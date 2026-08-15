@@ -64,11 +64,14 @@ let
     def main():
         user_input = " ".join(sys.argv[1:])
         system_prompt = (
-            "Você é um agente técnico NixOS.\n"
-            "Ferramentas disponíveis: bash, read_file\n"
-            "Se precisar usar uma ferramenta, retorne APENAS um JSON bruto "
-            "sem blocos markdown com o formato da ferramenta.\n"
-            "Se não, responda normalmente ao usuário."
+            "Você é um agente de automação em shell para NixOS.\n"
+            "Você DEVE usar a ferramenta 'bash' para executar comandos solicitados.\n"
+            "O formato EXATO da resposta deve ser estritamente um JSON:\n"
+            "{\"tool\": \"bash\", \"cmd\": \"seu_comando_aqui\"}\n\n"
+            "Exemplo:\n"
+            "Usuário: 'Colete versão e kernel'\n"
+            "Resposta: {\"tool\": \"bash\", \"cmd\": \"nixos-version && uname -r\"}\n\n"
+            "Retorne APENAS esse JSON bruto, sem blocos markdown."
         )
 
         messages = [
