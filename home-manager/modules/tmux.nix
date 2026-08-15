@@ -7,6 +7,11 @@
     keyMode = "vi";
     terminal = "screen-256color";
     extraConfig = ''
+      # Garante que a digitação duplicada em painéis esteja desativada
+      setw -g synchronize-panes off
+      
+      # Atalho para alternar a sincronização se necessário (Alt + y)
+      bind -n M-y setw synchronize-panes \; display "Toggle Pane Sync!"
       set -as terminal-features ",alacritty*:RGB"
       bind -n M-r source-file ~/.config/tmux/tmux.conf \; display "Reloaded!"
       bind C-p previous-window

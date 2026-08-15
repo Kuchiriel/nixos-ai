@@ -14,7 +14,7 @@
     ./stylix.nix
     ./swaync
     ./tmux.nix
-    ./waybar
+    ./waybar.nix
     ./wofi
     ./zathura.nix
     ./zsh.nix

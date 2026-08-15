@@ -1,5 +1,7 @@
-{ pkgs, inputs, ... }: {
-  imports = [ inputs.stylix.homeManagerModules.stylix ];
+{ pkgs, lib, ... }: {
+
+  # Força o bypass de fontes para passar por cima do bloco interno do Stylix
+  fonts.fontconfig.enable = lib.mkForce true;
 
   home.packages = with pkgs; [
     dejavu_fonts
@@ -7,10 +9,11 @@
     noto-fonts
     noto-fonts-lgc-plus
     texlivePackages.hebrew-fonts
-    noto-fonts-emoji
+    noto-fonts-color-emoji
     font-awesome
     powerline-fonts
     powerline-symbols
+    # Sintaxe estável 24.11 oficial para herança de ícones NerdFonts
     (nerdfonts.override { fonts = [ "NerdFontsSymbolsOnly" ]; })
   ];
 

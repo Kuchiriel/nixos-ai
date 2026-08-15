@@ -1,7 +1,14 @@
-{
+{ ... }: {
   programs.git = {
     enable = true;
-    userName = "Andrey0189";
-    userEmail = "varnavsky06@gmail.com";
+    userEmail = "matheus.almeida211094@gmail.com";
+    userName = "Kuchiriel";
+
+    # Se você tiver configurações personalizadas adicionais além do nome/email, 
+    # use o bloco extraConfig abaixo (antigo initExtra):
+    extraConfig = {
+      init.defaultBranch = "main";
+      http.sslVerify = true;
+    };
   };
 }

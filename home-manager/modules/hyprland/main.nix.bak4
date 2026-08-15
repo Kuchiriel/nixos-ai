@@ -10,7 +10,6 @@ let
   vmEnv = [
     "WLR_NO_HARDWARE_CURSORS,1"
     "WLR_RENDERER,pixman"
-    "WLR_RENDER_NO_EXPLICIT_SYNC,1"
   ];
 
   baseEnv = [
@@ -29,11 +28,11 @@ in
     settings = {
       "$fileManager" = "$terminal --app-id floating_shell -e yazi";
       "$mainMod" = "SUPER";
-      "$menu" = "wofi --show drun";
+      "$menu" = "rofi -show drun -theme jarvis-cyan";
       "$terminal" = "foot";
 
       animations = {
-        enabled = !isVM;
+        enabled = true;
         bezier = "myBezier, 0.05, 0.9, 0.1, 1.05";
         animation = [
           "windows, 1, 5, myBezier"
@@ -52,12 +51,17 @@ in
       decoration = {
         active_opacity = 0.9;
         inactive_opacity = 0.8;
-        rounding = if isVM then 0 else 10;
+        rounding = 10;
         blur = {
-          enabled = false;
+          enabled = !isVM;
+          passes = 1;
+          size = 1;
         };
         shadow = {
-          enabled = false;
+          enabled = true;
+          range = 15;
+          render_power = 3;
+          color = "rgba(00ffff33)";
         };
       };
 
@@ -81,8 +85,8 @@ in
         border_size = 2;
         "col.active_border" = "rgba(00ffffcc) rgba(0088ffcc) 45deg";
         "col.inactive_border" = "rgba(595959aa)";
-        gaps_in = if isVM then 2 else 5;
-        gaps_out = if isVM then 4 else 10;
+        gaps_in = 5;
+        gaps_out = 10;
         layout = "dwindle";
         resize_on_border = true;
       };
@@ -97,27 +101,6 @@ in
         follow_mouse = 1;
         kb_layout = "br";
       };
-
-      bind = [
-        "$mainMod, RETURN, exec, $terminal"
-        "$mainMod, Q, killactive,"
-        "$mainMod, E, exec, $fileManager"
-        "$mainMod, R, exec, $menu"
-        "$mainMod, V, togglefloating,"
-        "$mainMod, F, fullscreen,"
-        "$mainMod, 1, workspace, 1"
-        "$mainMod, 2, workspace, 2"
-        "$mainMod, 3, workspace, 3"
-        "$mainMod, 4, workspace, 4"
-        "$mainMod, 5, workspace, 5"
-        "$mainMod, 6, workspace, 6"
-        "$mainMod SHIFT, 1, movetoworkspace, 1"
-        "$mainMod SHIFT, 2, movetoworkspace, 2"
-        "$mainMod SHIFT, 3, movetoworkspace, 3"
-        "$mainMod SHIFT, 4, movetoworkspace, 4"
-        "$mainMod SHIFT, 5, movetoworkspace, 5"
-        "$mainMod SHIFT, 6, movetoworkspace, 6"
-      ];
 
       master = {
         mfact = 0.5;

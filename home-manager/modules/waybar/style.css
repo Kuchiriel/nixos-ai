@@ -3,70 +3,41 @@
   border-radius: 0px;
   font-family: "JetBrains Mono";
   font-weight: bold;
-  font-size: 16px;
+  font-size: 14px;
   min-height: 0;
-  color: #ebdbb2;
+  color: #b0bec5;
 }
 
 window#waybar {
-  background: #1d2021;
+  background: #0f1419;
 }
 
-/* Workspace Buttons */
-#workspaces button label{
-  color: #ebdbb2;
+#workspaces button label {
+  color: #b0bec5;
   padding: 0 10px;
 }
+
 #workspaces button.active label {
-  color: #1d2021;
+  color: #0f1419;
 }
+
 #workspaces button.active {
-  background: #d65d0e;
+  background: #00d3d0;
 }
 
-#clock, #battery, #pulseaudio, #tray, #language, #weather {
+#clock, #battery, #pulseaudio, #tray, #cpu, #memory, #backlight, #network, #bluetooth, #custom-files {
   padding: 0 10px;
-  margin: 0 10px;
+  margin: 0 5px;
 }
 
-#language {
-  margin: 0;
-  color: #d79921;
-  border-bottom: 5px solid #d79921;
-}
-
-#custom-weather {
-  margin: 0;
-  color: #98971a;
-  border-bottom: 5px solid #98971a
-}
-
-#pulseaudio {
-  margin: 0;
-  color: #689d6a;
-  border-bottom: 5px solid #689d6a;
-}
-
-#pulseaudio.muted {
-  padding: 0 20px;
-  color: #cc241d;
-  border-bottom: 5px solid #cc241d;
-}
-
-#battery {
-  margin: 0;
-  color: #458588;
-  border-bottom: 5px solid #458588;
-}
-
-#clock {
-  margin: 0;
-  color: #b16286;
-  border-bottom: 5px solid #b16286;
-}
-
-#tray {
-  margin: 0;
-  color: #d65d0e;
-  border-bottom: 5px solid #d65d0e;
-}
+#custom-files { color: #005f87; border-bottom: 3px solid #005f87; }
+#cpu { color: #007bb5; border-bottom: 3px solid #007bb5; }
+#memory { color: #0097a7; border-bottom: 3px solid #0097a7; }
+#backlight { color: #00acc1; border-bottom: 3px solid #00acc1; }
+#battery { color: #26c6da; border-bottom: 3px solid #26c6da; }
+#network { color: #4dd0e1; border-bottom: 3px solid #4dd0e1; }
+#bluetooth { color: #80deea; border-bottom: 3px solid #80deea; }
+#pulseaudio { color: #00d3d0; border-bottom: 3px solid #00d3d0; }
+#pulseaudio.muted { color: #d32f2f; border-bottom: 3px solid #d32f2f; }
+#clock { color: #00e5ff; border-bottom: 3px solid #00e5ff; }
+#tray { color: #18ffff; border-bottom: 3px solid #18ffff; }

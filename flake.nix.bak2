@@ -2,6 +2,7 @@
   description = "My system configuration";
 
   inputs = {
+    # Aponta para uma release estável recente que garante o funcionamento de todas as ferramentas
     nixpkgs.url = "github:nixos/nixpkgs/nixos-24.11";
 
     home-manager = {
@@ -20,18 +21,13 @@
     user = "nixos";
 
     hosts = [
-      {
-        hostname = "nixos-lab";
-        stateVersion = "24.11";
-        isVM = true;
-        gpu = "nvidia";
-      }
+      { hostname = "nixos-lab"; stateVersion = "24.11"; }
     ];
 
-    makeSystem = { hostname, stateVersion, isVM, gpu }: nixpkgs.lib.nixosSystem {
+    makeSystem = { hostname, stateVersion }: nixpkgs.lib.nixosSystem {
       inherit system;
       specialArgs = {
-        inherit inputs stateVersion hostname user isVM gpu;
+        inherit inputs stateVersion hostname user;
       };
 
       modules = [
@@ -40,20 +36,19 @@
         }
 
         ./hosts/${hostname}/configuration.nix
-        stylix.nixosModules.stylix # <-- Reativado aqui no escopo global
+        stylix.nixosModules.stylix
 
         home-manager.nixosModules.home-manager {
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;
           home-manager.extraSpecialArgs = {
-            inherit user isVM gpu;
+            inherit user;
             homeStateVersion = stateVersion;
           };
           home-manager.users.${user} = {
             imports = [
               ./home-manager/home.nix
-              # Injeta o sub-modulo do Stylix para o Home Manager entender as opções
-              stylix.homeManagerModules.stylix 
+              stylix.homeManagerModules.stylix
             ];
           };
         }
@@ -64,7 +59,7 @@
     nixosConfigurations = nixpkgs.lib.foldl' (configs: host:
       configs // {
         "${host.hostname}" = makeSystem {
-          inherit (host) hostname stateVersion isVM gpu;
+          inherit (host) hostname stateVersion;
         };
       }) {} hosts;
   };

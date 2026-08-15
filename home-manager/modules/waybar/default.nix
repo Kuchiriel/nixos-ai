@@ -6,84 +6,121 @@
       mainBar = {
         layer = "top";
         position = "top";
-        height = 30;
-        modules-left = ["hyprland/workspaces"];
-        modules-center = ["hyprland/window"];
-        modules-right = ["hyprland/language" "custom/weather" "pulseaudio" "battery" "clock" "tray"];
-        "hyprland/workspaces" = {
-          disable-scroll = true;
-          show-special = true;
-          special-visible-only = true;
-          all-outputs = false;
-          format = "{icon}";
-          format-icons = {
-            "1" = "";
-            "2" = "";
-            "3" = "";
-            "4" = "";
-            "5" = "";
-            "6" = "";
-            "7" = "";
-            "8" = "";
-            "9" = "";
-            "magic" = "";
-          };
+        height = 34;
+        spacing = 10;
 
-          persistent-workspaces = {
-            "*" = 9;
+        modules-left = [
+          "hyprland/workspaces"
+          "hyprland/window"
+        ];
+
+        modules-center = [
+          "clock"
+        ];
+
+        modules-right = [
+          "custom/files"
+          "cpu"
+          "memory"
+          "backlight"
+          "battery"
+          "network"
+          "bluetooth"
+          "pulseaudio"
+          "tray"
+        ];
+
+        "hyprland/workspaces" = {
+          format = "{name} {windows}";
+          window-rewrite-default = "󱓡";
+          on-click = "activate";
+          window-rewrite = {
+            "title<.*youtube.*>" = "󰗃";
+            "class<firefox>" = "";
+            "class<foot>" = "";
+            "class<code-oss>" = "󰨞";
+            "class<pcmanfm-qt>" = "󰉋";
+            "class<discord>" = "󰙯";
+            "class<spotify>" = "";
           };
         };
 
-        "hyprland/language" = {
-          format-en = "🇺🇸";
-          format-ru = "🇷🇺";
-          format-he = "🇮🇱";
-          min-length = 5;
+        "hyprland/window" = {
+          format = "󰖲 {title}";
+          max-length = 40;
+          separate-outputs = true;
+        };
+
+        "clock" = {
+          format = " {:%H:%M}";
+          tooltip = false;
+          on-click = "foot --app-id floating_shell -e calcurse";
+        };
+
+        "custom/files" = {
+          format = "󰉋 Files";
+          tooltip = "File Manager (yazi)";
+          on-click = "foot --app-id floating_shell -e yazi";
+        };
+
+        "cpu" = {
+          interval = 2;
+          format = " {usage}%";
+          tooltip = false;
+          on-click = "foot --app-id floating_shell -e btm";
+        };
+
+        "memory" = {
+          interval = 2;
+          format = " {used:0.1f}G";
+          tooltip = false;
+          on-click = "foot --app-id floating_shell -e btm";
+        };
+
+        "backlight" = {
+          format = "󰃠 {percent}%";
+          tooltip = false;
+          on-scroll-up = "brightnessctl set +5%";
+          on-scroll-down = "brightnessctl set 5%-";
+        };
+
+        "battery" = {
+          format = "{icon} {capacity}%";
+          format-icons = ["" "" "" "" ""];
           tooltip = false;
         };
 
-        "custom/weather" = {
-          format = " {} ";
-          exec = "curl -s 'wttr.in/Tashkent?format=%c%t'";
-          interval = 300;
-          class = "weather";
+        "network" = {
+          format-wifi = " {essid}";
+          format-ethernet = "󰈀 Wired";
+          tooltip = false;
+          on-click = "foot --app-id floating_shell -e nmtui";
+        };
+
+        "bluetooth" = {
+          format = " {status}";
+          tooltip = false;
+          on-click = "foot --app-id floating_shell -e bluetuith";
         };
 
         "pulseaudio" = {
           format = "{icon} {volume}%";
-          format-bluetooth = "{icon} {volume}% ";
-          format-muted = "";
           format-icons = {
-            "headphones" = "";
-            "handsfree" = "";
+            "headphone" = "";
+            "hands-free" = "";
             "headset" = "";
             "phone" = "";
             "portable" = "";
             "car" = "";
-            "default" = ["" ""];
+            "default" = ["" "" ""];
           };
+          tooltip = false;
           on-click = "pavucontrol";
         };
 
-        "battery" = {
-          states = {
-            warning = 30;
-            critical = 1;
-          };
-          format = "{icon} {capacity}%";
-          format-charging = " {capacity}%";
-          format-alt = "{time} {icon}";
-          format-icons = ["" "" "" "" ""];
-        };
-
-        "clock" = {
-          format = "{:%d.%m.%Y - %H:%M}";
-          format-alt = "{:%A, %B %d at %R}";
-        };
-
         "tray" = {
-          icon-size = 14;
-          spacing = 1;
+          icon-size = 18;
+          spacing = 6;
         };
       };
     };
