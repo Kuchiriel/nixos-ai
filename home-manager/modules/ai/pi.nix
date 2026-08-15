@@ -47,7 +47,9 @@ let
 
 
     def query(messages):
-        url = "[http://127.0.0.1:8080/v1/chat/completions](http://127.0.0.1:8080/v1/chat/completions)"
+        host = "127.0.0.1"
+        port = "8080"
+        url = f"http://{host}:{port}/v1/chat/completions"
         payload = {
             "model": "local-model",
             "messages": messages,
