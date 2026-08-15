@@ -1,12 +1,6 @@
 { pkgs, ... }:
 
 let
-  piGrammar = ''
-    root ::= "{" ws "\"cmd\"" ws ":" ws string ws "}"
-    string ::= "\"" ([^"\\] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]))* "\""
-    ws ::= [ \t\n]*
-  '';
-
   pi = pkgs.writers.writePython3Bin "pi" {
     libraries = [ pkgs.python3Packages.requests ];
   } ''
@@ -21,9 +15,16 @@ let
         "http://127.0.0.1:8080/completion"
     )
 
+    GRAMMAR = (
+        'root ::= "{" ws "\\"cmd\\"" ws ":" ws string ws "}\\n"'
+        'string ::= "\\"" ([^"\\\\] | "\\\\" '
+        '(["\\\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] '
+        '[0-9a-fA-F] [0-9a-fA-F]))* "\\""\\n"'
+        'ws ::= [ \\t\\n]*\\n'
+    )
+
 
     def pi_exec(prompt):
-        grammar = r"""${piGrammar}"""
         msg = (
             "Convert the following request into a single "
             f"shell command JSON. Request: {prompt}"
@@ -31,12 +32,14 @@ let
         payload = {
             "prompt": msg,
             "n_predict": 128,
-            "grammar": grammar,
+            "grammar": GRAMMAR,
             "temperature": 0.0,
         }
 
         try:
-            resp = requests.post(SERVER_URL, json=payload, timeout=10)
+            resp = requests.post(
+                SERVER_URL, json=payload, timeout=10
+            )
             data = resp.json()
             cmd = json.loads(data["content"])["cmd"]
 
