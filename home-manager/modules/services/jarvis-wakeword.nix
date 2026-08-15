@@ -60,7 +60,7 @@ let
         with open("/tmp/jarvis-wakeword-status", "w") as f:
             f.write(f"READY|{time.time()}")
         update_status("initializing", "Iniciando...")
-        subprocess.run(["${pkgs.libcanberra-gtk}/bin/canberra-gtk-play", "--file", STARTUP_SOUND], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["${pkgs.libcanberra-gtk3}/bin/canberra-gtk-play", "--file", STARTUP_SOUND], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         print(f"[WW] Starting arecord hw:1,7 @ {RATE}Hz (Threshold: {THRESHOLD})", flush=True)
         arecord_proc = subprocess.Popen(
@@ -83,10 +83,12 @@ let
             mono_norm = np.clip((mono - np.mean(mono)) * 10.0, -32768, 32767).astype(np.int16)
             predictions = oww.predict(mono_norm)
             
-            # Validação do threshold ativo
             for model_name, score in predictions.items():
                 if score >= THRESHOLD:
                     print(f"[WW] Trigger detectado em {model_name} com score {score}", flush=True)
+
+    if __name__ == "__main__":
+        main()
   '';
 in
 {
