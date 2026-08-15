@@ -14,6 +14,6 @@ git commit -m "chore: update system configuration" || true
 cd - > /dev/null
 
 echo "[3/4] Executando Rebuild..."
-nh os switch "$FLAKE_DIR" -H "$TARGET_HOST" -- --option binary-caches-parallel-connections 4 --option http-connections 5
+nh os switch "$FLAKE_DIR" -H "$TARGET_HOST" -- --option binary-caches-parallel-connections 4 --option http-connections 5 | grep -E "error:|at .*\.nix"
 
 echo "[4/4] Sistema atualizado!"

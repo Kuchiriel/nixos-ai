@@ -3,7 +3,7 @@
 with lib;
 
 let
-  # Detecção automática nativa pelo NixOS (lê o hardware/hypervisor do host sem depender do usuário)
+  # Detecção automática nativa pelo NixOS (lê o hardware/hypervisor do host)
   isVM = 
     let
       vendorPath = /sys/class/dmi/id/sys_vendor;
@@ -83,7 +83,7 @@ in
     };
   };
 
-  config = mkIf cfg.enable {
+  config = mkIf config.services.llama-cpp-server.enable {
     systemd.services.llama-cpp-server = {
       description = "Llama.cpp High-Performance LLM Server";
       after = [ "network-online.target" ];
@@ -93,7 +93,7 @@ in
       script = ''
         mkdir -p ${modelDir}
 
-        if [ ! -f "${cfg.modelPath}" ] || [ -f "${cfg.modelPath}.aria2" ]; then
+        if [ ! -f "${config.services.llama-cpp-server.modelPath}" ] || [ -f "${config.services.llama-cpp-server.modelPath}.aria2" ]; then
           echo "[LLAMA-SERVER] Baixando/Retomando modelo (${modelFileName})..."
           ${pkgs.aria2}/bin/aria2c \
             -c \
@@ -110,12 +110,12 @@ in
 
         echo "[LLAMA-SERVER] Iniciando llama-server com modelo ${modelFileName}..."
         exec ${pkgs.llama-cpp}/bin/llama-server \
-          -m "${cfg.modelPath}" \
+          -m "${config.services.llama-cpp-server.modelPath}" \
           --host 0.0.0.0 \
-          --port ${toString cfg.port} \
-          -c ${toString cfg.contextSize} \
-          -t ${toString cfg.threads} \
-          -ub ${toString cfg.ubatch} \
+          --port ${toString config.services.llama-cpp-server.port} \
+          -c ${toString config.services.llama-cpp-server.contextSize} \
+          -t ${toString config.services.llama-cpp-server.threads} \
+          -ub ${toString config.services.llama-cpp-server.ubatch} \
           -ngl ${toString gpuLayers} \
           ${extraLlamaFlags}
       '';
