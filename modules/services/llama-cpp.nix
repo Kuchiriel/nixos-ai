@@ -3,18 +3,29 @@
 with lib;
 
 let
-  cfg = config.services.llama-cpp-server;
+  # Detecção automática nativa pelo NixOS (lê o hardware/hypervisor do host sem depender do usuário)
+  isVM = 
+    let
+      vendorPath = /sys/class/dmi/id/sys_vendor;
+      productPath = /sys/class/dmi/id/product_name;
+      readSafe = path: if builtins.pathExists path then builtins.readFile path else "";
+      vendor = lib.toLower (readSafe vendorPath);
+      product = lib.toLower (readSafe productPath);
+    in
+      lib.hasInfix "qemu" vendor || 
+      lib.hasInfix "kvm" vendor || 
+      lib.hasInfix "virtualbox" vendor || 
+      lib.hasInfix "vmware" vendor ||
+      lib.hasInfix "qemu" product ||
+      lib.hasInfix "kvm" product;
 
-  # Detecção automática de ambiente (VM vs Host)
-  isVM = config.mySystem.isVM or false;
-
-  # Parâmetros adaptativos de hardware
+  # Parâmetros adaptativos baseados na detecção automática
   gpuLayers = if isVM then 0 else 16;
   threadsCount = if isVM then 4 else 7;
   ubatchSize = if isVM then 512 else 1024;
   defaultContextSize = if isVM then 16384 else 32768;
 
-  # Mapeamento do diretório e modelos por ambiente
+  # Mapeamento do diretório e modelos por ambiente detectado
   modelDir = "${config.users.users.nixos.home}/models";
 
   modelFileName = if isVM
