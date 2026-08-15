@@ -2,13 +2,13 @@
 
 let
   piAgent = pkgs.writers.writePython3Bin "pi" {
-    libraries = [];
+    libraries = [ pkgs.python3Packages.requests ];
     flakeIgnore = [ "E302" "E305" "W293" "E261" "F401" "E501" ];
   } ''
     import sys
     import json
     import subprocess
-    import urllib.request
+    import requests
 
     TOOLS = {
         "bash": "Executa comando shell: {'tool': 'bash', 'cmd': 'ls -la'}",
@@ -47,28 +47,23 @@ let
 
 
     def query(messages):
-        target_url = "[http://127.0.0.1:8080/v1/chat/completions](http://127.0.0.1:8080/v1/chat/completions)"
+        url = "[http://127.0.0.1:8080/v1/chat/completions](http://127.0.0.1:8080/v1/chat/completions)"
         payload = {
             "model": "local-model",
             "messages": messages,
             "temperature": 0.1,
             "response_format": {"type": "json_object"}
         }
-        req = urllib.request.Request(
-            target_url,
-            data=json.dumps(payload).encode('utf-8'),
-            headers={'Content-Type': 'application/json'}
-        )
-        with urllib.request.urlopen(req) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-            return data['choices'][0]['message']['content']
+        response = requests.post(url, json=payload, timeout=60)
+        data = response.json()
+        return data['choices'][0]['message']['content']
 
 
     def main():
         user_input = " ".join(sys.argv[1:])
         system_prompt = (
             "Você é um agente técnico NixOS.\n"
-            f"Ferramentas disponíveis: {json.dumps(TOOLS)}\n"
+            "Ferramentas disponíveis: bash, read_file\n"
             "Se precisar usar uma ferramenta, retorne APENAS um JSON bruto "
             "sem blocos markdown com o formato da ferramenta.\n"
             "Se não, responda normalmente ao usuário."
