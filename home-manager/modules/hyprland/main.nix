@@ -1,18 +1,5 @@
-{ isVM, gpu, ... }:
-
+{ pkgs, config, lib, ... }:
 let
-  nvidiaEnv = [
-    "LIBVA_DRIVER_NAME,nvidia"
-    "GBM_BACKEND,nvidia-drm"
-    "__GLX_VENDOR_LIBRARY_NAME,nvidia"
-  ];
-
-  vmEnv = [
-    "WLR_NO_HARDWARE_CURSORS,1"
-    "WLR_RENDERER,pixman"
-    "WLR_RENDER_NO_EXPLICIT_SYNC,1"
-  ];
-
   baseEnv = [
     "NIXOS_OZONE_WL,1"
     "XDG_CURRENT_DESKTOP,Hyprland"
@@ -24,68 +11,115 @@ let
   ];
 in
 {
+  home.activation.generateHyprlandRuntimeConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    mkdir -p $HOME/.config/hyprland
+  '';
+
   wayland.windowManager.hyprland = {
     enable = true;
+    extraConfig = ''
+      source = ~/.config/hyprland/dynamic.conf
+    '';
     settings = {
       "$fileManager" = "$terminal --app-id floating_shell -e yazi";
       "$mainMod" = "SUPER";
       "$menu" = "wofi --show drun";
       "$terminal" = "foot";
 
-      animations = {
-        enabled = !isVM;
-        bezier = "myBezier, 0.05, 0.9, 0.1, 1.05";
-        animation = [
-          "windows, 1, 5, myBezier"
-          "workspaces, 1, 4, default, slide"
-        ];
-      };
-
-      cursor = {
-        no_hardware_cursors = isVM;
-      };
-
-      debug = {
-        damage_tracking = if isVM then 0 else 2;
-      };
-
-      decoration = {
-        active_opacity = 0.9;
-        inactive_opacity = 0.8;
-        rounding = if isVM then 0 else 10;
-        blur = {
-          enabled = false;
-        };
-        shadow = {
-          enabled = false;
-        };
-      };
-
       dwindle = {
         preserve_split = true;
         pseudotile = true;
       };
 
-      env = baseEnv
-        ++ (if isVM then vmEnv else [])
-        ++ (if gpu == "nvidia" then nvidiaEnv else []);
+      env = baseEnv;
 
       exec-once = [
+        "${pkgs.writeShellScriptBin "hyprland-runtime-setup" ''
+          if systemd-detect-virt -q; then
+            cat << 'EOF' > $HOME/.config/hyprland/dynamic.conf
+          animations {
+              enabled = false
+          }
+          cursor {
+              no_hardware_cursors = true
+          }
+          debug {
+              damage_tracking = 0
+          }
+          decoration {
+              rounding = 0
+              active_opacity = 0.9
+              inactive_opacity = 0.8
+              blur {
+                  enabled = false
+              }
+              shadow {
+                  enabled = false
+              }
+          }
+          general {
+              allow_tearing = false
+              border_size = 2
+              col.active_border = rgba(00ffffcc) rgba(0088ffcc) 45deg
+              col.inactive_border = rgba(595959aa)
+              gaps_in = 2
+              gaps_out = 4
+              layout = dwindle
+              resize_on_border = true
+          }
+          env = WLR_NO_HARDWARE_CURSORS,1
+          env = WLR_RENDERER,pixman
+          env = WLR_RENDER_NO_EXPLICIT_SYNC,1
+          EOF
+          else
+            cat << 'EOF' > $HOME/.config/hyprland/dynamic.conf
+          animations {
+              enabled = true
+              bezier = myBezier, 0.05, 0.9, 0.1, 1.05
+              animation = windows, 1, 5, myBezier
+              animation = workspaces, 1, 4, default, slide
+          }
+          cursor {
+              no_hardware_cursors = false
+          }
+          debug {
+              damage_tracking = 2
+          }
+          decoration {
+              rounding = 10
+              active_opacity = 0.9
+              inactive_opacity = 0.8
+              blur {
+                  enabled = false
+              }
+              shadow {
+                  enabled = false
+              }
+          }
+          general {
+              allow_tearing = false
+              border_size = 2
+              col.active_border = rgba(00ffffcc) rgba(0088ffcc) 45deg
+              col.inactive_border = rgba(595959aa)
+              gaps_in = 5
+              gaps_out = 10
+              layout = dwindle
+              resize_on_border = true
+          }
+          EOF
+            if lspci | grep -qi nvidia; then
+              cat << 'EOF' >> $HOME/.config/hyprland/dynamic.conf
+          env = LIBVA_DRIVER_NAME,nvidia
+          env = GBM_BACKEND,nvidia-drm
+          env = __GLX_VENDOR_LIBRARY_NAME,nvidia
+          EOF
+            fi
+          fi
+        ''}/bin/hyprland-runtime-setup"
         "waybar"
         "wl-paste --type text --watch cliphist store"
         "wl-paste --type image --watch cliphist store"
       ];
-
-      general = {
-        allow_tearing = false;
-        border_size = 2;
-        "col.active_border" = "rgba(00ffffcc) rgba(0088ffcc) 45deg";
-        "col.inactive_border" = "rgba(595959aa)";
-        gaps_in = if isVM then 2 else 5;
-        gaps_out = if isVM then 4 else 10;
-        layout = "dwindle";
-        resize_on_border = true;
-      };
 
       gestures = {
         workspace_swipe = true;
