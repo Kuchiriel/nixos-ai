@@ -6,6 +6,11 @@ with lib;
   options.services.llama-cpp-server = {
     enable = mkEnableOption "Llama.cpp Server";
     port = mkOption { type = types.port; default = 8080; };
+    extraFlags = mkOption { 
+      type = types.listOf types.str; 
+      default = [ "--jinja" ]; 
+      description = "Flags adicionais para o llama-server.";
+    };
   };
 
   config = mkIf config.services.llama-cpp-server.enable {
@@ -16,10 +21,7 @@ with lib;
       wantedBy = [ "multi-user.target" ];
 
       script = ''
-        # Runtime detection: Usa systemd-detect-virt para identificar o ambiente
-        # Retorna 0 (sucesso) se estiver em uma VM, não-zero caso contrário (bare-metal)
         if ${pkgs.systemd}/bin/systemd-detect-virt --quiet --vm; then
-            echo "[LLAMA-SERVER] Ambiete VM detectado (Hyper-V/KVM/QEMU)."
             MODEL_FILE="qwen2.5-coder-7b-instruct-q4_k_m.gguf"
             MODEL_URL="https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf"
             THREADS=4
@@ -28,7 +30,6 @@ with lib;
             GPU_LAYERS=0
             EXTRA_FLAGS="-ctk f16 -ctv f16"
         else
-            echo "[LLAMA-SERVER] Ambiente Bare Metal detectado."
             MODEL_FILE="qwen2.5-coder-32b-instruct-q4_k_m.gguf"
             MODEL_URL="https://huggingface.co/Qwen/Qwen2.5-Coder-32B-Instruct-GGUF/resolve/main/qwen2.5-coder-32b-instruct-q4_k_m.gguf"
             THREADS=7
@@ -38,15 +39,13 @@ with lib;
             EXTRA_FLAGS="-fa -ctk q8_0 -ctv q4_0"
         fi
 
-        MODEL_DIR="${config.users.users.nixos.home}/models"
+        MODEL_DIR="$HOME/models"
         mkdir -p "$MODEL_DIR"
 
-        # Download apenas se não existir
         if [ ! -f "$MODEL_DIR/$MODEL_FILE" ]; then
           ${pkgs.aria2}/bin/aria2c -c -x 4 -s 4 --dir="$MODEL_DIR" --out="$MODEL_FILE" "$MODEL_URL"
         fi
 
-        echo "[LLAMA-SERVER] Iniciando com modelo $MODEL_FILE..."
         exec ${pkgs.llama-cpp}/bin/llama-server \
           -m "$MODEL_DIR/$MODEL_FILE" \
           --host 0.0.0.0 \
@@ -55,12 +54,11 @@ with lib;
           -t "$THREADS" \
           -ub "$UBATCH" \
           -ngl "$GPU_LAYERS" \
-          $EXTRA_FLAGS
+          $EXTRA_FLAGS \
+          ${escapeShellArgs config.services.llama-cpp-server.extraFlags}
       '';
 
       serviceConfig = {
-        User = "nixos";
-        Group = "users";
         Restart = "on-failure";
         RestartSec = "10s";
       };

@@ -1,70 +1,159 @@
-{ config, pkgs, lib, ... }:
+{ pkgs, ... }:
 
-with lib;
+let
+  pi = pkgs.writers.writePython3Bin "pi" {
+    libraries = [ pkgs.python3Packages.requests ];
+  } ''
+    import json
+    import os
+    import subprocess
+    import sys
+    import requests
 
+    SERVER_URL = os.getenv(
+        "LLAMA_SERVER_URL",
+        "http://127.0.0.1:8080/v1/chat/completions"
+    )
+
+    TOOLS = [
+        {
+            "type": "function",
+            "function": {
+                "name": "execute_shell",
+                "description": (
+                    "Execute a shell command on the "
+                    "local NixOS system."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "cmd": {
+                            "type": "string",
+                            "description": (
+                                "The exact shell command "
+                                "to execute."
+                            )
+                        }
+                    },
+                    "required": ["cmd"]
+                }
+            }
+        }
+    ]
+
+
+    def run_agent(user_prompt):
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a pragmatic system "
+                    "administration assistant on NixOS. "
+                    "Use the execute_shell tool to "
+                    "gather data or perform actions."
+                ),
+            },
+            {"role": "user", "content": user_prompt},
+        ]
+
+        for _ in range(5):
+            payload = {
+                "model": "default",
+                "messages": messages,
+                "tools": TOOLS,
+                "tool_choice": "auto",
+                "temperature": 0.0,
+            }
+
+            try:
+                resp = requests.post(
+                    SERVER_URL, json=payload, timeout=60
+                )
+                if resp.status_code != 200:
+                    print(
+                        f"Erro HTTP {resp.status_code}: "
+                        f"{resp.text}",
+                        file=sys.stderr
+                    )
+                    sys.exit(1)
+
+                data = resp.json()
+                choice = data["choices"][0]
+                message = choice["message"]
+                messages.append(message)
+
+                if message.get("tool_calls"):
+                    for tool_call in message["tool_calls"]:
+                        func_name = (
+                            tool_call["function"]["name"]
+                        )
+                        raw_args = (
+                            tool_call["function"]["arguments"]
+                        )
+
+                        if isinstance(
+                            raw_args, (dict, list)
+                        ):
+                            args = raw_args
+                        else:
+                            if (
+                                not raw_args
+                                or not raw_args.strip()
+                            ):
+                                args = {}
+                            else:
+                                args = json.loads(raw_args)
+
+                        if func_name == "execute_shell":
+                            cmd = args.get("cmd", "")
+                            print(f"-> Executando: {cmd}")
+
+                            res = subprocess.run(
+                                cmd,
+                                shell=True,
+                                capture_output=True,
+                                text=True
+                            )
+                            if res.returncode == 0:
+                                output = res.stdout
+                            else:
+                                output = res.stderr
+
+                            if not output.strip():
+                                output = (
+                                    "Command executed with "
+                                    f"exit code {res.returncode}"
+                                )
+
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_call["id"],
+                                "content": output
+                            })
+                else:
+                    print(
+                        message.get("content", "")
+                    )
+                    break
+
+            except Exception as e:
+                print(
+                    f"Erro crítico: {e}",
+                    file=sys.stderr
+                )
+                sys.exit(1)
+
+
+    if __name__ == "__main__":
+        if len(sys.argv) < 2:
+            print(
+                "Uso: pi \"seu prompt aqui\"",
+                file=sys.stderr
+            )
+            sys.exit(1)
+        run_agent(" ".join(sys.argv[1:]))
+  '';
+in
 {
-  options.services.llama-cpp-server = {
-    enable = mkEnableOption "Llama.cpp Server";
-    port = mkOption { type = types.port; default = 8080; };
-    # Adicionado para permitir passar flags customizadas (ex: --jinja)
-    extraFlags = mkOption { 
-      type = types.listOf types.str; 
-      default = [ "--jinja" ]; 
-      description = "Flags adicionais para o llama-server.";
-    };
-  };
-
-  config = mkIf config.services.llama-cpp-server.enable {
-    systemd.services.llama-cpp-server = {
-      description = "Llama.cpp High-Performance LLM Server (Auto-Adaptive)";
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
-      wantedBy = [ "multi-user.target" ];
-
-      script = ''
-        if ${pkgs.systemd}/bin/systemd-detect-virt --quiet --vm; then
-            MODEL_FILE="qwen2.5-coder-7b-instruct-q4_k_m.gguf"
-            MODEL_URL="https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf"
-            THREADS=4
-            CTX_SIZE=16384
-            UBATCH=512
-            GPU_LAYERS=0
-            EXTRA_FLAGS="-ctk f16 -ctv f16"
-        else
-            MODEL_FILE="qwen2.5-coder-32b-instruct-q4_k_m.gguf"
-            MODEL_URL="https://huggingface.co/Qwen/Qwen2.5-Coder-32B-Instruct-GGUF/resolve/main/qwen2.5-coder-32b-instruct-q4_k_m.gguf"
-            THREADS=7
-            CTX_SIZE=32768
-            UBATCH=1024
-            GPU_LAYERS=16
-            EXTRA_FLAGS="-fa -ctk q8_0 -ctv q4_0"
-        fi
-
-        MODEL_DIR="${config.users.users.nixos.home}/models"
-        mkdir -p "$MODEL_DIR"
-
-        if [ ! -f "$MODEL_DIR/$MODEL_FILE" ]; then
-          ${pkgs.aria2}/bin/aria2c -c -x 4 -s 4 --dir="$MODEL_DIR" --out="$MODEL_FILE" "$MODEL_URL"
-        fi
-
-        exec ${pkgs.llama-cpp}/bin/llama-server \
-          -m "$MODEL_DIR/$MODEL_FILE" \
-          --host 0.0.0.0 \
-          --port ${toString config.services.llama-cpp-server.port} \
-          -c "$CTX_SIZE" \
-          -t "$THREADS" \
-          -ub "$UBATCH" \
-          -ngl "$GPU_LAYERS" \
-          $EXTRA_FLAGS \
-          ${escapeShellArgs config.services.llama-cpp-server.extraFlags}
-      '';
-
-      serviceConfig = {
-        User = "nixos";
-        Group = "users";
-        Restart = "on-failure";
-        RestartSec = "10s";
-      };
-    };
-  };
+  home.packages = [ pi ];
 }
