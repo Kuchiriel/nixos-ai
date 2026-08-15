@@ -39,7 +39,8 @@ with lib;
             EXTRA_FLAGS="-fa -ctk q8_0 -ctv q4_0"
         fi
 
-        MODEL_DIR="$HOME/models"
+        # Caminho absoluto garantido para o usuário nixos
+        MODEL_DIR="/home/nixos/models"
         mkdir -p "$MODEL_DIR"
 
         if [ ! -f "$MODEL_DIR/$MODEL_FILE" ]; then
@@ -59,6 +60,10 @@ with lib;
       '';
 
       serviceConfig = {
+        User = "nixos";
+        Group = "users";
+        WorkingDirectory = "/home/nixos";
+        Environment = "HOME=/home/nixos";
         Restart = "on-failure";
         RestartSec = "10s";
       };
