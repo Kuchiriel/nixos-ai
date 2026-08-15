@@ -8,7 +8,7 @@ let
     version = "0.6.0";
     src = pkgs.python3Packages.fetchPypi {
       inherit pname version;
-      sha256 = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+      sha256 = "sha256-NoWNkPEYPjB0hVl6kSpOPDOEsU6pkj+D/q/658FWVWU=";
     };
     propagatedBuildInputs = with pkgs.python3Packages; [
       numpy
