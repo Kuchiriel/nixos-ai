@@ -38,7 +38,7 @@ let
 
         try:
             resp = requests.post(
-                SERVER_URL, json=payload, timeout=10
+                SERVER_URL, json=payload, timeout=60
             )
             data = resp.json()
             cmd = json.loads(data["content"])["cmd"]
