@@ -16,12 +16,17 @@ let
         exit 1
       fi
 
-      ENDPOINT="http://127.0.0.1:8080/v1/chat/completions"
+      BASE_URL="http://127.0.0.1:8080/v1"
+      ENDPOINT="$BASE_URL/chat/completions"
+
+      # Detecção dinâmica do modelo ativo no llama-server em runtime
+      MODEL=$(curl -s "$BASE_URL/models" | jq -r '.data[0].id // "local-model"')
 
       PAYLOAD=$(jq -n \
         --arg prompt "$PROMPT" \
+        --arg model "$MODEL" \
         '{
-          model: "local-model",
+          model: $model,
           messages: [
             {
               role: "system",
@@ -52,7 +57,6 @@ in
     provider = "openai-compatible";
     baseUrl = "http://127.0.0.1:8080/v1";
     apiKey = "local-no-key";
-    model = "local-model";
     temperature = 0.2;
     maxTokens = 4096;
     systemPrompt = "Você é um agente de engenharia de software integrado a um ambiente NixOS declarativo.";
