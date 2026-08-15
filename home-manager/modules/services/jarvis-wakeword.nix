@@ -16,14 +16,12 @@ let
       scipy
       requests
       sounddevice
-      pyaudio
     ];
     doCheck = false;
   };
 
   jarvisPythonEnv = pkgs.python3.withPackages (ps: with ps; [
     numpy
-    pyaudio
     requests
     openwakewordPkg
   ]);
@@ -32,11 +30,10 @@ let
     flakeIgnore = [ "E501" ];
     libraries = [ jarvisPythonEnv ];
   } ''
-    import time
     import json
     import subprocess
+    import time
     import numpy as np
-    import pyaudio
     from openwakeword.model import Model
 
     RATE = 16000
@@ -55,7 +52,6 @@ let
 
 
     def main():
-        _ = pyaudio.PyAudio()
         oww = Model(wakeword_model_paths=[WAKEWORD_MODEL])
         with open("/tmp/jarvis-wakeword-status", "w") as f:
             f.write(f"READY|{time.time()}")
@@ -82,7 +78,7 @@ let
             mono = (audio_np[::2] + audio_np[1::2]) * 0.5
             mono_norm = np.clip((mono - np.mean(mono)) * 10.0, -32768, 32767).astype(np.int16)
             predictions = oww.predict(mono_norm)
-            
+
             for model_name, score in predictions.items():
                 if score >= THRESHOLD:
                     print(f"[WW] Trigger detectado em {model_name} com score {score}", flush=True)
