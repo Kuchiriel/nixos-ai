@@ -3,7 +3,7 @@
 with lib;
 
 let
-  # Detecção automática nativa pelo NixOS (lê o hardware/hypervisor do host)
+  # Detecção automática nativa pelo NixOS (abrangendo Hyper-V, KVM, QEMU, VirtualBox, VMware)
   isVM = 
     let
       vendorPath = /sys/class/dmi/id/sys_vendor;
@@ -16,8 +16,11 @@ let
       lib.hasInfix "kvm" vendor || 
       lib.hasInfix "virtualbox" vendor || 
       lib.hasInfix "vmware" vendor ||
+      lib.hasInfix "microsoft" vendor ||
+      lib.hasInfix "hyper-v" vendor ||
       lib.hasInfix "qemu" product ||
-      lib.hasInfix "kvm" product;
+      lib.hasInfix "kvm" product ||
+      lib.hasInfix "virtual machine" product;
 
   # Parâmetros adaptativos baseados na detecção automática
   gpuLayers = if isVM then 0 else 16;
