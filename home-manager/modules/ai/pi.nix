@@ -1,63 +1,53 @@
 { pkgs, ... }:
 
 let
-  piAgent = pkgs.writers.writePython3Bin "pi" {
+  # GBNF Gramática que força o modelo a retornar APENAS o formato desejado.
+  # Isso elimina a necessidade de prompts complexos ou "agentes".
+  piGrammar = ''
+    root ::= "{" ws "\"cmd\"" ws ":" ws string ws "}"
+    string ::= "\"" ([^"\\] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]))* "\""
+    ws ::= [ \t\n]*
+  '';
+
+  pi = pkgs.writePython3Bin "pi" {
     libraries = [ pkgs.python3Packages.requests ];
   } ''
-    import sys
-    import json
-    import subprocess
-    import requests
+    import sys, json, subprocess, requests, os
 
-    def execute_tool(json_obj):
-        try:
-            if json_obj.get('tool') == 'bash':
-                res = subprocess.run(json_obj['cmd'], shell=True, capture_output=True, text=True)
-                return res.stdout if res.returncode == 0 else res.stderr
-            return "Erro: Ferramenta desconhecida."
-        except Exception as e:
-            return f"Erro na execução: {str(e)}"
-
-    def main():
-        user_input = " ".join(sys.argv[1:])
+    # Configuração via variáveis de ambiente ou defaults
+    SERVER_URL = os.getenv("LLAMA_SERVER_URL", "http://127.0.0.1:8080/completion")
+    
+    def pi_exec(prompt):
+        # Gramática embutida para forçar JSON puro
+        grammar = r"""${piGrammar}"""
         
-        # System Prompt focado em execução direta
-        system_prompt = (
-            "Você é um executor de comandos NixOS. "
-            "Sua tarefa é identificar a necessidade de um comando shell e executar. "
-            "Retorne APENAS o JSON no formato: {'tool': 'bash', 'cmd': 'comando_aqui'}. "
-            "Não adicione textos extras."
-        )
-
         payload = {
-            "model": "local-model",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_input}
-            ],
-            "temperature": 0.1,
-            "response_format": {"type": "json_object"}
+            "prompt": f"Convert the following request into a single shell command JSON. Request: {prompt}",
+            "n_predict": 128,
+            "grammar": grammar,
+            "temperature": 0.0 # Determinístico
         }
-
-        # Query
+        
         try:
-            resp = requests.post("http://127.0.0.1:8080/v1/chat/completions", json=payload, timeout=10)
-            reply = resp.json()['choices'][0]['message']['content']
+            resp = requests.post(SERVER_URL, json=payload, timeout=10)
+            data = resp.json()
+            # O servidor garante a estrutura via gramática
+            cmd = json.loads(data['content'])['cmd']
             
-            tool_call = json.loads(reply)
+            # Executa diretamente no contexto do shell NixOS
+            # Sem eval, sem agentes, sem arquivos extras
+            print(f"-> Executando: {cmd}")
+            subprocess.run(cmd, shell=True, check=True)
             
-            if 'tool' in tool_call:
-                # Executa e printa o resultado DO COMANDO, não do JSON
-                print(execute_tool(tool_call))
-            else:
-                print(reply)
         except Exception as e:
-            print(f"Erro no pi: {e}")
+            print(f"Erro: {e}", file=sys.stderr)
+            sys.exit(1)
 
     if __name__ == "__main__":
-        main()
+        pi_exec(" ".join(sys.argv[1:]))
   '';
 in
 {
-  home.packages = [ piAgent ];
+  # Injeta o executável no ambiente
+  home.packages = [ pi ];
 }
