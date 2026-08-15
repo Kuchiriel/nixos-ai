@@ -3,7 +3,7 @@
 let
   piAgent = pkgs.writers.writePython3Bin "pi" {
     libraries = [];
-    flakeIgnore = [];
+    flakeIgnore = [ "E501" "W293" ];
   } ''
     import sys
     import subprocess
@@ -14,6 +14,7 @@ let
     BASE_URL = "http://127.0.0.1:8080/v1"
     ENDPOINT = f"{BASE_URL}/chat/completions"
 
+
     def get_model():
         try:
             req = urllib.request.Request(f"{BASE_URL}/models")
@@ -22,6 +23,7 @@ let
                 return data['data'][0]['id']
         except Exception:
             return "local-model"
+
 
     def query_llama(messages, model):
         payload = {
@@ -37,6 +39,7 @@ let
         with urllib.request.urlopen(req) as response:
             res_data = json.loads(response.read().decode('utf-8'))
             return res_data['choices'][0]['message']['content']
+
 
     def main():
         if len(sys.argv) < 2:
@@ -77,6 +80,7 @@ let
                 
             messages.append({"role": "assistant", "content": reply})
             messages.append({"role": "system", "content": f"Command output:\n{output}"})
+
 
     if __name__ == "__main__":
         main()
