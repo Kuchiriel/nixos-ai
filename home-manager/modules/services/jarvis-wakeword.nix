@@ -16,7 +16,7 @@ let
       scipy
       requests
       sounddevice
-      PyAudio
+      pyaudio
     ];
     doCheck = false;
   };
