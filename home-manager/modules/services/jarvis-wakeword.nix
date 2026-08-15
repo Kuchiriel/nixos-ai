@@ -32,13 +32,11 @@ let
     flakeIgnore = [ "E501" ];
     libraries = [ jarvisPythonEnv ];
   } ''
-    import os
-    import sys
-    import numpy as np
-    import pyaudio
-    import subprocess
     import time
     import json
+    import subprocess
+    import numpy as np
+    import pyaudio
     from openwakeword.model import Model
 
     RATE = 16000
@@ -47,6 +45,7 @@ let
     WAKEWORD_MODEL = "${config.home.homeDirectory}/.local/lib/python3.14/site-packages/openwakeword/resources/models/hey_jarvis_v0.1.onnx"
     STARTUP_SOUND = "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/service-login.oga"
 
+
     def update_status(state, text=""):
         try:
             with open("/tmp/jarvis-status.json", "w") as f:
@@ -54,8 +53,9 @@ let
         except Exception:
             pass
 
+
     def main():
-        pa = pyaudio.PyAudio()
+        _ = pyaudio.PyAudio()
         oww = Model(wakeword_model_paths=[WAKEWORD_MODEL])
         with open("/tmp/jarvis-wakeword-status", "w") as f:
             f.write(f"READY|{time.time()}")
@@ -86,6 +86,7 @@ let
             for model_name, score in predictions.items():
                 if score >= THRESHOLD:
                     print(f"[WW] Trigger detectado em {model_name} com score {score}", flush=True)
+
 
     if __name__ == "__main__":
         main()
