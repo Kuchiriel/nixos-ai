@@ -3,100 +3,56 @@
 let
   piAgent = pkgs.writers.writePython3Bin "pi" {
     libraries = [ pkgs.python3Packages.requests ];
-    flakeIgnore = [ "E302" "E305" "W293" "E261" "F401" "E501" ];
   } ''
     import sys
     import json
     import subprocess
     import requests
 
-    TOOLS = {
-        "bash": "Executa comando shell: {'tool': 'bash', 'cmd': 'ls -la'}",
-        "read_file": "Lê um arquivo: {'tool': 'read_file', 'path': '/etc/nixos/configuration.nix'}",
-    }
-
-
-    def clean_json_response(text):
-        text = text.strip()
-        if text.startswith("```"):
-            lines = text.splitlines()
-            if lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].startswith("```"):
-                lines = lines[:-1]
-            text = "\n".join(lines).strip()
-        return text
-
-
     def execute_tool(json_obj):
         try:
-            if json_obj['tool'] == 'bash':
-                res = subprocess.run(
-                    json_obj['cmd'],
-                    shell=True,
-                    capture_output=True,
-                    text=True
-                )
+            if json_obj.get('tool') == 'bash':
+                res = subprocess.run(json_obj['cmd'], shell=True, capture_output=True, text=True)
                 return res.stdout if res.returncode == 0 else res.stderr
-            elif json_obj['tool'] == 'read_file':
-                with open(json_obj['path'], 'r') as f:
-                    return f.read()
+            return "Erro: Ferramenta desconhecida."
         except Exception as e:
             return f"Erro na execução: {str(e)}"
-        return "Ferramenta desconhecida."
-
-
-    def query(messages):
-        host = "127.0.0.1"
-        port = "8080"
-        url = f"http://{host}:{port}/v1/chat/completions"
-        payload = {
-            "model": "local-model",
-            "messages": messages,
-            "temperature": 0.1,
-            "response_format": {"type": "json_object"}
-        }
-        response = requests.post(url, json=payload, timeout=60)
-        data = response.json()
-        return data['choices'][0]['message']['content']
-
 
     def main():
         user_input = " ".join(sys.argv[1:])
+        
+        # System Prompt focado em execução direta
         system_prompt = (
-            "Você é um agente de automação em shell para NixOS.\n"
-            "Você DEVE usar a ferramenta 'bash' para executar comandos solicitados.\n"
-            "O formato EXATO da resposta deve ser estritamente um JSON:\n"
-            "{\"tool\": \"bash\", \"cmd\": \"seu_comando_aqui\"}\n\n"
-            "Exemplo:\n"
-            "Usuário: 'Colete versão e kernel'\n"
-            "Resposta: {\"tool\": \"bash\", \"cmd\": \"nixos-version && uname -r\"}\n\n"
-            "Retorne APENAS esse JSON bruto, sem blocos markdown."
+            "Você é um executor de comandos NixOS. "
+            "Sua tarefa é identificar a necessidade de um comando shell e executar. "
+            "Retorne APENAS o JSON no formato: {'tool': 'bash', 'cmd': 'comando_aqui'}. "
+            "Não adicione textos extras."
         )
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_input}
-        ]
+        payload = {
+            "model": "local-model",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_input}
+            ],
+            "temperature": 0.1,
+            "response_format": {"type": "json_object"}
+        }
 
-        reply = query(messages)
-        cleaned_reply = clean_json_response(reply)
-
+        # Query
         try:
-            tool_call = json.loads(cleaned_reply)
+            resp = requests.post("http://127.0.0.1:8080/v1/chat/completions", json=payload, timeout=10)
+            reply = resp.json()['choices'][0]['message']['content']
+            
+            tool_call = json.loads(reply)
+            
             if 'tool' in tool_call:
-                output = execute_tool(tool_call)
-                messages.append({"role": "assistant", "content": reply})
-                messages.append({
-                    "role": "user",
-                    "content": f"Resultado da execução: {output}"
-                })
-                print(query(messages))
+                # Executa e printa o resultado DO COMANDO, não do JSON
+                print(execute_tool(tool_call))
             else:
                 print(reply)
-        except json.JSONDecodeError:
-            print(reply)
-
+        except Exception as e:
+            print(f"Erro no pi: {e}")
 
     if __name__ == "__main__":
         main()
