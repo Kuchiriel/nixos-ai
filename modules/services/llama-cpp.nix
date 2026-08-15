@@ -12,6 +12,7 @@ with lib;
     systemd.services.llama-cpp-server = {
       description = "Llama.cpp High-Performance LLM Server (Auto-Adaptive)";
       after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
 
       script = ''
