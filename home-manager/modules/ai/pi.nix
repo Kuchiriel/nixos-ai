@@ -69,6 +69,7 @@ let
         re.DOTALL
     )
 
+
     def extract_fallback_tool_call(content):
         if not content:
             return None
@@ -93,6 +94,8 @@ let
     # (7B na VM vs 32B bare-metal, ver modules/services/llama-cpp.nix).
     # Detecção via /v1/models, sem hardcode de caminho de modelo.
     # --------------------------------------------------------------------
+
+
     def detect_profile():
         model_id = ""
         try:
@@ -138,6 +141,7 @@ let
                 "max_tokens_per_turn": 1024,
             }
 
+
     def call_server(messages, profile):
         payload = {
             "model": "default",
@@ -157,6 +161,7 @@ let
             sys.exit(1)
         return resp.json()
 
+
     def run_shell_tool(cmd):
         print(f"-> Executando: {cmd}")
         res = subprocess.run(
@@ -166,6 +171,7 @@ let
         if not output.strip():
             output = f"Command executed with exit code {res.returncode}"
         return output
+
 
     def run_agent(user_prompt):
         profile = detect_profile()
@@ -284,6 +290,7 @@ let
             )
             sys.exit(1)
 
+
     if __name__ == "__main__":
         if len(sys.argv) < 2:
             print(
@@ -297,4 +304,3 @@ in
 {
   home.packages = [ pi ];
 }
-
