@@ -1,9 +1,13 @@
 { config, pkgs, ... }:
 
 {
-
   users.groups.qdrant = {};
-  users.users.qdrant.group = "qdrant";
+
+  users.users.qdrant = {
+    isSystemUser = true;
+    group = "qdrant";
+    description = "Qdrant Vector Database Service User";
+  };
 
   services.qdrant = {
     enable = true;
@@ -19,7 +23,6 @@
     };
   };
 
-  # Garante que o diretório exista e tenha permissão de escrita para o usuário qdrant
   systemd.tmpfiles.rules = [
     "d /var/lib/qdrant 0750 qdrant qdrant -"
     "d /var/lib/qdrant/storage 0750 qdrant qdrant -"

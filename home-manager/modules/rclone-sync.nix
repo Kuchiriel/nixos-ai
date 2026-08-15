@@ -2,6 +2,7 @@
 
 let
   filterFile = pkgs.writeText "rclone-filters.txt" ''
+    - **/.local/**
     - **/.npm/**
     - **/.npm-global/**
     - **/.pub-cache/**

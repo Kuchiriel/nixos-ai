@@ -5,15 +5,29 @@ with lib;
 let
   cfg = config.services.llama-cpp-server;
 
-  # Detecta se está rodando em VM ou Bare Metal
+  # Detecção automática de ambiente (VM vs Host)
   isVM = config.mySystem.isVM or false;
 
-  # Parâmetros adaptativos de Hardware (VM vs Host)
+  # Parâmetros adaptativos de hardware
   gpuLayers = if isVM then 0 else 16;
   threadsCount = if isVM then 4 else 7;
   ubatchSize = if isVM then 512 else 1024;
+  defaultContextSize = if isVM then 16384 else 32768;
 
-  # Otimizações de KV Cache e FlashAttention dependentes do hardware
+  # Mapeamento do diretório e modelos por ambiente
+  modelDir = "${config.users.users.nixos.home}/models";
+
+  modelFileName = if isVM
+    then "qwen2.5-coder-7b-instruct-q4_k_m.gguf"
+    else "qwen2.5-coder-32b-instruct-q4_k_m.gguf";
+
+  modelFile = "${modelDir}/${modelFileName}";
+
+  modelUrl = if isVM
+    then "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf"
+    else "https://huggingface.co/Qwen/Qwen2.5-Coder-32B-Instruct-GGUF/resolve/main/qwen2.5-coder-32b-instruct-q4_k_m.gguf";
+
+  # Flags otimizadas em formato de string multilinha bash
   extraLlamaFlags = if isVM then ''
     -ctk f16 \
     -ctv f16
@@ -22,12 +36,6 @@ let
     -ctk q8_0 \
     -ctv q4_0
   '';
-
-  # Definição do modelo Qwen2.5-Coder-32B-Instruct
-  modelDir = "/home/nixos/models";
-  modelFileName = "qwen2.5-coder-32b-instruct-q4_k_m.gguf";
-  modelFile = "${modelDir}/${modelFileName}";
-  modelUrl = "https://huggingface.co/Qwen/Qwen2.5-Coder-32B-Instruct-GGUF/resolve/main/qwen2.5-coder-32b-instruct-q4_k_m.gguf";
 in
 {
   options.services.llama-cpp-server = {
@@ -53,7 +61,7 @@ in
 
     contextSize = mkOption {
       type = types.int;
-      default = 32768;
+      default = defaultContextSize;
       description = "Tamanho do contexto (tokens).";
     };
 
@@ -74,9 +82,8 @@ in
       script = ''
         mkdir -p ${modelDir}
 
-        # Download/Resumo via aria2c
         if [ ! -f "${cfg.modelPath}" ] || [ -f "${cfg.modelPath}.aria2" ]; then
-          echo "[LLAMA-SERVER] Baixando/Retomando Qwen2.5-Coder-32B..."
+          echo "[LLAMA-SERVER] Baixando/Retomando modelo (${modelFileName})..."
           ${pkgs.aria2}/bin/aria2c \
             -c \
             -x 4 \
@@ -90,7 +97,7 @@ in
           }
         fi
 
-        echo "[LLAMA-SERVER] Iniciando llama-server..."
+        echo "[LLAMA-SERVER] Iniciando llama-server com modelo ${modelFileName}..."
         exec ${pkgs.llama-cpp}/bin/llama-server \
           -m "${cfg.modelPath}" \
           --host 0.0.0.0 \
