@@ -3,7 +3,7 @@
 let
   piAgent = pkgs.writers.writePython3Bin "pi" {
     libraries = [];
-    flakeIgnore = [ "E302" "E305" "W293" "E261" "F401" ];
+    flakeIgnore = [ "E302" "E305" "W293" "E261" "F401" "E501" ];
   } ''
     import sys
     import json
@@ -53,10 +53,13 @@ let
 
     def main():
         user_input = " ".join(sys.argv[1:])
-        system_prompt = f"""Você é um agente técnico NixOS.
-        Ferramentas disponíveis: {json.dumps(TOOLS)}
-        Se precisar usar uma ferramenta, retorne APENAS um JSON com o formato da ferramenta.
-        Se não, responda normalmente ao usuário."""
+        system_prompt = (
+            "Você é um agente técnico NixOS.\n"
+            f"Ferramentas disponíveis: {json.dumps(TOOLS)}\n"
+            "Se precisar usar uma ferramenta, retorne APENAS um JSON "
+            "com o formato da ferramenta.\n"
+            "Se não, responda normalmente ao usuário."
+        )
 
         messages = [
             {"role": "system", "content": system_prompt},
