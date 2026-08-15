@@ -16,6 +16,18 @@ let
     }
 
 
+    def clean_json_response(text):
+        text = text.strip()
+        if text.startswith("```"):
+            lines = text.splitlines()
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
+        return text
+
+
     def execute_tool(json_obj):
         try:
             if json_obj['tool'] == 'bash':
@@ -42,7 +54,7 @@ let
             "response_format": {"type": "json_object"}
         }
         req = urllib.request.Request(
-            "http://127.0.0.1:8080/v1/chat/completions",
+            "[http://127.0.0.1:8080/v1/chat/completions](http://127.0.0.1:8080/v1/chat/completions)",
             data=json.dumps(payload).encode('utf-8'),
             headers={'Content-Type': 'application/json'}
         )
@@ -56,8 +68,8 @@ let
         system_prompt = (
             "Você é um agente técnico NixOS.\n"
             f"Ferramentas disponíveis: {json.dumps(TOOLS)}\n"
-            "Se precisar usar uma ferramenta, retorne APENAS um JSON "
-            "com o formato da ferramenta.\n"
+            "Se precisar usar uma ferramenta, retorne APENAS um JSON bruto "
+            "sem blocos markdown com o formato da ferramenta.\n"
             "Se não, responda normalmente ao usuário."
         )
 
@@ -67,9 +79,10 @@ let
         ]
 
         reply = query(messages)
+        cleaned_reply = clean_json_response(reply)
 
         try:
-            tool_call = json.loads(reply)
+            tool_call = json.loads(cleaned_reply)
             if 'tool' in tool_call:
                 output = execute_tool(tool_call)
                 messages.append({"role": "assistant", "content": reply})
