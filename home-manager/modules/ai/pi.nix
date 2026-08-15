@@ -47,6 +47,7 @@ let
 
 
     def query(messages):
+        target_url = "[http://127.0.0.1:8080/v1/chat/completions](http://127.0.0.1:8080/v1/chat/completions)"
         payload = {
             "model": "local-model",
             "messages": messages,
@@ -54,7 +55,7 @@ let
             "response_format": {"type": "json_object"}
         }
         req = urllib.request.Request(
-            "[http://127.0.0.1:8080/v1/chat/completions](http://127.0.0.1:8080/v1/chat/completions)",
+            target_url,
             data=json.dumps(payload).encode('utf-8'),
             headers={'Content-Type': 'application/json'}
         )
