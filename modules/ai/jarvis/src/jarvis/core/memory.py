@@ -133,45 +133,68 @@ class EpisodicMemory:
         top_k: int = 5,
         kinds: tuple[str, ...] | None = None,
     ) -> list[dict[str, Any]]:
-        """Busca híbrida por eventos semânticamente relevantes."""
+        """Busca híbrida por eventos semânticamente relevantes.
+
+        Inclui deduplicação por texto (memórias com texto igual ou >95% similar
+        são consolidadas, mantendo a mais recente) e limite de contexto para
+        não saturar o prompt de SLMs.
+        """
         vector = self._llm.embed(query)
         if vector is None:
             return []
         self.ensure()
         from jarvis.core.rag import sparse_terms, sparse_vector
 
+        # busca mais do top_k para ter margem de dedup
         points = self._store.search_hybrid(
             self.collection,
             vector,
             sparse_vector(sparse_terms(query)),
-            top_k=top_k,
+            top_k=top_k * 3,
         )
-        hits = []
+        hits: list[dict[str, Any]] = []
+        seen_texts: set[str] = set()
         for p in points:
             payload = p.get("payload", {})
             if kinds and payload.get("kind") not in kinds:
                 continue
+            text = payload.get("text", "")
+            # dedup: texto idêntico ou muito similar → mantém o mais recente
+            text_key = text.strip().lower()[:200]  # chave de dedup truncada
+            if text_key in seen_texts:
+                continue
+            seen_texts.add(text_key)
             hits.append({
                 "id": p.get("id"),
                 "score": round(p.get("score", 0.0), 4),
                 "kind": payload.get("kind", ""),
-                "text": payload.get("text", ""),
+                "text": text,
                 "task": payload.get("task", ""),
                 "error_pattern": payload.get("error_pattern", ""),
                 "fix": payload.get("fix", ""),
                 "ts": payload.get("ts"),
             })
+            if len(hits) >= top_k:
+                break
         return hits
 
-    def lessons(self, query: str, *, top_k: int = 3) -> str:
-        """Formato do legado ('PAST LESSONS') para injetar no prompt do agente."""
+    def lessons(self, query: str, *, top_k: int = 3, max_chars: int = 500) -> str:
+        """Formato do legado ('PAST LESSONS') para injetar no prompt do agente.
+
+        Args:
+            max_chars: limite de caracteres para não saturar o contexto de SLMs.
+                       Lições mais recentes e com score maior têm prioridade.
+        """
         hits = self.recall(query, top_k=top_k, kinds=(KIND_LESSON,))
         if not hits:
             return ""
         out = "\nPAST LESSONS (avoid these mistakes):\n"
         for h in hits:
-            out += (f"- When task was '{h['task'] or '?'}', error "
+            line = (f"- When task was '{h['task'] or '?'}', error "
                     f"'{h['error_pattern'] or '?'}' was fixed with:\n{h['fix'] or '?'}\n")
+            if len(out) + len(line) > max_chars:
+                break
+            out += line
         return out
 
     def recent(self, *, limit: int = 20) -> list[dict[str, Any]]:

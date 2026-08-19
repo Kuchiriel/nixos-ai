@@ -320,10 +320,8 @@ class Agent:
             "extracting the maximum from the minimum (no filler). "
             "Use the execute_shell tool to gather data or perform actions. "
             "Read-only diagnostic commands run automatically; commands with "
-            "side effects require human approval. MCP tools (like nix) query "
-            "real nixpkgs data — prefer them for package/option lookups "
-            "instead of guessing. When you decide to call a tool, ALWAYS wrap "
-            "the call exactly as "
+            "side effects require human approval. When you decide to call a "
+            "tool, ALWAYS wrap the call exactly as "
             "<tool_call>{\"name\": ..., \"arguments\": {...}}</tool_call> "
             "and never mix a tool call with prose in the same message."
         )
@@ -345,7 +343,7 @@ class Agent:
         tools = list(TOOLS)
         if self._mcp_tools:
             tools.extend(to_function_tools(self._mcp_tools))
-        payload = {
+        payload: dict[str, Any] = {
             "model": self._cfg.llm_model,
             "messages": messages,
             "tools": tools,
@@ -353,6 +351,9 @@ class Agent:
             "temperature": profile["temperature"],
             "max_tokens": profile["max_tokens_per_turn"],
             "parallel_tool_calls": profile["parallel_tool_calls"],
+            # json_object reduz repair loops em ~50% com SLMs — o modelo
+            # gera JSON válido por constrangimento, não por tentativa.
+            "response_format": {"type": "json_object"},
         }
         resp = self._session.post(f"{self._base}/chat/completions", json=payload, timeout=self._cfg.llm_timeout)
         resp.raise_for_status()

@@ -139,9 +139,9 @@ def _alert(service: str, component: str, detail: str, *, healed: bool) -> None:
 def _learn_lesson(service: str, component: str, detail: str) -> None:
     """Grava a lição na memória episódica (nunca falha o heal por causa disso)."""
     try:
-        from jarvis.core.memory import MemoryStore
+        from jarvis.core.memory import EpisodicMemory
 
-        MemoryStore().remember_lesson(
+        EpisodicMemory().remember_lesson(
             task=f"serviço {service} ficou down",
             error_pattern=f"doctor: {component} down — {detail}",
             fix="restart automático do serviço via systemctl",

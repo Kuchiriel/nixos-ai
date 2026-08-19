@@ -167,7 +167,8 @@
         pkgs.python313Packages.pytest
       ];
       shellHook = ''
-        export PYTHONPATH="modules/ai/jarvis/src:$PYTHONPATH"
+        export PYTHONPATH="''${FLAKE_ROOT:-$(git rev-parse --show-toplevel)}/modules/ai/jarvis/src:$PYTHONPATH"
+        export FLAKE_ROOT="''${FLAKE_ROOT:-$(git rev-parse --show-toplevel)}"
       '';
     };
 
