@@ -2,7 +2,7 @@
 
 ## Estado Atual do Sistema
 - **NixOS Lab**: VM Hyper-V, i7-13620H (4c/8t visíveis), 19.1GB RAM, sem GPU
-- **Último rebuild**: OK — **405+ testes verdes**
+- **Último rebuild**: OK — **460+ testes verdes** (56 novos de fuzzing/mutation)
 - **Git**: limpo (após commit mais recente)
 - **Partição legada montada**: `/mnt/legacy/system` (@) + `/mnt/legacy/home/kuchiriel` (@home) — **NÃO persiste no reboot** (cryptsetup manual)
 
@@ -24,6 +24,16 @@ df089dc docs: atualiza HANDOFF com resultados do hardening (422d0be)
 ```
 
 ## O Que Foi Implementado Nesta Sessão
+
+### 0b. Mutation Testing + Fuzzing (pendente commit)
+- `test_fuzz_mutation.py` — 56 testes de fuzzing e mutation testing
+- Fuzzing do parser JSON: 100+ strings aleatórias, 100+ JSONs malformados, 100+ tool calls
+- Fuzzing de memory: _stable_id determinismo, payload validação, edge cases
+- Fuzzing de rules: 100+ triggers aleatórios, alternativas especiais, ReDoS prevention
+- Mutation targets: _normalize_tool_call (None args, invalid JSON, empty name)
+- Stress tests: 1000 iterações rápidas (parser, compile, normalize, profile, stable_id)
+- Content safety fuzzing: 100+ safe/unsafe prompts, case insensitive, partial match
+- Lacunas encontradas: tab (\t) não detectado por chaining check (shlex.safe)
 
 ### 0a. Circuit Breaker + Fallback (pendente commit)
 - `core/health_monitor.py` — monitor de saúde do llama.cpp: socket check, HTTP health, latência, uptime%
@@ -170,7 +180,7 @@ Diagnóstico completo em `docs/architecture/pillar-diagnostic.md`. Score geral: 
 - `test_unknown_tool_rejected` (simulação real)
 - `test_execute_shell_only_tool_accepted`
 
-**405+ testes passando** (zero regressão). Inclui: 248 base + 6 security + 31 PBT + 30 wakeword + 20 profile + 13 observability + 34 eventbus/triggers/vision + 25 circuit breaker.
+**460+ testes passando** (zero regressão). Inclui: 248 base + 6 security + 31 PBT + 30 wakeword + 20 profile + 13 observability + 34 eventbus/triggers/vision + 25 circuit breaker + 56 fuzzing/mutation.
 
 ### O Que NÃO Foi Implementado (decisão consciente)
 
