@@ -119,6 +119,11 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
     from jarvis.core.agent import command_allowed
     import subprocess
 
+    if name == "jarvis_command":
+        from jarvis.core.devtools import jarvis_command
+        result = jarvis_command(args.get("subcommand", "status"), args.get("args", ""))
+        return result.get("output", result.get("error", "no output"))[:3000]
+
     if name == "execute_shell":
         cmd = args.get("cmd", "")
         if not cmd:

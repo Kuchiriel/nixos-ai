@@ -672,9 +672,14 @@ class Agent:
                     from jarvis.core.vision import handle_capture
                     output = handle_capture(args)
                 elif func_name in ("read_file", "write_file", "str_replace",
-                                   "list_directory", "code_search", "run_tests"):
-                    from jarvis.core.devtools import handle_dev_tool
-                    output = handle_dev_tool(func_name, args)
+                                   "list_directory", "code_search", "run_tests",
+                                   "semantic_search", "jarvis_command"):
+                    from jarvis.core.devtools import handle_dev_tool, jarvis_command
+                    if func_name == "jarvis_command":
+                        res = jarvis_command(args.get("subcommand", "status"), args.get("args", ""))
+                        output = res.get("output", res.get("error", "no output"))[:3000]
+                    else:
+                        output = handle_dev_tool(func_name, args)
                 elif self._mcp_clients:
                     output = self._call_mcp_tool(func_name, args)
                 else:

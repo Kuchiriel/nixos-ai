@@ -377,7 +377,7 @@ def test_dev_tools_schema() -> None:
     assert "list_directory" in names
     assert "code_search" in names
     assert "run_tests" in names
-    assert len(DEV_TOOLS) == 8  # read, write, str_replace, list, search, tests, linter, semantic
+    assert len(DEV_TOOLS) == 9  # read, write, str_replace, list, search, tests, linter, semantic, jarvis_command
 
 
 def test_dev_tools_have_required_params() -> None:

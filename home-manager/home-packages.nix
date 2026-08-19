@@ -15,7 +15,6 @@
     nerd-fonts.symbols-only
 
     # Core CLI utils
-    aider-chat
     bc
     bottom
     brightnessctl
@@ -32,9 +31,6 @@
     wl-clipboard
     yt-dlp
     zip
-
-    # Dev Runtime (Necessário para o Pi Agent CLI)
-    nodejs
 
     # WM Utilities
     libnotify

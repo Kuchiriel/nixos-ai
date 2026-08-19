@@ -753,7 +753,52 @@ DEV_TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "jarvis_command",
+            "description": "Run a JARVIS CLI command (doctor, status, profile, metrics, etc).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "subcommand": {
+                        "type": "string",
+                        "description": "Subcommand: doctor, status, profile show, metrics, hwdetect, hwprofile",
+                    },
+                    "args": {
+                        "type": "string",
+                        "description": "Additional arguments (e.g. '--json', 'set verbosity verbose')",
+                    },
+                },
+                "required": ["subcommand"],
+            },
+        },
+    },
 ]
+
+
+def jarvis_command(subcommand: str, args: str = "") -> dict[str, Any]:
+    """Executa um comando jarvis CLI e retorna o resultado."""
+    import subprocess
+    cmd_parts = ["jarvis", subcommand] + (args.split() if args else [])
+    try:
+        result = subprocess.run(
+            cmd_parts, capture_output=True, text=True, timeout=30,
+        )
+        output = result.stdout if result.returncode == 0 else result.stderr
+        return {"ok": result.returncode == 0, "output": output[:3000]}
+    except FileNotFoundError:
+        # Fallback: python module
+        try:
+            result = subprocess.run(
+                ["python", "-m", "jarvis.cli.main", subcommand] + (args.split() if args else []),
+                capture_output=True, text=True, timeout=30,
+            )
+            return {"ok": result.returncode == 0, "output": result.stdout[:3000]}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 # ---------------------------------------------------------------------------
