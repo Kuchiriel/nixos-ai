@@ -5,6 +5,7 @@
     ./modules/rclone-sync.nix
     ./modules/ai
     ./modules/services/jarvis-wakeword.nix
+    ./modules/services/jarvis-triggers.nix
   ];
 
   # ⚠️ SEGREDOS: NUNCA coloque API keys aqui (vazam para o repo/git history).
@@ -38,6 +39,12 @@
     # Calibração validada do legado (docs/architecture/legacy-audio-calibration.md):
     # 0.85 = menos false positives com ventoinha/sons de casa
     threshold = 0.85;
+  };
+
+  services.jarvis-triggers = {
+    enable = true;
+    pollInterval = 300;  # 5 minutos
+    diskThreshold = 90;
   };
 
   home = {

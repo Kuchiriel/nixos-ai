@@ -386,3 +386,34 @@ def test_dev_tools_have_required_params() -> None:
         params = tool["function"]["parameters"]
         assert "properties" in params
         assert "required" in params
+
+
+def test_jarvis_command_tool_exists() -> None:
+    """jarvis_command está no DEV_TOOLS."""
+    names = [t["function"]["name"] for t in DEV_TOOLS]
+    assert "jarvis_command" in names
+    tc = [t for t in DEV_TOOLS if t["function"]["name"] == "jarvis_command"][0]
+    props = tc["function"]["parameters"]["properties"]
+    assert "subcommand" in props
+    assert "args" in props
+
+
+def test_jarvis_command_handler() -> None:
+    """jarvis_command retorna dict com ok/output/error."""
+    from jarvis.core.devtools import jarvis_command
+    result = jarvis_command("status")
+    assert isinstance(result, dict)
+    assert "ok" in result
+    # No sandbox pode falhar (jarvis não instalado), mas retorna dict válido
+    if result["ok"]:
+        import json
+        data = json.loads(result["output"])
+        assert isinstance(data, dict)
+    else:
+        assert "error" in result or "output" in result
+
+
+def test_semantic_search_tool_exists() -> None:
+    """semantic_search está no DEV_TOOLS."""
+    names = [t["function"]["name"] for t in DEV_TOOLS]
+    assert "semantic_search" in names
