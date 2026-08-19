@@ -1,4 +1,4 @@
-# HANDOFF - Sessão 2026-08-17 (atualizado)
+# HANDOFF - Sessão 2026-08-19 (atualizado com hardening security)
 
 ## Estado Atual do Sistema
 - **NixOS Lab**: VM Hyper-V, i7-13620H (4c/8t visíveis), 19.1GB RAM, sem GPU
@@ -101,3 +101,43 @@ Diagnóstico completo em `docs/architecture/pillar-diagnostic.md`. Score geral: 
 - **Expert MoE/layer**: `(params_b − attn_total_b) / layers / n_experts * 1e9` (cuidado com unidades B vs raw!)
 - **VRAM**: `ngl = floor((vram − kv − 0.6) / gb_por_camada)`
 - **Offload iGPU**: `LIBVA_DRIVER_NAME=iHD` + mpvpaper `--hwdec=vaapi`; whisper SYCL = `intel-compute-runtime` + overlay
+
+---
+
+## Security Hardening (2026-08-19) — Commit 583d30c
+
+### Threat Model — Vetores de Ataque
+
+| # | Vetor | Severidade | Antes | Depois |
+|---|---|---|---|---|
+| 1 | **Chaining bypass** (`cat /etc/shadow; rm -rf /`) | 🔴 CRÍTICO | ✗ Aceito | ✗ Rejeitado |
+| 2 | **Tool hallucination** (modelo gera tool inventada) | 🟡 MÉDIO | ✗ Executada | ✗ Rejeitada + audit |
+| 3 | **MCP tools sem validação** (arguments arbitrários) | 🟡 MÉDIO | ✗ Aceito | ✗ Rejeitado |
+| 4 | **Prompt injection via RAG** | 🟢 BAIXO | — | Mitigado (allowlist) |
+| 5 | **Self-heal restart arbitrário** | 🟢 BAIXO | — | OK (SERVICE_MAP) |
+| 6 | **Audit trail adulterado** | 🟢 BAIXO | — | OK (state_dir declarativo) |
+
+### Barreiras Implementadas
+
+1. **`has_chaining_operators()`** — detecta `&&`, `||`, `;`, `|`, backticks, `$()`, `${}`, `\n`. Comandos com chaining são rejeitados pelo `command_allowed()` mesmo se o prefixo for válido.
+
+2. **`_valid_tool_names()`** — whitelist de tools aceitas (`execute_shell` + MCP registrados). Tools hallucinadas pelo modelo são rejeitadas com entrada no audit trail.
+
+3. **Empty cmd guard** — comandos vazios/malformados retornam erro sem execução.
+
+### Testes de Segurança (6 novos)
+
+- `test_chaining_operators_detected` (6 patterns)
+- `test_chaining_operators_not_in_safe_commands` (4 safe)
+- `test_chaining_bypasses_allowlist` (3 cenários)
+- `test_empty_cmd_rejected` (3 patterns)
+- `test_unknown_tool_rejected` (simulação real)
+- `test_execute_shell_only_tool_accepted`
+
+**310/310 testes passando** (zero regressão).
+
+### O Que NÃO Foi Implementado (decisão consciente)
+
+- **Rate limiting por IP/sessão** — não aplicável (agent é local, não HTTP público)
+- **Sandboxing de comandos** — `shlex.split()` sem `shell=True` já é seguro; container/isolation é overkill para agent local
+- **Integrity check no audit trail** — state_dir é declarativo via Nix; adulteração é revertida no próximo rebuild
