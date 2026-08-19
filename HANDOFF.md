@@ -3,11 +3,15 @@
 ## Estado Atual do Sistema
 - **NixOS Lab**: VM Hyper-V, i7-13620H (4c/8t visíveis), 19.1GB RAM, sem GPU
 - **Último rebuild**: OK — **485+ testes verdes**
-- **Git**: limpo, 3 commits ahead of origin (e1f29bd, d424185, e82e3d5)
+- **Git**: limpo, 7 commits ahead of origin
+- **Bulldozer**: 5/6 testes de atrito passam contra Qwen3-4B real
 - **Partição legada montada**: `/mnt/legacy/system` (@) + `/mnt/legacy/home/kuchiriel` (@home) — **NÃO persiste no reboot** (cryptsetup manual)
 
 ## Commits Recentes (em ordem — sessão 2026-08-19)
 ```
+5b94993 feat(bulldozer): testes de atrito reais contra SLM + prompt enforcement
+c17a9a8 feat(devtools): fuzzy matching para str_replace (tolera erros de SLM)
+3f4f434 fix(waybar): replace one-shot jarvis ask with jarvis dev REPL
 e1f29bd feat(dev): CLI interativo jarvis dev (estilo Aider) testado contra SLM real
 d424185 feat(devtools): ferramentas de desenvolvimento para o agente (estilo Aider/Claude Code)
 e82e3d5 test(fuzz): campanha intensiva de mutation testing e fuzzing de estresse
