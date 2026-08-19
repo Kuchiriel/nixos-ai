@@ -2,8 +2,8 @@
 
 ## Estado Atual do Sistema
 - **NixOS Lab**: VM Hyper-V, i7-13620H (4c/8t visíveis), 19.1GB RAM, sem GPU
-- **Último rebuild**: OK — **497 testes verdes**, 0 falhas, nix flake check OK
-- **Git**: limpo, 8 commits ahead of origin
+- **Último rebuild**: OK — **500+ testes verdes**, 0 falhas, nix flake check OK
+- **Git**: limpo, 12+ commits ahead of origin
 - **Bulldozer**: 5/6 testes de atrito passam contra Qwen3-4B real
 - **Validação E2E**: llama.cpp ✅, Qdrant ✅, Memória ✅, Agent ✅, Self-heal ✅, Flake ✅
 - **Bugs corrigidos**: semantic_search import, Logger sandbox, devtools /build path, content safety
