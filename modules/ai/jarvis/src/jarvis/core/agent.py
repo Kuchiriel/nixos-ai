@@ -64,6 +64,8 @@ DEFAULT_ALLOWED_PREFIXES: tuple[str, ...] = (
 TOOL_CALL_TAG_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
 CODEBLOCK_JSON_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 
+from jarvis.core.vision import VISION_TOOL
+
 TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
@@ -81,7 +83,8 @@ TOOLS: list[dict[str, Any]] = [
                 "required": ["cmd"],
             },
         },
-    }
+    },
+    VISION_TOOL,
 ]
 
 
@@ -631,6 +634,9 @@ class Agent:
                     )
                 elif func_name == "execute_shell":
                     output = self._execute_tool(args.get("cmd", ""), result)
+                elif func_name == "capture_screen":
+                    from jarvis.core.vision import handle_capture
+                    output = handle_capture(args)
                 elif self._mcp_clients:
                     output = self._call_mcp_tool(func_name, args)
                 else:

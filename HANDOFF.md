@@ -2,12 +2,13 @@
 
 ## Estado Atual do Sistema
 - **NixOS Lab**: VM Hyper-V, i7-13620H (4c/8t visíveis), 19.1GB RAM, sem GPU
-- **Último rebuild**: OK — **346+ testes verdes**
-- **Git**: limpo (após commit 9d0103f)
+- **Último rebuild**: OK — **380+ testes verdes**
+- **Git**: limpo (após commit mais recente)
 - **Partição legada montada**: `/mnt/legacy/system` (@) + `/mnt/legacy/home/kuchiriel` (@home) — **NÃO persiste no reboot** (cryptsetup manual)
 
 ## Commits Recentes (em ordem — sessão 2026-08-19)
 ```
+<pendente> feat(eventbus): barramento de eventos assíncrono + vision + triggers
 9d0103f feat(profile): perfil de usuario dinâmico + contexto adaptativo
 ee87408 feat(observability): logging JSONL unificado + metrics + doctor proativo
 6b5c445 docs(security): adiciona threat model e resultados do hardening ao HANDOFF.md
@@ -22,6 +23,14 @@ df089dc docs: atualiza HANDOFF com resultados do hardening (422d0be)
 ```
 
 ## O Que Foi Implementado Nesta Sessão
+
+### 0. Event Bus + Vision + Triggers (pendente commit)
+- `core/eventbus.py` — barramento asyncio leve: pub/sub por tópico, retry, DLQ, stats
+- `core/vision.py` — captura de tela via grim/slurp (full/region/window), fallback gracioso sem display
+- `core/triggers.py` — motor declarativo: cooldown, idempotência, persistência JSON, triggers pré-definidos (disk/doctor/cpu)
+- `agent.py` — tool `capture_screen` integrada ao agente
+- CLI: `jarvis screenshot`, `jarvis triggers run|status`
+- 34 testes novos (eventbus + triggers + vision)
 
 ### 1. Hardening da Stack (422d0be)
 - `heal.py`: MemoryStore (bug) → EpisodicMemory — fecha loop de self-heal
@@ -73,6 +82,8 @@ df089dc docs: atualiza HANDOFF com resultados do hardening (422d0be)
 6. **Testes de integração real** — com Qdrant/LLM rodando (não mocks)
 7. **Dashboard waybar** — erros recentes, latência SLM, métricas em tempo real
 8. **Alertas Telegram** — notificar quando doctor detecta serviços down
+9. **Event Bus daemon** — rodar como systemd user service com `jarvis triggers run --loop`
+10. **Vision no host** — validar grim/slurp no Hyprland real (VM sem display)
 
 ## Problemas Conhecidos
 - **Logind D-Bus timeout**: erro recorrente no rebuild, não afeta funcionalidade
@@ -150,7 +161,7 @@ Diagnóstico completo em `docs/architecture/pillar-diagnostic.md`. Score geral: 
 - `test_unknown_tool_rejected` (simulação real)
 - `test_execute_shell_only_tool_accepted`
 
-**346+ testes passando** (zero regressão). Inclui: 248 base + 6 security + 31 PBT + 30 wakeword + 20 profile + 13 observability.
+**380+ testes passando** (zero regressão). Inclui: 248 base + 6 security + 31 PBT + 30 wakeword + 20 profile + 13 observability + 34 eventbus/triggers/vision.
 
 ### O Que NÃO Foi Implementado (decisão consciente)
 

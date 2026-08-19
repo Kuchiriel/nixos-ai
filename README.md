@@ -30,7 +30,10 @@ e não fica parada — tudo rodando local (llama.cpp + Qdrant), sem cloud.
 | 🔒 **Security** | anti-chaining, tool whitelist, empty cmd guard, threat model documentado |
 | 📟 **Observabilidade** | logging JSONL centralizado, `jarvis metrics`, doctor proativo (network/sockets/Btrfs) |
 | 👤 **Perfil Adaptativo** | preferências locais (verbosity/tone/expertise), contexto temporal + sistema no prompt |
-| 🧪 **Testes** | 346+ testes: unit, integration, PBT (hypothesis), security, wakeword |
+| 🔗 **Event Bus** | barramento asyncio leve: pub/sub por tópico, retry, DLQ, stats |
+| 📷 **Vision** | captura de tela via grim/slurp (full/region/window) como tool do agente |
+| ⚡ **Triggers** | automações declarativas: disk/doctor/cpu alerts com cooldown e idempotência |
+| 🧪 **Testes** | 380+ testes: unit, integration, PBT (hypothesis), security, wakeword |
 | 📝 **Property-Based Testing** | 31 testes adversariais com hypothesis para parsers e regex |
 
 **Modelos 100% declarativos**: `modules/ai/models.nix` é a única fonte de
@@ -359,6 +362,8 @@ jarvis speak "texto"          # sintetiza texto em voz
 # Hardware e Integração
 jarvis hwdetect               # detecta hardware e classifica tier
 jarvis hwprofile              # calcula flags SOTA + melhor modelo
+jarvis screenshot full|region|window  # captura de tela (Wayland/Hyprland)
+jarvis triggers run|status    # motor de automações por gatilhos
 jarvis handoff --task "..."   # pacote de contexto para IAs web
 jarvis telegram               # canal Telegram
 jarvis idle status            # estado do modo idle

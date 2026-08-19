@@ -18,6 +18,8 @@ Subcomandos:
   jarvis lessons "erro"         — lições passadas relevantes (estilo experience_buffer)
   jarvis hwdetect               — detecta o hardware (RAM/VRAM/CPU/GPU/NPU)
   jarvis hwprofile              — calcula flags SOTA + melhor modelo p/ o hardware
+  jarvis screenshot [full|region|window] — captura de tela (Wayland/Hyprland)
+  jarvis triggers run|status     — motor de automações por gatilhos
 """
 
 from __future__ import annotations
@@ -589,6 +591,46 @@ def _cmd_hwprofile(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_screenshot(args: argparse.Namespace) -> int:
+    from jarvis.core.vision import capture_full, capture_region, capture_window
+
+    mode = args.mode
+    if mode == "full":
+        result = capture_full()
+    elif mode == "region":
+        result = capture_region()
+    elif mode == "window":
+        result = capture_window(args.window_title)
+    else:
+        print(f"Modo desconhecido: {mode}")
+        return 1
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0 if result.get("ok") else 1
+
+
+def _cmd_triggers(args: argparse.Namespace) -> int:
+    from jarvis.core.config import get_config
+    from jarvis.core.triggers import TriggerEngine, Trigger, create_default_triggers
+
+    cfg = get_config()
+    engine = create_default_triggers(state_dir=cfg.state_dir)
+
+    action = args.trigger_action
+    if action == "run":
+        report = engine.run_all()
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        executed = sum(1 for r in report if r["action"] == "executed")
+        print(f"\n{executed}/{len(report)} triggers executados")
+        return 0
+    elif action == "status":
+        status = engine.status()
+        print(json.dumps(status, ensure_ascii=False, indent=2))
+        return 0
+    else:
+        print(f"Ação desconhecida: {action}")
+        return 1
+
+
 def _cmd_stt(args: argparse.Namespace) -> int:
     from jarvis.core.voice import main_stt
 
@@ -787,6 +829,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_hwprofile.add_argument("--ctx", type=int, default=None, help="contexto alvo em tokens (default: 32K ou nativo)")
     p_hwprofile.add_argument("--json", action="store_true", help="saída JSON pura")
     p_hwprofile.set_defaults(func=_cmd_hwprofile)
+
+    p_screenshot = sub.add_parser("screenshot", help="captura de tela via grim/slurp (Wayland)")
+    p_screenshot.add_argument("mode", choices=["full", "region", "window"], default="full",
+                              help="modo: full (tela inteira), region (seleção), window (janela ativa)")
+    p_screenshot.add_argument("--window-title", default=None, help="título da janela (para mode=window)")
+    p_screenshot.set_defaults(func=_cmd_screenshot)
+
+    p_triggers = sub.add_parser("triggers", help="motor de automações por gatilhos do sistema")
+    trigger_sub = p_triggers.add_subparsers(dest="trigger_action", required=True)
+    p_trun = trigger_sub.add_parser("run", help="executa todos os triggers habilitados")
+    p_trun.set_defaults(func=_cmd_triggers)
+    p_tstatus = trigger_sub.add_parser("status", help="mostra status dos triggers")
+    p_tstatus.set_defaults(func=_cmd_triggers)
 
     p_heal = sub.add_parser("heal", help="self-heal: detecta serviços down e repara (restart allowlist)")
     p_heal.add_argument("--watch", action="store_true", help="loop contínuo (daemon)")

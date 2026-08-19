@@ -34,8 +34,8 @@ nixos-rebuild build --flake .#nixos-lab   # valida o sistema (sem ativar)
 - **Feitas**: 5 (self-heal), 6 (agente+aprovação), 7 (memória+vault), 9 (Telegram),
   10 (RAG SOTA: NDCG@5=1.0), 11 (benchmark+regressão), 4a (modo idle),
   audiobook, observabilidade, perfil dinâmico — todas implementadas e testadas.
-- **Testes**: 346+ (pytest). Inclui PBT (hypothesis), security, wakeword, profile,
-  observability.
+- **Testes**: 380+ (pytest). Inclui PBT (hypothesis), security, wakeword, profile,
+  observability, eventbus, triggers, vision.
 - **Pendente no lab**: ativar Telegram (criar bot + `/etc/jarvis-telegram.env` +
   `services.jarvis-telegram.enable`); ativar `jarvis heal` como daemon.
 - **Pendente no host**: `services.llama-cpp-server.profile = "host"` (Qwen3.6-35B
