@@ -108,6 +108,21 @@ df089dc docs: atualiza HANDOFF com resultados do hardening (422d0be)
 - README com diagramas Mermaid (arquitetura + ciclo de memória)
 - Guia de instalação "Padrão Ouro" para Acer Nitro V15 (8 passos)
 
+# HANDOFF — Validação de Integração E2E e Hardening (2026-08-19)
+
+## Status de Validação da VM vs. Bare Metal
+- **Ambiente de Integração Atual**: VM Hyper-V (NixOS Lab, Intel i7-13620H, sem GPU passthrough).
+- **Status do Runtime**: VM VALIDADA | BARE METAL PENDENTE (NVIDIA RTX 4050 Laptop / CUDA Offload).
+- **Suíte de Testes**: 492+ testes unitários/propriedade/fuzzing PASS.
+- **Serviços Ativos em Runtime**: `llama-cpp-server`, `llama-cpp-embeddings`, `llama-cpp-rerank`, `qdrant`.
+
+## Resultados das Validações
+1. **llama.cpp REAL**: Endpoints `/v1/chat/completions` e `/v1/models` operacionais com `enable_thinking=False`.
+2. **Qdrant REAL**: Coleções `memories` e `code_index` ativas em `127.0.0.1:6333` com persistência No CoW (+C).
+3. **RAG & Memória Episódica**: Ingestão, chunking, deduplicação e busca vetorial validados via `test_integration.py`, `test_rag.py` e `test_memory.py`.
+4. **Agente & Tools**: Ciclo de execução com ferramentas de desenvolvimento (`devtools.py`) e tratamento de exceções gracioso no `semantic_search`.
+5. **Resiliência e Fricção**: Reinício quente de daemons e tratamento de indisponibilidade de banco vetorial validados.
+
 ## Pendente / Próximos Passos
 1. **Instalação host com disko** — detectar Gen3/Gen4, editar device IDs, `nixos-install --flake .#nitro-v15`
 2. **Plugar hwprofile ao serviço** (llama-cpp.nix consumir o cálculo)
