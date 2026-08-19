@@ -13,7 +13,7 @@ in
   imports = [
     ./hardware-configuration.nix
     ./local-packages.nix
-   # ./disko.nix
+    ./disko.nix
     ../../nixos/modules
   ] ++ dynamicServiceImports;
 
@@ -79,7 +79,9 @@ in
   };
 
   # Garante que as pastas de banco vetorial (Qdrant) e modelos nasçam com +C (No CoW)
+  # Regras de tmpfiles: limpeza e suporte a No CoW (+C) para Btrfs
   systemd.tmpfiles.rules = [
+    "d /var/tmp 1777 root root 14d"
     "d /var/lib/qdrant 0755 jarvis jarvis - -"
     "h /var/lib/qdrant - - - - +C"
     "d /var/lib/jarvis/models 0755 jarvis jarvis - -"

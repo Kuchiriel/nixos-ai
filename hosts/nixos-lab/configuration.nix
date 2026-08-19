@@ -99,13 +99,6 @@ security.sudo.extraRules = [
     keep-derivations = true;
   };
 
-
-  # Limpeza automática de diretórios de estado/cache estagnados em /var
-  systemd.tmpfiles.rules = [
-    # Limpa arquivos em /var/tmp que não foram acessados há mais de 14 dias
-    "d /var/tmp 1777 root root 14d"
-  ];
-
   # =========================================================================
   # 3. KERNEL E PERFORMANCE
   # =========================================================================
@@ -200,12 +193,14 @@ security.sudo.extraRules = [
   networking.firewall.allowedTCPPorts = [ 22 8080 8081 4000 ];
 
   # Garante que as pastas de banco vetorial (Qdrant) e modelos nasçam com +C (No CoW)
+  # Regras de tmpfiles: limpeza e suporte a No CoW (+C) para Btrfs
   systemd.tmpfiles.rules = [
+    "d /var/tmp 1777 root root 14d"
     "d /var/lib/qdrant 0755 jarvis jarvis - -"
     "h /var/lib/qdrant - - - - +C"
     "d /var/lib/jarvis/models 0755 jarvis jarvis - -"
     "h /var/lib/jarvis/models - - - - +C"
-  ];
+  ];  
 
   # =========================================================================
   # 5. REDE, USUÁRIOS E LOCALIZAÇÃO
