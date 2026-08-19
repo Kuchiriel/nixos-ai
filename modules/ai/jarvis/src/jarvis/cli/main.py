@@ -532,6 +532,37 @@ def _cmd_voice(args: argparse.Namespace) -> int:
     return main_voice(argv)
 
 
+def _cmd_audiobook(args: argparse.Namespace) -> int:
+    from jarvis.core.audiobook import (
+        cmd_list, cmd_next, cmd_pause, cmd_prev, cmd_read, cmd_resume,
+        cmd_scan, cmd_status, cmd_stop,
+    )
+
+    action = args.audiobook_action
+    if action == "scan":
+        print(cmd_scan())
+    elif action == "list":
+        print(cmd_list())
+    elif action == "read":
+        print(cmd_read(args.book or ""))
+    elif action == "stop":
+        print(cmd_stop())
+    elif action == "pause":
+        print(cmd_pause())
+    elif action == "resume":
+        print(cmd_resume())
+    elif action == "next":
+        print(cmd_next())
+    elif action == "prev":
+        print(cmd_prev())
+    elif action == "status":
+        print(cmd_status())
+    else:
+        print(f"Ação desconhecida: {action}")
+        return 1
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="jarvis", description="JARVIS — sistema de IA local")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -684,6 +715,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_voice.add_argument("--no-tts", action="store_true", help="não sintetizar resposta em voz")
     p_voice.add_argument("--model", default="small", help="tamanho do modelo faster-whisper")
     p_voice.set_defaults(func=_cmd_voice)
+
+    p_audiobook = sub.add_parser("audiobook", help="leitor de livros (.epub/.txt) com TTS Kokoro")
+    p_audiobook.add_argument("audiobook_action",
+                             choices=["scan", "list", "read", "stop", "pause", "resume", "next", "prev", "status"],
+                             help="ação: scan/list/read/stop/pause/resume/next/prev/status")
+    p_audiobook.add_argument("book", nargs="?", default=None, help="nome do livro (para read)")
+    p_audiobook.set_defaults(func=_cmd_audiobook)
 
     return parser
 

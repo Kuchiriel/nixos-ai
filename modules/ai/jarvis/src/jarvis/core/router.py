@@ -84,8 +84,8 @@ def get_fast_paths() -> FastPaths:
     fp = FastPaths.from_text(DEFAULT_RULES)
 
     def _audio(args: list[str]) -> str:
-        action = args[0] if args else ""
-        return f"[audiobook {action}] {' '.join(args[1:]) or '(sem livro)'}"
+        from jarvis.core.audiobook import dispatch
+        return dispatch(args)
 
     def _voice(args: list[str]) -> str:
         action = args[0] if args else ""
