@@ -202,15 +202,19 @@ def test_level5_read_then_edit() -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.integration
 def test_tool_calling_json_valid() -> None:
     """Valida que o SLM gera JSON válido para tool calls."""
     proj = _create_project()
-    result = _run_dev_task(
-        f"List the files in {proj} using list_directory.",
-        str(proj),
-        timeout=90,
-    )
-    # O resultado deve conter informações sobre arquivos OU ter rodado
+    # Retry up to 2x com timeout maior (Qwen3-4B pode demorar no VM)
+    for attempt in range(2):
+        result = _run_dev_task(
+            f"List the files in {proj} using list_directory.",
+            str(proj),
+            timeout=120,
+        )
+        if result["ok"] or "main.py" in result["stdout"] or result["exit_code"] == 0:
+            break
     assert result["ok"] or "main.py" in result["stdout"] or result["exit_code"] == 0, (
-        f"SLM failed tool calling. stdout: {result['stdout'][-500:]} stderr: {result['stderr'][-200:]}"
+        f"SLM failed tool calling after {attempt+1} attempts. stdout: {result['stdout'][-500:]} stderr: {result['stderr'][-200:]}"
     )

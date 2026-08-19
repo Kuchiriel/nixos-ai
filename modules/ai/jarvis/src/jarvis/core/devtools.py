@@ -29,6 +29,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from jarvis.core.config import get_config
+
 
 def _project_root() -> Path:
     """Retorna o diretório raiz do projeto."""
