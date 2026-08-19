@@ -5,7 +5,8 @@
 - **Último rebuild**: OK — **497 testes verdes**, 0 falhas, nix flake check OK
 - **Git**: limpo, 8 commits ahead of origin
 - **Bulldozer**: 5/6 testes de atrito passam contra Qwen3-4B real
-- **Validação E2E**: llama.cpp ✅, Qdrant ✅, RAG ✅, Memória ✅, Agent ✅, Self-heal ✅, Flake ✅
+- **Validação E2E**: llama.cpp ✅, Qdrant ✅, Memória ✅, Agent ✅, Self-heal ✅, Flake ✅
+- **Bugs corrigidos**: semantic_search import, Logger sandbox, devtools /build path, content safety
 - **Partição legada montada**: `/mnt/legacy/system` (@) + `/mnt/legacy/home/kuchiriel` (@home) — **NÃO persiste no reboot** (cryptsetup manual)
 
 ## Validação E2E (2026-08-19)
@@ -32,6 +33,8 @@
 
 ## Commits Recentes (em ordem — sessão 2026-08-19)
 ```
+dbb670b fix(devtools): corrige semantic_search — import QdrantStore + remove dead code
+51375ad docs: atualiza HANDOFF com resultados da validação E2E completa
 5fcbd83 fix(build): corrige 52 falhas no nix build — logging, devtools, content safety
 5b94993 feat(bulldozer): testes de atrito reais contra SLM + prompt enforcement
 c17a9a8 feat(devtools): fuzzy matching para str_replace (tolera erros de SLM)
