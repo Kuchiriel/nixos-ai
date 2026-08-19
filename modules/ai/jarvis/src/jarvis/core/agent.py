@@ -34,6 +34,7 @@ import requests
 
 from jarvis.core.logging import get_logger
 from jarvis.core.user_profile import UserProfile, inject_context
+from jarvis.core.circuit_breaker import CircuitBreaker
 
 from jarvis.core.config import Config, get_config
 from jarvis.providers.mcp import MCPClient, MCPError, parse_command, to_function_tools
@@ -337,6 +338,7 @@ class Agent:
         mcp_servers: dict[str, str] | None = None,
         memory: Any | None = None,
         approver: Callable[[str], bool] | None = None,
+        circuit_breaker: CircuitBreaker | None = None,
     ) -> None:
         self._cfg = config or Config()
         self._base = self._cfg.llm_base_url.rstrip("/")
@@ -362,6 +364,8 @@ class Agent:
             self._user_profile.load()
         except Exception:  # noqa: BLE001 — perfil é best-effort
             pass
+        # Circuit breaker para fallback de inferência
+        self._circuit_breaker = circuit_breaker
 
     # --- servidor ---
 
@@ -400,6 +404,11 @@ class Agent:
         resp = self._session.post(f"{self._base}/chat/completions", json=payload, timeout=self._cfg.llm_timeout)
         resp.raise_for_status()
         return resp.json()
+
+    def _chat_raw(self, messages: list[dict[str, Any]], profile: dict[str, Any]) -> str:
+        """Chat que retorna apenas o conteúdo (para circuit breaker)."""
+        data = self._chat(messages, profile)
+        return data["choices"][0]["message"]["content"] or ""
 
     # --- MCP ---
 
@@ -570,7 +579,27 @@ class Agent:
                     "content": "Stop. Answer now with the data you have.",
                 })
             result.turns = turn + 1
-            data = self._chat(messages, profile)
+            # Circuit breaker: tenta local, fallback se disponível
+            if self._circuit_breaker is not None:
+                cb_result = self._circuit_breaker.execute(
+                    messages, local_fn=lambda msgs: self._chat_raw(msgs, profile),
+                )
+                # Se fallback ou rejected, adapta a resposta
+                if cb_result["backend"] in ("fallback", "rejected"):
+                    content = cb_result["response"]
+                    data = {"choices": [{"message": {"content": content, "tool_calls": None}}]}
+                else:
+                    data = {"choices": [{"message": {"content": cb_result["response"], "tool_calls": None}}]}
+                    # Re-parse do JSON para tool calls
+                    try:
+                        import json as _json
+                        parsed = _json.loads(cb_result["response"])
+                        if isinstance(parsed, dict) and "tool_calls" in parsed:
+                            data["choices"][0]["message"]["tool_calls"] = parsed["tool_calls"]
+                    except (ValueError, TypeError):
+                        pass
+            else:
+                data = self._chat(messages, profile)
             message = data["choices"][0]["message"]
             content = message.get("content") or ""
             tool_calls = message.get("tool_calls")

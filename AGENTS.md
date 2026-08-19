@@ -52,6 +52,10 @@ nixos-rebuild build --flake .#nixos-lab   # valida o sistema (sem ativar)
 4. **`sudo ALL NOPASSWD` é temporário** (lab, para o agente não travar). No host:
    sudo escopo mínimo (só `nixos-rebuild` e `clean.sh`) — ver assessment §3.
 5. **Nunca editar arquivos do store** (`/nix/store/...`) — mudar a fonte no repo.
+6. **Circuit Breaker**: se o backend local falhar 3x, o sistema usa fallback remoto
+   (Groq/Gemini/OpenRouter). **POLÍTICA DE EGRESS**: dados sensíveis (memórias,
+   vault, RAG, paths, passwords) NUNCA saem do host — o ContentSafetyFilter
+   bloqueia. Usuário pode forçar modo local (`/force_local`).
 
 ## Perfil do usuário (o que toda IA deve saber sobre ele)
 

@@ -108,6 +108,9 @@ class TelegramChannel:
         remember_fn: Callable[[str], str] | None = None,
         vault_fn: Callable[[str], str] | None = None,
         approval_timeout: float = 120.0,
+        circuit_breaker: Any | None = None,
+        force_local_fn: Callable[[], str] | None = None,
+        force_remote_fn: Callable[[], str] | None = None,
     ) -> None:
         self._bot = bot or TelegramBot(token)
         self._allowed = set(allowed_chats)
@@ -118,6 +121,9 @@ class TelegramChannel:
         self._remember = remember_fn
         self._vault = vault_fn
         self._approval_timeout = approval_timeout
+        self._circuit_breaker = circuit_breaker
+        self._force_local_fn = force_local_fn
+        self._force_remote_fn = force_remote_fn
 
     # --- aprovação (usada pelo agente) ---
 
@@ -165,7 +171,11 @@ class TelegramChannel:
         if text in ("/start", "/help"):
             return self._help_text()
         if text == "/status":
-            return (self._status or (lambda: "status indisponível"))()
+            return self._handle_status()
+        if text == "/force_local":
+            return self._handle_force_local()
+        if text == "/force_remote":
+            return self._handle_force_remote()
         if text.startswith("/ask "):
             return (self._ask or (lambda q: f"ask indisponível: {q}"))(text[5:].strip())
         if text.startswith("/remember "):
@@ -179,6 +189,42 @@ class TelegramChannel:
             return f"comando desconhecido: {text.split()[0]}\n\n{self._help_text()}"
         # default: pergunta livre
         return (self._ask or (lambda q: f"ask indisponível: {q}"))(text)
+
+    def _handle_status(self) -> str:
+        """Status do backend com info do circuit breaker."""
+        base_status = (self._status or (lambda: "status indisponível"))()
+        if self._circuit_breaker is not None:
+            cb_info = self._circuit_breaker.state_info
+            circuit = cb_info["circuit_state"]
+            backend = cb_info["backend"]["state"]
+            latency = cb_info["backend"]["latency_ms"]
+            uptime = cb_info["backend"]["uptime_pct"]
+            mode = "LOCAL" if circuit == "closed" else "FALLBACK" if circuit == "open" else "TESTING"
+            extra = (
+                f"\n\n🔗 Circuit Breaker: {circuit.upper()}"
+                f"\n📡 Backend: {backend} ({latency}ms)"
+                f"\n📊 Uptime: {uptime}%"
+                f"\n🔄 Modo: {mode}"
+                f"\n📈 Local: {cb_info['total_local']} | Fallback: {cb_info['total_fallback']} | Rejeitados: {cb_info['total_rejected']}"
+            )
+            return base_status + extra
+        return base_status
+
+    def _handle_force_local(self) -> str:
+        """Força retorno ao modo local."""
+        if self._force_local_fn:
+            return self._force_local_fn()
+        if self._circuit_breaker is not None:
+            return self._circuit_breaker.force_local()
+        return "Circuit breaker não configurado."
+
+    def _handle_force_remote(self) -> str:
+        """Força uso do fallback remoto."""
+        if self._force_remote_fn:
+            return self._force_remote_fn()
+        if self._circuit_breaker is not None:
+            return self._circuit_breaker.force_open()
+        return "Circuit breaker não configurado."
 
     def send_help(self, chat_id: int) -> None:
         """Help com markdown (texto controlado por nós — markdown válido)."""
@@ -194,7 +240,9 @@ class TelegramChannel:
             "*Comandos*\n"
             "`/ask <pergunta>` — cascata (fastpath/doctor/nixos/rag/agent)\n"
             "`/agent <tarefa>` — agente com aprovação por botões\n"
-            "`/status` — saúde dos serviços\n"
+            "`/status` — saúde dos serviços + circuit breaker\n"
+            "`/force_local` — força modo local (desliga fallback)\n"
+            "`/force_remote` — força fallback remoto\n"
             "`/remember <fato>` — grava na memória episódica\n"
             "`/vault summarize|list` — memória de longo prazo\n\n"
             "*Comandos diretos (respondem em ms, sem LLM)*\n"

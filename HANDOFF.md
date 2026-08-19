@@ -2,12 +2,13 @@
 
 ## Estado Atual do Sistema
 - **NixOS Lab**: VM Hyper-V, i7-13620H (4c/8t visíveis), 19.1GB RAM, sem GPU
-- **Último rebuild**: OK — **380+ testes verdes**
+- **Último rebuild**: OK — **405+ testes verdes**
 - **Git**: limpo (após commit mais recente)
 - **Partição legada montada**: `/mnt/legacy/system` (@) + `/mnt/legacy/home/kuchiriel` (@home) — **NÃO persiste no reboot** (cryptsetup manual)
 
 ## Commits Recentes (em ordem — sessão 2026-08-19)
 ```
+<pendente> feat(circuit-breaker): health monitor + circuit breaker + fallback + telegram
 <pendente> feat(eventbus): barramento de eventos assíncrono + vision + triggers
 9d0103f feat(profile): perfil de usuario dinâmico + contexto adaptativo
 ee87408 feat(observability): logging JSONL unificado + metrics + doctor proativo
@@ -23,6 +24,14 @@ df089dc docs: atualiza HANDOFF com resultados do hardening (422d0be)
 ```
 
 ## O Que Foi Implementado Nesta Sessão
+
+### 0a. Circuit Breaker + Fallback (pendente commit)
+- `core/health_monitor.py` — monitor de saúde do llama.cpp: socket check, HTTP health, latência, uptime%
+- `core/circuit_breaker.py` — padrão Circuit Breaker: CLOSED→OPEN→HALF_OPEN, fallback remoto, ContentSafetyFilter
+- Filtro de segurança: keywords sensíveis (recall, vault, password, /home/) → fallback remoto NUNCA
+- Agent: `_chat_raw()` + integração com circuit breaker no `_run_loop`
+- Telegram: `/status` (backend + circuit info), `/force_local`, `/force_remote`
+- 25 testes: health monitor, content safety, circuit breaker, Telegram
 
 ### 0. Event Bus + Vision + Triggers (pendente commit)
 - `core/eventbus.py` — barramento asyncio leve: pub/sub por tópico, retry, DLQ, stats
@@ -161,7 +170,7 @@ Diagnóstico completo em `docs/architecture/pillar-diagnostic.md`. Score geral: 
 - `test_unknown_tool_rejected` (simulação real)
 - `test_execute_shell_only_tool_accepted`
 
-**380+ testes passando** (zero regressão). Inclui: 248 base + 6 security + 31 PBT + 30 wakeword + 20 profile + 13 observability + 34 eventbus/triggers/vision.
+**405+ testes passando** (zero regressão). Inclui: 248 base + 6 security + 31 PBT + 30 wakeword + 20 profile + 13 observability + 34 eventbus/triggers/vision + 25 circuit breaker.
 
 ### O Que NÃO Foi Implementado (decisão consciente)
 

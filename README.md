@@ -33,7 +33,8 @@ e não fica parada — tudo rodando local (llama.cpp + Qdrant), sem cloud.
 | 🔗 **Event Bus** | barramento asyncio leve: pub/sub por tópico, retry, DLQ, stats |
 | 📷 **Vision** | captura de tela via grim/slurp (full/region/window) como tool do agente |
 | ⚡ **Triggers** | automações declarativas: disk/doctor/cpu alerts com cooldown e idempotência |
-| 🧪 **Testes** | 380+ testes: unit, integration, PBT (hypothesis), security, wakeword |
+| 🔌 **Circuit Breaker** | health monitor + fallback remoto com filtro de segurança (dados sensíveis nunca saem) |
+| 🧪 **Testes** | 405+ testes: unit, integration, PBT (hypothesis), security, wakeword |
 | 📝 **Property-Based Testing** | 31 testes adversariais com hypothesis para parsers e regex |
 
 **Modelos 100% declarativos**: `modules/ai/models.nix` é a única fonte de
@@ -170,6 +171,38 @@ flowchart LR
 **Fluxo de escrita**: evento → embedding (nomic, 768-dim) + sparse BM25 → upsert no Qdrant (coleção `memories`). Deduplicação por texto. ID determinístico (crc32).
 
 **Fluxo de leitura**: query → embedding → busca híbrida (prefetch dense + sparse, fusão RRF ponderada) → reranker cross-encoder → top-k contexto. Lições injetadas como `PAST LESSONS` no prompt do agente.
+
+---
+
+## 🔌 Resiliência e Fallback
+
+O JARVIS garante alta disponibilidade via Circuit Breaker:
+
+```
+[Backend Local OK] ──→ USA LOCAL (latência ~ms)
+         │
+         ▼ (3 falhas consecutivas)
+[Backend Local DOWN] ──→ ABRE CIRCUITO
+         │
+         ▼
+[Filtro de Segurança] ──→ Dados sensíveis? → REJEITADO (nunca envia remoto)
+         │ (seguro)
+         ▼
+[Fallback Remoto] ──→ Groq/Gemini/OpenRouter (API key via env)
+         │
+         ▼ (após 60s)
+[HALF-OPEN] ──→ Testa local novamente
+         │
+         ▼ (funciona)
+[FECHA CIRCUITO] ──→ Volta ao local
+```
+
+**Política de EGRESS**: dados sensíveis (memórias, vault, RAG, paths, passwords) **NUNCA** saem do host. O filtro `ContentSafetyFilter` verifica keywords antes de qualquer envio remoto.
+
+**Controle via Telegram**:
+- `/status` — mostra estado do circuit breaker + backend + uptime
+- `/force_local` — força retorno ao modo local
+- `/force_remote` — força uso do fallback remoto
 
 ---
 
