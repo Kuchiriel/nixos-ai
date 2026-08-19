@@ -205,7 +205,7 @@ in
         exec-on-event = true;
         interval = 2;
         return-type = "json";
-        on-click = "foot --app-id floating_shell -e bash -lc 'read -p \"JARVIS: \" q; jarvis ask \"$q\"'";
+        on-click = "foot --app-id floating_shell -e jarvis dev";
       };
 
       "hyprland/workspaces" = {
