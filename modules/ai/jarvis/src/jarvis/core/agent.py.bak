@@ -1,5 +1,4 @@
-    """Agente de tool calling do JARVIS — implementação própria, inspirada no
-    # OPTIMIZED
+"""Agente de tool calling do JARVIS — implementação própria, inspirada no
 conceito de agentes terminais (ex: `earendil-works/pi`, empacotado pelo
 `pi.nix` do lukasl-dev). NÃO usa o código do pi: o loop de tool calling é
 escrito do zero para o nosso stack, com as três camadas de segurança que o
