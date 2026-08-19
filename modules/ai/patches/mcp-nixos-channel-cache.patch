@@ -1,0 +1,76 @@
+--- a/mcp_nixos/caches.py	1970-01-01 00:00:01.000000000 +0000
++++ b/mcp_nixos/caches.py	2026-08-16 22:25:56.229152005 +0000
+@@ -2,6 +2,7 @@
+ 
+ import json
+ import re
++import os
+ from typing import Any
+ 
+ import requests
+@@ -25,14 +26,36 @@
+         self.resolved_channels: dict[str, str] | None = None
+         self.using_fallback: bool = False
+ 
++    def _load_precomputed(self) -> dict[str, Any] | None:
++        """Load precomputed channels from MCP_NIXOS_CHANNEL_CACHE (store file)."""
++        path = os.environ.get("MCP_NIXOS_CHANNEL_CACHE", "")
++        if not path:
++            return None
++        try:
++            with open(path, encoding="utf-8") as fh:
++                data = json.load(fh)
++        except (OSError, ValueError):
++            return None
++        if not isinstance(data, dict) or not data.get("resolved"):
++            return None
++        return data
++
+     def get_available(self) -> dict[str, str]:
+         if self.available_channels is None:
+-            self.available_channels = self._discover_available_channels()
++            pre = self._load_precomputed()
++            if pre is not None:
++                self.available_channels = dict(pre.get("available", {}))
++            else:
++                self.available_channels = self._discover_available_channels()
+         return self.available_channels if self.available_channels is not None else {}
+ 
+     def get_resolved(self) -> dict[str, str]:
+         if self.resolved_channels is None:
+-            self.resolved_channels = self._resolve_channels()
++            pre = self._load_precomputed()
++            if pre is not None:
++                self.resolved_channels = dict(pre["resolved"])
++            else:
++                self.resolved_channels = self._resolve_channels()
+         return self.resolved_channels if self.resolved_channels is not None else {}
+ 
+     def _discover_available_channels(self) -> dict[str, str]:
+--- a/mcp_nixos/config.py	1970-01-01 00:00:01.000000000 +0000
++++ b/mcp_nixos/config.py	2026-08-16 22:25:56.230152013 +0000
+@@ -20,15 +20,18 @@
+     "unstable": "nixos-unstable",
+     "25.05": "nixos-25.05",
+     "25.11": "nixos-25.11",
++    "26.05": "nixos-26.05",
+ }
+ 
+-# Fallback channels when API discovery fails (static mappings based on recent patterns)
++# Fallback channels when API discovery fails (static mappings based on recent patterns).
++# Kept current for NixOS 26.05: generation 45/46 are the live search indices.
+ FALLBACK_CHANNELS = {
+-    "unstable": "latest-44-nixos-unstable",
+-    "stable": "latest-44-nixos-25.11",
+-    "25.05": "latest-44-nixos-25.05",
+-    "25.11": "latest-44-nixos-25.11",
+-    "beta": "latest-44-nixos-25.11",
++    "unstable": "latest-45-nixos-unstable",
++    "stable": "latest-45-nixos-25.11",
++    "25.05": "latest-45-nixos-25.05",
++    "25.11": "latest-45-nixos-25.11",
++    "26.05": "latest-45-nixos-26.05",
++    "beta": "latest-45-nixos-25.11",
+ }
+ 
+ HOME_MANAGER_URL = "https://nix-community.github.io/home-manager/options.xhtml"

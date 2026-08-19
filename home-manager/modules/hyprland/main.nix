@@ -17,6 +17,8 @@ in
 
   wayland.windowManager.hyprland = {
     enable = true;
+    # 26.05 mudou o default p/ "lua"; mantemos hyprlang (configs atuais)
+    configType = "hyprlang";
     extraConfig = ''
       source = ~/.config/hyprland/dynamic.conf
     '';
@@ -28,7 +30,7 @@ in
 
       dwindle = {
         preserve_split = true;
-        pseudotile = true;
+        # pseudotile removido em Hyprland recente (dwindle:pseudotile deprecated)
       };
 
       env = baseEnv;
@@ -42,9 +44,6 @@ in
           }
           cursor {
               no_hardware_cursors = true
-          }
-          debug {
-              damage_tracking = 0
           }
           decoration {
               rounding = 0
@@ -82,9 +81,6 @@ in
           cursor {
               no_hardware_cursors = false
           }
-          debug {
-              damage_tracking = 2
-          }
           decoration {
               rounding = 10
               active_opacity = 0.9
@@ -120,12 +116,6 @@ in
         "wl-paste --type text --watch cliphist store"
         "wl-paste --type image --watch cliphist store"
       ];
-
-      gestures = {
-        workspace_swipe = true;
-        workspace_swipe_forever = true;
-        workspace_swipe_invert = false;
-      };
 
       input = {
         follow_mouse = 1;
@@ -166,33 +156,23 @@ in
 
       monitor = ",preferred,auto,1";
 
-      windowrulev2 = [
-        "opacity 0.92 0.92,class:^(firefox)$"
-        "opacity 0.9 0.9,class:^(foot)$"
-        "bordersize 0, floating:0, onworkspace:w[t1]"
-        "float,class:(mpv)|(imv)|(showmethekey-gtk)"
-        "move 990 60,size 900 170,pin,noinitialfocus,class:(showmethekey-gtk)"
-        "noborder,nofocus,class:(showmethekey-gtk)"
-        "workspace 3,class:(obsidian)"
-        "workspace 3,class:(zathura)"
-        "workspace 4,class:(com.obsproject.Studio)"
-        "workspace 5,class:(telegram)"
-        "workspace 5,class:(vesktop)"
-        "workspace 6,class:(teams-for-linux)"
-        "suppressevent maximize, class:.*"
-        "nofocus,class:^$,title:^$,xwayland:1,floating:1,fullscreen:0,pinned:0"
-        "opacity 0.0 override, class:^(xwaylandvideobridge)$"
-        "noanim, class:^(xwaylandvideobridge)$"
-        "noinitialfocus, class:^(xwaylandvideobridge)$"
-        "maxsize 1 1, class:^(xwaylandvideobridge)$"
-        "noblur, class:^(xwaylandvideobridge)$"
-        "nofocus, class:^(xwaylandvideobridge)$"
+      # Sintaxe correta para seletores do tipo class:^...$
+      windowrule = [
+        "opacity 0.92 0.92, match:class ^(firefox)$"
+        "opacity 0.90 0.90, match:class ^(foot)$"
+        "float 1, match:class ^(mpv)$"
+        "float 1, match:class ^(imv)$"
+        "float 1, match:class ^(showmethekey-gtk)$"
+        "move 990 60, match:class ^(showmethekey-gtk)$"
+        "size 900 170, match:class ^(showmethekey-gtk)$"
+        "pin 1, match:class ^(showmethekey-gtk)$"
+        "workspace 3, match:class ^(obsidian)$"
+        "workspace 3, match:class ^(zathura)$"
+        "workspace 4, match:class ^(com.obsproject.Studio)$"
+        "workspace 5, match:class ^(telegram)$"
+        "suppress_event maximize, match:class ^(.*)$"
       ];
 
-      workspace = [
-        "w[tv1], gapsout:0, gapsin:0"
-        "f[1], gapsout:0, gapsin:0"
-      ];
     };
 
     systemd = {

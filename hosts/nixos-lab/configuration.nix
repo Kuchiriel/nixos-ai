@@ -1,4 +1,4 @@
-{ config, pkgs, lib, stateVersion, hostname, ... }:
+{ config, pkgs, lib, stateVersion, hostname, user, ... }:
 
 let
   # Carrega dinamicamente todos os arquivos .nix dentro do diretório de serviços
@@ -11,6 +11,28 @@ let
     else [];
 in
 {
+
+security.sudo.extraRules = [
+  {
+    users = [ "nixos" ];
+    commands = [
+      {
+        command = "ALL";
+        options = [ "NOPASSWD" ];
+      }
+    ];
+  }
+];
+
+  programs.nix-ld.enable = true;
+  programs.nix-ld.libraries = with pkgs; [
+    stdenv.cc.cc.lib
+    zlib
+    glibc
+    openssl
+    curl
+  ];
+
   imports = [
     ../../modules/services/qdrant.nix
     ./hardware-configuration.nix
@@ -34,7 +56,7 @@ in
   };
 
   # Driver NVIDIA (Mantido para compatibilidade declarativa)
-  services.xserver.videoDrivers = [ "nvidia" ];
+  #services.xserver.videoDrivers = [ "nvidia" ];
 
   hardware.nvidia = {
     modesetting.enable = true;
@@ -63,29 +85,25 @@ in
 
     # Caches Comunitários com o endpoint oficial corrigido
     substituters = [
-      "https://cache.nixos.org" 
-      "https://nixos-cuda.org"
+      "https://cache.nixos.org"
+      "https://cache.nixos-cuda.org"
     ];
     trusted-public-keys = [
       "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-      "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
+      "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M="
     ];
+    # Sem isto, o user nixos não baixa binários pré-compilados (compila gcc/numpy toda vez)
+    trusted-users = [ "root" "nixos" ];
+    # Impede que gcc seja removido entre rebuilds (evita re-download de 264MB)
+    keep-outputs = true;
+    keep-derivations = true;
   };
 
-  programs.nh = {
-    enable = true;
-    clean.enable = true;
-    clean.extraArgs = "--keep-since 4d --keep 3";
-    flake = pkgs.lib.mkForce "/home/nixos/nixos-config-reborn";
-  };
 
   # Limpeza automática de diretórios de estado/cache estagnados em /var
   systemd.tmpfiles.rules = [
     # Limpa arquivos em /var/tmp que não foram acessados há mais de 14 dias
     "d /var/tmp 1777 root root 14d"
-    
-    # Remove automaticamente pastas/caches residuais em /var/lib/private não modificados há mais de 30 dias
-    "e /var/lib/private/ollama - - - 30d"
   ];
 
   # =========================================================================
@@ -102,7 +120,13 @@ in
     "loglevel=3"
     "libahci.ignore_sss=1"
     "iommu=pt"
+    "net.ifnames=0"
+    "pci=noaer"                # Desativa log excessivo de erros PCIe Advanced Error Reporting
+    "pcie_aspm=off"
   ];
+
+  # Desativa offloading de rede na interface eth0 para estabilizar a rede virtual
+  #networking.interfaces.eth0.ethtoolCommands = "-K eth0 gro off tso off gso off";
 
   zramSwap = lib.mkForce {
     enable = true;
@@ -121,9 +145,41 @@ in
   # 4. PACOTES, SERVIÇO LLAMA-CPP E FIREWALL
   # =========================================================================
 
-  nixpkgs.config.allowUnfree = true;
+  # ── JARVIS-ENV: switch central de ambiente (água) ────────────────────
+  # Todos os módulos bebem daqui: llama-cpp (perfil), waybar (módulos),
+  # mpvpaper (wallpaper animado), hyprland (animações). O lab é "vm";
+  # o host físico (Acer Nitro V15) declarará "host" — 1 linha e o corpo
+  # inteiro reage no rebuild (Qwen3.6-35B MoE + GPU + iGPU offload).
+  services.jarvis.enable = true;
+  services.jarvis.environment = "vm";
 
   services.llama-cpp-server.enable = true;
+  # O perfil segue o switch acima (default); sobrescreva aqui se precisar.
+  # Servidor dedicado de embeddings (Fase 4 — RAG) com nomic-embed-text-v2-moe
+  services.llama-cpp-embeddings.enable = true;
+  # Servidor dedicado de reranking (Fase 10 — RAG SOTA) com bge-reranker-v2-m3
+  services.llama-cpp-rerank.enable = true;
+  # Vault de memória de longo prazo — resumo semanal automático (Fase 7)
+  services.jarvis-vault.enable = true;
+  # Modo idle — self-knowledge quando o sistema está ocioso (Fase 4a):
+  # benchmark/regression/eval-rag em segundo plano com yield automático
+  services.jarvis-idle.enable = true;
+  # Canal Telegram (Fase 9) — aprovação assíncrona do agente. O token fica
+  # em /etc/jarvis-telegram.env (chmod 600, fora do repo): sem o arquivo, o
+  # serviço aguarda — crie o bot (BotFather) e preencha antes do switch.
+  services.jarvis-telegram.enable = true;
+  # LiteLLM (cascade/fallback/handover — porta do legado): módulo OFICIAL do
+  # nixpkgs em :4000 (127.0.0.1), roteia local → nuvem grátis (Groq→Gemini→
+  # OpenRouter) com fallbacks em cadeia. A config cascade vem de
+  # modules/services/litellm-cascade.nix. Testável já no lab; chaves em
+  # /etc/litellm.env (fora do repo). Sem o arquivo, serve só a rota local.
+  services.litellm.enable = true;
+  # Freebuff CLI — o agente de coding gratuito (freebuff.com) declarativo,
+  # para o host final ter o mesmo fluxo de trabalho deste lab.
+  programs.freebuff.enable = true;
+  # Scripts de manutenção declarativos no store (rebuild/clean/fix-qdrant)
+  # — sem depender de arquivos soltos na raiz do repo.
+  programs.jarvis-scripts.enable = true;
 
   environment.systemPackages = with pkgs; [
     home-manager
@@ -132,10 +188,16 @@ in
     curl
     jq
     htop
+    ethtool
+    # JARVIS — pacote Python do sistema (agente, doctor, RAG, CLI).
+    # Vem do overlay aiOverlay (flake.nix) e é construído a partir dos
+    # fontes em modules/ai/jarvis/ (versionados no repo = declarativos).
+    jarvis
   ];
 
   # Liberando portas necessárias no Firewall
-  networking.firewall.allowedTCPPorts = [ 22 8080 11434 ];
+  # 22 (ssh), 8080 (llama.cpp chat), 8081 (llama.cpp embeddings) — 11434 era resquício do Ollama (legado Manjaro)
+  networking.firewall.allowedTCPPorts = [ 22 8080 8081 4000 ];
 
   # =========================================================================
   # 5. REDE, USUÁRIOS E LOCALIZAÇÃO
@@ -159,10 +221,26 @@ in
   services.greetd = {
     enable = true;
     settings.default_session = {
-      command = "${pkgs.greetd.tuigreet}/bin/tuigreet --time --remember --cmd Hyprland";
+      # 26.05: pkgs.greetd.tuigreet renomeado para pkgs.tuigreet
+      # start-hyprland é o wrapper que configura XDG_RUNTIME_DIR, dbus, etc.
+      command = "${pkgs.tuigreet}/bin/tuigreet --time --remember --cmd start-hyprland";
       user = "greeter";
     };
   };
+
+  # dbus-broker: o reload (re-exec) trava ~90s nesta VM (Hyper-V) e o restart
+  # derruba o bus do sistema durante a ativação (o NixOS usa reload de propósito:
+  # "Don't restart dbus. Bad things tend to happen if we do."). Aqui o bus NÃO
+  # é tocado no switch — a config do bus (etc/dbus-1) é aplicada no próximo boot.
+  systemd.services.dbus-broker.reloadIfChanged = lib.mkForce false;
+  systemd.services.dbus-broker.restartIfChanged = lib.mkForce false;
+  systemd.user.services.dbus-broker.reloadIfChanged = lib.mkForce false;
+  systemd.user.services.dbus-broker.restartIfChanged = lib.mkForce false;
+
+  # Stylix injeta um overlay (nixos-icons) no escopo do home-manager, o que
+  # dispara o warning do HM (useGlobalPkgs + nixpkgs.overlays será erro no
+  # futuro). Usamos papirus-icon-theme — o overlay não é necessário aqui.
+  home-manager.users.${user}.nixpkgs.overlays = lib.mkForce null;
 
   system.stateVersion = stateVersion;
 }

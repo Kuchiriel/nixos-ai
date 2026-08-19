@@ -17,7 +17,7 @@
       rebuild = "sudo nixos-rebuild switch --flake ~/nixos-config-reborn/#nixos-lab";
     };
 
-    initExtra = ''
+    initContent = ''
       export PROMPT='%F{green}%n@%m%f:%F{blue}%~%f$ '
     '';
   };

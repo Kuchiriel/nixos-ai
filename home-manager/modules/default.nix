@@ -7,9 +7,11 @@
     ./git.nix
     ./hyprland
     ./lazygit.nix
+    ./mpvpaper.nix
     ./neovim.nix
     ./obsidian.nix
     ./ranger.nix
+    ./rofi.nix
     ./starship.nix
     ./stylix.nix
     ./swaync

@@ -2,99 +2,99 @@
 
 with lib;
 
+let
+  profileName = config.services.llama-cpp-server.profile;
+  # Perfil de execução — única fonte de verdade: modules/ai/models.nix.
+  # Centraliza arquivo do modelo, threads, ctx, ubatch, GPU layers, KV cache,
+  # MoE flags e scheduler por cenário (vm = lab CPU, host = bare metal GPU).
+  prof = pkgs.aiModels.profiles.${profileName};
+in
 {
-  options.services.llama-cpp-server = {
-    enable = mkEnableOption "Llama.cpp Server";
-    port = mkOption { type = types.port; default = 8080; };
-    extraFlags = mkOption {
-      type = types.listOf types.str;
-      default = [ "--jinja" ];
-      description = "Flags adicionais para o llama-server.";
+  options.services = {
+    llama-cpp-server = {
+      enable = mkEnableOption "Llama.cpp Main Server";
+      port = mkOption { type = types.port; default = 8080; };
+      profile = mkOption {
+        type = types.enum [ "vm" "host" ];
+        # Água: o perfil segue o switch central services.jarvis.environment
+        # (declarado no host). O lab declara "vm"; o host físico "host".
+        default = if config.services.jarvis.environment == "host"
+                  then "host" else "vm";
+        description = ''
+          Cenário de execução do servidor de chat. Define modelo, threads,
+          contexto, batch, GPU layers, KV-cache, flags MoE e scheduler —
+          tudo declarado em modules/ai/models.nix (profiles). Default segue
+          services.jarvis.environment; pode ser sobrescrito por host.
+        '';
+      };
+      extraFlags = mkOption { type = types.listOf types.str; default = [ "--jinja" ]; };
+    };
+    llama-cpp-embeddings = {
+      enable = mkEnableOption "Llama.cpp Embeddings Server";
+      port = mkOption { type = types.port; default = 8081; };
+    };
+    llama-cpp-rerank = {
+      enable = mkEnableOption "Llama.cpp Rerank Server";
+      port = mkOption { type = types.port; default = 8082; };
     };
   };
 
-  config = mkIf config.services.llama-cpp-server.enable {
-    systemd.services.llama-cpp-server = {
-      description = "Llama.cpp High-Performance LLM Server (Auto-Adaptive)";
+  config = mkIf (config.services.llama-cpp-server.enable || config.services.llama-cpp-embeddings.enable || config.services.llama-cpp-rerank.enable) {
+
+    # --- 1. SERVIDOR PRINCIPAL (LLM / CHAT) ---
+    # Tudo vem do perfil em models.nix — nada de download imperativo nem
+    # parâmetros hardcoded aqui. O modelo vive no store (fetchurl, hash
+    # verificado): o sistema nasce com o modelo certo para o cenário.
+    systemd.services.llama-cpp-server = mkIf config.services.llama-cpp-server.enable {
+      description = "Llama.cpp Main Server (${profileName}: ${prof.model})";
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
 
       script = ''
-        if ${pkgs.systemd}/bin/systemd-detect-virt --quiet --vm; then
-            MODEL_FILE="qwen2.5-coder-7b-instruct-q4_k_m.gguf"
-            MODEL_URL="https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf"
-            THREADS=4
-            CTX_SIZE=16384
-            UBATCH=512
-            GPU_LAYERS=0
-            # -fa habilitado tambem aqui: flash-attention nao piora tool
-            # calling e mantem o comportamento consistente entre os dois
-            # perfis (VM x bare-metal), o que facilita debugar diferencas
-            # de comportamento do parser Hermes 2 Pro entre 7B e 32B.
-            EXTRA_FLAGS="-fa -ctk f16 -ctv f16"
-        else
-            MODEL_FILE="qwen2.5-coder-32b-instruct-q4_k_m.gguf"
-            MODEL_URL="https://huggingface.co/Qwen/Qwen2.5-Coder-32B-Instruct-GGUF/resolve/main/qwen2.5-coder-32b-instruct-q4_k_m.gguf"
-            THREADS=7
-            CTX_SIZE=32768
-            UBATCH=1024
-            GPU_LAYERS=16
-            # ATENCAO: a doc oficial do llama.cpp alerta que quantizacoes
-            # extremas de KV (ex: -ctv q4_0) degradam substancialmente a
-            # confiabilidade de tool calling. Subimos o V-cache de q4_0
-            # para q8_0 -- custa mais VRAM/RAM, mas e exatamente o
-            # parametro mais provavel de estar contribuindo pro Qwen
-            # 32B "vazar" tool_call como texto em vez de JSON estruturado.
-            EXTRA_FLAGS="-fa -ctk q8_0 -ctv q8_0"
-        fi
-
-        # Caminho absoluto garantido para o usuário nixos
-        MODEL_DIR="/home/nixos/models"
-        mkdir -p "$MODEL_DIR"
-
-        if [ ! -f "$MODEL_DIR/$MODEL_FILE" ]; then
-          ${pkgs.aria2}/bin/aria2c -c -x 4 -s 4 --dir="$MODEL_DIR" --out="$MODEL_FILE" "$MODEL_URL"
-        fi
-
         exec ${pkgs.llama-cpp}/bin/llama-server \
-          -m "$MODEL_DIR/$MODEL_FILE" \
-          --host 0.0.0.0 \
-          --port ${toString config.services.llama-cpp-server.port} \
-          -c "$CTX_SIZE" \
-          -t "$THREADS" \
-          -ub "$UBATCH" \
-          -ngl "$GPU_LAYERS" \
-          $EXTRA_FLAGS \
-          ${escapeShellArgs config.services.llama-cpp-server.extraFlags}
-      '';
-
-      # Diagnostico automatico: registra no journal qual chat format
-      # (Hermes 2 Pro / Generic / etc) o llama.cpp detectou pro modelo
-      # que acabou de subir. Se aparecer "Generic" em vez de "Hermes 2
-      # Pro" para um Qwen2.5-Coder, o template jinja embutido no GGUF
-      # nao esta sendo reconhecido -- sinal para usar --chat-template-file.
-      postStart = ''
-        for i in $(seq 1 30); do
-          if ${pkgs.curl}/bin/curl -sf "http://127.0.0.1:${toString config.services.llama-cpp-server.port}/health" >/dev/null 2>&1; then
-            break
-          fi
-          sleep 2
-        done
-        FORMAT=$(${pkgs.curl}/bin/curl -sf "http://127.0.0.1:${toString config.services.llama-cpp-server.port}/props" \
-          | ${pkgs.jq}/bin/jq -r '.chat_template_tool_use // .chat_template // "unknown"' 2>/dev/null | head -c 60)
-        echo "llama-cpp-server: props chat template prefix = $FORMAT" | ${pkgs.systemd}/bin/systemd-cat -t llama-cpp-diagnostic
+          -m "${pkgs.aiModels.${prof.model}}" \
+          ${optionalString (prof ? mmproj) ''--mmproj "${pkgs.aiModels.${prof.mmproj}}" \''} \
+          --host 0.0.0.0 --port ${toString config.services.llama-cpp-server.port} \
+          -c ${toString prof.ctxSize} -t ${toString prof.threads} -ub ${toString prof.ubatch} -ngl ${toString prof.gpuLayers} \
+          ${prof.kvCache} ${prof.moeFlags} ${escapeShellArgs config.services.llama-cpp-server.extraFlags}
       '';
 
       serviceConfig = {
-        User = "nixos";
-        Group = "users";
-        WorkingDirectory = "/home/nixos";
-        Environment = "HOME=/home/nixos";
+        User = prof.user;
         Restart = "on-failure";
-        RestartSec = "10s";
+      } // optionalAttrs (prof.scheduler != null) {
+        # Host: prioridade de tempo real para o servidor de LLM (kernel).
+        # Exige privilégio — por isso o perfil host roda como root.
+        CPUSchedulingPolicy = prof.scheduler.policy;
+        CPUSchedulingPriority = prof.scheduler.priority;
       };
+    };
+
+    # --- 2. SERVIDOR DE EMBEDDINGS (RAG) ---
+    systemd.services.llama-cpp-embeddings = mkIf config.services.llama-cpp-embeddings.enable {
+      description = "Llama.cpp Embeddings Server";
+      wantedBy = [ "multi-user.target" ];
+      script = ''
+        exec ${pkgs.llama-cpp}/bin/llama-server \
+          -m "${pkgs.aiModels.embed}" \
+          --host 0.0.0.0 --port ${toString config.services.llama-cpp-embeddings.port} \
+          --embeddings --pooling mean -c 4096 -t 4 -b 4096 -ub 4096
+      '';
+      serviceConfig.User = "nixos";
+    };
+
+    # --- 3. SERVIDOR DE RERANK (SOTA RAG) ---
+    systemd.services.llama-cpp-rerank = mkIf config.services.llama-cpp-rerank.enable {
+      description = "Llama.cpp Rerank Server";
+      wantedBy = [ "multi-user.target" ];
+      script = ''
+        exec ${pkgs.llama-cpp}/bin/llama-server \
+          -m "${pkgs.aiModels.reranker}" \
+          --host 0.0.0.0 --port ${toString config.services.llama-cpp-rerank.port} \
+          --rerank -t 4 -c 8192 -b 4096 -ub 4096
+      '';
+      serviceConfig.User = "nixos";
     };
   };
 }
-

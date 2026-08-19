@@ -1,0 +1,53 @@
+* {
+    bg: #000000DD; /* Preto profundo com 86% opacidade */
+    fg: #00ffff;
+    accent: #00ffff;
+    background-color: transparent;
+    text-color: @fg;
+    font: "JetBrainsMono Nerd Font 12";
+}
+window {
+    background-color: @bg;
+    border: 2px;
+    border-color: @accent;
+    padding: 30px;
+    width: 40%;
+    border-radius: 12px;
+}
+mainbox {
+    spacing: 15px;
+}
+listview {
+    lines: 10;
+    columns: 1;
+    fixed-height: false;
+    spacing: 10px;
+    padding: 10px 0px;
+}
+element {
+    padding: 10px;
+    spacing: 10px;
+    border-radius: 5px;
+}
+element selected {
+    background-color: #0088ff44; /* Azul escuro com 26% de opacidade */
+    text-color: #00ffff;        /* Texto Ciano Neon */
+    border: 1px;
+    border-color: #00ffff;      /* Borda fina ciano */
+}
+inputbar {
+    padding: 10px;
+    background-color: #ffffff11;
+    border-radius: 5px;
+    children: [ "prompt", "entry" ];
+}
+prompt {
+    spacing: 0;
+    text-color: @fg;
+}
+entry {
+    spacing: 0;
+    text-color: @fg;
+    placeholder: "Transmit command...";
+    placeholder-color: #00ffff66;
+}

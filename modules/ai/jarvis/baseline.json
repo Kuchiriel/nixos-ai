@@ -1,0 +1,17 @@
+{
+  "gerado_em": "2026-08-16T00:00:00",
+  "benchmark": {
+    "total_ms": 16855.0,
+    "rotas": {
+      "fastpath": 1.1,
+      "doctor": 65.5,
+      "nixos": 1817.0,
+      "rag": 52.0,
+      "agent": 14919.0
+    }
+  },
+  "eval_rag": {
+    "ndcg_5": 1.0,
+    "recall_5": 1.0
+  }
+}

@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jarvis"
+version = "0.1.0"
+description = "JARVIS — sistema de IA local (roteamento, RAG, memória, voz) para NixOS"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "requests>=2.31",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+daemon = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
+dev = [
+    "pytest>=8",
+]
+
+[project.scripts]
+jarvis = "jarvis.cli.main:main"
+jarvis-intent = "jarvis.cli.main:intent_main"
+jarvis-rag = "jarvis.cli.main:rag_main"
+jarvis-waybar = "jarvis.cli.main:waybar_main"
+jarvis-stt = "jarvis.core.voice:main_stt"
+jarvis-speak = "jarvis.core.voice:main_tts"
+jarvis-voice = "jarvis.core.voice:main_voice"
+jarvis-emotion = "jarvis.core.emotion:main_emotion"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: testes que dependem de serviços externos (llama.cpp, Qdrant)",
+]

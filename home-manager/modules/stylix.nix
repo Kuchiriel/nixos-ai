@@ -13,8 +13,8 @@
     font-awesome
     powerline-fonts
     powerline-symbols
-    # Sintaxe estável 24.11 oficial para herança de ícones NerdFonts
-    (nerdfonts.override { fonts = [ "NerdFontsSymbolsOnly" ]; })
+    # nixpkgs 26.05: nerdfonts foi renomeado para nerd-fonts (attrset por fonte)
+    nerd-fonts.symbols-only
   ];
 
   stylix = {
@@ -60,7 +60,8 @@
       };
     };
 
-    iconTheme = {
+    # 26.05: stylix.iconTheme.* renomeado para stylix.icons.*
+    icons = {
       enable = true;
       package = pkgs.papirus-icon-theme;
       dark = "Papirus-Dark";

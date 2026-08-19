@@ -1,6 +1,15 @@
 { pkgs, ... }:
 let
   booksDir = "$HOME/Downloads/books";
+
+  # JARVIS — prompt rápido (porta do legado: rofi jarvis-cyan)
+  jarvisAsk = pkgs.writeScriptBin "jarvis-ask-prompt" ''
+    #!/bin/sh
+    PROMPT=$(wofi --dmenu --prompt "JARVIS:" --width 800 2>/dev/null || rofi -dmenu -p "JARVIS:" -theme jarvis-cyan 2>/dev/null)
+    [ -z "$PROMPT" ] && exit 0
+    foot --app-id floating_shell -e bash -lc "jarvis ask \"$PROMPT\""
+  '';
+
   booksScript = pkgs.writeScriptBin "open_books" ''
     #!/bin/sh
 
@@ -15,7 +24,7 @@ let
     fi
   '';
 in {
-  home.packages = [ booksScript ];
+  home.packages = [ booksScript jarvisAsk ];
 
   wayland.windowManager.hyprland.settings = {
     bind = [
@@ -25,8 +34,7 @@ in {
       "$mainMod,       R, exec, $fileManager"
       "$mainMod,       F, togglefloating,"
       "$mainMod,       D, exec, $menu --show drun"
-      "$mainMod,       P, pin,"
-      "$mainMod,       J, togglesplit,"
+      "$mainMod,       J, layoutmsg, togglesplit"
       "$mainMod,       E, exec, bemoji -cn"
       "$mainMod,       V, exec, cliphist list | $menu --dmenu | cliphist decode | wl-copy"
       "$mainMod,       B, exec, pkill -SIGUSR2 waybar"
@@ -82,6 +90,11 @@ in {
       # Scratchpad
       "$mainMod,       S, togglespecialworkspace,  magic"
       "$mainMod SHIFT, S, movetoworkspace, special:magic"
+
+      # JARVIS — ferramentas de IA
+      "$mainMod,       A, exec, ${jarvisAsk}/bin/jarvis-ask-prompt"
+      "$mainMod SHIFT, A, exec, $terminal -e jarvis agent --help"
+      "$mainMod,       I, exec, $terminal -e jarvis doctor"
     ];
 
     # Move/resize windows with mainMod + LMB/RMB and dragging

@@ -1,5 +1,30 @@
-{ pkgs, ... }:
-
+{ pkgs, lib, jarvisEnvironment, ... }:
+# Waybar — perfil por ambiente (água: segue services.jarvis.environment
+# passado via extraSpecialArgs: jarvisEnvironment).
+#   VM  (lab): sem battery/bluetooth/backlight (não existem na VM — davam
+#       popups de erro); clock/cpu/memory/network/workspaces/custom-jarvis.
+#   host (bare metal): full — battery, bluetooth, backlight, tudo.
+let
+  isHost = jarvisEnvironment == "host";
+  # módulos só de hardware real (determinístico, não lib.mkIf)
+  hostOnlyModules = if isHost then [ "battery" "bluetooth" "backlight" ] else [];
+  # definições dos módulos só de hardware (merge determinístico)
+  hostOnlySettings = lib.optionalAttrs isHost {
+    battery = {
+      format = "{icon} {capacity}%";
+      format-icons = [ "" "" "" "" "" ];
+      tooltip = false;
+    };
+    backlight = {
+      format = "󰃠 {percent}%";
+      tooltip = false;
+    };
+    bluetooth = {
+      format = " {status}";
+      tooltip = false;
+    };
+  };
+in
 {
   programs.waybar = {
     enable = true;
@@ -82,6 +107,58 @@
       }
 
       /* ------------------------------
+         JARVIS STATES (porta do legado)
+         ------------------------------ */
+      #custom-jarvis {
+        background: rgba(0, 255, 255, 0.12);
+        border-bottom: 2px solid #00ffff;
+      }
+
+      #custom-jarvis.idle {
+        color: #aaaaaa;
+      }
+
+      #custom-jarvis.listening,
+      #custom-jarvis.initializing {
+        color: #00ffff;
+        animation: jarvis-pulse 1s infinite;
+      }
+
+      #custom-jarvis.transcribing {
+        color: #ffaa00;
+      }
+
+      #custom-jarvis.thinking {
+        color: #bb77ff;
+        animation: jarvis-pulse 1.2s infinite;
+      }
+
+      #custom-jarvis.speaking {
+        color: #00ff88;
+      }
+
+      #custom-jarvis.error {
+        color: #ff0000;
+        animation: jarvis-blink 0.4s infinite;
+      }
+
+      #custom-jarvis.done {
+        color: #00ff88;
+      }
+
+      @keyframes jarvis-pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.4; }
+        100% { opacity: 1; }
+      }
+
+      @keyframes jarvis-blink {
+        0% { opacity: 1; }
+        50% { opacity: 0.2; }
+        100% { opacity: 1; }
+      }
+
+      /* ------------------------------
          TRAY & TOOLTIP
          ------------------------------ */
       #tray {
@@ -96,7 +173,7 @@
       }
     '';
 
-    settings = [{
+    settings = [({
       layer = "top";
       position = "top";
       height = 34;
@@ -112,14 +189,24 @@
       ];
 
       modules-right = [
+        "custom/jarvis"
         "custom/files"
         "cpu"
         "memory"
+      ] ++ hostOnlyModules ++ [
         "network"
-        "bluetooth"
         "pulseaudio"
         "tray"
       ];
+
+      # JARVIS — estado da IA (porta do legado waybar-jarvis-status.sh)
+      "custom/jarvis" = {
+        exec = "${pkgs.jarvis}/bin/jarvis-waybar 2>/dev/null || echo '{\"text\": \"IDLE 🤖\", \"class\": \"idle\"}'";
+        exec-on-event = true;
+        interval = 2;
+        return-type = "json";
+        on-click = "foot --app-id floating_shell -e bash -lc 'read -p \"JARVIS: \" q; jarvis ask \"$q\"'";
+      };
 
       "hyprland/workspaces" = {
         format = "{name} {windows}";
@@ -172,11 +259,6 @@
         tooltip = false;
       };
 
-      bluetooth = {
-        format = " {status}";
-        tooltip = false;
-      };
-
       pulseaudio = {
         format = "{icon} {volume}%";
         format-icons = {
@@ -190,6 +272,6 @@
         icon-size = 18;
         spacing = 6;
       };
-    }];
+    } // hostOnlySettings)];
   };
 }
