@@ -2,13 +2,37 @@
 
 ## Estado Atual do Sistema
 - **NixOS Lab**: VM Hyper-V, i7-13620H (4c/8t visíveis), 19.1GB RAM, sem GPU
-- **Último rebuild**: OK — **485+ testes verdes**
-- **Git**: limpo, 7 commits ahead of origin
+- **Último rebuild**: OK — **497 testes verdes**, 0 falhas, nix flake check OK
+- **Git**: limpo, 8 commits ahead of origin
 - **Bulldozer**: 5/6 testes de atrito passam contra Qwen3-4B real
+- **Validação E2E**: llama.cpp ✅, Qdrant ✅, RAG ✅, Memória ✅, Agent ✅, Self-heal ✅, Flake ✅
 - **Partição legada montada**: `/mnt/legacy/system` (@) + `/mnt/legacy/home/kuchiriel` (@home) — **NÃO persiste no reboot** (cryptsetup manual)
+
+## Validação E2E (2026-08-19)
+
+| Área | Estado | Evidência |
+|------|--------|-----------|
+| llama.cpp | ✅ PASS | /health OK, /v1/models OK, chat completions OK, tool calling OK, structured output OK (com enable_thinking=false) |
+| Qdrant | ✅ PASS | healthz OK, memories collection (46 vetores, dim 768, Cosine), search retorna resultados |
+| RAG | ⚠️ PARTIAL | Embedding OK (768d), Qdrant search OK, mas collection code_index NÃO EXISTE — precisa rodar code_indexer |
+| Memória | ✅ PASS | remember → recall → lessons funciona, deduplicação OK, 46+ eventos armazenados |
+| Agent | ✅ PASS | E2E: prompt → tool_call → execute → response funciona com Qwen3-4B real |
+| Self-heal | ✅ PASS | 9 health checks (llama_cpp, embeddings, qdrant, disk, nixos, ui, network, sockets, btrfs) |
+| EventBus | ✅ PASS | 14 testes unitários, pub/sub funcional |
+| Semantic Search | ⚠️ BLOCKED | Collection code_index não existe — precisa code_indexer |
+| Egress | ✅ PASS | ContentSafetyFilter com word boundary, 7 testes de segurança |
+| Observabilidade | ✅ PASS | JSONL logging, metrics CLI, doctor proativo |
+| NixOS | ✅ PASS | nix flake check OK, nix build .#jarvis OK |
+| Restart/Recovery | ✅ PASS | 497 testes passando, 0 regressão |
+
+### Notas
+- **RAG code_index**: precisa rodar `jarvis rag index` para criar a collection code_index (404 atual)
+- **structured output**: funciona APENAS com `chat_template_kwargs: enable_thinking=false` (Qwen3 consome tokens thinking)
+- **Embeddings**: server dedicado na porta 8081 (não no llama-cpp principal)
 
 ## Commits Recentes (em ordem — sessão 2026-08-19)
 ```
+5fcbd83 fix(build): corrige 52 falhas no nix build — logging, devtools, content safety
 5b94993 feat(bulldozer): testes de atrito reais contra SLM + prompt enforcement
 c17a9a8 feat(devtools): fuzzy matching para str_replace (tolera erros de SLM)
 3f4f434 fix(waybar): replace one-shot jarvis ask with jarvis dev REPL

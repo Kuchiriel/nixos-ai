@@ -38,6 +38,13 @@ in
     extraPackages = with pkgs; [ intel-media-driver ];
   };
 
+  hardware.nvidia.prime = {
+    offload.enable = true;
+    offload.enableOffloadCmd = true;
+    intelBusId = "PCI:0:2:0"; # Validar via lspci na máquina física
+    nvidiaBusId = "PCI:1:0:0"; # Validar via lspci na máquina física
+  };
+
   boot.kernelParams = [
     "nvidia-drm.modeset=1"
     "quiet"
@@ -152,7 +159,7 @@ in
       "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
       "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M="
     ];
-    trusted-users = [ "root" "nixos" ];
+    trusted-users = [ "root" user ];
     keep-outputs = true;
     keep-derivations = true;
   };

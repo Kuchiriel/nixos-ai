@@ -65,6 +65,13 @@ security.sudo.extraRules = [
     package = config.boot.kernelPackages.nvidiaPackages.stable;
   };
 
+  hardware.nvidia.prime = {
+    offload.enable = true;
+    offload.enableOffloadCmd = true;
+    intelBusId = "PCI:0:2:0"; # Validar via lspci na máquina física
+    nvidiaBusId = "PCI:1:0:0"; # Validar via lspci na máquina física
+  };
+
   # Variáveis de ambiente para estabilidade em VM / Wayland
   environment.sessionVariables = {
     WLR_NO_HARDWARE_CURSORS = "1";
@@ -93,7 +100,7 @@ security.sudo.extraRules = [
       "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M="
     ];
     # Sem isto, o user nixos não baixa binários pré-compilados (compila gcc/numpy toda vez)
-    trusted-users = [ "root" "nixos" ];
+    trusted-users = [ "root" user ];
     # Impede que gcc seja removido entre rebuilds (evita re-download de 264MB)
     keep-outputs = true;
     keep-derivations = true;
