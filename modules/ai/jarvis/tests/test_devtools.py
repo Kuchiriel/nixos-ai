@@ -158,6 +158,93 @@ def test_str_replace_file_not_found() -> None:
 
 
 # ---------------------------------------------------------------------------
+# str_replace — fuzzy matching (SLM whitespace/indent errors)
+# ---------------------------------------------------------------------------
+
+
+def test_str_replace_fuzzy_normalized_whitespace() -> None:
+    """SLM envia whitespace diferente — match normalizado ou fuzzy deve funcionar."""
+    d = _tmp()
+    f = d / "test.py"
+    f.write_text("def hello(   ):\n    return True\n")
+    # SLM normalizou os espaços extras
+    result = str_replace(str(f), "def hello():\n    return True", "def hello():\n    return False")
+    assert result["ok"] is True
+    assert result["strategy"] in ("normalized", "fuzzy (95%)")
+    assert "return False" in f.read_text()
+
+
+def test_str_replace_fuzzy_indentation() -> None:
+    """SLM erra indentação (tabs vs spaces)."""
+    d = _tmp()
+    f = d / "test.py"
+    f.write_text("if True:\n    x = 1\n    y = 2\n")
+    # SLM usou 2 espaços em vez de 4
+    result = str_replace(str(f), "if True:\n  x = 1\n  y = 2", "if True:\n    x = 1\n    y = 2\n    z = 3")
+    assert result["ok"] is True
+    # Pode ser normalized, fuzzy, ou line-match dependendo da similaridade
+    assert result["strategy"] != "none"
+    assert "z = 3" in f.read_text()
+
+
+def test_str_replace_fuzzy_mixed_whitespace() -> None:
+    """SLM mistura tabs e spaces."""
+    d = _tmp()
+    f = d / "test.py"
+    f.write_text("class Foo:\n    def bar(self):\n        pass\n")
+    # SLM usou tab em vez de spaces
+    result = str_replace(str(f), "class Foo:\n\tdef bar(self):\n\t\tpass", "class Foo:\n    def bar(self):\n        return 42")
+    assert result["ok"] is True
+    assert result["strategy"] != "none"
+    assert "return 42" in f.read_text()
+
+
+def test_str_replace_fuzzy_preserves_exact_content() -> None:
+    """Fuzzy match deve usar o texto EXATO do arquivo, não o input normalizado."""
+    d = _tmp()
+    f = d / "test.py"
+    original = "x =   1  # lots of spaces\n"
+    f.write_text(original)
+    # Input normalizado (espaços colapsados)
+    result = str_replace(str(f), "x = 1 # lots of spaces", "x = 2")
+    assert result["ok"] is True
+    # Conteúdo original preservado exceto a substituição
+    content = f.read_text()
+    assert "x = 2" in content
+
+
+def test_str_replace_fuzzy_line_match() -> None:
+    """Match por linha única quando bloco multi-linha falha."""
+    d = _tmp()
+    f = d / "test.py"
+    f.write_text("# TODO: fix this\nimport os\nimport sys\n")
+    result = str_replace(str(f), "# TODO: fix this", "# DONE: fixed")
+    assert result["ok"] is True
+    assert "# DONE: fixed" in f.read_text()
+
+
+def test_str_replace_fuzzy_strategy_reported() -> None:
+    """Estratégia usada deve ser reportada no resultado."""
+    d = _tmp()
+    f = d / "test.py"
+    f.write_text("hello   world\n")
+    result = str_replace(str(f), "hello world", "hi world")
+    assert result["ok"] is True
+    assert result["strategy"] in ("exact", "normalized", "line-match")
+
+
+def test_str_replace_truly_not_found_returns_context() -> None:
+    """Quando nada funciona, retorna contexto para debug."""
+    d = _tmp()
+    f = d / "test.py"
+    f.write_text("alpha\nbeta\ngamma\n")
+    result = str_replace(str(f), "ZZZZZ_NOT_HERE", "new")
+    assert result["ok"] is False
+    assert "hint" in result
+    assert len(result["hint"]) > 0
+
+
+# ---------------------------------------------------------------------------
 # list_directory
 # ---------------------------------------------------------------------------
 

@@ -20,6 +20,7 @@ Segurança:
 
 from __future__ import annotations
 
+import difflib
 import os
 import re
 import shutil
@@ -149,21 +150,144 @@ def write_file(path: str, content: str, backup: bool = True) -> dict[str, Any]:
     except ValueError as e:
         return {"ok": False, "error": str(e)}
     except OSError as e:
-        return {"ok": False, "error": f"Write error: {e}"}
+        return {"ok": False, "error": f"Write error: {e}"}# ---------------------------------------------------------------------------
+# Fuzzy matching helpers (para SLMs que erram whitespace/indentação)
+# ---------------------------------------------------------------------------
+
+def _normalize_line(line: str) -> str:
+    """Normaliza uma linha: strip, tabs→spaces, múltiplos espaços→1."""
+    return " ".join(line.expandtabs().split())
+
+
+def _normalize_text(text: str) -> str:
+    """Normaliza bloco de texto para comparação fuzzy.
+
+    Cada linha é normalizada individualmente (whitespace colapsado),
+    preservando a estrutura de linhas para matching multi-linha.
+    """
+    return "\n".join(_normalize_line(l) for l in text.splitlines())
+
+
+def _fuzzy_find(content: str, old: str) -> tuple[str | None, str]:
+    """Tenta encontrar `old` em `content` com estratégias crescentes.
+
+    Retorna (found_text, strategy) ou (None, "none").
+    found_text é o texto EXATO do arquivo que corresponde (para substitution).
+    """
+    # 1. Match exato (rápido)
+    if old in content:
+        return old, "exact"
+
+    # 2. Match normalizado (whitespace collapsing, preserva novas linhas)
+    norm_old = _normalize_text(old)
+    norm_content = _normalize_text(content.rstrip("\n"))
+    if norm_old in norm_content:
+        content_lines = content.splitlines()
+        old_lines = old.splitlines()
+        if old_lines:
+            for i in range(len(content_lines) - len(old_lines) + 1):
+                window = content_lines[i:i + len(old_lines)]
+                if _normalize_text("\n".join(window)) == norm_old:
+                    found = "\n".join(window)
+                    return found, "normalized"
+
+    # 2b. Match por colapso de whitespace em bloco (tolera \s+ → \s)
+    #      Compara o bloco inteiro com regex de whitespace
+    old_compact = re.sub(r"\s+", " ", old.strip())
+    content_compact = re.sub(r"\s+", " ", content.strip())
+    if old_compact in content_compact:
+        # Encontra o bloco exato no conteúdo original
+        content_lines = content.splitlines()
+        old_lines = old.splitlines()
+        if old_lines:
+            for i in range(len(content_lines) - len(old_lines) + 1):
+                window = content_lines[i:i + len(old_lines)]
+                window_compact = re.sub(r"\s+", " ", " ".join(l.strip() for l in window).strip())
+                if window_compact == old_compact:
+                    found = "\n".join(window)
+                    return found, "normalized"
+
+    # 3. Match por similaridade de linhas (difflib)
+    content_lines = content.splitlines()
+    old_lines = old.splitlines()
+    if len(old_lines) >= 2:
+        # Janela deslizante com threshold de similaridade
+        best_ratio = 0.0
+        best_start = -1
+        best_len = len(old_lines)
+        window_size = len(old_lines)
+
+        for i in range(len(content_lines) - window_size + 1):
+            window = content_lines[i:i + window_size]
+            ratio = difflib.SequenceMatcher(
+                None,
+                "\n".join(old_lines),
+                "\n".join(window),
+            ).ratio()
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_start = i
+
+        if best_ratio >= 0.75 and best_start >= 0:
+            found = "\n".join(content_lines[best_start:best_start + best_len])
+            return found, f"fuzzy ({best_ratio:.0%})"
+
+    # 4. Match por linha única (último recurso)
+    if old_lines:
+        first_norm = _normalize_line(old_lines[0])
+        for i, line in enumerate(content_lines):
+            if _normalize_line(line) == first_norm:
+                # Tenta pegar as linhas seguintes
+                end = min(i + len(old_lines), len(content_lines))
+                found = "\n".join(content_lines[i:end])
+                if len(found.strip()) > 0:
+                    return found, "line-match"
+
+    return None, "none"
+
+
+def _find_context(content: str, old: str, context_lines: int = 3) -> str:
+    """Retorna contexto ao redor de onde `old` seria encontrado (para debug)."""
+    content_lines = content.splitlines()
+    old_lines = old.splitlines()
+    if not old_lines:
+        return ""
+
+    # Tenta encontrar a melhor posição
+    best_ratio = 0.0
+    best_start = 0
+    for i in range(max(1, len(content_lines) - len(old_lines) + 1)):
+        end = min(i + len(old_lines), len(content_lines))
+        window = content_lines[i:end]
+        ratio = difflib.SequenceMatcher(
+            None, "\n".join(old_lines), "\n".join(window)
+        ).ratio()
+        if ratio > best_ratio:
+            best_ratio = ratio
+            best_start = i
+
+    start = max(0, best_start - context_lines)
+    end = min(len(content_lines), best_start + len(old_lines) + context_lines)
+    lines = []
+    for i in range(start, end):
+        marker = ">>>" if best_start <= i < best_start + len(old_lines) else "   "
+        lines.append(f"{i+1:4d} {marker} {content_lines[i]}")
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
 # str_replace (método preferido para edição)
 # ---------------------------------------------------------------------------
-
 def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> dict[str, Any]:
     """Substitui uma string em um arquivo (método preferido para edição).
 
     Valida que a string antiga existe antes de escrever.
     Se allow_multiple=False (default), exige que old apareça exatamente 1 vez.
 
+    Suporta matching fuzzy (whitespace-insensitive) quando o match exato falha.
+
     Returns:
-        {"ok": True, "replacements": 1, "path": "..."}
+        {"ok": True, "replacements": 1, "path": "...", "strategy": "exact"}
     """
     try:
         target = _safe_path(path)
@@ -171,23 +295,38 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
             return {"ok": False, "error": f"File not found: {path}"}
 
         content = target.read_text(encoding="utf-8", errors="replace")
-        count = content.count(old)
 
-        if count == 0:
-            return {"ok": False, "error": f"String not found in {path}: {old[:100]!r}..."}
+        # Tenta matching com estratégias crescentes
+        found_text, strategy = _fuzzy_find(content, old)
+
+        if found_text is None:
+            # Nenhuma estratégia funcionou — retorna contexto útil
+            ctx = _find_context(content, old)
+            return {
+                "ok": False,
+                "error": f"String not found in {path}",
+                "hint": f"Searched with: exact, normalized, fuzzy (75%+). Closest match:\n{ctx}",
+                "old_preview": old[:200],
+            }
+
+        count = content.count(found_text)
         if count > 1 and not allow_multiple:
-            return {"ok": False, "error": f"String found {count} times (use allow_multiple=True): {old[:100]!r}..."}
+            return {
+                "ok": False,
+                "error": f"String found {count} times (use allow_multiple=True)",
+                "strategy": strategy,
+            }
 
         # Backup
         backup_path = target.with_suffix(target.suffix + ".bak")
         shutil.copy2(target, backup_path)
 
-        # Substitui
+        # Substitui usando o texto EXATO encontrado no arquivo
         if allow_multiple:
-            new_content = content.replace(old, new)
+            new_content = content.replace(found_text, new)
             replacements = count
         else:
-            new_content = content.replace(old, new, 1)
+            new_content = content.replace(found_text, new, 1)
             replacements = 1
 
         target.write_text(new_content, encoding="utf-8")
@@ -205,6 +344,7 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
             "replacements": replacements,
             "path": rel,
             "backup": backup_rel,
+            "strategy": strategy,
         }
     except ValueError as e:
         return {"ok": False, "error": str(e)}
