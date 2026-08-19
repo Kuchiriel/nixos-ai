@@ -2,14 +2,18 @@
 
 ## Estado Atual do Sistema
 - **NixOS Lab**: VM Hyper-V, i7-13620H (4c/8t visíveis), 19.1GB RAM, sem GPU
-- **Último rebuild**: OK — **485+ testes verdes** (25 novos devtools)
-- **Git**: limpo (após commit mais recente)
+- **Último rebuild**: OK — **485+ testes verdes**
+- **Git**: limpo, 3 commits ahead of origin (e1f29bd, d424185, e82e3d5)
 - **Partição legada montada**: `/mnt/legacy/system` (@) + `/mnt/legacy/home/kuchiriel` (@home) — **NÃO persiste no reboot** (cryptsetup manual)
 
 ## Commits Recentes (em ordem — sessão 2026-08-19)
 ```
-<pendente> feat(circuit-breaker): health monitor + circuit breaker + fallback + telegram
-<pendente> feat(eventbus): barramento de eventos assíncrono + vision + triggers
+e1f29bd feat(dev): CLI interativo jarvis dev (estilo Aider) testado contra SLM real
+d424185 feat(devtools): ferramentas de desenvolvimento para o agente (estilo Aider/Claude Code)
+e82e3d5 test(fuzz): campanha intensiva de mutation testing e fuzzing de estresse
+b4d7e19 feat(resilience): circuit breaker + health monitor + fallback com egress safety
+e10a2c7 feat(pipeline): event bus + vision + triggers — pipeline orientado a eventos
+5552f85 docs: atualiza documentação com todos os commits da sessão 2026-08-19
 9d0103f feat(profile): perfil de usuario dinâmico + contexto adaptativo
 ee87408 feat(observability): logging JSONL unificado + metrics + doctor proativo
 6b5c445 docs(security): adiciona threat model e resultados do hardening ao HANDOFF.md
@@ -25,7 +29,15 @@ df089dc docs: atualiza HANDOFF com resultados do hardening (422d0be)
 
 ## O Que Foi Implementado Nesta Sessão
 
-### 0b. Mutation Testing + Fuzzing (pendente commit)
+### 0c. CLI Dev Agent (e1f29bd)
+- `jarvis dev` — REPL interativo estilo Aider com ferramentas de desenvolvimento
+- Tool calls reais contra o SLM local (Qwen3-4B via llama.cpp)
+- Ferramentas: `list_directory`, `read_file`, `write_file`, `str_replace`, `code_search`, `run_tests`
+- Segurança: paths restritos ao projeto ou /tmp, backup .bak, str_replace valida existência
+- Teste real: SLM listou arquivos, leu config.py (19 vars), criou arquivo, editou código
+- 25 novos testes unitários + validação contra SLM real
+
+### 0b. Mutation Testing + Fuzzing (e82e3d5)
 - `test_fuzz_mutation.py` — 56 testes de fuzzing e mutation testing
 - Fuzzing do parser JSON: 100+ strings aleatórias, 100+ JSONs malformados, 100+ tool calls
 - Fuzzing de memory: _stable_id determinismo, payload validação, edge cases
@@ -35,7 +47,7 @@ df089dc docs: atualiza HANDOFF com resultados do hardening (422d0be)
 - Content safety fuzzing: 100+ safe/unsafe prompts, case insensitive, partial match
 - Lacunas encontradas: tab (\t) não detectado por chaining check (shlex.safe)
 
-### 0a. Circuit Breaker + Fallback (pendente commit)
+### 0a. Circuit Breaker + Fallback (b4d7e19)
 - `core/health_monitor.py` — monitor de saúde do llama.cpp: socket check, HTTP health, latência, uptime%
 - `core/circuit_breaker.py` — padrão Circuit Breaker: CLOSED→OPEN→HALF_OPEN, fallback remoto, ContentSafetyFilter
 - Filtro de segurança: keywords sensíveis (recall, vault, password, /home/) → fallback remoto NUNCA
@@ -43,7 +55,7 @@ df089dc docs: atualiza HANDOFF com resultados do hardening (422d0be)
 - Telegram: `/status` (backend + circuit info), `/force_local`, `/force_remote`
 - 25 testes: health monitor, content safety, circuit breaker, Telegram
 
-### 0. Event Bus + Vision + Triggers (pendente commit)
+### 0. Event Bus + Vision + Triggers (e10a2c7)
 - `core/eventbus.py` — barramento asyncio leve: pub/sub por tópico, retry, DLQ, stats
 - `core/vision.py` — captura de tela via grim/slurp (full/region/window), fallback gracioso sem display
 - `core/triggers.py` — motor declarativo: cooldown, idempotência, persistência JSON, triggers pré-definidos (disk/doctor/cpu)
@@ -103,6 +115,8 @@ df089dc docs: atualiza HANDOFF com resultados do hardening (422d0be)
 8. **Alertas Telegram** — notificar quando doctor detecta serviços down
 9. **Event Bus daemon** — rodar como systemd user service com `jarvis triggers run --loop`
 10. **Vision no host** — validar grim/slurp no Hyprland real (VM sem display)
+11. **CLI dev expandido** — bulldozer loop completo com retry automático de erros de build/teste
+12. **Dev tools no pi.nix** — integrar capabilities do jarvis dev ao CLI standalone
 
 ## Problemas Conhecidos
 - **Logind D-Bus timeout**: erro recorrente no rebuild, não afeta funcionalidade
@@ -140,7 +154,7 @@ Diagnóstico completo em `docs/architecture/pillar-diagnostic.md`. Score geral: 
 
 **Bônus**: devShell PYTHONPATH corrigido (absoluto, não relativo); system_prompt limpo de instruções MCP.
 
-**346+ testes passando.**
+**485+ testes passando.**
 
 ## Notas Técnicas
 - **KV cache**: `2 * n_kv_heads * head_dim * n_layers * bytes` (f16=2, q8=1)
@@ -180,7 +194,7 @@ Diagnóstico completo em `docs/architecture/pillar-diagnostic.md`. Score geral: 
 - `test_unknown_tool_rejected` (simulação real)
 - `test_execute_shell_only_tool_accepted`
 
-**460+ testes passando** (zero regressão). Inclui: 248 base + 6 security + 31 PBT + 30 wakeword + 20 profile + 13 observability + 34 eventbus/triggers/vision + 25 circuit breaker + 56 fuzzing/mutation.
+**485+ testes passando** (zero regressão). Inclui: 248 base + 6 security + 31 PBT + 30 wakeword + 20 profile + 13 observability + 34 eventbus/triggers/vision + 25 circuit breaker + 56 fuzzing/mutation + 25 devtools.
 
 ### O Que NÃO Foi Implementado (decisão consciente)
 

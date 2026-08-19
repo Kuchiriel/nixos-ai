@@ -36,6 +36,8 @@ e não fica parada — tudo rodando local (llama.cpp + Qdrant), sem cloud.
 | 🔌 **Circuit Breaker** | health monitor + fallback remoto com filtro de segurança (dados sensíveis nunca saem) |
 | 🧪 **Testes** | 405+ testes: unit, integration, PBT (hypothesis), security, wakeword |
 | 📝 **Property-Based Testing** | 31 testes adversariais com hypothesis para parsers e regex |
+| 🔧 **Dev Agent (CLI)** | `jarvis dev` — REPL interativo estilo Aider com ferramentas de código contra SLM real |
+| 🧪 **Mutation Testing + Fuzzing** | 56 testes de stress: parser JSON, tool calls, memory, rules, security |
 
 **Modelos 100% declarativos**: `modules/ai/models.nix` é a única fonte de
 verdade — o host nasce com tudo no store Nix, sem download imperativo.
@@ -397,6 +399,10 @@ jarvis hwdetect               # detecta hardware e classifica tier
 jarvis hwprofile              # calcula flags SOTA + melhor modelo
 jarvis screenshot full|region|window  # captura de tela (Wayland/Hyprland)
 jarvis triggers run|status    # motor de automações por gatilhos
+
+# Desenvolvimento (estilo Aider)
+jarvis dev                    # REPL interativo com ferramentas de código
+# O agente pode: ler, escrever, editar arquivos, buscar no codebase, rodar testes
 jarvis handoff --task "..."   # pacote de contexto para IAs web
 jarvis telegram               # canal Telegram
 jarvis idle status            # estado do modo idle
