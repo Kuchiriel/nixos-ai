@@ -2,6 +2,7 @@
 
 Subcomandos:
   jarvis intent "texto"          — classifica a intenção (determinístico)
+  jarvis profile show/set/forget — preferências do usuario (adaptativo)
   jarvis status                  — verifica disponibilidade de llama.cpp e Qdrant
   jarvis chat "pergunta"         — resposta via llama.cpp (OpenAI-compat)
   jarvis rag "busca"             — busca híbrida (dense + sparse BM25 + boosts V4.0.5)
@@ -167,6 +168,33 @@ def _log_dir():
     if base:
         return Path(base).expanduser() / "logs"
     return Path.home() / ".local" / "state" / "jarvis" / "logs"
+
+
+def _cmd_profile_show(_args: argparse.Namespace) -> int:
+    from jarvis.core.user_profile import UserProfile, profile_show
+
+    p = UserProfile()
+    p.load()
+    print(profile_show(p))
+    return 0
+
+
+def _cmd_profile_set(args: argparse.Namespace) -> int:
+    from jarvis.core.user_profile import UserProfile, profile_set
+
+    p = UserProfile()
+    p.load()
+    print(profile_set(p, args.key, args.value))
+    return 0
+
+
+def _cmd_profile_forget(args: argparse.Namespace) -> int:
+    from jarvis.core.user_profile import UserProfile, profile_forget
+
+    p = UserProfile()
+    p.load()
+    print(profile_forget(p, args.key))
+    return 0
 
 
 def _cmd_remember(args: argparse.Namespace) -> int:
@@ -622,6 +650,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_status = sub.add_parser("status", help="verifica serviços (llama.cpp, Qdrant)")
     p_status.set_defaults(func=_cmd_status)
+
+    p_profile = sub.add_parser("profile", help="perfil de usuario dinâmico")
+    profile_sub = p_profile.add_subparsers(dest="profile_cmd", required=True)
+    p_pshow = profile_sub.add_parser("show", help="mostra o perfil atual")
+    p_pshow.set_defaults(func=_cmd_profile_show)
+    p_pset = profile_sub.add_parser("set", help="define uma preferencia")
+    p_pset.add_argument("key", help="chave (ex: verbosity, tone, language)")
+    p_pset.add_argument("value", help="valor")
+    p_pset.set_defaults(func=_cmd_profile_set)
+    p_pforget = profile_sub.add_parser("forget", help="remove uma preferencia")
+    p_pforget.add_argument("key", help="chave a remover")
+    p_pforget.set_defaults(func=_cmd_profile_forget)
 
     p_intent = sub.add_parser("intent", help="classifica a intenção de um texto")
     p_intent.add_argument("text")

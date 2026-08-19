@@ -33,6 +33,7 @@ from typing import Any
 import requests
 
 from jarvis.core.logging import get_logger
+from jarvis.core.user_profile import UserProfile, inject_context
 
 from jarvis.core.config import Config, get_config
 from jarvis.providers.mcp import MCPClient, MCPError, parse_command, to_function_tools
@@ -352,6 +353,12 @@ class Agent:
             "Respostas curtas e diretas. Use execute_shell para dados/ações. "
             "Comandos read-only rodam direto; comandos com efeito pedem aprovação."
         )
+        # Perfil de usuario: preferências + contexto ambiental dinâmico
+        self._user_profile = UserProfile()
+        try:
+            self._user_profile.load()
+        except Exception:  # noqa: BLE001 — perfil é best-effort
+            pass
 
     # --- servidor ---
 
@@ -541,7 +548,8 @@ class Agent:
     def _run_loop(self, user_prompt: str, result: AgentResult) -> AgentResult:
         profile = detect_profile(self._model_id())
         lessons = self._lessons_block(user_prompt)
-        system = self._system_prompt
+        # Injeta contexto adaptativo (perfil + tempo + sistema) no system prompt
+        system = inject_context(self._system_prompt, self._user_profile)
         if lessons:
             system += "\n\nAVOID (past errors):" + lessons
         messages: list[dict[str, Any]] = [
