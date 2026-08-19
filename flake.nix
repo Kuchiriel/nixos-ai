@@ -165,6 +165,7 @@
       inputsFrom = [ pkgs.jarvis ];
       packages = [
         pkgs.python313Packages.pytest
+        pkgs.python313Packages.hypothesis
       ];
       shellHook = ''
         export PYTHONPATH="''${FLAKE_ROOT:-$(git rev-parse --show-toplevel)}/modules/ai/jarvis/src:$PYTHONPATH"

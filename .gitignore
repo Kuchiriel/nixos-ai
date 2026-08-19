@@ -33,3 +33,6 @@ hosts/nitro-v15/hardware-configuration.nix
 result
 result-*
 .aider*
+
+# Hypothesis PBT cache
+.hypothesis/
