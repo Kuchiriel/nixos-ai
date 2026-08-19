@@ -355,6 +355,11 @@ class Agent:
             # gera JSON válido por constrangimento, não por tentativa.
             "response_format": {"type": "json_object"},
         }
+        # Qwen3 (e Qwen3.6) ativam thinking por padrão via chat template;
+        # em CPU (lab) isso dobra a latência e consome max_tokens em
+        # reasoning antes do tool call. Desligado via Config (env).
+        if self._cfg.llm_disable_thinking:
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
         resp = self._session.post(f"{self._base}/chat/completions", json=payload, timeout=self._cfg.llm_timeout)
         resp.raise_for_status()
         return resp.json()
