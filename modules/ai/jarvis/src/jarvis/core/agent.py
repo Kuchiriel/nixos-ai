@@ -66,6 +66,7 @@ TOOL_CALL_TAG_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTA
 CODEBLOCK_JSON_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 
 from jarvis.core.vision import VISION_TOOL
+from jarvis.core.devtools import DEV_TOOLS
 
 TOOLS: list[dict[str, Any]] = [
     {
@@ -86,6 +87,7 @@ TOOLS: list[dict[str, Any]] = [
         },
     },
     VISION_TOOL,
+    *DEV_TOOLS,
 ]
 
 
@@ -448,11 +450,14 @@ class Agent:
         self._mcp_tools = []
 
     def _valid_tool_names(self) -> set[str]:
-        """Conjunto de nomes de tools aceitos — execute_shell + MCP."""
+        """Conjunto de nomes de tools aceitos — execute_shell + MCP + dev tools."""
+        from jarvis.core.devtools import DEV_TOOLS as _DEV
         names = {"execute_shell"}
         for t in self._mcp_tools:
             if isinstance(t, dict) and "name" in t:
                 names.add(t["name"])
+        for t in _DEV:
+            names.add(t["function"]["name"])
         return names
 
     # --- tool ---
@@ -666,6 +671,10 @@ class Agent:
                 elif func_name == "capture_screen":
                     from jarvis.core.vision import handle_capture
                     output = handle_capture(args)
+                elif func_name in ("read_file", "write_file", "str_replace",
+                                   "list_directory", "code_search", "run_tests"):
+                    from jarvis.core.devtools import handle_dev_tool
+                    output = handle_dev_tool(func_name, args)
                 elif self._mcp_clients:
                     output = self._call_mcp_tool(func_name, args)
                 else:
