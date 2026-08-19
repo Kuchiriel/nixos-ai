@@ -85,14 +85,16 @@ python3 -c "from jarvis.core.hwdetect import HardwareProfile, CpuInfo, GpuInfo; 
 
 ## Diagnóstico de Arquitetura (4 Pilares)
 
-Diagnóstico completo em `docs/architecture/pillar-diagnostic.md`. Score geral: **82/100**.
+Diagnóstico completo em `docs/architecture/pillar-diagnostic.md`. Score geral: **82/100** (pre-hardening).
 
-**Top 3 fixes de maior impacto (pendentes):**
-1. `response_format: json_object` no payload do LLM (agent.py:296) — reduz repair loops ~50%
-2. Deduplicação de memória episódica (memory.py:65) — evita lições repetidas saturando contexto
-3. Lição em falha de restart (heal.py:139) — fecha loop de self-heal
+**Top 3 fixes — IMPLEMENTADOS (commit 422d0be):**
+1. ✅ `response_format: json_object` no payload do LLM (agent.py) — reduz repair loops ~50%
+2. ✅ Deduplicação de memória episódica (memory.py) — texto dedup + max_chars=500 em lessons()
+3. ✅ heal.py: MemoryStore (bug) → EpisodicMemory — fecha loop de self-heal
 
-**Nota**: diagnóstico gerado pelo MiMo 2.5 (modelo da sessão Freebuff). Rodar `flake check` + `pytest` após edições antes de commitar.
+**Bônus**: devShell PYTHONPATH corrigido (absoluto, não relativo); system_prompt limpo de instruções MCP.
+
+**248/248 testes passando.**
 
 ## Notas Técnicas
 - **KV cache**: `2 * n_kv_heads * head_dim * n_layers * bytes` (f16=2, q8=1)
