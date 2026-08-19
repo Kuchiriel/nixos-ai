@@ -115,12 +115,32 @@ def write_file(path: str, content: str, backup: bool = True) -> dict[str, Any]:
 
     Se backup=True e o arquivo existe, cria .bak antes de sobrescrever.
     Cria diretórios intermediários automaticamente.
+    Valida AST para arquivos .py (proteção contra SLM).
 
     Returns:
         {"ok": True, "path": "...", "bytes": 1234, "backup": "..."}
     """
     try:
         target = _safe_path(path)
+
+        # AST guard: valida sintaxe Python antes de escrever
+        # Só aplica se o arquivo original era Python válido
+        if target.suffix == ".py" and target.exists():
+            try:
+                from jarvis.core.ast_guard import validate_python_syntax
+                original_code = target.read_text(encoding="utf-8", errors="replace")
+                original_valid, _ = validate_python_syntax(original_code)
+                if original_valid:
+                    is_valid, ast_error = validate_python_syntax(content)
+                    if not is_valid:
+                        return {
+                            "ok": False,
+                            "error": f"write_file rejeitado — sintaxe Python inválida",
+                            "ast_error": ast_error,
+                        }
+            except ImportError:
+                pass  # ast_guard não disponível, segue sem validação
+
         backup_path = None
 
         # Backup se arquivo existe
@@ -321,10 +341,6 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
                 "strategy": strategy,
             }
 
-        # Backup
-        backup_path = target.with_suffix(target.suffix + ".bak")
-        shutil.copy2(target, backup_path)
-
         # Substitui usando o texto EXATO encontrado no arquivo
         if allow_multiple:
             new_content = content.replace(found_text, new)
@@ -332,6 +348,29 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
         else:
             new_content = content.replace(found_text, new, 1)
             replacements = 1
+
+        # AST guard: valida sintaxe Python antes de escrever
+        # Só aplica se o arquivo original era Python válido
+        if target.suffix == ".py":
+            try:
+                from jarvis.core.ast_guard import validate_python_syntax, format_ast_error_for_llm
+                original_valid, _ = validate_python_syntax(content)
+                if original_valid:
+                    is_valid, ast_error = validate_python_syntax(new_content)
+                    if not is_valid:
+                        return {
+                            "ok": False,
+                            "error": f"str_replace rejeitado — quebra sintaxe Python",
+                            "ast_error": ast_error,
+                            "hint": format_ast_error_for_llm(ast_error, found_text[:300], new[:300]),
+                            "strategy": strategy,
+                        }
+            except ImportError:
+                pass  # ast_guard não disponível, segue sem validação
+
+        # Backup
+        backup_path = target.with_suffix(target.suffix + ".bak")
+        shutil.copy2(target, backup_path)
 
         target.write_text(new_content, encoding="utf-8")
 
