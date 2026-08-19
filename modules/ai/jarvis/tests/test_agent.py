@@ -206,7 +206,7 @@ def test_agent_injects_past_lessons_into_system_prompt(tmp_path) -> None:
     agent.run("arrume o qdrant")
 
     system = LessonSession.last_payload["messages"][0]["content"]
-    assert "MANDATORY CONSTRAINTS from past experience" in system
+    assert "AVOID (past errors):" in system
     assert "PAST LESSONS (avoid these mistakes)" in system
     assert "unknown variant on_disk" in system
 
@@ -224,7 +224,7 @@ def test_agent_without_memory_has_no_lessons_block(tmp_path) -> None:
     agent.run("checagem")
 
     system = ProbeSession.last_payload["messages"][0]["content"]
-    assert "MANDATORY CONSTRAINTS" not in system
+    assert "AVOID" not in system
 
 
 def test_agent_loop_executes_tool(tmp_path) -> None:

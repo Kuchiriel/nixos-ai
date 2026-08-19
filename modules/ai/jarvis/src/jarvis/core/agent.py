@@ -66,17 +66,13 @@ TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "execute_shell",
-            "description": (
-                "Execute a shell command on the local NixOS system. "
-                "Read-only diagnostic commands are allowed; commands with "
-                "side effects will require human approval."
-            ),
+            "description": "Execute a shell command. Read-only commands run directly; commands with side effects require approval.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "cmd": {
                         "type": "string",
-                        "description": "The exact shell command to execute.",
+                        "description": "Shell command to execute.",
                     }
                 },
                 "required": ["cmd"],
@@ -152,6 +148,12 @@ def human_approve(cmd: str, prompt: str = "Permitir execução? [y/N] ") -> bool
 
 
 def detect_profile(model_id: str) -> dict[str, Any]:
+    """Perfil adaptativo por tamanho de modelo.
+
+    4B: max_tokens baixo (tool calls curtos, respostas diretas).
+    7B: margem para raciocínio + tool call.
+    32B+: tools complexos, respostas detalhadas.
+    """
     m = model_id.lower()
     if "32b" in m or "30b" in m:
         return {
@@ -168,6 +170,14 @@ def detect_profile(model_id: str) -> dict[str, Any]:
             "tool_choice": "auto",
             "parallel_tool_calls": False,
             "max_tokens_per_turn": 1024,
+        }
+    if "4b" in m or "3b" in m or "1b" in m:
+        return {
+            "name": "tiny",
+            "temperature": 0.0,
+            "tool_choice": "auto",
+            "parallel_tool_calls": False,
+            "max_tokens_per_turn": 512,
         }
     return {
         "name": "default",
@@ -314,16 +324,9 @@ class Agent:
         self._mcp_clients: dict[str, MCPClient] = {}
         self._mcp_tools: list[dict[str, Any]] = []
         self._system_prompt = system_prompt or (
-            "You are JARVIS, a pragmatic system administration assistant on "
-            "NixOS. RESPOND ALWAYS IN BRAZILIAN PORTUGUESE (pt-BR), even if "
-            "the user writes in English; keep answers concise and direct, "
-            "extracting the maximum from the minimum (no filler). "
-            "Use the execute_shell tool to gather data or perform actions. "
-            "Read-only diagnostic commands run automatically; commands with "
-            "side effects require human approval. When you decide to call a "
-            "tool, ALWAYS wrap the call exactly as "
-            "<tool_call>{\"name\": ..., \"arguments\": {...}}</tool_call> "
-            "and never mix a tool call with prose in the same message."
+            "JARVIS, assistente de admin NixOS. Sempre responda em PT-BR. "
+            "Respostas curtas e diretas. Use execute_shell para dados/ações. "
+            "Comandos read-only rodam direto; comandos com efeito pedem aprovação."
         )
 
     # --- servidor ---
@@ -483,11 +486,7 @@ class Agent:
         lessons = self._lessons_block(user_prompt)
         system = self._system_prompt
         if lessons:
-            system += (
-                "\n\nMANDATORY CONSTRAINTS from past experience — if a PAST LESSON "
-                "warns against a specific change or command, you MUST avoid it:\n"
-                + lessons
-            )
+            system += "\n\nAVOID (past errors):" + lessons
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system},
             {"role": "user", "content": user_prompt},
@@ -500,11 +499,7 @@ class Agent:
             if turn == MAX_TURNS - 2 and messages:
                 messages.append({
                     "role": "system",
-                    "content": (
-                        "You already have enough information to answer the user's "
-                        "request. STOP calling tools now and give the final answer "
-                        "in plain text, using the tool results you already have."
-                    ),
+                    "content": "Stop. Answer now with the data you have.",
                 })
             result.turns = turn + 1
             data = self._chat(messages, profile)
@@ -557,10 +552,7 @@ class Agent:
                             "role": "tool",
                             "tool_call_id": tool_call.get("id", ""),
                             "name": func_name,
-                            "content": (
-                                f"ERROR: invalid JSON in arguments: {raw_args!r}. "
-                                "Reissue the tool call with strictly valid JSON arguments."
-                            ),
+                            "content": f"Invalid JSON. Retry with valid JSON: {raw_args[:200]}",
                         })
                         continue
 
