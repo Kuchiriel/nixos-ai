@@ -584,18 +584,24 @@ def semantic_search(query: str, top_k: int = 5) -> dict[str, Any]:
         {"ok": True, "results": [{"text": "...", "score": 0.9, "source": "file.py"}], "total": 3}
     """
     try:
-        from jarvis.providers.vector_store import VectorStore
+        from jarvis.providers.vector_store import QdrantStore
+        from jarvis.providers.llm import LLMClient
 
         cfg = get_config()
-        vs = VectorStore(cfg)
-        results = vs.search(query, collection="code_index", top_k=top_k)
+        llm = LLMClient(cfg)
+        vec = llm.embed(query)
+        if not vec:
+            return {"ok": False, "error": "Embedding generation failed"}
+
+        vs = QdrantStore(cfg)
+        raw = vs.search(cfg.qdrant_collection_code, vec, top_k=top_k)
 
         formatted = []
-        for r in results:
+        for r in raw:
             formatted.append({
-                "text": r.get("text", "")[:300],
+                "text": r.get("payload", {}).get("text", "")[:300],
                 "score": round(r.get("score", 0), 3),
-                "source": r.get("metadata", {}).get("source", "unknown"),
+                "source": r.get("payload", {}).get("path", "unknown"),
             })
 
         return {
@@ -608,49 +614,14 @@ def semantic_search(query: str, top_k: int = 5) -> dict[str, Any]:
         err_type = type(e).__name__
         if "Connect" in err_type or "Connection" in err_type or "Timeout" in err_type:
             msg = f"Qdrant daemon/connection unavailable ({err_type}): {e}"
-        elif "UnexpectedResponse" in err_type or "NotFound" in err_type:
-            msg = f"Collection 'code_index' missing or invalid schema ({err_type}): {e}"
+        elif "NotFound" in str(e) or "not found" in str(e).lower():
+            msg = f"Collection 'code_index' missing — run 'jarvis rag index' first"
         elif "Embedding" in err_type or "Model" in err_type:
             msg = f"Embedding generation failure ({err_type}): {e}"
         else:
             msg = f"Semantic search failure ({err_type}): {e}"
         return {"ok": False, "error": msg}
 
-
-'''
-# ---------------------------------------------------------------------------
-# semantic_search (via Qdrant)
-# ---------------------------------------------------------------------------
-def semantic_search(query: str, top_k: int = 5) -> dict[str, Any]:
-    """Busca semântica no code_index do Qdrant.
-
-    Returns:
-        {"ok": True, "results": [{"text": "...", "score": 0.9, "source": "file.py"}], "total": 3}
-    """
-    try:
-        from jarvis.providers.vector_store import VectorStore
-
-        cfg = get_config()
-        vs = VectorStore(cfg)
-        results = vs.search(query, collection="code_index", top_k=top_k)
-
-        formatted = []
-        for r in results:
-            formatted.append({
-                "text": r.get("text", "")[:300],
-                "score": round(r.get("score", 0), 3),
-                "source": r.get("metadata", {}).get("source", "unknown"),
-            })
-
-        return {
-            "ok": True,
-            "results": formatted,
-            "total": len(formatted),
-            "query": query,
-        }
-    except Exception as e:
-        return {"ok": False, "error": f"Semantic search error: {e}"}
-'''
 
 # ---------------------------------------------------------------------------
 # Tool definitions para o agente
