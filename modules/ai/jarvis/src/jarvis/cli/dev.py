@@ -56,9 +56,56 @@ def _detect_profile() -> dict[str, Any]:
     return {"name": "default", "max_tokens": 1024, "temperature": 0.0}
 
 
-SYSTEM_PROMPT = """You are JARVIS, a local-first dev assistant on NixOS. You can read, edit, and create files, search code, and run tests.
+def _build_repo_map(root: str, max_files: int = 80) -> str:
+    """Constrói um mapa do repositório (estilo Aider repo-map).
+
+    Escaneia o projeto e retorna uma árvore compacta de arquivos com tamanhos,
+    para o SLM saber o que existe no codebase sem precisar listar dir por dir.
+    """
+    from pathlib import Path
+    import os
+
+    entries = []
+    root_path = Path(root)
+    ignore = {".git", "node_modules", "__pycache__", "result", ".direnv", "nixos"}
+
+    for dirpath, dirnames, filenames in os.walk(root):
+        # Filtra dirs ignorados
+        dirnames[:] = [d for d in dirnames if d not in ignore]
+        rel = os.path.relpath(dirpath, root)
+        if rel == ".":
+            rel = ""
+        for f in filenames:
+            if f.startswith("."):
+                continue
+            fp = os.path.join(dirpath, f)
+            try:
+                size = os.path.getsize(fp)
+            except OSError:
+                continue
+            full_rel = os.path.join(rel, f) if rel else f
+            entries.append((full_rel, size))
+
+    # Ordena por tamanho (mais relevantes primeiro) e limita
+    entries.sort(key=lambda x: -x[1])
+    entries = entries[:max_files]
+
+    lines = ["REPOSITORY MAP (project structure):"]
+    for path, size in entries:
+        if size > 1024:
+            size_str = f"{size // 1024}KB"
+        else:
+            size_str = f"{size}B"
+        lines.append(f"  {path} ({size_str})")
+
+    return "\n".join(lines)
+
+
+SYSTEM_PROMPT_TEMPLATE = """You are JARVIS, a local-first dev assistant on NixOS. You can read, edit, and create files, search code, and run tests.
 
 RESPOND IN PT-BR. Be concise and direct.
+
+{repo_map}
 
 AVAILABLE TOOLS:
 - read_file(path, offset?, limit?): Read a file
@@ -70,13 +117,15 @@ AVAILABLE TOOLS:
 - run_tests(test_path?, pattern?, timeout?): Run pytest
 - run_linter(path?): Run ruff linter
 - execute_shell(cmd): Run shell command
+- jarvis_command(subcommand, args?): Run JARVIS CLI (doctor, status, profile)
 
 CRITICAL WORKFLOW (always follow this order):
-1. LIST: list_directory to see available files
-2. READ: read_file to see the EXACT content of files you need to edit
-3. EDIT: str_replace with the EXACT text you just read (copy it precisely)
-4. TEST: run_tests to validate changes
-5. ITERATE: if tests fail, read the error output, fix, re-test
+1. PLAN: Think about what needs to change and why
+2. MAP: Use repo map above to identify relevant files
+3. READ: read_file to see the EXACT content of files you need to edit
+4. EDIT: str_replace with the EXACT text you just read (copy it precisely)
+5. TEST: run_tests to validate changes
+6. ITERATE: if tests fail, read the error output, fix, re-test
 
 CRITICAL RULES:
 - NEVER guess file content — ALWAYS read_file FIRST before any edit
@@ -84,7 +133,7 @@ CRITICAL RULES:
 - Copy text character-by-character from read_file output — do not paraphrase
 - If str_replace fails, read the file again and use the correct text
 - Run tests after every edit to validate
-- Max 10 tool calls per conversation to prevent loops
+- Max 12 tool calls per conversation to prevent loops
 """
 
 
@@ -228,8 +277,12 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
     print("   Comandos: /quit, /status, /clear, /help")
     print()
 
+    # Build repo map for SLM context (Aider-style)
+    repo_map = _build_repo_map(os.getcwd())
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map)
+
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
     ]
 
     while True:
@@ -246,7 +299,8 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
             print("👋 Até logo!")
             break
         if user_input == "/clear":
-            messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+            repo_map = _build_repo_map(os.getcwd())
+            messages = [{"role": "system", "content": SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map)}]
             print("🗑️  Contexto limpo.")
             continue
         if user_input == "/status":
@@ -262,7 +316,14 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
             print("  /quit    — sair")
             print("  /clear   — limpar contexto")
             print("  /status  — status do backend")
+            print("  /map     — atualizar repo map")
             print("  /help    — esta ajuda")
+            continue
+        if user_input == "/map":
+            repo_map = _build_repo_map(os.getcwd())
+            system_prompt = SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map)
+            messages[0] = {"role": "system", "content": system_prompt}
+            print("🗺️  Repo map atualizado.")
             continue
 
         messages.append({"role": "user", "content": user_input})
@@ -375,8 +436,10 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False) 
     print(f"📋 Tarefa: {task}")
     print()
 
+    repo_map = _build_repo_map(os.getcwd())
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map)
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": task},
     ]
 
