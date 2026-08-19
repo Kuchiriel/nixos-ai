@@ -1,6 +1,35 @@
-*.zip
-result
+#  Segredos e Variáveis de Ambiente 
+*.env
+*.pem
+*.key
+*.token
+/etc/litellm.env
+/etc/jarvis-telegram.env
+
+#  Modelos de IA e Pesos (Pesados) 
+*.gguf
+*.bin
+*.pt
+*.safetensors
+/modules/ai/models/
+
+#  Bancos de Dados & Vetores 
+/qdrant_data/
+*.sqlite
+*.db
+
+#  Caches e Builds 
+.direnv/
+.venv/
 __pycache__/
 *.pyc
+result
+result-*
+
+#  Hardware Config Local (Específico da máquina) 
+hosts/nitro-v15/hardware-configuration.nix
+
+*.zip
+result
 result-*
 .aider*
