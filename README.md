@@ -1,6 +1,6 @@
 # ❄️ nixos-ai — JARVIS on NixOS
 
-**"Ia de bordo" 100% local-first e declarativa**: uma configuração NixOS
+**"IA de bordo" 100% local-first e declarativa**: uma configuração NixOS
 modular e reprodutível que nasce do zero no hardware físico (Acer Nitro V15,
 RTX 4050 6GB / 32GB RAM) com um sistema de IA que se auto-cura, se auto-melhora
 e não fica parada — tudo rodando local (llama.cpp + Qdrant), sem cloud.
@@ -11,198 +11,374 @@ e não fica parada — tudo rodando local (llama.cpp + Qdrant), sem cloud.
 > Use `jarvis handoff` para gerar o pacote de contexto pronto para colar em
 > IAs web (ver [Uso](#uso)).
 
-## ✨ O que o JARVIS faz hoje (11 fases implementadas)
+---
+
+## ✨ O que o JARVIS faz hoje (12 fases implementadas)
 
 | Área | O que faz |
 |---|---|
-| 🧠 **Inferência local** | `llama.cpp` — chat (Qwen3-4B no lab / Qwen3.6-35B-A3B MoE + vision no host), embeddings dedicado (nomic), reranker (bge, NDCG@5=1.0) |
-| 🔎 **RAG híbrido** | Qdrant dense + sparse BM25 + RRF ponderado + cross-encoder — NDCG@5 **1.0**, 11/11 queries |
-| 🤖 **Agente** | tool-calling com allowlist + aprovação + audit JSONL + cliente MCP (mcp-nixos) + roteador por custo (`jarvis ask`: fastpath → doctor → nixos → rag → agent) |
-| 🩺 **Self-heal** | `jarvis doctor` (saúde de todos os serviços) + `jarvis heal` (restart com allowlist, cooldown, lição na memória ao errar) |
-| 🧠 **Memória** | episódica (Qdrant, auto-aprendizado ao falhar) + **vault markdown git-syncado** (resumo semanal automático por timer) |
-| 🛋️ **Modo idle** | quando o sistema está ocioso (carga + IdleHint), roda self-knowledge (benchmark/regressão/eval-rag) com yield automático de CPU/IO |
-| 📱 **Canais** | Telegram (long-polling, allowlist, aprovação inline [Sim]/[Não], roteamento `/ask` `/agent` `/status`) |
-| 🎙️ **Voz** | wakeword (openwakeword, calibrado com RNNoise) → STT (faster-whisper, VAD) → roteador → TTS (Kokoro) + emoção por keywords |
-| 📊 **Qualidade medida** | `jarvis benchmark` (latência por rota), `eval-rag` (NDCG/Recall), `regression` (baseline + CI via `flake check`) |
+| 🧠 **Inferência local** | `llama.cpp` — chat (Qwen3-4B no lab / Qwen3.6-35B-A3B MoE + vision no host), embeddings (nomic), reranker (bge, NDCG@5=1.0) |
+| 🔎 **RAG híbrido** | Qdrant dense + sparse BM25 + RRF ponderado + cross-encoder — NDCG@5 **1.0** |
+| 🤖 **Agente** | tool-calling com allowlist + aprovação + audit JSONL + MCP (mcp-nixos) + roteador por custo |
+| 🩺 **Self-heal** | `jarvis doctor` + `jarvis heal` (restart allowlist, cooldown, lição na memória) |
+| 🧠 **Memória** | episódica (Qdrant, auto-aprendizado) + vault markdown git-syncado (resumo semanal) |
+| 🛋️ **Modo idle** | self-knowledge quando ocioso (benchmark/regressão/eval-rag) |
+| 📱 **Canais** | Telegram (long-polling, aprovação inline, `/ask` `/agent` `/status`) |
+| 🎙️ **Voz** | wakeword (openwakeword) → STT (faster-whisper) → roteador → TTS (Kokoro) + emoção |
+| 📖 **Audiobook** | leitura de .epub/.txt com chunking, TTS Kokoro e bookmark |
+| 📊 **Qualidade** | `benchmark`, `eval-rag`, `regression` (baseline + CI via `flake check`) |
 
 **Modelos 100% declarativos**: `modules/ai/models.nix` é a única fonte de
-verdade (URL + hash + perfis `vm`/`host`) — o host nasce com tudo no store
-Nix, sem download imperativo, sem resíduo (troca de modelo = editar o arquivo
-+ `nh clean`).
+verdade — o host nasce com tudo no store Nix, sem download imperativo.
 
-## 🚀 Instalação / rebuild
+---
+
+## 📐 Arquitetura Geral
+
+```mermaid
+flowchart TD
+    subgraph UserIngress["🧑 Interface do Usuário"]
+        CLI["jarvis CLI"]
+        TG["Telegram Bot"]
+        WW["🎤 Wakeword<br/>(openwakeword)"]
+    end
+
+    subgraph FastPath["⚡ Fast Path (zero LLM)"]
+        RULES["Motor de Regras<br/>(RiveScript-like)<br/>2-106ms"]
+        SYS["Comandos sys<br/>free, df, uptime"]
+        AUDIO["Audiobook<br/>scan/read/pause"]
+        VOZ["Voz<br/>mude voz, listar vozes"]
+    end
+
+    subgraph Router["🔀 Roteador de Custo"]
+        ROUTE["route_request()"]
+    end
+
+    subgraph HeavyPath["🧠 Caminhos com LLM"]
+        DOCTOR["🩺 Doctor<br/>(saúde dos serviços)"]
+        NIXOS["❄️ NixOS<br/>(mcp-nixos)"]
+        RAG["🔎 RAG<br/>(Qdrant híbrido)"]
+        AGENT["🤖 Agent<br/>(tool-calling + allowlist)"]
+    end
+
+    subgraph Inference["🖥️ Inferência Local"]
+        LLM["llama.cpp<br/>Qwen3-4B (VM)<br/>Qwen3.6-35B MoE (Host)"]
+        EMB["Embeddings<br/>(nomic-embed-text)"]
+        RERANK["Reranker<br/>(bge-reranker-v2)"]
+    end
+
+    subgraph Storage["💾 Armazenamento"]
+        QDRANT[("Qdrant<br/>code_index +<br/>memories")]
+    end
+
+    subgraph Output["🔊 Saída"]
+        TTS["TTS Kokoro<br/>(82M, CPU)"]
+        TELEGRAM_OUT["Resposta<br/>Telegram"]
+    end
+
+    CLI --> ROUTE
+    TG --> ROUTE
+    WW -->|"jarvis voice"| ROUTE
+
+    ROUTE -->|"comando conhecido"| RULES
+    RULES --> SYS
+    RULES --> AUDIO
+    RULES --> VOZ
+
+    ROUTE -->|"diagnóstico"| DOCTOR
+    ROUTE -->|"nixpkgs"| NIXOS
+    ROUTE -->|"código indexado"| RAG
+    ROUTE -->|"raciocínio"| AGENT
+
+    AGENT --> LLM
+    RAG --> EMB
+    RAG --> RERANK
+    RAG --> QDRANT
+    AGENT -->|"tool calls"| LLM
+
+    LLM --> TTS
+    DOCTOR --> TELEGRAM_OUT
+    AGENT --> TELEGRAM_OUT
+    RULES --> TTS
+
+    style FastPath fill:#1a1a2e,stroke:#00d4aa,stroke-width:2px,color:#00d4aa
+    style HeavyPath fill:#1a1a2e,stroke:#ff6b6b,stroke-width:2px,color:#ff6b6b
+    style Inference fill:#1a1a2e,stroke:#ffd93d,stroke-width:2px,color:#ffd93d
+```
+
+---
+
+## 🧠 Ciclo de Vida da Memória Episódica & Pipeline RAG
+
+```mermaid
+flowchart LR
+    subgraph Ingest["📥 Ingest"]
+        EVT["Evento<br/>(lição/fato/decisão)"]
+        EMB["Embedding<br/>(nomic-embed)"]
+        SPARSE["Sparse BM25"]
+    end
+
+    subgraph Store["💾 Qdrant"]
+        MEM["memories<br/>(768-dim dense<br/>+ BM25 sparse)"]
+        CODE["code_index<br/>(768-dim dense<br/>+ BM25 sparse)"]
+    end
+
+    subgraph Recall["📤 Recall"]
+        QUERY["Query do Usuário"]
+        HYBRID["Busca Híbrida<br/>(prefetch dense +<br/>sparse → RRF)"]
+        RERANK["Reranker<br/>(bge-reranker)"]
+        CTX["Contexto<br/>relevante"]
+    end
+
+    subgraph Agent["🤖 Consumo"]
+        LESSONS["PAST LESSONS<br/>(lições no prompt)"]
+        RAG_CTX["Contexto RAG<br/>(código relevante)"]
+        VAULT["Vault<br/>(resumo semanal)"]
+    end
+
+    EVT --> EMB
+    EVT --> SPARSE
+    EMB --> MEM
+    SPARSE --> MEM
+    EMB --> CODE
+    SPARSE --> CODE
+
+    QUERY --> HYBRID
+    HYBRID --> MEM
+    HYBRID --> CODE
+    MEM --> RERANK
+    CODE --> RERANK
+    RERANK --> CTX
+
+    CTX --> LESSONS
+    CTX --> RAG_CTX
+    MEM -.->|"summarize"| VAULT
+    VAULT -.->|"resumo de volta"| MEM
+
+    style Store fill:#1a1a2e,stroke:#a78bfa,stroke-width:2px,color:#a78bfa
+    style Ingest fill:#1a1a2e,stroke:#34d399,stroke-width:2px,color:#34d399
+```
+
+**Fluxo de escrita**: evento → embedding (nomic, 768-dim) + sparse BM25 → upsert no Qdrant (coleção `memories`). Deduplicação por texto. ID determinístico (crc32).
+
+**Fluxo de leitura**: query → embedding → busca híbrida (prefetch dense + sparse, fusão RRF ponderada) → reranker cross-encoder → top-k contexto. Lições injetadas como `PAST LESSONS` no prompt do agente.
+
+---
+
+## 🏗️ Estrutura do Repositório
+
+```
+flake.nix                    ← inputs (nixpkgs 26.05, disko, stylix) + hosts
+AGENTS.md                    ← premissas compartilhadas entre humano e IAs
+HANDOFF.md                   ← estado atual + próximo trabalho
+
+hosts/
+  nixos-lab/configuration.nix   ← VM de validação (CPU puro)
+  nitro-v15/
+    configuration.nix           ← Host physical (RTX 4050 + iGPU)
+    disko.nix                   ← Partições declarativas (2 NVMe)
+
+modules/ai/
+  models.nix                    ← ÚNICA FONTE DE VERDADE (URL + hash + perfis)
+  package.nix                   ← Pacote Python (jarvis + jarvis-voice)
+  jarvis/src/jarvis/
+    core/                       ← Lógica: agent, router, memory, rag, heal, audiobook...
+    providers/                  ← Adaptadores: llm, vector_store, telegram, mcp
+    cli/main.py                 ← CLI: jarvis <subcommand>
+
+modules/services/               ← Serviços declarativos (llama-cpp, qdrant, litellm...)
+nixos/modules/                  ← Módulos base (audio, hyprland, zram...)
+home-manager/                   ← Desktop (hyprland, waybar) + daemons IA
+
+docs/
+  architecture/                 ← Proposta, avaliação, diagnóstico
+  audit/                        ← Baseline e inventário do legado
+```
+
+---
+
+## 🚀 Instalação / Rebuild
+
+### Host de Laboratório (VM)
 
 ```bash
-# Host de laboratório (VM)
 ./rebuild.sh
 # ou
 nixos-rebuild switch --flake .#nixos-lab
 ```
 
-> ⚠️ **Qdrant pós-upgrade**: se `systemctl status qdrant` mostrar `failed`
-> após um upgrade de base (storage 24.11 incompatível com 26.05), rode
-> `sudo ./fix-qdrant.sh` (descarta estado de runtime recriável e reinicia).
-> Limpeza de disco: `./clean.sh` (GC do Nix).
+### Host Physical (Acer Nitro V15) — Guia Padrão Ouro
+
+> ⚠️ **AVISO**: O disko vai apagar **completamente** os 2 NVMe. Faça backup
+> de tudo antes de prosseguir.
+
+#### Passo 1 — Boot e Conexão no Live USB
+
+1. Baixe o ISO do NixOS 26.05: <https://nixos.org/download/>
+2. Grave num USB (Rufus ou Etcher)
+3. Boot pelo USB (F2 → Boot Menu no Acer Nitro V15)
+4. Conecte-se à rede:
+
+```bash
+sudo systemctl start wpa_supplicant
+nmtui  # conecte ao Wi-Fi
+```
+
+#### Passo 2 — Identificar os SSDs NVMe
+
+```bash
+# Liste os NVMe
+sudo nvme list
+
+# Identifique qual é Gen4 (rápido) vs Gen3 (lento)
+sudo lspci -vv | grep -A 2 "Non-Volatile" | grep LnkSta
+# Gen4 = 16GT/s | Gen3 = 8GT/s
+
+# Copie os IDs EXATOS (use /dev/disk/by-id/*):
+ls /dev/disk/by-id/nvme-*
+```
+
+> **Regra**: NVMe Gen4 → `/` + `/nix` (store + modelos = I/O intensivo).
+> NVMe Gen3 → `/home` (dados do usuário).
+
+#### Passo 3 — Preparar o Repositório
+
+```bash
+# Clone o repo
+nix-env -iA nixos.git
+git clone https://github.com/Kuchiriel/nixos-ai.git
+cd nixos-ai
+
+# Edite os device IDs no disko.nix
+nano hosts/nitro-v15/disko.nix
+# Substitua os device = "/dev/disk/by-id/nvme-XXXX..." pelos IDs reais
+```
+
+#### Passo 4 — Executar o Disko (APAGA OS DISCOS!)
+
+```bash
+# Instalação via disko (wipe completo dos 2 NVMe)
+sudo nixos-install --flake .#nitro-v15 --disk-main system --disk-extra home
+```
+
+#### Passo 5 — Gerar e Rastrear hardware-configuration.nix
+
+```bash
+# O disko já montou /mnt — gere o hardware-config
+sudo nixos-generate-config --root /mnt
+cp /mnt/etc/nixos/hardware-configuration.nix ./hosts/nitro-v15/
+
+# ADICIONE AO .gitignore (não commitar hardware-configuration):
+echo "hosts/nitro-v15/hardware-configuration.nix" >> .gitignore
+```
+
+> **Importante**: remova linhas de bootloader do `hardware-configuration.nix`
+> (já estão no `configuration.nix`).
+
+#### Passo 6 — Instalação Final
+
+```bash
+# Rebuild para validar antes de rebootar
+sudo nixos-install --flake .#nitro-v15
+```
+
+#### Passo 7 — Reboot e Primeira Boot
+
+```bash
+sudo reboot
+# Remova o USB
+# Login: nixos (senha definida na instalação)
+```
+
+#### Passo 8 — Pós-Boot: Variáveis de Ambiente e Validação
+
+```bash
+# Criar arquivo de chaves do LiteLLM (fora do git!)
+sudo tee /etc/litellm.env > /dev/null <<'EOF'
+GROQ_API_KEY=sua_chave_aqui
+GEMINI_API_KEY=sua_chave_aqui
+EOF
+sudo chmod 600 /etc/litellm.env
+
+# Criar arquivo do Telegram
+sudo tee /etc/jarvis-telegram.env > /dev/null <<'EOF'
+JARVIS_TELEGRAM_TOKEN=SEU_TOKEN
+JARVIS_TELEGRAM_CHAT_ID=SEU_CHAT_ID
+EOF
+sudo chmod 600 /etc/jarvis-telegram.env
+
+# Validar o sistema
+jarvis doctor
+jarvis hwdetect
+jarvis hwprofile
+```
+
+---
 
 ## 🔧 Uso
 
 ```bash
 jarvis status                 # saúde de llama.cpp + Qdrant
-jarvis ask "pergunta"         # roteador: caminho mais barato (regra → doctor → nixos → rag → agent)
-jarvis agent "tarefa"         # agente tool-calling (--approve p/ comandos com efeito)
+jarvis ask "pergunta"         # roteador: caminho mais barato
+jarvis agent "tarefa"         # agente tool-calling (--approve p/ efeito)
 jarvis rag "busca"            # busca híbrida no código
 jarvis index <dir>            # indexa código no Qdrant
 jarvis doctor / jarvis heal   # diagnóstico / auto-reparo
 jarvis remember|recall|lessons# memória episódica
-jarvis vault summarize        # resumo de longo prazo (markdown git-syncado)
-jarvis idle status            # estado do modo idle (tarefas devidas)
-jarvis benchmark|eval-rag|regression   # qualidade medida
-jarvis handoff --task "..."   # gera o pacote de contexto p/ colar em IAs web
-jarvis telegram               # canal (exige token: /etc/jarvis-telegram.env)
+jarvis vault summarize        # resumo de longo prazo
+jarvis audiobook scan|read    # leitor de livros com TTS
 jarvis voice                  # loop STT → roteador → TTS
+jarvis handoff --task "..."   # pacote de contexto para IAs web
+jarvis telegram               # canal Telegram
+jarvis idle status            # estado do modo idle
 ```
 
-## 🤝 Trabalho em paralelo com IAs (a parte diferente)
+---
 
-Este repo foi desenhado para **várias IAs trabalharem juntas sem pisar nos pés**:
+## 🤝 Trabalho em Paralelo com IAs
 
-1. **`AGENTS.md`** — premissas, regras intransigíveis, estado atual e perfil do
-   usuário. Qualquer IA que ler este arquivo começa com o mesmo contexto.
-2. **`jarvis handoff`** — gera um bloco markdown (AGENTS.md + últimos commits +
-   árvore de trabalho + sua tarefa) para **colar em Gemini/ChatGPT no
-   navegador**. A IA web começa com as mesmas premissas que os agentes locais.
-3. **Git como sensor de mudanças** — commits pequenos e frequentes; antes de
-   trabalhar, `git log --oneline -5` + `git status` mostram o que mudou.
+1. **`AGENTS.md`** — premissas, regras e perfil do usuário. Qualquer IA lê e começa com o mesmo contexto.
+2. **`jarvis handoff`** — gera um bloco markdown (AGENTS.md + git log + tarefa) para colar em Gemini/ChatGPT.
+3. **Git como sensor** — commits pequenos e frequentes; `git log --oneline -5` mostra o que mudou.
 
-## 🏗️ Estrutura
+---
 
-```
-flake.nix                 ← inputs, overlays e definição dos hosts
-AGENTS.md                 ← premissas compartilhadas entre humano e IAs
-hosts/nixos-lab/          ← host ativo (VM de validação)
-modules/ai/               ← models.nix (fonte única) + fontes do JARVIS (jarvis/)
-modules/services/         ← serviços declarativos (llama-cpp, qdrant, jarvis-*)
-nixos/modules/            ← módulos base do sistema
-home-manager/             ← configuração do usuário (desktop + daemons IA)
-docs/                     ← baseline, auditorias, decisões e avaliação de arquitetura
-```
+## 🤖 Modelos (100% Declarativos)
+
+| Modelo | Uso | Tamanho | Host |
+|---|---|---|---|
+| Qwen3-4B Q4_K_M | Chat (VM) | 2.5GB | CPU puro |
+| Qwen3.6-35B-A3B UD-Q4_K_M | Chat (Host) | ~20.6GB | RTX 4050 + 32GB RAM |
+| nomic-embed-text-v2-moe Q8_0 | Embeddings | 512MB | CPU |
+| bge-reranker-v2-m3 Q4_K_M | Reranker | 438MB | CPU |
+| Kokoro-82M | TTS | <1GB | CPU |
+| faster-whisper-small | STT | ~500MB | CPU / iGPU (SYCL) |
+| openwakeword v0.5.1 | Wakeword | ~10MB | CPU |
+
+**Troca de modelo**: edite `modules/ai/models.nix` → `./rebuild.sh` → `nh clean` (remove o antigo do store).
+
+---
 
 ## 📚 Documentação
 
 - [`docs/architecture/proposal.md`](docs/architecture/proposal.md) — arquitetura alvo e plano incremental
-- [`docs/architecture/system-assessment.md`](docs/architecture/system-assessment.md) — ranqueamento da stack vs ecossistema, gargalos, roadmap (o "mapa" do projeto)
-- [`docs/audit/`](docs/audit/) — baseline e auditorias (inclui inventário do sistema legado Manjaro)
+- [`docs/architecture/system-assessment.md`](docs/architecture/system-assessment.md) — ranqueamento da stack vs ecossistema
+- [`docs/architecture/pillar-diagnostic.md`](docs/architecture/pillar-diagnostic.md) — diagnóstico dos 4 pilares de arquitetura
+- [`docs/audit/`](docs/audit/) — baseline e auditorias (inclui inventário do legado Manjaro)
 
-## 🤝 Contribuições / convenções
+---
+
+## 🤝 Contribuições
 
 - Commits pequenos e semânticos (`feat(ai): …`, `fix(nixos): …`, `test(rag): …`), em PT-BR.
-- Sem alterações imperativas em `~/.config`; estado da aplicação separado da configuração.
-- **Antes de commitar**: `git add -A` (o flake só copia arquivos trackeados),
-  `nix build .#jarvis` (roda pytest) e `nix flake check`.
+- Sem alterações imperativas em `~/.config`; estado separado da configuração.
+- **Antes de commitar**: `git add -A` + `nix build .#jarvis` (pytest) + `nix flake check`.
 
-```mermaid
-graph TD
-    %% 
-    %% STYLES & CLASSES
-    %% 
-    classDef hw fill:#1e1e2e,stroke:#89b4fa,stroke-width:2px,color:#cdd6f4
-    classDef btrfs fill:#181825,stroke:#a6e3a1,stroke-width:1px,color:#a6e3a1
-    classDef service fill:#313244,stroke:#f5c2e7,stroke-width:1px,color:#cdd6f4
-    classDef gateway fill:#45475a,stroke:#fab387,stroke-width:2px,color:#fab387
-    classDef cloud fill:#11111b,stroke:#b4bfe2,stroke-dasharray: 5 5,color:#b4bfe2
+---
 
-    %% 
-    %% HARDWARE & INFRASTRUCTURE
-    %% 
-    subgraph AcerNitro[" Acer Nitro V15 (Host Physical)"]
-        direction TB
+## ⚠️ Notas Conhecidas
 
-        subgraph Storage[" Storage Topography (Dual NVMe)"]
-            subgraph NVMe_A[" NVMe Gen4 (System / Nix Store)"]
-                Sub_Nix["/nix (Nix Store + Models)"]:::btrfs
-                Sub_Root["/ (Root Filesystem)"]:::btrfs
-                Sub_Tmp["/tmp & /var/tmp"]:::btrfs
-            end
-
-            subgraph NVMe_B[" NVMe Gen3 (User Data)"]
-                Sub_Home["/home (User Data & Configs)"]:::btrfs
-            end
-        end
-
-        subgraph Hardware_Offload[" Processing Engine"]
-            CPU_RAM["Intel Core i7-13620H + 32GB RAM"]:::hw
-            dGPU["NVIDIA RTX 4050 (Offload VRAM)"]:::hw
-            iGPU["Intel UHD Graphics (SYCL / VA-API)"]:::hw
-        end
-
-        %% 
-        %% NIXOS AI & SERVICES MESH
-        %% 
-        subgraph AIMesh[" NixOS Local AI Mesh"]
-            direction TB
-
-            subgraph Ingress[" User Ingress & Interface"]
-                Telegram["jarvis-telegram.service<br/><i>Telegram Bot / Async Approvals</i>"]:::service
-                ShellCLI["jarvis CLI / Doctor"]:::service
-            end
-
-            subgraph GatewayLayer[" Gateway & Cascading Engine"]
-                LiteLLM["litellm.service<br/><b>Porta 127.0.0.1:4000</b><br/><i>Cascade Proxy & Cost Tracking</i>"]:::gateway
-            end
-
-            subgraph InferenceEngine[" Local Inference Cluster (llama-cpp)"]
-                LlamaMain["llama-cpp-server.service<br/><b>Porta 0.0.0.0:8080</b><br/><i>Qwen3.6-35B MoE + Vision</i>"]:::service
-                LlamaRerank["llama-cpp-rerank.service<br/><b>Porta 0.0.0.0:8081</b><br/><i>Reranking Model</i>"]:::service
-                LlamaEmbed["llama-cpp-embeddings.service<br/><i>Embeddings Generator</i>"]:::service
-            end
-
-            subgraph StorageMemory[" Context & Vector Database"]
-                Qdrant["qdrant.service<br/><b>Porta 127.0.0.1:6333</b><br/><i>Vector Search Engine</i>"]:::service
-            end
-
-            subgraph AutonomousServices[" Autonomous Daemon Services"]
-                JarvisIdle["jarvis-idle.nix<br/><i>Idle / Offload Tasks</i>"]:::service
-                JarvisHeal["jarvis-heal.nix<br/><i>Self-Healing & Monitor</i>"]:::service
-                JarvisVault["jarvis-vault.nix<br/><i>Encrypted Secrets (/etc/*.env)</i>"]:::service
-            end
-        end
-    end
-
-    %% 
-    %% EXTERNAL CLOUD FALLBACKS
-    %% 
-    subgraph CloudCascade[" Cloud Provider Cascades"]
-        Groq["Groq API<br/><i>(High Speed Fallback)</i>"]:::cloud
-        Gemini["Gemini API<br/><i>(High Context Fallback)</i>"]:::cloud
-        OpenRouter["OpenRouter API<br/><i>(Extended Fallback)</i>"]:::cloud
-    end
-
-    %% 
-    %% FLOWS & DATA PIPELINES
-    %% 
-    %% Input Routing
-    Telegram -->|Prompt Request| LiteLLM
-    ShellCLI -->|Direct Query| LiteLLM
-
-    %% LiteLLM Cascade Strategy
-    LiteLLM -->|1º Try: Local Model :8080| LlamaMain
-    LiteLLM -.->|2º Fallback| Groq
-    LiteLLM -.->|3º Fallback| Gemini
-    LiteLLM -.->|4º Fallback| OpenRouter
-
-    %% Local Inference & Storage Interactions
-    LlamaMain -->|Vector Retrieval| Qdrant
-    LlamaMain -->|Rerank Documents :8081| LlamaRerank
-    LlamaEmbed -->|Generate Vectors| Qdrant
-
-    %% Hardware Execution
-    LlamaMain -->|GPU Layers Offload| dGPU
-    LlamaMain -->|RAM / CPU Offload| CPU_RAM
-    
-    %% Storage Backing
-    LlamaMain -->|Load Model Weights| Sub_Nix
-    Qdrant -->|Persist DB State| Sub_Root
-    Telegram -->|Logs / Config| Sub_Home
-    JarvisVault -->|Inject Secrets| Telegram
-    JarvisVault -->|Inject Secrets| LiteLLM
-```
+- **Qdrant pós-upgrade**: se `systemctl status qdrant` mostrar `failed` após upgrade de base, rode `sudo ./fix-qdrant.sh`.
+- **Limpeza de disco**: `./clean.sh` (GC do Nix) ou `nix-collect-garbage -d`.
+- **SQLite warning**: `unable to open database file` do mcp-nixos — benigno, cache de canais funciona normalmente.
+- **NVIDIA na VM**: `No NVIDIA GPU found` no dmesg — esperado (sem PCIe passthrough).
