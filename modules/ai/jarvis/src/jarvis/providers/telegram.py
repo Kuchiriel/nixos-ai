@@ -185,6 +185,8 @@ class TelegramChannel:
         if text.startswith("/agent "):
             # executado em thread pelo run(); aqui retornamos a tarefa
             return None
+        if text.startswith("/dev "):
+            return self._handle_dev(text[5:].strip())
         if text.startswith("/"):
             return f"comando desconhecido: {text.split()[0]}\n\n{self._help_text()}"
         # default: pergunta livre
@@ -226,6 +228,24 @@ class TelegramChannel:
             return self._circuit_breaker.force_open()
         return "Circuit breaker não configurado."
 
+    def _handle_dev(self, task: str) -> str:
+        """Executa uma tarefa de dev via REPL remoto."""
+        if not task:
+            return "Uso: /dev <tarefa>\nEx: /dev leia o arquivo config.py"
+        try:
+            from jarvis.cli.dev import dev_once
+            import io, contextlib
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                dev_once(task)
+            output = buf.getvalue()
+            # Trunca para Telegram (4096 chars)
+            if len(output) > 3800:
+                output = output[:3800] + "\n... (truncado)"
+            return output or "(sem saída)"
+        except Exception as e:
+            return f"Erro no dev: {e}"
+
     def send_help(self, chat_id: int) -> None:
         """Help com markdown (texto controlado por nós — markdown válido)."""
         try:
@@ -240,6 +260,7 @@ class TelegramChannel:
             "*Comandos*\n"
             "`/ask <pergunta>` — cascata (fastpath/doctor/nixos/rag/agent)\n"
             "`/agent <tarefa>` — agente com aprovação por botões\n"
+            "`/dev <tarefa>` — dev REPL remoto (ler/editar/criar arquivos)\n"
             "`/status` — saúde dos serviços + circuit breaker\n"
             "`/force_local` — força modo local (desliga fallback)\n"
             "`/force_remote` — força fallback remoto\n"
