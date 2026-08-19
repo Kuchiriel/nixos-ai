@@ -65,8 +65,10 @@ AVAILABLE TOOLS:
 - write_file(path, content): Write/create a file (backup created)
 - str_replace(path, old, new, allow_multiple?): Replace string in file (preferred for editing)
 - list_directory(path?, max_depth?): List directory contents
-- code_search(pattern, path?, max_results?): Search codebase
+- code_search(pattern, path?, max_results?): Search codebase (grep)
+- semantic_search(query, top_k?): Search codebase semantically (Qdrant)
 - run_tests(test_path?, pattern?, timeout?): Run pytest
+- run_linter(path?): Run ruff linter
 - execute_shell(cmd): Run shell command
 
 CRITICAL WORKFLOW (always follow this order):

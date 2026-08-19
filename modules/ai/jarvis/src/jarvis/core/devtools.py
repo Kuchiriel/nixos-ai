@@ -535,6 +535,79 @@ def run_tests(
 
 
 # ---------------------------------------------------------------------------
+# run_linter
+# ---------------------------------------------------------------------------
+def run_linter(path: str = ".") -> dict[str, Any]:
+    """Executa ruff linter e retorna issues encontradas.
+
+    Returns:
+        {"ok": True, "issues": [...], "total": 5, "clean": False}
+    """
+    try:
+        target = _safe_path(path)
+        cmd = ["ruff", "check", "--output-format=json", str(target)]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+        issues: list[dict[str, Any]] = []
+        if result.stdout.strip():
+            try:
+                issues = json.loads(result.stdout)
+            except json.JSONDecodeError:
+                # Fallback: parse texto
+                for line in result.stdout.strip().splitlines():
+                    if ":" in line:
+                        issues.append({"text": line[:200]})
+
+        return {
+            "ok": True,
+            "issues": issues[:50],
+            "total": len(issues),
+            "clean": len(issues) == 0,
+            "path": str(target),
+        }
+    except FileNotFoundError:
+        return {"ok": False, "error": "ruff not installed"}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "Linter timed out (30s)"}
+    except (OSError, subprocess.SubprocessError) as e:
+        return {"ok": False, "error": f"Linter error: {e}"}
+
+
+# ---------------------------------------------------------------------------
+# semantic_search (via Qdrant)
+# ---------------------------------------------------------------------------
+def semantic_search(query: str, top_k: int = 5) -> dict[str, Any]:
+    """Busca semântica no code_index do Qdrant.
+
+    Returns:
+        {"ok": True, "results": [{"text": "...", "score": 0.9, "source": "file.py"}], "total": 3}
+    """
+    try:
+        from jarvis.providers.vector_store import VectorStore
+
+        cfg = get_config()
+        vs = VectorStore(cfg)
+        results = vs.search(query, collection="code_index", top_k=top_k)
+
+        formatted = []
+        for r in results:
+            formatted.append({
+                "text": r.get("text", "")[:300],
+                "score": round(r.get("score", 0), 3),
+                "source": r.get("metadata", {}).get("source", "unknown"),
+            })
+
+        return {
+            "ok": True,
+            "results": formatted,
+            "total": len(formatted),
+            "query": query,
+        }
+    except Exception as e:
+        return {"ok": False, "error": f"Semantic search error: {e}"}
+
+
+# ---------------------------------------------------------------------------
 # Tool definitions para o agente
 # ---------------------------------------------------------------------------
 
@@ -632,6 +705,34 @@ DEV_TOOLS: list[dict[str, Any]] = [
                 },
                 "required": [],
             },
+        },    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_linter",
+            "description": "Run ruff linter on a file or directory and return issues.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File or directory to lint (default: project root)"},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "semantic_search",
+            "description": "Search codebase semantically via Qdrant embeddings (slower but smarter than grep).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Natural language query"},
+                    "top_k": {"type": "integer", "description": "Number of results (default 5)"},
+                },
+                "required": ["query"],
+            },
         },
     },
 ]
@@ -640,7 +741,6 @@ DEV_TOOLS: list[dict[str, Any]] = [
 # ---------------------------------------------------------------------------
 # Tool dispatcher (chamado pelo agente)
 # ---------------------------------------------------------------------------
-
 def handle_dev_tool(name: str, args: dict[str, Any]) -> str:
     """Despacha uma tool call do agente para a função correspondente."""
     import json
@@ -652,6 +752,8 @@ def handle_dev_tool(name: str, args: dict[str, Any]) -> str:
         "list_directory": lambda a: list_directory(a.get("path", "."), a.get("max_depth", 2)),
         "code_search": lambda a: code_search(a["pattern"], a.get("path", "."), max_results=a.get("max_results", 50)),
         "run_tests": lambda a: run_tests(a.get("test_path", "tests/"), a.get("pattern", ""), a.get("timeout", 120)),
+        "run_linter": lambda a: run_linter(a.get("path", ".")),
+        "semantic_search": lambda a: semantic_search(a["query"], a.get("top_k", 5)),
     }
 
     handler = handlers.get(name)
