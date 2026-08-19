@@ -26,6 +26,23 @@
 | NixOS | ✅ PASS | nix flake check OK, nix build .#jarvis OK |
 | Restart/Recovery | ✅ PASS | 497 testes passando, 0 regressão |
 
+### Bateria E2E 10 Níveis (2026-08-19)
+
+| Nível | Tarefa | Tools | Resultado | Tempo |
+|-------|--------|-------|-----------|-------|
+| 1 | Ler arquivo | `read_file` | ✅ 15 configs | 190s |
+| 2 | Editar 1 linha | `read_file` → `str_replace` | ✅ | 22s |
+| 3 | Criar função | `str_replace` | ✅ | 24s |
+| 4 | Web search | `web_search` | ✅ 5 resultados | 100s |
+| 5 | Read URL | `read_url` | ✅ Wiki Hyprland | 56s |
+| 6 | Semantic search | `semantic_search` | ✅ circuit_breaker.py | 77s |
+| 7 | Read + Edit + Commit | `read_file` → `str_replace` → `git_commit` | ✅ | 172s |
+| 8 | Run tests | `run_tests` | ⚠️ pytest fora do sandbox Nix | 27s |
+| 9 | Multi-file edit | `read_file`×2 → `str_replace`×2 | ✅ ambos editados | 98s |
+| 10 | Full workflow | `web_search` → `read_file` → `str_replace` → `execute_shell` | ✅ Hello World | 67s |
+
+**9/10 PASS** — Level 8: pytest precisa do sandbox Nix (esperado).
+
 ### Notas
 - **structured output**: funciona APENAS com `chat_template_kwargs: enable_thinking=false` (Qwen3 consome tokens thinking)
 - **Embeddings**: server dedicado na porta 8081 (não no llama-cpp principal)
