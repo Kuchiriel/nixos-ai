@@ -185,6 +185,8 @@ class TelegramChannel:
         if text.startswith("/agent "):
             # executado em thread pelo run(); aqui retornamos a tarefa
             return None
+        if text == "/dev":
+            return self._handle_dev("")
         if text.startswith("/dev "):
             return self._handle_dev(text[5:].strip())
         if text.startswith("/"):
