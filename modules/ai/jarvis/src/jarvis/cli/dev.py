@@ -152,6 +152,17 @@ Step3: run_tests()
 Step4: git_commit('fix: muda X para Y')
 """
 
+PLAN_PROMPT = """JARVIS architect. PT-BR. Short.
+
+{repo_map}
+
+Read the files and create a PLAN.
+Output a JSON with:
+PLAN: [{action: read|edit|create|delete, path: ..., description: ...}]
+
+Do NOT execute. Just plan.
+"""
+
 
 def _call_llm(messages: list[dict[str, str]], tools: list[dict], profile: dict) -> dict:
     """Chama o LLM local."""
@@ -490,6 +501,50 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
                 })
 
 
+def _architect_plan(task: str, profile: dict, tools: list) -> str | None:
+    """Fase 1: SLM cria um plano (architect mode)."""
+    repo_map = _build_repo_map(os.getcwd())
+    plan_prompt = PLAN_PROMPT.format(repo_map=repo_map)
+    plan_messages = [
+        {"role": "system", "content": plan_prompt},
+        {"role": "user", "content": task},
+    ]
+    try:
+        data = _call_llm(plan_messages, tools, profile)
+        msg = data["choices"][0]["message"]
+        content = msg.get("content") or ""
+        tool_calls = msg.get("tool_calls")
+
+        # Se o SLM usou tools no plan, executa eles primeiro (leitura)
+        if tool_calls:
+            for tc in tool_calls:
+                fn = tc["function"]["name"]
+                try:
+                    a = json.loads(tc["function"]["arguments"])
+                except json.JSONDecodeError:
+                    a = {}
+                # Só executa read_file e list_directory no plan
+                if fn in ("read_file", "list_directory"):
+                    result = _execute_tool_call(fn, a)
+                    plan_messages.append({"role": "tool", "content": result[:2000]})
+
+        # Pede o plano final
+        plan_messages.append({"role": "user", "content": "Agora retorne o plano JSON."})
+        data2 = _call_llm(plan_messages, tools, profile)
+        plan_content = data2["choices"][0]["message"].get("content") or ""
+        # Tenta extrair JSON, mas aceita texto puro
+        try:
+            parsed = json.loads(plan_content)
+            if isinstance(parsed, dict) and "plan" in parsed:
+                plan_content = json.dumps(parsed["plan"], ensure_ascii=False)
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return plan_content[:500]
+    except Exception as e:
+        print(f"⚠️  Erro no plano: {e}")
+        return None
+
+
 def dev_once(task: str, project_root: str | None = None, approve: bool = False) -> int:
     """Executa uma única tarefa e sai."""
     if project_root:
@@ -503,6 +558,16 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False) 
     print(f"📋 Tarefa: {task}")
     print()
 
+    # ARCHITECT MODE: planeja antes de executar (opcional — se falhar, pula)
+    plan = None
+    try:
+        plan = _architect_plan(task, profile, tools)
+    except Exception as e:
+        pass  # architect é opcional
+    if plan:
+        print(f"📋 Plano: {plan[:300]}")
+        print()
+
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context()
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
@@ -510,6 +575,9 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False) 
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": task},
     ]
+    if plan:
+        messages.append({"role": "assistant", "content": f"Plano: {plan}"})
+        messages.append({"role": "user", "content": "Execute este plano agora. Use as tools para cada passo."})
 
     for turn in range(10):
         try:
