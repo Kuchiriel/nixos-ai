@@ -39,5 +39,6 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
+    "slow: testes lentos que chamam o SLM real",
     "integration: testes que dependem de serviços externos (llama.cpp, Qdrant)",
 ]

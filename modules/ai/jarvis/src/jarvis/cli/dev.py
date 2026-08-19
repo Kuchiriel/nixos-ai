@@ -69,18 +69,20 @@ AVAILABLE TOOLS:
 - run_tests(test_path?, pattern?, timeout?): Run pytest
 - execute_shell(cmd): Run shell command
 
-WORKFLOW:
-1. Explore: list_directory / code_search to understand the codebase
-2. Read: read_file to see relevant code
-3. Edit: str_replace to make targeted changes (preferred over write_file)
-4. Test: run_tests to validate changes
-5. Iterate: if tests fail, read errors, fix, re-test
+CRITICAL WORKFLOW (always follow this order):
+1. LIST: list_directory to see available files
+2. READ: read_file to see the EXACT content of files you need to edit
+3. EDIT: str_replace with the EXACT text you just read (copy it precisely)
+4. TEST: run_tests to validate changes
+5. ITERATE: if tests fail, read the error output, fix, re-test
 
-RULES:
-- Always use str_replace for edits (safer than write_file)
-- Run tests after every edit
-- If a tool call fails, analyze the error and try a different approach
-- Max 8 tool calls per turn to prevent loops
+CRITICAL RULES:
+- NEVER guess file content — ALWAYS read_file FIRST before any edit
+- When using str_replace, the 'old' parameter must be the EXACT text from the file
+- Copy text character-by-character from read_file output — do not paraphrase
+- If str_replace fails, read the file again and use the correct text
+- Run tests after every edit to validate
+- Max 10 tool calls per conversation to prevent loops
 """
 
 
