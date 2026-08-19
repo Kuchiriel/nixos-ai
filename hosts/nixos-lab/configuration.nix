@@ -199,6 +199,14 @@ security.sudo.extraRules = [
   # 22 (ssh), 8080 (llama.cpp chat), 8081 (llama.cpp embeddings) — 11434 era resquício do Ollama (legado Manjaro)
   networking.firewall.allowedTCPPorts = [ 22 8080 8081 4000 ];
 
+  # Garante que as pastas de banco vetorial (Qdrant) e modelos nasçam com +C (No CoW)
+  systemd.tmpfiles.rules = [
+    "d /var/lib/qdrant 0755 jarvis jarvis - -"
+    "h /var/lib/qdrant - - - - +C"
+    "d /var/lib/jarvis/models 0755 jarvis jarvis - -"
+    "h /var/lib/jarvis/models - - - - +C"
+  ];
+
   # =========================================================================
   # 5. REDE, USUÁRIOS E LOCALIZAÇÃO
   # =========================================================================

@@ -87,7 +87,7 @@ def _create_project() -> Path:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.slow
+@pytest.mark.integration
 def test_level1_edit_one_line() -> None:
     """SLM deve alterar o greeting de 'Hello' para 'Hi'."""
     proj = _create_project()
@@ -106,7 +106,7 @@ def test_level1_edit_one_line() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.slow
+@pytest.mark.integration
 def test_level2_create_function() -> None:
     """SLM deve criar uma nova função multiply em main.py."""
     proj = _create_project()
@@ -125,7 +125,7 @@ def test_level2_create_function() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.slow
+@pytest.mark.integration
 def test_level3_refactor() -> None:
     """SLM deve adicionar type hints a todas as funções."""
     proj = _create_project()
@@ -149,7 +149,7 @@ def test_level3_refactor() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.slow
+@pytest.mark.integration
 def test_level4_create_file() -> None:
     """SLM deve criar um novo arquivo de configuração."""
     proj = _create_project()
@@ -169,7 +169,7 @@ def test_level4_create_file() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.slow
+@pytest.mark.integration
 def test_level5_read_then_edit() -> None:
     """SLM deve ler um arquivo, entender seu conteúdo, e fazer uma edição."""
     proj = _create_project()
@@ -201,7 +201,7 @@ def test_level5_read_then_edit() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.slow
+@pytest.mark.integration
 def test_tool_calling_json_valid() -> None:
     """Valida que o SLM gera JSON válido para tool calls."""
     proj = _create_project()

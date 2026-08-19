@@ -110,17 +110,16 @@ df089dc docs: atualiza HANDOFF com resultados do hardening (422d0be)
 
 ## Pendente / Próximos Passos
 1. **Instalação host com disko** — detectar Gen3/Gen4, editar device IDs, `nixos-install --flake .#nitro-v15`
-2. **Chave Groq rotacionar** — vazou no git history (home.nix antigo)
-3. **Plugar hwprofile ao serviço** (llama-cpp.nix consumir o cálculo)
-4. **Validar mpvpaper no host** (hwdec vaapi iGPU)
-5. **nixpkgs SYCL incompleto** (#367722) — overlay local p/ whisper SYCL no host
-6. **Testes de integração real** — com Qdrant/LLM rodando (não mocks)
-7. **Dashboard waybar** — erros recentes, latência SLM, métricas em tempo real
-8. **Alertas Telegram** — notificar quando doctor detecta serviços down
-9. **Event Bus daemon** — rodar como systemd user service com `jarvis triggers run --loop`
-10. **Vision no host** — validar grim/slurp no Hyprland real (VM sem display)
-11. **CLI dev expandido** — bulldozer loop completo com retry automático de erros de build/teste
-12. **Dev tools no pi.nix** — integrar capabilities do jarvis dev ao CLI standalone
+2. **Plugar hwprofile ao serviço** (llama-cpp.nix consumir o cálculo)
+3. **Validar mpvpaper no host** (hwdec vaapi iGPU)
+4. **nixpkgs SYCL incompleto** (#367722) — overlay local p/ whisper SYCL no host
+5. **Testes de integração real** — com Qdrant/LLM rodando (não mocks)
+6. **Dashboard waybar** — erros recentes, latência SLM, métricas em tempo real
+7. **Alertas Telegram** — notificar quando doctor detecta serviços down
+8. **Event Bus daemon** — rodar como systemd user service com `jarvis triggers run --loop`
+9. **Vision no host** — validar grim/slurp no Hyprland real (VM sem display)
+10. **CLI dev expandido** — bulldozer loop completo com retry automático de erros de build/teste
+11. **Dev tools no pi.nix** — integrar capabilities do jarvis dev ao CLI standalone
 
 ## Problemas Conhecidos
 - **Logind D-Bus timeout**: erro recorrente no rebuild, não afeta funcionalidade

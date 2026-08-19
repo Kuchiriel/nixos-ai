@@ -9,7 +9,7 @@ from jarvis.core.hwdetect import CpuInfo, GpuInfo, HardwareProfile, classify
 from jarvis.core.hwprofile import (
     LlamaFlags, aux_offload_recommendations, by_key, derive_flags, full_report,
     kv_bytes_per_token, kv_cache_gb, moe_expert_params_per_layer, pick_model,
-    render_models_nix,
+    render_models_nix, derive_aux_env
 )
 
 
@@ -239,3 +239,29 @@ def test_full_report_includes_aux() -> None:
     r = full_report(_host_with_igpu())
     assert r["aux_gpu"] and "UHD" in r["aux_gpu"]
     assert r["aux_recs"] and r["aux_recs"][0]["backend"] == "SYCL/OpenVINO"
+
+def test_derive_aux_env_intel_igpu():
+    hw = HardwareProfile(
+        cpu=CpuInfo(cores=10, threads=16, vendor="Intel"),
+        gpu=GpuInfo(name="NVIDIA GeForce RTX 4050 Laptop GPU", vram_gb=6.0, backend="cuda", count=1),
+        ram_gb=32.0,
+        aux_gpu_name="Intel Corporation Raptor Lake-S GT1 [UHD Graphics 770]",
+    )
+    aux_env = derive_aux_env(hw)
+    assert aux_env.whisper_backend == "openvino"
+    assert aux_env.whisper_env["OPENVINO_DEVICE"] == "GPU"
+    assert aux_env.whisper_env["CUDA_VISIBLE_DEVICES"] == ""
+    assert aux_env.tts_backend == "cpu"
+
+
+def test_derive_aux_env_fallback_cpu():
+    hw = HardwareProfile(
+        cpu=CpuInfo(cores=8, threads=8, vendor="Intel"),
+        gpu=GpuInfo(name="NVIDIA GeForce RTX 3060", vram_gb=6.0, backend="cuda", count=1),
+        ram_gb=16.0,
+        aux_gpu_name="",
+    )
+    aux_env = derive_aux_env(hw)
+    assert aux_env.whisper_backend == "cpu"
+    assert aux_env.whisper_env["CUDA_VISIBLE_DEVICES"] == ""
+    assert aux_env.tts_backend == "cpu"

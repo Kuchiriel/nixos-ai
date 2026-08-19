@@ -44,7 +44,16 @@ class Logger:
     def __init__(self, module: str, log_dir: Path | None = None) -> None:
         self.module = module
         self._dir = log_dir or _default_log_dir()
-        self._dir.mkdir(parents=True, exist_ok=True)
+        self._dir_ok: bool | None = None  # lazy: None = untested, True/False
+
+    def _ensure_dir(self) -> bool:
+        if self._dir_ok is None:
+            try:
+                self._dir.mkdir(parents=True, exist_ok=True)
+                self._dir_ok = True
+            except (OSError, PermissionError):
+                self._dir_ok = False
+        return self._dir_ok
 
     @property
     def _file(self) -> Path:
@@ -70,6 +79,8 @@ class Logger:
     def emit(self, event: str, *, level: str = "info",
              detail: Any = None, **extra: Any) -> None:
         """Emite um evento estruturado."""
+        if not self._ensure_dir():
+            return  # diretório inacessível (sandbox Nix, etc.)
         entry: dict[str, Any] = {
             "ts": time.time(),
             "iso": time.strftime("%Y-%m-%dT%H:%M:%S%z"),

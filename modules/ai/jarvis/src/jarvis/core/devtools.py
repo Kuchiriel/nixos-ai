@@ -48,12 +48,14 @@ def _safe_path(path: str, root: Path | None = None) -> Path:
     r = root or _project_root()
     if p.is_absolute():
         target = p
-        # Permite /tmp para testes
-        if not str(target).startswith("/tmp") and not str(target).startswith(str(r)):
+        # Permite /tmp e /build (sandbox Nix) para testes
+        _allowed_prefixes = ("/tmp", "/build", str(r))
+        if not any(str(target).startswith(pfx) for pfx in _allowed_prefixes):
             raise ValueError(f"Path outside project: {target}")
     else:
         target = (r / p)
-        if not str(target).startswith(str(r)) and not str(target).startswith("/tmp"):
+        _allowed_prefixes = ("/tmp", "/build", str(r))
+        if not any(str(target).startswith(pfx) for pfx in _allowed_prefixes):
             raise ValueError(f"Path outside project: {target}")
     return target
 
@@ -572,7 +574,50 @@ def run_linter(path: str = ".") -> dict[str, Any]:
     except (OSError, subprocess.SubprocessError) as e:
         return {"ok": False, "error": f"Linter error: {e}"}
 
+# ---------------------------------------------------------------------------
+# semantic_search (via Qdrant)
+# ---------------------------------------------------------------------------
+def semantic_search(query: str, top_k: int = 5) -> dict[str, Any]:
+    """Busca semântica no code_index do Qdrant.
 
+    Returns:
+        {"ok": True, "results": [{"text": "...", "score": 0.9, "source": "file.py"}], "total": 3}
+    """
+    try:
+        from jarvis.providers.vector_store import VectorStore
+
+        cfg = get_config()
+        vs = VectorStore(cfg)
+        results = vs.search(query, collection="code_index", top_k=top_k)
+
+        formatted = []
+        for r in results:
+            formatted.append({
+                "text": r.get("text", "")[:300],
+                "score": round(r.get("score", 0), 3),
+                "source": r.get("metadata", {}).get("source", "unknown"),
+            })
+
+        return {
+            "ok": True,
+            "results": formatted,
+            "total": len(formatted),
+            "query": query,
+        }
+    except Exception as e:
+        err_type = type(e).__name__
+        if "Connect" in err_type or "Connection" in err_type or "Timeout" in err_type:
+            msg = f"Qdrant daemon/connection unavailable ({err_type}): {e}"
+        elif "UnexpectedResponse" in err_type or "NotFound" in err_type:
+            msg = f"Collection 'code_index' missing or invalid schema ({err_type}): {e}"
+        elif "Embedding" in err_type or "Model" in err_type:
+            msg = f"Embedding generation failure ({err_type}): {e}"
+        else:
+            msg = f"Semantic search failure ({err_type}): {e}"
+        return {"ok": False, "error": msg}
+
+
+'''
 # ---------------------------------------------------------------------------
 # semantic_search (via Qdrant)
 # ---------------------------------------------------------------------------
@@ -605,7 +650,7 @@ def semantic_search(query: str, top_k: int = 5) -> dict[str, Any]:
         }
     except Exception as e:
         return {"ok": False, "error": f"Semantic search error: {e}"}
-
+'''
 
 # ---------------------------------------------------------------------------
 # Tool definitions para o agente

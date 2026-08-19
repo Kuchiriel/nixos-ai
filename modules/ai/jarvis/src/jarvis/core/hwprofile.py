@@ -550,3 +550,35 @@ def full_report(hw: HardwareProfile, ctx_target: int | None = None) -> dict[str,
         "aux_gpu": hw.aux_gpu_name or None,
         "aux_recs": aux_offload_recommendations(hw),
     }
+
+@dataclass
+class AuxiliaryOffloadEnv:
+    """Variáveis de ambiente para isolar STT (Whisper) e TTS na iGPU / CPU."""
+    whisper_backend: str        # openvino | sycl | vulkan | cpu
+    whisper_env: dict[str, str] # Ex: {"CUDA_VISIBLE_DEVICES": "", "SYCL_DEVICE_FILTER": "gpu"}
+    tts_backend: str            # cpu | openvino
+    tts_env: dict[str, str]
+
+
+def derive_aux_env(hw: HardwareProfile) -> AuxiliaryOffloadEnv:
+    """Gera regras de ambiente para que STT/TTS não tomem VRAM da dGPU NVIDIA."""
+
+    # Se temos iGPU Intel detectada
+    if "intel" in hw.aux_gpu_name.lower() or "raptor lake" in hw.aux_gpu_name.lower():
+        return AuxiliaryOffloadEnv(
+            whisper_backend="openvino",
+            whisper_env={
+                "CUDA_VISIBLE_DEVICES": "",  # Força ignorar a RTX 4050
+                "OPENVINO_DEVICE": "GPU",    # Direciona para Intel UHD/Arc
+            },
+            tts_backend="cpu",  # Kokoro-82M roda com <5ms em CPU multi-thread
+            tts_env={"OMP_NUM_THREADS": "4"}
+        )
+
+    # Fallback genérico: se não tiver iGPU, roda áudio na CPU para preservar VRAM da dGPU
+    return AuxiliaryOffloadEnv(
+        whisper_backend="cpu",
+        whisper_env={"CUDA_VISIBLE_DEVICES": ""},
+        tts_backend="cpu",
+        tts_env={"OMP_NUM_THREADS": "4"}
+    )

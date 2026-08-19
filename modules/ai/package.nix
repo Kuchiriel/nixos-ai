@@ -23,7 +23,7 @@ let
     # `mcpNixos` é o fast (cache de canais pré-computado) quando vem do overlay.
     propagatedBuildInputs = [ mcpNixos ];
 
-    nativeCheckInputs = with python3Packages; [ pytest ];
+    nativeCheckInputs = with python3Packages; [ pytest hypothesis ];
     checkPhase = ''
       runHook preCheck
       pytest -m "not integration" -q

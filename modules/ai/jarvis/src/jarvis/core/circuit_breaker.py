@@ -65,7 +65,16 @@ class ContentSafetyFilter:
 
     def __init__(self, extra_patterns: tuple[str, ...] | None = None) -> None:
         self._patterns = SENSITIVE_PATTERNS + (extra_patterns or ())
-        self._compiled = [re.compile(re.escape(p), re.IGNORECASE) for p in self._patterns]
+        # Patterns de caminho (/home/, /etc/) e tokens longos usam substring;
+        # patterns curtos (< 5 chars) usam word boundary para evitar falsos
+        # positivos em strings aleatórias (ex: "ssh" em "uhrsshb6a9...").
+        self._compiled: list[re.Pattern[str]] = []
+        for p in self._patterns:
+            escaped = re.escape(p)
+            if len(p) < 5 and not p.startswith("/"):
+                self._compiled.append(re.compile(rf"\b{escaped}\b", re.IGNORECASE))
+            else:
+                self._compiled.append(re.compile(escaped, re.IGNORECASE))
 
     def is_safe(self, prompt: str) -> tuple[bool, str]:
         """Verifica se o prompt é seguro para fallback remoto.

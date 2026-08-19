@@ -78,6 +78,14 @@ in
     "net.ipv4.tcp_congestion_control" = "bbr";
   };
 
+  # Garante que as pastas de banco vetorial (Qdrant) e modelos nasçam com +C (No CoW)
+  systemd.tmpfiles.rules = [
+    "d /var/lib/qdrant 0755 jarvis jarvis - -"
+    "h /var/lib/qdrant - - - - +C"
+    "d /var/lib/jarvis/models 0755 jarvis jarvis - -"
+    "h /var/lib/jarvis/models - - - - +C"
+  ];
+
   # =========================================================================
   # 4. SESSÃO, LOGIN E INTERFACE (Greetd + Hyprland)
   # =========================================================================

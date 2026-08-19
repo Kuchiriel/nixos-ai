@@ -239,7 +239,45 @@ def detect_npu() -> tuple[bool, str]:
         return True, "Android NNAPI"
     return False, ""
 
+def _detect_aux_gpu() -> str:
+    """Detecta GPU integrada (Intel UHD/Arc, AMD iGPU) com múltiplos fallbacks.
 
+    No host (Acer Nitro V15): "Intel Corporation Raptor Lake-S GT1 [UHD Graphics 770]"
+    Ordem de busca: lspci -> /sys/class/drm -> vulkaninfo
+    """
+    if platform.system() != "Linux":
+        return ""
+
+    # 1. Tenta via lspci
+    if shutil.which("lspci"):
+        try:
+            out = _run(["lspci"], timeout=5.0)
+            for line in out.splitlines():
+                ll = line.lower()
+                if ("intel" in ll or "amd" in ll) and ("vga" in ll or "display" in ll or "3d" in ll):
+                    if "nvidia" not in ll:
+                        return line.split(":", 2)[-1].strip() if line.count(":") >= 2 else line.strip()
+        except (OSError, subprocess.SubprocessError):
+            pass
+
+    # 2. Fallback via Sysfs (/sys/class/drm)
+    try:
+        cards = os.listdir("/sys/class/drm")
+        for card in cards:
+            if card.startswith("card") and not "-" in card:
+                vendor_file = f"/sys/class/drm/{card}/device/vendor"
+                if os.path.exists(vendor_file):
+                    vendor_id = open(vendor_file).read().strip()
+                    if vendor_id == "0x8086":  # Intel Vendor ID
+                        return "Intel Integrated Graphics (sysfs)"
+                    elif vendor_id == "0x1002": # AMD Vendor ID
+                        return "AMD Integrated Graphics (sysfs)"
+    except OSError:
+        pass
+
+    return ""
+
+'''
 def _detect_aux_gpu() -> str:
     """Detecta GPU integrada (Intel UHD/Arc, AMD iGPU) — lspci, rápido e leve.
 
@@ -261,7 +299,7 @@ def _detect_aux_gpu() -> str:
     except (OSError, subprocess.SubprocessError):
         pass
     return ""
-
+'''
 
 def detect() -> HardwareProfile:
     """Detecta o hardware completo da máquina atual."""
