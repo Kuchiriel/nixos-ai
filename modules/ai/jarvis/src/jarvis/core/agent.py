@@ -116,12 +116,34 @@ class AuditLog:
 # Execução segura de comandos
 # ---------------------------------------------------------------------------
 
+# Operadores de encadeamento que permitem executar múltiplos comandos.
+# Um SLM pode gerar "cat /etc/shadow; rm -rf /" — o prefix check passaria
+# em "cat" mas o segundo comando seria executado. shlex.split() com
+# shell=True resolveria, mas usamos shell=False; ainda assim, validamos
+# explicitamente contra estes padrões para defense-in-depth.
+_CHAINING_PATTERNS = ("&&", "||", ";", "|", "`", "$(", "${", "\n")
+
+def has_chaining_operators(cmd: str) -> bool:
+    """True se o comando contém operadores de encadeamento shell.
+
+    Detecta: && || ; | backtick $() ${} quebra de linha.
+    Não é uma validação shell completa — é uma barreira defensiva extra
+    para SLMs que geram encadeamento inesperado.
+    """
+    for pat in _CHAINING_PATTERNS:
+        if pat in cmd:
+            return True
+    return False
+
 
 def command_allowed(cmd: str, allowed_prefixes: tuple[str, ...] | None = None) -> bool:
-    """True se o comando começa com um prefixo read-only da allowlist."""
+    """True se o comando começa com um prefixo read-only da allowlist
+    E não contém operadores de encadeamento."""
     prefixes = allowed_prefixes or DEFAULT_ALLOWED_PREFIXES
     stripped = cmd.strip()
     if not stripped:
+        return False
+    if has_chaining_operators(stripped):
         return False
     return any(stripped.startswith(p) for p in prefixes)
 
@@ -404,9 +426,20 @@ class Agent:
         self._mcp_clients.clear()
         self._mcp_tools = []
 
+    def _valid_tool_names(self) -> set[str]:
+        """Conjunto de nomes de tools aceitos — execute_shell + MCP."""
+        names = {"execute_shell"}
+        for t in self._mcp_tools:
+            if isinstance(t, dict) and "name" in t:
+                names.add(t["name"])
+        return names
+
     # --- tool ---
 
     def _execute_tool(self, cmd: str, result: AgentResult) -> str:
+        # Validação de entrada — rejeita cmd vazio/malformado
+        if not cmd or not cmd.strip():
+            return "ERROR: empty command"
         allowed = command_allowed(cmd, self._allowed)
         approved = False
         if not allowed:
@@ -556,12 +589,20 @@ class Agent:
                         })
                         continue
 
-                if func_name == "execute_shell":
+                # Validação de nome de tool — rejeita tools que o modelo
+                # hallucinou (não estão no TOOLS declarado nem no MCP).
+                if func_name not in self._valid_tool_names():
+                    output = f"ERROR: unknown tool '{func_name}'. Available: {sorted(self._valid_tool_names())}"
+                    self._audit.record(
+                        cmd=f"tool:{func_name}", allowed=False, approved=False,
+                        exit_code=None, output=output,
+                    )
+                elif func_name == "execute_shell":
                     output = self._execute_tool(args.get("cmd", ""), result)
                 elif self._mcp_clients:
                     output = self._call_mcp_tool(func_name, args)
                 else:
-                    output = f"Unknown tool: {func_name}"
+                    output = f"ERROR: tool '{func_name}' not available"
 
                 messages.append({
                     "role": "tool",
