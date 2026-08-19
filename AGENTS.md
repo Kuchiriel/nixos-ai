@@ -32,12 +32,12 @@ nixos-rebuild build --flake .#nixos-lab   # valida o sistema (sem ativar)
 ## Estado atual (agosto/2026 — fases do roadmap)
 
 - **Feitas**: 5 (self-heal), 6 (agente+aprovação), 7 (memória+vault), 9 (Telegram),
-  10 (RAG SOTA: NDCG@5=1.0), 11 (benchmark+regressão), 4a (modo idle) — todas
-  implementadas e testadas no lab.
-- **Pendente no lab**: reboot (VM bootou 24.11/systemd 256, está em 26.05/260 —
-  logind pendurado causa erro cosmético na ativação); ativar Telegram
-  (criar bot + `/etc/jarvis-telegram.env` + `services.jarvis-telegram.enable`);
-  ativar `jarvis heal` como daemon.
+  10 (RAG SOTA: NDCG@5=1.0), 11 (benchmark+regressão), 4a (modo idle),
+  audiobook, observabilidade, perfil dinâmico — todas implementadas e testadas.
+- **Testes**: 346+ (pytest). Inclui PBT (hypothesis), security, wakeword, profile,
+  observability.
+- **Pendente no lab**: ativar Telegram (criar bot + `/etc/jarvis-telegram.env` +
+  `services.jarvis-telegram.enable`); ativar `jarvis heal` como daemon.
 - **Pendente no host**: `services.llama-cpp-server.profile = "host"` (Qwen3.6-35B
   MoE + GPU), verificar se o llama-cpp do pin carrega o Qwen3.6, voz/wakeword.
 

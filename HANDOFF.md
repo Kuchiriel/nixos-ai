@@ -1,62 +1,78 @@
-# HANDOFF - Sessão 2026-08-19 (atualizado com hardening security)
+# HANDOFF - Sessão 2026-08-19 (atualizado)
 
 ## Estado Atual do Sistema
 - **NixOS Lab**: VM Hyper-V, i7-13620H (4c/8t visíveis), 19.1GB RAM, sem GPU
-- **Último rebuild**: OK — **248 testes verdes + flake check OK**
-- **Git**: limpo (antes do commit pendente desta sessão)
+- **Último rebuild**: OK — **346+ testes verdes**
+- **Git**: limpo (após commit 9d0103f)
 - **Partição legada montada**: `/mnt/legacy/system` (@) + `/mnt/legacy/home/kuchiriel` (@home) — **NÃO persiste no reboot** (cryptsetup manual)
 
-## Commits Recentes (em ordem)
+## Commits Recentes (em ordem — sessão 2026-08-19)
 ```
-<esta sessão> sistema-água + host skeleton + hyprland fixes + litellm cascade
-92dde21 refactor(água): switch services.jarvis.environment central
-85e9a01 feat(doctor): check_ui — saúde dos elementos cosméticos
-e30a251 feat(ui): mpvpaper (wallpaper animado mp4) com condicional VM/host
-de64d5e feat(ui): tema rofi jarvis-cyan portado do legado + gaps do host
-bb92b30 feat(waybar): módulo custom/jarvis (estado da pipeline) + CSS
-580f105 feat(ai): iGPU integrada detectada + offload auxiliar (whisper SYCL)
-94524ad feat(ai): auto-detecção de hardware → flags SOTA (hwdetect/hwprofile)
-aa31efb docs: handoff para nova sessão
+9d0103f feat(profile): perfil de usuario dinâmico + contexto adaptativo
+ee87408 feat(observability): logging JSONL unificado + metrics + doctor proativo
+6b5c445 docs(security): adiciona threat model e resultados do hardening ao HANDOFF.md
+583d30c feat(security): hardening do agente contra prompt injection e tool hallucination
+0fe095d test(pbt): adiciona Property-Based Testing com hypothesis (31 testes)
+bb29aa7 perf(agent): otimiza prompts e tool calling para SLMs (4B-35B)
+451ba46 docs: atualiza README.md com diagramas Mermaid e guia de instalação padrão ouro
+196ea2c feat(audiobook): handler real com scan/read/pause/resume/stop/next/prev + TTS
+21a0198 fix(agent): injeta chat_template_kwargs enable_thinking=False no payload
+df089dc docs: atualiza HANDOFF com resultados do hardening (422d0be)
+422d0be fix(ai): hardening da stack JARVIS — 4 correções validadas com 248 testes
 ```
 
 ## O Que Foi Implementado Nesta Sessão
 
-### 1. hwdetect/hwprofile (auto-detecção → flags SOTA)
-- `jarvis hwdetect`: detecta RAM/VRAM/CPU/GPU/NPU + **iGPU auxiliar** (lspci), classifica tier (Termux→datacenter)
-- `jarvis hwprofile`: calcula KV cache (fórmula exata), offload full/expert/partial/cpu, previsão t/s, bloco models.nix renderizado
-- Catálogo com arquiteturas REAIS (config.json HF): Qwen3-1.7B/4B/8B, Qwen3.6-27B, Qwen3.6-35B-A3B (40L, 2kv, 256hd), Qwen3-VL-235B (approx)
-- **Host alvo (RTX 4050 6GB/32GB)**: Qwen3.6-35B-A3B MoE+vision, expert offload ngl 17/n-cpu-moe 2/KV q8/32K/-fa on, ~11 t/s
-- **iGPU Intel UHD**: whisper STT vai para iGPU via SYCL/OpenVINO (12x boost whisper.cpp 1.8.3); TTS Kokoro NÃO (82M, CPU em ms); mvpaper SIM (OpenGL)
-- Bugs caçados: unidades B/raw, Apple unified memory, multi-GPU VRAM total
+### 1. Hardening da Stack (422d0be)
+- `heal.py`: MemoryStore (bug) → EpisodicMemory — fecha loop de self-heal
+- `agent.py`: `response_format: json_object` + system_prompt limpo de instruções MCP
+- `memory.py`: deduplicação por texto em `recall()` + `max_chars=500` em `lessons()`
+- `flake.nix`: devShell PYTHONPATH usa FLAKE_ROOT absoluto (antes relativo, quebrava em subdirs)
 
-### 2. Look and feel do legado portado
-- **Tema rofi jarvis-cyan** (assets/rofi/, declarado home-manager)
-- **mpvpaper**: 12 wallpapers mp4 versionados (121MB), serviço user com `ConditionVirtualization=!vm` — host sobe com hwdec VA-API na iGPU (LIBVA_DRIVER_NAME=iHD), VM não sobe (hyprpaper estático)
-- **Waybar**: módulo custom/jarvis com estados (idle/listening/thinking/speaking/error/done) via jarvis-waybar + CSS animado
-- Gaps hyprland host 5/10 (VM 2/4), cores ciano já estavam portadas
+### 2. Security Hardening (583d30c)
+- `has_chaining_operators()` — detecta `&&`, `||`, `;`, `|`, backticks, `$()`, newlines
+- `_valid_tool_names()` — whitelist de tools (execute_shell + MCP); tools hallucinadas rejeitadas
+- Empty cmd guard — comandos vazios retornam erro sem execução
+- 6 testes de segurança adicionados
 
-### 3. Doctor com saúde cosmética (check_ui)
-- Monitora: waybar, hyprland, swaync, tema rofi, mpvpaper (condicional VM/host)
-- Cosmético só degrada, nunca derruba overall
-- Validado ao vivo: detectou waybar parado
+### 3. Property-Based Testing (0fe095d)
+- 31 testes com `hypothesis` para parser de JSON fallback e motor de regras
+- Estratégias adversárias: UTF-8 corrompido, JSON incompleto, infinite nesting, null bytes
 
-### 4. Sistema-água + host skeleton + cascade
-- **`services.jarvis.environment = "vm"|"host"`** (nixos/modules/jarvis-env.nix) — switch central; todos os módulos bebem dele
-- **Waybar VM profile**: sem battery/bluetooth/backlight (popups somem). BUG: diretório `waybar/` era INERTO — arquivo ativo é `waybar.nix` (raiz); usar if/then/else puro
-- **Hyprland**: 4 deprecações corrigidas (layoutmsg, pseudotile, gesture, windowrule)
-- **Host skeleton** `hosts/nitro-v15/`: configuration.nix (switch host) + disko.nix (2 NVMe: rápido=/+ /nix, lento=/home) — NÃO registrado no flake até hardware-config real
-- **LiteLLM cascade** (módulo oficial nixpkgs + litellm-cascade.nix): local→Groq→Gemini→OpenRouter em :4000; chaves /etc/litellm.env
-- **SEGURANÇA**: chave Groq removida do home.nix (vazou) — usuário deve ROTACIONAR
+### 4. Prompt Optimization (bb29aa7)
+- System prompt: 580→194 chars (-66%), tool description: 143→102 chars (-29%)
+- Profile `tiny` para Qwen3-4B/3B/1B: max_tokens=512
+- `detect_profile` agora cobre 1B→35B com perfis adequados
+
+### 5. Audiobook Handler (196ea2c)
+- `jarvis audiobook scan/read/pause/resume/stop/next/prev/status`
+- Extração .epub (ebooklib) + .txt, chunking 800 chars, TTS Kokoro, bookmark persistente
+- Router: macro `<call>audiobook</call>` agora chama handler real
+
+### 6. Observabilidade (ee87408)
+- `core/logging.py` — Logger JSONL centralizado com rotação 10MB
+- `jarvis metrics` — métricas por módulo/nível/evento com filtros
+- `jarvis doctor` expandido: network, sockets, Btrfs + `--json` flag
+- Instrumentação: agent (start/done/tool_call/timeout/error), heal, router, doctor
+
+### 7. Perfil de Usuário Dinâmico (9d0103f)
+- `jarvis profile show/set/forget` — preferências locais (language, verbosity, tone, expertise)
+- Contexto adaptativo: hora do dia, load 1m/5m, memória disponível injetados no system prompt
+- Verbosidade ajustável: minimal (sem SYSTEM), normal, verbose (tudo)
+
+### 8. Docs (451ba46)
+- README com diagramas Mermaid (arquitetura + ciclo de memória)
+- Guia de instalação "Padrão Ouro" para Acer Nitro V15 (8 passos)
 
 ## Pendente / Próximos Passos
-1. **rebuild.sh pendente** — ativar no lab: waybar sem popups, hyprland fixes, litellm, doctor novo
-2. **Waybar não aparece na VM**: o pkill matou e o exec-once só roda no login — reiniciar sessão Hyprland (SUPER+M) ou `waybar &` manual; o config carregado é o ANTIGO até o rebuild
-3. **Hyprland na VM**: erros ZINK/EGL (esperado sem GPU); hyprlock "Authentication failed" — destravar com senha do nixos ou Ctrl+Alt+F3
-4. **Plugar hwprofile ao serviço** (llama-cpp.nix consumir o cálculo)
-5. **Validar mpvpaper no host** (hwdec vaapi iGPU)
-6. **Wallpaper alien_static.jpg** se perdeu — procurar no HD externo
-7. **nixpkgs SYCL incompleto** (#367722) — overlay local p/ whisper SYCL no host
-8. **Instalação host com disko**: detectar Gen3/Gen4 (nvme list / lspci LnkSta), usar /dev/disk/by-id
+1. **Instalação host com disko** — detectar Gen3/Gen4, editar device IDs, `nixos-install --flake .#nitro-v15`
+2. **Chave Groq rotacionar** — vazou no git history (home.nix antigo)
+3. **Plugar hwprofile ao serviço** (llama-cpp.nix consumir o cálculo)
+4. **Validar mpvpaper no host** (hwdec vaapi iGPU)
+5. **nixpkgs SYCL incompleto** (#367722) — overlay local p/ whisper SYCL no host
+6. **Testes de integração real** — com Qdrant/LLM rodando (não mocks)
+7. **Dashboard waybar** — erros recentes, latência SLM, métricas em tempo real
+8. **Alertas Telegram** — notificar quando doctor detecta serviços down
 
 ## Problemas Conhecidos
 - **Logind D-Bus timeout**: erro recorrente no rebuild, não afeta funcionalidade
@@ -94,7 +110,7 @@ Diagnóstico completo em `docs/architecture/pillar-diagnostic.md`. Score geral: 
 
 **Bônus**: devShell PYTHONPATH corrigido (absoluto, não relativo); system_prompt limpo de instruções MCP.
 
-**248/248 testes passando.**
+**346+ testes passando.**
 
 ## Notas Técnicas
 - **KV cache**: `2 * n_kv_heads * head_dim * n_layers * bytes` (f16=2, q8=1)
@@ -134,7 +150,7 @@ Diagnóstico completo em `docs/architecture/pillar-diagnostic.md`. Score geral: 
 - `test_unknown_tool_rejected` (simulação real)
 - `test_execute_shell_only_tool_accepted`
 
-**310/310 testes passando** (zero regressão).
+**346+ testes passando** (zero regressão). Inclui: 248 base + 6 security + 31 PBT + 30 wakeword + 20 profile + 13 observability.
 
 ### O Que NÃO Foi Implementado (decisão consciente)
 

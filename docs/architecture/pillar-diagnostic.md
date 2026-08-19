@@ -1,5 +1,9 @@
 # Diagnóstico dos 4 Pilares de Arquitetura — JARVIS (ago/2026)
 
+> **STATUS**: Este diagnóstico é de referência histórica (pre-hardening). Os 3 fixes
+> recomendados abaixo foram **IMPLEMENTADOS** (commits 422d0be, 583d30c, ee87408,
+> 9d0103f). Consulte o HANDOFF.md para o estado atual.
+>
 > Análise profunda do código-fonte (`modules/ai/jarvis/src/jarvis/`) contra 4 pilares
 > de arquitetura críticos para um sistema de IA de bordo local-first.
 > Cada ponto inclui: status, linhas exatas do código, e proposta de refatoração.
@@ -197,13 +201,18 @@
 
 ---
 
-## 🎯 Top 3 Fixes de Maior Impacto Imediato
+## 🎯 Top 3 Fixes de Maior Impacto Imediato — ✅ IMPLEMENTADOS
 
-| # | Fix | Arquivo:Linha | Esforço | Impacto |
-|---|---|---|---|---|
-| 1 | `response_format: json_object` no payload do LLM | agent.py:296 | 1 linha | Reduz repair loops em ~50%+ |
-| 2 | Deduplicação de memória episódica | memory.py:65 | ~20 linhas | Evita lições repetidas saturando contexto |
-| 3 | Lição em falha de restart (heal aprende fracasso) | heal.py:139 | 3 linhas | Fecha loop de self-heal |
+| # | Fix | Commit | Status |
+|---|---|---|---|
+| 1 | `response_format: json_object` no payload do LLM | 422d0be | ✅ Implementado |
+| 2 | Deduplicação de memória episódica | 422d0be | ✅ Implementado |
+| 3 | Lição em falha de restart (heal aprende fracasso) | 422d0be | ✅ Implementado |
+
+**Hardening adicional** (commits 583d30c, ee87408, 9d0103f):
+- Security: anti-chaining, tool whitelist, empty cmd guard
+- Observabilidade: logging JSONL, metrics, doctor proativo
+- Perfil adaptativo: contexto temporal + preferências no prompt
 
 ---
 

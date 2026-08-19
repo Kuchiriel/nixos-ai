@@ -27,6 +27,11 @@ e não fica parada — tudo rodando local (llama.cpp + Qdrant), sem cloud.
 | 🎙️ **Voz** | wakeword (openwakeword) → STT (faster-whisper) → roteador → TTS (Kokoro) + emoção |
 | 📖 **Audiobook** | leitura de .epub/.txt com chunking, TTS Kokoro e bookmark |
 | 📊 **Qualidade** | `benchmark`, `eval-rag`, `regression` (baseline + CI via `flake check`) |
+| 🔒 **Security** | anti-chaining, tool whitelist, empty cmd guard, threat model documentado |
+| 📟 **Observabilidade** | logging JSONL centralizado, `jarvis metrics`, doctor proativo (network/sockets/Btrfs) |
+| 👤 **Perfil Adaptativo** | preferências locais (verbosity/tone/expertise), contexto temporal + sistema no prompt |
+| 🧪 **Testes** | 346+ testes: unit, integration, PBT (hypothesis), security, wakeword |
+| 📝 **Property-Based Testing** | 31 testes adversariais com hypothesis para parsers e regex |
 
 **Modelos 100% declarativos**: `modules/ai/models.nix` é a única fonte de
 verdade — o host nasce com tudo no store Nix, sem download imperativo.
@@ -318,16 +323,42 @@ jarvis hwprofile
 ## 🔧 Uso
 
 ```bash
+# Core
 jarvis status                 # saúde de llama.cpp + Qdrant
 jarvis ask "pergunta"         # roteador: caminho mais barato
 jarvis agent "tarefa"         # agente tool-calling (--approve p/ efeito)
+jarvis chat "pergunta"        # resposta direta via llama.cpp
+
+# RAG e Indexação
 jarvis rag "busca"            # busca híbrida no código
 jarvis index <dir>            # indexa código no Qdrant
-jarvis doctor / jarvis heal   # diagnóstico / auto-reparo
-jarvis remember|recall|lessons# memória episódica
+
+# Diagnóstico e Observabilidade
+jarvis doctor                 # diagnóstico completo (--json p/ saída pura)
+jarvis doctor --json          # JSON para dashboards/Telegram
+jarvis metrics                # métricas dos logs (--module, --since, --json)
+jarvis heal                   # auto-reparo (--watch p/ daemon)
+
+# Memória
+jarvis remember "fato"        # grava na memória episódica
+jarvis recall "busca"         # recupera eventos
+jarvis lessons "erro"         # lições passadas relevantes
 jarvis vault summarize        # resumo de longo prazo
+
+# Perfil Adaptativo
+jarvis profile show           # mostra preferências atuais
+jarvis profile set tone friendly   # define uma preferência
+jarvis profile forget restrictions # remove uma preferência
+
+# Voz e Audiobook
 jarvis audiobook scan|read    # leitor de livros com TTS
 jarvis voice                  # loop STT → roteador → TTS
+jarvis stt <wav>              # transcreve áudio
+jarvis speak "texto"          # sintetiza texto em voz
+
+# Hardware e Integração
+jarvis hwdetect               # detecta hardware e classifica tier
+jarvis hwprofile              # calcula flags SOTA + melhor modelo
 jarvis handoff --task "..."   # pacote de contexto para IAs web
 jarvis telegram               # canal Telegram
 jarvis idle status            # estado do modo idle
