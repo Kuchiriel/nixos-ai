@@ -879,6 +879,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_audiobook.add_argument("book", nargs="?", default=None, help="nome do livro (para read)")
     p_audiobook.set_defaults(func=_cmd_audiobook)
 
+    p_dev = sub.add_parser("dev", help="CLI interativo de desenvolvimento (estilo Aider)")
+    p_dev.add_argument("task", nargs="?", default=None, help="tarefa única (se omitido, abre REPL)")
+    p_dev.add_argument("--project", default=None, help="diretório raiz do projeto")
+    p_dev.add_argument("--approve", action="store_true", help="permite aprovação para comandos com efeito")
+    p_dev.set_defaults(func=_cmd_dev)
+
     return parser
 
 
@@ -896,6 +902,16 @@ def rag_main() -> int:  # entry point extra: jarvis-rag "busca"
     sys.argv = ["jarvis-rag", "rag", *sys.argv[1:]]
     args = build_parser().parse_args()
     return args.func(args)
+
+
+def _cmd_dev(args: argparse.Namespace) -> int:
+    from jarvis.cli.dev import dev_repl, dev_once
+
+    if args.task:
+        return dev_once(args.task, project_root=args.project, approve=args.approve)
+    else:
+        dev_repl(project_root=args.project, approve=args.approve)
+        return 0
 
 
 def waybar_main() -> int:  # entry point extra: jarvis-waybar (module do Waybar)

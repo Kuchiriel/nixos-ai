@@ -2,7 +2,7 @@
 
 ## Estado Atual do Sistema
 - **NixOS Lab**: VM Hyper-V, i7-13620H (4c/8t visíveis), 19.1GB RAM, sem GPU
-- **Último rebuild**: OK — **460+ testes verdes** (56 novos de fuzzing/mutation)
+- **Último rebuild**: OK — **485+ testes verdes** (25 novos devtools)
 - **Git**: limpo (após commit mais recente)
 - **Partição legada montada**: `/mnt/legacy/system` (@) + `/mnt/legacy/home/kuchiriel` (@home) — **NÃO persiste no reboot** (cryptsetup manual)
 
