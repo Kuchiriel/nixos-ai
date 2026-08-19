@@ -15,19 +15,18 @@
 |------|--------|-----------|
 | llama.cpp | ✅ PASS | /health OK, /v1/models OK, chat completions OK, tool calling OK, structured output OK (com enable_thinking=false) |
 | Qdrant | ✅ PASS | healthz OK, memories collection (46 vetores, dim 768, Cosine), search retorna resultados |
-| RAG | ⚠️ PARTIAL | Embedding OK (768d), Qdrant search OK, mas collection code_index NÃO EXISTE — precisa rodar code_indexer |
+| RAG | ✅ PASS | Embedding OK (768d), code_index criado (787 points: 659 .py + 128 .nix), search validado (score 0.471) |
 | Memória | ✅ PASS | remember → recall → lessons funciona, deduplicação OK, 46+ eventos armazenados |
 | Agent | ✅ PASS | E2E: prompt → tool_call → execute → response funciona com Qwen3-4B real |
 | Self-heal | ✅ PASS | 9 health checks (llama_cpp, embeddings, qdrant, disk, nixos, ui, network, sockets, btrfs) |
 | EventBus | ✅ PASS | 14 testes unitários, pub/sub funcional |
-| Semantic Search | ⚠️ BLOCKED | Collection code_index não existe — precisa code_indexer |
+| Semantic Search | ✅ PASS | code_index com 787 points, search retorna resultados com score |
 | Egress | ✅ PASS | ContentSafetyFilter com word boundary, 7 testes de segurança |
 | Observabilidade | ✅ PASS | JSONL logging, metrics CLI, doctor proativo |
 | NixOS | ✅ PASS | nix flake check OK, nix build .#jarvis OK |
 | Restart/Recovery | ✅ PASS | 497 testes passando, 0 regressão |
 
 ### Notas
-- **RAG code_index**: precisa rodar `jarvis rag index` para criar a collection code_index (404 atual)
 - **structured output**: funciona APENAS com `chat_template_kwargs: enable_thinking=false` (Qwen3 consome tokens thinking)
 - **Embeddings**: server dedicado na porta 8081 (não no llama-cpp principal)
 
@@ -60,12 +59,19 @@ df089dc docs: atualiza HANDOFF com resultados do hardening (422d0be)
 
 ## O Que Foi Implementado Nesta Sessão
 
-### 0c. CLI Dev Agent (e1f29bd)
+### 0c. CLI Dev Agent (e1f29bd + melhorias 2026-08-19)
 - `jarvis dev` — REPL interativo estilo Aider com ferramentas de desenvolvimento
 - Tool calls reais contra o SLM local (Qwen3-4B via llama.cpp)
-- Ferramentas: `list_directory`, `read_file`, `write_file`, `str_replace`, `code_search`, `run_tests`
+- **12 ferramentas**: `read_file`, `str_replace`, `write_file`, `list_directory`, `code_search`, `semantic_search`, `run_tests`, `execute_shell`, `git_commit`, `web_search`, `read_url`, `jarvis_command`
+- **Repo map**: 80 arquivos indexados no system prompt (estilo Aider)
+- **Architect mode**: `/architect` — SLM lê → planeja → executa (opcional)
+- **Memory context**: lições episódicas injetadas no prompt
+- **Fuzzy matching**: str_replace tolera 82% de similaridade (corrige erros do SLM)
+- **Comandos REPL**: `/quit`, `/clear`, `/status`, `/map`, `/model`, `/recall`, `/architect`, `/help`
+- **Web tools**: `web_search` (DuckDuckGo) + `read_url` — validados E2E
+- **Prompts SLM**: numéricos, condicionais, RULE 1-5, exemplo explícito
 - Segurança: paths restritos ao projeto ou /tmp, backup .bak, str_replace valida existência
-- Teste real: SLM listou arquivos, leu config.py (19 vars), criou arquivo, editou código
+- Testes E2E: ler, editar, criar função, web search, read URL, semantic search — todos validados
 - 25 novos testes unitários + validação contra SLM real
 
 ### 0b. Mutation Testing + Fuzzing (e82e3d5)

@@ -38,7 +38,7 @@ nixos-rebuild build --flake .#nixos-lab   # valida o sistema (sem ativar)
 - **Testes**: 485+ (pytest). Inclui PBT (hypothesis), security, wakeword, profile,
   observability, eventbus, triggers, vision, circuit breaker, fuzzing, devtools.
 - **Pendente no lab**: ativar Telegram (bot + `/etc/jarvis-telegram.env`);
-  ativar `jarvis heal` como daemon; testar `jarvis dev` com mais tarefas reais.
+  ativar `jarvis heal` como daemon.
 - **Pendente no host**: `services.llama-cpp-server.profile = "host"` (Qwen3.6-35B
   MoE + GPU), verificar se o llama-cpp do pin carrega o Qwen3.6, voz/wakeword.
 
