@@ -9,6 +9,7 @@ Subcomandos:
   jarvis migrate <legacy-dir>    — migração one-shot do índice .ai-index legado
   jarvis parity <legacy-dir>     — teste de paridade (top-k legado vs novo)
   jarvis doctor                  — diagnóstico de saúde de todos os serviços
+  jarvis metrics                 — métricas e telemetria dos logs JSONL
   jarvis agent "tarefa"         — agente tool-calling (allowlist + aprovação + audit)
   jarvis ask "pedido"           — roteador: doctor/nixos/rag/agent (caminho mais barato)
   jarvis remember "fato"        — grava um evento na memória episódica
@@ -23,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 
 from jarvis.core.config import get_config
@@ -108,12 +110,63 @@ def _cmd_parity(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
-def _cmd_doctor(_args: argparse.Namespace) -> int:
+def _cmd_doctor(args: argparse.Namespace) -> int:
     from jarvis.core.doctor import doctor_report
 
     report = doctor_report(get_config())
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        overall = report["overall"]
+        icon = {"ok": "✅", "degraded": "⚠️", "down": "❌"}.get(overall, "?")
+        print(f"{icon} Overall: {overall}")
+        for c in report["checks"]:
+            mark = {"ok": "✓", "degraded": "⚠", "down": "✗"}.get(c["status"], "?")
+            detail = c.get("detail", "")[:60]
+            print(f"  {mark} {c['name']:<24} {c['status']:<10} {detail}")
     return 0 if report["overall"] != "down" else 1
+
+
+def _cmd_metrics(args: argparse.Namespace) -> int:
+    from jarvis.core.logging import compute_metrics, read_events
+
+    since_ts = None
+    if args.since:
+        since_ts = time.time() - (args.since * 3600)
+    events = read_events(args.module, since_ts=since_ts, limit=args.limit)
+    metrics = compute_metrics(events)
+    metrics["log_dir"] = str(_log_dir())
+    if args.json:
+        print(json.dumps(metrics, ensure_ascii=False, indent=2))
+    else:
+        print(f"📊 Métricas — {metrics['total_events']} eventos")
+        print(f"   Log dir: {metrics['log_dir']}")
+        print()
+        if metrics["by_module"]:
+            print("Por módulo:")
+            for mod, count in sorted(metrics["by_module"].items(), key=lambda x: -x[1]):
+                print(f"  {mod:<16} {count}")
+        print()
+        if metrics["by_level"]:
+            print("Por nível:")
+            for lvl, count in metrics["by_level"].items():
+                if count:
+                    print(f"  {lvl:<16} {count}")
+        print()
+        if metrics["by_event"]:
+            print("Por evento:")
+            for evt, count in sorted(metrics["by_event"].items(), key=lambda x: -x[1]):
+                print(f"  {evt:<24} {count}")
+    return 0
+
+
+def _log_dir():
+    from pathlib import Path
+    import os
+    base = os.environ.get("JARVIS_STATE_DIR", "")
+    if base:
+        return Path(base).expanduser() / "logs"
+    return Path.home() / ".local" / "state" / "jarvis" / "logs"
 
 
 def _cmd_remember(args: argparse.Namespace) -> int:
@@ -598,7 +651,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_parity.set_defaults(func=_cmd_parity)
 
     p_doctor = sub.add_parser("doctor", help="diagnóstico de saúde de todos os serviços")
+    p_doctor.add_argument("--json", action="store_true", help="saída JSON pura")
     p_doctor.set_defaults(func=_cmd_doctor)
+
+    p_metrics = sub.add_parser("metrics", help="métricas e telemetria dos logs JSONL")
+    p_metrics.add_argument("--module", default=None, help="filtrar por módulo (agent|heal|fastpath|voice)")
+    p_metrics.add_argument("--since", type=int, default=None, help="janela em horas (ex: --since 24)")
+    p_metrics.add_argument("--limit", type=int, default=500, help="máximo de eventos (default 500)")
+    p_metrics.add_argument("--json", action="store_true", help="saída JSON pura")
+    p_metrics.set_defaults(func=_cmd_metrics)
 
     p_agent = sub.add_parser("agent", help="agente tool-calling (allowlist + aprovação + audit)")
     p_agent.add_argument("prompt", help="tarefa para o agente")

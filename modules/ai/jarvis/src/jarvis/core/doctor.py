@@ -18,6 +18,7 @@ from typing import Any
 import requests
 
 from jarvis.core.config import Config
+from jarvis.core.logging import get_logger
 
 
 @dataclass
@@ -223,6 +224,114 @@ def check_nixos_generations() -> ComponentHealth:
     return h
 
 
+def check_network() -> ComponentHealth:
+    """Conectividade de rede local e internet."""
+    h = ComponentHealth("network")
+    issues: list[str] = []
+    # Gateway local
+    try:
+        import socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(3)
+        try:
+            s.connect(("1.1.1.1", 53))
+            s.close()
+        except (OSError, TimeoutError):
+            issues.append("sem acesso a 1.1.1.1:53 (internet?)")
+        finally:
+            s.close()
+    except OSError:
+        issues.append("socket indisponível")
+    # DNS
+    try:
+        import socket
+        socket.getaddrinfo("cache.nixos.org", 443, socket.AF_INET, socket.SOCK_STREAM)
+    except (OSError, socket.gaierror):
+        issues.append("DNS cache.nixos.org falhou")
+    if issues:
+        h.status = "degraded"
+        h.detail = "; ".join(issues)
+    else:
+        h.status = "ok"
+        h.detail = "rede local + internet OK"
+    return h
+
+
+def check_sockets(cfg: Config) -> ComponentHealth:
+    """Verifica se as portas dos serviços estão aceitando conexões."""
+    import socket
+
+    h = ComponentHealth("sockets")
+    ports = {
+        "llama_cpp": cfg.llm_base_url.replace("http://", "").split(":")[1].split("/")[0] if":" in cfg.llm_base_url else "8080",
+        "embeddings": cfg.embed_base_url.replace("http://", "").split(":")[1].split("/")[0] if":" in cfg.embed_base_url else "8081",
+        "qdrant": cfg.qdrant_url.replace("http://", "").split(":")[1].split("/")[0] if":" in cfg.qdrant_url else "6333",
+    }
+    results = {}
+    for name, port in ports.items():
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(2)
+            result = s.connect_ex(("127.0.0.1", int(port)))
+            s.close()
+            results[name] = result == 0
+        except (OSError, ValueError):
+            results[name] = False
+    closed = [name for name, ok in results.items() if not ok]
+    h.data = results
+    if closed:
+        h.status = "degraded"
+        h.detail = f"portas fechadas: {', '.join(closed)}"
+    else:
+        h.status = "ok"
+        h.detail = ", ".join(f"{k}:{v}" for k, v in results.items())
+    return h
+
+
+def check_btrfs() -> ComponentHealth:
+    """Verificação de saúde do filesystem Btrfs (se aplicável)."""
+    h = ComponentHealth("btrfs")
+    try:
+        proc = subprocess.run(
+            ["btrfs", "filesystem", "show", "/"],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+        if proc.returncode != 0:
+            # Não é Btrfs — ok, outros filesystems são válidos
+            h.status = "ok"
+            h.detail = "não é Btrfs (ok)"
+            return h
+        # Verifica erros
+        proc2 = subprocess.run(
+            ["btrfs", "device", "stats", "/"],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+        if proc2.returncode == 0:
+            # Conta erros
+            errors = 0
+            for line in proc2.stdout.strip().splitlines():
+                if ": 0" not in line and line.strip():
+                    parts = line.split(":")
+                    if len(parts) >= 2:
+                        try:
+                            errors += int(parts[1].strip())
+                        except ValueError:
+                            pass
+            if errors > 0:
+                h.status = "degraded"
+                h.detail = f"Btrfs: {errors} erros de device"
+            else:
+                h.status = "ok"
+                h.detail = "Btrfs: sem erros"
+        else:
+            h.status = "ok"
+            h.detail = "Btrfs: stats indisponíveis (ok)"
+    except (OSError, subprocess.SubprocessError):
+        h.status = "ok"
+        h.detail = "btrfs não disponível"
+    return h
+
+
 def run_doctor(cfg: Config | None = None) -> list[ComponentHealth]:
     cfg = cfg or Config()
     return [
@@ -232,11 +341,15 @@ def run_doctor(cfg: Config | None = None) -> list[ComponentHealth]:
         check_disk(),
         check_nixos_generations(),
         check_ui(),
+        check_network(),
+        check_sockets(cfg),
+        check_btrfs(),
     ]
 
 
 def doctor_report(cfg: Config | None = None) -> dict[str, Any]:
     """Relatório completo em dict (para JSON)."""
+    log = get_logger("doctor")
     checks = run_doctor(cfg)
     overall = "ok"
     for c in checks:
@@ -245,10 +358,17 @@ def doctor_report(cfg: Config | None = None) -> dict[str, Any]:
             break
         if c.status == "degraded" and overall == "ok":
             overall = "degraded"
-    return {
+    report = {
         "overall": overall,
         "checks": [
             {"name": c.name, "status": c.status, "detail": c.detail, **({"data": c.data} if c.data else {})}
             for c in checks
         ],
     }
+    down_count = sum(1 for c in checks if c.status == "down")
+    degraded_count = sum(1 for c in checks if c.status == "degraded")
+    log.info("doctor_report", detail={
+        "overall": overall, "down": down_count, "degraded": degraded_count,
+        "total": len(checks),
+    })
+    return report

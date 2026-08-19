@@ -128,6 +128,9 @@ def _match_any(text: str, triggers: tuple[str, ...]) -> tuple[bool, str]:
 
 def route_request(text: str) -> Route:
     """Classifica um pedido e escolhe a rota mais barata que resolve."""
+    from jarvis.core.logging import get_logger
+    log = get_logger("fastpath")
+
     low = text.lower().strip()
     if not low:
         return Route("agent", "pedido vazio", text, 0.0)
@@ -136,6 +139,7 @@ def route_request(text: str) -> Route:
     fp = get_fast_paths()
     match = fp.match(low)
     if match is not None:
+        log.info("fastpath_match", detail={"trigger": match.rule.trigger, "text": text[:100]})
         return Route("fastpath", f"regra declarativa: '{match.rule.trigger}'", text, 1.0)
 
     # 1. DOCTOR — o mais barato (zero LLM), mas NÃO rouba comandos diretos:
@@ -143,20 +147,24 @@ def route_request(text: str) -> Route:
     #    pedido de saúde geral. Fast path tem precedência sobre doctor.
     ok, trigger = _match_any(low, _DOCTOR_TRIGGERS)
     if ok and fp.match(low) is None:
+        log.info("route_doctor", detail={"trigger": trigger})
         return Route("doctor", f"gatilho de diagnóstico: '{trigger}'", text, 0.9)
 
     # 2. NIXOS — consulta real via mcp-nixos (zero LLM, sem alucinação)
     ok, trigger = _match_any(low, _NIXOS_TRIGGERS)
     if ok:
+        log.info("route_nixos", detail={"trigger": trigger})
         return Route("nixos", f"gatilho de nixpkgs: '{trigger}'", text, 0.85)
 
     # 3. RAG — código indexado (zero LLM para recuperação)
     ok, trigger = _match_any(low, _RAG_TRIGGERS)
     if ok or _RAG_EXT_RE.search(low):
         reason = f"gatilho de código: '{trigger}'" if ok else "extensão de arquivo no pedido"
+        log.info("route_rag", detail={"trigger": trigger})
         return Route("rag", reason, text, 0.8)
 
     # 4. AGENT — tudo mais (LLM + tools)
+    log.info("route_agent", detail={"text": text[:100]})
     return Route("agent", "sem caminho barato — LLM com tools", text, 0.5)
 
 

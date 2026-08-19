@@ -27,6 +27,7 @@ from typing import Any
 
 from jarvis.core.config import Config
 from jarvis.core.doctor import doctor_report
+from jarvis.core.logging import get_logger
 
 # Componente do doctor → serviço systemd. Só o que é seguro/útil reiniciar.
 SERVICE_MAP: dict[str, dict[str, str]] = {
@@ -152,6 +153,7 @@ def _learn_lesson(service: str, component: str, detail: str) -> None:
 
 def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_SECONDS, alerts: bool = True) -> HealReport:
     """Detecta + repara. Retorna o relatório completo."""
+    log = get_logger("heal")
     cfg = cfg or Config()
     state = state_dir(cfg)
     report = doctor_report(cfg)
@@ -185,6 +187,9 @@ def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_S
             continue
 
         ok, detail = _restart_service(service, scope)
+        log.info("heal_restart", detail={
+            "component": comp, "service": service, "ok": ok, "detail": detail,
+        })
         if ok:
             _record_restart(state, service)
         _append_audit(state, {

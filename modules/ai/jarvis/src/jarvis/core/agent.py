@@ -32,6 +32,8 @@ from typing import Any
 
 import requests
 
+from jarvis.core.logging import get_logger
+
 from jarvis.core.config import Config, get_config
 from jarvis.providers.mcp import MCPClient, MCPError, parse_command, to_function_tools
 
@@ -458,23 +460,35 @@ class Agent:
             approved = True
 
         result.commands_run.append(cmd)
+        log = get_logger("agent")
+        t0 = time.time()
         try:
             res = run_shell(cmd, timeout=120)
+            elapsed = round(time.time() - t0, 2)
             output = res.stdout if res.returncode == 0 else res.stderr
             if not output.strip():
                 output = f"Command executed with exit code {res.returncode}"
             self._audit.record(cmd=cmd, allowed=allowed, approved=approved, exit_code=res.returncode, output=output)
+            log.info("tool_call", detail={
+                "cmd": cmd, "exit_code": res.returncode,
+                "allowed": allowed, "approved": approved,
+                "elapsed_s": elapsed, "output_len": len(output),
+            })
             # auto-aprendizado: comando falhou → grava lição na memória episódica
             if res.returncode != 0 and self._memory is not None:
                 self._learn(cmd, output)
             return output
         except subprocess.TimeoutExpired:
+            elapsed = round(time.time() - t0, 2)
             self._audit.record(cmd=cmd, allowed=allowed, approved=approved, exit_code=None, output="[timeout]")
+            log.warn("tool_timeout", detail={"cmd": cmd, "elapsed_s": elapsed})
             if self._memory is not None:
                 self._learn(cmd, "timeout after 120s")
             return "ERROR: command timed out after 120s."
         except Exception as exc:  # noqa: BLE001 — falha vira mensagem p/ o modelo
+            elapsed = round(time.time() - t0, 2)
             self._audit.record(cmd=cmd, allowed=allowed, approved=approved, exit_code=None, output=str(exc))
+            log.error("tool_error", detail={"cmd": cmd, "error": str(exc), "elapsed_s": elapsed})
             if self._memory is not None:
                 self._learn(cmd, str(exc))
             return f"ERROR: {exc}"
@@ -493,10 +507,20 @@ class Agent:
     # --- loop principal ---
 
     def run(self, user_prompt: str) -> AgentResult:
+        log = get_logger("agent")
+        log.info("agent_start", detail={"prompt": user_prompt[:200]})
         result = AgentResult()
+        t0 = time.time()
         self._connect_mcp()
         try:
-            return self._run_loop(user_prompt, result)
+            r = self._run_loop(user_prompt, result)
+            elapsed = round(time.time() - t0, 2)
+            log.info("agent_done", detail={
+                "turns": r.turns, "elapsed_s": elapsed,
+                "commands_run": len(r.commands_run),
+                "commands_denied": len(r.commands_denied),
+            })
+            return r
         finally:
             self._close_mcp()
 

@@ -113,7 +113,8 @@ def test_run_doctor_returns_checks(monkeypatch) -> None:
     monkeypatch.setattr("jarvis.core.doctor.requests.get", fake_get)
     checks = run_doctor(cfg)
     assert all(isinstance(c, ComponentHealth) for c in checks)
-    assert len(checks) == 6
+    # 6 originais + 3 novos proativos (network, sockets, btrfs)
+    assert len(checks) == 9
 
 
 def test_check_ui_shape(monkeypatch) -> None:
