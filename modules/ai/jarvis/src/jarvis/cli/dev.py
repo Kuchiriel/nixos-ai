@@ -137,6 +137,8 @@ TOOLS:
 7 run_tests()
 8 execute_shell(cmd)
 9 git_commit(msg)
+10 web_search(query)
+11 read_url(url)
 
 RULE 1: ANTES de str_replace, SEMPRE read_file no mesmo path.
 RULE 2: 'old' deve ser EXATO do read_file output.
@@ -211,6 +213,58 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
         except Exception as e:
             return f"ERROR: {e}"
 
+    if name == "web_search":
+        import requests as _requests
+        import urllib.parse
+        import re
+        query = args.get("query", "")
+        if not query:
+            return "ERROR: empty query"
+        try:
+            session = _requests.Session()
+            session.headers.update({"User-Agent": "Mozilla/5.0 (X11; Linux x86_64)"})
+            session.get("https://html.duckduckgo.com/html/", timeout=10)
+            resp = session.get(
+                f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}",
+                timeout=15,
+            )
+            results = re.findall(
+                r'class="result__a"[^>]*href="([^"]+)"[^>]*>([^<]+)',
+                resp.text,
+            )
+            if not results:
+                return "Nenhum resultado encontrado."
+            lines = []
+            for i, (url, title) in enumerate(results[:5]):
+                # Extract real URL from DuckDuckGo redirect
+                m = re.search(r'uddg=([^&]+)', url)
+                real_url = urllib.parse.unquote(m.group(1)) if m else url
+                lines.append(f"{i+1}. {title.strip()}\n   {real_url}")
+            return "\n".join(lines)
+        except Exception as e:
+            return f"Web search error: {e}"
+
+    if name == "read_url":
+        import urllib.request
+        url = args.get("url", "")
+        if not url:
+            return "ERROR: empty URL"
+        if not url.startswith(("http://", "https://")):
+            return "ERROR: URL must start with http:// or https://"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "JARVIS/1.0"})
+            resp = urllib.request.urlopen(req, timeout=15)
+            content = resp.read().decode("utf-8", errors="replace")
+            # Remove scripts e styles
+            import re
+            content = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL)
+            content = re.sub(r'<style[^>]*>.*?</style>', '', content, flags=re.DOTALL)
+            content = re.sub(r'<[^>]+>', ' ', content)
+            content = re.sub(r'\s+', ' ', content).strip()
+            return content[:5000]
+        except Exception as e:
+            return f"URL fetch error: {e}"
+
     if name == "execute_shell":
         cmd = args.get("cmd", "")
         if not cmd:
@@ -284,7 +338,35 @@ def _get_tools() -> list[dict[str, Any]]:
             },
         },
     }
-    return [shell_tool, VISION_TOOL, git_tool, *DEV_TOOLS]
+    web_search_tool = {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the web for information.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query"}
+                },
+                "required": ["query"],
+            },
+        },
+    }
+    read_url_tool = {
+        "type": "function",
+        "function": {
+            "name": "read_url",
+            "description": "Fetch and read a URL content.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "URL to fetch"}
+                },
+                "required": ["url"],
+            },
+        },
+    }
+    return [shell_tool, VISION_TOOL, git_tool, web_search_tool, read_url_tool, *DEV_TOOLS]
 
 
 def _extract_tool_call(content: str) -> dict | None:
@@ -395,13 +477,31 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
                 print(f"  Erro: {e}")
             continue
         if user_input == "/help":
-            print("  /quit    — sair")
-            print("  /clear   — limpar contexto")
-            print("  /status  — status do backend")
-            print("  /map     — atualizar repo map + memória")
-            print("  /model   — ver modelo atual")
-            print("  /recall  — buscar memória episódica")
-            print("  /help    — esta ajuda")
+            print("  /quit      — sair")
+            print("  /clear     — limpar contexto")
+            print("  /status    — status do backend")
+            print("  /map       — atualizar repo map + memória")
+            print("  /model     — ver modelo atual")
+            print("  /recall    — buscar memória episódica")
+            print("  /architect — modo architect (plan + execute)")
+            print("  /help      — esta ajuda")
+            continue
+        if user_input == "/architect":
+            task_input = input("📋 Tarefa para architect: ").strip()
+            if task_input:
+                try:
+                    plan = _architect_plan(task_input, profile, tools)
+                    if plan:
+                        print(f"📋 Plano:\n{plan}")
+                        exec_input = input("\nExecutar? [Y/n] ").strip().lower()
+                        if exec_input != "n":
+                            messages.append({"role": "user", "content": task_input})
+                            messages.append({"role": "assistant", "content": f"Plano: {plan}"})
+                            messages.append({"role": "user", "content": "Execute este plano. Use as tools."})
+                    else:
+                        print("⚠️  Não foi possível gerar plano.")
+                except Exception as e:
+                    print(f"❌ Erro: {e}")
             continue
 
         messages.append({"role": "user", "content": user_input})
@@ -558,16 +658,6 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False) 
     print(f"📋 Tarefa: {task}")
     print()
 
-    # ARCHITECT MODE: planeja antes de executar (opcional — se falhar, pula)
-    plan = None
-    try:
-        plan = _architect_plan(task, profile, tools)
-    except Exception as e:
-        pass  # architect é opcional
-    if plan:
-        print(f"📋 Plano: {plan[:300]}")
-        print()
-
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context()
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
@@ -575,9 +665,6 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False) 
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": task},
     ]
-    if plan:
-        messages.append({"role": "assistant", "content": f"Plano: {plan}"})
-        messages.append({"role": "user", "content": "Execute este plano agora. Use as tools para cada passo."})
 
     for turn in range(10):
         try:
