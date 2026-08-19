@@ -56,6 +56,26 @@ def _detect_profile() -> dict[str, Any]:
     return {"name": "default", "max_tokens": 1024, "temperature": 0.0}
 
 
+def _build_memory_context() -> str:
+    """Busca memórias episódicas relevantes para dar contexto ao SLM."""
+    try:
+        from jarvis.core.memory import EpisodicMemory
+        cfg = _get_config()
+        mem = EpisodicMemory(cfg)
+        if not mem.is_available():
+            return ""
+        results = mem.recall("code edit error fix", top_k=3)
+        if not results:
+            return ""
+        lines = ["RECENT LESSONS:"]
+        for r in results:
+            text = r.get("text", "")[:120]
+            lines.append(f"- {text}")
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
 def _build_repo_map(root: str, max_files: int = 80) -> str:
     """Constrói um mapa do repositório (estilo Aider repo-map).
 
@@ -101,39 +121,35 @@ def _build_repo_map(root: str, max_files: int = 80) -> str:
     return "\n".join(lines)
 
 
-SYSTEM_PROMPT_TEMPLATE = """You are JARVIS, a local-first dev assistant on NixOS. You can read, edit, and create files, search code, and run tests.
-
-RESPOND IN PT-BR. Be concise and direct.
+SYSTEM_PROMPT_TEMPLATE = """JARVIS. PT-BR. Short.
 
 {repo_map}
 
-AVAILABLE TOOLS:
-- read_file(path, offset?, limit?): Read a file
-- write_file(path, content): Write/create a file (backup created)
-- str_replace(path, old, new, allow_multiple?): Replace string in file (preferred for editing)
-- list_directory(path?, max_depth?): List directory contents
-- code_search(pattern, path?, max_results?): Search codebase (grep)
-- semantic_search(query, top_k?): Search codebase semantically (Qdrant)
-- run_tests(test_path?, pattern?, timeout?): Run pytest
-- run_linter(path?): Run ruff linter
-- execute_shell(cmd): Run shell command
-- jarvis_command(subcommand, args?): Run JARVIS CLI (doctor, status, profile)
+{memory_context}
 
-CRITICAL WORKFLOW (always follow this order):
-1. PLAN: Think about what needs to change and why
-2. MAP: Use repo map above to identify relevant files
-3. READ: read_file to see the EXACT content of files you need to edit
-4. EDIT: str_replace with the EXACT text you just read (copy it precisely)
-5. TEST: run_tests to validate changes
-6. ITERATE: if tests fail, read the error output, fix, re-test
+TOOLS:
+1 read_file(path) — LEIA PRIMEIRO
+2 str_replace(path,old,new) — EDITE DEPOIS
+3 write_file(path,content)
+4 list_directory(path)
+5 code_search(pattern)
+6 semantic_search(query)
+7 run_tests()
+8 execute_shell(cmd)
+9 git_commit(msg)
 
-CRITICAL RULES:
-- NEVER guess file content — ALWAYS read_file FIRST before any edit
-- When using str_replace, the 'old' parameter must be the EXACT text from the file
-- Copy text character-by-character from read_file output — do not paraphrase
-- If str_replace fails, read the file again and use the correct text
-- Run tests after every edit to validate
-- Max 12 tool calls per conversation to prevent loops
+RULE 1: ANTES de str_replace, SEMPRE read_file no mesmo path.
+RULE 2: 'old' deve ser EXATO do read_file output.
+RULE 3: Se str_replace falhou, read_file de novo, copie o texto correto.
+RULE 4: Após editar, rode run_tests.
+RULE 5: Após sucesso, rode git_commit.
+
+EXAMPLE:
+User: mude X para Y em app.py
+Step1: read_file(path='app.py')
+Step2: str_replace(path='app.py', old='<texto exato do step1>', new='Y')
+Step3: run_tests()
+Step4: git_commit('fix: muda X para Y')
 """
 
 
@@ -172,6 +188,17 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
         from jarvis.core.devtools import jarvis_command
         result = jarvis_command(args.get("subcommand", "status"), args.get("args", ""))
         return result.get("output", result.get("error", "no output"))[:3000]
+
+    if name == "git_commit":
+        msg = args.get("message", "")
+        if not msg:
+            return "ERROR: empty commit message"
+        try:
+            subprocess.run(["git", "add", "-A"], capture_output=True, timeout=10)
+            r = subprocess.run(["git", "commit", "-m", msg], capture_output=True, text=True, timeout=10)
+            return r.stdout[-2000:] if r.returncode == 0 else f"ERROR: {r.stderr[-500:]}"
+        except Exception as e:
+            return f"ERROR: {e}"
 
     if name == "execute_shell":
         cmd = args.get("cmd", "")
@@ -232,7 +259,21 @@ def _get_tools() -> list[dict[str, Any]]:
             },
         },
     }
-    return [shell_tool, VISION_TOOL, *DEV_TOOLS]
+    git_tool = {
+        "type": "function",
+        "function": {
+            "name": "git_commit",
+            "description": "Stage all changes and commit with message.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "Commit message"}
+                },
+                "required": ["message"],
+            },
+        },
+    }
+    return [shell_tool, VISION_TOOL, git_tool, *DEV_TOOLS]
 
 
 def _extract_tool_call(content: str) -> dict | None:
@@ -277,13 +318,17 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
     print("   Comandos: /quit, /status, /clear, /help")
     print()
 
-    # Build repo map for SLM context (Aider-style)
+    # Build repo map + memory context (Aider-style + compiler expert)
     repo_map = _build_repo_map(os.getcwd())
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map)
+    memory_ctx = _build_memory_context()
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
 
     messages: list[dict[str, str]] = [
         {"role": "system", "content": system_prompt},
     ]
+
+    # Active model for display
+    active_model = profile["name"]
 
     while True:
         try:
@@ -300,7 +345,8 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
             break
         if user_input == "/clear":
             repo_map = _build_repo_map(os.getcwd())
-            messages = [{"role": "system", "content": SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map)}]
+            memory_ctx = _build_memory_context()
+            messages = [{"role": "system", "content": SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)}]
             print("🗑️  Contexto limpo.")
             continue
         if user_input == "/status":
@@ -309,21 +355,42 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
             monitor = BackendHealthMonitor(cfg.llm_base_url.replace("/v1", ""))
             status = monitor.status_dict()
             print(f"  Backend: {status['state']} ({status['latency_ms']}ms)")
-            print(f"  Model: {profile['name']}")
+            print(f"  Model: {active_model}")
             print(f"  Uptime: {status['uptime_pct']}%")
+            continue
+        if user_input == "/map":
+            repo_map = _build_repo_map(os.getcwd())
+            memory_ctx = _build_memory_context()
+            system_prompt = SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
+            messages[0] = {"role": "system", "content": system_prompt}
+            print("🗺️  Repo map + memória atualizados.")
+            continue
+        if user_input == "/model":
+            print(f"  Modelo atual: {active_model}")
+            print("  Para trocar, edite models.nix e faça rebuild")
+            continue
+        if user_input == "/recall":
+            try:
+                from jarvis.core.memory import EpisodicMemory
+                cfg = _get_config()
+                mem = EpisodicMemory(cfg)
+                results = mem.recall(user_input if len(user_input) > 8 else "dev", top_k=3)
+                if results:
+                    for r in results:
+                        print(f"  [{r.get('kind','?')}] {r.get('text','')[:100]}")
+                else:
+                    print("  Nenhuma memória encontrada.")
+            except Exception as e:
+                print(f"  Erro: {e}")
             continue
         if user_input == "/help":
             print("  /quit    — sair")
             print("  /clear   — limpar contexto")
             print("  /status  — status do backend")
-            print("  /map     — atualizar repo map")
+            print("  /map     — atualizar repo map + memória")
+            print("  /model   — ver modelo atual")
+            print("  /recall  — buscar memória episódica")
             print("  /help    — esta ajuda")
-            continue
-        if user_input == "/map":
-            repo_map = _build_repo_map(os.getcwd())
-            system_prompt = SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map)
-            messages[0] = {"role": "system", "content": system_prompt}
-            print("🗺️  Repo map atualizado.")
             continue
 
         messages.append({"role": "user", "content": user_input})
@@ -437,7 +504,8 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False) 
     print()
 
     repo_map = _build_repo_map(os.getcwd())
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map)
+    memory_ctx = _build_memory_context()
+    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
     messages: list[dict[str, str]] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": task},
