@@ -132,6 +132,11 @@ in
     mode = "0600";
   };
 
+  environment.etc."nanorc".text = ''
+    set tabsize 2
+    set tabstospaces
+  '';
+
   # =========================================================================
   # 3. KERNEL, PERFORMANCE E ZRAM
   # =========================================================================
@@ -206,33 +211,6 @@ in
   }];
 
 
-  systemd.services.cloudflare-warp-routes = {
-    description = "Configura excecoes de rota locais e do Wurm Online no WARP";
-    after = [ "network-online.target" "cloudflare-warp.service" ];
-    wants = [ "network-online.target" "cloudflare-warp.service" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      TimeoutStartSec = "15s";
-      ExecStart = pkgs.writeShellScript "warp-set-routes" ''
-        # Aguarda o daemon estar pronto (max 5s)
-        for i in {1..5}; do
-          if ${pkgs.cloudflare-warp}/bin/warp-cli status >/dev/null 2>&1; then
-            break
-          fi
-          sleep 1
-        done
-
-        # 1. Exceções de rede local por IP
-        ${pkgs.cloudflare-warp}/bin/warp-cli tunnel ip add 192.168.0.0/16 || true
-        ${pkgs.cloudflare-warp}/bin/warp-cli tunnel ip add 10.0.0.0/8 || true
-
-        # 2. Exceção do Wurm Online por Host (Nativo)
-        ${pkgs.cloudflare-warp}/bin/warp-cli tunnel host add harmony.game.wurmonline.com || true
-      '';
-    };
-  };
 
   # =========================================================================
   # 6. NIX — Caches, Performance e nix-ld
