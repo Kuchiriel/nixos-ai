@@ -61,7 +61,7 @@ let
   '';
 
   jarvisScript = pkgs.writers.writePython3Bin "jarvis-wakeword-daemon" {
-    flakeIgnore = [ "E501" "E231" ];
+    flakeIgnore = [ "E501" "E231" "F541" ];
     # libraries espera pacotes (ou função), não um env pronto — passar o env
     # resultava em PYTHONPATH vazio (import numpy falhava em runtime)
     libraries = (ps: with ps; [ numpy requests openwakewordPkg ]);
@@ -247,8 +247,8 @@ let
                                     print(f"[WW] ✅ brain OK: {(result.stdout or "")[:100]}", flush=True)
                                     update_status("done", "Concluído")
                         except subprocess.TimeoutExpired:
-                            print(f"[WW] ⏰ brain timeout (60s) — LLM ou TTS travou", flush=True)
-                            update_status("error", "Timeout: LLM/TTS não respondeu")
+                            print("[WW] ⏰ brain timeout (60s) — LLM ou TTS travou", flush=True)
+                            update_status("error", "Timeout: LLM/TTS nao respondeu")
                         except Exception as e:
                             print(f"[WW] ❌ brain error: {str(e)[:100]}", flush=True)
                             update_status("error", f"Exceção: {str(e)[:60]}")
