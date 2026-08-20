@@ -9,6 +9,13 @@
     pavucontrol
     telegram-desktop
 
+    # TUI tools (porta do legado Manjaro — abre via on-click no Waybar)
+    bluetuith          # Bluetooth TUI (on-click no módulo bluetooth)
+    ncpamixer          # Audio mixer TUI (on-click no módulo pulseaudio)
+    networkmanagerapplet  # nmtui-connect (on-click no módulo network)
+    calcurse           # Calendar TUI (on-click no clock)
+    htop               # Process viewer alternativo ao btm
+
     # Fonts / Icons
     font-awesome
     nerd-fonts.jetbrains-mono

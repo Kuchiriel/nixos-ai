@@ -1,16 +1,20 @@
 { pkgs, lib, jarvisEnvironment, ... }:
-# mpvpaper — wallpaper animado (mp4 via mpv) — porta do legado.
+# mpvpaper — wallpaper animado (mp4 via mpv) — porta do legado Manjaro.
 #
-# Condicional declarativa (água — segue o switch services.jarvis.environment
-# passado via extraSpecialArgs: jarvisEnvironment):
-#   - Host (bare metal): sobe com decode de vídeo por HARDWARE via VA-API
-#     na iGPU Intel (hwdec) — a dGPU (RTX 4050) fica livre para o LLM.
-#   - VM (lab): NÃO sobe — sem GPU, o decode em software roubaria CPU do
-#     JARVIS; o hyprpaper estático cobre.
+# Legado (hyprland.conf do Manjaro):
+#   exec-once = env DRI_PRIME=pci-0000_00_02_0 mpvpaper -f -p -n 30 -l background \
+#     -o "--no-audio --hwdec=vaapi --vo=gpu" '*' ~/Vídeos/Wallpapers
 #
-# Trocar o wallpaper: edite `video` abaixo (ou liste vários e alterne).
+# Condicional declarativa:
+#   - Host (bare metal): decode por HARDWARE via VA-API na iGPU Intel (UHD 770)
+#     — a dGPU (RTX 4050) fica livre para o LLM.
+#     DRI_PRIME força o decode na iGPU; --vo=gpu usa OpenGL na iGPU.
+#   - VM (lab): NÃO sobe — sem GPU, o decode em software roubaria CPU.
+#
+# Wallpapers: /etc/jarvis/wallpapers/*.mp4 (copiados do legado via Nix store)
 let
   isHost = jarvisEnvironment == "host";
+  wallpapersDir = ../assets/wallpapers;
 in
 {
   home.packages = [ pkgs.mpvpaper pkgs.mpv ];
@@ -24,20 +28,27 @@ in
   systemd.user.services.mpvpaper = lib.mkIf isHost {
     Unit = {
       Description = "JARVIS — wallpaper animado (mpvpaper, mp4 na iGPU)";
-      # Água: o serviço só EXISTE no host (services.jarvis.environment).
-      # Na VM o hyprpaper estático cobre; o mpvpaper nem é definido.
       ConditionVirtualization = "!vm";  # rede de segurança extra
       After = [ "graphical-session.target" ];
     };
     Service = {
-      # mpvpaper <opções mpv> <output> <vídeo> — loop infinito, sem som,
-      # decode por hardware (VA-API → iGPU), escala para o monitor.
+      # Porta fiel do legado Manjaro:
+      #   DRI_PRIME=pci-0000_00_02_0 → força decode na iGPU Intel
+      #   -f → fork (mpvpaper retorna imediato)
+      #   -p → presentation mode (sem bordas, fullscreen)
+      #   -n 30 → limita a 30 FPS (economiza CPU/GPU)
+      #   -l background → camada background (abaixo de janelas)
+      #   --hwdec=vaapi → decode por hardware (VA-API → iGPU)
+      #   --vo=gpu → renderização OpenGL (na iGPU)
+      #   --no-audio → sem áudio do wallpaper
+      Environment = "DRI_PRIME=pci-0000_00_02.0";
       ExecStart = lib.concatStringsSep " " [
         "${pkgs.mpvpaper}/bin/mpvpaper"
+        "-f" "-p" "-n" "30" "-l" "background"
         "-o"
-        ''"--hwdec=vaapi --loop --no-audio --no-osc --no-input-default-bindings --scale=bilinear"''
+        ''"--no-audio --hwdec=vaapi --vo=gpu --loop"''
         "*"
-        "${../assets/wallpapers}/brook-one-piece-requiem.1920x1080.mp4"
+        "${wallpapersDir}"
       ];
       Restart = "on-failure";
       RestartSec = 5;

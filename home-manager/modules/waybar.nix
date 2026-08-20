@@ -2,8 +2,13 @@
 # Waybar — perfil por ambiente (água: segue services.jarvis.environment
 # passado via extraSpecialArgs: jarvisEnvironment).
 #   VM  (lab): sem battery/bluetooth/backlight (não existem na VM — davam
-#       popups de erro); clock/cpu/memory/network/workspaces/custom-jarvis.
-#   host (bare metal): full — battery, bluetooth, backlight, tudo.
+#       popups de error); clock/cpu/memory/network/workspaces/custom-jarvis.
+#   host (bare metal): full — battery, bluetooth, backlight, GPU, tudo.
+#
+# Porta do legado Manjaro (waybar-gpu.sh, waybar-jarvis-status.sh):
+#   - custom/gpu: nvidia-smi com states low/medium/high + VRAM/tooltip
+#   - custom/jarvis: estado da IA (idle/listening/thinking/speaking/error)
+#   - on-click em cada módulo abre TUI tool em foot (btm, yazi, nmtui, etc)
 let
   isHost = jarvisEnvironment == "host";
   # módulos só de hardware real (determinístico, não lib.mkIf)
@@ -12,7 +17,7 @@ let
   hostOnlySettings = lib.optionalAttrs isHost {
     battery = {
       format = "{icon} {capacity}%";
-      format-icons = [ "" "" "" "" "" ];
+      format-icons = [ "" "" "" "" "" ];
       tooltip = false;
     };
     backlight = {
@@ -20,8 +25,9 @@ let
       tooltip = false;
     };
     bluetooth = {
-      format = " {status}";
+      format = " {status}";
       tooltip = false;
+      on-click = "foot --app-id floating_shell -e bluetuith";
     };
   };
 in
@@ -107,7 +113,43 @@ in
       }
 
       /* ------------------------------
-         JARVIS STATES (porta do legado)
+         GPU USAGE STATES (porta do legado)
+         ------------------------------ */
+      #custom-gpu.low {
+        color: #50FA7B;
+      }
+
+      #custom-gpu.medium {
+        color: #FFB86C;
+      }
+
+      #custom-gpu.high {
+        color: #FF5555;
+        text-shadow: 0 0 6px #FF5555;
+      }
+
+      #custom-gpu.disabled {
+        color: #666666;
+      }
+
+      /* ------------------------------
+         BATTERY STATES
+         ------------------------------ */
+      #battery.warning {
+        color: #ffaa00;
+      }
+
+      #battery.critical {
+        color: #ff5555;
+        text-shadow: 0 0 6px #ff5555;
+      }
+
+      #battery.charging {
+        color: #50FA7B;
+      }
+
+      /* ------------------------------
+         JARVIS AI STATUS STATES (porta do legado)
          ------------------------------ */
       #custom-jarvis {
         background: rgba(0, 255, 255, 0.12);
@@ -193,6 +235,7 @@ in
         "custom/files"
         "cpu"
         "memory"
+        "custom/gpu"
       ] ++ hostOnlyModules ++ [
         "network"
         "pulseaudio"
@@ -214,12 +257,12 @@ in
         on-click = "activate";
         window-rewrite = {
           "title<.*youtube.*>" = "󰗃";
-          "class<firefox>" = "";
-          "class<foot>" = "";
+          "class<firefox>" = "";
+          "class<foot>" = "";
           "class<code-oss>" = "󰨞";
           "class<pcmanfm-qt>" = "󰉋";
           "class<discord>" = "󰙯";
-          "class<spotify>" = "";
+          "class<spotify>" = "";
         };
       };
 
@@ -230,42 +273,80 @@ in
       };
 
       clock = {
-        format = " {:%H:%M}";
+        format = " {:%H:%M}";
         tooltip = false;
+        on-click = "foot --app-id floating_shell -e calcurse";
       };
 
       "custom/files" = {
         format = "󰉋 Files";
-        tooltip = "File Manager";
+        tooltip = "File Manager (yazi)";
         on-click = "foot --app-id floating_shell -e yazi";
       };
 
       cpu = {
         interval = 2;
-        format = " {usage}%";
+        format = " {usage}%";
         tooltip = false;
+        on-click = "foot --app-id floating_shell -e btm";
       };
 
       memory = {
         interval = 2;
-        format = " {used:0.1f}G";
+        format = " {used:0.1f}G";
         tooltip = false;
+        on-click = "foot --app-id floating_shell -e btm";
+      };
+
+      # GPU monitor via nvidia-smi (porta do legado waybar-gpu.sh)
+      # Mostra uso%, VRAM, temperatura com states low/medium/high
+      "custom/gpu" = {
+        exec = ''
+          bash -c '
+          if ! command -v nvidia-smi &>/dev/null; then
+              echo "{\"text\": \"GPU N/A\", \"tooltip\": \"nvidia-smi not found\", \"class\": \"disabled\"}"
+              exit 0
+          fi
+          GPU_UTIL=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1)
+          GPU_TEMP=$(nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null | head -1)
+          GPU_MEM=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1)
+          GPU_MEM_TOTAL=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1)
+          GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
+          if [ -z "$GPU_UTIL" ]; then
+              echo "{\"text\": \"GPU N/A\", \"tooltip\": \"GPU not detected\", \"class\": \"disabled\"}"
+              exit 0
+          fi
+          GPU_MEM_GB=$(awk "BEGIN {printf \"%.1f\", $GPU_MEM / 1024}")
+          GPU_MEM_TOTAL_GB=$(awk "BEGIN {printf \"%.1f\", $GPU_MEM_TOTAL / 1024}")
+          if [ "$GPU_UTIL" -ge 80 ]; then CLASS="high"
+          elif [ "$GPU_UTIL" -ge 50 ]; then CLASS="medium"
+          else CLASS="low"
+          fi
+          echo "{\"text\": \"GPU ${GPU_UTIL}%\", \"tooltip\": \"${GPU_NAME}\nUsage: ${GPU_UTIL}%\nTemp: ${GPU_TEMP}C\nVRAM: ${GPU_MEM_GB}GB / ${GPU_MEM_TOTAL_GB}GB\", \"class\": \"$CLASS\"}"
+          '
+        '';
+        interval = 3;
+        return-type = "json";
+        tooltip = true;
+        on-click = "foot --app-id floating_shell -e nvidia-smi";
       };
 
       network = {
-        format-wifi = " {essid}";
+        format-wifi = " {essid}";
         format-ethernet = "󰈀 Wired";
         format-disconnected = "󰤮 Disconnected";
         tooltip = false;
+        on-click = "foot --app-id floating_shell -e nmtui-connect";
       };
 
       pulseaudio = {
         format = "{icon} {volume}%";
         format-icons = {
-          headphone = "";
-          default = [ "" "" "" ];
+          headphone = "";
+          default = [ "" "" "" ];
         };
         tooltip = false;
+        on-click = "foot --app-id floating_shell -e ncpamixer";
       };
 
       tray = {
