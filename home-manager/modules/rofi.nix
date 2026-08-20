@@ -1,26 +1,9 @@
 { pkgs, lib, ... }:
 # Tema rofi "jarvis-cyan" — porta do legado (Manjaro).
-# Fonte: ~/.local/share/rofi/themes/jarvis-cyan.rasi do sistema legado
-# (preto profundo 86%, ciano neon #00ffff, borda ciano, seleção azul 26%).
-# Usado por SUPER+D (menu) e pelo prompt do JARVIS (SUPER+A).
+# O tema é aplicado via --theme na linha de comando do hyprland.
 {
   home.packages = [ pkgs.rofi ];
 
   home.file."local/share/rofi/themes/jarvis-cyan.rasi".source =
     ../assets/rofi/jarvis-cyan.rasi;
-
-  programs.rofi = {
-    enable = true;
-    font = "JetBrainsMono Nerd Font 12";
-    terminal = "foot";
-    theme = "jarvis-cyan";
-    extraConfig = {
-      modi = "drun,run,window";
-      show-icons = true;
-      drun-display-format = "{name}";
-      disable-history = false;
-      hide-scrollbar = true;
-      sidebar-mode = true;
-    };
-  };
 }
