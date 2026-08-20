@@ -73,6 +73,7 @@ in
       #custom-files,
       #custom-weather,
       #custom-gpu,
+      #custom-igpu,
       #custom-cpu,
       #custom-memory,
       #custom-jarvis {
@@ -109,6 +110,7 @@ in
       #custom-files:hover,
       #custom-weather:hover,
       #custom-gpu:hover,
+      #custom-igpu:hover,
       #custom-cpu:hover,
       #custom-memory:hover,
       #custom-jarvis:hover {
@@ -129,6 +131,19 @@ in
       }
 
       #custom-gpu.high {
+        color: #FF5555;
+        text-shadow: 0 0 6px #FF5555;
+      }
+
+      #custom-igpu.low {
+        color: #50FA7B;
+      }
+
+      #custom-igpu.medium {
+        color: #FFB86C;
+      }
+
+      #custom-igpu.high {
         color: #FF5555;
         text-shadow: 0 0 6px #FF5555;
       }
@@ -273,6 +288,7 @@ in
         "custom/cpu"
         "custom/memory"
         "custom/gpu"
+        "custom/igpu"
       ] ++ hostOnlyModules ++ [
         "network"
         "pulseaudio"
@@ -368,15 +384,12 @@ in
         on-click = "foot --app-id floating_shell -e btm";
       };
 
-      # GPU monitor via nvidia-smi (porta do legado waybar-gpu.sh)
-
-      # GPU monitor via nvidia-smi (porta do legado waybar-gpu.sh)
-      # Mostra uso%, VRAM, temperatura com states low/medium/high
+      # dGPU (NVIDIA RTX 4050) — estados low/medium/high
       "custom/gpu" = {
         exec = ''
           bash -c '
           if ! command -v nvidia-smi &>/dev/null; then
-              echo "{\"text\": \"GPU N/A\", \"tooltip\": \"nvidia-smi not found\", \"class\": \"disabled\"}"
+              echo "{\"text\": \" GPU N/A\", \"tooltip\": \"nvidia-smi not found\", \"class\": \"disabled\"}"
               exit 0
           fi
           GPU_UTIL=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1)
@@ -385,7 +398,7 @@ in
           GPU_MEM_TOTAL=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1)
           GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
           if [ -z "$GPU_UTIL" ]; then
-              echo "{\"text\": \"GPU N/A\", \"tooltip\": \"GPU not detected\", \"class\": \"disabled\"}"
+              echo "{\"text\": \" GPU N/A\", \"tooltip\": \"GPU not detected\", \"class\": \"disabled\"}"
               exit 0
           fi
           GPU_MEM_GB=$(awk "BEGIN {printf \"%.1f\", $GPU_MEM / 1024}")
@@ -394,13 +407,38 @@ in
           elif [ "$GPU_UTIL" -ge 50 ]; then CLASS="medium"
           else CLASS="low"
           fi
-          echo "{\"text\": \"GPU ''${GPU_UTIL}%\", \"tooltip\": \"''${GPU_NAME}\nUsage: ''${GPU_UTIL}%\nTemp: ''${GPU_TEMP}C\nVRAM: ''${GPU_MEM_GB}GB / ''${GPU_MEM_TOTAL_GB}GB\", \"class\": \"$CLASS\"}"
+          echo "{\"text\": \" ''${GPU_UTIL}%\", \"tooltip\": \"''${GPU_NAME}\\nUsage: ''${GPU_UTIL}%\\nTemp: ''${GPU_TEMP}C\\nVRAM: ''${GPU_MEM_GB}GB / ''${GPU_MEM_TOTAL_GB}GB\", \"class\": \"$CLASS\"}"
           '
         '';
         interval = 3;
         return-type = "json";
         tooltip = true;
         on-click = "foot --app-id floating_shell -e nvidia-smi";
+      };
+
+      # iGPU (Intel UHD) — frequência como proxy de uso
+      "custom/igpu" = {
+        exec = ''
+          bash -c '
+          CUR=$(cat /sys/class/drm/card1/gt_cur_freq_mhz 2>/dev/null || echo 0)
+          MAX=$(cat /sys/class/drm/card1/gt_max_freq_mhz 2>/dev/null || echo 1500)
+          STATUS=$(cat /sys/class/drm/card1/device/power/runtime_status 2>/dev/null || echo "unknown")
+          if [ "$MAX" -gt 0 ] 2>/dev/null; then
+              PCT=$((CUR * 100 / MAX))
+          else
+              PCT=0
+          fi
+          if [ "$PCT" -ge 80 ]; then CLASS="high"
+          elif [ "$PCT" -ge 40 ]; then CLASS="medium"
+          else CLASS="low"
+          fi
+          FREQ="''${CUR}MHz"
+          echo "{\"text\": \" ''${FREQ}\", \"tooltip\": \"Intel UHD 770\\nFreq: ''${CUR}/''${MAX} MHz (''${PCT}%)\\nPower: ''${STATUS}\", \"class\": \"$CLASS\"}"
+          '
+        '';
+        interval = 5;
+        return-type = "json";
+        tooltip = true;
       };
 
       network = {
