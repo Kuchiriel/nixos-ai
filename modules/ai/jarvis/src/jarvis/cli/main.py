@@ -543,6 +543,9 @@ def _cmd_hwprofile(args: argparse.Namespace) -> int:
 
     hw = detect()
     report = full_report(hw, ctx_target=args.ctx)
+    if args.render_nix:
+        print(report["models_nix"])
+        return 0
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0
@@ -828,6 +831,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_hwprofile = sub.add_parser("hwprofile", help="calcula flags SOTA do llama.cpp + melhor modelo p/ este hardware")
     p_hwprofile.add_argument("--ctx", type=int, default=None, help="contexto alvo em tokens (default: 32K ou nativo)")
     p_hwprofile.add_argument("--json", action="store_true", help="saída JSON pura")
+    p_hwprofile.add_argument("--render-nix", action="store_true",
+                             help="saída apenas o bloco Nix (para colar em models.nix)")
     p_hwprofile.set_defaults(func=_cmd_hwprofile)
 
     p_screenshot = sub.add_parser("screenshot", help="captura de tela via grim/slurp (Wayland)")

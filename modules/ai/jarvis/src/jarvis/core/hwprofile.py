@@ -424,13 +424,14 @@ def _forecast_tps(
                      + gpu_routed_per_token * exp_per_layer) * bytes_per_param
         ram_bytes = ram_experts_per_token * exp_per_layer * bytes_per_param
         # Time per token per layer (VRAM bandwidth for GPU, RAM bandwidth for CPU)
+        # gpu_bytes/ram_bytes em BYTES; bw em GB/s (1e9 bytes/s)
+        # tempo_s = bytes / (bw * 1e9); tempo_ms = tempo_s * 1000
         from jarvis.core.hwdetect import memory_bandwidth_gb_s
-        gpu_bw = memory_bandwidth_gb_s(hw)
-        ram_bw = 120.0  # DDR5 dual-channel典型値
-        if ram_bytes > 0:
-            ms_per_layer = max(gpu_bytes / gpu_bw, ram_bytes / ram_bw)
-        else:
-            ms_per_layer = gpu_bytes / gpu_bw
+        gpu_bw = memory_bandwidth_gb_s(hw)  # GB/s (260 para RTX 4050)
+        ram_bw = 120.0  # DDR5 dual-channel típico (GB/s)
+        gpu_time_ms = gpu_bytes / (gpu_bw * 1e6)  # bytes / (GB/s × 1e6) = ms
+        ram_time_ms = ram_bytes / (ram_bw * 1e6) if ram_bytes > 0 else 0
+        ms_per_layer = max(gpu_time_ms, ram_time_ms)  # gargalo = canal mais lento
         total_ms_per_token = ms_per_layer * m.layers
         if total_ms_per_token > 0:
             return max(1.0, 1000.0 / total_ms_per_token)  # ms → t/s
