@@ -39,6 +39,8 @@ in
     ];
   };
 
+  programs.mtr.enable = true;
+
   stylix.targets.gnome.enable = false;    # Exemplo para GNOME
   stylix.targets.feh.enable = false;      # Comum em WMs leves como i3 ou Sway
   stylix.targets.console.enable = true; # Mantém as cores no terminal
@@ -203,28 +205,32 @@ in
     commands = [{ command = "ALL"; options = [ "NOPASSWD" ]; }];
   }];
 
-  # Serviço declarativo para aplicar as exceções de rota na inicialização
   systemd.services.cloudflare-warp-routes = {
-    description = "Configura excecoes de rota no Cloudflare WARP";
-    after = [ "cloudflare-warp.service" ];
-    wants = [ "cloudflare-warp.service" ];
+    description = "Configura excecoes de rota locais e do Wurm Online no WARP";
+    after = [ "network-online.target" "cloudflare-warp.service" ];
+    wants = [ "network-online.target" "cloudflare-warp.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
       ExecStart = pkgs.writeShellScript "warp-set-routes" ''
-        # Aguarda o daemon warp-svc responder
+        # Aguarda o daemon do WARP responder
         until ${pkgs.cloudflare-warp}/bin/warp-cli status >/dev/null 2>&1; do
           sleep 1
         done
 
-        # Aplica as excecoes de subrede local de forma idempotente
+        # 1. Rotas locais estaticas
         ${pkgs.cloudflare-warp}/bin/warp-cli add-excluded-route 192.168.0.0/16 || true
         ${pkgs.cloudflare-warp}/bin/warp-cli add-excluded-route 10.0.0.0/8 || true
+
+        # 2. Resolução dinâmica do servidor do Wurm Online
+        WURM_IP=$(getent ahossthost harmony.game.wurmonline.com | ${pkgs.gawk}/bin/awk '{ print $1 }' | head -n 1)
+
+        if [ -n "$WURM_IP" ]; then
+          ${pkgs.cloudflare-warp}/bin/warp-cli add-excluded-route "$WURM_IP/32" || true
+        fi
       '';
     };
-  };
-
 
   # =========================================================================
   # 6. NIX — Caches, Performance e nix-ld
