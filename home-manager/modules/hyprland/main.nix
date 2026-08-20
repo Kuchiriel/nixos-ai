@@ -122,8 +122,8 @@ in
 
       general = {
         border_size = 2;
-        col.active_border = "rgba(00ffffcc) rgba(0088ffcc) 45deg";
-        col.inactive_border = "rgba(595959aa)";
+        "col.active_border" = "rgba(00ffffcc) rgba(0088ffcc) 45deg";
+        "col.inactive_border" = "rgba(595959aa)";
         gaps_in = 5;
         gaps_out = 10;
         layout = "dwindle";
