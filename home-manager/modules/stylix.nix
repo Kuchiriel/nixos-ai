@@ -67,8 +67,6 @@
       dark = "Papirus-Dark";
       light = "Papirus-Light";
     };
-
-    # Wallpaper com atmosfera tecnológica em tons de azul/ciano
-    image = "${pkgs.nixos-icons}/share/icons/hicolor/scalable/apps/nixos-logo-white.svg"
+    image = pkgs.runCommand "dummy-img" {} "touch $out";
   };
 }
