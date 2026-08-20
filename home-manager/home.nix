@@ -36,7 +36,8 @@ stylix.targets.hyprland.enable = false;
     enable = true;
     settings = {
       main = {
-        font = "JetBrainsMono Nerd Font:size=12";
+        # O mkForce resolve o conflito e força o tamanho 12 (ou mude para o número que preferir)
+        font = lib.mkForce "JetBrainsMono Nerd Font:size=12";
       };
     };
   };
