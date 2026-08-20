@@ -18,8 +18,6 @@ in
     ../../nixos/modules
   ] ++ dynamicServiceImports;
 
-  nixpkgs.config.allowUnfree = true;
-
   environment.systemPackages = with pkgs; [
     # Utilitários do sistema
     pciutils

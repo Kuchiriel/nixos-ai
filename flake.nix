@@ -1,6 +1,8 @@
 {
   description = "My system configuration";
 
+nixpkgs.config.allowUnfree = true;
+
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
