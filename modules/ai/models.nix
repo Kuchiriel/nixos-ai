@@ -166,7 +166,6 @@ in
       kvCache = "-fa on -ctk q8_0 -ctv q8_0";
       moeFlags = "--n-cpu-moe 2";
       user = "root";
-      scheduler = { policy = "fifo"; priority = 50; };
     };
   };
 }
