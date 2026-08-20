@@ -112,9 +112,8 @@ in
         "workspace 3, match:class ^(zathura)$"
         "workspace 4, match:class ^(com.obsproject.Studio)$"
         "workspace 5, match:class ^(telegram)$"
-        "float 1, match:class ^(com\\.wurmonline.*|.*[Ww]urm.*)$"
-        "stay_focused true, match:class ^(com\\.wurmonline.*|.*[Ww]urm.*)$, match:title ^(Dropdown|ComboBox|Wurm.*)$"
-        "opacity 1.0 1.0, match:class ^(com\\.wurmonline.*|.*[Ww]urm.*)$"
+        "float 1, match:class ^.*[Ww]urm.*$"
+        "opacity 1.0 override 1.0 override, match:class ^.*[Ww]urm.*$"
         "suppress_event maximize, match:class ^(.*)$"
       ];
     };
