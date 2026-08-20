@@ -4,7 +4,7 @@
 set -e
 
 FLAKE_DIR="$HOME/projects/nixos-ai"
-TARGET_HOST="nixos-lab"
+TARGET_HOST="nitro-v15"
 
 # nh 4.4.2+: usa NH_FLAKE; o FLAKE antigo (sessão pré-upgrade) dispara warning.
 export NH_FLAKE="$FLAKE_DIR"
