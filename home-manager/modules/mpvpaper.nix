@@ -44,7 +44,11 @@ in
       #   --loop → repete wallpaper infinitamente
       # NOTA: hwdec=vaapi (não auto-safe) — auto-safe pode escolher a RTX em vez
       # da iGPU. DRI_PRIME + LIBVA_DRIVER_NAME=iHD força o decode no device certo.
-      Environment = "DRI_PRIME=pci-0000:00:02.0";
+      Environment = [
+        "DRI_PRIME=pci-0000:00:02.0"
+        "WAYLAND_DISPLAY=wayland-1"
+        "XDG_RUNTIME_DIR=/run/user/1000"
+      ];
       ExecStart = lib.concatStringsSep " " [
         "${pkgs.mpvpaper}/bin/mpvpaper"
         "-f" "-p" "-n" "30" "-l" "background"
