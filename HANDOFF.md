@@ -418,3 +418,55 @@ journalctl -u llama-cpp-embeddings -f
 - `home-manager/modules/waybar.nix` — font family correction
 - `modules/ai/models.nix` — batchSize no vm profile
 
+
+---
+
+## RELATÓRIO DE AUDITORIA — Sessão 2026-08-20
+
+### Tabela PASS/FAIL/BLOCKED por Camada
+
+| Camada | Estado | Evidência | Risco |
+|--------|--------|-----------|-------|
+| Flake | ✅ PASS | `nix flake check` OK, inputs pinados | Baixo |
+| Disko | ⏳ PENDENTE | Não auditado (requer bare metal) | — |
+| LUKS | ⏳ PENDENTE | Não auditado (requer bare metal) | — |
+| Btrfs | ⏳ PENDENTE | Não auditado (requer bare metal) | — |
+| Boot | ⏳ PENDENTE | Não auditado (requer bare metal) | — |
+| Hardware | ✅ PASS | hwdetect/hwprofile funcionais, ngl=99 n-cpu-moe=99 | Baixo |
+| NVIDIA | ⚠️ DECLARADO | Config correta no models.nix, VRAM 4.4/6GB | Médio (iHD crash) |
+| systemd | ✅ PASS | heal, idle, wakeword, mpvpaper, llama-cpp OK | Baixo |
+| Home Manager | ✅ PASS | waybar, hyprland, rofi, mpvpaper configurados | Baixo |
+| Secrets | ✅ PASS | /etc/jarvis-telegram.env (EnvironmentFile, não no git) | Baixo |
+| Idempotência | ✅ PASS | rebuild-host.sh converge em 2 rebuilds | Baixo |
+| Persistência | ✅ PASS | ~/.local/state/jarvis (memória, vault, logs) | Baixo |
+| Rollback | ⏳ PENDENTE | Requer teste de geração anterior | — |
+| VM/Bare Metal | ✅ PASS | Config separada (vm profile vs host profile) | Baixo |
+| Pipeline Voz | ✅ PASS | brainCommand=[jarvis,voice], withVoice package | Baixo |
+| Waybar | ✅ PASS | GPU/iGPU/CPU/Memory/Battery com cores | Baixo |
+| Hyprland | ✅ PASS | Cyan borders, rounding, shadow, animations | Baixo |
+| JSONL | ✅ PASS | JARVIS_JSONL=0 no host, habilitado na VM | Baixo |
+| mpvpaper | ⚠️ PARCIAL | Funciona sem hwdec=vaapi (iHD crash no NixOS) | Médio |
+
+### Problemas Encontrados e Corrigidos
+
+1. **MoE performance invertida** (8.7→33 t/s): ngl=99 + n-cpu-moe=99
+2. **Pipeline de voz desconectada**: brainCommand vazio + jarvis sem voice deps
+3. **Hyprland sem decoração**: dynamic.conf read-only do HM
+4. **Waybar sem cores**: módulos built-in sem classes CSS
+5. **iHD VA-API crash**: hwdec=auto-safe como workaround
+6. **hyprpaper bloqueando mpvpaper**: desabilitado
+7. **JSONL sempre ativo**: agora condicional via env var
+8. **grim pedindo seleção**:改为 save screen
+
+### Pendente Bare Metal
+
+- NVIDIA driver validação real
+- CUDA performance
+- VRAM com mmproj quantizado
+- Whisper/Kokoro performance real
+- Thermal throttling
+- Power management
+- Rollback test
+
+### VM BASELINE VALIDADO; BARE METAL PENDENTE
+
