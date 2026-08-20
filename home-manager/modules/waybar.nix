@@ -322,7 +322,7 @@ in
           elif [ "$GPU_UTIL" -ge 50 ]; then CLASS="medium"
           else CLASS="low"
           fi
-          echo "{\"text\": \"GPU ${GPU_UTIL}%\", \"tooltip\": \"${GPU_NAME}\nUsage: ${GPU_UTIL}%\nTemp: ${GPU_TEMP}C\nVRAM: ${GPU_MEM_GB}GB / ${GPU_MEM_TOTAL_GB}GB\", \"class\": \"$CLASS\"}"
+          echo "{\"text\": \"GPU ''${GPU_UTIL}%\", \"tooltip\": \"''${GPU_NAME}\nUsage: ''${GPU_UTIL}%\nTemp: ''${GPU_TEMP}C\nVRAM: ''${GPU_MEM_GB}GB / ''${GPU_MEM_TOTAL_GB}GB\", \"class\": \"$CLASS\"}"
           '
         '';
         interval = 3;
