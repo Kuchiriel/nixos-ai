@@ -57,7 +57,7 @@ in
   ];
 
   # =========================================================================
-  # 2. SERVIÇOS JARVIS & IA (Host SOTA)
+  # 2. SERVIÇOS JARVIS & IA (Host)
   # =========================================================================
   services.llama-cpp-server.enable = true;
   services.llama-cpp-embeddings.enable = true;
@@ -69,6 +69,11 @@ in
   services.litellm.enable = true;
   programs.freebuff.enable = true;
   programs.jarvis-scripts.enable = true;
+
+  environment.etc."litellm.env" = {
+    text = "";
+    mode = "0600";
+  };
 
   # =========================================================================
   # 3. KERNEL, PERFORMANCE E ZRAM

@@ -183,6 +183,11 @@ security.sudo.extraRules = [
   # — sem depender de arquivos soltos na raiz do repo.
   programs.jarvis-scripts.enable = true;
 
+  environment.etc."litellm.env" = {
+    text = "";
+    mode = "0600";
+  };
+
   environment.systemPackages = with pkgs; [
     home-manager
     pciutils

@@ -14,13 +14,13 @@ in
   home.activation.generateHyprlandRuntimeConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     mkdir -p $HOME/.config/hyprland
   '';
-
+  home.file.".config/hyprland/dynamic.conf".text = "";
   wayland.windowManager.hyprland = {
     enable = true;
     # 26.05 mudou o default p/ "lua"; mantemos hyprlang (configs atuais)
     configType = "hyprlang";
     extraConfig = ''
-      source = ~/.config/hyprland/dynamic.conf
+      source = source = ?~/.config/hyprland/dynamic.conf
     '';
     settings = {
       "$fileManager" = "$terminal --app-id floating_shell -e yazi";
