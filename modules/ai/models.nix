@@ -183,7 +183,7 @@ in
     host = {
       model = "llm-host";
       mmproj = "llm-host-mmproj";  # vision na GPU (denso, ~861MB BF16)
-      threads = 10;  # 6 P-cores + 4 E-cores (1 thread per physical core)
+      threads = 6;   # só P-cores (alta frequência, sem E-core contention)
       ctxSize = 4096;           # 4K: contexto menor = estável, menos KV cache
       ubatch = 512;
       gpuLayers = 99;           # 99 = TODAS as camadas de atenção na GPU
