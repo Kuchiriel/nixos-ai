@@ -34,7 +34,6 @@ in
     Service = {
       # Porta fiel do legado Manjaro:
       #   DRI_PRIME=pci-0000_00_02_0 → força decode na iGPU Intel
-      #   -f → fork (mpvpaper retorna imediato)
       #   -p → presentation mode (sem bordas, fullscreen)
       #   -n 30 → limita a 30 FPS (economiza CPU/GPU)
       #   -l background → camada background (abaixo de janelas)
@@ -51,7 +50,7 @@ in
       ];
       ExecStart = lib.concatStringsSep " " [
         "${pkgs.mpvpaper}/bin/mpvpaper"
-        "-f" "-p" "-n" "30" "-l" "background"
+        "-p" "-n" "30" "-l" "background"
         "-o"
         ''"--no-audio --hwdec=vaapi --vo=gpu --loop"''
         "*"
