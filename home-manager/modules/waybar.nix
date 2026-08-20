@@ -1,14 +1,4 @@
 { pkgs, lib, jarvisEnvironment, ... }:
-# Waybar — perfil por ambiente (água: segue services.jarvis.environment
-# passado via extraSpecialArgs: jarvisEnvironment).
-#   VM  (lab): sem battery/bluetooth/backlight (não existem na VM — davam
-#       popups de error); clock/cpu/memory/network/workspaces/custom-jarvis.
-#   host (bare metal): full — battery, bluetooth, backlight, GPU, tudo.
-#
-# Estratégia de rendering de ícones Nerd Font:
-#   Os ícones ficam no campo `format` do módulo waybar (ex: "󰍛 {text}"),
-#   NÃO no output JSON dos scripts. Scripts retornam apenas valores ASCII.
-#   Isso evita que glyphs PUA multi-byte quebrem o parser JSON do waybar.
 let
   isHost = jarvisEnvironment == "host";
   hostOnlyModules = if isHost then [ "battery" "bluetooth" "backlight" ] else [];
@@ -30,8 +20,11 @@ let
     };
   };
 
-  # Scripts bash — output APENAS valores ASCII, sem ícones.
-  # Ícones ficam no campo `format` do waybar ( onde ).
+  # Scripts bash — output APENAS valores ASCII puro.
+  # Ícones Nerd Font ficam no campo `format` do módulo waybar.
+  # NOTA: em strings Nix '', \n é literal (backslash+n), NÃO interpola.
+  # No printf, \n gera nova linha — para JSON válido precisamos de \\n
+  # que o printf imprime como literal \n.
   cpuScript = pkgs.writeShellScriptBin "waybar-cpu" ''
     read -r user nice system idle rest < /proc/stat
     total=$((user+nice+system+idle))
@@ -41,7 +34,7 @@ let
     else CLASS="low"
     fi
     read LOAD _rest _ < /proc/loadavg
-    printf '{"text": "%s%%", "tooltip": "Load: %s\nUsage: %s%%", "class": "%s"}\n' "$CPU" "$LOAD" "$CPU" "$CLASS"
+    printf '{"text": "%s%%", "tooltip": "Load: %s\\nUsage: %s%%", "class": "%s"}\n' "$CPU" "$LOAD" "$CPU" "$CLASS"
   '';
 
   memoryScript = pkgs.writeShellScriptBin "waybar-memory" ''
@@ -63,7 +56,7 @@ let
     elif [ "$MEM_PCT" -ge 60 ]; then CLASS="medium"
     else CLASS="low"
     fi
-    printf '{"text": "%sG", "tooltip": "RAM: %sG / %sG (%s%%)\nSwap: %sG", "class": "%s"}\n' "$MEM_USED_GB" "$MEM_USED_GB" "$MEM_TOTAL_GB" "$MEM_PCT" "$SWAP_GB" "$CLASS"
+    printf '{"text": "%sG", "tooltip": "RAM: %sG / %sG (%s%%)\\nSwap: %sG", "class": "%s"}\n' "$MEM_USED_GB" "$MEM_USED_GB" "$MEM_TOTAL_GB" "$MEM_PCT" "$SWAP_GB" "$CLASS"
   '';
 
   gpuScript = pkgs.writeShellScriptBin "waybar-gpu" ''
@@ -86,7 +79,7 @@ let
     elif [ "$GPU_UTIL" -ge 50 ]; then CLASS="medium"
     else CLASS="low"
     fi
-    printf '{"text": "%s%%", "tooltip": "%s\nUsage: %s%%\nTemp: %sC\nVRAM: %sGB / %sGB", "class": "%s"}\n' "$GPU_UTIL" "$GPU_NAME" "$GPU_UTIL" "$GPU_TEMP" "$GPU_MEM_GB" "$GPU_MEM_TOTAL_GB" "$CLASS"
+    printf '{"text": "%s%%", "tooltip": "%s\\nUsage: %s%%\\nTemp: %sC\\nVRAM: %sGB / %sGB", "class": "%s"}\n' "$GPU_UTIL" "$GPU_NAME" "$GPU_UTIL" "$GPU_TEMP" "$GPU_MEM_GB" "$GPU_MEM_TOTAL_GB" "$CLASS"
   '';
 
   igpuScript = pkgs.writeShellScriptBin "waybar-igpu" ''
@@ -102,7 +95,7 @@ let
     elif [ "$PCT" -ge 40 ]; then CLASS="medium"
     else CLASS="low"
     fi
-    printf '{"text": "%sMHz", "tooltip": "Intel UHD 770\nFreq: %s/%s MHz (%s%%)\nPower: %s", "class": "%s"}\n' "$CUR" "$CUR" "$MAX" "$PCT" "$STATUS" "$CLASS"
+    printf '{"text": "%sMHz", "tooltip": "Intel UHD 770\\nFreq: %s/%s MHz (%s%%)\\nPower: %s", "class": "%s"}\n' "$CUR" "$CUR" "$MAX" "$PCT" "$STATUS" "$CLASS"
   '';
 in
 {
@@ -310,7 +303,6 @@ in
         on-click = "foot --app-id floating_shell -e yazi";
       };
 
-      # Ícone no format, script retorna só valor ASCII
       "custom/cpu" = {
         format = "󰍛 {}";
         exec = "${cpuScript}/bin/waybar-cpu";
