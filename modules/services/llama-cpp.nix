@@ -7,9 +7,15 @@ let
   # Perfil de execução — única fonte de verdade: modules/ai/models.nix.
   # Centraliza arquivo do modelo, threads, ctx, ubatch, GPU layers, KV cache,
   # MoE flags e scheduler por cenário (vm = lab CPU, host = bare metal GPU).
-  llamaCppPkg = pkgs.llama-cpp.override { cudaSupport = true; };
-
   prof = pkgs.aiModels.profiles.${profileName};
+  # Instância local de pkgs permitindo pacotes unfree especificamente para o CUDA
+  cudaPkgs = import pkgs.path {
+    system = pkgs.system;
+    config.allowUnfree = true;
+  };
+
+  # Compila o llama-cpp com suporte a CUDA forçado
+  llamaCppPkg = cudaPkgs.llama-cpp.override { cudaSupport = true; };
 in
 {
   options.services = {
