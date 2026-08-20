@@ -72,6 +72,8 @@ in
       #custom-files,
       #custom-weather,
       #custom-gpu,
+      #custom-cpu,
+      #custom-memory,
       #custom-jarvis {
         padding: 0 12px;
         color: #00ffff;
@@ -106,6 +108,8 @@ in
       #custom-files:hover,
       #custom-weather:hover,
       #custom-gpu:hover,
+      #custom-cpu:hover,
+      #custom-memory:hover,
       #custom-jarvis:hover {
         text-shadow:
           0 0 4px #00ffff,
@@ -130,6 +134,38 @@ in
 
       #custom-gpu.disabled {
         color: #666666;
+      }
+
+      /* ------------------------------
+         CPU USAGE STATES
+         ------------------------------ */
+      #custom-cpu.low {
+        color: #50FA7B;
+      }
+
+      #custom-cpu.medium {
+        color: #FFB86C;
+      }
+
+      #custom-cpu.high {
+        color: #FF5555;
+        text-shadow: 0 0 6px #FF5555;
+      }
+
+      /* ------------------------------
+         MEMORY USAGE STATES
+         ------------------------------ */
+      #custom-memory.low {
+        color: #50FA7B;
+      }
+
+      #custom-memory.medium {
+        color: #FFB86C;
+      }
+
+      #custom-memory.high {
+        color: #FF5555;
+        text-shadow: 0 0 6px #FF5555;
       }
 
       /* ------------------------------
@@ -233,8 +269,8 @@ in
       modules-right = [
         "custom/jarvis"
         "custom/files"
-        "cpu"
-        "memory"
+        "custom/cpu"
+        "custom/memory"
         "custom/gpu"
       ] ++ hostOnlyModules ++ [
         "network"
@@ -284,19 +320,54 @@ in
         on-click = "foot --app-id floating_shell -e yazi";
       };
 
-      cpu = {
-        interval = 2;
-        format = " {usage}%";
-        tooltip = false;
+      # CPU com estados de cor: green <50%, yellow 50-80%, red >80%
+      "custom/cpu" = {
+        exec = ''
+          bash -c '
+          CPU=$(top -bn1 | grep "Cpu(s)" | awk "{print \\$2}")
+          CPU_INT=$(printf "%.0f" "$CPU")
+          if [ "$CPU_INT" -ge 80 ]; then CLASS="high"
+          elif [ "$CPU_INT" -ge 50 ]; then CLASS="medium"
+          else CLASS="low"
+          fi
+          LOAD=$(awk "{print \\$1}" /proc/loadavg)
+          echo "{\"text\": \" ''${CPU}%\", \"tooltip\": \"Load: ''${LOAD}\\nUsage: ''${CPU}%\", \"class\": \"$CLASS\"}"
+          '
+        '';
+        interval = 3;
+        return-type = "json";
+        tooltip = true;
         on-click = "foot --app-id floating_shell -e btm";
       };
 
-      memory = {
-        interval = 2;
-        format = " {used:0.1f}G";
-        tooltip = false;
+      # Memory com estados de cor: green <60%, yellow 60-85%, red >85%
+      "custom/memory" = {
+        exec = ''
+          bash -c '
+          MEM_TOTAL=$(awk "/MemTotal/ {print \\$2}" /proc/meminfo)
+          MEM_AVAIL=$(awk "/MemAvailable/ {print \\$2}" /proc/meminfo)
+          MEM_USED=$((MEM_TOTAL - MEM_AVAIL))
+          MEM_PCT=$((MEM_USED * 100 / MEM_TOTAL))
+          MEM_USED_GB=$(awk "BEGIN {printf \"%.1f\", $MEM_USED / 1048576}")
+          MEM_TOTAL_GB=$(awk "BEGIN {printf \"%.1f\", $MEM_TOTAL / 1048576}")
+          SWAP_TOTAL=$(awk "/SwapTotal/ {print \\$2}" /proc/meminfo)
+          SWAP_FREE=$(awk "/SwapFree/ {print \\$2}" /proc/meminfo)
+          SWAP_USED=$((SWAP_TOTAL - SWAP_FREE))
+          SWAP_GB=$(awk "BEGIN {printf \"%.1f\", $SWAP_USED / 1048576}")
+          if [ "$MEM_PCT" -ge 85 ]; then CLASS="high"
+          elif [ "$MEM_PCT" -ge 60 ]; then CLASS="medium"
+          else CLASS="low"
+          fi
+          echo "{\"text\": \" ''${MEM_USED_GB}G\", \"tooltip\": \"RAM: ''${MEM_USED_GB}G / ''${MEM_TOTAL_GB}G (''${MEM_PCT}%)\\nSwap: ''${SWAP_GB}G\", \"class\": \"$CLASS\"}"
+          '
+        '';
+        interval = 5;
+        return-type = "json";
+        tooltip = true;
         on-click = "foot --app-id floating_shell -e btm";
       };
+
+      # GPU monitor via nvidia-smi (porta do legado waybar-gpu.sh)
 
       # GPU monitor via nvidia-smi (porta do legado waybar-gpu.sh)
       # Mostra uso%, VRAM, temperatura com states low/medium/high
