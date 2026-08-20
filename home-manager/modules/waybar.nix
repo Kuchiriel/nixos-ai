@@ -17,7 +17,7 @@ let
   hostOnlySettings = lib.optionalAttrs isHost {
     battery = {
       format = "{icon} {capacity}%";
-      format-icons = [ "" "" "" "" "" ];
+      format-icons = [ "󰂎" "󰁺" "󰁌" "󰁞" "󰂀" "󰁹" ];
       format-charging = " {capacity}%";
       tooltip = false;
     };
@@ -26,13 +26,20 @@ let
       tooltip = false;
     };
     bluetooth = {
-      format = "c {status}";
+      format = "󰂯 {status}";
       tooltip = false;
       on-click = "foot --app-id floating_shell -e bluetuith";
     };
   };
 in
 {
+  fonts.fontconfig.enable = true;
+
+  home.packages = with pkgs; [
+    nerd-fonts.jetbrains-mono
+    nerd-fonts.symbols-only
+  ];
+
   programs.waybar = {
     enable = true;
     style = ''
@@ -43,7 +50,7 @@ in
       * {
         border: none;
         border-radius: 0;
-        font-family: "JetBrainsMono Nerd Font", "Symbols Nerd Font Mono", sans-serif;
+        font-family: "JetBrainsMono Nerd Font", "Symbols Nerd Font", sans-serif;
         font-size: 14px;
         min-height: 0;
       }
@@ -300,7 +307,7 @@ in
 
       # JARVIS — estado da IA (porta do legado waybar-jarvis-status.sh)
       "custom/jarvis" = {
-        exec = "${pkgs.jarvis}/bin/jarvis-waybar 2>/dev/null || echo '{\"text\": \"IDLE 🤖\", \"class\": \"idle\"}'";
+        exec = "${pkgs.jarvis}/bin/jarvis-waybar 2>/dev/null || echo '{\\\"text\\\": \\\"IDLE 🤖\\\", \\\"class\\\": \\\"idle\\\"}'";
         exec-on-event = true;
         interval = 2;
         return-type = "json";
@@ -329,7 +336,7 @@ in
       };
 
       clock = {
-        format = " {:%H:%M}";
+        format = " {:%H:%M}";
         tooltip = false;
         on-click = "foot --app-id floating_shell -e calcurse";
       };
@@ -352,8 +359,8 @@ in
           else CLASS="low"
           fi
           read LOAD _rest _ < /proc/loadavg
-          echo "{\"text\": \" ''${CPU}%\", \"tooltip\": \"Load: ''${LOAD}\\nUsage: ''${CPU}%\", \"class\": \"$CLASS\"}"
-          '
+          echo "{\"text\": \"󰍛 ''${CPU}%\", \"tooltip\": \"Load: ''${LOAD}\nUsage: ''${CPU}%\", \"class\": \"$CLASS\"}"
+          ''
         '';
         interval = 3;
         return-type = "json";
@@ -384,8 +391,8 @@ in
           elif [ "$MEM_PCT" -ge 60 ]; then CLASS="medium"
           else CLASS="low"
           fi
-          echo "{\"text\": \" ''${MEM_USED_GB}G\", \"tooltip\": \"RAM: ''${MEM_USED_GB}G / ''${MEM_TOTAL_GB}G (''${MEM_PCT}%)\\nSwap: ''${SWAP_GB}G\", \"class\": \"$CLASS\"}"
-          '
+          echo "{\"text\": \"󰘚 ''${MEM_USED_GB}G\", \"tooltip\": \"RAM: ''${MEM_USED_GB}G / ''${MEM_TOTAL_GB}G (''${MEM_PCT}%)\nSwap: ''${SWAP_GB}G\", \"class\": \"$CLASS\"}"
+          ''
         '';
         interval = 5;
         return-type = "json";
@@ -398,7 +405,7 @@ in
         exec = ''
           bash -c '
           if ! command -v nvidia-smi &>/dev/null; then
-              echo "{\"text\": \" GPU N/A\", \"tooltip\": \"nvidia-smi not found\", \"class\": \"disabled\"}"
+              echo "{\"text\": \"󰢮 GPU N/A\", \"tooltip\": \"nvidia-smi not found\", \"class\": \"disabled\"}"
               exit 0
           fi
           GPU_UTIL=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1)
@@ -407,7 +414,7 @@ in
           GPU_MEM_TOTAL=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1)
           GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
           if [ -z "$GPU_UTIL" ]; then
-              echo "{\"text\": \" GPU N/A\", \"tooltip\": \"GPU not detected\", \"class\": \"disabled\"}"
+              echo "{\"text\": \"󰢮 GPU N/A\", \"tooltip\": \"GPU not detected\", \"class\": \"disabled\"}"
               exit 0
           fi
           GPU_MEM_GB=$(awk "BEGIN {printf \"%.1f\", $GPU_MEM / 1024}")
@@ -416,8 +423,8 @@ in
           elif [ "$GPU_UTIL" -ge 50 ]; then CLASS="medium"
           else CLASS="low"
           fi
-          echo "{\"text\": \" ''${GPU_UTIL}%\", \"tooltip\": \"''${GPU_NAME}\\nUsage: ''${GPU_UTIL}%\\nTemp: ''${GPU_TEMP}C\\nVRAM: ''${GPU_MEM_GB}GB / ''${GPU_MEM_TOTAL_GB}GB\", \"class\": \"$CLASS\"}"
-          '
+          echo "{\"text\": \"󰢮 ''${GPU_UTIL}%\", \"tooltip\": \"''${GPU_NAME}\nUsage: ''${GPU_UTIL}%\nTemp: ''${GPU_TEMP}C\nVRAM: ''${GPU_MEM_GB}GB / ''${GPU_MEM_TOTAL_GB}GB\", \"class\": \"$CLASS\"}"
+          ''
         '';
         interval = 3;
         return-type = "json";
@@ -442,8 +449,8 @@ in
           else CLASS="low"
           fi
           FREQ="''${CUR}MHz"
-          echo "{\"text\": \" ''${FREQ}\", \"tooltip\": \"Intel UHD 770\\nFreq: ''${CUR}/''${MAX} MHz (''${PCT}%)\\nPower: ''${STATUS}\", \"class\": \"$CLASS\"}"
-          '
+          echo "{\"text\": \"󰢮 ''${FREQ}\", \"tooltip\": \"Intel UHD 770\nFreq: ''${CUR}/''${MAX} MHz (''${PCT}%)\nPower: ''${STATUS}\", \"class\": \"$CLASS\"}"
+          ''
         '';
         interval = 5;
         return-type = "json";
@@ -451,7 +458,7 @@ in
       };
 
       network = {
-        format-wifi = " {essid}";
+        format-wifi = " {essid}";
         format-ethernet = "󰈀 Wired";
         format-disconnected = "󰤮 Disconnected";
         tooltip = false;
@@ -461,8 +468,8 @@ in
       pulseaudio = {
         format = "{icon} {volume}%";
         format-icons = {
-          headphone = "f";
-          default = [ "" "" "" ];
+          headphone = "󰋋";
+          default = [ "󰕿" "󰖀" "󰕾" ];
         };
         tooltip = false;
         on-click = "foot --app-id floating_shell -e ncpamixer";
