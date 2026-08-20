@@ -3,7 +3,7 @@
 #
 # Legado (hyprland.conf do Manjaro):
 #   exec-once = env DRI_PRIME=pci-0000_00_02_0 mpvpaper -f -p -n 30 -l background \
-#     -o "--no-audio --hwdec=vaapi --vo=gpu" '*' ~/Vídeos/Wallpapers
+#     -o "--no-audio --hwdec=auto-safe --vo=gpu" '*' ~/Vídeos/Wallpapers
 #
 # Condicional declarativa:
 #   - Host (bare metal): decode por HARDWARE via VA-API na iGPU Intel (UHD 770)
@@ -38,15 +38,15 @@ in
       #   -p → presentation mode (sem bordas, fullscreen)
       #   -n 30 → limita a 30 FPS (economiza CPU/GPU)
       #   -l background → camada background (abaixo de janelas)
-      #   --hwdec=vaapi → decode por hardware (VA-API → iGPU)
+      #   --hwdec=auto-safe → decode por hardware (VA-API → iGPU)
       #   --vo=gpu → renderização OpenGL (na iGPU)
       #   --no-audio → sem áudio do wallpaper
-      Environment = "DRI_PRIME=pci-0000_00_02.0";
+      Environment = "DRI_PRIME=pci-0000:00:02.0";
       ExecStart = lib.concatStringsSep " " [
         "${pkgs.mpvpaper}/bin/mpvpaper"
         "-f" "-p" "-n" "30" "-l" "background"
         "-o"
-        ''"--no-audio --hwdec=vaapi --vo=gpu --loop"''
+        ''"--no-audio --hwdec=auto-safe --vo=gpu --loop"''
         "*"
         "${wallpapersDir}"
       ];
