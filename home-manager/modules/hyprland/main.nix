@@ -120,6 +120,40 @@ in
         "wl-paste --type image --watch cliphist store"
       ];
 
+      general = {
+        border_size = 2;
+        col.active_border = "rgba(00ffffcc) rgba(0088ffcc) 45deg";
+        col.inactive_border = "rgba(595959aa)";
+        gaps_in = 5;
+        gaps_out = 10;
+        layout = "dwindle";
+        resize_on_border = true;
+      };
+
+      decoration = {
+        rounding = 10;
+        active_opacity = 0.9;
+        inactive_opacity = 0.8;
+        blur = {
+          enabled = false;
+        };
+        shadow = {
+          enabled = true;
+          range = 15;
+          render_power = 3;
+          color = "rgba(00ffff33)";
+        };
+      };
+
+      animations = {
+        enabled = true;
+        bezier = "myBezier, 0.05, 0.9, 0.1, 1.05";
+        animation = [
+          "windows, 1, 5, myBezier"
+          "workspaces, 1, 4, default, slide"
+        ];
+      };
+
       input = {
         follow_mouse = 1;
         kb_layout = "br";

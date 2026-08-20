@@ -38,6 +38,9 @@
     # Calibração validada do legado (docs/architecture/legacy-audio-calibration.md):
     # 0.85 = menos false positives com ventoinha/sons de casa
     threshold = 0.85;
+    # Pipeline de voz: STT (faster-whisper) → LLM (llama.cpp) → TTS (Kokoro)
+    # O wakeword grava WAV e passa como argumento para 'jarvis voice'
+    brainCommand = [ "jarvis" "voice" ];
   };
 
 

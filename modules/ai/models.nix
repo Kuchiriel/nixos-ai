@@ -149,6 +149,7 @@ in
       model = "llm-vm";
       threads = 4;
       ctxSize = 16384;
+      batchSize = 512;
       ubatch = 512;
       gpuLayers = 0;                    # CPU puro no lab
       kvCache = "-fa on -ctk f16 -ctv f16";

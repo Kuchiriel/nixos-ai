@@ -76,8 +76,9 @@
         '';
       });
 
-      # Pacote Python do JARVIS (build + testes no checkPhase)
-      jarvis = (prev.callPackage ./modules/ai/package.nix { mcpNixos = final.mcp-nixos-fast; }).base;
+      # Pacote Python do JARVIS (com voz: STT faster-whisper + TTS Kokoro).
+      # Usar withVoice como default para que 'jarvis voice' funcione no wakeword.
+      jarvis = (prev.callPackage ./modules/ai/package.nix { mcpNixos = final.mcp-nixos-fast; }).withVoice;
       # Jarvis com voz (STT + TTS) — mais pesado (torch/ctranslate2)
       jarvis-voice = (prev.callPackage ./modules/ai/package.nix { mcpNixos = final.mcp-nixos-fast; }).withVoice;
       # Modelos declarativos (openwakeword, kokoro, whisper)
