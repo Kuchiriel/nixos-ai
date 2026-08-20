@@ -14,7 +14,8 @@
     networkmanagerapplet  # nmtui-connect (on-click no módulo network)
     calcurse           # Calendar TUI (on-click no clock)
     htop               # Process viewer alternativo ao btm
-
+    intel-gpu-tools
+    
     # Fonts / Icons
     font-awesome
     nerd-fonts.jetbrains-mono
