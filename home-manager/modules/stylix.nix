@@ -20,7 +20,8 @@
     enable = true;
     polarity = "dark";
     # Paleta futurista em tons de azul escuro e ciano (Estética HUD/Jarvis)
-    base16Scheme = "${pkgs.base16-schemes}/share/themes/horizon-dark.yaml";
+    base16Scheme = "${pkgs.base16-schemes}/share/themes/oceanicnext.yaml"; # Exemplo de esquema azulado
+    #base16Scheme = "${pkgs.base16-schemes}/share/themes/horizon-dark.yaml";
 
     targets = {
       neovim.enable = false;
@@ -68,9 +69,7 @@
     };
 
     # Wallpaper com atmosfera tecnológica em tons de azul/ciano
-    image = pkgs.fetchurl {
-      url = "https://raw.githubusercontent.com/Icy-Thought/Artwork/master/Wallpapers/blue-cyber-grid.png"; 
-      sha256 = lib.fakeHash; # Ajuste o hash após o primeiro build se necessário
+    image = "${pkgs.nixos-icons}/share/icons/hicolor/scalable/apps/nix-glow.svg";
     };
   };
 }
