@@ -394,17 +394,14 @@ class HybridIndexer:
             except OSError:
                 return None
 
-        # 1. Chunking agressivo para respeitar os 512 tokens (~800-900 caracteres)
-        # O modelo de embedding atual tem limite estrito de 512 tokens.
+        # Chunking alinhado com o contexto do modelo
         chunk_size = 800 
         chunks = [content[i:i + chunk_size] for i in range(0, len(content), chunk_size)]
-        
-        # Se for o primeiro chunk, incluímos os fatos
+
         facts = extract_facts(content, ext)
-        
+
         last_payload = None
         for i, chunk in enumerate(chunks):
-            # Formato rico apenas para o primeiro chunk ou se precisar de contexto
             rich = build_rich_content(path, facts if i == 0 else [], chunk, max_chars=chunk_size)
             dense = self._llm.embed(rich)
             if not dense:
@@ -412,7 +409,7 @@ class HybridIndexer:
 
             terms = sparse_terms(rich)
             point = {
-                "id": abs(dense_key(f"{path}_chunk_{i}")), # ID único por chunk
+                "id": abs(dense_key(f"{path}_chunk_{i}")),
                 "vector": {
                     "dense": dense,
                     "bm25": sparse_vector(terms),
@@ -423,7 +420,7 @@ class HybridIndexer:
                     "filename": os.path.basename(path),
                     "ext": ext,
                     "facts": facts if i == 0 else [],
-                    "content": chunk, # O conteúdo salvo é o chunk, não o arquivo todo
+                    "content": chunk,
                 },
             }
             self._store.upsert(self._cfg.qdrant_collection_code, [point])
@@ -431,51 +428,14 @@ class HybridIndexer:
             
         return last_payload
 
-
-'''
-    def index_file(self, path: str, *, content: str | None = None) -> dict[str, Any] | None:
-        """Indexa um único arquivo. Retorna o payload indexado ou None se falhar."""
-        ext = os.path.splitext(path)[1].lower()
-        if content is None:
-            try:
-                content = Path(path).read_text(encoding="utf-8", errors="ignore")
-            except OSError:
-                return None
-
-        facts = extract_facts(content, ext)
-        rich = build_rich_content(path, facts, content, max_chars=self._cfg.rich_content_chars)
-        dense = self._llm.embed(rich)
-        if not dense:
-            return None
-
-        terms = sparse_terms(rich)
-        point: dict[str, Any] = {
-            "id": abs(dense_key(path)),
-            "vector": {
-                "dense": dense,
-                "bm25": sparse_vector(terms),
-            },
-            "payload": {
-                "path": path,
-                "filename": os.path.basename(path),
-                "ext": ext,
-                "facts": facts,
-                "symbols": [f.split(": ", 1)[-1] for f in facts],
-                "content": content[:_STORED_CONTENT_CHARS],
-            },
-        }
-        self._store.upsert(self._cfg.qdrant_collection_code, [point])
-        return point["payload"]
-
     def index_directory(self, root: str | Path) -> int:
-        """Indexa todos os arquivos elegíveis de um diretório. Retorna o total."""
+        """Indexa todos os arquivos elegíveis de um diretório. Retorna o total de arquivos."""
         self.ensure_collection()
-        total = 0
+        processed_files = set()
         for path in iter_indexable_files(root, exclude_dirs=self._cfg.index_exclude_dirs):
             if self.index_file(path) is not None:
-                total += 1
-        return total
-'''
+                processed_files.add(path)
+        return len(processed_files)
 
 # ---------------------------------------------------------------------------
 # Busca híbrida
