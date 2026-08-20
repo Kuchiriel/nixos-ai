@@ -7,7 +7,10 @@
     imv
     mpv
     pavucontrol
-
+    xfce.thunar
+    xfce.thunar-archive-plugin
+    xfce.thunar-volman
+    
     # TUI tools (porta do legado Manjaro — abre via on-click no Waybar)
     bluetuith          # Bluetooth TUI (on-click no módulo bluetooth)
     ncpamixer          # Audio mixer TUI (on-click no módulo pulseaudio)
@@ -45,3 +48,4 @@
     xdg-desktop-portal-hyprland
   ];
 }
+

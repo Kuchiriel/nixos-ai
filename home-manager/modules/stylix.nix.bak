@@ -13,14 +13,14 @@
     font-awesome
     powerline-fonts
     powerline-symbols
+    # nixpkgs 26.05: nerdfonts foi renomeado para nerd-fonts (attrset por fonte)
     nerd-fonts.symbols-only
   ];
 
   stylix = {
     enable = true;
     polarity = "dark";
-    # Paleta futurista em tons de azul escuro e ciano (Estética HUD/Jarvis)
-    base16Scheme = "${pkgs.base16-schemes}/share/themes/horizon-dark.yaml";
+    base16Scheme = "${pkgs.base16-schemes}/share/themes/gruvbox-dark-medium.yaml";
 
     targets = {
       neovim.enable = false;
@@ -60,6 +60,7 @@
       };
     };
 
+    # 26.05: stylix.iconTheme.* renomeado para stylix.icons.*
     icons = {
       enable = true;
       package = pkgs.papirus-icon-theme;
@@ -67,10 +68,9 @@
       light = "Papirus-Light";
     };
 
-    # Wallpaper com atmosfera tecnológica em tons de azul/ciano
     image = pkgs.fetchurl {
-      url = "https://raw.githubusercontent.com/Icy-Thought/Artwork/master/Wallpapers/blue-cyber-grid.png"; 
-      sha256 = = lib.fakeHash; # Ajuste o hash após o primeiro build se necessário
+      url = "https://codeberg.org/lunik1/nixos-logo-gruvbox-wallpaper/raw/branch/master/png/gruvbox-dark-rainbow.png";
+      sha256 = "036gqhbf6s5ddgvfbgn6iqbzgizssyf7820m5815b2gd748jw8zc";
     };
   };
 }
