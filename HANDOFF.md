@@ -373,3 +373,48 @@ nvidia-smi --query-compute-apps=pid,used_memory,name --format=csv
 journalctl -u llama-cpp-server -f
 journalctl -u llama-cpp-embeddings -f
 ```
+
+---
+
+## Sessão 2026-08-20 (continuação) — Pipeline de Voz + Hyprland + Waybar
+
+### Problemas diagnosticados e corrigidos
+
+#### 1. Pipeline de voz (wakeword → STT → LLM → TTS) NÃO funcionava
+**Causa raiz**: Duas falhas encadeadas:
+- `brainCommand` no wakeword estava vazio `[]` (default) — o daemon gravava WAV mas nunca chamava o pipeline
+- `pkgs.jarvis` era a versão **base** (sem faster-whisper/kokoro) — mesmo com brainCommand correto, `jarvis voice` falharia com ImportError
+
+**Correções**:
+- `home.nix`: Adicionado `brainCommand = [ "jarvis" "voice" ]` ao wakeword service
+- `flake.nix`: Overlay `pkgs.jarvis` agora aponta para `.withVoice` (STT + TTS incluídos)
+- `jarvis-wakeword.nix`: Adicionado `E231` ao flakeIgnore (erro de linting na string Nix do brainCommand)
+
+#### 2. Hyprland com bordas brancas quadradas
+**Causa raiz**: `general`, `decoration` e `animations` só existiam no `dynamic.conf` (gerado pelo script runtime), que ficava vazio até o Hyprland iniciar. O config estático não tinha essas seções.
+
+**Correção**: Seções movidas para `settings` estático no `main.nix`, com `"col.active_border"` como chave string (não nesting `col { active_border = ... }` — o home-manager Hyprland serializa attrsets como seções hyprlang, mas `col.active_border` é uma chave pontilhada, não seção).
+
+#### 3. Waybar ícones faltando (só Files e Brightness)
+**Causa raiz**: Font family no CSS era `"SymbolsNerdFont"` mas o fontconfig registra como `"Symbols Nerd Font"` (com espaço).
+
+**Correção**: Font family atualizada para `"Symbols Nerd Font"`.
+
+### Estado verificado (E2E)
+- ✅ LLM: 33.0 t/s, healthy
+- ✅ Embeddings: healthy (CPU-only)
+- ✅ Reranker: healthy (CPU-only)
+- ✅ Wakeword: running, brainCommand configurado
+- ✅ Hyprland: borders cyan gradient, rounding=10, shadow enabled
+- ✅ Waybar: GPU monitor, TUI on-click, icons (font corrected)
+- ✅ GPU: 4307MB/6141MB VRAM
+- ✅ Testes: 30/30 passam
+
+### Arquivos alterados nesta iteração
+- `flake.nix` — pkgs.jarvis → withVoice
+- `home-manager/home.nix` — brainCommand wakeword
+- `home-manager/modules/services/jarvis-wakeword.nix` — E231 ignore
+- `home-manager/modules/hyprland/main.nix` — static general/decoration/animations, col.active_border flat key
+- `home-manager/modules/waybar.nix` — font family correction
+- `modules/ai/models.nix` — batchSize no vm profile
+
