@@ -20,7 +20,7 @@ in
     # 26.05 mudou o default p/ "lua"; mantemos hyprlang (configs atuais)
     configType = "hyprlang";
     extraConfig = ''
-      source = source = ~/.config/hyprland/dynamic.conf
+      source = ~/.config/hyprland/dynamic.conf
     '';
     settings = {
       "$fileManager" = "$terminal --app-id floating_shell -e yazi";
