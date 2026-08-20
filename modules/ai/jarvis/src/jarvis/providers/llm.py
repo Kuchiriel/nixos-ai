@@ -70,7 +70,7 @@ class LLMClient:
 
     # ctx do modelo de embedding (nomic-embed-text-v2-moe = 512 tokens);
     # além disso o embedding perde qualidade em textos longos de qualquer forma
-    _EMBED_MAX_CHARS = 1900  # ~500 tokens seguro p/ o ctx 512
+    _EMBED_MAX_CHARS = 600O  # ~1500 tokens seguro p/ o ctx 2048
 
     def embed(self, text: str, model: str | None = None) -> list[float]:
         """Embedding via /v1/embeddings — servidor dedicado (--embeddings).
