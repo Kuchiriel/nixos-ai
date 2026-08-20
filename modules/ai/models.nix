@@ -191,7 +191,9 @@ in
       gpuLayers = 99;           # 99 = TODAS as camadas de atenção na GPU
       kvCache = "-fa on -ctk q8_0 -ctv q8_0";
       moeFlags = "--n-cpu-moe 99 --split-mode none";  # experts TODOS na RAM
-      extraFlags = "--no-mmap";  # carrega modelo em RAM, evita page faults
+      # NOTA: --no-mmap REMOVIDO (auditoria 2026-08-20)
+      # Causava RSS de 15.7GB (GGUF inteiro em RAM física).
+      # Com mmap, OS usa demand paging: apenas experts ativos em RAM (~3-5GB).
       user = "root";
       scheduler = { policy = "fifo"; priority = 50; };
     };
