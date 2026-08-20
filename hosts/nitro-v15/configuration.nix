@@ -48,6 +48,7 @@ in
   environment.systemPackages = with pkgs; [
     # Sunshine (streaming) — módulo NixOS não existe; pacote + config manual
     sunshine
+    discord
     gvfs
     # Utilitários do sistema
     pciutils
