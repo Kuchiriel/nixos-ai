@@ -9,6 +9,7 @@ let
         (lib.filterAttrs (name: type: type == "regular" && lib.hasSuffix ".nix" name) (builtins.readDir servicesDir))
     else [];
 in
+
 {
   imports = [
     ./hardware-configuration.nix
@@ -16,6 +17,8 @@ in
     ./disko.nix
     ../../nixos/modules
   ] ++ dynamicServiceImports;
+
+  nixpkgs.config.allowUnfree = true;
 
   environment.systemPackages = with pkgs; [
     # Utilitários do sistema
