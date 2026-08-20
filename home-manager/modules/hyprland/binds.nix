@@ -28,7 +28,7 @@ in {
 
   wayland.windowManager.hyprland.settings = {
     bind = [
-      "$mainMod SHIFT, Return, exec, $terminal"
+      "$mainMod        Return, exec, $terminal"
       "$mainMod,       Q, killactive"
       "$mainMod SHIFT, Q, exit,"
       "$mainMod,       R, exec, $fileManager"
