@@ -13,7 +13,12 @@
   # enxergar a chave na sessão interativa:
   #   sudo cp /etc/litellm.env ~/.config/litellm.env && chmod 600 ~/.config/litellm.env
   #   echo '[ -f ~/.config/litellm.env ] && set -a && . ~/.config/litellm.env && set +a' >> ~/.bashrc
-  home.sessionVariables = { };
+
+  home.sessionVariables = {
+    _JAVA_AWT_WM_NONREPARENTING = "1";
+    AWT_TOOLKIT = "MToolkit";
+    JAVA_TOOL_OPTIONS = "-Dsun.java2d.uiScale=1";
+  };
 
   # Importa as variáveis de ambiente com segurança ao abrir o terminal
 
