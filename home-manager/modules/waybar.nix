@@ -285,15 +285,6 @@ in
         on-click = "foot --app-id floating_shell -e jarvis dev";
       };
 
-      "custom/igpu" = {
-        format = "󰢮 {}";
-        exec = "${igpuScript}/bin/waybar-igpu";
-        interval = 5;
-        return-type = "json";
-        tooltip = true;
-        on-click = "foot --app-id floating_shell -e intel_gpu_top";
-      };
-
       "hyprland/workspaces" = {
         format = "{name} {windows}";
         window-rewrite-default = "󱓡";
@@ -360,6 +351,7 @@ in
         interval = 5;
         return-type = "json";
         tooltip = true;
+        on-click = "foot --app-id floating_shell -e sudo intel_gpu_top";
       };
 
       network = {
