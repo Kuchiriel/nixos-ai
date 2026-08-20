@@ -268,13 +268,18 @@ in
         Restart = "on-failure";
         RestartSec = 5;
 
-        # Segurança: não rodar como root
-        User = "nixos";
-        Group = "nixos";
+        # Precisa de root para systemctl stop/start de serviços do sistema
+        # (llama-cpp-server, embeddings, rerank são system services)
+        User = "root";
 
         # Limites de recursos para o watcher (leve)
         CPUQuota = "10%";
         MemoryMax = "100M";
+
+        # Segurança: só pode manipular serviços JARVIS
+        ProtectSystem = "strict";
+        ProtectHome = "read-only";
+        NoNewPrivileges = false;  # Precisa de systemctl
       };
     };
 
