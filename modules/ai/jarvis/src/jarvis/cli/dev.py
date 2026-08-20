@@ -187,7 +187,7 @@ def _call_llm(messages: list[dict[str, str]], tools: list[dict], profile: dict) 
     # ==============================================
 
     resp = requests.post(
-        f"{cfg.llm_base_url.rstrip('/')}/chat/completions"
+        f"{cfg.llm_base_url.rstrip('/')}/chat/completions",
         json=payload,
         timeout=cfg.llm_timeout,
     )
