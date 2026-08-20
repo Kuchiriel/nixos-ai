@@ -145,18 +145,6 @@ in
   #   - vm: CPU puro (gpuLayers=0), KV f16 (sem GPU não compensa q8), 4
   #     threads (VM compartilhada com o host Hyper-V).
   profiles = {
-    auto = {
-      model = "qwen3.6-35b-a3b";
-      mmproj = "llm-host-mmproj";  # vision
-      threads = 16;
-      ctxSize = 32768;
-      ubatch = 1024;
-      gpuLayers = 13;
-      kvCache = "-fa on -ctk q8_0 -ctv q8_0";
-      moeFlags = "--n-cpu-moe 2";
-      user = "root";
-      scheduler = { policy = "fifo"; priority = 50; };
-    };
     vm = {
       model = "llm-vm";
       threads = 4;
@@ -174,7 +162,7 @@ in
       threads = 12;
       ctxSize = 16384;                  # q8_0 KV: 32K estoura a VRAM de 6GB
       ubatch = 1024;
-      gpuLayers = 13;                   # ~4.5GB de pesos; knob de tuning no host
+      gpuLayers = 12;                   # ~4.5GB de pesos; knob de tuning no host
       kvCache = "-fa on -ctk q8_0 -ctv q8_0";      # KV-cache quantizado
       moeFlags = "--n-cpu-moe 2";       # experts na RAM (32GB), VRAM 6GB intacta
       user = "root";                    # CPUSchedulingPolicy=fifo exige privilégio
