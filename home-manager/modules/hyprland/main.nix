@@ -9,19 +9,20 @@ let
     "QT_QPA_PLATFORMTHEME,qt6ct"
     "XDG_SCREENSHOTS_DIR,$HOME/screens"
   ];
+
+  # NVIDIA env vars — RTX 4050 no host (não presente na VM)
+  # O legado Manjaro sempre tinha essas vars; na VM (sem GPU), elas são ignoradas.
+  nvidiaEnv = {
+    LIBVA_DRIVER_NAME = "nvidia";
+    GBM_BACKEND = "nvidia-drm";
+    __GLX_VENDOR_LIBRARY_NAME = "nvidia";
+  };
 in
 {
-  home.activation.generateHyprlandRuntimeConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    mkdir -p $HOME/.config/hyprland
-  '';
-  home.file.".config/hyprland/dynamic.conf".text = "";
   wayland.windowManager.hyprland = {
     enable = true;
-    # 26.05 mudou o default p/ "lua"; mantemos hyprlang (configs atuais)
     configType = "hyprlang";
-    extraConfig = ''
-      source = ~/.config/hyprland/dynamic.conf
-    '';
+
     settings = {
       "$fileManager" = "$terminal --app-id floating_shell -e yazi";
       "$mainMod" = "SUPER";
@@ -30,91 +31,11 @@ in
 
       dwindle = {
         preserve_split = true;
-        # pseudotile removido em Hyprland recente (dwindle:pseudotile deprecated)
       };
 
-      env = baseEnv;
+      env = baseEnv ++ (lib.mapAttrsToList (n: v: "${n},${v}") nvidiaEnv);
 
       exec-once = [
-        "${pkgs.writeShellScriptBin "hyprland-runtime-setup" ''
-          if systemd-detect-virt -q; then
-            cat << 'EOF' > $HOME/.config/hyprland/dynamic.conf
-          animations {
-              enabled = false
-          }
-          cursor {
-              no_hardware_cursors = true
-          }
-          decoration {
-              rounding = 0
-              active_opacity = 0.9
-              inactive_opacity = 0.8
-              blur {
-                  enabled = false
-              }
-              shadow {
-                  enabled = false
-              }
-          }
-          general {
-              allow_tearing = false
-              border_size = 2
-              col.active_border = rgba(00ffffcc) rgba(0088ffcc) 45deg
-              col.inactive_border = rgba(595959aa)
-              gaps_in = 2
-              gaps_out = 4
-              layout = dwindle
-              resize_on_border = true
-          }
-          env = WLR_NO_HARDWARE_CURSORS,1
-          env = WLR_RENDERER,pixman
-          env = WLR_RENDER_NO_EXPLICIT_SYNC,1
-          EOF
-          else
-            cat << 'EOF' > $HOME/.config/hyprland/dynamic.conf
-          animations {
-              enabled = true
-              bezier = myBezier, 0.05, 0.9, 0.1, 1.05
-              animation = windows, 1, 5, myBezier
-              animation = workspaces, 1, 4, default, slide
-          }
-          cursor {
-              no_hardware_cursors = false
-          }
-          decoration {
-              rounding = 10
-              active_opacity = 0.9
-              inactive_opacity = 0.8
-              blur {
-                  enabled = false
-              }
-              shadow {
-                  enabled = true
-                  range = 15
-                  render_power = 3
-                  color = rgba(00ffff33)
-              }
-          }
-          general {
-              allow_tearing = false
-              border_size = 2
-              col.active_border = rgba(00ffffcc) rgba(0088ffcc) 45deg
-              col.inactive_border = rgba(595959aa)
-              gaps_in = 5
-              gaps_out = 10
-              layout = dwindle
-              resize_on_border = true
-          }
-          EOF
-            if lspci | grep -qi nvidia; then
-              cat << 'EOF' >> $HOME/.config/hyprland/dynamic.conf
-          env = LIBVA_DRIVER_NAME,nvidia
-          env = GBM_BACKEND,nvidia-drm
-          env = __GLX_VENDOR_LIBRARY_NAME,nvidia
-          EOF
-            fi
-          fi
-        ''}/bin/hyprland-runtime-setup"
         "waybar"
         "wl-paste --type text --watch cliphist store"
         "wl-paste --type image --watch cliphist store"
@@ -159,47 +80,7 @@ in
         kb_layout = "br";
       };
 
-      bind = [
-        "$mainMod, RETURN, exec, $terminal"
-        "$mainMod, Q, killactive,"
-        "$mainMod, E, exec, $fileManager"
-        "$mainMod, R, exec, $menu"
-        "$mainMod, V, togglefloating,"
-        "$mainMod, F, fullscreen,"
-        "$mainMod, 1, workspace, 1"
-        "$mainMod, 2, workspace, 2"
-        "$mainMod, 3, workspace, 3"
-        "$mainMod, 4, workspace, 4"
-        "$mainMod, 5, workspace, 5"
-        "$mainMod, 6, workspace, 6"
-        "$mainMod SHIFT, 1, movetoworkspace, 1"
-        "$mainMod SHIFT, 2, movetoworkspace, 2"
-        "$mainMod SHIFT, 3, movetoworkspace, 3"
-        "$mainMod SHIFT, 4, movetoworkspace, 4"
-        "$mainMod SHIFT, 5, movetoworkspace, 5"
-        "$mainMod SHIFT, 6, movetoworkspace, 6"
-
-        # === ACCESSIBILITY (porta do legado Manjaro) ===
-        # Window focus
-        "$mainMod, left, movefocus, l"
-        "$mainMod, right, movefocus, r"
-        "$mainMod, up, movefocus, u"
-        "$mainMod, down, movefocus, d"
-        # Quick maximize
-        "$mainMod SHIFT, F, fullscreen, 1"
-        # Center floating window
-        "$mainMod, C, centerwindow"
-        # Move windows
-        "$mainMod SHIFT, left, movewindow, l"
-        "$mainMod SHIFT, right, movewindow, r"
-        "$mainMod SHIFT, up, movewindow, u"
-        "$mainMod SHIFT, down, movewindow, d"
-        # Resize windows
-        "$mainMod CTRL, left, resizeactive, -50 0"
-        "$mainMod CTRL, right, resizeactive, 50 0"
-        "$mainMod CTRL, up, resizeactive, 0 -50"
-        "$mainMod CTRL, down, resizeactive, 0 50"
-      ];
+      # Keybinds ficam em binds.nix (porta do legado Manjaro + JARVIS AI)
 
       master = {
         mfact = 0.5;
@@ -214,7 +95,6 @@ in
 
       monitor = ",preferred,auto,1";
 
-      # Sintaxe correta para seletores do tipo class:^...$
       windowrule = [
         "opacity 0.92 0.92, match:class ^(firefox)$"
         "opacity 0.90 0.90, match:class ^(foot)$"
