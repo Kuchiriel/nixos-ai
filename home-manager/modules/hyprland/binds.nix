@@ -2,7 +2,7 @@
 let
   booksDir = "$HOME/Downloads/books";
 
-  # JARVIS — prompt rápido (porta do legado: rofi jarvis-cyan)
+  # JARVIS — prompt rápido
   jarvisAsk = pkgs.writeScriptBin "jarvis-ask-prompt" ''
     #!/bin/sh
     PROMPT=$(wofi --dmenu --prompt "JARVIS:" --width 800 2>/dev/null || rofi -dmenu -p "JARVIS:" -theme jarvis-cyan 2>/dev/null)
@@ -17,18 +17,23 @@ let
 
     BOOK=$(find "$BOOKS_DIR" -type f \( -iname "*.pdf" -o -iname "*.epub" -o -iname "*.djvu" \) | wofi --dmenu --prompt "Select a book" --width 1200 --height 400)
 
-    if [[ -n "$BOOK" ]]; then
+    if [ -n "$BOOK" ]; then
         zathura "$BOOK" &
     else
         echo "No book selected."
     fi
   '';
 in {
-  home.packages = [ booksScript jarvisAsk ];
+  home.packages = with pkgs; [ 
+    booksScript 
+    jarvisAsk 
+    grimblast # Garante que a ferramenta de screenshot está nos pacotes do user
+  ];
 
   wayland.windowManager.hyprland.settings = {
     bind = [
-      "$mainMod        Return, exec, $terminal"
+      # Corrigido: vírgula adicionada entre $mainMod e Return
+      "$mainMod,       Return, exec, $terminal"
       "$mainMod,       Q, killactive"
       "$mainMod SHIFT, Q, exit,"
       "$mainMod,       R, exec, $fileManager"
@@ -42,8 +47,11 @@ in {
       "$mainMod,       L, exec, loginctl lock-session"
       "$mainMod,       P, exec, hyprpicker -an"
       "$mainMod,       N, exec, swaync-client -t"
-      ", Print, exec, grimblast save screen"
       "$mainMod,       W, exec, ${booksScript}/bin/open_books"
+
+      # Screenshots (Print Screen tela cheia / Super + Print seleciona área)
+      ", Print, exec, grimblast copysave screen"
+      "$mainMod, Print, exec, grimblast copysave area"
 
       # Moving focus
       "$mainMod, left, movefocus, l"
@@ -57,7 +65,7 @@ in {
       "$mainMod SHIFT, up,    swapwindow, u"
       "$mainMod SHIFT, down,  swapwindow, d"
 
-      # Resizeing windows                   X  Y
+      # Resizing windows
       "$mainMod CTRL, left,  resizeactive, -60 0"
       "$mainMod CTRL, right, resizeactive,  60 0"
       "$mainMod CTRL, up,    resizeactive,  0 -60"
@@ -97,13 +105,11 @@ in {
       "$mainMod,       I, exec, $terminal -e jarvis doctor"
     ];
 
-    # Move/resize windows with mainMod + LMB/RMB and dragging
     bindm = [
       "$mainMod, mouse:272, movewindow"
       "$mainMod, mouse:273, resizewindow"
     ];
 
-    # Laptop multimedia keys for volume and LCD brightness
     bindel = [
       ",XF86AudioRaiseVolume,  exec, wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"
       ",XF86AudioLowerVolume,  exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
@@ -113,7 +119,6 @@ in {
       "$mainMod, bracketleft,  exec, brightnessctl s 10%-"
     ];
 
-    # Audio playback
     bindl = [
       ", XF86AudioNext,  exec, playerctl next"
       ", XF86AudioPause, exec, playerctl play-pause"
