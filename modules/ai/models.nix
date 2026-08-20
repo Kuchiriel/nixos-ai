@@ -156,18 +156,24 @@ in
       user = "nixos";
       scheduler = null;                 # CFS (default) — VM compartilhada
     };
+    # Host: RTX 4050 6GB + 32GB RAM, Qwen3.6-35B-A3B MoE + vision
+    # Cálculo via hwprofile.py (jarvis hwprofile):
+    #   VRAM:6.0GB - overhead 1.3GB(base+mmproj) × 0.90(safety) = 4.23GB headroom
+    #   gpu_params/layer: attn(24.7MB) + 4 experts(212.8MB) = 237.4MB quantized
+    #   ngl=14: 14×237.4MB=3.32GB + KV q8_0 32K=1.25GB + overhead=1.3GB → 5.87GB ✓
+    #   6 routed experts → RAM (120GB/s DDR5), 2 routed + 2 shared → GPU (260GB/s)
+    # Forecast: ~25-30 t/s (bandwidth-bound, MoE esparsa)
     host = {
       model = "llm-host";
       mmproj = "llm-host-mmproj";
       threads = 12;
-      ctxSize = 8192;           # Reduzido de 16384 para aliviar a alocação inicial
-      ubatch = 512;             # Reduzido de 1024 para diminuir o pico de VRAM no boot
-      gpuLayers = 6;            # Baixado de 8 para garantir margem na RTX 4050
-      kvCache = "-fa on -ctk q8_0 -ctv q8_0";
-      moeFlags = "--n-cpu-moe 2";
+      ctxSize = 32768;          # 32K contexto — cabe nos 32GB RAM (9.9GB livres)
+      ubatch = 1024;            # Batch maior = melhor throughput (cabe na VRAM)
+      gpuLayers = 14;           # 14/40 camadas na GPU (expert offload: attn+4experts/camada)
+      kvCache = "-fa on -ctk q8_0 -ctv q8_0";  # q8_0: VRAM apertada, f16 não cabe
+      moeFlags = "--n-cpu-moe 2";  # 2 routed experts na GPU + 2 shared; 6 routed→RAM
       user = "root";
-      scheduler = null;
-      #scheduler = { policy = "fifo"; priority = 50; };
+      scheduler = { policy = "fifo"; priority = 50; };  # tempo real para LLM inference
     };
   };
 }

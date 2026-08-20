@@ -96,12 +96,19 @@ def test_host_nitro_expert_offload() -> None:
     assert flags.fa is True            # cuda → flash attention
     assert flags.ctx <= 32768
     # VRAM 6GB: atenção + experts na GPU + KV q8 + overhead não podem estourar
-    from jarvis.core.hwprofile import QUANT_BYTES, gpu_params_per_layer, kv_cache_gb
+    # Overhead dinâmico: base(CUDA+compute) + mmproj(vision BF16)
+    from jarvis.core.hwprofile import (QUANT_BYTES, gpu_params_per_layer,
+                                       kv_cache_gb, VRAM_OVERHEAD_BASE_GB,
+                                       VRAM_MMPROJ_GB)
     per_layer_gb = (gpu_params_per_layer(flags.model, flags.n_cpu_moe, "Q4_K_M")
                     * QUANT_BYTES["Q4_K_M"] / 1e9)
-    used = flags.ngl * per_layer_gb + kv_cache_gb(flags.model, flags.ctx, "q8_0") + 0.6
-    assert used <= 6.5, f"VRAM estourada: {used:.1f}GB > 6GB"
+    # Host com vision: overhead = base + mmproj
+    overhead = VRAM_OVERHEAD_BASE_GB + VRAM_MMPROJ_GB
+    used = flags.ngl * per_layer_gb + kv_cache_gb(flags.model, flags.ctx, "q8_0") + overhead
+    assert used <= 6.0, f"VRAM estourada: {used:.1f}GB > 6GB"
     assert flags.forecast_tps > 1.0   # unidade certa (bugs de mistura B/raw dão 1.0)
+    # ng1 deve ser > 10 para ter performance decente (> 15 t/s)
+    assert flags.ngl >= 10, f"ngl={flags.ngl} muito baixo — performance insuficiente"
 
 
 def test_expert_params_sane() -> None:

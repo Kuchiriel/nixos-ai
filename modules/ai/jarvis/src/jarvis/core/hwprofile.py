@@ -47,16 +47,23 @@ QUANT_BYTES: dict[str, float] = {
 # Bytes por elemento do KV cache (llama.cpp: f16 = 2, q8_0 = 1)
 KV_BYTES: dict[str, float] = {"f16": 2.0, "q8_0": 1.0}
 
-# Folga de VRAM para buffers de computação, mmproj (visão) e runtime
-VRAM_OVERHEAD_GB = 0.6
+# Folga de VRAM base: CUDA context (~0.3GB) + compute buffers (~0.2GB)
+VRAM_OVERHEAD_BASE_GB = 0.5
+# Folga extra para mmproj (visão BF16: SigLIP ~400M params × 2 bytes ≈ 0.8GB)
+VRAM_MMPROJ_GB = 0.8
 # Folga de RAM para o sistema operacional e serviços
 RAM_OVERHEAD_GB = 1.5
+# Safety margin: usar 90% da headroom para evitar OOM por flutuação
+# do CUDA context e buffers de compute em runtime
+VRAM_SAFETY_FACTOR = 0.90
 
 # Eficiência real vs. largura de banda teórica (calibrada com relatos reais:
 # Qwen3.6-35B offload ≈ 30 tps em 6GB/32GB; Qwen3-4B CPU ≈ 5-10 tps na VM)
 EFF_FULL_GPU = 0.60
 EFF_CPU = 0.45
-EFF_MOE_OFFLOAD = 0.15
+# MoE offload:Experts na RAM lidos por token, ativação esparsa (top-k)
+# Calibrado: ~30 tps em RTX 4050 6GB/32GB com ngl=16, n_cpu_moe=2
+EFF_MOE_OFFLOAD = 0.25
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +307,12 @@ def derive_flags(
     if backend and vram > 0:
         # multi-GPU: o modelo se distribui entre todas (split-mode layer|row)
         total_vram = vram * hw.gpu.count if hw.gpu.count > 1 else vram
-        headroom = total_vram - VRAM_OVERHEAD_GB
+        # Overhead dinâmico: base + mmproj (se vision)
+        overhead = VRAM_OVERHEAD_BASE_GB
+        if model.vision:
+            overhead += VRAM_MMPROJ_GB
+        # Safety factor: 90% da headroom para evitar OOM
+        headroom = (total_vram - overhead) * VRAM_SAFETY_FACTOR
         kv_f16_gb = kv_cache_gb(model, ctx, "f16")
         if headroom >= size_gb + kv_f16_gb + 0.5:
             offload = "full"
@@ -311,23 +323,31 @@ def derive_flags(
             offload = "expert"
             kv = "q8_0" if headroom < size_gb + kv_cache_gb(model, ctx, "f16") + 1.0 else "f16"
             kv_gb = kv_cache_gb(model, ctx, kv)
-            # n-cpu-moe: quantos experts roteados por camada cabem na GPU
+            # n-cpu-moe: quantos experts roteados por camada ficam na GPU
+            # (os demais routed experts ficam na RAM via --n-cpu-moe)
+            # Testa de 2 em 2: menos experts na GPU = menos VRAM por camada
             n_cpu_moe = 2
             while n_cpu_moe < model.routed_experts:
                 per_layer = gpu_params_per_layer(model, n_cpu_moe, quant)
-                ngl = int((headroom - kv_gb) / (per_layer * QUANT_BYTES[quant] / 1e9))
+                gb_per_layer = per_layer * QUANT_BYTES[quant] / 1e9
+                ngl = int((headroom - kv_gb) / gb_per_layer)
                 if ngl >= model.layers:
                     break
                 if ngl >= 1:
                     break
-                n_cpu_moe += 2  # reduz carga por camada até algo caber
+                n_cpu_moe += 2  # reduz experts na GPU até caber
+            # Recalcula ngl final com o n_cpu_moe escolhido
             per_layer = gpu_params_per_layer(model, n_cpu_moe, quant)
             gb_per_layer = per_layer * QUANT_BYTES[quant] / 1e9
             ngl = max(1, min(model.layers, int((headroom - kv_gb) / gb_per_layer)))
+            n_on_gpu = min(n_cpu_moe + model.shared_experts,
+                           model.routed_experts + model.shared_experts)
             warnings.append(
-                f"expert offload: atenção na GPU ({ngl}/{model.layers} camadas), "
-                f"{model.routed_experts - n_cpu_moe} experts roteados por camada "
-                f"na RAM ({ram:.0f}GB) — VRAM {vram:.0f}GB preservada"
+                f"expert offload: {ngl}/{model.layers} camadas na GPU "
+                f"({ngl * gb_per_layer:.1f}GB), {n_on_gpu} experts/camada na GPU "
+                f"({model.routed_experts - n_cpu_moe} routed→RAM), "
+                f"VRAM {vram:.0f}GB, overhead {overhead:.1f}GB "
+                f"(base+mmproj) × {VRAM_SAFETY_FACTOR:.0%} = {headroom:.1f}GB"
             )
         else:
             # Denso parcial: camadas que cabem na VRAM
@@ -375,26 +395,52 @@ def _forecast_tps(
 
     Calibrada com relatos reais (ver constantes EFF_*):
       - full GPU:  denso ativo = modelo inteiro (bytes/token = params × quant)
-      - MoE:       bytes/token = atenção + experts ativos (rotação)
-      - offload:   experts roteados lidos da RAM (banda da RAM, eficiência baixa)
+      - MoE:       bytes/token = attn + experts ativos (top-k routing)
+      - offload:   experts roteados na RAM lidos por token
       - cpu:       modelo inteiro da RAM
+
+    Para MoE (expert offload), o cálculo considera:
+      - attn + shared experts sempre na GPU (por camada)
+      - routed experts: top_k selectos por token, divididos entre GPU/RAM
+      - RAM bandwidth é o gargalo quando a maioria dos routed experts está na RAM
     """
     bytes_per_param = QUANT_BYTES[quant]
     if offload == "full":
-        active = m.params_b * bytes_per_param
-        return max(1.0, bw * EFF_FULL_GPU / active)
+        active_bytes_gb = m.params_b * bytes_per_param  # GB (params_b × bytes/param)
+        return max(1.0, bw * EFF_FULL_GPU / active_bytes_gb)
     if offload == "expert":
-        exp_b = moe_expert_params_per_layer(m) / 1e9            # params → bilhões
-        active_ram = (m.routed_experts - n_cpu_moe) * exp_b     # experts da RAM
-        active_gpu = m.active_params_b or (attn_params_per_layer(m) * m.layers / 1e9)
-        active_total = active_ram + active_gpu
-        return max(1.0, bw * EFF_MOE_OFFLOAD / active_total)
+        # Qwen3.6-35B-A3B: top_k=2, routed=8, shared=2, layers=40
+        # Per token per layer: attn + shared + top_k experts (split GPU/RAM)
+        attn_per_layer = attn_params_per_layer(m)  # raw params
+        exp_per_layer = moe_expert_params_per_layer(m)  # raw params por expert
+        n_gpu_routed = min(n_cpu_moe, m.routed_experts)
+        n_ram_routed = m.routed_experts - n_gpu_routed
+        top_k = min(2, m.routed_experts)  # Qwen MoE typical: top_k=2
+        # Experts expected per token (sparsely activated)
+        ram_experts_per_token = top_k * n_ram_routed / m.routed_experts
+        gpu_routed_per_token = top_k - ram_experts_per_token
+        # Bytes per token per layer
+        gpu_bytes = (attn_per_layer + m.shared_experts * exp_per_layer
+                     + gpu_routed_per_token * exp_per_layer) * bytes_per_param
+        ram_bytes = ram_experts_per_token * exp_per_layer * bytes_per_param
+        # Time per token per layer (VRAM bandwidth for GPU, RAM bandwidth for CPU)
+        from jarvis.core.hwdetect import memory_bandwidth_gb_s
+        gpu_bw = memory_bandwidth_gb_s(hw)
+        ram_bw = 120.0  # DDR5 dual-channel典型値
+        if ram_bytes > 0:
+            ms_per_layer = max(gpu_bytes / gpu_bw, ram_bytes / ram_bw)
+        else:
+            ms_per_layer = gpu_bytes / gpu_bw
+        total_ms_per_token = ms_per_layer * m.layers
+        if total_ms_per_token > 0:
+            return max(1.0, 1000.0 / total_ms_per_token)  # ms → t/s
+        return 1.0
     if offload == "partial":
-        active = m.params_b * bytes_per_param
-        return max(1.0, bw * EFF_CPU / active)
+        active_bytes_gb = m.params_b * bytes_per_param
+        return max(1.0, bw * EFF_CPU / active_bytes_gb)
     # cpu
-    active = m.params_b * bytes_per_param
-    return max(1.0, bw * EFF_CPU / active)
+    active_bytes_gb = m.params_b * bytes_per_param
+    return max(1.0, bw * EFF_CPU / active_bytes_gb)
 
 
 def build_command(flags: LlamaFlags, mmproj_path: str | None = None) -> list[str]:
