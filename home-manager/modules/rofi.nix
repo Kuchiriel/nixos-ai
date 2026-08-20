@@ -6,24 +6,21 @@
 {
   home.packages = [ pkgs.rofi ];
 
-  home.file.".local/share/rofi/themes/jarvis-cyan.rasi".source =
+  home.file."local/share/rofi/themes/jarvis-cyan.rasi".source =
     ../assets/rofi/jarvis-cyan.rasi;
 
-  programs.rofi.enable = true;
-
-  home.file.".config/rofi/config.rasi".text = ''
-    configuration {
-        modi: "drun,run,window";
-        show-icons: true;
-        terminal: "foot";
-        drun-display-format: "{name}";
-        location: 0;
-        disable-history: false;
-        hide-scrollbar: true;
-        display-drun: "  Apps ";
-        display-run: "  Run ";
-        display-window: "󰕰  Window";
-        sidebar-mode: true;
-    }
-  '';
+  programs.rofi = {
+    enable = true;
+    font = "JetBrainsMono Nerd Font 12";
+    terminal = "foot";
+    theme = "jarvis-cyan";
+    extraConfig = {
+      modi = "drun,run,window";
+      show-icons = true;
+      drun-display-format = "{name}";
+      disable-history = false;
+      hide-scrollbar = true;
+      sidebar-mode = true;
+    };
+  };
 }
