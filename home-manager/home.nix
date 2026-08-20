@@ -7,6 +7,8 @@
     ./modules/services/jarvis-wakeword.nix
   ];
 
+stylix.targets.hyprland.enable = false;
+
   # ⚠️ SEGREDOS: NUNCA coloque API keys aqui (vazam para o repo/git history).
   # O padrão do projeto é /etc/litellm.env (chmod 600, criado manualmente no
   # host, fora do git) — o serviço services.litellm lê de lá. Para o aider

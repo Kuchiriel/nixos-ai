@@ -32,8 +32,8 @@ in
   };
 
   stylix.targets.gnome.enable = false;    # Exemplo para GNOME
-  stylix.targets.hyprland.enable = false; # Exemplo para Hyprland
   stylix.targets.feh.enable = false;      # Comum em WMs leves como i3 ou Sway
+  stylix.targets.swaybg.enable = false;
   stylix.targets.console.enable = true; # Mantém as cores no terminal
 
   environment.systemPackages = with pkgs; [
