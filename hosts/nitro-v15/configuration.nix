@@ -57,7 +57,7 @@ in
     jq
     htop
     ethtool
-
+    cloudflare-warp
     # Pacote do JARVIS via overlay
     jarvis
   ];
@@ -65,6 +65,8 @@ in
   # Habilita o gerenciamento de volumes e montagem de mídia
   services.gvfs.enable = true;
   services.udisks2.enable = true;
+
+  services.cloudflare-warp.enable = true;
 
   # Suporte a NTFS (essencial para ler/escrever em partições do Windows)
   boot.supportedFilesystems = [ "ntfs" ];
