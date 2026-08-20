@@ -145,6 +145,18 @@ in
   #   - vm: CPU puro (gpuLayers=0), KV f16 (sem GPU não compensa q8), 4
   #     threads (VM compartilhada com o host Hyper-V).
   profiles = {
+    auto = {
+      model = "qwen3.6-35b-a3b";
+      mmproj = "llm-host-mmproj";  # vision
+      threads = 16;
+      ctxSize = 32768;
+      ubatch = 1024;
+      gpuLayers = 17;
+      kvCache = "-fa on -ctk q8_0 -ctv q8_0";
+      moeFlags = "--n-cpu-moe 2";
+      user = "root";
+      scheduler = { policy = "fifo"; priority = 50; };
+    };
     vm = {
       model = "llm-vm";
       threads = 4;
