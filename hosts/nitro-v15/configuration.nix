@@ -205,6 +205,7 @@ in
     commands = [{ command = "ALL"; options = [ "NOPASSWD" ]; }];
   }];
 
+
   systemd.services.cloudflare-warp-routes = {
     description = "Configura excecoes de rota locais e do Wurm Online no WARP";
     after = [ "network-online.target" "cloudflare-warp.service" ];
@@ -215,26 +216,23 @@ in
       RemainAfterExit = true;
       TimeoutStartSec = "15s";
       ExecStart = pkgs.writeShellScript "warp-set-routes" ''
-      # Tenta verificar o daemon no máximo 5 vezes (5 segundos)
-      for i in {1..5}; do
-        if ${pkgs.cloudflare-warp}/bin/warp-cli status >/dev/null 2>&1; then
-          break
-        fi
-        sleep 1
-      done
+        # Aguarda o daemon estar pronto (max 5s)
+        for i in {1..5}; do
+          if ${pkgs.cloudflare-warp}/bin/warp-cli status >/dev/null 2>&1; then
+            break
+          fi
+          sleep 1
+        done
 
-      # Executa as regras de exclusao
-      ${pkgs.cloudflare-warp}/bin/warp-cli add-excluded-route 192.168.0.0/16 || true
-      ${pkgs.cloudflare-warp}/bin/warp-cli add-excluded-route 10.0.0.0/8 || true
+        # 1. Exceções de rede local por IP
+        ${pkgs.cloudflare-warp}/bin/warp-cli tunnel ip add 192.168.0.0/16 || true
+        ${pkgs.cloudflare-warp}/bin/warp-cli tunnel ip add 10.0.0.0/8 || true
 
-      WURM_IP=$(getent ahossthost harmony.game.wurmonline.com 2>/dev/null | ${pkgs.gawk}/bin/awk '{ print $1 }' | head -n 1)
-
-      if [ -n "$WURM_IP" ]; then
-        ${pkgs.cloudflare-warp}/bin/warp-cli add-excluded-route "$WURM_IP/32" || true
-      fi
-    '';
+        # 2. Exceção do Wurm Online por Host (Nativo)
+        ${pkgs.cloudflare-warp}/bin/warp-cli tunnel host add harmony.game.wurmonline.com || true
+      '';
+    };
   };
-};
 
   # =========================================================================
   # 6. NIX — Caches, Performance e nix-ld
