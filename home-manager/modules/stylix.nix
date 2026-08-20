@@ -70,7 +70,7 @@
     # Wallpaper com atmosfera tecnológica em tons de azul/ciano
     image = pkgs.fetchurl {
       url = "https://raw.githubusercontent.com/Icy-Thought/Artwork/master/Wallpapers/blue-cyber-grid.png"; 
-      sha256 = = lib.fakeHash; # Ajuste o hash após o primeiro build se necessário
+      sha256 = lib.fakeHash; # Ajuste o hash após o primeiro build se necessário
     };
   };
 }
