@@ -39,7 +39,29 @@ def _default_log_dir() -> Path:
 
 
 class Logger:
-    """Logger JSONL estruturado — um por módulo (agent, heal, etc)."""
+    """Logger JSONL estruturado — um por módulo (agent, heal, etc).
+
+    Condicionais (jsonl-repl.txt):
+      - VM/lab: JSONL habilitado (debug, audit, regressão).
+      - Host/bare-metal: desabilitado via JARVIS_JSONL=0 (llm não precisa
+        de JSONL pesado — mantém I/O mínimo).
+      - Override: JARVIS_JSONL=1 força habilitar em qualquer ambiente.
+    """
+
+    _disabled: bool | None = None  # cache do check (lazy)
+
+    @classmethod
+    def _is_disabled(cls) -> bool:
+        if cls._disabled is None:
+            val = os.environ.get("JARVIS_JSONL", "").lower()
+            if val in ("0", "false", "no"):
+                cls._disabled = True
+            elif val in ("1", "true", "yes"):
+                cls._disabled = False
+            else:
+                # Auto-detect: se rodando como root ou sem state dir, desabilita
+                cls._disabled = os.getuid() == 0
+        return cls._disabled
 
     def __init__(self, module: str, log_dir: Path | None = None) -> None:
         self.module = module
@@ -79,6 +101,8 @@ class Logger:
     def emit(self, event: str, *, level: str = "info",
              detail: Any = None, **extra: Any) -> None:
         """Emite um evento estruturado."""
+        if self._is_disabled():
+            return  # JSONL desabilitado (host/bare-metal)
         if not self._ensure_dir():
             return  # diretório inacessível (sandbox Nix, etc.)
         entry: dict[str, Any] = {

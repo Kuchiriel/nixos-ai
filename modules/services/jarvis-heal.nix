@@ -45,6 +45,7 @@ in
       wantedBy = [ "multi-user.target" ];
       serviceConfig = {
         ExecStart = "${pkgs.jarvis}/bin/jarvis heal --watch --interval ${toString cfg.interval} --cooldown ${toString cfg.cooldown}";
+        Environment = [ "JARVIS_JSONL=0" ];
         Restart = "on-failure";
         RestartSec = "30";
         # Audit/lições da memória ficam em ~root/.local/state/jarvis
@@ -56,6 +57,7 @@ in
       wantedBy = [ "default.target" ];
       serviceConfig = {
         ExecStart = "${pkgs.jarvis}/bin/jarvis heal --watch --interval ${toString cfg.interval} --cooldown ${toString cfg.cooldown}";
+        Environment = [ "JARVIS_JSONL=0" ];
         Restart = "on-failure";
         RestartSec = "30";
       };
