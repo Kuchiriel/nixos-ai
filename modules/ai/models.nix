@@ -171,6 +171,10 @@ in
       gpuLayers = 12;           # 12/40 camadas na GPU (expert offload: attn+4experts/camada)
       kvCache = "-fa on -ctk q8_0 -ctv q8_0";  # q8_0: VRAM apertada, f16 não cabe
       moeFlags = "--n-cpu-moe 2";  # 2 routed experts na GPU + 2 shared; 6 routed→RAM
+      # Flags de performance (benchmarks Qwen3.6-35B-A3B MoE):
+      #   --no-mmap: carrega modelo inteiro na RAM no startup (+35% t/s, elimina page faults)
+      #   --mlock: impede swap dos experts ativos pra disco (mantém latência RAM)
+      extraFlags = "--no-mmap --mlock";
       user = "root";
       scheduler = { policy = "fifo"; priority = 50; };  # tempo real para LLM inference
     };

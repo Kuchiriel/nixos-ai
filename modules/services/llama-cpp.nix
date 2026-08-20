@@ -65,7 +65,7 @@ in
           ${optionalString (prof ? mmproj) ''--mmproj "${pkgs.aiModels.${prof.mmproj}}" ''} \
           --host 0.0.0.0 --port ${toString config.services.llama-cpp-server.port} \
           -c ${toString prof.ctxSize} -t ${toString prof.threads} -ub ${toString prof.ubatch} -ngl ${toString prof.gpuLayers} \
-          ${prof.kvCache} ${prof.moeFlags} ${escapeShellArgs config.services.llama-cpp-server.extraFlags}
+          ${prof.kvCache} ${prof.moeFlags} ${prof.extraFlags or ""} ${escapeShellArgs config.services.llama-cpp-server.extraFlags}
       '';
 
       serviceConfig = {

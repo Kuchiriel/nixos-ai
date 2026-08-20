@@ -461,6 +461,11 @@ def build_command(flags: LlamaFlags, mmproj_path: str | None = None) -> list[str
         cmd += ["--n-cpu-moe", str(flags.n_cpu_moe)]
     if flags.split_mode:
         cmd += ["--split-mode", flags.split_mode]
+    # Flags de performance para offload RAM (benchmarks Qwen3.6-35B-A3B MoE):
+    #   --no-mmap: carrega modelo inteiro na RAM no startup (+35% t/s)
+    #   --mlock: impede swap dos experts ativos pra disco
+    if flags.offload in ("expert", "partial", "cpu") and m.size_gb and m.size_gb > 10:
+        cmd += ["--no-mmap", "--mlock"]
     cmd += ["--jinja"]  # tool calling via chat template (Qwen3+)
     return cmd
 
@@ -487,6 +492,10 @@ def render_models_nix(flags: LlamaFlags, profile_name: str = "auto") -> str:
         f'      kvCache = "-fa {fa} -ctk {kv} -ctv {kv}";',
         f'      moeFlags = "{moe}";',
     ]
+    # Flags de performance para modelos grandes em offload RAM
+    m = flags.model
+    if flags.offload in ("expert", "partial", "cpu") and m and m.size_gb and m.size_gb > 10:
+        lines.append('      extraFlags = "--no-mmap --mlock";')
     if flags.offload != "cpu":
         lines.append('      user = "root";')
         lines.append('      scheduler = { policy = "fifo"; priority = 50; };')
