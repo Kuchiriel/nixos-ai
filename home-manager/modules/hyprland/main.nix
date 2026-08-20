@@ -1,5 +1,7 @@
-{ pkgs, config, lib, ... }:
+{ pkgs, config, lib, jarvisEnvironment, ... }:
 let
+  isHost = jarvisEnvironment == "host";
+
   baseEnv = [
     "NIXOS_OZONE_WL,1"
     "XDG_CURRENT_DESKTOP,Hyprland"
@@ -10,10 +12,11 @@ let
     "XDG_SCREENSHOTS_DIR,$HOME/screens"
   ];
 
-  # NVIDIA env vars — RTX 4050 no host (não presente na VM)
-  # O legado Manjaro sempre tinha essas vars; na VM (sem GPU), elas são ignoradas.
-  nvidiaEnv = {
-    LIBVA_DRIVER_NAME = "nvidia";
+  # NVIDIA env vars — RTX 4050 NO HOST apenas.
+  # Na VM (sem GPU), essas vars quebram VA-API e causam erros no waybar/mpvpaper.
+  # No host, LIBVA_DRIVER_NAME=nvidia é SOBRESCREVIDO por mpvpaper.nix para iHD
+  # (iGPU Intel UHD 770 faz o decode de vídeo; RTX fica livre para o LLM).
+  nvidiaEnv = lib.optionalAttrs isHost {
     GBM_BACKEND = "nvidia-drm";
     __GLX_VENDOR_LIBRARY_NAME = "nvidia";
   };

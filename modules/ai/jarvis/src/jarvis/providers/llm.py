@@ -41,8 +41,19 @@ class LLMClient:
     # --- chat ---
 
     def chat(self, messages: list[dict[str, str]], *, temperature: float = 0.0, max_tokens: int | None = None) -> str:
+        # Detecta o model_id real do servidor (o default 'default' não existe
+        # no llama.cpp — o nome vem do arquivo GGUF, ex: Qwen3-4B-Q4_K_M).
+        model_id = self._cfg.llm_model
+        try:
+            resp = requests.get(f"{self._base}/models", timeout=3)
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("data"):
+                model_id = data["data"][0].get("id", model_id)
+        except Exception:
+            pass
         payload: dict[str, Any] = {
-            "model": self._cfg.llm_model,
+            "model": model_id,
             "messages": messages,
             "temperature": temperature,
         }

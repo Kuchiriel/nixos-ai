@@ -7,7 +7,7 @@
 #   - cooldown 5s anti-loop (sem ele, o beep de confirmação re-triggerava o wakeword)
 #   - silence adaptativo: 40% drop do pico RMS por 1.0s = parar gravação
 #   - kill TTS/audiobook ao trigger (para o usuário falar)
-#   - RNNoise: desativado (plugin LADSPA indisponível no nixpkgs — pendência documentada)
+#   - RNNoise: ativado via PipeWire filter-chain em nixos/modules/audio.nix
 
 let
   cfg = config.services.jarvis-wakeword;
@@ -228,9 +228,30 @@ let
                     if BRAIN_CMD:
                         update_status("processing", "Pensando...")
                         try:
-                            subprocess.run(BRAIN_CMD + [temp_wav], timeout=30)
+                            # Verifica se o comando existe antes de rodar
+                            import shutil as _shutil
+                            if not _shutil.which(BRAIN_CMD[0]):
+                                print(f"[WW] ❌ BRAIN_CMD '{BRAIN_CMD[0]}' não encontrado no PATH", flush=True)
+                                update_status("error", f"Comando '{BRAIN_CMD[0]}' não encontrado")
+                            else:
+                                result = subprocess.run(
+                                    BRAIN_CMD + [temp_wav],
+                                    timeout=60,
+                                    capture_output=True, text=True,
+                                )
+                                if result.returncode != 0:
+                                    stderr_msg = (result.stderr or "")[:200]
+                                    print(f"[WW] ❌ brain falhou (exit {result.returncode}): {stderr_msg}", flush=True)
+                                    update_status("error", f"Erro: {stderr_msg[:60]}")
+                                else:
+                                    print(f"[WW] ✅ brain OK: {(result.stdout or "")[:100]}", flush=True)
+                                    update_status("done", "Concluído")
+                        except subprocess.TimeoutExpired:
+                            print(f"[WW] ⏰ brain timeout (60s) — LLM ou TTS travou", flush=True)
+                            update_status("error", "Timeout: LLM/TTS não respondeu")
                         except Exception as e:
-                            print(f"[WW] brain error: {str(e)[:100]}", flush=True)
+                            print(f"[WW] ❌ brain error: {str(e)[:100]}", flush=True)
+                            update_status("error", f"Exceção: {str(e)[:60]}")
 
                     # Reset: restart arecord e recarrega modelo (limpa estado do trigger)
                     arecord_proc.terminate()
@@ -257,8 +278,12 @@ in
     };
     device = lib.mkOption {
       type = lib.types.str;
-      default = "hw:1,7";
-      description = "Dispositivo ALSA de captura (legado: hw:1,7, bypass PyAudio).";
+      default = "default";
+      description = ''
+        Dispositivo ALSA de captura.
+        "default" = PipeWire ALSA emulation (usa o source padrão do usuário).
+        Legado Manjaro: hw:1,7 (bypass PyAudio) — NÃO usar no NixOS.
+      '';
     };
     rate = lib.mkOption {
       type = lib.types.int;

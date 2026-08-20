@@ -4,6 +4,6 @@
 {
   home.packages = [ pkgs.rofi ];
 
-  home.file."local/share/rofi/themes/jarvis-cyan.rasi".source =
+  home.file.".local/share/rofi/themes/jarvis-cyan.rasi".source =
     ../assets/rofi/jarvis-cyan.rasi;
 }

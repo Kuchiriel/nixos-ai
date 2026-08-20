@@ -387,7 +387,7 @@ class Agent:
         if self._mcp_tools:
             tools.extend(to_function_tools(self._mcp_tools))
         payload: dict[str, Any] = {
-            "model": self._cfg.llm_model,
+            "model": self._model_id() or self._cfg.llm_model,
             "messages": messages,
             "tools": tools,
             "tool_choice": profile["tool_choice"],

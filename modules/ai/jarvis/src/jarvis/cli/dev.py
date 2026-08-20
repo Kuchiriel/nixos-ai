@@ -33,27 +33,26 @@ def _get_config():
 
 
 def _detect_profile() -> dict[str, Any]:
-    """Detecta o perfil do modelo."""
+    """Detecta o perfil do modelo E retorna o model_id correto para o payload."""
     cfg = _get_config()
+    model_id = cfg.llm_model  # default: "default"
     try:
         resp = requests.get(f"{cfg.llm_base_url.rstrip('/')}/models", timeout=5)
         resp.raise_for_status()
         data = resp.json()
         if data.get("data"):
-            model_id = data["data"][0].get("id", "")
-        else:
-            model_id = ""
+            model_id = data["data"][0].get("id", model_id)
     except Exception:
-        model_id = ""
+        pass
 
     m = model_id.lower()
     if "32b" in m or "30b" in m:
-        return {"name": "large", "max_tokens": 768, "temperature": 0.0}
+        return {"name": "large", "max_tokens": 768, "temperature": 0.0, "model_id": model_id}
     if "7b" in m:
-        return {"name": "small", "max_tokens": 1024, "temperature": 0.0}
+        return {"name": "small", "max_tokens": 1024, "temperature": 0.0, "model_id": model_id}
     if "4b" in m or "3b" in m or "1b" in m:
-        return {"name": "tiny", "max_tokens": 512, "temperature": 0.0}
-    return {"name": "default", "max_tokens": 1024, "temperature": 0.0}
+        return {"name": "tiny", "max_tokens": 512, "temperature": 0.0, "model_id": model_id}
+    return {"name": "default", "max_tokens": 1024, "temperature": 0.0, "model_id": model_id}
 
 
 def _build_memory_context() -> str:
@@ -170,7 +169,7 @@ def _call_llm(messages: list[dict[str, str]], tools: list[dict], profile: dict) 
     """Chama o LLM local."""
     cfg = _get_config()
     payload = {
-        "model": cfg.llm_model,
+        "model": profile.get("model_id", cfg.llm_model),
         "messages": messages,
         "tools": tools,
         "tool_choice": "auto",

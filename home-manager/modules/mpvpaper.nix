@@ -11,7 +11,7 @@
 #     DRI_PRIME força o decode na iGPU; --vo=gpu usa OpenGL na iGPU.
 #   - VM (lab): NÃO sobe — sem GPU, o decode em software roubaria CPU.
 #
-# Wallpapers: /etc/jarvis/wallpapers/*.mp4 (copiados do legado via Nix store)
+# Wallpapers: home-manager/assets/wallpapers/*.mp4 (copiados do legado Manjaro)
 let
   isHost = jarvisEnvironment == "host";
   wallpapersDir = ../assets/wallpapers;
@@ -38,15 +38,18 @@ in
       #   -p → presentation mode (sem bordas, fullscreen)
       #   -n 30 → limita a 30 FPS (economiza CPU/GPU)
       #   -l background → camada background (abaixo de janelas)
-      #   --hwdec=auto-safe → decode por hardware (VA-API → iGPU)
+      #   --hwdec=vaapi → decode por hardware VA-API na iGPU Intel
       #   --vo=gpu → renderização OpenGL (na iGPU)
       #   --no-audio → sem áudio do wallpaper
+      #   --loop → repete wallpaper infinitamente
+      # NOTA: hwdec=vaapi (não auto-safe) — auto-safe pode escolher a RTX em vez
+      # da iGPU. DRI_PRIME + LIBVA_DRIVER_NAME=iHD força o decode no device certo.
       Environment = "DRI_PRIME=pci-0000:00:02.0";
       ExecStart = lib.concatStringsSep " " [
         "${pkgs.mpvpaper}/bin/mpvpaper"
         "-f" "-p" "-n" "30" "-l" "background"
         "-o"
-        ''"--no-audio --hwdec=auto-safe --vo=gpu --loop"''
+        ''"--no-audio --hwdec=vaapi --vo=gpu --loop"''
         "*"
         "${wallpapersDir}"
       ];
