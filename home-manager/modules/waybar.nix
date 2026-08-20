@@ -26,16 +26,31 @@ let
   # No printf, \n gera nova linha — para JSON válido precisamos de \\n
   # que o printf imprime como literal \n.
   cpuScript = pkgs.writeShellScriptBin "waybar-cpu" ''
-    read -r user nice system idle rest < /proc/stat
-    total=$((user+nice+system+idle))
-    CPU=$(( (user+nice+system)*100/total ))
+    get_cpu() {
+      awk '/^cpu / {print ($2+$3+$4+$5+$6+$7+$8), $5}' /proc/stat
+    }
+    
+    read -r total1 idle1 < <(get_cpu)
+    sleep 0.5
+    read -r total2 idle2 < <(get_cpu)
+    
+    total_diff=$((total2 - total1))
+    idle_diff=$((idle2 - idle1))
+    
+    if [ "$total_diff" -gt 0 ]; then
+      CPU=$(( (100 * (total_diff - idle_diff)) / total_diff ))
+    else
+      CPU=0
+    fi
+
     if [ "$CPU" -ge 80 ]; then CLASS="high"
     elif [ "$CPU" -ge 50 ]; then CLASS="medium"
     else CLASS="low"
     fi
+    
     read LOAD _rest _ < /proc/loadavg
     printf '{"text": "%s%%", "tooltip": "Load: %s\\nUsage: %s%%", "class": "%s"}\n' "$CPU" "$LOAD" "$CPU" "$CLASS"
-  '';
+  '';  
 
   memoryScript = pkgs.writeShellScriptBin "waybar-memory" ''
     while read -r key val rest; do
