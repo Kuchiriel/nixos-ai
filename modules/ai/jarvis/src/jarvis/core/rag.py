@@ -395,7 +395,7 @@ class HybridIndexer:
                 return None
 
         # Chunking alinhado com o contexto do modelo
-        chunk_size = 350
+        chunk_size = 200
         chunks = [content[i:i + chunk_size] for i in range(0, len(content), chunk_size)]
 
         facts = extract_facts(content, ext)
