@@ -9,6 +9,11 @@ Padrão do legado:
 
 Nossa adaptação:
   str_replace → ast_validate(target_file) → if fail → revert + report error
+
+Poneglyph Protocol (AST Hash Cache):
+  Antes de ast.parse(), verifica o cache de hashes SHA-256.
+  Se o hash bater: arquivo não mudou → bypass (ganho de performance).
+  Se divergir: roda ast.parse() → grava novo hash se válido.
 """
 from __future__ import annotations
 
@@ -23,7 +28,9 @@ from typing import Optional
 
 def validate_python_syntax(code: str) -> tuple[bool, str]:
     """Valida sintaxe Python com ast.parse().
-    
+
+    Poneglyph: usa cache de hashes para bypass quando possível.
+
     Returns:
         (is_valid, error_message)
     """
@@ -33,6 +40,38 @@ def validate_python_syntax(code: str) -> tuple[bool, str]:
     except SyntaxError as e:
         msg = f"Linha {e.lineno}, Col {e.offset}: {e.msg}"
         return False, msg
+
+
+def validate_python_syntax_cached(code: str, filepath: str = "") -> tuple[bool, str]:
+    """Valida com cache de hashes — bypass se o hash bater.
+
+    Se filepath não for fornecido, valida sem cache (fallback).
+
+    Returns:
+        (is_valid, error_message)
+    """
+    if not filepath:
+        return validate_python_syntax(code)
+
+    try:
+        from jarvis.core.ast_cache import get_ast_cache
+        cache = get_ast_cache()
+
+        # Se o hash bater, arquivo não mudou → bypass
+        if cache.is_valid(filepath, code):
+            return True, ""
+
+        # Hash divergiu → roda validação completa
+        is_valid, error = validate_python_syntax(code)
+
+        # Só grava no cache se for válido
+        if is_valid:
+            cache.mark_valid(filepath, code)
+
+        return is_valid, error
+    except ImportError:
+        # ast_cache não disponível → fallback sem cache
+        return validate_python_syntax(code)
 
 
 def validate_file_syntax(filepath: str) -> tuple[bool, str]:

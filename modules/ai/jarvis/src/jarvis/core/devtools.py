@@ -127,11 +127,11 @@ def write_file(path: str, content: str, backup: bool = True) -> dict[str, Any]:
         # Só aplica se o arquivo original era Python válido
         if target.suffix == ".py" and target.exists():
             try:
-                from jarvis.core.ast_guard import validate_python_syntax
+                from jarvis.core.ast_guard import validate_python_syntax_cached
                 original_code = target.read_text(encoding="utf-8", errors="replace")
-                original_valid, _ = validate_python_syntax(original_code)
+                original_valid, _ = validate_python_syntax_cached(original_code, str(target))
                 if original_valid:
-                    is_valid, ast_error = validate_python_syntax(content)
+                    is_valid, ast_error = validate_python_syntax_cached(content, str(target))
                     if not is_valid:
                         return {
                             "ok": False,
@@ -353,10 +353,10 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
         # Só aplica se o arquivo original era Python válido
         if target.suffix == ".py":
             try:
-                from jarvis.core.ast_guard import validate_python_syntax, format_ast_error_for_llm
-                original_valid, _ = validate_python_syntax(content)
+                from jarvis.core.ast_guard import validate_python_syntax_cached, format_ast_error_for_llm
+                original_valid, _ = validate_python_syntax_cached(content, str(target))
                 if original_valid:
-                    is_valid, ast_error = validate_python_syntax(new_content)
+                    is_valid, ast_error = validate_python_syntax_cached(new_content, str(target))
                     if not is_valid:
                         return {
                             "ok": False,
