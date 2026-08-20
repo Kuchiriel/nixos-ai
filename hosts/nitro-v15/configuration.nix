@@ -24,14 +24,9 @@ in
     dedicatedServer.openFirewall = true; # Open ports in the firewall for Source Dedicated Server
   };
 
-  programs.sunshine = {
-    enable = true;
-    autoStart = true; # Cria o serviço de usuário do systemd automaticamente
-    capSysAdmin = true; # Aplica as capacidades necessárias para captura de tela/input
-    openFirewall = true; # Abre exatamente as portas TCP/UDP que você listou
-  };
-
   environment.systemPackages = with pkgs; [
+    # Sunshine (streaming) — módulo NixOS não existe; pacote + config manual
+    sunshine
     # Utilitários do sistema
     pciutils
     git
