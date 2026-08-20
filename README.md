@@ -263,7 +263,6 @@ nixos-rebuild switch --flake .#nixos-lab
 4. Conecte-se à rede:
 
 ```bash
-sudo systemctl start wpa_supplicant
 nmtui  # conecte ao Wi-Fi
 ```
 
@@ -275,10 +274,16 @@ sudo nvme list
 
 # Identifique qual é Gen4 (rápido) vs Gen3 (lento)
 sudo lspci -vv | grep -A 2 "Non-Volatile" | grep LnkSta
+cat /sys/class/nvme/nvme0/device/current_link_speed
+cat /sys/class/nvme/nvme1/device/current_link_speed
+cat /sys/class/nvme/nvme0/device/current_link_width
+cat /sys/class/nvme/nvme1/device/current_link_width
+
 # Gen4 = 16GT/s | Gen3 = 8GT/s
 
-# Copie os IDs EXATOS (use /dev/disk/by-id/*):
+# Copie os IDs EXATOS (use /dev/disk/by-id/* ignore qualquer _1 copie só o ID):
 ls /dev/disk/by-id/nvme-*
+
 ```
 
 > **Regra**: NVMe Gen4 → `/` + `/nix` (store + modelos = I/O intensivo).
@@ -301,7 +306,9 @@ nano hosts/nitro-v15/disko.nix
 
 ```bash
 # Instalação via disko (wipe completo dos 2 NVMe)
-sudo nixos-install --flake .#nitro-v15 --disk-main system --disk-extra home
+sudo nix --extra-experimental-features 'nix-command flakes' run github:nix-community/disko -- --mode mount --flake .#nitro-v15
+
+sudo nixos-install --flake .#nitro-v15
 ```
 
 #### Passo 5 — Gerar e Rastrear hardware-configuration.nix
