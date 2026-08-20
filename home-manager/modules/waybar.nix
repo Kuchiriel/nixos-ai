@@ -18,6 +18,7 @@ let
     battery = {
       format = "{icon} {capacity}%";
       format-icons = [ "" "" "" "" "" ];
+      format-charging = " {capacity}%";
       tooltip = false;
     };
     backlight = {
