@@ -50,6 +50,13 @@ in
     jarvis
   ];
 
+  # Habilita o gerenciamento de volumes e montagem de mídia
+  services.gvfs.enable = true;
+  services.udisks2.enable = true;
+
+  # Suporte a NTFS (essencial para ler/escrever em partições do Windows)
+  boot.supportedFilesystems = [ "ntfs" ];
+
   # ── O SWITCH CENTRAL (Ambiente do Host Físico) ──────────────────────
   services.jarvis.enable = true;
   services.jarvis.environment = "host";
