@@ -181,7 +181,7 @@ def _call_llm(messages: list[dict[str, str]], tools: list[dict], profile: dict) 
         payload["chat_template_kwargs"] = {"enable_thinking": False}
 
     resp = requests.post(
-        f"{base_url}/completion",
+        f"{cfg.llm_base_url.rstrip('/')}/completion"
         json=payload,
         timeout=cfg.llm_timeout,
     )
