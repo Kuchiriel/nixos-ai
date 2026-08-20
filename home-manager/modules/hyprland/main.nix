@@ -99,7 +99,7 @@ in
 
       monitor = ",preferred,auto,1";
 
-     windowrule = [
+      windowrule = [
         "opacity 0.92 0.92, match:class ^(firefox)$"
         "opacity 0.90 0.90, match:class ^(foot)$"
         "float 1, match:class ^(mpv)$"
@@ -114,8 +114,7 @@ in
         "workspace 5, match:class ^(telegram)$"
         "float 1, match:class ^([Ww]urm.*)$"
         "stay_focused true, match:class ^([Ww]urm.*)$, match:title ^(Dropdown|ComboBox)$"
-        "opaque, match:class ^([Ww]urm.*)$"
-        "opacity 1.0 override 1.0 override, match:class ^([Ww]urm.*)$"
+        "opacity 1.0 1.0, match:class ^([Ww]urm.*)$"
         "suppress_event maximize, match:class ^(.*)$"
       ];
 
