@@ -21,6 +21,7 @@ let
     __GLX_VENDOR_LIBRARY_NAME = "nvidia";
   };
 in
+
 {
   wayland.windowManager.hyprland = {
     enable = true;
@@ -98,7 +99,7 @@ in
 
       monitor = ",preferred,auto,1";
 
-      windowrule = [
+     windowrule = [
         "opacity 0.92 0.92, match:class ^(firefox)$"
         "opacity 0.90 0.90, match:class ^(foot)$"
         "float 1, match:class ^(mpv)$"
@@ -111,6 +112,8 @@ in
         "workspace 3, match:class ^(zathura)$"
         "workspace 4, match:class ^(com.obsproject.Studio)$"
         "workspace 5, match:class ^(telegram)$"
+        "float 1, match:class ^([Ww]urm.*)$"
+        "stay_focused true, match:class ^([Ww]urm.*)$, match:title ^(Dropdown|ComboBox)$"
         "suppress_event maximize, match:class ^(.*)$"
       ];
 
