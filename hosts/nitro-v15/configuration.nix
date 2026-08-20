@@ -20,8 +20,15 @@ in
 
   programs.steam = {
     enable = true;
-    remotePlay.openFirewall = true; # Open ports in the firewall for Steam Remote Play
-    dedicatedServer.openFirewall = true; # Open ports in the firewall for Source Dedicated Server
+    # Força o Steam a rodar na NVIDIA por padrão
+    package = pkgs.steam.overrideAttrs (old: {
+      nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ pkgs.makeWrapper ];
+      postInstall = (old.postInstall or "") + ''
+        wrapProgram $out/bin/steam \
+          --set __NV_PRIME_RENDER_OFFLOAD "1" \
+          --set __GLX_VENDOR_LIBRARY_NAME "nvidia"
+      '';
+    });
   };
 
   environment.systemPackages = with pkgs; [
