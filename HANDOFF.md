@@ -276,13 +276,18 @@ Diagnóstico completo em `docs/architecture/pillar-diagnostic.md`. Score geral: 
 
 ### O que foi feito
 
-#### 1. Otimização MoE (hwprofile.py + models.nix)
-- **VRAM overhead dinâmico**: base 0.8GB (CUDA+compute) + mmproj 0.8GB + safety factor 90%
-- **Forecast MoE consertado**: bug de unidade (bytes vs GB/s), modelo top-k por layer
-- **Host profile**: ngl=10, ctx=16K, ubatch=512, threads=16, scheduler=fifo
-- **Flags deprecated**: `--no-mmap`/`--mlock` → `--load-mode mlock`
-- **Embeddings/Rerank**: `CUDA_VISIBLE_DEVICES=""` força CPU-only (libera ~540MB VRAM)
-- **mmproj DESATIVADO**: 861MB BF16 não cabe com ngl=10 (reativar com mmproj Q4)
+#### 1. Otimização MoE (models.nix + llama-cpp.nix)
+- **ESTRATÉGIA CORRETA** (pesquisa confirmada):
+  - `-ngl 99`: TODAS as camadas de atenção na GPU (denso, roda em todo token)
+  - `--n-cpu-moe 99`: TODOS os experts MoE na RAM (esparsos, rodam sob demanda)
+  - Attention é o gargalo → precisa de GPU
+  - Experts são lidos da RAM quando router seleciona top-k
+- **Host profile**: ngl=99, n_cpu_moe=99, ctx=4K, ubatch=512, threads=16, fifo
+- **mmproj**: na GPU (denso, ~861MB BF16)
+- **nomic-embed**: na GPU (<500MB, mais rápido para RAG)
+- **rerank**: CPU-only (`CUDA_VISIBLE_DEVICES=""`)
+- **VRAM**: 4455MB/6141MB (1686MB livre)
+- **Performance**: 33.3 t/s TG, 77 t/s PP (vs 8.7/26 com config errada)
 
 #### 2. Waybar GPU Monitor + TUI Tools (porta do legado Manjaro)
 - **custom/gpu**: nvidia-smi com states low/medium/high + VRAM tooltip
@@ -336,10 +341,16 @@ CPU (i7-13620H, 32GB RAM):
 ### Performance Medida
 
 ```
-Prompt processing:  26 t/s
-Token generation:   8.7 t/s (10.5 t/s com thinking)
-Contexto:           16K tokens
-Modelo:             Qwen3.6-35B-A3B MoE (UD-Q4_K_M)
+ANTES (config errada ngl=10):
+  Prompt processing:  26 t/s
+  Token generation:   8.7 t/s (10.5 t/s com thinking)
+  Contexto:           16K tokens
+
+DEPOIS (config correta ngl=99 --n-cpu-moe 99):
+  Prompt processing:  77 t/s
+  Token generation:  33.3 t/s
+  Contexto:           4K tokens
+  VRAM:               4455MB / 6141MB (1686MB livre)
 ```
 
 ### Comandos Importantes
