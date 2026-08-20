@@ -70,6 +70,5 @@
 
     # Wallpaper com atmosfera tecnológica em tons de azul/ciano
     image = "${pkgs.nixos-icons}/share/icons/hicolor/scalable/apps/nix-glow.svg";
-    };
   };
 }
