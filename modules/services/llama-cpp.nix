@@ -81,14 +81,11 @@ in
 
     # --- 2. SERVIDOR DE EMBEDDINGS (RAG) ---
     # --- 2. SERVIDOR DE EMBEDDINGS (RAG) ---
-    # CUDA_VISIBLE_DEVICES="" força CPU-only: previne CUDA context na GPU.
-    # O nomic-embed-text-v2-moe é leve (~512MB) e embeddings são compute
-    # uma vez por query (não por token) — CPU é suficiente.
-    # Sem isso, o CUDA context consome ~300MB de VRAM desnecessariamente.
+    # Nomic-embed é leve (<500MB) e BENEFICIA da GPU (indexação instantânea).
+    # Com o LLM usando ~2.5GB de VRAM, sobra espaço.
     systemd.services.llama-cpp-embeddings = mkIf config.services.llama-cpp-embeddings.enable {
       description = "Llama.cpp Embeddings Server";
       wantedBy = [ "multi-user.target" ];
-      environment.CUDA_VISIBLE_DEVICES = "";
       script = ''
         exec ${pkgs.llama-cpp}/bin/llama-server \
           -m "${pkgs.aiModels.embed}" \
@@ -99,11 +96,11 @@ in
     };
 
     # --- 3. SERVIDOR DE RERANK (SOTA RAG) ---
-    # CUDA_VISIBLE_DEVICES="" força CPU-only — mesmo raciocínio do embeddings.
+    # Reranker é leve, roda bem em CPU.
     systemd.services.llama-cpp-rerank = mkIf config.services.llama-cpp-rerank.enable {
       description = "Llama.cpp Rerank Server";
       wantedBy = [ "multi-user.target" ];
-      environment.CUDA_VISIBLE_DEVICES = "";
+      environment.CUDA_VISIBLE_DEVICES = "";  # CPU-only para preservar VRAM
       script = ''
         exec ${pkgs.llama-cpp}/bin/llama-server \
           -m "${pkgs.aiModels.reranker}" \

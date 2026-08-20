@@ -163,23 +163,35 @@ in
     #   TOTAL:    5.30GB (0.70GB margem de segurança)
     # 6 routed experts → RAM (120GB/s DDR5), 2 routed + 2 shared → GPU (260GB/s)
     # Forecast: ~25-30 t/s (bandwidth-bound, MoE esparsa top-k=2)
+    # Host: RTX 4050 6GB + 32GB RAM, Qwen3.6-35B-A3B MoE + vision
+    #
+    # ESTRATÉGIA MOE (pesquisa confirmada):
+    #   -ngl 99 = TODAS as camadas de atenção na GPU (rápido)
+    #   --n-cpu-moe 99 = TODOS os experts MoE na RAM (CPU lê sob demanda)
+    #   Attention = denso, roda em TODOS os tokens → GPU é essencial
+    #   Experts = esparsos, rodam em 2-4 por token → RAM é aceitável
+    #
+    # VRAM budget (~2.5GB usado, 3.5GB livre):
+    #   attention: 40 layers × ~25MB/layer ≈ 1GB (todas na GPU)
+    #   KV q8_0 4K: ~0.16GB
+    #   mmproj:    ~0.86GB (BF16, denso, deve ficar na GPU)
+    #   overhead:  ~0.5GB (CUDA context + compute)
+    #   TOTAL:     ~2.5GB
+    #
+    # Experts (20GB GGUF) ficam na RAM (32GB DDR5 ~120GB/s)
+    # CPU lê experts sob demanda quando router seleciona top-k
     host = {
       model = "llm-host";
-      # mmproj DESATIVADO: consome 861MB VRAM (BF16), não cabe com ngl=10.
-      # Reativar quando houver mais VRAM ou mmproj quantizado (Q4).
-      # mmproj = "llm-host-mmproj";
+      mmproj = "llm-host-mmproj";  # vision na GPU (denso, ~861MB BF16)
       threads = 16;
-      ctxSize = 16384;          # 16K contexto — seguro na VRAM (0.7GB margem)
-      ubatch = 512;             # 512: menos compute buffer que 1024 (seguro p/ 6GB)
-      gpuLayers = 10;           # 10/40 camadas na GPU (expert offload: attn+4experts/camada)
-      kvCache = "-fa on -ctk q8_0 -ctv q8_0";  # q8_0: VRAM apertada, f16 não cabe
-      moeFlags = "--n-cpu-moe 2";  # 2 routed experts na GPU + 2 shared; 6 routed→RAM
-      # Flags de performance (benchmarks Qwen3.6-35B-A3B MoE):
-      #   --load-mode mmap: carrega modelo inteiro na RAM no startup (+35% t/s)
-      #   --load-mode mlock: impede swap dos experts ativos pra disco
-      extraFlags = "--load-mode mlock";
+      ctxSize = 4096;           # 4K: contexto menor = estável, menos KV cache
+      ubatch = 512;
+      gpuLayers = 99;           # 99 = TODAS as camadas de atenção na GPU
+      kvCache = "-fa on -ctk q8_0 -ctv q8_0";
+      moeFlags = "--n-cpu-moe 99 --split-mode none";  # experts TODOS na RAM
+      extraFlags = "--no-mmap";  # carrega modelo em RAM, evita page faults
       user = "root";
-      scheduler = { policy = "fifo"; priority = 50; };  # tempo real para LLM inference
+      scheduler = { policy = "fifo"; priority = 50; };
     };
   };
 }
