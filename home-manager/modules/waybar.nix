@@ -5,15 +5,13 @@
 #       popups de error); clock/cpu/memory/network/workspaces/custom-jarvis.
 #   host (bare metal): full — battery, bluetooth, backlight, GPU, tudo.
 #
-# Porta do legado Manjaro (waybar-gpu.sh, waybar-jarvis-status.sh):
-#   - custom/gpu: nvidia-smi com states low/medium/high + VRAM/tooltip
-#   - custom/jarvis: estado da IA (idle/listening/thinking/speaking/error)
-#   - on-click em cada módulo abre TUI tool em foot (btm, yazi, nmtui, etc)
+# Estratégia de rendering de ícones Nerd Font:
+#   Os ícones ficam no campo `format` do módulo waybar (ex: "󰍛 {text}"),
+#   NÃO no output JSON dos scripts. Scripts retornam apenas valores ASCII.
+#   Isso evita que glyphs PUA multi-byte quebrem o parser JSON do waybar.
 let
   isHost = jarvisEnvironment == "host";
-  # módulos só de hardware real (determinístico, não lib.mkIf)
   hostOnlyModules = if isHost then [ "battery" "bluetooth" "backlight" ] else [];
-  # definições dos módulos só de hardware (merge determinístico)
   hostOnlySettings = lib.optionalAttrs isHost {
     battery = {
       format = "{icon} {capacity}%";
@@ -32,10 +30,8 @@ let
     };
   };
 
-  # Scripts bash para módulos custom — isolados via writeScriptBin para
-  # evitar problemas de escaping Nix '' ↔ aspas bash.
-  # NOTA: em strings Nix '', ${} é interpolação Nix. Para passar ${VAR}
-  # ao bash, usamos ''${VAR} ('' antes de $ escapa a interpolação).
+  # Scripts bash — output APENAS valores ASCII, sem ícones.
+  # Ícones ficam no campo `format` do waybar ( onde ).
   cpuScript = pkgs.writeShellScriptBin "waybar-cpu" ''
     read -r user nice system idle rest < /proc/stat
     total=$((user+nice+system+idle))
@@ -45,7 +41,7 @@ let
     else CLASS="low"
     fi
     read LOAD _rest _ < /proc/loadavg
-    printf '{"text": "󰍛 %s%%", "tooltip": "Load: %s\nUsage: %s%%", "class": "%s"}\n' "$CPU" "$LOAD" "$CPU" "$CLASS"
+    printf '{"text": "%s%%", "tooltip": "Load: %s\nUsage: %s%%", "class": "%s"}\n' "$CPU" "$LOAD" "$CPU" "$CLASS"
   '';
 
   memoryScript = pkgs.writeShellScriptBin "waybar-memory" ''
@@ -67,12 +63,12 @@ let
     elif [ "$MEM_PCT" -ge 60 ]; then CLASS="medium"
     else CLASS="low"
     fi
-    printf '{"text": "󰘚 %sG", "tooltip": "RAM: %sG / %sG (%s%%)\nSwap: %sG", "class": "%s"}\n' "$MEM_USED_GB" "$MEM_USED_GB" "$MEM_TOTAL_GB" "$MEM_PCT" "$SWAP_GB" "$CLASS"
+    printf '{"text": "%sG", "tooltip": "RAM: %sG / %sG (%s%%)\nSwap: %sG", "class": "%s"}\n' "$MEM_USED_GB" "$MEM_USED_GB" "$MEM_TOTAL_GB" "$MEM_PCT" "$SWAP_GB" "$CLASS"
   '';
 
   gpuScript = pkgs.writeShellScriptBin "waybar-gpu" ''
     if ! command -v nvidia-smi &>/dev/null; then
-        printf '{"text": "󰢮 GPU N/A", "tooltip": "nvidia-smi not found", "class": "disabled"}\n'
+        printf '{"text": "N/A", "tooltip": "nvidia-smi not found", "class": "disabled"}\n'
         exit 0
     fi
     GPU_UTIL=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1)
@@ -81,7 +77,7 @@ let
     GPU_MEM_TOTAL=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1)
     GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
     if [ -z "$GPU_UTIL" ]; then
-        printf '{"text": "󰢮 GPU N/A", "tooltip": "GPU not detected", "class": "disabled"}\n'
+        printf '{"text": "N/A", "tooltip": "GPU not detected", "class": "disabled"}\n'
         exit 0
     fi
     GPU_MEM_GB=$(awk "BEGIN {printf \"%.1f\", $GPU_MEM / 1024}")
@@ -90,7 +86,7 @@ let
     elif [ "$GPU_UTIL" -ge 50 ]; then CLASS="medium"
     else CLASS="low"
     fi
-    printf '{"text": "󰢮 %s%%", "tooltip": "%s\nUsage: %s%%\nTemp: %sC\nVRAM: %sGB / %sGB", "class": "%s"}\n' "$GPU_UTIL" "$GPU_NAME" "$GPU_UTIL" "$GPU_TEMP" "$GPU_MEM_GB" "$GPU_MEM_TOTAL_GB" "$CLASS"
+    printf '{"text": "%s%%", "tooltip": "%s\nUsage: %s%%\nTemp: %sC\nVRAM: %sGB / %sGB", "class": "%s"}\n' "$GPU_UTIL" "$GPU_NAME" "$GPU_UTIL" "$GPU_TEMP" "$GPU_MEM_GB" "$GPU_MEM_TOTAL_GB" "$CLASS"
   '';
 
   igpuScript = pkgs.writeShellScriptBin "waybar-igpu" ''
@@ -106,7 +102,7 @@ let
     elif [ "$PCT" -ge 40 ]; then CLASS="medium"
     else CLASS="low"
     fi
-    printf '{"text": "󰢮 %sMHz", "tooltip": "Intel UHD 770\nFreq: %s/%s MHz (%s%%)\nPower: %s", "class": "%s"}\n' "$CUR" "$CUR" "$MAX" "$PCT" "$STATUS" "$CLASS"
+    printf '{"text": "%sMHz", "tooltip": "Intel UHD 770\nFreq: %s/%s MHz (%s%%)\nPower: %s", "class": "%s"}\n' "$CUR" "$CUR" "$MAX" "$PCT" "$STATUS" "$CLASS"
   '';
 in
 {
@@ -125,10 +121,6 @@ in
   programs.waybar = {
     enable = true;
     style = ''
-      /* =========================================
-         JARVIS AI_SYSTEM — WAYBAR STYLE
-         ========================================= */
-
       * {
         border: none;
         border-radius: 0;
@@ -137,9 +129,6 @@ in
         min-height: 0;
       }
 
-      /* ------------------------------
-         BAR CONTAINER
-         ------------------------------ */
       window#waybar {
         background: #0a0a0a;
         border-bottom: 2px solid #00ffff;
@@ -148,9 +137,6 @@ in
         min-height: 34px;
       }
 
-      /* ------------------------------
-         MODULE BASE
-         ------------------------------ */
       #workspaces button,
       #clock,
       #cpu,
@@ -162,7 +148,6 @@ in
       #backlight,
       #tray,
       #custom-files,
-      #custom-weather,
       #custom-gpu,
       #custom-igpu,
       #custom-cpu,
@@ -174,9 +159,6 @@ in
         transition: all 0.25s ease;
       }
 
-      /* ------------------------------
-         WORKSPACES
-         ------------------------------ */
       #workspaces button {
         background: transparent;
         color: #00ffff;
@@ -188,9 +170,6 @@ in
         border-bottom: 2px solid #00ffff;
       }
 
-      /* ------------------------------
-         HOVER GLOW EFFECT
-         ------------------------------ */
       #clock:hover,
       #cpu:hover,
       #memory:hover,
@@ -200,20 +179,14 @@ in
       #bluetooth:hover,
       #backlight:hover,
       #custom-files:hover,
-      #custom-weather:hover,
       #custom-gpu:hover,
       #custom-igpu:hover,
       #custom-cpu:hover,
       #custom-memory:hover,
       #custom-jarvis:hover {
-        text-shadow:
-          0 0 4px #00ffff,
-          0 0 8px #00ffff;
+        text-shadow: 0 0 4px #00ffff, 0 0 8px #00ffff;
       }
 
-      /* ------------------------------
-         GPU USAGE STATES (porta do legado)
-         ------------------------------ */
       #custom-gpu.low { color: #50FA7B; }
       #custom-gpu.medium { color: #FFB86C; }
       #custom-gpu.high { color: #FF5555; text-shadow: 0 0 6px #FF5555; }
@@ -223,30 +196,18 @@ in
       #custom-igpu.medium { color: #FFB86C; }
       #custom-igpu.high { color: #FF5555; text-shadow: 0 0 6px #FF5555; }
 
-      /* ------------------------------
-         CPU USAGE STATES
-         ------------------------------ */
       #custom-cpu.low { color: #50FA7B; }
       #custom-cpu.medium { color: #FFB86C; }
       #custom-cpu.high { color: #FF5555; text-shadow: 0 0 6px #FF5555; }
 
-      /* ------------------------------
-         MEMORY USAGE STATES
-         ------------------------------ */
       #custom-memory.low { color: #50FA7B; }
       #custom-memory.medium { color: #FFB86C; }
       #custom-memory.high { color: #FF5555; text-shadow: 0 0 6px #FF5555; }
 
-      /* ------------------------------
-         BATTERY STATES
-         ------------------------------ */
       #battery.warning { color: #ffaa00; }
       #battery.critical { color: #ff5555; text-shadow: 0 0 6px #ff5555; }
       #battery.charging { color: #50FA7B; }
 
-      /* ------------------------------
-         JARVIS AI STATUS STATES
-         ------------------------------ */
       #custom-jarvis {
         background: rgba(0, 255, 255, 0.12);
         border-bottom: 2px solid #00ffff;
@@ -271,9 +232,6 @@ in
         100% { opacity: 1; }
       }
 
-      /* ------------------------------
-         TRAY & TOOLTIP
-         ------------------------------ */
       #tray { padding-right: 8px; }
       tooltip {
         background: rgba(0, 0, 0, 0.9);
@@ -311,9 +269,8 @@ in
         "tray"
       ];
 
-      # JARVIS — estado da IA (porta do legado waybar-jarvis-status.sh)
       "custom/jarvis" = {
-        exec = "${pkgs.jarvis}/bin/jarvis-waybar 2>/dev/null || echo '{\\\"text\\\": \\\"IDLE 🤖\\\", \\\"class\\\": \\\"idle\\\"}'";
+        exec = "${pkgs.jarvis}/bin/jarvis-waybar 2>/dev/null || echo '{\\\"text\\\": \\\"IDLE\\\", \\\"class\\\": \\\"idle\\\"}'";
         exec-on-event = true;
         interval = 2;
         return-type = "json";
@@ -353,7 +310,9 @@ in
         on-click = "foot --app-id floating_shell -e yazi";
       };
 
+      # Ícone no format, script retorna só valor ASCII
       "custom/cpu" = {
+        format = "󰍛 {}";
         exec = "${cpuScript}/bin/waybar-cpu";
         interval = 3;
         return-type = "json";
@@ -362,6 +321,7 @@ in
       };
 
       "custom/memory" = {
+        format = "󰘚 {}";
         exec = "${memoryScript}/bin/waybar-memory";
         interval = 5;
         return-type = "json";
@@ -370,6 +330,7 @@ in
       };
 
       "custom/gpu" = {
+        format = "󰢮 {}";
         exec = "${gpuScript}/bin/waybar-gpu";
         interval = 3;
         return-type = "json";
@@ -378,6 +339,7 @@ in
       };
 
       "custom/igpu" = {
+        format = "󰢮 {}";
         exec = "${igpuScript}/bin/waybar-igpu";
         interval = 5;
         return-type = "json";
