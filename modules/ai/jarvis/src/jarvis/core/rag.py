@@ -84,7 +84,7 @@ _EXCLUDE_DIRS: tuple[str, ...] = (
     "git", "idea", "vscode", "file-history", "claude", "fleet", "zed",
 
     # Caches Gerais & Sistema
-    "cache", "tmp", "trash", "appcache", "gpu_cache", "code_cache",
+    "cache", "tmp", "trash", "appcache", "gpu_cache", "code_cache", "local", "config",
 
     # Python & Testes / Cobertura
     "pycache", "pytest_cache", "mypy_cache", "ruff_cache", "tox",

@@ -31,6 +31,7 @@ def _get_config():
     from jarvis.core.config import Config
     return Config()
 
+
 def _detect_profile() -> dict[str, Any]:
     """Detecta o perfil do modelo E retorna o model_id correto para o payload."""
     cfg = _get_config()
@@ -53,7 +54,8 @@ def _detect_profile() -> dict[str, Any]:
         return {"name": "tiny", "max_tokens": 512, "temperature": 0.0, "model_id": model_id}
     return {"name": "default", "max_tokens": 1024, "temperature": 0.0, "model_id": model_id}
 
-def _build_memory_context() -> str:
+
+def _build_memory_context(query: str = "code edit error fix") -> str:
     """Busca memórias episódicas relevantes para dar contexto ao SLM."""
     try:
         from jarvis.core.memory import EpisodicMemory
@@ -61,7 +63,7 @@ def _build_memory_context() -> str:
         mem = EpisodicMemory(cfg)
         if not mem.is_available():
             return ""
-        results = mem.recall("code edit error fix", top_k=3)
+        results = mem.recall(query, top_k=3)
         if not results:
             return ""
         lines = ["RECENT LESSONS:"]
@@ -74,20 +76,11 @@ def _build_memory_context() -> str:
 
 
 def _build_repo_map(root: str, max_files: int = 80) -> str:
-    """Constrói um mapa do repositório (estilo Aider repo-map).
-
-    Escaneia o projeto e retorna uma árvore compacta de arquivos com tamanhos,
-    para o SLM saber o que existe no codebase sem precisar listar dir por dir.
-    """
-    from pathlib import Path
-    import os
-
+    """Constrói um mapa do repositório (estilo Aider repo-map)."""
     entries = []
-    root_path = Path(root)
     ignore = {".git", "node_modules", "__pycache__", "result", ".direnv", "nixos"}
 
     for dirpath, dirnames, filenames in os.walk(root):
-        # Filtra dirs ignorados
         dirnames[:] = [d for d in dirnames if d not in ignore]
         rel = os.path.relpath(dirpath, root)
         if rel == ".":
@@ -103,16 +96,12 @@ def _build_repo_map(root: str, max_files: int = 80) -> str:
             full_rel = os.path.join(rel, f) if rel else f
             entries.append((full_rel, size))
 
-    # Ordena por tamanho (mais relevantes primeiro) e limita
     entries.sort(key=lambda x: -x[1])
     entries = entries[:max_files]
 
     lines = ["REPOSITORY MAP (project structure):"]
     for path, size in entries:
-        if size > 1024:
-            size_str = f"{size // 1024}KB"
-        else:
-            size_str = f"{size}B"
+        size_str = f"{size // 1024}KB" if size > 1024 else f"{size}B"
         lines.append(f"  {path} ({size_str})")
 
     return "\n".join(lines)
@@ -163,10 +152,10 @@ Do NOT execute. Just plan.
 """
 
 
-def _call_llm(messages: list[dict[str, str]], tools: list[dict], profile: dict) -> dict:
+def _call_llm(messages: list[dict[str, Any]], tools: list[dict], profile: dict) -> dict:
     """Chama o LLM local."""
     cfg = _get_config()
-    payload = {
+    payload: dict[str, Any] = {
         "model": profile.get("model_id", cfg.llm_model),
         "messages": messages,
         "tools": tools,
@@ -174,17 +163,9 @@ def _call_llm(messages: list[dict[str, str]], tools: list[dict], profile: dict) 
         "temperature": profile["temperature"],
         "max_tokens": profile["max_tokens"],
         "parallel_tool_calls": False,
-        # NÃO usar response_format json_object — adiciona ~2.7s de overhead
-        # O Qwen3 já faz tool calling nativo via chat template (--jinja)
     }
     if cfg.llm_disable_thinking:
         payload["chat_template_kwargs"] = {"enable_thinking": False}
-
-    # === BLOCO DE DEBUG (PRINT DIRETO NO REPL) ===
-    print("\n" + "="*40 + " PAYLOAD ENVIADO EM CONVERSA " + "="*40, file=sys.stderr)
-    print(json.dumps(payload, indent=2, ensure_ascii=False), file=sys.stderr)
-    print("="*109 + "\n", file=sys.stderr)
-    # ==============================================
 
     resp = requests.post(
         f"{cfg.llm_base_url.rstrip('/')}/chat/completions",
@@ -240,7 +221,6 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
                 return "Nenhum resultado encontrado."
             lines = []
             for i, (url, title) in enumerate(results[:5]):
-                # Extract real URL from DuckDuckGo redirect
                 m = re.search(r'uddg=([^&]+)', url)
                 real_url = urllib.parse.unquote(m.group(1)) if m else url
                 lines.append(f"{i+1}. {title.strip()}\n   {real_url}")
@@ -259,7 +239,6 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
             req = urllib.request.Request(url, headers={"User-Agent": "JARVIS/1.0"})
             resp = urllib.request.urlopen(req, timeout=15)
             content = resp.read().decode("utf-8", errors="replace")
-            # Remove scripts e styles
             import re
             content = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL)
             content = re.sub(r'<style[^>]*>.*?</style>', '', content, flags=re.DOTALL)
@@ -296,9 +275,7 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
         except Exception as e:
             return f"ERROR: {e}"
 
-    # Dev tools
     result = handle_dev_tool(name, args)
-    # Trunca saída muito longa para o SLM
     try:
         parsed = json.loads(result)
         if isinstance(parsed, dict) and "entries" in parsed and len(parsed["entries"]) > 50:
@@ -311,7 +288,6 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
 
 
 def _get_tools() -> list[dict[str, Any]]:
-    """Retorna as tools disponíveis."""
     from jarvis.core.devtools import DEV_TOOLS
     from jarvis.core.vision import VISION_TOOL
     shell_tool = {
@@ -374,7 +350,6 @@ def _get_tools() -> list[dict[str, Any]]:
 
 
 def _extract_tool_call(content: str) -> dict | None:
-    """Extrai tool call do content (fallback para SLMs que vazam)."""
     import re
     tag_re = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
     codeblock_re = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
@@ -389,7 +364,6 @@ def _extract_tool_call(content: str) -> dict | None:
             except json.JSONDecodeError:
                 pass
 
-    # Tenta JSON solto
     try:
         parsed = json.loads(content)
         if isinstance(parsed, dict) and "name" in parsed:
@@ -401,7 +375,6 @@ def _extract_tool_call(content: str) -> dict | None:
 
 
 def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
-    """REPL interativo do dev agent."""
     if project_root:
         os.environ["JARVIS_PROJECT_ROOT"] = project_root
         os.chdir(project_root)
@@ -412,19 +385,16 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
     print(f"🤖 JARVIS Dev — SLM: {profile['name']} (max_tokens={profile['max_tokens']})")
     print(f"📁 Projeto: {os.getcwd()}")
     print(f"🔧 Tools: {len(tools)} disponíveis")
-    print("   Comandos: /quit, /status, /clear, /help")
-    print()
+    print("   Comandos: /quit, /status, /clear, /help\n")
 
-    # Build repo map + memory context (Aider-style + compiler expert)
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context()
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
 
-    messages: list[dict[str, str]] = [
+    messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
     ]
 
-    # Active model for display
     active_model = profile["name"]
 
     while True:
@@ -510,7 +480,6 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
 
         messages.append({"role": "user", "content": user_input})
 
-        # Loop de tool calls (máx 8 por turno)
         for turn in range(8):
             print(f"  🤔 Pensando... (turno {turn + 1})", end="", flush=True)
 
@@ -524,38 +493,40 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
             content = message.get("content") or ""
             tool_calls = message.get("tool_calls")
 
-            # Fallback: extrai tool call do content se não veio estruturado
             if not tool_calls and content:
                 fallback = _extract_tool_call(content)
                 if fallback:
                     tool_calls = [{
-                        "id": "fallback-0",
+                        "id": "call_fallback_0",
                         "type": "function",
                         "function": {
                             "name": fallback["name"],
                             "arguments": json.dumps(fallback.get("arguments", {})),
                         },
                     }]
-                    print(f" (recuperado via fallback)")
+                    print(" (recuperado via fallback)")
                 else:
                     print()
             else:
                 print()
 
-            # Adiciona resposta do assistant
-            messages.append({
-                "role": "assistant",
-                "content": "" if tool_calls else content,
-                "tool_calls": tool_calls,
-            })
+            # Constrói o objeto da mensagem sem chaves 'null'
+            assistant_msg: dict[str, Any] = {"role": "assistant"}
+            if content:
+                assistant_msg["content"] = content
+            else:
+                assistant_msg["content"] = None
+
+            if tool_calls:
+                assistant_msg["tool_calls"] = tool_calls
+
+            messages.append(assistant_msg)
 
             if not tool_calls:
-                # Resposta final
                 if content:
                     print(f"🤖 JARVIS: {content}")
                 break
 
-            # Executa tool calls
             for tc in tool_calls:
                 func_name = tc["function"]["name"]
                 try:
@@ -566,7 +537,6 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
                 print(f"  🔧 {func_name}({args.get('path', args.get('cmd', ''))[:50]})")
                 output = _execute_tool_call(func_name, args, approve)
 
-                # Mostra resultado resumido
                 try:
                     parsed = json.loads(output)
                     if isinstance(parsed, dict):
@@ -588,7 +558,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
                             elif "bytes" in parsed:
                                 print(f"  💾 {parsed['bytes']} bytes escritos")
                             else:
-                                print(f"  ✅ OK")
+                                print("  ✅ OK")
                         else:
                             print(f"  ⚠️  {parsed.get('error', 'erro')[:80]}")
                 except (json.JSONDecodeError, TypeError):
@@ -597,29 +567,26 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
                     else:
                         print(f"  📤 {output[:80]}")
 
+                tool_call_id = tc.get("id") or "call_fallback_0"
                 messages.append({
                     "role": "tool",
-                    "tool_call_id": tc.get("id", ""),
-                    "name": func_name,
+                    "tool_call_id": tool_call_id,
                     "content": output[:5000],
                 })
 
 
 def _architect_plan(task: str, profile: dict, tools: list) -> str | None:
-    """Fase 1: SLM cria um plano (architect mode)."""
     repo_map = _build_repo_map(os.getcwd())
     plan_prompt = PLAN_PROMPT.format(repo_map=repo_map)
-    plan_messages = [
+    plan_messages: list[dict[str, Any]] = [
         {"role": "system", "content": plan_prompt},
         {"role": "user", "content": task},
     ]
     try:
         data = _call_llm(plan_messages, tools, profile)
         msg = data["choices"][0]["message"]
-        content = msg.get("content") or ""
         tool_calls = msg.get("tool_calls")
 
-        # Se o SLM usou tools no plan, executa eles primeiro (leitura)
         if tool_calls:
             for tc in tool_calls:
                 fn = tc["function"]["name"]
@@ -627,16 +594,18 @@ def _architect_plan(task: str, profile: dict, tools: list) -> str | None:
                     a = json.loads(tc["function"]["arguments"])
                 except json.JSONDecodeError:
                     a = {}
-                # Só executa read_file e list_directory no plan
                 if fn in ("read_file", "list_directory"):
                     result = _execute_tool_call(fn, a)
-                    plan_messages.append({"role": "tool", "content": result[:2000]})
+                    tool_id = tc.get("id") or "call_plan_0"
+                    plan_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_id,
+                        "content": result[:2000],
+                    })
 
-        # Pede o plano final
         plan_messages.append({"role": "user", "content": "Agora retorne o plano JSON."})
         data2 = _call_llm(plan_messages, tools, profile)
         plan_content = data2["choices"][0]["message"].get("content") or ""
-        # Tenta extrair JSON, mas aceita texto puro
         try:
             parsed = json.loads(plan_content)
             if isinstance(parsed, dict) and "plan" in parsed:
@@ -650,7 +619,6 @@ def _architect_plan(task: str, profile: dict, tools: list) -> str | None:
 
 
 def dev_once(task: str, project_root: str | None = None, approve: bool = False) -> int:
-    """Executa uma única tarefa e sai."""
     if project_root:
         os.environ["JARVIS_PROJECT_ROOT"] = project_root
         os.chdir(project_root)
@@ -659,18 +627,17 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False) 
     tools = _get_tools()
 
     print(f"🤖 JARVIS Dev — {profile['name']}")
-    print(f"📋 Tarefa: {task}")
-    print()
+    print(f"📋 Tarefa: {task}\n")
 
     repo_map = _build_repo_map(os.getcwd())
-    memory_ctx = _build_memory_context()
+    memory_ctx = _build_memory_context(task)
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
-    messages: list[dict[str, str]] = [
+    messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": task},
     ]
 
-    for turn in range(10):
+    for _ in range(10):
         try:
             data = _call_llm(messages, tools, profile)
         except Exception as e:
@@ -685,7 +652,7 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False) 
             fallback = _extract_tool_call(content)
             if fallback:
                 tool_calls = [{
-                    "id": "fallback-0",
+                    "id": "call_fallback_0",
                     "type": "function",
                     "function": {
                         "name": fallback["name"],
@@ -693,11 +660,16 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False) 
                     },
                 }]
 
-        messages.append({
-            "role": "assistant",
-            "content": "" if tool_calls else content,
-            "tool_calls": tool_calls,
-        })
+        assistant_msg: dict[str, Any] = {"role": "assistant"}
+        if content:
+            assistant_msg["content"] = content
+        else:
+            assistant_msg["content"] = None
+
+        if tool_calls:
+            assistant_msg["tool_calls"] = tool_calls
+
+        messages.append(assistant_msg)
 
         if not tool_calls:
             if content:
@@ -715,10 +687,10 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False) 
             output = _execute_tool_call(func_name, args, approve)
             print(f"  → {output[:200]}")
 
+            tool_call_id = tc.get("id") or "call_fallback_0"
             messages.append({
                 "role": "tool",
-                "tool_call_id": tc.get("id", ""),
-                "name": func_name,
+                "tool_call_id": tool_call_id,
                 "content": output[:5000],
             })
 
