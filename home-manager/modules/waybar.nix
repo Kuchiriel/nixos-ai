@@ -43,8 +43,8 @@ in
       * {
         border: none;
         border-radius: 0;
-        font-family: "JetBrainsMono Nerd Font", "Symbols Nerd Font", sans-serif;
-        font-size: 12.5px;
+        font-family: "Symbols Nerd Font Mono", "JetBrainsMono Nerd Font", sans-serif;
+        font-size: 14px;
         min-height: 0;
       }
 
@@ -52,9 +52,11 @@ in
          BAR CONTAINER
          ------------------------------ */
       window#waybar {
-        background: rgba(0, 0, 0, 0.85);
+        background: #0a0a0a;
         border-bottom: 2px solid #00ffff;
         color: #00ffff;
+        font-size: 14px;
+        min-height: 34px;
       }
 
       /* ------------------------------
@@ -77,8 +79,9 @@ in
       #custom-cpu,
       #custom-memory,
       #custom-jarvis {
-        padding: 0 12px;
+        padding: 0 16px;
         color: #00ffff;
+        font-size: 14px;
         transition: all 0.25s ease;
       }
 
