@@ -285,9 +285,10 @@ in
         CPUQuota = "10%";
         MemoryMax = "100M";
 
-        # Segurança: só pode manipular serviços JARVIS
-        ProtectSystem = "strict";
+        # Segurança: proteção do filesystem
+        ProtectSystem = "full";  # /etc, /usr, /boot read-only
         ProtectHome = "read-only";
+        ReadWritePaths = ["/var/lib/jarvis"];
         NoNewPrivileges = false;  # Precisa de systemctl
       };
     };
