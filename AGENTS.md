@@ -18,11 +18,25 @@ RTX 4050 6GB / 32GB RAM) nasce do zero via este repo.
 
 ```bash
 git add -A          # OBRIGATÓRIO antes de build: o flake só copia arquivos trackeados
-nix build .#jarvis --no-link        # roda pytest (checkPhase) — 200+ testes
+nix build .#jarvis --no-link        # roda pytest (checkPhase) — 500+ testes
 nix flake check                     # avalia TODAS as configurações
-nixos-rebuild build --flake .#nixos-lab   # valida o sistema (sem ativar)
-./rebuild.sh                        # switch de verdade (rebuild + ativação)
 ```
+
+### REBUILD DO SISTEMA (CRÍTICO — NÃO ERRE ESTE PASSO)
+
+```bash
+# HOST (bare metal) — SEMPRE usar este script:
+./rebuild-host.sh
+
+# LAB (VM) — usar este:
+./rebuild-lab.sh
+
+# NÃO FAÇA:
+nixos-rebuild build --flake .#nixos-lab   # ERRADO no host!
+nixos-rebuild switch --flake .#nitro-v15  # ERRADO — usar rebuild-host.sh!
+```
+
+**Por quê**: `rebuild-host.sh` faz `git add -A` + commit automático antes do build. Sem isso, o flake não vê arquivos untracked e o build quebra.
 
 - Testes: `modules/ai/jarvis/tests/test_*.py` (pytest, roda no build Nix).
 - Convenção de commit: mensagem em PT-BR, um verbo por mudança
@@ -46,6 +60,20 @@ nixos-rebuild build --flake .#nixos-lab   # valida o sistema (sem ativar)
 
 1. **`models.nix` é a única fonte de verdade** dos modelos (GGUF/URL/hash/perfis
    `vm`/`host`). Nunca baixe modelo imperativamente nem edite unit à mão.
+
+2. **VRAM BUDGET (RTX 40506GB) — NÃO EXCEDER**:
+   - Main LLM (ngl=10): ~5100MB
+   - Embeddings/Rerank: 0MB (CUDA_VISIBLE_DEVICES="" força CPU)
+   - mmproj: DESATIVADO (861MB BF16 não cabe)
+   - Total: 5556MB / 6141MB (585MB margem)
+   - Para adicionar mmproj: reduzir ngl OU usar mmproj Q4 quantizado
+   - `hwdetect`/`hwprofile` devem respeitar este budget
+
+3. **DISTRIBUIÇÃO DE HARDWARE**:
+   - RTX 4050: Main LLM apenas (não colocar embeddings/rerank)
+   - Intel UHD 770 iGPU: Whisper STT, mpvpaper, Kokoro TTS (futuro)
+   - CPU: MoE experts na RAM, embeddings, reranker, TTS
+   - `CUDA_VISIBLE_DEVICES=""` em embeddings/rerank é OBRIGATÓRIO
 2. **NÃO tocar no dbus-broker** (`reloadIfChanged`/`restartIfChanged = mkForce false`
    no lab): restart derruba o bus do sistema; reload trava ~90s na VM.
 3. **Fontes Python do JARVIS ficam no repo** (`modules/ai/jarvis/`) — declarativo.

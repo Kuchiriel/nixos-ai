@@ -1,13 +1,13 @@
-# HANDOFF - Sessão 2026-08-19 (atualizado)
+# HANDOFF - Sessão 2026-08-20 (atualizado)
 
 ## Estado Atual do Sistema
-- **NixOS Lab**: VM Hyper-V, i7-13620H (4c/8t visíveis), 19.1GB RAM, sem GPU
-- **Último rebuild**: OK — **500+ testes verdes**, 0 falhas, nix flake check OK
-- **Git**: limpo, 12+ commits ahead of origin
-- **Bulldozer**: 5/6 testes de atrito passam contra Qwen3-4B real
-- **Validação E2E**: llama.cpp ✅, Qdrant ✅, Memória ✅, Agent ✅, Self-heal ✅, Flake ✅
-- **Bugs corrigidos**: semantic_search import, Logger sandbox, devtools /build path, content safety
-- **Partição legada montada**: `/mnt/legacy/system` (@) + `/mnt/legacy/home/kuchiriel` (@home) — **NÃO persiste no reboot** (cryptsetup manual)
+- **NixOS Host**: Acer Nitro V15, i7-13620H (16t), 32GB RAM, RTX 40506GB + Intel UHD 770
+- **Último rebuild**: OK — `rebuild-host.sh` (NÃO `nixos-rebuild build --flake .#nixos-lab`!)
+- **Git**: 38+ commits ahead of origin
+- **llama-cpp-server**: ✅ RODANDO — Qwen3.6-35B-A3B MoE, ngl=10, ~10.5 t/s
+- **VRAM budget**: 5556MB/6141MB (mmproj DESATIVADO por falta de VRAM)
+- **Embeddings/Rerank**: CPU-only via `CUDA_VISIBLE_DEVICES=""` (libera VRAM p/ LLM)
+- **500+ testes verdes**, nix flake check OK
 
 ## Validação E2E (2026-08-19)
 
@@ -269,3 +269,96 @@ Diagnóstico completo em `docs/architecture/pillar-diagnostic.md`. Score geral: 
 - **Rate limiting por IP/sessão** — não aplicável (agent é local, não HTTP público)
 - **Sandboxing de comandos** — `shlex.split()` sem `shell=True` já é seguro; container/isolation é overkill para agent local
 - **Integrity check no audit trail** — state_dir é declarativo via Nix; adulteração é revertida no próximo rebuild
+
+---
+
+## Sessão 2026-08-20 — MoE Optimization + Waybar + mpvpaper
+
+### O que foi feito
+
+#### 1. Otimização MoE (hwprofile.py + models.nix)
+- **VRAM overhead dinâmico**: base 0.8GB (CUDA+compute) + mmproj 0.8GB + safety factor 90%
+- **Forecast MoE consertado**: bug de unidade (bytes vs GB/s), modelo top-k por layer
+- **Host profile**: ngl=10, ctx=16K, ubatch=512, threads=16, scheduler=fifo
+- **Flags deprecated**: `--no-mmap`/`--mlock` → `--load-mode mlock`
+- **Embeddings/Rerank**: `CUDA_VISIBLE_DEVICES=""` força CPU-only (libera ~540MB VRAM)
+- **mmproj DESATIVADO**: 861MB BF16 não cabe com ngl=10 (reativar com mmproj Q4)
+
+#### 2. Waybar GPU Monitor + TUI Tools (porta do legado Manjaro)
+- **custom/gpu**: nvidia-smi com states low/medium/high + VRAM tooltip
+- **On-click handlers**: btm (cpu/mem), yazi (files), nmtui (network), ncpamixer (audio), bluetuith (bt), calcurse (clock), nvidia-smi (gpu)
+- **TUI packages**: bluetuith, ncpamixer, networkmanagerapplet, calcurse, htop
+- **CSS**: GPU states, JARVIS states, hover glow cyan
+
+#### 3. mpvpaper iGPU (fiel ao legado Manjaro)
+- `DRI_PRIME=pci-0000_00_02.0` força decode na iGPU Intel
+- `--hwdec=vaapi --vo=gpu` renderização OpenGL na iGPU
+- `-f -p -n 30 -l background` fork, presentation, 30fps, background layer
+- 12 wallpapers .mp4 em `home-manager/assets/wallpapers/`
+
+### VRAM Budget Final (RTX 40506GB)
+
+```
+Main LLM (ngl=10):     5096MB  ← Qwen3.6-35B (attn+4experts × 10 layers)
+Embeddings:               0MB  ← CUDA_VISIBLE_DEVICES="" (CPU only)
+Rerank:                   0MB  ← CUDA_VISIBLE_DEVICES="" (CPU only)
+mmproj:                   0MB  ← DESATIVADO (861MB BF16 não cabe)
+CUDA overhead:          ~460MB
+─────────────────────────────
+Total:                  5556MB / 6141MB (585MB livre)
+```
+
+### Distribuição de Hardware (planejada)
+
+```
+RTX 4050 (6GB VRAM):
+  └── Main LLM (Qwen3.6-35B-A3B MoE, ngl=10, expert offload)
+
+Intel UHD 770 iGPU:
+  └── Whisper STT (SYCL/OpenVINO, 12x boost)
+  └── mpvpaper (wallpaper animado, VA-API)
+  └── Kokoro TTS (futuro)
+
+CPU (i7-13620H, 32GB RAM):
+  └── MoE experts na RAM (6 routed experts × 40 layers)
+  └── Embeddings (nomic-embed, 4 threads)
+  └── Reranker (bge-reranker, 4 threads)
+```
+
+### Erros Corrigidos Nesta Sessão
+
+1. **Nix interpolação**: `${GPU_UTIL}` em waybar.nix → `''${GPU_UTIL}` (escape para literal)
+2. **Flags deprecated**: `--no-mmap`/`--mlock` → `--load-mode mlock` (llama.cpp 10273)
+3. **CUDA OOM**: embeddings/rerank consumiam 540MB VRAM → `CUDA_VISIBLE_DEVICES=""`
+4. **mmproj OOM**: 861MB BF16 não cabe com ngl=10 → desativado temporariamente
+5. **build errado**: `nixos-rebuild build --flake .#nixos-lab` → deve usar `./rebuild-host.sh`
+
+### Performance Medida
+
+```
+Prompt processing:  26 t/s
+Token generation:   8.7 t/s (10.5 t/s com thinking)
+Contexto:           16K tokens
+Modelo:             Qwen3.6-35B-A3B MoE (UD-Q4_K_M)
+```
+
+### Comandos Importantes
+
+```bash
+# REBUILD (host) — NÃO usar nixos-rebuild direto!
+./rebuild-host.sh
+
+# TESTE E2E
+curl -s http://localhost:8080/health
+curl -s http://localhost:8080/v1/models
+curl -s http://localhost:8080/completion -H "Content-Type: application/json" \
+  -d '{"prompt": "Olá", "n_predict": 32}'
+
+# VRAM CHECK
+nvidia-smi
+nvidia-smi --query-compute-apps=pid,used_memory,name --format=csv
+
+# LOGS
+journalctl -u llama-cpp-server -f
+journalctl -u llama-cpp-embeddings -f
+```
