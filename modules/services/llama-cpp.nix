@@ -90,7 +90,7 @@ in
         exec ${pkgs.llama-cpp}/bin/llama-server \
           -m "${pkgs.aiModels.embed}" \
           --host 0.0.0.0 --port ${toString config.services.llama-cpp-embeddings.port} \
-          --embeddings --pooling mean -c 4096 -t 4 -b 4096 -ub 4096
+          --embeddings --pooling mean -c 4096 -t 2 -b 512 -ub 512
       '';
       serviceConfig.User = "nixos";
     };
@@ -105,7 +105,7 @@ in
         exec ${pkgs.llama-cpp}/bin/llama-server \
           -m "${pkgs.aiModels.reranker}" \
           --host 0.0.0.0 --port ${toString config.services.llama-cpp-rerank.port} \
-          --rerank -t 4 -c 8192 -b 4096 -ub 4096
+          --rerank -t 2 -c 8192 -b 512 -ub 512
       '';
       serviceConfig.User = "nixos";
     };
