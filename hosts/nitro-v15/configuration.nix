@@ -38,7 +38,6 @@ in
   environment.systemPackages = with pkgs; [
     # Sunshine (streaming) — módulo NixOS não existe; pacote + config manual
     sunshine
-    gnome-backgrounds
     # Utilitários do sistema
     pciutils
     git

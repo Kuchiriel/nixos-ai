@@ -69,6 +69,6 @@
     };
 
     # Wallpaper com atmosfera tecnológica em tons de azul/ciano
-    image = ${pkgs.gnome-backgrounds}/share/backgrounds/gnome/adwaita-d.jpg
+    image = "${pkgs.nixos-icons}/share/icons/hicolor/scalable/apps/nixos-logo-white.svg"
   };
 }
