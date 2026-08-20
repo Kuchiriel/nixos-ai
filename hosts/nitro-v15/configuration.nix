@@ -203,6 +203,29 @@ in
     commands = [{ command = "ALL"; options = [ "NOPASSWD" ]; }];
   }];
 
+  # Serviço declarativo para aplicar as exceções de rota na inicialização
+  systemd.services.cloudflare-warp-routes = {
+    description = "Configura excecoes de rota no Cloudflare WARP";
+    after = [ "cloudflare-warp.service" ];
+    wants = [ "cloudflare-warp.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "warp-set-routes" ''
+        # Aguarda o daemon warp-svc responder
+        until ${pkgs.cloudflare-warp}/bin/warp-cli status >/dev/null 2>&1; do
+          sleep 1
+        done
+
+        # Aplica as excecoes de subrede local de forma idempotente
+        ${pkgs.cloudflare-warp}/bin/warp-cli add-excluded-route 192.168.0.0/16 || true
+        ${pkgs.cloudflare-warp}/bin/warp-cli add-excluded-route 10.0.0.0/8 || true
+      '';
+    };
+  };
+
+
   # =========================================================================
   # 6. NIX — Caches, Performance e nix-ld
   # =========================================================================
