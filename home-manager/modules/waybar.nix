@@ -341,7 +341,9 @@ in
       "custom/cpu" = {
         exec = ''
           bash -c '
-          CPU=$(awk "{sum+=\$1} END {printf \"%.0f\", sum/NR}" /proc/stat)
+          read -r user nice system idle rest < /proc/stat
+          total=$((user+nice+system+idle))
+          CPU=$(( (user+nice+system)*100/total ))
           if [ "$CPU" -ge 80 ]; then CLASS="high"
           elif [ "$CPU" -ge 50 ]; then CLASS="medium"
           else CLASS="low"
@@ -357,17 +359,22 @@ in
       };
 
       # Memory com estados de cor: green <60%, yellow 60-85%, red >85%
+      # Usa read do bash em vez de awk — evita problemas de escaping Nix→bash→awk
       "custom/memory" = {
         exec = ''
           bash -c '
-          MEM_TOTAL=$(awk "/MemTotal/ {print \\$2}" /proc/meminfo)
-          MEM_AVAIL=$(awk "/MemAvailable/ {print \\$2}" /proc/meminfo)
+          while read -r key val rest; do
+            case "$key" in
+              MemTotal:)  MEM_TOTAL=$val ;;
+              MemAvailable:) MEM_AVAIL=$val ;;
+              SwapTotal:) SWAP_TOTAL=$val ;;
+              SwapFree:)  SWAP_FREE=$val ;;
+            esac
+          done < /proc/meminfo
           MEM_USED=$((MEM_TOTAL - MEM_AVAIL))
           MEM_PCT=$((MEM_USED * 100 / MEM_TOTAL))
           MEM_USED_GB=$(awk "BEGIN {printf \"%.1f\", $MEM_USED / 1048576}")
           MEM_TOTAL_GB=$(awk "BEGIN {printf \"%.1f\", $MEM_TOTAL / 1048576}")
-          SWAP_TOTAL=$(awk "/SwapTotal/ {print \\$2}" /proc/meminfo)
-          SWAP_FREE=$(awk "/SwapFree/ {print \\$2}" /proc/meminfo)
           SWAP_USED=$((SWAP_TOTAL - SWAP_FREE))
           SWAP_GB=$(awk "BEGIN {printf \"%.1f\", $SWAP_USED / 1048576}")
           if [ "$MEM_PCT" -ge 85 ]; then CLASS="high"
