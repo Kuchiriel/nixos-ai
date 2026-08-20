@@ -1,13 +1,10 @@
 { pkgs, ... }: {
-
-  # Permite pacotes proprietários e ativa o DRM Widevine para o Chromium
-  nixpkgs.config = {
-    allowUnfree = true;
-    chromium.enableWideVine = true;
-  };
-
   programs.chromium = {
     enable = true;
+    
+    # Esta linha injeta o Widevine diretamente no pacote do Chromium sem violar o useGlobalPkgs
+    package = pkgs.chromium.override { enableWideVine = true; };
+
     extensions = [
       # Dark Reader
       { id = "eimadpbcbfnmbkopoojfekhnkhdbieeh"; }
