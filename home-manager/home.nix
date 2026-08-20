@@ -32,6 +32,15 @@ stylix.targets.hyprland.enable = false;
     fi
   '';
 
+  programs.foot = {
+    enable = true;
+    settings = {
+      main = {
+        font = "JetBrainsMono Nerd Font:size=12";
+      };
+    };
+  };
+
   home.file.".aider.conf.yml".text = ''
     openai-api-base: http://localhost:8080/v1
     model: openai//nix/store/dw121d64zaschr6nw19lwvhl3mmnzh0a-Qwen3-4B-Q4_K_M.gguf
