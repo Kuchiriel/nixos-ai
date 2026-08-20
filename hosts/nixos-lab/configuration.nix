@@ -40,6 +40,12 @@ security.sudo.extraRules = [
     ../../nixos/modules
   ] ++ dynamicServiceImports;
 
+  environment.systemPackages = with pkgs; [
+    # Outros pacotes do sistema...
+    inputs.self.packages.${pkgs.system}.jarvis
+  ];
+
+
   stylix.homeManagerIntegration.autoImport = false;
 
   # =========================================================================

@@ -17,6 +17,11 @@ in
     ../../nixos/modules
   ] ++ dynamicServiceImports;
 
+  environment.systemPackages = with pkgs; [
+    # Outros pacotes do sistema...
+    inputs.self.packages.${pkgs.system}.jarvis
+  ];
+
   # ── O SWITCH CENTRAL (Ambiente do Host Físico) ──────────────────────
   services.jarvis.enable = true;
   services.jarvis.environment = "host";
