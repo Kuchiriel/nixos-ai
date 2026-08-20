@@ -39,7 +39,14 @@
 
     # Overlay único dos componentes de IA (usado pelo sistema e pelo output `packages`)
     aiOverlay = final: prev: {
-      # llama.cpp vem do unstable (24.11/26.05 pinned ficam desatualizados)
+    # llama.cpp vem do unstable (24.11/26.05 pinned ficam desatualizados)
+      llama-cpp = (import nixpkgs-unstable {
+        system = prev.stdenv.hostPlatform.system;
+	config.allowUnfree = true;
+      }).llama-cpp.override {
+        cudaSupport = true;
+      };
+
       llama-cpp = (nixpkgs-unstable.legacyPackages.${prev.stdenv.hostPlatform.system}.llama-cpp.override {
         cudaSupport = true;
       });
