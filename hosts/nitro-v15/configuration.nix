@@ -43,6 +43,8 @@ in
   stylix.targets.feh.enable = false;      # Comum em WMs leves como i3 ou Sway
   stylix.targets.console.enable = true; # Mantém as cores no terminal
 
+  hardware.uinput.enable = true;
+
   environment.systemPackages = with pkgs; [
     # Sunshine (streaming) — módulo NixOS não existe; pacote + config manual
     sunshine
@@ -190,7 +192,7 @@ in
 
   users.users.${user} = {
     isNormalUser = true;
-    extraGroups = [ "wheel" "video" "audio" "networkmanager" "qdrant" ];
+    extraGroups = [ "wheel" "video" "audio" "networkmanager" "qdrant" "input" "uinput" ];
   };
 
   security.sudo.extraRules = [{
