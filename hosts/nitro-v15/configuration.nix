@@ -31,9 +31,15 @@ in
     });
   };
 
+  stylix.targets.gnome.enable = false;    # Exemplo para GNOME
+  stylix.targets.hyprland.enable = false; # Exemplo para Hyprland
+  stylix.targets.feh.enable = false;      # Comum em WMs leves como i3 ou Sway
+  stylix.targets.console.enable = true; # Mantém as cores no terminal
+
   environment.systemPackages = with pkgs; [
     # Sunshine (streaming) — módulo NixOS não existe; pacote + config manual
     sunshine
+    gnome-backgrounds
     # Utilitários do sistema
     pciutils
     git
