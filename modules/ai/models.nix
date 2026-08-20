@@ -165,7 +165,9 @@ in
     # Forecast: ~25-30 t/s (bandwidth-bound, MoE esparsa top-k=2)
     host = {
       model = "llm-host";
-      mmproj = "llm-host-mmproj";
+      # mmproj DESATIVADO: consome 861MB VRAM (BF16), não cabe com ngl=10.
+      # Reativar quando houver mais VRAM ou mmproj quantizado (Q4).
+      # mmproj = "llm-host-mmproj";
       threads = 16;
       ctxSize = 16384;          # 16K contexto — seguro na VRAM (0.7GB margem)
       ubatch = 512;             # 512: menos compute buffer que 1024 (seguro p/ 6GB)
