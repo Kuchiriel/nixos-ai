@@ -348,7 +348,7 @@ in
           elif [ "$CPU" -ge 50 ]; then CLASS="medium"
           else CLASS="low"
           fi
-          LOAD=$(cut -d' ' -f1 /proc/loadavg)
+          read LOAD _rest _ < /proc/loadavg
           echo "{\"text\": \" ''${CPU}%\", \"tooltip\": \"Load: ''${LOAD}\\nUsage: ''${CPU}%\", \"class\": \"$CLASS\"}"
           '
         '';
