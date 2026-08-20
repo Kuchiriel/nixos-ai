@@ -18,17 +18,16 @@ in
   ] ++ dynamicServiceImports;
 
   environment.systemPackages = with pkgs; [
-    # Se quiser a versão padrão sem voz:
-    # (callPackage ../../modules/ai/package.nix { }).base
+    # Utilitários do sistema
+    pciutils
+    git
+    curl
+    jq
+    htop
+    ethtool
 
-    # OU, se quiser a versão completa com suporte a voz (STT/TTS):
-    (callPackage ../../modules/ai/package.nix { }).withVoice
-  ];
-
-
-  environment.systemPackages = with pkgs; [
-    # Outros pacotes do sistema...
-    (callPackage ../../modules/ai/package.nix { })
+    # Pacote do JARVIS via overlay
+    jarvis
   ];
 
   # ── O SWITCH CENTRAL (Ambiente do Host Físico) ──────────────────────
