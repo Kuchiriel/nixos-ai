@@ -306,7 +306,7 @@ nano hosts/nitro-v15/disko.nix
 
 ```bash
 # Instalação via disko (wipe completo dos 2 NVMe)
-sudo nix --extra-experimental-features 'nix-command flakes' run github:nix-community/disko -- --mode mount --flake .#nitro-v15
+sudo nix --extra-experimental-features 'nix-command flakes' run github:nix-community/disko -- --mode disko --flake .#nitro-v15
 
 sudo nixos-install --flake .#nitro-v15
 ```
