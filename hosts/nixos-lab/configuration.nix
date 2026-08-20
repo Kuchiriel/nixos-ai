@@ -139,6 +139,8 @@ security.sudo.extraRules = [
     "net.core.default_qdisc" = "fq_codel";
     "net.ipv4.tcp_congestion_control" = "bbr";
     "net.ipv4.tcp_low_latency" = 1;
+    "net.core.netdev_max_backlog" = 16384;     # Movido para cá
+    "net.ipv4.tcp_fastopen" = 3;  
   };
 
   # =========================================================================

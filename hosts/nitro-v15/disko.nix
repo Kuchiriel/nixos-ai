@@ -30,11 +30,11 @@
                 subvolumes = {
                   "/root" = {
                     mountpoint = "/";
-                    mountOptions = [ "compress=zstd" "noatime" ];
+                    mountOptions = [ "compress=zstd" "noatime" "nodiratime" "discard=async" "commit=60" ];
                   };
                   "/nix" = {
                     mountpoint = "/nix";
-                    mountOptions = [ "compress=zstd" "noatime" ];
+                    mountOptions = [ "compress=zstd" "noatime" "nodiratime" "discard=async" "commit=60" ];
                   };
                 };
               };
@@ -58,7 +58,7 @@
                 subvolumes = {
                   "/home" = {
                     mountpoint = "/home";
-                    mountOptions = [ "compress=zstd" "noatime" ];
+                    mountOptions = [ "compress=zstd" "noatime" "nodiratime" "discard=async" "commit=60"  ];
                   };
                 };
               };

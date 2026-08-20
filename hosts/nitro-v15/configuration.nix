@@ -50,7 +50,10 @@ in
     "quiet"
     "loglevel=3"
     "iommu=pt"
-    "pcie_aspm=off"
+    "pcie_aspm=force"          # Altere de "off" para "force" para reduzir calor da dGPU em idle
+    "nvme_load=1"              # Adicione para carregar o NVMe precocemente no initrd
+    "preempt=full"             # Adicione para forçar preempção total do kernel Zen
+    "split_lock_detect=off"    # Adicione para desativar penalidades por split locks em IA
   ];
 
   # =========================================================================
@@ -73,6 +76,13 @@ in
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
+  # ADICIONE ESTA LINHA AQUI: Força o NixOS a compilar o sistema com o Kernel Zen
+  boot.kernelPackages = lib.mkForce pkgs.linuxPackages_zen;
+
+  # ADICIONE ESTAS DUAS LINHAS AQUI: Ativa o controle térmico e trava performance
+  services.thermald.enable = true;
+  powerManagement.cpuFreqGovernor = "performance";
+
   zramSwap = lib.mkForce {
     enable = true;
     memoryPercent = 50;
@@ -80,9 +90,12 @@ in
   };
 
   boot.kernel.sysctl = {
-    "vm.swappiness" = 150;
+    "vm.swappiness" = 10;
     "net.core.default_qdisc" = "fq_codel";
     "net.ipv4.tcp_congestion_control" = "bbr";
+    "net.ipv4.tcp_low_latency" = 1;            # Adicione: Otimização de baixa latência de rede
+    "net.core.netdev_max_backlog" = 16384;     # Adicione: Expande fila contra gargalo da Claro
+    "net.ipv4.tcp_fastopen" = 3;               # Adicione: Acelera conexões HTTP das tools web
   };
 
   # Garante que as pastas de banco vetorial (Qdrant) e modelos nasçam com +C (No CoW)
