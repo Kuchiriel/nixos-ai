@@ -213,26 +213,28 @@ in
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      TimeoutStartSec = "15s";
       ExecStart = pkgs.writeShellScript "warp-set-routes" ''
-        # Aguarda o daemon do WARP responder
-        until ${pkgs.cloudflare-warp}/bin/warp-cli status >/dev/null 2>&1; do
-          sleep 1
-        done
-
-        # 1. Rotas locais estaticas
-        ${pkgs.cloudflare-warp}/bin/warp-cli add-excluded-route 192.168.0.0/16 || true
-        ${pkgs.cloudflare-warp}/bin/warp-cli add-excluded-route 10.0.0.0/8 || true
-
-        # 2. Resolução dinâmica do servidor do Wurm Online
-        WURM_IP=$(getent ahossthost harmony.game.wurmonline.com | ${pkgs.gawk}/bin/awk '{ print $1 }' | head -n 1)
-
-        if [ -n "$WURM_IP" ]; then
-          ${pkgs.cloudflare-warp}/bin/warp-cli add-excluded-route "$WURM_IP/32" || true
+      # Tenta verificar o daemon no máximo 5 vezes (5 segundos)
+      for i in {1..5}; do
+        if ${pkgs.cloudflare-warp}/bin/warp-cli status >/dev/null 2>&1; then
+          break
         fi
-      '';
-     };
-   };
+        sleep 1
+      done
 
+      # Executa as regras de exclusao
+      ${pkgs.cloudflare-warp}/bin/warp-cli add-excluded-route 192.168.0.0/16 || true
+      ${pkgs.cloudflare-warp}/bin/warp-cli add-excluded-route 10.0.0.0/8 || true
+
+      WURM_IP=$(getent ahossthost harmony.game.wurmonline.com 2>/dev/null | ${pkgs.gawk}/bin/awk '{ print $1 }' | head -n 1)
+
+      if [ -n "$WURM_IP" ]; then
+        ${pkgs.cloudflare-warp}/bin/warp-cli add-excluded-route "$WURM_IP/32" || true
+      fi
+    '';
+  };
+};
 
   # =========================================================================
   # 6. NIX — Caches, Performance e nix-ld
