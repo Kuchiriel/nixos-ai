@@ -341,13 +341,12 @@ in
       "custom/cpu" = {
         exec = ''
           bash -c '
-          CPU=$(top -bn1 | grep "Cpu(s)" | awk "{print \\$2}")
-          CPU_INT=$(printf "%.0f" "$CPU")
-          if [ "$CPU_INT" -ge 80 ]; then CLASS="high"
-          elif [ "$CPU_INT" -ge 50 ]; then CLASS="medium"
+          CPU=$(awk "{sum+=\$1} END {printf \"%.0f\", sum/NR}" /proc/stat)
+          if [ "$CPU" -ge 80 ]; then CLASS="high"
+          elif [ "$CPU" -ge 50 ]; then CLASS="medium"
           else CLASS="low"
           fi
-          LOAD=$(awk "{print \\$1}" /proc/loadavg)
+          LOAD=$(cut -d' ' -f1 /proc/loadavg)
           echo "{\"text\": \" ''${CPU}%\", \"tooltip\": \"Load: ''${LOAD}\\nUsage: ''${CPU}%\", \"class\": \"$CLASS\"}"
           '
         '';
