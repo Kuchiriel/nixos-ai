@@ -67,6 +67,9 @@
       dark = "Papirus-Dark";
       light = "Papirus-Light";
     };
-    image = pkgs.runCommand "dummy-img" {} "touch $out";
+
+    image = pkgs.runCommand "solid-blue.png" { nativeBuildInputs = [ pkgs.imagemagick ]; } ''
+      magick convert -size 1x1 xc:blue $out
+    '';
   };
 }
