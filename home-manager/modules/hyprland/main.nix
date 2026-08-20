@@ -117,7 +117,6 @@ in
         "suppress_event maximize, match:class ^(.*)$"
         "float 1, match:title ^(Wurm Macro)$"
         "pin 1, match:title ^(Wurm Macro)$"
-        "stayfocused 0, match:title ^(Wurm Macro)$"
         "opacity 0.9 0.9, match:title ^(Wurm Macro)$"
       ];
     };
