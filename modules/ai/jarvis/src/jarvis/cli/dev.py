@@ -31,7 +31,47 @@ def _get_config():
     from jarvis.core.config import Config
     return Config()
 
+  def _detect_profile() -> dict[str, Any]:
+    """Detecta o perfil do modelo E retorna o model_id correto para o payload."""
+    cfg = _get_config()
+    model_id = cfg.llm_model  # default: "default"
+    
+    # Força uma string válida caso venha None ou vazio do Config
+    if not model_id:
+        model_id = "default"
+        
+    try:
+        # llama.cpp expõe a compatibilidade OpenAI sob a rota /v1/models
+        base_url = cfg.llm_base_url.rstrip('/')
+        url = f"{base_url}/v1/models" if not base_url.endswith("/v1") else f"{base_url}/models"
+        
+        resp = requests.get(url, timeout=5)
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("data"):
+            model_id = data["data"][0].get("id", model_id)
+    except Exception as e:
+        # Se quiser debugar o motivo da falha de conexão, descomente a linha abaixo:
+        # print(f"DEBUG: Falha ao conectar no llama.cpp: {e}", file=sys.stderr)
+        pass
 
+    m = model_id.lower()
+    
+    # Se falhou e continuou como 'default', define um perfil padrão seguro (ex: small ou large)
+    if m == "default":
+        return {"name": "small", "max_tokens": 1024, "temperature": 0.0, "model_id": model_id}
+        
+    if "32b" in m or "30b" in m or "70b" in m:
+        return {"name": "large", "max_tokens": 768, "temperature": 0.0, "model_id": model_id}
+    if "8b" in m or "7b" in m:
+        return {"name": "small", "max_tokens": 1024, "temperature": 0.0, "model_id": model_id}
+    if "4b" in m or "3b" in m or "1b" in m or "0.5b" in m:
+        return {"name": "tiny", "max_tokens": 512, "temperature": 0.0, "model_id": model_id}
+        
+    return {"name": "small", "max_tokens": 1024, "temperature": 0.0, "model_id": model_id}
+
+
+'''
 def _detect_profile() -> dict[str, Any]:
     """Detecta o perfil do modelo E retorna o model_id correto para o payload."""
     cfg = _get_config()
@@ -53,7 +93,7 @@ def _detect_profile() -> dict[str, Any]:
     if "4b" in m or "3b" in m or "1b" in m:
         return {"name": "tiny", "max_tokens": 512, "temperature": 0.0, "model_id": model_id}
     return {"name": "default", "max_tokens": 1024, "temperature": 0.0, "model_id": model_id}
-
+'''
 
 def _build_memory_context() -> str:
     """Busca memórias episódicas relevantes para dar contexto ao SLM."""
@@ -164,7 +204,37 @@ PLAN: [{action: read|edit|create|delete, path: ..., description: ...}]
 Do NOT execute. Just plan.
 """
 
+  def _call_llm(messages: list[dict[str, str]], tools: list[dict], profile: dict) -> dict:
+    """Chama o LLM local."""
+    cfg = _get_config()
+    
+    # Monte um payload limpo e estritamente compatível com a API OpenAI do llama.cpp
+    payload = {
+        "model": profile.get("model_id", cfg.llm_model),
+        "messages": messages,
+        "temperature": profile["temperature"],
+        "max_tokens": profile["max_tokens"],
+    }
+    
+    # SÓ adiciona ferramentas se a lista NÃO estiver vazia, evitando quebras no parser BNF
+    if tools and len(tools) > 0:
+        payload["tools"] = tools
+        payload["tool_choice"] = "auto"
 
+    # NOTA: Removemos completamente o 'chat_template_kwargs' daqui. 
+    # O controle de thinking do Qwen/DeepSeek deve ser feito direto na inicialização do llama-server.
+
+    resp = requests.post(
+        f"{cfg.llm_base_url.rstrip('/')}/chat/completions",
+        json=payload,
+        timeout=cfg.llm_timeout,
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+
+'''
 def _call_llm(messages: list[dict[str, str]], tools: list[dict], profile: dict) -> dict:
     """Chama o LLM local."""
     cfg = _get_config()
@@ -175,7 +245,7 @@ def _call_llm(messages: list[dict[str, str]], tools: list[dict], profile: dict) 
         "tool_choice": "auto",
         "temperature": profile["temperature"],
         "max_tokens": profile["max_tokens"],
-        "parallel_tool_calls": False,
+      #  "parallel_tool_calls": False,
         # NÃO usar response_format json_object — adiciona ~2.7s de overhead
         # O Qwen3 já faz tool calling nativo via chat template (--jinja)
     }
@@ -189,7 +259,7 @@ def _call_llm(messages: list[dict[str, str]], tools: list[dict], profile: dict) 
     )
     resp.raise_for_status()
     return resp.json()
-
+'''
 
 def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -> str:
     """Executa uma tool call e retorna o resultado."""
