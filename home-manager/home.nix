@@ -38,6 +38,7 @@ stylix.targets.hyprland.enable = false;
       main = {
         font = {
           _type = "override";
+          priority = 50; # Define a força da substituição como mkForce
           content = "JetBrainsMono Nerd Font:size=12";
         };
       };
