@@ -113,12 +113,12 @@ def _alert(service: str, component: str, detail: str, *, healed: bool) -> None:
         from jarvis.core.feedback import notify, play_sound
 
         if healed:
-            notify("🛠️ JARVIS self-heal", f"{service} estava down e foi reiniciado.", urgency="normal")
+            notify("✅ JARVIS", f"{service} restaurado", urgency="normal")
             play_sound("success")
         else:
             notify(
-                "⚠️ JARVIS self-heal",
-                f"{service} está down e o restart não resolveu: {detail}",
+                "⚠️ JARVIS",
+                f"{service} down — restart falhou",
                 urgency="critical",
             )
             play_sound("error")
@@ -127,13 +127,28 @@ def _alert(service: str, component: str, detail: str, *, healed: bool) -> None:
             from jarvis.providers.telegram import send_notification
 
             send_notification(
-                f"🛠️ Self-heal: {service} estava down e foi reiniciado ✅"
+                f"✅ {service} restaurado"
                 if healed
-                else f"⚠️ Self-heal: {service} down, restart não resolveu: {detail}"
+                else f"⚠️ {service} down — restart falhou: {detail}"
             )
         except Exception:  # noqa: BLE001
             pass
     except Exception:  # noqa: BLE001
+        pass
+
+
+def _alert_recovery(service: str, component: str) -> None:
+    """Notifica quando um serviço que estava down volta ao normal."""
+    try:
+        from jarvis.core.feedback import notify, play_sound
+        notify("✅ JARVIS", f"{service} está operacional novamente", urgency="low")
+        play_sound("success")
+        try:
+            from jarvis.providers.telegram import send_notification
+            send_notification(f"✅ {service} está operacional novamente")
+        except Exception:
+            pass
+    except Exception:
         pass
 
 
@@ -151,6 +166,28 @@ def _learn_lesson(service: str, component: str, detail: str) -> None:
         pass
 
 
+def _load_previous_state(state: Path) -> dict[str, str]:
+    """Carrega estado anterior dos componentes (para detectar recovery)."""
+    try:
+        import json
+        state_file = state / "component_states.json"
+        if state_file.exists():
+            return json.loads(state_file.read_text())
+    except Exception:
+        pass
+    return {}
+
+
+def _save_previous_state(state: Path, states: dict[str, str]) -> None:
+    """Salva estado dos componentes."""
+    try:
+        import json
+        state_file = state / "component_states.json"
+        state_file.write_text(json.dumps(states))
+    except Exception:
+        pass
+
+
 def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_SECONDS, alerts: bool = True) -> HealReport:
     """Detecta + repara. Retorna o relatório completo."""
     log = get_logger("heal")
@@ -159,9 +196,21 @@ def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_S
     report = doctor_report(cfg)
     report_inst = HealReport(overall=report.get("overall", "ok"), checks=report.get("checks", []))
 
+    # Carrega estado anterior para detectar recovery
+    prev_states = _load_previous_state(state)
+    curr_states = {}
+
     for check in report.get("checks", []):
         comp = check.get("name", "")
-        if check.get("status") != "down":
+        status = check.get("status", "ok")
+        curr_states[comp] = status
+
+        # Se estava down e agora está ok → notifica recovery
+        if prev_states.get(comp) == "down" and status == "ok":
+            if alerts:
+                _alert_recovery(comp, comp)
+
+        if status != "down":
             continue
         spec = SERVICE_MAP.get(comp)
         if not spec:
@@ -212,6 +261,11 @@ def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_S
         report_inst.overall = "healed"
     elif any(a.action == "report_only" for a in report_inst.actions):
         report_inst.overall = "degraded"
+
+    # Salva estado atual para detectar recovery na próxima iteração
+    if curr_states:
+        _save_previous_state(state, curr_states)
+
     return report_inst
 
 

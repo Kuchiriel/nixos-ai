@@ -25,7 +25,7 @@ in
     settings = {
       "$fileManager" = "$terminal --app-id floating_shell -e yazi";
       "$mainMod" = "SUPER";
-      "$menu" = "wofi --show drun";
+      "$menu" = "rofi -show drun -theme jarvis-cyan";
       "$terminal" = "foot";
 
       dwindle = {
@@ -89,7 +89,10 @@ in
                   enabled = false
               }
               shadow {
-                  enabled = false
+                  enabled = true
+                  range = 15
+                  render_power = 3
+                  color = rgba(00ffff33)
               }
           }
           general {
@@ -141,6 +144,27 @@ in
         "$mainMod SHIFT, 4, movetoworkspace, 4"
         "$mainMod SHIFT, 5, movetoworkspace, 5"
         "$mainMod SHIFT, 6, movetoworkspace, 6"
+
+        # === ACCESSIBILITY (porta do legado Manjaro) ===
+        # Window focus
+        "$mainMod, left, movefocus, l"
+        "$mainMod, right, movefocus, r"
+        "$mainMod, up, movefocus, u"
+        "$mainMod, down, movefocus, d"
+        # Quick maximize
+        "$mainMod SHIFT, F, fullscreen, 1"
+        # Center floating window
+        "$mainMod, C, centerwindow"
+        # Move windows
+        "$mainMod SHIFT, left, movewindow, l"
+        "$mainMod SHIFT, right, movewindow, r"
+        "$mainMod SHIFT, up, movewindow, u"
+        "$mainMod SHIFT, down, movewindow, d"
+        # Resize windows
+        "$mainMod CTRL, left, resizeactive, -50 0"
+        "$mainMod CTRL, right, resizeactive, 50 0"
+        "$mainMod CTRL, up, resizeactive, 0 -50"
+        "$mainMod CTRL, down, resizeactive, 0 50"
       ];
 
       master = {

@@ -9,7 +9,22 @@
   home.file.".local/share/rofi/themes/jarvis-cyan.rasi".source =
     ../assets/rofi/jarvis-cyan.rasi;
 
-  # Rofi sem service/daemon — só o tema + binário; o menu é chamado pelos
-  # keybindings do hyprland (wofi primeiro, rofi como fallback).
+  # Configuração do rofi com ícones Nerd Font e modos JARVIS
+  home.file.".config/rofi/config.rasi".text = ''
+    configuration {
+        modi: "drun,run,window,jarvis";
+        show-icons: true;
+        terminal: "foot";
+        drun-display-format: "{name}";
+        location: 0;
+        disable-history: false;
+        hide-scrollbar: true;
+        display-drun: "  Apps ";
+        display-run: "  Run ";
+        display-window: "󰕰  Window";
+        sidebar-mode: true;
+    }
+  '';
+
   programs.rofi.enable = true;
 }
