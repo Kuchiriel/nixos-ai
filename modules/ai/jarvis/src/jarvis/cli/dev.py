@@ -180,13 +180,14 @@ def _call_llm(messages: list[dict[str, str]], tools: list[dict], profile: dict) 
     if cfg.llm_disable_thinking:
         payload["chat_template_kwargs"] = {"enable_thinking": False}
 
-   # === BLOCO DE DEBUG (ADICIONE AQUI) ===
-    with open("payload_debug.json", "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2, ensure_ascii=False)
-    # ======================================
+    # === BLOCO DE DEBUG (PRINT DIRETO NO REPL) ===
+    print("\n" + "="*40 + " PAYLOAD ENVIADO EM CONVERSA " + "="*40, file=sys.stderr)
+    print(json.dumps(payload, indent=2, ensure_ascii=False), file=sys.stderr)
+    print("="*109 + "\n", file=sys.stderr)
+    # ==============================================
 
     resp = requests.post(
-        f"{cfg.llm_base_url.rstrip('/')}/completions"
+        f"{cfg.llm_base_url.rstrip('/')}/chat/completions"
         json=payload,
         timeout=cfg.llm_timeout,
     )
