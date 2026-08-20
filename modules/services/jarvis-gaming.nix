@@ -247,13 +247,15 @@ in
 
   config = lib.mkIf cfg.enable {
     # ═══════════════════════════════════════════════════════════════════
-    # System packages
+    # System packages (binários para feedback visual/sonoro)
     # ═══════════════════════════════════════════════════════════════════
     environment.systemPackages = [
       gameDetectScript
       transitionToGaming
       transitionToNormal
       watcherScript
+      pkgs.libnotify    # notify-send
+      pkgs.libcanberra-gtk3  # canberra-gtk-play
     ];
 
     # ═══════════════════════════════════════════════════════════════════

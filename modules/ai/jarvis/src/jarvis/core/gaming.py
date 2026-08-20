@@ -199,13 +199,45 @@ def write_profile_state(profile: str, path: Path | None = None) -> None:
         log.warning("Failed to write profile state: %s", exc)
 
 
+def _notify(title: str, msg: str, icon: str = "dialog-information") -> None:
+    """Notificação visual via notify-send (best-effort)."""
+    notify_bin = "/run/current-system/sw/bin/notify-send"
+    try:
+        subprocess.Popen(
+            [notify_bin, "-t", "4000", "-i", icon, title, msg],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except (FileNotFoundError, OSError):
+        pass
+
+
+def _play_sound(name: str) -> None:
+    """Toca um som do freedesktop (best-effort)."""
+    sound_base = "/run/current-system/sw/share/sounds/freedesktop/stereo"
+    sound_map = {
+        "enter": "service-login.oga",
+        "exit": "service-logout.oga",
+    }
+    sound_file = sound_map.get(name, name)
+    if not sound_file.endswith(".oga"):
+        sound_file += ".oga"
+    canberra_bin = "/run/current-system/sw/bin/canberra-gtk-play"
+    try:
+        subprocess.run(
+            [canberra_bin, "--file", f"{sound_base}/{sound_file}"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pass
+
+
 def log_transition(
     from_profile: str,
     to_profile: str,
     reason: str,
     details: str = "",
 ) -> None:
-    """Loga uma transição de perfil."""
+    """Loga uma transição de perfil com notificação visual + sonora."""
     entry = {
         "ts": time.time(),
         "iso": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -215,7 +247,16 @@ def log_transition(
         "details": details,
     }
     log.info("Profile transition: %s → %s (%s)", from_profile, to_profile, reason)
-    # Also write to a JSONL log file
+
+    # Notificação visual
+    if to_profile == "gaming":
+        _notify("🎮 JARVIS Gaming", "Modo gaming ativo — serviços pesados pausados.", "input-gaming")
+        _play_sound("enter")
+    elif to_profile == "normal":
+        _notify("🤖 JARVIS Normal", "Serviços restaurados — modo normal.", "emblem-default")
+        _play_sound("exit")
+
+    # Log em JSONL
     log_file = Path("/var/log/jarvis-gaming.jsonl")
     try:
         with log_file.open("a") as f:
