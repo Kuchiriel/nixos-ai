@@ -42,7 +42,7 @@ in
       * {
         border: none;
         border-radius: 0;
-        font-family: "JetBrainsMono Nerd Font", "SymbolsNerdFont", sans-serif;
+        font-family: "JetBrainsMono Nerd Font", "Symbols Nerd Font", sans-serif;
         font-size: 12.5px;
         min-height: 0;
       }
