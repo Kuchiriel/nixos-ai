@@ -41,8 +41,11 @@ security.sudo.extraRules = [
   ] ++ dynamicServiceImports;
 
   environment.systemPackages = with pkgs; [
-    # Outros pacotes do sistema...
-    (callPackage ../../modules/ai/package.nix { })
+    # Se quiser a versão padrão sem voz:
+    (callPackage ../../modules/ai/package.nix { }).base
+
+    # OU, se quiser a versão completa com suporte a voz (STT/TTS):
+    # (callPackage ../../modules/ai/package.nix { }).withVoice
   ];
 
   stylix.homeManagerIntegration.autoImport = false;

@@ -18,6 +18,15 @@ in
   ] ++ dynamicServiceImports;
 
   environment.systemPackages = with pkgs; [
+    # Se quiser a versão padrão sem voz:
+    # (callPackage ../../modules/ai/package.nix { }).base
+
+    # OU, se quiser a versão completa com suporte a voz (STT/TTS):
+    (callPackage ../../modules/ai/package.nix { }).withVoice
+  ];
+
+
+  environment.systemPackages = with pkgs; [
     # Outros pacotes do sistema...
     (callPackage ../../modules/ai/package.nix { })
   ];
