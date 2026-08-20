@@ -114,6 +114,8 @@ in
         "workspace 5, match:class ^(telegram)$"
         "float 1, match:class ^([Ww]urm.*)$"
         "stay_focused true, match:class ^([Ww]urm.*)$, match:title ^(Dropdown|ComboBox)$"
+        "opaque, match:class ^([Ww]urm.*)$"
+        "opacity 1.0 override 1.0 override, match:class ^([Ww]urm.*)$"
         "suppress_event maximize, match:class ^(.*)$"
       ];
 
