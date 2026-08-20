@@ -158,15 +158,15 @@ in
     };
     host = {
       model = "llm-host";
-      mmproj = "llm-host-mmproj";       # vision (Qwen3.6 tem encoder integrado)
+      mmproj = "llm-host-mmproj";
       threads = 12;
-      ctxSize = 16384;                  # q8_0 KV: 32K estoura a VRAM de 6GB
-      ubatch = 1024;
-      gpuLayers = 8;                   # ~4.5GB de pesos; knob de tuning no host
-      kvCache = "-fa on -ctk q8_0 -ctv q8_0";      # KV-cache quantizado
-      moeFlags = "--n-cpu-moe 2";       # experts na RAM (32GB), VRAM 6GB intacta
-      user = "root";                    # CPUSchedulingPolicy=fifo exige privilégio
-      scheduler = { policy = "fifo"; priority = 50; };  # prioridade tempo real
+      ctxSize = 8192;           # Reduzido de 16384 para aliviar a alocação inicial
+      ubatch = 512;             # Reduzido de 1024 para diminuir o pico de VRAM no boot
+      gpuLayers = 6;            # Baixado de 8 para garantir margem na RTX 4050
+      kvCache = "-fa on -ctk q8_0 -ctv q8_0";
+      moeFlags = "--n-cpu-moe 2";
+      user = "root";
+      scheduler = { policy = "fifo"; priority = 50; };
     };
   };
 }
