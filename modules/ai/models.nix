@@ -162,7 +162,7 @@ in
       threads = 12;
       ctxSize = 16384;                  # q8_0 KV: 32K estoura a VRAM de 6GB
       ubatch = 1024;
-      gpuLayers = 12;                   # ~4.5GB de pesos; knob de tuning no host
+      gpuLayers = 10;                   # ~4.5GB de pesos; knob de tuning no host
       kvCache = "-fa on -ctk q8_0 -ctv q8_0";      # KV-cache quantizado
       moeFlags = "--n-cpu-moe 2";       # experts na RAM (32GB), VRAM 6GB intacta
       user = "root";                    # CPUSchedulingPolicy=fifo exige privilégio
