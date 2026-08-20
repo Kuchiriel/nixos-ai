@@ -177,7 +177,8 @@ def _call_llm(messages: list[dict[str, str]], tools: list[dict], profile: dict) 
         "temperature": profile["temperature"],
         "max_tokens": profile["max_tokens"],
         "parallel_tool_calls": False,
-        "response_format": {"type": "json_object"},
+        # NÃO usar response_format json_object — adiciona ~2.7s de overhead
+        # O Qwen3 já faz tool calling nativo via chat template (--jinja)
     }
     if cfg.llm_disable_thinking:
         payload["chat_template_kwargs"] = {"enable_thinking": False}

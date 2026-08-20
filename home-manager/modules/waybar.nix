@@ -17,7 +17,7 @@ let
   hostOnlySettings = lib.optionalAttrs isHost {
     battery = {
       format = "{icon} {capacity}%";
-      format-icons = [ "\uf240" "\uf241" "\uf242" "\uf243" "\uf244" ];
+      format-icons = [ "" "" "" "" "" ];
       tooltip = false;
     };
     backlight = {
@@ -25,7 +25,7 @@ let
       tooltip = false;
     };
     bluetooth = {
-      format = "\uf16cc {status}";
+      format = "c {status}";
       tooltip = false;
       on-click = "foot --app-id floating_shell -e bluetuith";
     };
@@ -273,7 +273,7 @@ in
       };
 
       clock = {
-        format = "\uf017 {:%H:%M}";
+        format = " {:%H:%M}";
         tooltip = false;
         on-click = "foot --app-id floating_shell -e calcurse";
       };
@@ -286,14 +286,14 @@ in
 
       cpu = {
         interval = 2;
-        format = "\uf538 {usage}%";
+        format = " {usage}%";
         tooltip = false;
         on-click = "foot --app-id floating_shell -e btm";
       };
 
       memory = {
         interval = 2;
-        format = "\uf538 {used:0.1f}G";
+        format = " {used:0.1f}G";
         tooltip = false;
         on-click = "foot --app-id floating_shell -e btm";
       };
@@ -332,7 +332,7 @@ in
       };
 
       network = {
-        format-wifi = "\uf1eb {essid}";
+        format-wifi = " {essid}";
         format-ethernet = "󰈀 Wired";
         format-disconnected = "󰤮 Disconnected";
         tooltip = false;
@@ -342,8 +342,8 @@ in
       pulseaudio = {
         format = "{icon} {volume}%";
         format-icons = {
-          headphone = "\uf001f";
-          default = [ "\uf026" "\uf027" "\uf028" ];
+          headphone = "f";
+          default = [ "" "" "" ];
         };
         tooltip = false;
         on-click = "foot --app-id floating_shell -e ncpamixer";
