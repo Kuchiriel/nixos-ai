@@ -39,9 +39,6 @@ in
     ];
   };
 
-  services.gvfs.enable = true;
-  services.udisks2.enable = true;
-
   stylix.targets.gnome.enable = false;    # Exemplo para GNOME
   stylix.targets.feh.enable = false;      # Comum em WMs leves como i3 ou Sway
   stylix.targets.console.enable = true; # Mantém as cores no terminal
