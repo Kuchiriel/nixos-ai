@@ -204,37 +204,7 @@ PLAN: [{action: read|edit|create|delete, path: ..., description: ...}]
 Do NOT execute. Just plan.
 """
 
-  def _call_llm(messages: list[dict[str, str]], tools: list[dict], profile: dict) -> dict:
-    """Chama o LLM local."""
-    cfg = _get_config()
-    
-    # Monte um payload limpo e estritamente compatível com a API OpenAI do llama.cpp
-    payload = {
-        "model": profile.get("model_id", cfg.llm_model),
-        "messages": messages,
-        "temperature": profile["temperature"],
-        "max_tokens": profile["max_tokens"],
-    }
-    
-    # SÓ adiciona ferramentas se a lista NÃO estiver vazia, evitando quebras no parser BNF
-    if tools and len(tools) > 0:
-        payload["tools"] = tools
-        payload["tool_choice"] = "auto"
 
-    # NOTA: Removemos completamente o 'chat_template_kwargs' daqui. 
-    # O controle de thinking do Qwen/DeepSeek deve ser feito direto na inicialização do llama-server.
-
-    resp = requests.post(
-        f"{cfg.llm_base_url.rstrip('/')}/chat/completions",
-        json=payload,
-        timeout=cfg.llm_timeout,
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-
-
-'''
 def _call_llm(messages: list[dict[str, str]], tools: list[dict], profile: dict) -> dict:
     """Chama o LLM local."""
     cfg = _get_config()
@@ -259,7 +229,7 @@ def _call_llm(messages: list[dict[str, str]], tools: list[dict], profile: dict) 
     )
     resp.raise_for_status()
     return resp.json()
-'''
+
 
 def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -> str:
     """Executa uma tool call e retorna o resultado."""
