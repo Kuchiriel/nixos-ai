@@ -274,7 +274,8 @@ sudo nvme list
 
 # Identifique qual é Gen4 (rápido) vs Gen3 (lento)
 sudo lspci -vv | grep -A 2 "Non-Volatile" | grep LnkSta
-cat /sys/class/nvme/nvme0/device/current_link_speed
+cat
+/sys/class/nvme/nvme0/device/current_link_speed
 cat /sys/class/nvme/nvme1/device/current_link_speed
 cat /sys/class/nvme/nvme0/device/current_link_width
 cat /sys/class/nvme/nvme1/device/current_link_width
@@ -283,7 +284,6 @@ cat /sys/class/nvme/nvme1/device/current_link_width
 
 # Copie os IDs EXATOS (use /dev/disk/by-id/* ignore qualquer _1 copie só o ID):
 ls /dev/disk/by-id/nvme-*
-
 ```
 
 > **Regra**: NVMe Gen4 → `/` + `/nix` (store + modelos = I/O intensivo).
@@ -307,32 +307,15 @@ nano hosts/nitro-v15/disko.nix
 ```bash
 # Instalação via disko (wipe completo dos 2 NVMe)
 sudo nix --extra-experimental-features 'nix-command flakes' run github:nix-community/disko -- --mode disko --flake .#nitro-v15
+```
 
+#### Passo 5 — Instalação
+
+```bash
 sudo nixos-install --flake .#nitro-v15
 ```
 
-#### Passo 5 — Gerar e Rastrear hardware-configuration.nix
-
-```bash
-# O disko já montou /mnt — gere o hardware-config
-sudo nixos-generate-config --root /mnt
-cp /mnt/etc/nixos/hardware-configuration.nix ./hosts/nitro-v15/
-
-# ADICIONE AO .gitignore (não commitar hardware-configuration):
-echo "hosts/nitro-v15/hardware-configuration.nix" >> .gitignore
-```
-
-> **Importante**: remova linhas de bootloader do `hardware-configuration.nix`
-> (já estão no `configuration.nix`).
-
-#### Passo 6 — Instalação Final
-
-```bash
-# Rebuild para validar antes de rebootar
-sudo nixos-install --flake .#nitro-v15
-```
-
-#### Passo 7 — Reboot e Primeira Boot
+#### Passo 6 — Reboot e Primeira Boot
 
 ```bash
 sudo reboot
@@ -340,7 +323,7 @@ sudo reboot
 # Login: nixos (senha definida na instalação)
 ```
 
-#### Passo 8 — Pós-Boot: Variáveis de Ambiente e Validação
+#### Passo 7 — Pós-Boot: Variáveis de Ambiente e Validação
 
 ```bash
 # Criar arquivo de chaves do LiteLLM (fora do git!)
@@ -362,7 +345,6 @@ jarvis doctor
 jarvis hwdetect
 jarvis hwprofile
 ```
-
 ---
 
 ## 🔧 Uso
