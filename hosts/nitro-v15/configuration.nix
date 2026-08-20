@@ -19,7 +19,7 @@ in
 
   environment.systemPackages = with pkgs; [
     # Outros pacotes do sistema...
-    inputs.self.packages.${pkgs.system}.jarvis
+    (callPackage ../../modules/ai/package.nix { })
   ];
 
   # ── O SWITCH CENTRAL (Ambiente do Host Físico) ──────────────────────
