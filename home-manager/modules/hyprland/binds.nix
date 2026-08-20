@@ -53,9 +53,9 @@ in {
       "$mainMod,       N, exec, swaync-client -t"
       "$mainMod,       W, exec, ${booksScript}/bin/open_books"
 
-      # Screenshots (Print Screen tela cheia / Super + Print seleciona área)
-      ", Print, exec, grimblast copysave screen"
-      "$mainMod, Print, exec, grimblast copysave area"
+      # Screenshots resilientes (copia direto para o wl-copy)
+      ", Print, exec, grim - | wl-copy"
+      "$mainMod, Print, exec, grim -g \"$(slurp)\" - | wl-copy"
 
       # Moving focus
       "$mainMod, left, movefocus, l"

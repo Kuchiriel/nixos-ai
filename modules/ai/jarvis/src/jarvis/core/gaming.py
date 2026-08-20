@@ -57,8 +57,8 @@ DEFAULT_GPU_THRESHOLD = 60
 DEFAULT_GRACE_PERIOD = 30  # seconds
 DEFAULT_SPIKE_DURATION = 3  # consecutive checks
 
-# Arquivo de estado do perfil
-PROFILE_STATE_FILE = Path("/tmp/jarvis-resource-profile")
+# Arquivo de estado do perfil (em /var/lib/jarvis — já criado por tmpfiles)
+PROFILE_STATE_FILE = Path("/var/lib/jarvis/resource-profile")
 
 
 # ═══════════════════════════════════════════════════════════════════

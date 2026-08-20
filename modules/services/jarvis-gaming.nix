@@ -178,7 +178,7 @@ let
     CHECK_INTERVAL=2  # seconds between checks
 
     # Initialize profile file
-    echo "$CURRENT_PROFILE" > /tmp/jarvis-resource-profile
+    echo "$CURRENT_PROFILE" > /var/lib/jarvis/resource-profile
 
     while true; do
       if ${gameDetectScript}/bin/jarvis-game-detect &>/dev/null; then
@@ -190,6 +190,7 @@ let
           echo "$LOG_PREFIX Game confirmed ($SPIKE_COUNT consecutive spikes), transitioning to gaming"
           ${transitionToGaming}/bin/jarvis-transition-to-gaming
           CURRENT_PROFILE="gaming"
+          echo "$CURRENT_PROFILE" > /var/lib/jarvis/resource-profile
         fi
       else
         # No GPU spike
@@ -202,6 +203,7 @@ let
           sleep ${toString gracePeriod}
           ${transitionToNormal}/bin/jarvis-transition-to-normal
           CURRENT_PROFILE="normal"
+          echo "$CURRENT_PROFILE" > /var/lib/jarvis/resource-profile
           IDLE_COUNT=0
         fi
       fi
@@ -252,6 +254,13 @@ in
       transitionToGaming
       transitionToNormal
       watcherScript
+    ];
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Tmpfiles — garante que /var/lib/jarvis existe
+    # ═══════════════════════════════════════════════════════════════════
+    systemd.tmpfiles.rules = [
+      "d /var/lib/jarvis 0755 root root -"
     ];
 
     # ═══════════════════════════════════════════════════════════════════
