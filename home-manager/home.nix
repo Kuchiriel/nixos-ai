@@ -36,11 +36,12 @@ stylix.targets.hyprland.enable = false;
     enable = true;
     settings = {
       main = {
-        # O mkForce resolve o conflito e força o tamanho 12 (ou mude para o número que preferir)
-        font = lib.mkForce "JetBrainsMono Nerd Font:size=12";
+        # Trocado de lib.mkForce para pkgs.lib.mkForce
+        font = pkgs.lib.mkForce "JetBrainsMono Nerd Font:size=12";
       };
     };
   };
+
 
   home.file.".aider.conf.yml".text = ''
     openai-api-base: http://localhost:8080/v1
