@@ -31,17 +31,18 @@ stylix.targets.hyprland.enable = false;
       set +a
     fi
   '';
-
+   
   programs.foot = {
     enable = true;
     settings = {
       main = {
-        # Trocado de lib.mkForce para pkgs.lib.mkForce
-        font = pkgs.lib.mkForce "JetBrainsMono Nerd Font:size=12";
+        font = {
+          _type = "override";
+          content = "JetBrainsMono Nerd Font:size=12";
+        };
       };
     };
   };
-
 
   home.file.".aider.conf.yml".text = ''
     openai-api-base: http://localhost:8080/v1
