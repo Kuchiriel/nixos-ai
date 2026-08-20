@@ -46,10 +46,6 @@
       }).llama-cpp.override {
         cudaSupport = true;
       };
-
-      llama-cpp = (nixpkgs-unstable.legacyPackages.${prev.stdenv.hostPlatform.system}.llama-cpp.override {
-        cudaSupport = true;
-      });
       #llama-cpp = nixpkgs-unstable.legacyPackages.${prev.stdenv.hostPlatform.system}.llama-cpp;
       #llama-cpp = inputs.nixpkgs-unstable.legacyPackages.${system}.llama-cpp;
       # mcp-nixos com cache de canais pré-computado (store) + FALLBACK atualizado:
