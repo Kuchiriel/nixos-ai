@@ -47,8 +47,8 @@ QUANT_BYTES: dict[str, float] = {
 # Bytes por elemento do KV cache (llama.cpp: f16 = 2, q8_0 = 1)
 KV_BYTES: dict[str, float] = {"f16": 2.0, "q8_0": 1.0}
 
-# Folga de VRAM base: CUDA context (~0.3GB) + compute buffers (~0.2GB)
-VRAM_OVERHEAD_BASE_GB = 0.5
+# Folga de VRAM base: CUDA context (~0.3GB) + compute buffers (~0.5GB para ubatch≥512)
+VRAM_OVERHEAD_BASE_GB = 0.8
 # Folga extra para mmproj (visão BF16: SigLIP ~400M params × 2 bytes ≈ 0.8GB)
 VRAM_MMPROJ_GB = 0.8
 # Folga de RAM para o sistema operacional e serviços

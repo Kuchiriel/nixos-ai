@@ -156,19 +156,20 @@ in
       user = "nixos";
       scheduler = null;                 # CFS (default) — VM compartilhada
     };    # Host: RTX 4050 6GB + 32GB RAM, Qwen3.6-35B-A3B MoE + vision
-    # Cálculo via hwprofile.py (jarvis hwprofile):
-    #   VRAM:6.0GB - overhead 1.3GB(base+mmproj) × 0.90(safety) = 4.23GB headroom
-    #   gpu_params/layer: attn(24.7MB) + 4 experts(212.8MB) = 237.4MB quantized
-    #   ngl=12: 12×237.4MB=2.85GB + KV q8_0 32K=1.25GB + overhead=1.3GB → 5.40GB ✓
-    #   6 routed experts → RAM (120GB/s DDR5), 2 routed + 2 shared → GPU (260GB/s)
-    #   Forecast: ~37 t/s (bandwidth-bound, MoE esparsa top-k=2)
+    # VRAM budget (6GB total):
+    #   weights:  10 × 0.237GB = 2.37GB (attn+4experts/camada)
+    #   KV q8_0:  16K ctx     = 0.62GB
+    #   overhead: base(0.5) + mmproj(0.8) + cuda_compute(~1.0) = 2.30GB
+    #   TOTAL:    5.30GB (0.70GB margem de segurança)
+    # 6 routed experts → RAM (120GB/s DDR5), 2 routed + 2 shared → GPU (260GB/s)
+    # Forecast: ~25-30 t/s (bandwidth-bound, MoE esparsa top-k=2)
     host = {
       model = "llm-host";
       mmproj = "llm-host-mmproj";
       threads = 16;
-      ctxSize = 32768;          # 32K contexto — cabe nos 32GB RAM (9.9GB livres)
-      ubatch = 1024;            # Batch maior = melhor throughput (cabe na VRAM)
-      gpuLayers = 12;           # 12/40 camadas na GPU (expert offload: attn+4experts/camada)
+      ctxSize = 16384;          # 16K contexto — seguro na VRAM (0.7GB margem)
+      ubatch = 512;             # 512: menos compute buffer que 1024 (seguro p/ 6GB)
+      gpuLayers = 10;           # 10/40 camadas na GPU (expert offload: attn+4experts/camada)
       kvCache = "-fa on -ctk q8_0 -ctv q8_0";  # q8_0: VRAM apertada, f16 não cabe
       moeFlags = "--n-cpu-moe 2";  # 2 routed experts na GPU + 2 shared; 6 routed→RAM
       # Flags de performance (benchmarks Qwen3.6-35B-A3B MoE):
