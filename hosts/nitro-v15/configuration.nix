@@ -88,6 +88,7 @@ in
   services.jarvis-vault.enable = true;
   services.jarvis-idle.enable = true;
   services.jarvis-telegram.enable = true;
+  services.jarvis-gaming.enable = true;
   services.litellm.enable = true;
   programs.freebuff.enable = true;
   programs.jarvis-scripts.enable = true;

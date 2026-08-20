@@ -27,6 +27,10 @@ in {
   home.packages = with pkgs; [ 
     booksScript 
     jarvisAsk 
+    grim
+    slurp
+    wl-clipboard
+    libnotify # Necessário para o grimblast enviar notificações do sistema
     grimblast # Garante que a ferramenta de screenshot está nos pacotes do user
   ];
 
