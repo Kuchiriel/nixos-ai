@@ -40,7 +40,10 @@
     # Overlay único dos componentes de IA (usado pelo sistema e pelo output `packages`)
     aiOverlay = final: prev: {
       # llama.cpp vem do unstable (24.11/26.05 pinned ficam desatualizados)
-      llama-cpp = nixpkgs-unstable.legacyPackages.${prev.stdenv.hostPlatform.system}.llama-cpp;
+      llama-cpp = (nixpkgs-unstable.legacyPackages.${prev.stdenv.hostPlatform.system}.llama-cpp.override {
+        cudaSupport = true;
+      });
+      #llama-cpp = nixpkgs-unstable.legacyPackages.${prev.stdenv.hostPlatform.system}.llama-cpp;
       #llama-cpp = inputs.nixpkgs-unstable.legacyPackages.${system}.llama-cpp;
       # mcp-nixos com cache de canais pré-computado (store) + FALLBACK atualizado:
       # a descoberta de canais faz 20 probes HTTP sequenciais por processo novo
