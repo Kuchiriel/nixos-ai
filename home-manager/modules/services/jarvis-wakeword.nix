@@ -163,6 +163,7 @@ let
         speaking = False
         silence_start = None
         speech_frames = []
+        speech_buf = []  # buffer for consecutive speech chunks
 
         while True:
             try:
@@ -199,13 +200,17 @@ let
                 if (time.time() - last_trigger_time) < COOLDOWN:
                     continue
 
-                # VAD: detect speech onset (adaptive: 20% above baseline)
+                # VAD: detect speech onset (adaptive: 20% above baseline, require 3 consecutive chunks)
                 if not speaking:
                     if rms > noise_baseline * 1.2:
-                        speaking = True
-                        speech_frames = [data]
-                        silence_start = None
-                        print(f"[WW] 🎤 Speech detected (RMS={rms:.0f})", flush=True)
+                        speech_buf.append(rms)
+                        if len(speech_buf) >= 3:
+                            speaking = True
+                            speech_frames = [data]
+                            silence_start = None
+                            print(f"[WW] 🎤 Speech detected (RMS={rms:.0f}, baseline={noise_baseline:.0f})", flush=True)
+                    else:
+                        speech_buf = []
                     continue
 
                 # Currently speaking — accumulate frames
