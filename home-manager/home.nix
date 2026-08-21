@@ -51,13 +51,13 @@
     };
   };
 
-  # ══════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════
   # JARVIS STT — Download declarativo do modelo faster-whisper-tiny.en
   # ══════════════════════════════════════════════════════════════
   home.file.".local/share/jarvis/voice/models--Systran--faster-whisper-tiny.en/snapshots/main/model.bin".source = pkgs.fetchurl {
     url = "https://huggingface.co/Systran/faster-whisper-tiny.en/resolve/main/model.bin";
-    hash = "sha256-EbC7deetDKa6P2TBFRP03wUXXEgXfSOho+ai67rr7CA=";
-  }; 
+    hash = "sha256-Glr64GpNuRyXXJqdeL5cwRDuTqAirVfVVJLkVQ6Tayo=";
+  };
 
   # ══════════════════════════════════════════════════════════════
   # AIDER — Qwen3.6-35B-A3B via llama.cpp local
