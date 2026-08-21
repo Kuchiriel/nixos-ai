@@ -76,7 +76,7 @@ stylix.targets.hyprland.enable = false;
     }
   '';
 
-  # 3. Settings do modelo customizado (edit_format, system_prompt, etc.)
+  # 3. Settings do modelo customizado (edit_format, system_prompt, thinking off)
   home.file.".aider.model.settings.yml".text = ''
     - name: openai/custom-model
       edit_format: diff
@@ -84,6 +84,7 @@ stylix.targets.hyprland.enable = false;
       lazy: false
       reminder: sys
       examples_as_sys_msg: true
+      reasoning_tag: think
       system_prompt_prefix: >-
         You are an autonomous coding agent. You MUST execute all actions yourself.
         NEVER ask the user to run commands, edit files, or do anything manually.
@@ -93,6 +94,9 @@ stylix.targets.hyprland.enable = false;
       extra_params:
         max_tokens: 4096
         temperature: 0.0
+        extra_body:
+          chat_template_kwargs:
+            enable_thinking: false
   '';
 
   services.jarvis-wakeword = {
