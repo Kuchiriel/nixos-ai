@@ -51,7 +51,13 @@ let
   gameDetectScript = pkgs.writeShellScriptBin "jarvis-game-detect" ''
     set -euo pipefail
 
+    # ═══════════════════════════════════════════════════════════════════
+    # Detecção multi-sinal: qualquer sinal = jogo ativo
+    # Prioridade: GPU → Hyprland fullscreen → Steam children → Proton
+    # ═══════════════════════════════════════════════════════════════════
+
     # 1. GPU utilization check via nvidia-smi
+    #    Threshold 30%: MMOs/jogos leves usam 15-35% GPU
     if command -v nvidia-smi &>/dev/null; then
       GPU_UTIL=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')
       if [ -n "$GPU_UTIL" ] && [ "$GPU_UTIL" -ge ${toString gpuThreshold} ] 2>/dev/null; then
@@ -60,24 +66,49 @@ let
       fi
     fi
 
-    # 2. Process tree check: steam game processes
-    # Steam games run as children of steam or steamwebhelper
-    # Proton games run via pressure-vessel or gamescope
+    # 2. Hyprland fullscreen window check
+    #    Se há janela fullscreen = provavelmente jogo rodando
+    if command -v hyprctl &>/dev/null; then
+      if hyprctl clients -j 2>/dev/null | python3 -c "
+import sys, json
+try:
+    clients = json.load(sys.stdin)
+    for c in clients:
+        if c.get('fullscreen') is True:
+            sys.exit(0)
+    sys.exit(1)
+except:
+    sys.exit(1)
+" 2>/dev/null; then
+        echo "hyprland_fullscreen"
+        exit 0
+      fi
+    fi
+
+    # 3. Steam game children check
+    #    Se o Steam tem filhos que NÃO são steamwebhelper = jogo rodando
+    STEAM_PID=$(pgrep -x "steam" 2>/dev/null | head -1)
+    if [ -n "$STEAM_PID" ]; then
+      # Processos internos do Steam (NÃO indicam jogo)
+      STEAM_INTERNAL="steamwebhelper|steam_oOo|crashhandler"
+      # Verifica filhos do Steam
+      for CHILD_PID in $(pgrep -P "$STEAM_PID" 2>/dev/null); do
+        COMM=$(cat /proc/$CHILD_PID/comm 2>/dev/null || echo "")
+        if [ -n "$COMM" ] && ! echo "$COMM" | grep -qE "$STEAM_INTERNAL"; then
+          echo "steam_game_active"
+          exit 0
+        fi
+      done
+    fi
+
+    # 4. Proton/gamescope check
     if pgrep -x "gamescope" &>/dev/null; then
       echo "gamescope_active"
       exit 0
     fi
 
-    # Check for proton/wine processes (indicates game running under Proton)
     if pgrep -f "pressure-vessel" &>/dev/null; then
       echo "proton_active"
-      exit 0
-    fi
-
-    # Check for game processes (common game executables)
-    # This is a fallback — GPU utilization is the primary signal
-    if pgrep -f "game_(linux|exe|bin)" &>/dev/null; then
-      echo "game_process_active"
       exit 0
     fi
 

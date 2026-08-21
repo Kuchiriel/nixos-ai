@@ -1,8 +1,7 @@
 """JARVIS Gaming — Resource Profiles (normal / gaming).
 
-Quando um jogo está EFETIVAMENTE rodando (GPU utilization spike ou
-processos de jogo detectados), o sistema para serviços pesados que
-competem por recursos:
+Quando um jogo está EFETIVAMENTE rodando, o sistema para serviços
+pesados que competem por recursos:
   - llama-cpp-server (VRAM ~2.5GB + GPU compute)
   - llama-cpp-embeddings (CPU)
   - llama-cpp-rerank (CPU)
@@ -13,8 +12,11 @@ Serviços MANTIDOS durante gaming (leves, sem competição):
   - jarvis-wakeword (CPU-only, fast paths)
   - jarvis-vault, jarvis-idle, jarvis-telegram
 
-Detecção: GPU utilization via nvidia-smi (>60% = jogo ativo)
-          + fallback para process tree (gamescope, proton, pressure-vessel)
+Detecção multi-sinal (qualquer um = jogo ativo):
+  1. GPU utilization via nvidia-smi (≥30% = jogo ativo)
+  2. Hyprland fullscreen window (hyprctl clients -j)
+  3. Steam game children (steam com filhos ≠ steamwebhelper)
+  4. Proton/gamescope (pressure-vessel, gamescope)
 
 Integração: NixOS module (modules/services/jarvis-gaming.nix)
             + systemd services + targets
@@ -53,9 +55,18 @@ GAMING_KEEP_SERVICES: list[str] = [
 ]
 
 # Defaults
-DEFAULT_GPU_THRESHOLD = 60
+DEFAULT_GPU_THRESHOLD = 30  # Abaixado de 60% — MMOs/jogos leves usam 15-35% GPU
 DEFAULT_GRACE_PERIOD = 30  # seconds
 DEFAULT_SPIKE_DURATION = 3  # consecutive checks
+
+# Processos internos do Steam (NÃO indicam jogo rodando)
+STEAM_INTERNAL_PROCESSES = {
+    "steamwebhelper",
+    "steam",
+    "steam_oOo",
+    "crashhandler",
+    " steamwebhelper",
+}
 
 # Arquivo de estado do perfil (em /var/lib/jarvis — já criado por tmpfiles)
 PROFILE_STATE_FILE = Path("/var/lib/jarvis/resource-profile")
@@ -81,8 +92,99 @@ def _get_gpu_utilization() -> int | None:
     return None
 
 
-def _check_game_processes() -> bool:
-    """Verifica processos de jogo via pgrep."""
+def _check_hyprland_fullscreen() -> bool:
+    """Verifica se há janela fullscreen via hyprctl (Hyprland)."""
+    try:
+        result = subprocess.run(
+            ["hyprctl", "clients", "-j"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            clients = json.loads(result.stdout)
+            for client in clients:
+                # Hyprland: fullscreen pode ser bool ou estado
+                if client.get("fullscreen") is True:
+                    log.debug(
+                        "Game detected via Hyprland fullscreen: %s",
+                        client.get("title", "unknown"),
+                    )
+                    return True
+    except (
+        FileNotFoundError,
+        subprocess.TimeoutExpired,
+        json.JSONDecodeError,
+        KeyError,
+        TypeError,
+    ):
+        pass
+    return False
+
+
+def _check_steam_game_children() -> bool:
+    """Verifica se o Steam tem filhos que não são processos internos.
+
+    Quando o Steam lança um jogo, cria processos filhos que não são
+    steamwebhelper (UI) nem outros processos internos do Steam.
+    """
+    try:
+        # Encontra o PID principal do Steam
+        result = subprocess.run(
+            ["pgrep", "-x", "steam"],
+            capture_output=True, text=True, timeout=3,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return False
+
+        steam_pid = result.stdout.strip().split("\n")[0].strip()
+
+        # Lista filhos do Steam
+        result = subprocess.run(
+            ["pgrep", "-P", steam_pid],
+            capture_output=True, text=True, timeout=3,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return False
+
+        child_pids = result.stdout.strip().split("\n")
+
+        # Verifica se algum filho NÃO é processo interno do Steam
+        for child_pid in child_pids:
+            child_pid = child_pid.strip()
+            if not child_pid:
+                continue
+
+            # Lê o nome do processo via /proc/PID/comm
+            try:
+                comm_path = Path(f"/proc/{child_pid}/comm")
+                if comm_path.exists():
+                    comm_name = comm_path.read_text().strip()
+                    # Remove caracteres perigosos
+                    comm_name = sanitize_process_name(comm_name)
+
+                    # Verifica se é processo interno do Steam
+                    is_internal = False
+                    for internal in STEAM_INTERNAL_PROCESSES:
+                        if internal in comm_name:
+                            is_internal = True
+                            break
+
+                    if not is_internal:
+                        log.debug(
+                            "Game detected via Steam child process: %s (PID %s)",
+                            comm_name,
+                            child_pid,
+                        )
+                        return True
+            except (OSError, PermissionError):
+                continue
+
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return False
+
+
+def _check_proton_gamescope() -> bool:
+    """Verifica processos de Proton/gamescope (existente)."""
     # Gamescope (wrapper de jogo)
     try:
         result = subprocess.run(
@@ -111,21 +213,34 @@ def _check_game_processes() -> bool:
 def detect_game(gpu_threshold: int = DEFAULT_GPU_THRESHOLD) -> bool:
     """Detecta se um jogo está EFETIVAMENTE rodando.
 
-    Primário: GPU utilization via nvidia-smi
-    Secundário: process tree (gamescope, proton)
+    Detecção multi-sinal (qualquer um = jogo ativo):
+      1. GPU utilization via nvidia-smi (≥30% = jogo ativo)
+      2. Hyprland fullscreen window (hyprctl clients -j)
+      3. Steam game children (steam com filhos ≠ steamwebhelper)
+      4. Proton/gamescope (pressure-vessel, gamescope)
 
     Returns:
         True se jogo detectado, False caso contrário.
     """
-    # 1. GPU utilization (primary signal)
+    # 1. GPU utilization (primary signal — qualquer jogo pesado)
     gpu_util = _get_gpu_utilization()
     if gpu_util is not None and gpu_util >= gpu_threshold:
         log.debug("Game detected via GPU utilization: %d%%", gpu_util)
         return True
 
-    # 2. Process tree (fallback)
-    if _check_game_processes():
-        log.debug("Game detected via process tree")
+    # 2. Hyprland fullscreen (janela fullscreen = provavelmente jogo)
+    if _check_hyprland_fullscreen():
+        log.debug("Game detected via Hyprland fullscreen window")
+        return True
+
+    # 3. Steam game children (Steam com filhos ≠ internos)
+    if _check_steam_game_children():
+        log.debug("Game detected via Steam child process")
+        return True
+
+    # 4. Proton/gamescope (fallback para jogos via Proton)
+    if _check_proton_gamescope():
+        log.debug("Game detected via Proton/gamescope")
         return True
 
     return False

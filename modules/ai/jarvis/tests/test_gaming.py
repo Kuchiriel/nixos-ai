@@ -91,21 +91,21 @@ class TestGameDetection:
     def test_gpu_above_threshold_detects_game(self, mock_nvidia_smi_gpu_active):
         """GPU utilization > threshold → jogo detectado."""
         from jarvis.core.gaming import detect_game
-        assert detect_game(gpu_threshold=60) is True
+        assert detect_game(gpu_threshold=30) is True
 
     def test_gpu_below_threshold_no_game(self, mock_nvidia_smi_gpu_idle):
         """GPU utilization < threshold → sem jogo."""
         from jarvis.core.gaming import detect_game
-        assert detect_game(gpu_threshold=60) is False
+        assert detect_game(gpu_threshold=30) is False
 
-    def test_no_gpu_fallback_to_process_check(self, mock_nvidia_smi_no_gpu):
-        """Sem GPU NVIDIA → fallback para detecção por processo."""
+    def test_no_gpu_fallback_to_hyprland_fullscreen(self, mock_nvidia_smi_no_gpu):
+        """Sem GPU NVIDIA → fallback para Hyprland fullscreen."""
         with patch("subprocess.run") as mock_run:
-            # Simula gamescope rodando
             def side_effect(cmd, **kwargs):
-                if "pgrep" in cmd:
+                if "hyprctl" in cmd and "clients" in cmd:
                     result = MagicMock()
-                    result.returncode = 0  # process found
+                    result.stdout = '[{"fullscreen": true, "title": "Wurm Online"}]'
+                    result.returncode = 0
                     return result
                 result = MagicMock()
                 result.stdout = ""
@@ -114,7 +114,14 @@ class TestGameDetection:
             mock_run.side_effect = side_effect
 
             from jarvis.core.gaming import detect_game
-            assert detect_game(gpu_threshold=60) is True
+            assert detect_game(gpu_threshold=30) is True
+
+    def test_no_gpu_steam_game_children(self, mock_nvidia_smi_no_gpu):
+        """Sem GPU → Steam com filhos ≠ steamwebhelper = jogo."""
+        with patch("jarvis.core.gaming._check_steam_game_children") as mock_steam:
+            mock_steam.return_value = True
+            from jarvis.core.gaming import detect_game
+            assert detect_game(gpu_threshold=30) is True
 
     def test_no_gpu_no_processes_no_game(self, mock_nvidia_smi_no_gpu):
         """Sem GPU e sem processos → sem jogo."""
@@ -124,7 +131,32 @@ class TestGameDetection:
             mock_run.return_value = result
 
             from jarvis.core.gaming import detect_game
-            assert detect_game(gpu_threshold=60) is False
+            assert detect_game(gpu_threshold=30) is False
+
+    def test_hyprland_fullscreen_detects_game(self, mock_nvidia_smi_gpu_idle):
+        """Hyprland fullscreen → jogo detectado (mesmo com GPU baixa)."""
+        with patch("subprocess.run") as mock_run:
+            def side_effect(cmd, **kwargs):
+                if "hyprctl" in cmd and "clients" in cmd:
+                    result = MagicMock()
+                    result.stdout = '[{"fullscreen": true, "title": "Game"}]'
+                    result.returncode = 0
+                    return result
+                result = MagicMock()
+                result.stdout = ""
+                result.returncode = 1
+                return result
+            mock_run.side_effect = side_effect
+
+            from jarvis.core.gaming import detect_game
+            assert detect_game(gpu_threshold=30) is True
+
+    def test_steam_only_internal_no_game(self, mock_nvidia_smi_no_gpu):
+        """Steam com apenas processos internos → sem jogo."""
+        with patch("jarvis.core.gaming._check_steam_game_children") as mock_steam:
+            mock_steam.return_value = False
+            from jarvis.core.gaming import detect_game
+            assert detect_game(gpu_threshold=30) is False
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -355,6 +387,11 @@ class TestSecurity:
         assert "llama-cpp-server" in GAMING_STOP_SERVICES
         assert "qdrant" not in GAMING_STOP_SERVICES  # Qdrant NÃO deve ser parado
         assert "jarvis-wakeword" not in GAMING_STOP_SERVICES  # Wakeword NÃO deve ser parado
+
+    def test_default_gpu_threshold_is_30(self):
+        """Threshold padrão é 30% (abaixado de 60% para MMOs/jogos leves)."""
+        from jarvis.core.gaming import DEFAULT_GPU_THRESHOLD
+        assert DEFAULT_GPU_THRESHOLD == 30
 
 
 # ═══════════════════════════════════════════════════════════════════
