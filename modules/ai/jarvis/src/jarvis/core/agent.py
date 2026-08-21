@@ -394,10 +394,13 @@ class Agent:
             "temperature": profile["temperature"],
             "max_tokens": profile["max_tokens_per_turn"],
             "parallel_tool_calls": profile["parallel_tool_calls"],
-            # json_object reduz repair loops em ~50% com SLMs — o modelo
-            # gera JSON válido por constrangimento, não por tentativa.
-            "response_format": {"type": "json_object"},
         }
+        # NOTA: response_format: json_object REMOVIDO quando tool_choice está ativo.
+        # Conflito: forçar JSON content + tool_choice auto confunde o modelo —
+        # ele pode tentar serializar tool_calls como JSON content em vez de usar
+        # o campo tool_calls separado. O repair loop já lida com tool_calls
+        # vazados como texto (3 camadas de extração).
+        # json_object só é útil quando NÃO há tools (ex: rotas sem tool calling).
         # Qwen3 (e Qwen3.6) ativam thinking por padrão via chat template;
         # em CPU (lab) isso dobra a latência e consome max_tokens em
         # reasoning antes do tool call. Desligado via Config (env).
