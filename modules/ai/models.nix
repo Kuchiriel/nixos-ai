@@ -203,7 +203,8 @@ in
             "--keep" "1024"
             "--no-warmup"                    # Sem warmup: +2% prefill e decode
             "--prio" "2"                     # Prioridade high para decode
-            "--prio-batch" "3"               # Real-time priority para batch/prefill
+            "--prio-batch" "3"               # Real-time priority para batch/prefull
+            "--reasoning-preserve"             # Preserva reasoning trace no histórico (Qwen3 thinking)
        ];
 
         user = "root";
