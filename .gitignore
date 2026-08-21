@@ -36,3 +36,4 @@ result-*
 
 # Hypothesis PBT cache
 .hypothesis/
+logs/
