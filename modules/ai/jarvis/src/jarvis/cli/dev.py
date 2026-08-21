@@ -7,7 +7,7 @@ REPL onde o usuário conversa com o agente e o agente pode:
   - Editar/criar arquivos (str_replace, com old_str='' para criar)
   - Rodar testes, commitar e buscar na web via execute_shell
 
-Arquitetura (v2 — ultra-leve, 100% compatível com llama-server/GGUF):
+Arquitetura (v2.1 — ultra-leve, 100% compatível com llama-server/GGUF):
   - Apenas 3 ferramentas primitivas nativas (read_file, str_replace,
     execute_shell) em vez de ~15 schemas JSON — corta ~2.800 tokens/turno
     de overhead de contexto.
@@ -17,10 +17,21 @@ Arquitetura (v2 — ultra-leve, 100% compatível com llama-server/GGUF):
     blocos de texto estilo Aider (SEARCH/REPLACE), zerando o overhead.
   - Parser híbrido: tenta tool_calls nativas da API; se ausentes, faz
     fallback para blocos de texto (SEARCH/REPLACE, `>>> READ`, fenced
-    shell, JSON solto) — cobre tanto modelos com function-calling robusto
+    shell, JSON solto, e o formato Hermes/Llama-3 `<function=...>
+    <parameter=...>`) — cobre tanto modelos com function-calling robusto
     quanto SLMs locais que só seguem instrução em texto.
+
+    NOTA: essa escolha (texto > JSON tool-calling para modelos pequenos)
+    segue o próprio Aider, que não usa tool_calls JSON nativamente —
+    processa tudo via formatos de diff em texto plano, justamente para
+    evitar a inconsistência de function-calling em modelos <30B.
   - Repo map limitado a ~20 arquivos mais recentes (mtime), formatado como
     árvore compacta, com orçamento rígido de ~500 tokens.
+  - Histórico da conversa é podado automaticamente (mantém system prompt +
+    últimas N mensagens) para evitar crescimento de contexto → latência
+    progressiva em sessões longas.
+  - /debug: loga o payload exato enviado à API e a resposta crua recebida,
+    para diagnosticar formatos de tool-call inesperados ou lentidão.
 
 Uso:
   jarvis dev                    # inicia REPL no CWD
@@ -37,6 +48,7 @@ import json
 import os
 import re
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -132,7 +144,16 @@ _REPO_MAP_IGNORE_DIRS = {
 def _build_repo_map(root: str, max_files: int = 20, max_tokens: int = 500) -> str:
     """Constrói um mapa compacto do repositório (estilo Aider repo-map),
     limitado aos `max_files` arquivos mais recentemente modificados e a um
-    orçamento aproximado de `max_tokens` (heurística: 1 token ~= 4 chars)."""
+    orçamento aproximado de `max_tokens` (heurística: 1 token ~= 4 chars).
+
+    NOTA (pesquisa): o Aider "de verdade" usa tree-sitter + PageRank sobre um
+    grafo de símbolos (arquivos como nós, referências como arestas) para
+    escolher os trechos mais relevantes, não só os mais recentes. É
+    significativamente melhor em repos grandes, mas exige grammars
+    tree-sitter por linguagem — dependência pesada para o objetivo "ultra-
+    leve" deste projeto. Fica como possível v3 se o repo map atual (mtime-
+    based) começar a trazer arquivos irrelevantes com frequência.
+    """
     entries: list[tuple[str, float]] = []
 
     for dirpath, dirnames, filenames in os.walk(root):
@@ -252,12 +273,21 @@ Responda em JSON puro, sem markdown:
 # Chamada HTTP — payload estritamente compatível com a spec OpenAI
 # ---------------------------------------------------------------------------
 
-def _call_llm(messages: list[dict[str, Any]], tools: list[dict], profile: dict) -> dict:
+def _call_llm(
+    messages: list[dict[str, Any]],
+    tools: list[dict],
+    profile: dict,
+    debug: bool = False,
+) -> dict:
     """Chama o LLM local. Payload contém SOMENTE chaves da spec OpenAI
     /chat/completions (model, messages, temperature, max_tokens, e
     tools/tool_choice apenas se houver ferramentas ativas). Removidos
     `parallel_tool_calls` e `chat_template_kwargs`, que o llama-server
-    rejeita com HTTP 400."""
+    rejeita com HTTP 400.
+
+    Com debug=True, imprime o payload exato enviado e a resposta crua
+    recebida (incluindo latência), para diagnosticar lentidão ou formatos
+    de tool-call que o parser de texto não reconhece."""
     cfg = _get_config()
     payload: dict[str, Any] = {
         "model": profile.get("model_id", cfg.llm_model),
@@ -269,13 +299,45 @@ def _call_llm(messages: list[dict[str, Any]], tools: list[dict], profile: dict) 
         payload["tools"] = tools
         payload["tool_choice"] = "auto"
 
+    if debug:
+        print(f"\n{'─' * 60}")
+        print(f"📤 REQUEST → {cfg.llm_base_url.rstrip('/')}/chat/completions")
+        print(f"   ({len(messages)} mensagens, ~{sum(len(str(m)) for m in messages) // 4} tokens estimados)")
+        print(json.dumps(payload, ensure_ascii=False, indent=2)[:4000])
+
+    t0 = time.monotonic()
     resp = requests.post(
         f"{cfg.llm_base_url.rstrip('/')}/chat/completions",
         json=payload,
         timeout=cfg.llm_timeout,
     )
+    elapsed = time.monotonic() - t0
     resp.raise_for_status()
-    return resp.json()
+    data = resp.json()
+
+    if debug:
+        print(f"📥 RESPONSE ({elapsed:.2f}s)")
+        print(json.dumps(data, ensure_ascii=False, indent=2)[:4000])
+        print(f"{'─' * 60}\n")
+
+    return data
+
+
+# ---------------------------------------------------------------------------
+# Poda de histórico — evita crescimento ilimitado de contexto (= latência
+# progressiva e, em modelos "tiny", degradação de qualidade)
+# ---------------------------------------------------------------------------
+
+def _trim_messages(messages: list[dict[str, Any]], max_messages: int = 20) -> list[dict[str, Any]]:
+    """Mantém a mensagem de system + as últimas `max_messages` mensagens.
+    Chamado a cada novo turno de usuário — não corta no meio de um par
+    tool_call/tool_result porque só age nas fronteiras de turno (antes de
+    anexar o próximo input do usuário)."""
+    if len(messages) <= max_messages + 1:
+        return messages
+    system = messages[0]
+    tail = messages[-max_messages:]
+    return [system, *tail]
 
 
 # ---------------------------------------------------------------------------
@@ -494,6 +556,21 @@ _READ_MARKER_RE = re.compile(r"^>>>\s*READ\s+(?P<path>\S+)\s*$", re.MULTILINE)
 _JSON_TAG_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
 _JSON_CODEBLOCK_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 
+# Formato Hermes/Llama-3 tool-use fine-tune, ex:
+#   <function=read_file>
+#   <parameter=path>
+#   src/foo.py
+#   </parameter>
+#   </function>
+# Vários modelos GGUF locais (Qwen/Hermes-tuned) preferem esse formato em
+# vez de JSON puro — era o que estava quebrando o parser antigo.
+_FUNCTION_TAG_RE = re.compile(
+    r"<function=(?P<name>\w+)>\s*(?P<body>.*?)\s*</function>", re.DOTALL
+)
+_PARAMETER_TAG_RE = re.compile(
+    r"<parameter=(?P<key>\w+)>\s*(?P<value>.*?)\s*</parameter>", re.DOTALL
+)
+
 
 def _parse_text_actions(content: str) -> list[dict[str, Any]] | None:
     """Extrai ações de texto puro quando não há tool_calls nativas.
@@ -517,6 +594,18 @@ def _parse_text_actions(content: str) -> list[dict[str, Any]] | None:
         cmd = m.group("cmd").strip()
         if cmd:
             actions.append({"name": "execute_shell", "arguments": {"cmd": cmd}})
+
+    for m in _FUNCTION_TAG_RE.finditer(content):
+        name = m.group("name").strip()
+        args = {
+            pm.group("key").strip(): pm.group("value").strip()
+            for pm in _PARAMETER_TAG_RE.finditer(m.group("body"))
+        }
+        # normaliza tipos numéricos simples (start_line/end_line)
+        for k in ("start_line", "end_line"):
+            if k in args and args[k].isdigit():
+                args[k] = int(args[k])
+        actions.append({"name": name, "arguments": args})
 
     if actions:
         return actions
@@ -573,7 +662,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
     print(f"🤖 JARVIS Dev — SLM: {profile['name']} (max_tokens={profile['max_tokens']})")
     print(f"📁 Projeto: {os.getcwd()}")
     print(f"🔧 Ferramentas: read_file, str_replace, execute_shell — modo: {mode}")
-    print("   Comandos: /quit, /status, /clear, /map, /model, /recall, /architect, /help\n")
+    print("   Comandos: /quit, /status, /clear, /map, /model, /recall, /architect, /debug, /help\n")
 
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context()
@@ -586,6 +675,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
     ]
 
     active_model = profile["name"]
+    debug_mode = False
 
     while True:
         try:
@@ -609,6 +699,10 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
             messages = [{"role": "system", "content": system_prompt}]
             print("🗑️  Contexto limpo.")
             continue
+        if user_input == "/debug":
+            debug_mode = not debug_mode
+            print(f"🐞 Debug {'ATIVADO' if debug_mode else 'desativado'} — mostra request/response cru da API")
+            continue
         if user_input == "/status":
             from jarvis.core.health_monitor import BackendHealthMonitor
             cfg = _get_config()
@@ -617,6 +711,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
             print(f"  Backend: {status['state']} ({status['latency_ms']}ms)")
             print(f"  Model: {active_model}")
             print(f"  Modo de ferramentas: {mode}")
+            print(f"  Mensagens no histórico: {len(messages)}")
             print(f"  Uptime: {status['uptime_pct']}%")
             continue
         if user_input == "/map":
@@ -655,13 +750,14 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
             print("  /model     — ver modelo atual")
             print("  /recall    — buscar memória episódica")
             print("  /architect — modo architect (plan + execute)")
+            print("  /debug     — mostra request/response cru da API")
             print("  /help      — esta ajuda")
             continue
         if user_input == "/architect":
             task_input = input("📋 Tarefa para architect: ").strip()
             if task_input:
                 try:
-                    plan = _architect_plan(task_input, profile, tools)
+                    plan = _architect_plan(task_input, profile, tools, debug_mode)
                     if plan:
                         print(f"📋 Plano:\n{plan}")
                         exec_input = input("\nExecutar? [Y/n] ").strip().lower()
@@ -676,12 +772,13 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
             continue
 
         messages.append({"role": "user", "content": user_input})
+        messages = _trim_messages(messages)
 
         for turn in range(8):
             print(f"  🤔 Pensando... (turno {turn + 1})", end="", flush=True)
 
             try:
-                data = _call_llm(messages, tools, profile)
+                data = _call_llm(messages, tools, profile, debug=debug_mode)
             except Exception as e:
                 print(f"\n  ❌ Erro LLM: {e}")
                 break
@@ -713,7 +810,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
                 except json.JSONDecodeError:
                     args = {}
 
-                preview_arg = args.get("path", args.get("cmd", ""))[:50]
+                preview_arg = str(args.get("path", args.get("cmd", "")))[:50]
                 print(f"  🔧 {func_name}({preview_arg})")
                 output = _execute_tool_call(func_name, args, approve)
 
@@ -729,7 +826,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
                 })
 
 
-def _architect_plan(task: str, profile: dict, tools: list) -> str | None:
+def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) -> str | None:
     repo_map = _build_repo_map(os.getcwd())
     plan_prompt = _maybe_disable_thinking(PLAN_PROMPT.format(repo_map=repo_map))
     plan_messages: list[dict[str, Any]] = [
@@ -737,7 +834,7 @@ def _architect_plan(task: str, profile: dict, tools: list) -> str | None:
         {"role": "user", "content": task},
     ]
     try:
-        data = _call_llm(plan_messages, tools, profile)
+        data = _call_llm(plan_messages, tools, profile, debug=debug)
         msg = data["choices"][0]["message"]
         content = msg.get("content") or ""
         tool_calls = msg.get("tool_calls") or _to_tool_calls(_parse_text_actions(content))
@@ -761,7 +858,7 @@ def _architect_plan(task: str, profile: dict, tools: list) -> str | None:
                 })
 
         plan_messages.append({"role": "user", "content": "Agora retorne o plano em JSON, campo 'plan'."})
-        data2 = _call_llm(plan_messages, tools, profile)
+        data2 = _call_llm(plan_messages, tools, profile, debug=debug)
         plan_content = data2["choices"][0]["message"].get("content") or ""
         try:
             parsed = json.loads(plan_content)
@@ -775,7 +872,7 @@ def _architect_plan(task: str, profile: dict, tools: list) -> str | None:
         return None
 
 
-def dev_once(task: str, project_root: str | None = None, approve: bool = False) -> int:
+def dev_once(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False) -> int:
     if project_root:
         os.environ["JARVIS_PROJECT_ROOT"] = project_root
         os.chdir(project_root)
@@ -798,7 +895,7 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False) 
 
     for _ in range(10):
         try:
-            data = _call_llm(messages, tools, profile)
+            data = _call_llm(messages, tools, profile, debug=debug)
         except Exception as e:
             print(f"❌ Erro LLM: {e}")
             return 1
