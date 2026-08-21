@@ -47,7 +47,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import select
 import subprocess
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -359,7 +361,7 @@ def _tool_read_file(
     path: str,
     start_line: int | None = None,
     end_line: int | None = None,
-    max_chars: int = 4000,
+    max_chars: int = 12000,
 ) -> str:
     if not path:
         return "ERROR: empty path"
@@ -686,6 +688,27 @@ def _to_tool_calls(actions: list[dict[str, Any]] | None) -> list[dict[str, Any]]
     ]
 
 
+def _read_user_input(prompt: str) -> str:
+    """input() trata cada \\n dentro de um texto colado como um Enter — então
+    colar um prompt multi-linha dispara o primeiro input() na primeira linha
+    e as linhas seguintes viram mensagens SEPARADAS nos próximos loops, sem
+    o prompt aparecer de novo (sintoma: 'já manda pra API antes de eu
+    apertar Enter', e sobra uma linha órfã que dispara uma chamada vazia/
+    malformada no turno seguinte).
+
+    Fix: depois de receber a primeira linha, checa via select() se já tem
+    mais dado bufferizado no stdin (típico de paste) e continua drenando
+    até não sobrar nada, juntando tudo como UMA mensagem só."""
+    first_line = input(prompt)
+    lines = [first_line]
+    while select.select([sys.stdin], [], [], 0)[0]:
+        try:
+            lines.append(sys.stdin.readline().rstrip("\n"))
+        except Exception:
+            break
+    return "\n".join(lines).strip()
+
+
 # ---------------------------------------------------------------------------
 # REPL principal
 # ---------------------------------------------------------------------------
@@ -719,7 +742,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
 
     while True:
         try:
-            user_input = input("👤 Você: ").strip()
+            user_input = _read_user_input("👤 Você: ")
         except (EOFError, KeyboardInterrupt):
             print("\n👋 Até logo!")
             break
@@ -794,7 +817,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
             print("  /help      — esta ajuda")
             continue
         if user_input == "/architect":
-            task_input = input("📋 Tarefa para architect: ").strip()
+            task_input = _read_user_input("📋 Tarefa para architect: ").strip()
             if task_input:
                 try:
                     plan = _architect_plan(task_input, profile, tools, debug_mode)
