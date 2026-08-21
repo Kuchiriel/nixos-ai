@@ -139,6 +139,7 @@
             jarvisEnvironment = config.services.jarvis.environment;
           };
           home-manager.users.${user} = {
+            extraSpecialArgs = { inherit inputs; };
             imports = [
               ./home-manager/home.nix
               # stylix 26.05: o output `homeManagerModules` foi renomeado p/ `homeModules`
