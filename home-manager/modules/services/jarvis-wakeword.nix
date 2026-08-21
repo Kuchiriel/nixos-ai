@@ -173,7 +173,7 @@ let
         last_trigger_time = 0
         pulse_state = 0
         chunk_count = 0
-        WARMUP_CHUNKS = 30  # ~1s de warmup para estabilizar scores
+        WARMUP_CHUNKS = 100  # ~2s de warmup (PipeWire gera artefatos na init)
 
         while True:
             try:
