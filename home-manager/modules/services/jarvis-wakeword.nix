@@ -134,11 +134,18 @@ let
         play_sound(STARTUP_SOUND)
         notify("JARVIS", "Sistemas Ativos.", "emblem-default")
 
-        print(f"[WW] Starting arecord {DEVICE} @ {RATE}Hz (Threshold: {THRESHOLD}, Cooldown: {COOLDOWN}s)", flush=True)
+        # pw-record: captura direta do PipeWire source (sem emulação ALSA)
+        # arecord -D default passa pela ALSA emulation do PipeWire e atenua
+        # o sinal (RMS 11 vs RMS 129 via pw-record direto).
+        PW_RECORD = "${pkgs.pipewire}/bin/pw-record"
+        print(f"[WW] Starting pw-record {DEVICE} @ {RATE}Hz (Threshold: {THRESHOLD}, Cooldown: {COOLDOWN}s)", flush=True)
 
         def start_arecord():
+            # pw-record --target default --format s16 --rate 16000 --channels 2 -
+            # formato 's16' = signed 16-bit little-endian (padrão PipeWire)
             return subprocess.Popen(
-                ["${pkgs.alsa-utils}/bin/arecord", "-D", DEVICE, "-f", "S16_LE", "-r", str(RATE), "-c", "2"],
+                [PW_RECORD, "--target", DEVICE, "--format", "s16",
+                 "--rate", str(RATE), "--channels", "2", "-"],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             )
 
