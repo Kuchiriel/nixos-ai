@@ -187,7 +187,7 @@ in
       model = "llm-host";
       mmproj = "llm-host-mmproj";  # vision na GPU (denso, ~861MB BF16)
       threads = 12;              # hyperthreading ativo (testado: melhor que t=10 ou t=6)
-      ctxSize = 131072;          # Expandido para 128K para suportar o contexto longo do Aider
+      ctxSize = 32768;          # Expandido para 128K para suportar o contexto longo do Aider
       batchSize = 1024;          # -b 512 iguala -ub 512 (evita pico de memória no prefill)
       ubatch = 1024;
       gpuLayers = 99;            # 99 = TODAS as camadas de atenção na GPU
