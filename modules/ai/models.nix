@@ -148,7 +148,7 @@ in
     vm = {
       model = "llm-vm";
       threads = 4;
-      ctxSize = 16384;
+      ctxSize = 131072;
       batchSize = 512;
       ubatch = 512;
       gpuLayers = 0;                    # CPU puro no lab
