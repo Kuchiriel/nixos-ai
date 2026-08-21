@@ -185,7 +185,6 @@ let
                     pulse_state += 1
 
                 if chunk_count % 10 == 0:
-                    speech_thresh = noise_baseline * 1.5
                     print(f"[WW] RMS: {rms:.0f} (baseline={noise_baseline:.0f}, speech>{noise_baseline*1.2:.0f})", flush=True)
 
                 # Skip during warmup
