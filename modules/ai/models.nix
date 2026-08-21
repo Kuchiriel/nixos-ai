@@ -204,8 +204,7 @@ in
             "--image-min-tokens" "1024" 
             "--kv-unified"                    # Compartilha o cache de chaves/valores de forma otimizada
             "--ctx-checkpoints" "2"          # Ativa 16 slots de checkpoints de contexto para congelar estados do Aider
-            "--keep" "1024"
-            "--n-cuda-streams" "2"          # testando: overlapp de compute CUDA
+            "--keep" "1024"      
        ];
 
         user = "root";
