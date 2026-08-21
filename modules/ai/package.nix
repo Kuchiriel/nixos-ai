@@ -13,6 +13,7 @@ let
     dependencies = with python3Packages; [
       requests
       numpy
+      prompt-toolkit
     ];
 
     nativeBuildInputs = [ makeWrapper ];
