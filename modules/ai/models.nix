@@ -184,7 +184,7 @@ in
     host = {
         model = "llm-host";
         mmproj = "llm-host-mmproj";  # vision na GPU (denso, ~861MB BF16)
-        threads = 12;              # hyperthreading ativo (testado: melhor que t=10 ou t=6)
+        threads = 14;              # testando: usar mais cores do i7-13620H (6P+8E=14 cores)
         
         # 128K contexto para suportar Aider/Freebuff com projetos grandes.
         # KV cache q4_0 mantém VRAM dentro do budget (~2.5GB para 128K).
