@@ -191,7 +191,7 @@ in
         ctxSize = 131072;
         batchSize = 1024;          # mantido: 1024 é melhor que 2048
         ubatch = 1024;
-        gpuLayers = 50;            # MANTIDO: Mantém os experts ativos no chip mais rápido (GPU)
+        gpuLayers = 65;            # Máximo estimado para 6GB VRAM (~73 MiB/layer)
        
         kvCache = "-fa on -ctk q4_0 -ctv q4_0";         
 
@@ -200,7 +200,6 @@ in
 
         # Flags legítimas extraídas diretamente do seu manual do llama-server-help
         extraArgs = [
-            "--load-mode" "none"                        # CORREÇÃO: Força os experts da CPU a ficarem residentes na RAM, eliminando o gargalo do SSD
             "--image-min-tokens" "1024" 
             "--kv-unified"                    # Compartilha o cache de chaves/valores de forma otimizada
             "--ctx-checkpoints" "2"          # Ativa 16 slots de checkpoints de contexto para congelar estados do Aider
