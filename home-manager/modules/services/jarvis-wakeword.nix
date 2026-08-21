@@ -142,8 +142,8 @@ let
         # Fallback: detect speech onset via RMS, record, then STT checks
         # if the user said 'Hey Jarvis'.
         PW_RECORD = "${pkgs.pipewire}/bin/pw-record"
-        SPEECH_RMS = ${toString (if cfg.rmsGate != null then cfg.rmsGate else 800)}  # RMS > 800 = speech
-        SILENCE_RMS = 400  # RMS < 400 for 1.5s = end of speech
+        SPEECH_RMS = 3500  # RMS > 3500 = voz acima do ruído (noise ~2200)
+        SILENCE_RMS = 1500  # RMS < 1500 for 1.5s = end of speech
         print(f"[WW] Starting pw-record {DEVICE} @ {RATE}Hz (VAD mode: speech_rms={SPEECH_RMS}, Cooldown: {COOLDOWN}s)", flush=True)
 
         def start_arecord():
