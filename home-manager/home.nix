@@ -1,4 +1,4 @@
-{ homeStateVersion, user, ... }: {
+{ homeStateVersion, user, pkgs, ... }: {
   imports = [
     ./modules
     ./home-packages.nix
@@ -7,23 +7,24 @@
     ./modules/services/jarvis-wakeword.nix
   ];
 
-stylix.targets.hyprland.enable = false;
+  stylix.targets.hyprland.enable = false;
 
   # ⚠️ SEGREDOS: NUNCA coloque API keys aqui (vazam para o repo/git history).
   # O padrão do projeto é /etc/litellm.env (chmod 600, criado manualmente no
   # host, fora do git) — o serviço services.litellm lê de lá. Para o aider
   # enxergar a chave na sessão interativa:
-  #   sudo cp /etc/litellm.env ~/.config/litellm.env && chmod 600 ~/.config/litellm.env
-  #   echo '[ -f ~/.config/litellm.env ] && set -a && . ~/.config/litellm.env && set +a' >> ~/.bashrc
+  #    sudo cp /etc/litellm.env ~/.config/litellm.env && chmod 600 ~/.config/litellm.env
+  #    echo '[ -f ~/.config/litellm.env ] && set -a && . ~/.config/litellm.env && set +a' >> ~/.bashrc
 
   home.sessionVariables = {
     _JAVA_AWT_WM_NONREPARENTING = "1";
     AWT_TOOLKIT = "MToolkit";
     JAVA_TOOL_OPTIONS = "-Dsun.java2d.uiScale=1";
+    # Oculta o aviso de falta de botocore/aws do LiteLLM no Aider
+    LITELLM_LOG = "ERROR";
   };
 
   # Importa as variáveis de ambiente com segurança ao abrir o terminal
-
   programs.bash.initExtra = ''
     if [ -f /etc/litellm.env ]; then
       set -a
@@ -31,7 +32,12 @@ stylix.targets.hyprland.enable = false;
       set +a
     fi
   '';
-   
+
+  # Garante que as ferramentas universais de AST/tags estejam disponíveis no PATH do usuário para o Aider
+  home.packages = with pkgs; [
+    universal-ctags
+  ];
+
   programs.foot = {
     enable = true;
     settings = {
@@ -43,6 +49,14 @@ stylix.targets.hyprland.enable = false;
         };
       };
     };
+  };
+
+  # ══════════════════════════════════════════════════════════════
+  # JARVIS STT — Download declarativo do modelo faster-whisper-tiny.en
+  # ══════════════════════════════════════════════════════════════
+  home.file.".local/share/jarvis/voice/models--Systran--faster-whisper-tiny.en/snapshots/main/model.bin".source = pkgs.fetchurl {
+    url = "https://huggingface.co/Systran/faster-whisper-tiny.en/resolve/main/model.bin";
+    hash = "sha256-11b0bb75e7a90ca6ba3f64c12513f4df05105cf4817d23a1a3e6a2ebbaebec20";
   };
 
   # ══════════════════════════════════════════════════════════════
@@ -74,8 +88,8 @@ stylix.targets.hyprland.enable = false;
     no-show-model-warnings: true
     no-check-model-accepts-settings: true
 
-    # Repo map: 512 tokens (suficiente, economiza 1.7k tokens por request)
-    map-tokens: 512
+    # Repo map: estendido para permitir busca e leitura autônoma sem pedir anexos
+    map-tokens: 2048
     map-refresh: auto
   '';
 
@@ -99,7 +113,7 @@ stylix.targets.hyprland.enable = false;
       # Edição: diff com SEARCH/REPLACE blocks
       edit_format: diff
 
-      # Repo map: aider mapeia o projeto para navegar arquivos
+      # Repo map: aider mapeia o projeto para navegar arquivos autonomamente
       use_repo_map: true
 
       # Lazy: false = aplica edits imediatamente (não espera confirmação)
@@ -111,15 +125,15 @@ stylix.targets.hyprland.enable = false;
       # Examples: no system prompt (economiza tokens)
       examples_as_sys_msg: true
 
-      # Thinking: mostra reasoning separadamente do output
-      reasoning_tag: think
+      # Thinking: desativa para evitar loops de overthinking do Qwen local
+      reasoning_tag: null
 
-      # System prompt: instrução de autonomia
+      # System prompt: instrução estrita de autonomia e busca
       system_prompt_prefix: >-
-        You are an autonomous coding agent. You execute all actions yourself.
-        NEVER ask the user to run commands or edit files manually.
-        Read files, generate SEARCH/REPLACE blocks, suggest shell commands.
-        Be concise. No unnecessary explanations.
+        You are an autonomous execution coding agent.
+        You have direct access to the repo map. NEVER ask the user to manually attach, paste, or inspect files.
+        Find files autonomously through the repo map, read them, generate SEARCH/REPLACE blocks, and execute terminal commands directly.
+        Do not output thinking, reasoning, or manual step-by-step instructions for the user. Execute everything yourself.
 
       # Parâmetros do modelo
       extra_params:
@@ -138,7 +152,6 @@ stylix.targets.hyprland.enable = false;
     # O wakeword grava WAV e passa como argumento para 'jarvis voice'
     brainCommand = [ "jarvis" "voice" ];
   };
-
 
   home = {
     username = user;
