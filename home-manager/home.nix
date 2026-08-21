@@ -65,6 +65,24 @@
   # Benchmark: 32 t/s decode, 367 t/s prefill, 4179 MiB VRAM
   # ══════════════════════════════════════════════════════════════
 
+  home.file.".config/opencode/opencode.json".text = builtins.toJSON {
+    "$schema" = "https://opencode.ai/config.json";
+    provider = {
+      local = {
+        npm = "@ai-sdk/openai-compatible";
+        options = {
+          baseURL = "http://localhost:8080/v1";
+        };
+        models = {
+          "qwen3-35b-a3b" = {
+            name = "Qwen3 35B Local";
+          };
+        };
+      };
+    };
+    model = "local/qwen3-35b-a3b";
+  };
+
   # 1. Configuração principal do Aider
   home.file.".aider.conf.yml".text = ''
     openai-api-base: "http://localhost:8080/v1"
