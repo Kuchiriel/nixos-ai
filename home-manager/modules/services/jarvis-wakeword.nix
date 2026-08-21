@@ -211,11 +211,11 @@ let
                 # Currently speaking — accumulate frames
                 speech_frames.append(data)
 
-                # Check for silence (adaptive: < baseline * 1.05)
-                if rms < noise_baseline * 1.05:
+                # Check for silence (adaptive: < baseline * 1.1 for 2s)
+                if rms < noise_baseline * 1.1:
                     if silence_start is None:
                         silence_start = time.time()
-                    elif time.time() - silence_start > 1.5:
+                    elif time.time() - silence_start > 2.0:
                         # End of speech — save WAV and process
                         speaking = False
                         last_trigger_time = time.time()
