@@ -18,7 +18,7 @@ RTX 4050 6GB / 32GB RAM) nasce do zero via este repo.
 
 ```bash
 git add -A          # OBRIGATÓRIO antes de build: o flake só copia arquivos trackeados
-nix build .#jarvis --no-link        # roda pytest (checkPhase) — 500+ testes
+nix build .#jarvis --no-link        # roda pytest (checkPhase) — 533 testes
 nix flake check                     # avalia TODAS as configurações
 ```
 
@@ -48,40 +48,54 @@ nixos-rebuild switch --flake .#nitro-v15  # ERRADO — usar rebuild-host.sh!
 - **Feitas**: 5 (self-heal), 6 (agente+aprovação), 7 (memória+vault), 9 (Telegram),
   10 (RAG SOTA: NDCG@5=1.0), 11 (benchmark+regressão), 4a (modo idle),
   audiobook, observabilidade, perfil dinâmico, circuit breaker, event bus,
-  vision, triggers, devtools, CLI dev — todas implementadas e testadas.
-- **Testes**: 485+ (pytest). Inclui PBT (hypothesis), security, wakeword, profile,
-  observability, eventbus, triggers, vision, circuit breaker, fuzzing, devtools.
+  vision, triggers, devtools, CLI dev, gaming profile — todas implementadas e testadas.
+- **Testes**: 533 (pytest). Inclui PBT (hypothesis), security, wakeword, profile,
+  observabilidade, eventbus, triggers, vision, circuit breaker, fuzzing, devtools, gaming.
 - **Pendente no lab**: ativar Telegram (bot + `/etc/jarvis-telegram.env`);
   ativar `jarvis heal` como daemon.
-- **Pendente no host**: `services.llama-cpp-server.profile = "host"` (Qwen3.6-35B
-  MoE + GPU), verificar se o llama-cpp do pin carrega o Qwen3.6, voz/wakeword.
+- **Pendente no host**: validar voz/wakeword no hardware real.
+
+## Configuração atual do llama-cpp (host)
+
+- **Modelo**: Qwen3.6-35B-A3B MoE (UD-Q4_K_M, ~20.6GiB)
+- **GPU layers**: ngl=50 (atenção na GPU)
+- **MoE**: n-cpu-moe=50 (experts na RAM via --load-mode none)
+- **Contexto**: 131072 tokens (128K, KV cache q4_0)
+- **Threads**: 16 (decode) + 16 (batch via --threads-batch)
+- **VRAM**: ~4.8GB / 6GB (1.2GB margem)
+- **Flags**: --no-warmup --prio 2 --prio-batch 3 --kv-unified --ctx-checkpoints 2
 
 ## Regras que não podem ser quebradas
 
 1. **`models.nix` é a única fonte de verdade** dos modelos (GGUF/URL/hash/perfis
    `vm`/`host`). Nunca baixe modelo imperativamente nem edite unit à mão.
 
-2. **VRAM BUDGET (RTX 40506GB) — NÃO EXCEDER**:
-   - Main LLM (ngl=10): ~5100MB
-   - Embeddings/Rerank: 0MB (CUDA_VISIBLE_DEVICES="" força CPU)
-   - mmproj: DESATIVADO (861MB BF16 não cabe)
-   - Total: 5556MB / 6141MB (585MB margem)
-   - Para adicionar mmproj: reduzir ngl OU usar mmproj Q4 quantizado
-   - `hwdetect`/`hwprofile` devem respeitar este budget
+2. **VRAM BUDGET (RTX 4050 6GB) — NÃO EXCEDER**:
+   - Main LLM (ngl=50): ~2.5GB (atenção)
+   - KV cache q4_0 128K: ~2.5GB
+   - mmproj BF16: ~0.86GB
+   - Overhead CUDA: ~0.5GB
+   - Total: ~4.8GB / 6GB (1.2GB margem)
+   - Embeddings/Rerank: 0MB VRAM (CUDA_VISIBLE_DEVICES="" força CPU)
 
 3. **DISTRIBUIÇÃO DE HARDWARE**:
-   - RTX 4050: Main LLM apenas (não colocar embeddings/rerank)
+   - RTX 4050: Main LLM + mmproj (atenção densa + vision)
    - Intel UHD 770 iGPU: Whisper STT, mpvpaper, Kokoro TTS (futuro)
    - CPU: MoE experts na RAM, embeddings, reranker, TTS
    - `CUDA_VISIBLE_DEVICES=""` em embeddings/rerank é OBRIGATÓRIO
-2. **NÃO tocar no dbus-broker** (`reloadIfChanged`/`restartIfChanged = mkForce false`
+
+4. **NÃO tocar no dbus-broker** (`reloadIfChanged`/`restartIfChanged = mkForce false`
    no lab): restart derruba o bus do sistema; reload trava ~90s na VM.
-3. **Fontes Python do JARVIS ficam no repo** (`modules/ai/jarvis/`) — declarativo.
+
+5. **Fontes Python do JARVIS ficam no repo** (`modules/ai/jarvis/`) — declarativo.
    Arquivos untracked NÃO entram no build do flake: `git add -A` antes de build.
-4. **`sudo ALL NOPASSWD` é temporário** (lab, para o agente não travar). No host:
+
+6. **`sudo ALL NOPASSWD` é temporário** (lab, para o agente não travar). No host:
    sudo escopo mínimo (só `nixos-rebuild` e `clean.sh`) — ver assessment §3.
-5. **Nunca editar arquivos do store** (`/nix/store/...`) — mudar a fonte no repo.
-6. **Circuit Breaker**: se o backend local falhar 3x, o sistema usa fallback remoto
+
+7. **Nunca editar arquivos do store** (`/nix/store/...`) — mudar a fonte no repo.
+
+8. **Circuit Breaker**: se o backend local falhar 3x, o sistema usa fallback remoto
    (Groq/Gemini/OpenRouter). **POLÍTICA DE EGRESS**: dados sensíveis (memórias,
    vault, RAG, paths, passwords) NUNCA saem do host — o ContentSafetyFilter
    bloqueia. Usuário pode forçar modo local (`/force_local`).
