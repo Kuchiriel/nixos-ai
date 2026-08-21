@@ -185,12 +185,12 @@ in
       model = "llm-host";
       mmproj = "llm-host-mmproj";  # vision na GPU (denso, ~861MB BF16)
       threads = 12;  # hyperthreading ativo (testado: melhor que t=10 ou t=6)
-      ctxSize = 66536;           # 4K: contexto menor = estável, menos KV cache
+      ctxSize = 65536;           # 4K: contexto menor = estável, menos KV cache
       batchSize = 1024;          # -b 512 iguala -ub 512 (evita pico de memória no prefill)
       ubatch = 1024;
       gpuLayers = 99;           # 99 = TODAS as camadas de atenção na GPU
       kvCache = "-fa on -ctk q8_0 -ctv q8_0";
-      moeFlags = "--n-cpu-moe 90 --split-mode none --poll 0 --poll-batch 0";  # --poll-batch 0 adicionado
+      moeFlags = "--n-cpu-moe 80 --split-mode none --poll 0 --poll-batch 0";  # --poll-batch 0 adicionado
       # NOTA: --no-mmap REMOVIDO (auditoria 2026-08-20)
       # Causava RSS de 15.7GB (GGUF inteiro em RAM física).
       # Com mmap, OS usa demand paging: apenas experts ativos em RAM (~3-5GB).
