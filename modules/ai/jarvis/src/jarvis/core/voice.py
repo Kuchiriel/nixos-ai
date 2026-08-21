@@ -63,7 +63,6 @@ def transcribe(
 
     try:
         model_dir = _model_dir()
-        os.makedirs(model_dir, exist_ok=True)
         model = WhisperModel(model_size, device="cpu", compute_type="int8", download_root=model_dir)
         segments, _info = model.transcribe(
             audio_path,
