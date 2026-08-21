@@ -194,11 +194,11 @@ in
         batchSize = 1024;          # Evita pico de memória no prefill
         ubatch = 1024;
         gpuLayers = 99;            # MANTIDO: Mantém os experts ativos no chip mais rápido (GPU)
-        
-        kvCache = "-fa on -ctk q8_0 -ctv q8_0";        
+       
+        kvCache = "-fa on -ctk q8_0 -ctv q4_0";         
 
         # Sintaxe estrita e padrão para a execução de MoE do Qwen
-        moeFlags = "--n-cpu-moe 95 --split-mode none --poll 0 --poll-batch 0";
+        moeFlags = "--n-cpu-moe 99 --split-mode none --poll 0 --poll-batch 0";
 
         # Flags legítimas extraídas diretamente do seu manual do llama-server-help
         extraArgs = [
