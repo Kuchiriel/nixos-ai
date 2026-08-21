@@ -23,6 +23,7 @@
 
     # Core CLI utils
     aider-chat
+    python3Packages.botocore
     bc
     bottom
     brightnessctl
