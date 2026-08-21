@@ -80,11 +80,21 @@ def _detect_profile() -> dict[str, Any]:
         pass
 
     m = model_id.lower()
-    if "32b" in m or "30b" in m:
+
+    # Extrai o total de parâmetros do nome (ex: "35b" em "qwen3.6-35b-a3b"),
+    # não o de ativos (o "a3b" indica ativos por token em modelos MoE — o
+    # antigo `"3b" in m` colidia com essa substring e classificava modelos
+    # MoE grandes como "tiny", cortando max_tokens e desativando tool_calls
+    # nativas à toa). Regex pega o primeiro NxB isolado por fronteira de
+    # palavra/hífen que não seja precedido por "a" (ativos).
+    total_b_match = re.search(r"(?<![a-z])(\d+(?:\.\d+)?)b(?!\w)", m)
+    total_b = float(total_b_match.group(1)) if total_b_match else None
+
+    if total_b is not None and total_b >= 30:
         profile = {"name": "large", "max_tokens": 768, "temperature": 0.0}
-    elif "7b" in m:
+    elif total_b is not None and total_b >= 7:
         profile = {"name": "small", "max_tokens": 1024, "temperature": 0.0}
-    elif "4b" in m or "3b" in m or "1b" in m:
+    elif total_b is not None and total_b < 7:
         profile = {"name": "tiny", "max_tokens": 512, "temperature": 0.0}
     else:
         profile = {"name": "default", "max_tokens": 1024, "temperature": 0.0}
