@@ -74,8 +74,8 @@ stylix.targets.hyprland.enable = false;
     no-show-model-warnings: true
     no-check-model-accepts-settings: true
 
-    # Repo map: para o aider enxergar a estrutura do projeto
-    map-tokens: 2048
+    # Repo map: 512 tokens (suficiente, economiza 1.7k tokens por request)
+    map-tokens: 512
     map-refresh: auto
   '';
 
