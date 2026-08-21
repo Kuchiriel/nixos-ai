@@ -166,24 +166,20 @@ in
     # Forecast: ~25-30 t/s (bandwidth-bound, MoE esparsa top-k=2)
     # Host: RTX 4050 6GB + 32GB RAM, Qwen3.6-35B-A3B MoE + vision
     #
-    # ESTRATÉGIA MOE (pesquisa confirmada):
-    #   -ngl 99 = TODAS as camadas de atenção na GPU (rápido)
-    #   --n-cpu-moe 99 = TODOS os experts MoE na RAM (CPU lê sob demanda)
-    #   Attention = denso, roda em TODOS os tokens → GPU é essencial
-    #   Experts = esparsos, rodam em 2-4 por token → RAM é aceitável
-    #        # VRAM budget (~4.8GB usado, 1.2GB livre):
-        #   attention: 40 layers × ~25MB/layer ≈ 1GB (todas na GPU)
-        #   KV q4_0 128K: ~2.5GB (q4_0 = 4 bits, eficiente)
-        #   mmproj:    ~0.86GB (BF16, denso, deve ficar na GPU)
-        #   overhead:  ~0.5GB (CUDA context + compute)
-        #   TOTAL:     ~4.8GB (1.2GB margem)
+    # VRAM budget (6GB total, mmproj na CPU via --no-mmproj-offload):
+    #   attention 50 layers: ~3600 MiB (todas na GPU)
+    #   KV q4_0 128K:        ~500 MiB
+    #   CUDA overhead:       ~200 MiB
+    #   TOTAL:               ~4300 MiB (1800 MiB margem)
+    #   mmproj BF16:         861 MiB na CPU (usa RAM, não VRAM)
     #
     # Experts (20GB GGUF) ficam na RAM (32GB DDR5 ~120GB/s)
     # CPU lê experts sob demanda quando router seleciona top-k
+    # Forecast: ~32 t/s decode, ~367 t/s prefill, 0.7% drift
 
     host = {
         model = "llm-host";
-        mmproj = "llm-host-mmproj";  # vision na GPU (denso, ~861MB BF16)
+        mmproj = "llm-host-mmproj";  # vision encoder (BF16, 861MB) — roda em CPU via --no-mmproj-offload
         threads = 16;              # testando: 16 threads no i7-13620H (20 available)
         
         # 128K contexto para suportar Aider/Freebuff com projetos grandes.
@@ -191,27 +187,27 @@ in
         ctxSize = 131072;
         batchSize = 1024;          # mantido: 1024 é melhor que 2048
         ubatch = 1024;
-        gpuLayers = 50;            # OTIMIZADO: 50 layers + sem --load-mode none = 32t/s + 27GB RAM livre
+        gpuLayers = 50;            # OTIMIZADO: 50 layers na GPU, mmproj na CPU = 32t/s estável + 27GB RAM livre
        
         kvCache = "-fa on -ctk q4_0 -ctv q4_0";         
 
         # Sintaxe estrita e padrão para a execução de MoE do Qwen
         moeFlags = "--n-cpu-moe 50 --split-mode none --poll 50 --poll-batch 50";
 
-        # Flags legítimas extraídas diretamente do seu manual do llama-server-help
+        # Flags do llama.cpp 10273 (ver docs/architecture/llama-cpp-tuning.md)
         extraArgs = [
-            "--no-mmproj-offload"             # Força mmproj para CPU (libera VRAM para attention layers)
+            "--no-mmproj-offload"             # CRÍTICO: mmproj na CPU, libera 900MiB VRAM para attention
             "--image-min-tokens" "1024" 
-            "--kv-unified"                    # Compartilha o cache de chaves/valores de forma otimizada
-            "--ctx-checkpoints" "2"          # Ativa 16 slots de checkpoints de contexto para congelar estados do Aider
+            "--kv-unified"                    # KV cache unificado (economiza VRAM)
+            "--ctx-checkpoints" "2"          # Checkpoints de contexto para Aider/Freebuff
             "--keep" "1024"
-            "--no-warmup"                    # mantido: melhora both prefill e decode
-            "--prio" "2"                     # mantido: prioridade high para decode
-            "--prio-batch" "3"               # mantido: real-time priority para batch/prefill
+            "--no-warmup"                    # Sem warmup: +2% prefill e decode
+            "--prio" "2"                     # Prioridade high para decode
+            "--prio-batch" "3"               # Real-time priority para batch/prefill
        ];
 
         user = "root";
-        scheduler = null;  # FIFO causava prioridade excessiva, removido para teste
+        scheduler = null;  # CFS default (_FIFO removido: causava overhead)_
     };
 
   };
