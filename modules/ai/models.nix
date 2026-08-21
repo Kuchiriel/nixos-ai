@@ -205,8 +205,7 @@ in
             "--kv-unified"                    # Compartilha o cache de chaves/valores de forma otimizada
             "--ctx-checkpoints" "2"          # Ativa 16 slots de checkpoints de contexto para congelar estados do Aider
             "--keep" "1024"
-            "--threads-batch" "14"          # testando: 14 threads para batch/prefill, 16 para decode
-            "--cache-reuse" "1024"          # testando: reutilização de cache via KV shifting
+            "--no-warmup"                    # testando: desabilitar warmup para startup mais rápido
        ];
 
         user = "root";
