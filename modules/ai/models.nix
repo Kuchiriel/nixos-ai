@@ -191,7 +191,7 @@ in
         ctxSize = 131072;
         batchSize = 1024;          # mantido: 1024 é melhor que 2048
         ubatch = 1024;
-        gpuLayers = 70;            # Testando: 70 de 99 layers na GPU
+        gpuLayers = 65;            # Máximo estável para 6GB VRAM (testado: 65 ok, 70 instável)
        
         kvCache = "-fa on -ctk q4_0 -ctv q4_0";         
 
