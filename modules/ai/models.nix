@@ -181,19 +181,26 @@ in
     #
     # Experts (20GB GGUF) ficam na RAM (32GB DDR5 ~120GB/s)
     # CPU lê experts sob demanda quando router seleciona top-k
+   
     host = {
       model = "llm-host";
       mmproj = "llm-host-mmproj";  # vision na GPU (denso, ~861MB BF16)
-      threads = 12;  # hyperthreading ativo (testado: melhor que t=10 ou t=6)
-      ctxSize = 65536;           # 4K: contexto menor = estável, menos KV cache
+      threads = 12;              # hyperthreading ativo (testado: melhor que t=10 ou t=6)
+      ctxSize = 131072;          # Expandido para 128K para suportar o contexto longo do Aider
       batchSize = 1024;          # -b 512 iguala -ub 512 (evita pico de memória no prefill)
       ubatch = 1024;
-      gpuLayers = 99;           # 99 = TODAS as camadas de atenção na GPU
+      gpuLayers = 99;            # 99 = TODAS as camadas de atenção na GPU
       kvCache = "-fa on -ctk q8_0 -ctv q8_0";
-      moeFlags = "--n-cpu-moe 95 --split-mode none --poll 0 --poll-batch 0 --smart-context --load-mode none";  # --poll-batch 0 adicionado
-      # NOTA: --no-mmap REMOVIDO (auditoria 2026-08-20)
-      # Causava RSS de 15.7GB (GGUF inteiro em RAM física).
-      # Com mmap, OS usa demand paging: apenas experts ativos em RAM (~3-5GB).
+      
+      # Escopo estrito: Apenas flags nativas do mecanismo Mixture of Experts (MoE)
+      moeFlags = "--n-cpu-moe 95 --split-mode none --poll 0 --poll-batch 0";
+      
+      # Isolamento de escopo: Argumentos globais do servidor inseridos como lista Nix para evitar falhas de validação
+      extraArgs = [
+        "--smart-context"
+        "--load-mode" "none"     # Substituto do antigo --no-mmap (Auditoria 2026-08-20) para evitar page faults no SSD
+      ];
+
       user = "root";
       scheduler = { policy = "fifo"; priority = 50; };
     };

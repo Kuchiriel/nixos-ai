@@ -65,7 +65,9 @@ in
           ${optionalString (prof ? mmproj) ''--mmproj "${pkgs.aiModels.${prof.mmproj}}" ''} \
           --host 0.0.0.0 --port ${toString config.services.llama-cpp-server.port} \
           -c ${toString prof.ctxSize} -t ${toString prof.threads} -b ${toString prof.batchSize} -ub ${toString prof.ubatch} -ngl ${toString prof.gpuLayers} \
-          ${prof.kvCache} ${prof.moeFlags} ${prof.extraFlags or ""} ${escapeShellArgs config.services.llama-cpp-server.extraFlags}
+          ${prof.kvCache} ${prof.moeFlags} \
+          ${optionalString (prof ? extraArgs) (escapeShellArgs prof.extraArgs)} \
+          ${prof.extraFlags or ""} ${escapeShellArgs config.services.llama-cpp-server.extraFlags}
       '';
 
       serviceConfig = {
@@ -80,9 +82,6 @@ in
     };
 
     # --- 2. SERVIDOR DE EMBEDDINGS (RAG) ---
-    # --- 2. SERVIDOR DE EMBEDDINGS (RAG) ---
-    # Nomic-embed é leve (<500MB) e BENEFICIA da GPU (indexação instantânea).
-    # Com o LLM usando ~2.5GB de VRAM, sobra espaço.
     systemd.services.llama-cpp-embeddings = mkIf config.services.llama-cpp-embeddings.enable {
       description = "Llama.cpp Embeddings Server";
       wantedBy = [ "multi-user.target" ];
@@ -96,7 +95,6 @@ in
     };
 
     # --- 3. SERVIDOR DE RERANK (SOTA RAG) ---
-    # Reranker é leve, roda bem em CPU.
     systemd.services.llama-cpp-rerank = mkIf config.services.llama-cpp-rerank.enable {
       description = "Llama.cpp Rerank Server";
       wantedBy = [ "multi-user.target" ];
