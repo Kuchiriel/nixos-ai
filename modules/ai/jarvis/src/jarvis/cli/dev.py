@@ -343,13 +343,23 @@ def _call_llm(
 
 def _trim_messages(messages: list[dict[str, Any]], max_messages: int = 20) -> list[dict[str, Any]]:
     """Mantém a mensagem de system + as últimas `max_messages` mensagens.
-    Chamado a cada novo turno de usuário — não corta no meio de um par
-    tool_call/tool_result porque só age nas fronteiras de turno (antes de
-    anexar o próximo input do usuário)."""
+
+    CUIDADO: cortar por posição fixa pode deixar uma mensagem role='tool'
+    órfã no topo (sem o assistant/tool_calls correspondente antes dela).
+    Chat templates com lógica condicional para agrupar respostas de tool
+    (ex: checando o role da mensagem anterior) podem gerar um prompt
+    malformado nesse caso — o que na prática se manifestou como geração
+    presa/loop (GPU a 99%, sem terminar) quando o histórico cruzava esse
+    limiar. Por isso avançamos até a próxima mensagem 'user', que é sempre
+    uma fronteira de turno segura (nunca tem tool_calls pendente)."""
     if len(messages) <= max_messages + 1:
         return messages
     system = messages[0]
     tail = messages[-max_messages:]
+    for i, m in enumerate(tail):
+        if m.get("role") == "user":
+            tail = tail[i:]
+            break
     return [system, *tail]
 
 
@@ -701,7 +711,7 @@ def _read_user_input(prompt: str) -> str:
     até não sobrar nada, juntando tudo como UMA mensagem só."""
     first_line = input(prompt)
     lines = [first_line]
-    while select.select([sys.stdin], [], [], 0)[0]:
+    while select.select([sys.stdin], [], [], 0.03)[0]:
         try:
             lines.append(sys.stdin.readline().rstrip("\n"))
         except Exception:
