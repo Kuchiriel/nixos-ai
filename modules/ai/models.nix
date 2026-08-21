@@ -187,20 +187,23 @@ in
       model = "llm-host";
       mmproj = "llm-host-mmproj";  # vision na GPU (denso, ~861MB BF16)
       threads = 12;              # hyperthreading ativo (testado: melhor que t=10 ou t=6)
-      ctxSize = 32768;          # Expandido para 128K para suportar o contexto longo do Aider
+      ctxSize = 65536;          # Expandido para 128K para suportar o contexto longo do Aider
       batchSize = 1024;          # -b 512 iguala -ub 512 (evita pico de memória no prefill)
       ubatch = 1024;
       gpuLayers = 99;            # 99 = TODAS as camadas de atenção na GPU
-      kvCache = "-fa on -ctk q8_0 -ctv q8_0";
+      # TURBO QUANT (Tecnologia real de 2026): Comprime o KV Cache agressivamente para 4-bits.
+      # Como o Qwen usa Grouped-Query Attention, isso reduz o tamanho do cache em até 75% na VRAM.
+      kvCache = "-fa on --cache-kv turbo4 --cache-qv turbo3";    
+
+      #kvCache = "-fa on -ctk q8_0 -ctv q8_0";
       
       # Sintaxe estrita: Apenas flags legítimas de concorrência do MoE
       moeFlags = "--n-cpu-moe 95 --split-mode none --poll 0 --poll-batch 0";
       
       # Flags REAIS de gerenciamento e sobrevivência de contexto (Attention Sinks)
       extraArgs = [
-        "--context-shift"                 # Ativa o algoritmo de compressão/deslocamento rotativo
+        "-ot" ".*ffn_.*_exps.=CPU"
         "--keep" "4096"                   # Protege os primeiros 4K de tokens (instruções críticas do Aider)
-        "--cache-reuse" "1"               # Minimiza lentidão de prefill reusando o cache KV idêntico
       ];
 
       user = "root";
