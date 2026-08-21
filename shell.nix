@@ -9,6 +9,8 @@
     nspr
     nss
     systemd
+    python3Packages.botocore
+    aider-chat
   ]);
   runScript = "bash";
 }).env

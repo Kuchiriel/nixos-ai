@@ -45,12 +45,12 @@ stylix.targets.hyprland.enable = false;
     };
   };
 
+
   home.file.".aider.conf.yml".text = ''
     openai-api-base: http://localhost:8080/v1
-    model: openai//nix/store/dw121d64zaschr6nw19lwvhl3mmnzh0a-Qwen3-4B-Q4_K_M.gguf
+    model: openai//nix/store/in9pq5ak2mj5km4f6r87v295bfm53w6c-Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
     auto-commits: true
     dirty-commits: true
-    # A chave GROQ_API_KEY vem do ambiente (ver comentário acima)
   '';
 
   services.jarvis-wakeword = {
