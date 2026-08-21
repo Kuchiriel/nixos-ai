@@ -144,7 +144,9 @@
 
 **2. Sparse terms + Dense embedding = busca híbrida.**
 - BM25 (sparse) + Dense + RRF + re-rank V4.0.5.
-- NDCG@5 = 1.0000 no eval.
+- ⚠️ **code_index NÃO EXISTE no Qdrant** — RAG nunca foi indexado
+- ⚠️ NDCG@5 = 1.0000 é de teste unitário com dados sintéticos
+- **NÃO VALIDADO E2E** — collection precisa ser criada via `jarvis rag index`
 
 **3. Rich content com limites progressivos.**
 - `_STORED_CONTENT_CHARS = 30000`
@@ -171,16 +173,23 @@
 
 ---
 
-## 📊 Score Geral (Atualizado)
+## 📊 Score Geral (Atualizado — auditoria code-first, agosto/2026)
 
-| Pilar | Implementado | Limitações | Nota |
-|---|---|---|---|
-| 1. Isolamento de Contexto | 95% | Allowlist prefix-based | **A** |
-| 2. Resiliência Tool Calling | 90% | Sem grammar/JSON Schema | **A** |
-| 3. Loop de Retry | 90% | Sem ação reparadora automática | **A** |
-| 4. Eficiência Memória | 85% | Vault sem sliding window | **A-** |
+| Pilar | Implementado | Validado E2E | Limitações | Nota |
+|---|---|---|---|---|
+| 1. Isolamento de Contexto | 95% | ✅ | Allowlist prefix-based | **A** |
+| 2. Resiliência Tool Calling | 90% | ⚠️ | Modelo NÃO usa tools (responde do contexto) | **B+** |
+| 3. Loop de Retry | 90% | ✅ | Sem ação reparadora automática | **A** |
+| 4. Eficiência Memória/RAG | 85% | ❌ | **code_index não indexado** — RAG inoperante | **B-** |
 
-**Score geral: 90/100** — arquitetura madura para um sistema de IA de bordo.
+**Score geral: 82/100** — arquitetura madura mas com gaps de validação.
+
+### Descobertas da auditoria (agosto/2026)
+
+1. **RAG code_index não existe** — collection nunca foi criada no Qdrant
+2. **Modelo não usa tools** — responde do contexto em vez de chamar read_file/code_search
+3. **E2E Agent**: 4/10 tools chamadas, mas 9/10 respostas corretas
+4. **thinking overhead**: 88% dos tokens no aider são thinking inútil
 
 ---
 

@@ -16,9 +16,26 @@ RTX 4050 6GB / 32GB RAM) nasce do zero via este repo.
 
 ## Build, teste e validação (sempre antes de commitar)
 
+### TESTES — USE `nix develop` (NÃO nix-shell)
+
+```bash
+# ✅ CORRETO — provisiona jarvis + pytest + hypothesis + PYTHONPATH:
+nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -x -q --tb=short
+
+# ❌ ERRADO — nix-shell com pacotes soltos não tem as dependências do jarvis:
+# nix-shell -p python3Packages.pytest python3Packages.requests --run "pytest ..."
+```
+
+O `nix develop` carrega o flake devShell que inclui:
+- Todas as dependências do jarvis (via `inputsFrom = [ pkgs.jarvis ]`)
+- pytest + hypothesis
+- `PYTHONPATH` automático para `modules/ai/jarvis/src`
+
+### BUILD
+
 ```bash
 git add -A          # OBRIGATÓRIO antes de build: o flake só copia arquivos trackeados
-nix build .#jarvis --no-link        # roda pytest (checkPhase) — 533 testes
+nix build .#jarvis --no-link        # roda pytest (checkPhase)
 nix flake check                     # avalia TODAS as configurações
 ```
 
@@ -38,32 +55,52 @@ nixos-rebuild switch --flake .#nitro-v15  # ERRADO — usar rebuild-host.sh!
 
 **Por quê**: `rebuild-host.sh` faz `git add -A` + commit automático antes do build. Sem isso, o flake não vê arquivos untracked e o build quebra.
 
-- Testes: `modules/ai/jarvis/tests/test_*.py` (pytest, roda no build Nix).
 - Convenção de commit: mensagem em PT-BR, um verbo por mudança
   (`feat:`/`fix:`/`chore:`/`docs:`), corpo explicando o **porquê**.
 - Rodar `./clean.sh` de vez em quando (GC do Nix) para não encher o disco.
 
-## Estado atual (agosto/2026 — fases do roadmap)
+## Estado atual (agosto/2026 — auditoria code-first)
 
-- **Feitas**: 5 (self-heal), 6 (agente+aprovação), 7 (memória+vault), 9 (Telegram),
-  10 (RAG SOTA: NDCG@5=1.0), 11 (benchmark+regressão), 4a (modo idle),
-  audiobook, observabilidade, perfil dinâmico, circuit breaker, event bus,
-  vision, triggers, devtools, CLI dev, gaming profile — todas implementadas e testadas.
-- **Testes**: 533 (pytest). Inclui PBT (hypothesis), security, wakeword, profile,
-  observabilidade, eventbus, triggers, vision, circuit breaker, fuzzing, devtools, gaming.
-- **Pendente no lab**: ativar Telegram (bot + `/etc/jarvis-telegram.env`);
-  ativar `jarvis heal` como daemon.
-- **Pendente no host**: validar voz/wakeword no hardware real.
+### Implementado e validado
+- **Agent loop** (tool-calling com repair, circuit breaker, audit trail)
+- **Router** (cascata: fastpath → doctor → nixos → rag → agent)
+- **Fast Paths** (regras declarativas, zero LLM)
+- **DevTools** (read_file, write_file, str_replace, code_search, run_tests)
+- **Memory** (Qdrant episódica: remember/recall/lessons, 14 eventos)
+- **MCP** (mcp-nixos via JSON-RPC 2.0)
+- **Circuit Breaker** (CLOSED/OPEN/HALF_OPEN + egress filter)
+- **Self-Heal** (detect→restart→audit→learn, allowlist de 3 serviços)
+- **AST Guard** (validação antes de str_replace)
+- **Gaming Profile** (multi-sinal: GPU/Hyprland/Steam/Proton)
+- **Vision** (grim/slurp/hyprctl)
+- **Triggers** (disco, doctor, CPU alerts)
+- **EventBus** (asyncio pub/sub)
+- **User Profile** (preferências + contexto dinâmico)
+- **llama-server** (32 t/s estável, 0.7% drift)
+
+### Implementado mas NÃO validado
+- **RAG code_index** — collection NÃO EXISTE no Qdrant (nunca indexado)
+- **Voz/wakeword** — implementado, não testado E2E no host
+- **Telegram** — precisa criar bot + env file
+- **Heal daemon** — implementado, não ativado
+
+### Problemas conhecidos
+- **Modelo não usa tools** — Qwen responde do contexto em vez de chamar read_file/code_search
+- **thinking overhead** — 88% dos tokens são thinking no aider (~42s por tarefa)
+- **legado** — legacy_index.py requer numpy (4 testes falham)
+- **Backups** — agent.py.bak, rag.py.bkp no código ativo
 
 ## Configuração atual do llama-cpp (host)
 
 - **Modelo**: Qwen3.6-35B-A3B MoE (UD-Q4_K_M, ~20.6GiB)
 - **GPU layers**: ngl=50 (atenção na GPU)
-- **MoE**: n-cpu-moe=50 (experts na RAM via --load-mode none)
+- **MoE**: n-cpu-moe=50 (experts na RAM)
 - **Contexto**: 131072 tokens (128K, KV cache q4_0)
-- **Threads**: 16 (decode) + 16 (batch via --threads-batch)
-- **VRAM**: ~4.8GB / 6GB (1.2GB margem)
-- **Flags**: --no-warmup --prio 2 --prio-batch 3 --kv-unified --ctx-checkpoints 2
+- **Threads**: 16
+- **VRAM**: ~4.2GB / 6GB (mmproj em CPU via --no-mmproj-offload)
+- **RAM livre**: ~27 GB (sem --load-mode none)
+- **Decode**: ~32 t/s (estável, 0.7% drift)
+- **Flags**: --no-mmproj-offload --reasoning-preserve --jinja
 
 ## Regras que não podem ser quebradas
 
@@ -71,12 +108,12 @@ nixos-rebuild switch --flake .#nitro-v15  # ERRADO — usar rebuild-host.sh!
    `vm`/`host`). Nunca baixe modelo imperativamente nem edite unit à mão.
 
 2. **VRAM BUDGET (RTX 4050 6GB) — NÃO EXCEDER**:
-   - Main LLM (ngl=50): ~2.5GB (atenção)
-   - KV cache q4_0 128K: ~2.5GB
-   - mmproj BF16: ~0.86GB
+   - Main LLM (ngl=50): ~3.2GB (atenção +KV)
+   - mmproj BF16: 0MB VRAM (--no-mmproj-offload mantém em CPU)
    - Overhead CUDA: ~0.5GB
-   - Total: ~4.8GB / 6GB (1.2GB margem)
+   - Total: ~4.2GB / 6GB (1.9GB margem)
    - Embeddings/Rerank: 0MB VRAM (CUDA_VISIBLE_DEVICES="" força CPU)
+   - **IMPORTANTE**: mmproj na GPU causa degradação 32→14 t/s após 1º request
 
 3. **DISTRIBUIÇÃO DE HARDWARE**:
    - RTX 4050: Main LLM + mmproj (atenção densa + vision)

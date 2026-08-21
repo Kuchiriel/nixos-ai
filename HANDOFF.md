@@ -24,7 +24,7 @@ self-heal, modo idle, gaming profile e 533 testes verdes.
 | llama-cpp-server | 8080 | ✅ Rodando | Qwen3.6-35B MoE, 128K ctx |
 | llama-cpp-embeddings | 8081 | ✅ Rodando | nomic-embed-text-v2, CPU |
 | llama-cpp-rerank | 8082 | ✅ Rodando | bge-reranker-v2-m3, CPU |
-| qdrant | 6333 | ✅ Rodando | Vector DB (memories + code_index) |
+| qdrant | 6333 | ✅ Rodando | Vector DB (memories: 14 vetores; code_index: NÃO INDEXADO) |
 | jarvis-gaming-watcher | — | ✅ Rodando | Detecção multi-sinal |
 | jarvis-idle | — | ✅ Rodando | Self-knowledge (benchmark/regression/eval-rag) |
 | jarvis-heal | — | ⏳ Pendente | Precisa ativar como daemon |
@@ -36,27 +36,41 @@ self-heal, modo idle, gaming profile e 533 testes verdes.
 ```
 Modelo:     Qwen3.6-35B-A3B MoE (UD-Q4_K_M, ~20.6GiB)
 GPU layers: ngl=50 (atenção na GPU)
-MoE:        n-cpu-moe=50 (experts na RAM via --load-mode none)
+MoE:        n-cpu-moe=50 (experts na RAM)
 Contexto:   131072 tokens (128K, KV cache q4_0)
-Threads:    16 (decode) + 16 (batch)
-VRAM:       ~4.8GB / 6GB (1.2GB margem)
-Flags:      --no-warmup --prio 2 --prio-batch 3 --kv-unified --ctx-checkpoints 2
+Threads:    16
+VRAM:       ~4.2GB / 6GB (mmproj em CPU)
+RAM livre:  ~27 GB
+Flags:      --no-mmproj-offload --reasoning-preserve --jinja
 ```
 
-**Performance medida (benchmark.sh)**:
-- Prefill: ~360 t/s
-- Decode: ~32 t/s
+**Performance medida (benchmark.sh, 5 runs com warmup)**:
+- Prefill: ~367 t/s
+- Decode: ~32 t/s (estável, 0.7% drift)
+- Descoberta: mmproj na GPU causa degradação 32→14 t/s após 1º request
+  (solução: --no-mmproj-offload mantém mmproj em CPU, libera 900 MiB VRAM)
 
-## Testes
+## Testes — USE `nix develop`
+
+```bash
+# ✅ CORRETO — provisiona jarvis + pytest + hypothesis + PYTHONPATH:
+nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -x -q --tb=short
+
+# ❌ ERRADO — nix-shell com pacotes soltos não tem dependências do jarvis:
+# nix-shell -p python3Packages.pytest python3Packages.requests --run "pytest ..."
+```
 
 | Categoria | Quantidade | Status |
 |-----------|------------|--------|
-| Unitários | ~450 | ✅ Passando |
+| Unitários (sem numpy) | ~500 | ✅ Passando |
+| Integração (llama+qdrant) | 4 | ✅ Passando |
+| E2E Agent (live) | 10 | 4/10 tools usadas |
 | PBT (hypothesis) | 31 | ✅ Passando |
 | Security | 6 | ✅ Passando |
 | Fuzzing/Mutation | 56 | ✅ Passando |
-| Integração | ~90 | ✅ Passando |
-| **Total** | **533** | **✅ Todos passando** |
+| Sem numpy (voice/wakeword) | 4 | ❌ Falta numpy |
+| Bulldozer (jarvis dev) | 6 | ⏳ Precisa CLI |
+| **Total executável** | **~500+** | **✅ Passando** |
 
 ## Arquitetura da IA
 
@@ -141,23 +155,46 @@ Validation (core/ast_guard.py) — AST check
 - `services/jarvis-wakeword.nix` — Wake word detection
 - `mpvpaper.nix` — Animated wallpaper (iGPU VA-API)
 
+## Achados da Auditoria Code-First (agosto/2026)
+
+### RAG não indexado
+- `code_index` collection NÃO EXISTE no Qdrant — rota RAG do router inoperante
+- `memories` collection tem 14 eventos (pouco populada)
+- Fix: executar `jarvis rag index` para criar a collection
+
+### Modelo não usa tools
+- Qwen3.6-35B MoE A3B responde do contexto/repo-map em vez de chamar tools
+- Quando USA tools (execute_shell, read_file), funciona corretamente
+- E2E: 4/10 tools chamadas, mas 9/10 respostas corretas
+- Causa: modelo forte o suficiente para saber a resposta sem tool
+
+### Thinking overhead
+- 88% dos tokens no aider são thinking (~500 tokens são resposta real)
+- `reasoning-effort low` e `thinking-tokens 0` são ignorados pelo modelo
+- `chat_template_kwargs: enable_thinking=False` funciona via curl mas litellm não passa
+- Solução ideal: proxy que intercepta requests e injeta enable_thinking: false
+
+### Código morto/legado
+- `agent.py.bak` — backup no código ativo (remover)
+- `rag.py.bkp` — backup na raiz (remover)
+- `legacy_index.py` — requer numpy, 4 testes falham
+
 ## Pendências Reais
 
 ### Críticas
-1. **Telegram não ativado** — precisa criar bot no BotFather + `/etc/jarvis-telegram.env`
-2. **jarvis-heal como daemon** — implementado mas não ativado no lab/host
-3. **Chave Groq vazada no git history** — usuário deve rotacionar
+1. **RAG não indexado** — executar `jarvis rag index` para criar `code_index`
+2. **Telegram não ativado** — precisa criar bot no BotFather + `/etc/jarvis-telegram.env`
+3. **jarvis-heal como daemon** — implementado mas não ativado
 
 ### Importantes
-4. **Validar voz/wakeword no host** — implementado mas não testado E2E no hardware
-5. **mpvpaper com VA-API** — funciona sem hwdec (iHD crash no NixOS)
-6. **sudo ALL NOPASSWD** — temporário no host, precisa minimizar
+4. **Limpar legado** — remover agent.py.bak, rag.py.bkp
+5. **Validar voz/wakeword no host** — implementado mas não testado E2E
+6. **sudo ALL NOPASSWD** — temporário, precisa minimizar
 
 ### Melhorias
-7. **Dashboard waybar expandido** — erros recentes, latência SLM
-8. **Alertas Telegram** — notificar quando doctor detecta serviços down
-9. **Event Bus daemon** — rodar como systemd user service
-10. **Vision no host** — validar grim/slurp no Hyprland real
+7. **Forçar tool calling** — testar tool_choice: required no Agent
+8. **Proxy thinking** — interceptar aider para desabilitar thinking
+9. **Vision no host** — validar grim/slurp no Hyprland real
 
 ## Riscos
 
