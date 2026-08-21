@@ -62,7 +62,11 @@ in
     cloudflare-warp
     # Pacote do JARVIS via overlay
     jarvis
-    python3Packages.prompt-toolkit
+    # Cria um comando chamado "jarvis-dev" que roda o seu arquivo com as dependências corretas
+    (pkgs.writers.writeDashBin "jarvis-dev" ''
+    export PYTHONPATH="${pkgs.python3Packages.prompt-toolkit}/${pkgs.python3.sitePackages}:$PYTHONPATH"
+    exec ${pkgs.python3}/bin/python3 /home/nixos/projects/nixos-ai/modules/ai/jarvis/src/jarvis/cli/dev.py "$@"
+  '')
   ];
 
   # Habilita o gerenciamento de volumes e montagem de mídia
