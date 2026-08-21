@@ -186,7 +186,7 @@ let
 
                 if chunk_count % 10 == 0:
                     speech_thresh = noise_baseline * 1.5
-                    print(f"[WW] RMS: {rms:.0f} (baseline={noise_baseline:.0f}, speech>{speech_thresh:.0f})", flush=True)
+                    print(f"[WW] RMS: {rms:.0f} (baseline={noise_baseline:.0f}, speech>{noise_baseline*1.2:.0f})", flush=True)
 
                 # Skip during warmup
                 if chunk_count < WARMUP_CHUNKS:
@@ -200,9 +200,9 @@ let
                 if (time.time() - last_trigger_time) < COOLDOWN:
                     continue
 
-                # VAD: detect speech onset (adaptive threshold)
+                # VAD: detect speech onset (adaptive: 20% above baseline)
                 if not speaking:
-                    if rms > noise_baseline * 1.5:
+                    if rms > noise_baseline * 1.2:
                         speaking = True
                         speech_frames = [data]
                         silence_start = None
@@ -212,8 +212,8 @@ let
                 # Currently speaking — accumulate frames
                 speech_frames.append(data)
 
-                # Check for silence (adaptive: < baseline * 1.1)
-                if rms < noise_baseline * 1.1:
+                # Check for silence (adaptive: < baseline * 1.05)
+                if rms < noise_baseline * 1.05:
                     if silence_start is None:
                         silence_start = time.time()
                     elif time.time() - silence_start > 1.5:
