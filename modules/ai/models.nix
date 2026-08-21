@@ -182,29 +182,27 @@ in
     # Experts (20GB GGUF) ficam na RAM (32GB DDR5 ~120GB/s)
     # CPU lê experts sob demanda quando router seleciona top-k
 
-
     host = {
       model = "llm-host";
       mmproj = "llm-host-mmproj";  # vision na GPU (denso, ~861MB BF16)
-      threads = 12;              # hyperthreading ativo (testado: melhor que t=10 ou t=6)
-      ctxSize = 65536;          # Expandido para 128K para suportar o contexto longo do Aider
-      batchSize = 1024;          # -b 512 iguala -ub 512 (evita pico de memória no prefill)
+      threads = 12;              # hyperthreading ativo
+      
+      # 65K agora é possível porque o cache quantizado em 4-bits consome metade da VRAM de um q8_0
+      ctxSize = 65536;           
+      
+      batchSize = 1024;          # Evita pico de memória no prefill
       ubatch = 1024;
-      gpuLayers = 99;            # 99 = TODAS as camadas de atenção na GPU
-      # TURBO QUANT (Tecnologia real de 2026): Comprime o KV Cache agressivamente para 4-bits.
-      # Como o Qwen usa Grouped-Query Attention, isso reduz o tamanho do cache em até 75% na VRAM.
-      kvCache = "-fa on --cache-kv turbo4 --cache-qv turbo3";    
+      gpuLayers = 99;            # MANTIDO: Todos os experts ativos e atenção calculados na GPU
 
-      #kvCache = "-fa on -ctk q8_0 -ctv q8_0";
-      
-      # Sintaxe estrita: Apenas flags legítimas de concorrência do MoE
+      # O SEGREDO REAL DO SEU HARDWARE: Comprime o Cache KV em q4_0 nativo do llama.cpp.
+      # Isso libera espaço físico crítico na VRAM da RTX 4050 sem precisar de flags fantasmas.
+      kvCache = "-fa on -ctk q4_0 -ctv q4_0";    
+
+      # Sintaxe estrita e padrão para a execução de MoE do Qwen
       moeFlags = "--n-cpu-moe 95 --split-mode none --poll 0 --poll-batch 0";
-      
-      # Flags REAIS de gerenciamento e sobrevivência de contexto (Attention Sinks)
-      extraArgs = [
-        "-ot" ".*ffn_.*_exps.=CPU"
-        "--keep" "4096"                   # Protege os primeiros 4K de tokens (instruções críticas do Aider)
-      ];
+
+      # ZERADO: Nenhuma flag experimental ou argumento inválido para o systemd passar direto
+      extraArgs = [ ];
 
       user = "root";
       scheduler = { policy = "fifo"; priority = 50; };
