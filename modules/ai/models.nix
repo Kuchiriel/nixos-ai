@@ -192,20 +192,20 @@ in
         #ctxSize = 65536;           
         ctxSize = 32768;
         batchSize = 1024;          # Evita pico de memória no prefill
-        ubatch = 1024;
+        ubatch = 512;
         gpuLayers = 99;            # MANTIDO: Mantém os experts ativos no chip mais rápido (GPU)
        
         kvCache = "-fa on -ctk q4_0 -ctv q4_0";         
 
         # Sintaxe estrita e padrão para a execução de MoE do Qwen
-        moeFlags = "--n-cpu-moe 99 --split-mode none --poll 0 --poll-batch 0";
+        moeFlags = "--n-cpu-moe 45 --split-mode none --poll 50 --poll-batch 50";
 
         # Flags legítimas extraídas diretamente do seu manual do llama-server-help
         extraArgs = [
             "--kv-unified"                    # Compartilha o cache de chaves/valores de forma otimizada
-            "--ctx-checkpoints" "8"          # Ativa 16 slots de checkpoints de contexto para congelar estados do Aider
-            "--checkpoint-every-n-tokens" "1024" # Salva snapshots do contexto durante o prefill longo do agente
-            "--keep" "4096"      
+            "--ctx-checkpoints" "2"          # Ativa 16 slots de checkpoints de contexto para congelar estados do Aider
+            #"--checkpoint-every-n-tokens" "1024" # Salva snapshots do contexto durante o prefill longo do agente
+            "--keep" "1024"      
        ];
 
         user = "root";
