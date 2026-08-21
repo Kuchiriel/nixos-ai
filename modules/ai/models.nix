@@ -181,7 +181,8 @@ in
     #
     # Experts (20GB GGUF) ficam na RAM (32GB DDR5 ~120GB/s)
     # CPU lê experts sob demanda quando router seleciona top-k
-   
+
+
     host = {
       model = "llm-host";
       mmproj = "llm-host-mmproj";  # vision na GPU (denso, ~861MB BF16)
@@ -192,12 +193,14 @@ in
       gpuLayers = 99;            # 99 = TODAS as camadas de atenção na GPU
       kvCache = "-fa on -ctk q8_0 -ctv q8_0";
       
-      # Escopo estrito: Apenas flags nativas do mecanismo Mixture of Experts (MoE)
+      # Sintaxe estrita: Apenas flags legítimas de concorrência do MoE
       moeFlags = "--n-cpu-moe 95 --split-mode none --poll 0 --poll-batch 0";
       
-      # Isolamento de escopo: Argumentos globais do servidor inseridos como lista Nix para evitar falhas de validação
+      # Flags REAIS de gerenciamento e sobrevivência de contexto (Attention Sinks)
       extraArgs = [
-        "--load-mode" "none"     # Substituto do antigo --no-mmap (Auditoria 2026-08-20) para evitar page faults no SSD
+        "--context-shift"                 # Ativa o algoritmo de compressão/deslocamento rotativo
+        "--keep" "4096"                   # Protege os primeiros 4K de tokens (instruções críticas do Aider)
+        "--cache-reuse" "1"               # Minimiza lentidão de prefill reusando o cache KV idêntico
       ];
 
       user = "root";
