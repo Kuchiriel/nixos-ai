@@ -158,14 +158,21 @@ def _call_llm(messages: list[dict[str, Any]], tools: list[dict], profile: dict) 
     payload: dict[str, Any] = {
         "model": profile.get("model_id", cfg.llm_model),
         "messages": messages,
-        "tools": tools,
-        "tool_choice": "auto",
         "temperature": profile["temperature"],
         "max_tokens": profile["max_tokens"],
+'''
         "parallel_tool_calls": False,
+'''
     }
-    if cfg.llm_disable_thinking:
+
+'''
+   if cfg.llm_disable_thinking:
         payload["chat_template_kwargs"] = {"enable_thinking": False}
+'''
+
+    if tools:
+        payload["tools"] = tools
+        payload["tool_choice"] = "auto"
 
     resp = requests.post(
         f"{cfg.llm_base_url.rstrip('/')}/chat/completions",
