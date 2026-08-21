@@ -209,7 +209,7 @@ in
        ];
 
         user = "root";
-        #scheduler = { policy = "fifo"; priority = 50; };
+        scheduler = { policy = "fifo"; priority = 50; };
     };
 
   };
