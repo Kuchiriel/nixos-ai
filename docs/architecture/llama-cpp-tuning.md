@@ -81,19 +81,21 @@ Preserva trace de reasoning no histórico completo, não só na última mensagem
 
 Define servidores MCP inline via JSON. Formato compatível com Cursor. Pode simplificar integração MCP.
 
-### Flags que NÃO ajudaram
+### Flags testadas (benchmark real, 3 runs + warmup cada)
 
-| Flag | Resultado | Motivo |
-|------|-----------|--------|
-| `--threads-batch 14` | Prefill +3%, Decode -1.3% | Trade-off ruim |
-| `--cache-reuse 1024` | Prefill -1.8% | Piorou prefill |
-| `-cram 16384` | Prefill -4%, Decode -2% | Piorou tudo |
-| `--spec-type ngram-simple` | Decode **-25%** | Desastroso |
-| `--n-cuda-streams 2` | **CRASH** | Flag não existe |
-| `--no-mmproj-offload` | Decode -1.4% | Piorou decode |
-| batch 2048 | Prefill -2.2% | Piorou prefill |
-| `--cpu-range 0-11` | Sem efeito | Scheduler já otimiza |
-| `--load-mode none` | 19GB RSS | PC inutilizável |
+| Flag | Prefill | Decode | VRAM | Veredito |
+|------|---------|--------|------|----------|
+| (baseline) | 367 t/s | 31.8 t/s | 4179 MiB | — |
+| `--reasoning-preserve` | 367 t/s | 32.4 t/s | 4179 MiB | ✅ **ATIVAR** |
+| `--no-op-offload` | **161 t/s↓** | 32.2 t/s | 4043 MiB | ❌ destrói prefill |
+| `--no-kv-offload` | 299 t/s↓ | **16.0 t/s↓** | 3165 MiB | ❌ KV na RAM |
+| `--cache-reuse 1024` | 367 t/s | **15.6 t/s↓** | 4179 MiB | ❌ degrada decode |
+| `--load-mode mlock` | ~370 t/s | 33.0 t/s | 4179 MiB | ⚠️ 20GB RSS |
+| `--threads-batch 14` | 369 t/s↑ | 31.9 t/s | — | ⚠️ trade-off |
+| `-cram 16384` | 352 t/s↓ | 31.8 t/s | — | ❌ piorou |
+| `--spec-type ngram-simple` | 358 t/s | **24.2 t/s↓** | — | ❌ desastroso |
+| batch 2048 | 359 t/s↓ | 32.3 t/s | — | ⚠️ prefill ↓ |
+| `--cpu-range 0-11` | — | — | — | sem efeito |
 
 ---
 
@@ -111,14 +113,15 @@ host = {
   kvCache = "-fa on -ctk q4_0 -ctv q4_0";
   moeFlags = "--n-cpu-moe 50 --split-mode none --poll 50 --poll-batch 50";
   extraArgs = [
-    "--no-mmproj-offload"       # CRÍTICO: mmproj na CPU
+    "--no-mmproj-offload"       # CRÍTICO: mmproj na CPU, libera 900MiB VRAM
     "--image-min-tokens" "1024"
-    "--kv-unified"
+    "--kv-unified"              # KV cache unificado
     "--ctx-checkpoints" "2"
     "--keep" "1024"
-    "--no-warmup"
-    "--prio" "2"
-    "--prio-batch" "3"
+    "--no-warmup"               # +2% prefill/decode
+    "--prio" "2"                # Prioridade high
+    "--prio-batch" "3"          # Real-time batch
+    "--reasoning-preserve"      # Preserva thinking trace (Qwen3)
   ];
   user = "root";
   scheduler = null;  # CFS default (FIFO removido)
