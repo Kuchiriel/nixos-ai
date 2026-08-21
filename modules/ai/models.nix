@@ -205,7 +205,7 @@ in
             "--kv-unified"                    # Compartilha o cache de chaves/valores de forma otimizada
             "--ctx-checkpoints" "2"          # Ativa 16 slots de checkpoints de contexto para congelar estados do Aider
             "--keep" "1024"
-            "--no-warmup"                    # testando: desabilitar warmup para startup mais rápido
+            "--no-mmproj-offload"            # testando: manter mmproj na CPU para liberar VRAM
        ];
 
         user = "root";
