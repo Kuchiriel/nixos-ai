@@ -200,6 +200,7 @@ in
 
         # Flags legítimas extraídas diretamente do seu manual do llama-server-help
         extraArgs = [
+            "--mlock"                          # Mantém pesos do modelo residente em RAM (evita page faults)
             "--image-min-tokens" "1024" 
             "--kv-unified"                    # Compartilha o cache de chaves/valores de forma otimizada
             "--ctx-checkpoints" "2"          # Ativa 16 slots de checkpoints de contexto para congelar estados do Aider
