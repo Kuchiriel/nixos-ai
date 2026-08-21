@@ -183,7 +183,7 @@ in
 
     host = {
         model = "llm-host";
-        # mmproj = "llm-host-mmproj";  # DESATIVADO para teste - vision pode causar tensor override
+        mmproj = "llm-host-mmproj";  # vision na GPU (denso, ~861MB BF16)
         threads = 16;              # testando: 16 threads no i7-13620H (20 available)
         
         # 128K contexto para suportar Aider/Freebuff com projetos grandes.
@@ -200,6 +200,7 @@ in
 
         # Flags legítimas extraídas diretamente do seu manual do llama-server-help
         extraArgs = [
+            "--no-mmproj-offload"             # Força mmproj para CPU (libera VRAM para attention layers)
             "--image-min-tokens" "1024" 
             "--kv-unified"                    # Compartilha o cache de chaves/valores de forma otimizada
             "--ctx-checkpoints" "2"          # Ativa 16 slots de checkpoints de contexto para congelar estados do Aider
