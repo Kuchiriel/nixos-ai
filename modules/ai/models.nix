@@ -205,7 +205,7 @@ in
             "--kv-unified"                    # Compartilha o cache de chaves/valores de forma otimizada
             "--ctx-checkpoints" "2"          # Ativa 16 slots de checkpoints de contexto para congelar estados do Aider
             "--keep" "1024"
-            "--no-mmproj-offload"            # testando: manter mmproj na CPU para liberar VRAM
+            "--no-warmup"                    # mantido: melhora both prefill e decode
        ];
 
         user = "root";
