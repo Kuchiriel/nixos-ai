@@ -183,29 +183,34 @@ in
     # CPU lê experts sob demanda quando router seleciona top-k
 
     host = {
-      model = "llm-host";
-      mmproj = "llm-host-mmproj";  # vision na GPU (denso, ~861MB BF16)
-      threads = 12;              # hyperthreading ativo
-      
-      # 65K agora é possível porque o cache quantizado em 4-bits consome metade da VRAM de um q8_0
-      ctxSize = 65536;           
-      
-      batchSize = 1024;          # Evita pico de memória no prefill
-      ubatch = 1024;
-      gpuLayers = 99;            # MANTIDO: Todos os experts ativos e atenção calculados na GPU
+        model = "llm-host";
+        mmproj = "llm-host-mmproj";  # vision na GPU (denso, ~861MB BF16)
+        threads = 12;              # hyperthreading ativo (testado: melhor que t=10 ou t=6)
+        
+        # 65K é o ponto ideal: com o cache quantizado em q4_0 confirmado pelo help,
+        # ele vai ocupar o mesmo espaço de VRAM que um bloco de 16K ocuparia em FP16.
+        ctxSize = 65536;           
+        
+        batchSize = 1024;          # Evita pico de memória no prefill
+        ubatch = 1024;
+        gpuLayers = 99;            # MANTIDO: Mantém os experts ativos no chip mais rápido (GPU)
+        
+        # Compressão real confirmada pelo seu manual: Corta o uso de VRAM do cache pela metade
+        kvCache = "-fa on -ctk q4_0 -ctv q4_0";    
 
-      # O SEGREDO REAL DO SEU HARDWARE: Comprime o Cache KV em q4_0 nativo do llama.cpp.
-      # Isso libera espaço físico crítico na VRAM da RTX 4050 sem precisar de flags fantasmas.
-      kvCache = "-fa on -ctk q4_0 -ctv q4_0";    
+        # Sintaxe estrita e padrão para a execução de MoE do Qwen
+        moeFlags = "--n-cpu-moe 95 --split-mode none --poll 0 --poll-batch 0";
 
-      # Sintaxe estrita e padrão para a execução de MoE do Qwen
-      moeFlags = "--n-cpu-moe 95 --split-mode none --poll 0 --poll-batch 0";
+        # Flags legítimas extraídas diretamente do seu manual do llama-server-help
+        extraArgs = [
+            "--kv-unified"                    # Compartilha o cache de chaves/valores de forma otimizada
+            "--ctx-checkpoints" "16"          # Ativa 16 slots de checkpoints de contexto para congelar estados do Aider
+            "--checkpoint-every-n-tokens" "512" # Salva snapshots do contexto durante o prefill longo do agente
+        ];
 
-      # ZERADO: Nenhuma flag experimental ou argumento inválido para o systemd passar direto
-      extraArgs = [ ];
-
-      user = "root";
-      scheduler = { policy = "fifo"; priority = 50; };
+        user = "root";
+        scheduler = { policy = "fifo"; priority = 50; };
     };
+
   };
 }
