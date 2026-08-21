@@ -211,8 +211,9 @@ let
                 # Currently speaking — accumulate frames
                 speech_frames.append(data)
 
-                # Check for silence (adaptive: < baseline * 1.1 for 2s)
-                if rms < noise_baseline * 1.1:
+                # Check for silence (adaptive: < baseline * 1.1 for 2s, min 1s recording)
+                recording_duration = len(speech_frames) * CHUNK / RATE
+                if rms < noise_baseline * 1.1 and recording_duration > 1.0:
                     if silence_start is None:
                         silence_start = time.time()
                     elif time.time() - silence_start > 2.0:
