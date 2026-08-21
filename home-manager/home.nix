@@ -80,7 +80,7 @@
 
     subtree-only: true
     auto-test: false
-    auto-prompts: true
+    suggest-shell-commands: true
 
     no-stream: true
     no-cache-prompts: true
