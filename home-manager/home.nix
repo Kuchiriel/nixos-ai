@@ -80,6 +80,7 @@
 
     subtree-only: true
     auto-test: false
+    auto-prompts: true
 
     no-stream: true
     no-cache-prompts: true
@@ -105,12 +106,12 @@
     }
   '';
 
-  # 3. Settings do modelo — Autonomia com protocolo de busca via Shell
+# 3. Settings do modelo — Estrutura original com contrato /run
   home.file.".aider.model.settings.yml".text = ''
     - name: openai/qwen3-35b-a3b
       edit_format: diff
       use_repo_map: true
-      lazy: true
+      lazy: false
       reminder: sys
       examples_as_sys_msg: true
       reasoning_tag: null
@@ -119,7 +120,7 @@
 
         OPERATIONAL RULES:
         1. IF REQUIRED FILES ARE NOT IN CHAT CONTEXT:
-           - Immediately output a shell command prefixed with '!' to locate them (e.g., !grep -rn "pattern" . or !find . -name "*target*").
+           - Immediately output a command prefixed with '/run' to locate them (e.g., /run grep -rn "pattern" . or /run find . -name "*target*").
            - NEVER ask the user to run commands manually.
            - NEVER write conversational explanations, tutorials, or step-by-step guides.
 
@@ -128,7 +129,7 @@
            - Apply edits directly without confirmation or conversational preamble.
 
         3. OUTPUT FORMAT:
-           - Output ONLY shell commands prefixed with '!', SEARCH/REPLACE blocks, or '/add <file_path>'.
+           - Output ONLY commands prefixed with '/run', SEARCH/REPLACE blocks, or '/add <file_path>'.
            - Zero chat chatter. Pure execution.
       extra_params:
         max_tokens: 8192
