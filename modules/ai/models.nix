@@ -189,7 +189,7 @@ in
         # 128K contexto para suportar Aider/Freebuff com projetos grandes.
         # KV cache q4_0 mantém VRAM dentro do budget (~2.5GB para 128K).
         ctxSize = 131072;
-        batchSize = 1024;          # Evita pico de memória no prefill
+        batchSize = 2048;          # testando: batch maior para prefill mais rápido
         ubatch = 1024;
         gpuLayers = 50;            # MANTIDO: Mantém os experts ativos no chip mais rápido (GPU)
        
