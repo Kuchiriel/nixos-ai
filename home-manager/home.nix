@@ -56,8 +56,8 @@
   # ══════════════════════════════════════════════════════════════
   home.file.".local/share/jarvis/voice/models--Systran--faster-whisper-tiny.en/snapshots/main/model.bin".source = pkgs.fetchurl {
     url = "https://huggingface.co/Systran/faster-whisper-tiny.en/resolve/main/model.bin";
-    hash = "sha256-11b0bb75e7a90ca6ba3f64c12513f4df05105cf4817d23a1a3e6a2ebbaebec20";
-  };
+    hash = "sha256-EbC7deetDKa6P2TBFRP03wUXXEgXfSOho+ai67rr7CA=";
+  }; 
 
   # ══════════════════════════════════════════════════════════════
   # AIDER — Qwen3.6-35B-A3B via llama.cpp local
