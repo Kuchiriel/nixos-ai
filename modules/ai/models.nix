@@ -171,13 +171,12 @@ in
     #   --n-cpu-moe 99 = TODOS os experts MoE na RAM (CPU lê sob demanda)
     #   Attention = denso, roda em TODOS os tokens → GPU é essencial
     #   Experts = esparsos, rodam em 2-4 por token → RAM é aceitável
-    #
-    # VRAM budget (~2.5GB usado, 3.5GB livre):
-    #   attention: 40 layers × ~25MB/layer ≈ 1GB (todas na GPU)
-    #   KV q8_0 4K: ~0.16GB
-    #   mmproj:    ~0.86GB (BF16, denso, deve ficar na GPU)
-    #   overhead:  ~0.5GB (CUDA context + compute)
-    #   TOTAL:     ~2.5GB
+    #        # VRAM budget (~4.8GB usado, 1.2GB livre):
+        #   attention: 40 layers × ~25MB/layer ≈ 1GB (todas na GPU)
+        #   KV q4_0 128K: ~2.5GB (q4_0 = 4 bits, eficiente)
+        #   mmproj:    ~0.86GB (BF16, denso, deve ficar na GPU)
+        #   overhead:  ~0.5GB (CUDA context + compute)
+        #   TOTAL:     ~4.8GB (1.2GB margem)
     #
     # Experts (20GB GGUF) ficam na RAM (32GB DDR5 ~120GB/s)
     # CPU lê experts sob demanda quando router seleciona top-k
@@ -187,10 +186,9 @@ in
         mmproj = "llm-host-mmproj";  # vision na GPU (denso, ~861MB BF16)
         threads = 12;              # hyperthreading ativo (testado: melhor que t=10 ou t=6)
         
-        # 65K é o ponto ideal: com o cache quantizado em q4_0 confirmado pelo help,
-        # ele vai ocupar o mesmo espaço de VRAM que um bloco de 16K ocuparia em FP16.
-        ctxSize = 65536;           
-        #ctxSize = 32768;
+        # 128K contexto para suportar Aider/Freebuff com projetos grandes.
+        # KV cache q4_0 mantém VRAM dentro do budget (~2.5GB para 128K).
+        ctxSize = 131072;
         batchSize = 1024;          # Evita pico de memória no prefill
         ubatch = 1024;
         gpuLayers = 50;            # MANTIDO: Mantém os experts ativos no chip mais rápido (GPU)
