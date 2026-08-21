@@ -197,7 +197,6 @@ in
       
       # Isolamento de escopo: Argumentos globais do servidor inseridos como lista Nix para evitar falhas de validação
       extraArgs = [
-        "--smart-context"
         "--load-mode" "none"     # Substituto do antigo --no-mmap (Auditoria 2026-08-20) para evitar page faults no SSD
       ];
 

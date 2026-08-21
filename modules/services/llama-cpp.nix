@@ -60,7 +60,7 @@ in
       wantedBy = [ "multi-user.target" ];
 
       script = ''
-        exec ${pkgs.llama-cpp}/bin/llama-server \
+        exec ${llamaCppPkg}/bin/llama-server \
           -m "${pkgs.aiModels.${prof.model}}" \
           ${optionalString (prof ? mmproj) ''--mmproj "${pkgs.aiModels.${prof.mmproj}}" ''} \
           --host 0.0.0.0 --port ${toString config.services.llama-cpp-server.port} \
