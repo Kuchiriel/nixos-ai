@@ -204,7 +204,8 @@ in
             "--image-min-tokens" "1024" 
             "--kv-unified"                    # Compartilha o cache de chaves/valores de forma otimizada
             "--ctx-checkpoints" "2"          # Ativa 16 slots de checkpoints de contexto para congelar estados do Aider
-            "--keep" "1024"      
+            "--keep" "1024"
+            "--threads-batch" "14"          # testando: 14 threads para batch/prefill, 16 para decode
        ];
 
         user = "root";
