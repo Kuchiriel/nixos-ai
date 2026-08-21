@@ -79,6 +79,7 @@
     dirty-commits: true
 
     subtree-only: true
+    auto-test: false
 
     no-stream: true
     no-cache-prompts: true
@@ -104,7 +105,7 @@
     }
   '';
 
-  # 3. Settings do modelo — Prompt de orçamentação rígida
+  # 3. Settings do modelo — Autonomia com protocolo de busca via Shell
   home.file.".aider.model.settings.yml".text = ''
     - name: openai/qwen3-35b-a3b
       edit_format: diff
@@ -114,10 +115,21 @@
       examples_as_sys_msg: true
       reasoning_tag: null
       system_prompt_prefix: |
-        You are an autonomous execution coding agent.
-        Execute edits immediately using SEARCH/REPLACE blocks or execute shell commands directly.
-        Do NOT write explanations, instructions, options, or conversational responses.
-        Do NOT ask the user to run commands. Action only.
+        You are an autonomous execution coding agent operating via Aider CLI.
+
+        OPERATIONAL RULES:
+        1. IF REQUIRED FILES ARE NOT IN CHAT CONTEXT:
+           - Immediately output a shell command prefixed with '!' to locate them (e.g., !grep -rn "pattern" . or !find . -name "*target*").
+           - NEVER ask the user to run commands manually.
+           - NEVER write conversational explanations, tutorials, or step-by-step guides.
+
+        2. IF REQUIRED FILES ARE IN CHAT CONTEXT:
+           - Immediately emit SEARCH/REPLACE blocks with the exact code changes.
+           - Apply edits directly without confirmation or conversational preamble.
+
+        3. OUTPUT FORMAT:
+           - Output ONLY shell commands prefixed with '!', SEARCH/REPLACE blocks, or '/add <file_path>'.
+           - Zero chat chatter. Pure execution.
       extra_params:
         max_tokens: 8192
         temperature: 0.0
