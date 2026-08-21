@@ -45,27 +45,27 @@ stylix.targets.hyprland.enable = false;
     };
   };
 
-
+  # 1. Configuração do Aider apontando para o identificador customizado
   home.file.".aider.conf.yml".text = ''
-    openai-api-base: http://localhost:8080/v1
-    model: "openai/local"
-    #model: openai//nix/store/in9pq5ak2mj5km4f6r87v295bfm53w6c-Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    openai-api-base: "http://localhost:8080/v1"
+    model: "openai/custom-model"
     auto-commits: true
     dirty-commits: true
   '';
 
+  # 2. Injeção explícita de metadados para ensinar o LiteLLM a aceitar o contexto estendido
   home.file.".aider.model.metadata.json".text = ''
     {
-      "openai/local": {
+      "openai/custom-model": {
         "max_input_tokens": 131072,
         "max_output_tokens": 4096,
         "input_cost_per_token": 0.0,
         "output_cost_per_token": 0.0,
-        "litellm_provider": "openai"
+        "litellm_provider": "openai",
+        "mode": "chat"
       }
     }
   '';
-
 
   services.jarvis-wakeword = {
     enable = true;
