@@ -65,35 +65,28 @@
   # Benchmark: 32 t/s decode, 367 t/s prefill, 4179 MiB VRAM
   # ══════════════════════════════════════════════════════════════
 
-  # 1. Configuração principal — flags que o aider lê do conf
+  # 1. Configuração principal do Aider
   home.file.".aider.conf.yml".text = ''
-    # Conexão com nosso llama.cpp local
     openai-api-base: "http://localhost:8080/v1"
     openai-api-key: "sk-dummy"
     model: "openai/qwen3-35b-a3b"
 
-    # Edição: diff (SEARCH/REPLACE) — mais eficiente que whole
     edit-format: diff
-
-    # Autonomia: executa sem pedir confirmação
     yes-always: true
     auto-commits: true
     dirty-commits: true
 
-    # Performance: sem stream (resposta completa), sem cache de prompts
     no-stream: true
     no-cache-prompts: true
-
-    # Limpar output: sem warnings nem validação de settings
     no-show-model-warnings: true
     no-check-model-accepts-settings: true
 
-    # Repo map: mantido enxuto em 512 tokens para acelerar o prefill no llama.cpp
+    # Mantém o mapa do repositório em 512 tokens para prefill ultrarrápido
     map-tokens: 512
     map-refresh: auto
   '';
 
-  # 2. Metadata — limites de contexto e custos (com margem para raciocínio)
+  # 2. Metadata — Limite ampliado para 8192 output tokens
   home.file.".aider.model.metadata.json".text = ''
     {
       "openai/qwen3-35b-a3b": {
@@ -107,46 +100,35 @@
     }
   '';
 
-  # 3. Settings do modelo — comportamento, thinking, system prompt
+  # 3. Settings do modelo — Prompt de orçamentação rígida
   home.file.".aider.model.settings.yml".text = ''
     - name: openai/qwen3-35b-a3b
-      # Edição: diff com SEARCH/REPLACE blocks
       edit_format: diff
-
-      # Repo map: aider mapeia o projeto para navegar arquivos autonomamente
       use_repo_map: true
-
-      # Lazy: false = aplica edits imediatamente (não espera confirmação)
       lazy: false
-
-      # Reminder: sys = lembretes no system prompt (mais estável)
       reminder: sys
-
-      # Examples: no system prompt (economiza tokens)
       examples_as_sys_msg: true
 
-      # Thinking: captura e exibe a tag de raciocínio do modelo
+      # O Aider oculta e formata a tag de pensamento
       reasoning_tag: think
 
-      # System prompt: força concisão no raciocínio e execução obrigatória do código
+      # Injunção direta no sistema: rascunho curto, prioridade total na emissão das alterações
       system_prompt_prefix: >-
-        You are an autonomous execution coding agent.
-        You have direct access to the repo map. NEVER ask the user to manually attach, paste, or inspect files.
-        Keep your reasoning inside <think> extremely brief and concise (max 3-4 sentences).
-        You MUST focus your token budget on outputting the SEARCH/REPLACE diff blocks and terminal commands.
-        NEVER exhaust your turn in thinking without writing the actual code edits.
+        You are an autonomous senior coding agent.
+        Keep your internal reasoning inside <think> tags strictly brief (3 to 4 sentences maximum).
+        You MUST reserve 90% of your response for generating the actual SEARCH/REPLACE diff blocks and terminal commands.
+        NEVER exhaust your response in thinking without emitting the required code edits.
 
-      # Parâmetros do modelo
       extra_params:
         max_tokens: 8192
-        temperature: 0.2
+        temperature: 0.1
   '';
 
   services.jarvis-wakeword = {
     enable = true;
     # Calibração validada do legado (docs/architecture/legacy-audio-calibration.md):
     # 0.85 = menos false positives com ventoinha/sons de casa
-    threshold = 0.15;  # Voz ~0.33, ruído ~0.002. 0.15 = seguro
+    threshold = 0.20;  # Voz ~0.33, ruído ~0.002. 0.15 = seguro
     # RMS gate: ignora score alto se RMS < 500 (evita falsos positivos)
     rmsGate = 500;
     # Pipeline de voz: STT (faster-whisper) → LLM (llama.cpp) → TTS (Kokoro)

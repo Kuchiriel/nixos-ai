@@ -185,7 +185,7 @@ in
         # 128K contexto para suportar Aider/Freebuff com projetos grandes.
         # KV cache q4_0 mantém VRAM dentro do budget (~2.5GB para 128K).
         ctxSize = 131072;
-        batchSize = 1024;          # mantido: 1024 é melhor que 2048
+        batchSize = 2048;        
         ubatch = 1024;
         gpuLayers = 50;            # OTIMIZADO: 50 layers na GPU, mmproj na CPU = 32t/s estável + 27GB RAM livre
        
@@ -204,7 +204,6 @@ in
             "--no-warmup"                    # Sem warmup: +2% prefill e decode
             "--prio" "2"                     # Prioridade high para decode
             "--prio-batch" "3"               # Real-time priority para batch/prefull
-            "--reasoning-preserve"             # Preserva reasoning trace no histórico (Qwen3 thinking)
        ];
 
         user = "root";
