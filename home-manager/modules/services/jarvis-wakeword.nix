@@ -173,6 +173,7 @@ let
         last_trigger_time = 0
         pulse_state = 0
         chunk_count = 0
+        WARMUP_CHUNKS = 30  # ~1s de warmup para estabilizar scores
 
         while True:
             try:
@@ -204,6 +205,10 @@ let
 
                 # RMS gate opcional (filtro de ruído ambiente, calibrado em 2093 no legado)
                 if RMS_GATE is not None and rms > RMS_GATE and score <= THRESHOLD:
+                    continue
+
+                # Skip trigger durante warmup (primeiros ~1s)
+                if chunk_count < WARMUP_CHUNKS:
                     continue
 
                 # Trigger com cooldown anti-loop (sem ele, o beep re-triggerava o wakeword)
@@ -265,8 +270,11 @@ let
                                     capture_output=True, text=True,
                                 )
                                 if result.returncode != 0:
-                                    stderr_msg = (result.stderr or "")[:200]
-                                    print(f"[WW] ❌ brain falhou (exit {result.returncode}): {stderr_msg}", flush=True)
+                                    stderr_msg = (result.stderr or "")[:300]
+                                    stdout_msg = (result.stdout or "")[:300]
+                                    # Mostra stdout tb (STT output, agent response)
+                                    combined = stdout_msg + stderr_msg
+                                    print(f"[WW] ❌ brain falhou (exit {result.returncode}): {combined[:200]}", flush=True)
                                     update_status("error", f"Erro: {stderr_msg[:60]}")
                                 else:
                                     print(f"[WW] ✅ brain OK: {(result.stdout or "")[:100]}", flush=True)
