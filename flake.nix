@@ -132,6 +132,7 @@
           home-manager.useUserPackages = true;
           home-manager.extraSpecialArgs = {
             inherit user;
+            inherit inputs;
             homeStateVersion = stateVersion;
             # Água: o home-manager bebe do switch central de ambiente
             # (services.jarvis.environment) — waybar/mpvpaper/hyprland
@@ -139,7 +140,6 @@
             jarvisEnvironment = config.services.jarvis.environment;
           };
           home-manager.users.${user} = {
-            extraSpecialArgs = { inherit inputs; };
             imports = [
               ./home-manager/home.nix
               # stylix 26.05: o output `homeManagerModules` foi renomeado p/ `homeModules`
