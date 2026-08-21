@@ -144,7 +144,7 @@ let
         PW_RECORD = "${pkgs.pipewire}/bin/pw-record"
         # Adaptive VAD: speech = RMS > baseline * 1.5, silence = RMS < baseline * 1.1
         noise_baseline = 2200  # Updated during silence (rolling average)
-        print(f"[WW] Starting pw-record {DEVICE} @ {RATE}Hz (VAD mode: speech_rms={SPEECH_RMS}, Cooldown: {COOLDOWN}s)", flush=True)
+        print(f"[WW] Starting pw-record {DEVICE} @ {RATE}Hz (VAD adaptive mode, Cooldown: {COOLDOWN}s)", flush=True)
 
         def start_arecord():
             return subprocess.Popen(
