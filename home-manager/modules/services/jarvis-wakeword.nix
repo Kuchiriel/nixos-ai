@@ -64,7 +64,7 @@ let
     flakeIgnore = [ "E501" "E231" "F541" ];
     # libraries espera pacotes (ou função), não um env pronto — passar o env
     # resultava em PYTHONPATH vazio (import numpy falhava em runtime)
-    libraries = (ps: with ps; [ numpy requests openwakewordPkg ]);
+    libraries = (ps: with ps; [ numpy ]);
   } ''
     import json
     import os
@@ -72,22 +72,13 @@ let
     import time
     import wave
     import numpy as np
-    from openwakeword.model import Model
 
     RATE = ${toString cfg.rate}
     CHUNK = 512
-    THRESHOLD = ${toString cfg.threshold}
     DEVICE = "${cfg.device}"
     COOLDOWN = ${toString cfg.cooldownSeconds}
-    MAX_RECORD = ${toString cfg.maxRecordSeconds}
-    SILENCE_DROP = ${toString cfg.silenceDrop}
-    RMS_GATE = ${if cfg.rmsGate != null then toString cfg.rmsGate else "None"}
     KILL_TTS = ${if cfg.killTTSOnTrigger then "True" else "False"}
     BRAIN_CMD = ${builtins.toJSON brainCmd}
-    # Modelos do store Nix (linkados em ~/.local/share/openwakeword pelo activation)
-    WAKEWORD_MODEL = "${config.home.homeDirectory}/.local/share/openwakeword/hey_jarvis_v0.1.onnx"
-    MELSPEC_MODEL = "${config.home.homeDirectory}/.local/share/openwakeword/melspectrogram.onnx"
-    EMBEDDING_MODEL = "${config.home.homeDirectory}/.local/share/openwakeword/embedding_model.onnx"
     STARTUP_SOUND = "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/service-login.oga"
     BEEP_SOUND = "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/message-new-instant.oga"
 
@@ -140,27 +131,22 @@ let
 
     def main():
         kill_orphan_pw_record()
-        oww = Model(
-            wakeword_model_paths=[WAKEWORD_MODEL],
-            melspec_model_path=MELSPEC_MODEL,
-            embedding_model_path=EMBEDDING_MODEL,
-            inference_framework="onnx",
-        )
         with open("/tmp/jarvis-wakeword-status", "w") as f:
             f.write(f"READY|{time.time()}")
         update_status("initializing", "Iniciando...")
         play_sound(STARTUP_SOUND)
         notify("JARVIS", "Sistemas Ativos.", "emblem-default")
 
-        # pw-record: captura direta do PipeWire source (sem emulação ALSA)
-        # arecord -D default passa pela ALSA emulation do PipeWire e atenua
-        # o sinal (RMS 11 vs RMS 129 via pw-record direto).
+        # VAD mode: RMS-based voice detection + STT verification
+        # openwakeword model doesn't work with PipeWire audio on NixOS.
+        # Fallback: detect speech onset via RMS, record, then STT checks
+        # if the user said 'Hey Jarvis'.
         PW_RECORD = "${pkgs.pipewire}/bin/pw-record"
-        print(f"[WW] Starting pw-record {DEVICE} @ {RATE}Hz (Threshold: {THRESHOLD}, Cooldown: {COOLDOWN}s)", flush=True)
+        SPEECH_RMS = ${toString (if cfg.rmsGate != null then cfg.rmsGate else 800)}  # RMS > 800 = speech
+        SILENCE_RMS = 400  # RMS < 400 for 1.5s = end of speech
+        print(f"[WW] Starting pw-record {DEVICE} @ {RATE}Hz (VAD mode: speech_rms={SPEECH_RMS}, Cooldown: {COOLDOWN}s)", flush=True)
 
         def start_arecord():
-            # pw-record --target default --format s16 --rate 16000 --channels 2 -
-            # formato 's16' = signed 16-bit little-endian (padrão PipeWire)
             return subprocess.Popen(
                 [PW_RECORD, "--target", DEVICE, "--format", "s16",
                  "--rate", str(RATE), "--channels", "2", "-"],
@@ -173,7 +159,10 @@ let
         last_trigger_time = 0
         pulse_state = 0
         chunk_count = 0
-        WARMUP_CHUNKS = 100  # ~2s de warmup (PipeWire gera artefatos na init)
+        WARMUP_CHUNKS = 50  # ~1s warmup
+        speaking = False
+        silence_start = None
+        speech_frames = []
 
         while True:
             try:
@@ -186,76 +175,65 @@ let
 
                 audio_np = np.frombuffer(data, dtype=np.int16).astype(np.float32)
                 mono = (audio_np[::2] + audio_np[1::2]) * 0.5
-                # Normalização calibrada do legado: DC removal + ganho fixo
-                # Normalização calibrada do legado: DC removal + ganho fixo
-                # PipeWire (volume 3.0): voz ~0.33, ruído ~0.002
-                mono_norm = np.clip((mono - np.mean(mono)) * 10.0, -32768, 32767).astype(np.int16)
-                oww.predict(mono_norm)
-                score = oww.prediction_buffer['hey_jarvis_v0.1'][-1]
                 rms = np.sqrt(np.mean(mono**2))
-
                 chunk_count += 1
 
-                # Pulsing waybar status (a cada ~800ms)
+                # Pulsing waybar status
                 if chunk_count % 50 == 0:
                     pulse_symbols = ["🎤", "🎙️"]
                     update_status("idle", f"{pulse_symbols[pulse_state % 2]} Ouvindo...")
                     pulse_state += 1
 
                 if chunk_count % 10 == 0:
-                    print(f"[WW] Score: {score:.4f}, RMS: {rms:.0f}, Threshold: {THRESHOLD}", flush=True)
+                    print(f"[WW] RMS: {rms:.0f} (speech>{SPEECH_RMS}, silence<{SILENCE_RMS})", flush=True)
 
-                # RMS gate opcional (filtro de ruído ambiente, calibrado em 2093 no legado)
-                if RMS_GATE is not None and rms > RMS_GATE and score <= THRESHOLD:
-                    continue
-
-                # Skip trigger durante warmup (primeiros ~1s)
+                # Skip during warmup
                 if chunk_count < WARMUP_CHUNKS:
                     continue
 
-                # Trigger com cooldown anti-loop (sem ele, o beep re-triggerava o wakeword)
-                if score > THRESHOLD and (time.time() - last_trigger_time) > COOLDOWN:
-                    last_trigger_time = time.time()
-                    print(f"[WW] ✅ TRIGGER: score {score:.4f} > threshold {THRESHOLD}", flush=True)
+                # Cooldown check
+                if (time.time() - last_trigger_time) < COOLDOWN:
+                    continue
 
-                    # Kill TTS/audiobook para o usuário falar (lição do legado)
+                # VAD: detect speech onset
+                if not speaking:
+                    if rms > SPEECH_RMS:
+                        speaking = True
+                        speech_frames = [data]
+                        silence_start = None
+                        print(f"[WW] 🎤 Speech detected (RMS={rms:.0f})", flush=True)
+                    continue
+
+                # Currently speaking — accumulate frames
+                speech_frames.append(data)
+
+                # Check for silence
+                if rms < SILENCE_RMS:
+                    if silence_start is None:
+                        silence_start = time.time()
+                    elif time.time() - silence_start > 1.5:
+                        # End of speech — save WAV and process
+                        speaking = False
+                        last_trigger_time = time.time()
+                        print(f"[WW] ✅ Speech ended ({len(speech_frames)} chunks, {len(speech_frames)*CHUNK/RATE:.1f}s)", flush=True)
+
+                    # Kill TTS/audiobook para o usuário falar
                     if KILL_TTS:
                         for pat in ["paplay", "aplay", "enhanced_audiobook.py"]:
                             subprocess.run(["pkill", "-9", pat], stderr=subprocess.DEVNULL)
 
-                    update_status("listening", "Gravando...")
                     play_sound(BEEP_SOUND)
 
-                    # Captura com silence adaptativo: 40% drop do pico RMS por 1.0s
-                    frames = []
-                    silence_start = None
-                    record_start = time.time()
-                    max_rms_seen = rms
-
-                    while time.time() - record_start < MAX_RECORD:
-                        chunk_data = arecord_proc.stdout.read(CHUNK * 4)
-                        if not chunk_data:
-                            break
-                        frames.append(chunk_data)
-                        c_rms = np.sqrt(np.mean(np.frombuffer(chunk_data, dtype=np.int16).astype(np.float32)**2))
-                        max_rms_seen = max(max_rms_seen, c_rms)
-                        silence_threshold = max_rms_seen * SILENCE_DROP
-                        if c_rms < silence_threshold:
-                            if silence_start is None:
-                                silence_start = time.time()
-                            elif time.time() - silence_start > 1.0:
-                                break
-                        else:
-                            silence_start = None
-
+                    # Save the speech we already captured
                     timestamp = int(time.time())
                     temp_wav = f"/tmp/jarvis_cmd_{timestamp}.wav"
                     with wave.open(temp_wav, "wb") as wf:
                         wf.setnchannels(2)
                         wf.setsampwidth(2)
                         wf.setframerate(RATE)
-                        wf.writeframes(b"".join(frames))
-                    print(f"[WW] 📼 Capturado: {temp_wav} ({len(frames)} chunks)", flush=True)
+                        wf.writeframes(b"".join(speech_frames))
+                    print(f"[WW] 📼 Capturado: {temp_wav} ({len(speech_frames)} chunks, {len(speech_frames)*CHUNK/RATE:.1f}s)", flush=True)
+                    speech_frames = []
 
                     if BRAIN_CMD:
                         update_status("processing", "Pensando...")
