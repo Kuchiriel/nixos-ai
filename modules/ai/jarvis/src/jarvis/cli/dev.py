@@ -7,7 +7,7 @@ REPL onde o usuário conversa com o agente e o agente pode:
   - Editar/criar arquivos (str_replace, com old_str='' para criar)
   - Rodar testes, commitar e buscar na web via execute_shell
 
-Arquitetura (v2.1 — ultra-leve, 100% compatível com llama-server/GGUF):
+Arquitetura (v2.2 — UX + confiabilidade de edição):
   - Apenas 3 ferramentas primitivas nativas (read_file, str_replace,
     execute_shell) em vez de ~15 schemas JSON — corta ~2.800 tokens/turno
     de overhead de contexto.
@@ -15,23 +15,36 @@ Arquitetura (v2.1 — ultra-leve, 100% compatível com llama-server/GGUF):
     /chat/completions: sem `parallel_tool_calls`, sem `chat_template_kwargs`.
     Modelos "tiny" (<=4B) nem recebem o array `tools` — operam 100% via
     blocos de texto estilo Aider (SEARCH/REPLACE), zerando o overhead.
+    Modelos MoE grandes (ex: qwen3.5-30b-a3b) caem em "large" — o regex de
+    detecção ignora o sufixo "aXb" (ativos por token), olhando só o total.
   - Parser híbrido: tenta tool_calls nativas da API; se ausentes, faz
     fallback para blocos de texto (SEARCH/REPLACE, `>>> READ`, fenced
     shell, JSON solto, e o formato Hermes/Llama-3 `<function=...>
     <parameter=...>`) — cobre tanto modelos com function-calling robusto
     quanto SLMs locais que só seguem instrução em texto.
-
-    NOTA: essa escolha (texto > JSON tool-calling para modelos pequenos)
-    segue o próprio Aider, que não usa tool_calls JSON nativamente —
-    processa tudo via formatos de diff em texto plano, justamente para
-    evitar a inconsistência de function-calling em modelos <30B.
+  - str_replace com match em cascata (NOVO): se o old_str não bater
+    byte-a-byte, tenta um match normalizado (espaços/indentação) antes de
+    desistir — inspirado nas 4 estratégias de match do Aider. Modelos
+    pequenos raramente copiam whitespace com 100% de fidelidade; sem isso
+    a edição falhava e o modelo entrava em loop de retry.
+  - Loop de execução único (NOVO): _run_agent_loop() é chamado tanto pelo
+    REPL normal quanto pelo /architect quanto pelo --once. Antes, o
+    /architect só empilhava mensagens e nunca chamava o LLM de fato — o
+    "Executar? [Y/n]" não executava nada até o próximo input manual.
   - Repo map limitado a ~20 arquivos mais recentes (mtime), formatado como
     árvore compacta, com orçamento rígido de ~500 tokens.
   - Histórico da conversa é podado automaticamente (mantém system prompt +
-    últimas N mensagens) para evitar crescimento de contexto → latência
-    progressiva em sessões longas.
-  - /debug: loga o payload exato enviado à API e a resposta crua recebida,
-    para diagnosticar formatos de tool-call inesperados ou lentidão.
+    últimas N mensagens, sempre cortando numa fronteira 'user' segura)
+    para evitar crescimento de contexto → latência progressiva.
+  - /debug: loga o payload exato enviado à API e a resposta crua recebida.
+  - UI (NOVO): rich para saída (painéis, diff colorido, markdown, spinner)
+    e prompt_toolkit para entrada (multiline paste nativo — resolve a
+    fragilidade do polling manual de stdin — + histórico + autocomplete
+    de comandos /).
+
+Dependências além de Python stdlib: requests, rich, prompt_toolkit.
+No NixOS, todas as três estão em nixpkgs como pacotes Python puros:
+  python3Packages.requests, python3Packages.rich, python3Packages.prompt-toolkit
 
 Uso:
   jarvis dev                    # inicia REPL no CWD
@@ -44,21 +57,139 @@ Inspirado em: Aider, Claude Code, pi (earendil-works).
 
 from __future__ import annotations
 
+import difflib
 import json
 import os
 import re
-import readline  # noqa: F401 — ativa GNU readline p/ input(), habilitando o
-                  # bracketed-paste nativo do terminal: sem isso, input() lê
-                  # cru e cada \n DENTRO de um texto colado é tratado como um
-                  # Enter, disparando envio antes do usuário confirmar. Com
-                  # readline, o terminal diferencia paste de Enter real.
 import subprocess
+import sys
 import time
 import uuid
 from pathlib import Path
 from typing import Any
 
 import requests
+from prompt_toolkit import PromptSession
+from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.history import InMemoryHistory
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.prompt import Confirm
+from rich.rule import Rule
+from rich.syntax import Syntax
+from rich.table import Table
+from rich.text import Text
+from rich.theme import Theme
+
+
+# ---------------------------------------------------------------------------
+# UI — console rich, tema e sessão de input (prompt_toolkit)
+# ---------------------------------------------------------------------------
+
+_THEME = Theme({
+    "jarvis": "bold cyan",
+    "user": "bold green",
+    "tool": "yellow",
+    "tool.ok": "green",
+    "tool.error": "bold red",
+    "diff.add": "green",
+    "diff.del": "red3",
+    "dim": "grey58",
+    "path": "bold blue",
+})
+console = Console(theme=_THEME)
+
+_SLASH_COMMANDS = [
+    "/quit", "/status", "/clear", "/map", "/model",
+    "/recall", "/architect", "/debug", "/help",
+]
+
+
+def _make_prompt_session() -> PromptSession:
+    """Sessão de input com histórico, autosuggest e completar de comandos.
+
+    Substitui o antigo _read_user_input baseado em select.select + janela
+    de silêncio de 80ms: prompt_toolkit negocia bracketed-paste nativamente,
+    então colar texto multilinha chega como um único evento de paste (sem
+    submeter cada \\n como Enter) em qualquer terminal que suporte o
+    protocolo — sem heurística de timing frágil."""
+    return PromptSession(
+        history=InMemoryHistory(),
+        auto_suggest=AutoSuggestFromHistory(),
+        completer=WordCompleter(_SLASH_COMMANDS, sentence=True),
+        complete_while_typing=True,
+    )
+
+
+def _print_diff(diff_text: str | None) -> None:
+    if not diff_text:
+        return
+    body = Text()
+    for line in diff_text.splitlines():
+        if line.startswith("+") and not line.startswith("+++"):
+            body.append(line + "\n", style="diff.add")
+        elif line.startswith("-") and not line.startswith("---"):
+            body.append(line + "\n", style="diff.del")
+        elif line.startswith("@@"):
+            body.append(line + "\n", style="dim")
+        else:
+            body.append(line + "\n", style="dim")
+    console.print(Panel(body, border_style="dim", padding=(0, 1), expand=False))
+
+
+def _print_status(active_model: str, mode: str, messages: list[dict[str, Any]]) -> None:
+    try:
+        from jarvis.core.health_monitor import BackendHealthMonitor
+        cfg = _get_config()
+        monitor = BackendHealthMonitor(cfg.llm_base_url.replace("/v1", ""))
+        status = monitor.status_dict()
+    except Exception as e:
+        console.print(f"[tool.error]Erro ao consultar status: {e}[/]")
+        return
+
+    table = Table(show_header=False, box=None, padding=(0, 1))
+    table.add_row("Backend", f"{status['state']} ({status['latency_ms']}ms)")
+    table.add_row("Model", active_model)
+    table.add_row("Modo de ferramentas", mode)
+    table.add_row("Mensagens no histórico", str(len(messages)))
+    table.add_row("Uptime", f"{status['uptime_pct']}%")
+    console.print(Panel(table, title="Status", border_style="dim", title_align="left"))
+
+
+def _print_recall() -> None:
+    try:
+        from jarvis.core.memory import EpisodicMemory
+        cfg = _get_config()
+        mem = EpisodicMemory(cfg)
+        results = mem.recall("dev", top_k=3)
+    except Exception as e:
+        console.print(f"[tool.error]Erro: {e}[/]")
+        return
+    if not results:
+        console.print("[dim]Nenhuma memória encontrada.[/]")
+        return
+    for r in results:
+        console.print(f"  [dim][{r.get('kind', '?')}][/] {r.get('text', '')[:100]}")
+
+
+def _print_help() -> None:
+    rows = [
+        ("/quit", "sair"),
+        ("/clear", "limpar contexto"),
+        ("/status", "status do backend"),
+        ("/map", "atualizar repo map + memória"),
+        ("/model", "ver modelo atual"),
+        ("/recall", "buscar memória episódica"),
+        ("/architect", "modo architect (plan + execute)"),
+        ("/debug", "mostra request/response cru da API"),
+        ("/help", "esta ajuda"),
+    ]
+    table = Table(show_header=False, box=None, padding=(0, 1))
+    for cmd, desc in rows:
+        table.add_row(f"[tool]{cmd}[/]", desc)
+    console.print(Panel(table, title="Comandos", border_style="dim", title_align="left"))
 
 
 # ---------------------------------------------------------------------------
@@ -316,10 +447,14 @@ def _call_llm(
         payload["tool_choice"] = "auto"
 
     if debug:
-        print(f"\n{'─' * 60}")
-        print(f"📤 REQUEST → {cfg.llm_base_url.rstrip('/')}/chat/completions")
-        print(f"   ({len(messages)} mensagens, ~{sum(len(str(m)) for m in messages) // 4} tokens estimados)")
-        print(json.dumps(payload, ensure_ascii=False, indent=2)[:4000])
+        approx_tokens = sum(len(str(m)) for m in messages) // 4
+        console.print(Rule(
+            f"📤 REQUEST → {cfg.llm_base_url.rstrip('/')}/chat/completions "
+            f"({len(messages)} msgs, ~{approx_tokens} tok)",
+            style="dim",
+        ))
+        body = json.dumps(payload, ensure_ascii=False, indent=2)[:4000]
+        console.print(Syntax(body, "json", theme="ansi_dark", word_wrap=True))
 
     t0 = time.monotonic()
     resp = requests.post(
@@ -332,9 +467,9 @@ def _call_llm(
     data = resp.json()
 
     if debug:
-        print(f"📥 RESPONSE ({elapsed:.2f}s)")
-        print(json.dumps(data, ensure_ascii=False, indent=2)[:4000])
-        print(f"{'─' * 60}\n")
+        console.print(Rule(f"📥 RESPONSE ({elapsed:.2f}s)", style="dim"))
+        body = json.dumps(data, ensure_ascii=False, indent=2)[:4000]
+        console.print(Syntax(body, "json", theme="ansi_dark", word_wrap=True))
 
     return data
 
@@ -406,41 +541,98 @@ def _tool_read_file(
     )
 
 
-def _tool_str_replace(path: str, old_str: str, new_str: str) -> str:
+def _find_fuzzy_match(content: str, old_str: str) -> str | None:
+    """Tenta localizar old_str no arquivo mesmo com pequenas diferenças de
+    espaçamento — usado quando o match exato falha. Modelos pequenos
+    quantizados raramente copiam whitespace/indentação com 100% de
+    fidelidade ao citar um trecho do read_file; sem essa camada, a edição
+    falhava, o modelo tentava de novo e às vezes entrava em loop.
+
+    Estratégia (inspirada nas 4 camadas de match do Aider, reduzida a 1
+    para manter o código simples): normaliza espaços/tabs internos de cada
+    linha e compara em janelas deslizantes do mesmo tamanho. Só retorna um
+    resultado se houver exatamente UM trecho do arquivo real que bate com
+    a versão normalizada — ambiguidade (0 ou 2+ candidatos) retorna None,
+    igual ao comportamento de "não único" do match exato.
+    """
+    def norm_line(line: str) -> str:
+        return re.sub(r"[ \t]+", " ", line.strip())
+
+    old_lines = [norm_line(line) for line in old_str.splitlines()]
+    if not old_lines:
+        return None
+
+    content_lines = content.splitlines(keepends=True)
+    n = len(old_lines)
+    if n == 0 or n > len(content_lines):
+        return None
+
+    candidates: list[str] = []
+    for i in range(len(content_lines) - n + 1):
+        window = content_lines[i:i + n]
+        if [norm_line(w) for w in window] == old_lines:
+            candidates.append("".join(window))
+
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def _make_diff(path: str, old: str, new: str) -> str:
+    return "\n".join(difflib.unified_diff(
+        old.splitlines(), new.splitlines(),
+        fromfile=path, tofile=path, lineterm="", n=1,
+    ))
+
+
+def _tool_str_replace(path: str, old_str: str, new_str: str) -> tuple[str, str | None]:
+    """Retorna (mensagem_para_o_modelo, diff_para_exibir_ou_None)."""
     if not path:
-        return "ERROR: empty path"
+        return "ERROR: empty path", None
     fp = Path(path)
 
     if old_str == "":
         if fp.exists():
-            return f"ERROR: file already exists — old_str='' só cria arquivos novos: {path}"
+            return f"ERROR: file already exists — old_str='' só cria arquivos novos: {path}", None
         try:
             fp.parent.mkdir(parents=True, exist_ok=True)
             fp.write_text(new_str, encoding="utf-8")
-            return f"OK: arquivo criado ({len(new_str)} bytes) — {path}"
         except Exception as e:
-            return f"ERROR: {e}"
+            return f"ERROR: {e}", None
+        diff = _make_diff(path, "", new_str)
+        return f"OK: arquivo criado ({len(new_str)} bytes) — {path}", diff
 
     if not fp.exists():
-        return f"ERROR: file not found: {path} (use old_str='' para criar)"
+        return f"ERROR: file not found: {path} (use old_str='' para criar)", None
 
     try:
         content = fp.read_text(encoding="utf-8", errors="replace")
     except Exception as e:
-        return f"ERROR: {e}"
+        return f"ERROR: {e}", None
 
     count = content.count(old_str)
-    if count == 0:
-        return "ERROR: old_str não encontrado. Faça read_file novamente e copie o texto EXATO."
-    if count > 1:
-        return f"ERROR: old_str aparece {count}x — não é único. Adicione mais contexto ao redor."
+    matched = old_str
+    used_fuzzy = False
 
-    new_content = content.replace(old_str, new_str, 1)
+    if count == 0:
+        fuzzy = _find_fuzzy_match(content, old_str)
+        if fuzzy is None:
+            return (
+                "ERROR: old_str não encontrado (nem com match aproximado por espaçamento). "
+                "Faça read_file novamente e copie o texto EXATO."
+            ), None
+        matched = fuzzy
+        used_fuzzy = True
+    elif count > 1:
+        return f"ERROR: old_str aparece {count}x — não é único. Adicione mais contexto ao redor.", None
+
+    new_content = content.replace(matched, new_str, 1)
     try:
         fp.write_text(new_content, encoding="utf-8")
     except Exception as e:
-        return f"ERROR: {e}"
-    return f"OK: 1 substituição em {path} ({len(new_content)} bytes)"
+        return f"ERROR: {e}", None
+
+    diff = _make_diff(path, matched, new_str)
+    note = " (via match aproximado — espaçamento diferia)" if used_fuzzy else ""
+    return f"OK: 1 substituição em {path}{note} ({len(new_content)} bytes)", diff
 
 
 def _tool_execute_shell(cmd: str, approve: bool = False) -> str:
@@ -457,13 +649,12 @@ def _tool_execute_shell(cmd: str, approve: bool = False) -> str:
     if not command_allowed(cmd):
         if not approve:
             return f"ERROR: command not allowed: {cmd} (use --approve)"
-        print(f"  ⚠  Comando: {cmd}")
+        console.print(f"  [tool.error]⚠  Comando:[/] {cmd}")
         try:
-            ans = input("  Permitir? [y/N] ").strip().lower()
-        except EOFError:
+            if not Confirm.ask("  Permitir?", default=False):
+                return "ERROR: command denied by user"
+        except (EOFError, KeyboardInterrupt):
             return "ERROR: approval denied (EOF)"
-        if ans not in ("y", "yes", "s", "sim"):
-            return "ERROR: command denied by user"
 
     try:
         res = subprocess.run(
@@ -479,14 +670,17 @@ def _tool_execute_shell(cmd: str, approve: bool = False) -> str:
         return f"ERROR: {e}"
 
 
-def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -> str:
-    """Dispatcher único — só existem 3 ferramentas possíveis."""
+def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -> tuple[str, str | None]:
+    """Dispatcher único — só existem 3 ferramentas possíveis. Retorna
+    (saída_texto, diff_ou_None) — diff só é preenchido por str_replace, e é
+    usado apenas para exibição na UI (o modelo continua recebendo só a
+    mensagem de saída, sem inflar o histórico com o diff)."""
     if name == "read_file":
         return _tool_read_file(
             args.get("path", ""),
             args.get("start_line"),
             args.get("end_line"),
-        )
+        ), None
     if name == "str_replace":
         return _tool_str_replace(
             args.get("path", ""),
@@ -494,8 +688,8 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
             args.get("new_str", ""),
         )
     if name == "execute_shell":
-        return _tool_execute_shell(args.get("cmd", ""), approve)
-    return f"ERROR: unknown tool '{name}' (disponíveis: read_file, str_replace, execute_shell)"
+        return _tool_execute_shell(args.get("cmd", ""), approve), None
+    return f"ERROR: unknown tool '{name}' (disponíveis: read_file, str_replace, execute_shell)", None
 
 
 def _get_tools() -> list[dict[str, Any]]:
@@ -702,6 +896,92 @@ def _to_tool_calls(actions: list[dict[str, Any]] | None) -> list[dict[str, Any]]
 
 
 # ---------------------------------------------------------------------------
+# Loop de execução de agente — ÚNICO em todo o projeto (NOVO em v2.2)
+#
+# Antes havia 3 cópias quase idênticas desse loop: no REPL principal, no
+# handler de /architect (que na verdade nunca chamava o LLM — só empilhava
+# mensagens e voltava pro prompt) e em dev_once. Consolidar num só lugar
+# corrige o bug do /architect por construção e garante que qualquer fix
+# futuro (ex: uma nova estratégia de match) vale para os três fluxos.
+# ---------------------------------------------------------------------------
+
+def _run_agent_loop(
+    messages: list[dict[str, Any]],
+    tools: list[dict],
+    profile: dict,
+    approve: bool = False,
+    debug: bool = False,
+    max_turns: int = 16,
+) -> bool:
+    """Roda turnos até o modelo responder só com texto (sucesso) ou até
+    max_turns / erro de LLM (falha). Muta `messages` in-place."""
+    for turn in range(max_turns):
+        with console.status(f"[jarvis]pensando…[/] (turno {turn + 1}/{max_turns})", spinner="dots"):
+            try:
+                data = _call_llm(messages, tools, profile, debug=debug)
+            except Exception as e:
+                console.print(f"[tool.error]❌ Erro LLM: {e}[/]")
+                return False
+
+        message = data["choices"][0]["message"]
+        content = message.get("content") or ""
+        tool_calls = message.get("tool_calls")
+
+        used_text_fallback = False
+        if not tool_calls and content:
+            tool_calls = _to_tool_calls(_parse_text_actions(content))
+            used_text_fallback = tool_calls is not None
+
+        assistant_msg: dict[str, Any] = {"role": "assistant", "content": content or None}
+        if tool_calls:
+            assistant_msg["tool_calls"] = tool_calls
+        messages.append(assistant_msg)
+
+        if not tool_calls:
+            if content:
+                console.print(Panel(
+                    Markdown(content), title="🤖 JARVIS", title_align="left", border_style="jarvis",
+                ))
+            return True
+
+        if used_text_fallback:
+            console.print("[dim]  (ação recuperada via parser de texto)[/]")
+
+        for tc in tool_calls:
+            func_name = tc["function"]["name"]
+            try:
+                args = json.loads(tc["function"]["arguments"])
+            except json.JSONDecodeError:
+                args = {}
+
+            preview_arg = str(args.get("path", args.get("cmd", "")))[:60]
+            console.print(f"  [tool]🔧 {func_name}[/]([path]{preview_arg}[/])")
+
+            output, diff = _execute_tool_call(func_name, args, approve)
+
+            is_error = output.startswith("ERROR")
+            style = "tool.error" if is_error else "tool.ok"
+            icon = "⚠️ " if is_error else "✅"
+            preview = output if len(output) <= 160 else f"{output[:160]}…"
+            console.print(f"  [{style}]{icon} {preview}[/]")
+            if diff:
+                _print_diff(diff)
+
+            tool_call_id = tc.get("id") or f"call_fallback_{uuid.uuid4().hex[:6]}"
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": output[:5000],
+            })
+
+    console.print(
+        f"[tool.error]⚠️  Máximo de {max_turns} turnos atingido nesta tarefa[/] — "
+        "peça pra continuar ou seja mais específico no próximo pedido."
+    )
+    return False
+
+
+# ---------------------------------------------------------------------------
 # REPL principal
 # ---------------------------------------------------------------------------
 
@@ -712,39 +992,40 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
 
     profile = _detect_profile()
     tools = _get_tools() if profile["native_tools"] else []
-
     mode = "function-calling nativo" if profile["native_tools"] else "blocos de texto (Aider-style)"
-    print(f"🤖 JARVIS Dev — SLM: {profile['name']} (max_tokens={profile['max_tokens']})")
-    print(f"📁 Projeto: {os.getcwd()}")
-    print(f"🔧 Ferramentas: read_file, str_replace, execute_shell — modo: {mode}")
-    print("   Comandos: /quit, /status, /clear, /map, /model, /recall, /architect, /debug, /help\n")
+
+    banner = Table.grid(padding=(0, 1))
+    banner.add_row("🤖", f"[jarvis]JARVIS Dev[/] — {profile['name']} (max_tokens={profile['max_tokens']})")
+    banner.add_row("📁", os.getcwd())
+    banner.add_row("🔧", f"read_file · str_replace · execute_shell — [dim]{mode}[/]")
+    console.print(Panel(banner, border_style="jarvis", padding=(0, 1)))
+    console.print("[dim]" + "  ".join(_SLASH_COMMANDS) + "[/]\n")
 
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context()
     system_prompt = _maybe_disable_thinking(
         SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
     )
-
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": system_prompt},
-    ]
+    messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
 
     active_model = profile["name"]
     debug_mode = False
+    session = _make_prompt_session()
 
     while True:
         try:
-            user_input = input("👤 Você: ").strip()
+            user_input = session.prompt("👤 Você: ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\n👋 Até logo!")
+            console.print("\n[jarvis]👋 Até logo![/]")
             break
 
         if not user_input:
             continue
 
         if user_input == "/quit":
-            print("👋 Até logo!")
+            console.print("[jarvis]👋 Até logo![/]")
             break
+
         if user_input == "/clear":
             repo_map = _build_repo_map(os.getcwd())
             memory_ctx = _build_memory_context()
@@ -752,23 +1033,18 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
                 SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
             )
             messages = [{"role": "system", "content": system_prompt}]
-            print("🗑️  Contexto limpo.")
+            console.print("[dim]🗑️  Contexto limpo.[/]")
             continue
+
         if user_input == "/debug":
             debug_mode = not debug_mode
-            print(f"🐞 Debug {'ATIVADO' if debug_mode else 'desativado'} — mostra request/response cru da API")
+            console.print(f"[dim]🐞 Debug {'ATIVADO' if debug_mode else 'desativado'} — mostra request/response cru da API[/]")
             continue
+
         if user_input == "/status":
-            from jarvis.core.health_monitor import BackendHealthMonitor
-            cfg = _get_config()
-            monitor = BackendHealthMonitor(cfg.llm_base_url.replace("/v1", ""))
-            status = monitor.status_dict()
-            print(f"  Backend: {status['state']} ({status['latency_ms']}ms)")
-            print(f"  Model: {active_model}")
-            print(f"  Modo de ferramentas: {mode}")
-            print(f"  Mensagens no histórico: {len(messages)}")
-            print(f"  Uptime: {status['uptime_pct']}%")
+            _print_status(active_model, mode, messages)
             continue
+
         if user_input == "/map":
             repo_map = _build_repo_map(os.getcwd())
             memory_ctx = _build_memory_context()
@@ -776,113 +1052,49 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
                 SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
             )
             messages[0] = {"role": "system", "content": system_prompt}
-            print("🗺️  Repo map + memória atualizados.")
+            console.print("[dim]🗺️  Repo map + memória atualizados.[/]")
             continue
+
         if user_input == "/model":
-            print(f"  Modelo atual: {active_model}")
-            print(f"  Modo de ferramentas: {mode}")
-            print("  Para trocar, edite models.nix e faça rebuild")
+            console.print(f"[dim]Modelo atual: {active_model} — modo: {mode}[/]")
+            console.print("[dim]Para trocar, edite models.nix e faça rebuild[/]")
             continue
+
         if user_input == "/recall":
-            try:
-                from jarvis.core.memory import EpisodicMemory
-                cfg = _get_config()
-                mem = EpisodicMemory(cfg)
-                results = mem.recall(user_input if len(user_input) > 8 else "dev", top_k=3)
-                if results:
-                    for r in results:
-                        print(f"  [{r.get('kind', '?')}] {r.get('text', '')[:100]}")
-                else:
-                    print("  Nenhuma memória encontrada.")
-            except Exception as e:
-                print(f"  Erro: {e}")
+            _print_recall()
             continue
+
         if user_input == "/help":
-            print("  /quit      — sair")
-            print("  /clear     — limpar contexto")
-            print("  /status    — status do backend")
-            print("  /map       — atualizar repo map + memória")
-            print("  /model     — ver modelo atual")
-            print("  /recall    — buscar memória episódica")
-            print("  /architect — modo architect (plan + execute)")
-            print("  /debug     — mostra request/response cru da API")
-            print("  /help      — esta ajuda")
+            _print_help()
             continue
+
         if user_input == "/architect":
-            task_input = input("📋 Tarefa para architect: ").strip()
+            task_input = session.prompt("📋 Tarefa para architect: ").strip()
             if task_input:
                 try:
                     plan = _architect_plan(task_input, profile, tools, debug_mode)
                     if plan:
-                        print(f"📋 Plano:\n{plan}")
-                        exec_input = input("\nExecutar? [Y/n] ").strip().lower()
+                        console.print(Panel(plan, title="📋 Plano", border_style="jarvis", title_align="left"))
+                        exec_input = session.prompt("Executar? [Y/n] ").strip().lower()
                         if exec_input != "n":
                             messages.append({"role": "user", "content": task_input})
                             messages.append({"role": "assistant", "content": f"Plano: {plan}"})
                             messages.append({"role": "user", "content": "Execute este plano. Use as ferramentas disponíveis."})
+                            messages = _trim_messages(messages)
+                            # FIX: antes o /architect empilhava as mensagens e
+                            # voltava pro prompt sem nunca chamar o LLM — o
+                            # plano só "executava" se o usuário digitasse
+                            # outra coisa depois. Agora roda de fato aqui.
+                            _run_agent_loop(messages, tools, profile, approve, debug_mode)
                     else:
-                        print("⚠️  Não foi possível gerar plano.")
+                        console.print("[tool.error]⚠️  Não foi possível gerar plano.[/]")
                 except Exception as e:
-                    print(f"❌ Erro: {e}")
+                    console.print(f"[tool.error]❌ Erro: {e}[/]")
             continue
 
         messages.append({"role": "user", "content": user_input})
         messages = _trim_messages(messages)
-
-        max_turns = 16
-        for turn in range(max_turns):
-            print(f"  🤔 Pensando... (turno {turn + 1})", end="", flush=True)
-
-            try:
-                data = _call_llm(messages, tools, profile, debug=debug_mode)
-            except Exception as e:
-                print(f"\n  ❌ Erro LLM: {e}")
-                break
-
-            message = data["choices"][0]["message"]
-            content = message.get("content") or ""
-            tool_calls = message.get("tool_calls")
-
-            if not tool_calls and content:
-                tool_calls = _to_tool_calls(_parse_text_actions(content))
-                print(" (recuperado via parser de texto)" if tool_calls else "")
-            else:
-                print()
-
-            assistant_msg: dict[str, Any] = {"role": "assistant", "content": content or None}
-            if tool_calls:
-                assistant_msg["tool_calls"] = tool_calls
-            messages.append(assistant_msg)
-
-            if not tool_calls:
-                if content:
-                    print(f"🤖 JARVIS: {content}")
-                break
-
-            for tc in tool_calls:
-                func_name = tc["function"]["name"]
-                try:
-                    args = json.loads(tc["function"]["arguments"])
-                except json.JSONDecodeError:
-                    args = {}
-
-                preview_arg = str(args.get("path", args.get("cmd", "")))[:50]
-                print(f"  🔧 {func_name}({preview_arg})")
-                output = _execute_tool_call(func_name, args, approve)
-
-                icon = "⚠️ " if output.startswith("ERROR") else "✅"
-                preview = output if len(output) <= 120 else f"{output[:120]}…"
-                print(f"  {icon} {preview}")
-
-                tool_call_id = tc.get("id") or "call_fallback_0"
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call_id,
-                    "content": output[:5000],
-                })
-        else:
-            print(f"  ⚠️  Máximo de {max_turns} turnos atingido nesta tarefa — "
-                  "peça pra continuar ou seja mais específico no próximo pedido.")
+        _run_agent_loop(messages, tools, profile, approve, debug_mode)
 
 
 def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) -> str | None:
@@ -893,7 +1105,8 @@ def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) 
         {"role": "user", "content": task},
     ]
     try:
-        data = _call_llm(plan_messages, tools, profile, debug=debug)
+        with console.status("[jarvis]lendo arquivos para o plano…[/]", spinner="dots"):
+            data = _call_llm(plan_messages, tools, profile, debug=debug)
         msg = data["choices"][0]["message"]
         content = msg.get("content") or ""
         tool_calls = msg.get("tool_calls") or _to_tool_calls(_parse_text_actions(content))
@@ -907,8 +1120,8 @@ def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) 
                     a = json.loads(tc["function"]["arguments"])
                 except json.JSONDecodeError:
                     a = {}
-                result = _execute_tool_call(fn, a)
-                tool_id = tc.get("id") or "call_plan_0"
+                result, _diff = _execute_tool_call(fn, a)
+                tool_id = tc.get("id") or f"call_plan_{uuid.uuid4().hex[:6]}"
                 plan_messages.append({"role": "assistant", "content": None, "tool_calls": [tc]})
                 plan_messages.append({
                     "role": "tool",
@@ -917,7 +1130,8 @@ def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) 
                 })
 
         plan_messages.append({"role": "user", "content": "Agora retorne o plano em JSON, campo 'plan'."})
-        data2 = _call_llm(plan_messages, tools, profile, debug=debug)
+        with console.status("[jarvis]montando o plano…[/]", spinner="dots"):
+            data2 = _call_llm(plan_messages, tools, profile, debug=debug)
         plan_content = data2["choices"][0]["message"].get("content") or ""
         try:
             parsed = json.loads(plan_content)
@@ -927,7 +1141,7 @@ def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) 
             pass
         return plan_content[:500]
     except Exception as e:
-        print(f"⚠️  Erro no plano: {e}")
+        console.print(f"[tool.error]⚠️  Erro no plano: {e}[/]")
         return None
 
 
@@ -939,8 +1153,10 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
     profile = _detect_profile()
     tools = _get_tools() if profile["native_tools"] else []
 
-    print(f"🤖 JARVIS Dev — {profile['name']}")
-    print(f"📋 Tarefa: {task}\n")
+    header = Table.grid(padding=(0, 1))
+    header.add_row("🤖", f"[jarvis]JARVIS Dev[/] — {profile['name']}")
+    header.add_row("📋", task)
+    console.print(Panel(header, border_style="jarvis", padding=(0, 1)))
 
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context(task)
@@ -952,47 +1168,21 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
         {"role": "user", "content": task},
     ]
 
-    for _ in range(10):
-        try:
-            data = _call_llm(messages, tools, profile, debug=debug)
-        except Exception as e:
-            print(f"❌ Erro LLM: {e}")
-            return 1
+    ok = _run_agent_loop(messages, tools, profile, approve, debug, max_turns=10)
+    return 0 if ok else 1
 
-        message = data["choices"][0]["message"]
-        content = message.get("content") or ""
-        tool_calls = message.get("tool_calls")
 
-        if not tool_calls and content:
-            tool_calls = _to_tool_calls(_parse_text_actions(content))
+if __name__ == "__main__":
+    import argparse
 
-        assistant_msg: dict[str, Any] = {"role": "assistant", "content": content or None}
-        if tool_calls:
-            assistant_msg["tool_calls"] = tool_calls
-        messages.append(assistant_msg)
+    parser = argparse.ArgumentParser(description="JARVIS Dev — CLI de desenvolvimento local")
+    parser.add_argument("--project", type=str, default=None, help="Diretório do projeto")
+    parser.add_argument("--approve", action="store_true", help="Ativa aprovação para comandos com efeito")
+    parser.add_argument("--once", type=str, default=None, help="Executa uma tarefa única e sai")
+    parser.add_argument("--debug", action="store_true", help="Modo debug (payloads crus da API)")
+    ns = parser.parse_args()
 
-        if not tool_calls:
-            if content:
-                print(f"🤖 {content}")
-            return 0
-
-        for tc in tool_calls:
-            func_name = tc["function"]["name"]
-            try:
-                args = json.loads(tc["function"]["arguments"])
-            except json.JSONDecodeError:
-                args = {}
-
-            print(f"  🔧 {func_name}({str(args)[:60]})")
-            output = _execute_tool_call(func_name, args, approve)
-            print(f"  → {output[:200]}")
-
-            tool_call_id = tc.get("id") or "call_fallback_0"
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call_id,
-                "content": output[:5000],
-            })
-
-    print("⚠️  Máximo de turnos atingido")
-    return 1
+    if ns.once:
+        sys.exit(dev_once(ns.once, project_root=ns.project, approve=ns.approve, debug=ns.debug))
+    else:
+        dev_repl(project_root=ns.project, approve=ns.approve)
