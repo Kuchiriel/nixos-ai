@@ -8,14 +8,13 @@ let
   # Centraliza arquivo do modelo, threads, ctx, ubatch, GPU layers, KV cache,
   # MoE flags e scheduler por cenário (vm = lab CPU, host = bare metal GPU).
   prof = pkgs.aiModels.profiles.${profileName};
-  # Instância local de pkgs permitindo pacotes unfree especificamente para o CUDA
-  cudaPkgs = import pkgs.path {
-    system = pkgs.system;
-    config.allowUnfree = true;
-  };
 
-  # Compila o llama-cpp com suporte a CUDA forçado
-  llamaCppPkg = cudaPkgs.llama-cpp.override { cudaSupport = true; };
+  # Compila o llama-cpp com suporte a CUDA forçado.
+  # Usa o `pkgs` já recebido pelo módulo (herda allowUnfree + overlay
+  # definidos centralmente no flake.nix) — NÃO reimportar pkgs.path aqui,
+  # isso cria uma segunda instância de nixpkgs isolada que perde overlays
+  # e flags de otimização de CPU, degradando o TPS no offload MoE (n-cpu-moe).
+  llamaCppPkg = pkgs.llama-cpp.override { cudaSupport = true; };
 in
 {
   options.services = {
