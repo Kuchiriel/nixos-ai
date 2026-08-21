@@ -59,6 +59,7 @@ in
     jq
     htop
     ethtool
+    xclip
     cloudflare-warp
     # Pacote do JARVIS via overlay
     jarvis

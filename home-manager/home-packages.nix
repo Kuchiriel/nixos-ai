@@ -22,6 +22,7 @@
     nerd-fonts.symbols-only
 
     # Core CLI utils
+    aider-chat
     bc
     bottom
     brightnessctl
