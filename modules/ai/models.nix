@@ -185,7 +185,7 @@ in
       model = "llm-host";
       mmproj = "llm-host-mmproj";  # vision na GPU (denso, ~861MB BF16)
       threads = 12;  # hyperthreading ativo (testado: melhor que t=10 ou t=6)
-      ctxSize = 4096;           # 4K: contexto menor = estável, menos KV cache
+      ctxSize = 32768;           # 4K: contexto menor = estável, menos KV cache
       batchSize = 512;          # -b 512 iguala -ub 512 (evita pico de memória no prefill)
       ubatch = 512;
       gpuLayers = 99;           # 99 = TODAS as camadas de atenção na GPU
