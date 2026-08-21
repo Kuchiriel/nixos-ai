@@ -51,7 +51,7 @@
     };
   };
 
-# ══════════════════════════════════════════════════════════════
+  # ══════════════════════════════════════════════════════════════
   # JARVIS STT — Download declarativo do modelo faster-whisper-tiny.en
   # ══════════════════════════════════════════════════════════════
   home.file.".local/share/jarvis/voice/models--Systran--faster-whisper-tiny.en/snapshots/main/model.bin".source = pkgs.fetchurl {
@@ -88,17 +88,17 @@
     no-show-model-warnings: true
     no-check-model-accepts-settings: true
 
-    # Repo map: estendido para permitir busca e leitura autônoma sem pedir anexos
-    map-tokens: 2048
+    # Repo map: mantido enxuto em 512 tokens para acelerar o prefill no llama.cpp
+    map-tokens: 512
     map-refresh: auto
   '';
 
-  # 2. Metadata — limites de contexto e custos
+  # 2. Metadata — limites de contexto e custos (com margem para raciocínio)
   home.file.".aider.model.metadata.json".text = ''
     {
       "openai/qwen3-35b-a3b": {
         "max_input_tokens": 131072,
-        "max_output_tokens": 4096,
+        "max_output_tokens": 8192,
         "input_cost_per_token": 0.0,
         "output_cost_per_token": 0.0,
         "litellm_provider": "openai",
@@ -125,20 +125,21 @@
       # Examples: no system prompt (economiza tokens)
       examples_as_sys_msg: true
 
-      # Thinking: desativa para evitar loops de overthinking do Qwen local
-      reasoning_tag: null
+      # Thinking: captura e exibe a tag de raciocínio do modelo
+      reasoning_tag: think
 
-      # System prompt: instrução estrita de autonomia e busca
+      # System prompt: força concisão no raciocínio e execução obrigatória do código
       system_prompt_prefix: >-
         You are an autonomous execution coding agent.
         You have direct access to the repo map. NEVER ask the user to manually attach, paste, or inspect files.
-        Find files autonomously through the repo map, read them, generate SEARCH/REPLACE blocks, and execute terminal commands directly.
-        Do not output thinking, reasoning, or manual step-by-step instructions for the user. Execute everything yourself.
+        Keep your reasoning inside <think> extremely brief and concise (max 3-4 sentences).
+        You MUST focus your token budget on outputting the SEARCH/REPLACE diff blocks and terminal commands.
+        NEVER exhaust your turn in thinking without writing the actual code edits.
 
       # Parâmetros do modelo
       extra_params:
-        max_tokens: 4096
-        temperature: 0.1
+        max_tokens: 8192
+        temperature: 0.2
   '';
 
   services.jarvis-wakeword = {
