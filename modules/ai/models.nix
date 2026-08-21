@@ -208,7 +208,7 @@ in
             "--no-warmup"                    # mantido: melhora both prefill e decode
             "--prio" "2"                     # mantido: prioridade high para decode
             "--prio-batch" "3"               # mantido: real-time priority para batch/prefill
-            "-cram" "16384"                  # testando: 16GB cache RAM para 128K ctx
+            "--spec-type" "ngram-simple"     # testando: speculative decoding sem draft model
        ];
 
         user = "root";
