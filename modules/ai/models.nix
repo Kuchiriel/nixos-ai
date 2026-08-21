@@ -198,7 +198,7 @@ in
         kvCache = "-fa on -ctk q4_0 -ctv q4_0";         
 
         # Sintaxe estrita e padrão para a execução de MoE do Qwen
-        moeFlags = "--n-cpu-moe 45 --split-mode none --poll 50 --poll-batch 50";
+        moeFlags = "--n-cpu-moe 60 --split-mode none --poll 50 --poll-batch 50";
 
         # Flags legítimas extraídas diretamente do seu manual do llama-server-help
         extraArgs = [
