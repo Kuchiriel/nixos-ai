@@ -71,10 +71,14 @@
     openai-api-key: "sk-dummy"
     model: "openai/qwen3-35b-a3b"
 
+    architect: true
+
     edit-format: diff
     yes-always: true
     auto-commits: true
     dirty-commits: true
+
+    subtree-only: true
 
     no-stream: true
     no-cache-prompts: true
@@ -105,19 +109,18 @@
     - name: openai/qwen3-35b-a3b
       edit_format: diff
       use_repo_map: true
-      lazy: false
+      lazy: yes
       reminder: sys
       examples_as_sys_msg: true
 
-      # O Aider oculta e formata a tag de pensamento
-      reasoning_tag: think
+      # DESATIVADO: Força o Qwen a responder direto no formato de ação sem rascunho
+      reasoning_tag: null
 
-      # Injunção direta no sistema: rascunho curto, prioridade total na emissão das alterações
-      system_prompt_prefix: >-
-        You are an autonomous senior coding agent.
-        Keep your internal reasoning inside <think> tags strictly brief (3 to 4 sentences maximum).
-        You MUST reserve 90% of your response for generating the actual SEARCH/REPLACE diff blocks and terminal commands.
-        NEVER exhaust your response in thinking without emitting the required code edits.
+     system_prompt_prefix: >-
+        You are an autonomous execution coding agent.
+        Execute edits immediately using SEARCH/REPLACE blocks or execute shell commands directly.
+        Do NOT write explanations, instructions, options, or conversational responses.
+        Do NOT ask the user to run commands. Action only.
 
       extra_params:
         max_tokens: 8192
