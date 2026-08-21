@@ -121,7 +121,25 @@ let
             pass
 
 
+    def kill_orphan_pw_record():
+        """Mate processos pw-record órfãos (de runs anteriores)."""
+        try:
+            import signal
+            my_pid = os.getpid()
+            for line in subprocess.check_output(["pgrep", "-f", "pw-record"], text=True).splitlines():
+                pid = int(line.strip())
+                if pid != my_pid:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                        print(f"[WW] Killed orphan pw-record PID {pid}", flush=True)
+                    except OSError:
+                        pass
+        except Exception:
+            pass
+
+
     def main():
+        kill_orphan_pw_record()
         oww = Model(
             wakeword_model_paths=[WAKEWORD_MODEL],
             melspec_model_path=MELSPEC_MODEL,
@@ -243,7 +261,7 @@ let
                             else:
                                 result = subprocess.run(
                                     BRAIN_CMD + [temp_wav],
-                                    timeout=60,
+                                    timeout=30,
                                     capture_output=True, text=True,
                                 )
                                 if result.returncode != 0:
@@ -254,18 +272,25 @@ let
                                     print(f"[WW] ✅ brain OK: {(result.stdout or "")[:100]}", flush=True)
                                     update_status("done", "Concluído")
                         except subprocess.TimeoutExpired:
-                            print("[WW] ⏰ brain timeout (60s) — LLM ou TTS travou", flush=True)
-                            update_status("error", "Timeout: LLM/TTS nao respondeu")
+                            print("[WW] ⏰ brain timeout (30s) — STT/LLM/TTS travou", flush=True)
+                            update_status("error", "Timeout: pipeline nao respondeu")
                         except Exception as e:
                             print(f"[WW] ❌ brain error: {str(e)[:100]}", flush=True)
                             update_status("error", f"Exceção: {str(e)[:60]}")
 
-                    # Reset: restart arecord e recarrega modelo (limpa estado do trigger)
-                    arecord_proc.terminate()
-                    time.sleep(1.0)
+                    # Reset: kill agressivo do pw-record (PipeWire segura o processo)
+                    try:
+                        arecord_proc.kill()
+                    except Exception:
+                        pass
+                    try:
+                        arecord_proc.wait(timeout=3)
+                    except Exception:
+                        pass
+                    time.sleep(0.5)
                     update_status("idle", "Aguardando...")
                     arecord_proc = start_arecord()
-                    print(f"[WW] arecord restarted PID: {arecord_proc.pid}", flush=True)
+                    print(f"[WW] pw-record restarted PID: {arecord_proc.pid}", flush=True)
             except Exception as e:
                 print(f"[WW] ERROR: {str(e)[:100]}", flush=True)
                 time.sleep(0.1)
@@ -343,6 +368,13 @@ in
     # Cria os symlinks dos modelos declarativos (store → ~/.local/share)
     home.activation.jarvisModels = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       run ${modelsLink}/lib/link-models.sh
+      # Pré-baixa modelo STT (tiny.en ~75MB) — evita timeout na primeira ativação
+      STT_DIR="$HOME/.local/share/jarvis/voice"
+      if [ ! -f "$STT_DIR/tiny.en/model.bin" ]; then
+        mkdir -p "$STT_DIR"
+        echo "[jarvis] Baixando modelo STT tiny.en..."
+        python3 -c "from faster_whisper import WhisperModel; WhisperModel('tiny.en', device='cpu', compute_type='int8', download_root='$STT_DIR')" 2>/dev/null || true
+      fi
     '';
 
     systemd.user.services.jarvis-wakeword = {

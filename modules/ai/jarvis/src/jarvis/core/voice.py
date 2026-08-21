@@ -26,7 +26,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 MODEL_DIR_DEFAULT = "~/.local/share/jarvis/voice"
-STT_MODEL_DEFAULT = "small"  # faster-whisper: tiny/base/small/medium/large-v3
+STT_MODEL_DEFAULT = "tiny.en"  # faster-whisper: tiny.en (~75MB, ~1s CPU) > tiny > base > small
 
 # Kokoro-82M no formato do nixpkgs (torch): config.json + kokoro-v1_0.pth +
 # voz voices/af_heart.pt. No host, os paths vêm do store Nix via env vars
@@ -62,7 +62,9 @@ def transcribe(
         return f"ERROR: faster-whisper não instalado: {exc}"
 
     try:
-        model = WhisperModel(model_size, device="cpu", compute_type="int8", download_root=_model_dir())
+        model_dir = _model_dir()
+        os.makedirs(model_dir, exist_ok=True)
+        model = WhisperModel(model_size, device="cpu", compute_type="int8", download_root=model_dir)
         segments, _info = model.transcribe(
             audio_path,
             beam_size=3,
