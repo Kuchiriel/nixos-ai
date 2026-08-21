@@ -200,11 +200,11 @@ let
                 if (time.time() - last_trigger_time) < COOLDOWN:
                     continue
 
-                # VAD: detect speech onset (adaptive: 20% above baseline, require 3 consecutive chunks)
+                # VAD: detect speech onset (adaptive: 10% above baseline, require 2 consecutive chunks)
                 if not speaking:
-                    if rms > noise_baseline * 1.2:
+                    if rms > noise_baseline * 1.1:
                         speech_buf.append(rms)
-                        if len(speech_buf) >= 3:
+                        if len(speech_buf) >= 2:
                             speaking = True
                             speech_frames = [data]
                             silence_start = None
