@@ -47,9 +47,12 @@ from __future__ import annotations
 import json
 import os
 import re
-import select
+import readline  # noqa: F401 — ativa GNU readline p/ input(), habilitando o
+                  # bracketed-paste nativo do terminal: sem isso, input() lê
+                  # cru e cada \n DENTRO de um texto colado é tratado como um
+                  # Enter, disparando envio antes do usuário confirmar. Com
+                  # readline, o terminal diferencia paste de Enter real.
 import subprocess
-import sys
 import time
 import uuid
 from pathlib import Path
@@ -698,27 +701,6 @@ def _to_tool_calls(actions: list[dict[str, Any]] | None) -> list[dict[str, Any]]
     ]
 
 
-def _read_user_input(prompt: str) -> str:
-    """input() trata cada \\n dentro de um texto colado como um Enter — então
-    colar um prompt multi-linha dispara o primeiro input() na primeira linha
-    e as linhas seguintes viram mensagens SEPARADAS nos próximos loops, sem
-    o prompt aparecer de novo (sintoma: 'já manda pra API antes de eu
-    apertar Enter', e sobra uma linha órfã que dispara uma chamada vazia/
-    malformada no turno seguinte).
-
-    Fix: depois de receber a primeira linha, checa via select() se já tem
-    mais dado bufferizado no stdin (típico de paste) e continua drenando
-    até não sobrar nada, juntando tudo como UMA mensagem só."""
-    first_line = input(prompt)
-    lines = [first_line]
-    while select.select([sys.stdin], [], [], 0.03)[0]:
-        try:
-            lines.append(sys.stdin.readline().rstrip("\n"))
-        except Exception:
-            break
-    return "\n".join(lines).strip()
-
-
 # ---------------------------------------------------------------------------
 # REPL principal
 # ---------------------------------------------------------------------------
@@ -752,7 +734,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
 
     while True:
         try:
-            user_input = _read_user_input("👤 Você: ")
+            user_input = input("👤 Você: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n👋 Até logo!")
             break
@@ -827,7 +809,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
             print("  /help      — esta ajuda")
             continue
         if user_input == "/architect":
-            task_input = _read_user_input("📋 Tarefa para architect: ").strip()
+            task_input = input("📋 Tarefa para architect: ").strip()
             if task_input:
                 try:
                     plan = _architect_plan(task_input, profile, tools, debug_mode)
@@ -847,7 +829,8 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
         messages.append({"role": "user", "content": user_input})
         messages = _trim_messages(messages)
 
-        for turn in range(8):
+        max_turns = 16
+        for turn in range(max_turns):
             print(f"  🤔 Pensando... (turno {turn + 1})", end="", flush=True)
 
             try:
@@ -897,6 +880,9 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
                     "tool_call_id": tool_call_id,
                     "content": output[:5000],
                 })
+        else:
+            print(f"  ⚠️  Máximo de {max_turns} turnos atingido nesta tarefa — "
+                  "peça pra continuar ou seja mais específico no próximo pedido.")
 
 
 def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) -> str | None:
