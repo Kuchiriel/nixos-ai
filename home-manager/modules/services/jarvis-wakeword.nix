@@ -187,7 +187,9 @@ let
                 audio_np = np.frombuffer(data, dtype=np.int16).astype(np.float32)
                 mono = (audio_np[::2] + audio_np[1::2]) * 0.5
                 # Normalização calibrada do legado: DC removal + ganho fixo
-                mono_norm = np.clip((mono - np.mean(mono)) * 10.0, -32768, 32767).astype(np.int16)
+                # PipeWire já entrega sinal forte (RMS ~2400). Ganho 2.0 é suficiente.
+                # *10.0 amplificava ruído para nível de fala → falsos positivos.
+                mono_norm = np.clip((mono - np.mean(mono)) * 2.0, -32768, 32767).astype(np.int16)
                 oww.predict(mono_norm)
                 score = oww.prediction_buffer['hey_jarvis_v0.1'][-1]
                 rms = np.sqrt(np.mean(mono**2))
