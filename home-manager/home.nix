@@ -45,27 +45,44 @@ stylix.targets.hyprland.enable = false;
     };
   };
 
-  # 1. Configuração do Aider — Qwen3.6-35B-A3B via llama.cpp local
+  # ══════════════════════════════════════════════════════════════
+  # AIDER — Qwen3.6-35B-A3B via llama.cpp local
+  # Uso: basta rodar `aider` (tudo nas configs abaixo)
+  # Benchmark: 32 t/s decode, 367 t/s prefill, 4179 MiB VRAM
+  # ══════════════════════════════════════════════════════════════
+
+  # 1. Configuração principal — flags que o aider lê do conf
   home.file.".aider.conf.yml".text = ''
+    # Conexão com nosso llama.cpp local
     openai-api-base: "http://localhost:8080/v1"
     openai-api-key: "sk-dummy"
-    model: "openai/custom-model"
+    model: "openai/qwen3-35b-a3b"
+
+    # Edição: diff (SEARCH/REPLACE) — mais eficiente que whole
     edit-format: diff
+
+    # Autonomia: executa sem pedir confirmação
+    yes-always: true
     auto-commits: true
     dirty-commits: true
-    yes-always: true
+
+    # Performance: sem stream (resposta completa), sem cache de prompts
+    no-stream: true
+    no-cache-prompts: true
+
+    # Limpar output: sem warnings nem validação de settings
     no-show-model-warnings: true
     no-check-model-accepts-settings: true
-    no-cache-prompts: true
-    no-stream: true
+
+    # Repo map: para o aider enxergar a estrutura do projeto
     map-tokens: 2048
     map-refresh: auto
   '';
 
-  # 2. Metadata do modelo (limites de contexto)
+  # 2. Metadata — limites de contexto e custos
   home.file.".aider.model.metadata.json".text = ''
     {
-      "openai/custom-model": {
+      "openai/qwen3-35b-a3b": {
         "max_input_tokens": 131072,
         "max_output_tokens": 4096,
         "input_cost_per_token": 0.0,
@@ -76,27 +93,38 @@ stylix.targets.hyprland.enable = false;
     }
   '';
 
-  # 3. Settings do modelo customizado (edit_format, system_prompt, thinking off)
+  # 3. Settings do modelo — comportamento, thinking, system prompt
   home.file.".aider.model.settings.yml".text = ''
-    - name: openai/custom-model
+    - name: openai/qwen3-35b-a3b
+      # Edição: diff com SEARCH/REPLACE blocks
       edit_format: diff
+
+      # Repo map: aider mapeia o projeto para navegar arquivos
       use_repo_map: true
+
+      # Lazy: false = aplica edits imediatamente (não espera confirmação)
       lazy: false
+
+      # Reminder: sys = lembretes no system prompt (mais estável)
       reminder: sys
+
+      # Examples: no system prompt (economiza tokens)
       examples_as_sys_msg: true
+
+      # Thinking: mostra reasoning separadamente do output
       reasoning_tag: think
+
+      # System prompt: instrução de autonomia
       system_prompt_prefix: >-
-        You are an autonomous coding agent. You MUST execute all actions yourself.
-        NEVER ask the user to run commands, edit files, or do anything manually.
-        When you need to read a file, read it. When you need to edit, generate SEARCH/REPLACE blocks.
-        When you need to run a shell command, suggest it in a ```bash block.
-        Be concise and direct. Do not output thinking or reasoning text.
+        You are an autonomous coding agent. You execute all actions yourself.
+        NEVER ask the user to run commands or edit files manually.
+        Read files, generate SEARCH/REPLACE blocks, suggest shell commands.
+        Be concise. No unnecessary explanations.
+
+      # Parâmetros do modelo
       extra_params:
         max_tokens: 4096
-        temperature: 0.0
-        extra_body:
-          chat_template_kwargs:
-            enable_thinking: false
+        temperature: 0.1
   '';
 
   services.jarvis-wakeword = {
