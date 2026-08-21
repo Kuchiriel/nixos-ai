@@ -109,22 +109,18 @@
     - name: openai/qwen3-35b-a3b
       edit_format: diff
       use_repo_map: true
-      lazy: yes
+      lazy: true
       reminder: sys
       examples_as_sys_msg: true
-
-      # DESATIVADO: Força o Qwen a responder direto no formato de ação sem rascunho
       reasoning_tag: null
-
-     system_prompt_prefix: >-
+      system_prompt_prefix: |
         You are an autonomous execution coding agent.
         Execute edits immediately using SEARCH/REPLACE blocks or execute shell commands directly.
         Do NOT write explanations, instructions, options, or conversational responses.
         Do NOT ask the user to run commands. Action only.
-
       extra_params:
         max_tokens: 8192
-        temperature: 0.1
+        temperature: 0.0
   '';
 
   services.jarvis-wakeword = {
