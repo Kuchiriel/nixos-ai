@@ -49,6 +49,7 @@ import os
 import re
 import subprocess
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -572,11 +573,46 @@ _PARAMETER_TAG_RE = re.compile(
 )
 
 
+def _dedupe_actions(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Remove ações idênticas (mesmo nome+args) — o modelo às vezes repete o
+    mesmo tool_call duas vezes no mesmo texto (ex: menciona a ação em prosa
+    e depois formaliza em <tool_call>)."""
+    seen: set[tuple[str, str]] = set()
+    out: list[dict[str, Any]] = []
+    for a in actions:
+        key = (a["name"], json.dumps(a["arguments"], sort_keys=True, ensure_ascii=False))
+        if key not in seen:
+            seen.add(key)
+            out.append(a)
+    return out
+
+
 def _parse_text_actions(content: str) -> list[dict[str, Any]] | None:
     """Extrai ações de texto puro quando não há tool_calls nativas.
-    Suporta múltiplas ações no mesmo turno (ex: vários blocos SEARCH/REPLACE)."""
+    Suporta múltiplas ações no mesmo turno (ex: vários blocos SEARCH/REPLACE).
+
+    Prioridade: se o modelo emitiu blocos <function=...> (formato
+    Hermes/Llama-3), usa SOMENTE eles — é o formato mais estruturado (tem
+    argumentos explícitos) — e ignora qualquer ">>> READ"/texto solto
+    redundante que o modelo tenha repetido antes do bloco formal. Sem isso,
+    um mesmo pedido (ex: ler um arquivo) podia virar 2 ações idênticas,
+    inflando o histórico e duplicando conteúdo de arquivo no contexto."""
     if not content:
         return None
+
+    function_actions: list[dict[str, Any]] = []
+    for m in _FUNCTION_TAG_RE.finditer(content):
+        name = m.group("name").strip()
+        args = {
+            pm.group("key").strip(): pm.group("value").strip()
+            for pm in _PARAMETER_TAG_RE.finditer(m.group("body"))
+        }
+        for k in ("start_line", "end_line"):
+            if k in args and args[k].isdigit():
+                args[k] = int(args[k])
+        function_actions.append({"name": name, "arguments": args})
+    if function_actions:
+        return _dedupe_actions(function_actions)
 
     actions: list[dict[str, Any]] = []
 
@@ -595,20 +631,8 @@ def _parse_text_actions(content: str) -> list[dict[str, Any]] | None:
         if cmd:
             actions.append({"name": "execute_shell", "arguments": {"cmd": cmd}})
 
-    for m in _FUNCTION_TAG_RE.finditer(content):
-        name = m.group("name").strip()
-        args = {
-            pm.group("key").strip(): pm.group("value").strip()
-            for pm in _PARAMETER_TAG_RE.finditer(m.group("body"))
-        }
-        # normaliza tipos numéricos simples (start_line/end_line)
-        for k in ("start_line", "end_line"):
-            if k in args and args[k].isdigit():
-                args[k] = int(args[k])
-        actions.append({"name": name, "arguments": args})
-
     if actions:
-        return actions
+        return _dedupe_actions(actions)
 
     # Fallback secundário: JSON solto (formato de tool call legado)
     for regex in (_JSON_TAG_RE, _JSON_CODEBLOCK_RE):
@@ -633,16 +657,22 @@ def _parse_text_actions(content: str) -> list[dict[str, Any]] | None:
 
 def _to_tool_calls(actions: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
     """Converte ações extraídas do texto para o mesmo formato de tool_calls
-    da API, mantendo o resto do loop agnóstico à origem (nativo vs. texto)."""
+    da API, mantendo o resto do loop agnóstico à origem (nativo vs. texto).
+
+    IDs são uuid curtos e únicos por chamada — o antigo `call_fallback_{i}`
+    reiniciava em 0 a cada turno, então conversas com mais de um turno de
+    fallback acumulavam tool_call_id duplicados no histórico, o que o
+    llama-server rejeita com HTTP 400 assim que o histórico cresce o
+    suficiente para expor a colisão na mesma janela de contexto."""
     if not actions:
         return None
     return [
         {
-            "id": f"call_fallback_{i}",
+            "id": f"call_{uuid.uuid4().hex[:8]}",
             "type": "function",
             "function": {"name": a["name"], "arguments": json.dumps(a["arguments"], ensure_ascii=False)},
         }
-        for i, a in enumerate(actions)
+        for a in actions
     ]
 
 
