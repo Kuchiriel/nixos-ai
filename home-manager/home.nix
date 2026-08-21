@@ -131,7 +131,7 @@ stylix.targets.hyprland.enable = false;
     enable = true;
     # Calibração validada do legado (docs/architecture/legacy-audio-calibration.md):
     # 0.85 = menos false positives com ventoinha/sons de casa
-    threshold = 0.15;  # Com normalização *2.0: voz ~0.12, ruído ~0.03-0.08
+    threshold = 0.30;  # Com normalização *5.0: voz ~0.28, ruído ~0.15-0.20
     # RMS gate: ignora score alto se RMS < 500 (evita falsos positivos)
     rmsGate = 500;
     # Pipeline de voz: STT (faster-whisper) → LLM (llama.cpp) → TTS (Kokoro)
