@@ -183,7 +183,7 @@ in
 
     host = {
         model = "llm-host";
-        mmproj = "llm-host-mmproj";  # vision na GPU (denso, ~861MB BF16)
+        # mmproj = "llm-host-mmproj";  # DESATIVADO para teste - vision pode causar tensor override
         threads = 16;              # testando: 16 threads no i7-13620H (20 available)
         
         # 128K contexto para suportar Aider/Freebuff com projetos grandes.
