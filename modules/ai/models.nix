@@ -204,12 +204,12 @@ in
         extraArgs = [
             "--kv-unified"                    # Compartilha o cache de chaves/valores de forma otimizada
             "--ctx-checkpoints" "2"          # Ativa 16 slots de checkpoints de contexto para congelar estados do Aider
-            #"--checkpoint-every-n-tokens" "1024" # Salva snapshots do contexto durante o prefill longo do agente
-            #"--keep" "1024"      
+            "--checkpoint-every-n-tokens" "1024" # Salva snapshots do contexto durante o prefill longo do agente
+            "--keep" "1024"      
        ];
 
         user = "root";
-        scheduler = { policy = "fifo"; priority = 50; };
+        #scheduler = { policy = "fifo"; priority = 50; };
     };
 
   };
