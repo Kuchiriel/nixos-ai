@@ -246,10 +246,29 @@ let
                     speech_frames = []
 
                     if BRAIN_CMD:
+                        # Pre-check: run STT first, skip if no speech detected
+                        try:
+                            import shutil as _shutil
+                            # Quick STT check
+                            _stt_check = subprocess.run(
+                                [BRAIN_CMD[0], "stt", temp_wav],
+                                timeout=10, capture_output=True, text=True,
+                            )
+                            _stt_text = (_stt_check.stdout or "").strip()
+                            if not _stt_text or _stt_text.startswith("ERROR"):
+                                print(f"[WW] ⏭️ No speech in audio (STT: '{_stt_text[:50]}'), skipping brain", flush=True)
+                                update_status("idle", "🎤 Ouvindo...")
+                                # Reset for next recording
+                                arecord_proc.terminate()
+                                time.sleep(0.5)
+                                arecord_proc = start_arecord()
+                                continue
+                            print(f"[WW] 🗣️ STT detected: '{_stt_text[:80]}'", flush=True)
+                        except Exception as _stt_err:
+                            print(f"[WW] ⚠️ STT pre-check failed: {_stt_err}", flush=True)
+
                         update_status("processing", "Pensando...")
                         try:
-                            # Verifica se o comando existe antes de rodar
-                            import shutil as _shutil
                             if not _shutil.which(BRAIN_CMD[0]):
                                 print(f"[WW] ❌ BRAIN_CMD '{BRAIN_CMD[0]}' não encontrado no PATH", flush=True)
                                 update_status("error", f"Comando '{BRAIN_CMD[0]}' não encontrado")
