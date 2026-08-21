@@ -206,8 +206,9 @@ in
             "--ctx-checkpoints" "2"          # Ativa 16 slots de checkpoints de contexto para congelar estados do Aider
             "--keep" "1024"
             "--no-warmup"                    # mantido: melhora both prefill e decode
-            "--prio" "2"                     # testando: prioridade high para decode
-            "--prio-batch" "3"               # testando: real-time priority para batch/prefill
+            "--prio" "2"                     # mantido: prioridade high para decode
+            "--prio-batch" "3"               # mantido: real-time priority para batch/prefill
+            "-cram" "16384"                  # testando: 16GB cache RAM para 128K ctx
        ];
 
         user = "root";
