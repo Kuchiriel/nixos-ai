@@ -376,12 +376,15 @@ in
     # Cria os symlinks dos modelos declarativos (store → ~/.local/share)
     home.activation.jarvisModels = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       run ${modelsLink}/lib/link-models.sh
-      # Pré-baixa modelo STT (tiny.en ~75MB) — evita timeout na primeira ativação
+      # Pré-baixa modelo STT tiny (multilingual, ~75MB, PT-BR) — evita timeout
       STT_DIR="$HOME/.local/share/jarvis/voice"
-      if [ ! -f "$STT_DIR/tiny.en/model.bin" ]; then
-        mkdir -p "$STT_DIR"
-        echo "[jarvis] Baixando modelo STT tiny.en..."
-        python3 -c "from faster_whisper import WhisperModel; WhisperModel('tiny.en', device='cpu', compute_type='int8', download_root='$STT_DIR')" 2>/dev/null || true
+      TINY_DIR="$STT_DIR/models--Systran--faster-whisper-tiny/snapshots/main"
+      if [ ! -f "$TINY_DIR/model.bin" ]; then
+        mkdir -p "$TINY_DIR"
+        echo "[jarvis] Baixando modelo STT tiny (multilingual)..."
+        for f in model.bin config.json vocabulary.txt tokenizer.json; do
+          wget -q --timeout=30 "https://huggingface.co/Systran/faster-whisper-tiny/resolve/main/$f" -O "$TINY_DIR/$f" 2>/dev/null || true
+        done
       fi
     '';
 

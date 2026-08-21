@@ -26,7 +26,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 MODEL_DIR_DEFAULT = "~/.local/share/jarvis/voice"
-STT_MODEL_DEFAULT = "tiny.en"  # faster-whisper: tiny.en (~75MB, ~1s CPU) > tiny > base > small
+STT_MODEL_DEFAULT = "tiny"  # faster-whisper: tiny multilingual (~75MB, PT-BR+EN, ~1s CPU)
 
 # Kokoro-82M no formato do nixpkgs (torch): config.json + kokoro-v1_0.pth +
 # voz voices/af_heart.pt. No host, os paths vêm do store Nix via env vars

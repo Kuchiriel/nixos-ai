@@ -862,7 +862,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_stt = sub.add_parser("stt", help="transcreve um WAV (faster-whisper, VAD calibrado)")
     p_stt.add_argument("wav", help="arquivo de áudio")
-    p_stt.add_argument("--model", default="tiny.en", help="tamanho do modelo faster-whisper")
+    p_stt.add_argument("--model", default="tiny", help="tamanho do modelo faster-whisper")
     p_stt.set_defaults(func=_cmd_stt)
 
     p_speak = sub.add_parser("speak", help="sintetiza texto com Kokoro (TTS)")
@@ -874,7 +874,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_voice = sub.add_parser("voice", help="loop de voz: STT → roteador → TTS (brainCommand do wakeword)")
     p_voice.add_argument("wav", help="arquivo de áudio capturado pelo wakeword")
     p_voice.add_argument("--no-tts", action="store_true", help="não sintetizar resposta em voz")
-    p_voice.add_argument("--model", default="tiny.en", help="tamanho do modelo faster-whisper")
+    p_voice.add_argument("--model", default="tiny", help="tamanho do modelo faster-whisper")
     p_voice.set_defaults(func=_cmd_voice)
 
     p_audiobook = sub.add_parser("audiobook", help="leitor de livros (.epub/.txt) com TTS Kokoro")
