@@ -208,7 +208,6 @@ in
             "--no-warmup"                    # mantido: melhora both prefill e decode
             "--prio" "2"                     # mantido: prioridade high para decode
             "--prio-batch" "3"               # mantido: real-time priority para batch/prefill
-            "--spec-type" "ngram-simple"     # testando: speculative decoding sem draft model
        ];
 
         user = "root";
