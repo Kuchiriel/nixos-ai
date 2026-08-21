@@ -81,6 +81,7 @@
     subtree-only: true
     auto-test: false
     suggest-shell-commands: true
+    aiderignore: ".aiderignore"
 
     no-stream: true
     no-cache-prompts: true
@@ -88,9 +89,62 @@
     no-check-model-accepts-settings: true
 
     # Mantém o mapa do repositório em 512 tokens para prefill ultrarrápido
-    map-tokens: 512
+    map-tokens: 2048
     map-refresh: auto
   '';
+
+  home.file.".aiderignore".text = ''
+    # Segredos, Chaves e Envs
+    *.env
+    *.pem
+    *.key
+    *.token
+    /etc/litellm.env
+    /etc/jarvis-telegram.env
+
+    # Modelos de IA, Pesos e Assets Pesados
+    *.gguf
+    *.bin
+    *.pt
+    *.safetensors
+    *.onnx
+    /modules/ai/models/
+
+    # Bancos de Dados, Vetores e Caches de Áudio do Jarvis
+    /qdrant_data/
+    *.sqlite
+    *.db
+    *.wav
+    *.mp3
+    *.flac
+    *.pcm
+
+    # Caches, Venvs, Nix Stores e Artefatos de Build
+    .direnv/
+    .venv/
+    venv/
+    __pycache__/
+    *.pyc
+    .pytest_cache/
+    .hypothesis/
+    .mypy_cache/
+    .ruff_cache/
+    result
+    result-*
+
+    # Logs, Trava de Sistema e Configs Específicas
+    logs/
+    *.log
+    hosts/nitro-v15/hardware-configuration.nix
+    .aider*
+    *.zip
+    *.tar.gz
+    
+    # Documentação Extensa / Markdown Secundários (Economiza Tokens de Contexto)
+    #docs/
+    #*.md
+  '';
+
 
   # 2. Metadata — Limite ampliado para 8192 output tokens
   home.file.".aider.model.metadata.json".text = ''
@@ -106,7 +160,7 @@
     }
   '';
 
-# 3. Settings do modelo — Estrutura original com contrato /run
+
   home.file.".aider.model.settings.yml".text = ''
     - name: openai/qwen3-35b-a3b
       edit_format: diff
@@ -116,21 +170,10 @@
       examples_as_sys_msg: true
       reasoning_tag: null
       system_prompt_prefix: |
-        You are an autonomous execution coding agent operating via Aider CLI.
-
-        OPERATIONAL RULES:
-        1. IF REQUIRED FILES ARE NOT IN CHAT CONTEXT:
-           - Immediately output a command prefixed with '/run' to locate them (e.g., /run grep -rn "pattern" . or /run find . -name "*target*").
-           - NEVER ask the user to run commands manually.
-           - NEVER write conversational explanations, tutorials, or step-by-step guides.
-
-        2. IF REQUIRED FILES ARE IN CHAT CONTEXT:
-           - Immediately emit SEARCH/REPLACE blocks with the exact code changes.
-           - Apply edits directly without confirmation or conversational preamble.
-
-        3. OUTPUT FORMAT:
-           - Output ONLY commands prefixed with '/run', SEARCH/REPLACE blocks, or '/add <file_path>'.
-           - Zero chat chatter. Pure execution.
+        You are an autonomous execution coding agent.
+        Analyze the repo map to locate files required for the user prompt.
+        Focus strictly on selecting files and generating SEARCH/REPLACE blocks.
+        Do NOT generate repeated text loops or conversational preamble.
       extra_params:
         max_tokens: 8192
         temperature: 0.0

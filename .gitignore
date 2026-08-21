@@ -1,4 +1,4 @@
-#  Segredos e Variáveis de Ambiente 
+# Segredos, Chaves e Variáveis de Ambiente
 *.env
 *.pem
 *.key
@@ -6,34 +6,43 @@
 /etc/litellm.env
 /etc/jarvis-telegram.env
 
-#  Modelos de IA e Pesos (Pesados) 
+# Modelos de IA, Pesos e Checkpoints
 *.gguf
 *.bin
 *.pt
 *.safetensors
+*.onnx
 /modules/ai/models/
 
-#  Bancos de Dados & Vetores 
+# Bancos de Dados, Vetores e Mídias de Teste (Jarvis)
 /qdrant_data/
 *.sqlite
+*.sqlite3
 *.db
+*.wav
+*.mp3
+*.flac
+*.pcm
 
-#  Caches e Builds 
+# Caches de Runtime, Ambientes Virtuais e Nix
 .direnv/
 .venv/
+venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
 result
 result-*
 
-#  Hardware Config Local (Específico da máquina) 
-hosts/nitro-v15/hardware-configuration.nix
-
+# Logs, Arquivos Compactados e Históricos
+logs/
+*.log
 *.zip
-result
-result-*
+*.tar.gz
 .aider*
 
-# Hypothesis PBT cache
-.hypothesis/
-logs/
+# Configurações de Hardware/Local Específicas
+hosts/nitro-v15/hardware-configuration.nix
