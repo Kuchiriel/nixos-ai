@@ -48,10 +48,24 @@ stylix.targets.hyprland.enable = false;
 
   home.file.".aider.conf.yml".text = ''
     openai-api-base: http://localhost:8080/v1
-    model: openai//nix/store/in9pq5ak2mj5km4f6r87v295bfm53w6c-Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    model: "openai/local"
+    #model: openai//nix/store/in9pq5ak2mj5km4f6r87v295bfm53w6c-Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
     auto-commits: true
     dirty-commits: true
   '';
+
+  home.file.".aider.model.metadata.json".text = ''
+    {
+      "openai/local": {
+        "max_input_tokens": 131072,
+        "max_output_tokens": 4096,
+        "input_cost_per_token": 0.0,
+        "output_cost_per_token": 0.0,
+        "litellm_provider": "openai"
+      }
+    }
+  '';
+
 
   services.jarvis-wakeword = {
     enable = true;

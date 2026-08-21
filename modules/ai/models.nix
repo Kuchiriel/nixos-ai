@@ -189,22 +189,23 @@ in
         
         # 65K é o ponto ideal: com o cache quantizado em q4_0 confirmado pelo help,
         # ele vai ocupar o mesmo espaço de VRAM que um bloco de 16K ocuparia em FP16.
-        #ctxSize = 65536;           
-        ctxSize = 32768;
+        ctxSize = 65536;           
+        #ctxSize = 32768;
         batchSize = 1024;          # Evita pico de memória no prefill
-        ubatch = 512;
-        gpuLayers = 99;            # MANTIDO: Mantém os experts ativos no chip mais rápido (GPU)
+        ubatch = 1024;
+        gpuLayers = 50;            # MANTIDO: Mantém os experts ativos no chip mais rápido (GPU)
        
         kvCache = "-fa on -ctk q4_0 -ctv q4_0";         
 
         # Sintaxe estrita e padrão para a execução de MoE do Qwen
-        moeFlags = "--n-cpu-moe 60 --split-mode none --poll 50 --poll-batch 50";
+        moeFlags = "--n-cpu-moe 50 --split-mode none --poll 50 --poll-batch 50";
 
         # Flags legítimas extraídas diretamente do seu manual do llama-server-help
         extraArgs = [
+            "--load-mode" "none"                        # CORREÇÃO: Força os experts da CPU a ficarem residentes na RAM, eliminando o gargalo do SSD
+            "--image-min-tokens" "1024" 
             "--kv-unified"                    # Compartilha o cache de chaves/valores de forma otimizada
             "--ctx-checkpoints" "2"          # Ativa 16 slots de checkpoints de contexto para congelar estados do Aider
-            #"--checkpoint-every-n-tokens" "1024" # Salva snapshots do contexto durante o prefill longo do agente
             "--keep" "1024"      
        ];
 
