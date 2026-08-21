@@ -61,7 +61,7 @@ let
   '';
 
   jarvisScript = pkgs.writers.writePython3Bin "jarvis-wakeword-daemon" {
-    flakeIgnore = [ "E501" "E231" "F541" ];
+    flakeIgnore = [ "E501" "E231" "E226" "F541" ];
     # libraries espera pacotes (ou função), não um env pronto — passar o env
     # resultava em PYTHONPATH vazio (import numpy falhava em runtime)
     libraries = (ps: with ps; [ numpy ]);
