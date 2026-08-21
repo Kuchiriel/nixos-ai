@@ -80,7 +80,7 @@
 
     subtree-only: true
     auto-test: false
-    suggest-shell-commands: true
+    suggest-shell-commands: false
     aiderignore: ".aiderignore"
 
     no-stream: true
