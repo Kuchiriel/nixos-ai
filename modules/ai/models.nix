@@ -189,7 +189,7 @@ in
         # 128K contexto para suportar Aider/Freebuff com projetos grandes.
         # KV cache q4_0 mantém VRAM dentro do budget (~2.5GB para 128K).
         ctxSize = 131072;
-        batchSize = 2048;          # testando: batch maior para prefill mais rápido
+        batchSize = 1024;          # mantido: 1024 é melhor que 2048
         ubatch = 1024;
         gpuLayers = 50;            # MANTIDO: Mantém os experts ativos no chip mais rápido (GPU)
        
@@ -204,7 +204,8 @@ in
             "--image-min-tokens" "1024" 
             "--kv-unified"                    # Compartilha o cache de chaves/valores de forma otimizada
             "--ctx-checkpoints" "2"          # Ativa 16 slots de checkpoints de contexto para congelar estados do Aider
-            "--keep" "1024"      
+            "--keep" "1024"
+            "--n-cuda-streams" "2"          # testando: overlapp de compute CUDA
        ];
 
         user = "root";
