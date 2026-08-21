@@ -84,11 +84,53 @@ def transcribe(
 # TTS — Kokoro-82M
 # ---------------------------------------------------------------------------
 
+def _setup_kokoro_espeak():
+    """Bypass spaCy: monkey-patch en.G2P para usar espeak-ng.
+
+    Kokoro 0.9+ usa spaCy para English G2P (grapheme-to-phoneme), mas spaCy
+    precisa de modelo baixado via pip — impossível no NixOS declarativo.
+    Esta função substitui en.G2P por um wrapper que usa espeak-ng, que já
+    está no PATH do nix develop. Chamada uma vez; idempotente.
+    """
+    if getattr(_setup_kokoro_espeak, "_done", False):
+        return
+    try:
+        from kokoro.pipeline import en as _en, espeak as _espeak_mod
+        _espeak_backend = _espeak_mod.EspeakG2P(language="en-us")
+
+        class _EspeakG2PWrapper:
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                pass
+
+            def __call__(self, text: str, preprocess: bool = True) -> tuple[str, list]:
+                ps_list = _espeak_backend.backend.phonemize([text])
+                ps = ps_list[0].strip() if ps_list else ""
+                words = text.split()
+                tokens = []
+                for i, word in enumerate(words):
+                    ws = " " if i < len(words) - 1 else ""
+                    t = _en.MToken(text=word, tag="NN", whitespace=ws)
+                    try:
+                        w_ps = _espeak_backend.backend.phonemize([word])
+                        t.phonemes = w_ps[0].strip() if w_ps else ""
+                    except Exception:
+                        t.phonemes = ""
+                    tokens.append(t)
+                return ps, tokens
+
+        _en.G2P = _EspeakG2PWrapper  # type: ignore[misc]
+        _setup_kokoro_espeak._done = True  # type: ignore[attr-defined]
+    except Exception:
+        pass  # se espeak não está disponível, Kokoro vai dar erro own
+
+
 def speak(text: str, voice: str | None = None, *, play: bool = True) -> str:
     """Sintetiza `text` com Kokoro-82M (formato torch do nixpkgs) e (opcionalmente) toca.
 
     Aplica a prosódia emocional (speed) do `jarvis.core.emotion` — porta do
     emotional_state do legado (keywords → perfil → speed do Kokoro).
+    Bypass automático de spaCy via espeak-ng quando o modelo spaCy não está
+    disponível (comum em NixOS declarativo).
     Retorna o path do WAV gerado ou mensagem ERROR:.
     """
     try:
@@ -114,8 +156,9 @@ def speak(text: str, voice: str | None = None, *, play: bool = True) -> str:
                 "via JARVIS_KOKORO_* — provisionamento declarativo."
             )
         voice_path = voice or os.path.expanduser(KOKORO_VOICE_DEFAULT)
+        _setup_kokoro_espeak()  # bypass spaCy antes de criar pipeline
         kmodel = KModel(config=config_path, model=model_path)
-        pipeline = KPipeline(lang_code="a", model=kmodel)
+        pipeline = KPipeline(lang_code="a", model=kmodel, trf=False)
         out_dir = Path(_model_dir()) / "tts"
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / f"jarvis_tts_{abs(hash(text)) % 10**9}.wav"
@@ -137,9 +180,12 @@ def speak(text: str, voice: str | None = None, *, play: bool = True) -> str:
 
 
 def _play(wav_path: str) -> None:
-    """Toca um WAV (canberra → paplay → aplay, em ordem de preferência)."""
+    """Toca um WAV (pw-play → canberra → mpv → aplay, em ordem de preferência)."""
+    pw_play = "/run/current-system/sw/bin/pw-play"
     for cmd in (
+        [pw_play, wav_path],
         ["canberra-gtk-play", "--file", wav_path],
+        ["mpv", "--no-video", "--really-quiet", wav_path],
         ["paplay", wav_path],
         ["aplay", "-q", wav_path],
     ):
@@ -148,6 +194,56 @@ def _play(wav_path: str) -> None:
             return
         except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
             continue
+
+
+# ---------------------------------------------------------------------------
+# Conversão de respostas para texto limpo (TTS)
+# ---------------------------------------------------------------------------
+
+def _text_for_tts(out: dict[str, Any] | str) -> str:
+    """Converte a resposta do router em texto limpo para TTS.
+
+    O router retorna dicts com chaves como 'response', 'overall', 'checks'.
+    Para TTS, queremos apenas o texto principal, sem JSON cru.
+    """
+    if isinstance(out, str):
+        return out
+
+    # Rota doctor: {overall, checks, actions}
+    if "overall" in out:
+        overall = out["overall"]
+        checks = out.get("checks", [])
+        down = [c.get("name", "") for c in checks if c.get("status") == "down"]
+        degraded = [c.get("name", "") for c in checks if c.get("status") == "degraded"]
+        parts = [f"Sistema {overall}."]
+        if down:
+            parts.append(f"Servicos fora: {', '.join(down)}.")
+        if degraded:
+            parts.append(f"Degradados: {', '.join(degraded)}.")
+        return " ".join(parts)
+
+    # Rota agent: {response, commands_run, commands_denied}
+    if "response" in out:
+        return str(out["response"])
+
+    # Rota rag: {hits}
+    if "hits" in out:
+        hits = out["hits"]
+        if not hits:
+            return "Nao encontrei nada no codigo."
+        lines = []
+        for h in hits[:3]:
+            path = h.get("path", "")
+            score = h.get("score", 0)
+            lines.append(f"{path} (relevancia {score:.0%})")
+        return f"Encontrei: {', '.join(lines)}."
+
+    # Rota fastpath: {response}
+    if "response" in out:
+        return str(out["response"])
+
+    # Fallback
+    return str(out)[:500]
 
 
 # ---------------------------------------------------------------------------
@@ -189,7 +285,7 @@ def voice_loop(audio_path: str, *, tts: bool = True) -> int:
         print(f"ERROR: rota '{route.handler}' falhou: {exc}", file=sys.stderr)
         return 1
 
-    answer = str(out.get("response", out))
+    answer = _text_for_tts(out)
     if tts:
         wav = speak(answer)
         print(f"🔊 {answer}", flush=True)
