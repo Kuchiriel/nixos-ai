@@ -1,10 +1,26 @@
 """jarvis dev — CLI interativo de desenvolvimento (estilo Aider).
 
 REPL onde o usuário conversa com o agente e o agente pode:
-  - Explorar a codebase (list_directory, code_search, read_file)
-  - Editar arquivos (str_replace, write_file)
-  - Rodar testes (run_tests, execute_shell)
-  - Iterar sobre erros automaticamente
+  - Explorar a codebase via execute_shell (ls, find, grep — não há mais
+    ferramentas dedicadas de listagem/busca; tudo passa pelo shell)
+  - Ler arquivos (read_file)
+  - Editar/criar arquivos (str_replace, com old_str='' para criar)
+  - Rodar testes, commitar e buscar na web via execute_shell
+
+Arquitetura (v2 — ultra-leve, 100% compatível com llama-server/GGUF):
+  - Apenas 3 ferramentas primitivas nativas (read_file, str_replace,
+    execute_shell) em vez de ~15 schemas JSON — corta ~2.800 tokens/turno
+    de overhead de contexto.
+  - Payload HTTP estritamente compatível com a spec OpenAI
+    /chat/completions: sem `parallel_tool_calls`, sem `chat_template_kwargs`.
+    Modelos "tiny" (<=4B) nem recebem o array `tools` — operam 100% via
+    blocos de texto estilo Aider (SEARCH/REPLACE), zerando o overhead.
+  - Parser híbrido: tenta tool_calls nativas da API; se ausentes, faz
+    fallback para blocos de texto (SEARCH/REPLACE, `>>> READ`, fenced
+    shell, JSON solto) — cobre tanto modelos com function-calling robusto
+    quanto SLMs locais que só seguem instrução em texto.
+  - Repo map limitado a ~20 arquivos mais recentes (mtime), formatado como
+    árvore compacta, com orçamento rígido de ~500 tokens.
 
 Uso:
   jarvis dev                    # inicia REPL no CWD
@@ -19,13 +35,17 @@ from __future__ import annotations
 
 import json
 import os
-import sys
-import time
+import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
 import requests
 
+
+# ---------------------------------------------------------------------------
+# Config / perfil do modelo
+# ---------------------------------------------------------------------------
 
 def _get_config():
     from jarvis.core.config import Config
@@ -33,7 +53,8 @@ def _get_config():
 
 
 def _detect_profile() -> dict[str, Any]:
-    """Detecta o perfil do modelo E retorna o model_id correto para o payload."""
+    """Detecta o perfil do modelo, o model_id correto para o payload, e se
+    devemos usar tool_calls nativas ou operar 100% via blocos de texto."""
     cfg = _get_config()
     model_id = cfg.llm_model  # default: "default"
     try:
@@ -47,12 +68,33 @@ def _detect_profile() -> dict[str, Any]:
 
     m = model_id.lower()
     if "32b" in m or "30b" in m:
-        return {"name": "large", "max_tokens": 768, "temperature": 0.0, "model_id": model_id}
-    if "7b" in m:
-        return {"name": "small", "max_tokens": 1024, "temperature": 0.0, "model_id": model_id}
-    if "4b" in m or "3b" in m or "1b" in m:
-        return {"name": "tiny", "max_tokens": 512, "temperature": 0.0, "model_id": model_id}
-    return {"name": "default", "max_tokens": 1024, "temperature": 0.0, "model_id": model_id}
+        profile = {"name": "large", "max_tokens": 768, "temperature": 0.0}
+    elif "7b" in m:
+        profile = {"name": "small", "max_tokens": 1024, "temperature": 0.0}
+    elif "4b" in m or "3b" in m or "1b" in m:
+        profile = {"name": "tiny", "max_tokens": 512, "temperature": 0.0}
+    else:
+        profile = {"name": "default", "max_tokens": 1024, "temperature": 0.0}
+
+    profile["model_id"] = model_id
+
+    # Modelos "tiny" costumam ter function-calling nativo pouco confiável em
+    # GGUF quantizado — por padrão operam só em modo texto (0 tokens de
+    # overhead de `tools`). Pode ser sobrescrito via cfg.llm_native_tools.
+    override = getattr(cfg, "llm_native_tools", None)
+    profile["native_tools"] = override if override is not None else profile["name"] != "tiny"
+    return profile
+
+
+def _maybe_disable_thinking(system_prompt: str) -> str:
+    """Compat para desabilitar 'thinking' sem reintroduzir chat_template_kwargs
+    no payload (que o llama-server rejeita). Vários templates locais
+    (família Qwen3, etc.) respeitam a diretiva '/no_think' dentro do próprio
+    prompt — então movemos essa configuração do payload HTTP para o texto."""
+    cfg = _get_config()
+    if getattr(cfg, "llm_disable_thinking", False):
+        return f"{system_prompt}\n/no_think"
+    return system_prompt
 
 
 def _build_memory_context(query: str = "code edit error fix") -> str:
@@ -75,101 +117,154 @@ def _build_memory_context(query: str = "code edit error fix") -> str:
         return ""
 
 
-def _build_repo_map(root: str, max_files: int = 80) -> str:
-    """Constrói um mapa do repositório (estilo Aider repo-map)."""
-    entries = []
-    ignore = {".git", "node_modules", "__pycache__", "result", ".direnv", "nixos"}
+# ---------------------------------------------------------------------------
+# Repo map — árvore compacta, top-N arquivos mais recentes, budget de tokens
+# ---------------------------------------------------------------------------
+
+_REPO_MAP_IGNORE_DIRS = {
+    ".git", "node_modules", "__pycache__", "result", ".direnv", "nixos",
+    ".venv", "venv", "env", "dist", "build", ".pytest_cache", ".mypy_cache",
+    ".ruff_cache", "target", ".next", ".cache", "htmlcov", ".idea", ".vscode",
+    "egg-info",
+}
+
+
+def _build_repo_map(root: str, max_files: int = 20, max_tokens: int = 500) -> str:
+    """Constrói um mapa compacto do repositório (estilo Aider repo-map),
+    limitado aos `max_files` arquivos mais recentemente modificados e a um
+    orçamento aproximado de `max_tokens` (heurística: 1 token ~= 4 chars)."""
+    entries: list[tuple[str, float]] = []
 
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in ignore]
-        rel = os.path.relpath(dirpath, root)
-        if rel == ".":
-            rel = ""
+        dirnames[:] = [
+            d for d in dirnames
+            if d not in _REPO_MAP_IGNORE_DIRS and not d.startswith(".")
+        ]
+        rel_dir = os.path.relpath(dirpath, root)
+        if rel_dir == ".":
+            rel_dir = ""
         for f in filenames:
             if f.startswith("."):
                 continue
             fp = os.path.join(dirpath, f)
             try:
-                size = os.path.getsize(fp)
+                mtime = os.path.getmtime(fp)
             except OSError:
                 continue
-            full_rel = os.path.join(rel, f) if rel else f
-            entries.append((full_rel, size))
+            rel_path = os.path.join(rel_dir, f) if rel_dir else f
+            entries.append((rel_path, mtime))
 
     entries.sort(key=lambda x: -x[1])
     entries = entries[:max_files]
+    entries.sort(key=lambda x: x[0])  # ordem alfabética para árvore legível
 
-    lines = ["REPOSITORY MAP (project structure):"]
-    for path, size in entries:
-        size_str = f"{size // 1024}KB" if size > 1024 else f"{size}B"
-        lines.append(f"  {path} ({size_str})")
+    tree: dict[str, Any] = {}
+    for rel_path, _ in entries:
+        parts = rel_path.split(os.sep)
+        node = tree
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+        node.setdefault("__files__", []).append(parts[-1])
 
-    return "\n".join(lines)
+    lines: list[str] = []
+
+    def render(node: dict[str, Any], prefix: str = "") -> None:
+        dirs = sorted(k for k in node if k != "__files__")
+        files = sorted(node.get("__files__", []))
+        for d in dirs:
+            lines.append(f"{prefix}{d}/")
+            render(node[d], prefix + "  ")
+        for f in files:
+            lines.append(f"{prefix}{f}")
+
+    render(tree)
+
+    budget_chars = max_tokens * 4
+    out = [f"REPO MAP ({len(entries)} arquivos mais recentes):"]
+    used = len(out[0])
+    for line in lines:
+        entry = f"  {line}"
+        if used + len(entry) + 1 > budget_chars:
+            out.append("  … (truncado por orçamento de tokens)")
+            break
+        out.append(entry)
+        used += len(entry) + 1
+
+    return "\n".join(out)
 
 
-SYSTEM_PROMPT_TEMPLATE = """JARVIS. PT-BR. Short.
+# ---------------------------------------------------------------------------
+# Prompts
+# ---------------------------------------------------------------------------
+
+SYSTEM_PROMPT_TEMPLATE = """Você é o JARVIS, agente de desenvolvimento local. Responda em PT-BR. Seja direto.
 
 {repo_map}
 
 {memory_context}
 
-TOOLS:
-1 read_file(path) — LEIA PRIMEIRO
-2 str_replace(path,old,new) — EDITE DEPOIS
-3 write_file(path,content)
-4 list_directory(path)
-5 code_search(pattern)
-6 semantic_search(query)
-7 run_tests()
-8 execute_shell(cmd)
-9 git_commit(msg)
-10 web_search(query)
-11 read_url(url)
+FERRAMENTAS (apenas 3 — mantenha o overhead de contexto mínimo):
+- read_file(path, start_line?, end_line?)      → leia SEMPRE antes de editar
+- str_replace(path, old_str, new_str)          → old_str deve ser EXATO (copiado do read_file) e único no arquivo; old_str='' cria um arquivo novo
+- execute_shell(cmd)                            → ls/find/grep (explorar), pytest/npm test (testar),
+                                                   git add -A && git commit -m "msg" (commitar),
+                                                   curl (buscar na web), rm/mv/mkdir (qualquer outra ação)
 
-RULE 1: ANTES de str_replace, SEMPRE read_file no mesmo path.
-RULE 2: 'old' deve ser EXATO do read_file output.
-RULE 3: Se str_replace falhou, read_file de novo, copie o texto correto.
-RULE 4: Após editar, rode run_tests.
-RULE 5: Após sucesso, rode git_commit.
+Se sua API não suportar tool_calls nativas, use este formato de TEXTO (estilo Aider):
 
-EXAMPLE:
-User: mude X para Y em app.py
-Step1: read_file(path='app.py')
-Step2: str_replace(path='app.py', old='<texto exato do step1>', new='Y')
-Step3: run_tests()
-Step4: git_commit('fix: muda X para Y')
+Para ler um arquivo:
+>>> READ caminho/do/arquivo.py
+
+Para editar (old deve ser cópia EXATA e única; vazio = cria arquivo novo):
+caminho/do/arquivo.py
+<<<<<<< SEARCH
+texto exato a substituir
+=======
+texto novo
+>>>>>>> REPLACE
+
+Para rodar shell:
+```bash
+comando aqui
+```
+
+REGRAS:
+1. SEMPRE read_file (ou >>> READ) antes de str_replace no mesmo path.
+2. old_str deve ser cópia EXATA de um trecho do read_file — não parafraseie.
+3. Se str_replace falhar (não encontrado ou não-único), read_file de novo e copie melhor, com mais contexto ao redor.
+4. Depois de editar, rode os testes via execute_shell.
+5. Depois dos testes passarem, faça commit via execute_shell (git add -A && git commit -m "...").
+6. Nunca invente conteúdo de arquivo sem ler primeiro.
 """
 
-PLAN_PROMPT = """JARVIS architect. PT-BR. Short.
+PLAN_PROMPT = """Você é o JARVIS architect. PT-BR. Seja direto.
 
 {repo_map}
 
-Read the files and create a PLAN.
-Output a JSON with:
-PLAN: [{action: read|edit|create|delete, path: ..., description: ...}]
+Leia os arquivos necessários (read_file ou >>> READ) e monte um PLANO — não execute edições ainda.
 
-Do NOT execute. Just plan.
+Responda em JSON puro, sem markdown:
+{{"plan": [{{"action": "read|edit|create|shell", "path": "...", "description": "..."}}]}}
 """
 
 
+# ---------------------------------------------------------------------------
+# Chamada HTTP — payload estritamente compatível com a spec OpenAI
+# ---------------------------------------------------------------------------
+
 def _call_llm(messages: list[dict[str, Any]], tools: list[dict], profile: dict) -> dict:
-    """Chama o LLM local."""
+    """Chama o LLM local. Payload contém SOMENTE chaves da spec OpenAI
+    /chat/completions (model, messages, temperature, max_tokens, e
+    tools/tool_choice apenas se houver ferramentas ativas). Removidos
+    `parallel_tool_calls` e `chat_template_kwargs`, que o llama-server
+    rejeita com HTTP 400."""
     cfg = _get_config()
     payload: dict[str, Any] = {
         "model": profile.get("model_id", cfg.llm_model),
         "messages": messages,
         "temperature": profile["temperature"],
         "max_tokens": profile["max_tokens"],
-'''
-        "parallel_tool_calls": False,
-'''
     }
-
-'''
-   if cfg.llm_disable_thinking:
-        payload["chat_template_kwargs"] = {"enable_thinking": False}
-'''
-
     if tools:
         payload["tools"] = tools
         payload["tool_choice"] = "auto"
@@ -183,203 +278,288 @@ def _call_llm(messages: list[dict[str, Any]], tools: list[dict], profile: dict) 
     return resp.json()
 
 
-def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -> str:
-    """Executa uma tool call e retorna o resultado."""
-    from jarvis.core.devtools import handle_dev_tool
-    from jarvis.core.agent import command_allowed
-    import subprocess
+# ---------------------------------------------------------------------------
+# As 3 ferramentas primitivas
+# ---------------------------------------------------------------------------
 
-    if name == "jarvis_command":
-        from jarvis.core.devtools import jarvis_command
-        result = jarvis_command(args.get("subcommand", "status"), args.get("args", ""))
-        return result.get("output", result.get("error", "no output"))[:3000]
-
-    if name == "git_commit":
-        msg = args.get("message", "")
-        if not msg:
-            return "ERROR: empty commit message"
-        try:
-            subprocess.run(["git", "add", "-A"], capture_output=True, timeout=10)
-            r = subprocess.run(["git", "commit", "-m", msg], capture_output=True, text=True, timeout=10)
-            return r.stdout[-2000:] if r.returncode == 0 else f"ERROR: {r.stderr[-500:]}"
-        except Exception as e:
-            return f"ERROR: {e}"
-
-    if name == "web_search":
-        import requests as _requests
-        import urllib.parse
-        import re
-        query = args.get("query", "")
-        if not query:
-            return "ERROR: empty query"
-        try:
-            session = _requests.Session()
-            session.headers.update({"User-Agent": "Mozilla/5.0 (X11; Linux x86_64)"})
-            session.get("https://html.duckduckgo.com/html/", timeout=10)
-            resp = session.get(
-                f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}",
-                timeout=15,
-            )
-            results = re.findall(
-                r'class="result__a"[^>]*href="([^"]+)"[^>]*>([^<]+)',
-                resp.text,
-            )
-            if not results:
-                return "Nenhum resultado encontrado."
-            lines = []
-            for i, (url, title) in enumerate(results[:5]):
-                m = re.search(r'uddg=([^&]+)', url)
-                real_url = urllib.parse.unquote(m.group(1)) if m else url
-                lines.append(f"{i+1}. {title.strip()}\n   {real_url}")
-            return "\n".join(lines)
-        except Exception as e:
-            return f"Web search error: {e}"
-
-    if name == "read_url":
-        import urllib.request
-        url = args.get("url", "")
-        if not url:
-            return "ERROR: empty URL"
-        if not url.startswith(("http://", "https://")):
-            return "ERROR: URL must start with http:// or https://"
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "JARVIS/1.0"})
-            resp = urllib.request.urlopen(req, timeout=15)
-            content = resp.read().decode("utf-8", errors="replace")
-            import re
-            content = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL)
-            content = re.sub(r'<style[^>]*>.*?</style>', '', content, flags=re.DOTALL)
-            content = re.sub(r'<[^>]+>', ' ', content)
-            content = re.sub(r'\s+', ' ', content).strip()
-            return content[:5000]
-        except Exception as e:
-            return f"URL fetch error: {e}"
-
-    if name == "execute_shell":
-        cmd = args.get("cmd", "")
-        if not cmd:
-            return "ERROR: empty command"
-        if not command_allowed(cmd):
-            if not approve:
-                return f"ERROR: command not allowed: {cmd} (use --approve)"
-            print(f"  ⚠  Comando: {cmd}")
-            try:
-                ans = input("  Permitir? [y/N] ").strip().lower()
-            except EOFError:
-                return "ERROR: approval denied (EOF)"
-            if ans not in ("y", "yes", "s", "sim"):
-                return "ERROR: command denied by user"
-        try:
-            res = subprocess.run(
-                cmd.split(), capture_output=True, text=True, timeout=60,
-            )
-            output = res.stdout if res.returncode == 0 else res.stderr
-            if not output.strip():
-                output = f"(exit code {res.returncode})"
-            return output[:3000]
-        except subprocess.TimeoutExpired:
-            return "ERROR: command timed out (60s)"
-        except Exception as e:
-            return f"ERROR: {e}"
-
-    result = handle_dev_tool(name, args)
+def _tool_read_file(
+    path: str,
+    start_line: int | None = None,
+    end_line: int | None = None,
+    max_chars: int = 4000,
+) -> str:
+    if not path:
+        return "ERROR: empty path"
+    fp = Path(path)
+    if not fp.exists():
+        return f"ERROR: file not found: {path}"
+    if not fp.is_file():
+        return f"ERROR: not a file: {path}"
     try:
-        parsed = json.loads(result)
-        if isinstance(parsed, dict) and "entries" in parsed and len(parsed["entries"]) > 50:
-            parsed["entries"] = parsed["entries"][:50]
-            parsed["note"] = f"Truncated (showing 50 of {len(parsed['entries'])})"
-            result = json.dumps(parsed, ensure_ascii=False)
-    except (json.JSONDecodeError, TypeError):
-        pass
-    return result[:5000]
+        text = fp.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:
+        return f"ERROR: {e}"
+
+    lines = text.splitlines()
+    total = len(lines)
+    start = max((start_line or 1) - 1, 0)
+    end = min(end_line or total, total)
+    window = lines[start:end]
+
+    numbered = "\n".join(f"{start + i + 1:>5} | {line}" for i, line in enumerate(window))
+    if len(numbered) <= max_chars:
+        suffix = "" if (start == 0 and end == total) else f"\n… (linhas {start + 1}-{end} de {total})"
+        return numbered + suffix
+
+    truncated = numbered[:max_chars]
+    return (
+        f"{truncated}\n… (truncado — {total} linhas totais; use start_line/end_line "
+        "ou grep via execute_shell para ver o resto)"
+    )
+
+
+def _tool_str_replace(path: str, old_str: str, new_str: str) -> str:
+    if not path:
+        return "ERROR: empty path"
+    fp = Path(path)
+
+    if old_str == "":
+        if fp.exists():
+            return f"ERROR: file already exists — old_str='' só cria arquivos novos: {path}"
+        try:
+            fp.parent.mkdir(parents=True, exist_ok=True)
+            fp.write_text(new_str, encoding="utf-8")
+            return f"OK: arquivo criado ({len(new_str)} bytes) — {path}"
+        except Exception as e:
+            return f"ERROR: {e}"
+
+    if not fp.exists():
+        return f"ERROR: file not found: {path} (use old_str='' para criar)"
+
+    try:
+        content = fp.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:
+        return f"ERROR: {e}"
+
+    count = content.count(old_str)
+    if count == 0:
+        return "ERROR: old_str não encontrado. Faça read_file novamente e copie o texto EXATO."
+    if count > 1:
+        return f"ERROR: old_str aparece {count}x — não é único. Adicione mais contexto ao redor."
+
+    new_content = content.replace(old_str, new_str, 1)
+    try:
+        fp.write_text(new_content, encoding="utf-8")
+    except Exception as e:
+        return f"ERROR: {e}"
+    return f"OK: 1 substituição em {path} ({len(new_content)} bytes)"
+
+
+def _tool_execute_shell(cmd: str, approve: bool = False) -> str:
+    """Primitiva única para explorar (ls/find/grep), testar (pytest/npm test),
+    commitar (git add/commit) e buscar na web (curl) — consolida o que antes
+    eram ferramentas dedicadas (git_commit, run_tests, web_search, read_url,
+    list_directory, code_search). Usa shell=True para suportar comandos
+    compostos (ex: `git add -A && git commit -m "msg"`); a gate de aprovação
+    (`command_allowed` / --approve) continua sendo a barreira de segurança."""
+    from jarvis.core.agent import command_allowed
+
+    if not cmd:
+        return "ERROR: empty command"
+    if not command_allowed(cmd):
+        if not approve:
+            return f"ERROR: command not allowed: {cmd} (use --approve)"
+        print(f"  ⚠  Comando: {cmd}")
+        try:
+            ans = input("  Permitir? [y/N] ").strip().lower()
+        except EOFError:
+            return "ERROR: approval denied (EOF)"
+        if ans not in ("y", "yes", "s", "sim"):
+            return "ERROR: command denied by user"
+
+    try:
+        res = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, timeout=60,
+        )
+        output = res.stdout if res.returncode == 0 else (res.stdout + res.stderr)
+        if not output.strip():
+            output = f"(exit code {res.returncode})"
+        return output[:3000]
+    except subprocess.TimeoutExpired:
+        return "ERROR: command timed out (60s)"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -> str:
+    """Dispatcher único — só existem 3 ferramentas possíveis."""
+    if name == "read_file":
+        return _tool_read_file(
+            args.get("path", ""),
+            args.get("start_line"),
+            args.get("end_line"),
+        )
+    if name == "str_replace":
+        return _tool_str_replace(
+            args.get("path", ""),
+            args.get("old_str", ""),
+            args.get("new_str", ""),
+        )
+    if name == "execute_shell":
+        return _tool_execute_shell(args.get("cmd", ""), approve)
+    return f"ERROR: unknown tool '{name}' (disponíveis: read_file, str_replace, execute_shell)"
 
 
 def _get_tools() -> list[dict[str, Any]]:
-    from jarvis.core.devtools import DEV_TOOLS
-    from jarvis.core.vision import VISION_TOOL
-    shell_tool = {
-        "type": "function",
-        "function": {
-            "name": "execute_shell",
-            "description": "Execute a shell command.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "cmd": {"type": "string", "description": "Shell command to execute."}
+    """Apenas 3 schemas — overhead total de ~150-250 tokens (vs. ~3.000 do
+    array antigo de 15 ferramentas)."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "description": "Lê o conteúdo de um arquivo com números de linha. Use sempre antes de str_replace.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Caminho relativo do arquivo"},
+                        "start_line": {"type": "integer", "description": "Linha inicial (opcional, 1-indexed)"},
+                        "end_line": {"type": "integer", "description": "Linha final (opcional, inclusive)"},
+                    },
+                    "required": ["path"],
                 },
-                "required": ["cmd"],
             },
         },
-    }
-    git_tool = {
-        "type": "function",
-        "function": {
-            "name": "git_commit",
-            "description": "Stage all changes and commit with message.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "message": {"type": "string", "description": "Commit message"}
+        {
+            "type": "function",
+            "function": {
+                "name": "str_replace",
+                "description": (
+                    "Substitui um trecho EXATO de texto em um arquivo. old_str deve ser "
+                    "único no arquivo (copiado do read_file). old_str='' cria um arquivo "
+                    "novo com new_str como conteúdo completo."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Caminho relativo do arquivo"},
+                        "old_str": {"type": "string", "description": "Texto exato a substituir (vazio para criar arquivo)"},
+                        "new_str": {"type": "string", "description": "Texto novo"},
+                    },
+                    "required": ["path", "old_str", "new_str"],
                 },
-                "required": ["message"],
             },
         },
-    }
-    web_search_tool = {
-        "type": "function",
-        "function": {
-            "name": "web_search",
-            "description": "Search the web for information.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Search query"}
+        {
+            "type": "function",
+            "function": {
+                "name": "execute_shell",
+                "description": (
+                    "Executa um comando shell (bash -c, suporta &&/pipes). Use para: explorar "
+                    "arquivos (ls, find, grep), rodar testes (pytest, npm test), git "
+                    "(add/commit/diff/log), buscar na web (curl), e qualquer ação que não "
+                    "seja ler ou editar um arquivo específico."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "cmd": {"type": "string", "description": "Comando shell completo a executar"}
+                    },
+                    "required": ["cmd"],
                 },
-                "required": ["query"],
             },
         },
-    }
-    read_url_tool = {
-        "type": "function",
-        "function": {
-            "name": "read_url",
-            "description": "Fetch and read a URL content.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "url": {"type": "string", "description": "URL to fetch"}
-                },
-                "required": ["url"],
-            },
-        },
-    }
-    return [shell_tool, VISION_TOOL, git_tool, web_search_tool, read_url_tool, *DEV_TOOLS]
+    ]
 
 
-def _extract_tool_call(content: str) -> dict | None:
-    import re
-    tag_re = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
-    codeblock_re = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+# ---------------------------------------------------------------------------
+# Parser híbrido de fallback (estilo Aider) — usado quando o modelo não
+# emite tool_calls nativas, ou quando native_tools=False (modelos "tiny")
+# ---------------------------------------------------------------------------
 
-    for regex in [tag_re, codeblock_re]:
+_SEARCH_REPLACE_RE = re.compile(
+    r"^(?P<path>[^\n`*]+?)\s*\n"
+    r"<{5,}\s*SEARCH\s*\n"
+    r"(?P<old>.*?)\n"
+    r"={5,}\s*\n"
+    r"(?P<new>.*?)\n"
+    r">{5,}\s*REPLACE",
+    re.DOTALL | re.MULTILINE,
+)
+
+_SHELL_BLOCK_RE = re.compile(r"```(?:bash|sh|shell)\s*\n(?P<cmd>.*?)```", re.DOTALL)
+
+_READ_MARKER_RE = re.compile(r"^>>>\s*READ\s+(?P<path>\S+)\s*$", re.MULTILINE)
+
+_JSON_TAG_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
+_JSON_CODEBLOCK_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+
+
+def _parse_text_actions(content: str) -> list[dict[str, Any]] | None:
+    """Extrai ações de texto puro quando não há tool_calls nativas.
+    Suporta múltiplas ações no mesmo turno (ex: vários blocos SEARCH/REPLACE)."""
+    if not content:
+        return None
+
+    actions: list[dict[str, Any]] = []
+
+    for m in _SEARCH_REPLACE_RE.finditer(content):
+        path = m.group("path").strip().strip("`").strip()
+        actions.append({
+            "name": "str_replace",
+            "arguments": {"path": path, "old_str": m.group("old"), "new_str": m.group("new")},
+        })
+
+    for m in _READ_MARKER_RE.finditer(content):
+        actions.append({"name": "read_file", "arguments": {"path": m.group("path").strip()}})
+
+    for m in _SHELL_BLOCK_RE.finditer(content):
+        cmd = m.group("cmd").strip()
+        if cmd:
+            actions.append({"name": "execute_shell", "arguments": {"cmd": cmd}})
+
+    if actions:
+        return actions
+
+    # Fallback secundário: JSON solto (formato de tool call legado)
+    for regex in (_JSON_TAG_RE, _JSON_CODEBLOCK_RE):
         match = regex.search(content)
         if match:
             try:
                 parsed = json.loads(match.group(1))
                 if isinstance(parsed, dict) and "name" in parsed:
-                    return parsed
+                    return [{"name": parsed["name"], "arguments": parsed.get("arguments", {})}]
             except json.JSONDecodeError:
                 pass
 
     try:
         parsed = json.loads(content)
         if isinstance(parsed, dict) and "name" in parsed:
-            return parsed
+            return [{"name": parsed["name"], "arguments": parsed.get("arguments", {})}]
     except json.JSONDecodeError:
         pass
 
     return None
 
+
+def _to_tool_calls(actions: list[dict[str, Any]] | None) -> list[dict[str, Any]] | None:
+    """Converte ações extraídas do texto para o mesmo formato de tool_calls
+    da API, mantendo o resto do loop agnóstico à origem (nativo vs. texto)."""
+    if not actions:
+        return None
+    return [
+        {
+            "id": f"call_fallback_{i}",
+            "type": "function",
+            "function": {"name": a["name"], "arguments": json.dumps(a["arguments"], ensure_ascii=False)},
+        }
+        for i, a in enumerate(actions)
+    ]
+
+
+# ---------------------------------------------------------------------------
+# REPL principal
+# ---------------------------------------------------------------------------
 
 def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
     if project_root:
@@ -387,16 +567,19 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
         os.chdir(project_root)
 
     profile = _detect_profile()
-    tools = _get_tools()
+    tools = _get_tools() if profile["native_tools"] else []
 
+    mode = "function-calling nativo" if profile["native_tools"] else "blocos de texto (Aider-style)"
     print(f"🤖 JARVIS Dev — SLM: {profile['name']} (max_tokens={profile['max_tokens']})")
     print(f"📁 Projeto: {os.getcwd()}")
-    print(f"🔧 Tools: {len(tools)} disponíveis")
-    print("   Comandos: /quit, /status, /clear, /help\n")
+    print(f"🔧 Ferramentas: read_file, str_replace, execute_shell — modo: {mode}")
+    print("   Comandos: /quit, /status, /clear, /map, /model, /recall, /architect, /help\n")
 
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context()
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
+    system_prompt = _maybe_disable_thinking(
+        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
+    )
 
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
@@ -420,7 +603,10 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
         if user_input == "/clear":
             repo_map = _build_repo_map(os.getcwd())
             memory_ctx = _build_memory_context()
-            messages = [{"role": "system", "content": SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)}]
+            system_prompt = _maybe_disable_thinking(
+                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
+            )
+            messages = [{"role": "system", "content": system_prompt}]
             print("🗑️  Contexto limpo.")
             continue
         if user_input == "/status":
@@ -430,17 +616,21 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
             status = monitor.status_dict()
             print(f"  Backend: {status['state']} ({status['latency_ms']}ms)")
             print(f"  Model: {active_model}")
+            print(f"  Modo de ferramentas: {mode}")
             print(f"  Uptime: {status['uptime_pct']}%")
             continue
         if user_input == "/map":
             repo_map = _build_repo_map(os.getcwd())
             memory_ctx = _build_memory_context()
-            system_prompt = SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
+            system_prompt = _maybe_disable_thinking(
+                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
+            )
             messages[0] = {"role": "system", "content": system_prompt}
             print("🗺️  Repo map + memória atualizados.")
             continue
         if user_input == "/model":
             print(f"  Modelo atual: {active_model}")
+            print(f"  Modo de ferramentas: {mode}")
             print("  Para trocar, edite models.nix e faça rebuild")
             continue
         if user_input == "/recall":
@@ -451,7 +641,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
                 results = mem.recall(user_input if len(user_input) > 8 else "dev", top_k=3)
                 if results:
                     for r in results:
-                        print(f"  [{r.get('kind','?')}] {r.get('text','')[:100]}")
+                        print(f"  [{r.get('kind', '?')}] {r.get('text', '')[:100]}")
                 else:
                     print("  Nenhuma memória encontrada.")
             except Exception as e:
@@ -478,7 +668,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
                         if exec_input != "n":
                             messages.append({"role": "user", "content": task_input})
                             messages.append({"role": "assistant", "content": f"Plano: {plan}"})
-                            messages.append({"role": "user", "content": "Execute este plano. Use as tools."})
+                            messages.append({"role": "user", "content": "Execute este plano. Use as ferramentas disponíveis."})
                     else:
                         print("⚠️  Não foi possível gerar plano.")
                 except Exception as e:
@@ -501,32 +691,14 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
             tool_calls = message.get("tool_calls")
 
             if not tool_calls and content:
-                fallback = _extract_tool_call(content)
-                if fallback:
-                    tool_calls = [{
-                        "id": "call_fallback_0",
-                        "type": "function",
-                        "function": {
-                            "name": fallback["name"],
-                            "arguments": json.dumps(fallback.get("arguments", {})),
-                        },
-                    }]
-                    print(" (recuperado via fallback)")
-                else:
-                    print()
+                tool_calls = _to_tool_calls(_parse_text_actions(content))
+                print(" (recuperado via parser de texto)" if tool_calls else "")
             else:
                 print()
 
-            # Constrói o objeto da mensagem sem chaves 'null'
-            assistant_msg: dict[str, Any] = {"role": "assistant"}
-            if content:
-                assistant_msg["content"] = content
-            else:
-                assistant_msg["content"] = None
-
+            assistant_msg: dict[str, Any] = {"role": "assistant", "content": content or None}
             if tool_calls:
                 assistant_msg["tool_calls"] = tool_calls
-
             messages.append(assistant_msg)
 
             if not tool_calls:
@@ -541,38 +713,13 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
                 except json.JSONDecodeError:
                     args = {}
 
-                print(f"  🔧 {func_name}({args.get('path', args.get('cmd', ''))[:50]})")
+                preview_arg = args.get("path", args.get("cmd", ""))[:50]
+                print(f"  🔧 {func_name}({preview_arg})")
                 output = _execute_tool_call(func_name, args, approve)
 
-                try:
-                    parsed = json.loads(output)
-                    if isinstance(parsed, dict):
-                        if parsed.get("ok"):
-                            if "entries" in parsed:
-                                print(f"  📂 {parsed.get('count', 0)} itens")
-                            elif "content" in parsed:
-                                lines = parsed.get("lines", 0)
-                                total = parsed.get("total_lines", 0)
-                                print(f"  📄 {lines}/{total} linhas")
-                            elif "results" in parsed:
-                                print(f"  🔍 {parsed.get('total', 0)} resultados")
-                            elif "passed" in parsed:
-                                p, f = parsed.get("passed", 0), parsed.get("failed", 0)
-                                icon = "✅" if f == 0 else "❌"
-                                print(f"  {icon} {p} passed, {f} failed")
-                            elif "replacements" in parsed:
-                                print(f"  ✏️  {parsed['replacements']} substituições")
-                            elif "bytes" in parsed:
-                                print(f"  💾 {parsed['bytes']} bytes escritos")
-                            else:
-                                print("  ✅ OK")
-                        else:
-                            print(f"  ⚠️  {parsed.get('error', 'erro')[:80]}")
-                except (json.JSONDecodeError, TypeError):
-                    if len(output) > 100:
-                        print(f"  📤 {len(output)} chars")
-                    else:
-                        print(f"  📤 {output[:80]}")
+                icon = "⚠️ " if output.startswith("ERROR") else "✅"
+                preview = output if len(output) <= 120 else f"{output[:120]}…"
+                print(f"  {icon} {preview}")
 
                 tool_call_id = tc.get("id") or "call_fallback_0"
                 messages.append({
@@ -584,7 +731,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
 
 def _architect_plan(task: str, profile: dict, tools: list) -> str | None:
     repo_map = _build_repo_map(os.getcwd())
-    plan_prompt = PLAN_PROMPT.format(repo_map=repo_map)
+    plan_prompt = _maybe_disable_thinking(PLAN_PROMPT.format(repo_map=repo_map))
     plan_messages: list[dict[str, Any]] = [
         {"role": "system", "content": plan_prompt},
         {"role": "user", "content": task},
@@ -592,25 +739,28 @@ def _architect_plan(task: str, profile: dict, tools: list) -> str | None:
     try:
         data = _call_llm(plan_messages, tools, profile)
         msg = data["choices"][0]["message"]
-        tool_calls = msg.get("tool_calls")
+        content = msg.get("content") or ""
+        tool_calls = msg.get("tool_calls") or _to_tool_calls(_parse_text_actions(content))
 
         if tool_calls:
             for tc in tool_calls:
                 fn = tc["function"]["name"]
+                if fn != "read_file":
+                    continue
                 try:
                     a = json.loads(tc["function"]["arguments"])
                 except json.JSONDecodeError:
                     a = {}
-                if fn in ("read_file", "list_directory"):
-                    result = _execute_tool_call(fn, a)
-                    tool_id = tc.get("id") or "call_plan_0"
-                    plan_messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_id,
-                        "content": result[:2000],
-                    })
+                result = _execute_tool_call(fn, a)
+                tool_id = tc.get("id") or "call_plan_0"
+                plan_messages.append({"role": "assistant", "content": None, "tool_calls": [tc]})
+                plan_messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_id,
+                    "content": result[:2000],
+                })
 
-        plan_messages.append({"role": "user", "content": "Agora retorne o plano JSON."})
+        plan_messages.append({"role": "user", "content": "Agora retorne o plano em JSON, campo 'plan'."})
         data2 = _call_llm(plan_messages, tools, profile)
         plan_content = data2["choices"][0]["message"].get("content") or ""
         try:
@@ -631,14 +781,16 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False) 
         os.chdir(project_root)
 
     profile = _detect_profile()
-    tools = _get_tools()
+    tools = _get_tools() if profile["native_tools"] else []
 
     print(f"🤖 JARVIS Dev — {profile['name']}")
     print(f"📋 Tarefa: {task}\n")
 
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context(task)
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
+    system_prompt = _maybe_disable_thinking(
+        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
+    )
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": task},
@@ -656,26 +808,11 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False) 
         tool_calls = message.get("tool_calls")
 
         if not tool_calls and content:
-            fallback = _extract_tool_call(content)
-            if fallback:
-                tool_calls = [{
-                    "id": "call_fallback_0",
-                    "type": "function",
-                    "function": {
-                        "name": fallback["name"],
-                        "arguments": json.dumps(fallback.get("arguments", {})),
-                    },
-                }]
+            tool_calls = _to_tool_calls(_parse_text_actions(content))
 
-        assistant_msg: dict[str, Any] = {"role": "assistant"}
-        if content:
-            assistant_msg["content"] = content
-        else:
-            assistant_msg["content"] = None
-
+        assistant_msg: dict[str, Any] = {"role": "assistant", "content": content or None}
         if tool_calls:
             assistant_msg["tool_calls"] = tool_calls
-
         messages.append(assistant_msg)
 
         if not tool_calls:
