@@ -169,11 +169,12 @@
       reminder: sys
       examples_as_sys_msg: true
       reasoning_tag: null
+     
       system_prompt_prefix: |
-        You are an autonomous execution coding agent.
-        Analyze the repo map to locate files required for the user prompt.
-        Focus strictly on selecting files and generating SEARCH/REPLACE blocks.
-        Do NOT generate repeated text loops or conversational preamble.
+        You are an expert coding assistant.
+        If you need to search for a file, output ONLY a bash code block with the search command (like grep or find).
+        If the required files are already in the chat, output ONLY the SEARCH/REPLACE blocks to edit them.
+        Do not write explanations.
       extra_params:
         max_tokens: 8192
         temperature: 0.0
