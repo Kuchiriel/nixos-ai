@@ -142,8 +142,8 @@ let
         # Fallback: detect speech onset via RMS, record, then STT checks
         # if the user said 'Hey Jarvis'.
         PW_RECORD = "${pkgs.pipewire}/bin/pw-record"
-        SPEECH_RMS = 3500  # RMS > 3500 = voz acima do ruído (noise ~2200)
-        SILENCE_RMS = 1500  # RMS < 1500 for 1.5s = end of speech
+        # Adaptive VAD: speech = RMS > baseline * 1.5, silence = RMS < baseline * 1.1
+        noise_baseline = 2200  # Updated during silence (rolling average)
         print(f"[WW] Starting pw-record {DEVICE} @ {RATE}Hz (VAD mode: speech_rms={SPEECH_RMS}, Cooldown: {COOLDOWN}s)", flush=True)
 
         def start_arecord():
@@ -185,19 +185,24 @@ let
                     pulse_state += 1
 
                 if chunk_count % 10 == 0:
-                    print(f"[WW] RMS: {rms:.0f} (speech>{SPEECH_RMS}, silence<{SILENCE_RMS})", flush=True)
+                    speech_thresh = noise_baseline * 1.5
+                    print(f"[WW] RMS: {rms:.0f} (baseline={noise_baseline:.0f}, speech>{speech_thresh:.0f})", flush=True)
 
                 # Skip during warmup
                 if chunk_count < WARMUP_CHUNKS:
                     continue
 
+                # Update noise baseline during silence
+                if not speaking:
+                    noise_baseline = noise_baseline * 0.99 + rms * 0.01  # slow EWMA
+
                 # Cooldown check
                 if (time.time() - last_trigger_time) < COOLDOWN:
                     continue
 
-                # VAD: detect speech onset
+                # VAD: detect speech onset (adaptive threshold)
                 if not speaking:
-                    if rms > SPEECH_RMS:
+                    if rms > noise_baseline * 1.5:
                         speaking = True
                         speech_frames = [data]
                         silence_start = None
@@ -207,8 +212,8 @@ let
                 # Currently speaking — accumulate frames
                 speech_frames.append(data)
 
-                # Check for silence
-                if rms < SILENCE_RMS:
+                # Check for silence (adaptive: < baseline * 1.1)
+                if rms < noise_baseline * 1.1:
                     if silence_start is None:
                         silence_start = time.time()
                     elif time.time() - silence_start > 1.5:
