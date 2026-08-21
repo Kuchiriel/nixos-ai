@@ -62,6 +62,7 @@ in
     cloudflare-warp
     # Pacote do JARVIS via overlay
     jarvis
+    prompt_toolkit
   ];
 
   # Habilita o gerenciamento de volumes e montagem de mídia
