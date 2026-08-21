@@ -168,7 +168,10 @@ let
                 audio_np = np.frombuffer(data, dtype=np.int16).astype(np.float32)
                 mono = (audio_np[::2] + audio_np[1::2]) * 0.5
                 # Normalização calibrada do legado: DC removal + ganho fixo
-                mono_norm = np.clip((mono - np.mean(mono)) * 10.0, -32768, 32767).astype(np.int16)
+                # Ganho 50x: microfone do laptop é naturalmente baixo (RMS 70)
+                # PipeWire + RNNoise atenuam vs ALSA direto do Manjaro.
+                # O modelo openwakeword precisa de sinal forte para reconhecer.
+                mono_norm = np.clip((mono - np.mean(mono)) * 50.0, -32768, 32767).astype(np.int16)
                 oww.predict(mono_norm)
                 score = oww.prediction_buffer['hey_jarvis_v0.1'][-1]
                 rms = np.sqrt(np.mean(mono**2))
