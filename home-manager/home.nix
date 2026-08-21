@@ -45,15 +45,24 @@ stylix.targets.hyprland.enable = false;
     };
   };
 
-  # 1. Configuração do Aider apontando para o identificador customizado
+  # 1. Configuração do Aider — Qwen3.6-35B-A3B via llama.cpp local
   home.file.".aider.conf.yml".text = ''
     openai-api-base: "http://localhost:8080/v1"
+    openai-api-key: "sk-dummy"
     model: "openai/custom-model"
+    edit-format: diff
     auto-commits: true
     dirty-commits: true
+    yes-always: true
+    no-show-model-warnings: true
+    no-check-model-accepts-settings: true
+    no-cache-prompts: true
+    no-stream: true
+    map-tokens: 2048
+    map-refresh: auto
   '';
 
-  # 2. Injeção explícita de metadados para ensinar o LiteLLM a aceitar o contexto estendido
+  # 2. Metadata do modelo (limites de contexto)
   home.file.".aider.model.metadata.json".text = ''
     {
       "openai/custom-model": {
@@ -65,6 +74,25 @@ stylix.targets.hyprland.enable = false;
         "mode": "chat"
       }
     }
+  '';
+
+  # 3. Settings do modelo customizado (edit_format, system_prompt, etc.)
+  home.file.".aider.model.settings.yml".text = ''
+    - name: openai/custom-model
+      edit_format: diff
+      use_repo_map: true
+      lazy: false
+      reminder: sys
+      examples_as_sys_msg: true
+      system_prompt_prefix: >-
+        You are an autonomous coding agent. You MUST execute all actions yourself.
+        NEVER ask the user to run commands, edit files, or do anything manually.
+        When you need to read a file, read it. When you need to edit, generate SEARCH/REPLACE blocks.
+        When you need to run a shell command, suggest it in a ```bash block.
+        Be concise and direct. Do not output thinking or reasoning text.
+      extra_params:
+        max_tokens: 4096
+        temperature: 0.0
   '';
 
   services.jarvis-wakeword = {
