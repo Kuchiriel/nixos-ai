@@ -58,24 +58,26 @@
     url = "https://huggingface.co/Systran/faster-whisper-tiny.en/resolve/main/model.bin";
     hash = "sha256-Glr64GpNuRyXXJqdeL5cwRDuTqAirVfVVJLkVQ6Tayo=";
   };
-   
+
   programs.opencode = {
     enable = true;
-#   enableMcpIntegration = true;
     package = inputs.opencode-flake.packages.${pkgs.system}.default;
 
     settings = {
-    #  theme = "opencode";
-      provider.local = {
-        npm = "@ai-sdk/openai-compatible";
-        options.baseURL = "http://localhost:8080/";
-        models."qwen3-35b-a3b" = {
-          name = "Qwen3 35B Local";
-          cost = { input = 0; output = 0; };
+      provider = {
+        local = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "http://127.0.0.1:8080/v1";
+          };
+          models = {
+            "qwen3-35b-a3b" = {
+              name = "Qwen3 35B Local";
+            };
+          };
         };
       };
       model = "local/qwen3-35b-a3b";
-     # small_model = "local/qwen3-35b-a3b";
     };
   };
 
