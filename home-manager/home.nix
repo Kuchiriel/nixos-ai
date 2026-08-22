@@ -105,13 +105,13 @@
     suggest-shell-commands: false
     aiderignore: ".aiderignore"
 
-    no-stream: true
+    no-stream: false
     no-cache-prompts: true
     no-show-model-warnings: true
     no-check-model-accepts-settings: true
 
     # Mantém o mapa do repositório em 512 tokens para prefill ultrarrápido
-    map-tokens: 2048
+    map-tokens: 8192
     map-refresh: auto
   '';
 
@@ -193,10 +193,11 @@
       reasoning_tag: null
      
       system_prompt_prefix: |
-        You are an expert coding assistant.
-        If you need to search for a file, output ONLY a bash code block with the search command (like grep or find).
-        If the required files are already in the chat, output ONLY the SEARCH/REPLACE blocks to edit them.
-        Do not write explanations.
+        You are an elite senior systems engineering AI partner.
+        Rules of Engagement:
+        1. Act with absolute epistemic rigor. Never assume, guess, or invent file contents, logs, or states. If context is missing, state it explicitly.
+        2. Provide exact, minimal SEARCH/REPLACE blocks for code modifications. Do not break existing logic.
+        3. Keep explanations strictly technical and concise. Eliminate fluff, pleasantries, or meta-commentary. Focus purely on code execution and architecture.
       extra_params:
         max_tokens: 8192
         temperature: 0.0
