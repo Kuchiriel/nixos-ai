@@ -27,6 +27,7 @@ def _resp_with(data):
     return _FakeResp(data)
 
 
+@pytest.mark.integration
 def test_chat_sends_disable_thinking_by_default(monkeypatch):
     """Default (lab/CPU): thinking desligado — chat_template_kwargs no payload."""
     captured = {}
@@ -43,6 +44,7 @@ def test_chat_sends_disable_thinking_by_default(monkeypatch):
     assert captured["payload"]["chat_template_kwargs"] == {"enable_thinking": False}
 
 
+@pytest.mark.integration
 def test_chat_omits_disable_thinking_when_enabled(monkeypatch):
     """JARVIS_LLM_DISABLE_THINKING=0 → thinking reabilitado (payload limpo)."""
     captured = {}
@@ -59,6 +61,7 @@ def test_chat_omits_disable_thinking_when_enabled(monkeypatch):
     assert "chat_template_kwargs" not in captured["payload"]
 
 
+@pytest.mark.integration
 def test_embed_truncates_long_text(monkeypatch):
     # ctx do modelo de embedding é 512 tokens — texto longo deve ser truncado
     # antes do POST (o llama-server rejeita com HTTP 400 caso contrário)

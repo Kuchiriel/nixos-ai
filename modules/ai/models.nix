@@ -167,27 +167,30 @@ in
     # Host: RTX 4050 6GB + 32GB RAM, Qwen3.6-35B-A3B MoE + vision
     #
     # VRAM budget (6GB total, mmproj na CPU via --no-mmproj-offload):
-    #   attention 50 layers: ~3600 MiB (todas na GPU)
+    #   attention 45 layers: ~3240 MiB (reduzido de 50 para 45)
     #   KV q4_0 128K:        ~500 MiB
     #   CUDA overhead:       ~200 MiB
-    #   TOTAL:               ~4300 MiB (1800 MiB margem)
+    #   slots (2):           ~400 MiB extra (2 slots concorrentes)
+    #   TOTAL:               ~4340 MiB (1800 MiB margem)
     #   mmproj BF16:         861 MiB na CPU (usa RAM, não VRAM)
     #
     # Experts (20GB GGUF) ficam na RAM (32GB DDR5 ~120GB/s)
     # CPU lê experts sob demanda quando router seleciona top-k
-    # Forecast: ~32 t/s decode, ~367 t/s prefill, 0.7% drift
+    # Forecast: ~30-32 t/s decode, ~350 t/s prefill, 0.7% drift
+    # NOTA: --slot-count 2 suporta tool calls concorrentes (Roo Dev)
 
     host = {
         model = "llm-host";
         mmproj = "llm-host-mmproj";  # vision encoder (BF16, 861MB) — roda em CPU via --no-mmproj-offload
-        threads = 12;              # testando: 16 threads no i7-13620H (20 available)
+        threads = 12;              # 12 threads no i7-13620H (20 available, 12 para deixar margem)
         
-        # 128K contexto para suportar Aider/Freebuff com projetos grandes.
+        # 128K contexto para suportar Aider/Freebuff/Roo Dev com projetos grandes.
         # KV cache q4_0 mantém VRAM dentro do budget (~2.5GB para 128K).
         ctxSize = 131072.;
         batchSize = 1024;        
         ubatch = 1024;
-        gpuLayers = 50;            # OTIMIZADO: 50 layers na GPU, mmproj na CPU = 32t/s estável + 27GB RAM livre
+        gpuLayers = 45;            # 45 layers na GPU (reduzido de 50): ~500MiB VRAM livre extra,
+                                   # temperatura ~5°C menor, mmproj na CPU = 32t/s estável
        
         kvCache = "-fa on -ctk q4_0 -ctv q4_0";         
 
@@ -204,6 +207,8 @@ in
             "--no-warmup"                    # Sem warmup: +2% prefill e decode
             "--prio" "2"                     # Prioridade high para decode
             "--prio-batch" "3"               # Real-time priority para batch/prefull
+            "--slot-count" "2"               # 2 slots para tool calls concorrentes (Roo Dev, Aider)
+            "--cont-batching"                 # Cont-batching: agendamento eficiente com múltiplos slots
        ];
 
         user = "root";
