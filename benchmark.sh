@@ -17,7 +17,7 @@ SERVER_URL="http://127.0.0.1:8080"
 PROMPT_SIZE=60  # repetições da frase-base
 
 # ─── Parse args ───
-REPEAT=1
+REPEAT=5
 WARMUP=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
