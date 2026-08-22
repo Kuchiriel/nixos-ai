@@ -107,10 +107,13 @@ in
     "quiet"
     "loglevel=3"
     "iommu=pt"
-    "pcie_aspm=force"          # Altere de "off" para "force" para reduzir calor da dGPU em idle
-    "nvme_load=1"              # Adicione para carregar o NVMe precocemente no initrd
-    "preempt=full"             # Adicione para forçar preempção total do kernel Zen
-    "split_lock_detect=off"    # Adicione para desativar penalidades por split locks em IA
+    "pcie_aspm=force"          # Reduz calor da dGPU em idle
+    "nvme_load=1"              # Carrega o NVMe precocemente no initrd
+    "preempt=full"             # Preempção total do kernel Zen
+    "split_lock_detect=off"    # Desativa penalidades por split locks em IA
+    # Performance tweaks para llama.cpp / inferência:
+    "intel_idle.max_cstate=1"  # Limita C-states a C1: menor wake latency, +1-3% decode
+    "nvme_core.io_timeout=10"  # Timeout I/O NVMe mais agressivo
   ];
 
   # =========================================================================
@@ -159,12 +162,19 @@ in
 
   boot.kernel.sysctl = {
     "vm.swappiness" = 10;
+    "vm.nr_hugepages" = 16384;                  # 32GB * 50% / 2MB = 16384 pages: Huge Pages para KV cache do llama.cpp
+    "kernel.sched_child_runs_first" = 1;        # Processos filhos rodam mais rápido (inferência)
     "net.core.default_qdisc" = "fq_codel";
     "net.ipv4.tcp_congestion_control" = "bbr";
-    "net.ipv4.tcp_low_latency" = 1;            # Adicione: Otimização de baixa latência de rede
-    "net.core.netdev_max_backlog" = 16384;     # Adicione: Expande fila contra gargalo da Claro
-    "net.ipv4.tcp_fastopen" = 3;               # Adicione: Acelera conexões HTTP das tools web
+    "net.ipv4.tcp_low_latency" = 1;             # Baixa latência de rede
+    "net.core.netdev_max_backlog" = 16384;      # Expande fila contra gargalo da Claro
+    "net.ipv4.tcp_fastopen" = 3;                # Acelera conexões HTTP das tools web
   };
+
+  # I/O scheduler para NVMe: 'none' é melhor que 'kyber' para devices non-rotational
+  services.udev.extraRules = ''
+    ACTION=="add|change", KERNEL=="nvme[0-9]*n[0-9]*", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="none"
+  '';
 
   # Garante que as pastas de banco vetorial (Qdrant) e modelos nasçam com +C (No CoW)
   # Regras de tmpfiles: limpeza e suporte a No CoW (+C) para Btrfs
