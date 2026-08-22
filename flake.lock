@@ -254,11 +254,11 @@
         "openspec": "openspec"
       },
       "locked": {
-        "lastModified": 1787420958,
-        "narHash": "sha256-p3Q4nLEL0Rw2ewBYLaTONGr8FYB8YxpJX0rqaFTWgig=",
+        "lastModified": 1787421124,
+        "narHash": "sha256-LJbNDU7YD3aifMJrrKnm2jRwEVxDcG1M3+nkwGf0oGA=",
         "ref": "refs/heads/master",
-        "rev": "582b70923fb679d3b5ffa955c8c7ba3852e34fa7",
-        "revCount": 383,
+        "rev": "c2759ea320cffd85f0b8d7572031d90e4d85ec53",
+        "revCount": 384,
         "type": "git",
         "url": "file:///home/nixos/projects/nixpkgs"
       },
