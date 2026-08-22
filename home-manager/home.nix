@@ -1,4 +1,4 @@
-{ homeStateVersion, user, pkgs, inputs, ... }: {
+{ homeStateVersion, user, pkgs, inputs, system ... }: {
   imports = [
     inputs.opencode.homeManagerModules.default
     ./modules
