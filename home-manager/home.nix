@@ -25,16 +25,9 @@
   m3ta.stt-ptt.language = "pt";
 
   # ── m3ta-coding: coding agents (Pi, OpenCode) ──────────────────
-  coding.agents.pi = {
-    enable = true;
-    agentsInput = inputs.agents;
-    settings.defaultProvider = "anthropic";
-    settings.defaultModel = "claude-sonnet-4";
-    mcpServers.nixos = {
-      command = "/home/${user}/.local/bin/mcp-nixos-wrapper";
-      args = [];
-    };
-  };
+  # Pi agent desabilitado — renderForPi precisa de agente "primary" no repo AGENTS
+  # Para reativar, adicione um agente com mode="primary" no repo AGENTS
+  coding.agents.pi.enable = false;
 
   home.sessionVariables = {
     _JAVA_AWT_WM_NONREPARENTING = "1";
