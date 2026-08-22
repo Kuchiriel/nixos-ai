@@ -8,6 +8,8 @@
     # m3ta-coding: coding agents (Pi, OpenCode)
     ./modules/m3ta-coding/pi.nix
     ./modules/m3ta-coding/shared/default.nix
+    # VS Code + Roo Code (100% declarativo)
+    ./modules/vscode-roo.nix
   ];
 
   stylix.targets.hyprland.enable = false;
@@ -80,45 +82,8 @@
   };
 
 
-  programs.vscode = {
-    enable = true;
-    # Pacote oficial ou via flake, garantindo versão recente
-    package = pkgs.vscode;
-
-    profiles.default = {
-      # Configurações de usuário declarativas no VS Code
-      userSettings = {
-        # Força a habilitação de modelos BYOK (Bring Your Own Key) no chat nativo
-        "chat.agentHost.byokModels.enabled" = true;
-
-        # Mapeia diretamente o endpoint compatível com OpenAI do seu llama.cpp local
-        "chat.customEndpoints" = [
-          {
-            "name" = "Qwen3 Local 35B";
-            "url" = "http://127.0.0.1:8080/v1";
-            "models" = [
-              {
-                "id" = "qwen3-35b-a3b";
-                "name" = "Qwen3 35B Local";
-                "maxInputTokens" = 131072;
-                "maxOutputTokens" = 8192;
-                "toolCalling" = true;
-              }
-            ];
-          }
-        ];
-
-        # Define o Qwen local como o modelo padrão de utilidade do chat
-        "chat.utilityModel" = "customendpoint/qwen3-35b-a3b";
-        "chat.utilitySmallModel" = "customendpoint/qwen3-35b-a3b";
-
-        # Roo Dev (roo-cline) timeout settings
-        # Aumentado para suportar prompts grandes com 192K context
-        "roo-cline.apiRequestTimeout" = 1800;  # 30 min (default: 600s)
-        "roo-cline.commandExecutionTimeout" = 300;  # 5 min para comandos
-      };
-    };
-  };
+  # ── VS Code + Roo Code — configurado via módulo vscode-roo.nix ──
+  # (extensões, userSettings, MCP, custom modes são declarativos)
 
 
   programs.opencode = {

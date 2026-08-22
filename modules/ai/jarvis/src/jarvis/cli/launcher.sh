@@ -92,26 +92,25 @@ llm_health() {
 # Menu helpers — rods menu_yad com --text-info + scroll
 # ═══════════════════════════════════════════════════════════════════════════
 
-# Usage: menu_run "Title" "scrollable_text" "btn_label1:1" "btn_label2:2" ...
-# Returns: RC in $MENU_RC, stdout has button label clicked
+# menu_run: abre janela Yad com texto + botões
+# SEM --text-info (que fecha com EOF do pipe)
+# Usa --text direto — maior janela se precisar
 MENU_RC=0
 MENU_CLICKED=""
 
 menu_run() {
     local title="$1"; shift
     local text="$1"; shift
-    # remaining args are "label:code" pairs
     local buttons=()
     for arg in "$@"; do
         buttons+=(--button="$arg")
     done
 
-    # text-info with scroll handles overflow
-    MENU_CLICKED=$(echo "$text" | $YAD \
+    MENU_CLICKED=$($YAD \
         --title="$title" \
-        --text-info \
-        --scroll \
-        --width=580 --height=600 \
+        --text="$text" \
+        --text-align=left \
+        --width=580 --height=640 \
         --font="JetBrainsMono Nerd Font 12" \
         "${buttons[@]}" \
         2>/dev/null) || true
