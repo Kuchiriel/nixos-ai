@@ -211,12 +211,5 @@
         export FLAKE_ROOT="''${FLAKE_ROOT:-$(git rev-parse --show-toplevel)}"
       '';
     };
-
-    # Permite `nix build .#jarvis` / `nix run .#jarvis`
-    # e `nix build .#jarvis-voice` (núcleo + STT faster-whisper + TTS Kokoro)
-    packages.${system} = {
-      jarvis = (nixpkgs.legacyPackages.${system}.extend aiOverlay).jarvis;
-      jarvis-voice = (nixpkgs.legacyPackages.${system}.extend aiOverlay).jarvis-voice;
-    };
   };
 }
