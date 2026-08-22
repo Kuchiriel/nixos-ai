@@ -143,7 +143,7 @@ let
         # if the user said 'Hey Jarvis'.
         PW_RECORD = "${pkgs.pipewire}/bin/pw-record"
         # Adaptive VAD: speech = RMS > baseline * 1.5, silence = RMS < baseline * 1.1
-        noise_baseline = 2200  # Updated during silence (rolling average)
+        noise_baseline = 500  # Updated during silence (rolling average)
         print(f"[WW] Starting pw-record {DEVICE} @ {RATE}Hz (VAD adaptive mode, Cooldown: {COOLDOWN}s)", flush=True)
 
         def start_arecord():
@@ -200,11 +200,17 @@ let
                 if (time.time() - last_trigger_time) < COOLDOWN:
                     continue
 
-                # VAD: detect speech onset (adaptive: 10% above baseline, require 2 consecutive chunks)
+                # VAD: detect speech onset
+                # 1. Ignore very quiet audio (electronic noise)
+                if rms < 50:
+                    continue
+
+                # 2. Adaptive threshold: 50% above baseline (was 10%)
+                # 3. Require 3 consecutive chunks (was 2)
                 if not speaking:
-                    if rms > noise_baseline * 1.1:
+                    if rms > noise_baseline * 1.5:
                         speech_buf.append(rms)
-                        if len(speech_buf) >= 2:
+                        if len(speech_buf) >= 3:
                             speaking = True
                             speech_frames = [data]
                             silence_start = None
