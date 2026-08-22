@@ -68,6 +68,7 @@
   home.file.".config/opencode/opencode.json".text = builtins.toJSON {
     "$schema" = "https://opencode.ai/config.json";
     provider = {
+      # Provedor local (Seu Qwen)
       local = {
         npm = "@ai-sdk/openai-compatible";
         options = {
@@ -76,14 +77,11 @@
         models = {
           "qwen3-35b-a3b" = {
             name = "Qwen3 35B Local";
-            cost = {
-              input = 0;
-              output = 0;
-            };
           };
         };
       };
     };
+    # Define o modelo padrão
     model = "local/qwen3-35b-a3b";
   };
 
