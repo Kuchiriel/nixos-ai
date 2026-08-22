@@ -33,6 +33,11 @@
     fi
   '';
 
+  programs.direnv = {
+    enable = true;
+    nix-direnv.enable = true;
+  };
+
   # Garante que as ferramentas universais de AST/tags estejam disponíveis no PATH do usuário para o Aider
   home.packages = with pkgs; [
     universal-ctags
