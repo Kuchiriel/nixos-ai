@@ -65,17 +65,21 @@
   # Benchmark: 32 t/s decode, 367 t/s prefill, 4179 MiB VRAM
   # ══════════════════════════════════════════════════════════════
 
-home.file.".config/opencode/opencode.json".text = builtins.toJSON {
+  home.file.".config/opencode/opencode.json".text = builtins.toJSON {
     "$schema" = "https://opencode.ai/config.json";
     provider = {
       local = {
-        npm = "@ai-sdk/openai-compatible";
+        package = "@ai-sdk/openai-compatible";
         options = {
           baseURL = "http://localhost:8080/v1";
         };
         models = {
           "qwen3-35b-a3b" = {
             name = "Qwen3 35B Local";
+            cost = {
+              input = 0;
+              output = 0;
+            };
           };
         };
       };
