@@ -1,20 +1,15 @@
-# Biblioteca de helpers para nixos-ai
-#
-# Esta biblioteca expõe as utilidades do m3ta-nixpkgs (ports, coding-rules,
-# agents) de forma acessível via `let m3ta = import ./default.nix { lib; };`
-#
-# Usage:
+# Library of helper functions for m3ta-nixpkgs
+# Usage in your configuration:
 #   let
-#     m3ta = import ./lib { inherit lib; };
-#     portHelpers = m3ta.ports.mkPortHelpers {
-#       ports = { qdrant = 6333; llama-cpp = 8080; };
-#       hostPorts = { nitro-v15 = { qdrant = 6334; }; };
-#     };
+#     m3taLib = inputs.m3ta-nixpkgs.lib.${system};
 #   in ...
-{lib}: let
+{lib}: {
+  # Port management utilities
   ports = import ./ports.nix {inherit lib;};
-  agents = import ./agents.nix {inherit lib;};
+
+  # Coding rules injection utilities
   coding-rules = import ./coding-rules.nix {inherit lib;};
-in {
-  inherit ports agents coding-rules;
+
+  # Agent configuration management utilities
+  agents = import ./agents.nix {inherit lib;};
 }

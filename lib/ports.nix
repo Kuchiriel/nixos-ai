@@ -1,29 +1,98 @@
-# Port management utilities para nixos-ai
+# Port management utilities
 #
-# Gerencia portas de serviços centralizadamente com suporte a overrides
-# por host. Ideal para serviços como qdrant, llama-cpp, mcp etc.
+# This module provides functions to manage service ports across multiple hosts
+# in a centralized way. Ports are defined in your configuration and can have
+# host-specific overrides.
 #
-# Usage:
+# Usage in your configuration:
+#
+#   # In your flake or configuration, define your ports:
 #   let
-#     m3taLib = import ./default.nix { inherit lib; };
+#     m3taLib = inputs.m3ta-nixpkgs.lib.${system};
+#
 #     myPorts = {
 #       ports = {
-#         qdrant = 6333;
-#         llama-cpp = 8080;
-#         mcp = 3000;
+#         nginx = 80;
+#         grafana = 3000;
+#         prometheus = 9090;
+#         homepage = 8080;
 #       };
 #       hostPorts = {
-#         nitro-v15 = { qdrant = 6334; };
+#         laptop = {
+#           nginx = 8080;  # Override nginx port on laptop
+#         };
+#         server = {
+#           homepage = 3001;  # Override homepage port on server
+#         };
 #       };
 #     };
+#
 #     portHelpers = m3taLib.ports.mkPortHelpers myPorts;
 #   in {
-#     services.qdrant.port = portHelpers.getPort "qdrant" "nitro-v15";
+#     # Use in your config:
+#     services.nginx.port = portHelpers.getPort "nginx" "laptop";
+#     # Returns: 8080 (host-specific override)
+#
+#     services.grafana.port = portHelpers.getPort "grafana" "laptop";
+#     # Returns: 3000 (default port)
+#
+#     # Get all ports for a specific host (defaults + overrides):
+#     allLaptopPorts = portHelpers.getHostPorts "laptop";
+#     # Returns: { nginx = 8080; grafana = 3000; prometheus = 9090; homepage = 8080; }
 #   }
-{lib}: let
-  # Re-exporta a função mkPortHelpers do m3ta-nixpkgs
-  mkPortHelpers = portsConfig:
-    (import "${./../m3ta-nixpkgs}/lib/ports.nix" {inherit lib;}).mkPortHelpers portsConfig;
-in {
-  inherit mkPortHelpers;
+{lib}: {
+  # Create port helper functions from a ports configuration
+  #
+  # Args:
+  #   portsConfig: An attribute set with structure:
+  #     {
+  #       ports = { service-name = port-number; ... };
+  #       hostPorts = { hostname = { service-name = port-number; ... }; ... };
+  #     }
+  #
+  # Returns:
+  #   An attribute set containing helper functions:
+  #     - getPort: Get port for a service with optional host override
+  #     - getHostPorts: Get all ports for a specific host
+  #     - listServices: List all defined services
+  mkPortHelpers = portsConfig: let
+    ports = portsConfig.ports or {};
+    hostPorts = portsConfig.hostPorts or {};
+  in {
+    # Get port for a service, with optional host-specific override
+    #
+    # Args:
+    #   service: The service name (string)
+    #   host: The hostname (string)
+    #
+    # Returns:
+    #   Port number (int) or null if service not found
+    #
+    # Example:
+    #   getPort "nginx" "laptop"  # Returns host-specific port if defined
+    #   getPort "nginx" null      # Returns default port
+    getPort = service: host:
+      if host != null && hostPorts ? ${host} && hostPorts.${host} ? ${service}
+      then hostPorts.${host}.${service}
+      else ports.${service} or null;
+
+    # Get all ports for a specific host (merges defaults with host overrides)
+    #
+    # Args:
+    #   host: The hostname (string)
+    #
+    # Returns:
+    #   Attribute set of all ports for the host
+    #
+    # Example:
+    #   getHostPorts "laptop"  # { nginx = 8080; grafana = 3000; ... }
+    getHostPorts = host:
+      ports // (hostPorts.${host} or {});
+
+    # List all defined service names
+    #
+    # Returns:
+    #   List of service names (strings)
+    listServices = lib.attrNames ports;
+  };
 }
