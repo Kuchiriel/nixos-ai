@@ -222,15 +222,16 @@ in
       #custom-jarvis {
         background: rgba(0, 255, 255, 0.12);
         border-bottom: ${colors.waybar.border};
+        color: #00ffff;
       }
-      #custom-jarvis.idle { color: #aaaaaa; }
+      #custom-jarvis.idle { color: #00ffff; opacity: 0.5; }
       #custom-jarvis.listening,
       #custom-jarvis.initializing { color: #00ffff; animation: jarvis-pulse 1s infinite; }
-      #custom-jarvis.transcribing { color: #ffaa00; }
-      #custom-jarvis.thinking { color: #bb77ff; animation: jarvis-pulse 1.2s infinite; }
-      #custom-jarvis.speaking { color: #00ff88; }
-      #custom-jarvis.error { color: #ff0000; animation: jarvis-blink 0.4s infinite; }
-      #custom-jarvis.done { color: #00ff88; }
+      #custom-jarvis.transcribing { color: #00ffff; animation: jarvis-pulse 0.8s infinite; }
+      #custom-jarvis.thinking { color: #00ffff; animation: jarvis-pulse 1.2s infinite; }
+      #custom-jarvis.speaking { color: #00ffff; }
+      #custom-jarvis.error { color: ${colors.status.error}; animation: jarvis-blink 0.4s infinite; }
+      #custom-jarvis.done { color: ${colors.status.success}; }
 
       @keyframes jarvis-pulse {
         0% { opacity: 1; }

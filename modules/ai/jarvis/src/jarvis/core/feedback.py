@@ -107,31 +107,36 @@ def waybar_format() -> dict[str, Any]:
 
     Ícones minimalistas Nerd Font estilo cyberpunk (cyan).
     """
+    import re
+
     status = get_status()
     state = status.get("state", "idle")
     text = status.get("text", "")
 
-    # Ícones minimalistas Nerd Font (cyan cyberpunk)
+    # Remove Nerd Font glyphs E emoji do text (evita duplicação)
+    # Nerd Font glyphs: U+E000-U+F8FF, U+F0000-U+FFFFF, U+100000-U+10FFFF
+    text_clean = re.sub(
+        r'[\U000E000-\U000F8FF\U000F0000-\U000FFFFF\U00100000-\U0010FFFF'
+        r'\U0001F300-\U0001F9FF\u2600-\u27BF]\s*',
+        '', text,
+    ).strip()
+
+    # Ícones minimalistas Nerd Font (cyberpunk)
     icons = {
-        "idle": "󰆪",        # nf-md-waveform (cyan)
-        "listening": "󰍬",   # nf-md-microphone (cyan)
-        "transcribing": "󰈙",  # nf-md-text-box (cyan)
-        "thinking": "󰐕",     # nf-md-progress-clock (cyan)
-        "speaking": "󰕾",     # nf-md-volume-high (cyan)
-        "error": "󰅙",       # nf-md-alert-circle (red)
-        "done": "󰄬",        # nf-md-check-circle (green)
-        "initializing": "󰚌",  # nf-md-robot (cyan)
+        "idle": "󰆪",        # nf-md-waveform
+        "listening": "󰍬",   # nf-md-microphone
+        "transcribing": "󰈙",  # nf-md-text-box
+        "thinking": "󰐕",     # nf-md-progress-clock
+        "speaking": "󰕾",     # nf-md-volume-high
+        "error": "󰅙",       # nf-md-alert-circle
+        "done": "󰄬",        # nf-md-check-circle
+        "initializing": "󰚌",  # nf-md-robot
     }
     icon = icons.get(state, "󰆪")
 
-    # Remove emoji do text se já existe (evita duplicação)
-    import re
-    text_clean = re.sub(r'^[\U0001F300-\U0001F9FF\u2600-\u27BF]\s*', '', text).strip()
-
-    # Formato minimalista: ícone + texto
-    display = f"{icon} {text_clean}".strip() if text_clean else icon
+    # Formato minimalista: só ícone (texto fica no tooltip)
     return {
-        "text": display,
+        "text": icon,
         "tooltip": f"{state}: {text_clean or text}",
         "class": state,
         "alt": state,
