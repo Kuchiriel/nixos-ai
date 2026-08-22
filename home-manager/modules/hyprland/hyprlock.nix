@@ -22,6 +22,8 @@
           path = "screenshot";
           blur_passes = 3;
           blur_size = 8;
+          brightness = 0.6;
+          contrast = 1.0;
         }
       ];
 
@@ -32,11 +34,12 @@
           monitor = "";
           dots_center = true;
           font_color = "rgb(235, 219, 178)";
-          inner_color = "rgb(40, 40, 40)";
-          outer_color = "rgb(60, 56, 54)";
+          inner_color = "rgba(40, 40, 40, 0.7)";
+          outer_color = "rgba(60, 56, 54, 0.8)";
           outline_thickness = 5;
           placeholder_text = "sussy baka";
           shadow_passes = 1;
+          fade_on_empty = false;
         }
       ];
     };

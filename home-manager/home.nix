@@ -109,6 +109,11 @@
         # Define o Qwen local como o modelo padrão de utilidade do chat
         "chat.utilityModel" = "customendpoint/qwen3-35b-a3b";
         "chat.utilitySmallModel" = "customendpoint/qwen3-35b-a3b";
+
+        # Roo Dev (roo-cline) timeout settings
+        # Aumentado para suportar prompts grandes com 192K context
+        "roo-cline.apiRequestTimeout" = 1800;  # 30 min (default: 600s)
+        "roo-cline.commandExecutionTimeout" = 300;  # 5 min para comandos
       };
     };
   };

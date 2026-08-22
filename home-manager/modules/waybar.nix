@@ -138,7 +138,7 @@ in
       }
 
       window#waybar {
-        background: #0a0a0a;
+        background: rgba(10, 10, 10, 0.85);
         border-bottom: 2px solid #00ffff;
         color: #00ffff;
         font-size: 14px;
@@ -278,7 +278,7 @@ in
       ];
 
       "custom/jarvis" = {
-       # exec = "${pkgs.jarvis}/bin/jarvis-waybar 2>/dev/null || echo '{\\\"text\\\": \\\"IDLE\\\", \\\"class\\\": \\\"idle\\\"}'";
+        exec = "${pkgs.jarvis}/bin/jarvis-waybar 2>/dev/null || echo '{\\\"text\\\": \\\"IDLE\\\", \\\"class\\\": \\\"idle\\\"}'";
         exec-on-event = true;
         interval = 2;
         return-type = "json";
