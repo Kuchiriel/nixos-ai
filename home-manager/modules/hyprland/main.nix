@@ -1,6 +1,6 @@
-{ pkgs, config, lib, jarvisEnvironment, ... }:
+{ pkgs, config, lib, jarvisEnvironment, m3taLib, ... }:
 let
-  colors = lib.m3ta.colors;
+  colors = m3taLib.colors;
   isHost = jarvisEnvironment == "host";
 
   baseEnv = [

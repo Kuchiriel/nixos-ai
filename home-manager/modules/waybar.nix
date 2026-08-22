@@ -1,6 +1,6 @@
-{ pkgs, lib, jarvisEnvironment, ... }:
+{ pkgs, lib, jarvisEnvironment, m3taLib, ... }:
 let
-  colors = lib.m3ta.colors;
+  colors = m3taLib.colors;
   isHost = jarvisEnvironment == "host";
   hostOnlyModules = if isHost then [ "battery" "bluetooth" "backlight" ] else [];
   hostOnlySettings = lib.optionalAttrs isHost {
@@ -133,8 +133,8 @@ in
       * {
         border: none;
         border-radius: 0;
-        font-family: ${lib.m3ta.fonts.cssFamily};
-        font-size: ${toString lib.m3ta.fonts.mono.size}px;
+        font-family: ${m3taLib.fonts.cssFamily};
+        font-size: ${toString m3taLib.fonts.mono.size}px;
         min-height: 0;
       }
 
@@ -142,7 +142,7 @@ in
         background: ${colors.waybar.bg};
         border-bottom: ${colors.waybar.border};
         color: ${colors.waybar.text};
-        font-size: ${toString lib.m3ta.fonts.mono.size}px;
+        font-size: ${toString m3taLib.fonts.mono.size}px;
         min-height: 34px;
         margin: 4px 8px 0 8px;
         border-radius: 10px;
@@ -166,7 +166,7 @@ in
       #custom-jarvis {
         padding: 0 16px;
         color: ${colors.waybar.text};
-        font-size: ${toString lib.m3ta.fonts.mono.size}px;
+        font-size: ${toString m3taLib.fonts.mono.size}px;
         transition: all 0.25s ease;
       }
 

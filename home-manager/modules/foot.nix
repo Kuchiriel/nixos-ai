@@ -1,10 +1,10 @@
-# Foot terminal — usa lib.m3ta.fonts como single source
-{lib, ...}: {
+# Foot terminal — usa m3taLib.fonts como single source
+{lib, m3taLib, ...}: {
   programs.foot = {
     enable = true;
     settings = {
       main = {
-        font = lib.mkForce lib.m3ta.fonts.footFont;
+        font = lib.mkForce m3taLib.fonts.footFont;
       };
     };
   };

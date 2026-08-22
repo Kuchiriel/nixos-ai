@@ -162,6 +162,11 @@
             # (services.jarvis.environment) — waybar/mpvpaper/hyprland
             # decidem seus perfis aqui, sem hardcode por host.
             jarvisEnvironment = config.services.jarvis.environment;
+            # m3ta lib: fonts, colors, ports
+            m3taLib = import ./lib {
+              lib = nixpkgs.lib;
+              pkgs = nixpkgs.legacyPackages.${system};
+            };
           };
           home-manager.users.${user} = {
             imports = [
