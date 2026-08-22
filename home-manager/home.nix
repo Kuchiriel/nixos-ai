@@ -1,6 +1,5 @@
-{ homeStateVersion, user, pkgs, inputs, system ... }: {
+{ homeStateVersion, user, pkgs, inputs, system, ... }: {
   imports = [
-    inputs.opencode.homeManagerModules.default
     ./modules
     ./home-packages.nix
     ./modules/rclone-sync.nix
