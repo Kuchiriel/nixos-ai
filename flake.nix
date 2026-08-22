@@ -1,4 +1,4 @@
-]{
+{
   description = "My system configuration";
 
   inputs = {
