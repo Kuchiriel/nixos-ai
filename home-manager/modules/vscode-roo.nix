@@ -62,9 +62,30 @@ in
           env = {
             TAVILY_API_KEY = config.vscode-roo.tavilyApiKey or "";
           };
-          alwaysAllow = [ "tavily_search" "tavily_extract" ];
+          alwaysAllow = [ "tavily_search" "tavily_extract" ];    };
+
+    # ── Desktop Entry (para Rofi/Wofi encontrar) ───────
+    xdg.desktopEntries.code = {
+      name = "Visual Studio Code";
+      comment = "Code Editing. Redefined.";
+      genericName = "Text Editor";
+      exec = "code %F";
+      icon = "vscode";
+      type = "Application";
+      startupNotify = false;
+      startupWMClass = "Code";
+      categories = [ "Utility" "TextEditor" "Development" "IDE" ];
+      mimeType = [ "text/plain" "inode/directory" "application/x-code-workspace" ];
+      keywords = [ "vscode" ];
+      actions = {
+        new-empty-window = {
+          name = "New Empty Window";
+          exec = "code --new-window %F";
         };
       };
+    };
+}
+;
       description = "Servidores MCP configurados no Roo Code";
     };
 
