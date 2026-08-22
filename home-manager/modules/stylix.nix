@@ -28,6 +28,7 @@
       waybar.enable = false;
       wofi.enable = false;
       hyprland.enable = false;
+      foot.enable = false;  # Gerenciado por lib/fonts.nix
       hyprlock.enable = false;
 
     };

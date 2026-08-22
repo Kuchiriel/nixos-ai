@@ -3,7 +3,7 @@
 #   let
 #     m3taLib = inputs.m3ta-nixpkgs.lib.${system};
 #   in ...
-{lib}: {
+{lib, pkgs ? null}: {
   # Port management utilities
   ports = import ./ports.nix {inherit lib;};
 
@@ -12,4 +12,10 @@
 
   # Agent configuration management utilities
   agents = import ./agents.nix {inherit lib;};
+
+  # Fonts — single source (requer pkgs)
+  fonts = import ./fonts.nix {inherit pkgs;};
+
+  # Colors — paleta cyberpunk
+  colors = import ./colors.nix {};
 }

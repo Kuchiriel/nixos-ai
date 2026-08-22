@@ -1,9 +1,12 @@
-{ lib, ... }: {
+# Foot terminal — usa lib/fonts.nix como single source
+{pkgs, lib, ...}: let
+  fonts = import ../../../lib/fonts.nix {inherit pkgs;};
+in {
   programs.foot = {
     enable = true;
     settings = {
       main = {
-        font = lib.mkForce "JetBrainsMono Nerd Font:size=14";
+        font = lib.mkForce fonts.footFont;
       };
     };
   };
