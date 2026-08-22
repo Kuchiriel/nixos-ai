@@ -112,8 +112,7 @@ in {
       "$mainMod,       S, togglespecialworkspace,  magic"
       "$mainMod SHIFT, S, movetoworkspace, special:magic"
 
-      # JARVIS — ferramentas de IA
-      "$mainMod,       A, exec, ${jarvisAsk}/bin/jarvis-ask-prompt"
+      # JARVIS — ferramentas de IA (SUPER+A → launcher, ver acima)
       "$mainMod SHIFT, A, exec, $terminal -e jarvis agent --help"
       "$mainMod,       I, exec, $terminal -e jarvis doctor"
     ];

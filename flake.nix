@@ -8,6 +8,7 @@
     opencode-flake.url = "github:aodhanhayter/opencode-flake";
 
     # m3ta-nixpkgs: submodule com pacotes sidecar, stt-ptt, talk etc.
+    # Inclui o input agents para coding agents (opencode, pi, claude-code)
     # git+file: acessa o submodule como repositório Git independente
     m3ta-nixpkgs = {
       url = "git+file:///home/nixos/projects/nixpkgs";
