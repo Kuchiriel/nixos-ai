@@ -10,6 +10,7 @@
     ./jarvis-env.nix
     ./kernel.nix
     ./mime.nix
+    ./m3ta-ports.nix
     ./net.nix
     ./nh.nix
     ./nix.nix

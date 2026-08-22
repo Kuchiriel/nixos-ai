@@ -45,6 +45,14 @@
     libnotify
     xdg-desktop-portal-gtk
     xdg-desktop-portal-hyprland
+
+    # ── m3ta-nixpkgs packages ──────────────────────────────────────
+    # sidecar: terminal multiplexer/UX para CLI agents
+    sidecar
+    # stt-ptt: Push-to-Talk Speech-to-Text com Whisper
+    stt-ptt
+    # talk: Text-to-Speech com ElevenLabs para notificações
+    talk
   ];
 }
 

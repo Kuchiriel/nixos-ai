@@ -8,6 +8,8 @@
     ./hyprland
     ./lazygit.nix
     ./mpvpaper.nix
+    ./m3ta-coding
+    ./m3ta-stt-ptt.nix
     ./neovim.nix
     ./obsidian.nix
     ./ranger.nix

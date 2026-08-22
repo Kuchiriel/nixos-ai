@@ -173,3 +173,68 @@ nixos-rebuild switch --flake .#nitro-v15  # ERRADO — usar rebuild-host.sh!
   humano implementa algo, commit + mensagem descritiva para o agente saber.
 - **Não duplicar trabalho**: antes de implementar algo, consulte o
   `docs/architecture/system-assessment.md` (estado da stack) e o `git log`.
+
+## Integração m3ta-nixpkgs (agosto/2026)
+
+### Submodule
+O repositório `nixpkgs` (`/home/nixos/projects/nixpkgs`) é importado como submodule
+git em `m3ta-nixpkgs/`. Ele contém:
+- **Pacotes**: sidecar, stt-ptt, talk, td, opencode, vibetyper, zellij-ps etc.
+- **Módulos NixOS**: ports (gerenciamento centralizado de portas)
+- **Módulos Home Manager**: stt-ptt, coding agents (opencode, pi, claude-code)
+- **Bibliotecas**: ports, agents, coding-rules
+
+### Estrutura de integração
+```
+nixos-ai/
+├── flake.nix                          # m3ta-nixpkgs input + overlay + packages
+├── overlays/m3ta-packages.nix         # overlay: sidecar, stt-ptt, talk
+├── lib/                               # wrappers das bibliotecas m3ta
+│   ├── default.nix
+│   ├── ports.nix
+│   ├── agents.nix
+│   └── coding-rules.nix
+├── nixos/modules/m3ta-ports.nix       # módulo NixOS de portas
+├── home-manager/modules/m3ta-coding/  # módulos coding agents
+│   ├── default.nix
+│   ├── opencode.nix
+│   ├── pi.nix
+│   └── shared/
+├── home-manager/modules/m3ta-stt-ptt.nix
+└── home-manager/home-packages.nix     # sidecar, stt-ptt, talk
+```
+
+### Uso dos módulos
+
+#### Ports (NixOS)
+```nix
+# Em configuration.nix:
+imports = [ ./nixos/modules/m3ta-ports.nix ];
+m3ta.ports = {
+  enable = true;
+  definitions = { qdrant = 6333; llama-cpp = 8080; mcp = 3000; };
+  hostOverrides = { nitro-v15 = { qdrant = 6334; }; };
+};
+# Uso: services.qdrant.settings.config.listener.port = config.m3ta.ports.get "qdrant";
+```
+
+#### STT-PTT (Home Manager)
+```nix
+# Em home.nix:
+m3ta.stt-ptt.enable = true;
+m3ta.stt-ptt.model = "ggml-large-v3-turbo";
+m3ta.stt-ptt.language = "pt";
+```
+
+#### Coding Agents (Home Manager)
+```nix
+# Em home.nix:
+coding.agents.opencode.enable = true;
+coding.agents.opencode.agentsInput = inputs.agents;
+coding.agents.opencode.modelOverrides = { chiron = "anthropic/claude-sonnet-4"; };
+
+coding.agents.pi.enable = true;
+coding.agents.pi.agentsInput = inputs.agents;
+coding.agents.pi.settings.defaultProvider = "anthropic";
+coding.agents.pi.settings.defaultModel = "claude-sonnet-4";
+```

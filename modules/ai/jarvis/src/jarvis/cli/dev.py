@@ -1,58 +1,31 @@
-"""jarvis dev — CLI interativo de desenvolvimento (estilo Aider).
+"""jarvis dev — CLI interativo de desenvolvimento (estilo Claude Code).
 
 REPL onde o usuário conversa com o agente e o agente pode:
-  - Explorar a codebase via execute_shell (ls, find, grep — não há mais
-    ferramentas dedicadas de listagem/busca; tudo passa pelo shell)
+  - Explorar a codebase via execute_shell
   - Ler arquivos (read_file)
   - Editar/criar arquivos (str_replace, com old_str='' para criar)
   - Rodar testes, commitar e buscar na web via execute_shell
 
-Arquitetura (v2.2 — UX + confiabilidade de edição):
-  - Apenas 3 ferramentas primitivas nativas (read_file, str_replace,
-    execute_shell) em vez de ~15 schemas JSON — corta ~2.800 tokens/turno
-    de overhead de contexto.
-  - Payload HTTP estritamente compatível com a spec OpenAI
-    /chat/completions: sem `parallel_tool_calls`, sem `chat_template_kwargs`.
-    Modelos "tiny" (<=4B) nem recebem o array `tools` — operam 100% via
-    blocos de texto estilo Aider (SEARCH/REPLACE), zerando o overhead.
-    Modelos MoE grandes (ex: qwen3.5-30b-a3b) caem em "large" — o regex de
-    detecção ignora o sufixo "aXb" (ativos por token), olhando só o total.
-  - Parser híbrido: tenta tool_calls nativas da API; se ausentes, faz
-    fallback para blocos de texto (SEARCH/REPLACE, `>>> READ`, fenced
-    shell, JSON solto, e o formato Hermes/Llama-3 `<function=...>
-    <parameter=...>`) — cobre tanto modelos com function-calling robusto
-    quanto SLMs locais que só seguem instrução em texto.
-  - str_replace com match em cascata (NOVO): se o old_str não bater
-    byte-a-byte, tenta um match normalizado (espaços/indentação) antes de
-    desistir — inspirado nas 4 estratégias de match do Aider. Modelos
-    pequenos raramente copiam whitespace com 100% de fidelidade; sem isso
-    a edição falhava e o modelo entrava em loop de retry.
-  - Loop de execução único (NOVO): _run_agent_loop() é chamado tanto pelo
-    REPL normal quanto pelo /architect quanto pelo --once. Antes, o
-    /architect só empilhava mensagens e nunca chamava o LLM de fato — o
-    "Executar? [Y/n]" não executava nada até o próximo input manual.
-  - Repo map limitado a ~20 arquivos mais recentes (mtime), formatado como
-    árvore compacta, com orçamento rígido de ~500 tokens.
-  - Histórico da conversa é podado automaticamente (mantém system prompt +
-    últimas N mensagens, sempre cortando numa fronteira 'user' segura)
-    para evitar crescimento de contexto → latência progressiva.
-  - /debug: loga o payload exato enviado à API e a resposta crua recebida.
-  - UI (NOVO): rich para saída (painéis, diff colorido, markdown, spinner)
-    e prompt_toolkit para entrada (multiline paste nativo — resolve a
-    fragilidade do polling manual de stdin — + histórico + autocomplete
-    de comandos /).
+Arquitetura (v3.0 — lean + Claude Code UX):
+  - 4 ferramentas primitivas (read_file, str_replace, execute_shell,
+    semantic_search) — overhead mínimo de contexto.
+  - System prompt compacto (~40% menor que v2.2).
+  - UI estilo Claude Code: banner minimal, output inline, prompt limpo.
+  - Auto-RAG: indexa codebase se collection vazia (uma vez por sessão).
+  - Session auto-compaction: estima tokens e compacta antes de estourar.
+  - Smart context: AGENTS.md < 3KB, memória se disponível.
 
-Dependências além de Python stdlib: requests, rich, prompt_toolkit.
-No NixOS, todas as três estão em nixpkgs como pacotes Python puros:
-  python3Packages.requests, python3Packages.rich, python3Packages.prompt-toolkit
+Dependências: requests, rich, prompt_toolkit (todas em nixpkgs).
 
 Uso:
-  jarvis dev                    # inicia REPL no CWD
-  jarvis dev --project /path    # inicia em diretório específico
-  jarvis dev --approve          # ativa aprovação para comandos com efeito
-  jarvis dev --once "tarefa"    # executa uma tarefa e sai
+  jarvis dev                    # REPL no CWD
+  jarvis dev --project /path    # diretório específico
+  jarvis dev --approve          # aprovação para comandos com efeito
+  jarvis dev --yolo             # auto-aprova tudo
+  jarvis dev --once "tarefa"    # executa e sai
+  jarvis dev --continue         # retoma última sessão
 
-Inspirado em: Aider, Claude Code, pi (earendil-works).
+Inspirado em: Claude Code, Aider, pi (earendil-works).
 """
 
 from __future__ import annotations
@@ -124,19 +97,16 @@ def _make_prompt_session() -> PromptSession:
 
 
 def _print_diff(diff_text: str | None) -> None:
+    """Imprime diff compacto — só linhas +/- com cores, sem painel."""
     if not diff_text:
         return
-    body = Text()
     for line in diff_text.splitlines():
         if line.startswith("+") and not line.startswith("+++"):
-            body.append(line + "\n", style="diff.add")
+            console.print(f"  [diff.add]{line}[/]")
         elif line.startswith("-") and not line.startswith("---"):
-            body.append(line + "\n", style="diff.del")
+            console.print(f"  [diff.del]{line}[/]")
         elif line.startswith("@@"):
-            body.append(line + "\n", style="dim")
-        else:
-            body.append(line + "\n", style="dim")
-    console.print(Panel(body, border_style="dim", padding=(0, 1), expand=False))
+            console.print(f"  [dim]{line}[/]")
 
 
 def _print_status(active_model: str, mode: str, messages: list[dict[str, Any]]) -> None:
@@ -148,12 +118,11 @@ def _print_status(active_model: str, mode: str, messages: list[dict[str, Any]]) 
     except Exception as e:
         console.print(f"[tool.error]Erro ao consultar status: {e}[/]")
         return
-
     table = Table(show_header=False, box=None, padding=(0, 1))
     table.add_row("Backend", f"{status['state']} ({status['latency_ms']}ms)")
     table.add_row("Model", active_model)
-    table.add_row("Modo de ferramentas", mode)
-    table.add_row("Mensagens no histórico", str(len(messages)))
+    table.add_row("Modo", mode)
+    table.add_row("Mensagens", str(len(messages)))
     table.add_row("Uptime", f"{status['uptime_pct']}%")
     console.print(Panel(table, title="Status", border_style="dim", title_align="left"))
 
@@ -178,8 +147,9 @@ def _print_help() -> None:
     rows = [
         ("/quit", "sair"),
         ("/clear", "limpar contexto"),
+        ("/compact", "compactar sessão (auto ao estourar)"),
         ("/status", "status do backend"),
-        ("/map", "atualizar repo map + memória"),
+        ("/map", "atualizar repo map"),
         ("/model", "ver modelo atual"),
         ("/recall", "buscar memória episódica"),
         ("/architect", "modo architect (plan + execute)"),
@@ -246,14 +216,84 @@ def _detect_profile() -> dict[str, Any]:
 
 
 def _maybe_disable_thinking(system_prompt: str) -> str:
-    """Compat para desabilitar 'thinking' sem reintroduzir chat_template_kwargs
-    no payload (que o llama-server rejeita). Vários templates locais
-    (família Qwen3, etc.) respeitam a diretiva '/no_think' dentro do próprio
-    prompt — então movemos essa configuração do payload HTTP para o texto."""
+    """Adiciona '/no_think' se thinking estiver desabilitado."""
     cfg = _get_config()
     if getattr(cfg, "llm_disable_thinking", False):
         return f"{system_prompt}\n/no_think"
     return system_prompt
+
+
+def _estimate_tokens(messages: list[dict[str, Any]]) -> int:
+    """Estimativa rápida de tokens (heurística: 1 token ≈ 4 chars)."""
+    total_chars = sum(len(json.dumps(m, ensure_ascii=False)) for m in messages)
+    return total_chars // 4
+
+
+def _compact_session(messages: list[dict[str, Any]], max_tokens: int = 6000) -> list[dict[str, Any]]:
+    """Compacta sessão preservando: system + resumo + turnos recentes.
+
+    Chamado quando _estimate_tokens > max_tokens. O resumo captura o
+    essencial do histórico, mantendo o modelo informado sem inflar contexto.
+    """
+    if _estimate_tokens(messages) <= max_tokens:
+        return messages
+    system = messages[0]
+    recent_count = 6
+    if len(messages) <= recent_count + 1:
+        return messages
+    middle = messages[1:-recent_count]
+    recent = messages[-recent_count:]
+    summary_parts = ["SESSION HISTORY:"]
+    for msg in middle:
+        role = msg.get("role", "?")
+        content = str(msg.get("content") or "")
+        if role == "user":
+            summary_parts.append(f"- User: {content[:150]}")
+        elif role == "assistant" and content:
+            summary_parts.append(f"- Assistant: {content[:150]}")
+        elif role == "tool":
+            preview = content[:80].replace("\n", " ")
+            summary_parts.append(f"- Tool: {preview}")
+    for i, m in enumerate(recent):
+        if m.get("role") == "user":
+            recent = recent[i:]
+            break
+    summary_msg = {"role": "user", "content": "\n".join(summary_parts)}
+    return [system, summary_msg, *recent]
+
+
+def _auto_index_rag() -> None:
+    """Indexa codebase no Qdrant se collection vazia (uma vez por sessão)."""
+    if _auto_index_rag._indexed:
+        return
+    _auto_index_rag._indexed = True
+    try:
+        from jarvis.core.config import Config
+        from jarvis.providers.vector_store import QdrantStore
+        cfg = Config()
+        store = QdrantStore(cfg)
+        if not store.is_available():
+            return
+        try:
+            result = store.client.count(
+                collection_name=cfg.qdrant_collection_code, exact=True,
+            )
+            if result.count > 0:
+                return
+        except Exception:
+            return
+        console.print("[dim]📦 Indexando codebase no RAG...[/]")
+        try:
+            from jarvis.core.rag import HybridIndexer
+            indexer = HybridIndexer(cfg)
+            total = indexer.index_directory(os.getcwd())
+            console.print(f"[dim]✅ {total} chunks indexados.[/]")
+        except Exception as e:
+            console.print(f"[dim]⚠️  Indexação RAG falhou: {e}[/]")
+    except Exception:
+        pass
+
+_auto_index_rag._indexed = False
 
 
 def _build_memory_context(query: str = "code edit error fix") -> str:
@@ -276,26 +316,6 @@ def _build_memory_context(query: str = "code edit error fix") -> str:
         return ""
 
 
-def _checkpoint_state(messages: list[dict[str, Any]], project_root: str | None = None) -> None:
-    """Salva um snapshot de sessão em disco para continuar depois de longa execução."""
-    try:
-        base = Path(os.environ.get("JARVIS_STATE_DIR", "~/.local/state/jarvis")).expanduser()
-        base.mkdir(parents=True, exist_ok=True)
-        checkpoint_dir = base / "checkpoints"
-        checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        project_id = str(Path(project_root or os.getcwd()).resolve())
-        stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-        snapshot = {
-            "project": project_id,
-            "ts": stamp,
-            "messages": messages[-30:],
-        }
-        dest = checkpoint_dir / f"{abs(hash(project_id))}_{stamp}.json"
-        dest.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
-
-
 def _session_state_path(project_root: str | None = None) -> Path:
     """Caminho do estado de sessão persistente do dev CLI."""
     base = Path(os.environ.get("JARVIS_STATE_DIR", "~/.local/state/jarvis")).expanduser()
@@ -303,24 +323,6 @@ def _session_state_path(project_root: str | None = None) -> Path:
     project_root_path = Path(project_root or os.getcwd()).resolve()
     project_id = project_root_path.as_posix().replace("/", "_")
     return base / f"dev-session-{project_id}.json"
-
-
-def _summarize_for_autopilot(messages: list[dict[str, Any]], max_items: int = 12) -> list[dict[str, Any]]:
-    """Encurta a sessão para manter contexto útil sem empilhar o histórico inteiro."""
-    if len(messages) <= max_items:
-        return messages
-    keep: list[dict[str, Any]] = [messages[0]]
-    recent = messages[-max_items:]
-    summary_lines = ["AUTO SUMMARY:"]
-    for msg in recent:
-        role = msg.get("role", "unknown")
-        content = str(msg.get("content") or "")
-        if role == "tool":
-            summary_lines.append(f"- tool: {content[:180]}")
-        elif role in {"user", "assistant"}:
-            summary_lines.append(f"- {role}: {content[:220]}")
-    keep.append({"role": "user", "content": "\n".join(summary_lines)})
-    return keep
 
 
 def _discover_agent_files(start_dir: str | None = None, max_depth: int = 3) -> list[Path]:
@@ -350,32 +352,34 @@ def _discover_agent_files(start_dir: str | None = None, max_depth: int = 3) -> l
 
 
 def _load_agent_context(start_dir: str | None = None) -> str:
-    """Carrega o contexto dos AGENTS.md relevantes de diretórios ancestrais."""
+    """Carrega AGENTS.md seletivamente — só arquivos < 3KB."""
     files = _discover_agent_files(start_dir)
     if not files:
         return ""
-    chunks: list[str] = ["ACTIVE AGENT CONTEXT:"]
+    chunks: list[str] = []
     for path in files:
         try:
             text = path.read_text(encoding="utf-8", errors="replace").strip()
-            if text:
-                chunks.append(f"--- {path} ---\n{text[:2500]}")
+            if text and len(text) < 3000:
+                chunks.append(text)
         except Exception:
             continue
-    return "\n".join(chunks)
+    if not chunks:
+        return ""
+    return "PROJECT RULES:\n" + "\n---\n".join(chunks)
 
 
 def _persist_session(messages: list[dict[str, Any]], project_root: str | None = None) -> None:
-    """Salva histórico para continuar depois do reload/overnight."""
+    """Salva histórico com metadata para resume confiável."""
     try:
         state = {
             "project": str(Path(project_root or os.getcwd()).resolve()),
             "messages": messages,
             "ts": time.time(),
+            "token_estimate": _estimate_tokens(messages),
         }
         path = _session_state_path(project_root)
         path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-        _checkpoint_state(messages, project_root)
     except Exception:
         pass
 
@@ -485,58 +489,43 @@ def _build_repo_map(root: str, max_files: int = 20, max_tokens: int = 500) -> st
 # Prompts
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT_TEMPLATE = """Você é o JARVIS, agente de desenvolvimento local. Responda em PT-BR. Seja direto.
+SYSTEM_PROMPT_TEMPLATE = """JARVIS dev agent. PT-BR. Direto.
 
 {repo_map}
-
 {memory_context}
-
 {agent_context}
 
-FERRAMENTAS (apenas 4 — mantenha o overhead de contexto mínimo):
-- read_file(path, start_line?, end_line?)      → leia SEMPRE antes de editar
-- str_replace(path, old_str, new_str)          → old_str deve ser EXATO (copiado do read_file) e único no arquivo; old_str='' cria um arquivo novo
-- execute_shell(cmd)                            → ls/find/grep (explorar), pytest/npm test (testar),
-                                                   git add -A && git commit -m "msg" (commitar),
-                                                   curl (buscar na web), rm/mv/mkdir (qualquer outra ação)
-- semantic_search(query, top_k=5)               → busca local no código por semântica antes de ler muitos arquivos
+TOOLS:
+- read_file(path, start_line?, end_line?) → ler ANTES de editar
+- str_replace(path, old_str, new_str) → old_str EXATO e único; vazio = criar
+- execute_shell(cmd) → bash (ls/grep/pytest/git/curl)
+- semantic_search(query, top_k) → busca semântica no código
 
-Se sua API não suportar tool_calls nativas, use este formato de TEXTO (estilo Aider):
-
-Para ler um arquivo:
->>> READ caminho/do/arquivo.py
-
-Para editar (old deve ser cópia EXATA e única; vazio = cria arquivo novo):
-caminho/do/arquivo.py
+TEXT FORMAT (quando não há tool_calls):
+>>> READ path
+path
 <<<<<<< SEARCH
-texto exato a substituir
+old
 =======
-texto novo
+new
 >>>>>>> REPLACE
-
-Para rodar shell:
 ```bash
-comando aqui
+cmd
 ```
 
-REGRAS:
-1. SEMPRE read_file (ou >>> READ) antes de str_replace no mesmo path.
-2. old_str deve ser cópia EXATA de um trecho do read_file — não parafraseie.
-3. Se str_replace falhar (não encontrado ou não-único), read_file de novo e copie melhor, com mais contexto ao redor.
-4. Depois de editar, rode os testes via execute_shell.
-5. Depois dos testes passarem, faça commit via execute_shell (git add -A && git commit -m "...").
-6. Nunca invente conteúdo de arquivo sem ler primeiro.
-7. Se existir AGENTS.md / CLAUDE.md / GEMINI.md / instruções do projeto, siga essas regras antes de agir.
-8. Modo hands-off: se o alvo for simples e seguro, execute em lote com poucos turns; se houver risco, pare e peça confirmação.
+RULES:
+1. read_file ANTES de str_replace no mesmo path
+2. old_str = cópia EXATA do read_file
+3. Se falhar, re-leia com mais contexto
+4. Teste após editar, commit após testar
+5. Não invente conteúdo sem ler
 """
 
-PLAN_PROMPT = """Você é o JARVIS architect. PT-BR. Seja direto.
+PLAN_PROMPT = """JARVIS architect. PT-BR. Direto.
 
 {repo_map}
 
-Leia os arquivos necessários (read_file ou >>> READ) e monte um PLANO — não execute edições ainda.
-
-Responda em JSON puro, sem markdown:
+Leia arquivos necessários e retorne JSON puro:
 {{"plan": [{{"action": "read|edit|create|shell", "path": "...", "description": "..."}}]}}
 """
 
@@ -1086,14 +1075,26 @@ def _run_agent_loop(
     debug: bool = False,
     max_turns: int = 16,
 ) -> bool:
-    """Roda turnos até o modelo responder só com texto (sucesso) ou até
-    max_turns / erro de LLM (falha). Muta `messages` in-place."""
+    """Roda turnos até texto puro (sucesso) ou max_turns/erro (falha).
+
+    Inclui auto-compaction: se contexto estimado ultrapassar 70% do
+    max_tokens do modelo, compacta automaticamente.
+    """
+    max_context_tokens = profile["max_tokens"] * 8
+    compact_threshold = int(max_context_tokens * 0.7)
+
     for turn in range(max_turns):
-        with console.status(f"[jarvis]pensando…[/] (turno {turn + 1}/{max_turns})", spinner="dots"):
+        est = _estimate_tokens(messages)
+        if est > compact_threshold:
+            messages[:] = _compact_session(messages, max_tokens=int(compact_threshold * 0.6))
+            if debug:
+                console.print(f"[dim]🗜️  auto-compact: {est} → ~{_estimate_tokens(messages)} tok[/]")
+
+        with console.status(f"[jarvis]pensando…[/] ({turn + 1}/{max_turns})", spinner="dots"):
             try:
                 data = _call_llm(messages, tools, profile, debug=debug)
             except Exception as e:
-                console.print(f"[tool.error]❌ Erro LLM: {e}[/]")
+                console.print(f"[tool.error]❌ LLM error: {e}[/]")
                 return False
 
         message = data["choices"][0]["message"]
@@ -1113,12 +1114,12 @@ def _run_agent_loop(
         if not tool_calls:
             if content:
                 console.print(Panel(
-                    Markdown(content), title="🤖 JARVIS", title_align="left", border_style="jarvis",
+                    Markdown(content), title="🤖", title_align="left", border_style="jarvis",
                 ))
             return True
 
         if used_text_fallback:
-            console.print("[dim]  (ação recuperada via parser de texto)[/]")
+            console.print("[dim]  (parser de texto)[/]")
 
         for tc in tool_calls:
             func_name = tc["function"]["name"]
@@ -1127,30 +1128,27 @@ def _run_agent_loop(
             except json.JSONDecodeError:
                 args = {}
 
-            preview_arg = str(args.get("path", args.get("cmd", "")))[:60]
-            console.print(f"  [tool]🔧 {func_name}[/]([path]{preview_arg}[/])")
+            preview_arg = str(args.get("path", args.get("cmd", "")))[:50]
+            console.print(f"  [tool]🔧 {func_name}[/] [path]{preview_arg}[/]")
 
             output, diff = _execute_tool_call(func_name, args, approve)
 
             is_error = output.startswith("ERROR")
             style = "tool.error" if is_error else "tool.ok"
-            icon = "⚠️ " if is_error else "✅"
-            preview = output if len(output) <= 160 else f"{output[:160]}…"
+            icon = "✗" if is_error else "✓"
+            preview = output if len(output) <= 120 else f"{output[:120]}…"
             console.print(f"  [{style}]{icon} {preview}[/]")
             if diff:
                 _print_diff(diff)
 
-            tool_call_id = tc.get("id") or f"call_fallback_{uuid.uuid4().hex[:6]}"
+            tool_call_id = tc.get("id") or f"call_{uuid.uuid4().hex[:6]}"
             messages.append({
                 "role": "tool",
                 "tool_call_id": tool_call_id,
                 "content": output[:5000],
             })
 
-    console.print(
-        f"[tool.error]⚠️  Máximo de {max_turns} turnos atingido nesta tarefa[/] — "
-        "peça pra continuar ou seja mais específico no próximo pedido."
-    )
+    console.print(f"[tool.error]⚠️  {max_turns} turnos atingidos[/]")
     return False
 
 
@@ -1165,18 +1163,16 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
 
     if yolo:
         approve = True
-        console.print("[tool.ok]YOLO mode: auto-aprovação ativa para comandos seguros de execução.[/]")
+        console.print("[tool.ok]⚡ YOLO mode[/]")
+
+    _auto_index_rag()
 
     profile = _detect_profile()
     tools = _get_tools() if profile["native_tools"] else []
-    mode = "function-calling nativo" if profile["native_tools"] else "blocos de texto (Aider-style)"
+    mode = "native" if profile["native_tools"] else "text"
 
-    banner = Table.grid(padding=(0, 1))
-    banner.add_row("🤖", f"[jarvis]JARVIS Dev[/] — {profile['name']} (max_tokens={profile['max_tokens']})")
-    banner.add_row("📁", os.getcwd())
-    banner.add_row("🔧", f"read_file · str_replace · execute_shell — [dim]{mode}[/]")
-    console.print(Panel(banner, border_style="jarvis", padding=(0, 1)))
-    console.print("[dim]" + "  ".join(_SLASH_COMMANDS) + "[/]\n")
+    console.print(f"[jarvis]jarvis[/] [dim]dev[/] · {profile['name']} · {mode} · [dim]{os.getcwd()}[/]")
+    console.print("[dim]/help para comandos[/]\n")
 
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context()
@@ -1193,7 +1189,8 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
                 messages[0]["content"] = system_prompt
             else:
                 messages.insert(0, {"role": "system", "content": system_prompt})
-            console.print("[dim]✅ Sessão anterior carregada.[/]")
+            est = _estimate_tokens(messages)
+            console.print(f"[dim]✅ sessão carregada ({est} tok)[/]")
 
     active_model = profile["name"]
     debug_mode = False
@@ -1201,16 +1198,16 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
 
     while True:
         try:
-            user_input = session.prompt("👤 Você: ").strip()
+            user_input = session.prompt("> ").strip()
         except (EOFError, KeyboardInterrupt):
-            console.print("\n[jarvis]👋 Até logo![/]")
+            console.print("\n[dim]tchau[/]")
             break
 
         if not user_input:
             continue
 
         if user_input == "/quit":
-            console.print("[jarvis]👋 Até logo![/]")
+            console.print("[dim]tchau[/]")
             break
 
         if user_input == "/clear":
@@ -1222,12 +1219,20 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             )
             messages = [{"role": "system", "content": system_prompt}]
             _persist_session(messages, project_root or os.getcwd())
-            console.print("[dim]🗑️  Contexto limpo.[/]")
+            console.print("[dim]🗑️  contexto limpo[/]")
+            continue
+
+        if user_input == "/compact":
+            old_est = _estimate_tokens(messages)
+            messages = _compact_session(messages, max_tokens=4000)
+            new_est = _estimate_tokens(messages)
+            _persist_session(messages, project_root or os.getcwd())
+            console.print(f"[dim]🗜️  {old_est} → {new_est} tok[/]")
             continue
 
         if user_input == "/debug":
             debug_mode = not debug_mode
-            console.print(f"[dim]🐞 Debug {'ATIVADO' if debug_mode else 'desativado'} — mostra request/response cru da API[/]")
+            console.print(f"[dim]debug {'ON' if debug_mode else 'OFF'}[/]")
             continue
 
         if user_input == "/status":
@@ -1242,12 +1247,11 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
                 SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx)
             )
             messages[0] = {"role": "system", "content": system_prompt}
-            console.print("[dim]🗺️  Repo map + memória atualizados.[/]")
+            console.print("[dim]🗺️  repo map atualizado[/]")
             continue
 
         if user_input == "/model":
-            console.print(f"[dim]Modelo atual: {active_model} — modo: {mode}[/]")
-            console.print("[dim]Para trocar, edite models.nix e faça rebuild[/]")
+            console.print(f"[dim]{active_model} · {mode}[/]")
             continue
 
         if user_input == "/recall":
@@ -1259,27 +1263,23 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             continue
 
         if user_input == "/architect":
-            task_input = session.prompt("📋 Tarefa para architect: ").strip()
+            task_input = session.prompt("> tarefa: ").strip()
             if task_input:
                 try:
                     plan = _architect_plan(task_input, profile, tools, debug_mode)
                     if plan:
-                        console.print(Panel(plan, title="📋 Plano", border_style="jarvis", title_align="left"))
-                        exec_input = session.prompt("Executar? [Y/n] ").strip().lower()
+                        console.print(Panel(plan, title="📋 plano", border_style="jarvis", title_align="left"))
+                        exec_input = session.prompt("executar? [Y/n] ").strip().lower()
                         if exec_input != "n":
                             messages.append({"role": "user", "content": task_input})
-                            messages.append({"role": "assistant", "content": f"Plano: {plan}"})
-                            messages.append({"role": "user", "content": "Execute este plano. Use as ferramentas disponíveis."})
+                            messages.append({"role": "assistant", "content": f"plano: {plan}"})
+                            messages.append({"role": "user", "content": "execute o plano"})
                             messages = _trim_messages(messages)
-                            # FIX: antes o /architect empilhava as mensagens e
-                            # voltava pro prompt sem nunca chamar o LLM — o
-                            # plano só "executava" se o usuário digitasse
-                            # outra coisa depois. Agora roda de fato aqui.
                             _run_agent_loop(messages, tools, profile, approve, debug_mode)
                     else:
-                        console.print("[tool.error]⚠️  Não foi possível gerar plano.[/]")
+                        console.print("[tool.error]⚠️  não gerou plano[/]")
                 except Exception as e:
-                    console.print(f"[tool.error]❌ Erro: {e}[/]")
+                    console.print(f"[tool.error]❌ {e}[/]")
             continue
 
         messages.append({"role": "user", "content": user_input})
@@ -1287,7 +1287,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
         ok = _run_agent_loop(messages, tools, profile, approve, debug_mode)
         _persist_session(messages, project_root or os.getcwd())
         if not ok:
-            console.print("[dim]ℹ️ Sessão persistida; pode continuar depois com --continue.[/]")
+            console.print("[dim]ℹ️ sessão salva — continue com --continue[/]")
 
 
 def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) -> str | None:
@@ -1298,7 +1298,7 @@ def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) 
         {"role": "user", "content": task},
     ]
     try:
-        with console.status("[jarvis]lendo arquivos para o plano…[/]", spinner="dots"):
+        with console.status("[jarvis]lendo arquivos…[/]", spinner="dots"):
             data = _call_llm(plan_messages, tools, profile, debug=debug)
         msg = data["choices"][0]["message"]
         content = msg.get("content") or ""
@@ -1314,7 +1314,7 @@ def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) 
                 except json.JSONDecodeError:
                     a = {}
                 result, _diff = _execute_tool_call(fn, a)
-                tool_id = tc.get("id") or f"call_plan_{uuid.uuid4().hex[:6]}"
+                tool_id = tc.get("id") or f"call_{uuid.uuid4().hex[:6]}"
                 plan_messages.append({"role": "assistant", "content": None, "tool_calls": [tc]})
                 plan_messages.append({
                     "role": "tool",
@@ -1322,8 +1322,8 @@ def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) 
                     "content": result[:2000],
                 })
 
-        plan_messages.append({"role": "user", "content": "Agora retorne o plano em JSON, campo 'plan'."})
-        with console.status("[jarvis]montando o plano…[/]", spinner="dots"):
+        plan_messages.append({"role": "user", "content": 'retorne JSON: {"plan": [...]}科技进步'})
+        with console.status("[jarvis]montando plano…[/]", spinner="dots"):
             data2 = _call_llm(plan_messages, tools, profile, debug=debug)
         plan_content = data2["choices"][0]["message"].get("content") or ""
         try:
@@ -1334,24 +1334,23 @@ def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) 
             pass
         return plan_content[:500]
     except Exception as e:
-        console.print(f"[tool.error]⚠️  Erro no plano: {e}[/]")
+        console.print(f"[tool.error]⚠️  plano error: {e}[/]")
         return None
 
 
 def _run_autopilot(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False, continue_session: bool = False, yolo: bool = False) -> int:
-    """Modo seguro de execução em lote: planeja, executa e valida em turnos limitados, com checkpoint final."""
+    """Modo lote: planeja → executa → checkpoint."""
     if project_root:
         os.environ["JARVIS_PROJECT_ROOT"] = project_root
         os.chdir(project_root)
     if yolo:
         approve = True
 
+    _auto_index_rag()
+
     profile = _detect_profile()
     tools = _get_tools() if profile["native_tools"] else []
-    header = Table.grid(padding=(0, 1))
-    header.add_row("🤖", f"[jarvis]AUTOPILOT[/] — {profile['name']}")
-    header.add_row("📋", task)
-    console.print(Panel(header, border_style="jarvis", padding=(0, 1)))
+    console.print(f"[jarvis]autopilot[/] · {profile['name']} · {task[:60]}")
 
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context(task)
@@ -1375,10 +1374,8 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
     messages.append({"role": "user", "content": task})
     messages = _trim_messages(messages)
     ok = _run_agent_loop(messages, tools, profile, approve, debug, max_turns=8)
-    if len(messages) > 20:
-        messages = _summarize_for_autopilot(messages)
     _persist_session(messages, project_root or os.getcwd())
-    console.print("[dim]🧭 autopilot: checkpoint salvo e sessão resumível com --continue.[/]")
+    console.print("[dim]🧭 checkpoint salvo[/]")
     return 0 if ok else 1
 
 
@@ -1393,13 +1390,12 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
     if autopilot:
         return _run_autopilot(task, project_root=project_root, approve=approve, debug=debug, continue_session=continue_session, yolo=yolo)
 
+    _auto_index_rag()
+
     profile = _detect_profile()
     tools = _get_tools() if profile["native_tools"] else []
 
-    header = Table.grid(padding=(0, 1))
-    header.add_row("🤖", f"[jarvis]JARVIS Dev[/] — {profile['name']}")
-    header.add_row("📋", task)
-    console.print(Panel(header, border_style="jarvis", padding=(0, 1)))
+    console.print(f"[jarvis]jarvis[/] [dim]dev[/] · {profile['name']} · {task[:60]}")
 
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context(task)
