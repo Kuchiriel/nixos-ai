@@ -40,16 +40,34 @@ def test_waybar_format_idle(tmp_path, monkeypatch) -> None:
     set_status("idle", "")
     out = waybar_format()
     assert out["class"] == "idle"
-    assert out["text"].startswith("IDLE")
+    # Nerd Font icon for idle: 󰆪
+    assert "󰆪" in out["text"]
 
 
 def test_waybar_format_states(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("jarvis.core.feedback.STATUS_FILE", tmp_path / "status.json")
-    for state, icon in [("listening", "LISTEN"), ("thinking", "THINK"), ("error", "ERROR"), ("speaking", "SPEAK")]:
+    # Nerd Font icons (minimalist cyan)
+    expected_icons = {
+        "listening": "󰍬",
+        "thinking": "󰐕",
+        "error": "󰅙",
+        "speaking": "󰕾",
+    }
+    for state, icon in expected_icons.items():
         set_status(state, "contexto")
         out = waybar_format()
         assert out["class"] == state
-        assert out["text"].startswith(icon)
+        assert icon in out["text"]
+
+
+def test_waybar_format_no_emoji_duplication(tmp_path, monkeypatch) -> None:
+    """O emoji do text não deve duplicar o ícone Nerd Font."""
+    monkeypatch.setattr("jarvis.core.feedback.STATUS_FILE", tmp_path / "status.json")
+    set_status("idle", "🎤 Ouvindo...")
+    out = waybar_format()
+    # Deve ter apenas 1 ícone Nerd Font, não emoji duplicado
+    assert out["text"].count("󰆪") == 1
+    assert "🎤" not in out["text"]
 
 
 def test_waybar_format_invalid_json(tmp_path, monkeypatch) -> None:
