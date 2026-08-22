@@ -216,16 +216,26 @@ class LLMClient:
     _EMBED_MAX_TOKENS = 480  # margem de segurança abaixo do ctx=512
     _HEALTH_CACHE_TTL = 2.0  # segundos — evita martelar /models em loops de agente
 
-    def __init__(self, config: Config | None = None) -> None:
+    def __init__(self, config: Config | None = None, *, session: requests.Session | None = None) -> None:
+        """
+        session: injeção de dependência — passe uma Session já mockada em
+        testes (ex. `requests_mock.Mocker()` te dá uma, ou um
+        `unittest.mock.Mock(spec=requests.Session)` na mão) em vez de
+        mockar `requests.get`/`requests.post` como função de módulo, que
+        não intercepta chamadas feitas via Session persistente.
+        """
         self._cfg = config or Config()
         self._base = self._cfg.llm_base_url.rstrip("/")
 
-        total_retries = getattr(self._cfg, "llm_max_retries", 3)
-        backoff_factor = getattr(self._cfg, "llm_backoff_factor", 0.5)
-        backoff_jitter = getattr(self._cfg, "llm_backoff_jitter", 0.3)
-        self._session = _build_session(
-            total_retries=total_retries, backoff_factor=backoff_factor, backoff_jitter=backoff_jitter
-        )
+        if session is not None:
+            self._session = session
+        else:
+            total_retries = getattr(self._cfg, "llm_max_retries", 3)
+            backoff_factor = getattr(self._cfg, "llm_backoff_factor", 0.5)
+            backoff_jitter = getattr(self._cfg, "llm_backoff_jitter", 0.3)
+            self._session = _build_session(
+                total_retries=total_retries, backoff_factor=backoff_factor, backoff_jitter=backoff_jitter
+            )
 
         # timeouts separados: connect precisa falhar rápido (processo morto
         # não vale a pena esperar), read precisa ser generoso (gerações de
