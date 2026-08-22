@@ -276,6 +276,126 @@ def _build_memory_context(query: str = "code edit error fix") -> str:
         return ""
 
 
+def _checkpoint_state(messages: list[dict[str, Any]], project_root: str | None = None) -> None:
+    """Salva um snapshot de sessão em disco para continuar depois de longa execução."""
+    try:
+        base = Path(os.environ.get("JARVIS_STATE_DIR", "~/.local/state/jarvis")).expanduser()
+        base.mkdir(parents=True, exist_ok=True)
+        checkpoint_dir = base / "checkpoints"
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        project_id = str(Path(project_root or os.getcwd()).resolve())
+        stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        snapshot = {
+            "project": project_id,
+            "ts": stamp,
+            "messages": messages[-30:],
+        }
+        dest = checkpoint_dir / f"{abs(hash(project_id))}_{stamp}.json"
+        dest.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _session_state_path(project_root: str | None = None) -> Path:
+    """Caminho do estado de sessão persistente do dev CLI."""
+    base = Path(os.environ.get("JARVIS_STATE_DIR", "~/.local/state/jarvis")).expanduser()
+    base.mkdir(parents=True, exist_ok=True)
+    project_root_path = Path(project_root or os.getcwd()).resolve()
+    project_id = project_root_path.as_posix().replace("/", "_")
+    return base / f"dev-session-{project_id}.json"
+
+
+def _summarize_for_autopilot(messages: list[dict[str, Any]], max_items: int = 12) -> list[dict[str, Any]]:
+    """Encurta a sessão para manter contexto útil sem empilhar o histórico inteiro."""
+    if len(messages) <= max_items:
+        return messages
+    keep: list[dict[str, Any]] = [messages[0]]
+    recent = messages[-max_items:]
+    summary_lines = ["AUTO SUMMARY:"]
+    for msg in recent:
+        role = msg.get("role", "unknown")
+        content = str(msg.get("content") or "")
+        if role == "tool":
+            summary_lines.append(f"- tool: {content[:180]}")
+        elif role in {"user", "assistant"}:
+            summary_lines.append(f"- {role}: {content[:220]}")
+    keep.append({"role": "user", "content": "\n".join(summary_lines)})
+    return keep
+
+
+def _discover_agent_files(start_dir: str | None = None, max_depth: int = 3) -> list[Path]:
+    """Procura AGENTS.md / CLAUDE.md / GEMINI.md / copilot instructions em diretório atual e pais."""
+    base = Path(start_dir or os.getcwd()).resolve()
+    seen: set[Path] = set()
+    candidates: list[Path] = []
+    cur = base
+    depth = 0
+    while cur.exists() and depth <= max_depth:
+        for name in ("AGENTS.md", "CLAUDE.md", "GEMINI.md"):
+            p = cur / name
+            if p not in seen and p.exists():
+                seen.add(p)
+                candidates.append(p)
+        gh = cur / ".github"
+        if gh.exists():
+            p = gh / "copilot-instructions.md"
+            if p.exists() and p not in seen:
+                seen.add(p)
+                candidates.append(p)
+        if cur == cur.parent:
+            break
+        cur = cur.parent
+        depth += 1
+    return candidates
+
+
+def _load_agent_context(start_dir: str | None = None) -> str:
+    """Carrega o contexto dos AGENTS.md relevantes de diretórios ancestrais."""
+    files = _discover_agent_files(start_dir)
+    if not files:
+        return ""
+    chunks: list[str] = ["ACTIVE AGENT CONTEXT:"]
+    for path in files:
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace").strip()
+            if text:
+                chunks.append(f"--- {path} ---\n{text[:2500]}")
+        except Exception:
+            continue
+    return "\n".join(chunks)
+
+
+def _persist_session(messages: list[dict[str, Any]], project_root: str | None = None) -> None:
+    """Salva histórico para continuar depois do reload/overnight."""
+    try:
+        state = {
+            "project": str(Path(project_root or os.getcwd()).resolve()),
+            "messages": messages,
+            "ts": time.time(),
+        }
+        path = _session_state_path(project_root)
+        path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+        _checkpoint_state(messages, project_root)
+    except Exception:
+        pass
+
+
+def _resume_session(project_root: str | None = None) -> list[dict[str, Any]]:
+    """Carrega a última sessão persistida, se existir."""
+    try:
+        path = _session_state_path(project_root)
+        if not path.exists():
+            return []
+        obj = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(obj, dict):
+            msg = obj.get("messages")
+            if isinstance(msg, list):
+                return msg
+    except Exception:
+        pass
+    return []
+
+
 # ---------------------------------------------------------------------------
 # Repo map — árvore compacta, top-N arquivos mais recentes, budget de tokens
 # ---------------------------------------------------------------------------
@@ -371,12 +491,15 @@ SYSTEM_PROMPT_TEMPLATE = """Você é o JARVIS, agente de desenvolvimento local. 
 
 {memory_context}
 
-FERRAMENTAS (apenas 3 — mantenha o overhead de contexto mínimo):
+{agent_context}
+
+FERRAMENTAS (apenas 4 — mantenha o overhead de contexto mínimo):
 - read_file(path, start_line?, end_line?)      → leia SEMPRE antes de editar
 - str_replace(path, old_str, new_str)          → old_str deve ser EXATO (copiado do read_file) e único no arquivo; old_str='' cria um arquivo novo
 - execute_shell(cmd)                            → ls/find/grep (explorar), pytest/npm test (testar),
                                                    git add -A && git commit -m "msg" (commitar),
                                                    curl (buscar na web), rm/mv/mkdir (qualquer outra ação)
+- semantic_search(query, top_k=5)               → busca local no código por semântica antes de ler muitos arquivos
 
 Se sua API não suportar tool_calls nativas, use este formato de TEXTO (estilo Aider):
 
@@ -403,6 +526,8 @@ REGRAS:
 4. Depois de editar, rode os testes via execute_shell.
 5. Depois dos testes passarem, faça commit via execute_shell (git add -A && git commit -m "...").
 6. Nunca invente conteúdo de arquivo sem ler primeiro.
+7. Se existir AGENTS.md / CLAUDE.md / GEMINI.md / instruções do projeto, siga essas regras antes de agir.
+8. Modo hands-off: se o alvo for simples e seguro, execute em lote com poucos turns; se houver risco, pare e peça confirmação.
 """
 
 PLAN_PROMPT = """Você é o JARVIS architect. PT-BR. Seja direto.
@@ -670,6 +795,37 @@ def _tool_execute_shell(cmd: str, approve: bool = False) -> str:
         return f"ERROR: {e}"
 
 
+def _tool_semantic_search(query: str, top_k: int = 5) -> str:
+    """Busca semântica local no Qdrant para encontrar o arquivo certo sem inflar o contexto."""
+    if not query or not query.strip():
+        return "ERROR: query vazia"
+    try:
+        from jarvis.core.config import Config
+        from jarvis.providers.llm import LLMClient
+        from jarvis.providers.vector_store import QdrantStore
+
+        cfg = Config()
+        llm = LLMClient(cfg)
+        vec = llm.embed(query)
+        if not vec:
+            return "ERROR: embedding generation failed"
+        store = QdrantStore(cfg)
+        hits = store.search(cfg.qdrant_collection_code, vec, top_k=top_k)
+        if not hits:
+            return "OK: semantic_search sem resultados relevantes"
+
+        lines = ["SEMANTIC SEARCH:"]
+        for hit in hits[:top_k]:
+            payload = hit.get("payload", {})
+            path = payload.get("path", "unknown")
+            text = str(payload.get("text", ""))[:280]
+            score = hit.get("score", 0.0)
+            lines.append(f"- {path} (score={score:.3f})\n{text}")
+        return "\n".join(lines)
+    except Exception as exc:  # noqa: BLE001
+        return f"ERROR: semantic_search failed: {exc}"
+
+
 def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -> tuple[str, str | None]:
     """Dispatcher único — só existem 3 ferramentas possíveis. Retorna
     (saída_texto, diff_ou_None) — diff só é preenchido por str_replace, e é
@@ -689,7 +845,9 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
         )
     if name == "execute_shell":
         return _tool_execute_shell(args.get("cmd", ""), approve), None
-    return f"ERROR: unknown tool '{name}' (disponíveis: read_file, str_replace, execute_shell)", None
+    if name == "semantic_search":
+        return _tool_semantic_search(args.get("query", ""), args.get("top_k", 5)), None
+    return f"ERROR: unknown tool '{name}' (disponíveis: read_file, str_replace, execute_shell, semantic_search)", None
 
 
 def _get_tools() -> list[dict[str, Any]]:
@@ -748,6 +906,21 @@ def _get_tools() -> list[dict[str, Any]]:
                         "cmd": {"type": "string", "description": "Comando shell completo a executar"}
                     },
                     "required": ["cmd"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "semantic_search",
+                "description": "Busca semântica local no índice do código para achar o arquivo certo sem inflar o contexto com o repo inteiro.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Query em linguagem natural para encontrar trechos relevantes"},
+                        "top_k": {"type": "integer", "description": "Número máximo de resultados (padrão 5)"},
+                    },
+                    "required": ["query"],
                 },
             },
         },
@@ -985,10 +1158,14 @@ def _run_agent_loop(
 # REPL principal
 # ---------------------------------------------------------------------------
 
-def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
+def dev_repl(project_root: str | None = None, approve: bool = False, continue_session: bool = False, yolo: bool = False) -> None:
     if project_root:
         os.environ["JARVIS_PROJECT_ROOT"] = project_root
         os.chdir(project_root)
+
+    if yolo:
+        approve = True
+        console.print("[tool.ok]YOLO mode: auto-aprovação ativa para comandos seguros de execução.[/]")
 
     profile = _detect_profile()
     tools = _get_tools() if profile["native_tools"] else []
@@ -1003,10 +1180,20 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
 
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context()
+    agent_ctx = _load_agent_context(os.getcwd())
     system_prompt = _maybe_disable_thinking(
-        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
+        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx)
     )
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+    if continue_session:
+        resumed = _resume_session(project_root or os.getcwd())
+        if resumed:
+            messages = resumed
+            if len(messages) and messages[0].get("role") == "system":
+                messages[0]["content"] = system_prompt
+            else:
+                messages.insert(0, {"role": "system", "content": system_prompt})
+            console.print("[dim]✅ Sessão anterior carregada.[/]")
 
     active_model = profile["name"]
     debug_mode = False
@@ -1029,10 +1216,12 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
         if user_input == "/clear":
             repo_map = _build_repo_map(os.getcwd())
             memory_ctx = _build_memory_context()
+            agent_ctx = _load_agent_context(os.getcwd())
             system_prompt = _maybe_disable_thinking(
-                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
+                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx)
             )
             messages = [{"role": "system", "content": system_prompt}]
+            _persist_session(messages, project_root or os.getcwd())
             console.print("[dim]🗑️  Contexto limpo.[/]")
             continue
 
@@ -1048,8 +1237,9 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
         if user_input == "/map":
             repo_map = _build_repo_map(os.getcwd())
             memory_ctx = _build_memory_context()
+            agent_ctx = _load_agent_context(os.getcwd())
             system_prompt = _maybe_disable_thinking(
-                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
+                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx)
             )
             messages[0] = {"role": "system", "content": system_prompt}
             console.print("[dim]🗺️  Repo map + memória atualizados.[/]")
@@ -1094,7 +1284,10 @@ def dev_repl(project_root: str | None = None, approve: bool = False) -> None:
 
         messages.append({"role": "user", "content": user_input})
         messages = _trim_messages(messages)
-        _run_agent_loop(messages, tools, profile, approve, debug_mode)
+        ok = _run_agent_loop(messages, tools, profile, approve, debug_mode)
+        _persist_session(messages, project_root or os.getcwd())
+        if not ok:
+            console.print("[dim]ℹ️ Sessão persistida; pode continuar depois com --continue.[/]")
 
 
 def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) -> str | None:
@@ -1145,10 +1338,60 @@ def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) 
         return None
 
 
-def dev_once(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False) -> int:
+def _run_autopilot(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False, continue_session: bool = False, yolo: bool = False) -> int:
+    """Modo seguro de execução em lote: planeja, executa e valida em turnos limitados, com checkpoint final."""
     if project_root:
         os.environ["JARVIS_PROJECT_ROOT"] = project_root
         os.chdir(project_root)
+    if yolo:
+        approve = True
+
+    profile = _detect_profile()
+    tools = _get_tools() if profile["native_tools"] else []
+    header = Table.grid(padding=(0, 1))
+    header.add_row("🤖", f"[jarvis]AUTOPILOT[/] — {profile['name']}")
+    header.add_row("📋", task)
+    console.print(Panel(header, border_style="jarvis", padding=(0, 1)))
+
+    repo_map = _build_repo_map(os.getcwd())
+    memory_ctx = _build_memory_context(task)
+    agent_ctx = _load_agent_context(os.getcwd())
+    system_prompt = _maybe_disable_thinking(
+        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx)
+    )
+    messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+    if continue_session:
+        resumed = _resume_session(project_root or os.getcwd())
+        if resumed:
+            messages = resumed
+            if len(messages) and messages[0].get("role") == "system":
+                messages[0]["content"] = system_prompt
+            else:
+                messages.insert(0, {"role": "system", "content": system_prompt})
+
+    plan = _architect_plan(task, profile, tools, debug)
+    if plan:
+        messages.append({"role": "user", "content": f"Plano inicial:\n{plan}\n\nExecute em etapas curtas com validação de cada fase."})
+    messages.append({"role": "user", "content": task})
+    messages = _trim_messages(messages)
+    ok = _run_agent_loop(messages, tools, profile, approve, debug, max_turns=8)
+    if len(messages) > 20:
+        messages = _summarize_for_autopilot(messages)
+    _persist_session(messages, project_root or os.getcwd())
+    console.print("[dim]🧭 autopilot: checkpoint salvo e sessão resumível com --continue.[/]")
+    return 0 if ok else 1
+
+
+def dev_once(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False, continue_session: bool = False, yolo: bool = False, autopilot: bool = False) -> int:
+    if project_root:
+        os.environ["JARVIS_PROJECT_ROOT"] = project_root
+        os.chdir(project_root)
+
+    if yolo:
+        approve = True
+
+    if autopilot:
+        return _run_autopilot(task, project_root=project_root, approve=approve, debug=debug, continue_session=continue_session, yolo=yolo)
 
     profile = _detect_profile()
     tools = _get_tools() if profile["native_tools"] else []
@@ -1160,15 +1403,23 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
 
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context(task)
+    agent_ctx = _load_agent_context(os.getcwd())
     system_prompt = _maybe_disable_thinking(
-        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx)
+        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx)
     )
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": task},
-    ]
+    messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+    if continue_session:
+        resumed = _resume_session(project_root or os.getcwd())
+        if resumed:
+            messages = resumed
+            if len(messages) and messages[0].get("role") == "system":
+                messages[0]["content"] = system_prompt
+            else:
+                messages.insert(0, {"role": "system", "content": system_prompt})
 
+    messages.append({"role": "user", "content": task})
     ok = _run_agent_loop(messages, tools, profile, approve, debug, max_turns=10)
+    _persist_session(messages, project_root or os.getcwd())
     return 0 if ok else 1
 
 
@@ -1178,11 +1429,29 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="JARVIS Dev — CLI de desenvolvimento local")
     parser.add_argument("--project", type=str, default=None, help="Diretório do projeto")
     parser.add_argument("--approve", action="store_true", help="Ativa aprovação para comandos com efeito")
+    parser.add_argument("--yolo", action="store_true", help="Auto-aprova comandos e deixa o agent em modo hands-off")
+    parser.add_argument("--continue", dest="continue_session", action="store_true", help="Continua a última sessão persistida do projeto")
+    parser.add_argument("--autopilot", action="store_true", help="Modo seguro em lote: plano → execução → validação → checkpoint")
     parser.add_argument("--once", type=str, default=None, help="Executa uma tarefa única e sai")
     parser.add_argument("--debug", action="store_true", help="Modo debug (payloads crus da API)")
     ns = parser.parse_args()
 
     if ns.once:
-        sys.exit(dev_once(ns.once, project_root=ns.project, approve=ns.approve, debug=ns.debug))
+        sys.exit(
+            dev_once(
+                ns.once,
+                project_root=ns.project,
+                approve=ns.approve,
+                debug=ns.debug,
+                continue_session=ns.continue_session,
+                yolo=ns.yolo,
+                autopilot=ns.autopilot,
+            )
+        )
     else:
-        dev_repl(project_root=ns.project, approve=ns.approve)
+        dev_repl(
+            project_root=ns.project,
+            approve=ns.approve,
+            continue_session=ns.continue_session,
+            yolo=ns.yolo,
+        )
