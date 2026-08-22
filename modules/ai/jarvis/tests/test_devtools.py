@@ -360,7 +360,7 @@ def test_handle_dev_tool_read_file(tmp_path: Path) -> None:
 
 def test_handle_dev_tool_unknown() -> None:
     result = handle_dev_tool("nonexistent_tool", {})
-    assert "ERROR" in result
+    assert "error" in result.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -377,7 +377,7 @@ def test_dev_tools_schema() -> None:
     assert "list_directory" in names
     assert "code_search" in names
     assert "run_tests" in names
-    assert len(DEV_TOOLS) == 9  # read, write, str_replace, list, search, tests, linter, semantic, jarvis_command
+    assert len(DEV_TOOLS) == 10  # read, write, str_replace, execute_shell, list, code_search, run_tests, run_linter, semantic, jarvis_command
 
 
 def test_dev_tools_have_required_params() -> None:

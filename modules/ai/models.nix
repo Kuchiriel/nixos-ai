@@ -177,7 +177,7 @@ in
     # Experts (20GB GGUF) ficam na RAM (32GB DDR5 ~120GB/s)
     # CPU lê experts sob demanda quando router seleciona top-k
     # Forecast: ~30-32 t/s decode, ~350 t/s prefill, 0.7% drift
-    # NOTA: --slot-count 2 suporta tool calls concorrentes (Roo Dev)
+    # NOTA: --parallel 2 suporta tool calls concorrentes (Roo Dev)
 
     host = {
         model = "llm-host";
@@ -207,7 +207,7 @@ in
             "--no-warmup"                    # Sem warmup: +2% prefill e decode
             "--prio" "2"                     # Prioridade high para decode
             "--prio-batch" "3"               # Real-time priority para batch/prefull
-            "--slot-count" "2"               # 2 slots para tool calls concorrentes (Roo Dev, Aider)
+            "--parallel" "2"                 # 2 slots para tool calls concorrentes (Roo Dev, Aider)
             "--cont-batching"                 # Cont-batching: agendamento eficiente com múltiplos slots
        ];
 

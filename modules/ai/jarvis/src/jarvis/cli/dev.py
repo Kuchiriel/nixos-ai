@@ -1,19 +1,13 @@
 """jarvis dev — CLI interativo de desenvolvimento (estilo Claude Code).
 
+v4.0 — Usa devtools.py unificado (AST guard, backup, safety, fuzzy match).
+
 REPL onde o usuário conversa com o agente e o agente pode:
   - Explorar a codebase via execute_shell
   - Ler arquivos (read_file)
-  - Editar/criar arquivos (str_replace, com old_str='' para criar)
-  - Rodar testes, commitar e buscar na web via execute_shell
-
-Arquitetura (v3.0 — lean + Claude Code UX):
-  - 4 ferramentas primitivas (read_file, str_replace, execute_shell,
-    semantic_search) — overhead mínimo de contexto.
-  - System prompt compacto (~40% menor que v2.2).
-  - UI estilo Claude Code: banner minimal, output inline, prompt limpo.
-  - Auto-RAG: indexa codebase se collection vazia (uma vez por sessão).
-  - Session auto-compaction: estima tokens e compacta antes de estourar.
-  - Smart context: AGENTS.md < 3KB, memória se disponível.
+  - Editar/criar arquivos (str_replace, com old='' para criar)
+  - Rodar testes, linter, git, web via execute_shell
+  - Busca semântica via semantic_search
 
 Dependências: requests, rich, prompt_toolkit (todas em nixpkgs).
 
@@ -24,13 +18,10 @@ Uso:
   jarvis dev --yolo             # auto-aprova tudo
   jarvis dev --once "tarefa"    # executa e sai
   jarvis dev --continue         # retoma última sessão
-
-Inspirado em: Claude Code, Aider, pi (earendil-works).
 """
 
 from __future__ import annotations
 
-import difflib
 import json
 import os
 import re
@@ -42,6 +33,17 @@ from pathlib import Path
 from typing import Any
 
 import requests
+
+# Tools unificadas — AST guard, backup, safety, fuzzy match 4 camadas
+from jarvis.core.devtools import (
+    handle_dev_tool,
+    read_file as _devtools_read_file,
+    str_replace as _devtools_str_replace,
+    execute_shell as _devtools_execute_shell,
+    semantic_search as _devtools_semantic_search,
+    list_directory as _devtools_list_directory,
+    write_file as _devtools_write_file,
+)
 from prompt_toolkit import PromptSession
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.completion import WordCompleter
@@ -496,8 +498,8 @@ SYSTEM_PROMPT_TEMPLATE = """JARVIS dev agent. PT-BR. Direto.
 {agent_context}
 
 TOOLS:
-- read_file(path, start_line?, end_line?) → ler ANTES de editar
-- str_replace(path, old_str, new_str) → old_str EXATO e único; vazio = criar
+- read_file(path, offset?, limit?) → ler ANTES de editar
+- str_replace(path, old, new) → old EXATO e único; vazio = criar
 - execute_shell(cmd) → bash (ls/grep/pytest/git/curl)
 - semantic_search(query, top_k) → busca semântica no código
 
@@ -515,7 +517,7 @@ cmd
 
 RULES:
 1. read_file ANTES de str_replace no mesmo path
-2. old_str = cópia EXATA do read_file
+2. old = cópia EXATA do read_file
 3. Se falhar, re-leia com mais contexto
 4. Teste após editar, commit após testar
 5. Não invente conteúdo sem ler
@@ -616,244 +618,79 @@ def _trim_messages(messages: list[dict[str, Any]], max_messages: int = 20) -> li
 
 
 # ---------------------------------------------------------------------------
-# As 3 ferramentas primitivas
+# Tools — delegação para devtools.py unificado
 # ---------------------------------------------------------------------------
 
-def _tool_read_file(
-    path: str,
-    start_line: int | None = None,
-    end_line: int | None = None,
-    max_chars: int = 12000,
-) -> str:
-    if not path:
-        return "ERROR: empty path"
-    fp = Path(path)
-    if not fp.exists():
-        return f"ERROR: file not found: {path}"
-    if not fp.is_file():
-        return f"ERROR: not a file: {path}"
-    try:
-        text = fp.read_text(encoding="utf-8", errors="replace")
-    except Exception as e:
-        return f"ERROR: {e}"
-
-    lines = text.splitlines()
-    total = len(lines)
-    start = max((start_line or 1) - 1, 0)
-    end = min(end_line or total, total)
-    window = lines[start:end]
-
-    numbered = "\n".join(f"{start + i + 1:>5} | {line}" for i, line in enumerate(window))
-    if len(numbered) <= max_chars:
-        suffix = "" if (start == 0 and end == total) else f"\n… (linhas {start + 1}-{end} de {total})"
-        return numbered + suffix
-
-    truncated = numbered[:max_chars]
-    return (
-        f"{truncated}\n… (truncado — {total} linhas totais; use start_line/end_line "
-        "ou grep via execute_shell para ver o resto)"
-    )
-
-
-def _find_fuzzy_match(content: str, old_str: str) -> str | None:
-    """Tenta localizar old_str no arquivo mesmo com pequenas diferenças de
-    espaçamento — usado quando o match exato falha. Modelos pequenos
-    quantizados raramente copiam whitespace/indentação com 100% de
-    fidelidade ao citar um trecho do read_file; sem essa camada, a edição
-    falhava, o modelo tentava de novo e às vezes entrava em loop.
-
-    Estratégia (inspirada nas 4 camadas de match do Aider, reduzida a 1
-    para manter o código simples): normaliza espaços/tabs internos de cada
-    linha e compara em janelas deslizantes do mesmo tamanho. Só retorna um
-    resultado se houver exatamente UM trecho do arquivo real que bate com
-    a versão normalizada — ambiguidade (0 ou 2+ candidatos) retorna None,
-    igual ao comportamento de "não único" do match exato.
-    """
-    def norm_line(line: str) -> str:
-        return re.sub(r"[ \t]+", " ", line.strip())
-
-    old_lines = [norm_line(line) for line in old_str.splitlines()]
-    if not old_lines:
-        return None
-
-    content_lines = content.splitlines(keepends=True)
-    n = len(old_lines)
-    if n == 0 or n > len(content_lines):
-        return None
-
-    candidates: list[str] = []
-    for i in range(len(content_lines) - n + 1):
-        window = content_lines[i:i + n]
-        if [norm_line(w) for w in window] == old_lines:
-            candidates.append("".join(window))
-
-    return candidates[0] if len(candidates) == 1 else None
-
-
-def _make_diff(path: str, old: str, new: str) -> str:
-    return "\n".join(difflib.unified_diff(
-        old.splitlines(), new.splitlines(),
-        fromfile=path, tofile=path, lineterm="", n=1,
-    ))
-
-
-def _tool_str_replace(path: str, old_str: str, new_str: str) -> tuple[str, str | None]:
-    """Retorna (mensagem_para_o_modelo, diff_para_exibir_ou_None)."""
-    if not path:
-        return "ERROR: empty path", None
-    fp = Path(path)
-
-    if old_str == "":
-        if fp.exists():
-            return f"ERROR: file already exists — old_str='' só cria arquivos novos: {path}", None
-        try:
-            fp.parent.mkdir(parents=True, exist_ok=True)
-            fp.write_text(new_str, encoding="utf-8")
-        except Exception as e:
-            return f"ERROR: {e}", None
-        diff = _make_diff(path, "", new_str)
-        return f"OK: arquivo criado ({len(new_str)} bytes) — {path}", diff
-
-    if not fp.exists():
-        return f"ERROR: file not found: {path} (use old_str='' para criar)", None
-
-    try:
-        content = fp.read_text(encoding="utf-8", errors="replace")
-    except Exception as e:
-        return f"ERROR: {e}", None
-
-    count = content.count(old_str)
-    matched = old_str
-    used_fuzzy = False
-
-    if count == 0:
-        fuzzy = _find_fuzzy_match(content, old_str)
-        if fuzzy is None:
-            return (
-                "ERROR: old_str não encontrado (nem com match aproximado por espaçamento). "
-                "Faça read_file novamente e copie o texto EXATO."
-            ), None
-        matched = fuzzy
-        used_fuzzy = True
-    elif count > 1:
-        return f"ERROR: old_str aparece {count}x — não é único. Adicione mais contexto ao redor.", None
-
-    new_content = content.replace(matched, new_str, 1)
-    try:
-        fp.write_text(new_content, encoding="utf-8")
-    except Exception as e:
-        return f"ERROR: {e}", None
-
-    diff = _make_diff(path, matched, new_str)
-    note = " (via match aproximado — espaçamento diferia)" if used_fuzzy else ""
-    return f"OK: 1 substituição em {path}{note} ({len(new_content)} bytes)", diff
-
-
-def _tool_execute_shell(cmd: str, approve: bool = False) -> str:
-    """Primitiva única para explorar (ls/find/grep), testar (pytest/npm test),
-    commitar (git add/commit) e buscar na web (curl) — consolida o que antes
-    eram ferramentas dedicadas (git_commit, run_tests, web_search, read_url,
-    list_directory, code_search). Usa shell=True para suportar comandos
-    compostos (ex: `git add -A && git commit -m "msg"`); a gate de aprovação
-    (`command_allowed` / --approve) continua sendo a barreira de segurança."""
-    from jarvis.core.agent import command_allowed
-
-    if not cmd:
-        return "ERROR: empty command"
-    if not command_allowed(cmd):
-        if not approve:
-            return f"ERROR: command not allowed: {cmd} (use --approve)"
-        console.print(f"  [tool.error]⚠  Comando:[/] {cmd}")
-        try:
-            if not Confirm.ask("  Permitir?", default=False):
-                return "ERROR: command denied by user"
-        except (EOFError, KeyboardInterrupt):
-            return "ERROR: approval denied (EOF)"
-
-    try:
-        res = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, timeout=60,
-        )
-        output = res.stdout if res.returncode == 0 else (res.stdout + res.stderr)
-        if not output.strip():
-            output = f"(exit code {res.returncode})"
-        return output[:3000]
-    except subprocess.TimeoutExpired:
-        return "ERROR: command timed out (60s)"
-    except Exception as e:
-        return f"ERROR: {e}"
-
-
-def _tool_semantic_search(query: str, top_k: int = 5) -> str:
-    """Busca semântica local no Qdrant para encontrar o arquivo certo sem inflar o contexto."""
-    if not query or not query.strip():
-        return "ERROR: query vazia"
-    try:
-        from jarvis.core.config import Config
-        from jarvis.providers.llm import LLMClient
-        from jarvis.providers.vector_store import QdrantStore
-
-        cfg = Config()
-        llm = LLMClient(cfg)
-        vec = llm.embed(query)
-        if not vec:
-            return "ERROR: embedding generation failed"
-        store = QdrantStore(cfg)
-        hits = store.search(cfg.qdrant_collection_code, vec, top_k=top_k)
-        if not hits:
-            return "OK: semantic_search sem resultados relevantes"
-
-        lines = ["SEMANTIC SEARCH:"]
-        for hit in hits[:top_k]:
-            payload = hit.get("payload", {})
-            path = payload.get("path", "unknown")
-            text = str(payload.get("text", ""))[:280]
-            score = hit.get("score", 0.0)
-            lines.append(f"- {path} (score={score:.3f})\n{text}")
-        return "\n".join(lines)
-    except Exception as exc:  # noqa: BLE001
-        return f"ERROR: semantic_search failed: {exc}"
-
-
 def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -> tuple[str, str | None]:
-    """Dispatcher único — só existem 3 ferramentas possíveis. Retorna
-    (saída_texto, diff_ou_None) — diff só é preenchido por str_replace, e é
-    usado apenas para exibição na UI (o modelo continua recebendo só a
-    mensagem de saída, sem inflar o histórico com o diff)."""
-    if name == "read_file":
-        return _tool_read_file(
-            args.get("path", ""),
-            args.get("start_line"),
-            args.get("end_line"),
-        ), None
-    if name == "str_replace":
-        return _tool_str_replace(
-            args.get("path", ""),
-            args.get("old_str", ""),
-            args.get("new_str", ""),
-        )
-    if name == "execute_shell":
-        return _tool_execute_shell(args.get("cmd", ""), approve), None
-    if name == "semantic_search":
-        return _tool_semantic_search(args.get("query", ""), args.get("top_k", 5)), None
-    return f"ERROR: unknown tool '{name}' (disponíveis: read_file, str_replace, execute_shell, semantic_search)", None
+    """Executa tool via handle_dev_tool (devtools.py). Retorna (texto, diff_ou_None)."""
+    # execute_shell requer aprovação
+    if name == "execute_shell" and not approve:
+        from jarvis.core.agent import command_allowed
+        cmd = args.get("cmd", "")
+        if cmd and not command_allowed(cmd):
+            console.print(f"  [tool.error]⚠  Comando:[/] {cmd}")
+            try:
+                if not Confirm.ask("  Permitir?", default=False):
+                    return "ERROR: command denied by user", None
+            except (EOFError, KeyboardInterrupt):
+                return "ERROR: approval denied (EOF)", None
+
+    # Chama handle_dev_tool do devtools.py
+    result_json = handle_dev_tool(name, args)
+    try:
+        result = json.loads(result_json)
+    except json.JSONDecodeError:
+        return result_json[:3000], None
+
+    if not result.get("ok", False):
+        error = result.get("error", "Unknown error")
+        hint = result.get("hint", "")
+        msg = f"ERROR: {error}"
+        if hint:
+            msg += f"\n{hint}"
+        return msg, None
+
+    # Extrai diff do resultado do str_replace
+    diff = result.pop("diff", None)
+
+    # Converte dict para string para o modelo
+    if "content" in result:
+        return result["content"], diff
+    elif "output" in result:
+        return result["output"], diff
+    elif "results" in result:
+        lines = ["SEARCH RESULTS:"]
+        for r in result["results"]:
+            lines.append(f"- {r['source']} (score={r['score']})\n{r['text']}")
+        return "\n".join(lines), diff
+    elif "entries" in result:
+        lines = [f"DIRECTORY ({result['count']} items):"]
+        for e in result["entries"]:
+            icon = "📁" if e["type"] == "dir" else "📄"
+            lines.append(f"  {icon} {e['name']}")
+        return "\n".join(lines), diff
+    elif "path" in result:
+        strategy = result.get("strategy", "")
+        replacements = result.get("replacements", 1)
+        return f"OK: {replacements} substituição(ões) em {result['path']} ({strategy})", diff
+    else:
+        return json.dumps(result, ensure_ascii=False)[:2000], diff
 
 
 def _get_tools() -> list[dict[str, Any]]:
-    """Apenas 3 schemas — overhead total de ~150-250 tokens (vs. ~3.000 do
-    array antigo de 15 ferramentas)."""
+    """6 tools lean — overhead ~200 tokens."""
     return [
         {
             "type": "function",
             "function": {
                 "name": "read_file",
-                "description": "Lê o conteúdo de um arquivo com números de linha. Use sempre antes de str_replace.",
+                "description": "Lê um arquivo com números de linha. Use sempre antes de str_replace.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "path": {"type": "string", "description": "Caminho relativo do arquivo"},
-                        "start_line": {"type": "integer", "description": "Linha inicial (opcional, 1-indexed)"},
-                        "end_line": {"type": "integer", "description": "Linha final (opcional, inclusive)"},
+                        "offset": {"type": "integer", "description": "Linha inicial (opcional, 0-indexed)"},
+                        "limit": {"type": "integer", "description": "Máximo de linhas (padrão 2000)"},
                     },
                     "required": ["path"],
                 },
@@ -863,19 +700,15 @@ def _get_tools() -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "str_replace",
-                "description": (
-                    "Substitui um trecho EXATO de texto em um arquivo. old_str deve ser "
-                    "único no arquivo (copiado do read_file). old_str='' cria um arquivo "
-                    "novo com new_str como conteúdo completo."
-                ),
+                "description": "Substitui trecho EXATO. old vazio = criar arquivo novo. Fuzzy match automático.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "path": {"type": "string", "description": "Caminho relativo do arquivo"},
-                        "old_str": {"type": "string", "description": "Texto exato a substituir (vazio para criar arquivo)"},
-                        "new_str": {"type": "string", "description": "Texto novo"},
+                        "old": {"type": "string", "description": "Texto exato (vazio para criar)"},
+                        "new": {"type": "string", "description": "Texto novo"},
                     },
-                    "required": ["path", "old_str", "new_str"],
+                    "required": ["path", "old", "new"],
                 },
             },
         },
@@ -883,16 +716,11 @@ def _get_tools() -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "execute_shell",
-                "description": (
-                    "Executa um comando shell (bash -c, suporta &&/pipes). Use para: explorar "
-                    "arquivos (ls, find, grep), rodar testes (pytest, npm test), git "
-                    "(add/commit/diff/log), buscar na web (curl), e qualquer ação que não "
-                    "seja ler ou editar um arquivo específico."
-                ),
+                "description": "Executa comando shell (bash -c). Explorar, testar, git, curl.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "cmd": {"type": "string", "description": "Comando shell completo a executar"}
+                        "cmd": {"type": "string", "description": "Comando shell completo"}
                     },
                     "required": ["cmd"],
                 },
@@ -902,14 +730,44 @@ def _get_tools() -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "semantic_search",
-                "description": "Busca semântica local no índice do código para achar o arquivo certo sem inflar o contexto com o repo inteiro.",
+                "description": "Busca semântica no código (mais inteligente que grep, mais lenta).",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "Query em linguagem natural para encontrar trechos relevantes"},
-                        "top_k": {"type": "integer", "description": "Número máximo de resultados (padrão 5)"},
+                        "query": {"type": "string", "description": "Query em linguagem natural"},
+                        "top_k": {"type": "integer", "description": "Número de resultados (padrão 5)"},
                     },
                     "required": ["query"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "write_file",
+                "description": "Cria/escreve arquivo completo. Backup automático + AST guard.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Caminho do arquivo"},
+                        "content": {"type": "string", "description": "Conteúdo completo"},
+                    },
+                    "required": ["path", "content"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_directory",
+                "description": "Lista diretório (recursivo limitado).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Diretório (padrão: raiz)"},
+                        "max_depth": {"type": "integer", "description": "Profundidade (padrão 2)"},
+                    },
+                    "required": [],
                 },
             },
         },
@@ -988,7 +846,7 @@ def _parse_text_actions(content: str) -> list[dict[str, Any]] | None:
             pm.group("key").strip(): pm.group("value").strip()
             for pm in _PARAMETER_TAG_RE.finditer(m.group("body"))
         }
-        for k in ("start_line", "end_line"):
+        for k in ("start_line", "end_line", "offset", "limit"):
             if k in args and args[k].isdigit():
                 args[k] = int(args[k])
         function_actions.append({"name": name, "arguments": args})
@@ -1001,7 +859,7 @@ def _parse_text_actions(content: str) -> list[dict[str, Any]] | None:
         path = m.group("path").strip().strip("`").strip()
         actions.append({
             "name": "str_replace",
-            "arguments": {"path": path, "old_str": m.group("old"), "new_str": m.group("new")},
+            "arguments": {"path": path, "old": m.group("old"), "new": m.group("new")},
         })
 
     for m in _READ_MARKER_RE.finditer(content):
