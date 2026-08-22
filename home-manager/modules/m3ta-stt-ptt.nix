@@ -1,12 +1,12 @@
 # Módulo Home Manager para stt-ptt (Push-to-Talk STT)
 #
 # Configura o stt-ptt do m3ta-nixpkgs com Whisper para reconhecimento
-# de fala em tempo real. Usa wtype para simular tecla de atalho.
+# de fala em tempo real.
 #
 # Usage em home.nix:
-#   cli.stt-ptt.enable = true;
-#   cli.stt-ptt.model = "ggml-large-v3-turbo";
-#   cli.stt-ptt.language = "pt";
+#   m3ta.stt-ptt.enable = true;
+#   m3ta.stt-ptt.model = "ggml-large-v3-turbo";
+#   m3ta.stt-ptt.language = "pt";
 {
   config,
   lib,
@@ -15,36 +15,37 @@
 }:
 with lib; let
   cfg = config.m3ta.stt-ptt;
-
-  # Re-exporta o módulo do m3ta-nixpkgs
-  m3taModule = import "${./../../m3ta-nixpkgs}/modules/home-manager/cli/stt-ptt.nix";
 in {
-  imports = [m3taModule];
-
   options.m3ta.stt-ptt = {
-    enable = mkAliasOption [] "cli.stt-ptt.enable";
-    whisperPackage = mkAliasOption [] "cli.stt-ptt.whisperPackage";
+    enable = mkEnableOption "Push-to-Talk Speech to Text com Whisper";
+
     model = mkOption {
       type = types.str;
       default = "ggml-large-v3-turbo";
       description = "Modelo Whisper a usar.";
     };
-    notifyTimeout = mkAliasOption [] "cli.stt-ptt.notifyTimeout";
-    language = mkAliasOption [] "cli.stt-ptt.language";
+
+    language = mkOption {
+      type = types.str;
+      default = "auto";
+      description = "Idioma para reconhecimento de fala.";
+    };
+
+    notifyTimeout = mkOption {
+      type = types.int;
+      default = 3000;
+      description = "Timeout da notificação em ms.";
+    };
   };
 
   config = mkIf cfg.enable {
     home.packages = [pkgs.stt-ptt];
 
-    # Configura atalho de teclado para stt-ptt (Ctrl+Space)
-    wayland.sessionVariables.STT_PTT_KEY = "space";
-    wayland.sessionVariables.STT_PTT_MOD = "ctrl";
-
-    # Garante que whisper-cpp model está disponível
-    xdg.dataHome = let
-      modelDir = "${config.xdg.dataHome}/stt-ptt/models";
-    in pkgs.runCommand "stt-ptt-models" {} ''
-      mkdir -p "$out"
-    '';
+    # Configura variáveis de ambiente para stt-ptt
+    home.sessionVariables = {
+      STT_PTT_MODEL = cfg.model;
+      STT_PTT_LANGUAGE = cfg.language;
+      STT_PTT_NOTIFY_TIMEOUT = toString cfg.notifyTimeout;
+    };
   };
 }
