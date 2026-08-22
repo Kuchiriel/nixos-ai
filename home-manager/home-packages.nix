@@ -46,6 +46,7 @@
     libnotify
     xdg-desktop-portal-gtk
     xdg-desktop-portal-hyprland
+    yad                    # GUI dialogs para NixOS-AI Launcher
 
     # ── m3ta-nixpkgs packages ──────────────────────────────────────
     # sidecar: terminal multiplexer/UX para CLI agents
@@ -53,7 +54,7 @@
     # stt-ptt: Push-to-Talk Speech-to-Text com Whisper
     stt-ptt
     # talk: Text-to-Speech com ElevenLabs para notificações
-    talk
+    # talk  # REMOVIDO: redundante com Kokoro TTS do jarvis voice
   ];
 }
 

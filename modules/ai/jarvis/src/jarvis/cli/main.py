@@ -890,6 +890,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_dev.add_argument("--approve", action="store_true", help="permite aprovação para comandos com efeito")
     p_dev.set_defaults(func=_cmd_dev)
 
+    p_launcher = sub.add_parser("launcher", help="abre o launcher GUI (Yad) para todas as features")
+    p_launcher.add_argument("--status", action="store_true", help="status rápido (notification)")
+    p_launcher.add_argument("--dev", action="store_true", help="abre jarvis dev")
+    p_launcher.add_argument("--services", action="store_true", help="gerenciar serviços")
+    p_launcher.set_defaults(func=_cmd_launcher)
+
     return parser
 
 
@@ -917,6 +923,11 @@ def _cmd_dev(args: argparse.Namespace) -> int:
     else:
         dev_repl(project_root=args.project, approve=args.approve)
         return 0
+
+
+def _cmd_launcher(args: argparse.Namespace) -> int:
+    from jarvis.cli.launcher_main import main as launcher_main
+    return launcher_main()
 
 
 def waybar_main() -> int:  # entry point extra: jarvis-waybar (module do Waybar)

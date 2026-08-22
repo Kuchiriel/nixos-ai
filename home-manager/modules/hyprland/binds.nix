@@ -10,6 +10,12 @@ let
     foot --app-id floating_shell -e bash -lc "jarvis ask \"$PROMPT\""
   '';
 
+  # NixOS-AI Launcher — GUI para todas as features
+  launcherScript = pkgs.writeScriptBin "nixos-ai-launcher" ''
+    #!/bin/sh
+    exec ${../../modules/ai/jarvis/src/jarvis/cli/launcher.sh} "$@"
+  '';
+
   booksScript = pkgs.writeScriptBin "open_books" ''
     #!/bin/sh
 
@@ -26,7 +32,8 @@ let
 in {
   home.packages = with pkgs; [ 
     booksScript 
-    jarvisAsk 
+    jarvisAsk
+    launcherScript 
     grim
     slurp
     wl-clipboard
@@ -53,6 +60,7 @@ in {
       "$mainMod,       P, exec, hyprpicker -an"
       "$mainMod,       N, exec, swaync-client -t"
       "$mainMod,       W, exec, ${booksScript}/bin/open_books"
+      "$mainMod,       A, exec, ${launcherScript}/bin/nixos-ai-launcher"
 
       # Screenshots resilientes (copia direto para o wl-copy)
       ", Print, exec, grim - | wl-copy"
