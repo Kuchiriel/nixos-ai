@@ -1,0 +1,20 @@
+{
+  "chat.agentHost.byokModels.enabled": true,
+  "chat.customEndpoints": [
+    {
+      "name": "Qwen3 Local 35B",
+      "url": "http://127.0.0.1:8080/v1",
+      "models": [
+        {
+          "id": "qwen3-35b-a3b",
+          "name": "Qwen3 35B Local",
+          "maxInputTokens": 131072,
+          "maxOutputTokens": 8192,
+          "toolCalling": true
+        }
+      ]
+    }
+  ],
+  "chat.utilityModel": "customendpoint/qwen3-35b-a3b",
+  "direnv.enable": false
+}
