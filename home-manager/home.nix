@@ -1,4 +1,4 @@
-{ homeStateVersion, user, pkgs, inputs, system, ... }: {
+{ homeStateVersion, user, pkgs, inputs, ... }: {
   imports = [
     ./modules
     ./home-packages.nix
@@ -58,11 +58,11 @@
     url = "https://huggingface.co/Systran/faster-whisper-tiny.en/resolve/main/model.bin";
     hash = "sha256-Glr64GpNuRyXXJqdeL5cwRDuTqAirVfVVJLkVQ6Tayo=";
   };
-
+   
   programs.opencode = {
     enable = true;
     enableMcpIntegration = true;
-    package = inputs.opencode.packages.${system}.default;  # opcional — senão usa o do nixpkgs
+    package = inputs.opencode-flake.packages.${pkgs.system}.default;
 
     settings = {
       theme = "opencode";

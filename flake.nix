@@ -1,4 +1,4 @@
-{
+]{
   description = "My system configuration";
 
   inputs = {
@@ -6,7 +6,6 @@
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     opencode-flake.url = "github:aodhanhayter/opencode-flake";
-    opencode.url = "github:anomalyco/opencode/dev"; 
 
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
@@ -28,7 +27,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, stylix, disko, opencode, system, ... }@inputs: let
+  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, stylix, disko, opencode, ... }@inputs: let
     system = "x86_64-linux";
     user = "nixos";
 

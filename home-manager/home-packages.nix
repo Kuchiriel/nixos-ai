@@ -24,7 +24,6 @@
     # Core CLI utils
     aider-chat
     python3Packages.botocore
-    inputs.opencode-flake.packages.${pkgs.system}.default
     bc
     bottom
     brightnessctl
