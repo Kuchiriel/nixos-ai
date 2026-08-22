@@ -62,7 +62,9 @@
 
   programs.opencode = {
     enable = true;
-    enableMcpIntegration = true;  # só se você for usar MCP servers
+    enableMcpIntegration = true;
+    package = inputs.opencode.packages.${system}.default;  # opcional — senão usa o do nixpkgs
+
     settings = {
       theme = "opencode";
       provider.local = {
@@ -70,10 +72,7 @@
         options.baseURL = "http://localhost:8080/v1";
         models."qwen3-35b-a3b" = {
           name = "Qwen3 35B Local";
-          cost = {
-            input = 0;
-            output = 0;
-          };
+          cost = { input = 0; output = 0; };
         };
       };
       model = "local/qwen3-35b-a3b";
