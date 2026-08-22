@@ -18,9 +18,9 @@ customModes:
       - NEVER rebuild without asking confirmation
     groups:
       - read
-      - - edit
-        - fileRegex: \.nix$
-        - description: Nix files only
+      - edit:
+          fileRegex: \.nix$
+          description: Nix files only
       - command
       - mcp
     whenToUse: Use this mode for NixOS configs, modules, overlays, flakes or any .nix file
@@ -58,9 +58,9 @@ customModes:
       - Keep 100% coverage on new code
     groups:
       - read
-      - - edit
-        - fileRegex: \.(py|toml|cfg)$
-        - description: Python files only
+      - edit:
+          fileRegex: \.(py|toml|cfg)$
+          description: Python files only
       - command
       - mcp
     whenToUse: Use this mode for Python code, tests, configs or .toml files
@@ -98,9 +98,7 @@ customModes:
       - Validate configurations before applying
     groups:
       - read
-      - - edit
-        - fileRegex: \.(sh|yaml|yml|toml|json|nix|dockerfile|Dockerfile|txt|md)$
-        - description: Config and script files only
+      - edit
       - command
       - mcp
     whenToUse: Use this mode for build scripts, benchmarks, deployment configs, CI/CD, or system troubleshooting
@@ -170,9 +168,9 @@ customModes:
       - Produce actionable plans with clear acceptance criteria
     groups:
       - read
-      - - edit
-        - fileRegex: \.md$
-        - description: Documentation only
+      - edit:
+          fileRegex: \.md$
+          description: Documentation only
       - mcp
     whenToUse: Use this mode for planning, design, architecture decisions, or technical specifications before implementation
     customInstructions: >
@@ -202,8 +200,7 @@ customModes:
       - Verify fixes don't introduce regressions
     groups:
       - read
-      - - edit
-        - description: Any file for debugging
+      - edit
       - command
       - mcp
     whenToUse: Use this mode when investigating errors, crashes, test failures, or unexpected behavior

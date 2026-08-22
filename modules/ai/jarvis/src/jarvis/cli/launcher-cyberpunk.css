@@ -1,0 +1,74 @@
+/* NixOS-AI Launcher — Cyberpunk Theme (GTK3) */
+/* Applied via GTK_CSS_PROVIDER or ~/.config/gtk-3.0/gtk.css */
+
+/* ── Window ── */
+window {
+    background-color: #0a0a0a;
+    color: #00ffff;
+}
+
+/* ── Text ── */
+textview text, label {
+    color: #00ffff;
+}
+
+/* ── Buttons ── */
+button {
+    background-color: rgba(0, 255, 255, 0.08);
+    color: #00ffff;
+    border: 1px solid #00ffff;
+    border-radius: 6px;
+    padding: 6px 14px;
+    min-height: 28px;
+    font-family: "JetBrainsMono Nerd Font", monospace;
+    font-size: 12px;
+}
+
+button:hover {
+    background-color: rgba(0, 255, 255, 0.20);
+    border-color: #00ffff;
+    box-shadow: 0 0 8px rgba(0, 255, 255, 0.3);
+}
+
+button:active {
+    background-color: rgba(0, 255, 255, 0.35);
+}
+
+/* ── Entry (text input) ── */
+entry {
+    background-color: #111111;
+    color: #00ffff;
+    border: 1px solid #00ffff;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: "JetBrainsMono Nerd Font", monospace;
+    font-size: 12px;
+}
+
+entry:focus {
+    border-color: #00ffff;
+    box-shadow: 0 0 6px rgba(0, 255, 255, 0.4);
+}
+
+/* ── Scrollbar ── */
+scrollbar {
+    background-color: #0a0a0a;
+}
+
+scrollbar slider {
+    background-color: #00ffff;
+    border-radius: 4px;
+    min-width: 6px;
+}
+
+/* ── Separator ── */
+separator {
+    background-color: rgba(0, 255, 255, 0.15);
+}
+
+/* ── Tooltip ── */
+tooltip {
+    background-color: #0a0a0a;
+    color: #00ffff;
+    border: 1px solid #00ffff;
+}
