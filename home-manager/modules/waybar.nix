@@ -285,6 +285,7 @@ in
         exec-on-event = true;
         interval = 2;
         return-type = "json";
+        format = "{}";
         on-click = "foot --app-id floating_shell -e jarvis dev";
       };
 

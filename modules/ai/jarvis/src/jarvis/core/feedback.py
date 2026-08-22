@@ -103,27 +103,36 @@ def play_sound(name: str, sound_theme: str | None = None) -> bool:
 
 
 def waybar_format() -> dict[str, Any]:
-    """Formato JSON para o module custom/jarvis do Waybar (porta do legado)."""
+    """Formato JSON para o module custom/jarvis do Waybar (porta do legado).
+
+    Ícones minimalistas Nerd Font estilo cyberpunk (cyan).
+    """
     status = get_status()
     state = status.get("state", "idle")
     text = status.get("text", "")
 
+    # Ícones minimalistas Nerd Font (cyan cyberpunk)
     icons = {
-        "idle": ("IDLE", "🤖"),
-        "listening": ("LISTEN", "🎤"),
-        "transcribing": ("TRANS", "📝"),
-        "thinking": ("THINK", "🤔"),
-        "speaking": ("SPEAK", "💬"),
-        "error": ("ERROR", "❌"),
-        "done": ("OK", "✅"),
-        "initializing": ("BOOT", "🚀"),
+        "idle": "󰆪",        # nf-md-waveform (cyan)
+        "listening": "󰍬",   # nf-md-microphone (cyan)
+        "transcribing": "󰈙",  # nf-md-text-box (cyan)
+        "thinking": "󰐕",     # nf-md-progress-clock (cyan)
+        "speaking": "󰕾",     # nf-md-volume-high (cyan)
+        "error": "󰅙",       # nf-md-alert-circle (red)
+        "done": "󰄬",        # nf-md-check-circle (green)
+        "initializing": "󰚌",  # nf-md-robot (cyan)
     }
-    icon, emoji = icons.get(state, ("IDLE", "🤖"))
-    short = text[:24] if text else ""
-    display = f"{icon} {emoji} {short}".strip()
+    icon = icons.get(state, "󰆪")
+
+    # Remove emoji do text se já existe (evita duplicação)
+    import re
+    text_clean = re.sub(r'^[\U0001F300-\U0001F9FF\u2600-\u27BF]\s*', '', text).strip()
+
+    # Formato minimalista: ícone + texto
+    display = f"{icon} {text_clean}".strip() if text_clean else icon
     return {
         "text": display,
-        "tooltip": f"{state}: {text}",
+        "tooltip": f"{state}: {text_clean or text}",
         "class": state,
         "alt": state,
     }
