@@ -19,6 +19,11 @@ with lib;
 let
   cfg = config.vscode-roo;
 
+  # Wrapper local para npx (evita dependência de pacote inexistente)
+  mcpNpxWrapper = pkgs.writeShellScriptBin "mcp-npx-wrapper" ''
+    exec npx --yes "$@"
+  '';
+
   # Gera o JSON do mcp_settings a partir da opção mcpServers
   mcpSettingsJson = builtins.toJSON {
     mcpServers = builtins.mapAttrs (name: server: {
@@ -52,7 +57,7 @@ in
           alwaysAllow = [ "nix" "nix_versions" ];
         };
         tavily-search = {
-          command = "${pkgs.mcp-npx-wrapper}/bin/mcp-npx-wrapper";
+          command = "${mcpNpxWrapper}/bin/mcp-npx-wrapper";
           args = [ "-y" "tavily-mcp" ];
           env = {
             TAVILY_API_KEY = config.vscode-roo.tavilyApiKey or "";
@@ -167,7 +172,6 @@ in
     # ── Pacotes necessários ──────────────────────────────
     home.packages = with pkgs; [
       mcp-nixos
-      mcp-npx-wrapper
     ];
 
     # Wrapper mcp-npx-wrapper
