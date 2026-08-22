@@ -67,7 +67,7 @@
 
   home.file.".config/opencode/opencode.json".text = builtins.toJSON {
     "$schema" = "https://opencode.ai/config.json";
-    provider = {
+    providers = {
       local = {
         npm = "@ai-sdk/openai-compatible";
         options = {
