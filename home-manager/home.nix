@@ -1,5 +1,6 @@
-{ homeStateVersion, user, pkgs, ... }: {
+{ homeStateVersion, user, pkgs, inputs ... }: {
   imports = [
+    inputs.opencode.homeManagerModules.default
     ./modules
     ./home-packages.nix
     ./modules/rclone-sync.nix
@@ -59,31 +60,32 @@
     hash = "sha256-Glr64GpNuRyXXJqdeL5cwRDuTqAirVfVVJLkVQ6Tayo=";
   };
 
+  programs.opencode = {
+    enable = true;
+    enableMcpIntegration = true;  # só se você for usar MCP servers
+
+    settings = {
+      theme = "opencode";
+
+      provider.local = {
+        npm = "@ai-sdk/openai-compatible";
+        options.baseURL = "http://localhost:8080/v1";
+        models."qwen3-35b-a3b".name = "Qwen3 35B Local";
+      };
+
+      model = "local/qwen3-35b-a3b";
+
+      # small_model opcional — evita que title generation caia no Zen sem você saber:
+      small_model = "local/qwen3-35b-a3b";
+    };
+  };
+
+
   # ══════════════════════════════════════════════════════════════
   # AIDER — Qwen3.6-35B-A3B via llama.cpp local
   # Uso: basta rodar `aider` (tudo nas configs abaixo)
   # Benchmark: 32 t/s decode, 367 t/s prefill, 4179 MiB VRAM
   # ══════════════════════════════════════════════════════════════
-
-  home.file.".config/opencode/opencode.json".text = builtins.toJSON {
-    "$schema" = "https://opencode.ai/config.json";
-    provider = {
-      # Provedor local (Seu Qwen)
-      local = {
-        npm = "@ai-sdk/openai-compatible";
-        options = {
-          baseURL = "http://localhost:8080/v1";
-        };
-        models = {
-          "qwen3-35b-a3b" = {
-            name = "Qwen3 35B Local";
-          };
-        };
-      };
-    };
-    # Define o modelo padrão
-    model = "local/qwen3-35b-a3b";
-  };
 
   # 1. Configuração principal do Aider
   home.file.".aider.conf.yml".text = ''
