@@ -1,4 +1,4 @@
-{ homeStateVersion, user, pkgs, inputs ... }: {
+{ homeStateVersion, user, pkgs, inputs, ... }: {
   imports = [
     inputs.opencode.homeManagerModules.default
     ./modules
@@ -63,23 +63,23 @@
   programs.opencode = {
     enable = true;
     enableMcpIntegration = true;  # só se você for usar MCP servers
-
     settings = {
       theme = "opencode";
-
       provider.local = {
         npm = "@ai-sdk/openai-compatible";
         options.baseURL = "http://localhost:8080/v1";
-        models."qwen3-35b-a3b".name = "Qwen3 35B Local";
+        models."qwen3-35b-a3b" = {
+          name = "Qwen3 35B Local";
+          cost = {
+            input = 0;
+            output = 0;
+          };
+        };
       };
-
       model = "local/qwen3-35b-a3b";
-
-      # small_model opcional — evita que title generation caia no Zen sem você saber:
       small_model = "local/qwen3-35b-a3b";
     };
   };
-
 
   # ══════════════════════════════════════════════════════════════
   # AIDER — Qwen3.6-35B-A3B via llama.cpp local
