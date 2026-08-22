@@ -63,29 +63,35 @@
   programs.vscode = {
     enable = true;
     # Pacote oficial ou via flake, garantindo versão recente
-    package = pkgs.vscode; 
+    package = pkgs.vscode;
 
-    # Configurações de usuário declarativas no VS Code
-    userSettings = {
-      "chat.customEndpoints" = [
-        {
-          "name" = "Qwen3 Local 35B";
-          "url" = "http://127.0.0.1:8080/v1";
-          "models" = [
-            {
-              "id" = "qwen3-35b-a3b";
-              "name" = "Qwen3 35B Local";
-              "maxInputTokens" = 131072;
-              "maxOutputTokens" = 8192;
-              "toolCalling" = true;
-            }
-          ];
-        }
-      ];
+    profiles.default = {
+      # Configurações de usuário declarativas no VS Code
+      userSettings = {
+        # Força a habilitação de modelos BYOK (Bring Your Own Key) no chat nativo
+        "chat.agentHost.byokModels.enabled" = true;
 
-      # Define o modelo local como padrão para o Chat e utilitários (evita precisar de conta da GitHub/Copilot)
-      "chat.utilityModel" = "customendpoint/qwen3-35b-a3b";
-      "chat.utilitySmallModel" = "customendpoint/qwen3-35b-a3b";
+        # Mapeia diretamente o endpoint compatível com OpenAI do seu llama.cpp local
+        "chat.customEndpoints" = [
+          {
+            "name" = "Qwen3 Local 35B";
+            "url" = "http://127.0.0.1:8080/v1";
+            "models" = [
+              {
+                "id" = "qwen3-35b-a3b";
+                "name" = "Qwen3 35B Local";
+                "maxInputTokens" = 131072;
+                "maxOutputTokens" = 8192;
+                "toolCalling" = true;
+              }
+            ];
+          }
+        ];
+
+        # Define o Qwen local como o modelo padrão de utilidade do chat
+        "chat.utilityModel" = "customendpoint/qwen3-35b-a3b";
+        "chat.utilitySmallModel" = "customendpoint/qwen3-35b-a3b";
+      };
     };
   };
 

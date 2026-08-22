@@ -360,6 +360,30 @@ def test_agent_approval_rejects(tmp_path, monkeypatch) -> None:
     assert "touch /tmp/x" in result.commands_denied
 
 
+def test_agent_ignores_malformed_tool_calls() -> None:
+    class MixedFormatSession(FakeSession):
+        def post(self, url, json=None, timeout=120):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [
+                        {"name": "execute_shell", "arguments": {"cmd": "echo ok"}},
+                        {"function": {"name": "broken_tool", "arguments": "{bad json"}},
+                    ],
+                }
+            else:
+                msg = {"role": "assistant", "content": "done"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    cfg = Config()
+    agent = Agent(cfg, session=MixedFormatSession())
+    result = agent.run("check shell")
+    assert result.commands_run == ["echo ok"]
+    assert result.final_response == "done"
+
+
 # ---------------------------------------------------------------------------
 # Integração MCP (servidor MCP fake via subprocess + LLM mockado)
 # ---------------------------------------------------------------------------

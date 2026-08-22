@@ -306,6 +306,57 @@ def _normalize_tool_call(parsed: dict[str, Any]) -> dict[str, Any] | None:
     return {"name": name, "arguments": arguments}
 
 
+def normalize_tool_calls(raw_tool_calls: Any) -> list[dict[str, Any]]:
+    """Normaliza tool_calls vindas do modelo em formatos mistos.
+
+    O servidor local pode devolver estruturas como:
+      - [{"function": {...}}]
+      - [{"name": "x", "arguments": {...}}]
+      - strings JSON em `arguments`
+      - listas vazias / tipos inválidos
+
+    A normalização ignora entradas malformadas em vez de quebrar o loop do
+    agente; qualquer item válido segue para execução normal.
+    """
+    if raw_tool_calls is None:
+        return []
+    if isinstance(raw_tool_calls, dict):
+        raw_tool_calls = [raw_tool_calls]
+    if not isinstance(raw_tool_calls, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for idx, entry in enumerate(raw_tool_calls):
+        if not isinstance(entry, dict):
+            continue
+
+        function = entry.get("function") if isinstance(entry.get("function"), dict) else entry
+        name = function.get("name") if isinstance(function, dict) else None
+        if not isinstance(name, str) or not name.strip():
+            continue
+
+        arguments = function.get("arguments", {}) if isinstance(function, dict) else {}
+        if isinstance(arguments, str):
+            try:
+                arguments = json.loads(arguments) if arguments.strip() else {}
+            except json.JSONDecodeError:
+                arguments = {}
+        if arguments is None:
+            arguments = {}
+        if not isinstance(arguments, (dict, list)):
+            arguments = {}
+
+        normalized.append({
+            "id": entry.get("id") or f"call-{idx}",
+            "type": "function",
+            "function": {
+                "name": name,
+                "arguments": arguments if isinstance(arguments, (dict, list)) else json.dumps(arguments),
+            },
+        })
+    return normalized
+
+
 # ---------------------------------------------------------------------------
 # Loop do agente
 # ---------------------------------------------------------------------------
@@ -610,7 +661,7 @@ class Agent:
                 data = self._chat(messages, profile)
             message = data["choices"][0]["message"]
             content = message.get("content") or ""
-            tool_calls = message.get("tool_calls")
+            tool_calls = normalize_tool_calls(message.get("tool_calls"))
 
             recovered = False
             if not tool_calls:
