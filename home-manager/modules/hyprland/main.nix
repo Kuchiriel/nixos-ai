@@ -1,5 +1,6 @@
 { pkgs, config, lib, jarvisEnvironment, ... }:
 let
+  colors = lib.m3ta.colors;
   isHost = jarvisEnvironment == "host";
 
   baseEnv = [
@@ -47,8 +48,8 @@ in
 
       general = {
         border_size = 2;
-        "col.active_border" = "rgba(00ffffcc) rgba(0088ffcc) 45deg";
-        "col.inactive_border" = "rgba(595959aa)";
+        "col.active_border" = colors.hypr.activeBorder;
+        "col.inactive_border" = colors.hypr.inactiveBorder;
         gaps_in = 5;
         gaps_out = 10;
         layout = "dwindle";
@@ -66,7 +67,7 @@ in
           enabled = true;
           range = 15;
           render_power = 3;
-          color = "rgba(00ffff33)";
+          color = colors.hypr.shadow;
         };
       };
 

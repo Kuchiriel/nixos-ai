@@ -1,4 +1,8 @@
-{
+# Hyprlock — usa lib.m3ta.colors e lib.m3ta.fonts
+{lib, ...}: let
+  colors = lib.m3ta.colors;
+  fonts = lib.m3ta.fonts;
+in {
   programs.hyprlock = {
     enable = true;
     settings = {
@@ -9,7 +13,7 @@
       label = {
         text = "$TIME";
         font_size = 96;
-        font_family = "JetBrains Mono";
+        font_family = fonts.mono.name;
         color = "rgba(235, 219, 178, 1.0)";
         position = "0, 600";
         halign = "center";

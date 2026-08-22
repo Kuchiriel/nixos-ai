@@ -1,12 +1,10 @@
-# Foot terminal — fonte padronizada
-# NOTA: Quando lib/ for exportado pelo flake, migrar para:
-#   fonts = lib.m3ta.fonts;
+# Foot terminal — usa lib.m3ta.fonts como single source
 {lib, ...}: {
   programs.foot = {
     enable = true;
     settings = {
       main = {
-        font = lib.mkForce "JetBrainsMono Nerd Font:size=14";
+        font = lib.mkForce lib.m3ta.fonts.footFont;
       };
     };
   };

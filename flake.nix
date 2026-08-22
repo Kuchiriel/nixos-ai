@@ -193,6 +193,12 @@
       talk = (nixpkgs.legacyPackages.${system}.extend aiOverlay).talk;
     };
 
+    # ── m3ta lib: fonts, colors, ports ──────────────────────────────
+    lib.m3ta = import ./lib {
+      lib = nixpkgs.lib;
+      pkgs = nixpkgs.legacyPackages.${system};
+    };
+
     # Ambiente de desenvolvimento interativo (`nix develop`)
     devShells.${system}.default = let
       pkgs = import nixpkgs {

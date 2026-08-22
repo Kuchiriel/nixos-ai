@@ -1,5 +1,6 @@
 { pkgs, lib, jarvisEnvironment, ... }:
 let
+  colors = lib.m3ta.colors;
   isHost = jarvisEnvironment == "host";
   hostOnlyModules = if isHost then [ "battery" "bluetooth" "backlight" ] else [];
   hostOnlySettings = lib.optionalAttrs isHost {
@@ -132,16 +133,16 @@ in
       * {
         border: none;
         border-radius: 0;
-        font-family: "JetBrainsMono Nerd Font", "Symbols Nerd Font", sans-serif;
-        font-size: 14px;
+        font-family: ${lib.m3ta.fonts.cssFamily};
+        font-size: ${toString lib.m3ta.fonts.mono.size}px;
         min-height: 0;
       }
 
       window#waybar {
-        background: rgba(10, 10, 10, 0.85);
-        border-bottom: 2px solid #00ffff;
-        color: #00ffff;
-        font-size: 14px;
+        background: ${colors.waybar.bg};
+        border-bottom: ${colors.waybar.border};
+        color: ${colors.waybar.text};
+        font-size: ${toString lib.m3ta.fonts.mono.size}px;
         min-height: 34px;
         margin: 4px 8px 0 8px;
         border-radius: 10px;
@@ -164,20 +165,20 @@ in
       #custom-memory,
       #custom-jarvis {
         padding: 0 16px;
-        color: #00ffff;
-        font-size: 14px;
+        color: ${colors.waybar.text};
+        font-size: ${toString lib.m3ta.fonts.mono.size}px;
         transition: all 0.25s ease;
       }
 
       #workspaces button {
         background: transparent;
-        color: #00ffff;
+        color: ${colors.waybar.text};
       }
 
       #workspaces button.active,
       #workspaces button.focused {
         background: rgba(0, 255, 255, 0.18);
-        border-bottom: 2px solid #00ffff;
+        border-bottom: ${colors.waybar.border};
       }
 
       #clock:hover,
@@ -194,33 +195,33 @@ in
       #custom-cpu:hover,
       #custom-memory:hover,
       #custom-jarvis:hover {
-        text-shadow: 0 0 4px #00ffff, 0 0 8px #00ffff;
+        text-shadow: 0 0 4px ${colors.waybar.text}, 0 0 8px ${colors.waybar.text};
       }
 
-      #custom-gpu.low { color: #50FA7B; }
-      #custom-gpu.medium { color: #FFB86C; }
-      #custom-gpu.high { color: #FF5555; text-shadow: 0 0 6px #FF5555; }
+      #custom-gpu.low { color: ${colors.status.success}; }
+      #custom-gpu.medium { color: ${colors.status.warning}; }
+      #custom-gpu.high { color: ${colors.status.error}; text-shadow: 0 0 6px ${colors.status.error}; }
       #custom-gpu.disabled { color: #666666; }
 
-      #custom-igpu.low { color: #50FA7B; }
-      #custom-igpu.medium { color: #FFB86C; }
-      #custom-igpu.high { color: #FF5555; text-shadow: 0 0 6px #FF5555; }
+      #custom-igpu.low { color: ${colors.status.success}; }
+      #custom-igpu.medium { color: ${colors.status.warning}; }
+      #custom-igpu.high { color: ${colors.status.error}; text-shadow: 0 0 6px ${colors.status.error}; }
 
-      #custom-cpu.low { color: #50FA7B; }
-      #custom-cpu.medium { color: #FFB86C; }
-      #custom-cpu.high { color: #FF5555; text-shadow: 0 0 6px #FF5555; }
+      #custom-cpu.low { color: ${colors.status.success}; }
+      #custom-cpu.medium { color: ${colors.status.warning}; }
+      #custom-cpu.high { color: ${colors.status.error}; text-shadow: 0 0 6px ${colors.status.error}; }
 
-      #custom-memory.low { color: #50FA7B; }
-      #custom-memory.medium { color: #FFB86C; }
-      #custom-memory.high { color: #FF5555; text-shadow: 0 0 6px #FF5555; }
+      #custom-memory.low { color: ${colors.status.success}; }
+      #custom-memory.medium { color: ${colors.status.warning}; }
+      #custom-memory.high { color: ${colors.status.error}; text-shadow: 0 0 6px ${colors.status.error}; }
 
-      #battery.warning { color: #ffaa00; }
-      #battery.critical { color: #ff5555; text-shadow: 0 0 6px #ff5555; }
-      #battery.charging { color: #50FA7B; }
+      #battery.warning { color: ${colors.status.warning}; }
+      #battery.critical { color: ${colors.status.error}; text-shadow: 0 0 6px ${colors.status.error}; }
+      #battery.charging { color: ${colors.status.success}; }
 
       #custom-jarvis {
         background: rgba(0, 255, 255, 0.12);
-        border-bottom: 2px solid #00ffff;
+        border-bottom: ${colors.waybar.border};
       }
       #custom-jarvis.idle { color: #aaaaaa; }
       #custom-jarvis.listening,

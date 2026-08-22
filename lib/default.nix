@@ -1,9 +1,9 @@
-# Library of helper functions for m3ta-nixpkgs
-# Usage in your configuration:
-#   let
-#     m3taLib = inputs.m3ta-nixpkgs.lib.${system};
-#   in ...
-{lib, pkgs ? null}: {
+# lib/default.nix — m3ta lib exports
+#
+# Uso em módulos (quando disponível via flake):
+#   colors = lib.m3ta.colors;
+#   fonts = lib.m3ta.fonts;
+{lib, pkgs}: {
   # Port management utilities
   ports = import ./ports.nix {inherit lib;};
 
