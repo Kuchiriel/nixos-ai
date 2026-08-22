@@ -182,8 +182,8 @@ let
 
                 # Pulsing waybar status
                 if chunk_count % 50 == 0:
-                    pulse_symbols = ["󰆪", "󰍬"]
-                    update_status("listening", f"{pulse_symbols[pulse_state % 2]} Ouvindo...")
+                    pulse_symbols = ["󰆪", "󰆪"]
+                    update_status("idle", f"{pulse_symbols[pulse_state % 2]} Ouvindo...")
                     pulse_state += 1
 
                 if chunk_count % 10 == 0:
