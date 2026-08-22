@@ -23,6 +23,7 @@
 
     # Core CLI utils
     aider-chat
+    nodejs          # npx para MCP servers (Roo Dev, etc.)
     python3Packages.botocore
     bc
     bottom
