@@ -16,6 +16,11 @@
   #    sudo cp /etc/litellm.env ~/.config/litellm.env && chmod 600 ~/.config/litellm.env
   #    echo '[ -f ~/.config/litellm.env ] && set -a && . ~/.config/litellm.env && set +a' >> ~/.bashrc
 
+  # ── m3ta-stt-ptt: Push-to-Talk STT com Whisper ──────────────────
+  m3ta.stt-ptt.enable = true;
+  m3ta.stt-ptt.model = "ggml-large-v3-turbo";
+  m3ta.stt-ptt.language = "pt";
+
   home.sessionVariables = {
     _JAVA_AWT_WM_NONREPARENTING = "1";
     AWT_TOOLKIT = "MToolkit";
