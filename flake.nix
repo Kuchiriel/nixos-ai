@@ -27,7 +27,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, stylix, disko, opencode, ... }@inputs: let
+  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, stylix, disko, ... }@inputs: let
     system = "x86_64-linux";
     user = "nixos";
 
