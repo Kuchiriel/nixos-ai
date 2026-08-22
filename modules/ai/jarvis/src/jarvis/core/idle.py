@@ -50,7 +50,7 @@ def _task_benchmark() -> dict[str, Any]:
 
     report = bench_report()
     return {
-        "rotas": {r.get("route", "?"): r.get("ms") for r in report.get("resultados", [])},
+        "rotas": {r.get("route", "?"): r.get("ms") for r in report.get("results", [])},
         "total_ms": report.get("total_ms"),
     }
 

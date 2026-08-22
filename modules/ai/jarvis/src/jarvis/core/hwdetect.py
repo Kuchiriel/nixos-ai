@@ -277,29 +277,7 @@ def _detect_aux_gpu() -> str:
 
     return ""
 
-'''
-def _detect_aux_gpu() -> str:
-    """Detecta GPU integrada (Intel UHD/Arc, AMD iGPU) — lspci, rápido e leve.
 
-    No host (Acer Nitro V15): "Intel Corporation Raptor Lake-S GT1 [UHD
-    Graphics 770]" — iGPU fraca mas útil para whisper STT via SYCL/OpenVINO
-    (12x boost confirmado, whisper.cpp 1.8.3), sem competir com a VRAM da
-    RTX 4050. No lab: nada (VM sem iGPU).
-    """
-    if platform.system() != "Linux":
-        return ""
-    try:
-        out = _run(["lspci"], timeout=5.0)
-        for line in out.splitlines():
-            ll = line.lower()
-            if ("intel" in ll or "amd" in ll) and ("vga" in ll or "display" in ll or "3d" in ll):
-                # "... VGA compatible controller: Intel Corporation Raptor Lake-S GT1 [UHD Graphics 770]"
-                name = line.split(":", 2)[-1].strip() if line.count(":") >= 2 else line.strip()
-                return name
-    except (OSError, subprocess.SubprocessError):
-        pass
-    return ""
-'''
 
 def detect() -> HardwareProfile:
     """Detecta o hardware completo da máquina atual."""

@@ -169,7 +169,6 @@ def _learn_lesson(service: str, component: str, detail: str) -> None:
 def _load_previous_state(state: Path) -> dict[str, str]:
     """Carrega estado anterior dos componentes (para detectar recovery)."""
     try:
-        import json
         state_file = state / "component_states.json"
         if state_file.exists():
             return json.loads(state_file.read_text())
@@ -181,7 +180,6 @@ def _load_previous_state(state: Path) -> dict[str, str]:
 def _save_previous_state(state: Path, states: dict[str, str]) -> None:
     """Salva estado dos componentes."""
     try:
-        import json
         state_file = state / "component_states.json"
         state_file.write_text(json.dumps(states))
     except Exception:

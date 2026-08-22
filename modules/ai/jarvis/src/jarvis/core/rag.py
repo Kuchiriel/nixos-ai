@@ -22,8 +22,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
-import requests
-
 from jarvis.core.config import Config
 from jarvis.providers.llm import LLMClient
 from jarvis.providers.vector_store import QdrantStore, dense_key
@@ -338,41 +336,6 @@ def iter_indexable_files(root: str | Path, exclude_dirs: Iterable[str] | None = 
                         yield str(path)
                 except OSError:
                     continue
-
-'''
-def iter_indexable_files(root: str | Path, exclude_dirs: Iterable[str] | None = None) -> Iterable[str]:
-    """Varre um diretório/arquivo com as mesmas regras do V4.0.5 (excludes, tamanho)."""
-    excludes = tuple(exclude_dirs) if exclude_dirs is not None else _EXCLUDE_DIRS
-    root_path = Path(root).resolve()
-    
-    if root_path.is_file():
-        if _is_allowed(str(root_path.parent), root_path.name):
-            try:
-                if root_path.stat().st_size <= _MAX_FILE_SIZE_KB * 1024:
-                    yield str(root_path)
-            except OSError:
-                pass
-        return
-
-    for dirpath, dirnames, filenames in os.walk(root_path):
-        dirnames[:] = [
-            d for d in dirnames
-            if not d.startswith(".")
-            and not any(ex in d.lower() for ex in excludes)
-        ]
-        if any(ex in dirpath.lower() for ex in excludes):
-            continue
-        for file in filenames:
-            if file.startswith("."):
-                continue
-            if _is_allowed(dirpath, file):
-                path = Path(dirpath) / file
-                try:
-                    if path.stat().st_size <= _MAX_FILE_SIZE_KB * 1024:
-                        yield str(path.resolve())
-                except OSError:
-                    continue
-'''
 
 class HybridIndexer:
     """Indexa arquivos de código no Qdrant (dense + sparse BM25 + payload)."""

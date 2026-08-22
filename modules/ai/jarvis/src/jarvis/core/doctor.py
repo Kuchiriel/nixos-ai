@@ -11,6 +11,7 @@ Componentes retornam status "ok" | "degraded" | "down", com detalhes.
 from __future__ import annotations
 
 import shutil
+import socket
 import subprocess
 from dataclasses import dataclass, field
 from typing import Any
@@ -94,8 +95,6 @@ def check_qdrant(cfg: Config) -> ComponentHealth:
 
 def check_disk() -> ComponentHealth:
     """Espaço em disco do sistema."""
-    import shutil as _shutil
-
     h = ComponentHealth("disk")
     try:
         usage = shutil.disk_usage("/")
@@ -109,9 +108,7 @@ def check_disk() -> ComponentHealth:
         }
         if pct >= 90:
             h.status = "degraded"
-            # binário declarativo do store (nixos/modules/scripts.nix);
-            # fallback para o script da raiz se o pacote não estiver ativo
-            clean = _shutil.which("clean") or _shutil.which("jarvis-clean")
+            clean = shutil.which("clean") or shutil.which("jarvis-clean")
             h.detail = (f"disco {pct:.0f}% cheio — rodar {clean or './clean.sh'}")
         elif pct >= 80:
             h.status = "degraded"
@@ -230,7 +227,6 @@ def check_network() -> ComponentHealth:
     issues: list[str] = []
     # Gateway local
     try:
-        import socket
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(3)
         try:
@@ -244,7 +240,6 @@ def check_network() -> ComponentHealth:
         issues.append("socket indisponível")
     # DNS
     try:
-        import socket
         socket.getaddrinfo("cache.nixos.org", 443, socket.AF_INET, socket.SOCK_STREAM)
     except (OSError, socket.gaierror):
         issues.append("DNS cache.nixos.org falhou")
@@ -259,8 +254,6 @@ def check_network() -> ComponentHealth:
 
 def check_sockets(cfg: Config) -> ComponentHealth:
     """Verifica se as portas dos serviços estão aceitando conexões."""
-    import socket
-
     h = ComponentHealth("sockets")
     ports = {
         "llama_cpp": cfg.llm_base_url.replace("http://", "").split(":")[1].split("/")[0] if":" in cfg.llm_base_url else "8080",

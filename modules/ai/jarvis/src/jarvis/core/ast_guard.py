@@ -19,11 +19,7 @@ from __future__ import annotations
 
 import ast
 import os
-import re
 import shutil
-import tempfile
-from pathlib import Path
-from typing import Optional
 
 
 def validate_python_syntax(code: str) -> tuple[bool, str]:

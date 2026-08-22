@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -163,9 +164,7 @@ def _cmd_metrics(args: argparse.Namespace) -> int:
     return 0
 
 
-def _log_dir():
-    from pathlib import Path
-    import os
+def _log_dir() -> Path:
     base = os.environ.get("JARVIS_STATE_DIR", "")
     if base:
         return Path(base).expanduser() / "logs"

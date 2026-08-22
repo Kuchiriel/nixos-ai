@@ -168,7 +168,7 @@ def _print_help() -> None:
 # Config / perfil do modelo
 # ---------------------------------------------------------------------------
 
-def _get_config():
+def _get_config() -> Any:
     from jarvis.core.config import Config
     return Config()
 
@@ -1180,7 +1180,7 @@ def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) 
                     "content": result[:2000],
                 })
 
-        plan_messages.append({"role": "user", "content": 'retorne JSON: {"plan": [...]}科技进步'})
+        plan_messages.append({"role": "user", "content": 'retorne JSON: {"plan": [...]}'})
         with console.status("[jarvis]montando plano…[/]", spinner="dots"):
             data2 = _call_llm(plan_messages, tools, profile, debug=debug)
         plan_content = data2["choices"][0]["message"].get("content") or ""

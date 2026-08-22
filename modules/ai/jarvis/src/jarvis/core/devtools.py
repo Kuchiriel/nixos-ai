@@ -23,10 +23,8 @@ from __future__ import annotations
 import difflib
 import json
 import os
-import re
 import shutil
 import subprocess
-import time
 from pathlib import Path
 from typing import Any
 
@@ -45,7 +43,7 @@ def _project_root() -> Path:
 def _safe_path(path: str, root: Path | None = None) -> Path:
     """Resolve um path e valida que está dentro do projeto.
 
-    Aceita paths relativos (resolvidos相对于 project root) ou absolutos
+    Aceita paths relativos (resolvidos em relacao ao project root) ou absolutos
     (se estiverem dentro do projeto ou em /tmp para testes).
     """
     p = Path(path)

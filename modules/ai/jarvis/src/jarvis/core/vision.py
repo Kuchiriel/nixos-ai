@@ -15,6 +15,7 @@ para o agente analisar erros visuais (ex: erros de terminal, estado da tela).
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -127,7 +128,6 @@ def capture_window(window_title: str | None = None, timeout: float = 5.0) -> dic
                 capture_output=True, text=True, timeout=5,
             )
             if proc.returncode == 0:
-                import json
                 clients = json.loads(proc.stdout)
                 target = None
                 for c in clients:
@@ -149,7 +149,6 @@ def capture_window(window_title: str | None = None, timeout: float = 5.0) -> dic
                 capture_output=True, text=True, timeout=5,
             )
             if proc.returncode == 0:
-                import json
                 win = json.loads(proc.stdout)
                 geom = win.get("at", [0, 0])
                 size = win.get("size", [800, 600])
@@ -180,7 +179,7 @@ def capture_window(window_title: str | None = None, timeout: float = 5.0) -> dic
 
 
 def cleanup_old_screenshots(max_age_s: int = 3600) -> int:
-    """Remove screenshots antigos (> max_age_s segundos). Retorna数量 removida."""
+    """Remove screenshots antigos (> max_age_s segundos). Retorna quantidade removida."""
     now = time.time()
     removed = 0
     try:

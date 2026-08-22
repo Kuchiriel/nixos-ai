@@ -25,8 +25,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable
 
-import requests
-
 from jarvis.core.health_monitor import BackendHealthMonitor, BackendState
 
 
