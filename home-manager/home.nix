@@ -61,11 +61,11 @@
    
   programs.opencode = {
     enable = true;
-    enableMcpIntegration = true;
+#   enableMcpIntegration = true;
     package = inputs.opencode-flake.packages.${pkgs.system}.default;
 
     settings = {
-      theme = "opencode";
+    #  theme = "opencode";
       provider.local = {
         npm = "@ai-sdk/openai-compatible";
         options.baseURL = "http://localhost:8080/v1";
@@ -75,7 +75,7 @@
         };
       };
       model = "local/qwen3-35b-a3b";
-      small_model = "local/qwen3-35b-a3b";
+     # small_model = "local/qwen3-35b-a3b";
     };
   };
 
