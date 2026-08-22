@@ -56,44 +56,26 @@ in
       };
 
       decoration = {
-        rounding = 12;
-        active_opacity = 0.95;
-        inactive_opacity = 0.85;
+        rounding = 10;
+        active_opacity = 0.9;
+        inactive_opacity = 0.8;
         blur = {
-          enabled = true;
-          size = 8;
-          passes = 3;
-          noise = 0.02;
-          contrast = 1.0;
-          brightness = 0.9;
-          vibrancy = 0.2;
-          vibrancy_darkness = 0.5;
-          new_optimizations = true;
-          xray = false;
+          enabled = false;
         };
         shadow = {
           enabled = true;
-          range = 20;
-          render_power = 4;
-          color = "rgba(00ffff44)";
-          offset = "0, 4";
+          range = 15;
+          render_power = 3;
+          color = "rgba(00ffff33)";
         };
       };
 
       animations = {
         enabled = true;
-        bezier = [
-          "myBezier, 0.05, 0.9, 0.1, 1.05"
-          "smooth, 0.25, 0.1, 0.25, 1.0"
-          "easeOutBack, 0.34, 1.56, 0.64, 1"
-        ];
+        bezier = "myBezier, 0.05, 0.9, 0.1, 1.05";
         animation = [
-          "windows, 1, 4, myBezier"
-          "windowsOut, 1, 4, smooth, popin 80%"
-          "fade, 1, 3, smooth"
+          "windows, 1, 5, myBezier"
           "workspaces, 1, 4, default, slide"
-          "layers, 1, 3, smooth, fade"
-          "specialWorkspace, 1, 4, smooth, slidevert"
         ];
       };
 
