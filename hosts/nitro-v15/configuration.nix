@@ -189,10 +189,13 @@ in
   # =========================================================================
   # 4. SESSÃO, LOGIN E INTERFACE (Greetd + Hyprland)
   # =========================================================================
+  # CSS customizado para gtkgreet (tema cyberpunk preto+ciano)
+  environment.etc."greetd/gtkgreet.css".source = ./gtkgreet.css;
+
   services.greetd = {
     enable = true;
     settings.default_session = {
-      command = "${pkgs.tuigreet}/bin/tuigreet --time --remember --cmd start-hyprland";
+      command = "${pkgs.gtkgreet}/bin/gtkgreet -l -s /etc/greetd/gtkgreet.css";
       user = "greeter";
     };
   };
