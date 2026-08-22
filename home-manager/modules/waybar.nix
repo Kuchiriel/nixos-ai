@@ -143,6 +143,8 @@ in
         color: #00ffff;
         font-size: 14px;
         min-height: 34px;
+        margin: 4px 8px 0 8px;
+        border-radius: 10px;
       }
 
       #workspaces button,
