@@ -101,7 +101,6 @@ in
 
           # Linguagens
           ms-python.python
-          ms-vscode.nix-language-server
           shardulm94.trailing-spaces
 
           # Git
