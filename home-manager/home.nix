@@ -65,7 +65,7 @@
   # Benchmark: 32 t/s decode, 367 t/s prefill, 4179 MiB VRAM
   # ══════════════════════════════════════════════════════════════
 
-  home.file.".config/opencode/opencode.json".text = builtins.toJSON {
+home.file.".config/opencode/opencode.json".text = builtins.toJSON {
     "$schema" = "https://opencode.ai/config.json";
     provider = {
       local = {
