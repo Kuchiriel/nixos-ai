@@ -195,7 +195,7 @@
         overlays = [ aiOverlay ];
       };
     in pkgs.mkShell {
-      inputsFrom = [ pkgs.jarvis ];
+#       inputsFrom = [ pkgs.jarvis ];
       packages = [
         pkgs.python313Packages.pytest
         pkgs.python313Packages.hypothesis

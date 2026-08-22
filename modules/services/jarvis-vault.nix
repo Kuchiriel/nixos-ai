@@ -34,7 +34,7 @@ in
       description = "JARVIS — resumo de memória de longo prazo (vault)";
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${pkgs.jarvis}/bin/jarvis vault summarize --since ${toString cfg.since}";
+#         ExecStart = "${pkgs.jarvis}/bin/jarvis vault summarize --since ${toString cfg.since}";
         # token do Telegram para notificar conclusão no celular (se existir)
         EnvironmentFile = "-/etc/jarvis-telegram.env";
         # sem stdout no journal: o resultado vai para o vault + memória

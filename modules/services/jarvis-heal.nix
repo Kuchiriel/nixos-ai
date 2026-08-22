@@ -44,7 +44,7 @@ in
       description = "JARVIS self-heal (root) — detecta serviços down e repara";
       wantedBy = [ "multi-user.target" ];
       serviceConfig = {
-        ExecStart = "${pkgs.jarvis}/bin/jarvis heal --watch --interval ${toString cfg.interval} --cooldown ${toString cfg.cooldown}";
+#         ExecStart = "${pkgs.jarvis}/bin/jarvis heal --watch --interval ${toString cfg.interval} --cooldown ${toString cfg.cooldown}";
         Environment = [ "JARVIS_JSONL=0" ];
         Restart = "on-failure";
         RestartSec = "30";
@@ -56,7 +56,7 @@ in
       description = "JARVIS self-heal — detecta serviços down e repara";
       wantedBy = [ "default.target" ];
       serviceConfig = {
-        ExecStart = "${pkgs.jarvis}/bin/jarvis heal --watch --interval ${toString cfg.interval} --cooldown ${toString cfg.cooldown}";
+#         ExecStart = "${pkgs.jarvis}/bin/jarvis heal --watch --interval ${toString cfg.interval} --cooldown ${toString cfg.cooldown}";
         Environment = [ "JARVIS_JSONL=0" ];
         Restart = "on-failure";
         RestartSec = "30";

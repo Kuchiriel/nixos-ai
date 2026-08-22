@@ -47,7 +47,7 @@ in
       description = "JARVIS — worker de auto-manutenção em idle (self-knowledge)";
       serviceConfig = {
         Type = "oneshot";
-        ExecStart = "${pkgs.jarvis}/bin/jarvis idle worker --max-load ${toString cfg.maxLoad}"
+#         ExecStart = "${pkgs.jarvis}/bin/jarvis idle worker --max-load ${toString cfg.maxLoad}"
           + lib.optionalString (!cfg.idleCheck) " --no-idle-check";
         # token do Telegram para notificar conclusão no celular (se existir)
         EnvironmentFile = "-/etc/jarvis-telegram.env";
