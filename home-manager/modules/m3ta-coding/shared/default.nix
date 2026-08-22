@@ -1,3 +1,9 @@
 # Shared agent module exports para nixos-ai
-# Apenas shared-options.nix (biblioteca pura de opções)
-# git-identity.nix é um módulo Home Manager completo — não importa aqui
+# Módulo vazio — shared-options.nix é uma biblioteca pura importada individualmente
+{
+  config,
+  lib,
+  ...
+}: {
+  # placeholder — imports individuais de shared-options.nix em opencode.nix/pi.nix
+}
