@@ -67,7 +67,7 @@
     settings = {
       theme = "opencode";
       provider.local = {
-        npm = "@ai-sdk/openai-compatible";
+        npm = "@ai-sdk/openai-compatible@1";
         options.baseURL = "http://localhost:8080/v1";
         models."qwen3-35b-a3b" = {
           name = "Qwen3 35B Local";
