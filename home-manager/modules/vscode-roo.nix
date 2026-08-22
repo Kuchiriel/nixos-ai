@@ -165,7 +165,6 @@ in
       home.file.".roomodes" = {
         text = builtins.readFile cfg.customModesFile;
       };
-    };
 
     # ── Pacotes necessários ──────────────────────────────
     home.packages = with pkgs; [
