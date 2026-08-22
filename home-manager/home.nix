@@ -262,6 +262,21 @@
     brainCommand = [ "jarvis" "voice" ];
   };
 
+  # ══════════════════════════════════════════════════════════════
+  # PI AGENT — MCP servers (mcp-nixos: consulta packages/options)
+  # Usa wrapper dinâmico em ~/.local/bin/mcp-nixos-wrapper para
+  # não quebrar quando o nixpkgs atualizar o path no store.
+  # ══════════════════════════════════════════════════════════════
+  coding.agents.pi = {
+    enable = true;
+    mcpServers = {
+      nixos = {
+        command = "/home/${user}/.local/bin/mcp-nixos-wrapper";
+        args = [];
+      };
+    };
+  };
+
   home = {
     username = user;
     homeDirectory = "/home/${user}";
