@@ -155,7 +155,7 @@ let
             )
 
         arecord_proc = start_arecord()
-        update_status("listening", "🎤 Ouvindo...")
+        update_status("idle", "󰆪 Aguardando...")
 
         last_trigger_time = 0
         pulse_state = 0
@@ -182,7 +182,7 @@ let
 
                 # Pulsing waybar status
                 if chunk_count % 50 == 0:
-                    pulse_symbols = ["🎤", "🎙️"]
+                    pulse_symbols = ["󰆪", "󰍬"]
                     update_status("listening", f"{pulse_symbols[pulse_state % 2]} Ouvindo...")
                     pulse_state += 1
 
@@ -272,7 +272,7 @@ let
                             _stt_text = (_stt_check.stdout or "").strip()
                             if not _stt_text or _stt_text.startswith("ERROR"):
                                 print(f"[WW] ⏭️ No speech in audio (STT: '{_stt_text[:50]}'), skipping brain", flush=True)
-                                update_status("listening", "🎤 Ouvindo...")
+                                update_status("idle", "󰆪 Aguardando...")
                                 # Reset for next recording
                                 arecord_proc.terminate()
                                 time.sleep(0.5)
