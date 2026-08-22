@@ -113,13 +113,18 @@ def waybar_format() -> dict[str, Any]:
     state = status.get("state", "idle")
     text = status.get("text", "")
 
-    # Remove Nerd Font glyphs E emoji do text (evita duplicação)
-    # Nerd Font glyphs: U+E000-U+F8FF, U+F0000-U+FFFFF, U+100000-U+10FFFF
-    text_clean = re.sub(
-        r'[\U000E000-\U000F8FF\U000F0000-\U000FFFFF\U00100000-\U0010FFFF'
-        r'\U0001F300-\U0001F9FF\u2600-\u27BF]\s*',
-        '', text,
-    ).strip()
+    # Remove Nerd Font glyphs e emoji do text (evita duplicação)
+    # NF Private Use: U+E000-U+F8FF | NF Supplementary: U+F0000+ | Emoji: U+1F300+
+    nf_emoji_re = re.compile(
+        r'['
+        r'\U0000E000-\U0000F8FF'   # BMP Private Use (Nerd Font)
+        r'\U000F0000-\U000FFFFF'   # Supplementary Private Use Area-A
+        r'\U00100000-\U0010FFFF'   # Supplementary Private Use Area-B
+        r'\U0001F300-\U0001F9FF'   # Emoticons + Misc Symbols
+        r'\u2600-\u27BF'           # Misc Symbols + Dingbats
+        r']'
+    )
+    text_clean = nf_emoji_re.sub('', text).strip()
 
     # Ícones minimalistas Nerd Font (cyberpunk)
     icons = {
