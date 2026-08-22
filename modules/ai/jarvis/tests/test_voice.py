@@ -195,3 +195,21 @@ def test_main_stt_missing_file() -> None:
 
 def test_main_voice_missing_file() -> None:
     assert voice.main_voice(["/tmp/nao-existe-xyz.wav"]) == 1
+
+
+def test_main_voice_passes_model_to_pipeline(monkeypatch, tmp_path) -> None:
+    wav = tmp_path / "cmd.wav"
+    wav.write_bytes(b"RIFF")
+    seen = {}
+
+    def fake_voice_loop(audio_path, *, tts=True, model_size=voice.STT_MODEL_DEFAULT):
+        seen["audio_path"] = audio_path
+        seen["tts"] = tts
+        seen["model_size"] = model_size
+        return 0
+
+    monkeypatch.setattr(voice, "voice_loop", fake_voice_loop)
+    assert voice.main_voice([str(wav), "--model", "small", "--no-tts"]) == 0
+    assert seen["audio_path"] == str(wav)
+    assert seen["tts"] is False
+    assert seen["model_size"] == "small"

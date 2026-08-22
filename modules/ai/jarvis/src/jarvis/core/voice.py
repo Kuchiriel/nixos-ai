@@ -251,7 +251,7 @@ def _text_for_tts(out: dict[str, Any] | str) -> str:
 # Loop de voz completo (wakeword → STT → roteador → TTS)
 # ---------------------------------------------------------------------------
 
-def voice_loop(audio_path: str, *, tts: bool = True) -> int:
+def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL_DEFAULT) -> int:
     """Pipeline completo para o brainCommand do wakeword.
 
     STT do WAV capturado → roteia o pedido (`jarvis ask`) → TTS da resposta.
@@ -261,7 +261,7 @@ def voice_loop(audio_path: str, *, tts: bool = True) -> int:
         handle_agent, handle_doctor, handle_fastpath, handle_nixos, handle_rag, route_request,
     )
 
-    text = transcribe(audio_path)
+    text = transcribe(audio_path, model_size=model_size)
     if text.startswith("ERROR"):
         print(text, file=sys.stderr)
         return 1
@@ -310,7 +310,7 @@ def main_voice(argv: list[str] | None = None) -> int:
     if not Path(args.wav).exists():
         print(f"ERROR: arquivo não existe: {args.wav}", file=sys.stderr)
         return 1
-    return voice_loop(args.wav, tts=not args.no_tts)
+    return voice_loop(args.wav, tts=not args.no_tts, model_size=args.model)
 
 
 def main_stt(argv: list[str] | None = None) -> int:

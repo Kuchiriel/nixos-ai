@@ -11,6 +11,7 @@
 
 let
   cfg = config.services.jarvis-wakeword;
+  micTarget = if cfg.device == "default" then "rnnoise_source" else cfg.device;
 
   openwakewordPkg = pkgs.python3Packages.buildPythonPackage rec {
     pname = "openwakeword";
@@ -75,7 +76,7 @@ let
 
     RATE = ${toString cfg.rate}
     CHUNK = 512
-    DEVICE = "${cfg.device}"
+    DEVICE = "${micTarget}"
     COOLDOWN = ${toString cfg.cooldownSeconds}
     KILL_TTS = ${if cfg.killTTSOnTrigger then "True" else "False"}
     BRAIN_CMD = ${builtins.toJSON brainCmd}
@@ -154,7 +155,7 @@ let
             )
 
         arecord_proc = start_arecord()
-        update_status("idle", "🎤 Ouvindo...")
+        update_status("listening", "🎤 Ouvindo...")
 
         last_trigger_time = 0
         pulse_state = 0
@@ -182,7 +183,7 @@ let
                 # Pulsing waybar status
                 if chunk_count % 50 == 0:
                     pulse_symbols = ["🎤", "🎙️"]
-                    update_status("idle", f"{pulse_symbols[pulse_state % 2]} Ouvindo...")
+                    update_status("listening", f"{pulse_symbols[pulse_state % 2]} Ouvindo...")
                     pulse_state += 1
 
                 if chunk_count % 10 == 0:
@@ -192,9 +193,17 @@ let
                 if chunk_count < WARMUP_CHUNKS:
                     continue
 
-                # Update noise baseline during silence
+                # Update noise baseline only during silence; otherwise the
+                # ambient noise floor keeps drifting upward and suppresses
+                # real wakeword triggers forever.
                 if not speaking:
-                    noise_baseline = noise_baseline * 0.99 + rms * 0.01  # slow EWMA
+                    if rms < noise_baseline * 1.1:
+                        noise_baseline = noise_baseline * 0.9 + rms * 0.1
+                    # Keep a practical minimum gate so ventilation / fan / room
+                    # noise can’t masquerade as speech forever.
+                    speech_gate = max(noise_baseline * 1.5, 1200)
+                else:
+                    speech_gate = max(noise_baseline * 1.5, 1200)
 
                 # Cooldown check
                 if (time.time() - last_trigger_time) < COOLDOWN:
@@ -208,13 +217,13 @@ let
                 # 2. Adaptive threshold: 50% above baseline (was 10%)
                 # 3. Require 3 consecutive chunks (was 2)
                 if not speaking:
-                    if rms > noise_baseline * 1.5:
+                    if rms > speech_gate:
                         speech_buf.append(rms)
                         if len(speech_buf) >= 3:
                             speaking = True
                             speech_frames = [data]
                             silence_start = None
-                            print(f"[WW] 🎤 Speech detected (RMS={rms:.0f}, baseline={noise_baseline:.0f})", flush=True)
+                            print(f"[WW] 🎤 Speech detected (RMS={rms:.0f}, baseline={noise_baseline:.0f}, gate={speech_gate:.0f})", flush=True)
                     else:
                         speech_buf = []
                     continue
@@ -263,7 +272,7 @@ let
                             _stt_text = (_stt_check.stdout or "").strip()
                             if not _stt_text or _stt_text.startswith("ERROR"):
                                 print(f"[WW] ⏭️ No speech in audio (STT: '{_stt_text[:50]}'), skipping brain", flush=True)
-                                update_status("idle", "🎤 Ouvindo...")
+                                update_status("listening", "🎤 Ouvindo...")
                                 # Reset for next recording
                                 arecord_proc.terminate()
                                 time.sleep(0.5)
@@ -333,11 +342,11 @@ in
     };
     device = lib.mkOption {
       type = lib.types.str;
-      default = "default";
+      default = "rnnoise_source";
       description = ''
-        Dispositivo ALSA de captura.
-        "default" = PipeWire ALSA emulation (usa o source padrão do usuário).
-        Legado Manjaro: hw:1,7 (bypass PyAudio) — NÃO usar no NixOS.
+        Fonte de captura do PipeWire.
+        "rnnoise_source" = source virtual do pipewire com denoise (recomendado);
+        "default" = fallback apenas se a fonte do denoise não estiver disponível.
       '';
     };
     rate = lib.mkOption {
