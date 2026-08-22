@@ -1,6 +1,26 @@
 {
   "nodes": {
     "agents": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1783016143,
+        "narHash": "sha256-3qejDAo4g2XfzTyWCaX8RVKH17JXnw/fujsbXQA+Mzc=",
+        "ref": "refs/heads/master",
+        "rev": "83284d752d2ac325d4bf3ab7b38acad1c2fffe3a",
+        "revCount": 98,
+        "type": "git",
+        "url": "https://code.m3ta.dev/m3tam3re/AGENTS"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://code.m3ta.dev/m3tam3re/AGENTS"
+      }
+    },
+    "agents_2": {
       "flake": false,
       "locked": {
         "lastModified": 1783016143,
@@ -243,7 +263,7 @@
     },
     "m3ta-nixpkgs": {
       "inputs": {
-        "agents": "agents",
+        "agents": "agents_2",
         "basecamp": "basecamp",
         "buzz": "buzz",
         "nixpkgs": [
@@ -432,6 +452,7 @@
     },
     "root": {
       "inputs": {
+        "agents": "agents",
         "disko": "disko",
         "home-manager": "home-manager",
         "m3ta-nixpkgs": "m3ta-nixpkgs",

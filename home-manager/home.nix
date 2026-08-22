@@ -25,10 +25,16 @@
   m3ta.stt-ptt.language = "pt";
 
   # ── m3ta-coding: coding agents (Pi, OpenCode) ──────────────────
-  coding.agents.pi.enable = true;
-  coding.agents.pi.agentsInput = inputs.agents;
-  coding.agents.pi.settings.defaultProvider = "anthropic";
-  coding.agents.pi.settings.defaultModel = "claude-sonnet-4";
+  coding.agents.pi = {
+    enable = true;
+    agentsInput = inputs.agents;
+    settings.defaultProvider = "anthropic";
+    settings.defaultModel = "claude-sonnet-4";
+    mcpServers.nixos = {
+      command = "/home/${user}/.local/bin/mcp-nixos-wrapper";
+      args = [];
+    };
+  };
 
   home.sessionVariables = {
     _JAVA_AWT_WM_NONREPARENTING = "1";
@@ -272,20 +278,6 @@
   };
 
   # ══════════════════════════════════════════════════════════════
-  # PI AGENT — MCP servers (mcp-nixos: consulta packages/options)
-  # Usa wrapper dinâmico em ~/.local/bin/mcp-nixos-wrapper para
-  # não quebrar quando o nixpkgs atualizar o path no store.
-  # ══════════════════════════════════════════════════════════════
-  coding.agents.pi = {
-    enable = true;
-    mcpServers = {
-      nixos = {
-        command = "/home/${user}/.local/bin/mcp-nixos-wrapper";
-        args = [];
-      };
-    };
-  };
-
   home = {
     username = user;
     homeDirectory = "/home/${user}";
