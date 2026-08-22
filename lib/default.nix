@@ -17,5 +17,5 @@
   fonts = import ./fonts.nix {inherit pkgs;};
 
   # Colors — paleta cyberpunk
-  colors = import ./colors.nix {};
+  colors = import ./colors.nix;
 }
