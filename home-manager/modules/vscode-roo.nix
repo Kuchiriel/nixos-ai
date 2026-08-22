@@ -181,17 +181,15 @@ in
       executable = true;
     };
 
-    # Wrapper mcp-nixos-wrapper (usa a versão mais recente do store)
+    # Wrapper mcp-nixos-wrapper
     home.file.".local/bin/mcp-nixos-wrapper" = {
       text = ''
         #!/bin/sh
-        # Find mcp-nixos in /nix/store (most recent version)
         MCP_NIXOS=$(find /nix/store -name "mcp-nixos" -type f -path "*/bin/mcp-nixos" 2>/dev/null | sort -V | tail -1)
         if [ -z "$MCP_NIXOS" ]; then
-          echo "ERROR: mcp-nixos not found in /nix/store" >&2
+          echo "ERROR: mcp-nixos not found" >&2
           exit 1
         fi
-        # Use channel cache if available (speeds up startup by ~20s)
         CACHE_DIR=$(dirname "$MCP_NIXOS")/../share/mcp-nixos
         if [ -f "$CACHE_DIR/channels.json" ]; then
           export MCP_NIXOS_CHANNEL_CACHE="$CACHE_DIR/channels.json"
