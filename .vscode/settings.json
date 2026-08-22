@@ -16,5 +16,8 @@
     }
   ],
   "chat.utilityModel": "customendpoint/qwen3-35b-a3b",
-  "direnv.enable": false
+  "direnv.enable": false,
+  "nixEnvSelector.nixFile": "${workspaceFolder}/flake.nix",
+  "nixEnvSelector.useFlakes": true,
+  "nixEnvSelector.flakeShell": "default"
 }

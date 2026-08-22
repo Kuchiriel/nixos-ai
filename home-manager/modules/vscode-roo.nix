@@ -64,25 +64,41 @@ in
           };
           alwaysAllow = [ "tavily_search" "tavily_extract" ];    };
 
-    # ── Desktop Entry (para Rofi/Wofi encontrar) ───────
-    xdg.desktopEntries.code = {
-      name = "Visual Studio Code";
-      comment = "Code Editing. Redefined.";
-      genericName = "Text Editor";
-      exec = "code %F";
-      icon = "vscode";
-      type = "Application";
-      startupNotify = false;
-      startupWMClass = "Code";
-      categories = [ "Utility" "TextEditor" "Development" "IDE" ];
-      mimeType = [ "text/plain" "inode/directory" "application/x-code-workspace" ];
-      keywords = [ "vscode" ];
-      actions = {
-        new-empty-window = {
-          name = "New Empty Window";
-          exec = "code --new-window %F";
-        };
-      };
+    # ── VSCode wrapper + desktop entry (path do store muda a cada update) ──
+    home.file.".local/bin/code-wrapper" = {
+      text = ''
+        #!/bin/sh
+        CODE=$(find /nix/store -name "code" -path "*/bin/code" -type f 2>/dev/null | sort -V | tail -1)
+        if [ -z "$CODE" ]; then
+            echo "ERROR: VSCode not found" >&2
+            exit 1
+        fi
+        exec "$CODE" "$@"
+      '';
+      executable = true;
+    };
+
+    home.file.".local/share/applications/code.desktop" = {
+      text = ''
+        [Desktop Entry]
+        Name=Visual Studio Code
+        Comment=Code Editing. Redefined.
+        GenericName=Text Editor
+        Exec=/home/nixos/.local/bin/code-wrapper %F
+        Icon=vscode
+        Type=Application
+        StartupNotify=false
+        StartupWMClass=Code
+        Categories=Utility;TextEditor;Development;IDE;
+        MimeType=text/plain;inode/directory;application/x-code-workspace;
+        Actions=new-empty-window;
+        Keywords=vscode;
+
+        [Desktop Action new-empty-window]
+        Name=New Empty Window
+        Exec=/home/nixos/.local/bin/code-wrapper --new-window %F
+        Icon=vscode
+      '';
     };
 }
 ;
