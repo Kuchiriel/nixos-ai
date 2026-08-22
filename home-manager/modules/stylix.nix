@@ -29,6 +29,7 @@
       wofi.enable = false;
       hyprland.enable = false;
       hyprlock.enable = false;
+      foot.enable = false;  # Usamos nosso tema cyberpunk customizado
     };
 
     cursor = {
