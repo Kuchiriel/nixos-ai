@@ -69,7 +69,7 @@
     "$schema" = "https://opencode.ai/config.json";
     provider = {
       local = {
-        package = "@ai-sdk/openai-compatible";
+        npm = "@ai-sdk/openai-compatible";
         options = {
           baseURL = "http://localhost:8080/v1";
         };
