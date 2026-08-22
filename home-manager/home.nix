@@ -59,6 +59,37 @@
     hash = "sha256-Glr64GpNuRyXXJqdeL5cwRDuTqAirVfVVJLkVQ6Tayo=";
   };
 
+
+  programs.vscode = {
+    enable = true;
+    # Pacote oficial ou via flake, garantindo versão recente
+    package = pkgs.vscode; 
+
+    # Configurações de usuário declarativas no VS Code
+    userSettings = {
+      "chat.customEndpoints" = [
+        {
+          "name" = "Qwen3 Local 35B";
+          "url" = "http://127.0.0.1:8080/v1";
+          "models" = [
+            {
+              "id" = "qwen3-35b-a3b";
+              "name" = "Qwen3 35B Local";
+              "maxInputTokens" = 131072;
+              "maxOutputTokens" = 8192;
+              "toolCalling" = true;
+            }
+          ];
+        }
+      ];
+
+      # Define o modelo local como padrão para o Chat e utilitários (evita precisar de conta da GitHub/Copilot)
+      "chat.utilityModel" = "customendpoint/qwen3-35b-a3b";
+      "chat.utilitySmallModel" = "customendpoint/qwen3-35b-a3b";
+    };
+  };
+
+
   programs.opencode = {
     enable = true;
     package = inputs.opencode-flake.packages.${pkgs.system}.default;
