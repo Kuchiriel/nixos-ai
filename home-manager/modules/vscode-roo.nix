@@ -76,7 +76,7 @@ in
 
     customModesFile = mkOption {
       type = types.path;
-      default = ../.roomodes;
+      default = ../../.roomodes;
       description = "Caminho para o arquivo .roomodes (custom modes YAML)";
     };
 
