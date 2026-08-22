@@ -13,7 +13,7 @@ let
   # NixOS-AI Launcher — GUI para todas as features
   launcherScript = pkgs.writeScriptBin "nixos-ai-launcher" ''
     #!/bin/sh
-    exec ${../../modules/ai/jarvis/src/jarvis/cli/launcher.sh} "$@"
+    exec ${../../../modules/ai/jarvis/src/jarvis/cli/launcher.sh} "$@"
   '';
 
   booksScript = pkgs.writeScriptBin "open_books" ''
