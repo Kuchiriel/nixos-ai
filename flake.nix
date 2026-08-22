@@ -7,6 +7,13 @@
 
     opencode-flake.url = "github:aodhanhayter/opencode-flake";
 
+    # m3ta-nixpkgs: submodule com pacotes sidecar, stt-ptt, talk etc.
+    # git+file: acessa o submodule como repositório Git independente
+    m3ta-nixpkgs = {
+      url = "git+file:///home/nixos/projects/nixpkgs";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -27,7 +34,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, stylix, disko, ... }@inputs: let
+  outputs = { self, nixpkgs, nixpkgs-unstable, home-manager, stylix, disko, m3ta-nixpkgs, ... }@inputs: let
     system = "x86_64-linux";
     user = "nixos";
 
@@ -39,12 +46,19 @@
     # Conferir quando atualizar o pin do nixpkgs: `curl -s .../backend/latest-XX-nixos-unstable/_count`.
     nixosIndexGeneration = 45;
 
-    # Overlay único dos componentes de IA (usado pelo sistema e pelo output `packages`)
+    # Overlay combinado: AI (llama-cpp, mcp-nixos-fast, jarvis, aiModels)
+    # + m3ta packages (sidecar, stt-ptt, talk)
+    #
+    # O overlay m3ta-packages é importado DENTRO do aiOverlay para garantir
+    # que as dependências (opencode, td, tmux, whisper-cpp etc.) sejam
+    # resolvidas corretamente via `final.callPackage`.
+    m3taPackagesOverlay = import ./overlays/m3ta-packages.nix { inherit inputs; };
+
     aiOverlay = final: prev: {
-    # llama.cpp vem do unstable (24.11/26.05 pinned ficam desatualizados)
+      # llama.cpp vem do unstable (24.11/26.05 pinned ficam desatualizados)
       llama-cpp = (import nixpkgs-unstable {
         system = prev.stdenv.hostPlatform.system;
-	config.allowUnfree = true;
+ config.allowUnfree = true;
       }).llama-cpp.override {
         cudaSupport = true;
       };
@@ -85,7 +99,11 @@
       jarvis-voice = (prev.callPackage ./modules/ai/package.nix { mcpNixos = final.mcp-nixos-fast; }).withVoice;
       # Modelos declarativos (openwakeword, kokoro, whisper)
       inherit aiModels;
-    };
+
+      # ── Pacotes m3ta-nixpkgs (sidecar, stt-ptt, talk) ─────────────
+      # Importados via overlay separado para manter o código organizado.
+      # As dependências são resolvidas via `final.callPackage`.
+    } // (m3taPackagesOverlay final prev);
 
     hosts = [
       {
@@ -159,9 +177,14 @@
       }) {} hosts;
 
    # Permite `nix build .#jarvis` / `nix run .#jarvis`
+   # e `nix build .#sidecar` / `nix build .#stt-ptt` / `nix build .#talk`
     packages.${system} = {
       jarvis = (nixpkgs.legacyPackages.${system}.extend aiOverlay).jarvis;
       jarvis-voice = (nixpkgs.legacyPackages.${system}.extend aiOverlay).jarvis-voice;
+      # m3ta-nixpkgs packages
+      sidecar = (nixpkgs.legacyPackages.${system}.extend aiOverlay).sidecar;
+      stt-ptt = (nixpkgs.legacyPackages.${system}.extend aiOverlay).stt-ptt;
+      talk = (nixpkgs.legacyPackages.${system}.extend aiOverlay).talk;
     };
 
     # Ambiente de desenvolvimento interativo (`nix develop`)

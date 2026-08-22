@@ -2,9 +2,9 @@
 # benchmark.sh — Benchmark E2E do llama-server com lock e logging
 #
 # Uso:
-#   ./benchmark.sh              # executa 1x (lock contra concorrência)
-#   ./benchmark.sh --repeat N   # executa N vezes com intervalo de 5s
-#   ./benchmark.sh --warmup     # 1 run descartado antes do benchmark real
+#   ./benchmark.sh                # executa 1x (lock contra concorrência)
+#   ./benchmark.sh --repeat N     # executa N vezes com intervalo de 5s
+#   ./benchmark.sh --warmup       # 1 run descartado antes do benchmark real
 #
 # Logs ficam em logs/benchmark/YYYY-MM-DD_HH-MM-SS.json
 
@@ -59,6 +59,7 @@ run_once() {
             \"n_predict\": 128,
             \"cache_prompt\": false,
             \"temperature\": 0,
+            \"seed\": 42,
             \"ignore_eos\": true
         }")
 

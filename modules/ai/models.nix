@@ -180,19 +180,19 @@ in
     host = {
         model = "llm-host";
         mmproj = "llm-host-mmproj";  # vision encoder (BF16, 861MB) — roda em CPU via --no-mmproj-offload
-        threads = 16;              # testando: 16 threads no i7-13620H (20 available)
+        threads = 12;              # testando: 16 threads no i7-13620H (20 available)
         
         # 128K contexto para suportar Aider/Freebuff com projetos grandes.
         # KV cache q4_0 mantém VRAM dentro do budget (~2.5GB para 128K).
-        ctxSize = 131072;
+        ctxSize = 65536;
         batchSize = 2048;        
-        ubatch = 1024;
-        gpuLayers = 50;            # OTIMIZADO: 50 layers na GPU, mmproj na CPU = 32t/s estável + 27GB RAM livre
+        ubatch = 2048;
+        gpuLayers = 54;            # OTIMIZADO: 50 layers na GPU, mmproj na CPU = 32t/s estável + 27GB RAM livre
        
         kvCache = "-fa on -ctk q4_0 -ctv q4_0";         
 
         # Sintaxe estrita e padrão para a execução de MoE do Qwen
-        moeFlags = "--n-cpu-moe 50 --split-mode none --poll 50 --poll-batch 50";
+        moeFlags = "--n-cpu-moe 50 --split-mode layer --poll 50 --poll-batch 50";
 
         # Flags do llama.cpp 10273 (ver docs/architecture/llama-cpp-tuning.md)
         extraArgs = [
