@@ -44,7 +44,7 @@ in
         User = cfg.user;
         # `-` = não falha se o arquivo ainda não existe (aguarda o token)
         EnvironmentFile = "-${cfg.environmentFile}";
-        ExecStart = "${pkgs.jarvis}/bin/jarvis telegram";
+        #ExecStart = "${pkgs.jarvis}/bin/jarvis telegram";
         Restart = "on-failure";
         RestartSec = "5";
         # sem timeout: long-polling mantém a conexão aberta
