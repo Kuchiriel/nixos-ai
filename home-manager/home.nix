@@ -5,6 +5,9 @@
     ./modules/rclone-sync.nix
     ./modules/ai
     ./modules/services/jarvis-wakeword.nix
+    # m3ta-coding: coding agents (Pi, OpenCode)
+    ./modules/m3ta-coding/pi.nix
+    ./modules/m3ta-coding/shared/default.nix
   ];
 
   stylix.targets.hyprland.enable = false;
@@ -20,6 +23,12 @@
   m3ta.stt-ptt.enable = true;
   m3ta.stt-ptt.model = "ggml-large-v3-turbo";
   m3ta.stt-ptt.language = "pt";
+
+  # ── m3ta-coding: coding agents (Pi, OpenCode) ──────────────────
+  coding.agents.pi.enable = true;
+  coding.agents.pi.agentsInput = inputs.agents;
+  coding.agents.pi.settings.defaultProvider = "anthropic";
+  coding.agents.pi.settings.defaultModel = "claude-sonnet-4";
 
   home.sessionVariables = {
     _JAVA_AWT_WM_NONREPARENTING = "1";

@@ -184,9 +184,9 @@ in
         mmproj = "llm-host-mmproj";  # vision encoder (BF16, 861MB) — roda em CPU via --no-mmproj-offload
         threads = 12;              # 12 threads no i7-13620H (20 available, 12 para deixar margem)
         
-        # 128K contexto para suportar Aider/Freebuff/Roo Dev com projetos grandes.
-        # KV cache q4_0 mantém VRAM dentro do budget (~2.5GB para 128K).
-        ctxSize = 131072.;
+        # 192K contexto — suporta Aider/Freebuff/Roo Dev com projetos grandes.
+        # KV cache q4_0 mantém VRAM dentro do budget (~1.5GB para 192K).
+        ctxSize = 196608.;  # 192K tokens
         batchSize = 1024;        
         ubatch = 1024;
         gpuLayers = 45;            # 45 layers na GPU (reduzido de 50): ~500MiB VRAM livre extra,
