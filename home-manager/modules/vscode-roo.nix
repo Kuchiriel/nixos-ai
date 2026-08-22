@@ -88,9 +88,8 @@ in
   };
 
   config = mkIf cfg.enable {
-    home-manager.sharedModules = [{
-      # ── VS Code + extensões ────────────────────────────
-      programs.vscode = {
+    # ── VS Code + extensões ────────────────────────────
+    programs.vscode = {
         enable = true;
         package = pkgs.vscode;
 
@@ -166,7 +165,7 @@ in
       home.file.".roomodes" = {
         text = builtins.readFile cfg.customModesFile;
       };
-    }];
+    };
 
     # ── Pacotes necessários ──────────────────────────────
     home.packages = with pkgs; [
