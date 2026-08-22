@@ -254,23 +254,56 @@ def _text_for_tts(out: dict[str, Any] | str) -> str:
 def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL_DEFAULT) -> int:
     """Pipeline completo para o brainCommand do wakeword.
 
-    STT do WAV capturado → roteia o pedido (`jarvis ask`) → TTS da resposta.
+    STT do WAV capturado → load check → roteia o pedido → TTS da resposta.
     Tolerante: cada etapa degrada sem quebrar as seguintes.
+
+    Load shedding: se o LLM está sobrecarregado (todos os slots ocupados ou
+    contexto >80%), retorna resposta busy via TTS sem tentar o LLM — evita
+    sobrecarregar ainda mais e dá feedback imediato ao usuário.
     """
+    from jarvis.core.busy import check_load, handle_busy
+    from jarvis.core.feedback import set_status
+    from jarvis.core.logging import get_logger
     from jarvis.core.router import (
         handle_agent, handle_doctor, handle_fastpath, handle_nixos, handle_rag, route_request,
     )
 
+    log = get_logger("voice")
+
+    # 1. STT
+    set_status("transcribing", "Transcrevendo...")
     text = transcribe(audio_path, model_size=model_size)
     if text.startswith("ERROR"):
+        set_status("error", text[:80])
         print(text, file=sys.stderr)
         return 1
     if not text:
+        set_status("idle", "")
         print("(voz vazia)", file=sys.stderr)
         return 0
 
     print(f"🎤 {text}", flush=True)
+
+    # 2. Roteamento
     route = route_request(text)
+
+    # 3. Load shedding — verifica carga ANTES de chamar o LLM
+    #    Rotas que NÃO usam LLM (fastpath, doctor, nixos, rag) passam direto.
+    needs_llm = route.handler in ("agent",)
+    if needs_llm:
+        from jarvis.providers.llm import LLMClient
+        from jarvis.core.config import get_config
+        llm = LLMClient(get_config())
+        load = check_load(llm)
+        if load["busy"]:
+            log.warning("voice_load_shed", detail={
+                "reason": load["reason"],
+                "text": text[:100],
+            })
+            return handle_busy(load, tts=tts)
+
+    # 4. Executa a rota
+    set_status("thinking", f"{route.handler}: {text[:40]}")
     try:
         if route.handler == "fastpath":
             out = handle_fastpath(route.query)
@@ -283,10 +316,13 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
         else:
             out = handle_agent(route.query)
     except Exception as exc:  # noqa: BLE001
+        set_status("error", str(exc)[:80])
         print(f"ERROR: rota '{route.handler}' falhou: {exc}", file=sys.stderr)
         return 1
 
+    # 5. TTS
     answer = _text_for_tts(out)
+    set_status("speaking", answer[:60])
     if tts:
         wav = speak(answer)
         print(f"🔊 {answer}", flush=True)
@@ -294,6 +330,8 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
             print(wav, file=sys.stderr)
     else:
         print(f"💬 {answer}", flush=True)
+
+    set_status("done", "")
     return 0
 
 

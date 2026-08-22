@@ -292,6 +292,58 @@ class LLMClient:
             self._health_cache = (time.monotonic(), result)
         return result
 
+    # --- slots / load detection ---
+
+    def get_slots_status(self) -> dict[str, Any]:
+        """Consulta /slots do llama-server — slots_idle, slots_processing,
+        contexto usado, etc. Retorna dict vazio se o endpoint não existir.
+        """
+        try:
+            resp = self._session.get(
+                f"{self._base}/slots",
+                timeout=(self._connect_timeout, 3),
+            )
+            if resp.status_code != 200:
+                return {}
+            slots = resp.json()
+            if not isinstance(slots, list):
+                return {}
+            idle = sum(1 for s in slots if not s.get("is_processing"))
+            busy = sum(1 for s in slots if s.get("is_processing"))
+            total_ctx = sum(s.get("n_ctx", 0) for s in slots)
+            used_ctx = sum(s.get("n_prompt_tokens", 0) for s in slots)
+            return {
+                "slots_total": len(slots),
+                "slots_idle": idle,
+                "slots_busy": busy,
+                "ctx_total": total_ctx,
+                "ctx_used": used_ctx,
+                "ctx_pct": round(used_ctx / total_ctx * 100, 1) if total_ctx > 0 else 0,
+            }
+        except (requests.RequestException, ValueError):
+            return {}
+
+    def is_busy(self, *, ctx_threshold: float = 80.0) -> bool:
+        """True se o servidor está sob carga alta.
+
+        Critérios (qualquer um = busy):
+        - Todos os slots ocupados (slots_busy == slots_total)
+        - Contexto > ctx_threshold% usado
+        - Servidor inalcançável (circuit breaker aberto)
+        """
+        # Circuit breaker aberto = servidor fora
+        if self._breaker.state == "open":
+            return True
+        status = self.get_slots_status()
+        if not status:
+            # Não conseguiu consultar = assume busy (seguro)
+            return True
+        if status["slots_busy"] >= status["slots_total"]:
+            return True
+        if status["ctx_pct"] > ctx_threshold:
+            return True
+        return False
+
     def models(self) -> list[dict[str, Any]]:
         resp = self._session.get(f"{self._base}/models", timeout=(self._connect_timeout, self._read_timeout))
         resp.raise_for_status()
