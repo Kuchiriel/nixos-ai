@@ -4,7 +4,6 @@
     ./home-packages.nix
     ./modules/rclone-sync.nix
     ./modules/ai
-    ./modules/foot.nix
     ./modules/services/jarvis-wakeword.nix
     # m3ta-coding: coding agents (Pi, OpenCode)
     ./modules/m3ta-coding/pi.nix
