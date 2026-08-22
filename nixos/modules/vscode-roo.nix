@@ -18,6 +18,20 @@ with lib;
 
 let
   cfg = config.vscode-roo;
+
+  # Gera o JSON do mcp_settings a partir da opção mcpServers
+  mcpSettingsJson = builtins.toJSON {
+    mcpServers = builtins.mapAttrs (name: server: {
+      command = server.command;
+      args = server.args or [ ];
+      env = server.env or { };
+      disabled = false;
+      alwaysAllow = server.alwaysAllow or [ ];
+    }) cfg.mcpServers;
+  };
+
+  # Gera o YAML do .roomodes a partir de uma lista de modos
+  roomodesYaml = modes: builtins.readFile (pkgs.writeText "roomodes.yaml" modes);
 in
 {
   options.vscode-roo = {
@@ -55,20 +69,22 @@ in
       description = "API key para o Tavily Search MCP";
     };
 
-    customModes = mkOption {
-      type = types.str;
-      description = "Conteúdo do arquivo .roomodes (YAML)";
+    customModesFile = mkOption {
+      type = types.path;
+      default = ../.roomodes;
+      description = "Caminho para o arquivo .roomodes (custom modes YAML)";
     };
 
     userSettings = mkOption {
       type = types.attrs;
       default = { };
-      description = "Configurações userSettings do VS Code";
+      description = "Configurações userSettings extras do VS Code";
     };
   };
 
   config = mkIf cfg.enable {
     home-manager.sharedModules = [{
+      # ── VS Code + extensões ────────────────────────────
       programs.vscode = {
         enable = true;
         package = pkgs.vscode;
@@ -92,11 +108,11 @@ in
 
         # Configurações de usuário
         userSettings = {
-          # ── Roo Code timeouts ──────────────────────────────
+          # ── Roo Code timeouts ────────────────────────────
           "roo-cline.apiRequestTimeout" = 1800;  # 30 min
           "roo-cline.commandExecutionTimeout" = 300;  # 5 min
 
-          # ── Chat nativo VS Code ────────────────────────────
+          # ── Chat nativo VS Code ──────────────────────────
           "chat.agentHost.byokModels.enabled" = true;
           "chat.customEndpoints" = [
             {
@@ -116,7 +132,7 @@ in
           "chat.utilityModel" = "customendpoint/qwen3-35b-a3b";
           "chat.utilitySmallModel" = "customendpoint/qwen3-35b-a3b";
 
-          # ── Fontes ─────────────────────────────────────────
+          # ── Fontes ───────────────────────────────────────
           "editor.fontFamily" = "'JetBrains Mono', 'Droid Sans Mono', 'Monaco', monospace";
           "editor.fontSize" = 14;
           "editor.inlayHints.fontFamily" = "'JetBrains Mono', monospace";
@@ -125,7 +141,7 @@ in
           "markdown.preview.fontSize" = 14;
           "notebook.markup.fontFamily" = "Noto Sans, sans-serif";
 
-          # ── Geral ──────────────────────────────────────────
+          # ── Geral ────────────────────────────────────────
           "editor.minimap.sectionHeaderFontSize" = 11;
           "scm.inputFontFamily" = "'JetBrains Mono', monospace";
           "scm.inputFontSize" = 14;
@@ -133,36 +149,18 @@ in
           "terminal.integrated.fontSize" = 14;
           "workbench.colorTheme" = "Dracula";
 
-          # ── Merge das configurações customizadas ───────────
+          # ── Merge das configurações customizadas ─────────
         } // cfg.userSettings;
-
-        # ── MCP Settings (mcp_settings.json) ───────────────
-        # O VS Code não suporta mcp_settings.json diretamente
-        # via userSettings. Precisamos criar o arquivo manualmente.
-        settingsJson = { };  # placeholder, usamos file abaixo
-
-        # ── Arquivos declarativos ──────────────────────────
-        userSettings = { };  # limpa para usar file abaixo
       };
 
-      # MCP Settings — copiado para o storage do Roo Code
+      # ── MCP Settings — mcp_settings.json ───────────────
       home.file.".config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json" = {
-        text = builtins.toJSON {
-          mcpServers = builtins.mapAttrs (name: server: {
-            command = server.command;
-            args = server.args or [ ];
-            env = server.env or { };
-            disabled = false;
-            alwaysAllow = server.alwaysAllow or [ ];
-          }) cfg.mcpServers;
-        };
+        text = mcpSettingsJson;
       };
 
-      # Custom Modes — .roomodes no root do projeto
-      # (copiado para o workspace se existir)
+      # ── Custom Modes — .roomodes no home ──────────────
       home.file.".roomodes" = {
-        text = cfg.customModes;
-        executable = false;
+        text = builtins.readFile cfg.customModesFile;
       };
     }];
 
