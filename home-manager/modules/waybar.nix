@@ -1,12 +1,20 @@
-{ pkgs, lib, jarvisEnvironment, m3taLib, ... }:
-let
+{
+  pkgs,
+  lib,
+  jarvisEnvironment,
+  m3taLib,
+  ...
+}: let
   colors = m3taLib.colors;
   isHost = jarvisEnvironment == "host";
-  hostOnlyModules = if isHost then [ "battery" "bluetooth" "backlight" ] else [];
+  hostOnlyModules =
+    if isHost
+    then ["battery" "bluetooth" "backlight"]
+    else [];
   hostOnlySettings = lib.optionalAttrs isHost {
     battery = {
       format = "{icon} {capacity}%";
-      format-icons = [ "󰂎" "󰁺" "󰁌" "󰁞" "󰂀" "󰁹" ];
+      format-icons = ["󰂎" "󰁺" "󰁌" "󰁞" "󰂀" "󰁹"];
       format-charging = " {capacity}%";
       tooltip = false;
     };
@@ -30,14 +38,14 @@ let
     get_cpu() {
       awk '/^cpu / {print ($2+$3+$4+$5+$6+$7+$8), $5}' /proc/stat
     }
-    
+
     read -r total1 idle1 < <(get_cpu)
     sleep 0.5
     read -r total2 idle2 < <(get_cpu)
-    
+
     total_diff=$((total2 - total1))
     idle_diff=$((idle2 - idle1))
-    
+
     if [ "$total_diff" -gt 0 ]; then
       CPU=$(( (100 * (total_diff - idle_diff)) / total_diff ))
     else
@@ -48,10 +56,10 @@ let
     elif [ "$CPU" -ge 50 ]; then CLASS="medium"
     else CLASS="low"
     fi
-    
+
     read LOAD _rest _ < /proc/loadavg
     printf '{"text": "%s%%", "tooltip": "Load: %s\\nUsage: %s%%", "class": "%s"}\n' "$CPU" "$LOAD" "$CPU" "$CLASS"
-  '';  
+  '';
 
   memoryScript = pkgs.writeShellScriptBin "waybar-memory" ''
     while read -r key val rest; do
@@ -113,19 +121,20 @@ let
     fi
     printf '{"text": "%sMHz", "tooltip": "Intel UHD 770\\nFreq: %s/%s MHz (%s%%)\\nPower: %s", "class": "%s"}\n' "$CUR" "$CUR" "$MAX" "$PCT" "$STATUS" "$CLASS"
   '';
-in
-{
+in {
   fonts.fontconfig.enable = true;
 
-  home.packages = with pkgs; [
-    nerd-fonts.jetbrains-mono
-    nerd-fonts.symbols-only
-  ] ++ [
-    cpuScript
-    memoryScript
-    gpuScript
-    igpuScript
-  ];
+  home.packages = with pkgs;
+    [
+      nerd-fonts.jetbrains-mono
+      nerd-fonts.symbols-only
+    ]
+    ++ [
+      cpuScript
+      memoryScript
+      gpuScript
+      igpuScript
+    ];
 
   programs.waybar = {
     enable = true;
@@ -253,134 +262,140 @@ in
       }
     '';
 
-    settings = [({
-      layer = "top";
-      position = "top";
-      height = 34;
-      spacing = 10;
+    settings = [
+      ({
+          layer = "top";
+          position = "top";
+          height = 34;
+          spacing = 10;
 
-      modules-left = [
-        "hyprland/workspaces"
-        "hyprland/window"
-      ];
+          modules-left = [
+            "hyprland/workspaces"
+            "hyprland/window"
+          ];
 
-      modules-center = [
-        "clock"
-      ];
+          modules-center = [
+            "clock"
+          ];
 
-      modules-right = [
-        "custom/jarvis"
-        "custom/files"
-        "custom/cpu"
-        "custom/memory"
-        "custom/gpu"
-        "custom/igpu"
-      ] ++ hostOnlyModules ++ [
-        "network"
-        "pulseaudio"
-        "tray"
-      ];
+          modules-right =
+            [
+              "custom/jarvis"
+              "custom/files"
+              "custom/cpu"
+              "custom/memory"
+              "custom/gpu"
+              "custom/igpu"
+            ]
+            ++ hostOnlyModules
+            ++ [
+              "network"
+              "pulseaudio"
+              "tray"
+            ];
 
-      "custom/jarvis" = {
-        exec = "${pkgs.jarvis}/bin/jarvis-waybar 2>/dev/null || echo '{\\\"text\\\": \\\"IDLE\\\", \\\"class\\\": \\\"idle\\\"}'";
-        exec-on-event = true;
-        interval = 2;
-        return-type = "json";
-        format = "{}";
-        on-click = "foot --app-id floating_shell -e jarvis dev";
-      };
+          "custom/jarvis" = {
+            exec = "${pkgs.jarvis}/bin/jarvis-waybar 2>/dev/null || echo '{\\\"text\\\": \\\"IDLE\\\", \\\"class\\\": \\\"idle\\\"}'";
+            exec-on-event = true;
+            interval = 2;
+            return-type = "json";
+            format = "{}";
+            on-click = "foot --app-id floating_shell -e jarvis dev";
+          };
 
-      "hyprland/workspaces" = {
-        format = "{name} {windows}";
-        window-rewrite-default = "󱓡";
-        on-click = "activate";
-        window-rewrite = {
-          "title<.*youtube.*>" = "󰗃";
-          "class<firefox>" = "";
-          "class<foot>" = "";
-          "class<code-oss>" = "󰨞";
-          "class<pcmanfm-qt>" = "󰉋";
-          "class<discord>" = "󰙯";
-          "class<spotify>" = "";
-        };
-      };
+          "hyprland/workspaces" = {
+            format = "{name} {windows}";
+            window-rewrite-default = "󱓡";
+            on-click = "activate";
+            window-rewrite = {
+              "title<.*youtube.*>" = "󰗃";
+              "class<firefox>" = "";
+              "class<foot>" = "";
+              "class<code-oss>" = "󰨞";
+              "class<pcmanfm-qt>" = "󰉋";
+              "class<discord>" = "󰙯";
+              "class<spotify>" = "";
+            };
+          };
 
-      "hyprland/window" = {
-        format = "󰖲 {title}";
-        max-length = 40;
-        separate-outputs = true;
-      };
+          "hyprland/window" = {
+            format = "󰖲 {title}";
+            max-length = 40;
+            separate-outputs = true;
+          };
 
-      clock = {
-        format = " {:%H:%M}";
-        tooltip = false;
-        on-click = "foot --app-id floating_shell -e calcurse";
-      };
+          clock = {
+            format = " {:%H:%M}";
+            tooltip = false;
+            on-click = "foot --app-id floating_shell -e calcurse";
+          };
 
-      "custom/files" = {
-        format = "󰉋 Files";
-        tooltip = "File Manager (yazi)";
-        on-click = "foot --app-id floating_shell -e yazi";
-      };
+          "custom/files" = {
+            format = "󰉋 Files";
+            tooltip = "File Manager (yazi)";
+            on-click = "foot --app-id floating_shell -e yazi";
+          };
 
-      "custom/cpu" = {
-        format = "󰍛 {}";
-        exec = "${cpuScript}/bin/waybar-cpu";
-        interval = 3;
-        return-type = "json";
-        tooltip = true;
-        on-click = "foot --app-id floating_shell -e btm";
-      };
+          "custom/cpu" = {
+            format = "󰍛 {}";
+            exec = "${cpuScript}/bin/waybar-cpu";
+            interval = 3;
+            return-type = "json";
+            tooltip = true;
+            on-click = "foot --app-id floating_shell -e btm";
+          };
 
-      "custom/memory" = {
-        format = "󰘚 {}";
-        exec = "${memoryScript}/bin/waybar-memory";
-        interval = 5;
-        return-type = "json";
-        tooltip = true;
-        on-click = "foot --app-id floating_shell -e btm";
-      };
+          "custom/memory" = {
+            format = "󰘚 {}";
+            exec = "${memoryScript}/bin/waybar-memory";
+            interval = 5;
+            return-type = "json";
+            tooltip = true;
+            on-click = "foot --app-id floating_shell -e btm";
+          };
 
-      "custom/gpu" = {
-        format = "󰢮 {}";
-        exec = "${gpuScript}/bin/waybar-gpu";
-        interval = 3;
-        return-type = "json";
-        tooltip = true;
-        on-click = "foot --app-id floating_shell -e nvidia-smi";
-      };
+          "custom/gpu" = {
+            format = "󰢮 {}";
+            exec = "${gpuScript}/bin/waybar-gpu";
+            interval = 3;
+            return-type = "json";
+            tooltip = true;
+            on-click = "foot --app-id floating_shell -e nvidia-smi";
+          };
 
-      "custom/igpu" = {
-        format = "󰢮 {}";
-        exec = "${igpuScript}/bin/waybar-igpu";
-        interval = 5;
-        return-type = "json";
-        tooltip = true;
-        on-click = "foot --app-id floating_shell -e sudo intel_gpu_top";
-      };
+          "custom/igpu" = {
+            format = "󰢮 {}";
+            exec = "${igpuScript}/bin/waybar-igpu";
+            interval = 5;
+            return-type = "json";
+            tooltip = true;
+            on-click = "foot --app-id floating_shell -e sudo intel_gpu_top";
+          };
 
-      network = {
-        format-wifi = " {essid}";
-        format-ethernet = "󰈀 Wired";
-        format-disconnected = "󰤮 Disconnected";
-        tooltip = false;
-        on-click = "foot --app-id floating_shell -e nmtui-connect";
-      };
+          network = {
+            format-wifi = " {essid}";
+            format-ethernet = "󰈀 Wired";
+            format-disconnected = "󰤮 Disconnected";
+            tooltip = false;
+            on-click = "foot --app-id floating_shell -e nmtui-connect";
+          };
 
-      pulseaudio = {
-        format = "{icon} {volume}%";
-        format-icons = {
-          headphone = "󰋋";
-          default = [ "󰕿" "󰖀" "󰕾" ];
-        };
-        tooltip = false;
-        on-click = "foot --app-id floating_shell -e ncpamixer";
-      };
+          pulseaudio = {
+            format = "{icon} {volume}%";
+            format-icons = {
+              headphone = "󰋋";
+              default = ["󰕿" "󰖀" "󰕾"];
+            };
+            tooltip = false;
+            on-click = "foot --app-id floating_shell -e ncpamixer";
+          };
 
-      tray = {
-        icon-size = 18;
-        spacing = 6;
-      };
-    } // hostOnlySettings)];
+          tray = {
+            icon-size = 18;
+            spacing = 6;
+          };
+        }
+        // hostOnlySettings)
+    ];
   };
 }

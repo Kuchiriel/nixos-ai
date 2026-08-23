@@ -1,4 +1,4 @@
-{ lib, ... }:
+{ ...}:
 # ═══════════════════════════════════════════════════════════════════════
 # DISKO — partições declarativas do host (Acer Nitro V15, 2 NVMe)
 # ═══════════════════════════════════════════════════════════════════════
@@ -19,22 +19,22 @@
                 type = "filesystem";
                 format = "vfat";
                 mountpoint = "/boot";
-                mountOptions = [ "fmask=0077" "dmask=0077" ];
+                mountOptions = ["fmask=0077" "dmask=0077"];
               };
             };
             root = {
               size = "100%";
               content = {
                 type = "btrfs";
-                extraArgs = [ "-f" ];
+                extraArgs = ["-f"];
                 subvolumes = {
                   "/root" = {
                     mountpoint = "/";
-                    mountOptions = [ "compress=zstd" "noatime" "nodiratime" "discard=async" "commit=60" ];
+                    mountOptions = ["compress=zstd" "noatime" "nodiratime" "discard=async" "commit=60"];
                   };
                   "/nix" = {
                     mountpoint = "/nix";
-                    mountOptions = [ "compress=zstd" "noatime" "nodiratime" "discard=async" "commit=60" ];
+                    mountOptions = ["compress=zstd" "noatime" "nodiratime" "discard=async" "commit=60"];
                   };
                 };
               };
@@ -54,11 +54,11 @@
               size = "100%";
               content = {
                 type = "btrfs";
-                extraArgs = [ "-f" ];
+                extraArgs = ["-f"];
                 subvolumes = {
                   "/home" = {
                     mountpoint = "/home";
-                    mountOptions = [ "compress=zstd" "noatime" "nodiratime" "discard=async" "commit=60"  ];
+                    mountOptions = ["compress=zstd" "noatime" "nodiratime" "discard=async" "commit=60"];
                   };
                 };
               };

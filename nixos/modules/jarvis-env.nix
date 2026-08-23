@@ -1,4 +1,7 @@
-{ config, lib, ... }:
+{
+  lib,
+  ...
+}:
 # ═══════════════════════════════════════════════════════════════════════
 # JARVIS-ENV — o "cérebro do ambiente" (metáfora da água).
 #
@@ -16,14 +19,12 @@
 # A detecção em RUNTIME (systemd-detect-virt/lspci) fica para os serviços
 # que precisam decidir ao vivo (hwdetect/hwprofile no Python).
 # ═══════════════════════════════════════════════════════════════════════
-with lib;
-
-{
+with lib; {
   options.services.jarvis = {
     enable = mkEnableOption "JARVIS environment switch (vm/host)";
 
     environment = mkOption {
-      type = types.enum [ "vm" "host" ];
+      type = types.enum ["vm" "host"];
       default = "vm";
       description = ''
         Recipiente do sistema: "vm" = Lab (CPU, sem GPU, modo leve) e

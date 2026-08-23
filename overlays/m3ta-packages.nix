@@ -6,10 +6,7 @@
 # As dependências são resolvidas via `final.callPackage` para garantir
 # que pacotes como opencode, td, tmux, whisper-cpp etc. venham do
 # closure completo do flake.
-
-{ inputs, ... }:
-
-final: prev: let
+{inputs, ...}: final: _prev: let
   m3ta = "${inputs.m3ta-nixpkgs}";
 in {
   # sidecar: terminal multiplexer/UX para CLI agents (Go)

@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 # ═══════════════════════════════════════════════════════════════════════
 # JARVIS GAMING — Resource Profiles (normal / gaming)
 #
@@ -18,7 +23,6 @@
 # Transição: systemd targets + scripts de stop/start
 # Grace period: 30s entre jogo terminar e retorno ao normal
 # ═══════════════════════════════════════════════════════════════════════
-
 let
   cfg = config.services.jarvis-gaming;
 
@@ -49,70 +53,70 @@ let
   # Retorna 0 se jogo está ativo, 1 se não.
   # Also checks for game processes (steam children, proton, gamescope).
   gameDetectScript = pkgs.writeShellScriptBin "jarvis-game-detect" ''
-    set -euo pipefail
+        set -euo pipefail
 
-    # ═══════════════════════════════════════════════════════════════════
-    # Detecção multi-sinal: qualquer sinal = jogo ativo
-    # Prioridade: GPU → Hyprland fullscreen → Steam children → Proton
-    # ═══════════════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════════════
+        # Detecção multi-sinal: qualquer sinal = jogo ativo
+        # Prioridade: GPU → Hyprland fullscreen → Steam children → Proton
+        # ═══════════════════════════════════════════════════════════════════
 
-    # 1. GPU utilization check via nvidia-smi
-    #    Threshold 30%: MMOs/jogos leves usam 15-35% GPU
-    if command -v nvidia-smi &>/dev/null; then
-      GPU_UTIL=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')
-      if [ -n "$GPU_UTIL" ] && [ "$GPU_UTIL" -ge ${toString gpuThreshold} ] 2>/dev/null; then
-        echo "gpu_active"
-        exit 0
-      fi
-    fi
+        # 1. GPU utilization check via nvidia-smi
+        #    Threshold 30%: MMOs/jogos leves usam 15-35% GPU
+        if command -v nvidia-smi &>/dev/null; then
+          GPU_UTIL=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')
+          if [ -n "$GPU_UTIL" ] && [ "$GPU_UTIL" -ge ${toString gpuThreshold} ] 2>/dev/null; then
+            echo "gpu_active"
+            exit 0
+          fi
+        fi
 
-    # 2. Hyprland fullscreen window check
-    #    Se há janela fullscreen = provavelmente jogo rodando
-    if command -v hyprctl &>/dev/null; then
-      if hyprctl clients -j 2>/dev/null | python3 -c "
-import sys, json
-try:
-    clients = json.load(sys.stdin)
-    for c in clients:
-        if c.get('fullscreen') is True:
-            sys.exit(0)
-    sys.exit(1)
-except:
-    sys.exit(1)
-" 2>/dev/null; then
-        echo "hyprland_fullscreen"
-        exit 0
-      fi
-    fi
+        # 2. Hyprland fullscreen window check
+        #    Se há janela fullscreen = provavelmente jogo rodando
+        if command -v hyprctl &>/dev/null; then
+          if hyprctl clients -j 2>/dev/null | python3 -c "
+    import sys, json
+    try:
+        clients = json.load(sys.stdin)
+        for c in clients:
+            if c.get('fullscreen') is True:
+                sys.exit(0)
+        sys.exit(1)
+    except:
+        sys.exit(1)
+    " 2>/dev/null; then
+            echo "hyprland_fullscreen"
+            exit 0
+          fi
+        fi
 
-    # 3. Steam game children check
-    #    Se o Steam tem filhos que NÃO são steamwebhelper = jogo rodando
-    STEAM_PID=$(pgrep -x "steam" 2>/dev/null | head -1)
-    if [ -n "$STEAM_PID" ]; then
-      # Processos internos do Steam (NÃO indicam jogo)
-      STEAM_INTERNAL="steamwebhelper|steam_oOo|crashhandler"
-      # Verifica filhos do Steam
-      for CHILD_PID in $(pgrep -P "$STEAM_PID" 2>/dev/null); do
-        COMM=$(cat /proc/$CHILD_PID/comm 2>/dev/null || echo "")
-        if [ -n "$COMM" ] && ! echo "$COMM" | grep -qE "$STEAM_INTERNAL"; then
-          echo "steam_game_active"
+        # 3. Steam game children check
+        #    Se o Steam tem filhos que NÃO são steamwebhelper = jogo rodando
+        STEAM_PID=$(pgrep -x "steam" 2>/dev/null | head -1)
+        if [ -n "$STEAM_PID" ]; then
+          # Processos internos do Steam (NÃO indicam jogo)
+          STEAM_INTERNAL="steamwebhelper|steam_oOo|crashhandler"
+          # Verifica filhos do Steam
+          for CHILD_PID in $(pgrep -P "$STEAM_PID" 2>/dev/null); do
+            COMM=$(cat /proc/$CHILD_PID/comm 2>/dev/null || echo "")
+            if [ -n "$COMM" ] && ! echo "$COMM" | grep -qE "$STEAM_INTERNAL"; then
+              echo "steam_game_active"
+              exit 0
+            fi
+          done
+        fi
+
+        # 4. Proton/gamescope check
+        if pgrep -x "gamescope" &>/dev/null; then
+          echo "gamescope_active"
           exit 0
         fi
-      done
-    fi
 
-    # 4. Proton/gamescope check
-    if pgrep -x "gamescope" &>/dev/null; then
-      echo "gamescope_active"
-      exit 0
-    fi
+        if pgrep -f "pressure-vessel" &>/dev/null; then
+          echo "proton_active"
+          exit 0
+        fi
 
-    if pgrep -f "pressure-vessel" &>/dev/null; then
-      echo "proton_active"
-      exit 0
-    fi
-
-    exit 1
+        exit 1
   '';
 
   # ═══════════════════════════════════════════════════════════════════
@@ -132,14 +136,15 @@ except:
 
     # Stop heavy services
     ${lib.concatMapStringsSep "\n" (svc: ''
-      if systemctl is-active --quiet ${svc} 2>/dev/null; then
-        echo "$LOG_PREFIX Stopping ${svc}..."
-        systemctl stop ${svc}
-        echo "$LOG_PREFIX ${svc} stopped"
-      else
-        echo "$LOG_PREFIX ${svc} already stopped"
-      fi
-    '') gamingStopServices}
+        if systemctl is-active --quiet ${svc} 2>/dev/null; then
+          echo "$LOG_PREFIX Stopping ${svc}..."
+          systemctl stop ${svc}
+          echo "$LOG_PREFIX ${svc} stopped"
+        else
+          echo "$LOG_PREFIX ${svc} already stopped"
+        fi
+      '')
+      gamingStopServices}
 
     # Log GPU state after transition
     if command -v nvidia-smi &>/dev/null; then
@@ -177,16 +182,17 @@ except:
 
     # Restart services (only if they were enabled in the host config)
     ${lib.concatMapStringsSep "\n" (svc: ''
-      if systemctl is-enabled --quiet ${svc} 2>/dev/null; then
-        if ! systemctl is-active --quiet ${svc} 2>/dev/null; then
-          echo "$LOG_PREFIX Starting ${svc}..."
-          systemctl start ${svc}
-          echo "$LOG_PREFIX ${svc} started"
-        else
-          echo "$LOG_PREFIX ${svc} already running"
+        if systemctl is-enabled --quiet ${svc} 2>/dev/null; then
+          if ! systemctl is-active --quiet ${svc} 2>/dev/null; then
+            echo "$LOG_PREFIX Starting ${svc}..."
+            systemctl start ${svc}
+            echo "$LOG_PREFIX ${svc} started"
+          else
+            echo "$LOG_PREFIX ${svc} already running"
+          fi
         fi
-      fi
-    '') gamingStopServices}
+      '')
+      gamingStopServices}
 
     echo "$LOG_PREFIX NORMAL profile active"
     echo "normal" > /tmp/jarvis-resource-profile
@@ -242,8 +248,7 @@ except:
       sleep "$CHECK_INTERVAL"
     done
   '';
-in
-{
+in {
   options.services.jarvis-gaming = {
     enable = lib.mkEnableOption "JARVIS Gaming Resource Profiles";
 
@@ -285,8 +290,8 @@ in
       transitionToGaming
       transitionToNormal
       watcherScript
-      pkgs.libnotify    # notify-send
-      pkgs.libcanberra-gtk3  # canberra-gtk-play
+      pkgs.libnotify # notify-send
+      pkgs.libcanberra-gtk3 # canberra-gtk-play
     ];
 
     # ═══════════════════════════════════════════════════════════════════
@@ -301,9 +306,9 @@ in
     # ═══════════════════════════════════════════════════════════════════
     systemd.services.jarvis-gaming-watcher = {
       description = "JARVIS Gaming — game detection and resource profile manager";
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
-      wantedBy = [ "multi-user.target" ];
+      after = ["network-online.target"];
+      wants = ["network-online.target"];
+      wantedBy = ["multi-user.target"];
 
       serviceConfig = {
         ExecStart = "${watcherScript}/bin/jarvis-gaming-watcher";
@@ -319,10 +324,10 @@ in
         MemoryMax = "100M";
 
         # Segurança: proteção do filesystem
-        ProtectSystem = "full";  # /etc, /usr, /boot read-only
+        ProtectSystem = "full"; # /etc, /usr, /boot read-only
         ProtectHome = "read-only";
         ReadWritePaths = ["/var/lib/jarvis"];
-        NoNewPrivileges = false;  # Precisa de systemctl
+        NoNewPrivileges = false; # Precisa de systemctl
       };
     };
 

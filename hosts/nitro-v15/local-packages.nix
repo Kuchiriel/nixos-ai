@@ -1,10 +1,8 @@
-{ pkgs, ... }:
-
-{
+{pkgs, ...}: {
   environment.systemPackages = with pkgs; [
     pciutils
     clinfo
-    nvtopPackages.nvidia    # Monitoramento em tempo real da RTX 4050 e Intel UHD
+    nvtopPackages.nvidia # Monitoramento em tempo real da RTX 4050 e Intel UHD
     uwsm
     git
     curl

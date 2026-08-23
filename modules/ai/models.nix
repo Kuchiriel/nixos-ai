@@ -1,5 +1,6 @@
-{ fetchurl, lib }:
-
+{
+  fetchurl,
+}:
 # Modelos de IA baixados declarativamente via fetchurl.
 #
 # Por quê: o legado baixava modelos imperativamente (pip/site-packages, URLs
@@ -44,11 +45,13 @@
 #   - openwakeword: releases oficiais GitHub v0.5.1 (onnx)
 #   - Kokoro-82M: hexgrad/Kokoro-82M (Apache-2.0) — formato TORCH do nixpkgs
 #   - faster-whisper: Systran/faster-whisper-small (CTranslate2)
-
 let
-  mkModel = { url, sha256 }: fetchurl { inherit url sha256; };
-in
-{
+  mkModel = {
+    url,
+    sha256,
+  }:
+    fetchurl {inherit url sha256;};
+in {
   # =========================================================================
   # 1. ARQUIVOS DE MODELO
   # =========================================================================
@@ -151,12 +154,12 @@ in
       ctxSize = 131072;
       batchSize = 512;
       ubatch = 512;
-      gpuLayers = 0;                    # CPU puro no lab
+      gpuLayers = 0; # CPU puro no lab
       kvCache = "-fa on -ctk f16 -ctv f16";
       moeFlags = "";
       user = "nixos";
-      scheduler = null;                 # CFS (default) — VM compartilhada
-    };    # Host: RTX 4050 6GB + 32GB RAM, Qwen3.6-35B-A3B MoE + vision
+      scheduler = null; # CFS (default) — VM compartilhada
+    }; # Host: RTX 4050 6GB + 32GB RAM, Qwen3.6-35B-A3B MoE + vision
     # VRAM budget (6GB total):
     #   weights:  10 × 0.237GB = 2.37GB (attn+4experts/camada)
     #   KV q8_0:  16K ctx     = 0.62GB
@@ -180,40 +183,45 @@ in
     # NOTA: --parallel 2 suporta tool calls concorrentes (Roo Dev)
 
     host = {
-        model = "llm-host";
-        mmproj = "llm-host-mmproj";  # vision encoder (BF16, 861MB) — roda em CPU via --no-mmproj-offload
-        threads = 12;              # 12 threads no i7-13620H (20 available, 12 para deixar margem)
-        
-        # 192K contexto — suporta Aider/Freebuff/Roo Dev com projetos grandes.
-        # KV cache q4_0 mantém VRAM dentro do budget (~1.5GB para 192K).
-        ctxSize = 196608.;  # 192K tokens
-        batchSize = 1024;        
-        ubatch = 1024;
-        gpuLayers = 45;            # 45 layers na GPU (reduzido de 50): ~500MiB VRAM livre extra,
-                                   # temperatura ~5°C menor, mmproj na CPU = 32t/s estável
-       
-        kvCache = "-fa on -ctk q4_0 -ctv q4_0";         
+      model = "llm-host";
+      mmproj = "llm-host-mmproj"; # vision encoder (BF16, 861MB) — roda em CPU via --no-mmproj-offload
+      threads = 12; # 12 threads no i7-13620H (20 available, 12 para deixar margem)
 
-        # Sintaxe estrita e padrão para a execução de MoE do Qwen
-        moeFlags = "--n-cpu-moe 99 --split-mode layer --poll 50 --poll-batch 50";
+      # 192K contexto — suporta Aider/Freebuff/Roo Dev com projetos grandes.
+      # KV cache q4_0 mantém VRAM dentro do budget (~1.5GB para 192K).
+      ctxSize = 196608.; # 192K tokens
+      batchSize = 1024;
+      ubatch = 1024;
+      gpuLayers = 45; # 45 layers na GPU (reduzido de 50): ~500MiB VRAM livre extra,
+      # temperatura ~5°C menor, mmproj na CPU = 32t/s estável
 
-        # Flags do llama.cpp 10273 (ver docs/architecture/llama-cpp-tuning.md)
-        extraArgs = [
-            "--no-mmproj-offload"             # CRÍTICO: mmproj na CPU, libera 900MiB VRAM para attention
-            "--image-min-tokens" "1024" 
-            "--kv-unified"                    # KV cache unificado (economiza VRAM)
-            "--ctx-checkpoints" "2"          # Checkpoints de contexto para Aider/Freebuff
-            "--keep" "1024"
-            "--no-warmup"                    # Sem warmup: +2% prefill e decode
-            "--prio" "2"                     # Prioridade high para decode
-            "--prio-batch" "3"               # Real-time priority para batch/prefull
-            "--parallel" "2"                 # 2 slots para tool calls concorrentes (Roo Dev, Aider)
-            "--cont-batching"                 # Cont-batching: agendamento eficiente com múltiplos slots
-       ];
+      kvCache = "-fa on -ctk q4_0 -ctv q4_0";
 
-        user = "root";
-        scheduler = null;  # CFS default (_FIFO removido: causava overhead)_
+      # Sintaxe estrita e padrão para a execução de MoE do Qwen
+      moeFlags = "--n-cpu-moe 99 --split-mode layer --poll 50 --poll-batch 50";
+
+      # Flags do llama.cpp 10273 (ver docs/architecture/llama-cpp-tuning.md)
+      extraArgs = [
+        "--no-mmproj-offload" # CRÍTICO: mmproj na CPU, libera 900MiB VRAM para attention
+        "--image-min-tokens"
+        "1024"
+        "--kv-unified" # KV cache unificado (economiza VRAM)
+        "--ctx-checkpoints"
+        "2" # Checkpoints de contexto para Aider/Freebuff
+        "--keep"
+        "1024"
+        "--no-warmup" # Sem warmup: +2% prefill e decode
+        "--prio"
+        "2" # Prioridade high para decode
+        "--prio-batch"
+        "3" # Real-time priority para batch/prefull
+        "--parallel"
+        "2" # 2 slots para tool calls concorrentes (Roo Dev, Aider)
+        "--cont-batching" # Cont-batching: agendamento eficiente com múltiplos slots
+      ];
+
+      user = "root";
+      scheduler = null; # CFS default (_FIFO removido: causava overhead)_
     };
-
   };
 }

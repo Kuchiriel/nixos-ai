@@ -1,4 +1,9 @@
-{ pkgs, lib, jarvisEnvironment, ... }:
+{
+  pkgs,
+  lib,
+  jarvisEnvironment,
+  ...
+}:
 # mpvpaper — wallpaper animado (mp4 via mpv) — porta do legado Manjaro.
 #
 # Legado (hyprland.conf do Manjaro):
@@ -15,9 +20,8 @@
 let
   isHost = jarvisEnvironment == "host";
   wallpapersDir = ../assets/wallpapers;
-in
-{
-  home.packages = [ pkgs.mpvpaper pkgs.mpv ];
+in {
+  home.packages = [pkgs.mpvpaper pkgs.mpv];
 
   # VA-API Intel (iHD) para decode de vídeo na iGPU do host (Nitro V15:
   # Intel UHD 770). LIBVA_DRIVER_NAME=iHD força o driver Intel correto.
@@ -28,8 +32,8 @@ in
   systemd.user.services.mpvpaper = lib.mkIf isHost {
     Unit = {
       Description = "JARVIS — wallpaper animado (mpvpaper, mp4 na iGPU)";
-      ConditionVirtualization = "!vm";  # rede de segurança extra
-      After = [ "graphical-session.target" ];
+      ConditionVirtualization = "!vm"; # rede de segurança extra
+      After = ["graphical-session.target"];
     };
     Service = {
       # Porta do legado Manjaro (corrigido para NixOS):
@@ -51,7 +55,11 @@ in
       ];
       ExecStart = lib.concatStringsSep " " [
         "${pkgs.mpvpaper}/bin/mpvpaper"
-        "-p" "-n" "30" "-l" "background"
+        "-p"
+        "-n"
+        "30"
+        "-l"
+        "background"
         "-o"
         ''"--no-audio --hwdec=vaapi --loop --framedrop=vo"''
         "*"
@@ -60,6 +68,6 @@ in
       Restart = "on-failure";
       RestartSec = 5;
     };
-    Install = { WantedBy = [ "hyprland-session.target" ]; };
+    Install = {WantedBy = ["hyprland-session.target"];};
   };
 }

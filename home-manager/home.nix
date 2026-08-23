@@ -1,4 +1,10 @@
-{ homeStateVersion, user, pkgs, inputs, ... }: {
+{
+  homeStateVersion,
+  user,
+  pkgs,
+  inputs,
+  ...
+}: {
   imports = [
     ./modules
     ./home-packages.nix
@@ -81,10 +87,8 @@
     hash = "sha256-Glr64GpNuRyXXJqdeL5cwRDuTqAirVfVVJLkVQ6Tayo=";
   };
 
-
   # ── VS Code + Roo Code — configurado via módulo vscode-roo.nix ──
   # (extensões, userSettings, MCP, custom modes são declarativos)
-
 
   programs.opencode = {
     enable = true;
@@ -188,12 +192,11 @@
     .aider*
     *.zip
     *.tar.gz
-    
+
     # Documentação Extensa / Markdown Secundários (Economiza Tokens de Contexto)
     #docs/
     #*.md
   '';
-
 
   # 2. Metadata — Limite ampliado para 8192 output tokens
   home.file.".aider.model.metadata.json".text = ''
@@ -209,7 +212,6 @@
     }
   '';
 
-
   home.file.".aider.model.settings.yml".text = ''
     - name: openai/qwen3-35b-a3b
       edit_format: diff
@@ -218,7 +220,7 @@
       reminder: sys
       examples_as_sys_msg: true
       reasoning_tag: null
-     
+
       system_prompt_prefix: |
         You are an elite senior systems engineering AI partner.
         Rules of Engagement:
@@ -234,12 +236,12 @@
     enable = false;
     # Calibração validada do legado (docs/architecture/legacy-audio-calibration.md):
     # 0.85 = menos false positives com ventoinha/sons de casa
-    threshold = 0.20;  # Voz ~0.33, ruído ~0.002. 0.15 = seguro
+    threshold = 0.20; # Voz ~0.33, ruído ~0.002. 0.15 = seguro
     # RMS gate: ignora score alto se RMS < 500 (evita falsos positivos)
     rmsGate = 500;
     # Pipeline de voz: STT (faster-whisper) → LLM (llama.cpp) → TTS (Kokoro)
     # O wakeword grava WAV e passa como argumento para 'jarvis voice'
-    brainCommand = [ "jarvis" "voice" ];
+    brainCommand = ["jarvis" "voice"];
   };
 
   # ══════════════════════════════════════════════════════════════

@@ -1,6 +1,10 @@
-{ lib, python3Packages, makeWrapper, mcp-nixos, mcpNixos ? mcp-nixos }:
-
-let
+{
+  lib,
+  python3Packages,
+  makeWrapper,
+  mcp-nixos,
+  mcpNixos ? mcp-nixos,
+}: let
   base = python3Packages.buildPythonPackage rec {
     pname = "jarvis";
     version = "0.1.0";
@@ -8,7 +12,7 @@ let
 
     src = lib.cleanSource ./jarvis;
 
-    build-system = with python3Packages; [ setuptools ];
+    build-system = with python3Packages; [setuptools];
 
     dependencies = with python3Packages; [
       requests
@@ -16,15 +20,15 @@ let
       prompt-toolkit
     ];
 
-    nativeBuildInputs = [ makeWrapper ];
+    nativeBuildInputs = [makeWrapper];
 
     # mcp-nixos (MCP server read-only de packages/options do nixpkgs) é usado
     # pelo agente via stdio; entra como propagado para o binário jarvis saber
     # o caminho (JARVIS_MCP_NIXOS_BIN) sem hardcode de store path.
     # `mcpNixos` é o fast (cache de canais pré-computado) quando vem do overlay.
-    propagatedBuildInputs = [ mcpNixos ];
+    propagatedBuildInputs = [mcpNixos];
 
-    nativeCheckInputs = with python3Packages; [ pytest hypothesis ];
+    nativeCheckInputs = with python3Packages; [pytest hypothesis];
     checkPhase = ''
       runHook preCheck
       pytest -m "not integration" -q
@@ -40,7 +44,7 @@ let
     postInstall = ''
       for bin in $out/bin/*; do
         wrapProgram "$bin" \
-          --prefix PATH : ${lib.makeBinPath [ mcpNixos ]} \
+          --prefix PATH : ${lib.makeBinPath [mcpNixos]} \
           --set MCP_NIXOS_CHANNEL_CACHE "${mcpNixos}/share/mcp-nixos/channels.json"
       done
     '';
@@ -49,7 +53,7 @@ let
       description = "JARVIS — sistema de IA local (roteamento, RAG, memória, voz) para NixOS";
       license = licenses.mit;
       platforms = platforms.linux;
-      maintainers = [ ];
+      maintainers = [];
     };
   };
 
@@ -58,14 +62,15 @@ let
   # este quando quiser a interface falada (wakeword brainCommand).
   withVoice = base.overridePythonAttrs (old: {
     pname = "jarvis-voice";
-    dependencies = old.dependencies ++ (with python3Packages; [
-      faster-whisper
-      kokoro
-      soundfile
-    ]);
-    propagatedBuildInputs = old.propagatedBuildInputs or [ ] ++ [ mcpNixos ];
+    dependencies =
+      old.dependencies
+      ++ (with python3Packages; [
+        faster-whisper
+        kokoro
+        soundfile
+      ]);
+    propagatedBuildInputs = old.propagatedBuildInputs or [] ++ [mcpNixos];
   });
-in
-{
+in {
   inherit base withVoice;
 }

@@ -1,5 +1,9 @@
-{ config, lib, pkgs, ... }:
-
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 # Scripts de manutenção empacotados DECLARATIVAMENTE (writeShellApplication).
 #
 # Por que: depender de scripts soltos na raiz do repo (./rebuild.sh,
@@ -9,11 +13,10 @@
 #
 # O rebuild.sh roda contra o repo local do usuário (~/nixos-config-reborn):
 # o script referencia o flake, não o copia (o repo é o estado declarativo).
-
 let
   rebuildSh = pkgs.writeShellApplication {
     name = "jarvis-rebuild";
-    runtimeInputs = [ pkgs.git pkgs.nh ];
+    runtimeInputs = [pkgs.git pkgs.nh];
     text = ''
       set -e
       FLAKE_DIR="''${JARVIS_FLAKE_DIR:-$HOME/nixos-config-reborn}"
@@ -48,7 +51,7 @@ let
 
   cleanSh = pkgs.writeShellApplication {
     name = "jarvis-clean";
-    runtimeInputs = [ pkgs.nix ];
+    runtimeInputs = [pkgs.nix];
     text = ''
       GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; NC='\033[0m'
       echo -e "''${BLUE}=== FAXINA COMPLETA NO NIXOS ===''${NC}"
@@ -93,15 +96,14 @@ let
       echo "qdrant reiniciado com storage recriado."
     '';
   };
-in
-{
+in {
   # Ativa com: programs.jarvis-scripts.enable = true
   options.programs.jarvis-scripts = {
     enable = lib.mkEnableOption "scripts de manutenção JARVIS (rebuild/clean/fix-qdrant) no store";
   };
 
   config = lib.mkIf config.programs.jarvis-scripts.enable {
-    environment.systemPackages = [ rebuildSh cleanSh fixQdrantSh ];
+    environment.systemPackages = [rebuildSh cleanSh fixQdrantSh];
     # Comandos `rebuild`, `clean`, `fix-qdrant` disponíveis no PATH (binários
     # do store, não scripts soltos). O doctor/heal referenciam esses binários.
   };

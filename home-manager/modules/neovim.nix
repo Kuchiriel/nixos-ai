@@ -1,4 +1,4 @@
-{ pkgs, ... }: {
+{pkgs, ...}: {
   programs.neovim = {
     enable = true;
     # 26.05 mudou os defaults p/ false (stateVersion < 26.05 mantém true);

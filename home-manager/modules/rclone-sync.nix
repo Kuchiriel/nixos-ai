@@ -1,6 +1,8 @@
-{ pkgs, config, ... }:
-
-let
+{
+  pkgs,
+  config,
+  ...
+}: let
   filterFile = pkgs.writeText "rclone-filters.txt" ''
     - **/.local/**
     - **/.npm/**
@@ -39,16 +41,15 @@ let
       ${pkgs.curl}/bin/curl -X POST http://localhost:6333/collections/$col/snapshots
     done
   '';
-in
-{
-  home.packages = [ pkgs.rclone qdrant-snapshot ];
+in {
+  home.packages = [pkgs.rclone qdrant-snapshot];
 
   xdg.configFile."rclone/filters.txt".source = filterFile;
 
   systemd.user.services.rclone-sync = {
     Unit = {
       Description = "Sync Inteligente Rclone para Google Drive (Projects & Qdrant)";
-      After = [ "network-online.target" ];
+      After = ["network-online.target"];
     };
     Service = {
       Type = "oneshot";
@@ -75,6 +76,6 @@ in
       OnCalendar = "*-*-* 00/4:00:00";
       Persistent = true;
     };
-    Install.WantedBy = [ "timers.target" ];
+    Install.WantedBy = ["timers.target"];
   };
 }

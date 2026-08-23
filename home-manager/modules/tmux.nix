@@ -1,4 +1,4 @@
-{ pkgs, ... }: {
+{pkgs, ...}: {
   programs.tmux = {
     enable = true;
     baseIndex = 1;
@@ -9,7 +9,7 @@
     extraConfig = ''
       # Garante que a digitação duplicada em painéis esteja desativada
       setw -g synchronize-panes off
-      
+
       # Atalho para alternar a sincronização se necessário (Alt + y)
       bind -n M-y setw synchronize-panes \; display "Toggle Pane Sync!"
       set -as terminal-features ",alacritty*:RGB"

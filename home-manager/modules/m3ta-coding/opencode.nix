@@ -12,10 +12,7 @@
   lib,
   pkgs,
   ...
-}: let
-  cfg = config.coding.agents.opencode;
-  shared = import ./shared/shared-options.nix {inherit lib;};
-in {
+}: {
   imports = [./shared/default.nix];
 
   options.coding.agents.opencode = let
@@ -34,7 +31,6 @@ in {
     };
 
   config = with lib; let
-    shared = import ./shared/shared-options.nix {inherit lib;};
     cfg = config.coding.agents.opencode;
   in
     mkIf cfg.enable {

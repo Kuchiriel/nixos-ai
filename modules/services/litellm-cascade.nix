@@ -1,4 +1,8 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  ...
+}:
 # ═══════════════════════════════════════════════════════════════════════
 # LITELLM-CASCADE — cascade/fallback/handover de modelos (porta do legado)
 #
@@ -30,18 +34,15 @@
 #   sudo chmod 600 /etc/litellm.env
 # Sem o arquivo o serviço sobe mesmo assim (rota local-only) — não quebra.
 # ═══════════════════════════════════════════════════════════════════════
-with lib;
-
-let
+with lib; let
   cfg = config.services.litellm;
-in
-{
+in {
   # Só ativa quando o serviço upstream estiver ligado
   config = mkIf cfg.enable {
     services.litellm = {
       # Port 4000 — o default (8080) conflita com o llama-cpp-server
       port = 4000;
-      host = "127.0.0.1";   # só local (JARVIS roda na mesma máquina)
+      host = "127.0.0.1"; # só local (JARVIS roda na mesma máquina)
       environmentFile = "/etc/litellm.env";
 
       settings = {
@@ -60,7 +61,7 @@ in
             litellm_params = {
               model = "groq/llama-3.3-70b-versatile";
               api_key = "os.environ/GROQ_API_KEY";
-              fallbacks = [ "gemini-free" "openrouter-free" "local" ];
+              fallbacks = ["gemini-free" "openrouter-free" "local"];
             };
           }
           {
@@ -68,7 +69,7 @@ in
             litellm_params = {
               model = "gemini/gemini-2.5-flash";
               api_key = "os.environ/GEMINI_API_KEY";
-              fallbacks = [ "openrouter-free" "local" ];
+              fallbacks = ["openrouter-free" "local"];
             };
           }
           {
@@ -76,13 +77,13 @@ in
             litellm_params = {
               model = "openrouter/meta-llama/llama-3.3-70b-instruct:free";
               api_key = "os.environ/OPENROUTER_API_KEY";
-              fallbacks = [ "local" ];
+              fallbacks = ["local"];
             };
           }
         ];
 
         router_settings = {
-          routing_strategy = "least-busy";   # rota p/ o modelo disponível mais rápido
+          routing_strategy = "least-busy"; # rota p/ o modelo disponível mais rápido
           num_retries = 2;
           timeout = 120;
         };

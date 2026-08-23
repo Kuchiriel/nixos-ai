@@ -11,11 +11,13 @@
 #   vscode-roo.extensions = [ "github.copilot" ];  # extensões extras
 #   vscode-roo.mcpServers = { ... };                # servidores MCP
 # ══════════════════════════════════════════════════════════════
-{ config, lib, pkgs, ... }:
-
-with lib;
-
-let
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+with lib; let
   cfg = config.vscode-roo;
 
   # Wrapper local para npx (pacote mcp-npx-wrapper não existe no nixpkgs)
@@ -25,22 +27,23 @@ let
 
   # Gera o JSON do mcp_settings a partir da opção mcpServers
   mcpSettingsJson = builtins.toJSON {
-    mcpServers = builtins.mapAttrs (name: server: {
-      command = server.command;
-      args = server.args or [ ];
-      env = server.env or { };
-      disabled = false;
-      alwaysAllow = server.alwaysAllow or [ ];
-    }) cfg.mcpServers;
+    mcpServers =
+      builtins.mapAttrs (_name: server: {
+        command = server.command;
+        args = server.args or [];
+        env = server.env or {};
+        disabled = false;
+        alwaysAllow = server.alwaysAllow or [];
+      })
+      cfg.mcpServers;
   };
-in
-{
+in {
   options.vscode-roo = {
     enable = mkEnableOption "VS Code + Roo Code installation";
 
     extensions = mkOption {
       type = types.listOf types.str;
-      default = [ ];
+      default = [];
       description = "Lista de extensões VS Code adicionais";
     };
 
@@ -49,16 +52,16 @@ in
       default = {
         nixos = {
           command = "${pkgs.mcp-nixos}/bin/mcp-nixos";
-          args = [ ];
-          alwaysAllow = [ "nix" "nix_versions" ];
+          args = [];
+          alwaysAllow = ["nix" "nix_versions"];
         };
         tavily-search = {
           command = "${mcpNpxWrapper}/bin/mcp-npx-wrapper";
-          args = [ "-y" "tavily-mcp" ];
+          args = ["-y" "tavily-mcp"];
           env = {
             TAVILY_API_KEY = config.vscode-roo.tavilyApiKey or "";
           };
-          alwaysAllow = [ "tavily_search" "tavily_extract" ];
+          alwaysAllow = ["tavily_search" "tavily_extract"];
         };
       };
       description = "Servidores MCP configurados no Roo Code";
@@ -78,7 +81,7 @@ in
 
     userSettings = mkOption {
       type = types.attrs;
-      default = { };
+      default = {};
       description = "Configurações userSettings extras do VS Code";
     };
   };
@@ -90,66 +93,70 @@ in
       package = pkgs.vscode;
 
       # Extensões instaladas automaticamente
-      extensions = with pkgs.vscode-extensions; [
-        # Roo Code (roo-cline)
-        rooveterinaryinc.roo-cline
+      extensions = with pkgs.vscode-extensions;
+        [
+          # Roo Code (roo-cline)
+          rooveterinaryinc.roo-cline
 
-        # Linguagens
-        ms-python.python
-        shardulm94.trailing-spaces
+          # Linguagens
+          ms-python.python
+          shardulm94.trailing-spaces
 
-        # Git
-        eamodio.gitlens
+          # Git
+          eamodio.gitlens
 
-        # Temas e utilitários
-        dracula-theme.theme-dracula
-      ] ++ cfg.extensions;
+          # Temas e utilitários
+          dracula-theme.theme-dracula
+        ]
+        ++ cfg.extensions;
 
       # Configurações de usuário
-      userSettings = {
-        # ── Roo Code timeouts ────────────────────────────
-        "roo-cline.apiRequestTimeout" = 1800;  # 30 min
-        "roo-cline.commandExecutionTimeout" = 300;  # 5 min
+      userSettings =
+        {
+          # ── Roo Code timeouts ────────────────────────────
+          "roo-cline.apiRequestTimeout" = 1800; # 30 min
+          "roo-cline.commandExecutionTimeout" = 300; # 5 min
 
-        # ── Chat nativo VS Code ──────────────────────────
-        "chat.agentHost.byokModels.enabled" = true;
-        "chat.customEndpoints" = [
-          {
-            name = "Qwen3 Local 35B";
-            url = "http://127.0.0.1:8080/v1";
-            models = [
-              {
-                id = "qwen3-35b-a3b";
-                name = "Qwen3 35B Local";
-                maxInputTokens = 131072;
-                maxOutputTokens = 8192;
-                toolCalling = true;
-              }
-            ];
-          }
-        ];
-        "chat.utilityModel" = "customendpoint/qwen3-35b-a3b";
-        "chat.utilitySmallModel" = "customendpoint/qwen3-35b-a3b";
+          # ── Chat nativo VS Code ──────────────────────────
+          "chat.agentHost.byokModels.enabled" = true;
+          "chat.customEndpoints" = [
+            {
+              name = "Qwen3 Local 35B";
+              url = "http://127.0.0.1:8080/v1";
+              models = [
+                {
+                  id = "qwen3-35b-a3b";
+                  name = "Qwen3 35B Local";
+                  maxInputTokens = 131072;
+                  maxOutputTokens = 8192;
+                  toolCalling = true;
+                }
+              ];
+            }
+          ];
+          "chat.utilityModel" = "customendpoint/qwen3-35b-a3b";
+          "chat.utilitySmallModel" = "customendpoint/qwen3-35b-a3b";
 
-        # ── Fontes ───────────────────────────────────────
-        "editor.fontFamily" = "'JetBrains Mono', 'Droid Sans Mono', 'Monaco', monospace";
-        "editor.fontSize" = 14;
-        "editor.inlayHints.fontFamily" = "'JetBrains Mono', monospace";
-        "editor.inlineSuggest.fontFamily" = "'JetBrains Mono', monospace";
-        "markdown.preview.fontFamily" = "Noto Sans, sans-serif";
-        "markdown.preview.fontSize" = 14;
-        "notebook.markup.fontFamily" = "Noto Sans, sans-serif";
+          # ── Fontes ───────────────────────────────────────
+          "editor.fontFamily" = "'JetBrains Mono', 'Droid Sans Mono', 'Monaco', monospace";
+          "editor.fontSize" = 14;
+          "editor.inlayHints.fontFamily" = "'JetBrains Mono', monospace";
+          "editor.inlineSuggest.fontFamily" = "'JetBrains Mono', monospace";
+          "markdown.preview.fontFamily" = "Noto Sans, sans-serif";
+          "markdown.preview.fontSize" = 14;
+          "notebook.markup.fontFamily" = "Noto Sans, sans-serif";
 
-        # ── Geral ────────────────────────────────────────
-        "editor.minimap.sectionHeaderFontSize" = 11;
-        "scm.inputFontFamily" = "'JetBrains Mono', monospace";
-        "scm.inputFontSize" = 14;
-        "screencastMode.fontSize" = 48;
-        "terminal.integrated.fontSize" = 14;
-        "workbench.colorTheme" = "Dracula";
+          # ── Geral ────────────────────────────────────────
+          "editor.minimap.sectionHeaderFontSize" = 11;
+          "scm.inputFontFamily" = "'JetBrains Mono', monospace";
+          "scm.inputFontSize" = 14;
+          "screencastMode.fontSize" = 48;
+          "terminal.integrated.fontSize" = 14;
+          "workbench.colorTheme" = "Dracula";
 
-        # ── Merge das configurações customizadas ─────────
-      } // cfg.userSettings;
+          # ── Merge das configurações customizadas ─────────
+        }
+        // cfg.userSettings;
     };
 
     # ── MCP Settings — mcp_settings.json ───────────────

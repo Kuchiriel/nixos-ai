@@ -1,9 +1,10 @@
-{ config, lib, pkgs, ... }:
-
-let
-  cfg = config.services.jarvis-telegram;
-in
 {
+  config,
+  lib,
+  ...
+}: let
+  cfg = config.services.jarvis-telegram;
+in {
   options.services.jarvis-telegram = {
     enable = lib.mkEnableOption "canal Telegram do JARVIS (aprovação assíncrona — Fase 9)";
 
@@ -35,10 +36,10 @@ in
     # on-failure: o self-heal do systemd cobre quedas de rede do Telegram.
     systemd.services.jarvis-telegram = {
       description = "JARVIS — canal Telegram (aprovação assíncrona)";
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
-      wantedBy = [ "multi-user.target" ];
-#       path = [ pkgs.jarvis ];
+      after = ["network-online.target"];
+      wants = ["network-online.target"];
+      wantedBy = ["multi-user.target"];
+      #       path = [ pkgs.jarvis ];
       serviceConfig = {
         Type = "simple";
         User = cfg.user;

@@ -12,7 +12,6 @@
 # NOTA: boot.loader já está declarado no configuration.nix —
 # remova as linhas de boot do arquivo gerado para evitar conflito.
 # ═══════════════════════════════════════════════════════════════════════
-{ modulesPath, ... }:
-{
-  imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
+{modulesPath, ...}: {
+  imports = [(modulesPath + "/installer/scan/not-detected.nix")];
 }

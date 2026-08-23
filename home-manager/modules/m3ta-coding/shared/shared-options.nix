@@ -1,7 +1,7 @@
 # Shared option definitions for agent modules.
 # Biblioteca pura — importa com: import ./shared-options.nix { inherit lib; }
 {lib}: let
-  inherit (lib) mkOption mkEnableOption types literalExpression;
+  inherit (lib) mkOption types literalExpression;
 in {
   # Common agentsInput option used by all agent modules.
   mkAgentsInputOption = description:

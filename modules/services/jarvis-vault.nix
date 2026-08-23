@@ -1,9 +1,10 @@
-{ config, lib, pkgs, ... }:
-
-let
-  cfg = config.services.jarvis-vault;
-in
 {
+  config,
+  lib,
+  ...
+}: let
+  cfg = config.services.jarvis-vault;
+in {
   options.services.jarvis-vault = {
     enable = lib.mkEnableOption "timer de resumo da memória de longo prazo do JARVIS (jarvis vault summarize)";
 
@@ -34,7 +35,7 @@ in
       description = "JARVIS — resumo de memória de longo prazo (vault)";
       serviceConfig = {
         Type = "oneshot";
-#         ExecStart = "${pkgs.jarvis}/bin/jarvis vault summarize --since ${toString cfg.since}";
+        #         ExecStart = "${pkgs.jarvis}/bin/jarvis vault summarize --since ${toString cfg.since}";
         # token do Telegram para notificar conclusão no celular (se existir)
         EnvironmentFile = "-/etc/jarvis-telegram.env";
         # sem stdout no journal: o resultado vai para o vault + memória
@@ -44,7 +45,7 @@ in
 
     systemd.user.timers.jarvis-vault-summarize = {
       description = "JARVIS — agenda do resumo de memória";
-      wantedBy = [ "timers.target" ];
+      wantedBy = ["timers.target"];
       timerConfig = {
         OnCalendar = cfg.calendar;
         Persistent = true;

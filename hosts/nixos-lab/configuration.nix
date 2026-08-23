@@ -1,28 +1,33 @@
-{ config, pkgs, lib, stateVersion, hostname, user, ... }:
-
-let
+{
+  config,
+  pkgs,
+  lib,
+  stateVersion,
+  hostname,
+  user,
+  ...
+}: let
   # Carrega dinamicamente todos os arquivos .nix dentro do diretório de serviços
   servicesDir = ../../modules/services;
-  dynamicServiceImports = 
-    if builtins.pathExists servicesDir then
-      lib.mapAttrsToList 
-        (name: type: servicesDir + "/${name}") 
-        (lib.filterAttrs (name: type: type == "regular" && lib.hasSuffix ".nix" name) (builtins.readDir servicesDir))
+  dynamicServiceImports =
+    if builtins.pathExists servicesDir
+    then
+      lib.mapAttrsToList
+      (name: _type: servicesDir + "/${name}")
+      (lib.filterAttrs (name: type: type == "regular" && lib.hasSuffix ".nix" name) (builtins.readDir servicesDir))
     else [];
-in
-{
-
-security.sudo.extraRules = [
-  {
-    users = [ "nixos" ];
-    commands = [
-      {
-        command = "ALL";
-        options = [ "NOPASSWD" ];
-      }
-    ];
-  }
-];
+in {
+  security.sudo.extraRules = [
+    {
+      users = ["nixos"];
+      commands = [
+        {
+          command = "ALL";
+          options = ["NOPASSWD"];
+        }
+      ];
+    }
+  ];
 
   programs.nix-ld.enable = true;
   programs.nix-ld.libraries = with pkgs; [
@@ -33,12 +38,14 @@ security.sudo.extraRules = [
     curl
   ];
 
-  imports = [
-    ../../modules/services/qdrant.nix
-    ./hardware-configuration.nix
-    ./local-packages.nix
-    ../../nixos/modules
-  ] ++ dynamicServiceImports;
+  imports =
+    [
+      ../../modules/services/qdrant.nix
+      ./hardware-configuration.nix
+      ./local-packages.nix
+      ../../nixos/modules
+    ]
+    ++ dynamicServiceImports;
 
   stylix.homeManagerIntegration.autoImport = false;
 
@@ -84,7 +91,7 @@ security.sudo.extraRules = [
   # =========================================================================
 
   nix.settings = {
-    experimental-features = [ "nix-command" "flakes" ];
+    experimental-features = ["nix-command" "flakes"];
     auto-optimise-store = true;
     download-buffer-size = 536870912; # 500 MiB
     http-connections = 25;
@@ -100,7 +107,7 @@ security.sudo.extraRules = [
       "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M="
     ];
     # Sem isto, o user nixos não baixa binários pré-compilados (compila gcc/numpy toda vez)
-    trusted-users = [ "root" user ];
+    trusted-users = ["root" user];
     # Impede que gcc seja removido entre rebuilds (evita re-download de 264MB)
     keep-outputs = true;
     keep-derivations = true;
@@ -121,7 +128,7 @@ security.sudo.extraRules = [
     "libahci.ignore_sss=1"
     "iommu=pt"
     "net.ifnames=0"
-    "pci=noaer"                # Desativa log excessivo de erros PCIe Advanced Error Reporting
+    "pci=noaer" # Desativa log excessivo de erros PCIe Advanced Error Reporting
     "pcie_aspm=off"
   ];
 
@@ -139,8 +146,8 @@ security.sudo.extraRules = [
     "net.core.default_qdisc" = "fq_codel";
     "net.ipv4.tcp_congestion_control" = "bbr";
     "net.ipv4.tcp_low_latency" = 1;
-    "net.core.netdev_max_backlog" = 16384;     # Movido para cá
-    "net.ipv4.tcp_fastopen" = 3;  
+    "net.core.netdev_max_backlog" = 16384; # Movido para cá
+    "net.ipv4.tcp_fastopen" = 3;
   };
 
   # =========================================================================
@@ -204,7 +211,7 @@ security.sudo.extraRules = [
 
   # Liberando portas necessárias no Firewall
   # 22 (ssh), 8080 (llama.cpp chat), 8081 (llama.cpp embeddings) — 11434 era resquício do Ollama (legado Manjaro)
-  networking.firewall.allowedTCPPorts = [ 22 8080 8081 4000 ];
+  networking.firewall.allowedTCPPorts = [22 8080 8081 4000];
 
   # Garante que as pastas de banco vetorial (Qdrant) e modelos nasçam com +C (No CoW)
   # Regras de tmpfiles: limpeza e suporte a No CoW (+C) para Btrfs
@@ -214,7 +221,7 @@ security.sudo.extraRules = [
     "h /var/lib/qdrant - - - - +C"
     "d /var/lib/jarvis/models 0755 jarvis jarvis - -"
     "h /var/lib/jarvis/models - - - - +C"
-  ];  
+  ];
 
   # =========================================================================
   # 5. REDE, USUÁRIOS E LOCALIZAÇÃO
@@ -223,7 +230,7 @@ security.sudo.extraRules = [
   networking.hostName = hostname;
   networking.networkmanager.enable = true;
   time.timeZone = lib.mkForce "America/Sao_Paulo";
-  networking.nameservers = [ "8.8.8.8" "1.1.1.1" ];
+  networking.nameservers = ["8.8.8.8" "1.1.1.1"];
 
   services.openssh = {
     enable = true;
@@ -232,7 +239,7 @@ security.sudo.extraRules = [
 
   users.users.nixos = {
     isNormalUser = true;
-    extraGroups = [ "wheel" "networkmanager" "qdrant" ];
+    extraGroups = ["wheel" "networkmanager" "qdrant"];
   };
 
   services.greetd = {

@@ -14,10 +14,7 @@
   pkgs,
   ...
 }:
-with lib; let
-  cfg = config.coding.agents.pi;
-  shared = import ./shared/shared-options.nix {inherit lib;};
-in {
+with lib; {
   imports = [./shared/default.nix];
 
   options.coding.agents.pi = let
@@ -160,7 +157,6 @@ in {
     };
 
   config = with lib; let
-    shared = import ./shared/shared-options.nix {inherit lib;};
     cfg = config.coding.agents.pi;
   in
     mkIf cfg.enable (let

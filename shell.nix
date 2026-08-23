@@ -1,5 +1,4 @@
-{ pkgs ? import <nixpkgs> {} }:
-
+{pkgs ? import <nixpkgs> {}}:
 (pkgs.buildFHSEnv {
   name = "freebuff-fhs";
   targetPkgs = pkgs: (with pkgs; [

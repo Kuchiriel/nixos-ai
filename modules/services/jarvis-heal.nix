@@ -1,9 +1,10 @@
-{ config, lib, pkgs, ... }:
-
-let
-  cfg = config.services.jarvis-heal;
-in
 {
+  config,
+  lib,
+  ...
+}: let
+  cfg = config.services.jarvis-heal;
+in {
   options.services.jarvis-heal = {
     enable = lib.mkEnableOption "daemon de self-heal do JARVIS (jarvis heal --watch)";
 
@@ -42,10 +43,10 @@ in
     # à allowlist (llama-cpp-server, llama-cpp-embeddings, qdrant).
     systemd.services.jarvis-heal = lib.mkIf cfg.runAsRoot {
       description = "JARVIS self-heal (root) — detecta serviços down e repara";
-      wantedBy = [ "multi-user.target" ];
+      wantedBy = ["multi-user.target"];
       serviceConfig = {
-#         ExecStart = "${pkgs.jarvis}/bin/jarvis heal --watch --interval ${toString cfg.interval} --cooldown ${toString cfg.cooldown}";
-        Environment = [ "JARVIS_JSONL=0" ];
+        #         ExecStart = "${pkgs.jarvis}/bin/jarvis heal --watch --interval ${toString cfg.interval} --cooldown ${toString cfg.cooldown}";
+        Environment = ["JARVIS_JSONL=0"];
         Restart = "on-failure";
         RestartSec = "30";
         # Audit/lições da memória ficam em ~root/.local/state/jarvis
@@ -54,10 +55,10 @@ in
 
     systemd.user.services.jarvis-heal = lib.mkIf (!cfg.runAsRoot) {
       description = "JARVIS self-heal — detecta serviços down e repara";
-      wantedBy = [ "default.target" ];
+      wantedBy = ["default.target"];
       serviceConfig = {
-#         ExecStart = "${pkgs.jarvis}/bin/jarvis heal --watch --interval ${toString cfg.interval} --cooldown ${toString cfg.cooldown}";
-        Environment = [ "JARVIS_JSONL=0" ];
+        #         ExecStart = "${pkgs.jarvis}/bin/jarvis heal --watch --interval ${toString cfg.interval} --cooldown ${toString cfg.cooldown}";
+        Environment = ["JARVIS_JSONL=0"];
         Restart = "on-failure";
         RestartSec = "30";
       };

@@ -1,6 +1,9 @@
-{ config, lib, pkgs, ... }:
-
-let
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}: let
   # Freebuff CLI — agente de coding gratuito (freebuff.com). O pacote npm é um
   # LAUNCHER leve (~18KB, única dep: tar): na primeira execução ele baixa o
   # agente real (repo privado CodebuffAI/freebuff-private) para ~/.config.
@@ -29,7 +32,7 @@ let
     # --ignore-scripts: o prepack/postpack do package.json referenciam o repo
     # de desenvolvimento (cli/release-core) e quebrariam o build Nix
     dontBuild = true;
-    npmInstallFlags = [ "--ignore-scripts" ];
+    npmInstallFlags = ["--ignore-scripts"];
     dontStrip = true;
 
     meta = {
@@ -39,13 +42,12 @@ let
       mainProgram = "freebuff";
     };
   };
-in
-{
+in {
   options.programs.freebuff = {
     enable = lib.mkEnableOption "Freebuff CLI (agente de coding gratuito)";
   };
 
   config = lib.mkIf config.programs.freebuff.enable {
-    environment.systemPackages = [ freebuff ];
+    environment.systemPackages = [freebuff];
   };
 }

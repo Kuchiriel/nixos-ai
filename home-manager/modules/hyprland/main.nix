@@ -1,5 +1,9 @@
-{ pkgs, config, lib, jarvisEnvironment, m3taLib, ... }:
-let
+{
+  lib,
+  jarvisEnvironment,
+  m3taLib,
+  ...
+}: let
   colors = m3taLib.colors;
   isHost = jarvisEnvironment == "host";
 
@@ -21,9 +25,7 @@ let
     GBM_BACKEND = "nvidia-drm";
     __GLX_VENDOR_LIBRARY_NAME = "nvidia";
   };
-in
-
-{
+in {
   wayland.windowManager.hyprland = {
     enable = true;
     configType = "hyprlang";

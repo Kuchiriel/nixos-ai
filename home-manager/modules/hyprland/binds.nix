@@ -1,5 +1,4 @@
-{ pkgs, ... }:
-let
+{pkgs, ...}: let
   booksDir = "$HOME/Downloads/books";
 
   # JARVIS — prompt rápido
@@ -30,10 +29,10 @@ let
     fi
   '';
 in {
-  home.packages = with pkgs; [ 
-    booksScript 
+  home.packages = with pkgs; [
+    booksScript
     jarvisAsk
-    launcherScript 
+    launcherScript
     grim
     slurp
     wl-clipboard

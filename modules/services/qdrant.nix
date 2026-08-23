@@ -1,6 +1,6 @@
-{ config, pkgs, ... }:
-
 {
+  ...
+}: {
   users.groups.qdrant = {};
 
   users.users.qdrant = {

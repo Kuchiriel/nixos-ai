@@ -1,9 +1,10 @@
-{ config, lib, pkgs, ... }:
-
-let
-  cfg = config.services.jarvis-idle;
-in
 {
+  config,
+  lib,
+  ...
+}: let
+  cfg = config.services.jarvis-idle;
+in {
   options.services.jarvis-idle = {
     enable = lib.mkEnableOption "modo idle do JARVIS (self-knowledge quando o sistema está ocioso)";
 
@@ -47,7 +48,7 @@ in
       description = "JARVIS — worker de auto-manutenção em idle (self-knowledge)";
       serviceConfig = {
         Type = "oneshot";
-#         ExecStart = "${pkgs.jarvis}/bin/jarvis idle worker --max-load ${toString cfg.maxLoad}" + lib.optionalString (!cfg.idleCheck) " --no-idle-check";
+        #         ExecStart = "${pkgs.jarvis}/bin/jarvis idle worker --max-load ${toString cfg.maxLoad}" + lib.optionalString (!cfg.idleCheck) " --no-idle-check";
         # token do Telegram para notificar conclusão no celular (se existir)
         EnvironmentFile = "-/etc/jarvis-telegram.env";
         # yield automático: nunca compete com o usuário / jogos
@@ -62,7 +63,7 @@ in
 
     systemd.user.timers.jarvis-idle-worker = {
       description = "JARVIS — agenda do worker de idle";
-      wantedBy = [ "timers.target" ];
+      wantedBy = ["timers.target"];
       timerConfig = {
         OnUnitActiveSec = cfg.interval;
         # se uma execução demorar (benchmark), não sobrepor

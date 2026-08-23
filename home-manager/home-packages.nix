@@ -1,4 +1,7 @@
-{ pkgs, inputs, ... }: {
+{
+  pkgs,
+  ...
+}: {
   fonts.fontconfig.enable = true;
   home.packages = with pkgs; [
     # Desktop essential apps
@@ -7,15 +10,15 @@
     imv
     mpv
     pavucontrol
-    
+
     # TUI tools (porta do legado Manjaro — abre via on-click no Waybar)
-    bluetuith          # Bluetooth TUI (on-click no módulo bluetooth)
-    ncpamixer          # Audio mixer TUI (on-click no módulo pulseaudio)
-    networkmanagerapplet  # nmtui-connect (on-click no módulo network)
-    calcurse           # Calendar TUI (on-click no clock)
-    htop               # Process viewer alternativo ao btm
+    bluetuith # Bluetooth TUI (on-click no módulo bluetooth)
+    ncpamixer # Audio mixer TUI (on-click no módulo pulseaudio)
+    networkmanagerapplet # nmtui-connect (on-click no módulo network)
+    calcurse # Calendar TUI (on-click no clock)
+    htop # Process viewer alternativo ao btm
     intel-gpu-tools
-    
+
     # Fonts / Icons
     font-awesome
     nerd-fonts.jetbrains-mono
@@ -23,7 +26,7 @@
 
     # Core CLI utils
     aider-chat
-    nodejs          # npx para MCP servers (Roo Dev, etc.)
+    nodejs # npx para MCP servers (Roo Dev, etc.)
     python3Packages.botocore
     bc
     bottom
@@ -46,7 +49,7 @@
     libnotify
     xdg-desktop-portal-gtk
     xdg-desktop-portal-hyprland
-    yad                    # GUI dialogs para NixOS-AI Launcher
+    yad # GUI dialogs para NixOS-AI Launcher
 
     # ── m3ta-nixpkgs packages ──────────────────────────────────────
     # sidecar: terminal multiplexer/UX para CLI agents
@@ -57,4 +60,3 @@
     # talk  # REMOVIDO: redundante com Kokoro TTS do jarvis voice
   ];
 }
-

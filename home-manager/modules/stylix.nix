@@ -1,5 +1,8 @@
-{ pkgs, lib, ... }: {
-
+{
+  pkgs,
+  lib,
+  ...
+}: {
   # Força o bypass de fontes para passar por cima do bloco interno do Stylix
   fonts.fontconfig.enable = lib.mkForce true;
 
@@ -28,9 +31,8 @@
       waybar.enable = false;
       wofi.enable = false;
       hyprland.enable = false;
-      foot.enable = false;  # Gerenciado por lib/fonts.nix
+      foot.enable = false; # Gerenciado por lib/fonts.nix
       hyprlock.enable = false;
-
     };
 
     cursor = {
@@ -70,7 +72,7 @@
       light = "Papirus-Light";
     };
 
-    image = pkgs.runCommand "solid-blue.png" { nativeBuildInputs = [ pkgs.imagemagick ]; } ''
+    image = pkgs.runCommand "solid-blue.png" {nativeBuildInputs = [pkgs.imagemagick];} ''
       magick convert -size 1x1 xc:blue $out
     '';
   };

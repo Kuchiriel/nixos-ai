@@ -3,7 +3,10 @@
 # Uso em módulos (quando disponível via flake):
 #   colors = lib.m3ta.colors;
 #   fonts = lib.m3ta.fonts;
-{lib, pkgs}: {
+{
+  lib,
+  pkgs,
+}: {
   # Port management utilities
   ports = import ./ports.nix {inherit lib;};
 

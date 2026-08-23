@@ -1,33 +1,42 @@
-{ config, pkgs, lib, stateVersion, hostname, user, ... }:
-
-let
+{
+  config,
+  pkgs,
+  lib,
+  stateVersion,
+  hostname,
+  user,
+  ...
+}: let
   servicesDir = ../../modules/services;
   dynamicServiceImports =
-    if builtins.pathExists servicesDir then
+    if builtins.pathExists servicesDir
+    then
       lib.mapAttrsToList
-        (name: type: servicesDir + "/${name}")
-        (lib.filterAttrs (name: type: type == "regular" && lib.hasSuffix ".nix" name) (builtins.readDir servicesDir))
+      (name: _type: servicesDir + "/${name}")
+      (lib.filterAttrs (name: type: type == "regular" && lib.hasSuffix ".nix" name) (builtins.readDir servicesDir))
     else [];
-in
-
-{
-  imports = [
-    ./hardware-configuration.nix
-    ./local-packages.nix
-    ./disko.nix
-    ../../nixos/modules
-  ] ++ dynamicServiceImports;
+in {
+  imports =
+    [
+      ./hardware-configuration.nix
+      ./local-packages.nix
+      ./disko.nix
+      ../../nixos/modules
+    ]
+    ++ dynamicServiceImports;
 
   programs.steam = {
     enable = true;
     # Força o Steam a rodar na NVIDIA por padrão
     package = pkgs.steam.overrideAttrs (old: {
-      nativeBuildInputs = (old.nativeBuildInputs or []) ++ [ pkgs.makeWrapper ];
-      postInstall = (old.postInstall or "") + ''
-        wrapProgram $out/bin/steam \
-          --set __NV_PRIME_RENDER_OFFLOAD "1" \
-          --set __GLX_VENDOR_LIBRARY_NAME "nvidia"
-      '';
+      nativeBuildInputs = (old.nativeBuildInputs or []) ++ [pkgs.makeWrapper];
+      postInstall =
+        (old.postInstall or "")
+        + ''
+          wrapProgram $out/bin/steam \
+            --set __NV_PRIME_RENDER_OFFLOAD "1" \
+            --set __GLX_VENDOR_LIBRARY_NAME "nvidia"
+        '';
     });
   };
 
@@ -41,8 +50,8 @@ in
 
   programs.mtr.enable = true;
 
-  stylix.targets.gnome.enable = false;    # Exemplo para GNOME
-  stylix.targets.feh.enable = false;      # Comum em WMs leves como i3 ou Sway
+  stylix.targets.gnome.enable = false; # Exemplo para GNOME
+  stylix.targets.feh.enable = false; # Comum em WMs leves como i3 ou Sway
   stylix.targets.console.enable = true; # Mantém as cores no terminal
 
   hardware.uinput.enable = true;
@@ -80,7 +89,7 @@ in
   };
 
   # Suporte a NTFS (essencial para ler/escrever em partições do Windows)
-  boot.supportedFilesystems = [ "ntfs" ];
+  boot.supportedFilesystems = ["ntfs"];
 
   # ── O SWITCH CENTRAL (Ambiente do Host Físico) ──────────────────────
   services.jarvis.enable = true;
@@ -95,12 +104,12 @@ in
     open = false;
     nvidiaSettings = true;
   };
-  services.xserver.videoDrivers = [ "nvidia" ];
+  services.xserver.videoDrivers = ["nvidia"];
 
   hardware.graphics = {
     enable = true;
     enable32Bit = true;
-    extraPackages = with pkgs; [ intel-media-driver ];
+    extraPackages = with pkgs; [intel-media-driver];
   };
 
   hardware.nvidia.prime = {
@@ -115,13 +124,13 @@ in
     "quiet"
     "loglevel=3"
     "iommu=pt"
-    "pcie_aspm=force"          # Reduz calor da dGPU em idle
-    "nvme_load=1"              # Carrega o NVMe precocemente no initrd
-    "preempt=full"             # Preempção total do kernel Zen
-    "split_lock_detect=off"    # Desativa penalidades por split locks em IA
+    "pcie_aspm=force" # Reduz calor da dGPU em idle
+    "nvme_load=1" # Carrega o NVMe precocemente no initrd
+    "preempt=full" # Preempção total do kernel Zen
+    "split_lock_detect=off" # Desativa penalidades por split locks em IA
     # Performance tweaks para llama.cpp / inferência:
-    "intel_idle.max_cstate=1"  # Limita C-states a C1: menor wake latency, +1-3% decode
-    "nvme_core.io_timeout=10"  # Timeout I/O NVMe mais agressivo
+    "intel_idle.max_cstate=1" # Limita C-states a C1: menor wake latency, +1-3% decode
+    "nvme_core.io_timeout=10" # Timeout I/O NVMe mais agressivo
   ];
 
   # =========================================================================
@@ -170,13 +179,13 @@ in
 
   boot.kernel.sysctl = {
     "vm.swappiness" = 10;
-    "vm.nr_hugepages" = 16384;                  # 32GB * 50% / 2MB = 16384 pages: Huge Pages para KV cache do llama.cpp
-    "kernel.sched_child_runs_first" = 1;        # Processos filhos rodam mais rápido (inferência)
+    "vm.nr_hugepages" = 16384; # 32GB * 50% / 2MB = 16384 pages: Huge Pages para KV cache do llama.cpp
+    "kernel.sched_child_runs_first" = 1; # Processos filhos rodam mais rápido (inferência)
     "net.core.default_qdisc" = "fq_codel";
     "net.ipv4.tcp_congestion_control" = "bbr";
-    "net.ipv4.tcp_low_latency" = 1;             # Baixa latência de rede
-    "net.core.netdev_max_backlog" = 16384;      # Expande fila contra gargalo da Claro
-    "net.ipv4.tcp_fastopen" = 3;                # Acelera conexões HTTP das tools web
+    "net.ipv4.tcp_low_latency" = 1; # Baixa latência de rede
+    "net.core.netdev_max_backlog" = 16384; # Expande fila contra gargalo da Claro
+    "net.ipv4.tcp_fastopen" = 3; # Acelera conexões HTTP das tools web
   };
 
   # I/O scheduler para NVMe: 'none' é melhor que 'kyber' para devices non-rotational
@@ -212,8 +221,8 @@ in
   networking.hostName = hostname;
   networking.networkmanager.enable = true;
   time.timeZone = lib.mkForce "America/Sao_Paulo";
-  networking.nameservers = [ "8.8.8.8" "1.1.1.1" ];
-  networking.firewall.allowedTCPPorts = [ 22 8080 8081 4000 ];
+  networking.nameservers = ["8.8.8.8" "1.1.1.1"];
+  networking.firewall.allowedTCPPorts = [22 8080 8081 4000];
 
   services.openssh = {
     enable = true;
@@ -222,13 +231,20 @@ in
 
   users.users.${user} = {
     isNormalUser = true;
-    extraGroups = [ "wheel" "video" "audio" "networkmanager" "qdrant" "input" "uinput" ];
+    extraGroups = ["wheel" "video" "audio" "networkmanager" "qdrant" "input" "uinput"];
   };
 
-  security.sudo.extraRules = [{
-    users = [ user ];
-    commands = [{ command = "ALL"; options = [ "NOPASSWD" ]; }];
-  }];
+  security.sudo.extraRules = [
+    {
+      users = [user];
+      commands = [
+        {
+          command = "ALL";
+          options = ["NOPASSWD"];
+        }
+      ];
+    }
+  ];
 
   # =========================================================================
   # 6. NIX — Caches, Performance e nix-ld
@@ -246,7 +262,7 @@ in
   ];
 
   nix.settings = {
-    experimental-features = [ "nix-command" "flakes" ];
+    experimental-features = ["nix-command" "flakes"];
     auto-optimise-store = true;
     download-buffer-size = 536870912;
     http-connections = 25;
@@ -259,7 +275,7 @@ in
       "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
       "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M="
     ];
-    trusted-users = [ "root" user ];
+    trusted-users = ["root" user];
     keep-outputs = true;
     keep-derivations = true;
   };

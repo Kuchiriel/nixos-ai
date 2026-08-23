@@ -8,9 +8,6 @@
 #   coding.agents.opencode.enable = true;
 #   coding.agents.opencode.agentsInput = inputs.agents;
 {
-  config,
-  lib,
-  pkgs,
   ...
 }: {
   imports = [
