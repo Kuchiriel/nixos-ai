@@ -146,9 +146,9 @@ def _alert_recovery(service: str, component: str) -> None:
         try:
             from jarvis.providers.telegram import send_notification
             send_notification(f"✅ {service} está operacional novamente")
-        except Exception:
+        except Exception:  # noqa: BLE001 — notificação é best-effort
             pass
-    except Exception:
+    except Exception:  # noqa: BLE001 — notificação é best-effort
         pass
 
 
@@ -172,7 +172,7 @@ def _load_previous_state(state: Path) -> dict[str, str]:
         state_file = state / "component_states.json"
         if state_file.exists():
             return json.loads(state_file.read_text())
-    except Exception:
+    except Exception:  # noqa: BLE001 — estado é best-effort
         pass
     return {}
 
@@ -182,7 +182,7 @@ def _save_previous_state(state: Path, states: dict[str, str]) -> None:
     try:
         state_file = state / "component_states.json"
         state_file.write_text(json.dumps(states))
-    except Exception:
+    except Exception:  # noqa: BLE001 — estado é best-effort
         pass
 
 
