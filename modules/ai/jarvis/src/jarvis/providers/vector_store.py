@@ -15,9 +15,8 @@ from __future__ import annotations
 import zlib
 from typing import Any
 
-import requests
-
 from jarvis.core.config import Config
+from jarvis.providers.http_service import http_health_check
 
 # dimensões dos embeddings: defaults coerentes com modelos locais comuns
 DEFAULT_DIM = 768
@@ -49,11 +48,7 @@ class QdrantStore:
     # --- infra ---
 
     def is_available(self) -> bool:
-        try:
-            resp = requests.get(f"{self._base}/collections", timeout=2.0)
-            return resp.status_code == 200
-        except requests.RequestException:
-            return False
+        return http_health_check(f"{self._base}/collections", timeout=2.0)
 
     def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
         try:

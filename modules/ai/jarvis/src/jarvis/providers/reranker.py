@@ -19,6 +19,8 @@ from typing import Any
 
 import requests
 
+from jarvis.providers.http_service import http_health_check
+
 
 class RerankerError(RuntimeError):
     pass
@@ -32,11 +34,7 @@ class Reranker:
         self._timeout = timeout
 
     def is_available(self) -> bool:
-        try:
-            resp = requests.get(f"{self._base}/health", timeout=2.0)
-            return resp.status_code == 200
-        except requests.RequestException:
-            return False
+        return http_health_check(f"{self._base}/health", timeout=2.0)
 
     def rerank(self, query: str, documents: list[str], *, top_k: int | None = None) -> list[float]:
         """Reranka `documents` contra `query`. Retorna scores na mesma ordem.
