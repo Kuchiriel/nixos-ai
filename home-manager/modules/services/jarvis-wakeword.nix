@@ -175,34 +175,43 @@ let
                     arecord_proc = start_arecord()
                     continue
 
-                audio_np = np.frombuffer(data, dtype=np.int16).astype(np.float32)
-                mono = (audio_np[::2] + audio_np[1::2]) * 0.5
-                rms = np.sqrt(np.mean(mono**2))
+                # Converte o buffer bruto mantendo os limites corretos do int16
+                audio_np = np.frombuffer(data, dtype=np.int16)
+                
+                # Trata os canais de forma segura para evitar clipping/estouro na soma
+                if len(audio_np) >= 2:
+                    mono = (audio_np[::2].astype(np.int32) + audio_np[1::2].astype(np.int32)) // 2
+                    mono = np.clip(mono, -32768, 32767).astype(np.float32)
+                else:
+                    mono = audio_np.astype(np.float32)
+
+                # Calcula o RMS real sem overflow geométrico
+                rms = np.sqrt(np.mean(mono**2)) if len(mono) > 0 else 0
                 chunk_count += 1
 
-                # Pulsing waybar status
+                # Sistema deWaybar/Pulsing status
                 if chunk_count % 50 == 0:
-                    pulse_symbols = ["󰆪", "󰆪"]
+                    pulse_symbols = ["  ", "  "]
                     update_status("idle", f"{pulse_symbols[pulse_state % 2]} Ouvindo...")
                     pulse_state += 1
 
                 if chunk_count % 10 == 0:
-                    print(f"[WW] RMS: {rms:.0f} (baseline={noise_baseline:.0f}, speech>{noise_baseline*1.2:.0f})", flush=True)
+                    print(f"[WW] RMS: {rms:.0f} (baseline={noise_baseline:.0f}, gate={max(noise_baseline * 1.5, 1200):.0f})", flush=True)
 
-                # Skip during warmup
+                # Ignora o aquecimento inicial do mic
                 if chunk_count < WARMUP_CHUNKS:
                     continue
 
-                # Update noise baseline only during silence; otherwise the
-                # ambient noise floor keeps drifting upward and suppresses
-                # real wakeword triggers forever.
+                # Atualiza o ruído de fundo de forma suave (Filtro Passa-Baixa)
                 if not speaking:
-                    if rms < noise_baseline * 1.1:
-                        noise_baseline = noise_baseline * 0.9 + rms * 0.1
-                    # Keep a practical minimum gate so ventilation / fan / room
-                    # noise can’t masquerade as speech forever.
-                    speech_gate = max(noise_baseline * 1.5, 1200)
+                    if rms < noise_baseline * 1.2:
+                        # Taxa de aprendizado menor para a ventoinha do notebook não estourar o ganho
+                        noise_baseline = noise_baseline * 0.95 + rms * 0.05
+                    
+                    # Evita que o gate caia a zero e cause ganho infinito
+                    speech_gate = max(noise_baseline * 1.6, 1500)
                 else:
+                    speech_gate = max(noise_baseline * 1.6, 1500)
                     speech_gate = max(noise_baseline * 1.5, 1200)
 
                 # Cooldown check

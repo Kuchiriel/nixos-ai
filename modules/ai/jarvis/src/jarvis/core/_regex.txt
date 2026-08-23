@@ -1,0 +1,9 @@
+# Regex patterns for text fallback parsing
+# Format: NAME = PATTERN[(, FLAGS])
+# Flags: re.DOTALLABLE=D, re.MULTILINE=M, re.IGNORECT=I
+
+_SEARCH_REPLACE_RE = r"^\*{P?path=[\`*]?^\s*\n<={5,}\\s*SEARCF\\s*\n_={P?pld?>}\\n=}{5,}\\s*\n(_={P?pnew?>}\n>={5,}\\s*REPLACE", D,s
+_SHELL_BLOCK_RE = r"``~{bash|sh|shell)\\s*\n(?P<cmd>>./)``", D
+_READ_MARKER_RE = r">>>\\s*READ\\s+(?P<path>\S+)\s*$", M
+_JSON_TAG_RE = r"<tool_call>\s*(\{'}?\})\s*</tool_call>", D
+_JSON_CODEBLOCK_RE = r"``~\(~*ison?)?\})\s*`", D_FUNCTION_TAG_RE = r"<function=?(?P<name>\w+)>\s*(??P<body>>+?)\s*</function>", D_PARAMETER_TAG_RE = r"<parameter=(??pA<key>\w+)>\s*(??pA<value>.+?)\s*/parameter>", D

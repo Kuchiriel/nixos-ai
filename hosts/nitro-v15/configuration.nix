@@ -69,7 +69,15 @@ in
   services.gvfs.enable = true;
   services.udisks2.enable = true;
 
-  services.cloudflare-warp.enable = true;
+  services.cloudflare-warp.enable = false;
+
+  security.rtkit.enable = true;
+  services.pipewire = {
+    enable = true;
+    alsa.enable = true;
+    alsa.support32Bit = true;
+    pulse.enable = true;
+  };
 
   # Suporte a NTFS (essencial para ler/escrever em partições do Windows)
   boot.supportedFilesystems = [ "ntfs" ];
