@@ -1,4 +1,7 @@
 {
+  lib,
+  config,
+  mkIf,
   ...
 }: {
   users.groups.qdrant = {};

@@ -62,65 +62,67 @@ in {
   };
 
   config = mkIf (config.services.llama-cpp-server.enable || config.services.llama-cpp-embeddings.enable || config.services.llama-cpp-rerank.enable) {
-    # --- 1. SERVIDOR PRINCIPAL (LLM / CHAT) ---
+    # --- SERVIDORES LLAMA.CPP ---
     # Tudo vem do perfil em models.nix — nada de download imperativo nem
     # parâmetros hardcoded aqui. O modelo vive no store (fetchurl, hash
     # verificado): o sistema nasce com o modelo certo para o cenário.
-    systemd.services.llama-cpp-server = mkIf config.services.llama-cpp-server.enable {
-      description = "Llama.cpp Main Server (${profileName}: ${prof.model})";
-      after = ["network-online.target"];
-      wants = ["network-online.target"];
-      wantedBy = ["multi-user.target"];
+    systemd.services = {
+      llama-cpp-server = mkIf config.services.llama-cpp-server.enable {
+        description = "Llama.cpp Main Server (${profileName}: ${prof.model})";
+        after = ["network-online.target"];
+        wants = ["network-online.target"];
+        wantedBy = ["multi-user.target"];
 
-      script = ''
-        exec ${llamaCppPkg}/bin/llama-server \
-          -m "${pkgs.aiModels.${prof.model}}" \
-          ${optionalString (prof ? mmproj) ''--mmproj "${pkgs.aiModels.${prof.mmproj}}" ''} \
-          --host 0.0.0.0 --port ${toString config.services.llama-cpp-server.port} \
-          -c ${toString prof.ctxSize} -t ${toString prof.threads} -b ${toString prof.batchSize} -ub ${toString prof.ubatch} -ngl ${toString prof.gpuLayers} \
-          ${prof.kvCache} ${prof.moeFlags} \
-          ${optionalString (prof ? extraArgs) (escapeShellArgs prof.extraArgs)} \
-          ${prof.extraFlags or ""} ${escapeShellArgs config.services.llama-cpp-server.extraFlags}
-      '';
+        script = ''
+          exec ${llamaCppPkg}/bin/llama-server \
+            -m "${pkgs.aiModels.${prof.model}}" \
+            ${optionalString (prof ? mmproj) ''--mmproj "${pkgs.aiModels.${prof.mmproj}}" ''} \
+            --host 0.0.0.0 --port ${toString config.services.llama-cpp-server.port} \
+            -c ${toString prof.ctxSize} -t ${toString prof.threads} -b ${toString prof.batchSize} -ub ${toString prof.ubatch} -ngl ${toString prof.gpuLayers} \
+            ${prof.kvCache} ${prof.moeFlags} \
+            ${optionalString (prof ? extraArgs) (escapeShellArgs prof.extraArgs)} \
+            ${prof.extraFlags or ""} ${escapeShellArgs config.services.llama-cpp-server.extraFlags}
+        '';
 
-      serviceConfig =
-        {
-          User = prof.user;
-          Restart = "on-failure";
-        }
-        // optionalAttrs (prof.scheduler != null) {
-          # Host: prioridade de tempo real para o servidor de LLM (kernel).
-          # Exige privilégio — por isso o perfil host roda como root.
-          CPUSchedulingPolicy = prof.scheduler.policy;
-          CPUSchedulingPriority = prof.scheduler.priority;
-        };
-    };
+        serviceConfig =
+          {
+            User = prof.user;
+            Restart = "on-failure";
+          }
+          // optionalAttrs (prof.scheduler != null) {
+            # Host: prioridade de tempo real para o servidor de LLM (kernel).
+            # Exige privilégio — por isso o perfil host roda como root.
+            CPUSchedulingPolicy = prof.scheduler.policy;
+            CPUSchedulingPriority = prof.scheduler.priority;
+          };
+      };
 
-    # --- 2. SERVIDOR DE EMBEDDINGS (RAG) ---
-    systemd.services.llama-cpp-embeddings = mkIf config.services.llama-cpp-embeddings.enable {
-      description = "Llama.cpp Embeddings Server";
-      wantedBy = ["multi-user.target"];
-      script = ''
-        exec ${pkgs.llama-cpp}/bin/llama-server \
-          -m "${pkgs.aiModels.embed}" \
-          --host 0.0.0.0 --port ${toString config.services.llama-cpp-embeddings.port} \
-          --embeddings --pooling mean -c 4096 -t 2 -b 512 -ub 512
-      '';
-      serviceConfig.User = "nixos";
-    };
+      # --- 2. SERVIDOR DE EMBEDDINGS (RAG) ---
+      llama-cpp-embeddings = mkIf config.services.llama-cpp-embeddings.enable {
+        description = "Llama.cpp Embeddings Server";
+        wantedBy = ["multi-user.target"];
+        script = ''
+          exec ${pkgs.llama-cpp}/bin/llama-server \
+            -m "${pkgs.aiModels.embed}" \
+            --host 0.0.0.0 --port ${toString config.services.llama-cpp-embeddings.port} \
+            --embeddings --pooling mean -c 4096 -t 2 -b 512 -ub 512
+        '';
+        serviceConfig.User = "nixos";
+      };
 
-    # --- 3. SERVIDOR DE RERANK (SOTA RAG) ---
-    systemd.services.llama-cpp-rerank = mkIf config.services.llama-cpp-rerank.enable {
-      description = "Llama.cpp Rerank Server";
-      wantedBy = ["multi-user.target"];
-      environment.CUDA_VISIBLE_DEVICES = ""; # CPU-only para preservar VRAM
-      script = ''
-        exec ${pkgs.llama-cpp}/bin/llama-server \
-          -m "${pkgs.aiModels.reranker}" \
-          --host 0.0.0.0 --port ${toString config.services.llama-cpp-rerank.port} \
-          --rerank -t 2 -c 8192 -b 512 -ub 512
-      '';
-      serviceConfig.User = "nixos";
+      # --- 3. SERVIDOR DE RERANK (SOTA RAG) ---
+      llama-cpp-rerank = mkIf config.services.llama-cpp-rerank.enable {
+        description = "Llama.cpp Rerank Server";
+        wantedBy = ["multi-user.target"];
+        environment.CUDA_VISIBLE_DEVICES = ""; # CPU-only para preservar VRAM
+        script = ''
+          exec ${pkgs.llama-cpp}/bin/llama-server \
+            -m "${pkgs.aiModels.reranker}" \
+            --host 0.0.0.0 --port ${toString config.services.llama-cpp-rerank.port} \
+            --rerank -t 2 -c 8192 -b 512 -ub 512
+        '';
+        serviceConfig.User = "nixos";
+      };
     };
   };
 }
