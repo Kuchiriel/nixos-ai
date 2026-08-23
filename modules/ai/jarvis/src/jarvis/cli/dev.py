@@ -34,6 +34,8 @@ from typing import Any
 
 import requests
 
+from jarvis.core.config import get_config as _get_config
+
 # Tools unificadas — AST guard, backup, safety, fuzzy match 4 camadas
 from jarvis.core.devtools import (
     handle_dev_tool,
@@ -167,11 +169,6 @@ def _print_help() -> None:
 # ---------------------------------------------------------------------------
 # Config / perfil do modelo
 # ---------------------------------------------------------------------------
-
-def _get_config() -> Any:
-    from jarvis.core.config import Config
-    return Config()
-
 
 def _detect_profile() -> dict[str, Any]:
     """Detecta o perfil do modelo, o model_id correto para o payload, e se
