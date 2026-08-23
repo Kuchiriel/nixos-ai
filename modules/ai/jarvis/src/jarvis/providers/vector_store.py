@@ -12,6 +12,7 @@ algoritmo híbrido do legado (semântico + símbolos + filename) sobre Qdrant.
 
 from __future__ import annotations
 
+import requests
 import zlib
 from typing import Any
 
