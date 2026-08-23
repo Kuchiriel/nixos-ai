@@ -114,14 +114,14 @@ def _setup_kokoro_espeak():
                     try:
                         w_ps = _espeak_backend.backend.phonemize([word])
                         t.phonemes = w_ps[0].strip() if w_ps else ""
-                    except Exception:
+                    except Exception:  # noqa: BLE001 — phonemize é best-effort
                         t.phonemes = ""
                     tokens.append(t)
                 return ps, tokens
 
         _en.G2P = _EspeakG2PWrapper  # type: ignore[misc]
         _setup_kokoro_espeak._done = True  # type: ignore[attr-defined]
-    except Exception:
+    except Exception:  # noqa: BLE001 — espeak é best-effort
         pass  # se espeak não está disponível, Kokoro vai dar erro own
 
 

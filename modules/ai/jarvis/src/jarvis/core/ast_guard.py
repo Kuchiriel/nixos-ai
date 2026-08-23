@@ -136,7 +136,7 @@ def safe_str_replace(
         backup_path = filepath + ".bak"
         try:
             shutil.copy2(filepath, backup_path)
-        except Exception:
+        except Exception:  # noqa: BLE001 — backup é best-effort
             pass  # Backup é best-effort
     
     # Aplica no arquivo real
@@ -170,7 +170,7 @@ def safe_write_file(
     if create_backup and os.path.exists(filepath):
         try:
             shutil.copy2(filepath, filepath + ".bak")
-        except Exception:
+        except Exception:  # noqa: BLE001 — backup é best-effort
             pass
     
     try:

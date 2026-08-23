@@ -468,7 +468,7 @@ class HybridSearch:
                 for hit in candidates
             ]
             scores = reranker.rerank(query, docs)
-        except Exception:  # Fallback silencioso para qualquer erro de comunicação ou parsing
+        except Exception:  # noqa: BLE001 + Fallback silencioso para qualquer erro de comunicação ou parsing
             return candidates
 
         n = len(candidates)
