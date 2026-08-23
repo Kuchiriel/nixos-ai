@@ -60,9 +60,24 @@
 
 ---
 
+### 2026-08-23 06:20 - Ciclo 1: .roomodes nightwatch + higiene + deduplicação
+- **.roomodes**: reescrito com ciclo contínuo de 4 fases (Scan → Execute → Validate → Rescan)
+  - Instrução explícita: NUNCA PARE até usuário dizer
+  - 8 categorias de melhoria (bugs, dedup, consolidação, refatoração, higiene, segurança, docs, pesquisa)
+- **Higiene**: remove 2 arquivos .bak (stylix.nix.bak, configuration.nix.bak)
+- **Deduplicação**: extrai `http_health_check()` para `http_service.py`
+  - `reranker.py` e `vector_store.py` agora usam a mesma função
+  - Reduz acoplamento: providers não importam requests para health check
+- **Testes**: 6 passed (test_reranker.py), 18 passed (test_rag.py)
+- **Commits**:
+  - `2531b69` refactor(jarvis): extrai http_health_check() para http_service.py
+  - `d5177d5` chore: remove arquivos .bak (higiene)
+
+---
+
 ## Resumo final
-- **Itens tentados**: 11 (devShell fix, legacy_index, backups, saúde testes, higiene Nix, qualidade Python, documentação, pesquisa web)
-- **Mantidos**: 4 commits (devShell fix, testes LLM, bulldozer xfail, higiene Nix)
+- **Itens tentados**: 13 (devShell fix, legacy_index, backups, saúde testes, higiene Nix, qualidade Python, documentação, pesquisa web, .roomodes, deduplicação)
+- **Mantidos**: 6 commits (devShell fix, testes LLM, bulldozer xfail, higiene Nix, .roomodes, deduplicação)
 - **Revertidos**: 0
 - **Bloqueios**: Nenhum
-- **Resultado geral**: Suite de testes limpa (561 passed, 0 failed), 57 arquivos .nix formatados, devShell com ferramentas de higiene Nix
+- **Resultado geral**: Suite de testes limpa (561 passed, 0 failed), 57 arquivos .nix formatados, devShell com ferramentas de higiene Nix, http_health_check() compartilhado
