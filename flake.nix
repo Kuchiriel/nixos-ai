@@ -168,28 +168,29 @@
           # central services.jarvis.environment ao home-manager (água).
           ({config, ...}: {
             imports = [home-manager.nixosModules.home-manager];
-            home-manager.useGlobalPkgs = true;
-            home-manager.useUserPackages = true;
-            home-manager.extraSpecialArgs = {
-              inherit user;
-              inherit inputs;
-              homeStateVersion = stateVersion;
-              # Água: o home-manager bebe do switch central de ambiente
-              # (services.jarvis.environment) — waybar/mpvpaper/hyprland
-              # decidem seus perfis aqui, sem hardcode por host.
-              jarvisEnvironment = config.services.jarvis.environment;
-              # m3ta lib: fonts, colors, ports
-              m3taLib = import ./lib {
-                lib = nixpkgs.lib;
-                pkgs = nixpkgs.legacyPackages.${system};
+            home-manager = {
+              useGlobalPkgs = true;
+              useUserPackages = true;
+              extraSpecialArgs = {
+                inherit user inputs;
+                homeStateVersion = stateVersion;
+                # Água: o home-manager bebe do switch central de ambiente
+                # (services.jarvis.environment) — waybar/mpvpaper/hyprland
+                # decidem seus perfis aqui, sem hardcode por host.
+                jarvisEnvironment = config.services.jarvis.environment;
+                # m3ta lib: fonts, colors, ports
+                m3taLib = import ./lib {
+                  inherit (nixpkgs.lib) lib;
+                  pkgs = nixpkgs.legacyPackages.${system};
+                };
               };
-            };
-            home-manager.users.${user} = {
-              imports = [
-                ./home-manager/home.nix
-                # stylix 26.05: o output `homeManagerModules` foi renomeado p/ `homeModules`
-                stylix.homeModules.stylix
-              ];
+              users.${user} = {
+                imports = [
+                  ./home-manager/home.nix
+                  # stylix 26.05: o output `homeManagerModules` foi renomeado p/ `homeModules`
+                  stylix.homeModules.stylix
+                ];
+              };
             };
           })
         ];
@@ -206,18 +207,15 @@
 
     # Permite `nix build .#jarvis` / `nix run .#jarvis`
     # e `nix build .#sidecar` / `nix build .#stt-ptt` / `nix build .#talk`
-    packages.${system} = {
-      jarvis = (nixpkgs.legacyPackages.${system}.extend aiOverlay).jarvis;
-      jarvis-voice = (nixpkgs.legacyPackages.${system}.extend aiOverlay).jarvis-voice;
-      # m3ta-nixpkgs packages
-      sidecar = (nixpkgs.legacyPackages.${system}.extend aiOverlay).sidecar;
-      stt-ptt = (nixpkgs.legacyPackages.${system}.extend aiOverlay).stt-ptt;
-      talk = (nixpkgs.legacyPackages.${system}.extend aiOverlay).talk;
+    packages.${system} = let
+      pkg = nixpkgs.legacyPackages.${system}.extend aiOverlay;
+    in {
+      inherit (pkg) jarvis jarvis-voice sidecar stt-ptt talk;
     };
 
     # ── m3ta lib: fonts, colors, ports ──────────────────────────────
     lib.m3ta = import ./lib {
-      lib = nixpkgs.lib;
+      inherit (nixpkgs.lib) lib;
       pkgs = nixpkgs.legacyPackages.${system};
     };
 

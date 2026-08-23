@@ -5,7 +5,7 @@
   m3taLib,
   ...
 }: let
-  colors = m3taLib.colors;
+  inherit (m3taLib) colors;
   isHost = jarvisEnvironment == "host";
   hostOnlyModules =
     if isHost

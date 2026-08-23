@@ -12,20 +12,18 @@ in {
   # sidecar: terminal multiplexer/UX para CLI agents (Go)
   # Dependências: opencode, td, tmux
   sidecar = final.callPackage "${m3ta}/pkgs/sidecar" {
-    opencode = final.opencode;
-    td = final.td;
-    tmux = final.tmux;
+    inherit (final) opencode td tmux;
   };
 
   # stt-ptt: Push-to-Talk Speech-to-Text (Bash + Whisper)
   # Dependências: whisper-cpp, wtype, libnotify, pipewire, procps, busybox
   stt-ptt = final.callPackage "${m3ta}/pkgs/stt-ptt" {
-    whisper-cpp = final.whisper-cpp;
+    inherit (final) whisper-cpp;
   };
 
   # talk: Text-to-Speech com ElevenLabs (Bash + Python)
   # Dependências: curl, python3, mpv, libnotify, busybox, fetchurl
   talk = final.callPackage "${m3ta}/pkgs/talk" {
-    mpv = final.mpv;
+    inherit (final) mpv;
   };
 }
