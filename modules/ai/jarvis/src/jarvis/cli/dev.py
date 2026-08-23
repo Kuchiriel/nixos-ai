@@ -181,7 +181,7 @@ def _detect_profile() -> dict[str, Any]:
         data = resp.json()
         if data.get("data"):
             model_id = data["data"][0].get("id", model_id)
-    except Exception:
+    except Exception:  # noqa: BLE001 — model_id é best-effort
         pass
 
     m = model_id.lower()
@@ -279,7 +279,7 @@ def _auto_index_rag() -> None:
             )
             if result.count > 0:
                 return
-        except Exception:
+        except Exception:  # noqa: BLE001 — count é best-effort
             return
         console.print("[dim]📦 Indexando codebase no RAG...[/]")
         try:
@@ -289,7 +289,7 @@ def _auto_index_rag() -> None:
             console.print(f"[dim]✅ {total} chunks indexados.[/]")
         except Exception as e:
             console.print(f"[dim]⚠️  Indexação RAG falhou: {e}[/]")
-    except Exception:
+    except Exception:  # noqa: BLE001 — indexação é best-effort
         pass
 
 _auto_index_rag._indexed = False
@@ -311,7 +311,7 @@ def _build_memory_context(query: str = "code edit error fix") -> str:
             text = r.get("text", "")[:120]
             lines.append(f"- {text}")
         return "\n".join(lines)
-    except Exception:
+    except Exception:  # noqa: BLE001 — memória é best-effort
         return ""
 
 
@@ -361,7 +361,7 @@ def _load_agent_context(start_dir: str | None = None) -> str:
             text = path.read_text(encoding="utf-8", errors="replace").strip()
             if text and len(text) < 3000:
                 chunks.append(text)
-        except Exception:
+        except Exception:  # noqa: BLE001 — leitura de arquivo é best-effort
             continue
     if not chunks:
         return ""
@@ -379,7 +379,7 @@ def _persist_session(messages: list[dict[str, Any]], project_root: str | None = 
         }
         path = _session_state_path(project_root)
         path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
+    except Exception:  # noqa: BLE001 — persistência é best-effort
         pass
 
 
@@ -394,7 +394,7 @@ def _resume_session(project_root: str | None = None) -> list[dict[str, Any]]:
             msg = obj.get("messages")
             if isinstance(msg, list):
                 return msg
-    except Exception:
+    except Exception:  # noqa: BLE001 — resume é best-effort
         pass
     return []
 
