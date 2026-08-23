@@ -87,8 +87,8 @@ nixos-rebuild switch --flake .#nitro-v15  # ERRADO — usar rebuild-host.sh!
 ### Problemas conhecidos
 - **Modelo não usa tools** — Qwen responde do contexto em vez de chamar read_file/code_search
 - **thinking overhead** — 88% dos tokens são thinking no aider (~42s por tarefa)
-- **legado** — legacy_index.py requer numpy (4 testes falham)
-- **Backups** — agent.py.bak, rag.py.bkp no código ativo
+- **legacy_index.py** — requer numpy, mas agora passa todos os 11 testes (corrigido em 2026-08-22)
+- **Backups** — agent.py.bak, rag.py.bkp foram removidos em commits anteriores
 
 ## Configuração atual do llama-cpp (host)
 
