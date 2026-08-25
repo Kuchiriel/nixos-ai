@@ -20,13 +20,13 @@ echo "===================================================="
 #    IMPORTANTE: nix eval é validação de avaliação, NÃO garante proteção
 #    contra OOM por infinite recursion — mas é a melhor barreira disponível.
 if ! nix eval "$FLAKE_DIR#nixosConfigurations.$TARGET_HOST.config.system.build.toplevel" \
-    --show-trace --readonly-mode > /dev/null 2>&1; then
+    --show-trace > /dev/null 2>&1; then
   echo ""
   echo "[ERRO CRÍTICO] Falha durante avaliação da configuração!"
   echo "Executando novamente com trace detalhado:"
   echo "----------------------------------------------------"
   nix eval "$FLAKE_DIR#nixosConfigurations.$TARGET_HOST.config.system.build.toplevel" \
-    --show-trace --readonly-mode 2>&1 || true
+    --show-trace 2>&1 || true
   echo "----------------------------------------------------"
   echo ""
   echo "Avaliação FRACASSOU. Corrija os erros acima ANTES de fazer rebuild."
