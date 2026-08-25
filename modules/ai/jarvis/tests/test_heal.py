@@ -32,6 +32,9 @@ def _ok(name: str) -> dict:
 def fake_doctor(monkeypatch):
     calls = {"n": 0}
 
+    # Sempre pula verificação real de systemctl nos testes
+    monkeypatch.setattr("jarvis.core.heal._verify_service_up", lambda s, sc, **kw: True)
+
     def _set(checks):
         calls["n"] += 1
         monkeypatch.setattr(

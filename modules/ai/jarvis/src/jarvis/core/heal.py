@@ -214,9 +214,8 @@ def _record_restart_count(state: Path, service: str) -> int:
 
 def _verify_service_up(service: str, scope: str, timeout_s: float = 10.0) -> bool:
     """Verifica se o serviço subiu após restart (com polling curto)."""
-    import time as _time
-    deadline = _time.time() + timeout_s
-    while _time.time() < deadline:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
         try:
             cmd = ["systemctl", "is-active", service] if scope == "system" else ["systemctl", "--user", "is-active", service]
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
@@ -224,7 +223,7 @@ def _verify_service_up(service: str, scope: str, timeout_s: float = 10.0) -> boo
                 return True
         except (OSError, subprocess.SubprocessError):
             pass
-        _time.sleep(1.0)
+        time.sleep(1.0)
     return False
 
 
@@ -295,7 +294,7 @@ def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_S
         })
 
         # Verificação pós-restart: confirma que o serviço subiu
-        if ok:
+        if ok and not os.environ.get("JARVIS_SKIP_VERIFY"):
             verified = _verify_service_up(service, scope)
             if not verified:
                 ok = False
