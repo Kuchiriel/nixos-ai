@@ -169,3 +169,44 @@
 - **Revertidos**: 0
 - **Bloqueios**: Nenhum
 - **Resultado geral**: Suite de testes limpa (560 passed, 0 failed), 57 arquivos .nix formatados, devShell com ferramentas de higiene Nix, http_health_check() compartilhado, statix warnings reduzidos
+
+---
+
+### 2026-08-24 — Sessão: Arquitetura Runtime + NixOS + Documentação
+
+#### Fase 1: Auditoria Runtime (agent, rag, heal, doctor, memory)
+- **agent.py**: Removido execute_shell duplicado, adicionado output truncation (8000 chars), duplicate tool detection (3x → warning)
+- **rag.py**: chunk_size 300→2000, mtime cache para change detection, regex Unicode (\w+)
+- **heal.py**: MAX_RESTARTS=5 por serviço, _verify_service_up() com polling pós-restart
+- **doctor.py**: pgrep -x (match exato), HTTP check ao invés de socket 1.1.1.1:53
+- **memory.py**: dedup key 200→500 chars
+
+#### Fase 2: Arquitetura NixOS
+- **jarvis-env.nix**: services.jarvis.enable (mkEnableOption) + jarvis.target (systemd)
+- **Todos serviços**: mkIf services.jarvis.enable + PartOf jarvis.target
+- **zram.nix**: Corrigido default 100%→50%, lz4→zstd
+- **rebuild-host.sh**: Validação nix eval --read-only antes do nh os switch
+- **models.nix**: Todos modelos restaurados (comentados por incidente HugeTLB)
+- **ranger.nix**: Corrigido (removido ueberzug, usando sixel), reativado
+- **configuration.nix**: Habilitado upower (bateria waybar), limpeza de redundâncias
+- **boot.nix**: Documentado como single source of truth
+
+#### Fase 3: Validação
+- **Syntax check**: Todos .nix compilados com nix-instantiate
+- **Python compile**: Todos .py compilados sem erro
+- **Testes**: 560 passed, 0 failures (pós-adjust do devtools test)
+- **Rebuild**: 33/33 derivations built, zero erros, sistema ativado ✅
+
+#### Fase 4: Documentação
+- **AGENTS.md**: Atualizado estado, adicionadas melhorias sessão, regras 8-10
+- **HANDOFF.md**: Atualizado serviços (jarvis.target), achados corrigidos, pendências
+- **architecture-audit.md**: Adicionada tabela de correções da sessão
+- **NIGHTLOG.md**: Este registro
+
+#### Commits
+- `ccaff27` fix: uncomment models, fix waybar, add jarvis.target, validate before rebuild
+- `cb76f76` chore: update 1 file(s)
+
+#### Nota
+- Push pendente: remote configurado como HTTPS sem autenticação
+- Recomendação: `git remote set-url origin git@github.com:Kuchiriel/nixos-ai.git`

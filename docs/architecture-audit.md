@@ -12,6 +12,42 @@
 
 ---
 
+## ✅ Sessão 2026-08-24 — Correções de Arquitetura
+
+### Problemas encontrados e corrigidos
+
+| # | Problema | Causa | Correção | Arquivo |
+|---|----------|-------|----------|---------|
+| 1 | `execute_shell` duplicado (TOOL + DEV_TOOL) | Mesma tool em 2 módulos | Removido de devtools.py | `devtools.py` |
+| 2 | Sem output truncation | stdout retornado inteiro (MB) | TOOL_OUTPUT_MAX_CHARS=8000 | `agent.py` |
+| 3 | Sem duplicate tool detection | Modelo chamava mesma tool infinitamente | Tracking + warning após 3x | `agent.py` |
+| 4 | Circuit breaker quebrado | `json.loads()` em resposta de texto | Simplificado: retorna só texto | `agent.py` |
+| 5 | RAG chunk 300 (muito pequeno) | Embeddings perdiam contexto | Aumentado para 2000 | `rag.py` |
+| 6 | RAG sem change detection | Re-indexava tudo sempre | mtime cache | `rag.py` |
+| 7 | RAG sparse_terms sem acentos | Regex [a-zA-Z0-9_] | Trocado para \w+ | `rag.py` |
+| 8 | Self-heal sem max restarts | Loop infinito possível | MAX_RESTARTS=5 | `heal.py` |
+| 9 | Self-heal sem verify | systemctl retornava 0 sem confirmar | _verify_service_up() | `heal.py` |
+| 10 | Doctor pgrep -f muito amplo | Falsos positivos | Trocado para pgrep -x | `doctor.py` |
+| 11 | Doctor check_network frágil | Socket 1.1.1.1:53 bloqueável | HTTP check | `doctor.py` |
+| 12 | Memory dedup agressiva | Chave 200 chars falsos positivos | Aumentado para 500 | `memory.py` |
+
+### Arquitetura NixOS
+
+| Componente | Antes | Depois |
+|------------|-------|--------|
+| Controle de serviços | Sem toggle global | `services.jarvis.enable` (mkIf) |
+| Target systemd | Sem target | `jarvis.target` (multi-user.target) |
+| Serviços Jarvis | `wantedBy = ["multi-user.target"]` | `PartOf = ["jarvis.target"]` |
+| zram default | 100% (perigoso) | 50% |
+| rebuild-host.sh | Sem validação | `nix eval` antes do switch |
+| models.nix | Parcialmente comentado | Todos os modelos restaurados |
+| ranger.nix | Quebrado (ueberzug) | Corrigido (sixel), reativado |
+| UPower | Não habilitado | Habilitado (bateria waybar) |
+
+---
+
+---
+
 ## 🚨 Problemas Encontrados
 
 ### 1. FONTE — 4 locations hardcoded, nenhuma single source

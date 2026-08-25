@@ -69,7 +69,7 @@ nixos-rebuild switch --flake .#nitro-v15  # ERRADO — usar rebuild-host.sh!
 - **Memory** (Qdrant episódica: remember/recall/lessons, 14 eventos)
 - **MCP** (mcp-nixos via JSON-RPC 2.0)
 - **Circuit Breaker** (CLOSED/OPEN/HALF_OPEN + egress filter)
-- **Self-Heal** (detect→restart→audit→learn, allowlist de 3 serviços)
+- **Self-Heal** (detect→restart→audit→learn, MAX 5 restarts/serviço)
 - **AST Guard** (validação antes de str_replace)
 - **Gaming Profile** (multi-sinal: GPU/Hyprland/Steam/Proton)
 - **Vision** (grim/slurp/hyprctl)
@@ -77,12 +77,22 @@ nixos-rebuild switch --flake .#nitro-v15  # ERRADO — usar rebuild-host.sh!
 - **EventBus** (asyncio pub/sub)
 - **User Profile** (preferências + contexto dinâmico)
 - **llama-server** (32 t/s estável, 0.7% drift)
+- **services.jarvis.enable** (toggle global com mkIf + jarvis.target)
+- **rebuild-host.sh** (validação nix eval antes do switch)
+
+### Melhorias implementadas nesta sessão
+- **Agent**: output truncation (8000 chars max), duplicate tool detection (3x → warning)
+- **RAG**: chunk_size 300→2000, file change detection (mtime cache), Unicode regex
+- **Self-heal**: MAX_RESTARTS=5 por serviço, verificação pós-restart (_verify_service_up)
+- **Doctor**: pgrep -x (match exato), HTTP check ao invés de socket 1.1.1.1
+- **Memory**: dedup key 200→500 chars
+- **NixOS**: jarvis.target como target mestre, todos serviços com PartOf, zram 100%→50%
 
 ### Implementado mas NÃO validado
 - **RAG code_index** — collection NÃO EXISTE no Qdrant (nunca indexado)
 - **Voz/wakeword** — implementado, não testado E2E no host
 - **Telegram** — precisa criar bot + env file
-- **Heal daemon** — implementado, não ativado
+- **Heal daemon** — implementado, ativado via jarvis.target
 
 ### Problemas conhecidos
 - **Modelo não usa tools** — Qwen responde do contexto em vez de chamar read_file/code_search

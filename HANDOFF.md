@@ -19,17 +19,19 @@ self-heal, modo idle, gaming profile e 533 testes verdes.
 
 ## Serviços Ativos
 
-| Serviço | Porta | Estado | Observação |
-|---------|-------|--------|------------|
-| llama-cpp-server | 8080 | ✅ Rodando | Qwen3.6-35B MoE, 128K ctx |
-| llama-cpp-embeddings | 8081 | ✅ Rodando | nomic-embed-text-v2, CPU |
-| llama-cpp-rerank | 8082 | ✅ Rodando | bge-reranker-v2-m3, CPU |
-| qdrant | 6333 | ✅ Rodando | Vector DB (memories: 14 vetores; code_index: NÃO INDEXADO) |
-| jarvis-gaming-watcher | — | ✅ Rodando | Detecção multi-sinal |
-| jarvis-idle | — | ✅ Rodando | Self-knowledge (benchmark/regression/eval-rag) |
-| jarvis-heal | — | ⏳ Pendente | Precisa ativar como daemon |
-| jarvis-telegram | — | ⏳ Pendente | Precisa criar bot + /etc/jarvis-telegram.env |
-| litellm | 4000 | ✅ Rodando | Cascade local → Groq → Gemini → OpenRouter |
+Todos os serviços Jarvis são controlados por `services.jarvis.enable` (toggle global) e `jarvis.target` (systemd target mestre).
+
+| Serviço | Porta | Estado | systemd | Observação |
+|---------|-------|--------|---------|------------|
+| llama-cpp-server | 8080 | ✅ Rodando | PartOf jarvis.target | Qwen3.6-35B MoE, 128K ctx |
+| llama-cpp-embeddings | 8081 | ✅ Rodando | PartOf jarvis.target | nomic-embed-text-v2, CPU |
+| llama-cpp-rerank | 8082 | ✅ Rodando | PartOf jarvis.target | bge-reranker-v2-m3, CPU |
+| qdrant | 6333 | ✅ Rodando | PartOf jarvis.target | Vector DB |
+| jarvis-gaming-watcher | — | ✅ Rodando | PartOf jarvis.target | Detecção multi-sinal |
+| jarvis-idle | — | ✅ Rodando | — | Self-knowledge |
+| jarvis-heal | — | ✅ Ativado | PartOf jarvis.target | Self-heal com MAX 5 restarts |
+| jarvis-telegram | — | ⏳ Pendente | — | Precisa criar bot + env file |
+| litellm | 4000 | ✅ Rodando | — | Cascade local → Groq → Gemini → OpenRouter |
 
 ## Configuração llama-cpp (Host)
 
@@ -70,6 +72,7 @@ nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -x -q --tb=shor
 | Fuzzing/Mutation | 56 | ✅ Passando |
 | Sem numpy (voice/wakeword) | 4 | ❌ Falta numpy |
 | Bulldozer (jarvis dev) | 6 | ⏳ Precisa CLI |
+| Devtools (pós-refactor) | 9 | ✅ Passando |
 | **Total executável** | **~500+** | **✅ Passando** |
 
 ## Arquitetura da IA
@@ -101,15 +104,15 @@ Validation (core/ast_guard.py) — AST check
 ## Componentes Implementados
 
 ### Core AI
-- `core/agent.py` — Agente com tool-calling (12 ferramentas)
+- `core/agent.py` — Agente com tool-calling (11 ferramentas + output truncation + duplicate detection)
 - `core/router.py` — Roteamento em cascata (fastpath → doctor → nixos → rag → agent)
 - `core/rules.py` — Motor de regras declarativas (substitui RiveScript)
-- `core/rag.py` — RAG híbrido (dense + sparse BM25 + RRF + rerank)
+- `core/rag.py` — RAG híbrido (dense + sparse BM25 + RRF + rerank, chunk 2000, mtime cache)
 - `core/memory.py` — Memória episódica (Qdrant: remember/recall/lessons/forget)
 - `core/vault.py` — Memória de longo prazo (markdown git-syncado)
 - `core/voice.py` — STT (faster-whisper) + TTS (Kokoro-82M)
-- `core/heal.py` — Self-heal (restart + audit JSONL + lesson)
-- `core/doctor.py` — Health checks (9 verificações)
+- `core/heal.py` — Self-heal (restart + audit JSONL + lesson, MAX 5 restarts, post-restart verify)
+- `core/doctor.py` — Health checks (9 verificações, HTTP check, pgrep -x)
 - `core/benchmark.py` — Benchmark da cascata
 - `core/eval_rag.py` — Avaliação de qualidade RAG (NDCG/Recall)
 - `core/regression.py` — Teste de regressão
@@ -139,10 +142,11 @@ Validation (core/ast_guard.py) — AST check
 - `providers/reranker.py` — Reranker (bge-reranker-v2-m3)
 - `providers/telegram.py` — Canal Telegram
 
-### Serviços NixOS
+### Serviços NixOS (todos com mkIf services.jarvis.enable + PartOf jarvis.target)
+- `nixos/modules/jarvis-env.nix` — Master toggle + jarvis.target
 - `services/llama-cpp.nix` — llama.cpp (server + embeddings + rerank)
 - `services/qdrant.nix` — Qdrant vector DB
-- `services/jarvis-heal.nix` — Self-heal daemon
+- `services/jarvis-heal.nix` — Self-heal daemon (MAX 5 restarts)
 - `services/jarvis-idle.nix` — Idle mode daemon
 - `services/jarvis-telegram.nix` — Telegram bot
 - `services/jarvis-vault.nix` — Vault summarization
@@ -157,22 +161,22 @@ Validation (core/ast_guard.py) — AST check
 
 ## Achados da Auditoria Code-First (agosto/2026)
 
-### RAG não indexado
-- `code_index` collection NÃO EXISTE no Qdrant — rota RAG do router inoperante
-- `memories` collection tem 14 eventos (pouco populada)
-- Fix: executar `jarvis rag index` para criar a collection
+### CORRIGIDO NESTA SESSÃO
+- **execute_shell duplicado** — tool existia em agent.py E devtools.py. Removido de devtools.py.
+- **Sem output truncation** — execute_shell retornava stdout inteiro (MB). Adicionado TOOL_OUTPUT_MAX_CHARS=8000.
+- **Sem duplicate detection** — modelo podia chamar mesma tool infinitamente. Adicionado tracking + warning após 3x.
+- **RAG chunk 300→2000** — embeddings perdiam contexto com chunks muito pequenos.
+- **RAG sem change detection** — re-indexava tudo sempre. Adicionado mtime cache.
+- **Self-heal sem max restarts** — loop infinito de restart possível. Adicionado MAX_RESTARTS=5.
+- **Self-heal sem verify** — systemctl retornava 0 mas serviço podia não subir. Adicionado polling pós-restart.
+- **Doctor pgrep -f muito amplo** — trocado para pgrep -x (match exato).
+- **Doctor check_network frágil** — socket 1.1.1.1:53 bloqueável. Trocado para HTTP check.
+- **Memory dedup agressiva** — chave 200 chars causava falsos positivos. Aumentado para 500.
+- **RAG sparse_terms sem acentos** — regex [a-zA-Z0-9_] descartava PT-BR. Trocado para \w+.
 
-### Modelo não usa tools
-- Qwen3.6-35B MoE A3B responde do contexto/repo-map em vez de chamar tools
-- Quando USA tools (execute_shell, read_file), funciona corretamente
-- E2E: 4/10 tools chamadas, mas 9/10 respostas corretas
-- Causa: modelo forte o suficiente para saber a resposta sem tool
-
-### Thinking overhead
-- 88% dos tokens no aider são thinking (~500 tokens são resposta real)
-- `reasoning-effort low` e `thinking-tokens 0` são ignorados pelo modelo
-- `chat_template_kwargs: enable_thinking=False` funciona via curl mas litellm não passa
-- Solução ideal: proxy que intercepta requests e injeta enable_thinking: false
+### Pendências que continuam
+- **RAG code_index** — collection NÃO EXISTE no Qdrant (nunca indexado)
+- **Thinking overhead** — 88% dos tokens no aider são thinking
 
 ### Código morto/legado
 - `agent.py.bak` — backup no código ativo (remover)
@@ -184,17 +188,17 @@ Validation (core/ast_guard.py) — AST check
 ### Críticas
 1. **RAG não indexado** — executar `jarvis rag index` para criar `code_index`
 2. **Telegram não ativado** — precisa criar bot no BotFather + `/etc/jarvis-telegram.env`
-3. **jarvis-heal como daemon** — implementado mas não ativado
 
 ### Importantes
-4. **Limpar legado** — remover agent.py.bak, rag.py.bkp
-5. **Validar voz/wakeword no host** — implementado mas não testado E2E
-6. **sudo ALL NOPASSWD** — temporário, precisa minimizar
+3. **Limpar legado** — remover agent.py.bak, rag.py.bkp
+4. **Validar voz/wakeword no host** — implementado mas não testado E2E
+5. **sudo ALL NOPASSWD** — temporário, precisa minimizar
 
 ### Melhorias
-7. **Forçar tool calling** — testar tool_choice: required no Agent
-8. **Proxy thinking** — interceptar aider para desabilitar thinking
-9. **Vision no host** — validar grim/slurp no Hyprland real
+6. **Forçar tool calling** — testar tool_choice: required no Agent
+7. **Proxy thinking** — interceptar aider para desabilitar thinking
+8. **Vision no host** — validar grim/slurp no Hyprland real
+9. **Push para remote** — remote configurado mas sem autenticação SSH/token
 
 ## Riscos
 
@@ -215,6 +219,9 @@ Validation (core/ast_guard.py) — AST check
 5. **KV cache q4_0** — eficiente para 128K contexto em 6GB VRAM
 6. **n-cpu-moe 50** — experts na RAM, atenção na GPU
 7. **Telegram > ntfy** — bidirecional + aprovação inline
+8. **services.jarvis.enable** — toggle global com mkIf + jarvis.target
+9. **rebuild-host.sh** — sempre validar com nix eval antes do switch
+10. **Self-heal MAX 5 restarts** — nunca loops infinitos de restart
 
 ## Comandos para Retomar
 
