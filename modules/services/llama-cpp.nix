@@ -13,6 +13,12 @@ with lib; let
   # Usa o `pkgs` já recebido pelo módulo (herda allowUnfree + overlay
   # definidos centralmente no flake.nix) — NÃO reimportar pkgs.path aqui.
   llamaCppPkg = pkgs.llama-cpp.override {cudaSupport = true;};
+
+  # Se o profile tem wrapper (ex: host-ehs), usar o script wrapper
+  # que aponta pro binario wackmall compilado localmente.
+  llamaBin = if prof ? wrapper && prof.wrapper != null
+    then "${./.}/${prof.wrapper}.sh"
+    else "${llamaCppPkg}/bin/llama-server";
 in {
   options.services = {
     llama-cpp-server = {
@@ -69,7 +75,7 @@ in {
         wantedBy = ["jarvis.target" "multi-user.target"];
 
         script = ''
-          exec ${llamaCppPkg}/bin/llama-server \
+          exec ${llamaBin} \
             -m "${pkgs.aiModels.${prof.model}}" \
             ${optionalString (prof ? mmproj) ''--mmproj "${pkgs.aiModels.${prof.mmproj}}" ''} \
             --host 0.0.0.0 --port ${toString config.services.llama-cpp-server.port} \

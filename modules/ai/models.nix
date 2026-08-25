@@ -143,5 +143,30 @@ in {
       user = "root";
       scheduler = null;
     };
+
+    # --- host-ehs: Expert Hot Store (fork wackmall, +25.6% compute) ---
+    # Requer binario compilado: ~/projects/llama-wackmall/build/bin/llama-server
+    # Medido: 60.28 → 48.00 ms/token (+25.6%), GPU util 20.5% → 32.2%
+    # NÃO usar --n-cpu-moe com -ehs (auto-ativa --cmoe)
+    host-ehs = {
+      model = "llm-host";
+      mmproj = "llm-host-mmproj";
+      threads = 8;
+      ctxSize = 4096;
+      batchSize = 512;
+      ubatch = 512;
+      gpuLayers = 45;
+      kvCache = "-fa on -ctk q4_0 -ctv q4_0";
+      moeFlags = "-ehs 25 --split-mode layer";
+      extraArgs = [
+        "--parallel"
+        "1"
+        "--jinja"
+      ];
+      user = "nixos";
+      scheduler = null;
+      # Usa binario wackmall (wrapper com CUDA)
+      wrapper = "llama-wackmall-wrapper";
+    };
   };
 }
