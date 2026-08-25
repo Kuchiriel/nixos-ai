@@ -48,3 +48,13 @@ logs/
 hosts/nitro-v15/hardware-configuration.nix
 result
 result-*
+
+# Python build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.hypothesis/
+build/
+dist/

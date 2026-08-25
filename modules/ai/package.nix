@@ -10,7 +10,18 @@
     version = "0.1.0";
     pyproject = true;
 
-    src = lib.cleanSource ./jarvis;
+    # cleanSourceWith exclui artefatos de build que mudam a cada execução
+    # (pytest cache, hypothesis, pycache, egg-info) para evitar rebuilds
+    # desnecessários. Sem isso, o hash muda e jarvis-voice rebuilda sempre.
+    src = lib.cleanSourceWith {
+      filter = path: type:
+        let
+          base = builtins.baseNameOf (toString path);
+          isJunk = builtins.match "(__pycache__|\.pytest_cache|\.hypothesis|.*\.egg-info|build|dist)" base != null;
+        in
+        !isJunk;
+      src = ./jarvis;
+    };
 
     build-system = with python3Packages; [setuptools];
 
