@@ -71,7 +71,7 @@ in {
     xclip
     cloudflare-warp
     # Pacote do JARVIS via overlay
-    #jarvis
+    # jarvis
   ];
 
   # Habilita o gerenciamento de volumes e montagem de mídia
@@ -119,7 +119,7 @@ in {
     nvidiaBusId = "PCI:1:0:0"; # Validar via lspci na máquina física
   };
 
-  boot.kernelParams = [
+  boot.kernelParams = [ 
     "nvidia-drm.modeset=1"
     "quiet"
     "loglevel=3"
@@ -136,17 +136,17 @@ in {
   # =========================================================================
   # 2. SERVIÇOS JARVIS & IA (Host)
   # =========================================================================
-  services.llama-cpp-server.enable = true;
-  services.llama-cpp-embeddings.enable = true;
-  services.llama-cpp-rerank.enable = true;
+  services.llama-cpp-server.enable = false;
+  services.llama-cpp-embeddings.enable = false;
+  services.llama-cpp-rerank.enable = false;
   services.qdrant.enable = true;
-  services.jarvis-vault.enable = true;
-  services.jarvis-idle.enable = true;
-  services.jarvis-telegram.enable = true;
-  services.jarvis-gaming.enable = true;
-  services.litellm.enable = true;
+  services.jarvis-vault.enable = false;
+  services.jarvis-idle.enable = false;
+  services.jarvis-telegram.enable = false;
+  services.jarvis-gaming.enable = false;
+  services.litellm.enable = false;
   programs.freebuff.enable = true;
-  programs.jarvis-scripts.enable = true;
+  programs.jarvis-scripts.enable = false;
 
   environment.etc."litellm.env" = {
     text = "";
@@ -179,7 +179,6 @@ in {
 
   boot.kernel.sysctl = {
     "vm.swappiness" = 10;
-    "vm.nr_hugepages" = 16384; # 32GB * 50% / 2MB = 16384 pages: Huge Pages para KV cache do llama.cpp
     "kernel.sched_child_runs_first" = 1; # Processos filhos rodam mais rápido (inferência)
     "net.core.default_qdisc" = "fq_codel";
     "net.ipv4.tcp_congestion_control" = "bbr";

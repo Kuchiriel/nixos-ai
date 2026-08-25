@@ -61,78 +61,78 @@ in {
   # Escolhido por pesquisa (maio/2026): melhor custo/benefício de SLM para
   # tool calling em CPU — supera o Qwen2.5-7B que o lab usava (bug de
   # tool_call vazado como texto puro com gramática Hermes).
-  llm-vm = mkModel {
-    url = "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf";
-    sha256 = "sha256-dIX+bxGvKUM7xRyrWACVIfIFhA9bSuOjL6f5LoU0/fU=";
-  };
+  #llm-vm = mkModel {
+   # url = "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf";
+    #sha256 = "sha256-dIX+bxGvKUM7xRyrWACVIfIFhA9bSuOjL6f5LoU0/fU=";
+  #};
 
   # --- LLM — Host (bare metal) ---
   # Qwen3.6-35B-A3B: MoE (35B total, 3B ativos por token) com vision encoder
   # integrado, treinado para agentic coding / tool use (2026). GGUF UD-Q4_K_M
   # do unsloth (~20.6GiB) — cabe nos 32GB de RAM do Nitro V15.
-  llm-host = mkModel {
-    url = "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/main/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf";
-    sha256 = "sha256-rA4sEYngVfqjbv82FYDnnFvW+Odr/7TOVH8WfVPjGmE=";
-  };
+  #llm-host = mkModel {
+   # url = "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/main/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf";
+    #sha256 = "sha256-rA4sEYngVfqjbv82FYDnnFvW+Odr/7TOVH8WfVPjGmE=";
+  #};
 
   # --- Projetor de visão (multimodal) do Qwen3.6-35B-A3B ---
   # Usado com --mmproj no host para capacidade de imagem/visão.
-  llm-host-mmproj = mkModel {
-    url = "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/main/mmproj-BF16.gguf";
-    sha256 = "sha256-NW36oxETdqT3Fl4y6HSXEzeNFwCzfPUuDFDZ8jMiM00=";
-  };
+  #llm-host-mmproj = mkModel {
+   # url = "https://huggingface.co/unsloth/Qwen3.6-35B-A3B-GGUF/resolve/main/mmproj-BF16.gguf";
+    #sha256 = "sha256-NW36oxETdqT3Fl4y6HSXEzeNFwCzfPUuDFDZ8jMiM00=";
+  #};
 
   # --- Embeddings (RAG) — nomic-embed-text-v2-moe Q8_0 (512MB) ---
   # Antes baixado imperativamente para /home/nixos/models — agora no store.
-  embed = mkModel {
-    url = "https://huggingface.co/nomic-ai/nomic-embed-text-v2-moe-GGUF/resolve/main/nomic-embed-text-v2-moe.Q8_0.gguf";
-    sha256 = "sha256-Buen5ZSiaYVSPBg4OrpKrTn+bhTwj/xqtbVU4czcPP8=";
-  };
+  #embed = mkModel {
+   # url = "https://huggingface.co/nomic-ai/nomic-embed-text-v2-moe-GGUF/resolve/main/nomic-embed-text-v2-moe.Q8_0.gguf";
+   # sha256 = "sha256-Buen5ZSiaYVSPBg4OrpKrTn+bhTwj/xqtbVU4czcPP8=";
+  #};
 
   # --- bge-reranker-v2-m3 (Fase 10 — reranker cross-encoder, multi-língua) ---
   # GGUF Q4_K_M (438MB) para o endpoint /rerank do llama-server.
-  reranker = fetchurl {
-    url = "https://huggingface.co/gpustack/bge-reranker-v2-m3-GGUF/resolve/main/bge-reranker-v2-m3-Q4_K_M.gguf";
-    sha256 = "0wrnic7hzrcnvr2fbdf0yl9sx9i7fk73jhy6dsv4lns5xm2a51p1";
-  };
+ # reranker = fetchurl {
+   # url = "https://huggingface.co/gpustack/bge-reranker-v2-m3-GGUF/resolve/main/bge-reranker-v2-m3-Q4_K_M.gguf";
+   # sha256 = "0wrnic7hzrcnvr2fbdf0yl9sx9i7fk73jhy6dsv4lns5xm2a51p1";
+  #};
 
   # --- openwakeword (wakeword) ---
-  openwakeword = {
-    hey_jarvis = fetchurl {
-      url = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/hey_jarvis_v0.1.onnx";
-      sha256 = "1jyjw0p72wsa8dcgphqvhrqfw8w15r37wbj7d8pi6nq7c3z3r8cl";
-    };
-    embedding = fetchurl {
-      url = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/embedding_model.onnx";
-      sha256 = "07sw0z9ppzvc0lfz6nbb66km0cjl01gbqjg19qfms28x1hln9lbh";
-    };
-    melspectrogram = fetchurl {
-      url = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/melspectrogram.onnx";
-      sha256 = "0vqpxdjzlyglv775r2gj6v2bllzzc0rv3768l9lm71vvic7hwaxs";
-    };
-  };
+  #openwakeword = {
+   # hey_jarvis = fetchurl {
+     # url = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/hey_jarvis_v0.1.onnx";
+     # sha256 = "1jyjw0p72wsa8dcgphqvhrqfw8w15r37wbj7d8pi6nq7c3z3r8cl";
+    #};
+   # embedding = fetchurl {
+    #  url = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/embedding_model.onnx";
+     # sha256 = "07sw0z9ppzvc0lfz6nbb66km0cjl01gbqjg19qfms28x1hln9lbh";
+#    };
+   # melspectrogram = fetchurl {
+     # url = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/melspectrogram.onnx";
+      #sha256 = "0vqpxdjzlyglv775r2gj6v2bllzzc0rv3768l9lm71vvic7hwaxs";
+ #   };
+ # };
 
   # --- Kokoro-82M (TTS, formato torch do nixpkgs) ---
-  kokoro = {
-    config = fetchurl {
-      url = "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/config.json";
-      sha256 = "0zy18fdnn68mpqis8jdd1mx9s81y8ihf3z847pq2n1rv83i03fss";
-    };
-    model = fetchurl {
-      url = "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/kokoro-v1_0.pth";
-      sha256 = "1r6iibqm6b0zxr3nxzl9zj1h8vi1vkdqiz1fvgrzan0sil8vlva9";
-    };
-    voice = fetchurl {
-      url = "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_heart.pt";
-      sha256 = "1zxl5h82lf0jggbd0fi56dvsyq2vyyc1vlcwhkyrpcgsiydp1d8a";
-    };
-  };
+  #kokoro = {
+   # config = fetchurl {
+    #  url = "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/config.json";
+    #  sha256 = "0zy18fdnn68mpqis8jdd1mx9s81y8ihf3z847pq2n1rv83i03fss";
+   # };
+   # model = fetchurl {
+   #   url = "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/kokoro-v1_0.pth";
+   #   sha256 = "1r6iibqm6b0zxr3nxzl9zj1h8vi1vkdqiz1fvgrzan0sil8vlva9";
+   # };
+   # voice = fetchurl {
+   #   url = "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/voices/af_heart.pt";
+   #   sha256 = "1zxl5h82lf0jggbd0fi56dvsyq2vyyc1vlcwhkyrpcgsiydp1d8a";
+   # };
+  #};
 
   # --- faster-whisper (STT) — small CTranslate2 (multi-língua, PT-BR) ---
-  whisper-small = fetchurl {
-    url = "https://huggingface.co/Systran/faster-whisper-small/resolve/main/model.bin";
-    sha256 = "0wfnf10y3g779xxsjkdji7xij92xwxrw5r13c20p523da0hmjc1y";
-  };
+ # whisper-small = fetchurl {
+  #  url = "https://huggingface.co/Systran/faster-whisper-small/resolve/main/model.bin";
+   # sha256 = "0wfnf10y3g779xxsjkdji7xij92xwxrw5r13c20p523da0hmjc1y";
+  #};
 
   # =========================================================================
   # 2. PERFIS DE EXECUÇÃO (llama-cpp) — ÚNICA FONTE DE VERDADE

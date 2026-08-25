@@ -3,6 +3,7 @@
   lib,
   ...
 }: {
+
   # Força o bypass de fontes para passar por cima do bloco interno do Stylix
   fonts.fontconfig.enable = lib.mkForce true;
 

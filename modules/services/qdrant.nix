@@ -3,7 +3,9 @@
   config,
   mkIf,
   ...
-}: {
+}:
+
+  {  
   users.groups.qdrant = {};
 
   users.users.qdrant = {

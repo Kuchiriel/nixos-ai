@@ -25,9 +25,7 @@
     nerd-fonts.symbols-only
 
     # Core CLI utils
-    aider-chat
     nodejs # npx para MCP servers (Roo Dev, etc.)
-    python3Packages.botocore
     bc
     bottom
     brightnessctl
@@ -53,9 +51,9 @@
 
     # ── m3ta-nixpkgs packages ──────────────────────────────────────
     # sidecar: terminal multiplexer/UX para CLI agents
-    sidecar
+    # sidecar
     # stt-ptt: Push-to-Talk Speech-to-Text com Whisper
-    stt-ptt
+    # stt-ptt
     # talk: Text-to-Speech com ElevenLabs para notificações
     # talk  # REMOVIDO: redundante com Kokoro TTS do jarvis voice
   ];
