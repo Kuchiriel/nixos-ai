@@ -27,15 +27,17 @@ in {
 
   programs.steam = {
     enable = true;
-    # Força o Steam a rodar na NVIDIA por padrão
+    # Steam client UI DEVE rodar na iGPU (Intel) para evitar segfault
+    # no XRandR sob XWayland. Jogos usam NVIDIA via prime-run.
     package = pkgs.steam.overrideAttrs (old: {
       nativeBuildInputs = (old.nativeBuildInputs or []) ++ [pkgs.makeWrapper];
       postInstall =
         (old.postInstall or "")
         + ''
           wrapProgram $out/bin/steam \
-            --set __NV_PRIME_RENDER_OFFLOAD "1" \
-            --set __GLX_VENDOR_LIBRARY_NAME "nvidia"
+            --set __NV_PRIME_RENDER_OFFLOAD "0" \
+            --set __GLX_VENDOR_LIBRARY_NAME "intel" \
+            --set MESA_LOADER_DRIVER_OVERRIDE "iris"
         '';
     });
   };

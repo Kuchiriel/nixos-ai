@@ -195,9 +195,12 @@ _SPARSE_STOPWORDS: frozenset[str] = frozenset({
 
 
 def sparse_terms(text: str) -> dict[str, float]:
-    """Tokeniza texto em {termo: frequência} para o sparse vector BM25."""
+    """Tokeniza texto em {termo: frequência} para o sparse vector BM25.
+
+    Suporta caracteres acentuados (PT-BR: c, a, e, etc.) via w+ do regex.
+    """
     counts: dict[str, float] = {}
-    for token in re.findall(r"[a-zA-Z0-9_]+", text.lower()):
+    for token in re.findall(r"[\w]+", text.lower()):
         if len(token) < _SPARSE_MIN_LEN or token in _SPARSE_STOPWORDS:
             continue
         counts[token] = counts.get(token, 0.0) + 1.0
@@ -344,21 +347,33 @@ class HybridIndexer:
         self._cfg = config or Config()
         self._store = QdrantStore(self._cfg)
         self._llm = LLMClient(self._cfg)
+        self._indexed_hashes: dict[str, float] = {}  # path → mtime (cache de indexação)
 
     def ensure_collection(self) -> None:
         self._store.ensure_collection(self._cfg.qdrant_collection_code, dim=self._cfg.embed_dim)
 
-    def index_file(self, path: str, *, content: str | None = None) -> dict[str, Any] | None:
-        """Indexa um arquivo com chunking para respeitar o limite de contexto."""
+    def index_file(self, path: str, *, content: str | None = None, force: bool = False) -> dict[str, Any] | None:
+        """Indexa um arquivo com chunking para respeitar o limite de contexto.
+
+        Pula arquivos que não mudaram desde a última indexação (por mtime).
+        Use force=True para re-indexar mesmo sem mudanças.
+        """
         ext = os.path.splitext(path)[1].lower()
         if content is None:
             try:
+                stat = Path(path).stat()
+                mtime = stat.st_mtime
+                if not force and path in self._indexed_hashes and self._indexed_hashes[path] >= mtime:
+                    return None  # arquivo não mudou, pula
+                self._indexed_hashes[path] = mtime
                 content = Path(path).read_text(encoding="utf-8", errors="ignore")
             except OSError:
                 return None
 
-        # Chunking alinhado com o contexto do modelo
-        chunk_size = 300
+        # Chunking alinhado com o contexto do modelo de embedding.
+        # nomic-embed-text-v2-moe tem ctx 2048; 2000 chars ≈ 950 tokens.
+        # Chunks maiores = mais contexto por resultado = melhor qualidade de busca.
+        chunk_size = 2000
         chunks = [content[i:i + chunk_size] for i in range(0, len(content), chunk_size)]
 
         facts = extract_facts(content, ext)

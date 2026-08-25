@@ -138,11 +138,16 @@ def _user_unit_active(unit: str) -> tuple[bool, str]:
         return False, "systemd user indisponível (SSH/sem sessão?)"
 
 
-def _proc_running(name: str) -> bool:
-    """Verifica se um processo está rodando (pgrep por nome)."""
+def _proc_running(name: str, exact: bool = True) -> bool:
+    """Verifica se um processo está rodando.
+
+    exact=True: pgrep -x (match exato no nome do processo).
+    exact=False: pgrep -f (match em qualquer parte da linha de comando).
+    """
     try:
+        cmd = ["pgrep", "-x", name] if exact else ["pgrep", "-f", name]
         out = subprocess.run(
-            ["pgrep", "-f", name], capture_output=True, text=True, timeout=5,
+            cmd, capture_output=True, text=True, timeout=5,
             check=False,
         )
         return out.returncode == 0
@@ -225,24 +230,19 @@ def check_network() -> ComponentHealth:
     """Conectividade de rede local e internet."""
     h = ComponentHealth("network")
     issues: list[str] = []
-    # Gateway local
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(3)
-        try:
-            s.connect(("1.1.1.1", 53))
-            s.close()
-        except (OSError, TimeoutError):
-            issues.append("sem acesso a 1.1.1.1:53 (internet?)")
-        finally:
-            s.close()
-    except OSError:
-        issues.append("socket indisponível")
-    # DNS
+    # DNS resolution — mais confiável que socket direto
     try:
         socket.getaddrinfo("cache.nixos.org", 443, socket.AF_INET, socket.SOCK_STREAM)
     except (OSError, socket.gaierror):
         issues.append("DNS cache.nixos.org falhou")
+    # HTTP check — mais confiável que socket para 1.1.1.1:53 (pode ser bloqueado)
+    try:
+        import requests as _req
+        resp = _req.get("http://httpbin.org/ip", timeout=5)
+        if resp.status_code != 200:
+            issues.append(f"HTTP check falhou (status {resp.status_code})")
+    except Exception:  # noqa: BLE001
+        issues.append("HTTP check falhou (sem internet?)")
     if issues:
         h.status = "degraded"
         h.detail = "; ".join(issues)

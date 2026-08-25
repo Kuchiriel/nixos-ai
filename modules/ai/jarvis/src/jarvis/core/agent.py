@@ -56,6 +56,10 @@ DEFAULT_ALLOWED_PREFIXES: tuple[str, ...] = (
     "nixos-rebuild dry-build", "nixos-rebuild build",
 )
 
+# Limite de caracteres para output de tool — evita saturar o contexto do LLM.
+# 8000 chars ≈ 2000 tokens, suficiente para a maioria dos comandos.
+TOOL_OUTPUT_MAX_CHARS = int(os.environ.get("JARVIS_TOOL_OUTPUT_MAX_CHARS", "8000"))
+
 # Padrões de tool_call que o Qwen2.5 vaza como texto puro no `content`
 # (bug documentado com llama.cpp + tool_choice=auto). Além da tag nativa
 # <tool_call>...</tool_call>, o modelo costuma devolver o JSON dentro de um
@@ -368,6 +372,10 @@ class AgentResult:
     turns: int = 0
     commands_run: list[str] = field(default_factory=list)
     commands_denied: list[str] = field(default_factory=list)
+    tools_called: list[dict[str, Any]] = field(default_factory=list)  # [{name, args_preview, elapsed_s}]
+    total_input_tokens_approx: int = 0  # estimativa de tokens de entrada
+    total_output_tokens_approx: int = 0  # estimativa de tokens de saída
+    duplicate_tool_warnings: int = 0
 
 
 class Agent:
@@ -546,6 +554,9 @@ class Agent:
             output = res.stdout if res.returncode == 0 else res.stderr
             if not output.strip():
                 output = f"Command executed with exit code {res.returncode}"
+            # Trunca output para não saturar o contexto do LLM
+            if len(output) > TOOL_OUTPUT_MAX_CHARS:
+                output = output[:TOOL_OUTPUT_MAX_CHARS] + f"\n... [truncated, {len(res.stdout)} chars total]"
             self._audit.record(cmd=cmd, allowed=allowed, approved=approved, exit_code=res.returncode, output=output)
             log.info("tool_call", detail={
                 "cmd": cmd, "exit_code": res.returncode,
@@ -597,6 +608,8 @@ class Agent:
                 "turns": r.turns, "elapsed_s": elapsed,
                 "commands_run": len(r.commands_run),
                 "commands_denied": len(r.commands_denied),
+                "tools_called": len(r.tools_called),
+                "duplicate_warnings": r.duplicate_tool_warnings,
             })
             return r
         finally:
@@ -628,6 +641,8 @@ class Agent:
             {"role": "user", "content": user_prompt},
         ]
         repair_attempts = 0
+        last_tool_signature = ""  # para detectar chamadas duplicadas
+        consecutive_duplicates = 0
 
         # O Qwen pequeno (7B) tende a continuar chamando tools mesmo com dados
         # suficientes. No penúltimo turno, injetamos um aviso de "responda já".
@@ -643,20 +658,12 @@ class Agent:
                 cb_result = self._circuit_breaker.execute(
                     messages, local_fn=lambda msgs: self._chat_raw(msgs, profile),
                 )
-                # Se fallback ou rejected, adapta a resposta
-                if cb_result["backend"] in ("fallback", "rejected"):
-                    content = cb_result["response"]
-                    data = {"choices": [{"message": {"content": content, "tool_calls": None}}]}
-                else:
-                    data = {"choices": [{"message": {"content": cb_result["response"], "tool_calls": None}}]}
-                    # Re-parse do JSON para tool calls
-                    try:
-                        import json as _json
-                        parsed = _json.loads(cb_result["response"])
-                        if isinstance(parsed, dict) and "tool_calls" in parsed:
-                            data["choices"][0]["message"]["tool_calls"] = parsed["tool_calls"]
-                    except (ValueError, TypeError):
-                        pass
+                # O circuit breaker retorna apenas texto (não tool_calls).
+                # Se o backend foi fallback ou rejected, o conteúdo é a resposta final.
+                # Se foi local com erro, a resposta é a mensagem de erro.
+                # Em todos os casos, tratamos como resposta sem tool calls.
+                content = cb_result["response"]
+                data = {"choices": [{"message": {"content": content, "tool_calls": None}}]}
             else:
                 data = self._chat(messages, profile)
             message = data["choices"][0]["message"]
@@ -745,6 +752,33 @@ class Agent:
                     "name": func_name,
                     "content": output,
                 })
+
+                # Métricas de observabilidade
+                result.tools_called.append({
+                    "name": func_name,
+                    "args_preview": json.dumps(args, default=str)[:200],
+                    "output_len": len(output),
+                })
+
+                # Detecção de chamadas duplicadas: se o modelo repete a mesma
+                # tool com os mesmos argumentos, avisa e eventualmente para.
+                sig = f"{func_name}:{json.dumps(args, sort_keys=True, default=str)[:200]}"
+                if sig == last_tool_signature:
+                    consecutive_duplicates += 1
+                    if consecutive_duplicates >= 2:
+                        # Injeta aviso no contexto para o modelo parar
+                        messages.append({
+                            "role": "system",
+                            "content": (
+                                "You repeated the same tool call 3 times with identical arguments. "
+                                "This is not productive. Use the data you already have to answer."
+                            ),
+                        })
+                        result.duplicate_tool_warnings += 1
+                        consecutive_duplicates = 0
+                else:
+                    consecutive_duplicates = 0
+                last_tool_signature = sig
 
         result.final_response = (
             f"Erro: número máximo de iterações ({MAX_TURNS}) atingido sem resposta final."

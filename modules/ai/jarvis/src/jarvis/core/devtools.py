@@ -749,20 +749,9 @@ DEV_TOOLS: list[dict[str, Any]] = [
             },
         },
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "execute_shell",
-            "description": "Execute a shell command (bash -c). Use for: explore (ls/grep), test (pytest), git, curl.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "cmd": {"type": "string", "description": "Shell command to execute"},
-                },
-                "required": ["cmd"],
-            },
-        },
-    },
+    # NOTE: execute_shell is defined in agent.py TOOLS (with safe shlex-based execution).
+    # It is NOT duplicated here to avoid confusion for the LLM model.
+    # agent.py intercepts execute_shell calls and routes to _execute_tool().
     {
         "type": "function",
         "function": {

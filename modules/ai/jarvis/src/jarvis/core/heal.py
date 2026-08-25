@@ -38,6 +38,7 @@ SERVICE_MAP: dict[str, dict[str, str]] = {
 ALLOWLIST = tuple(v["service"] for v in SERVICE_MAP.values())
 
 DEFAULT_COOLDOWN_SECONDS = 300.0  # 5 min entre restarts do mesmo serviço
+DEFAULT_MAX_RESTARTS = 5  # máximo de restarts por serviço antes de desistir
 STATE_DIR_ENV = "JARVIS_STATE_DIR"
 
 
@@ -186,7 +187,48 @@ def _save_previous_state(state: Path, states: dict[str, str]) -> None:
         pass
 
 
-def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_SECONDS, alerts: bool = True) -> HealReport:
+def _restart_count(state: Path, service: str) -> int:
+    f = state / "heal-restart-counts.json"
+    if f.exists():
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            return int(data.get(service, 0))
+        except (OSError, ValueError):
+            return 0
+    return 0
+
+
+def _record_restart_count(state: Path, service: str) -> int:
+    f = state / "heal-restart-counts.json"
+    data: dict[str, Any] = {}
+    if f.exists():
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+    count = int(data.get(service, 0)) + 1
+    data[service] = count
+    f.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return count
+
+
+def _verify_service_up(service: str, scope: str, timeout_s: float = 10.0) -> bool:
+    """Verifica se o serviço subiu após restart (com polling curto)."""
+    import time as _time
+    deadline = _time.time() + timeout_s
+    while _time.time() < deadline:
+        try:
+            cmd = ["systemctl", "is-active", service] if scope == "system" else ["systemctl", "--user", "is-active", service]
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+            if proc.stdout.strip() == "active":
+                return True
+        except (OSError, subprocess.SubprocessError):
+            pass
+        _time.sleep(1.0)
+    return False
+
+
+def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_SECONDS, alerts: bool = True, max_restarts: int = DEFAULT_MAX_RESTARTS) -> HealReport:
     """Detecta + repara. Retorna o relatório completo."""
     log = get_logger("heal")
     cfg = cfg or Config()
@@ -224,6 +266,9 @@ def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_S
             continue
 
         last = _last_restart(state, service)
+        restart_count = _restart_count(state, service)
+
+        # Verifica cooldown
         if time.time() - last < cooldown:
             report_inst.actions.append(
                 HealAction(
@@ -233,12 +278,45 @@ def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_S
             )
             continue
 
+        # Verifica limite de restarts
+        if restart_count >= max_restarts:
+            report_inst.actions.append(
+                HealAction(
+                    component=comp, service=service, scope=scope, action="report_only",
+                    skipped_reason=f"max restarts ({max_restarts}) atingido — serviço persistentemente down",
+                )
+            )
+            continue
+
         ok, detail = _restart_service(service, scope)
         log.info("heal_restart", detail={
             "component": comp, "service": service, "ok": ok, "detail": detail,
+            "restart_count": restart_count + 1,
         })
+
+        # Verificação pós-restart: confirma que o serviço subiu
+        if ok:
+            verified = _verify_service_up(service, scope)
+            if not verified:
+                ok = False
+                detail = "restart executou mas serviço não confirmou como ativo"
+                log.warn("heal_verify_failed", detail={"component": comp, "service": service})
+
         if ok:
             _record_restart(state, service)
+            # Sucesso: zera contador de restarts
+            try:
+                state / "heal-restart-counts.json"
+                counts_file = state / "heal-restart-counts.json"
+                if counts_file.exists():
+                    data = json.loads(counts_file.read_text(encoding="utf-8"))
+                    data[service] = 0
+                    counts_file.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            except Exception:  # noqa: BLE001
+                pass
+        else:
+            _record_restart_count(state, service)
+
         _append_audit(state, {
             "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "component": comp,
@@ -246,6 +324,7 @@ def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_S
             "action": "restart",
             "ok": ok,
             "detail": detail,
+            "restart_count": restart_count + 1,
         })
         if alerts:
             _alert(service, comp, detail, healed=ok)

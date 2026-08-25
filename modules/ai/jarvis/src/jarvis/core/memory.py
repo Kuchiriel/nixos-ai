@@ -160,7 +160,7 @@ class EpisodicMemory:
                 continue
             text = payload.get("text", "")
             # dedup: texto idêntico ou muito similar → mantém o mais recente
-            text_key = text.strip().lower()[:200]  # chave de dedup truncada
+            text_key = text.strip().lower()[:500]  # chave de dedup — 500 chars evita falsos positivos
             if text_key in seen_texts:
                 continue
             seen_texts.add(text_key)
