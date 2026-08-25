@@ -252,3 +252,56 @@ The current configuration (ngl=45, ncmoe=99) is already near-optimal for this ha
 - More VRAM (external GPU, RTX 4060+ with 8GB)
 - Speculative decoding with accurate draft model
 - Model quantization improvements (smaller expert weights)
+
+## Video Analysis: RTX 3060 Expert Cache (70+ tok/s)
+
+### Key Findings from "How Fast Can One RTX 3060 Actually Run 35B"
+
+1. **The "Zero-Missing" Trick**
+   - If expert not on GPU, return zeros
+   - Run CPU pass for missing experts
+   - Sum results = mathematically identical output
+   - This is the enabling technique for hybrid execution
+
+2. **Scheduler Optimization**
+   - GPU work in ONE contiguous block
+   - CPU work in ONE contiguous block
+   - Combine results ONCE at the end
+   - Bad scheduling = expert weights bouncing across PCIe = disaster
+
+3. **Cache Behavior**
+   - Expert distribution is FLAT over long time
+   - But at any moment, only a handful are active
+   - LRU cache achieves ~45% hit rate
+   - Oracle (perfect knowledge) achieves ~41%
+   - Key: "What is hot RIGHT NOW" matters more than "what is popular overall"
+
+4. **Performance Results**
+   - Baseline (no cache): ~42 tok/s
+   - Expert cache alone: ~45 tok/s (+7%)
+   - Speculative decoding alone: ~55 tok/s (+31%)
+   - Speculative + cache: ~70 tok/s (+67%)
+   - With concurrency (GPU+CPU parallel): 70-75 tok/s
+
+5. **Hardware Requirements**
+   - RTX 3060 (12GB VRAM): fits ~50% of experts → strong results
+   - RTX 4050 (6GB VRAM): fits ~25% of experts → marginal benefit
+   - Below 15-20% fit, fixed caching stops being beneficial
+
+6. **PCIe Transfer Cost**
+   - Bad variant: ~127 MB transferred per token (disastrous)
+   - Good variant: ~9 MB transferred per token
+   - Key: Minimize transfers, not just cache misses
+
+### Implications for Our RTX 4050
+
+- **Expert cache**: Borderline feasible (25% fit = marginal benefit)
+- **Speculative decoding**: Most promising optimization (+31% potential)
+- **Scheduler optimization**: Could help without VRAM constraints
+- **Concurrency**: Requires more VRAM for concurrent execution
+
+### Recommended Priority
+
+1. **Speculative decoding** (highest impact, no VRAM increase needed)
+2. **Scheduler optimization** (could help with current config)
+3. **Expert cache** (only if VRAM increases)
