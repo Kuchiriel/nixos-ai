@@ -152,7 +152,7 @@ in {
       model = "llm-host";
       mmproj = "llm-host-mmproj";
       threads = 8;
-      ctxSize = 4096;
+      ctxSize = 196608;
       batchSize = 512;
       ubatch = 512;
       gpuLayers = 45;
