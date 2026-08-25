@@ -18,9 +18,8 @@ in {
         Para descobrir seu chat_id: mande uma mensagem para o bot e chame
         https://api.telegram.org/bot<TOKEN>/getUpdates (campo chat.id).
         O `-` no EnvironmentFile faz o systemd IGNORAR a ausência do arquivo:
-        sem token o serviço fica parado (o CLI sai limpo) até você criar o
-        bot e preencher o arquivo — depois é só `sudo systemctl restart
-        jarvis-telegram` (ou o próximo rebuild).
+        sem token o serviço fica parado até você criar o bot e preencher o
+        arquivo — depois é só `sudo systemctl restart jarvis-telegram`.
       '';
     };
 
@@ -31,24 +30,19 @@ in {
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    # Bot em long-polling (sem webhook — funciona atrás de NAT). Restart
-    # on-failure: o self-heal do systemd cobre quedas de rede do Telegram.
+  config = lib.mkIf (config.services.jarvis.enable && cfg.enable) {
     systemd.services.jarvis-telegram = {
       description = "JARVIS — canal Telegram (aprovação assíncrona)";
-      after = ["network-online.target"];
+      after = ["network-online.target" "jarvis.target"];
       wants = ["network-online.target"];
-      wantedBy = ["multi-user.target"];
-      #       path = [ pkgs.jarvis ];
+      partOf = ["jarvis.target"];
+      wantedBy = ["jarvis.target"];
       serviceConfig = {
         Type = "simple";
         User = cfg.user;
-        # `-` = não falha se o arquivo ainda não existe (aguarda o token)
         EnvironmentFile = "-${cfg.environmentFile}";
-        #ExecStart = "${pkgs.jarvis}/bin/jarvis telegram";
         Restart = "on-failure";
         RestartSec = "5";
-        # sem timeout: long-polling mantém a conexão aberta
         TimeoutStopSec = "10";
       };
     };

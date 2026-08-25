@@ -36,20 +36,16 @@ in {
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    # O usuário precisa conseguir restartar os serviços vigiados: em modo user,
-    # só reinicia serviços do próprio usuário; para serviços do sistema, ou
-    # `runAsRoot = true` (serviço systemd do sistema) ou sudo NOPASSWD restrito
-    # à allowlist (llama-cpp-server, llama-cpp-embeddings, qdrant).
+  config = lib.mkIf (config.services.jarvis.enable && cfg.enable) {
     systemd.services.jarvis-heal = lib.mkIf cfg.runAsRoot {
       description = "JARVIS self-heal (root) — detecta serviços down e repara";
-      wantedBy = ["multi-user.target"];
+      after = ["jarvis.target"];
+      partOf = ["jarvis.target"];
+      wantedBy = ["jarvis.target"];
       serviceConfig = {
-        #         ExecStart = "${pkgs.jarvis}/bin/jarvis heal --watch --interval ${toString cfg.interval} --cooldown ${toString cfg.cooldown}";
         Environment = ["JARVIS_JSONL=0"];
         Restart = "on-failure";
         RestartSec = "30";
-        # Audit/lições da memória ficam em ~root/.local/state/jarvis
       };
     };
 
@@ -57,7 +53,6 @@ in {
       description = "JARVIS self-heal — detecta serviços down e repara";
       wantedBy = ["default.target"];
       serviceConfig = {
-        #         ExecStart = "${pkgs.jarvis}/bin/jarvis heal --watch --interval ${toString cfg.interval} --cooldown ${toString cfg.cooldown}";
         Environment = ["JARVIS_JSONL=0"];
         Restart = "on-failure";
         RestartSec = "30";

@@ -1,27 +1,37 @@
 {
+  config,
   lib,
+  pkgs,
   ...
 }:
 # ═══════════════════════════════════════════════════════════════════════
-# JARVIS-ENV — o "cérebro do ambiente" (metáfora da água).
+# JARVIS-ENV — Master orchestrator do ecossistema Jarvis.
 #
-# UM switch central: `services.jarvis.environment` (vm | host). Todos os
-# módulos bebem dele em vez de detectar o ambiente cada um do seu jeito:
+# Dois switches centrais:
+#   1. services.jarvis.enable  — liga/desliga TODO o ecossistema
+#   2. services.jarvis.environment — "vm" ou "host" (profile de execução)
 #
-#   - llama-cpp  → profile do models.nix (vm=CPU Qwen3-4B, host=MoE+GPU)
-#   - waybar     → módulos por hardware (sem battery/bluetooth na VM)
-#   - mpvpaper   → wallpaper animado só no host (iGPU)
-#   - hyprland   → animações/efeitos por ambiente
+# Hierarquia systemd:
+#   jarvis.target (multi-user.target)
+#       ├── qdrant.service (infraestrutura base)
+#       ├── llama-cpp-server.service (inferência)
+#       ├── jarvis-heal.service (auto-reparo)
+#       ├── jarvis-idle-worker.timer (manutenção)
+#       ├── jarvis-telegram.service (notificações)
+#       ├── jarvis-vault-summarize.timer (memória)
+#       └── jarvis-gaming-watcher.service (resource profiles)
 #
-# Por quê declarativo e não "auto-detect em build": o NixOS avalia a config
-# ANTES do boot — não existe detecção em tempo de build. A água NixOS é:
-# cada host declara seu recipiente (1 linha), e o corpo inteiro reage junto.
-# A detecção em RUNTIME (systemd-detect-virt/lspci) fica para os serviços
-# que precisam decidir ao vivo (hwdetect/hwprofile no Python).
+# Quando services.jarvis.enable = false:
+#   - NENHUM serviço Jarvis inicia no boot
+#   - NENHUMA configuração de runtime é ativada
+#   - Modelos NÃO são baixados (fetchurl é lazy — se ninguém referencia, não baixa)
+#
+# IMPORTANTE: mkIf NÃO impede avaliação de toda expressão no módulo.
+# O Nix ainda avalia a estrutura. O objetivo é evitar materialização/ativação.
 # ═══════════════════════════════════════════════════════════════════════
 with lib; {
   options.services.jarvis = {
-    enable = mkEnableOption "JARVIS environment switch (vm/host)";
+    enable = mkEnableOption "Jarvis Ecosystem (master toggle for all Jarvis services)";
 
     environment = mkOption {
       type = types.enum ["vm" "host"];
@@ -33,5 +43,32 @@ with lib; {
         este único switch — troque aqui, o corpo inteiro reage no rebuild.
       '';
     };
+  };
+
+  config = mkIf config.services.jarvis.enable {
+    # ═══════════════════════════════════════════════════════════════════
+    # JARVIS TARGET — target mestre do ecossistema
+    # ═══════════════════════════════════════════════════════════════════
+    systemd.targets.jarvis = {
+      description = "Jarvis AI Ecosystem";
+      wants = [
+        "qdrant.service"
+        "llama-cpp-server.service"
+        "jarvis-gaming-watcher.service"
+      ];
+      after = [
+        "qdrant.service"
+        "llama-cpp-server.service"
+      ];
+    };
+
+    # ═══════════════════════════════════════════════════════════════════
+    # TMPFILES — diretórios base do ecossistema
+    # ═══════════════════════════════════════════════════════════════════
+    systemd.tmpfiles.rules = [
+      "d /var/lib/jarvis 0755 root root -"
+      "d /var/lib/jarvis/models 0755 root root -"
+      "h /var/lib/jarvis/models - - - - +C"
+    ];
   };
 }

@@ -13,7 +13,7 @@
  #   ./m3ta-stt-ptt.nix
     ./neovim.nix
     ./obsidian.nix
-    #./ranger.nix
+    ./ranger.nix
     ./rofi.nix
     ./starship.nix
     ./stylix.nix

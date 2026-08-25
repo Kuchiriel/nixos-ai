@@ -71,12 +71,13 @@ in {
     xclip
     cloudflare-warp
     # Pacote do JARVIS via overlay
-    # jarvis
+    jarvis
   ];
 
   # Habilita o gerenciamento de volumes e montagem de mídia
   services.gvfs.enable = true;
   services.udisks2.enable = true;
+  services.upower.enable = true; # Battery detection for waybar
 
   services.cloudflare-warp.enable = false;
 
@@ -136,10 +137,12 @@ in {
   # =========================================================================
   # 2. SERVIÇOS JARVIS & IA (Host)
   # =========================================================================
+  # Master toggle: services.jarvis.enable = true (já definido acima)
+  # Quando desabilitado, NENHUM serviço Jarvis inicia.
   services.llama-cpp-server.enable = false;
   services.llama-cpp-embeddings.enable = false;
   services.llama-cpp-rerank.enable = false;
-  services.qdrant.enable = true;
+  # services.qdrant.enable é definido por qdrant.nix (condicional a jarvis.enable)
   services.jarvis-vault.enable = false;
   services.jarvis-idle.enable = false;
   services.jarvis-telegram.enable = false;
@@ -161,21 +164,12 @@ in {
   # =========================================================================
   # 3. KERNEL, PERFORMANCE E ZRAM
   # =========================================================================
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
+  # boot.loader: definido em boot.nix (systemd-boot + EFI)
+  # boot.kernelPackages: definido em kernel.nix (linuxPackages_zen)
+  # zramSwap: definido em zram.nix (zstd, 50%, priority 999)
 
-  # ADICIONE ESTA LINHA AQUI: Força o NixOS a compilar o sistema com o Kernel Zen
-  boot.kernelPackages = lib.mkForce pkgs.linuxPackages_zen;
-
-  # ADICIONE ESTAS DUAS LINHAS AQUI: Ativa o controle térmico e trava performance
   services.thermald.enable = true;
   powerManagement.cpuFreqGovernor = "performance";
-
-  zramSwap = lib.mkForce {
-    enable = true;
-    memoryPercent = 50;
-    algorithm = "zstd";
-  };
 
   boot.kernel.sysctl = {
     "vm.swappiness" = 10;
@@ -192,14 +186,11 @@ in {
     ACTION=="add|change", KERNEL=="nvme[0-9]*n[0-9]*", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="none"
   '';
 
-  # Garante que as pastas de banco vetorial (Qdrant) e modelos nasçam com +C (No CoW)
   # Regras de tmpfiles: limpeza e suporte a No CoW (+C) para Btrfs
+  # NOTA: /var/lib/qdrant e /var/lib/jarvis/models já são criados por
+  # qdrant.nix e jarvis-env.nix respectivamente (condicionais a jarvis.enable)
   systemd.tmpfiles.rules = [
     "d /var/tmp 1777 root root 14d"
-    "d /var/lib/qdrant 0755 jarvis jarvis - -"
-    "h /var/lib/qdrant - - - - +C"
-    "d /var/lib/jarvis/models 0755 jarvis jarvis - -"
-    "h /var/lib/jarvis/models - - - - +C"
   ];
 
   # =========================================================================

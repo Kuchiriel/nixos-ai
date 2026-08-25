@@ -1,11 +1,11 @@
 {
   lib,
   config,
-  mkIf,
   ...
 }:
-
-  {  
+# Qdrant Vector Database — infraestrutura base do RAG.
+# Condicional a services.jarvis.enable (master toggle).
+lib.mkIf config.services.jarvis.enable {
   users.groups.qdrant = {};
 
   users.users.qdrant = {
@@ -28,9 +28,15 @@
     };
   };
 
+  systemd.services.qdrant = {
+    partOf = ["jarvis.target"];
+    wantedBy = ["jarvis.target" "multi-user.target"];
+  };
+
   systemd.tmpfiles.rules = [
     "d /var/lib/qdrant 0750 qdrant qdrant -"
     "d /var/lib/qdrant/storage 0750 qdrant qdrant -"
     "d /var/lib/qdrant/snapshots 0750 qdrant qdrant -"
+    "h /var/lib/qdrant - - - - +C"
   ];
 }

@@ -4,49 +4,25 @@
   ...
 }:
 # ═══════════════════════════════════════════════════════════════════════
-# LITELLM-CASCADE — cascade/fallback/handover de modelos (porta do legado)
+# LITELLM-CASCADE — cascade/fallback/handover de modelos
 #
-# O legado (Manjaro) usava LiteLLM como gateway unificado (config-free-ai.yaml
-# + config-smart.yaml): um endpoint OpenAI-compat que ROTEIA entre modelos
-# locais e nuvem grátis com fallbacks em cadeia:
+# Estratégia:
+#   1. LOCAL primeiro (llama-cpp) — zero custo, privado
+#   2. Se falhar → nuvem grátis: Groq → Gemini → OpenRouter
+#   3. JARVIS usa UM endpoint (http://127.0.0.1:4000/v1)
 #
-#   local (llama.cpp) → Groq (grátis) → Gemini (grátis) → OpenRouter (grátis)
-#
-# Aqui usamos o MÓDULO OFICIAL do nixpkgs (services.litellm, 26.05) — com
-# hardening (DynamicUser, PrivateTmp), cache tiktoken seedado e suporte a
-# environmentFile. Este módulo fino só injeta a ESTRATÉGIA de cascata nele.
-#
-# = Estratégia (água: funciona no lab e no host) =
-#   1. LOCAL primeiro (lab: Qwen3-4B; host: Qwen3.6-35B MoE) — zero custo,
-#      privado, sempre ativo (api_base 127.0.0.1:8080, o llama-cpp)
-#   2. Se falhar/lento → nuvem grátis: Groq (14.400 req/dia) → Gemini
-#      (1M tok/min) → OpenRouter (30+ modelos :free, sem cartão)
-#   3. O JARVIS usa UM endpoint (http://127.0.0.1:4000/v1) e o LiteLLM decide
-#      — a cascata fica declarativa, não no código do agente
-#
-# API keys: NUNCA no repo. Crie manualmente no host (fora do git):
-#   sudo tee /etc/litellm.env > /dev/null <<'EOF'
-#   LITELLM_MASTER_KEY=sk-...
-#   GROQ_API_KEY=gsk_...
-#   GEMINI_API_KEY=AIza...
-#   OPENROUTER_API_KEY=sk-or-...
-#   EOF
-#   sudo chmod 600 /etc/litellm.env
-# Sem o arquivo o serviço sobe mesmo assim (rota local-only) — não quebra.
+# API keys: /etc/litellm.env (chmod 600, fora do repo)
 # ═══════════════════════════════════════════════════════════════════════
 with lib; let
   cfg = config.services.litellm;
 in {
-  # Só ativa quando o serviço upstream estiver ligado
-  config = mkIf cfg.enable {
+  config = mkIf (config.services.jarvis.enable && cfg.enable) {
     services.litellm = {
-      # Port 4000 — o default (8080) conflita com o llama-cpp-server
       port = 4000;
-      host = "127.0.0.1"; # só local (JARVIS roda na mesma máquina)
+      host = "127.0.0.1";
       environmentFile = "/etc/litellm.env";
 
       settings = {
-        # ── Modelos grátis (estratégia do legado, atualizada 08/2026) ──
         model_list = [
           {
             model_name = "local";
@@ -83,7 +59,7 @@ in {
         ];
 
         router_settings = {
-          routing_strategy = "least-busy"; # rota p/ o modelo disponível mais rápido
+          routing_strategy = "least-busy";
           num_retries = 2;
           timeout = 120;
         };

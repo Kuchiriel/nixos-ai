@@ -7,15 +7,11 @@
 with lib; let
   profileName = config.services.llama-cpp-server.profile;
   # Perfil de execução — única fonte de verdade: modules/ai/models.nix.
-  # Centraliza arquivo do modelo, threads, ctx, ubatch, GPU layers, KV cache,
-  # MoE flags e scheduler por cenário (vm = lab CPU, host = bare metal GPU).
   prof = pkgs.aiModels.profiles.${profileName};
 
   # Compila o llama-cpp com suporte a CUDA forçado.
   # Usa o `pkgs` já recebido pelo módulo (herda allowUnfree + overlay
-  # definidos centralmente no flake.nix) — NÃO reimportar pkgs.path aqui,
-  # isso cria uma segunda instância de nixpkgs isolada que perde overlays
-  # e flags de otimização de CPU, degradando o TPS no offload MoE (n-cpu-moe).
+  # definidos centralmente no flake.nix) — NÃO reimportar pkgs.path aqui.
   llamaCppPkg = pkgs.llama-cpp.override {cudaSupport = true;};
 in {
   options.services = {
@@ -27,8 +23,6 @@ in {
       };
       profile = mkOption {
         type = types.enum ["vm" "host"];
-        # Água: o perfil segue o switch central services.jarvis.environment
-        # (declarado no host). O lab declara "vm"; o host físico "host".
         default =
           if config.services.jarvis.environment == "host"
           then "host"
@@ -61,17 +55,18 @@ in {
     };
   };
 
-  config = mkIf (config.services.llama-cpp-server.enable || config.services.llama-cpp-embeddings.enable || config.services.llama-cpp-rerank.enable) {
-    # --- SERVIDORES LLAMA.CPP ---
-    # Tudo vem do perfil em models.nix — nada de download imperativo nem
-    # parâmetros hardcoded aqui. O modelo vive no store (fetchurl, hash
-    # verificado): o sistema nasce com o modelo certo para o cenário.
+  config = mkIf (
+    config.services.jarvis.enable
+    && (config.services.llama-cpp-server.enable || config.services.llama-cpp-embeddings.enable || config.services.llama-cpp-rerank.enable)
+  ) {
     systemd.services = {
       llama-cpp-server = mkIf config.services.llama-cpp-server.enable {
         description = "Llama.cpp Main Server (${profileName}: ${prof.model})";
-        after = ["network-online.target"];
+        after = ["network-online.target" "qdrant.service"];
         wants = ["network-online.target"];
-        wantedBy = ["multi-user.target"];
+        # PartOf jarvis.target: para junto com o ecossistema
+        partOf = ["jarvis.target"];
+        wantedBy = ["jarvis.target" "multi-user.target"];
 
         script = ''
           exec ${llamaCppPkg}/bin/llama-server \
@@ -90,17 +85,15 @@ in {
             Restart = "on-failure";
           }
           // optionalAttrs (prof.scheduler != null) {
-            # Host: prioridade de tempo real para o servidor de LLM (kernel).
-            # Exige privilégio — por isso o perfil host roda como root.
             CPUSchedulingPolicy = prof.scheduler.policy;
             CPUSchedulingPriority = prof.scheduler.priority;
           };
       };
 
-      # --- 2. SERVIDOR DE EMBEDDINGS (RAG) ---
       llama-cpp-embeddings = mkIf config.services.llama-cpp-embeddings.enable {
         description = "Llama.cpp Embeddings Server";
-        wantedBy = ["multi-user.target"];
+        partOf = ["jarvis.target"];
+        wantedBy = ["jarvis.target"];
         script = ''
           exec ${pkgs.llama-cpp}/bin/llama-server \
             -m "${pkgs.aiModels.embed}" \
@@ -110,11 +103,11 @@ in {
         serviceConfig.User = "nixos";
       };
 
-      # --- 3. SERVIDOR DE RERANK (SOTA RAG) ---
       llama-cpp-rerank = mkIf config.services.llama-cpp-rerank.enable {
         description = "Llama.cpp Rerank Server";
-        wantedBy = ["multi-user.target"];
-        environment.CUDA_VISIBLE_DEVICES = ""; # CPU-only para preservar VRAM
+        partOf = ["jarvis.target"];
+        wantedBy = ["jarvis.target"];
+        environment.CUDA_VISIBLE_DEVICES = "";
         script = ''
           exec ${pkgs.llama-cpp}/bin/llama-server \
             -m "${pkgs.aiModels.reranker}" \
