@@ -159,6 +159,9 @@ in {
       kvCache = "-fa on -ctk q4_0 -ctv q4_0";
       moeFlags = "--n-cpu-moe 35 --split-mode layer";
       extraArgs = [
+        "--no-mmproj-offload"
+        "--image-min-tokens"
+        "1024"
         "--parallel"
         "1"
         "--jinja"
