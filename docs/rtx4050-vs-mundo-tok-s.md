@@ -83,11 +83,11 @@ O expert cache (PR #26824) dá +67% no 3060 porque:
 3. 🔲 **Q3_K_M** — modelo menor (16.6 vs 21 GiB), mais experts cabem
 
 ### Tier 2: Hardware (custo baixo)
-4. 🔲 **Cooler externo** — sustenta clocks, +30-40% sustained (~R$100-200)
-5. 🔲 **Undervolt CPU** — reduz thermal, mantém clocks GPU
+4. 🔲 **Cooler externo** — [HYPOTHESIS] pode sustentar clocks, ganho estimado +30-40% sustained (~R$100-200). **Nunca testado.**
+5. 🔲 **Undervolt CPU** — [HYPOTHESIS] reduz thermal, mantém clocks GPU. **Nunca testado.**
 
 ### Tier 3: Hardware (custo alto)
-6. 🔲 **GPU upgrade** — RTX 4060 8GB ou RTX 4070 12GB
+6. 🔲 **GPU upgrade** — RTX 4060 8GB ou RTX 4070 12GB. [HYPOTHESIS] ganhos estimados de +15-60%. **Nunca testado.**
 
 ## Conclusão
 

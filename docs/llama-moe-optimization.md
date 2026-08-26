@@ -18,9 +18,9 @@
 | Total Size | 20.6 GiB |
 | Total Params | 34.66 B |
 | Active Params | ~3 B per token |
-| Layers | 48 |
-| Experts per Layer | 64 (3B active = ~3 experts used) |
-| Expert Weight per Layer | ~430 MB (Q4_K_M) |
+| Layers | 64 |
+| Experts per Layer | 256 (top-8 active per token) |
+| Expert Weight per Layer | ~38 GB (256 × 148.5 MiB) |
 | Total Expert Weights | ~20 GB |
 | Dense Weights (attn+ffn) | ~0.6 GB |
 
@@ -177,22 +177,28 @@ The CPU MUL_MAT_ID kernel in `repack.cpp` could be optimized:
 
 Given the 6GB VRAM constraint, the expert cache approach is NOT recommended for this hardware. Instead:
 
-### Priority 1: Thread Optimization (Immediate)
-```nix
-threads = 6;  # Instead of 12
-```
-Expected improvement: ~10-15% TG
+### ~~Priority 1: Thread Optimization~~ [SUPERSEDED]
 
-### Priority 2: Poll Optimization (Immediate)
-```nix
-moeFlags = "--n-cpu-moe 99 --split-mode layer --poll 25 --poll-batch 25";
-```
-Expected improvement: ~5-10% TG
+**⚠️ This recommendation was superseded by server benchmarks (`moe-gargalo-diagnostico.md`, `benchmark-definitivo-2026-08-26.md`).**
 
-### Priority 3: Speculative Decoding (Medium-term)
-- Use MTP draft head if available in the GGUF
-- Or use a small draft model (Qwen3-4B) for speculative decoding
-- Expected improvement: ~20-50% TG (if draft model is accurate)
+The llama-bench data (t=6 best at 16.77 tok/s) used a different workload than real inference. Server benchmarks show:
+- t=8: 31.28 tok/s (best)
+- t=6: 30.83 tok/s
+- t=12: 14.75 tok/s (E-cores hurt)
+
+**Current recommendation: t=8** (confirmed by multiple server benchmarks).
+
+### ~~Priority 2: Poll Optimization~~ [UNTESTED]
+
+**⚠️ `moe-benchmark-results.md` poll sweep data actually shows poll=25 (16.22 tok/s) beats poll=50 (13.25 tok/s), but the conclusion incorrectly stated poll=50 was optimal.**
+
+However, these are llama-bench numbers. Server impact is unclear. The current config uses poll=50.
+
+### Priority 3: Speculative Decoding [SUPERSEDED]
+
+**⚠️ N-gram speculative decoding was tested and HURT performance by -51%** (`moe-benchmark-results.md`). Draft acceptance was only 48%, far below the ~70% needed to break even.
+
+A trained draft model (EAGLE-3) might work, but n-gram does not.
 
 ### Priority 4: Expert Cache (Research Only)
 - Only if VRAM increases (e.g., external GPU)

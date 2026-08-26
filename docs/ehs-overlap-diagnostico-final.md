@@ -7,21 +7,15 @@
 | Métrica | Baseline (ncmoe=99) | EHS-25 | Speedup |
 |---------|---------------------|--------|---------|
 | Eval time/token | 60.28 ms | 48.00 ms | **1.256x (+25.6%)** |
-| TG (server) | 16.59 t/s | 20.83 t/s | +25.6% |
-| TG (benchmark) | 29.1 t/s | 30.9 t/s | +6.2% |
+| TG (server eval_time) | 16.59 t/s | 20.83 t/s | +25.6% (compute only) |
+| TG (benchmark wall-clock) | 29.1 t/s | 30.9 t/s | **+6.2% (real improvement)** |
 | GPU utilization | 20.5% | 32.2% | +57% relativo |
 | VRAM | 2414 MiB | 4314 MiB | +1900 MiB |
 | Hit rate | — | 55% | — |
 
 ### Por que benchmark ≠ compute speedup?
 
-O benchmark mede wall time incluindo:
-- Network overhead (curl)
-- JSON parsing
-- Warmup period (cache ainda frio)
-- Prompt processing
-
-O server `eval time` mede apenas compute. O speedup real de compute é **25.6%**, não 6.2%.
+**⚠️ Importante:** O `eval_time` do servidor mede APENAS o compute (matmuls, kernels), excluindo overhead de rede, JSON, e tokenização. O speedup de compute é 25.6%, mas o **improvement real sentido pelo usuário (wall-clock TG) é +6.2%**. O eval_time é útil para diagnosticar gargalos de compute, mas NÃO deve ser reportado como "speedup" sem essa ressalva.
 
 ---
 

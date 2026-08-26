@@ -8,7 +8,7 @@
 ## Modelo
 - **Qwen3.6-35B-A3B Q4_K_M** (~20.6 GiB)
 - 64 experts, top-8 per token
-- Expert size: ~72 MiB per slot per layer
+- Expert size: ~148.5 MiB per expert (Q4_K_M). Note: earlier docs incorrectly stated 72 MiB due to wrong expert count (64 instead of 256).
 
 ## Configuração Base
 ```

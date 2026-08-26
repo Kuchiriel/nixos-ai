@@ -60,7 +60,7 @@
 | 25 | 16.22 |
 | 50 | 13.25 |
 
-**Default poll=50 is already optimal for this config**
+**⚠️ Note:** The data shows poll=25 (16.22 tok/s) is faster than poll=50 (13.25 tok/s), contradicting the original conclusion. However, these are llama-bench numbers — server impact may differ. The current production config uses poll=50.
 
 ## Conclusion
 
