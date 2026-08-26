@@ -144,6 +144,30 @@ in {
       scheduler = null;
     };
 
+    # --- host-ncmoe35: ncmoe=35 é +7.3% vs baseline (32.5 vs 30.3 tok/s) ---
+    # Testado 2026-08-26: upstream llama.cpp, ncmoe=35 coloca experts das
+    # layers 35-44 na GPU, restante na CPU. Mais VRAM (4933 MiB) mas mais rápido.
+    # REQUER upstream llama.cpp (NÃO wackmall). Se wackmall, usar host-ehs.
+    host-ncmoe35 = {
+      model = "llm-host";
+      mmproj = "llm-host-mmproj";
+      threads = 8;
+      ctxSize = 4096;
+      batchSize = 512;
+      ubatch = 512;
+      gpuLayers = 45;
+      kvCache = "-fa on -ctk q4_0 -ctv q4_0";
+      moeFlags = "--n-cpu-moe 35 --split-mode layer";
+      extraArgs = [
+        "--parallel"
+        "1"
+        "--jinja"
+        "--no-warmup"
+      ];
+      user = "nixos";
+      scheduler = null;
+    };
+
     # --- host-ehs: Expert Hot Store (fork wackmall, +25.6% compute) ---
     # Requer binario compilado: ~/projects/llama-wackmall/build/bin/llama-server
     # Medido: 60.28 → 48.00 ms/token (+25.6%), GPU util 20.5% → 32.2%

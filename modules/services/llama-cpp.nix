@@ -29,7 +29,7 @@ in {
         default = 8080;
       };
       profile = mkOption {
-        type = types.enum ["vm" "host" "host-ehs" "host-ehs-optimized"];
+        type = types.enum ["vm" "host" "host-ncmoe35" "host-ehs" "host-ehs-optimized"];
         default =
           if config.services.jarvis.environment == "host"
           then "host"
