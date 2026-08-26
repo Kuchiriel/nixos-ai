@@ -152,7 +152,9 @@ in {
       model = "llm-host";
       mmproj = "llm-host-mmproj";
       threads = 8;
-      ctxSize = 196608;
+      # 196K ctx não cabe na VRAM com EHS (KV cache + hot store = >6GB).
+      # 8192 é suficiente pra Roo Dev e cabe com margem.
+      ctxSize = 8192;
       batchSize = 512;
       ubatch = 512;
       gpuLayers = 45;
