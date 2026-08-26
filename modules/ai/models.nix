@@ -152,8 +152,6 @@ in {
       model = "llm-host";
       mmproj = "llm-host-mmproj";
       threads = 8;
-      # 196K ctx não cabe na VRAM com EHS (KV cache + hot store = >6GB).
-      # 8192 é suficiente pra Roo Dev e cabe com margem.
       ctxSize = 8192;
       batchSize = 512;
       ubatch = 512;
@@ -167,7 +165,45 @@ in {
       ];
       user = "nixos";
       scheduler = null;
-      # Usa binario wackmall (wrapper com CUDA)
+      wrapper = "llama-wackmall-wrapper";
+    };
+
+    # --- host-ehs-optimized: melhor dos dois mundos ---
+    # Combina EHS-25 (hot experts na GPU) com todas as flags de otimização do host.
+    # VRAM budget: 6141 - 2400 (modelo) - 1895 (EHS) = 1846 MB para KV cache.
+    # 16384 tokens × 64 KB = 1024 MB — cabe com margem.
+    # Se o cooler sustentar clocks altos, este profile deve ser o mais rápido.
+    host-ehs-optimized = {
+      model = "llm-host";
+      mmproj = "llm-host-mmproj";
+      threads = 12;
+      ctxSize = 16384;
+      batchSize = 1024;
+      ubatch = 1024;
+      gpuLayers = 45;
+      kvCache = "-fa on -ctk q4_0 -ctv q4_0";
+      moeFlags = "-ehs 25 --split-mode layer --poll 50 --poll-batch 50";
+      extraArgs = [
+        "--no-mmproj-offload"
+        "--image-min-tokens"
+        "1024"
+        "--kv-unified"
+        "--ctx-checkpoints"
+        "2"
+        "--keep"
+        "1024"
+        "--no-warmup"
+        "--prio"
+        "2"
+        "--prio-batch"
+        "3"
+        "--parallel"
+        "2"
+        "--cont-batching"
+        "--jinja"
+      ];
+      user = "nixos";
+      scheduler = null;
       wrapper = "llama-wackmall-wrapper";
     };
   };

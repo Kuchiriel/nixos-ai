@@ -144,7 +144,7 @@ in {
   # Master toggle: services.jarvis.enable = true (já definido acima)
   # Quando desabilitado, NENHUM serviço Jarvis inicia.
   services.llama-cpp-server.enable = true;
-  services.llama-cpp-server.profile = "host";
+  services.llama-cpp-server.profile = "host-ehs-optimized";
   services.llama-cpp-embeddings.enable = false;
   services.llama-cpp-rerank.enable = false;
   # services.qdrant.enable é definido por qdrant.nix (condicional a jarvis.enable)
