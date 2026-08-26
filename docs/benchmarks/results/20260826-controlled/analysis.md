@@ -69,25 +69,29 @@ The sustained average blends cold + throttled phases, making it sensitive to exa
 
 ## Final Comparison Table
 
-| Config | Peak (median) | Sustained (mean) | Throttle @ | VRAM | Efficiency | Status |
-|--------|--------------|-----------------|------------|------|------------|--------|
+**⚠️ No true peak was measured.** All benchmarks used `--sustained-only 45`. The "Median TG" column represents the median of the sustained window, which混入了cold-phase and throttled-phase requests.
+
+| Config | Median TG (sustained window) | Mean TG (sustained window) | Throttle @ | VRAM | Efficiency | Status |
+|--------|----------------------------|---------------------------|------------|------|------------|--------|
 | **baseline** | **30.4** | **28.0** (avg of 28.6, 27.3) | ~42s | 2543 MB | 0.686 tok/s/W | **MEASURED** |
 | **ncmoe35** | **32.2** | **28.0** (avg of 26.2, 29.8) | ~42s | 4933 MB | 0.695 tok/s/W | **MEASURED** |
 | **ehs25** | **23.0** | **20.6** | ~26s | 5595 MB | 0.548 tok/s/W | **MEASURED** |
 
 ## Classification
 
+**Note:** No true peak was measured. "Median TG" refers to the median of the sustained window (混合cold + throttled phases).
+
 ### baseline vs ncmoe35
 
-- **Peak:** ncmoe35 median 32.2 vs baseline 30.4 → **+5.9% [MEASURED]**
-- **Sustained:** ncmoe35 28.0 vs baseline 28.0 → **~0% [MEASURED]**
-- **Conclusion:** **PEAK IMPROVEMENT WITHOUT SUSTAINED THROUGHPUT IMPROVEMENT**
-- **Explanation:** ncmoe35 puts more MoE experts on GPU (higher peak compute), but the extra VRAM usage (4933 vs 2543 MB) and power draw cause identical thermal throttling. Over a 45s window, both produce approximately the same total tokens.
+- **Median TG (sustained window):** ncmoe35 32.2 vs baseline 30.4 → **+5.9% [MEASURED]**
+- **Mean TG (sustained window):** ncmoe35 28.0 vs baseline 28.0 → **~0% [MEASURED]**
+- **Conclusion:** **HIGHER COLD-PHASE THROUGHPUT, NO SUSTAINED ADVANTAGE**
+- **Explanation:** ncmoe35 puts more MoE experts on GPU (higher throughput during cold phase), but the extra VRAM usage (4933 vs 2543 MB) and power draw cause identical thermal throttling. Over a 45s window, both produce approximately the same total tokens.
 
 ### ehs25 vs baseline
 
-- **Peak:** ehs25 median 23.0 vs baseline 30.4 → **-24.3% [MEASURED]**
-- **Sustained:** ehs25 20.6 vs baseline 28.0 → **-26.4% [MEASURED]**
+- **Median TG (sustained window):** ehs25 23.0 vs baseline 30.4 → **-24.3% [MEASURED]**
+- **Mean TG (sustained window):** ehs25 20.6 vs baseline 28.0 → **-26.4% [MEASURED]**
 - **Conclusion:** **REGRESSION** — EHS-25 is significantly slower than baseline on this hardware.
 - **Explanation:** The wackmall fork has higher overhead (5595 MB VRAM, mmproj loaded, EHS bookkeeping). The 6GB VRAM is insufficient for EHS to provide benefit. Previous claims of +6% were on the wackmall fork baseline (29.1 tok/s), not the upstream baseline (30.4 tok/s).
 
@@ -103,19 +107,21 @@ The sustained average blends cold + throttled phases, making it sensitive to exa
 
 ### MEASURED (this session)
 
-1. Baseline peak median: 30.4 tok/s ✅
-2. ncmoe35 peak median: 32.2 tok/s (+5.9%) ✅
-3. Both sustain ~28 tok/s over 45s ✅
+1. Baseline median TG (sustained window): 30.4 tok/s ✅
+2. ncmoe35 median TG (sustained window): 32.2 tok/s (+5.9%) ✅
+3. Both sustain ~28 tok/s mean over 45s ✅
 4. Thermal throttle at ~42s, GPU 68°C ✅
-5. EHS-25 sustained: 20.6 tok/s (-26% vs baseline) ✅
-6. Order bias affects sustained average by up to 12% ✅
+5. EHS-25 mean TG: 20.6 tok/s (-26% vs baseline) ✅
+6. Order bias affects sustained mean by up to 12% ✅
 7. Median is order-independent ✅
+8. **No true peak was measured** (all runs used --sustained-only) ✅
 
 ### SUPPORTED INFERENCE (from measured data)
 
 1. The thermal wall is the dominant factor for sustained throughput
-2. ncmoe=35's advantage disappears under sustained load due to thermal throttling
+2. ncmoe=35's higher cold-phase throughput disappears under sustained load due to thermal throttling
 3. EHS-25 is counterproductive on 6GB VRAM (too much overhead)
+4. True peak throughput is unknown — would require `--peak-only` measurement
 
 ### HYPOTHESIS (untested)
 

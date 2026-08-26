@@ -1,13 +1,9 @@
 # Benchmark Summary — 20260826-154715
 
-| Config | Peak TG | Sustained TG | Degradation | Classification |
+| Config | Median TG (sustained) | Mean TG (sustained) | Classification |
 |--------|---------|-------------|-------------|----------------|
-| ncmoe35 | — | 29.8 | — | INCOMPLETE |
-| baseline | — | 27.3 | — | INCOMPLETE |
-| ehs25 | — | 20.6 | — | INCOMPLETE |
+| ncmoe35 | 32.2 | 29.8 | INCOMPLETE (no peak measured) |
+| baseline | 30.4 | 27.3 | INCOMPLETE (no peak measured) |
+| ehs25 | 23.3 | 20.6 | INCOMPLETE (no peak measured) |
 
-**Legend:**
-- **STABLE**: <10% degradation peak→sustained
-- **MODERATE_THROTTLING**: 10-30% degradation
-- **SEVERE_THROTTLING**: 30-50% degradation
-- **EXTREME_THROTTLING**: >50% degradation
+**Note:** No peak was measured (--sustained-only). Median TG混入了cold + throttled phases. Mean TG includes all requests.

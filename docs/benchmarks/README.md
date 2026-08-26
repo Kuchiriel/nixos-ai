@@ -102,32 +102,34 @@ notes: |
 
 ## History
 
-| Date | Config | Peak (median) | Sustained (mean) | Classification | Notes |
-|------|--------|--------------|-----------------|----------------|-------|
-| 2026-08-26 | baseline (ncmoe=99) | 30.4 | 28.0 | CONTROLLED | Order A+B averaged, COLD start |
-| 2026-08-26 | ncmoe=35 | 32.2 | 28.0 | CONTROLLED | Order A+B averaged, COLD start |
-| 2026-08-26 | EHS-25 (wackmall) | 23.0 | 20.6 | CONTROLLED | Wackmall fork, always 3rd |
-| 2026-08-26 | baseline (ncmoe=99) | 31.0 | 29.7 | EARLIER | No thermal control |
-| 2026-08-26 | ncmoe=35 | 32.7 | 29.4 | EARLIER | No thermal control |
+| Date | Config | Median TG (sustained) | Mean TG (sustained) | Classification | Notes |
+|------|--------|----------------------|--------------------|----------------|-------|
+| 2026-08-26 | baseline (ncmoe=99) | 30.4 | 28.0 | CONTROLLED | Order A+B averaged, COLD start, --sustained-only |
+| 2026-08-26 | ncmoe=35 | 32.2 | 28.0 | CONTROLLED | Order A+B averaged, COLD start, --sustained-only |
+| 2026-08-26 | EHS-25 (wackmall) | 23.0 | 20.6 | CONTROLLED | Wackmall fork, --sustained-only |
+| 2026-08-26 | baseline (ncmoe=99) | — | 29.7 | EARLIER | No thermal control, --sustained-only |
+| 2026-08-26 | ncmoe=35 | — | 29.4 | EARLIER | No thermal control, --sustained-only |
 
-**Note:** Earlier results (no thermal control) are less reliable. Controlled results use COLD start check and order bias testing.
+**⚠️ No true peak was measured.** All controlled runs used `--sustained-only 45`. The "Median TG" represents the median of the sustained window (cold + throttled phases mixed). Earlier results are less reliable (no thermal control).
 
 ## Current Known Performance Baseline
 
 **Last updated:** 2026-08-26
 **Measurement method:** `scripts/benchmark-official.py` (45s sustained, upstream llama.cpp)
 
-### MEASURED (controlled benchmark, COLD start, order-bias tested)
+### MEASURED (controlled benchmark, COLD start, order-bias tested, --sustained-only)
+
+**⚠️ No true peak was measured.** All values below are from the sustained window.
 
 | Metric | baseline (ncmoe=99) | ncmoe=35 | EHS-25 |
 |--------|---------------------|----------|--------|
-| Peak (median TG) | 30.4 tok/s | 32.2 tok/s (+5.9%) | 23.0 tok/s (-24%) |
-| Sustained (mean TG) | 28.0 tok/s | 28.0 tok/s (≈same) | 20.6 tok/s (-26%) |
+| Median TG (sustained window) | 30.4 tok/s | 32.2 tok/s (+5.9%) | 23.0 tok/s (-24%) |
+| Mean TG (sustained window) | 28.0 tok/s | 28.0 tok/s (≈same) | 20.6 tok/s (-26%) |
 | Time to throttle | ~42s | ~42s | ~26s |
 | VRAM | 2,543 MB | 4,933 MB | 5,595 MB |
 | Efficiency | 0.686 tok/s/W | 0.695 tok/s/W | 0.548 tok/s/W |
 
-**Key finding:** ncmoe=35 shows PEAK IMPROVEMENT WITHOUT SUSTAINED IMPROVEMENT. The +5.9% peak advantage disappears under sustained load because both configs hit the same thermal wall at ~68°C GPU.
+**Key finding:** ncmoe=35 shows higher cold-phase throughput (+5.9% median) but NO sustained advantage. Both configs produce ~28 tok/s mean over 45s because both hit the same thermal wall at ~68°C GPU.
 
 **EHS-25 is counterproductive** on 6GB VRAM. The wackmall fork overhead (mmproj, EHS bookkeeping) outweighs any expert cache benefit.
 
