@@ -102,9 +102,45 @@ notes: |
 
 ## History
 
-| Date | Config | Sustained tok/s | Notes |
-|------|--------|-----------------|-------|
-| 2026-08-26 | EHS-25 | 18.6 | No external cooler, room temp ~25°C |
+| Date | Config | Peak TG | Sustained TG | Classification | Notes |
+|------|--------|---------|-------------|----------------|-------|
+| 2026-08-26 | baseline (ncmoe=99) | 31.0 | 29.7 | MODERATE_THROTTLING | 42s before throttle |
+| 2026-08-26 | ncmoe=35 | 32.7 | 29.4 | MODERATE_THROTTLING | 43s before throttle |
+| 2026-08-26 | EHS-25 (wackmall) | — | 18.6 | SEVERE_THROTTLING | Older measurement, different binary |
+
+## Current Known Performance Baseline
+
+**Last updated:** 2026-08-26
+**Measurement method:** `scripts/benchmark-official.py` (45s sustained, upstream llama.cpp)
+
+### MEASURED (Tier 1 — robustly measured)
+
+| Metric | baseline (ncmoe=99) | ncmoe=35 | Delta |
+|--------|---------------------|----------|-------|
+| Peak TG tok/s | 31.0 | 32.7 | +5.5% |
+| Sustained TG tok/s | 29.7 | 29.4 | -1.0% |
+| Time to throttle | ~42s | ~43s | ≈ same |
+| VRAM | 2,543 MB | 4,933 MB | +2,390 MB |
+| GPU power (peak) | 42 W | 42 W | ≈ same |
+| GPU temp (peak) | 67°C | 68°C | +1°C |
+| Efficiency | 0.705 tok/s/W | 0.697 tok/s/W | -1.1% |
+
+### THIRD-PARTY (not reproduced locally)
+
+| Metric | Value | Source |
+|--------|-------|--------|
+| RTX 3060 12GB baseline | ~42 tok/s | YouTube k_LostFpatg |
+| RTX 3060 12GB + expert cache | ~70+ tok/s | YouTube k_LostFpatg |
+| RTX 3090 24GB | ~140 tok/s | gilesthomas.com |
+
+### HYPOTHESIS (untested)
+
+- Cooler externo: +30-40% sustained (**UNTESTED**)
+- RTX 4060 8GB: +15-20% (**UNTESTED**)
+- Q3_K_M: improve hit rate (**UNTESTED**, download failed)
+- Poll=25 better than poll=50 (**UNTESTED** in server context)
+
+See `docs/benchmarks/performance-evidence-audit.md` for full classification.
 
 ## Scripts
 
