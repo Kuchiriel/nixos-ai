@@ -32,8 +32,10 @@ def _ok(name: str) -> dict:
 def fake_doctor(monkeypatch):
     calls = {"n": 0}
 
-    # Sempre pula verificação real de systemctl nos testes
-    monkeypatch.setattr("jarvis.core.heal._verify_service_up", lambda s, sc, **kw: True)
+    # Pula verificação pós-restart (systemctl is-active) — não existe no sandbox de build.
+    # O monkeypatch de _verify_service_up pode não pegar porque heal_once referencia
+    # o nome do módulo internamente; a env var é checada ANTES de chamar a função.
+    monkeypatch.setenv("JARVIS_SKIP_VERIFY", "1")
 
     def _set(checks):
         calls["n"] += 1

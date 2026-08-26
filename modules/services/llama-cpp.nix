@@ -28,7 +28,7 @@ in {
         default = 8080;
       };
       profile = mkOption {
-        type = types.enum ["vm" "host"];
+        type = types.enum ["vm" "host" "host-ehs"];
         default =
           if config.services.jarvis.environment == "host"
           then "host"
