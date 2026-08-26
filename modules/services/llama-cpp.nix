@@ -16,8 +16,9 @@ with lib; let
 
   # Se o profile tem wrapper (ex: host-ehs), usar o script wrapper
   # que aponta pro binario wackmall compilado localmente.
+  # O wrapper fica em modules/ai/ (../ai/ relativo a modules/services/).
   llamaBin = if prof ? wrapper && prof.wrapper != null
-    then "${./.}/${prof.wrapper}.sh"
+    then "${../ai}/${prof.wrapper}.sh"
     else "${llamaCppPkg}/bin/llama-server";
 in {
   options.services = {
