@@ -31,7 +31,7 @@ from datetime import datetime
 
 # ── Paths ────────────────────────────────────────────────────────────
 UPSTREAM = "/nix/store/n7n3jfqfxdbb74kzqk2bhjdgs56byirv-llama-cpp-10273/bin/llama-server"
-WACKMALL = "/home/nixos/projects/llama-wackmall/build/bin/llama-server"
+WACKMALL_WRAPPER = "/home/nixos/projects/nixos-ai/modules/ai/llama-wackmall-wrapper.sh"
 MODEL = "/nix/store/in9pq5ak2mj5km4f6r87v295bfm53w6c-Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"
 MMPROJ = "/nix/store/fc4lc40lbcp1mi0vqq4d4780d8vf3w5p-mmproj-BF16.gguf"
 PORT = 18080
@@ -44,6 +44,7 @@ WARMUP_REQUESTS = 3
 PEAK_RUNS = 3           # Rapid requests for peak measurement
 SUSTAINED_SECONDS = 90  # Continuous inference for sustained measurement
 COOLDOWN_SECONDS = 60   # Between configs for thermal recovery
+THERMAL_COLD_MAX_C = 62  # GPU temp must be below this for a 'cold' run
 
 # ── Configurations ───────────────────────────────────────────────────
 CONFIGS = {
@@ -73,7 +74,7 @@ CONFIGS = {
     },
     "ehs25": {
         "description": "Expert Hot Store 25 slots (wackmall fork)",
-        "binary": WACKMALL,
+        "binary": WACKMALL_WRAPPER,
         "args": [
             "-ngl", "45", "-t", "8", "-c", "8192",
             "-b", "512", "-ub", "512",
@@ -87,6 +88,17 @@ CONFIGS = {
 
 def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def check_thermal_state():
+    """Check initial GPU thermal state. Returns (is_cold, gpu_temp, gpu_clock)."""
+    gpu = get_gpu_stats()
+    temp = gpu.get("gpu_temp_c", 0)
+    clock = gpu.get("gpu_sm_mhz", 0)
+    is_cold = temp <= THERMAL_COLD_MAX_C
+    status = "COLD" if is_cold else "WARM"
+    log(f"  Thermal state: {status} (GPU {temp}°C, {clock} MHz, threshold {THERMAL_COLD_MAX_C}°C)")
+    return is_cold, temp, clock
 
 
 def get_git_commit(path):
@@ -389,7 +401,7 @@ def classify_result(peak_stats, sustained_stats):
         return "EXTREME_THROTTLING"
 
 
-def generate_report(config_name, config, peak_stats, sustained_stats, classification, raw_results):
+def generate_report(config_name, config, peak_stats, sustained_stats, classification, raw_results, initial_temp_c=None, initial_gpu_clock_mhz=None, is_cold_start=None):
     """Generate human-readable report."""
     lines = []
     lines.append(f"# Benchmark Report: {config_name}")
@@ -397,6 +409,13 @@ def generate_report(config_name, config, peak_stats, sustained_stats, classifica
     lines.append(f"**Timestamp:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     lines.append(f"**Config:** {config['description']}")
     lines.append(f"**Classification:** {classification}")
+    if is_cold_start is not None:
+        cold_str = "YES" if is_cold_start else "NO (WARM START — results may be affected by residual heat)"
+        lines.append(f"**Cold start:** {cold_str}")
+    if initial_temp_c is not None:
+        lines.append(f"**Initial GPU temp:** {initial_temp_c}°C")
+    if initial_gpu_clock_mhz is not None:
+        lines.append(f"**Initial GPU clock:** {initial_gpu_clock_mhz} MHz")
     lines.append(f"")
 
     # Environment
@@ -504,11 +523,18 @@ def main():
                        help="Skip sustained, run peak only")
     parser.add_argument("--cooldown", type=int, default=COOLDOWN_SECONDS,
                        help="Cooldown between configs")
+    parser.add_argument("--order", type=str, default=None,
+                       help="Comma-separated config order (e.g. 'baseline,ncmoe35' or 'ncmoe35,baseline')")
     args = parser.parse_args()
 
-    configs_to_run = [args.config] if args.config else ["baseline", "ncmoe35"]
+    if args.order:
+        configs_to_run = [c.strip() for c in args.order.split(",")]
+    elif args.config:
+        configs_to_run = [args.config]
+    else:
+        configs_to_run = ["baseline", "ncmoe35"]
     # Add ehs25 only if wackmall binary exists
-    if args.config == "ehs25" or (not args.config and os.path.exists(WACKMALL)):
+    if args.config == "ehs25" or (not args.config and os.path.exists(WACKMALL_WRAPPER)):
         if "ehs25" not in configs_to_run:
             configs_to_run.append("ehs25")
 
@@ -542,6 +568,9 @@ def main():
             all_results[config_name] = {"status": "FAILED"}
             continue
 
+        # Check thermal state
+        is_cold, initial_temp, initial_clock = check_thermal_state()
+
         # Warmup
         warmup(WARMUP_REQUESTS)
 
@@ -564,6 +593,9 @@ def main():
         # Store results
         all_results[config_name] = {
             "status": "OK",
+            "initial_temp_c": initial_temp,
+            "initial_gpu_clock_mhz": initial_clock,
+            "is_cold_start": is_cold,
             "peak_stats": peak_stats,
             "sustained_stats": sustained_stats,
             "classification": classification,
@@ -581,7 +613,8 @@ def main():
                 f"(GPU {sustained_stats['gpu_sm_mean']:.0f}MHz, "
                 f"{sustained_stats['gpu_temp_mean']:.1f}°C, "
                 f"{sustained_stats['gpu_power_mean']:.1f}W)")
-        log(f"  CLASSIFICATION: {classification}")
+        cold_tag = "COLD" if is_cold else "WARM"
+        log(f"  CLASSIFICATION: {classification} ({cold_tag} start @ {initial_temp}°C)")
 
         # Kill server + cooldown
         kill_server()
@@ -606,7 +639,9 @@ def main():
         report = generate_report(
             config_name, config,
             result["peak_stats"], result["sustained_stats"],
-            result["classification"], result["raw_runs"]
+            result["classification"], result["raw_runs"],
+            result.get("initial_temp_c"), result.get("initial_gpu_clock_mhz"),
+            result.get("is_cold_start")
         )
 
         # Write report
@@ -621,6 +656,9 @@ def main():
             json.dump({
                 "config": config_name,
                 "timestamp": timestamp,
+                "initial_temp_c": result.get("initial_temp_c"),
+                "initial_gpu_clock_mhz": result.get("initial_gpu_clock_mhz"),
+                "is_cold_start": result.get("is_cold_start"),
                 "peak_stats": result["peak_stats"],
                 "sustained_stats": result["sustained_stats"],
                 "classification": result["classification"],

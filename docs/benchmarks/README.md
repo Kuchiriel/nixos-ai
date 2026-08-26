@@ -102,28 +102,34 @@ notes: |
 
 ## History
 
-| Date | Config | Peak TG | Sustained TG | Classification | Notes |
-|------|--------|---------|-------------|----------------|-------|
-| 2026-08-26 | baseline (ncmoe=99) | 31.0 | 29.7 | MODERATE_THROTTLING | 42s before throttle |
-| 2026-08-26 | ncmoe=35 | 32.7 | 29.4 | MODERATE_THROTTLING | 43s before throttle |
-| 2026-08-26 | EHS-25 (wackmall) | — | 18.6 | SEVERE_THROTTLING | Older measurement, different binary |
+| Date | Config | Peak (median) | Sustained (mean) | Classification | Notes |
+|------|--------|--------------|-----------------|----------------|-------|
+| 2026-08-26 | baseline (ncmoe=99) | 30.4 | 28.0 | CONTROLLED | Order A+B averaged, COLD start |
+| 2026-08-26 | ncmoe=35 | 32.2 | 28.0 | CONTROLLED | Order A+B averaged, COLD start |
+| 2026-08-26 | EHS-25 (wackmall) | 23.0 | 20.6 | CONTROLLED | Wackmall fork, always 3rd |
+| 2026-08-26 | baseline (ncmoe=99) | 31.0 | 29.7 | EARLIER | No thermal control |
+| 2026-08-26 | ncmoe=35 | 32.7 | 29.4 | EARLIER | No thermal control |
+
+**Note:** Earlier results (no thermal control) are less reliable. Controlled results use COLD start check and order bias testing.
 
 ## Current Known Performance Baseline
 
 **Last updated:** 2026-08-26
 **Measurement method:** `scripts/benchmark-official.py` (45s sustained, upstream llama.cpp)
 
-### MEASURED (Tier 1 — robustly measured)
+### MEASURED (controlled benchmark, COLD start, order-bias tested)
 
-| Metric | baseline (ncmoe=99) | ncmoe=35 | Delta |
-|--------|---------------------|----------|-------|
-| Peak TG tok/s | 31.0 | 32.7 | +5.5% |
-| Sustained TG tok/s | 29.7 | 29.4 | -1.0% |
-| Time to throttle | ~42s | ~43s | ≈ same |
-| VRAM | 2,543 MB | 4,933 MB | +2,390 MB |
-| GPU power (peak) | 42 W | 42 W | ≈ same |
-| GPU temp (peak) | 67°C | 68°C | +1°C |
-| Efficiency | 0.705 tok/s/W | 0.697 tok/s/W | -1.1% |
+| Metric | baseline (ncmoe=99) | ncmoe=35 | EHS-25 |
+|--------|---------------------|----------|--------|
+| Peak (median TG) | 30.4 tok/s | 32.2 tok/s (+5.9%) | 23.0 tok/s (-24%) |
+| Sustained (mean TG) | 28.0 tok/s | 28.0 tok/s (≈same) | 20.6 tok/s (-26%) |
+| Time to throttle | ~42s | ~42s | ~26s |
+| VRAM | 2,543 MB | 4,933 MB | 5,595 MB |
+| Efficiency | 0.686 tok/s/W | 0.695 tok/s/W | 0.548 tok/s/W |
+
+**Key finding:** ncmoe=35 shows PEAK IMPROVEMENT WITHOUT SUSTAINED IMPROVEMENT. The +5.9% peak advantage disappears under sustained load because both configs hit the same thermal wall at ~68°C GPU.
+
+**EHS-25 is counterproductive** on 6GB VRAM. The wackmall fork overhead (mmproj, EHS bookkeeping) outweighs any expert cache benefit.
 
 ### THIRD-PARTY (not reproduced locally)
 
