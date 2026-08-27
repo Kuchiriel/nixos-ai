@@ -83,6 +83,16 @@ with lib; let
       alwaysAllow = [];
     };
 
+    # ── NixOS MCP (packages/options search — anti-alucinação) ──
+    nixos-mcp = {
+      command = "${pkgs.mcp-nixos}/bin/mcp-nixos";
+      args = [];
+      env = {
+        MCP_NIXOS_CHANNEL_CACHE = "${pkgs.mcp-nixos}/share/mcp-nixos/channels.json";
+      };
+      alwaysAllow = ["nix" "nix_versions"];
+    };
+
     # ── JARVIS (agent harness local — shell, files, vision, nix) ──
     jarvis = {
       command = "${pkgs.bash}/bin/bash";
@@ -93,7 +103,7 @@ with lib; let
       env = {
         JARVIS_PROJECT_ROOT = toString ../../.;
       };
-      alwaysAllow = ["jarvis_execute" "jarvis_read_file" "jarvis_capture_screen" "jarvis_nix_eval" "jarvis_nix_check"];
+      alwaysAllow = ["jarvis_execute" "jarvis_read_file" "jarvis_capture_screen" "jarvis_nix_eval" "jarvis_nix_check" "jarvis_nix_search"];
     };
   };
 
