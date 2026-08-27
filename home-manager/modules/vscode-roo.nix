@@ -26,7 +26,8 @@ with lib; let
   rooGlobalStorage = ".config/VSCodium/User/globalStorage/rooveterinaryinc.roo-cline";
   rooSettingsDir = "${rooGlobalStorage}/settings";
 
-  # ═══ Gera mcp_settings.json a partir da opção mcpServers ═══
+  # ═══ Gera mcp_settings.json a partir dos servidores MCP ═══
+  # USA finalMcpServers (defaults + overrides do usuário)
   mcpSettingsJson = builtins.toJSON {
     mcpServers =
       builtins.mapAttrs (_name: server: {
@@ -36,7 +37,7 @@ with lib; let
         disabled = server.disabled or false;
         alwaysAllow = server.alwaysAllow or [];
       })
-      cfg.mcpServers;
+      finalMcpServers;
   };
 
   # ═══ Servidores MCP pré-configurados ═══
