@@ -186,15 +186,24 @@ in {
     # ════════════════════════════════════════════════════════
     # 2. MCP SETTINGS (mcp_settings.json)
     # ════════════════════════════════════════════════════════
-    home.file."${rooSettingsDir}/mcp_settings.json".text = mcpSettingsJson;
+    home.file."${rooSettingsDir}/mcp_settings.json" = {
+      text = mcpSettingsJson;
+      force = true;
+    };
 
     # ════════════════════════════════════════════════════════
     # 3. CUSTOM MODES (.roomodes)
     # ════════════════════════════════════════════════════════
     # Roo Code lê .roomodes do workspace root, mas também aceita
     # o arquivo no global storage. Colocamos nos dois locais.
-    home.file."${rooSettingsDir}/custom_modes.yaml".source = cfg.customModesFile;
-    home.file.".roomodes".source = cfg.customModesFile;
+    home.file."${rooSettingsDir}/custom_modes.yaml" = {
+      source = cfg.customModesFile;
+      force = true;
+    };
+    home.file.".roomodes" = {
+      source = cfg.customModesFile;
+      force = true;
+    };
 
     # ════════════════════════════════════════════════════════
     # 4. PACOTES NECESSÁRIOS
