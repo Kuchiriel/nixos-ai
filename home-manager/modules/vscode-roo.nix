@@ -182,6 +182,13 @@ in {
           "roo-cline.commandExecutionTimeout" = 300;
           "roo-cline.useAgentRules" = true;
 
+          # ── Codebase Indexing (local nomic + qdrant) ──
+          "roo-cline.codebaseIndexEnabled" = true;
+          "roo-cline.codebaseIndexEmbedderProvider" = "openai-compatible";
+          "roo-cline.codebaseIndexEmbedderBaseUrl" = "http://127.0.0.1:8081";
+          "roo-cline.codebaseIndexEmbedderModelId" = "nomic-embed-text-v2-moe";
+          "roo-cline.codebaseIndexQdrantUrl" = "http://127.0.0.1:6333";
+
           # ── VS Code Chat (llama.cpp local) ──
           "chat.agentHost.byokModels.enabled" = true;
           "chat.customEndpoints" = [

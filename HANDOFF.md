@@ -64,7 +64,7 @@ nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -x -q --tb=shor
 
 | Categoria | Quantidade | Status |
 |-----------|------------|--------|
-| Unitários (sem numpy) | ~500 | ✅ Passando |
+| Unitários (sem numpy) | ~578 | ✅ Passando |
 | Integração (llama+qdrant) | 4 | ✅ Passando |
 | E2E Agent (live) | 10 | 4/10 tools usadas |
 | PBT (hypothesis) | 31 | ✅ Passando |
@@ -107,9 +107,14 @@ Validation (core/ast_guard.py) — AST check
 
 ### Core AI
 - `core/agent.py` — Agente com tool-calling (11 ferramentas + output truncation + duplicate detection + loop detector + context budget + validator)
+- `core/vision.py` — Captura de tela (grim) + observe_screen (screenshot→vision API→descrição)
+- `core/validator.py` — Validação pós-tool-call (shell errors, file existence, test failures)
+- `core/eval_harness.py` — Eval harness (task templates, trajectory recording, success criteria)
+- `core/loop_detector.py` — Detecção de loops (duplicate, cycle, edit-revert, stagnation)
+- `core/context_budget.py` — Gestão de contexto (token estimation, truncation, compression)
 - `core/router.py` — Roteamento em cascata (fastpath → doctor → nixos → rag → agent)
 - `core/rules.py` — Motor de regras declarativas (substitui RiveScript)
-- `core/rag.py` — RAG híbrido (dense + sparse BM25 + RRF + rerank, chunk 2000, mtime cache)
+- `core/rag.py` — RAG híbrido (dense via nomic-embed-text-v2-moe + sparse BM25 + RRF + rerank via bge-reranker-v2-m3, chunk 2000, mtime cache)
 - `core/memory.py` — Memória episódica (Qdrant: remember/recall/lessons/forget)
 - `core/vault.py` — Memória de longo prazo (markdown git-syncado)
 - `core/voice.py` — STT (faster-whisper) + TTS (Kokoro-82M)
@@ -228,32 +233,49 @@ Validation (core/ast_guard.py) — AST check
 8. **services.jarvis.enable** — toggle global com mkIf + jarvis.target
 9. **rebuild-host.sh** — sempre validar com nix eval antes do switch
 10. **Self-heal MAX 5 restarts** — nunca loops infinitos de restart
+11. **Context budget** — 32K tokens, sempre wc -l antes de ler, max 200 linhas
+12. **observe_screen** — screenshot→vision→descrição para GUI interaction
+
+## Serviços Ativos (atualizado 2026-08-27)
+
+| Serviço | Porta | Modelo | Status |
+|---------|-------|--------|--------|
+| LLM | 8080 | Qwen3.6-35B-A3B Q4_K_M | ✅ |
+| Embeddings | 8081 | nomic-embed-text-v2-moe Q8_0 | ✅ |
+| Rerank | 8082 | bge-reranker-v2-m3 Q4_K_M | ✅ |
+| Qdrant | 6333 | Vector DB | ✅ |
+
+## MCP Servers (Roo Code)
+
+| MCP | Tools | Status |
+|-----|-------|--------|
+| jarvis | 9 tools (execute, read, write, str_replace, observe_screen, nix_eval, nix_check, nix_search, capture_screen) | ✅ |
+| nixos-mcp | nix, nix_versions (130K+ packages) | ✅ |
+| tavily-search | web search | ✅ |
+| context7 | library docs | ✅ |
+| playwright | browser automation | ✅ |
 
 ## Comandos para Retomar
 
 ```bash
-cd /home/nixos/nixos-ai
+cd ~/projects/nixos-ai
 
 # Status rápido
 git log --oneline -5
-systemctl status llama-cpp-server qdrant
+systemctl status llama-cpp-server qdrant llama-cpp-embeddings llama-cpp-rerank
 
 # Rebuild
 ./rebuild-host.sh
 
-# Benchmark
-./benchmark.sh
-
 # Testes
-nix build .#jarvis --no-link
+nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -x -q --tb=short
 
-# Logs
-journalctl -u llama-cpp-server -f
-journalctl -u qdrant -f
+# Saúde
+jarvis doctor
 
 # VRAM
 nvidia-smi
 
-# Saúde
-jarvis doctor
+# Code indexer (Roo Code)
+# Configurado em vscode-roo.nix: nomic-embed + qdrant local
 ```

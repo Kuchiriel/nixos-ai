@@ -171,6 +171,37 @@ nixos-rebuild switch --flake .#nitro-v15  # ERRADO — usar rebuild-host.sh!
   (compiler-expert, RiveScript com topics, audiobook, áudio calibrado com
   RNNoise) — consulte antes de reinventar.
 
+## Gestão de Contexto (CRÍTICO — 32K tokens)
+
+O modelo local (Qwen3.6-35B-A3B) possui **32K tokens de contexto**.
+Isso é pouco. O system prompt já consome ~2K. Restam ~28K para conversa.
+
+### Regras Obrigatórias
+
+1. **ANTES de ler um arquivo**: sempre execute `wc -l <arquivo>` para saber o tamanho.
+2. **NUNCA leia mais de 200 linhas** de uma vez. Use:
+   - `head -n 100 arquivo.py` (primeiras linhas)
+   - `tail -n 50 arquivo.py` (últimas linhas)
+   - `sed -n '50,150p' arquivo.py` (intervalo específico)
+3. **Para achar função/string**: use `grep -n 'padrão' arquivo.py` antes de ler.
+4. **Arquivos >500 linhas**: leia SOMENTE a parte relevante (identificada por grep).
+5. **Nunca faça `cat arquivo.py`** inteiro — sempre com offset/limit.
+6. **Cada tool call gasta tokens** — minimize chamadas repetidas.
+7. **Se o contexto estiver cheio**: resuma e continue, não tente ler mais.
+
+### Padrão de Leitura Seguro
+
+```bash
+# 1. Tamanho
+wc -l modules/ai/jarvis/src/jarvis/core/agent.py
+
+# 2. Achar a função
+grep -n 'def _run_loop' modules/ai/jarvis/src/jarvis/core/agent.py
+
+# 3. Ler só a função (ex: linhas 634-750)
+sed -n '634,750p' modules/ai/jarvis/src/jarvis/core/agent.py
+```
+
 ## Como trabalhar em paralelo (sincronia de premissas)
 
 - **git é o sensor de mudanças**: antes de começar qualquer tarefa, rode

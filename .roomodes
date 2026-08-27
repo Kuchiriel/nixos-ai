@@ -23,6 +23,16 @@ customModes:
       Use para edição de código, debug, implementação de features,
       refatoração, e qualquer tarefa de desenvolvimento.
     customInstructions: |-
+      ## GESTÃO DE CONTEXTO (CRÍTICO — 32K tokens)
+      - ANTES de ler arquivo: `wc -l <arquivo>` para saber o tamanho
+      - NUNCA leia mais de 200 linhas de uma vez
+      - Para arquivos grandes: use `head -n 100`, `tail -n 50`, `sed -n '50,150p'`
+      - Para achar função: use `grep -n 'def func' arquivo.py` primeiro
+      - Para achar uma string: use `grep -n 'termo' arquivo.py`
+      - Se o arquivo tem >500 linhas, leia SÓ a parte relevante
+      - Nunca faça `cat arquivo.py` inteiro — sempre com offset/limit
+      - Respeite seu orçamento: ~28K tokens úteis (descontando system prompt)
+
       ## Regras
       - Leia o código relevante ANTES de editar
       - Use apply_diff/str_replace para edits cirúrgicos
@@ -51,6 +61,13 @@ customModes:
       Use para decisões de arquitetura, análise de sistemas, design de
       componentes, e planejamento de implementação.
     customInstructions: |-
+      ## GESTÃO DE CONTEXTO (CRÍTICO — 32K tokens)
+      - ANTES de ler arquivo: `wc -l <arquivo>` para saber o tamanho
+      - NUNCA leia mais de 200 linhas de uma vez
+      - Para arquivos grandes: use `head -n 100`, `tail -n 50`, `sed -n '50,150p'`
+      - Se o arquivo tem >500 linhas, leia SÓ a parte relevante
+      - Nunca faça `cat arquivo.py` inteiro — sempre com offset/limit
+
       ## Regras
       - Leia o código existente antes de propor mudanças
       - Documente trade-offs em formato: OPÇÃO A vs OPÇÃO B
@@ -78,6 +95,15 @@ customModes:
       Use para trabalho autônomo contínuo quando o usuário pedir para
       "rodar overnight" ou "fazer melhorias automáticas".
     customInstructions: |-
+      ## GESTÃO DE CONTEXTO (CRÍTICO — 32K tokens)
+      - ANTES de ler arquivo: `wc -l <arquivo>` para saber o tamanho
+      - NUNCA leia mais de 200 linhas de uma vez
+      - Para arquivos grandes: use `head -n 100`, `tail -n 50`, `sed -n '50,150p'`
+      - Para achar função/string: use `grep -n` primeiro
+      - Se arquivo >500 linhas, leia SÓ a parte relevante
+      - Nunca faça `cat arquivo.py` inteiro
+      - Respeite orçamento: ~28K tokens úteis
+
       ## Regras Fundamentais
       1. NÃO PARE — loop até usuário dizer "pare"
       2. NÃO PERGUNTE — tome decisões baseadas nas regras
@@ -124,6 +150,12 @@ customModes:
       Use quando o usuário pedir para organizar, limpar, categorizar
       ou deduplicar arquivos e diretórios.
     customInstructions: |-
+      ## GESTÃO DE CONTEXTO (CRÍTICO — 32K tokens)
+      - ANTES de ler arquivo: `wc -l <arquivo>` para saber o tamanho
+      - NUNCA leia mais de 200 linhas de uma vez
+      - Para inventário: use `find` + `wc -l` + `head -5` por arquivo
+      - Nunca leia arquivos inteiros para classificar — bastam as primeiras linhas
+
       ## Metodologia
       1. INVENTORY — escaneie recursivamente, leia primeiras linhas
       2. CLASSIFY — tipo (código/doc/config), status (ativo/obsoleto), projeto
