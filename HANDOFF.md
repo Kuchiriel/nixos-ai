@@ -23,7 +23,7 @@ Todos os serviços Jarvis são controlados por `services.jarvis.enable` (toggle 
 
 | Serviço | Porta | Estado | systemd | Observação |
 |---------|-------|--------|---------|------------|
-| llama-cpp-server | 8080 | ✅ Rodando | PartOf jarvis.target | Qwen3.6-35B MoE, 128K ctx |
+| llama-cpp-server | 8080 | ✅ Rodando | PartOf jarvis.target | Qwen3.6-35B MoE, 32K ctx (host-ncmoe35) |
 | llama-cpp-embeddings | 8081 | ✅ Rodando | PartOf jarvis.target | nomic-embed-text-v2, CPU |
 | llama-cpp-rerank | 8082 | ✅ Rodando | PartOf jarvis.target | bge-reranker-v2-m3, CPU |
 | qdrant | 6333 | ✅ Rodando | PartOf jarvis.target | Vector DB |
@@ -36,14 +36,14 @@ Todos os serviços Jarvis são controlados por `services.jarvis.enable` (toggle 
 ## Configuração llama-cpp (Host)
 
 ```
+Profile:    host-ncmoe35 (ativo)
 Modelo:     Qwen3.6-35B-A3B MoE (UD-Q4_K_M, ~20.6GiB)
-GPU layers: ngl=50 (atenção na GPU)
-MoE:        n-cpu-moe=50 (experts na RAM)
-Contexto:   131072 tokens (128K, KV cache q4_0)
-Threads:    16
-VRAM:       ~4.2GB / 6GB (mmproj em CPU)
-RAM livre:  ~27 GB
-Flags:      --no-mmproj-offload --reasoning-preserve --jinja
+GPU layers: ngl=45 (atenção na GPU)
+MoE:        n-cpu-moe=35 (experts layers 0-34 na RAM)
+Contexto:   32768 tokens (32K, KV cache q4_0)
+Threads:    8
+VRAM:       ~5.1GB / 6GB
+Flags:      --no-mmproj-offload --jinja --split-mode layer
 ```
 
 **Performance medida (benchmark.sh, 5 runs com warmup)**:
