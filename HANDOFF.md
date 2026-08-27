@@ -92,6 +92,8 @@ Agent (core/agent.py) — LLM tool-calling
     ↓
 Tools / MCP
     ↓
+Validator (core/validator.py) — post-tool-call verification
+    ↓
 Memory (core/memory.py) — Qdrant episódica
     ↓
 Self-Heal (core/heal.py) — restart + audit + lesson
@@ -104,7 +106,7 @@ Validation (core/ast_guard.py) — AST check
 ## Componentes Implementados
 
 ### Core AI
-- `core/agent.py` — Agente com tool-calling (11 ferramentas + output truncation + duplicate detection)
+- `core/agent.py` — Agente com tool-calling (11 ferramentas + output truncation + duplicate detection + loop detector + context budget + validator)
 - `core/router.py` — Roteamento em cascata (fastpath → doctor → nixos → rag → agent)
 - `core/rules.py` — Motor de regras declarativas (substitui RiveScript)
 - `core/rag.py` — RAG híbrido (dense + sparse BM25 + RRF + rerank, chunk 2000, mtime cache)
@@ -112,6 +114,10 @@ Validation (core/ast_guard.py) — AST check
 - `core/vault.py` — Memória de longo prazo (markdown git-syncado)
 - `core/voice.py` — STT (faster-whisper) + TTS (Kokoro-82M)
 - `core/heal.py` — Self-heal (restart + audit JSONL + lesson, MAX 5 restarts, post-restart verify)
+- `core/validator.py` — Post-tool-call validation (shell errors, file existence, test failures, NixOS patterns)
+- `core/eval_harness.py` — Eval harness (task templates, trajectory recording, success criteria)
+- `core/loop_detector.py` — Loop detection (duplicate, cycle, edit-revert, stagnation)
+- `core/context_budget.py` — Context budget management (token estimation, truncation, compression)
 - `core/doctor.py` — Health checks (9 verificações, HTTP check, pgrep -x)
 - `core/benchmark.py` — Benchmark da cascata
 - `core/eval_rag.py` — Avaliação de qualidade RAG (NDCG/Recall)
