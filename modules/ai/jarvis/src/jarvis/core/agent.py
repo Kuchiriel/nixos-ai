@@ -37,6 +37,7 @@ from jarvis.core.user_profile import UserProfile, inject_context
 from jarvis.core.circuit_breaker import CircuitBreaker
 from jarvis.core.loop_detector import LoopDetector, RecoveryAction
 from jarvis.core.context_budget import ContextBudget
+from jarvis.core.validator import ToolValidator
 
 from jarvis.core.config import Config, get_config
 from jarvis.providers.mcp import MCPClient, MCPError, parse_command, to_function_tools
@@ -646,9 +647,10 @@ class Agent:
         last_tool_signature = ""  # para detectar chamadas duplicadas
         consecutive_duplicates = 0
 
-        # ── Loop Detector + Context Budget (novos) ──
+        # ── Loop Detector + Context Budget + Validator (novos) ──
         loop_detector = LoopDetector()
         context_budget = ContextBudget(max_tokens=32000)
+        validator = ToolValidator()
         for msg in messages:
             context_budget.add_message(msg)
 
@@ -764,6 +766,9 @@ class Agent:
                     output = self._call_mcp_tool(func_name, args)
                 else:
                     output = f"ERROR: tool '{func_name}' not available"
+
+                # ── Validation: verificar resultado antes de passar ao modelo ──
+                output = validator.enhance_tool_output(func_name, args, output)
 
                 messages.append({
                     "role": "tool",
