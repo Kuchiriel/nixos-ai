@@ -31,14 +31,41 @@ import os
 import threading
 from typing import Any
 
-# Adicionar path do projeto
-_project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-if _project_root not in sys.path:
-    sys.path.insert(0, _project_root)
+# Adicionar paths necessários
+_src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # jarvis/src
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
 
 from jarvis.core.devtools import handle_dev_tool, DEV_TOOLS
 from jarvis.core.vision import VISION_TOOL, handle_capture
-from jarvis.core.agent import command_allowed, run_shell, DEFAULT_ALLOWED_PREFIXES
+
+
+import shlex
+import subprocess
+
+
+def _run_shell(cmd: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
+    """Executa via shlex (sem shell=True)."""
+    argv = shlex.split(cmd)
+    return subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+
+
+def _command_allowed(cmd: str) -> bool:
+    """Verifica se o comando é read-only."""
+    ALLOWED = (
+        "ls", "cat", "head", "tail", "grep", "rg", "find", "wc",
+        "df", "free", "ps", "pgrep", "ss", "ip", "uname", "uptime",
+        "date", "echo", "hostname", "id", "whoami",
+        "systemctl is-active", "systemctl status", "systemctl list-units",
+        "journalctl", "nix flake check", "nix eval", "nix build --dry-run",
+    )
+    stripped = cmd.strip()
+    if not stripped:
+        return False
+    for pat in ("&&", "||", ";", "|", "`", "$("):
+        if pat in stripped:
+            return False
+    return any(stripped.startswith(p) for p in ALLOWED)
 
 
 # ═══ Tool Schemas ═══
@@ -187,10 +214,9 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
             cmd = args.get("cmd", "")
             if not cmd:
                 return "ERROR: empty command"
-            # JARVIS server roda como read-only por padrão
-            if not command_allowed(cmd):
+            if not _command_allowed(cmd):
                 return f"ERROR: command not in allowlist: {cmd}"
-            res = run_shell(cmd, timeout=60)
+            res = _run_shell(cmd, timeout=60)
             output = res.stdout if res.returncode == 0 else res.stderr
             if len(output) > 8000:
                 output = output[:8000] + f"\n... [truncated from {len(res.stdout)} chars]"
@@ -212,12 +238,12 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
             expr = args.get("expr", "")
             if not expr:
                 return "ERROR: empty expression"
-            res = run_shell(f"nix eval --json '{expr}'", timeout=30)
+            res = _run_shell(f"nix eval --json '{expr}'", timeout=30)
             return res.stdout or res.stderr
 
         if name == "jarvis_nix_check":
             path = args.get("path", ".")
-            res = run_shell(f"cd {path} && nix flake check 2>&1", timeout=120)
+            res = _run_shell(f"cd {path} && nix flake check 2>&1", timeout=120)
             return res.stdout or res.stderr or "Check passed"
 
         return f"ERROR: unknown tool: {name}"

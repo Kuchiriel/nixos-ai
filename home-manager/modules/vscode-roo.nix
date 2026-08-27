@@ -81,6 +81,19 @@ with lib; let
       disabled = cfg.githubToken == "";
       alwaysAllow = [];
     };
+
+    # ── JARVIS (agent harness local — shell, files, vision, nix) ──
+    jarvis = {
+      command = "${pkgs.bash}/bin/bash";
+      args = [
+        "-c"
+        "cd ${toString ../../.} && PYTHONPATH=modules/ai/jarvis/src exec ${pkgs.python3}/bin/python3 -m jarvis.mcp_server"
+      ];
+      env = {
+        JARVIS_PROJECT_ROOT = toString ../../.;
+      };
+      alwaysAllow = ["jarvis_execute" "jarvis_read_file" "jarvis_capture_screen" "jarvis_nix_eval" "jarvis_nix_check"];
+    };
   };
 
   # ═══ Merge: defaultMcpServers ++ cfg.mcpServers (override manual) ═══
