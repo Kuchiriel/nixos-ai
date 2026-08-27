@@ -168,7 +168,7 @@ in {
                 {
                   id = "qwen3.6-35b-a3b";
                   name = "Qwen3 35B Local";
-                  maxInputTokens = 16384;
+                  maxInputTokens = 32768;
                   maxOutputTokens = 8192;
                   toolCalling = true;
                 }
