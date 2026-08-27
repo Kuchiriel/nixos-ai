@@ -145,8 +145,8 @@ in {
   # Quando desabilitado, NENHUM serviço Jarvis inicia.
   services.llama-cpp-server.enable = true;
   services.llama-cpp-server.profile = "host-ncmoe35";
-  services.llama-cpp-embeddings.enable = false;
-  services.llama-cpp-rerank.enable = false;
+  services.llama-cpp-embeddings.enable = true;
+  services.llama-cpp-rerank.enable = true;
   # services.qdrant.enable é definido por qdrant.nix (condicional a jarvis.enable)
   services.jarvis-vault.enable = false;
   services.jarvis-idle.enable = false;

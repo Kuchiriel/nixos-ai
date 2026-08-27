@@ -1,0 +1,1714 @@
+Today 4:23 AM
+Revisão Metodológica — Conclusão
+
+Problemas Encontrados e Corrigidos
+
+┌───────────────────────────┬────────────────┬──────────────────────────────┐
+│ Problema                  │ Onde           │ Correção                     │
+├───────────────────────────┼────────────────┼──────────────────────────────┤
+│ "Peak (median)" quando    │ analysis.md,   │ Renomeado para "Median TG    │
+│ não há peak               │ README.md      │ (sustained window)"          │
+│ Coluna "Peak TG" em       │ summary.md     │ Renomeado para "Median TG    │
+│ summaries                 │ (Order A/B)    │ (sustained)"                 │
+│ Falta de aviso sobre      │ analysis.md,   │ Adicionado: "No true peak    │
+│ ausência de peak          │ README.md      │ was measured"                │
+└───────────────────────────┴────────────────┴──────────────────────────────┘
+
+Auditoria do Script
+
+┌──────────────────────────────────┬────────────────────────────────────────┐
+│ Verificação                      │ Status                                 │
+├──────────────────────────────────┼────────────────────────────────────────┤
+│ Warmup separado da medição?      │ ✅ Sim — 3 warmup requests antes de    │
+│                                  │ sustained                              │
+│ Sustained representa janela de   │ ✅ Sim — 45s de requests contínuos     │
+│ medição?                         │                                        │
+│ Thermal metrics coletadas        │ ✅ Sim — snapshot a cada request       │
+│ durante medição?                 │                                        │
+│ Valores não misturam peak e      │ ✅ Corrigido — agora corretamente      │
+│ sustained?                       │ rotulados                              │
+│ Configs usam parâmetros          │ ⚠️ Parcial — EHS usa ctx=8192 vs       │
+│ equivalentes?                    │ ctx=4096 dos outros                    │
+└──────────────────────────────────┴────────────────────────────────────────┘
+
+Nota sobre ctx: EHS-25 usa  -c 8192  enquanto baseline/ncmoe35 usam  -c 4096 . Isso afeta VRAM usage (KV cache maior) mas não deveria afetar TG significativamente para prompts curtos. Não é uma falha metodológica — é uma diferença de configuração do profile.
+
+Classificação Final
+
+┌──────────────┬─────────┬──────────────────────────────────────────────────┐
+│ Config       │ Classif │ Base                                             │
+│              │ icação  │                                                  │
+├──────────────┼─────────┼──────────────────────────────────────────────────┤
+│ baseline     │ RECOMME │ Mean TG 28.0, menor VRAM (2543 MB), mais estável │
+│ (ncmoe=99)   │ NDED    │                                                  │
+│ ncmoe=35     │ EXPERIM │ Median TG 32.2 (+5.9%) mas mean TG 28.0          │
+│              │ ENTAL   │ (≈baseline) — vantagem apenas na fase cold       │
+│ EHS-25       │ REGRESS │ Mean TG 20.6 (-26%), maior VRAM (5595 MB), menos │
+│              │ ION     │ eficiente                                        │
+└──────────────┴─────────┴──────────────────────────────────────────────────┘
+
+Incerteza Principal Restante
+
+O throughput de pico verdadeiro é desconhecido.
+
+Os dados mostram que o median do sustained window (32.2 para ncmoe35, 30.4 para baseline)混入了cold-phase requests (~32 tok/s) e throttled-phase requests (~15 tok/s). O valor real de "o que o hardware entrega nos primeiros 5 segundos" não foi medido.
+
+Próximo Experimento Necessário
+
+// bash
+# Medir peak verdadeiro (sem sustained)
+python3 scripts/benchmark-official.py --config baseline --peak-only
+python3 scripts/benchmark-official.py --config ncmoe35 --peak-only
+
+Isso responde: ncmoe35 realmente entrega mais throughput que baseline nos primeiros requests, ou a diferença de 5.9% é ruído do sustained window?
+
+Sem essa medição, a classificação de ncmoe35 como "EXPERIMENTAL" permanece — não sabemos se a vantagem de cold-phase é real ou artefato de mistura de fases. 
+
+Sim. Essa revisão está correta e agora o experimento está metodologicamente limpo o suficiente para fechar essa etapa.
+
+A única coisa que eu mudaria na conclusão é esta frase:
+
+"não sabemos se a vantagem de cold-phase é real ou artefato"
+
+Na verdade, os dados anteriores já sugerem que existe diferença de pico, mas o benchmark atual não mediu o pico de maneira isolada. Portanto, a formulação mais rigorosa é:
+
+A magnitude e a significância do ganho de cold-start de ncmoe=35 ainda não foram medidas pelo protocolo oficial.
+
+Isso é diferente de dizer que a diferença necessariamente é ruído.
+
+Próximo passo
+
+Eu deixaria a CLI executar exatamente:
+
+python3 scripts/benchmark-official.py --config baseline --peak-only
+python3 scripts/benchmark-official.py --config ncmoe35 --peak-only
+
+Mas faria 3–5 repetições de cada, com cooldown comparável. Um único peak-only ainda deixa bastante espaço para ruído.
+
+Depois teremos algo como:
+
+Config	Cold peak median	Sustained median	Sustained mean
+baseline	?	28,0	28,0
+ncmoe35	?	28,0	28,0
+
+A partir daí podemos finalmente dizer:
+
+cold-start gain real
+sem ganho sustentado
+thermal throttling é o fator dominante
+ncmoe=99 continua sendo o perfil recomendado para uso contínuo.
+
+E eu não mandaria a IA fazer mais alterações no llama.cpp antes desse resultado. Vocês já fizeram bastante experimentação; agora o ganho está em fechar a evidência, não em adicionar mais código.
+
+vou deixar a ia local rodando enquanto durmo, ela não pode reiniciar o llama ou modificar os proprios arquivos, se não obviamente ela vai parar, essa ia local não é a mesma ia do cli, que prompt posso deixar pra ela, vou plugar meu hd externo e deixar ela ler meus projetos, o que ela achar viavel copiar para  ~/projects e trabalhar em cima disso, mas preciso de um prompt relativamente seguro, coloquei algumas normas de segurança no roomodes do roo dev, mas preciso de um prompt  também
+
+Sim. Eu faria a tarefa como uma auditoria/expansão do harness, não como "melhorar o prompt do Roo". O objetivo é transformar o nixos-ai em uma infraestrutura capaz de medir e melhorar sistematicamente agentes locais e a integração com o Roo Dev.
+
+Há uma base técnica importante para isso: o llama-server atual suporta tool calling, endpoints OpenAI/Anthropic compatíveis e ferramentas como read_file, grep_search, exec_shell_command, write_file, edit_file e apply_diff; além disso, o próprio llama.cpp possui uma suíte de testes do servidor que inicia o servidor e valida respostas. A literatura recente de avaliação de agent harnesses também separa explicitamente context engineering, tool integration, state/memory, control loop e observability/guardrails, que é uma boa taxonomia para estruturar o trabalho.
+
+Prompt para a CLI
+Atue como engenheiro sênior de Agent Harness, LLM local, avaliação de agentes, Python, NixOS, llama.cpp e integração com VS Code/VSCodium.
+
+Você está trabalhando no repositório:
+
+~/projects/nixos-ai
+
+OBJETIVO PRINCIPAL
+
+Expandir significativamente as capacidades de HARNESS do projeto nixos-ai e melhorar a integração operacional com o Roo Dev no VSCodium.
+
+Não quero apenas mais prompts.
+
+Quero que o projeto tenha uma infraestrutura capaz de:
+
+1. executar agentes locais;
+2. fornecer ferramentas de forma confiável;
+3. controlar contexto;
+4. observar cada etapa do loop do agente;
+5. detectar tool-call failures;
+6. detectar loops;
+7. recuperar de falhas;
+8. preservar estado;
+9. executar tarefas longas;
+10. avaliar objetivamente o desempenho do agente;
+11. comparar diferentes modelos/configurações/harnesses;
+12. reproduzir experimentos;
+13. integrar essas capacidades com o Roo Dev.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 1 — PESQUISA OBRIGATÓRIA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Antes de projetar qualquer coisa, pesquise o estado atual do ecossistema.
+
+Não dependa apenas do conhecimento interno.
+
+Pesquise documentação e código atual de:
+
+- Roo Code / Roo Dev;
+- VS Code Extension API;
+- VSCodium;
+- MCP;
+- llama.cpp;
+- llama-server;
+- OpenAI-compatible tool calling;
+- Anthropic-compatible tool calling;
+- agent harnesses;
+- coding agents locais;
+- SWE-bench;
+- benchmarks de agentes;
+- avaliação de tool calling;
+- context engineering;
+- agent memory;
+- trajectory evaluation;
+- recovery loops;
+- sandboxing;
+- observability.
+
+Priorize fontes primárias:
+
+- documentação oficial;
+- repositórios upstream;
+- código;
+- issues;
+- pull requests;
+- changelogs.
+
+Pesquise especificamente o Roo Code atual e descubra:
+
+- arquitetura de modos;
+- custom modes;
+- tool permissions;
+- MCP;
+- regras;
+- contexto;
+- checkpoints;
+- subagents;
+- condicionalidade de ferramentas;
+- mecanismos de recuperação;
+- extensibilidade;
+- APIs disponíveis;
+- limitações atuais.
+
+Não assuma que uma funcionalidade ainda existe ou funciona da mesma forma que versões antigas.
+
+Documente a versão/data da pesquisa.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 2 — LEIA O CÓDIGO DO PROJETO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Antes de implementar:
+
+- leia AGENTS.md;
+- leia HANDOFF.md;
+- leia a estrutura completa relevante;
+- leia os módulos do agente;
+- leia os providers;
+- leia tool calling;
+- leia memória;
+- leia RAG;
+- leia testes;
+- leia scripts;
+- leia integração llama.cpp;
+- leia configurações Nix;
+- leia qualquer código existente relacionado a harness.
+
+NÃO faça uma análise baseada apenas em documentação.
+
+A documentação pode estar desatualizada.
+
+O código é a fonte primária para determinar o estado atual.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 3 — DEFINIR O HARNESS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Estruture conceitualmente o harness em componentes independentes:
+
+A. MODEL ADAPTER
+
+Responsável por:
+
+- llama.cpp;
+- OpenAI-compatible;
+- Anthropic-compatible quando necessário;
+- tool calling;
+- streaming;
+- structured output;
+- reasoning/thinking;
+- timeout;
+- retry;
+- token accounting.
+
+B. CONTEXT ENGINE
+
+Responsável por:
+
+- montagem de contexto;
+- truncamento;
+- compactação;
+- sumarização;
+- seleção de arquivos;
+- histórico;
+- estado da tarefa;
+- recuperação após contexto grande;
+- orçamento de tokens.
+
+Não implemente simplesmente truncamento cego.
+
+O harness deve saber o que é:
+
+- estado permanente;
+- contexto operacional;
+- contexto recuperável;
+- histórico;
+- evidência;
+- resultado de ferramentas.
+
+C. TOOL EXECUTOR
+
+Responsável por:
+
+- execução;
+- validação;
+- timeout;
+- stdout/stderr;
+- exit code;
+- tamanho máximo;
+- cancelamento;
+- retries;
+- isolamento;
+- logs.
+
+D. AGENT LOOP
+
+Responsável por:
+
+USER
+→ MODEL
+→ TOOL CALL
+→ TOOL RESULT
+→ MODEL
+→ VALIDATION
+→ NEXT ACTION
+→ DONE
+
+O loop deve possuir:
+
+- limite de iterações;
+- limite de custo;
+- limite de tempo;
+- detecção de repetição;
+- detecção de tool-call inútil;
+- recuperação de erro;
+- checkpoint.
+
+E. MEMORY
+
+Separar explicitamente:
+
+- short-term context;
+- task state;
+- episodic memory;
+- project knowledge;
+- RAG;
+- lessons learned.
+
+F. VALIDATION
+
+O agente não deve considerar uma alteração concluída apenas porque o modelo afirmou que terminou.
+
+Criar mecanismos para verificar:
+
+- arquivos;
+- diff;
+- sintaxe;
+- testes;
+- build;
+- lint;
+- Nix evaluation;
+- execução;
+- comportamento.
+
+G. OBSERVABILITY
+
+Registrar por trajetória:
+
+- prompt;
+- resposta;
+- tool call;
+- argumentos;
+- resultado;
+- duração;
+- tokens;
+- erro;
+- retry;
+- estado;
+- decisão;
+- resultado final.
+
+Evitar armazenar segredos.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 4 — TOOL CALLING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Pesquise a implementação atual do llama-server.
+
+A implementação atual oferece tool calling compatível com APIs conhecidas e ferramentas built-in; valide exatamente o que a versão usada pelo projeto suporta antes de alterar o harness.
+
+Não crie um sistema paralelo se a infraestrutura existente puder ser reutilizada.
+
+Investigue:
+
+- native tool calls;
+- parse_tool_calls;
+- parallel_tool_calls;
+- structured outputs;
+- streaming;
+- tool result handling;
+- erros de schema;
+- chamadas inválidas;
+- chamadas duplicadas.
+
+Crie testes E2E que exercitem:
+
+1. modelo responde normalmente;
+2. modelo solicita uma ferramenta;
+3. ferramenta executa;
+4. resultado volta ao modelo;
+5. modelo continua;
+6. modelo finaliza.
+
+Também teste:
+
+- argumento inválido;
+- ferramenta inexistente;
+- timeout;
+- comando com exit != 0;
+- output enorme;
+- tool call duplicado;
+- tool call malformado;
+- modelo entra em loop.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 5 — HARNESS E ROO DEV
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Não tente transformar o Roo Dev em uma cópia do nixos-ai.
+
+Determine quais capacidades devem permanecer no Roo e quais devem ficar no harness.
+
+Investigue formas de integração através de:
+
+- MCP;
+- OpenAI-compatible endpoint;
+- Anthropic-compatible endpoint;
+- ferramentas;
+- custom modes;
+- regras;
+- scripts auxiliares;
+- APIs oficiais disponíveis.
+
+O resultado deve permitir que o Roo utilize o ecossistema local sem criar acoplamento desnecessário.
+
+Procure especialmente oportunidades para melhorar:
+
+- tool calling;
+- contexto;
+- recuperação de contexto;
+- validação;
+- execução de testes;
+- memória;
+- observabilidade;
+- controle de autonomia.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 6 — NÃO CONFIAR NO MODELO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+O harness deve assumir que o modelo pode:
+
+- alucinar;
+- declarar sucesso sem testar;
+- interpretar errado uma ferramenta;
+- repetir uma ação;
+- produzir JSON inválido;
+- gerar comandos incorretos;
+- esquecer contexto;
+- entrar em loops;
+- tentar corrigir algo que já está correto.
+
+Portanto:
+
+MODELO = COMPONENTE NÃO CONFIÁVEL
+
+HARNESS = CAMADA DE CONTROLE
+
+Nunca delegue ao modelo a decisão final de que uma operação foi bem-sucedida quando isso puder ser verificado externamente.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 7 — LOOP DETECTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Implemente, se ainda não existir, mecanismos para detectar:
+
+- mesma tool call repetida;
+- mesmos argumentos repetidos;
+- mesma sequência de ferramentas;
+- mesma mensagem produzida repetidamente;
+- edição seguida de reversão;
+- teste falhando sem alteração relevante;
+- chamadas sem progresso;
+- crescimento anormal do contexto.
+
+Defina um conceito mensurável de "progress".
+
+Uma iteração que não produz progresso não deve ser tratada como trabalho produtivo.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 8 — RECOVERY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+O harness deve conseguir recuperar de:
+
+- tool timeout;
+- processo encerrado;
+- comando com erro;
+- JSON inválido;
+- resposta truncada;
+- contexto excedido;
+- tool call inválido;
+- modelo repetitivo;
+- teste falhando;
+- build falhando.
+
+Implementar recovery sem simplesmente mandar:
+
+"tente novamente"
+
+O retry deve alterar alguma condição:
+
+- contexto;
+- estratégia;
+- ferramenta;
+- comando;
+- prompt;
+- orçamento;
+- diagnóstico.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 9 — CONTEXT ENGINEERING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Investigue formas melhores de administrar contexto em modelos locais.
+
+Especialmente:
+
+- compactação;
+- sumarização incremental;
+- seleção semântica;
+- seleção por dependência;
+- file relevance;
+- symbol relevance;
+- diffs;
+- testes;
+- erros recentes;
+- estado da tarefa.
+
+O objetivo não é apenas suportar contextos maiores.
+
+O objetivo é colocar no contexto o que realmente aumenta a probabilidade de sucesso.
+
+Meça:
+
+- tokens enviados;
+- tokens descartados;
+- tamanho do contexto;
+- tool calls;
+- sucesso;
+- tempo;
+- custo computacional.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 10 — EVAL HARNESS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Crie ou expanda uma infraestrutura de avaliação.
+
+Ela deve conseguir executar tarefas congeladas e registrar trajetórias.
+
+Cada avaliação deve produzir algo semelhante a:
+
+TASK
+MODEL
+MODEL VERSION
+HARNESS VERSION
+TOOLS
+PROMPT
+START
+END
+TOKENS
+TOOL CALLS
+ERRORS
+TEST RESULTS
+BUILD RESULT
+FINAL STATUS
+
+Crie uma coleção inicial de tarefas reais do próprio projeto.
+
+Exemplos:
+
+- localizar bug;
+- corrigir teste;
+- alterar módulo Nix;
+- diagnosticar build;
+- modificar script;
+- corrigir configuração;
+- encontrar regressão;
+- implementar pequena feature;
+- executar benchmark;
+- atualizar documentação baseada no código.
+
+Não use apenas testes artificiais de "responda X".
+
+Queremos medir capacidade real de engenharia.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 11 — MÉTRICAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Além de "passou/falhou", medir:
+
+- task success rate;
+- tool-call success rate;
+- recovery rate;
+- iterations/task;
+- tokens/task;
+- wall-clock time;
+- test pass rate;
+- build pass rate;
+- context size;
+- redundant tool calls;
+- failed actions;
+- retries;
+- model thinking/output ratio quando disponível.
+
+Separar:
+
+MODEL FAILURE
+HARNESS FAILURE
+TOOL FAILURE
+ENVIRONMENT FAILURE
+TASK AMBIGUITY
+
+Isso é fundamental para não atribuir ao modelo um problema causado pelo harness.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 12 — E2E > UNIT TEST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Unit tests são necessários, mas insuficientes.
+
+Para cada componente crítico:
+
+UNIT TEST
++
+INTEGRATION TEST
++
+E2E TEST
+
+O teste E2E deve executar a trajetória real:
+
+modelo
+→ ferramenta
+→ resultado
+→ modelo
+→ validação.
+
+Quando possível, use um servidor llama.cpp real.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 13 — REPRODUTIBILIDADE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Tudo deve ser reproduzível no NixOS.
+
+Preferir:
+
+- Flake;
+- packages;
+- devShell;
+- módulos;
+- scripts versionados;
+- fixtures;
+- datasets pequenos;
+- configurações declarativas.
+
+Não depender de estado manual escondido em ~/.config.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 14 — SEGURANÇA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+O harness NÃO deve ganhar autonomia irrestrita simplesmente para aumentar benchmark.
+
+Ferramentas potencialmente destrutivas devem possuir:
+
+- allowlist;
+- confirmação;
+- sandbox quando possível;
+- timeout;
+- limites;
+- logging.
+
+Não permita que um teste de harness:
+
+- reinicie o host;
+- mate a LLM atualmente utilizada pela sessão;
+- altere drivers;
+- altere kernel;
+- destrua repositórios;
+- execute git reset --hard;
+- execute git clean destrutivo;
+- apague dados sem necessidade.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 15 — PESQUISA DE OUTROS HARNESS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Pesquise arquiteturas atuais de:
+
+- Roo Code;
+- Claude Code;
+- Codex CLI;
+- Aider;
+- OpenCode;
+- Qwen Code;
+- outros agentes open-source relevantes.
+
+Não copie funcionalidades cegamente.
+
+Extraia padrões arquiteturais.
+
+Compare pelo menos:
+
+1. context engineering;
+2. tool integration;
+3. state/memory;
+4. control loop;
+5. recovery;
+6. observability;
+7. permissions;
+8. evaluation.
+
+Documente o que vale incorporar ao nixos-ai e o que NÃO vale.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 16 — NÃO FAZER BIG-BANG REFACTOR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Não reescreva o projeto inteiro.
+
+Primeiro produza um mapa:
+
+CURRENT
+→ GAP
+→ PROPOSED
+→ PRIORITY
+→ IMPLEMENTATION
+
+Depois implemente em incrementos independentes.
+
+Cada incremento deve:
+
+- compilar;
+- passar testes;
+- possuir evidência;
+- ser revertível.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRA 17 — EXECUÇÃO AUTÔNOMA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Não pare depois de produzir um relatório.
+
+Depois da auditoria:
+
+1. escolha o maior gap de alto ROI;
+2. implemente;
+3. teste;
+4. valide;
+5. documente;
+6. commit;
+7. procure o próximo.
+
+Se encontrar uma hipótese interessante, pesquise e teste.
+
+Se falhar, registre o experimento negativo.
+
+Se funcionar, prove com E2E.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ENTREGÁVEIS ESPERADOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Ao final, quero:
+
+1. harness mais robusto;
+2. tool execution mais confiável;
+3. loop detection;
+4. recovery;
+5. context management melhor;
+6. E2E tests reais;
+7. infraestrutura de avaliação;
+8. métricas;
+9. integração Roo Dev melhor documentada;
+10. documentação baseada no código atual;
+11. benchmarks/reports reproduzíveis;
+12. commits limpos.
+
+Não crie funcionalidades apenas para aumentar a quantidade de código.
+
+Priorize melhorias que aumentem:
+
+CORREÇÃO
++
+AUTONOMIA CONTROLADA
++
+RECUPERAÇÃO
++
+OBSERVABILIDADE
++
+EFICIÊNCIA
+
+COMECE AGORA.
+
+Primeiro pesquise o estado atual do Roo Dev e dos principais agent harnesses.
+
+Depois audite o código atual do nixos-ai.
+
+Compare a arquitetura existente com as melhores práticas encontradas.
+
+Crie um gap analysis.
+
+Em seguida implemente os gaps de maior ROI, validando cada mudança com testes reais.
+
+Não fique apenas na documentação.
+Today 9:51 AM
+o vscodium ta aberto com roocode e ia local, e a cli aberta com a ia cloud crie um prompt para ia cloud na cli testar o harness, aproveitar que a ia local tem vision que o nixos tem módulos evdev e screenshot e pra cada tool do harness pesquisar a melhor pratica pra escrever e chamar cada uma delas, ele precisa interagir com a interface grafica e evitar atalhos de execute shell commands
+
+this looks bounded/experimental, so vou apresentar um prompt operacional focado em testar o harness existente, não em implementar novas capacidades. A ideia é fazer a IA cloud atuar como avaliadora do Roo Dev + IA local, usando a GUI/vision/evdev como caminho principal e pesquisando práticas atuais para cada ferramenta antes de exercitá-la.
+
+Prompt para a CLI/cloud
+Atue como um engenheiro sênior de AI Agent Harness, NixOS, Linux desktop automation, MCP e Roo Dev.
+
+CONTEXTO ATUAL
+- O projeto é ~/projects/nixos-ai.
+- O VSCodium está aberto com Roo Dev/Roo Code conectado à LLM local.
+- Existe uma segunda IA cloud nesta CLI: VOCÊ.
+- A LLM local possui vision.
+- O NixOS do projeto possui infraestrutura para interação gráfica, incluindo screenshot e evdev.
+- O objetivo desta sessão NÃO é substituir a IA local nem modificar/reiniciar o servidor llama.cpp.
+- Seu objetivo é TESTAR, auditar e endurecer o harness existente do projeto, utilizando a IA local + Roo Dev como um agente real.
+
+REGRAS CRÍTICAS
+1. Antes de alterar qualquer código, leia a codebase relevante. Não confie somente em README, HANDOFF ou documentação.
+2. Pesquise na internet as melhores práticas atuais para cada ferramenta/capacidade encontrada no harness antes de avaliá-la ou modificá-la.
+3. Diferencie claramente:
+   - comportamento documentado;
+   - comportamento observado;
+   - hipótese;
+   - recomendação baseada em pesquisa.
+4. Não invente capacidades de ferramentas.
+5. Não considere "o teste passou" apenas porque uma função retornou exit code 0.
+6. Priorize testes E2E com comportamento real.
+7. NÃO reinicie, recarregue, mate ou reconfigure o llama.cpp durante esta sessão.
+8. NÃO modifique os arquivos do próprio modelo/runtime da IA local de forma que interrompa a sessão atual.
+9. NÃO altere configurações do VSCodium/Roo Dev de maneira que derrube a sessão atual.
+10. Não faça alterações destrutivas.
+11. Git é obrigatório: antes de qualquer mudança relevante, verifique o estado do repositório.
+12. Se uma alteração puder interromper o harness atual, NÃO a aplique durante esta sessão; documente-a como proposta.
+13. Não faça mudanças cosméticas. Só altere código quando houver benefício técnico demonstrável.
+
+OBJETIVO PRINCIPAL
+
+Faça uma auditoria prática do harness existente e descubra até onde a IA local consegue operar como um agente autônomo real.
+
+Você deve testar o ciclo:
+
+OBSERVAR → RACIOCINAR → ESCOLHER TOOL → EXECUTAR → OBSERVAR RESULTADO → VALIDAR → CORRIGIR
+
+O teste deve ocorrer com a IA local operando dentro do Roo Dev, e não simplesmente chamando funções Python diretamente.
+
+PRIMEIRA FASE — RECONHECIMENTO
+
+Mapeie a implementação real do harness:
+
+- módulos Nix relacionados ao harness;
+- ferramentas MCP;
+- ferramentas de screenshot/vision;
+- evdev/input;
+- automação de mouse/teclado;
+- integração com Roo Dev;
+- wrappers;
+- permissões;
+- sandboxing;
+- scripts auxiliares;
+- testes existentes;
+- documentação;
+- contratos entre ferramentas;
+- schemas de entrada/saída;
+- tratamento de erros;
+- timeouts;
+- validação de resultados.
+
+Leia os arquivos de implementação, não apenas a documentação.
+
+Produza mentalmente um mapa:
+
+tool → implementação → dependências → mecanismo → consumidor → teste existente → lacunas.
+
+NÃO comece implementando.
+
+SEGUNDA FASE — PESQUISA
+
+Para CADA categoria de ferramenta existente no harness, pesquise a prática recomendada atual.
+
+Exemplos:
+
+- screenshot/captura de tela;
+- vision → screenshot → interpretação;
+- evdev;
+- mouse;
+- teclado;
+- foco de janela;
+- identificação de aplicação;
+- automação GUI;
+- MCP tool design;
+- tool schemas;
+- timeout/retry;
+- idempotência;
+- validação pós-ação;
+- segurança de ferramentas;
+- prevenção de loops de agente;
+- observabilidade;
+- state verification.
+
+Use documentação oficial e fontes técnicas primárias sempre que possível.
+
+Não pesquise genericamente "como fazer IA". Pesquise especificamente a tecnologia encontrada no código.
+
+Para cada descoberta importante, compare:
+
+IMPLEMENTAÇÃO ATUAL
+vs.
+BEST PRACTICE ATUAL
+
+TERCEIRA FASE — TESTE REAL DO HARNESS
+
+Agora faça testes E2E.
+
+IMPORTANTE:
+
+Não transforme o teste em:
+
+IA → shell → script → resultado.
+
+Queremos testar:
+
+IA local → Roo Dev → tool do harness → sistema → observação → decisão seguinte.
+
+Sempre que existir uma ferramenta de GUI apropriada, prefira-a a "execute shell command".
+
+Evite deliberadamente atalhos como:
+
+- executar comandos shell para simular uma ação gráfica;
+- escrever diretamente arquivos que poderiam ser manipulados pela ferramenta;
+- consultar estado interno quando a informação poderia ser observada pela GUI;
+- chamar diretamente APIs internas para fingir que o agente utilizou a ferramenta.
+
+Queremos descobrir se o agente consegue REALMENTE utilizar o harness.
+
+TESTES MÍNIMOS
+
+1. SCREENSHOT
+
+Peça à IA local para obter uma screenshot.
+
+Depois faça a IA:
+
+- identificar a aplicação atualmente visível;
+- localizar elementos relevantes;
+- descrever o estado da interface;
+- usar essa informação para decidir a próxima ação.
+
+Verifique se a cadeia vision realmente funciona.
+
+2. MOUSE
+
+Faça um teste simples e observável:
+
+- localizar um elemento conhecido;
+- mover o cursor;
+- clicar;
+- observar novamente a interface;
+- confirmar que o estado mudou.
+
+Não aceite "cliquei" como evidência.
+A mudança visual deve ser verificada.
+
+3. TECLADO / EVDEV
+
+Execute uma ação reversível na GUI.
+
+Depois:
+
+- screenshot;
+- verificar o estado;
+- confirmar que o evento realmente produziu o efeito esperado.
+
+4. COMPOSIÇÃO DE TOOLS
+
+Faça um teste que exija pelo menos:
+
+screenshot → raciocínio → ação → screenshot → validação.
+
+Esse é mais importante que testes unitários individuais.
+
+5. RECOVERY
+
+Introduza deliberadamente uma condição simples em que a ação esperada não produza o resultado.
+
+Exemplo:
+
+- clicar em posição incorreta;
+- tentar interagir com elemento que mudou;
+- perder foco da janela.
+
+Observe se a IA:
+
+- percebe a falha;
+- não entra em loop;
+- coleta novo estado;
+- adapta a estratégia;
+- tenta novamente;
+- eventualmente aborta de maneira segura.
+
+6. TOOL FAILURE
+
+Teste timeout/erro controlado de uma ferramenta, quando isso puder ser feito sem derrubar o ambiente.
+
+Avalie:
+
+- mensagem de erro;
+- informação disponível para o modelo;
+- possibilidade de recuperação;
+- retry;
+- risco de loop infinito.
+
+7. GUI VS SHELL
+
+Faça pelo menos uma tarefa que possa ser executada tanto por shell quanto pela GUI.
+
+Oriente a IA local a usar a GUI.
+
+Verifique se ela consegue concluir a tarefa sem recorrer ao shell.
+
+O objetivo é avaliar a capacidade real de tool use, não apenas a capacidade de executar comandos.
+
+QUARTA FASE — AVALIAÇÃO DO AGENTE
+
+Não avalie somente se as tools funcionam.
+
+Avalie a IA local como agente.
+
+Observe:
+
+- ela escolhe a ferramenta correta?
+- entende o schema?
+- fornece argumentos válidos?
+- observa o resultado?
+- verifica se a ação realmente aconteceu?
+- utiliza vision corretamente?
+- mantém estado entre ações?
+- recupera erros?
+- evita repetir ações inúteis?
+- consegue decompor uma tarefa?
+- sabe quando parar?
+- usa shell quando não deveria?
+- inventa resultados?
+- afirma que uma ação ocorreu sem verificá-la?
+- entra em ciclos?
+- perde contexto?
+- chama ferramentas em ordem inadequada?
+
+REGISTRE FALHAS REAIS.
+
+Não suavize o resultado.
+
+Se a IA local falhar, isso é um resultado valioso.
+
+QUINTA FASE — SEGURANÇA DO HARNESS
+
+Audite especialmente:
+
+- permissões excessivas;
+- ferramentas sem validação de argumentos;
+- comandos arbitrários;
+- path traversal;
+- ações irreversíveis;
+- ausência de confirmação para ações perigosas;
+- falta de timeout;
+- retries infinitos;
+- loops de agente;
+- ausência de limite de chamadas;
+- ausência de validação pós-ação;
+- tool descriptions ambíguas;
+- schemas permissivos demais;
+- retorno de erro insuficiente;
+- exposição desnecessária de informações do sistema.
+
+Não implemente uma "solução" especulativa.
+Somente corrija problemas demonstrados pela codebase/testes/pesquisa.
+
+SEXTA FASE — PERFORMANCE E UX DO TOOL CALLING
+
+Analise também o custo cognitivo e operacional das ferramentas.
+
+Para cada tool:
+
+- descrição é clara para um LLM?
+- schema minimiza ambiguidades?
+- argumentos possuem defaults seguros?
+- resultado contém informação suficiente para decidir a próxima ação?
+- o retorno é excessivamente grande?
+- há informação irrelevante?
+- o agente precisa chamar outra ferramenta apenas para descobrir se a primeira funcionou?
+- screenshot retorna metadados úteis?
+- erros são acionáveis?
+
+O objetivo é maximizar:
+
+tool correctness
++
+tool discoverability
++
+tool observability
++
+agent recovery
+
+e minimizar:
+
+tokens
++
+tool calls
++
+ambiguity
++
+false success.
+
+SÉTIMA FASE — IMPLEMENTAÇÃO
+
+Somente depois de observar problemas reais, implemente melhorias de alto ROI.
+
+Prioridade:
+
+P0 — falhas que quebram o harness;
+P1 — falhas que causam comportamento incorreto;
+P2 — falhas que causam loops/desperdício;
+P3 — melhorias de tool schema/observabilidade;
+P4 — otimizações menores.
+
+Não faça refatorações grandes sem necessidade.
+
+Toda mudança deve:
+
+- ser compatível com NixOS/Flakes;
+- permanecer declarativa;
+- preservar a sessão atual;
+- possuir teste;
+- ter justificativa baseada em evidência.
+
+OITAVA FASE — TESTES DE REGRESSÃO
+
+Depois das alterações:
+
+1. rode os testes existentes;
+2. execute novamente os testes E2E;
+3. repita os testes de GUI;
+4. teste recuperação;
+5. compare antes/depois;
+6. confirme que nenhuma ferramenta existente regrediu.
+
+Se algo não puder ser testado sem reiniciar o llama.cpp ou derrubar a sessão atual, não faça a alteração agora. Documente o teste pendente.
+
+NÃO confunda:
+
+"código compila"
+
+com:
+
+"harness funciona".
+
+O critério de sucesso é comportamento observável E2E.
+
+NONA FASE — DOCUMENTAÇÃO
+
+Atualize a documentação somente com fatos comprovados.
+
+Para cada capacidade:
+
+- implementação;
+- como o agente chama;
+- exemplo real;
+- resultado observado;
+- limitações;
+- falhas conhecidas;
+- requisitos;
+- testes realizados.
+
+Marque explicitamente qualquer hipótese como:
+
+[HYPOTHESIS]
+
+e qualquer comportamento ainda não validado como:
+
+[UNVERIFIED]
+
+Não transforme expectativa em benchmark.
+
+DÉCIMA FASE — RELATÓRIO FINAL
+
+Ao terminar, produza um relatório objetivo contendo:
+
+1. Ferramentas encontradas
+2. Ferramentas testadas
+3. Ferramentas que funcionaram E2E
+4. Ferramentas que falharam
+5. Falhas da IA local
+6. Falhas do harness
+7. Falhas de integração Roo Dev
+8. Resultados da pesquisa
+9. Melhorias implementadas
+10. Melhorias não implementadas e por quê
+11. Testes executados
+12. Evidências observadas
+13. Próximos experimentos de maior ROI
+
+Inclua uma tabela:
+
+| Tool | Implementação | E2E | Vision | Recovery | Segurança | Observação |
+|------|---------------|-----|--------|----------|----------|------------|
+
+CRITÉRIO FINAL
+
+Não quero uma auditoria baseada em "parece correto".
+
+Quero evidência de que o harness consegue sustentar um agente real.
+
+Se a IA local conseguir realizar uma tarefa através de:
+
+Roo Dev
+→ tool
+→ GUI
+→ screenshot
+→ vision
+→ nova decisão
+→ tool
+→ validação
+
+isso deve ser considerado evidência forte.
+
+Se ela apenas executar comandos shell ou receber respostas artificiais das ferramentas, considere o teste inconclusivo.
+
+IMPORTANTE:
+Durante toda a sessão preserve o ambiente atual da IA local.
+NÃO reinicie llama.cpp.
+NÃO mate processos do Roo Dev/VSCodium.
+NÃO substitua o modelo.
+NÃO altere a configuração que mantém a sessão atual funcionando.
+
+Você tem autonomia para investigar profundamente a codebase, pesquisar documentação e executar testes seguros. Prefira evidência experimental a suposições e não encerre a tarefa apenas porque os testes unitários passaram.
+
+Esse prompt força uma diferença importante em relação aos testes que vocês vinham fazendo: o objeto de teste passa a ser o agente usando o harness, e não apenas cada implementação de tool isoladamente. Isso deve revelar problemas que um pytest ou um teste direto de função jamais mostraria.
+
+como o agente da cli mimo 2.5 faz pequenas entregas, testes unitarios como se tivessem valor de verdade, e larga tudo cheio de débito técnico e pula coisas, eu pensei em sair mandando tudo nessa conversa desde o começo até o fim em partes menores e reforçando o todo list que ele cria e tudo mais, mas pensei numa coisa eu poderia copiar o link da conversa  pedir pra ele ler ela toda, mas começar do começo e ir fazendo uma coisa por vez com uma lista todo bem definido e entrega bem feito e testado sera q funcionaria?
+
+Sim. Pode funcionar melhor, mas eu mudaria uma coisa importante: não pediria ao Mimo simplesmente para “ler a conversa inteira e executar”. Isso tende a produzir exatamente o comportamento que você quer evitar: ele monta um plano superficial, faz 2–3 alterações fáceis, roda testes unitários e declara vitória.
+
+O melhor uso dessa conversa é como especificação histórica + evidência, enquanto o repositório é a fonte de verdade atual.
+
+Estratégia que eu usaria
+Passar o link da conversa para ele.
+Mandar reconstruir o estado do projeto desde o início, mas sem alterar nada ainda.
+Extrair todos os objetivos, decisões, problemas descobertos, experimentos e pendências.
+Comparar isso com a codebase atual, não com a documentação.
+Produzir um backlog priorizado e rastreável.
+Só então começar a executar.
+Uma tarefa por vez, mas uma tarefa só pode ser considerada concluída quando:
+código realmente implementado;
+integração real feita;
+testes relevantes executados;
+teste E2E/fricção real quando aplicável;
+documentação atualizada;
+débito técnico introduzido = zero ou explicitamente justificado;
+resultado verificado;
+commit;
+atualizar o TODO antes de iniciar a próxima.
+
+O ponto crucial é não deixar o agente redefinir o escopo depois de começar.
+
+Eu mandaria este prompt:
+
+Você vai assumir a manutenção e evolução deste projeto como Engenheiro de Sistemas Sênior.
+
+CONTEXTO
+
+Esta conversa contém o histórico completo do desenvolvimento, decisões, experimentos, problemas encontrados, correções, benchmarks, arquitetura e tarefas já discutidas.
+
+Leia a conversa inteira desde o início antes de executar qualquer alteração.
+
+A conversa é CONTEXTO HISTÓRICO.
+A CODEBASE ATUAL é a fonte de verdade sobre o estado real do projeto.
+
+NÃO presuma que documentação, HANDOFF, TODOs ou conclusões antigas ainda estão corretos. Verifique tudo contra o código atual.
+
+OBJETIVO
+
+Reconstruir o estado atual do projeto e executar, de forma completa e verificável, as tarefas que ainda fazem sentido.
+
+Não quero uma sequência de pequenas entregas superficiais.
+
+Não quero "unit tests passaram" sendo usado como evidência suficiente para declarar uma tarefa concluída.
+
+Não quero implementar apenas o caminho feliz.
+
+Não quero deixar TODO, FIXME, stubs, código morto, hacks temporários ou débito técnico escondido para "uma próxima etapa" quando isso fizer parte da tarefa atual.
+
+REGRAS FUNDAMENTAIS
+
+1. PRIMEIRO LEIA, DEPOIS ALTERE
+
+Antes de modificar qualquer arquivo:
+
+- leia a conversa inteira;
+- leia AGENTS.md, HANDOFF.md e documentação relevante;
+- inspecione a árvore real do repositório;
+- leia os módulos, scripts e componentes envolvidos;
+- identifique dependências e pontos de integração;
+- examine testes existentes;
+- examine git status, branch e commits recentes;
+- procure TODO/FIXME/stubs relacionados ao escopo;
+- identifique discrepâncias entre documentação e implementação.
+
+Não comece implementando a primeira coisa que encontrar.
+
+2. CODEBASE > DOCUMENTAÇÃO
+
+Documentação antiga pode estar errada.
+
+Se documentação contradizer código ou comportamento observado:
+
+- investigue;
+- determine qual é o estado real;
+- corrija a documentação posteriormente;
+- não adapte o código cegamente para satisfazer documentação obsoleta.
+
+3. CRIE UM MASTER TODO
+
+Depois da auditoria inicial, produza um TODO persistente e rastreável contendo:
+
+- ID;
+- objetivo;
+- arquivos/componentes envolvidos;
+- dependências;
+- risco;
+- método de validação;
+- estado.
+
+Classifique cada item:
+
+- BLOCKED
+- TODO
+- IN PROGRESS
+- VERIFIED
+- SUPERSEDED
+
+Não remova itens antigos silenciosamente.
+Se algo não fizer mais sentido, marque como SUPERSEDED e explique por quê.
+
+4. EXECUÇÃO SEQUENCIAL
+
+Execute uma tarefa por vez.
+
+Antes de começar uma tarefa:
+
+- explique exatamente o que será alterado;
+- defina o critério objetivo de conclusão;
+- defina os testes necessários.
+
+Depois:
+
+- implemente;
+- teste;
+- valide integração;
+- corrija problemas encontrados;
+- atualize documentação;
+- atualize o TODO;
+- faça commit.
+
+Só então passe para a próxima tarefa.
+
+5. TESTES COM FRICÇÃO REAL
+
+Testes unitários são apenas uma camada.
+
+Para cada funcionalidade, determine o maior nível de teste razoável:
+
+UNIT
+INTEGRATION
+E2E
+REAL-WORLD / SYSTEM
+
+Priorize E2E e testes de integração quando a funcionalidade envolver:
+
+- NixOS;
+- systemd;
+- llama.cpp;
+- GPU/CUDA;
+- modelos locais;
+- MCP;
+- ferramentas do agente;
+- VSCodium/Roo Dev;
+- GUI;
+- evdev;
+- screenshots;
+- filesystem;
+- rede;
+- processos;
+- serviços;
+- tool calling;
+- RAG;
+- memória;
+- automação.
+
+Não simule uma integração real quando for possível testar o sistema real.
+
+Se uma ferramenta é destinada a ser chamada por um agente, teste a chamada através do mecanismo real de tool calling.
+
+Se uma funcionalidade deve interagir com a GUI, teste a interação real.
+
+Se uma funcionalidade depende de llama.cpp, teste contra llama.cpp real.
+
+Se depende de Nix evaluation/build, execute a avaliação/build real.
+
+6. PESQUISA EXTERNA
+
+Quando uma tarefa envolver tecnologia que pode ter mudado:
+
+PESQUISE NA INTERNET ANTES DE IMPLEMENTAR.
+
+Priorize:
+
+- documentação oficial;
+- upstream;
+- código-fonte upstream;
+- issues/PRs relevantes;
+- especificações;
+- melhores práticas atuais.
+
+Não implemente baseado apenas no conhecimento interno.
+
+Registre na documentação as decisões importantes derivadas da pesquisa.
+
+Não invente APIs, flags, opções ou comportamento.
+
+7. BENCHMARK
+
+Para qualquer alteração relacionada a performance:
+
+ANTES:
+- estabeleça baseline;
+- registre metodologia;
+- registre hardware;
+- registre configuração;
+- execute múltiplas medições.
+
+DEPOIS:
+- execute exatamente o mesmo protocolo;
+- compare métricas;
+- controle variáveis;
+- diferencie peak de sustained;
+- reporte média/mediana e variância quando apropriado;
+- não transforme hipótese em fato.
+
+Nenhum ganho de performance deve ser declarado sem medição reproduzível.
+
+8. NÃO CONFUNDA COMPONENTES
+
+Este projeto possui múltiplos agentes/modelos e ferramentas.
+
+Mantenha explicitamente separados:
+
+- Mimo 2.5 / Freebuff;
+- CLI;
+- Aider;
+- modelo local;
+- llama.cpp;
+- Roo Dev;
+- VSCodium;
+- ferramentas MCP;
+- infraestrutura NixOS.
+
+Não atribua comportamento de um componente a outro sem evidência.
+
+9. NÃO QUEBRE O AMBIENTE DE EXECUÇÃO
+
+Nunca reinicie, substitua ou interrompa deliberadamente componentes necessários para o próprio agente continuar trabalhando, salvo se isso fizer parte explícita da tarefa e existir uma estratégia segura de recuperação.
+
+Especialmente:
+
+- não reinicie llama.cpp sem necessidade;
+- não substitua o próprio agente em execução;
+- não altere arbitrariamente configurações de VM/hypervisor;
+- não destrua serviços ou arquivos necessários para a sessão atual.
+
+Se uma alteração exigir restart/reload, documente isso antes e determine se existe uma estratégia de validação sem interromper a sessão.
+
+10. NIXOS
+
+Mantenha a filosofia declarativa.
+
+Priorize:
+
+- Flakes;
+- módulos Nix;
+- Home Manager;
+- opções declarativas;
+- packages/overlays;
+- systemd declarativo.
+
+Não faça configuração manual persistente em ~/.config para resolver problemas que deveriam estar no código declarativo.
+
+Não introduza caminhos absolutos específicos da máquina sem justificativa.
+
+11. SEGURANÇA CONTRA LOOPS DE EVAL
+
+O projeto já sofreu um problema grave de avaliação recursiva/lazy evaluation que consumiu toda a RAM durante build.
+
+Portanto, qualquer alteração em:
+
+- módulos;
+- imports;
+- mkIf;
+- mkMerge;
+- mkForce;
+- overlays;
+- specialArgs;
+- module arguments;
+- pkgs;
+- Home Manager;
+- Stylix;
+- opções recursivas;
+- listas/attrs derivados;
+
+deve ser analisada especificamente quanto ao risco de dependência circular e fixpoint recursivo.
+
+Valide com nix eval/build antes de declarar concluído.
+
+12. NÃO FAÇA FAKE COMPLETION
+
+É proibido considerar uma tarefa concluída apenas porque:
+
+- o arquivo foi criado;
+- pytest passou;
+- o código compila;
+- uma função isolada funciona;
+- um mock funciona;
+- um benchmark foi executado uma única vez;
+- a documentação foi atualizada.
+
+"Implemented" e "Verified" são estados diferentes.
+
+Uma tarefa só vira VERIFIED quando a evidência corresponde ao comportamento que a tarefa realmente exige.
+
+13. QUANDO ENCONTRAR UM PROBLEMA, NÃO CONTORNE SEM INVESTIGAR
+
+Se um teste falhar:
+
+- investigue a causa raiz;
+- consulte logs;
+- leia o código relevante;
+- pesquise upstream quando necessário;
+- corrija a causa;
+- execute novamente.
+
+Não esconda falhas com:
+
+- timeout maior;
+- retry infinito;
+- suppress de erro;
+- mocks;
+- skip de teste;
+- flags que mascaram o problema;
+- alterações cosméticas.
+
+Se precisar de workaround, documente explicitamente.
+
+14. DÉBITO TÉCNICO
+
+Antes de finalizar cada tarefa, procure:
+
+- código morto;
+- duplicação;
+- TODO criado pela implementação;
+- imports desnecessários;
+- arquivos temporários;
+- scripts descartáveis que deveriam ser integrados;
+- documentação divergente;
+- interfaces incompletas;
+- tratamento de erro ausente;
+- caminhos hardcoded;
+- hacks.
+
+Não deixe lixo para trás.
+
+15. DOCUMENTAÇÃO
+
+Depois de qualquer alteração arquitetural ou comportamental:
+
+- atualize a documentação afetada;
+- atualize benchmarks;
+- atualize HANDOFF quando necessário;
+- marque informações antigas como superseded em vez de simplesmente apagá-las quando isso for importante para rastreabilidade.
+
+A documentação final deve refletir o código realmente existente.
+
+16. GIT
+
+Faça commits lógicos.
+
+Antes de cada commit:
+
+- git diff;
+- git status;
+- testes relevantes;
+- verificar arquivos inesperados.
+
+Nunca inclua arquivos pessoais, segredos, credenciais ou artefatos de build.
+
+17. AUTONOMIA
+
+Você possui autorização para:
+
+- ler a codebase;
+- pesquisar;
+- criar/modificar arquivos necessários;
+- executar testes;
+- executar builds;
+- executar benchmarks;
+- refatorar;
+- corrigir problemas encontrados;
+- atualizar documentação;
+- criar commits.
+
+Não pare depois de encontrar a primeira solução plausível.
+
+Continue investigando até atingir o critério de conclusão definido para a tarefa.
+
+18. PRIORIZAÇÃO
+
+Quando existirem muitas tarefas:
+
+P0 = correção, segurança, build, boot, integridade
+P1 = funcionalidades quebradas/incompletas
+P2 = integração e qualidade
+P3 = performance mensurável
+P4 = limpeza/refatoração
+P5 = melhorias cosméticas
+
+Não gaste a sessão inteira em otimizações cosméticas enquanto houver problemas funcionais ou integração incompleta.
+
+19. REGRA DE "UMA COISA POR VEZ"
+
+"Uma tarefa por vez" NÃO significa "uma pequena alteração por vez".
+
+Uma tarefa deve ser entregue COMPLETA.
+
+Exemplo:
+
+ERRADO:
+- criar função;
+- pytest passa;
+- marcar done.
+
+CORRETO:
+- entender requisito;
+- pesquisar;
+- implementar;
+- integrar;
+- testar caminho normal;
+- testar falhas;
+- testar integração;
+- testar E2E quando aplicável;
+- medir quando aplicável;
+- documentar;
+- revisar diff;
+- corrigir débito técnico;
+- commit;
+- marcar VERIFIED.
+
+20. PRIMEIRA FASE — NÃO IMPLEMENTE
+
+Sua primeira resposta após ler a conversa e o repositório deve ser SOMENTE uma auditoria.
+
+Entregue:
+
+A. Estado atual real da codebase.
+
+B. Arquitetura atual inferida do código.
+
+C. Diferenças entre documentação e código.
+
+D. Problemas encontrados.
+
+E. Funcionalidades incompletas.
+
+F. Débito técnico relevante.
+
+G. Lista de tarefas priorizada.
+
+H. Critério de validação de cada tarefa.
+
+I. Dependências entre tarefas.
+
+J. Quais itens históricos da conversa já foram resolvidos, quais continuam válidos e quais foram superseded.
+
+NÃO faça alterações nesta primeira fase.
+
+Depois da auditoria, aguarde a confirmação para iniciar a execução do TODO.
+
+REGRA FINAL
+
+Prefira uma implementação menor, correta, integrada e verificável a uma implementação grande, superficial e cheia de débito técnico.
+
+Não me entregue a aparência de progresso.
+
+Entregue evidência de progresso.
+Um detalhe importante
+
+Eu não deixaria o link da conversa como única fonte. O ideal é:
+
+conversa → contexto histórico
+repo → estado atual
+testes/benchmarks → evidência
+
+Isso evita um problema comum de agentes: eles leem uma conversa antiga, assumem que determinada coisa ainda existe, e começam a “corrigir” problemas que já foram resolvidos ou reintroduzem arquitetura antiga.
+
+E, considerando o histórico do projeto, eu manteria a regra mais importante do prompt:
+
+"Uma tarefa por vez não significa uma alteração pequena por vez. A tarefa só termina quando estiver integrada, testada e documentada."
+
+Essa é justamente a diferença entre o Mimo produzir uma sequência de patches que parecem progresso e efetivamente fechar os itens do projeto.
