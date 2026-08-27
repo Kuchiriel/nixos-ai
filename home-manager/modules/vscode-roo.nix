@@ -103,7 +103,7 @@ with lib; let
       env = {
         JARVIS_PROJECT_ROOT = toString ../../.;
       };
-      alwaysAllow = ["jarvis_execute" "jarvis_read_file" "jarvis_capture_screen" "jarvis_nix_eval" "jarvis_nix_check" "jarvis_nix_search"];
+      alwaysAllow = ["jarvis_execute" "jarvis_read_file" "jarvis_capture_screen" "jarvis_observe_screen" "jarvis_nix_eval" "jarvis_nix_check" "jarvis_nix_search"];
     };
   };
 

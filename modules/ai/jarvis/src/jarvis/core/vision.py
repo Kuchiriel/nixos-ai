@@ -237,3 +237,93 @@ def handle_capture(args: dict[str, Any]) -> str:
     if result["ok"]:
         return f"Screenshot capturada: {result['path']} ({result.get('size_kb', '?')}KB)"
     return f"ERROR: {result['error']}"
+
+
+def observe_screen(args: dict[str, Any]) -> str:
+    """Captura screenshot E envia ao modelo para análise.
+
+    Pipeline completo: grim → resize → base64 → llama.cpp vision → descrição.
+    Retorna a descrição do que o modelo vê na tela.
+    """
+    import base64
+    import io
+    import json
+
+    # 1. Capture screenshot
+    mode = args.get("mode", "full")
+    window_title = args.get("window_title")
+    question = args.get("question", "Describe what you see. List applications, errors, and UI state.")
+
+    if mode == "full":
+        result = capture_full()
+    elif mode == "window":
+        result = capture_window(window_title)
+    else:
+        result = capture_full()
+
+    if not result.get("ok"):
+        return f"ERROR: screenshot failed: {result.get('error', 'unknown')}"
+
+    image_path = result["path"]
+
+    # 2. Resize + encode
+    try:
+        from PIL import Image
+        img = Image.open(image_path)
+        img.thumbnail((1024, 1024), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=80)
+        img_b64 = base64.b64encode(buf.getvalue()).decode()
+    except ImportError:
+        # Fallback: send raw file as base64
+        with open(image_path, "rb") as f:
+            img_b64 = base64.b64encode(f.read()).decode()
+
+    # 3. Send to model via llama.cpp API
+    import os
+    import requests
+
+    api_url = os.environ.get("JARVIS_LLM_URL", "http://127.0.0.1:8080")
+    payload = {
+        "model": "local",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
+                    {"type": "text", "text": question},
+                ],
+            }
+        ],
+        "max_tokens": 2000,
+        "temperature": 0.0,
+    }
+
+    try:
+        r = requests.post(
+            f"{api_url}/v1/chat/completions",
+            json=payload,
+            timeout=180,
+        )
+        data = r.json()
+        msg = data["choices"][0]["message"]
+        content = msg.get("content", "")
+        reasoning = msg.get("reasoning_content", "")
+
+        # Build response
+        parts = []
+        if content:
+            parts.append(content)
+        elif reasoning:
+            # If only reasoning (thinking), use it as fallback
+            parts.append(f"[model thinking only]\n{reasoning[:1000]}")
+        else:
+            parts.append("Model returned empty response")
+
+        parts.append(f"\n[screenshot: {image_path} ({result.get('size_kb', '?')}KB)]")
+        return "\n".join(parts)
+
+    except requests.Timeout:
+        return f"ERROR: vision API timeout (120s). Screenshot saved at {image_path}"
+    except Exception as e:
+        return f"ERROR: vision analysis failed: {e}. Screenshot saved at {image_path}"

@@ -37,7 +37,7 @@ if _src_dir not in sys.path:
     sys.path.insert(0, _src_dir)
 
 from jarvis.core.devtools import handle_dev_tool, DEV_TOOLS
-from jarvis.core.vision import VISION_TOOL, handle_capture
+from jarvis.core.vision import VISION_TOOL, handle_capture, observe_screen
 
 
 import shlex
@@ -129,6 +129,28 @@ JARVIS_TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {}
+        }
+    },
+    {
+        "name": "jarvis_observe_screen",
+        "description": "Capture screenshot AND analyze it with vision AI. Returns what the model sees on screen. Use this instead of capture_screen when you need to understand the current UI state.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "enum": ["full", "window"],
+                    "description": "Capture mode. Default: full",
+                },
+                "window_title": {
+                    "type": "string",
+                    "description": "Window title to capture (for mode=window)",
+                },
+                "question": {
+                    "type": "string",
+                    "description": "What to analyze. Default: describe UI state, apps, errors",
+                },
+            },
         }
     },
     {
@@ -274,6 +296,9 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
 
         if name == "jarvis_capture_screen":
             return handle_capture(args)
+
+        if name == "jarvis_observe_screen":
+            return observe_screen(args)
 
         if name == "jarvis_nix_eval":
             expr = args.get("expr", "")
