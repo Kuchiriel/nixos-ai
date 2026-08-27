@@ -35,6 +35,8 @@ import requests
 from jarvis.core.logging import get_logger
 from jarvis.core.user_profile import UserProfile, inject_context
 from jarvis.core.circuit_breaker import CircuitBreaker
+from jarvis.core.loop_detector import LoopDetector, RecoveryAction
+from jarvis.core.context_budget import ContextBudget
 
 from jarvis.core.config import Config, get_config
 from jarvis.providers.mcp import MCPClient, MCPError, parse_command, to_function_tools
@@ -644,9 +646,26 @@ class Agent:
         last_tool_signature = ""  # para detectar chamadas duplicadas
         consecutive_duplicates = 0
 
+        # ── Loop Detector + Context Budget (novos) ──
+        loop_detector = LoopDetector()
+        context_budget = ContextBudget(max_tokens=32000)
+        for msg in messages:
+            context_budget.add_message(msg)
+
         # O Qwen pequeno (7B) tende a continuar chamando tools mesmo com dados
         # suficientes. No penúltimo turno, injetamos um aviso de "responda já".
         for turn in range(MAX_TURNS):
+            # ── Context budget warning ──
+            budget_warning = context_budget.get_budget_warning()
+            if budget_warning:
+                messages.append({"role": "system", "content": budget_warning})
+                context_budget.add_message(messages[-1])
+                # Truncar tool outputs se overflow
+                if context_budget.is_overflow:
+                    context_budget.truncate_tool_outputs(aggressive=True)
+                    saved = context_budget.compress_history()
+                    log.info("context_compress", detail={"tokens_saved": saved})
+
             if turn == MAX_TURNS - 2 and messages:
                 messages.append({
                     "role": "system",
@@ -752,6 +771,7 @@ class Agent:
                     "name": func_name,
                     "content": output,
                 })
+                context_budget.add_message(messages[-1])
 
                 # Métricas de observabilidade
                 result.tools_called.append({
@@ -760,25 +780,33 @@ class Agent:
                     "output_len": len(output),
                 })
 
-                # Detecção de chamadas duplicadas: se o modelo repete a mesma
-                # tool com os mesmos argumentos, avisa e eventualmente para.
-                sig = f"{func_name}:{json.dumps(args, sort_keys=True, default=str)[:200]}"
-                if sig == last_tool_signature:
-                    consecutive_duplicates += 1
-                    if consecutive_duplicates >= 2:
-                        # Injeta aviso no contexto para o modelo parar
-                        messages.append({
-                            "role": "system",
-                            "content": (
-                                "You repeated the same tool call 3 times with identical arguments. "
-                                "This is not productive. Use the data you already have to answer."
-                            ),
-                        })
-                        result.duplicate_tool_warnings += 1
-                        consecutive_duplicates = 0
-                else:
-                    consecutive_duplicates = 0
-                last_tool_signature = sig
+                # ── Loop Detector: verifica padrões de loop ──
+                loop_strategy = loop_detector.check(tool_calls, content)
+                if loop_strategy.action == RecoveryAction.ABORT:
+                    result.final_response = (
+                        f"Loop detectado ({loop_strategy.loop_type.value}): "
+                        f"{loop_strategy.message}"
+                    )
+                    return result
+                elif loop_strategy.action == RecoveryAction.FORCE_ANSWER:
+                    messages.append({
+                        "role": "system",
+                        "content": loop_strategy.message,
+                    })
+                    context_budget.add_message(messages[-1])
+                elif loop_strategy.action == RecoveryAction.INJECT_WARNING:
+                    messages.append({
+                        "role": "system",
+                        "content": loop_strategy.message,
+                    })
+                    context_budget.add_message(messages[-1])
+                    result.duplicate_tool_warnings += 1
+                elif loop_strategy.action == RecoveryAction.CHANGE_STRATEGY:
+                    messages.append({
+                        "role": "system",
+                        "content": loop_strategy.message,
+                    })
+                    context_budget.add_message(messages[-1])
 
         result.final_response = (
             f"Erro: número máximo de iterações ({MAX_TURNS}) atingido sem resposta final."
