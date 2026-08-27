@@ -1,15 +1,16 @@
 # ══════════════════════════════════════════════════════════════
-# VS Code + Roo Code — instalação 100% declarativa
+# VS Codium + Roo Code — instalação 100% declarativa (NixOS)
 # ══════════════════════════════════════════════════════════════
-# Instala VS Code, extensão Roo Code, custom modes, MCP servers
-# e configurações do projeto. Reprodutível em qualquer máquina.
+# Instala VSCodium, extensão Roo Code, custom modes (.roomodes),
+# MCP servers (Tavily, Context7, Playwright, GitHub) e
+# configurações do projeto. Reprodutível em qualquer instalação.
 #
-# Uso: imports = [ ./modules/vscode-roo.nix ]; no home.nix
-#
-# Opções configuráveis:
-#   vscode-roo.enable = true;
-#   vscode-roo.extensions = [ "github.copilot" ];  # extensões extras
-#   vscode-roo.mcpServers = { ... };                # servidores MCP
+# Uso no home.nix:
+#   imports = [ ./modules/vscode-roo.nix ];
+#   vscode-roo = {
+#     enable = true;
+#     tavilyApiKey = "tvly-dev-...";
+#   };
 # ══════════════════════════════════════════════════════════════
 {
   config,
@@ -20,57 +21,96 @@
 with lib; let
   cfg = config.vscode-roo;
 
-  # Wrapper local para npx (pacote mcp-npx-wrapper não existe no nixpkgs)
-  mcpNpxWrapper = pkgs.writeShellScriptBin "mcp-npx-wrapper" ''
-    exec npx --yes "$@"
-  '';
+  # ═══ Caminhos VSCodium ═══
+  # VSCodium armazena dados em ~/.config/VSCodium/
+  rooGlobalStorage = ".config/VSCodium/User/globalStorage/rooveterinaryinc.roo-cline";
+  rooSettingsDir = "${rooGlobalStorage}/settings";
 
-  # Gera o JSON do mcp_settings a partir da opção mcpServers
+  # ═══ Gera mcp_settings.json a partir da opção mcpServers ═══
   mcpSettingsJson = builtins.toJSON {
     mcpServers =
       builtins.mapAttrs (_name: server: {
         command = server.command;
         args = server.args or [];
         env = server.env or {};
-        disabled = false;
+        disabled = server.disabled or false;
         alwaysAllow = server.alwaysAllow or [];
       })
       cfg.mcpServers;
   };
+
+  # ═══ Servidores MCP pré-configurados ═══
+  defaultMcpServers = {
+    # ── Tavily Search (web search) ──
+    tavily-search = {
+      command = "${pkgs.bash}/bin/bash";
+      args = [
+        "-c"
+        "${pkgs.coreutils}/bin/env PATH=${pkgs.nodejs}/bin:$PATH exec ${pkgs.nodejs}/bin/npx -y mcp-remote https://mcp.tavily.com/mcp/?tavilyApiKey=${cfg.tavilyApiKey}"
+      ];
+      env = {};
+      alwaysAllow = ["tavily_search" "tavily_extract"];
+    };
+
+    # ── Context7 (library documentation) ──
+    context7 = {
+      command = "${pkgs.bash}/bin/bash";
+      args = [
+        "-c"
+        "${pkgs.coreutils}/bin/env PATH=${pkgs.nodejs}/bin:$PATH exec ${pkgs.nodejs}/bin/npx -y @upstash/context7-mcp@latest"
+      ];
+      env = {};
+      alwaysAllow = ["resolve-library-id" "get-library-docs"];
+    };
+
+    # ── Playwright (browser automation) ──
+    playwright = {
+      command = "${pkgs.playwright-mcp}/bin/playwright-mcp";
+      args = [];
+      env = {};
+      alwaysAllow = [];
+    };
+
+    # ── GitHub (repo operations — desabilitado por padrão) ──
+    github = {
+      command = "${pkgs.github-mcp-server}/bin/github-mcp-server";
+      args = [];
+      env = {
+        GITHUB_PERSONAL_ACCESS_TOKEN = cfg.githubToken;
+      };
+      disabled = cfg.githubToken == "";
+      alwaysAllow = [];
+    };
+  };
+
+  # ═══ Merge: defaultMcpServers ++ cfg.mcpServers (override manual) ═══
+  finalMcpServers = defaultMcpServers // cfg.mcpServers;
 in {
   options.vscode-roo = {
-    enable = mkEnableOption "VS Code + Roo Code installation";
+    enable = mkEnableOption "VSCodium + Roo Code installation";
 
     extensions = mkOption {
       type = types.listOf types.str;
       default = [];
-      description = "Lista de extensões VS Code adicionais";
+      description = "Extensões VSX adicionais (IDs)";
     };
 
     mcpServers = mkOption {
       type = types.attrs;
-      default = {
-        nixos = {
-          command = "${pkgs.mcp-nixos}/bin/mcp-nixos";
-          args = [];
-          alwaysAllow = ["nix" "nix_versions"];
-        };
-        tavily-search = {
-          command = "${mcpNpxWrapper}/bin/mcp-npx-wrapper";
-          args = ["-y" "tavily-mcp"];
-          env = {
-            TAVILY_API_KEY = config.vscode-roo.tavilyApiKey or "";
-          };
-          alwaysAllow = ["tavily_search" "tavily_extract"];
-        };
-      };
-      description = "Servidores MCP configurados no Roo Code";
+      default = {};
+      description = "Servidores MCP extras ou overrides dos defaults";
     };
 
     tavilyApiKey = mkOption {
       type = types.str;
       default = "";
-      description = "API key para o Tavily Search MCP";
+      description = "API key do Tavily Search";
+    };
+
+    githubToken = mkOption {
+      type = types.str;
+      default = "";
+      description = "GitHub Personal Access Token (vazio = desabilitado)";
     };
 
     customModesFile = mkOption {
@@ -82,42 +122,43 @@ in {
     userSettings = mkOption {
       type = types.attrs;
       default = {};
-      description = "Configurações userSettings extras do VS Code";
+      description = "Configurações userSettings extras do VSCodium";
     };
   };
 
   config = mkIf cfg.enable {
-    # ── VS Code + extensões ────────────────────────────
+    # ════════════════════════════════════════════════════════
+    # 1. VSCODIUM + EXTENSÕES
+    # ════════════════════════════════════════════════════════
     programs.vscode = {
       enable = true;
-      package = pkgs.vscode;
+      package = pkgs.vscodium;
 
-      # Extensões instaladas automaticamente
       extensions = with pkgs.vscode-extensions;
         [
-          # Roo Code (roo-cline)
+          # ── Roo Code (coding agent) ──
           rooveterinaryinc.roo-cline
 
-          # Linguagens
+          # ── Linguagens ──
           ms-python.python
           shardulm94.trailing-spaces
 
-          # Git
+          # ── Git ──
           eamodio.gitlens
 
-          # Temas e utilitários
+          # ── Tema ──
           dracula-theme.theme-dracula
         ]
         ++ cfg.extensions;
 
-      # Configurações de usuário
       userSettings =
         {
-          # ── Roo Code timeouts ────────────────────────────
-          "roo-cline.apiRequestTimeout" = 1800; # 30 min
-          "roo-cline.commandExecutionTimeout" = 300; # 5 min
+          # ── Roo Code ──
+          "roo-cline.apiRequestTimeout" = 1800;
+          "roo-cline.commandExecutionTimeout" = 300;
+          "roo-cline.useAgentRules" = true;
 
-          # ── Chat nativo VS Code ──────────────────────────
+          # ── VS Code Chat (llama.cpp local) ──
           "chat.agentHost.byokModels.enabled" = true;
           "chat.customEndpoints" = [
             {
@@ -125,116 +166,80 @@ in {
               url = "http://127.0.0.1:8080/v1";
               models = [
                 {
-                  id = "qwen3-35b-a3b";
+                  id = "qwen3.6-35b-a3b";
                   name = "Qwen3 35B Local";
-                  maxInputTokens = 131072;
+                  maxInputTokens = 16384;
                   maxOutputTokens = 8192;
                   toolCalling = true;
                 }
               ];
             }
           ];
-          "chat.utilityModel" = "customendpoint/qwen3-35b-a3b";
-          "chat.utilitySmallModel" = "customendpoint/qwen3-35b-a3b";
 
-          # ── Fontes ───────────────────────────────────────
-          "editor.fontFamily" = "'JetBrains Mono', 'Droid Sans Mono', 'Monaco', monospace";
-          "editor.fontSize" = 14;
-          "editor.inlayHints.fontFamily" = "'JetBrains Mono', monospace";
-          "editor.inlineSuggest.fontFamily" = "'JetBrains Mono', monospace";
-          "markdown.preview.fontFamily" = "Noto Sans, sans-serif";
-          "markdown.preview.fontSize" = 14;
-          "notebook.markup.fontFamily" = "Noto Sans, sans-serif";
 
-          # ── Geral ────────────────────────────────────────
-          "editor.minimap.sectionHeaderFontSize" = 11;
-          "scm.inputFontFamily" = "'JetBrains Mono', monospace";
-          "scm.inputFontSize" = 14;
-          "screencastMode.fontSize" = 48;
-          "terminal.integrated.fontSize" = 14;
-          "workbench.colorTheme" = "Dracula";
 
-          # ── Merge das configurações customizadas ─────────
+          # ── Merge das configs customizadas ──
         }
         // cfg.userSettings;
     };
 
-    # ── MCP Settings — mcp_settings.json ───────────────
-    home.file.".config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json" = {
-      text = mcpSettingsJson;
-    };
+    # ════════════════════════════════════════════════════════
+    # 2. MCP SETTINGS (mcp_settings.json)
+    # ════════════════════════════════════════════════════════
+    home.file."${rooSettingsDir}/mcp_settings.json".text = mcpSettingsJson;
 
-    # ── Custom Modes — .roomodes no home ──────────────
-    home.file.".roomodes" = {
-      text = builtins.readFile cfg.customModesFile;
-    };
+    # ════════════════════════════════════════════════════════
+    # 3. CUSTOM MODES (.roomodes)
+    # ════════════════════════════════════════════════════════
+    # Roo Code lê .roomodes do workspace root, mas também aceita
+    # o arquivo no global storage. Colocamos nos dois locais.
+    home.file."${rooSettingsDir}/custom_modes.yaml".source = cfg.customModesFile;
+    home.file.".roomodes".source = cfg.customModesFile;
 
-    # ── Pacotes necessários ──────────────────────────────
+    # ════════════════════════════════════════════════════════
+    # 4. PACOTES NECESSÁRIOS
+    # ════════════════════════════════════════════════════════
     home.packages = with pkgs; [
-      mcp-nixos
+      # MCP servers que são chamados diretamente
+      playwright-mcp
+      github-mcp-server
+
+      # Node.js para npx (mcp-remote, context7)
+      nodejs
     ];
 
-    # Wrapper mcp-npx-wrapper (local, sem depender de pacote inexistente)
-    home.file.".local/bin/mcp-npx-wrapper" = {
+    # ════════════════════════════════════════════════════════
+    # 5. WRAPPERS (para paths estáveis)
+    # ════════════════════════════════════════════════════════
+    home.file.".local/bin/vscodium-wrapper" = {
       text = ''
         #!/bin/sh
-        exec npx --yes "$@"
+        exec ${pkgs.vscodium}/bin/codium "$@"
       '';
       executable = true;
     };
 
-    # Wrapper mcp-nixos-wrapper (usa a versão mais recente do store)
-    home.file.".local/bin/mcp-nixos-wrapper" = {
-      text = ''
-        #!/bin/sh
-        MCP_NIXOS=$(find /nix/store -name "mcp-nixos" -type f -path "*/bin/mcp-nixos" 2>/dev/null | sort -V | tail -1)
-        if [ -z "$MCP_NIXOS" ]; then
-          echo "ERROR: mcp-nixos not found in /nix/store" >&2
-          exit 1
-        fi
-        CACHE_DIR=$(dirname "$MCP_NIXOS")/../share/mcp-nixos
-        if [ -f "$CACHE_DIR/channels.json" ]; then
-          export MCP_NIXOS_CHANNEL_CACHE="$CACHE_DIR/channels.json"
-        fi
-        exec "$MCP_NIXOS" "$@"
-      '';
-      executable = true;
-    };
-
-    # ── VSCode wrapper + desktop entry (path do store muda a cada update) ──
-    home.file.".local/bin/code-wrapper" = {
-      text = ''
-        #!/bin/sh
-        CODE=$(find /nix/store -name "code" -path "*/bin/code" -type f 2>/dev/null | sort -V | tail -1)
-        if [ -z "$CODE" ]; then
-            echo "ERROR: VSCode not found" >&2
-            exit 1
-        fi
-        exec "$CODE" "$@"
-      '';
-      executable = true;
-    };
-
-    home.file.".local/share/applications/code.desktop" = {
+    # Desktop entry para VSCodium
+    home.file.".local/share/applications/codium.desktop" = {
       text = ''
         [Desktop Entry]
-        Name=Visual Studio Code
-        Comment=Code Editing. Redefined.
+        Name=VSCodium
+        Comment=Open Source Editor (VS Code without Microsoft branding)
         GenericName=Text Editor
-        Exec=/home/nixos/.local/bin/code-wrapper %F
-        Icon=vscode
+        Exec=${pkgs.vscodium}/bin/codium %F
+        Icon=codium
         Type=Application
         StartupNotify=false
-        StartupWMClass=Code
+        StartupWMClass=VSCodium
         Categories=Utility;TextEditor;Development;IDE;
         MimeType=text/plain;inode/directory;application/x-code-workspace;
         Actions=new-empty-window;
-        Keywords=vscode;
+        Keywords=vscodium;vscode;
 
         [Desktop Action new-empty-window]
         Name=New Empty Window
-        Exec=/home/nixos/.local/bin/code-wrapper --new-window %F
-        Icon=vscode
+        Exec=${pkgs.vscodium}/bin/codium --new-window %F
+        Icon=codium
       '';
     };
   };

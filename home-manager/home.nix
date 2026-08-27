@@ -90,6 +90,11 @@
 
   # ── VS Code + Roo Code — configurado via módulo vscode-roo.nix ──
   # (extensões, userSettings, MCP, custom modes são declarativos)
+  vscode-roo = {
+    enable = true;
+    tavilyApiKey = "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";
+    # githubToken = "";  # Desabilitado — adicione seu token para ativar
+  };
 
   programs.opencode = {
     enable = true;

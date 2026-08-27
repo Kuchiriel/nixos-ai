@@ -75,7 +75,7 @@ in {
     # Pacote do JARVIS via overlay
     jarvis
     # Editor
-    vscodium
+    # vscodium — gerenciado por home-manager (vscode-roo.nix)
   ];
 
   # Habilita o gerenciamento de volumes e montagem de mídia
