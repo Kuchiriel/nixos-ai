@@ -1,12 +1,13 @@
 # Roo Code Custom Modes — nixos-ai
 # Formato: https://docs.roocode.com/features/custom-modes
-# Contexto: 32K tokens (Qwen3.6-35B-A3B via llama.cpp local)
+# Contexto: 192K tokens (Qwen3.6-35B-A3B via llama.cpp local, profile host)
 #
 # REGRAS DE ECONOMIA DE CONTEXTO:
 #   - Instruções devem ser concisas (máx ~500 tokens por modo)
 #   - Use listas, não parágrafos longos
 #   - Evite repetir informações entre modos
 #   - O system prompt consome ~2K tokens; customInstructions somam ~1-2K
+#   - Com 192K tokens, há ~135K úteis (70% do contexto)
 
 customModes:
   # ============================================================
@@ -23,15 +24,13 @@ customModes:
       Use para edição de código, debug, implementação de features,
       refatoração, e qualquer tarefa de desenvolvimento.
     customInstructions: |-
-      ## GESTÃO DE CONTEXTO (CRÍTICO — 32K tokens)
+      ## GESTÃO DE CONTEXTO (192K tokens — mas seja eficiente)
       - ANTES de ler arquivo: `wc -l <arquivo>` para saber o tamanho
-      - NUNCA leia mais de 200 linhas de uma vez
-      - Para arquivos grandes: use `head -n 100`, `tail -n 50`, `sed -n '50,150p'`
+      - Para arquivos >200 linhas: use `head -n 100`, `tail -n 50`, `sed -n '50,150p'`
       - Para achar função: use `grep -n 'def func' arquivo.py` primeiro
       - Para achar uma string: use `grep -n 'termo' arquivo.py`
-      - Se o arquivo tem >500 linhas, leia SÓ a parte relevante
       - Nunca faça `cat arquivo.py` inteiro — sempre com offset/limit
-      - Respeite seu orçamento: ~28K tokens úteis (descontando system prompt)
+      - Respeite orçamento: ~135K tokens úteis
 
       ## Regras
       - Leia o código relevante ANTES de editar
@@ -61,11 +60,9 @@ customModes:
       Use para decisões de arquitetura, análise de sistemas, design de
       componentes, e planejamento de implementação.
     customInstructions: |-
-      ## GESTÃO DE CONTEXTO (CRÍTICO — 32K tokens)
+      ## GESTÃO DE CONTEXTO (192K tokens)
       - ANTES de ler arquivo: `wc -l <arquivo>` para saber o tamanho
-      - NUNCA leia mais de 200 linhas de uma vez
-      - Para arquivos grandes: use `head -n 100`, `tail -n 50`, `sed -n '50,150p'`
-      - Se o arquivo tem >500 linhas, leia SÓ a parte relevante
+      - Para arquivos >200 linhas: use `head -n 100`, `tail -n 50`, `sed -n '50,150p'`
       - Nunca faça `cat arquivo.py` inteiro — sempre com offset/limit
 
       ## Regras
@@ -95,14 +92,12 @@ customModes:
       Use para trabalho autônomo contínuo quando o usuário pedir para
       "rodar overnight" ou "fazer melhorias automáticas".
     customInstructions: |-
-      ## GESTÃO DE CONTEXTO (CRÍTICO — 32K tokens)
+      ## GESTÃO DE CONTEXTO (192K tokens)
       - ANTES de ler arquivo: `wc -l <arquivo>` para saber o tamanho
-      - NUNCA leia mais de 200 linhas de uma vez
-      - Para arquivos grandes: use `head -n 100`, `tail -n 50`, `sed -n '50,150p'`
+      - Para arquivos >200 linhas: use `head -n 100`, `tail -n 50`, `sed -n '50,150p'`
       - Para achar função/string: use `grep -n` primeiro
-      - Se arquivo >500 linhas, leia SÓ a parte relevante
       - Nunca faça `cat arquivo.py` inteiro
-      - Respeite orçamento: ~28K tokens úteis
+      - Respeite orçamento: ~135K tokens úteis
 
       ## Regras Fundamentais
       1. NÃO PARE — loop até usuário dizer "pare"
@@ -150,9 +145,8 @@ customModes:
       Use quando o usuário pedir para organizar, limpar, categorizar
       ou deduplicar arquivos e diretórios.
     customInstructions: |-
-      ## GESTÃO DE CONTEXTO (CRÍTICO — 32K tokens)
+      ## GESTÃO DE CONTEXTO (192K tokens)
       - ANTES de ler arquivo: `wc -l <arquivo>` para saber o tamanho
-      - NUNCA leia mais de 200 linhas de uma vez
       - Para inventário: use `find` + `wc -l` + `head -5` por arquivo
       - Nunca leia arquivos inteiros para classificar — bastam as primeiras linhas
 

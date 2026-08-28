@@ -42,12 +42,13 @@ with lib; let
 
   # ═══ Servidores MCP pré-configurados ═══
   defaultMcpServers = {
-    # ── Tavily Search (web search) ──
+    # ── Tavily Search (web search — local, sem OAuth) ──
+    # mcp-remote tenta OAuth discovery e trava; tavily-mcp local funciona direto.
     tavily-search = {
       command = "${pkgs.bash}/bin/bash";
       args = [
         "-c"
-        "${pkgs.coreutils}/bin/env PATH=${pkgs.nodejs}/bin:$PATH exec ${pkgs.nodejs}/bin/npx -y mcp-remote https://mcp.tavily.com/mcp/?tavilyApiKey=${cfg.tavilyApiKey}"
+        "${pkgs.coreutils}/bin/env PATH=${pkgs.nodejs}/bin:$PATH TAVILY_API_KEY=${cfg.tavilyApiKey} exec ${pkgs.nodejs}/bin/npx -y tavily-mcp@latest"
       ];
       env = {};
       alwaysAllow = ["tavily_search" "tavily_extract"];
@@ -182,6 +183,9 @@ in {
           "roo-cline.commandExecutionTimeout" = 300;
           "roo-cline.useAgentRules" = true;
 
+          # Context window é configurado pelo usuário no Roo Code UI,
+          # não via VS Code settings.json. O endpoint define maxInputTokens.
+
           # ── Codebase Indexing (local nomic + qdrant) ──
           "roo-cline.codebaseIndexEnabled" = true;
           "roo-cline.codebaseIndexEmbedderProvider" = "openai-compatible";
@@ -199,7 +203,7 @@ in {
                 {
                   id = "qwen3.6-35b-a3b";
                   name = "Qwen3 35B Local";
-                  maxInputTokens = 32768;
+                  maxInputTokens = 196608;
                   maxOutputTokens = 8192;
                   toolCalling = true;
                 }

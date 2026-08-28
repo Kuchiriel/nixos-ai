@@ -38,6 +38,7 @@ if _src_dir not in sys.path:
 
 from jarvis.core.devtools import handle_dev_tool, DEV_TOOLS
 from jarvis.core.vision import VISION_TOOL, handle_capture, observe_screen
+from jarvis.core.chatgpt_reader import CHATGPT_READER_TOOL, handle_chatgpt_read
 
 
 import shlex
@@ -215,6 +216,18 @@ JARVIS_TOOLS = [
             "required": ["action"]
         }
     },
+    {
+        "name": "jarvis_read_chatgpt",
+        "description": "Read a shared ChatGPT conversation. Extracts all messages using a headless browser.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "ChatGPT share URL"},
+                "max_chars": {"type": "integer", "description": "Max chars to return (default: 50000)"}
+            },
+            "required": ["url"]
+        }
+    },
 ]
 
 
@@ -299,6 +312,9 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
 
         if name == "jarvis_observe_screen":
             return observe_screen(args)
+
+        if name == "jarvis_read_chatgpt":
+            return handle_chatgpt_read(args)
 
         if name == "jarvis_nix_eval":
             expr = args.get("expr", "")
