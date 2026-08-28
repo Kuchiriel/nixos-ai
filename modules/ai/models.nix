@@ -119,13 +119,12 @@ in {
       ctxSize = 196608;
       batchSize = 1024;
       ubatch = 1024;
-      gpuLayers = 99; # Attention + shared no GPU; --n-cpu-moe move experts pra CPU
+      gpuLayers = 45; # 45 layers no GPU; --n-cpu-moe 36 move experts pra CPU
       kvCache = "-fa on -ctk q4_0 -ctv q4_0";
-      # Sweet spot para 6GB VRAM (fonte: GPU-Poor's Guide 2026)
-      # -ngl 99 + --n-cpu-moe 36: experts layers 0-35 na CPU, 36-63 no GPU
-      # Attention + shared always no GPU; routed experts distribuídos
-      # Resultado referência: 28 tok/s em GTX 1660 Ti 6GB com mesmo modelo
-      # NOTA: -ngl 999 causa OOM — usar 99 (mesmo do artigo)
+      # Sweet spot: -ngl 45 + --n-cpu-moe 36
+      # experts layers 0-35 → CPU, layers 36-44 experts → GPU
+      # attention + shared → GPU (45 layers)
+      # RTX 4050 6GB: ngl=99 causa OOM, 45 é o max viável
       moeFlags = "--n-cpu-moe 36 --split-mode layer --poll 50 --poll-batch 50";
       extraArgs = [
         "--no-mmproj-offload"
