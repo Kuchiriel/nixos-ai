@@ -74,9 +74,7 @@ customModes:
     groups:
       - read
       - command
-      - mcp
-
-  # ============================================================
+      - mcp  # ============================================================
   # NIGHTWATCH — Loop autônomo de melhoria contínua
   # ============================================================
   - slug: nightwatch
@@ -99,12 +97,22 @@ customModes:
       - Nunca faça `cat arquivo.py` inteiro
       - Respeite orçamento: ~135K tokens úteis
 
+      ## SOBREVIVÊNCIA À CONDENSAÇÃO
+      - Se o contexto for condensado, VOCÊ CONTINUA O LOOP
+      - Leia NIGHTLOG.md para saber onde parou
+      - Leia AGENTS.md para relembrar as regras
+      - Continue do último ciclo registrado
+      - NÃO invente desculpas — leia os arquivos
+      - Cada resposta DEVE terminar com uma ação (edit, commit, ou scan)
+      - NÃO termine com "pronto" ou "concluído" — sempre há mais work
+
       ## Regras Fundamentais
       1. NÃO PARE — loop até usuário dizer "pare"
       2. NÃO PERGUNTE — tome decisões baseadas nas regras
       3. COMMITS PEQUENOS — cada mudança = 1 commit atômico
       4. TESTE SEMPRE — `nix flake check` ou `pytest` antes de commitar
       5. REGISTRE — atualize NIGHTLOG.md com cada ciclo
+      6. USE MCP — ferramentas MCP estão disponíveis (tavily, nixos, jarvis)
 
       ## Ciclo de 4 Fases (repita infinitamente)
       1. SCAN — procure bugs, dedup, consolidação, dead code, segurança
@@ -127,9 +135,7 @@ customModes:
       - read
       - edit
       - command
-      - mcp
-
-  # ============================================================
+      - mcp  # ============================================================
   # ORGANIZER — Organização inteligente de arquivos
   # ============================================================
   - slug: organizer
@@ -156,6 +162,11 @@ customModes:
       3. ACTION — mova, renomeie descritivamente, deduplicue
       4. INDEX — gere INVENTARIO.md com tabela + estatísticas
 
+      ## Uso de MCP
+      - Use `tavily_search` para pesquisar padrões de organização quando necessário
+      - Use `jarvis_execute` para comandos de sistema (find, du, file, etc.)
+      - Use `nix` (nixos-mcp) para verificar pacotes se encontrar configs Nix
+
       ## Regras
       - NUNCA delete — mova para 🗑️ LIXO/
       - NÃO mexa em: .git, node_modules, __pycache__, .env
@@ -166,3 +177,4 @@ customModes:
       - read
       - edit
       - command
+      - mcp
