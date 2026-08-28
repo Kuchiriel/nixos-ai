@@ -29,12 +29,10 @@ let
     CHECK_INTERVAL=5
 
     find_acer_hwmon() {
-      for hwmon in /sys/class/hwmon/hwmon*; do
-        if [ -f "$hwmon/name" ] && grep -q "acer" "$hwmon/name" 2>/dev/null; then
-          if [ -f "$hwmon/pwm1_enable" ]; then
-            echo "$hwmon"
-            return 0
-          fi
+      for hwmon in /sys/class/hwmon/hwmon*/; do
+        if [ -f "''${hwmon}name" ] && grep -q "acer" "''${hwmon}name" 2>/dev/null; then
+          echo "$hwmon"
+          return 0
         fi
       done
       return 1
@@ -62,40 +60,44 @@ let
     log "Fan control daemon started"
 
     HWMON_DIR=$(find_acer_hwmon) || {
-      log "WARNING: acer_wmi hwmon not found. Fan control unavailable."
+      log "WARNING: acer_wmi hwmon not found. Fan monitoring unavailable."
       log "Ensure 'acer_wmi.predator_v4=1' is in kernel params."
-      log "Falling back to thermald adaptive mode."
-      # Keep running to log, but don't attempt control
       while true; do sleep 300; done
     }
 
     log "Found acer hwmon at: $HWMON_DIR"
 
+    # Check if PWM control is available
+    HAS_PWM=false
+    if [ -f "''${HWMON_DIR}pwm1_enable" ]; then
+      HAS_PWM=true
+      log "PWM control available — will set turbo when LLM active"
+    else
+      log "PWM control NOT available (read-only fan monitoring)"
+      log "Fan speed: CPU=$(cat "''${HWMON_DIR}fan1_input" 2>/dev/null) GPU=$(cat "''${HWMON_DIR}fan2_input" 2>/dev/null) RPM"
+    fi
+
     was_running=false
 
     while true; do
-      # Check if llama-server (main LLM) is running
       if pgrep -x "llama-server" > /dev/null 2>&1; then
         if [ "$was_running" = false ]; then
-          log "llama-server detected — switching to TURBO fan"
-          set_fan_turbo "$HWMON_DIR"
+          log "llama-server detected"
+          if [ "$HAS_PWM" = true ]; then
+            log "Setting fan to TURBO"
+            set_fan_turbo "$HWMON_DIR"
+          fi
           was_running=true
-
-          # Log thermal state
-          if [ -f "$HWMON_DIR/temp1_input" ]; then
-            log "CPU temp: $(cat "$HWMON_DIR/temp1_input" 2>/dev/null) m°C"
-          fi
-          if [ -f "$HWMON_DIR/fan1_input" ]; then
-            log "CPU fan: $(cat "$HWMON_DIR/fan1_input" 2>/dev/null) RPM"
-          fi
-          if [ -f "$HWMON_DIR/fan2_input" ]; then
-            log "GPU fan: $(cat "$HWMON_DIR/fan2_input" 2>/dev/null) RPM"
-          fi
         fi
+        # Log thermal state periodically
+        log "CPU: $(cat "''${HWMON_DIR}temp1_input" 2>/dev/null) m°C | Fan: $(cat "''${HWMON_DIR}fan1_input" 2>/dev/null) RPM | GPU: $(cat "''${HWMON_DIR}temp2_input" 2>/dev/null) m°C | Fan: $(cat "''${HWMON_DIR}fan2_input" 2>/dev/null) RPM"
       else
         if [ "$was_running" = true ]; then
-          log "llama-server stopped — switching to AUTO fan"
-          set_fan_auto "$HWMON_DIR"
+          log "llama-server stopped"
+          if [ "$HAS_PWM" = true ]; then
+            log "Setting fan to AUTO"
+            set_fan_auto "$HWMON_DIR"
+          fi
           was_running=false
         fi
       fi
