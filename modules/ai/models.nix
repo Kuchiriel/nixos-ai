@@ -119,9 +119,11 @@ in {
       ctxSize = 196608;
       batchSize = 1024;
       ubatch = 1024;
-      gpuLayers = 45;
+      gpuLayers = 999; # Tudo na GPU; --cpu-moe move só routed experts pra CPU
       kvCache = "-fa on -ctk q4_0 -ctv q4_0";
-      moeFlags = "--n-cpu-moe 99 --split-mode layer --poll 50 --poll-batch 50";
+      # --cpu-moe: attention + dense FFN ficam na GPU, só routed experts na CPU
+      # ANTES: --n-cpu-moe 99 deixava GPU com 0% utilização
+      moeFlags = "--cpu-moe --split-mode layer --poll 50 --poll-batch 50";
       extraArgs = [
         "--no-mmproj-offload"
         "--image-min-tokens"
