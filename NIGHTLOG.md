@@ -210,3 +210,37 @@
 #### Nota
 - Push pendente: remote configurado como HTTPS sem autenticação
 - Recomendação: `git remote set-url origin git@github.com:Kuchiriel/nixos-ai.git`
+
+---
+
+## 2026-08-28 04:00 - Sessão Nightwatch: Security + Hygiene
+
+### SCAN: Identificação de problemas
+- **97 arquivos Python** no jarvis (24,631 linhas totais)
+- **58 `except Exception`** em todo core — maioria com `# noqa: BLE001` documentado
+- **3 `shell=True`** encontrados: devtools.py:379, eval_harness.py:105,164
+- **1 arquivo .bak** stale: `home-manager/modules/m3ta-stt-ptt.nix.bak`
+- **Regex duplicados**: `TOOL_CALL_TAG_RE` e `CODEBLOCK_JSON_RE` em agent.py e dev.py
+
+### EXECUTE: Correções aplicadas
+
+#### 1. SECURITY: devtools.py — shell=True → shlex.split()
+- [`execute_shell()`](modules/ai/jarvis/src/jarvis/core/devtools.py:368) agora usa `shlex.split()` ao invés de `shell=True`
+- Defense-in-depth: rejeição explícita de operadores de encadeamento (`&&`, `||`, `;`, `|`, `` ` ``, `$(`, `${`)
+- Consistente com [`agent.py:run_shell()`](modules/ai/jarvis/src/jarvis/core/agent.py:167)
+- Import `shlex` adicionado
+
+#### 2. SECURITY: eval_harness.py — shell=True → shlex.split()
+- [`setup` e `teardown`](modules/ai/jarvis/src/jarvis/core/eval_harness.py:105) agora usam `shlex.split()`
+- Import `shlex` adicionado no escopo do método
+
+#### 3. HYGIENE: Remoção de arquivo stale
+- `home-manager/modules/m3ta-stt-ptt.nix.bak` removido
+
+### VALIDATE
+- `test_devtools.py`: 35 passed ✅
+- `test_agent.py`: 28 passed ✅
+- Test manual: chaining operators corretamente rejeitados (`;`, `&&`, `|`)
+
+### COMMIT
+- `a544707` fix(jarvis): security — replace shell=True with shlex.split() em devtools e eval_harness
