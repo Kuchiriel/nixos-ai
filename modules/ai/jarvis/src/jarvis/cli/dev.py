@@ -789,8 +789,9 @@ _SHELL_BLOCK_RE = re.compile(r"```(?:bash|sh|shell)\s*\n(?P<cmd>.*?)```", re.DOT
 
 _READ_MARKER_RE = re.compile(r"^>>>\s*READ\s+(?P<path>\S+)\s*$", re.MULTILINE)
 
-_JSON_TAG_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
-_JSON_CODEBLOCK_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+# Reutiliza padrões compartilhados de tool_patterns (DRY)
+from jarvis.core.tool_patterns import CODEBLOCK_JSON_RE as _JSON_CODEBLOCK_RE
+from jarvis.core.tool_patterns import TOOL_CALL_TAG_RE as _JSON_TAG_RE
 
 # Formato Hermes/Llama-3 tool-use fine-tune, ex:
 #   <function=read_file>

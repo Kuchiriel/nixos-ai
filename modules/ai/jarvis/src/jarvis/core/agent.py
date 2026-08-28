@@ -63,15 +63,8 @@ DEFAULT_ALLOWED_PREFIXES: tuple[str, ...] = (
 # 8000 chars ≈ 2000 tokens, suficiente para a maioria dos comandos.
 TOOL_OUTPUT_MAX_CHARS = int(os.environ.get("JARVIS_TOOL_OUTPUT_MAX_CHARS", "8000"))
 
-# Padrões de tool_call que o Qwen2.5 vaza como texto puro no `content`
-# (bug documentado com llama.cpp + tool_choice=auto). Além da tag nativa
-# <tool_call>...</tool_call>, o modelo costuma devolver o JSON dentro de um
-# code block (```json ... ```) ou solto no texto — e o JSON tem objetos
-# ANINHADOS ("arguments": {...}), que um regex simples de chaves não captura.
-# A extração usa balanceamento de chaves (veja extract_fallback_tool_call).
-TOOL_CALL_TAG_RE = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.DOTALL)
-CODEBLOCK_JSON_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
-
+from jarvis.core.tool_patterns import CODEBLOCK_JSON_RE
+from jarvis.core.tool_patterns import TOOL_CALL_TAG_RE
 from jarvis.core.vision import VISION_TOOL
 from jarvis.core.devtools import DEV_TOOLS
 
