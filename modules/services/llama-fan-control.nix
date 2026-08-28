@@ -149,9 +149,9 @@ let
     echo ""
     echo "4. Current fan state:"
     for c in /sys/class/thermal/cooling_device*/; do
-      type=$(cat "${c}type" 2>/dev/null)
-      cur=$(cat "${c}cur_state" 2>/dev/null)
-      max=$(cat "${c}max_state" 2>/dev/null)
+      type=$(cat "''${c}type" 2>/dev/null)
+      cur=$(cat "''${c}cur_state" 2>/dev/null)
+      max=$(cat "''${c}max_state" 2>/dev/null)
       if [ "$max" != "0" ]; then
         echo "   $type: $cur/$max"
       fi
@@ -161,8 +161,8 @@ let
     echo "5. Thermal state:"
     nvidia-smi --query-gpu=temperature.gpu,clocks.current.graphics,power.draw,utilization.gpu --format=csv,noheader 2>/dev/null && true
     for zone in /sys/class/thermal/thermal_zone*/; do
-      type=$(cat "${zone}type" 2>/dev/null)
-      temp=$(cat "${zone}temp" 2>/dev/null)
+      type=$(cat "''${zone}type" 2>/dev/null)
+      temp=$(cat "''${zone}temp" 2>/dev/null)
       echo "   $type: $temp"
     done
 
