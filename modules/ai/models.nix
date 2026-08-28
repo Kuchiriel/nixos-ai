@@ -119,11 +119,13 @@ in {
       ctxSize = 196608;
       batchSize = 1024;
       ubatch = 1024;
-      gpuLayers = 999; # Tudo na GPU; --cpu-moe move só routed experts pra CPU
+      gpuLayers = 999; # Tudo na GPU; --n-cpu-moe N move experts das first N layers pra CPU
       kvCache = "-fa on -ctk q4_0 -ctv q4_0";
-      # --cpu-moe: attention + dense FFN ficam na GPU, só routed experts na CPU
-      # ANTES: --n-cpu-moe 99 deixava GPU com 0% utilização
-      moeFlags = "--cpu-moe --split-mode layer --poll 50 --poll-batch 50";
+      # Sweet spot para 6GB VRAM (fonte: GPU-Poor's Guide 2026)
+      # --n-cpu-moe 36: experts layers 0-35 na CPU, 36-63 no GPU
+      #attention + shared always no GPU; routed experts distribuídos
+      # Resultado referência: 28 tok/s em GTX 1660 Ti 6GB com mesmo modelo
+      moeFlags = "--n-cpu-moe 36 --split-mode layer --poll 50 --poll-batch 50";
       extraArgs = [
         "--no-mmproj-offload"
         "--image-min-tokens"
