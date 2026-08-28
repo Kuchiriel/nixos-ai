@@ -6,6 +6,7 @@
       import json
       import os
       import re
+      import shlex
       import subprocess
       import sys
       import requests
@@ -162,9 +163,15 @@
 
 
       def run_shell_tool(cmd):
+          """Executa comando via shlex (sem shell=True)."""
           print(f"-> Executando: {cmd}")
+          # Defense-in-depth: rejeita operadores de encadeamento shell
+          _CHAINING_PATTERNS = ("&&", "||", ";", "|", "`", "$(", "${", "\n")
+          if any(op in cmd for op in _CHAINING_PATTERNS):
+              return f"Comando com encadeamento não permitido: {cmd[:100]}"
+          argv = shlex.split(cmd)
           res = subprocess.run(
-              cmd, shell=True, capture_output=True, text=True
+              argv, capture_output=True, text=True
           )
           output = res.stdout if res.returncode == 0 else res.stderr
           if not output.strip():
