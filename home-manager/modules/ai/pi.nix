@@ -166,7 +166,7 @@
           """Executa comando via shlex (sem shell=True)."""
           print(f"-> Executando: {cmd}")
           # Defense-in-depth: rejeita operadores de encadeamento shell
-          _CHAINING_PATTERNS = ("&&", "||", ";", "|", "`", "$(", "${", "\n")
+          _CHAINING_PATTERNS = ("&&", "||", ";", "|", "`", "$(", "''${", "\n")
           if any(op in cmd for op in _CHAINING_PATTERNS):
               return f"Comando com encadeamento não permitido: {cmd[:100]}"
           argv = shlex.split(cmd)
