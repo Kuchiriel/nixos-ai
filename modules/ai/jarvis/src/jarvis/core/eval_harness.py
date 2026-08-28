@@ -94,6 +94,7 @@ class EvalHarness:
             {"response": str, "tool_calls": list, "turns": int, ...}
         """
         import subprocess
+        import shlex
 
         trajectory: list[TrajectoryStep] = []
         criteria_met: dict[str, bool] = {}
@@ -102,7 +103,9 @@ class EvalHarness:
         try:
             # Setup
             if task.setup:
-                subprocess.run(task.setup, shell=True, capture_output=True,
+                # Usa shlex.split() ao invés de shell=True para segurança
+                argv = shlex.split(task.setup)
+                subprocess.run(argv, capture_output=True,
                                timeout=30, text=True)
 
             start = time.monotonic()
@@ -161,7 +164,8 @@ class EvalHarness:
 
             # Teardown
             if task.teardown:
-                subprocess.run(task.teardown, shell=True, capture_output=True,
+                argv = shlex.split(task.teardown)
+                subprocess.run(argv, capture_output=True,
                                timeout=30, text=True)
 
             eval_result = EvalResult(

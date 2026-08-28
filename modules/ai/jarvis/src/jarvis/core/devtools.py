@@ -23,6 +23,7 @@ from __future__ import annotations
 import difflib
 import json
 import os
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -366,17 +367,25 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
 # ===========================================================================
 
 def execute_shell(cmd: str, approve: bool = False) -> dict[str, Any]:
-    """Executa um comando shell.
+    """Executa um comando shell via shlex (sem shell=True).
 
     Compatível com dev.py execute_shell(cmd).
+    Usa shlex.split() para parsing seguro — equivalente a agent.py:run_shell().
     Retorna dict estruturado.
     """
     if not cmd:
         return {"ok": False, "error": "Empty command"}
 
+    # Defense-in-depth: rejeita operadores de encadeamento shell
+    _CHAINING_PATTERNS = ("&&", "||", ";", "|", "`", "$(", "${", "\n")
+    stripped = cmd.strip()
+    if any(op in stripped for op in _CHAINING_PATTERNS):
+        return {"ok": False, "error": f"Comando com encadeamento não permitido: {cmd[:100]}"}
+
     try:
+        argv = shlex.split(cmd)
         result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, timeout=60,
+            argv, capture_output=True, text=True, timeout=60,
         )
         output = result.stdout if result.returncode == 0 else (result.stdout + result.stderr)
         if not output.strip():
