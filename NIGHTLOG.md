@@ -244,3 +244,10 @@
 
 ### COMMIT
 - `a544707` fix(jarvis): security — replace shell=True with shlex.split() em devtools e eval_harness
+
+### Segunda rodada: DEDUP — tool_patterns
+- Criado [`tool_patterns.py`](modules/ai/jarvis/src/jarvis/core/tool_patterns.py) com `TOOL_CALL_TAG_RE` e `CODEBLOCK_JSON_RE`
+- [`agent.py`](modules/ai/jarvis/src/jarvis/core/agent.py) e [`dev.py`](modules/ai/jarvis/src/jarvis/cli/dev.py) importam do módulo central
+- Elimina duplicação de regex entre 2 módulos
+- 63 testes passam (test_devtools + test_agent)
+- Commit: `8ffc0e7` refactor(jarvis): consolidar regex de tool_patterns em módulo compartilhado
