@@ -259,5 +259,6 @@
   devtools, doctor, heal, hwprofile, hwdetect, triggers, intents, config,
   context_budget, loop_detector, validator, ast_guard, ast_cache, busy, queue,
   rules, vision, providers (llm, mcp, http_service)
-- **Status**: Código limpo, sem TODO/FIXME pendentes, sem shell=True restante,
-  sem arquivos .bak, regex consolidados
+- **Status**: Código limpo, sem TODO/FIXME pendentes, sem arquivos .bak,
+  regex consolidados
+- **Nota**: shell=True ainda existe em pi.nix (corrigido nesta sessão)
