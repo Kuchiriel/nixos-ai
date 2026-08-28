@@ -136,6 +136,8 @@ in {
     # Performance tweaks para llama.cpp / inferência:
     "intel_idle.max_cstate=1" # Limita C-states a C1: menor wake latency, +1-3% decode
     "nvme_core.io_timeout=10" # Timeout I/O NVMe mais agressivo
+    # Fan control para Acer Nitro V15 — habilita acer_wmi fan sysfs:
+    "acer_wmi.predator_v4=1" # Exibe /sys/class/hwmon/hwmonX/pwm* para controle de ventoinha
   ];
 
   # =========================================================================
@@ -174,6 +176,7 @@ in {
   # zramSwap: definido em zram.nix (zstd, 50%, priority 999)
 
   services.thermald.enable = true;
+  services.llama-fan-control.enable = true;
   powerManagement.cpuFreqGovernor = "performance";
 
   boot.kernel.sysctl = {
