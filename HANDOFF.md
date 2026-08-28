@@ -23,7 +23,7 @@ Todos os serviços Jarvis são controlados por `services.jarvis.enable` (toggle 
 
 | Serviço | Porta | Estado | systemd | Observação |
 |---------|-------|--------|---------|------------|
-| llama-cpp-server | 8080 | ✅ Rodando | PartOf jarvis.target | Qwen3.6-35B MoE, 32K ctx (host-ncmoe35) |
+| llama-cpp-server | 8080 | ✅ Rodando | PartOf jarvis.target | Qwen3.6-35B MoE, 192K ctx (profile host) |
 | llama-cpp-embeddings | 8081 | ✅ Rodando | PartOf jarvis.target | nomic-embed-text-v2, CPU |
 | llama-cpp-rerank | 8082 | ✅ Rodando | PartOf jarvis.target | bge-reranker-v2-m3, CPU |
 | qdrant | 6333 | ✅ Rodando | PartOf jarvis.target | Vector DB |
@@ -36,14 +36,14 @@ Todos os serviços Jarvis são controlados por `services.jarvis.enable` (toggle 
 ## Configuração llama-cpp (Host)
 
 ```
-Profile:    host-ncmoe35 (ativo)
+Profile:    host (ativo)
 Modelo:     Qwen3.6-35B-A3B MoE (UD-Q4_K_M, ~20.6GiB)
 GPU layers: ngl=45 (atenção na GPU)
-MoE:        n-cpu-moe=35 (experts layers 0-34 na RAM)
-Contexto:   32768 tokens (32K, KV cache q4_0)
-Threads:    8
+MoE:        n-cpu-moe=99 (todos experts na CPU)
+Contexto:   196608 tokens (192K, KV cache q4_0)
+Threads:    12
 VRAM:       ~5.1GB / 6GB
-Flags:      --no-mmproj-offload --jinja --split-mode layer
+Flags:      --no-mmproj-offload --jinja --split-mode layer --parallel 2
 ```
 
 **Performance medida (benchmark.sh, 5 runs com warmup)**:
@@ -233,7 +233,7 @@ Validation (core/ast_guard.py) — AST check
 8. **services.jarvis.enable** — toggle global com mkIf + jarvis.target
 9. **rebuild-host.sh** — sempre validar com nix eval antes do switch
 10. **Self-heal MAX 5 restarts** — nunca loops infinitos de restart
-11. **Context budget** — 32K tokens, sempre wc -l antes de ler, max 200 linhas
+11. **Context budget** — 192K tokens (~135K úteis), wc -l antes de ler, max 200 linhas para arquivos grandes
 12. **observe_screen** — screenshot→vision→descrição para GUI interaction
 
 ## Serviços Ativos (atualizado 2026-08-27)
@@ -249,9 +249,9 @@ Validation (core/ast_guard.py) — AST check
 
 | MCP | Tools | Status |
 |-----|-------|--------|
-| jarvis | 9 tools (execute, read, write, str_replace, observe_screen, nix_eval, nix_check, nix_search, capture_screen) | ✅ |
+| jarvis | 10 tools (execute, read, write, str_replace, observe_screen, capture_screen, nix_eval, nix_check, nix_search, read_chatgpt) | ✅ |
 | nixos-mcp | nix, nix_versions (130K+ packages) | ✅ |
-| tavily-search | web search | ✅ |
+| tavily-search | web search (local tavily-mcp@latest, sem mcp-remote) | ✅ |
 | context7 | library docs | ✅ |
 | playwright | browser automation | ✅ |
 
