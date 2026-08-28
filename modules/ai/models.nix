@@ -116,7 +116,7 @@ in {
       model = "llm-host";
       mmproj = "llm-host-mmproj";
       threads = 12;
-      ctxSize = 8192; # Max seguro com ncmoe=36, 2 slots, 6GB VRAM (192K causa OOM)
+      ctxSize = 16384; # Teste: 16K com ncmoe=36, 2 slots — se OOM, voltar pra 8192
       batchSize = 1024;
       ubatch = 1024;
       gpuLayers = 45; # 45 layers no GPU; --n-cpu-moe 36 move experts pra CPU
