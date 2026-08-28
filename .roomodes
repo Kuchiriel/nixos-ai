@@ -43,7 +43,8 @@ customModes:
     groups:
       - read
       - edit
-      - command      - mcp
+      - command
+      - mcp
 
   # ============================================================
   # ARCHITECT — Design de sistemas e arquitetura
@@ -73,7 +74,9 @@ customModes:
     groups:
       - read
       - command
-      - mcp  # ============================================================
+      - mcp
+
+  # ============================================================
   # NIGHTWATCH — Loop autônomo de melhoria contínua
   # ============================================================
   - slug: nightwatch
