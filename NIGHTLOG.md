@@ -260,5 +260,4 @@
   context_budget, loop_detector, validator, ast_guard, ast_cache, busy, queue,
   rules, vision, providers (llm, mcp, http_service)
 - **Status**: Código limpo, sem TODO/FIXME pendentes, sem arquivos .bak,
-  regex consolidados
-- **Nota**: shell=True ainda existe em pi.nix (corrigido nesta sessão)
+  regex consolidados, zero shell=True restante
