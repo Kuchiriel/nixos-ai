@@ -43,8 +43,7 @@ customModes:
     groups:
       - read
       - edit
-      - command
-      - mcp
+      - command      - mcp
 
   # ============================================================
   # ARCHITECT — Design de sistemas e arquitetura
@@ -135,7 +134,9 @@ customModes:
       - read
       - edit
       - command
-      - mcp  # ============================================================
+      - mcp
+
+  # ============================================================
   # ORGANIZER — Organização inteligente de arquivos
   # ============================================================
   - slug: organizer
