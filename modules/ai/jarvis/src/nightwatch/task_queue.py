@@ -12,6 +12,7 @@ Each task has a full lifecycle with state machine.
 """
 
 from __future__ import annotations
+import os
 
 import json
 import time
@@ -21,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 
-STATE_DIR = Path.home() / ".local/state/jarvis/nightwatch"
+STATE_DIR = Path(os.environ.get("JARVIS_STATE_DIR", str(Path.home() / ".local/state/jarvis/nightwatch")))
 TASK_QUEUE_FILE = STATE_DIR / "task_queue.json"
 MISSION_STATE_FILE = STATE_DIR / "mission_state.json"
 

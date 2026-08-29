@@ -1481,6 +1481,7 @@ def _run_agent_loop(
     approve: bool = False,
     debug: bool = False,
     max_turns: int = 30,
+    reasoning_level: str = "medium",
 ) -> bool:
     """Roda turnos até texto puro (sucesso) ou max_turns/erro (falha).
 

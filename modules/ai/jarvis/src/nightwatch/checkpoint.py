@@ -23,9 +23,10 @@ import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any
+import os
 
 
-STATE_DIR = Path.home() / ".local/state/jarvis/nightwatch"
+STATE_DIR = Path(os.environ.get("JARVIS_STATE_DIR", str(Path.home() / ".local/state/jarvis/nightwatch")))
 CHECKPOINT_FILE = STATE_DIR / "checkpoint.json"
 
 
