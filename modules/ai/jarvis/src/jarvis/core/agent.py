@@ -46,7 +46,9 @@ def detect_profile(model_id: str) -> dict[str, Any]:
         A dictionary containing the profile configuration:
         - name (str): Profile category ('large', 'small', 'tiny', 'default').
         - max_tokens (int): Recommended maximum output tokens.
-        - temperature (float): Recommended temperature setting (always 0.0 for deterministic tool calling).
+        - max_tokens_per_turn (int): Max tokens per generation turn.
+        - temperature (float): Recommended temperature setting.
+        - tool_choice (str): Tool choice strategy.
     """
     m = model_id.lower()
     
@@ -55,13 +57,47 @@ def detect_profile(model_id: str) -> dict[str, Any]:
     total_b = float(total_b_match.group(1)) if total_b_match else None
     
     if total_b is not None and total_b >= 30:
-        return {"name": "large", "max_tokens": 768, "temperature": 0.0}
+        return {"name": "large", "max_tokens": 768, "max_tokens_per_turn": 768, "temperature": 0.0, "tool_choice": "auto"}
     elif total_b is not None and total_b >= 7:
-        return {"name": "small", "max_tokens": 1024, "temperature": 0.0}
+        return {"name": "small", "max_tokens": 1024, "max_tokens_per_turn": 1024, "temperature": 0.0, "tool_choice": "auto"}
     elif total_b is not None and total_b < 7:
-        return {"name": "tiny", "max_tokens": 512, "temperature": 0.0}
+        return {"name": "tiny", "max_tokens": 512, "max_tokens_per_turn": 512, "temperature": 0.0, "tool_choice": "none"}
     else:
-        return {"name": "default", "max_tokens": 1024, "temperature": 0.0}
+        return {"name": "default", "max_tokens": 1024, "max_tokens_per_turn": 1024, "temperature": 0.0, "tool_choice": "auto"}
+
+
+def _normalize_tool_call(tc: dict[str, Any]) -> dict[str, Any] | None:
+    """Normalize a tool call to a standard format.
+    
+    Handles:
+    - arguments as string (JSON) or dict
+    - missing name
+    - empty arguments
+    - preserves non-dict arguments (lists, numbers)
+    
+    Raises:
+        json.JSONDecodeError: If arguments is an invalid JSON string.
+    """
+    if not isinstance(tc, dict):
+        return None
+    
+    name = tc.get("name") or tc.get("function", {}).get("name")
+    if not name:
+        return None
+    
+    # Get arguments
+    args = tc.get("arguments") or tc.get("function", {}).get("arguments", {})
+    
+    # Parse string arguments
+    if isinstance(args, str):
+        if not args.strip():
+            args = {}
+        else:
+            args = json.loads(args)  # Raises JSONDecodeError for invalid JSON
+    
+    # Preserve non-dict types (lists, numbers) - don't force to dict
+    
+    return {"name": name, "arguments": args}
 
 
 def _extract_json_object(text: str) -> str | None:
@@ -110,46 +146,60 @@ def extract_fallback_tool_call(text: str | None) -> dict[str, Any] | None:
     - <tool_call>...</tool_call> format
     - JSON in code blocks
     - Bare JSON inline
+    
+    Returns normalized tool call with arguments parsed.
     """
     if not text:
         return None
+    
+    result = None
     
     # Look for <tool_call> format
     match = re.search(r'<tool_call>({.*?})</tool_call>', text, re.DOTALL)
     if match:
         try:
-            return json.loads(match.group(1))
+            result = json.loads(match.group(1))
         except json.JSONDecodeError:
             pass
     
     # Look for JSON in code blocks
-    match = re.search(r'```(?:json)?\s*({\s*"name"\s*:\s*"[^"]+"[^}]*})\s*```', text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except json.JSONDecodeError:
-            pass
+    if result is None:
+        match = re.search(r'```(?:json)?\s*({\s*"name"\s*:\s*"[^"]+"[^}]*})\s*```', text, re.DOTALL)
+        if match:
+            try:
+                result = json.loads(match.group(1))
+            except json.JSONDecodeError:
+                pass
     
     # Look for bare JSON with name and arguments
-    match = re.search(r'\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:', text)
-    if match:
-        # Find the complete JSON object
-        start = text.rfind('{', 0, match.start() + 1)
-        if start >= 0:
-            # Count braces to find matching closing brace
-            depth = 0
-            for i in range(start, len(text)):
-                if text[i] == '{':
-                    depth += 1
-                elif text[i] == '}':
-                    depth -= 1
-                    if depth == 0:
-                        try:
-                            return json.loads(text[start:i+1])
-                        except json.JSONDecodeError:
+    if result is None:
+        match = re.search(r'\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:', text)
+        if match:
+            start = text.rfind('{', 0, match.start() + 1)
+            if start >= 0:
+                depth = 0
+                for i in range(start, len(text)):
+                    if text[i] == '{':
+                        depth += 1
+                    elif text[i] == '}':
+                        depth -= 1
+                        if depth == 0:
+                            try:
+                                result = json.loads(text[start:i+1])
+                            except json.JSONDecodeError:
+                                pass
                             break
     
-    return None
+    # Normalize: parse string arguments
+    if result is not None and isinstance(result.get("arguments"), str):
+        args_str = result["arguments"]
+        if args_str.strip():
+            try:
+                result["arguments"] = json.loads(args_str)
+            except json.JSONDecodeError:
+                pass  # Keep as string if invalid
+    
+    return result
 
 import requests
 
@@ -462,6 +512,30 @@ class Agent:
         """Run agent with a single prompt. Returns AgentResult."""
         result = AgentResult()
         system_content = "You are JARVIS, an AI coding assistant."
+        
+        # Inject user profile
+        try:
+            from jarvis.core.user_profile import UserProfile, build_context_block
+            profile = UserProfile()
+            profile.load()
+            profile_block = build_context_block(profile)
+            if profile_block:
+                system_content += f"\n\nUSER PREFERENCES:\n{profile_block}"
+        except Exception:
+            pass
+        
+        # Inject environment context
+        try:
+            import platform
+            import os
+            env_block = f"""ENVIRONMENT:
+- OS: {platform.system()} {platform.release()}
+- Python: {platform.python_version()}
+- CWD: {os.getcwd()}
+- User: {os.environ.get('USER', 'unknown')}"""
+            system_content += f"\n\n{env_block}"
+        except Exception:
+            pass
         
         # Inject lessons from memory
         if self.memory:

@@ -11,31 +11,24 @@ TARGET_HOST="nitro-v15"
 export NH_FLAKE="$FLAKE_DIR"
 unset FLAKE
 
+# ═══ Multi-Layer Validation ═══
+# Roda validação completa antes de qualquer rebuild.
+# Se qualquer camada falhar, o rebuild NÃO é executado.
+
 echo "===================================================="
-echo "INICIANDO VALIDAÇÃO DA CONFIGURAÇÃO"
+echo "EXECUTANDO VALIDAÇÃO MULTI-CAMADA"
 echo "===================================================="
 
-# 1. Validação da avaliação do Flake (sem efeitos colaterais).
-#    Testa se a expressão nixosConfigurations.<host> avalia sem erro.
-#    IMPORTANTE: nix eval é validação de avaliação, NÃO garante proteção
-#    contra OOM por infinite recursion — mas é a melhor barreira disponível.
-if ! nix eval "$FLAKE_DIR#nixosConfigurations.$TARGET_HOST.config.system.build.toplevel" \
-    --show-trace > /dev/null 2>&1; then
+if ! "$FLAKE_DIR/scripts/nix-validate.sh" --host "$TARGET_HOST"; then
   echo ""
-  echo "[ERRO CRÍTICO] Falha durante avaliação da configuração!"
-  echo "Executando novamente com trace detalhado:"
-  echo "----------------------------------------------------"
-  nix eval "$FLAKE_DIR#nixosConfigurations.$TARGET_HOST.config.system.build.toplevel" \
-    --show-trace 2>&1 || true
-  echo "----------------------------------------------------"
-  echo ""
-  echo "Avaliação FRACASSOU. Corrija os erros acima ANTES de fazer rebuild."
+  echo "[ERRO CRÍTICO] Validação falhou!"
+  echo "Corrija os erros acima ANTES de fazer rebuild."
   echo "O rebuild NÃO será executado."
   exit 1
 fi
 
-echo "✅ Avaliação concluída com sucesso."
 echo ""
+echo "===================================================="
 
 echo "===================================================="
 echo "INDEXANDO ALTERAÇÕES NO GIT"
