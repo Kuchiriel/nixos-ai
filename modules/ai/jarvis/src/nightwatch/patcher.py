@@ -19,9 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from nightwatch.file_guard import apply_with_guard, strip_markdown_fences
-
-
-REPO_ROOT = Path.home() / "projects" / "nixos-ai"
+from nightwatch.paths import REPO_ROOT
 
 
 @dataclass

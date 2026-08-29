@@ -154,23 +154,32 @@ class TestStructuralIntegrity:
     def test_detects_removed_function(self):
         original = 'def foo():\n    pass\n\ndef bar():\n    pass\n'
         new = 'def foo():\n    pass\n'
-        ok, warnings = check_structural_integrity(original, new)
-        assert ok
-        assert any("bar" in w for w in warnings)
+        ok, errors, warnings = check_structural_integrity(original, new)
+        assert not ok
+        assert any("bar" in e for e in errors)
 
     def test_detects_removed_class(self):
         original = 'class A:\n    pass\n\nclass B:\n    pass\n'
         new = 'class A:\n    pass\n'
-        ok, warnings = check_structural_integrity(original, new)
-        assert ok
-        assert any("B" in w for w in warnings)
+        ok, errors, warnings = check_structural_integrity(original, new)
+        assert not ok
+        assert any("B" in e for e in errors)
 
-    def test_safe_editor_warns_on_function_removal(self, tmp_editor, sample_python):
+    def test_detects_added_function(self):
+        original = 'def foo():\n    pass\n'
+        new = 'def foo():\n    pass\n\ndef baz():\n    pass\n'
+        ok, errors, warnings = check_structural_integrity(original, new)
+        assert ok
+        assert not errors
+        assert any("baz" in w for w in warnings)
+
+    def test_safe_editor_blocks_function_removal(self, tmp_editor, sample_python):
         path, original = sample_python
-        # Remove 'helper' function
+        # Remove 'helper' function — should be BLOCKED now
         new_content = original.replace('\ndef helper():\n    """Helper function."""\n    return True\n', '\n')
         result = tmp_editor.apply_edit(path, new_content)
-        assert any("helper" in w for w in result.warnings)
+        assert not result.success
+        assert any("helper" in e for e in result.errors)
 
 
 # --- Invalid Python tests ---

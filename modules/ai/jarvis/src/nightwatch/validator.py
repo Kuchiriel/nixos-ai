@@ -18,9 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from nightwatch.file_guard import detect_language, validate_file, ValidationResult
-
-
-REPO_ROOT = Path.home() / "projects" / "nixos-ai"
+from nightwatch.paths import REPO_ROOT
 
 
 @dataclass

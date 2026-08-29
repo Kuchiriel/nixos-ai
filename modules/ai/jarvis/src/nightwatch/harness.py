@@ -101,9 +101,9 @@ from nightwatch.project_isolation import (
     get_project_root, validate_project_path, run_in_project,
 )
 from nightwatch.context_budget import ContextBudget, query_server_context_size
+from nightwatch.paths import REPO_ROOT
 
 
-REPO_ROOT = Path.home() / "projects" / "nixos-ai"
 STATE_DIR = Path.home() / ".local/state/jarvis/nightwatch"
 PROGRESS_LOG = STATE_DIR / "progress.jsonl"
 

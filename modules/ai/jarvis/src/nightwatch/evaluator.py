@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 
-REPO_ROOT = Path.home() / "projects" / "nixos-ai"
+from nightwatch.paths import REPO_ROOT
 
 
 @dataclass

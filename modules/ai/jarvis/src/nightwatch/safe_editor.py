@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 
-REPO_ROOT = Path.home() / "projects" / "nixos-ai"
+from nightwatch.paths import REPO_ROOT
 BACKUP_DIR = Path.home() / ".local/state/jarvis/nightwatch/backups"
 
 
@@ -200,15 +200,21 @@ def check_import_integrity(original: str, new: str) -> tuple[bool, list[str]]:
     return True, warnings
 
 
-def check_structural_integrity(original: str, new: str) -> tuple[bool, list[str]]:
-    """Check that functions/classes haven't disappeared."""
+def check_structural_integrity(original: str, new: str) -> tuple[bool, list[str], list[str]]:
+    """Check that functions/classes haven't disappeared.
+    
+    Returns (ok, errors, warnings).
+    Critical damage (removed functions/classes) → errors (blocks edit).
+    Minor structural notes → warnings.
+    """
+    errors = []
     warnings = []
     
     try:
         orig_tree = ast.parse(original)
         new_tree = ast.parse(new)
     except SyntaxError:
-        return False, ["Cannot parse one or both versions"]
+        return False, ["Cannot parse one or both versions"], []
     
     # Check function count
     orig_funcs = {n.name for n in ast.walk(orig_tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
@@ -216,7 +222,7 @@ def check_structural_integrity(original: str, new: str) -> tuple[bool, list[str]
     
     removed_funcs = orig_funcs - new_funcs
     if removed_funcs:
-        warnings.append(f"Functions removed: {', '.join(removed_funcs)}")
+        errors.append(f"Functions removed: {', '.join(removed_funcs)}")
     
     # Check class count
     orig_classes = {n.name for n in ast.walk(orig_tree) if isinstance(n, ast.ClassDef)}
@@ -224,9 +230,18 @@ def check_structural_integrity(original: str, new: str) -> tuple[bool, list[str]
     
     removed_classes = orig_classes - new_classes
     if removed_classes:
-        warnings.append(f"Classes removed: {', '.join(removed_classes)}")
+        errors.append(f"Classes removed: {', '.join(removed_classes)}")
     
-    return True, warnings
+    # Check for new functions/classes (informational)
+    added_funcs = new_funcs - orig_funcs
+    if added_funcs:
+        warnings.append(f"Functions added: {', '.join(added_funcs)}")
+    
+    added_classes = new_classes - orig_classes
+    if added_classes:
+        warnings.append(f"Classes added: {', '.join(added_classes)}")
+    
+    return len(errors) == 0, errors, warnings
 
 
 class SafeEditor:
@@ -298,13 +313,16 @@ class SafeEditor:
             
             # Import integrity for Python
             if lang == "python":
-                ok, warnings = check_import_integrity(original, content)
-                all_warnings.extend(warnings)
+                ok, import_warnings = check_import_integrity(original, content)
+                all_warnings.extend(import_warnings)
             
-            # Structural integrity for Python
+            # Structural integrity for Python — critical damage blocks the edit
             if lang == "python":
-                ok, warnings = check_structural_integrity(original, content)
-                all_warnings.extend(warnings)
+                ok, struct_errors, struct_warnings = check_structural_integrity(original, content)
+                all_errors.extend(struct_errors)
+                all_warnings.extend(struct_warnings)
+                if not ok:
+                    return False, all_errors, all_warnings
         
         return len(all_errors) == 0, all_errors, all_warnings
     
