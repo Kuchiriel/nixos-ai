@@ -441,7 +441,7 @@ def scenario_b_error_fix(repo_root: Path | None = None) -> ScenarioResult:
 
     # Step 1: Create a file with a known error
     bad_content = '"""File with intentional error."""\n\n\ndef broken():\n    return "missing closing quote\n'
-    tc = tool_write_file("modules/ai/jarvis/tests/_e2e_broken.py", bad_content, repo_root=repo_root)
+    tc = tool_write_file("src/broken.py", bad_content, repo_root=repo_root)
     result.tool_calls.append(tc)
     if not tc.success:
         result.errors.append(f"Failed to create broken file: {tc.error}")
@@ -451,7 +451,7 @@ def scenario_b_error_fix(repo_root: Path | None = None) -> ScenarioResult:
     result.evidence.append("Created file with intentional syntax error")
 
     # Step 2: Validate — should FAIL
-    tc = tool_validate_python("modules/ai/jarvis/tests/_e2e_broken.py", repo_root=repo_root)
+    tc = tool_validate_python("src/broken.py", repo_root=repo_root)
     result.tool_calls.append(tc)
     if tc.success:
         result.errors.append("Expected validation to fail but it passed")
@@ -462,7 +462,7 @@ def scenario_b_error_fix(repo_root: Path | None = None) -> ScenarioResult:
 
     # Step 3: Fix the error
     fixed_content = '"""File with intentional error — fixed."""\n\n\ndef broken():\n    return "missing closing quote"\n'
-    tc = tool_write_file("modules/ai/jarvis/tests/_e2e_broken.py", fixed_content, repo_root=repo_root)
+    tc = tool_write_file("src/broken.py", fixed_content, repo_root=repo_root)
     result.tool_calls.append(tc)
     if not tc.success:
         result.errors.append(f"Failed to write fix: {tc.error}")
@@ -472,7 +472,7 @@ def scenario_b_error_fix(repo_root: Path | None = None) -> ScenarioResult:
     result.evidence.append("Applied fix")
 
     # Step 4: Validate again — should PASS
-    tc = tool_validate_python("modules/ai/jarvis/tests/_e2e_broken.py", repo_root=repo_root)
+    tc = tool_validate_python("src/broken.py", repo_root=repo_root)
     result.tool_calls.append(tc)
     if not tc.success:
         result.validation_failures += 1
