@@ -52,21 +52,48 @@ def _run_shell(cmd: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
 
 
 def _command_allowed(cmd: str) -> bool:
-    """Verifica se o comando é read-only."""
-    ALLOWED = (
+    """Verifica se o comando é read-only (com suporte a pipes seguros)."""
+    # Comandos base permitidos
+    BASE_ALLOWED = (
         "ls", "cat", "head", "tail", "grep", "rg", "find", "wc",
         "df", "free", "ps", "pgrep", "ss", "ip", "uname", "uptime",
-        "date", "echo", "hostname", "id", "whoami",
+        "date", "echo", "hostname", "id", "whoami", "file", "stat",
+        "du", "which", "type", "realpath", "pwd",
         "systemctl is-active", "systemctl status", "systemctl list-units",
         "journalctl", "nix flake check", "nix eval", "nix build --dry-run",
+        "git log", "git status", "git diff", "git show",
+        "curl -sf", "curl -s", "nvidia-smi",
+    )
+    # Comandos que podem aparecer após pipe (seguros)
+    SAFE_PIPE_TARGETS = (
+        "head", "tail", "grep", "wc", "sort", "uniq", "cut", "awk",
+        "sed", "tr", "column", "jq",
     )
     stripped = cmd.strip()
     if not stripped:
         return False
-    for pat in ("&&", "||", ";", "|", "`", "$("):
+    # Bloqueio absoluto
+    for pat in ("&&", "||", ";", "`", "$(", "rm ", "mv ", "cp ", "chmod", "chown", "dd ", "mkfs"):
         if pat in stripped:
             return False
-    return any(stripped.startswith(p) for p in ALLOWED)
+    # Suporte a pipe: separar e verificar cada parte
+    parts = stripped.split("|")
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        # Remover redirects
+        for sep in ("2>/dev/null", ">/dev/null", "> "):
+            if sep in part:
+                part = part.split(sep)[0].strip()
+        if not part:
+            continue
+        # Verificar se é comando base ou pipe target
+        is_base = any(part.startswith(p) for p in BASE_ALLOWED)
+        is_safe_pipe = any(part.startswith(p) for p in SAFE_PIPE_TARGETS)
+        if not is_base and not is_safe_pipe:
+            return False
+    return True
 
 
 # ═══ Tool Schemas ═══
@@ -283,6 +310,29 @@ JARVIS_TOOLS = [
             "required": ["name", "content"]
         }
     },
+    {
+        "name": "jarvis_rag_search",
+        "description": "Search the project codebase using RAG (semantic search). Returns relevant code snippets and documentation.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "What to search for in the codebase"},
+                "collection": {"type": "string", "description": "Collection to search: code, memories, books (default: code)", "enum": ["code", "memories", "books"]},
+                "limit": {"type": "integer", "description": "Max results (default: 5)"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "jarvis_rag_index",
+        "description": "Index a directory into the RAG system. Use to make code searchable.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "Directory to index (default: current dir)"}
+            }
+        }
+    },
 ]
 
 
@@ -400,6 +450,12 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
 
         if name == "jarvis_vault_write":
             return _handle_vault_write(args)
+
+        if name == "jarvis_rag_search":
+            return _handle_rag_search(args)
+
+        if name == "jarvis_rag_index":
+            return _handle_rag_index(args)
 
         return f"ERROR: unknown tool: {name}"
     except Exception as e:
@@ -581,6 +637,64 @@ def _handle_vault_write(args: dict[str, Any]) -> str:
         return f"Note saved: {note_path}"
     except Exception as e:
         return f"ERROR: vault_write failed: {e}"
+
+
+# ═══ RAG Handlers ═══
+
+def _handle_rag_search(args: dict[str, Any]) -> str:
+    """Search the codebase using RAG."""
+    query = args.get("query", "")
+    if not query:
+        return "ERROR: empty query"
+    collection = args.get("collection", "code")
+    limit = args.get("limit", 5)
+    try:
+        from jarvis.core.rag import HybridSearch
+        from jarvis.core.config import Config
+        cfg = Config()
+        # Override collection if specified
+        if collection == "memories":
+            cfg.qdrant_collection_code = cfg.qdrant_collection_memories
+        elif collection == "books":
+            cfg.qdrant_collection_code = cfg.qdrant_collection_books
+        # Check if collection exists, create if not
+        import requests
+        resp = requests.get(f"{cfg.qdrant_url}/collections/{cfg.qdrant_collection_code}")
+        if resp.status_code == 404:
+            # Create collection with default vectors
+            create_payload = {
+                "vectors": {"dense": {"size": 768, "distance": "Cosine"}},
+                "sparse_vectors": {"sparse": {"modifier": "Idf"}}
+            }
+            requests.put(f"{cfg.qdrant_url}/collections/{cfg.qdrant_collection_code}", json=create_payload)
+        hs = HybridSearch(config=cfg)
+        results = hs.search(query, top_k=limit)
+        if not results:
+            return "No results found."
+        lines = []
+        for r in results:
+            path = r.path if hasattr(r, 'path') else 'unknown'
+            score = r.score if hasattr(r, 'score') else 0
+            text = r.text if hasattr(r, 'text') else ''
+            lines.append(f"[{score:.2f}] {path}\n{text[:200]}\n")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"ERROR: rag_search failed: {e}"
+
+
+def _handle_rag_index(args: dict[str, Any]) -> str:
+    """Index a directory into the RAG system."""
+    path = args.get("path", ".")
+    try:
+        from jarvis.core.rag import HybridIndexer
+        hi = HybridIndexer()
+        count = hi.index_directory(path)
+        return f"Indexed {count} files from {path}"
+    except Exception as e:
+        error_msg = str(e)
+        if "batch size" in error_msg:
+            return "ERROR: Embedding server batch size too small (512 tokens). Increase --batch-size in llama-server config."
+        return f"ERROR: rag_index failed: {e}"
 
 
 # ═══ Stdio Server ═══
