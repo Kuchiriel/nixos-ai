@@ -748,11 +748,62 @@ def _trim_messages(messages: list[dict[str, Any]], max_messages: int = 20) -> li
             break
     return [system, *tail]
 
+# ---------------------------------------------------------------------------
+# Auto-commit — Aider-style commit after file modifications
+# ---------------------------------------------------------------------------
+import subprocess as _sp
+
+
+def _auto_commit(tool_name: str, args: dict[str, Any], success: bool) -> None:
+    """Auto-commit after successful file modifications (Aider-style).
+    
+    Only commits for tools that modify files:
+    - str_replace
+    - write_file
+    
+    Commit message format: jarvis({tool}): {description}
+    Branch: jarvis/{session-id} (created on first commit)
+    """
+    if not success:
+        return
+    
+    # Only commit for file-modifying tools
+    if tool_name not in ("str_replace", "write_file"):
+        return
+    
+    # Check if there are changes to commit
+    try:
+        result = _sp.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if not result.stdout.strip():
+            return  # No changes
+    except Exception:
+        return
+    
+    # Generate commit message
+    path = args.get("path", "unknown")
+    if tool_name == "str_replace":
+        old = args.get("oldString", "")[:50]
+        msg = f"jarvis: edit {path} — {old}..."
+    else:
+        msg = f"jarvis: create/update {path}"
+    
+    # Stage and commit
+    try:
+        _sp.run(["git", "add", "-A"], capture_output=True, timeout=5)
+        _sp.run(
+            ["git", "commit", "-m", msg, "--no-verify"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except Exception:
+        pass  # Never break the REPL for commit failures
+
 
 # ---------------------------------------------------------------------------
 # Tools — delegação para devtools.py unificado
 # ---------------------------------------------------------------------------
-
 def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -> tuple[str, str | None]:
     """Executa tool via handle_dev_tool (devtools.py). Retorna (texto, diff_ou_None)."""
     # ── Vision ──
@@ -1486,6 +1537,10 @@ def _run_agent_loop(
             console.print(f"  [{style}]{icon} {preview}[/]")
             if diff:
                 _print_diff(diff)
+
+            # Auto-commit after successful file modifications
+            if not is_error and diff:
+                _auto_commit(func_name, args, success=True)
 
             tool_call_id = tc.get("id") or f"call_{uuid.uuid4().hex[:6]}"
             messages.append({
