@@ -38,9 +38,8 @@ from typing import Any
 import pytest
 
 
-REPO_ROOT = Path.home() / "projects" / "nixos-ai"
-JARVIS_SRC = REPO_ROOT / "modules/ai/jarvis/src"
-JARVIS_TEST = REPO_ROOT / "modules/ai/jarvis/tests"
+# REPO_ROOT is now a fixture — never touches the real repo
+# See isolated_repo() fixture below
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -154,11 +153,12 @@ class MetricsCollector:
 # Tool wrappers (real tool calls)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def tool_read_file(path: str, offset: int = 0, limit: int = 100) -> ToolCall:
+def tool_read_file(path: str, offset: int = 0, limit: int = 100, repo_root: Path | None = None) -> ToolCall:
     """Read a file — real tool call."""
     t0 = time.time()
     try:
-        full = Path(path) if Path(path).is_absolute() else REPO_ROOT / path
+        root = repo_root or Path(".")
+        full = Path(path) if Path(path).is_absolute() else root / path
         lines = full.read_text(encoding="utf-8").splitlines()
         selected = lines[offset:offset + limit]
         output = "\n".join(f"{i+1+offset:4d} | {l}" for i, l in enumerate(selected))
@@ -175,11 +175,12 @@ def tool_read_file(path: str, offset: int = 0, limit: int = 100) -> ToolCall:
         )
 
 
-def tool_write_file(path: str, content: str) -> ToolCall:
+def tool_write_file(path: str, content: str, repo_root: Path | None = None) -> ToolCall:
     """Write a file — real tool call."""
     t0 = time.time()
     try:
-        full = Path(path) if Path(path).is_absolute() else REPO_ROOT / path
+        root = repo_root or Path(".")
+        full = Path(path) if Path(path).is_absolute() else root / path
         full.parent.mkdir(parents=True, exist_ok=True)
         full.write_text(content, encoding="utf-8")
         duration = int((time.time() - t0) * 1000)
@@ -196,13 +197,14 @@ def tool_write_file(path: str, content: str) -> ToolCall:
         )
 
 
-def tool_execute_shell(cmd: str, timeout: int = 30) -> ToolCall:
+def tool_execute_shell(cmd: str, timeout: int = 30, repo_root: Path | None = None) -> ToolCall:
     """Execute shell command — real tool call."""
     t0 = time.time()
     try:
+        root = repo_root or Path(".")
         result = subprocess.run(
             cmd, shell=True, capture_output=True, text=True,
-            timeout=timeout, cwd=str(REPO_ROOT),
+            timeout=timeout, cwd=str(root),
         )
         duration = int((time.time() - t0) * 1000)
         output = result.stdout + result.stderr
@@ -226,13 +228,13 @@ def tool_execute_shell(cmd: str, timeout: int = 30) -> ToolCall:
         )
 
 
-def tool_safe_edit(path: str, new_content: str) -> ToolCall:
+def tool_safe_edit(path: str, new_content: str, repo_root: Path | None = None) -> ToolCall:
     """Safe edit with validation — real tool call."""
     t0 = time.time()
     try:
         from nightwatch.safe_editor import SafeEditor
         editor = SafeEditor()
-        full = Path(path) if Path(path).is_absolute() else REPO_ROOT / path
+        full = Path(path) if Path(path).is_absolute() else (repo_root or Path(".")) / path
         result = editor.apply_edit(full, new_content, validate=True)
         duration = int((time.time() - t0) * 1000)
         return ToolCall(
@@ -250,14 +252,14 @@ def tool_safe_edit(path: str, new_content: str) -> ToolCall:
         )
 
 
-def tool_git_status() -> ToolCall:
+def tool_git_status(repo_root: Path | None = None) -> ToolCall:
     """Git status — real tool call."""
     t0 = time.time()
     try:
         result = subprocess.run(
             ["git", "status", "--porcelain"],
             capture_output=True, text=True, timeout=10,
-            cwd=str(REPO_ROOT),
+            cwd=str(repo_root or Path(".")),
         )
         duration = int((time.time() - t0) * 1000)
         return ToolCall(
@@ -272,7 +274,7 @@ def tool_git_status() -> ToolCall:
         )
 
 
-def tool_git_diff(path: str | None = None) -> ToolCall:
+def tool_git_diff(path: str | None = None, repo_root: Path | None = None) -> ToolCall:
     """Git diff — real tool call."""
     t0 = time.time()
     try:
@@ -281,7 +283,7 @@ def tool_git_diff(path: str | None = None) -> ToolCall:
             cmd.append(path)
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=10,
-            cwd=str(REPO_ROOT),
+            cwd=str(repo_root or Path(".")),
         )
         duration = int((time.time() - t0) * 1000)
         return ToolCall(
@@ -296,18 +298,18 @@ def tool_git_diff(path: str | None = None) -> ToolCall:
         )
 
 
-def tool_git_commit(message: str) -> ToolCall:
+def tool_git_commit(message: str, repo_root: Path | None = None) -> ToolCall:
     """Git commit — real tool call."""
     t0 = time.time()
     try:
         subprocess.run(
             ["git", "add", "-A"], capture_output=True, timeout=10,
-            cwd=str(REPO_ROOT),
+            cwd=str(repo_root or Path(".")),
         )
         result = subprocess.run(
             ["git", "commit", "-m", message, "--no-verify"],
             capture_output=True, text=True, timeout=30,
-            cwd=str(REPO_ROOT),
+            cwd=str(repo_root or Path(".")),
         )
         duration = int((time.time() - t0) * 1000)
         sha = ""
@@ -315,7 +317,7 @@ def tool_git_commit(message: str) -> ToolCall:
             sha_result = subprocess.run(
                 ["git", "rev-parse", "HEAD"],
                 capture_output=True, text=True, timeout=5,
-                cwd=str(REPO_ROOT),
+                cwd=str(repo_root or Path(".")),
             )
             sha = sha_result.stdout.strip()
         return ToolCall(
@@ -332,11 +334,11 @@ def tool_git_commit(message: str) -> ToolCall:
         )
 
 
-def tool_validate_python(path: str) -> ToolCall:
+def tool_validate_python(path: str, repo_root: Path | None = None) -> ToolCall:
     """Validate Python syntax — real tool call."""
     t0 = time.time()
     try:
-        full = Path(path) if Path(path).is_absolute() else REPO_ROOT / path
+        full = Path(path) if Path(path).is_absolute() else (repo_root or Path(".")) / path
         content = full.read_text(encoding="utf-8")
         ast.parse(content)
         duration = int((time.time() - t0) * 1000)
@@ -363,7 +365,7 @@ def tool_validate_python(path: str) -> ToolCall:
 # Scenario A: Simple code change → validate → commit
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def scenario_a_simple_change() -> ScenarioResult:
+def scenario_a_simple_change(repo_root: Path | None = None) -> ScenarioResult:
     """Agent receives a simple code task, modifies file, validates, commits."""
     result = ScenarioResult(scenario="A: simple_code_change", task_success=False)
     t0 = time.time()
@@ -423,7 +425,7 @@ def scenario_a_simple_change() -> ScenarioResult:
 # Scenario B: Error detection → tool call → evidence → fix → validate
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def scenario_b_error_fix() -> ScenarioResult:
+def scenario_b_error_fix(repo_root: Path | None = None) -> ScenarioResult:
     """Agent finds an error, runs a tool to collect evidence, fixes it, validates."""
     result = ScenarioResult(scenario="B: error_detection_fix", task_success=False)
     t0 = time.time()
@@ -493,7 +495,7 @@ def scenario_b_error_fix() -> ScenarioResult:
 # Scenario C: Tool failure → agent detects FAILURE → does not declare success
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def scenario_c_tool_failure() -> ScenarioResult:
+def scenario_c_tool_failure(repo_root: Path | None = None) -> ScenarioResult:
     """Tool fails — agent must detect and not declare success."""
     result = ScenarioResult(scenario="C: tool_failure_detection", task_success=False)
     t0 = time.time()
@@ -543,7 +545,7 @@ def scenario_c_tool_failure() -> ScenarioResult:
 # Scenario D: Invalid file → SafeEditor prevents corruption
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def scenario_d_safe_editor() -> ScenarioResult:
+def scenario_d_safe_editor(repo_root: Path | None = None) -> ScenarioResult:
     """SafeEditor prevents corruption from invalid LLM output."""
     result = ScenarioResult(scenario="D: safe_editor_corruption_prevention", task_success=False)
     t0 = time.time()
@@ -618,7 +620,7 @@ def scenario_d_safe_editor() -> ScenarioResult:
 # Scenario E: Interrupted task → harness restarts → recovers state
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def scenario_e_recovery() -> ScenarioResult:
+def scenario_e_recovery(repo_root: Path | None = None) -> ScenarioResult:
     """Simulate task interruption and recovery."""
     result = ScenarioResult(scenario="E: recovery_after_interruption", task_success=False)
     t0 = time.time()
@@ -773,36 +775,52 @@ def scenario_f_gui_interaction() -> ScenarioResult:
 # Pytest tests
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@pytest.fixture(scope="module")
-def cleanup_e2e_files():
-    """Clean up E2E test artifacts after all tests."""
-    yield
-    # Remove test files
-    for name in [
-        "_e2e_placeholder.py",
-        "_e2e_broken.py",
-        "_e2e_valid.py",
-    ]:
-        path = REPO_ROOT / "modules/ai/jarvis/tests" / name
-        if path.exists():
-            path.unlink()
+@pytest.fixture
+def isolated_repo(tmp_path):
+    """Create an isolated git repo for E2E tests.
+
+    Never touches the real project repo. All tool calls operate
+    inside this temporary directory.
+    """
+    repo = tmp_path / "nixos-ai-e2e"
+    repo.mkdir()
+    # Initialize git
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "e2e@test"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "e2e"], cwd=repo, check=True, capture_output=True)
+    # Create minimal structure
+    (repo / "modules").mkdir(parents=True, exist_ok=True)
+    (repo / "tests").mkdir(parents=True, exist_ok=True)
+    # Initial commit (git needs at least one commit)
+    (repo / "tests").mkdir(parents=True, exist_ok=True)
+    (repo / "tests" / "__init__.py").write_text("")
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, check=True, capture_output=True)
+    return repo
 
 
 class TestScenarioA:
     """Scenario A: Simple code change → validate → commit."""
 
-    def test_simple_change(self, cleanup_e2e_files):
-        result = scenario_a_simple_change()
+    def test_simple_change(self, isolated_repo):
+        result = scenario_a_simple_change(repo_root=isolated_repo)
         assert result.task_success, f"Scenario A failed: {result.errors}"
         assert result.tool_success_rate > 0.8, f"Low tool success: {result.tool_success_rate}"
         assert len(result.evidence) >= 3, f"Not enough evidence: {result.evidence}"
+        # Verify no commits leaked to real repo
+        real_log = subprocess.run(
+            ["git", "log", "--oneline", "-5"],
+            capture_output=True, text=True,
+            cwd=str(Path.home() / "projects" / "nixos-ai"),
+        ).stdout
+        assert "e2e(test)" not in real_log, "E2E test committed to real repo!"
 
 
 class TestScenarioB:
     """Scenario B: Error detection → fix → validate."""
 
-    def test_error_fix(self, cleanup_e2e_files):
-        result = scenario_b_error_fix()
+    def test_error_fix(self, isolated_repo):
+        result = scenario_b_error_fix(repo_root=isolated_repo)
         assert result.task_success, f"Scenario B failed: {result.errors}"
         assert result.validation_failures == 0, f"Validation failures: {result.validation_failures}"
 
@@ -820,7 +838,7 @@ class TestScenarioC:
 class TestScenarioD:
     """Scenario D: SafeEditor prevents corruption."""
 
-    def test_corruption_prevention(self, cleanup_e2e_files):
+    def test_corruption_prevention(self, isolated_repo):
         result = scenario_d_safe_editor()
         assert result.task_success, f"Scenario D failed: {result.errors}"
         # Verify file is still valid Python
@@ -850,7 +868,7 @@ class TestScenarioF:
 class TestMetricsReport:
     """Aggregate metrics across all scenarios."""
 
-    def test_all_scenarios_produce_metrics(self, cleanup_e2e_files):
+    def test_all_scenarios_produce_metrics(self, isolated_repo):
         collector = MetricsCollector()
 
         scenarios = [
