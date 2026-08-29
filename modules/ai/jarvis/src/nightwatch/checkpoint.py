@@ -229,6 +229,38 @@ def create_checkpoint_for_task(task_id: str, description: str, project: str = "n
     return cp
 
 
+def generate_recovery_summary() -> str:
+    """Generate a text summary for context re-injection after compaction.
+
+    This is injected into the LLM context after compaction to remind it
+    what it was doing. Without this, the agent forgets its task state.
+    """
+    cp = Checkpoint.load()
+    if not cp.task_id:
+        return ""
+
+    lines = [
+        "[RECOVERY CONTEXT — injected after compaction]",
+        f"Current task: {cp.task_description[:100]}",
+        f"Project: {cp.project}",
+        f"Last operation: {cp.last_operation or 'none'}",
+    ]
+
+    if cp.last_error:
+        lines.append(f"Last error: {cp.last_error[:200]}")
+    if cp.files_written:
+        lines.append(f"Files modified: {', '.join(cp.files_written[-5:])}")
+    if cp.files_read:
+        lines.append(f"Files read: {len(cp.files_read)} files")
+    if cp.history:
+        recent = cp.history[-3:]
+        for h in recent:
+            status = "✓" if h.get("success") else "✗"
+            lines.append(f"  {status} {h.get('operation', '?')} — {h.get('error', '')[:80]}")
+
+    return "\n".join(lines)
+
+
 def get_recovery_context() -> dict[str, Any] | None:
     """Get context needed to recover from a crash."""
     cp = Checkpoint.load()

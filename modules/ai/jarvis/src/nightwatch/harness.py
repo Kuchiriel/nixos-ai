@@ -44,7 +44,52 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from enum import Enum
 from nightwatch.task_queue import TaskQueue, Task, TaskStatus, MissionState
+
+
+class FailureType(str, Enum):
+    """Classification of task failures for recovery strategy."""
+    TRANSIENT = "transient"        # Network, timeout, temporary LLM error
+    TOOL_FAILURE = "tool_failure"    # Tool returned error, could retry
+    VALIDATION_FAILURE = "validation_failure"  # Code didn't pass checks
+    CONTEXT_EXHAUSTION = "context_exhaustion"  # Ran out of context
+    TASK_FAILURE = "task_failure"    # Task itself is flawed
+    UNRECOVERABLE = "unrecoverable"  # Should not retry
+
+
+def classify_failure(error: str, task_status: str) -> FailureType:
+    """Classify a failure into a recovery strategy category."""
+    error_lower = (error or "").lower()
+
+    # Transient errors — worth retrying
+    if any(kw in error_lower for kw in ["timeout", "connection", "network", "temporary"]):
+        return FailureType.TRANSIENT
+    if "llm error" in error_lower or "api error" in error_lower:
+        return FailureType.TRANSIENT
+
+    # Context exhaustion — need compaction
+    if any(kw in error_lower for kw in ["context", "token", "exceeds", "overflow"]):
+        return FailureType.CONTEXT_EXHAUSTION
+
+    # Tool failures — could retry with different approach
+    if any(kw in error_lower for kw in ["tool", "command", "permission", "denied"]):
+        return FailureType.TOOL_FAILURE
+
+    # Validation failures — code is wrong
+    if any(kw in error_lower for kw in ["syntax", "import", "validation", "test fail"]):
+        return FailureType.VALIDATION_FAILURE
+
+    # SafeEditor rejections — LLM produced bad code
+    if "safeditor" in error_lower or "rejected" in error_lower:
+        return FailureType.VALIDATION_FAILURE
+
+    # Protected path
+    if "protected" in error_lower:
+        return FailureType.UNRECOVERABLE
+
+    # Default: task failure (flawed task definition)
+    return FailureType.TASK_FAILURE
 from nightwatch.safe_editor import SafeEditor, EditResult
 from nightwatch.validator import validate_change, ValidationReport
 from nightwatch.evaluator import review_change, auto_review, ReviewResult
@@ -703,14 +748,30 @@ class Harness:
 
         except Exception as e:
             cp.record_operation("error", False, str(e))
-            task.fail(str(e))
-            self.notify(f"❌ *Task Error*\n{str(e)[:100]}")
+            error_msg = str(e)
+            failure_type = classify_failure(error_msg, task.status)
+            task.fail(error_msg)
+            self.notify(
+                f"❌ *Task Error* [{failure_type.value}]\n{error_msg[:100]}"
+            )
             _log_progress({
                 "task_id": task.id, "status": "error",
-                "error": str(e),
+                "error": error_msg, "failure_type": failure_type.value,
             })
             # Revert on error
             _git_revert()
+
+            # Retry logic for transient/tool failures
+            if failure_type in (FailureType.TRANSIENT, FailureType.TOOL_FAILURE):
+                retries = getattr(task, '_retry_count', 0)
+                if retries < self.config.max_retries:
+                    task._retry_count = retries + 1
+                    wait = min(2 ** retries * 5, 60)  # exponential backoff, max 60s
+                    self.notify(f"🔁 Retrying in {wait}s (attempt {retries + 1}/{self.config.max_retries})")
+                    time.sleep(wait)
+                    # Don't count as executed — retry same task
+                    return self.execute_task(task)
+
             return False
 
     # ── Main Run ───────────────────────────────────────────────────────────
