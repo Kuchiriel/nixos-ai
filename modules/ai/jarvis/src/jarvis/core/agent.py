@@ -34,7 +34,20 @@ from jarvis.core.security import command_allowed, has_chaining_operators, run_sh
 
 
 def detect_profile(model_id: str) -> dict[str, Any]:
-    """Detect model profile from model name. Used by tests and REPL."""
+    """Detect model profile from model name. Used by tests and REPL.
+
+    Analyzes the model ID string to determine the appropriate inference
+    profile (large, small, tiny, or default) based on parameter count.
+
+    Args:
+        model_id: The identifier of the model (e.g., "llama-3-70b", "qwen-7b").
+
+    Returns:
+        A dictionary containing the profile configuration:
+        - name (str): Profile category ('large', 'small', 'tiny', 'default').
+        - max_tokens (int): Recommended maximum output tokens.
+        - temperature (float): Recommended temperature setting (always 0.0 for deterministic tool calling).
+    """
     m = model_id.lower()
     
     # Extract total parameters from name

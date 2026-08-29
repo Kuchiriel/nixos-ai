@@ -159,17 +159,31 @@ def apply_hunk(content: str, hunk: PatchHunk) -> tuple[bool, str]:
     
     Returns (success, new_content).
     """
+    # 1. Exact match
     if hunk.old_text in content:
         new_content = content.replace(hunk.old_text, hunk.new_text, 1)
         return True, new_content
     
-    # Try fuzzy matching (strip leading/trailing whitespace)
+    # 2. Line-by-line match (for multi-line hunks)
+    old_lines = hunk.old_text.strip().split("\n")
+    content_lines = content.split("\n")
+    
+    for i in range(len(content_lines) - len(old_lines) + 1):
+        match = True
+        for j, old_line in enumerate(old_lines):
+            if content_lines[i + j].strip() != old_line.strip():
+                match = False
+                break
+        if match:
+            new_lines = content_lines[:i] + hunk.new_text.split("\n") + content_lines[i + len(old_lines):]
+            return True, "\n".join(new_lines)
+    
+    # 3. Fuzzy: find first significant line and replace around it
     old_stripped = hunk.old_text.strip()
-    for i, line in enumerate(content.split("\n")):
-        if old_stripped in line or line.strip() == old_stripped:
-            lines = content.split("\n")
-            lines[i] = line.replace(old_stripped, hunk.new_text.strip())
-            return True, "\n".join(lines)
+    for i, line in enumerate(content_lines):
+        if old_stripped[:30] in line or line.strip() == old_stripped:
+            content_lines[i] = line.replace(line.strip(), hunk.new_text.strip())
+            return True, "\n".join(content_lines)
     
     return False, content
 

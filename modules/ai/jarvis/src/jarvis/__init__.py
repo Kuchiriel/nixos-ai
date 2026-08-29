@@ -8,3 +8,4 @@ Separação de responsabilidades:
 """
 
 __version__ = "0.1.0"
+"""Version string for the JARVIS package."""
