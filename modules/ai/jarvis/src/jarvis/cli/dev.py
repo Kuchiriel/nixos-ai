@@ -956,6 +956,30 @@ def _run_agent_loop(
         content = message.get("content") or ""
         tool_calls = message.get("tool_calls")
 
+        # Extract thinking content if present
+        thinking = ""
+        if "<thinking>" in content and "</thinking>" in content:
+            import re
+            thinking_match = re.search(r"<thinking>(.*?)</thinking>", content, re.DOTALL)
+            if thinking_match:
+                thinking = thinking_match.group(1).strip()
+                content = content[:thinking_match.start()] + content[thinking_match.end():]
+                content = content.strip()
+        elif reasoning_level != "low" and content:
+            # Show first part as thinking if no explicit tags
+            lines = content.split("\n")
+            if len(lines) > 3:
+                thinking = "\n".join(lines[:2])
+                content = "\n".join(lines[2:])
+
+        if thinking and reasoning_level != "low":
+            console.print(Panel(
+                Markdown(thinking) if thinking.strip().startswith(("#", "-", "*", "`")) else thinking,
+                title="💭 reasoning",
+                title_align="left",
+                border_style="dim",
+            ))
+
         used_text_fallback = False
         if not tool_calls and content:
             tool_calls = _to_tool_calls(_parse_text_actions(content))
@@ -1011,8 +1035,35 @@ def _run_agent_loop(
 # REPL principal
 # ---------------------------------------------------------------------------
 
+def _find_project_root() -> str | None:
+    """Auto-detect project root by looking for AGENTS.md or .git."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    # Fallback: look for AGENTS.md in common locations
+    for candidate in [
+        os.path.expanduser("~/projects/nixos-ai"),
+        os.path.expanduser("~/nixos-ai"),
+        os.getcwd(),
+    ]:
+        if os.path.exists(os.path.join(candidate, "AGENTS.md")):
+            return candidate
+    return None
+
+
 def dev_repl(project_root: str | None = None, approve: bool = False, continue_session: bool = False, yolo: bool = False) -> None:
     from jarvis.core.feedback import set_status, clear_status
+
+    # Auto-detect project root if not specified
+    if not project_root:
+        project_root = _find_project_root()
 
     if project_root:
         os.environ["JARVIS_PROJECT_ROOT"] = project_root
@@ -1052,6 +1103,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
 
     active_model = profile["name"]
     debug_mode = False
+    reasoning_level = "medium"  # low, medium, high
     session = _make_prompt_session()
 
     while True:
@@ -1122,6 +1174,19 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
 
         if user_input == "/help":
             _print_help()
+            continue
+
+        if user_input == "/reasoning":
+            console.print(f"[dim]reasoning level: {reasoning_level}[/]")
+            continue
+
+        if user_input.startswith("/reasoning "):
+            new_level = user_input.split(" ", 1)[1].strip().lower()
+            if new_level in ("low", "medium", "high"):
+                reasoning_level = new_level
+                console.print(f"[dim]reasoning level: {reasoning_level}[/]")
+            else:
+                console.print("[tool.error]use: /reasoning low|medium|high[/]")
             continue
 
         if user_input == "/architect":

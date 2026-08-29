@@ -1,5 +1,6 @@
 {
   imports = [
+    ./agents-md.nix
     ./alacritty.nix
     ./bat.nix
     ./chromium.nix

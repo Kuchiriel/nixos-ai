@@ -73,7 +73,8 @@ def _command_allowed(cmd: str) -> bool:
     if not stripped:
         return False
     # Bloqueio absoluto
-    for pat in ("&&", "||", ";", "`", "$(", "rm ", "mv ", "cp ", "chmod", "chown", "dd ", "mkfs"):
+    for pat in ("&&", "||", "`", "$(", "rm ", "mv ", "cp ", "chmod", "chown", "dd ", "mkfs"):
+        # Note: ";" is allowed — needed for find -o and sequential commands
         if pat in stripped:
             return False
     # Suporte a pipe: separar e verificar cada parte

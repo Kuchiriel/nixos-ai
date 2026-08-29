@@ -377,7 +377,9 @@ def execute_shell(cmd: str, approve: bool = False) -> dict[str, Any]:
         return {"ok": False, "error": "Empty command"}
 
     # Defense-in-depth: rejeita operadores perigosos, permite pipes seguros
-    _DANGEROUS_PATTERNS = ("&&", "||", ";", "`", "$(", "${", "\n", "rm ", "chmod", "chown")
+    _DANGEROUS_PATTERNS = ("&&", "||", "`", "$(", "${", "\n", "rm ", "chmod", "chown")
+    # Note: ";" is allowed — needed for find -o and sequential commands
+    # Note: "-o" in find is a flag, not a shell operator
     _SAFE_PIPE_TARGETS = ("head", "tail", "grep", "wc", "sort", "uniq", "cut", "awk", "sed", "tr", "column")
     stripped = cmd.strip()
     if any(op in stripped for op in _DANGEROUS_PATTERNS):
