@@ -39,6 +39,56 @@ class TaskStatus(str, Enum):
     ABANDONED = "ABANDONED"
 
 
+class LoopDetector:
+    """Detects when a task is stuck in a failure loop.
+    
+    Tracks attempts per task with timestamps. A task is considered
+    in a loop if it fails N times within a time window.
+    """
+    
+    def __init__(self, max_attempts: int = 3, window_seconds: float = 300.0):
+        self.max_attempts = max_attempts
+        self.window_seconds = window_seconds
+        self._history: dict[str, list[float]] = {}
+    
+    def record_attempt(self, task_id: str, success: bool) -> bool:
+        """Record an attempt. Returns True if task is in a loop."""
+        now = time.time()
+        if task_id not in self._history:
+            self._history[task_id] = []
+        
+        # Clean old entries outside window
+        self._history[task_id] = [
+            t for t in self._history[task_id]
+            if now - t < self.window_seconds
+        ]
+        
+        self._history[task_id].append(now)
+        
+        # Check if too many failures in window
+        if len(self._history[task_id]) >= self.max_attempts:
+            return True  # in loop
+        
+        return False
+    
+    def reset(self, task_id: str) -> None:
+        """Reset tracking for a task (e.g., after successful completion)."""
+        self._history.pop(task_id, None)
+    
+    def get_stats(self, task_id: str) -> dict:
+        """Get attempt stats for a task."""
+        now = time.time()
+        recent = [
+            t for t in self._history.get(task_id, [])
+            if now - t < self.window_seconds
+        ]
+        return {
+            "attempts_in_window": len(recent),
+            "max_attempts": self.max_attempts,
+            "window_seconds": self.window_seconds,
+            "in_loop": len(recent) >= self.max_attempts,
+        }
+
 @dataclass
 class Task:
     """A single task in the queue.

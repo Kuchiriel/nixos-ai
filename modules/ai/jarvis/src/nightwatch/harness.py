@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from enum import Enum
-from nightwatch.task_queue import TaskQueue, Task, TaskStatus, MissionState
+from nightwatch.task_queue import TaskQueue, Task, TaskStatus, LoopDetector, MissionState
 
 
 class FailureType(str, Enum):
@@ -721,6 +721,7 @@ class Harness:
 
             # ── Step 6: Complete ──
             task.complete(commit_sha)
+            self.loop_detector.reset(task.id)  # Clear loop tracking on success
             self.mission.total_tasks_completed += 1
             if commit_sha:
                 self.mission.total_commits += 1
@@ -751,6 +752,17 @@ class Harness:
             })
             # Revert on error
             _git_revert()
+
+            # Anti-loop detection
+            in_loop = self.loop_detector.record_attempt(task.id, success=False)
+            if in_loop:
+                task.block(f"Anti-loop: {self.config.loop_max_attempts} failures in {self.config.loop_window_seconds}s")
+                self.notify(f"🔄 *Loop Detected* — task {task.id} blocked after {self.config.loop_max_attempts} attempts")
+                _log_progress({
+                    "task_id": task.id, "status": "loop_detected",
+                    "attempts": self.loop_detector.get_stats(task.id),
+                })
+                return False
 
             # Retry logic for transient/tool failures
             if failure_type in (FailureType.TRANSIENT, FailureType.TOOL_FAILURE):
