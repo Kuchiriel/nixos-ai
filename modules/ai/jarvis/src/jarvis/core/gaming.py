@@ -556,10 +556,15 @@ def transition_to_normal(manual: bool = False) -> list[str]:
     started: list[str] = []
 
     # Restore system services
+    # Always try to start services that should be running in normal mode,
+    # even if the stopped list is empty (handles state loss / manual restart)
     for service in GAMING_STOP_SERVICES:
-        if service in previously_stopped or (
-            _service_is_enabled(service) and not _service_is_active(service)
-        ):
+        should_start = (
+            service in previously_stopped
+            or (_service_is_enabled(service) and not _service_is_active(service))
+            or (not previously_stopped and not _service_is_active(service))
+        )
+        if should_start:
             log.info("Starting %s (returning to normal)", service)
             if _start_service(service):
                 started.append(service)
@@ -568,9 +573,14 @@ def transition_to_normal(manual: bool = False) -> list[str]:
                 log.warning("  Failed to start %s", service)
 
     # Restore user services
+    # Always try to start user services that should be running in normal mode
     for service in GAMING_STOP_USER_SERVICES:
         user_key = f"user:{service}"
-        if user_key in previously_stopped or not _service_user_is_active(service):
+        should_start = (
+            user_key in previously_stopped
+            or not _service_user_is_active(service)
+        )
+        if should_start:
             log.info("Starting user service %s (returning to normal)", service)
             if _start_user_service(service):
                 started.append(user_key)
