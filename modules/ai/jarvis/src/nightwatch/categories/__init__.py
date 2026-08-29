@@ -263,6 +263,39 @@ def discover_performance() -> list[Task]:
     return tasks
 
 
+def discover_missao() -> list[Task]:
+    """Read TODO-MISSAO.md and convert Status: TODO items into Tasks.
+
+    P0/P1 (security/Nix architecture) → auto_fixable=False (supervised only)
+    P2/P3 (quality/docs) → auto_fixable=True (can go through safety gate)
+    """
+    path = REPO_ROOT / "TODO-MISSAO.md"
+    if not path.exists():
+        return []
+    text = path.read_text(encoding="utf-8")
+    tasks = []
+    for block in re.split(r"\n### ", text)[1:]:
+        header, _, body = block.partition("\n")
+        m = re.match(r"(P\d)-(\d+): (.+)", header)
+        if not m:
+            continue
+        prio, num, title = m.groups()
+        status_m = re.search(r"\*\*Status\*\*:\s*(\w+)", body)
+        if not status_m or status_m.group(1) != "TODO":
+            continue
+        arq_m = re.search(r"\*\*Arquivos\*\*:\s*(.+)", body)
+        severity = {"P0": "critical", "P1": "high", "P2": "medium", "P3": "low"}.get(prio, "info")
+        tasks.append(Task(
+            id=f"missao-{prio}-{num}",
+            category="missao",
+            severity=severity,
+            description=title.strip(),
+            target_path=(arq_m.group(1).strip() if arq_m else ""),
+            auto_fixable=prio in ("P2", "P3"),
+        ))
+    return tasks
+
+
 # ═══ Registry ═══
 
 CATEGORY_REGISTRY: dict[str, Callable[[], list[Task]]] = {
@@ -275,6 +308,7 @@ CATEGORY_REGISTRY: dict[str, Callable[[], list[Task]]] = {
     "nix-lint": discover_nix_lint,
     "nix-check": discover_nix_check,
     "performance": discover_performance,
+    "missao": discover_missao,
 }
 
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
