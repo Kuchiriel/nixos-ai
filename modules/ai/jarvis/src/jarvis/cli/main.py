@@ -370,7 +370,14 @@ def _cmd_idle_worker(args: argparse.Namespace) -> int:
         force=args.force, max_load=args.max_load, idle_check=not args.no_idle_check,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0 if result.get("ran") else 1
+    # Exit 0 even when idle: "system busy" is expected, not an error
+    # Only exit 1 on actual errors (exception, force task not found)
+    if result.get("ran"):
+        return 0
+    elif "error" in result.get("result", {}):
+        return 1
+    else:
+        return 0  # busy or nothing due = success
 
 
 def _cmd_ask(args: argparse.Namespace) -> int:
