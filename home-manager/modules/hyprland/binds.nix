@@ -60,6 +60,7 @@ in {
       "$mainMod,       N, exec, swaync-client -t"
       "$mainMod,       W, exec, ${booksScript}/bin/open_books"
       "$mainMod,       A, exec, ${launcherScript}/bin/nixos-ai-launcher"
+      "$mainMod,       G, exec, python3 -c \"from jarvis.core.gaming import toggle_gaming; import json; r=toggle_gaming(); print(json.dumps(r))\""
 
       # Screenshots resilientes (copia direto para o wl-copy)
       ", Print, exec, grim - | wl-copy"

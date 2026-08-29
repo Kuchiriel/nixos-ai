@@ -5,6 +5,7 @@
     ./boot.nix
     ./env.nix
     ./freebuff.nix
+    ./gaming-polkit.nix
     ./home-manager.nix
     ./hyprland.nix
     ./jarvis-env.nix
