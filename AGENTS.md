@@ -81,3 +81,10 @@ scripts/                # Scripts auxiliares
   - `playwright` — browser automation
 
 > ⚠️ Este arquivo deve ter <150 linhas. Regras detalhadas ficam em `.roomodes`.
+
+
+## Nightwatch Learning — 2026-08-29 02:51
+- Task: llm-1787982443-0
+- Result: success
+- Learnings: Changed 1 files, tests passed
+- Files: /home/nixos/projects/nixos-ai/modules/ai/jarvis/src/jarvis/cli/main.py
