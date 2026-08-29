@@ -21,11 +21,23 @@
 4. **package.nix** — testes sandbox-incompatíveis excluídos do checkPhase
    - Testes que escrevem em ~/.local/state/ falham no sandbox Nix
 
+5. **Failure classification** — FailureType enum + classify_failure()
+   - Transient → retry with backoff
+   - Tool failure → retry
+   - Validation → no retry
+   - Context exhaustion → compact
+   - Unrecoverable → block
+   - Arquivo: `harness.py`
+
+6. **Context re-injection** — generate_recovery_summary()
+   - Injected after compaction to prevent task amnesia
+   - Includes: task, last operation, error, files modified
+   - Arquivo: `checkpoint.py`
+
 ### O que AINDA NÃO funciona:
 
 | Item | Severidade | Estado |
 |------|-----------|--------|
-| Recovery real (classify failure → retry/quarantine) | HIGH | Não implementado |
 | E2E real (LLM trajectory, não mocks) | HIGH | Parcial (mocks) |
 | Observabilidade (logs estruturados por task) | MEDIUM | Básico |
 | Multi-project isolation real | MEDIUM | Framework existe |
