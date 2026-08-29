@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   cfg = config.services.jarvis-idle;
@@ -43,7 +44,7 @@ in {
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = "-/etc/jarvis-telegram.env";
-        ExecStart = "${config.services.jarvis.package}/bin/jarvis idle-worker --once";
+        ExecStart = "${pkgs.jarvis}/bin/jarvis idle-worker --once";
         CPUWeight = 1;
         Nice = 19;
         IOSchedulingClass = "idle";

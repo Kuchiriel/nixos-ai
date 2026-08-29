@@ -11,8 +11,8 @@
 { config, lib, pkgs, ... }:
 
 let
-  jarvisPackage = config.services.jarvis.package or pkgs.jarvis;
-  projectRoot = config.services.jarvis.projectRoot or "/home/nixos/projects/nixos-ai";
+  jarvisPackage = pkgs.jarvis;
+  projectRoot = "/home/nixos/projects/nixos-ai";
 in {
   systemd.services.nightwatch = {
     description = "JARVIS nightwatch — autonomous overnight maintenance";
