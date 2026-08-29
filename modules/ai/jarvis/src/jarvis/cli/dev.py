@@ -60,6 +60,21 @@ from rich.text import Text
 from rich.theme import Theme
 
 
+
+# ---------------------------------------------------------------------------
+# Event Bus integration — lifecycle events for REPL session
+# ---------------------------------------------------------------------------
+
+def _repl_emit(topic: str, **data: object) -> None:
+    """Emit a lifecycle event via Event Bus (best-effort, never breaks REPL)."""
+    try:
+        from jarvis.core.eventbus import get_bus
+        get_bus().publish(f"repl.{topic}", data)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+
 # ---------------------------------------------------------------------------
 # UI — console rich, tema e sessão de input (prompt_toolkit)
 # ---------------------------------------------------------------------------
@@ -1497,6 +1512,7 @@ def _run_agent_loop(
         est = _estimate_tokens(messages)
         if est > compact_threshold:
             messages[:] = _compact_session(messages, max_tokens=compact_target)
+            _repl_emit("compact.triggered", before=est, after=_estimate_tokens(messages), threshold=compact_threshold)
             if debug:
                 console.print(f"[dim]🗜️  auto-compact: {est:,} → ~{_estimate_tokens(messages):,} tok (threshold: {compact_threshold:,})[/]")
 
@@ -1580,12 +1596,14 @@ def _run_agent_loop(
                 _auto_commit(func_name, args, success=True)
 
             tool_call_id = tc.get("id") or f"call_{uuid.uuid4().hex[:6]}"
+            _repl_emit("tool.called", tool=func_name, success=not is_error, preview=preview_arg)
             messages.append({
                 "role": "tool",
                 "tool_call_id": tool_call_id,
                 "content": output[:5000],
             })
 
+    _repl_emit("session.max_turns", max_turns=max_turns)
     console.print(f"[tool.error]⚠️  {max_turns} turnos atingidos[/]")
     return False
 
@@ -1938,6 +1956,7 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
     ok = _run_agent_loop(messages, tools, profile, approve, debug, max_turns=8)
     _persist_session(messages, project_root or os.getcwd())
     console.print("[dim]🧭 checkpoint salvo[/]")
+    _repl_emit("session.ended", success=ok, turns=len(messages))
     return 0 if ok else 1
 
 
@@ -1958,6 +1977,7 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
     tools = _get_tools() if profile["native_tools"] else []
 
     console.print(f"[jarvis]jarvis[/] [dim]dev[/] · {profile['name']} · {task[:60]}")
+    _repl_emit("session.started", task=task[:100], profile=profile["name"])
 
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context(task)
