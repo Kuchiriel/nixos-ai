@@ -88,3 +88,16 @@ scripts/                # Scripts auxiliares
 - Result: success
 - Learnings: Changed 1 files, tests passed
 - Files: /home/nixos/projects/nixos-ai/modules/ai/jarvis/src/jarvis/cli/main.py
+
+
+## Nightwatch Learning — 2026-08-29 03:01
+- Task: llm-1787983181
+- Result: failed
+- Learnings: Changed 1 files, tests failed
+- Files: modules/ai/jarvis/src/jarvis/core/agent.py
+
+
+## Nightwatch Learning — 2026-08-29 03:02
+- Task: llm-1787983349-0
+- Result: failed
+- Learnings: Could not read target files

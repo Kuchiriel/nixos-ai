@@ -104,7 +104,29 @@ def call_llm(prompt: str, max_tokens: int = 2048, disable_thinking: bool = True)
 def read_file(path: str) -> str:
     """Read a file from the repo."""
     try:
-        full_path = REPO_ROOT / path
+        # Handle both absolute and relative paths
+        if path.startswith("/"):
+            full_path = Path(path)
+        else:
+            # Remove common prefixes the LLM might add
+            for prefix in ["modules/ai/jarvis/src/", "src/jarvis/", "jarvis/", "src/"]:
+                if path.startswith(prefix):
+                    path = path[len(prefix):]
+                    break
+            full_path = REPO_ROOT / "modules/ai/jarvis/src" / path
+        
+        if not full_path.exists():
+            # Try alternative locations
+            alt_paths = [
+                REPO_ROOT / path,
+                REPO_ROOT / "modules/ai/jarvis/src" / path,
+                REPO_ROOT / "src" / path,
+            ]
+            for alt in alt_paths:
+                if alt.exists():
+                    full_path = alt
+                    break
+        
         return full_path.read_text(encoding="utf-8")[:8000]  # Limit to 8K chars
     except Exception as e:
         return f"ERROR: Could not read {path}: {e}"
@@ -113,7 +135,17 @@ def read_file(path: str) -> str:
 def write_file(path: str, content: str) -> bool:
     """Write a file to the repo."""
     try:
-        full_path = REPO_ROOT / path
+        # Handle both absolute and relative paths
+        if path.startswith("/"):
+            full_path = Path(path)
+        else:
+            # Remove common prefixes the LLM might add
+            for prefix in ["modules/ai/jarvis/src/", "src/jarvis/", "jarvis/", "src/"]:
+                if path.startswith(prefix):
+                    path = path[len(prefix):]
+                    break
+            full_path = REPO_ROOT / "modules/ai/jarvis/src" / path
+        
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_text(content, encoding="utf-8")
         return True
