@@ -376,11 +376,19 @@ def execute_shell(cmd: str, approve: bool = False) -> dict[str, Any]:
     if not cmd:
         return {"ok": False, "error": "Empty command"}
 
-    # Defense-in-depth: rejeita operadores de encadeamento shell
-    _CHAINING_PATTERNS = ("&&", "||", ";", "|", "`", "$(", "${", "\n")
+    # Defense-in-depth: rejeita operadores perigosos, permite pipes seguros
+    _DANGEROUS_PATTERNS = ("&&", "||", ";", "`", "$(", "${", "\n", "rm ", "chmod", "chown")
+    _SAFE_PIPE_TARGETS = ("head", "tail", "grep", "wc", "sort", "uniq", "cut", "awk", "sed", "tr", "column")
     stripped = cmd.strip()
-    if any(op in stripped for op in _CHAINING_PATTERNS):
+    if any(op in stripped for op in _DANGEROUS_PATTERNS):
         return {"ok": False, "error": f"Comando com encadeamento não permitido: {cmd[:100]}"}
+    # Allow safe pipes: cmd | head, cmd | grep, etc.
+    if "|" in stripped:
+        parts = stripped.split("|")
+        for part in parts[1:]:
+            part = part.strip().split()[0] if part.strip() else ""
+            if part and not any(part.startswith(p) for p in _SAFE_PIPE_TARGETS):
+                return {"ok": False, "error": f"Pipe não seguro: | {part}"}
 
     try:
         argv = shlex.split(cmd)

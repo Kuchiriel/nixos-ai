@@ -928,7 +928,7 @@ def _run_agent_loop(
     profile: dict,
     approve: bool = False,
     debug: bool = False,
-    max_turns: int = 16,
+    max_turns: int = 30,
 ) -> bool:
     """Roda turnos até texto puro (sucesso) ou max_turns/erro (falha).
 
@@ -1012,6 +1012,8 @@ def _run_agent_loop(
 # ---------------------------------------------------------------------------
 
 def dev_repl(project_root: str | None = None, approve: bool = False, continue_session: bool = False, yolo: bool = False) -> None:
+    from jarvis.core.feedback import set_status, clear_status
+
     if project_root:
         os.environ["JARVIS_PROJECT_ROOT"] = project_root
         os.chdir(project_root)
@@ -1026,6 +1028,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
     tools = _get_tools() if profile["native_tools"] else []
     mode = "native" if profile["native_tools"] else "text"
 
+    set_status("listening", "REPL aberto")
     console.print(f"[jarvis]jarvis[/] [dim]dev[/] · {profile['name']} · {mode} · [dim]{os.getcwd()}[/]")
     console.print("[dim]/help para comandos[/]\n")
 
@@ -1056,13 +1059,17 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             user_input = session.prompt("> ").strip()
         except (EOFError, KeyboardInterrupt):
             console.print("\n[dim]tchau[/]")
+            clear_status()
             break
 
         if not user_input:
             continue
 
+        set_status("thinking", user_input[:50])
+
         if user_input == "/quit":
             console.print("[dim]tchau[/]")
+            clear_status()
             break
 
         if user_input == "/clear":
