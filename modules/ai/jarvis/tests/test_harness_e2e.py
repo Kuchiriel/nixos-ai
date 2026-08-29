@@ -371,7 +371,7 @@ def scenario_a_simple_change(repo_root: Path | None = None) -> ScenarioResult:
     t0 = time.time()
 
     # Step 1: Read the target file
-    tc = tool_read_file("modules/ai/jarvis/src/nightwatch/harness.py", limit=20)
+    tc = tool_read_file("modules/ai/jarvis/src/nightwatch/harness.py", limit=20, repo_root=repo_root)
     result.tool_calls.append(tc)
     if not tc.success:
         result.errors.append(f"Failed to read target: {tc.error}")
@@ -382,7 +382,7 @@ def scenario_a_simple_change(repo_root: Path | None = None) -> ScenarioResult:
 
     # Step 2: Create a small test file (safe target, not production code)
     test_content = '"""E2E test placeholder — auto-generated."""\n\n\ndef test_placeholder():\n    """Placeholder test for E2E scenario A."""\n    assert True\n'
-    tc = tool_write_file("modules/ai/jarvis/tests/_e2e_placeholder.py", test_content)
+    tc = tool_write_file("modules/ai/jarvis/tests/_e2e_placeholder.py", test_content, repo_root=repo_root)
     result.tool_calls.append(tc)
     if not tc.success:
         result.errors.append(f"Failed to write: {tc.error}")
@@ -392,7 +392,7 @@ def scenario_a_simple_change(repo_root: Path | None = None) -> ScenarioResult:
     result.evidence.append("Created test placeholder file")
 
     # Step 3: Validate Python syntax
-    tc = tool_validate_python("modules/ai/jarvis/tests/_e2e_placeholder.py")
+    tc = tool_validate_python("modules/ai/jarvis/tests/_e2e_placeholder.py", repo_root=repo_root)
     result.tool_calls.append(tc)
     if not tc.success:
         result.validation_failures += 1
@@ -403,12 +403,12 @@ def scenario_a_simple_change(repo_root: Path | None = None) -> ScenarioResult:
     result.evidence.append("Python syntax valid")
 
     # Step 4: Check git status
-    tc = tool_git_status()
+    tc = tool_git_status(repo_root=repo_root)
     result.tool_calls.append(tc)
     result.evidence.append(f"Git status: {len(tc.output)} lines changed")
 
     # Step 5: Commit
-    tc = tool_git_commit("e2e(test): scenario A — placeholder for E2E testing")
+    tc = tool_git_commit("e2e(test, repo_root=repo_root): scenario A — placeholder for E2E testing")
     result.tool_calls.append(tc)
     if not tc.success:
         result.errors.append(f"Commit failed: {tc.error}")
@@ -432,7 +432,7 @@ def scenario_b_error_fix(repo_root: Path | None = None) -> ScenarioResult:
 
     # Step 1: Create a file with a known error
     bad_content = '"""File with intentional error."""\n\n\ndef broken():\n    return "missing closing quote\n'
-    tc = tool_write_file("modules/ai/jarvis/tests/_e2e_broken.py", bad_content)
+    tc = tool_write_file("modules/ai/jarvis/tests/_e2e_broken.py", bad_content, repo_root=repo_root)
     result.tool_calls.append(tc)
     if not tc.success:
         result.errors.append(f"Failed to create broken file: {tc.error}")
@@ -442,7 +442,7 @@ def scenario_b_error_fix(repo_root: Path | None = None) -> ScenarioResult:
     result.evidence.append("Created file with intentional syntax error")
 
     # Step 2: Validate — should FAIL
-    tc = tool_validate_python("modules/ai/jarvis/tests/_e2e_broken.py")
+    tc = tool_validate_python("modules/ai/jarvis/tests/_e2e_broken.py", repo_root=repo_root)
     result.tool_calls.append(tc)
     if tc.success:
         result.errors.append("Expected validation to fail but it passed")
@@ -453,7 +453,7 @@ def scenario_b_error_fix(repo_root: Path | None = None) -> ScenarioResult:
 
     # Step 3: Fix the error
     fixed_content = '"""File with intentional error — fixed."""\n\n\ndef broken():\n    return "missing closing quote"\n'
-    tc = tool_write_file("modules/ai/jarvis/tests/_e2e_broken.py", fixed_content)
+    tc = tool_write_file("modules/ai/jarvis/tests/_e2e_broken.py", fixed_content, repo_root=repo_root)
     result.tool_calls.append(tc)
     if not tc.success:
         result.errors.append(f"Failed to write fix: {tc.error}")
@@ -463,7 +463,7 @@ def scenario_b_error_fix(repo_root: Path | None = None) -> ScenarioResult:
     result.evidence.append("Applied fix")
 
     # Step 4: Validate again — should PASS
-    tc = tool_validate_python("modules/ai/jarvis/tests/_e2e_broken.py")
+    tc = tool_validate_python("modules/ai/jarvis/tests/_e2e_broken.py", repo_root=repo_root)
     result.tool_calls.append(tc)
     if not tc.success:
         result.validation_failures += 1
@@ -501,7 +501,7 @@ def scenario_c_tool_failure(repo_root: Path | None = None) -> ScenarioResult:
     t0 = time.time()
 
     # Step 1: Try to read a non-existent file — should FAIL
-    tc = tool_read_file("nonexistent/file/that/does/not/exist.py")
+    tc = tool_read_file("nonexistent/file/that/does/not/exist.py", repo_root=repo_root)
     result.tool_calls.append(tc)
     if tc.success:
         result.errors.append("Expected read to fail but it succeeded")
@@ -524,7 +524,7 @@ def scenario_c_tool_failure(repo_root: Path | None = None) -> ScenarioResult:
         result.evidence.append(f"Protected path check: {tc.output}")
 
     # Step 3: Try to validate invalid Python — should FAIL
-    tc = tool_validate_python("nonexistent/file.py")
+    tc = tool_validate_python("nonexistent/file.py", repo_root=repo_root)
     result.tool_calls.append(tc)
     if tc.success:
         result.errors.append("Expected validation to fail for nonexistent file")
@@ -552,7 +552,7 @@ def scenario_d_safe_editor(repo_root: Path | None = None) -> ScenarioResult:
 
     # Step 1: Create a valid Python file
     valid_content = '"""Valid module."""\n\nimport os\n\n\ndef hello():\n    return "world"\n'
-    tc = tool_write_file("modules/ai/jarvis/tests/_e2e_valid.py", valid_content)
+    tc = tool_write_file("modules/ai/jarvis/tests/_e2e_valid.py", valid_content, repo_root=repo_root)
     result.tool_calls.append(tc)
     if not tc.success:
         result.errors.append(f"Failed to create valid file: {tc.error}")
@@ -563,7 +563,7 @@ def scenario_d_safe_editor(repo_root: Path | None = None) -> ScenarioResult:
 
     # Step 2: Try to overwrite with markdown fences — SafeEditor should strip them
     llm_output = '```python\n"""Corrupted module."""\n\nimport os\n\n\ndef hello():\n    return "corrupted"\n```'
-    tc = tool_safe_edit("modules/ai/jarvis/tests/_e2e_valid.py", llm_output)
+    tc = tool_safe_edit("modules/ai/jarvis/tests/_e2e_valid.py", llm_output, repo_root=repo_root)
     result.tool_calls.append(tc)
     if tc.success:
         result.evidence.append("SafeEditor stripped markdown fences — file still valid")
@@ -572,7 +572,7 @@ def scenario_d_safe_editor(repo_root: Path | None = None) -> ScenarioResult:
 
     # Step 3: Try to overwrite with invalid Python — should be rejected
     invalid_content = '"""Truncated."""\n\ndef broken(\n    unclosed'
-    tc = tool_safe_edit("modules/ai/jarvis/tests/_e2e_valid.py", invalid_content)
+    tc = tool_safe_edit("modules/ai/jarvis/tests/_e2e_valid.py", invalid_content, repo_root=repo_root)
     result.tool_calls.append(tc)
     if tc.success:
         result.errors.append("SafeEditor should have rejected invalid Python")
@@ -582,7 +582,7 @@ def scenario_d_safe_editor(repo_root: Path | None = None) -> ScenarioResult:
     result.evidence.append(f"SafeEditor correctly rejected invalid Python: {tc.error}")
 
     # Step 4: Verify original file is still intact
-    tc = tool_validate_python("modules/ai/jarvis/tests/_e2e_valid.py")
+    tc = tool_validate_python("modules/ai/jarvis/tests/_e2e_valid.py", repo_root=repo_root)
     result.tool_calls.append(tc)
     if not tc.success:
         result.errors.append("Original file was corrupted despite SafeEditor rejection")
@@ -593,7 +593,7 @@ def scenario_d_safe_editor(repo_root: Path | None = None) -> ScenarioResult:
 
     # Step 5: Try to overwrite with drastically shrunk content — should be rejected
     shrunk = "# tiny"
-    tc = tool_safe_edit("modules/ai/jarvis/tests/_e2e_valid.py", shrunk)
+    tc = tool_safe_edit("modules/ai/jarvis/tests/_e2e_valid.py", shrunk, repo_root=repo_root)
     result.tool_calls.append(tc)
     if tc.success:
         result.errors.append("SafeEditor should have rejected shrunk content")
@@ -603,7 +603,7 @@ def scenario_d_safe_editor(repo_root: Path | None = None) -> ScenarioResult:
     result.evidence.append(f"SafeEditor correctly rejected shrunk content: {tc.error}")
 
     # Final: file should still be valid
-    tc = tool_validate_python("modules/ai/jarvis/tests/_e2e_valid.py")
+    tc = tool_validate_python("modules/ai/jarvis/tests/_e2e_valid.py", repo_root=repo_root)
     result.tool_calls.append(tc)
     if not tc.success:
         result.errors.append("File corrupted despite multiple rejections")
