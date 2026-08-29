@@ -69,7 +69,27 @@ def _task_eval_rag() -> dict[str, Any]:
     return {"exit": code, "ok": code == 0}
 
 
+def _task_nightwatch() -> dict[str, Any]:
+    """Run nightwatch v3 — LLM-powered autonomous code improvement."""
+    try:
+        from nightwatch.llm_loop import run_llm_nightwatch
+        results = run_llm_nightwatch(
+            max_iterations=3,
+            max_minutes=20,
+        )
+        return {
+            "iterations": len(results),
+            "success": sum(1 for r in results if r.success),
+            "failed": sum(1 for r in results if not r.success),
+            "files_changed": sum(len(r.files_changed) for r in results),
+            "commits": sum(1 for r in results if r.commit_sha),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 IDLE_TASKS: list[IdleTask] = [
+    IdleTask("nightwatch", _task_nightwatch, 360),     # a cada 6h
     IdleTask("benchmark", _task_benchmark, 360),      # a cada 6h
     IdleTask("regression", _task_regression, 1440),   # diário
     IdleTask("eval-rag", _task_eval_rag, 1440),       # diário
