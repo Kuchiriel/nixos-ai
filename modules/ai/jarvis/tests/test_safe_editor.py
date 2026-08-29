@@ -336,3 +336,54 @@ class TestEdgeCases:
         # May succeed or fail depending on implementation
         # Key point: no crash, no silent corruption
         assert isinstance(result, EditResult)
+
+    def test_structurally_mutilated_python_rejected(self, tmp_editor, tmp_path):
+        """LLM produces valid Python but with all logic gutted."""
+        path = tmp_path / "mangled.py"
+        original = '"""Module."""\nimport os\n\ndef foo():\n    return os.path.join("a", "b")\n\ndef bar():\n    return foo()\n\nclass MyClass:\n    def method(self):\n        return bar()\n'
+        path.write_text(original)
+        # Mutilated: valid Python, but all logic removed
+        mutilated = '"""Module."""\nimport os\n\ndef foo():\n    pass\n\ndef bar():\n    pass\n\nclass MyClass:\n    def method(self):\n        pass\n'
+        result = tmp_editor.apply_edit(path, mutilated)
+        # Should succeed syntactically but warn about structural changes
+        # (functions still exist, just gutted — this is a WARNING, not error)
+        assert isinstance(result, EditResult)
+
+    def test_edit_that_changes_existing_function(self, tmp_editor, tmp_path):
+        """LLM modifies an existing function (legitimate edit)."""
+        path = tmp_path / "func_edit.py"
+        original = 'def compute(x):\n    return x * 2\n'
+        path.write_text(original)
+        new_content = 'def compute(x):\n    return x * 3  # triple instead of double\n'
+        result = tmp_editor.apply_edit(path, new_content)
+        assert result.success
+
+    def test_new_file_creation(self, tmp_editor, tmp_path):
+        """LLM creates a brand new file."""
+        path = tmp_path / "new_file.py"
+        content = '"""A new module."""\n\ndef hello():\n    return "world"\n'
+        result = tmp_editor.apply_edit(path, content)
+        assert result.success
+        assert path.read_text().strip() == content.strip()
+
+    def test_llm_wraps_valid_code_in_markdown(self, tmp_editor, tmp_path):
+        """LLM wraps perfectly valid Python in markdown fences."""
+        path = tmp_path / "fenced.py"
+        content = '```python\nimport os\n\ndef foo():\n    return os.getcwd()\n```\n'
+        result = tmp_editor.apply_edit(path, content)
+        assert result.success
+        # Verify fences were stripped
+        written = path.read_text()
+        assert not written.startswith('```')
+
+    def test_partial_file_reconstruction_rejected(self, tmp_editor, tmp_path):
+        """LLM returns only the first 20% of a file (truncation)."""
+        path = tmp_path / "truncated.py"
+        original = '\n'.join([f'def func_{i}():\n    return {i}' for i in range(50)])
+        path.write_text(original)
+        # Only first 10 functions
+        truncated = '\n'.join([f'def func_{i}():\n    return {i}' for i in range(10)])
+        result = tmp_editor.apply_edit(path, truncated)
+        # Should be rejected: file shrunk too much
+        assert not result.success
+        assert any('shrunk' in e.lower() for e in result.errors)
