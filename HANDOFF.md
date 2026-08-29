@@ -415,3 +415,67 @@ b25bb8f e2e(test): real E2E test — 27 tests with filesystem operations
 27/27 nightwatch E2E pass
 105/105 combinados pass (nightwatch + longrun + safe_editor + config + devtools)
 ```
+
+---
+
+## Auditoria ChatGPT — 2026-08-29
+
+### O que foi feito nesta sessão (complemento)
+
+#### Event Bus Integration ✅
+
+**Problema:** O Event Bus (`core/eventbus.py`, 251 linhas, 13 testes) existia mas não era usado por nenhum módulo de produção.
+
+**Solução:** Integrado no nightwatch harness:
+
+1. **Initialization** — `Harness.__init__` agora cria `EventBus` com subscribers:
+   - `harness.notify` → `_handle_bus_notify` (Telegram)
+   - `harness.task` → `_handle_bus_log` (JSONL logger)
+
+2. **notify()** — Agora publica via `self._bus.publish("harness.notify", {"message": ...})`
+
+3. **_emit()** — Novo método para eventos de lifecycle:
+   - `task_started` — quando task começa execução
+   - `task_completed` — quando task termina com sucesso
+   - `task_failed` — quando task falha
+   - `loop_detected` — quando anti-loop detecta ciclo
+   - `recovery` — quando recupera tasks stuck
+   - `run_started` — quando harness inicia
+
+4. **Teste** — `test_eventbus_integration` verifica que eventos fluem pelo bus
+
+**Benefício:** Novos subscribers (Waybar, ntfy, Obsidian) podem ser adicionados sem modificar o harness.
+
+#### Bug Fix: LoopDetector Initialization ✅
+
+**Problema:** `self.loop_detector` era usado mas nunca inicializado em `Harness.__init__`.
+
+**Solução:**
+- Adicionado `loop_max_attempts` e `loop_window_seconds` ao `HarnessConfig`
+- `self.loop_detector = LoopDetector(...)` agora é inicializado no `__init__`
+
+**Impacto:** Sem essa correção, qualquer task que falhasse causaria `AttributeError` em runtime.
+
+### Estado dos testes
+
+```
+28/28 nightwatch E2E pass (incluindo Event Bus integration)
+13/13 Event Bus pass
+122/122 combinados pass
+211/211 core suite pass
+nix flake check: all checks passed
+```
+
+### Commits desta sessão
+
+```
+bd76e3c feat(harness): integrate Event Bus + fix LoopDetector initialization
+```
+
+### Gaps restantes (prioridade decrescente)
+
+1. **Event Bus em agent.py** — O REPL não emite eventos de lifecycle (baixa prioridade, REPL é síncrono)
+2. **Event Bus em idle.py/heal.py** — Usam `send_notification` diretamente (funcional, não quebrado)
+3. **Testes para audiobook, hackmd, multi_ai_reader** — 3 módulos sem teste
+4. **Nightwatch long-running validation** — Framework existe mas não validado em execução real de horas
+5. **Multi-agent coordination** — Primitives existem mas sem implementação real
