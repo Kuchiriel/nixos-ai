@@ -6,24 +6,15 @@
   hostname,
   user,
   ...
-}: let
-  servicesDir = ../../modules/services;
-  dynamicServiceImports =
-    if builtins.pathExists servicesDir
-    then
-      lib.mapAttrsToList
-      (name: _type: servicesDir + "/${name}")
-      (lib.filterAttrs (name: type: type == "regular" && lib.hasSuffix ".nix" name) (builtins.readDir servicesDir))
-    else [];
-in {
+}: {
   imports =
     [
       ./hardware-configuration.nix
       ./local-packages.nix
       ./disko.nix
       ../../nixos/modules
-    ]
-    ++ dynamicServiceImports;
+      ../../modules/services/default.nix
+    ];
 
   programs.steam = {
     enable = true;
