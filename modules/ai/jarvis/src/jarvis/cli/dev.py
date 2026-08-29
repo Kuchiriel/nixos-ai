@@ -145,7 +145,10 @@ def _print_recall() -> None:
         console.print("[dim]Nenhuma memória encontrada.[/]")
         return
     for r in results:
-        console.print(f"  [dim][{r.get('kind', '?')}][/] {r.get('text', '')[:100]}")    def _print_help() -> None:
+        console.print(f"  [dim][{r.get('kind', '?')}][/] {r.get('text', '')[:100]}")
+
+
+def _print_help() -> None:
     rows = [
         ("/quit", "sair"),
         ("/clear", "limpar contexto"),
@@ -1503,29 +1506,31 @@ def _run_agent_loop(
 
         message = data["choices"][0]["message"]
         content = message.get("content") or ""
-        tool_calls = message.get("tool_calls")            # Extract thinking content if present
-            thinking = ""
-            if "<thinking>" in content and "</thinking>" in content:
-                import re as _re
-                thinking_match = _re.search(r"<thinking>(.*?)</thinking>", content, _re.DOTALL)
-                if thinking_match:
-                    thinking = thinking_match.group(1).strip()
-                    content = content[:thinking_match.start()] + content[thinking_match.end():]
-                    content = content.strip()
-            elif reasoning_level != "low" and content:
-                # Show first part as thinking if no explicit tags
-                lines = content.split("\n")
-                if len(lines) > 3:
-                    thinking = "\n".join(lines[:2])
-                    content = "\n".join(lines[2:])
+        tool_calls = message.get("tool_calls")
 
-            if thinking and reasoning_level != "low":
-                console.print(Panel(
-                    Markdown(thinking) if thinking.strip().startswith(("#", "-", "*", "`")) else thinking,
-                    title="💭 reasoning",
-                    title_align="left",
-                    border_style="dim",
-                ))
+        # Extract thinking content if present
+        thinking = ""
+        if "<thinking>" in content and "</thinking>" in content:
+            import re as _re
+            thinking_match = _re.search(r"<thinking>(.*?)</thinking>", content, _re.DOTALL)
+            if thinking_match:
+                thinking = thinking_match.group(1).strip()
+                content = content[:thinking_match.start()] + content[thinking_match.end():]
+                content = content.strip()
+        elif reasoning_level != "low" and content:
+            # Show first part as thinking if no explicit tags
+            lines = content.split("\n")
+            if len(lines) > 3:
+                thinking = "\n".join(lines[:2])
+                content = "\n".join(lines[2:])
+
+        if thinking and reasoning_level != "low":
+            console.print(Panel(
+                Markdown(thinking) if thinking.strip().startswith(("#", "-", "*", "`")) else thinking,
+                title="💭 reasoning",
+                title_align="left",
+                border_style="dim",
+            ))
 
         used_text_fallback = False
         if not tool_calls and content:
