@@ -145,9 +145,12 @@ SAFE_TASK_CATEGORIES = {
 
 def _run_safe_command(cmd: str, timeout: int = 60) -> tuple[bool, str]:
     """Run a command safely with timeout."""
+    import shlex
     try:
+        # Use shlex.split() for safety (no shell=True)
+        args = shlex.split(cmd)
         result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True,
+            args, capture_output=True, text=True,
             timeout=timeout, cwd=os.getcwd(),
         )
         output = result.stdout + result.stderr
