@@ -50,12 +50,15 @@ git add -A && nix build .#jarvis --no-link && nix flake check
 ## Estrutura do repo
 
 ```
-modules/ai/jarvis/     # Código Python do agente (core, providers, mcp)
-modules/services/      # Módulos NixOS (llama-cpp, qdrant, fan-control)
-home-manager/modules/  # Configs do usuário (vscode-roo, hyprland)
-hosts/nitro-v15/       # Config do host físico
-docs/benchmarks/       # Resultados de benchmark
-scripts/               # Scripts auxiliares
+modules/ai/jarvis/      # Código Python do agente (core, providers, mcp)
+modules/services/       # Módulos NixOS (llama-cpp, qdrant, fan-control)
+home-manager/modules/   # Configs do usuário (vscode-roo, hyprland)
+hosts/nitro-v15/        # Config do host físico
+docs/benchmarks/        # Resultados de benchmark
+m3ta-nixpkgs/           # Submodule: pacotes (sidecar, stt-ptt, talk),
+                        #   módulos NixOS (ports), libs (agents, coding-rules)
+                        #   Detalhes: m3ta-nixpkgs/AGENTS.md
+scripts/                # Scripts auxiliares
 ```
 
 ## Perfil do usuário
