@@ -116,8 +116,9 @@ def _extract_pdf(path: Path) -> str:
         return ""
 
 
-def extract_text(path: Path) -> str:
+def extract_text(path: Path | str) -> str:
     """Extrai texto de um livro (.epub, .txt, .pdf)."""
+    path = Path(path)
     suffix = path.suffix.lower()
     if suffix == ".epub":
         return _extract_epub(path)
