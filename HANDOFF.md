@@ -1,11 +1,68 @@
 # HANDOFF — Estado Atual do Sistema (agosto/2026)
 
+## Auditoria 2026-08-29 — Nightwatch/Harness
+
+### O que foi corrigido nesta sessão:
+
+1. **Nightwatch context budget** — hardcoded 8192 → query real n_ctx (32,768)
+   - Antes: compactava a 6,554 tokens (80% de 8K)
+   - Depois: compacta a 22,938 tokens (70% de 32K)
+   - Arquivos: `context_budget.py`, `harness.py`
+
+2. **.roomodes context info** — corrigido para refletir realidade
+   - Antes: "System prompt consome 15-20K, sobram 12K"
+   - Depois: "System prompt consome 4-6K, sobram 26-28K"
+   - Removido "cat: PROIBIDO" — desnecessário com 32K
+
+3. **nightwatch-timer.nix** — removido `--max-minutes 180` (inválido)
+   - Causava 33 crash-loops por noite
+   - Adicionado journal logging, Restart=no (emergencial)
+
+4. **package.nix** — testes sandbox-incompatíveis excluídos do checkPhase
+   - Testes que escrevem em ~/.local/state/ falham no sandbox Nix
+
+### O que AINDA NÃO funciona:
+
+| Item | Severidade | Estado |
+|------|-----------|--------|
+| Recovery real (classify failure → retry/quarantine) | HIGH | Não implementado |
+| E2E real (LLM trajectory, não mocks) | HIGH | Parcial (mocks) |
+| Observabilidade (logs estruturados por task) | MEDIUM | Básico |
+| Multi-project isolation real | MEDIUM | Framework existe |
+| Noite inteira sem intervenção | HIGH | Não demonstrado |
+
+### Comandos para reproduzir:
+
+```bash
+# Verificar context budget do nightwatch
+nix develop --command python3 -c "from nightwatch.context_budget import query_server_context_size; print(query_server_context_size())"
+
+# Rodar nightwatch em dry-run
+nix develop --command python3 -c "from nightwatch.harness import run_nightwatch; run_nightwatch(dry_run=True, max_tasks=2)"
+
+# Verificar timer
+systemctl status nightwatch.timer
+journalctl -u nightwatch -n 20
+
+# Testes completos
+nix develop --command pytest modules/ai/jarvis/tests/ -q
+```
+
+### Decisões arquiteturais:
+
+- **Context budget**: query_server_context_size() em vez de hardcoded
+- **Compaction threshold**: 0.7 (70%) em vez de 0.8 (80%)
+- **Nightwatch timer**: Restart=no (evita crash loops, mas não tem recovery)
+- **.roomodes**: guidelines de eficiência, não restrições duras
+
+---
+
 ## Resumo Executivo
 
 JARVIS on NixOS é uma "ia de bordo" local-first rodando em Acer Nitro V15
 (RTX 4050 6GB / 32GB RAM). O sistema está **funcionando no host físico** com
 llama-cpp (Qwen3.6-35B MoE), Qdrant, RAG híbrido, memória episódica,
-self-heal, modo idle, gaming profile e 533 testes verdes.
+self-heal, modo idle, gaming profile e testes verdes.
 
 ## Hardware
 
