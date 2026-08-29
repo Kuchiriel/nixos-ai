@@ -672,3 +672,83 @@ print(get_current_profile())  # 'gaming' or 'normal'
 - Criar polkit rule para permitir parar/iniciar system services sem sudo
 - Criar atalho rofi para toggle (hyprland binds)
 - Integrar com feedback.py para notificações
+
+---
+
+## Sessão 2026-08-29 — FASE 0-2 + E2E Hardening
+
+### O que foi feito
+
+#### 1. SafeEditor Integrity Gate (FASE 2)
+
+**Problema:** `check_structural_integrity()` retornava apenas warnings quando funções/classes eram removidas pelo LLM. O `validate_content()` só verificava `len(all_errors) == 0`, então danos estruturais eram silenciosamente permitidos.
+
+**Solução:**
+- `check_structural_integrity()` agora retorna 3-tuple `(ok, errors, warnings)`
+- Remoção de funções/classes → `errors` (bloqueia a edição)
+- Adição de funções/classes → `warnings` (informacional)
+- `validate_content()` agora trata danos estruturais como erros → edit REJECTED
+
+**Impacto:** LLM que remove uma função inteira agora tem a edição bloqueada pelo SafeEditor, em vez de apenas receber um warning.
+
+**Testes:** 5 novos cenários adversariais adicionados:
+- `test_detects_removed_function` — agora assert `not ok`
+- `test_detects_removed_class` — agora assert `not ok`
+- `test_detects_added_function` — novo: verifies OK for additions
+- `test_safe_editor_blocks_function_removal` — novo: edit REJECTED
+- `test_structurally_mutilated_python_rejected` — novo: gutted functions warned
+- `test_edit_that_changes_existing_function` — novo: legitimate edit passes
+- `test_new_file_creation` — novo: new file creation works
+- `test_llm_wraps_valid_code_in_markdown` — novo: fences stripped correctly
+- `test_partial_file_reconstruction_rejected` — novo: truncation blocked
+
+#### 2. Shared paths.py Module
+
+**Problema:** REPO_ROOT estava hardcoded como `Path.home() / "projects" / "nixos-ai"` em 6 arquivos do nightwatch.
+
+**Solução:** Criado `nightwatch/paths.py` com `find_repo_root()` que:
+1. Verifica `JARVIS_PROJECT_ROOT` env var
+2. Walk up from cwd looking for `.git` ou `flake.nix`
+3. Fallback para `~/projects/nixos-ai`
+
+Todos os módulos nightwatch agora importam `from nightwatch.paths import REPO_ROOT`.
+
+**Arquivos afetados:** safe_editor.py, validator.py, patcher.py, evaluator.py, file_guard.py, harness.py
+
+#### 3. E2E Test Leak Fix
+
+**Problema:** `test_all_scenarios_produce_metrics` chamava scenario functions sem `repo_root`, escrevendo artefatos no repo real.
+
+**Solução:** Passa `isolated_repo` para todas as scenario functions (com inspect para functions que não aceitam `repo_root`).
+
+### Commits desta sessão
+
+```
+e468b4a fix(test): pass isolated_repo to scenario functions in metrics test
+b5d8943 e2e(test): safe editor integrity gate + shared paths module
+```
+
+### Estado dos testes
+
+```
+176/176 passam (nightwatch + harness + safe_editor + eventbus + multi_agent + gaming + audiobook + hackmd + multi_ai_reader)
+nix flake check: pending (não executado nesta sessão)
+```
+
+### O que foi validado
+
+| Capacidade | Evidência |
+|-----------|-----------|
+| SafeEditor bloqueia remoção de funções | 5 testes adversariais passam |
+| SafeEditor aceita edições legítimas | test_edit_that_changes_existing_function passa |
+| SafeEditor cria arquivos novos | test_new_file_creation passa |
+| SafeEditor rejeita truncamento | test_partial_file_reconstruction_rejected passa |
+| Shared paths funciona | Imports OK em todos os módulos |
+| E2E não vaza artefatos | test_harness_e2e passa sem leak |
+
+### Gaps restantes
+
+1. **FASE 4:** Task engine audit — verificar retry, states, recovery em profundidade
+2. **FASE 7:** Event Bus — verificar se todos os módulos emitem eventos corretamente
+3. **FASE 9:** Mais cenários E2E (recovery, multi-project, long-running)
+4. **nix flake check:** Não executado nesta sessão
