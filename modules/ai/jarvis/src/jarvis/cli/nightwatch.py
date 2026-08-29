@@ -357,7 +357,7 @@ def run_nightwatch(
             if task_info.get("has_tests") and task_success:
                 console.print("  [dim]Running verification...[/]")
                 test_ok, test_output = _run_safe_command(
-                    "nix develop --command python3 -m pytest modules/ai/jarvis/tests/test_agent.py -x -q",
+                    "python3 -m pytest modules/ai/jarvis/tests/test_agent.py -x -q",
                     timeout=120,
                 )
                 tests_passed = test_ok
