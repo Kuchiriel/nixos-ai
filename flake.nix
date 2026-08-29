@@ -209,6 +209,8 @@
           python313Packages.pytest
           python313Packages.hypothesis
           python313Packages.pymupdf  # PDF extraction for audiobook reader
+          python313Packages.ebooklib  # EPUB extraction for audiobook reader
+          python313Packages.beautifulsoup4  # HTML parsing for EPUB
           # Higiene Nix
           statix
           deadnix
