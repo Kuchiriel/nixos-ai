@@ -619,7 +619,111 @@ def _trim_messages(messages: list[dict[str, Any]], max_messages: int = 20) -> li
 
 def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -> tuple[str, str | None]:
     """Executa tool via handle_dev_tool (devtools.py). Retorna (texto, diff_ou_None)."""
-    # execute_shell requer aprovação
+    # ── Vision ──
+    if name == "capture_screen":
+        try:
+            from jarvis.core.vision import handle_capture
+            result = handle_capture(args)
+            return result, None
+        except Exception as e:
+            return f"ERROR: {e}", None
+
+    if name == "observe_screen":
+        try:
+            from jarvis.core.vision import observe_screen
+            result = observe_screen(args)
+            return result, None
+        except Exception as e:
+            return f"ERROR: {e}", None
+
+    # ── NixOS ──
+    if name == "nix_eval":
+        import subprocess
+        expr = args.get("expr", "")
+        if not expr:
+            return "ERROR: empty expression", None
+        res = subprocess.run(["nix", "eval", "--json", expr], capture_output=True, text=True, timeout=30)
+        return res.stdout or res.stderr, None
+
+    if name == "nix_check":
+        import subprocess
+        res = subprocess.run(["nix", "flake", "check"], capture_output=True, text=True, timeout=120, cwd=os.getcwd())
+        return res.stdout or res.stderr or "Check passed", None
+
+    if name == "nix_search":
+        import subprocess
+        query = args.get("query", "")
+        if not query:
+            return "ERROR: empty query", None
+        res = subprocess.run(["nix", "search", "nixpkgs", query, "--json"], capture_output=True, text=True, timeout=30)
+        return res.stdout[:3000] if res.stdout else res.stderr, None
+
+    # ── Memory ──
+    if name == "remember":
+        try:
+            from jarvis.core.memory import EpisodicMemory, MemoryEvent
+            em = EpisodicMemory()
+            event = MemoryEvent(text=args.get("text", ""), kind=args.get("category", "fact"), meta={"source": "repl"})
+            mid = em.remember(event)
+            return f"Stored (id={mid}): {args.get('text', '')[:100]}...", None
+        except Exception as e:
+            return f"ERROR: {e}", None
+
+    if name == "recall":
+        try:
+            from jarvis.core.memory import EpisodicMemory
+            em = EpisodicMemory()
+            results = em.recall(args.get("query", ""), top_k=5)
+            if not results:
+                return "No memories found.", None
+            lines = []
+            for r in results:
+                lines.append(f"[{r.get('kind', '?')}] {r.get('text', '')[:200]}")
+            return "\n".join(lines), None
+        except Exception as e:
+            return f"ERROR: {e}", None
+
+    # ── Vault ──
+    if name == "vault_list":
+        try:
+            from jarvis.core.vault import MemoryVault
+            mv = MemoryVault()
+            notes = mv.list_notes()
+            if not notes:
+                return "Vault is empty.", None
+            return "Vault notes:\n" + "\n".join(f"- {n}" for n in notes), None
+        except Exception as e:
+            return f"ERROR: {e}", None
+
+    if name == "vault_write":
+        try:
+            from jarvis.core.vault import MemoryVault
+            mv = MemoryVault()
+            note_path = mv.vault_dir / f"{args.get('name', '')}.md"
+            note_path.parent.mkdir(parents=True, exist_ok=True)
+            note_path.write_text(args.get("content", ""))
+            return f"Note saved: {note_path}", None
+        except Exception as e:
+            return f"ERROR: {e}", None
+
+    # ── RAG ──
+    if name == "rag_search":
+        try:
+            from jarvis.core.rag import HybridSearch
+            from jarvis.core.config import Config
+            cfg = Config()
+            hs = HybridSearch(config=cfg)
+            results = hs.search(args.get("query", ""), top_k=5)
+            if not results:
+                return "No results found.", None
+            lines = []
+            for r in results:
+                lines.append(f"[{r.score:.2f}] {r.path}\n{r.text[:200]}")
+            return "\n".join(lines), None
+        except Exception as e:
+            return f"ERROR: {e}", None
+
+    # ── execute_shell requer aprovação ──
     if name == "execute_shell" and not approve:
         from jarvis.core.agent import command_allowed
         cmd = args.get("cmd", "")
@@ -764,6 +868,136 @@ def _get_tools() -> list[dict[str, Any]]:
                         "max_depth": {"type": "integer", "description": "Profundidade (padrão 2)"},
                     },
                     "required": [],
+                },
+            },
+        },
+        # ── Vision ──
+        {
+            "type": "function",
+            "function": {
+                "name": "capture_screen",
+                "description": "Captura screenshot da tela atual.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "observe_screen",
+                "description": "Captura e analisa screenshot com vision AI.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "mode": {"type": "string", "enum": ["full", "window"], "description": "Modo de captura"},
+                        "question": {"type": "string", "description": "O que analisar"},
+                    },
+                },
+            },
+        },
+        # ── NixOS ──
+        {
+            "type": "function",
+            "function": {
+                "name": "nix_eval",
+                "description": "Avalia expressão Nix.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "expr": {"type": "string", "description": "Expressão Nix"},
+                    },
+                    "required": ["expr"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "nix_check",
+                "description": "Roda nix flake check.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "nix_search",
+                "description": "Pesquisa packages/options no nixpkgs.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Termo de busca"},
+                        "type": {"type": "string", "enum": ["packages", "options"], "description": "Tipo"},
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
+        # ── Memory ──
+        {
+            "type": "function",
+            "function": {
+                "name": "remember",
+                "description": "Grava fato/evento na memória episódica.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string", "description": "O que gravar"},
+                        "category": {"type": "string", "description": "Categoria: fact, event, decision"},
+                    },
+                    "required": ["text"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "recall",
+                "description": "Busca memórias por similaridade.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "O que buscar"},
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
+        # ── Vault ──
+        {
+            "type": "function",
+            "function": {
+                "name": "vault_list",
+                "description": "Lista notas no vault persistente.",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "vault_write",
+                "description": "Escreve nota no vault.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Nome da nota"},
+                        "content": {"type": "string", "description": "Conteúdo"},
+                    },
+                    "required": ["name", "content"],
+                },
+            },
+        },
+        # ── RAG ──
+        {
+            "type": "function",
+            "function": {
+                "name": "rag_search",
+                "description": "Busca semântica no codebase.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "O que buscar"},
+                    },
+                    "required": ["query"],
                 },
             },
         },
