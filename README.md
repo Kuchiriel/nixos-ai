@@ -37,7 +37,7 @@ Configuração NixOS declarativa e reprodutível com sistema de IA local integra
 | Property-based tests (hypothesis) | ✅ Funcional | 31 testes adversariais para parsers e regex |
 | Fuzzing + mutation testing | ✅ Funcional | 56 testes de stress |
 | Nightwatch (loop autônomo) | 🧪 Experimental | harness.py com failure classification + anti-loop + checkpoint + Event Bus; não validado em longa duração |
-| Multi-agent / sub-agents | 🧪 Experimental | task_queue.py com Task model + LoopDetector; sem orquestração real |
+| Multi-agent / sub-agents | 🧪 Experimental | multi_agent.py com AgentPersona + Orchestrator + handoff via Event Bus; 14 testes; sem integração LLM real |
 | Voz (STT/TTS/wakeword) | 🧪 Experimental | código existe (voice.py, STT faster-whisper, TTS Kokoro, openwakeword); requer `jarvis-voice` para ativar |
 | Audiobook | ✅ Implementado | audiobook.py com 11 testes (chunk_text, extract, scan, dispatch) |
 | Obsidian / HackMD | ✅ Implementado | hackmd.py com 8 testes (token, headers, reports, API errors) |
