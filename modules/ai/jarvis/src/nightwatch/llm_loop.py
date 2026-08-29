@@ -381,6 +381,9 @@ def run_llm_nightwatch(max_iterations: int = 5, max_minutes: int = 60) -> list[I
     print(f"LLM endpoint: {LLAMA_CPP_URL}")
     print()
     
+    # Send start notification
+    send_telegram(f"🌙 *Nightwatch Started*\nMax iterations: {max_iterations}\nMax minutes: {max_minutes}")
+    
     for i in range(max_iterations):
         if (time.time() - started) > max_minutes * 60:
             print(f"⏰ Time limit reached ({max_minutes} minutes)")
@@ -421,14 +424,64 @@ def run_llm_nightwatch(max_iterations: int = 5, max_minutes: int = 60) -> list[I
         print()
     
     # Summary
+    elapsed = time.time() - started
+    minutes = int(elapsed // 60)
+    seconds = int(elapsed % 60)
+    
     print("━━━ Summary ━━━")
     print(f"Iterations: {len(results)}")
     print(f"Success: {sum(1 for r in results if r.success)}")
     print(f"Failed: {sum(1 for r in results if not r.success)}")
     print(f"Files changed: {sum(len(r.files_changed) for r in results)}")
     print(f"Commits: {sum(1 for r in results if r.commit_sha)}")
+    print(f"Duration: {minutes}m {seconds}s")
+    
+    # Send summary notification
+    success = sum(1 for r in results if r.success)
+    failed = sum(1 for r in results if not r.success)
+    files = sum(len(r.files_changed) for r in results)
+    commits = sum(1 for r in results if r.commit_sha)
+    
+    summary = f"🌙 *Nightwatch Complete*\n"
+    summary += f"Duration: {minutes}m {seconds}s\n"
+    summary += f"Success: {success} | Failed: {failed}\n"
+    summary += f"Files changed: {files}\n"
+    summary += f"Commits: {commits}\n"
+    
+    if commits > 0:
+        summary += f"\n📦 Auto-committed {commits} improvements"
+    
+    send_telegram(summary)
     
     return results
+
+
+def send_telegram(message: str) -> bool:
+    """Send message to Telegram."""
+    try:
+        env_file = Path("/etc/jarvis-telegram.env")
+        if not env_file.exists():
+            return False
+        env = {}
+        for line in env_file.read_text().splitlines():
+            if "=" in line:
+                key, _, value = line.partition("=")
+                env[key.strip()] = value.strip()
+
+        token = env.get("JARVIS_TELEGRAM_TOKEN", "")
+        chat_id = env.get("JARVIS_TELEGRAM_CHAT_ID", "")
+        if not token or not chat_id:
+            return False
+
+        import requests
+        resp = requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": message, "parse_mode": "Markdown"},
+            timeout=10,
+        )
+        return resp.status_code == 200
+    except Exception:
+        return False
 
 
 def persist_learnings(result: IterationResult) -> None:
@@ -455,6 +508,17 @@ def persist_learnings(result: IterationResult) -> None:
             f.write(f"- Learnings: {result.learnings}\n")
             if result.files_changed:
                 f.write(f"- Files: {', '.join(result.files_changed)}\n")
+    
+    # Send Telegram notification
+    icon = "✅" if result.success else "❌"
+    files = len(result.files_changed)
+    msg = f"{icon} *Nightwatch Update*\n"
+    msg += f"Task: {result.task_id[:20]}...\n"
+    msg += f"Files changed: {files}\n"
+    msg += f"Tests: {'passed' if result.tests_passed else 'failed'}\n"
+    if result.commit_sha:
+        msg += f"Commit: {result.commit_sha[:8]}\n"
+    send_telegram(msg)
 
 
 # ═══ CLI Entry Point ═══
