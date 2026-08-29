@@ -27,6 +27,28 @@ STATE_DIR = Path.home() / ".local/state/jarvis/nightwatch"
 CONTEXT_LOG = STATE_DIR / "context_usage.jsonl"
 
 
+def query_server_context_size() -> int:
+    """Query llama.cpp /props endpoint for actual n_ctx.
+
+    Returns 0 if server is unavailable.
+    """
+    import os
+    try:
+        import requests
+        base_url = os.environ.get("LLAMA_CPP_URL", "http://127.0.0.1:8080")
+        # /props is at root, not under /v1
+        base = base_url.rstrip("/").replace("/v1", "")
+        resp = requests.get(f"{base}/props", timeout=3)
+        resp.raise_for_status()
+        data = resp.json()
+        n_ctx = data.get("default_generation_settings", {}).get("n_ctx", 0)
+        if n_ctx > 0:
+            return n_ctx
+    except Exception:  # noqa: BLE001
+        pass
+    return 0
+
+
 @dataclass
 class ContextSnapshot:
     """A single point-in-time measurement of context usage."""
@@ -49,7 +71,7 @@ class ContextBudget:
     """Tracks context budget across a session."""
     
     budget: int = 8192
-    compaction_threshold: float = 0.8  # compact at 80%
+    compaction_threshold: float = 0.7  # compact at 70% (was 0.8 = too aggressive)
     max_tool_output_tokens: int = 2000
     max_file_content_tokens: int = 8000
     

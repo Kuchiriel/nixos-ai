@@ -54,7 +54,7 @@ from nightwatch.project_isolation import (
     ProjectConfig, ProjectRegistry, discover_projects,
     get_project_root, validate_project_path, run_in_project,
 )
-from nightwatch.context_budget import ContextBudget
+from nightwatch.context_budget import ContextBudget, query_server_context_size
 
 
 REPO_ROOT = Path.home() / "projects" / "nixos-ai"
@@ -84,9 +84,9 @@ class HarnessConfig:
     # Multi-project
     projects: list[str] = field(default_factory=list)  # empty = auto-discover
     project_switch_interval: int = 5  # switch project every N tasks
-    # Context budget
-    context_budget: int = 8192
-    compaction_threshold: float = 0.8
+    # Context budget (0 = auto-detect from llama.cpp /props endpoint)
+    context_budget: int = 0
+    compaction_threshold: float = 0.7
 
 
 @dataclass
@@ -476,7 +476,20 @@ class Harness:
         self.checkpoint = Checkpoint.load()
         self.mission = self.queue.mission
         self.project_registry = ProjectRegistry()
-        self.context_budget = ContextBudget(budget=self.config.context_budget)
+        # Auto-detect context size from llama.cpp server if not specified
+        budget = self.config.context_budget
+        if budget <= 0:
+            server_ctx = query_server_context_size()
+            if server_ctx > 0:
+                budget = server_ctx
+                self.notify(f"📊 Context: {budget:,} tokens (from server)")
+            else:
+                budget = 8192
+                self.notify(f"⚠️ Context: {budget:,} tokens (server unavailable, fallback)")
+        self.context_budget = ContextBudget(
+            budget=budget,
+            compaction_threshold=self.config.compaction_threshold,
+        )
         # Auto-discover projects if none specified
         if not self.config.projects:
             self._discover_projects()
@@ -859,7 +872,7 @@ def run_nightwatch(
     use_llm: bool = True,
     use_scripted: bool = True,
     projects: list[str] | None = None,
-    context_budget: int = 8192,
+    context_budget: int = 0,  # 0 = auto-detect from server
 ) -> HarnessResult:
     """Convenience function to run nightwatch.
 
