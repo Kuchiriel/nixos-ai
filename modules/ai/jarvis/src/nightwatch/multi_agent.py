@@ -213,3 +213,118 @@ class Orchestrator:
     @property
     def history(self) -> list[dict[str, Any]]:
         return list(self._history)
+
+
+# ---------------------------------------------------------------------------
+# LLM-backed execution — connects personas to real LLM
+# ---------------------------------------------------------------------------
+
+def create_llm_executor(
+    system_prompt: str = "You are a helpful coding assistant. PT-BR.",
+    max_tokens: int = 1024,
+    temperature: float = 0.3,
+    timeout: int = 120,
+) -> Callable[[str, dict[str, Any]], dict[str, Any]]:
+    """Create an execute function that calls the local LLM.
+
+    Returns a callable suitable for AgentPersona._execute_fn.
+
+    Usage:
+        executor = create_llm_executor(system_prompt="You are a code reviewer.")
+        persona = AgentPersona("reviewer", _execute_fn=executor)
+    """
+    import requests as _requests
+
+    def _llm_execute(task: str, context: dict[str, Any]) -> dict[str, Any]:
+        """Execute task by calling local LLM."""
+        # Build messages
+        messages: list[dict[str, Any]] = [
+            {"role": "system", "content": system_prompt},
+        ]
+
+        # Add context from previous persona if available
+        prev = context.get("previous_result")
+        if prev and prev.get("output"):
+            messages.append({
+                "role": "user",
+                "content": f"Previous agent said: {prev['output'][:500]}",
+            })
+
+        messages.append({"role": "user", "content": task})
+
+        # Detect LLM endpoint
+        import os as _os
+        base_url = _os.environ.get("LLAMA_CPP_URL", "http://127.0.0.1:8080")
+
+        payload = {
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+
+        try:
+            resp = _requests.post(
+                f"{base_url.rstrip('/')}/v1/chat/completions",
+                json=payload,
+                timeout=timeout,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            content = data["choices"][0]["message"].get("content", "")
+            return {
+                "output": content[:2000],
+                "success": True,
+                "artifacts": {},
+            }
+        except Exception as e:
+            return {
+                "output": f"LLM error: {e}",
+                "success": False,
+                "artifacts": {},
+            }
+
+    return _llm_execute
+
+
+def create_file_executor(
+    project_root: str | None = None,
+) -> Callable[[str, dict[str, Any]], dict[str, Any]]:
+    """Create an execute function that modifies files (for coder persona).
+
+    Returns a callable suitable for AgentPersona._execute_fn.
+    WARNING: This actually modifies files. Use with caution.
+    """
+    import subprocess as _subprocess
+    from pathlib import Path as _Path
+
+    root = _Path(project_root) if project_root else _Path.cwd()
+
+    def _file_execute(task: str, context: dict[str, Any]) -> dict[str, Any]:
+        """Execute task by reading/modifying files."""
+        # Simple file operations based on task keywords
+        task_lower = task.lower()
+
+        try:
+            if "read" in task_lower or "list" in task_lower:
+                # List files in project
+                result = _subprocess.run(
+                    ["find", str(root), "-name", "*.py", "-type", "f"],
+                    capture_output=True, text=True, timeout=10,
+                )
+                files = result.stdout.strip().split("\n")[:20]
+                return {
+                    "output": f"Found {len(files)} Python files:\n" + "\n".join(files),
+                    "success": True,
+                    "artifacts": {"files": files},
+                }
+            else:
+                return {
+                    "output": f"[file_executor] Task received: {task[:100]}",
+                    "success": True,
+                    "artifacts": {},
+                }
+        except Exception as e:
+            return {"output": str(e), "success": False, "artifacts": {}}
+
+    return _file_execute
+

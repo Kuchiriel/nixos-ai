@@ -172,3 +172,64 @@ def test_orchestrator_personas_property():
     assert len(orch.personas) == 2
     assert orch.personas[0].name == "a"
     assert orch.personas[1].name == "b"
+
+
+def test_create_llm_executor_returns_callable():
+    """create_llm_executor returns a callable."""
+    from nightwatch.multi_agent import create_llm_executor
+
+    executor = create_llm_executor()
+    assert callable(executor)
+
+
+def test_create_llm_executor_with_custom_params():
+    """create_llm_executor accepts custom parameters."""
+    from nightwatch.multi_agent import create_llm_executor
+
+    executor = create_llm_executor(
+        system_prompt="You are a reviewer.",
+        max_tokens=512,
+        temperature=0.5,
+        timeout=30,
+    )
+    assert callable(executor)
+
+
+def test_create_llm_executor_handles_offline():
+    """create_llm_executor handles LLM being offline gracefully."""
+    from nightwatch.multi_agent import create_llm_executor
+    import os
+    os.environ["LLAMA_CPP_URL"] = "http://127.0.0.1:19999"  # wrong port
+
+    executor = create_llm_executor(timeout=2)
+    result = executor("test task", {})
+    assert result["success"] is False
+    assert "error" in result["output"].lower()
+
+
+def test_create_file_executor_returns_callable():
+    """create_file_executor returns a callable."""
+    from nightwatch.multi_agent import create_file_executor
+
+    executor = create_file_executor()
+    assert callable(executor)
+
+
+def test_create_file_executor_list_files(tmp_path):
+    """create_file_executor lists files when task contains 'list'."""
+    from nightwatch.multi_agent import create_file_executor
+
+    (tmp_path / "test.py").write_text("print('hello')")
+    executor = create_file_executor(project_root=str(tmp_path))
+    result = executor("list files", {})
+    assert result["success"] is True
+    assert "test.py" in result["output"]
+
+
+def test_create_file_executor_default_task(tmp_path):
+    """create_file_executor handles default task."""
+    from nightwatch.multi_agent import create_file_executor
+
+    executor = create_file_executor(project_root=str(tmp_path))
+    result = executor("do something", {})
+    assert result["success"] is True
