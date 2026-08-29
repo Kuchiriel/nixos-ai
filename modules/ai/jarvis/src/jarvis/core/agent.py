@@ -510,6 +510,7 @@ class Agent:
     def run(self, prompt: str) -> AgentResult:
         """Run agent with a single prompt. Returns AgentResult."""
         result = AgentResult()
+        self.logger.emit("agent_start", detail={"prompt": prompt[:100]})
         system_content = "You are JARVIS, an AI coding assistant."
         
         # Inject user profile
@@ -632,6 +633,11 @@ class Agent:
                     result.final_response = msg["content"]
                     break
         
+        self.logger.emit("agent_done", detail={
+            "turns": result.turns,
+            "commands_run": len(result.commands_run),
+            "final_length": len(result.final_response),
+        })
         return result
 
     def _get_llm_response(self, messages: list[dict[str, Any]]) -> dict[str, Any]:

@@ -179,6 +179,9 @@ def test_compute_metrics_aggregation() -> None:
 def test_agent_emits_logs(monkeypatch, tmp_path: Path) -> None:
     """Verifica que o agent emite eventos de log durante execução."""
     monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("JARVIS_JSONL", "1")
+    from jarvis.core.logging import Logger
+    Logger._disabled = None  # Reset class-level cache
     from jarvis.core.logging import _loggers
     _loggers.clear()
 
@@ -210,7 +213,7 @@ def test_agent_emits_logs(monkeypatch, tmp_path: Path) -> None:
     assert result.final_response == "resposta ok"
 
     # Verifica que os logs foram escritos
-    log_file = tmp_path / "logs" / "agent.jsonl"
+    log_file = tmp_path / "logs" / "jarvis.core.agent.jsonl"
     assert log_file.exists()
     lines = log_file.read_text().strip().splitlines()
     events = [json.loads(l) for l in lines]
