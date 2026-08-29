@@ -43,6 +43,7 @@ in {
       serviceConfig = {
         Type = "oneshot";
         EnvironmentFile = "-/etc/jarvis-telegram.env";
+        ExecStart = "${config.services.jarvis.package}/bin/jarvis idle-worker --once";
         CPUWeight = 1;
         Nice = 19;
         IOSchedulingClass = "idle";
