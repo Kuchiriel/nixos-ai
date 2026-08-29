@@ -132,8 +132,32 @@ def read_file(path: str) -> str:
         return f"ERROR: Could not read {path}: {e}"
 
 
+def strip_markdown_fences(content: str) -> str:
+    """Strip markdown code fences that LLMs sometimes add around files."""
+    lines = content.strip().split("\n")
+    # Check if file starts with ``` and ends with ```
+    if lines and lines[0].strip().startswith("```"):
+        lines = lines[1:]  # Remove opening fence
+    if lines and lines[-1].strip() == "```":
+        lines = lines[:-1]  # Remove closing fence
+    # Also strip language identifier from first fence
+    if lines and lines[0].strip().startswith("```"):
+        lines = lines[1:]
+    return "\n".join(lines)
+
+
+def validate_python_file(path: Path, content: str) -> tuple[bool, str]:
+    """Validate that content is valid Python before writing."""
+    import ast
+    try:
+        ast.parse(content)
+        return True, "ok"
+    except SyntaxError as e:
+        return False, f"Syntax error at line {e.lineno}: {e.msg}"
+
+
 def write_file(path: str, content: str) -> bool:
-    """Write a file to the repo."""
+    """Write a file to the repo with validation."""
     try:
         # Handle both absolute and relative paths
         if path.startswith("/"):
@@ -145,6 +169,36 @@ def write_file(path: str, content: str) -> bool:
                     path = path[len(prefix):]
                     break
             full_path = REPO_ROOT / "modules/ai/jarvis/src" / path
+        
+        # Strip markdown fences
+        content = strip_markdown_fences(content)
+        
+        # Validate Python files
+        if full_path.suffix == ".py":
+            valid, error = validate_python_file(full_path, content)
+            if not valid:
+                print(f"ERROR: Invalid Python in {path}: {error}")
+                return False
+            
+            # Check that existing imports still work
+            if full_path.exists():
+                original = full_path.read_text(encoding="utf-8")
+                full_path.write_text(content, encoding="utf-8")
+                # Try to import the module
+                try:
+                    result = subprocess.run(
+                        ["python3", "-c", f"import ast; ast.parse(open('{full_path}').read())"],
+                        capture_output=True, timeout=5,
+                    )
+                    if result.returncode != 0:
+                        print(f"ERROR: File {path} breaks imports, reverting")
+                        full_path.write_text(original, encoding="utf-8")
+                        return False
+                except Exception:
+                    pass
+                finally:
+                    # Restore content for final write
+                    full_path.write_text(content, encoding="utf-8")
         
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_text(content, encoding="utf-8")
