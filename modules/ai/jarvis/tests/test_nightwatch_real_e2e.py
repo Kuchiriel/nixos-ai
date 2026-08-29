@@ -480,3 +480,38 @@ class TestFullPipeline:
         assert '"""Add."""' not in text_after
         assert "-> float:" not in text_after
         assert "def add(a: int, b: int) -> int:" in text_after
+
+
+class TestLoopDetector:
+    """Test anti-loop detection."""
+    
+    def test_no_loop_under_threshold(self):
+        """Less than max_attempts should not trigger loop."""
+        from nightwatch.task_queue import LoopDetector
+        detector = LoopDetector(max_attempts=3, window_seconds=300)
+        assert not detector.record_attempt("t1", success=False)
+        assert not detector.record_attempt("t1", success=False)
+        assert not detector.get_stats("t1")["in_loop"]
+    
+    def test_loop_at_threshold(self):
+        """At max_attempts should trigger loop."""
+        from nightwatch.task_queue import LoopDetector
+        detector = LoopDetector(max_attempts=3, window_seconds=300)
+        detector.record_attempt("t1", success=False)
+        detector.record_attempt("t1", success=False)
+        assert detector.record_attempt("t1", success=False)  # 3rd attempt = loop
+        assert detector.get_stats("t1")["in_loop"]
+        assert detector.get_stats("t1")["attempts_in_window"] == 3
+    
+    def test_reset_clears_loop(self):
+        """Reset should clear loop tracking."""
+        from nightwatch.task_queue import LoopDetector
+        detector = LoopDetector(max_attempts=3, window_seconds=300)
+        detector.record_attempt("t1", success=False)
+        detector.record_attempt("t1", success=False)
+        detector.record_attempt("t1", success=False)
+        assert detector.get_stats("t1")["in_loop"]
+        detector.reset("t1")
+        assert not detector.get_stats("t1")["in_loop"]
+        assert detector.get_stats("t1")["attempts_in_window"] == 0
+
