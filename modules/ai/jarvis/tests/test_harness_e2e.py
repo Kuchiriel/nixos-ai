@@ -484,8 +484,7 @@ def scenario_b_error_fix(repo_root: Path | None = None) -> ScenarioResult:
 
     # Step 5: Run the actual test
     tc = tool_execute_shell(
-        "nix develop --command python3 -c "
-        "\"import ast; ast.parse(open('modules/ai/jarvis/tests/_e2e_broken.py').read()); print('OK')\"",
+        "python3 -c \"import ast; ast.parse(open('src/broken.py').read()); print('OK')\"",
         timeout=30,
     )
     result.tool_calls.append(tc)
