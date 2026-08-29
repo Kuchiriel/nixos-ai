@@ -366,19 +366,28 @@ def tool_validate_python(path: str, repo_root: Path | None = None) -> ToolCall:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def scenario_a_simple_change(repo_root: Path | None = None) -> ScenarioResult:
-    """Agent receives a simple code task, modifies file, validates, commits."""
+    """Agent creates, reads, modifies, validates, and commits a file in isolated repo."""
     result = ScenarioResult(scenario="A: simple_code_change", task_success=False)
     t0 = time.time()
 
-    # Step 1: Read the target file
-    tc = tool_read_file("modules/ai/jarvis/src/nightwatch/harness.py", limit=20, repo_root=repo_root)
+    # Step 1: Create a target file
+    target = "src/module.py"
+    tc = tool_write_file(target, "def hello(): return 'world'\n", repo_root=repo_root)
+    result.tool_calls.append(tc)
+    if not tc.success:
+        result.errors.append(f"Failed to create target: {tc.error}")
+        result.duration_ms = int((time.time() - t0) * 1000)
+        return result
+    result.evidence.append("Created target file")
+
+    # Step 2: Read it back
+    tc = tool_read_file(target, repo_root=repo_root)
     result.tool_calls.append(tc)
     if not tc.success:
         result.errors.append(f"Failed to read target: {tc.error}")
         result.duration_ms = int((time.time() - t0) * 1000)
         return result
-
-    result.evidence.append(f"Read harness.py: {len(tc.output)} chars")
+    result.evidence.append(f"Read back: {len(tc.output)} chars")
 
     # Step 2: Create a small test file (safe target, not production code)
     test_content = '"""E2E test placeholder — auto-generated."""\n\n\ndef test_placeholder():\n    """Placeholder test for E2E scenario A."""\n    assert True\n'
