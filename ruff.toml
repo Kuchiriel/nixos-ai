@@ -1,0 +1,36 @@
+# Ruff linter configuration for nixos-ai
+# https://docs.astral.sh/ruff/
+
+target-version = "py312"
+line-length = 120
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # function call in default argument
+    "UP007",  # use X | Y for union types
+    "N802",   # function name should be lowercase (some exceptions)
+    "N803",   # argument name should be lowercase
+    "N806",   # variable in function should be lowercase
+]
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/**/*.py" = ["S101", "B011"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

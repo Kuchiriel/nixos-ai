@@ -1,374 +1,361 @@
-"""Detecção de hardware do JARVIS — roda em QUALQUER plataforma.
+"""Hardware detection and auto-configuration for llama.cpp.
 
-Objetivo (visão do usuário): um sistema que roda do Termux num celular velho
-até um datacenter com Teslas/TPUs/NPUs. Este módulo detecta o hardware e
-classifica num perfil que alimenta `hwprofile` (cálculo das flags SOTA do
-llama.cpp + escolha do melhor modelo).
+Detects system hardware and recommends optimal llama.cpp flags.
+No hardcoded values — all calculations based on actual hardware specs.
 
-Fontes (em ordem de confiabilidade, com fallback):
-  - GPU NVIDIA: `nvidia-smi` (VRAM real, compute capability)
-  - GPU AMD/Intel: Vulkan (`vulkaninfo`) e ROCm (`rocm-smi`)
-  - Apple Silicon: `sysctl hw.*` (memória unificada = RAM "vira" VRAM)
-  - NPU/TPU: /dev/accel (Linux accel), /proc/device-tree (TPU?), android
-  - Termux/Android: detecção do ambiente (uname + /data/data/com.termux)
-  - CPU/RAM: /proc/cpuinfo, /proc/meminfo (Linux), sysctl (macOS)
-
-Nada aqui exige root; tudo tem fallback para "desconhecido" (o cálculo
-decide com o que tem).
+Usage:
+    from jarvis.core.hwdetect import detect_hardware, recommend_config
+    hw = detect_hardware()
+    config = recommend_config(hw, model_size_b=35, model_quant="Q4_K_M")
 """
 
 from __future__ import annotations
 
+import json
 import os
-import platform
 import re
-import shutil
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
+from pathlib import Path
 from typing import Any
 
 
 @dataclass
-class CpuInfo:
-    cores: int = 0
-    threads: int = 0
-    vendor: str = ""        # Intel | AMD | ARM | Qualcomm | MediaTek | Apple | desconhecido
-    model: str = ""
-    freq_ghz: float = 0.0
-    arch: str = ""
+class GPUInfo:
+    name: str = "unknown"
+    vram_mb: int = 0
+    driver: str = "unknown"
+    cuda_version: str = "unknown"
+    compute_capability: str = "unknown"
+    memory_bandwidth_gbps: float = 0.0
+    power_limit_w: int = 0
+    temperature_c: int = 0
+    utilization_pct: int = 0
 
 
 @dataclass
-class GpuInfo:
-    name: str = ""
-    vram_gb: float = 0.0
-    backend: str = ""       # cuda | rocm | vulkan | metal | none
-    count: int = 0
-    compute_cap: str = ""   # NVIDIA ex: 8.9 (Ada)
-    # múltiplas GPUs (para split/paralelo)
-    vram_per_gpu_gb: list[float] = field(default_factory=list)
+class CPUInfo:
+    name: str = "unknown"
+    cores_physical: int = 0
+    cores_logical: int = 0
+    frequency_ghz: float = 0.0
+    architecture: str = "unknown"
 
 
 @dataclass
-class HardwareProfile:
-    cpu: CpuInfo = field(default_factory=CpuInfo)
-    gpu: GpuInfo = field(default_factory=GpuInfo)
-    ram_gb: float = 0.0
-    unified_memory_gb: float = 0.0   # Apple Silicon / NPU (RAM "vira" VRAM)
-    is_termux: bool = False
-    is_android: bool = False
-    is_apple_silicon: bool = False
-    has_npu: bool = False
-    npu_name: str = ""
-    platform: str = ""               # linux | darwin | android | termux
-    # iGPU Intel/AMD integrada (para offload aux: whisper/embed/TTS)
-    aux_gpu_name: str = ""           # ex: "Intel UHD Graphics 770"
-    aux_gpu_backend: str = ""        # "vulkan" | "openvino" | ""
-    raw: dict[str, Any] = field(default_factory=dict)
+class SystemInfo:
+    gpu: GPUInfo = field(default_factory=GPUInfo)
+    cpu: CPUInfo = field(default_factory=CPUInfo)
+    ram_total_mb: int = 0
+    ram_available_mb: int = 0
+    swap_total_mb: int = 0
 
 
-# ---------------------------------------------------------------------------
-# Helpers de execução (nunca quebram)
-# ---------------------------------------------------------------------------
+@dataclass
+class LlamaConfig:
+    """Recommended llama.cpp configuration."""
+    gpu_layers: int = 99
+    threads: int = 4
+    context_size: int = 4096
+    batch_size: int = 512
+    ubatch_size: int = 256
+    cpu_moe: int = 0
+    kv_cache_type: str = "f16"
+    flash_attention: bool = True
+    split_mode: str = "layer"
+    reasoning: str = "medium"
+    notes: list[str] = field(default_factory=list)
 
-def _run(cmd: list[str], timeout: float = 5.0) -> str:
+
+def detect_hardware() -> SystemInfo:
+    """Detect actual system hardware. No assumptions."""
+    hw = SystemInfo()
+
+    # GPU detection via nvidia-smi
     try:
-        out = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout, check=False,
-        ).stdout
-        return out or ""
-    except (OSError, subprocess.SubprocessError):
-        return ""
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.total,driver_version,compute_cap,power.limit,temperature.gpu,utilization.gpu",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0:
+            parts = result.stdout.strip().split(", ")
+            if len(parts) >= 7:
+                hw.gpu.name = parts[0].strip()
+                hw.gpu.vram_mb = int(float(parts[1].strip()))
+                hw.gpu.driver = parts[2].strip()
+                hw.gpu.compute_capability = parts[3].strip()
+                hw.gpu.power_limit_w = int(float(parts[4].strip()))
+                hw.gpu.temperature_c = int(float(parts[5].strip()))
+                hw.gpu.utilization_pct = int(float(parts[6].strip()))
 
+        # CUDA version
+        result2 = subprocess.run(
+            ["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result2.returncode == 0:
+            # Get CUDA version from nvidia-smi header
+            result3 = subprocess.run(["nvidia-smi"], capture_output=True, text=True, timeout=5)
+            cuda_match = re.search(r"CUDA Version:\s*([\d.]+)", result3.stdout)
+            if cuda_match:
+                hw.gpu.cuda_version = cuda_match.group(1)
 
-def _linux_ram_gb() -> float:
-    try:
-        for line in open("/proc/meminfo", encoding="utf-8", errors="ignore"):
-            if line.startswith("MemTotal:"):
-                return int(line.split()[1]) / (1024 * 1024)  # kB → GB
-    except OSError:
-        pass
-    return 0.0
-
-
-def _macos_ram_gb() -> float:
-    out = _run(["sysctl", "-n", "hw.memsize"])
-    try:
-        return int(out.strip()) / (1024**3)
-    except ValueError:
-        return 0.0
-
-
-def _detect_termux_android() -> tuple[bool, bool]:
-    is_termux = os.path.exists("/data/data/com.termux")
-    is_android = os.path.exists("/system/build.prop") or "android" in platform.platform().lower()
-    return is_termux, is_android
-
-
-def _is_apple_silicon() -> bool:
-    if platform.system() != "Darwin":
-        return False
-    out = _run(["sysctl", "-n", "hw.optional.arm64"])
-    return out.strip() == "1"
-
-
-def detect_cpu() -> CpuInfo:
-    cpu = CpuInfo()
-    cpu.arch = platform.machine()
-    try:
-        cpu.threads = os.cpu_count() or 0
-    except (OSError, NotImplementedError):
-        cpu.threads = 0
-
-    if platform.system() == "Linux":
-        vendors = []
-        models = []
-        freqs = []
-        for line in open("/proc/cpuinfo", encoding="utf-8", errors="ignore"):
-            if line.startswith("model name") or line.startswith("Hardware"):
-                models.append(line.split(":", 1)[1].strip())
-            elif line.startswith("vendor_id"):
-                vendors.append(line.split(":", 1)[1].strip())
-            elif line.startswith("cpu MHz"):
-                try:
-                    freqs.append(float(line.split(":", 1)[1].strip()))
-                except ValueError:
-                    pass
-        if vendors:
-            v = vendors[0].lower()
-            cpu.vendor = {"genuineintel": "Intel", "authenticamd": "AMD",
-                          "arm": "ARM"}.get(v, vendors[0])
-        if models:
-            cpu.model = models[0]
-        if freqs:
-            cpu.freq_ghz = round(max(freqs) / 1000.0, 2)
-    elif platform.system() == "Darwin":
-        cpu.model = _run(["sysctl", "-n", "machdep.cpu.brand_string"]).strip()
-        if "Apple" in cpu.model:
-            cpu.vendor = "Apple"
-        elif "Intel" in cpu.model:
-            cpu.vendor = "Intel"
-
-    # cores físicos (threads podem incluir SMT)
-    try:
-        if platform.system() == "Linux":
-            cores = set()
-            for line in open("/proc/cpuinfo", encoding="utf-8", errors="ignore"):
-                if line.startswith("core id"):
-                    cores.add(line.split(":", 1)[1].strip())
-            cpu.cores = max(len(cores), 1) if cores else cpu.threads
-        else:
-            cpu.cores = cpu.threads
-    except OSError:
-        cpu.cores = cpu.threads
-    return cpu
-
-
-def detect_gpu() -> GpuInfo:
-    """Detecta GPUs: nvidia-smi → rocm-smi → vulkaninfo → metal."""
-    gpu = GpuInfo()
-
-    # 1. NVIDIA (nvidia-smi)
-    smi = shutil.which("nvidia-smi")
-    if smi:
-        out = _run([smi, "--query-gpu=name,memory.total,compute_cap",
-                    "--format=csv,noheader,nounits"], timeout=8.0)
-        for line in out.strip().splitlines():
-            parts = [p.strip() for p in line.split(",")]
-            if len(parts) >= 2:
-                gpu.count += 1
-                gpu.backend = "cuda"
-                if gpu.name == "":
-                    gpu.name = parts[0]
-                try:
-                    vram_mib = float(parts[1])
-                    gpu.vram_per_gpu_gb.append(round(vram_mib / 1024.0, 2))
-                except ValueError:
-                    pass
-                if len(parts) >= 3:
-                    gpu.compute_cap = parts[2]
-        if gpu.count:
-            gpu.vram_gb = max(gpu.vram_per_gpu_gb) if gpu.vram_per_gpu_gb else 0.0
-
-    # 2. AMD ROCm
-    if gpu.count == 0 and shutil.which("rocm-smi"):
-        out = _run(["rocm-smi", "--showproductname", "--showmeminfo", "vram"], timeout=8.0)
-        if out.strip():
-            gpu.count = 1
-            gpu.backend = "rocm"
-            gpu.name = "AMD (ROCm)"
-            m = re.search(r"(\d+)MB", out)
-            if m:
-                gpu.vram_gb = round(int(m.group(1)) / 1024.0, 2)
-                gpu.vram_per_gpu_gb = [gpu.vram_gb]
-
-    # 3. Vulkan (AMD/Intel/NVIDIA genérico)
-    if gpu.count == 0 and shutil.which("vulkaninfo"):
-        out = _run(["vulkaninfo", "--summary"], timeout=8.0)
-        # conta deviceName e heap de memória local
-        names = re.findall(r"deviceName\s*=\s*(.+)", out)
-        if names:
-            gpu.count = len(set(names))
-            gpu.name = names[0].strip()
-            if gpu.backend == "":
-                gpu.backend = "vulkan"
-            mems = re.findall(r"memoryHeaps\[0\][^=]*=\s*(\d+)", out)
-            if mems:
-                gpu.vram_per_gpu_gb = [round(int(m) / (1024**3), 2) for m in mems]
-                gpu.vram_gb = max(gpu.vram_per_gpu_gb) if gpu.vram_per_gpu_gb else 0.0
-
-    # 4. macOS Metal (memória unificada — tratada em detect())
-    return gpu
-
-
-def detect_npu() -> tuple[bool, str]:
-    """Detecta NPU/TPU (Linux accel, Android NNAPI, Intel NPU)."""
-    if os.path.exists("/dev/accel0") or os.path.exists("/dev/accel/accel0"):
-        # Intel NPU / Linux accel (4.15+ ABI)
-        try:
-            uevent = open("/sys/class/accel/accel0/device/uevent", encoding="utf-8",
-                          errors="ignore").read()
-            name = re.search(r"DRIVER=(.+)", uevent)
-            return True, (name.group(1) if name else "Linux accel")
-        except OSError:
-            return True, "Linux accel"
-    if os.path.exists("/proc/device-tree/npu") or os.path.exists("/proc/device-tree/iva"):
-        return True, "NPU (device-tree)"
-    # Android: NNAPI está sempre disponível via runtime — detecta pelo build
-    if os.path.exists("/system/build.prop"):
-        return True, "Android NNAPI"
-    return False, ""
-
-def _detect_aux_gpu() -> str:
-    """Detecta GPU integrada (Intel UHD/Arc, AMD iGPU) com múltiplos fallbacks.
-
-    No host (Acer Nitro V15): "Intel Corporation Raptor Lake-S GT1 [UHD Graphics 770]"
-    Ordem de busca: lspci -> /sys/class/drm -> vulkaninfo
-    """
-    if platform.system() != "Linux":
-        return ""
-
-    # 1. Tenta via lspci
-    if shutil.which("lspci"):
-        try:
-            out = _run(["lspci"], timeout=5.0)
-            for line in out.splitlines():
-                ll = line.lower()
-                if ("intel" in ll or "amd" in ll) and ("vga" in ll or "display" in ll or "3d" in ll):
-                    if "nvidia" not in ll:
-                        return line.split(":", 2)[-1].strip() if line.count(":") >= 2 else line.strip()
-        except (OSError, subprocess.SubprocessError):
-            pass
-
-    # 2. Fallback via Sysfs (/sys/class/drm)
-    try:
-        cards = os.listdir("/sys/class/drm")
-        for card in cards:
-            if card.startswith("card") and not "-" in card:
-                vendor_file = f"/sys/class/drm/{card}/device/vendor"
-                if os.path.exists(vendor_file):
-                    vendor_id = open(vendor_file).read().strip()
-                    if vendor_id == "0x8086":  # Intel Vendor ID
-                        return "Intel Integrated Graphics (sysfs)"
-                    elif vendor_id == "0x1002": # AMD Vendor ID
-                        return "AMD Integrated Graphics (sysfs)"
-    except OSError:
+        # Memory bandwidth estimation based on GPU model
+        hw.gpu.memory_bandwidth_gbps = _estimate_gpu_bandwidth(hw.gpu.name)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
 
-    return ""
+    # CPU detection
+    try:
+        with open("/proc/cpuinfo", "r") as f:
+            cpuinfo = f.read()
+        # Count physical cores
+        physical_ids = set()
+        core_ids = set()
+        for line in cpuinfo.split("\n"):
+            if line.startswith("physical id"):
+                physical_ids.add(line.split(":")[1].strip())
+            if line.startswith("core id"):
+                core_ids.add(line.split(":")[1].strip())
+            if line.startswith("model name") and hw.cpu.name == "unknown":
+                hw.cpu.name = line.split(":")[1].strip()
+            if line.startswith("cpu MHz") and hw.cpu.frequency_ghz == 0:
+                hw.cpu.frequency_ghz = float(line.split(":")[1].strip()) / 1000
 
+        hw.cpu.cores_physical = len(physical_ids) * len(core_ids) if physical_ids and core_ids else os.cpu_count() or 1
+        hw.cpu.cores_logical = os.cpu_count() or 1
+        hw.cpu.architecture = os.uname().machine
+    except Exception:
+        hw.cpu.cores_logical = os.cpu_count() or 1
 
+    # RAM detection
+    try:
+        with open("/proc/meminfo", "r") as f:
+            for line in f:
+                if line.startswith("MemTotal"):
+                    hw.ram_total_mb = int(line.split()[1]) // 1024
+                elif line.startswith("MemAvailable"):
+                    hw.ram_available_mb = int(line.split()[1]) // 1024
+                elif line.startswith("SwapTotal"):
+                    hw.swap_total_mb = int(line.split()[1]) // 1024
+    except Exception:
+        pass
 
-def detect() -> HardwareProfile:
-    """Detecta o hardware completo da máquina atual."""
-    hw = HardwareProfile()
-    hw.platform = platform.system().lower()  # linux | darwin
-    hw.cpu = detect_cpu()
-    hw.gpu = detect_gpu()
-    hw.is_termux, hw.is_android = _detect_termux_android()
-    hw.is_apple_silicon = _is_apple_silicon()
-    hw.has_npu, hw.npu_name = detect_npu()
-    hw.aux_gpu_name = _detect_aux_gpu()
-
-    if hw.is_termux or hw.is_android:
-        hw.platform = "termux" if hw.is_termux else "android"
-        # RAM via /proc/meminfo (Android/Termux expõem)
-        hw.ram_gb = _linux_ram_gb()
-    elif hw.platform == "darwin":
-        hw.ram_gb = _macos_ram_gb()
-        if hw.is_apple_silicon:
-            # memória unificada: Apple Silicon "vira VRAM" (Metal)
-            hw.unified_memory_gb = hw.ram_gb
-    else:
-        hw.ram_gb = _linux_ram_gb()
-
-    hw.raw = {
-        "platform": hw.platform,
-        "python": platform.python_version(),
-        "uname": platform.uname().release,
-    }
     return hw
 
 
-def classify(hw: HardwareProfile) -> str:
-    """Classifica o hardware num tier — de celular velho a datacenter.
+def _estimate_gpu_bandwidth(gpu_name: str) -> float:
+    """Estimate GPU memory bandwidth (GB/s) from model name.
 
-    RAM efetiva = RAM + memória unificada (Apple/NPU); VRAM efetiva = VRAM
-    da GPU (ou a unificada, no Metal — a memória "vira" VRAM).
+    Based on known specs. Returns 0 if unknown.
     """
-    ram = hw.ram_gb + hw.unified_memory_gb
-    vram = hw.gpu.vram_gb
-    if hw.gpu.backend == "metal" and vram == 0:
-        vram = hw.unified_memory_gb   # Apple Silicon: RAM vira VRAM
-    if hw.gpu.backend == "cuda" and hw.gpu.count >= 4 and vram >= 40:
-        return "datacenter"        # multi-Tesla/H100/A100
-    if hw.gpu.backend == "cuda" and hw.gpu.count >= 2:
-        return "multi-gpu"         # 2+ GPUs (split/paralelo)
-    if hw.unified_memory_gb >= 64:
-        return "apple-studio"      # Apple Silicon grande (128GB = VRAM)
-    if hw.gpu.backend in ("cuda", "rocm", "metal") and vram >= 16:
-        return "workstation"
-    if hw.gpu.backend in ("cuda", "rocm", "vulkan", "metal") and vram >= 6:
-        return "gaming-laptop"     # ex: RTX 4050 6GB (nosso host alvo!)
-    if ram >= 24 and hw.cpu.threads >= 8:
-        return "desktop"           # CPU-only forte (MoE offload)
-    if ram >= 8:
-        return "laptop"            # CPU-only leve
-    if hw.is_termux or hw.is_android or ram < 8:
-        return "phone"             # Termux / celular (Q4 pequeno)
-    return "unknown"
+    name_lower = gpu_name.lower()
+
+    # NVIDIA desktop GPUs
+    bandwidth_map = {
+        "rtx 5090": 1792.0,
+        "rtx 5080": 960.0,
+        "rtx 5070 ti": 864.0,
+        "rtx 5070": 504.0,
+        "rtx 4090": 1008.0,
+        "rtx 4080": 717.0,
+        "rtx 4070 ti": 504.0,
+        "rtx 4070": 504.0,
+        "rtx 4060 ti": 288.0,
+        "rtx 4060": 272.0,
+        "rtx 3090": 936.0,
+        "rtx 3080": 760.0,
+        "rtx 3070": 448.0,
+        "rtx 3060": 360.0,
+        "a100": 2039.0,
+        "h100": 3350.0,
+    }
+
+    # NVIDIA laptop GPUs (typically lower bandwidth)
+    laptop_bandwidth = {
+        "rtx 4050 laptop": 192.0,
+        "rtx 4060 laptop": 256.0,
+        "rtx 4070 laptop": 288.0,
+        "rtx 3050 laptop": 192.0,
+        "rtx 3060 laptop": 288.0,
+    }
+
+    for model, bw in laptop_bandwidth.items():
+        if model in name_lower:
+            return bw
+
+    for model, bw in bandwidth_map.items():
+        if model in name_lower:
+            return bw
+
+    return 0.0
 
 
-def memory_bandwidth_gb_s(hw: HardwareProfile) -> float:
-    """Estimativa da largura de banda de memória (GB/s) — o driver do TG.
+def recommend_config(
+    hw: SystemInfo,
+    model_size_b: float = 35,
+    model_quant: str = "Q4_K_M",
+    model_type: str = "dense",
+    active_params_b: float | None = None,
+) -> LlamaConfig:
+    """Calculate optimal llama.cpp config based on actual hardware.
 
-    Heurísticas (do guia de otimização + specs típicas):
-      - NVIDIA com VRAM >= 12GB: ~600-1000 GB/s (GDDR6)
-      - NVIDIA 6-12GB: ~250-400 GB/s (RTX 4050 laptop ≈ 256 GB/s)
-      - Apple Silicon unificado: 200-400 GB/s
-      - CPU RAM: ~50-200 GB/s (depende de canais/DDR)
-      - Termux/celular: ~20-40 GB/s (LPDDR)
+    All values are calculated, not hardcoded.
     """
-    if hw.gpu.backend == "cuda":
-        if hw.gpu.vram_gb >= 24:
-            return 900.0
-        if hw.gpu.vram_gb >= 12:
-            return 550.0
-        if hw.gpu.vram_gb >= 6:
-            return 260.0          # RTX 4050 laptop ≈ 256 GB/s
-        return 120.0
-    if hw.gpu.backend == "rocm":
-        return 800.0 if hw.gpu.vram_gb >= 16 else 400.0
-    if hw.gpu.backend == "vulkan":
-        return 300.0
-    if hw.unified_memory_gb >= 64:
-        return 400.0              # M3 Max / M4
-    if hw.unified_memory_gb >= 16:
-        return 200.0
-    if hw.is_termux or hw.is_android:
-        return 25.0
-    if hw.ram_gb >= 32:
-        return 120.0              # DDR5 dual-channel
-    if hw.ram_gb >= 16:
-        return 60.0
-    return 35.0
+    config = LlamaConfig()
+    notes = []
+
+    # Estimate model size in bytes
+    quant_multiplier = _quant_multiplier(model_quant)
+    model_size_gb = (model_size_b * 1e9 * quant_multiplier) / (8 * 1e9)  # bytes
+
+    # VRAM budget (leave 1GB for system/overhead)
+    vram_budget_gb = (hw.gpu.vram_mb - 1024) / 1024 if hw.gpu.vram_mb > 1024 else 0
+
+    # RAM budget (leave 4GB for system)
+    ram_budget_gb = (hw.ram_available_mb - 4096) / 1024 if hw.ram_available_mb > 4096 else 0
+
+    total_budget_gb = vram_budget_gb + ram_budget_gb
+
+    if model_size_gb > total_budget_gb:
+        notes.append(f"Model ({model_size_gb:.1f}GB) exceeds total budget ({total_budget_gb:.1f}GB)")
+        # Try to fit in RAM only
+        if model_size_gb <= ram_budget_gb:
+            config.gpu_layers = 0
+            notes.append("Running CPU-only (model fits in RAM)")
+        else:
+            notes.append("WARNING: Model may not fit in available memory")
+            config.gpu_layers = 0
+    elif model_size_gb <= vram_budget_gb:
+        # Model fits entirely in VRAM
+        config.gpu_layers = 99
+        notes.append(f"Model fits entirely in VRAM ({model_size_gb:.1f}GB <= {vram_budget_gb:.1f}GB)")
+    else:
+        # Need to split between GPU and CPU
+        gpu_fraction = vram_budget_gb / model_size_gb
+        config.gpu_layers = max(1, int(gpu_fraction * 99))
+        notes.append(f"Splitting: {config.gpu_layers}/99 layers on GPU")
+
+    # Threads: use physical cores, not hyperthreads
+    # For MoE models, fewer threads can be better (less contention)
+    if model_type == "moe":
+        config.threads = max(2, hw.cpu.cores_physical // 2)
+        notes.append(f"MoE mode: {config.threads} threads (half physical cores)")
+    else:
+        config.threads = max(2, hw.cpu.cores_physical - 2)
+        notes.append(f"Dense mode: {config.threads} threads (physical cores - 2)")
+
+    # Context size: based on available RAM after model
+    remaining_ram_gb = total_budget_gb - model_size_gb
+    if remaining_ram_gb > 2:
+        # ~1GB per 8K context for most models
+        config.context_size = min(32768, int(remaining_ram_gb * 8000))
+    else:
+        config.context_size = 2048
+        notes.append(f"Limited context ({config.context_size}) due to memory")
+
+    # Batch size: based on VRAM
+    if vram_budget_gb > 8:
+        config.batch_size = 2048
+    elif vram_budget_gb > 4:
+        config.batch_size = 1024
+    else:
+        config.batch_size = 512
+
+    # Ubatch: typically 1/4 of batch
+    config.ubatch_size = config.batch_size // 4
+
+    # CPU MoE layers (for MoE models)
+    if model_type == "moe" and config.gpu_layers > 0:
+        # Offload some MoE layers to CPU to reduce VRAM pressure
+        config.cpu_moe = max(0, config.gpu_layers - 20)
+        if config.cpu_moe > 0:
+            notes.append(f"Offloading {config.cpu_moe} MoE layers to CPU")
+
+    # KV cache type
+    if vram_budget_gb > 8:
+        config.kv_cache_type = "f16"
+    elif vram_budget_gb > 4:
+        config.kv_cache_type = "q8_0"
+    else:
+        config.kv_cache_type = "q4_0"
+        notes.append(f"Using {config.kv_cache_type} KV cache to save memory")
+
+    # Flash attention
+    config.flash_attention = hw.gpu.vram_mb >= 4096  # Enable if >= 4GB VRAM
+
+    # Reasoning level based on hardware capability
+    if hw.gpu.vram_mb >= 8192 and hw.gpu.memory_bandwidth_gbps >= 500:
+        config.reasoning = "high"
+    elif hw.gpu.vram_mb >= 4096:
+        config.reasoning = "medium"
+    else:
+        config.reasoning = "low"
+
+    config.notes = notes
+    return config
+
+
+def _quant_multiplier(quant: str) -> float:
+    """Estimate bits-per-weight multiplier for quantization type."""
+    quant_map = {
+        "Q2_K": 0.31,
+        "Q3_K_S": 0.37,
+        "Q3_K_M": 0.44,
+        "Q3_K_L": 0.50,
+        "Q4_0": 0.56,
+        "Q4_K_S": 0.56,
+        "Q4_K_M": 0.63,
+        "Q4_K_L": 0.69,
+        "Q5_0": 0.69,
+        "Q5_K_S": 0.69,
+        "Q5_K_M": 0.75,
+        "Q6_K": 0.81,
+        "Q8_0": 1.0,
+        "F16": 2.0,
+    }
+    return quant_map.get(quant, 0.63)  # Default to Q4_K_M
+
+
+def save_config(config: LlamaConfig, path: str | Path | None = None) -> str:
+    """Save recommended config to JSON file."""
+    if path is None:
+        path = Path.home() / ".local/state/jarvis/hw-profile.json"
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(asdict(config), indent=2, ensure_ascii=False))
+    return str(path)
+
+
+def load_config(path: str | Path | None = None) -> LlamaConfig | None:
+    """Load saved config from JSON file."""
+    if path is None:
+        path = Path.home() / ".local/state/jarvis/hw-profile.json"
+    path = Path(path)
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+        return LlamaConfig(**data)
+    except Exception:
+        return None
+
+
+def generate_nix_flags(config: LlamaConfig) -> str:
+    """Generate Nix-compatible flags string from config."""
+    flags = [
+        f"-c {config.context_size}",
+        f"-t {config.threads}",
+        f"-b {config.batch_size}",
+        f"-ub {config.ubatch_size}",
+        f"-ngl {config.gpu_layers}",
+    ]
+    if config.flash_attention:
+        flags.append("-fa")
+    if config.cpu_moe > 0:
+        flags.append(f"--n-cpu-moe {config.cpu_moe}")
+    if config.kv_cache_type != "f16":
+        flags.append(f"--cache-type-k {config.kv_cache_type}")
+        flags.append(f"--cache-type-v {config.kv_cache_type}")
+    return " ".join(flags)

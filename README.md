@@ -404,6 +404,41 @@ jarvis idle status            # estado do modo idle
 1. **`AGENTS.md`** — premissas, regras e perfil do usuário. Qualquer IA lê e começa com o mesmo contexto.
 2. **`jarvis handoff`** — gera um bloco markdown (AGENTS.md + git log + tarefa) para colar em Gemini/ChatGPT.
 3. **Git como sensor** — commits pequenos e frequentes; `git log --oneline -5` mostra o que mudou.
+4. **`jarvis dev`** — REPL com 20 tools, 5 modos customizáveis, contexto adaptativo.
+5. **Multi-AI Reader** — `jarvis read-ai <url>` lê conversas do ChatGPT, Gemini e Claude compartilhadas.
+
+---
+
+## 🎭 Custom Modes (`.jarvismodes`)
+
+| Modo | Descrição |
+|------|-----------|
+| `code` | Editar código, bugs, features — edits cirúrgicos |
+| `architect` | Projetar sistemas, trade-offs, ADRs |
+| `nightwatch` | Loop autônomo 24/7: scan → execute → validate |
+| `organizer` | Organizar arquivos por conteúdo |
+| `research` | Pesquisa web com citação de fontes |
+
+```bash
+jarvis dev          # REPL com modo padrão (code)
+/modes              # listar modos disponíveis
+/mode nightwatch    # trocar para modo autônomo
+/mode architect     # trocar para modo de arquitetura
+```
+
+---
+
+## 🔌 MCP Servers (18 tools)
+
+| Server | Tools | Descrição |
+|--------|-------|-----------|
+| jarvis | 18 | Shell, files, vision, NixOS, memory, vault, RAG, multi-AI reader |
+| context7 | 2 | Documentação de bibliotecas em tempo real |
+| tavily-search | 2 | Pesquisa web |
+| nixos-mcp | 1 | Pesquisa packages/options do nixpkgs |
+| playwright | 1 | Automação de browser |
+
+**Configuração**: `~/.config/VSCodium/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`
 
 ---
 
