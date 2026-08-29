@@ -58,3 +58,7 @@ __pycache__/
 .hypothesis/
 build/
 dist/
+
+# Secrets (não versionar)
+/etc/jarvis-secrets/
+*.env

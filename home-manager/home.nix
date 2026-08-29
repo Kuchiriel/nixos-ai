@@ -92,7 +92,7 @@
   # (extensões, userSettings, MCP, custom modes são declarativos)
   vscode-roo = {
     enable = true;
-    tavilyApiKey = "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";
+    # tavilyApiKey agora é lido de /etc/jarvis-secrets/tavily.env (fora do git)
     # githubToken = "";  # Desabilitado — adicione seu token para ativar
   };
 

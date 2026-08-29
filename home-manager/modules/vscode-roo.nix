@@ -41,14 +41,19 @@ with lib; let
   };
 
   # ═══ Servidores MCP pré-configurados ═══
+  # Lê secrets de /etc/jarvis-secrets/ (fora do git)
+  tavilyKey = builtins.readFile /etc/jarvis-secrets/tavily.env;
+  tavilyApiKeyClean = lib.last (lib.splitString "=" (lib.last (lib.splitString "JARVIS_TAVILY_API_KEY=" tavilyKey)));
+
   defaultMcpServers = {
     # ── Tavily Search (web search — local, sem OAuth) ──
     # mcp-remote tenta OAuth discovery e trava; tavily-mcp local funciona direto.
+    # Chave lida de /etc/jarvis-secrets/tavily.env (não versionada)
     tavily-search = {
       command = "${pkgs.bash}/bin/bash";
       args = [
         "-c"
-        "${pkgs.coreutils}/bin/env PATH=${pkgs.nodejs}/bin:$PATH TAVILY_API_KEY=${cfg.tavilyApiKey} exec ${pkgs.nodejs}/bin/npx -y tavily-mcp@latest"
+        "${pkgs.coreutils}/bin/env PATH=${pkgs.nodejs}/bin:$PATH TAVILY_API_KEY=${tavilyApiKeyClean} exec ${pkgs.nodejs}/bin/npx -y tavily-mcp@latest"
       ];
       env = {};
       alwaysAllow = ["tavily_search" "tavily_extract"];
