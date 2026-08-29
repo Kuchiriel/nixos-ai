@@ -406,16 +406,23 @@ class HardwareProfile:
 
 def classify(hw: HardwareProfile) -> str:
     """Classify hardware into tier (backward compat)."""
-    if hw.gpu.vram_gb >= 24:
+    if hw.gpu.backend == "cuda" and hw.gpu.count >= 4 and hw.gpu.vram_gb >= 40:
         return "datacenter"
-    elif hw.gpu.vram_gb >= 8:
-        return "high"
-    elif hw.gpu.vram_gb >= 4:
-        return "medium"
-    elif hw.ram_gb >= 16:
-        return "cpu-only"
-    else:
-        return "low"
+    if hw.gpu.backend == "cuda" and hw.gpu.count >= 2:
+        return "multi-gpu"
+    if hw.unified_memory_gb >= 64:
+        return "apple-studio"
+    if hw.gpu.backend in ("cuda", "rocm", "metal") and hw.gpu.vram_gb >= 16:
+        return "workstation"
+    if hw.gpu.backend in ("cuda", "rocm", "vulkan", "metal") and hw.gpu.vram_gb >= 6:
+        return "gaming-laptop"
+    if hw.ram_gb >= 24 and hw.cpu.threads >= 8:
+        return "desktop"
+    if hw.ram_gb >= 8:
+        return "laptop"
+    if hw.is_termux or hw.is_android or hw.ram_gb < 8:
+        return "phone"
+    return "unknown"
 
 
 def detect() -> HardwareProfile:
@@ -440,3 +447,29 @@ def detect() -> HardwareProfile:
         ram_gb=hw_sys.ram_total_mb / 1024,
         platform="linux",
     )
+
+def memory_bandwidth_gb_s(hw: HardwareProfile) -> float:
+    """Estimate memory bandwidth (GB/s) — the TG driver."""
+    if hw.gpu.backend == "cuda":
+        if hw.gpu.vram_gb >= 24:
+            return 900.0
+        if hw.gpu.vram_gb >= 12:
+            return 550.0
+        if hw.gpu.vram_gb >= 6:
+            return 260.0
+        return 120.0
+    if hw.gpu.backend == "rocm":
+        return 800.0 if hw.gpu.vram_gb >= 16 else 400.0
+    if hw.gpu.backend == "vulkan":
+        return 300.0
+    if hw.unified_memory_gb >= 64:
+        return 400.0
+    if hw.unified_memory_gb >= 16:
+        return 200.0
+    if hw.is_termux or hw.is_android:
+        return 25.0
+    if hw.ram_gb >= 32:
+        return 120.0
+    if hw.ram_gb >= 16:
+        return 60.0
+    return 35.0
