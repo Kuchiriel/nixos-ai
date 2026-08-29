@@ -30,17 +30,18 @@ Configuração NixOS declarativa e reprodutível com sistema de IA local integra
 | Telegram bot | ✅ Implementado | long-polling, `/ask` `/agent` `/status` |
 | Dev agent (REPL) | ✅ Implementado | `jarvis dev` — ferramentas de código, modos customizáveis |
 | Circuit breaker + fallback remoto | ✅ Implementado | CLOSED/OPEN/HALF_OPEN; filtro de segurança para dados sensíveis |
-| Event bus (asyncio) | ✅ Implementado | pub/sub por tópico, retry, DLQ, stats |
+| Event bus (asyncio) | ✅ Implementado | pub/sub por tópico, retry, DLQ, stats; integrado no harness, idle, heal |
 | Vision (screenshot) | ✅ Implementado | grim/slurp (Wayland); `jarvis screenshot full\|region\|window` |
 | Triggers (automações) | ✅ Implementado | disk/cpu alerts com cooldown e idempotência |
 | Segurança (anti-chaining) | ✅ Implementado | shlex.split, DANGEROUS_CHAINING, DANGEROUS_COMMANDS, safe pipes |
 | Property-based tests (hypothesis) | ✅ Funcional | 31 testes adversariais para parsers e regex |
 | Fuzzing + mutation testing | ✅ Funcional | 56 testes de stress |
-| Nightwatch (loop autônomo) | 🧪 Experimental | harness.py com failure classification + anti-loop + checkpoint; não validado em longa duração |
+| Nightwatch (loop autônomo) | 🧪 Experimental | harness.py com failure classification + anti-loop + checkpoint + Event Bus; não validado em longa duração |
 | Multi-agent / sub-agents | 🧪 Experimental | task_queue.py com Task model + LoopDetector; sem orquestração real |
 | Voz (STT/TTS/wakeword) | 🧪 Experimental | código existe (voice.py, STT faster-whisper, TTS Kokoro, openwakeword); requer `jarvis-voice` para ativar |
-| Audiobook | 🧪 Experimental | código existe (audiobook.py); não testado E2E |
-| Obsidian / HackMD | 🧪 Experimental | hackmd.py existe; token configurado mas integração não validada |
+| Audiobook | ✅ Implementado | audiobook.py com 11 testes (chunk_text, extract, scan, dispatch) |
+| Obsidian / HackMD | ✅ Implementado | hackmd.py com 8 testes (token, headers, reports, API errors) |
+| Multi-AI Reader | ✅ Implementado | multi_ai_reader.py com 8 testes (ChatGPT/Gemini/Claude dispatch, HTML extraction) |
 | Emotion (detecção) | 🧪 Experimental | emotion.py — keywords, zero LLM; funcional para TTS prosódia |
 | Idle mode (self-knowledge) | 🧪 Experimental | idle.py existe; modo idle com tarefas devidas; não validado em produção |
 | Profiling de hardware | ✅ Funcional | `jarvis hwdetect` / `jarvis hwprofile` — detecta RAM/VRAM/CPU/GPU e calcula flags |
@@ -268,7 +269,7 @@ nix develop                # shell de desenvolvimento
 ```bash
 # Contagem de testes (reproduzível)
 nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -q --co 2>&1 | tail -1
-# Resultado: ~700 testes coletados
+# Resultado: ~736 testes coletados
 
 # Rodar todos
 nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -q
