@@ -96,7 +96,7 @@
         # Modelos declarativos (openwakeword, kokoro, whisper)
         inherit aiModels;
 
-      }
+      };
 
     hosts = [
       {

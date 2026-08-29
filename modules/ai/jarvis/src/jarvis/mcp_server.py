@@ -228,6 +228,61 @@ JARVIS_TOOLS = [
             "required": ["url"]
         }
     },
+    {
+        "name": "jarvis_remember",
+        "description": "Store a fact or event in episodic memory. Use for things to remember across sessions.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "What to remember"},
+                "category": {"type": "string", "description": "Category: fact, event, decision, error"}
+            },
+            "required": ["text"]
+        }
+    },
+    {
+        "name": "jarvis_recall",
+        "description": "Recall memories matching a query. Returns relevant past events and facts.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "What to search for in memory"},
+                "top_k": {"type": "integer", "description": "Max results (default: 5)"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "jarvis_lessons",
+        "description": "Recall lessons learned from past errors. Use when encountering a known problem pattern.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Error pattern or problem to find lessons for"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "jarvis_vault_list",
+        "description": "List notes in the persistent vault. Use to check what's stored.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {}
+        }
+    },
+    {
+        "name": "jarvis_vault_write",
+        "description": "Write a note to the persistent vault. Use for important findings that should persist.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Note filename (without .md)"},
+                "content": {"type": "string", "description": "Note content in markdown"}
+            },
+            "required": ["name", "content"]
+        }
+    },
 ]
 
 
@@ -331,6 +386,21 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
         if name == "jarvis_nix_search":
             return _handle_nix_search(args)
 
+        if name == "jarvis_remember":
+            return _handle_remember(args)
+
+        if name == "jarvis_recall":
+            return _handle_recall(args)
+
+        if name == "jarvis_lessons":
+            return _handle_lessons(args)
+
+        if name == "jarvis_vault_list":
+            return _handle_vault_list(args)
+
+        if name == "jarvis_vault_write":
+            return _handle_vault_write(args)
+
         return f"ERROR: unknown tool: {name}"
     except Exception as e:
         return f"ERROR: {e}"
@@ -431,11 +501,89 @@ def _handle_nix_search(args: dict[str, Any]) -> str:
     except subprocess.TimeoutExpired:
         return "ERROR: mcp-nixos timed out"
     except Exception as e:
-        return f"ERROR: mcp-nixos failed: {e}"
+        return f"ERROR: mcp-nixos failed: {e}"# ═══ Memory Handlers ═══
+
+def _handle_remember(args: dict[str, Any]) -> str:
+    """Store a fact or event in episodic memory."""
+    text = args.get("text", "")
+    if not text:
+        return "ERROR: empty text"
+    category = args.get("category", "fact")
+    try:
+        from jarvis.core.memory import EpisodicMemory, MemoryEvent
+        em = EpisodicMemory()
+        event = MemoryEvent(text=text, kind=category, meta={"source": "mcp"})
+        mid = em.remember(event)
+        return f"Stored in memory (id={mid}): {text[:100]}..."
+    except Exception as e:
+        return f"ERROR: remember failed: {e}"
+
+
+def _handle_recall(args: dict[str, Any]) -> str:
+    """Recall memories matching a query."""
+    query = args.get("query", "")
+    if not query:
+        return "ERROR: empty query"
+    top_k = args.get("top_k", 5)
+    try:
+        from jarvis.core.memory import EpisodicMemory
+        em = EpisodicMemory()
+        results = em.recall(query, top_k=top_k)
+        if not results:
+            return "No memories found matching the query."
+        lines = []
+        for r in results:
+            lines.append(f"[{r.get('kind', '?')}] {r.get('text', '')[:200]}")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"ERROR: recall failed: {e}"
+
+
+def _handle_lessons(args: dict[str, Any]) -> str:
+    """Recall lessons learned from past errors."""
+    query = args.get("query", "")
+    if not query:
+        return "ERROR: empty query"
+    try:
+        from jarvis.core.memory import EpisodicMemory
+        em = EpisodicMemory()
+        result = em.lessons(query, top_k=3)
+        return result or "No lessons found for this pattern."
+    except Exception as e:
+        return f"ERROR: lessons failed: {e}"
+
+
+def _handle_vault_list(args: dict[str, Any]) -> str:
+    """List notes in the persistent vault."""
+    try:
+        from jarvis.core.vault import MemoryVault
+        mv = MemoryVault()
+        notes = mv.list_notes()
+        if not notes:
+            return "Vault is empty."
+        return "Vault notes:\n" + "\n".join(f"- {n}" for n in notes)
+    except Exception as e:
+        return f"ERROR: vault_list failed: {e}"
+
+
+def _handle_vault_write(args: dict[str, Any]) -> str:
+    """Write a note to the persistent vault."""
+    name = args.get("name", "")
+    content = args.get("content", "")
+    if not name or not content:
+        return "ERROR: name and content required"
+    try:
+        from jarvis.core.vault import MemoryVault
+        mv = MemoryVault()
+        note_path = mv.vault_dir / f"{name}.md"
+        note_path.parent.mkdir(parents=True, exist_ok=True)
+        note_path.write_text(content)
+        return f"Note saved: {note_path}"
+    except Exception as e:
+        return f"ERROR: vault_write failed: {e}"
 
 
 # ═══ Stdio Server ═══
-
 def main():
     """Executa o MCP server via stdio (JSON-RPC 2.0)."""
     for line in sys.stdin:

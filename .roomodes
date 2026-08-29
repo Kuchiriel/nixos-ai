@@ -171,6 +171,8 @@ customModes:
       - NÃO reescreva arquivos inteiros
       - NÃO comite sem testar
       - NÃO pergunte ao usuário
+    rulesFiles:
+      - relativePath: ".roo/rules-nightwatch/instructions.md"
     groups:
       - read
       - edit
@@ -218,6 +220,8 @@ customModes:
       - Respeite symlinks existentes
       - Gere README.md em diretórios novos
       - Análise por CONTEÚDO: Python → imports, Nix → opções, Shell → propósito
+    rulesFiles:
+      - relativePath: ".roo/rules-organizer/instructions.md"
     groups:
       - read
       - edit
