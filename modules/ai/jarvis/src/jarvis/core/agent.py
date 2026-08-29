@@ -51,6 +51,45 @@ def detect_profile(model_id: str) -> dict[str, Any]:
         return {"name": "default", "max_tokens": 1024, "temperature": 0.0}
 
 
+def _extract_json_object(text: str) -> str | None:
+    """Extract a balanced JSON object from text."""
+    if not text:
+        return None
+    # Find first {
+    start = text.find('{')
+    if start < 0:
+        return None
+    # Count braces to find matching closing }
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        c = text[i]
+        if escape:
+            escape = False
+            continue
+        if c == '\\' and in_string:
+            escape = True
+            continue
+        if c == '"' and not escape:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                candidate = text[start:i+1]
+                try:
+                    json.loads(candidate)
+                    return candidate
+                except json.JSONDecodeError:
+                    return None
+    return None
+
+
 def extract_fallback_tool_call(text: str | None) -> dict[str, Any] | None:
     """Extract tool call from text when native tool calls fail.
     
