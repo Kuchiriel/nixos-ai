@@ -807,13 +807,10 @@ class TestScenarioA:
         assert result.task_success, f"Scenario A failed: {result.errors}"
         assert result.tool_success_rate > 0.8, f"Low tool success: {result.tool_success_rate}"
         assert len(result.evidence) >= 3, f"Not enough evidence: {result.evidence}"
-        # Verify no commits leaked to real repo
-        real_log = subprocess.run(
-            ["git", "log", "--oneline", "-5"],
-            capture_output=True, text=True,
-            cwd=str(Path.home() / "projects" / "nixos-ai"),
-        ).stdout
-        assert "e2e(test)" not in real_log, "E2E test committed to real repo!"
+        # Verify no test artifacts leaked to real repo
+        real_tests = Path.home() / "projects" / "nixos-ai" / "modules" / "ai" / "jarvis" / "tests"
+        for name in ["_e2e_placeholder.py", "_e2e_broken.py", "_e2e_valid.py"]:
+            assert not (real_tests / name).exists(), f"Test artifact {name} leaked to real repo!"
 
 
 class TestScenarioB:
@@ -839,10 +836,10 @@ class TestScenarioD:
     """Scenario D: SafeEditor prevents corruption."""
 
     def test_corruption_prevention(self, isolated_repo):
-        result = scenario_d_safe_editor()
+        result = scenario_d_safe_editor(repo_root=isolated_repo)
         assert result.task_success, f"Scenario D failed: {result.errors}"
         # Verify file is still valid Python
-        path = REPO_ROOT / "modules/ai/jarvis/tests/_e2e_valid.py"
+        path = isolated_repo / "tests" / "_e2e_valid.py"
         if path.exists():
             content = path.read_text()
             ast.parse(content)  # Should not raise
