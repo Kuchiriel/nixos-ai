@@ -81,6 +81,15 @@ def discover_docs() -> list[Task]:
     return tasks
 
 
+# Files that contain security pattern definitions (false positive whitelist)
+_SECURITY_WHITELIST = {
+    "nightwatch/categories/__init__.py",  # scanner pattern definitions
+    "nightwatch/evaluator.py",  # dangerous patterns list
+    "jarvis/core/security.py",  # security functions
+    "jarvis/core/eval_harness.py",  # mentions shlex.split() in comments
+}
+
+
 def discover_security() -> list[Task]:
     """Scan for security issues."""
     tasks = []
@@ -97,15 +106,19 @@ def discover_security() -> list[Task]:
                 capture_output=True, text=True, timeout=10,
                 cwd=str(REPO_ROOT),
             )
-            for line in result.stdout.splitlines()[:3]:
+            for line in result.stdout.splitlines()[:5]:
                 parts = line.split(":", 1)
                 if len(parts) >= 2 and "# noqa" not in line:
+                    file_path = parts[0]
+                    # Skip whitelist files (scanner own definitions)
+                    if any(wl in file_path for wl in _SECURITY_WHITELIST):
+                        continue
                     tasks.append(Task(
                         id=f"sec-{hash(line) % 100000}",
                         category="security",
                         severity=severity,
                         description=f"{desc}: {line[:100]}",
-                        target_path=parts[0],
+                        target_path=file_path,
                         auto_fixable=False,
                     ))
         except Exception:

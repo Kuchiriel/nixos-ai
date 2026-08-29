@@ -97,13 +97,34 @@ def _extract_epub(path: Path) -> str:
         return "\n\n".join(parts)
 
 
+def _extract_pdf(path: Path) -> str:
+    """Extrai texto de um .pdf usando PyMuPDF (fitz)."""
+    try:
+        import fitz  # PyMuPDF — type: ignore[import-not-found]
+
+        doc = fitz.open(str(path))
+        parts: list[str] = []
+        for page in doc:
+            text = page.get_text()
+            if text.strip():
+                parts.append(text.strip())
+        doc.close()
+        return "\n\n".join(parts)
+    except ImportError:
+        return ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def extract_text(path: Path) -> str:
-    """Extrai texto de um livro (.epub ou .txt)."""
+    """Extrai texto de um livro (.epub, .txt, .pdf)."""
     suffix = path.suffix.lower()
     if suffix == ".epub":
         return _extract_epub(path)
     elif suffix == ".txt":
         return _extract_txt(path)
+    elif suffix == ".pdf":
+        return _extract_pdf(path)
     return ""
 
 
@@ -233,7 +254,7 @@ def scan_books(books_dir: str | Path | None = None) -> list[dict[str, Any]]:
         return []
     books: list[dict[str, Any]] = []
     for f in sorted(directory.iterdir()):
-        if f.is_file() and f.suffix.lower() in (".epub", ".txt"):
+        if f.is_file() and f.suffix.lower() in (".epub", ".txt", ".pdf"):
             books.append({
                 "name": f.stem,
                 "path": str(f),

@@ -80,13 +80,15 @@ def test_scan_books_with_files(tmp_path):
 
     (tmp_path / "book1.txt").write_text("content")
     (tmp_path / "book2.epub").write_text("epub content")
-    (tmp_path / "ignored.pdf").write_text("pdf")
+    (tmp_path / "book3.pdf").write_text("pdf content")
+    (tmp_path / "ignored.xyz").write_text("unsupported")
     books = scan_books(tmp_path)
     names = [b["name"] for b in books]
     # scan_books strips extension from name
     assert "book1" in names
     assert "book2" in names
-    # .pdf not supported
+    assert "book3" in names  # .pdf now supported
+    # .xyz not supported
     assert all("ignored" not in n for n in names)
 
 
