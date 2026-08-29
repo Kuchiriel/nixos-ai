@@ -20,7 +20,6 @@ from typing import Any
 import pytest
 
 # Skip all tests in Nix build sandbox (no network, no filesystem access)
-_in_sandbox = not Path("/proc/1/cgroup").read_text().contains("/nix/store") if Path("/proc/1/cgroup").exists() else False
 pytestmark = pytest.mark.skipif(
     os.environ.get("NIX_BUILD_TOP") is not None or os.path.exists("/homeless-shelter"),
     reason="E2E tests require live services (skipped in Nix build sandbox)"
