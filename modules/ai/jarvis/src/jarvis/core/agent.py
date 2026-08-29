@@ -591,6 +591,16 @@ class Agent:
                             result.commands_run.append(cmd)
                             tool_result = proc.stdout + proc.stderr
                             self._log_audit(cmd, proc.returncode, tool_result, True)
+                            # Auto-learn: record lesson on command failure
+                            if proc.returncode != 0 and self.memory:
+                                try:
+                                    self.memory.remember_lesson(
+                                        task=f"shell: {cmd[:80]}",
+                                        error_pattern=tool_result[:200],
+                                        fix=f"Command '{cmd[:60]}' failed with exit code {proc.returncode}",
+                                    )
+                                except Exception:
+                                    pass
                     else:
                         # Needs approval
                         if self.approve:

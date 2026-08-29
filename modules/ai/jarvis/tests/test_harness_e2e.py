@@ -417,7 +417,7 @@ def scenario_a_simple_change(repo_root: Path | None = None) -> ScenarioResult:
     result.evidence.append(f"Git status: {len(tc.output)} lines changed")
 
     # Step 5: Commit
-    tc = tool_git_commit("e2e(test, repo_root=repo_root): scenario A — placeholder for E2E testing")
+    tc = tool_git_commit("e2e(test): scenario A — placeholder for E2E testing", repo_root=repo_root)
     result.tool_calls.append(tc)
     if not tc.success:
         result.errors.append(f"Commit failed: {tc.error}")
