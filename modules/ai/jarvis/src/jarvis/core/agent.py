@@ -29,6 +29,76 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Any
 
+# Re-export from security.py for backward compatibility
+from jarvis.core.security import command_allowed, has_chaining_operators, run_shell  # noqa: F401
+
+
+def detect_profile(model_id: str) -> dict[str, Any]:
+    """Detect model profile from model name. Used by tests and REPL."""
+    m = model_id.lower()
+    
+    # Extract total parameters from name
+    total_b_match = re.search(r"(?<![a-z])(\d+(?:\.\d+)?)b(?!\w)", m)
+    total_b = float(total_b_match.group(1)) if total_b_match else None
+    
+    if total_b is not None and total_b >= 30:
+        return {"name": "large", "max_tokens": 768, "temperature": 0.0}
+    elif total_b is not None and total_b >= 7:
+        return {"name": "small", "max_tokens": 1024, "temperature": 0.0}
+    elif total_b is not None and total_b < 7:
+        return {"name": "tiny", "max_tokens": 512, "temperature": 0.0}
+    else:
+        return {"name": "default", "max_tokens": 1024, "temperature": 0.0}
+
+
+def extract_fallback_tool_call(text: str | None) -> dict[str, Any] | None:
+    """Extract tool call from text when native tool calls fail.
+    
+    Supports:
+    - <tool_call>...</tool_call> format
+    - JSON in code blocks
+    - Bare JSON inline
+    """
+    if not text:
+        return None
+    
+    # Look for <tool_call> format
+    match = re.search(r'<tool_call>({.*?})</tool_call>', text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            pass
+    
+    # Look for JSON in code blocks
+    match = re.search(r'```(?:json)?\s*({\s*"name"\s*:\s*"[^"]+"[^}]*})\s*```', text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            pass
+    
+    # Look for bare JSON with name and arguments
+    match = re.search(r'\{\s*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:', text)
+    if match:
+        # Find the complete JSON object
+        start = text.rfind('{', 0, match.start() + 1)
+        if start >= 0:
+            # Count braces to find matching closing brace
+            depth = 0
+            for i in range(start, len(text)):
+                if text[i] == '{':
+                    depth += 1
+                elif text[i] == '}':
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            return json.loads(text[start:i+1])
+                        except json.JSONDecodeError:
+                            break
+    
+    return None
+
 import requests
 
 from jarvis.core.logging import get_logger
@@ -100,6 +170,20 @@ class ApprovalDeniedError(AgentError):
     pass
 
 
+@dataclass
+class AgentResult:
+    """Result of agent.run()."""
+    commands_run: list[str] = field(default_factory=list)
+    commands_denied: list[str] = field(default_factory=list)
+    final_response: str = ""
+    turns: int = 0
+
+
+def human_approve(cmd: str) -> bool:
+    """Ask user for approval. Stub — monkeypatchable in tests."""
+    return False
+
+
 class Agent:
     """
     Main agent class handling tool calling, execution, and safety checks.
@@ -109,14 +193,29 @@ class Agent:
         self,
         config: Config | None = None,
         approval_callback: Callable[[str], bool] | None = None,
+        session: Any | None = None,
+        memory: Any | None = None,
+        audit_path: Path | None = None,
+        mcp_servers: dict[str, str] | None = None,
+        approve: bool = False,
     ):
         self.config = config or get_config()
         self.approval_callback = approval_callback
+        self.session = session
+        self.memory = memory
+        self.approve = approve
+        self.audit_path = audit_path
+        self.mcp_servers = mcp_servers or {}
         self.logger = get_logger(__name__)
         
         # Initialize components
         self.loop_detector = LoopDetector()
-        self.circuit_breaker = CircuitBreaker()
+        try:
+            from jarvis.core.health_monitor import BackendHealthMonitor
+            monitor = BackendHealthMonitor()
+            self.circuit_breaker = CircuitBreaker(health_monitor=monitor)
+        except Exception:
+            self.circuit_breaker = None
         self.context_budget = ContextBudget()
         self.validator = ToolValidator()
         
@@ -124,16 +223,18 @@ class Agent:
         self.turn_count = 0
         self.state_dir = Path(self.config.state_dir) if self.config.state_dir else Path.cwd() / "state"
         self.state_dir.mkdir(parents=True, exist_ok=True)
-        self.audit_log_path = self.state_dir / "audit.jsonl"
+        self.audit_log_path = audit_path or (self.state_dir / "audit.jsonl")
 
-    def _log_audit(self, command: str, exit_code: int | None, result: str, allowed: bool) -> None:
+    def _log_audit(self, command: str, exit_code: int | None, result: str, allowed: bool, approved: bool = False) -> None:
         """Append an entry to the audit trail JSONL file."""
         entry = {
             "timestamp": time.time(),
+            "cmd": command,
             "command": command,
             "exit_code": exit_code,
             "result_truncated": result[:TOOL_OUTPUT_MAX_CHARS],
             "allowed": allowed,
+            "approved": approved,
         }
         try:
             with open(self.audit_log_path, "a", encoding="utf-8") as f:
@@ -305,12 +406,158 @@ class Agent:
         
         return messages
 
+    def run(self, prompt: str) -> AgentResult:
+        """Run agent with a single prompt. Returns AgentResult."""
+        result = AgentResult()
+        system_content = "You are JARVIS, an AI coding assistant."
+        
+        # Inject lessons from memory
+        if self.memory:
+            try:
+                lessons = self.memory.lessons("", top_k=3)
+                if lessons:
+                    system_content += f"\n\nAVOID (past errors):{lessons}"
+            except Exception:
+                pass
+        
+        messages = [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": prompt},
+        ]
+        
+        for turn in range(MAX_TURNS):
+            result.turns += 1
+            response = self._get_llm_response(messages)
+            messages.append(response)
+            
+            # Extract tool calls
+            tool_calls = response.get("tool_calls", [])
+            if not tool_calls:
+                # Check for fallback tool call in content
+                content = response.get("content", "")
+                fallback = extract_fallback_tool_call(content)
+                if fallback:
+                    tool_calls = [{"function": fallback}]
+                else:
+                    result.final_response = content
+                    break
+            
+            # Execute tools
+            for tc in tool_calls:
+                func = tc.get("function", tc)
+                name = func.get("name", "")
+                try:
+                    args = json.loads(func.get("arguments", "{}"))
+                except (json.JSONDecodeError, TypeError):
+                    args = func.get("arguments", {})
+                
+                if name == "execute_shell":
+                    cmd = args.get("cmd", "")
+                    # Check if command is allowed
+                    if command_allowed(cmd):
+                        # Check chaining
+                        if has_chaining_operators(cmd):
+                            result.commands_denied.append(cmd)
+                            tool_result = f"ERROR: Chaining operators not allowed: {cmd}"
+                        else:
+                            # Execute
+                            proc = run_shell(cmd)
+                            result.commands_run.append(cmd)
+                            tool_result = proc.stdout + proc.stderr
+                            self._log_audit(cmd, proc.returncode, tool_result, True)
+                    else:
+                        # Needs approval
+                        if self.approve:
+                            if human_approve(cmd):
+                                proc = run_shell(cmd)
+                                result.commands_run.append(cmd)
+                                tool_result = proc.stdout + proc.stderr
+                                self._log_audit(cmd, proc.returncode, tool_result, True)
+                            else:
+                                result.commands_denied.append(cmd)
+                                tool_result = f"ERROR: Command denied by user: {cmd}"
+                                self._log_audit(cmd, None, tool_result, False)
+                        else:
+                            result.commands_denied.append(cmd)
+                            tool_result = f"ERROR: Command not allowed: {cmd}"
+                            self._log_audit(cmd, None, tool_result, False)
+                else:
+                    tool_result = f"ERROR: Unknown tool: {name}"
+                
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.get("id", f"call-{turn}"),
+                    "content": tool_result[:TOOL_OUTPUT_MAX_CHARS],
+                })
+        
+        # Get final response if not set
+        if not result.final_response:
+            for msg in reversed(messages):
+                if msg.get("role") == "assistant" and msg.get("content"):
+                    result.final_response = msg["content"]
+                    break
+        
+        return result
+
     def _get_llm_response(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
-        """Get response from LLM (implementation depends on provider)."""
-        # Placeholder for actual LLM call
-        raise NotImplementedError("LLM provider not implemented")
+        """Get response from LLM via session or config."""
+        # Inject lessons into system prompt if memory is available
+        if self.memory and messages and messages[0].get("role") == "system":
+            try:
+                lessons = self.memory.lessons("", top_k=3)
+                if lessons:
+                    messages[0]["content"] += f"\n\nAVOID (past errors):{lessons}"
+            except Exception:
+                pass
+        
+        # Use session if available (for testing)
+        if self.session:
+            url = f"{self.config.llm_base_url.rstrip('/')}/v1/chat/completions"
+            payload = {
+                "model": self.config.llm_model,
+                "messages": messages,
+                "max_tokens": 1024,
+                "temperature": 0.0,
+            }
+            # Add tools if MCP servers are configured
+            if self.mcp_servers:
+                tools = [{
+                    "type": "function",
+                    "function": {
+                        "name": "execute_shell",
+                        "description": "Execute a shell command.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "cmd": {"type": "string", "description": "Command to execute"}
+                            },
+                            "required": ["cmd"]
+                        }
+                    }
+                }]
+                # Add MCP tools
+                for server_name, server_cmd in self.mcp_servers.items():
+                    tools.append({
+                        "type": "function",
+                        "function": {
+                            "name": f"{server_name}_query",
+                            "description": f"Query {server_name} MCP server",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {
+                                    "q": {"type": "string", "description": "Query"}
+                                },
+                                "required": ["q"]
+                            }
+                        }
+                    })
+                payload["tools"] = tools
+            resp = self.session.post(url, json=payload, timeout=120)
+            return resp.json()["choices"][0]["message"]
+        
+        # Fallback: raise not implemented
+        raise NotImplementedError("LLM provider not configured")
 
     def _extract_tool_calls(self, response: dict[str, Any]) -> list[dict[str, Any]]:
         """Extract tool calls from LLM response."""
-        # Placeholder for actual parsing logic
-        raise NotImplementedError("Tool call extraction not implemented")
+        return response.get("tool_calls", [])
