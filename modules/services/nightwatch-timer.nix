@@ -25,15 +25,16 @@ in {
         "PYTHONPATH=${jarvisPackage}/lib/python3.13/site-packages"
         "JARVIS_PROJECT_ROOT=${projectRoot}"
       ];
-      ExecStart = "${jarvisPackage}/bin/jarvis nightwatch --tasks 20 --report-telegram --max-minutes 180";
+      ExecStart = "${jarvisPackage}/bin/jarvis nightwatch --tasks 10 --report-telegram";
       WorkingDirectory = projectRoot;
       User = "nixos";
 
-      # Safety: restart on failure, but not too often
-      Restart = "on-failure";
-      RestartSec = 300;
-      StartLimitIntervalSec = 3600;
-      StartLimitBurst = 3;
+      # Capture all output to journal for audit trail
+      StandardOutput = "journal";
+      StandardError = "journal";
+
+      # Safety: do NOT restart on failure (prevents crash loops)
+      Restart = "no";
     };
   };
 
