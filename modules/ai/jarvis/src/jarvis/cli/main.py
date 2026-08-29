@@ -895,6 +895,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_launcher.add_argument("--services", action="store_true", help="gerenciar serviços")
     p_launcher.set_defaults(func=_cmd_launcher)
 
+    # nightwatch — loop autônomo de melhoria com reflection grounded
+    p_nw = sub.add_parser("nightwatch", help="loop autônomo seguro com reflection (generate→critique→revise)")
+    p_nw.add_argument("--tasks", type=int, default=10, help="máximo de tarefas por sessão (padrão: 10)")
+    p_nw.add_argument("--cycles", type=int, default=3, help="máximo de ciclos (padrão: 3)")
+    p_nw.add_argument("--report-telegram", action="store_true", help="envia status pro Telegram")
+    p_nw.add_argument("--dry-run", action="store_true", help="mostra o que faria sem executar")
+    p_nw.add_argument("--only", nargs="+", help="executar apenas estas categorias")
+    p_nw.set_defaults(func=_cmd_nightwatch)
+
     return parser
 
 
@@ -922,6 +931,17 @@ def _cmd_dev(args: argparse.Namespace) -> int:
     else:
         dev_repl(project_root=args.project, approve=args.approve)
         return 0
+
+
+def _cmd_nightwatch(args: argparse.Namespace) -> int:
+    from jarvis.cli.nightwatch import run_nightwatch
+    return run_nightwatch(
+        max_tasks=args.tasks,
+        max_cycles=args.cycles,
+        report_telegram=args.report_telegram,
+        dry_run=args.dry_run,
+        tasks=args.only,
+    )
 
 
 def _cmd_launcher(args: argparse.Namespace) -> int:
