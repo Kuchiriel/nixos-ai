@@ -2,6 +2,7 @@
 
 Tests each tool via the MCP server's JSON-RPC interface.
 Requires: Qdrant running, embeddings server running, llama-server running.
+These tests require live services — they are SKIPPED during nix build.
 
 Run: nix develop --command python3 -m pytest modules/ai/jarvis/tests/test_mcp_tools_e2e.py -x -v
 """
@@ -17,6 +18,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
+# Skip all tests in Nix build sandbox (no network, no filesystem access)
+_in_sandbox = not Path("/proc/1/cgroup").read_text().contains("/nix/store") if Path("/proc/1/cgroup").exists() else False
+pytestmark = pytest.mark.skipif(
+    os.environ.get("NIX_BUILD_TOP") is not None or os.path.exists("/homeless-shelter"),
+    reason="E2E tests require live services (skipped in Nix build sandbox)"
+)
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
