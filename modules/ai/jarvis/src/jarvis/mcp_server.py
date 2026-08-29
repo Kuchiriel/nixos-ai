@@ -40,6 +40,7 @@ from jarvis.core.devtools import handle_dev_tool, DEV_TOOLS
 from jarvis.core.vision import VISION_TOOL, handle_capture, observe_screen
 from jarvis.core.chatgpt_reader import CHATGPT_READER_TOOL, handle_chatgpt_read
 from jarvis.core.multi_ai_reader import MULTI_AI_READER_TOOL, read_ai_conversation
+from jarvis.core.hackmd import HACKMD_TOOLS, list_notes as hackmd_list, get_note as hackmd_get, create_note as hackmd_create, update_note as hackmd_update, sync_local_to_hackmd
 
 
 import subprocess
@@ -285,6 +286,7 @@ JARVIS_TOOLS = [
         }
     },
     MULTI_AI_READER_TOOL,
+    *HACKMD_TOOLS,
 ]
 
 
@@ -375,6 +377,26 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
 
         if name == "jarvis_read_ai_conversation":
             return read_ai_conversation(args.get("url", ""), args.get("max_chars", 50000))
+
+        if name == "jarvis_hackmd_list":
+            notes = hackmd_list(args.get("limit", 20))
+            return json.dumps([{"id": n.get("noteId"), "title": n.get("title"), "updatedAt": n.get("updatedAt")} for n in notes], indent=2)
+
+        if name == "jarvis_hackmd_read":
+            note = hackmd_get(args.get("note_id", ""))
+            return json.dumps({"title": note.get("title"), "content": note.get("content", "")[:5000]}, indent=2)
+
+        if name == "jarvis_hackmd_write":
+            note_id = args.get("note_id")
+            if note_id:
+                result = hackmd_update(note_id, title=args.get("title"), content=args.get("content", ""))
+            else:
+                result = hackmd_create(args.get("title", "Untitled"), args.get("content", ""))
+            return json.dumps({"noteId": result.get("noteId"), "title": result.get("title")}, indent=2)
+
+        if name == "jarvis_hackmd_sync":
+            result = sync_local_to_hackmd(args.get("path", ""), args.get("title"))
+            return json.dumps(result, indent=2)
 
         if name == "jarvis_nix_eval":
             expr = args.get("expr", "")

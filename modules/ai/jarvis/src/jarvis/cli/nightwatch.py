@@ -102,6 +102,43 @@ SAFE_TASK_CATEGORIES = {
         ],
         "reversible": False,
         "has_tests": False,
+    },    "dead-code": {
+        "description": "Find dead code and unused imports",
+        "commands": [
+            "grep -rn 'import.*# noqa' modules/ai/jarvis/src/ --include='*.py' | head -10",
+            "grep -rn '^def ' modules/ai/jarvis/src/jarvis/core/ --include='*.py' | wc -l",
+        ],
+        "reversible": False,
+        "has_tests": False,
+    },
+    "git-hygiene": {
+        "description": "Check git status and stale work",
+        "commands": [
+            "git status --short",
+            "git log --oneline -10",
+            "git stash list",
+            "git branch -a | head -10",
+        ],
+        "reversible": False,
+        "has_tests": False,
+    },
+    "nix-check": {
+        "description": "NixOS configuration validation",
+        "commands": [
+            "statix check . 2>/dev/null || echo statix-not-available",
+            "deadnix . 2>/dev/null || echo deadnix-not-available",
+        ],
+        "reversible": False,
+        "has_tests": False,
+    },
+    "performance": {
+        "description": "Check for performance opportunities",
+        "commands": [
+            "grep -rn 'time\.time\|time\.monotonic' modules/ai/jarvis/src/ --include='*.py' | wc -l",
+            "grep -rn 'subprocess\.run\|subprocess\.Popen' modules/ai/jarvis/src/ --include='*.py' | wc -l",
+        ],
+        "reversible": False,
+        "has_tests": False,
     },
 }
 
