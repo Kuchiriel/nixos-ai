@@ -208,6 +208,7 @@
         packages = with pkgs; [
           python313Packages.pytest
           python313Packages.hypothesis
+          python313Packages.pymupdf  # PDF extraction for audiobook reader
           # Higiene Nix
           statix
           deadnix
