@@ -116,7 +116,7 @@ in {
       model = "llm-host";
       mmproj = "llm-host-mmproj";
       threads = 12;
-      ctxSize = 16384; # Teste: 16K com ncmoe=36, 2 slots — se OOM, voltar pra 8192
+      ctxSize = 32768; # 32K com ncmoe=36, 2 slots — system prompt Roo Dev ~20K tokens
       batchSize = 1024;
       ubatch = 1024;
       gpuLayers = 45; # 45 layers no GPU; --n-cpu-moe 36 move experts pra CPU
