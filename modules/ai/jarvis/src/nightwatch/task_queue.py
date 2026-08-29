@@ -40,7 +40,12 @@ class TaskStatus(str, Enum):
 
 @dataclass
 class Task:
-    """A single task in the queue."""
+    """A single task in the queue.
+    
+    Supports multi-project via `repository` field.
+    Supports recovery via `recovery_state` field.
+    Supports dependency ordering via `dependencies` field.
+    """
     id: str
     project: str
     description: str
@@ -60,6 +65,14 @@ class Task:
     commit_sha: str | None = None
     evidence: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    # Multi-project support
+    repository: str = ""  # absolute path to repo root
+    language: str = ""  # python, nix, shell, etc.
+    # Recovery state
+    recovery_state: dict[str, Any] = field(default_factory=dict)
+    # Context tracking
+    context_tokens_used: int = 0
+    last_context_compaction: float | None = None
     
     def to_dict(self) -> dict:
         return asdict(self)
@@ -241,16 +254,51 @@ class TaskQueue:
             return [t for t in self._tasks if t.status == status]
         return list(self._tasks)
     
-    def get_stats(self) -> dict[str, Any]:
-        """Get queue statistics."""
+    def get_stats(self, project: str | None = None) -> dict[str, Any]:
+        """Get queue statistics, optionally filtered by project."""
+        tasks = self._tasks
+        if project:
+            tasks = [t for t in tasks if t.project == project]
         return {
-            "total": len(self._tasks),
-            "completed": len([t for t in self._tasks if t.status == TaskStatus.COMPLETED.value]),
-            "failed": len([t for t in self._tasks if t.status == TaskStatus.FAILED.value]),
-            "blocked": len([t for t in self._tasks if t.status == TaskStatus.BLOCKED.value]),
-            "in_progress": len([t for t in self._tasks if t.status == TaskStatus.IN_PROGRESS.value]),
-            "ready": len([t for t in self._tasks if t.status in (TaskStatus.READY.value, TaskStatus.DISCOVERED.value)]),
+            "total": len(tasks),
+            "completed": len([t for t in tasks if t.status == TaskStatus.COMPLETED.value]),
+            "failed": len([t for t in tasks if t.status == TaskStatus.FAILED.value]),
+            "blocked": len([t for t in tasks if t.status == TaskStatus.BLOCKED.value]),
+            "in_progress": len([t for t in tasks if t.status == TaskStatus.IN_PROGRESS.value]),
+            "ready": len([t for t in tasks if t.status in (TaskStatus.READY.value, TaskStatus.DISCOVERED.value)]),
         }
+    
+    def get_projects(self) -> list[str]:
+        """Get all unique projects in the queue."""
+        return list({t.project for t in self._tasks})
+    
+    def get_tasks_by_project(self, project: str) -> list[Task]:
+        """Get all tasks for a specific project."""
+        return [t for t in self._tasks if t.project == project]
+    
+    def get_in_progress_tasks(self) -> list[Task]:
+        """Get all tasks currently in progress (for recovery)."""
+        return [t for t in self._tasks if t.status == TaskStatus.IN_PROGRESS.value]
+    
+    def recover_stuck_tasks(self, max_age_seconds: float = 3600) -> int:
+        """Recover tasks stuck IN_PROGRESS for too long (e.g. after crash).
+        
+        Returns number of tasks recovered.
+        """
+        now = time.time()
+        recovered = 0
+        for task in self._tasks:
+            if task.status == TaskStatus.IN_PROGRESS.value:
+                age = now - task.updated_at
+                if age > max_age_seconds:
+                    # Reset to READY so it can be retried
+                    task.status = TaskStatus.READY.value
+                    task.last_error = f"Recovered from stuck state after {age:.0f}s"
+                    task.updated_at = now
+                    recovered += 1
+        if recovered > 0:
+            self._save()
+        return recovered
     
     def prune_completed(self, keep_last: int = 50) -> int:
         """Remove old completed tasks, keeping recent ones."""

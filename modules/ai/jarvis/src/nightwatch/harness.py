@@ -50,6 +50,11 @@ from nightwatch.validator import validate_change, ValidationReport
 from nightwatch.evaluator import review_change, auto_review, ReviewResult
 from nightwatch.checkpoint import Checkpoint, create_checkpoint_for_task, get_recovery_context
 from nightwatch import safety
+from nightwatch.project_isolation import (
+    ProjectConfig, ProjectRegistry, discover_projects,
+    get_project_root, validate_project_path, run_in_project,
+)
+from nightwatch.context_budget import ContextBudget
 
 
 REPO_ROOT = Path.home() / "projects" / "nixos-ai"
@@ -76,6 +81,12 @@ class HarnessConfig:
     use_llm_discovery: bool = True
     use_scripted_discovery: bool = True
     dry_run: bool = False
+    # Multi-project
+    projects: list[str] = field(default_factory=list)  # empty = auto-discover
+    project_switch_interval: int = 5  # switch project every N tasks
+    # Context budget
+    context_budget: int = 8192
+    compaction_threshold: float = 0.8
 
 
 @dataclass
@@ -464,6 +475,15 @@ class Harness:
         self.editor = SafeEditor()
         self.checkpoint = Checkpoint.load()
         self.mission = self.queue.mission
+        self.project_registry = ProjectRegistry()
+        self.context_budget = ContextBudget(budget=self.config.context_budget)
+        # Auto-discover projects if none specified
+        if not self.config.projects:
+            self._discover_projects()
+        # Recover stuck tasks from previous run
+        recovered = self.queue.recover_stuck_tasks()
+        if recovered > 0:
+            self.notify(f"♻️ Recovered {recovered} stuck tasks")
 
     # ── Notifications ──────────────────────────────────────────────────────
 
@@ -474,16 +494,37 @@ class Harness:
 
     # ── Task Discovery ─────────────────────────────────────────────────────
 
-    def discover_tasks(self) -> list[Task]:
-        """Discover tasks from all enabled sources."""
+    def _discover_projects(self) -> None:
+        """Auto-discover projects in the workspace."""
+        try:
+            projects = discover_projects()
+            for proj in projects:
+                self.project_registry.register(proj)
+                if proj.name not in self.config.projects:
+                    self.config.projects.append(proj.name)
+        except Exception:
+            # Fallback: just use the configured project
+            if self.config.project not in self.config.projects:
+                self.config.projects.append(self.config.project)
+    
+    def discover_tasks(self, project: str | None = None) -> list[Task]:
+        """Discover tasks from all enabled sources.
+        
+        If project is specified, only discover tasks for that project.
+        Otherwise, discover across all configured projects.
+        """
         tasks = []
-
-        if self.config.use_scripted_discovery:
-            tasks.extend(_discover_scripted_tasks())
-
-        if self.config.use_llm_discovery:
-            tasks.extend(_discover_llm_tasks(self.call_llm, self.config.project))
-
+        projects = [project] if project else self.config.projects
+        
+        for proj_name in projects:
+            # Scripted discovery (per-project if project has a root)
+            if self.config.use_scripted_discovery:
+                tasks.extend(_discover_scripted_tasks())
+            
+            # LLM discovery (per-project)
+            if self.config.use_llm_discovery:
+                tasks.extend(_discover_llm_tasks(self.call_llm, proj_name))
+        
         # Deduplicate by description
         seen = set()
         unique = []
@@ -492,7 +533,7 @@ class Harness:
             if key not in seen:
                 seen.add(key)
                 unique.append(t)
-
+        
         return unique
 
     # ── Task Execution ─────────────────────────────────────────────────────
@@ -666,9 +707,11 @@ class Harness:
 
         Flow:
             1. Check for recovery context
-            2. Discover tasks (scripted + LLM)
-            3. Execute tasks through pipeline
-            4. Report results
+            2. Recover stuck tasks
+            3. Discover tasks (scripted + LLM) across projects
+            4. Execute tasks through pipeline
+            5. Switch projects periodically
+            6. Report results
         """
         start = time.time()
         result = HarnessResult()
@@ -676,23 +719,27 @@ class Harness:
         self.mission.active = True
         self.mission.started_at = time.time()
 
-        self.notify(f"🌙 *Nightwatch Started*\nProject: {self.config.project}")
+        projects_str = ", ".join(self.config.projects[:3])
+        self.notify(f"🌙 *Nightwatch Started*\nProjects: {projects_str}")
 
         # ── Recovery ──
         recovery = get_recovery_context()
         if recovery and recovery.get("task_id"):
             self.notify(f"♻️ *Recovering*: {recovery.get('task_description', '')[:50]}")
 
-        # ── Discover ──
+        # ── Discover across all projects ──
         self.notify("🔍 Discovering tasks...")
         new_tasks = self.discover_tasks()
         for task in new_tasks:
             self.queue.add_task(task)
 
-        self.notify(f"📋 Found {len(new_tasks)} tasks")
+        self.notify(f"📋 Found {len(new_tasks)} tasks across {len(self.config.projects)} projects")
 
         # ── Execute ──
         executed = 0
+        tasks_since_switch = 0
+        current_project_idx = 0
+
         while executed < self.config.max_tasks:
             if (time.time() - start) > self.config.max_minutes * 60:
                 self.notify(f"⏰ Time limit ({self.config.max_minutes} min)")
@@ -700,8 +747,16 @@ class Harness:
 
             task = self.queue.get_next_task()
             if not task:
-                self.notify("✅ No more tasks")
-                break
+                # Try discovering more tasks
+                if self.config.projects:
+                    proj = self.config.projects[current_project_idx % len(self.config.projects)]
+                    more = self.discover_tasks(project=proj)
+                    for t in more:
+                        self.queue.add_task(t)
+                    task = self.queue.get_next_task()
+                if not task:
+                    self.notify("✅ No more tasks")
+                    break
 
             success = self.execute_task(task)
 
@@ -710,14 +765,35 @@ class Harness:
                 result.files_changed.extend(task.target_files)
                 if task.commit_sha:
                     result.commits.append(task.commit_sha)
+                # Update project state
+                self.project_registry.update_state(
+                    task.project,
+                    tasks_completed=self.project_registry.get_state(task.project).tasks_completed + 1
+                    if self.project_registry.get_state(task.project) else 1,
+                )
             elif task.status == TaskStatus.BLOCKED.value:
                 result.tasks_blocked += 1
             elif task.status == TaskStatus.ABANDONED.value:
                 result.tasks_skipped += 1
             else:
                 result.tasks_failed += 1
+                self.project_registry.update_state(
+                    task.project,
+                    tasks_failed=(self.project_registry.get_state(task.project).tasks_failed + 1
+                                  if self.project_registry.get_state(task.project) else 1),
+                    last_error=task.last_error or "",
+                )
 
             executed += 1
+            tasks_since_switch += 1
+
+            # Switch projects periodically
+            if (tasks_since_switch >= self.config.project_switch_interval
+                    and len(self.config.projects) > 1):
+                current_project_idx = (current_project_idx + 1) % len(self.config.projects)
+                tasks_since_switch = 0
+                new_proj = self.config.projects[current_project_idx]
+                self.notify(f"🔄 Switching to project: {new_proj}")
 
         # ── Summary ──
         elapsed = time.time() - start
@@ -726,7 +802,15 @@ class Harness:
         self.mission.active = False
         self.mission.last_checkpoint = time.time()
 
-        stats = self.queue.get_stats()
+        # Per-project stats
+        project_stats = []
+        for proj_name in self.config.projects:
+            stats = self.queue.get_stats(project=proj_name)
+            project_stats.append(f"  {proj_name}: {stats['completed']} done, {stats['ready']} ready")
+
+        overall_stats = self.queue.get_stats()
+        context_stats = self.context_budget.get_stats()
+
         summary = f"""🌙 *Nightwatch Complete*
 
 📊 Results:
@@ -739,7 +823,13 @@ class Harness:
 - Duration: {int(elapsed // 60)}m {int(elapsed % 60)}s
 - Success rate: {result.success_rate:.0%}
 
-📈 Queue: {stats.get('completed', 0)} done, {stats.get('ready', 0)} ready, {stats.get('blocked', 0)} blocked"""
+📈 Projects:
+{chr(10).join(project_stats)}
+
+🧠 Context:
+- LLM calls: {context_stats.get('total_llm_calls', 0)}
+- Compactions: {context_stats.get('total_compactions', 0)}
+- Tokens processed: {context_stats.get('total_tokens_processed', 0)}"""
 
         self.notify(summary)
 
@@ -750,6 +840,8 @@ class Harness:
             "blocked": result.tasks_blocked,
             "commits": len(result.commits),
             "duration_s": elapsed,
+            "projects": self.config.projects,
+            "context_stats": context_stats,
         })
 
         return result
@@ -766,6 +858,8 @@ def run_nightwatch(
     dry_run: bool = False,
     use_llm: bool = True,
     use_scripted: bool = True,
+    projects: list[str] | None = None,
+    context_budget: int = 8192,
 ) -> HarnessResult:
     """Convenience function to run nightwatch.
 
@@ -780,6 +874,8 @@ def run_nightwatch(
         dry_run=dry_run,
         use_llm_discovery=use_llm,
         use_scripted_discovery=use_scripted,
+        projects=projects or [],
+        context_budget=context_budget,
     )
     harness = Harness(config=config)
     return harness.run()

@@ -31,7 +31,11 @@ CHECKPOINT_FILE = STATE_DIR / "checkpoint.json"
 
 @dataclass
 class Checkpoint:
-    """Recovery checkpoint."""
+    """Recovery checkpoint.
+    
+    Survives process crashes and context condensing.
+    Tracks per-project state for multi-project execution.
+    """
     task_id: str | None = None
     task_description: str = ""
     project: str = "nixos-ai"
@@ -49,6 +53,20 @@ class Checkpoint:
     max_retries: int = 3
     context_tokens_used: int = 0
     history: list[dict] = field(default_factory=list)
+    # Multi-project state
+    repository: str = ""  # absolute path to repo root
+    # Context instrumentation
+    context_compactions: int = 0
+    context_tokens_before_compaction: int = 0
+    context_tokens_after_compaction: int = 0
+    context_compaction_events: list[dict] = field(default_factory=list)
+    # Recovery state
+    recovery_state: dict[str, Any] = field(default_factory=dict)
+    # Session tracking
+    session_id: str = ""
+    session_started_at: float = 0.0
+    total_llm_calls: int = 0
+    total_tool_calls: int = 0
     
     def to_dict(self) -> dict:
         return asdict(self)
@@ -144,6 +162,57 @@ class Checkpoint:
         self.retry_count = 0
         self.history = []
         self.save()
+    
+    def record_compaction(self, tokens_before: int, tokens_after: int, reason: str = "") -> None:
+        """Record a context compaction event."""
+        self.context_compactions += 1
+        self.context_tokens_before_compaction = tokens_before
+        self.context_tokens_after_compaction = tokens_after
+        event = {
+            "timestamp": time.time(),
+            "tokens_before": tokens_before,
+            "tokens_after": tokens_after,
+            "tokens_saved": tokens_before - tokens_after,
+            "reason": reason,
+        }
+        self.context_compaction_events.append(event)
+        self.save()
+    
+    def record_llm_call(self, tokens_used: int = 0) -> None:
+        """Record an LLM call for context tracking."""
+        self.total_llm_calls += 1
+        self.context_tokens_used += tokens_used
+        self.save()
+    
+    def record_tool_call(self) -> None:
+        """Record a tool call."""
+        self.total_tool_calls += 1
+        self.save()
+    
+    def set_recovery_state(self, key: str, value: Any) -> None:
+        """Set a recovery state value."""
+        self.recovery_state[key] = value
+        self.save()
+    
+    def get_recovery_state(self, key: str, default: Any = None) -> Any:
+        """Get a recovery state value."""
+        return self.recovery_state.get(key, default)
+    
+    def get_context_stats(self) -> dict[str, Any]:
+        """Get context instrumentation stats."""
+        return {
+            "total_tokens_used": self.context_tokens_used,
+            "total_compactions": self.context_compactions,
+            "last_compaction_before": self.context_tokens_before_compaction,
+            "last_compaction_after": self.context_tokens_after_compaction,
+            "compaction_events": len(self.context_compaction_events),
+            "total_llm_calls": self.total_llm_calls,
+            "total_tool_calls": self.total_tool_calls,
+            "tokens_per_llm_call": (
+                self.context_tokens_used // self.total_llm_calls
+                if self.total_llm_calls > 0 else 0
+            ),
+        }
 
 
 def create_checkpoint_for_task(task_id: str, description: str, project: str = "nixos-ai") -> Checkpoint:
