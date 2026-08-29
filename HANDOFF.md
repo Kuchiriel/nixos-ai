@@ -532,3 +532,89 @@ result = orch.run(["Fix bug in main.py"])
 2. Conectar com .jarvismodes (load personas from file)
 3. Adicionar modo paralelo (não apenas sequencial)
 4. Integrar com TaskQueue do nightwatch
+
+---
+
+## Audiobook Reader UI — 2026-08-29
+
+### O que foi implementado
+
+**Módulo:** `jarvis/core/audiobook_ui.py` (170 linhas)
+**Testes:** `test_audiobook_ui.py` (11 testes)
+
+### Componentes
+
+1. **rofi_menu()** — Menu interativo via rofi
+   - Scan livros, listar, tocar, status, parar
+   - Tema jarvis-cyan (consistente com o resto)
+
+2. **waybar_status()** — JSON para waybar custom module
+   - Estados: idle, playing, paused
+   - Ícones Nerd Font (󰏤)
+
+3. **dispatch_audiobook()** — CLI dispatcher
+   - `jarvis audiobook scan [dir]`
+   - `jarvis audiobook play <nome>`
+   - `jarvis audiobook status`
+   - `jarvis audiobook stop`
+   - `jarvis audiobook waybar`
+   - `jarvis audiobook menu`
+
+4. **Event Bus integration** — Eventos audiobook.*
+   - scanned, playing, stopped, status
+
+### Integração com waybar
+
+Adicionar ao waybar config:
+```json
+"custom/audiobook": {
+    "exec": "jarvis audiobook --waybar",
+    "interval": 5,
+    "format": "{}"
+}
+```
+
+### Nota: lotm.pdf
+
+Lord of the Mysteries está no HD externo montado.
+Path: `/run/media/nixos/YUMI/...` (precisa verificar path exato).
+O audiobook reader aceita .txt — pode ser necessário converter de .pdf.
+
+---
+
+## Trigger Word → STT → Jarvis → TTS — PIPELINE NÃO VALIDADA
+
+### Estado atual
+
+A pipeline de voz completa não está validada:
+
+```
+Wake Word → STT (Whisper) → Jarvis (LLM) → TTS (Kokoro) → Audio Output
+```
+
+### Componentes existentes
+
+1. **Wake Word** — openwakeword (configurado mas não validado)
+2. **STT** — faster-whisper (configurado mas não validado)
+3. **Jarvis** — LLM local via llama.cpp (funcional)
+4. **TTS** — Kokoro (configurado mas não validado)
+5. **Audio Output** — PipeWire/WirePlumber (configurado no NixOS)
+
+### Problemas conhecidos
+
+- **PipeWire/WirePlumber** — Configuração complexa, depende de hardware
+- **RNNoise** — Denoising de áudio, thresholds variam por microfone
+- **Wake Word Scores** — Thresholds precisam de calibração por ambiente
+- **Latência** — Cada etapa adiciona latência, pipeline total pode ser lenta
+- **Manjaro legado** — Config funcional existe mas não foi possível importar
+
+### O que foi tentado
+
+- Importar config do Manjaro legado → não funcionou (diferenças de path/pacote)
+- Configuração manual → funciona parcialmente mas não end-to-end
+
+### Recomendação
+
+Esta pipeline é a mais problemática e difícil de resolver.
+Priorizar depois que o resto do sistema estiver estável.
+Para testes unitários, mockar cada etapa separadamente.
