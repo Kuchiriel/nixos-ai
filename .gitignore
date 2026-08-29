@@ -62,3 +62,7 @@ dist/
 # Secrets (não versionar)
 /etc/jarvis-secrets/
 *.env
+
+# HackMD secrets
+.hackmd/
+/etc/jarvis-secrets/
