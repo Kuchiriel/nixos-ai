@@ -618,3 +618,57 @@ Wake Word → STT (Whisper) → Jarvis (LLM) → TTS (Kokoro) → Audio Output
 Esta pipeline é a mais problemática e difícil de resolver.
 Priorizar depois que o resto do sistema estiver estável.
 Para testes unitários, mockar cada etapa separadamente.
+
+---
+
+## Gaming Mode — 2026-08-29
+
+### Estado atual
+
+**Módulo:** `jarvis/core/gaming.py` (545 linhas)
+**Testes:** `test_gaming.py` (17 testes)
+
+### O que foi feito
+
+1. **Expansão de serviços parados:**
+   - System: llama-cpp-server, llama-cpp-embeddings, llama-cpp-rerank, qdrant, mpvpaper
+   - User: hypridle, swaync
+
+2. **Detecção Wurm Online:**
+   - `_check_wurm_online()`: detecta processos Java com "wurm" nos argumentos
+   - `_check_java_game()`: detecta processos Java com alto uso de CPU
+   - Adicionado ao `detect_game()` como sinais 5 e 6
+
+3. **Toggle manual:**
+   - `toggle_gaming()`: liga/desliga gaming mode manualmente
+   - `transition_to_gaming(manual=True)`: ativa sem detecção automática
+   - `transition_to_normal(manual=True)`: desativa sem verificar se jogo ainda roda
+
+4. **Persistência de estado:**
+   - Salva lista de serviços parados em `~/.local/state/jarvis/gaming-stopped-services.json`
+   - Restaura corretamente ao desativar
+
+### Limitações conhecidas
+
+- **System services (llama-cpp-server, qdrant)** precisam de sudo/polkit para parar/iniciar
+- **User services (hypridle, swaync)** funcionam corretamente via toggle
+- **Wurm Online** detectado via `pgrep -f -i wurm` — funciona se processo está rodando
+
+### Uso
+
+```python
+from jarvis.core.gaming import toggle_gaming, get_current_profile
+
+# Toggle manual
+result = toggle_gaming()
+print(result)  # {'profile': 'gaming', 'action': 'activated', ...}
+
+# Check current
+print(get_current_profile())  # 'gaming' or 'normal'
+```
+
+### Pendente
+
+- Criar polkit rule para permitir parar/iniciar system services sem sudo
+- Criar atalho rofi para toggle (hyprland binds)
+- Integrar com feedback.py para notificações
