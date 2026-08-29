@@ -889,6 +889,15 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
         except Exception as e:
             return f"ERROR: {e}", None
 
+    # ── Multi-AI Reader ──
+    if name == "read_ai_conversation":
+        try:
+            from jarvis.core.multi_ai_reader import read_ai_conversation
+            result = read_ai_conversation(args.get("url", ""), args.get("max_chars", 50000))
+            return result, None
+        except Exception as e:
+            return f"ERROR: {e}", None
+
     # ── execute_shell requer aprovação ──
     if name == "execute_shell" and not approve:
         from jarvis.core.agent import command_allowed
@@ -1201,6 +1210,22 @@ def _get_tools() -> list[dict[str, Any]]:
             "function": {
                 "name": "read_chatgpt",
                 "description": "Lê conversa compartilhada do ChatGPT.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string", "description": "URL de compartilhamento"},
+                        "max_chars": {"type": "integer", "description": "Máx de caracteres (padrão 50000)"},
+                    },
+                    "required": ["url"],
+                },
+            },
+        },
+        # ── Multi-AI Reader ──
+        {
+            "type": "function",
+            "function": {
+                "name": "read_ai_conversation",
+                "description": "Lê conversa de qualquer IA (ChatGPT, Gemini, Claude). Auto-detecta da URL.",
                 "parameters": {
                     "type": "object",
                     "properties": {

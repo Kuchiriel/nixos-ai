@@ -39,6 +39,7 @@ if _src_dir not in sys.path:
 from jarvis.core.devtools import handle_dev_tool, DEV_TOOLS
 from jarvis.core.vision import VISION_TOOL, handle_capture, observe_screen
 from jarvis.core.chatgpt_reader import CHATGPT_READER_TOOL, handle_chatgpt_read
+from jarvis.core.multi_ai_reader import MULTI_AI_READER_TOOL, read_ai_conversation
 
 
 import shlex
@@ -334,6 +335,7 @@ JARVIS_TOOLS = [
             }
         }
     },
+    MULTI_AI_READER_TOOL,
 ]
 
 
@@ -421,6 +423,9 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
 
         if name == "jarvis_read_chatgpt":
             return handle_chatgpt_read(args)
+
+        if name == "jarvis_read_ai_conversation":
+            return read_ai_conversation(args.get("url", ""), args.get("max_chars", 50000))
 
         if name == "jarvis_nix_eval":
             expr = args.get("expr", "")
