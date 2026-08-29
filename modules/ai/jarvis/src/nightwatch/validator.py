@@ -9,6 +9,7 @@ Runs proportional checks based on what changed:
 """
 
 from __future__ import annotations
+import shlex
 
 import subprocess
 import time
@@ -55,7 +56,7 @@ def run_command(cmd: str, timeout: int = 60) -> tuple[bool, str, int]:
     start = time.time()
     try:
         result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True,
+            shlex.split(cmd), capture_output=True, text=True,
             timeout=timeout, cwd=str(REPO_ROOT),
         )
         duration = int((time.time() - start) * 1000)

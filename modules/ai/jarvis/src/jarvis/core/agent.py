@@ -362,8 +362,7 @@ class Agent:
         """Execute a shell command and return (exit_code, output)."""
         try:
             result = subprocess.run(
-                command,
-                shell=True,
+                shlex.split(command),
                 capture_output=True,
                 text=True,
                 timeout=30,
