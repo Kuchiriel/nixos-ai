@@ -348,3 +348,70 @@ nvidia-smi
 # Code indexer (Roo Code)
 # Configurado em vscode-roo.nix: nomic-embed + qdrant local
 ```
+
+
+## Sessão 2026-08-29 (continuação)
+
+### P1.4 — Real E2E Test ✅
+
+**Arquivo:** `modules/ai/jarvis/tests/test_nightwatch_real_e2e.py`
+
+27 testes que exercitam o harness com filesystem real (não mocks):
+
+| Classe | Testes | O que valida |
+|--------|--------|-------------|
+| TestSafeEditorReal | 5 | Atomic write, truncation rejection, markdown rejection, invalid Python, valid change |
+| TestValidationReal | 3 | AST validation, invalid Python, truncated file detection |
+| TestCheckpointReal | 3 | Save/load, recovery summary, context structure |
+| TestTaskQueueReal | 3 | Task lifecycle, failure/block, stats |
+| TestContextBudgetReal | 2 | Server query, budget tracking |
+| TestFailureClassification | 5 | Transient, validation, context, unrecoverable, default |
+| TestFullPipeline | 3 | Edit→validate→commit, failure→recovery, multiple edits→rollback |
+| TestLoopDetector | 3 | Threshold, loop detection, reset |
+
+**Correções aplicadas durante o desenvolvimento:**
+- `apply_edit` expects `Path`, not `str` — tests corrigidos
+- `validate_change` doesn't accept `cwd` — tests reescritos
+- TaskQueue and Checkpoint persist to disk — tests usam monkeypatch para isolar STATE_DIR
+- `Task.fail()` só marca FAILED após `max_attempts` — tests ajustados
+- `_run_agent_loop` referenciava `reasoning_level` sem ser parâmetro — corrigido
+
+### P2 — Anti-Loop Detection ✅
+
+**Arquivo:** `nightwatch/task_queue.py` — `LoopDetector` class
+**Arquivo:** `nightwatch/harness.py` — integração no execute_task
+
+Comportamento:
+- `LoopDetector(max_attempts=3, window_seconds=300)` — rastreia tentativas por task
+- Se uma task falha 3 vezes em 5 minutos → marcada como BLOCKED (anti-loop)
+- `loop_detector.reset(task_id)` chamado no sucesso → limpa histórico
+- Logging estruturado em JSONL com `loop_detected` status
+- Config: `HarnessConfig.loop_max_attempts`, `HarnessConfig.loop_window_seconds`
+
+### P2 — Structured Logging (já existente)
+
+O `_log_progress()` já escreve JSONL em `~/.local/state/jarvis/nightwatch/progress.jsonl`.
+Cada entrada contém: `task_id`, `status`, `timestamp` (implícito), e campos extras.
+Entradas adicionadas: `loop_detected` (nova).
+
+### Correção: reasoning_level NameError
+
+**Arquivo:** `jarvis/cli/dev.py`
+
+`_run_agent_loop` referenciava `reasoning_level` sem ser parâmetro → NameError em testes.
+
+**Fix:** Adicionado parâmetro `reasoning_level: str = "medium"` e passado nas chamadas.
+
+### Commits desta sessão
+
+```
+b518e2b test(nightwatch): add LoopDetector unit tests for anti-loop detection
+b25bb8f e2e(test): real E2E test — 27 tests with filesystem operations
+```
+
+### Estado atual dos testes
+
+```
+27/27 nightwatch E2E pass
+105/105 combinados pass (nightwatch + longrun + safe_editor + config + devtools)
+```
