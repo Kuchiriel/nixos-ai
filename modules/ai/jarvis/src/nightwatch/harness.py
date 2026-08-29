@@ -362,9 +362,17 @@ def _request_patch_from_llm(
         for path, content in file_contents.items()
     )
 
+    # Inject recovery context if available
+    recovery_ctx = ""
+    try:
+        from nightwatch.checkpoint import generate_recovery_summary
+        recovery_ctx = generate_recovery_summary()
+    except Exception:
+        pass
+
     prompt = f"""Improve this code for the given task.
 
-TASK: {task_description}
+{recovery_ctx + chr(10) + chr(10) if recovery_ctx else ""}TASK: {task_description}
 
 FILES:
 {files_section}
@@ -622,6 +630,19 @@ class Harness:
             return False
 
         try:
+            # ── Step 0: Context budget check ──
+            try:
+                stats = self.context_budget.get_stats()
+                if stats.get("should_compact", False):
+                    cp.record_compaction(
+                        stats.get("tokens_estimated", 0),
+                        stats.get("tokens_estimated", 0) // 2,
+                        "auto-compact before LLM call"
+                    )
+                    self.notify("🗜️ Context compaction triggered")
+            except Exception:
+                pass
+
             # ── Step 1: Request patch from LLM ──
             success, new_contents, errors = _request_patch_from_llm(
                 task_description=task.description,
