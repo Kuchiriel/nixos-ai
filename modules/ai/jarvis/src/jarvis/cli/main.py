@@ -941,12 +941,14 @@ def _cmd_dev(args: argparse.Namespace) -> int:
 
 
 def _cmd_nightwatch(args: argparse.Namespace) -> int:
-    from nightwatch.llm_loop import run_llm_nightwatch
-    results = run_llm_nightwatch(
-        max_iterations=args.tasks,
+    from nightwatch.harness import run_nightwatch
+    result = run_nightwatch(
+        max_tasks=args.tasks,
         max_minutes=60,
+        report_telegram=args.report_telegram,
+        dry_run=args.dry_run,
     )
-    return 0 if any(r.success for r in results) else 1
+    return 0 if result.tasks_completed > 0 else 1
 
 
 def _cmd_launcher(args: argparse.Namespace) -> int:

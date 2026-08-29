@@ -70,19 +70,20 @@ def _task_eval_rag() -> dict[str, Any]:
 
 
 def _task_nightwatch() -> dict[str, Any]:
-    """Run nightwatch v3 — LLM-powered autonomous code improvement."""
+    """Run nightwatch — unified harness."""
     try:
-        from nightwatch.llm_loop import run_llm_nightwatch
-        results = run_llm_nightwatch(
-            max_iterations=3,
+        from nightwatch.harness import run_nightwatch
+        result = run_nightwatch(
+            max_tasks=3,
             max_minutes=20,
         )
         return {
-            "iterations": len(results),
-            "success": sum(1 for r in results if r.success),
-            "failed": sum(1 for r in results if not r.success),
-            "files_changed": sum(len(r.files_changed) for r in results),
-            "commits": sum(1 for r in results if r.commit_sha),
+            "completed": result.tasks_completed,
+            "failed": result.tasks_failed,
+            "blocked": result.tasks_blocked,
+            "files_changed": len(result.files_changed),
+            "commits": len(result.commits),
+            "duration_s": result.duration_seconds,
         }
     except Exception as e:
         return {"error": str(e)}

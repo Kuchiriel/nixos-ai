@@ -1,33 +1,65 @@
-"""Harness — Main orchestrator for the Nightwatch autonomous coding agent.
+"""Harness — Unified orchestrator for the Nightwatch autonomous coding agent.
 
-Integrates:
-- TaskQueue (persistent state)
-- Patcher (safe editing)
-- FileGuard (structural validation)
-- Validator (test pipeline)
-- Evaluator (independent review)
-- Checkpoint (recovery)
+This is the SINGLE entrypoint for all nightwatch operations.
+Replaces both orchestrator.py (v2 scripted) and llm_loop.py (v3 LLM-based).
+
+Architecture:
+    Task Discovery (categories + LLM)
+        ↓
+    TaskQueue (persistent state machine)
+        ↓
+    Patcher (LLM generates patches, not full files)
+        ↓
+    SafeEditor (atomic writes, validation, backup)
+        ↓
+    Validator (syntax → imports → tests)
+        ↓
+    Evaluator (independent review)
+        ↓
+    Checkpoint (save state)
+        ↓
+    Safety (protected paths, git ops)
+        ↓
+    Commit (only if all gates pass)
+        ↓
+    Learning (persist to AGENTS.md)
+        ↓
+    Telegram notification
+
+Invariants:
+    1. LLM never writes directly to filesystem
+    2. Every change has a baseline
+    3. Validation is proportional to change type
+    4. Unit tests ≠ success
+    5. Evaluator is independent from implementer
 """
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
 from nightwatch.task_queue import TaskQueue, Task, TaskStatus, MissionState
-from nightwatch.patcher import request_patch_from_llm, PatchResult
+from nightwatch.safe_editor import SafeEditor, EditResult
 from nightwatch.validator import validate_change, ValidationReport
 from nightwatch.evaluator import review_change, auto_review, ReviewResult
 from nightwatch.checkpoint import Checkpoint, create_checkpoint_for_task, get_recovery_context
+from nightwatch import safety
 
 
 REPO_ROOT = Path.home() / "projects" / "nixos-ai"
 STATE_DIR = Path.home() / ".local/state/jarvis/nightwatch"
+PROGRESS_LOG = STATE_DIR / "progress.jsonl"
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @dataclass
 class HarnessConfig:
@@ -41,6 +73,9 @@ class HarnessConfig:
     run_imports: bool = True
     auto_review: bool = True
     telegram_notifications: bool = True
+    use_llm_discovery: bool = True
+    use_scripted_discovery: bool = True
+    dry_run: bool = False
 
 
 @dataclass
@@ -49,99 +84,121 @@ class HarnessResult:
     tasks_completed: int = 0
     tasks_failed: int = 0
     tasks_blocked: int = 0
-    files_changed: list[str] = None
-    commits: list[str] = None
+    tasks_skipped: int = 0
+    files_changed: list[str] = field(default_factory=list)
+    commits: list[str] = field(default_factory=list)
     duration_seconds: float = 0.0
-    errors: list[str] = None
-    
-    def __post_init__(self):
-        if self.files_changed is None:
-            self.files_changed = []
-        if self.commits is None:
-            self.commits = []
-        if self.errors is None:
-            self.errors = []
+    errors: list[str] = field(default_factory=list)
+
+    @property
+    def total(self) -> int:
+        return self.tasks_completed + self.tasks_failed + self.tasks_blocked
+
+    @property
+    def success_rate(self) -> float:
+        return self.tasks_completed / self.total if self.total > 0 else 0.0
 
 
-class Harness:
-    """Main harness orchestrator."""
-    
-    def __init__(
-        self,
-        config: HarnessConfig | None = None,
-        call_llm: Callable[[str, int], str] | None = None,
-        send_telegram: Callable[[str], bool] | None = None,
-    ):
-        self.config = config or HarnessConfig()
-        self.call_llm = call_llm or self._default_call_llm
-        self.send_telegram = send_telegram or self._default_send_telegram
-        self.queue = TaskQueue()
-        self.checkpoint = Checkpoint.load()
-        self.mission = self.queue.mission
-    
-    def _default_call_llm(self, prompt: str, max_tokens: int = 2048) -> str:
-        """Default LLM caller."""
+# ═══════════════════════════════════════════════════════════════════════════════
+# LLM Interface
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _default_call_llm(prompt: str, max_tokens: int = 2048) -> str:
+    """Call the local LLM via llama.cpp API."""
+    import requests
+    url = os.environ.get("LLAMA_CPP_URL", "http://127.0.0.1:8080")
+    payload = {
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+        "temperature": 0.3,
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+    try:
+        resp = requests.post(
+            f"{url}/v1/chat/completions",
+            json=payload,
+            timeout=300,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        msg = data["choices"][0]["message"]
+        return msg.get("content", "") or msg.get("reasoning_content", "")
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+def _default_send_telegram(message: str) -> bool:
+    """Send message to Telegram."""
+    env_file = Path("/etc/jarvis-telegram.env")
+    if not env_file.exists():
+        return False
+    try:
+        env = {}
+        for line in env_file.read_text().splitlines():
+            if "=" in line:
+                key, _, value = line.partition("=")
+                env[key.strip()] = value.strip()
+
         import requests
-        url = "http://127.0.0.1:8080/v1/chat/completions"
-        payload = {
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
-            "temperature": 0.3,
-            "chat_template_kwargs": {"enable_thinking": False},
-        }
+        resp = requests.post(
+            f"https://api.telegram.org/bot{env['JARVIS_TELEGRAM_TOKEN']}/sendMessage",
+            json={
+                "chat_id": env["JARVIS_TELEGRAM_CHAT_ID"],
+                "text": message,
+                "parse_mode": "Markdown",
+            },
+            timeout=10,
+        )
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Task Discovery
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _discover_scripted_tasks() -> list[Task]:
+    """Discover tasks from the category registry (security scanner, TODO finder, etc.)."""
+    try:
+        from nightwatch.categories import CATEGORY_REGISTRY, SEVERITY_ORDER
+    except ImportError:
+        return []
+
+    tasks = []
+    for cat_name, cat_fn in CATEGORY_REGISTRY.items():
         try:
-            resp = requests.post(url, json=payload, timeout=300)
-            resp.raise_for_status()
-            data = resp.json()
-            msg = data["choices"][0]["message"]
-            return msg.get("content", "") or msg.get("reasoning_content", "")
-        except Exception as e:
-            return f"ERROR: {e}"
-    
-    def _default_send_telegram(self, message: str) -> bool:
-        """Default Telegram sender."""
-        env_file = Path("/etc/jarvis-telegram.env")
-        if not env_file.exists():
-            return False
-        try:
-            env = {}
-            for line in env_file.read_text().splitlines():
-                if "=" in line:
-                    key, _, value = line.partition("=")
-                    env[key.strip()] = value.strip()
-            
-            import requests
-            resp = requests.post(
-                f"https://api.telegram.org/bot{env['JARVIS_TELEGRAM_TOKEN']}/sendMessage",
-                json={
-                    "chat_id": env["JARVIS_TELEGRAM_CHAT_ID"],
-                    "text": message,
-                    "parse_mode": "Markdown",
-                },
-                timeout=10,
-            )
-            return resp.status_code == 200
+            scripted_tasks = cat_fn()
+            for st in scripted_tasks:
+                # Convert categories.Task → task_queue.Task
+                tasks.append(Task(
+                    id=st.id,
+                    project="nixos-ai",
+                    description=st.description,
+                    target_files=[st.target_path] if st.target_path else [],
+                    acceptance_criteria="",
+                    priority=SEVERITY_ORDER.get(st.severity, 5),
+                    risk="low" if st.severity in ("info", "low") else "medium",
+                    status=TaskStatus.READY.value,
+                ))
         except Exception:
-            return False
-    
-    def notify(self, message: str) -> None:
-        """Send notification if enabled."""
-        if self.config.telegram_notifications:
-            self.send_telegram(message)
-    
-    def discover_tasks(self) -> list[Task]:
-        """Discover tasks using the LLM."""
-        # Get codebase overview
-        try:
-            result = subprocess.run(
-                ["find", str(REPO_ROOT / "modules/ai/jarvis/src"), "-name", "*.py", "-type", "f"],
-                capture_output=True, text=True, timeout=10,
-            )
-            files = result.stdout.strip().split("\n")[:20]
-        except Exception:
-            files = []
-        
-        prompt = f"""Analyze this Python codebase and identify 3-5 improvement tasks.
+            pass
+    return tasks
+
+
+def _discover_llm_tasks(call_llm_fn: Callable, project: str = "nixos-ai") -> list[Task]:
+    """Use the LLM to discover improvement tasks in the codebase."""
+    # Get codebase overview
+    try:
+        result = subprocess.run(
+            ["find", str(REPO_ROOT / "modules/ai/jarvis/src"), "-name", "*.py", "-type", "f"],
+            capture_output=True, text=True, timeout=10,
+        )
+        files = result.stdout.strip().split("\n")[:20]
+    except Exception:
+        files = []
+
+    prompt = f"""Analyze this Python codebase and identify 3-5 improvement tasks.
 
 Key files:
 {chr(10).join(files[:15])}
@@ -158,214 +215,517 @@ For each task provide JSON:
 Focus on: error handling, code quality, security, missing tests, documentation.
 Return JSON array."""
 
-        response = self.call_llm(prompt, 1500)
-        
+    response = call_llm_fn(prompt, 1500)
+
+    tasks = []
+    try:
+        start = response.find("[")
+        end = response.rfind("]") + 1
+        if start >= 0 and end > start:
+            items = json.loads(response[start:end])
+            for i, item in enumerate(items):
+                tasks.append(Task(
+                    id=f"disc-{int(time.time())}-{i}",
+                    project=project,
+                    description=item.get("description", ""),
+                    target_files=item.get("target_files", []),
+                    acceptance_criteria=item.get("acceptance_criteria", ""),
+                    priority=item.get("priority", 5),
+                    risk=item.get("risk", "low"),
+                    status=TaskStatus.READY.value,
+                ))
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    return tasks
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# File Editing (via Patcher + SafeEditor)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _read_file_for_llm(path: str) -> str:
+    """Read a file for LLM context, with path resolution."""
+    try:
+        if path.startswith("/"):
+            full_path = Path(path)
+        else:
+            # Try multiple prefixes
+            for prefix in ["modules/ai/jarvis/src/", "src/jarvis/", "jarvis/", "src/"]:
+                if path.startswith(prefix):
+                    path = path[len(prefix):]
+                    break
+            full_path = REPO_ROOT / "modules/ai/jarvis/src" / path
+
+        if not full_path.exists():
+            # Try alternative locations
+            for alt in [
+                REPO_ROOT / path,
+                REPO_ROOT / "modules/ai/jarvis/src" / path,
+            ]:
+                if alt.exists():
+                    full_path = alt
+                    break
+
+        return full_path.read_text(encoding="utf-8")[:8000]
+    except Exception as e:
+        return f"ERROR: Could not read {path}: {e}"
+
+
+def _resolve_file_path(path: str) -> Path:
+    """Resolve a file path to an absolute path."""
+    if path.startswith("/"):
+        return Path(path)
+
+    for prefix in ["modules/ai/jarvis/src/", "src/jarvis/", "jarvis/", "src/"]:
+        if path.startswith(prefix):
+            path = path[len(prefix):]
+            break
+
+    # Try multiple locations
+    candidates = [
+        REPO_ROOT / "modules/ai/jarvis/src" / path,
+        REPO_ROOT / path,
+        REPO_ROOT / "modules/ai/jarvis" / path,
+    ]
+    for c in candidates:
+        if c.exists():
+            return c
+    return candidates[0]  # Return first candidate even if not exists
+
+
+def _request_patch_from_llm(
+    task_description: str,
+    target_files: list[str],
+    call_llm_fn: Callable,
+) -> tuple[bool, dict[str, str], list[str]]:
+    """Request a patch from the LLM. Returns (success, {file: new_content}, errors)."""
+    # Read target files
+    file_contents = {}
+    for path in target_files:
+        content = _read_file_for_llm(path)
+        if not content.startswith("ERROR"):
+            file_contents[path] = content
+
+    if not file_contents:
+        return False, {}, ["No readable target files"]
+
+    files_section = "\n\n".join(
+        f"=== FILE: {path} ===\n```\n{content}\n```"
+        for path, content in file_contents.items()
+    )
+
+    prompt = f"""Improve this code for the given task.
+
+TASK: {task_description}
+
+FILES:
+{files_section}
+
+For each file you want to change, return:
+=== FILE: path/to/file.py ===
+REASON: why this change is needed
+--- new content ---
+The complete improved file content
+--- end ---
+
+Return only files that need changes. If no changes needed, return "NO_CHANGES"."""
+
+    response = call_llm_fn(prompt, 4096)
+
+    if "ERROR" in response:
+        return False, {}, [response]
+
+    if "NO_CHANGES" in response:
+        return True, {}, []
+
+    # Parse response
+    new_contents = {}
+    errors = []
+
+    # Split by === FILE: markers
+    parts = response.split("=== FILE:")
+    for part in parts[1:]:  # Skip first empty part
+        lines = part.strip().split("\n")
+        if not lines:
+            continue
+
+        file_path = lines[0].strip().rstrip("=").strip()
+        # Find content between --- new content --- and --- end ---
+        content_start = -1
+        content_end = -1
+        for i, line in enumerate(lines):
+            if "--- new content ---" in line:
+                content_start = i + 1
+            elif "--- end ---" in line:
+                content_end = i
+                break
+
+        if content_start >= 0 and content_end > content_start:
+            new_content = "\n".join(lines[content_start:content_end])
+            new_contents[file_path] = new_content
+        else:
+            errors.append(f"Could not parse patch for {file_path}")
+
+    return bool(new_contents), new_contents, errors
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Git Operations
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _git_diff_stat() -> str:
+    """Get git diff stat."""
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--stat"],
+            capture_output=True, text=True, timeout=10,
+            cwd=str(REPO_ROOT),
+        )
+        return result.stdout
+    except Exception:
+        return ""
+
+
+def _git_commit(message: str) -> str | None:
+    """Commit changes and return SHA."""
+    try:
+        subprocess.run(
+            ["git", "add", "-A"],
+            capture_output=True, timeout=10,
+            cwd=str(REPO_ROOT),
+        )
+        result = subprocess.run(
+            ["git", "commit", "-m", message],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(REPO_ROOT),
+        )
+        if result.returncode == 0:
+            sha = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True, text=True, timeout=5,
+                cwd=str(REPO_ROOT),
+            ).stdout.strip()
+            return sha
+    except Exception:
+        pass
+    return None
+
+
+def _git_revert() -> None:
+    """Revert all uncommitted changes."""
+    try:
+        subprocess.run(
+            ["git", "checkout", "--", "."],
+            capture_output=True, timeout=10,
+            cwd=str(REPO_ROOT),
+        )
+        subprocess.run(
+            ["git", "clean", "-fd"],
+            capture_output=True, timeout=10,
+            cwd=str(REPO_ROOT),
+        )
+    except Exception:
+        pass
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Progress Logging
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _log_progress(entry: dict) -> None:
+    """Append a progress entry to the JSONL log."""
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    with open(PROGRESS_LOG, "a") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Harness
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class Harness:
+    """Main harness orchestrator.
+
+    Single entrypoint for all nightwatch operations.
+    Integrates: TaskQueue, SafeEditor, Validator, Evaluator, Checkpoint, Safety.
+    """
+
+    def __init__(
+        self,
+        config: HarnessConfig | None = None,
+        call_llm: Callable[[str, int], str] | None = None,
+        send_telegram: Callable[[str], bool] | None = None,
+    ):
+        self.config = config or HarnessConfig()
+        self.call_llm = call_llm or _default_call_llm
+        self.send_telegram = send_telegram or _default_send_telegram
+        self.queue = TaskQueue()
+        self.editor = SafeEditor()
+        self.checkpoint = Checkpoint.load()
+        self.mission = self.queue.mission
+
+    # ── Notifications ──────────────────────────────────────────────────────
+
+    def notify(self, message: str) -> None:
+        """Send notification if enabled."""
+        if self.config.telegram_notifications:
+            self.send_telegram(message)
+
+    # ── Task Discovery ─────────────────────────────────────────────────────
+
+    def discover_tasks(self) -> list[Task]:
+        """Discover tasks from all enabled sources."""
         tasks = []
-        try:
-            start = response.find("[")
-            end = response.rfind("]") + 1
-            if start >= 0 and end > start:
-                items = json.loads(response[start:end])
-                for i, item in enumerate(items):
-                    tasks.append(Task(
-                        id=f"disc-{int(time.time())}-{i}",
-                        project=self.config.project,
-                        description=item.get("description", ""),
-                        target_files=item.get("target_files", []),
-                        acceptance_criteria=item.get("acceptance_criteria", ""),
-                        priority=item.get("priority", 5),
-                        risk=item.get("risk", "low"),
-                        status=TaskStatus.READY.value,
-                    ))
-        except json.JSONDecodeError:
-            pass
-        
-        return tasks
-    
+
+        if self.config.use_scripted_discovery:
+            tasks.extend(_discover_scripted_tasks())
+
+        if self.config.use_llm_discovery:
+            tasks.extend(_discover_llm_tasks(self.call_llm, self.config.project))
+
+        # Deduplicate by description
+        seen = set()
+        unique = []
+        for t in tasks:
+            key = t.description[:80]
+            if key not in seen:
+                seen.add(key)
+                unique.append(t)
+
+        return unique
+
+    # ── Task Execution ─────────────────────────────────────────────────────
+
     def execute_task(self, task: Task) -> bool:
-        """Execute a single task."""
+        """Execute a single task through the full pipeline.
+
+        Pipeline:
+            1. Checkpoint (save state)
+            2. Request patch from LLM
+            3. Apply via SafeEditor (atomic, validated)
+            4. Validate (syntax, imports, tests)
+            5. Review (independent)
+            6. Commit (only if all pass)
+            7. Learn (persist to AGENTS.md)
+        """
         # Create checkpoint
         cp = create_checkpoint_for_task(task.id, task.description, self.config.project)
-        
+
         # Notify start
         self.notify(f"🔄 *Task Started*\n{task.description[:100]}")
-        
+
+        # Check protected paths
+        for f in task.target_files:
+            if safety.is_path_protected(f):
+                task.block(f"Protected path: {f}")
+                self.notify(f"🚫 *Task Blocked*\nProtected path: {f}")
+                return False
+
         # Mark in progress
         self.queue.update_task(task.id, status=TaskStatus.IN_PROGRESS.value)
-        
+
+        # Dry run
+        if self.config.dry_run:
+            self.notify(f"🔍 *Dry Run*\n{task.description[:80]}")
+            task.skip("dry-run")
+            return False
+
         try:
-            # Request patch from LLM
-            patch_result = request_patch_from_llm(
+            # ── Step 1: Request patch from LLM ──
+            success, new_contents, errors = _request_patch_from_llm(
                 task_description=task.description,
                 target_files=task.target_files,
                 call_llm_fn=self.call_llm,
             )
-            
-            cp.record_operation("patch", patch_result.success, 
-                               "; ".join(patch_result.errors) if patch_result.errors else "")
-            
-            if not patch_result.success:
-                task.fail("; ".join(patch_result.errors))
-                self.notify(f"❌ *Task Failed*\n{task.description[:50]}\nError: {patch_result.errors[0][:100]}")
+
+            cp.record_operation("patch", success, "; ".join(errors) if errors else "")
+
+            if not success:
+                task.fail("; ".join(errors))
+                self.notify(f"❌ *Patch Failed*\n{errors[0][:100] if errors else 'unknown'}")
+                _log_progress({
+                    "task_id": task.id, "status": "patch_failed",
+                    "error": errors[0] if errors else "unknown",
+                })
                 return False
-            
-            # Validate changes
+
+            if not new_contents:
+                # LLM decided no changes needed
+                task.skip("no_changes_needed")
+                self.notify(f"⏭️ *No Changes*\n{task.description[:50]}")
+                return False
+
+            # ── Step 2: Apply via SafeEditor ──
             self.queue.update_task(task.id, status=TaskStatus.VALIDATING.value)
+            applied_files = []
+            apply_errors = []
+
+            for file_path, new_content in new_contents.items():
+                resolved = _resolve_file_path(file_path)
+                edit_result: EditResult = self.editor.apply_edit(
+                    resolved, new_content, validate=True
+                )
+                if edit_result.success:
+                    applied_files.append(file_path)
+                    cp.record_operation(f"write:{file_path}", True)
+                else:
+                    apply_errors.extend(edit_result.errors)
+                    cp.record_operation(f"write:{file_path}", False, "; ".join(edit_result.errors))
+
+            if not applied_files:
+                task.fail(f"SafeEditor rejected all changes: {'; '.join(apply_errors)}")
+                self.notify(f"❌ *Write Failed*\n{apply_errors[0][:100] if apply_errors else 'rejected'}")
+                _log_progress({
+                    "task_id": task.id, "status": "write_failed",
+                    "errors": apply_errors,
+                })
+                return False
+
+            # ── Step 3: Validate ──
             validation = validate_change(
-                patch_result.files_applied,
+                applied_files,
                 run_tests=self.config.run_tests,
                 run_imports=self.config.run_imports,
             )
-            
+
             cp.record_operation("validate", validation.passed, validation.summary)
-            
+
             if not validation.passed:
-                # Revert changes
-                self._revert_changes()
+                _git_revert()
                 task.fail(f"Validation failed: {validation.summary}")
                 self.notify(f"❌ *Validation Failed*\n{validation.summary}")
+                _log_progress({
+                    "task_id": task.id, "status": "validation_failed",
+                    "summary": validation.summary,
+                })
                 return False
-            
-            # Independent review
+
+            # ── Step 4: Independent review ──
             if self.config.auto_review:
                 self.queue.update_task(task.id, status=TaskStatus.REVIEW.value)
-                test_output = "\n".join(s.output for s in validation.steps if s.name == "tests")
+                test_output = "\n".join(
+                    s.output for s in validation.steps if s.name == "tests"
+                )
                 review = review_change(
                     task_description=task.description,
                     acceptance_criteria=task.acceptance_criteria,
                     test_output=test_output,
                     call_llm_fn=self.call_llm,
                 )
-                
+
                 if not review.passed:
-                    self._revert_changes()
+                    _git_revert()
                     task.fail(f"Review failed: {review.summary}")
                     self.notify(f"❌ *Review Failed*\n{review.summary}")
+                    _log_progress({
+                        "task_id": task.id, "status": "review_failed",
+                        "summary": review.summary,
+                    })
                     return False
-            
-            # Commit
-            commit_sha = self._commit(task)
+
+            # ── Step 5: Commit ──
+            msg = f"nightwatch({task.project}): {task.description[:80]}"
+            commit_sha = _git_commit(msg)
             cp.record_operation("commit", commit_sha is not None)
-            
-            # Complete
+
+            # ── Step 6: Complete ──
             task.complete(commit_sha)
             self.mission.total_tasks_completed += 1
             if commit_sha:
                 self.mission.total_commits += 1
-            
-            self.notify(f"✅ *Task Complete*\n{task.description[:50]}\nCommit: {commit_sha[:8] if commit_sha else 'N/A'}")
-            
+
+            self.notify(
+                f"✅ *Task Complete*\n{task.description[:50]}\n"
+                f"Commit: {commit_sha[:8] if commit_sha else 'N/A'}"
+            )
+
+            _log_progress({
+                "task_id": task.id, "status": "completed",
+                "commit": commit_sha, "files": applied_files,
+            })
+
             return True
-            
+
         except Exception as e:
             cp.record_operation("error", False, str(e))
             task.fail(str(e))
             self.notify(f"❌ *Task Error*\n{str(e)[:100]}")
+            _log_progress({
+                "task_id": task.id, "status": "error",
+                "error": str(e),
+            })
+            # Revert on error
+            _git_revert()
             return False
-    
-    def _revert_changes(self) -> None:
-        """Revert uncommitted changes."""
-        try:
-            subprocess.run(
-                ["git", "checkout", "--", "."],
-                capture_output=True, timeout=10,
-                cwd=str(REPO_ROOT),
-            )
-            subprocess.run(
-                ["git", "clean", "-fd"],
-                capture_output=True, timeout=10,
-                cwd=str(REPO_ROOT),
-            )
-        except Exception:
-            pass
-    
-    def _commit(self, task: Task) -> str | None:
-        """Commit changes with descriptive message."""
-        try:
-            subprocess.run(
-                ["git", "add", "-A"],
-                capture_output=True, timeout=10,
-                cwd=str(REPO_ROOT),
-            )
-            
-            msg = f"nightwatch({task.project}): {task.description[:80]}"
-            if task.commit_sha:
-                msg += f"\n\nTask ID: {task.id}"
-            
-            result = subprocess.run(
-                ["git", "commit", "-m", msg],
-                capture_output=True, text=True, timeout=30,
-                cwd=str(REPO_ROOT),
-            )
-            
-            if result.returncode == 0:
-                sha = subprocess.run(
-                    ["git", "rev-parse", "HEAD"],
-                    capture_output=True, text=True, timeout=5,
-                    cwd=str(REPO_ROOT),
-                ).stdout.strip()
-                return sha
-        except Exception:
-            pass
-        return None
-    
+
+    # ── Main Run ───────────────────────────────────────────────────────────
+
     def run(self) -> HarnessResult:
-        """Run the harness."""
+        """Run the harness.
+
+        Flow:
+            1. Check for recovery context
+            2. Discover tasks (scripted + LLM)
+            3. Execute tasks through pipeline
+            4. Report results
+        """
         start = time.time()
         result = HarnessResult()
-        
+
         self.mission.active = True
         self.mission.started_at = time.time()
-        
-        self.notify(f"🌙 *Nightwatch Harness Started*\nProject: {self.config.project}")
-        
-        # Check for recovery context
+
+        self.notify(f"🌙 *Nightwatch Started*\nProject: {self.config.project}")
+
+        # ── Recovery ──
         recovery = get_recovery_context()
         if recovery and recovery.get("task_id"):
-            self.notify(f"♻️ *Recovering task*: {recovery['task_description'][:50]}")
-        
-        # Discover tasks
+            self.notify(f"♻️ *Recovering*: {recovery.get('task_description', '')[:50]}")
+
+        # ── Discover ──
         self.notify("🔍 Discovering tasks...")
         new_tasks = self.discover_tasks()
         for task in new_tasks:
             self.queue.add_task(task)
-        
-        self.notify(f"📋 Found {len(new_tasks)} new tasks")
-        
-        # Execute tasks
+
+        self.notify(f"📋 Found {len(new_tasks)} tasks")
+
+        # ── Execute ──
         executed = 0
         while executed < self.config.max_tasks:
             if (time.time() - start) > self.config.max_minutes * 60:
-                self.notify(f"⏰ Time limit reached ({self.config.max_minutes} min)")
+                self.notify(f"⏰ Time limit ({self.config.max_minutes} min)")
                 break
-            
+
             task = self.queue.get_next_task()
             if not task:
-                self.notify("✅ No more tasks available")
+                self.notify("✅ No more tasks")
                 break
-            
+
             success = self.execute_task(task)
-            
+
             if success:
                 result.tasks_completed += 1
                 result.files_changed.extend(task.target_files)
                 if task.commit_sha:
                     result.commits.append(task.commit_sha)
+            elif task.status == TaskStatus.BLOCKED.value:
+                result.tasks_blocked += 1
+            elif task.status == TaskStatus.ABANDONED.value:
+                result.tasks_skipped += 1
             else:
-                if task.status == TaskStatus.BLOCKED.value:
-                    result.tasks_blocked += 1
-                else:
-                    result.tasks_failed += 1
-            
+                result.tasks_failed += 1
+
             executed += 1
-        
-        # Summary
+
+        # ── Summary ──
         elapsed = time.time() - start
         result.duration_seconds = elapsed
-        
+
         self.mission.active = False
         self.mission.last_checkpoint = time.time()
-        
+
         stats = self.queue.get_stats()
         summary = f"""🌙 *Nightwatch Complete*
 
@@ -373,12 +733,53 @@ Return JSON array."""
 - Completed: {result.tasks_completed}
 - Failed: {result.tasks_failed}
 - Blocked: {result.tasks_blocked}
+- Skipped: {result.tasks_skipped}
 - Files changed: {len(result.files_changed)}
 - Commits: {len(result.commits)}
 - Duration: {int(elapsed // 60)}m {int(elapsed % 60)}s
+- Success rate: {result.success_rate:.0%}
 
-📈 Queue: {stats['completed']} done, {stats['ready']} ready, {stats['blocked']} blocked"""
-        
+📈 Queue: {stats.get('completed', 0)} done, {stats.get('ready', 0)} ready, {stats.get('blocked', 0)} blocked"""
+
         self.notify(summary)
-        
+
+        _log_progress({
+            "event": "run_complete",
+            "completed": result.tasks_completed,
+            "failed": result.tasks_failed,
+            "blocked": result.tasks_blocked,
+            "commits": len(result.commits),
+            "duration_s": elapsed,
+        })
+
         return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Public API
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def run_nightwatch(
+    max_tasks: int = 10,
+    max_minutes: int = 180,
+    report_telegram: bool = False,
+    dry_run: bool = False,
+    use_llm: bool = True,
+    use_scripted: bool = True,
+) -> HarnessResult:
+    """Convenience function to run nightwatch.
+
+    This replaces both:
+    - orchestrator.run_nightwatch()
+    - llm_loop.run_llm_nightwatch()
+    """
+    config = HarnessConfig(
+        max_tasks=max_tasks,
+        max_minutes=max_minutes,
+        telegram_notifications=report_telegram,
+        dry_run=dry_run,
+        use_llm_discovery=use_llm,
+        use_scripted_discovery=use_scripted,
+    )
+    harness = Harness(config=config)
+    return harness.run()

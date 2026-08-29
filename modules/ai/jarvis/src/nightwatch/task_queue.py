@@ -95,6 +95,12 @@ class Task:
         self.last_error = reason
         self.updated_at = time.time()
     
+    def skip(self, reason: str) -> None:
+        """Skip this task (e.g. dry-run, no changes needed)."""
+        self.status = TaskStatus.ABANDONED.value
+        self.last_error = f"skipped: {reason}"
+        self.updated_at = time.time()
+    
     @property
     def is_terminal(self) -> bool:
         return self.status in (
