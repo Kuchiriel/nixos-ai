@@ -98,20 +98,100 @@ def _extract_epub(path: Path) -> str:
 
 
 def _extract_pdf(path: Path) -> str:
-    """Extrai texto de um .pdf usando PyMuPDF (fitz)."""
+    """Extrai texto de um .pdf usando PyMuPDF (fitz).
+    
+    Fallback: se o PDF for baseado em imagens (texto vazio),
+    renderiza páginas como imagens e usa OCR via pytesseract.
+    Preprocessing inspirado no guia-renamer (grayscale + sharpen + contrast).
+    """
     try:
         import fitz  # PyMuPDF — type: ignore[import-not-found]
 
         doc = fitz.open(str(path))
         parts: list[str] = []
+        ocr_fallback_needed = False
+        
         for page in doc:
             text = page.get_text()
             if text.strip():
                 parts.append(text.strip())
+            else:
+                ocr_fallback_needed = True
         doc.close()
-        return "\n\n".join(parts)
+        
+        # If we got text from some pages, return it
+        if parts and not ocr_fallback_needed:
+            return "\n\n".join(parts)
+        
+        # OCR fallback for image-based PDFs
+        if ocr_fallback_needed:
+            ocr_text = _ocr_pdf(path)
+            if ocr_text:
+                # Merge: use extracted text where available, OCR where not
+                if parts:
+                    return "\n\n".join(parts) + "\n\n" + ocr_text
+                return ocr_text
+        
+        return "\n\n".join(parts) if parts else ""
     except ImportError:
         return ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _ocr_pdf(path: Path) -> str:
+    """OCR fallback for image-based PDFs using PyMuPDF + pytesseract.
+    
+    Renders each page as an image at 300 DPI, preprocesses (grayscale,
+    sharpen, contrast), and runs pytesseract OCR.
+    Inspired by guia-renamer/core/ocr_extractor.py.
+    """
+    try:
+        import fitz  # PyMuPDF
+        from PIL import Image, ImageOps, ImageEnhance, ImageFilter
+        import pytesseract
+        import io
+    except ImportError:
+        return ""
+    
+    try:
+        doc = fitz.open(str(path))
+        parts: list[str] = []
+        render_dpi = 300
+        zoom = render_dpi / 72  # PyMuPDF default is 72 DPI
+        mat = fitz.Matrix(zoom, zoom)
+        
+        for page_num in range(min(len(doc), 50)):  # limit to 50 pages
+            page = doc[page_num]
+            # Render page as image
+            pix = page.get_pixmap(matrix=mat)
+            img = Image.open(io.BytesIO(pix.tobytes("png")))
+            
+            # Preprocessing (from guia-renamer)
+            img_gray = img.convert("L")
+            img_gray = img_gray.filter(ImageFilter.SHARPEN)
+            img_gray = ImageEnhance.Contrast(img_gray).enhance(2.0)
+            img_gray = ImageOps.autocontrast(img_gray)
+            
+            # OCR with multiple PSM modes for better coverage
+            text_parts = []
+            for config in ["--psm 3", "--psm 6", "--psm 11"]:
+                try:
+                    t = pytesseract.image_to_string(
+                        img_gray, config=f"{config} -l eng+por"
+                    )
+                    if t.strip():
+                        text_parts.append(t.strip())
+                except Exception:  # noqa: BLE001
+                    continue
+            
+            if text_parts:
+                # Deduplicate: take the longest result
+                best = max(text_parts, key=len)
+                parts.append(best)
+        
+        doc.close()
+        return "\n\n".join(parts)
     except Exception:  # noqa: BLE001
         return ""
 
@@ -119,6 +199,8 @@ def _extract_pdf(path: Path) -> str:
 def extract_text(path: Path | str) -> str:
     """Extrai texto de um livro (.epub, .txt, .pdf)."""
     path = Path(path)
+    if not path.exists():
+        return ""
     suffix = path.suffix.lower()
     if suffix == ".epub":
         return _extract_epub(path)
@@ -172,6 +254,123 @@ def chunk_text(text: str, target_chars: int = CHUNK_TARGET_CHARS) -> list[str]:
         chunks.append(current.strip())
 
     return chunks
+
+
+# ---------------------------------------------------------------------------
+# SFX (Sound Effects) — portado do enhanced_audiobook.py legado
+# ---------------------------------------------------------------------------
+
+SOUNDS_DIR = Path(os.environ.get(
+    "JARVIS_SOUNDS_DIR",
+    str(Path.home() / ".local" / "share" / "jarvis" / "sounds"),
+))
+
+# Mapa de palavras-chave → arquivos de som
+SFX_MAP: dict[str, str] = {
+    # Weather
+    "rain": "weather/rain.ogg", "thunder": "weather/thunder.ogg",
+    "wind": "weather/wind.ogg", "storm": "weather/storm.ogg",
+    # Nature
+    "birds": "nature/birds.ogg", "waves": "nature/ocean.ogg",
+    "ocean": "nature/ocean.ogg", "fire": "nature/fire.ogg",
+    "forest": "nature/forest.ogg",
+    # Actions
+    "door": "actions/door_close.ogg", "knock": "actions/knock.ogg",
+    "footsteps": "actions/footsteps.ogg", "explosion": "actions/explosion.ogg",
+    "glass_break": "actions/glass_break.ogg", "scream": "actions/scream.ogg",
+    "carriage": "city/crowd.ogg", "church_bell": "city/crowd.ogg",
+    "clock": "mechanical/clock_ticking.ogg", "crowd": "city/crowd.ogg",
+    "ritual": "nature/fire.ogg", "magic": "weather/wind.ogg",
+    "metal_clink": "actions/metal_cling.ogg", "metal_clank": "actions/metal_clang.ogg",
+    "sword": "actions/metal_cling.ogg", "blade": "actions/metal_clang.ogg",
+}
+
+
+def detect_sfx(text: str) -> list[tuple[str, str]]:
+    """Detecta palavras-chave de SFX no texto.
+    
+    Retorna lista de (keyword, sound_file) encontrados.
+    """
+    text_lower = text.lower()
+    found: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    
+    for keyword, sound_file in SFX_MAP.items():
+        if keyword in text_lower and keyword not in seen:
+            seen.add(keyword)
+            found.append((keyword, sound_file))
+    
+    return found
+
+
+def play_sfx(sound_file: str, volume: float = 0.6) -> bool:
+    """Toca um arquivo de som via mpv (background)."""
+    full_path = SOUNDS_DIR / sound_file
+    if not full_path.exists():
+        return False
+    try:
+        subprocess.Popen(
+            ["mpv", "--no-video", "--volume", str(int(volume * 100)),
+             "--really-quiet", str(full_path)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
+    except (FileNotFoundError, OSError):
+        return False
+
+
+def play_sfx_for_text(text: str, volume: float = 0.4) -> list[str]:
+    """Detecta e toca SFX relevantes para o texto dado."""
+    effects = detect_sfx(text)
+    played: list[str] = []
+    for keyword, sound_file in effects:
+        if play_sfx(sound_file, volume=volume):
+            played.append(keyword)
+    return played
+
+
+def install_sfx(sounds_dir: Path | str | None = None) -> str:
+    """Copia arquivos SFX do legado para o diretório atual.
+    
+    Procura em:
+    1. /run/media/nixos/YUMI/BACKUPS/MANJARO_EXTRACTED/.../sounds/
+    2. ~/.jarvis/sounds/ (legado direto)
+    
+    Retorna mensagem de resultado.
+    """
+    target = Path(sounds_dir) if sounds_dir else SOUNDS_DIR
+    
+    # Sources to try
+    legacy_sources = [
+        Path.home() / ".jarvis" / "sounds",
+        Path("/run/media/nixos/YUMI/BACKUPS/MANJARO_EXTRACTED/manjaro_extracted/.jarvis/sounds"),
+    ]
+    
+    src_dir = None
+    for src in legacy_sources:
+        if src.exists() and any(src.iterdir()):
+            src_dir = src
+            break
+    
+    if not src_dir:
+        return "Nenhum diretório SFX legado encontrado"
+    
+    # Copy
+    import shutil
+    target.mkdir(parents=True, exist_ok=True)
+    copied = 0
+    
+    for item in src_dir.rglob("*"):
+        if item.is_file():
+            rel = item.relative_to(src_dir)
+            dest = target / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if not dest.exists():
+                shutil.copy2(item, dest)
+                copied += 1
+    
+    return f"Copiados {copied} arquivos de {src_dir} para {target}"
 
 
 # ---------------------------------------------------------------------------

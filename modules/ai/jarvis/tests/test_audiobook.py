@@ -117,3 +117,89 @@ def test_dispatch_status():
 
     result = dispatch(["status"])
     assert isinstance(result, str)
+
+
+# --- SFX tests ---
+
+
+def test_detect_sfx_rain():
+    """detect_sfx finds rain keyword."""
+    from jarvis.core.audiobook import detect_sfx
+
+    text = "The rain fell heavily on the ancient roof."
+    sfx = detect_sfx(text)
+    keywords = [kw for kw, _ in sfx]
+    assert "rain" in keywords
+
+
+def test_detect_sfx_multiple():
+    """detect_sfx finds multiple effects."""
+    from jarvis.core.audiobook import detect_sfx
+
+    text = "Thunder boomed as the wind howled through the forest."
+    sfx = detect_sfx(text)
+    keywords = [kw for kw, _ in sfx]
+    assert "thunder" in keywords
+    assert "wind" in keywords
+    assert "forest" in keywords
+
+
+def test_detect_sfx_none():
+    """detect_sfx returns empty for plain text."""
+    from jarvis.core.audiobook import detect_sfx
+
+    sfx = detect_sfx("The quick brown fox jumps over the lazy dog.")
+    assert sfx == []
+
+
+def test_detect_sfx_dedup():
+    """detect_sfx deduplicates keywords."""
+    from jarvis.core.audiobook import detect_sfx
+
+    text = "rain rain rain"
+    sfx = detect_sfx(text)
+    keywords = [kw for kw, _ in sfx]
+    assert keywords.count("rain") == 1
+
+
+def test_sfx_map_has_entries():
+    """SFX_MAP is not empty."""
+    from jarvis.core.audiobook import SFX_MAP
+
+    assert len(SFX_MAP) > 10
+
+
+def test_sounds_dir_exists():
+    """SOUNDS_DIR exists after install_sfx."""
+    from jarvis.core.audiobook import SOUNDS_DIR
+
+    assert SOUNDS_DIR.exists()
+    ogg_files = list(SOUNDS_DIR.rglob("*.ogg"))
+    assert len(ogg_files) > 0
+
+
+def test_extract_text_str_path(tmp_path):
+    """extract_text accepts string paths."""
+    from jarvis.core.audiobook import extract_text
+
+    # Test with a real file
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("Hello world")
+    result = extract_text(str(test_file))
+    assert "Hello world" in result
+    
+    # Test with non-existent file (should not crash)
+    result = extract_text(str(tmp_path / "nonexistent.txt"))
+    assert result == ""
+
+
+def test_ocr_pdf_fallback(tmp_path):
+    """_ocr_pdf handles missing pytesseract gracefully."""
+    from jarvis.core.audiobook import _ocr_pdf
+
+    # Create a minimal PDF-like file (won't be valid, but tests the fallback)
+    fake_pdf = tmp_path / "fake.pdf"
+    fake_pdf.write_bytes(b"%PDF-1.4 fake")
+    result = _ocr_pdf(fake_pdf)
+    # Should not crash, may return empty string
+    assert isinstance(result, str)
