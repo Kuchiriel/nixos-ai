@@ -51,6 +51,7 @@ GAMING_STOP_SERVICES: list[str] = [
 GAMING_STOP_USER_SERVICES: list[str] = [
     "hypridle",          # Idle manager — interfere com gaming
     "swaync",            # Notification daemon — popups atrapalham
+    "mpvpaper",          # Wallpaper animation — consome iGPU
 ]
 
 # Serviços a MANTER durante gaming (leves, essenciais)
