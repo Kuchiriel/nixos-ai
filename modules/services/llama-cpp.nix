@@ -105,7 +105,7 @@ in {
           exec ${pkgs.llama-cpp}/bin/llama-server \
             -m "${pkgs.aiModels.embed}" \
             --host 0.0.0.0 --port ${toString config.services.llama-cpp-embeddings.port} \
-            --embeddings --pooling mean -c 4096 -t 2 -b 512 -ub 512
+            --embeddings --pooling mean -c 4096 -t 2 -b 2048 -ub 512
         '';
         serviceConfig.User = "nixos";
       };
