@@ -371,9 +371,10 @@ class HybridIndexer:
                 return None
 
         # Chunking alinhado com o contexto do modelo de embedding.
-        # nomic-embed-text-v2-moe tem ctx 2048; 2000 chars ≈ 950 tokens.
-        # Chunks maiores = mais contexto por resultado = melhor qualidade de busca.
-        chunk_size = 2000
+        # nomic-embed-text-v2-moe tem ctx 2048; 1500 chars ≈ 700 tokens.
+        # Com metadata, total fica ~800-900 tokens (safe for ubatch 1024).
+        # Chunks maiores = mais contexto = melhor qualidade, mas limitado pelo ubatch.
+        chunk_size = 1500
         chunks = [content[i:i + chunk_size] for i in range(0, len(content), chunk_size)]
 
         facts = extract_facts(content, ext)
