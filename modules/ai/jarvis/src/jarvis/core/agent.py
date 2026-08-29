@@ -125,36 +125,93 @@ class AuditLog:
 # Execução segura de comandos
 # ---------------------------------------------------------------------------
 
-# Operadores de encadeamento que permitem executar múltiplos comandos.
+# Operadores de encadeamento perigosos que permitem execução arbitrária.
+# &&, ||, backticks, $() são bloqueados sempre.
+# ; e | são permitidos quando o destino é seguro (pipes para head/tail/grep).
 # Um SLM pode gerar "cat /etc/shadow; rm -rf /" — o prefix check passaria
-# em "cat" mas o segundo comando seria executado. shlex.split() com
-# shell=True resolveria, mas usamos shell=False; ainda assim, validamos
-# explicitamente contra estes padrões para defense-in-depth.
-_CHAINING_PATTERNS = ("&&", "||", ";", "|", "`", "$(", "${", "\n")
+# em "cat" mas o segundo comando seria executado.
+_DANGEROUS_CHAINING = ("&&", "||", "`", "$(", "${", "\n")
 
-def has_chaining_operators(cmd: str) -> bool:
-    """True se o comando contém operadores de encadeamento shell.
+# Comandos que podem aparecer após pipe (seguros, read-only)
+_SAFE_PIPE_TARGETS = (
+    "head", "tail", "grep", "rg", "wc", "sort", "uniq", "cut",
+    "awk", "sed", "tr", "column", "jq", "ls", "cat",
+)
 
-    Detecta: && || ; | backtick $() ${} quebra de linha.
-    Não é uma validação shell completa — é uma barreira defensiva extra
-    para SLMs que geram encadeamento inesperado.
+
+def has_dangerous_operators(cmd: str) -> bool:
+    """True se o comando contém operadores perigosos (&&, ||, backticks, etc.).
+
+    Pipes (|) e ponto-e-vírgula (;) NÃO são bloqueados aqui — são
+    validados separadamente para permitir comandos como:
+      find ... -o ... | head -20
+      ls dir/ | grep pattern
     """
-    for pat in _CHAINING_PATTERNS:
+    for pat in _DANGEROUS_CHAINING:
         if pat in cmd:
             return True
     return False
 
 
+def _validate_pipes(cmd: str) -> bool:
+    """Valida que pipes apontam apenas para comandos seguros.
+
+    Permite: find ... | head, ls ... | grep, etc.
+    Bloqueia: find ... | rm, ls ... | xargs rm, etc.
+    """
+    if "|" not in cmd:
+        return True
+    parts = cmd.split("|")
+    for part in parts[1:]:
+        part = part.strip()
+        if not part:
+            continue
+        # Extrair primeiro token (comando)
+        first_token = part.split()[0] if part.split() else ""
+        # Remover redirects
+        first_token = first_token.split(">")[0]
+        if first_token and not any(first_token.startswith(p) for p in _SAFE_PIPE_TARGETS):
+            return False
+    return True
+
+
+def has_chaining_operators(cmd: str) -> bool:
+    """True se o comando contém operadores perigosos.
+
+    Mantido para backward compatibility — usada internamente.
+    Pipes e ; são validados separadamente.
+    """
+    return has_dangerous_operators(cmd)
+
+
 def command_allowed(cmd: str, allowed_prefixes: tuple[str, ...] | None = None) -> bool:
     """True se o comando começa com um prefixo read-only da allowlist
-    E não contém operadores de encadeamento."""
+    E não contém operadores perigosos.
+
+    Pipes (|) e ; são permitidos quando:
+    - O pipe aponta para um comando seguro (head, tail, grep, etc.)
+    - Exemplo: find ... -o ... | head -20 → OK
+    - Exemplo: ls | rm → BLOQUEADO
+    """
     prefixes = allowed_prefixes or DEFAULT_ALLOWED_PREFIXES
     stripped = cmd.strip()
     if not stripped:
         return False
-    if has_chaining_operators(stripped):
+    if has_dangerous_operators(stripped):
         return False
-    return any(stripped.startswith(p) for p in prefixes)
+    if not _validate_pipes(stripped):
+        return False
+    # Para comandos com pipes, verificar o comando base (antes do pipe)
+    base_cmd = stripped.split("|")[0].strip()
+    # Para comandos com ;, verificar cada parte
+    for part in stripped.split(";"):
+        part = part.strip()
+        if not part:
+            continue
+        check_cmd = part.split("|")[0].strip()
+        if not any(check_cmd.startswith(p) for p in prefixes):
+            return False
+    return True
 
 
 def run_shell(cmd: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:

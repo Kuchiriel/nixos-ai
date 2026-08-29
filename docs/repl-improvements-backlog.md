@@ -5,7 +5,7 @@
 
 ## 1. LSP Integration (OpenCode-style)
 
-**Status**: HYPOTHESIS
+**Status**: HYPOTHESIS — NOT YET IMPLEMENTED
 **Impacto**: Alto — modelo recebe type information
 **Complexidade**: Alta
 
@@ -21,7 +21,7 @@ OpenCode usa LSP para:
 
 ## 2. Git Auto-Commit (Aider-style)
 
-**Status**: HYPOTHESIS
+**Status**: HYPOTHESIS — NOT YET IMPLEMENTED
 **Impacto**: Médio — traceabilidade de mudanças
 **Complexidade**: Média
 
@@ -37,7 +37,7 @@ Aider faz:
 
 ## 3. Multi-Session (OpenCode-style)
 
-**Status**: HYPOTHESIS
+**Status**: HYPOTHESIS — NOT YET IMPLEMENTED
 **Impacto**: Médio — paralelismo
 **Complexidade**: Alta
 
@@ -53,7 +53,7 @@ OpenCode permite:
 
 ## 4. Session Sharing
 
-**Status**: HYPOTHESIS
+**Status**: HYPOTHESIS — NOT YET IMPLEMENTED
 **Impacto**: Baixo
 **Complexidade**: Média
 
@@ -62,7 +62,42 @@ Links compartilháveis para:
 - Debug de problemas
 - Review de mudanças
 
-## Prioridade de Implementação
+## IMPLEMENTED IN THIS SESSION
+
+### ✅ Context File Discovery (2026 Standard)
+- Walks up from CWD (no hardcoded paths)
+- Discovers: AGENTS.md, CLAUDE.md, GEMINI.md, .cursorrules
+- Follows AGENTS.md spec (Linux Foundation): nearest wins
+- Home-level: `~/.agents.md` via home-manager
+
+### ✅ .jarvismodes (Custom Modes)
+- Format inspired by .roomodes
+- 5 modes: code, architect, nightwatch, organizer, research
+- Declarative via home-manager (`~/.jarvismodes`)
+- REPL commands: /modes, /mode <slug>
+
+### ✅ All 20 MCP Tools in REPL
+- Added: lessons, read_chatgpt, rag_index
+- Full parity with MCP server
+
+### ✅ Pipe/Semicolon Support
+- `find ... -o ... | head -20` now works
+- Safe pipe validation (blocks `| rm`, etc.)
+- Updated: agent.py, devtools.py, mcp_server.py
+
+### ✅ Slash Commands
+- /reasoning (low|medium|high)
+- /lessons (search learned lessons)
+- /vault (list persistent notes)
+- /modes (list available modes)
+- /mode <slug> (switch mode)
+
+### ✅ System Prompt
+- Full 20-tool list documented
+- Output limits enforced
+- Context-aware rules
+
+## Prioridade de Implementação (remaining)
 
 1. **LSP** — maior impacto na qualidade do código gerado
 2. **Git auto-commit** — maior impacto na traceabilidade

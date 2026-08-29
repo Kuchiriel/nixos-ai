@@ -80,6 +80,8 @@ console = Console(theme=_THEME)
 _SLASH_COMMANDS = [
     "/quit", "/status", "/clear", "/map", "/model",
     "/recall", "/architect", "/debug", "/help",
+    "/reasoning", "/compact", "/vault", "/lessons",
+    "/modes", "/mode",
 ]
 
 
@@ -143,10 +145,7 @@ def _print_recall() -> None:
         console.print("[dim]Nenhuma memória encontrada.[/]")
         return
     for r in results:
-        console.print(f"  [dim][{r.get('kind', '?')}][/] {r.get('text', '')[:100]}")
-
-
-def _print_help() -> None:
+        console.print(f"  [dim][{r.get('kind', '?')}][/] {r.get('text', '')[:100]}")    def _print_help() -> None:
     rows = [
         ("/quit", "sair"),
         ("/clear", "limpar contexto"),
@@ -155,7 +154,12 @@ def _print_help() -> None:
         ("/map", "atualizar repo map"),
         ("/model", "ver modelo atual"),
         ("/recall", "buscar memória episódica"),
+        ("/lessons", "buscar lições aprendidas"),
+        ("/vault", "listar notas persistentes"),
         ("/architect", "modo architect (plan + execute)"),
+        ("/reasoning", "ver/nível reasoning (low|medium|high)"),
+        ("/modes", "listar modos disponíveis"),
+        ("/mode <slug>", "trocar de modo"),
         ("/debug", "mostra request/response cru da API"),
         ("/help", "esta ajuda"),
     ]
@@ -323,25 +327,39 @@ def _session_state_path(project_root: str | None = None) -> Path:
     return base / f"dev-session-{project_id}.json"
 
 
-def _discover_agent_files(start_dir: str | None = None, max_depth: int = 3) -> list[Path]:
-    """Procura AGENTS.md / CLAUDE.md / GEMINI.md / copilot instructions em diretório atual e pais."""
+def _discover_agent_files(start_dir: str | None = None, max_depth: int = 5) -> list[Path]:
+    """Walk up from start_dir discovering agent context files.
+
+    Follows the 2026 standard: AGENTS.md (Linux Foundation), CLAUDE.md
+    (Anthropic), GEMINI.md (Google), plus copilot-instructions.md.
+    Nearest file takes precedence per AGENTS.md spec.
+
+    Also discovers .jarvismodes (Jarvis custom modes) if present.
+    """
     base = Path(start_dir or os.getcwd()).resolve()
     seen: set[Path] = set()
     candidates: list[Path] = []
     cur = base
     depth = 0
     while cur.exists() and depth <= max_depth:
-        for name in ("AGENTS.md", "CLAUDE.md", "GEMINI.md"):
+        # Standard agent context files (AGENTS.md spec + vendor extensions)
+        for name in ("AGENTS.md", "CLAUDE.md", "GEMINI.md", "agents.md"):
             p = cur / name
             if p not in seen and p.exists():
                 seen.add(p)
                 candidates.append(p)
+        # GitHub Copilot instructions
         gh = cur / ".github"
         if gh.exists():
             p = gh / "copilot-instructions.md"
             if p.exists() and p not in seen:
                 seen.add(p)
                 candidates.append(p)
+        # Cursor rules (legacy but still honored)
+        cr = cur / ".cursorrules"
+        if cr.exists() and cr not in seen:
+            seen.add(cr)
+            candidates.append(cr)
         if cur == cur.parent:
             break
         cur = cur.parent
@@ -350,16 +368,22 @@ def _discover_agent_files(start_dir: str | None = None, max_depth: int = 3) -> l
 
 
 def _load_agent_context(start_dir: str | None = None) -> str:
-    """Carrega AGENTS.md seletivamente — só arquivos < 3KB."""
+    """Load agent context files — budget-aware, nearest-first.
+
+    Per AGENTS.md spec: closest file wins. We load from nearest to farthest
+    and stop when we hit the 3KB budget per-file limit (Codex uses 32KB
+    total, but our model has 32K context and system prompt takes ~15-20K).
+    """
     files = _discover_agent_files(start_dir)
     if not files:
         return ""
     chunks: list[str] = []
+    total_budget = 3000  # max chars per file (conservative for small context)
     for path in files:
         try:
             text = path.read_text(encoding="utf-8", errors="replace").strip()
-            if text and len(text) < 3000:
-                chunks.append(text)
+            if text and len(text) < total_budget:
+                chunks.append(f"# From {path.name} ({path.parent}):\n{text}")
         except Exception:  # noqa: BLE001 — leitura de arquivo é best-effort
             continue
     if not chunks:
@@ -396,6 +420,97 @@ def _resume_session(project_root: str | None = None) -> list[dict[str, Any]]:
     except Exception:  # noqa: BLE001 — resume é best-effort
         pass
     return []
+
+
+# ---------------------------------------------------------------------------
+# .jarvismodes — modos customizados (estilo .roomodes)
+# ---------------------------------------------------------------------------
+
+def _load_jarvismodes() -> list[dict[str, Any]]:
+    """Load custom modes from .jarvismodes file.
+
+    Searches: CWD → project root → ~/.jarvismodes
+    Format: YAML with 'modes' key, each mode has slug, name, description,
+    roleDefinition, instructions.
+    """
+    search_paths = [
+        Path(os.getcwd()) / ".jarvismodes",
+        Path(os.getcwd()) / ".jarvis" / "modes.yaml",
+    ]
+    # Also check home directory
+    home_modes = Path.home() / ".jarvismodes"
+    if home_modes.exists():
+        search_paths.append(home_modes)
+
+    for path in search_paths:
+        if not path.exists():
+            continue
+        try:
+            import yaml  # noqa: F401 — optional dependency
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and "modes" in data:
+                return data["modes"]
+        except ImportError:
+            # No yaml — try simple line-based parsing
+            return _parse_jarvismodes_simple(path)
+        except Exception:
+            continue
+    return []
+
+
+def _parse_jarvismodes_simple(path: Path) -> list[dict[str, Any]]:
+    """Fallback parser for .jarvismodes without PyYAML.
+
+    Supports a simple format:
+      slug: name
+      description: text
+      instructions: |
+        multi-line
+        text
+    """
+    modes: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    in_instructions = False
+    instructions_lines: list[str] = []
+
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.rstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if in_instructions:
+            if line.startswith("  ") or line.startswith("\t"):
+                instructions_lines.append(line.strip())
+                continue
+            else:
+                if current and instructions_lines:
+                    current["instructions"] = "\n".join(instructions_lines)
+                in_instructions = False
+                instructions_lines = []
+
+        if stripped.startswith("slug:"):
+            if current:
+                modes.append(current)
+            slug = stripped.split(":", 1)[1].strip()
+            current = {"slug": slug}
+        elif stripped.startswith("name:") and current:
+            current["name"] = stripped.split(":", 1)[1].strip()
+        elif stripped.startswith("description:") and current:
+            current["description"] = stripped.split(":", 1)[1].strip()
+        elif stripped.startswith("instructions:") and current:
+            rest = stripped.split(":", 1)[1].strip()
+            if rest == "|" or rest == ">-":
+                in_instructions = True
+            elif rest:
+                current["instructions"] = rest
+        elif stripped.startswith("roleDefinition:") and current:
+            current["roleDefinition"] = stripped.split(":", 1)[1].strip()
+
+    if current:
+        if in_instructions and instructions_lines:
+            current["instructions"] = "\n".join(instructions_lines)
+        modes.append(current)
+
+    return modes
 
 
 # ---------------------------------------------------------------------------
@@ -493,23 +608,42 @@ SYSTEM_PROMPT_TEMPLATE = """JARVIS dev agent. PT-BR. Direto.
 {memory_context}
 {agent_context}
 
-TOOLS:
+TOOLS (20 tools disponíveis):
+--- Arquivos ---
 - read_file(path, offset?, limit?) → ler ANTES de editar
-- str_replace(path, old, new) → old EXATO e único; vazio = criar
+- write_file(path, content) → criar/escrever arquivo
+- str_replace(path, old, new) → old EXATO; vazio = criar
+- list_directory(path, max_depth?) → listar diretório
+--- Shell ---
 - execute_shell(cmd) → bash (ls/grep/pytest/git/curl)
-- semantic_search(query, top_k) → busca semântica no código
+  Pipes e ; são permitidos: find ... -o ... | head -20
+--- Busca ---
+- semantic_search(query, top_k) → busca semântica
+- rag_search(query) → busca RAG no codebase
+- rag_index(path?) → indexar diretório no RAG
+--- Vision ---
+- capture_screen() → screenshot
+- observe_screen(mode?, question?) → screenshot + vision
+--- NixOS ---
+- nix_eval(expr) → avaliar Nix
+- nix_check() → nix flake check
+- nix_search(query) → pesquisar nixpkgs
+--- Memória ---
+- remember(text, category?) → gravar memória
+- recall(query) → buscar memórias
+- lessons(query) → lições aprendidas
+- vault_list() → notas persistentes
+- vault_write(name, content) → escrever nota
+--- Web ---
+- read_chatgpt(url) → ler conversa ChatGPT compartilhada
 
-TEXT FORMAT (quando não há tool_calls):
->>> READ path
-path
-<<<<<<< SEARCH
-old
-=======
-new
->>>>>>> REPLACE
-```bash
-cmd
-```
+LIMITES DE OUTPUT (OBRIGATÓRIO):
+- find: máx 30 resultados (use -maxdepth 2 | head -30)
+- ls: NUNCA recursivo (sem -R)
+- git log: máx 10 linhas (git log --oneline -10)
+- cat: PROIBIDO (usar head/tail/sed)
+- grep: máx 20 resultados (-m 20)
+- Output >50 linhas = resuma em bullets
 
 RULES:
 1. read_file ANTES de str_replace no mesmo path
@@ -517,6 +651,8 @@ RULES:
 3. Se falhar, re-leia com mais contexto
 4. Teste após editar, commit após testar
 5. Não invente conteúdo sem ler
+6. Use MCP tools quando built-in tools não bastam
+7. ANTES de ler arquivo grande: wc -l (saber tamanho)
 """
 
 PLAN_PROMPT = """JARVIS architect. PT-BR. Direto.
@@ -720,6 +856,36 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
             for r in results:
                 lines.append(f"[{r.score:.2f}] {r.path}\n{r.text[:200]}")
             return "\n".join(lines), None
+        except Exception as e:
+            return f"ERROR: {e}", None
+
+    # ── RAG Index ──
+    if name == "rag_index":
+        try:
+            from jarvis.core.rag import HybridIndexer
+            hi = HybridIndexer()
+            path = args.get("path", os.getcwd())
+            count = hi.index_directory(path)
+            return f"Indexed {count} files from {path}", None
+        except Exception as e:
+            return f"ERROR: {e}", None
+
+    # ── Lessons ──
+    if name == "lessons":
+        try:
+            from jarvis.core.memory import EpisodicMemory
+            em = EpisodicMemory()
+            result = em.lessons(args.get("query", ""), top_k=3)
+            return result or "No lessons found.", None
+        except Exception as e:
+            return f"ERROR: {e}", None
+
+    # ── ChatGPT Reader ──
+    if name == "read_chatgpt":
+        try:
+            from jarvis.core.chatgpt_reader import handle_chatgpt_read
+            result = handle_chatgpt_read(args)
+            return result, None
         except Exception as e:
             return f"ERROR: {e}", None
 
@@ -1001,6 +1167,50 @@ def _get_tools() -> list[dict[str, Any]]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "rag_index",
+                "description": "Indexa diretório no RAG (torna código buscabável).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Diretório para indexar (padrão: atual)"},
+                    },
+                },
+            },
+        },
+        # ── Lessons ──
+        {
+            "type": "function",
+            "function": {
+                "name": "lessons",
+                "description": "Busca lições aprendidas de erros passados.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Padrão de erro ou problema"},
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
+        # ── ChatGPT Reader ──
+        {
+            "type": "function",
+            "function": {
+                "name": "read_chatgpt",
+                "description": "Lê conversa compartilhada do ChatGPT.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {"type": "string", "description": "URL de compartilhamento"},
+                        "max_chars": {"type": "integer", "description": "Máx de caracteres (padrão 50000)"},
+                    },
+                    "required": ["url"],
+                },
+            },
+        },
     ]
 
 
@@ -1188,31 +1398,29 @@ def _run_agent_loop(
 
         message = data["choices"][0]["message"]
         content = message.get("content") or ""
-        tool_calls = message.get("tool_calls")
+        tool_calls = message.get("tool_calls")            # Extract thinking content if present
+            thinking = ""
+            if "<thinking>" in content and "</thinking>" in content:
+                import re as _re
+                thinking_match = _re.search(r"<thinking>(.*?)</thinking>", content, _re.DOTALL)
+                if thinking_match:
+                    thinking = thinking_match.group(1).strip()
+                    content = content[:thinking_match.start()] + content[thinking_match.end():]
+                    content = content.strip()
+            elif reasoning_level != "low" and content:
+                # Show first part as thinking if no explicit tags
+                lines = content.split("\n")
+                if len(lines) > 3:
+                    thinking = "\n".join(lines[:2])
+                    content = "\n".join(lines[2:])
 
-        # Extract thinking content if present
-        thinking = ""
-        if "<thinking>" in content and "</thinking>" in content:
-            import re
-            thinking_match = re.search(r"<thinking>(.*?)</thinking>", content, re.DOTALL)
-            if thinking_match:
-                thinking = thinking_match.group(1).strip()
-                content = content[:thinking_match.start()] + content[thinking_match.end():]
-                content = content.strip()
-        elif reasoning_level != "low" and content:
-            # Show first part as thinking if no explicit tags
-            lines = content.split("\n")
-            if len(lines) > 3:
-                thinking = "\n".join(lines[:2])
-                content = "\n".join(lines[2:])
-
-        if thinking and reasoning_level != "low":
-            console.print(Panel(
-                Markdown(thinking) if thinking.strip().startswith(("#", "-", "*", "`")) else thinking,
-                title="💭 reasoning",
-                title_align="left",
-                border_style="dim",
-            ))
+            if thinking and reasoning_level != "low":
+                console.print(Panel(
+                    Markdown(thinking) if thinking.strip().startswith(("#", "-", "*", "`")) else thinking,
+                    title="💭 reasoning",
+                    title_align="left",
+                    border_style="dim",
+                ))
 
         used_text_fallback = False
         if not tool_calls and content:
@@ -1270,25 +1478,43 @@ def _run_agent_loop(
 # ---------------------------------------------------------------------------
 
 def _find_project_root() -> str | None:
-    """Auto-detect project root by looking for AGENTS.md or .git."""
+    """Auto-detect project root by walking UP from CWD.
+
+    Best practice (2026): Walk up the directory tree from the working
+    directory looking for context files. This follows the AGENTS.md spec
+    (Linux Foundation) and CLAUDE.md convention: 'agents automatically
+    read the nearest file in the directory tree, so the closest one takes
+    precedence.' No hardcoded paths — works from any directory.
+
+    Search order: .git (git root) → AGENTS.md → CLAUDE.md → GEMINI.md
+    Walking stops at filesystem root or after max_depth levels.
+    """
     import subprocess
+    # 1. Try git root first (most reliable for repos)
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True, timeout=5,
+            cwd=os.getcwd(),
         )
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
     except Exception:
         pass
-    # Fallback: look for AGENTS.md in common locations
-    for candidate in [
-        os.path.expanduser("~/projects/nixos-ai"),
-        os.path.expanduser("~/nixos-ai"),
-        os.getcwd(),
-    ]:
-        if os.path.exists(os.path.join(candidate, "AGENTS.md")):
-            return candidate
+    # 2. Walk up from CWD looking for agent context files
+    #    (AGENTS.md spec: nearest file wins, walk up tree)
+    base = Path(os.getcwd()).resolve()
+    depth = 0
+    max_depth = 10
+    cur = base
+    while cur.exists() and depth <= max_depth:
+        for name in ("AGENTS.md", "CLAUDE.md", "GEMINI.md", "agents.md"):
+            if (cur / name).exists():
+                return str(cur)
+        if cur == cur.parent:
+            break
+        cur = cur.parent
+        depth += 1
     return None
 
 
@@ -1421,6 +1647,61 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
                 console.print(f"[dim]reasoning level: {reasoning_level}[/]")
             else:
                 console.print("[tool.error]use: /reasoning low|medium|high[/]")
+            continue
+
+        if user_input == "/lessons":
+            query = session.prompt("query: ").strip()
+            if query:
+                try:
+                    from jarvis.core.memory import EpisodicMemory
+                    em = EpisodicMemory()
+                    result = em.lessons(query, top_k=5)
+                    console.print(Panel(result or "Nenhuma lição encontrada.", title="📚 Lições", border_style="dim", title_align="left"))
+                except Exception as e:
+                    console.print(f"[tool.error]Erro: {e}[/]")
+            continue
+
+        if user_input == "/vault":
+            try:
+                from jarvis.core.vault import MemoryVault
+                mv = MemoryVault()
+                notes = mv.list_notes()
+                if notes:
+                    console.print(Panel("\n".join(f"- {n}" for n in notes), title="📦 Vault", border_style="dim", title_align="left"))
+                else:
+                    console.print("[dim]Vault vazio.[/]")
+            except Exception as e:
+                console.print(f"[tool.error]Erro: {e}[/]")
+            continue
+
+        if user_input == "/modes":
+            modes = _load_jarvismodes()
+            if modes:
+                table = Table(show_header=False, box=None, padding=(0, 1))
+                for m in modes:
+                    table.add_row(f"[tool]{m['slug']}[/]", m.get('name', ''), m.get('description', '')[:60])
+                console.print(Panel(table, title="🎭 Modos", border_style="dim", title_align="left"))
+            else:
+                console.print("[dim]Nenhum modo configurado em .jarvismodes[/]")
+            continue
+
+        if user_input.startswith("/mode "):
+            target_slug = user_input.split(" ", 1)[1].strip().lower()
+            modes = _load_jarvismodes()
+            found = [m for m in modes if m["slug"] == target_slug]
+            if found:
+                m = found[0]
+                # Reload system prompt with mode-specific instructions
+                mode_instructions = m.get("instructions", "")
+                mode_role = m.get("roleDefinition", "")
+                if mode_instructions or mode_role:
+                    extra = f"\n\nMODE: {m.get('name', target_slug)}\n{mode_role}\n\n{mode_instructions}"
+                    messages[0] = {"role": "system", "content": system_prompt + extra}
+                    console.print(f"[jarvis]modo: {m.get('name', target_slug)}[/]")
+                else:
+                    console.print(f"[dim]modo '{target_slug}' sem instruções extras[/]")
+            else:
+                console.print(f"[tool.error]modo '{target_slug}' não encontrado. Use /modes para ver disponíveis.[/]")
             continue
 
         if user_input == "/architect":

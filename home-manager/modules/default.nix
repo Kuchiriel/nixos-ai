@@ -1,6 +1,7 @@
 {
   imports = [
     ./agents-md.nix
+    ./jarvismodes.nix
     ./alacritty.nix
     ./bat.nix
     ./chromium.nix
