@@ -182,8 +182,10 @@ def _query_server_context_size() -> int:
     Falls back to 0 if server is unavailable.
     """
     cfg = _get_config()
+    # /props is at root, not under /v1
+    base = cfg.llm_base_url.rstrip('/').replace('/v1', '')
     try:
-        resp = requests.get(f"{cfg.llm_base_url.rstrip('/')}/props", timeout=3)
+        resp = requests.get(f"{base}/props", timeout=3)
         resp.raise_for_status()
         data = resp.json()
         n_ctx = data.get("default_generation_settings", {}).get("n_ctx", 0)
