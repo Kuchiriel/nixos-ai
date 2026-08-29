@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   cfg = config.services.jarvis-telegram;
@@ -41,6 +42,7 @@ in {
         Type = "simple";
         User = cfg.user;
         EnvironmentFile = "-${cfg.environmentFile}";
+        ExecStart = "${pkgs.jarvis}/bin/jarvis telegram";
         Restart = "on-failure";
         RestartSec = "5";
         TimeoutStopSec = "10";
