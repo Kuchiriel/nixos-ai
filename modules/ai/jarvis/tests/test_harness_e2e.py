@@ -886,7 +886,12 @@ class TestMetricsReport:
         ]
 
         for scenario_fn in scenarios:
-            result = scenario_fn()
+            import inspect
+            sig = inspect.signature(scenario_fn)
+            if 'repo_root' in sig.parameters:
+                result = scenario_fn(repo_root=isolated_repo)
+            else:
+                result = scenario_fn()
             collector.record(result)
 
         # Print report
