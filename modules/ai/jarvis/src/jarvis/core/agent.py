@@ -176,12 +176,17 @@ def _validate_pipes(cmd: str) -> bool:
 
 
 def has_chaining_operators(cmd: str) -> bool:
-    """True se o comando contém operadores perigosos.
+    """True se o comando contém operadores de encadeamento shell.
 
-    Mantido para backward compatibility — usada internamente.
-    Pipes e ; são validados separadamente.
+    Detecta: && || ; | backtick $() ${} newline.
+    Usada por testes e para detecção geral.
+    Para validação de segurança, usar command_allowed().
     """
-    return has_dangerous_operators(cmd)
+    _ALL_CHAINING = ("&&", "||", ";", "|", "`", "$(", "${", "\n")
+    for pat in _ALL_CHAINING:
+        if pat in cmd:
+            return True
+    return False
 
 
 def command_allowed(cmd: str, allowed_prefixes: tuple[str, ...] | None = None) -> bool:
