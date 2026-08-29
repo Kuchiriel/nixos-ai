@@ -184,29 +184,20 @@ def _default_call_llm(prompt: str, max_tokens: int = 2048) -> str:
 
 
 def _default_send_telegram(message: str) -> bool:
-    """Send message to Telegram."""
-    env_file = Path("/etc/jarvis-telegram.env")
-    if not env_file.exists():
-        return False
-    try:
-        env = {}
-        for line in env_file.read_text().splitlines():
-            if "=" in line:
-                key, _, value = line.partition("=")
-                env[key.strip()] = value.strip()
+    """Delegate to canonical telegram provider.
 
-        import requests
-        resp = requests.post(
-            f"https://api.telegram.org/bot{env['JARVIS_TELEGRAM_TOKEN']}/sendMessage",
-            json={
-                "chat_id": env["JARVIS_TELEGRAM_CHAT_ID"],
-                "text": message,
-                "parse_mode": "Markdown",
-            },
-            timeout=10,
-        )
-        return resp.status_code == 200
-    except Exception:
+    The old implementation read /etc/jarvis-telegram.env directly and failed
+    silently. This delegates to jarvis.providers.telegram.send_notification()
+    which is tested and used by heal.py.
+    """
+    try:
+        from jarvis.providers.telegram import send_notification
+        ok = send_notification(message)
+        if not ok:
+            print("[nightwatch] Telegram configured but send failed — check bot token")
+        return ok
+    except Exception as e:
+        print(f"[nightwatch] Telegram unavailable: {e}")
         return False
 
 
