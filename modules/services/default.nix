@@ -12,6 +12,7 @@
     ./litellm-cascade.nix
     ./llama-cpp.nix
     ./llama-fan-control.nix
+    ./nightwatch-timer.nix
     ./qdrant.nix
   ];
 }

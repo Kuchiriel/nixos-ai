@@ -11,22 +11,23 @@
 { config, lib, pkgs, ... }:
 
 let
-  jarvisEnv = config.services.jarvis.environment or {};
+  jarvisPackage = config.services.jarvis.package or pkgs.jarvis;
+  projectRoot = config.services.jarvis.projectRoot or "/home/nixos/projects/nixos-ai";
 in {
-  systemd.user.services.nightwatch = {
-    Description = "JARVIS nightwatch — autonomous overnight maintenance";
-    After = [ "llama-cpp-server.service" ];
-    Wants = [ "llama-cpp-server.service" ];
+  systemd.services.nightwatch = {
+    description = "JARVIS nightwatch — autonomous overnight maintenance";
+    after = [ "llama-cpp-server.service" ];
+    wants = [ "llama-cpp-server.service" ];
 
-    Service = {
+    serviceConfig = {
       Type = "oneshot";
       Environment = [
-        "PYTHONPATH=${config.services.jarvis.package or pkgs.jarvis}/lib/python3.13/site-packages"
-        "JARVIS_PROJECT_ROOT=${config.services.jarvis.projectRoot or "/home/nixos/projects/nixos-ai"}"
-      ] ++ lib.mapAttrsToList (n: v: "${n}=${v}") jarvisEnv;
-
-      ExecStart = "${config.services.jarvis.package or pkgs.jarvis}/bin/jarvis nightwatch --tasks 20 --report-telegram --max-minutes 180";
-      WorkingDirectory = config.services.jarvis.projectRoot or "/home/nixos/projects/nixos-ai";
+        "PYTHONPATH=${jarvisPackage}/lib/python3.13/site-packages"
+        "JARVIS_PROJECT_ROOT=${projectRoot}"
+      ];
+      ExecStart = "${jarvisPackage}/bin/jarvis nightwatch --tasks 20 --report-telegram --max-minutes 180";
+      WorkingDirectory = projectRoot;
+      User = "nixos";
 
       # Safety: restart on failure, but not too often
       Restart = "on-failure";
@@ -34,20 +35,16 @@ in {
       StartLimitIntervalSec = 3600;
       StartLimitBurst = 3;
     };
-
-    Install = {
-      WantedBy = [ "default.target" ];
-    };
   };
 
-  systemd.user.timers.nightwatch = {
-    Description = "Run JARVIS nightwatch daily at 03:00";
-    WantedBy = [ "timers.target" ];
+  systemd.timers.nightwatch = {
+    description = "Run JARVIS nightwatch daily at 03:00";
+    wantedBy = [ "timers.target" ];
 
-    Timer = {
+    timerConfig = {
       OnCalendar = "*-*-* 03:00:00";
       Persistent = true;
-      RandomizedDelaySec = 1200;  # 0-20min random delay
+      RandomizedDelaySec = 1200;
       AccuracySec = 300;
     };
   };
