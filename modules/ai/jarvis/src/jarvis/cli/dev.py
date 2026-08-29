@@ -173,9 +173,29 @@ def _print_recall() -> None:
 # Config / perfil do modelo
 # ---------------------------------------------------------------------------
 
+def _query_server_context_size() -> int:
+    """Query llama.cpp /props endpoint for actual n_ctx.
+
+    Falls back to 0 if server is unavailable.
+    """
+    cfg = _get_config()
+    try:
+        resp = requests.get(f"{cfg.llm_base_url.rstrip('/')}/props", timeout=3)
+        resp.raise_for_status()
+        data = resp.json()
+        n_ctx = data.get("default_generation_settings", {}).get("n_ctx", 0)
+        if n_ctx > 0:
+            return n_ctx
+    except Exception:  # noqa: BLE001
+        pass
+    return 0
+
+
 def _detect_profile() -> dict[str, Any]:
     """Detecta o perfil do modelo, o model_id correto para o payload, e se
-    devemos usar tool_calls nativas ou operar 100% via blocos de texto."""
+    devemos usar tool_calls nativas ou operar 100% via blocos de texto.
+
+    v4.1: queries actual n_ctx from llama.cpp /props for accurate context."""
     cfg = _get_config()
     model_id = cfg.llm_model  # default: "default"
     try:
@@ -208,6 +228,13 @@ def _detect_profile() -> dict[str, Any]:
         profile = {"name": "default", "max_tokens": 1024, "temperature": 0.0}
 
     profile["model_id"] = model_id
+
+    # Query actual context size from llama.cpp server
+    actual_n_ctx = _query_server_context_size()
+    if actual_n_ctx > 0:
+        profile["context_size"] = actual_n_ctx
+    else:
+        profile["context_size"] = max(profile["max_tokens"] * 8, 8192)
 
     # Modelos "tiny" costumam ter function-calling nativo pouco confiável em
     # GGUF quantizado — por padrão operam só em modo texto (0 tokens de
@@ -1455,15 +1482,17 @@ def _run_agent_loop(
     Inclui auto-compaction: se contexto estimado ultrapassar 70% do
     max_tokens do modelo, compacta automaticamente.
     """
-    max_context_tokens = profile["max_tokens"] * 8
-    compact_threshold = int(max_context_tokens * 0.7)
+    # Use actual context size from server, not the old max_tokens * 8 heuristic
+    context_size = profile.get("context_size", 8192)
+    compact_threshold = int(context_size * 0.70)
+    compact_target = int(context_size * 0.50)
 
     for turn in range(max_turns):
         est = _estimate_tokens(messages)
         if est > compact_threshold:
-            messages[:] = _compact_session(messages, max_tokens=int(compact_threshold * 0.6))
+            messages[:] = _compact_session(messages, max_tokens=compact_target)
             if debug:
-                console.print(f"[dim]🗜️  auto-compact: {est} → ~{_estimate_tokens(messages)} tok[/]")
+                console.print(f"[dim]🗜️  auto-compact: {est:,} → ~{_estimate_tokens(messages):,} tok (threshold: {compact_threshold:,})[/]")
 
         with console.status(f"[jarvis]pensando…[/] ({turn + 1}/{max_turns})", spinner="dots"):
             try:
@@ -1620,7 +1649,10 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
     mode = "native" if profile["native_tools"] else "text"
 
     set_status("listening", "REPL aberto")
+    context_size = profile.get("context_size", 0)
     console.print(f"[jarvis]jarvis[/] [dim]dev[/] · {profile['name']} · {mode} · [dim]{os.getcwd()}[/]")
+    if context_size:
+        console.print(f"[dim]ctx: {context_size:,} tokens (from server)[/]")
     console.print("[dim]/help para comandos[/]\n")
 
     repo_map = _build_repo_map(os.getcwd())
