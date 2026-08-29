@@ -26,4 +26,17 @@ in {
     Timer.OnCalendar = "*:0/15";
     Install.WantedBy = ["timers.target"];
   };
+
+  # ═══ HackMD Sync Plugin ═══
+  # Install via Obsidian Community Plugins (BRAT or manual)
+  # Plugin: hackmd-sync (bidirectional push/pull)
+  # After Obsidian starts, go to:
+  #   Settings → Community Plugins → Browse → Search "HackMD Sync" → Install
+  # Then configure:
+  #   Settings → HackMD Sync → API Token: (same token as JARVIS)
+  #
+  # Alternative: use hackmd-push for one-way push only
+  #
+  # The JARVIS MCP server also syncs docs to HackMD automatically.
+  # This creates a triangle: Obsidian ↔ HackMD ↔ JARVIS
 }
