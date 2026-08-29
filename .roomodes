@@ -1,13 +1,21 @@
 # Roo Code Custom Modes — nixos-ai
 # Formato: https://docs.roocode.com/features/custom-modes
-# Contexto: 192K tokens (Qwen3.6-35B-A3B via llama.cpp local, profile host)
+# Contexto: 32K tokens (Qwen3.6-35B-A3B, ncmoe=36, 6GB VRAM)
 #
-# REGRAS DE ECONOMIA DE CONTEXTO:
-#   - Instruções devem ser concisas (máx ~500 tokens por modo)
-#   - Use listas, não parágrafos longos
-#   - Evite repetir informações entre modos
-#   - O system prompt consome ~2K tokens; customInstructions somam ~1-2K
-#   - Com 192K tokens, há ~135K úteis (70% do contexto)
+# ⚠️ CONTEXTO É RECURSO ESCASSO — 32K NÃO É 192K
+#   - System prompt Roo Dev: ~15-20K tokens
+#   - Sobram: ~12-17K para conversa + tools
+#   - Cada tool output consome contexto
+#   - Condensing falha se histórico > contexto disponível
+#
+# REGRAS ANTI-CONDENSING:
+#   - TODO output de tool DEVE ser limitado
+#   - find: máx 30 resultados
+#   - ls: sem -R, sem recursivo
+#   - git log: máx 10 linhas
+#   - cat: NUNCA — usar head/tail/sed
+#   - grep: máx 20 resultados
+#   - Comando longo = contexto perdido
 
 customModes:
   # ============================================================
@@ -24,22 +32,32 @@ customModes:
       Use para edição de código, debug, implementação de features,
       refatoração, e qualquer tarefa de desenvolvimento.
     customInstructions: |-
-      ## GESTÃO DE CONTEXTO (192K tokens — mas seja eficiente)
-      - ANTES de ler arquivo: `wc -l <arquivo>` para saber o tamanho
-      - Para arquivos >200 linhas: use `head -n 100`, `tail -n 50`, `sed -n '50,150p'`
-      - Para achar função: use `grep -n 'def func' arquivo.py` primeiro
-      - Para achar uma string: use `grep -n 'termo' arquivo.py`
-      - Nunca faça `cat arquivo.py` inteiro — sempre com offset/limit
-      - Respeite orçamento: ~135K tokens úteis
+      ## ⚠️ CONTEXTO: 32K — SEJA EXTREMAMENTE EFICIENTE
+      - System prompt já consome ~15-20K. Sobram ~12K.
+      - Cada tool output consome contexto. Limite SEMPRE.
 
-      ## Regras
-      - Leia o código relevante ANTES de editar
-      - Use apply_diff/str_replace para edits cirúrgicos
-      - Não reescreva arquivos inteiros sem necessidade
-      - Para Nix: use `nix flake check` antes de commitar
-      - Para Python: use `nix develop --command pytest`
-      - Commits pequenos e atômicos em PT-BR
-      - Se não tiver certeza, pesquise antes de implementar
+      ## LIMITES DE OUTPUT (OBRIGATÓRIO)
+      - `find`: máx 30 resultados — use `-maxdepth 2 | head -30`
+      - `ls`: NUNCA recursivo — use `ls dir/` sem -R
+      - `git log`: máx 10 linhas — `git log --oneline -10`
+      - `cat`: PROIBIDO — usar `head -n 50`, `tail -n 20`, `sed -n '10,30p'`
+      - `grep`: máx 20 resultados — use `-m 20` ou `| head -20`
+      - `wc -l`: ok (1 linha)
+      - `nix eval`: ok (1 linha)
+      - Output >50 linhas = PERDA de contexto
+
+      ## LEITURA DE ARQUIVOS
+      - ANTES: `wc -l <arquivo>` (1 linha)
+      - Para achar algo: `grep -n 'termo' arquivo | head -20`
+      - Para ler: `sed -n '10,30p' arquivo` (20 linhas)
+      - NUNCA: `cat arquivo`, `head -1000`, `ls -R`
+
+      ## Regras (AkitaOnRails: XP com IA)
+      - Edits cirúrgicos (str_replace) > reescritas
+      - Cada commit = mudança atômica
+      - Teste antes de commitar (`nix flake check` / `pytest`)
+      - Commit message descreva o PORQUÊ, não o quê
+      - Se.output >50 linhas, resuma em 5 bullet points
     groups:
       - read
       - edit
@@ -92,12 +110,11 @@ customModes:
       Use para trabalho autônomo contínuo quando o usuário pedir para
       "rodar overnight" ou "fazer melhorias automáticas".
     customInstructions: |-
-      ## GESTÃO DE CONTEXTO (192K tokens)
-      - ANTES de ler arquivo: `wc -l <arquivo>` para saber o tamanho
-      - Para arquivos >200 linhas: use `head -n 100`, `tail -n 50`, `sed -n '50,150p'`
-      - Para achar função/string: use `grep -n` primeiro
-      - Nunca faça `cat arquivo.py` inteiro
-      - Respeite orçamento: ~135K tokens úteis
+      ## ⚠️ CONTEXTO: 32K — SEJA EXTREMAMENTE EFICIENTE
+      - System prompt já consome ~15-20K. Sobram ~12K.
+      - Cada tool output consome contexto. Limite SEMPRE.
+      - `find`: máx 30 | `ls`: sem -R | `git log`: -10 | `cat`: PROIBIDO
+      - `grep`: máx 20 | Output >50 linhas = resuma em bullets
 
       ## SOBREVIVÊNCIA À CONDENSAÇÃO
       - Se o contexto for condensado, VOCÊ CONTINUA O LOOP
@@ -155,10 +172,13 @@ customModes:
       Use quando o usuário pedir para organizar, limpar, categorizar
       ou deduplicar arquivos e diretórios.
     customInstructions: |-
-      ## GESTÃO DE CONTEXTO (192K tokens)
-      - ANTES de ler arquivo: `wc -l <arquivo>` para saber o tamanho
-      - Para inventário: use `find` + `wc -l` + `head -5` por arquivo
-      - Nunca leia arquivos inteiros para classificar — bastam as primeiras linhas
+      ## ⚠️ CONTEXTO: 32K — SEJA EXTREMAMENTE EFICIENTE
+      - System prompt já consome ~15-20K. Sobram ~12K.
+      - `find`: máx 30 | `ls`: sem -R | `du`: sem -r | `cat`: PROIBIDO
+      - Para inventário: `find dir -maxdepth 2 -type f | head -30`
+      - Para tamanho: `du -sh dir/* | sort -rh | head -10`
+      - Para conteúdo: `head -3 arquivo` (3 linhas)
+      - Output >30 linhas = PERDA de contexto
 
       ## Metodologia
       1. INVENTORY — escaneie recursivamente, leia primeiras linhas
