@@ -136,6 +136,15 @@ def _alert(service: str, component: str, detail: str, *, healed: bool) -> None:
             pass
     except Exception:  # noqa: BLE001
         pass
+    # Emit lifecycle event via Event Bus
+    try:
+        from jarvis.core.eventbus import get_bus
+        get_bus().publish("heal.service", {
+            "service": service, "component": component,
+            "healed": healed, "detail": detail[:200],
+        })
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _alert_recovery(service: str, component: str) -> None:
@@ -150,6 +159,14 @@ def _alert_recovery(service: str, component: str) -> None:
         except Exception:  # noqa: BLE001 — notificação é best-effort
             pass
     except Exception:  # noqa: BLE001 — notificação é best-effort
+        pass
+    # Emit lifecycle event via Event Bus
+    try:
+        from jarvis.core.eventbus import get_bus
+        get_bus().publish("heal.recovered", {
+            "service": service, "component": component,
+        })
+    except Exception:  # noqa: BLE001
         pass
 
 

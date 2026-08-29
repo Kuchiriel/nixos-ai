@@ -213,6 +213,15 @@ class IdleWorker:
             json.dumps(heartbeat, ensure_ascii=False), encoding="utf-8",
         )
         self._notify(task.name, result)
+        # Emit lifecycle event via Event Bus
+        try:
+            from jarvis.core.eventbus import get_bus
+            ok = result.get("ok", result.get("exit", 0) == 0)
+            get_bus().publish("idle.task", {
+                "task": task.name, "ok": ok, "result": result,
+            })
+        except Exception:  # noqa: BLE001
+            pass
         return {"ran": True, "task": task.name, "result": result}
 
     def _notify(self, task_name: str, result: dict[str, Any]) -> None:
