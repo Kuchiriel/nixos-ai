@@ -46,6 +46,7 @@ from typing import Any, Callable
 
 from enum import Enum
 from nightwatch.task_queue import TaskQueue, Task, TaskStatus, LoopDetector, MissionState
+from jarvis.core.eventbus import EventBus, Event
 
 
 class FailureType(str, Enum):
@@ -132,6 +133,9 @@ class HarnessConfig:
     # Context budget (0 = auto-detect from llama.cpp /props endpoint)
     context_budget: int = 0
     compaction_threshold: float = 0.7
+    # Anti-loop detection
+    loop_max_attempts: int = 3
+    loop_window_seconds: float = 300.0
 
 
 @dataclass
@@ -520,6 +524,14 @@ class Harness:
         self.checkpoint = Checkpoint.load()
         self.mission = self.queue.mission
         self.project_registry = ProjectRegistry()
+        self.loop_detector = LoopDetector(
+            max_attempts=self.config.loop_max_attempts,
+            window_seconds=self.config.loop_window_seconds,
+        )
+        # Event Bus — decouple notification from harness
+        self._bus = EventBus()
+        self._bus.subscribe("harness.notify", self._handle_bus_notify, name="telegram")
+        self._bus.subscribe("harness.task", self._handle_bus_log, name="jsonl_logger")
         # Auto-detect context size from llama.cpp server if not specified
         budget = self.config.context_budget
         if budget <= 0:
@@ -545,9 +557,22 @@ class Harness:
     # ── Notifications ──────────────────────────────────────────────────────
 
     def notify(self, message: str) -> None:
-        """Send notification if enabled."""
+        """Send notification via Event Bus."""
+        self._bus.publish("harness.notify", {"message": message})
+
+    def _handle_bus_notify(self, event: Event) -> None:
+        """Handle notify events — delegates to Telegram."""
         if self.config.telegram_notifications:
-            self.send_telegram(message)
+            self.send_telegram(event.data.get("message", ""))
+
+    def _handle_bus_log(self, event: Event) -> None:
+        """Handle task lifecycle events — logs to JSONL."""
+        entry = {"ts": event.ts, "event": event.topic, **event.data}
+        _log_progress(entry)
+
+    def _emit(self, topic: str, **data: object) -> None:
+        """Emit a lifecycle event through the Event Bus."""
+        self._bus.publish("harness.task", {"event_type": topic, **data})
 
     # ── Task Discovery ─────────────────────────────────────────────────────
 
@@ -612,6 +637,7 @@ class Harness:
 
         # Notify start
         self.notify(f"🔄 *Task Started*\n{task.description[:100]}")
+        self._emit("task_started", task_id=task.id, description=task.description[:100])
 
         # Check protected paths
         for f in task.target_files:
@@ -751,6 +777,7 @@ class Harness:
                 f"✅ *Task Complete*\n{task.description[:50]}\n"
                 f"Commit: {commit_sha[:8] if commit_sha else 'N/A'}"
             )
+            self._emit("task_completed", task_id=task.id, commit=commit_sha, files=applied_files)
 
             _log_progress({
                 "task_id": task.id, "status": "completed",
@@ -767,6 +794,7 @@ class Harness:
             self.notify(
                 f"❌ *Task Error* [{failure_type.value}]\n{error_msg[:100]}"
             )
+            self._emit("task_failed", task_id=task.id, error=error_msg[:100], failure_type=failure_type.value)
             _log_progress({
                 "task_id": task.id, "status": "error",
                 "error": error_msg, "failure_type": failure_type.value,
@@ -779,6 +807,7 @@ class Harness:
             if in_loop:
                 task.block(f"Anti-loop: {self.config.loop_max_attempts} failures in {self.config.loop_window_seconds}s")
                 self.notify(f"🔄 *Loop Detected* — task {task.id} blocked after {self.config.loop_max_attempts} attempts")
+                self._emit("loop_detected", task_id=task.id, attempts=self.loop_detector.get_stats(task.id))
                 _log_progress({
                     "task_id": task.id, "status": "loop_detected",
                     "attempts": self.loop_detector.get_stats(task.id),
@@ -819,11 +848,13 @@ class Harness:
 
         projects_str = ", ".join(self.config.projects[:3])
         self.notify(f"🌙 *Nightwatch Started*\nProjects: {projects_str}")
+        self._emit("run_started", projects=self.config.projects)
 
         # ── Recovery ──
         recovery = get_recovery_context()
         if recovery and recovery.get("task_id"):
             self.notify(f"♻️ *Recovering*: {recovery.get('task_description', '')[:50]}")
+            self._emit("recovery", task_id=recovery.get("task_id"), description=recovery.get("task_description", "")[:50])
 
         # ── Discover across all projects ──
         self.notify("🔍 Discovering tasks...")

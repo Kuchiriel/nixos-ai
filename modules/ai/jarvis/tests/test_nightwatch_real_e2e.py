@@ -515,3 +515,58 @@ class TestLoopDetector:
         assert not detector.get_stats("t1")["in_loop"]
         assert detector.get_stats("t1")["attempts_in_window"] == 0
 
+
+
+def test_eventbus_integration(tmp_path, monkeypatch):
+    """Verify Event Bus is wired in harness — events flow through bus."""
+    from nightwatch.harness import Harness, HarnessConfig
+    from jarvis.core.eventbus import EventBus, Event
+    from nightwatch.task_queue import TaskQueue, TaskStatus
+
+    # Isolate state
+    monkeypatch.setattr("nightwatch.harness.STATE_DIR", tmp_path)
+    monkeypatch.setattr("nightwatch.task_queue.STATE_DIR", tmp_path)
+    # checkpoint uses STATE_DIR for state files
+    monkeypatch.setattr("nightwatch.checkpoint.STATE_DIR", tmp_path)
+
+    events_received = []
+
+    def capture_handler(event: Event) -> None:
+        events_received.append({"topic": event.topic, "data": dict(event.data)})
+
+    config = HarnessConfig(
+        max_tasks=0,
+        dry_run=True,
+        telegram_notifications=False,
+        use_scripted_discovery=False,
+        use_llm_discovery=False,
+    )
+    harness = Harness(config=config)
+
+    # Subscribe a custom handler to verify events flow
+    harness._bus.subscribe("harness.task", capture_handler, name="test_capture")
+
+    # Execute a dry-run task
+    task = Task(
+        id="evt-test-1",
+        project="test",
+        description="Event bus test task",
+        target_files=[],
+        acceptance_criteria="",
+        priority=1,
+        risk="low",
+        status=TaskStatus.READY.value,
+    )
+    harness.queue.add_task(task)
+    harness.execute_task(task)
+
+    # Verify task_started event was emitted (task_started goes to harness.task topic)
+    event_types = [e["data"].get("event_type") for e in events_received]
+    assert "task_started" in event_types, f"Expected task_started in {event_types}"
+
+    # Verify notify also flows through bus (harness.notify topic)
+    notify_received = []
+    harness._bus.subscribe("harness.notify", lambda e: notify_received.append(e), name="test_notify")
+    harness.notify("test notification")
+    assert len(notify_received) == 1, f"Expected 1 notify event, got {len(notify_received)}"
+    assert notify_received[0].data["message"] == "test notification"
