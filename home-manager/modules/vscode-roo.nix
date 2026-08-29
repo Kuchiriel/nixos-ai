@@ -105,7 +105,15 @@ with lib; let
       env = {
         JARVIS_PROJECT_ROOT = toString ../../.;
       };
-      alwaysAllow = ["jarvis_execute" "jarvis_read_file" "jarvis_capture_screen" "jarvis_observe_screen" "jarvis_nix_eval" "jarvis_nix_check" "jarvis_nix_search"];
+      alwaysAllow = [
+        "jarvis_execute" "jarvis_read_file" "jarvis_capture_screen" "jarvis_observe_screen"
+        "jarvis_nix_eval" "jarvis_nix_check" "jarvis_nix_search"
+        "jarvis_remember" "jarvis_recall" "jarvis_lessons"
+        "jarvis_vault_list" "jarvis_vault_write"
+        "jarvis_rag_search" "jarvis_rag_index"
+        "jarvis_read_ai_conversation"
+        "jarvis_hackmd_list" "jarvis_hackmd_read" "jarvis_hackmd_write" "jarvis_hackmd_sync"
+      ];
     };
   };
 
