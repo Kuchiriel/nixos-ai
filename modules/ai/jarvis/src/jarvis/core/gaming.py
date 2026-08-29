@@ -37,20 +37,28 @@ log = logging.getLogger("jarvis.gaming")
 # Constantes
 # ═══════════════════════════════════════════════════════════════════
 
-# Serviços a PARAR durante gaming (pesados, competem por GPU/CPU)
+# Serviços a PARAR durante gaming (pesados, competem por GPU/CPU/memória)
+# System services
 GAMING_STOP_SERVICES: list[str] = [
     "llama-cpp-server",
     "llama-cpp-embeddings",
     "llama-cpp-rerank",
+    "qdrant",            # Vector DB — consome ~500MB RAM
+    "mpvpaper",          # Wallpaper animation — consome iGPU
 ]
 
-# Serviços a MANTER durante gaming (leves)
+# User services a parar durante gaming
+GAMING_STOP_USER_SERVICES: list[str] = [
+    "hypridle",          # Idle manager — interfere com gaming
+    "swaync",            # Notification daemon — popups atrapalham
+]
+
+# Serviços a MANTER durante gaming (leves, essenciais)
 GAMING_KEEP_SERVICES: list[str] = [
-    "qdrant",
-    "jarvis-wakeword",
-    "jarvis-vault",
-    "jarvis-idle",
-    "jarvis-telegram",
+    "pipewire",
+    "wireplumber",
+    "pipewire-pulse",
+    "dbus-broker",
 ]
 
 # Defaults
@@ -205,6 +213,71 @@ def _check_proton_gamescope() -> bool:
             return True
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
+    return False
+
+
+def _check_wurm_online() -> bool:
+    """Detecta Wurm Online (Java game). Wurm roda como processo Java.
+    Verifica se há processos Java com argumentos contendo 'wurm'."""
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "-i", "wurm"],
+            capture_output=True, text=True, timeout=3,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            log.debug("Game detected via Wurm Online process")
+            return True
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    # Also check for Java processes with Wurm in classpath
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "-i", "com.wurmonline"],
+            capture_output=True, text=True, timeout=3,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            log.debug("Game detected via Wurm Online Java class")
+            return True
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    return False
+
+
+def _check_java_game() -> bool:
+    """Detecta jogos Java genéricos (processos Java com alto uso de CPU)."""
+    try:
+        # Check for Java processes using >20% CPU
+        result = subprocess.run(
+            ["pgrep", "-x", "java"],
+            capture_output=True, text=True, timeout=3,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return False
+
+        for pid in result.stdout.strip().split("\n"):
+            pid = pid.strip()
+            if not pid:
+                continue
+            try:
+                # Read /proc/PID/stat for CPU usage
+                stat_path = Path(f"/proc/{pid}/stat")
+                if stat_path.exists():
+                    stat = stat_path.read_text().split()
+                    # utime + stime (field 14 + 15, 0-indexed 13+14)
+                    if len(stat) > 15:
+                        utime = int(stat[13])
+                        stime = int(stat[14])
+                        total = utime + stime
+                        # High CPU time suggests active game
+                        if total > 10000:  # arbitrary threshold
+                            log.debug("Game detected via Java process with high CPU: PID %s", pid)
+                            return True
+            except (OSError, ValueError, IndexError):
+                continue
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
 
     return False
 
@@ -217,6 +290,8 @@ def detect_game(gpu_threshold: int = DEFAULT_GPU_THRESHOLD) -> bool:
       2. Hyprland fullscreen window (hyprctl clients -j)
       3. Steam game children (steam com filhos ≠ steamwebhelper)
       4. Proton/gamescope (pressure-vessel, gamescope)
+      5. Wurm Online (Java game)
+      6. Java games with high CPU usage
 
     Returns:
         True se jogo detectado, False caso contrário.
@@ -240,6 +315,16 @@ def detect_game(gpu_threshold: int = DEFAULT_GPU_THRESHOLD) -> bool:
     # 4. Proton/gamescope (fallback para jogos via Proton)
     if _check_proton_gamescope():
         log.debug("Game detected via Proton/gamescope")
+        return True
+
+    # 5. Wurm Online (Java MMO)
+    if _check_wurm_online():
+        log.debug("Game detected via Wurm Online")
+        return True
+
+    # 6. Java games with high CPU (generic fallback)
+    if _check_java_game():
+        log.debug("Game detected via Java process with high CPU")
         return True
 
     return False
@@ -379,13 +464,52 @@ def log_transition(
         pass  # Best-effort logging
 
 
-def transition_to_gaming() -> list[str]:
+def _stop_user_service(service: str) -> bool:
+    """Para um serviço user systemd."""
+    try:
+        result = subprocess.run(
+            ["systemctl", "--user", "stop", service],
+            capture_output=True, timeout=15,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def _start_user_service(service: str) -> bool:
+    """Inicia um serviço user systemd."""
+    try:
+        result = subprocess.run(
+            ["systemctl", "--user", "start", service],
+            capture_output=True, timeout=30,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def _service_user_is_active(service: str) -> bool:
+    """Verifica se um serviço user systemd está ativo."""
+    try:
+        result = subprocess.run(
+            ["systemctl", "--user", "is-active", "--quiet", service],
+            capture_output=True, timeout=5,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+def transition_to_gaming(manual: bool = False) -> list[str]:
     """Transição normal → gaming.
 
     Para serviços pesados e retorna a lista de serviços parados.
+    Se manual=True, ignora detecção automática (para toggle via rofi).
     """
     stopped: list[str] = []
+    reason = "manual_toggle" if manual else "game_detected"
 
+    # Stop system services
     for service in GAMING_STOP_SERVICES:
         if _service_is_active(service):
             log.info("Stopping %s for gaming mode", service)
@@ -395,27 +519,46 @@ def transition_to_gaming() -> list[str]:
             else:
                 log.warning("  Failed to stop %s", service)
 
+    # Stop user services
+    for service in GAMING_STOP_USER_SERVICES:
+        if _service_user_is_active(service):
+            log.info("Stopping user service %s for gaming mode", service)
+            if _stop_user_service(service):
+                stopped.append(f"user:{service}")
+                log.info("  %s stopped", service)
+            else:
+                log.warning("  Failed to stop %s", service)
+
+    # Save list of stopped services for restoration
+    _save_stopped_services(stopped)
+
     write_profile_state("gaming")
-    log_transition("normal", "gaming", "game_detected",
+    log_transition("normal", "gaming", reason,
                    f"stopped: {', '.join(stopped)}")
     return stopped
 
 
-def transition_to_normal() -> list[str]:
+def transition_to_normal(manual: bool = False) -> list[str]:
     """Transição gaming → normal.
 
-    Verifica se jogo ainda está ativo (cancelamento). Reinicia serviços
-    parados. Retorna lista de serviços iniciados.
+    Se manual=True, ignora detecção de jogo (para toggle via rofi).
+    Reinicia serviços parados. Retorna lista de serviços iniciados.
     """
-    # Double-check: game still running?
-    if detect_game():
+    # Double-check: game still running? (skip if manual)
+    if not manual and detect_game():
         log.info("Game still active, cancelling return to normal")
         return []
 
+    # Get list of previously stopped services
+    previously_stopped = _load_stopped_services()
+
     started: list[str] = []
 
+    # Restore system services
     for service in GAMING_STOP_SERVICES:
-        if _service_is_enabled(service) and not _service_is_active(service):
+        if service in previously_stopped or (
+            _service_is_enabled(service) and not _service_is_active(service)
+        ):
             log.info("Starting %s (returning to normal)", service)
             if _start_service(service):
                 started.append(service)
@@ -423,10 +566,71 @@ def transition_to_normal() -> list[str]:
             else:
                 log.warning("  Failed to start %s", service)
 
+    # Restore user services
+    for service in GAMING_STOP_USER_SERVICES:
+        user_key = f"user:{service}"
+        if user_key in previously_stopped or not _service_user_is_active(service):
+            log.info("Starting user service %s (returning to normal)", service)
+            if _start_user_service(service):
+                started.append(user_key)
+                log.info("  %s started", service)
+            else:
+                log.warning("  Failed to start %s", service)
+
+    # Clear saved state
+    _clear_stopped_services()
+
     write_profile_state("normal")
     log_transition("gaming", "normal", "game_ended",
                    f"started: {', '.join(started)}")
     return started
+
+
+def _save_stopped_services(stopped: list[str]) -> None:
+    """Save list of stopped services for later restoration."""
+    state_file = Path("/var/lib/jarvis/gaming-stopped-services.json")
+    try:
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        state_file.write_text(json.dumps(stopped))
+    except OSError:
+        pass
+
+
+def _load_stopped_services() -> list[str]:
+    """Load list of previously stopped services."""
+    state_file = Path("/var/lib/jarvis/gaming-stopped-services.json")
+    try:
+        return json.loads(state_file.read_text())
+    except (OSError, json.JSONDecodeError):
+        return []
+
+
+def _clear_stopped_services() -> None:
+    """Clear saved stopped services state."""
+    state_file = Path("/var/lib/jarvis/gaming-stopped-services.json")
+    try:
+        state_file.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def toggle_gaming() -> dict[str, Any]:
+    """Toggle gaming mode on/off. Returns new state."""
+    current = get_current_profile()
+    if current == "gaming":
+        started = transition_to_normal(manual=True)
+        return {
+            "profile": "normal",
+            "action": "restored",
+            "services_started": started,
+        }
+    else:
+        stopped = transition_to_gaming(manual=True)
+        return {
+            "profile": "gaming",
+            "action": "activated",
+            "services_stopped": stopped,
+        }
 
 
 def get_current_profile() -> str:

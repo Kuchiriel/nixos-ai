@@ -383,10 +383,13 @@ class TestSecurity:
 
     def test_services_list_is_fixed(self):
         """Lista de serviços a parar é fixa e auditável."""
-        from jarvis.core.gaming import GAMING_STOP_SERVICES
+        from jarvis.core.gaming import GAMING_STOP_SERVICES, GAMING_STOP_USER_SERVICES
         assert "llama-cpp-server" in GAMING_STOP_SERVICES
-        assert "qdrant" not in GAMING_STOP_SERVICES  # Qdrant NÃO deve ser parado
-        assert "jarvis-wakeword" not in GAMING_STOP_SERVICES  # Wakeword NÃO deve ser parado
+        assert "qdrant" in GAMING_STOP_SERVICES  # Qdrant consome ~500MB RAM
+        assert "mpvpaper" in GAMING_STOP_SERVICES  # Wallpaper consome iGPU
+        # User services
+        assert "hypridle" in GAMING_STOP_USER_SERVICES
+        assert "swaync" in GAMING_STOP_USER_SERVICES
 
     def test_default_gpu_threshold_is_30(self):
         """Threshold padrão é 30% (abaixado de 60% para MMOs/jogos leves)."""
