@@ -479,3 +479,56 @@ bd76e3c feat(harness): integrate Event Bus + fix LoopDetector initialization
 3. **Testes para audiobook, hackmd, multi_ai_reader** — 3 módulos sem teste
 4. **Nightwatch long-running validation** — Framework existe mas não validado em execução real de horas
 5. **Multi-agent coordination** — Primitives existem mas sem implementação real
+
+---
+
+## Multi-Agent Subsystem — 2026-08-29
+
+### O que foi implementado
+
+**Módulo:** `nightwatch/multi_agent.py` (185 linhas)
+**Testes:** `test_multi_agent.py` (14 testes)
+
+### Componentes
+
+1. **AgentPersona** — Persona com state tracking
+   - Wraps definição de modo (.jarvismodes)
+   - Estado: IDLE → ACTIVE → COMPLETED/FAILED/WAITING
+   - Execução com função customizável (_execute_fn)
+   - Stats: tasks_completed, tasks_failed
+
+2. **HandoffContext** — Transferência de contexto entre personas
+   - from_persona, to_persona, task, artifacts, notes
+   - Timestamp para rastreabilidade
+
+3. **Orchestrator** — Pipeline sequencial de personas
+   - Executa tasks através de todas as personas em ordem
+   - Passa contexto via handoff (previous_result, handoff info)
+   - Emite eventos via Event Bus (orchestrator.*)
+   - Falha em uma persona não mata o pipeline
+
+### Eventos emitidos
+
+- `orchestrator.run.started` — início da execução
+- `orchestrator.persona.started` — persona começou
+- `orchestrator.persona.completed` — persona terminou
+- `orchestrator.handoff` — transferência entre personas
+- `orchestrator.run.completed` — execução completa
+
+### Uso
+
+```python
+from nightwatch.multi_agent import Orchestrator, AgentPersona
+
+orch = Orchestrator()
+orch.add_persona(AgentPersona("coder", role="Engenheiro de código"))
+orch.add_persona(AgentPersona("reviewer", role="Revisor"))
+result = orch.run(["Fix bug in main.py"])
+```
+
+### Próximos passos
+
+1. Integrar com LLM real (substituir _execute_fn por chamada LLM)
+2. Conectar com .jarvismodes (load personas from file)
+3. Adicionar modo paralelo (não apenas sequencial)
+4. Integrar com TaskQueue do nightwatch
