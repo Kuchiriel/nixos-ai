@@ -69,10 +69,15 @@ scripts/                # Scripts auxiliares
 - Hardware: Acer Nitro V15 (RTX 4050 6GB / 32GB RAM)
 - NixOS: declarativo e reprodutível
 
-## Estado do sistema (atualizado via git)
+## Estado do sistema
 
-- Modelo: Qwen3.6-35B-A3B Q4_K_M, ngl=45, ncmoe=36, ctx=32K
+- Modelo: Qwen3.6-35B-A3B Q4_K_M, ngl=99, ncmoe=36, ctx=32K
 - Serviços: llama-server (8080), embeddings (8081), rerank (8082), qdrant (6333)
-- Roo Dev: VSCodium + extensão Roo Code, MCP servers (jarvis, tavily, nixos, context7)
+- Roo Dev: VSCodium + Roo Code, MCP servers ativos:
+  - `jarvis` — shell, file ops, vision, nix eval, chatgpt reader
+  - `tavily-search` — pesquisa web
+  - `nixos-mcp` — pesquisar nixpkgs
+  - `context7` — docs de bibliotecas
+  - `playwright` — browser automation
 
 > ⚠️ Este arquivo deve ter <150 linhas. Regras detalhadas ficam em `.roomodes`.
