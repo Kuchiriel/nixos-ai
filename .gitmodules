@@ -1,3 +1,0 @@
-[submodule "m3ta-nixpkgs"]
-	path = m3ta-nixpkgs
-	url = /home/nixos/projects/nixpkgs

@@ -7,19 +7,6 @@
 
     opencode-flake.url = "github:aodhanhayter/opencode-flake";
 
-    # m3ta-nixpkgs: submodule com pacotes sidecar, stt-ptt, talk etc.
-    # git+file: acessa o submodule como repositório Git independente
-    m3ta-nixpkgs = {
-      url = "git+file:///home/nixos/projects/nixpkgs";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    # m3ta AGENTS repo: agentes canônicos para coding agents (opencode, pi, claude-code)
-    agents = {
-      url = "git+https://code.m3ta.dev/m3tam3re/AGENTS";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -58,14 +45,6 @@
     # custa ~20s por processo — o cache pré-computado elimina as probes).
     # Conferir quando atualizar o pin do nixpkgs: `curl -s .../backend/latest-XX-nixos-unstable/_count`.
     nixosIndexGeneration = 45;
-
-    # Overlay combinado: AI (llama-cpp, mcp-nixos-fast, jarvis, aiModels)
-    # + m3ta packages (sidecar, stt-ptt, talk)
-    #
-    # O overlay m3ta-packages é importado DENTRO do aiOverlay para garantir
-    # que as dependências (opencode, td, tmux, whisper-cpp etc.) sejam
-    # resolvidas corretamente via `final.callPackage`.
-    m3taPackagesOverlay = import ./overlays/m3ta-packages.nix {inherit inputs;};
 
     aiOverlay = final: prev:
       {
@@ -117,11 +96,7 @@
         # Modelos declarativos (openwakeword, kokoro, whisper)
         inherit aiModels;
 
-        # ── Pacotes m3ta-nixpkgs (sidecar, stt-ptt, talk) ─────────────
-        # Importados via overlay separado para manter o código organizado.
-        # As dependências são resolvidas via `final.callPackage`.
       }
-      // (m3taPackagesOverlay final prev);
 
     hosts = [
       {
@@ -178,7 +153,7 @@
                 # (services.jarvis.environment) — waybar/mpvpaper/hyprland
                 # decidem seus perfis aqui, sem hardcode por host.
                 jarvisEnvironment = config.services.jarvis.environment;
-                # m3ta lib: fonts, colors, ports
+                # lib: fonts, colors, ports (nosso próprio lib/)
                 m3taLib = import ./lib {
                   inherit (nixpkgs.lib) lib;
                   pkgs = nixpkgs.legacyPackages.${system};
@@ -206,14 +181,13 @@
     hosts;
 
     # Permite `nix build .#jarvis` / `nix run .#jarvis`
-    # e `nix build .#sidecar` / `nix build .#stt-ptt` / `nix build .#talk`
     packages.${system} = let
       pkg = nixpkgs.legacyPackages.${system}.extend aiOverlay;
     in {
-      inherit (pkg) jarvis jarvis-voice sidecar stt-ptt talk;
+      inherit (pkg) jarvis jarvis-voice;
     };
 
-    # ── m3ta lib: fonts, colors, ports ──────────────────────────────
+    # ── lib: fonts, colors, ports (nosso próprio lib/) ──────────────
     lib.m3ta = import ./lib {
       inherit (nixpkgs.lib) lib;
       pkgs = nixpkgs.legacyPackages.${system};
