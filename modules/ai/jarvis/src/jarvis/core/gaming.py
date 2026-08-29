@@ -75,8 +75,8 @@ STEAM_INTERNAL_PROCESSES = {
     " steamwebhelper",
 }
 
-# Arquivo de estado do perfil (em /var/lib/jarvis — já criado por tmpfiles)
-PROFILE_STATE_FILE = Path("/var/lib/jarvis/resource-profile")
+# Arquivo de estado do perfil (em ~/.local/state/jarvis — sem precisar de sudo)
+PROFILE_STATE_FILE = Path.home() / ".local/state/jarvis/gaming-profile"
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -456,7 +456,7 @@ def log_transition(
         _play_sound("exit")
 
     # Log em JSONL
-    log_file = Path("/var/log/jarvis-gaming.jsonl")
+    log_file = Path.home() / ".local/state/jarvis/gaming-transitions.jsonl"
     try:
         with log_file.open("a") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -588,7 +588,7 @@ def transition_to_normal(manual: bool = False) -> list[str]:
 
 def _save_stopped_services(stopped: list[str]) -> None:
     """Save list of stopped services for later restoration."""
-    state_file = Path("/var/lib/jarvis/gaming-stopped-services.json")
+    state_file = Path.home() / ".local/state/jarvis/gaming-stopped-services.json"
     try:
         state_file.parent.mkdir(parents=True, exist_ok=True)
         state_file.write_text(json.dumps(stopped))
@@ -598,7 +598,7 @@ def _save_stopped_services(stopped: list[str]) -> None:
 
 def _load_stopped_services() -> list[str]:
     """Load list of previously stopped services."""
-    state_file = Path("/var/lib/jarvis/gaming-stopped-services.json")
+    state_file = Path.home() / ".local/state/jarvis/gaming-stopped-services.json"
     try:
         return json.loads(state_file.read_text())
     except (OSError, json.JSONDecodeError):
@@ -607,7 +607,7 @@ def _load_stopped_services() -> list[str]:
 
 def _clear_stopped_services() -> None:
     """Clear saved stopped services state."""
-    state_file = Path("/var/lib/jarvis/gaming-stopped-services.json")
+    state_file = Path.home() / ".local/state/jarvis/gaming-stopped-services.json"
     try:
         state_file.unlink(missing_ok=True)
     except OSError:
