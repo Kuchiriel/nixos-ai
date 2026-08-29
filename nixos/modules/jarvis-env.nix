@@ -52,9 +52,13 @@ with lib; {
     systemd.targets.jarvis = {
       description = "Jarvis AI Ecosystem";
       wants = [
+        # Infraestrutura
         "qdrant.service"
         "llama-cpp-server.service"
+        # Consumidores
         "jarvis-gaming-watcher.service"
+        "jarvis-heal.service"
+        "jarvis-telegram.service"
       ];
       after = [
         "qdrant.service"

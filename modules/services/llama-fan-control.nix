@@ -190,8 +190,9 @@ in {
   config = mkIf cfg.enable {
     systemd.services.llama-fan-control = {
       description = "Fan turbo control for llama.cpp inference";
-      after = [ "llama-cpp-server.service" ];
-      wantedBy = [ "multi-user.target" ];
+      after = [ "llama-cpp-server.service" "jarvis.target" ];
+      wantedBy = [ "jarvis.target" ];
+      partOf = [ "jarvis.target" ];
       serviceConfig = {
         Type = "simple";
         ExecStart = fanControlScript;
