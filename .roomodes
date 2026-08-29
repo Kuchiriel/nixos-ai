@@ -1,21 +1,21 @@
 # Roo Code Custom Modes — nixos-ai
 # Formato: https://docs.roocode.com/features/custom-modes
-# Contexto: 32K tokens (Qwen3.6-35B-A3B, ncmoe=36, 6GB VRAM)
+# Server n_ctx: 32,768 tokens (Qwen3.6-35B-A3B, Q4_K_M, 6GB VRAM)
+# Roo Dev system prompt: ~4-6K tokens (with custom modes)
+# Effective budget: ~26-28K for conversation + tools
 #
 # ⚠️ CONTEXTO É RECURSO ESCASSO — 32K NÃO É 192K
-#   - System prompt Roo Dev: ~15-20K tokens
-#   - Sobram: ~12-17K para conversa + tools
-#   - Cada tool output consome contexto
-#   - Condensing falha se histórico > contexto disponível
+#   - Tool outputs consomem contexto rapidamente
+#   - Condensing ocorre quando contexto > 70% do budget
+#   - Manter tool outputs enxutos melhora autonomia
 #
-# REGRAS ANTI-CONDENSING:
-#   - TODO output de tool DEVE ser limitado
-#   - find: máx 30 resultados
-#   - ls: sem -R, sem recursivo
-#   - git log: máx 10 linhas
-#   - cat: NUNCA — usar head/tail/sed
-#   - grep: máx 20 resultados
-#   - Comando longo = contexto perdido
+# REGRAS DE EFICIÊNCIA (não de restrição):
+#   - find: usar -maxdepth e head para limitar
+#   - ls: preferir sem -R
+#   - git log: usar --oneline -10
+#   - cat: usar head/tail/sed para arquivos grandes
+#   - grep: usar -m para limitar resultados
+#   - Output gigante = contexto desperdiçado
 
 customModes:
   # ============================================================
@@ -32,25 +32,17 @@ customModes:
       Use para edição de código, debug, implementação de features,
       refatoração, e qualquer tarefa de desenvolvimento.
     customInstructions: |-
-      ## ⚠️ CONTEXTO: 32K — SEJA EXTREMAMENTE EFICIENTE
-      - System prompt já consome ~15-20K. Sobram ~12K.
-      - Cada tool output consome contexto. Limite SEMPRE.
-
-      ## LIMITES DE OUTPUT (OBRIGATÓRIO)
-      - `find`: máx 30 resultados — use `-maxdepth 2 | head -30`
-      - `ls`: NUNCA recursivo — use `ls dir/` sem -R
-      - `git log`: máx 10 linhas — `git log --oneline -10`
-      - `cat`: PROIBIDO — usar `head -n 50`, `tail -n 20`, `sed -n '10,30p'`
-      - `grep`: máx 20 resultados — use `-m 20` ou `| head -20`
-      - `wc -l`: ok (1 linha)
-      - `nix eval`: ok (1 linha)
-      - Output >50 linhas = PERDA de contexto
+      ## ⚠️ CONTEXTO: 32K tokens — budget real ~26-28K
+      - System prompt consome ~4-6K. Sobram ~26-28K.
+      - Ferramentas de leitura: use head/tail/sed para arquivos grandes
+      - Ferramentas de busca: use -m ou head para limitar resultados
 
       ## LEITURA DE ARQUIVOS
-      - ANTES: `wc -l <arquivo>` (1 linha)
+      - ANTES: `wc -l <arquivo>` para saber o tamanho
       - Para achar algo: `grep -n 'termo' arquivo | head -20`
-      - Para ler: `sed -n '10,30p' arquivo` (20 linhas)
-      - NUNCA: `cat arquivo`, `head -1000`, `ls -R`
+      - Para ler trecho: `sed -n '10,30p' arquivo`
+      - Para ler arquivo inteiro: `cat` é ok se <200 linhas
+      - Para arquivos grandes: `head -100` ou `tail -50`
 
       ## Regras (AkitaOnRails: XP com IA)
       - Edits cirúrgicos (str_replace) > reescritas
@@ -87,7 +79,7 @@ customModes:
       Use para decisões de arquitetura, análise de sistemas, design de
       componentes, e planejamento de implementação.
     customInstructions: |-
-      ## ⚠️ CONTEXTO: 32K — SEJA EXTREMAMENTE EFICIENTE
+      ## CONTEXTO: 32K tokens — budget real ~26-28K
       - ANTES de ler arquivo: `wc -l <arquivo>` para saber o tamanho
       - Para arquivos >200 linhas: use `head -n 100`, `tail -n 50`, `sed -n '50,150p'`
       - Nunca faça `cat arquivo.py` inteiro — sempre com offset/limit
@@ -126,10 +118,10 @@ customModes:
       Use para trabalho autônomo contínuo quando o usuário pedir para
       "rodar overnight" ou "fazer melhorias automáticas".
     customInstructions: |-
-      ## ⚠️ CONTEXTO: 32K — SEJA EXTREMAMENTE EFICIENTE
-      - System prompt já consome ~15-20K. Sobram ~12K.
+      ## CONTEXTO: 32K tokens — budget real ~26-28K
+      - Use head/tail/sed para arquivos grandes
       - Cada tool output consome contexto. Limite SEMPRE.
-      - `find`: máx 30 | `ls`: sem -R | `git log`: -10 | `cat`: PROIBIDO
+      - Use head/tail/sed para arquivos grandes
       - `grep`: máx 20 | Output >50 linhas = resuma em bullets
 
       ## SOBREVIVÊNCIA À CONDENSAÇÃO
@@ -195,9 +187,9 @@ customModes:
       Use quando o usuário pedir para organizar, limpar, categorizar
       ou deduplicar arquivos e diretórios.
     customInstructions: |-
-      ## ⚠️ CONTEXTO: 32K — SEJA EXTREMAMENTE EFICIENTE
-      - System prompt já consome ~15-20K. Sobram ~12K.
-      - `find`: máx 30 | `ls`: sem -R | `du`: sem -r | `cat`: PROIBIDO
+      ## CONTEXTO: 32K tokens — budget real ~26-28K
+      - Use head/tail/sed para arquivos grandes
+      - Output gigante deve ser resumido
       - Para inventário: `find dir -maxdepth 2 -type f | head -30`
       - Para tamanho: `du -sh dir/* | sort -rh | head -10`
       - Para conteúdo: `head -3 arquivo` (3 linhas)
