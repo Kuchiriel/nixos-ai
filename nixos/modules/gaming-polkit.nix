@@ -4,7 +4,7 @@
 {pkgs, ...}: {
   security.polkit = {
     enable = true;
-    extraRules = ''
+    extraConfig = ''
       // Allow user to manage JARVIS gaming services without password
       polkit.addRule(function(action, subject) {
         if (
