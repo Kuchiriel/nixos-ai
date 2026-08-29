@@ -21,19 +21,21 @@ OpenCode usa LSP para:
 
 ## 2. Git Auto-Commit (Aider-style)
 
-**Status**: HYPOTHESIS — NOT YET IMPLEMENTED
+**Status**: ✅ IMPLEMENTED
 **Impacto**: Médio — traceabilidade de mudanças
 **Complexidade**: Média
+**Implemented**: 2026-08-29
 
 Aider faz:
 - Cada edit vira commit automático
 - Branch por sessão
 - Rollback fácil via git revert
 
-**Para implementar:**
-- Após cada `str_replace`/`write_file`, auto-commit
-- Message: "jarvis: {descrição da mudança}"
-- Branch: `jarvis/{session-id}`
+**Implementação:**
+- Após cada `str_replace`/`write_file` com diff, auto-commit
+- Message: `jarvis({tool}): {path} — {description}`
+- Commit: `--no-verify` (evita hooks que podem quebrar)
+- Nunca falha o REPL por erro de commit
 
 ## 3. Multi-Session (OpenCode-style)
 
