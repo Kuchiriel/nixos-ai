@@ -367,49 +367,18 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
 # ===========================================================================
 
 def execute_shell(cmd: str, approve: bool = False) -> dict[str, Any]:
-    """Executa um comando shell via shlex (sem shell=True).
+    """Execute shell command — delegates to security.run_shell_dict().
 
-    Compatível com dev.py execute_shell(cmd).
-    Usa shlex.split() para parsing seguro — equivalente a agent.py:run_shell().
-    Retorna dict estruturado.
+    Single implementation. No duplicated validation logic.
     """
+    from jarvis.core.security import run_shell_dict, command_allowed
     if not cmd:
         return {"ok": False, "error": "Empty command"}
-
-    # Defense-in-depth: rejeita operadores perigosos, permite pipes seguros
-    _DANGEROUS_PATTERNS = ("&&", "||", "`", "$(", "${", "\n", "rm ", "chmod", "chown")
-    _SAFE_PIPE_TARGETS = ("head", "tail", "grep", "rg", "wc", "sort", "uniq", "cut", "awk", "sed", "tr", "column", "jq", "ls", "cat")
+    # Quick validation before execution
     stripped = cmd.strip()
-    if any(op in stripped for op in _DANGEROUS_PATTERNS):
-        return {"ok": False, "error": f"Comando com encadeamento não permitido: {cmd[:100]}"}
-    # Allow safe pipes: cmd | head, cmd | grep, etc.
-    # Also allow ; for sequential commands (find ... ; find ...)
-    if "|" in stripped:
-        parts = stripped.split("|")
-        for part in parts[1:]:
-            part = part.strip().split()[0] if part.strip() else ""
-            if part and not any(part.startswith(p) for p in _SAFE_PIPE_TARGETS):
-                return {"ok": False, "error": f"Pipe não seguro: | {part}"}
-
-    try:
-        argv = shlex.split(cmd)
-        result = subprocess.run(
-            argv, capture_output=True, text=True, timeout=60,
-        )
-        output = result.stdout if result.returncode == 0 else (result.stdout + result.stderr)
-        if not output.strip():
-            output = f"(exit code {result.returncode})"
-
-        return {
-            "ok": result.returncode == 0,
-            "output": output[:5000],
-            "exit_code": result.returncode,
-            "truncated": len(output) > 5000,
-        }
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": "Command timed out (60s)", "exit_code": -1}
-    except Exception as e:
-        return {"ok": False, "error": str(e), "exit_code": -1}
+    if not command_allowed(stripped):
+        return {"ok": False, "error": f"Command not in allowlist: {stripped[:100]}"}
+    return run_shell_dict(cmd)
 
 
 # ===========================================================================

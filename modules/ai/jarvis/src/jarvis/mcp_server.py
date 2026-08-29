@@ -42,60 +42,9 @@ from jarvis.core.chatgpt_reader import CHATGPT_READER_TOOL, handle_chatgpt_read
 from jarvis.core.multi_ai_reader import MULTI_AI_READER_TOOL, read_ai_conversation
 
 
-import shlex
 import subprocess
 
-
-def _run_shell(cmd: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
-    """Executa via shlex (sem shell=True)."""
-    argv = shlex.split(cmd)
-    return subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
-
-
-def _command_allowed(cmd: str) -> bool:
-    """Verifica se o comando é read-only (com suporte a pipes seguros)."""
-    # Comandos base permitidos
-    BASE_ALLOWED = (
-        "ls", "cat", "head", "tail", "grep", "rg", "find", "wc",
-        "df", "free", "ps", "pgrep", "ss", "ip", "uname", "uptime",
-        "date", "echo", "hostname", "id", "whoami", "file", "stat",
-        "du", "which", "type", "realpath", "pwd",
-        "systemctl is-active", "systemctl status", "systemctl list-units",
-        "journalctl", "nix flake check", "nix eval", "nix build --dry-run",
-        "git log", "git status", "git diff", "git show",
-        "curl -sf", "curl -s", "nvidia-smi",
-    )
-    # Comandos que podem aparecer após pipe (seguros)
-    SAFE_PIPE_TARGETS = (
-        "head", "tail", "grep", "wc", "sort", "uniq", "cut", "awk",
-        "sed", "tr", "column", "jq",
-    )
-    stripped = cmd.strip()
-    if not stripped:
-        return False
-    # Bloqueio absoluto — operadores perigosos
-    # ";" e "|" são permitidos (validados separadamente abaixo)
-    for pat in ("&&", "||", "`", "$(", "${", "rm ", "mv ", "cp ", "chmod", "chown", "dd ", "mkfs"):
-        if pat in stripped:
-            return False
-    # Suporte a pipe: separar e verificar cada parte
-    parts = stripped.split("|")
-    for part in parts:
-        part = part.strip()
-        if not part:
-            continue
-        # Remover redirects
-        for sep in ("2>/dev/null", ">/dev/null", "> "):
-            if sep in part:
-                part = part.split(sep)[0].strip()
-        if not part:
-            continue
-        # Verificar se é comando base ou pipe target
-        is_base = any(part.startswith(p) for p in BASE_ALLOWED)
-        is_safe_pipe = any(part.startswith(p) for p in SAFE_PIPE_TARGETS)
-        if not is_base and not is_safe_pipe:
-            return False
-    return True
+from jarvis.core.security import command_allowed as _command_allowed, run_shell as _run_shell
 
 
 # ═══ Tool Schemas ═══

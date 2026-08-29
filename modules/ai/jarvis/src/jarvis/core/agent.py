@@ -122,106 +122,21 @@ class AuditLog:
 
 
 # ---------------------------------------------------------------------------
-# Execução segura de comandos
+# Execução segura de comandos — importa de security.py (single source of truth)
 # ---------------------------------------------------------------------------
-
-# Operadores de encadeamento perigosos que permitem execução arbitrária.
-# &&, ||, backticks, $() são bloqueados sempre.
-# ; e | são permitidos quando o destino é seguro (pipes para head/tail/grep).
-# Um SLM pode gerar "cat /etc/shadow; rm -rf /" — o prefix check passaria
-# em "cat" mas o segundo comando seria executado.
-_DANGEROUS_CHAINING = ("&&", "||", "`", "$(", "${", "\n")
-
-# Comandos que podem aparecer após pipe (seguros, read-only)
-_SAFE_PIPE_TARGETS = (
-    "head", "tail", "grep", "rg", "wc", "sort", "uniq", "cut",
-    "awk", "sed", "tr", "column", "jq", "ls", "cat",
+from jarvis.core.security import (
+    command_allowed,
+    has_chaining_operators,
+    has_dangerous_operators,
+    run_shell,
+    DEFAULT_ALLOWED_PREFIXES,
 )
 
 
-def has_dangerous_operators(cmd: str) -> bool:
-    """True se o comando contém operadores perigosos (&&, ||, backticks, etc.).
-
-    Pipes (|) e ponto-e-vírgula (;) NÃO são bloqueados aqui — são
-    validados separadamente para permitir comandos como:
-      find ... -o ... | head -20
-      ls dir/ | grep pattern
-    """
-    for pat in _DANGEROUS_CHAINING:
-        if pat in cmd:
-            return True
-    return False
-
-
 def _validate_pipes(cmd: str) -> bool:
-    """Valida que pipes apontam apenas para comandos seguros.
-
-    Permite: find ... | head, ls ... | grep, etc.
-    Bloqueia: find ... | rm, ls ... | xargs rm, etc.
-    """
-    if "|" not in cmd:
-        return True
-    parts = cmd.split("|")
-    for part in parts[1:]:
-        part = part.strip()
-        if not part:
-            continue
-        # Extrair primeiro token (comando)
-        first_token = part.split()[0] if part.split() else ""
-        # Remover redirects
-        first_token = first_token.split(">")[0]
-        if first_token and not any(first_token.startswith(p) for p in _SAFE_PIPE_TARGETS):
-            return False
-    return True
-
-
-def has_chaining_operators(cmd: str) -> bool:
-    """True se o comando contém operadores de encadeamento shell.
-
-    Detecta: && || ; | backtick $() ${} newline.
-    Usada por testes e para detecção geral.
-    Para validação de segurança, usar command_allowed().
-    """
-    _ALL_CHAINING = ("&&", "||", ";", "|", "`", "$(", "${", "\n")
-    for pat in _ALL_CHAINING:
-        if pat in cmd:
-            return True
-    return False
-
-
-def command_allowed(cmd: str, allowed_prefixes: tuple[str, ...] | None = None) -> bool:
-    """True se o comando começa com um prefixo read-only da allowlist
-    E não contém operadores perigosos.
-
-    Pipes (|) e ; são permitidos quando:
-    - O pipe aponta para um comando seguro (head, tail, grep, etc.)
-    - Exemplo: find ... -o ... | head -20 → OK
-    - Exemplo: ls | rm → BLOQUEADO
-    """
-    prefixes = allowed_prefixes or DEFAULT_ALLOWED_PREFIXES
-    stripped = cmd.strip()
-    if not stripped:
-        return False
-    if has_dangerous_operators(stripped):
-        return False
-    if not _validate_pipes(stripped):
-        return False
-    # Para comandos com pipes, verificar o comando base (antes do pipe)
-    base_cmd = stripped.split("|")[0].strip()
-    # Para comandos com ;, verificar cada parte
-    for part in stripped.split(";"):
-        part = part.strip()
-        if not part:
-            continue
-        check_cmd = part.split("|")[0].strip()
-        if not any(check_cmd.startswith(p) for p in prefixes):
-            return False
-    return True
-
-
-def run_shell(cmd: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
-    """Executa via `shlex` (sem shell=True) — mais seguro e auditável."""
-    argv = shlex.split(cmd)
+    """Wrapper para backward compatibility."""
+    from jarvis.core.security import validate_pipes
+    return validate_pipes(cmd)
     return subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
 
 
