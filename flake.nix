@@ -158,11 +158,7 @@
                   inherit (nixpkgs.lib) lib;
                   pkgs = nixpkgs.legacyPackages.${system};
                 };
-                # Backward compat (deprecated — use projectLib)
-                m3taLib = import ./lib {
-                  inherit (nixpkgs.lib) lib;
-                  pkgs = nixpkgs.legacyPackages.${system};
-                };
+
               };
               users.${user} = {
                 imports = [
@@ -197,11 +193,7 @@
       inherit (nixpkgs.lib) lib;
       pkgs = nixpkgs.legacyPackages.${system};
     };
-    # Backward compat alias (deprecated — use lib.nixos-ai)
-    lib.m3ta = import ./lib {
-      inherit (nixpkgs.lib) lib;
-      pkgs = nixpkgs.legacyPackages.${system};
-    };
+
 
     # Ambiente de desenvolvimento interativo (`nix develop`)
     devShells.${system}.default = let
