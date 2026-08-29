@@ -359,3 +359,84 @@ def generate_nix_flags(config: LlamaConfig) -> str:
         flags.append(f"--cache-type-k {config.kv_cache_type}")
         flags.append(f"--cache-type-v {config.kv_cache_type}")
     return " ".join(flags)
+
+
+# ═══ Backward Compatibility ═══
+# Old API used by test_hwprofile.py and hwprofile.py
+
+from dataclasses import dataclass as _dataclass, field as _field
+
+
+@_dataclass
+class CpuInfo:
+    cores: int = 0
+    threads: int = 0
+    vendor: str = ""
+    model: str = ""
+    freq_ghz: float = 0.0
+    arch: str = ""
+
+
+@_dataclass
+class GpuInfo:
+    name: str = ""
+    vram_gb: float = 0.0
+    backend: str = ""
+    count: int = 0
+    compute_cap: str = ""
+    vram_per_gpu_gb: list = _field(default_factory=list)
+
+
+@_dataclass
+class HardwareProfile:
+    cpu: CpuInfo = _field(default_factory=CpuInfo)
+    gpu: GpuInfo = _field(default_factory=GpuInfo)
+    ram_gb: float = 0.0
+    unified_memory_gb: float = 0.0
+    is_termux: bool = False
+    is_android: bool = False
+    is_apple_silicon: bool = False
+    has_npu: bool = False
+    npu_name: str = ""
+    platform: str = ""
+    aux_gpu_name: str = ""
+    aux_gpu_backend: str = ""
+    raw: dict = _field(default_factory=dict)
+
+
+def classify(hw: HardwareProfile) -> str:
+    """Classify hardware into tier (backward compat)."""
+    if hw.gpu.vram_gb >= 24:
+        return "datacenter"
+    elif hw.gpu.vram_gb >= 8:
+        return "high"
+    elif hw.gpu.vram_gb >= 4:
+        return "medium"
+    elif hw.ram_gb >= 16:
+        return "cpu-only"
+    else:
+        return "low"
+
+
+def detect() -> HardwareProfile:
+    """Detect hardware and return HardwareProfile (backward compat)."""
+    hw_sys = detect_hardware()
+    return HardwareProfile(
+        cpu=CpuInfo(
+            cores=hw_sys.cpu.cores_physical,
+            threads=hw_sys.cpu.cores_logical,
+            vendor="Intel" if "intel" in hw_sys.cpu.name.lower() else "AMD" if "amd" in hw_sys.cpu.name.lower() else "Unknown",
+            model=hw_sys.cpu.name,
+            freq_ghz=hw_sys.cpu.frequency_ghz,
+            arch=hw_sys.cpu.architecture,
+        ),
+        gpu=GpuInfo(
+            name=hw_sys.gpu.name,
+            vram_gb=hw_sys.gpu.vram_mb / 1024,
+            backend="cuda" if hw_sys.gpu.vram_mb > 0 else "none",
+            count=1 if hw_sys.gpu.vram_mb > 0 else 0,
+            compute_cap=hw_sys.gpu.compute_capability,
+        ),
+        ram_gb=hw_sys.ram_total_mb / 1024,
+        platform="linux",
+    )
