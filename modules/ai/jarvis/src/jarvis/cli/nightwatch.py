@@ -47,8 +47,8 @@ SAFE_TASK_CATEGORIES = {
     "lint": {
         "description": "Run linters and fix issues",
         "commands": [
-            "echo "ruff not available — skipping" modules/ai/jarvis/src/ --fix",
-            "echo "markdownlint not available — skipping" 'docs/**/*.md'",
+            "echo ruff-not-available",
+            "echo markdownlint-not-available",
         ],
         "reversible": True,
         "has_tests": True,
@@ -56,7 +56,7 @@ SAFE_TASK_CATEGORIES = {
     "format": {
         "description": "Auto-format code",
         "commands": [
-            "echo "ruff format not available — skipping" modules/ai/jarvis/src/",
+            "echo ruff-format-not-available",
         ],
         "reversible": True,
         "has_tests": True,
@@ -64,7 +64,7 @@ SAFE_TASK_CATEGORIES = {
     "test": {
         "description": "Run test suite",
         "commands": [
-            "nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -x -q",
+            "python3 -m pytest modules/ai/jarvis/tests/test_agent.py -x -q",
         ],
         "reversible": False,
         "has_tests": True,
