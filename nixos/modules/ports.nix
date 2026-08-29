@@ -5,9 +5,9 @@
 # llama-cpp, mcp) com suporte a overrides por host.
 #
 # Usage em configuration.nix:
-#   imports = [ ./modules/m3ta-ports.nix ];
+#   imports = [ ./modules/ports.nix ];
 #
-#   m3ta.ports = {
+#   ports = {
 #     enable = true;
 #     definitions = {
 #       qdrant = 6333;
@@ -24,7 +24,7 @@
 #   services.qdrant.settings.config.listener = {
 #     type = "http";
 #     address = "0.0.0.0";
-#     port = config.m3ta.ports.get "qdrant";
+#     port = config.ports.get "qdrant";
 #   };
 {
   config,
@@ -32,7 +32,7 @@
   pkgs,
   ...
 }: let
-  cfg = config.m3ta.ports;
+  cfg = config.ports;
 
   portsLib = import "${./../../lib/ports.nix}" {inherit lib;};
 
@@ -45,7 +45,7 @@
       }
     else null;
 in {
-  options.m3ta.ports = {
+  options.ports = {
     enable = lib.mkEnableOption "gerenciamento centralizado de portas";
 
     definitions = lib.mkOption {
@@ -86,16 +86,16 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    m3ta.ports = {
+    ports = {
       get = service: portHelpers.getPort service cfg.currentHost;
       all = portHelpers.getHostPorts cfg.currentHost;
     };
 
     # Exporta portas como JSON para scripts
     environment.etc = let
-      portsJson = pkgs.writeText "m3ta-ports.json" (builtins.toJSON cfg.all);
+      portsJson = pkgs.writeText "ports.json" (builtins.toJSON cfg.all);
     in {
-      "m3ta-ports.json".source = portsJson;
+      "ports.json".source = portsJson;
     };
   };
 }

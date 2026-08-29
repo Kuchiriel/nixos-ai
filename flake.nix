@@ -154,6 +154,11 @@
                 # decidem seus perfis aqui, sem hardcode por host.
                 jarvisEnvironment = config.services.jarvis.environment;
                 # lib: fonts, colors, ports (nosso próprio lib/)
+                projectLib = import ./lib {
+                  inherit (nixpkgs.lib) lib;
+                  pkgs = nixpkgs.legacyPackages.${system};
+                };
+                # Backward compat (deprecated — use projectLib)
                 m3taLib = import ./lib {
                   inherit (nixpkgs.lib) lib;
                   pkgs = nixpkgs.legacyPackages.${system};
@@ -188,6 +193,11 @@
     };
 
     # ── lib: fonts, colors, ports (nosso próprio lib/) ──────────────
+    lib.nixos-ai = import ./lib {
+      inherit (nixpkgs.lib) lib;
+      pkgs = nixpkgs.legacyPackages.${system};
+    };
+    # Backward compat alias (deprecated — use lib.nixos-ai)
     lib.m3ta = import ./lib {
       inherit (nixpkgs.lib) lib;
       pkgs = nixpkgs.legacyPackages.${system};

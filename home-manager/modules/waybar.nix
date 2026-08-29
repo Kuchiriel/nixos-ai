@@ -2,10 +2,10 @@
   pkgs,
   lib,
   jarvisEnvironment,
-  m3taLib,
+  projectLib,
   ...
 }: let
-  inherit (m3taLib) colors;
+  inherit (projectLib) colors;
   isHost = jarvisEnvironment == "host";
   hostOnlyModules =
     if isHost
@@ -142,8 +142,8 @@ in {
       * {
         border: none;
         border-radius: 0;
-        font-family: ${m3taLib.fonts.cssFamily};
-        font-size: ${toString m3taLib.fonts.mono.size}px;
+        font-family: ${projectLib.fonts.cssFamily};
+        font-size: ${toString projectLib.fonts.mono.size}px;
         min-height: 0;
       }
 
@@ -151,7 +151,7 @@ in {
         background: ${colors.waybar.bg};
         border-bottom: ${colors.waybar.border};
         color: ${colors.waybar.text};
-        font-size: ${toString m3taLib.fonts.mono.size}px;
+        font-size: ${toString projectLib.fonts.mono.size}px;
         min-height: 34px;
         margin: 4px 8px 0 8px;
         border-radius: 10px;
@@ -175,7 +175,7 @@ in {
       #custom-jarvis {
         padding: 0 16px;
         color: ${colors.waybar.text};
-        font-size: ${toString m3taLib.fonts.mono.size}px;
+        font-size: ${toString projectLib.fonts.mono.size}px;
         transition: all 0.25s ease;
       }
 

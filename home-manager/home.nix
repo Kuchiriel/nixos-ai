@@ -11,9 +11,9 @@
     ./modules/rclone-sync.nix
     ./modules/ai
     ./modules/services/jarvis-wakeword.nix
-    # m3ta-coding: coding agents (Pi, OpenCode)
-    # ./modules/m3ta-coding/pi.nix
-    # ./modules/m3ta-coding/shared/default.nix
+    # coding: coding agents (Pi, OpenCode)
+    # ./modules/coding/pi.nix
+    # ./modules/coding/shared/default.nix
     # VS Code + Roo Code (100% declarativo)
     ./modules/vscode-roo.nix
   ];
@@ -27,12 +27,12 @@
   #    sudo cp /etc/litellm.env ~/.config/litellm.env && chmod 600 ~/.config/litellm.env
   #    echo '[ -f ~/.config/litellm.env ] && set -a && . ~/.config/litellm.env && set +a' >> ~/.bashrc
 
-  # ── m3ta-stt-ptt: Push-to-Talk STT com Whisper ──────────────────
-  # m3ta.stt-ptt.enable = true;
-  # m3ta.stt-ptt.model = "ggml-large-v3-turbo";
-  # m3ta.stt-ptt.language = "pt";
+  # ── stt-ptt: Push-to-Talk STT com Whisper ──────────────────
+  # stt-ptt.enable = true;
+  # stt-ptt.model = "ggml-large-v3-turbo";
+  # stt-ptt.language = "pt";
 
-  # ── m3ta-coding: coding agents (Pi, OpenCode) ──────────────────
+  # ── coding: coding agents (Pi, OpenCode) ──────────────────
   # Pi agent desabilitado — renderForPi precisa de agente "primary" no repo AGENTS
   # Para reativar, adicione um agente com mode="primary" no repo AGENTS
 

@@ -8,9 +8,9 @@
 #
 #   # In your flake or configuration:
 #   let
-#     m3taLib = inputs.m3ta-nixpkgs.lib.${system};
+#     projectLib = ...;
 #
-#     rules = m3taLib.coding-rules.mkCodingRules {
+#     rules = projectLib.coding-rules.mkCodingRules {
 #       agents = inputs.agents;
 #       languages = [ "python" "typescript" ];
 #       concerns = [ "coding-style" "naming" "documentation" ];

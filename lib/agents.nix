@@ -6,11 +6,11 @@
 # Usage in your configuration:
 #
 #   let
-#     m3taLib = inputs.m3ta-nixpkgs.lib.${system};
-#     canonical = m3taLib.agents.loadCanonical { agentsInput = inputs.agents; };
+#     projectLib = ...;
+#     canonical = projectLib.agents.loadCanonical { agentsInput = inputs.agents; };
 #
 #     # Render for a specific tool
-#     rendered = m3taLib.agents.renderForOpencode {
+#     rendered = projectLib.agents.renderForOpencode {
 #       inherit pkgs canonical;
 #       modelOverrides = { chiron = "anthropic/claude-sonnet-4"; };
 #     };
@@ -386,7 +386,7 @@
     #
     # Usage:
     #   devShells.default = pkgs.mkShell {
-    #     shellHook = m3taLib.agents.shellHookForTool {
+    #     shellHook = projectLib.agents.shellHookForTool {
     #       inherit pkgs;
     #       agentsInput = inputs.agents;
     #       tool = "opencode";

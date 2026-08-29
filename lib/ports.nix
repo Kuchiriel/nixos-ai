@@ -8,7 +8,7 @@
 #
 #   # In your flake or configuration, define your ports:
 #   let
-#     m3taLib = inputs.m3ta-nixpkgs.lib.${system};
+#     projectLib = ...;
 #
 #     myPorts = {
 #       ports = {
@@ -27,7 +27,7 @@
 #       };
 #     };
 #
-#     portHelpers = m3taLib.ports.mkPortHelpers myPorts;
+#     portHelpers = projectLib.ports.mkPortHelpers myPorts;
 #   in {
 #     # Use in your config:
 #     services.nginx.port = portHelpers.getPort "nginx" "laptop";

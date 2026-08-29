@@ -1,9 +1,9 @@
-# Hyprlock — usa m3taLib.colors e m3taLib.fonts
+# Hyprlock — usa projectLib.colors e projectLib.fonts
 {
-  m3taLib,
+  projectLib,
   ...
 }: let
-  fonts = m3taLib.fonts;
+  fonts = projectLib.fonts;
 in {
   programs.hyprlock = {
     enable = true;

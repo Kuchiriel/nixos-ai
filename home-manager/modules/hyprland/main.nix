@@ -1,10 +1,10 @@
 {
   lib,
   jarvisEnvironment,
-  m3taLib,
+  projectLib,
   ...
 }: let
-  inherit (m3taLib) colors;
+  inherit (projectLib) colors;
   isHost = jarvisEnvironment == "host";
 
   baseEnv = [

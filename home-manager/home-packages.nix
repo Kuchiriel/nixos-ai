@@ -49,7 +49,7 @@
     xdg-desktop-portal-hyprland
     yad # GUI dialogs para NixOS-AI Launcher
 
-    # ── m3ta-nixpkgs packages ──────────────────────────────────────
+    # ── packages ──────────────────────────────────────
     # sidecar: terminal multiplexer/UX para CLI agents
     # sidecar
     # stt-ptt: Push-to-Talk Speech-to-Text com Whisper

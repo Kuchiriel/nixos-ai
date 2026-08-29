@@ -1,8 +1,10 @@
-# lib/default.nix — m3ta lib exports
+# lib/default.nix — project lib exports
 #
 # Uso em módulos (quando disponível via flake):
-#   colors = lib.m3ta.colors;
-#   fonts = lib.m3ta.fonts;
+#   colors = lib.nixos-ai.colors;
+#   fonts = lib.nixos-ai.fonts;
+#   colors = projectLib.colors;  (via extraSpecialArgs)
+#   fonts = projectLib.fonts;    (via extraSpecialArgs)
 {
   lib,
   pkgs,
