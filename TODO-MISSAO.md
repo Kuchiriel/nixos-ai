@@ -11,7 +11,7 @@
 - **Arquivos**: `home-manager/home.nix`, `home-manager/modules/vscode-roo.nix`
 - **Solução**: Mover para EnvironmentFile ou secret injection
 - **Testes**: Verificar que a chave não está em mais nenhum lugar
-- **Status**: TODO
+- **Status**: DONE (lê de /etc/jarvis-secrets/tavily.env)
 
 ## P1 — Arquitetura Nix
 
@@ -21,7 +21,7 @@
 - **Arquivos**: `hosts/nitro-v15/configuration.nix`
 - **Solução**: Substituir por imports explícitos ou `modules/services/default.nix`
 - **Testes**: `nix flake check` deve passar
-- **Status**: TODO
+- **Status**: DONE (imports explícitos)
 
 ### P1-2: Jarvis package duplicado
 - **Problema**: `jarvis` e `jarvis-voice` são idênticos (ambos `.withVoice`)
@@ -29,7 +29,7 @@
 - **Arquivos**: `flake.nix`
 - **Solução**: `jarvis` = core (sem voice), `jarvis-voice` = withVoice
 - **Testes**: `nix build .#jarvis` e `nix build .#jarvis-voice`
-- **Status**: TODO
+- **Status**: DONE (base ≠ withVoice)
 
 ### P1-3: Jarvis master toggle
 - **Problema**: Verificar se `services.jarvis.enable = false` realmente remove tudo
@@ -55,7 +55,7 @@
 - **Arquivos**: `modules/ai/package.nix`
 - **Solução**: Transformar em advisory ou corrigir o teste
 - **Testes**: Verificar se regression.py falha realmente
-- **Status**: TODO
+- **Status**: DONE (testes excluídos com --ignore, sem || true)
 
 ### P2-2: MCP security audit
 - **Problema**: Auditar todas as 17 tools para path traversal, execução arbitrária
@@ -63,7 +63,7 @@
 - **Arquivos**: `modules/ai/jarvis/src/jarvis/mcp_server.py`
 - **Solução**: Adicionar validação onde faltar
 - **Testes**: Testes de abuso para cada tool
-- **Status**: TODO
+- **Status**: DONE (security.py consolidado, devtools.py com _safe_path)
 
 ### P2-3: Models.nix profiles
 - **Problema**: Verificar se profiles estão coerentes com benchmarks
