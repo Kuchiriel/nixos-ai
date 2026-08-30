@@ -196,8 +196,6 @@ in {
         color: ${colors.waybar.text};
         font-size: ${toString projectLib.fonts.mono.size}px;
         min-height: 34px;
-        margin: 4px 8px 0 8px;
-        border-radius: 10px;
       }
 
       #workspaces button,
@@ -214,11 +212,12 @@ in {
       #custom-gpu,
       #custom-igpu,
       #custom-cpu,
-      #custom-memory {
+      #custom-memory,
+      #custom-jarvis,
+      #custom-audiobook {
         padding: 0 16px;
         color: ${colors.waybar.text};
         font-size: ${toString projectLib.fonts.mono.size}px;
-        transition: all 0.25s ease;
       }
 
       #workspaces button {
@@ -232,45 +231,21 @@ in {
         border-bottom: ${colors.waybar.border};
       }
 
-      #clock:hover,
-      #cpu:hover,
-      #memory:hover,
-      #battery:hover,
-      #network:hover,
-      #pulseaudio:hover,
-      #bluetooth:hover,
-      #backlight:hover,
-      #custom-files:hover,
-      #custom-gpu:hover,
-      #custom-igpu:hover,
-      #custom-cpu:hover,
-      #custom-memory:hover,
-      #custom-jarvis:hover {
-        text-shadow: 0 0 4px ${colors.waybar.text}, 0 0 8px ${colors.waybar.text};
+      #custom-gpu.low, #custom-igpu.low, #custom-cpu.low, #custom-memory.low {
+        color: ${colors.status.success};
       }
-
-      #custom-gpu.low { color: ${colors.status.success}; }
-      #custom-gpu.medium { color: ${colors.status.warning}; }
-      #custom-gpu.high { color: ${colors.status.error}; text-shadow: 0 0 6px ${colors.status.error}; }
+      #custom-gpu.medium, #custom-igpu.medium, #custom-cpu.medium, #custom-memory.medium {
+        color: ${colors.status.warning};
+      }
+      #custom-gpu.high, #custom-igpu.high, #custom-cpu.high, #custom-memory.high {
+        color: ${colors.status.error};
+      }
       #custom-gpu.disabled { color: #666666; }
 
-      #custom-igpu.low { color: ${colors.status.success}; }
-      #custom-igpu.medium { color: ${colors.status.warning}; }
-      #custom-igpu.high { color: ${colors.status.error}; text-shadow: 0 0 6px ${colors.status.error}; }
-
-      #custom-cpu.low { color: ${colors.status.success}; }
-      #custom-cpu.medium { color: ${colors.status.warning}; }
-      #custom-cpu.high { color: ${colors.status.error}; text-shadow: 0 0 6px ${colors.status.error}; }
-
-      #custom-memory.low { color: ${colors.status.success}; }
-      #custom-memory.medium { color: ${colors.status.warning}; }
-      #custom-memory.high { color: ${colors.status.error}; text-shadow: 0 0 6px ${colors.status.error}; }
-
       #battery.warning { color: ${colors.status.warning}; }
-      #battery.critical { color: ${colors.status.error}; text-shadow: 0 0 6px ${colors.status.error}; }
+      #battery.critical { color: ${colors.status.error}; }
       #battery.charging { color: ${colors.status.success}; }
 
-      /* ── Jarvis Waybar Module ─────────────────────────────────────────── */
       #custom-jarvis {
         background: rgba(0, 255, 255, 0.08);
         border-bottom: ${colors.waybar.border};
@@ -278,39 +253,13 @@ in {
         padding: 0 6px;
         font-weight: bold;
       }
-      #custom-jarvis.idle { color: #00ffff; opacity: 0.4; }
-      #custom-jarvis.listening {
-        color: #00ffff;
-        animation: jarvis-glow 1s ease-in-out infinite;
-        background: rgba(0, 255, 255, 0.15);
-      }
-      #custom-jarvis.initializing {
-        color: #00ffff;
-        animation: jarvis-spin 2s linear infinite;
-      }
-      #custom-jarvis.transcribing {
-        color: #00ffff;
-        animation: jarvis-pulse 0.6s ease-in-out infinite;
-        background: rgba(0, 255, 255, 0.12);
-      }
-      #custom-jarvis.thinking {
-        color: #FFB86C;
-        animation: jarvis-pulse 1.2s ease-in-out infinite;
-      }
-      #custom-jarvis.speaking {
-        color: #50FA7B;
-        animation: jarvis-glow 1s ease-in-out infinite;
-      }
-      #custom-jarvis.error {
-        color: #FF5555;
-        animation: jarvis-blink 0.4s step-end infinite;
-        background: rgba(255, 85, 85, 0.15);
-      }
-      #custom-jarvis.done {
-        color: #50FA7B;
-      }
+      #custom-jarvis.idle { color: #00ffff; }
+      #custom-jarvis.listening { color: #00ffff; background: rgba(0, 255, 255, 0.15); }
+      #custom-jarvis.thinking { color: #FFB86C; }
+      #custom-jarvis.speaking { color: #50FA7B; }
+      #custom-jarvis.error { color: #FF5555; background: rgba(255, 85, 85, 0.15); }
+      #custom-jarvis.done { color: #50FA7B; }
 
-      /* ── Audiobook Module ─────────────────────────────────────────────── */
       #custom-audiobook {
         background: rgba(0, 255, 255, 0.05);
         border-bottom: ${colors.waybar.border};
@@ -318,50 +267,10 @@ in {
         padding: 0 4px;
         font-weight: bold;
       }
-      #custom-audiobook.audiobook-playing {
-        color: #00ffff;
-        animation: jarvis-glow 2s ease-in-out infinite;
-      }
-      #custom-audiobook.audiobook-paused { color: #00ffff; opacity: 0.5; }
-      #custom-audiobook.audiobook-idle { color: #00ffff; opacity: 0.2; }
 
-      /* ── Hardware Modules ─────────────────────────────────────────────── */
       #custom-cpu, #custom-memory, #custom-gpu, #custom-igpu {
         padding: 0 4px;
         font-weight: bold;
-      }
-      #custom-cpu.high, #custom-memory.high, #custom-gpu.high {
-        color: #FF5555;
-      }
-      #custom-cpu.medium, #custom-memory.medium, #custom-gpu.medium {
-        color: #FFB86C;
-      }
-      #custom-cpu.low, #custom-memory.low, #custom-gpu.low {
-        color: #50FA7B;
-      }
-
-      /* ── Animations (waybar CSS: opacity only, single selectors) ──────── */
-      @keyframes jarvis-pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.3; }
-        100% { opacity: 1; }
-      }
-      @keyframes jarvis-glow {
-        0% { opacity: 1; }
-        50% { opacity: 0.5; }
-        100% { opacity: 1; }
-      }
-      @keyframes jarvis-blink {
-        0% { opacity: 1; }
-        50% { opacity: 0.15; }
-        100% { opacity: 1; }
-      }
-      @keyframes jarvis-spin {
-        0% { opacity: 1; }
-        25% { opacity: 0.5; }
-        50% { opacity: 0.2; }
-        75% { opacity: 0.5; }
-        100% { opacity: 1; }
       }
 
       #tray { padding-right: 8px; }
