@@ -904,3 +904,262 @@ def handle_dev_tool(name: str, args: dict[str, Any]) -> str:
         return json.dumps(result, ensure_ascii=False, default=str)
     except Exception as exc:
         return json.dumps({"ok": False, "error": str(exc)})
+
+
+# ===========================================================================
+# SafeEditor — Atomic writes with validation (ported from nightwatch)
+# ===========================================================================
+# Principles:
+# 1. Never overwrite silently
+# 2. Write to temp file first
+# 3. Validate before commit
+# 4. Atomic rename on success
+# 5. Keep backup on failure
+# 6. Detect truncation, corruption, structural damage
+
+import hashlib
+import tempfile
+
+BACKUP_DIR = Path.home() / ".local/state/jarvis/backups"
+
+
+def compute_checksum(content: str) -> str:
+    """Compute SHA256 checksum of content."""
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+
+
+def detect_language(path: Path) -> str:
+    """Detect file language from extension."""
+    ext = path.suffix.lower()
+    return {
+        ".py": "python",
+        ".nix": "nix",
+        ".json": "json",
+        ".yaml": "yaml",
+        ".yml": "yaml",
+        ".toml": "toml",
+        ".sh": "bash",
+        ".md": "markdown",
+    }.get(ext, "unknown")
+
+
+def strip_markdown_fences(content: str) -> str:
+    """Strip markdown code fences that LLMs sometimes add."""
+    lines = content.strip().split("\n")
+    if not lines:
+        return content
+    
+    # Strip opening fence(s)
+    while lines and lines[0].strip().startswith("```"):
+        lines = lines[1:]
+    
+    # Strip closing fence(s)
+    while lines and lines[-1].strip().startswith("```"):
+        lines = lines[:-1]
+    
+    return "\n".join(lines)
+
+
+def validate_content(
+    path: Path,
+    content: str,
+    original: str | None = None,
+) -> tuple[bool, list[str], list[str]]:
+    """Validate new content. Returns (valid, errors, warnings)."""
+    all_errors = []
+    all_warnings = []
+    
+    # Strip markdown fences
+    content = strip_markdown_fences(content)
+    
+    # Language-specific validation
+    lang = detect_language(path)
+    
+    if lang == "python":
+        # AST guard
+        is_valid, ast_error = _validate_python_syntax(content)
+        if not is_valid:
+            all_errors.append(f"Syntax error: {ast_error}")
+            return False, all_errors, all_warnings
+    
+    elif lang == "nix":
+        # Nix validation
+        try:
+            proc = subprocess.run(
+                ["nix-instantiate", "--parse"],
+                input=content, capture_output=True, text=True, timeout=10,
+            )
+            if proc.returncode != 0:
+                all_errors.append(f"Nix parse error: {proc.stderr[:200]}")
+                return False, all_errors, all_warnings
+        except FileNotFoundError:
+            all_warnings.append("nix-instantiate not available")
+        except subprocess.TimeoutExpired:
+            all_warnings.append("Nix validation timed out")
+    
+    elif lang == "json":
+        # JSON validation
+        try:
+            json.loads(content)
+        except json.JSONDecodeError as e:
+            all_errors.append(f"JSON error: {e.msg} at position {e.pos}")
+            return False, all_errors, all_warnings
+    
+    # Size checks against original
+    if original:
+        orig_size = len(original)
+        new_size = len(content)
+        
+        if new_size < orig_size * 0.3:
+            all_errors.append(f"File shrunk too much: {orig_size} -> {new_size} ({new_size/orig_size:.0%})")
+            return False, all_errors, all_warnings
+        
+        if new_size > orig_size * 3:
+            all_warnings.append(f"File grew significantly: {orig_size} -> {new_size} ({new_size/orig_size:.0%})")
+        
+        # Import integrity for Python
+        if lang == "python":
+            try:
+                orig_tree = ast.parse(original)
+                new_tree = ast.parse(content)
+                
+                orig_imports = set()
+                for node in ast.walk(orig_tree):
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            orig_imports.add(alias.name)
+                    elif isinstance(node, ast.ImportFrom):
+                        if node.module:
+                            orig_imports.add(node.module)
+                
+                new_imports = set()
+                for node in ast.walk(new_tree):
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            new_imports.add(alias.name)
+                    elif isinstance(node, ast.ImportFrom):
+                        if node.module:
+                            new_imports.add(node.module)
+                
+                removed = orig_imports - new_imports
+                if removed:
+                    all_warnings.append(f"Imports removed: {', '.join(removed)}")
+            except SyntaxError:
+                pass
+        
+        # Structural integrity for Python
+        if lang == "python":
+            try:
+                orig_tree = ast.parse(original)
+                new_tree = ast.parse(content)
+                
+                orig_funcs = {n.name for n in ast.walk(orig_tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+                new_funcs = {n.name for n in ast.walk(new_tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+                removed_funcs = orig_funcs - new_funcs
+                if removed_funcs:
+                    all_errors.append(f"Functions removed: {', '.join(removed_funcs)}")
+                    return False, all_errors, all_warnings
+                
+                orig_classes = {n.name for n in ast.walk(orig_tree) if isinstance(n, ast.ClassDef)}
+                new_classes = {n.name for n in ast.walk(new_tree) if isinstance(n, ast.ClassDef)}
+                removed_classes = orig_classes - new_classes
+                if removed_classes:
+                    all_errors.append(f"Classes removed: {', '.join(removed_classes)}")
+                    return False, all_errors, all_warnings
+            except SyntaxError:
+                pass
+    
+    return len(all_errors) == 0, all_errors, all_warnings
+
+
+def safe_write_file(path: str, content: str, backup: bool = True) -> dict[str, Any]:
+    """Write file safely with atomic writes and validation.
+    
+    Steps:
+    1. Read original (for comparison)
+    2. Create backup
+    3. Validate new content
+    4. Write to temp file
+    5. Validate temp file
+    6. Atomic rename
+    """
+    try:
+        target = _safe_path(path)
+        
+        # Read original
+        original = None
+        if target.exists():
+            try:
+                original = target.read_text(encoding="utf-8")
+            except Exception as e:
+                return {"ok": False, "error": f"Could not read original: {e}"}
+        
+        # Create backup
+        backup_path = None
+        if backup and target.exists():
+            BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+            timestamp = target.stat().st_mtime
+            backup_name = f"{target.name}.{int(timestamp)}.bak"
+            backup_path = BACKUP_DIR / backup_name
+            shutil.copy2(target, backup_path)
+        
+        # Strip markdown fences
+        content = strip_markdown_fences(content)
+        
+        # Validate
+        valid, errors, warnings = validate_content(target, content, original)
+        if not valid:
+            return {"ok": False, "errors": errors, "warnings": warnings}
+        
+        # Write to temp file
+        target.parent.mkdir(parents=True, exist_ok=True)
+        
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=target.suffix,
+            dir=target.parent,
+            delete=False,
+        ) as tmp:
+            tmp.write(content)
+            tmp.flush()
+            os.fsync(tmp.fileno())
+            tmp_path = Path(tmp.name)
+        
+        # Validate temp file
+        try:
+            temp_content = tmp_path.read_text(encoding="utf-8")
+            valid, errors, warnings = validate_content(target, temp_content, original)
+            if not valid:
+                tmp_path.unlink()
+                return {"ok": False, "errors": errors, "warnings": warnings}
+        except Exception as e:
+            tmp_path.unlink()
+            return {"ok": False, "error": f"Temp validation failed: {e}"}
+        
+        # Atomic rename
+        os.replace(tmp_path, target)
+        
+        # Verify
+        final_content = target.read_text(encoding="utf-8")
+        checksum_after = compute_checksum(final_content)
+        
+        if checksum_after != compute_checksum(content):
+            return {"ok": False, "error": "Content mismatch after write"}
+        
+        try:
+            rel = str(target.relative_to(_project_root()))
+        except ValueError:
+            rel = str(target)
+        
+        return {
+            "ok": True,
+            "path": rel,
+            "bytes": len(content.encode("utf-8")),
+            "backup": str(backup_path) if backup_path else None,
+            "warnings": warnings,
+        }
+    
+    except ValueError as e:
+        return {"ok": False, "error": str(e)}
+    except OSError as e:
+        return {"ok": False, "error": f"Write error: {e}"}
