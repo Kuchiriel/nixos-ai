@@ -36,10 +36,10 @@ Configuração NixOS declarativa e reprodutível com sistema de IA local integra
 | Segurança (anti-chaining) | ✅ Implementado | shlex.split, DANGEROUS_CHAINING, DANGEROUS_COMMANDS, safe pipes |
 | Property-based tests (hypothesis) | ✅ Funcional | 31 testes adversariais para parsers e regex |
 | Fuzzing + mutation testing | ✅ Funcional | 56 testes de stress |
-| Nightwatch (loop autônomo) | 🧪 Experimental | harness.py com failure classification + anti-loop + checkpoint + Event Bus; não validado em longa duração |
+| Nightwatch (loop autônomo) | ✅ Implementado | harness.py com failure classification + anti-loop + checkpoint + Event Bus + task timeout + persistent LoopDetector |
 | Multi-agent / sub-agents | 🧪 Experimental | multi_agent.py com AgentPersona + Orchestrator + handoff via Event Bus; 14 testes; sem integração LLM real |
 | Voz (STT/TTS/wakeword) | 🧪 Experimental | código existe (voice.py, STT faster-whisper, TTS Kokoro, openwakeword); requer `jarvis-voice` para ativar |
-| Audiobook | ✅ Implementado | audiobook.py com 11 testes (chunk_text, extract, scan, dispatch) |
+| Audiobook | ✅ Implementado | audiobook.py com 27 testes — EPUB/PDF/TXT + OCR fallback + SFX + chapter detection + TTS (Kokoro) + LLM search |
 | Obsidian / HackMD | ✅ Implementado | hackmd.py com 8 testes (token, headers, reports, API errors) |
 | Multi-AI Reader | ✅ Implementado | multi_ai_reader.py com 8 testes (ChatGPT/Gemini/Claude dispatch, HTML extraction) |
 | Emotion (detecção) | 🧪 Experimental | emotion.py — keywords, zero LLM; funcional para TTS prosódia |
@@ -77,7 +77,7 @@ flake.nix
 │   │   ├── core/             ← Lógica: agent, rag, memory, heal, vision, etc.
 │   │   ├── providers/        ← Adaptadores: llm, vector_store, telegram, mcp
 │   │   └── mcp_server.py     ← MCP server (18 tools)
-│   └── nightwatch/           ← Harness autônomo (4.179 linhas)
+│   └── nightwatch/           ← Harness autônomo (4.994 linhas)
 ├── modules/services/         ← Serviços NixOS (llama-cpp, qdrant, telegram, etc.)
 ├── nixos/modules/            ← Módulos base (audio, hyprland, bluetooth, etc.)
 ├── home-manager/             ← Desktop (hyprland, waybar) + daemons IA
@@ -269,7 +269,7 @@ nix develop                # shell de desenvolvimento
 ```bash
 # Contagem de testes (reproduzível)
 nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -q --co 2>&1 | tail -1
-# Resultado: ~736 testes coletados
+# Resultado: ~790 testes coletados
 
 # Rodar todos
 nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -q
@@ -281,13 +281,15 @@ nix develop --command python3 -m pytest modules/ai/jarvis/tests/test_nightwatch_
 nix flake check
 ```
 
-**Categorias de testes**:
+**Categorias de testes** (52 arquivos, ~790 testes):
 - Unitários (core, providers, CLI)
 - Integration (MCP, RAG, memory)
-- E2E (nightwatch, harness, longrun)
+- E2E (nightwatch, harness, real filesystem)
 - Property-based (hypothesis — parsers, regex)
-- Fuzzing + mutation (56 testes de stress)
+- Fuzzing + mutation (stress tests)
 - Security (anti-chaining, command validation)
+- Audiobook (OCR, SFX, chapters, TTS)
+- Gaming (detection, toggle, services)
 
 ---
 
