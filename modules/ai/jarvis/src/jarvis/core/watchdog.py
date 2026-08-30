@@ -83,27 +83,11 @@ def speak(message: str, priority: str = "normal") -> bool:
         return False
 
     try:
-        # Use kokoro TTS via jarvis speak command
-        jarvis_bin = os.environ.get("JARVIS_BIN", "jarvis")
-        result = subprocess.run(
-            [jarvis_bin, "speak", message],
-            capture_output=True, text=True, timeout=15
-        )
-        if result.returncode == 0:
-            logger.info(f"TTS: {message}")
-            return True
-        else:
-            # Fallback: use espeak-ng if available
-            try:
-                subprocess.run(
-                    ["espeak-ng", message],
-                    capture_output=True, timeout=10
-                )
-                return True
-            except FileNotFoundError:
-                # No TTS available, just log
-                logger.info(f"TTS (no voice): {message}")
-                return False
+        # Direct TTS call — no subprocess (avoids PATH issues in systemd)
+        from jarvis.core.voice import speak as tts_speak
+        tts_speak(message, play=True)
+        logger.info(f"TTS: {message}")
+        return True
     except Exception as e:
         logger.info(f"TTS failed: {e}")
         return False
