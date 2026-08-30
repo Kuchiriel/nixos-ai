@@ -170,16 +170,17 @@ in {
     # Contexto grande (32K) para coding com tool calling.
     # Parallel=2 para múltiplas ferramentas simultâneas.
     # Prioriza qualidade sobre velocidade.
+    # VRAM budget: 6141 MB total - 2400 MB (model) - 500 MB (safety) = 3241 MB
+    # Mas: experts precisam de VRAM também! ncmoe=36 mantém ALL experts na CPU
+    # (36 experts × ~100MB = 3600 MB se fossem na GPU — impossível)
     roo-dev = hostBase // {
       threads = 12;
       ctxSize = 32768;
       batchSize = 1024;
       ubatch = 1024;
-      # VRAM budget: 3244 MB available
-      # KV cache: 32768 × 64 bytes = 2048 MB
-      # Experts on GPU: (3244 - 2048) / 100 = 11 experts
-      # Experts on CPU: 36 - 11 = 25 experts
-      moeFlags = "--n-cpu-moe 25 --split-mode layer --poll 50 --poll-batch 50";
+      # Mantém ncmoe=36 (todos experts na CPU) — RTX 4050 não tem VRAM suficiente
+      # para experts na GPU E contexto grande E modelo dense layers
+      moeFlags = "--n-cpu-moe 36 --split-mode layer --poll 50 --poll-batch 50";
       extraArgs = [
         "--no-mmproj-offload"
         "--image-min-tokens"
@@ -205,16 +206,15 @@ in {
     # Throughput máximo para conversas interativas.
     # Contexto médio (16K), parallel=1 para reduzir overhead.
     # Prioriza velocidade sobre qualidade de tool calling.
+    # VRAM budget: 6141 MB total - 2400 MB (model) - 500 MB (safety) = 3241 MB
+    # Mantém ncmoe=36 para estabilidade — experts na CPU
     chat = hostBase // {
       threads = 12;
       ctxSize = 16384;
       batchSize = 2048;
       ubatch = 2048;
-      # VRAM budget: 3244 MB available
-      # KV cache: 16384 × 64 bytes = 1024 MB
-      # Experts on GPU: (3244 - 1024) / 100 = 22 experts
-      # Experts on CPU: 36 - 22 = 14 experts
-      moeFlags = "--n-cpu-moe 14 --split-mode layer --poll 50 --poll-batch 50";
+      # Mantém ncmoe=36 — experts na CPU para não estourar VRAM
+      moeFlags = "--n-cpu-moe 36 --split-mode layer --poll 50 --poll-batch 50";
       extraArgs = [
         "--no-mmproj-offload"
         "--image-min-tokens"
@@ -236,16 +236,15 @@ in {
     # Baixa latência para interações por voz.
     # Contexto pequeno (8K), parallel=1, threads reduzidas.
     # Prioriza latência sobre throughput.
+    # VRAM budget: 6141 MB total - 2400 MB (model) - 500 MB (safety) = 3241 MB
+    # Mantém ncmoe=36 para estabilidade — experts na CPU
     jarvis = hostBase // {
       threads = 8;
       ctxSize = 8192;
       batchSize = 512;
       ubatch = 512;
-      # VRAM budget: 3244 MB available
-      # KV cache: 8192 × 64 bytes = 512 MB
-      # Experts on GPU: (3244 - 512) / 100 = 27 experts
-      # Experts on CPU: 36 - 27 = 9 experts
-      moeFlags = "--n-cpu-moe 9 --split-mode layer --poll 50 --poll-batch 50";
+      # Mantém ncmoe=36 — experts na CPU para não estourar VRAM
+      moeFlags = "--n-cpu-moe 36 --split-mode layer --poll 50 --poll-batch 50";
       extraArgs = [
         "--no-mmproj-offload"
         "--image-min-tokens"
@@ -267,16 +266,15 @@ in {
     # Settings reprodutíveis para medições.
     # Sem otimizações dinâmicas, tudo hardcoded.
     # Usado para comparar performance entre versões.
+    # VRAM budget: 6141 MB total - 2400 MB (model) - 500 MB (safety) = 3241 MB
+    # Mantém ncmoe=36 para estabilidade — experts na CPU
     benchmark = hostBase // {
       threads = 8;
       ctxSize = 2048; # Pequeno para benchmarks rápidos
       batchSize = 512;
       ubatch = 512;
-      # VRAM budget: 3244 MB available
-      # KV cache: 2048 × 64 bytes = 128 MB
-      # Experts on GPU: (3244 - 128) / 100 = 31 experts
-      # Experts on CPU: 36 - 31 = 5 experts
-      moeFlags = "--n-cpu-moe 5 --split-mode layer";
+      # Mantém ncmoe=36 — experts na CPU para não estourar VRAM
+      moeFlags = "--n-cpu-moe 36 --split-mode layer";
       extraArgs = [
         "--no-mmproj-offload"
         "--image-min-tokens"
