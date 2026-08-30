@@ -577,7 +577,7 @@ class Harness:
                 budget = 8192
                 self.notify(f"⚠️ Context: {budget:,} tokens (server unavailable, fallback)")
         self.context_budget = ContextBudget(
-            budget=budget,
+            max_tokens=budget,
             compaction_threshold=self.config.compaction_threshold,
         )
         # Auto-discover projects if none specified
