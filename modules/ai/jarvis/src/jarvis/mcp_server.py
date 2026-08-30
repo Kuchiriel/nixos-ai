@@ -795,7 +795,7 @@ def _vault_sync_to_obsidian() -> list[str]:
     import shutil
     
     VAULT_DIR = Path.home() / "projects/nixos-ai/docs/vault"
-    OBSIDIAN_VAULT = Path.home() / "vaults/nixos-ai"
+    OBSIDIAN_VAULT = Path.home() / "vaults/projects"
     
     VAULT_DIR.mkdir(parents=True, exist_ok=True)
     OBSIDIAN_VAULT.mkdir(parents=True, exist_ok=True)
@@ -867,7 +867,7 @@ def _vault_read_from_obsidian(query: str) -> list[dict[str, str]]:
     from pathlib import Path
     import subprocess
     
-    OBSIDIAN_VAULT = Path.home() / "vaults/nixos-ai"
+    OBSIDIAN_VAULT = Path.home() / "vaults/projects"
     if not OBSIDIAN_VAULT.exists():
         return []
     
@@ -886,7 +886,7 @@ def _vault_status() -> dict[str, Any]:
     from pathlib import Path
     
     VAULT_DIR = Path.home() / "projects/nixos-ai/docs/vault"
-    OBSIDIAN_VAULT = Path.home() / "vaults/nixos-ai"
+    OBSIDIAN_VAULT = Path.home() / "vaults/projects"
     
     VAULT_DIR.mkdir(parents=True, exist_ok=True)
     
