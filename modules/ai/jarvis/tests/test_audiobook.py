@@ -203,3 +203,113 @@ def test_ocr_pdf_fallback(tmp_path):
     result = _ocr_pdf(fake_pdf)
     # Should not crash, may return empty string
     assert isinstance(result, str)
+
+
+# --- Chapter detection tests ---
+
+
+def test_detect_chapters():
+    """detect_chapters finds chapter headers."""
+    from jarvis.core.audiobook import detect_chapters
+
+    text = """Some intro text.
+
+CAPÍTULO 1: The Beginning
+It was a dark and stormy night.
+
+CAPÍTULO 2: The Discovery
+He found a mysterious artifact.
+"""
+    chapters = detect_chapters(text)
+    assert len(chapters) == 2
+    assert chapters[0]["num"] == 1
+    assert chapters[1]["num"] == 2
+
+
+def test_detect_chapters_english():
+    """detect_chapters handles English chapter headers."""
+    from jarvis.core.audiobook import detect_chapters
+
+    text = """Chapter 1: The Beginning
+Some text here.
+
+Chapter 2: The End
+More text.
+"""
+    chapters = detect_chapters(text)
+    assert len(chapters) == 2
+
+
+def test_detect_chapters_empty():
+    """detect_chapters returns empty for text without chapters."""
+    from jarvis.core.audiobook import detect_chapters
+
+    chapters = detect_chapters("Just some plain text without chapters.")
+    assert chapters == []
+
+
+def test_extract_chapter():
+    """extract_chapter returns the correct chapter text."""
+    from jarvis.core.audiobook import extract_chapter
+
+    text = """Intro text.
+
+CAPÍTULO 1: First
+First chapter content here.
+
+CAPÍTULO 2: Second
+Second chapter content here.
+"""
+    ch1 = extract_chapter(text, 1)
+    assert "First chapter content" in ch1
+    assert "Second chapter" not in ch1
+
+
+def test_extract_chapter_not_found():
+    """extract_chapter returns empty for non-existent chapter."""
+    from jarvis.core.audiobook import extract_chapter
+
+    text = "CAPÍTULO 1: First\nContent."
+    result = extract_chapter(text, 99)
+    assert result == ""
+
+
+def test_list_chapters():
+    """list_chapters returns chapter titles."""
+    from jarvis.core.audiobook import list_chapters
+
+    text = """CAPÍTULO 1: Carmesim
+Text.
+
+CAPÍTULO 2: Situação
+More text.
+"""
+    titles = list_chapters(text)
+    assert len(titles) == 2
+    assert "CAPÍTULO 1: Carmesim" in titles[0]
+
+
+def test_skip_toc():
+    """skip_toc removes TOC from beginning."""
+    from jarvis.core.audiobook import skip_toc
+
+    text = """ÍNDICES
+CAPA FRONTAL
+CAPA COMPLETA
+CAPÍTULO 1: The Beginning
+Actual content here.
+"""
+    clean = skip_toc(text)
+    assert "ÍNDICES" not in clean
+    assert "CAPÍTULO 1" in clean
+
+
+def test_search_book_keyword_fallback():
+    """search_book falls back to keyword matching when LLM unavailable."""
+    from jarvis.core.audiobook import search_book
+
+    text = "The rain fell. Derek stood at the corner. The alchemist poured the liquid."
+    results = search_book(text, "Derek", context_chars=500)
+    # Should find at least one result via keyword fallback
+    assert len(results) >= 1
+    assert any("Derek" in r["text"] for r in results)

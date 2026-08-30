@@ -257,6 +257,194 @@ def chunk_text(text: str, target_chars: int = CHUNK_TARGET_CHARS) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# Chapter Detection
+# ---------------------------------------------------------------------------
+
+# Padrões de cabeçalho de capítulo (PT-BR e EN)
+CHAPTER_PATTERNS = [
+    r"(?m)^\s*CAP[IÍ]TULO\s+\d+",          # CAPÍTULO 1, CAPITULO 1
+    r"(?m)^\s*CAP[IÍ]TULO\s+[IVXLCDM]+",   # CAPÍTULO IV
+    r"(?m)^\s*CHAPTER\s+\d+",               # Chapter 1
+    r"(?m)^\s*CHAPTER\s+[IVXLCDM]+",        # Chapter IV
+    r"(?m)^\s*PART\s+\d+",                  # Part 1
+    r"(?m)^\s*PARTE\s+\d+",                 # Parte 1
+    r"(?m)^\s*Volume\s+\d+",               # Volume 1
+]
+
+# Padrões de TOC/índice para pular
+TOC_PATTERNS = [
+    r"(?m)^\s*(ÍNDICES?|INDICE|CONTENTS?|TABLE\s+OF\s+CONTENTS?)\s*$",
+    r"(?m)^\s*(CAPA\s+FRONTAL|CAPA\s+COMPLETA|DIREITOS\s+AUTORAIS|SINOPSE)\s*$",
+]
+
+
+def detect_chapters(text: str) -> list[dict[str, Any]]:
+    """Detecta capítulos no texto.
+    
+    Retorna lista de {"num": int, "title": str, "start": int, "end": int}.
+    """
+    chapters: list[dict[str, Any]] = []
+    
+    # Find all chapter headers
+    for pattern in CHAPTER_PATTERNS:
+        for match in re.finditer(pattern, text, re.IGNORECASE):
+            # Extract chapter number/title
+            title_line = text[match.start():text.find("\n", match.start())].strip()
+            
+            # Try to extract chapter number
+            num_match = re.search(r"\d+", title_line)
+            num = int(num_match.group()) if num_match else len(chapters) + 1
+            
+            chapters.append({
+                "num": num,
+                "title": title_line,
+                "start": match.start(),
+                "end": 0,  # Will be set below
+            })
+    
+    # Sort by position and set end positions
+    chapters.sort(key=lambda c: c["start"])
+    for i in range(len(chapters) - 1):
+        chapters[i]["end"] = chapters[i + 1]["start"]
+    if chapters:
+        chapters[-1]["end"] = len(text)
+    
+    return chapters
+
+
+def detect_toc_range(text: str) -> tuple[int, int]:
+    """Detecta o range do TOC/índice no início do livro.
+    
+    Retorna (start, end) em chars. Se não encontrar TOC, retorna (0, 0).
+    """
+    toc_start = 0
+    toc_end = 0
+    
+    for pattern in TOC_PATTERNS:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            toc_start = match.start()
+            # TOC usually ends at the first chapter
+            for cp in CHAPTER_PATTERNS:
+                ch_match = re.search(cp, text, re.IGNORECASE)
+                if ch_match and ch_match.start() > toc_start:
+                    toc_end = ch_match.start()
+                    break
+            break
+    
+    return (toc_start, toc_end)
+
+
+def extract_chapter(text: str, chapter_num: int) -> str:
+    """Extrai um capítulo específico pelo número."""
+    chapters = detect_chapters(text)
+    for ch in chapters:
+        if ch["num"] == chapter_num:
+            return text[ch["start"]:ch["end"]]
+    return ""
+
+
+def skip_toc(text: str) -> str:
+    """Remove o TOC/índice do início do texto."""
+    _, toc_end = detect_toc_range(text)
+    if toc_end > 0:
+        return text[toc_end:].strip()
+    return text
+
+
+def list_chapters(text: str) -> list[str]:
+    """Lista títulos dos capítulos encontrados."""
+    chapters = detect_chapters(text)
+    return [ch["title"] for ch in chapters]
+
+
+# ---------------------------------------------------------------------------
+# LLM-based Semantic Search
+# ---------------------------------------------------------------------------
+
+def search_book(text: str, query: str, context_chars: int = 2000) -> list[dict[str, Any]]:
+    """Busca semântica no texto do livro usando o LLM local.
+    
+    Divide o texto em blocos e usa o LLM para encontrar trechos relevantes.
+    Retorna lista de {"chunk_index": int, "text": str, "relevance": str}.
+    """
+    # Try LLM-based search first
+    llm_available = False
+    llm = None
+    try:
+        from jarvis.providers.llm import LLMClient
+        from jarvis.core.config import get_config
+        import requests as _req
+        cfg = get_config()
+        # Quick health check
+        _req.get(f"{cfg.llm_base_url}/v1/models", timeout=2)
+        llm = LLMClient(cfg)
+        llm_available = True
+    except Exception:  # noqa: BLE001
+        llm = None
+    
+    # Split into search blocks (larger than TTS chunks)
+    block_size = 4000
+    blocks: list[dict[str, Any]] = []
+    for i in range(0, len(text), block_size):
+        block = text[i:i + block_size]
+        blocks.append({"index": len(blocks), "text": block, "offset": i})
+    
+    results: list[dict[str, Any]] = []
+    
+    if llm_available and llm:
+        # LLM-based semantic search
+        batch_size = 5
+        for batch_start in range(0, len(blocks), batch_size):
+            batch = blocks[batch_start:batch_start + batch_size]
+            blocks_text = "\n\n".join(
+                f"[BLOCK {b['index']}]\n{b['text'][:2000]}"
+                for b in batch
+            )
+            prompt = f"""Search this book text for passages related to: "{query}"
+
+{blocks_text}
+
+Return the block numbers that contain relevant passages.
+If none are relevant, return "NONE".
+Format: BLOCKS: 0, 3, 7"""
+            try:
+                response = llm.chat([{"role": "user", "content": prompt}], max_tokens=200)
+                if "NONE" in response.upper():
+                    continue
+                nums = re.findall(r"\d+", response.split(":")[-1] if ":" in response else response)
+                for num_str in nums:
+                    num = int(num_str)
+                    if 0 <= num < len(blocks):
+                        block = blocks[num]
+                        start = max(0, block["offset"] - context_chars // 2)
+                        end = min(len(text), block["offset"] + len(block["text"]) + context_chars // 2)
+                        results.append({
+                            "chunk_index": block["index"],
+                            "text": text[start:end],
+                            "relevance": response[:200],
+                        })
+            except Exception:  # noqa: BLE001
+                continue
+    else:
+        # Keyword fallback when LLM is not available
+        query_words = query.lower().split()
+        for block in blocks:
+            block_lower = block["text"].lower()
+            matches = sum(1 for w in query_words if w in block_lower)
+            if matches > 0:
+                start = max(0, block["offset"] - context_chars // 2)
+                end = min(len(text), block["offset"] + len(block["text"]) + context_chars // 2)
+                results.append({
+                    "chunk_index": block["index"],
+                    "text": text[start:end],
+                    "relevance": f"keyword match: {matches}/{len(query_words)}",
+                })
+    
+    return results
+
+
+# ---------------------------------------------------------------------------
 # SFX (Sound Effects) — portado do enhanced_audiobook.py legado
 # ---------------------------------------------------------------------------
 

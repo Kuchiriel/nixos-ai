@@ -211,6 +211,8 @@
           python313Packages.pymupdf  # PDF extraction for audiobook reader
           python313Packages.ebooklib  # EPUB extraction for audiobook reader
           python313Packages.beautifulsoup4  # HTML parsing for EPUB
+          python313Packages.kokoro  # TTS for audiobook reader
+          python313Packages.soundfile  # WAV I/O for TTS
           # Higiene Nix
           statix
           deadnix
