@@ -450,13 +450,14 @@ def _handle_nix_search(args: dict[str, Any]) -> str:
     # Encontrar mcp-nixos no PATH ou no nix store
     mcp_bin = shutil.which("mcp-nixos")
     if not mcp_bin:
-        # Fallback: procurar no nix store
+        # Fallback: procurar no nix store (usar subprocess sem pipes)
         try:
-            res = _run_shell(
-                "find /nix/store -name mcp-nixos -type f -path '*/bin/*' 2>/dev/null | sort -V | tail -1",
-                timeout=5,
-            )
-            mcp_bin = res.stdout.strip()
+            import glob
+            candidates = glob.glob("/nix/store/*/bin/mcp-nixos")
+            if candidates:
+                # Sort by version (last = newest)
+                candidates.sort()
+                mcp_bin = candidates[-1]
         except Exception:
             pass
     if not mcp_bin:
