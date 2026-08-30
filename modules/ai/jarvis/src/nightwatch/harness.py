@@ -136,6 +136,8 @@ class HarnessConfig:
     # Anti-loop detection
     loop_max_attempts: int = 3
     loop_window_seconds: float = 300.0
+    # Task timeout (seconds) — tasks running longer are killed
+    task_timeout: int = 600  # 10 minutes
 
 
 @dataclass
@@ -648,6 +650,15 @@ class Harness:
             6. Commit (only if all pass)
             7. Learn (persist to AGENTS.md)
         """
+        task_start = time.time()
+
+        # Timeout check: skip tasks that have been running too long
+        task_age = task_start - task.created_at
+        if task_age > self.config.task_timeout:
+            self._fail_task(task, f"Task timeout: running for {task_age:.0f}s (limit: {self.config.task_timeout}s)")
+            self.notify(f"⏰ *Task Timeout*\n{task.description[:50]}")
+            return False
+
         # Create checkpoint
         cp = create_checkpoint_for_task(task.id, task.description, self.config.project)
 

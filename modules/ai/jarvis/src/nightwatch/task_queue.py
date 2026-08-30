@@ -39,17 +39,41 @@ class TaskStatus(str, Enum):
     ABANDONED = "ABANDONED"
 
 
+LOOP_DETECTOR_FILE = STATE_DIR / "loop_detector.json"
+
+
 class LoopDetector:
     """Detects when a task is stuck in a failure loop.
     
     Tracks attempts per task with timestamps. A task is considered
     in a loop if it fails N times within a time window.
+    Persisted to disk to survive restarts.
     """
     
     def __init__(self, max_attempts: int = 3, window_seconds: float = 300.0):
         self.max_attempts = max_attempts
         self.window_seconds = window_seconds
         self._history: dict[str, list[float]] = {}
+        self._load()
+    
+    def _load(self) -> None:
+        """Load history from disk."""
+        if LOOP_DETECTOR_FILE.exists():
+            try:
+                data = json.loads(LOOP_DETECTOR_FILE.read_text(encoding="utf-8"))
+                self._history = {k: v for k, v in data.items() if isinstance(v, list)}
+            except (json.JSONDecodeError, OSError):
+                self._history = {}
+    
+    def _save(self) -> None:
+        """Persist history to disk."""
+        try:
+            LOOP_DETECTOR_FILE.parent.mkdir(parents=True, exist_ok=True)
+            LOOP_DETECTOR_FILE.write_text(
+                json.dumps(self._history), encoding="utf-8"
+            )
+        except OSError:
+            pass
     
     def record_attempt(self, task_id: str, success: bool) -> bool:
         """Record an attempt. Returns True if task is in a loop."""
@@ -64,6 +88,7 @@ class LoopDetector:
         ]
         
         self._history[task_id].append(now)
+        self._save()
         
         # Check if too many failures in window
         if len(self._history[task_id]) >= self.max_attempts:
@@ -74,6 +99,7 @@ class LoopDetector:
     def reset(self, task_id: str) -> None:
         """Reset tracking for a task (e.g., after successful completion)."""
         self._history.pop(task_id, None)
+        self._save()
     
     def get_stats(self, task_id: str) -> dict:
         """Get attempt stats for a task."""

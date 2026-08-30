@@ -483,8 +483,12 @@ def scenario_b_error_fix(repo_root: Path | None = None) -> ScenarioResult:
     result.evidence.append("Validation passes after fix")
 
     # Step 5: Run the actual test
+    import sys
+    py = sys.executable
+    # Use absolute path to avoid PATH issues in subprocess
+    abs_path = str(repo_root / "src" / "broken.py")
     tc = tool_execute_shell(
-        "python3 -c \"import ast; ast.parse(open('src/broken.py').read()); print('OK')\"",
+        f"{py} -c \"import ast; ast.parse(open('{abs_path}').read()); print('OK')\"",
         timeout=30,
     )
     result.tool_calls.append(tc)

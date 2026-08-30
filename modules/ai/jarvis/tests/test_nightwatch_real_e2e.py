@@ -489,6 +489,7 @@ class TestLoopDetector:
         """Less than max_attempts should not trigger loop."""
         from nightwatch.task_queue import LoopDetector
         detector = LoopDetector(max_attempts=3, window_seconds=300)
+        detector._history.clear()  # Clean state for test isolation
         assert not detector.record_attempt("t1", success=False)
         assert not detector.record_attempt("t1", success=False)
         assert not detector.get_stats("t1")["in_loop"]
@@ -497,6 +498,7 @@ class TestLoopDetector:
         """At max_attempts should trigger loop."""
         from nightwatch.task_queue import LoopDetector
         detector = LoopDetector(max_attempts=3, window_seconds=300)
+        detector._history.clear()  # Clean state for test isolation
         detector.record_attempt("t1", success=False)
         detector.record_attempt("t1", success=False)
         assert detector.record_attempt("t1", success=False)  # 3rd attempt = loop
@@ -507,6 +509,7 @@ class TestLoopDetector:
         """Reset should clear loop tracking."""
         from nightwatch.task_queue import LoopDetector
         detector = LoopDetector(max_attempts=3, window_seconds=300)
+        detector._history.clear()
         detector.record_attempt("t1", success=False)
         detector.record_attempt("t1", success=False)
         detector.record_attempt("t1", success=False)
@@ -514,6 +517,31 @@ class TestLoopDetector:
         detector.reset("t1")
         assert not detector.get_stats("t1")["in_loop"]
         assert detector.get_stats("t1")["attempts_in_window"] == 0
+    
+    def test_loop_persistence(self, tmp_path):
+        """LoopDetector persists state across instances."""
+        import nightwatch.task_queue as tq
+        # Use temp file for persistence test
+        orig = tq.LOOP_DETECTOR_FILE
+        tq.LOOP_DETECTOR_FILE = tmp_path / "loop.json"
+        try:
+            from nightwatch.task_queue import LoopDetector
+            
+            # First instance: record failures
+            d1 = LoopDetector(max_attempts=3, window_seconds=300)
+            d1.record_attempt("t1", success=False)
+            d1.record_attempt("t1", success=False)
+            
+            # Second instance: should see previous state
+            d2 = LoopDetector(max_attempts=3, window_seconds=300)
+            assert d2.get_stats("t1")["attempts_in_window"] == 2
+            assert not d2.get_stats("t1")["in_loop"]
+            
+            # Third attempt triggers loop
+            assert d2.record_attempt("t1", success=False)
+            assert d2.get_stats("t1")["in_loop"]
+        finally:
+            tq.LOOP_DETECTOR_FILE = orig
 
 
 
