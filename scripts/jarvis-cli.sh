@@ -82,18 +82,16 @@ print(json.dumps(json.loads(result) if isinstance(result, str) else result, inde
         ;;
     screen)
         python3 -c "
-from jarvis.core.devtools import handle_dev_tool
-import json
-result = handle_dev_tool('capture_screen', {})
-print(json.dumps(json.loads(result) if isinstance(result, str) else result, indent=2, ensure_ascii=False))
+from jarvis.mcp_server import call_tool
+result = call_tool('jarvis_capture_screen', {})
+print(result)
 "
         ;;
     observe)
         python3 -c "
-from jarvis.core.devtools import handle_dev_tool
-import json
-result = handle_dev_tool('observe_screen', {})
-print(json.dumps(json.loads(result) if isinstance(result, str) else result, indent=2, ensure_ascii=False))
+from jarvis.mcp_server import call_tool
+result = call_tool('jarvis_observe_screen', {})
+print(result)
 "
         ;;
     nix-eval)
