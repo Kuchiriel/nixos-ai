@@ -258,6 +258,21 @@ result = classify_file('$FILE_ARG')
 print(json.dumps(result.to_dict(), indent=2))
 "
         ;;
+    watchdog)
+        python3 -c "
+from jarvis.core.watchdog import watchdog_cycle
+import json
+result = watchdog_cycle()
+print(json.dumps(result, indent=2))
+"
+        ;;
+    watchdog-loop)
+        python3 -c "
+from jarvis.core.watchdog import run_watchdog_loop
+interval = int('${2:-60}')
+run_watchdog_loop(interval=interval)
+"
+        ;;
     vault-status)
         python3 -c "
 from jarvis.mcp_server import _vault_status
