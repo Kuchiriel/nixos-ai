@@ -917,6 +917,11 @@ class Harness:
         self.mission.active = True
         self.mission.started_at = time.time()
 
+        # Prune stale tasks from previous runs (>1h old, still non-terminal)
+        pruned = self.queue.prune_stale(max_age_seconds=3600)
+        if pruned > 0:
+            self.notify(f"🧹 Pruned {pruned} stale tasks from previous runs")
+
         projects_str = ", ".join(self.config.projects[:3])
         self.notify(f"🌙 *Nightwatch Started*\nProjects: {projects_str}")
         self._emit("run_started", projects=self.config.projects)

@@ -394,3 +394,19 @@ class TaskQueue:
         self._tasks = [t for t in self._tasks if t.id not in {r.id for r in to_remove}]
         self._save()
         return len(to_remove)
+
+    def prune_stale(self, max_age_seconds: float = 3600) -> int:
+        """Remove non-terminal tasks older than max_age_seconds.
+        
+        Stale tasks from previous runs cause immediate timeouts
+        because their created_at timestamp is old.
+        Returns number of tasks removed.
+        """
+        now = time.time()
+        stale = [t for t in self._tasks if not t.is_terminal and (now - t.created_at) > max_age_seconds]
+        if not stale:
+            return 0
+        stale_ids = {t.id for t in stale}
+        self._tasks = [t for t in self._tasks if t.id not in stale_ids]
+        self._save()
+        return len(stale_ids)
