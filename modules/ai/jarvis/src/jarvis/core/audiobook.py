@@ -651,11 +651,12 @@ def _tts_chunk(text: str) -> str | None:
 
 
 def _play_wav(path: str) -> None:
-    """Toca um WAV sequencialmente."""
+    """Toca um WAV sequencialmente via多种 players."""
     for cmd in (
         ["canberra-gtk-play", "--file", path],
         ["paplay", path],
         ["aplay", "-q", path],
+        ["mpv", "--no-video", "--really-quiet", path],
     ):
         try:
             subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
