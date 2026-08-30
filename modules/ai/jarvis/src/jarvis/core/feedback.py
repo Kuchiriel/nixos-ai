@@ -126,23 +126,27 @@ def waybar_format() -> dict[str, Any]:
     )
     text_clean = nf_emoji_re.sub('', text).strip()
 
-    # Ícones minimalistas Nerd Font (cyberpunk)
-    icons = {
-        "idle": "󰆪",        # nf-md-waveform
-        "listening": "󰍬",   # nf-md-microphone
-        "transcribing": "󰈙",  # nf-md-text-box
-        "thinking": "󰐕",     # nf-md-progress-clock
-        "speaking": "󰕾",     # nf-md-volume-high
-        "error": "󰅙",       # nf-md-alert-circle
-        "done": "󰄬",        # nf-md-check-circle
-        "initializing": "󰚌",  # nf-md-robot
+    # Ícones + labels Nerd Font (cyberpunk)
+    # Formato: ícone + label curto visível na barra
+    state_map = {
+        "idle":          ("󰆪", "IDLE"),
+        "listening":     ("󰍬", "REC"),
+        "transcribing":  ("󰈙", "STT"),
+        "thinking":      ("󰐕", "..."),
+        "speaking":      ("󰕾", "TTS"),
+        "error":         ("󰅙", "ERR"),
+        "done":          ("󰄬", "OK"),
+        "initializing":  ("󰚌", "INIT"),
     }
-    icon = icons.get(state, "󰆪")
+    icon, label = state_map.get(state, ("󰆪", state.upper()))
 
-    # Formato minimalista: só ícone (texto fica no tooltip)
+    # Show icon + short label in the bar; full text in tooltip
+    display = f"{icon} {label}"
+    detail = text_clean or text
+
     return {
-        "text": icon,
-        "tooltip": f"{state}: {text_clean or text}",
+        "text": display,
+        "tooltip": f"{state}: {detail}",
         "class": state,
         "alt": state,
     }

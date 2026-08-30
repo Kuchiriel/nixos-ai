@@ -271,39 +271,104 @@ in {
       #battery.critical { color: ${colors.status.error}; text-shadow: 0 0 6px ${colors.status.error}; }
       #battery.charging { color: ${colors.status.success}; }
 
+      /* ── Jarvis Waybar Module ─────────────────────────────────────────── */
       #custom-jarvis {
-        background: rgba(0, 255, 255, 0.12);
-        border-bottom: ${colors.waybar.border};
-        color: #00ffff;
-      }
-      #custom-jarvis.idle { color: #00ffff; opacity: 0.5; }
-      #custom-jarvis.listening,
-      #custom-jarvis.initializing { color: #00ffff; animation: jarvis-pulse 1s infinite; }
-      #custom-jarvis.transcribing { color: #00ffff; animation: jarvis-pulse 0.8s infinite; }
-      #custom-jarvis.thinking { color: #00ffff; animation: jarvis-pulse 1.2s infinite; }
-      #custom-jarvis.speaking { color: #00ffff; }
-      #custom-jarvis.error { color: ${colors.status.error}; animation: jarvis-blink 0.4s infinite; }
-      #custom-jarvis.done { color: ${colors.status.success}; }
-
-      #custom-audiobook {
         background: rgba(0, 255, 255, 0.08);
         border-bottom: ${colors.waybar.border};
         color: #00ffff;
-        padding: 0 4px;
+        padding: 0 6px;
+        font-weight: bold;
       }
-      #custom-audiobook.audiobook-playing { color: #00ffff; animation: jarvis-pulse 1.5s infinite; }
-      #custom-audiobook.audiobook-paused { color: #00ffff; opacity: 0.6; }
-      #custom-audiobook.audiobook-idle { color: #00ffff; opacity: 0.3; }
+      #custom-jarvis.idle { color: #00ffff; opacity: 0.4; }
+      #custom-jarvis.listening {
+        color: #00ffff;
+        animation: jarvis-glow 1s ease-in-out infinite;
+        background: rgba(0, 255, 255, 0.15);
+      }
+      #custom-jarvis.initializing {
+        color: #00ffff;
+        animation: jarvis-spin 2s linear infinite;
+      }
+      #custom-jarvis.transcribing {
+        color: #00ffff;
+        animation: jarvis-pulse 0.6s ease-in-out infinite;
+        background: rgba(0, 255, 255, 0.12);
+      }
+      #custom-jarvis.thinking {
+        color: #FFB86C;
+        animation: jarvis-pulse 1.2s ease-in-out infinite;
+      }
+      #custom-jarvis.speaking {
+        color: #50FA7B;
+        animation: jarvis-wave 0.8s ease-in-out infinite;
+      }
+      #custom-jarvis.error {
+        color: #FF5555;
+        animation: jarvis-blink 0.4s step-end infinite;
+        background: rgba(255, 85, 85, 0.15);
+      }
+      #custom-jarvis.done {
+        color: #50FA7B;
+        animation: jarvis-fadein 0.5s ease-out;
+      }
 
+      /* ── Audiobook Module ─────────────────────────────────────────────── */
+      #custom-audiobook {
+        background: rgba(0, 255, 255, 0.05);
+        border-bottom: ${colors.waybar.border};
+        color: #00ffff;
+        padding: 0 4px;
+        font-weight: bold;
+      }
+      #custom-audiobook.audiobook-playing {
+        color: #00ffff;
+        animation: jarvis-glow 2s ease-in-out infinite;
+      }
+      #custom-audiobook.audiobook-paused { color: #00ffff; opacity: 0.5; }
+      #custom-audiobook.audiobook-idle { color: #00ffff; opacity: 0.2; }
+
+      /* ── Hardware Modules ─────────────────────────────────────────────── */
+      #custom-cpu, #custom-memory, #custom-gpu, #custom-igpu {
+        padding: 0 4px;
+        font-weight: bold;
+      }
+      #custom-cpu.high, #custom-memory.high, #custom-gpu.high {
+        color: #FF5555;
+      }
+      #custom-cpu.medium, #custom-memory.medium, #custom-gpu.medium {
+        color: #FFB86C;
+      }
+      #custom-cpu.low, #custom-memory.low, #custom-gpu.low {
+        color: #50FA7B;
+      }
+
+      /* ── Animations ───────────────────────────────────────────────────── */
       @keyframes jarvis-pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.4; }
-        100% { opacity: 1; }
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+      }
+      @keyframes jarvis-glow {
+        0%, 100% { opacity: 1; text-shadow: 0 0 4px rgba(0, 255, 255, 0.4); }
+        50% { opacity: 0.7; text-shadow: 0 0 8px rgba(0, 255, 255, 0.8); }
       }
       @keyframes jarvis-blink {
+        0%, 49% { opacity: 1; }
+        50%, 100% { opacity: 0.2; }
+      }
+      @keyframes jarvis-spin {
         0% { opacity: 1; }
-        50% { opacity: 0.2; }
+        25% { opacity: 0.6; }
+        50% { opacity: 0.3; }
+        75% { opacity: 0.6; }
         100% { opacity: 1; }
+      }
+      @keyframes jarvis-wave {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.8; transform: scale(1.05); }
+      }
+      @keyframes jarvis-fadein {
+        from { opacity: 0; }
+        to { opacity: 1; }
       }
 
       #tray { padding-right: 8px; }
@@ -401,7 +466,7 @@ in {
           };
 
           "custom/cpu" = {
-            format = "󰍛 {}";
+            format = "󰍛 CPU {}";
             exec = "${cpuScript}/bin/waybar-cpu";
             interval = 3;
             return-type = "json";
@@ -410,7 +475,7 @@ in {
           };
 
           "custom/memory" = {
-            format = "󰘚 {}";
+            format = "󰘚 RAM {}";
             exec = "${memoryScript}/bin/waybar-memory";
             interval = 5;
             return-type = "json";
@@ -419,7 +484,7 @@ in {
           };
 
           "custom/gpu" = {
-            format = "󰢮 {}";
+            format = "󰢝 GPU {}";
             exec = "${gpuScript}/bin/waybar-gpu";
             interval = 3;
             return-type = "json";
@@ -428,7 +493,7 @@ in {
           };
 
           "custom/igpu" = {
-            format = "󰢮 {}";
+            format = "󰢮 iGPU {}";
             exec = "${igpuScript}/bin/waybar-igpu";
             interval = 5;
             return-type = "json";
