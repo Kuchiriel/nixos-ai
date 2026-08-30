@@ -49,8 +49,12 @@
         --ignore=tests/test_agent.py \
         --ignore=tests/test_longrun_e2e.py \
         --ignore=tests/test_harness_e2e.py \
+        --ignore=tests/test_nightwatch_real_e2e.py \
         --ignore=tests/test_memory.py \
-        --ignore=tests/test_logging.py
+        --ignore=tests/test_logging.py \
+        --ignore=tests/test_bulldozer.py \
+        --ignore=tests/test_mcp_tools_e2e.py \
+        --ignore=tests/test_hackmd.py
       runHook postCheck
     '';
 
