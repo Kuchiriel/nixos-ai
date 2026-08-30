@@ -1,5 +1,5 @@
 {pkgs, ...}: let
-  booksDir = "$HOME/Downloads/books";
+  booksDir = "$HOME/Books";
 
   # JARVIS — prompt rápido
   jarvisAsk = pkgs.writeScriptBin "jarvis-ask-prompt" ''

@@ -36,6 +36,58 @@ KOKORO_MODEL_DEFAULT = os.environ.get("JARVIS_KOKORO_MODEL", "~/.local/share/kok
 KOKORO_VOICE_DEFAULT = os.environ.get("JARVIS_KOKORO_VOICE", "~/.local/share/kokoro/af_heart.pt")
 KOKORO_VOICE_ID_DEFAULT = "af_heart"  # id da voz (para o nome do arquivo)
 
+# Voice mapping by language code (Kokoro lang_code → voice file prefix)
+# First letter: a=Australian/US English, b=British, j=Japanese, z=Chinese,
+#              e=Spanish, f=French, h=Hindi, i=Italian, p=Brazilian Portuguese
+VOICE_BY_LANG: dict[str, str] = {
+    "a": "af_heart",
+    "b": "bf_emma",
+    "p": "pf_dora",
+    "j": "jf_alpha",
+    "e": "ef_dora",
+    "f": "ff_siwis",
+    "h": "hf_alpha",
+    "i": "if_sara",
+    "z": "zf_xiaoxiao",
+}
+
+
+def _detect_lang_code(text: str) -> str:
+    """Detect Kokoro lang_code from text content.
+
+    Uses character frequency heuristics:
+    - PT-BR: high count of ã, ç, é, ê, ó, õ, á, à, â, ù, ~
+    - Japanese: high count of hiragana/katakana
+    - Chinese: high count of CJK
+    - Default: English ('a')
+    """
+    if len(text) < 10:
+        return "a"
+    sample = text[:5000]  # Check first 5000 chars
+    pt_chars = sum(1 for c in sample if c in 'ãçéêóõáàâúÃÇÉÊÓÕÁÀÂÚ')
+    ja_chars = sum(1 for c in sample if '\u3040' <= c <= '\u309f' or '\u30a0' <= c <= '\u30ff')
+    zh_chars = sum(1 for c in sample if '\u4e00' <= c <= '\u9fff')
+    total = len(sample)
+    if pt_chars / max(total, 1) > 0.005:
+        return "p"
+    if ja_chars / max(total, 1) > 0.01:
+        return "j"
+    if zh_chars / max(total, 1) > 0.01:
+        return "z"
+    return "a"
+
+
+def _voice_for_lang(lang_code: str, voice_override: str | None = None) -> str:
+    """Resolve voice file path for a given language code."""
+    if voice_override:
+        return os.path.expanduser(voice_override)
+    voice_id = VOICE_BY_LANG.get(lang_code, "af_heart")
+    voice_path = os.path.expanduser(f"~/.local/share/kokoro/voices/{voice_id}.pt")
+    if not Path(voice_path).exists():
+        # Fallback to default voice
+        return os.path.expanduser(KOKORO_VOICE_DEFAULT)
+    return voice_path
+
 
 def _model_dir() -> str:
     return os.path.expanduser(os.environ.get("JARVIS_VOICE_DIR", MODEL_DIR_DEFAULT))
@@ -159,7 +211,10 @@ def speak(text: str, voice: str | None = None, *, play: bool = True) -> str:
         voice_path = voice or os.path.expanduser(KOKORO_VOICE_DEFAULT)
         _setup_kokoro_espeak()  # bypass spaCy antes de criar pipeline
         kmodel = KModel(config=config_path, model=model_path)
-        pipeline = KPipeline(lang_code="a", model=kmodel, trf=False)
+        # Auto-detect language from text content
+        lang_code = _detect_lang_code(text)
+        voice_path = _voice_for_lang(lang_code, voice)
+        pipeline = KPipeline(lang_code=lang_code, model=kmodel, trf=False)
         out_dir = Path(_model_dir()) / "tts"
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / f"jarvis_tts_{abs(hash(text)) % 10**9}.wav"

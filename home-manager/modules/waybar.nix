@@ -242,6 +242,16 @@ in {
       #custom-jarvis.error { color: ${colors.status.error}; animation: jarvis-blink 0.4s infinite; }
       #custom-jarvis.done { color: ${colors.status.success}; }
 
+      #custom-audiobook {
+        background: rgba(0, 255, 255, 0.08);
+        border-bottom: ${colors.waybar.border};
+        color: #00ffff;
+        padding: 0 4px;
+      }
+      #custom-audiobook.audiobook-playing { color: #00ffff; animation: jarvis-pulse 1.5s infinite; }
+      #custom-audiobook.audiobook-paused { color: #00ffff; opacity: 0.6; }
+      #custom-audiobook.audiobook-idle { color: #00ffff; opacity: 0.3; }
+
       @keyframes jarvis-pulse {
         0% { opacity: 1; }
         50% { opacity: 0.4; }
@@ -281,6 +291,7 @@ in {
           modules-right =
             [
               "custom/jarvis"
+              "custom/audiobook"
               "custom/files"
               "custom/cpu"
               "custom/memory"
@@ -301,6 +312,16 @@ in {
             return-type = "json";
             format = "{}";
             on-click = "foot --app-id floating_shell -e jarvis dev";
+          };
+
+          "custom/audiobook" = {
+            exec = "${pkgs.jarvis-audiobook-waybar}/bin/jarvis-audiobook-waybar";
+            exec-on-event = true;
+            interval = 5;
+            return-type = "json";
+            format = "{}";
+            on-click = "${pkgs.jarvis-audiobook-menu}/bin/jarvis-audiobook-menu";
+            tooltip = true;
           };
 
           "hyprland/workspaces" = {

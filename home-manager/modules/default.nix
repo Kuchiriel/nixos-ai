@@ -15,6 +15,7 @@
     ./obsidian.nix
     ./ranger.nix
     ./rofi.nix
+    ./audiobook.nix
     ./starship.nix
     ./stylix.nix
     ./swaync
