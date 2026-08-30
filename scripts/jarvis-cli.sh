@@ -229,16 +229,17 @@ print(result)
         ;;
     health|diagnose)
         python3 -c "
-from jarvis.core.proactive import run_proactive_diagnostics, format_alerts
-alerts = run_proactive_diagnostics()
-print(format_alerts(alerts))
+from jarvis.core.watchdog import watchdog_cycle
+result = watchdog_cycle()
+import json
+print(json.dumps(result, indent=2))
 "
         ;;
     system-health)
         python3 -c "
-from jarvis.core.proactive import get_system_summary
+from jarvis.core.watchdog import watchdog_cycle
 import json
-print(json.dumps(get_system_summary(), indent=2))
+print(json.dumps(watchdog_cycle(), indent=2))
 "
         ;;
     classify)

@@ -494,7 +494,7 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
 
         # Proactive Diagnostics
         if name == "jarvis_proactive_check":
-            from jarvis.core.proactive import run_proactive_diagnostics, format_alerts, get_system_summary
+            from jarvis.core.watchdog import run_proactive_diagnostics, format_alerts, get_system_summary
             alerts = run_proactive_diagnostics()
             summary = get_system_summary()
             return json.dumps({
@@ -504,7 +504,7 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
             }, indent=2)
 
         if name == "jarvis_system_health":
-            from jarvis.core.proactive import get_system_summary
+            from jarvis.core.watchdog import get_system_summary
             return json.dumps(get_system_summary(), indent=2)
 
         # Security Classification
