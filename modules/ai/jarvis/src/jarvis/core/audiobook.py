@@ -358,6 +358,39 @@ def list_chapters(text: str) -> list[str]:
     return [ch["title"] for ch in chapters]
 
 
+def get_content_chapters(text: str, min_chars: int = 500) -> list[dict[str, Any]]:
+    """Retorna apenas capítulos com conteúdo real (filtra TOC/índices).
+    
+    Capítulos com menos de min_chars são considerados entradas de TOC.
+    """
+    chapters = detect_chapters(text)
+    return [ch for ch in chapters if (ch["end"] - ch["start"]) >= min_chars]
+
+
+def get_real_chapter_text(text: str, chapter_num: int) -> str:
+    """Extrai o texto real de um capítulo (pulando cabeçalho do título)."""
+    chapters = get_content_chapters(text)
+    for ch in chapters:
+        if ch["num"] == chapter_num:
+            raw = text[ch["start"]:ch["end"]]
+            # Skip the title line
+            first_newline = raw.find("\n")
+            if first_newline > 0 and first_newline < 100:
+                return raw[first_newline:].strip()
+            return raw.strip()
+    return ""
+
+
+def read_chapter(book_name: str, chapter_num: int, books_dir: str | Path | None = None) -> str:
+    """Extrai e retorna o texto de um capítulo de um livro."""
+    books = scan_books(books_dir)
+    for b in books:
+        if b["name"] == book_name or book_name.lower() in b["name"].lower():
+            text = extract_text(b["path"])
+            return get_real_chapter_text(text, chapter_num)
+    return ""
+
+
 # ---------------------------------------------------------------------------
 # LLM-based Semantic Search
 # ---------------------------------------------------------------------------
