@@ -438,14 +438,60 @@ def _load_agent_context(start_dir: str | None = None) -> str:
     return "PROJECT RULES:\n" + "\n---\n".join(chunks)
 
 
-def _persist_session(messages: list[dict[str, Any]], project_root: str | None = None) -> None:
-    """Salva histórico com metadata para resume confiável."""
+def _get_git_state(project_root: str | None = None) -> dict[str, Any]:
+    """Get current git state for checkpoint."""
     try:
+        root = Path(project_root or os.getcwd()).resolve()
+        result = {}
+        
+        # Get branch
+        proc = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=root, capture_output=True, text=True, timeout=5,
+        )
+        if proc.returncode == 0:
+            result["branch"] = proc.stdout.strip()
+        
+        # Get commit
+        proc = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root, capture_output=True, text=True, timeout=5,
+        )
+        if proc.returncode == 0:
+            result["commit"] = proc.stdout.strip()[:8]
+        
+        # Check if clean
+        proc = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=root, capture_output=True, text=True, timeout=5,
+        )
+        if proc.returncode == 0:
+            result["clean"] = len(proc.stdout.strip()) == 0
+        
+        return result
+    except Exception:
+        return {}
+
+
+def _persist_session(messages: list[dict[str, Any]], project_root: str | None = None) -> None:
+    """Salva histórico com metadata para resume confiável.
+    
+    Enhanced with git state, context usage, and tool call tracking.
+    """
+    try:
+        root = project_root or os.getcwd()
         state = {
-            "project": str(Path(project_root or os.getcwd()).resolve()),
+            "project": str(Path(root).resolve()),
             "messages": messages,
             "ts": time.time(),
             "token_estimate": _estimate_tokens(messages),
+            # Git state for recovery
+            "git": _get_git_state(root),
+            # Session metadata
+            "session_id": f"{int(time.time())}",
+            "total_messages": len(messages),
+            # Tool call count (from messages)
+            "tool_calls": sum(1 for m in messages if m.get("role") == "tool"),
         }
         path = _session_state_path(project_root)
         path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -467,6 +513,27 @@ def _resume_session(project_root: str | None = None) -> list[dict[str, Any]]:
     except Exception:  # noqa: BLE001 — resume é best-effort
         pass
     return []
+
+
+def _get_session_info(project_root: str | None = None) -> dict[str, Any] | None:
+    """Get session info without loading all messages."""
+    try:
+        path = _session_state_path(project_root)
+        if not path.exists():
+            return None
+        obj = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(obj, dict):
+            return {
+                "project": obj.get("project"),
+                "timestamp": obj.get("ts"),
+                "token_estimate": obj.get("token_estimate"),
+                "git": obj.get("git", {}),
+                "total_messages": obj.get("total_messages", 0),
+                "tool_calls": obj.get("tool_calls", 0),
+            }
+    except Exception:
+        pass
+    return None
 
 
 # ---------------------------------------------------------------------------
