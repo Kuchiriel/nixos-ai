@@ -2,6 +2,8 @@
 
 > This file is read by Buffy when working on the nixos-ai project.
 > It provides context about all available JARVIS features, MCP tools,
+
+> **PRIMEIRO PASSO**: Leia HANDOFF.md para mapa completo do projeto.
 > project structure, and operational rules.
 >
 > **CLI WRAPPER**: Use `scripts/jarvis-cli.sh` to call any JARVIS tool.
