@@ -24,7 +24,12 @@ import subprocess
 import time
 from pathlib import Path
 
+import shutil
+
 import pytest
+
+has_git = shutil.which("git") is not None
+requires_git = pytest.mark.skipif(not has_git, reason="git not available in sandbox")
 
 from nightwatch.safe_editor import SafeEditor, EditResult
 from nightwatch.validator import validate_change
@@ -41,6 +46,8 @@ from nightwatch.harness import FailureType, classify_failure
 @pytest.fixture
 def isolated_repo(tmp_path):
     """Create an isolated git repo with a real Python file."""
+    if not has_git:
+        pytest.skip("git not available in sandbox")
     repo = tmp_path / "test-repo"
     repo.mkdir()
     subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
@@ -86,6 +93,7 @@ def editor(isolated_repo):
 # Test 1: SafeEditor atomic write + validation
 # ═══════════════════════════════════════════════════════════════════════════════
 
+@requires_git
 class TestSafeEditorReal:
     """Test SafeEditor with real file operations."""
 
@@ -203,6 +211,9 @@ class TestCheckpointReal:
 
     def test_checkpoint_save_and_load(self, tmp_path, monkeypatch):
         """Checkpoint should persist to disk and reload."""
+        import nightwatch.checkpoint as ckpt_mod
+        monkeypatch.setattr(ckpt_mod, "STATE_DIR", tmp_path / "state")
+        monkeypatch.setattr(ckpt_mod, "CHECKPOINT_FILE", tmp_path / "state" / "checkpoint.json")
         cp = create_checkpoint_for_task("test-123", "Add divide function", "test-repo")
         cp.record_operation("read", True)
         cp.record_operation("write", True)
@@ -235,8 +246,11 @@ class TestCheckpointReal:
         # files_written is shown in recovery summary
         assert "calculator.py" in summary
 
-    def test_recovery_context_structure(self):
+    def test_recovery_context_structure(self, tmp_path, monkeypatch):
         """Recovery context should have all required fields."""
+        import nightwatch.checkpoint as ckpt_mod
+        monkeypatch.setattr(ckpt_mod, "STATE_DIR", tmp_path / "state")
+        monkeypatch.setattr(ckpt_mod, "CHECKPOINT_FILE", tmp_path / "state" / "checkpoint.json")
         cp = create_checkpoint_for_task("task-99", "Test recovery", "test-repo")
         ctx = cp.to_dict()
 
@@ -389,6 +403,7 @@ class TestFailureClassification:
 # Test 7: Full pipeline (closest to real E2E)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+@requires_git
 class TestFullPipeline:
     """Test the complete edit → validate → checkpoint → commit pipeline."""
 
@@ -551,11 +566,11 @@ def test_eventbus_integration(tmp_path, monkeypatch):
     from jarvis.core.eventbus import EventBus, Event
     from nightwatch.task_queue import TaskQueue, TaskStatus
 
-    # Isolate state
+    # Isolate state — must patch both STATE_DIR and module-level constants
     monkeypatch.setattr("nightwatch.harness.STATE_DIR", tmp_path)
     monkeypatch.setattr("nightwatch.task_queue.STATE_DIR", tmp_path)
-    # checkpoint uses STATE_DIR for state files
-    monkeypatch.setattr("nightwatch.checkpoint.STATE_DIR", tmp_path)
+    monkeypatch.setattr("nightwatch.checkpoint.STATE_DIR", tmp_path / "nightwatch")
+    monkeypatch.setattr("nightwatch.checkpoint.CHECKPOINT_FILE", tmp_path / "nightwatch" / "checkpoint.json")
 
     events_received = []
 

@@ -50,8 +50,9 @@ def test_waybar_status_error():
         assert result["class"] == "audiobook-idle"
 
 
-def test_dispatch_help():
+def test_dispatch_help(tmp_path, monkeypatch):
     """dispatch_audiobook shows help."""
+    monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path / "state"))
     from jarvis.core.audiobook_ui import dispatch_audiobook
 
     result = dispatch_audiobook([])
@@ -75,16 +76,18 @@ def test_dispatch_scan(tmp_path):
     assert result == 0
 
 
-def test_dispatch_status():
+def test_dispatch_status(tmp_path, monkeypatch):
     """dispatch_audiobook status returns current state."""
+    monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path / "state"))
     from jarvis.core.audiobook_ui import dispatch_audiobook
 
     result = dispatch_audiobook(["status"])
     assert result == 0
 
 
-def test_dispatch_waybar():
+def test_dispatch_waybar(tmp_path, monkeypatch):
     """dispatch_audiobook waybar outputs JSON."""
+    monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path / "state"))
     from jarvis.core.audiobook_ui import dispatch_audiobook
 
     result = dispatch_audiobook(["waybar"])

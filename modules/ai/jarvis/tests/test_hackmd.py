@@ -51,21 +51,39 @@ def test_headers_with_token(monkeypatch):
     assert "Content-Type" in h
 
 
-def test_create_nightwatch_report():
+@patch("jarvis.core.hackmd.requests.post")
+@patch("jarvis.core.hackmd._get_token", return_value="fake-token")
+def test_create_nightwatch_report(mock_token, mock_post):
     """create_nightwatch_report formats report correctly."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 201
+    mock_resp.json.return_value = {"noteId": "test-123", "title": "Nightwatch Report"}
+    mock_resp.raise_for_status = MagicMock()
+    mock_post.return_value = mock_resp
+
     from jarvis.core.hackmd import create_nightwatch_report
 
     result = create_nightwatch_report("All tests passed", cycle=3)
     assert isinstance(result, dict)
     assert "title" in result or "content" in result
+    mock_post.assert_called_once()
 
 
-def test_create_knowledge_entry():
+@patch("jarvis.core.hackmd.requests.post")
+@patch("jarvis.core.hackmd._get_token", return_value="fake-token")
+def test_create_knowledge_entry(mock_token, mock_post):
     """create_knowledge_entry formats entry correctly."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 201
+    mock_resp.json.return_value = {"noteId": "test-456", "title": "Test Title"}
+    mock_resp.raise_for_status = MagicMock()
+    mock_post.return_value = mock_resp
+
     from jarvis.core.hackmd import create_knowledge_entry
 
     result = create_knowledge_entry("Test Title", "Test content", tags=["test", "ai"])
     assert isinstance(result, dict)
+    mock_post.assert_called_once()
 
 
 @patch("jarvis.core.hackmd._get_token", return_value=None)

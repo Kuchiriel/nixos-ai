@@ -102,8 +102,9 @@ def test_bookmark_state_dataclass():
     assert bs.chunk_index == 0
 
 
-def test_dispatch_help():
+def test_dispatch_help(tmp_path, monkeypatch):
     """dispatch returns help on empty args."""
+    monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path / "state"))
     from jarvis.core.audiobook import dispatch
 
     result = dispatch([])
@@ -111,8 +112,9 @@ def test_dispatch_help():
     assert len(result) > 0
 
 
-def test_dispatch_status():
+def test_dispatch_status(tmp_path, monkeypatch):
     """dispatch status returns current state."""
+    monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path / "state"))
     from jarvis.core.audiobook import dispatch
 
     result = dispatch(["status"])
@@ -169,6 +171,10 @@ def test_sfx_map_has_entries():
     assert len(SFX_MAP) > 10
 
 
+@pytest.mark.skipif(
+    not (Path.home() / ".local/share/jarvis/sounds").exists(),
+    reason="SFX sounds not installed (only available outside Nix sandbox)"
+)
 def test_sounds_dir_exists():
     """SOUNDS_DIR exists after install_sfx."""
     from jarvis.core.audiobook import SOUNDS_DIR
