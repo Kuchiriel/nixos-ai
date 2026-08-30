@@ -3,31 +3,62 @@
 > This file is read by Buffy when working on the nixos-ai project.
 > It provides context about all available JARVIS features, MCP tools,
 > project structure, and operational rules.
+>
+> **CLI WRAPPER**: Use `scripts/jarvis-cli.sh` to call any JARVIS tool.
+> Example: `./scripts/jarvis-cli.sh read <file> 0 50`
+
+## Quick Reference — JARVIS CLI Wrapper
+
+**Use `scripts/jarvis-cli.sh` to call JARVIS tools from this agent.**
+
+```bash
+# Read a file (with offset/limit to save context)
+./scripts/jarvis-cli.sh read <file> 0 50
+
+# Execute shell command (read-only safe)
+./scripts/jarvis-cli.sh shell "ls -la"
+
+# Search NixOS packages
+./scripts/jarvis-cli.sh nix-search "waybar"
+
+# Read shared ChatGPT conversation
+./scripts/jarvis-cli.sh chatgpt "https://chatgpt.com/share/..."
+
+# Store/recall memory
+./scripts/jarvis-cli.sh remember "fact to remember"
+./scripts/jarvis-cli.sh recall "query"
+
+# System status
+./scripts/jarvis-cli.sh status
+```
 
 ## Quick Reference — JARVIS MCP Tools
 
 When Roo Dev or the REPL calls JARVIS, these tools are available:
 
-| Tool | Description | Usage |
-|------|-------------|-------|
-| `jarvis_execute` | Shell commands (read-only direct, write needs approval) | `ls`, `find`, `git`, `nix` |
-| `jarvis_read_file` | Read file with optional offset/limit | Economizes context |
-| `jarvis_write_file` | Write/overwrite file | Creates new files |
-| `jarvis_str_replace` | Surgical string replacement in file | Preferred for edits |
-| `jarvis_capture_screen` | Take screenshot of desktop | Debug UI issues |
-| `jarvis_observe_screen` | Screenshot + vision AI analysis | Understand what's on screen |
-| `jarvis_nix_eval` | Evaluate Nix expressions | Test configs before rebuild |
-| `jarvis_nix_check` | Run `nix flake check` | Validate flake |
-| `jarvis_nix_search` | Search NixOS packages/options/flakes | Find packages |
-| `jarvis_read_chatgpt` | Read shared ChatGPT conversations | Get context from conversations |
-| `jarvis_read_ai_conversation` | Read shared AI conversations (ChatGPT/Gemini/Claude) | Multi-platform |
-| `jarvis_remember` | Store episodic memory (cross-session) | Facts, events, decisions |
-| `jarvis_recall` | Recall memories matching query | Search past events |
-| `jarvis_lessons` | Recall lessons from past errors | Avoid repeated mistakes |
-| `jarvis_vault_list` | List persistent vault notes | Check stored knowledge |
-| `jarvis_vault_write` | Write to persistent vault | Important findings |
-| `jarvis_rag_search` | Semantic code search (RAG) | Find relevant code |
-| `jarvis_rag_index` | Index directory into RAG system | Make code searchable |
+| Tool | CLI Command | Description |
+|------|------------|-------------|
+| `jarvis_execute` | `shell <cmd>` | Shell commands |
+| `jarvis_read_file` | `read <file> [offset] [limit]` | Read file |
+| `jarvis_write_file` | `write <file> <content>` | Write file |
+| `jarvis_str_replace` | `replace <file> <old> <new>` | Surgical edit |
+| `jarvis_capture_screen` | `screen` | Screenshot |
+| `jarvis_observe_screen` | `observe` | Screenshot + vision |
+| `jarvis_nix_eval` | `nix-eval <expr>` | Evaluate Nix |
+| `jarvis_nix_check` | `nix-check` | Flake check |
+| `jarvis_nix_search` | `nix-search <query>` | Search packages |
+| `jarvis_read_chatgpt` | `chatgpt <url>` | Read ChatGPT |
+| `jarvis_read_ai_conversation` | `chatgpt <url>` | Multi-platform |
+| `jarvis_remember` | `remember <fact>` | Store memory |
+| `jarvis_recall` | `recall <query>` | Recall memory |
+| `jarvis_lessons` | `lessons <query>` | Past errors |
+| `jarvis_vault_list` | `vault-list` | List vault |
+| `jarvis_vault_write` | `vault-write <title> <content>` | Write vault |
+| `jarvis_rag_search` | `rag-search <query>` | Semantic search |
+| `jarvis_rag_index` | `rag-index <dir>` | Index for RAG |
+| `jarvis_hackmd_list` | `hackmd-list` | List notes |
+| `jarvis_hackmd_read` | `hackmd-read <id>` | Read note |
+| `jarvis_hackmd_write` | `hackmd-write <title> <content>` | Write note |
 | `jarvis_hackmd_list` | List recent HackMD notes | Documentation |
 | `jarvis_hackmd_read` | Read HackMD note by ID | Read docs |
 | `jarvis_hackmd_write` | Create/update HackMD note | Write docs |
