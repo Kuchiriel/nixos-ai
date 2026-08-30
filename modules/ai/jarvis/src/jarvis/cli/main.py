@@ -911,6 +911,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_nw.add_argument("--only", nargs="+", help="executar apenas estas categorias")
     p_nw.set_defaults(func=_cmd_nightwatch)
 
+    # watchdog — monitoramento proativo com TTS
+    p_wd = sub.add_parser("watchdog", help="watchdog: monitora hardware/serviços e fala via TTS")
+    p_wd.add_argument("--interval", type=int, default=60, help="intervalo entre verificações em segundos")
+    p_wd.add_argument("--max-cycles", type=int, default=0, help="máximo de ciclos (0 = infinito)")
+    p_wd.set_defaults(func=_cmd_watchdog)
+
     return parser
 
 
@@ -954,6 +960,14 @@ def _cmd_nightwatch(args: argparse.Namespace) -> int:
 def _cmd_launcher(args: argparse.Namespace) -> int:
     from jarvis.cli.launcher_main import main as launcher_main
     return launcher_main()
+
+
+def _cmd_watchdog(args: argparse.Namespace) -> int:
+    """Watchdog loop: monitora hardware/serviços e fala via TTS quando detecta problema."""
+    from jarvis.core.watchdog import run_watchdog_loop
+
+    run_watchdog_loop(interval=args.interval, max_cycles=args.max_cycles)
+    return 0
 
 
 def waybar_main() -> int:  # entry point extra: jarvis-waybar (module do Waybar)

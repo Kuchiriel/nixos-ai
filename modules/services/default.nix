@@ -7,6 +7,7 @@
     ./jarvis-gaming.nix
     ./jarvis-heal.nix
     ./jarvis-idle.nix
+    ./jarvis-watchdog.nix
     ./jarvis-telegram.nix
     ./jarvis-vault.nix
     ./litellm-cascade.nix
