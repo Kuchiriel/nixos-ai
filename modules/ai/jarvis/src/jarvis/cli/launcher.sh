@@ -43,7 +43,7 @@ run_in_terminal() {
     " &
 }
 
-svc() { systemctl --user is-active "$1" 2>/dev/null || systemctl is-active "$1" 2>/dev/null || echo "inactive"; }
+svc() { local s; s=$(systemctl --user is-active "$1" 2>/dev/null) && echo "$s" && return; systemctl is-active "$1" 2>/dev/null || echo "inactive"; }
 dot() {
     local s; s=$(svc "$1")
     [ "$s" = "active" ] && echo "<span color='${GREEN}'>●</span>" || echo "<span color='${RED}'>●</span>"
