@@ -477,7 +477,7 @@ in {
           };
 
           "custom/gpu" = {
-            format = "󰢝 GPU {}";
+            format = "󰘚 GPU {}";
             exec = "${gpuScript}/bin/waybar-gpu";
             interval = 3;
             return-type = "json";

@@ -129,7 +129,7 @@ def waybar_format() -> dict[str, Any]:
     # Ícones + labels Nerd Font (Material Design)
     # nf-md icons — verified in JetBrainsMono Nerd Font
     state_map = {
-        "idle":          ("󰒚", "JARVIS"),    # nf-md-brain — AI standby
+        "idle":          ("󰧑", "JARVIS"),    # nf-md-brain (U+F09D1) — AI standby
         "listening":     ("󰍬", "REC"),        # nf-md-microphone
         "transcribing":  ("󰈙", "STT"),        # nf-md-text-box
         "thinking":      ("󰐕", "..."),         # nf-md-progress-clock
@@ -138,7 +138,7 @@ def waybar_format() -> dict[str, Any]:
         "done":          ("󰄬", "OK"),         # nf-md-check-circle
         "initializing":  ("󰚌", "BOOT"),       # nf-md-robot
     }
-    icon, label = state_map.get(state, ("󰒚", state.upper()))
+    icon, label = state_map.get(state, ("󰧑", state.upper()))
 
     # Show icon + short label in the bar; full text in tooltip
     display = f"{icon} {label}"

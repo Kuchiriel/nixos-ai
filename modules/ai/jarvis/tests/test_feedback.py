@@ -40,8 +40,8 @@ def test_waybar_format_idle(tmp_path, monkeypatch) -> None:
     set_status("idle", "")
     out = waybar_format()
     assert out["class"] == "idle"
-    # Nerd Font icon for idle: 󰒚 (nf-md-brain)
-    assert "󰒚" in out["text"]
+    # Nerd Font icon for idle: 󰧑 (nf-md-brain)
+    assert "󰧑" in out["text"]
     assert "JARVIS" in out["text"]
 
 
@@ -67,7 +67,7 @@ def test_waybar_format_no_emoji_duplication(tmp_path, monkeypatch) -> None:
     set_status("idle", "🎤 Ouvindo...")
     out = waybar_format()
     # Deve ter apenas 1 ícone Nerd Font, não emoji duplicado
-    assert out["text"].count("󰒚") == 1
+    assert out["text"].count("󰧑") == 1
     assert "🎤" not in out["text"]
 
 
