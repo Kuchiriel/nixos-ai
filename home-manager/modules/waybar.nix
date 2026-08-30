@@ -214,8 +214,7 @@ in {
       #custom-gpu,
       #custom-igpu,
       #custom-cpu,
-      #custom-memory,
-      #custom-jarvis {
+      #custom-memory {
         padding: 0 16px;
         color: ${colors.waybar.text};
         font-size: ${toString projectLib.fonts.mono.size}px;
@@ -300,7 +299,7 @@ in {
       }
       #custom-jarvis.speaking {
         color: #50FA7B;
-        animation: jarvis-wave 0.8s ease-in-out infinite;
+        animation: jarvis-glow 1s ease-in-out infinite;
       }
       #custom-jarvis.error {
         color: #FF5555;
@@ -309,7 +308,6 @@ in {
       }
       #custom-jarvis.done {
         color: #50FA7B;
-        animation: jarvis-fadein 0.5s ease-out;
       }
 
       /* ── Audiobook Module ─────────────────────────────────────────────── */
@@ -342,33 +340,25 @@ in {
         color: #50FA7B;
       }
 
-      /* ── Animations ───────────────────────────────────────────────────── */
+      /* ── Animations (waybar CSS only supports opacity) ────────────────── */
       @keyframes jarvis-pulse {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.3; }
       }
       @keyframes jarvis-glow {
-        0%, 100% { opacity: 1; text-shadow: 0 0 4px rgba(0, 255, 255, 0.4); }
-        50% { opacity: 0.7; text-shadow: 0 0 8px rgba(0, 255, 255, 0.8); }
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
       }
       @keyframes jarvis-blink {
         0%, 49% { opacity: 1; }
-        50%, 100% { opacity: 0.2; }
+        50%, 100% { opacity: 0.15; }
       }
       @keyframes jarvis-spin {
         0% { opacity: 1; }
-        25% { opacity: 0.6; }
-        50% { opacity: 0.3; }
-        75% { opacity: 0.6; }
+        25% { opacity: 0.5; }
+        50% { opacity: 0.2; }
+        75% { opacity: 0.5; }
         100% { opacity: 1; }
-      }
-      @keyframes jarvis-wave {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.8; transform: scale(1.05); }
-      }
-      @keyframes jarvis-fadein {
-        from { opacity: 0; }
-        to { opacity: 1; }
       }
 
       #tray { padding-right: 8px; }
