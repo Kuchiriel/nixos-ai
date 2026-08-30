@@ -446,6 +446,10 @@ in {
         ExecStart = "${jarvisScript}/bin/jarvis-wakeword-daemon";
         Restart = "always";
         RestartSec = "5s";
+        # PATH needs jarvis-voice for BRAIN_CMD (jarvis voice <wav>)
+        Environment = [
+          "PATH=${lib.makeBinPath [pkgs.jarvis-voice pkgs.pipewire pkgs.sox]}:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.findutils}/bin"
+        ];
       };
       Install = {
         WantedBy = ["graphical-session.target"];

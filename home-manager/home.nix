@@ -239,7 +239,7 @@
   '';
 
   services.jarvis-wakeword = {
-    enable = false;
+    enable = true;
     # Calibração validada do legado (docs/architecture/legacy-audio-calibration.md):
     # 0.85 = menos false positives com ventoinha/sons de casa
     threshold = 0.20; # Voz ~0.33, ruído ~0.002. 0.15 = seguro
