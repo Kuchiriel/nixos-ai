@@ -13,12 +13,46 @@
 #   - host (Bare metal — Acer Nitro V15, RTX 4050 6GB / 32GB RAM):
 #     Qwen3.6-35B-A3B (MoE 35B total / 3B ativos + vision encoder)
 #
+# Perfis por caso de uso:
+#   - roo-dev: Contexto grande para coding (32K tokens, parallel=2)
+#   - chat: Throughput máximo para conversas (16K tokens, parallel=1)
+#   - jarvis: Baixa latência para voz (8K tokens, parallel=1)
+#   - benchmark: Settings reprodutíveis para medições
+
 let
   mkModel = {
     url,
     sha256,
   }:
     fetchurl {inherit url sha256;};
+
+  # ── VRAM Budget Calculator ──
+  # RTX 4050 Laptop: 6144 MB VRAM total
+  # Model Q4_K_M: ~2400 MB
+  # Safety margin: 500 MB
+  # KV cache per token: ~64 bytes (q4_0 quantization)
+  totalVram = 6144; # MB
+  modelSize = 2400; # MB
+  safetyMargin = 500; # MB
+  availableForKvAndExperts = totalVram - modelSize - safetyMargin; # 3244 MB
+
+  # Calculate safe KV cache size based on context
+  kvBytesPerToken = 64; # bytes per token (q4_0)
+  calculateKvSize = ctxSize: (ctxSize * kvBytesPerToken) / 1024; # KB
+
+  # Calculate experts that can fit on GPU
+  expertSize = 100; # MB per expert layer
+  maxExpertsOnGpu = availableForKvAndExperts / expertSize; # ~32 experts
+
+  # Base profile for host models
+  hostBase = {
+    model = "llm-host";
+    mmproj = "llm-host-mmproj";
+    gpuLayers = 45; # Max layers on GPU for RTX 4050
+    kvCache = "-fa on -ctk q4_0 -ctv q4_0";
+    user = "root";
+    scheduler = null;
+  };
 in {
   # =========================================================================
   # 1. ARQUIVOS DE MODELO
@@ -117,6 +151,8 @@ in {
   # 2. PERFIS DE EXECUÇÃO (llama-cpp) — ÚNICA FONTE DE VERDADE
   # =========================================================================
   profiles = {
+    # ── VM Profile ──
+    # Para lab/VM com CPU only. Qwen3-4B com contexto grande.
     vm = {
       model = "llm-vm";
       threads = 4;
@@ -130,19 +166,136 @@ in {
       scheduler = null;
     };
 
-    host = {
-      model = "llm-host";
-      mmproj = "llm-host-mmproj";
+    # ── Roo Dev Profile ──
+    # Contexto grande (32K) para coding com tool calling.
+    # Parallel=2 para múltiplas ferramentas simultâneas.
+    # Prioriza qualidade sobre velocidade.
+    roo-dev = hostBase // {
       threads = 12;
-      ctxSize = 32768; # 32K com ncmoe=36, 2 slots — system prompt Roo Dev ~20K tokens
+      ctxSize = 32768;
       batchSize = 1024;
       ubatch = 1024;
-      gpuLayers = 45; # 45 layers no GPU; --n-cpu-moe 36 move experts pra CPU
-      kvCache = "-fa on -ctk q4_0 -ctv q4_0";
-      # Sweet spot: -ngl 45 + --n-cpu-moe 36
-      # experts layers 0-35 → CPU, layers 36-44 experts → GPU
-      # attention + shared → GPU (45 layers)
-      # RTX 4050 6GB: ngl=99 causa OOM, 45 é o max viável
+      # VRAM budget: 3244 MB available
+      # KV cache: 32768 × 64 bytes = 2048 MB
+      # Experts on GPU: (3244 - 2048) / 100 = 11 experts
+      # Experts on CPU: 36 - 11 = 25 experts
+      moeFlags = "--n-cpu-moe 25 --split-mode layer --poll 50 --poll-batch 50";
+      extraArgs = [
+        "--no-mmproj-offload"
+        "--image-min-tokens"
+        "1024"
+        "--kv-unified"
+        "--ctx-checkpoints"
+        "2"
+        "--keep"
+        "1024"
+        "--no-warmup"
+        "--prio"
+        "2"
+        "--prio-batch"
+        "3"
+        "--parallel"
+        "2"
+        "--cont-batching"
+        "--jinja"
+      ];
+    };
+
+    # ── Chat Profile ──
+    # Throughput máximo para conversas interativas.
+    # Contexto médio (16K), parallel=1 para reduzir overhead.
+    # Prioriza velocidade sobre qualidade de tool calling.
+    chat = hostBase // {
+      threads = 12;
+      ctxSize = 16384;
+      batchSize = 2048;
+      ubatch = 2048;
+      # VRAM budget: 3244 MB available
+      # KV cache: 16384 × 64 bytes = 1024 MB
+      # Experts on GPU: (3244 - 1024) / 100 = 22 experts
+      # Experts on CPU: 36 - 22 = 14 experts
+      moeFlags = "--n-cpu-moe 14 --split-mode layer --poll 50 --poll-batch 50";
+      extraArgs = [
+        "--no-mmproj-offload"
+        "--image-min-tokens"
+        "1024"
+        "--kv-unified"
+        "--ctx-checkpoints"
+        "2"
+        "--keep"
+        "1024"
+        "--no-warmup"
+        "--parallel"
+        "1"
+        "--cont-batching"
+        "--jinja"
+      ];
+    };
+
+    # ── Jarvis Profile ──
+    # Baixa latência para interações por voz.
+    # Contexto pequeno (8K), parallel=1, threads reduzidas.
+    # Prioriza latência sobre throughput.
+    jarvis = hostBase // {
+      threads = 8;
+      ctxSize = 8192;
+      batchSize = 512;
+      ubatch = 512;
+      # VRAM budget: 3244 MB available
+      # KV cache: 8192 × 64 bytes = 512 MB
+      # Experts on GPU: (3244 - 512) / 100 = 27 experts
+      # Experts on CPU: 36 - 27 = 9 experts
+      moeFlags = "--n-cpu-moe 9 --split-mode layer --poll 50 --poll-batch 50";
+      extraArgs = [
+        "--no-mmproj-offload"
+        "--image-min-tokens"
+        "1024"
+        "--kv-unified"
+        "--ctx-checkpoints"
+        "1"
+        "--keep"
+        "512"
+        "--no-warmup"
+        "--parallel"
+        "1"
+        "--cont-batching"
+        "--jinja"
+      ];
+    };
+
+    # ── Benchmark Profile ──
+    # Settings reprodutíveis para medições.
+    # Sem otimizações dinâmicas, tudo hardcoded.
+    # Usado para comparar performance entre versões.
+    benchmark = hostBase // {
+      threads = 8;
+      ctxSize = 2048; # Pequeno para benchmarks rápidos
+      batchSize = 512;
+      ubatch = 512;
+      # VRAM budget: 3244 MB available
+      # KV cache: 2048 × 64 bytes = 128 MB
+      # Experts on GPU: (3244 - 128) / 100 = 31 experts
+      # Experts on CPU: 36 - 31 = 5 experts
+      moeFlags = "--n-cpu-moe 5 --split-mode layer";
+      extraArgs = [
+        "--no-mmproj-offload"
+        "--image-min-tokens"
+        "1024"
+        "--parallel"
+        "1"
+        "--no-warmup"
+        "--jinja"
+      ];
+    };
+
+    # ── Legacy Profiles (mantidos para compatibilidade) ──
+
+    # host: Profile original para o servidor principal
+    host = hostBase // {
+      threads = 12;
+      ctxSize = 32768;
+      batchSize = 1024;
+      ubatch = 1024;
       moeFlags = "--n-cpu-moe 36 --split-mode layer --poll 50 --poll-batch 50";
       extraArgs = [
         "--no-mmproj-offload"
@@ -162,23 +315,14 @@ in {
         "2"
         "--cont-batching"
       ];
-      user = "root";
-      scheduler = null;
     };
 
-    # --- host-ncmoe35: ncmoe=35 é +7.3% vs baseline (32.5 vs 30.3 tok/s) ---
-    # Testado 2026-08-26: upstream llama.cpp, ncmoe=35 coloca experts das
-    # layers 35-44 na GPU, restante na CPU. Mais VRAM (4933 MiB) mas mais rápido.
-    # REQUER upstream llama.cpp (NÃO wackmall). Se wackmall, usar host-ehs.
-    host-ncmoe35 = {
-      model = "llm-host";
-      mmproj = "llm-host-mmproj";
+    # host-ncmoe35: Variante mais rápida com mais experts na GPU
+    host-ncmoe35 = hostBase // {
       threads = 8;
       ctxSize = 32768;
       batchSize = 512;
       ubatch = 512;
-      gpuLayers = 45;
-      kvCache = "-fa on -ctk q4_0 -ctv q4_0";
       moeFlags = "--n-cpu-moe 35 --split-mode layer";
       extraArgs = [
         "--no-mmproj-offload"
@@ -190,22 +334,14 @@ in {
         "--no-warmup"
       ];
       user = "nixos";
-      scheduler = null;
     };
 
-    # --- host-ehs: Expert Hot Store (fork wackmall, +25.6% compute) ---
-    # Requer binario compilado: ~/projects/llama-wackmall/build/bin/llama-server
-    # Medido: 60.28 → 48.00 ms/token (+25.6%), GPU util 20.5% → 32.2%
-    # NÃO usar --n-cpu-moe com -ehs (auto-ativa --cmoe)
-    host-ehs = {
-      model = "llm-host";
-      mmproj = "llm-host-mmproj";
+    # host-ehs: Expert Hot Store (fork wackmall)
+    host-ehs = hostBase // {
       threads = 8;
       ctxSize = 8192;
       batchSize = 512;
       ubatch = 512;
-      gpuLayers = 45;
-      kvCache = "-fa on -ctk q4_0 -ctv q4_0";
       moeFlags = "-ehs 25 --split-mode layer";
       extraArgs = [
         "--parallel"
@@ -213,24 +349,15 @@ in {
         "--jinja"
       ];
       user = "nixos";
-      scheduler = null;
       wrapper = "llama-wackmall-wrapper";
     };
 
-    # --- host-ehs-optimized: melhor dos dois mundos ---
-    # Combina EHS-25 (hot experts na GPU) com todas as flags de otimização do host.
-    # VRAM budget: 6141 - 2400 (modelo) - 1895 (EHS) = 1846 MB para KV cache.
-    # 16384 tokens × 64 KB = 1024 MB — cabe com margem.
-    # Se o cooler sustentar clocks altos, este profile deve ser o mais rápido.
-    host-ehs-optimized = {
-      model = "llm-host";
-      mmproj = "llm-host-mmproj";
+    # host-ehs-optimized: Combina EHS com otimizações
+    host-ehs-optimized = hostBase // {
       threads = 12;
       ctxSize = 16384;
       batchSize = 1024;
       ubatch = 1024;
-      gpuLayers = 45;
-      kvCache = "-fa on -ctk q4_0 -ctv q4_0";
       moeFlags = "-ehs 25 --split-mode layer --poll 50 --poll-batch 50";
       extraArgs = [
         "--no-mmproj-offload"
@@ -252,7 +379,6 @@ in {
         "--jinja"
       ];
       user = "nixos";
-      scheduler = null;
       wrapper = "llama-wackmall-wrapper";
     };
   };

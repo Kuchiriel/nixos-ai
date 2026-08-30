@@ -120,12 +120,12 @@
     "quiet"
     "loglevel=3"
     "iommu=pt"
-    "pcie_aspm=force" # Reduz calor da dGPU em idle
+    "pcie_aspm=force" # Reduz calor da dGPU em idle (~40% economia PCIe)
     "nvme_load=1" # Carrega o NVMe precocemente no initrd
     "preempt=full" # Preempção total do kernel Zen
-    "split_lock_detect=off" # Desativa penalidades por split locks em IA
     # Performance tweaks para llama.cpp / inferência:
-    "intel_idle.max_cstate=1" # Limita C-states a C1: menor wake latency, +1-3% decode
+    # NOTA: intel_idle.max_cstate=1 removido — aumenta calor sem benefício significativo
+    # Se observar freezes, considerar adicionar de volta
     "nvme_core.io_timeout=10" # Timeout I/O NVMe mais agressivo
     # Fan control para Acer Nitro V15 — habilita acer_wmi fan sysfs:
     "acer_wmi.predator_v4=1" # Exibe /sys/class/hwmon/hwmonX/pwm* para controle de ventoinha

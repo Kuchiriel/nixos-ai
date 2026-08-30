@@ -29,7 +29,10 @@ in {
         default = 8080;
       };
       profile = mkOption {
-        type = types.enum ["vm" "host" "host-ncmoe35" "host-ehs" "host-ehs-optimized"];
+        type = types.enum [
+          "vm" "host" "host-ncmoe35" "host-ehs" "host-ehs-optimized"
+          "roo-dev" "chat" "jarvis" "benchmark"
+        ];
         default =
           if config.services.jarvis.environment == "host"
           then "host"
@@ -39,6 +42,17 @@ in {
           contexto, batch, GPU layers, KV-cache, flags MoE e scheduler —
           tudo declarado em modules/ai/models.nix (profiles). Default segue
           services.jarvis.environment; pode ser sobrescrito por host.
+
+          Perfis disponíveis:
+          - vm: Lab/VM com CPU only (Qwen3-4B)
+          - host: Servidor principal (Qwen3.6-35B-A3B)
+          - host-ncmoe35: Variante mais rápida com mais experts na GPU
+          - host-ehs: Expert Hot Store (fork wackmall)
+          - host-ehs-optimized: Combina EHS com otimizações
+          - roo-dev: Contexto grande para coding (32K, parallel=2)
+          - chat: Throughput máximo para conversas (16K, parallel=1)
+          - jarvis: Baixa latência para voz (8K, parallel=1)
+          - benchmark: Settings reprodutíveis para medições
         '';
       };
       extraFlags = mkOption {
