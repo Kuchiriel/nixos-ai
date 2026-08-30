@@ -173,6 +173,17 @@ def speak(text: str, voice: str | None = None, *, play: bool = True) -> str:
         audio = np.concatenate(chunks)
         sf.write(str(out_path), audio, 24000)
 
+        # Publish to Event Bus
+        try:
+            from jarvis.core.eventbus import get_bus
+            get_bus().publish("voice.tts", {
+                "text_len": len(text),
+                "path": str(out_path),
+                "played": play,
+            })
+        except Exception:  # noqa: BLE001
+            pass
+
         if play:
             _play(str(out_path))
         return str(out_path)

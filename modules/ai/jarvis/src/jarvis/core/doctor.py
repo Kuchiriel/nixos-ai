@@ -364,4 +364,15 @@ def doctor_report(cfg: Config | None = None) -> dict[str, Any]:
         "overall": overall, "down": down_count, "degraded": degraded_count,
         "total": len(checks),
     })
+    # Publish to Event Bus
+    try:
+        from jarvis.core.eventbus import get_bus
+        get_bus().publish("doctor.report", {
+            "overall": overall,
+            "down": down_count,
+            "degraded": degraded_count,
+            "total": len(checks),
+        })
+    except Exception:  # noqa: BLE001
+        pass
     return report

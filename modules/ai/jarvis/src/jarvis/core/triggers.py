@@ -134,6 +134,16 @@ class TriggerEngine:
                 state.last_condition = True
                 state.run_count += 1
                 state.last_error = ""
+                # Publish to Event Bus
+                try:
+                    from jarvis.core.eventbus import get_bus
+                    get_bus().publish("trigger.fired", {
+                        "name": trigger.name,
+                        "description": trigger.description,
+                        "run_count": state.run_count,
+                    })
+                except Exception:  # noqa: BLE001
+                    pass
                 return {
                     "name": trigger.name,
                     "action": "executed",
