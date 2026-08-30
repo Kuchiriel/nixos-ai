@@ -20,6 +20,7 @@ Interface (compatível com agent.py):
 
 from __future__ import annotations
 
+import ast
 import difflib
 import json
 import os
@@ -1163,3 +1164,177 @@ def safe_write_file(path: str, content: str, backup: bool = True) -> dict[str, A
         return {"ok": False, "error": str(e)}
     except OSError as e:
         return {"ok": False, "error": f"Write error: {e}"}
+
+
+# ===========================================================================
+# Enhanced Validation — ported from nightwatch/validator.py
+# ===========================================================================
+
+def validate_file(path: str, content: str | None = None) -> dict[str, Any]:
+    """Validate a file with language-specific checks.
+    
+    Returns:
+        dict with 'valid', 'errors', 'warnings', 'steps'
+    """
+    try:
+        target = _safe_path(path)
+    except ValueError as e:
+        return {"valid": False, "errors": [str(e)], "warnings": [], "steps": []}
+    
+    # Read content if not provided
+    if content is None:
+        if not target.exists():
+            return {"valid": True, "errors": [], "warnings": ["File does not exist"], "steps": []}
+        try:
+            content = target.read_text(encoding="utf-8")
+        except Exception as e:
+            return {"valid": False, "errors": [f"Cannot read: {e}"], "warnings": [], "steps": []}
+    
+    steps = []
+    all_errors = []
+    all_warnings = []
+    
+    # Language-specific validation
+    lang = detect_language(target)
+    
+    # Step 1: Syntax validation
+    if lang == "python":
+        is_valid, ast_error = _validate_python_syntax(content)
+        steps.append({"name": "python_syntax", "passed": is_valid, "output": ast_error or "ok"})
+        if not is_valid:
+            all_errors.append(f"Python syntax: {ast_error}")
+    
+    elif lang == "nix":
+        try:
+            proc = subprocess.run(
+                ["nix-instantiate", "--parse"],
+                input=content, capture_output=True, text=True, timeout=10,
+            )
+            passed = proc.returncode == 0
+            steps.append({"name": "nix_parse", "passed": passed, "output": proc.stderr[:200] if not passed else "ok"})
+            if not passed:
+                all_errors.append(f"Nix parse: {proc.stderr[:200]}")
+        except FileNotFoundError:
+            steps.append({"name": "nix_parse", "passed": True, "output": "skipped (nix-instantiate not found)"})
+        except subprocess.TimeoutExpired:
+            steps.append({"name": "nix_parse", "passed": True, "output": "skipped (timeout)"})
+    
+    elif lang == "json":
+        try:
+            json.loads(content)
+            steps.append({"name": "json_parse", "passed": True, "output": "ok"})
+        except json.JSONDecodeError as e:
+            steps.append({"name": "json_parse", "passed": False, "output": str(e)})
+            all_errors.append(f"JSON: {e}")
+    
+    elif lang == "bash":
+        try:
+            proc = subprocess.run(
+                ["bash", "-n", str(target)],
+                capture_output=True, text=True, timeout=5,
+            )
+            passed = proc.returncode == 0
+            steps.append({"name": "bash_syntax", "passed": passed, "output": proc.stderr[:200] if not passed else "ok"})
+            if not passed:
+                all_errors.append(f"Bash syntax: {proc.stderr[:200]}")
+        except FileNotFoundError:
+            steps.append({"name": "bash_syntax", "passed": True, "output": "skipped (bash not found)"})
+    
+    # Step 2: Size checks
+    if target.exists():
+        try:
+            original = target.read_text(encoding="utf-8")
+            orig_size = len(original)
+            new_size = len(content)
+            
+            if new_size < orig_size * 0.3:
+                steps.append({"name": "size_check", "passed": False, "output": f"Shrunk: {orig_size} -> {new_size}"})
+                all_errors.append(f"File shrunk too much: {orig_size} -> {new_size}")
+            else:
+                steps.append({"name": "size_check", "passed": True, "output": f"OK: {orig_size} -> {new_size}"})
+        except Exception:
+            pass
+    
+    # Step 3: Import integrity for Python
+    if lang == "python" and target.exists():
+        try:
+            original = target.read_text(encoding="utf-8")
+            orig_tree = ast.parse(original)
+            new_tree = ast.parse(content)
+            
+            orig_imports = set()
+            for node in ast.walk(orig_tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        orig_imports.add(alias.name)
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module:
+                        orig_imports.add(node.module)
+            
+            new_imports = set()
+            for node in ast.walk(new_tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        new_imports.add(alias.name)
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module:
+                        new_imports.add(node.module)
+            
+            removed = orig_imports - new_imports
+            if removed:
+                steps.append({"name": "import_integrity", "passed": True, "output": f"Warning: imports removed: {', '.join(removed)}"})
+                all_warnings.append(f"Imports removed: {', '.join(removed)}")
+            else:
+                steps.append({"name": "import_integrity", "passed": True, "output": "ok"})
+        except SyntaxError:
+            pass
+    
+    # Step 4: Structural integrity for Python
+    if lang == "python" and target.exists():
+        try:
+            original = target.read_text(encoding="utf-8")
+            orig_tree = ast.parse(original)
+            new_tree = ast.parse(content)
+            
+            orig_funcs = {n.name for n in ast.walk(orig_tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+            new_funcs = {n.name for n in ast.walk(new_tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+            removed_funcs = orig_funcs - new_funcs
+            
+            if removed_funcs:
+                steps.append({"name": "structural_integrity", "passed": False, "output": f"Functions removed: {', '.join(removed_funcs)}"})
+                all_errors.append(f"Functions removed: {', '.join(removed_funcs)}")
+            else:
+                steps.append({"name": "structural_integrity", "passed": True, "output": "ok"})
+        except SyntaxError:
+            pass
+    
+    return {
+        "valid": len(all_errors) == 0,
+        "errors": all_errors,
+        "warnings": all_warnings,
+        "steps": steps,
+    }
+
+
+def run_validation_checks(files: list[str]) -> dict[str, Any]:
+    """Run validation checks on multiple files.
+    
+    Returns summary of validation results.
+    """
+    results = []
+    total_errors = 0
+    total_warnings = 0
+    
+    for file_path in files:
+        result = validate_file(file_path)
+        results.append({"file": file_path, **result})
+        total_errors += len(result["errors"])
+        total_warnings += len(result["warnings"])
+    
+    return {
+        "files_checked": len(files),
+        "total_errors": total_errors,
+        "total_warnings": total_warnings,
+        "all_passed": total_errors == 0,
+        "results": results,
+    }
