@@ -297,54 +297,79 @@ Return JSON array."""
 # File Editing (via Patcher + SafeEditor)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _read_file_for_llm(path: str) -> str:
-    """Read a file for LLM context, with path resolution."""
+def _read_file_for_llm(path: str, max_chars: int = 0) -> str:
+    """Read a file for LLM context, with path resolution.
+
+    Args:
+        path: File path (absolute or relative to project root)
+        max_chars: Max chars to read (0 = auto-detect from context budget)
+    """
     try:
         if path.startswith("/"):
             full_path = Path(path)
         else:
-            # Try multiple prefixes
-            for prefix in ["modules/ai/jarvis/src/", "src/jarvis/", "jarvis/", "src/"]:
-                if path.startswith(prefix):
-                    path = path[len(prefix):]
-                    break
-            full_path = REPO_ROOT / "modules/ai/jarvis/src" / path
+            full_path = _resolve_file_path(path)
 
         if not full_path.exists():
-            # Try alternative locations
-            for alt in [
-                REPO_ROOT / path,
-                REPO_ROOT / "modules/ai/jarvis/src" / path,
-            ]:
-                if alt.exists():
-                    full_path = alt
-                    break
+            return f"ERROR: File not found: {path}"
 
-        return full_path.read_text(encoding="utf-8")[:8000]
+        content = full_path.read_text(encoding="utf-8")
+
+        # Auto-detect truncation from context budget if not specified
+        if max_chars <= 0:
+            max_chars = 16000  # reasonable default for structured patch context
+
+        if len(content) > max_chars:
+            # For large files, send first and last portions with marker
+            head = content[:max_chars // 2]
+            tail = content[-(max_chars // 2):]
+            content = f"{head}\n\n# ... [{len(content) - max_chars} chars truncated] ...\n\n{tail}"
+
+        return content
     except Exception as e:
         return f"ERROR: Could not read {path}: {e}"
 
 
 def _resolve_file_path(path: str) -> Path:
-    """Resolve a file path to an absolute path."""
+    """Resolve a file path to an absolute path.
+
+    Tries multiple strategies:
+    1. Absolute path as-is
+    2. Relative to project root
+    3. With common source prefixes stripped
+    4. Glob search in project
+    """
     if path.startswith("/"):
         return Path(path)
 
+    # Try direct relative to project root
+    direct = REPO_ROOT / path
+    if direct.exists():
+        return direct
+
+    # Try with common prefixes stripped
     for prefix in ["modules/ai/jarvis/src/", "src/jarvis/", "jarvis/", "src/"]:
         if path.startswith(prefix):
-            path = path[len(prefix):]
-            break
+            stripped = path[len(prefix):]
+            for base in [REPO_ROOT / "modules/ai/jarvis/src", REPO_ROOT]:
+                candidate = base / stripped
+                if candidate.exists():
+                    return candidate
 
-    # Try multiple locations
-    candidates = [
-        REPO_ROOT / "modules/ai/jarvis/src" / path,
-        REPO_ROOT / path,
-        REPO_ROOT / "modules/ai/jarvis" / path,
-    ]
-    for c in candidates:
-        if c.exists():
-            return c
-    return candidates[0]  # Return first candidate even if not exists
+    # Fallback: search in project
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["find", str(REPO_ROOT), "-name", Path(path).name, "-type", "f"],
+            capture_output=True, text=True, timeout=5,
+        )
+        for line in result.stdout.strip().split("\n"):
+            if line and Path(line).exists():
+                return Path(line)
+    except Exception:
+        pass
+
+    return REPO_ROOT / path  # Return best guess
 
 
 def _request_structured_patch(
@@ -464,19 +489,35 @@ def _git_commit(message: str) -> str | None:
     return None
 
 
-def _git_revert() -> None:
-    """Revert all uncommitted changes."""
+def _git_revert(files: list[str] | None = None) -> None:
+    """Revert uncommitted changes.
+
+    If files is provided, only revert those specific files.
+    If files is None, revert ALL changes (dangerous — use with caution).
+    """
     try:
-        subprocess.run(
-            ["git", "checkout", "--", "."],
-            capture_output=True, timeout=10,
-            cwd=str(REPO_ROOT),
-        )
-        subprocess.run(
-            ["git", "clean", "-fd"],
-            capture_output=True, timeout=10,
-            cwd=str(REPO_ROOT),
-        )
+        if files:
+            # Revert only specific files
+            for f in files:
+                resolved = _resolve_file_path(f)
+                if resolved.exists():
+                    subprocess.run(
+                        ["git", "checkout", "--", str(resolved)],
+                        capture_output=True, timeout=10,
+                        cwd=str(REPO_ROOT),
+                    )
+        else:
+            # Full revert — last resort
+            subprocess.run(
+                ["git", "checkout", "--", "."],
+                capture_output=True, timeout=10,
+                cwd=str(REPO_ROOT),
+            )
+            subprocess.run(
+                ["git", "clean", "-fd"],
+                capture_output=True, timeout=10,
+                cwd=str(REPO_ROOT),
+            )
     except Exception:
         pass
 
@@ -759,7 +800,7 @@ class Harness:
             cp.record_operation("validate", validation.passed, validation.summary)
 
             if not validation.passed:
-                _git_revert()
+                _git_revert(applied_files)
                 self._fail_task(task, f"Validation failed: {validation.summary}")
                 self.notify(f"❌ *Validation Failed*\n{validation.summary}")
                 _log_progress({
@@ -782,7 +823,7 @@ class Harness:
                 )
 
                 if not review.passed:
-                    _git_revert()
+                    _git_revert(applied_files)
                     self._fail_task(task, f"Review failed: {review.summary}")
                     self.notify(f"❌ *Review Failed*\n{review.summary}")
                     _log_progress({
@@ -829,8 +870,8 @@ class Harness:
                 "task_id": task.id, "status": "error",
                 "error": error_msg, "failure_type": failure_type.value,
             })
-            # Revert on error
-            _git_revert()
+            # Revert only files changed by this task
+            _git_revert(applied_files if 'applied_files' in dir() else None)
 
             # Anti-loop detection
             in_loop = self.loop_detector.record_attempt(task.id, success=False)
