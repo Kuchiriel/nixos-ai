@@ -121,6 +121,47 @@
     fi
     printf '{"text": "%sMHz", "tooltip": "Intel UHD 770\\nFreq: %s/%s MHz (%s%%)\\nPower: %s", "class": "%s"}\n' "$CUR" "$CUR" "$MAX" "$PCT" "$STATUS" "$CLASS"
   '';
+
+  # ── Audiobook waybar + menu scripts ──────────────────────────────────────
+  audiobookMenuScript = pkgs.writeShellScriptBin "jarvis-audiobook-menu" ''
+    choice=$(echo -e "📚 Scan livros\n📖 Listar livros\n▶️  Tocar livro\n⏸  Pausar\n▶️  Continuar\n⏹  Parar\n📊 Status" | \
+      wofi --dmenu --prompt "Audiobook:" --width 400 --height 350)
+    case "$choice" in
+      *"Scan"*) jarvis audiobook scan 2>&1 | wofi --dmenu --prompt "Resultado:" --width 600 || true ;;
+      *"Listar"*) jarvis audiobook list 2>&1 | wofi --dmenu --prompt "Livros:" --width 600 || true ;;
+      *"Tocar"*)
+        books=$(jarvis audiobook list 2>/dev/null | grep -oP '^\d+\.\s+\K.*' || true)
+        if [ -z "$books" ]; then
+          notify-send "📚 Audiobook" "Nenhum livro encontrado. Execute Scan primeiro."
+          exit 0
+        fi
+        book=$(echo "$books" | wofi --dmenu --prompt "Livro:" --width 600 --height 400)
+        if [ -n "$book" ]; then
+          notify-send "▶️ Audiobook" "Reproduzindo: $book"
+          jarvis audiobook play "$book" 2>&1 | head -5 &
+        fi
+        ;;
+      *"Pausar"*) jarvis audiobook pause 2>/dev/null; notify-send "⏸ Audiobook" "Pausado" ;;
+      *"Continuar"*) jarvis audiobook resume 2>/dev/null; notify-send "▶️ Audiobook" "Continuando..." ;;
+      *"Parar"*) jarvis audiobook stop 2>/dev/null; notify-send "⏹ Audiobook" "Reprodução parada" ;;
+      *"Status"*) jarvis audiobook status 2>&1 | wofi --dmenu --prompt "Status:" --width 500 || true ;;
+    esac
+  '';
+
+  audiobookWaybarScript = pkgs.writeShellScriptBin "jarvis-audiobook-waybar" ''
+    status=$(jarvis audiobook status 2>/dev/null)
+    if echo "$status" | grep -q "Tocando\|playing"; then
+      book=$(echo "$status" | grep -oP 'Livro: \K.*' | head -1)
+      chunk=$(echo "$status" | grep -oP 'Chunk: \K\d+' | head -1)
+      total=$(echo "$status" | grep -oP '/ \K\d+' | head -1)
+      printf '{"text":"󰏤","tooltip":"▶ %s — chunk %s/%s","class":"audiobook-playing"}' "$book" "$chunk" "$total"
+    elif echo "$status" | grep -q "Pausado\|paused"; then
+      book=$(echo "$status" | grep -oP 'Livro: \K.*' | head -1)
+      printf '{"text":"󰏤","tooltip":"⏸ %s — pausado","class":"audiobook-paused"}' "$book"
+    else
+      printf '{"text":"","tooltip":"Audiobook: idle","class":"audiobook-idle"}'
+    fi
+  '';
 in {
   fonts.fontconfig.enable = true;
 
@@ -134,6 +175,8 @@ in {
       memoryScript
       gpuScript
       igpuScript
+      audiobookMenuScript
+      audiobookWaybarScript
     ];
 
   programs.waybar = {
@@ -315,12 +358,12 @@ in {
           };
 
           "custom/audiobook" = {
-            exec = "${pkgs.jarvis-audiobook-waybar}/bin/jarvis-audiobook-waybar";
+            exec = "${audiobookWaybarScript}/bin/jarvis-audiobook-waybar";
             exec-on-event = true;
             interval = 5;
             return-type = "json";
             format = "{}";
-            on-click = "${pkgs.jarvis-audiobook-menu}/bin/jarvis-audiobook-menu";
+            on-click = "${audiobookMenuScript}/bin/jarvis-audiobook-menu";
             tooltip = true;
           };
 
