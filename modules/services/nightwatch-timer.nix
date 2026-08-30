@@ -35,6 +35,16 @@ in {
 
       # Safety: do NOT restart on failure (prevents crash loops)
       Restart = "no";
+
+      # ── Sandboxing ──
+      ProtectSystem = "strict";       # /usr e /boot read-only
+      PrivateTmp = true;                # /tmp privado
+      NoNewPrivileges = true;           # Sem escalada de privilégio
+      RestrictSUIDSGID = true;          # Sem arquivos SUID/SGID
+      # ── Resource limits ──
+      MemoryMax = "2G";                 # Max 2GB RAM (nightwatch needs more)
+      TasksMax = 128;                   # Max 128 tasks
+      TimeoutStartSec = "3600";         # 1 hour max runtime
     };
   };
 

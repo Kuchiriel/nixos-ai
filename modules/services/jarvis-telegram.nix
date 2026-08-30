@@ -46,6 +46,14 @@ in {
         Restart = "on-failure";
         RestartSec = "5";
         TimeoutStopSec = "10";
+        # ── Sandboxing ──
+        ProtectSystem = "strict";       # /usr e /boot read-only
+        PrivateTmp = true;                # /tmp privado
+        NoNewPrivileges = true;           # Sem escalada de privilégio
+        RestrictSUIDSGID = true;          # Sem arquivos SUID/SGID
+        # ── Resource limits ──
+        MemoryMax = "256M";               # Max 256MB RAM
+        TasksMax = 32;                    # Max 32 tasks
       };
     };
   };
