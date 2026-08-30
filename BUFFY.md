@@ -7,6 +7,21 @@
 > **CLI WRAPPER**: Use `scripts/jarvis-cli.sh` to call any JARVIS tool.
 > Example: `./scripts/jarvis-cli.sh read <file> 0 50`
 
+## ⚠️ DEclarative First Rule
+
+**ALL configuration files MUST be created via NixOS modules or home-manager.**
+
+- Use `home.file` for user config files
+- Use `xdg.configFile` for XDG config
+- Use `pkgs.writeShellScriptBin` for scripts
+- Use `systemd.user.services` for user services
+- Use `systemd.services` for system services
+
+**DO NOT** create files manually (mkdir, touch, echo > file).
+**DO NOT** edit ~/.config/ directly.
+**DO NOT** use pip/npm install globally.
+**DO NOT** create scripts outside of Nix derivations.
+
 ## Quick Reference — JARVIS CLI Wrapper
 
 **Use `scripts/jarvis-cli.sh` to call JARVIS tools from this agent.**

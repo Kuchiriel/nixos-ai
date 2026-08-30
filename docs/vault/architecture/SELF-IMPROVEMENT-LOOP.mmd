@@ -1,0 +1,46 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '14px'}}}%%
+graph TB
+    START["🎬 Start"] --> PICK["📋 Pick Next Task<br/>from prd.json"]
+    PICK --> IMPLEMENT["💻 Implement Task<br/>agent writes code"]
+    IMPLEMENT --> VALIDATE["✅ Validate<br/>run tests, type checks"]
+    VALIDATE --> PASS{Tests Pass?}
+    PASS -->|Yes| COMMIT["💾 Commit<br/>git add + commit"]
+    PASS -->|No| FIX["🔧 Fix Code<br/>agent debugs"]
+    FIX --> VALIDATE
+    COMMIT --> LOG["📝 Log Progress<br/>update progress.txt"]
+    LOG --> LEARN["📚 Learn<br/>update AGENTS.md"]
+    LEARN --> CHECKPOINT["💾 Checkpoint<br/>save state"]
+    CHECKPOINT --> MORE{More Tasks?}
+    MORE -->|Yes| PICK
+    MORE -->|No| DONE["🎉 Done<br/>all tasks complete"]
+
+    subgraph "Memory Persistence"
+        AGENTS["📄 AGENTS.md<br/>long-term knowledge"]
+        PROGRESS["📄 progress.txt<br/>chronological log"]
+        PRD["📄 prd.json<br/>task state"]
+        GIT["🔀 Git History<br/>code changes"]
+    end
+
+    LOG --> AGENTS
+    LOG --> PROGRESS
+    LOG --> PRD
+    COMMIT --> GIT
+
+    subgraph "Context Management"
+        CTX["🧠 Context Window<br/>32K tokens"]
+        COMPACT["📦 Compact<br/>when > 70% full"]
+        RECONSTRUCT["🔄 Reconstruct<br/>from checkpoints"]
+    end
+
+    CTX --> COMPACT
+    COMPACT --> RECONSTRUCT
+    RECONSTRUCT --> PICK
+
+    style START fill:#4CAF50,stroke:#333,color:#fff
+    style DONE fill:#4CAF50,stroke:#333,color:#fff
+    style PASS fill:#ff9800,stroke:#333,color:#fff
+    style MORE fill:#ff9800,stroke:#333,color:#fff
+    style AGENTS fill:#2196F3,stroke:#333,color:#fff
+    style PROGRESS fill:#2196F3,stroke:#333,color:#fff
+    style PRD fill:#2196F3,stroke:#333,color:#fff
+    style GIT fill:#2196F3,stroke:#333,color:#fff
