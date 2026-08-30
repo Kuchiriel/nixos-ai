@@ -111,6 +111,24 @@ When Roo Dev or the REPL calls JARVIS, these tools are available:
 
 ## Operational Rules
 
+### Declarative First (NixOS/home.file)
+
+**ALL changes MUST be declarative via NixOS modules or home-manager.**
+
+- Configuration files → `home.file` or `xdg.configFile`
+- Services → `systemd.user.services` or `systemd.services`
+- Packages → `home.packages` or `environment.systemPackages`
+- Scripts → `pkgs.writeScriptBin` or `pkgs.writeShellScriptBin`
+- Timers → `systemd.user.timers`
+
+**DO NOT**:
+- Create files manually outside of Nix
+- Edit `~/.config/` directly
+- Use `mkdir` or `touch` for config files
+- Install packages with `pip` or `npm` globally
+
+**Exception**: `/tmp` for testing, state files in `~/.local/state/`
+
 ### Commands
 ```bash
 # Tests (ALWAYS use nix develop, NOT nix-shell)
