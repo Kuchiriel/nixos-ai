@@ -380,7 +380,8 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
 
         if name == "jarvis_hackmd_list":
             notes = hackmd_list(args.get("limit", 20))
-            return json.dumps([{"id": n.get("noteId"), "title": n.get("title"), "updatedAt": n.get("updatedAt")} for n in notes], indent=2)
+            # HackMD API returns 'id' not 'noteId'
+            return json.dumps([{"id": n.get("id") or n.get("noteId"), "title": n.get("title"), "updatedAt": n.get("updatedAt")} for n in notes], indent=2)
 
         if name == "jarvis_hackmd_read":
             note = hackmd_get(args.get("note_id", ""))
@@ -392,7 +393,8 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
                 result = hackmd_update(note_id, title=args.get("title"), content=args.get("content", ""))
             else:
                 result = hackmd_create(args.get("title", "Untitled"), args.get("content", ""))
-            return json.dumps({"noteId": result.get("noteId"), "title": result.get("title")}, indent=2)
+            # HackMD API returns 'id' not 'noteId'
+            return json.dumps({"noteId": result.get("id") or result.get("noteId"), "title": result.get("title")}, indent=2)
 
         if name == "jarvis_hackmd_sync":
             result = sync_local_to_hackmd(args.get("path", ""), args.get("title"))

@@ -207,6 +207,16 @@ result = call_tool('jarvis_hackmd_write', {'title': '''$TITLE''', 'content': '''
 print(result)
 "
         ;;
+    hackmd-sync)
+        FILE="${2:?Usage: jarvis-cli.sh hackmd-sync <file> [title]}"
+        TITLE="${3:-$(basename "$FILE" .md)}"
+        CONTENT=$(cat "$FILE")
+        python3 -c "
+from jarvis.mcp_server import call_tool
+result = call_tool('jarvis_hackmd_write', {'title': '''$TITLE''', 'content': '''$CONTENT'''})
+print(result)
+"
+        ;;
     status)
         echo "=== JARVIS Status ==="
         echo "LLM: $(curl -sf http://127.0.0.1:8080/health 2>/dev/null || echo 'offline')"
