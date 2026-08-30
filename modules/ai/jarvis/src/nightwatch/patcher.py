@@ -154,18 +154,21 @@ def parse_llm_patch(response: str) -> list[FilePatch]:
 
 def apply_hunk(content: str, hunk: PatchHunk) -> tuple[bool, str]:
     """Apply a single hunk to file content.
-    
+
+    FAIL-CLOSED: only exact and line-by-line matches allowed.
+    Fuzzy matching removed — it could apply patches to wrong locations.
+
     Returns (success, new_content).
     """
     # 1. Exact match
     if hunk.old_text in content:
         new_content = content.replace(hunk.old_text, hunk.new_text, 1)
         return True, new_content
-    
+
     # 2. Line-by-line match (for multi-line hunks)
     old_lines = hunk.old_text.strip().split("\n")
     content_lines = content.split("\n")
-    
+
     for i in range(len(content_lines) - len(old_lines) + 1):
         match = True
         for j, old_line in enumerate(old_lines):
@@ -175,14 +178,8 @@ def apply_hunk(content: str, hunk: PatchHunk) -> tuple[bool, str]:
         if match:
             new_lines = content_lines[:i] + hunk.new_text.split("\n") + content_lines[i + len(old_lines):]
             return True, "\n".join(new_lines)
-    
-    # 3. Fuzzy: find first significant line and replace around it
-    old_stripped = hunk.old_text.strip()
-    for i, line in enumerate(content_lines):
-        if old_stripped[:30] in line or line.strip() == old_stripped:
-            content_lines[i] = line.replace(line.strip(), hunk.new_text.strip())
-            return True, "\n".join(content_lines)
-    
+
+    # FAIL-CLOSED: no fuzzy match — reject if exact/line match failed
     return False, content
 
 

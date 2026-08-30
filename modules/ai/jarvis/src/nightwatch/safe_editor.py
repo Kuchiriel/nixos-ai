@@ -197,6 +197,10 @@ def check_import_integrity(original: str, new: str) -> tuple[bool, list[str]]:
     if removed:
         warnings.append(f"Imports removed: {', '.join(removed)}")
     
+    # NOTE: import removal is a WARNING, not an error.
+    # The caller (SafeEditor.validate_content) can upgrade to error
+    # based on context. Structural integrity (functions/classes removed)
+    # IS an error that blocks the edit.
     return True, warnings
 
 

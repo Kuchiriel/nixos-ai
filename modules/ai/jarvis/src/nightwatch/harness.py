@@ -347,13 +347,19 @@ def _resolve_file_path(path: str) -> Path:
     return candidates[0]  # Return first candidate even if not exists
 
 
-def _request_patch_from_llm(
+def _request_structured_patch(
     task_description: str,
     target_files: list[str],
     call_llm_fn: Callable,
-) -> tuple[bool, dict[str, str], list[str]]:
-    """Request a patch from the LLM. Returns (success, {file: new_content}, errors)."""
-    # Read target files
+) -> tuple[bool, list, list[str]]:
+    """Request structured patches from the LLM (old_text → new_text).
+
+    Returns (success, list[FilePatch], errors).
+    This is the SAFE path — LLM returns hunks, not full files.
+    """
+    from nightwatch.patcher import parse_llm_patch, FilePatch
+
+    # Read target files (full content for context, but LLM returns patches)
     file_contents = {}
     for path in target_files:
         content = _read_file_for_llm(path)
@@ -361,7 +367,7 @@ def _request_patch_from_llm(
             file_contents[path] = content
 
     if not file_contents:
-        return False, {}, ["No readable target files"]
+        return False, [], ["No readable target files"]
 
     files_section = "\n\n".join(
         f"=== FILE: {path} ===\n```\n{content}\n```"
@@ -383,52 +389,37 @@ def _request_patch_from_llm(
 FILES:
 {files_section}
 
-For each file you want to change, return:
+For each file you want to change, return STRUCTURED PATCHES:
 === FILE: path/to/file.py ===
 REASON: why this change is needed
---- new content ---
-The complete improved file content
+--- old text ---
+exact text to find (must match exactly)
+--- new text ---
+replacement text
 --- end ---
 
-Return only files that need changes. If no changes needed, return "NO_CHANGES"."""
+IMPORTANT RULES:
+- Return ONLY the specific lines that need to change
+- old text MUST be an exact substring of the file
+- Do NOT return complete files — return only the diff hunks
+- You can have multiple hunks per file
+- Return only files that need changes. If no changes needed, return "NO_CHANGES"."""
 
     response = call_llm_fn(prompt, 4096)
 
     if "ERROR" in response:
-        return False, {}, [response]
+        return False, [], [response]
 
     if "NO_CHANGES" in response:
-        return True, {}, []
+        return True, [], []
 
-    # Parse response
-    new_contents = {}
-    errors = []
+    # Parse structured patches
+    patches = parse_llm_patch(response)
 
-    # Split by === FILE: markers
-    parts = response.split("=== FILE:")
-    for part in parts[1:]:  # Skip first empty part
-        lines = part.strip().split("\n")
-        if not lines:
-            continue
+    if not patches:
+        return False, [], ["Could not parse any patches from LLM response"]
 
-        file_path = lines[0].strip().rstrip("=").strip()
-        # Find content between --- new content --- and --- end ---
-        content_start = -1
-        content_end = -1
-        for i, line in enumerate(lines):
-            if "--- new content ---" in line:
-                content_start = i + 1
-            elif "--- end ---" in line:
-                content_end = i
-                break
-
-        if content_start >= 0 and content_end > content_start:
-            new_content = "\n".join(lines[content_start:content_end])
-            new_contents[file_path] = new_content
-        else:
-            errors.append(f"Could not parse patch for {file_path}")
-
-    return bool(new_contents), new_contents, errors
+    return True, patches, []
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -696,8 +687,8 @@ class Harness:
             except Exception:
                 pass
 
-            # ── Step 1: Request patch from LLM ──
-            success, new_contents, errors = _request_patch_from_llm(
+            # ── Step 1: Request structured patches from LLM ──
+            success, patches, errors = _request_structured_patch(
                 task_description=task.description,
                 target_files=task.target_files,
                 call_llm_fn=self.call_llm,
@@ -714,31 +705,43 @@ class Harness:
                 })
                 return False
 
-            if not new_contents:
+            if not patches:
                 # LLM decided no changes needed
                 task.skip("no_changes_needed")
                 self.notify(f"⏭️ *No Changes*\n{task.description[:50]}")
                 return False
 
-            # ── Step 2: Apply via SafeEditor ──
+            # ── Step 2: Apply structured patches via Patcher + SafeEditor ──
             self.queue.update_task(task.id, status=TaskStatus.VALIDATING.value)
             applied_files = []
             apply_errors = []
 
-            for file_path, new_content in new_contents.items():
-                resolved = _resolve_file_path(file_path)
+            from nightwatch.patcher import apply_patch
+            from nightwatch.safe_editor import strip_markdown_fences
+
+            for file_patch in patches:
+                # Apply patch hunks to get new content
+                patch_ok, patched_content, patch_diff = apply_patch(file_patch)
+
+                if not patch_ok:
+                    apply_errors.append(f"Patcher failed for {file_patch.path}: {patched_content}")
+                    cp.record_operation(f"patch:{file_patch.path}", False, patched_content)
+                    continue
+
+                # Validate and write via SafeEditor (atomic, validated)
+                resolved = _resolve_file_path(file_patch.path)
                 edit_result: EditResult = self.editor.apply_edit(
-                    resolved, new_content, validate=True
+                    resolved, patched_content, validate=True
                 )
                 if edit_result.success:
-                    applied_files.append(file_path)
-                    cp.record_operation(f"write:{file_path}", True)
+                    applied_files.append(file_patch.path)
+                    cp.record_operation(f"write:{file_patch.path}", True)
                 else:
                     apply_errors.extend(edit_result.errors)
-                    cp.record_operation(f"write:{file_path}", False, "; ".join(edit_result.errors))
+                    cp.record_operation(f"write:{file_patch.path}", False, "; ".join(edit_result.errors))
 
             if not applied_files:
-                self._fail_task(task, f"SafeEditor rejected all changes: {'; '.join(apply_errors)}")
+                self._fail_task(task, f"All patches failed: {'; '.join(apply_errors)}")
                 self.notify(f"❌ *Write Failed*\n{apply_errors[0][:100] if apply_errors else 'rejected'}")
                 _log_progress({
                     "task_id": task.id, "status": "write_failed",
