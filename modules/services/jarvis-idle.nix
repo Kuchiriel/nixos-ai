@@ -45,10 +45,18 @@ in {
         Type = "oneshot";
         EnvironmentFile = "-/etc/jarvis-telegram.env";
         ExecStart = "${pkgs.jarvis}/bin/jarvis idle worker";
-        CPUWeight = 1;
-        Nice = 19;
-        IOSchedulingClass = "idle";
-        IOSchedulingPriority = 7;
+        # ── Sandboxing ──
+        ProtectSystem = "strict";       # /usr e /boot read-only
+        PrivateTmp = true;                # /tmp privado
+        NoNewPrivileges = true;           # Sem escalada de privilégio
+        RestrictSUIDSGID = true;          # Sem arquivos SUID/SGID
+        # ── Resource limits ──
+        CPUWeight = 1;                    # Baixa prioridade CPU
+        Nice = 19;                        # Lowest priority
+        IOSchedulingClass = "idle";       # I/O idle
+        IOSchedulingPriority = 7;         # Lowest I/O priority
+        MemoryMax = "512M";               # Max 512MB RAM
+        TasksMax = 64;                    # Max 64 tasks
         StandardOutput = "journal";
       };
     };

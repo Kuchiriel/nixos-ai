@@ -215,7 +215,7 @@
 
   services.openssh = {
     enable = true;
-    settings.PermitRootLogin = "yes";
+    settings.PermitRootLogin = "prohibit-password"; # Segurança: login root só por chave SSH
   };
 
   users.users.${user} = {

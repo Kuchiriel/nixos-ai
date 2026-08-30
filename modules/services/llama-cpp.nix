@@ -107,7 +107,17 @@ in {
             --host 0.0.0.0 --port ${toString config.services.llama-cpp-embeddings.port} \
             --embeddings --pooling mean -c 4096 -t 2 -b 2048 -ub 1024
         '';
-        serviceConfig.User = "nixos";
+        serviceConfig = {
+          User = "nixos";
+          # ── Sandboxing ──
+          ProtectSystem = "strict";       # /usr e /boot read-only
+          PrivateTmp = true;                # /tmp privado
+          NoNewPrivileges = true;           # Sem escalada de privilégio
+          RestrictSUIDSGID = true;          # Sem arquivos SUID/SGID
+          # ── Resource limits ──
+          MemoryMax = "512M";               # Max 512MB RAM
+          TasksMax = 32;                    # Max 32 tasks
+        };
       };
 
       llama-cpp-rerank = mkIf config.services.llama-cpp-rerank.enable {
@@ -121,7 +131,17 @@ in {
             --host 0.0.0.0 --port ${toString config.services.llama-cpp-rerank.port} \
             --rerank -t 2 -c 8192 -b 512 -ub 512
         '';
-        serviceConfig.User = "nixos";
+        serviceConfig = {
+          User = "nixos";
+          # ── Sandboxing ──
+          ProtectSystem = "strict";       # /usr e /boot read-only
+          PrivateTmp = true;                # /tmp privado
+          NoNewPrivileges = true;           # Sem escalada de privilégio
+          RestrictSUIDSGID = true;          # Sem arquivos SUID/SGID
+          # ── Resource limits ──
+          MemoryMax = "256M";               # Max 256MB RAM
+          TasksMax = 16;                    # Max 16 tasks
+        };
       };
     };
   };
