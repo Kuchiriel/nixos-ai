@@ -227,6 +227,39 @@ print(result)
         echo "Waybar: $(pgrep -c waybar 2>/dev/null || echo '0') processes"
         echo "Status: $(cat /tmp/jarvis-status.json 2>/dev/null || echo '{}')"
         ;;
+    vault-status)
+        python3 -c "
+from jarvis.mcp_server import _vault_status
+import json
+result = _vault_status()
+print(json.dumps(result, indent=2))
+"
+        ;;
+    vault-sync-obsidian)
+        python3 -c "
+from jarvis.mcp_server import _vault_sync_to_obsidian
+import json
+result = _vault_sync_to_obsidian()
+print(json.dumps({'synced': len(result), 'files': result}, indent=2))
+"
+        ;;
+    vault-sync-hackmd)
+        python3 -c "
+from jarvis.mcp_server import _vault_sync_to_hackmd
+import json
+result = _vault_sync_to_hackmd()
+print(json.dumps({'synced': len(result), 'results': result}, indent=2))
+"
+        ;;
+    vault-search-obsidian)
+        QUERY="${2:?Usage: jarvis-cli.sh vault-search-obsidian <query>}"
+        python3 -c "
+from jarvis.mcp_server import _vault_read_from_obsidian
+import json
+result = _vault_read_from_obsidian('''$QUERY''')
+print(json.dumps(result, indent=2))
+"
+        ;;
     help|*)
         usage
         ;;
