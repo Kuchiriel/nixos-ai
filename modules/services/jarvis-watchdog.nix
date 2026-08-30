@@ -26,7 +26,7 @@ in {
       serviceConfig = {
         Type = "simple";
         EnvironmentFile = "-/etc/jarvis-telegram.env";
-        Environment = "PATH=/run/current-system/sw/bin:${pkgs.coreutils}/bin:${pkgs.nvidia-utils}/bin";
+        Environment = "PATH=/run/current-system/sw/bin:${pkgs.coreutils}/bin";
         ExecStart = "${pkgs.jarvis}/bin/jarvis watchdog --interval ${toString cfg.interval}";
         Restart = "on-failure";
         RestartSec = 30;
