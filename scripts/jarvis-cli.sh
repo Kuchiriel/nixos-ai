@@ -227,6 +227,37 @@ print(result)
         echo "Waybar: $(pgrep -c waybar 2>/dev/null || echo '0') processes"
         echo "Status: $(cat /tmp/jarvis-status.json 2>/dev/null || echo '{}')"
         ;;
+    health|diagnose)
+        python3 -c "
+from jarvis.core.proactive import run_proactive_diagnostics, format_alerts
+alerts = run_proactive_diagnostics()
+print(format_alerts(alerts))
+"
+        ;;
+    system-health)
+        python3 -c "
+from jarvis.core.proactive import get_system_summary
+import json
+print(json.dumps(get_system_summary(), indent=2))
+"
+        ;;
+    classify)
+        PATH_ARG="${2:.}"
+        python3 -c "
+from jarvis.core.classify import get_security_summary, format_security_summary
+summary = get_security_summary('$PATH_ARG')
+print(format_security_summary(summary))
+"
+        ;;
+    classify-file)
+        FILE_ARG="${2:?Usage: jarvis-cli.sh classify-file <file>}"
+        python3 -c "
+from jarvis.core.classify import classify_file
+import json
+result = classify_file('$FILE_ARG')
+print(json.dumps(result.to_dict(), indent=2))
+"
+        ;;
     vault-status)
         python3 -c "
 from jarvis.mcp_server import _vault_status

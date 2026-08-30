@@ -7,6 +7,32 @@
 > **CLI WRAPPER**: Use `scripts/jarvis-cli.sh` to call any JARVIS tool.
 > Example: `./scripts/jarvis-cli.sh read <file> 0 50`
 
+## 🚨 USE JARVIS TOOLS — THIS IS MANDATORY
+
+**You have 22 JARVIS tools available. USE THEM. Not just RAG search.**
+
+Before doing ANYTHING, ask yourself:
+1. Can JARVIS `remember` this fact?
+2. Can JARVIS `recall` similar past issues?
+3. Can JARVIS `rag-search` find relevant code?
+4. Can JARVIS `shell` run a diagnostic?
+5. Can JARVIS `read` a file with context?
+6. Can JARVIS `vault-write` document this?
+7. Can JARVIS `hackmd-write` share this externally?
+8. Can JARVIS `lessons` find past mistakes?
+
+**The JARVIS ecosystem exists to help you. INVOKE IT.**
+
+```bash
+# Quick JARVIS commands
+./scripts/jarvis-cli.sh remember "fact to store"
+./scripts/jarvis-cli.sh recall "query"
+./scripts/jarvis-cli.sh lessons "past error"
+./scripts/jarvis-cli.sh rag-search "code query"
+./scripts/jarvis-cli.sh status
+./scripts/jarvis-cli.sh shell "diagnostic command"
+```
+
 ## ⚠️ DEclarative First Rule
 
 **ALL configuration files MUST be created via NixOS modules or home-manager.**

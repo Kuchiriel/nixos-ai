@@ -492,6 +492,36 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
             result = _vault_status()
             return json.dumps(result, indent=2)
 
+        # Proactive Diagnostics
+        if name == "jarvis_proactive_check":
+            from jarvis.core.proactive import run_proactive_diagnostics, format_alerts, get_system_summary
+            alerts = run_proactive_diagnostics()
+            summary = get_system_summary()
+            return json.dumps({
+                "alerts": format_alerts(alerts),
+                "summary": summary,
+                "alert_count": len(alerts),
+            }, indent=2)
+
+        if name == "jarvis_system_health":
+            from jarvis.core.proactive import get_system_summary
+            return json.dumps(get_system_summary(), indent=2)
+
+        # Security Classification
+        if name == "jarvis_classify_file":
+            from jarvis.core.classify import classify_file
+            path = args.get("path", "")
+            if not path:
+                return "ERROR: empty path"
+            result = classify_file(path)
+            return json.dumps(result.to_dict(), indent=2)
+
+        if name == "jarvis_classify_directory":
+            from jarvis.core.classify import get_security_summary, format_security_summary
+            path = args.get("path", ".")
+            summary = get_security_summary(path)
+            return format_security_summary(summary)
+
         return f"ERROR: unknown tool: {name}"
     except Exception as e:
         return f"ERROR: {e}"
