@@ -126,27 +126,35 @@ def waybar_format() -> dict[str, Any]:
     )
     text_clean = nf_emoji_re.sub('', text).strip()
 
-    # Ícones + labels Nerd Font (cyberpunk)
-    # Formato: ícone + label curto visível na barra
+    # Ícones + labels Nerd Font (Material Design)
+    # nf-md icons — verified in JetBrainsMono Nerd Font
     state_map = {
-        "idle":          ("󰆪", "IDLE"),
-        "listening":     ("󰍬", "REC"),
-        "transcribing":  ("󰈙", "STT"),
-        "thinking":      ("󰐕", "..."),
-        "speaking":      ("󰕾", "TTS"),
-        "error":         ("󰅙", "ERR"),
-        "done":          ("󰄬", "OK"),
-        "initializing":  ("󰚌", "INIT"),
+        "idle":          ("󰒚", "JARVIS"),    # nf-md-brain — AI standby
+        "listening":     ("󰍬", "REC"),        # nf-md-microphone
+        "transcribing":  ("󰈙", "STT"),        # nf-md-text-box
+        "thinking":      ("󰐕", "..."),         # nf-md-progress-clock
+        "speaking":      ("󰕾", "TTS"),        # nf-md-volume-high
+        "error":         ("󰅙", "ERR"),        # nf-md-alert-circle
+        "done":          ("󰄬", "OK"),         # nf-md-check-circle
+        "initializing":  ("󰚌", "BOOT"),       # nf-md-robot
     }
-    icon, label = state_map.get(state, ("󰆪", state.upper()))
+    icon, label = state_map.get(state, ("󰒚", state.upper()))
 
     # Show icon + short label in the bar; full text in tooltip
     display = f"{icon} {label}"
     detail = text_clean or text
 
+    # Tooltip: only show detail if it's meaningful (not just pulsing dots)
+    if state == "idle" and detail in ("", "Ouvindo...", "Aguardando..."):
+        tooltip = "JARVIS: aguardando ativação"
+    elif detail:
+        tooltip = f"{label}: {detail}"
+    else:
+        tooltip = f"JARVIS: {state}"
+
     return {
         "text": display,
-        "tooltip": f"{state}: {detail}",
+        "tooltip": tooltip,
         "class": state,
         "alt": state,
     }
