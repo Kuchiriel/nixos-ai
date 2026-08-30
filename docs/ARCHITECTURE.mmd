@@ -1,0 +1,89 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '14px'}}}%%
+graph TB
+    subgraph "Hardware Layer"
+        HW["🖥️ Acer Nitro V15<br/>RTX 4050 6GB / 32GB RAM"]
+    end
+
+    subgraph "OS Layer (NixOS)"
+        NIX["📦 NixOS Declarative<br/>flake.nix → configuration"]
+        HM["🏠 Home Manager<br/>waybar, hyprland, rofi"]
+        SYS["⚙️ Systemd Services<br/>sandboxed, dependency-managed"]
+    end
+
+    subgraph "AI Runtime"
+        LLM["🧠 llama-server<br/>Qwen3.6-35B-A3B MoE"]
+        EMB["📊 Embeddings Server<br/>nomic-embed-text-v2-moe"]
+        RERANK["🔄 Rerank Server<br/>bge-reranker-v2-m3"]
+        QDRANT["🗄️ Qdrant<br/>Vector Database"]
+    end
+
+    subgraph "JARVIS Core"
+        AGENT["🤖 Agent<br/>multi-turn LLM"]
+        MCP["🔌 MCP Server<br/>22 tools"]
+        MEMORY["💾 Memory<br/>episodic (Qdrant)"]
+        RAG["🔍 RAG<br/>semantic search"]
+        VAULT["📚 Vault<br/>long-term knowledge"]
+    end
+
+    subgraph "Voice Pipeline"
+        WAKE["🎤 Wake Word<br/>openWakeWord"]
+        STT["🗣️ STT<br/>faster-whisper"]
+        TTS["🔊 TTS<br/>Kokoro-82M"]
+    end
+
+    subgraph "Nightwatch"
+        HARNESS["🔧 Harness<br/>autonomous agent"]
+        PATCHER["📝 Patcher<br/>structured edits"]
+        SAFE["🛡️ SafeEditor<br/>atomic writes"]
+        VALIDATOR["✅ Validator<br/>syntax/import/test"]
+        EVALUATOR["👁️ Evaluator<br/>independent review"]
+        CHECKPOINT["💾 Checkpoint<br/>recovery state"]
+    end
+
+    subgraph "Interfaces"
+        REPL["💻 REPL<br/>jarvis dev"]
+        TELEGRAM["📱 Telegram<br/>remote control"]
+        WAYBAR["📊 Waybar<br/>status display"]
+        ROFI["🎯 Rofi<br/>app launcher"]
+    end
+
+    HW --> NIX
+    NIX --> HM
+    NIX --> SYS
+
+    SYS --> LLM
+    SYS --> EMB
+    SYS --> RERANK
+    SYS --> QDRANT
+
+    LLM --> AGENT
+    EMB --> RAG
+    QDRANT --> MEMORY
+    QDRANT --> RAG
+
+    AGENT --> MCP
+    MCP --> MEMORY
+    MCP --> RAG
+    MCP --> VAULT
+
+    WAKE --> STT
+    STT --> AGENT
+    AGENT --> TTS
+
+    HARNESS --> AGENT
+    HARNESS --> PATCHER
+    PATCHER --> SAFE
+    SAFE --> VALIDATOR
+    VALIDATOR --> EVALUATOR
+    EVALUATOR --> CHECKPOINT
+
+    REPL --> AGENT
+    TELEGRAM --> AGENT
+    WAYBAR --> MEMORY
+    ROFI --> REPL
+
+    style HW fill:#1a1a2e,stroke:#e94560,color:#fff
+    style NIX fill:#16213e,stroke:#0f3460,color:#fff
+    style LLM fill:#533483,stroke:#e94560,color:#fff
+    style AGENT fill:#0f3460,stroke:#e94560,color:#fff
+    style HARNESS fill:#1a1a2e,stroke:#e94560,color:#fff
