@@ -364,7 +364,7 @@ class TestContextBudgetReal:
 
     def test_budget_tracks_usage(self):
         """ContextBudget should track token usage correctly."""
-        cb = ContextBudget(budget=10000)
+        cb = ContextBudget(max_tokens=10000)
         assert not cb.should_compact(5000)  # 50% — below 70% threshold
         assert cb.should_compact(8000)      # 80% — above 70% threshold
 
