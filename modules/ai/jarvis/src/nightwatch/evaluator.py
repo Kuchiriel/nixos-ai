@@ -160,11 +160,19 @@ def review_change(
 
 
 def auto_review(diff: str, test_output: str) -> ReviewResult:
-    """Quick automated review without LLM."""
+    """Quick automated review without LLM.
+
+    Checks structural integrity of the change:
+    - Dangerous patterns
+    - Test failures
+    - Size sanity
+    - Import removal
+    - Function/class removal
+    """
     issues = []
     suggestions = []
-    
-    # Check for dangerous patterns
+
+    # 1. Check for dangerous patterns
     dangerous = [
         "rm -rf",
         "sudo",
@@ -176,25 +184,37 @@ def auto_review(diff: str, test_output: str) -> ReviewResult:
     ]
     for pattern in dangerous:
         if pattern in diff:
-            issues.append(f"Dangerous pattern found: {pattern}")
-    
-    # Check for test failures
+            issues.append(f"Dangerous pattern: {pattern}")
+
+    # 2. Check for test failures
     if "FAILED" in test_output or "ERROR" in test_output:
-        issues.append("Test failures detected")
-    
-    # Check for large changes
+        issues.append("Test failures in output")
+
+    # 3. Size sanity
     added = sum(1 for line in diff.split("\n") if line.startswith("+") and not line.startswith("+++"))
     removed = sum(1 for line in diff.split("\n") if line.startswith("-") and not line.startswith("---"))
     if added + removed > 200:
-        suggestions.append(f"Large change: +{added}/-{removed} lines. Consider breaking into smaller changes.")
-    
-    # Check for missing tests
+        suggestions.append(f"Large change: +{added}/-{removed} lines")
+
+    # 4. Check for import removal (structural damage indicator)
+    removed_lines = [l[1:] for l in diff.split("\n") if l.startswith("-") and not l.startswith("---")]
+    removed_imports = [l for l in removed_lines if l.strip().startswith("import ") or l.strip().startswith("from ")]
+    if removed_imports:
+        issues.append(f"Imports removed: {len(removed_imports)} import statements")
+
+    # 5. Check for function/class removal
+    removed_defs = [l for l in removed_lines if l.strip().startswith("def ") or l.strip().startswith("class ")]
+    if removed_defs:
+        names = [l.strip().split("(")[0].split(":")[0].replace("def ", "").replace("class ", "") for l in removed_defs]
+        issues.append(f"Definitions removed: {', '.join(names)}")
+
+    # 6. Check for missing tests
     if ".py" in diff and "test" not in diff.lower():
-        suggestions.append("Python files changed but no test changes detected")
-    
+        suggestions.append("Python changed without test changes")
+
     verdict = "pass" if not issues else "fail"
     confidence = 0.7 if not issues else 0.9
-    
+
     return ReviewResult(
         verdict=verdict,
         issues=issues,
