@@ -60,7 +60,12 @@ let
     mkdir -p "$HOME/.local/share/kokoro" "$HOME/.local/share/openwakeword"
     ln -sf ${pkgs.aiModels.kokoro.config} "$HOME/.local/share/kokoro/config.json"
     ln -sf ${pkgs.aiModels.kokoro.model} "$HOME/.local/share/kokoro/kokoro-v1_0.pth"
+    # Voice files — one per language
+    mkdir -p "$HOME/.local/share/kokoro/voices"
     ln -sf ${pkgs.aiModels.kokoro.voice} "$HOME/.local/share/kokoro/af_heart.pt"
+    ln -sf ${pkgs.aiModels.kokoro.voice} "$HOME/.local/share/kokoro/voices/af_heart.pt"
+    ln -sf ${pkgs.aiModels.kokoro.voices.pf_dora} "$HOME/.local/share/kokoro/voices/pf_dora.pt"
+    ln -sf ${pkgs.aiModels.kokoro.voices.pm_alex} "$HOME/.local/share/kokoro/voices/pm_alex.pt"
     ln -sf ${pkgs.aiModels.openwakeword.hey_jarvis} "$HOME/.local/share/openwakeword/hey_jarvis_v0.1.onnx"
     ln -sf ${pkgs.aiModels.openwakeword.embedding} "$HOME/.local/share/openwakeword/embedding_model.onnx"
     ln -sf ${pkgs.aiModels.openwakeword.melspectrogram} "$HOME/.local/share/openwakeword/melspectrogram.onnx"
