@@ -209,3 +209,80 @@ Recent commits show work on:
 - JARVIS features span multiple projects
 - RAG indexes should cover all projects
 - Nightwatch can work across projects (multi-project support)
+
+## JARVIS E2E Stress Test Results
+
+### Test: Sync Documentation to HackMD
+
+**Task**: Use JARVIS MCP tools to sync all .md files to HackMD
+
+**Result**: ✅ SUCCESS
+
+**Issues Found & Fixed**:
+1. HackMD API returns `id` not `noteId` — fixed field mapping
+2. `hackmd-sync` command missing from CLI wrapper — added it
+
+**Files Synced**:
+- README.md → `DZBDZ7hQTi2eKXazPE6MBA`
+- AGENTS.md → `c6lqbvuETJGL8E7zYvif7Q`
+- HANDOFF.md → `l_FhXk1ORE6VM4gFG6S1tw`
+- TODO-MISSAO.md → `0ye2PffXR7aeCXSjH25Gvg`
+- PLATFORM-AUDIT-2026-08-30.md → `gtGOKXLWTvOaGNv26GnCBg`
+
+### Conclusions
+
+1. **JARVIS MCP tools work** — but had bugs that needed fixing
+2. **HackMD integration is functional** — can create, list, read, write notes
+3. **CLI wrapper is useful** — simplifies calling JARVIS tools from terminal
+4. **Bug discovery is the value** — E2E testing found real issues
+
+### JARVIS vs MCU vs MiMo Code Comparison
+
+**Critical Gaps Identified**:
+
+1. **Context Window**: 32K vs 260K+ (8x smaller)
+2. **Persistent Memory**: Session-based vs cross-session
+3. **Subagent System**: Single-threaded vs parallel execution
+4. **Task Tracking**: Flat vs hierarchical
+
+**Recommendations**:
+1. Increase context to 64K or 128K
+2. Implement checkpoint system
+3. Add MEMORY.md equivalent
+4. Implement subagent system
+5. Add hierarchical task tracking
+
+**Key Insight**: The gap is not in the model, but in the **infrastructure around the model**.
+
+### Mermaid Diagrams Created
+
+1. `docs/ARCHITECTURE.mmd` — Full system architecture
+2. `docs/JARVIS-COMPARISON.mmd` — MCU vs Our JARVIS vs MiMo Code
+3. `docs/SELF-IMPROVEMENT-LOOP.mmd` — Agent self-improvement cycle
+
+**Render in**: Obsidian, GitHub, mermaid.live
+
+### Self-Improvement Loop (Addy Osmani Technique)
+
+Based on "Ralph Wiggum" technique:
+1. Pick task from prd.json
+2. Implement task
+3. Validate (tests, type checks)
+4. Commit if pass
+5. Log progress
+6. Update AGENTS.md with learnings
+7. Checkpoint state
+8. Repeat
+
+**Key Insight**: Each iteration is isolated (fresh context), but knowledge persists via:
+- AGENTS.md (long-term knowledge)
+- progress.txt (chronological log)
+- prd.json (task state)
+- Git History (code changes)
+
+### Next Steps
+
+1. Implement self-improvement loop for JARVIS
+2. Create prd.json with tasks
+3. Test JARVIS tools more (RAG, remember, recall)
+4. Set up Obsidian vault
