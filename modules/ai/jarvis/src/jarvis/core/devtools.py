@@ -74,7 +74,13 @@ def _validate_python_syntax(code: str) -> tuple[bool, str | None]:
 
 
 def _ast_guard(target: Path, new_content: str) -> dict[str, Any] | None:
-    """Retorna erro dict se AST guard rejeitar, None se OK."""
+    """Retorna erro dict se AST guard rejeitar, None se OK.
+
+    Checks:
+    1. Syntax validity (AST parse)
+    2. Structural integrity (no unexpected function/class removal)
+    3. Size sanity (file didn't shrink >70%)
+    """
     if target.suffix != ".py" or not target.exists():
         return None
     try:
@@ -86,12 +92,49 @@ def _ast_guard(target: Path, new_content: str) -> dict[str, Any] | None:
     if not original_valid:
         return None  # original já era inválido, não proteger
 
+    # 1. Syntax check
     is_valid, ast_error = _validate_python_syntax(new_content)
     if not is_valid:
         return {
             "ok": False,
             "error": f"Rejeitado — quebra sintaxe Python: {ast_error}",
         }
+
+    # 2. Structural integrity — block unexpected function/class removal
+    try:
+        import ast
+        orig_tree = ast.parse(original)
+        new_tree = ast.parse(new_content)
+
+        orig_funcs = {n.name for n in ast.walk(orig_tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        new_funcs = {n.name for n in ast.walk(new_tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+        removed_funcs = orig_funcs - new_funcs
+        if removed_funcs:
+            return {
+                "ok": False,
+                "error": f"Rejeitado — funções removidas: {', '.join(sorted(removed_funcs))}",
+            }
+
+        orig_classes = {n.name for n in ast.walk(orig_tree) if isinstance(n, ast.ClassDef)}
+        new_classes = {n.name for n in ast.walk(new_tree) if isinstance(n, ast.ClassDef)}
+        removed_classes = orig_classes - new_classes
+        if removed_classes:
+            return {
+                "ok": False,
+                "error": f"Rejeitado — classes removidas: {', '.join(sorted(removed_classes))}",
+            }
+    except SyntaxError:
+        pass  # already caught above
+
+    # 3. Size sanity — block >70% shrinkage
+    orig_size = len(original)
+    new_size = len(new_content)
+    if orig_size > 100 and new_size < orig_size * 0.3:
+        return {
+            "ok": False,
+            "error": f"Rejeitado — arquivo encolheu demais: {orig_size} → {new_size} ({new_size/orig_size:.0%})",
+        }
+
     return None
 
 
