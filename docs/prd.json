@@ -1,0 +1,121 @@
+{
+  "version": "1.0",
+  "project": "nixos-ai",
+  "description": "JARVIS Integration and Improvement Tasks",
+  "created": "2026-08-30",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Port Validator to devtools.py",
+      "description": "Add validation before write operations in devtools.py",
+      "status": "pending",
+      "priority": "high",
+      "acceptance": [
+        "validate_content() function available in devtools.py",
+        "Python, Nix, JSON validation working",
+        "Size sanity checks working",
+        "Import integrity checking working"
+      ],
+      "notes": "SafeEditor already ported, Validator is next"
+    },
+    {
+      "id": "T2",
+      "title": "Port Learning to Agent",
+      "description": "Add pattern detection and learning to agent.py",
+      "status": "pending",
+      "priority": "medium",
+      "acceptance": [
+        "detect_recurring_patterns() available in agent",
+        "update_agent_memory() working",
+        "get_stats() returning metrics",
+        "Patterns stored in NIGHTWATCH-MEMORY.md"
+      ],
+      "notes": "Learning loop from nightwatch/learning.py"
+    },
+    {
+      "id": "T3",
+      "title": "Port VaultSync to MCP Server",
+      "description": "Add vault sync tools to MCP server",
+      "status": "pending",
+      "priority": "medium",
+      "acceptance": [
+        "sync_to_obsidian() available via MCP",
+        "sync_to_hackmd() available via MCP",
+        "read_from_obsidian() working",
+        "vault_status() returning info"
+      ],
+      "notes": "Enable vault operations from any client"
+    },
+    {
+      "id": "T4",
+      "title": "Configure Obsidian Vault",
+      "description": "Set up Obsidian vault with HackMD sync",
+      "status": "completed",
+      "priority": "high",
+      "acceptance": [
+        "Vault directory created at ~/vaults/nixos-ai",
+        ".obsidian/app.json configured",
+        "Documentation synced from HackMD",
+        "Mermaid diagrams render correctly"
+      ],
+      "notes": "Basic setup complete, need plugin installation"
+    },
+    {
+      "id": "T5",
+      "title": "Create Mermaid Architecture Diagrams",
+      "description": "Generate visual diagrams of the system",
+      "status": "completed",
+      "priority": "medium",
+      "acceptance": [
+        "ARCHITECTURE.mmd created",
+        "JARVIS-COMPARISON.mmd created",
+        "SELF-IMPROVEMENT-LOOP.mmd created",
+        "Diagrams render in Obsidian"
+      ],
+      "notes": "Three diagrams created and synced to HackMD"
+    },
+    {
+      "id": "T6",
+      "title": "Test JARVIS RAG and Memory Tools",
+      "description": "Verify RAG search and memory tools work correctly",
+      "status": "pending",
+      "priority": "high",
+      "acceptance": [
+        "rag-search returns relevant results",
+        "remember stores facts correctly",
+        "recall retrieves memories",
+        "lessons returns past errors"
+      ],
+      "notes": "Critical for self-improvement loop"
+    },
+    {
+      "id": "T7",
+      "title": "Integrate Context Budget with REPL",
+      "description": "Use unified ContextBudget in REPL session",
+      "status": "pending",
+      "priority": "medium",
+      "acceptance": [
+        "ContextBudget tracks token usage",
+        "Warnings at 80% budget",
+        "Tool output truncation working",
+        "History compression working"
+      ],
+      "notes": "Uses consolidated context_budget.py"
+    },
+    {
+      "id": "T8",
+      "title": "Create Self-Improvement Loop",
+      "description": "Implement autonomous improvement cycle",
+      "status": "pending",
+      "priority": "low",
+      "acceptance": [
+        "Loop picks tasks from prd.json",
+        "Implements changes",
+        "Validates with tests",
+        "Commits if passes",
+        "Updates AGENTS.md with learnings"
+      ],
+      "notes": "Depends on nightwatch maturity"
+    }
+  ]
+}
