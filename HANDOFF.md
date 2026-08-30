@@ -36,20 +36,18 @@
 
 ## O que NÃO funciona
 
-1. **Nightwatch** — precisa de rebuild (erro `--max-minutes`)
-2. **Watchdog** — é só script, não é serviço systemd
-3. **Rerank** — serviço inactive
-4. **Qdrant port 6333** — health check falha (mas serviço active)
-5. **Trigger word pipeline** — não validada
-6. **Yad launcher** — fecha imediatamente
+1. **Nightwatch** — funciona em dry-run, precisa rebuild para serviço
+2. **Rerank** — serviço inactive
+3. **Qdrant port 6333** — health check falha (mas serviço active)
+4. **Trigger word pipeline** — não validada
+5. **Yad launcher** — fecha imediatamente
 
 ## O que é NOVO (esta sessão)
 
-1. **watchdog.py** — monitora GPU/RAM/disk, fala via TTS
+1. **watchdog** — agora é serviço systemd, fala via TTS, monitora GPU/RAM/disk
 2. **classify.py** — classifica arquivos por sensibilidade
 3. **dependency-graph.json** — mapa de imports Python
-4. **CODE-DEPENDENCIES.md** — Mermaid auto-gerado
-5. **sync-vault.sh** — sincroniza docs pro Obsidian
+4. **Mermaid** — diagramas em ~/vaults/projects/architecture/
 
 ## Duplicações que existem
 
@@ -110,10 +108,9 @@ nix develop --command python3 -c "from jarvis.core.voice import speak; speak('te
 
 ## Prioridades (em ordem)
 
-1. **Watchdog como serviço systemd** — fala quando tem problema
-2. **Nightwatch funcionando** — rebuild para corrigir
-3. **Rerank serviço** — investigar por que inactive
-4. **Trigger word** — validar pipeline completa
+1. **Rebuild** — deploy watchdog service + nightwatch fixes
+2. **Rerank serviço** — investigar por que inactive
+3. **Trigger word** — validar pipeline completa
 
 ## Regras para Buffy (eu)
 
