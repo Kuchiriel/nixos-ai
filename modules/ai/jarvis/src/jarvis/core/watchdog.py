@@ -358,9 +358,9 @@ def watchdog_cycle() -> dict[str, Any]:
     for alert in all_alerts:
         _log_alert(alert)
 
-        # Speak if message exists
-        if "speak" in alert:
-            spoke = speak(alert["speak"], priority=alert.get("severity", "normal"))
+        # TTS only for CRITICAL — warnings just log, don't annoy user
+        if "speak" in alert and alert.get("severity") == "critical":
+            spoke = speak(alert["speak"], priority="critical")
             alert["spoken"] = spoke
 
         # Auto-heal if needed
