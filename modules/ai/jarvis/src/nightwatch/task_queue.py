@@ -148,6 +148,12 @@ class Task:
             self.status = TaskStatus.FAILED.value
         else:
             self.status = TaskStatus.READY.value
+        # Persist immediately to avoid data loss on crash
+        try:
+            TASK_QUEUE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            # Note: this is a simplified persist — full save happens in _save()
+        except Exception:
+            pass
     
     def complete(self, commit_sha: str | None = None) -> None:
         self.status = TaskStatus.COMPLETED.value

@@ -554,6 +554,22 @@ class Harness:
         if recovered > 0:
             self.notify(f"♻️ Recovered {recovered} stuck tasks")
 
+    # ── Task Failure (with persistence) ───────────────────────────────────
+
+    def _fail_task(self, task: Task, error: str) -> None:
+        """Fail a task and persist the state immediately.
+        
+        This ensures the attempt count and status are saved to disk
+        even if the harness crashes before the next _save() call.
+        """
+        task.fail(error)
+        self.queue.update_task(
+            task.id,
+            status=task.status,
+            attempts=task.attempts,
+            last_error=task.last_error,
+        )
+
     # ── Notifications ──────────────────────────────────────────────────────
 
     def notify(self, message: str) -> None:
@@ -679,7 +695,7 @@ class Harness:
             cp.record_operation("patch", success, "; ".join(errors) if errors else "")
 
             if not success:
-                task.fail("; ".join(errors))
+                self._fail_task(task, "; ".join(errors))
                 self.notify(f"❌ *Patch Failed*\n{errors[0][:100] if errors else 'unknown'}")
                 _log_progress({
                     "task_id": task.id, "status": "patch_failed",
@@ -711,7 +727,7 @@ class Harness:
                     cp.record_operation(f"write:{file_path}", False, "; ".join(edit_result.errors))
 
             if not applied_files:
-                task.fail(f"SafeEditor rejected all changes: {'; '.join(apply_errors)}")
+                self._fail_task(task, f"SafeEditor rejected all changes: {'; '.join(apply_errors)}")
                 self.notify(f"❌ *Write Failed*\n{apply_errors[0][:100] if apply_errors else 'rejected'}")
                 _log_progress({
                     "task_id": task.id, "status": "write_failed",
@@ -730,7 +746,7 @@ class Harness:
 
             if not validation.passed:
                 _git_revert()
-                task.fail(f"Validation failed: {validation.summary}")
+                self._fail_task(task, f"Validation failed: {validation.summary}")
                 self.notify(f"❌ *Validation Failed*\n{validation.summary}")
                 _log_progress({
                     "task_id": task.id, "status": "validation_failed",
@@ -753,7 +769,7 @@ class Harness:
 
                 if not review.passed:
                     _git_revert()
-                    task.fail(f"Review failed: {review.summary}")
+                    self._fail_task(task, f"Review failed: {review.summary}")
                     self.notify(f"❌ *Review Failed*\n{review.summary}")
                     _log_progress({
                         "task_id": task.id, "status": "review_failed",
@@ -790,7 +806,7 @@ class Harness:
             cp.record_operation("error", False, str(e))
             error_msg = str(e)
             failure_type = classify_failure(error_msg, task.status)
-            task.fail(error_msg)
+            self._fail_task(task, error_msg)
             self.notify(
                 f"❌ *Task Error* [{failure_type.value}]\n{error_msg[:100]}"
             )
