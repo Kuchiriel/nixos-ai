@@ -340,18 +340,21 @@ in {
         color: #50FA7B;
       }
 
-      /* ── Animations (waybar CSS only supports opacity) ────────────────── */
+      /* ── Animations (waybar CSS: opacity only, single selectors) ──────── */
       @keyframes jarvis-pulse {
-        0%, 100% { opacity: 1; }
+        0% { opacity: 1; }
         50% { opacity: 0.3; }
+        100% { opacity: 1; }
       }
       @keyframes jarvis-glow {
-        0%, 100% { opacity: 1; }
+        0% { opacity: 1; }
         50% { opacity: 0.5; }
+        100% { opacity: 1; }
       }
       @keyframes jarvis-blink {
-        0%, 49% { opacity: 1; }
-        50%, 100% { opacity: 0.15; }
+        0% { opacity: 1; }
+        50% { opacity: 0.15; }
+        100% { opacity: 1; }
       }
       @keyframes jarvis-spin {
         0% { opacity: 1; }
