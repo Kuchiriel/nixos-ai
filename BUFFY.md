@@ -345,3 +345,34 @@ Based on "Ralph Wiggum" technique:
 2. Create prd.json with tasks
 3. Test JARVIS tools more (RAG, remember, recall)
 4. Set up Obsidian vault
+
+## 🚨 REGRA: ANTES DE QUALQUER COISA, USE O JARVIS
+
+**NÃO tente adivinhar. NÃO faça tentativa e erro. USE as ferramentas do JARVIS:**
+
+1. **`jarvis recall "query"`** — Busca memória episódica
+2. **`jarvis rag-search "query"`** — Busca no código
+3. **`jarvis lessons "error"`** — Busca erros passados
+4. **`jarvis read <file> 0 50`** — Lê arquivo com contexto
+5. **`jarvis shell "cmd"`** — Executa comando
+6. **`jarvis health`** — Checa sistema
+7. **`jarvis watchdog`** — Monitoramento proativo
+
+**Se não sabe a resposta, PESQUISE na web antes de inventar.**
+
+### Audio Player
+- Player: **mpv** (via NixOS home-manager)
+- TTS: `from jarvis.core.voice import speak`
+- Playback: automático via pw-play → mpv → paplay
+- Nunca use `paplay` diretamente, use `speak()`
+
+### Ferramentas JARVIS (22 tools)
+- shell, read, write, replace
+- rag-search, rag-index
+- remember, recall, lessons
+- vault-list, vault-write, vault-sync
+- hackmd-list, hackmd-read, hackmd-write
+- nix-eval, nix-check, nix-search
+- screen, observe
+- chatgpt (ler conversas compartilhadas)
+- health, watchdog, classify

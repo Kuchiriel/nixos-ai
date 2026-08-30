@@ -461,3 +461,11 @@ def main_tts(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main_voice())
+
+# ═══ IMPORTANT: How to use TTS ═══
+# from jarvis.core.voice import speak
+# result = speak('texto em português ou inglês')
+# result returns path to WAV file
+# Audio plays automatically via pw-play → mpv → paplay fallback
+# Language auto-detected: PT-BR if accented chars found
+# Voice: Kokoro-82M (pf_dora for PT-BR, af_heart for EN)
