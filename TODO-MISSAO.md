@@ -80,6 +80,20 @@
 - **Arquivos**: `AGENTS.md`, `HANDOFF.md`
 - **Status**: TODO (depois das correções)
 
+### P3-2: Validação real de long-run (>30min, LLM online)
+- **Problema**: `docs/NIGHTWATCH-LONGRUN-VALIDATION.md` (2026-08-29) só validou
+  com `use_llm=False` — 3 tasks, 8.7s, tudo falhou "corretamente" por falta de
+  LLM. Isso prova que o pipeline falha bem, não que o nightwatch funciona.
+  A missão central (autônomo 24/7) continua sem nenhuma corrida real registrada.
+- **Evidência**: `grep "Sem validação >30min" docs/NIGHTWATCH-LONGRUN-VALIDATION.md`
+- **Arquivos**: `docs/NIGHTWATCH-LONGRUN-VALIDATION.md`
+- **Solução**: Rodar `jarvis nightwatch --tasks 15` com LLM online, >=30min de
+  parede, sem interromper. Atualizar a tabela de critérios de sucesso do doc
+  (as 2 linhas com "⏳ Requer LLM") com resultado real, não só "próximo passo"
+- **Testes**: context budget não estoura, checkpoint/recovery não precisa
+  disparar sem motivo, task queue não fica com `IN_PROGRESS` órfão no fim
+- **Status**: TODO
+
 ---
 
 ## Commits planejados
