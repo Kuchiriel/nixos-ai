@@ -181,10 +181,22 @@ def run_targeted_tests(files: list[str]) -> ValidationReport:
             if module_name in test_name or test_name.replace("test_", "") in module_name:
                 relevant_tests.append(test_file)
     
-    # If no specific tests found, run the main test suite
+    # Se nenhum teste específico for encontrado, o arquivo mudado não tem
+    # cobertura dedicada — não dá pra saber o blast radius, então roda a
+    # suíte inteira em vez de cair para um arquivo arbitrário e não
+    # relacionado (era assim antes: sempre test_agent.py, mesmo pra mudança
+    # em módulo compartilhado sem teste homônimo — furo real de regressão).
     if not relevant_tests:
-        relevant_tests = ["modules/ai/jarvis/tests/test_agent.py"]
-    
+        test_cmd = "python3 -m pytest modules/ai/jarvis/tests/ -q --tb=short"
+        step = ValidationStep(name="tests:full-suite-fallback", command=test_cmd)
+        success, output, duration = run_command(test_cmd, timeout=600)
+        step.passed = success
+        step.output = output[-3000:]
+        step.duration_ms = duration
+        report.steps.append(step)
+        report.passed = success
+        return report
+
     # Run tests
     test_cmd = f"python3 -m pytest {' '.join(relevant_tests)} -x -q --tb=short"
     step = ValidationStep(name="tests", command=test_cmd)
