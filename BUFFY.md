@@ -3,11 +3,49 @@
 > This file is read by Buffy when working on the nixos-ai project.
 > It provides context about all available JARVIS features, MCP tools,
 
-> **PRIMEIRO PASSO**: Leia HANDOFF.md para mapa completo do projeto.
-> project structure, and operational rules.
+> **A CADA PROMPT**: Use JARVIS RAG + recall para contexto, não leia HANDOFF.md inteiro.
+> Seção abaixo explica o protocolo de 3 camadas.
 >
 > **CLI WRAPPER**: Use `scripts/jarvis-cli.sh` to call any JARVIS tool.
 > Example: `./scripts/jarvis-cli.sh read <file> 0 50`
+
+## 🧠 CONTEXT ENGINEERING PROTOCOL (A CADA PROMPT)
+
+**Handoff.md é um INDEX leve (~200 linhas), não o mapa inteiro.**
+O mapa real está no RAG + memória.
+
+### ANTES de cada resposta (obrigatório):
+```bash
+# 1. RAG search — contexto semântico do que o usuário pediu
+./scripts/jarvis-cli.sh rag-search "palavras-chave do prompt"
+
+# 2. Memory recall — o que foi feito recentemente
+./scripts/jarvis-cli.sh recall "últimas alterações"
+
+# 3. Lessons — erros passados similares
+./scripts/jarvis-cli.sh lessons "tipo de problema"
+```
+
+### DEPOIS de cada alteração:
+```bash
+# 1. Remember — gravar o que foi feito
+./scripts/jarvis-cli.sh remember "alterei X em Y por causa de Z"
+
+# 2. Atualizar HANDOFF.md se status mudou
+# (só se mudança for significativa, não a cada commit)
+```
+
+### A cada 5 prompts:
+```bash
+# Verificar git status
+./scripts/jarvis-cli.sh shell "cd ~/projects/nixos-ai && git status --short"
+```
+
+### NUNCA fazer:
+- Ler HANDOFF.md inteiro no início (é um index, não o mapa)
+- Copiar tudo pro contexto
+- Inventar sem RAG search primeiro
+- Criar módulo novo sem checar existentes via RAG
 
 ## 🚨 USE JARVIS TOOLS — THIS IS MANDATORY
 
