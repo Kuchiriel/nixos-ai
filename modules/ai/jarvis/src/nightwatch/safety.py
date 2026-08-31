@@ -18,12 +18,9 @@ import subprocess
 import time
 from dataclasses import dataclass
 from fnmatch import fnmatch
-from pathlib import Path
 from typing import Any
 
-REPO_ROOT = Path(__file__).parent.parent.parent.parent.parent.resolve()
-if not (REPO_ROOT / ".git").exists():
-    REPO_ROOT = Path.home() / "projects" / "nixos-ai"
+from nightwatch.paths import REPO_ROOT
 
 # ═══ Protected Paths ═══
 # NEVER auto-modify — requires explicit human approval
@@ -108,8 +105,13 @@ def rollback_snapshot(snapshot_ref: str) -> None:
 
 # ═══ Git Branch Isolation ═══
 
-def create_task_branch(task_id: str, category: str) -> str:
-    """Create an isolated branch for the task."""
+def create_task_branch(task_id: str, category: str) -> str | None:
+    """Create an isolated branch for the task.
+
+    Returns the branch name, or None if checkout failed (caller must
+    treat that as a hard stop — never proceed uncommitted on the wrong
+    branch).
+    """
     branch = f"nightwatch/{category}/{task_id}"
 
     # Ensure we're on main
@@ -119,10 +121,23 @@ def create_task_branch(task_id: str, category: str) -> str:
     )
 
     # Create and checkout branch
-    subprocess.run(
+    result = subprocess.run(
         ["git", "-C", str(REPO_ROOT), "checkout", "-b", branch],
-        capture_output=True, timeout=10,
+        capture_output=True, text=True, timeout=10,
     )
+    if result.returncode != 0:
+        return None
+
+    # Verify we actually landed on the new branch — a silent checkout
+    # failure here would mean every subsequent commit lands on whatever
+    # branch was previously checked out (main), defeating the isolation
+    # this function exists for.
+    current = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "branch", "--show-current"],
+        capture_output=True, text=True, timeout=10,
+    ).stdout.strip()
+    if current != branch:
+        return None
 
     return branch
 
@@ -298,7 +313,19 @@ def commit_or_revert(task_id: str, category: str, description: str, branch: str,
 
 
 def prune_orphan_branches() -> int:
-    """Delete merged nightwatch branches. Returns count deleted."""
+    """Delete leftover nightwatch/* branches. Returns count deleted.
+
+    Called at harness startup, before any task branch for *this* run
+    exists — so anything matching nightwatch/* at that point is left
+    over from a crashed/killed prior run. Checks out main first: `git
+    branch -D` refuses to delete the currently-checked-out branch, and
+    if a crashed run died mid-task, that's exactly the branch it'd be
+    sitting on.
+    """
+    subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "checkout", "main"],
+        capture_output=True, timeout=10,
+    )
     result = subprocess.run(
         ["git", "-C", str(REPO_ROOT), "branch", "--list", "nightwatch/*"],
         capture_output=True, text=True, timeout=10,

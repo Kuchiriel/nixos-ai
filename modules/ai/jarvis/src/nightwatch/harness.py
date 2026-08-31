@@ -618,6 +618,12 @@ class Harness:
         recovered = self.queue.recover_stuck_tasks()
         if recovered > 0:
             self.notify(f"♻️ Recovered {recovered} stuck tasks")
+        # Sweep leftover nightwatch/* branches from a crashed/killed prior
+        # run — each task now lives on its own branch until merged, so a
+        # process killed mid-task can leave one behind.
+        pruned = safety.prune_orphan_branches()
+        if pruned > 0:
+            self.notify(f"🧹 Pruned {pruned} orphaned nightwatch branches")
 
     # ── Task Failure (with persistence) ───────────────────────────────────
 
@@ -770,8 +776,20 @@ class Harness:
             task.skip("dry-run")
             return False
 
+        branch: str | None = None
         try:
-            # ── Step 0: Context budget check ──
+            # ── Step 0a: Isolate on a task branch ──
+            # Every commit for this task happens here, never on main
+            # directly. abort_task_branch() on any failure path below
+            # discards this branch entirely — main is never touched
+            # until the merge at the very end.
+            branch = safety.create_task_branch(task.id, task.project)
+            if not branch:
+                self._fail_task(task, "Could not create isolated branch (git checkout -b failed)")
+                self.notify(f"🚫 *Task Blocked*\nBranch isolation failed for {task.id}")
+                return False
+
+            # ── Step 0b: Context budget check ──
             try:
                 stats = self.context_budget.get_stats()
                 if stats.get("should_compact", False):
@@ -794,6 +812,7 @@ class Harness:
             cp.record_operation("patch", success, "; ".join(errors) if errors else "")
 
             if not success:
+                safety.abort_task_branch(branch)
                 self._fail_task(task, "; ".join(errors))
                 self.notify(f"❌ *Patch Failed*\n{errors[0][:100] if errors else 'unknown'}")
                 _log_progress({
@@ -803,7 +822,9 @@ class Harness:
                 return False
 
             if not patches:
-                # LLM decided no changes needed
+                # LLM decided no changes needed — discard the empty
+                # branch instead of leaving it orphaned
+                safety.abort_task_branch(branch)
                 task.skip("no_changes_needed")
                 self.notify(f"⏭️ *No Changes*\n{task.description[:50]}")
                 return False
@@ -838,6 +859,7 @@ class Harness:
                     cp.record_operation(f"write:{file_patch.path}", False, "; ".join(edit_result.errors))
 
             if not applied_files:
+                safety.abort_task_branch(branch)
                 self._fail_task(task, f"All patches failed: {'; '.join(apply_errors)}")
                 self.notify(f"❌ *Write Failed*\n{apply_errors[0][:100] if apply_errors else 'rejected'}")
                 _log_progress({
@@ -856,7 +878,7 @@ class Harness:
             cp.record_operation("validate", validation.passed, validation.summary)
 
             if not validation.passed:
-                _git_revert(applied_files)
+                safety.abort_task_branch(branch)
                 self._fail_task(task, f"Validation failed: {validation.summary}")
                 self.notify(f"❌ *Validation Failed*\n{validation.summary}")
                 _log_progress({
@@ -879,7 +901,7 @@ class Harness:
                 )
 
                 if not review.passed:
-                    _git_revert(applied_files)
+                    safety.abort_task_branch(branch)
                     self._fail_task(task, f"Review failed: {review.summary}")
                     self.notify(f"❌ *Review Failed*\n{review.summary}")
                     _log_progress({
@@ -888,9 +910,19 @@ class Harness:
                     })
                     return False
 
-            # ── Step 5: Commit ──
+            # ── Step 5: Commit on branch, then merge into main ──
             msg = f"nightwatch({task.project}): {task.description[:80]}"
-            commit_sha = _git_commit(msg)
+            branch_commit = _git_commit(msg)
+            if not branch_commit:
+                # Validation/review passed but the commit itself failed —
+                # don't leave an unmerged branch behind, don't report
+                # success with no actual commit.
+                safety.abort_task_branch(branch)
+                self._fail_task(task, "git commit failed on task branch after validation passed")
+                self.notify("❌ *Commit Failed*\nValidation passed but git commit did not")
+                _log_progress({"task_id": task.id, "status": "commit_failed"})
+                return False
+            commit_sha = safety.merge_task_branch(branch)
             cp.record_operation("commit", commit_sha is not None)
 
             # ── Step 6: Complete ──
@@ -940,8 +972,11 @@ class Harness:
                 "task_id": task.id, "status": "error",
                 "error": error_msg, "failure_type": failure_type.value,
             })
-            # Revert only files changed by this task
-            _git_revert(applied_files if 'applied_files' in dir() else None)
+            # Revert on error — abort the isolated branch, main untouched
+            if branch:
+                safety.abort_task_branch(branch)
+            else:
+                _git_revert(applied_files if 'applied_files' in dir() else None)
 
             # Anti-loop detection
             in_loop = self.loop_detector.record_attempt(task.id, success=False)
