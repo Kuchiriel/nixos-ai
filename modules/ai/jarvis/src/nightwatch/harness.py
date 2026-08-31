@@ -240,8 +240,11 @@ def _discover_scripted_tasks() -> list[Task]:
 
 
 def _discover_llm_tasks(call_llm_fn: Callable, project: str = "nixos-ai") -> list[Task]:
-    """Use the LLM to discover improvement tasks in the codebase."""
-    # Get codebase overview
+    """Use the LLM to discover improvement tasks in the codebase.
+    
+    Enhanced version that uses workspace context and RAG for better discovery.
+    """
+    # Get codebase overview with workspace context
     try:
         result = subprocess.run(
             ["find", str(REPO_ROOT / "modules/ai/jarvis/src"), "-name", "*.py", "-type", "f"],
@@ -251,8 +254,34 @@ def _discover_llm_tasks(call_llm_fn: Callable, project: str = "nixos-ai") -> lis
     except Exception:
         files = []
 
+    # Get workspace context if available
+    workspace_context = ""
+    try:
+        from jarvis.core.workspace import WorkspaceDiscovery
+        ws = WorkspaceDiscovery()
+        ws.discover()
+        if project in ws._projects:
+            ctx = ws.get_project_context(project)
+            workspace_context = f"\nProject: {project}\nType: {ctx.get('manifest', {}).get('type', 'unknown')}\nFiles: {ctx.get('file_count', 0)}\nLines: {ctx.get('total_lines', 0)}\n"
+    except Exception:
+        pass
+
+    # Get recent git changes for context
+    git_context = ""
+    try:
+        result = subprocess.run(
+            ["git", "log", "--oneline", "-10"],
+            capture_output=True, text=True, timeout=5,
+            cwd=str(REPO_ROOT),
+        )
+        if result.stdout.strip():
+            git_context = f"\nRecent changes:\n{result.stdout.strip()}\n"
+    except Exception:
+        pass
+
     prompt = f"""Analyze this Python codebase and identify 3-5 improvement tasks.
 
+{workspace_context}{git_context}
 Key files:
 {chr(10).join(files[:15])}
 
@@ -262,10 +291,12 @@ For each task provide JSON:
   "target_files": ["file.py"],
   "acceptance_criteria": "how to verify",
   "priority": 1-10,
-  "risk": "low/medium/high"
+  "risk": "low/medium/high",
+  "persona": "which persona should handle this"
 }}
 
-Focus on: error handling, code quality, security, missing tests, documentation.
+Focus on: error handling, code quality, security, missing tests, documentation, performance.
+Prioritize tasks that improve reliability and reduce technical debt.
 Return JSON array."""
 
     response = call_llm_fn(prompt, 1500)
