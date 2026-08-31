@@ -307,7 +307,7 @@ class TestOrchestrator:
         sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
         from jarvis.core.orchestrator import Orchestrator
 
-        orch = Orchestrator()
+        orch = Orchestrator(state_dir=str(tmp_path / "orch"))
         items = orch.decompose_task("Fix the bug", project_id="test")
 
         assert len(items) > 0
@@ -322,7 +322,7 @@ class TestOrchestrator:
         sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
         from jarvis.core.orchestrator import Orchestrator
 
-        orch = Orchestrator()
+        orch = Orchestrator(state_dir=str(tmp_path / "orch"))
 
         # Bug should use bugfix workflow
         items = orch.decompose_task("Fix the crash bug", project_id="test")
@@ -338,7 +338,7 @@ class TestOrchestrator:
         sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
         from jarvis.core.orchestrator import Orchestrator
 
-        orch = Orchestrator()
+        orch = Orchestrator(state_dir=str(tmp_path / "orch"))
         items = orch.decompose_task("Fix bug", project_id="test")
 
         agent = orch.assign_task(items[0].id, "backend_engineer")
@@ -352,7 +352,7 @@ class TestOrchestrator:
         sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
         from jarvis.core.orchestrator import Orchestrator
 
-        orch = Orchestrator()
+        orch = Orchestrator(state_dir=str(tmp_path / "orch"))
         items = orch.decompose_task("Research best practices", project_id="test")
 
         # All items should have model tier tags
@@ -366,7 +366,7 @@ class TestOrchestrator:
         sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
         from jarvis.core.orchestrator import Orchestrator
 
-        orch = Orchestrator()
+        orch = Orchestrator(state_dir=str(tmp_path / "orch"))
         status = orch.get_status()
 
         assert "active_agents" in status
@@ -467,9 +467,17 @@ class TestPlatformBridge:
         sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
         from nightwatch.platform_bridge import discover_projects_for_nightwatch
 
-        projects = discover_projects_for_nightwatch(str(isolated_workspace))
-        assert len(projects) == 3
-        assert any(p["name"] == "project-a" for p in projects)
+        # Override HOME to avoid hitting real workspace
+        import os
+        old_home = os.environ.get("HOME")
+        os.environ["HOME"] = str(isolated_workspace.parent)
+        try:
+            projects = discover_projects_for_nightwatch(str(isolated_workspace))
+            assert len(projects) == 3
+            assert any(p["name"] == "project-a" for p in projects)
+        finally:
+            if old_home:
+                os.environ["HOME"] = old_home
 
     def test_select_persona_for_task(self):
         """Should select persona via bridge."""

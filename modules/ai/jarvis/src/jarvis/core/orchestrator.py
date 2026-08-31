@@ -162,6 +162,7 @@ class Orchestrator:
         workspace: WorkspaceDiscovery = None,
         work_engine: WorkItemEngine = None,
         model_policy: ModelPolicy = None,
+        state_dir: str = None,
     ):
         self.personas = persona_registry or PersonaRegistry()
         self.workspace = workspace or WorkspaceDiscovery()
@@ -170,7 +171,10 @@ class Orchestrator:
         self._workflows = dict(BUILTIN_WORKFLOWS)
         self._active_agents: dict[str, AgentInstance] = {}
         self._execution_log: list[dict] = []
-        self._state_dir = Path(os.path.expanduser("~/.local/state/jarvis/orchestrator"))
+        if state_dir:
+            self._state_dir = Path(state_dir)
+        else:
+            self._state_dir = Path(os.path.expanduser("~/.local/state/jarvis/orchestrator"))
         self._state_dir.mkdir(parents=True, exist_ok=True)
 
     def decompose_task(
