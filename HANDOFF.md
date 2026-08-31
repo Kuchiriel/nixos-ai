@@ -13,6 +13,7 @@
 | `orchestrator.py` | Decomposição, dispatch, 4 workflows |
 | `context.py` | Just-in-time context pipeline (HANDOFF + RAG + memory) |
 | `model_policy.py` | Route cheap/medium/strong per workflow stage |
+| `platform_bridge.py` | Connects nightwatch to workspace, personas, orchestrator |
 
 ## Serviços (status rápido)
 | Serviço | Status | Porta |

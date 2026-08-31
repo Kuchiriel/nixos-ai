@@ -950,6 +950,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_or.add_argument("--workflows", action="store_true", help="listar workflows disponíveis")
     p_or.set_defaults(func=_cmd_orchestrate)
 
+    # observability — métricas e tracing
+    p_obs = sub.add_parser("stats", help="stats: métricas de execução de tarefas")
+    p_obs.set_defaults(func=_cmd_stats)
+
     return parser
 
 
@@ -1118,6 +1122,14 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
             print(f"    Stages: {[s['name'] for s in wf.stages]}")
     else:
         print(orch.summary())
+    return 0
+
+
+def _cmd_stats(args: argparse.Namespace) -> int:
+    """Execution statistics."""
+    from nightwatch.platform_bridge import get_execution_stats
+    stats = get_execution_stats()
+    print(json.dumps(stats, indent=2))
     return 0
 
 
