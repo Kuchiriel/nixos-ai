@@ -14,6 +14,7 @@
 | `context.py` | Just-in-time context pipeline (HANDOFF + RAG + memory) |
 | `model_policy.py` | Route cheap/medium/strong per workflow stage |
 | `platform_bridge.py` | Connects nightwatch to workspace, personas, orchestrator |
+| `self_test.py` | Auto-eval: black/grey/white box testing |
 
 ## Serviços (status rápido)
 | Serviço | Status | Porta |
