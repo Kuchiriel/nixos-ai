@@ -954,6 +954,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_obs = sub.add_parser("stats", help="stats: métricas de execução de tarefas")
     p_obs.set_defaults(func=_cmd_stats)
 
+    # self-test — auto-evaluation
+    p_st = sub.add_parser("self-test", help="self-test: auto-evaluation do jarvis")
+    p_st.add_argument("--level", choices=["black", "grey", "white", "all"], default="all", help="nivel de teste")
+    p_st.set_defaults(func=_cmd_self_test)
+
     return parser
 
 
@@ -1131,6 +1136,14 @@ def _cmd_stats(args: argparse.Namespace) -> int:
     stats = get_execution_stats()
     print(json.dumps(stats, indent=2))
     return 0
+
+
+def _cmd_self_test(args: argparse.Namespace) -> int:
+    """Self-test: auto-evaluation of JARVIS."""
+    from jarvis.core.self_test import run_self_test
+    result = run_self_test(args.level)
+    print(json.dumps(result, indent=2))
+    return 0 if result["summary"]["failed"] == 0 else 1
 
 
 def waybar_main() -> int:  # entry point extra: jarvis-waybar (module do Waybar)
