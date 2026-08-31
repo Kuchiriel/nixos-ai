@@ -379,5 +379,36 @@ in {
       user = "nixos";
       wrapper = "llama-wackmall-wrapper";
     };
+
+    # ── Fast Profile ──
+    # Otimizado para agent loop / baixa latência.
+    # Contexto pequeno (8K) libera VRAM para mais experts na GPU.
+    # VRAM budget: 6141 MB - 2400 MB (model) - 500 MB (safety) = 3244 MB
+    # KV cache 8K * parallel=1 * q4_0 ≈ 512 MB
+    # Experts cabem: (3244 - 512) / 100 ≈ 27 experts na GPU
+    # Resultado: ~3x mais rápido que roo-dev para tarefas simples
+    fast = hostBase // {
+      gpuLayers = 45; # Mesmo que host —45 dense layers cabem (2.4GB)
+      threads = 12;
+      ctxSize = 8192;
+      batchSize = 1024;
+      ubatch = 512;
+      # n-cpu-moe 36: OBRIGATÓRIO — qualquer menos causa OOM
+      # O ganho de velocidade vem de: ctx 8K (vs 32K) + parallel 1 (vs 2)
+      moeFlags = "--n-cpu-moe 36 --split-mode layer --poll 50 --poll-batch 50";
+      extraArgs = [
+        "--no-mmproj-offload"
+        "--kv-unified"
+        "--parallel"
+        "1"
+        "--no-warmup"
+        "--prio"
+        "2"
+        "--prio-batch"
+        "3"
+        "--cont-batching"
+      ];
+      user = "nixos";
+    };
   };
 }

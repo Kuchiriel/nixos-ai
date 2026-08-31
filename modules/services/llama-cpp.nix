@@ -31,7 +31,7 @@ in {
       profile = mkOption {
         type = types.enum [
           "vm" "host" "host-ncmoe35" "host-ehs" "host-ehs-optimized"
-          "roo-dev" "chat" "jarvis" "benchmark"
+          "roo-dev" "chat" "jarvis" "benchmark" "fast"
         ];
         default =
           if config.services.jarvis.environment == "host"
@@ -53,6 +53,7 @@ in {
           - chat: Throughput máximo para conversas (16K, parallel=1)
           - jarvis: Baixa latência para voz (8K, parallel=1)
           - benchmark: Settings reprodutíveis para medições
+          - fast: Agent loop / baixa latência (8K, parallel=1, experts na GPU)
         '';
       };
       extraFlags = mkOption {
@@ -94,7 +95,7 @@ in {
             -m "${pkgs.aiModels.${prof.model}}" \
             ${optionalString (prof ? mmproj) ''--mmproj "${pkgs.aiModels.${prof.mmproj}}" ''} \
             --host 0.0.0.0 --port ${toString config.services.llama-cpp-server.port} \
-            -c ${toString prof.ctxSize} -t ${toString prof.threads} -b ${toString prof.batchSize} -ub ${toString prof.ubatch} -ngl ${toString prof.gpuLayers} \
+            -c ${toString prof.ctxSize} -t ${toString prof.threads} -b ${toString prof.batchSize} -ub ${toString prof.ubatch} ${optionalString (prof.gpuLayers > 0) "-ngl ${toString prof.gpuLayers}"} \
             ${prof.kvCache} ${prof.moeFlags} \
             ${optionalString (prof ? extraArgs) (escapeShellArgs prof.extraArgs)} \
             ${prof.extraFlags or ""} ${escapeShellArgs config.services.llama-cpp-server.extraFlags}

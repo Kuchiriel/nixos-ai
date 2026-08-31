@@ -137,7 +137,7 @@
   # Master toggle: services.jarvis.enable = true (já definido acima)
   # Quando desabilitado, NENHUM serviço Jarvis inicia.
   services.llama-cpp-server.enable = true;
-  services.llama-cpp-server.profile = "host"; # Profile padrão para servidor principal
+  services.llama-cpp-server.profile = "fast"; # Profile otimizado para agent loop (8K ctx, experts na GPU)
   services.llama-cpp-embeddings.enable = true;
   services.llama-cpp-rerank.enable = true;
   # services.qdrant.enable é definido por qdrant.nix (condicional a jarvis.enable)
