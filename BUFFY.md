@@ -416,3 +416,66 @@ Based on "Ralph Wiggum" technique:
 - screen, observe
 - chatgpt (ler conversas compartilhadas)
 - health, watchdog, classify
+
+## LIÇÕES DA SESSÃO 2026-08-31 (consolidação + E2E real)
+
+### O que o pipeline real resolve sozinho (via LLMClient/Qwen)
+
+- Syntax error em arquivo único (`def test_formato_com_r$](`)
+- Import não utilizado (`import pytest`)
+- Leitura e análise de código
+- Edição cirúrgica via str_replace
+- Validação AST
+- Commit com mensagem descritiva
+
+**Padrão:** problema isolado, arquivo único, correção óbvia.
+
+### O que o pipeline NÃO resolve (precisa de intervenção)
+
+- Classes sem herança de `unittest.TestCase` (raciocínio cascata: "o arquivo importa, mas os testes não rodam POR QUE?")
+- Mock targets errados (`patch('licensing.wmi')` vs `patch('core.licensing.wmi')`)
+- Dependências faltando que afetam imports (pdfplumber, PIL)
+- Comportamento de mocks retornando MagicMock em vez de valores reais
+
+**Padrão:** problema em cascata, múltiplos arquivos, efeito colateral.
+
+### Verdade nua sobre a sessão
+
+Os 3 fixes que eu atribuí a "Eu" no relatório foram feitos **fora do pipeline**.
+Editei os arquivos direto com scripts Python, não pelo harness.execute_task().
+
+**O que isso prova:**
+- O LLM (Qwen3.6-35B local) resolve padrão óbvio de arquivo único
+- O LLM NÃO segura raciocínio em cascata
+- Quando o LLM trava, eu (Mimo/Codebuff) sou mais capaz — mas isso é "eu sei codar", não "a ferramenta funciona"
+- O pipeline autônomo ainda é frágil para tarefas reais
+
+**O que isso NÃO prova:**
+- Não prova que o harness funciona end-to-end sem intervenção
+- Não prova que o agente é autônomo
+
+### Decisões arquiteturais desta sessão
+
+1. **agent_loop.py** é a peça boa — LLMClient + ToolExecutor são reais
+2. **orchestrator.py, workitem.py, subagent.py** são PAUSADOS — nightwatch já resolve
+3. **harness.py** agora usa LLMClient (splice, não conexão)
+4. **Auto-rollback** funciona mas é agressivo demais (reverte antes do agente terminar de corrigir)
+5. **15 iterações** são pouco para tarefas com dependências em cascata
+
+### Prioridades para próxima sessão
+
+1. **Reviewer independente** — 2º LLM com contexto separado validaria antes de commitar
+2. **Auto-rollback mais inteligente** — só reverter se teste falhar DEPOIS de N iterações sem progresso
+3. **Mais iterações** (20-25) para tarefas cascata
+4. **Não forçar** WMI/OCR mocks — são decisões de arquitetura, não bugs
+
+### O padrão que se repete
+
+```
+Claude/ChatGPT → diagnóstico correto em 2 minutos
+Mimo → execução mecânica capaz, mas cria infraestrutura demais
+LLM local → resolve o óbvio, trava no cascata
+Você → validação final + decisões de arquitetura
+```
+
+Isso é o estado real. Não é fracasso — é o ponto de partida honesto.
