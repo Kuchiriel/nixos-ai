@@ -525,3 +525,42 @@ Isso é o estado real. Não é fracasso — é o ponto de partida honesto.
 **Gap restante:** check_environment retorna "installed" para PIL quando
 o módulo está no sys.modules do Python mas não como pacote standalone.
 Correção: checar `from PIL import Image` em vez de apenas `import PIL`.
+
+## Sessão: Build Fix + LLM Speed Diagnosis (2026-08-31)
+
+### Problema: Build Nix falhava com 9+ erros
+
+Causa: testes que dependem de infraestrutura ausente no sandbox Nix:
+- `/homeless-shelter` (HOME do sandbox) é read-only
+- `git` não disponível no sandbox
+- Kokoro voice files não existem no sandbox
+
+Solução: adicionar testes incompatíveis ao ignore list no `checkPhase` de `package.nix`.
+
+### Problema: LLM extremamente lento (0.2 tokens/sec)
+
+Causa: GPU thermal throttling — 61°C, clocks em 2130 MHz (vs 3105 MHz max).
+Isso limita drasticamente a velocidade do agent loop.
+
+Impacto: cada iteração do agent_loop leva 50-60 segundos.
+Tarefas complexas com 15+ iterações levam 15+ minutos.
+
+Lições:
+1. O agent_loop funciona mas é lento com hardware throttled
+2. Tarefas devem ser escolhidas para serem resolvidas em poucas iterações
+3. O deferred rollback + env probe funcionam (provado na sessão anterior)
+4. O LLM resolve padrão óbvio (syntax, imports, herança) mas não cascata complexa sem intervenção
+
+### Estado do build
+
+```
+nix flake check: ✅ PASS
+jarvis build: ✅ PASS (630 tests, 0 failures)
+jarvis-voice build: ✅ PASS
+```
+
+### Commits desta sessão
+```
+17b0cad fix: skip sandbox-incompatible tests in Nix build checkPhase
+62d13b5 fix: increase LLMClient timeout from 300s to 600s
+```
