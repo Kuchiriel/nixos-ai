@@ -309,25 +309,26 @@ print(json.dumps(result, indent=2))
         ;;
     workspace)
         python3 -c "
-import sys; sys.argv = ['jarvis', 'workspace', *sys.argv[2:]]
+import sys; sys.argv = ['jarvis', 'workspace'] + sys.argv[1:] *sys.argv[2:]]
 from jarvis.cli.main import main; main()
 " ${2:-} ${3:-} ${4:-}
         ;;
     persona)
+        shift
         python3 -c "
-import sys; sys.argv = ['jarvis', 'persona', *sys.argv[2:]]
+import sys; sys.argv = ['jarvis', 'persona'] + sys.argv[1:]
 from jarvis.cli.main import main; main()
-" ${2:-} ${3:-} ${4:-}
+" "$@"
         ;;
     workitem)
         python3 -c "
-import sys; sys.argv = ['jarvis', 'workitem', *sys.argv[2:]]
+import sys; sys.argv = ['jarvis', 'workitem'] + sys.argv[1:] *sys.argv[2:]]
 from jarvis.cli.main import main; main()
 " ${2:-} ${3:-} ${4:-}
         ;;
     orchestrate)
         python3 -c "
-import sys; sys.argv = ['jarvis', 'orchestrate', *sys.argv[2:]]
+import sys; sys.argv = ['jarvis', 'orchestrate'] + sys.argv[1:] *sys.argv[2:]]
 from jarvis.cli.main import main; main()
 " ${2:-} ${3:-} ${4:-}
         ;;
