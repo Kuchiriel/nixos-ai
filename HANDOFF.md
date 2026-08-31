@@ -55,6 +55,7 @@
 ./scripts/jarvis-cli.sh workitem --create "title" "project"
 ./scripts/jarvis-cli.sh workitem --next
 ./scripts/jarvis-cli.sh orchestrate --decompose "task" "project"
+./scripts/jarvis-cli.sh stats  # execution metrics
 
 # Depois de cada alteração
 ./scripts/jarvis-cli.sh remember "fiz X em Y"
