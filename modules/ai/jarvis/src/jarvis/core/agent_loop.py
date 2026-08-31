@@ -76,7 +76,7 @@ class LLMClient:
         resp = requests.post(
             f"{self.base_url}/v1/chat/completions",
             json=payload,
-            timeout=300,
+            timeout=600,
         )
         elapsed = time.monotonic() - t0
         resp.raise_for_status()
