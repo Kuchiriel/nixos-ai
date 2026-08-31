@@ -98,14 +98,13 @@ def speak(message: str, priority: str = "normal") -> bool:
 def update_waybar(status: str, icon: str = "jarvis") -> None:
     """Update waybar status via feedback.py."""
     try:
-        from jarvis.core.feedback import waybar_format
+        from jarvis.core.feedback import waybar_format, STATUS_FILE
         data = waybar_format()
         data["text"] = f"{icon} {status}"
         data["tooltip"] = f"JARVIS: {status}"
         
-        # Write to waybar status file
-        status_file = Path("/tmp/jarvis-status.json")
-        status_file.write_text(json.dumps(data))
+        # Write to waybar status file (use shared STATUS_FILE from feedback module)
+        STATUS_FILE.write_text(json.dumps(data))
     except Exception as e:
         logger.debug(f"Waybar update failed: {e}")
 
