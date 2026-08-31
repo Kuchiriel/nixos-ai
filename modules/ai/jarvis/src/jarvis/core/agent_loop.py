@@ -425,6 +425,8 @@ class RealAgentLoop:
         self.iteration = 0
         self.total_tokens = 0
         self.total_latency = 0.0
+        self._consecutive_test_failures = 0
+        self._rollback_threshold = 3  # rollback after 3 consecutive failures
     
     def _build_system_prompt(self, task: str, context: str = "") -> str:
         """Build system prompt incorporating persona."""
@@ -544,17 +546,23 @@ class RealAgentLoop:
                         path = result.get("path", "")
                         if path:
                             self.files_changed.add(path)
+                            self._consecutive_test_failures = 0  # reset on progress
                 else:
-                    # Auto-rollback on test failure
+                    # Deferred rollback: track consecutive test failures
                     if tool_name == "run_command":
                         try:
                             cmd_args = json.loads(tc["function"]["arguments"])
                             cmd = cmd_args.get("command", "")
                             if any(w in cmd.lower() for w in ["test", "unittest", "pytest"]):
-                                restored = self.tools.rollback_all()
-                                if restored and self.verbose:
-                                    print(f"    ROLLBACK: restored {restored}")
-                                self.files_changed -= set(restored)
+                                self._consecutive_test_failures += 1
+                                if self.verbose:
+                                    print(f"    Test failed ({self._consecutive_test_failures}/{self._rollback_threshold} before rollback)")
+                                if self._consecutive_test_failures >= self._rollback_threshold:
+                                    restored = self.tools.rollback_all()
+                                    if restored and self.verbose:
+                                        print(f"    ROLLBACK: restored {restored}")
+                                    self.files_changed -= set(restored)
+                                    self._consecutive_test_failures = 0
                         except Exception:
                             pass
                 
