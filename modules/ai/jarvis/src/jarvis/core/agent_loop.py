@@ -225,7 +225,24 @@ class ToolExecutor:
     def __init__(self, project_root: str):
         self.project_root = Path(project_root)
         self.tool_log: list[dict] = []
-    
+        self._file_snapshots: dict[str, str] = {}
+
+    def snapshot_file(self, path: str) -> None:
+        """Save file content before modification for rollback."""
+        full = self.project_root / path
+        if full.exists():
+            self._file_snapshots[path] = full.read_text(errors="replace")
+
+    def rollback_all(self) -> list[str]:
+        """Restore all snapshotted files."""
+        restored = []
+        for path, content in self._file_snapshots.items():
+            full = self.project_root / path
+            full.write_text(content)
+            restored.append(path)
+        self._file_snapshots.clear()
+        return restored
+
     def execute(self, tool_call: dict) -> dict:
         """Execute a single tool call and return structured result."""
         func_name = tool_call["function"]["name"]
@@ -306,8 +323,8 @@ class ToolExecutor:
             return {
                 "success": result.returncode == 0,
                 "exit_code": result.returncode,
-                "stdout": result.stdout[-2000:],
-                "stderr": result.stderr[-1000:],
+                "stdout": result.stdout[-8000:],
+                "stderr": result.stderr[-4000:],
             }
         except subprocess.TimeoutExpired:
             return {"success": False, "error": "Command timed out (120s)"}
@@ -505,6 +522,14 @@ class RealAgentLoop:
                     args_preview = tc["function"].get("arguments", "")[:100]
                     print(f"  → {tool_name}({args_preview})")
                 
+                # Snapshot before modification for rollback
+                if tool_name in ("write_file", "str_replace"):
+                    try:
+                        snap_args = json.loads(tc["function"]["arguments"])
+                        self.tools.snapshot_file(snap_args.get("path", ""))
+                    except Exception:
+                        pass
+
                 result = self.tools.execute(tc)
                 self.tool_calls_made.append({
                     "tool": tool_name,
@@ -519,6 +544,19 @@ class RealAgentLoop:
                         path = result.get("path", "")
                         if path:
                             self.files_changed.add(path)
+                else:
+                    # Auto-rollback on test failure
+                    if tool_name == "run_command":
+                        try:
+                            cmd_args = json.loads(tc["function"]["arguments"])
+                            cmd = cmd_args.get("command", "")
+                            if any(w in cmd.lower() for w in ["test", "unittest", "pytest"]):
+                                restored = self.tools.rollback_all()
+                                if restored and self.verbose:
+                                    print(f"    ROLLBACK: restored {restored}")
+                                self.files_changed -= set(restored)
+                        except Exception:
+                            pass
                 
                 if self.verbose:
                     status = "✅" if result.get("success") else "❌"
