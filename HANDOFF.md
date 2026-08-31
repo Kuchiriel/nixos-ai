@@ -1,8 +1,17 @@
 # HANDOFF — Lightweight Index do Projeto
 
-> Este é um INDEX (~100 linhas). O mapa real está no RAG + memória.
+> Este é um INDEX (~150 linhas). O mapa real está no RAG + memória.
 > Use `jarvis rag-search` e `jarvis recall` a cada prompt.
-> Atualizado: 2026-08-30
+> Atualizado: 2026-08-31
+
+## Agent Platform (novo)
+| Módulo | O que faz |
+|--------|-----------|
+| `workspace.py` | Descobre projetos, lê manifests, monta dependency graph |
+| `persona.py` | 10 personas (CTO, architect, engineers, QA, etc) |
+| `workitem.py` | Kanban/Scrum agnostic, persistente, WIP limits |
+| `orchestrator.py` | Decomposição, dispatch, 4 workflows |
+| `context.py` | Just-in-time context pipeline (HANDOFF + RAG + memory) |
 
 ## Serviços (status rápido)
 | Serviço | Status | Porta |
@@ -25,6 +34,9 @@
 | Scripts | `scripts/jarvis-cli.sh` |
 | Vault Obsidian | `~/vaults/projects/` |
 | Estado | `~/.local/state/jarvis/` |
+| Workspace state | `~/.local/state/jarvis/workspace.json` |
+| Work items | `~/.local/state/jarvis/work/items.json` |
+| Orchestrator | `~/.local/state/jarvis/orchestrator/` |
 
 ## Comandos essenciais
 ```bash
@@ -32,6 +44,15 @@
 ./scripts/jarvis-cli.sh rag-search "query"
 ./scripts/jarvis-cli.sh recall "query"
 ./scripts/jarvis-cli.sh lessons "error"
+
+# Agent Platform
+./scripts/jarvis-cli.sh workspace --discover
+./scripts/jarvis-cli.sh workspace --project nixos-ai
+./scripts/jarvis-cli.sh persona --list
+./scripts/jarvis-cli.sh persona --select "fix waybar"
+./scripts/jarvis-cli.sh workitem --create "title" "project"
+./scripts/jarvis-cli.sh workitem --next
+./scripts/jarvis-cli.sh orchestrate --decompose "task" "project"
 
 # Depois de cada alteração
 ./scripts/jarvis-cli.sh remember "fiz X em Y"
@@ -53,3 +74,4 @@ nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -x -q --tb=shor
 3. UMA COISA POR VEZ
 4. Rebuild via rebuild-host.sh (nunca nixos-rebuild direto)
 5. Declarativo: tudo via NixOS modules/home.file
+6. Usar agent platform (workspace/persona/workitem) pra tarefas
