@@ -189,6 +189,20 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "check_environment",
+            "description": "Check what Python packages are installed and what imports will work. Run this before modifying test files to understand what dependencies are available.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "imports": {"type": "string", "description": "Comma-separated list of modules to check, e.g. 'pdfplumber,PIL,pytesseract'"}
+                },
+                "required": ["imports"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "git_diff",
             "description": "Show git diff of current changes.",
             "parameters": {
@@ -276,6 +290,7 @@ class ToolExecutor:
             "run_command": self._run_command,
             "validate_python": self._validate_python,
             "run_tests": self._run_tests,
+            "check_environment": self._check_environment,
             "git_diff": self._git_diff,
             "git_commit": self._git_commit,
         }
@@ -343,6 +358,19 @@ class ToolExecutor:
     def _run_tests(self, path: str, **kw) -> dict:
         return self._run_command(f"python3 -m unittest {path} -v 2>&1")
     
+
+    def _check_environment(self, imports: str, **kw) -> dict:
+        """Check which imports are available in the current environment."""
+        results = {}
+        for mod in imports.split(","):
+            mod = mod.strip()
+            try:
+                __import__(mod)
+                results[mod] = "installed"
+            except ImportError as e:
+                results[mod] = f"NOT INSTALLED: {e}"
+        return {"success": True, "environment": results}
+
     def _git_diff(self, **kw) -> dict:
         return self._run_command("git diff --stat 2>&1")
     
@@ -436,7 +464,7 @@ class RealAgentLoop:
                 "You have access to file system tools. "
                 "When you make changes, use str_replace for surgical edits, "
                 "never write entire files unless creating new ones. "
-                "Always validate Python files with validate_python after changes. "
+                "Always validate Python files with validate_python after changes. " "\n" "When working with test files, first use check_environment to see what packages are available. "
                 "Always run tests after changes. "
                 "When done, call git_commit with a descriptive message. "
                 "Be precise, minimal, and correct."
