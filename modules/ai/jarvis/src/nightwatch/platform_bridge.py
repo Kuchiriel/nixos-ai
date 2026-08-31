@@ -116,12 +116,16 @@ def log_task_execution(
     duration_seconds: float = 0,
     tokens_used: int = 0,
     error: str = "",
+    state_dir: str = None,
 ):
     """Log task execution for observability.
 
     Writes to a structured JSONL log that can be queried later.
     """
-    log_dir = Path(os.path.expanduser("~/.local/state/jarvis/orchestrator"))
+    if state_dir:
+        log_dir = Path(state_dir)
+    else:
+        log_dir = Path(os.path.expanduser("~/.local/state/jarvis/orchestrator"))
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "task-execution.jsonl"
 
@@ -140,9 +144,12 @@ def log_task_execution(
         f.write(json.dumps(entry, default=str) + "\n")
 
 
-def get_execution_stats() -> dict:
+def get_execution_stats(state_dir: str = None) -> dict:
     """Get execution statistics from the task execution log."""
-    log_file = Path(os.path.expanduser("~/.local/state/jarvis/orchestrator/task-execution.jsonl"))
+    if state_dir:
+        log_file = Path(state_dir) / "task-execution.jsonl"
+    else:
+        log_file = Path(os.path.expanduser("~/.local/state/jarvis/orchestrator/task-execution.jsonl"))
 
     if not log_file.exists():
         return {"total": 0, "by_status": {}, "by_persona": {}, "by_project": {}}

@@ -504,9 +504,7 @@ class TestPlatformBridge:
         sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
         from nightwatch.platform_bridge import log_task_execution, get_execution_stats
 
-        # Override log path for testing
-        import nightwatch.platform_bridge as bridge
-        original_log_dir = bridge.Path
+        state_dir = str(tmp_path / "orchestrator")
 
         log_task_execution(
             task_id="test-001",
@@ -515,8 +513,9 @@ class TestPlatformBridge:
             project="test",
             status="completed",
             duration_seconds=42.0,
+            state_dir=state_dir,
         )
 
-        stats = get_execution_stats()
+        stats = get_execution_stats(state_dir=state_dir)
         assert stats["total"] >= 1
         assert "completed" in stats["by_status"]
