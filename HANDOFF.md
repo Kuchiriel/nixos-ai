@@ -17,6 +17,21 @@
 | `self_test.py` | Auto-eval: black/grey/white box testing |
 | `evidence.py` | Task evidence collection with verdicts |
 
+
+## E2E Demonstration: Corretor Project
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| Python 3 valid | ❌ (Python 2 syntax) | ✅ (AST parse OK) |
+| Tests | 0 | 15 (all passing) |
+| Vocabulary loaded | N/A | 29,157 words |
+| Accuracy | 74% (baseline) | 74% (preserved) |
+| correct("speling") | Error | "spelling" |
+| correct("goverment") | Error | "government" |
+| correct_phrase() | N/A | New function added |
+| Docstrings | None | All functions |
+
+> Jarvis harness E2E: discovered project → analyzed code → identified Python 2 issues
+> → fixed syntax → added tests → validated AST → committed with evidence.
 ## Serviços (status rápido)
 | Serviço | Status | Porta |
 |---------|--------|-------|
