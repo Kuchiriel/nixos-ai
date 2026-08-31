@@ -917,6 +917,39 @@ def build_parser() -> argparse.ArgumentParser:
     p_wd.add_argument("--max-cycles", type=int, default=0, help="máximo de ciclos (0 = infinito)")
     p_wd.set_defaults(func=_cmd_watchdog)
 
+    # workspace — monorepo discovery
+    p_ws = sub.add_parser("workspace", help="workspace: descobre projetos no monorepo")
+    p_ws.add_argument("--root", default=None, help="root do workspace (default: ~/projects)")
+    p_ws.add_argument("--discover", action="store_true", help="descobrir e salvar projetos")
+    p_ws.add_argument("--list", action="store_true", help="listar projetos descobertos")
+    p_ws.add_argument("--project", default=None, help="contexto de um projeto específico")
+    p_ws.add_argument("--affected", nargs="+", help="quais projetos são afetados por arquivos")
+    p_ws.set_defaults(func=_cmd_workspace)
+
+    # persona — gerenciamento de personas
+    p_pr = sub.add_parser("persona", help="persona: gerencia personas/roles do agente")
+    p_pr.add_argument("--list", action="store_true", help="listar personas disponíveis")
+    p_pr.add_argument("--select", default=None, help="selecionar persona para uma tarefa")
+    p_pr.add_argument("--show", default=None, help="mostrar detalhes de uma persona")
+    p_pr.set_defaults(func=_cmd_persona)
+
+    # workitem — gerenciamento de trabalho
+    p_wi = sub.add_parser("workitem", help="workitem: gerencia tarefas/kanban")
+    p_wi.add_argument("--create", nargs=2, metavar=("TITLE", "PROJECT"), help="criar work item")
+    p_wi.add_argument("--list", action="store_true", help="listar work items")
+    p_wi.add_argument("--next", action="store_true", help="próxima tarefa a executar")
+    p_wi.add_argument("--transition", nargs=2, metavar=("ID", "STATUS"), help="mudar status")
+    p_wi.add_argument("--burndown", action="store_true", help="mostrar burndown")
+    p_wi.set_defaults(func=_cmd_workitem)
+
+    # orchestrate — orquestração de agentes
+    p_or = sub.add_parser("orchestrate", help="orchestrate: orquestra personas e workflows")
+    p_or.add_argument("--decompose", nargs=2, metavar=("TASK", "PROJECT"), help="decompor tarefa em work items")
+    p_or.add_argument("--assign", nargs=2, metavar=("ITEM_ID", "PERSONA"), help="atribuir tarefa a persona")
+    p_or.add_argument("--status", action="store_true", help="status da orquestração")
+    p_or.add_argument("--workflows", action="store_true", help="listar workflows disponíveis")
+    p_or.set_defaults(func=_cmd_orchestrate)
+
     return parser
 
 
@@ -967,6 +1000,124 @@ def _cmd_watchdog(args: argparse.Namespace) -> int:
     from jarvis.core.watchdog import run_watchdog_loop
 
     run_watchdog_loop(interval=args.interval, max_cycles=args.max_cycles)
+    return 0
+
+
+def _cmd_workspace(args: argparse.Namespace) -> int:
+    """Workspace discovery for monorepo."""
+    from jarvis.core.workspace import WorkspaceDiscovery
+
+    ws = WorkspaceDiscovery(args.root)
+
+    if args.discover or args.list:
+        projects = ws.discover()
+        ws.save()
+        print(ws.summary())
+    elif args.project:
+        ws.discover()
+        ctx = ws.get_project_context(args.project)
+        print(json.dumps(ctx, indent=2, default=str))
+    elif args.affected:
+        ws.discover()
+        affected = ws.get_affected_projects(args.affected)
+        print(json.dumps({"affected_projects": affected}, indent=2))
+    else:
+        # Default: discover and show
+        projects = ws.discover()
+        ws.save()
+        print(ws.summary())
+    return 0
+
+
+def _cmd_persona(args: argparse.Namespace) -> int:
+    """Persona management."""
+    from jarvis.core.persona import PersonaRegistry
+
+    reg = PersonaRegistry()
+
+    if args.list:
+        print(reg.summary())
+    elif args.select:
+        persona = reg.select_for_task(args.select)
+        print(json.dumps(persona.to_dict(), indent=2))
+    elif args.show:
+        persona = reg.get(args.show)
+        if persona:
+            print(json.dumps(persona.to_dict(), indent=2))
+        else:
+            print(f"Persona '{args.show}' not found")
+            return 1
+    else:
+        print(reg.summary())
+    return 0
+
+
+def _cmd_workitem(args: argparse.Namespace) -> int:
+    """Work item management."""
+    from jarvis.core.workitem import WorkItemEngine
+
+    engine = WorkItemEngine()
+
+    if args.create:
+        title, project = args.create
+        item = engine.create(project=project, title=title)
+        print(json.dumps(item.to_dict(), indent=2))
+    elif args.list:
+        items = engine.list_items()
+        for item in items:
+            print(f"  [{item.status}] {item.id}: {item.title} (project={item.project})")
+        if not items:
+            print("  No work items")
+    elif args.next:
+        item = engine.get_next_task()
+        if item:
+            print(json.dumps(item.to_dict(), indent=2))
+        else:
+            print("No tasks ready")
+    elif args.transition:
+        item_id, status = args.transition
+        item = engine.transition(item_id, status)
+        if item:
+            print(f"Transitioned {item_id} to {status}")
+        else:
+            print(f"Item {item_id} not found")
+            return 1
+    elif args.burndown:
+        print(json.dumps(engine.get_burndown(), indent=2))
+    else:
+        print(engine.summary())
+    return 0
+
+
+def _cmd_orchestrate(args: argparse.Namespace) -> int:
+    """Orchestration management."""
+    from jarvis.core.orchestrator import Orchestrator
+
+    orch = Orchestrator()
+
+    if args.decompose:
+        task, project = args.decompose
+        items = orch.decompose_task(task, project_id=project)
+        print(f"Created {len(items)} work items:")
+        for item in items:
+            print(f"  [{item.status}] {item.id}: {item.title}")
+    elif args.assign:
+        item_id, persona_id = args.assign
+        agent = orch.assign_task(item_id, persona_id)
+        if agent:
+            print(json.dumps(agent.to_dict(), indent=2))
+        else:
+            print("Assignment failed")
+            return 1
+    elif args.status:
+        print(orch.summary())
+    elif args.workflows:
+        for wf_id, wf in orch._workflows.items():
+            print(f"  {wf_id}: {wf.name}")
+            print(f"    {wf.description}")
+            print(f"    Stages: {[s['name'] for s in wf.stages]}")
+    else:
+        print(orch.summary())
     return 0
 
 
