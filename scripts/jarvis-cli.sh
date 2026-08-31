@@ -308,10 +308,11 @@ print(json.dumps(result, indent=2))
 "
         ;;
     workspace)
+        shift
         python3 -c "
-import sys; sys.argv = ['jarvis', 'workspace'] + sys.argv[1:] *sys.argv[2:]]
+import sys; sys.argv = ['jarvis', 'workspace'] + sys.argv[1:]
 from jarvis.cli.main import main; main()
-" ${2:-} ${3:-} ${4:-}
+" "$@"
         ;;
     persona)
         shift
@@ -321,16 +322,18 @@ from jarvis.cli.main import main; main()
 " "$@"
         ;;
     workitem)
+        shift
         python3 -c "
-import sys; sys.argv = ['jarvis', 'workitem'] + sys.argv[1:] *sys.argv[2:]]
+import sys; sys.argv = ['jarvis', 'workitem'] + sys.argv[1:]
 from jarvis.cli.main import main; main()
-" ${2:-} ${3:-} ${4:-}
+" "$@"
         ;;
     orchestrate)
+        shift
         python3 -c "
-import sys; sys.argv = ['jarvis', 'orchestrate'] + sys.argv[1:] *sys.argv[2:]]
+import sys; sys.argv = ['jarvis', 'orchestrate'] + sys.argv[1:]
 from jarvis.cli.main import main; main()
-" ${2:-} ${3:-} ${4:-}
+" "$@"
         ;;
     help|*)
         usage
