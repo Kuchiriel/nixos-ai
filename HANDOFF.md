@@ -15,6 +15,7 @@
 | `model_policy.py` | Route cheap/medium/strong per workflow stage |
 | `platform_bridge.py` | Connects nightwatch to workspace, personas, orchestrator |
 | `self_test.py` | Auto-eval: black/grey/white box testing |
+| `evidence.py` | Task evidence collection with verdicts |
 
 ## Serviços (status rápido)
 | Serviço | Status | Porta |
