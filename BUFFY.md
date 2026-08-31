@@ -497,3 +497,31 @@ Isso é o estado real. Não é fracasso — é o ponto de partida honesto.
 - Rollback adiado: LLM resolveu 4/5 (+ TestCase + unittest.main)
 
 **Conclusão:** O bug era de fechamento de loop (rollback destruía progresso antes do LLM ver o erro), não limite de capacidade do modelo.
+
+### Evidência #3: env probe + deferred rollback (5/5 core fixes)
+
+**guia-renamer-pro — zero intervenção humana:**
+
+| Fix | Feito por | Via pipeline? |
+|-----|-----------|---------------|
+| Syntax error `r$](` | LLM ✅ | Sim |
+| Remove pytest | LLM ✅ | Sim |
+| unittest.TestCase (8+6 classes) | LLM ✅ | Sim |
+| unittest.main() | LLM ✅ | Sim |
+| sys.modules mocks (3 modules) | LLM ✅ | Sim |
+| PIL mocks | LLM ❌ | check_environment said "installed" |
+
+**Progresso por sessão:**
+- Sessão 1 (rollback imediato): 2/5 fixes, 3 manuais
+- Sessão 2 (deferred rollback): 4/5 fixes, 1 manual
+- Sessão 3 (env probe + deferred): **5/5 core fixes, zero manual**
+
+**O que mudou:**
+- check_environment tool → LLM descobre dependências antes de editar
+- Deferred rollback → LLM vê erros e corrige antes de reverter
+- 20 iterações → espaço suficiente para cascata
+- System prompt hint → LLM sabe que deve checar ambiente
+
+**Gap restante:** check_environment retorna "installed" para PIL quando
+o módulo está no sys.modules do Python mas não como pacote standalone.
+Correção: checar `from PIL import Image` em vez de apenas `import PIL`.
