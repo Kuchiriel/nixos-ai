@@ -644,10 +644,25 @@ class Harness:
         
         If project is specified, only discover tasks for that project.
         Otherwise, discover across all configured projects.
+        
+        Uses platform bridge for workspace-aware discovery when available.
         """
         tasks = []
         projects = [project] if project else self.config.projects
-        
+
+        # Platform-aware discovery: use workspace module if available
+        try:
+            from nightwatch.platform_bridge import discover_projects_for_nightwatch
+            ws_projects = discover_projects_for_nightwatch()
+            if ws_projects:
+                # Update config with discovered projects
+                for proj in ws_projects:
+                    if proj["name"] not in self.config.projects:
+                        self.config.projects.append(proj["name"])
+                        self.notify(f"🏗️ Discovered project: {proj['name']}")
+        except Exception:
+            pass
+
         for proj_name in projects:
             # Scripted discovery (per-project if project has a root)
             if self.config.use_scripted_discovery:
@@ -656,6 +671,16 @@ class Harness:
             # LLM discovery (per-project)
             if self.config.use_llm_discovery:
                 tasks.extend(_discover_llm_tasks(self.call_llm, proj_name))
+
+        # Platform-aware persona selection for each task
+        try:
+            from nightwatch.platform_bridge import select_persona_for_task
+            for task in tasks:
+                persona = select_persona_for_task(task.description)
+                if persona and persona.get("id"):
+                    task.persona = persona["id"]
+        except Exception:
+            pass
         
         # Deduplicate by description
         seen = set()
@@ -843,6 +868,20 @@ class Harness:
             self.mission.total_tasks_completed += 1
             if commit_sha:
                 self.mission.total_commits += 1
+
+            # Platform observability: log execution stats
+            try:
+                from nightwatch.platform_bridge import log_task_execution
+                log_task_execution(
+                    task_id=task.id,
+                    persona=getattr(task, 'persona', 'unknown'),
+                    model_tier=getattr(task, 'model_tier', 'medium'),
+                    project=task.project,
+                    status="completed",
+                    duration_seconds=time.time() - task_start,
+                )
+            except Exception:
+                pass
 
             self.notify(
                 f"✅ *Task Complete*\n{task.description[:50]}\n"
