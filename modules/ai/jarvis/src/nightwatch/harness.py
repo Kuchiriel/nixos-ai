@@ -166,25 +166,26 @@ class HarnessResult:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _default_call_llm(prompt: str, max_tokens: int = 2048) -> str:
-    """Call the local LLM via llama.cpp API."""
-    import requests
-    url = os.environ.get("LLAMA_CPP_URL", "http://127.0.0.1:8080")
-    payload = {
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": max_tokens,
-        "temperature": 0.3,
-        "chat_template_kwargs": {"enable_thinking": False},
-    }
+    """Call the local LLM via LLMClient (spliced from agent_loop.py).
+
+    Uses the same LLMClient that RealAgentLoop uses — system prompt,
+    tool calling support, thinking disabled. Drops the old bare-request
+    mechanism in favor of a single shared LLM abstraction.
+    """
     try:
-        resp = requests.post(
-            f"{url}/v1/chat/completions",
-            json=payload,
-            timeout=300,
+        from jarvis.core.agent_loop import LLMClient
+        client = LLMClient()
+        messages = [
+            {"role": "system", "content": "You are a code improvement assistant. "
+             "Return only the requested output, no explanations."},
+            {"role": "user", "content": prompt},
+        ]
+        response = client.chat(
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=0.3,
         )
-        resp.raise_for_status()
-        data = resp.json()
-        msg = data["choices"][0]["message"]
-        return msg.get("content", "") or msg.get("reasoning_content", "")
+        return response.get("content", "") or "ERROR: empty response from LLM"
     except Exception as e:
         return f"ERROR: {e}"
 

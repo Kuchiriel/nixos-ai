@@ -1,3 +1,7 @@
+# PAUSADO — nightwatch/harness.py ja resolve isso (task_queue+safety+checkpoint).
+# Ver decisao de consolidacao de 2026-08-31.
+# Nao construir em cima disso sem revisar nightwatch/ primeiro.
+
 """
 Orchestrator — Supervisor/subagent dispatch for multi-persona workflows.
 
