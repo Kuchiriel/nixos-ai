@@ -166,7 +166,12 @@ class Orchestrator:
     ):
         self.personas = persona_registry or PersonaRegistry()
         self.workspace = workspace or WorkspaceDiscovery()
-        self.work_engine = work_engine or WorkItemEngine()
+        if work_engine:
+            self.work_engine = work_engine
+        else:
+            # Use state_dir if provided, otherwise default
+            work_state = str(Path(state_dir) / "work") if state_dir else None
+            self.work_engine = WorkItemEngine(work_state)
         self.model_policy = model_policy or ModelPolicy()
         self._workflows = dict(BUILTIN_WORKFLOWS)
         self._active_agents: dict[str, AgentInstance] = {}
