@@ -19,6 +19,7 @@ from .persona import Persona, PersonaRegistry
 from .workspace import WorkspaceDiscovery
 from .workitem import WorkItem, WorkItemEngine, WorkItemStatus
 from .model_policy import ModelPolicy
+from .evidence import EvidenceCollector, TaskEvidence
 
 
 @dataclass
@@ -173,6 +174,8 @@ class Orchestrator:
             work_state = str(Path(state_dir) / "work") if state_dir else None
             self.work_engine = WorkItemEngine(work_state)
         self.model_policy = model_policy or ModelPolicy()
+        evidence_state = str(Path(state_dir) / "evidence") if state_dir else None
+        self.evidence = EvidenceCollector(evidence_state)
         self._workflows = dict(BUILTIN_WORKFLOWS)
         self._active_agents: dict[str, AgentInstance] = {}
         self._execution_log: list[dict] = []
@@ -294,7 +297,7 @@ class Orchestrator:
         return agent
 
     def complete_task(self, item_id: str, artifacts: list = None, commits: list = None):
-        """Mark a task as complete."""
+        """Mark a task as complete with evidence collection."""
         item = self.work_engine.get(item_id)
         if not item:
             return
@@ -307,6 +310,19 @@ class Orchestrator:
                 item.add_commit(c)
 
         self.work_engine.transition(item_id, "done", "Task completed")
+
+        # Collect evidence
+        try:
+            evidence = self.evidence.start_task(item_id, item.title, item.project)
+            evidence.persona = item.persona
+            evidence.model_tier = item.model_tier if hasattr(item, 'model_tier') else ""
+            if artifacts:
+                self.evidence.add_code_change(evidence, artifacts)
+            if commits:
+                self.evidence.add_validation(evidence, "git commit", f"Commit: {commits[-1]}", True)
+            self.evidence.complete_task(evidence)
+        except Exception:
+            pass
 
         # Update agent
         for agent in self._active_agents.values():

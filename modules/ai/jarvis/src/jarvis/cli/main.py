@@ -959,6 +959,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_st.add_argument("--level", choices=["black", "grey", "white", "all"], default="all", help="nivel de teste")
     p_st.set_defaults(func=_cmd_self_test)
 
+    # evidence — task evidence collection
+    p_ev = sub.add_parser("evidence", help="evidence: evidencias de tarefas")
+    p_ev.add_argument("--summary", action="store_true", help="resumo de todas evidencias")
+    p_ev.add_argument("--task", default=None, help="evidencia de uma task especifica")
+    p_ev.set_defaults(func=_cmd_evidence)
+
     return parser
 
 
@@ -1144,6 +1150,24 @@ def _cmd_self_test(args: argparse.Namespace) -> int:
     result = run_self_test(args.level)
     print(json.dumps(result, indent=2))
     return 0 if result["summary"]["failed"] == 0 else 1
+
+
+def _cmd_evidence(args: argparse.Namespace) -> int:
+    """Task evidence collection."""
+    from jarvis.core.evidence import EvidenceCollector
+    collector = EvidenceCollector()
+
+    if args.task:
+        evidence = collector.get_task_evidence(args.task)
+        if evidence:
+            print(json.dumps(evidence, indent=2))
+        else:
+            print(f"No evidence for task {args.task}")
+            return 1
+    else:
+        summary = collector.get_summary()
+        print(json.dumps(summary, indent=2))
+    return 0
 
 
 def waybar_main() -> int:  # entry point extra: jarvis-waybar (module do Waybar)
