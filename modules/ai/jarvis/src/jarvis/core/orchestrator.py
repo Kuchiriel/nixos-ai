@@ -18,6 +18,7 @@ from typing import Optional
 from .persona import Persona, PersonaRegistry
 from .workspace import WorkspaceDiscovery
 from .workitem import WorkItem, WorkItemEngine, WorkItemStatus
+from .model_policy import ModelPolicy
 
 
 @dataclass
@@ -160,10 +161,12 @@ class Orchestrator:
         persona_registry: PersonaRegistry = None,
         workspace: WorkspaceDiscovery = None,
         work_engine: WorkItemEngine = None,
+        model_policy: ModelPolicy = None,
     ):
         self.personas = persona_registry or PersonaRegistry()
         self.workspace = workspace or WorkspaceDiscovery()
         self.work_engine = work_engine or WorkItemEngine()
+        self.model_policy = model_policy or ModelPolicy()
         self._workflows = dict(BUILTIN_WORKFLOWS)
         self._active_agents: dict[str, AgentInstance] = {}
         self._execution_log: list[dict] = []
@@ -193,6 +196,9 @@ class Orchestrator:
             persona_tag = workflow.persona_requirements.get(stage["name"], "backend_engineer")
             persona = self.personas.select_for_task(stage["name"])
 
+            # Select model tier for this stage
+            model_tier = self.model_policy.select_tier(stage["name"])
+
             item = self.work_engine.create(
                 project=project_id or "unknown",
                 type="task",
@@ -201,7 +207,7 @@ class Orchestrator:
                 priority="medium",
                 status="backlog",
                 persona=persona.id,
-                tags=[stage["name"], workflow.id],
+                tags=[stage["name"], workflow.id, f"model:{model_tier.tier}"],
             )
             items.append(item)
 

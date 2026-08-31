@@ -1741,11 +1741,31 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
     tools = _get_tools() if profile["native_tools"] else []
     mode = "native" if profile["native_tools"] else "text"
 
+    # Agent Platform: discover workspace and select persona
+    workspace_info = ""
+    active_persona = None
+    try:
+        from jarvis.core.workspace import WorkspaceDiscovery
+        ws = WorkspaceDiscovery()
+        ws.discover()
+        ws.save()
+        project_id = os.path.basename(os.getcwd())
+        if project_id in ws._projects:
+            ctx = ws.get_project_context(project_id)
+            workspace_info = f" · {len(ws._projects)} projects"
+            # Auto-select persona based on project type
+            from jarvis.core.persona import PersonaRegistry
+            reg = PersonaRegistry()
+            active_persona = reg.select_for_task(project_id)
+    except Exception:
+        pass
+
     set_status("listening", "REPL aberto")
     context_size = profile.get("context_size", 0)
-    console.print(f"[jarvis]jarvis[/] [dim]dev[/] · {profile['name']} · {mode} · [dim]{os.getcwd()}[/]")
+    persona_name = active_persona.name if active_persona else "default"
+    console.print(f"[jarvis]jarvis[/] [dim]dev[/] · {profile['name']} · {mode}{workspace_info} · [dim]{os.getcwd()}[/]")
     if context_size:
-        console.print(f"[dim]ctx: {context_size:,} tokens (from server)[/]")
+        console.print(f"[dim]ctx: {context_size:,} tokens (from server) · persona: {persona_name}[/]")
     console.print("[dim]/help para comandos[/]\n")
 
     repo_map = _build_repo_map(os.getcwd())
@@ -1907,6 +1927,139 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
                     console.print(f"[dim]modo '{target_slug}' sem instruções extras[/]")
             else:
                 console.print(f"[tool.error]modo '{target_slug}' não encontrado. Use /modes para ver disponíveis.[/]")
+            continue
+
+        # ── Agent Platform Commands ──
+
+        if user_input == "/workspace":
+            try:
+                from jarvis.core.workspace import WorkspaceDiscovery
+                ws = WorkspaceDiscovery()
+                ws.discover()
+                ws.save()
+                console.print(Panel(ws.summary(), title="🏗️ Workspace", border_style="dim", title_align="left"))
+            except Exception as e:
+                console.print(f"[tool.error]Erro: {e}[/]")
+            continue
+
+        if user_input.startswith("/workspace "):
+            sub = user_input.split(" ", 1)[1].strip()
+            try:
+                from jarvis.core.workspace import WorkspaceDiscovery
+                ws = WorkspaceDiscovery()
+                ws.discover()
+                ctx = ws.get_project_context(sub)
+                if ctx.get("error"):
+                    console.print(f"[tool.error]{ctx['error']}[/]")
+                else:
+                    console.print(Panel(json.dumps(ctx, indent=2, default=str), title=f"🏗️ {sub}", border_style="dim", title_align="left"))
+            except Exception as e:
+                console.print(f"[tool.error]Erro: {e}[/]")
+            continue
+
+        if user_input == "/persona":
+            try:
+                from jarvis.core.persona import PersonaRegistry
+                reg = PersonaRegistry()
+                table = Table(show_header=True, box=None, padding=(0, 1))
+                table.add_column("ID", style="tool")
+                table.add_column("Name")
+                table.add_column("Role")
+                table.add_column("Tools")
+                for p in reg.list_all():
+                    table.add_row(p.id, p.name, p.role, str(len(p.tools)))
+                console.print(Panel(table, title="🎭 Personas", border_style="dim", title_align="left"))
+            except Exception as e:
+                console.print(f"[tool.error]Erro: {e}[/]")
+            continue
+
+        if user_input.startswith("/persona "):
+            sub = user_input.split(" ", 1)[1].strip()
+            try:
+                from jarvis.core.persona import PersonaRegistry
+                reg = PersonaRegistry()
+                if sub.startswith("select "):
+                    task_desc = sub.split(" ", 1)[1]
+                    persona = reg.select_for_task(task_desc)
+                    active_persona = persona
+                    console.print(f"[jarvis]persona: {persona.name} ({persona.role})[/]")
+                else:
+                    persona = reg.get(sub)
+                    if persona:
+                        console.print(Panel(json.dumps(persona.to_dict(), indent=2), title=f"🎭 {persona.name}", border_style="dim", title_align="left"))
+                    else:
+                        console.print(f"[tool.error]Persona '{sub}' não encontrada[/]")
+            except Exception as e:
+                console.print(f"[tool.error]Erro: {e}[/]")
+            continue
+
+        if user_input == "/workitem" or user_input.startswith("/workitem "):
+            try:
+                from jarvis.core.workitem import WorkItemEngine
+                engine = WorkItemEngine()
+                sub = user_input.split(" ", 1)[1].strip() if " " in user_input else ""
+                if sub == "list" or sub == "":
+                    items = engine.list_items()
+                    if items:
+                        table = Table(show_header=True, box=None, padding=(0, 1))
+                        table.add_column("ID", style="tool")
+                        table.add_column("Status")
+                        table.add_column("Title")
+                        table.add_column("Project")
+                        for item in items:
+                            table.add_row(item.id[:8], item.status, item.title[:40], item.project)
+                        console.print(Panel(table, title="📋 Work Items", border_style="dim", title_align="left"))
+                    else:
+                        console.print("[dim]Nenhum work item[/]")
+                elif sub == "next":
+                    item = engine.get_next_task()
+                    if item:
+                        console.print(Panel(json.dumps(item.to_dict(), indent=2, default=str), title="📋 Next Task", border_style="jarvis", title_align="left"))
+                    else:
+                        console.print("[dim]Nenhuma tarefa pronta[/]")
+                elif sub == "burndown":
+                    console.print(json.dumps(engine.get_burndown(), indent=2))
+                elif sub.startswith("create "):
+                    parts = sub.split(" ", 2)
+                    title = parts[1] if len(parts) > 1 else "new task"
+                    project = parts[2] if len(parts) > 2 else os.path.basename(os.getcwd())
+                    item = engine.create(project=project, title=title)
+                    console.print(f"[tool.ok]Criado: {item.id} — {item.title}[/]")
+                elif sub.startswith("done "):
+                    item_id = sub.split(" ", 1)[1]
+                    item = engine.transition(item_id, "done")
+                    if item:
+                        console.print(f"[tool.ok]{item_id} → done[/]")
+                    else:
+                        console.print(f"[tool.error]Item não encontrado[/]")
+                else:
+                    console.print("[dim]uso: /workitem [list|next|burndown|create <title>|done <id>][/")
+            except Exception as e:
+                console.print(f"[tool.error]Erro: {e}[/]")
+            continue
+
+        if user_input == "/orchestrate" or user_input.startswith("/orchestrate "):
+            try:
+                from jarvis.core.orchestrator import Orchestrator
+                orch = Orchestrator()
+                sub = user_input.split(" ", 1)[1].strip() if " " in user_input else ""
+                if sub == "" or sub == "status":
+                    console.print(orch.summary())
+                elif sub == "workflows":
+                    for wf_id, wf in orch._workflows.items():
+                        console.print(f"  [tool]{wf_id}[/]: {wf.name}")
+                        console.print(f"    {wf.description}")
+                elif sub.startswith("decompose "):
+                    task = sub.split(" ", 1)[1]
+                    project = os.path.basename(os.getcwd())
+                    items = orch.decompose_task(task, project_id=project)
+                    console.print(f"[tool.ok]Criados {len(items)} work items:[/]")
+                    for item in items:
+                        console.print(f"  [{item.status}] {item.id[:8]}: {item.title}")
+                else:
+                    console.print("[dim]uso: /orchestrate [status|workflows|decompose <task>][/")
+            except Exception as e:
+                console.print(f"[tool.error]Erro: {e}[/]")
             continue
 
         if user_input == "/architect":
