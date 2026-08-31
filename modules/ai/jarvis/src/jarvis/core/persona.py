@@ -147,12 +147,8 @@ When writing code:
 
 Never assume input is valid.
 Never suppress errors silently.""",
-    )
-        ),
-        model_preference="medium",
-        tags=["backend", "implementation"],
     ),
-    "nixos_engineer": Persona(
+"nixos_engineer": Persona(
         id="nixos_engineer",
         name="NixOS Engineer",
         role="NixOS/Infrastructure Engineer",
