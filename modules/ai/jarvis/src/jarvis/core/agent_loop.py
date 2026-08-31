@@ -455,7 +455,14 @@ class RealAgentLoop:
         self.total_latency = 0.0
         self._consecutive_test_failures = 0
         self._rollback_threshold = 3  # rollback after 3 consecutive failures
+        self._log_path = os.path.expanduser("~/.local/state/jarvis/agent-loop.log")
     
+    def _log(self, msg):
+        """Append to real-time log file."""
+        os.makedirs(os.path.dirname(self._log_path), exist_ok=True)
+        with open(self._log_path, 'a') as f:
+            f.write('[' + time.strftime('%H:%M:%S') + '] ' + str(msg) + chr(10))
+
     def _build_system_prompt(self, task: str, context: str = "") -> str:
         """Build system prompt incorporating persona."""
         persona_prompts = {
