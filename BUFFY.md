@@ -479,3 +479,21 @@ Você → validação final + decisões de arquitetura
 ```
 
 Isso é o estado real. Não é fracasso — é o ponto de partida honesto.
+
+### Evidência da correção (deferred rollback)
+
+**Re-execução do guia-renamer-pro com rollback adiado (threshold=3):**
+
+| Fix | Iterações | Feito por |
+|-----|-----------|-----------|
+| Syntax error `r$](` | 4 | LLM ✅ |
+| Remove pytest (2 arquivos) | 2-3 | LLM ✅ |
+| unittest.TestCase (8 classes) | 5-11 | LLM ✅ |
+| unittest.main() | 12 | LLM ✅ |
+| pdfplumber/PIL mocks | — | Não feito (precisa env knowledge) |
+
+**Comparação:**
+- Rollback imediato: LLM resolveu 2/5 (syntax + pytest)
+- Rollback adiado: LLM resolveu 4/5 (+ TestCase + unittest.main)
+
+**Conclusão:** O bug era de fechamento de loop (rollback destruía progresso antes do LLM ver o erro), não limite de capacidade do modelo.
