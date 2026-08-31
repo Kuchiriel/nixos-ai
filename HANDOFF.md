@@ -16,6 +16,7 @@
 | `platform_bridge.py` | Connects nightwatch to workspace, personas, orchestrator |
 | `self_test.py` | Auto-eval: black/grey/white box testing |
 | `evidence.py` | Task evidence collection with verdicts |
+| `agent_loop.py` | Real LLM agent loop — calls llama.cpp, executes tools, validates, commits |
 
 
 ## E2E Demonstration: Corretor Project
