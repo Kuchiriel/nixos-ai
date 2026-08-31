@@ -335,6 +335,20 @@ import sys; sys.argv = ['jarvis', 'orchestrate'] + sys.argv[1:]
 from jarvis.cli.main import main; main()
 " "$@"
         ;;
+    stats)
+        shift
+        python3 -c "
+import sys; sys.argv = ['jarvis', 'stats'] + sys.argv[1:]
+from jarvis.cli.main import main; main()
+" "$@"
+        ;;
+    evidence)
+        shift
+        python3 -c "
+import sys; sys.argv = ['jarvis', 'evidence'] + sys.argv[1:]
+from jarvis.cli.main import main; main()
+" "$@"
+        ;;
     help|*)
         usage
         ;;
