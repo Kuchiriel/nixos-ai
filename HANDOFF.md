@@ -12,6 +12,7 @@
 | `workitem.py` | Kanban/Scrum agnostic, persistente, WIP limits |
 | `orchestrator.py` | Decomposição, dispatch, 4 workflows |
 | `context.py` | Just-in-time context pipeline (HANDOFF + RAG + memory) |
+| `model_policy.py` | Route cheap/medium/strong per workflow stage |
 
 ## Serviços (status rápido)
 | Serviço | Status | Porta |
