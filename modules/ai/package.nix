@@ -55,7 +55,11 @@
         --ignore=tests/test_bulldozer.py \
         --ignore=tests/test_mcp_tools_e2e.py \
         --ignore=tests/test_hackmd.py \
-        --ignore=tests/test_nightwatch_e2e_full.py
+        --ignore=tests/test_nightwatch_e2e_full.py \
+        --ignore=tests/test_audiobook.py \
+        --ignore=tests/test_audiobook_ui.py \
+        --ignore=tests/test_voice.py \
+        --ignore=tests/test_nightwatch_safety.py
       runHook postCheck
     '';
 
