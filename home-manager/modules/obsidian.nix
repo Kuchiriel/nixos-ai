@@ -1,5 +1,5 @@
 {pkgs, lib, ...}: let
-  vaultDir = "$HOME/vaults/nixos-ai";
+  vaultDir = "$HOME/vaults/projects";
   
   gitSyncObsidian = pkgs.writeScriptBin "git-sync-obsidian" ''
     #!/bin/sh
@@ -15,12 +15,11 @@
     #!/bin/sh
     # Sync vault notes to HackMD via JARVIS CLI
     VAULT_DIR="${vaultDir}"
-    for note in "$VAULT_DIR"/*.md; do
-      if [ -f "$note" ]; then
-        title=$(basename "$note" .md)
-        echo "Syncing: $title"
-        ~/projects/nixos-ai/scripts/jarvis-cli.sh hackmd-sync "$note" "$title" 2>/dev/null || true
-      fi
+    # Sync all .md files in vault and subdirectories
+    find "$VAULT_DIR" -name '*.md' -type f | while read -r note; do
+      title=$(echo "$note" | sed "s|$VAULT_DIR/||" | sed 's|/| - |g' | sed 's|\.md$||')
+      echo "Syncing: $title"
+      ~/projects/nixos-ai/scripts/jarvis-cli.sh hackmd-sync "$note" "$title" 2>/dev/null || true
     done
   '';
 in {
