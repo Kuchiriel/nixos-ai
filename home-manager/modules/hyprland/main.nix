@@ -85,6 +85,7 @@ in {
       input = {
         follow_mouse = 1;
         kb_layout = "br";
+        kb_variant = "abnt2";
       };
 
       # Keybinds ficam em binds.nix (porta do legado Manjaro + JARVIS AI)
@@ -117,8 +118,9 @@ in {
         "workspace 5, match:class ^(telegram)$"
         # Wurm Standalone: game fullscreen on ws3 + macro floating overlay
         "workspace 3, match:class ^(com.wurmonline.client.launcherfx.WurmMain)$"
-        "fullscreen 1, match:class ^(com.wurmonline.client.launcherfx.WurmMain)$"
+        "maximize 1, match:class ^(com.wurmonline.client.launcherfx.WurmMain)$"
         "opacity 1.0 override 1.0 override, match:class ^(com.wurmonline.client.launcherfx.WurmMain)$"
+        "pin 1, match:title (Wurm Macro)"
         "workspace 3, match:title (Wurm Macro)"
         "float 1, match:title (Wurm Macro)"
         "size 320 200, match:title (Wurm Macro)"
