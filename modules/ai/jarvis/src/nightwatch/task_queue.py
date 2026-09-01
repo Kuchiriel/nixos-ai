@@ -76,24 +76,36 @@ class LoopDetector:
             pass
     
     def record_attempt(self, task_id: str, success: bool) -> bool:
-        """Record an attempt. Returns True if task is in a loop."""
+        """Record an attempt. Returns True if task is in a failure loop.
+
+        Only FAILURES are tracked. Successes reset the counter.
+        A task is "in a loop" when it fails N times within the time window.
+        """
         now = time.time()
+
+        if success:
+            # Successful attempt clears failure history
+            self._history.pop(task_id, None)
+            self._save()
+            return False
+
+        # Failure: track it
         if task_id not in self._history:
             self._history[task_id] = []
-        
+
         # Clean old entries outside window
         self._history[task_id] = [
             t for t in self._history[task_id]
             if now - t < self.window_seconds
         ]
-        
+
         self._history[task_id].append(now)
         self._save()
-        
+
         # Check if too many failures in window
         if len(self._history[task_id]) >= self.max_attempts:
-            return True  # in loop
-        
+            return True  # in failure loop
+
         return False
     
     def reset(self, task_id: str) -> None:
@@ -175,12 +187,41 @@ class Task:
         else:
             self.status = TaskStatus.READY.value
         # Persist immediately to avoid data loss on crash
+        # This is a critical state transition — if the process dies
+        # after fail() but before the caller saves, we must not lose
+        # the attempt count or status change.
+        self._persist_now()
+
+    def _persist_now(self) -> None:
+        """Write this task's state to disk immediately.
+
+        Uses an atomic write (write to temp + rename) to avoid corruption
+        if the process dies mid-write. This is a simplified version —
+        the full queue save is more comprehensive but this covers the
+        critical case where fail() is called but the process crashes
+        before TaskQueue._save() runs.
+        """
         try:
             TASK_QUEUE_FILE.parent.mkdir(parents=True, exist_ok=True)
-            # Note: this is a simplified persist — full save happens in _save()
+            # Read existing tasks, update this one, write back
+            tasks = []
+            if TASK_QUEUE_FILE.exists():
+                try:
+                    data = json.loads(TASK_QUEUE_FILE.read_text(encoding="utf-8"))
+                    tasks = [t for t in data if t.get("id") != self.id]
+                except Exception:
+                    tasks = []
+            tasks.append(self.to_dict())
+            # Atomic write
+            tmp = TASK_QUEUE_FILE.with_suffix(".tmp")
+            tmp.write_text(
+                json.dumps(tasks, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            tmp.rename(TASK_QUEUE_FILE)
         except Exception:
             pass
-    
+
     def complete(self, commit_sha: str | None = None) -> None:
         self.status = TaskStatus.COMPLETED.value
         self.commit_sha = commit_sha
@@ -276,12 +317,21 @@ class TaskQueue:
         return self._mission
     
     def add_task(self, task: Task) -> None:
-        """Add a task to the queue."""
-        # Check for duplicates
-        existing = [t for t in self._tasks if t.description == task.description and not t.is_terminal]
+        """Add a task to the queue.
+
+        Deduplication key: project + description.
+        Tasks with the same description but different projects are NOT duplicates.
+        """
+        # Check for duplicates — same project + same description
+        existing = [
+            t for t in self._tasks
+            if t.project == task.project
+            and t.description == task.description
+            and not t.is_terminal
+        ]
         if existing:
             return
-        
+
         self._tasks.append(task)
         self._save()
     

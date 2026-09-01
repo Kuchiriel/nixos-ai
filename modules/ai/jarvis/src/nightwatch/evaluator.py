@@ -138,18 +138,35 @@ def review_change(
     acceptance_criteria: str,
     test_output: str,
     call_llm_fn,
+    require_change: bool = True,
 ) -> ReviewResult:
-    """Review a change using diff and test results."""
+    """Review a change using diff and test results.
+
+    Args:
+        require_change: If True (default), a task that requires work
+            cannot pass with zero diff. The caller should set this to
+            False only for tasks that are explicitly no-ops (e.g.
+            "verify X is already correct").
+    """
     diff = get_git_diff()
     diff_stat = get_git_diff_stat()
-    
+
     if not diff:
+        if require_change:
+            return ReviewResult(
+                verdict="fail",
+                summary="Task requires changes but no diff was produced",
+                issues=["No changes detected — task may not have been executed, "
+                        "or the LLM decided no changes were needed. "
+                        "If the task is truly a no-op, set require_change=False."],
+                confidence=0.9,
+            )
         return ReviewResult(
             verdict="pass",
-            summary="No changes to review",
+            summary="No changes needed (explicit no-op)",
             confidence=1.0,
         )
-    
+
     return review_with_llm(
         task_description=task_description,
         acceptance_criteria=acceptance_criteria,

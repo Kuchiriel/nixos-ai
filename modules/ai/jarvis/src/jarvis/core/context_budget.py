@@ -109,7 +109,7 @@ class ContextBudget:
     max_tokens: int = 32000
     reserved_tokens: int = 2000  # Reserved for system prompt + response
     warning_threshold: float = 0.80  # 80% of budget
-    compaction_threshold: float = 0.70  # Compact at 70%
+    compaction_threshold: float = 0.85  # Compact at 85% (was 0.70 — too aggressive)
 
     # Truncation limits
     max_tool_output_tokens: int = 2000
@@ -230,7 +230,11 @@ class ContextBudget:
 
     def compress_history(self, keep_last: int = 6) -> int:
         """Compress old messages, keeping last keep_last.
-        Returns tokens saved."""
+
+        Strategy: preserve high-signal content (errors, decisions, file paths,
+        task state) while compressing verbose tool outputs and intermediate steps.
+        Returns tokens saved.
+        """
         if len(self._messages) <= keep_last + 2:
             return 0
 
@@ -244,8 +248,41 @@ class ContextBudget:
                 continue
 
             old_tokens = self.estimate_tokens(content)
-            # Replace with 1-line summary
-            summary = f"[Earlier context: {msg.get('role', '?')} — {len(content)} chars compressed]"
+            role = msg.get("role", "?")
+
+            # Preserve high-signal content
+            if role == "tool":
+                # For tool outputs: keep first 200 chars + any error/file info
+                lines = content.split("\n")
+                preserved = []
+                for line in lines[:5]:  # Keep first 5 lines
+                    preserved.append(line)
+                # Also preserve lines with error indicators
+                for line in lines:
+                    lower = line.lower()
+                    if any(kw in lower for kw in ["error", "fail", "traceback", "exception",
+                                                   "import", "def ", "class ", "file ",
+                                                   ".py", ".nix", "test_"]):
+                        if line not in preserved:
+                            preserved.append(line)
+                            if len(preserved) > 15:
+                                break
+                summary = "\n".join(preserved)
+                if len(content) > len(summary) + 50:
+                    summary += f"\n... [compressed from {len(content)} chars — preserved errors/paths]"
+            elif role == "assistant":
+                # For assistant messages: keep decision-making parts
+                if "```" in content:
+                    # Code blocks: keep the code, compress surrounding text
+                    parts = content.split("```")
+                    summary = "```\n".join(parts[1::2]) if len(parts) > 1 else content[:300]
+                    summary = f"[Code preserved from compressed assistant message]\n{summary}"
+                else:
+                    summary = content[:300] + f"\n... [compressed from {len(content)} chars]"
+            else:
+                # Generic compression
+                summary = f"[Earlier {role}: {len(content)} chars compressed]"
+
             msg["content"] = summary
             new_tokens = self.estimate_tokens(summary)
             saved += (old_tokens - new_tokens)
