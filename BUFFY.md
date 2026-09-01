@@ -564,3 +564,114 @@ jarvis-voice build: ✅ PASS
 17b0cad fix: skip sandbox-incompatible tests in Nix build checkPhase
 62d13b5 fix: increase LLMClient timeout from 300s to 600s
 ```
+
+## Sessão: Systemd Master Service + Sync + Build Fixes (2026-09-01)
+
+### Problema: jarvis.target não iniciava no boot
+
+Causa: `jarvis.target` existia mas não tinha `WantedBy=multi-user.target`.
+Todos os serviços estavam declarados com `partOf` e `wantedBy` ao target,
+mas o target em si nunca era acionado.
+
+Correção: adicionar `wantedBy = ["multi-user.target"]` ao target e
+completar a lista `Wants` (embeddings, rerank, fan-control, nightwatch
+não estavam listados).
+
+**Comandos importantes:**
+```bash
+sudo systemctl start jarvis.target    # iniciar tudo
+sudo systemctl stop jarvis.target     # parar tudo
+sudo systemctl status jarvis.target   # ver status
+# Serviços user (sem sudo):
+systemctl --user status jarvis-wakeword
+systemctl --user status mpvpaper
+```
+
+### Problema: mmproj crash no profile "fast"
+
+Causa: profile "fast" herdava `mmproj = "llm-host-mmproj"` do hostBase
+mas NÃO tinha `--no-mmproj-offload`. Todos os outros profiles tinham.
+O mmproj BF16 (861MB) crashava `clip_model_loader`.
+
+Correção: adicionar `--no-mmproj-offload` ao `extraArgs` do fast profile.
+
+**Lição:** quando herdar de base, verificar quais flags foram omitidos.
+Ommproj é inútil pra agent loop (só texto).
+
+### Problema: nightwatch falhava com "git not found"
+
+Causa: serviço sandboado com `ProtectSystem=strict` não tem acesso
+a `/usr/bin/git`. O PATH do sandbox só inclui nix store paths.
+
+Correção: adicionar `PATH` explícito com `${pkgs.git}/bin` no Environment
+do serviço.
+
+### Problema: rerank crashava com core dump
+
+Causa: `MemoryMax=256M` era menor que o modelo (438MB).
+
+Correção: aumentar para `MemoryMax="1G"` e `TasksMax=64`.
+
+### Problema: test_nightwatch_project_isolation falhava no sandbox
+
+Causa: teste do Claude precisa de `git` que não existe no sandbox Nix.
+
+Correção: adicionar à ignore list em `package.nix`.
+
+### Cadeia de Serviços Correta (depois da correção)
+
+```
+multi-user.target
+  └── jarvis.target (enabled, auto-starts)
+        ├── qdrant
+        ├── llama-cpp-server (after: qdrant)
+        ├── llama-cpp-embeddings (after: qdrant)
+        ├── llama-cpp-rerank
+        ├── llama-fan-control (after: llama-cpp-server)
+        ├── jarvis-telegram (after: network)
+        └── nightwatch (after: llama-cpp-server, timer 03:00)
+```
+
+Serviços user (sem sudo):
+```
+graphical-session.target
+  ├── jarvis-wakeword
+  └── mpvpaper
+```
+
+### Commits desta sessão
+```
+87df6f4 fix: add nightwatch tests to sandbox ignore list
+a82f959 fix: disable mmproj in fast profile (was crashing on load)
+4c70fa3 fix: nightwatch needs git in PATH, rerank needs more memory
+e44ef04 fix: make jarvis.target the real master service
+0d561b2 fix(nightwatch): real project isolation (Claude)
+```
+
+### Lições Aprendidas
+
+1. **Nix sandbox ≠ ambiente local**: testes que passam localmente podem
+   falhar no build por falta de HOME, git, ou filesystem write.
+   SOLUÇÃO: manter ignore list em package.nix para testes que precisam
+   de infraestrutura ausente no sandbox.
+
+2. **Herança de profiles Nix**: quando um profile herda de base via `//`,
+   qualquer flag ausente é herdada silenciosamente. Verificar quais
+   flags da base são aplicáveis ao novo profile.
+
+3. **Serviços systemd**: NÃO basta declarar `partOf` e `wantedBy` a um
+   target. O target em precisa de `WantedBy=multi-user.target` pra
+   iniciar no boot.
+
+4. **Rebase entre IAs**: commits do Claude e Buffy podem ser integrados
+   via rebase se os arquivos não se sobrepõem. Sempre fazer
+   `git log --oneline HEAD..origin/main` antes de rebase pra ver o
+   que veio.
+
+5. **Sandboxing e memória**: limites de memória em serviços systemd
+   precisam considerar o tamanho real do modelo, não um número arbitrário.
+   Modelo de 438MB precisa de pelo menos 1GB de MemoryMax.
+
+6. **mmproj e agent loop**: o modelo multimodal (mmproj) é inútil para
+   tarefas de código/texto. Desabilitar em profiles de agent loop
+   economiza VRAM e evita crashes.
