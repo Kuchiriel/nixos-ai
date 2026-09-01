@@ -919,3 +919,56 @@ llama-server \
   ...
 ```
 
+
+## Fork Analysis Complete (2026-09-01)
+
+### Re-quantization: NÃO faz sentido
+
+| Questão | Resposta |
+|---------|----------|
+| Re-quantizar Q4_K_M para IQ4_KS? | ❌ Não — cada requantização perde qualidade |
+| IQ4_KS vs Q4_K_M qualidade | Diferença: apenas 0.14% PPL (irrelevante) |
+| IQ4_KS vs Q4_K_M tamanho | IQ4_KS é ~3GB menor |
+| Como obter IQ4_KS? | Precisa do BF16 original (70GB) — não temos |
+| Vale a pena? | Só se tivermos o BF16 ou usar modelo novo |
+
+### EHS (Expert Hot Store): Futuro, não agora
+
+| Aspecto | Detalhe |
+|---------|---------|
+| Implementação | wackmall fork (51KB código) |
+| Upstream RFC | Discussion #24528 (em progresso) |
+| Multi-GPU (4x RTX 3090) | +25% a +57% speedup |
+| Single GPU (GTX 1080 Ti) | ❌ REGRESSÃO de performance |
+| RTX 4050 6GB | Provavelmente não ajuda (pouca VRAM) |
+| Prioridade | FUTURO — quando multi-GPU ou 12GB+ VRAM |
+
+### TurboQuant: Não disponível
+
+| Aspecto | Detalhe |
+|---------|---------|
+| O que é | KV cache quantization extrema (<3 bits) |
+| Fork necessário | TheTom/llama-cpp-turboquant |
+| Benefício para 4K context | Irrelevante (q4_0 já é suficiente) |
+| Benefício para 32K+ context | Potencialmente significativo |
+| Status | Não compilado no build atual |
+
+### Melhor configuração para RTX 4050 6GB
+
+```bash
+# Upstream llama.cpp (NixOS service)
+--n-cpu-moe 35 --split-mode layer
+-fa on --no-mmap
+-ctk q4_0 -ctv q4_0
+-c 4096 -t 8 -b 512 -ub 512
+# Resultado: ~30 tok/s TG, ~40 tok/s PP
+```
+
+### O que pode melhorar no futuro
+
+1. **EHS** quando multi-GPU ou mais VRAM
+2. **TurboQuant** para contextos longos (>32K)
+3. **IQ4_KS** quando BF16 estiver disponível
+4. **Custom build** mergeando features de cada fork
+5. **Bonsai model** quando download completar
+
