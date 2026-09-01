@@ -33,6 +33,12 @@
     });
   };
 
+  virtualisation.docker = {
+    enable = true;
+    # A mágica para IA em containers no NixOS acontece aqui:
+    enableNvidia = true; 
+  };
+
   programs.thunar = {
     enable = true;
     plugins = with pkgs.xfce; [
@@ -53,6 +59,7 @@
     # Sunshine (streaming) — módulo NixOS não existe; pacote + config manual
     sunshine
     discord
+    file-roller 
     gvfs
     # Utilitários do sistema
     pciutils
