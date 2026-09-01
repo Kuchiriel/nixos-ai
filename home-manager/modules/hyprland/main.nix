@@ -119,11 +119,11 @@ in {
         "workspace 3, match:class ^(com.wurmonline.client.launcherfx.WurmMain)$"
         "fullscreen 1, match:class ^(com.wurmonline.client.launcherfx.WurmMain)$"
         "opacity 1.0 override 1.0 override, match:class ^(com.wurmonline.client.launcherfx.WurmMain)$"
-        "workspace 3, match:class ^(Wurm Macro)$"
-        "float 1, match:class ^(Wurm Macro)$"
-        "size 320 200, match:class ^(Wurm Macro)$"
-        "move 100 100, match:class ^(Wurm Macro)$"
-        "opacity 0.9 0.9, match:class ^(Wurm Macro)$"
+        "workspace 3, match:title (Wurm Macro)"
+        "float 1, match:title (Wurm Macro)"
+        "size 320 200, match:title (Wurm Macro)"
+        "move 100 100, match:title (Wurm Macro)"
+        "opacity 0.9 0.9, match:title (Wurm Macro)"
         "suppress_event maximize, match:class ^(.*)$"
       ];
     };
