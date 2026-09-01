@@ -6,17 +6,7 @@
   hostname,
   user,
   ...
-}: let
-  # Carrega dinamicamente todos os arquivos .nix dentro do diretório de serviços
-  servicesDir = ../../modules/services;
-  dynamicServiceImports =
-    if builtins.pathExists servicesDir
-    then
-      lib.mapAttrsToList
-      (name: _type: servicesDir + "/${name}")
-      (lib.filterAttrs (name: type: type == "regular" && lib.hasSuffix ".nix" name) (builtins.readDir servicesDir))
-    else [];
-in {
+}: {
   security.sudo.extraRules = [
     {
       users = ["nixos"];
@@ -38,14 +28,12 @@ in {
     curl
   ];
 
-  imports =
-    [
-      ../../modules/services/qdrant.nix
+  imports = [
+      ../../modules/services/default.nix  # Serviços explícitos (sem readDir)
       ./hardware-configuration.nix
       ./local-packages.nix
       ../../nixos/modules
-    ]
-    ++ dynamicServiceImports;
+    ];
 
   stylix.homeManagerIntegration.autoImport = false;
 

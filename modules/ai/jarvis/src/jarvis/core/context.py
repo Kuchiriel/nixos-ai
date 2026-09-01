@@ -49,7 +49,24 @@ class ContextPipeline:
 
     def __init__(self, project_root: str = None):
         if project_root is None:
-            project_root = os.path.expanduser("~/projects/nixos-ai")
+            # Resolve from environment or workspace discovery — never hardcode.
+            project_root = os.environ.get(
+                "JARVIS_PROJECT_ROOT",
+                os.environ.get("JARVIS_WORKSPACE_ROOT", "") or "",
+            )
+            if not project_root:
+                # Last resort: discover from cwd (walks up looking for .git)
+                from pathlib import Path as _P
+                cur = _P.cwd()
+                for _ in range(10):
+                    if (cur / ".git").exists() or (cur / "flake.nix").exists():
+                        project_root = str(cur)
+                        break
+                    if cur.parent == cur:
+                        break
+                    cur = cur.parent
+            if not project_root:
+                project_root = os.path.expanduser("~/projects")
         self.project_root = Path(project_root)
         self.handoff_path = self.project_root / "HANDOFF.md"
         self.buffy_path = self.project_root / "BUFFY.md"

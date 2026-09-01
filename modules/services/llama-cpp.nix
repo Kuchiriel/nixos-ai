@@ -60,6 +60,15 @@ in {
         type = types.listOf types.str;
         default = ["--jinja"];
       };
+      bindAddress = mkOption {
+        type = types.str;
+        default = "127.0.0.1";
+        description = ''
+          Address to bind the llama-server HTTP endpoint.
+          Default: 127.0.0.1 (loopback only — local inference, not exposed).
+          Set to "0.0.0.0" only when remote access is explicitly needed.
+        '';
+      };
     };
     llama-cpp-embeddings = {
       enable = mkEnableOption "Llama.cpp Embeddings Server";
@@ -94,7 +103,7 @@ in {
           exec ${llamaBin} \
             -m "${pkgs.aiModels.${prof.model}}" \
             ${optionalString (prof ? mmproj) ''--mmproj "${pkgs.aiModels.${prof.mmproj}}" ''} \
-            --host 0.0.0.0 --port ${toString config.services.llama-cpp-server.port} \
+            --host ${config.services.llama-cpp-server.bindAddress} --port ${toString config.services.llama-cpp-server.port} \
             -c ${toString prof.ctxSize} -t ${toString prof.threads} -b ${toString prof.batchSize} -ub ${toString prof.ubatch} ${optionalString (prof.gpuLayers > 0) "-ngl ${toString prof.gpuLayers}"} \
             ${prof.kvCache} ${prof.moeFlags} \
             ${optionalString (prof ? extraArgs) (escapeShellArgs prof.extraArgs)} \
@@ -121,7 +130,7 @@ in {
         script = ''
           exec ${pkgs.llama-cpp}/bin/llama-server \
             -m "${pkgs.aiModels.embed}" \
-            --host 0.0.0.0 --port ${toString config.services.llama-cpp-embeddings.port} \
+            --host 127.0.0.1 --port ${toString config.services.llama-cpp-embeddings.port} \
             --embeddings --pooling mean -c 4096 -t 2 -b 2048 -ub 1024
         '';
         serviceConfig = {
@@ -147,7 +156,7 @@ in {
         script = ''
           exec ${pkgs.llama-cpp}/bin/llama-server \
             -m "${pkgs.aiModels.reranker}" \
-            --host 0.0.0.0 --port ${toString config.services.llama-cpp-rerank.port} \
+            --host 127.0.0.1 --port ${toString config.services.llama-cpp-rerank.port} \
             --rerank -t 2 -c 8192 -b 512 -ub 512
         '';
         serviceConfig = {

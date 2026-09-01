@@ -14,6 +14,8 @@
 
 let
   jarvisPackage = pkgs.jarvis;
+  # Hardcoded: nightwatch timer is specific to the nixos-ai project.
+  # Other projects should use their own timer or the jarvis CLI.
   projectRoot = "/home/nixos/projects/nixos-ai";
 in {
   systemd.services.nightwatch = {

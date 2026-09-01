@@ -227,6 +227,10 @@ in {
         ExecStart = "${watcherScript}/bin/jarvis-gaming-watcher";
         Restart = "on-failure";
         RestartSec = 5;
+        # Root required: gaming watcher reads GPU utilization via nvidia-smi
+        # which needs direct /dev/nvidia* access. The nixos user in the
+        # "video" group can read GPU state, but nvidia-smi also needs
+        # permission to query GPU power/thermal state which requires root.
         User = "root";
         CPUQuota = "10%";
         MemoryMax = "100M";

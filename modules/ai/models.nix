@@ -50,7 +50,13 @@ let
     mmproj = "llm-host-mmproj";
     gpuLayers = 45; # Max layers on GPU for RTX 4050
     kvCache = "-fa on -ctk q4_0 -ctv q4_0";
-    user = "root";
+    # User for the llama-server process. "nixos" is sufficient when:
+    #   - /dev/nvidia* is accessible via the "video" group
+    #   - Nix store paths are readable (they are world-readable by default)
+    #   - Model files are in /nix/store (not a custom path requiring root)
+    # Use "root" only if a specific profile needs direct hardware access
+    # that the nixos user cannot obtain via groups.
+    user = "nixos";
     scheduler = null;
   };
 in {

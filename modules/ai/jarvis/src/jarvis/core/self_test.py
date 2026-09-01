@@ -88,7 +88,7 @@ class BlackBoxTests:
 
     def __init__(self, jarvis_cli_path: str = None):
         if jarvis_cli_path is None:
-            jarvis_cli_path = os.path.expanduser("~/projects/nixos-ai/scripts/jarvis-cli.sh")
+            jarvis_cli_path = Path(os.environ.get("JARVIS_PROJECT_ROOT", os.path.expanduser("~/projects"))) / "nixos-ai" / "scripts" / "jarvis-cli.sh"
         self.cli_path = jarvis_cli_path
 
     def run_all(self) -> TestSuite:
@@ -128,7 +128,7 @@ class BlackBoxTests:
         import subprocess
         try:
             result = subprocess.run(
-                f"cd ~/projects/nixos-ai && ./scripts/jarvis-cli.sh {args}",
+                f"cd {Path(os.environ.get("JARVIS_PROJECT_ROOT", os.path.expanduser("~/projects"))) / "nixos-ai"} && ./scripts/jarvis-cli.sh {args}",
                 shell=True, capture_output=True, text=True,
                 timeout=timeout,
             )
@@ -406,7 +406,7 @@ class WhiteBoxTests:
 
     def __init__(self, project_root: str = None):
         if project_root is None:
-            project_root = os.path.expanduser("~/projects/nixos-ai")
+            project_root = str(Path(os.environ.get("JARVIS_PROJECT_ROOT", os.path.expanduser("~/projects"))) / "nixos-ai")
         self.project_root = Path(project_root)
 
     def run_all(self) -> TestSuite:

@@ -35,7 +35,7 @@ def read_chatgpt_share(url: str, max_chars: int = 50000) -> dict[str, Any]:
     script_path = Path(__file__).parent.parent.parent.parent / "scripts" / "read_chatgpt.py"
     if not script_path.exists():
         # Fallback: look in project root
-        script_path = Path(os.environ.get("JARVIS_PROJECT_ROOT", "/home/nixos/projects/nixos-ai")) / "scripts" / "read_chatgpt.py"
+        script_path = Path(os.environ.get("JARVIS_PROJECT_ROOT", str(Path(os.environ.get("JARVIS_PROJECT_ROOT", os.path.expanduser("~/projects"))) / "nixos-ai"))) / "scripts" / "read_chatgpt.py"
 
     try:
         result = subprocess.run(

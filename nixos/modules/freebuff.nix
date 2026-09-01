@@ -49,5 +49,23 @@ in {
 
   config = lib.mkIf config.programs.freebuff.enable {
     environment.systemPackages = [freebuff];
+
+    # ── Reproducibility boundary ──
+    # This Nix module installs the LAUNCHER only (~18KB npm package).
+    # The real agent (CodebuffAI/freebuff-private) is downloaded by the
+    # launcher to ~/.config/freebuff on first run. This bootstrap is
+    # MUTABLE and NOT reproducible by Nix.
+    #
+    # What IS reproducible (Nix Store):
+    #   - freebuff launcher binary + npm dependencies
+    #   - Version pinned: 0.0.149 (sha256 verified)
+    #
+    # What is NOT reproducible (mutable):
+    #   - ~/.config/freebuff/ (downloaded agent, config, state)
+    #   - Agent version (auto-updates on each run)
+    #
+    # This is analogous to how GGUF models are fetched at runtime.
+    # If full reproducibility is needed, the agent binary would need
+    # to be packaged separately with a fixed hash.
   };
 }
