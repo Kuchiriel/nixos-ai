@@ -679,3 +679,56 @@ e44ef04 fix: make jarvis.target the real master service
 6. **mmproj e agent loop**: o modelo multimodal (mmproj) é inútil para
    tarefas de código/texto. Desabilitar em profiles de agent loop
    economiza VRAM e evita crashes.
+
+## Sessão: Harness Audit P2-P9 (2026-09-01)
+
+### Bugs Corrigidos
+
+| ID | Bug | Arquivo | Correção |
+|----|-----|---------|----------|
+| P2 | LoopDetector contava successos | task_queue.py | Só conta failures, success limpa |
+| P3 | Task.fail() não persistia | task_queue.py | Atomic write via _persist_now() |
+| P3 | Task.complete() não persistia | task_queue.py | Atomic write via _persist_now() |
+| P4 | Evaluator aprovava no-diff | evaluator.py | require_change=True (default) |
+| P6 | Dedup só usava description | task_queue.py | Key = project+description |
+| P7 | Compaction em 70% prematura | context_budget.py | Threshold → 85% |
+| P7 | Compressão genérica | context_budget.py | Preserva errors/paths/code |
+
+### Estado Real do Harness
+
+| Capacidade | Status |
+|-----------|--------|
+| LoopDetector failure tracking | ✅ VERIFIED |
+| Task.fail()/complete() crash survival | ✅ VERIFIED |
+| Evaluator no-diff rejection | ✅ VERIFIED |
+| TaskQueue dedup multi-project | ✅ VERIFIED |
+| Context compaction threshold | ✅ VERIFIED |
+| State machine validation | ⚠️ PARTIAL |
+| Multi-project state partitioning | ⚠️ LIMITAÇÃO |
+| Evaluator independence | ⚠️ LIMITAÇÃO |
+| Agent pipeline real | ❌ BLOQUEADO (requer LLM) |
+
+### Bloqueadores para Autonomia
+
+1. LLM server dependency — pipeline inteiro depende do llama.cpp
+2. Tool history perdida após compactação
+3. State machine sem validação de transições
+
+### Auditoria Completa
+
+Ver `docs/HARNESS-AUDIT-2026-09-01.md`
+
+### Commits desta sessão
+
+```
+5ef56b2 docs: harness audit P2-P9 with verification results
+17487b9 fix: Task.complete() now persists immediately (P3 gap)
+3f6b1e4 fix: critical harness bugs (P2/P3/P4/P6/P7)
+4c3237f docs: add Obsidian wikilinks for graph connectivity
+2b7cb11 docs: consolidate docs and archive redundant scripts
+b79cdd2 docs: update BUFFY.md with systemd session lessons
+87df6f4 fix: add nightwatch tests to sandbox ignore list
+a82f959 fix: disable mmproj in fast profile (was crashing on load)
+4c70fa3 fix: nightwatch needs git in PATH, rerank needs more memory
+e44ef04 fix: make jarvis.target the real master service
+```
