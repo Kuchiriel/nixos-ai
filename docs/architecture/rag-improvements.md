@@ -49,3 +49,6 @@
 - O chunk ideal para código tende a ser a **função/classe** (o legado embebia o
   arquivo inteiro, diluindo símbolos pequenos). `get_symbol_block` do V4.0.5 já
   extrai o bloco — base para o chunking por símbolo.
+
+---
+**Ver também:** [[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]

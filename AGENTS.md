@@ -3,6 +3,10 @@
 > Formato agents.md (Linux Foundation) — toda IA que trabalhar neste repo
 > lê este arquivo. É a fonte de premissas universais.
 > Regras de modo específico estão em `.roomodes`.
+>
+> Tags: #status/active #type/rules #project/nixos-ai
+>
+> **Graph:** [[HANDOFF]] | [[BUFFY.md]] | [[README]] | [[CONTEXT-ENGINEERING]]
 
 ## Comandos
 

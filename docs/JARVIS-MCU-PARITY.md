@@ -214,3 +214,11 @@ User: "Save this to the project"
 MCU JARVIS: Asks about storage location if sensitive
 Our JARVIS: Should classify file sensitivity and ask if needed
 ```
+
+---
+**Ver também:** [[../HANDOFF]] | [[../AGENTS.md]] | [[../README]]
+
+**Docs relacionados:**
+- [[JARVIS-COMPARISON-2026-08-30]] — Comparação com alternativas
+- [[PLATFORM-AUDIT-2026-08-30]] — Auditoria da plataforma
+- [[NIGHTWATCH-AUDIT-2026-08-30]] — Auditoria do Nightwatch

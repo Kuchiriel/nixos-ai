@@ -183,3 +183,6 @@ flowchart TB
     style Infra fill:#fff3e0
     style Consumers fill:#fce4ec
 ```
+
+---
+**Ver também:** [[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]

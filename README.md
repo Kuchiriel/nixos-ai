@@ -377,3 +377,19 @@ Resultados em `logs/benchmark/` e `docs/benchmarks/`.
 - [ ] Idle mode autônomo
 - [ ] HackMD sync
 - [ ] Monorepo git strategy
+
+---
+
+## Documentação Relacionada (Obsidian Graph)
+
+| Documento | Descrição |
+|-----------|-----------|
+| [[HANDOFF]] | Index leve do projeto |
+| [[AGENTS.md]] | Regras compartilhadas |
+| [[BUFFY.md]] | Profile do agente |
+| [[CONTEXT-ENGINEERING]] | Protocolo de contexto |
+| [[NIGHTLOG]] | Log de manutenção |
+| [[docs/architecture/system-overview]] | Arquitetura geral |
+| [[docs/architecture/agent-harness]] | Harness de agentes |
+| [[docs/JARVIS-MCU-PARITY]] | Paridade com Jarvis MCU |
+| [[docs/benchmarks/README]] | Benchmarks |

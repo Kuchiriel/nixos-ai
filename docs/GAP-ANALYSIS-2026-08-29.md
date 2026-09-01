@@ -104,3 +104,6 @@ O ChatGPT sugere: **não mandar mais um prompt genérico**. Em vez disso:
 3. Obrigar separação entre: investigado / implementado / medido / hipótese / débito técnico
 
 Isso é exatamente o que o `AGENTS.md` + `HANDOFF.md` + `NIGHTLOG.md` deveriam suportar — e parcialmente suportam.
+
+---
+**Ver também:** [[../HANDOFF]] | [[../AGENTS.md]] | [[../README]]

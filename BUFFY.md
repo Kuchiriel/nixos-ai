@@ -2,6 +2,10 @@
 
 > This file is read by Buffy when working on the nixos-ai project.
 > It provides context about all available JARVIS features, MCP tools,
+>
+> Tags: #status/active #type/agent-profile #project/nixos-ai
+>
+> **Graph:** [[../HANDOFF]] | [[../AGENTS.md]] | [[../README]] | [[../CONTEXT-ENGINEERING]]
 
 > **A CADA PROMPT**: Use JARVIS RAG + recall para contexto, não leia HANDOFF.md inteiro.
 > Seção abaixo explica o protocolo de 3 camadas.

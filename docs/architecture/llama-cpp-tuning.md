@@ -161,3 +161,6 @@ host = {
 2. **Por que `--load-mode mmap` (default) degrada mas `--no-mmproj-offload` resolve?** — O mecanismo exato não está 100% claro. Hipótese: mmproj na GPU cria CUDA context que interfere no compute graph do modelo principal.
 
 3. **`--load-mode none` vs `--load-mode mmap`** — A diferença de performance (14 vs 32 t/s) com mmproj na GPU sugere que o modo de carregamento afeta como o CUDA gerencia memória entre modelo e mmproj.
+
+---
+**Ver também:** [[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]

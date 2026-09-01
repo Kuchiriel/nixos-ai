@@ -155,3 +155,6 @@ See `docs/benchmarks/performance-evidence-audit.md` for full classification.
 - `scripts/thermal-curve.sh` — Full thermal characterization
 - `scripts/proper-benchmark.sh` — 10-run benchmark with stats
 - `scripts/mlock-benchmark.sh` — mlock comparison test
+
+---
+**Ver também:** [[../../HANDOFF]] | [[../../AGENTS.md]] | [[architecture/llama-cpp-tuning]]

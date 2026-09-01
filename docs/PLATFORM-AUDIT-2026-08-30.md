@@ -249,3 +249,6 @@ f2ab9d2 fix(platform): security hardening + Systemd sandboxing
 - [ ] VRAM budgeting implemented
 - [ ] Systemd dependencies verified
 - [ ] Home Manager audited
+
+---
+**Ver também:** [[../HANDOFF]] | [[../AGENTS.md]] | [[../README]]

@@ -219,3 +219,6 @@ No software optimization can overcome the 67°C thermal wall on this laptop.
 - Fine sweep: `/tmp/ncmoe-sweep-custom.json`
 - Cooled comparison: `/tmp/ncmoe-cooled.log`
 - Sustained test: `/tmp/sustained-results.log`
+
+---
+**Ver também:** [[../../HANDOFF]] | [[../../AGENTS.md]] | [[architecture/llama-cpp-tuning]]

@@ -2,6 +2,10 @@
 
 > Baseado em: Anthropic context engineering, OpenDev paper (arxiv 2603.05344),
 > Claude Code memory docs, Packmind ContextOps guide.
+>
+> Tags: #status/active #type/protocol #project/nixos-ai
+>
+> **Graph:** [[HANDOFF]] | [[AGENTS.md]] | [[BUFFY.md]]
 
 ## O PROBLEMA
 

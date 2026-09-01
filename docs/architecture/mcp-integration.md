@@ -131,3 +131,6 @@ flowchart TB
     style Blocked fill:#ffcdd2
     style Approval fill:#fff9c4
 ```
+
+---
+**Ver também:** [[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]

@@ -151,3 +151,6 @@ flowchart TB
     style Budget fill:#e3f2fd
     style Strategies fill:#fff3e0
 ```
+
+---
+**Ver também:** [[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]

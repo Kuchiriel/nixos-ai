@@ -53,3 +53,6 @@ rodando por >30 minutos com múltiplas tasks.
 | 1 | README, MCP reader, test fixes | shell=True, test failures, m3ta aliases |
 | 2 | Segurança, legacy, performance | recovery context não integrada, context budget não chamada |
 | 3 | Orquestração, módulos não integrados | Event Bus não integrado, 3 módulos sem teste |
+
+---
+**Ver também:** [[../HANDOFF]] | [[../AGENTS.md]] | [[../README]]
