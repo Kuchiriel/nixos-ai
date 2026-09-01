@@ -61,3 +61,6 @@ scripts: rebuild.sh, limpar_nixos.sh, mount_manjaro.sh, shell.nix
 - **Permanecer**: conceito do Pi Agent (CLI + tool calling), Qdrant via nixpkgs, llama-cpp via unstable, estilo "1 host ativo".
 - **Corrigir**: módulo wakeword (build do pacote + pipeline completo), import dinâmico de serviços, chave do cache CUDA, firewall, tmpfiles legado, rebuild.sh, EOL do NixOS.
 - **Remover (em commits isolados, após confirmar ausência de referências)**: hosts stale, `.bak` commitados, porta 11434, cleanup ollama, README desatualizado.
+
+---
+**Ver também:** [[../../HANDOFF]] | [[../PLATFORM-ASSESSMENT]] | [[../GAP-ANALYSIS-2026-08-29]]

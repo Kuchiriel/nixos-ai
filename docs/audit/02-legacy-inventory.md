@@ -101,3 +101,6 @@ archive/       consolidados, scripts legados, session_manager.py antigo (referê
 - **Sem Qdrant** (NumPy + ChromaDB) — mandato: migrar para Qdrant.
 - **Sem testes automatizados** (só scripts de benchmark/manual: `test-voice-system.sh`, `massive_benchmark.py`).
 - **Sem separação core/adapters** — tudo acoplado a caminhos absolutos `/home/kuchiriel/Projects/AI_SYSTEM`, hardcoded `hw:1,7`, `localhost:11434`.
+
+---
+**Ver também:** [[../../HANDOFF]] | [[../PLATFORM-ASSESSMENT]] | [[../GAP-ANALYSIS-2026-08-29]]

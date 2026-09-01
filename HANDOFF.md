@@ -28,14 +28,12 @@
 
 ## Auditorias
 
-| Documento | Data | Escopo |
-|-----------|------|--------|
-| [[docs/JARVIS-MCU-PARITY]] | 2026-08-30 | Paridade com Jarvis MCU |
-| [[docs/JARVIS-COMPARISON-2026-08-30]] | 2026-08-30 | Comparação com alternativas |
-| [[docs/PLATFORM-AUDIT-2026-08-30]] | 2026-08-30 | Auditoria da plataforma |
-| [[docs/NIGHTWATCH-AUDIT-2026-08-30]] | 2026-08-30 | Auditoria do Nightwatch |
-| [[docs/GAP-ANALYSIS-2026-08-29]] | 2026-08-29 | Análise de gaps |
-| [[docs/GAP-ANALYSIS-2026-08-29-ROUND3]] | 2026-08-29 | Round 3 da análise |
+| Documento | Escopo |
+|-----------|--------|
+| [[docs/JARVIS-COMPARISON]] | Paridade MCU + Comparação com alternativas |
+| [[docs/PLATFORM-ASSESSMENT]] | Auditoria da plataforma + Avaliação de arquitetura |
+| [[docs/NIGHTWATCH]] | Auditoria + Validação long-run do Nightwatch |
+| [[docs/GAP-ANALYSIS-2026-08-29]] | Análise de gaps (original + round 3) |
 
 ## Benchmarks
 

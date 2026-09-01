@@ -129,3 +129,6 @@
 8. **Chave do cache `nixos-cuda.org` incorreta** na config atual — builds CUDA podem estar sem cache.
 9. **RiveScript 1649 ln** acoplado a shell calls — portar com cuidado, testando macro a macro.
 10. **Memória de sessão em /tmp** (volátil) — reimplementar persistente; comportamento antigo de perda de contexto não deve ser "preservado".
+
+---
+**Ver também:** [[../../HANDOFF]] | [[../PLATFORM-ASSESSMENT]] | [[../GAP-ANALYSIS-2026-08-29]]
