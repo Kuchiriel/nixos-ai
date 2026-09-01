@@ -802,3 +802,17 @@ $PRISM_DIR/llama-server \
 (mudanças em progresso — aguardar download)
 ```
 
+
+### Regressão de Performance Qwen (30→9.9 tok/s)
+
+**Causa raiz identificada**: Profile "fast" perdeu flags importantes durante refatoração.
+
+| Flag | Old (32.5 tok/s) | New (9.9 tok/s) | Impacto |
+|------|-------------------|------------------|---------|
+| `--split-mode layer` | ✅ | ❌ | CRÍTICO — distribui experts MoE GPU/CPU |
+| `--no-warmup` | ✅ | ❌ | Médio — pula benchmark inicial |
+| `--parallel 1` | ✅ | ❌ | Baixo — explícito single parallel |
+
+**Fix commit**: `b21b56c` — restaurado `--split-mode layer`, `--no-warmup`, `--parallel 1`
+**Efeito**: precisa de rebuild para aplicar.
+
