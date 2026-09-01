@@ -69,11 +69,21 @@ def run_command(cmd: str, timeout: int = 60) -> tuple[bool, str, int]:
 
 
 def discover_test_files() -> list[str]:
-    """Discover test files in the project."""
-    test_dir = REPO_ROOT / "modules/ai/jarvis/tests"
-    if not test_dir.exists():
-        return []
-    return [str(f.relative_to(REPO_ROOT)) for f in test_dir.glob("test_*.py")]
+    """Discover test files in the project.
+
+    modules/ai/jarvis/tests is nixos-ai's own layout, not a generic
+    convention — for any other project (post use_project_root()) that
+    path won't exist. Try common layouts in order; first match wins.
+    """
+    candidates = [
+        REPO_ROOT / "modules/ai/jarvis/tests",  # nixos-ai
+        REPO_ROOT / "tests",
+        REPO_ROOT / "test",
+    ]
+    for test_dir in candidates:
+        if test_dir.exists():
+            return [str(f.relative_to(REPO_ROOT)) for f in test_dir.glob("test_*.py")]
+    return []
 
 
 def validate_changed_files(files: list[str]) -> ValidationReport:
@@ -167,8 +177,19 @@ def run_targeted_tests(files: list[str]) -> ValidationReport:
     # Determine which test files to run
     test_files = discover_test_files()
     if not test_files:
-        step = ValidationStep(name="tests", skipped=True, skip_reason="No test files found")
+        # No discoverable test directory anywhere in the project — there
+        # is no safety net for this change. ValidationReport.passed
+        # defaults to True, which would make this a silent green light
+        # for an autonomous commit with zero tests run. Fail closed
+        # instead: a project with no tests needs a human to decide
+        # whether autonomous commits are even appropriate here.
+        step = ValidationStep(
+            name="tests", skipped=True,
+            skip_reason="No test directory found (tried modules/ai/jarvis/tests, tests/, test/) "
+                        "— failing closed, not silently passing with zero coverage",
+        )
         report.steps.append(step)
+        report.passed = False
         return report
     
     # Map source files to test files
@@ -187,7 +208,16 @@ def run_targeted_tests(files: list[str]) -> ValidationReport:
     # relacionado (era assim antes: sempre test_agent.py, mesmo pra mudança
     # em módulo compartilhado sem teste homônimo — furo real de regressão).
     if not relevant_tests:
-        test_cmd = "python3 -m pytest modules/ai/jarvis/tests/ -q --tb=short"
+        # Same test_dir discover_test_files() already found — run the
+        # whole suite from there instead of hardcoding nixos-ai's own
+        # nested test path (that path doesn't exist in other projects).
+        test_dir = next(
+            (d for d in (REPO_ROOT / "modules/ai/jarvis/tests", REPO_ROOT / "tests", REPO_ROOT / "test")
+             if d.exists()),
+            None,
+        )
+        test_target = str(test_dir.relative_to(REPO_ROOT)) if test_dir else "."
+        test_cmd = f"python3 -m pytest {test_target} -q --tb=short"
         step = ValidationStep(name="tests:full-suite-fallback", command=test_cmd)
         success, output, duration = run_command(test_cmd, timeout=600)
         step.passed = success

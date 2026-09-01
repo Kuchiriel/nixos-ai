@@ -41,7 +41,7 @@ def test_no_relevant_match_falls_back_to_full_suite(monkeypatch):
     assert "test_agent.py" not in cmd, (
         f"regrediu para o fallback antigo (arquivo unico e nao relacionado): {cmd}"
     )
-    assert "modules/ai/jarvis/tests/" in cmd
+    assert "modules/ai/jarvis/tests" in cmd
     assert timeout >= 600  # suite completa precisa de mais tempo que 1 arquivo
 
 

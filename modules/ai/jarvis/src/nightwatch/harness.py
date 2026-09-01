@@ -96,6 +96,7 @@ from nightwatch.validator import validate_change, ValidationReport
 from nightwatch.evaluator import review_change, auto_review, ReviewResult
 from nightwatch.checkpoint import Checkpoint, create_checkpoint_for_task, get_recovery_context
 from nightwatch import safety
+from nightwatch import project_isolation
 from nightwatch.project_isolation import (
     ProjectConfig, ProjectRegistry, discover_projects,
     get_project_root, validate_project_path, run_in_project,
@@ -724,7 +725,7 @@ class Harness:
         seen = set()
         unique = []
         for t in tasks:
-            key = t.description[:80]
+            key = f"{t.project}:{t.description[:80]}"
             if key not in seen:
                 seen.add(key)
                 unique.append(t)
@@ -779,186 +780,187 @@ class Harness:
 
         branch: str | None = None
         try:
-            # ── Step 0a: Isolate on a task branch ──
-            # Every commit for this task happens here, never on main
-            # directly. abort_task_branch() on any failure path below
-            # discards this branch entirely — main is never touched
-            # until the merge at the very end.
-            branch = safety.create_task_branch(task.id, task.project)
-            if not branch:
-                self._fail_task(task, "Could not create isolated branch (git checkout -b failed)")
-                self.notify(f"🚫 *Task Blocked*\nBranch isolation failed for {task.id}")
-                return False
+            with project_isolation.use_project_root(project_isolation.resolve_project_root(task.project)):
+                # ── Step 0a: Isolate on a task branch ──
+                # Every commit for this task happens here, never on main
+                # directly. abort_task_branch() on any failure path below
+                # discards this branch entirely — main is never touched
+                # until the merge at the very end.
+                branch = safety.create_task_branch(task.id, task.project)
+                if not branch:
+                    self._fail_task(task, "Could not create isolated branch (git checkout -b failed)")
+                    self.notify(f"🚫 *Task Blocked*\nBranch isolation failed for {task.id}")
+                    return False
 
-            # ── Step 0b: Context budget check ──
-            try:
-                stats = self.context_budget.get_stats()
-                if stats.get("should_compact", False):
-                    cp.record_compaction(
-                        stats.get("tokens_estimated", 0),
-                        stats.get("tokens_estimated", 0) // 2,
-                        "auto-compact before LLM call"
-                    )
-                    self.notify("🗜️ Context compaction triggered")
-            except Exception:
-                pass
+                # ── Step 0b: Context budget check ──
+                try:
+                    stats = self.context_budget.get_stats()
+                    if stats.get("should_compact", False):
+                        cp.record_compaction(
+                            stats.get("tokens_estimated", 0),
+                            stats.get("tokens_estimated", 0) // 2,
+                            "auto-compact before LLM call"
+                        )
+                        self.notify("🗜️ Context compaction triggered")
+                except Exception:
+                    pass
 
-            # ── Step 1: Request structured patches from LLM ──
-            success, patches, errors = _request_structured_patch(
-                task_description=task.description,
-                target_files=task.target_files,
-                call_llm_fn=self.call_llm,
-            )
-
-            cp.record_operation("patch", success, "; ".join(errors) if errors else "")
-
-            if not success:
-                safety.abort_task_branch(branch)
-                self._fail_task(task, "; ".join(errors))
-                self.notify(f"❌ *Patch Failed*\n{errors[0][:100] if errors else 'unknown'}")
-                _log_progress({
-                    "task_id": task.id, "status": "patch_failed",
-                    "error": errors[0] if errors else "unknown",
-                })
-                return False
-
-            if not patches:
-                # LLM decided no changes needed — discard the empty
-                # branch instead of leaving it orphaned
-                safety.abort_task_branch(branch)
-                task.skip("no_changes_needed")
-                self.notify(f"⏭️ *No Changes*\n{task.description[:50]}")
-                return False
-
-            # ── Step 2: Apply structured patches via Patcher + SafeEditor ──
-            self.queue.update_task(task.id, status=TaskStatus.VALIDATING.value)
-            applied_files = []
-            apply_errors = []
-
-            from nightwatch.patcher import apply_patch
-            from nightwatch.safe_editor import strip_markdown_fences
-
-            for file_patch in patches:
-                # Apply patch hunks to get new content
-                patch_ok, patched_content, patch_diff = apply_patch(file_patch)
-
-                if not patch_ok:
-                    apply_errors.append(f"Patcher failed for {file_patch.path}: {patched_content}")
-                    cp.record_operation(f"patch:{file_patch.path}", False, patched_content)
-                    continue
-
-                # Validate and write via SafeEditor (atomic, validated)
-                resolved = _resolve_file_path(file_patch.path)
-                edit_result: EditResult = self.editor.apply_edit(
-                    resolved, patched_content, validate=True
-                )
-                if edit_result.success:
-                    applied_files.append(file_patch.path)
-                    cp.record_operation(f"write:{file_patch.path}", True)
-                else:
-                    apply_errors.extend(edit_result.errors)
-                    cp.record_operation(f"write:{file_patch.path}", False, "; ".join(edit_result.errors))
-
-            if not applied_files:
-                safety.abort_task_branch(branch)
-                self._fail_task(task, f"All patches failed: {'; '.join(apply_errors)}")
-                self.notify(f"❌ *Write Failed*\n{apply_errors[0][:100] if apply_errors else 'rejected'}")
-                _log_progress({
-                    "task_id": task.id, "status": "write_failed",
-                    "errors": apply_errors,
-                })
-                return False
-
-            # ── Step 3: Validate ──
-            validation = validate_change(
-                applied_files,
-                run_tests=self.config.run_tests,
-                run_imports=self.config.run_imports,
-            )
-
-            cp.record_operation("validate", validation.passed, validation.summary)
-
-            if not validation.passed:
-                safety.abort_task_branch(branch)
-                self._fail_task(task, f"Validation failed: {validation.summary}")
-                self.notify(f"❌ *Validation Failed*\n{validation.summary}")
-                _log_progress({
-                    "task_id": task.id, "status": "validation_failed",
-                    "summary": validation.summary,
-                })
-                return False
-
-            # ── Step 4: Independent review ──
-            if self.config.auto_review:
-                self.queue.update_task(task.id, status=TaskStatus.REVIEW.value)
-                test_output = "\n".join(
-                    s.output for s in validation.steps if s.name == "tests"
-                )
-                review = review_change(
+                # ── Step 1: Request structured patches from LLM ──
+                success, patches, errors = _request_structured_patch(
                     task_description=task.description,
-                    acceptance_criteria=task.acceptance_criteria,
-                    test_output=test_output,
+                    target_files=task.target_files,
                     call_llm_fn=self.call_llm,
                 )
 
-                if not review.passed:
+                cp.record_operation("patch", success, "; ".join(errors) if errors else "")
+
+                if not success:
                     safety.abort_task_branch(branch)
-                    self._fail_task(task, f"Review failed: {review.summary}")
-                    self.notify(f"❌ *Review Failed*\n{review.summary}")
+                    self._fail_task(task, "; ".join(errors))
+                    self.notify(f"❌ *Patch Failed*\n{errors[0][:100] if errors else 'unknown'}")
                     _log_progress({
-                        "task_id": task.id, "status": "review_failed",
-                        "summary": review.summary,
+                        "task_id": task.id, "status": "patch_failed",
+                        "error": errors[0] if errors else "unknown",
                     })
                     return False
 
-            # ── Step 5: Commit on branch, then merge into main ──
-            msg = f"nightwatch({task.project}): {task.description[:80]}"
-            branch_commit = _git_commit(msg)
-            if not branch_commit:
-                # Validation/review passed but the commit itself failed —
-                # don't leave an unmerged branch behind, don't report
-                # success with no actual commit.
-                safety.abort_task_branch(branch)
-                self._fail_task(task, "git commit failed on task branch after validation passed")
-                self.notify("❌ *Commit Failed*\nValidation passed but git commit did not")
-                _log_progress({"task_id": task.id, "status": "commit_failed"})
-                return False
-            commit_sha = safety.merge_task_branch(branch)
-            cp.record_operation("commit", commit_sha is not None)
+                if not patches:
+                    # LLM decided no changes needed — discard the empty
+                    # branch instead of leaving it orphaned
+                    safety.abort_task_branch(branch)
+                    task.skip("no_changes_needed")
+                    self.notify(f"⏭️ *No Changes*\n{task.description[:50]}")
+                    return False
 
-            # ── Step 6: Complete ──
-            task.complete(commit_sha)
-            self.loop_detector.reset(task.id)  # Clear loop tracking on success
-            self.mission.total_tasks_completed += 1
-            if commit_sha:
-                self.mission.total_commits += 1
+                # ── Step 2: Apply structured patches via Patcher + SafeEditor ──
+                self.queue.update_task(task.id, status=TaskStatus.VALIDATING.value)
+                applied_files = []
+                apply_errors = []
 
-            # Platform observability: log execution stats
-            try:
-                from nightwatch.platform_bridge import log_task_execution
-                log_task_execution(
-                    task_id=task.id,
-                    persona=getattr(task, 'persona', 'unknown'),
-                    model_tier=getattr(task, 'model_tier', 'medium'),
-                    project=task.project,
-                    status="completed",
-                    duration_seconds=time.time() - task_start,
+                from nightwatch.patcher import apply_patch
+                from nightwatch.safe_editor import strip_markdown_fences
+
+                for file_patch in patches:
+                    # Apply patch hunks to get new content
+                    patch_ok, patched_content, patch_diff = apply_patch(file_patch)
+
+                    if not patch_ok:
+                        apply_errors.append(f"Patcher failed for {file_patch.path}: {patched_content}")
+                        cp.record_operation(f"patch:{file_patch.path}", False, patched_content)
+                        continue
+
+                    # Validate and write via SafeEditor (atomic, validated)
+                    resolved = _resolve_file_path(file_patch.path)
+                    edit_result: EditResult = self.editor.apply_edit(
+                        resolved, patched_content, validate=True
+                    )
+                    if edit_result.success:
+                        applied_files.append(file_patch.path)
+                        cp.record_operation(f"write:{file_patch.path}", True)
+                    else:
+                        apply_errors.extend(edit_result.errors)
+                        cp.record_operation(f"write:{file_patch.path}", False, "; ".join(edit_result.errors))
+
+                if not applied_files:
+                    safety.abort_task_branch(branch)
+                    self._fail_task(task, f"All patches failed: {'; '.join(apply_errors)}")
+                    self.notify(f"❌ *Write Failed*\n{apply_errors[0][:100] if apply_errors else 'rejected'}")
+                    _log_progress({
+                        "task_id": task.id, "status": "write_failed",
+                        "errors": apply_errors,
+                    })
+                    return False
+
+                # ── Step 3: Validate ──
+                validation = validate_change(
+                    applied_files,
+                    run_tests=self.config.run_tests,
+                    run_imports=self.config.run_imports,
                 )
-            except Exception:
-                pass
 
-            self.notify(
-                f"✅ *Task Complete*\n{task.description[:50]}\n"
-                f"Commit: {commit_sha[:8] if commit_sha else 'N/A'}"
-            )
-            self._emit("task_completed", task_id=task.id, commit=commit_sha, files=applied_files)
+                cp.record_operation("validate", validation.passed, validation.summary)
 
-            _log_progress({
-                "task_id": task.id, "status": "completed",
-                "commit": commit_sha, "files": applied_files,
-            })
+                if not validation.passed:
+                    safety.abort_task_branch(branch)
+                    self._fail_task(task, f"Validation failed: {validation.summary}")
+                    self.notify(f"❌ *Validation Failed*\n{validation.summary}")
+                    _log_progress({
+                        "task_id": task.id, "status": "validation_failed",
+                        "summary": validation.summary,
+                    })
+                    return False
 
-            return True
+                # ── Step 4: Independent review ──
+                if self.config.auto_review:
+                    self.queue.update_task(task.id, status=TaskStatus.REVIEW.value)
+                    test_output = "\n".join(
+                        s.output for s in validation.steps if s.name == "tests"
+                    )
+                    review = review_change(
+                        task_description=task.description,
+                        acceptance_criteria=task.acceptance_criteria,
+                        test_output=test_output,
+                        call_llm_fn=self.call_llm,
+                    )
+
+                    if not review.passed:
+                        safety.abort_task_branch(branch)
+                        self._fail_task(task, f"Review failed: {review.summary}")
+                        self.notify(f"❌ *Review Failed*\n{review.summary}")
+                        _log_progress({
+                            "task_id": task.id, "status": "review_failed",
+                            "summary": review.summary,
+                        })
+                        return False
+
+                # ── Step 5: Commit on branch, then merge into main ──
+                msg = f"nightwatch({task.project}): {task.description[:80]}"
+                branch_commit = _git_commit(msg)
+                if not branch_commit:
+                    # Validation/review passed but the commit itself failed —
+                    # don't leave an unmerged branch behind, don't report
+                    # success with no actual commit.
+                    safety.abort_task_branch(branch)
+                    self._fail_task(task, "git commit failed on task branch after validation passed")
+                    self.notify("❌ *Commit Failed*\nValidation passed but git commit did not")
+                    _log_progress({"task_id": task.id, "status": "commit_failed"})
+                    return False
+                commit_sha = safety.merge_task_branch(branch)
+                cp.record_operation("commit", commit_sha is not None)
+
+                # ── Step 6: Complete ──
+                task.complete(commit_sha)
+                self.loop_detector.reset(task.id)  # Clear loop tracking on success
+                self.mission.total_tasks_completed += 1
+                if commit_sha:
+                    self.mission.total_commits += 1
+
+                # Platform observability: log execution stats
+                try:
+                    from nightwatch.platform_bridge import log_task_execution
+                    log_task_execution(
+                        task_id=task.id,
+                        persona=getattr(task, 'persona', 'unknown'),
+                        model_tier=getattr(task, 'model_tier', 'medium'),
+                        project=task.project,
+                        status="completed",
+                        duration_seconds=time.time() - task_start,
+                    )
+                except Exception:
+                    pass
+
+                self.notify(
+                    f"✅ *Task Complete*\n{task.description[:50]}\n"
+                    f"Commit: {commit_sha[:8] if commit_sha else 'N/A'}"
+                )
+                self._emit("task_completed", task_id=task.id, commit=commit_sha, files=applied_files)
+
+                _log_progress({
+                    "task_id": task.id, "status": "completed",
+                    "commit": commit_sha, "files": applied_files,
+                })
+
+                return True
 
         except Exception as e:
             cp.record_operation("error", False, str(e))

@@ -24,8 +24,16 @@ from pathlib import Path
 from typing import Any
 
 
-WORKSPACE_ROOT = Path.home() / "projects"
+WORKSPACE_ROOT = Path(os.environ.get("JARVIS_WORKSPACE_ROOT", str(Path.home() / "projects")))
 STATE_ROOT = Path.home() / ".local/state/jarvis"
+
+
+def _default_protected_paths() -> list[str]:
+    """Generic secret-shaped paths — applies to any project we've never
+    audited, on top of whatever project-specific paths get added later.
+    nixos-ai has its own explicit list in safety.py; this is the floor
+    for everything else."""
+    return [".env", "*.env", "*.key", "*.pem", "secrets/*", "*_secret*", "*credentials*"]
 
 
 @dataclass
@@ -37,7 +45,7 @@ class ProjectConfig:
     test_command: str = ""  # e.g. "pytest -x -q"
     lint_command: str = ""  # e.g. "ruff check"
     build_command: str = ""  # e.g. "nix build"
-    protected_paths: list[str] = field(default_factory=list)
+    protected_paths: list[str] = field(default_factory=_default_protected_paths)
     max_file_size: int = 100_000  # bytes
     
     def validate(self) -> tuple[bool, list[str]]:
@@ -222,3 +230,72 @@ def run_in_project(
         timeout=timeout,
         cwd=str(project_root),
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Actual isolation enforcement.
+#
+# Everything above this line (ProjectRegistry, discover_projects,
+# get_project_root, validate_project_path, run_in_project) existed
+# before this and was imported by harness.py — but nothing ever called
+# it to change where patcher.py / safe_editor.py / validator.py /
+# evaluator.py / safety.py actually read and write. Those five modules
+# each do `from nightwatch.paths import REPO_ROOT` at import time and
+# reference that frozen value directly in function bodies (not as an
+# overridable parameter). One process = one REPO_ROOT for its entire
+# lifetime, regardless of which project a Task claims to belong to.
+#
+# use_project_root() below overrides the REPO_ROOT attribute on each of
+# those modules for the duration of a single task. This is safe *only*
+# because nightwatch executes one task at a time, sequentially — there
+# is no thread/async concurrency in Harness.execute_task() to race
+# against. If that ever changes, this needs to become a contextvar
+# instead of a module-global reassignment.
+# ═══════════════════════════════════════════════════════════════════════
+
+import contextlib
+import importlib
+
+_ISOLATED_MODULES = (
+    "nightwatch.patcher",
+    "nightwatch.safe_editor",
+    "nightwatch.validator",
+    "nightwatch.evaluator",
+    "nightwatch.safety",
+)
+
+
+def resolve_project_root(project_name: str) -> Path:
+    """Resolve a project name to its actual root path.
+
+    Falls back to the frozen nightwatch.paths.REPO_ROOT default for
+    "nixos-ai" (or an unresolvable name) so existing single-project
+    behavior is unchanged when a task's project can't be located.
+    """
+    from nightwatch.paths import REPO_ROOT as DEFAULT_ROOT
+    if not project_name or project_name == "nixos-ai":
+        return DEFAULT_ROOT
+    root = get_project_root(project_name)
+    return root if root is not None else DEFAULT_ROOT
+
+
+@contextlib.contextmanager
+def use_project_root(new_root: Path):
+    """Temporarily point every isolation-aware module at new_root.
+
+    Restores each module's original REPO_ROOT on exit, including on
+    exception, so a task that dies mid-flight can't leave a later task
+    (for a different project, in the same process) pointed at the
+    wrong repo.
+    """
+    mods = [importlib.import_module(name) for name in _ISOLATED_MODULES]
+    originals = [getattr(m, "REPO_ROOT", None) for m in mods]
+    for m in mods:
+        if hasattr(m, "REPO_ROOT"):
+            m.REPO_ROOT = new_root
+    try:
+        yield new_root
+    finally:
+        for m, orig in zip(mods, originals):
+            if hasattr(m, "REPO_ROOT"):
+                m.REPO_ROOT = orig
