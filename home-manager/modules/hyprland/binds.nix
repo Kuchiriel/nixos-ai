@@ -28,11 +28,93 @@
         echo "No book selected."
     fi
   '';
+
+  wurmMenuScript = pkgs.writeScriptBin "wurm-menu" ''
+    #!/bin/sh
+    WURM_DIR="$HOME/wurm-sandbox-home"
+    is_running() {
+        pgrep -f "Xephyr :99" >/dev/null 2>&1 && pgrep -f "WurmLauncher" >/dev/null 2>&1
+    }
+    if is_running; then
+        CHOICE=$(echo -e "stop\nstatus" | wofi --dmenu -p "Wurm Online (RUNNING)" -W 300 -H 120)
+    else
+        CHOICE=$(echo -e "start\nstart-multi-2\nstart-multi-3\ngaming-mode" | wofi --dmenu -p "Wurm Online (STOPPED)" -W 300 -H 180)
+    fi
+    case "$CHOICE" in
+        start) "$WURM_DIR/run_wurm.sh" & ;;
+        start-multi-2) "$WURM_DIR/run_wurm_multi.sh" 2 & ;;
+        start-multi-3) "$WURM_DIR/run_wurm_multi.sh" 3 & ;;
+        stop)
+            pkill -f "Xephyr :99" 2>/dev/null
+            pkill -f "WurmLauncher" 2>/dev/null
+            pkill -f "steam-run.*wurm" 2>/dev/null
+            notify-send "Wurm Online" "Sandbox stopped"
+            ;;
+        gaming-mode)
+            for svc in llama-cpp-server llama-cpp-embeddings llama-cpp-rerank qdrant mpvpaper llama-fan-control; do
+                sudo systemctl stop "$svc" 2>/dev/null
+            done
+            for svc in jarvis-wakeword jarvis-telegram jarvis-idle-worker rclone-sync; do
+                systemctl --user stop "$svc" 2>/dev/null
+            done
+            pkill -f "freebuff" 2>/dev/null
+            "$WURM_DIR/run_wurm.sh" &
+            notify-send "Gaming Mode" "AI services stopped. Wurm starting on :99"
+            ;;
+        status)
+            notify-send "Wurm Status" "Xephyr: $(pgrep -f 'Xephyr :99' && echo ON || echo OFF)"
+            ;;
+    esac
+  '';
+
+  gamingToggleScript = pkgs.writeScriptBin "gaming-toggle" ''
+    #!/bin/sh
+    STATE="/tmp/.gaming-mode-state"
+    SYSTEM_SERVICES="llama-cpp-server llama-cpp-embeddings llama-cpp-rerank qdrant mpvpaper llama-fan-control"
+    USER_SERVICES="jarvis-wakeword jarvis-telegram jarvis-idle-worker rclone-sync"
+    WURM_DIR="$HOME/wurm-sandbox-home"
+
+    if [ -f "$STATE" ]; then
+        # DISABLE GAMING
+        pkill -f "Xephyr :99" 2>/dev/null
+        pkill -f "WurmLauncher" 2>/dev/null
+        pkill -f "steam-run.*wurm" 2>/dev/null
+        pkill -f "nix-shell.*wurm" 2>/dev/null
+        while IFS= read -r line; do
+            case "$line" in
+                system:*) sudo systemctl start "''${line#system:}" 2>/dev/null ;;
+                user:*) systemctl --user start "''${line#user:}" 2>/dev/null ;;
+            esac
+        done < "$STATE"
+        rm -f "$STATE"
+        notify-send "Gaming Mode OFF" "Services restored"
+    else
+        # ENABLE GAMING
+        echo "# Gaming mode $(date)" > "$STATE"
+        for svc in $SYSTEM_SERVICES; do
+            if systemctl is-active "$svc" >/dev/null 2>&1; then
+                sudo systemctl stop "$svc" 2>/dev/null
+                echo "system:$svc" >> "$STATE"
+            fi
+        done
+        for svc in $USER_SERVICES; do
+            if systemctl --user is-active "$svc" >/dev/null 2>&1; then
+                systemctl --user stop "$svc" 2>/dev/null
+                echo "user:$svc" >> "$STATE"
+            fi
+        done
+        pkill -f "freebuff" 2>/dev/null
+        "$WURM_DIR/run_wurm.sh" &
+        notify-send "Gaming Mode ON" "AI stopped. Wurm on :99"
+    fi
+  '';
 in {
   home.packages = with pkgs; [
     booksScript
     jarvisAsk
     launcherScript
+    wurmMenuScript
+    gamingToggleScript
     grim
     slurp
     wl-clipboard
@@ -111,6 +193,10 @@ in {
       # Scratchpad
       "$mainMod,       S, togglespecialworkspace,  magic"
       "$mainMod SHIFT, S, movetoworkspace, special:magic"
+
+      # Wurm Online sandbox
+      "$mainMod,       U, exec, ${wurmMenuScript}/bin/wurm-menu"
+      "$mainMod SHIFT, G, exec, ${gamingToggleScript}/bin/gaming-toggle"
 
       # JARVIS — ferramentas de IA (SUPER+A → launcher, ver acima)
       "$mainMod SHIFT, A, exec, $terminal -e jarvis agent --help"
