@@ -816,3 +816,39 @@ $PRISM_DIR/llama-server \
 **Fix commit**: `b21b56c` — restaurado `--split-mode layer`, `--no-warmup`, `--parallel 1`
 **Efeito**: precisa de rebuild para aplicar.
 
+
+## Benchmark Results (2026-09-01)
+
+### Qwen3.6-35B-A3B Q4_K_M on RTX 4050 (6GB VRAM)
+
+| Config | TG (tok/s) | PP (tok/s) | VRAM | Notes |
+|--------|-----------|-----------|------|-------|
+| **Upstream + --split-mode layer** | **30.3-30.7** | **32-51** | 5557 MiB | ✅ BEST |
+| ik_llama.cpp (ngl=999, n-cpu-moe=35) | 15-16 | 32-44 | 5497 MiB | Slower TG |
+| Upstream (before fix, no split-mode) | 9.9 | 9.2 | 5597 MiB | ❌ Regression |
+
+### Key Finding
+
+The 30→9.9 tok/s regression was caused by the "fast" profile losing `--split-mode layer`
+during refactoring. Restoring it (commit `b21b56c`) restored 30 tok/s.
+
+### ik_llama.cpp Analysis
+
+Built successfully with CUDA SM89. Has exclusive features:
+- `--merge-qkv` (fused attention)
+- `-smgs` (split mode graph scheduling)
+- `-gr` (graph reuse)
+
+However, for Qwen3.6-35B-A3B on RTX 4050, upstream with correct flags is faster.
+ik_llama may benefit other model architectures or multi-GPU setups.
+
+### Fork Analysis Summary
+
+| Fork | Unique Feature | Useful for us? |
+|------|---------------|----------------|
+| upstream | Baseline, most stable | ✅ Primary |
+| ik_llama.cpp | merge-qkv, graph scheduling | ⚠️ Slower for Qwen MoE |
+| wackmall | Expert Hot Store (EHS) | 🔜 Future (GPU expert caching) |
+| prism-llama | Ternary/quantization | 🔜 For Bonsai model |
+| moe-cache | Disk read tracking | ❌ Not enough unique |
+
