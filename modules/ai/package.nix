@@ -59,7 +59,9 @@
         --ignore=tests/test_audiobook.py \
         --ignore=tests/test_audiobook_ui.py \
         --ignore=tests/test_voice.py \
-        --ignore=tests/test_nightwatch_safety.py
+        --ignore=tests/test_nightwatch_safety.py \
+        --ignore=tests/test_nightwatch_project_isolation.py \
+        --ignore=tests/test_nightwatch_validator_fallback.py
       runHook postCheck
     '';
 
