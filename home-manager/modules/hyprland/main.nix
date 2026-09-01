@@ -115,10 +115,10 @@ in {
         "workspace 3, match:class ^(zathura)$"
         "workspace 4, match:class ^(com.obsproject.Studio)$"
         "workspace 5, match:class ^(telegram)$"
-        # Wurm Standalone Sandbox: gamescope (mouse confined) + macro (floating overlay)
-        "workspace 3, match:class ^(.gamescope-wrapped)$"
-        "fullscreen 1, match:class ^(.gamescope-wrapped)$"
-        "opacity 1.0 override 1.0 override, match:class ^(.gamescope-wrapped)$"
+        # Wurm Standalone: game fullscreen on ws3 + macro floating overlay
+        "workspace 3, match:class ^(com.wurmonline.client.launcherfx.WurmMain)$"
+        "fullscreen 1, match:class ^(com.wurmonline.client.launcherfx.WurmMain)$"
+        "opacity 1.0 override 1.0 override, match:class ^(com.wurmonline.client.launcherfx.WurmMain)$"
         "workspace 3, match:class ^(Wurm Macro)$"
         "float 1, match:class ^(Wurm Macro)$"
         "size 320 200, match:class ^(Wurm Macro)$"
