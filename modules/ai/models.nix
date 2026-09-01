@@ -363,9 +363,12 @@ in {
       ctxSize = 4096;
       batchSize = 512;
       ubatch = 512;
-      moeFlags = "--n-cpu-moe 35";
+      moeFlags = "--n-cpu-moe 35 --split-mode layer";
       extraArgs = [
-        "--no-mmproj-offload"
+        "--parallel"
+        "1"
+        "--jinja"
+        "--no-warmup"
       ];
       user = "nixos";
     };
