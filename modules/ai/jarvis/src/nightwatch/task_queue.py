@@ -226,6 +226,9 @@ class Task:
         self.status = TaskStatus.COMPLETED.value
         self.commit_sha = commit_sha
         self.updated_at = time.time()
+        # Persist immediately — same as fail(), crash between complete()
+        # and TaskQueue._save() must not lose the completion state.
+        self._persist_now()
     
     def abandon(self, reason: str) -> None:
         self.status = TaskStatus.ABANDONED.value
