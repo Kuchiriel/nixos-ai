@@ -8,6 +8,22 @@
 > **Graph:** [[../HANDOFF]] | [[../AGENTS.md]] | [[../README]] | [[../CONTEXT-ENGINEERING]]
 
 > **A CADA PROMPT**: Use JARVIS RAG + recall para contexto, não leia HANDOFF.md inteiro.
+>
+> **REGRA OBRIGATÓRIA**: Ao final de cada sessão com trabalho significativo,
+> ATUALIZE este arquivo com:
+> - Bugs corrigidos (arquivo, linha, correção)
+> - Capacidades verificadas vs apenas declaradas
+> - Bloqueadores encontrados
+> - Lições aprendidas
+> - Commits realizados
+> NÃO espere que o usuário peça. Se você fez algo relevante, registre.
+>
+> **NAVEGAÇÃO**: Os [[wikilinks]] acima são seu mapa. Quando precisar de:
+> - Arquitetura → leia [[docs/architecture/system-overview]]
+> - Serviços → leia [[HANDOFF]] → seção Serviços
+> - Benchmarks → leia [[docs/benchmarks/README]]
+> - Auditorias → leia [[docs/JARVIS-COMPARISON]]
+> - Estado do harness → leia este arquivo → seção "Estado Real"
 > Seção abaixo explica o protocolo de 3 camadas.
 >
 > **CLI WRAPPER**: Use `scripts/jarvis-cli.sh` to call any JARVIS tool.
