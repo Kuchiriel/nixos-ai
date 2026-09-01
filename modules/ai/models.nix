@@ -358,7 +358,9 @@ in {
       batchSize = 512;
       ubatch = 512;
       moeFlags = "--n-cpu-moe 35";
-      extraArgs = [];
+      extraArgs = [
+        "--no-mmproj-offload"
+      ];
       user = "nixos";
     };
   };
