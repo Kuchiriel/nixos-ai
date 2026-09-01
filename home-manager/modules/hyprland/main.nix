@@ -115,12 +115,16 @@ in {
         "workspace 3, match:class ^(zathura)$"
         "workspace 4, match:class ^(com.obsproject.Studio)$"
         "workspace 5, match:class ^(telegram)$"
-        "float 1, match:class ^.*[Ww]urm.*$"
-        "opacity 1.0 override 1.0 override, match:class ^.*[Ww]urm.*$"
+        # Wurm Standalone Sandbox: gamescope (mouse confined) + macro (floating overlay)
+        "workspace 3, match:class ^(.gamescope-wrapped)$"
+        "fullscreen 1, match:class ^(.gamescope-wrapped)$"
+        "opacity 1.0 override 1.0 override, match:class ^(.gamescope-wrapped)$"
+        "workspace 3, match:class ^(Wurm Macro)$"
+        "float 1, match:class ^(Wurm Macro)$"
+        "size 320 200, match:class ^(Wurm Macro)$"
+        "move 100 100, match:class ^(Wurm Macro)$"
+        "opacity 0.9 0.9, match:class ^(Wurm Macro)$"
         "suppress_event maximize, match:class ^(.*)$"
-        "float 1, match:title ^(Wurm Macro)$"
-        "pin 1, match:title ^(Wurm Macro)$"
-        "opacity 0.9 0.9, match:title ^(Wurm Macro)$"
       ];
     };
 
