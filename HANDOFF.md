@@ -109,6 +109,24 @@ sudo systemctl start jarvis.target
 sudo systemctl stop jarvis.target
 ```
 
+## Auditoria do Harness (2026-09-01)
+
+| Capacidade | Status | Evidência |
+|-----------|--------|-----------|
+| LoopDetector failure tracking | ✅ VERIFIED | test_queue.py + custom tests |
+| Task.fail() crash survival | ✅ VERIFIED | atomic write testado |
+| Task.complete() crash survival | ✅ VERIFIED | `_persist_now()` adicionado |
+| Evaluator no-diff rejection | ✅ VERIFIED | `require_change=True` testado |
+| TaskQueue dedup multi-project | ✅ VERIFIED | project+description key |
+| Context compaction threshold | ✅ VERIFIED | 85% (era 70%) |
+| Context compress preserves errors | ✅ IMPLEMENTED | preserva errors/paths/code |
+| State machine validation | ⚠️ PARTIAL | transições existem mas não validadas |
+| Multi-project state partitioning | ⚠️ LIMITAÇÃO | task_queue.json é global |
+| Evaluator independence | ⚠️ LIMITAÇÃO | usa mesmo LLM/contexto |
+| Agent pipeline real | ❌ BLOQUEADO | requer LLM server ativo |
+
+Relatório completo: [[docs/HARNESS-AUDIT-2026-09-01]]
+
 ## Regras
 
 1. RAG search ANTES de inventar
