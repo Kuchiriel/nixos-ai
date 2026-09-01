@@ -102,7 +102,7 @@ in {
         script = ''
           exec ${llamaBin} \
             -m "${pkgs.aiModels.${prof.model}}" \
-            ${optionalString (prof ? mmproj) ''--mmproj "${pkgs.aiModels.${prof.mmproj}}" ''} \
+            ${optionalString (prof ? mmproj && prof.mmproj != null) ''--mmproj "${pkgs.aiModels.${prof.mmproj}}" ''} \
             --host ${config.services.llama-cpp-server.bindAddress} --port ${toString config.services.llama-cpp-server.port} \
             -c ${toString prof.ctxSize} -t ${toString prof.threads} -b ${toString prof.batchSize} -ub ${toString prof.ubatch} ${optionalString (prof.gpuLayers > 0) "-ngl ${toString prof.gpuLayers}"} \
             ${prof.kvCache} ${prof.moeFlags} \
