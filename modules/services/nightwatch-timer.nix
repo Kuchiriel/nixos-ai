@@ -28,6 +28,7 @@ in {
       Environment = [
         "PYTHONPATH=${jarvisPackage}/lib/python3.13/site-packages"
         "JARVIS_PROJECT_ROOT=${projectRoot}"
+        "PATH=/run/current-system/sw/bin:${pkgs.git}/bin:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.findutils}/bin:${pkgs.gnused}/bin"
       ];
       ExecStart = "${jarvisPackage}/bin/jarvis nightwatch --tasks 10 --report-telegram";
       WorkingDirectory = projectRoot;

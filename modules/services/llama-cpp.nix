@@ -158,8 +158,8 @@ in {
           NoNewPrivileges = true;           # Sem escalada de privilégio
           RestrictSUIDSGID = true;          # Sem arquivos SUID/SGID
           # ── Resource limits ──
-          MemoryMax = "256M";               # Max 256MB RAM
-          TasksMax = 16;                    # Max 16 tasks
+          MemoryMax = "1G";                 # Max 1GB RAM (model is 438MB)
+          TasksMax = 64;                    # Max 64 tasks (threads)
         };
       };
     };
