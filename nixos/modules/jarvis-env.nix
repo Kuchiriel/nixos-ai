@@ -48,22 +48,36 @@ with lib; {
   config = mkIf config.services.jarvis.enable {
     # ═══════════════════════════════════════════════════════════════════
     # JARVIS TARGET — target mestre do ecossistema
+    #
+    # Inicia automaticamente no boot via wantedBy.
+    # Para tudo com: sudo systemctl stop jarvis.target
+    # Inicia tudo com: sudo systemctl start jarvis.target
     # ═══════════════════════════════════════════════════════════════════
     systemd.targets.jarvis = {
       description = "Jarvis AI Ecosystem";
       wants = [
         # Infraestrutura
         "qdrant.service"
+        # Inferência
         "llama-cpp-server.service"
+        "llama-cpp-embeddings.service"
+        "llama-cpp-rerank.service"
+        "llama-fan-control.service"
         # Consumidores
-        "jarvis-gaming-watcher.service"
-        "jarvis-heal.service"
         "jarvis-telegram.service"
+        # Nightwatch (execução noturna autônoma)
+        "nightwatch.service"
+        # Auto-reparo e gaming (só quando habilitados)
+        "jarvis-heal.service"
+        "jarvis-gaming-watcher.service"
       ];
       after = [
         "qdrant.service"
         "llama-cpp-server.service"
+        "llama-cpp-embeddings.service"
+        "llama-cpp-rerank.service"
       ];
+      wantedBy = ["multi-user.target"];
     };
 
     # ═══════════════════════════════════════════════════════════════════

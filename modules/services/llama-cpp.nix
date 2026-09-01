@@ -114,6 +114,8 @@ in {
 
       llama-cpp-embeddings = mkIf config.services.llama-cpp-embeddings.enable {
         description = "Llama.cpp Embeddings Server";
+        after = ["network-online.target" "qdrant.service"];
+        wants = ["network-online.target"];
         partOf = ["jarvis.target"];
         wantedBy = ["jarvis.target"];
         script = ''
@@ -137,6 +139,8 @@ in {
 
       llama-cpp-rerank = mkIf config.services.llama-cpp-rerank.enable {
         description = "Llama.cpp Rerank Server";
+        after = ["network-online.target"];
+        wants = ["network-online.target"];
         partOf = ["jarvis.target"];
         wantedBy = ["jarvis.target"];
         environment.CUDA_VISIBLE_DEVICES = "";

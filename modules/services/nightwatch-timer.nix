@@ -4,9 +4,11 @@
 # Independent of session — systemd handles scheduling.
 #
 # Usage:
-#   systemctl --user start nightwatch    # run now
-#   systemctl --user status nightwatch   # check status
-#   journalctl --user -u nightwatch -f   # follow logs
+#   sudo systemctl start nightwatch    # run now
+#   sudo systemctl status nightwatch   # check status
+#   sudo journalctl -u nightwatch -f   # follow logs
+#   sudo systemctl start jarvis.target # start all jarvis services
+#   sudo systemctl stop jarvis.target  # stop all jarvis services
 
 { config, lib, pkgs, ... }:
 
@@ -16,8 +18,10 @@ let
 in {
   systemd.services.nightwatch = {
     description = "JARVIS nightwatch — autonomous overnight maintenance";
-    after = [ "llama-cpp-server.service" ];
+    after = [ "llama-cpp-server.service" "jarvis.target" ];
     wants = [ "llama-cpp-server.service" ];
+    partOf = [ "jarvis.target" ];
+    wantedBy = [ "jarvis.target" ];
 
     serviceConfig = {
       Type = "oneshot";
