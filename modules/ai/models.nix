@@ -363,6 +363,7 @@ in {
       ctxSize = 4096;
       batchSize = 512;
       ubatch = 512;
+      mmproj = null; # Disable vision model — saves 861MB VRAM + prevents crash
       moeFlags = "--n-cpu-moe 35 --split-mode layer";
       extraArgs = [
         "--parallel"
