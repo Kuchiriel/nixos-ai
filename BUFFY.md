@@ -748,3 +748,57 @@ a82f959 fix: disable mmproj in fast profile (was crashing on load)
 4c70fa3 fix: nightwatch needs git in PATH, rerank needs more memory
 e44ef04 fix: make jarvis.target the real master service
 ```
+
+## Sessão: PrismML/Bonsai Benchmark (2026-09-01)
+
+### O que foi descoberto
+
+1. **PrismML binary funciona** — `llama-server` (build 10660) é um stub ELF de 18KB
+   que carrega `libllama-server-impl.so` via `$ORIGIN`. Precisa de 3 libs CUDA:
+   - `libcuda.so.1` (NVIDIA driver): `/nix/store/.../nvidia-x11-595.71.05/lib/`
+   - `libcudart.so.12` (CUDA toolkit): `/nix/store/.../cuda12.9-cuda_cudart-12.9.79/lib/`
+   - `libcublas.so.12` (cuBLAS): `/nix/store/.../cuda12.9-libcublas-12.9.1.4-lib/lib/`
+
+2. **Modelo Q2_0 legado ≠ PQ2_0** — PrismML b10660 espera `PQ2_0` (type id 142,
+   group-64), mas o modelo baixado era `Q2_0` legado (type id 42, group-128).
+   Erro claro: "use the PQ2_0 version of this model".
+
+3. **Modelo正在baixando** — `Ternary-Bonsai-8B-PQ2_0.gguf` (1.76GB) em download
+   via wget, ~17% concluído. HuggingFace LFS throttle = ~60min restante.
+
+4. **Qwen atual: 9.9 tok/s** — RTX 4050 com 45 ngl + 35 cpu-moe + 4096 ctx.
+   GPU em P3/P8 (baixa potência), 59°C. Usuário relata 30 tok/s em sessões
+   anteriores — possível regressão por thermal throttling ou mudança de config.
+
+5. **ik-llama binários existem** — `~/models/ik-llama/build/bin/` tem llama-server
+   (11MB) com CUDA, mas precisa `libcuda.so.1` no LD_LIBRARY_PATH.
+
+### Comando para testar PrismML com Bonsai
+
+```bash
+NVIDIA_LIB="/nix/store/rsha0mmmyzsrbryja5ck9w0cdcsj1lap-nvidia-x11-595.71.05/lib"
+CUDA_LIB="/nix/store/s6aspcvp29vwfqv5wva5gfnmzahcny63-cuda12.9-cuda_cudart-12.9.79/lib"
+CUBLAS_LIB="/nix/store/h4zc291jsiamkwivbdrjmsay8ipxqjaj-cuda12.9-libcublas-12.9.1.4-lib/lib"
+PRISM_DIR="$HOME/projects/prism-bin/llama-prism-b10660-e311ed3"
+export LD_LIBRARY_PATH="$PRISM_DIR:$NVIDIA_LIB:$CUDA_LIB:$CUBLAS_LIB"
+
+$PRISM_DIR/llama-server \
+  -m ~/projects/models/Ternary-Bonsai-8B-PQ2_0.gguf \
+  --host 127.0.0.1 --port 8090 \
+  -c 2048 -ngl 99
+```
+
+### Pendente
+
+- [ ] Completar download PQ2_0 (~60min)
+- [ ] Testar PrismML + Bonsai real
+- [ ] Benchmark comparativo: Bonsai 8B vs Qwen3.6-35B-A3B
+- [ ] Investigar por que Qwen caiu de 30 para 9.9 tok/s
+- [ ] Wrapper permanente para PrismML (LD_LIBRARY_PATH)
+
+### Commits desta sessão
+
+```
+(mudanças em progresso — aguardar download)
+```
+
