@@ -852,3 +852,70 @@ ik_llama may benefit other model architectures or multi-GPU setups.
 | prism-llama | Ternary/quantization | 🔜 For Bonsai model |
 | moe-cache | Disk read tracking | ❌ Not enough unique |
 
+
+## Expert Hot Store (EHS) — wackmall fork analysis
+
+### What it does
+Caches the most frequently used MoE experts in VRAM while cold experts stay in RAM.
+For Qwen3.6-35B-A3B with 35 experts per layer, only ~2-4 are active per token.
+EHS keeps the hot experts on GPU, avoiding RAM→GPU transfer latency.
+
+### Key Parameters
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `expert_hot_s` | Number of hot expert slots per layer | 0 (disabled) |
+| `expert_sync_period` | Tokens between re-syncs | 0 (disabled) |
+| `expert_hyst` | Hysteresis to prevent thrashing | - |
+| `expert_dwell` | Tokens before evicting unused expert | - |
+| `expert_move_mode` | 0=auto, 1=copy, 2=move | 0 |
+| `expert_heat_decay` | Heat value decay rate | - |
+| `expert_pin_pct` | Percentage of experts to pin | - |
+| `expert_sidecar` | Sidecar file for expert data | false |
+
+### Architecture
+```
+GPU VRAM (6GB)
+├── Attention layers (always active)
+├── KV cache
+├── Hot Store (S slots per layer)
+│   ├── Slot 0: Expert 3 (hot)
+│   ├── Slot 1: Expert 7 (hot)
+│   └── Slot 2: Expert 12 (hot)
+└── Compute buffer
+
+CPU RAM
+├── Cold experts (35 - S per layer)
+└── Model weights
+```
+
+### How it works
+1. **Heatmap tracking**: Counts which experts are used per token
+2. **Periodic re-sync**: Every N tokens, compare heatmap to hot store
+3. **Promote**: If cold expert is used more than hot expert, swap
+4. **Hysteresis**: Requires sustained usage before promoting (prevents thrashing)
+5. **Dwell time**: Expert must be unused for N tokens before eviction
+
+### Why it matters for us
+- RTX 4050 has 6GB VRAM
+- Qwen3.6-35B-A3B has 35 experts per layer, ~2-4 active per token
+- Without EHS: all experts in RAM, every token needs RAM→GPU transfer
+- With EHS: hot experts in VRAM, only cold experts need transfer
+- Expected improvement: 2-3x token generation speed for MoE models
+
+### Integration status
+- **wackmall fork**: EHS fully implemented (51KB code)
+- **Our upstream**: Not implemented
+- **Effort to port**: Medium (needs ggml backend integration)
+- **Priority**: Future — current 30 tok/s is acceptable
+
+### CLI flags (when available)
+```bash
+llama-server \
+  --expert-hot-s 8 \        # Keep 8 hot experts per layer in VRAM
+  --expert-sync-period 100 \ # Re-sync every 100 tokens
+  --expert-hyst 0.3 \        # 30% hysteresis threshold
+  --expert-dwell 50 \        # Evict after 50 tokens unused
+  --expert-move-mode 0 \     # Auto (copy if RAM fits, move if not)
+  ...
+```
+
