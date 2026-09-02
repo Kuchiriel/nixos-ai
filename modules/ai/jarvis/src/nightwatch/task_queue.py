@@ -39,6 +39,22 @@ class TaskStatus(str, Enum):
     ABANDONED = "ABANDONED"
 
 
+# P5: Explicit state machine — only these transitions are allowed.
+# Anything else is a bug or corrupted state.
+VALID_TRANSITIONS: dict[str, set[str]] = {
+    TaskStatus.DISCOVERED.value: {TaskStatus.READY.value, TaskStatus.IN_PROGRESS.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
+    TaskStatus.READY.value: {TaskStatus.IN_PROGRESS.value, TaskStatus.FAILED.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
+    TaskStatus.IN_PROGRESS.value: {TaskStatus.VALIDATING.value, TaskStatus.READY.value, TaskStatus.FAILED.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
+    TaskStatus.VALIDATING.value: {TaskStatus.REVIEW.value, TaskStatus.READY.value, TaskStatus.FAILED.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
+    TaskStatus.REVIEW.value: {TaskStatus.COMPLETED.value, TaskStatus.READY.value, TaskStatus.FAILED.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
+    # Terminal states
+    TaskStatus.COMPLETED.value: set(),
+    TaskStatus.FAILED.value: {TaskStatus.READY.value, TaskStatus.BLOCKED.value},  # retry or block
+    TaskStatus.BLOCKED.value: {TaskStatus.READY.value, TaskStatus.BLOCKED.value},  # unblock or no-op
+    TaskStatus.ABANDONED.value: set(),
+}
+
+
 LOOP_DETECTOR_FILE = STATE_DIR / "loop_detector.json"
 
 
@@ -173,23 +189,34 @@ class Task:
         filtered = {k: v for k, v in data.items() if k in known}
         return cls(**filtered)
     
-    def block(self, reason: str) -> None:
-        self.status = TaskStatus.BLOCKED.value
-        self.last_error = reason
+    def _transition(self, new_status: str) -> bool:
+        """Validate and apply a state transition. Returns True if valid."""
+        allowed = VALID_TRANSITIONS.get(self.status, set())
+        if new_status not in allowed:
+            # Log but don't crash — this is a bug, not a fatal error
+            import sys
+            print(
+                f"[P5-BUG] Invalid transition: {self.status} → {new_status} "
+                f"(task={self.id}, project={self.project})",
+                file=sys.stderr,
+            )
+            return False
+        self.status = new_status
         self.updated_at = time.time()
+        return True
+    
+    def block(self, reason: str) -> None:
+        self._transition(TaskStatus.BLOCKED.value)
+        self.last_error = reason
     
     def fail(self, error: str) -> None:
         self.attempts += 1
         self.last_error = error
-        self.updated_at = time.time()
         if self.attempts >= self.max_attempts:
-            self.status = TaskStatus.FAILED.value
+            self._transition(TaskStatus.FAILED.value)
         else:
-            self.status = TaskStatus.READY.value
+            self._transition(TaskStatus.READY.value)
         # Persist immediately to avoid data loss on crash
-        # This is a critical state transition — if the process dies
-        # after fail() but before the caller saves, we must not lose
-        # the attempt count or status change.
         self._persist_now()
 
     def _persist_now(self) -> None:
@@ -223,23 +250,20 @@ class Task:
             pass
 
     def complete(self, commit_sha: str | None = None) -> None:
-        self.status = TaskStatus.COMPLETED.value
+        self._transition(TaskStatus.COMPLETED.value)
         self.commit_sha = commit_sha
-        self.updated_at = time.time()
-        # Persist immediately — same as fail(), crash between complete()
-        # and TaskQueue._save() must not lose the completion state.
+        # Persist immediately — crash between complete() and TaskQueue._save()
+        # must not lose the completion state.
         self._persist_now()
     
     def abandon(self, reason: str) -> None:
-        self.status = TaskStatus.ABANDONED.value
+        self._transition(TaskStatus.ABANDONED.value)
         self.last_error = reason
-        self.updated_at = time.time()
     
     def skip(self, reason: str) -> None:
         """Skip this task (e.g. dry-run, no changes needed)."""
-        self.status = TaskStatus.ABANDONED.value
+        self._transition(TaskStatus.ABANDONED.value)
         self.last_error = f"skipped: {reason}"
-        self.updated_at = time.time()
     
     @property
     def is_terminal(self) -> bool:
@@ -367,12 +391,18 @@ class TaskQueue:
         return None
     
     def update_task(self, task_id: str, **kwargs: Any) -> None:
-        """Update a task's fields."""
+        """Update a task's fields.
+        
+        If 'status' is being changed, validates the transition.
+        """
         for task in self._tasks:
             if task.id == task_id:
+                new_status = kwargs.pop("status", None)
                 for key, value in kwargs.items():
                     if hasattr(task, key):
                         setattr(task, key, value)
+                if new_status is not None:
+                    task._transition(new_status)
                 task.updated_at = time.time()
                 break
         self._save()
@@ -428,7 +458,7 @@ class TaskQueue:
                 age = now - task.updated_at
                 if age > max_age_seconds:
                     # Reset to READY so it can be retried
-                    task.status = TaskStatus.READY.value
+                    task._transition(TaskStatus.READY.value)
                     task.last_error = f"Recovered from stuck state after {age:.0f}s"
                     task.updated_at = now
                     recovered += 1
