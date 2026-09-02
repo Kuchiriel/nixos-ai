@@ -1,4 +1,6 @@
 """E2E tests for all 17 JARVIS MCP tools.
+import pytest
+pytestmark = pytest.mark.integration
 
 Tests each tool via the MCP server's JSON-RPC interface.
 Requires: Qdrant running, embeddings server running, llama-server running.

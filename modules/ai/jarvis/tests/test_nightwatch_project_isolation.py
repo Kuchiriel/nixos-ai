@@ -1,4 +1,6 @@
 """Integration tests for real cross-project isolation.
+import pytest
+pytestmark = pytest.mark.integration
 
 Before this: nightwatch.paths.REPO_ROOT was computed once at process
 import time and referenced directly (not as a parameter) inside

@@ -1,4 +1,6 @@
 """Real E2E test for nightwatch harness.
+import pytest
+pytestmark = pytest.mark.integration
 
 Tests the full pipeline with REAL file operations:
 - SafeEditor writes files atomically

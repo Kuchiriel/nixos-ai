@@ -1,4 +1,6 @@
 """Regression test: run_targeted_tests() must never silently narrow the
+import pytest
+pytestmark = pytest.mark.integration
 safety net to a single unrelated file when no test matches the change.
 
 Contexto: antes desta correção, mudar um arquivo sem teste homônimo (ex:

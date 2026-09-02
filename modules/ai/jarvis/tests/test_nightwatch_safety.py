@@ -1,4 +1,6 @@
 """Integration tests for nightwatch.safety branch isolation — real git,
+import pytest
+pytestmark = pytest.mark.integration
 no mocks. This is the mechanism just wired into harness.execute_task();
 before this file, zero tests exercised create_task_branch/abort_task_branch/
 merge_task_branch against a real repo (only is_path_protected had coverage,

@@ -1,4 +1,6 @@
 """Testes do agente tool-calling seguro (core/agent.py)."""
+import pytest
+pytestmark = pytest.mark.integration
 
 import json as jsonlib
 

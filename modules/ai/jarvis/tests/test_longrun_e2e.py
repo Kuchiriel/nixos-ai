@@ -1,4 +1,6 @@
 """E2E tests for long-run autonomy and multi-project isolation.
+import pytest
+pytestmark = pytest.mark.integration
 
 Tests:
 - Multi-project task isolation

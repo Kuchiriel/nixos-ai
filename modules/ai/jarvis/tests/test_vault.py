@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+pytestmark = pytest.mark.integration
+
 import time
 
 from jarvis.core.config import Config

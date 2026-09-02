@@ -42,31 +42,12 @@
     nativeCheckInputs = with python3Packages; [pytest hypothesis];
     checkPhase = ''
       runHook preCheck
-      # Sandbox-safe subset: skip tests that write to ~/.local/state/jarvis/.
-      # These fail in Nix sandbox (/homeless-shelter is read-only).
-      # They pass on host: nix develop --command pytest tests/
-      pytest -m "not integration" -q \
-        --ignore=tests/test_agent.py \
-        --ignore=tests/test_longrun_e2e.py \
-        --ignore=tests/test_harness_e2e.py \
-        --ignore=tests/test_nightwatch_real_e2e.py \
-        --ignore=tests/test_memory.py \
-        --ignore=tests/test_logging.py \
-        --ignore=tests/test_bulldozer.py \
-        --ignore=tests/test_mcp_tools_e2e.py \
-        --ignore=tests/test_hackmd.py \
-        --ignore=tests/test_nightwatch_e2e_full.py \
-        --ignore=tests/test_audiobook.py \
-        --ignore=tests/test_audiobook_ui.py \
-        --ignore=tests/test_voice.py \
-        --ignore=tests/test_nightwatch_safety.py \
-        --ignore=tests/test_nightwatch_project_isolation.py \
-        --ignore=tests/test_nightwatch_validator_fallback.py \
-        --ignore=tests/test_integration.py \
-        --ignore=tests/test_legacy_index.py \
-        --ignore=tests/test_llm.py \
-        --ignore=tests/test_rag.py \
-        --ignore=tests/test_vault.py
+      # P8: Sandbox-safe subset via markers, not file-name ignores.
+      # Tests marked @pytest.mark.integration need external services
+      # (LLM server, Qdrant, network, git, audio) and fail in the
+      # Nix sandbox (/homeless-shelter is read-only).
+      # Run on host: nix develop --command pytest tests/
+      pytest -m "not integration" -q
       runHook postCheck
     '';
 

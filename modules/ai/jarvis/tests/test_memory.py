@@ -1,4 +1,6 @@
 """Testes da memória episódica (core/memory.py) com mocks."""
+import pytest
+pytestmark = pytest.mark.integration
 
 import time
 

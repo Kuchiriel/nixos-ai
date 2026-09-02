@@ -1,4 +1,6 @@
 """Testes unitários do RAG híbrido (porta V4.0.5) — sem serviços externos."""
+import pytest
+pytestmark = pytest.mark.integration
 
 import os
 

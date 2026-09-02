@@ -1,4 +1,6 @@
 """Testes da voz (core/voice.py) — imports lazy e falhas tolerantes."""
+import pytest
+pytestmark = pytest.mark.integration
 
 from pathlib import Path
 from types import SimpleNamespace

@@ -1,4 +1,6 @@
 """E2E test of the full Nightwatch pipeline.
+import pytest
+pytestmark = pytest.mark.integration
 
 Tests: task -> structured patch -> Patcher -> SafeEditor -> Validator
 """
