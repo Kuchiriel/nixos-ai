@@ -195,6 +195,20 @@ class TestBackendFactory:
             backend = create_backend(config)
             assert backend.__class__.__name__ == "LlamaCppBackend"
     
+    def test_create_prismml_backend(self):
+        """Test creating prismml backend."""
+        with patch.dict(os.environ, {"JARVIS_LLM_BACKEND": "prismml"}):
+            config = Config()
+            backend = create_backend(config)
+            assert backend.__class__.__name__ == "PrismMLBackend"
+    
+    def test_create_bonsai_backend(self):
+        """Test creating bonsai backend (uses PrismML)."""
+        with patch.dict(os.environ, {"JARVIS_LLM_BACKEND": "bonsai"}):
+            config = Config()
+            backend = create_backend(config)
+            assert backend.__class__.__name__ == "PrismMLBackend"
+    
     def test_create_unknown_backend_raises(self):
         """Test that unknown backend raises ValueError."""
         with patch.dict(os.environ, {"JARVIS_LLM_BACKEND": "unknown"}):

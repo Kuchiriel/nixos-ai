@@ -68,7 +68,9 @@
     jq
     htop
     ethtool
-    xclip
+    grim
+    slurp
+    wl-clipboard
     cloudflare-warp
     # Pacote do JARVIS via overlay
     jarvis

@@ -167,26 +167,25 @@ class HarnessResult:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _default_call_llm(prompt: str, max_tokens: int = 2048) -> str:
-    """Call the local LLM via LLMClient (spliced from agent_loop.py).
+    """Call the local LLM via the unified provider LLMClient.
 
-    Uses the same LLMClient that RealAgentLoop uses — system prompt,
-    tool calling support, thinking disabled. Drops the old bare-request
-    mechanism in favor of a single shared LLM abstraction.
+    Uses jarvis.providers.llm which supports multiple backends
+    (llama-cpp, prismml, bonsai) via the LLMBackend abstraction.
     """
     try:
-        from jarvis.core.agent_loop import LLMClient
-        client = LLMClient()
+        from jarvis.providers.llm import LLMClient
+        from jarvis.core.config import Config
+        client = LLMClient(Config())
         messages = [
             {"role": "system", "content": "You are a code improvement assistant. "
              "Return only the requested output, no explanations."},
             {"role": "user", "content": prompt},
         ]
-        response = client.chat(
+        return client.chat(
             messages=messages,
             max_tokens=max_tokens,
             temperature=0.3,
-        )
-        return response.get("content", "") or "ERROR: empty response from LLM"
+        ) or "ERROR: empty response from LLM"
     except Exception as e:
         return f"ERROR: {e}"
 

@@ -23,8 +23,19 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    val = os.environ.get(name)
+    if val is None:
+        return default
+    return val.lower() in ("1", "true", "yes")
+
+
 @dataclass(frozen=True)
 class Config:
+    # --- Backend Selection ---
+    # Which LLM backend to use: "llama-cpp", "prismml", "bonsai", etc.
+    llm_backend: str = field(default_factory=lambda: _env_str("JARVIS_LLM_BACKEND", "llama-cpp"))
+    
     # --- LLM (llama.cpp / OpenAI-compatible) ---
     llm_base_url: str = field(default_factory=lambda: _env_str("JARVIS_LLM_BASE_URL", "http://127.0.0.1:8080/v1"))
     llm_model: str = field(default_factory=lambda: _env_str("JARVIS_LLM_MODEL", "default"))
@@ -33,6 +44,8 @@ class Config:
     # dobra a latência e consome o max_tokens em reasoning antes do tool call.
     # Desligado por default (tool calling direto); host pode reabilitar via env.
     llm_disable_thinking: bool = field(default_factory=lambda: _env_str("JARVIS_LLM_DISABLE_THINKING", "1") == "1")
+    # Tool calling support (True for llama.cpp with jinja, False for simpler backends)
+    llm_tool_calling: bool = field(default_factory=lambda: _env_bool("JARVIS_LLM_TOOL_CALLING", True))
 
     # --- Embeddings (servidor dedicado llama.cpp --embeddings, porta 8081) ---
     embed_base_url: str = field(default_factory=lambda: _env_str("JARVIS_EMBED_BASE_URL", "http://127.0.0.1:8081/v1"))

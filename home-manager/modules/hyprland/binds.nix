@@ -144,9 +144,13 @@ in {
       "$mainMod,       A, exec, ${launcherScript}/bin/nixos-ai-launcher"
       "$mainMod,       G, exec, python3 -c \"from jarvis.core.gaming import toggle_gaming; import json; r=toggle_gaming(); print(json.dumps(r))\""
 
-      # Screenshots resilientes (copia direto para o wl-copy)
-      ", Print, exec, grim - | wl-copy"
-      "$mainMod, Print, exec, grim -g \"$(slurp)\" - | wl-copy"
+      # Screenshots
+      # Print: selecionar área → clipboard
+      ", Print, exec, grim -g \"$(slurp)\" - | wl-copy"
+      # Mod+Print: tela inteira → clipboard
+      "$mainMod, Print, exec, grim - | wl-copy"
+      # Shift+Print: selecionárea → salvar em ~/Imagens
+      "$mainMod SHIFT, Print, exec, grim -g \"$(slurp)\" ~/Imagens/$(date +'%Y%m%d_%H%M%S').png"
 
       # Moving focus
       "$mainMod, left, movefocus, l"

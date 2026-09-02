@@ -76,11 +76,36 @@ class RunResult:
     # Raw data
     raw_runs: list[dict[str, Any]] = field(default_factory=list)
     
-    # Metadata
-    backend: str = "llama-cpp"
-    commit: str = ""
-    fork: str = ""  # "upstream", "wackmall", "ik", "moe-cache", etc.
+    # Backend metadata
+    backend: str = "llama-cpp"  # llama-cpp, prismml, bonsai
+    backend_version: str = ""  # commit or version of the backend
+    model: str = ""  # model name/path
+    model_format: str = ""  # Q4_K_M, Q2_0, PQ2_0, etc.
+    quantization: str = ""  # quantization type
+    
+    # Fork/patch tracking
+    fork: str = ""  # "upstream", "wackmall", "prismml", etc.
+    fork_commit: str = ""  # commit hash of the fork
     patch_description: str = ""
+    
+    # Server config
+    n_ctx: int = 0
+    n_gpu_layers: int = 0
+    threads: int = 0
+    batch_size: int = 0
+    ubatch_size: int = 0
+    parallel: int = 0
+    split_mode: str = ""
+    moe_flags: str = ""
+    
+    # Prompt details
+    prompt: str = ""
+    input_tokens: int = 0
+    output_tokens: int = 0
+    
+    # Quality metrics
+    quality_score: float = 0.0  # 0-1, manual or automated
+    quality_notes: str = ""
     
     # Status
     status: str = "OK"  # OK, FAILED, TIMEOUT, OOM
@@ -225,6 +250,58 @@ class ExperimentTracker:
         
         return comparison
     
+    def validate_quality(self, experiment_id: str) -> dict[str, Any]:
+        """Validate output quality across runs in an experiment.
+        
+        Returns:
+            Dict with quality assessment per config:
+            - has_gibberish: bool (detected repetitive/nonsensical output)
+            - avg_quality_score: float (0-1)
+            - consistency: float (stddev of quality scores)
+            - recommendation: str
+        """
+        exp = self._load_experiment(experiment_id)
+        if exp is None:
+            raise ValueError(f"Experiment not found: {experiment_id}")
+        
+        result = {"configs": {}}
+        
+        for run in exp.runs:
+            if run.config_name not in result["configs"]:
+                result["configs"][run.config_name] = {
+                    "runs": [],
+                    "quality_scores": [],
+                }
+            
+            result["configs"][run.config_name]["runs"].append({
+                "status": run.status,
+                "quality_score": run.quality_score,
+                "quality_notes": run.quality_notes,
+            })
+            
+            if run.quality_score > 0:
+                result["configs"][run.config_name]["quality_scores"].append(
+                    run.quality_score
+                )
+        
+        # Calculate summary per config
+        for config_name, config_data in result["configs"].items():
+            scores = config_data["quality_scores"]
+            if scores:
+                avg = sum(scores) / len(scores)
+                variance = sum((s - avg) ** 2 for s in scores) / len(scores)
+                config_data["avg_quality_score"] = round(avg, 3)
+                config_data["consistency"] = round(variance ** 0.5, 3)
+                config_data["has_gibberish"] = any(s < 0.3 for s in scores)
+            else:
+                config_data["avg_quality_score"] = 0.0
+                config_data["consistency"] = 0.0
+                config_data["has_gibberish"] = False
+            
+            del config_data["quality_scores"]  # Remove raw scores from output
+        
+        return result
+
     def list_experiments(self, limit: int = 20) -> list[dict[str, Any]]:
         """List recent experiments."""
         experiments = []

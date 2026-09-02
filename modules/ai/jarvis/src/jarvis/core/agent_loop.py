@@ -32,66 +32,9 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
-import requests
-
-# ---------------------------------------------------------------------------
-# LLM Client — calls the real llama.cpp server
-# ---------------------------------------------------------------------------
-
-class LLMClient:
-    """Minimal client for llama.cpp /chat/completions endpoint."""
-    
-    def __init__(self, base_url: str = None, model: str = None):
-        self.base_url = (base_url or os.environ.get(
-            "LLAMA_CPP_URL", "http://127.0.0.1:8080"
-        )).rstrip("/")
-        self.model = model or "default"
-        self._query_context_size()
-    
-    def _query_context_size(self):
-        """Query actual n_ctx from the server."""
-        try:
-            resp = requests.get(f"{self.base_url}/props", timeout=5)
-            data = resp.json()
-            settings = data.get("default_generation_settings", {})
-            self.n_ctx = settings.get("n_ctx", 32768)
-        except Exception:
-            self.n_ctx = 32768
-    
-    def chat(self, messages: list[dict], tools: list[dict] = None,
-             temperature: float = 0.3, max_tokens: int = 2048) -> dict:
-        """Send a chat completion request to the LLM."""
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-        if tools:
-            payload["tools"] = tools
-            payload["tool_choice"] = "auto"
-        
-        t0 = time.monotonic()
-        payload["chat_template_kwargs"] = {"enable_thinking": False}
-        resp = requests.post(
-            f"{self.base_url}/v1/chat/completions",
-            json=payload,
-            timeout=600,
-        )
-        elapsed = time.monotonic() - t0
-        resp.raise_for_status()
-        data = resp.json()
-        
-        choice = data["choices"][0]
-        message = choice["message"]
-        
-        return {
-            "content": message.get("content", ""),
-            "tool_calls": message.get("tool_calls", []),
-            "finish_reason": choice.get("finish_reason", ""),
-            "usage": data.get("usage", {}),
-            "latency_seconds": elapsed,
-        }
+# Re-export LLMClient from providers for backward compatibility
+# The old local LLMClient class has been replaced by the unified provider
+from jarvis.providers.llm import LLMClient
 
 
 # ---------------------------------------------------------------------------

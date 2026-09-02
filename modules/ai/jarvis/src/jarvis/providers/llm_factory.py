@@ -60,17 +60,26 @@ def create_backend(
         )
     
     elif backend == "prismml":
-        # Future: PrismML backend
-        raise NotImplementedError(
-            "PrismML backend not yet implemented. "
-            "Set JARVIS_LLM_BACKEND=llama-cpp or contribute an adapter."
+        from .llm_prismml import PrismMLBackend
+        return PrismMLBackend(
+            base_url=base_url or config.llm_base_url.replace("/v1", ""),
+            embed_url=embed_url or config.embed_base_url.replace("/v1", ""),
+            model=model or config.llm_model,
+            connect_timeout=kwargs.get("connect_timeout", 5.0),
+            read_timeout=kwargs.get("read_timeout", float(config.llm_timeout)),
+            session=kwargs.get("session"),
         )
     
     elif backend == "bonsai":
-        # Future: Bonsai Ternary backend
-        raise NotImplementedError(
-            "Bonsai backend not yet implemented. "
-            "Set JARVIS_LLM_BACKEND=llama-cpp or contribute an adapter."
+        # Bonsai runs on PrismML fork (same API, different model format)
+        from .llm_prismml import PrismMLBackend
+        return PrismMLBackend(
+            base_url=base_url or config.llm_base_url.replace("/v1", ""),
+            embed_url=embed_url or config.embed_base_url.replace("/v1", ""),
+            model=model or config.llm_model,
+            connect_timeout=kwargs.get("connect_timeout", 5.0),
+            read_timeout=kwargs.get("read_timeout", float(config.llm_timeout)),
+            session=kwargs.get("session"),
         )
     
     else:
