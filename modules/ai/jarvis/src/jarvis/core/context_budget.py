@@ -109,7 +109,8 @@ class ContextBudget:
     max_tokens: int = 32000
     reserved_tokens: int = 2000  # Reserved for system prompt + response
     warning_threshold: float = 0.80  # 80% of budget
-    compaction_threshold: float = 0.85  # Compact at 85% (was 0.70 — too aggressive)
+    compaction_threshold: float = 0.85  # Compact at 85%
+    _auto_detected: bool = field(default=False, init=False)  # Whether n_ctx was auto-detected
 
     # Truncation limits
     max_tool_output_tokens: int = 2000
@@ -128,6 +129,14 @@ class ContextBudget:
     total_tool_calls: int = 0
     phase_tokens: dict[str, int] = field(default_factory=dict)
     phase_calls: dict[str, int] = field(default_factory=dict)
+
+    def __post_init__(self):
+        """Auto-detect n_ctx from llama.cpp server if max_tokens is default."""
+        if self.max_tokens == 32000 and not self._auto_detected:
+            server_ctx = query_server_context_size()
+            if server_ctx > 0:
+                self.max_tokens = server_ctx
+                self._auto_detected = True
 
     @property
     def available_tokens(self) -> int:
@@ -257,12 +266,16 @@ class ContextBudget:
                 preserved = []
                 for line in lines[:5]:  # Keep first 5 lines
                     preserved.append(line)
-                # Also preserve lines with error indicators
+                # Also preserve lines with error/file indicators
+                high_signal_keywords = [
+                    "error", "fail", "traceback", "exception",
+                    "import", "def ", "class ", "file ",
+                    ".py", ".nix", "test_", "commit",
+                    "task", "project", "status", "passed", "failed",
+                ]
                 for line in lines:
                     lower = line.lower()
-                    if any(kw in lower for kw in ["error", "fail", "traceback", "exception",
-                                                   "import", "def ", "class ", "file ",
-                                                   ".py", ".nix", "test_"]):
+                    if any(kw in lower for kw in high_signal_keywords):
                         if line not in preserved:
                             preserved.append(line)
                             if len(preserved) > 15:
@@ -464,7 +477,7 @@ class ContextBudget:
             max_tokens=data.get("max_tokens", 32000),
             reserved_tokens=data.get("reserved_tokens", 2000),
             warning_threshold=data.get("warning_threshold", 0.80),
-            compaction_threshold=data.get("compaction_threshold", 0.70),
+            compaction_threshold=data.get("compaction_threshold", 0.85),
             total_tokens_processed=data.get("total_tokens_processed", 0),
             total_compactions=data.get("total_compactions", 0),
             total_llm_calls=data.get("total_llm_calls", 0),
