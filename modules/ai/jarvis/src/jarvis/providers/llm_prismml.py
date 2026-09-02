@@ -84,8 +84,9 @@ class PrismMLBackend(LLMBackend):
             read_timeout: Read timeout in seconds
             session: Optional pre-built requests session (for testing)
         """
-        self._base_url = base_url.rstrip("/")
-        self._embed_url = (embed_url or base_url).rstrip("/")
+        # Strip trailing /v1 if present — adapter appends it
+        self._base_url = base_url.rstrip("/").removesuffix("/v1")
+        self._embed_url = (embed_url or base_url).rstrip("/").removesuffix("/v1")
         self._model = model
         self._connect_timeout = connect_timeout
         self._read_timeout = read_timeout
