@@ -972,3 +972,94 @@ llama-server \
 4. **Custom build** mergeando features de cada fork
 5. **Bonsai model** quando download completar
 
+
+
+## 📊 SESSÃO 2026-09-02 — Backend Abstraction + P5/P7/P8/P9
+
+### Benchmark Result (llama.cpp baseline)
+
+| Metric | Value |
+|--------|-------|
+| Model | Qwen3.6-35B-A3B Q4_K_M |
+| Backend | llama.cpp upstream |
+| Peak TG | 33.1 tok/s |
+| Mean TG | 26.9 tok/s |
+| Median TG | 30.4 tok/s |
+| GPU Temp | 56°C |
+| VRAM | 5502/6141 MiB |
+| Hardware | RTX 4050 6GB, i7-13620H, 32GB RAM |
+| Config | --n-cpu-moe 35 --split-mode layer -fa on -c 4096 -t 8 |
+
+### Commits desta sessão
+
+| Commit | O que |
+|--------|-------|
+| 1d443ac | Backend abstraction + PrismML adapter + 32 tests |
+| 6174389 | P5: State machine validation (VALID_TRANSITIONS) |
+| 2f980f4 | P8: Pytest markers (conftest.py + 21 files marked) |
+| 58647bf | P7: Context budget auto-detect n_ctx + threshold fix |
+| f714d25 | Fix PrismML double /v1 URL bug |
+
+### Lições aprendidas
+
+1. **SafeEditor expects Path, not str** — `SafeEditor(Path(...))` não `SafeEditor(str)`
+2. **Validator class doesn't exist** — use `validate_file()`, `validate_change()`, `validate_changed_files()` functions
+3. **ValidationReport has `passed` and `summary`** — not individual counters like `syntax_checks_passed`
+4. **Qwen3.6 thinking tokens** — reasoning tokens consume max_tokens budget, short prompts return empty content
+5. **Bonsai PQ2_0 models corrupted** — incomplete downloads, tensor bounds errors, need re-download
+6. **PrismML same API as llama.cpp** — adapter is semantically equivalent, just different binary
+7. **Double /v1 bug** — config returns `http://host:port/v1` but adapters append `/v1/chat/completions`
+8. **State machine found real bugs** — DISCOVERED→IN_PROGRESS, READY→FAILED, BLOCKED→BLOCKED were missing
+9. **from_dict threshold mismatch** — class default 0.85 vs from_dict fallback 0.70
+10. **sed breaks from __future__** — inserting markers after line 1 breaks Python imports
+
+### O que funciona de verdade
+
+| Capacidade | Status | Evidência |
+|-----------|--------|-----------|
+| Backend abstraction | ✅ VERIFIED | 32 tests, factory works with llama-cpp/prismml/bonsai |
+| State machine | ✅ VERIFIED | 16 tests, invalid transitions rejected |
+| Context budget | ✅ VERIFIED | 10 tests, auto-detect from /props |
+| Test taxonomy | ✅ VERIFIED | conftest.py + markers, -m "not integration" works |
+| E2E pipeline | ✅ VERIFIED | discovery→task→checkpoint→safeedit→validate on Corretor |
+| LLM chat | ✅ VERIFIED | llama-cpp backend responds |
+| Tool calling | ✅ VERISADE | Qwen returns correct tool_calls |
+
+### O que NÃO funciona
+
+| Capacidade | Status | Motivo |
+|-----------|--------|--------|
+| Bonsai model | ❌ BLOCKED | Model files corrupted (incomplete download) |
+| PrismML standalone | ⚠️ PARTIAL | VRAM insufficient for 2 servers simultaneously |
+| Qwen thinking tokens | ⚠️ LIMITATION | Short prompts → empty content (all tokens to thinking) |
+| Nightwatch autonomous | ⚠️ PARTIAL | Pipeline works but needs LLM integration in harness |
+
+### Próximos passos reais
+
+1. Re-download Bonsai PQ2_0 model (current files corrupted)
+2. Stop Qwen server → start PrismML with Bonsai → test real ternary inference
+3. Connect LLMClient to harness.py for autonomous execution
+4. P9: Full E2E with LLM generating real patches
+
+## 🔗 CROSS-PROJECT REFERENCE
+
+> Para contexto do monorepo completo, leia `~/projects/BUFFY.md`
+
+### Monorepo Structure
+- **nixos-ai** → PRIMARY (Nix+Python, P0, Protected)
+- **llama.cpp** → REFERENCE (C++, P1, Protected)
+- **prism-bin** → TOOL (PrismML binary, P1, Protected)
+- **Corretor** → PROJECT (Python, E2E tested)
+- **Wurm Ultimate** → PROJECT (Game macros)
+
+### Disponível no Monorepo
+- RAG: `cd ~/projects/nixos-ai && ./scripts/jarvis-cli.sh rag-search "query"`
+- Memory: `cd ~/projects/nixos-ai && ./scripts/jarvis-cli.sh recall "query"`
+- Vault: `cd ~/projects/nixos-ai && ./scripts/jarvis-cli.sh vault-write "name" "content"`
+- Personas: `cd ~/projects/nixos-ai && ./scripts/jarvis-cli.sh persona --list`
+
+### Próximos Passos (do Monorepo)
+1. Re-download Bonsai PQ2_0 (em progresso, 98MB/2GB)
+2. Stop Qwen → start PrismML with Bonsai → test ternary inference
+3. Connect LLMClient to harness.py for autonomous execution
+4. P9: Full E2E with LLM generating real patches
