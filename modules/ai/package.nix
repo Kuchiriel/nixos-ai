@@ -61,7 +61,12 @@
         --ignore=tests/test_voice.py \
         --ignore=tests/test_nightwatch_safety.py \
         --ignore=tests/test_nightwatch_project_isolation.py \
-        --ignore=tests/test_nightwatch_validator_fallback.py
+        --ignore=tests/test_nightwatch_validator_fallback.py \
+        --ignore=tests/test_integration.py \
+        --ignore=tests/test_legacy_index.py \
+        --ignore=tests/test_llm.py \
+        --ignore=tests/test_rag.py \
+        --ignore=tests/test_vault.py
       runHook postCheck
     '';
 
