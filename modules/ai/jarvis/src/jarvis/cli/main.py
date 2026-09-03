@@ -385,6 +385,8 @@ def _cmd_ask(args: argparse.Namespace) -> int:
     from jarvis.core.router import (
         handle_agent, handle_doctor, handle_fastpath, handle_nixos, handle_rag, route_request,
     )
+    from jarvis.control_plane.events import Events, Severity
+    from jarvis.control_plane.notifications import get_notification_manager
 
     cfg = get_config()
     route = route_request(args.prompt)
@@ -403,6 +405,14 @@ def _cmd_ask(args: argparse.Namespace) -> int:
     except Exception as exc:  # noqa: BLE001
         set_status("error", str(exc)[:120])
         notify("JARVIS", f"Erro: {exc}", urgency="critical")
+        # Also publish via Control Plane
+        try:
+            get_notification_manager().notify(
+                "JARVIS Error", str(exc)[:200],
+                severity=Severity.ERROR, channels=["desktop", "web"],
+            )
+        except Exception:  # noqa: BLE001
+            pass
         raise
     out["_route"] = {"handler": route.handler, "reason": route.reason}
     print(json.dumps(out, ensure_ascii=False, indent=2))
@@ -965,6 +975,30 @@ def build_parser() -> argparse.ArgumentParser:
     p_ev.add_argument("--task", default=None, help="evidencia de uma task especifica")
     p_ev.set_defaults(func=_cmd_evidence)
 
+    # control — Control Plane commands (unified interface)
+    p_ctrl = sub.add_parser("control", help="Control Plane: unified command interface")
+    ctrl_sub = p_ctrl.add_subparsers(dest="control_action", required=True)
+    p_cstatus = ctrl_sub.add_parser("status", help="full system status")
+    p_cstatus.set_defaults(func=_cmd_control_status)
+    p_cstate = ctrl_sub.add_parser("state", help="current state snapshot")
+    p_cstate.set_defaults(func=_cmd_control_state)
+    p_ccmds = ctrl_sub.add_parser("commands", help="list all registered commands")
+    p_ccmds.set_defaults(func=_cmd_control_commands)
+    p_cexec = ctrl_sub.add_parser("exec", help="execute a command")
+    p_cexec.add_argument("name", help="command name (e.g., service.restart)")
+    p_cexec.add_argument("--args", default="{}", help="JSON args for the command")
+    p_cexec.add_argument("--confirm", action="store_true", help="confirm dangerous commands")
+    p_cexec.set_defaults(func=_cmd_control_exec)
+    p_cnotify = ctrl_sub.add_parser("notify", help="send a test notification")
+    p_cnotify.add_argument("title", help="notification title")
+    p_cnotify.add_argument("--body", default="", help="notification body")
+    p_cnotify.add_argument("--severity", default="info", choices=["info", "success", "warning", "error", "critical"])
+    p_cnotify.set_defaults(func=_cmd_control_notify)
+    p_cservices = ctrl_sub.add_parser("services", help="list all known services")
+    p_cservices.set_defaults(func=_cmd_control_services)
+    p_creset = ctrl_sub.add_parser("reset-state", help="reset state store")
+    p_creset.set_defaults(func=_cmd_control_reset_state)
+
     return parser
 
 
@@ -1167,6 +1201,105 @@ def _cmd_evidence(args: argparse.Namespace) -> int:
     else:
         summary = collector.get_summary()
         print(json.dumps(summary, indent=2))
+    return 0
+
+
+def _init_control_plane():
+    """Initialize Control Plane with integration layer."""
+    from jarvis.control_plane.plane import get_control_plane
+    from jarvis.control_plane.integration import setup_integration
+    plane = get_control_plane()
+    setup_integration()
+    return plane
+
+
+def _cmd_control_status(_args: argparse.Namespace) -> int:
+    """Full system status via Control Plane."""
+    plane = _init_control_plane()
+    status = plane.get_full_status()
+    print(json.dumps(status, ensure_ascii=False, indent=2, default=str))
+    return 0
+
+
+def _cmd_control_state(_args: argparse.Namespace) -> int:
+    """Current state snapshot."""
+    plane = _init_control_plane()
+    print(json.dumps(plane.state.get_state(), ensure_ascii=False, indent=2, default=str))
+    return 0
+
+
+def _cmd_control_commands(_args: argparse.Namespace) -> int:
+    """List all registered commands."""
+    plane = _init_control_plane()
+    cmds = plane.commands.list_commands()
+    cats = plane.commands.list_categories()
+    print(f"=== {len(cmds)} Commands ({len(cats)} categories) ===")
+    for cat, count in sorted(cats.items()):
+        print(f"\n  [{cat}]")
+        for cmd in cmds:
+            if cmd["category"] == cat:
+                risk = cmd["risk"].upper()
+                confirm = " ⚠️" if cmd["requires_confirmation"] else ""
+                print(f"    {risk:<8} {cmd['name']:<24} {cmd['description'][:50]}{confirm}")
+    return 0
+
+
+def _cmd_control_exec(args: argparse.Namespace) -> int:
+    """Execute a command via Control Plane."""
+    plane = _init_control_plane()
+    try:
+        cmd_args = json.loads(args.args)
+    except json.JSONDecodeError as exc:
+        print(f"Invalid JSON args: {exc}", file=sys.stderr)
+        return 1
+    result = plane.commands.execute(
+        args.name, cmd_args,
+        source="cli", confirmed=args.confirm,
+    )
+    print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2, default=str))
+    return 0 if result.success else 1
+
+
+def _cmd_control_notify(args: argparse.Namespace) -> int:
+    """Send a test notification via Control Plane."""
+    _init_control_plane()  # Ensure integration is loaded
+    from jarvis.control_plane.notifications import get_notification_manager
+    from jarvis.control_plane.events import Severity
+    nm = get_notification_manager()
+    severity_map = {
+        "info": Severity.INFO,
+        "success": Severity.SUCCESS,
+        "warning": Severity.WARNING,
+        "error": Severity.ERROR,
+        "critical": Severity.CRITICAL,
+    }
+    notified = nm.notify(
+        args.title, args.body,
+        severity=severity_map.get(args.severity, Severity.INFO),
+    )
+    print(f"Notified via: {', '.join(notified)}")
+    return 0
+
+
+def _cmd_control_services(_args: argparse.Namespace) -> int:
+    """List all known services via systemd adapter."""
+    _init_control_plane()  # Ensure integration is loaded
+    from jarvis.control_plane.systemd_adapter import get_systemd_adapter
+    adapter = get_systemd_adapter()
+    services = adapter.list_services()
+    for svc in services:
+        status = "✅" if svc.get("active") else "❌"
+        enabled = "[enabled]" if svc.get("enabled") else "[disabled]"
+        print(f"  {status} {svc['name']:<24} {svc.get('status', '?'):<12} {enabled}  {svc.get('description', '')}")
+    return 0
+
+
+def _cmd_control_reset_state(_args: argparse.Namespace) -> int:
+    """Reset state store."""
+    from jarvis.control_plane.state import get_state_store
+    store = get_state_store()
+    store.update("_meta", "reset_time", time.time())
+    print("State store reset.")
     return 0
 
 
