@@ -1146,3 +1146,27 @@ The pipeline works when:
 - `.bak` files in commits (add to .gitignore)
 - Multi-persona handoff (personas don't pass context to each other yet)
 - Bonsai model download (needs stable internet)
+
+## 🏆 Multi-Persona Pipeline Verified (2026-09-02)
+
+Three personas executed a real pipeline on Corretor:
+1. Researcher: analyzed edits1() → committed analysis
+2. Backend Engineer: optimized edits1() → committed optimization
+3. QA Engineer: added performance regression test → committed test
+
+All 17 tests pass. Pipeline took ~8.5 minutes total.
+
+### Pipeline flow
+```
+Researcher (271s) → Backend Engineer (109s) → QA Engineer (150s)
+     ↓                    ↓                        ↓
+  analysis              optimization            regression test
+  commit                commit                   commit
+```
+
+### What this proves
+- Personas can execute sequentially on the same project
+- Each persona's changes build on the previous one
+- Validator catches regressions between steps
+- Reviewer approves quality changes
+- Git history shows clean progression
