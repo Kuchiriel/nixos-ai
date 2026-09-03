@@ -72,11 +72,28 @@ def _sse_handler(update: Any) -> None:
         "value": update.value,
         "ts": update.ts,
     }
+    _push_to_sse(event_data)
+
+
+def _sse_event_handler(event: Any) -> None:
+    """EventBus event handler that pushes to SSE queues."""
+    event_data = {
+        "type": "event",
+        "topic": event.topic,
+        "source": event.source,
+        "data": event.data,
+        "ts": event.ts,
+    }
+    _push_to_sse(event_data)
+
+
+def _push_to_sse(data: dict[str, Any]) -> None:
+    """Push data to all SSE queues."""
     with _event_lock:
         dead = []
         for q in _event_queues:
             try:
-                q.put_nowait(event_data)
+                q.put_nowait(data)
             except queue.Full:
                 dead.append(q)
         for q in dead:
@@ -183,6 +200,13 @@ def notify(req: NotifyRequest) -> dict[str, Any]:
     return {"notified": notified}
 
 
+@app.get("/api/events/history")
+def event_history(limit: int = 100) -> list[dict[str, Any]]:
+    """Get recent event history."""
+    plane = _get_plane()
+    return plane.get_event_history(limit)
+
+
 @app.get("/api/events/stats")
 def event_stats() -> dict[str, Any]:
     """Event bus statistics."""
@@ -207,6 +231,10 @@ async def events_stream():
 
     # Subscribe to state store
     plane.state.subscribe(None, _sse_handler)
+
+    # Subscribe to EventBus events
+    from jarvis.core.eventbus import get_bus
+    get_bus().subscribe("", _sse_event_handler, name="sse-bridge")
 
     async def generate():
         try:

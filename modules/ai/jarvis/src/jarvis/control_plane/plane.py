@@ -18,13 +18,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from jarvis.control_plane.events import Events, Severity, EventData
-from jarvis.control_plane.state import StateStore, Sections, get_state_store
-from jarvis.control_plane.commands import CommandRegistry, Risk, get_command_registry
-from jarvis.control_plane.notifications import (
-    NotificationManager, get_notification_manager,
-)
-from jarvis.core.eventbus import EventBus, Event, get_bus
+from jarvis.control_plane.events import Events, Severity
+from jarvis.control_plane.state import Sections, get_state_store
+from jarvis.control_plane.commands import Risk, get_command_registry
+from jarvis.control_plane.notifications import get_notification_manager
+from jarvis.core.eventbus import Event, get_bus
 
 
 class ControlPlane:
@@ -46,6 +44,7 @@ class ControlPlane:
         self.commands = get_command_registry()
         self.notifications = get_notification_manager()
         self._systemd = None  # Lazy init
+        self._event_history: list[dict[str, Any]] = []
 
     def setup(self) -> None:
         """Wire everything together."""
@@ -62,27 +61,18 @@ class ControlPlane:
         self._systemd = get_systemd_adapter()
 
     def _setup_event_subscriptions(self) -> None:
-        """Subscribe to EventBus events for state updates and notifications."""
-        # Health events → state + notifications
-        self.bus.subscribe("doctor.report", self._on_doctor_report)
-        self.bus.subscribe("heal.service", self._on_heal_event)
-        self.bus.subscribe("heal.recovered", self._on_heal_recovered)
+        """Subscribe to EventBus events for state updates and notifications.
 
-        # Agent events → state + notifications
-        self.bus.subscribe("orchestrator.agent.assigned", self._on_agent_assigned)
-
-        # Idle events → state
-        self.bus.subscribe("idle.task", self._on_idle_task)
-
-        # Trigger events → state
-        self.bus.subscribe("trigger.fired", self._on_trigger_fired)
-
-        # Watchdog events → notifications
-        self.bus.subscribe("watchdog.alert", self._on_watchdog_alert)
+        NOTE: Component-specific subscriptions (doctor, heal, idle, triggers,
+        voice) are handled by integration.py to avoid duplication.
+        This method only handles Core-level subscriptions.
+        """
+        # Core event history — every published event gets recorded
+        self.bus.subscribe("", self._record_event, name="cp-event-history")
 
     def _setup_state_subscriptions(self) -> None:
         """Subscribe to state changes for derived state."""
-        pass  # Will be used for derived state computation
+        pass
 
     def _register_core_commands(self) -> None:
         """Register core Control Plane commands."""
@@ -102,83 +92,52 @@ class ControlPlane:
         )
         self.commands.register(
             name="system.events",
-            description="Get recent events from EventBus",
+            description="Get recent event history",
+            risk=Risk.SAFE,
+            handler=self.get_event_history,
+            category="system",
+        )
+        self.commands.register(
+            name="system.event_stats",
+            description="Get event bus statistics",
             risk=Risk.SAFE,
             handler=lambda: self.bus.stats,
             category="system",
         )
 
-    # ─── Event Handlers ────────────────────────────────────────────
+    # ─── Event History ─────────────────────────────────────────────
 
-    def _on_doctor_report(self, event: Event) -> None:
-        """Handle doctor report events."""
-        data = event.data
-        overall = data.get("overall", "ok")
-        self.state.update(Sections.HEALTH, "overall", overall)
-        self.state.update(Sections.HEALTH, "down", data.get("down", 0))
-        self.state.update(Sections.HEALTH, "degraded", data.get("degraded", 0))
+    def _record_event(self, event: Event) -> None:
+        """Record every EventBus event to history."""
+        entry = {
+            "topic": event.topic,
+            "ts": event.ts,
+            "source": event.source,
+            "data_keys": list(event.data.keys()) if event.data else [],
+            "data_summary": self._summarize_event(event),
+        }
+        self._event_history.append(entry)
+        # Keep last 500 events in memory
+        if len(self._event_history) > 500:
+            self._event_history = self._event_history[-500:]
 
-        # Route to notifications based on severity
-        if overall == "down":
-            self.notifications.notify_event(Events.DOCTOR_DOWN, data)
-        elif overall == "degraded":
-            self.notifications.notify_event(Events.DOCTOR_DEGRADED, data)
-        else:
-            self.notifications.notify_event(Events.DOCTOR_COMPLETED, data)
+    def _summarize_event(self, event: Event) -> str:
+        """Create a human-readable summary of an event."""
+        data = event.data or {}
+        topic = event.topic
+        if "service" in data:
+            return f"{data['service']}"
+        if "task" in data:
+            return f"{data['task']}"
+        if "name" in data:
+            return f"{data['name']}"
+        if "overall" in data:
+            return f"{data['overall']}"
+        return ""
 
-    def _on_heal_event(self, event: Event) -> None:
-        """Handle heal events."""
-        data = event.data
-        service = data.get("service", "?")
-        healed = data.get("healed", False)
-
-        if healed:
-            self.state.update(Sections.SERVICES, service, "active")
-            self.notifications.notify_event(Events.HEAL_COMPLETED, {
-                "service": service,
-                "severity": Severity.SUCCESS,
-            })
-        else:
-            self.state.update(Sections.SERVICES, service, "failed")
-            self.notifications.notify_event(Events.HEAL_FAILED, {
-                "service": service,
-                "severity": Severity.ERROR,
-            })
-
-    def _on_heal_recovered(self, event: Event) -> None:
-        """Handle service recovery events."""
-        data = event.data
-        service = data.get("service", "?")
-        self.state.update(Sections.SERVICES, service, "active")
-        self.notifications.notify_event(Events.HEAL_RECOVERED, {
-            "service": service,
-            "severity": Severity.SUCCESS,
-        })
-
-    def _on_agent_assigned(self, event: Event) -> None:
-        """Handle agent assignment events."""
-        data = event.data
-        self.state.update(Sections.AGENT, "active_task", data.get("task_id", ""))
-        self.state.update(Sections.AGENT, "active_persona", data.get("persona", ""))
-        self.state.update(Sections.AGENT, "active_project", data.get("project", ""))
-
-    def _on_idle_task(self, event: Event) -> None:
-        """Handle idle task completion events."""
-        data = event.data
-        task_name = data.get("task", "?")
-        ok = data.get("ok", False)
-        self.state.update(Sections.SYSTEM, "last_idle_task", task_name)
-        self.state.update(Sections.SYSTEM, "last_idle_ok", ok)
-
-    def _on_trigger_fired(self, event: Event) -> None:
-        """Handle trigger events."""
-        data = event.data
-        self.state.update(Sections.SYSTEM, "last_trigger", data.get("name", ""))
-
-    def _on_watchdog_alert(self, event: Event) -> None:
-        """Handle watchdog alerts."""
-        data = event.data
-        self.notifications.notify_event(Events.WATCHDOG_ALERT, data)
+    def get_event_history(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Get recent event history."""
+        return list(self._event_history[-limit:])
 
     # ─── Full Status ───────────────────────────────────────────────
 

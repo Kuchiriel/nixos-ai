@@ -156,72 +156,96 @@ class CommandRegistry:
         source: str = "cli",
         confirmed: bool = False,
     ) -> CommandResult:
-        """Execute a command.
+        """Execute a command with full validation.
 
-        Args:
-            name: Command name (e.g., "service.restart")
-            args: Command arguments
-            source: Who's executing (cli, webui, telegram, voice)
-            confirmed: Whether user confirmed a dangerous command
-
-        Returns:
-            CommandResult with success/failure and output
+        Validation order:
+        1. Command exists
+        2. Command is enabled
+        3. Risk level requires confirmation (MEDIUM/HIGH)
+        4. Required args are present
+        5. Execute handler
+        6. Audit trail + event
         """
         cmd = self._commands.get(name)
         if cmd is None:
             return CommandResult(
-                command=name,
-                success=False,
+                command=name, success=False,
                 error=f"Unknown command: {name}",
-                ts=time.time(),
-                source=source,
+                ts=time.time(), source=source,
             )
 
         if not cmd.enabled:
             return CommandResult(
-                command=name,
-                success=False,
+                command=name, success=False,
                 error=f"Command disabled: {name}",
-                ts=time.time(),
-                source=source,
+                ts=time.time(), source=source,
             )
 
-        if cmd.requires_confirmation and not confirmed:
+        # Risk enforcement: MEDIUM and HIGH always require confirmation
+        if cmd.risk in (Risk.MEDIUM, Risk.HIGH) and not confirmed:
             return CommandResult(
-                command=name,
-                success=False,
-                error=f"Requires confirmation (risk={cmd.risk.value}). "
-                      f"Re-execute with confirmed=True.",
-                ts=time.time(),
-                source=source,
+                command=name, success=False,
+                error=(
+                    f"Requires confirmation (risk={cmd.risk.value}). "
+                    f"Re-execute with confirmed=true."
+                ),
+                ts=time.time(), source=source,
             )
 
+        # Args validation: check required args from handler signature
         args = args or {}
+        import inspect
+        try:
+            sig = inspect.signature(cmd.handler)
+            for param_name, param in sig.parameters.items():
+                if param.default is inspect.Parameter.empty and param_name not in args:
+                    # Check if **kwargs absorbs it
+                    if param.kind == inspect.Parameter.VAR_KEYWORD:
+                        continue
+                    return CommandResult(
+                        command=name, success=False,
+                        error=f"Missing required arg: {param_name}",
+                        ts=time.time(), source=source,
+                    )
+        except (ValueError, TypeError):
+            pass  # Can't introspect — skip validation
+
         start = time.time()
         try:
             result = cmd.handler(**args)
             duration = (time.time() - start) * 1000
             cmd_result = CommandResult(
-                command=name,
-                success=True,
-                result=result,
-                duration_ms=duration,
-                ts=time.time(),
-                source=source,
+                command=name, success=True, result=result,
+                duration_ms=duration, ts=time.time(), source=source,
             )
         except Exception as exc:
             duration = (time.time() - start) * 1000
             cmd_result = CommandResult(
-                command=name,
-                success=False,
-                error=str(exc),
-                duration_ms=duration,
-                ts=time.time(),
-                source=source,
+                command=name, success=False, error=str(exc),
+                duration_ms=duration, ts=time.time(), source=source,
             )
 
         self._audit(cmd_result)
+        self._emit_event(cmd_result)
         return cmd_result
+
+    def _emit_event(self, result: CommandResult) -> None:
+        """Emit event for command execution."""
+        try:
+            from jarvis.core.eventbus import get_bus
+            topic = (
+                f"command.completed" if result.success
+                else f"command.failed"
+            )
+            get_bus().publish(topic, {
+                "command": result.command,
+                "success": result.success,
+                "source": result.source,
+                "duration_ms": result.duration_ms,
+                "error": result.error[:200] if result.error else None,
+            })
+        except Exception:  # noqa: BLE001
+            pass
 
     def get_command(self, name: str) -> CommandDef | None:
         """Get command definition."""

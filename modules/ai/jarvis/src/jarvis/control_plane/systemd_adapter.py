@@ -20,57 +20,21 @@ from jarvis.control_plane.commands import CommandRegistry, Risk, get_command_reg
 
 # ─── Service Registry ──────────────────────────────────────────────────
 
-# Known Jarvis services — source of truth from NixOS config
-# Format: name → {scope, description, managed_by}
-
-KNOWN_SERVICES: dict[str, dict[str, Any]] = {
-    # System services (require sudo)
-    "llama-cpp-server": {
-        "scope": "system",
-        "description": "LLM inference server (Qwen)",
-        "managed_by": "nixos",
-    },
-    "llama-cpp-embeddings": {
-        "scope": "system",
-        "description": "Embeddings server",
-        "managed_by": "nixos",
-    },
-    "llama-cpp-rerank": {
-        "scope": "system",
-        "description": "Reranker server",
-        "managed_by": "nixos",
-    },
-    "qdrant": {
-        "scope": "system",
-        "description": "Vector database",
-        "managed_by": "nixos",
-    },
-    "llama-fan-control": {
-        "scope": "system",
-        "description": "GPU fan control",
-        "managed_by": "nixos",
-    },
-    # User services
-    "jarvis-telegram": {
-        "scope": "user",
-        "description": "Telegram bot",
-        "managed_by": "nixos",
-    },
-    "jarvis-wakeword": {
-        "scope": "user",
-        "description": "Wake word detection",
-        "managed_by": "nixos",
-    },
-    "jarvis-idle-worker": {
-        "scope": "user",
-        "description": "Idle worker timer",
-        "managed_by": "nixos",
-    },
-    "waybar": {
-        "scope": "user",
-        "description": "Status bar",
-        "managed_by": "nixos",
-    },
+# Seed descriptions for known Jarvis services
+# The actual service list is discovered dynamically from systemctl
+SERVICE_DESCRIPTIONS: dict[str, str] = {
+    "llama-cpp-server": "LLM inference server (Qwen)",
+    "llama-cpp-embeddings": "Embeddings server",
+    "llama-cpp-rerank": "Reranker server",
+    "qdrant": "Vector database",
+    "llama-fan-control": "GPU fan control",
+    "jarvis-telegram": "Telegram bot",
+    "jarvis-wakeword": "Wake word detection",
+    "jarvis-idle-worker": "Idle worker timer",
+    "waybar": "Status bar",
+    "mpvpaper": "Animated wallpaper",
+    "swaync": "Notification daemon",
+    "hypridle": "Idle manager",
 }
 
 
@@ -91,6 +55,9 @@ class ServiceStatus:
 class SystemdAdapter:
     """Safe wrapper for systemctl operations.
 
+    Discovers services dynamically from systemctl, with seed descriptions
+    for known Jarvis services. The NixOS/systemd config is the source of truth.
+
     Usage:
         adapter = SystemdAdapter()
         status = adapter.get_status("llama-cpp-server")
@@ -102,6 +69,7 @@ class SystemdAdapter:
     def __init__(self) -> None:
         self._registry = get_command_registry()
         self._register_commands()
+        self._discovered_services: dict[str, dict[str, Any]] | None = None
 
     def _register_commands(self) -> None:
         """Register systemd commands with the command registry."""
@@ -145,10 +113,70 @@ class SystemdAdapter:
             category="services",
         )
 
+    def _discover_services(self) -> dict[str, dict[str, Any]]:
+        """Discover services dynamically from systemctl.
+
+        Combines:
+        - Dynamic discovery from systemctl list-units
+        - Seed descriptions from SERVICE_DESCRIPTIONS
+        """
+        if self._discovered_services is not None:
+            return self._discovered_services
+
+        services: dict[str, dict[str, Any]] = {}
+
+        # Discover system services
+        for scope, flag in [("system", []), ("user", ["--user"])]:
+            try:
+                cmd = ["systemctl"] + flag + [
+                    "list-units", "--type=service",
+                    "--all", "--no-legend", "--no-pager",
+                    "--plain",
+                ]
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=10,
+                )
+                if result.returncode != 0:
+                    continue
+                for line in result.stdout.strip().splitlines():
+                    parts = line.split()
+                    if len(parts) < 4:
+                        continue
+                    unit = parts[0]
+                    # Remove .service suffix
+                    name = unit.replace(".service", "")
+                    # Filter: only jarvis-related or well-known services
+                    is_jarvis = any(kw in name for kw in (
+                        "jarvis", "llama", "qdrant", "waybar",
+                        "mpvpaper", "swaync", "hypr",
+                    ))
+                    if not is_jarvis:
+                        continue
+                    # Format: unit load active sub description
+                    # parts[0]=unit, parts[1]=load, parts[2]=active, parts[3]=sub, parts[4:]=desc
+                    active_state = parts[2] if len(parts) > 2 else "unknown"
+                    sub_state = parts[3] if len(parts) > 3 else "unknown"
+                    description = " ".join(parts[4:]) if len(parts) > 4 else ""
+                    # Use seed description if available
+                    desc = SERVICE_DESCRIPTIONS.get(name, description)
+                    services[name] = {
+                        "scope": scope,
+                        "description": desc,
+                        "active_state": active_state,
+                        "sub_state": sub_state,
+                    }
+            except (subprocess.TimeoutExpired, OSError):
+                continue
+
+        self._discovered_services = services
+        return services
+
     def _validate_service(self, name: str) -> str | None:
-        """Validate service name exists in registry. Returns error or None."""
-        if name not in KNOWN_SERVICES:
-            return f"Unknown service: {name}. Known: {', '.join(KNOWN_SERVICES)}"
+        """Validate service name exists. Returns error or None."""
+        services = self._discover_services()
+        if name not in services:
+            known = ", ".join(sorted(services.keys()))
+            return f"Unknown service: {name}. Discovered: {known}"
         return None
 
     def _run_systemctl(
@@ -219,21 +247,21 @@ class SystemdAdapter:
         }
 
     def get_status(self, name: str) -> dict[str, Any]:
-        """Get service status."""
-        error = self._validate_service(name)
-        if error:
-            return {"error": error}
+        """Get service status via systemctl."""
+        services = self._discover_services()
+        svc = services.get(name)
+        if svc is None:
+            return {"error": f"Service not found: {name}"}
 
-        svc = KNOWN_SERVICES[name]
         scope = svc["scope"]
 
-        # Check active state
-        ok_active, out_active = self._run_systemctl("is-active", name, scope, timeout=5)
-        active_state = out_active.strip() if ok_active else "unknown"
+        # Check active state (is-active returns exit 3 for inactive — that's OK)
+        _, out_active = self._run_systemctl("is-active", name, scope, timeout=5)
+        active_state = out_active.strip() or "unknown"
 
-        # Check enabled state
-        ok_enabled, out_enabled = self._run_systemctl("is-enabled", name, scope, timeout=5)
-        enabled_state = out_enabled.strip() if ok_enabled else "unknown"
+        # Check enabled state (is-enabled returns exit 1 for disabled — that's OK)
+        _, out_enabled = self._run_systemctl("is-enabled", name, scope, timeout=5)
+        enabled_state = out_enabled.strip() or "unknown"
 
         return {
             "name": name,
@@ -241,21 +269,22 @@ class SystemdAdapter:
             "enabled": enabled_state == "enabled",
             "status": active_state,
             "scope": scope,
-            "description": svc["description"],
+            "description": svc.get("description", ""),
         }
 
     def list_services(self) -> list[dict[str, Any]]:
-        """List all known Jarvis services with their status."""
+        """List all discovered Jarvis services with their status."""
+        services = self._discover_services()
         result = []
-        for name, svc in KNOWN_SERVICES.items():
-            status = self.get_status(name)
-            result.append(status)
+        for name in services:
+            result.append(self.get_status(name))
         return result
 
     def get_all_status(self) -> dict[str, ServiceStatus]:
-        """Get status of all known services."""
+        """Get status of all discovered services."""
+        services = self._discover_services()
         result = {}
-        for name in KNOWN_SERVICES:
+        for name in services:
             data = self.get_status(name)
             result[name] = ServiceStatus(
                 name=name,
@@ -266,6 +295,10 @@ class SystemdAdapter:
                 description=data.get("description", ""),
             )
         return result
+
+    def invalidate_cache(self) -> None:
+        """Force re-discovery on next call."""
+        self._discovered_services = None
 
 
 # ─── Singleton ─────────────────────────────────────────────────────────
