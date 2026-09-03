@@ -1106,3 +1106,43 @@ sudo systemctl start jarvis.target
 # Ver status
 ~/projects/nixos-ai/scripts/jarvis-gaming-mode.sh status
 ```
+
+## 🏆 BREAKTHROUGH: First Real E2E Pipeline Execution (2026-09-02)
+
+### What happened
+The PersonaExecutor successfully ran a complete pipeline on the **Corretor** project:
+1. Persona selected (qa_engineer)
+2. Task created via orchestrator
+3. LLM generated a patch (vocabulary_size test)
+4. Patcher applied patch (markdown fence stripping fixed)
+5. Validator ran **Corretor tests** (not nixos-ai tests!)
+6. All tests passed
+7. Git commit created: `de00088f`
+
+### Bugs fixed in this session
+| Bug | Fix | File |
+|-----|-----|------|
+| LLM wraps patches in markdown fences | `strip_markdown_fences` in parse_llm_patch | patcher.py |
+| Validator runs nixos-ai tests for external projects | Use `JARVIS_PROJECT_ROOT` for test discovery | validator.py |
+| Validator resolves paths relative to REPO_ROOT | Also check `JARVIS_PROJECT_ROOT` | validator.py |
+| Qwen thinking tokens consume max_tokens | Add `/no_think` to prompts | harness.py |
+| Harness sends 6K+ token prompts to 4K context server | Truncate file content to fit budget | harness.py |
+| Harness resolves files from REPO_ROOT | Use `task.repository` for file paths | harness.py |
+| PrismML adapter double `/v1` in URL | Strip `/v1` from base_url | llm_prismml.py |
+
+### P5 state machine warning
+"Invalid transition: DISCOVERED → COMPLETED" — orchestrator skips intermediate states.
+Not blocking but needs fixing in orchestrator.py.
+
+### Key insight
+The pipeline works when:
+- Markdown fences are stripped from LLM output
+- Tests run from the correct project (not nixos-ai)
+- File content fits the context budget
+- Thinking tokens are disabled for short responses
+
+### What still needs work
+- Orchestrator state machine (DISCOVERED → COMPLETED skip)
+- `.bak` files in commits (add to .gitignore)
+- Multi-persona handoff (personas don't pass context to each other yet)
+- Bonsai model download (needs stable internet)
