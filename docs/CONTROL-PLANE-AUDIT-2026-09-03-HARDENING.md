@@ -156,3 +156,27 @@ Component calls notifications.notify_event()
 | Voice notification delivery | UNVERIFIED | Depends on Kokoro |
 | State crash recovery | UNVERIFIED | No test for process killed mid-write |
 | Command audit trail integrity | UNVERIFIED | JSONL append-only, not tested |
+
+---
+
+## F. Updated Requirement Matrix (2026-09-03 — Session 2)
+
+| ID | Requirement | Previous | New | Evidence |
+|----|------------|----------|-----|----------|
+| R8 | SystemdAdapter can start/stop | PARTIAL | ✅ VERIFIED | jarvis-wakeword restart returns success=True, gaming.toggle toggles real services |
+| R19 | API /api/agent returns agent state | PARTIAL | ✅ VERIFIED | Harness now uses global EventBus, integration subscribes to harness.task events, state updates in real-time |
+| R26 | SSE cleans up on disconnect | IMPLEMENTED | ✅ VERIFIED | EventBus.unsubscribe() + UUID per connection, tested |
+| R27-R39 | SvelteKit pages | IMPLEMENTED | ⚠️ PARTIAL | Tasks page now shows real data, others still need browser verification |
+| R40 | Tasks page | NOT_IMPLEMENTED | ✅ VERIFIED | /api/tasks returns 7 real tasks, SvelteKit page shows status/project/description/errors/commits |
+| NEW | Service restart via WebUI | — | ✅ VERIFIED | POST /api/commands/service.restart with real systemctl |
+| NEW | Agent state population | — | ✅ VERIFIED | harness.task events → integration → State Store agent section |
+| NEW | Task queue persistence | — | ✅ VERIFIED | /api/tasks reads from task_queue.json, 7 tasks found |
+
+### What changed
+
+1. **Harness uses global EventBus** — was `EventBus()`, now `get_bus()`. Agent events flow to Control Plane.
+2. **Integration subscribes to harness.task** — updates agent state (active_task, persona, project, status, errors, commits).
+3. **Tasks API endpoint** — reads from persistent task_queue.json + mission_state.json.
+4. **Tasks SvelteKit page** — shows real data with status colors, auto-refreshes on SSE harness events.
+5. **systemd_adapter fixed** — `KNOWN_SERVICES` reference removed, uses `_get_service_scope()` from discovered services.
+6. **Service operations verified** — jarvis-wakeword restart succeeds, gaming.toggle works.
