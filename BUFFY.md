@@ -105,6 +105,8 @@ SvelteKit (12 routes, SSE real-time)
 | API (9 endpoints) | — | ✅ VERIFIED | ✅ VERIFIED | — |
 | SSE stream | — | ✅ VERIFIED | ✅ VERIFIED | — |
 | SvelteKit pages (12) | — | — | — | ❌ UNVERIFIED |
+| persona_executor | ✅ VERIFIED | ✅ VERIFIED | ✅ VERIFIED | — |
+| `jarvis execute` CLI | ✅ VERIFIED | — | ✅ VERIFIED | — |
 
 **Legend**: ✅ verified, ⚠️ partially verified, ❌ not verified, — not applicable
 
@@ -115,9 +117,9 @@ SvelteKit (12 routes, SSE real-time)
 1. **SvelteKit not verified in browser** — code exists, no headless test
 2. **Service start/stop via WebUI** — buttons exist, not tested with real systemctl
 3. **Desktop/Sound/Telegram/Voice notifications** — handlers exist, delivery not verified
-4. **Agent state never populated** — /api/agent returns empty, pipeline doesn't write to State Store
+4. ~~Agent state never populated~~ — FIXED: harness events now flow to State Store
 5. **Nightwatch state** — reads from progress.json which may not exist
-6. **Tasks page** — placeholder only, no data
+6. ~~Tasks page~~ — FIXED: real persistent queue, retry/cancel actions
 7. **Command audit trail** — JSONL append-only, integrity not tested
 8. **State crash recovery** — no test for process killed mid-write
 
@@ -148,6 +150,8 @@ SvelteKit (12 routes, SSE real-time)
 | SSE real-time stream | ✅ VERIFIED | curl shows init + heartbeats |
 | Gaming toggle (real services) | ✅ VERIFIED | curl shows services restarted |
 | Command arg validation | ✅ VERIFIED | voice.speak without text → error |
+| Autonomous persona execution | ✅ VERIFIED | `jarvis execute` CLI + persona_executor |
+| Agent state wiring | ✅ VERIFIED | harness → EventBus → State → SSE |
 
 ---
 
