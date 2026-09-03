@@ -67,3 +67,6 @@ dist/
 .hackmd/
 /etc/jarvis-secrets/
 modules/ai/jarvis/tests/_e2e_*.py
+
+# Backup files
+*.bak
