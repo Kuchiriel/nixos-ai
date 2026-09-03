@@ -943,6 +943,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_pr.add_argument("--show", default=None, help="mostrar detalhes de uma persona")
     p_pr.set_defaults(func=_cmd_persona)
 
+    # execute — execução autônoma com persona
+    p_ex = sub.add_parser("execute", help="execute: executa tarefa autonomamente com persona")
+    p_ex.add_argument("task", help="descrição da tarefa a executar")
+    p_ex.add_argument("--persona", default=None, help="persona a usar (auto-select se omitido)")
+    p_ex.add_argument("--project", default="nixos-ai", help="projeto alvo (default: nixos-ai)")
+    p_ex.add_argument("--dry-run", action="store_true", help="simular sem executar")
+    p_ex.set_defaults(func=_cmd_execute)
+
     # workitem — gerenciamento de trabalho
     p_wi = sub.add_parser("workitem", help="workitem: gerencia tarefas/kanban")
     p_wi.add_argument("--create", nargs=2, metavar=("TITLE", "PROJECT"), help="criar work item")
@@ -1099,6 +1107,40 @@ def _cmd_persona(args: argparse.Namespace) -> int:
     else:
         print(reg.summary())
     return 0
+
+
+def _cmd_execute(args: argparse.Namespace) -> int:
+    """Execute a task autonomously using a persona."""
+    from jarvis.core.persona_executor import PersonaExecutor
+
+    executor = PersonaExecutor(project=args.project)
+
+    print(f"Executing task with persona: {args.persona or 'auto-select'}")
+    print(f"Project: {args.project}")
+    print(f"Task: {args.task}")
+    print()
+
+    result = executor.execute_with_persona(
+        task=args.task,
+        persona_id=args.persona,
+        project=args.project,
+    )
+
+    status = "✅ SUCCESS" if result.success else "❌ FAILED"
+    print(f"\n{status}")
+    print(f"  Persona: {result.persona_id}")
+    print(f"  Task ID: {result.task_id}")
+    print(f"  Message: {result.message}")
+    if result.files_changed:
+        print(f"  Files: {', '.join(result.files_changed)}")
+    if result.commit_sha:
+        print(f"  Commit: {result.commit_sha}")
+    print(f"  Duration: {result.duration_seconds:.1f}s")
+    if result.error:
+        print(f"  Error: {result.error}")
+
+    return 0 if result.success else 1
+
 
 
 def _cmd_workitem(args: argparse.Namespace) -> int:
