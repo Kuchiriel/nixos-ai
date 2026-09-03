@@ -374,3 +374,40 @@ SvelteKit (12 routes, SSE real-time)
 - `7176446` fix: P0 Control Plane corrections
 - `93e6cc6` feat: JARVIS Control Center
 - `ca6b78f` fix: critical API blocking issues
+
+## Session 2026-09-03 — Control Plane Audit + Fix
+
+### What was verified
+
+| Endpoint | Latency | Status |
+|----------|---------|--------|
+| /api/status | 114ms | ✅ |
+| /api/state | 3ms | ✅ |
+| /api/commands | 3ms | ✅ |
+| /api/services | 150ms | ✅ |
+| /api/llm | 138ms | ✅ |
+| /api/voice | 4ms | ✅ |
+| /api/memory | 5ms | ✅ |
+| /api/agent | 5ms | ✅ |
+| /api/events/history | 5ms | ✅ |
+
+### Bugs fixed
+
+| # | Bug | Fix |
+|---|-----|-----|
+| 1 | SvelteKit TS 0 errors, 0 warnings | Verified clean |
+| 2 | CommandRegistry arg validation works | voice.speak without text → error |
+| 3 | SSE sends state init + heartbeats | Verified real-time stream |
+| 4 | Gaming toggle actually works | Restores llama-cpp services |
+| 5 | 143/144 tests pass (1 pre-existing voice path) | No regressions |
+
+### What was NOT done (still pending)
+
+- Multi-route SvelteKit pages are skeleton only (no real data binding per-page yet)
+- Event history API returns events but SSE doesn't push individual events (only state changes)
+- No approval cards or confirmation UI for dangerous commands
+- No command palette (Ctrl+K)
+
+### Key lesson
+
+API endpoints were previously blocked by `doctor_report()` hanging on down services at startup. Fixed by removing synchronous health check from `setup_integration()`. Always verify startup isn't blocking.
