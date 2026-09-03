@@ -80,33 +80,38 @@ def notify(title: str, body: str = "", urgency: str = "normal") -> bool:
     """Notificação via notify-send. Retorna True se enviou.
 
     Also routes through Control Plane Notification Manager when available.
+    Returns True only if at least one channel actually delivered.
     """
+    delivered = False
     # Route through Control Plane if available
     try:
         from jarvis.control_plane.notifications import get_notification_manager
         from jarvis.control_plane.events import Severity
         severity_map = {"low": Severity.INFO, "normal": Severity.INFO,
                         "critical": Severity.CRITICAL}
-        get_notification_manager().notify(
+        notified = get_notification_manager().notify(
             title, body,
             severity=severity_map.get(urgency, Severity.INFO),
             channels=["desktop"],
         )
-        return True
+        if notified:
+            delivered = True
     except Exception:  # noqa: BLE001
         pass
-    # Fallback: direct notify-send
-    binary = shutil.which("notify-send")
-    if binary is None:
-        return False
-    try:
-        subprocess.run(
-            [binary, "-u", urgency, title, body],
-            capture_output=True, timeout=5,
-        )
-        return True
-    except (OSError, subprocess.TimeoutExpired):
-        return False
+    # Fallback: direct notify-send (only if CP didn't deliver)
+    if not delivered:
+        binary = shutil.which("notify-send")
+        if binary is None:
+            return False
+        try:
+            subprocess.run(
+                [binary, "-u", urgency, title, body],
+                capture_output=True, timeout=5,
+            )
+            delivered = True
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return delivered
 
 
 def play_sound(name: str, sound_theme: str | None = None) -> bool:
