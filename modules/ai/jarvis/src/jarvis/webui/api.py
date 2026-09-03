@@ -319,15 +319,37 @@ def nightwatch_info() -> dict[str, Any]:
 
 @app.get("/api/projects")
 def projects_list() -> list[dict[str, Any]]:
-    """List discovered projects."""
-    from jarvis.core.workspace import WorkspaceDiscovery
-    ws = WorkspaceDiscovery()
-    projs = ws.discover()
-    return [
-        {"name": p.get("name", "?"), "path": str(p.get("path", "")),
-         "type": p.get("type", "unknown")}
-        for p in projs[:20]
-    ]
+    """List projects — fast shallow scan, no deep analysis."""
+    now = time.time()
+    if hasattr(projects_list, '_cache') and now - projects_list._cache_ts < 60:
+        return projects_list._cache
+
+    from pathlib import Path
+    import os
+    root = Path(os.path.expanduser("~/projects"))
+    result = []
+    if root.exists():
+        for entry in sorted(root.iterdir()):
+            if not entry.is_dir() or entry.name.startswith("."):
+                continue
+            # Quick project detection
+            has_git = (entry / ".git").exists()
+            has_py = any(entry.glob("*.py")) or (entry / "pyproject.toml").exists()
+            has_nix = (entry / "flake.nix").exists() or (entry / "default.nix").exists()
+            has_node = (entry / "package.json").exists()
+            proj_type = "unknown"
+            if has_py: proj_type = "python"
+            if has_nix: proj_type = "nix" if proj_type == "unknown" else f"{proj_type}+nix"
+            if has_node: proj_type = "node" if proj_type == "unknown" else f"{proj_type}+node"
+            result.append({
+                "name": entry.name,
+                "path": str(entry),
+                "type": proj_type,
+                "has_git": has_git,
+            })
+    projects_list._cache = result
+    projects_list._cache_ts = now
+    return result
 
 
 @app.get("/api/events/stats")

@@ -261,19 +261,16 @@ def setup_integration() -> None:
     )
 
     # ─── Initial State Population ──────────────────────────────────
+    # NOTE: No blocking HTTP calls at startup. Health state is populated
+    # lazily when doctor.run command is executed or first doctor report
+    # event arrives via EventBus.
 
-    # Populate state from current gaming profile
+    # Populate state from current gaming profile (fast, no I/O)
     try:
         from jarvis.core.gaming import get_current_profile
         state.update(Sections.GAMING, "profile", get_current_profile())
-    except Exception:
+    except Exception:  # noqa: BLE001
         pass
 
-    # Populate health state
-    try:
-        from jarvis.core.doctor import doctor_report
-        from jarvis.core.config import get_config
-        report = doctor_report(get_config())
-        state.update(Sections.HEALTH, "overall", report.get("overall", "unknown"))
-    except Exception:
-        pass
+    # Set health to unknown until first doctor report
+    state.update(Sections.HEALTH, "overall", "unknown")
