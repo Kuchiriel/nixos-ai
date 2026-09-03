@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { fetchTasks, connectSSE, type TaskInfo } from '$lib/api/client';
+  import { fetchTasks, executeCommand, connectSSE, type TaskInfo } from '$lib/api/client';
 
   let tasks: TaskInfo[] = $state([]);
   let mission: Record<string, any> = $state({});
@@ -8,6 +8,28 @@
   let connected = $state(false);
   let filter = $state('');
   let sse: EventSource | null = null;
+  let actionPending = $state('');
+
+  async function retryTask(taskId: string) {
+    actionPending = taskId;
+    try {
+      await executeCommand('task.retry', { task_id: taskId }, true);
+      const data = await fetchTasks(100);
+      tasks = data.tasks;
+    } catch (e) { console.error(e); }
+    actionPending = '';
+  }
+
+  async function cancelTask(taskId: string) {
+    if (!confirm('Abandon this task?')) return;
+    actionPending = taskId;
+    try {
+      await executeCommand('task.cancel', { task_id: taskId }, true);
+      const data = await fetchTasks(100);
+      tasks = data.tasks;
+    } catch (e) { console.error(e); }
+    actionPending = '';
+  }
 
   onMount(async () => {
     try {
@@ -130,6 +152,18 @@
           {#if task.target_files.length > 0}
             <span>files:{task.target_files.length}</span>
           {/if}
+          <span class="task-actions">
+            {#if task.status === 'FAILED' || task.status === 'BLOCKED'}
+              <button class="btn-retry" disabled={actionPending === task.id} onclick={() => retryTask(task.id)}>
+                {actionPending === task.id ? '...' : 'Retry'}
+              </button>
+            {/if}
+            {#if !['COMPLETED', 'ABANDONED'].includes(task.status)}
+              <button class="btn-cancel" disabled={actionPending === task.id} onclick={() => cancelTask(task.id)}>
+                {actionPending === task.id ? '...' : 'Cancel'}
+              </button>
+            {/if}
+          </span>
         </div>
       </div>
     {/each}
@@ -161,6 +195,13 @@
   .task-desc { color: #ccc; font-size: 0.8rem; margin-bottom: 0.2rem; }
   .task-error { color: #ef4444; font-size: 0.7rem; font-family: monospace; margin: 0.2rem 0; }
   .task-commit { color: #22c55e; font-size: 0.7rem; font-family: monospace; margin: 0.2rem 0; }
-  .task-meta { display: flex; gap: 0.75rem; color: #555; font-size: 0.65rem; }
+  .task-meta { display: flex; gap: 0.75rem; color: #555; font-size: 0.65rem; align-items: center; }
+  .task-actions { margin-left: auto; display: flex; gap: 0.3rem; }
+  .task-actions button { padding: 0.1rem 0.4rem; border: none; border-radius: 3px; font-size: 0.65rem; font-family: inherit; cursor: pointer; }
+  .btn-retry { background: #1a3a1a; color: #22c55e; }
+  .btn-retry:hover { background: #2a4a2a; }
+  .btn-cancel { background: #3a1a1a; color: #ef4444; }
+  .btn-cancel:hover { background: #4a2a2a; }
+  .task-actions button:disabled { opacity: 0.4; cursor: not-allowed; }
   .empty { color: #555; font-style: italic; padding: 2rem; text-align: center; }
 </style>

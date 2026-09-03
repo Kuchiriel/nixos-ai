@@ -218,6 +218,70 @@ def setup_integration() -> None:
         category="voice",
     )
 
+    # ─── Register Task Commands ─────────────────────────────────────
+
+    def _task_retry(task_id: str = "") -> dict[str, Any]:
+        """Retry a failed task by resetting it to READY."""
+        from pathlib import Path
+        import json
+        queue_file = Path.home() / ".local/state/jarvis/nightwatch" / "task_queue.json"
+        if not queue_file.exists():
+            return {"error": "No task queue found"}
+        tasks = json.loads(queue_file.read_text(encoding="utf-8"))
+        for t in tasks:
+            if t["id"] == task_id:
+                if t["status"] not in ("FAILED", "BLOCKED"):
+                    return {"error": f"Cannot retry task in status {t['status']}"}
+                t["status"] = "READY"
+                t["attempts"] = 0
+                t["last_error"] = None
+                t["updated_at"] = time.time()
+                # Atomic write
+                tmp = queue_file.with_suffix(".tmp")
+                tmp.write_text(json.dumps(tasks, indent=2, ensure_ascii=False), encoding="utf-8")
+                tmp.rename(queue_file)
+                return {"success": True, "task_id": task_id, "new_status": "READY"}
+        return {"error": f"Task {task_id} not found"}
+
+    def _task_cancel(task_id: str = "") -> dict[str, Any]:
+        """Cancel/abandon a task."""
+        from pathlib import Path
+        import json
+        queue_file = Path.home() / ".local/state/jarvis/nightwatch" / "task_queue.json"
+        if not queue_file.exists():
+            return {"error": "No task queue found"}
+        tasks = json.loads(queue_file.read_text(encoding="utf-8"))
+        for t in tasks:
+            if t["id"] == task_id:
+                if t["status"] in ("COMPLETED", "ABANDONED"):
+                    return {"error": f"Task already {t['status']}"}
+                t["status"] = "ABANDONED"
+                t["last_error"] = "cancelled by user"
+                t["updated_at"] = time.time()
+                tmp = queue_file.with_suffix(".tmp")
+                tmp.write_text(json.dumps(tasks, indent=2, ensure_ascii=False), encoding="utf-8")
+                tmp.rename(queue_file)
+                return {"success": True, "task_id": task_id, "new_status": "ABANDONED"}
+        return {"error": f"Task {task_id} not found"}
+
+    registry.register(
+        name="task.retry",
+        description="Retry a failed/blocked task",
+        risk=Risk.LOW,
+        handler=_task_retry,
+        args_schema={"task_id": "Task ID to retry"},
+        category="tasks",
+    )
+    registry.register(
+        name="task.cancel",
+        description="Cancel/abandon a task",
+        risk=Risk.MEDIUM,
+        handler=_task_cancel,
+        requires_confirmation=True,
+        args_schema={"task_id": "Task ID to cancel"},
+        category="tasks",
+    )
+
     # ─── Register RAG Commands ─────────────────────────────────────
 
     def _rag_search(query: str = "", top_k: int = 5) -> dict[str, Any]:
