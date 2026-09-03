@@ -1063,3 +1063,46 @@ llama-server \
 2. Stop Qwen → start PrismML with Bonsai → test ternary inference
 3. Connect LLMClient to harness.py for autonomous execution
 4. P9: Full E2E with LLM generating real patches
+
+## 🎮 GAMING MODE
+
+### Master Service: jarvis.target
+
+O serviço mestre `jarvis.target` controla TODOS os serviços Jarvis.
+
+**Definição:** `nixos/modules/jarvis-env.nix`
+**Comando:** `sudo systemctl start/stop jarvis.target`
+
+### Services no Target
+
+| Service | Tipo | GPU | Pode parar? |
+|---------|------|-----|-------------|
+| llama-cpp-server | System | 5GB VRAM | **SIM** |
+| llama-cpp-embeddings | System | ~200MB | SIM |
+| llama-cpp-rerank | System | ~200MB | SIM |
+| llama-fan-control | System | minimal | SIM |
+| qdrant | System | ~100MB RAM | SIM |
+| jarvis-telegram | System | ~78MB RAM | SIM |
+| nightwatch | System | 0 (failed) | SIM |
+| jarvis-heal | System | minimal | SIM |
+| jarvis-gaming-watcher | System | minimal | NÃO (detecta jogos) |
+| jarvis-wakeword | User | ~6MB RAM | SIM |
+
+### Quick Commands
+
+```bash
+# Parar tudo para jogar
+sudo systemctl stop jarvis.target
+
+# Ou usar o script
+~/projects/nixos-ai/scripts/jarvis-gaming-mode.sh stop
+
+# Recomeçar depois
+sudo systemctl start jarvis.target
+
+# Ou
+~/projects/nixos-ai/scripts/jarvis-gaming-mode.sh start
+
+# Ver status
+~/projects/nixos-ai/scripts/jarvis-gaming-mode.sh status
+```
