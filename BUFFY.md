@@ -201,6 +201,33 @@ SvelteKit (12 routes, SSE real-time)
 - Agent state population in Control Plane
 - Tasks page implementation
 
+### 2026-09-03: Consolidation + Agent State + Tasks
+
+**What was done:**
+- Archived 9 dead modules (orchestrator, workitem, subagent, context, agent_loop, ast_guard, ast_cache, learning, vision_analyzer)
+- Refactored persona_executor to use harness directly (eliminated PAUSADO dependency)
+- Wired agent state from harness → global EventBus → Control Plane → SSE → Dashboard
+- Implemented real Tasks page with persistent queue
+- Fixed systemd_adapter KNOWN_SERVICES bug
+- Added task.retry/task.cancel commands to CommandRegistry
+- E2E verified: PersonaExecutor → LLM → patch → validator → events → state → API
+- 302/303 tests pass
+
+**Commits:**
+- `88c34f6` — Consolidation: archive 9 modules, refactor persona_executor
+- `b02af88` — Update HANDOFF.md
+- `296767a` — Fix test_platform_e2e for archived modules
+- `d94fb10` — Agent state wiring + Tasks page + service fix
+- `840ab17` — Updated requirement matrix
+- `55e8088` — Dashboard agent indicator + task actions + E2E verified
+
+**What remains UNVERIFIED:**
+- SvelteKit browser rendering
+- Real notification delivery
+- Service start/stop via WebUI with real systemctl
+- Nightwatch autonomous loop with real LLM
+- Cross-project task execution
+
 ## Consolidation 2026-09-03 — Complete
 
 ### What was eliminated
@@ -229,3 +256,63 @@ PersonaExecutor
 
 ### Archived code lives in
 - `archive/core/` — 9 modules + 1 test + README
+
+---
+
+## 16. MCP TOOLS & READING EXTERNAL SOURCES
+
+### Reading ChatGPT Conversations
+
+ChatGPT shared URLs are too large for `read_url` (>2MB). Use Playwright:
+
+```bash
+nix-shell -p python3Packages.playwright --run "python3 /tmp/read_chatgpt_convo.py"
+```
+
+Script at `/tmp/read_chatgpt_convo.py` uses system Chromium via `executable_path="/etc/profiles/per-user/nixos/bin/chromium"`. The cached Playwright Chromium lacks shared libs (`libglib-2.0.so.0`). Scrolls to load lazy content, saves to `/tmp/chatgpt_conversation.txt`.
+
+### MCP Tools Available
+
+- `read_url` — fetches URL text (works for most sites, NOT ChatGPT shared links)
+- `web_search` — Google search via Serper API
+- `gravity_index` — third-party service discovery
+- `render_ui` — render UI widgets
+- `code_search` — ripgrep search across project files
+- `read_files` — read files from disk
+- `write_file` — create/overwrite files
+- `str_replace` — edit files with string replacement
+- `run_terminal_command` — execute bash commands
+
+### ChatGPT Conversation Key Findings (2026-09-03)
+
+Claude analyzed the project and identified:
+
+1. **P2/P3 already fixed** — `record_attempt()` only tracks failures, `_persist_now()` called immediately
+2. **P6 is a real bug** — `checkpoint.json` and `mission_state.json` are single objects, not per-project. Different projects can overwrite each other's state
+3. **Critical unverified question**: does the agent loop send traceback feedback to the LLM on retry? If not, it's a loop bug, not model capacity limit. Never confirmed.
+4. **Claude's recommendation**: prove the harness works on real projects before adding infrastructure
+5. **Bonsai/PrismML**: worth trying but download attempts consumed entire sessions. Pre-download with stable internet.
+6. **buffy.md pattern**: good manual but needs Enforcement Gates (added in this session)
+
+### Lessons from Failed Sessions
+
+- **Bonsai download**: don't attempt large downloads during sessions — pre-download with stable internet
+- **Playwright on NixOS**: use system Chromium via `executable_path`, not Playwright's cached binary
+- **Agent loop capacity**: 15 retries seeing same error = likely model capacity limit, but never confirmed
+- **Token throughput**: was 30 t/s, dropped to 9 t/s — check for background processes consuming resources
+- **Session fragmentation**: critical context lives in ChatGPT/Claude conversations, not in codebase — use Playwright reader to bridge
+
+---
+
+## 17. CHATGPT SESSION STATE (2026-09-03)
+
+The ChatGPT conversation at `https://chatgpt.com/share/6a99bf79-72bc-83e9-aeed-f0f15ca835ac` contains:
+
+- Full analysis of buffy.md weaknesses
+- Claude's prompt for buffy hardening
+- Claude's analysis of P2-P9 audit items
+- Recommendation to break audit into sessions (P4+P6, P5+P8, P7, P9)
+- Bonsai/PrismML evaluation context
+- Agent loop traceback feedback question
+
+**Always read this conversation at session start using Playwright to recover context.**
