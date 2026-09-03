@@ -101,8 +101,8 @@ class BlackBoxTests:
             self.test_memory_remember,
             self.test_workspace_discovery,
             self.test_persona_selection,
-            self.test_workitem_creation,
-            self.test_orchestrator_decompose,
+            self.test_task_queue,
+            self.test_harness_status,
             self.test_vault_status,
             self.test_shell_execution,
             self.test_health_check,
@@ -190,23 +190,24 @@ class BlackBoxTests:
             evidence=output[:200],
         )
 
-    def test_workitem_creation(self) -> TestResult:
-        """Test work item creation."""
+    def test_task_queue(self) -> TestResult:
+        """Test task queue status."""
         start = time.time()
-        ok, output = self._run_cli('workitem --create "self-test task" "test"')
+        ok, output = self._run_cli('orchestrate --status')
+        has_stats = "Tasks" in output or "total" in output.lower()
         return TestResult(
-            name="workitem_creation", level="black", passed=ok,
+            name="task_queue", level="black", passed=ok and has_stats,
             duration_ms=(time.time() - start) * 1000,
             evidence=output[:200],
         )
 
-    def test_orchestrator_decompose(self) -> TestResult:
-        """Test task decomposition."""
+    def test_harness_status(self) -> TestResult:
+        """Test harness workflow listing."""
         start = time.time()
-        ok, output = self._run_cli('orchestrate --decompose "fix bug" "test"')
-        has_items = "work items" in output.lower() or "Created" in output
+        ok, output = self._run_cli('orchestrate --workflows')
+        has_categories = "code-quality" in output or "Task categories" in output
         return TestResult(
-            name="orchestrator_decompose", level="black", passed=ok and has_items,
+            name="harness_status", level="black", passed=ok and has_categories,
             duration_ms=(time.time() - start) * 1000,
             evidence=output[:200],
         )
@@ -262,7 +263,7 @@ class GreyBoxTests:
             self.test_state_directory_exists,
             self.test_workspace_state,
             self.test_work_items_state,
-            self.test_orchestrator_state,
+            self.test_task_queue_state,
             self.test_memory_state,
             self.test_vault_state,
             self.test_logs_exist,
@@ -329,21 +330,23 @@ class GreyBoxTests:
         except Exception as e:
             return TestResult(name="work_items_state", level="grey", passed=False, error=str(e))
 
-    def test_orchestrator_state(self) -> TestResult:
-        """Verify orchestrator state."""
-        orch_dir = self.state_dir / "orchestrator"
-        if not orch_dir.exists():
-            return TestResult(name="orchestrator_state", level="grey", passed=True,
-                            evidence="Orchestrator state dir not created yet")
-        events_file = orch_dir / "events.jsonl"
-        event_count = 0
-        if events_file.exists():
-            event_count = len(events_file.read_text().splitlines())
-        return TestResult(
-            name="orchestrator_state", level="grey", passed=True,
-            evidence=f"{event_count} events logged",
-            metrics={"events": event_count},
-        )
+    def test_task_queue_state(self) -> TestResult:
+        """Verify task queue state."""
+        queue_file = self.state_dir / "task_queue.json"
+        if not queue_file.exists():
+            return TestResult(name="task_queue_state", level="grey", passed=True,
+                            evidence="Task queue not created yet (empty state)")
+        try:
+            import json
+            data = json.loads(queue_file.read_text())
+            task_count = len(data) if isinstance(data, list) else 0
+            return TestResult(
+                name="task_queue_state", level="grey", passed=True,
+                evidence=f"{task_count} tasks in queue",
+                metrics={"tasks": task_count},
+            )
+        except Exception as e:
+            return TestResult(name="task_queue_state", level="grey", passed=False, error=str(e))
 
     def test_memory_state(self) -> TestResult:
         """Verify memory/state persistence."""
@@ -467,9 +470,9 @@ class WhiteBoxTests:
         modules = [
             "jarvis.core.workspace",
             "jarvis.core.persona",
-            "jarvis.core.workitem",
-            "jarvis.core.orchestrator",
-            "jarvis.core.context",
+            "jarvis.core.persona_executor",
+            "jarvis.core.config",
+            "jarvis.core.context_budget",
             "jarvis.core.model_policy",
         ]
 

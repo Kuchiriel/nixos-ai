@@ -102,11 +102,11 @@ SvelteKit (12 routes, SSE real-time)
 | NotificationManager | ✅ VERIFIED | ⚠️ PARTIAL | ⚠️ PARTIAL | — |
 | Notification web delivery | — | — | ✅ IMPLEMENTED | — |
 | SystemdAdapter | ✅ VERIFIED | ✅ VERIFIED | ⚠️ PARTIAL | — |
-| API (9 endpoints) | — | ✅ VERIFIED | ✅ VERIFIED | — |
+| API (20 endpoints) | — | ✅ VERIFIED | ✅ VERIFIED | — |
 | SSE stream | — | ✅ VERIFIED | ✅ VERIFIED | — |
 | SvelteKit pages (12) | — | — | — | ❌ UNVERIFIED |
-| persona_executor | ✅ VERIFIED | ✅ VERIFIED | ✅ VERIFIED | — |
-| `jarvis execute` CLI | ✅ VERIFIED | — | ✅ VERIFIED | — |
+| persona_executor | ✅ VERIFIED | ✅ VERIFIED | ⚠️ PARTIAL | — |
+| `jarvis execute` CLI | ✅ VERIFIED | — | ⚠️ PARTIAL | — |
 
 **Legend**: ✅ verified, ⚠️ partially verified, ❌ not verified, — not applicable
 
@@ -132,6 +132,11 @@ SvelteKit (12 routes, SSE real-time)
 | 1 | SSE subscriber leak — every connection adds subscriber, never removed | EventBus.unsubscribe() + unique UUID per SSE connection | Code verified, not runtime-tested with multiple connections |
 | 2 | _deliver_web returns True without delivering | Now pushes to SSE queues via _push_to_sse() | Code verified |
 | 3 | Duplicate SSE subscribe — old + new name both in code | Removed old subscribe, only UUID-based remains | Code verified |
+| 4 | `--dry-run` parsed but never passed to harness | PersonaExecutor now accepts dry_run parameter | Verified: `harness.config.dry_run=True` when `--dry-run` passed |
+| 5 | Hardcoded `/home/nixos/projects` in persona_executor | Uses `JARVIS_PROJECTS_DIR` env or `~/projects` | Verified: imports Path, resolves dynamically |
+| 6 | `files_changed` reported candidates not actual changes | Now uses `git diff --name-only HEAD` | Verified: subprocess call to git |
+| 7 | `except Exception: pass` silenced event publishing errors | Now logs warning via `logging.getLogger` | Code verified |
+| 8 | self_test.py referenced archived modules (orchestrator, workitem) | Replaced with task_queue and harness_status tests | Verified: self_test passes 9/10 black, 6/6 white |
 
 ---
 
@@ -196,7 +201,7 @@ SvelteKit (12 routes, SSE real-time)
 - Removed duplicate SSE subscribe
 - Wrote hardened BUFFY with Completion Gate, Evidence Ladder, Adversarial Verification
 - Produced 40-item requirement matrix with real statuses
-- 134 tests pass (baseline verified)
+- Actual test count: 820 passed (not 134 as claimed)
 
 **What remains UNVERIFIED:**
 - SvelteKit browser rendering
@@ -215,7 +220,7 @@ SvelteKit (12 routes, SSE real-time)
 - Fixed systemd_adapter KNOWN_SERVICES bug
 - Added task.retry/task.cancel commands to CommandRegistry
 - E2E verified: PersonaExecutor → LLM → patch → validator → events → state → API
-- 302/303 tests pass
+- Actual test count: 820 passed (not 302 as claimed)
 
 **Commits:**
 - `88c34f6` — Consolidation: archive 9 modules, refactor persona_executor
@@ -231,6 +236,26 @@ SvelteKit (12 routes, SSE real-time)
 - Service start/stop via WebUI with real systemctl
 - Nightwatch autonomous loop with real LLM
 - Cross-project task execution
+
+### 2026-09-03: Forensic Verification
+
+**Bugs found and fixed:**
+1. `--dry-run` parsed but never wired → FIXED
+2. Hardcoded `/home/nixos/projects` → FIXED (uses config)
+3. `files_changed` reported candidates → FIXED (uses git diff)
+4. `except Exception: pass` silenced errors → FIXED (logs warning)
+5. self_test.py referenced archived modules → FIXED
+
+**False markings corrected:**
+- Test count: 302/303 → 820/833 actual
+- Endpoint count: 9 → 20 actual
+- persona_executor VERIFIED → PARTIAL (dry-run was broken)
+- `jarvis execute` VERIFIED → PARTIAL (files_changed was wrong)
+
+**Unfixed (needs separate session):**
+- P6: checkpoint.json not per-project (cross-project state corruption)
+- Agent loop never feeds error context back to LLM (architectural)
+- 13 test failures (5 API mismatch, 3 pipeline bugs, 3 test infra, 2 LLM offline)
 
 ## Consolidation 2026-09-03 — Complete
 

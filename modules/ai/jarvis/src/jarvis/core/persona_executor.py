@@ -21,8 +21,10 @@ Usage:
 from __future__ import annotations
 
 import os
+import subprocess
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Optional
 
 from jarvis.core.persona import Persona, PersonaRegistry
@@ -50,22 +52,29 @@ class PersonaExecutor:
     - Harness for execution pipeline
     """
 
-    def __init__(self, project: str = "nixos-ai"):
+    def __init__(self, project: str = "nixos-ai", dry_run: bool = False):
         self.project = project
+        self.dry_run = dry_run
         self.registry = PersonaRegistry()
         self._harness = None
 
     def _get_harness(self):
         """Lazy-load harness to avoid circular imports."""
         if self._harness is None:
-            # Set project root for harness path resolution
-            project_path = f"/home/nixos/projects/{self.project}"
-            os.environ["JARVIS_PROJECT_ROOT"] = project_path
+            # Resolve project root from config or default location
+            from jarvis.core.config import get_config
+            cfg = get_config()
+            projects_dir = Path(os.environ.get(
+                "JARVIS_PROJECTS_DIR",
+                str(Path.home() / "projects"),
+            ))
+            project_path = projects_dir / self.project
+            os.environ["JARVIS_PROJECT_ROOT"] = str(project_path)
 
             from nightwatch.harness import Harness, HarnessConfig
             config = HarnessConfig(
                 project=self.project,
-                dry_run=False,
+                dry_run=self.dry_run,
                 max_retries=1,
             )
             self._harness = Harness(config=config)
@@ -149,13 +158,27 @@ class PersonaExecutor:
 
             duration = time.time() - start_time
 
+            # Determine actually changed files via git diff (not candidates)
+            actual_files_changed: list[str] = []
+            project_path = Path(os.environ.get("JARVIS_PROJECT_ROOT", "."))
+            try:
+                diff_result = subprocess.run(
+                    ["git", "diff", "--name-only", "HEAD"],
+                    capture_output=True, text=True, timeout=5,
+                    cwd=str(project_path),
+                )
+                if diff_result.returncode == 0 and diff_result.stdout.strip():
+                    actual_files_changed = diff_result.stdout.strip().split("\n")
+            except (OSError, subprocess.SubprocessError):
+                pass  # Fallback to target_files if git unavailable
+
             if success:
                 # Publish task_completed event
                 get_bus().publish("harness.task", {
                     "event_type": "task_completed",
                     "task_id": task_id,
                     "commit": harness_task.commit_sha or "",
-                    "files": harness_task.target_files,
+                    "files": actual_files_changed or harness_task.target_files,
                 })
 
                 return ExecutionResult(
@@ -163,7 +186,7 @@ class PersonaExecutor:
                     persona_id=persona.id,
                     task_id=task_id,
                     message=f"Task completed by {persona.name}",
-                    files_changed=harness_task.target_files,
+                    files_changed=actual_files_changed or harness_task.target_files,
                     commit_sha=harness_task.commit_sha,
                     duration_seconds=duration,
                 )
@@ -195,8 +218,11 @@ class PersonaExecutor:
                     "task_id": task_id,
                     "error": str(e)[:200],
                 })
-            except Exception:
-                pass
+            except Exception as pub_err:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Failed to publish task_failed event: %s", pub_err
+                )
 
             return ExecutionResult(
                 success=False,

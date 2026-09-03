@@ -1113,11 +1113,13 @@ def _cmd_execute(args: argparse.Namespace) -> int:
     """Execute a task autonomously using a persona."""
     from jarvis.core.persona_executor import PersonaExecutor
 
-    executor = PersonaExecutor(project=args.project)
+    executor = PersonaExecutor(project=args.project, dry_run=getattr(args, 'dry_run', False))
 
     print(f"Executing task with persona: {args.persona or 'auto-select'}")
     print(f"Project: {args.project}")
     print(f"Task: {args.task}")
+    if getattr(args, 'dry_run', False):
+        print("Mode: DRY RUN (no files will be modified)")
     print()
 
     result = executor.execute_with_persona(
