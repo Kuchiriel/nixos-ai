@@ -125,6 +125,33 @@ export async function fetchEventHistory(limit = 100): Promise<any[]> {
   return res.json();
 }
 
+export interface TaskInfo {
+  id: string;
+  project: string;
+  description: string;
+  status: string;
+  priority: number;
+  risk: string;
+  attempts: number;
+  last_error: string | null;
+  commit_sha: string | null;
+  created_at: number;
+  updated_at: number;
+  target_files: string[];
+}
+
+export interface TasksResponse {
+  tasks: TaskInfo[];
+  mission: Record<string, any>;
+  total: number;
+}
+
+export async function fetchTasks(limit = 50): Promise<TasksResponse> {
+  const res = await fetch(`${API_BASE}/tasks?limit=${limit}`);
+  if (!res.ok) throw new Error(`Tasks fetch failed: ${res.status}`);
+  return res.json();
+}
+
 export async function sendNotification(
   title: string,
   body: string = '',

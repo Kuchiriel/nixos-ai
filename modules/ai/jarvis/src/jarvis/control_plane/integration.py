@@ -260,6 +260,50 @@ def setup_integration() -> None:
         category="memory",
     )
 
+    # ─── Harness/Agent → State ─────────────────────────────────────
+    # harness.py publishes task lifecycle events via the global EventBus.
+    # We subscribe to update the Agent section of StateStore.
+
+    def _on_harness_task(event: Any) -> None:
+        data = event.data
+        event_type = data.get("event_type", "")
+        task_id = data.get("task_id", "")
+
+        if event_type == "task_started":
+            state.update(Sections.AGENT, "active_task", task_id)
+            state.update(Sections.AGENT, "active_persona", data.get("persona", ""))
+            state.update(Sections.AGENT, "active_project", data.get("project", ""))
+            state.update(Sections.AGENT, "status", "running")
+            state.update(Sections.AGENT, "last_started", time.time())
+            notifications.notify_event(Events.AGENT_TASK_STARTED, {
+                "task_id": task_id,
+                "description": data.get("description", ""),
+            })
+        elif event_type == "task_completed":
+            state.update(Sections.AGENT, "active_task", "")
+            state.update(Sections.AGENT, "status", "idle")
+            state.update(Sections.AGENT, "last_completed", time.time())
+            state.update(Sections.AGENT, "last_commit", data.get("commit", ""))
+            notifications.notify_event(Events.AGENT_TASK_COMPLETED, {
+                "task_id": task_id,
+                "commit": data.get("commit", ""),
+                "files": data.get("files", []),
+            })
+        elif event_type == "task_failed":
+            state.update(Sections.AGENT, "active_task", "")
+            state.update(Sections.AGENT, "status", "error")
+            state.update(Sections.AGENT, "last_error", data.get("error", "")[:200])
+            state.update(Sections.AGENT, "last_failed", time.time())
+            notifications.notify_event(Events.AGENT_TASK_FAILED, {
+                "task_id": task_id,
+                "error": data.get("error", ""),
+            })
+        elif event_type == "loop_detected":
+            state.update(Sections.AGENT, "status", "blocked")
+            state.update(Sections.AGENT, "last_error", f"Loop detected: {task_id}")
+
+    bus.subscribe("harness.task", _on_harness_task, name="cp-harness")
+
     # ─── Initial State Population ──────────────────────────────────
     # NOTE: No blocking HTTP calls at startup. Health state is populated
     # lazily when doctor.run command is executed or first doctor report

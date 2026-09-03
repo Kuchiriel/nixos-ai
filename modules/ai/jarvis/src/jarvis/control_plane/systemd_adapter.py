@@ -201,14 +201,22 @@ class SystemdAdapter:
         except (OSError, FileNotFoundError) as exc:
             return False, str(exc)
 
+    def _get_service_scope(self, name: str) -> str:
+        """Get the scope (user/system) for a service from discovered list."""
+        services = self._discover_services()
+        svc = services.get(name)
+        if svc:
+            return svc.get("scope", "system")
+        return "system"  # default fallback
+
     def start(self, name: str) -> dict[str, Any]:
         """Start a service."""
         error = self._validate_service(name)
         if error:
             return {"success": False, "error": error}
 
-        svc = KNOWN_SERVICES[name]
-        ok, output = self._run_systemctl("start", name, svc["scope"], timeout=60)
+        scope = self._get_service_scope(name)
+        ok, output = self._run_systemctl("start", name, scope, timeout=60)
         return {
             "success": ok,
             "service": name,
@@ -222,8 +230,8 @@ class SystemdAdapter:
         if error:
             return {"success": False, "error": error}
 
-        svc = KNOWN_SERVICES[name]
-        ok, output = self._run_systemctl("stop", name, svc["scope"], timeout=30)
+        scope = self._get_service_scope(name)
+        ok, output = self._run_systemctl("stop", name, scope, timeout=30)
         return {
             "success": ok,
             "service": name,
@@ -237,8 +245,8 @@ class SystemdAdapter:
         if error:
             return {"success": False, "error": error}
 
-        svc = KNOWN_SERVICES[name]
-        ok, output = self._run_systemctl("restart", name, svc["scope"], timeout=60)
+        scope = self._get_service_scope(name)
+        ok, output = self._run_systemctl("restart", name, scope, timeout=60)
         return {
             "success": ok,
             "service": name,

@@ -352,6 +352,59 @@ def projects_list() -> list[dict[str, Any]]:
     return result
 
 
+# ─── Tasks ──────────────────────────────────────────────────────────────
+
+@app.get("/api/tasks")
+def tasks_list(limit: int = 50) -> dict[str, Any]:
+    """List tasks from the persistent task queue."""
+    from pathlib import Path
+    import json as _json
+    state_dir = Path.home() / ".local/state/jarvis/nightwatch"
+    queue_file = state_dir / "task_queue.json"
+    mission_file = state_dir / "mission_state.json"
+
+    tasks = []
+    if queue_file.exists():
+        try:
+            raw = _json.loads(queue_file.read_text(encoding="utf-8"))
+            # Sort by updated_at descending (most recent first)
+            raw.sort(key=lambda t: t.get("updated_at", 0), reverse=True)
+            tasks = raw[:limit]
+        except (_json.JSONDecodeError, OSError):
+            pass
+
+    mission = {}
+    if mission_file.exists():
+        try:
+            mission = _json.loads(mission_file.read_text(encoding="utf-8"))
+        except (_json.JSONDecodeError, OSError):
+            pass
+
+    return {
+        "tasks": tasks,
+        "mission": mission,
+        "total": len(tasks),
+    }
+
+
+@app.get("/api/tasks/{task_id}")
+def task_detail(task_id: str) -> dict[str, Any]:
+    """Get a specific task by ID."""
+    from pathlib import Path
+    import json as _json
+    queue_file = Path.home() / ".local/state/jarvis/nightwatch" / "task_queue.json"
+    if not queue_file.exists():
+        raise HTTPException(404, "No tasks found")
+    try:
+        raw = _json.loads(queue_file.read_text(encoding="utf-8"))
+        for t in raw:
+            if t.get("id") == task_id:
+                return t
+    except (_json.JSONDecodeError, OSError):
+        pass
+    raise HTTPException(404, f"Task {task_id} not found")
+
+
 @app.get("/api/events/stats")
 def event_stats() -> dict[str, Any]:
     """Event bus statistics."""

@@ -619,8 +619,9 @@ class Harness:
             max_attempts=self.config.loop_max_attempts,
             window_seconds=self.config.loop_window_seconds,
         )
-        # Event Bus — decouple notification from harness
-        self._bus = EventBus()
+        # Event Bus — use global bus so Control Plane receives harness events
+        from jarvis.core.eventbus import get_bus
+        self._bus = get_bus()
         self._bus.subscribe("harness.notify", self._handle_bus_notify, name="telegram")
         self._bus.subscribe("harness.task", self._handle_bus_log, name="jsonl_logger")
         # Auto-detect context size from llama.cpp server if not specified
