@@ -70,3 +70,8 @@ modules/ai/jarvis/tests/_e2e_*.py
 
 # Backup files
 *.bak
+
+# WebUI frontend build
+modules/ai/jarvis/src/jarvis/webui/frontend/.svelte-kit/
+modules/ai/jarvis/src/jarvis/webui/frontend/build/
+modules/ai/jarvis/src/jarvis/webui/frontend/dist/

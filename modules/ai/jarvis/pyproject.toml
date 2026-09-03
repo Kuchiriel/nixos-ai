@@ -33,6 +33,7 @@ jarvis-speak = "jarvis.core.voice:main_tts"
 jarvis-voice = "jarvis.core.voice:main_voice"
 jarvis-emotion = "jarvis.core.emotion:main_emotion"
 jarvis-launcher = "jarvis.cli.launcher_main:main"
+jarvis-webui = "jarvis.webui.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

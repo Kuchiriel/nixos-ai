@@ -29,6 +29,8 @@
       requests
       numpy
       prompt-toolkit
+      fastapi
+      uvicorn
     ];
 
     nativeBuildInputs = [makeWrapper];
