@@ -207,6 +207,129 @@ def event_history(limit: int = 100) -> list[dict[str, Any]]:
     return plane.get_event_history(limit)
 
 
+# ─── LLM ──────────────────────────────────────────────────────────────
+
+@app.get("/api/llm")
+def llm_info() -> dict[str, Any]:
+    """Get LLM backend info."""
+    from jarvis.core.config import get_config
+    cfg = get_config()
+    info: dict[str, Any] = {
+        "backend": cfg.llm_backend,
+        "model": cfg.llm_model,
+        "base_url": cfg.llm_base_url,
+        "timeout": cfg.llm_timeout,
+        "tool_calling": cfg.llm_tool_calling,
+        "disable_thinking": cfg.llm_disable_thinking,
+    }
+    # Check health
+    try:
+        import requests
+        health_url = cfg.llm_base_url.replace("/v1", "") + "/health"
+        resp = requests.get(health_url, timeout=3)
+        info["healthy"] = resp.status_code == 200
+        info["status"] = "online" if resp.status_code == 200 else "error"
+    except Exception:
+        info["healthy"] = False
+        info["status"] = "offline"
+    return info
+
+
+# ─── Voice ─────────────────────────────────────────────────────────────
+
+@app.get("/api/voice")
+def voice_info() -> dict[str, Any]:
+    """Get voice/TTS state."""
+    plane = _get_plane()
+    voice_state = plane.state.get_section("voice")
+    return {
+        "status": voice_state.get("status", "idle"),
+        "text": voice_state.get("status_text", ""),
+        "last_tts_len": voice_state.get("last_tts_len", 0),
+        "last_tts_time": voice_state.get("last_tts_time"),
+    }
+
+
+# ─── Memory / RAG ─────────────────────────────────────────────────────
+
+@app.get("/api/memory")
+def memory_info() -> dict[str, Any]:
+    """Get memory/RAG status."""
+    from jarvis.core.config import get_config
+    cfg = get_config()
+    info: dict[str, Any] = {
+        "qdrant_url": cfg.qdrant_url,
+        "collections": {
+            "code": cfg.qdrant_collection_code,
+            "memories": cfg.qdrant_collection_memories,
+            "books": cfg.qdrant_collection_books,
+        },
+    }
+    # Check Qdrant health
+    try:
+        import requests
+        resp = requests.get(f"{cfg.qdrant_url}/collections", timeout=3)
+        if resp.status_code == 200:
+            collections = [c["name"] for c in resp.json()["result"]["collections"]]
+            info["healthy"] = True
+            info["existing_collections"] = collections
+        else:
+            info["healthy"] = False
+    except Exception:
+        info["healthy"] = False
+        info["existing_collections"] = []
+    return info
+
+
+# ─── Agent ─────────────────────────────────────────────────────────────
+
+@app.get("/api/agent")
+def agent_info() -> dict[str, Any]:
+    """Get agent state."""
+    plane = _get_plane()
+    agent_state = plane.state.get_section("agent")
+    return {
+        "active_task": agent_state.get("active_task", ""),
+        "active_persona": agent_state.get("active_persona", ""),
+        "active_project": agent_state.get("active_project", ""),
+    }
+
+
+# ─── Nightwatch ────────────────────────────────────────────────────────
+
+@app.get("/api/nightwatch")
+def nightwatch_info() -> dict[str, Any]:
+    """Get nightwatch state."""
+    from pathlib import Path
+    import json
+    state_dir = Path.home() / ".local/state/jarvis/nightwatch"
+    info: dict[str, Any] = {"active": False, "last_run": None}
+    progress_file = state_dir / "progress.json"
+    if progress_file.exists():
+        try:
+            data = json.loads(progress_file.read_text())
+            info["last_run"] = data
+            info["active"] = True
+        except (json.JSONDecodeError, OSError):
+            pass
+    return info
+
+
+# ─── Projects ──────────────────────────────────────────────────────────
+
+@app.get("/api/projects")
+def projects_list() -> list[dict[str, Any]]:
+    """List discovered projects."""
+    from jarvis.core.workspace import WorkspaceDiscovery
+    ws = WorkspaceDiscovery()
+    projs = ws.discover()
+    return [
+        {"name": p.get("name", "?"), "path": str(p.get("path", "")),
+         "type": p.get("type", "unknown")}
+        for p in projs[:20]
+    ]
+
+
 @app.get("/api/events/stats")
 def event_stats() -> dict[str, Any]:
     """Event bus statistics."""

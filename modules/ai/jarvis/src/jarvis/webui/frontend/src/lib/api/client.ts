@@ -83,6 +83,48 @@ export async function fetchServices(): Promise<ServiceInfo[]> {
   return res.json();
 }
 
+export async function fetchLLMInfo(): Promise<any> {
+  const res = await fetch(`${API_BASE}/llm`);
+  if (!res.ok) throw new Error(`LLM fetch failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchVoiceInfo(): Promise<any> {
+  const res = await fetch(`${API_BASE}/voice`);
+  if (!res.ok) throw new Error(`Voice fetch failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchMemoryInfo(): Promise<any> {
+  const res = await fetch(`${API_BASE}/memory`);
+  if (!res.ok) throw new Error(`Memory fetch failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchAgentInfo(): Promise<any> {
+  const res = await fetch(`${API_BASE}/agent`);
+  if (!res.ok) throw new Error(`Agent fetch failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchNightwatchInfo(): Promise<any> {
+  const res = await fetch(`${API_BASE}/nightwatch`);
+  if (!res.ok) throw new Error(`Nightwatch fetch failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchProjects(): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/projects`);
+  if (!res.ok) throw new Error(`Projects fetch failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchEventHistory(limit = 100): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/events/history?limit=${limit}`);
+  if (!res.ok) throw new Error(`Event history fetch failed: ${res.status}`);
+  return res.json();
+}
+
 export async function sendNotification(
   title: string,
   body: string = '',
