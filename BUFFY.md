@@ -345,3 +345,31 @@ The ChatGPT conversation at `https://chatgpt.com/share/6a99bf79-72bc-83e9-aeed-f
 - Agent loop traceback feedback question
 
 **Always read this conversation at session start using Playwright to recover context.**
+
+## 18. FORENSIC VERIFICATION LESSONS (2026-09-03)
+
+### What This Session Proved
+
+1. **Never trust self-reported metrics** — test count was claimed 302, actual 820. Endpoint count claimed 9, actual 20.
+2. **`--dry-run` is the most dangerous false feature** — CLI parsed it, user thought it was safe, but it silently executed real changes.
+3. **`files_changed` lying** — reported input candidates, not actual modifications. User trusted wrong data.
+4. **Archived modules leave ghost references** — self_test.py still called orchestrator/workitem functions that were supposed to be dead.
+5. **Agent loop never feeds error context** — LLM never sees what went wrong on retry. This is the root cause of the 15-retry loops.
+6. **P6 checkpoint corruption is real** — cross-project state is not namespaced.
+
+### Rules Added to BUFFY
+
+- **Evidence Ladder**: never auto-promote verification levels
+- **Completion Gate**: hard barrier before declaring done
+- **Adversarial Verification**: try to break your own implementation
+- **Anti-Small-Delivery**: return to requirements matrix after each fix
+- **Anti-Mock**: at least one validation without mocks when possible
+- **Anti-False-Green**: never add || true, never hide exceptions
+
+### What Must Be Verified Before Next Session
+
+- [ ] P6 checkpoint per-project namespace
+- [ ] Agent loop error context feedback
+- [ ] SvelteKit browser rendering
+- [ ] Real notification delivery
+- [ ] Service start/stop via WebUI
