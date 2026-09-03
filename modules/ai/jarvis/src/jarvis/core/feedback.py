@@ -12,6 +12,11 @@ error), com emojis e cores, além de notificações. Este módulo generaliza:
 
 Estados padrão (mesma semântica do legado):
   idle | listening | transcribing | thinking | speaking | error | done
+
+Integration with Control Plane:
+  This module now also publishes state changes to the Control Plane's
+  State Store and Notification Manager when available. Existing callers
+  are unaffected — the Control Plane integration is additive.
 """
 
 from __future__ import annotations
@@ -36,7 +41,10 @@ _SOUNDS: dict[str, str] = {
 
 
 def set_status(state: str, text: str = "", **extra: Any) -> None:
-    """Escreve o status compartilhado (Waybar lê e estiliza)."""
+    """Escreve o status compartilhado (Waybar lê e estiliza).
+
+    Also publishes to Control Plane State Store when available.
+    """
     payload: dict[str, Any] = {
         "state": state,
         "text": text,
@@ -47,6 +55,13 @@ def set_status(state: str, text: str = "", **extra: Any) -> None:
     try:
         STATUS_FILE.write_text(json.dumps(payload, ensure_ascii=False))
     except OSError:
+        pass
+    # Update Control Plane state
+    try:
+        from jarvis.control_plane.state import get_state_store, Sections
+        get_state_store().update(Sections.VOICE, "status", state)
+        get_state_store().update(Sections.VOICE, "status_text", text)
+    except Exception:  # noqa: BLE001
         pass
 
 
@@ -62,7 +77,25 @@ def clear_status() -> None:
 
 
 def notify(title: str, body: str = "", urgency: str = "normal") -> bool:
-    """Notificação via notify-send. Retorna True se enviou."""
+    """Notificação via notify-send. Retorna True se enviou.
+
+    Also routes through Control Plane Notification Manager when available.
+    """
+    # Route through Control Plane if available
+    try:
+        from jarvis.control_plane.notifications import get_notification_manager
+        from jarvis.control_plane.events import Severity
+        severity_map = {"low": Severity.INFO, "normal": Severity.INFO,
+                        "critical": Severity.CRITICAL}
+        get_notification_manager().notify(
+            title, body,
+            severity=severity_map.get(urgency, Severity.INFO),
+            channels=["desktop"],
+        )
+        return True
+    except Exception:  # noqa: BLE001
+        pass
+    # Fallback: direct notify-send
     binary = shutil.which("notify-send")
     if binary is None:
         return False
