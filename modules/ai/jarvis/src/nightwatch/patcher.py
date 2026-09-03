@@ -192,7 +192,14 @@ def apply_patch(patch: FilePatch) -> tuple[bool, str, str]:
     
     Returns (success, new_content_or_error, diff).
     """
-    path = REPO_ROOT / patch.path
+    import os
+    env_root = os.environ.get("JARVIS_PROJECT_ROOT")
+    project_root = Path(env_root) if env_root and Path(env_root).exists() else REPO_ROOT
+    
+    # Try project root first (external projects), then REPO_ROOT
+    path = project_root / patch.path
+    if not path.exists():
+        path = REPO_ROOT / patch.path
     if not path.exists():
         # Try with common prefixes
         for prefix in ["modules/ai/jarvis/src/", "src/jarvis/", "jarvis/"]:
