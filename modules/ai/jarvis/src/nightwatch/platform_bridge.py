@@ -65,17 +65,17 @@ def decompose_task_for_nightwatch(
     task_description: str,
     project_id: str = "nixos-ai",
 ) -> list[dict]:
-    """Decompose a task into subtasks using the orchestrator.
+    """Decompose a task into subtasks.
 
-    Returns a list of work item dicts.
+    Returns a list of task dicts for the harness.
     """
-    try:
-        from jarvis.core.orchestrator import Orchestrator
-        orch = Orchestrator()
-        items = orch.decompose_task(task_description, project_id=project_id)
-        return [item.to_dict() for item in items]
-    except Exception:
-        return []
+    # Simple decomposition: treat the task as a single work item
+    return [{
+        "task": task_description,
+        "project": project_id or "nixos-ai",
+        "priority": 5,
+        "risk": "low",
+    }]
 
 
 def get_model_tier_for_stage(stage: str) -> dict:

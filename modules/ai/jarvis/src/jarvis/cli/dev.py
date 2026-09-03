@@ -1995,67 +1995,55 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
 
         if user_input == "/workitem" or user_input.startswith("/workitem "):
             try:
-                from jarvis.core.workitem import WorkItemEngine
-                engine = WorkItemEngine()
+                from nightwatch.task_queue import TaskQueue, Task
+                queue = TaskQueue()
                 sub = user_input.split(" ", 1)[1].strip() if " " in user_input else ""
                 if sub == "list" or sub == "":
-                    items = engine.list_items()
-                    if items:
+                    tasks = queue._tasks
+                    if tasks:
                         table = Table(show_header=True, box=None, padding=(0, 1))
                         table.add_column("ID", style="tool")
                         table.add_column("Status")
-                        table.add_column("Title")
+                        table.add_column("Description")
                         table.add_column("Project")
-                        for item in items:
-                            table.add_row(item.id[:8], item.status, item.title[:40], item.project)
-                        console.print(Panel(table, title="📋 Work Items", border_style="dim", title_align="left"))
+                        for t in tasks:
+                            table.add_row(t.id[:12], t.status, t.description[:40], t.project)
+                        console.print(Panel(table, title="📋 Tasks", border_style="dim", title_align="left"))
                     else:
-                        console.print("[dim]Nenhum work item[/]")
+                        console.print("[dim]Nenhuma task[/]")
                 elif sub == "next":
-                    item = engine.get_next_task()
-                    if item:
-                        console.print(Panel(json.dumps(item.to_dict(), indent=2, default=str), title="📋 Next Task", border_style="jarvis", title_align="left"))
+                    task = queue.get_next_task()
+                    if task:
+                        console.print(Panel(json.dumps(task.to_dict(), indent=2, default=str), title="📋 Next Task", border_style="jarvis", title_align="left"))
                     else:
                         console.print("[dim]Nenhuma tarefa pronta[/]")
                 elif sub == "burndown":
-                    console.print(json.dumps(engine.get_burndown(), indent=2))
+                    console.print(json.dumps(queue.get_stats(), indent=2))
                 elif sub.startswith("create "):
                     parts = sub.split(" ", 2)
-                    title = parts[1] if len(parts) > 1 else "new task"
+                    desc = parts[1] if len(parts) > 1 else "new task"
                     project = parts[2] if len(parts) > 2 else os.path.basename(os.getcwd())
-                    item = engine.create(project=project, title=title)
-                    console.print(f"[tool.ok]Criado: {item.id} — {item.title}[/]")
-                elif sub.startswith("done "):
-                    item_id = sub.split(" ", 1)[1]
-                    item = engine.transition(item_id, "done")
-                    if item:
-                        console.print(f"[tool.ok]{item_id} → done[/]")
-                    else:
-                        console.print(f"[tool.error]Item não encontrado[/]")
+                    task = Task(id=f"cli-{int(time.time())}", project=project, description=desc, priority=5, risk="low")
+                    queue.add_task(task)
+                    console.print(f"[tool.ok]Criado: {task.id} — {task.description[:40]}[/]")
                 else:
-                    console.print("[dim]uso: /workitem [list|next|burndown|create <title>|done <id>][/")
+                    console.print("[dim]uso: /workitem [list|next|burndown|create <desc>][/")
             except Exception as e:
                 console.print(f"[tool.error]Erro: {e}[/]")
             continue
 
         if user_input == "/orchestrate" or user_input.startswith("/orchestrate "):
             try:
-                from jarvis.core.orchestrator import Orchestrator
-                orch = Orchestrator()
+                from nightwatch.task_queue import TaskQueue
+                queue = TaskQueue()
+                mission = queue.mission
                 sub = user_input.split(" ", 1)[1].strip() if " " in user_input else ""
                 if sub == "" or sub == "status":
-                    console.print(orch.summary())
+                    stats = queue.get_stats()
+                    console.print(f"Mission: active={mission.active}, completed={mission.total_tasks_completed}, commits={mission.total_commits}")
+                    console.print(f"Tasks: {stats['total']} total, {stats['completed']} done, {stats['ready']} ready")
                 elif sub == "workflows":
-                    for wf_id, wf in orch._workflows.items():
-                        console.print(f"  [tool]{wf_id}[/]: {wf.name}")
-                        console.print(f"    {wf.description}")
-                elif sub.startswith("decompose "):
-                    task = sub.split(" ", 1)[1]
-                    project = os.path.basename(os.getcwd())
-                    items = orch.decompose_task(task, project_id=project)
-                    console.print(f"[tool.ok]Criados {len(items)} work items:[/]")
-                    for item in items:
-                        console.print(f"  [{item.status}] {item.id[:8]}: {item.title}")
+                    console.print("Task categories: code-quality, test-coverage, security-scan, nix-check, dedup, docs")
                 else:
                     console.print("[dim]uso: /orchestrate [status|workflows|decompose <task>][/")
             except Exception as e:

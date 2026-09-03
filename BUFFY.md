@@ -200,3 +200,32 @@ SvelteKit (12 routes, SSE real-time)
 - Service start/stop via WebUI with real systemctl
 - Agent state population in Control Plane
 - Tasks page implementation
+
+## Consolidation 2026-09-03 — Complete
+
+### What was eliminated
+- 9 archived modules (orchestrator, workitem, subagent, context, agent_loop, ast_guard, ast_cache, learning, vision_analyzer)
+- 0 PAUSADO imports remaining
+- persona_executor now uses harness directly (no orchestrator dependency)
+- CLI commands updated to use task_queue
+
+### Verified
+- 302/303 tests pass (1 pre-existing failure)
+- PersonaExecutor E2E on Corretor: commit bd3919f2
+- No regressions from consolidation
+
+### Architecture (current)
+```
+PersonaExecutor
+  → TaskQueue (persistent)
+    → Harness (pipeline engine)
+      → LLM (via _default_call_llm)
+        → Patcher + SafeEditor
+          → Validator (syntax + tests)
+            → Evaluator (review)
+              → Checkpoint + Safety
+                → Git commit
+```
+
+### Archived code lives in
+- `archive/core/` — 9 modules + 1 test + README

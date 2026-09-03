@@ -592,13 +592,12 @@ class WhiteBoxTests:
         try:
             from jarvis.core.workspace import WorkspaceDiscovery
             from jarvis.core.persona import PersonaRegistry
-            from jarvis.core.workitem import WorkItemEngine
-            from jarvis.core.orchestrator import Orchestrator
-            from jarvis.core.context import ContextPipeline
             from jarvis.core.model_policy import ModelPolicy
+            from nightwatch.task_queue import TaskQueue
+            from nightwatch.harness import Harness
             return TestResult(
                 name="platform_modules_importable", level="white", passed=True,
-                evidence="All 6 platform modules import successfully",
+                evidence="All 5 platform modules import successfully (PAUSADO modules removed)",
             )
         except Exception as e:
             return TestResult(

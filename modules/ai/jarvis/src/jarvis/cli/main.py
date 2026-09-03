@@ -1102,71 +1102,66 @@ def _cmd_persona(args: argparse.Namespace) -> int:
 
 
 def _cmd_workitem(args: argparse.Namespace) -> int:
-    """Work item management."""
-    from jarvis.core.workitem import WorkItemEngine
+    """Task queue management (replaces old workitem)."""
+    from nightwatch.task_queue import TaskQueue, Task, TaskStatus
 
-    engine = WorkItemEngine()
+    queue = TaskQueue()
 
     if args.create:
         title, project = args.create
-        item = engine.create(project=project, title=title)
-        print(json.dumps(item.to_dict(), indent=2))
+        task = Task(
+            id=f"cli-{int(time.time())}",
+            project=project,
+            description=title,
+            priority=5,
+            risk="low",
+        )
+        queue.add_task(task)
+        print(f"Created task {task.id}: {title}")
     elif args.list:
-        items = engine.list_items()
-        for item in items:
-            print(f"  [{item.status}] {item.id}: {item.title} (project={item.project})")
-        if not items:
-            print("  No work items")
+        tasks = queue._tasks
+        for t in tasks:
+            print(f"  [{t.status}] {t.id}: {t.description[:60]} (project={t.project})")
+        if not tasks:
+            print("  No tasks")
     elif args.next:
-        item = engine.get_next_task()
-        if item:
-            print(json.dumps(item.to_dict(), indent=2))
+        task = queue.get_next_task()
+        if task:
+            print(json.dumps(task.to_dict(), indent=2, default=str))
         else:
             print("No tasks ready")
-    elif args.transition:
-        item_id, status = args.transition
-        item = engine.transition(item_id, status)
-        if item:
-            print(f"Transitioned {item_id} to {status}")
-        else:
-            print(f"Item {item_id} not found")
-            return 1
     elif args.burndown:
-        print(json.dumps(engine.get_burndown(), indent=2))
+        stats = queue.get_stats()
+        print(json.dumps(stats, indent=2))
     else:
-        print(engine.summary())
+        stats = queue.get_stats()
+        print(f"Tasks: {stats['total']} total, {stats['completed']} done, {stats['ready']} ready")
     return 0
 
 
 def _cmd_orchestrate(args: argparse.Namespace) -> int:
-    """Orchestration management."""
-    from jarvis.core.orchestrator import Orchestrator
+    """Harness status and task execution."""
+    from nightwatch.task_queue import TaskQueue
 
-    orch = Orchestrator()
+    queue = TaskQueue()
+    mission = queue.mission
 
-    if args.decompose:
-        task, project = args.decompose
-        items = orch.decompose_task(task, project_id=project)
-        print(f"Created {len(items)} work items:")
-        for item in items:
-            print(f"  [{item.status}] {item.id}: {item.title}")
-    elif args.assign:
-        item_id, persona_id = args.assign
-        agent = orch.assign_task(item_id, persona_id)
-        if agent:
-            print(json.dumps(agent.to_dict(), indent=2))
-        else:
-            print("Assignment failed")
-            return 1
-    elif args.status:
-        print(orch.summary())
+    if args.status:
+        stats = queue.get_stats()
+        print(f"Mission: active={mission.active}, completed={mission.total_tasks_completed}, commits={mission.total_commits}")
+        print(f"Tasks: {stats['total']} total, {stats['completed']} done, {stats['ready']} ready, {stats['failed']} failed")
     elif args.workflows:
-        for wf_id, wf in orch._workflows.items():
-            print(f"  {wf_id}: {wf.name}")
-            print(f"    {wf.description}")
-            print(f"    Stages: {[s['name'] for s in wf.stages]}")
+        # Show available task categories
+        print("Task categories:")
+        print("  code-quality: Code quality improvements")
+        print("  test-coverage: Test coverage gaps")
+        print("  security-scan: Security issues")
+        print("  nix-check: NixOS configuration")
+        print("  dedup: Duplicated code")
+        print("  docs: Documentation gaps")
     else:
-        print(orch.summary())
+        stats = queue.get_stats()
+        print(f"Tasks: {stats['total']} total, {stats['completed']} done, {stats['ready']} ready")
     return 0
 
 
