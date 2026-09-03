@@ -374,12 +374,16 @@ async def events_stream():
     with _event_lock:
         _event_queues.append(q)
 
-    # Subscribe to state store
+    # Subscribe to state store (idempotent — handler ref replaces previous)
     plane.state.subscribe(None, _sse_handler)
 
-    # Subscribe to EventBus events
+    # Track unique subscriber name for this connection
+    import uuid
+    sub_name = f"sse-bridge-{uuid.uuid4().hex[:8]}"
+
+    # Subscribe to EventBus events with unique name (cleaned up on disconnect)
     from jarvis.core.eventbus import get_bus
-    get_bus().subscribe("", _sse_event_handler, name="sse-bridge")
+    get_bus().subscribe("", _sse_event_handler, name=sub_name)
 
     async def generate():
         try:
@@ -395,10 +399,11 @@ async def events_stream():
                     await asyncio.sleep(1)
                     yield f": heartbeat {int(time.time())}\n\n"
         finally:
-            # Cleanup
+            # Cleanup: remove from SSE queues and unsubscribe from EventBus
             with _event_lock:
                 if q in _event_queues:
                     _event_queues.remove(q)
+            get_bus().unsubscribe(sub_name)
 
     return StreamingResponse(
         generate(),

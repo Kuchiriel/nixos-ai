@@ -302,9 +302,20 @@ class NotificationManager:
         return _speak(notif.body or notif.title)
 
     def _deliver_web(self, notif: Notification) -> bool:
-        """Web delivery — stub for now (WebUI will consume via SSE)."""
-        # Will be connected to SSE/WebSocket later
-        return True
+        """Web delivery — push to SSE queues for connected WebUI clients."""
+        try:
+            from jarvis.webui.api import _push_to_sse
+            _push_to_sse({
+                "type": "notification",
+                "title": notif.title,
+                "body": notif.body,
+                "severity": notif.severity,
+                "event": notif.event,
+                "ts": notif.ts,
+            })
+            return True
+        except (ImportError, Exception):
+            return False
 
     def _auto_body(self, event_name: str, data: dict[str, Any]) -> str:
         """Auto-generate body text from event data."""

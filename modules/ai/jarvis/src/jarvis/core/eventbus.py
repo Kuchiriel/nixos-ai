@@ -112,6 +112,18 @@ class EventBus:
         )
         self._subscribers.setdefault(topic or "__all__", []).append(sub)
 
+    def unsubscribe(self, name: str) -> bool:
+        """Remove all subscribers with the given name. Returns True if any removed."""
+        removed = False
+        for topic_key in list(self._subscribers.keys()):
+            before = len(self._subscribers[topic_key])
+            self._subscribers[topic_key] = [
+                s for s in self._subscribers[topic_key] if s.name != name
+            ]
+            if len(self._subscribers[topic_key]) < before:
+                removed = True
+        return removed
+
     def subscribe_many(self, topics: list[str], handler: EventHandler, **kw: Any) -> None:
         """Registra um handler para múltiplos tópicos."""
         for t in topics:
