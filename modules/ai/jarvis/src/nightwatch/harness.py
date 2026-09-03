@@ -171,6 +171,9 @@ def _default_call_llm(prompt: str, max_tokens: int = 2048) -> str:
 
     Uses jarvis.providers.llm which supports multiple backends
     (llama-cpp, prismml, bonsai) via the LLMBackend abstraction.
+
+    Disables thinking tokens for coding tasks to prevent
+    reasoning from consuming the entire max_tokens budget.
     """
     try:
         from jarvis.providers.llm import LLMClient
@@ -181,11 +184,19 @@ def _default_call_llm(prompt: str, max_tokens: int = 2048) -> str:
              "Return only the requested output, no explanations."},
             {"role": "user", "content": prompt},
         ]
-        return client.chat(
+        response = client.chat_with_tools(
             messages=messages,
             max_tokens=max_tokens,
             temperature=0.3,
-        ) or "ERROR: empty response from LLM"
+            extra={"chat_template_kwargs": {"enable_thinking": False}},
+        )
+        content = response.content or ""
+        # Some backends put response in tool_calls when structured; check content
+        if not content.strip() and response.tool_calls:
+            # Tool calls present — stringify them
+            import json
+            content = json.dumps(response.tool_calls, indent=2)
+        return content or "ERROR: empty response from LLM"
     except Exception as e:
         return f"ERROR: {e}"
 
@@ -349,7 +360,10 @@ def _read_file_for_llm(path: str, max_chars: int = 0) -> str:
 
         # Auto-detect truncation from context budget if not specified
         if max_chars <= 0:
-            max_chars = 16000  # reasonable default for structured patch context
+            # Be conservative: llama-server context is typically 4096-8192 tokens.
+            # ~1 token per 3-4 chars, reserve room for system prompt + response.
+            # 4000 chars ≈ 1000 tokens, leaving 3000 tokens for prompt template + response.
+            max_chars = 4000
 
         if len(content) > max_chars:
             # For large files, send first and last portions with marker
@@ -362,20 +376,31 @@ def _read_file_for_llm(path: str, max_chars: int = 0) -> str:
         return f"ERROR: Could not read {path}: {e}"
 
 
+def _get_project_root() -> Path:
+    """Get the active project root, preferring JARVIS_PROJECT_ROOT env var."""
+    import os
+    env_root = os.environ.get("JARVIS_PROJECT_ROOT")
+    if env_root and Path(env_root).exists():
+        return Path(env_root)
+    return REPO_ROOT
+
+
 def _resolve_file_path(path: str) -> Path:
     """Resolve a file path to an absolute path.
 
     Tries multiple strategies:
     1. Absolute path as-is
-    2. Relative to project root
+    2. Relative to project root (JARVIS_PROJECT_ROOT or REPO_ROOT)
     3. With common source prefixes stripped
     4. Glob search in project
     """
+    project_root = _get_project_root()
+
     if path.startswith("/"):
         return Path(path)
 
     # Try direct relative to project root
-    direct = REPO_ROOT / path
+    direct = project_root / path
     if direct.exists():
         return direct
 
@@ -383,7 +408,7 @@ def _resolve_file_path(path: str) -> Path:
     for prefix in ["modules/ai/jarvis/src/", "src/jarvis/", "jarvis/", "src/"]:
         if path.startswith(prefix):
             stripped = path[len(prefix):]
-            for base in [REPO_ROOT / "modules/ai/jarvis/src", REPO_ROOT]:
+            for base in [project_root / "modules/ai/jarvis/src", project_root]:
                 candidate = base / stripped
                 if candidate.exists():
                     return candidate
@@ -392,7 +417,7 @@ def _resolve_file_path(path: str) -> Path:
     import subprocess
     try:
         result = subprocess.run(
-            ["find", str(REPO_ROOT), "-name", Path(path).name, "-type", "f"],
+            ["find", str(project_root), "-name", Path(path).name, "-type", "f"],
             capture_output=True, text=True, timeout=5,
         )
         for line in result.stdout.strip().split("\n"):
@@ -401,7 +426,7 @@ def _resolve_file_path(path: str) -> Path:
     except Exception:
         pass
 
-    return REPO_ROOT / path  # Return best guess
+    return project_root / path  # Return best guess
 
 
 def _request_structured_patch(

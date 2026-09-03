@@ -313,6 +313,7 @@ class LLMClient:
         tools: list[dict[str, Any]] | None = None,
         temperature: float = 0.0,
         max_tokens: int | None = None,
+        extra: dict[str, Any] | None = None,
     ) -> ChatResponse:
         """Chat completion com tool calling — retorna ChatResponse completo."""
         request_id = uuid.uuid4().hex[:12]
@@ -324,6 +325,7 @@ class LLMClient:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 tools=tools,
+                extra=extra,
             )
             self._breaker.record_success()
             return response

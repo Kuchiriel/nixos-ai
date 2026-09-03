@@ -71,27 +71,44 @@ def run_command(cmd: str, timeout: int = 60) -> tuple[bool, str, int]:
 def discover_test_files() -> list[str]:
     """Discover test files in the project.
 
-    modules/ai/jarvis/tests is nixos-ai's own layout, not a generic
-    convention — for any other project (post use_project_root()) that
-    path won't exist. Try common layouts in order; first match wins.
+    Checks JARVIS_PROJECT_ROOT first (for external projects),
+    then falls back to nixos-ai's own layout.
     """
+    import os
+    env_root = os.environ.get("JARVIS_PROJECT_ROOT")
+    project_root = Path(env_root) if env_root and Path(env_root).exists() else REPO_ROOT
+
+    # Check project root directly for test_*.py files (flat layout)
+    flat_tests = list(project_root.glob("test_*.py"))
+    if flat_tests:
+        return [str(f) if f.is_absolute() else str(project_root / f) for f in flat_tests]
+
+    # Check common subdirectory layouts
     candidates = [
-        REPO_ROOT / "modules/ai/jarvis/tests",  # nixos-ai
+        project_root / "tests",
+        project_root / "test",
+        REPO_ROOT / "modules/ai/jarvis/tests",  # nixos-ai fallback
         REPO_ROOT / "tests",
         REPO_ROOT / "test",
     ]
     for test_dir in candidates:
         if test_dir.exists():
-            return [str(f.relative_to(REPO_ROOT)) for f in test_dir.glob("test_*.py")]
+            return [str(f) for f in test_dir.glob("test_*.py")]
     return []
 
 
 def validate_changed_files(files: list[str]) -> ValidationReport:
     """Validate all changed files."""
+    import os
     report = ValidationReport()
+    env_root = os.environ.get("JARVIS_PROJECT_ROOT")
+    project_root = Path(env_root) if env_root and Path(env_root).exists() else REPO_ROOT
     
     for file_path in files:
-        path = REPO_ROOT / file_path
+        # Try project root first (external projects), then REPO_ROOT
+        path = project_root / file_path
+        if not path.exists():
+            path = REPO_ROOT / file_path
         if not path.exists():
             continue
         
@@ -208,16 +225,31 @@ def run_targeted_tests(files: list[str]) -> ValidationReport:
     # relacionado (era assim antes: sempre test_agent.py, mesmo pra mudança
     # em módulo compartilhado sem teste homônimo — furo real de regressão).
     if not relevant_tests:
-        # Same test_dir discover_test_files() already found — run the
-        # whole suite from there instead of hardcoding nixos-ai's own
-        # nested test path (that path doesn't exist in other projects).
+        # No test maps to the changed file — run the test suite from
+        # the project being worked on (not nixos-ai's own tests).
+        import os
+        env_root = os.environ.get("JARVIS_PROJECT_ROOT")
+        project_root = Path(env_root) if env_root and Path(env_root).exists() else REPO_ROOT
+
+        # Find the test directory in the target project
         test_dir = next(
-            (d for d in (REPO_ROOT / "modules/ai/jarvis/tests", REPO_ROOT / "tests", REPO_ROOT / "test")
-             if d.exists()),
+            (d for d in (project_root / "tests", project_root / "test",
+                         project_root,)  # flat layout
+             if d.exists() and d.is_dir()),
             None,
         )
-        test_target = str(test_dir.relative_to(REPO_ROOT)) if test_dir else "."
-        test_cmd = f"python3 -m pytest {test_target} -q --tb=short"
+        # Fall back to nixos-ai tests only if the project IS nixos-ai
+        if test_dir is None and project_root == REPO_ROOT:
+            test_dir = next(
+                (d for d in (REPO_ROOT / "modules/ai/jarvis/tests", REPO_ROOT / "tests")
+                 if d.exists()),
+                None,
+            )
+        if test_dir:
+            test_target = str(test_dir)
+            test_cmd = f"python3 -m pytest {test_target} -q --tb=short"
+        else:
+            test_cmd = f"cd {project_root} && python3 -m pytest . -q --tb=short"
         step = ValidationStep(name="tests:full-suite-fallback", command=test_cmd)
         success, output, duration = run_command(test_cmd, timeout=600)
         step.passed = success

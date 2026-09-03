@@ -143,12 +143,16 @@ def parse_llm_patch(response: str) -> list[FilePatch]:
                 if current_hunk.new_text:
                     current_hunk.new_text += "\n" + line
                 else:
-                    current_hunk.new_text = line
-    
-    # Don't forget last patch
+                    current_hunk.new_text = line    # Don't forget last patch
     if current_patch and current_patch.hunks:
         patches.append(current_patch)
-    
+
+    # Strip markdown fences from all hunks (LLM often wraps code in ```)
+    for patch in patches:
+        for hunk in patch.hunks:
+            hunk.old_text = strip_markdown_fences(hunk.old_text.strip())
+            hunk.new_text = strip_markdown_fences(hunk.new_text.strip())
+
     return patches
 
 
