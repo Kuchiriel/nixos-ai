@@ -143,8 +143,11 @@ class PersonaExecutor:
                 language="python",
             )
             
-            # Execute through harness pipeline
+            # Add task to queue so harness can track state transitions
             harness = self._get_harness()
+            harness.queue.add_task(harness_task)
+            
+            # Execute through harness pipeline
             success = harness.execute_task(harness_task)
             
             duration = time.time() - start_time

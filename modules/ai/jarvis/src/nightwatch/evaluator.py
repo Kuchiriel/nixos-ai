@@ -96,13 +96,13 @@ Provide your review as JSON:
 }}
 
 Rules:
-- Be objective and critical
-- Don't just say "looks good"
+- Be objective but fair
+- A test that correctly validates the function is acceptable even if it could be more thorough
 - Check if the change actually addresses the task
-- Check for regressions
-- Check for missing tests
+- Check for regressions (tests that now fail)
 - Check for security issues
-- Check for code quality
+- Only reject if the change is broken, incorrect, or introduces regressions
+- Style preferences (like assertion style) are suggestions, not failures
 
 Review now:"""
 
