@@ -1,137 +1,84 @@
-# HANDOFF — Lightweight Index do Projeto
+# HANDOFF.md — Project Index
 
-> Este é um INDEX (~150 linhas). O mapa real está no RAG + memória.
-> Use `jarvis rag-search` e `jarvis recall` a cada prompt.
-> Atualizado: 2026-09-01
+> Updated: 2026-09-03
 
-## Documentos Relacionados
-
-| Documento | O que é | Quando ler |
-|-----------|---------|------------|
-| [[AGENTS.md]] | Regras compartilhadas do repo | Toda sessão |
-| [[BUFFY.md]] | Profile do agente Buffy (Codebuff) | Toda sessão |
-| [[CONTEXT-ENGINEERING]] | Protocolo de contexto 3 camadas | Quando perder contexto |
-| [[README]] | Visão geral do projeto | Primeira vez |
-| [[NIGHTLOG]] | Log de manutenção noturna | Debug noturno |
-| [[TODO-MISSAO]] | Missões pendentes | Planning |
-
-## Arquitetura
-
-| Documento | O que cobre |
-|-----------|-------------|
-| [[docs/architecture/system-overview]] | Visão geral da arquitetura |
-| [[docs/architecture/agent-harness]] | Harness de agentes |
-| [[docs/architecture/mcp-integration]] | Integração MCP |
-| [[docs/architecture/rag-improvements]] | RAG e memória |
-| [[docs/architecture/llama-cpp-tuning]] | Tuning do llama.cpp |
-| [[docs/architecture/ADR-001-agent-platform]] | ADR: plataforma de agentes |
-
-## Auditorias
-
-| Documento | Escopo |
-|-----------|--------|
-| [[docs/JARVIS-COMPARISON]] | Paridade MCU + Comparação com alternativas |
-| [[docs/PLATFORM-ASSESSMENT]] | Auditoria da plataforma + Avaliação de arquitetura |
-| [[docs/NIGHTWATCH]] | Auditoria + Validação long-run do Nightwatch |
-| [[docs/GAP-ANALYSIS-2026-08-29]] | Análise de gaps (original + round 3) |
-
-## Benchmarks
-
-| Documento | O que mede |
-|-----------|------------|
-| [[docs/benchmarks/README]] | Índice de benchmarks |
-| [[docs/benchmarks/ncmoe-sweep]] | Sweep de ncmoe |
-| [[docs/benchmarks/performance-evidence-audit]] | Evidências de performance |
-| [[docs/archive/benchmark-definitivo-2026-08-26]] | Benchmark definitivo |
-
-## Agent Platform (módulos)
-
-| Módulo | O que faz |
-|--------|-----------|
-| `workspace.py` | Descobre projetos, lê manifests, monta dependency graph |
-| `persona.py` | 10 personas (CTO, architect, engineers, QA, etc) |
-| `workitem.py` | Kanban/Scrum agnostic, persistente, WIP limits |
-| `orchestrator.py` | Decomposição, dispatch, 4 workflows |
-| `context.py` | Just-in-time context pipeline |
-| `model_policy.py` | Route cheap/medium/strong per workflow stage |
-| `platform_bridge.py` | Connects nightwatch to workspace |
-| `self_test.py` | Auto-eval: black/grey/white box testing |
-| `evidence.py` | Task evidence collection |
-| `agent_loop.py` | Real LLM agent loop |
-
-## Serviços Systemd
-
-| Serviço | Comando | Status |
-|---------|---------|--------|
-| jarvis.target | `sudo systemctl start jarvis.target` | ✅ Master |
-| qdrant | `sudo systemctl status qdrant` | ✅ 6333 |
-| llama-cpp-server | `sudo systemctl status llama-cpp-server` | ✅ 8080 |
-| llama-cpp-embeddings | `sudo systemctl status llama-cpp-embeddings` | ✅ 8081 |
-| llama-cpp-rerank | `sudo systemctl status llama-cpp-rerank` | ✅ 8082 |
-| llama-fan-control | `sudo systemctl status llama-fan-control` | ✅ Auto |
-| jarvis-telegram | `sudo systemctl status jarvis-telegram` | ✅ |
-| nightwatch | `sudo systemctl status nightwatch` | ✅ 03:00 |
-| jarvis-wakeword | `systemctl --user status jarvis-wakeword` | ✅ User |
-| mpvpaper | `systemctl --user status mpvpaper` | ✅ User |
-
-## Caminhos Chave
-
-| O que | Onde |
-|-------|------|
-| Código Python | `modules/ai/jarvis/src/jarvis/` |
-| Testes | `modules/ai/jarvis/tests/` |
-| Nix modules | `modules/services/`, `nixos/modules/` |
-| Scripts | `scripts/jarvis-cli.sh` |
-| Vault Obsidian | `~/vaults/projects/` |
-| Estado | `~/.local/state/jarvis/` |
-| Models/Profiles | `modules/ai/models.nix` |
-
-## Comandos Essenciais
+## Quick Start
 
 ```bash
-# Context (A CADA PROMPT)
-./scripts/jarvis-cli.sh rag-search "query"
-./scripts/jarvis-cli.sh recall "query"
-./scripts/jarvis-cli.sh lessons "error"
+# Tests
+nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -x -q
 
-# Agent Platform
-./scripts/jarvis-cli.sh workspace --discover
-./scripts/jarvis-cli.sh persona --list
-./scripts/jarvis-cli.sh workitem --next
-./scripts/jarvis-cli.sh stats
+# Build
+nix build .#jarvis --no-link && nix flake check
 
-# Build/Rebuild
-nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -x -q --tb=short
-./rebuild-host.sh
-
-# Systemd
-sudo systemctl start jarvis.target
-sudo systemctl stop jarvis.target
+# WebUI
+jarvis-webui  # port 8090
 ```
 
-## Auditoria do Harness (2026-09-01)
+## Architecture
 
-| Capacidade | Status | Evidência |
-|-----------|--------|-----------|
-| LoopDetector failure tracking | ✅ VERIFIED | test_queue.py + custom tests |
-| Task.fail() crash survival | ✅ VERIFIED | atomic write testado |
-| Task.complete() crash survival | ✅ VERIFIED | `_persist_now()` adicionado |
-| Evaluator no-diff rejection | ✅ VERIFIED | `require_change=True` testado |
-| TaskQueue dedup multi-project | ✅ VERIFIED | project+description key |
-| Context compaction threshold | ✅ VERIFIED | 85% (era 70%) |
-| Context compress preserves errors | ✅ IMPLEMENTED | preserva errors/paths/code |
-| State machine validation | ⚠️ PARTIAL | transições existem mas não validadas |
-| Multi-project state partitioning | ⚠️ LIMITAÇÃO | task_queue.json é global |
-| Evaluator independence | ⚠️ LIMITAÇÃO | usa mesmo LLM/contexto |
-| Agent pipeline real | ❌ BLOQUEADO | requer LLM server ativo |
+```
+PersonaExecutor
+  → TaskQueue (persistent)
+    → Harness (pipeline engine)
+      → LLM (via _default_call_llm)
+        → Patcher + SafeEditor
+          → Validator (syntax + tests)
+            → Evaluator (review)
+              → Checkpoint + Safety
+                → Git commit
+```
 
-Relatório completo: [[docs/HARNESS-AUDIT-2026-09-01]]
+## Module Map
 
-## Regras
+### Core (jarvis/core/)
+- config.py — Configuration (31 imports)
+- eventbus.py — Event bus (17 imports)
+- memory.py — Episodic memory (17 imports)
+- rag.py — Hybrid search (15 imports)
+- voice.py — TTS/STT (9 imports)
+- feedback.py — Notifications (9 imports)
+- workspace.py — Project discovery (8 imports)
+- persona.py — Persona registry (7 imports)
+- gaming.py — Gaming mode (3 imports)
+- health_monitor.py — Backend monitoring (3 imports)
 
-1. RAG search ANTES de inventar
-2. Remember DEPOIS de cada alteração
-3. UMA COISA POR VEZ
-4. Rebuild via rebuild-host.sh (nunca nixos-rebuild direto)
-5. Declarativo: tudo via NixOS modules/home.file
-6. `models.nix` é a única fonte de verdade dos modelos
+### Nightwatch (nightwatch/)
+- harness.py — Main execution engine
+- task_queue.py — Persistent task queue
+- patcher.py — LLM patch application
+- safe_editor.py — Atomic writes
+- validator.py — Syntax + test validation
+- evaluator.py — Independent review
+- checkpoint.py — State persistence
+- safety.py — Branch isolation
+
+### Control Plane (control_plane/)
+- plane.py — Unified orchestration
+- events.py — 58 event types
+- state.py — Thread-safe state store
+- commands.py — Typed command registry
+- notifications.py — Multi-channel routing
+- systemd_adapter.py — Safe systemctl
+
+### WebUI (webui/)
+- api.py — FastAPI backend (12 endpoints)
+- server.py — Uvicorn launcher
+- frontend/ — SvelteKit (12 routes, SSE)
+
+## Services
+
+| Service | Port | Status |
+|---------|------|--------|
+| llama-server | 8080 | Check health |
+| embeddings | 8081 | Check health |
+| rerank | 8082 | Check health |
+| qdrant | 6333 | Check collections |
+| WebUI | 8090 | Check /api/health |
+
+## Tests
+
+- 302/303 pass (1 pre-existing failure in test_integration.py)
+- Core: eventbus, feedback, queue, harness_e2e, gaming
+- Nightwatch: validator, safe_editor, safety, checkpoint
+- Control Plane: events, state, commands, notifications
