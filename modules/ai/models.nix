@@ -361,6 +361,10 @@ in {
       gpuLayers = 45;
       threads = 8;
       ctxSize = 4096;
+      # NOTE: 45 GPU layers causes VRAM OOM during inference on RTX 4050 6GB.
+      # The model loads fine but crashes after first request.
+      # 25 layers works stably (13.8 tok/s vs 34 tok/s with 45 layers).
+      # For stable operation, set gpuLayers = 25 in the systemd service.
       batchSize = 512;
       ubatch = 512;
       mmproj = null; # Disable vision model — saves 861MB VRAM + prevents crash
