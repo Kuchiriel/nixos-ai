@@ -523,3 +523,69 @@ Solutions for next session:
 - Rules ratchet ✅
 - Reflection loop with "Did you mean?" ✅
 - 8/10 personas tested ✅
+
+---
+
+## 21. SESSION LESSONS (2026-09-04c)
+
+### Review-Skip Optimization
+
+For low-risk tasks where validation passes, skip the independent LLM review.
+This eliminates 1 LLM call per task, saving ~30-60s.
+
+Condition: `risk == "low" AND validation.passed AND no test failures`
+
+Impact: Task execution time reduced from ~90-120s to ~40-60s.
+
+### Fuzzy Matching False Positive Fix
+
+Short lines (<20 chars) must match exactly. 20% tolerance on short strings
+causes false positives (e.g., `def f():` matching `def g():`).
+
+### Orphan Branch Pruning Fix
+
+`prune_orphan_branches()` used `REPO_ROOT` (nixos-ai) instead of the
+target project root. External project branches were never cleaned.
+
+Fix: Pass `project_root` parameter to `prune_orphan_branches()`.
+
+### Task Recovery Fix
+
+`recover_stuck_tasks()` only handled `IN_PROGRESS` state. Tasks stuck in
+`REVIEW` or `VALIDATING` after a crash were never recovered.
+
+Fix: Also handle `REVIEW` and `VALIDATING` states.
+
+### Persona Handover Results
+
+Tested 4 personas (architect, backend_engineer, qa_engineer, technical_writer)
+on Corretor project. Results:
+
+| Persona | Result | Time | Issue |
+|---------|--------|------|-------|
+| architect | FAIL | 41s | Model removed existing function |
+| backend_engineer | FAIL | 30s | Patch didn't match file content |
+| qa_engineer | FAIL | 16s | Unparseable LLM output |
+| technical_writer | FAIL | 29s | Model removed existing function |
+
+Root cause: Qwen local (5GB) generates patches that conflict with
+existing code. The harness correctly catches and rejects these.
+This is a model capability issue, not a harness bug.
+
+### Queue Stale Task Problem
+
+Old tasks from previous runs clog the queue and cause immediate timeouts.
+`prune_stale()` uses `max_age_seconds=3600` (1 hour), but tasks from
+30 minutes ago still block new tasks.
+
+Solution: Clean queue file before tests, or reduce prune threshold.
+
+### Verified This Session
+
+- 34/34 core tests pass
+- Review-skip saves ~30-60s per low-risk task
+- Fuzzy matching no longer has false positives on short lines
+- Orphan branches cleaned for external projects
+- Task recovery handles all non-terminal states
+- 14+ real commits to Corretor via autonomous harness
+- Goal loop works end-to-end (plan → execute → verify → loop)
