@@ -468,3 +468,58 @@ Three types of memory needed (from Hindsight/Addy Osmani research):
 3. **Episodic** (what happened) → JSONL log of actions/outcomes
 
 The harness MUST accumulate understanding from work and have it shape the next session. Current gap: episodic memory exists (progress.jsonl) but isn't consulted by the harness.
+
+
+---
+
+## 20. SESSION LESSONS (2026-09-04b)
+
+### Goal Loop Pattern (from Aider/OpenHands/Codex)
+
+Instead of LLM discovery ("what tasks exist?"), use goal loops:
+1. Human gives a high-level goal
+2. Planner decomposes into subtasks (line-by-line parsing, not JSON)
+3. Executor runs each subtask through the harness
+4. Verifier checks if goal is met
+5. Loop continues until done
+
+This is the proven pattern for autonomous operation.
+
+### Fuzzy Matching (from Aider research)
+
+Three-tier matching strategy:
+1. Exact match (fastest)
+2. Whitespace-insensitive line-by-line
+3. Fuzzy line-by-line (20% tolerance per line)
+
+Aider had full Levenshtein fuzzy matching but disabled it (false positives).
+Line-by-line fuzzy is the right balance.
+
+### Reviewer Robustness
+
+Small LLMs don't always return clean JSON. Fallback strategy:
+1. Try JSON parse
+2. Check for pass/fail keywords
+3. Conservative needs_revision
+
+### Latency Bottleneck
+
+Each LLM call takes ~30-60s on local Qwen. With 3 calls per task
+(patch + review + verify), each task takes ~90-180s.
+For 3 tasks × 3 iterations = ~27 minutes.
+
+Solutions for next session:
+- Batch multiple patches in one LLM call
+- Skip review for low-risk changes
+- Increase context to 8192 (if VRAM allows)
+- Use faster model for planning/verification
+
+### What Works End-to-End
+
+- Goal loop: plan → execute → verify → loop ✅
+- Autonomous task execution with real commits ✅
+- Fuzzy matching catches LLM imperfections ✅
+- Auto-queue cleanup ✅
+- Rules ratchet ✅
+- Reflection loop with "Did you mean?" ✅
+- 8/10 personas tested ✅
