@@ -138,6 +138,8 @@ def test_speak_generates_wav(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(voice, "KOKORO_CONFIG_DEFAULT", str(tmp_path / "config.json"))
     monkeypatch.setattr(voice, "KOKORO_MODEL_DEFAULT", str(tmp_path / "kokoro.pth"))
     monkeypatch.setattr(voice, "KOKORO_VOICE_DEFAULT", str(tmp_path / "af_heart.pt"))
+    # Force _voice_for_lang to use our tmp_path voice (system may have real kokoro installed)
+    monkeypatch.setattr(voice, "_voice_for_lang", lambda lang, override=None: str(tmp_path / "af_heart.pt"))
 
     out = voice.speak("olá mundo", play=False)
     assert not out.startswith("ERROR")

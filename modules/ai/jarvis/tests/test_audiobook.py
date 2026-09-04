@@ -310,9 +310,15 @@ Actual content here.
     assert "CAPÍTULO 1" in clean
 
 
-def test_search_book_keyword_fallback():
+def test_search_book_keyword_fallback(monkeypatch):
     """search_book falls back to keyword matching when LLM unavailable."""
     from jarvis.core.audiobook import search_book
+    import requests as _real_requests
+
+    # Make the LLM health check fail so keyword fallback is used
+    def _fail_get(*args, **kwargs):
+        raise ConnectionError("LLM not available")
+    monkeypatch.setattr(_real_requests, "get", _fail_get)
 
     text = "The rain fell. Derek stood at the corner. The alchemist poured the liquid."
     results = search_book(text, "Derek", context_chars=500)

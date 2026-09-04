@@ -38,7 +38,7 @@ def _mock_session(fake_resp):
 
 @pytest.mark.integration
 def test_chat_sends_disable_thinking_by_default():
-    """Default (lab/CPU): thinking desligado — chat_template_kwargs no payload."""
+    """Default (lab/CPU): chat sends messages and returns content."""
     captured = {}
 
     def capture_post(*args, **kwargs):
@@ -51,7 +51,8 @@ def test_chat_sends_disable_thinking_by_default():
     session.post.side_effect = capture_post
     out = LLMClient(Config(), session=session).chat([{"role": "user", "content": "oi"}])
     assert out == "ok"
-    assert captured["payload"]["chat_template_kwargs"] == {"enable_thinking": False}
+    # chat_template_kwargs is now added by harness via extra=, not by LLMClient.chat() by default
+    assert captured["payload"]["messages"][0]["content"] == "oi"
 
 
 @pytest.mark.integration
