@@ -151,12 +151,7 @@ def edits1_optimized(word):
 edits1 = edits1_optimized
 
 def edits2(word):
-    """Generates all strings that are two edits away from the word.
-    
-    This function is used to find potential corrections that are two edit
-    operations (insertions, deletions, substitutions, or transpositions) away
-    from the original word.
-    """
+    """Generates all strings that are two edits away"""
     return set(e2 for e1 in edits1(word) for e2 in edits1(e1))
 
 def known_edits2(word):
@@ -181,6 +176,13 @@ def vocabulary_size() -> int:
     """Return the number of words in the vocabulary."""
     return len(NWORDS)
 
+
+def test_vocabulary_size_is_integer():
+    """Verify that vocabulary_size() returns an integer."""
+    result = vocabulary_size()
+    assert isinstance(result, int), f"vocabulary_size() returned {type(result)}, expected int"
+    assert result >= 0, "vocabulary_size() should return a non-negative integer"
+
 def test_empty_correct():
     assert correct("") == ""
     """Test that correct("") returns an empty string."""
@@ -198,13 +200,6 @@ def correct_phrase(phrase):
 ################ Testing code from here on ################
 
 def spelltest(tests, bias=None, verbose=False):
-    """
-    Test spell correction accuracy.
-    
-    Evaluates the performance of the correct() function against a set of
-    known correct words and their misspelled variants. Returns statistics
-    including the number of errors, percentage accuracy, and processing time.
-    """
     """Test spell correction accuracy."""
     n, bad, unknown, start = 0, 0, 0, time.perf_counter()
     if bias:
