@@ -370,12 +370,13 @@ Return JSON array."""
 # File Editing (via Patcher + SafeEditor)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _read_file_for_llm(path: str, max_chars: int = 0) -> str:
+def _read_file_for_llm(path: str, max_chars: int = 0, task_description: str = "") -> str:
     """Read a file for LLM context, with path resolution.
 
     Args:
         path: File path (absolute or relative to project root)
         max_chars: Max chars to read (0 = auto-detect from context budget)
+        task_description: Used to extract relevant section for large files
     """
     try:
         if path.startswith("/"):
@@ -398,15 +399,75 @@ def _read_file_for_llm(path: str, max_chars: int = 0) -> str:
             max_chars = 11000
 
         if len(content) > max_chars:
-            # For large files, send the beginning (imports + first functions)
-            # which is usually enough context for the LLM to understand the file.
-            # The patcher uses full-file matching anyway.
-            content = content[:max_chars]
-            content += f"\n\n# ... [file continues — {len(content)}+ chars shown]"
+            # For large files, try to extract the section around the target function.
+            # This is what Aider does — send relevant context, not the whole file.
+            content = _extract_relevant_section(content, path, max_chars, task_description)
 
         return content
     except Exception as e:
         return f"ERROR: Could not read {path}: {e}"
+
+
+def _extract_relevant_section(content: str, path: str, max_chars: int, task_description: str = "") -> str:
+    """Extract the most relevant section of a large file.
+    
+    Strategy: find function names mentioned in the task description,
+    then send the section around those functions + imports header.
+    Falls back to first max_chars if no match found.
+    """
+    lines = content.split('\n')
+    
+    # Find function/class definitions with their line numbers
+    definitions = []
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith('def ') or stripped.startswith('class '):
+            definitions.append((i, stripped[:60]))
+    
+    if not definitions:
+        return content[:max_chars]
+    
+    # Try to find the function mentioned in the task description
+    best_start = 0
+    best_len = 0
+    
+    # Search for function names from task description
+    task_lower = task_description.lower()
+    for i, (def_line, def_text) in enumerate(definitions):
+        # Extract function name from 'def name(' or 'class name('
+        fname = def_text.split('(')[0].split(':')[0].replace('def ', '').replace('class ', '').strip()
+        if fname and fname.lower() in task_lower:
+            # Found the target function — send its section
+            start_line = max(0, def_line - 5)
+            end_line = definitions[i+1][0] if i+1 < len(definitions) else len(lines)
+            best_start = start_line
+            best_len = end_line - start_line
+            break
+    
+    # Fallback: find the largest section
+    if best_len == 0:
+        for i in range(len(definitions)):
+            start_line = definitions[i][0]
+            end_line = definitions[i+1][0] if i+1 < len(definitions) else len(lines)
+            section_len = end_line - start_line
+            if section_len > best_len:
+                best_len = section_len
+                best_start = start_line
+    
+    # Extract section with context
+    context_before = max(0, best_start - 5)
+    context_end = min(len(lines), best_start + best_len + 5)
+    section = '\n'.join(lines[context_before:context_end])
+    
+    if len(section) > max_chars:
+        section = section[:max_chars]
+    
+    # Prepend imports/header for context (first ~30 lines)
+    header = '\n'.join(lines[:min(30, len(lines))])
+    if len(header) + len(section) < max_chars:
+        section = header + '\n\n# ... [section around target function] ...\n\n' + section
+    
+    return section[:max_chars]
 
 
 def _get_project_root() -> Path:
@@ -484,7 +545,7 @@ def _request_structured_patch(
     file_contents = {}
     missing_files = []
     for path in target_files:
-        content = _read_file_for_llm(path)
+        content = _read_file_for_llm(path, task_description=task_description)
         if content.startswith("ERROR"):
             # File doesn't exist — treat as CREATE candidate
             missing_files.append(path)
