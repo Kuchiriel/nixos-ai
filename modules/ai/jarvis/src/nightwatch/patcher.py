@@ -207,14 +207,20 @@ def _find_similar_content(search_text: str, file_content: str, context_lines: in
 def _lines_match_fuzzy(line_a: str, line_b: str, tolerance: float = 0.2) -> bool:
     """Check if two lines match with fuzzy tolerance.
     
-    Allows up to `toleration` fraction of characters to differ.
+    Allows up to `tolerance` fraction of characters to differ.
     This handles LLM generating slightly different whitespace,
     comments, or minor variations.
+    
+    For short lines (<20 chars), fuzzy matching is disabled to prevent
+    false positives (e.g., 'def f():' matching 'def g():').
     """
     a, b = line_a.strip(), line_b.strip()
     if a == b:
         return True
     if not a or not b:
+        return False
+    # Short lines must match exactly — fuzzy is too risky for short strings
+    if len(a) < 20 or len(b) < 20:
         return False
     # Quick check: same length ±20%
     if abs(len(a) - len(b)) > max(len(a), len(b)) * tolerance:

@@ -1180,7 +1180,16 @@ class Harness:
                         return False
 
                     # ── Step 4: Independent review ──
-                    if self.config.auto_review:
+                    # Skip LLM review for low-risk tasks that pass validation.
+                    # This saves ~30-60s per task (1 LLM call eliminated).
+                    # High-risk tasks and tasks with test failures still get reviewed.
+                    skip_review = (
+                        self.config.auto_review
+                        and task.risk == "low"
+                        and validation.passed
+                        and not any(s.output for s in validation.steps if s.name == "tests")
+                    )
+                    if self.config.auto_review and not skip_review:
                         self.queue.update_task(task.id, status=TaskStatus.REVIEW.value)
                         test_output = "\n".join(
                             s.output for s in validation.steps if s.name == "tests"
@@ -1201,10 +1210,12 @@ class Harness:
                             self._fail_task(task, f"Review failed: {review.summary}")
                             self.notify(f"❌ *Review Failed*\n{review.summary}")
                             _log_progress({
-                                "task_id": task.id, "status": "review_failed",
+                                "task_id": task.id, "status": "review_skipped",
                                 "summary": review.summary,
                             })
                             return False
+                    elif skip_review:
+                        self.notify("⏭️ *Review Skipped* (low-risk, validation passed)")
 
                     # All steps passed — break out of retry loop
                     break
