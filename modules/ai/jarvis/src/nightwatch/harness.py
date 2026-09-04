@@ -255,11 +255,18 @@ def _discover_llm_tasks(call_llm_fn: Callable, project: str = "nixos-ai") -> lis
     """Use the LLM to discover improvement tasks in the codebase.
     
     Enhanced version that uses workspace context and RAG for better discovery.
+    Uses project root (not REPO_ROOT) for external projects.
     """
-    # Get codebase overview with workspace context
+    # Get project root for file discovery
+    import os
+    env_root = os.environ.get("JARVIS_PROJECT_ROOT")
+    project_root = Path(env_root) if env_root and Path(env_root).exists() else REPO_ROOT
+    
+    # Get codebase overview
     try:
         result = subprocess.run(
-            ["find", str(REPO_ROOT / "modules/ai/jarvis/src"), "-name", "*.py", "-type", "f"],
+            ["find", str(project_root), "-name", "*.py", "-type", "f",
+             "-not", "-path", "*/__pycache__/*", "-not", "-path", "*/node_modules/*"],
             capture_output=True, text=True, timeout=10,
         )
         files = result.stdout.strip().split("\n")[:20]
@@ -278,13 +285,13 @@ def _discover_llm_tasks(call_llm_fn: Callable, project: str = "nixos-ai") -> lis
     except Exception:
         pass
 
-    # Get recent git changes for context
+    # Get recent git changes for context (use project root)
     git_context = ""
     try:
         result = subprocess.run(
             ["git", "log", "--oneline", "-10"],
             capture_output=True, text=True, timeout=5,
-            cwd=str(REPO_ROOT),
+            cwd=str(project_root),
         )
         if result.stdout.strip():
             git_context = f"\nRecent changes:\n{result.stdout.strip()}\n"
@@ -311,7 +318,19 @@ Focus on: error handling, code quality, security, missing tests, documentation, 
 Prioritize tasks that improve reliability and reduce technical debt.
 Return JSON array."""
 
-    response = call_llm_fn(prompt, 1500)
+    # Call LLM with timeout protection
+    import concurrent.futures
+    response = ""
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(call_llm_fn, prompt, 1500)
+            response = future.result(timeout=120)  # 2 min max for discovery
+    except concurrent.futures.TimeoutError:
+        print("[discovery] LLM timeout — skipping LLM discovery", file=sys.stderr)
+        return []
+    except Exception as e:
+        print(f"[discovery] LLM error: {e}", file=sys.stderr)
+        return []
 
     tasks = []
     try:
@@ -371,16 +390,19 @@ def _read_file_for_llm(path: str, max_chars: int = 0) -> str:
 
         # Auto-detect truncation from context budget if not specified
         if max_chars <= 0:
-            # Be conservative: llama-server context is typically 4096-8192 tokens.
-            # ~1 token per 3-4 chars, reserve room for system prompt + response.
-            # 4000 chars ≈ 1000 tokens, leaving 3000 tokens for prompt template + response.
-            max_chars = 4000
+            # llama-server -c 4096 means ~4K tokens total.
+            # Prompt overhead (system + format instructions): ~600 tokens ≈ 2400 chars.
+            # Response reserve: ~500 tokens ≈ 2000 chars.
+            # Safe budget for file content: ~2900 tokens ≈ 11500 chars.
+            # Aider sends whole file for small files, relevant section for large.
+            max_chars = 11000
 
         if len(content) > max_chars:
-            # For large files, send first and last portions with marker
-            head = content[:max_chars // 2]
-            tail = content[-(max_chars // 2):]
-            content = f"{head}\n\n# ... [{len(content) - max_chars} chars truncated] ...\n\n{tail}"
+            # For large files, send the beginning (imports + first functions)
+            # which is usually enough context for the LLM to understand the file.
+            # The patcher uses full-file matching anyway.
+            content = content[:max_chars]
+            content += f"\n\n# ... [file continues — {len(content)}+ chars shown]"
 
         return content
     except Exception as e:
