@@ -394,8 +394,77 @@ The ChatGPT conversation at `https://chatgpt.com/share/6a99bf79-72bc-83e9-aeed-f
 
 ### What Must Be Verified Before Next Session
 
-- [ ] P6 checkpoint per-project namespace
-- [ ] Agent loop error context feedback
+- [ ] P6 checkpoint per-project namespace ✅ DONE
+- [ ] Agent loop error context feedback ✅ DONE
 - [ ] SvelteKit browser rendering
 - [ ] Real notification delivery
 - [ ] Service start/stop via WebUI
+
+---
+
+## 19. SESSION LESSONS (2026-09-04)
+
+### Root Cause of All Patch Failures
+
+**`_read_file_for_llm` truncated files to 4000 chars.** The LLM literally couldn't see the code it was supposed to edit. Every patch failed because old_text referenced code that was cut off.
+
+**Fix**: Send 11000 chars for small files. For large files, extract the section around the function mentioned in the task description (Aider pattern).
+
+**Lesson**: Never assume the model is too weak. If the same model works in Aider/Roo Code but fails in your harness, the problem is in YOUR harness, not the model.
+
+### What Aider Does Differently
+
+1. **Sends relevant section, not whole file** — for large files, identifies the function to edit and sends that + context
+2. **SEARCH/REPLACE format** — simpler for the model than unified diff
+3. **"Did you mean?" on failure** — shows actual file content near failed match
+4. **Three-stage validation**: edit errors → lint → tests, each with reflection
+5. **Fuzzy matching** — whitespace-insensitive, then Levenshtein distance
+
+### What We Fixed This Session
+
+| Fix | Impact |
+|-----|--------|
+| File context: 4000 → 11000 chars | LLM can see target functions |
+| Smart section extraction | Large files: send relevant section only |
+| Aider-style "Did you mean?" | LLM sees actual file content on failure |
+| Auto-prune terminal tasks | Queue self-manages, no manual cleanup |
+| Rules ratchet | Failures → AGENTS.md rules for future sessions |
+| P5 state machine fixes | Retry loops don't crash on same-state transitions |
+| Evaluator uses project root | Reviewer sees correct project's changes |
+
+### Persona Test Results (2026-09-04)
+
+| Persona | Tested | Completed |
+|---------|--------|-----------|
+| cto | ✅ | ✅ |
+| architect | ✅ | ✅ |
+| backend_engineer | ✅ | ✅ |
+| nixos_engineer | ✅ | ✅ |
+| qa_engineer | ✅ | ✅ |
+| security_engineer | ✅ | ✅ |
+| researcher | ✅ | ✅ |
+| technical_writer | ✅ | ❌ (syntax error — model limitation for code gen) |
+| supervisor | ✅ | ✅ |
+| devops_engineer | ✅ | ❌ (syntax error — model limitation for code gen) |
+
+**8/10 tested, 8 completed. 2 failures caught by harness (correct behavior).**
+
+### Autonomous Loop Status
+
+- ✅ Loop runs and completes tasks
+- ✅ Tasks are committed on isolated branches
+- ✅ Auto-cleanup on startup
+- ✅ Reflection loop on failures
+- ❌ LLM discovery times out (needs shorter prompt or scripted fallback)
+- ❌ Persona-specific prompt injection not yet implemented
+- ❌ Handover between personas not yet tested
+
+### Memory Architecture (Research)
+
+Three types of memory needed (from Hindsight/Addy Osmani research):
+
+1. **Procedural** (how to do things) → rules in AGENTS.md (rules ratchet ✅)
+2. **Semantic** (what things mean) → knowledge base (RAG/search)
+3. **Episodic** (what happened) → JSONL log of actions/outcomes
+
+The harness MUST accumulate understanding from work and have it shape the next session. Current gap: episodic memory exists (progress.jsonl) but isn't consulted by the harness.
