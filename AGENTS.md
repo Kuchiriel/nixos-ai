@@ -111,3 +111,4 @@ scripts/                # Scripts auxiliares
 - Task: llm-1787985046-0
 - Result: success
 - Learnings: Changed 0 files, tests passed
+- When patching files, the old_text must be an EXACT substring of the file content. Read the file first, then use the exact text.

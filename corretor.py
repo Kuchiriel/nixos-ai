@@ -1,12 +1,3 @@
-def train():
-    """
-    Trains the model using the provided dataset and hyperparameters.
-    This function handles the optimization loop, loss calculation,
-    and parameter updates to improve model performance.
-    """
-    print("Training started...")
-    # Placeholder for actual training logic
-    pass# NixOS compatible
 """Spelling Corrector.
 
 Copyright 2007 Peter Norvig. 
@@ -161,6 +152,8 @@ edits1 = edits1_optimized
 
 def edits2(word):
     """Generates all strings that are two edits away"""
+    # This function leverages edits1 to find all possible single edits,
+    # then applies edits1 again to each result to find all two-edit variations.
     return set(e2 for e1 in edits1(word) for e2 in edits1(e1))
 
 def known_edits2(word):
@@ -180,14 +173,6 @@ def correct(word: str) -> str:
         return ''
     candidates = known([word]) or known(edits1(word)) or known_edits2(word) or [word]
     return max(candidates, key=NWORDS.get)
-
-
-if __name__ == '__main__':
-    # Demonstrate the spelling corrector
-    test_words = ["speling", "goverment", "the", "hello"]
-    for word in test_words:
-        corrected = correct(word)
-        print(f"Correcting '{word}' -> '{corrected}'")
 
 def vocabulary_size() -> int:
     """Return the number of words in the vocabulary."""
