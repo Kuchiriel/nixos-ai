@@ -23,17 +23,24 @@ config = HarnessConfig(
 )
 harness = Harness(config=config)
 
+# Clean all old tasks that block the queue
+old_count = len(harness.queue._tasks)
+harness.queue._tasks = []
+if old_count > 0:
+    harness.queue._save()
+    print(f"Cleaned {old_count} old tasks from queue")
+
 # Each persona targets a DIFFERENT function to avoid conflicts
-tasks = [
+task_specs = [
     ("architect", "Add a docstring to the edits2() function explaining what it does", 1),
-    ("backend_engineer", "Add error handling to the known_edits2() function", 2),
+    ("backend_engineer", "Add error handling to the known_edits2() function for empty input", 2),
     ("qa_engineer", "Add a test function that verifies vocabulary_size() returns an integer", 3),
     ("technical_writer", "Add a comment above the spelltest() function explaining its purpose", 4),
 ]
 
-for persona, desc, pri in tasks:
+for persona, desc, pri in task_specs:
     t = Task(
-        id=f"ho-{persona}",
+        id="ho-" + persona,
         project="Corretor",
         description=desc,
         target_files=["corretor.py"],
@@ -45,8 +52,16 @@ for persona, desc, pri in tasks:
 
 print("=== PERSONA HANDOVER TEST ===")
 results = []
-for persona, desc, pri in tasks:
-    t = [x for x in harness.queue._tasks if x.id == f"ho-{persona}"][0]
+for persona, desc, pri in task_specs:
+    task_id = "ho-" + persona
+    t = None
+    for x in harness.queue._tasks:
+        if x.id == task_id:
+            t = x
+            break
+    if t is None:
+        print(f"  {persona:20s} SKIP   task not found")
+        continue
     s = time.time()
     ok = harness.execute_task(t)
     e = time.time() - s

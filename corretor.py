@@ -151,9 +151,17 @@ def edits1_optimized(word):
 edits1 = edits1_optimized
 
 def edits2(word):
-    """Generates all strings that are two edits away"""
-    # This function leverages edits1 to find all possible single edits,
-    # then applies edits1 again to each result to find all two-edit variations.
+    """Generates all strings that are two edits away from the input word.
+
+    This function leverages edits1 to find all possible single edits,
+    then applies edits1 again to each result to find all two-edit variations.
+
+    Args:
+        word (str): The input word to generate edits for.
+
+    Returns:
+        set: A set of strings representing all possible two-edit variations.
+    """
     return set(e2 for e1 in edits1(word) for e2 in edits1(e1))
 
 def known_edits2(word):

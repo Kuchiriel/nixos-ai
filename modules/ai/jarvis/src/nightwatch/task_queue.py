@@ -519,19 +519,25 @@ class TaskQueue:
         return [t for t in self._tasks if t.status == TaskStatus.IN_PROGRESS.value]
     
     def recover_stuck_tasks(self, max_age_seconds: float = 3600) -> int:
-        """Recover tasks stuck IN_PROGRESS for too long (e.g. after crash).
+        """Recover tasks stuck in non-terminal states for too long (e.g. after crash).
         
+        Handles IN_PROGRESS, REVIEW, and VALIDATING states.
         Returns number of tasks recovered.
         """
         now = time.time()
         recovered = 0
+        stuck_states = {
+            TaskStatus.IN_PROGRESS.value,
+            TaskStatus.REVIEW.value,
+            TaskStatus.VALIDATING.value,
+        }
         for task in self._tasks:
-            if task.status == TaskStatus.IN_PROGRESS.value:
+            if task.status in stuck_states:
                 age = now - task.updated_at
                 if age > max_age_seconds:
                     # Reset to READY so it can be retried
                     task._transition(TaskStatus.READY.value)
-                    task.last_error = f"Recovered from stuck state after {age:.0f}s"
+                    task.last_error = f"Recovered from stuck state ({task.status}) after {age:.0f}s"
                     task.updated_at = now
                     recovered += 1
         if recovered > 0:
