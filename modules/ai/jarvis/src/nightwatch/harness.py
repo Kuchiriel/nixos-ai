@@ -411,11 +411,21 @@ def _read_file_for_llm(path: str, max_chars: int = 0, task_description: str = ""
 def _extract_relevant_section(content: str, path: str, max_chars: int, task_description: str = "") -> str:
     """Extract the most relevant section of a large file.
     
-    Strategy: find function names mentioned in the task description,
-    then send the section around those functions + imports header.
-    Falls back to first max_chars if no match found.
+    Strategy: send only imports + the function being edited + immediate context.
+    For 'add new function' tasks, send imports + end of file.
+    Falls back to first max_chars if no structure found.
     """
     lines = content.split('\n')
+    
+    # Find imports (first ~20 lines that start with import/from/#)
+    import_end = 0
+    for i, line in enumerate(lines[:30]):
+        stripped = line.strip()
+        if stripped.startswith('import ') or stripped.startswith('from ') or stripped.startswith('#') or stripped == '':
+            import_end = i + 1
+        else:
+            break
+    imports = '\n'.join(lines[:import_end]) if import_end > 0 else '\n'.join(lines[:10])
     
     # Find function/class definitions with their line numbers
     definitions = []
@@ -428,46 +438,39 @@ def _extract_relevant_section(content: str, path: str, max_chars: int, task_desc
         return content[:max_chars]
     
     # Try to find the function mentioned in the task description
-    best_start = 0
-    best_len = 0
-    
-    # Search for function names from task description
     task_lower = task_description.lower()
+    target_section = ""
+    
     for i, (def_line, def_text) in enumerate(definitions):
-        # Extract function name from 'def name(' or 'class name('
         fname = def_text.split('(')[0].split(':')[0].replace('def ', '').replace('class ', '').strip()
         if fname and fname.lower() in task_lower:
-            # Found the target function — send its section
-            start_line = max(0, def_line - 5)
+            # Found the target function — send just this function
             end_line = definitions[i+1][0] if i+1 < len(definitions) else len(lines)
-            best_start = start_line
-            best_len = end_line - start_line
+            target_section = '\n'.join(lines[def_line:end_line])
             break
     
-    # Fallback: find the largest section
-    if best_len == 0:
-        for i in range(len(definitions)):
-            start_line = definitions[i][0]
-            end_line = definitions[i+1][0] if i+1 < len(definitions) else len(lines)
-            section_len = end_line - start_line
-            if section_len > best_len:
-                best_len = section_len
-                best_start = start_line
+    # If task mentions adding something new (not editing existing),
+    # send imports + last function + the function it calls (if any)
+    if not target_section:
+        last_def = definitions[-1]
+        end_line = len(lines)
+        target_section = '\n'.join(lines[last_def[0]:end_line])
+        # Also include the 'correct' function if mentioned in task
+        if 'correct' in task_lower:
+            for i, (def_line, def_text) in enumerate(definitions):
+                if 'correct' in def_text and i < len(definitions) - 1:
+                    correct_end = definitions[i+1][0]
+                    correct_section = '\n'.join(lines[def_line:correct_end])
+                    target_section = correct_section + '\n\n# ... [later code] ...\n\n' + target_section
+                    break
     
-    # Extract section with context
-    context_before = max(0, best_start - 5)
-    context_end = min(len(lines), best_start + best_len + 5)
-    section = '\n'.join(lines[context_before:context_end])
+    # Budget: imports + target function, fit within max_chars
+    budget_per_part = max_chars // 2
+    imports = imports[:budget_per_part]
+    target_section = target_section[:budget_per_part]
     
-    if len(section) > max_chars:
-        section = section[:max_chars]
-    
-    # Prepend imports/header for context (first ~30 lines)
-    header = '\n'.join(lines[:min(30, len(lines))])
-    if len(header) + len(section) < max_chars:
-        section = header + '\n\n# ... [section around target function] ...\n\n' + section
-    
-    return section[:max_chars]
+    result = f"{imports}\n\n# ... [file middle omitted] ...\n\n{target_section}"
+    return result[:max_chars]
 
 
 def _get_project_root() -> Path:

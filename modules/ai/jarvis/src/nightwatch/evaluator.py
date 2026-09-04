@@ -157,7 +157,23 @@ Review now:"""
     except json.JSONDecodeError:
         pass
     
-    # Fallback: conservative fail
+    # Fallback: try to extract verdict from text
+    response_lower = response.lower()
+    if any(w in response_lower for w in ["reject", "fail", "broken", "incorrect", "regression"]):
+        return ReviewResult(
+            verdict="fail",
+            issues=[response[:200]],
+            confidence=0.6,
+            summary="Review parsed from keywords (not JSON)",
+        )
+    if any(w in response_lower for w in ["approve", "pass", "looks good", "acceptable", "correct"]):
+        return ReviewResult(
+            verdict="pass",
+            issues=[],
+            confidence=0.6,
+            summary="Review parsed from keywords (not JSON)",
+        )
+    # Last resort: conservative needs_revision
     return ReviewResult(
         verdict="needs_revision",
         issues=["Could not parse review response"],

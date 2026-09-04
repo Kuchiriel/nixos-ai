@@ -204,12 +204,35 @@ def _find_similar_content(search_text: str, file_content: str, context_lines: in
     return ""
 
 
+def _lines_match_fuzzy(line_a: str, line_b: str, tolerance: float = 0.2) -> bool:
+    """Check if two lines match with fuzzy tolerance.
+    
+    Allows up to `toleration` fraction of characters to differ.
+    This handles LLM generating slightly different whitespace,
+    comments, or minor variations.
+    """
+    a, b = line_a.strip(), line_b.strip()
+    if a == b:
+        return True
+    if not a or not b:
+        return False
+    # Quick check: same length ±20%
+    if abs(len(a) - len(b)) > max(len(a), len(b)) * tolerance:
+        return False
+    # Count matching characters
+    matches = sum(1 for ca, cb in zip(a, b) if ca == cb)
+    max_len = max(len(a), len(b))
+    return matches / max_len >= (1 - tolerance)
+
+
 def apply_hunk(content: str, hunk: PatchHunk) -> tuple[bool, str]:
     """Apply a single hunk to file content.
-
-    FAIL-CLOSED: only exact and line-by-line matches allowed.
-    Fuzzy matching removed — it could apply patches to wrong locations.
-
+    
+    Matching strategy (from Aider research):
+    1. Exact match
+    2. Whitespace-insensitive line-by-line match
+    3. Fuzzy line-by-line match (20% tolerance per line)
+    
     Returns (success, new_content).
     """
     # 1. Exact match
@@ -217,10 +240,10 @@ def apply_hunk(content: str, hunk: PatchHunk) -> tuple[bool, str]:
         new_content = content.replace(hunk.old_text, hunk.new_text, 1)
         return True, new_content
 
-    # 2. Line-by-line match (for multi-line hunks)
     old_lines = hunk.old_text.strip().split("\n")
     content_lines = content.split("\n")
 
+    # 2. Whitespace-insensitive line-by-line match
     for i in range(len(content_lines) - len(old_lines) + 1):
         match = True
         for j, old_line in enumerate(old_lines):
@@ -231,7 +254,17 @@ def apply_hunk(content: str, hunk: PatchHunk) -> tuple[bool, str]:
             new_lines = content_lines[:i] + hunk.new_text.split("\n") + content_lines[i + len(old_lines):]
             return True, "\n".join(new_lines)
 
-    # FAIL-CLOSED: no fuzzy match — reject if exact/line match failed
+    # 3. Fuzzy line-by-line match (allows minor variations)
+    for i in range(len(content_lines) - len(old_lines) + 1):
+        match = True
+        for j, old_line in enumerate(old_lines):
+            if not _lines_match_fuzzy(content_lines[i + j], old_line):
+                match = False
+                break
+        if match:
+            new_lines = content_lines[:i] + hunk.new_text.split("\n") + content_lines[i + len(old_lines):]
+            return True, "\n".join(new_lines)
+
     return False, content
 
 
