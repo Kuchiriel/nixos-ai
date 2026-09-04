@@ -261,7 +261,7 @@ def handle_agent(query: str, cfg: Any = None, *, approve: bool = False,
     binary = mcp_bin or cfg.mcp_nixos_bin
     if binary:
         mcp_servers["nixos"] = binary
-    agent = Agent(cfg, approve=approve, approver=approver,
+    agent = Agent(cfg, approve=approve, approval_callback=approver,
                   audit_path=audit, mcp_servers=mcp_servers)
     result = agent.run(query)
     return {
