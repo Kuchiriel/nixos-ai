@@ -151,7 +151,12 @@ def edits1_optimized(word):
 edits1 = edits1_optimized
 
 def edits2(word):
-    """Generates all strings that are two edits away"""
+    """Generates all strings that are two edits away from the word.
+    
+    This function is used to find potential corrections that are two edit
+    operations (insertions, deletions, substitutions, or transpositions) away
+    from the original word.
+    """
     return set(e2 for e1 in edits1(word) for e2 in edits1(e1))
 
 def known_edits2(word):
