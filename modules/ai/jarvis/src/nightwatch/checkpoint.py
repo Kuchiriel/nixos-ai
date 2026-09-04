@@ -27,6 +27,16 @@ import os
 
 
 STATE_DIR = Path(os.environ.get("JARVIS_STATE_DIR", str(Path.home() / ".local/state/jarvis/nightwatch")))
+
+
+def _checkpoint_file_for_project(project: str = "nixos-ai") -> Path:
+    """Return per-project checkpoint file to prevent cross-project state corruption."""
+    # Sanitize project name for filesystem
+    safe_name = project.replace("/", "_").replace("..", "_")
+    return STATE_DIR / f"checkpoint-{safe_name}.json"
+
+
+# Legacy single-file path — kept for backward compat reads only
 CHECKPOINT_FILE = STATE_DIR / "checkpoint.json"
 
 
@@ -79,23 +89,36 @@ class Checkpoint:
         return cls(**filtered)
     
     def save(self) -> None:
-        """Save checkpoint to disk."""
+        """Save checkpoint to disk (per-project file)."""
         STATE_DIR.mkdir(parents=True, exist_ok=True)
-        CHECKPOINT_FILE.write_text(
+        target = _checkpoint_file_for_project(self.project)
+        target.write_text(
             json.dumps(self.to_dict(), indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
     
     @classmethod
-    def load(cls) -> Checkpoint:
-        """Load checkpoint from disk."""
-        if CHECKPOINT_FILE.exists():
+    def load(cls, project: str = "nixos-ai") -> Checkpoint:
+        """Load checkpoint from disk (per-project file, with legacy fallback)."""
+        target = _checkpoint_file_for_project(project)
+        # Try per-project file first
+        if target.exists():
             try:
-                data = json.loads(CHECKPOINT_FILE.read_text(encoding="utf-8"))
+                data = json.loads(target.read_text(encoding="utf-8"))
                 return cls.from_dict(data)
             except Exception:
                 pass
-        return cls()
+        # Fallback: legacy single file (migrate on next save)
+        if CHECKPOINT_FILE.exists():
+            try:
+                data = json.loads(CHECKPOINT_FILE.read_text(encoding="utf-8"))
+                cp = cls.from_dict(data)
+                cp.project = project
+                cp.save()  # Migrate to per-project file
+                return cp
+            except Exception:
+                pass
+        return cls(project=project)
     
     def record_operation(self, operation: str, success: bool, error: str = "") -> None:
         """Record an operation."""
@@ -230,13 +253,13 @@ def create_checkpoint_for_task(task_id: str, description: str, project: str = "n
     return cp
 
 
-def generate_recovery_summary() -> str:
+def generate_recovery_summary(project: str = "nixos-ai") -> str:
     """Generate a text summary for context re-injection after compaction.
 
     This is injected into the LLM context after compaction to remind it
     what it was doing. Without this, the agent forgets its task state.
     """
-    cp = Checkpoint.load()
+    cp = Checkpoint.load(project=project)
     if not cp.task_id:
         return ""
 
@@ -262,9 +285,9 @@ def generate_recovery_summary() -> str:
     return "\n".join(lines)
 
 
-def get_recovery_context() -> dict[str, Any] | None:
+def get_recovery_context(project: str = "nixos-ai") -> dict[str, Any] | None:
     """Get context needed to recover from a crash."""
-    cp = Checkpoint.load()
+    cp = Checkpoint.load(project=project)
     
     if not cp.task_id:
         return None

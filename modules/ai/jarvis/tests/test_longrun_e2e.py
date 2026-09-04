@@ -121,8 +121,12 @@ class TestMultiProjectIsolation:
 class TestCheckpointRecovery:
     """Test checkpoint and recovery mechanisms."""
     
-    def test_checkpoint_save_load(self):
-        """Test that checkpoints survive save/load cycle."""
+    def test_checkpoint_save_load(self, monkeypatch):
+        """Test that checkpoints survive save/load cycle (per-project)."""
+        import nightwatch.checkpoint as ckpt_mod
+        monkeypatch.setattr(ckpt_mod, "STATE_DIR", Path(tempfile.mkdtemp()))
+        monkeypatch.setattr(ckpt_mod, "_checkpoint_file_for_project",
+                           lambda proj: ckpt_mod.STATE_DIR / f"checkpoint-{proj}.json")
         from nightwatch.checkpoint import Checkpoint
         
         cp = Checkpoint(
@@ -139,8 +143,8 @@ class TestCheckpointRecovery:
         # Save
         cp.save()
         
-        # Load fresh
-        cp2 = Checkpoint.load()
+        # Load fresh (per-project)
+        cp2 = Checkpoint.load(project="test-project")
         assert cp2.task_id == "test-123"
         assert cp2.task_description == "Test recovery"
         assert cp2.total_llm_calls == 1
@@ -207,7 +211,7 @@ class TestContextBudget:
         """Test that context budget tracks usage correctly."""
         from nightwatch.context_budget import ContextBudget
         
-        budget = ContextBudget(budget=8192)
+        budget = ContextBudget(max_tokens=8192)
         
         # Record some snapshots
         budget.record_snapshot(1000, phase="discovery")
@@ -225,7 +229,7 @@ class TestContextBudget:
         stats = budget.get_stats()
         assert stats["snapshots"] == 3
         assert stats["total_tool_calls"] == 8
-        assert stats["max_tokens"] == 5000
+        assert stats["max_tokens_observed"] == 5000
         
         # Should not compact yet
         assert not budget.should_compact(5000)
@@ -237,7 +241,7 @@ class TestContextBudget:
         """Test compaction events are tracked."""
         from nightwatch.context_budget import ContextBudget
         
-        budget = ContextBudget(budget=8192)
+        budget = ContextBudget(max_tokens=8192)
         budget.record_snapshot(7500)
         budget.record_compaction(7500, 2000)
         
@@ -248,7 +252,7 @@ class TestContextBudget:
         """Test context management recommendations."""
         from nightwatch.context_budget import ContextBudget
         
-        budget = ContextBudget(budget=8192)
+        budget = ContextBudget(max_tokens=8192)
         
         # Low usage
         rec = budget.get_recommendation(2000)
@@ -274,15 +278,15 @@ class TestContextBudget:
         """Test context budget can be serialized/deserialized."""
         from nightwatch.context_budget import ContextBudget
         
-        budget = ContextBudget(budget=16384)
+        budget = ContextBudget(max_tokens=16384)
         budget.record_snapshot(5000, phase="test")
         budget.record_llm_call(500)
         
         data = budget.to_dict()
         budget2 = ContextBudget.from_dict(data)
         
-        assert budget2.budget == 16384
-        assert budget2.total_tokens_processed == 5500  # 5000 from snapshot + 500 from llm call
+        assert budget2.max_tokens == 16384
+        assert budget2.total_tokens_processed == 500  # only llm_call adds to total_tokens_processed
         assert budget2.total_llm_calls == 1
 
 

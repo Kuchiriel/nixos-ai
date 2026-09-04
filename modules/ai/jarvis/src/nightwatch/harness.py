@@ -433,11 +433,17 @@ def _request_structured_patch(
     task_description: str,
     target_files: list[str],
     call_llm_fn: Callable,
+    previous_errors: list[str] | None = None,
 ) -> tuple[bool, list, list[str]]:
     """Request structured patches from the LLM (old_text → new_text).
 
     Returns (success, list[FilePatch], errors).
     This is the SAFE path — LLM returns hunks, not full files.
+
+    If previous_errors is provided (from a prior failed attempt), the errors
+    are injected into the prompt so the LLM can learn from its mistakes
+    instead of repeating them. This is the critical feedback loop that
+    prevents infinite retry loops.
     """
     from nightwatch.patcher import parse_llm_patch, FilePatch
 
@@ -460,13 +466,21 @@ def _request_structured_patch(
     recovery_ctx = ""
     try:
         from nightwatch.checkpoint import generate_recovery_summary
-        recovery_ctx = generate_recovery_summary()
+        recovery_ctx = generate_recovery_summary(project=self.config.project)
     except Exception:
         pass
 
+    error_section = ""
+    if previous_errors:
+        error_section = (
+            "\n\n⚠️ PREVIOUS ATTEMPT FAILED — DO NOT REPEAT THESE ERRORS:\n"
+            + "\n".join(f"  - {e[:300]}" for e in previous_errors[-3:])
+            + "\n\nAnalyze why the previous patches failed and produce corrected patches."
+        )
+
     prompt = f"""Improve this code for the given task.
 
-{recovery_ctx + chr(10) + chr(10) if recovery_ctx else ""}TASK: {task_description}
+{recovery_ctx + chr(10) + chr(10) if recovery_ctx else ""}{error_section}TASK: {task_description}
 
 FILES:
 {files_section}
@@ -612,7 +626,7 @@ class Harness:
         self.send_telegram = send_telegram or _default_send_telegram
         self.queue = TaskQueue()
         self.editor = SafeEditor()
-        self.checkpoint = Checkpoint.load()
+        self.checkpoint = Checkpoint.load(project=self.config.project)
         self.mission = self.queue.mission
         self.project_registry = ProjectRegistry()
         self.loop_detector = LoopDetector(
@@ -830,113 +844,154 @@ class Harness:
                 except Exception:
                     pass
 
-                # ── Step 1: Request structured patches from LLM ──
-                success, patches, errors = _request_structured_patch(
-                    task_description=task.description,
-                    target_files=task.target_files,
-                    call_llm_fn=self.call_llm,
-                )
+                # ── Retry loop: patch → apply → validate → review ──
+                # On validation/review failure, feed error context back to LLM
+                # so it can learn from its mistakes instead of repeating them.
+                previous_errors: list[str] = []
+                max_attempts = max(self.config.max_retries, 1)
 
-                cp.record_operation("patch", success, "; ".join(errors) if errors else "")
-
-                if not success:
-                    safety.abort_task_branch(branch)
-                    self._fail_task(task, "; ".join(errors))
-                    self.notify(f"❌ *Patch Failed*\n{errors[0][:100] if errors else 'unknown'}")
-                    _log_progress({
-                        "task_id": task.id, "status": "patch_failed",
-                        "error": errors[0] if errors else "unknown",
-                    })
-                    return False
-
-                if not patches:
-                    # LLM decided no changes needed — discard the empty
-                    # branch instead of leaving it orphaned
-                    safety.abort_task_branch(branch)
-                    task.skip("no_changes_needed")
-                    self.notify(f"⏭️ *No Changes*\n{task.description[:50]}")
-                    return False
-
-                # ── Step 2: Apply structured patches via Patcher + SafeEditor ──
-                self.queue.update_task(task.id, status=TaskStatus.VALIDATING.value)
-                applied_files = []
-                apply_errors = []
-
-                from nightwatch.patcher import apply_patch
-                from nightwatch.safe_editor import strip_markdown_fences
-
-                for file_patch in patches:
-                    # Apply patch hunks to get new content
-                    patch_ok, patched_content, patch_diff = apply_patch(file_patch)
-
-                    if not patch_ok:
-                        apply_errors.append(f"Patcher failed for {file_patch.path}: {patched_content}")
-                        cp.record_operation(f"patch:{file_patch.path}", False, patched_content)
-                        continue
-
-                    # Validate and write via SafeEditor (atomic, validated)
-                    resolved = _resolve_file_path(file_patch.path)
-                    edit_result: EditResult = self.editor.apply_edit(
-                        resolved, patched_content, validate=True
-                    )
-                    if edit_result.success:
-                        applied_files.append(file_patch.path)
-                        cp.record_operation(f"write:{file_patch.path}", True)
-                    else:
-                        apply_errors.extend(edit_result.errors)
-                        cp.record_operation(f"write:{file_patch.path}", False, "; ".join(edit_result.errors))
-
-                if not applied_files:
-                    safety.abort_task_branch(branch)
-                    self._fail_task(task, f"All patches failed: {'; '.join(apply_errors)}")
-                    self.notify(f"❌ *Write Failed*\n{apply_errors[0][:100] if apply_errors else 'rejected'}")
-                    _log_progress({
-                        "task_id": task.id, "status": "write_failed",
-                        "errors": apply_errors,
-                    })
-                    return False
-
-                # ── Step 3: Validate ──
-                validation = validate_change(
-                    applied_files,
-                    run_tests=self.config.run_tests,
-                    run_imports=self.config.run_imports,
-                )
-
-                cp.record_operation("validate", validation.passed, validation.summary)
-
-                if not validation.passed:
-                    safety.abort_task_branch(branch)
-                    self._fail_task(task, f"Validation failed: {validation.summary}")
-                    self.notify(f"❌ *Validation Failed*\n{validation.summary}")
-                    _log_progress({
-                        "task_id": task.id, "status": "validation_failed",
-                        "summary": validation.summary,
-                    })
-                    return False
-
-                # ── Step 4: Independent review ──
-                if self.config.auto_review:
-                    self.queue.update_task(task.id, status=TaskStatus.REVIEW.value)
-                    test_output = "\n".join(
-                        s.output for s in validation.steps if s.name == "tests"
-                    )
-                    review = review_change(
-                        task_description=task.description,
-                        acceptance_criteria=task.acceptance_criteria,
-                        test_output=test_output,
-                        call_llm_fn=self.call_llm,
-                    )
-
-                    if not review.passed:
+                for attempt in range(max_attempts):
+                    if attempt > 0:
                         safety.abort_task_branch(branch)
-                        self._fail_task(task, f"Review failed: {review.summary}")
-                        self.notify(f"❌ *Review Failed*\n{review.summary}")
+                        branch = safety.create_task_branch(task.id, task.project)
+                        if not branch:
+                            self._fail_task(task, f"Could not create branch for retry {attempt}")
+                            return False
+                        self.notify(f"🔁 Retry {attempt + 1}/{max_attempts} with error context")
+
+                    # ── Step 1: Request structured patches from LLM ──
+                    success, patches, errors = _request_structured_patch(
+                        task_description=task.description,
+                        target_files=task.target_files,
+                        call_llm_fn=self.call_llm,
+                        previous_errors=previous_errors if previous_errors else None,
+                    )
+
+                    cp.record_operation("patch", success, "; ".join(errors) if errors else "")
+
+                    if not success:
+                        previous_errors.extend(errors)
+                        if attempt < max_attempts - 1:
+                            self.notify(f"⚠️ Patch failed (attempt {attempt + 1}), retrying with error context")
+                            continue
+                        safety.abort_task_branch(branch)
+                        self._fail_task(task, "; ".join(errors))
+                        self.notify(f"❌ *Patch Failed*\n{errors[0][:100] if errors else 'unknown'}")
                         _log_progress({
-                            "task_id": task.id, "status": "review_failed",
-                            "summary": review.summary,
+                            "task_id": task.id, "status": "patch_failed",
+                            "error": errors[0] if errors else "unknown",
                         })
                         return False
+
+                    if not patches:
+                        # LLM decided no changes needed — discard the empty
+                        # branch instead of leaving it orphaned
+                        safety.abort_task_branch(branch)
+                        task.skip("no_changes_needed")
+                        self.notify(f"⏭️ *No Changes*\n{task.description[:50]}")
+                        return False
+
+                    # ── Step 2: Apply structured patches via Patcher + SafeEditor ──
+                    self.queue.update_task(task.id, status=TaskStatus.VALIDATING.value)
+                    applied_files = []
+                    apply_errors = []
+
+                    from nightwatch.patcher import apply_patch
+                    from nightwatch.safe_editor import strip_markdown_fences
+
+                    for file_patch in patches:
+                        # Apply patch hunks to get new content
+                        patch_ok, patched_content, patch_diff = apply_patch(file_patch)
+
+                        if not patch_ok:
+                            apply_errors.append(f"Patcher failed for {file_patch.path}: {patched_content}")
+                            cp.record_operation(f"patch:{file_patch.path}", False, patched_content)
+                            continue
+
+                        # Validate and write via SafeEditor (atomic, validated)
+                        resolved = _resolve_file_path(file_patch.path)
+                        edit_result: EditResult = self.editor.apply_edit(
+                            resolved, patched_content, validate=True
+                        )
+                        if edit_result.success:
+                            applied_files.append(file_patch.path)
+                            cp.record_operation(f"write:{file_patch.path}", True)
+                        else:
+                            apply_errors.extend(edit_result.errors)
+                            cp.record_operation(f"write:{file_patch.path}", False, "; ".join(edit_result.errors))
+
+                    if not applied_files:
+                        previous_errors.extend(apply_errors)
+                        if attempt < max_attempts - 1:
+                            self.notify(f"⚠️ Write failed (attempt {attempt + 1}), retrying")
+                            continue
+                        safety.abort_task_branch(branch)
+                        self._fail_task(task, f"All patches failed: {'; '.join(apply_errors)}")
+                        self.notify(f"❌ *Write Failed*\n{apply_errors[0][:100] if apply_errors else 'rejected'}")
+                        _log_progress({
+                            "task_id": task.id, "status": "write_failed",
+                            "errors": apply_errors,
+                        })
+                        return False
+
+                    # ── Step 3: Validate ──
+                    validation = validate_change(
+                        applied_files,
+                        run_tests=self.config.run_tests,
+                        run_imports=self.config.run_imports,
+                    )
+
+                    cp.record_operation("validate", validation.passed, validation.summary)
+
+                    if not validation.passed:
+                        previous_errors.append(f"Validation failed: {validation.summary}")
+                        if attempt < max_attempts - 1:
+                            self.notify(f"⚠️ Validation failed (attempt {attempt + 1}), retrying with error context")
+                            continue
+                        safety.abort_task_branch(branch)
+                        self._fail_task(task, f"Validation failed: {validation.summary}")
+                        self.notify(f"❌ *Validation Failed*\n{validation.summary}")
+                        _log_progress({
+                            "task_id": task.id, "status": "validation_failed",
+                            "summary": validation.summary,
+                        })
+                        return False
+
+                    # ── Step 4: Independent review ──
+                    if self.config.auto_review:
+                        self.queue.update_task(task.id, status=TaskStatus.REVIEW.value)
+                        test_output = "\n".join(
+                            s.output for s in validation.steps if s.name == "tests"
+                        )
+                        review = review_change(
+                            task_description=task.description,
+                            acceptance_criteria=task.acceptance_criteria,
+                            test_output=test_output,
+                            call_llm_fn=self.call_llm,
+                        )
+
+                        if not review.passed:
+                            previous_errors.append(f"Review failed: {review.summary}")
+                            if attempt < max_attempts - 1:
+                                self.notify(f"⚠️ Review failed (attempt {attempt + 1}), retrying with error context")
+                                continue
+                            safety.abort_task_branch(branch)
+                            self._fail_task(task, f"Review failed: {review.summary}")
+                            self.notify(f"❌ *Review Failed*\n{review.summary}")
+                            _log_progress({
+                                "task_id": task.id, "status": "review_failed",
+                                "summary": review.summary,
+                            })
+                            return False
+
+                    # All steps passed — break out of retry loop
+                    break
+                else:
+                    # Exhausted all retries
+                    safety.abort_task_branch(branch)
+                    self._fail_task(task, f"Failed after {max_attempts} attempts: {'; '.join(previous_errors[-2:])}")
+                    self.notify(f"❌ *Exhausted Retries*\n{task.description[:50]}")
+                    return False
 
                 # ── Step 5: Commit on branch, then merge into main ──
                 msg = f"nightwatch({task.project}): {task.description[:80]}"
@@ -1060,7 +1115,7 @@ class Harness:
         self._emit("run_started", projects=self.config.projects)
 
         # ── Recovery ──
-        recovery = get_recovery_context()
+        recovery = get_recovery_context(project=self.config.project)
         if recovery and recovery.get("task_id"):
             self.notify(f"♻️ *Recovering*: {recovery.get('task_description', '')[:50]}")
             self._emit("recovery", task_id=recovery.get("task_id"), description=recovery.get("task_description", "")[:50])

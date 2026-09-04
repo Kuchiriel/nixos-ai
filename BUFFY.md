@@ -137,6 +137,9 @@ SvelteKit (12 routes, SSE real-time)
 | 6 | `files_changed` reported candidates not actual changes | Now uses `git diff --name-only HEAD` | Verified: subprocess call to git |
 | 7 | `except Exception: pass` silenced event publishing errors | Now logs warning via `logging.getLogger` | Code verified |
 | 8 | self_test.py referenced archived modules (orchestrator, workitem) | Replaced with task_queue and harness_status tests | Verified: self_test passes 9/10 black, 6/6 white |
+| 9 | Agent loop never fed error context back to LLM | `_request_structured_patch` now accepts `previous_errors`, retry loop feeds errors back | Verified: 827 tests pass, retry loop in `execute_task` feeds errors to next LLM call |
+| 10 | checkpoint.json was global (cross-project state corruption) | Now per-project: `checkpoint-{project}.json` with legacy migration | Verified: tests pass, 4 checkpoint tests updated |
+| 11 | State machine missing IN_PROGRESS→VALIDATING→REVIEW transitions in tests | Fixed test_stats, test_task_lifecycle, test_task_failure_and_block to use proper lifecycle | Verified: all P5 state machine tests pass |
 
 ---
 
@@ -252,10 +255,26 @@ SvelteKit (12 routes, SSE real-time)
 - persona_executor VERIFIED → PARTIAL (dry-run was broken)
 - `jarvis execute` VERIFIED → PARTIAL (files_changed was wrong)
 
+### 2026-09-03: P0/P1 Fixes + Test Reconciliation
+
+**P0: Error context feedback to LLM (FIXED)**
+- Root cause: `_request_structured_patch` never received error context from previous failures
+- LLM saw the same prompt every time and couldn't learn from mistakes
+- Fix: Added `previous_errors` parameter, retry loop in `execute_task` feeds errors back
+- Result: 827 tests pass (up from 816)
+
+**P1: Per-project checkpoint (FIXED)**
+- Root cause: `CHECKPOINT_FILE` was a single global path, projects overwrote each other
+- Fix: `_checkpoint_file_for_project(project)` returns `checkpoint-{project}.json`
+- Legacy migration: old single file is read and migrated on first access
+- Tests updated to use per-project API
+
+**Test count reconciliation:**
+- Final: 827 passed, 6 failed (all pre-existing), 25 skipped, 5 xpassed
+- 6 pre-existing failures: LLM offline (2), LLMClient API mismatch (1), ContextBudget real (1), validator format (1), voice path (1)
+
 **Unfixed (needs separate session):**
-- P6: checkpoint.json not per-project (cross-project state corruption)
-- Agent loop never feeds error context back to LLM (architectural)
-- 13 test failures (5 API mismatch, 3 pipeline bugs, 3 test infra, 2 LLM offline)
+- 6 pre-existing test failures (LLM server, API mismatches, voice paths)
 
 ## Consolidation 2026-09-03 — Complete
 

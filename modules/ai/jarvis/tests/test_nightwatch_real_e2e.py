@@ -212,10 +212,12 @@ class TestCheckpointReal:
     """Test checkpoint persistence and recovery."""
 
     def test_checkpoint_save_and_load(self, tmp_path, monkeypatch):
-        """Checkpoint should persist to disk and reload."""
+        """Checkpoint should persist to disk and reload (per-project)."""
         import nightwatch.checkpoint as ckpt_mod
         monkeypatch.setattr(ckpt_mod, "STATE_DIR", tmp_path / "state")
-        monkeypatch.setattr(ckpt_mod, "CHECKPOINT_FILE", tmp_path / "state" / "checkpoint.json")
+        # Monkeypatch the per-project function to use tmp_path
+        monkeypatch.setattr(ckpt_mod, "_checkpoint_file_for_project",
+                           lambda proj: tmp_path / "state" / f"checkpoint-{proj}.json")
         cp = create_checkpoint_for_task("test-123", "Add divide function", "test-repo")
         cp.record_operation("read", True)
         cp.record_operation("write", True)
@@ -224,7 +226,7 @@ class TestCheckpointReal:
 
         # Save and reload
         cp.save()
-        loaded = Checkpoint.load()
+        loaded = Checkpoint.load(project="test-repo")
         assert loaded.task_id == "test-123"
         assert loaded.task_description == "Add divide function"
         assert len(loaded.history) == 2
@@ -234,14 +236,15 @@ class TestCheckpointReal:
         """Recovery summary should contain enough context to resume."""
         import nightwatch.checkpoint as ckpt_mod
         monkeypatch.setattr(ckpt_mod, "STATE_DIR", tmp_path / "state")
-        monkeypatch.setattr(ckpt_mod, "CHECKPOINT_FILE", tmp_path / "state" / "checkpoint.json")
+        monkeypatch.setattr(ckpt_mod, "_checkpoint_file_for_project",
+                           lambda proj: tmp_path / "state" / f"checkpoint-{proj}.json")
         cp = create_checkpoint_for_task("task-42", "Fix multiplication bug", "test-repo")
         cp.record_operation("read", True)
         cp.record_operation("patch", False, "LLM timeout")
         cp.files_written.append("src/calculator.py")
         cp.save()
 
-        summary = generate_recovery_summary()
+        summary = generate_recovery_summary(project="test-repo")
         assert "Fix multiplication bug" in summary
         assert "test-repo" in summary  # project is shown
         assert "LLM timeout" in summary
@@ -293,7 +296,9 @@ class TestTaskQueueReal:
         q.update_task(next_task.id, status=TaskStatus.IN_PROGRESS.value)  # harness would do this
         assert next_task.status == TaskStatus.IN_PROGRESS.value
 
-        # Complete
+        # Complete (must go through VALIDATING → REVIEW → COMPLETED)
+        q.update_task(next_task.id, status=TaskStatus.VALIDATING.value)
+        q.update_task(next_task.id, status=TaskStatus.REVIEW.value)
         next_task.complete("abc1234")
         assert next_task.status == TaskStatus.COMPLETED.value
         assert next_task.commit_sha == "abc1234"
@@ -313,11 +318,13 @@ class TestTaskQueueReal:
 
         # Fail t1 (max_attempts=1 so first fail -> FAILED)
         t1 = q.get_next_task()
+        q.update_task(t1.id, status=TaskStatus.IN_PROGRESS.value)  # harness moves to IN_PROGRESS first
         t1.fail("Syntax error")
         assert t1.status == TaskStatus.FAILED.value
 
         # Block t2
         t2 = q.get_next_task()
+        q.update_task(t2.id, status=TaskStatus.IN_PROGRESS.value)  # harness moves to IN_PROGRESS first
         t2.block("Protected path")
         assert t2.status == TaskStatus.BLOCKED.value
 
@@ -336,12 +343,19 @@ class TestTaskQueueReal:
         for i in range(5):
             q.add_task(Task(id=f"t{i}", project="test", description=f"Task {i}"))
 
-        # Complete 2, fail 1
+        # Complete 2, fail 1 (must go through full lifecycle)
         t = q.get_next_task()
+        q.update_task(t.id, status=TaskStatus.IN_PROGRESS.value)
+        q.update_task(t.id, status=TaskStatus.VALIDATING.value)
+        q.update_task(t.id, status=TaskStatus.REVIEW.value)
         t.complete("sha1")
         t = q.get_next_task()
+        q.update_task(t.id, status=TaskStatus.IN_PROGRESS.value)
+        q.update_task(t.id, status=TaskStatus.VALIDATING.value)
+        q.update_task(t.id, status=TaskStatus.REVIEW.value)
         t.complete("sha2")
         t = q.get_next_task()
+        q.update_task(t.id, status=TaskStatus.IN_PROGRESS.value)
         t.max_attempts = 1  # so first fail -> FAILED
         t.fail("error")
 
@@ -466,7 +480,7 @@ class TestFullPipeline:
         assert "def add(a: int, b: int)" in target.read_text()
 
         # Step 4: Recovery summary should mention the failure
-        summary = generate_recovery_summary()
+        summary = generate_recovery_summary(project="test-repo")
         assert "Invalid Python syntax" in summary
 
     def test_multiple_edits_and_rollback(self, isolated_repo, editor):
