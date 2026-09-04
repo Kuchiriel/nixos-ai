@@ -578,6 +578,20 @@ def _request_structured_patch(
     except Exception:
         pass
 
+    # Inject episodic memory lessons from past failures
+    memory_ctx = ""
+    try:
+        from nightwatch.memory_bridge import recall_relevant_lessons
+        lessons = recall_relevant_lessons(task_description, top_k=3)
+        if lessons:
+            memory_ctx = "\n\nLESSONS FROM PAST FAILURES:\n"
+            for i, lesson in enumerate(lessons, 1):
+                memory_ctx += f"  {i}. {lesson['error_pattern'][:200]}\n"
+                if lesson.get('fix'):
+                    memory_ctx += f"     Fix: {lesson['fix'][:200]}\n"
+    except Exception:
+        pass
+
     error_section = ""
     if previous_errors:
         error_section = (
@@ -588,7 +602,7 @@ def _request_structured_patch(
 
     prompt = f"""Improve this code for the given task.
 
-{recovery_ctx + chr(10) + chr(10) if recovery_ctx else ""}{error_section}TASK: {task_description}
+{recovery_ctx + chr(10) + chr(10) if recovery_ctx else ""}{memory_ctx + chr(10) if memory_ctx else ""}{error_section}TASK: {task_description}
 
 FILES:
 {files_section}
@@ -839,6 +853,14 @@ class Harness:
         pruned = safety.prune_orphan_branches(project_root)
         if pruned > 0:
             self.notify(f"🧹 Pruned {pruned} orphaned nightwatch branches")
+        # Sync past failures to episodic memory for future learning
+        try:
+            from nightwatch.memory_bridge import sync_to_episodic_memory
+            sync_result = sync_to_episodic_memory(project=self.config.project, limit=50)
+            if sync_result.get('synced', 0) > 0:
+                self.notify(f"🧠 Synced {sync_result['synced']} lessons to episodic memory")
+        except Exception:
+            pass
 
     # ── Task Failure (with persistence) ───────────────────────────────────
 
