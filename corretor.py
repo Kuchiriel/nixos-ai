@@ -45,7 +45,7 @@ def words(text):
     """Extract words from text."""
     return re.findall('[a-z]+', text.lower())
 
-def train(features):
+def train(features: Iterable[str]) -> collections.defaultdict:
     """Build a frequency model from word features.
 
     This function creates a probabilistic model of word frequencies based on

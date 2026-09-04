@@ -23,19 +23,18 @@ config = HarnessConfig(
 )
 harness = Harness(config=config)
 
-# Clean all old tasks that block the queue
+# Clean all old tasks
 old_count = len(harness.queue._tasks)
 harness.queue._tasks = []
 if old_count > 0:
     harness.queue._save()
-    print(f"Cleaned {old_count} old tasks from queue")
 
-# Each persona targets a DIFFERENT function to avoid conflicts
+# Fresh tasks targeting functions that haven't been modified yet
 task_specs = [
-    ("architect", "Add a docstring to the edits2() function explaining what it does", 1),
-    ("backend_engineer", "Add error handling to the known_edits2() function for empty input", 2),
-    ("qa_engineer", "Add a test function that verifies vocabulary_size() returns an integer", 3),
-    ("technical_writer", "Add a comment above the spelltest() function explaining its purpose", 4),
+    ("architect", "Add a docstring to the words() function explaining what it does", 1),
+    ("backend_engineer", "Add a type hint to the train() function parameter", 2),
+    ("qa_engineer", "Add a test function called test_vocabulary_size that checks vocabulary_size returns an int", 3),
+    ("technical_writer", "Add a comment above the correct_phrase() function explaining its purpose", 4),
 ]
 
 for persona, desc, pri in task_specs:
@@ -66,9 +65,10 @@ for persona, desc, pri in task_specs:
     ok = harness.execute_task(t)
     e = time.time() - s
     status_char = "PASS" if ok else "FAIL"
-    print(f"  {persona:20s} {status_char:4s} {e:5.1f}s  {t.status}")
+    err = ""
     if t.last_error:
-        print(f"    error: {t.last_error[:120]}")
+        err = f"  err={t.last_error[:80]}"
+    print(f"  {persona:20s} {status_char:4s} {e:5.1f}s  {t.status}{err}")
     results.append((persona, ok, e, t.status))
 
 print()
