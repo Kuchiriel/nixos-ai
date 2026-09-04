@@ -62,8 +62,8 @@ VALID_TRANSITIONS: dict[str, set[str]] = {
     TaskStatus.DISCOVERED.value: {TaskStatus.READY.value, TaskStatus.IN_PROGRESS.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
     TaskStatus.READY.value: {TaskStatus.IN_PROGRESS.value, TaskStatus.FAILED.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
     TaskStatus.IN_PROGRESS.value: {TaskStatus.VALIDATING.value, TaskStatus.READY.value, TaskStatus.FAILED.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
-    TaskStatus.VALIDATING.value: {TaskStatus.REVIEW.value, TaskStatus.READY.value, TaskStatus.FAILED.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
-    TaskStatus.REVIEW.value: {TaskStatus.COMPLETED.value, TaskStatus.READY.value, TaskStatus.FAILED.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
+    TaskStatus.VALIDATING.value: {TaskStatus.REVIEW.value, TaskStatus.READY.value, TaskStatus.IN_PROGRESS.value, TaskStatus.FAILED.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
+    TaskStatus.REVIEW.value: {TaskStatus.COMPLETED.value, TaskStatus.READY.value, TaskStatus.IN_PROGRESS.value, TaskStatus.FAILED.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
     # Terminal states
     TaskStatus.COMPLETED.value: set(),
     TaskStatus.FAILED.value: {TaskStatus.READY.value, TaskStatus.BLOCKED.value},  # retry or block
@@ -226,7 +226,13 @@ class Task:
         return cls(**filtered)
     
     def _transition(self, new_status: str) -> bool:
-        """Validate and apply a state transition. Returns True if valid."""
+        """Validate and apply a state transition. Returns True if valid.
+        
+        Same-state transitions are allowed (no-ops) — they happen during
+        retry loops when the harness re-enters the pipeline.
+        """
+        if new_status == self.status:
+            return True  # no-op, already in this state
         allowed = VALID_TRANSITIONS.get(self.status, set())
         if new_status not in allowed:
             # Log but don't crash — this is a bug, not a fatal error

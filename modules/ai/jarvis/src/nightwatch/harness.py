@@ -181,7 +181,7 @@ def _default_call_llm(prompt: str, max_tokens: int = 2048) -> str:
         client = LLMClient(Config())
         messages = [
             {"role": "system", "content": "You are a code improvement assistant. "
-             "Return only the requested output, no explanations."},
+             "Follow the format instructions exactly. Return structured patches as requested."},
             {"role": "user", "content": prompt},
         ]
         response = client.chat_with_tools(
@@ -320,16 +320,27 @@ Return JSON array."""
         if start >= 0 and end > start:
             items = json.loads(response[start:end])
             for i, item in enumerate(items):
-                tasks.append(Task(
-                    id=f"disc-{int(time.time())}-{i}",
-                    project=project,
-                    description=item.get("description", ""),
-                    target_files=item.get("target_files", []),
-                    acceptance_criteria=item.get("acceptance_criteria", ""),
-                    priority=item.get("priority", 5),
-                    risk=item.get("risk", "low"),
-                    status=TaskStatus.READY.value,
-                ))
+                # LLM may return strings or dicts
+                if isinstance(item, str):
+                    tasks.append(Task(
+                        id=f"disc-{int(time.time())}-{i}",
+                        project=project,
+                        description=item,
+                        priority=5,
+                        risk="low",
+                        status=TaskStatus.READY.value,
+                    ))
+                elif isinstance(item, dict):
+                    tasks.append(Task(
+                        id=f"disc-{int(time.time())}-{i}",
+                        project=project,
+                        description=item.get("description", ""),
+                        target_files=item.get("target_files", []),
+                        acceptance_criteria=item.get("acceptance_criteria", ""),
+                        priority=item.get("priority", 5),
+                        risk=item.get("risk", "low"),
+                        status=TaskStatus.READY.value,
+                    ))
     except (json.JSONDecodeError, ValueError):
         pass
 
@@ -449,24 +460,35 @@ def _request_structured_patch(
 
     # Read target files (full content for context, but LLM returns patches)
     file_contents = {}
+    missing_files = []
     for path in target_files:
         content = _read_file_for_llm(path)
-        if not content.startswith("ERROR"):
+        if content.startswith("ERROR"):
+            # File doesn't exist — treat as CREATE candidate
+            missing_files.append(path)
+        else:
             file_contents[path] = content
 
-    if not file_contents:
+    if not file_contents and not missing_files:
         return False, [], ["No readable target files"]
 
     files_section = "\n\n".join(
         f"=== FILE: {path} ===\n```\n{content}\n```"
         for path, content in file_contents.items()
     )
+    # Tell LLM about missing files (candidates for CREATE)
+    if missing_files:
+        files_section += "\n\nFILES THAT DO NOT EXIST (create them):\n"
+        files_section += "\n".join(f"  - {p}" for p in missing_files)
 
     # Inject recovery context if available
     recovery_ctx = ""
     try:
         from nightwatch.checkpoint import generate_recovery_summary
-        recovery_ctx = generate_recovery_summary(project=self.config.project)
+        import os
+        _proj = os.environ.get("JARVIS_PROJECT_ROOT", "nixos-ai")
+        _proj_name = os.path.basename(_proj) if _proj else "nixos-ai"
+        recovery_ctx = generate_recovery_summary(project=_proj_name)
     except Exception:
         pass
 
@@ -485,7 +507,8 @@ def _request_structured_patch(
 FILES:
 {files_section}
 
-For each file you want to change, return STRUCTURED PATCHES:
+{"\n\n⚠️ The following files DO NOT EXIST yet. The task requires creating them.\nYou MUST use the CREATE format below for these files.\n" + chr(10).join(f"  - {p}" for p in missing_files) + chr(10) if missing_files else ""}
+To MODIFY an existing file, use:
 === FILE: path/to/file.py ===
 REASON: why this change is needed
 --- old text ---
@@ -494,10 +517,16 @@ exact text to find (must match exactly)
 replacement text
 --- end ---
 
-IMPORTANT RULES:
-- Return ONLY the specific lines that need to change
+To CREATE a new file, use:
+=== CREATE: path/to/new_file.py ===
+REASON: why this file is needed
+--- content ---
+full file content here
+--- end ---
+
+RULES:
 - old text MUST be an exact substring of the file
-- Do NOT return complete files — return only the diff hunks
+- To CREATE: use --- content --- with the full file content
 - You can have multiple hunks per file
 - Return only files that need changes. If no changes needed, return "NO_CHANGES"."""
 
@@ -507,6 +536,9 @@ IMPORTANT RULES:
         return False, [], [response]
 
     if "NO_CHANGES" in response:
+        # If files need creating, retry with a dedicated create prompt
+        if missing_files:
+            return _request_file_creation(task_description, missing_files, call_llm_fn)
         return True, [], []
 
     # Parse structured patches
@@ -514,6 +546,54 @@ IMPORTANT RULES:
 
     if not patches:
         return False, [], ["Could not parse any patches from LLM response"]
+
+    return True, patches, []
+
+
+def _request_file_creation(
+    task_description: str,
+    missing_files: list[str],
+    call_llm_fn: Callable,
+) -> tuple[bool, list, list[str]]:
+    """Dedicated prompt for file creation when the main prompt returns NO_CHANGES.
+    
+    Uses a simpler, more direct prompt that the Qwen model can follow.
+    """
+    from nightwatch.patcher import parse_llm_patch, FilePatch
+
+    files_list = "\n".join(f"  - {f}" for f in missing_files)
+    prompt = f"""You must create the following files for this task:
+
+TASK: {task_description}
+
+FILES TO CREATE:
+{files_list}
+
+For EACH file, return:
+=== CREATE: path/to/file.py ===
+REASON: why this file is needed
+--- content ---
+full file content here
+--- end ---
+
+IMPORTANT: You MUST create these files. Return the full content for each file.
+Do NOT return NO_CHANGES. The files do not exist yet."""
+
+    response = call_llm_fn(prompt, 4096)
+
+    if "ERROR" in response:
+        return False, [], [response]
+
+    if "NO_CHANGES" in response:
+        return False, [], [f"LLM still returned NO_CHANGES for file creation of: {', '.join(missing_files)}"]
+
+    patches = parse_llm_patch(response)
+    if not patches:
+        return False, [], ["Could not parse file creation patches from LLM response"]
+
+    # Mark all patches as CREATE
+    for p in patches:
+        p.create = True
 
     return True, patches, []
 
@@ -858,6 +938,8 @@ class Harness:
                         if not branch:
                             self._fail_task(task, f"Could not create branch for retry {attempt}")
                             return False
+                        # Reset state so the pipeline can re-enter cleanly
+                        self.queue.update_task(task.id, status=TaskStatus.IN_PROGRESS.value)
                         self.notify(f"🔁 Retry {attempt + 1}/{max_attempts} with error context")
 
                     # ── Step 1: Request structured patches from LLM ──

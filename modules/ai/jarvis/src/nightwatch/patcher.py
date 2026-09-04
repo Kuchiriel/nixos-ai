@@ -37,6 +37,7 @@ class FilePatch:
     path: str
     hunks: list[PatchHunk] = field(default_factory=list)
     rationale: str = ""
+    create: bool = False  # True = create new file (not modify existing)
 
 
 @dataclass
@@ -99,12 +100,21 @@ def parse_llm_patch(response: str) -> list[FilePatch]:
     mode = None  # None, "old", "new"
     
     for line in response.split("\n"):
-        # New file patch
+        # New file patch (modify existing)
         if line.startswith("=== FILE: ") and line.endswith(" ==="):
             if current_patch and current_patch.hunks:
                 patches.append(current_patch)
             path = line[10:-4].strip()
             current_patch = FilePatch(path=path)
+            current_hunk = None
+            mode = None
+            continue
+        # Create new file
+        if line.startswith("=== CREATE: ") and line.endswith(" ==="):
+            if current_patch and current_patch.hunks:
+                patches.append(current_patch)
+            path = line[12:-4].strip()
+            current_patch = FilePatch(path=path, create=True)
             current_hunk = None
             mode = None
             continue
@@ -124,6 +134,11 @@ def parse_llm_patch(response: str) -> list[FilePatch]:
             continue
         elif line.strip() == "--- new text ---":
             mode = "new"
+            continue
+        elif line.strip() == "--- content ---":
+            # For CREATE: the entire content is the new file
+            current_hunk = PatchHunk(old_text="", new_text="")
+            mode = "new"  # reuse "new" mode to collect content
             continue
         elif line.strip() == "--- end ---":
             if current_hunk:
@@ -210,7 +225,22 @@ def apply_patch(patch: FilePatch) -> tuple[bool, str, str]:
     
     # Get baseline
     baseline = get_file_baseline(path)
+    
+    # File creation
     if baseline is None:
+        if patch.create and patch.hunks:
+            # Use the new_text from hunks as the full file content
+            content = patch.hunks[0].new_text
+            if not content.strip():
+                return False, f"CREATE requested but content is empty for {patch.path}", ""
+            # Create parent directories
+            path.parent.mkdir(parents=True, exist_ok=True)
+            # Write the new file
+            path.write_text(content, encoding="utf-8")
+            diff = f"+++ new file {patch.path}\n" + "\n".join(
+                f"+{line}" for line in content.splitlines()
+            )
+            return True, content, diff
         return False, f"File not found: {patch.path}", ""
     
     # Apply hunks

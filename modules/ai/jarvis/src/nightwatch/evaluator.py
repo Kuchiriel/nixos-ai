@@ -39,26 +39,59 @@ class ReviewResult:
         return self.verdict == "pass"
 
 
+def _get_git_cwd() -> str:
+    """Get the correct git working directory (project root, not nixos-ai)."""
+    import os
+    env_root = os.environ.get("JARVIS_PROJECT_ROOT")
+    if env_root and Path(env_root).exists():
+        return env_root
+    return str(REPO_ROOT)
+
+
 def get_git_diff() -> str:
-    """Get current uncommitted changes."""
+    """Get current uncommitted changes (modified + untracked files with content)."""
+    cwd = _get_git_cwd()
+    diff = ""
     try:
+        # Modified/staged files
         result = subprocess.run(
             ["git", "diff"],
             capture_output=True, text=True, timeout=10,
-            cwd=str(REPO_ROOT),
+            cwd=cwd,
         )
-        return result.stdout[:10000]
+        diff = result.stdout[:8000]
+        # Also include untracked files (new file creation) with their content
+        result2 = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            capture_output=True, text=True, timeout=10,
+            cwd=cwd,
+        )
+        untracked = result2.stdout.strip()
+        if untracked:
+            diff += f"\n\n=== NEW FILES (untracked) ===\n"
+            for f in untracked.split("\n"):
+                f = f.strip()
+                if f:
+                    try:
+                        fpath = Path(cwd) / f
+                        if fpath.exists() and fpath.is_file():
+                            content = fpath.read_text(encoding="utf-8")[:3000]
+                            diff += f"\n--- {f} (NEW) ---\n{content}\n"
+                    except Exception:
+                        diff += f"\n--- {f} (NEW, unreadable) ---\n"
     except Exception:
-        return ""
+        pass
+    return diff
 
 
 def get_git_diff_stat() -> str:
     """Get diff statistics."""
+    cwd = _get_git_cwd()
     try:
         result = subprocess.run(
             ["git", "diff", "--stat"],
             capture_output=True, text=True, timeout=10,
-            cwd=str(REPO_ROOT),
+            cwd=cwd,
         )
         return result.stdout
     except Exception:
