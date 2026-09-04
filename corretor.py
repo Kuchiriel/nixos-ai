@@ -200,7 +200,13 @@ def correct_phrase(phrase):
 ################ Testing code from here on ################
 
 def spelltest(tests, bias=None, verbose=False):
-    """Test spell correction accuracy."""
+    """Test spell correction accuracy.
+    
+    This function evaluates the performance of the spelling corrector by comparing
+    its output against a set of known correct words and their misspelled variants.
+    It returns statistics including the number of errors, percentage correct,
+    and time taken.
+    """
     n, bad, unknown, start = 0, 0, 0, time.perf_counter()
     if bias:
         for target in tests:
