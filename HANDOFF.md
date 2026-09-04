@@ -78,7 +78,7 @@ PersonaExecutor
 
 ## Tests
 
-- 302/303 pass (1 pre-existing failure in test_integration.py)
+- 859 passed, 0 failed, 26 skipped, 5 xpassed
 - Core: eventbus, feedback, queue, harness_e2e, gaming
 - Nightwatch: validator, safe_editor, safety, checkpoint
 - Control Plane: events, state, commands, notifications
