@@ -819,13 +819,18 @@ class Harness:
         # Auto-discover projects if none specified
         if not self.config.projects:
             self._discover_projects()
-        # Recover stuck tasks from previous run
+        # Auto-cleanup: prune terminal tasks and recover stuck tasks
+        # This makes the queue self-managing for autonomous operation.
+        pruned_terminals = self.queue.prune_completed(keep_last=20)
+        if pruned_terminals > 0:
+            self.notify(f"🧹 Pruned {pruned_terminals} old terminal tasks")
+        pruned_stale = self.queue.prune_stale(max_age_seconds=3600)
+        if pruned_stale > 0:
+            self.notify(f"🧹 Pruned {pruned_stale} stale tasks from previous runs")
         recovered = self.queue.recover_stuck_tasks()
         if recovered > 0:
             self.notify(f"♻️ Recovered {recovered} stuck tasks")
-        # Sweep leftover nightwatch/* branches from a crashed/killed prior
-        # run — each task now lives on its own branch until merged, so a
-        # process killed mid-task can leave one behind.
+        # Sweep leftover nightwatch/* branches from a crashed/killed prior run
         pruned = safety.prune_orphan_branches()
         if pruned > 0:
             self.notify(f"🧹 Pruned {pruned} orphaned nightwatch branches")
@@ -837,6 +842,9 @@ class Harness:
         
         This ensures the attempt count and status are saved to disk
         even if the harness crashes before the next _save() call.
+        
+        Also implements the 'rules ratchet': every failure becomes a rule
+        that prevents the same mistake in future sessions.
         """
         task.fail(error)
         self.queue.update_task(
@@ -845,6 +853,51 @@ class Harness:
             attempts=task.attempts,
             last_error=task.last_error,
         )
+        # Rules ratchet: persist failure as a rule for future sessions
+        self._record_failure_rule(task, error)
+
+    def _record_failure_rule(self, task: Task, error: str) -> None:
+        """Record a failure as a rule for future sessions (rules ratchet).
+        
+        Every mistake becomes a permanent signal. Rules are stored in
+        AGENTS.md so future sessions read them as constraints.
+        """
+        import os
+        project_root = os.environ.get('JARVIS_PROJECT_ROOT', str(REPO_ROOT))
+        agents_file = os.path.join(project_root, 'AGENTS.md')
+        
+        # Classify the failure type
+        error_lower = error.lower()
+        rule = None
+        if 'hunk not found' in error_lower or 'could not parse' in error_lower:
+            rule = f"- When patching files, the old_text must be an EXACT substring of the file content. Read the file first, then use the exact text."
+        elif 'syntax error' in error_lower:
+            rule = f"- After generating code, verify it has no syntax errors before returning. Use python -c 'compile()' to check."
+        elif 'validation failed' in error_lower:
+            rule = f"- Always run validation checks on generated code before returning it."
+        elif 'review failed' in error_lower:
+            rule = f"- The independent reviewer checks acceptance criteria. Ensure your changes actually meet the stated requirements."
+        elif 'no changes' in error_lower:
+            rule = f"- If the task requires creating a new file, use the CREATE format. If modifying, the old_text must match existing content."
+        
+        if rule:
+            try:
+                # Read existing rules
+                existing = ""
+                if os.path.exists(agents_file):
+                    with open(agents_file, 'r') as f:
+                        existing = f.read()
+                
+                # Don't duplicate rules
+                if rule not in existing:
+                    # Append rule under a '## Harness Rules' section
+                    if '## Harness Rules' not in existing:
+                        existing += f"\n\n## Harness Rules\n\nThese rules were automatically generated from failures. Do not edit manually.\n"
+                    with open(agents_file, 'a') as f:
+                        f.write(f"{rule}\n")
+                    self.notify(f"📏 Rule added: {rule[:60]}...")
+            except Exception:
+                pass  # Don't fail the task just because rule recording failed
 
     # ── Notifications ──────────────────────────────────────────────────────
 

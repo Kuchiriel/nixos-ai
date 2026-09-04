@@ -171,6 +171,39 @@ def parse_llm_patch(response: str) -> list[FilePatch]:
     return patches
 
 
+def _find_similar_content(search_text: str, file_content: str, context_lines: int = 3) -> str:
+    """Find similar content in the file for failed matches (Aider-style 'Did you mean?').
+    
+    Searches for the first meaningful word/identifier from the search text
+    and returns the surrounding lines as context.
+    """
+    if not search_text or not file_content:
+        return ""
+    
+    # Extract first meaningful identifier from search text
+    words = search_text.strip().split()
+    search_term = ""
+    for w in words:
+        # Skip keywords and very short tokens
+        if len(w) > 2 and w not in ('def', 'class', 'import', 'from', 'return', 'if', 'else', 'for', 'while', 'with', 'try', 'except', 'finally', 'and', 'or', 'not', 'in', 'is', 'None', 'True', 'False'):
+            search_term = w.strip('():,')
+            break
+    
+    if not search_term:
+        return ""
+    
+    # Find the line containing this term
+    file_lines = file_content.split('\n')
+    for i, line in enumerate(file_lines):
+        if search_term in line:
+            # Return context around this line
+            start = max(0, i - context_lines)
+            end = min(len(file_lines), i + context_lines + 1)
+            return '\n'.join(file_lines[start:end])
+    
+    return ""
+
+
 def apply_hunk(content: str, hunk: PatchHunk) -> tuple[bool, str]:
     """Apply a single hunk to file content.
 
@@ -252,7 +285,13 @@ def apply_patch(patch: FilePatch) -> tuple[bool, str, str]:
             content = new_content
             applied += 1
         else:
-            return False, f"Hunk not found in {patch.path}: {hunk.old_text[:50]}...", ""
+            # Aider-style: show actual file content near the failed match
+            # so the LLM can see what the file actually contains
+            did_you_mean = _find_similar_content(hunk.old_text, content)
+            error_msg = f"Hunk not found in {patch.path}: {hunk.old_text[:80]}..."
+            if did_you_mean:
+                error_msg += f"\n\nDid you mean to match this actual content from {patch.path}?\n{did_you_mean}"
+            return False, error_msg, ""
     
     if applied == 0:
         return False, "No hunks applied", ""
