@@ -589,3 +589,45 @@ Solution: Clean queue file before tests, or reduce prune threshold.
 - Task recovery handles all non-terminal states
 - 14+ real commits to Corretor via autonomous harness
 - Goal loop works end-to-end (plan → execute → verify → loop)
+
+---
+
+## 22. SESSION LESSONS (2026-09-04d)
+
+### Episodic Memory Bridge
+
+progress.jsonl → memory_bridge.py → Qdrant episodic memory → recall in future sessions
+
+The harness now:
+1. Syncs past failures to episodic memory on startup
+2. Recalls relevant lessons before each task
+3. Injects lessons into the LLM prompt
+
+This makes the system learn from mistakes across sessions.
+
+### 3-Agent Architecture (Anthropic Pattern)
+
+Based on Anthropic's research (March 2026):
+- Planner: decomposes goal into tasks (fresh context)
+- Generator: implements each task (fresh context per task)
+- Evaluator: reviews all changes (fresh context)
+
+Key insight: Context RESETS between agents, not compaction.
+Each agent starts fresh with only the handoff artifact.
+
+### Context Size Limitation
+
+8192 context crashes with 45 GPU layers on RTX 4050 6GB.
+Root cause: KV cache + model weights exceed VRAM.
+Solution: Reduce GPU layers to ~30, or use smaller model.
+
+### Model Upgrade Path
+
+Qwen3-Coder-30B-A3B-Instruct (coding-specialized MoE):
+- 30B params, only 3B active
+- Runs at 32 tok/s on 8GB VRAM (RTX 3060 Ti)
+- UD-Q4_K_XL quantization: 17.6GB file
+- Needs: --n-cpu-moe flag + TurboQuant KV cache
+- Download: unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF
+
+For 6GB VRAM: UD-IQ3_XXS quantization (~10GB file)
