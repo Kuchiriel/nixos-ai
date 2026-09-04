@@ -624,7 +624,7 @@ class Harness:
         self.config = config or HarnessConfig()
         self.call_llm = call_llm or _default_call_llm
         self.send_telegram = send_telegram or _default_send_telegram
-        self.queue = TaskQueue()
+        self.queue = TaskQueue(project=self.config.project)
         self.editor = SafeEditor()
         self.checkpoint = Checkpoint.load(project=self.config.project)
         self.mission = self.queue.mission
@@ -632,6 +632,7 @@ class Harness:
         self.loop_detector = LoopDetector(
             max_attempts=self.config.loop_max_attempts,
             window_seconds=self.config.loop_window_seconds,
+            project=self.config.project,
         )
         # Event Bus — use global bus so Control Plane receives harness events
         from jarvis.core.eventbus import get_bus

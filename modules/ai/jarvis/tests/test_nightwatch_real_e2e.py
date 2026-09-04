@@ -275,9 +275,7 @@ class TestTaskQueueReal:
         """Task should go through READY → IN_PROGRESS → COMPLETED."""
         import nightwatch.task_queue as tq_mod
         monkeypatch.setattr(tq_mod, "STATE_DIR", tmp_path / "state")
-        monkeypatch.setattr(tq_mod, "TASK_QUEUE_FILE", tmp_path / "state" / "task_queue.json")
-        monkeypatch.setattr(tq_mod, "MISSION_STATE_FILE", tmp_path / "state" / "mission_state.json")
-        q = TaskQueue()
+        q = TaskQueue(project="test-lifecycle")
 
         task = Task(
             id="test-task-1",
@@ -307,9 +305,7 @@ class TestTaskQueueReal:
         """Failed task should be marked FAILED, blocked task should be BLOCKED."""
         import nightwatch.task_queue as tq_mod
         monkeypatch.setattr(tq_mod, "STATE_DIR", tmp_path / "state")
-        monkeypatch.setattr(tq_mod, "TASK_QUEUE_FILE", tmp_path / "state" / "task_queue.json")
-        monkeypatch.setattr(tq_mod, "MISSION_STATE_FILE", tmp_path / "state" / "mission_state.json")
-        q = TaskQueue()
+        q = TaskQueue(project="test-fail-block")
 
         task1 = Task(id="t1", project="test", description="Task 1", max_attempts=1)
         task2 = Task(id="t2", project="test", description="Task 2")
@@ -332,13 +328,7 @@ class TestTaskQueueReal:
         """Stats should reflect task states."""
         import nightwatch.task_queue as tq_mod
         monkeypatch.setattr(tq_mod, "STATE_DIR", tmp_path / "state")
-        monkeypatch.setattr(tq_mod, "TASK_QUEUE_FILE", tmp_path / "state" / "task_queue.json")
-        monkeypatch.setattr(tq_mod, "MISSION_STATE_FILE", tmp_path / "state" / "mission_state.json")
-        monkeypatch.setattr(tq_mod, "TASK_QUEUE_FILE", tmp_path / "state" / "task_queue.json")
-        monkeypatch.setattr(tq_mod, "MISSION_STATE_FILE", tmp_path / "state" / "mission_state.json")
-        monkeypatch.setattr(tq_mod, "TASK_QUEUE_FILE", tmp_path / "state" / "task_queue.json")
-        monkeypatch.setattr(tq_mod, "MISSION_STATE_FILE", tmp_path / "state" / "mission_state.json")
-        q = TaskQueue()
+        q = TaskQueue(project="test-stats")
 
         for i in range(5):
             q.add_task(Task(id=f"t{i}", project="test", description=f"Task {i}"))

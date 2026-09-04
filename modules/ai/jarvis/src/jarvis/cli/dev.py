@@ -1996,7 +1996,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
         if user_input == "/workitem" or user_input.startswith("/workitem "):
             try:
                 from nightwatch.task_queue import TaskQueue, Task
-                queue = TaskQueue()
+                queue = TaskQueue(project=os.path.basename(os.getcwd()))
                 sub = user_input.split(" ", 1)[1].strip() if " " in user_input else ""
                 if sub == "list" or sub == "":
                     tasks = queue._tasks
@@ -2035,7 +2035,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
         if user_input == "/orchestrate" or user_input.startswith("/orchestrate "):
             try:
                 from nightwatch.task_queue import TaskQueue
-                queue = TaskQueue()
+                queue = TaskQueue(project=os.path.basename(os.getcwd()))
                 mission = queue.mission
                 sub = user_input.split(" ", 1)[1].strip() if " " in user_input else ""
                 if sub == "" or sub == "status":

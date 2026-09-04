@@ -953,6 +953,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # workitem — gerenciamento de trabalho
     p_wi = sub.add_parser("workitem", help="workitem: gerencia tarefas/kanban")
+    p_wi.add_argument("--project", default="nixos-ai", help="project name (default: nixos-ai)")
     p_wi.add_argument("--create", nargs=2, metavar=("TITLE", "PROJECT"), help="criar work item")
     p_wi.add_argument("--list", action="store_true", help="listar work items")
     p_wi.add_argument("--next", action="store_true", help="próxima tarefa a executar")
@@ -962,6 +963,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # orchestrate — orquestração de agentes
     p_or = sub.add_parser("orchestrate", help="orchestrate: orquestra personas e workflows")
+    p_or.add_argument("--project", default="nixos-ai", help="project name (default: nixos-ai)")
     p_or.add_argument("--decompose", nargs=2, metavar=("TASK", "PROJECT"), help="decompor tarefa em work items")
     p_or.add_argument("--assign", nargs=2, metavar=("ITEM_ID", "PERSONA"), help="atribuir tarefa a persona")
     p_or.add_argument("--status", action="store_true", help="status da orquestração")
@@ -1149,7 +1151,7 @@ def _cmd_workitem(args: argparse.Namespace) -> int:
     """Task queue management (replaces old workitem)."""
     from nightwatch.task_queue import TaskQueue, Task, TaskStatus
 
-    queue = TaskQueue()
+    queue = TaskQueue(project=args.project)
 
     if args.create:
         title, project = args.create
@@ -1187,7 +1189,7 @@ def _cmd_orchestrate(args: argparse.Namespace) -> int:
     """Harness status and task execution."""
     from nightwatch.task_queue import TaskQueue
 
-    queue = TaskQueue()
+    queue = TaskQueue(project=args.project)
     mission = queue.mission
 
     if args.status:

@@ -23,8 +23,25 @@ from typing import Any
 
 
 STATE_DIR = Path(os.environ.get("JARVIS_STATE_DIR", str(Path.home() / ".local/state/jarvis/nightwatch")))
+
+# Legacy global files — kept for backward compat reads only
 TASK_QUEUE_FILE = STATE_DIR / "task_queue.json"
 MISSION_STATE_FILE = STATE_DIR / "mission_state.json"
+
+
+def _safe_project_name(project: str) -> str:
+    """Sanitize project name for use as filename."""
+    return project.replace("/", "_").replace("..", "_")
+
+
+def _task_queue_file(project: str = "nixos-ai") -> Path:
+    """Per-project task queue file."""
+    return STATE_DIR / f"task_queue-{_safe_project_name(project)}.json"
+
+
+def _mission_state_file(project: str = "nixos-ai") -> Path:
+    """Per-project mission state file."""
+    return STATE_DIR / f"mission_state-{_safe_project_name(project)}.json"
 
 
 class TaskStatus(str, Enum):
@@ -55,7 +72,12 @@ VALID_TRANSITIONS: dict[str, set[str]] = {
 }
 
 
-LOOP_DETECTOR_FILE = STATE_DIR / "loop_detector.json"
+LOOP_DETECTOR_FILE = STATE_DIR / "loop_detector.json"  # Legacy
+
+
+def _loop_detector_file(project: str = "nixos-ai") -> Path:
+    """Per-project loop detector file."""
+    return STATE_DIR / f"loop_detector-{_safe_project_name(project)}.json"
 
 
 class LoopDetector:
@@ -66,26 +88,40 @@ class LoopDetector:
     Persisted to disk to survive restarts.
     """
     
-    def __init__(self, max_attempts: int = 3, window_seconds: float = 300.0):
+    def __init__(self, max_attempts: int = 3, window_seconds: float = 300.0, project: str = "nixos-ai"):
         self.max_attempts = max_attempts
         self.window_seconds = window_seconds
+        self._project = project
+        self._file = _loop_detector_file(project)
         self._history: dict[str, list[float]] = {}
         self._load()
     
     def _load(self) -> None:
-        """Load history from disk."""
+        """Load history from disk (per-project, with legacy fallback)."""
+        # Try per-project file first
+        if self._file.exists():
+            try:
+                data = json.loads(self._file.read_text(encoding="utf-8"))
+                self._history = {k: v for k, v in data.items() if isinstance(v, list)}
+                return
+            except (json.JSONDecodeError, OSError):
+                pass
+        # Legacy fallback: migrate from global file
         if LOOP_DETECTOR_FILE.exists():
             try:
                 data = json.loads(LOOP_DETECTOR_FILE.read_text(encoding="utf-8"))
                 self._history = {k: v for k, v in data.items() if isinstance(v, list)}
+                self._save()  # Migrate
+                return
             except (json.JSONDecodeError, OSError):
-                self._history = {}
+                pass
+        self._history = {}
     
     def _save(self) -> None:
-        """Persist history to disk."""
+        """Persist history to disk (per-project)."""
         try:
-            LOOP_DETECTOR_FILE.parent.mkdir(parents=True, exist_ok=True)
-            LOOP_DETECTOR_FILE.write_text(
+            self._file.parent.mkdir(parents=True, exist_ok=True)
+            self._file.write_text(
                 json.dumps(self._history), encoding="utf-8"
             )
         except OSError:
@@ -220,32 +256,30 @@ class Task:
         self._persist_now()
 
     def _persist_now(self) -> None:
-        """Write this task's state to disk immediately.
+        """Write this task's state to disk immediately (per-project).
 
         Uses an atomic write (write to temp + rename) to avoid corruption
-        if the process dies mid-write. This is a simplified version —
-        the full queue save is more comprehensive but this covers the
-        critical case where fail() is called but the process crashes
-        before TaskQueue._save() runs.
+        if the process dies mid-write.
         """
         try:
-            TASK_QUEUE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            queue_file = _task_queue_file(self.project)
+            queue_file.parent.mkdir(parents=True, exist_ok=True)
             # Read existing tasks, update this one, write back
             tasks = []
-            if TASK_QUEUE_FILE.exists():
+            if queue_file.exists():
                 try:
-                    data = json.loads(TASK_QUEUE_FILE.read_text(encoding="utf-8"))
+                    data = json.loads(queue_file.read_text(encoding="utf-8"))
                     tasks = [t for t in data if t.get("id") != self.id]
                 except Exception:
                     tasks = []
             tasks.append(self.to_dict())
             # Atomic write
-            tmp = TASK_QUEUE_FILE.with_suffix(".tmp")
+            tmp = queue_file.with_suffix(".tmp")
             tmp.write_text(
                 json.dumps(tasks, indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
-            tmp.rename(TASK_QUEUE_FILE)
+            tmp.rename(queue_file)
         except Exception:
             pass
 
@@ -302,42 +336,74 @@ class MissionState:
 
 
 class TaskQueue:
-    """Persistent task queue with state management."""
+    """Persistent task queue with state management.
     
-    def __init__(self):
+    All state files are per-project to prevent cross-project corruption.
+    Legacy global files are migrated on first load.
+    """
+    
+    def __init__(self, project: str = "nixos-ai"):
         STATE_DIR.mkdir(parents=True, exist_ok=True)
+        self._project = project
+        self._queue_file = _task_queue_file(project)
+        self._mission_file = _mission_state_file(project)
         self._tasks: list[Task] = []
-        self._mission = MissionState()
+        self._mission = MissionState(project=project)
         self._load()
     
     def _load(self) -> None:
-        """Load state from disk."""
-        # Load tasks
-        if TASK_QUEUE_FILE.exists():
+        """Load state from disk (per-project, with legacy migration)."""
+        # Load tasks from per-project file
+        if self._queue_file.exists():
             try:
-                data = json.loads(TASK_QUEUE_FILE.read_text(encoding="utf-8"))
+                data = json.loads(self._queue_file.read_text(encoding="utf-8"))
                 self._tasks = [Task.from_dict(t) for t in data]
             except Exception:
                 self._tasks = []
+        elif TASK_QUEUE_FILE.exists():
+            # Legacy migration: read global file, filter to this project
+            try:
+                data = json.loads(TASK_QUEUE_FILE.read_text(encoding="utf-8"))
+                all_tasks = [Task.from_dict(t) for t in data]
+                self._tasks = [t for t in all_tasks if t.project == self._project]
+                self._save()  # Write per-project file
+            except Exception:
+                self._tasks = []
         
-        # Load mission state
-        if MISSION_STATE_FILE.exists():
+        # Load mission state from per-project file
+        if self._mission_file.exists():
+            try:
+                data = json.loads(self._mission_file.read_text(encoding="utf-8"))
+                self._mission = MissionState.from_dict(data)
+            except Exception:
+                self._mission = MissionState(project=self._project)
+        elif MISSION_STATE_FILE.exists():
+            # Legacy migration
             try:
                 data = json.loads(MISSION_STATE_FILE.read_text(encoding="utf-8"))
                 self._mission = MissionState.from_dict(data)
+                self._mission.project = self._project
+                self._save()  # Write per-project file
             except Exception:
-                self._mission = MissionState()
+                self._mission = MissionState(project=self._project)
     
     def _save(self) -> None:
-        """Save state to disk."""
-        TASK_QUEUE_FILE.write_text(
+        """Save state to disk (per-project files)."""
+        self._queue_file.parent.mkdir(parents=True, exist_ok=True)
+        # Atomic write for task queue
+        tmp_q = self._queue_file.with_suffix(".tmp")
+        tmp_q.write_text(
             json.dumps([t.to_dict() for t in self._tasks], indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
-        MISSION_STATE_FILE.write_text(
+        tmp_q.rename(self._queue_file)
+        # Atomic write for mission state
+        tmp_m = self._mission_file.with_suffix(".tmp")
+        tmp_m.write_text(
             json.dumps(self._mission.to_dict(), indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+        tmp_m.rename(self._mission_file)
     
     @property
     def mission(self) -> MissionState:
