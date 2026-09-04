@@ -834,7 +834,9 @@ class Harness:
         if recovered > 0:
             self.notify(f"♻️ Recovered {recovered} stuck tasks")
         # Sweep leftover nightwatch/* branches from a crashed/killed prior run
-        pruned = safety.prune_orphan_branches()
+        # Pass project root so external project branches are also cleaned
+        project_root = _get_project_root()
+        pruned = safety.prune_orphan_branches(project_root)
         if pruned > 0:
             self.notify(f"🧹 Pruned {pruned} orphaned nightwatch branches")
 

@@ -312,7 +312,7 @@ def commit_or_revert(task_id: str, category: str, description: str, branch: str,
         }
 
 
-def prune_orphan_branches() -> int:
+def prune_orphan_branches(project_root: Path | None = None) -> int:
     """Delete leftover nightwatch/* branches. Returns count deleted.
 
     Called at harness startup, before any task branch for *this* run
@@ -321,13 +321,19 @@ def prune_orphan_branches() -> int:
     branch -D` refuses to delete the currently-checked-out branch, and
     if a crashed run died mid-task, that's exactly the branch it'd be
     sitting on.
+    
+    Args:
+        project_root: Repository root to clean branches in.
+                     Defaults to REPO_ROOT (nixos-ai), but should be
+                     set to the target project for external projects.
     """
+    repo = str(project_root) if project_root else str(REPO_ROOT)
     subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "checkout", "main"],
+        ["git", "-C", repo, "checkout", "main"],
         capture_output=True, timeout=10,
     )
     result = subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "branch", "--list", "nightwatch/*"],
+        ["git", "-C", repo, "branch", "--list", "nightwatch/*"],
         capture_output=True, text=True, timeout=10,
     )
     count = 0
@@ -335,7 +341,7 @@ def prune_orphan_branches() -> int:
         branch = branch.strip().lstrip("* ")
         if branch:
             subprocess.run(
-                ["git", "-C", str(REPO_ROOT), "branch", "-D", branch],
+                ["git", "-C", repo, "branch", "-D", branch],
                 capture_output=True, timeout=10,
             )
             count += 1
