@@ -128,16 +128,19 @@
     package = inputs.opencode-flake.packages.${pkgs.system}.default;
 
     settings = {
-      # Provedor local (seu Qwen 35B de desenvolvimento)
+      # Provedor local (Bonsai 8B ternário via llama.cpp PrismML, porta 8080)
       provider = {
         local = {
           npm = "@ai-sdk/openai-compatible";
           options = {
-            baseURL = "http://127.0.0";
+            baseURL = "http://127.0.0.1:8080/v1";
           };
           models = {
             "qwen3-35b-a3b" = {
               name = "Qwen3 35B Local";
+            };
+            "bonsai-8b" = {
+              name = "Bonsai 8B Local (ternary)";
             };
           };
         };
@@ -153,8 +156,24 @@
         };
       };
       
-      # Define o modelo local padrão que já funcionava originalmente
-      model = "local/qwen3-35b-a3b";
+      # Define o modelo local padrão (Bonsai 8B; Qwen MoE removido em 2026-09-05)
+      model = "local/bonsai-8b";
+
+      # MCP Jarvis: RAG, memória, vault, files, shell, nix — via stdio.
+      # Handshake validado (tools/list retorna 20 tools).
+      mcp = {
+        jarvis = {
+          type = "local";
+          command = [ "/etc/profiles/per-user/nixos/bin/python3" "-m" "jarvis.mcp_server" ];
+          cwd = "/home/nixos/projects/nixos-ai";
+          environment = {
+            PYTHONPATH = "/home/nixos/projects/nixos-ai/modules/ai/jarvis/src";
+            JARVIS_PROJECT_ROOT = "/home/nixos/projects/nixos-ai";
+          };
+          enabled = true;
+          timeout = 30000;
+        };
+      };
     };
   };
 

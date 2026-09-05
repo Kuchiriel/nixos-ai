@@ -433,6 +433,25 @@ def task_detail(task_id: str) -> dict[str, Any]:
     raise HTTPException(404, f"Task {task_id} not found")
 
 
+@app.post("/api/tasks/clear_failed")
+def clear_failed_tasks() -> dict[str, Any]:
+    """Clear failed tasks from the persistent task queue."""
+    from pathlib import Path
+    import json as _json
+    queue_file = Path.home() / ".local/state/jarvis/nightwatch" / "task_queue.json"
+    if not queue_file.exists():
+        return {"cleared": 0, "remaining": 0}
+    
+    try:
+        raw = _json.loads(queue_file.read_text(encoding="utf-8"))
+        remaining = [t for t in raw if t.get("status") != "FAILED"]
+        cleared_count = len(raw) - len(remaining)
+        queue_file.write_text(_json.dumps(remaining, indent=2), encoding="utf-8")
+        return {"cleared": cleared_count, "remaining": len(remaining)}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to clear tasks: {e}")
+
+
 @app.get("/api/events/stats")
 def event_stats() -> dict[str, Any]:
     """Event bus statistics."""

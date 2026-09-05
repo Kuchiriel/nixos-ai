@@ -40,10 +40,8 @@ class Config:
     llm_base_url: str = field(default_factory=lambda: _env_str("JARVIS_LLM_BASE_URL", "http://127.0.0.1:8080/v1"))
     llm_model: str = field(default_factory=lambda: _env_str("JARVIS_LLM_MODEL", "default"))
     llm_timeout: int = field(default_factory=lambda: _env_int("JARVIS_LLM_TIMEOUT", 120))
-    # Qwen3 (e Qwen3.6) pensam por padrão via chat template — em CPU (lab) isso
-    # dobra a latência e consome o max_tokens em reasoning antes do tool call.
-    # Desligado por default (tool calling direto); host pode reabilitar via env.
-    llm_disable_thinking: bool = field(default_factory=lambda: _env_str("JARVIS_LLM_DISABLE_THINKING", "1") == "1")
+    # Thinking / reasoning enabled by default on GPU hardware (Bonsai/Qwen3)
+    llm_disable_thinking: bool = field(default_factory=lambda: _env_str("JARVIS_LLM_DISABLE_THINKING", "0") == "1")
     # Tool calling support (True for llama.cpp with jinja, False for simpler backends)
     llm_tool_calling: bool = field(default_factory=lambda: _env_bool("JARVIS_LLM_TOOL_CALLING", True))
 
