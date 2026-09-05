@@ -120,7 +120,7 @@
     "telemetry.telemetryLevel" = "off";
   };
 
-  # 2. Módulo nativo do OpenCode com injeção de Contexto do Obsidian
+  # Módulo nativo do OpenCode — Configuração mínima e blindada contra atualizações
   programs.opencode = {
     enable = true;
     package = inputs.opencode-flake.packages.${pkgs.system}.default;
@@ -134,23 +134,10 @@
         };
       };
       model = "local/qwen3-35b-a3b";
-      "$schema" = "https://kilo.ai";
-
-      # CORREÇÃO CIRÚRGICA: O Kilo agora agrupa essas flags dentro do objeto 'workspace'
-      workspace = {
-        directories = [
-          "/home/nixos/projects"
-          "/home/nixos/projects/nixos-ai"
-          "/home/nixos/vaults/projects"
-        ];
-        instructions = ''
-          Você é o assistente oficial do ecossistema NixOS-AI. Você opera dentro de um monorepo localizado em /home/nixos/projects.
-          Antes de tomar qualquer decisão ou gerar código, contextualize-se obrigatoriamente seguindo o prompt de inicialização global do Workspace.
-        '';
-      };
+      "$schema" = "https://app.kilo.ai/config.json";
     };
   };
-
+  
   # ══════════════════════════════════════════════════════════════
   # AIDER — Qwen3.6-35B-A3B via llama.cpp local
   # Uso: basta rodar `aider` (tudo nas configs abaixo)
