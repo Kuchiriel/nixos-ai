@@ -171,6 +171,63 @@ def execute_command(name: str, req: CommandRequest) -> dict[str, Any]:
     return result.to_dict()
 
 
+# ─── MCP Bridge (mission-control: mesmas tools do MCP server) ────────────
+
+# Tools que mutam estado exigem approve=true (mesma filosofia do confirmed).
+MCP_WRITE_TOOLS = frozenset({
+    "jarvis_execute",
+    "jarvis_write_file",
+    "jarvis_str_replace",
+    "jarvis_vault_write",
+    "jarvis_vault_sync_obsidian",
+    "jarvis_vault_sync_hackmd",
+    "jarvis_rag_index",
+    "jarvis_remember",
+})
+
+
+class McpCallRequest(BaseModel):
+    arguments: dict[str, Any] = {}
+    approve: bool = False
+
+
+@app.get("/api/mcp/tools")
+def mcp_tools() -> list[dict[str, Any]]:
+    """List MCP tools (name, description, write-gated). Mesmas do MCP server."""
+    from jarvis.mcp_server import JARVIS_TOOLS
+    return [
+        {
+            "name": t.get("name", "?"),
+            "description": t.get("description", ""),
+            "write": t.get("name") in MCP_WRITE_TOOLS,
+        }
+        for t in JARVIS_TOOLS
+    ]
+
+
+@app.post("/api/mcp/call/{name}")
+def mcp_call(name: str, req: McpCallRequest) -> dict[str, Any]:
+    """Call an MCP tool. Write tools exigem approve=true. Audita via SSE."""
+    from jarvis.mcp_server import JARVIS_TOOLS, call_tool
+    known = {t.get("name") for t in JARVIS_TOOLS}
+    if name not in known:
+        raise HTTPException(status_code=404, detail=f"Unknown MCP tool: {name}")
+    if name in MCP_WRITE_TOOLS and not req.approve:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Tool '{name}' mutates state — reenvie com approve=true",
+        )
+    result = call_tool(name, req.arguments or {})
+    _push_to_sse({
+        "type": "mcp_call",
+        "tool": name,
+        "approved": req.approve,
+        "error": result.startswith("ERROR:"),
+        "ts": time.time(),
+    })
+    return {"tool": name, "result": result, "isError": result.startswith("ERROR:")}
+
+
 @app.get("/api/services")
 def services() -> list[dict[str, Any]]:
     """List all known services with status."""
