@@ -332,6 +332,69 @@ def notify(req: NotifyRequest) -> dict[str, Any]:
     return {"notified": notified}
 
 
+@app.post("/api/services/{name}/{action}")
+def service_action(name: str, action: str) -> dict[str, Any]:
+    """start/stop/restart a service via allowlisted SystemdAdapter + SSE audit."""
+    if action not in ("start", "stop", "restart"):
+        raise HTTPException(400, f"Invalid action: {action}")
+    plane = _get_plane()
+    if plane._systemd is None:
+        from jarvis.control_plane.systemd_adapter import get_systemd_adapter
+        plane._systemd = get_systemd_adapter()
+    fn = {"start": plane._systemd.start,
+          "stop": plane._systemd.stop,
+          "restart": plane._systemd.restart}[action]
+    result = fn(name)
+    _push_to_sse({"type": "service_action", "service": name,
+                  "action": action, "success": result.get("success", False),
+                  "ts": time.time()})
+    return result
+
+
+class ChatRequest(BaseModel):
+    message: str
+    max_tokens: int = 512
+    temperature: float = 0.0
+
+
+@app.post("/api/chat")
+def chat(req: ChatRequest) -> dict[str, Any]:
+    """Chat direto com o LLM local (Bonsai). Sem streaming (rápido a 71 t/s)."""
+    if not req.message.strip():
+        raise HTTPException(400, "Empty message")
+    from jarvis.providers.llm import LLMClient
+    client = LLMClient()
+    text = client.chat(
+        [{"role": "user", "content": req.message}],
+        temperature=req.temperature,
+        max_tokens=min(req.max_tokens, 4096),
+    )
+    _push_to_sse({"type": "chat", "ts": time.time()})
+    return {"reply": text}
+
+
+@app.get("/api/remote")
+def remote_status() -> dict[str, Any]:
+    """Cascade remota: quais provedores têm key configurada (nomes, NUNCA valores).
+
+    Keys vivem em /etc/litellm.env (chmod 600, fora do repo).
+    """
+    from pathlib import Path
+    env_file = Path("/etc/litellm.env")
+    present: dict[str, bool] = {"groq": False, "gemini": False, "openrouter": False}
+    exists = env_file.exists()
+    if exists:
+        try:
+            content = env_file.read_text(encoding="utf-8")
+            present["groq"] = "GROQ_API_KEY=" in content and "sua_chave" not in content
+            present["gemini"] = "GEMINI_API_KEY=" in content and "sua_chave" not in content
+            present["openrouter"] = "OPENROUTER_API_KEY=" in content and "sua_chave" not in content
+        except OSError:
+            exists = False
+    return {"env_file": exists, "providers": present,
+            "cascade": ["local"] + [k for k, v in present.items() if v]}
+
+
 @app.get("/api/events/history")
 def event_history(limit: int = 100) -> list[dict[str, Any]]:
     """Get recent event history."""
@@ -555,6 +618,63 @@ def task_detail(task_id: str) -> dict[str, Any]:
     except (_json.JSONDecodeError, OSError):
         pass
     raise HTTPException(404, f"Task {task_id} not found")
+
+
+def _find_task_file(task_id: str) -> tuple[str, dict[str, Any]] | None:
+    """Locate a task across per-project queue files. Returns (project, dict)."""
+    import json as _json
+    from nightwatch.task_queue import STATE_DIR
+    for qf in sorted(STATE_DIR.glob("task_queue*.json")):
+        try:
+            raw = _json.loads(qf.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            continue
+        for t in raw:
+            if t.get("id") == task_id:
+                proj = t.get("project", "nixos-ai")
+                return proj, t
+    return None
+
+
+@app.post("/api/tasks/{task_id}/retry")
+def task_retry(task_id: str) -> dict[str, Any]:
+    """Re-queue a FAILED/BLOCKED task (attempts reset)."""
+    from nightwatch.task_queue import TaskQueue, TaskStatus
+    found = _find_task_file(task_id)
+    if not found:
+        raise HTTPException(404, f"Task {task_id} not found")
+    project, _ = found
+    q = TaskQueue(project=project)
+    task = q.get_task(task_id)
+    if task is None:
+        raise HTTPException(404, f"Task {task_id} not found")
+    if task.status not in (TaskStatus.FAILED.value, TaskStatus.BLOCKED.value):
+        raise HTTPException(409, f"Only FAILED/BLOCKED can retry (status={task.status})")
+    q.update_task(task_id, status=TaskStatus.READY.value, attempts=0,
+                  last_error="retried via webui")
+    _push_to_sse({"type": "task_retry", "task_id": task_id, "ts": time.time()})
+    return {"task_id": task_id, "status": TaskStatus.READY.value}
+
+
+@app.post("/api/tasks/{task_id}/cancel")
+def task_cancel(task_id: str) -> dict[str, Any]:
+    """Abandon a non-terminal task."""
+    from nightwatch.task_queue import TaskQueue, TaskStatus
+    found = _find_task_file(task_id)
+    if not found:
+        raise HTTPException(404, f"Task {task_id} not found")
+    project, _ = found
+    q = TaskQueue(project=project)
+    task = q.get_task(task_id)
+    if task is None:
+        raise HTTPException(404, f"Task {task_id} not found")
+    if task.status in (TaskStatus.COMPLETED.value, TaskStatus.FAILED.value,
+                       TaskStatus.ABANDONED.value):
+        raise HTTPException(409, f"Terminal task cannot cancel (status={task.status})")
+    task.abandon("cancelled via webui")
+    q._save()
+    _push_to_sse({"type": "task_cancel", "task_id": task_id, "ts": time.time()})
+    return {"task_id": task_id, "status": TaskStatus.ABANDONED.value}
 
 
 @app.post("/api/tasks/clear_failed")
