@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests that need external services (LLM, Qdrant, network, git, audio)",
+]
+testpaths = ["jarvis/tests"]
