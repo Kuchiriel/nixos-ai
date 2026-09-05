@@ -961,7 +961,8 @@ class Harness:
     # ── Notifications ──────────────────────────────────────────────────────
 
     def notify(self, message: str) -> None:
-        """Send notification via Event Bus."""
+        """Send notification via Event Bus + console (never silent)."""
+        print(message.replace("*", ""), flush=True)
         self._bus.publish("harness.notify", {"message": message})
 
     def _handle_bus_notify(self, event: Event) -> None:

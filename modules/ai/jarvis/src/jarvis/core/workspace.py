@@ -96,6 +96,37 @@ SKIP_DIRS = {
 }
 
 
+def _count_languages(project_path: Path, max_depth: int = 6,
+                     max_files: int = 20000) -> dict[str, int]:
+    """Count files per language with a single pruned walk.
+
+    Prunes SKIP_DIRS + hidden dirs in-place (never descends), caps depth
+    and total files — discovery needs shape, not exactitude.
+    """
+    from collections import Counter
+    counts: Counter[str] = Counter()
+    base = str(project_path)
+    seen = 0
+    for root, dirnames, filenames in os.walk(base, followlinks=False):
+        depth = root[len(base):].count(os.sep)
+        dirnames[:] = sorted(
+            d for d in dirnames
+            if d not in SKIP_DIRS and not d.startswith(".")
+        )
+        if depth >= max_depth:
+            dirnames[:] = []
+            continue
+        for fn in filenames:
+            seen += 1
+            if seen > max_files:
+                return dict(counts)
+            ext = os.path.splitext(fn)[1]
+            lang = LANG_MAP.get(ext)
+            if lang:
+                counts[lang] += 1
+    return dict(counts)
+
+
 class WorkspaceDiscovery:
     """Discovers and manages projects in a workspace."""
 
@@ -144,13 +175,9 @@ class WorkspaceDiscovery:
                     proj_type = type_name if proj_type == "unknown" else f"{proj_type}+{type_name}"
                     break
 
-        # Detect language breakdown
-        for ext, lang in LANG_MAP.items():
-            count = sum(1 for _ in project_path.rglob(f"*{ext}")
-                       if not any(skip in str(_.relative_to(project_path))
-                                 for skip in SKIP_DIRS))
-            if count > 0:
-                languages[lang] = count
+        # Detect language breakdown — single bounded walk (rglob per
+        # extension walks .git/nixpkgs/build dirs repeatedly = hang).
+        languages = _count_languages(project_path)
 
         # Detect test command
         test_cmd = ""
