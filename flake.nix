@@ -92,19 +92,14 @@
         jarvis = (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast;}).base;
         jarvis-voice = (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast;}).withVoice;
         
-        # CORREÇÃO: Força o patch de Shebangs na pasta node_modules do Kilo antes do build do Vite
-        kilo = ((import nixpkgs-unstable { inherit system; config.allowUnfree = true; }).kilo).overrideAttrs (oldAttrs: {
-          preBuild = ''
-            # Localiza todos os executáveis do node_modules e aponta para o bash correto da store
-            patchShebangs packages/kilo-console/node_modules/
-          '';
-        });
+        # SOLUÇÃO CIRÚRGICA: Consome o binário pronto do opencode-flake ignorando o build do Vite
+        kilo = inputs.opencode-flake.packages.${system}.default;
 
+        # Mantém o Antigravity original tratando a licença unfree com o import correto
         antigravity-ide = (import nixpkgs-unstable { inherit system; config.allowUnfree = true; }).antigravity-ide;
 
         inherit aiModels;
       };
-
 
     hosts = [
       {
@@ -211,9 +206,9 @@
           python313Packages.kokoro  
           python313Packages.soundfile  
           
-          # CLI de IA adicionados ao ambiente de desenvolvimento interativo
-          kilocode-cli
-          antigravity
+          # Nomes corrigidos também no devShell para evitar quebra de variáveis
+          kilo
+          antigravity-ide
 
           # Higiene Nix
           statix
@@ -227,4 +222,3 @@
       };
   };
 }
-
