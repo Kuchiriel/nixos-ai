@@ -51,63 +51,63 @@
         # llama.cpp vem do unstable (24.11/26.05 pinned ficam desatualizados)
         llama-cpp =
           (import nixpkgs-unstable {
-            system = prev.stdenv.hostPlatform.system;
+            inherit system;
             config.allowUnfree = true;
           }).llama-cpp.override {
             cudaSupport = true;
           };
-        #llama-cpp = nixpkgs-unstable.legacyPackages.${prev.stdenv.hostPlatform.system}.llama-cpp;
-        #llama-cpp = inputs.nixpkgs-unstable.legacyPackages.${system}.llama-cpp;
-        # mcp-nixos com cache de canais pré-computado (store) + FALLBACK atualizado:
-        # a descoberta de canais faz 20 probes HTTP sequenciais por processo novo
-        # (~20s na primeira consulta); o cache declarativo zera esse custo.
-        mcp-nixos-fast = prev.mcp-nixos.overridePythonAttrs (old: {
-          patches = (old.patches or []) ++ [./modules/ai/patches/mcp-nixos-channel-cache.patch];
-          postInstall =
-            (old.postInstall or "")
-            + ''
-              cache="$out/share/mcp-nixos/channels.json"
-              mkdir -p "$(dirname "$cache")"
-              cat > "$cache" <<'EOF'
-              {
-                "available": {
-                  "latest-${toString nixosIndexGeneration}-nixos-unstable": "disponível",
-                  "latest-${toString nixosIndexGeneration}-nixos-25.11": "disponível",
-                  "latest-${toString nixosIndexGeneration}-nixos-25.05": "disponível"
-                },
-                "resolved": {
-                  "unstable": "latest-${toString nixosIndexGeneration}-nixos-unstable",
-                  "stable": "latest-${toString nixosIndexGeneration}-nixos-25.11",
-                  "25.05": "latest-${toString nixosIndexGeneration}-nixos-25.05",
-                  "25.11": "latest-${toString nixosIndexGeneration}-nixos-25.11",
-                  "26.05": "latest-${toString nixosIndexGeneration}-nixos-26.05",
-                  "beta": "latest-${toString nixosIndexGeneration}-nixos-25.11"
+
+        # mcp-nixos com cache de canais pré-computado
+        mcp-nixos-fast = if (prev ? mcp-nixos) then 
+          prev.mcp-nixos.overridePythonAttrs (old: {
+            patches = (old.patches or []) ++ [./modules/ai/patches/mcp-nixos-channel-cache.patch];
+            postInstall =
+              (old.postInstall or "")
+              + ''
+                cache="$out/share/mcp-nixos/channels.json"
+                mkdir -p "$(dirname "$cache")"
+                cat > "$cache" <<'EOF'
+                {
+                  "available": {
+                    "latest-${toString nixosIndexGeneration}-nixos-unstable": "disponível",
+                    "latest-${toString nixosIndexGeneration}-nixos-25.11": "disponível",
+                    "latest-${toString nixosIndexGeneration}-nixos-25.05": "disponível"
+                  },
+                  "resolved": {
+                    "unstable": "latest-${toString nixosIndexGeneration}-nixos-unstable",
+                    "stable": "latest-${toString nixosIndexGeneration}-nixos-25.11",
+                    "25.05": "latest-${toString nixosIndexGeneration}-nixos-25.05",
+                    "25.11": "latest-${toString nixosIndexGeneration}-nixos-25.11",
+                    "26.05": "latest-${toString nixosIndexGeneration}-nixos-26.05",
+                    "beta": "latest-${toString nixosIndexGeneration}-nixos-25.11"
+                  }
                 }
-              }
-              EOF
-            '';
-        });
+                EOF
+              '';
+          })
+        else 
+          nixpkgs-unstable.legacyPackages.${system}.python3Packages.mcp;
 
         # Pacote Python do JARVIS
-        # jarvis = core (leve, sem voz)
-        # jarvis-voice = com voz (STT faster-whisper + TTS Kokoro)
         jarvis = (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast;}).base;
         jarvis-voice = (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast;}).withVoice;
-        # Modelos declarativos (openwakeword, kokoro, whisper)
-        inherit aiModels;
+        
+        # CORREÇÃO: Mapeamento com os novos nomes oficiais do Nixpkgs + instanciando com allowUnfree ativo
+        kilo = (import nixpkgs-unstable { inherit system; config.allowUnfree = true; }).kilo;
+        antigravity-ide = (import nixpkgs-unstable { inherit system; config.allowUnfree = true; }).antigravity-ide;
 
+        inherit aiModels;
       };
+
 
     hosts = [
       {
         hostname = "nixos-lab";
-        # stateVersion reflete a versão de instalação inicial (24.11) e não é
-        # alterado em upgrades — controla defaults comportamentais do módulo.
         stateVersion = "24.11";
       }
       {
         hostname = "nitro-v15";
-        stateVersion = "24.11"; # ou a versão que utilizou na instalação inicial
+        stateVersion = "24.11";
       }
     ];
 
@@ -116,16 +116,15 @@
       stateVersion,
     }:
       nixpkgs.lib.nixosSystem {
-        inherit system;
+        # Corrigido: Não passamos 'system' aqui na raiz para evitar a quebra do system.build.toplevel no NixOS 26.05/unstable
         specialArgs = {
           inherit inputs stateVersion hostname user;
         };
 
         modules = [
-          # Passa o pkgs estendido (overlay + allowUnfree) direto via nixpkgs.pkgs.
-          # Evita `nixpkgs.overlays`/`nixpkgs.config` em conjunto com
-          # `home-manager.useGlobalPkgs` (deprecated — warning de avaliação).
+          # Definição segura da plataforma e injeção de pacotes via nixpkgs.pkgs
           {
+            nixpkgs.hostPlatform = system;
             nixpkgs.pkgs = import nixpkgs {
               inherit system;
               config = {allowUnfree = true;};
@@ -139,8 +138,7 @@
           ./hosts/${hostname}/configuration.nix
           stylix.nixosModules.stylix
 
-          # Função de módulo: recebe o config NixOS para repassar o switch
-          # central services.jarvis.environment ao home-manager (água).
+          # Configuração do Home-Manager
           ({config, ...}: {
             imports = [home-manager.nixosModules.home-manager];
             home-manager = {
@@ -149,21 +147,15 @@
               extraSpecialArgs = {
                 inherit user inputs;
                 homeStateVersion = stateVersion;
-                # Água: o home-manager bebe do switch central de ambiente
-                # (services.jarvis.environment) — waybar/mpvpaper/hyprland
-                # decidem seus perfis aqui, sem hardcode por host.
-                jarvisEnvironment = config.services.jarvis.environment;
-                # lib: fonts, colors, ports (nosso próprio lib/)
+                jarvisEnvironment = config.services.jarvis.environment or "production";
                 projectLib = import ./lib {
                   inherit (nixpkgs.lib) lib;
                   pkgs = nixpkgs.legacyPackages.${system};
                 };
-
               };
               users.${user} = {
                 imports = [
                   ./home-manager/home.nix
-                  # stylix 26.05: o output `homeManagerModules` foi renomeado p/ `homeModules`
                   stylix.homeModules.stylix
                 ];
               };
@@ -185,7 +177,7 @@
     packages.${system} = let
       pkg = nixpkgs.legacyPackages.${system}.extend aiOverlay;
     in {
-      inherit (pkg) jarvis jarvis-voice;
+      inherit (pkg) jarvis jarvis-voice kilo antigravity-ide;
     };
 
     # ── lib: fonts, colors, ports (nosso próprio lib/) ──────────────
@@ -193,7 +185,6 @@
       inherit (nixpkgs.lib) lib;
       pkgs = nixpkgs.legacyPackages.${system};
     };
-
 
     # Ambiente de desenvolvimento interativo (`nix develop`)
     devShells.${system}.default = let
@@ -208,11 +199,16 @@
         packages = with pkgs; [
           python313Packages.pytest
           python313Packages.hypothesis
-          python313Packages.pymupdf  # PDF extraction for audiobook reader
-          python313Packages.ebooklib  # EPUB extraction for audiobook reader
-          python313Packages.beautifulsoup4  # HTML parsing for EPUB
-          python313Packages.kokoro  # TTS for audiobook reader
-          python313Packages.soundfile  # WAV I/O for TTS
+          python313Packages.pymupdf  
+          python313Packages.ebooklib  
+          python313Packages.beautifulsoup4  
+          python313Packages.kokoro  
+          python313Packages.soundfile  
+          
+          # CLI de IA adicionados ao ambiente de desenvolvimento interativo
+          kilocode-cli
+          antigravity
+
           # Higiene Nix
           statix
           deadnix
@@ -225,3 +221,4 @@
       };
   };
 }
+

@@ -58,7 +58,7 @@
   # ZSH — emacs keybindings (Ctrl+A/E/Ctrl+K, etc)
   programs.zsh = {
     enable = true;
-    initExtra = ''
+    initContent = ''
       # Emacs mode: Ctrl+A = início da linha, Ctrl+E = fim
       bindkey -e
       # Ctrl+R = busca reversa no histórico
@@ -94,6 +94,12 @@
     enable = true;
     # tavilyApiKey agora é lido de /etc/jarvis-secrets/tavily.env (fora do git)
     # githubToken = "";  # Desabilitado — adicione seu token para ativar
+  };
+
+ # Opcional: Se quiser criar apelidos rápidos para as ferramentas
+  home.shellAliases = {
+    kilo-chat = "kilo chat";
+    agy-danger = "agy --dangerously-skip-permissions"; # Pula as confirmações chatas de escrita do Antigravity
   };
 
   programs.opencode = {

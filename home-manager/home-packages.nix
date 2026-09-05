@@ -4,6 +4,10 @@
 }: {
   fonts.fontconfig.enable = true;
   home.packages = with pkgs; [
+    # AI CLIs
+    kilo
+    antigravity-ide
+
     # Desktop essential apps
     foot
     yazi
@@ -19,7 +23,7 @@
     htop # Process viewer alternativo ao btm
     intel-gpu-tools
 
-    # Fonts / Icons
+    # Fonts / Icons (Adaptado para compatibilidade estável do Nixpkgs 26.05)
     font-awesome
     nerd-fonts.jetbrains-mono
     nerd-fonts.symbols-only
@@ -58,3 +62,4 @@
     # talk  # REMOVIDO: redundante com Kokoro TTS do jarvis voice
   ];
 }
+
