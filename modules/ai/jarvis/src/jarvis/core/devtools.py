@@ -370,33 +370,29 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
             new_content = content.replace(found_text, new, 1)
             replacements = 1
 
-        # AST guard
-        ast_err = _ast_guard(target, new_content)
-        if ast_err:
-            ast_err["strategy"] = strategy
-            return ast_err
-
-        # Backup
-        backup_path = target.with_suffix(target.suffix + ".bak")
-        shutil.copy2(target, backup_path)
-
-        target.write_text(new_content, encoding="utf-8")
+        # Núcleo único de escrita: SafeEditor (atômico + validação completa
+        # python/nix/json + integridade estrutural + backup central).
+        from nightwatch.safe_editor import SafeEditor
+        res = SafeEditor().apply_edit(target, new_content)
+        if not res.success:
+            return {
+                "ok": False,
+                "error": "; ".join(res.errors) or "validation failed",
+                "strategy": strategy,
+                "warnings": res.warnings,
+            }
 
         try:
             rel = str(target.relative_to(_project_root()))
         except ValueError:
             rel = str(target)
-        try:
-            backup_rel = str(backup_path.relative_to(_project_root()))
-        except ValueError:
-            backup_rel = str(backup_path)
 
         diff = _make_diff(path, found_text, new)
         return {
             "ok": True,
             "replacements": replacements,
             "path": rel,
-            "backup": backup_rel,
+            "backup": res.backup_path,
             "strategy": strategy,
             "diff": diff,
         }
@@ -478,23 +474,14 @@ def semantic_search(query: str, top_k: int = 5) -> dict[str, Any]:
 # ===========================================================================
 
 def write_file(path: str, content: str, backup: bool = True) -> dict[str, Any]:
-    """Escreve um arquivo (cria ou sobrescreve). Com backup + AST guard."""
+    """Escreve um arquivo (cria ou sobrescreve). Núcleo único: SafeEditor."""
     try:
         target = _safe_path(path)
 
-        # AST guard
-        ast_err = _ast_guard(target, content)
-        if ast_err:
-            return ast_err
-
-        # Backup
-        backup_path = None
-        if backup and target.exists():
-            backup_path = target.with_suffix(target.suffix + ".bak")
-            shutil.copy2(target, backup_path)
-
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+        from nightwatch.safe_editor import SafeEditor
+        res = SafeEditor().apply_edit(target, content)
+        if not res.success:
+            return {"ok": False, "error": "; ".join(res.errors) or "validation failed"}
 
         try:
             rel = str(target.relative_to(_project_root()))
@@ -505,7 +492,7 @@ def write_file(path: str, content: str, backup: bool = True) -> dict[str, Any]:
             "ok": True,
             "path": rel,
             "bytes": len(content.encode("utf-8")),
-            "backup": str(backup_path) if backup_path else None,
+            "backup": res.backup_path if backup else None,
         }
     except ValueError as e:
         return {"ok": False, "error": str(e)}

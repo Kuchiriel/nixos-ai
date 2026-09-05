@@ -46,8 +46,12 @@ def detect_language(path: Path) -> str:
 
 
 def strip_markdown_fences(content: str) -> str:
-    """Strip markdown code fences that LLMs sometimes add around files."""
-    lines = content.strip().split("\n")
+    """Strip markdown code fences that LLMs sometimes add around files.
+
+    Only fence lines are removed — surrounding whitespace (incl. trailing
+    newline) is preserved byte-for-byte for editor exactness.
+    """
+    lines = content.split("\n")
     if lines and lines[0].strip().startswith("```"):
         lines = lines[1:]
     if lines and lines[-1].strip() == "```":

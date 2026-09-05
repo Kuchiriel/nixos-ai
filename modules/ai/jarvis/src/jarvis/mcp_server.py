@@ -378,6 +378,120 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# ─── Vault Helper Functions ───────────────────────────────────────────────
+
+def _vault_sync_to_obsidian() -> list[str]:
+    """Sync JARVIS vault notes to Obsidian vault."""
+    from pathlib import Path
+    import shutil
+    
+    VAULT_DIR = Path.home() / "vaults/projects/nixos-ai"
+    OBSIDIAN_VAULT = Path.home() / "vaults/projects"
+    
+    VAULT_DIR.mkdir(parents=True, exist_ok=True)
+    OBSIDIAN_VAULT.mkdir(parents=True, exist_ok=True)
+    
+    written = []
+    for note in VAULT_DIR.rglob("*.md"):
+        dest = OBSIDIAN_VAULT / note.relative_to(VAULT_DIR)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        
+        content = note.read_text(encoding="utf-8")
+        
+        # Add frontmatter if not present
+        if not content.startswith("---"):
+            tags = ["nixos-ai", "jarvis-vault"]
+            if "nightwatch" in note.name.lower():
+                tags.append("nightwatch")
+            frontmatter = f"---\ntags: [{', '.join(tags)}]\nsynced: true\n---\n\n"
+            content = frontmatter + content
+        
+        dest.write_text(content, encoding="utf-8")
+        written.append(str(dest))
+    
+    return written
+
+
+def _vault_sync_to_hackmd() -> list[dict[str, Any]]:
+    """Sync vault notes to HackMD."""
+    from pathlib import Path
+    
+    VAULT_DIR = Path.home() / "vaults/projects/nixos-ai"
+    VAULT_DIR.mkdir(parents=True, exist_ok=True)
+    
+    results = []
+    
+    try:
+        existing_notes = hackmd_list(limit=100)
+        existing = {n.get("title"): n for n in existing_notes}
+    except Exception:
+        existing = {}
+    
+    for note in VAULT_DIR.rglob("*.md"):
+        title = note.stem
+        content = note.read_text(encoding="utf-8")
+        
+        if "---" not in content[:10]:
+            content = f"---\ntags: [jarvis-vault]\n---\n\n{content}"
+        
+        try:
+            if title in existing:
+                note_id = existing[title].get("id")
+                if note_id:
+                    hackmd_update(note_id, content=content)
+                    results.append({"title": title, "action": "updated"})
+            else:
+                result = hackmd_create(title, content)
+                results.append({"title": title, "action": "created", "id": result.get("id")})
+        except Exception as e:
+            results.append({"title": title, "action": "error", "error": str(e)})
+    
+    return results
+
+
+def _vault_read_from_obsidian(query: str) -> list[dict[str, str]]:
+    """Search Obsidian vault using ripgrep."""
+    from pathlib import Path
+    import subprocess
+    
+    OBSIDIAN_VAULT = Path.home() / "vaults/projects"
+    if not OBSIDIAN_VAULT.exists():
+        return []
+    
+    try:
+        result = subprocess.run(
+            ["rg", "-l", "-i", query, str(OBSIDIAN_VAULT)],
+            capture_output=True, text=True, timeout=10,
+        )
+        return [{"path": p, "name": Path(p).stem} for p in result.stdout.splitlines()]
+    except Exception:
+        return []
+
+
+def _vault_status() -> dict[str, Any]:
+    """Get vault sync status."""
+    from pathlib import Path
+    
+    VAULT_DIR = Path.home() / "vaults/projects/nixos-ai"
+    OBSIDIAN_VAULT = Path.home() / "vaults/projects"
+    
+    VAULT_DIR.mkdir(parents=True, exist_ok=True)
+    
+    local_notes = list(VAULT_DIR.rglob("*.md"))
+    obsidian_notes = list(OBSIDIAN_VAULT.rglob("*.md")) if OBSIDIAN_VAULT.exists() else []
+    
+    sync_file = VAULT_DIR / ".last_sync"
+    last_sync = sync_file.read_text().strip() if sync_file.exists() else None
+    
+    return {
+        "local_vault": str(VAULT_DIR),
+        "obsidian_vault": str(OBSIDIAN_VAULT),
+        "local_count": len(local_notes),
+        "obsidian_count": len(obsidian_notes),
+        "last_sync": last_sync,
+    }
+
+
 def call_tool(name: str, args: dict[str, Any]) -> str:
     """Executa uma tool JARVIS."""
     try:
@@ -787,119 +901,4 @@ if __name__ == "__main__":
 
 # ===========================================================================
 # Vault Sync Tools — ported from nightwatch/vault_sync.py
-# ===========================================================================
 
-def _vault_sync_to_obsidian() -> list[str]:
-    """Sync JARVIS vault notes to Obsidian vault."""
-    from pathlib import Path
-    import shutil
-    
-    VAULT_DIR = Path.home() / "vaults/projects/nixos-ai"
-    OBSIDIAN_VAULT = Path.home() / "vaults/projects"
-    
-    VAULT_DIR.mkdir(parents=True, exist_ok=True)
-    OBSIDIAN_VAULT.mkdir(parents=True, exist_ok=True)
-    
-    written = []
-    for note in VAULT_DIR.rglob("*.md"):
-        dest = OBSIDIAN_VAULT / note.relative_to(VAULT_DIR)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        
-        content = note.read_text(encoding="utf-8")
-        
-        # Add frontmatter if not present
-        if not content.startswith("---"):
-            tags = ["nixos-ai", "jarvis-vault"]
-            if "nightwatch" in note.name.lower():
-                tags.append("nightwatch")
-            frontmatter = f"---\ntags: [{', '.join(tags)}]\nsynced: true\n---\n\n"
-            content = frontmatter + content
-        
-        dest.write_text(content, encoding="utf-8")
-        written.append(str(dest))
-    
-    return written
-
-
-def _vault_sync_to_hackmd() -> list[dict[str, Any]]:
-    """Sync vault notes to HackMD."""
-    from pathlib import Path
-    
-    VAULT_DIR = Path.home() / "vaults/projects/nixos-ai"
-    VAULT_DIR.mkdir(parents=True, exist_ok=True)
-    
-    results = []
-    
-    # Get existing HackMD notes
-    try:
-        existing_notes = hackmd_list(limit=100)
-        existing = {n.get("title"): n for n in existing_notes}
-    except Exception:
-        existing = {}
-    
-    for note in VAULT_DIR.rglob("*.md"):
-        title = note.stem
-        content = note.read_text(encoding="utf-8")
-        
-        # Add vault tag
-        if "---" not in content[:10]:
-            content = f"---\ntags: [jarvis-vault]\n---\n\n{content}"
-        
-        try:
-            if title in existing:
-                # Update existing
-                note_id = existing[title].get("id")
-                if note_id:
-                    hackmd_update(note_id, content=content)
-                    results.append({"title": title, "action": "updated"})
-            else:
-                # Create new
-                result = hackmd_create(title, content)
-                results.append({"title": title, "action": "created", "id": result.get("id")})
-        except Exception as e:
-            results.append({"title": title, "action": "error", "error": str(e)})
-    
-    return results
-
-
-def _vault_read_from_obsidian(query: str) -> list[dict[str, str]]:
-    """Search Obsidian vault using ripgrep."""
-    from pathlib import Path
-    import subprocess
-    
-    OBSIDIAN_VAULT = Path.home() / "vaults/projects"
-    if not OBSIDIAN_VAULT.exists():
-        return []
-    
-    try:
-        result = subprocess.run(
-            ["rg", "-l", "-i", query, str(OBSIDIAN_VAULT)],
-            capture_output=True, text=True, timeout=10,
-        )
-        return [{"path": p, "name": Path(p).stem} for p in result.stdout.splitlines()]
-    except Exception:
-        return []
-
-
-def _vault_status() -> dict[str, Any]:
-    """Get vault sync status."""
-    from pathlib import Path
-    
-    VAULT_DIR = Path.home() / "vaults/projects/nixos-ai"
-    OBSIDIAN_VAULT = Path.home() / "vaults/projects"
-    
-    VAULT_DIR.mkdir(parents=True, exist_ok=True)
-    
-    local_notes = list(VAULT_DIR.rglob("*.md"))
-    obsidian_notes = list(OBSIDIAN_VAULT.rglob("*.md")) if OBSIDIAN_VAULT.exists() else []
-    
-    sync_file = VAULT_DIR / ".last_sync"
-    last_sync = sync_file.read_text().strip() if sync_file.exists() else None
-    
-    return {
-        "local_vault": str(VAULT_DIR),
-        "obsidian_vault": str(OBSIDIAN_VAULT),
-        "local_count": len(local_notes),
-        "obsidian_count": len(obsidian_notes),
-        "last_sync": last_sync,
-    }

@@ -71,6 +71,35 @@ export async function fetchCommands(): Promise<Command[]> {
   return res.json();
 }
 
+export interface McpToolInfo {
+  name: string;
+  description: string;
+  write: boolean;
+}
+
+export async function fetchMcpTools(): Promise<McpToolInfo[]> {
+  const res = await fetch(`${API_BASE}/mcp/tools`);
+  if (!res.ok) throw new Error(`MCP tools fetch failed: ${res.status}`);
+  return res.json();
+}
+
+export async function callMcpTool(
+  name: string,
+  args: Record<string, any> = {},
+  approve = false
+): Promise<any> {
+  const res = await fetch(`${API_BASE}/mcp/call/${name}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ arguments: args, approve }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `MCP call failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function executeCommand(
   name: string,
   args: Record<string, any> = {},

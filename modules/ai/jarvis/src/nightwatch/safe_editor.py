@@ -284,10 +284,18 @@ class SafeEditor:
         
         if lang == "python":
             valid, errors, warnings = validate_python(content)
-            all_errors.extend(errors)
-            all_warnings.extend(warnings)
             if not valid:
-                return False, all_errors, all_warnings
+                # Repair flow: original already broken → syntax gate can't
+                # apply (else broken files could never be fixed).
+                try:
+                    import ast as _ast
+                    _ast.parse(original or "")
+                    return False, all_errors + errors, all_warnings + warnings
+                except Exception:
+                    all_warnings.append("original already had syntax errors; syntax gate skipped")
+            else:
+                all_errors.extend(errors)
+                all_warnings.extend(warnings)
         
         elif lang == "nix":
             valid, errors, warnings = validate_nix(content)
@@ -320,13 +328,18 @@ class SafeEditor:
                 ok, import_warnings = check_import_integrity(original, content)
                 all_warnings.extend(import_warnings)
             
-            # Structural integrity for Python — critical damage blocks the edit
-            if lang == "python":
+            # Structural integrity for Python — critical damage blocks the edit.
+            # Repair flow: unparseable original → nothing to compare against.
+            try:
+                import ast as _ast2
+                _ast2.parse(original or "")
                 ok, struct_errors, struct_warnings = check_structural_integrity(original, content)
                 all_errors.extend(struct_errors)
                 all_warnings.extend(struct_warnings)
                 if not ok:
                     return False, all_errors, all_warnings
+            except Exception:
+                all_warnings.append("original unparseable; structural check skipped")
         
         return len(all_errors) == 0, all_errors, all_warnings
     

@@ -228,6 +228,73 @@ def mcp_call(name: str, req: McpCallRequest) -> dict[str, Any]:
     return {"tool": name, "result": result, "isError": result.startswith("ERROR:")}
 
 
+# ─── Config & Router ───────────────────────────────────────────────────
+
+class ConfigUpdateRequest(BaseModel):
+    llm_disable_thinking: bool | None = None
+    llm_timeout: int | None = None
+    tavily_api_key: str | None = None
+
+
+@app.get("/api/config")
+def get_system_config() -> dict[str, Any]:
+    """Get full system configuration, cascade router status, and secret presence."""
+    from jarvis.core.config import get_config
+    import os
+    from pathlib import Path
+
+    cfg = get_config()
+    tavily_secret = Path("/etc/jarvis-secrets/tavily.env")
+    has_tavily = tavily_secret.exists() or bool(os.environ.get("TAVILY_API_KEY"))
+
+    return {
+        "llm": {
+            "backend": cfg.llm_backend,
+            "base_url": cfg.llm_base_url,
+            "model": cfg.llm_model,
+            "timeout": cfg.llm_timeout,
+            "disable_thinking": cfg.llm_disable_thinking,
+            "tool_calling": cfg.llm_tool_calling,
+        },
+        "services": {
+            "embed_url": cfg.embed_base_url,
+            "rerank_url": cfg.rerank_base_url,
+            "qdrant_url": cfg.qdrant_url,
+        },
+        "cascade_router": {
+            "routes": [
+                {"name": "fastpath", "desc": "Respostas instantâneas e determinísticas sem LLM"},
+                {"name": "doctor", "desc": "Diagnóstico de saúde do sistema e serviços"},
+                {"name": "nixos", "desc": "Consultas declarativas do sistema NixOS / Nixpkgs"},
+                {"name": "rag", "desc": "Busca semântica no Qdrant (dense + sparse + rerank)"},
+                {"name": "agent", "desc": "Execução autônoma com personas e chamadas de ferramenta"},
+            ],
+            "status": "active",
+        },
+        "secrets": {
+            "tavily_configured": has_tavily,
+            "telegram_configured": bool(os.environ.get("TELEGRAM_BOT_TOKEN")),
+        },
+    }
+
+
+@app.post("/api/config")
+def update_system_config(req: ConfigUpdateRequest) -> dict[str, Any]:
+    """Update runtime configuration settings."""
+    import os
+    if req.llm_disable_thinking is not None:
+        os.environ["JARVIS_LLM_DISABLE_THINKING"] = "1" if req.llm_disable_thinking else "0"
+    if req.llm_timeout is not None:
+        os.environ["JARVIS_LLM_TIMEOUT"] = str(req.llm_timeout)
+    if req.tavily_api_key:
+        os.environ["TAVILY_API_KEY"] = req.tavily_api_key
+
+    from jarvis.core.config import get_config
+    if hasattr(get_config, "cache_clear"):
+        get_config.cache_clear()
+    return {"status": "updated"}
+
+
 @app.get("/api/services")
 def services() -> list[dict[str, Any]]:
     """List all known services with status."""

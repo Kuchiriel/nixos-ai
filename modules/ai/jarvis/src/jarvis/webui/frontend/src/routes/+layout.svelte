@@ -14,6 +14,7 @@
     { href: '/projects', label: 'Projects', icon: '◈' },
     { href: '/nightwatch', label: 'Nightwatch', icon: '◎' },
     { href: '/commands', label: 'Commands', icon: '⬡' },
+    { href: '/mcp', label: 'MCP Tools', icon: '⚙' },
     { href: '/system', label: 'System', icon: '⬢' },
   ];
 </script>
