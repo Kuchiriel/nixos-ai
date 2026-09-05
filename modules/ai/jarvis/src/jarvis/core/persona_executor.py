@@ -119,13 +119,28 @@ class PersonaExecutor:
 
         task_id = f"pe-{int(time.time())}-{persona.id[:8]}"
 
-        # Auto-detect target files from project
+        # Auto-detect target files from project.
+        # 1. Explicit filenames mentioned in the task (any extension,
+        #    existing or not — missing ones become CREATE candidates).
+        # 2. Fallback: .py files (legacy behavior for code tasks).
+        import re
+        projects_dir = os.environ.get(
+            "JARVIS_PROJECTS_DIR", str(Path.home() / "projects")
+        )
+        project_path = os.path.join(projects_dir, project)
         target_files = []
-        project_path = f"/home/nixos/projects/{project}"
         if os.path.exists(project_path):
+            for m in re.findall(
+                r"[\w\-./]+\.(?:md|py|txt|nix|sh|json|yaml|yml|toml)",
+                task,
+            ):
+                candidate = m.strip("./")
+                if candidate and candidate not in target_files:
+                    target_files.append(candidate)
             for f in os.listdir(project_path):
                 if f.endswith('.py') and not f.startswith('.'):
-                    target_files.append(f)
+                    if f not in target_files:
+                        target_files.append(f)
 
         harness_task = Task(
             id=task_id,

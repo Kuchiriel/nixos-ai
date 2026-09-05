@@ -600,15 +600,30 @@ def _request_structured_patch(
             + "\n\nAnalyze why the previous patches failed and produce corrected patches."
         )
 
-    prompt = f"""Improve this code for the given task.
+    total_chars = sum(len(c) for c in file_contents.values())
+    use_whole = 0 < total_chars < 6000 and len(file_contents) <= 3
 
-{recovery_ctx + chr(10) + chr(10) if recovery_ctx else ""}{memory_ctx + chr(10) if memory_ctx else ""}{error_section}TASK: {task_description}
+    if use_whole:
+        format_block = """To MODIFY a file, return its COMPLETE new content:
+=== WHOLE: path/to/file.py ===
+REASON: why this change is needed
+--- content ---
+complete updated file content here
+--- end ---
 
-FILES:
-{files_section}
+To CREATE a new file, use:
+=== CREATE: path/to/new_file.py ===
+REASON: why this file is needed
+--- content ---
+full file content here
+--- end ---
 
-{"\n\n⚠️ The following files DO NOT EXIST yet. The task requires creating them.\nYou MUST use the CREATE format below for these files.\n" + chr(10).join(f"  - {p}" for p in missing_files) + chr(10) if missing_files else ""}
-To MODIFY an existing file, use:
+RULES:
+- Return the COMPLETE file content, not just the changed part
+- Preserve everything you are not changing, byte for byte
+- Return only files that need changes. If no changes needed, return "NO_CHANGES"."""
+    else:
+        format_block = """To MODIFY an existing file, use:
 === FILE: path/to/file.py ===
 REASON: why this change is needed
 --- old text ---
@@ -630,6 +645,16 @@ RULES:
 - You can have multiple hunks per file
 - Return only files that need changes. If no changes needed, return "NO_CHANGES"."""
 
+    prompt = f"""Improve this code for the given task.
+
+{recovery_ctx + chr(10) + chr(10) if recovery_ctx else ""}{memory_ctx + chr(10) if memory_ctx else ""}{error_section}TASK: {task_description}
+
+FILES:
+{files_section}
+
+{"\n\n⚠️ The following files DO NOT EXIST yet. The task requires creating them.\nYou MUST use the CREATE format below for these files.\n" + chr(10).join(f"  - {p}" for p in missing_files) + chr(10) if missing_files else ""}
+{format_block}"""
+
     response = call_llm_fn(prompt, 4096)
 
     if "ERROR" in response:
@@ -645,6 +670,13 @@ RULES:
     patches = parse_llm_patch(response)
 
     if not patches:
+        try:
+            from pathlib import Path as _Path
+            dbg = _Path.home() / ".local/state/jarvis/nightwatch/last_patch_failure.txt"
+            dbg.parent.mkdir(parents=True, exist_ok=True)
+            dbg.write_text(response[:4000], encoding="utf-8")
+        except Exception:
+            pass
         return False, [], ["Could not parse any patches from LLM response"]
 
     return True, patches, []

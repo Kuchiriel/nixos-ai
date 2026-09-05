@@ -38,6 +38,7 @@ class FilePatch:
     hunks: list[PatchHunk] = field(default_factory=list)
     rationale: str = ""
     create: bool = False  # True = create new file (not modify existing)
+    whole: bool = False  # True = hunk new_text is the COMPLETE file content
 
 
 @dataclass
@@ -118,6 +119,15 @@ def parse_llm_patch(response: str) -> list[FilePatch]:
             current_hunk = None
             mode = None
             continue
+        # Whole-file replacement (for weak/local models — tokens are free)
+        if line.startswith("=== WHOLE: ") and line.endswith(" ==="):
+            if current_patch and current_patch.hunks:
+                patches.append(current_patch)
+            path = line[11:-4].strip()
+            current_patch = FilePatch(path=path, whole=True)
+            current_hunk = None
+            mode = None
+            continue
         
         if current_patch is None:
             continue
@@ -129,6 +139,13 @@ def parse_llm_patch(response: str) -> list[FilePatch]:
         
         # Old/new text markers
         if line.strip() == "--- old text ---":
+            current_hunk = PatchHunk(old_text="", new_text="")
+            mode = "old"
+            continue
+        elif line.strip() == "---" and mode is None and current_hunk is None:
+            # Tolerance: weak models often emit a bare --- opener.
+            # Only outside content collection (markdown --- inside
+            # old/new text stays literal).
             current_hunk = PatchHunk(old_text="", new_text="")
             mode = "old"
             continue
@@ -315,6 +332,24 @@ def apply_patch(patch: FilePatch) -> tuple[bool, str, str]:
             return True, content, diff
         return False, f"File not found: {patch.path}", ""
     
+    # Whole-file replacement: skip hunk matching, validate full content.
+    # FileGuard enforces syntax/tests/structural integrity — safer than hunks
+    # (no match ambiguity) and the recommended format for weak local models.
+    if patch.whole and patch.hunks:
+        content = patch.hunks[0].new_text
+        if not content.strip():
+            return False, f"WHOLE requested but content is empty for {patch.path}", ""
+        if content.strip() == baseline.strip():
+            return False, f"WHOLE content identical to current {patch.path} (no changes)", ""
+        success, validation = apply_with_guard(path, content, baseline)
+        if not success:
+            return False, "; ".join(validation.errors), ""
+        diff = "\n".join(difflib.unified_diff(
+            baseline.splitlines(), content.splitlines(),
+            fromfile=f"a/{patch.path}", tofile=f"b/{patch.path}",
+        ))
+        return True, content, diff
+
     # Apply hunks
     content = baseline
     applied = 0

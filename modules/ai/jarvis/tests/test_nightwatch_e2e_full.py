@@ -101,6 +101,59 @@ class TestApply:
         assert not ok
 
 
+    def test_parse_bare_dashes_opener(self):
+        r = (
+            "=== FILE: module.py ===\n"
+            "REASON: fix\n"
+            "---\n"
+            "def hello():\n"
+            "    return \"hello\"\n"
+            "--- new text ---\n"
+            "def hello():\n"
+            "    return \"hi\"\n"
+            "--- end ---"
+        )
+        patches = parse_llm_patch(r)
+        assert len(patches) == 1
+        assert patches[0].hunks[0].old_text.strip().startswith("def hello")
+
+
+class TestWhole:
+    def test_parse_whole(self):
+        r = (
+            "=== WHOLE: module.py ===\n"
+            "REASON: fix greeting\n"
+            "--- content ---\n"
+            "def hello():\n"
+            "    return \"hi\"\n"
+            "--- end ---"
+        )
+        patches = parse_llm_patch(r)
+        assert len(patches) == 1
+        assert patches[0].whole is True
+        assert "return \"hi\"" in patches[0].hunks[0].new_text
+
+    def test_apply_whole(self, project, monkeypatch):
+        from nightwatch.patcher import FilePatch, apply_patch
+        monkeypatch.setenv("JARVIS_PROJECT_ROOT", str(project))
+        target = project / "module.py"
+        new_content = target.read_text().replace('return "hello"', 'return "hi"')
+        p = FilePatch(path="module.py", whole=True,
+                      hunks=[PatchHunk(old_text="", new_text=new_content)])
+        ok, content, diff = apply_patch(p)
+        assert ok, content
+        assert 'return "hi"' in content
+
+    def test_apply_whole_identical_rejected(self, project, monkeypatch):
+        from nightwatch.patcher import FilePatch, apply_patch
+        monkeypatch.setenv("JARVIS_PROJECT_ROOT", str(project))
+        target = project / "module.py"
+        p = FilePatch(path="module.py", whole=True,
+                      hunks=[PatchHunk(old_text="", new_text=target.read_text())])
+        ok, content, diff = apply_patch(p)
+        assert not ok
+
+
 class TestPipeline:
     def test_edit_and_validate(self, project):
         """Full pipeline: parse patch -> apply hunk -> validate -> write -> verify."""

@@ -31,6 +31,7 @@ git add -A && nix build .#jarvis --no-link && nix flake check
 - Rodar testes antes de commitar
 - `git add -A` antes de build (flake só vê arquivos trackeados)
 - Commit messages em PT-BR com verbo (`feat:`/`fix:`/`chore:`/`docs:`)
+- Tasks do harness em inglês (o modelo local rende mais; PT-BR só p/ docs e chat)
 
 **Ask first:**
 - Mudar `configuration.nix` do host
