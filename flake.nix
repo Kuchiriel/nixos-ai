@@ -92,8 +92,14 @@
         jarvis = (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast;}).base;
         jarvis-voice = (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast;}).withVoice;
         
-        # CORREÇÃO: Mapeamento com os novos nomes oficiais do Nixpkgs + instanciando com allowUnfree ativo
-        kilo = (import nixpkgs-unstable { inherit system; config.allowUnfree = true; }).kilo;
+        # CORREÇÃO: Força o patch de Shebangs na pasta node_modules do Kilo antes do build do Vite
+        kilo = ((import nixpkgs-unstable { inherit system; config.allowUnfree = true; }).kilo).overrideAttrs (oldAttrs: {
+          preBuild = ''
+            # Localiza todos os executáveis do node_modules e aponta para o bash correto da store
+            patchShebangs packages/kilo-console/node_modules/
+          '';
+        });
+
         antigravity-ide = (import nixpkgs-unstable { inherit system; config.allowUnfree = true; }).antigravity-ide;
 
         inherit aiModels;
