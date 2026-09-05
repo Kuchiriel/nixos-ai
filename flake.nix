@@ -5,7 +5,7 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
-    opencode-flake.url = "github:aodhanhayter/opencode-flake";
+    opencode-flake.url = "github:dan-online/opencode-nix";
 
     home-manager = {
       url = "github:nix-community/home-manager/release-26.05";
@@ -93,7 +93,8 @@
         jarvis-voice = (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast;}).withVoice;
         
         # SOLUÇÃO CIRÚRGICA: Consome o binário pronto do opencode-flake ignorando o build do Vite
-        kilo = inputs.opencode-flake.packages.${system}.default;
+        #kilo = inputs.opencode-flake.packages.${system}.default;
+        kilo = inputs.opencode-flake.packages.${system}.opencode;
 
         # Mantém o Antigravity original tratando a licença unfree com o import correto
         antigravity-ide = (import nixpkgs-unstable { inherit system; config.allowUnfree = true; }).antigravity-ide;
