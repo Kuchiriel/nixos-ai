@@ -653,7 +653,8 @@ class Agent:
         
         # Use session if available (for testing)
         if self.session:
-            url = f"{self.config.llm_base_url.rstrip('/')}/v1/chat/completions"
+            base = self.config.llm_base_url.rstrip('/')
+            url = f"{base}/chat/completions" if base.endswith('/v1') else f"{base}/v1/chat/completions"
             payload = {
                 "model": self.config.llm_model,
                 "messages": messages,
