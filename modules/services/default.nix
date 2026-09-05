@@ -10,6 +10,7 @@
     ./jarvis-watchdog.nix
     ./jarvis-telegram.nix
     ./jarvis-vault.nix
+    ./jarvis-webui.nix
     ./litellm-cascade.nix
     ./llama-cpp.nix
     ./llama-fan-control.nix

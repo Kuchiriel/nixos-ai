@@ -151,6 +151,7 @@
   services.llama-cpp-rerank.enable = true;
   # services.qdrant.enable é definido por qdrant.nix (condicional a jarvis.enable)
   services.jarvis-vault.enable = false;
+  services.jarvis-webui.enable = true;
   services.jarvis-idle.enable = true;
     services.jarvis-watchdog.enable = true;
   services.jarvis-telegram.enable = true;
