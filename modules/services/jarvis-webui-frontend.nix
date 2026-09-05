@@ -25,6 +25,7 @@ in {
       bindsTo = ["jarvis-webui.service"];
       partOf = ["jarvis.target"];
       wantedBy = ["jarvis.target" "multi-user.target"];
+      path = [ pkgs.bash pkgs.nodejs ];
       serviceConfig = {
         Type = "simple";
         User = "nixos";
