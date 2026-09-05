@@ -120,33 +120,44 @@
     "telemetry.telemetryLevel" = "off";
   };
 
-  # Módulo nativo do OpenCode — Configuração mínima e blindada contra atualizações
+ # ══════════════════════════════════════════════════════════════
+  # CONFIGURAÇÃO DECLARATIVA DO OPENCODE (MÓDULO ANTIGO E ESTÁVEL)
+  # ══════════════════════════════════════════════════════════════
   programs.opencode = {
     enable = true;
     package = inputs.opencode-flake.packages.${pkgs.system}.default;
 
     settings = {
-      # Força o Kilo a usar o schema estável e injeta chaves para ignorar a telemetria de custos
-      "$schema" = "https://app.kilo.ai/config.json";
-      
-      # Desativa o cálculo de telemetria de custos que gera o DecimalError no stream
-      telemetry = false;
-      experimental = {
-        disableCostTracking = true;
-        disableMetrics = true;
-      };
-
+      # Provedor local (seu Qwen 35B de desenvolvimento)
       provider = {
         local = {
           npm = "@ai-sdk/openai-compatible";
-          options = { baseURL = "http://127.0.0"; };
-          models = { "qwen3-35b-a3b" = { name = "Qwen3 35B Local"; }; };
+          options = {
+            baseURL = "http://127.0.0";
+          };
+          models = {
+            "qwen3-35b-a3b" = {
+              name = "Qwen3 35B Local";
+            };
+          };
+        };
+        
+        # ADICIONADO: Provedor oficial da Google para rodar na nuvem estável
+        google = {
+          npm = "@ai-sdk/google";
+          models = {
+            "gemini-2.5-flash" = {
+              name = "Gemini 2.5 Flash Cloud";
+            };
+          };
         };
       };
-      model = "local/qwen3-35b-a3b"; # Deixe o default aqui, mudaremos para a nuvem no chat
+      
+      # Define o modelo local padrão que já funcionava originalmente
+      model = "local/qwen3-35b-a3b";
     };
   };
- 
+
   # ══════════════════════════════════════════════════════════════
   # AIDER — Qwen3.6-35B-A3B via llama.cpp local
   # Uso: basta rodar `aider` (tudo nas configs abaixo)
