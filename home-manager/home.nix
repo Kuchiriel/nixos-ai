@@ -126,6 +126,16 @@
     package = inputs.opencode-flake.packages.${pkgs.system}.default;
 
     settings = {
+      # Força o Kilo a usar o schema estável e injeta chaves para ignorar a telemetria de custos
+      "$schema" = "https://app.kilo.ai/config.json";
+      
+      # Desativa o cálculo de telemetria de custos que gera o DecimalError no stream
+      telemetry = false;
+      experimental = {
+        disableCostTracking = true;
+        disableMetrics = true;
+      };
+
       provider = {
         local = {
           npm = "@ai-sdk/openai-compatible";
@@ -133,11 +143,10 @@
           models = { "qwen3-35b-a3b" = { name = "Qwen3 35B Local"; }; };
         };
       };
-      model = "local/qwen3-35b-a3b";
-      "$schema" = "https://app.kilo.ai/config.json";
+      model = "local/qwen3-35b-a3b"; # Deixe o default aqui, mudaremos para a nuvem no chat
     };
   };
-  
+ 
   # ══════════════════════════════════════════════════════════════
   # AIDER — Qwen3.6-35B-A3B via llama.cpp local
   # Uso: basta rodar `aider` (tudo nas configs abaixo)
