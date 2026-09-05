@@ -121,47 +121,33 @@
   };
 
   # 2. Módulo nativo do OpenCode com injeção de Contexto do Obsidian
-  # 2. Módulo nativo do OpenCode com injeção de Contexto do Obsidian (Esquema Unificado 2026)
   programs.opencode = {
     enable = true;
     package = inputs.opencode-flake.packages.${pkgs.system}.default;
 
     settings = {
-      # Mapeamento estável do seu provedor local
       provider = {
         local = {
           npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "http://127.0.0";
-          };
-          models = {
-            "qwen3-35b-a3b" = {
-              name = "Qwen3 35B Local";
-            };
-          };
+          options = { baseURL = "http://127.0.0"; };
+          models = { "qwen3-35b-a3b" = { name = "Qwen3 35B Local"; }; };
         };
       };
       model = "local/qwen3-35b-a3b";
+      "$schema" = "https://kilo.ai";
 
-      # CORREÇÃO CIRÚRGICA: includePaths, systemPrompt e schema declarados na raiz da configuração
-      "$schema" = "https://app.kilo.ai/config.json";
-      
-      includePaths = [
-        "/home/nixos/projects"
-        "/home/nixos/projects/nixos-ai"
-        "/home/nixos/vaults/projects"
-      ];
-      
-      systemPrompt = ''
-        Você é o assistente oficial do ecossistema NixOS-AI. Você opera dentro de um monorepo localizado em /home/nixos/projects.
-        Antes de tomar qualquer decisão ou gerar código, contextualize-se obrigatoriamente lendo as diretrizes centrais nos arquivos:
-        - /home/nixos/projects/AGENTS.md
-        - /home/nixos/projects/BUFFY.md
-        - /home/nixos/projects/nixos-ai/AGENTS.md
-        - /home/nixos/projects/nixos-ai/BUFFY.md
-
-        Nossa documentação utiliza notas estruturadas com Obsidian Wikilinks no padrão [[Nome da Nota]]. Sempre que encontrar essa sintaxe, você deve mapear e resolver o link buscando o arquivo correspondente (.md) dentro do Vault localizado em /home/nixos/vaults/projects/ para se situar perfeitamente no ambiente.
-      '';
+      # CORREÇÃO CIRÚRGICA: O Kilo agora agrupa essas flags dentro do objeto 'workspace'
+      workspace = {
+        directories = [
+          "/home/nixos/projects"
+          "/home/nixos/projects/nixos-ai"
+          "/home/nixos/vaults/projects"
+        ];
+        instructions = ''
+          Você é o assistente oficial do ecossistema NixOS-AI. Você opera dentro de um monorepo localizado em /home/nixos/projects.
+          Antes de tomar qualquer decisão ou gerar código, contextualize-se obrigatoriamente seguindo o prompt de inicialização global do Workspace.
+        '';
+      };
     };
   };
 
