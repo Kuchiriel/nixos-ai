@@ -36,9 +36,11 @@
 - **TG médio sustentado: 71.6 t/s** (7.2x vs Qwen `fast`).
 - VRAM em repouso: 4071 MiB (pesos 2.15GB + KV 32K q4_0 ~1.2GB + buffers).
 - Qualidade: resposta PT-BR coerente ("NixOS é um sistema operacional...").
-- **Anomalia não explicada**: PP 743 no run 1, ~70 nos runs 2-5; prompt curto
-  isolado deu PP 813. TG estável em todos. Hipótese: variação de clock
-  (PP é compute-bound, TG é memory-bound). Requer follow-up, não bloqueia uso.
+- **Anomalia PP resolvida (2026-09-05)**: PP 743 no run 1 vs ~70 nos runs 2-5
+  **não era bug** — runs 2-3 acertaram o prompt cache do servidor
+  (`n_prompt=1`; PP=1 tok/latência ≈ 63 t/s). PP real: 829 t/s (24 toks),
+  813 t/s (prompt curto isolado), 1956 t/s no bench PP512. Cache de prompt
+  funcionando como projetado.
 
 ### CPU (`-ngl 0`): **travou** — abortado pelo operador. Sem número. Esperado:
 Q2_0 g64 no x86 sem kernels dedicados cai em fallback escalar.
@@ -75,6 +77,32 @@ Os 32 t/s do Qwen citados em notas antigas vieram de config `-ngl 45`
 que **crashava após o 1º request (OOM)** — documentado no próprio
 `models.nix` (profile `fast`). Config estável (`fast`, `-ngl 25`) entregava
 10–13.8 t/s. Comparação honesta: **71.6 vs ~10 t/s = 7.2x**.
+
+## 6. Auditoria de flags/VRAM (2026-09-05, follow-up)
+
+Flags ativas confirmadas via `ps`: `-c 32768 -t 8 -b 2048 -ub 512 -ngl 99
+-fa on -ctk q4_0 -ctv q4_0 --parallel 1` = exatamente o profile declarado.
+
+| Conta de VRAM (6GB = 6141 MiB) | MiB |
+|---|---|
+| Pesos Q2_0 (2.15 GiB) | ~2200 |
+| KV 32K q4_0 (36L × 8KV × 128d) | ~1200 |
+| Buffers compute/prefill | ~700 |
+| **Em uso (medido)** | **4071** |
+| Livre (margem p/ spikes de prefill) | ~2070 |
+
+Veredito: **flags já estão no near-optimal, sem rebuild adicional.**
+TG 71.6 t/s ≈ 154 GB/s — teto prático da banda do RTX 4050 (~192 GB/s
+teóricos); nenhum flag aumenta banda. `--parallel 1` maximiza o loop
+sequencial do agente. ctx 32K é o sweet spot: 64K caberia no papel
+(~5.3GB) mas arrisca OOM em prefill longo por ganho marginal.
+Os 2GB livres são margem de segurança, não desperdício.
+
+## 7. Decisão vision (follow-up)
+
+`observe_screen`/vision inoperante (sem mmproj p/ Bonsai; sem VRAM livre
+p/ encoder dedicado). Decisão: **aceitar text-only**; revisitar só com
+troca de motor. Registrado como limitação, não como bug.
 
 **Ver também:** [[../architecture/system-overview]] | [[../architecture/llama-cpp-tuning]]
 [[ncmoe-sweep]] | [[performance-evidence-audit]]
