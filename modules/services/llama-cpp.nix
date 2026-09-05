@@ -102,7 +102,7 @@ in {
         # de runtime via Environment — caminhos nix compostos aqui, estáveis
         # entre rebuilds (precedente: llama-wackmall-wrapper.sh).
         environment = optionalAttrs (prof ? wrapper && prof.wrapper != null) {
-          LD_LIBRARY_PATH = "/home/nixos/projects/prism-bin/llama-prism-b10660-e311ed3:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas}/lib:/run/opengl-driver/lib";
+          LD_LIBRARY_PATH = "/home/nixos/projects/prism-bin/llama-prism-b10660-e311ed3:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
         };
 
         script = ''
