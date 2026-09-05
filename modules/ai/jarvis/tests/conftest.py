@@ -12,6 +12,7 @@ Usage:
 """
 
 import os
+import shutil
 import pytest
 
 # Hard ignore: files that need git/filesystem/network and cannot run in Nix sandbox.
@@ -26,8 +27,13 @@ _INTEGRATION_FILES = [
 ]
 
 def pytest_collection_modifyitems(config, items):
-    """Skip integration tests in sandbox (no git, no network)."""
-    if os.environ.get("NIX_SANDBOX") or not os.path.exists("/proc/1/cmdline"):
+    """Skip integration tests when git is unavailable (Nix sandbox)."""
+    # Detect sandbox: no git binary or NIX_SANDBOX env var set
+    sandbox = (
+        os.environ.get("NIX_SANDBOX") is not None
+        or shutil.which("git") is None
+    )
+    if sandbox:
         items[:] = [
             i for i in items
             if not any(f in str(i.fspath) for f in _INTEGRATION_FILES)
