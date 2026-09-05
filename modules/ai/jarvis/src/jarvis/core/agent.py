@@ -303,7 +303,7 @@ class Agent:
     ):
         self.config = config or get_config()
         self.approval_callback = approval_callback
-        self.session = session
+        self.session = session or requests.Session()
         self.memory = memory
         self.approve = approve
         self.audit_path = audit_path
