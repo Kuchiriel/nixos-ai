@@ -11,6 +11,7 @@
     ./jarvis-telegram.nix
     ./jarvis-vault.nix
     ./jarvis-webui.nix
+    ./jarvis-webui-frontend.nix
     ./litellm-cascade.nix
     ./llama-cpp.nix
     ./llama-fan-control.nix
