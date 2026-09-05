@@ -31,7 +31,7 @@ in {
       profile = mkOption {
         type = types.enum [
           "vm" "host" "host-ncmoe35" "host-ehs" "host-ehs-optimized"
-          "roo-dev" "chat" "jarvis" "benchmark" "fast"
+          "roo-dev" "chat" "jarvis" "benchmark" "fast" "bonsai"
         ];
         default =
           if config.services.jarvis.environment == "host"
@@ -98,6 +98,12 @@ in {
         # PartOf jarvis.target: para junto com o ecossistema
         partOf = ["jarvis.target"];
         wantedBy = ["jarvis.target" "multi-user.target"];
+        # Perfis com wrapper (binário fora do nix store) precisam das libs
+        # de runtime via Environment — caminhos nix compostos aqui, estáveis
+        # entre rebuilds (precedente: llama-wackmall-wrapper.sh).
+        environment = optionalAttrs (prof ? wrapper && prof.wrapper != null) {
+          LD_LIBRARY_PATH = "/home/nixos/projects/prism-bin/llama-prism-b10660-e311ed3:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:/run/opengl-driver/lib";
+        };
 
         script = ''
           exec ${llamaBin} \

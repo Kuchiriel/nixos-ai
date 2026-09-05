@@ -84,6 +84,15 @@ in {
     sha256 = "sha256-NW36oxETdqT3Fl4y6HSXEzeNFwCzfPUuDFDZ8jMiM00=";
   };
 
+  # --- LLM Bonsai — Host (bare metal), motor ternário ---
+  # Ternary-Bonsai-8B Q2_0_g64 (Qwen3-8B denso ternário {-1,0,+1}, 2.15GiB).
+  # Requer fork PrismML (Q2_0 g64 fora do upstream; nixpkgs trava no load).
+  # Medido 2026-09-05 (prism llama-bench, RTX 4050): PP512 1956 t/s, TG128 76.7 t/s.
+  llm-bonsai = mkModel {
+    url = "https://huggingface.co/prism-ml/Ternary-Bonsai-8B-gguf/resolve/main/Ternary-Bonsai-8B-Q2_0_g64.gguf";
+    sha256 = "sha256-4XspjYTueHl5Fq5cLsyCEUacxlzM/jCAzZqbtQP7xV4=";
+  };
+
   # --- Embeddings (RAG) — nomic-embed-text-v2-moe Q8_0 (512MB) ---
   embed = mkModel {
     url = "https://huggingface.co/nomic-ai/nomic-embed-text-v2-moe-GGUF/resolve/main/nomic-embed-text-v2-moe.Q8_0.gguf";
@@ -250,6 +259,33 @@ in {
         "--no-warmup"
         "--jinja"
       ];
+    };
+
+    # ── Bonsai Profile ──
+    # Motor neural ternário (Qwen3-8B denso Q2_0 g64) via fork PrismML.
+    # Medido 2026-09-05 (prism llama-bench, RTX 4050 6GB): PP512 1956 t/s, TG128 76.7 t/s.
+    # Denso = full offload, sem MoE flags. 36 layers, 8 KV heads, head_dim 128:
+    # KV q4_0 ≈ 37KB/tok → 32K ctx ≈ 1.2GB; pesos 2.15GB; total ≈ 3.4GB < 6GB.
+    # Limitação conhecida: sem mmproj (text-only; observe_screen inoperante).
+    bonsai = {
+      model = "llm-bonsai";
+      mmproj = null;
+      gpuLayers = 99; # todas as 36 layers na GPU (denso, sem experts)
+      kvCache = "-fa on -ctk q4_0 -ctv q4_0";
+      threads = 8;
+      ctxSize = 32768;
+      batchSize = 2048;
+      ubatch = 512;
+      moeFlags = "";
+      wrapper = "llama-prism-wrapper";
+      extraArgs = [
+        "--parallel"
+        "1"
+        "--jinja"
+        "--no-warmup"
+      ];
+      user = "nixos";
+      scheduler = null;
     };
 
     # ── Legacy Profiles (mantidos para compatibilidade) ──
