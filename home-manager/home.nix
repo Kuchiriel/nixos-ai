@@ -84,7 +84,7 @@
   # JARVIS STT — Download declarativo do modelo faster-whisper-tiny.en
   # ══════════════════════════════════════════════════════════════
   home.file.".local/share/jarvis/voice/models--Systran--faster-whisper-tiny.en/snapshots/main/model.bin".source = pkgs.fetchurl {
-    url = "https://huggingface.co/Systran/faster-whisper-tiny.en/resolve/main/model.bin";
+    url = "https://huggingface.co";
     hash = "sha256-Glr64GpNuRyXXJqdeL5cwRDuTqAirVfVVJLkVQ6Tayo=";
   };
 
@@ -92,16 +92,34 @@
   # (extensões, userSettings, MCP, custom modes são declarativos)
   vscode-roo = {
     enable = true;
-    # tavilyApiKey agora é lido de /etc/jarvis-secrets/tavily.env (fora do git)
-    # githubToken = "";  # Desabilitado — adicione seu token para ativar
   };
 
- # Opcional: Se quiser criar apelidos rápidos para as ferramentas
+  # Aliases rápidos para as ferramentas de IA em nuvem
   home.shellAliases = {
-    kilo-chat = "kilo chat";
-    agy-danger = "agy --dangerously-skip-permissions"; # Pula as confirmações chatas de escrita do Antigravity
+    kilo = "opencode";
+    agy  = "antigravity-ide";
   };
 
+  # ══════════════════════════════════════════════════════════════
+  # CONFIGURAÇÃO DECLARATIVA DOS AGENTES CLOUD (KILO & ANTIGRAVITY)
+  # ══════════════════════════════════════════════════════════════
+
+  # 1. Configuração do Antigravity IDE (Settings do Usuário via XDG)
+  xdg.configFile."antigravity-ide/User/settings.json".text = builtins.toJSON {
+    "antigravity.agent.customInstructions" = ''
+      Você opera dentro de um monorepo localizado em /home/nixos/projects. Antes de sugerir alterações, contextualize-se obrigatoriamente lendo as diretrizes centrais nos arquivos:
+      - /home/nixos/projects/AGENTS.md
+      - /home/nixos/projects/BUFFY.md
+      - /home/nixos/projects/nixos-ai/AGENTS.md
+      - /home/nixos/projects/nixos-ai/BUFFY.md
+
+      Nossa documentação utiliza Obsidian Wikilinks no padrão [[Nome da Nota]]. Sempre que encontrar essa sintaxe, resolva o link buscando o arquivo .md correspondente dentro do Vault em /home/nixos/vaults/projects/ para se situar perfeitamente.
+    '';
+    "gemini.systemPrompt" = "Veja as diretrizes em antigravity.agent.customInstructions.";
+    "telemetry.telemetryLevel" = "off";
+  };
+
+  # 2. Módulo nativo do OpenCode com injeção de Contexto do Obsidian
   programs.opencode = {
     enable = true;
     package = inputs.opencode-flake.packages.${pkgs.system}.default;
@@ -111,7 +129,7 @@
         local = {
           npm = "@ai-sdk/openai-compatible";
           options = {
-            baseURL = "http://127.0.0.1:8080/v1";
+            baseURL = "http://127.0.0";
           };
           models = {
             "qwen3-35b-a3b" = {
@@ -121,9 +139,27 @@
         };
       };
       model = "local/qwen3-35b-a3b";
+
+      # Injeção automatizada para ler os caminhos do Monorepo e do Vault do Obsidian
+      project = {
+        includePaths = [
+          "/home/nixos/projects"
+          "/home/nixos/projects/nixos-ai"
+          "/home/nixos/vaults/projects"
+        ];
+        systemPrompt = ''
+          Você é o assistente oficial do ecossistema NixOS-AI. Você opera dentro de um monorepo localizado em /home/nixos/projects.
+          Antes de tomar qualquer decisão ou gerar código, contextualize-se obrigatoriamente lendo as diretrizes centrais nos arquivos:
+          - /home/nixos/projects/AGENTS.md
+          - /home/nixos/projects/BUFFY.md
+          - /home/nixos/projects/nixos-ai/AGENTS.md
+          - /home/nixos/projects/nixos-ai/BUFFY.md
+
+          Nossa documentação utiliza notas estruturadas com Obsidian Wikilinks no padrão [[Nome da Nota]]. Sempre que encontrar essa sintaxe, você deve mapear e resolver o link buscando o arquivo correspondente (.md) dentro do Vault localizado em /home/nixos/vaults/projects/ para se situar perfeitamente no ambiente.
+        '';
+      };
     };
   };
-
   # ══════════════════════════════════════════════════════════════
   # AIDER — Qwen3.6-35B-A3B via llama.cpp local
   # Uso: basta rodar `aider` (tudo nas configs abaixo)
