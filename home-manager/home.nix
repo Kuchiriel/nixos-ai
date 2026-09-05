@@ -85,7 +85,8 @@
   # ══════════════════════════════════════════════════════════════
   home.file.".local/share/jarvis/voice/models--Systran--faster-whisper-tiny.en/snapshots/main/model.bin".source = pkgs.fetchurl {
     url = "https://huggingface.co";
-    hash = "sha256-Glr64GpNuRyXXJqdeL5cwRDuTqAirVfVVJLkVQ6Tayo=";
+    # ATUALIZADO: Substituído pelo hash correto apontado pelo log do Nix
+    hash = "sha256-RNPNvS2++DhYGMDtE5nans36CII9kdDo/acqVxwx2Qs=";
   };
 
   # ── VS Code + Roo Code — configurado via módulo vscode-roo.nix ──
