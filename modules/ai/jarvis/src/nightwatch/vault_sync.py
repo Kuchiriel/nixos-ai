@@ -15,8 +15,8 @@ from pathlib import Path
 from typing import Any
 
 
-VAULT_DIR = Path.home() / "projects/nixos-ai/docs/vault"
-OBSIDIAN_VAULT = Path.home() / "vaults/nixos-ai"
+VAULT_DIR = Path.home() / "vaults/projects/nixos-ai"
+OBSIDIAN_VAULT = Path.home() / "vaults/projects/nixos-ai"
 
 
 def ensure_vault_dirs() -> None:

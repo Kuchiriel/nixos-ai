@@ -51,4 +51,7 @@
   extrai o bloco — base para o chunking por símbolo.
 
 ---
-**Ver também:** [[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]
+**Ver também:** [[mcp-integration]] | [[llama-cpp-tuning]] | [[slm-techniques]]
+[[pillar-diagnostic]] | [[ADR-002-memory-layers]] | [[context-engineering]]
+[[../benchmarks/performance-evidence-audit]] | [[system-overview]]
+[[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]

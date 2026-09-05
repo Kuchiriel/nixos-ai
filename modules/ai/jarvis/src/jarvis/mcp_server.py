@@ -794,7 +794,7 @@ def _vault_sync_to_obsidian() -> list[str]:
     from pathlib import Path
     import shutil
     
-    VAULT_DIR = Path.home() / "projects/nixos-ai/docs/vault"
+    VAULT_DIR = Path.home() / "vaults/projects/nixos-ai"
     OBSIDIAN_VAULT = Path.home() / "vaults/projects"
     
     VAULT_DIR.mkdir(parents=True, exist_ok=True)
@@ -825,7 +825,7 @@ def _vault_sync_to_hackmd() -> list[dict[str, Any]]:
     """Sync vault notes to HackMD."""
     from pathlib import Path
     
-    VAULT_DIR = Path.home() / "projects/nixos-ai/docs/vault"
+    VAULT_DIR = Path.home() / "vaults/projects/nixos-ai"
     VAULT_DIR.mkdir(parents=True, exist_ok=True)
     
     results = []
@@ -885,7 +885,7 @@ def _vault_status() -> dict[str, Any]:
     """Get vault sync status."""
     from pathlib import Path
     
-    VAULT_DIR = Path.home() / "projects/nixos-ai/docs/vault"
+    VAULT_DIR = Path.home() / "vaults/projects/nixos-ai"
     OBSIDIAN_VAULT = Path.home() / "vaults/projects"
     
     VAULT_DIR.mkdir(parents=True, exist_ok=True)

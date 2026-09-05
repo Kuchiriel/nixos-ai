@@ -338,3 +338,9 @@ Diagrama do pipeline real com apenas módulos que existem.
 7. Fase 10 (documentação)
 
 **Total estimado: 3-4 sessões de trabalho focado.**
+
+---
+**Ver também:** [[agent-harness]] | [[nightwatch-components]]
+[[ADR-001-agent-platform]] | [[../audit/current/FULL-REPO-AUDIT-2026-09-03]]
+[[../audit/current/SESSION-AUDIT-2026-09-04]]
+[[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]

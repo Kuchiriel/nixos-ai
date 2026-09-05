@@ -315,4 +315,7 @@ This shows poll=25 IS faster than poll=50! But the conclusion says "Default poll
 **⚠️ All raw data is in /tmp (ephemeral).** If reproducibility is needed, raw data should be copied to `docs/benchmarks/data/` before next reboot.
 
 ---
-**Ver também:** [[../../HANDOFF]] | [[../../AGENTS.md]] | [[architecture/llama-cpp-tuning]]
+**Ver também:** [[ncmoe-sweep]] | [[../architecture/llama-cpp-tuning]]
+[[../architecture/rag-improvements]] | [[../architecture/system-overview]]
+**Evidência BUFFY**: Este doc satisfaz LEVEL 4 do Evidence Ladder
+[[../../HANDOFF]] | [[../../AGENTS.md]]

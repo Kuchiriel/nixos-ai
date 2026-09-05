@@ -356,4 +356,7 @@ Stuck (>1h):     0
 | Context budget auto-detect | ⏳ Requer LLM |
 
 ---
-**Ver também:** [[../HANDOFF]] | [[../AGENTS.md]] | [[JARVIS-COMPARISON]] | [[GAP-ANALYSIS-2026-08-29]]
+**Ver também:** [[agent-harness]] | [[mission-consolidation]]
+[[../audit/current/SESSION-AUDIT-2026-09-04]] | [[../audit/current/FULL-REPO-AUDIT-2026-09-03]]
+[[ADR-001-agent-platform]] | [[context-engineering]]
+[[../../HANDOFF]] | [[../../AGENTS.md]] | [[jarvis-comparison]]

@@ -185,4 +185,7 @@ flowchart TB
 ```
 
 ---
-**Ver também:** [[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]
+**Ver também:** [[mcp-integration]] | [[agent-harness]] | [[rag-improvements]]
+[[context-engineering]] | [[llama-cpp-tuning]] | [[nightwatch-components]]
+[[ADR-001-agent-platform]] | [[ADR-002-memory-layers]]
+[[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]

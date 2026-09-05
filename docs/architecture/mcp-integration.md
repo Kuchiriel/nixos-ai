@@ -133,4 +133,6 @@ flowchart TB
 ```
 
 ---
-**Ver também:** [[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]
+**Ver também:** [[system-overview]] | [[agent-harness]] | [[rag-improvements]]
+[[context-engineering]] | [[ADR-001-agent-platform]]
+[[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]

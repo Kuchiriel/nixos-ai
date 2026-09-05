@@ -146,3 +146,9 @@ From Addy Osmani / Viv Trivedy:
 2. Define "done" criteria
 3. Run autonomous loop until done
 4. Verify deliverable works
+
+---
+**Contexto arquitetural:** [[../../architecture/agent-harness]] | [[../../architecture/nightwatch-components]]
+**Personas:** [[../../architecture/ADR-001-agent-platform]]
+**Missão:** [[../../architecture/mission-consolidation]]
+**Índice:** [[../INDEX]]

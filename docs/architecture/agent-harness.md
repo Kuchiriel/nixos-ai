@@ -153,4 +153,7 @@ flowchart TB
 ```
 
 ---
-**Ver também:** [[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]
+**Ver também:** [[nightwatch-components]] | [[mission-consolidation]]
+[[mcp-integration]] | [[context-engineering]] | [[ADR-001-agent-platform]]
+[[ADR-002-memory-layers]] | [[system-overview]]
+[[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]

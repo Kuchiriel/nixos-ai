@@ -163,4 +163,6 @@ host = {
 3. **`--load-mode none` vs `--load-mode mmap`** — A diferença de performance (14 vs 32 t/s) com mmproj na GPU sugere que o modo de carregamento afeta como o CUDA gerencia memória entre modelo e mmproj.
 
 ---
-**Ver também:** [[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]
+**Ver também:** [[slm-techniques]] | [[rag-improvements]] | [[system-overview]]
+[[../benchmarks/ncmoe-sweep]] | [[../benchmarks/performance-evidence-audit]]
+[[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]

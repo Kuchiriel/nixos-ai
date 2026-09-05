@@ -1,5 +1,9 @@
 # Control Plane Hardening Audit — 2026-09-03
 
+**Contexto arquitetural:** [[system-overview]] | [[mcp-integration]]
+**Estado anterior:** [[CONTROL-PLANE-AUDIT-2026-09-03]]
+**Missão associada:** [[mission-consolidation]]
+
 ## A. Buffy Audit
 
 ### Problems Found in Original BUFFY

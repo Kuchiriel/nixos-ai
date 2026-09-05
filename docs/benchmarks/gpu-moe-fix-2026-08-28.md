@@ -1,5 +1,9 @@
 # GPU Activation Fix — --cpu-moe Benchmark Results
 
+**Contexto:** [[llama-cpp-tuning]] | [[slm-techniques]]
+**Hardware:** [[system-overview]]
+**Sweep relacionado:** [[ncmoe-sweep]]
+
 **Date:** 2026-08-28
 **Hardware:** RTX 4050 Laptop 6GB, i7-13620H, 32GB RAM
 **Model:** Qwen3.6-35B-A3B Q4_K_M

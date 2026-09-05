@@ -1,5 +1,8 @@
 # FULL REPOSITORY AUDIT — 2026-09-03
 
+**Contexto:** [[mission-consolidation]] | [[NIGHTLOG]]
+**Benchmarks relacionados:** [[performance-evidence-audit]]
+
 ## 1. Executive Diagnosis
 
 The nixos-ai repository is a NixOS-based AI agent platform with 171 Python files, 88 Nix files, 19 Svelte components, and 296 TypeScript files. After the consolidation (9 modules archived), the codebase is significantly cleaner but still has structural gaps.

@@ -133,3 +133,9 @@ What's missing:
 - Command Palette
 - Notification center
 - Approval workflow
+
+---
+**Contexto arquitetural:** [[../../architecture/system-overview]] | [[../../architecture/mcp-integration]]
+**Estado de hardening:** [[CONTROL-PLANE-AUDIT-2026-09-03-HARDENING]]
+**Missão associada:** [[../../architecture/mission-consolidation]]
+**Índice:** [[../INDEX]]

@@ -221,4 +221,6 @@ No software optimization can overcome the 67°C thermal wall on this laptop.
 - Sustained test: `/tmp/sustained-results.log`
 
 ---
-**Ver também:** [[../../HANDOFF]] | [[../../AGENTS.md]] | [[architecture/llama-cpp-tuning]]
+**Ver também:** [[performance-evidence-audit]] | [[../architecture/llama-cpp-tuning]]
+[[../architecture/slm-techniques]] | [[../architecture/system-overview]]
+[[../../HANDOFF]] | [[../../AGENTS.md]]
