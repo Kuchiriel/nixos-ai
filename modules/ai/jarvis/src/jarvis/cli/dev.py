@@ -96,7 +96,7 @@ _SLASH_COMMANDS = [
     "/quit", "/status", "/clear", "/map", "/model",
     "/recall", "/architect", "/debug", "/help",
     "/reasoning", "/compact", "/vault", "/lessons",
-    "/modes", "/mode",
+    "/modes", "/mode", "/add", "/drop", "/undo",
 ]
 
 
@@ -163,6 +163,51 @@ def _print_recall() -> None:
         console.print(f"  [dim][{r.get('kind', '?')}][/] {r.get('text', '')[:100]}")
 
 
+EDIT_HISTORY: list[dict[str, Any]] = []
+PINNED_FILES: dict[str, str] = {}
+
+
+def _snapshot_file(path_str: str) -> str | None:
+    try:
+        from pathlib import Path as _P
+        p = _P(path_str)
+        if not p.is_absolute():
+            p = _P(os.getcwd()) / path_str
+        if p.exists():
+            return p.read_text(encoding="utf-8")
+    except Exception:
+        pass
+    return None
+
+
+def _pinned_section(max_chars: int = 8000) -> str:
+    if not PINNED_FILES:
+        return ""
+    parts = ["\nPINNED FILES (contexto explícito, autoritativo):"]
+    for p, c in PINNED_FILES.items():
+        parts.append(f"\n=== PINNED: {p} ===\n{c[:max_chars]}")
+    return "\n".join(parts)
+
+
+def _restore_edit(entry: dict[str, Any]) -> str:
+    from pathlib import Path as _P
+    from jarvis.core import devtools
+    path, prev = entry.get("path", "?"), entry.get("prev")
+    if prev is None:
+        try:
+            p = _P(path)
+            if not p.is_absolute():
+                p = _P(os.getcwd()) / path
+            p.unlink(missing_ok=True)
+            return f"🗑️  {path} removido (era arquivo criado)"
+        except Exception as e:
+            return f"ERROR: {e}"
+    res = devtools.write_file(path, prev)
+    if res.get("ok", False):
+        return f"↩️  {path} restaurado"
+    return f"ERROR: {res.get('error', '?')}"
+
+
 def _print_help() -> None:
     rows = [
         ("/quit", "sair"),
@@ -170,6 +215,9 @@ def _print_help() -> None:
         ("/compact", "compactar sessão (auto ao estourar)"),
         ("/status", "status do backend"),
         ("/map", "atualizar repo map"),
+        ("/add <path>", "fixar arquivo no contexto"),
+        ("/drop <path|--all>", "soltar arquivo do contexto"),
+        ("/undo", "desfazer última edição"),
         ("/model", "ver modelo atual"),
         ("/recall", "buscar memória episódica"),
         ("/lessons", "buscar lições aprendidas"),
@@ -1075,6 +1123,12 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
             except (EOFError, KeyboardInterrupt):
                 return "ERROR: approval denied (EOF)", None
 
+    # Snapshot prévio p/ /undo (só edições de arquivo)
+    _prev = None
+    _tracked = name in ("write_file", "str_replace") and isinstance(args.get("path"), str)
+    if _tracked:
+        _prev = _snapshot_file(args["path"])
+
     # Chama handle_dev_tool do devtools.py
     result_json = handle_dev_tool(name, args)
     try:
@@ -1089,6 +1143,10 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
         if hint:
             msg += f"\n{hint}"
         return msg, None
+
+    if _tracked:
+        EDIT_HISTORY.append({"path": args["path"], "prev": _prev})
+        del EDIT_HISTORY[:-20]
 
     # Extrai diff do resultado do str_replace
     diff = result.pop("diff", None)
@@ -1770,7 +1828,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
 
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context()
-    agent_ctx = _load_agent_context(os.getcwd())
+    agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
     system_prompt = _maybe_disable_thinking(
         SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx)
     )
@@ -1812,7 +1870,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
         if user_input == "/clear":
             repo_map = _build_repo_map(os.getcwd())
             memory_ctx = _build_memory_context()
-            agent_ctx = _load_agent_context(os.getcwd())
+            agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
             system_prompt = _maybe_disable_thinking(
                 SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx)
             )
@@ -1841,7 +1899,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
         if user_input == "/map":
             repo_map = _build_repo_map(os.getcwd())
             memory_ctx = _build_memory_context()
-            agent_ctx = _load_agent_context(os.getcwd())
+            agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
             system_prompt = _maybe_disable_thinking(
                 SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx)
             )
@@ -1851,6 +1909,49 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
 
         if user_input == "/model":
             console.print(f"[dim]{active_model} · {mode}[/]")
+            continue
+
+        if user_input == "/undo":
+            if not EDIT_HISTORY:
+                console.print("[dim]nada a desfazer[/]")
+            else:
+                console.print(f"[dim]{_restore_edit(EDIT_HISTORY.pop())}[/]")
+            continue
+
+        if user_input.startswith("/add "):
+            target = user_input.split(" ", 1)[1].strip()
+            if len(PINNED_FILES) >= 5:
+                console.print("[tool.error]máx 5 arquivos fixados (use /drop)[/]")
+            else:
+                content = _snapshot_file(target)
+                if content is None:
+                    console.print(f"[tool.error]arquivo não encontrado: {target}[/]")
+                else:
+                    PINNED_FILES[target] = content
+                    repo_map = _build_repo_map(os.getcwd())
+                    memory_ctx = _build_memory_context()
+                    agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section() + _pinned_section()
+                    messages[0] = {"role": "system", "content": _maybe_disable_thinking(
+                        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx))}
+                    console.print(f"[dim]📌 {target} fixado ({len(content)} chars)[/]")
+            continue
+
+        if user_input == "/drop" or user_input.startswith("/drop "):
+            arg = user_input[5:].strip()
+            if arg in ("--all", "") and (arg == "--all" or not PINNED_FILES):
+                PINNED_FILES.clear()
+            elif arg:
+                PINNED_FILES.pop(arg, None)
+            else:
+                console.print("[tool.error]use: /drop <path> | /drop --all[/]")
+                continue
+            repo_map = _build_repo_map(os.getcwd())
+            memory_ctx = _build_memory_context()
+            agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section() + _pinned_section()
+            messages[0] = {"role": "system", "content": _maybe_disable_thinking(
+                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx))}
+            left = ", ".join(PINNED_FILES) or "nenhum"
+            console.print(f"[dim]fixados: {left}[/]")
             continue
 
         if user_input == "/recall":
@@ -2142,7 +2243,7 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
 
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context(task)
-    agent_ctx = _load_agent_context(os.getcwd())
+    agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
     system_prompt = _maybe_disable_thinking(
         SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx)
     )
@@ -2189,7 +2290,7 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
 
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context(task)
-    agent_ctx = _load_agent_context(os.getcwd())
+    agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
     system_prompt = _maybe_disable_thinking(
         SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx)
     )
