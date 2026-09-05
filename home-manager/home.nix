@@ -160,16 +160,17 @@
       model = "local/bonsai-8b";
 
       # MCP Jarvis: RAG, memória, vault, files, shell, nix — via stdio.
-      # Handshake validado (tools/list retorna 20 tools).
+      # Handshake validado (tools/list retorna 20 tools). Env inline no
+      # bash -c porque o campo environment nem sempre é repassado.
       mcp = {
         jarvis = {
           type = "local";
-          command = [ "/etc/profiles/per-user/nixos/bin/python3" "-m" "jarvis.mcp_server" ];
+          command = [ "bash" "-c" "cd /home/nixos/projects/nixos-ai && PYTHONPATH=modules/ai/jarvis/src JARVIS_PROJECT_ROOT=/home/nixos/projects/nixos-ai exec /etc/profiles/per-user/nixos/bin/python3 -m jarvis.mcp_server" ];
           cwd = "/home/nixos/projects/nixos-ai";
-          environment = {
-            PYTHONPATH = "/home/nixos/projects/nixos-ai/modules/ai/jarvis/src";
-            JARVIS_PROJECT_ROOT = "/home/nixos/projects/nixos-ai";
-          };
+          enabled = true;
+          timeout = 30000;
+        };
+      };
           enabled = true;
           timeout = 30000;
         };

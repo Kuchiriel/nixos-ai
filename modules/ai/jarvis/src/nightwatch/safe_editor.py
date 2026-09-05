@@ -73,8 +73,16 @@ def strip_markdown_fences(content: str) -> str:
     - ```python ... ```
     - ```` ... ````
     - nested: ```` ```python ... ``` ````
+
+    Only fence lines are removed — surrounding whitespace (incl. trailing
+    newline) is preserved byte-for-byte for editor exactness.
     """
-    lines = content.strip().split("\n")
+    lines = content.split("\n")
+    # Drop the single trailing "" produced by a final newline (not content),
+    # re-added at the end.
+    trailing_nl = bool(lines) and lines[-1] == ""
+    if trailing_nl:
+        lines = lines[:-1]
     if not lines:
         return content
     
@@ -85,8 +93,9 @@ def strip_markdown_fences(content: str) -> str:
     # Strip closing fence(s)
     while lines and lines[-1].strip().startswith("```"):
         lines = lines[:-1]
-    
-    return "\n".join(lines)
+
+    result = "\n".join(lines)
+    return result + ("\n" if trailing_nl else "")
 
 
 def validate_python(content: str) -> tuple[bool, list[str], list[str]]:
@@ -311,15 +320,16 @@ class SafeEditor:
             if not valid:
                 return False, all_errors, all_warnings
         
-        # Size checks against original
-        if original:
+        # Size checks against original (exempt tiny files — a 1-line fix
+        # on a 26-char file is not "truncation").
+        if original and len(original) > 100:
             orig_size = len(original)
             new_size = len(content)
-            
+
             if new_size < orig_size * 0.3:
                 all_errors.append(f"File shrunk too much: {orig_size} -> {new_size} ({new_size/orig_size:.0%})")
                 return False, all_errors, all_warnings
-            
+
             if new_size > orig_size * 3:
                 all_warnings.append(f"File grew significantly: {orig_size} -> {new_size} ({new_size/orig_size:.0%})")
             

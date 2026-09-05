@@ -506,6 +506,25 @@ def _cmd_regression(args: argparse.Namespace) -> int:
     return main_regression(argv)
 
 
+def _cmd_pause(args: argparse.Namespace) -> int:
+    from nightwatch.pause import pause
+    reason = args.reason or "manual"
+    pause(reason)
+    print(f"paused: {reason}")
+    return 0
+
+
+def _cmd_resume(_args: argparse.Namespace) -> int:
+    from nightwatch.pause import is_paused, resume
+    paused, why = is_paused()
+    if paused:
+        resume()
+        print(f"resumed (was: {why})")
+    else:
+        print("not paused")
+    return 0
+
+
 def _cmd_heal(args: argparse.Namespace) -> int:
     from jarvis.core.heal import main_heal
 
@@ -871,6 +890,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_heal.add_argument("--no-alerts", action="store_true", help="não notifica o usuário (notify-send/som)")
     p_heal.add_argument("--json", action="store_true", help="saída JSON pura")
     p_heal.set_defaults(func=_cmd_heal)
+    p_pause = sub.add_parser("pause", help="pausa o harness autônomo (sinal global p/ IDEs/CLIs/IAs)")
+    p_pause.add_argument("reason", nargs="?", default="manual", help="motivo do pause")
+    p_pause.set_defaults(func=_cmd_pause)
+    p_resume = sub.add_parser("resume", help="retoma o harness autônomo")
+    p_resume.set_defaults(func=_cmd_resume)
 
     p_emotion = sub.add_parser("emotion", help="detecta emoção de um texto (keywords, zero LLM — prosódia do TTS)")
     p_emotion.add_argument("text", nargs="*", help="texto para detectar; sem texto, mostra o estado atual")

@@ -141,14 +141,17 @@ in {
         '';
         serviceConfig = {
           User = "nixos";
+          Restart = "on-failure";
           # ── Sandboxing ──
           ProtectSystem = "strict";       # /usr e /boot read-only
           PrivateTmp = true;                # /tmp privado
           NoNewPrivileges = true;           # Sem escalada de privilégio
           RestrictSUIDSGID = true;          # Sem arquivos SUID/SGID
           # ── Resource limits ──
-          MemoryMax = "512M";               # Max 512MB RAM
-          TasksMax = 32;                    # Max 32 tasks
+          # Embeddings OOM-killed 2x em 2026-09-05 com 512M (mmap 42G
+          # virtual no compute buffer). 2G comporta modelo + buffers.
+          MemoryMax = "2G";               # Max 2GB RAM (model 512MB + buffers)
+          TasksMax = 32;                  # Max 32 tasks
         };
       };
 

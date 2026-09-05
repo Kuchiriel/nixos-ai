@@ -124,7 +124,7 @@
             bind:value={argsJson} 
             rows="5" 
             class="json-textarea"
-            placeholder='JSON args (ex: {} or {"query": "search text"})'
+            placeholder={'Enter JSON arguments (e.g. {"query": "search text"})'}
           ></textarea>
 
           {#if selectedTool.write}

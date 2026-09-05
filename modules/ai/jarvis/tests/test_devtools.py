@@ -86,9 +86,9 @@ def test_write_file_overwrite_with_backup() -> None:
     result = write_file(str(f), "new content")
     assert result["ok"] is True
     assert f.read_text() == "new content"
-    bak = f.with_suffix(".py.bak")
-    assert bak.exists()
-    assert bak.read_text() == "old content"
+    # Backup centralizado (SafeEditor), não mais .bak ao lado do arquivo
+    assert result["backup"] is not None
+    assert Path(result["backup"]).read_text() == "old content"
 
 
 def test_write_file_creates_dirs() -> None:

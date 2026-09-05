@@ -1070,6 +1070,17 @@ class Harness:
             self.notify(f"⏰ *Task Timeout*\n{task.description[:50]}")
             return False
 
+        # Global pause gate: any IDE/CLI/AI (or the watchdog on memory
+        # pressure) can defer autonomous work via the PAUSED flag file.
+        # Deferred, not failed — no attempts consumed.
+        from nightwatch.pause import is_paused
+        _paused, _why = is_paused()
+        if _paused:
+            task.skip(f"paused: {_why}")
+            self.notify(f"⏸️ *Task Paused*\n{task.description[:80]}\n{_why}")
+            self._emit("task_paused", task_id=task.id, reason=_why)
+            return False
+
         # Create checkpoint
         cp = create_checkpoint_for_task(task.id, task.description, self.config.project)
 

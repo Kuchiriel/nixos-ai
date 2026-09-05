@@ -341,6 +341,43 @@ def auto_heal(service: str) -> bool:
 
 # �══ Main Loop ═══
 
+def check_memory_pressure() -> list[dict]:
+    """PSI-based pressure guard. Sets/clears the global pause flag.
+
+    Critical → pause(origin=watchdog) + alert. Recovery → resume, but
+    ONLY flags set by the watchdog; manual pauses are never auto-cleared.
+    """
+    from nightwatch.pause import check_pressure, is_paused, pause, resume
+    alerts = []
+    try:
+        st = check_pressure()
+    except Exception:
+        return alerts
+    if st["level"] == "critical":
+        paused, _ = is_paused()
+        if not paused:
+            pause(st["reason"], origin="watchdog")
+        alerts.append({
+            "severity": "critical",
+            "component": "pressure",
+            "type": "pressure",
+            "message": f"Memory pressure CRITICAL: {st['reason']} — harness paused",
+            "speak": "Warning. Memory pressure critical. Autonomous tasks paused.",
+            "pause_signal": True,
+        })
+    elif st["level"] == "ok":
+        paused, why = is_paused()
+        if paused and why.startswith("watchdog:"):
+            resume()
+            alerts.append({
+                "severity": "info",
+                "component": "pressure",
+                "type": "pressure",
+                "message": "Memory pressure recovered — harness resumed",
+            })
+    return alerts
+
+
 def watchdog_cycle() -> dict[str, Any]:
     """Run one watchdog cycle. Returns summary of actions taken."""
     cycle_start = time.time()
@@ -350,6 +387,7 @@ def watchdog_cycle() -> dict[str, Any]:
     # Run all checks
     all_alerts.extend(check_gpu())
     all_alerts.extend(check_ram())
+    all_alerts.extend(check_memory_pressure())
     all_alerts.extend(check_disk())
     all_alerts.extend(check_services())
 

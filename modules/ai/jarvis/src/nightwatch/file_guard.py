@@ -221,8 +221,9 @@ def apply_with_guard(
             return False, import_check
         validation.warnings.extend(import_check.warnings)
     
-    # 4. Check file size (prevent truncation)
-    if baseline_content:
+    # 4. Check file size (prevent truncation; tiny files exempt —
+    # a 1-line fix on a 26-char file is not "truncation").
+    if baseline_content and len(baseline_content) > 100:
         if len(new_content) < len(baseline_content) * 0.3:
             validation.errors.append(f"File shrunk too much: {len(baseline_content)} -> {len(new_content)}")
             return False, validation
