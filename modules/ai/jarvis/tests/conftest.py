@@ -2,7 +2,7 @@
 
 P8: Separates tests into categories:
 - Unit tests: run in Nix sandbox (no external deps)
-- Integration tests: need LLM server, Qdrant, network, etc.
+- Integration tests: need LLM server, Qdrant, network, git, etc.
 - E2E tests: need full environment (LLM + git + filesystem)
 
 Usage:
@@ -11,14 +11,33 @@ Usage:
     pytest                       # everything
 """
 
+import os
 import pytest
 
+# Hard ignore: files that need git/filesystem/network and cannot run in Nix sandbox.
+# These have pytestmark = pytest.mark.integration but the marker filter
+# sometimes fails in the sandbox, so we also exclude by filename.
+_INTEGRATION_FILES = [
+    "test_harness_e2e.py",
+    "test_nightwatch_e2e_full.py",
+    "test_nightwatch_project_isolation.py",
+    "test_nightwatch_safety.py",
+    "test_longrun_e2e.py",
+]
+
+def pytest_collection_modifyitems(config, items):
+    """Skip integration tests in sandbox (no git, no network)."""
+    if os.environ.get("NIX_SANDBOX") or not os.path.exists("/proc/1/cmdline"):
+        items[:] = [
+            i for i in items
+            if not any(f in str(i.fspath) for f in _INTEGRATION_FILES)
+        ]
 
 def pytest_configure(config):
     """Register custom markers."""
     config.addinivalue_line(
         "markers",
-        "integration: tests that need external services (LLM, Qdrant, network)",
+        "integration: tests that need external services (LLM, Qdrant, network, git)",
     )
     config.addinivalue_line(
         "markers",
