@@ -23,7 +23,11 @@ _INTEGRATION_FILES = [
     "test_nightwatch_e2e_full.py",
     "test_nightwatch_project_isolation.py",
     "test_nightwatch_safety.py",
+    "test_nightwatch_real_e2e.py",
     "test_longrun_e2e.py",
+    "test_platform_e2e.py",
+    "test_p3_fail_persistence.py",
+    "test_p5_state_machine.py",
 ]
 
 def pytest_collection_modifyitems(config, items):
