@@ -898,7 +898,6 @@ def _vault_status() -> dict[str, Any]:
     
     return {
         "local_vault": str(VAULT_DIR),
-        "local_vault": str(VAULT_DIR),
         "obsidian_vault": str(OBSIDIAN_VAULT),
         "local_count": len(local_notes),
         "obsidian_count": len(obsidian_notes),
