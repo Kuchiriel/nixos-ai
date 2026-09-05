@@ -171,10 +171,6 @@
           timeout = 30000;
         };
       };
-          enabled = true;
-          timeout = 30000;
-        };
-      };
     };
   };
 
