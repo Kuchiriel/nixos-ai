@@ -1,4 +1,12 @@
-const API_BASE = 'http://127.0.0.1:8090/api';
+const getApiBase = (): string => {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname || '127.0.0.1';
+    return `${window.location.protocol}//${host}:8090/api`;
+  }
+  return 'http://127.0.0.1:8090/api';
+};
+
+const API_BASE = getApiBase();
 
 export interface SystemStatus {
   state: Record<string, Record<string, any>>;
@@ -171,6 +179,9 @@ export function connectSSE(
   onError?: (err: Event) => void
 ): EventSource {
   const es = new EventSource(`${API_BASE}/events/stream`);
+  es.onopen = () => {
+    onStateChange({ type: 'sse_connected' });
+  };
   es.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);

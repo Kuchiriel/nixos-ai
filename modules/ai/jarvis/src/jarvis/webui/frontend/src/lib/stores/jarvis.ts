@@ -55,8 +55,10 @@ export async function loadAll() {
     commands.set(c);
     services.set(svc);
     state.set(s.state);
+    connected.set(true);
   } catch (e: any) {
     error.set(e.message);
+    connected.set(false);
   } finally {
     loading.set(false);
   }

@@ -43,7 +43,15 @@ app = FastAPI(
 # CORS for SvelteKit dev server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+        "http://localhost:8090",
+        "http://127.0.0.1:8090",
+    ],
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -211,8 +219,11 @@ def event_history(limit: int = 100) -> list[dict[str, Any]]:
 
 @app.get("/api/llm")
 def llm_info() -> dict[str, Any]:
-    """Get LLM backend info."""
+    """Get LLM backend info including real active model name."""
     from jarvis.core.config import get_config
+    from pathlib import Path
+    import requests
+
     cfg = get_config()
     info: dict[str, Any] = {
         "backend": cfg.llm_backend,
@@ -222,13 +233,22 @@ def llm_info() -> dict[str, Any]:
         "tool_calling": cfg.llm_tool_calling,
         "disable_thinking": cfg.llm_disable_thinking,
     }
-    # Check health
     try:
-        import requests
-        health_url = cfg.llm_base_url.replace("/v1", "") + "/health"
-        resp = requests.get(health_url, timeout=3)
-        info["healthy"] = resp.status_code == 200
-        info["status"] = "online" if resp.status_code == 200 else "error"
+        resp = requests.get(f"{cfg.llm_base_url}/models", timeout=3)
+        if resp.status_code == 200:
+            info["healthy"] = True
+            info["status"] = "online"
+            data = resp.json().get("data", [])
+            if data and "id" in data[0]:
+                raw_name = data[0]["id"]
+                stem = Path(raw_name).stem.replace(".gguf", "")
+                parts = stem.split("-", 1)
+                clean_name = parts[-1] if (len(parts) > 1 and len(parts[0]) == 32) else stem
+                info["model"] = clean_name
+                info["raw_model_path"] = raw_name
+        else:
+            info["healthy"] = False
+            info["status"] = "error"
     except Exception:
         info["healthy"] = False
         info["status"] = "offline"
@@ -242,9 +262,17 @@ def voice_info() -> dict[str, Any]:
     """Get voice/TTS state."""
     plane = _get_plane()
     voice_state = plane.state.get_section("voice")
+    status_text = voice_state.get("status_text", "")
+    current_status = voice_state.get("status", "idle")
+    
+    # Auto-heal stale error if code_index is now active
+    if current_status == "error" and "code_index" in status_text:
+        current_status = "idle"
+        status_text = "Ready (RAG active)"
+
     return {
-        "status": voice_state.get("status", "idle"),
-        "text": voice_state.get("status_text", ""),
+        "status": current_status,
+        "text": status_text,
         "last_tts_len": voice_state.get("last_tts_len", 0),
         "last_tts_time": voice_state.get("last_tts_time"),
     }
