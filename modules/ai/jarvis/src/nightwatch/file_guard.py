@@ -222,13 +222,18 @@ def apply_with_guard(
         validation.warnings.extend(import_check.warnings)
     
     # 4. Check file size (prevent truncation; tiny files exempt —
-    # a 1-line fix on a 26-char file is not "truncation").
-    if baseline_content and len(baseline_content) > 100:
-        if len(new_content) < len(baseline_content) * 0.3:
-            validation.errors.append(f"File shrunk too much: {len(baseline_content)} -> {len(new_content)}")
+    # a 1-line fix on a 26-char file is not "truncation", but emptying
+    # any file is always rejected).
+    if baseline_content:
+        if not new_content.strip():
+            validation.errors.append("New content is empty")
             return False, validation
-        if len(new_content) > len(baseline_content) * 3:
-            validation.warnings.append(f"File grew significantly: {len(baseline_content)} -> {len(new_content)}")
+        if len(baseline_content) > 100:
+            if len(new_content) < len(baseline_content) * 0.3:
+                validation.errors.append(f"File shrunk too much: {len(baseline_content)} -> {len(new_content)}")
+                return False, validation
+            if len(new_content) > len(baseline_content) * 3:
+                validation.warnings.append(f"File grew significantly: {len(baseline_content)} -> {len(new_content)}")
     
     # 5. Apply the change
     try:

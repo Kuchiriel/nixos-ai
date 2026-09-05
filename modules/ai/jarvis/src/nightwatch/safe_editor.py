@@ -261,8 +261,16 @@ class SafeEditor:
     """Safe file editor with atomic writes and validation."""
     
     def __init__(self, backup_dir: Path | None = None):
-        self.backup_dir = backup_dir or BACKUP_DIR
-        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        if backup_dir is not None:
+            self.backup_dir = backup_dir
+        else:
+            self.backup_dir = BACKUP_DIR
+        try:
+            self.backup_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            fallback = Path(tempfile.gettempdir()) / "jarvis-backups"
+            fallback.mkdir(parents=True, exist_ok=True)
+            self.backup_dir = fallback
     
     def create_backup(self, path: Path) -> Path:
         """Create a timestamped backup of a file."""
@@ -320,18 +328,23 @@ class SafeEditor:
             if not valid:
                 return False, all_errors, all_warnings
         
-        # Size checks against original (exempt tiny files — a 1-line fix
+        # Size checks against original. Emptying a file is always
+        # rejected; tiny files are exempt from the ratio (a 1-line fix
         # on a 26-char file is not "truncation").
-        if original and len(original) > 100:
-            orig_size = len(original)
-            new_size = len(content)
-
-            if new_size < orig_size * 0.3:
-                all_errors.append(f"File shrunk too much: {orig_size} -> {new_size} ({new_size/orig_size:.0%})")
+        if original:
+            if not content.strip():
+                all_errors.append(f"New content is empty (original had {len(original)} chars)")
                 return False, all_errors, all_warnings
+            if len(original) > 100:
+                orig_size = len(original)
+                new_size = len(content)
 
-            if new_size > orig_size * 3:
-                all_warnings.append(f"File grew significantly: {orig_size} -> {new_size} ({new_size/orig_size:.0%})")
+                if new_size < orig_size * 0.3:
+                    all_errors.append(f"File shrunk too much: {orig_size} -> {new_size} ({new_size/orig_size:.0%})")
+                    return False, all_errors, all_warnings
+
+                if new_size > orig_size * 3:
+                    all_warnings.append(f"File grew significantly: {orig_size} -> {new_size} ({new_size/orig_size:.0%})")
             
             # Import integrity for Python
             if lang == "python":
