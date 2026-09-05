@@ -75,7 +75,7 @@ scripts/                # Scripts auxiliares
 
 ## Estado do sistema
 
-- Modelo: Qwen3.6-35B-A3B Q4_K_M, ngl=99, ncmoe=36, ctx=32K
+- Modelo: Ternary-Bonsai-8B Q2_0_g64, ngl=99, ctx=32K (medido 2026-09-05: TG 71.6 t/s; ver docs/benchmarks/bonsai-vs-qwen-2026-09-05.md)
 - Serviços: llama-server (8080), embeddings (8081), rerank (8082), qdrant (6333)
 - Roo Dev: VSCodium + Roo Code, MCP servers ativos:
   - `jarvis` — shell, file ops, vision, nix eval, chatgpt reader
