@@ -86,3 +86,4 @@ scripts/                # Scripts auxiliares
   - `playwright` — browser automation
 
 > ⚠️ Este arquivo deve ter <150 linhas. Regras detalhadas ficam em `.roomodes`.
+- When patching files, the old_text must be an EXACT substring of the file content. Read the file first, then use the exact text.

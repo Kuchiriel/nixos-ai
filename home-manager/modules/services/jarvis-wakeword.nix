@@ -78,7 +78,7 @@ let
       flakeIgnore = ["E501" "E231" "E226" "F541"];
       # libraries espera pacotes (ou função), não um env pronto — passar o env
       # resultava em PYTHONPATH vazio (import numpy falhava em runtime)
-      libraries = ps: with ps; [numpy];
+      libraries = ps: with ps; [numpy, onnxruntime];
     } ''
       import glob
       import json
@@ -100,6 +100,9 @@ let
         else "False"
       }
       BRAIN_CMD = ${builtins.toJSON brainCmd}
+      WW_SCORER = ${../../../modules/ai/ww_scorer.py};
+      OWW_MODELS = "$HOME/.local/share/openwakeword";
+      WW_THRESHOLD = "0.5";
       STARTUP_SOUND = "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/service-login.oga"
       BEEP_SOUND = "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/message-new-instant.oga"
 
@@ -317,7 +320,30 @@ let
                       speech_frames = []
 
                       if BRAIN_CMD:
-                          # Pre-check: run STT first, skip if no speech detected
+                          # 1. Scorer hey_jarvis (ONNX, barato) ANTES do STT:
+                          # ruído/TV é descartado aqui, sem 40s de CPU.
+                          try:
+                              import sys as _sys
+                              _score = subprocess.run(
+                                  [_sys.executable, WW_SCORER, "--models",
+                                   os.path.expanduser(OWW_MODELS),
+                                   "--wav", temp_wav,
+                                   "--threshold", WW_THRESHOLD],
+                                  capture_output=True, text=True, timeout=60,
+                              )
+                              print(f"[WW] 🎯 {(_score.stdout or '').strip()}", flush=True)
+                              if _score.returncode != 0:
+                                  print(f"[WW] 🔇 wakeword rejeitado, ignorando", flush=True)
+                                  update_status("idle", "󰆪 Aguardando...")
+                                  arecord_proc.terminate()
+                                  time.sleep(0.5)
+                                  arecord_proc = start_arecord()
+                                  continue
+                              print(f"[WW] 🫡 Hey Jarvis confirmado", flush=True)
+                              _play_ack()
+                          except Exception as _ww_err:
+                              print(f"[WW] ⚠️ scorer falhou: {_ww_err}, seguindo p/ STT", flush=True)
+                          # 2. Pre-check: run STT, skip if no speech detected
                           try:
                               import shutil as _shutil
                               # Quick STT check
@@ -337,18 +363,6 @@ let
                                   arecord_proc = start_arecord()
                                   continue
                               print(f"[WW] 🗣️ STT detected: '{_stt_text[:80]}'", flush=True)
-                              # Wakeword gate: sem "jarvis" no texto, descarta
-                              # em silêncio (sem beep/TTS/brain). Ventoinha e
-                              # TV não viram conversa.
-                              if "jarvis" not in _stt_text.lower():
-                                  print(f"[WW] 🔇 sem wakeword, ignorando", flush=True)
-                                  update_status("idle", "󰆪 Aguardando...")
-                                  arecord_proc.terminate()
-                                  time.sleep(0.5)
-                                  arecord_proc = start_arecord()
-                                  continue
-                              print(f"[WW] 🫡 Hey Jarvis confirmado", flush=True)
-                              _play_ack()
                           except Exception as _stt_err:
                               print(f"[WW] ⚠️ STT pre-check failed: {_stt_err}", flush=True)
 
