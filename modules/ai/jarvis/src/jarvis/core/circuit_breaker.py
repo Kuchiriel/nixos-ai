@@ -10,9 +10,13 @@ Fallback remoto:
   - Só aceita prompts SEM dados sensíveis (filtro de segurança)
   - Logs de cada decisão (local/remote) para auditoria
 
-POLÍTICA DE EGRESS:
-  - Dados sensíveis (memórias episódicas, RAG, contexto privado) NUNCA saem
-  - Filtro por keywords e padrões (ex: "recall", "remember", "vault", paths)
+POLÍTICA DE EGRESS (MISSÃO 1 — P0):
+  - TODA saída para nuvem passa obrigatoriamente pelo ContentSafetyFilter,
+    inclusive o caminho _try_local() → _try_fallback() (choke point único).
+  - Classificação por sensibilidade: SECRET > CONFIDENTIAL > INTERNAL > PUBLIC.
+    SECRET/CONFIDENTIAL/INTERNAL NUNCA saem sem sanitização explícita.
+  - Se o prompt violar, o fallback é bloqueado e um erro local controlado
+    é retornado — nunca o contexto bruto.
   - Usuário pode forçar modo local (/force_local)
 """
 
@@ -33,7 +37,48 @@ class CircuitState(str, Enum):
     HALF_OPEN = "half_open"  # testando se local voltou
 
 
-# Keywords que indicam dados sensíveis — NUNCA devem ir para fallback remoto
+class DataClass(str, Enum):
+    """Classes de sensibilidade — ordem = severidade (MISSÃO 1)."""
+    PUBLIC = "public"              # pode sair para nuvem
+    INTERNAL = "internal"          # só com sanitização explícita
+    CONFIDENTIAL = "confidential"  # nunca sai (memória episódica, PII)
+    SECRET = "secret"              # nunca sai (chaves, tokens, credenciais)
+
+
+# Valor sensível real (não keyword): API keys, tokens, senhas, chaves privadas.
+# Detecta o SEGREDO em si, mesmo sem a palavra "password" por perto.
+SECRET_REGEXES: tuple[str, ...] = (
+    r"sk-[A-Za-z0-9\-_]{8,}",                       # OpenAI/OpenRouter
+    r"gsk_[A-Za-z0-9]{8,}",                         # Groq
+    r"xox[bap]-[A-Za-z0-9\-]+",                     # Slack
+    r"AKIA[0-9A-Z]{16}",                            # AWS
+    r"gh[pousr]_[A-Za-z0-9]{8,}",                   # GitHub
+    r"hf_[A-Za-z0-9]{8,}",                          # HuggingFace
+    r"csk-[A-Za-z0-9\-_]{8,}",                      # Cerebras
+    r"nvapi-[A-Za-z0-9\-_]{8,}",                    # NVIDIA
+    r"-----BEGIN [A-Z ]*PRIVATE KEY-----",          # PEM
+    r"(?i)(api[_-]?key|api[_-]?token|secret[_-]?key|client[_-]?secret)\s*[:=]\s*\S+",
+    r"(?i)\bpassword\b\s*[:=]\s*\S+",
+    r"(?i)\bsenha\b\s*[:=]\s*\S+",
+    r"(?i)bearer\s+[A-Za-z0-9\-._~+/]+=*",
+    r"(?i)telegram[_-]?bot[_-]?token\s*[:=]?\s*\d+:[A-Za-z0-9\-_]+",
+    r"(?i)(/etc/shadow|~\/\.ssh\/id_|\.pem\b|credentials\.json|secrets\.ya?ml)",
+)
+
+# Marcadores de contexto confidencial (memória episódica, PII, home).
+CONFIDENTIAL_PATTERNS: tuple[str, ...] = (
+    "recall", "remember", "vault", "memória", "memoria", "episódica",
+    "episodica", "lesson", "lição", "fato pessoal", "minhas memórias",
+    "/home/", "telegram",
+)
+
+# Marcadores internos (infraestrutura, não-PII).
+INTERNAL_PATTERNS: tuple[str, ...] = (
+    "/etc/", "ssh", "private", "privado", "credential", "secret",
+    "token", "api_key", "password", "senha", "internal",
+)
+
+# Compat: keywords legadas (mantido para testes existentes).
 SENSITIVE_PATTERNS: tuple[str, ...] = (
     "recall", "remember", "vault", "memória", "memoria", "episódica",
     "episodica", "lesson", "lição", "lição", "fato pessoal",
@@ -55,9 +100,10 @@ class CircuitBreakerState:
 
 
 class ContentSafetyFilter:
-    """Filtra prompts que contêm dados sensíveis.
+    """Filtra prompts por classe de sensibilidade (MISSÃO 1).
 
-    Retorna True se o prompt é SEGURO para envio remoto.
+    SECRET/CONFIDENTIAL/INTERNAL → bloqueia egresso por padrão.
+    Retorna True SOMENTE para PUBLIC.
     """
 
     def __init__(self, extra_patterns: tuple[str, ...] | None = None) -> None:
@@ -72,16 +118,39 @@ class ContentSafetyFilter:
                 self._compiled.append(re.compile(rf"\b{escaped}\b", re.IGNORECASE))
             else:
                 self._compiled.append(re.compile(escaped, re.IGNORECASE))
+        self._secret_rx = [re.compile(rx) for rx in SECRET_REGEXES]
+        self._conf_rx = [
+            re.compile(re.escape(p), re.IGNORECASE) for p in CONFIDENTIAL_PATTERNS
+        ]
+        self._int_rx = [
+            re.compile(re.escape(p), re.IGNORECASE) for p in INTERNAL_PATTERNS
+        ]
+
+    def classify(self, prompt: str) -> tuple[DataClass, str]:
+        """Classifica o prompt por sensibilidade (severidade decrescente)."""
+        for rx in self._secret_rx:
+            m = rx.search(prompt)
+            if m:
+                sample = m.group(0)
+                masked = sample[:6] + "…[" + str(len(sample)) + " chars]"
+                return DataClass.SECRET, f"secret value: {masked}"
+        for i, rx in enumerate(self._conf_rx):
+            if rx.search(prompt):
+                return DataClass.CONFIDENTIAL, f"confidential marker: {CONFIDENTIAL_PATTERNS[i]}"
+        for i, rx in enumerate(self._int_rx):
+            if rx.search(prompt):
+                return DataClass.INTERNAL, f"internal marker: {INTERNAL_PATTERNS[i]}"
+        return DataClass.PUBLIC, ""
 
     def is_safe(self, prompt: str) -> tuple[bool, str]:
         """Verifica se o prompt é seguro para fallback remoto.
 
         Returns:
-            (is_safe, reason) — reason é vazio se seguro
+            (is_safe, reason) — reason é vazio se seguro (PUBLIC).
         """
-        for i, pattern in enumerate(self._compiled):
-            if pattern.search(prompt):
-                return False, f"sensitive pattern: {self._patterns[i]}"
+        cls, reason = self.classify(prompt)
+        if cls is not DataClass.PUBLIC:
+            return False, f"{cls.value}: {reason}"
         return True, ""
 
 
@@ -232,8 +301,28 @@ class CircuitBreaker:
         self,
         messages: list[dict[str, str]],
     ) -> dict[str, Any]:
-        """Tenta fallback remoto."""
+        """Tenta fallback remoto — CHOKE POINT ÚNICO DE EGRESS (MISSÃO 1).
+
+        TODA saída para nuvem passa por este gate, inclusive o caminho
+        _try_local() → _try_fallback() em falha local. Se o prompt não for
+        PUBLIC, o egresso é bloqueado e um erro local controlado é retornado.
+        """
         assert self._fallback_fn is not None
+        prompt_text = " ".join(m.get("content", "") for m in messages)
+        is_safe, reason = self._safety.is_safe(prompt_text)
+        if not is_safe:
+            self._state.total_rejected += 1
+            self._record_decision("rejected", f"fallback gate: {reason}")
+            return {
+                "response": (
+                    "ERRO: fallback remoto bloqueado pelo filtro de segurança "
+                    f"({reason}). Dados não-PUBLIC nunca saem para nuvem. "
+                    "Aguarde recuperação do backend local."
+                ),
+                "backend": "rejected",
+                "circuit_state": self._state.state.value,
+                "latency_ms": 0,
+            }
         t0 = time.time()
         try:
             response = self._fallback_fn(messages)

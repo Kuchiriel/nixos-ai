@@ -12,6 +12,7 @@ from jarvis.core.circuit_breaker import (
     CircuitBreaker,
     CircuitState,
     ContentSafetyFilter,
+    DataClass,
     SENSITIVE_PATTERNS,
 )
 
@@ -293,6 +294,88 @@ def test_cb_on_state_change_callback() -> None:
     cb.execute([{"role": "user", "content": "test"}], local_fn=failing_fn)
     assert len(changes) >= 1
     assert "closed→open" in changes[0]
+
+
+# ---------------------------------------------------------------------------
+# MISSÃO 1 (P0) — Blindagem do fallback: choke point em _try_fallback
+# ---------------------------------------------------------------------------
+
+
+def _cb_with_spy_fallback(failure_threshold: int = 3):
+    """CircuitBreaker com fallback espião (conta chamadas, nunca deve vazar)."""
+    from unittest.mock import MagicMock
+    monitor = BackendHealthMonitor("http://127.0.0.1:19999", cache_ttl_s=0)
+    spy = MagicMock(return_value="remoto - NÃO DEVERIA TER SIDO CHAMADO")
+    cb = CircuitBreaker(monitor, failure_threshold=failure_threshold, fallback_fn=spy)
+    return cb, spy
+
+
+def _failing_fn(msgs):
+    raise RuntimeError("bonsai local down (injetado)")
+
+
+def test_m1_local_failure_secret_never_egresses() -> None:
+    """Falha local + segredo → fallback BLOQUEADO, spy nunca chamado."""
+    cb, spy = _cb_with_spy_fallback()
+    msgs = [{"role": "user", "content": "Analise este código:\nOPENROUTER_API_KEY=\"sk-or-v1-abc123XYZ456\""}]
+    result = cb.execute(msgs, local_fn=_failing_fn)
+    assert result["backend"] == "rejected"
+    spy.assert_not_called()
+
+
+def test_m1_secret_without_keywords_blocked() -> None:
+    """Valor secreto SEM keyword por perto → SECRET, bloqueado."""
+    sf = ContentSafetyFilter()
+    cls, reason = sf.classify("revise: gsk_I7lysAgX8I9w6JqkDIVaWGdyb3FY8uty6HNy3")
+    assert cls is DataClass.SECRET, reason
+    safe, _ = sf.is_safe("revise: gsk_I7lysAgX8I9w6JqkDIVaWGdyb3FY8uty6HNy3")
+    assert safe is False
+
+
+def test_m1_pem_blocked() -> None:
+    sf = ContentSafetyFilter()
+    cls, _ = sf.classify("-----BEGIN RSA PRIVATE KEY-----\nMIIE...")
+    assert cls is DataClass.SECRET
+
+
+def test_m1_classify_levels() -> None:
+    sf = ContentSafetyFilter()
+    assert sf.classify("qual é a capital do Brasil?")[0] is DataClass.PUBLIC
+    assert sf.classify("ver /etc/nginx/nginx.conf")[0] is DataClass.INTERNAL
+    assert sf.classify("o que lembro sobre deploy? recall")[0] is DataClass.CONFIDENTIAL
+    assert sf.classify("token=abc password: s3nh4")[0] is DataClass.SECRET
+
+
+def test_m1_public_still_falls_back() -> None:
+    """Prompt PUBLIC + falha local → fallback permitido (sem regressão)."""
+    cb, spy = _cb_with_spy_fallback()
+    result = cb.execute([{"role": "user", "content": "qual é a capital do Brasil?"}], local_fn=_failing_fn)
+    assert result["backend"] == "fallback"
+    spy.assert_called_once()
+
+
+def test_m1_open_circuit_secret_stays_blocked() -> None:
+    """Circuito OPEN + CONFIDENTIAL via execute() → rejected, spy nunca chamado."""
+    cb, spy = _cb_with_spy_fallback(failure_threshold=1)
+    cb.execute([{"role": "user", "content": "warmup"}], local_fn=_failing_fn)
+    assert cb.state == CircuitState.OPEN
+    spy.reset_mock()  # warmup PUBLIC corretamente usou fallback; zera p/ o teste real
+    result = cb.execute(
+        [{"role": "user", "content": "resuma minhas memórias episódicas"}],
+        local_fn=_failing_fn,
+    )
+    assert result["backend"] == "rejected"
+    spy.assert_not_called()
+
+
+def test_m1_rejected_counted_in_state() -> None:
+    cb, _ = _cb_with_spy_fallback()
+    before = cb.state_info["total_rejected"]
+    cb.execute(
+        [{"role": "user", "content": "vault dump sk-or-v1-zzz"}],
+        local_fn=_failing_fn,
+    )
+    assert cb.state_info["total_rejected"] == before + 1
 
 
 # ---------------------------------------------------------------------------
