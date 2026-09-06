@@ -296,6 +296,7 @@
 
   services.jarvis-wakeword = {
     enable = true;
+    ackLang = "pt"; # Jarvis fala PT-BR (sistema em en_US, usuário em PT-BR)
     # Device: physical mic (rnnoise_source has no audio routing on this hardware)
     device = "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source";
     # Calibração validada do legado:
