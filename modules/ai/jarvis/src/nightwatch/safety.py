@@ -185,13 +185,35 @@ def rollback_snapshot(snapshot_ref: str) -> None:
 
 # ═══ Git Branch Isolation ═══
 
+def _tree_is_dirty(repo: str | Path | None = None) -> bool:
+    """True if the working tree has uncommitted changes."""
+    repo = REPO_ROOT if repo is None else repo
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(repo), "status", "--porcelain"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout.strip()
+        return bool(out)
+    except Exception:
+        return False
+
+
 def create_task_branch(task_id: str, category: str) -> str | None:
     """Create an isolated branch for the task.
 
     Returns the branch name, or None if checkout failed (caller must
     treat that as a hard stop — never proceed uncommitted on the wrong
     branch).
+
+    Refuses to start on a dirty tree: a later reset --hard would
+    destroy someone's uncommitted work (humans and other agents
+    share this checkout).
     """
+    if _tree_is_dirty():
+        import sys
+        print("[safety] dirty tree — refusing to create task branch",
+              file=sys.stderr)
+        return None
     branch = f"nightwatch/{category}/{task_id}"
 
     # Ensure we're on main
@@ -223,7 +245,17 @@ def create_task_branch(task_id: str, category: str) -> str | None:
 
 
 def abort_task_branch(branch: str) -> None:
-    """Abort task: go back to main, reset, delete branch."""
+    """Abort task: stash foreign dirt, go back to main, reset, delete branch.
+
+    Uncommitted changes are NEVER destroyed — stashed with a marker
+    instead (visible in git stash list, recoverable).
+    """
+    if _tree_is_dirty():
+        subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "stash", "push", "-m",
+             "nightwatch-autosave-uncommitted", "--include-untracked"],
+            capture_output=True, timeout=30,
+        )
     subprocess.run(
         ["git", "-C", str(REPO_ROOT), "checkout", "main"],
         capture_output=True, timeout=10,
