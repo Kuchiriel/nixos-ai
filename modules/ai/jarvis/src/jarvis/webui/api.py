@@ -395,6 +395,98 @@ def remote_status() -> dict[str, Any]:
             "cascade": ["local"] + [k for k, v in present.items() if v]}
 
 
+class KeysUpdateRequest(BaseModel):
+    provider: str
+    key: str
+
+
+PROVIDER_KEY_MAP = {
+    "openrouter": "OPENROUTER_API_KEY",
+    "groq": "GROQ_API_KEY",
+    "cerebras": "CEREBRAS_API_KEY",
+    "together": ["TOGETHERAI_API_KEY", "TOGETHER_API_KEY"],
+    "gemini": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+    "hf": ["HUGGINGFACE_API_KEY", "HF_TOKEN"],
+}
+
+
+@app.get("/api/keys")
+def keys_status() -> dict[str, Any]:
+    """List which API-key providers have keys configured (names only, never values)."""
+    from pathlib import Path
+    env_file = Path("/etc/litellm.env")
+    present: dict[str, bool] = {k: False for k in PROVIDER_KEY_MAP}
+    if env_file.exists():
+        try:
+            content = env_file.read_text(encoding="utf-8")
+            for provider, key_names in PROVIDER_KEY_MAP.items():
+                if isinstance(key_names, str):
+                    key_names = [key_names]
+                for kn in key_names:
+                    if f"{kn}=" in content and "sua_chave" not in content:
+                        present[provider] = True
+                        break
+        except OSError:
+            pass
+    configured = [k for k, v in present.items() if v]
+    return {"providers": present, "configured": configured,
+            "cascade": ["local"] + configured}
+
+
+@app.post("/api/keys")
+def set_key(req: KeysUpdateRequest) -> dict[str, Any]:
+    """Set or update an API key for a provider. Writes to /etc/litellm.env."""
+    import os
+    env_file = Path("/etc/litellm.env")
+    key_names = PROVIDER_KEY_MAP.get(req.provider)
+    if not key_names:
+        raise HTTPException(400, f"Unknown provider: {req.provider}")
+    if isinstance(key_names, str):
+        key_names = [key_names]
+    key_name = key_names[0]
+
+    try:
+        if env_file.exists():
+            content = env_file.read_text(encoding="utf-8")
+            lines = content.splitlines()
+            new_lines = [l for l in lines if not l.startswith(f"{key_name}=")]
+            new_lines.append(f'export {key_name}="{req.key}"')
+            env_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+        else:
+            env_file.write_text(f'export {key_name}="{req.key}"\n', encoding="utf-8")
+        os.chmod(env_file, 0o644)
+    except OSError as e:
+        raise HTTPException(500, f"Failed to write key: {e}")
+
+    _push_to_sse({"type": "key_set", "provider": req.provider, "ts": time.time()})
+    return {"status": "updated", "provider": req.provider}
+
+
+@app.delete("/api/keys/{provider}")
+def remove_key(provider: str) -> dict[str, Any]:
+    """Remove an API key for a provider from /etc/litellm.env."""
+    import os
+    key_names = PROVIDER_KEY_MAP.get(provider)
+    if not key_names:
+        raise HTTPException(400, f"Unknown provider: {provider}")
+    if isinstance(key_names, str):
+        key_names = [key_names]
+
+    try:
+        env_file = Path("/etc/litellm.env")
+        if env_file.exists():
+            content = env_file.read_text(encoding="utf-8")
+            lines = content.splitlines()
+            new_lines = [l for l in lines if not any(l.startswith(f"{kn}=") for kn in key_names)]
+            env_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+            os.chmod(env_file, 0o644)
+    except OSError as e:
+        raise HTTPException(500, f"Failed to remove key: {e}")
+
+    _push_to_sse({"type": "key_removed", "provider": provider, "ts": time.time()})
+    return {"status": "removed", "provider": provider}
+
+
 @app.get("/api/events/history")
 def event_history(limit: int = 100) -> list[dict[str, Any]]:
     """Get recent event history."""

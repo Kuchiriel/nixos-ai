@@ -48,9 +48,9 @@
 
   # Importa as variáveis de ambiente com segurança ao abrir o terminal
   programs.bash.initExtra = ''
-    if [ -f /etc/litellm.env ]; then
+    if [ -f ~/.config/ai-agents/keys-wrapper.sh ]; then
       set -a
-      source /etc/litellm.env
+      source ~/.config/ai-agents/keys-wrapper.sh
       set +a
     fi
   '';
@@ -88,6 +88,38 @@
     # ATUALIZADO: Substituído pelo hash correto apontado pelo log do Nix
     hash = "sha256-RNPNvS2++DhYGMDtE5nans36CII9kdDo/acqVxwx2Qs=";
   };
+
+  # ══════════════════════════════════════════════════════════════
+  # JARVIS — API Keys abstraction (keys-wrapper.sh + keys.env)
+  # ══════════════════════════════════════════════════════════════
+  home.file.".config/ai-agents/keys.env".source = builtins.toFile "jarvis-keys.env" ''
+    source /etc/litellm.env 2>/dev/null || true
+  '';
+
+  home.file.".config/ai-agents/keys-wrapper.sh".source = builtins.toFile "jarvis-keys-wrapper.sh" ''
+    #!/usr/bin/env bash
+    # Abstração de chaves para IA agents.
+    # Source este script em vez de keys.env diretamente para ter nomes normalizados.
+    # Resolve: TOGETHER_API_KEY vs TOGETHERAI_API_KEY, HF_TOKEN vs HUGGINGFACE_API_KEY, etc.
+
+    set -a
+    source "/home/$USER/.config/ai-agents/keys.env" 2>/dev/null || source "/etc/litellm.env" 2>/dev/null || true
+    set +a
+
+    if [ -z "$TOGETHER_API_KEY" ] && [ -n "$TOGETHERAI_API_KEY" ]; then
+        export TOGETHER_API_KEY="$TOGETHERAI_API_KEY"
+    fi
+    if [ -z "$HF_TOKEN" ] && [ -n "$HUGGINGFACE_API_KEY" ]; then
+        export HF_TOKEN="$HUGGINGFACE_API_KEY"
+    fi
+    if [ -z "$HUGGINGFACE_API_KEY" ] && [ -n "$HF_TOKEN" ]; then
+        export HUGGINGFACE_API_KEY="$HF_TOKEN"
+    fi
+    if [ -z "$GEMINI_API_KEY" ] && [ -n "$GOOGLE_API_KEY" ]; then
+        export GEMINI_API_KEY="$GOOGLE_API_KEY"
+    fi
+  '';
+  home.file.".config/ai-agents/keys-wrapper.sh".executable = true;
 
   # ── VS Code + Roo Code — configurado via módulo vscode-roo.nix ──
   # (extensões, userSettings, MCP, custom modes são declarativos)
@@ -154,10 +186,63 @@
             };
           };
         };
+        
+        # ADICIONADO: OpenRouter (cascade/fallback free tier)
+        openrouter = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "https://openrouter.ai/api/v1";
+            headers = {
+              "Authorization" = "Bearer \${OPENROUTER_API_KEY}";
+              "HTTP-Referer" = "http://localhost:5173";
+              "X-Title" = "Jarvis WebUI";
+            };
+          };
+          models = {
+            "free" = {
+              name = "OpenRouter Free Cascade";
+            };
+            "qwen/qwen3-coder:free" = {
+              name = "Qwen Coder Free";
+            };
+          };
+        };
+        
+        # ADICIONADO: Groq (fast LLM cloud)
+        groq = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "https://api.groq.com/openai/v1";
+            headers = {
+              "Authorization" = "Bearer \${GROQ_API_KEY}";
+            };
+          };
+          models = {
+            "llama-3.3-70b-versatile" = {
+              name = "Groq Llama 3.3 70B";
+            };
+          };
+        };
+        
+        # ADICIONADO: Cerebras (fast inference)
+        cerebras = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "https://api.cerebras.ai/v1";
+            headers = {
+              "Authorization" = "Bearer \${CEREBRAS_API_KEY}";
+            };
+          };
+          models = {
+            "llama3.1-70b" = {
+              name = "Cerebras Llama 3.1 70B";
+            };
+          };
+        };
       };
       
-      # Define o modelo local padrão (Bonsai 8B; Qwen MoE removido em 2026-09-05)
-      model = "local/bonsai-8b";
+      # Define o modelo padrão para cascade/fallback
+      model = "openrouter/free";
 
       # MCP Jarvis: RAG, memória, vault, files, shell, nix — via stdio.
       # Handshake validado (tools/list retorna 20 tools). Env inline no
