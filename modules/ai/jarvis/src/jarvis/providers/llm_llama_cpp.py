@@ -139,6 +139,7 @@ class LlamaCppBackend(LLMBackend):
             tool_calls=message.get("tool_calls", []),
             finish_reason=choice.get("finish_reason", ""),
             usage=data.get("usage", {}),
+            timings=data.get("timings", {}),
             latency_seconds=elapsed,
             backend="llama-cpp",
             model_id=data.get("model", self._model),

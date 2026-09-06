@@ -97,6 +97,7 @@ _SLASH_COMMANDS = [
     "/recall", "/architect", "/debug", "/help",
     "/reasoning", "/compact", "/vault", "/lessons",
     "/modes", "/mode", "/add", "/drop", "/undo",
+    "/stats",
 ]
 
 
@@ -219,6 +220,7 @@ def _print_help() -> None:
         ("/drop <path|--all>", "soltar arquivo do contexto"),
         ("/undo", "desfazer última edição"),
         ("/model", "ver modelo atual"),
+        ("/stats", "telemetria real: tokens, janela, TTFT, TPS"),
         ("/recall", "buscar memória episódica"),
         ("/lessons", "buscar lições aprendidas"),
         ("/vault", "listar notas persistentes"),
@@ -321,9 +323,83 @@ def _maybe_disable_thinking(system_prompt: str) -> str:
 
 
 def _estimate_tokens(messages: list[dict[str, Any]]) -> int:
-    """Estimativa rápida de tokens (heurística: 1 token ≈ 4 chars)."""
+    """Estimativa rápida de tokens (heurística: 1 token ≈ 4 chars).
+
+    Fallback grosseiro quando o servidor ainda não devolveu usage real.
+    Prefira SessionTelemetry (números reais) via /stats.
+    """
     total_chars = sum(len(json.dumps(m, ensure_ascii=False)) for m in messages)
     return total_chars // 4
+
+
+# --- telemetria de sessão (MISSÃO 4): números REAIS do servidor ---
+def _session_telemetry():
+    """Singleton lazy de SessionTelemetry (evita import circular no topo)."""
+    global _TELEMETRY_SINGLETON
+    try:
+        return _TELEMETRY_SINGLETON
+    except NameError:
+        from jarvis.core.context_budget import SessionTelemetry
+        _TELEMETRY_SINGLETON = SessionTelemetry()
+        return _TELEMETRY_SINGLETON
+
+
+def _record_llm_telemetry(data: dict[str, Any], latency_s: float, model: str = "") -> None:
+    """Extrai usage/timings reais da resposta e alimenta a telemetria."""
+    try:
+        tel = _session_telemetry()
+        usage = data.get("usage", {}) or {}
+        timings = data.get("timings", {}) or {}
+        details = usage.get("prompt_tokens_details", {}) or {}
+        tel.record(
+            model=model or data.get("model", ""),
+            backend="llama-cpp",
+            prompt_tokens=int(usage.get("prompt_tokens", 0) or 0),
+            completion_tokens=int(usage.get("completion_tokens", 0) or 0),
+            latency_s=latency_s,
+            tps=float(timings.get("predicted_per_second", 0) or 0),
+            cached_tokens=int(details.get("cached_tokens", 0) or 0),
+        )
+        # Janela real: n_ctx do servidor; uso via slots quando disponível
+        if tel.window_tokens <= 0:
+            n_ctx = _query_server_context_size()
+            if n_ctx > 0:
+                tel.window_tokens = n_ctx
+        try:
+            base = _get_config().llm_base_url.rstrip("/").replace("/v1", "")
+            slots = requests.get(f"{base}/slots", timeout=3).json()
+            if isinstance(slots, list):
+                used = sum(s.get("n_prompt_tokens", 0) for s in slots)
+                total = sum(s.get("n_ctx", 0) for s in slots)
+                if total > 0:
+                    tel.window_tokens = total
+                    tel.window_used = used
+        except Exception:
+            pass
+        # Espelha o prompt real na janela quando slots indisponível
+        if tel.window_used <= 0 and tel.last and tel.last.prompt_tokens > 0:
+            tel.window_used = tel.last.prompt_tokens
+    except Exception:
+        pass
+
+
+def _print_stats() -> None:
+    """Renderiza telemetria real estilo OpenCode (/stats)."""
+    tel = _session_telemetry()
+    if tel.n_calls == 0:
+        console.print("[dim]sem chamadas nesta sessão — faça uma pergunta primeiro[/]")
+        return
+    table = Table(show_header=False, box=None, padding=(0, 1))
+    table.add_row("Chamadas", str(tel.n_calls))
+    table.add_row("Prompt", f"{tel.total_prompt} tok (real, usage)")
+    table.add_row("Completion", f"{tel.total_completion} tok (real, usage)")
+    table.add_row("Janela", tel.window_bar())
+    table.add_row("TTFT médio", f"{tel.avg_ttft:.2f}s")
+    table.add_row("Throughput", f"{tel.avg_tps:.1f} t/s (real, timings)")
+    last = tel.last
+    if last:
+        table.add_row("Última", f"{last.backend}/{last.model} lat={last.latency_s:.2f}s cache={last.cached_tokens}")
+    console.print(Panel(table, title="Stats (números reais do servidor)", border_style="dim", title_align="left"))
 
 
 def _compact_session(messages: list[dict[str, Any]], max_tokens: int = 6000) -> list[dict[str, Any]]:
@@ -875,6 +951,7 @@ def _call_llm(
     elapsed = time.monotonic() - t0
     resp.raise_for_status()
     data = resp.json()
+    _record_llm_telemetry(data, elapsed, model=payload.get("model", ""))
 
     if debug:
         console.print(Rule(f"📥 RESPONSE ({elapsed:.2f}s)", style="dim"))
@@ -1909,6 +1986,10 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
 
         if user_input == "/model":
             console.print(f"[dim]{active_model} · {mode}[/]")
+            continue
+
+        if user_input == "/stats":
+            _print_stats()
             continue
 
         if user_input == "/undo":

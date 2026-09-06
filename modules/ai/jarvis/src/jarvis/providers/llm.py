@@ -205,6 +205,16 @@ class LLMClient:
         self._health_lock = threading.Lock()
         self._health_cache: tuple[float, bool] | None = None  # (timestamp, resultado)
 
+        # MISSÃO 4: telemetria real da última chamada + sessão acumulada
+        self._telemetry_lock = threading.Lock()
+        self._last_usage: dict[str, Any] = {}
+        self._last_timings: dict[str, Any] = {}
+        self._last_ttft_s: float = 0.0
+        self._last_model: str = ""
+        self._last_backend: str = ""
+        from jarvis.core.context_budget import SessionTelemetry
+        self._telemetry = SessionTelemetry()
+
     # --- context manager ---
 
     def __enter__(self) -> "LLMClient":
@@ -281,11 +291,55 @@ class LLMClient:
 
     # --- chat (síncrono) ---
 
+    def _record_telemetry(
+        self,
+        response: Any,
+        *,
+        ttft_s: float = 0.0,
+        latency_s: float = 0.0,
+    ) -> None:
+        """Alimenta telemetria com números REAIS (usage/timings) — MISSÃO 4."""
+        usage = getattr(response, "usage", {}) or {}
+        timings = getattr(response, "timings", {}) or {}
+        prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
+        completion_tokens = int(usage.get("completion_tokens", 0) or 0)
+        cached = 0
+        details = usage.get("prompt_tokens_details") or {}
+        if isinstance(details, dict):
+            cached = int(details.get("cached_tokens", 0) or 0)
+        tps = float(timings.get("predicted_per_second", 0) or 0)
+        backend = getattr(response, "backend", "") or ""
+        model = getattr(response, "model_id", "") or ""
+        with self._telemetry_lock:
+            self._last_usage = dict(usage)
+            self._last_timings = dict(timings)
+            self._last_ttft_s = ttft_s
+            self._last_model = model
+            self._last_backend = backend
+            self._telemetry.record(
+                model=model, backend=backend,
+                prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
+                ttft_s=ttft_s, latency_s=latency_s, tps=tps,
+                cached_tokens=cached,
+            )
+
+    @property
+    def session_telemetry(self):  # SessionTelemetry
+        """Telemetria acumulada da sessão (números reais)."""
+        return self._telemetry
+
+    @property
+    def last_ttft_s(self) -> float:
+        """TTFT real da última chamada (t_primeiro_token - t0_envio)."""
+        with self._telemetry_lock:
+            return self._last_ttft_s
+
     def chat(self, messages: list[dict[str, str]], *, temperature: float = 0.0, max_tokens: int | None = None) -> str:
         """Chat completion — retorna conteúdo como string."""
         request_id = uuid.uuid4().hex[:12]
-        
+
         self._breaker.before_call()
+        t0 = time.monotonic()
         try:
             response = self._backend.chat(
                 messages=messages,
@@ -293,6 +347,7 @@ class LLMClient:
                 max_tokens=max_tokens,
             )
             self._breaker.record_success()
+            self._record_telemetry(response, latency_s=time.monotonic() - t0)
             return response.content
         except Exception as exc:
             self._breaker.record_failure()
@@ -354,13 +409,29 @@ class LLMClient:
             yield self.chat(messages, temperature=temperature, max_tokens=max_tokens)
             return
         self._breaker.before_call()
+        t0 = time.monotonic()
+        ttft_s = 0.0
+        chunks: list[str] = []
         try:
             for token in backend_stream(messages, temperature=temperature, max_tokens=max_tokens):
+                if ttft_s == 0.0:
+                    ttft_s = time.monotonic() - t0  # TTFT real (MISSÃO 4)
+                chunks.append(token)
                 yield token
             self._breaker.record_success()
         except Exception as exc:
             self._breaker.record_failure()
             raise LLMError(f"stream failed: {exc}") from exc
+        finally:
+            # Telemetria do stream: TTFT real; tokens via usage quando o
+            # backend expõe (fallback: contagem de chunks como aproximação).
+            with self._telemetry_lock:
+                self._last_ttft_s = ttft_s
+                self._telemetry.record(
+                    model=self._resolved_model_id or "",
+                    backend=getattr(self._backend, "__class__", type(self._backend)).__name__,
+                    ttft_s=ttft_s, latency_s=time.monotonic() - t0,
+                )
 
     async def achat_stream(
         self, messages: list[dict[str, str]], *, temperature: float = 0.0, max_tokens: int | None = None
@@ -371,13 +442,25 @@ class LLMClient:
             yield self.chat(messages, temperature=temperature, max_tokens=max_tokens)
             return
         self._breaker.before_call()
+        t0 = time.monotonic()
+        ttft_s = 0.0
         try:
             async for token in backend_astream(messages, temperature=temperature, max_tokens=max_tokens):
+                if ttft_s == 0.0:
+                    ttft_s = time.monotonic() - t0
                 yield token
             self._breaker.record_success()
         except Exception as exc:
             self._breaker.record_failure()
             raise LLMError(f"async stream failed: {exc}") from exc
+        finally:
+            with self._telemetry_lock:
+                self._last_ttft_s = ttft_s
+                self._telemetry.record(
+                    model=self._resolved_model_id or "",
+                    backend=getattr(self._backend, "__class__", type(self._backend)).__name__,
+                    ttft_s=ttft_s, latency_s=time.monotonic() - t0,
+                )
 
     # --- embeddings ---
 

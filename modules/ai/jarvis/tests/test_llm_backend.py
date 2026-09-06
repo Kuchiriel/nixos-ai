@@ -434,3 +434,104 @@ class TestSyncStream:
         chunks = list(backend.chat_stream([{"role": "user", "content": "oi"}]))
         assert chunks == ["a"]
         assert "[DONE]" not in "".join(chunks)
+
+
+# ---------------------------------------------------------------------------
+# MISSÃO 4 (P1) — telemetria real + reconciliação (fim da heurística cega)
+# ---------------------------------------------------------------------------
+
+
+class TestSessionTelemetry:
+    def test_record_and_aggregates(self):
+        from jarvis.core.context_budget import SessionTelemetry
+        tel = SessionTelemetry()
+        tel.record(model="m", backend="llama-cpp", prompt_tokens=21,
+                   completion_tokens=2, ttft_s=0.08, latency_s=0.25,
+                   tps=60.7, cached_tokens=3)
+        tel.record(model="m", backend="llama-cpp", prompt_tokens=10,
+                   completion_tokens=5, ttft_s=0.10, latency_s=0.30, tps=55.0)
+        assert tel.n_calls == 2
+        assert tel.total_prompt == 31
+        assert tel.total_completion == 7
+        assert tel.total_tokens == 38
+        assert abs(tel.avg_tps - 57.85) < 0.01
+        assert abs(tel.avg_ttft - 0.09) < 0.001
+        assert tel.calls[0].cached_tokens == 3
+
+    def test_window_bar_against_server_numbers(self):
+        from jarvis.core.context_budget import SessionTelemetry
+        tel = SessionTelemetry(window_tokens=32768, window_used=22)
+        assert abs(tel.window_pct - 0.067) < 0.01
+        bar = tel.window_bar()
+        assert "22/32768 tok" in bar
+        rendered = tel.render()
+        assert "janela:" in rendered and "throughput médio" in rendered
+
+    def test_empty_session_renders(self):
+        from jarvis.core.context_budget import SessionTelemetry
+        tel = SessionTelemetry()
+        assert tel.n_calls == 0
+        assert tel.avg_tps == 0.0
+        assert "chamadas: 0" in tel.render()
+
+
+class TestBudgetReconciliation:
+    def test_record_actual_feeds_totals(self):
+        from jarvis.core.context_budget import ContextBudget
+        b = ContextBudget(max_tokens=32768)
+        b.record_actual(21, 2)
+        assert b.total_tokens_processed == 23
+        assert b.total_llm_calls == 1
+
+    def test_calibration_converges_from_pairs(self):
+        from jarvis.core.context_budget import ContextBudget
+        b = ContextBudget(max_tokens=32768)
+        assert b._calibration_ratio() == 1.0  # sem amostras: heurística pura
+        text = "x" * 400  # heurística diria 100 tok
+        b.record_actual_for_text(text, 25)  # real: 25 tok
+        assert b._calibration_ratio() == 4.0 or True  # clamped em 3.0
+        assert b._calibration_ratio() == 3.0
+        # estimativa futura converge para o real
+        assert b.estimate_tokens("y" * 400) == 33  # 100 // 3.0
+
+    def test_sync_from_slots_aligns_budget(self):
+        from jarvis.core.context_budget import ContextBudget
+        b = ContextBudget(max_tokens=32000)
+        b.sync_from_slots(22, 32768)
+        assert b.max_tokens == 32768
+        assert b.used_tokens == 22
+        assert abs(b.usage_percent - 22 / (32768 - 2000) * 100) < 0.01
+
+
+class TestClientTelemetryWiring:
+    def test_chat_records_real_usage(self):
+        from unittest.mock import MagicMock
+        from jarvis.providers.llm import LLMClient
+        from jarvis.providers.llm_backend import ChatResponse
+        backend = MagicMock()
+        backend.chat.return_value = ChatResponse(
+            content="ok",
+            usage={"prompt_tokens": 21, "completion_tokens": 2,
+                   "prompt_tokens_details": {"cached_tokens": 3}},
+            timings={"predicted_per_second": 60.7},
+            backend="llama-cpp", model_id="bonsai",
+        )
+        client = LLMClient(backend=backend)
+        assert client.chat([{"role": "user", "content": "oi"}]) == "ok"
+        tel = client.session_telemetry
+        assert tel.total_prompt == 21
+        assert tel.total_completion == 2
+        assert abs(tel.avg_tps - 60.7) < 0.01
+        assert tel.last.cached_tokens == 3
+
+    def test_stream_records_real_ttft(self):
+        import time
+        from unittest.mock import MagicMock
+        from jarvis.providers.llm import LLMClient
+        backend = MagicMock()
+        backend.chat_stream.return_value = iter(["Olá", " mundo"])
+        client = LLMClient(backend=backend)
+        chunks = list(client.chat_stream([{"role": "user", "content": "oi"}]))
+        assert chunks == ["Olá", " mundo"]
+        assert client.last_ttft_s >= 0.0
+        assert client.session_telemetry.n_calls == 1

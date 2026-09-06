@@ -78,6 +78,114 @@ def query_server_context_size() -> int:
 
 
 @dataclass
+class TelemetryCall:
+    """Uma chamada LLM com números REAIS do servidor (MISSÃO 4)."""
+    ts: float = field(default_factory=time.time)
+    model: str = ""
+    backend: str = ""
+    prompt_tokens: int = 0       # usage.prompt_tokens real
+    completion_tokens: int = 0   # usage.completion_tokens real
+    ttft_s: float = 0.0          # t_primeiro_token - t0_envio (streaming)
+    latency_s: float = 0.0       # latência total
+    tps: float = 0.0             # throughput real (timings.predicted_per_second)
+    cached_tokens: int = 0       # prompt cache hit (KV)
+
+
+@dataclass
+class SessionTelemetry:
+    """Telemetria de sessão estilo OpenCode (MISSÃO 4).
+
+    Expõe metadados idênticos ao OpenCode: tokens transmitidos,
+    % de janela ocupada por modelo e telemetria de performance.
+    Alimentado por números REAIS (usage/timings/slots), nunca heurística.
+    """
+    calls: list[TelemetryCall] = field(default_factory=list)
+    window_tokens: int = 0       # n_ctx real do servidor (/props ou /slots)
+    window_used: int = 0         # prompt_tokens reais em contexto (/slots)
+
+    def record(
+        self,
+        *,
+        model: str = "",
+        backend: str = "",
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        ttft_s: float = 0.0,
+        latency_s: float = 0.0,
+        tps: float = 0.0,
+        cached_tokens: int = 0,
+    ) -> TelemetryCall:
+        call = TelemetryCall(
+            model=model, backend=backend,
+            prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
+            ttft_s=ttft_s, latency_s=latency_s, tps=tps,
+            cached_tokens=cached_tokens,
+        )
+        self.calls.append(call)
+        return call
+
+    @property
+    def total_prompt(self) -> int:
+        return sum(c.prompt_tokens for c in self.calls)
+
+    @property
+    def total_completion(self) -> int:
+        return sum(c.completion_tokens for c in self.calls)
+
+    @property
+    def total_tokens(self) -> int:
+        return self.total_prompt + self.total_completion
+
+    @property
+    def n_calls(self) -> int:
+        return len(self.calls)
+
+    @property
+    def last(self) -> TelemetryCall | None:
+        return self.calls[-1] if self.calls else None
+
+    @property
+    def avg_tps(self) -> float:
+        tps = [c.tps for c in self.calls if c.tps > 0]
+        return sum(tps) / len(tps) if tps else 0.0
+
+    @property
+    def avg_ttft(self) -> float:
+        tt = [c.ttft_s for c in self.calls if c.ttft_s > 0]
+        return sum(tt) / len(tt) if tt else 0.0
+
+    @property
+    def window_pct(self) -> float:
+        if self.window_tokens <= 0:
+            return 0.0
+        return min(100.0, self.window_used / self.window_tokens * 100)
+
+    def window_bar(self, width: int = 24) -> str:
+        """Barra de progresso da janela, estilo OpenCode."""
+        pct = self.window_pct
+        filled = int(width * pct / 100)
+        bar = "█" * filled + "░" * (width - filled)
+        return f"[{bar}] {pct:.1f}% ({self.window_used}/{self.window_tokens} tok)"
+
+    def render(self) -> str:
+        """Bloco de stats idêntico em espírito aos metadados do OpenCode."""
+        last = self.last
+        lines = [
+            f"chamadas: {self.n_calls}  |  prompt: {self.total_prompt} tok  |  completion: {self.total_completion} tok",
+            f"janela: {self.window_bar()}",
+            f"TTFT médio: {self.avg_ttft:.2f}s  |  throughput médio: {self.avg_tps:.1f} t/s",
+        ]
+        if last:
+            lines.append(
+                f"última: {last.backend}/{last.model} ttft={last.ttft_s:.2f}s "
+                f"lat={last.latency_s:.2f}s tps={last.tps:.1f} "
+                f"prompt={last.prompt_tokens} compl={last.completion_tokens} "
+                f"cache={last.cached_tokens}"
+            )
+        return "\n".join(lines)
+
+
+@dataclass
 class ContextSnapshot:
     """A single point-in-time measurement of context usage."""
     timestamp: float = field(default_factory=time.time)
@@ -165,8 +273,53 @@ class ContextBudget:
         return self._total_tokens > self.available_tokens
 
     def estimate_tokens(self, text: str) -> int:
-        """Estimate tokens from text (~4 chars/token)."""
-        return max(1, len(text) // CHARS_PER_TOKEN)
+        """Estimate tokens from text (~4 chars/token, calibrado por reais)."""
+        ratio = self._calibration_ratio()
+        return max(1, int(len(text) // (CHARS_PER_TOKEN * ratio)))
+
+    # --- números reais (MISSÃO 4) ---
+
+    _real_prompt_total: int = field(default=0, init=False, repr=False)
+    _est_prompt_total: int = field(default=0, init=False, repr=False)
+
+    def _calibration_ratio(self) -> float:
+        """Razão estimado/real: corrige a heurística cega com dados medidos.
+
+        Sem amostras reais → 1.0 (heurística pura). Com amostras, a estimativa
+        futura converge para os tokens reais observados no servidor.
+        """
+        if self._real_prompt_total <= 0 or self._est_prompt_total <= 0:
+            return 1.0
+        ratio = self._est_prompt_total / self._real_prompt_total
+        return min(3.0, max(0.33, ratio))
+
+    def record_actual(self, prompt_tokens: int, completion_tokens: int = 0) -> None:
+        """Reconcilia estimativa com tokens REAIS do servidor (usage).
+
+        Deve ser chamado após cada chamada LLM com usage.prompt_tokens.
+        A calibração fina vem de record_actual_for_text() (pares texto→real).
+        """
+        if prompt_tokens > 0:
+            self._real_prompt_total += prompt_tokens
+            self.total_tokens_processed += prompt_tokens + completion_tokens
+            self.total_llm_calls += 1
+
+    def record_actual_for_text(self, text: str, prompt_tokens: int) -> None:
+        """Pareia uma estimativa de texto com o valor real (calibração)."""
+        if prompt_tokens > 0 and text:
+            self._est_prompt_total += max(1, len(text) // CHARS_PER_TOKEN)
+            self._real_prompt_total += prompt_tokens
+
+    def sync_from_slots(self, ctx_used: int, ctx_total: int) -> None:
+        """Alinha orçamento com a verdade do servidor (/slots).
+
+        ctx_used/ctx_total vêm de LlamaCppBackend.get_slots_status().
+        """
+        if ctx_total > 0:
+            self.max_tokens = ctx_total
+            self._auto_detected = True
+        if ctx_used >= 0:
+            self._total_tokens = ctx_used
 
     def add_message(self, msg: dict[str, Any]) -> int:
         """Add a message and return estimated tokens."""

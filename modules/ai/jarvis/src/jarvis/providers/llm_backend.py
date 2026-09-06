@@ -46,6 +46,7 @@ class ChatResponse:
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     finish_reason: str = ""
     usage: dict[str, Any] = field(default_factory=dict)
+    timings: dict[str, Any] = field(default_factory=dict)  # MISSÃO 4: timings reais do llama.cpp
     latency_seconds: float = 0.0
     # Backend-specific metadata
     backend: str = ""
