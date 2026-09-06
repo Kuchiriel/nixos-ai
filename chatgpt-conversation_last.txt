@@ -1,0 +1,1338 @@
+Escopo auditado
+
+Interpretei ://github.com como o repositório Kuchiriel/nixos-ai, branch main, cujo HEAD atual é 0f49df50c2aeaec592209278194659d5e0966054, commit de 6 de setembro de 2026. O último commit removeu a declaração de litellm.env do host NixOS porque o serviço LiteLLM está desabilitado.
+
+A análise abaixo cruza:
+
+README.md
+AGENTS.md
+BUFFY.md
+CONTEXT-ENGINEERING.md
+HANDOFF.md
+arquitetura Nightwatch
+Harness, TaskQueue, Checkpoint, ContextBudget, EventBus
+PersonaExecutor
+LLMClient + LLMBackend + LlamaCppBackend
+MCP server
+WebUI/Control Plane/SSE
+configuração declarativa dos providers
+auditoria forense existente
+estado real do código atual, não apenas o que a documentação afirma
+documentação atual de OpenCode e APIs dos providers.
+
+O README define a arquitetura como NixOS + llama.cpp + Qdrant + Python 3.13, com CLI, Agent, MCP, RAG, memória e Nightwatch.
+
+1. Cascata e ordem de fallback Local-First
+1.1 Diagnóstico da implementação atual
+
+A arquitetura atual não possui ainda o cascade que a pergunta descreve.
+
+O LLMBackend abstrai:
+
+LLMClient
+   ↓
+LLMBackend
+   ├── LlamaCppBackend
+   ├── PrismMLBackend
+   └── Bonsai → PrismML
+
+e o factory efetivamente conhece somente:
+
+llama-cpp
+prismml
+bonsai
+
+Isso é importante: Groq, Cerebras, OpenRouter, Gemini e NVIDIA não são backends reais do JARVIS atualmente. Eles aparecem na configuração do OpenCode/AI SDK, não como uma cadeia de failover nativa do LLMClient.
+
+A configuração declarativa atualmente possui:
+
+local
+ ├── bonsai-8b
+ └── qwen3-35b-a3b
+
+google
+ └── gemini-2.5-flash
+
+openrouter
+ ├── free
+ └── qwen/qwen3-coder:free
+
+groq
+ └── llama-3.3-70b-versatile
+
+cerebras
+ └── llama3.1-70b
+
+e define openrouter/free como modelo padrão do OpenCode.
+
+Portanto, há providers configurados, mas não há uma política única de roteamento compartilhada pelo JARVIS.
+
+1.2 O erro conceitual a evitar
+
+Não recomendo:
+
+Bonsai
+ ↓ timeout
+Groq
+ ↓ timeout
+Cerebras
+ ↓ timeout
+OpenRouter
+ ↓ timeout
+Gemini
+ ↓ timeout
+NVIDIA
+
+Isso é um fallback linear, não um router inteligente.
+
+O problema é que:
+
+aumenta TTFT;
+duplica chamadas em determinados erros;
+pode consumir cotas;
+pode reenviar contexto sensível;
+pode mandar o mesmo prompt para cinco providers;
+pode transformar uma falha de contexto em tempestade de retries;
+não considera carga;
+não considera capacidade de tool calling;
+não considera contexto máximo;
+não considera qualidade necessária;
+não considera privacidade.
+
+OpenRouter, por exemplo, já possui fallback interno entre providers, mas modelos :free têm limites baixos e variáveis. A documentação atual informa 50 requests/dia para conta gratuita e 20 RPM, com aumento para 1.000 requests/dia após adicionar créditos.
+
+1.3 Modelo correto: Policy-Based Cascading Router
+
+A arquitetura deveria ser:
+
+                         ┌───────────────┐
+                         │ Request       │
+                         └───────┬───────┘
+                                 │
+                         ┌───────▼────────┐
+                         │ Data Classifier │
+                         └───────┬────────┘
+                                 │
+                 ┌───────────────┼────────────────┐
+                 │               │                │
+             PRIVATE         INTERNAL          PUBLIC
+                 │               │                │
+                 ▼               ▼                ▼
+              LOCAL           LOCAL          latency/cost
+                 │               │                │
+                 ▼               ▼                ▼
+             Bonsai          Bonsai          Router
+                                             │
+                        ┌────────────────────┼──────────────┐
+                        │                    │              │
+                      Groq                Cerebras       Gemini
+                        │                    │              │
+                        └───────────┬────────┴──────────────┘
+                                    │
+                              OpenRouter
+                                    │
+                              NVIDIA Build
+Regra absoluta
+PRIVATE → LOCAL ONLY
+
+Não existe:
+
+local failure → cloud
+
+para dados privados.
+
+A implementação atual tenta fazer isso com ContentSafetyFilter, mas o mecanismo é insuficiente.
+
+O filtro atual procura strings como:
+
+recall
+remember
+vault
+/home/
+password
+token
+api_key
+secret
+ssh
+private
+
+Isso é heurística lexical, não classificação de dados.
+
+Exemplo:
+
+"Analise este código:"
+<conteúdo contendo uma chave secreta>
+
+não precisa conter a palavra password.
+
+Portanto:
+
+Nunca utilizar ausência de keyword como prova de que um prompt é seguro para egress.
+
+1.4 Classificação de sensibilidade
+
+O router deveria produzir algo como:
+
+class DataClass(Enum):
+    PUBLIC = 0
+    INTERNAL = 1
+    CONFIDENTIAL = 2
+    SECRET = 3
+
+E cada request:
+
+Request
+ ├── data_class
+ ├── requires_tools
+ ├── requires_vision
+ ├── context_tokens
+ ├── expected_output_tokens
+ ├── latency_budget_ms
+ ├── quality_tier
+ ├── user_forced_local
+ └── allowed_providers
+Política
+Classe	Providers
+SECRET	Bonsai/local
+CONFIDENTIAL	Bonsai/local
+INTERNAL	Bonsai → cloud somente após sanitização explícita
+PUBLIC	qualquer provider permitido
+PUBLIC + low latency	Groq/Cerebras/local
+PUBLIC + reasoning	provider de maior qualidade disponível
+PUBLIC + huge context	Gemini/OpenRouter/NVIDIA
+tool_calling	somente providers compatíveis
+vision	somente backend multimodal compatível
+1.5 Função matemática do router
+
+O problema pode ser modelado como minimização:
+
+$$ P^* = \arg\min_{p \in P_{allowed}} C(p) $$
+
+onde:
+
+$$ C(p)= w_tT_p+ w_q(1-Q_p)+ w_rR_p+ w_cCost_p+ w_lL_p $$
+
+com:
+
+\(T_p\) = TTFT esperado;
+\(Q_p\) = qualidade estimada;
+\(R_p\) = risco de privacidade;
+\(Cost_p\) = custo financeiro/cota;
+\(L_p\) = latência total esperada;
+\(w_x\) = pesos da política.
+
+Mas há uma restrição dura:
+
+$$ R_p = \infty $$
+
+quando:
+
+data_class > provider.max_data_class
+
+Então um provider cloud não pode ganhar simplesmente porque é mais rápido.
+
+1.6 Para TTFT, o score deve ser preditivo
+
+O histórico precisa alimentar:
+
+ProviderTelemetry
+ ├── TTFT p50
+ ├── TTFT p95
+ ├── tokens/sec
+ ├── failure rate
+ ├── timeout rate
+ ├── 429 rate
+ ├── context rejection rate
+ ├── tool-call success rate
+ ├── remaining quota
+ └── last successful timestamp
+
+O score:
+
+$$ Score(p)= \alpha \cdot TTFT_{p95} +\beta \cdot FailureRate +\gamma \cdot QueueDepth +\delta \cdot QuotaPressure +\epsilon \cdot Cost -\zeta \cdot Quality $$
+
+e escolhe o menor.
+
+1.7 Ordem recomendada para a stack atual
+
+Para dados públicos:
+
+1. Bonsai local
+2. Cerebras
+3. Groq
+4. Gemini
+5. NVIDIA Build
+6. OpenRouter
+
+Mas não como prioridade fixa.
+
+Use:
+
+LOCAL
+ ↓
+se local saudável + capacidade suficiente
+ → local
+
+senão
+ ↓
+ranking dinâmico
+
+Para workloads públicos de baixa latência:
+
+Cerebras ↔ Groq
+
+merecem ser testados empiricamente em vez de assumidos. Cerebras atualmente oferece uma camada gratuita inicial com US$5 em créditos e posiciona a API como inferência de alta velocidade.
+
+O Groq expõe headers de rate-limit que permitem alimentar diretamente o router com:
+
+remaining requests
+remaining tokens
+reset time
+retry-after
+
+Isso é muito mais útil do que um simples:
+
+if groq_available:
+1.8 OpenRouter deve ser tratado como agregador, não como provider simples
+
+OpenRouter já implementa fallback/routing próprio.
+
+Logo:
+
+JARVIS Router
+    ↓
+OpenRouter
+    ↓
+OpenRouter Provider Router
+    ├── provider A
+    ├── provider B
+    └── provider C
+
+é diferente de:
+
+JARVIS Router
+ ├── OpenRouter
+ ├── Groq
+ └── Cerebras
+
+O segundo oferece controle maior.
+
+O primeiro pode ser usado como último pool de recuperação.
+
+1.9 Gemini tem uma questão de privacidade diferente
+
+A documentação atual do Gemini Developer API informa que no Free Tier o conteúdo pode ser usado para melhorar os produtos, enquanto o Paid Tier informa que o conteúdo não é usado para esse fim.
+
+Portanto, mesmo que:
+
+Gemini = grátis
+
+não significa:
+
+Gemini = equivalente ao local
+
+Em política de dados, deve ser tratado como:
+
+cloud / external / data-policy-dependent
+
+A própria documentação indica que quotas são avaliadas por RPM, TPM e RPD, e podem variar por modelo/projeto.
+
+1.10 NVIDIA Build
+
+O NVIDIA Build atual possui endpoints gratuitos para diversos modelos, incluindo Nemotron 3 Ultra e Nemotron 3.5 Lightning.
+
+Mas eu o classificaria como:
+
+EXTERNAL_CLOUD
+
+e não como:
+
+LOCAL
+
+simplesmente porque os modelos são NVIDIA/open.
+
+2. Mapeamento de gargalos síncronos
+
+Aqui existe um problema arquitetural mais concreto.
+
+2.1 O maior gargalo é requests
+
+O LlamaCppBackend usa:
+
+import requests
+
+e:
+
+self._session.post(...)
+self._session.get(...)
+
+com requests.Session.
+
+Isso significa que o caminho:
+
+CLI
+ ↓
+LLMClient.chat()
+ ↓
+backend.chat()
+ ↓
+requests.Session.post()
+ ↓
+llama-server
+
+é bloqueante.
+
+O próprio LLMClient declara explicitamente a seção:
+
+# chat (síncrono)
+
+e chat_stream() atualmente não é streaming real:
+
+content = self.chat(...)
+yield content
+
+Esse é provavelmente o maior gargalo para o REPL.
+
+2.2 O streaming atual é falso
+
+A arquitetura afirma suporte a streaming no backend:
+
+stream: bool = False
+
+mas o LlamaCppBackend recebe stream=True e depois executa:
+
+data = resp.json()
+
+em vez de consumir incrementalmente os chunks SSE.
+
+E o LLMClient.chat_stream() explicitamente faz fallback para:
+
+chat()
+↓
+resposta inteira
+↓
+yield resposta inteira
+
+Portanto:
+
+TTFT observado pelo REPL atualmente não representa TTFT real de token streaming.
+
+2.3 EventBus também não é verdadeiramente concorrente
+
+A documentação diz:
+
+“Cada subscriber é uma task asyncio isolada”
+
+mas o código atual não implementa isso dessa forma.
+
+No dispatch assíncrono:
+
+for sub in targets:
+    result = sub.handler(event)
+    if asyncio.iscoroutine(result):
+        await asyncio.wait_for(result, ...)
+
+Ou seja:
+
+Event
+ ↓
+subscriber A
+ ↓ await
+subscriber B
+ ↓ await
+subscriber C
+
+não:
+
+Event
+ ├── task A
+ ├── task B
+ └── task C
+
+Isso é uma diferença arquitetural importante.
+
+2.4 O caminho síncrono é ainda pior
+
+EventBus.publish() chama _dispatch_sync().
+
+Em erro:
+
+time.sleep(...)
+
+é utilizado para retry.
+
+Portanto um subscriber lento pode bloquear completamente:
+
+CLI
+ ↓
+publish()
+ ↓
+handler
+ ↓
+retry
+ ↓
+time.sleep()
+ ↓
+CLI congelada
+2.5 ContextBudget também possui I/O síncrono
+
+Na inicialização:
+
+query_server_context_size()
+
+faz:
+
+requests.get(...)
+
+com timeout.
+
+Isso pode acontecer na criação do objeto de contexto e introduzir I/O no caminho de inicialização.
+
+Além disso:
+
+CHARS_PER_TOKEN = 4
+
+é apenas uma heurística.
+
+Logo:
+
+usage_percent
+
+não representa necessariamente o tokenizer real do modelo.
+
+2.6 Compressão de contexto é CPU-bound
+
+compress_history() percorre mensagens e:
+
+divide strings;
+procura keywords;
+reconstrói mensagens;
+recalcula tokens.
+
+Isso é síncrono e potencialmente pesado para históricos grandes.
+
+Não é o maior gargalo comparado ao LLM, mas deve sair do event loop quando crescer:
+
+compressed = await asyncio.to_thread(
+    context_budget.compress_history
+)
+
+ou usar um worker CPU dedicado.
+
+2.7 Nightwatch também é essencialmente sequencial
+
+A própria arquitetura de isolamento registra que o Nightwatch executa uma task por vez e não há concorrência async no Harness.execute_task().
+
+A pipeline é:
+
+Discovery
+   ↓
+TaskQueue
+   ↓
+Patcher
+   ↓
+SafeEditor
+   ↓
+Validator
+   ↓
+Evaluator
+   ↓
+Checkpoint
+   ↓
+Safety
+   ↓
+Commit
+   ↓
+Learning
+   ↓
+Telegram
+
+Isso é correto para integridade de código, mas ruim para throughput.
+
+A solução não é simplesmente paralelizar tudo.
+
+2.8 Pipeline async correto
+
+Eu dividiria o sistema em quatro planos.
+
+                  ┌─────────────────────────┐
+                  │       Control Plane      │
+                  │ state/events/commands    │
+                  └────────────┬────────────┘
+                               │
+              ┌────────────────┴────────────────┐
+              │                                 │
+        ┌─────▼─────┐                     ┌─────▼─────┐
+        │ CLI/TUI   │                     │ SvelteKit │
+        └─────┬─────┘                     └─────┬─────┘
+              │                                 │
+              └──────────────┬──────────────────┘
+                             │
+                      ┌──────▼──────┐
+                      │ Agent Runtime│
+                      └──────┬──────┘
+                             │
+       ┌─────────────────────┼──────────────────────┐
+       │                     │                      │
+ ┌─────▼─────┐        ┌──────▼─────┐        ┌──────▼─────┐
+ │ LLM Worker│        │ Tool Worker │        │ RAG Worker │
+ └───────────┘        └─────────────┘        └────────────┘
+2.9 Contrato async do backend
+
+O contrato deveria evoluir de:
+
+def chat(...) -> ChatResponse
+
+para:
+
+async def chat(...) -> ChatResponse
+
+async def stream(...) -> AsyncIterator[ChatEvent]
+
+com:
+
+@dataclass
+class ChatEvent:
+    type: Literal[
+        "started",
+        "token",
+        "tool_call",
+        "tool_result",
+        "usage",
+        "completed",
+        "error",
+    ]
+    timestamp: float
+    request_id: str
+    payload: dict[str, Any]
+
+Isso cria uma abstração única.
+
+2.10 Fluxo de streaming correto
+llama.cpp
+   │
+   │ SSE chunk
+   ▼
+AsyncHTTPClient
+   │
+   ▼
+LLMBackend.stream()
+   │
+   ▼
+AgentRuntime
+   │
+   ├── ContextBudget
+   ├── Telemetry
+   ├── EventBus
+   │
+   ├──────────────► CLI
+   │
+   └──────────────► WebUI SSE
+
+Não deve existir:
+
+LLM → string gigante → EventBus → SSE
+
+Deve existir:
+
+LLM → events incrementais
+2.11 SSE vs WebSocket
+
+Para o painel SvelteKit:
+
+SSE
+
+Ideal para:
+
+server → client
+
+e já existe no projeto.
+
+Use SSE para:
+
+token stream;
+agent state;
+task state;
+service state;
+logs;
+telemetry;
+notifications.
+WebSocket
+
+Use somente quando realmente houver:
+
+client ⇄ server
+
+de alta frequência:
+
+interactive REPL
+voice streaming
+bidirectional control
+live terminal
+
+Para o painel administrativo, SSE é mais simples e suficiente.
+
+2.12 EventBus deveria ser realmente concorrente
+
+Em vez de:
+
+await handler(event)
+
+usar:
+
+task = asyncio.create_task(
+    dispatch_subscriber(subscriber, event)
+)
+
+e manter:
+
+subscriber task registry
+bounded queues
+backpressure
+cancellation
+DLQ
+timeouts
+
+Porém, eventos de mutação de estado precisam preservar ordering:
+
+task.created
+task.started
+task.progress
+task.completed
+
+Portanto eu separaria:
+
+ordered state events
+
+de:
+
+telemetry events
+
+Telemetry pode ser descartável/coalescida.
+
+2.13 Backpressure
+
+Fundamental.
+
+Sem backpressure:
+
+LLM → 1000 tokens/s
+       ↓
+SSE
+       ↓
+slow browser
+       ↓
+queue grows
+       ↓
+RAM grows
+
+Use:
+
+asyncio.Queue(maxsize=N)
+
+e política:
+
+token event:
+    coalesce/drop permitted
+
+state event:
+    never drop
+
+completion:
+    never drop
+
+telemetry:
+    sampling/coalescing
+3. REPL avançado
+
+Aqui o projeto já possui quase todos os ingredientes necessários.
+
+O ContextBudget já mantém:
+
+tokens_used
+tokens_budget
+usage_percent
+messages
+tool calls
+files read
+files written
+compactions
+LLM calls
+tokens processed
+phase tokens
+phase calls
+
+O problema é que esses dados ainda não formam um telemetry stream unificado.
+
+3.1 Modelo de sessão
+
+Criaria:
+
+@dataclass
+class SessionTelemetry:
+    session_id: str
+
+    provider: str
+    model: str
+
+    context_limit: int
+    input_tokens: int
+    output_tokens: int
+    cached_tokens: int
+
+    ttft_ms: float
+    generation_ms: float
+    total_latency_ms: float
+
+    input_tps: float
+    output_tps: float
+
+    requests: int
+    retries: int
+
+    tools_called: int
+    files_read: int
+    files_written: int
+
+    estimated_cost_usd: float
+    simulated_credits: float
+
+    context_used: int
+    context_percent: float
+3.2 Métricas do OpenCode que vale reproduzir
+
+A documentação atual do OpenCode permite definir explicitamente:
+
+limit.context
+limit.output
+
+para que o sistema saiba quanto contexto o modelo suporta e quanto espaço de saída existe.
+
+A partir disso, o JARVIS pode exibir:
+
+╭─ JARVIS ─────────────────────────────────────────────╮
+│ Model       Bonsai-8B Q2_0_g64                       │
+│ Backend     llama.cpp / CUDA                         │
+│ Context     8,412 / 32,768  █████░░░░░ 25.7%        │
+│ Output      1,024 / 8,192                           │
+│                                                     │
+│ TTFT        118 ms                                   │
+│ Decode      71.6 tok/s                              │
+│ Prefill     367 tok/s                               │
+│                                                     │
+│ Input       8,412 tok                                │
+│ Output      643 tok                                  │
+│ Cache       0 tok                                    │
+│                                                     │
+│ Session     14 requests                              │
+│ Tools       27 calls                                 │
+│ Files       R 43 / W 6                               │
+╰─────────────────────────────────────────────────────╯
+3.3 TTFT verdadeiro
+
+Definição:
+
+$$ TTFT=t_{first\_token}-t_{request\_sent} $$
+
+Não:
+
+time(response)
+
+porque isso mede:
+
+TTFT + generation
+
+A implementação precisa registrar:
+
+t0 = request sent
+t1 = HTTP response headers
+t2 = first SSE data chunk
+t3 = first actual token
+tn = final token
+
+Então:
+
+TTFT        = t3 - t0
+network     = t1 - t0
+prefill     = t3 - t1
+generation  = tn - t3
+3.4 Throughput
+
+Depois do primeiro token:
+
+$$ TPS = \frac{N_{output}}{t_{last}-t_{first}} $$
+
+Isso produz:
+
+TG: 71.6 tok/s
+
+que é muito mais útil que uma média desde o início.
+
+3.5 Context percentage
+
+Não usar somente:
+
+len(text) / 4
+
+para sempre.
+
+A arquitetura atual explicitamente usa:
+
+~4 chars/token
+
+Isso é aceitável como fallback, mas o REPL deveria preferir:
+
+provider usage.prompt_tokens
+
+quando disponível.
+
+Hierarquia:
+
+1. API usage.prompt_tokens
+2. llama.cpp slot telemetry
+3. tokenizer real
+4. heuristic chars/token
+3.6 llama.cpp fornece uma vantagem enorme
+
+O backend já consulta:
+
+/slots
+
+e calcula:
+
+slots_total
+slots_idle
+slots_busy
+ctx_total
+ctx_used
+ctx_pct
+
+Isso deve alimentar diretamente a barra:
+
+CTX  18,421 / 32,768
+     ███████████░░░░░ 56.2%
+
+e não depender apenas da contagem local.
+
+3.7 Credits simulados
+
+Isso é simples e útil.
+
+Para cada provider:
+
+ProviderPricing(
+    input_per_million=0.0,
+    output_per_million=0.0,
+    cached_input_per_million=0.0,
+)
+
+Então:
+
+$$ Cost = \frac{input}{10^6}P_i+ \frac{output}{10^6}P_o+ \frac{cached}{10^6}P_c $$
+
+Mesmo para modelos gratuitos:
+
+Cost: $0.0000
+
+Mas adicionar:
+
+Free quota:
+████████░░ 82%
+
+quando a API fornecer quota.
+
+3.8 Não chamar isso de "custo real" quando for estimado
+
+Use:
+
+estimated_cost
+
+e:
+
+provider_reported_cost
+
+se o provider fornecer o valor real.
+
+OpenRouter, por exemplo, expõe usage e custo; sua documentação informa que usage: {include: true} pode ser usado para obter dados de uso na resposta.
+
+Logo:
+
+Estimated: $0.000000
+Reported:  $0.000000
+
+é melhor que fingir precisão.
+
+3.9 Telemetria por evento
+
+O protocolo interno deveria ser:
+
+llm.request.started
+llm.request.first_token
+llm.token
+llm.request.completed
+llm.request.failed
+
+context.updated
+context.compacted
+
+tool.started
+tool.completed
+tool.failed
+
+provider.selected
+provider.fallback
+provider.rate_limited
+
+task.started
+task.progress
+task.completed
+task.failed
+
+Exemplo:
+
+{
+  "event": "llm.request.first_token",
+  "request_id": "8f31...",
+  "provider": "llama-cpp",
+  "model": "bonsai-8b",
+  "ttft_ms": 118.4
+}
+
+O mesmo evento alimenta:
+
+CLI
+SSE
+logs
+metrics
+debugging
+3.10 REPL visual
+
+O REPL deveria ter duas camadas.
+
+Modo normal
+> explique este erro
+
+⠋ Bonsai-8B · 32K ctx · 118ms TTFT · 71.6 tok/s
+
+O problema está em...
+Modo telemetry
+/repl stats
+
+produz:
+
+SESSION
+────────────────────────────────────────────
+Provider             llama.cpp
+Model                Ternary-Bonsai-8B
+Context              32,768
+Used                 8,412
+Usage                25.7%
+
+REQUEST
+────────────────────────────────────────────
+TTFT                 118 ms
+Prefill              367 tok/s
+Decode               71.6 tok/s
+Output               643 tok
+Total                 9.0 s
+
+TOOLS
+────────────────────────────────────────────
+Calls                27
+Read                 43
+Write                 6
+Shell                 9
+Tests                 4
+
+SESSION
+────────────────────────────────────────────
+LLM calls            14
+Tokens in            72,931
+Tokens out            8,921
+Compactions           2
+
+COST
+────────────────────────────────────────────
+Input                 $0.000000
+Output                $0.000000
+Estimated              $0.000000
+4. Arquitetura final recomendada
+
+O resultado que considero tecnicamente mais sólido é:
+
+                         JARVIS RUNTIME
+                              │
+                ┌─────────────▼─────────────┐
+                │    Policy Router          │
+                │                           │
+                │ data classification       │
+                │ capability matching       │
+                │ latency budget             │
+                │ quota                     │
+                │ provider health            │
+                │ model quality              │
+                └─────────────┬─────────────┘
+                              │
+             ┌────────────────┼─────────────────┐
+             │                │                 │
+          LOCAL             CLOUD           AGGREGATOR
+             │                │                 │
+        ┌────▼────┐     ┌─────▼─────┐     ┌─────▼──────┐
+        │ llama   │     │ Cerebras  │     │ OpenRouter │
+        │ server  │     │ Groq      │     │ fallback   │
+        │ Bonsai  │     │ Gemini    │     │ routing    │
+        └────┬────┘     │ NVIDIA    │     └────────────┘
+             │          └───────────┘
+             │
+             ▼
+       ┌──────────────┐
+       │ Async Stream │
+       │ Adapter      │
+       └──────┬───────┘
+              │
+       ┌──────▼──────────┐
+       │ Agent Runtime   │
+       │ ContextBudget   │
+       │ ToolExecutor    │
+       │ SafeEditor      │
+       └──────┬──────────┘
+              │
+       ┌──────▼───────┐
+       │ EventBus     │
+       │ ordered      │
+       │ + telemetry  │
+       └───┬─────┬────┘
+           │     │
+       ┌───▼─┐ ┌─▼────────┐
+       │ TUI │ │ Web SSE  │
+       └─────┘ └──────────┘
+5. O que deve ser reutilizado do Nightwatch
+
+A própria documentação arquitetural do projeto identifica componentes muito bons que atualmente estão excessivamente isolados:
+
+Componente	Situação	Destino
+ContextBudget	duplicado	unificar
+SafeEditor	Nightwatch	Agent/MCP/REPL
+Validator	Nightwatch	Agent/MCP/REPL
+Evaluator	Nightwatch	REPL/Agent
+Checkpoint	Nightwatch	REPL/Agent
+Learning	Nightwatch	Agent
+ProjectIsolation	Nightwatch	Runtime inteiro
+Safety	Nightwatch	camada global
+EventBus	core	backbone
+Telemetry	parcialmente dispersa	camada transversal
+
+A auditoria arquitetural do próprio projeto chega à mesma conclusão: Nightwatch contém componentes reutilizáveis que deveriam alimentar os outros sistemas JARVIS.
+
+6. Problemas concretos encontrados que não devem ser ignorados
+
+Há uma diferença importante entre arquitetura pretendida e arquitetura efetivamente executada.
+
+Confirmado no código atual
+Problema	Estado
+LLM HTTP síncrono	confirmado
+chat_stream() não faz streaming real	confirmado
+EventBus async serializa subscribers	confirmado
+EventBus sync usa time.sleep()	confirmado
+ContextBudget usa requests	confirmado
+Context token count usa heurística	confirmado
+MCP é stdio JSON-RPC síncrono	confirmado
+MCP chama ferramentas síncronas	confirmado
+Nightwatch é serial	confirmado
+PersonaExecutor ainda altera JARVIS_PROJECT_ROOT globalmente	confirmado
+PersonaExecutor usa max_retries=1 hardcoded	confirmado
+files_changed agora tenta git diff real	corrigido parcialmente
+--dry-run agora chega ao PersonaExecutor	corrigido
+project path hardcoded /home/nixos/projects	corrigido no PersonaExecutor atual
+
+O último ponto é especialmente importante: o relatório forense de 3 de setembro dizia que --dry-run, path e files_changed estavam quebrados, mas o código atual mostra que os dois primeiros já foram corrigidos e files_changed agora usa git diff --name-only HEAD.
+
+Portanto, não seria correto simplesmente reproduzir o relatório forense como estado atual.
+
+7. Outro problema sério: segurança do fallback
+
+Há uma falha arquitetural no CircuitBreaker.
+
+Quando o local falha dentro de _try_local():
+
+if self._fallback_fn is not None:
+    return self._try_fallback(messages)
+
+ele chama diretamente o fallback.
+
+O filtro ContentSafetyFilter é aplicado no caminho de circuito OPEN, mas não nessa transição direta local → fallback.
+
+Isso significa:
+
+local request
+    ↓
+local exception
+    ↓
+_try_fallback()
+    ↓
+REMOTE
+
+sem necessariamente passar pelo:
+
+ContentSafetyFilter
+
+Esse é, na minha avaliação, um P0 de arquitetura de segurança para qualquer implementação real do cascade.
+
+A regra correta deve ser:
+
+                ┌───────────────┐
+request ───────►│ Data Policy   │
+                └───────┬───────┘
+                        │
+              ┌─────────▼─────────┐
+              │ Provider selected │
+              └─────────┬─────────┘
+                        │
+                  cloud allowed?
+                    /       \
+                  NO         YES
+                  │           │
+                LOCAL       REMOTE
+
+Nunca:
+
+LOCAL ERROR → REMOTE
+
+diretamente.
+
+8. Conclusão arquitetural
+
+A evolução correta não é adicionar mais if provider_failed.
+
+É transformar o JARVIS em um runtime orientado a eventos, policy-driven e local-first:
+
+                  ┌────────────────────┐
+                  │  Security Policy   │
+                  └─────────┬──────────┘
+                            │
+                  ┌─────────▼──────────┐
+                  │ Intelligent Router │
+                  └─────────┬──────────┘
+                            │
+          ┌─────────────────┼─────────────────┐
+          │                 │                 │
+        LOCAL             CLOUD           AGGREGATOR
+          │                 │                 │
+          └─────────────────┼─────────────────┘
+                            │
+                    Async LLM Stream
+                            │
+                    ┌───────▼───────┐
+                    │ Agent Runtime │
+                    └───────┬───────┘
+                            │
+                 ┌──────────▼──────────┐
+                 │ Unified Event Bus   │
+                 └──────┬─────────┬────┘
+                        │         │
+                     TUI/SSE    Metrics
+Prioridade técnica
+
+P0 — Segurança
+
+Centralizar Data Classification.
+Impedir qualquer fallback que não passe pela policy.
+Substituir keyword-only filtering.
+Definir allowed_data_class por provider/model.
+Registrar toda decisão de egress.
+
+P0 — Streaming
+
+Criar AsyncLLMBackend.
+Implementar SSE real no LlamaCppBackend.
+Eliminar chat_stream() fake.
+Propagar ChatEvent incrementalmente.
+
+P1 — Concorrência
+
+Tornar EventBus realmente concorrente.
+Separar eventos ordenados de telemetry.
+Implementar backpressure/coalescing.
+Tirar requests do event loop.
+Mover CPU-heavy context compression para workers.
+
+P1 — Router
+
+Criar ProviderRegistry.
+Health score por provider.
+Quota-aware routing.
+Latency-aware routing.
+Capability-aware routing.
+Circuit breaker por provider, não somente por backend local.
+
+P1 — Telemetria
+
+request_id universal.
+TTFT real.
+prefill TPS.
+decode TPS.
+prompt/output/cache tokens.
+context occupancy real.
+retry/fallback counters.
+provider quota.
+estimated vs reported cost.
+
+P2 — REPL
+
+Status line estilo OpenCode.
+/stats.
+/telemetry.
+/model.
+/context.
+/providers.
+live token counter.
+context progress bar.
+session accounting.
+
+OpenCode já trata limites de contexto/output como metadados de primeira classe para que a interface saiba quanto contexto está disponível. A arquitetura do JARVIS pode fazer o mesmo, mas com uma vantagem: possuir os dados de inferência local diretamente do llama.cpp, inclusive /slots.
+
+Estado final que eu adotaria
+SECRET / PRIVATE
+    │
+    └──► Bonsai local
+          │
+          └──► erro = erro local
+                    NÃO envia para cloud
+
+INTERNAL
+    │
+    ├──► local
+    │
+    └──► sanitização explícita
+             │
+             └──► cloud permitido
+
+PUBLIC
+    │
+    └──► dynamic router
+          │
+          ├── Bonsai
+          ├── Cerebras
+          ├── Groq
+          ├── Gemini
+          ├── NVIDIA
+          └── OpenRouter
+                    │
+                    └── provider fallback
+
+TODOS
+    │
+    ▼
+Async streaming
+    │
+    ▼
+EventBus
+    ├── CLI/TUI
+    ├── SvelteKit SSE
+    ├── telemetry
+    ├── audit
+    └── metrics
+
+O ponto central: o projeto já possui aproximadamente 70% dos componentes necessários — LLMBackend, CircuitBreaker, ContextBudget, EventBus, /slots, MCP, SSE, Checkpoint, SafeEditor, Validator e Harness. O problema atual não é falta de componentes; é que eles ainda estão acoplados em caminhos síncronos e possuem responsabilidades duplicadas/fragmentadas. A própria documentação do Nightwatch identifica essa duplicação, principalmente ContextBudget, SafeEditor, Validator e Checkpoint.
+
+O maior ganho arquitetural virá de unificar essas primitivas em torno de um AsyncAgentRuntime + PolicyRouter + EventBus, e não de adicionar mais providers ou mais camadas ao Harness.
