@@ -213,7 +213,7 @@ let
                       pulse_state += 1
 
                   if chunk_count % 10 == 0:
-                      print(f"[WW] RMS: {rms:.0f} (baseline={noise_baseline:.0f}, gate={max(noise_baseline * 1.5, 800):.0f})", flush=True)
+                      print(f"[WW] RMS: {rms:.0f} (baseline={noise_baseline:.0f}, gate={max(noise_baseline * 1.5, 250):.0f})", flush=True)
 
                   # Ignora o aquecimento inicial do mic
                   if chunk_count < WARMUP_CHUNKS:
@@ -226,10 +226,10 @@ let
                           noise_baseline = noise_baseline * 0.95 + rms * 0.05
 
                       # Evita que o gate caia a zero e cause ganho infinito
-                      speech_gate = max(noise_baseline * 1.6, 1500)
+                      speech_gate = max(noise_baseline * 1.6, 400)
                   else:
-                      speech_gate = max(noise_baseline * 1.6, 1500)
-                      speech_gate = max(noise_baseline * 1.5, 800)
+                      speech_gate = max(noise_baseline * 1.6, 400)
+                      speech_gate = max(noise_baseline * 1.5, 250)
 
                   # Cooldown check
                   if (time.time() - last_trigger_time) < COOLDOWN:
