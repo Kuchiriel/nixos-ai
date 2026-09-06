@@ -72,8 +72,11 @@
     slurp
     wl-clipboard
     cloudflare-warp
-    # Pacote do JARVIS via overlay
-    jarvis
+    # Pacote do JARVIS via overlay (withVoice: STT/TTS p/ wakeword brainCommand)
+    jarvis-voice
+    # Voz: G2P do Kokoro + captura/teste de áudio
+    espeak-ng
+    alsa-utils
     # Editor
     # vscodium — gerenciado por home-manager (vscode-roo.nix)
   ];
