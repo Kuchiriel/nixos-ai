@@ -1437,6 +1437,15 @@ class Harness:
         self.notify(f"🌙 *Nightwatch Started*\nProjects: {projects_str}")
         self._emit("run_started", projects=self.config.projects)
 
+        # Global pause short-circuit: skip discovery AND execution
+        # (discovery burns LLM/GPU for tasks that would only be deferred).
+        from nightwatch.pause import is_paused as _is_paused_now
+        _paused_now, _why_now = _is_paused_now()
+        if _paused_now:
+            self.notify(f"⏸️ *Run Paused*\n{_why_now}")
+            self._emit("run_paused", reason=_why_now)
+            return result
+
         # ── Recovery ──
         recovery = get_recovery_context(project=self.config.project)
         if recovery and recovery.get("task_id"):
