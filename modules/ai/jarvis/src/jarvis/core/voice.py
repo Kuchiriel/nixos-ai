@@ -337,6 +337,8 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
     contexto >80%), retorna resposta busy via TTS sem tentar o LLM — evita
     sobrecarregar ainda mais e dá feedback imediato ao usuário.
     """
+    import faulthandler
+    faulthandler.enable()
     from jarvis.core.busy import check_load, handle_busy
     from jarvis.core.feedback import set_status
     from jarvis.core.logging import get_logger
@@ -434,12 +436,13 @@ def main_stt(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="jarvis stt", description="Transcreve um WAV (faster-whisper)")
     parser.add_argument("wav", help="arquivo de áudio")
     parser.add_argument("--model", default=STT_MODEL_DEFAULT, help="tamanho do modelo")
+    parser.add_argument("--language", default=None, help="hint de idioma (ex: pt)")
     args = parser.parse_args(argv)
 
     if not Path(args.wav).exists():
         print(f"ERROR: arquivo não existe: {args.wav}", file=sys.stderr)
         return 1
-    text = transcribe(args.wav, model_size=args.model)
+    text = transcribe(args.wav, model_size=args.model, language=args.language)
     print(text)
     return 0 if not text.startswith("ERROR") else 1
 

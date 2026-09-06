@@ -306,7 +306,7 @@ let
 
                   # Check for silence (adaptive: < baseline * 1.1 for 2s, min 1s recording)
                   recording_duration = len(speech_frames) * CHUNK / RATE
-                  if rms < noise_baseline * 1.1 and recording_duration > 1.0:
+                  if rms < noise_baseline * 1.1 and recording_duration > 3.0:
                       if silence_start is None:
                           silence_start = time.time()
                       elif time.time() - silence_start > 2.0:
@@ -361,8 +361,11 @@ let
                           try:
                               import shutil as _shutil
                               # Quick STT check
+                              _stt_args = [BRAIN_CMD[0], "stt", temp_wav]
+                              if _ack_lang() == "pt":
+                                  _stt_args += ["--language", "pt"]
                               _stt_check = subprocess.run(
-                                  [BRAIN_CMD[0], "stt", temp_wav],
+                                  _stt_args,
                                   # Cold start: faster-whisper carrega o
                                   # modelo a cada chamada (~20-40s CPU)
                                   timeout=90, capture_output=True, text=True,
