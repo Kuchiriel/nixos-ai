@@ -25,8 +25,8 @@ def _cfg(name: str, default: str = "") -> str:
     return os.environ.get(name, default)
 
 
-# Pitch padrão: -2 semitons (validado contra rvc-jarvis-10s.wav, o mais fiel).
-DEFAULT_PITCH = -2
+# Pitch padrão: 0 (neutro — receita validada rvc-jarvis-10s.wav sem shift).
+DEFAULT_PITCH = 0
 
 
 def _best_model() -> tuple[str, str]:

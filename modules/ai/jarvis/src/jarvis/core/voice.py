@@ -232,7 +232,7 @@ def _setup_kokoro_espeak():
         pass  # se espeak não está disponível, Kokoro vai dar erro own
 
 
-CLONE_SPEED_FACTOR = 0.9  # base mais calma: RVC preserva o ritmo de entrada
+CLONE_SPEED_FACTOR = 1.0  # neutro: RVC preserva o ritmo; receita validada (rvc-jarvis-10s.wav) sem slowdown
 
 def speak(
     text: str,
@@ -533,7 +533,7 @@ def main_tts(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-play", action="store_true", help="gera WAV sem tocar")
     parser.add_argument("--clone", action="store_true", help="converte p/ timbre RVC (JARVIS_VOICE_CLONE_MODEL)")
     parser.add_argument("--speed", type=float, default=None, help="velocidade base Kokoro (padrão: emoção; clone aplica ×0.9)")
-    parser.add_argument("--pitch", type=int, default=None, help="semitons RVC (-12..12; default -2, 0 = neutro)")
+    parser.add_argument("--pitch", type=int, default=None, help="semitons RVC (-12..12; default 0 = neutro)")
     args = parser.parse_args(argv)
 
     # id da voz → path (mesmo diretório do modelo, voices/<id>.pt).
