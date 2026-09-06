@@ -1426,6 +1426,20 @@ class Harness:
         start = time.time()
         result = HarnessResult()
 
+        # Concurrency guard: um loop por vez (discovery LLM paralela
+        # derrete a GPU). Segundo loop sai imediatamente.
+        import fcntl as _fcntl
+        _lock_path = Path.home() / ".local/state/jarvis/nightwatch/RUNNING.lock"
+        _lock_path.parent.mkdir(parents=True, exist_ok=True)
+        _lock_fh = open(_lock_path, "w")
+        try:
+            _fcntl.flock(_lock_fh.fileno(), _fcntl.LOCK_EX | _fcntl.LOCK_NB)
+        except OSError:
+            self.notify("⏭️ *Nightwatch skipped*\nOutro loop em execução")
+            return result
+        _lock_fh.write(f"{os.getpid()}\n{start}\n")
+        _lock_fh.flush()
+
         self.mission.active = True
         self.mission.started_at = time.time()
 
