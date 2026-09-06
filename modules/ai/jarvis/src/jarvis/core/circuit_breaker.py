@@ -119,12 +119,20 @@ class ContentSafetyFilter:
             else:
                 self._compiled.append(re.compile(escaped, re.IGNORECASE))
         self._secret_rx = [re.compile(rx) for rx in SECRET_REGEXES]
-        self._conf_rx = [
-            re.compile(re.escape(p), re.IGNORECASE) for p in CONFIDENTIAL_PATTERNS
-        ]
-        self._int_rx = [
-            re.compile(re.escape(p), re.IGNORECASE) for p in INTERNAL_PATTERNS
-        ]
+        self._conf_rx = [self._word_aware(p) for p in CONFIDENTIAL_PATTERNS]
+        self._int_rx = [self._word_aware(p) for p in INTERNAL_PATTERNS]
+
+    @staticmethod
+    def _word_aware(pattern: str) -> re.Pattern[str]:
+        """Patterns curtos (<5 chars, ex: ssh) usam word boundary.
+
+        Evita falsos positivos em strings aleatórias (ex: "ssh" em
+        "8mekp1isshs1bhgjh0p1") — mesma regra do filtro legado.
+        """
+        escaped = re.escape(pattern)
+        if len(pattern) < 5 and not pattern.startswith("/"):
+            return re.compile(rf"\b{escaped}\b", re.IGNORECASE)
+        return re.compile(escaped, re.IGNORECASE)
 
     def classify(self, prompt: str) -> tuple[DataClass, str]:
         """Classifica o prompt por sensibilidade (severidade decrescente)."""
