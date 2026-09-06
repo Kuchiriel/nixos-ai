@@ -11,6 +11,13 @@ Resiliência:
   - Timeouts configuráveis por subscriber
   - Retry com backoff linear (max 3 tentativas)
 
+Concorrência (MISSÃO 3):
+  - Dispatch async dispara handlers em paralelo via asyncio.create_task();
+    um subscriber lento de telemetria NÃO degrada o fluxo principal.
+  - `ordered=True` no subscribe preserva ordenamento estrito (mutações de
+    estado de task): esses rodam sequencialmente, em ordem de registro.
+  - Retry nunca bloqueia um event loop com time.sleep(): pausa loop-aware.
+
 Uso síncrono (CLI): o módulo fornece `EventBus` síncrono que internamente
 usa `asyncio.Queue` — funciona tanto em scripts quanto em daemons.
 
@@ -47,6 +54,20 @@ class Subscriber:
     topics: list[str]  # [] = recebe todos
     max_retries: int = 3
     timeout_s: float = 30.0
+    ordered: bool = False  # True = ordenamento estrito (mutações de task)
+
+
+def _retry_pause(attempt: int) -> None:
+    """Pausa de retry que NUNCA bloqueia um event loop rodando (MISSÃO 3).
+
+    Sem loop na thread: time.sleep é inofensivo (nada para bloquear).
+    Com loop rodando: retry imediato, sem bloquear o loop.
+    O caminho async usa `await asyncio.sleep` (ver _deliver_async).
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        time.sleep(0.1 * (attempt + 1))
 
 
 @dataclass
@@ -101,14 +122,20 @@ class EventBus:
         name: str = "",
         max_retries: int = 3,
         timeout_s: float = 30.0,
+        ordered: bool = False,
     ) -> None:
-        """Registra um handler para um tópico. topic="" = todos os tópicos."""
+        """Registra um handler para um tópico. topic="" = todos os tópicos.
+
+        ordered=True: ordenamento estrito preservado (mutações de estado de
+        task) — dispatch sequencial em ordem de registro, mesmo no modo async.
+        """
         sub = Subscriber(
             name=name or handler.__name__,
             handler=handler,
             topics=[topic] if topic else [],
             max_retries=max_retries,
             timeout_s=timeout_s,
+            ordered=ordered,
         )
         self._subscribers.setdefault(topic or "__all__", []).append(sub)
 
@@ -141,7 +168,10 @@ class EventBus:
         self._dispatch_sync(event)
 
     def _dispatch_sync(self, event: Event) -> None:
-        """Dispatch síncrono — roda handlers diretamente (CLI/testes)."""
+        """Dispatch síncrono — roda handlers diretamente (CLI/testes).
+
+        Retry usa _retry_pause(): nunca bloqueia um event loop rodando.
+        """
         targets = self._matching_subscribers(event.topic)
         for sub in targets:
             for attempt in range(sub.max_retries + 1):
@@ -154,7 +184,7 @@ class EventBus:
                         self._stats.events_failed += 1
                         self._dlq.append(event)
                         break
-                    time.sleep(0.1 * (attempt + 1))
+                    _retry_pause(attempt)
 
     def _matching_subscribers(self, topic: str) -> list[Subscriber]:
         """Retorna subscribers que aceitam este tópico."""
@@ -214,30 +244,50 @@ class EventBus:
                 break
             await self._dispatch_async(event)
 
+    async def _deliver_async(self, sub: Subscriber, event: Event) -> None:
+        """Entrega um evento a UM subscriber, com retry + backoff não-bloqueante.
+
+        Roda dentro de sua própria task: falha/timeout aqui não afeta os
+        demais subscribers do mesmo evento.
+        """
+        for attempt in range(sub.max_retries + 1):
+            try:
+                result = sub.handler(event)
+                if asyncio.iscoroutine(result):
+                    await asyncio.wait_for(result, timeout=sub.timeout_s)
+                self._stats.events_delivered += 1
+                return
+            except asyncio.TimeoutError:
+                event.retries = attempt + 1
+                if attempt == sub.max_retries:
+                    self._stats.events_failed += 1
+                    self._dlq.append(event)
+                    return
+            except Exception:  # noqa: BLE001
+                event.retries = attempt + 1
+                if attempt == sub.max_retries:
+                    self._stats.events_failed += 1
+                    self._dlq.append(event)
+                    return
+                await asyncio.sleep(0.1 * (attempt + 1))
+
     async def _dispatch_async(self, event: Event) -> None:
-        """Dispatch assíncrono — roda handlers em tasks isoladas."""
+        """Dispatch assíncrono — handlers em paralelo (MISSÃO 3).
+
+        Subscribers paralelos disparam via asyncio.create_task() e rodam
+        concorrentemente: um subscriber lento de telemetria NÃO degrada o
+        fluxo principal. Subscribers `ordered=True` rodam sequencialmente,
+        em ordem de registro, APÓS o lote paralelo (ordenamento estrito
+        preservado para mutações de estado de task).
+        """
         targets = self._matching_subscribers(event.topic)
-        for sub in targets:
-            for attempt in range(sub.max_retries + 1):
-                try:
-                    result = sub.handler(event)
-                    if asyncio.iscoroutine(result):
-                        await asyncio.wait_for(result, timeout=sub.timeout_s)
-                    self._stats.events_delivered += 1
-                    break
-                except asyncio.TimeoutError:
-                    event.retries = attempt + 1
-                    if attempt == sub.max_retries:
-                        self._stats.events_failed += 1
-                        self._dlq.append(event)
-                        break
-                except Exception:  # noqa: BLE001
-                    event.retries = attempt + 1
-                    if attempt == sub.max_retries:
-                        self._stats.events_failed += 1
-                        self._dlq.append(event)
-                        break
-                    await asyncio.sleep(0.1 * (attempt + 1))
+        ordered = [s for s in targets if s.ordered]
+        parallel = [s for s in targets if not s.ordered]
+        if parallel:
+            tasks = [asyncio.create_task(self._deliver_async(sub, event)) for sub in parallel]
+            await asyncio.gather(*tasks, return_exceptions=True)
+        for sub in ordered:
+            await self._deliver_async(sub, event)
 
     # --- DLQ ---
 
