@@ -294,7 +294,9 @@ let
                               # Quick STT check
                               _stt_check = subprocess.run(
                                   [BRAIN_CMD[0], "stt", temp_wav],
-                                  timeout=10, capture_output=True, text=True,
+                                  # Cold start: faster-whisper carrega o
+                                  # modelo a cada chamada (~20-40s CPU)
+                                  timeout=90, capture_output=True, text=True,
                               )
                               _stt_text = (_stt_check.stdout or "").strip()
                               if not _stt_text or _stt_text.startswith("ERROR"):
