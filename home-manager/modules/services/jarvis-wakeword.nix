@@ -138,6 +138,7 @@ let
 
       ACK_PHRASES = ["Yes, sir?", "At your service, sir.", "How may I assist?", "Certainly, sir."]
 
+
       def _play_ack():
           """Resposta estilo MCU após wakeword confirmado. WAVs gerados 1x e cacheados."""
           try:
