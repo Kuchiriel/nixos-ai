@@ -241,6 +241,7 @@ def speak(
     play: bool = True,
     clone: bool = False,
     speed: float | None = None,
+    pitch: int = 0,
 ) -> str:
     """Sintetiza `text` com Kokoro-82M (formato torch do nixpkgs) e (opcionalmente) toca.
 
@@ -297,7 +298,7 @@ def speak(
 
         if clone:
             from jarvis.core.voice_clone import clone_wav
-            cloned = clone_wav(str(out_path))
+            cloned = clone_wav(str(out_path), pitch=pitch)
             if cloned.startswith("ERROR"):
                 return cloned
             out_path = Path(cloned)
@@ -532,6 +533,7 @@ def main_tts(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-play", action="store_true", help="gera WAV sem tocar")
     parser.add_argument("--clone", action="store_true", help="converte p/ timbre RVC (JARVIS_VOICE_CLONE_MODEL)")
     parser.add_argument("--speed", type=float, default=None, help="velocidade base Kokoro (padrão: emoção; clone aplica ×0.9)")
+    parser.add_argument("--pitch", type=int, default=0, help="semitons RVC (-12..12; ex: -3 aprofunda)")
     args = parser.parse_args(argv)
 
     # id da voz → path (mesmo diretório do modelo, voices/<id>.pt).
@@ -545,7 +547,7 @@ def main_tts(argv: list[str] | None = None) -> int:
             candidate = voice_dir / f"{args.voice}.pt"
             voice_path = str(candidate) if candidate.exists() else args.voice
 
-    out = speak(args.text, voice=voice_path, play=not args.no_play, clone=args.clone, speed=args.speed)
+    out = speak(args.text, voice=voice_path, play=not args.no_play, clone=args.clone, speed=args.speed, pitch=args.pitch)
     print(out)
     return 0 if not out.startswith("ERROR") else 1
 

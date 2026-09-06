@@ -20,30 +20,6 @@ import tempfile
 import time
 from pathlib import Path
 
-# Driver RVC autocontido: escrito em tmp a cada chamada (sem depender de
-# arquivos soltos). Espelha o rvc-test.py validado no spike (pedalboard sob
-# stub — SIGILL nesta CPU; post_process=False de qualquer forma).
-_DRIVER_TEMPLATE = """\
-import sys
-from unittest.mock import MagicMock
-sys.modules['pedalboard'] = MagicMock()
-from rvc.infer.infer import VoiceConverter
-vc = VoiceConverter()
-vc.convert_audio(
-    audio_input_path={input_path!r},
-    audio_output_path={output_path!r},
-    model_path={model_path!r},
-    index_path={index_path!r},
-    f0_method='rmvpe',
-    embedder_model='contentvec',
-    index_rate=0.75,
-    clean_audio=False,
-    post_process=False,
-)
-print('RVC-OK')
-"""
-
-
 def _cfg(name: str, default: str = "") -> str:
     return os.environ.get(name, default)
 
@@ -70,11 +46,12 @@ def _run_driver(
     model: str,
     index: str,
     timeout_s: int,
+    pitch: int = 0,
 ) -> tuple[bool, str]:
     """Executa o driver batch (UM processo, modelos carregados 1x)."""
     items = "\n".join(f"{i}\t{o}" for i, o in pairs)
     driver = _BATCH_TEMPLATE.format(
-        items=items, model_path=model, index_path=index,
+        items=items, model_path=model, index_path=index, pitch=pitch,
     )
     try:
         with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
@@ -113,6 +90,7 @@ def clone_many(
     model_path: str | None = None,
     index_path: str | None = None,
     timeout_s: int = 1800,
+    pitch: int = 0,
 ) -> dict[str, str]:
     """Converte N arquivos com UMA carga de modelos. Retorna {input: output|ERROR}."""
     result: dict[str, str] = {}
@@ -130,7 +108,7 @@ def clone_many(
     model = model_path or _cfg("JARVIS_VOICE_CLONE_MODEL")
     index = index_path or _cfg("JARVIS_VOICE_CLONE_INDEX")
     t0 = time.monotonic()
-    good, err = _run_driver(todo, model, index, timeout_s)
+    good, err = _run_driver(todo, model, index, timeout_s, pitch=pitch)
     elapsed = time.monotonic() - t0
     for i, o in todo:
         result[i] = o if good and Path(o).exists() else f"ERROR: voice-clone falhou: {err}"
@@ -152,6 +130,7 @@ def clone_wav(
     model_path: str | None = None,
     index_path: str | None = None,
     timeout_s: int = 300,
+    pitch: int = 0,
 ) -> str:
     """Converte input_wav para o timbre do modelo. Retorna path ou ERROR:."""
     if output_wav is None and input_wav:
@@ -159,6 +138,7 @@ def clone_wav(
     result = clone_many(
         [(input_wav, output_wav or "")],
         model_path=model_path, index_path=index_path, timeout_s=timeout_s,
+        pitch=pitch,
     )
     return result.get(input_wav, f"ERROR: input inexistente: {input_wav}")
 
@@ -185,6 +165,7 @@ for line in sys.stdin:
         f0_method='rmvpe',
         embedder_model='contentvec',
         index_rate=0.75,
+        pitch={pitch!r},
         clean_audio=False,
         post_process=False,
     )
