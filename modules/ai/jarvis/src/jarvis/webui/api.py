@@ -588,6 +588,101 @@ def memory_info() -> dict[str, Any]:
     return info
 
 
+# ─── Episodic Memory ────────────────────────────────────────────────────
+
+class RememberRequest(BaseModel):
+    kind: str  # "lesson", "fact", "decision", "preference"
+    content: str
+    task: str = ""
+    error_pattern: str = ""
+    fix: str = ""
+
+
+class RecallRequest(BaseModel):
+    kind: str = ""
+    task: str = ""
+
+
+@app.get("/api/memory/recall")
+def memory_recall(req: RecallRequest = RecallRequest()) -> dict[str, Any]:
+    """Recall episodic memories."""
+    from jarvis.core.memory import EpisodicMemory
+    from jarvis.core.config import get_config
+    cfg = get_config()
+    mem = EpisodicMemory()
+    kind = req.kind if req.kind else None
+    memories = mem.recall(kind=kind) if kind else mem.recent()
+    result = []
+    for m in memories:
+        result.append({
+            "id": m.id if hasattr(m, "id") else str(m),
+            "kind": m.kind if hasattr(m, "kind") else "unknown",
+            "content": m.content if hasattr(m, "content") else str(m),
+            "timestamp": m.timestamp if hasattr(m, "timestamp") else "",
+            "task": m.task if hasattr(m, "task") else "",
+        })
+    return {"memories": result}
+
+
+@app.post("/api/memory/remember")
+def memory_remember(req: RememberRequest) -> dict[str, Any]:
+    """Add a new episodic memory."""
+    from jarvis.core.memory import EpisodicMemory
+    from jarvis.core.config import get_config
+    cfg = get_config()
+    mem = EpisodicMemory()
+    eid = mem.remember(
+        kind=req.kind,
+        content=req.content,
+        task=req.task,
+        error_pattern=req.error_pattern,
+        fix=req.fix,
+    )
+    return {"id": eid, "kind": req.kind, "content": req.content}
+
+
+# ─── Vault ─────────────────────────────────────────────────────────────
+
+class VaultNote(BaseModel):
+    id: str
+    title: str
+    kind: str  # "lesson", "fact", "decision", "preference"
+    content: str
+    timestamp: str
+
+
+class SummarizeRequest(BaseModel):
+    since_days: int = 7
+
+
+@app.get("/api/vault/list")
+def vault_list() -> dict[str, Any]:
+    """List vault notes."""
+    from jarvis.core.vault import MemoryVault
+    vault = MemoryVault()
+    notes = vault.list_notes()
+    result = []
+    for note_id in notes:
+        note = vault._month_file_note(note_id) if hasattr(vault, "_month_file_note") else {}
+        result.append({
+            "id": note_id,
+            "title": note.get("title", note_id),
+            "kind": note.get("kind", "unknown"),
+            "content": note.get("content", ""),
+            "timestamp": note.get("timestamp", ""),
+        })
+    return {"notes": result}
+
+
+@app.post("/api/vault/summarize")
+def vault_summarize(req: SummarizeRequest) -> dict[str, Any]:
+    """Summarize vault events since given days."""
+    from jarvis.core.vault import MemoryVault
+    vault = MemoryVault()
+    summary = vault.summarize(since_days=req.since_days)
+    return summary
+
+
 # ─── Agent ─────────────────────────────────────────────────────────────
 
 @app.get("/api/agent")

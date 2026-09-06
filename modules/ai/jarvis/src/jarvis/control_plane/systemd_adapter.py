@@ -143,6 +143,10 @@ class SystemdAdapter:
                     if len(parts) < 4:
                         continue
                     unit = parts[0]
+                    load_state = parts[1] if len(parts) > 1 else ""
+                    # Skip not-found / masked units
+                    if load_state in ("not-found", "masked", "dead"):
+                        continue
                     # Remove .service suffix
                     name = unit.replace(".service", "")
                     # Filter: only jarvis-related or well-known services
@@ -152,24 +156,20 @@ class SystemdAdapter:
                     ))
                     if not is_jarvis:
                         continue
-                    # Format: unit load active sub description
-                    # parts[0]=unit, parts[1]=load, parts[2]=active, parts[3]=sub, parts[4:]=desc
                     active_state = parts[2] if len(parts) > 2 else "unknown"
                     sub_state = parts[3] if len(parts) > 3 else "unknown"
                     description = " ".join(parts[4:]) if len(parts) > 4 else ""
-                    # Use seed description if available
                     desc = SERVICE_DESCRIPTIONS.get(name, description)
-                    services[name] = {
-                        "scope": scope,
-                        "description": desc,
-                        "active_state": active_state,
-                        "sub_state": sub_state,
-                    }
+                    # Prefer user scope over system for the same service
+                    if name not in services or services[name].get("scope") == "system":
+                        services[name] = {
+                            "scope": scope,
+                            "description": desc,
+                            "active_state": active_state,
+                            "sub_state": sub_state,
+                        }
             except (subprocess.TimeoutExpired, OSError):
                 continue
-
-        self._discovered_services = services
-        return services
 
     def _validate_service(self, name: str) -> str | None:
         """Validate service name exists. Returns error or None."""
@@ -186,7 +186,7 @@ class SystemdAdapter:
         scope: str,
         timeout: int = 30,
     ) -> tuple[bool, str]:
-        """Run a systemctl command safely."""
+        """Run a systemctl command safely. Falls back to user scope on auth error."""
         cmd = ["systemctl"]
         if scope == "user":
             cmd.append("--user")
@@ -195,7 +195,18 @@ class SystemdAdapter:
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=timeout,
             )
-            return result.returncode == 0, result.stdout + result.stderr
+            ok = result.returncode == 0
+            output = result.stdout + result.stderr
+            if not ok and "interactive authentication" in output:
+                user_cmd = ["systemctl", "--user", action, service]
+                try:
+                    user_result = subprocess.run(
+                        user_cmd, capture_output=True, text=True, timeout=timeout,
+                    )
+                    return user_result.returncode == 0, user_result.stdout + user_result.stderr
+                except (subprocess.TimeoutExpired, OSError):
+                    pass
+            return ok, output
         except subprocess.TimeoutExpired:
             return False, f"Timeout after {timeout}s"
         except (OSError, FileNotFoundError) as exc:
@@ -211,12 +222,14 @@ class SystemdAdapter:
 
     def start(self, name: str) -> dict[str, Any]:
         """Start a service."""
+        self.invalidate_cache()
         error = self._validate_service(name)
         if error:
             return {"success": False, "error": error}
 
         scope = self._get_service_scope(name)
         ok, output = self._run_systemctl("start", name, scope, timeout=60)
+        self.invalidate_cache()
         return {
             "success": ok,
             "service": name,
@@ -226,12 +239,14 @@ class SystemdAdapter:
 
     def stop(self, name: str) -> dict[str, Any]:
         """Stop a service."""
+        self.invalidate_cache()
         error = self._validate_service(name)
         if error:
             return {"success": False, "error": error}
 
         scope = self._get_service_scope(name)
         ok, output = self._run_systemctl("stop", name, scope, timeout=30)
+        self.invalidate_cache()
         return {
             "success": ok,
             "service": name,
@@ -241,12 +256,14 @@ class SystemdAdapter:
 
     def restart(self, name: str) -> dict[str, Any]:
         """Restart a service."""
+        self.invalidate_cache()
         error = self._validate_service(name)
         if error:
             return {"success": False, "error": error}
 
         scope = self._get_service_scope(name)
         ok, output = self._run_systemctl("restart", name, scope, timeout=60)
+        self.invalidate_cache()
         return {
             "success": ok,
             "service": name,
@@ -256,6 +273,7 @@ class SystemdAdapter:
 
     def get_status(self, name: str) -> dict[str, Any]:
         """Get service status via systemctl."""
+        self.invalidate_cache()
         services = self._discover_services()
         svc = services.get(name)
         if svc is None:
