@@ -67,9 +67,19 @@ def set_status(state: str, text: str = "", **extra: Any) -> None:
 
 def get_status() -> dict[str, Any]:
     try:
-        return json.loads(STATUS_FILE.read_text())
+        data = json.loads(STATUS_FILE.read_text())
     except (OSError, json.JSONDecodeError):
         return {"state": "idle", "text": ""}
+    # TTL anti-travamento: estado transitório mais velho que 120s (ex: crash
+    # entre set_status("speaking") e o fim) volta a idle em vez de mentir.
+    if data.get("state") in ("transcribing", "thinking", "speaking",
+                             "processing", "listening"):
+        try:
+            if time.time() - float(data.get("ts", 0)) > 120:
+                return {"state": "idle", "text": ""}
+        except (TypeError, ValueError):
+            pass
+    return data
 
 
 def clear_status() -> None:
