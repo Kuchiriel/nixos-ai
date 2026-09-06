@@ -23,7 +23,7 @@ import logging
 import threading
 import time
 import uuid
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -344,11 +344,40 @@ class LLMClient:
     def chat_stream(
         self, messages: list[dict[str, str]], *, temperature: float = 0.0, max_tokens: int | None = None
     ) -> Iterator[str]:
-        """Gera tokens conforme chegam via SSE (stream: true)."""
-        # For now, use non-streaming fallback
-        # TODO: implement streaming in LlamaCppBackend
-        content = self.chat(messages, temperature=temperature, max_tokens=max_tokens)
-        yield content
+        """Gera tokens incrementais via SSE real do backend (MISSÃO 2).
+
+        Delega para backend.chat_stream() quando disponível; caso contrário
+        usa fallback não-streaming de yield único.
+        """
+        backend_stream = getattr(self._backend, "chat_stream", None)
+        if backend_stream is None:
+            yield self.chat(messages, temperature=temperature, max_tokens=max_tokens)
+            return
+        self._breaker.before_call()
+        try:
+            for token in backend_stream(messages, temperature=temperature, max_tokens=max_tokens):
+                yield token
+            self._breaker.record_success()
+        except Exception as exc:
+            self._breaker.record_failure()
+            raise LLMError(f"stream failed: {exc}") from exc
+
+    async def achat_stream(
+        self, messages: list[dict[str, str]], *, temperature: float = 0.0, max_tokens: int | None = None
+    ) -> AsyncIterator[str]:
+        """Versão async sem bloquear o event loop (httpx no backend)."""
+        backend_astream = getattr(self._backend, "achat_stream", None)
+        if backend_astream is None:
+            yield self.chat(messages, temperature=temperature, max_tokens=max_tokens)
+            return
+        self._breaker.before_call()
+        try:
+            async for token in backend_astream(messages, temperature=temperature, max_tokens=max_tokens):
+                yield token
+            self._breaker.record_success()
+        except Exception as exc:
+            self._breaker.record_failure()
+            raise LLMError(f"async stream failed: {exc}") from exc
 
     # --- embeddings ---
 

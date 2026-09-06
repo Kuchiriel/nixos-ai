@@ -27,6 +27,7 @@
 
     dependencies = with python3Packages; [
       requests
+      httpx
       numpy
       prompt-toolkit
       fastapi

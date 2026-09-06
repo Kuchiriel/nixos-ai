@@ -369,3 +369,68 @@ class TestChatMessage:
         assert d["role"] == "tool"
         assert d["tool_call_id"] == "call_123"
         assert d["name"] == "test_tool"
+
+
+# ---------------------------------------------------------------------------
+# MISSÃO 2 (ASYNC P0) — streaming SSE real token a token
+# ---------------------------------------------------------------------------
+
+
+class TestSSEParsing:
+    def test_extract_delta_content(self):
+        from jarvis.providers.llm_llama_cpp import LlamaCppBackend
+        line = 'data: {"choices":[{"delta":{"content":" Olá"},"finish_reason":null}]}'
+        assert LlamaCppBackend._extract_delta(line) == " Olá"
+
+    def test_extract_delta_done(self):
+        from jarvis.providers.llm_llama_cpp import LlamaCppBackend
+        assert LlamaCppBackend._extract_delta("data: [DONE]") is None
+        assert LlamaCppBackend._extract_delta("") is None
+        assert LlamaCppBackend._extract_delta(": heartbeat") is None
+
+    def test_extract_delta_empty_content(self):
+        from jarvis.providers.llm_llama_cpp import LlamaCppBackend
+        line = 'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}'
+        assert LlamaCppBackend._extract_delta(line) is None
+
+    def test_extract_delta_malformed(self):
+        from jarvis.providers.llm_llama_cpp import LlamaCppBackend
+        assert LlamaCppBackend._extract_delta("data: {not json") is None
+
+
+class TestSyncStream:
+    def _sse_response(self, tokens):
+        """Mock de requests.Response com iter_lines SSE."""
+        mock_resp = MagicMock()
+        lines = []
+        for t in tokens:
+            lines.append(f'data: {json.dumps({"choices": [{"delta": {"content": t}}]})}')
+        lines.append("data: [DONE]")
+        mock_resp.iter_lines.return_value = iter(lines)
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.__enter__ = Mock(return_value=mock_resp)
+        mock_resp.__exit__ = Mock(return_value=False)
+        return mock_resp
+
+    def test_chat_stream_yields_incremental(self):
+        from jarvis.providers.llm_llama_cpp import LlamaCppBackend
+        backend = LlamaCppBackend()
+        mock_session = MagicMock()
+        mock_session.post.return_value = self._sse_response([" Olá", " mundo"])
+        backend._session = mock_session
+        chunks = list(backend.chat_stream([{"role": "user", "content": "oi"}], max_tokens=8))
+        assert chunks == [" Olá", " mundo"]
+        # stream=True chegou ao requests (não buffer completo)
+        _, kwargs = mock_session.post.call_args
+        assert kwargs.get("stream") is True
+        assert kwargs["json"]["stream"] is True
+
+    def test_chat_stream_skips_done(self):
+        from jarvis.providers.llm_llama_cpp import LlamaCppBackend
+        backend = LlamaCppBackend()
+        mock_session = MagicMock()
+        mock_session.post.return_value = self._sse_response(["a"])
+        backend._session = mock_session
+        chunks = list(backend.chat_stream([{"role": "user", "content": "oi"}]))
+        assert chunks == ["a"]
+        assert "[DONE]" not in "".join(chunks)

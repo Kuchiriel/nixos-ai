@@ -4,20 +4,27 @@ Implements the LLMBackend interface for llama-server's OpenAI-compatible API.
 This is the current default backend.
 
 Endpoints used:
-- POST /v1/chat/completions — chat
+- POST /v1/chat/completions — chat (+ SSE streaming via stream=true)
 - POST /v1/embeddings — embeddings
 - GET /health — health check
 - GET /props — server properties (n_ctx, etc.)
 - GET /models — model list
 - GET /slots — slot status (optional)
+
+MISSÃO 2 (ASYNC P0): streaming SSE real token a token.
+- chat_stream(): gerador síncrono sobre requests stream=True (compat CLI).
+- achat_stream(): gerador assíncrono sobre httpx.AsyncClient (event loop livre).
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import time
+from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
+import httpx
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
@@ -136,6 +143,105 @@ class LlamaCppBackend(LLMBackend):
             backend="llama-cpp",
             model_id=data.get("model", self._model),
         )
+
+    def _stream_payload(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        temperature: float = 0.0,
+        max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Payload compartilhado entre chat_stream() e achat_stream()."""
+        payload: dict[str, Any] = {
+            "model": self._model,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": True,
+        }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+        if tools:
+            payload["tools"] = tools
+        return payload
+
+    @staticmethod
+    def _extract_delta(line: str) -> str | None:
+        """Extrai o token incremental de uma linha SSE. None = ignorar."""
+        if not line.startswith("data:"):
+            return None
+        data = line[5:].strip()
+        if not data or data == "[DONE]":
+            return None
+        try:
+            chunk = json.loads(data)
+        except ValueError:
+            return None
+        choices = chunk.get("choices") or []
+        if not choices:
+            return None
+        delta = choices[0].get("delta") or {}
+        return delta.get("content") or None
+
+    def chat_stream(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        temperature: float = 0.0,
+        max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> Iterator[str]:
+        """Yields incrementais token a token via SSE real (requests stream=True).
+
+        Compatível com consumidores síncronos (CLI). Não aguarda o buffer
+        completo: o primeiro yield sai no TTFT do servidor.
+        """
+        payload = self._stream_payload(
+            messages, temperature=temperature, max_tokens=max_tokens, tools=tools,
+        )
+        with self._session.post(
+            f"{self._base_url}/v1/chat/completions",
+            json=payload,
+            timeout=(self._connect_timeout, self._read_timeout),
+            stream=True,
+        ) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines(decode_unicode=True):
+                if not line:
+                    continue
+                token = self._extract_delta(line)
+                if token:
+                    yield token
+
+    async def achat_stream(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        temperature: float = 0.0,
+        max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AsyncIterator[str]:
+        """Yields incrementais sem bloquear o event loop (httpx.AsyncClient).
+
+        Para o painel SvelteKit via SSE/WebSocket e futuros callers async.
+        """
+        payload = self._stream_payload(
+            messages, temperature=temperature, max_tokens=max_tokens, tools=tools,
+        )
+        timeout = httpx.Timeout(self._read_timeout, connect=self._connect_timeout)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            async with client.stream(
+                "POST",
+                f"{self._base_url}/v1/chat/completions",
+                json=payload,
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line:
+                        continue
+                    token = self._extract_delta(line)
+                    if token:
+                        yield token
 
     def embed(self, text: str, model: str | None = None) -> list[float]:
         """Generate embedding via llama-server /v1/embeddings."""
