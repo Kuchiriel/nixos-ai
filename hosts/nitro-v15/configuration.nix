@@ -168,10 +168,8 @@
   programs.freebuff.enable = true;
   programs.jarvis-scripts.enable = false;
 
-  environment.etc."litellm.env" = {
-    text = "";
-    mode = "0600";
-  };
+  # environment.etc."litellm.env" removed — litellm service disabled (services.litellm.enable = false)
+  # API keys live in /etc/litellm.env managed manually with chmod 644
 
   environment.etc."nanorc".text = ''
     set tabsize 2
