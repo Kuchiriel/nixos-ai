@@ -43,6 +43,23 @@ PROTECTED_SYSTEMD_UNITS = [
 ]
 
 
+# ═══ Protected Projects (monorepo) ═══
+# NEVER auto-modify — forks gigantes, binários ou código de terceiros.
+# O harness nem os descobre; tarefa explícita é bloqueada no execute_task.
+PROTECTED_PROJECTS = frozenset({
+    "nixpkgs",      # fork — track only, nunca editar
+    "models",       # GGUFs binários (GBs), não-código
+    "llama.cpp",    # upstream — track only
+    "ik_llama.cpp", # fork com otimizações — só via fluxo explícito
+    "prism-bin",    # binários pré-compilados
+})
+
+
+def is_project_protected(project: str) -> bool:
+    """Check if a monorepo project is off-limits for autonomous edits."""
+    return (project or "").strip().lower() in PROTECTED_PROJECTS
+
+
 def is_path_protected(path: str) -> bool:
     """Check if a file path is in the protected list."""
     for pat in PROTECTED_PATHS:

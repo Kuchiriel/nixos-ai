@@ -982,10 +982,12 @@ class Harness:
     # ── Task Discovery ─────────────────────────────────────────────────────
 
     def _discover_projects(self) -> None:
-        """Auto-discover projects in the workspace."""
+        """Auto-discover projects in the workspace (minus protected)."""
         try:
             projects = discover_projects()
             for proj in projects:
+                if safety.is_project_protected(proj.name):
+                    continue
                 self.project_registry.register(proj)
                 if proj.name not in self.config.projects:
                     self.config.projects.append(proj.name)
@@ -1095,6 +1097,13 @@ class Harness:
                 task.block(f"Protected path: {f}")
                 self.notify(f"🚫 *Task Blocked*\nProtected path: {f}")
                 return False
+
+        # Check protected projects (defense in depth — discovery filters,
+        # but explicit tasks must also be refused)
+        if safety.is_project_protected(task.project):
+            task.block(f"Protected project: {task.project}")
+            self.notify(f"🚫 *Task Blocked*\nProtected project: {task.project}")
+            return False
 
         # Mark in progress
         self.queue.update_task(task.id, status=TaskStatus.IN_PROGRESS.value)
