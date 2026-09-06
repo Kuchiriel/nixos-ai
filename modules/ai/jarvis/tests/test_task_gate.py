@@ -30,10 +30,19 @@ def test_accepts_good_and_create(tmp_path, monkeypatch):
     monkeypatch.setattr(tq, "STATE_DIR", tmp_path)
     q = tq.TaskQueue(project="t")
     ok_task = tq.Task(id="g1", project="t",
-                      description="Add retry button to tasks page",
+                      description="Create new-component.svelte with retry button",
                       target_files=["new-component.svelte"])
     assert q.add_task(ok_task) is True
     bad = tq.Task(id="b1", project="t", description="Tests failing: ",
                   target_files=[])
     assert q.add_task(bad) is False
     assert q.get_task("b1") is None
+
+
+def test_rejects_phantom_wrong_project(tmp_path, monkeypatch):
+    monkeypatch.setattr(tq, "STATE_DIR", tmp_path)
+    q = tq.TaskQueue(project="t")
+    slop = tq.Task(id="s1", project="guia-renamer-pro",
+                   description="Implement comprehensive error handling code",
+                   target_files=["jarvis/core/feedback.py"])
+    assert q.add_task(slop) is False

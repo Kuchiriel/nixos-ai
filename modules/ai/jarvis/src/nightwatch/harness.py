@@ -1012,8 +1012,10 @@ class Harness:
             from nightwatch.platform_bridge import discover_projects_for_nightwatch
             ws_projects = discover_projects_for_nightwatch()
             if ws_projects:
-                # Update config with discovered projects
+                # Update config with discovered projects (minus protected)
                 for proj in ws_projects:
+                    if safety.is_project_protected(proj["name"]):
+                        continue
                     if proj["name"] not in self.config.projects:
                         self.config.projects.append(proj["name"])
                         self.notify(f"🏗️ Discovered project: {proj['name']}")
@@ -1024,10 +1026,21 @@ class Harness:
             # Scripted discovery (per-project if project has a root)
             if self.config.use_scripted_discovery:
                 tasks.extend(_discover_scripted_tasks())
-            
+
             # LLM discovery (per-project)
             if self.config.use_llm_discovery:
                 tasks.extend(_discover_llm_tasks(self.call_llm, proj_name))
+
+        # Cap: max 5 new tasks per project per round (flood control —
+        # generic LLM slop multiplied by N projects burned the queue).
+        capped: list[Task] = []
+        per_project: dict[str, int] = {}
+        for t in tasks:
+            n = per_project.get(t.project, 0)
+            if n < 5:
+                capped.append(t)
+                per_project[t.project] = n + 1
+        tasks = capped
 
         # Platform-aware persona selection for each task
         try:

@@ -77,19 +77,49 @@ def validate_task_quality(description: str, target_files: list[str],
         return GateResult(False, "protected-project",
                           f"project is protected: {project}")
     from pathlib import Path as _P
+    try:
+        from nightwatch.project_isolation import resolve_project_root
+        root = resolve_project_root(project or "nixos-ai")
+    except Exception:
+        root = None
+
+    def _exists(p: _P) -> str:
+        try:
+            if p.exists():
+                return "dir" if p.is_dir() else "file"
+        except Exception:
+            pass
+        return ""
+
     for t in target_files or []:
         p = _P(t)
-        candidates = [p] if p.is_absolute() else [
-            _P.cwd() / p, REPO_ROOT / p,
-            REPO_ROOT / "modules/ai/jarvis/src" / p,
-        ]
-        for c in candidates:
-            try:
-                if c.exists() and c.is_dir():
-                    return GateResult(False, "directory-target",
-                                      f"target is a directory, not a file: {t}")
-            except Exception:
-                pass
+        if p.is_absolute():
+            st = _exists(p)
+            if st == "dir":
+                return GateResult(False, "directory-target",
+                                  f"target is a directory, not a file: {t}")
+            if st == "file":
+                continue
+            return GateResult(False, "phantom-targets",
+                              f"absolute target missing: {t}")
+        # Relative: authoritative = the task's project root.
+        primary = [root / p] if root is not None else []
+        primary.append(_P.cwd() / p)
+        prim = next((_exists(c) for c in primary if _exists(c)), "")
+        if prim == "dir":
+            return GateResult(False, "directory-target",
+                              f"target is a directory, not a file: {t}")
+        if prim == "file":
+            continue
+        # Exists only outside the project = wrong-project hallucination.
+        elsewhere = [REPO_ROOT / p, REPO_ROOT / "modules/ai/jarvis/src" / p]
+        if any(_exists(c) for c in elsewhere):
+            return GateResult(False, "phantom-targets",
+                              f"target not in project {project}: {t}")
+        # Nowhere: only legit for CREATE-intent tasks.
+        if not any(w in desc.lower() for w in ("create", "new file", "add file", "add a file")):
+            return GateResult(False, "phantom-targets",
+                              "no target resolves in the task project")
     return GateResult(True, None, "")
 
 
