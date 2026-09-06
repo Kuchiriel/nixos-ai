@@ -100,9 +100,9 @@ let
         else "False"
       }
       BRAIN_CMD = ${builtins.toJSON brainCmd}
-      WW_SCORER = ${../../../modules/ai/ww_scorer.py};
-      OWW_MODELS = "$HOME/.local/share/openwakeword";
-      WW_THRESHOLD = "0.5";
+      WW_SCORER = "${../../../modules/ai/ww_scorer.py}"
+      OWW_MODELS = os.path.expanduser("~/.local/share/openwakeword")
+      WW_THRESHOLD = "0.5"
       STARTUP_SOUND = "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/service-login.oga"
       BEEP_SOUND = "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/message-new-instant.oga"
 
