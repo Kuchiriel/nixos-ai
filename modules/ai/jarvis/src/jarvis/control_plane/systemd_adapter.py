@@ -171,6 +171,9 @@ class SystemdAdapter:
             except (subprocess.TimeoutExpired, OSError):
                 continue
 
+        self._discovered_services = services
+        return services
+
     def _validate_service(self, name: str) -> str | None:
         """Validate service name exists. Returns error or None."""
         services = self._discover_services()
