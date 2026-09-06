@@ -100,6 +100,7 @@ let
         else "False"
       }
       BRAIN_CMD = ${builtins.toJSON brainCmd}
+      ACK_LANG = "${if cfg.ackLang == null then "auto" else cfg.ackLang}"
       WW_SCORER = "${../../../modules/ai/ww_scorer.py}"
       OWW_MODELS = os.path.expanduser("~/.local/share/openwakeword")
       WW_THRESHOLD = "0.5"
@@ -136,18 +137,29 @@ let
               pass
 
 
-      ACK_PHRASES = ["Yes, sir?", "At your service, sir.", "How may I assist?", "Certainly, sir."]
+      ACK_PHRASES = {
+          "en": ["Yes, sir?", "At your service, sir.", "How may I assist?", "Certainly, sir."],
+          "pt": ["Pois não, senhor?", "Às ordens, senhor.", "Como posso ajudar?", "Certamente, senhor."],
+      }
+
+      def _ack_lang():
+          if ACK_LANG != "auto":
+              return ACK_LANG
+          lang = (os.environ.get("LANG", "") + os.environ.get("LC_ALL", "")).lower()
+          return "pt" if lang.startswith("pt") else "en"
 
 
       def _play_ack():
-          """Resposta estilo MCU após wakeword confirmado. WAVs gerados 1x e cacheados."""
+          """Ack no idioma do sistema (ou cfg). WAVs gerados 1x e cacheados por idioma."""
           try:
-              ackdir = os.path.expanduser("~/.local/share/jarvis/voice/ack")
+              lang = _ack_lang()
+              phrases = ACK_PHRASES.get(lang, ACK_PHRASES["en"])
+              ackdir = os.path.expanduser(f"~/.local/share/jarvis/voice/ack-{lang}")
               os.makedirs(ackdir, exist_ok=True)
               existing = sorted(glob.glob(os.path.join(ackdir, "*.wav")))
               if not existing:
-                  print("[WW] Gerando respostas (1a vez)...", flush=True)
-                  for i, phrase in enumerate(ACK_PHRASES):
+                  print(f"[WW] Gerando respostas {lang} (1a vez)...", flush=True)
+                  for i, phrase in enumerate(phrases):
                       subprocess.run(["jarvis", "speak", "--no-play", phrase],
                                      capture_output=True, timeout=180)
                       cands = sorted(
@@ -457,6 +469,11 @@ in {
       type = lib.types.nullOr lib.types.int;
       default = null;
       description = "Gate RMS de ruído ambiente (legado calibrou 2093). null = desabilitado.";
+    };
+    ackLang = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Idioma do ack falado (pt|en). null = auto pelo LANG do sistema.";
     };
     killTTSOnTrigger = lib.mkOption {
       type = lib.types.bool;
