@@ -361,9 +361,19 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
         return 0
 
     print(f"🎤 {text}", flush=True)
+    try:
+        from jarvis.core.feedback import notify as _notify
+        _notify("Jarvis ouviu", text[:120])
+    except Exception:
+        pass
 
     # 2. Roteamento
     route = route_request(text)
+    try:
+        from jarvis.core.feedback import notify as _notify2
+        _notify2(f"Rota: {route.handler}", route.query[:120])
+    except Exception:
+        pass
 
     # 3. Load shedding — verifica carga ANTES de chamar o LLM
     #    Rotas que NÃO usam LLM (fastpath, doctor, nixos, rag) passam direto.
