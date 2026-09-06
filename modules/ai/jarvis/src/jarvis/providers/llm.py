@@ -372,8 +372,9 @@ class LLMClient:
     ) -> ChatResponse:
         """Chat completion com tool calling — retorna ChatResponse completo."""
         request_id = uuid.uuid4().hex[:12]
-        
+
         self._breaker.before_call()
+        t0 = time.monotonic()
         try:
             response = self._backend.chat(
                 messages=messages,
@@ -383,6 +384,7 @@ class LLMClient:
                 extra=extra,
             )
             self._breaker.record_success()
+            self._record_telemetry(response, latency_s=time.monotonic() - t0)
             return response
         except Exception as exc:
             self._breaker.record_failure()

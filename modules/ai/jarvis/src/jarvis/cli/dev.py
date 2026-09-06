@@ -916,18 +916,23 @@ def _call_llm(
     profile: dict,
     debug: bool = False,
 ) -> dict:
-    """Chama o LLM local. Payload contém SOMENTE chaves da spec OpenAI
-    /chat/completions (model, messages, temperature, max_tokens, e
-    tools/tool_choice apenas se houver ferramentas ativas). Removidos
-    `parallel_tool_calls` e `chat_template_kwargs`, que o llama-server
-    rejeita com HTTP 400.
+    """Chama o LLM via LLMClient (breaker + telemetria reais).
 
-    Com debug=True, imprime o payload exato enviado e a resposta crua
-    recebida (incluindo latência), para diagnosticar lentidão ou formatos
-    de tool-call que o parser de texto não reconhece."""
+    Unificação da dívida técnica: antes cada chamada abria seu próprio
+    requests.post (sem breaker, sem streaming, sem fallback). Agora delega
+    ao LLMClient.chat_with_tools() e readapta para o shape cru
+    data["choices"][0]["message"] que os 3 callers + text-fallback usam.
+
+    Com debug=True, imprime payload e resposta (conteúdo/tool_calls/
+    usage/timings/latência) para diagnosticar lentidão ou formatos de
+    tool-call que o parser de texto não reconhece."""
+    from jarvis.core.config import Config as _Config
+    from jarvis.providers.llm import LLMClient as _LLMClient
+
     cfg = _get_config()
+    model_id = profile.get("model_id", cfg.llm_model)
     payload: dict[str, Any] = {
-        "model": profile.get("model_id", cfg.llm_model),
+        "model": model_id,
         "messages": messages,
         "temperature": profile["temperature"],
         "max_tokens": profile["max_tokens"],
@@ -950,15 +955,31 @@ def _call_llm(
         body = json.dumps(payload, ensure_ascii=False, indent=2)[:4000]
         console.print(Syntax(body, "json", theme="ansi_dark", word_wrap=True))
 
+    client_cfg = _Config(llm_model=model_id, llm_timeout=cfg.llm_timeout)
     t0 = time.monotonic()
-    resp = requests.post(
-        f"{cfg.llm_base_url.rstrip('/')}/chat/completions",
-        json=payload,
-        timeout=cfg.llm_timeout,
-    )
+    with _LLMClient(config=client_cfg) as client:
+        response = client.chat_with_tools(
+            messages,
+            tools=tools or None,
+            temperature=profile["temperature"],
+            max_tokens=profile["max_tokens"],
+        )
     elapsed = time.monotonic() - t0
-    resp.raise_for_status()
-    data = resp.json()
+
+    # Shape cru compatível: choices[0].message + usage/model/finish_reason
+    data: dict[str, Any] = {
+        "choices": [{
+            "message": {
+                "role": "assistant",
+                "content": response.content,
+                "tool_calls": response.tool_calls or None,
+            },
+            "finish_reason": response.finish_reason,
+        }],
+        "usage": response.usage,
+        "timings": response.timings,
+        "model": response.model_id or model_id,
+    }
     _record_llm_telemetry(data, elapsed, model=payload.get("model", ""))
 
     if debug:
