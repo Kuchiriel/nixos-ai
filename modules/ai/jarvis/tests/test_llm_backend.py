@@ -679,7 +679,7 @@ class TestVoiceClone:
 
         class FakeProc:
             returncode = 0
-            stdout = "RVC-OK"
+            stdout = "RVC-BATCH-OK 1"
             stderr = ""
 
         def fake_run(cmd, **kw):
