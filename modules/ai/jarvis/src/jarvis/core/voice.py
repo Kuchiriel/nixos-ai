@@ -42,7 +42,7 @@ KOKORO_VOICE_ID_DEFAULT = "af_heart"  # id da voz (para o nome do arquivo)
 VOICE_BY_LANG: dict[str, str] = {
     "a": "af_heart",
     "b": "bf_emma",
-    "p": "pf_dora",
+    "p": "pm_alex",  # Jarvis é masculino; pf_dora segue via --voice
     "j": "jf_alpha",
     "e": "ef_dora",
     "f": "ff_siwis",
@@ -479,20 +479,21 @@ def main_tts(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(prog="jarvis speak", description="Sintetiza texto com Kokoro (TTS)")
     parser.add_argument("text", help="texto a falar")
-    parser.add_argument("--voice", default=KOKORO_VOICE_ID_DEFAULT, help="id da voz Kokoro (ex: af_heart)")
+    parser.add_argument("--voice", default=None, help="id da voz Kokoro (ex: af_heart, pf_dora, pm_alex); vazio = auto por idioma")
     parser.add_argument("--no-play", action="store_true", help="gera WAV sem tocar")
     parser.add_argument("--clone", action="store_true", help="converte p/ timbre RVC (JARVIS_VOICE_CLONE_MODEL)")
     args = parser.parse_args(argv)
 
-    # id da voz → path (mesmo diretório do modelo, voices/<id>.pt)
-    voice_path = os.path.expanduser(KOKORO_VOICE_DEFAULT)
-    if args.voice != KOKORO_VOICE_ID_DEFAULT and not Path(args.voice).exists():
-        voice_dir = Path(voice_path).parent
-        candidate = voice_dir / f"{args.voice}.pt"
-        if candidate.exists():
-            voice_path = str(candidate)
+    # id da voz → path (mesmo diretório do modelo, voices/<id>.pt).
+    # Sem --voice: None → speak() decide pelo idioma (VOICE_BY_LANG).
+    voice_path: str | None = None
+    if args.voice:
+        if Path(args.voice).exists():
+            voice_path = args.voice
         else:
-            voice_path = args.voice  # deixa o speak validar/errar
+            voice_dir = Path(os.path.expanduser(KOKORO_VOICE_DEFAULT)).parent
+            candidate = voice_dir / f"{args.voice}.pt"
+            voice_path = str(candidate) if candidate.exists() else args.voice
 
     out = speak(args.text, voice=voice_path, play=not args.no_play, clone=args.clone)
     print(out)

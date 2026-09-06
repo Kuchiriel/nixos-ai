@@ -681,7 +681,9 @@ def _cmd_stt(args: argparse.Namespace) -> int:
 def _cmd_speak(args: argparse.Namespace) -> int:
     from jarvis.core.voice import main_tts
 
-    argv = [args.text, "--voice", args.voice]
+    argv = [args.text]
+    if args.voice:
+        argv += ["--voice", args.voice]
     if args.no_play:
         argv.append("--no-play")
     if args.clone:
@@ -913,7 +915,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_speak = sub.add_parser("speak", help="sintetiza texto com Kokoro (TTS)")
     p_speak.add_argument("text", help="texto a falar")
-    p_speak.add_argument("--voice", default="af_heart", help="voz Kokoro")
+    p_speak.add_argument("--voice", default=None, help="voz Kokoro (vazio = auto por idioma)")
     p_speak.add_argument("--no-play", action="store_true", help="gera WAV sem tocar")
     p_speak.add_argument("--clone", action="store_true", help="converte p/ timbre RVC do personagem")
     p_speak.set_defaults(func=_cmd_speak)
