@@ -86,7 +86,7 @@ def handle_busy(load_status: dict[str, Any], *, tts: bool = True) -> int:
     # Log
     from jarvis.core.logging import get_logger
     log = get_logger("busy")
-    log.warning("load_shed", detail={
+    log.warn("load_shed", detail={
         "reason": reason,
         "slots": load_status.get("slots", {}),
     })
