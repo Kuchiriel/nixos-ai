@@ -480,8 +480,8 @@ in {
     };
     wakeThreshold = lib.mkOption {
       type = lib.types.float;
-      default = 0.3;
-      description = "Score mínimo do hey_jarvis ONNX (0.99 positivo real, ruído <0.18 medido).";
+      default = 0.5;
+      description = "Score mínimo do hey_jarvis ONNX (upstream default; 0.3 gerou falsos positivos com ventoinha).";
     };
     rmsGate = lib.mkOption {
       type = lib.types.nullOr lib.types.int;
