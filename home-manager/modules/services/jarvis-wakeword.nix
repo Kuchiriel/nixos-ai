@@ -252,11 +252,18 @@ let
                   rms = np.sqrt(np.mean(mono**2)) if len(mono) > 0 else 0
                   chunk_count += 1
 
-                  # Sistema deWaybar/Pulsing status
+                  # Sistema deWaybar/Pulsing status — nunca sobrescreve
+                  # pipeline ativa (brain transcrevendo/pensando/falando).
                   if chunk_count % 50 == 0:
-                      pulse_symbols = ["  ", "  "]
-                      update_status("idle", f"{pulse_symbols[pulse_state % 2]} Ouvindo...")
-                      pulse_state += 1
+                      try:
+                          with open("/tmp/jarvis-status.json") as _sf:
+                              _cur = json.load(_sf).get("state", "idle")
+                      except Exception:
+                          _cur = "idle"
+                      if _cur in ("idle", "listening"):
+                          pulse_symbols = ["  ", "  "]
+                          update_status("idle", f"{pulse_symbols[pulse_state % 2]} Ouvindo...")
+                          pulse_state += 1
 
                   if chunk_count % 10 == 0:
                       print(f"[WW] RMS: {rms:.0f} (baseline={noise_baseline:.0f}, gate={max(noise_baseline * 1.5, 250):.0f})", flush=True)
