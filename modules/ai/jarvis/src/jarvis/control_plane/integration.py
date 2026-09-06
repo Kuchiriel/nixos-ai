@@ -380,5 +380,6 @@ def setup_integration() -> None:
     except Exception:  # noqa: BLE001
         pass
 
-    # Set health to unknown until first doctor report
-    state.update(Sections.HEALTH, "overall", "unknown")
+    health = state.get(Sections.HEALTH)
+    if not health or not health.get("overall"):
+        state.update(Sections.HEALTH, "overall", "unknown")

@@ -28,6 +28,7 @@ from typing import Any
 from jarvis.core.config import Config
 from jarvis.core.doctor import doctor_report
 from jarvis.core.logging import get_logger
+from jarvis.control_plane.state import Sections, get_state_store
 
 # Componente do doctor → serviço systemd. Só o que é seguro/útil reiniciar.
 SERVICE_MAP: dict[str, dict[str, str]] = {
@@ -251,6 +252,16 @@ def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_S
     state = state_dir(cfg)
     report = doctor_report(cfg)
     report_inst = HealReport(overall=report.get("overall", "ok"), checks=report.get("checks", []))
+
+    # Update control-plane-state.json so webui sees health without restart
+    try:
+        _st = get_state_store()
+        _st.update(Sections.HEALTH, "overall", report.get("overall", "ok"))
+        _st.update(Sections.HEALTH, "down_count", report.get("down", 0))
+        _st.update(Sections.HEALTH, "degraded_count", report.get("degraded", 0))
+        _st.update(Sections.HEALTH, "last_check", time.time())
+    except Exception:
+        pass
 
     # Carrega estado anterior para detectar recovery
     prev_states = _load_previous_state(state)
