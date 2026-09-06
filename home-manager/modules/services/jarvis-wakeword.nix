@@ -449,7 +449,7 @@ in {
         RestartSec = "5s";
         # PATH needs jarvis-voice for BRAIN_CMD (jarvis voice <wav>)
         Environment = [
-          "PATH=${lib.makeBinPath [pkgs.jarvis-voice pkgs.pipewire pkgs.sox]}:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.findutils}/bin"
+          "PATH=${lib.makeBinPath [pkgs.jarvis-voice pkgs.pipewire pkgs.sox pkgs.procps]}:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.findutils}/bin"
         ];
       };
       Install = {
