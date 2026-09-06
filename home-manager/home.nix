@@ -59,6 +59,20 @@
     if [ -x ~/.config/ai-agents/opencode-auth-sync.sh ]; then
       ~/.config/ai-agents/opencode-auth-sync.sh >/dev/null 2>&1 || true
     fi
+    # RVC voice-clone (timbre Jarvis): só exporta se o spike env existir.
+    # Reconstrói pós-reboot com ./scripts/rvc-spike-bootstrap.sh.
+    if [ -x /tmp/opencode/tts-venv/bin/python ] && [ -d /tmp/opencode/applio/rvc ]; then
+      export JARVIS_RVC_PYTHON=/tmp/opencode/tts-venv/bin/python
+      export JARVIS_RVC_APP_DIR=/tmp/opencode/applio
+      export JARVIS_RVC_LD_PATH=/nix/store/7vafhlh0lmcvi75jfyy09qwr4m3x1ks3-gcc-15.2.0-lib/lib:/nix/store/483x61iy35irm4wr2b7dwzihljhp6da2-zlib-1.3.2/lib
+      export LD_LIBRARY_PATH="$JARVIS_RVC_LD_PATH:$LD_LIBRARY_PATH"
+    fi
+    if [ -f ~/models/Jarvis_62e_434s_best_epoch.pth ]; then
+      export JARVIS_VOICE_CLONE_MODEL=~/models/Jarvis_62e_434s_best_epoch.pth
+    fi
+    if [ -f ~/models/added_Jarvis_v2.index ]; then
+      export JARVIS_VOICE_CLONE_INDEX=~/models/added_Jarvis_v2.index
+    fi
   '';
 
   # Sync declarativo opencode auth.json <- env (nunca commita segredos:
