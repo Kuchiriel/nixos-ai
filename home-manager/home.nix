@@ -53,7 +53,64 @@
       source ~/.config/ai-agents/keys-wrapper.sh
       set +a
     fi
+    # Reconcilia auth.json do opencode com o env (fonte da verdade).
+    # Mata a classe "colei a chave e continua dando token error": chave
+    # apodrecida no state é sobrescrita pela chave boa do /etc/litellm.env.
+    if [ -x ~/.config/ai-agents/opencode-auth-sync.sh ]; then
+      ~/.config/ai-agents/opencode-auth-sync.sh >/dev/null 2>&1 || true
+    fi
   '';
+
+  # Sync declarativo opencode auth.json <- env (nunca commita segredos:
+  # o script lê do env em runtime; aqui vai só o código do sync).
+  home.file.".config/ai-agents/opencode-auth-sync.sh".source = builtins.toFile "opencode-auth-sync.sh" ''
+    #!/usr/bin/env bash
+    # Reconcilia ~/.local/share/opencode/auth.json com as chaves do env.
+    # Env é a fonte da verdade (/etc/litellm.env via keys-wrapper.sh).
+    # Só toca providers com chave válida no env; nunca exibe valores.
+    set -u
+    AUTH="$HOME/.local/share/opencode/auth.json"
+    [ -f "$AUTH" ] || exit 0
+    [ -n "$OPENROUTER_API_KEY" ] || [ -n "$GROQ_API_KEY" ] || [ -n "$CEREBRAS_API_KEY" ] || [ -n "$NVIDIA_API_KEY" ] || exit 0
+    python3 - "$AUTH" <<'PYEOF'
+    import json, os, sys
+    path = sys.argv[1]
+    mapping = {
+        "openrouter": os.environ.get("OPENROUTER_API_KEY", ""),
+        "groq": os.environ.get("GROQ_API_KEY", ""),
+        "cerebras": os.environ.get("CEREBRAS_API_KEY", ""),
+        "nvidia": os.environ.get("NVIDIA_API_KEY", ""),
+    }
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        sys.exit(0)
+    changed = []
+    for provider, key in mapping.items():
+        if not key or len(key) < 8:
+            continue
+        entry = data.get(provider)
+        if not isinstance(entry, dict):
+            entry = {"type": "api"}
+            data[provider] = entry
+        if entry.get("key") != key:
+            entry["key"] = key
+            entry["type"] = "api"
+            changed.append(provider)
+    if changed:
+        # backup do original antes de sobrescrever
+        try:
+            import shutil
+            shutil.copy2(path, path + ".prev")
+        except OSError:
+            pass
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2)
+        print("opencode auth sync: " + ", ".join(changed))
+    PYEOF
+  '';
+  home.file.".config/ai-agents/opencode-auth-sync.sh".executable = true;
 
   # ZSH — emacs keybindings (Ctrl+A/E/Ctrl+K, etc)
   programs.zsh = {
