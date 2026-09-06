@@ -331,7 +331,7 @@ let
                                    "--threshold", WW_THRESHOLD],
                                   capture_output=True, text=True, timeout=60,
                               )
-                              print(f"[WW] 🎯 {(_score.stdout or '').strip()}", flush=True)
+                              print(f"[WW] 🎯 {(_score.stdout or "").strip()}", flush=True)
                               if _score.returncode != 0:
                                   print(f"[WW] 🔇 wakeword rejeitado, ignorando", flush=True)
                                   update_status("idle", "󰆪 Aguardando...")
