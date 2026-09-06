@@ -368,7 +368,9 @@ let
                           try:
                               import shutil as _shutil
                               # Quick STT check
-                              _stt_args = [BRAIN_CMD[0], "stt", temp_wav]
+                              # Modelo small (não tiny): PT-BR curto alucina
+                              # ou esvazia no tiny; small custa ~30s mas ouve.
+                              _stt_args = [BRAIN_CMD[0], "stt", "--model", "small", temp_wav]
                               if _ack_lang() == "pt":
                                   _stt_args += ["--language", "pt"]
                               _stt_check = subprocess.run(
