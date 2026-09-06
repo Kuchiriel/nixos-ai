@@ -1070,7 +1070,10 @@ def _cmd_nightwatch(args: argparse.Namespace) -> int:
         report_telegram=args.report_telegram,
         dry_run=args.dry_run,
     )
-    return 0 if result.tasks_completed > 0 else 1
+    # Exit 0 on clean completion (even with zero commits — pause, skips
+    # and empty queues are normal states, not failures; a failing exit
+    # code breaks rebuild activation which test-starts this unit).
+    return 0
 
 
 def _cmd_launcher(args: argparse.Namespace) -> int:
