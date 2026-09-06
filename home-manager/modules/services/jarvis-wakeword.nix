@@ -243,15 +243,16 @@ let
                   # 2. Adaptive threshold: 50% above baseline (was 10%)
                   # 3. Require 3 consecutive chunks (was 2)
                   if not speaking:
-                      if rms > speech_gate:
-                          speech_buf.append(rms)
-                          if len(speech_buf) >= 3:
-                              speaking = True
-                              speech_frames = [data]
-                              silence_start = None
-                              print(f"[WW] 🎤 Speech detected (RMS={rms:.0f}, baseline={noise_baseline:.0f}, gate={speech_gate:.0f})", flush=True)
-                      else:
+                      # Windowed onset: 3 of last 5 chunks (syllable
+                      # valleys reset a strict consecutive counter)
+                      speech_buf.append(1 if rms > speech_gate else 0)
+                      speech_buf = speech_buf[-5:]
+                      if sum(speech_buf) >= 3:
+                          speaking = True
+                          speech_frames = [data]
+                          silence_start = None
                           speech_buf = []
+                          print(f"[WW] 🎤 Speech detected (RMS={rms:.0f}, baseline={noise_baseline:.0f}, gate={speech_gate:.0f})", flush=True)
                       continue
 
                   # Currently speaking — accumulate frames
