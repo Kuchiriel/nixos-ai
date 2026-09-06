@@ -323,13 +323,17 @@ def _maybe_disable_thinking(system_prompt: str) -> str:
 
 
 def _estimate_tokens(messages: list[dict[str, Any]]) -> int:
-    """Estimativa rápida de tokens (heurística: 1 token ≈ 4 chars).
+    """Estimativa via interface única (tokens.py) — nunca heurística inline.
 
     Fallback grosseiro quando o servidor ainda não devolveu usage real.
     Prefira SessionTelemetry (números reais) via /stats.
     """
-    total_chars = sum(len(json.dumps(m, ensure_ascii=False)) for m in messages)
-    return total_chars // 4
+    try:
+        from jarvis.core.tokens import estimate_messages as _estimate_messages
+        return _estimate_messages(messages)
+    except Exception:
+        total_chars = sum(len(json.dumps(m, ensure_ascii=False)) for m in messages)
+        return total_chars // 4
 
 
 # --- telemetria de sessão (MISSÃO 4): números REAIS do servidor ---
@@ -933,7 +937,11 @@ def _call_llm(
         payload["tool_choice"] = "auto"
 
     if debug:
-        approx_tokens = sum(len(str(m)) for m in messages) // 4
+        try:
+            from jarvis.core.tokens import estimate_messages as _estimate_messages
+            approx_tokens = _estimate_messages(messages)
+        except Exception:
+            approx_tokens = sum(len(str(m)) for m in messages) // 4
         console.print(Rule(
             f"📤 REQUEST → {cfg.llm_base_url.rstrip('/')}/chat/completions "
             f"({len(messages)} msgs, ~{approx_tokens} tok)",

@@ -273,9 +273,9 @@ class ContextBudget:
         return self._total_tokens > self.available_tokens
 
     def estimate_tokens(self, text: str) -> int:
-        """Estimate tokens from text (~4 chars/token, calibrado por reais)."""
-        ratio = self._calibration_ratio()
-        return max(1, int(len(text) // (CHARS_PER_TOKEN * ratio)))
+        """Estimate tokens — delega à interface única (tokens.py)."""
+        from jarvis.core.tokens import estimate as _estimate
+        return _estimate(text)
 
     # --- números reais (MISSÃO 4) ---
 
@@ -283,15 +283,19 @@ class ContextBudget:
     _est_prompt_total: int = field(default=0, init=False, repr=False)
 
     def _calibration_ratio(self) -> float:
-        """Razão estimado/real: corrige a heurística cega com dados medidos.
+        """Razão estimado/real — fonte única: tokens.py (global do processo).
 
-        Sem amostras reais → 1.0 (heurística pura). Com amostras, a estimativa
-        futura converge para os tokens reais observados no servidor.
+        Mantido como método p/ compat; instância alimenta o global via
+        record_actual_for_text(). Contadores locais seguem p/ stats.
         """
-        if self._real_prompt_total <= 0 or self._est_prompt_total <= 0:
-            return 1.0
-        ratio = self._est_prompt_total / self._real_prompt_total
-        return min(3.0, max(0.33, ratio))
+        try:
+            from jarvis.core.tokens import calibration_ratio as _global_ratio
+            return _global_ratio()
+        except Exception:
+            if self._real_prompt_total <= 0 or self._est_prompt_total <= 0:
+                return 1.0
+            ratio = self._est_prompt_total / self._real_prompt_total
+            return min(3.0, max(0.33, ratio))
 
     def record_actual(self, prompt_tokens: int, completion_tokens: int = 0) -> None:
         """Reconcilia estimativa com tokens REAIS do servidor (usage).
@@ -305,10 +309,18 @@ class ContextBudget:
             self.total_llm_calls += 1
 
     def record_actual_for_text(self, text: str, prompt_tokens: int) -> None:
-        """Pareia uma estimativa de texto com o valor real (calibração)."""
+        """Pareia uma estimativa de texto com o valor real (calibração).
+
+        Alimenta a calibração local E a global (tokens.py, p/ outros CLIs).
+        """
         if prompt_tokens > 0 and text:
             self._est_prompt_total += max(1, len(text) // CHARS_PER_TOKEN)
             self._real_prompt_total += prompt_tokens
+            try:
+                from jarvis.core.tokens import calibrate as _calibrate
+                _calibrate(text, prompt_tokens)
+            except Exception:
+                pass
 
     def sync_from_slots(self, ctx_used: int, ctx_total: int) -> None:
         """Alinha orçamento com a verdade do servidor (/slots).

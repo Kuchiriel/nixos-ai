@@ -484,15 +484,17 @@ class TestBudgetReconciliation:
         assert b.total_llm_calls == 1
 
     def test_calibration_converges_from_pairs(self):
+        from jarvis.core import tokens as _tokens
         from jarvis.core.context_budget import ContextBudget
+        _tokens._reset()
         b = ContextBudget(max_tokens=32768)
         assert b._calibration_ratio() == 1.0  # sem amostras: heurística pura
         text = "x" * 400  # heurística diria 100 tok
         b.record_actual_for_text(text, 25)  # real: 25 tok
-        assert b._calibration_ratio() == 4.0 or True  # clamped em 3.0
-        assert b._calibration_ratio() == 3.0
-        # estimativa futura converge para o real
+        assert b._calibration_ratio() == 3.0  # clamped (4.0 → 3.0)
+        # estimativa futura converge para o real (fonte única global)
         assert b.estimate_tokens("y" * 400) == 33  # 100 // 3.0
+        _tokens._reset()
 
     def test_sync_from_slots_aligns_budget(self):
         from jarvis.core.context_budget import ContextBudget
@@ -535,3 +537,49 @@ class TestClientTelemetryWiring:
         assert chunks == ["Olá", " mundo"]
         assert client.last_ttft_s >= 0.0
         assert client.session_telemetry.n_calls == 1
+
+
+# ---------------------------------------------------------------------------
+# Interface única de tokens (jarvis/core/tokens.py) — p/ jarvis + outros CLIs
+# ---------------------------------------------------------------------------
+
+
+class TestTokensInterface:
+    def setup_method(self):
+        from jarvis.core import tokens as _tokens
+        _tokens._reset()
+
+    def teardown_method(self):
+        from jarvis.core import tokens as _tokens
+        _tokens._reset()
+
+    def test_heuristic_without_samples(self):
+        from jarvis.core import tokens as _tokens
+        assert _tokens.calibration_ratio() == 1.0
+        assert _tokens.estimate("x" * 400) == 100
+
+    def test_calibrate_converges(self):
+        from jarvis.core import tokens as _tokens
+        _tokens.calibrate("x" * 400, 25)
+        assert _tokens.calibration_ratio() == 3.0
+        assert _tokens.estimate("y" * 400) == 33
+
+    def test_estimate_messages_with_tools(self):
+        from jarvis.core import tokens as _tokens
+        msgs = [
+            {"role": "user", "content": "x" * 40},
+            {"role": "assistant", "content": None,
+             "tool_calls": [{"function": {"name": "read_file", "arguments": '{"a":1}'}}]},
+        ]
+        assert _tokens.estimate_messages(msgs) == 10 + 2 + 1 + 1
+
+    def test_cli_text(self, capsys):
+        from jarvis.core import tokens as _tokens
+        assert _tokens.main(["--text", "x" * 40]) == 0
+        assert '"tokens": 10' in capsys.readouterr().out
+
+    def test_cli_stats(self, capsys):
+        import json
+        from jarvis.core import tokens as _tokens
+        assert _tokens.main(["--stats"]) == 0
+        assert json.loads(capsys.readouterr().out)["ratio"] == 1.0

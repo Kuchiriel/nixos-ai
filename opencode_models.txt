@@ -1,4 +1,3 @@
- opencode models                           
 opencode/big-pickle
 opencode/claude-fable-5
 opencode/claude-fable-5-1
