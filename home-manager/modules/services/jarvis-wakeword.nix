@@ -142,6 +142,7 @@ let
           "pt": ["Pois não, senhor?", "Às ordens, senhor.", "Como posso ajudar?", "Certamente, senhor."],
       }
 
+
       def _ack_lang():
           if ACK_LANG != "auto":
               return ACK_LANG
