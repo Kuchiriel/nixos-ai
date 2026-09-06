@@ -286,6 +286,7 @@
       },
       "original": {
         "owner": "dan-online",
+        "ref": "main",
         "repo": "opencode-nix",
         "type": "github"
       }
