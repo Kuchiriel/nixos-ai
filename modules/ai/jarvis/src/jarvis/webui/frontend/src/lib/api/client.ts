@@ -126,6 +126,12 @@ export async function fetchLLMInfo(): Promise<any> {
   return res.json();
 }
 
+export async function fetchConfig(): Promise<any> {
+  const res = await fetch(`${API_BASE}/config`);
+  if (!res.ok) throw new Error(`Config fetch failed: ${res.status}`);
+  return res.json();
+}
+
 export async function fetchVoiceInfo(): Promise<any> {
   const res = await fetch(`${API_BASE}/voice`);
   if (!res.ok) throw new Error(`Voice fetch failed: ${res.status}`);

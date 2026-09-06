@@ -160,9 +160,10 @@
   services.jarvis-webui.enable = true;
   services.jarvis-webui-frontend.enable = true;
   services.jarvis-idle.enable = true;
-    services.jarvis-watchdog.enable = true;
+  services.jarvis-watchdog.enable = true;
+  services.jarvis-heal.enable = true;
   services.jarvis-telegram.enable = true;
-  services.jarvis-gaming.enable = false;
+  services.jarvis-gaming.enable = true;
   services.litellm.enable = false;
   programs.freebuff.enable = true;
   programs.jarvis-scripts.enable = false;
