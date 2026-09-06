@@ -60,6 +60,39 @@ def is_project_protected(project: str) -> bool:
     return (project or "").strip().lower() in PROTECTED_PROJECTS
 
 
+def validate_task_quality(description: str, target_files: list[str],
+                          project: str = "") -> GateResult:
+    """Reject malformed tasks before they burn LLM time.
+
+    - Empty/generic descriptions (e.g. "Tests failing: ")
+    - Targets that are existing directories (not files)
+    - Protected projects
+    Missing files are ALLOWED (CREATE candidates).
+    """
+    desc = (description or "").strip().rstrip(":").strip()
+    if len(desc) < 10 or len(desc.split()) < 3:
+        return GateResult(False, "vacuous-description",
+                          f"description too vague: {description!r:.60}")
+    if is_project_protected(project):
+        return GateResult(False, "protected-project",
+                          f"project is protected: {project}")
+    from pathlib import Path as _P
+    for t in target_files or []:
+        p = _P(t)
+        candidates = [p] if p.is_absolute() else [
+            _P.cwd() / p, REPO_ROOT / p,
+            REPO_ROOT / "modules/ai/jarvis/src" / p,
+        ]
+        for c in candidates:
+            try:
+                if c.exists() and c.is_dir():
+                    return GateResult(False, "directory-target",
+                                      f"target is a directory, not a file: {t}")
+            except Exception:
+                pass
+    return GateResult(True, None, "")
+
+
 def is_path_protected(path: str) -> bool:
     """Check if a file path is in the protected list."""
     for pat in PROTECTED_PATHS:

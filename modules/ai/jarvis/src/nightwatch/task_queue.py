@@ -415,11 +415,13 @@ class TaskQueue:
     def mission(self) -> MissionState:
         return self._mission
     
-    def add_task(self, task: Task) -> None:
-        """Add a task to the queue.
+    def add_task(self, task: Task) -> bool:
+        """Add a task to the queue. Returns False if rejected.
 
         Deduplication key: project + description.
         Tasks with the same description but different projects are NOT duplicates.
+        Malformed tasks (vacuous/directory-target/protected) are refused
+        before they can burn LLM time.
         """
         # Check for duplicates — same project + same description
         existing = [
@@ -429,10 +431,17 @@ class TaskQueue:
             and not t.is_terminal
         ]
         if existing:
-            return
+            return False
+
+        from nightwatch.safety import validate_task_quality
+        gate = validate_task_quality(task.description, task.target_files,
+                                     task.project)
+        if not gate.passed:
+            return False
 
         self._tasks.append(task)
         self._save()
+        return True
     
     def get_next_task(self) -> Task | None:
         """Get the next task to execute."""
