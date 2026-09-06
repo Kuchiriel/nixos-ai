@@ -187,13 +187,21 @@ def _setup_kokoro_espeak():
         pass  # se espeak não está disponível, Kokoro vai dar erro own
 
 
-def speak(text: str, voice: str | None = None, *, play: bool = True) -> str:
+def speak(
+    text: str,
+    voice: str | None = None,
+    *,
+    play: bool = True,
+    clone: bool = False,
+) -> str:
     """Sintetiza `text` com Kokoro-82M (formato torch do nixpkgs) e (opcionalmente) toca.
 
     Aplica a prosódia emocional (speed) do `jarvis.core.emotion` — porta do
     emotional_state do legado (keywords → perfil → speed do Kokoro).
     Bypass automático de spaCy via espeak-ng quando o modelo spaCy não está
     disponível (comum em NixOS declarativo).
+    Com clone=True, pós-processa o WAV via RVC (jarvis.core.voice_clone,
+    timbre do JARVIS_VOICE_CLONE_MODEL) e toca/retorna o WAV convertido.
     Retorna o path do WAV gerado ou mensagem ERROR:.
     """
     try:
@@ -238,6 +246,13 @@ def speak(text: str, voice: str | None = None, *, play: bool = True) -> str:
         audio = np.concatenate(chunks)
         sf.write(str(out_path), audio, 24000)
 
+        if clone:
+            from jarvis.core.voice_clone import clone_wav
+            cloned = clone_wav(str(out_path))
+            if cloned.startswith("ERROR"):
+                return cloned
+            out_path = Path(cloned)
+
         # Publish to Event Bus
         try:
             from jarvis.core.eventbus import get_bus
@@ -245,6 +260,7 @@ def speak(text: str, voice: str | None = None, *, play: bool = True) -> str:
                 "text_len": len(text),
                 "path": str(out_path),
                 "played": play,
+                "cloned": clone,
             })
         except Exception:  # noqa: BLE001
             pass
@@ -458,13 +474,14 @@ def main_stt(argv: list[str] | None = None) -> int:
 
 
 def main_tts(argv: list[str] | None = None) -> int:
-    """Entry point CLI: jarvis speak <texto> [--voice af_heart] [--no-play]."""
+    """Entry point CLI: jarvis speak <texto> [--voice af_heart] [--no-play] [--clone]."""
     import argparse
 
     parser = argparse.ArgumentParser(prog="jarvis speak", description="Sintetiza texto com Kokoro (TTS)")
     parser.add_argument("text", help="texto a falar")
     parser.add_argument("--voice", default=KOKORO_VOICE_ID_DEFAULT, help="id da voz Kokoro (ex: af_heart)")
     parser.add_argument("--no-play", action="store_true", help="gera WAV sem tocar")
+    parser.add_argument("--clone", action="store_true", help="converte p/ timbre RVC (JARVIS_VOICE_CLONE_MODEL)")
     args = parser.parse_args(argv)
 
     # id da voz → path (mesmo diretório do modelo, voices/<id>.pt)
@@ -477,7 +494,7 @@ def main_tts(argv: list[str] | None = None) -> int:
         else:
             voice_path = args.voice  # deixa o speak validar/errar
 
-    out = speak(args.text, voice=voice_path, play=not args.no_play)
+    out = speak(args.text, voice=voice_path, play=not args.no_play, clone=args.clone)
     print(out)
     return 0 if not out.startswith("ERROR") else 1
 

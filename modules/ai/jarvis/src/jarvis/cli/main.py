@@ -684,6 +684,8 @@ def _cmd_speak(args: argparse.Namespace) -> int:
     argv = [args.text, "--voice", args.voice]
     if args.no_play:
         argv.append("--no-play")
+    if args.clone:
+        argv.append("--clone")
     return main_tts(argv)
 
 
@@ -913,6 +915,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_speak.add_argument("text", help="texto a falar")
     p_speak.add_argument("--voice", default="af_heart", help="voz Kokoro")
     p_speak.add_argument("--no-play", action="store_true", help="gera WAV sem tocar")
+    p_speak.add_argument("--clone", action="store_true", help="converte p/ timbre RVC do personagem")
     p_speak.set_defaults(func=_cmd_speak)
 
     p_voice = sub.add_parser("voice", help="loop de voz: STT → roteador → TTS (brainCommand do wakeword)")

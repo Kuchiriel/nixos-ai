@@ -637,3 +637,61 @@ class TestProviderRegistry:
         from jarvis.core.provider_registry import REGISTRY
         for name in ("openrouter", "omniroute", "9router"):
             assert REGISTRY[name].max_data_class is DataClass.PUBLIC, name
+
+
+# ---------------------------------------------------------------------------
+# Voice clone (RVC post TTS) — orquestração via subprocess configurável
+# ---------------------------------------------------------------------------
+
+
+class TestVoiceClone:
+    def test_missing_input(self):
+        from jarvis.core.voice_clone import clone_wav
+        assert clone_wav("/nao/existe.wav").startswith("ERROR")
+
+    def test_unavailable_without_env(self, monkeypatch):
+        from jarvis.core import voice_clone as vc
+        monkeypatch.delenv("JARVIS_RVC_PYTHON", raising=False)
+        monkeypatch.delenv("JARVIS_RVC_APP_DIR", raising=False)
+        monkeypatch.delenv("JARVIS_VOICE_CLONE_MODEL", raising=False)
+        monkeypatch.delenv("JARVIS_VOICE_CLONE_INDEX", raising=False)
+        ok, reason = vc.is_available()
+        assert ok is False and reason
+
+    def test_calls_configured_python(self, tmp_path, monkeypatch):
+        import json
+        from jarvis.core import voice_clone as vc
+        fake_in = tmp_path / "in.wav"
+        fake_in.write_bytes(b"RIFF....")
+        fake_py = tmp_path / "fake-python"
+        fake_py.write_bytes(b"x")
+        monkeypatch.setenv("JARVIS_RVC_PYTHON", str(fake_py))
+        monkeypatch.setenv("JARVIS_RVC_APP_DIR", str(tmp_path))
+        (tmp_path / "rvc" / "infer").mkdir(parents=True)
+        (tmp_path / "rvc" / "infer" / "infer.py").write_text("# stub")
+        model = tmp_path / "m.pth"
+        model.write_bytes(b"x")
+        index = tmp_path / "i.index"
+        index.write_bytes(b"y")
+        monkeypatch.setenv("JARVIS_VOICE_CLONE_MODEL", str(model))
+        monkeypatch.setenv("JARVIS_VOICE_CLONE_INDEX", str(index))
+        calls = {}
+
+        class FakeProc:
+            returncode = 0
+            stdout = "RVC-OK"
+            stderr = ""
+
+        def fake_run(cmd, **kw):
+            calls["cmd"] = cmd
+            calls["cwd"] = kw.get("cwd")
+            Path = __import__("pathlib").Path
+            out = tmp_path / "in-clone.wav"
+            out.write_bytes(b"RIFF....")
+            return FakeProc()
+
+        monkeypatch.setattr(vc.subprocess, "run", fake_run)
+        out = vc.clone_wav(str(fake_in))
+        assert out.endswith("-clone.wav")
+        assert calls["cmd"][0] == str(fake_py)
+        assert calls["cwd"] == str(tmp_path)
