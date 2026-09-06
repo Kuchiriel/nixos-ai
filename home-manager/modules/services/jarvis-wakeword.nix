@@ -80,8 +80,11 @@ let
       # resultava em PYTHONPATH vazio (import numpy falhava em runtime)
       libraries = ps: with ps; [numpy];
     } ''
+      import glob
       import json
       import os
+      import random
+      import shutil
       import subprocess
       import time
       import wave
@@ -128,6 +131,32 @@ let
               )
           except Exception:
               pass
+
+
+      ACK_PHRASES = ["Yes, sir?", "At your service, sir.", "How may I assist?", "Certainly, sir."]
+
+      def _play_ack():
+          """Resposta estilo MCU após wakeword confirmado. WAVs gerados 1x e cacheados."""
+          try:
+              ackdir = os.path.expanduser("~/.local/share/jarvis/voice/ack")
+              os.makedirs(ackdir, exist_ok=True)
+              existing = sorted(glob.glob(os.path.join(ackdir, "*.wav")))
+              if not existing:
+                  print("[WW] Gerando respostas (1a vez)...", flush=True)
+                  for i, phrase in enumerate(ACK_PHRASES):
+                      subprocess.run(["jarvis", "speak", "--no-play", phrase],
+                                     capture_output=True, timeout=180)
+                      cands = sorted(
+                          glob.glob(os.path.expanduser("~/.local/share/jarvis/voice/tts/*.wav")),
+                          key=os.path.getmtime)
+                      if cands:
+                          shutil.move(cands[-1], os.path.join(ackdir, f"ack{i}.wav"))
+                  existing = sorted(glob.glob(os.path.join(ackdir, "*.wav")))
+              if existing:
+                  subprocess.run(["pw-play", random.choice(existing)],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+          except Exception as e:
+              print(f"[WW] ACK falhou: {e}", flush=True)
 
 
       def kill_orphan_pw_record():
@@ -274,7 +303,7 @@ let
                           for pat in ["paplay", "aplay", "enhanced_audiobook.py"]:
                               subprocess.run(["pkill", "-9", pat], stderr=subprocess.DEVNULL)
 
-                      play_sound(BEEP_SOUND)
+                      # Sem beep aqui: só responde após wakeword confirmado.
 
                       # Save the speech we already captured
                       timestamp = int(time.time())
@@ -308,6 +337,18 @@ let
                                   arecord_proc = start_arecord()
                                   continue
                               print(f"[WW] 🗣️ STT detected: '{_stt_text[:80]}'", flush=True)
+                              # Wakeword gate: sem "jarvis" no texto, descarta
+                              # em silêncio (sem beep/TTS/brain). Ventoinha e
+                              # TV não viram conversa.
+                              if "jarvis" not in _stt_text.lower():
+                                  print(f"[WW] 🔇 sem wakeword, ignorando", flush=True)
+                                  update_status("idle", "󰆪 Aguardando...")
+                                  arecord_proc.terminate()
+                                  time.sleep(0.5)
+                                  arecord_proc = start_arecord()
+                                  continue
+                              print(f"[WW] 🫡 Hey Jarvis confirmado", flush=True)
+                              _play_ack()
                           except Exception as _stt_err:
                               print(f"[WW] ⚠️ STT pre-check failed: {_stt_err}", flush=True)
 
