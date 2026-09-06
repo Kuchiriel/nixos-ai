@@ -99,6 +99,51 @@ def _model_dir() -> str:
     return os.path.expanduser(os.environ.get("JARVIS_VOICE_DIR", MODEL_DIR_DEFAULT))
 
 
+# Cache de pipelines Kokoro por (config, model, lang): carregar o modelo
+# custa ~3.4s — em batch (audiobook) o reuso economiza horas.
+_PIPELINES: dict[tuple[str, str, str], tuple[object, object]] = {}
+
+
+def _get_pipeline(config_path: str, model_path: str, lang_code: str):
+    """Retorna (kmodel, pipeline) cacheados por chave."""
+    from kokoro import KModel, KPipeline  # type: ignore[import-not-found]
+    key = (config_path, model_path, lang_code)
+    hit = _PIPELINES.get(key)
+    if hit is None:
+        kmodel = KModel(config=config_path, model=model_path)
+        hit = (kmodel, KPipeline(lang_code=lang_code, model=kmodel, trf=False))
+        _PIPELINES[key] = hit
+    return hit
+
+
+def _split_chunks(text: str, max_chars: int = 600) -> list[str]:
+    """Divide texto em chunks por fronteira de sentença (pura, testável)."""
+    import re
+    sentences = re.split(r"(?<=[.!?…:;])\s+", text.strip())
+    chunks: list[str] = []
+    current = ""
+    for sentence in sentences:
+        if not sentence.strip():
+            continue
+        probe = f"{current} {sentence}".strip()
+        if current and len(probe) > max_chars:
+            chunks.append(current.strip())
+            current = sentence
+        else:
+            current = probe
+    if current.strip():
+        chunks.append(current.strip())
+    # Sentença gigante isolada: corta duro
+    hard: list[str] = []
+    for chunk in chunks:
+        while len(chunk) > max_chars:
+            hard.append(chunk[:max_chars])
+            chunk = chunk[max_chars:]
+        if chunk:
+            hard.append(chunk)
+    return hard or ([text.strip()] if text.strip() else [])
+
+
 # ---------------------------------------------------------------------------
 # STT — faster-whisper
 # ---------------------------------------------------------------------------
@@ -187,12 +232,15 @@ def _setup_kokoro_espeak():
         pass  # se espeak não está disponível, Kokoro vai dar erro own
 
 
+CLONE_SPEED_FACTOR = 0.9  # base mais calma: RVC preserva o ritmo de entrada
+
 def speak(
     text: str,
     voice: str | None = None,
     *,
     play: bool = True,
     clone: bool = False,
+    speed: float | None = None,
 ) -> str:
     """Sintetiza `text` com Kokoro-82M (formato torch do nixpkgs) e (opcionalmente) toca.
 
@@ -228,16 +276,17 @@ def speak(
             )
         voice_path = voice or os.path.expanduser(KOKORO_VOICE_DEFAULT)
         _setup_kokoro_espeak()  # bypass spaCy antes de criar pipeline
-        kmodel = KModel(config=config_path, model=model_path)
         # Auto-detect language from text content
         lang_code = _detect_lang_code(text)
         voice_path = _voice_for_lang(lang_code, voice)
-        pipeline = KPipeline(lang_code=lang_code, model=kmodel, trf=False)
+        kmodel, pipeline = _get_pipeline(config_path, model_path, lang_code)
         out_dir = Path(_model_dir()) / "tts"
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / f"jarvis_tts_{abs(hash(text)) % 10**9}.wav"
 
-        speed = speed_for(text)
+        speed = speed if speed is not None else speed_for(text)
+        if clone:
+            speed *= CLONE_SPEED_FACTOR
         chunks = []
         for _result in pipeline(text, voice=voice_path, speed=speed):
             chunks.append(_result.audio)
@@ -482,6 +531,7 @@ def main_tts(argv: list[str] | None = None) -> int:
     parser.add_argument("--voice", default=None, help="id da voz Kokoro (ex: af_heart, pf_dora, pm_alex); vazio = auto por idioma")
     parser.add_argument("--no-play", action="store_true", help="gera WAV sem tocar")
     parser.add_argument("--clone", action="store_true", help="converte p/ timbre RVC (JARVIS_VOICE_CLONE_MODEL)")
+    parser.add_argument("--speed", type=float, default=None, help="velocidade base Kokoro (padrão: emoção; clone aplica ×0.9)")
     args = parser.parse_args(argv)
 
     # id da voz → path (mesmo diretório do modelo, voices/<id>.pt).
@@ -495,7 +545,7 @@ def main_tts(argv: list[str] | None = None) -> int:
             candidate = voice_dir / f"{args.voice}.pt"
             voice_path = str(candidate) if candidate.exists() else args.voice
 
-    out = speak(args.text, voice=voice_path, play=not args.no_play, clone=args.clone)
+    out = speak(args.text, voice=voice_path, play=not args.no_play, clone=args.clone, speed=args.speed)
     print(out)
     return 0 if not out.startswith("ERROR") else 1
 
