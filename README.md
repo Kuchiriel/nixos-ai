@@ -13,8 +13,8 @@ Configuração NixOS declarativa e reprodutível com sistema de IA local integra
 | Componente | Estado | Evidência |
 |-----------|--------|-----------|
 | NixOS declarativo (hosts, módulos, services) | ✅ Funcional | `nix flake check` passa; 2 hosts: `nitro-v15` (bare metal) e `nixos-lab` (VM) |
-| Modelos declarativos (fetchurl + hash) | ✅ Funcional | `modules/ai/models.nix` — 7 modelos com hash verificado |
-| llama.cpp (host, CUDA) | ✅ Funcional | Qwen3.6-35B-A3B MoE (~20.6GB, RTX 4050) + mmproj vision |
+| Modelos declarativos (fetchurl + hash) | ✅ Funcional | `modules/ai/models.nix` — 9 modelos com hash verificado |
+| llama.cpp (host, CUDA) | ✅ Funcional | Ternary-Bonsai-8B Q2_0 via PrismML (2.15GB, 71.6 t/s TG) |
 | llama.cpp (VM, CPU) | ✅ Funcional | Qwen3-4B Q4_K_M (2.5GB) |
 | Qdrant (vetores) | ✅ Funcional | Módulo NixOS declarativo, `enable = true` |
 | Embeddings (nomic) | ✅ Funcional | nomic-embed-text-v2-moe Q8_0 (512MB, CPU) |
@@ -94,8 +94,7 @@ Definidos em `modules/ai/models.nix` (fetchurl + sha256 verificado):
 | Modelo | Uso | Tamanho | Host |
 |--------|-----|---------|------|
 | Qwen3-4B Q4_K_M | Chat (VM) | 2.5GB | CPU |
-| Qwen3.6-35B-A3B UD-Q4_K_M | Chat (host) | ~20.6GB | RTX 4050 |
-| mmproj-BF16.gguf | Vision (host) | ~1GB | RTX 4050 |
+| Ternary-Bonsai-8B Q2_0_g64 | Chat (host) | 2.15GB | RTX 4050 |
 | nomic-embed-text-v2-moe Q8_0 | Embeddings | 512MB | CPU |
 | bge-reranker-v2-m3 Q4_K_M | Reranker | 438MB | CPU |
 | Kokoro-82M | TTS | <1GB | CPU |
@@ -307,7 +306,8 @@ Resultados em `logs/benchmark/` e `docs/benchmarks/`.
 **Conhecido**:
 - RTX 4050 6GB tem limitação de VRAM para modelos grandes
 - Thermal throttling em sessions longas (controlado via thermald + fan profile)
-- MoE (Qwen3.6-35B-A3B) usa ~45 camadas na GPU, resto na CPU via n-cpu-moe
+- Bonsai 8B denso: full offload (`-ngl 99`), 2.15GB pesos + ~1.2GB KV 32K
+- Vision descontinuada no host (sem mmproj p/ Bonsai; `observe_screen` inoperante)
 - Throughput sustentado depende de thermal management
 
 ---
