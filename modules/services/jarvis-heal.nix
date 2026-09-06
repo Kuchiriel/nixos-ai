@@ -1,9 +1,11 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   cfg = config.services.jarvis-heal;
+  execCmd = "${pkgs.jarvis}/bin/jarvis heal --watch --interval ${toString cfg.interval} --cooldown ${toString cfg.cooldown}";
 in {
   options.services.jarvis-heal = {
     enable = lib.mkEnableOption "daemon de self-heal do JARVIS (jarvis heal --watch)";
@@ -44,6 +46,7 @@ in {
       wantedBy = ["jarvis.target"];
       serviceConfig = {
         Environment = ["JARVIS_JSONL=0"];
+        ExecStart = execCmd;
         Restart = "on-failure";
         RestartSec = "30";
       };
@@ -54,6 +57,7 @@ in {
       wantedBy = ["default.target"];
       serviceConfig = {
         Environment = ["JARVIS_JSONL=0"];
+        ExecStart = execCmd;
         Restart = "on-failure";
         RestartSec = "30";
       };
