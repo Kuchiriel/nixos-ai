@@ -111,6 +111,9 @@
     modesetting.enable = true;
     open = false;
     nvidiaSettings = true;
+    # Resume pós-suspend no Wayland (sem isso: tela preta ao abrir o lid).
+    # Ativa os units nvidia-suspend/hibernate/resume.
+    powerManagement.enable = true;
   };
   services.xserver.videoDrivers = ["nvidia"];
 

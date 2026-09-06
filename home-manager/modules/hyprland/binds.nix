@@ -226,6 +226,10 @@ in {
       ", XF86AudioPause, exec, playerctl play-pause"
       ", XF86AudioPlay,  exec, playerctl play-pause"
       ", XF86AudioPrev,  exec, playerctl previous"
+      # Lid: trava + apaga ao fechar; reacende ao abrir (sem isso o eDP
+      # pode não voltar — tela preta pós-lid).
+      ", switch:on:Lid Switch, exec, loginctl lock-session && hyprctl dispatch dpms off"
+      ", switch:off:Lid Switch, exec, hyprctl dispatch dpms on"
     ];
   };
 }
