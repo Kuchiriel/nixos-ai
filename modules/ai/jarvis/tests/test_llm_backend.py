@@ -583,3 +583,57 @@ class TestTokensInterface:
         from jarvis.core import tokens as _tokens
         assert _tokens.main(["--stats"]) == 0
         assert json.loads(capsys.readouterr().out)["ratio"] == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Registry de providers + roteamento persona/tarefa (local → free → paid)
+# ---------------------------------------------------------------------------
+
+
+class TestProviderRegistry:
+    def test_secret_never_routes_to_cloud(self):
+        from jarvis.core.circuit_breaker import DataClass
+        from jarvis.core.provider_registry import route
+        for cls in ("secret", "confidential", "internal"):
+            dc = DataClass(cls)
+            assert route(dc) == ["local"], cls
+
+    def test_public_starts_local_ends_aggregator(self):
+        from jarvis.core.circuit_breaker import DataClass
+        from jarvis.core.provider_registry import route
+        chain = route(DataClass.PUBLIC)
+        assert chain[0] == "local"
+        assert chain[-1] == "openrouter"
+        assert "cerebras" in chain and "groq" in chain
+
+    def test_reasoning_requires_thinking_model(self):
+        from jarvis.core.circuit_breaker import DataClass
+        from jarvis.core.provider_registry import route, REGISTRY
+        chain = route(DataClass.PUBLIC, task_kind="reasoning")
+        assert chain  # não-vazio: nunca ficar sem modelo
+        for name in chain:
+            assert any(m.reasoning for m in REGISTRY[name].models.values()), name
+
+    def test_research_needs_huge_context(self):
+        from jarvis.core.circuit_breaker import DataClass
+        from jarvis.core.provider_registry import route, REGISTRY
+        chain = route(DataClass.PUBLIC, task_kind="research")
+        for name in chain:
+            assert any(m.context >= 200000 for m in REGISTRY[name].models.values()), name
+
+    def test_persona_tiers_map(self):
+        from jarvis.core.provider_registry import route_for_persona
+        assert route_for_persona("cheap", "chat")[0] == "local"
+        assert route_for_persona("strong", "reasoning")
+        assert route_for_persona("", "chat")  # tier vazio → medium default
+
+    def test_local_only_flag(self):
+        from jarvis.core.circuit_breaker import DataClass
+        from jarvis.core.provider_registry import route
+        assert route(DataClass.PUBLIC, local_only=True) == ["local"]
+
+    def test_aggregators_are_public_only(self):
+        from jarvis.core.circuit_breaker import DataClass
+        from jarvis.core.provider_registry import REGISTRY
+        for name in ("openrouter", "omniroute", "9router"):
+            assert REGISTRY[name].max_data_class is DataClass.PUBLIC, name
