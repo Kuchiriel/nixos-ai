@@ -384,7 +384,7 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
         llm = LLMClient(get_config())
         load = check_load(llm)
         if load["busy"]:
-            log.warning("voice_load_shed", detail={
+            log.warn("voice_load_shed", detail={
                 "reason": load["reason"],
                 "text": text[:100],
             })
