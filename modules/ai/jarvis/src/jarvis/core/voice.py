@@ -52,6 +52,12 @@ VOICE_BY_LANG: dict[str, str] = {
 }
 
 
+def _default_lang() -> str:
+    """Idioma padrão pelo LANG do sistema (usuário BR → PT)."""
+    lang = (os.environ.get("LANG", "") + os.environ.get("LC_ALL", "")).lower()
+    return "p" if lang.startswith("pt") else "a"
+
+
 def _detect_lang_code(text: str) -> str:
     """Detect Kokoro lang_code from text content.
 
@@ -59,10 +65,10 @@ def _detect_lang_code(text: str) -> str:
     - PT-BR: high count of ã, ç, é, ê, ó, õ, á, à, â, ù, ~
     - Japanese: high count of hiragana/katakana
     - Chinese: high count of CJK
-    - Default: English ('a')
+    - Default: system LANG (PT-BR → 'p', else English 'a')
     """
     if len(text) < 10:
-        return "a"
+        return _default_lang()
     sample = text[:5000]  # Check first 5000 chars
     pt_chars = sum(1 for c in sample if c in 'ãçéêóõáàâúÃÇÉÊÓÕÁÀÂÚ')
     ja_chars = sum(1 for c in sample if '\u3040' <= c <= '\u309f' or '\u30a0' <= c <= '\u30ff')
@@ -74,7 +80,7 @@ def _detect_lang_code(text: str) -> str:
         return "j"
     if zh_chars / max(total, 1) > 0.01:
         return "z"
-    return "a"
+    return _default_lang()
 
 
 def _voice_for_lang(lang_code: str, voice_override: str | None = None) -> str:
@@ -112,6 +118,10 @@ def transcribe(
         from faster_whisper import WhisperModel  # type: ignore[import-not-found]
     except ImportError as exc:  # pragma: no cover — depende do ambiente
         return f"ERROR: faster-whisper não instalado: {exc}"
+
+    if language is None:
+        env_lang = (os.environ.get("LANG", "") + os.environ.get("LC_ALL", "")).lower()
+        language = "pt" if env_lang.startswith("pt") else None
 
     try:
         model_dir = _model_dir()

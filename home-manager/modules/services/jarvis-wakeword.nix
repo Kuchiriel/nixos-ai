@@ -100,10 +100,10 @@ let
         else "False"
       }
       BRAIN_CMD = ${builtins.toJSON brainCmd}
+      WW_THRESHOLD = "${toString cfg.wakeThreshold}"
       ACK_LANG = "${if cfg.ackLang == null then "auto" else cfg.ackLang}"
       WW_SCORER = "${../../../modules/ai/ww_scorer.py}"
       OWW_MODELS = os.path.expanduser("~/.local/share/openwakeword")
-      WW_THRESHOLD = "0.5"
       STARTUP_SOUND = "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/service-login.oga"
       BEEP_SOUND = "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/message-new-instant.oga"
 
@@ -465,6 +465,11 @@ in {
       type = lib.types.float;
       default = 0.6;
       description = "Fração do pico RMS que define silêncio (0.6 = 40% drop, silence adaptativo).";
+    };
+    wakeThreshold = lib.mkOption {
+      type = lib.types.float;
+      default = 0.3;
+      description = "Score mínimo do hey_jarvis ONNX (0.99 positivo real, ruído <0.18 medido).";
     };
     rmsGate = lib.mkOption {
       type = lib.types.nullOr lib.types.int;

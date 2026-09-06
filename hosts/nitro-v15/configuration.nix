@@ -225,6 +225,7 @@
   networking.hostName = hostname;
   networking.networkmanager.enable = true;
   time.timeZone = lib.mkForce "America/Sao_Paulo";
+  i18n.defaultLocale = "pt_BR.UTF-8";
   networking.nameservers = ["8.8.8.8" "1.1.1.1"];
   networking.firewall.allowedTCPPorts = [22 8080 8081 4000];
 
