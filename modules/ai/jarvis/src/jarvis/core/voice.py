@@ -241,7 +241,7 @@ def speak(
     play: bool = True,
     clone: bool = False,
     speed: float | None = None,
-    pitch: int = 0,
+    pitch: int | None = None,
 ) -> str:
     """Sintetiza `text` com Kokoro-82M (formato torch do nixpkgs) e (opcionalmente) toca.
 
@@ -533,7 +533,7 @@ def main_tts(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-play", action="store_true", help="gera WAV sem tocar")
     parser.add_argument("--clone", action="store_true", help="converte p/ timbre RVC (JARVIS_VOICE_CLONE_MODEL)")
     parser.add_argument("--speed", type=float, default=None, help="velocidade base Kokoro (padrão: emoção; clone aplica ×0.9)")
-    parser.add_argument("--pitch", type=int, default=0, help="semitons RVC (-12..12; ex: -3 aprofunda)")
+    parser.add_argument("--pitch", type=int, default=None, help="semitons RVC (-12..12; default -2, 0 = neutro)")
     args = parser.parse_args(argv)
 
     # id da voz → path (mesmo diretório do modelo, voices/<id>.pt).

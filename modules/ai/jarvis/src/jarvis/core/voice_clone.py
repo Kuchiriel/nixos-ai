@@ -15,6 +15,7 @@ Env:
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import tempfile
 import time
@@ -24,20 +25,71 @@ def _cfg(name: str, default: str = "") -> str:
     return os.environ.get(name, default)
 
 
+# Pitch padrão: -2 semitons (validado contra rvc-jarvis-10s.wav, o mais fiel).
+DEFAULT_PITCH = -2
+
+
+def _best_model() -> tuple[str, str]:
+    """Auto-detecta o melhor .pth pela maior epoch em ~/models.
+
+    Padrão: Jarvis_*_best_epoch.pth + added_Jarvis*.index (maior epoch vence).
+    """
+    models_dir = Path.home() / "models"
+    best_pth, best_epoch = "", -1
+    if models_dir.is_dir():
+        for candidate in models_dir.glob("Jarvis_*_best_epoch.pth"):
+            match = re.search(r"_(\d+)e_", candidate.name)
+            epoch = int(match.group(1)) if match else 0
+            if epoch > best_epoch:
+                best_epoch, best_pth = epoch, str(candidate)
+    scored: list[tuple[int, float, str]] = []
+    if models_dir.is_dir():
+        for candidate in models_dir.glob("added_Jarvis*.index"):
+            match = re.search(r"_(\d+)e_", candidate.name)
+            try:
+                mtime = candidate.stat().st_mtime
+            except OSError:
+                continue
+            epoch = int(match.group(1)) if match else 0
+            scored.append((epoch, mtime, str(candidate)))
+    best_index = max(scored)[2] if scored else ""
+    return best_pth, best_index
+
+
+def _resolve_model(model_path: str | None) -> str:
+    """Ordem: argumento explícito > env > auto-detect (maior epoch em ~/models)."""
+    if model_path:
+        return model_path
+    env_model = _cfg("JARVIS_VOICE_CLONE_MODEL")
+    if env_model:
+        return env_model
+    return _best_model()[0]
+
+
+def _resolve_index(index_path: str | None) -> str:
+    """Ordem: argumento explícito > env > auto-detect (maior epoch/mtime)."""
+    if index_path:
+        return index_path
+    env_index = _cfg("JARVIS_VOICE_CLONE_INDEX")
+    if env_index:
+        return env_index
+    return _best_model()[1]
+
+
 def is_available() -> tuple[bool, str]:
     """Verifica se a stack RVC está configurada. (ok, motivo)."""
     py = _cfg("JARVIS_RVC_PYTHON")
     app = _cfg("JARVIS_RVC_APP_DIR")
-    model = _cfg("JARVIS_VOICE_CLONE_MODEL")
-    index = _cfg("JARVIS_VOICE_CLONE_INDEX")
+    model = _resolve_model(None)
+    index = _resolve_index(None)
     if not py or not Path(py).exists():
         return False, "JARVIS_RVC_PYTHON ausente (ver scripts/rvc-spike-bootstrap.sh)"
     if not app or not Path(app, "rvc", "infer", "infer.py").exists():
         return False, "JARVIS_RVC_APP_DIR ausente ou sem rvc/infer/infer.py"
     if not model or not Path(model).exists():
-        return False, "JARVIS_VOICE_CLONE_MODEL ausente"
+        return False, "modelo .pth não encontrado (env ou ~/models/Jarvis_*_best_epoch.pth)"
     if not index or not Path(index).exists():
-        return False, "JARVIS_VOICE_CLONE_INDEX ausente"
+        return False, "índice .index não encontrado (env ou ~/models/added_Jarvis*.index)"
     return True, ""
 
 
@@ -90,7 +142,7 @@ def clone_many(
     model_path: str | None = None,
     index_path: str | None = None,
     timeout_s: int = 1800,
-    pitch: int = 0,
+    pitch: int | None = None,
 ) -> dict[str, str]:
     """Converte N arquivos com UMA carga de modelos. Retorna {input: output|ERROR}."""
     result: dict[str, str] = {}
@@ -105,8 +157,10 @@ def clone_many(
     todo = [(i, o) for i, o in pairs if i not in result]
     if not todo:
         return result
-    model = model_path or _cfg("JARVIS_VOICE_CLONE_MODEL")
-    index = index_path or _cfg("JARVIS_VOICE_CLONE_INDEX")
+    model = _resolve_model(model_path)
+    index = _resolve_index(index_path)
+    if pitch is None:
+        pitch = DEFAULT_PITCH
     t0 = time.monotonic()
     good, err = _run_driver(todo, model, index, timeout_s, pitch=pitch)
     elapsed = time.monotonic() - t0
@@ -130,7 +184,7 @@ def clone_wav(
     model_path: str | None = None,
     index_path: str | None = None,
     timeout_s: int = 300,
-    pitch: int = 0,
+    pitch: int | None = None,
 ) -> str:
     """Converte input_wav para o timbre do modelo. Retorna path ou ERROR:."""
     if output_wav is None and input_wav:
