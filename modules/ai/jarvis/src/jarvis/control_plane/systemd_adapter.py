@@ -10,12 +10,30 @@ Architecture:
 
 from __future__ import annotations
 
+import os
 import subprocess
 import time
 from dataclasses import dataclass
 from typing import Any
 
 from jarvis.control_plane.commands import CommandRegistry, Risk, get_command_registry
+
+
+def _user_env() -> dict[str, str]:
+    """Env with XDG_RUNTIME_DIR so `systemctl --user` works without a login session.
+
+    The webui runs as a system unit without DBUS_SESSION_BUS_ADDRESS set,
+    which makes every `systemctl --user` call fail. Point at the standard
+    per-user runtime dir explicitly.
+    """
+    env = os.environ.copy()
+    if not env.get("XDG_RUNTIME_DIR"):
+        try:
+            uid = os.getuid()
+        except OSError:
+            uid = 1000
+        env["XDG_RUNTIME_DIR"] = f"/run/user/{uid}"
+    return env
 
 
 # ─── Service Registry ──────────────────────────────────────────────────
@@ -133,8 +151,10 @@ class SystemdAdapter:
                     "--all", "--no-legend", "--no-pager",
                     "--plain",
                 ]
+                run_env = _user_env() if scope == "user" else None
                 result = subprocess.run(
                     cmd, capture_output=True, text=True, timeout=10,
+                    env=run_env,
                 )
                 if result.returncode != 0:
                     continue
@@ -194,9 +214,11 @@ class SystemdAdapter:
         if scope == "user":
             cmd.append("--user")
         cmd.extend([action, service])
+        run_env = _user_env() if scope == "user" else None
         try:
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=timeout,
+                env=run_env,
             )
             ok = result.returncode == 0
             output = result.stdout + result.stderr
@@ -205,6 +227,7 @@ class SystemdAdapter:
                 try:
                     user_result = subprocess.run(
                         user_cmd, capture_output=True, text=True, timeout=timeout,
+                        env=_user_env(),
                     )
                     return user_result.returncode == 0, user_result.stdout + user_result.stderr
                 except (subprocess.TimeoutExpired, OSError):
