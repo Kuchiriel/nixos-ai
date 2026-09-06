@@ -457,7 +457,7 @@
     device = "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source";
     # Calibração validada do legado:
     # 0.20 = sensível o suficiente para voz normal
-    threshold = 0.20;
+    threshold = 0.25;
     # RMS gate: ignora score alto se RMS < 500 (evita falsos positivos)
     rmsGate = 500;
     # Pipeline de voz: STT (faster-whisper) → LLM (llama.cpp) → TTS (Kokoro)
