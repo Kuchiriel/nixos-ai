@@ -672,7 +672,10 @@ def _cmd_triggers(args: argparse.Namespace) -> int:
 def _cmd_stt(args: argparse.Namespace) -> int:
     from jarvis.core.voice import main_stt
 
-    return main_stt([args.wav, "--model", args.model])
+    argv = [args.wav, "--model", args.model]
+    if getattr(args, "language", None):
+        argv += ["--language", args.language]
+    return main_stt(argv)
 
 
 def _cmd_speak(args: argparse.Namespace) -> int:
@@ -903,6 +906,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_stt = sub.add_parser("stt", help="transcreve um WAV (faster-whisper, VAD calibrado)")
     p_stt.add_argument("wav", help="arquivo de áudio")
     p_stt.add_argument("--model", default="tiny", help="tamanho do modelo faster-whisper")
+    p_stt.add_argument("--language", default=None, help="hint de idioma (ex: pt)")
     p_stt.set_defaults(func=_cmd_stt)
 
     p_speak = sub.add_parser("speak", help="sintetiza texto com Kokoro (TTS)")
