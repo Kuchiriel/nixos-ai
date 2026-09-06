@@ -47,9 +47,9 @@ def calibrate(text: str, real_tokens: int) -> None:
 
 
 def estimate(text: str) -> int:
-    """Estima tokens de um texto (heurística calibrada)."""
+    """Estima tokens de um texto (heurística calibrada, mínimo 1)."""
     if not text:
-        return 0
+        return 1
     return max(1, int(len(text) // (CHARS_PER_TOKEN * calibration_ratio())))
 
 
