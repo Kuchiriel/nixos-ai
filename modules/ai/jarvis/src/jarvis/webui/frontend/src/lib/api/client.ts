@@ -144,6 +144,40 @@ export async function fetchMemoryInfo(): Promise<any> {
   return res.json();
 }
 
+export async function fetchKeys(): Promise<any> {
+  const res = await fetch(`${API_BASE}/keys`);
+  if (!res.ok) throw new Error(`Keys fetch failed: ${res.status}`);
+  return res.json();
+}
+
+export async function setKey(provider: string, key: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/keys`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, key }),
+  });
+  if (!res.ok) throw new Error(`Set key failed: ${res.status}`);
+  return res.json();
+}
+
+export async function removeKey(provider: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/keys/${provider}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Remove key failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchMemories(kind = '', limit = 20): Promise<any> {
+  const res = await fetch(`${API_BASE}/memory/recall?kind=${kind}&limit=${limit}`);
+  if (!res.ok) throw new Error(`Recall failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchVaultNotes(): Promise<any> {
+  const res = await fetch(`${API_BASE}/vault/list`);
+  if (!res.ok) throw new Error(`Vault fetch failed: ${res.status}`);
+  return res.json();
+}
+
 export async function fetchAgentInfo(): Promise<any> {
   const res = await fetch(`${API_BASE}/agent`);
   if (!res.ok) throw new Error(`Agent fetch failed: ${res.status}`);

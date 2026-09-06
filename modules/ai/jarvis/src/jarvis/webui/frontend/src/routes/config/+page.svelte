@@ -1,15 +1,37 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { fetchLLMInfo, fetchConfig, fetchServices } from '$lib/api/client';
+  import { fetchLLMInfo, fetchConfig, fetchServices, fetchKeys, setKey, removeKey } from '$lib/api/client';
   let llm: any = $state(null);
   let config: any = $state(null);
   let services: any[] = $state([]);
+  let keys: any = $state(null);
+  let newProvider = $state('openrouter');
+  let newKey = $state('');
+  let keyMsg = $state('');
 
   onMount(async () => {
     llm = await fetchLLMInfo();
     config = await fetchConfig();
     services = await fetchServices();
+    try { keys = await fetchKeys(); } catch { keys = null; }
   });
+
+  async function saveKey() {
+    if (!newKey.trim()) return;
+    try {
+      await setKey(newProvider, newKey.trim());
+      keyMsg = `✓ ${newProvider} salva`;
+      newKey = '';
+      keys = await fetchKeys();
+    } catch (e) { keyMsg = `✗ ${e}`; }
+  }
+  async function delKey(provider: string) {
+    try {
+      await removeKey(provider);
+      keyMsg = `✓ ${provider} removida`;
+      keys = await fetchKeys();
+    } catch (e) { keyMsg = `✗ ${e}`; }
+  }
 </script>
 
 <svelte-head><title>Jarvis — Config</title></svelte-head>
@@ -35,6 +57,38 @@
       <div class="row"><span class="label">{name}</span><span class="value">{cfg.url || '—'}</span></div>
       {/each}
     </div>
+  </section>
+{/if}
+
+{#if keys}
+  <section>
+    <h2>API Keys</h2>
+    <div class="info-grid">
+      <div class="row"><span class="label">Cascade</span><span class="value">{keys.cascade?.join(' → ') || 'local'}</span></div>
+      {#each Object.entries(keys.providers || {}) as [provider, ok]}
+      <div class="row">
+        <span class="label">{provider}</span>
+        <span class="value">
+          <span style="color:{ok ? '#22c55e' : '#ef4444'}">{ok ? '● configurada' : '○ ausente'}</span>
+          {#if ok}<button class="mini-btn" onclick={() => delKey(provider)}>remover</button>{/if}
+        </span>
+      </div>
+      {/each}
+    </div>
+    <div class="key-form">
+      <select bind:value={newProvider}>
+        <option value="openrouter">openrouter</option>
+        <option value="groq">groq</option>
+        <option value="cerebras">cerebras</option>
+        <option value="together">together</option>
+        <option value="gemini">gemini</option>
+        <option value="hf">hf</option>
+      </select>
+      <input type="password" placeholder="sk-..." bind:value={newKey} />
+      <button onclick={saveKey}>salvar</button>
+      {#if keyMsg}<span class="msg">{keyMsg}</span>{/if}
+    </div>
+    <p class="hint">Chaves salvas em /etc/litellm.env (fora do repo). Valores nunca exibidos.</p>
   </section>
 {/if}
 
@@ -65,4 +119,11 @@
   table { width: 100%; max-width: 600px; border-collapse: collapse; font-size: 0.8rem; }
   th, td { padding: 0.4rem 0.6rem; text-align: left; border-bottom: 1px solid #222; }
   th { color: #666; }
+  .key-form { display: flex; gap: 0.5rem; margin-top: 0.6rem; max-width: 600px; }
+  .key-form select, .key-form input { background: #111; border: 1px solid #333; color: #eee; border-radius: 3px; padding: 0.4rem; font-size: 0.8rem; }
+  .key-form input { flex: 1; }
+  .key-form button, .mini-btn { background: #0a3d62; border: none; color: #fff; border-radius: 3px; padding: 0.4rem 0.8rem; cursor: pointer; font-size: 0.75rem; }
+  .mini-btn { margin-left: 0.5rem; padding: 0.15rem 0.5rem; background: #5a1a1a; }
+  .msg { font-size: 0.75rem; color: #888; align-self: center; }
+  .hint { font-size: 0.7rem; color: #555; max-width: 600px; }
 </style>

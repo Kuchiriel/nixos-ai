@@ -604,24 +604,30 @@ class RecallRequest(BaseModel):
 
 
 @app.get("/api/memory/recall")
-def memory_recall(req: RecallRequest = RecallRequest()) -> dict[str, Any]:
-    """Recall episodic memories."""
+def memory_recall(kind: str = "", limit: int = 20) -> dict[str, Any]:
+    """Recall episodic memories (most recent first)."""
     from jarvis.core.memory import EpisodicMemory
-    from jarvis.core.config import get_config
-    cfg = get_config()
     mem = EpisodicMemory()
-    kind = req.kind if req.kind else None
-    memories = mem.recall(kind=kind) if kind else mem.recent()
+    memories = mem.recall(kind=kind or None) if kind else mem.recent(limit=limit)
     result = []
     for m in memories:
-        result.append({
-            "id": m.id if hasattr(m, "id") else str(m),
-            "kind": m.kind if hasattr(m, "kind") else "unknown",
-            "content": m.content if hasattr(m, "content") else str(m),
-            "timestamp": m.timestamp if hasattr(m, "timestamp") else "",
-            "task": m.task if hasattr(m, "task") else "",
-        })
-    return {"memories": result}
+        if isinstance(m, dict):
+            result.append({
+                "id": str(m.get("id", "")),
+                "kind": m.get("kind", "unknown"),
+                "content": m.get("text", m.get("content", "")),
+                "timestamp": m.get("iso", ""),
+                "task": m.get("task", ""),
+            })
+        else:
+            result.append({
+                "id": str(getattr(m, "id", m)),
+                "kind": getattr(m, "kind", "unknown"),
+                "content": getattr(m, "content", str(m)),
+                "timestamp": getattr(m, "timestamp", ""),
+                "task": getattr(m, "task", ""),
+            })
+    return {"memories": result, "total": len(result)}
 
 
 @app.post("/api/memory/remember")
@@ -657,21 +663,21 @@ class SummarizeRequest(BaseModel):
 
 @app.get("/api/vault/list")
 def vault_list() -> dict[str, Any]:
-    """List vault notes."""
+    """List vault notes (markdown files, most recent first)."""
     from jarvis.core.vault import MemoryVault
     vault = MemoryVault()
-    notes = vault.list_notes()
+    names = vault.list_notes()
+    vdir = vault.vault_dir
     result = []
-    for note_id in notes:
-        note = vault._month_file_note(note_id) if hasattr(vault, "_month_file_note") else {}
-        result.append({
-            "id": note_id,
-            "title": note.get("title", note_id),
-            "kind": note.get("kind", "unknown"),
-            "content": note.get("content", ""),
-            "timestamp": note.get("timestamp", ""),
-        })
-    return {"notes": result}
+    for name in names:
+        preview = ""
+        try:
+            text = (vdir / name).read_text(encoding="utf-8", errors="replace")
+            preview = text[:500]
+        except OSError:
+            pass
+        result.append({"id": name, "title": name, "preview": preview})
+    return {"notes": result, "total": len(result)}
 
 
 @app.post("/api/vault/summarize")
