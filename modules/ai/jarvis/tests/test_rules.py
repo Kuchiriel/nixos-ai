@@ -151,3 +151,136 @@ def test_route_still_falls_to_agent() -> None:
 
 def test_get_fast_paths_singleton() -> None:
     assert get_fast_paths() is get_fast_paths()
+
+
+# ---------------------------------------------------------------------------
+# Motor enriquecido (portado do RiveScript do legado)
+# ---------------------------------------------------------------------------
+
+
+def test_array_synonyms_expand() -> None:
+    fp = FastPaths.from_text(
+        "! array memoria = memoria memória memòria\n"
+        "uso de @memoria → ok\n"
+    )
+    assert fp.respond("uso de memoria") == "ok"
+    assert fp.respond("uso de memória") == "ok"
+    assert fp.respond("uso de memòria") == "ok"
+    assert fp.respond("uso de ram") is None  # fora do array
+
+
+def test_array_inside_optional() -> None:
+    # `[@livro]` precisa expandir o array (não virar literal "@livro")
+    fp = FastPaths.from_text(
+        "! array livro = livro book audiobook\n"
+        "! array ler = ler leia le lê leio\n"
+        "@ler [o] [@livro] * → read <star>\n"
+    )
+    assert fp.respond("leia o livro hobbit") == "read hobbit"
+    assert fp.respond("ler book dune") == "read dune"
+    assert fp.respond("leia hobbit") == "read hobbit"
+
+
+def test_array_longest_alternative_wins() -> None:
+    # "leio" não pode ser roubado pela alternativa "le" (prefixo)
+    fp = FastPaths.from_text(
+        "! array ler = ler leia le lê leio\n"
+        "@ler * → read <star>\n"
+    )
+    assert fp.respond("leio audiobook the martian") == "read audiobook the martian"
+
+
+def test_optional_wildcard_star_brackets() -> None:
+    fp = FastPaths.from_text(
+        "[*] (tire|tira|tirar) [*] (print|screenshot) [*] → shot\n"
+    )
+    assert fp.respond("tira um print") == "shot"
+    assert fp.respond("pode tirar um print pra mim") == "shot"
+    # sem o verbo (tire/tira/tirar), a regra NÃO casa — "screenshot"
+    # puro é outra regra (trigger literal) no DEFAULT_RULES
+    assert fp.respond("screenshot") is None
+    assert fp.respond("tira uma foto da paisagem") is None  # sem print/screenshot
+
+
+def test_numeric_wildcard_math() -> None:
+    fp = FastPaths.from_text("quanto é # * # → <call>m <star1> <star2> <star3></call>")
+    fp.register("m", lambda args: "|".join(args))
+    assert fp.respond("quanto é 8 + 2") == "8|+|2"
+    assert fp.respond("quanto é 5,5 + 1,5") == "5,5|+|1,5"
+    assert fp.respond("quanto é a capital da frança") is None  # sem números
+
+
+def test_normalization_strips_name_and_filler() -> None:
+    fp = FastPaths.from_text("leia [o] [livro] * → ok\nquanto de memória tem → ok2\n")
+    assert fp.respond("jarvis, leia o livro hobbit") == "ok"
+    assert fp.respond("hey jarvis leia hobbit") == "ok"
+    assert fp.respond("ei jarvis, por favor, leia o livro hobbit") == "ok"
+    assert fp.respond("por favor, quanto de memória tem?") == "ok2"
+
+
+def test_normalization_does_not_steal_real_requests() -> None:
+    # filler/prefix stripping NUNCA pode transformar uma pergunta real
+    # em um trigger curto (ex.: "boa tarde, qual a capital da frança")
+    fp = FastPaths.from_text(
+        "boa tarde → Boa tarde!\n"
+        "cpu → cpu status\n"
+    )
+    assert fp.respond("boa tarde") == "Boa tarde!"
+    assert fp.respond("boa tarde, qual a capital da frança") is None
+    assert fp.respond("cpu") == "cpu status"
+    assert fp.respond("explique como funciona uma cpu") is None
+
+
+def test_specificity_literal_count_first() -> None:
+    # com literais iguais, `#` (número) vence `[*]` (wildcard opcional)
+    fp = FastPaths()
+    fp.add("[*] quanto é [*]", "generico")
+    fp.add("quanto é # * #", "especifico")
+    assert fp.respond("quanto é 8 + 2") == "especifico"
+
+
+def test_topic_short_commands_stay_in_topic() -> None:
+    fp = FastPaths.from_text(
+        "[topic random]\n"
+        "leia o livro * → <call>audio read <star></call>{topic=audiobook}\n"
+        "[topic audiobook]\n"
+        "pausa → <call>audio pause</call>{topic=audiobook}\n"
+        "continua → <call>audio resume</call>{topic=audiobook}\n"
+        "proximo → <call>audio next</call>{topic=audiobook}\n"
+    )
+    fp.register("audio", lambda args: f"audio:{args[0]}")
+    assert fp.respond("leia o livro hobbit") == "audio:read"
+    assert fp.topic() == "audiobook"
+    assert fp.respond("pausa") == "audio:pause"
+    assert fp.topic() == "audiobook"  # pausa não expulsa do tópico
+    assert fp.respond("continua") == "audio:resume"
+    assert fp.topic() == "audiobook"
+    assert fp.respond("proximo") == "audio:next"
+
+
+def test_route_math_and_screenshot_fastpath() -> None:
+    assert route_request("quanto é 8 + 2").handler == "fastpath"
+    assert route_request("tira um print").handler == "fastpath"
+    assert route_request("quanto é 8 + 2 + 3").handler == "fastpath"
+
+
+def test_route_math_answer_correct() -> None:
+    from jarvis.core.router import handle_fastpath
+
+    assert handle_fastpath("quanto é 8 + 2")["response"] == "10"
+    assert handle_fastpath("quanto é 8 dividido por 2")["response"] == "4"
+    assert handle_fastpath("quanto é 8 + 2 + 3")["response"] == "13"
+    assert handle_fastpath("quanto é 2 vezes 3")["response"] == "6"
+
+
+def test_real_questions_never_match_fastpath() -> None:
+    for text in [
+        "explique o conceito de recursão",
+        "o que você acha do livro que escrevi",
+        "que livros você recomenda",
+        "quanto é a capital da frança",
+        "qual a temperatura da cpu agora",
+        "me conta uma piada",
+        "boa tarde, qual a capital da frança",
+    ]:
+        assert route_request(text).handler != "fastpath", text

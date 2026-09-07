@@ -99,6 +99,72 @@ def get_fast_paths() -> FastPaths:
         action = args[0] if args else ""
         return f"[voz {action}] {' '.join(args[1:]) or ''}"
 
+    _MATH_WORDS = {
+        "mais": "+", "menos": "-", "vezes": "*", "dividido": "/",
+        "por": "/", "sobre": "/", "x": "*", "−": "-",
+        "plus": "+", "minus": "-", "times": "*", "divided": "/", "over": "/",
+    }
+
+    def _math(args: list[str]) -> str:
+        """Aritmética segura via ast (sem eval).
+
+        Recebe do trigger `quanto é # * #`: [n1, operador, n2]. O operador
+        pode ser símbolo, palavra (mais/menos/vezes/dividido por) ou até
+        multi-operador ("8 + 2 + 3" → op = "+ 2 +"). Expressões sem
+        números não casam o trigger (o `#` ancora os dois lados).
+        """
+        import ast
+        import operator as _op
+
+        _OPS = {
+            ast.Add: _op.add, ast.Sub: _op.sub, ast.Mult: _op.mul,
+            ast.Div: _op.truediv, ast.Mod: _op.mod, ast.Pow: _op.pow,
+            ast.USub: _op.neg, ast.UAdd: _op.pos,
+        }
+
+        def _eval_node(node: ast.AST) -> float:
+            if isinstance(node, ast.Expression):
+                return _eval_node(node.body)
+            if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+                return node.value
+            if isinstance(node, ast.BinOp) and type(node.op) in _OPS:
+                return _OPS[type(node.op)](_eval_node(node.left), _eval_node(node.right))
+            if isinstance(node, ast.UnaryOp) and type(node.op) in _OPS:
+                return _OPS[type(node.op)](_eval_node(node.operand))
+            raise ValueError("expressão não suportada")
+
+        if len(args) < 3:
+            return "(preciso de: número operador número)"
+        try:
+            # recompõe a expressão e traduz palavras para símbolos.
+            # Frases multi-palavra primeiro ("dividido por" → "/"),
+            # depois palavras individuais (mais→+, vezes→*, x→*...).
+            expr = " ".join(args)
+            expr = expr.replace("dividido por", "/").replace("divided by", "/")
+            toks: list[str] = []
+            for tok in expr.split():
+                tok = tok.replace(",", ".")
+                toks.append(_MATH_WORDS.get(tok.lower(), tok))
+            expr = " ".join(toks)
+            tree = ast.parse(expr, mode="eval")
+            r = _eval_node(tree.body)
+            if not isinstance(r, (int, float)) or r != r or abs(r) == float("inf"):
+                return "(resultado inválido)"
+        except (ValueError, SyntaxError, ZeroDivisionError, OverflowError, RecursionError):
+            return "(não entendi essa expressão — ex.: quanto é 8 + 2)"
+        return str(int(r)) if float(r).is_integer() else f"{r:.2f}"
+
+    def _screenshot(args: list[str]) -> str:
+        """Captura de tela local (grim) — zero LLM. Análise visual vai pro agente."""
+        try:
+            from jarvis.core.vision import capture_full
+
+            res = capture_full()
+        except Exception as exc:  # noqa: BLE001
+            return f"erro: {exc}"
+        if res.get("ok"):
+            return f"📸 screenshot: {res.get('path')}"
+        return f"erro: {res.get('error', 'captura falhou')}"
     def _sys(args: list[str]) -> str:
         """Executa comando read-only da allowlist e devolve a saída.
 
@@ -123,6 +189,8 @@ def get_fast_paths() -> FastPaths:
     fp.register("audiobook", _audio)
     fp.register("voice", _voice)
     fp.register("sys", _sys)
+    fp.register("math", _math)
+    fp.register("screenshot", _screenshot)
     _fast_paths = fp
     return fp
 
