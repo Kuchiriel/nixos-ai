@@ -218,7 +218,6 @@ VERIFIED:
 ```
 
 ## 18. Teste ao vivo 2 + follow-up (2026-09-07)
-
 ```text
 VERIFIED:
 - Endpoint novo encerra em 2.5-4s (adeus 12s); scorer confirma wake limpo
@@ -266,4 +265,23 @@ LIÇÃO DE PROCESSO (forense):
   flakes copiam o índice git; arquivos criados após o `git add` do script
   são invisíveis. Regra: `git add -A` + `git ls-files` ANTES de rebuildar.
   (AGENTS.md já mandava; o erro foi criar arquivos concorrente ao build.)
+```
+
+## 19. UX pattern pesquisado + aplicado (2026-09-07)
+
+Fontes: Picovoice (latency budget, endpointing, barge-in), Alexa Progressive
+Responses, DEV Siri/Alexa/Google tricks, CHI 2022 (respostas curtas pontuam
+mais), W3C SSML buffer module. Aplicado ao pipeline:
+- STT vazio (exit 0, texto "") → idle silencioso, SEM erro/notify (era o
+  "erro de pipeline" nos follow-ups de ruído).
+- Só-wakeword ("Hey Jarvis." sozinho) → idle (ack do confirm já cobriu);
+  antes queimava um turno LLM que respondia sem sentido.
+- Persona: saudação só no wake; turnos normais respondem direto (era o
+  "pois não senhor" em tudo).
+- TTS capped (~500 chars na sentença; Siri pattern) + resposta completa no
+  notify em vez de monólogo falado.
+- Waybar event-driven: set_status manda SIGRTMIN+8 (módulo com signal: 8,
+  polling virou fallback 5s); TTL anti-travamento 120s→45s.
+- GPU "torando": era o próprio loop de voz (turnos de ruído a cada ~15s) +
+  slot único dividido com opencode local. Sem processo estranho.
 ```

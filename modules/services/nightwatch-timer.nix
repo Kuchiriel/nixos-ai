@@ -23,7 +23,9 @@ in {
     after = [ "llama-cpp-server.service" "jarvis.target" ];
     wants = [ "llama-cpp-server.service" ];
     partOf = [ "jarvis.target" ];
-    wantedBy = [ "jarvis.target" ];
+    # SEM wantedBy: o timer é o único gatilho. Com wantedBy o service subia a
+    # cada `nixos-rebuild switch` (restart do jarvis.target) e queimava a GPU
+    # em horário de uso — forense 2026-09-07.
 
     serviceConfig = {
       Type = "oneshot";
