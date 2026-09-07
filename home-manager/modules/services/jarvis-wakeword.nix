@@ -286,7 +286,6 @@ let
               toca o ack, e OUVE O COMANDO numa captura nova — sem wake junto
               na transcrição e sem turno LLM para "hey jarvis" sozinho.
               """
-              nonlocal arecord_proc, suppress_until, followup_until, expect_command_until
               if KILL_TTS:
                   for pat in ["pw-play", "paplay", "aplay", "enhanced_audiobook.py"]:
                       subprocess.run(["pkill", "-9", pat], stderr=subprocess.DEVNULL)
@@ -341,6 +340,7 @@ let
 
           def _score_wake(temp_wav):
               """Roda o verificador offline. True = wake confirmado."""
+              nonlocal suppress_until
               import sys as _sys
               try:
                   _score = subprocess.run(
