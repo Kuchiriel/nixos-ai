@@ -444,7 +444,9 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
     #    (CTranslate2 + Kokoro no mesmo processo causa Floating-point exception)
     set_status("transcribing", "Transcrevendo...")
     try:
-        _stt_cmd = [sys.executable, "-m", "jarvis.cli.main", "stt", "--model", model_size, audio_path]
+        import shutil as _shutil
+        _stt_bin = _shutil.which("jarvis") or "jarvis"
+        _stt_cmd = [_stt_bin, "stt", "--model", model_size, audio_path]
         lang = (os.environ.get("LANG", "") + os.environ.get("LC_ALL", "")).lower()
         if lang.startswith("pt"):
             _stt_cmd += ["--language", "pt"]
