@@ -344,14 +344,13 @@ let
               nonlocal suppress_until
               import sys as _sys
               try:
-                  _score = subprocess.run(
-                      [_sys.executable, WW_SCORER, "--models",
-                       os.path.expanduser(OWW_MODELS),
-                       "--wav", temp_wav,
-                       "--threshold", WW_THRESHOLD,
-                       "--head-seconds", "4"],
-                      capture_output=True, text=True, timeout=60,
-                  )
+                          _score = subprocess.run(
+                              [_sys.executable, WW_SCORER, "--models",
+                               os.path.expanduser(OWW_MODELS),
+                               "--wav", temp_wav,
+                               "--threshold", WW_THRESHOLD],
+                              capture_output=True, text=True, timeout=60,
+                          )
               except Exception as _ww_err:
                   print(f"[WW] ⚠️ scorer falhou: {_ww_err}, seguindo p/ STT", flush=True)
                   return True
@@ -605,8 +604,8 @@ in {
     };
     wakeThreshold = lib.mkOption {
       type = lib.types.float;
-      default = 0.5;
-      description = "Score mínimo do hey_jarvis ONNX (upstream default; 0.3 gerou falsos positivos com ventoinha).";
+      default = 0.4;
+      description = "Score mínimo do hey_jarvis ONNX. Forense 2026-09: 0.5 rejeitava wake real (0.49) no ruído; ruído fica <0.15.";
     };
     ackLang = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
