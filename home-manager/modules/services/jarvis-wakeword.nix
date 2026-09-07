@@ -526,6 +526,9 @@ in {
         # PATH needs jarvis-voice for BRAIN_CMD (jarvis voice <wav>)
         Environment = [
           "PATH=${lib.makeBinPath [pkgs.jarvis-voice pkgs.pipewire pkgs.sox pkgs.procps]}:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.findutils}/bin"
+          "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus"
+          "DISPLAY=:0"
+          "WAYLAND_DISPLAY=wayland-1"
         ];
       };
       Install = {

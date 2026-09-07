@@ -440,12 +440,28 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
 
     log = get_logger("voice")
 
-    # 1. STT
+    # 1. STT — via subprocess para isolar CTranslate2/torch de Kokoro/torch
+    #    (CTranslate2 + Kokoro no mesmo processo causa Floating-point exception)
     set_status("transcribing", "Transcrevendo...")
-    text = transcribe(audio_path, model_size=model_size)
-    if text.startswith("ERROR"):
-        set_status("error", text[:80])
-        print(text, file=sys.stderr)
+    try:
+        _stt_cmd = [sys.executable, "-m", "jarvis.cli.main", "stt", "--model", model_size, audio_path]
+        lang = (os.environ.get("LANG", "") + os.environ.get("LC_ALL", "")).lower()
+        if lang.startswith("pt"):
+            _stt_cmd += ["--language", "pt"]
+        _stt_proc = subprocess.run(_stt_cmd, capture_output=True, text=True, timeout=60)
+        text = (_stt_proc.stdout or "").strip()
+        if _stt_proc.returncode != 0 or not text:
+            stderr_out = (_stt_proc.stderr or "")[:200]
+            set_status("error", f"STT falhou: {stderr_out[:60]}")
+            print(f"ERROR: STT falhou (exit {_stt_proc.returncode}): {stderr_out}", file=sys.stderr)
+            return 1
+    except subprocess.TimeoutExpired:
+        set_status("error", "STT timeout")
+        print("ERROR: STT timeout (60s)", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        set_status("error", str(exc)[:80])
+        print(f"ERROR: STT exceção: {exc}", file=sys.stderr)
         return 1
     if not text:
         set_status("idle", "")
