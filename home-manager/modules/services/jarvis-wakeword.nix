@@ -286,6 +286,7 @@ let
               toca o ack, e OUVE O COMANDO numa captura nova — sem wake junto
               na transcrição e sem turno LLM para "hey jarvis" sozinho.
               """
+              nonlocal followup_until, expect_command_until
               if KILL_TTS:
                   for pat in ["pw-play", "paplay", "aplay", "enhanced_audiobook.py"]:
                       subprocess.run(["pkill", "-9", pat], stderr=subprocess.DEVNULL)
