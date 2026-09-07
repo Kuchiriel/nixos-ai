@@ -337,9 +337,6 @@ let
               speech_buf.clear()
               expect_command_until = time.time() + 12
               update_status("listening", "Fale agora…")
-              # Earcon de "fale agora": sem ele o usuário repete o wake no
-              # vazio (loop wake→silêncio, forense 2026-09).
-              play_sound(BEEP_SOUND)
               print(f"[WW] 👂 fase 2: ouvindo comando (12s)", flush=True)
 
           def _score_wake(temp_wav):
@@ -467,15 +464,17 @@ let
                   rms = np.sqrt(np.mean(mono**2)) if len(mono) > 0 else 0
                   chunk_count += 1
 
-                  # Sistema deWaybar/Pulsing status — nunca sobrescreve
-                  # pipeline ativa (brain transcrevendo/pensando/falando).
+                  # Sistema deWaybar/Pulsing status — mostra vida SEM tocar em
+                  # estado de pipeline (transcribing/thinking/speaking/busy/
+                  # done/error/listening são donos do brain; rebaixar p/ idle
+                  # dessincronizava notify × waybar — forense 2026-09).
                   if chunk_count % 50 == 0:
                       try:
                           with open("/tmp/jarvis-status.json") as _sf:
                               _cur = json.load(_sf).get("state", "idle")
                       except Exception:
                           _cur = "idle"
-                      if _cur in ("idle", "listening"):
+                      if _cur == "idle":
                           pulse_symbols = ["  ", "  "]
                           update_status("idle", f"{pulse_symbols[pulse_state % 2]} Ouvindo...")
                           pulse_state += 1
