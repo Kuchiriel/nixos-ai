@@ -200,3 +200,19 @@ BLOCKED (deploy) — RESOLVIDO 2026-09-07 09:52:
   /tmp/nightly-flake-work.patch; revertido só o par flake.nix/flake.lock
   (sox mantido e implantado).
 ```
+
+## 16. Follow-up voz consistente + busy + clone (2026-09-07)
+
+```text
+VERIFIED:
+- TTS trocava de voz por frase: ack (acentos→pm_alex) vs resposta sem
+  acentos (LANG=en_US→af_heart) + speed 1.2 quando a resposta continha
+  "agora/já". Fix: JARVIS_TTS_LANG=pt no service (segue ackLang), clamp
+  auto-speed ±5%, strip do wake no texto (router recebia "hey jarvis" junto).
+- "Modelo ocupado": servidor tem 1 slot (profile bonsai parallel=1); shed
+  era imediato quando opencode/Roo usavam o slot. Fix: espera até 25s
+  (Waybar mostra "busy") antes do shed.
+- --clone: spike RVC existe (/tmp/opencode + ~/models); só faltavam envs.
+  Smoke manual: jarvis_tts_611505839-clone.wav em 21s. Pipeline ganhou
+  `jarvis voice --clone` (opt-in; default off pelo custo de ~20s/turno).
+```

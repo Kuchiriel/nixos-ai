@@ -396,20 +396,22 @@ let
                   if (time.time() - last_trigger_time) < COOLDOWN:
                       continue
 
-                  # VAD: detect speech onset
+                  # VAD: detect speech onset (forense 2026-09: 3/5 com gate 400
+                  # disparava no ruído ~500 → loop de capturas de 12s).
                   # 1. Ignore very quiet audio (electronic noise)
                   if rms < 50:
                       continue
 
-                  # 2. Adaptive threshold: 50% above baseline
-                  # 3. Require 3 of last 5 chunks above gate
+                  # 2. Adaptive threshold: 80% above baseline, floor 450
+                  # 3. Require 4 of last 6 chunks above gate
                   if not speaking:
                       if time.time() < suppress_until:
                           speech_buf = []
                           continue
-                      speech_buf.append(1 if rms > speech_gate else 0)
-                      speech_buf = speech_buf[-5:]
-                      if sum(speech_buf) >= 3:
+                      onset_gate = max(noise_baseline * 1.8, 450)
+                      speech_buf.append(1 if rms > onset_gate else 0)
+                      speech_buf = speech_buf[-6:]
+                      if sum(speech_buf) >= 4:
                           speaking = True
                           speech_peak = float(rms)
                           # Pre-roll: inclui os últimos ~770ms antes do onset
@@ -438,14 +440,15 @@ let
                       print(f"[WW] ⏱️ Max record reached ({MAX_RECORD}s)", flush=True)
                       _process_speech()
                   elif rms < silence_gate and recording_duration > 1.0:
-                      # Silence detected: < baseline * 1.1 for 2.5s, min 1s recording
+                      # Silence detected: abaixo do gate por 1.5s (mín 1s gravado).
+                      # 2.5s nunca segurava no ruído oscilante → tudo ia a 12s.
                       if silence_start is None:
                           silence_start = time.time()
-                      elif time.time() - silence_start > 2.5:
+                      elif time.time() - silence_start > 1.5:
                           speaking = False
                           last_trigger_time = time.time()
                           update_status("transcribing", "Transcrevendo...")
-                          print(f"[WW] ✅ Speech ended ({len(speech_frames)} chunks, {len(speech_frames)*CHUNK/RATE:.1f}s)", flush=True)
+                          print(f"[WW] ✅ Speech ended ({len(speech_frames)} chunks, {len(speech_frames)*CHUNK/RATE:.1f}s, gate={silence_gate:.0f})", flush=True)
                           _process_speech()
                   else:
                       # Speech continuing — reset silence timer
