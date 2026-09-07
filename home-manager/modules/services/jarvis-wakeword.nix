@@ -337,6 +337,9 @@ let
               speech_buf.clear()
               expect_command_until = time.time() + 12
               update_status("listening", "Fale agora…")
+              # Earcon de "fale agora": sem ele o usuário repete o wake no
+              # vazio (loop wake→silêncio, forense 2026-09).
+              play_sound(BEEP_SOUND)
               print(f"[WW] 👂 fase 2: ouvindo comando (12s)", flush=True)
 
           def _score_wake(temp_wav):
@@ -607,7 +610,7 @@ in {
     };
     maxRecordSeconds = lib.mkOption {
       type = lib.types.int;
-      default = 12;
+      default = 10;
       description = "Limite máximo de gravação após trigger.";
     };
     silenceDrop = lib.mkOption {

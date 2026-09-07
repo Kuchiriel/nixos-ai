@@ -33,10 +33,8 @@ def load_mono16k(path: str) -> np.ndarray:
             data = data.reshape(-1, f.getnchannels()).mean(axis=1).astype(np.int16)
         rate = f.getframerate()
         if rate != 16000:
-            # Resample linear p/ 16k (forense 2026-09: scorer quebrava em 48k/40k).
-            # Suporta rates comuns de captura/TTS; rejeita o resto.
-            if rate % 16000 != 0 and 16000 % rate != 0 and rate not in (44100, 48000, 40000, 32000, 22050):
-                raise ValueError(f"need 16 kHz (ou múltiplo), got {rate}")
+            # Resample p/ 16k em qualquer taxa (forense 2026-09: whitelist
+            # quebrava em 24k e matava o scorer com ValueError).
             import math
             n_out = math.ceil(len(data) * 16000 / rate)
             idx = (np.arange(n_out) * rate / 16000).astype(np.int64)

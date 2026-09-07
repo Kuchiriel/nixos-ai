@@ -268,7 +268,6 @@ LIÇÃO DE PROCESSO (forense):
 ```
 
 ## 19. UX pattern pesquisado + aplicado (2026-09-07)
-
 Fontes: Picovoice (latency budget, endpointing, barge-in), Alexa Progressive
 Responses, DEV Siri/Alexa/Google tricks, CHI 2022 (respostas curtas pontuam
 mais), W3C SSML buffer module. Aplicado ao pipeline:
@@ -284,4 +283,23 @@ mais), W3C SSML buffer module. Aplicado ao pipeline:
   polling virou fallback 5s); TTL anti-travamento 120s→45s.
 - GPU "torando": era o próprio loop de voz (turnos de ruído a cada ~15s) +
   slot único dividido com opencode local. Sem processo estranho.
+```
+
+## 20. Two-phase final + gate de confiança (2026-09-07)
+
+```text
+VERIFIED (logs + re-STT dos WAVs salvos):
+- head-seconds REMOVIDO: full 0.99 vs head-4s 0.04 no mesmo WAV — o scorer
+  precisa de histórico. Threshold 0.5→0.4 (wake real a 0.49, ruído <0.15).
+- Loop infinito morto: follow-up estende SÓ em turno real (rc 0 + texto);
+  rc=2 (vazio/wake) = idle silencioso, sem erro/notify.
+- Alucinações medidas: fala limpa avg_logprob -0.23/-0.38; delírios em ruído
+  -0.69..-1.14 ("cheirinho", "Um domingo", "Boa tarde"). Gate em -0.60:
+  verificado ao vivo — os 2 WAVs alucinados agora dão vazio, o limpo intacto.
+- One-breath REMOVIDO: heurística por duração errava "wake + pausa".
+  Sempre ack + fase 2 (previsível > esperto). Dreno do eco 0.8s→2.2s+settle.
+- Uso final: "hey jarvis" → ack → FALE o comando (12s) → resposta.
+  Follow-up sem wake em 20s pós-resposta real.
+- scripts/voice-selftest.sh: 8/9 PASS autônomo (TTS→STT→voice_loop + timings:
+  STT ~4.5s warm, LLM <1s, turno ~5s sem TTS).
 ```
