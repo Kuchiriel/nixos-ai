@@ -493,11 +493,8 @@
     ackLang = "pt"; # Jarvis fala PT-BR (sistema em en_US, usuário em PT-BR)
     # Device: physical mic (rnnoise_source has no audio routing on this hardware)
     device = "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source";
-    # Calibração validada do legado:
-    # 0.20 = sensível o suficiente para voz normal
-    threshold = 0.25;
-    # RMS gate: ignora score alto se RMS < 500 (evita falsos positivos)
-    rmsGate = 500;
+    # Verificação wakeword OFFLINE (ww_scorer.py): 0.5 = upstream default
+    wakeThreshold = 0.5;
     # Pipeline de voz: STT (faster-whisper) → LLM (llama.cpp) → TTS (Kokoro)
     # O wakeword grava WAV e passa como argumento para 'jarvis voice'
     brainCommand = ["jarvis" "voice"];

@@ -180,11 +180,13 @@ def waybar_format() -> dict[str, Any]:
         "idle":          ("󰧑", "JARVIS"),    # nf-md-brain (U+F09D1) — AI standby
         "listening":     ("󰍬", "REC"),        # nf-md-microphone
         "transcribing":  ("󰈙", "STT"),        # nf-md-text-box
+        "processing":    ("󰈙", "STT"),        # alias do daemon (gravou máx / processando)
         "thinking":      ("󰐕", "..."),         # nf-md-progress-clock
         "speaking":      ("󰕾", "TTS"),        # nf-md-volume-high
         "error":         ("󰅙", "ERR"),        # nf-md-alert-circle
         "done":          ("󰄬", "OK"),         # nf-md-check-circle
         "initializing":  ("󰚌", "BOOT"),       # nf-md-robot
+        "boot":          ("󰚌", "BOOT"),       # alias curto
     }
     icon, label = state_map.get(state, ("󰧑", state.upper()))
 

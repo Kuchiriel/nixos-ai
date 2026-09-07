@@ -107,6 +107,7 @@ let
       OWW_MODELS = os.path.expanduser("~/.local/share/openwakeword")
       STARTUP_SOUND = "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/service-login.oga"
       BEEP_SOUND = "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/message-new-instant.oga"
+      ERROR_SOUND = "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/dialog-error.oga"
       PRE_ROLL_CHUNKS = 15  # ~770ms pre-roll buffer before speech onset
 
 
@@ -229,16 +230,18 @@ let
           speaking = False
           silence_start = None
           speech_frames = []
+          speech_peak = 0.0  # pico RMS da fala atual (endpoint relativo, legado)
+          suppress_until = 0.0  # anti self-trigger: ignora onset após brain/TTS
           speech_buf = []  # buffer for consecutive speech chunks
           pre_roll = []  # circular buffer: last N chunks before speech onset (~770ms)
           BRAIN_TIMEOUT = 120  # STT cold start ~30s + LLM + TTS
 
           def _process_speech():
               """Save WAV, score wakeword, run brain pipeline."""
-              nonlocal arecord_proc
+              nonlocal arecord_proc, suppress_until
               if KILL_TTS:
-                  for pat in ["paplay", "aplay", "enhanced_audiobook.py"]:
-                      subprocess.run(["pkill", "-9", pat], stderr=subprocess.DEVNULL)
+                   for pat in ["pw-play", "paplay", "aplay", "enhanced_audiobook.py"]:
+                       subprocess.run(["pkill", "-9", pat], stderr=subprocess.DEVNULL)
               timestamp = int(time.time())
               temp_wav = f"/tmp/jarvis_cmd_{timestamp}.wav"
               with wave.open(temp_wav, "wb") as wf:
@@ -261,11 +264,13 @@ let
                       if _score.returncode != 0:
                           print(f"[WW] 🔇 wakeword rejeitado, ignorando", flush=True)
                           update_status("idle", "󰆪 Aguardando...")
+                          suppress_until = time.time() + 3
                           arecord_proc.terminate()
                           time.sleep(0.5)
                           arecord_proc = start_arecord()
                           return
                       print(f"[WW] 🫡 Hey Jarvis confirmado", flush=True)
+                      notify("Jarvis", "Ouvindo…")
                       _play_ack()
                   except Exception as _ww_err:
                       print(f"[WW] ⚠️ scorer falhou: {_ww_err}, seguindo p/ STT", flush=True)
@@ -287,15 +292,24 @@ let
                               combined = stdout_msg + stderr_msg
                               print(f"[WW] ❌ brain falhou (exit {result.returncode}): {combined[:200]}", flush=True)
                               update_status("error", f"Erro: {stderr_msg[:60]}")
+                              notify("Jarvis", f"Erro no pipeline: {stderr_msg[:80]}")
+                              play_sound(ERROR_SOUND)
                           else:
                               print(f"[WW] ✅ brain OK: {(result.stdout or "")[:100]}", flush=True)
                               update_status("done", "Concluído")
                   except subprocess.TimeoutExpired:
                       print(f"[WW] ⏰ brain timeout ({BRAIN_TIMEOUT}s) — STT/LLM/TTS travou", flush=True)
                       update_status("error", f"Timeout: pipeline nao respondeu ({BRAIN_TIMEOUT}s)")
+                      notify("Jarvis", "Pipeline de voz não respondeu (timeout)")
+                      play_sound(ERROR_SOUND)
                   except Exception as e:
                       print(f"[WW] ❌ brain error: {str(e)[:100]}", flush=True)
                       update_status("error", f"Exceção: {str(e)[:60]}")
+                      notify("Jarvis", f"Erro: {str(e)[:80]}")
+                      play_sound(ERROR_SOUND)
+              # Supressão pós-brain: ack + TTS ainda estão no ar; sem isso o
+              # daemon captura a própria voz (self-trigger, forense 2026-09).
+              suppress_until = time.time() + 8
               try:
                   arecord_proc.kill()
               except Exception:
@@ -303,7 +317,11 @@ let
               try:
                   arecord_proc.wait(timeout=3)
               except Exception:
-                  pass
+                  try:
+                      arecord_proc.kill()
+                  except Exception:
+                      pass
+                  print(f"[WW] ⚠️ pw-record não morreu no wait — possível órfão", flush=True)
               time.sleep(0.5)
               update_status("idle", "Aguardando...")
               arecord_proc = start_arecord()
@@ -358,10 +376,17 @@ let
                   if len(pre_roll) > PRE_ROLL_CHUNKS:
                       pre_roll.pop(0)
 
-                  # Atualiza o ruído de fundo de forma suave (Filtro Passa-Baixa)
+                  # Atualiza o ruído de fundo (Passa-Baixa bilateral com clamp).
+                  # Forense 2026-09 (ao vivo): baseline travava em ~38 (só aprendia
+                  # p/ baixo) e o fim-por-silêncio (baseline*1.1=42) ficava
+                  # inalcançável no ruído real (~250) → toda captura estourava em
+                  # MAX_RECORD 12s, diluindo a fala e matando o score do wakeword.
                   if not speaking:
                       if rms < noise_baseline * 1.2:
                           noise_baseline = noise_baseline * 0.95 + rms * 0.05
+                      elif rms < 3000:
+                          noise_baseline = noise_baseline * 0.998 + rms * 0.002
+                      noise_baseline = max(200.0, min(noise_baseline, 3000.0))
 
                       speech_gate = max(noise_baseline * 1.6, 400)
                   else:
@@ -379,10 +404,14 @@ let
                   # 2. Adaptive threshold: 50% above baseline
                   # 3. Require 3 of last 5 chunks above gate
                   if not speaking:
+                      if time.time() < suppress_until:
+                          speech_buf = []
+                          continue
                       speech_buf.append(1 if rms > speech_gate else 0)
                       speech_buf = speech_buf[-5:]
                       if sum(speech_buf) >= 3:
                           speaking = True
+                          speech_peak = float(rms)
                           # Pre-roll: inclui os últimos ~770ms antes do onset
                           speech_frames = list(pre_roll) + [data]
                           silence_start = None
@@ -393,6 +422,11 @@ let
 
                   # Currently speaking — accumulate frames
                   speech_frames.append(data)
+                  speech_peak = max(float(rms), speech_peak * 0.995)
+
+                  # Fim-por-silêncio relativo ao pico (legado: 40% drop do pico
+                  # RMS) com pisos: funciona mesmo com baseline descalibrada.
+                  silence_gate = max(noise_baseline * 1.1, speech_peak * 0.4, 200.0)
 
                   # Check for silence or max duration
                   recording_duration = len(speech_frames) * CHUNK / RATE
@@ -403,7 +437,7 @@ let
                       update_status("processing", "Gravação máxima atingida")
                       print(f"[WW] ⏱️ Max record reached ({MAX_RECORD}s)", flush=True)
                       _process_speech()
-                  elif rms < noise_baseline * 1.1 and recording_duration > 1.0:
+                  elif rms < silence_gate and recording_duration > 1.0:
                       # Silence detected: < baseline * 1.1 for 2.5s, min 1s recording
                       if silence_start is None:
                           silence_start = time.time()
@@ -427,11 +461,6 @@ let
 in {
   options.services.jarvis-wakeword = {
     enable = lib.mkEnableOption "Jarvis Wakeword Daemon";
-    threshold = lib.mkOption {
-      type = lib.types.float;
-      default = 0.85;
-      description = "Sensibilidade limite de ativação da wake word (calibrado: 0.85).";
-    };
     device = lib.mkOption {
       type = lib.types.str;
       default = "rnnoise_source";
@@ -466,11 +495,6 @@ in {
       default = 0.5;
       description = "Score mínimo do hey_jarvis ONNX (upstream default; 0.3 gerou falsos positivos com ventoinha).";
     };
-    rmsGate = lib.mkOption {
-      type = lib.types.nullOr lib.types.int;
-      default = null;
-      description = "Gate RMS de ruído ambiente (legado calibrou 2093). null = desabilitado.";
-    };
     ackLang = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
@@ -502,14 +526,14 @@ in {
     # Cria os symlinks dos modelos declarativos (store → ~/.local/share)
     home.activation.jarvisModels = lib.hm.dag.entryAfter ["writeBoundary"] ''
       run ${modelsLink}/lib/link-models.sh
-      # Pré-baixa modelo STT tiny (multilingual, ~75MB, PT-BR) — evita timeout
+      # Pré-baixa modelo STT small (multilingual, ~500MB, PT-BR correto) — evita timeout
       STT_DIR="$HOME/.local/share/jarvis/voice"
-      TINY_DIR="$STT_DIR/models--Systran--faster-whisper-tiny/snapshots/main"
-      if [ ! -f "$TINY_DIR/model.bin" ]; then
-        mkdir -p "$TINY_DIR"
-        echo "[jarvis] Baixando modelo STT tiny (multilingual)..."
+      SMALL_DIR="$STT_DIR/models--Systran--faster-whisper-small/snapshots/main"
+      if [ ! -f "$SMALL_DIR/model.bin" ]; then
+        mkdir -p "$SMALL_DIR"
+        echo "[jarvis] Baixando modelo STT small (multilingual)..."
         for f in model.bin config.json vocabulary.txt tokenizer.json; do
-          wget -q --timeout=30 "https://huggingface.co/Systran/faster-whisper-tiny/resolve/main/$f" -O "$TINY_DIR/$f" 2>/dev/null || true
+          wget -q --timeout=30 "https://huggingface.co/Systran/faster-whisper-small/resolve/main/$f" -O "$SMALL_DIR/$f" 2>/dev/null || true
         done
       fi
     '';

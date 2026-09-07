@@ -206,10 +206,12 @@ def test_main_voice_passes_model_to_pipeline(monkeypatch, tmp_path) -> None:
     wav.write_bytes(b"RIFF")
     seen = {}
 
-    def fake_voice_loop(audio_path, *, tts=True, model_size=voice.STT_MODEL_DEFAULT):
+    def fake_voice_loop(audio_path, *, tts=True, model_size=voice.STT_MODEL_DEFAULT,
+                        debug_wav=None):
         seen["audio_path"] = audio_path
         seen["tts"] = tts
         seen["model_size"] = model_size
+        seen["debug_wav"] = debug_wav
         return 0
 
     monkeypatch.setattr(voice, "voice_loop", fake_voice_loop)
@@ -217,3 +219,25 @@ def test_main_voice_passes_model_to_pipeline(monkeypatch, tmp_path) -> None:
     assert seen["audio_path"] == str(wav)
     assert seen["tts"] is False
     assert seen["model_size"] == "small"
+    assert seen["debug_wav"] is None
+
+
+def test_main_stt_debug_wav_writes_session(monkeypatch, tmp_path) -> None:
+    """--debug-wav salva WAV + session.json com métricas (sem STT real)."""
+    import json
+    import wave
+    wav = tmp_path / "cmd.wav"
+    with wave.open(str(wav), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(16000)
+        wf.writeframes(b"\x00\x00" * 1600)
+    monkeypatch.setattr(voice, "transcribe", lambda *a, **k: "oi jarvis")
+    dbg = tmp_path / "dbg"
+    assert voice.main_stt([str(wav), "--debug-wav", str(dbg)]) == 0
+    wavs = list(dbg.glob("*.wav"))
+    js = list(dbg.glob("*.json"))
+    assert len(wavs) == 1 and len(js) == 1
+    meta = json.loads(js[0].read_text())
+    assert meta["audio"]["sample_rate"] == 16000
+    assert meta["text_chars"] == len("oi jarvis")

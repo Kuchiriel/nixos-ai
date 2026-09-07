@@ -76,6 +76,7 @@
     jarvis-voice
     # Voz: G2P do Kokoro + captura/teste de áudio
     espeak-ng
+    sox
     alsa-utils
     # Editor
     # vscodium — gerenciado por home-manager (vscode-roo.nix)

@@ -26,7 +26,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 MODEL_DIR_DEFAULT = "~/.local/share/jarvis/voice"
-STT_MODEL_DEFAULT = "tiny"  # faster-whisper: tiny multilingual (~75MB, PT-BR+EN, ~1s CPU)
+STT_MODEL_DEFAULT = "small"  # faster-whisper: small multilingual (~500MB, PT-BR correto, +3s vs tiny; ver docs/audit/VOICE-PIPELINE-FORENSIC-2026-09.md)
 
 # Kokoro-82M no formato do nixpkgs (torch): config.json + kokoro-v1_0.pth +
 # voz voices/af_heart.pt. No host, os paths vêm do store Nix via env vars
@@ -168,6 +168,71 @@ def _split_chunks(text: str, max_chars: int = 600) -> list[str]:
         if chunk:
             hard.append(chunk)
     return hard or ([text.strip()] if text.strip() else [])
+
+
+# ---------------------------------------------------------------------------
+# Instrumentação / observabilidade (forense 2026-09)
+# ---------------------------------------------------------------------------
+
+def _audio_stats(path: str) -> dict[str, Any]:
+    """Métricas do WAV (sem conteúdo sensível): formato + níveis."""
+    import array
+    import math
+    import wave
+    try:
+        w = wave.open(path, "rb")
+        n = w.getnframes()
+        ch = w.getnchannels()
+        rate = w.getframerate()
+        sw = w.getsampwidth()
+        raw = w.readframes(n)
+        w.close()
+        duration = n / rate if rate else 0.0
+        stats: dict[str, Any] = {
+            "channels": ch,
+            "sample_rate": rate,
+            "frames": n,
+            "duration_s": round(duration, 3),
+            "bytes": len(raw),
+        }
+        if sw == 2 and raw:
+            a = array.array("h")
+            a.frombytes(raw)
+            if ch > 1:
+                mono = [sum(a[i * ch:(i + 1) * ch]) / ch for i in range(n)]
+            else:
+                mono = list(a)
+            if mono:
+                peak = max(abs(int(v)) for v in mono)
+                rms = math.sqrt(sum(float(v) ** 2 for v in mono) / len(mono))
+                stats["peak"] = int(peak)
+                stats["rms_mean"] = round(rms, 1)
+        return stats
+    except Exception as exc:  # noqa: BLE001 — diagnóstico nunca quebra o fluxo
+        return {"error": str(exc)[:100]}
+
+
+def _write_debug_wav(src_wav: str, debug_dir: str, meta: dict[str, Any]) -> str:
+    """Copia o WAV p/ DIR de debug + session.json (modo explícito, fora do fluxo)."""
+    import json
+    import shutil
+    import time
+    dest = Path(debug_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+    tag = time.strftime("%Y%m%d-%H%M%S")
+    wav_dest = dest / f"voice-debug-{tag}.wav"
+    try:
+        shutil.copyfile(src_wav, wav_dest)
+    except OSError as exc:
+        return f"ERROR: debug copy falhou: {exc}"
+    meta = {"ts": time.time(), "src": src_wav, "wav": str(wav_dest), **meta}
+    try:
+        (dest / f"voice-debug-{tag}.json").write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2)
+        )
+    except OSError as exc:
+        return f"ERROR: debug json falhou: {exc}"
+    return str(wav_dest)
 
 
 # ---------------------------------------------------------------------------
@@ -419,7 +484,8 @@ def _text_for_tts(out: dict[str, Any] | str) -> str:
 # Loop de voz completo (wakeword → STT → roteador → TTS)
 # ---------------------------------------------------------------------------
 
-def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL_DEFAULT) -> int:
+def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL_DEFAULT,
+               debug_wav: str | None = None) -> int:
     """Pipeline completo para o brainCommand do wakeword.
 
     STT do WAV capturado → load check → roteia o pedido → TTS da resposta.
@@ -440,6 +506,10 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
 
     log = get_logger("voice")
 
+    import time as _time
+    _t_session = _time.time()
+    _audio_meta = _audio_stats(audio_path)
+
     # 1. STT — via subprocess para isolar CTranslate2/torch de Kokoro/torch
     #    (CTranslate2 + Kokoro no mesmo processo causa Floating-point exception)
     set_status("transcribing", "Transcrevendo...")
@@ -456,10 +526,22 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
             stderr_out = (_stt_proc.stderr or "")[:200]
             set_status("error", f"STT falhou: {stderr_out[:60]}")
             print(f"ERROR: STT falhou (exit {_stt_proc.returncode}): {stderr_out}", file=sys.stderr)
+            try:
+                from jarvis.core.feedback import notify as _nfail, play_sound as _psnd
+                _nfail("Jarvis", "Falha ao transcrever o áudio")
+                _psnd("error")
+            except Exception:
+                pass
             return 1
     except subprocess.TimeoutExpired:
         set_status("error", "STT timeout")
         print("ERROR: STT timeout (60s)", file=sys.stderr)
+        try:
+            from jarvis.core.feedback import notify as _nfail2, play_sound as _psnd2
+            _nfail2("Jarvis", "STT demorou demais (timeout)")
+            _psnd2("error")
+        except Exception:
+            pass
         return 1
     except Exception as exc:
         set_status("error", str(exc)[:80])
@@ -471,6 +553,14 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
         return 0
 
     print(f"🎤 {text}", flush=True)
+    _t_stt_done = _time.time()
+    if debug_wav:
+        _write_debug_wav(audio_path, debug_wav, {
+            "audio": _audio_meta,
+            "model_size": model_size,
+            "stt_s": round(_t_stt_done - _t_session, 3),
+            "text_chars": len(text),
+        })
     try:
         from jarvis.core.feedback import notify as _notify
         _notify("Jarvis ouviu", text[:120])
@@ -541,12 +631,14 @@ def main_voice(argv: list[str] | None = None) -> int:
     parser.add_argument("wav", help="arquivo de áudio capturado pelo wakeword")
     parser.add_argument("--no-tts", action="store_true", help="não sintetizar resposta em voz")
     parser.add_argument("--model", default=STT_MODEL_DEFAULT, help="tamanho do modelo faster-whisper")
+    parser.add_argument("--debug-wav", default=None, help="dir p/ salvar WAV + session.json de diagnóstico")
     args = parser.parse_args(argv)
 
     if not Path(args.wav).exists():
         print(f"ERROR: arquivo não existe: {args.wav}", file=sys.stderr)
         return 1
-    return voice_loop(args.wav, tts=not args.no_tts, model_size=args.model)
+    return voice_loop(args.wav, tts=not args.no_tts, model_size=args.model,
+                      debug_wav=args.debug_wav)
 
 
 def main_stt(argv: list[str] | None = None) -> int:
@@ -557,12 +649,23 @@ def main_stt(argv: list[str] | None = None) -> int:
     parser.add_argument("wav", help="arquivo de áudio")
     parser.add_argument("--model", default=STT_MODEL_DEFAULT, help="tamanho do modelo")
     parser.add_argument("--language", default=None, help="hint de idioma (ex: pt)")
+    parser.add_argument("--debug-wav", default=None, help="dir p/ salvar WAV + session.json de diagnóstico")
     args = parser.parse_args(argv)
 
     if not Path(args.wav).exists():
         print(f"ERROR: arquivo não existe: {args.wav}", file=sys.stderr)
         return 1
+    import time as _time
+    _t0 = _time.time()
     text = transcribe(args.wav, model_size=args.model, language=args.language)
+    if args.debug_wav:
+        _write_debug_wav(args.wav, args.debug_wav, {
+            "audio": _audio_stats(args.wav),
+            "model_size": args.model,
+            "language": args.language,
+            "stt_s": round(_time.time() - _t0, 3),
+            "text_chars": len(text),
+        })
     print(text)
     return 0 if not text.startswith("ERROR") else 1
 
