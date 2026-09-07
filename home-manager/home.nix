@@ -132,6 +132,8 @@
   # ZSH — emacs keybindings (Ctrl+A/E/Ctrl+K, etc)
   programs.zsh = {
     enable = true;
+    # ZSH é o shell padrão do usuário (nixos): aqui também precisa das
+    # chaves + sync do opencode (bash.initExtra não roda em zsh).
     initContent = ''
       # Emacs mode: Ctrl+A = início da linha, Ctrl+E = fim
       bindkey -e
@@ -141,6 +143,16 @@
       bindkey '^W' backward-kill-word
       # Ctrl+U = deletar até início da linha
       bindkey '^U' backward-kill-line
+      # Chaves das APIs (fonte da verdade: /etc/litellm.env)
+      if [ -f "$HOME/.config/ai-agents/keys-wrapper.sh" ]; then
+        set -a
+        source "$HOME/.config/ai-agents/keys-wrapper.sh"
+        set +a
+      fi
+      # Reconcilia auth.json do opencode com o env
+      if [ -x "$HOME/.config/ai-agents/opencode-auth-sync.sh" ]; then
+        "$HOME/.config/ai-agents/opencode-auth-sync.sh" >/dev/null 2>&1 || true
+      fi
     '';
   };
 
@@ -277,8 +289,9 @@
           npm = "@ai-sdk/openai-compatible";
           options = {
             baseURL = "https://openrouter.ai/api/v1";
+            # {env:VAR} é a sintaxe que o opencode expande (NÃO ${VAR}).
+            apiKey = "{env:OPENROUTER_API_KEY}";
             headers = {
-              "Authorization" = "Bearer \${OPENROUTER_API_KEY}";
               "HTTP-Referer" = "http://localhost:5173";
               "X-Title" = "Jarvis WebUI";
             };
@@ -287,8 +300,11 @@
             "free" = {
               name = "OpenRouter Free Cascade";
             };
+            "qwen/qwen3-coder" = {
+              name = "Qwen Coder";
+            };
             "qwen/qwen3-coder:free" = {
-              name = "Qwen Coder Free";
+              name = "Qwen Coder Free (as vezes sem endpoint)";
             };
           };
         };
@@ -298,13 +314,14 @@
           npm = "@ai-sdk/openai-compatible";
           options = {
             baseURL = "https://api.groq.com/openai/v1";
-            headers = {
-              "Authorization" = "Bearer \${GROQ_API_KEY}";
-            };
+            apiKey = "{env:GROQ_API_KEY}";
           };
           models = {
-            "llama-3.3-70b-versatile" = {
-              name = "Groq Llama 3.3 70B";
+            "qwen/qwen3.6-27b" = {
+              name = "Groq Qwen3.6 27B";
+            };
+            "llama-3.1-8b-instant" = {
+              name = "Groq Llama 3.1 8B Instant";
             };
           };
         };
@@ -314,13 +331,11 @@
           npm = "@ai-sdk/openai-compatible";
           options = {
             baseURL = "https://api.cerebras.ai/v1";
-            headers = {
-              "Authorization" = "Bearer \${CEREBRAS_API_KEY}";
-            };
+            apiKey = "{env:CEREBRAS_API_KEY}";
           };
           models = {
-            "llama3.1-70b" = {
-              name = "Cerebras Llama 3.1 70B";
+            "qwen-3.8-27b" = {
+              name = "Cerebras Qwen3.8 27B";
             };
           };
         };
@@ -330,9 +345,7 @@
           npm = "@ai-sdk/openai-compatible";
           options = {
             baseURL = "https://api.together.xyz/v1";
-            headers = {
-              "Authorization" = "Bearer \${TOGETHER_API_KEY}";
-            };
+            apiKey = "{env:TOGETHER_API_KEY}";
           };
           models = {
             "meta-llama/Llama-3.3-70B-Instruct-Turbo" = {
@@ -349,9 +362,7 @@
           npm = "@ai-sdk/openai-compatible";
           options = {
             baseURL = "https://api-inference.huggingface.co/v1";
-            headers = {
-              "Authorization" = "Bearer \${HF_TOKEN}";
-            };
+            apiKey = "{env:HF_TOKEN}";
           };
           models = {
             "Qwen/Qwen3-235B-A22B-Instruct-2507" = {

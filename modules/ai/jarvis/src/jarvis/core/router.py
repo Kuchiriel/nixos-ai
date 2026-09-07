@@ -47,6 +47,14 @@ _NIXOS_TRIGGERS: tuple[str, ...] = (
     "como habilitar", "configurar o nixos",
 )
 
+# Rota BOOKS — pedidos sobre a biblioteca ~/Books (via audiobook, zero LLM).
+# Rede de segurança além das regras RiveScript (que exigem frase exata):
+# o agente alucinava "sem acesso" em vez de listar (forense 2026-09).
+_BOOKS_TRIGGERS: tuple[str, ...] = (
+    "livro", "livros", "biblioteca", "ebook", "epub", "acervo",
+    "para ler", "leitura",
+)
+
 # Rota RAG — pedidos sobre código indexado
 _RAG_TRIGGERS: tuple[str, ...] = (
     "no código", "no repo", "no repositório", "no codigo", "onde está",
