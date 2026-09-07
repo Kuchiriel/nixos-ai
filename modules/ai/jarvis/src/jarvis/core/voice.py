@@ -26,7 +26,9 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 MODEL_DIR_DEFAULT = "~/.local/share/jarvis/voice"
-STT_MODEL_DEFAULT = "small"  # faster-whisper: small multilingual (~500MB, PT-BR correto, +3s vs tiny; ver docs/audit/VOICE-PIPELINE-FORENSIC-2026-09.md)
+# Fonte de verdade do modelo: modules/ai/models.nix (whisper-small).
+# O módulo Nix espelha via JARVIS_STT_MODEL; trocar lá + aqui (env) juntos.
+STT_MODEL_DEFAULT = os.environ.get("JARVIS_STT_MODEL", "small")
 
 # Kokoro-82M no formato do nixpkgs (torch): config.json + kokoro-v1_0.pth +
 # voz voices/af_heart.pt. No host, os paths vêm do store Nix via env vars
@@ -53,9 +55,9 @@ VOICE_BY_LANG: dict[str, str] = {
 
 
 def _default_lang() -> str:
-    """Idioma padrão pelo LANG do sistema (usuário BR → PT)."""
-    lang = (os.environ.get("LANG", "") + os.environ.get("LC_ALL", "")).lower()
-    return "p" if lang.startswith("pt") else "a"
+    """Kokoro lang_code padrão (dinâmico via jarvis.core.lang)."""
+    from jarvis.core.lang import tts_code
+    return tts_code()
 
 
 def _detect_lang_code(text: str) -> str:
@@ -279,8 +281,8 @@ def transcribe(
         return f"ERROR: faster-whisper não instalado: {exc}"
 
     if language is None:
-        env_lang = (os.environ.get("LANG", "") + os.environ.get("LC_ALL", "")).lower()
-        language = "pt" if env_lang.startswith("pt") else None
+        from jarvis.core.lang import stt_code
+        language = stt_code()
 
     try:
         model_dir = _model_dir()
@@ -289,6 +291,11 @@ def transcribe(
             audio_path,
             beam_size=3,
             language=language,
+            # condition_on_previous_text=False: evita loops de alucinação
+            # ("AJRs AJRs") entre segmentos (doc faster-whisper; forense 2026-09).
+            condition_on_previous_text=False,
+            # Seed curta com o wake: melhora nomes próprios do domínio.
+            initial_prompt="Hey Jarvis.",
             vad_filter=True,
             vad_parameters=dict(
                 threshold=0.5,
@@ -543,9 +550,8 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
         import shutil as _shutil
         _stt_bin = _shutil.which("jarvis") or "jarvis"
         _stt_cmd = [_stt_bin, "stt", "--model", model_size, audio_path]
-        lang = (os.environ.get("LANG", "") + os.environ.get("LC_ALL", "")).lower()
-        if lang.startswith("pt"):
-            _stt_cmd += ["--language", "pt"]
+        from jarvis.core.lang import stt_code as _stt_lang
+        _stt_cmd += ["--language", _stt_lang() or "pt"]
         _stt_proc = subprocess.run(_stt_cmd, capture_output=True, text=True, timeout=60)
         text = (_stt_proc.stdout or "").strip()
         if _stt_proc.returncode != 0 or not text:

@@ -25,18 +25,9 @@ API_BASE = "https://api.hackmd.io/v1"
 
 
 def _get_token() -> str | None:
-    """Get HackMD API token from env or config file."""
-    token = os.environ.get("HMD_API_ACCESS_TOKEN")
-    if token:
-        return token
-    config_path = Path.home() / ".hackmd" / "config.json"
-    if config_path.exists():
-        try:
-            config = json.loads(config_path.read_text())
-            return config.get("accessToken")
-        except Exception:
-            pass
-    return None
+    """Get HackMD API token pela abstração única (env ou ~/.hackmd/config.json)."""
+    from jarvis.core.keys import get
+    return get("hackmd") or None
 
 
 def _headers() -> dict[str, str]:

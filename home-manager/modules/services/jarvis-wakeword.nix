@@ -559,6 +559,9 @@ in {
           # Voz do TTS segue o ackLang (pm_alex p/ pt) em vez do LANG do sistema
           # (forense 2026-09: resposta sem acentos caía em af_heart).
           "JARVIS_TTS_LANG=${if cfg.ackLang == null then "auto" else cfg.ackLang}"
+          # Modelo STT: espelha modules/ai/models.nix (whisper-small).
+          # Trocar o modelo = trocar aqui junto (fonte de verdade é o .nix).
+          "JARVIS_STT_MODEL=small"
         ];
       };
       Install = {

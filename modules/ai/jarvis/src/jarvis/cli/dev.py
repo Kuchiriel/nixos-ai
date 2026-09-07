@@ -844,7 +844,16 @@ def _build_repo_map(root: str, max_files: int = 20, max_tokens: int = 500) -> st
 # Prompts
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT_TEMPLATE = """JARVIS dev agent. PT-BR. Direto.
+def _template_lang() -> str:
+    """Idioma do header dos prompts (dinâmico via JARVIS_LANG, default pt)."""
+    try:
+        from jarvis.core.lang import name
+        return name()
+    except Exception:
+        return "português (PT-BR)"
+
+
+SYSTEM_PROMPT_TEMPLATE = """JARVIS dev agent. {LANG_NAME}. Direto.
 
 {repo_map}
 {memory_context}
@@ -897,15 +906,15 @@ RULES:
 6. Use MCP tools quando built-in tools não bastam
 7. ANTES de ler arquivo grande: wc -l (saber tamanho)
 {persona_block}
-"""
+""".replace("{LANG_NAME}", _template_lang())
 
-PLAN_PROMPT = """JARVIS architect. PT-BR. Direto.
+PLAN_PROMPT = """JARVIS architect. {LANG_NAME}. Direto.
 
 {repo_map}
 
 Leia arquivos necessários e retorne JSON puro:
 {{"plan": [{{"action": "read|edit|create|shell", "path": "...", "description": "..."}}]}}
-"""
+""".replace("{LANG_NAME}", _template_lang())
 
 
 # ---------------------------------------------------------------------------

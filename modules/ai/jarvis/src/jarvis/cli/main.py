@@ -672,7 +672,9 @@ def _cmd_triggers(args: argparse.Namespace) -> int:
 def _cmd_stt(args: argparse.Namespace) -> int:
     from jarvis.core.voice import main_stt
 
-    argv = [args.wav, "--model", args.model]
+    argv = [args.wav]
+    if getattr(args, "model", None):
+        argv += ["--model", args.model]
     if getattr(args, "language", None):
         argv += ["--language", args.language]
     return main_stt(argv)
@@ -698,9 +700,15 @@ def _cmd_speak(args: argparse.Namespace) -> int:
 def _cmd_voice(args: argparse.Namespace) -> int:
     from jarvis.core.voice import main_voice
 
-    argv = [args.wav, "--model", args.model]
+    argv = [args.wav]
+    if getattr(args, "model", None):
+        argv += ["--model", args.model]
     if args.no_tts:
         argv.append("--no-tts")
+    if getattr(args, "debug_wav", None):
+        argv += ["--debug-wav", args.debug_wav]
+    if getattr(args, "clone", False):
+        argv.append("--clone")
     return main_voice(argv)
 
 
@@ -913,7 +921,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_stt = sub.add_parser("stt", help="transcreve um WAV (faster-whisper, VAD calibrado)")
     p_stt.add_argument("wav", help="arquivo de áudio")
-    p_stt.add_argument("--model", default="small", help="tamanho do modelo faster-whisper")
+    p_stt.add_argument("--model", default=None, help="tamanho do modelo faster-whisper (default: JARVIS_STT_MODEL/small)")
     p_stt.add_argument("--language", default=None, help="hint de idioma (ex: pt)")
     p_stt.set_defaults(func=_cmd_stt)
 
@@ -929,7 +937,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_voice = sub.add_parser("voice", help="loop de voz: STT → roteador → TTS (brainCommand do wakeword)")
     p_voice.add_argument("wav", help="arquivo de áudio capturado pelo wakeword")
     p_voice.add_argument("--no-tts", action="store_true", help="não sintetizar resposta em voz")
-    p_voice.add_argument("--model", default="small", help="tamanho do modelo faster-whisper")
+    p_voice.add_argument("--model", default=None, help="tamanho do modelo faster-whisper (default: JARVIS_STT_MODEL/small)")
+    p_voice.add_argument("--debug-wav", default=None, help="dir p/ salvar WAV + session.json de diagnóstico")
+    p_voice.add_argument("--clone", action="store_true", help="converte resposta p/ timbre RVC (~+20s)")
     p_voice.set_defaults(func=_cmd_voice)
 
     p_audiobook = sub.add_parser("audiobook", help="leitor de livros (.epub/.txt) com TTS Kokoro")

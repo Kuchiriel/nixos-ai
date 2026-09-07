@@ -1,32 +1,21 @@
 """Web search via Tavily (mesmo provedor do Roo Dev).
 
-Chave: /etc/jarvis-secrets/tavily.env (formato KEY=valor) ou env TAVILY_API_KEY.
+Chave pela abstração jarvis.core.keys ("tavily"):
+env TAVILY_API_KEY (keys-wrapper.sh) ou /etc/jarvis-secrets/tavily.env.
 Sem chave → mensagem ERROR clara (nunca exceção que quebre o agente).
 """
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
 from typing import Any
 
 TAVILY_ENDPOINT = "https://api.tavily.com/search"
-_KEY_FILE = Path("/etc/jarvis-secrets/tavily.env")
 
 
 def _api_key() -> str:
-    """Resolve a chave Tavily (arquivo → env). Vazio = não configurado."""
-    try:
-        if _KEY_FILE.exists():
-            for line in _KEY_FILE.read_text().splitlines():
-                line = line.strip()
-                if line.startswith("TAVILY_API_KEY="):
-                    return line.split("=", 1)[1].strip().strip("\"'")
-                if line and "=" not in line and len(line) > 10:
-                    return line
-    except OSError:
-        pass
-    return os.environ.get("TAVILY_API_KEY", "").strip().strip("\"'")
+    """Resolve a chave Tavily pela abstração única de secrets."""
+    from jarvis.core.keys import get
+    return get("tavily")
 
 
 def has_key() -> bool:
