@@ -323,7 +323,22 @@ let
               if duration_s > 3.0:
                   # One-breath: comando veio junto; sem ack de 2s, direto ao brain.
                   print(f"[WW] ⚡ one-breath ({duration_s:.1f}s), pulando ack", flush=True)
-                  _run_brain(temp_wav)
+                  if _run_brain(temp_wav) == 2:
+                      # Só tinha o wake: vira two-phase (ack + escuta comando).
+                      print(f"[WW] ↩️ one-breath vazio, abrindo fase 2", flush=True)
+                      _play_ack()
+                      try:
+                          for _ in range(70):
+                              arecord_proc.stdout.read(CHUNK * 4)
+                          time.sleep(0.5)
+                      except Exception:
+                          pass
+                      speech_frames.clear()
+                      pre_roll.clear()
+                      speech_buf.clear()
+                      suppress_until = 0.0
+                      expect_command_until = time.time() + 12
+                      update_status("listening", "Fale agora…")
                   return
               _play_ack()
               # Drena o eco do ack do stream antes de ouvir (senão a fase 2
@@ -386,10 +401,11 @@ let
               print(f"[WW] pw-record restarted PID: {arecord_proc.pid}", flush=True)
 
           def _run_brain(temp_wav):
-              """STT → LLM → TTS + pós-turno (suppress/follow-up/restart)."""
+              """STT → LLM → TTS + pós-turno. Retorna o rc (2 = vazio/wake puro)."""
               nonlocal suppress_until, followup_until, expect_command_until
               import shutil as _shutil
               update_status("transcribing", "Transcrevendo...")
+              _rc = 1
               try:
                   if not _shutil.which(BRAIN_CMD[0]):
                       print(f"[WW] ❌ BRAIN_CMD '{BRAIN_CMD[0]}' não encontrado no PATH", flush=True)
@@ -400,7 +416,13 @@ let
                           timeout=BRAIN_TIMEOUT,
                           capture_output=True, text=True,
                       )
-                      if result.returncode != 0:
+                      _rc = result.returncode
+                      if result.returncode == 2:
+                          # Turno vazio (ruído/wake puro): idle silencioso, SEM
+                          # erro/notify/follow-up (forense 2026-09).
+                          update_status("idle", "󰆪 Aguardando...")
+                          print(f"[WW] 💤 turno vazio (rc=2)", flush=True)
+                      elif result.returncode != 0:
                           stderr_msg = (result.stderr or "")[:300]
                           stdout_msg = (result.stdout or "")[:300]
                           combined = stdout_msg + stderr_msg
@@ -434,6 +456,7 @@ let
               suppress_until = time.time() + 5
               expect_command_until = 0.0
               _restart_capture()
+              return _rc
 
           while True:
               try:
