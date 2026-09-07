@@ -285,6 +285,18 @@ JARVIS_TOOLS = [
             }
         }
     },
+    {
+        "name": "jarvis_web_search",
+        "description": "Search the internet via Tavily. Use for current events, library docs, and anything outside the codebase.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Question or search terms"},
+                "limit": {"type": "integer", "description": "Max results (default: 5)"}
+            },
+            "required": ["query"]
+        }
+    },
     MULTI_AI_READER_TOOL,
     *HACKMD_TOOLS,
     # Vault Sync tools
@@ -585,6 +597,15 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
 
         if name == "jarvis_rag_index":
             return _handle_rag_index(args)
+
+        if name == "jarvis_web_search":
+            from jarvis.core.websearch import web_search
+            query = args.get("query", "")
+            try:
+                max_results = int(args.get("limit", args.get("max_results", 5)) or 5)
+            except (TypeError, ValueError):
+                max_results = 5
+            return web_search(query, max_results=max_results)
 
         # Vault Sync tools
         if name == "jarvis_vault_sync_obsidian":

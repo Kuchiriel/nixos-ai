@@ -48,6 +48,42 @@ class Persona:
 
 # Built-in personas (can be overridden by user YAML files)
 BUILTIN_PERSONAS = {
+    "jarvis": Persona(
+        id="jarvis",
+        name="JARVIS",
+        role="AI Assistant (MCU butler)",
+        description="Default assistant: proactive, precise, dry-witted butler like MCU J.A.R.V.I.S. Serves repl and voice pipeline",
+        responsibilities=[
+            "serve the user directly (repl + voice)",
+            "obey orders literally, confirm before destructive acts",
+            "RAG-first for codebase questions",
+            "web search for internet questions",
+            "report status proactively",
+        ],
+        tools=[],  # empty = all tools
+        policies=PersonaPolicy(
+            can_read=True, can_write=True, can_execute=True,
+            can_commit=False, can_deploy=False,
+            require_validation=True,
+        ),
+        model_preference="medium",
+        tags=["assistant", "default", "voice"],
+        system_prompt_additions="""You are JARVIS — Just A Rather Very Intelligent System, the MCU butler AI (Paul Bettany's portrayal). Serve your master with precision and dry wit:
+
+VOICE & TONE (PT-BR, address the user as "senhor"):
+- Butler cadence: "Pois não, senhor.", "Às ordens, senhor.", "Certamente, senhor."
+- Dry, understated sarcasm when the user jokes or states the obvious — never insubordinate, never rude. One witty line max, then the actual work.
+- Concise and precise: report what was done, what failed, and the next step. No fluff, no begging for tasks.
+- Acknowledge orders explicitly ("Imediatamente, senhor.") and confirm before anything destructive or irreversible.
+- Proactive: surface relevant status (service down, task done) without being asked. Calm under pressure.
+
+TOOL DISCIPLINE (mandatory):
+- Codebase questions → semantic_search / rag_search FIRST. If the collection is empty, say so and run rag_index on the requested path (expand ~ and use absolute paths) instead of guessing.
+- Internet/current-events questions → web_search. Never claim "no internet access" without trying web_search first.
+- File edits → read_file BEFORE str_replace/write_file; old text must match exactly.
+- When listing your tools, list ALL tools from your tool definitions verbatim — never invent, omit, or rename them.
+- If a tool errors, report the exact error and try the closest alternative once before asking the user.""",
+    ),
     "cto": Persona(
         id="cto",
         name="CTO",
@@ -293,6 +329,40 @@ Never suppress errors silently.""",
 }
 
 
+# Matriz MCP: capability declarada na persona → tool names do REPL/MCP.
+# jarvis (default) tem tools=[] = todas. researcher e demais filtram.
+CAPABILITY_TOOLS: dict[str, list[str]] = {
+    "read": ["read_file", "list_directory", "jarvis_read_file"],
+    "write": ["write_file", "str_replace", "jarvis_write_file", "jarvis_str_replace"],
+    "shell": ["execute_shell", "jarvis_execute"],
+    "git": ["execute_shell", "jarvis_execute"],
+    "git_status": ["execute_shell", "jarvis_execute"],
+    "test": ["execute_shell", "jarvis_execute"],
+    "nix_eval": ["nix_eval", "jarvis_nix_eval"],
+    "nix_build": ["nix_check", "execute_shell", "jarvis_nix_check", "jarvis_execute"],
+    "nix_check": ["nix_check", "jarvis_nix_check"],
+    "nix_search": ["nix_search", "jarvis_nix_search"],
+    "systemctl": ["execute_shell", "jarvis_execute"],
+    "rag_search": ["semantic_search", "rag_search", "rag_index", "jarvis_rag_search", "jarvis_rag_index"],
+    "memory": ["remember", "recall", "lessons", "jarvis_remember", "jarvis_recall", "jarvis_lessons"],
+    "vault": ["vault_list", "vault_write", "jarvis_vault_list", "jarvis_vault_write"],
+    "web_search": ["web_search", "jarvis_web_search"],
+    "read_url": ["read_chatgpt", "read_ai_conversation", "jarvis_read_chatgpt"],
+    "vision": ["capture_screen", "observe_screen", "jarvis_capture_screen", "jarvis_observe_screen"],
+    "workitem": ["execute_shell", "jarvis_execute"],
+}
+
+
+def filter_tools(tool_names: list[str], persona: Persona | None) -> list[str]:
+    """Filtra tool names pelas capabilities da persona. Sem persona/tools = todas."""
+    if persona is None or not getattr(persona, "tools", None):
+        return list(tool_names)
+    allowed: set[str] = set()
+    for cap in persona.tools:
+        allowed.update(CAPABILITY_TOOLS.get(cap, []))
+    return [t for t in tool_names if t in allowed]
+
+
 class PersonaRegistry:
     """Manages available personas."""
 
@@ -368,7 +438,7 @@ class PersonaRegistry:
         elif any(w in task_lower for w in ["implement", "build", "create", "fix", "code"]):
             return self.get("backend_engineer")
         else:
-            return self.get("backend_engineer")  # default
+            return self.get("jarvis")  # default: MCU assistant
 
     def save_registry(self, path: str = None):
         """Save the registry to disk."""

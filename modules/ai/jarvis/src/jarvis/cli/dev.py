@@ -850,7 +850,7 @@ SYSTEM_PROMPT_TEMPLATE = """JARVIS dev agent. PT-BR. Direto.
 {memory_context}
 {agent_context}
 
-TOOLS (20 tools disponíveis):
+TOOLS (21 tools disponíveis):
 --- Arquivos ---
 - read_file(path, offset?, limit?) → ler ANTES de editar
 - write_file(path, content) → criar/escrever arquivo
@@ -878,6 +878,7 @@ TOOLS (20 tools disponíveis):
 - vault_write(name, content) → escrever nota
 --- Web ---
 - read_chatgpt(url) → ler conversa ChatGPT compartilhada
+- web_search(query) → PESQUISA NA INTERNET (Tavily). USE para atualidades, docs de libs e tudo fora do codebase. NÃO diga que não tem acesso à internet.
 
 LIMITES DE OUTPUT (OBRIGATÓRIO):
 - find: máx 30 resultados (use -maxdepth 2 | head -30)
@@ -895,6 +896,7 @@ RULES:
 5. Não invente conteúdo sem ler
 6. Use MCP tools quando built-in tools não bastam
 7. ANTES de ler arquivo grande: wc -l (saber tamanho)
+{persona_block}
 """
 
 PLAN_PROMPT = """JARVIS architect. PT-BR. Direto.
@@ -1183,9 +1185,17 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
         try:
             from jarvis.core.rag import HybridIndexer
             hi = HybridIndexer()
-            path = args.get("path", os.getcwd())
+            path = os.path.expanduser(args.get("path", os.getcwd()))
             count = hi.index_directory(path)
             return f"Indexed {count} files from {path}", None
+        except Exception as e:
+            return f"ERROR: {e}", None
+
+    # ── Web Search (Tavily) ──
+    if name == "web_search":
+        try:
+            from jarvis.core.websearch import web_search
+            return web_search(args.get("query", ""), max_results=int(args.get("max_results", 5) or 5)), None
         except Exception as e:
             return f"ERROR: {e}", None
 
@@ -1281,9 +1291,37 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
         return json.dumps(result, ensure_ascii=False)[:2000], diff
 
 
-def _get_tools() -> list[dict[str, Any]]:
-    """6 tools lean — overhead ~200 tokens."""
-    return [
+def _select_persona(hint: str = ""):
+    """Seleciona persona p/ hint (default: jarvis MCU). Nunca levanta."""
+    try:
+        from jarvis.core.persona import PersonaRegistry
+        reg = PersonaRegistry()
+        return reg.select_for_task(hint or "") or reg.get("jarvis")
+    except Exception:
+        return None
+
+
+def _persona_block(persona) -> str:
+    """Bloco de persona p/ system prompt (default: jarvis MCU)."""
+    try:
+        if persona is None:
+            from jarvis.core.persona import PersonaRegistry
+            persona = PersonaRegistry().get("jarvis")
+        additions = (getattr(persona, "system_prompt_additions", "") or "").strip()
+        if not additions:
+            return ""
+        return f"\n\nPERSONA ATIVA: {persona.name} ({persona.role})\n{additions}"
+    except Exception:
+        return ""
+
+
+def _get_tools(persona=None) -> list[dict[str, Any]]:
+    """Tools do REPL. Com persona (exceto jarvis/all): filtra por capabilities.
+
+    Matriz MCP (capability → tools):
+      jarvis (default) = todas. researcher = leitura+RAG+web+memória.
+    """
+    tools = [
         {
             "type": "function",
             "function": {
@@ -1565,7 +1603,29 @@ def _get_tools() -> list[dict[str, Any]]:
                 },
             },
         },
+        # ── Web Search (Tavily, mesma chave do Roo Dev) ──
+        {
+            "type": "function",
+            "function": {
+                "name": "web_search",
+                "description": "Pesquisa na internet (Tavily). Use para atualidades, docs e qualquer pergunta fora do codebase.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Pergunta ou termos"},
+                        "max_results": {"type": "integer", "description": "Resultados (padrão 5)"},
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
     ]
+    if persona is None or not getattr(persona, "tools", None):
+        return tools  # jarvis/default: todas
+    from jarvis.core.persona import filter_tools as _filter_tools
+    names = [t["function"]["name"] for t in tools]
+    keep = set(_filter_tools(names, persona))
+    return [t for t in tools if t["function"]["name"] in keep]
 
 
 # ---------------------------------------------------------------------------
@@ -1902,7 +1962,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
     _auto_index_rag()
 
     profile = _detect_profile()
-    tools = _get_tools() if profile["native_tools"] else []
+    tools: list = []
     mode = "native" if profile["native_tools"] else "text"
 
     # Agent Platform: discover workspace and select persona
@@ -1923,10 +1983,14 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             active_persona = reg.select_for_task(project_id)
     except Exception:
         pass
+    if active_persona is None:
+        active_persona = _select_persona("")
+    if profile["native_tools"]:
+        tools = _get_tools(active_persona)
 
     set_status("listening", "REPL aberto")
     context_size = profile.get("context_size", 0)
-    persona_name = active_persona.name if active_persona else "default"
+    persona_name = active_persona.id if active_persona else "jarvis"
     console.print(f"[jarvis]jarvis[/] [dim]dev[/] · {profile['name']} · {mode}{workspace_info} · [dim]{os.getcwd()}[/]")
     if context_size:
         console.print(f"[dim]ctx: {context_size:,} tokens (from server) · persona: {persona_name}[/]")
@@ -1936,7 +2000,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
     memory_ctx = _build_memory_context()
     agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
     system_prompt = _maybe_disable_thinking(
-        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx)
+        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona))
     )
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     if continue_session:
@@ -1978,7 +2042,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             memory_ctx = _build_memory_context()
             agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
             system_prompt = _maybe_disable_thinking(
-                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx)
+                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona))
             )
             messages = [{"role": "system", "content": system_prompt}]
             _persist_session(messages, project_root or os.getcwd())
@@ -2007,7 +2071,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             memory_ctx = _build_memory_context()
             agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
             system_prompt = _maybe_disable_thinking(
-                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx)
+                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona))
             )
             messages[0] = {"role": "system", "content": system_prompt}
             console.print("[dim]🗺️  repo map atualizado[/]")
@@ -2042,7 +2106,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
                     memory_ctx = _build_memory_context()
                     agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section() + _pinned_section()
                     messages[0] = {"role": "system", "content": _maybe_disable_thinking(
-                        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx))}
+                        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona)))}
                     console.print(f"[dim]📌 {target} fixado ({len(content)} chars)[/]")
             continue
 
@@ -2059,7 +2123,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             memory_ctx = _build_memory_context()
             agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section() + _pinned_section()
             messages[0] = {"role": "system", "content": _maybe_disable_thinking(
-                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx))}
+                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona)))}
             left = ", ".join(PINNED_FILES) or "nenhum"
             console.print(f"[dim]fixados: {left}[/]")
             continue
@@ -2348,14 +2412,15 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
     _auto_index_rag()
 
     profile = _detect_profile()
-    tools = _get_tools() if profile["native_tools"] else []
+    ap_persona = _select_persona(task)
+    tools = _get_tools(ap_persona) if profile["native_tools"] else []
     console.print(f"[jarvis]autopilot[/] · {profile['name']} · {task[:60]}")
 
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context(task)
     agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
     system_prompt = _maybe_disable_thinking(
-        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx)
+        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(ap_persona))
     )
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     if continue_session:
@@ -2393,7 +2458,8 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
     _auto_index_rag()
 
     profile = _detect_profile()
-    tools = _get_tools() if profile["native_tools"] else []
+    ss_persona = _select_persona(task)
+    tools = _get_tools(ss_persona) if profile["native_tools"] else []
 
     console.print(f"[jarvis]jarvis[/] [dim]dev[/] · {profile['name']} · {task[:60]}")
     _repl_emit("session.started", task=task[:100], profile=profile["name"])
@@ -2402,7 +2468,7 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
     memory_ctx = _build_memory_context(task)
     agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
     system_prompt = _maybe_disable_thinking(
-        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx)
+        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(ss_persona))
     )
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     if continue_session:

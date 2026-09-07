@@ -512,7 +512,16 @@ class Agent:
         result = AgentResult()
         self.logger.emit("agent_start", detail={"prompt": prompt[:100]})
         system_content = "You are JARVIS, an AI coding assistant."
-        
+
+        # Persona MCU (default do repl + voz; antes o agente ignorava personas)
+        try:
+            from jarvis.core.persona import PersonaRegistry
+            _persona = PersonaRegistry().get("jarvis")
+            if _persona and _persona.system_prompt_additions:
+                system_content += f"\n\nPERSONA ATIVA: {_persona.name} ({_persona.role})\n{_persona.system_prompt_additions}"
+        except Exception:
+            pass
+
         # Inject user profile
         try:
             from jarvis.core.user_profile import UserProfile, build_context_block

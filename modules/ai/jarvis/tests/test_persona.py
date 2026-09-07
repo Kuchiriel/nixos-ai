@@ -12,10 +12,10 @@ class TestPersonaRegistry:
     """Test PersonaRegistry functionality."""
 
     def test_registry_loads_builtin_personas(self):
-        """Registry should load all 10 built-in personas."""
+        """Registry should load all 11 built-in personas (10 + jarvis MCU)."""
         registry = PersonaRegistry()
         personas = registry.list_all()
-        assert len(personas) == 10
+        assert len(personas) == 11
 
     def test_get_persona_by_id(self):
         """Should retrieve persona by ID."""
@@ -45,11 +45,12 @@ class TestPersonaRegistry:
             assert isinstance(persona.policies, PersonaPolicy)
 
     def test_persona_has_tools(self):
-        """Each persona should have tools list."""
+        """Each persona should have tools list (jarvis: [] = all tools)."""
         registry = PersonaRegistry()
         for persona in registry.list_all():
             assert isinstance(persona.tools, list)
-            assert len(persona.tools) > 0
+            if persona.id != "jarvis":
+                assert len(persona.tools) > 0
 
 
 class TestPersonaSelection:
@@ -98,10 +99,10 @@ class TestPersonaSelection:
         persona = self.registry.select_for_task("Research best practices")
         assert persona.id == "researcher"
 
-    def test_unknown_task_selects_backend_engineer(self):
-        """Unknown tasks should default to backend_engineer."""
+    def test_unknown_task_selects_jarvis(self):
+        """Unknown tasks should default to jarvis (MCU assistant)."""
         persona = self.registry.select_for_task("random task with no keywords")
-        assert persona.id == "backend_engineer"
+        assert persona.id == "jarvis"
 
 
 class TestPersonaPolicies:

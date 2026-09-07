@@ -309,7 +309,7 @@ def _is_allowed(root: str, file: str) -> bool:
 def iter_indexable_files(root: str | Path, exclude_dirs: Iterable[str] | None = None) -> Iterable[str]:
     """Varre um diretório/arquivo com as mesmas regras do V4.0.5 (excludes, tamanho)."""
     excludes = tuple(e.lower() for e in (exclude_dirs if exclude_dirs is not None else _EXCLUDE_DIRS))
-    root_path = Path(root)
+    root_path = Path(root).expanduser()
     
     if root_path.is_file():
         if _is_allowed(str(root_path.parent), root_path.name):
