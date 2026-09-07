@@ -203,16 +203,84 @@ def clone_wav(
     index_path: str | None = None,
     timeout_s: int = 300,
     pitch: int | None = None,
+    cpu_only: bool = False,
 ) -> str:
-    """Converte input_wav para o timbre do modelo. Retorna path ou ERROR:."""
+    """Converte input_wav para o timbre do modelo. Retorna path ou ERROR:.
+
+    cpu_only: força RVC a rodar em CPU mesmo que CUDA esteja visível (útil em
+    hosts onde o torch-cuda do spike trava na inicialização do dispositivo).
+    """
     if output_wav is None and input_wav:
         output_wav = str(Path(input_wav).with_name(Path(input_wav).stem + "-clone.wav"))
-    result = clone_many(
-        [(input_wav, output_wav or "")],
-        model_path=model_path, index_path=index_path, timeout_s=timeout_s,
-        pitch=pitch,
+
+    # Quando cpu_only, injeta uma sinalização no ambiente para que o driver
+    # puppy use torch.device('cpu') explícito ao instanciar VoiceConverter.
+    env = dict(os.environ)
+    if cpu_only:
+        env["JARVIS_RVC_CPU_ONLY"] = "1"
+
+    extra_ld = _cfg("JARVIS_RVC_LD_PATH")
+    if extra_ld:
+        env["LD_LIBRARY_PATH"] = extra_ld + (":" + env.get("LD_LIBRARY_PATH", "") if env.get("LD_LIBRARY_PATH") else "")
+
+    app_dir = _cfg("JARVIS_RVC_APP_DIR")
+    env["PYTHONPATH"] = app_dir + (":" + env.get("PYTHONPATH", "") if env.get("PYTHONPATH") else "")
+
+    # monkeypatch temporário: executar driver com env modificado sem alterar
+    # o subprocess.run abaixo (que usa [_cfg('JARVIS_RVC_PYTHON'), driver_path]
+    # e já monta env próprio). Recriamos o subprocess.call inline paraHer passar
+    # o env estendido.
+    result = {}
+    if not Path(input_wav).exists():
+        return f"ERROR: input inexistente: {input_wav}"
+
+    todo = [(input_wav, output_wav)]
+    model = _resolve_model(model_path)
+    index = _resolve_index(index_path)
+    if pitch is None:
+        pitch = DEFAULT_PITCH
+
+    items = "\n".join(f"{i}\t{o}" for i, o in todo)
+    driver = _BATCH_TEMPLATE.format(
+        items=items, model_path=model, index_path=index, pitch=pitch,
     )
-    return result.get(input_wav, f"ERROR: input inexistente: {input_wav}")
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
+            f.write(driver)
+            driver_path = f.name
+
+        py = _cfg("JARVIS_RVC_PYTHON")
+        if not py or not Path(py).exists():
+            return "ERROR: JARVIS_RVC_PYTHON ausente (ver scripts/rvc-spike-bootstrap.sh)"
+
+        env_clone = dict(os.environ)
+        env_clone["PYTHONPATH"] = app_dir + (":" + env_clone.get("PYTHONPATH", "") if env_clone.get("PYTHONPATH") else "")
+        extra_ld = _cfg("JARVIS_RVC_LD_PATH")
+        if extra_ld:
+            env_clone["LD_LIBRARY_PATH"] = extra_ld + (":" + env_clone.get("LD_LIBRARY_PATH", "") if env_clone.get("LD_LIBRARY_PATH") else "")
+        if cpu_only:
+            env_clone["JARVIS_RVC_CPU_ONLY"] = "1"
+
+        proc = subprocess.run(
+            [py, driver_path],
+            cwd=app_dir, env=env_clone, capture_output=True, text=True,
+            timeout=timeout_s,
+        )
+    except subprocess.TimeoutExpired:
+        return f"ERROR: timeout após {timeout_s}s"
+    except OSError as exc:
+        return f"ERROR: spawn falhou: {exc}"
+    finally:
+        try:
+            Path(driver_path).unlink()
+        except (NameError, OSError):
+            pass
+
+    if proc.returncode != 0 or "RVC-BATCH-OK" not in (proc.stdout or ""):
+        err = (proc.stderr or proc.stdout or "").strip().splitlines()
+        tail = " | ".join(err[-3:]) if err else f"exit={proc.returncode}"
+        return f"ERROR: voice-clone falhou: {tail[:300]}"
+    return output_wav or "ERROR: saída não gerada"
 
 
 # Driver batch: UMA carga (VoiceConverter+hubert+rmvpe), N conversões.
