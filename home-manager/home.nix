@@ -231,7 +231,8 @@
   # ══════════════════════════════════════════════════════════════
   programs.opencode = {
     enable = true;
-    package = inputs.opencode-flake.packages.${pkgs.system}.default;
+    # Fonte única: overlay `kilo` (nixpkgs-unstable; dan-online parou em 05/2026).
+    package = pkgs.kilo;
 
     settings = {
       # Provedor local (Bonsai 8B ternário via llama.cpp PrismML, porta 8080)
