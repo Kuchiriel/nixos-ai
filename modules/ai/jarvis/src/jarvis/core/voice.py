@@ -99,6 +99,32 @@ def _model_dir() -> str:
     return os.path.expanduser(os.environ.get("JARVIS_VOICE_DIR", MODEL_DIR_DEFAULT))
 
 
+def _trim_silence(audio, sr: int, thresh_ratio: float = 0.05, pad_s: float = 0.05):
+    """Corta silêncio das bordas (Kokoro adiciona ~0.2s em cada ponta).
+
+    Em clips curtos (acks de 1.6s) 25% de silêncio soa arrastado/drogado.
+    """
+    import numpy as np
+    if len(audio) == 0:
+        return audio
+    mono = audio.mean(axis=1) if getattr(audio, "ndim", 1) > 1 else audio
+    win = max(1, int(sr * 0.02))
+    rms = [float((mono[i:i + win] ** 2).mean() ** 0.5)
+           for i in range(0, len(mono) - win + 1, win)]
+    if not rms:
+        return audio
+    peak = max(rms)
+    if peak <= 0:
+        return audio
+    thr = peak * thresh_ratio
+    start = next((i for i, r in enumerate(rms) if r > thr), 0)
+    end = next((i for i, r in enumerate(reversed(rms)) if r > thr), 0)
+    pad = int(pad_s * sr / (win or 1))
+    s0 = max(0, (start - pad) * win)
+    s1 = min(len(audio), len(audio) - (end - pad) * win)
+    return audio[s0:s1] if s1 > s0 else audio
+
+
 # Cache de pipelines Kokoro por (config, model, lang): carregar o modelo
 # custa ~3.4s — em batch (audiobook) o reuso economiza horas.
 _PIPELINES: dict[tuple[str, str, str], tuple[object, object]] = {}
