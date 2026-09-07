@@ -84,6 +84,24 @@ def is_available() -> tuple[bool, str]:
     index = _resolve_index(None)
     if not py or not Path(py).exists():
         return False, "JARVIS_RVC_PYTHON ausente (ver scripts/rvc-spike-bootstrap.sh)"
+
+    # Nix-sourced python binaries frequently need LD_LIBRARY_PATH injected
+    # BEFORE process start (rpath on the venv's torch/libtorch is often
+    # incomplete for a store-built python env). Do a quick smoke test so we
+    # distinguish "python missing" from "python present but deps unfindable"
+    # without paying the full model-load cost here.
+    try:
+        probe = subprocess.run(
+            [py, "-c", "import torch"],
+            env=dict(os.environ, LD_LIBRARY_PATH=_cfg("JARVIS_RVC_LD_PATH") or os.environ.get("LD_LIBRARY_PATH", "")),
+            capture_output=True, text=True, timeout=20,
+        )
+        if probe.returncode != 0:
+            return False, f"RVC python presente mas stack não carrega: {probe.stderr.strip().splitlines()[-1] if probe.stderr else 'import torch falhou'}"
+    except OSError as exc:
+        return False, f"RVC python inválido: {exc}"
+    except subprocess.TimeoutExpired:
+        return False, "RVC python froze durante a verificação (timeout no probe)"
     if not app or not Path(app, "rvc", "infer", "infer.py").exists():
         return False, "JARVIS_RVC_APP_DIR ausente ou sem rvc/infer/infer.py"
     if not model or not Path(model).exists():
