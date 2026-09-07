@@ -207,19 +207,21 @@ def test_main_voice_passes_model_to_pipeline(monkeypatch, tmp_path) -> None:
     seen = {}
 
     def fake_voice_loop(audio_path, *, tts=True, model_size=voice.STT_MODEL_DEFAULT,
-                        debug_wav=None):
+                        debug_wav=None, clone=False):
         seen["audio_path"] = audio_path
         seen["tts"] = tts
         seen["model_size"] = model_size
         seen["debug_wav"] = debug_wav
+        seen["clone"] = clone
         return 0
 
     monkeypatch.setattr(voice, "voice_loop", fake_voice_loop)
-    assert voice.main_voice([str(wav), "--model", "small", "--no-tts"]) == 0
+    assert voice.main_voice([str(wav), "--model", "small", "--no-tts", "--clone"]) == 0
     assert seen["audio_path"] == str(wav)
     assert seen["tts"] is False
     assert seen["model_size"] == "small"
     assert seen["debug_wav"] is None
+    assert seen["clone"] is True
 
 
 def test_main_stt_debug_wav_writes_session(monkeypatch, tmp_path) -> None:

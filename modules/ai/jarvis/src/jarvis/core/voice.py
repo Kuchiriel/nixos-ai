@@ -511,7 +511,7 @@ def _text_for_tts(out: dict[str, Any] | str) -> str:
 # ---------------------------------------------------------------------------
 
 def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL_DEFAULT,
-               debug_wav: str | None = None) -> int:
+               debug_wav: str | None = None, clone: bool = False) -> int:
     """Pipeline completo para o brainCommand do wakeword.
 
     STT do WAV capturado → load check → roteia o pedido → TTS da resposta.
@@ -608,12 +608,21 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
 
     # 3. Load shedding — verifica carga ANTES de chamar o LLM
     #    Rotas que NÃO usam LLM (fastpath, doctor, nixos, rag) passam direto.
+    #    Forense 2026-09: shed imediato perdia o turno quando o slot único
+    #    estava ocupado por outra sessão (opencode/Roo). Espera até 25s.
     needs_llm = route.handler in ("agent",)
     if needs_llm:
         from jarvis.providers.llm import LLMClient
         from jarvis.core.config import get_config
         llm = LLMClient(get_config())
         load = check_load(llm)
+        if load["busy"]:
+            import time as _wt
+            _deadline = _wt.time() + 25
+            set_status("busy", "Aguardando modelo liberar…")
+            while load["busy"] and _wt.time() < _deadline:
+                _wt.sleep(2)
+                load = check_load(llm)
         if load["busy"]:
             log.warn("voice_load_shed", detail={
                 "reason": load["reason"],
@@ -643,7 +652,7 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
     answer = _text_for_tts(out)
     set_status("speaking", answer[:60])
     if tts:
-        wav = speak(answer)
+        wav = speak(answer, clone=clone)
         print(f"🔊 {answer}", flush=True)
         if wav.startswith("ERROR"):
             print(wav, file=sys.stderr)
@@ -663,13 +672,14 @@ def main_voice(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-tts", action="store_true", help="não sintetizar resposta em voz")
     parser.add_argument("--model", default=STT_MODEL_DEFAULT, help="tamanho do modelo faster-whisper")
     parser.add_argument("--debug-wav", default=None, help="dir p/ salvar WAV + session.json de diagnóstico")
+    parser.add_argument("--clone", action="store_true", help="converte resposta p/ timbre RVC (~+20s; exige envs do spike)")
     args = parser.parse_args(argv)
 
     if not Path(args.wav).exists():
         print(f"ERROR: arquivo não existe: {args.wav}", file=sys.stderr)
         return 1
     return voice_loop(args.wav, tts=not args.no_tts, model_size=args.model,
-                      debug_wav=args.debug_wav)
+                      debug_wav=args.debug_wav, clone=args.clone)
 
 
 def main_stt(argv: list[str] | None = None) -> int:

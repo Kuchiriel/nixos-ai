@@ -187,6 +187,7 @@ def waybar_format() -> dict[str, Any]:
         "done":          ("󰄬", "OK"),         # nf-md-check-circle
         "initializing":  ("󰚌", "BOOT"),       # nf-md-robot
         "boot":          ("󰚌", "BOOT"),       # alias curto
+        "busy":          ("󰐕", "BUSY"),       # nf-md-progress-clock — shed/wait
     }
     icon, label = state_map.get(state, ("󰧑", state.upper()))
 
