@@ -253,6 +253,74 @@ def test_agent_writes_audit_log(tmp_path) -> None:
     assert entry["approved"] is False
 
 
+def test_agent_loop_detector_stops_repeated_tool_call(tmp_path) -> None:
+    """REPL path: identical tool call repeated 3x triggers the loop detector
+    warning, and a second warning (model ignoring it) stops the loop."""
+    class RepeatSession(FakeSession):
+        def post(self, url, json=None, timeout=120):
+            self.calls += 1
+            RepeatSession.last_payload = json or {}
+            msg = {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{
+                    "id": f"call-{self.calls}",
+                    "type": "function",
+                    "function": {
+                        "name": "execute_shell",
+                        "arguments": jsonlib.dumps({"cmd": "echo loop"}),
+                    },
+                }],
+            }
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    RepeatSession.last_payload = {}
+    cfg = Config()
+    agent = Agent(cfg, session=RepeatSession())
+    result = agent.run("repeat forever")
+    # 3rd identical call → duplicate warning injected; 4th call → cycle
+    # detector (A→A→A→A) fires → forced stop before burning MAX_TURNS (8).
+    # Without the loop detector this would execute 8 identical commands.
+    assert result.turns == 4
+    assert result.commands_run == ["echo loop"] * 3
+    # The warning reached the LLM in the message history
+    sys_msgs = [
+        m["content"] for m in RepeatSession.last_payload["messages"]
+        if m.get("role") == "system"
+    ]
+    assert any("repeated" in s or "Cycle detected" in s for s in sys_msgs)
+
+
+def test_agent_loop_detector_does_not_fire_on_progress(tmp_path) -> None:
+    """Normal multi-turn flow (different commands) never triggers warnings."""
+    class ProgressSession(FakeSession):
+        def post(self, url, json=None, timeout=120):
+            self.calls += 1
+            if self.calls <= 2:
+                msg = {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [{
+                        "id": f"call-{self.calls}",
+                        "type": "function",
+                        "function": {
+                            "name": "execute_shell",
+                            "arguments": jsonlib.dumps({"cmd": f"echo step{self.calls}"}),
+                        },
+                    }],
+                }
+            else:
+                msg = {"role": "assistant", "content": "finished"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    cfg = Config()
+    agent = Agent(cfg, session=ProgressSession())
+    result = agent.run("do progressive work")
+    assert result.commands_run == ["echo step1", "echo step2"]
+    assert result.final_response == "finished"
+    assert result.turns == 3
+
+
 def test_agent_denies_side_effect_without_approve(tmp_path) -> None:
     class DenySession(FakeSession):
         def post(self, url, json=None, timeout=120):

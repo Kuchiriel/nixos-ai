@@ -235,6 +235,8 @@ class LoopDetector:
 
     def _check_stagnation(self, content: str) -> RecoveryStrategy:
         """Detecta stagnation — iterações sem progresso medível."""
+        # llama.cpp returns content=None on tool-call turns; never crash on it.
+        content = content or ""
         content_hash = hashlib.md5(content[:500].encode()).hexdigest()[:8]
         if content_hash == self._last_content_hash and content.strip():
             self._stagnation_count += 1

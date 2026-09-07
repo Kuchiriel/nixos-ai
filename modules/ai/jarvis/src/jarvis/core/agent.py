@@ -323,6 +323,7 @@ class Agent:
         
         # State
         self.turn_count = 0
+        self._loop_warnings = 0  # consecutive loop-detector warnings before forced stop
         self.state_dir = Path(self.config.state_dir) if self.config.state_dir else Path.cwd() / "state"
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.audit_log_path = audit_path or (self.state_dir / "audit.jsonl")
@@ -559,7 +560,11 @@ class Agent:
             {"role": "system", "content": system_content},
             {"role": "user", "content": prompt},
         ]
-        
+
+        # Anti-loop: fresh detector state per prompt
+        self.loop_detector.reset()
+        self._loop_warnings = 0
+
         for turn in range(MAX_TURNS):
             result.turns += 1
             response = self._get_llm_response(messages)
@@ -567,15 +572,30 @@ class Agent:
             
             # Extract tool calls
             tool_calls = response.get("tool_calls", [])
+            content = response.get("content", "")
             if not tool_calls:
                 # Check for fallback tool call in content
-                content = response.get("content", "")
                 fallback = extract_fallback_tool_call(content)
                 if fallback:
                     tool_calls = [{"function": fallback}]
                 else:
                     result.final_response = content
                     break
+
+            # Anti-loop: detect repeated/cyclic tool calls and inject a
+            # recovery message. If the model ignores the warning twice in a
+            # row, stop the loop instead of burning turns on the same call.
+            strategy = self.loop_detector.check(tool_calls, content)
+            if strategy.action in (RecoveryAction.ABORT, RecoveryAction.FORCE_ANSWER):
+                messages.append({"role": "system", "content": strategy.message})
+                break
+            if strategy.action != RecoveryAction.NONE:
+                messages.append({"role": "system", "content": strategy.message})
+                self._loop_warnings += 1
+                if self._loop_warnings >= 2:
+                    break
+            else:
+                self._loop_warnings = 0
             
             # Execute tools
             for tc in tool_calls:
@@ -664,11 +684,14 @@ class Agent:
         if self.session:
             base = self.config.llm_base_url.rstrip('/')
             url = f"{base}/chat/completions" if base.endswith('/v1') else f"{base}/v1/chat/completions"
+            # Profile-aware generation params (hardcoded 1024/0.0 ignored the
+            # detected model profile and tool_choice strategy)
+            profile = detect_profile(self.config.llm_model or "")
             payload = {
                 "model": self.config.llm_model,
                 "messages": messages,
-                "max_tokens": 1024,
-                "temperature": 0.0,
+                "max_tokens": profile["max_tokens"],
+                "temperature": profile["temperature"],
             }
             # Add tools if MCP servers are configured
             if self.mcp_servers:

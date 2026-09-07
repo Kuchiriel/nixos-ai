@@ -767,9 +767,9 @@ DEV_TOOLS: list[dict[str, Any]] = [
             },
         },
     },
-    # NOTE: execute_shell is defined in agent.py TOOLS (with safe shlex-based execution).
-    # It is NOT duplicated here to avoid confusion for the LLM model.
-    # agent.py intercepts execute_shell calls and routes to _execute_tool().
+    # NOTE: execute_shell is handled by Agent.run() (core/agent.py) with
+    # allowlist + approval + audit. It is intentionally NOT in DEV_TOOLS so
+    # the LLM only sees one canonical shell tool definition.
     {
         "type": "function",
         "function": {

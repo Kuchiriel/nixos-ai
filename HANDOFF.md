@@ -142,3 +142,44 @@ por curl direto (HTTP 200).
 - Cerebras: conta sem billing (pagamento necessário para usar).
 - RiveScript legado tem mais regras aproveitáveis (git, typing, vision) —
   portar quando houver handler correspondente no jarvis atual.
+
+---
+
+## 2026-09 — Deep Architectural Audit (forensics pass)
+
+Audit doc: `docs/audit/DEEP-ARCHITECTURAL-AUDIT-2026-09.md`
+
+### Fixes (verified, tests green)
+
+1. **P0 — LoopDetector ligado ao `Agent.run()`** (`core/agent.py`): antes era instanciado e
+   nunca usado (component theater). Agora: reset por prompt, `check()` por turno de tool call,
+   warnings de recovery injetados no histórico, 2 warnings consecutivos → stop, e
+   ABORT/FORCE_ANSWER → stop imediato. Execução real: 4º call idêntico → cycle detector
+   interrompe (antes: 8 turnos queimados).
+2. **P0 — `LoopDetector._check_stagnation()` crashava com `content=None`**
+   (`core/loop_detector.py`): llama.cpp retorna `content: null` em turno de tool call — o
+   crash era garantido no primeiro uso real. Fix: `content = content or ""`.
+3. **P1 — payload profile-aware** (`_get_llm_response`): `max_tokens`/`temperature` agora vêm
+   de `detect_profile(model)` (antes fixos 1024/0.0).
+4. **P2 — comentário falso** em `devtools.py` (dizia que execute_shell vive em agent TOOLS e
+   roteia para `_execute_tool()` — premissas falsas).
+
+### Tests
+- `tests/test_agent.py`: **30 passed** (2 novos: loop detector para repetição idêntica;
+  sem falso positivo em fluxo com progresso).
+- `tests/test_loop_detector.py`: **15 passed**.
+- Falhas pré-existentes fora do escopo: `test_memory` (httpx ausente no pytest ad-hoc),
+  `test_rules::test_fastpath_sys_executes_and_blocks` (locale pt-BR: `"up" not in "1 dia 6:44"`).
+
+### Reproduzir
+```bash
+cd modules/ai/jarvis
+PYTHONPATH=src:<store de requests+urllib3+certifi+charset-normalizer+idna> \
+  /nix/store/b9xszc8ibgm6c4cm461661qiiqi78zwz-python3.13-pytest-9.0.3/bin/pytest tests/test_agent.py -q
+```
+
+### Bloqueadores p/ próxima sessão
+- Migrar `_get_llm_response()` para `LLMClient` (fecha acoplamento llama.cpp no REPL; ~20
+  testes mockam `session.post` — adaptar contrato).
+- Remover caminho morto `run_loop`/`execute_tool`/`TOOLS` (zero chamadores verificados).
+- Consolidar `jarvis/core/context_budget.py` + `nightwatch/context_budget.py`.
