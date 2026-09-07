@@ -233,6 +233,82 @@ let
           pre_roll = []  # circular buffer: last N chunks before speech onset (~770ms)
           BRAIN_TIMEOUT = 120  # STT cold start ~30s + LLM + TTS
 
+          def _process_speech():
+              """Save WAV, score wakeword, run brain pipeline."""
+              nonlocal arecord_proc
+              if KILL_TTS:
+                  for pat in ["paplay", "aplay", "enhanced_audiobook.py"]:
+                      subprocess.run(["pkill", "-9", pat], stderr=subprocess.DEVNULL)
+              timestamp = int(time.time())
+              temp_wav = f"/tmp/jarvis_cmd_{timestamp}.wav"
+              with wave.open(temp_wav, "wb") as wf:
+                  wf.setnchannels(2)
+                  wf.setsampwidth(2)
+                  wf.setframerate(RATE)
+                  wf.writeframes(b"".join(speech_frames))
+              print(f"[WW] 📼 Capturado: {temp_wav} ({len(speech_frames)} chunks, {len(speech_frames)*CHUNK/RATE:.1f}s)", flush=True)
+              if BRAIN_CMD:
+                  try:
+                      import sys as _sys
+                      _score = subprocess.run(
+                          [_sys.executable, WW_SCORER, "--models",
+                           os.path.expanduser(OWW_MODELS),
+                           "--wav", temp_wav,
+                           "--threshold", WW_THRESHOLD],
+                          capture_output=True, text=True, timeout=60,
+                      )
+                      print(f"[WW] 🎯 {(_score.stdout or "").strip()}", flush=True)
+                      if _score.returncode != 0:
+                          print(f"[WW] 🔇 wakeword rejeitado, ignorando", flush=True)
+                          update_status("idle", "󰆪 Aguardando...")
+                          arecord_proc.terminate()
+                          time.sleep(0.5)
+                          arecord_proc = start_arecord()
+                          return
+                      print(f"[WW] 🫡 Hey Jarvis confirmado", flush=True)
+                      _play_ack()
+                  except Exception as _ww_err:
+                      print(f"[WW] ⚠️ scorer falhou: {_ww_err}, seguindo p/ STT", flush=True)
+                  import shutil as _shutil
+                  update_status("transcribing", "Transcrevendo...")
+                  try:
+                      if not _shutil.which(BRAIN_CMD[0]):
+                          print(f"[WW] ❌ BRAIN_CMD '{BRAIN_CMD[0]}' não encontrado no PATH", flush=True)
+                          update_status("error", f"Comando '{BRAIN_CMD[0]}' não encontrado")
+                      else:
+                          result = subprocess.run(
+                              BRAIN_CMD + [temp_wav],
+                              timeout=BRAIN_TIMEOUT,
+                              capture_output=True, text=True,
+                          )
+                          if result.returncode != 0:
+                              stderr_msg = (result.stderr or "")[:300]
+                              stdout_msg = (result.stdout or "")[:300]
+                              combined = stdout_msg + stderr_msg
+                              print(f"[WW] ❌ brain falhou (exit {result.returncode}): {combined[:200]}", flush=True)
+                              update_status("error", f"Erro: {stderr_msg[:60]}")
+                          else:
+                              print(f"[WW] ✅ brain OK: {(result.stdout or "")[:100]}", flush=True)
+                              update_status("done", "Concluído")
+                  except subprocess.TimeoutExpired:
+                      print(f"[WW] ⏰ brain timeout ({BRAIN_TIMEOUT}s) — STT/LLM/TTS travou", flush=True)
+                      update_status("error", f"Timeout: pipeline nao respondeu ({BRAIN_TIMEOUT}s)")
+                  except Exception as e:
+                      print(f"[WW] ❌ brain error: {str(e)[:100]}", flush=True)
+                      update_status("error", f"Exceção: {str(e)[:60]}")
+              try:
+                  arecord_proc.kill()
+              except Exception:
+                  pass
+              try:
+                  arecord_proc.wait(timeout=3)
+              except Exception:
+                  pass
+              time.sleep(0.5)
+              update_status("idle", "Aguardando...")
+              arecord_proc = start_arecord()
+              print(f"[WW] pw-record restarted PID: {arecord_proc.pid}", flush=True)
+
           while True:
               try:
                   data = arecord_proc.stdout.read(CHUNK * 4)
@@ -320,91 +396,6 @@ let
 
                   # Check for silence or max duration
                   recording_duration = len(speech_frames) * CHUNK / RATE
-                  def _process_speech():
-                      """Save WAV, score wakeword, run brain pipeline."""
-                      nonlocal arecord_proc
-                      # Kill TTS/audiobook para o usuário falar
-                      if KILL_TTS:
-                          for pat in ["paplay", "aplay", "enhanced_audiobook.py"]:
-                              subprocess.run(["pkill", "-9", pat], stderr=subprocess.DEVNULL)
-
-                      # Save the speech we already captured
-                      timestamp = int(time.time())
-                      temp_wav = f"/tmp/jarvis_cmd_{timestamp}.wav"
-                      with wave.open(temp_wav, "wb") as wf:
-                          wf.setnchannels(2)
-                          wf.setsampwidth(2)
-                          wf.setframerate(RATE)
-                          wf.writeframes(b"".join(speech_frames))
-                      print(f"[WW] 📼 Capturado: {temp_wav} ({len(speech_frames)} chunks, {len(speech_frames)*CHUNK/RATE:.1f}s)", flush=True)
-
-                      if BRAIN_CMD:
-                          # 1. Scorer hey_jarvis (ONNX, barato) — filtra ruído/TV
-                          try:
-                              import sys as _sys
-                              _score = subprocess.run(
-                                  [_sys.executable, WW_SCORER, "--models",
-                                   os.path.expanduser(OWW_MODELS),
-                                   "--wav", temp_wav,
-                                   "--threshold", WW_THRESHOLD],
-                                  capture_output=True, text=True, timeout=60,
-                              )
-                              print(f"[WW] 🎯 {(_score.stdout or "").strip()}", flush=True)
-                              if _score.returncode != 0:
-                                  print(f"[WW] 🔇 wakeword rejeitado, ignorando", flush=True)
-                                  update_status("idle", "󰆪 Aguardando...")
-                                  arecord_proc.terminate()
-                                  time.sleep(0.5)
-                                  arecord_proc = start_arecord()
-                                  return
-                              print(f"[WW] 🫡 Hey Jarvis confirmado", flush=True)
-                              _play_ack()
-                          except Exception as _ww_err:
-                              print(f"[WW] ⚠️ scorer falhou: {_ww_err}, seguindo p/ STT", flush=True)
-
-                          # 2. Brain: STT → LLM → TTS (sem pre-check duplicado)
-                          import shutil as _shutil
-                          update_status("transcribing", "Transcrevendo...")
-                          try:
-                              if not _shutil.which(BRAIN_CMD[0]):
-                                  print(f"[WW] ❌ BRAIN_CMD '{BRAIN_CMD[0]}' não encontrado no PATH", flush=True)
-                                  update_status("error", f"Comando '{BRAIN_CMD[0]}' não encontrado")
-                              else:
-                                  result = subprocess.run(
-                                      BRAIN_CMD + [temp_wav],
-                                      timeout=BRAIN_TIMEOUT,
-                                      capture_output=True, text=True,
-                                  )
-                                  if result.returncode != 0:
-                                      stderr_msg = (result.stderr or "")[:300]
-                                      stdout_msg = (result.stdout or "")[:300]
-                                      combined = stdout_msg + stderr_msg
-                                      print(f"[WW] ❌ brain falhou (exit {result.returncode}): {combined[:200]}", flush=True)
-                                      update_status("error", f"Erro: {stderr_msg[:60]}")
-                                  else:
-                                      print(f"[WW] ✅ brain OK: {(result.stdout or "")[:100]}", flush=True)
-                                      update_status("done", "Concluído")
-                          except subprocess.TimeoutExpired:
-                              print(f"[WW] ⏰ brain timeout ({BRAIN_TIMEOUT}s) — STT/LLM/TTS travou", flush=True)
-                              update_status("error", f"Timeout: pipeline nao respondeu ({BRAIN_TIMEOUT}s)")
-                          except Exception as e:
-                              print(f"[WW] ❌ brain error: {str(e)[:100]}", flush=True)
-                              update_status("error", f"Exceção: {str(e)[:60]}")
-
-                      # Reset: kill agressivo do pw-record (PipeWire segura o processo)
-                      try:
-                          arecord_proc.kill()
-                      except Exception:
-                          pass
-                      try:
-                          arecord_proc.wait(timeout=3)
-                      except Exception:
-                          pass
-                      time.sleep(0.5)
-                      update_status("idle", "Aguardando...")
-                      arecord_proc = start_arecord()
-                      print(f"[WW] pw-record restarted PID: {arecord_proc.pid}", flush=True)
-
                   if recording_duration > MAX_RECORD:
                       # Hard limit — stop recording and process
                       speaking = False
