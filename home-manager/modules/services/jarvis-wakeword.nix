@@ -240,8 +240,8 @@ let
               """Save WAV, score wakeword, run brain pipeline."""
               nonlocal arecord_proc, suppress_until
               if KILL_TTS:
-                   for pat in ["pw-play", "paplay", "aplay", "enhanced_audiobook.py"]:
-                       subprocess.run(["pkill", "-9", pat], stderr=subprocess.DEVNULL)
+                  for pat in ["pw-play", "paplay", "aplay", "enhanced_audiobook.py"]:
+                      subprocess.run(["pkill", "-9", pat], stderr=subprocess.DEVNULL)
               timestamp = int(time.time())
               temp_wav = f"/tmp/jarvis_cmd_{timestamp}.wav"
               with wave.open(temp_wav, "wb") as wf:
