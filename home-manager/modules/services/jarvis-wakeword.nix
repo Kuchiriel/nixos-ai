@@ -157,8 +157,9 @@ let
           """Spike RVC presente? (/tmp efêmero — some no reboot)."""
           py = os.environ.get("JARVIS_RVC_PYTHON", "")
           app = os.environ.get("JARVIS_RVC_APP_DIR", "")
-          return bool(py and os.path.exists(py)
-                      and os.path.exists(os.path.join(app, "rvc", "infer", "infer.py")))
+          if not py or not os.path.exists(py):
+              return False
+          return os.path.exists(os.path.join(app, "rvc", "infer", "infer.py"))
 
 
       def _gen_ack(ackdir, phrases, clone):
