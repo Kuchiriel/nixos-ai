@@ -318,7 +318,11 @@ let
                               arecord_proc = start_arecord()
                               return
                           print(f"[WW] 🫡 Hey Jarvis confirmado", flush=True)
+                          update_status("listening", "🎤 Ouvindo...")
                           notify("Jarvis", "Ouvindo…")
+                          # Blip imediato (<1s): a geração do ack clonado leva
+                          # ~2min na 1a vez; sem isso o usuário acha que morreu.
+                          play_sound(BEEP_SOUND)
                           _play_ack()
                       except Exception as _ww_err:
                           print(f"[WW] ⚠️ scorer falhou: {_ww_err}, seguindo p/ STT", flush=True)
