@@ -199,6 +199,13 @@ ler [o] [livro] * → <call>audiobook read <star></call>{topic=audiobook}
 read [the] [book] * → <call>audiobook read <star></call>{topic=audiobook}
 quais livros [tenho|tem] → <call>audiobook list</call>
 meus livros → <call>audiobook list</call>
+lista [de] livros → <call>audiobook list</call>
+que livros * → <call>audiobook list</call>
+biblioteca → <call>audiobook list</call>
+meus ebooks → <call>audiobook list</call>
+acervo [de livros] → <call>audiobook list</call>
+tem na biblioteca → <call>audiobook list</call>
+o que tem para ler → <call>audiobook list</call>
 procura [por] livros → <call>audiobook scan</call>
 para de ler → <call>audiobook stop</call>{topic=random}
 pausa [a leitura] → <call>audiobook pause</call>

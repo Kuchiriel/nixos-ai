@@ -341,9 +341,9 @@ let
               speech_frames.clear()
               pre_roll.clear()
               speech_buf.clear()
-              expect_command_until = time.time() + 12
+              expect_command_until = time.time() + 8
               update_status("listening", "Fale agora…")
-              print(f"[WW] 👂 fase 2: ouvindo comando (12s)", flush=True)
+              print(f"[WW] 👂 fase 2: ouvindo comando (8s)", flush=True)
 
           def _score_wake(temp_wav):
               """Roda o verificador offline. True = wake confirmado."""
@@ -422,13 +422,9 @@ let
                       else:
                           print(f"[WW] ✅ brain OK: {(result.stdout or "")[:100]}", flush=True)
                           update_status("done", "Concluído")
-                          # Follow-up SÓ em turno real: rc=2 (voz vazia/wake
-                          # puro) ou stderr marcado NÃO estendem — senão
-                          # capturas de ruído viram loop infinito (2026-09).
-                          _err = result.stderr or ""
-                          if result.returncode == 0 and "(voz vazia)" not in _err and "(só wakeword" not in _err:
-                              # Conversa: próxima captura em 20s dispensa o wake.
-                              followup_until = time.time() + 20
+                          # Follow-up 12s (antes 20s): janela menor = menos
+                          # conversa paralela capturada (forense 2026-09).
+                          followup_until = time.time() + 12
               except subprocess.TimeoutExpired:
                   print(f"[WW] ⏰ brain timeout ({BRAIN_TIMEOUT}s) — STT/LLM/TTS travou", flush=True)
                   update_status("error", f"Timeout: pipeline nao respondeu ({BRAIN_TIMEOUT}s)")
@@ -441,7 +437,7 @@ let
                   play_sound(ERROR_SOUND)
               # Supressão pós-brain: cauda do TTS ainda está no ar; sem isso o
               # daemon captura a própria voz (self-trigger, forense 2026-09).
-              # 5s (antes 8s): follow-up abre em seguida (até 20s).
+              # 5s (antes 8s): follow-up abre em seguida (até 12s).
               suppress_until = time.time() + 5
               expect_command_until = 0.0
               _restart_capture()
@@ -581,7 +577,7 @@ let
                           speaking = False
                           last_trigger_time = time.time()
                           update_status("transcribing", "Transcrevendo...")
-                          print(f"[WW] ✅ Speech ended ({len(speech_frames)} chunks, {len(speech_frames)*CHUNK/RATE:.1f}s, gate={silence_gate:.0f})", flush=True)
+                          print(f"[WW] ✅ Speech ended ({len(speech_frames)} chunks, {len(speech_frames)*CHUNK/RATE:.1f}s, gate={silence_gate:.0f}, peak={speech_peak:.0f})", flush=True)
                           _process_speech()
                   else:
                       # Speech continuing — reset silence timer
