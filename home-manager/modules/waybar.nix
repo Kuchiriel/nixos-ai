@@ -35,6 +35,8 @@
   # No printf, \n gera nova linha — para JSON válido precisamos de \\n
   # que o printf imprime como literal \n.
   cpuScript = pkgs.writeShellScriptBin "waybar-cpu" ''
+    exec 2>/dev/null
+
     get_cpu() {
       awk '/^cpu / {print ($2+$3+$4+$5+$6+$7+$8), $5}' /proc/stat
     }
@@ -58,7 +60,13 @@
     fi
 
     read LOAD _rest _ < /proc/loadavg
-    printf '{"text": "%s%%", "tooltip": "Load: %s\\nUsage: %s%%", "class": "%s"}\n' "$CPU" "$LOAD" "$CPU" "$CLASS"
+    printf '{"text": "%s%%", "tooltip": "Load: %s\\\\nUsage: %s%%", "class": "%s"}\\n' "$CPU" "$LOAD" "$CPU" "$CLASS"
+
+    # Reap zombies promptly to avoid defunct processes accumulating
+    while kill -0 $PPID 2>/dev/null; do
+      wait -n 2>/dev/null || true
+      sleep 0.1
+    done
   '';
 
   memoryScript = pkgs.writeShellScriptBin "waybar-memory" ''
@@ -375,6 +383,7 @@ in {
             return-type = "json";
             tooltip = true;
             on-click = "foot --app-id floating_shell -e btm";
+            restart-interval = 120;  # Restart script periodically to avoid zombie accumulation
           };
 
           "custom/memory" = {

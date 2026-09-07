@@ -53,8 +53,11 @@ class ToolSignature:
 
     @classmethod
     def from_tool_call(cls, tool_call: dict[str, Any]) -> ToolSignature:
-        name = tool_call.get("function", {}).get("name", "")
-        raw_args = tool_call.get("function", {}).get("arguments", "")
+        func = tool_call.get("function", {})
+        if not isinstance(func, dict):
+            func = {}
+        name = func.get("name", "")
+        raw_args = func.get("arguments", "")
         if isinstance(raw_args, dict):
             raw_args = json.dumps(raw_args, sort_keys=True)
         args_hash = hashlib.md5(raw_args.encode()).hexdigest()[:12]

@@ -183,3 +183,31 @@ PYTHONPATH=src:<store de requests+urllib3+certifi+charset-normalizer+idna> \
   testes mockam `session.post` — adaptar contrato).
 - Remover caminho morto `run_loop`/`execute_tool`/`TOOLS` (zero chamadores verificados).
 - Consolidar `jarvis/core/context_budget.py` + `nightwatch/context_budget.py`.
+
+---
+
+## 2026-09-07 — Deep Forensic Audit (session 2)
+
+### Fixes (verified, tests green)
+
+1. **P0 — Agent.run() crashes on malformed tool calls** (`core/agent.py`):
+   - `func` not a dict (e.g. `"function": "not a dict"`) → `AttributeError` crash. Fixed: `isinstance(func, dict)` guard → error tool result + continue.
+   - `arguments` as invalid JSON string (e.g. `"{invalid json"`, `"   "`) → `args` became string → `args.get("cmd")` crash. Fixed: detect string vs dict before `json.loads`; except → `{}`.
+   - `arguments` as non-dict after parsing → `isinstance(args, dict)` guard → error tool result + continue.
+   - Evidence: `tests/test_solar_probe.py` 8 failures → 0. Suite 987 passed / 5 pre-existing infra failures.
+
+2. **P1 — Double lessons injection** (`core/agent.py`): `run()` injected lessons into system_content once; `_get_llm_response()` re-injected lessons into `messages[0]` every turn → system prompt grew N× per N-turn conversation. Removed re-injection from `_get_llm_response` (single canonical injection in `run()`).
+
+### Current audit state
+| Area | Status |
+|------|--------|
+| Agent loop (agent.py) | FIXED crashes; dead code `run_loop`/`execute_tool`/`TOOLS` still present |
+| Tool exposure | Agent exposes only `execute_shell` — no `read_file`/`write_file`/`str_replace` (mission CASE 1, 5 blocked) |
+| Router (router.py) | Keyword-matching: "leia X" → RAG route, never read_file |
+| LLMClient bypass | `_get_llm_response()` uses `requests.post` directly, ignores LLMClient |
+| Context budget | 2 implementations (core 0.85 vs nightwatch 0.7) |
+| Dev.py vs agent.py | 2529 lines vs 736 lines — massive duplication |
+| Voice pipeline | Not yet audited in this session |
+| MCP | Not yet audited in this session |
+| EventBus / Control Plane | Not yet audited in this session |
+| Hardcodes | Not yet audited in this session |
