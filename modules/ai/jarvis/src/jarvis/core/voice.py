@@ -691,6 +691,11 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
     set_status("speaking", answer[:60])
     if tts:
         wav = speak(_tts_short(answer), clone=clone)
+        if clone and wav.startswith("ERROR"):
+            # Spike RVC efêmero (/tmp): sem ele, responde com Kokoro puro
+            # em vez de silêncio (forense 2026-09).
+            print(f"[voice] clone indisponível, fallback p/ TTS puro: {wav[:100]}", flush=True)
+            wav = speak(_tts_short(answer), clone=False)
         print(f"🔊 {answer}", flush=True)
         try:
             from jarvis.core.feedback import notify as _notify3

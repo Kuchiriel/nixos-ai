@@ -506,9 +506,10 @@
     device = "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source";
     # Verificação wakeword OFFLINE (ww_scorer.py): 0.5 = upstream default
     wakeThreshold = 0.5;
-    # Pipeline de voz: STT (faster-whisper) → LLM (llama.cpp) → TTS (Kokoro)
-    # O wakeword grava WAV e passa como argumento para 'jarvis voice'
-    brainCommand = ["jarvis" "voice"];
+    # Pipeline de voz: STT (faster-whisper) → LLM (llama.cpp) → TTS (Kokoro+RVC)
+    # --clone: timbre Jarvis coerente com ack/persona (~+20s/turno; com fallback
+    # p/ TTS puro se o spike /tmp sumir). O wakeword grava WAV e passa como arg.
+    brainCommand = ["jarvis" "voice" "--clone"];
   };
 
   # ══════════════════════════════════════════════════════════════

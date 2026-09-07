@@ -153,25 +153,64 @@ let
           return "pt" if lang.startswith("pt") else "en"
 
 
+      def _rvc_ready():
+          """Spike RVC presente? (/tmp efêmero — some no reboot)."""
+          py = os.environ.get("JARVIS_RVC_PYTHON", "")
+          app = os.environ.get("JARVIS_RVC_APP_DIR", "")
+          return bool(py and os.path.exists(py)
+                      and os.path.exists(os.path.join(app, "rvc", "infer", "infer.py")))
+
+
+      def _gen_ack(ackdir, phrases, clone):
+          """Gera os WAVs de ack (clone ou puro). Retorna lista existente."""
+          os.makedirs(ackdir, exist_ok=True)
+          existing = sorted(glob.glob(os.path.join(ackdir, "*.wav")))
+          if not existing:
+              tag = " +clone" if clone else ""
+              print(f"[WW] Gerando respostas (1a vez){tag}...", flush=True)
+              for i, phrase in enumerate(phrases):
+                  cmd = ["jarvis", "speak", "--no-play", phrase]
+                  if clone:
+                      cmd.append("--clone")
+                  subprocess.run(cmd, capture_output=True, timeout=300)
+                  cands = sorted(
+                      glob.glob(os.path.expanduser("~/.local/share/jarvis/voice/tts/*.wav")),
+                      key=os.path.getmtime)
+                  if cands:
+                      shutil.move(cands[-1], os.path.join(ackdir, f"ack{i}.wav"))
+              existing = sorted(glob.glob(os.path.join(ackdir, "*.wav")))
+          return existing
+
+
       def _play_ack():
-          """Ack no idioma do sistema (ou cfg). WAVs gerados 1x e cacheados por idioma."""
+          """Ack no timbre do pipeline (clone se o spike existe, senão puro).
+
+          Cache separado por modo; regenera o clone se o .pth for mais novo
+          que o cache (treino novo → ack novo, sem rebuild).
+          """
           try:
               lang = _ack_lang()
               phrases = ACK_PHRASES.get(lang, ACK_PHRASES["en"])
-              ackdir = os.path.expanduser(f"~/.local/share/jarvis/voice/ack-{lang}")
-              os.makedirs(ackdir, exist_ok=True)
-              existing = sorted(glob.glob(os.path.join(ackdir, "*.wav")))
+              base = os.path.expanduser(f"~/.local/share/jarvis/voice/ack-{lang}")
+              existing = []
+              if _rvc_ready():
+                  cdir = base + "-clone"
+                  try:
+                      model = os.environ.get("JARVIS_VOICE_CLONE_MODEL", "")
+                      models = [model] if model else sorted(glob.glob(
+                          os.path.expanduser("~/models/Jarvis_*_best_epoch.pth")))
+                      if models and os.path.exists(models[0]):
+                          cur = sorted(glob.glob(os.path.join(cdir, "*.wav")))
+                          if cur and os.path.getmtime(models[0]) > os.path.getmtime(cur[0]):
+                              print(f"[WW] Modelo RVC novo, regenerando ack...", flush=True)
+                              shutil.rmtree(cdir, ignore_errors=True)
+                  except OSError:
+                      pass
+                  existing = _gen_ack(cdir, phrases, True)
+                  if not existing:
+                      print(f"[WW] clone indisponível, ack simples", flush=True)
               if not existing:
-                  print(f"[WW] Gerando respostas {lang} (1a vez)...", flush=True)
-                  for i, phrase in enumerate(phrases):
-                      subprocess.run(["jarvis", "speak", "--no-play", phrase],
-                                     capture_output=True, timeout=180)
-                      cands = sorted(
-                          glob.glob(os.path.expanduser("~/.local/share/jarvis/voice/tts/*.wav")),
-                          key=os.path.getmtime)
-                      if cands:
-                          shutil.move(cands[-1], os.path.join(ackdir, f"ack{i}.wav"))
-                  existing = sorted(glob.glob(os.path.join(ackdir, "*.wav")))
+                  existing = _gen_ack(base, phrases, False)
               if existing:
                   subprocess.run(["pw-play", random.choice(existing)],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -575,6 +614,13 @@ in {
           # Modelo STT: espelha modules/ai/models.nix (whisper-small).
           # Trocar o modelo = trocar aqui junto (fonte de verdade é o .nix).
           "JARVIS_STT_MODEL=small"
+          # Spike RVC (efêmero em /tmp — some no reboot; voice_clone faz
+          # fallback p/ TTS puro quando ausente). Libs via nix (sem hash fixo).
+          "JARVIS_RVC_PYTHON=/tmp/opencode/tts-venv/bin/python"
+          "JARVIS_RVC_APP_DIR=/tmp/opencode/applio"
+          "JARVIS_RVC_LD_PATH=${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.zlib}/lib"
+          "JARVIS_VOICE_CLONE_MODEL=${config.home.homeDirectory}/models/Jarvis_62e_434s_best_epoch.pth"
+          "JARVIS_VOICE_CLONE_INDEX=${config.home.homeDirectory}/models/added_Jarvis_v2.index"
         ];
       };
       Install = {
