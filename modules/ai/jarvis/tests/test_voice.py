@@ -42,6 +42,7 @@ def test_transcribe_uses_calibrated_vad(monkeypatch, tmp_path) -> None:
 
             class Seg:
                 text = "olá jarvis"
+                avg_logprob = -0.2
 
             class _Info:
                 pass

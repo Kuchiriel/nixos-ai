@@ -26,6 +26,10 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 MODEL_DIR_DEFAULT = "~/.local/share/jarvis/voice"
+# Confiança mínima (avg_logprob ponderado por chars): calibrado 2026-09 —
+# fala limpa -0.23/-0.38, alucinações em ruído -0.69..-1.14. Abaixo disso,
+# descarta (vira "voz vazia", rc=2) em vez de agir sobre delírio.
+STT_MIN_CONFIDENCE = -0.60
 # Fonte de verdade do modelo: modules/ai/models.nix (whisper-small).
 # O módulo Nix espelha via JARVIS_STT_MODEL; trocar lá + aqui (env) juntos.
 STT_MODEL_DEFAULT = os.environ.get("JARVIS_STT_MODEL", "small")
@@ -324,7 +328,18 @@ def transcribe(
                 speech_pad_ms=400,
             ),
         )
-        return " ".join(seg.text for seg in segments).strip()
+        texts: list[str] = []
+        lp_sum, ch_sum = 0.0, 0
+        for seg in segments:
+            texts.append(seg.text)
+            lp_sum += getattr(seg, "avg_logprob", 0.0) * len(seg.text)
+            ch_sum += len(seg.text)
+        text = " ".join(texts).strip()
+        if text and ch_sum and lp_sum / ch_sum < STT_MIN_CONFIDENCE:
+            print(f"STT baixa confiança ({lp_sum / ch_sum:.2f}), descartando",
+                  file=sys.stderr)
+            return ""
+        return text
     except Exception as exc:  # noqa: BLE001
         return f"ERROR: falha na transcrição: {exc}"
 

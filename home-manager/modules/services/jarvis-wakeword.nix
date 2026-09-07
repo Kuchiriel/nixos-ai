@@ -320,26 +320,9 @@ let
               update_status("listening", "🎤 Ouvindo...")
               notify("Jarvis", "Ouvindo…")
               play_sound(BEEP_SOUND)
-              if duration_s > 3.0:
-                  # One-breath: comando veio junto; sem ack de 2s, direto ao brain.
-                  print(f"[WW] ⚡ one-breath ({duration_s:.1f}s), pulando ack", flush=True)
-                  if _run_brain(temp_wav) == 2:
-                      # Só tinha o wake: vira two-phase (ack + escuta comando).
-                      print(f"[WW] ↩️ one-breath vazio, abrindo fase 2", flush=True)
-                      _play_ack()
-                      try:
-                          for _ in range(70):
-                              arecord_proc.stdout.read(CHUNK * 4)
-                          time.sleep(0.5)
-                      except Exception:
-                          pass
-                      speech_frames.clear()
-                      pre_roll.clear()
-                      speech_buf.clear()
-                      suppress_until = 0.0
-                      expect_command_until = time.time() + 12
-                      update_status("listening", "Fale agora…")
-                  return
+              # Sempre ack + fase 2 (one-breath removido: heurística por duração
+              # errava "wake + pausa" e queimava o comando — forense 2026-09).
+              _play_ack()
               _play_ack()
               # Drena o eco do ack do stream antes de ouvir (senão a fase 2
               # captura a própria voz). Ack tem ~2s: drena 70 chunks (~2.2s).

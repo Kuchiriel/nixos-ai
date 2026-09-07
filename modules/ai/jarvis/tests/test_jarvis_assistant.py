@@ -80,6 +80,39 @@ class TestTtsShort:
             assert w.lower().strip().rstrip(".!,?;: ") in ("hey jarvis", "ei jarvis", "jarvis")
 
 
+class TestSttConfidence:
+    def _fw(self, monkeypatch, texts_lps):
+        class Seg:
+            def __init__(self, t, lp):
+                self.text = t
+                self.avg_logprob = lp
+
+        class FakeModel:
+            def __init__(self, *a, **k):
+                pass
+
+            def transcribe(self, path, **kwargs):
+                return iter([Seg(t, lp) for t, lp in texts_lps]), object()
+
+        import jarvis.core.voice as v
+        monkeypatch.setitem(v.sys.modules, "faster_whisper",
+                            type("M", (), {"WhisperModel": FakeModel})())
+
+    def test_confident_passes(self, monkeypatch, tmp_path):
+        import jarvis.core.voice as v
+        w = tmp_path / "a.wav"
+        w.write_bytes(b"RIFF")
+        self._fw(monkeypatch, [("olá mundo", -0.3)])
+        assert v.transcribe(str(w)) == "olá mundo"
+
+    def test_hallucination_dropped(self, monkeypatch, tmp_path):
+        import jarvis.core.voice as v
+        w = tmp_path / "a.wav"
+        w.write_bytes(b"RIFF")
+        self._fw(monkeypatch, [("Lá, vá para o cheirinho, hein?", -1.14)])
+        assert v.transcribe(str(w)) == ""
+
+
 class TestRagTilde:
     def test_iter_expands_tilde(self, monkeypatch, tmp_path):
         import pytest
