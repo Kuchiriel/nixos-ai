@@ -63,7 +63,8 @@ in {
 
     timerConfig = {
       OnCalendar = "*-*-* 03:00:00";
-      Persistent = true;
+      # SEM Persistent: cada reload do systemd (rebuild) disparava o elapse
+      # "perdido" imediatamente e queimava a GPU em horário de uso — 2026-09-07.
       RandomizedDelaySec = 1200;
       AccuracySec = 300;
     };
