@@ -117,6 +117,12 @@ let
                   json.dump({"state": state, "text": text}, f)
           except Exception:
               pass
+          try:
+              subprocess.run(["pkill", "-RTMIN+8", "waybar"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             timeout=2)
+          except Exception:
+              pass
 
 
       def notify(title, msg, icon="audio-input-microphone"):
@@ -274,6 +280,7 @@ let
           suppress_until = 0.0  # anti self-trigger: ignora onset após brain/TTS
           followup_until = 0.0  # conversa: 1 captura pós-brain dispensa wake
           expect_command_until = 0.0  # two-phase: comando puro pós-ack
+          echo_until = 0.0  # ignora onsets no eco do ack (sem drenar áudio)
           speech_buf = []  # buffer for consecutive speech chunks
           pre_roll = []  # circular buffer: last N chunks before speech onset (~770ms)
           BRAIN_TIMEOUT = 120  # STT cold start ~30s + LLM + TTS
@@ -286,7 +293,7 @@ let
               toca o ack, e OUVE O COMANDO numa captura nova — sem wake junto
               na transcrição e sem turno LLM para "hey jarvis" sozinho.
               """
-              nonlocal followup_until, expect_command_until
+              nonlocal followup_until, expect_command_until, echo_until
               if KILL_TTS:
                   for pat in ["pw-play", "paplay", "aplay", "enhanced_audiobook.py"]:
                       subprocess.run(["pkill", "-9", pat], stderr=subprocess.DEVNULL)
@@ -324,14 +331,10 @@ let
               # errava "wake + pausa" e queimava o comando — forense 2026-09).
               _play_ack()
               _play_ack()
-              # Drena o eco do ack do stream antes de ouvir (senão a fase 2
-              # captura a própria voz). Ack tem ~2s: drena 70 chunks (~2.2s).
-              try:
-                  for _ in range(70):
-                      arecord_proc.stdout.read(CHUNK * 4)
-                  time.sleep(0.5)
-              except Exception:
-                  pass
+              # Eco do ack: ignora onsets por 1s (NÃO drena por tempo — dreno
+              # cego comia o comando do usuário; forense 2026-09). O pre-roll
+              # continua enchendo, então nada se perde.
+              echo_until = time.time() + 1.0
               speech_frames.clear()
               pre_roll.clear()
               speech_buf.clear()
@@ -522,6 +525,9 @@ let
                   # 3. Require 4 of last 6 chunks above gate
                   if not speaking:
                       if time.time() < suppress_until:
+                          speech_buf = []
+                          continue
+                      if time.time() < echo_until:
                           speech_buf = []
                           continue
                       # Fase 2 expirou sem comando: volta a idle.
