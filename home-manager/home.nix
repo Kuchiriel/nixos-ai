@@ -85,7 +85,7 @@
     set -u
     AUTH="$HOME/.local/share/opencode/auth.json"
     [ -f "$AUTH" ] || exit 0
-    [ -n "$OPENROUTER_API_KEY" ] || [ -n "$GROQ_API_KEY" ] || [ -n "$CEREBRAS_API_KEY" ] || [ -n "$NVIDIA_API_KEY" ] || exit 0
+    [ -n "$OPENROUTER_API_KEY" ] || [ -n "$GROQ_API_KEY" ] || [ -n "$CEREBRAS_API_KEY" ] || [ -n "$NVIDIA_API_KEY" ] || [ -n "$GEMINI_API_KEY" ] || [ -n "$TOGETHER_API_KEY" ] || [ -n "$HF_TOKEN" ] || exit 0
     python3 - "$AUTH" <<'PYEOF'
     import json, os, sys
     path = sys.argv[1]
@@ -94,6 +94,9 @@
         "groq": os.environ.get("GROQ_API_KEY", ""),
         "cerebras": os.environ.get("CEREBRAS_API_KEY", ""),
         "nvidia": os.environ.get("NVIDIA_API_KEY", ""),
+        "google": os.environ.get("GEMINI_API_KEY", "") or os.environ.get("GOOGLE_API_KEY", ""),
+        "together": os.environ.get("TOGETHER_API_KEY", "") or os.environ.get("TOGETHERAI_API_KEY", ""),
+        "huggingface": os.environ.get("HF_TOKEN", "") or os.environ.get("HUGGINGFACE_API_KEY", ""),
     }
     try:
         with open(path) as f:
@@ -307,6 +310,41 @@
           models = {
             "llama3.1-70b" = {
               name = "Cerebras Llama 3.1 70B";
+            };
+          };
+        };
+
+        # ADICIONADO: Together AI (open-source models)
+        together = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "https://api.together.xyz/v1";
+            headers = {
+              "Authorization" = "Bearer \${TOGETHER_API_KEY}";
+            };
+          };
+          models = {
+            "meta-llama/Llama-3.3-70B-Instruct-Turbo" = {
+              name = "Llama 3.3 70B Turbo";
+            };
+            "Qwen/Qwen3-Coder-480B-A35B-Instruct" = {
+              name = "Qwen3 Coder 480B";
+            };
+          };
+        };
+
+        # ADICIONADO: HuggingFace Inference API
+        huggingface = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "https://api-inference.huggingface.co/v1";
+            headers = {
+              "Authorization" = "Bearer \${HF_TOKEN}";
+            };
+          };
+          models = {
+            "Qwen/Qwen3-235B-A22B-Instruct-2507" = {
+              name = "Qwen3 235B HF";
             };
           };
         };
