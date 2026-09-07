@@ -318,7 +318,8 @@ in {
           "custom/jarvis" = {
             exec = "${pkgs.jarvis}/bin/jarvis-waybar 2>/dev/null || echo '{\\\"text\\\": \\\"IDLE\\\", \\\"class\\\": \\\"idle\\\"}'";
             exec-on-event = true;
-            interval = 2;
+            interval = 5;
+            signal = 8; # feedback.py manda SIGRTMIN+8 a cada set_status (<100ms)
             return-type = "json";
             format = "{}";
             on-click = "foot --app-id floating_shell -e jarvis dev";

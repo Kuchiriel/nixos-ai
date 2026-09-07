@@ -199,6 +199,26 @@ def _strip_wakewords(text: str) -> str:
     return t.strip() or text.strip()
 
 
+def _tts_short(text: str, max_chars: int = 500) -> str:
+    """Corta resposta p/ TTS na fronteira de sentença (primeira frase responde).
+
+    Voz é unidirecional (não dá p/ "skim"): resposta longa falada = espera
+    longa percebida (Siri pattern, CHI 2022). O texto completo vai no notify.
+    """
+    import re
+    t = text.strip()
+    if len(t) <= max_chars:
+        return t
+    sentences = re.split(r"(?<=[.!?…])\s+", t)
+    out = ""
+    for s in sentences:
+        probe = f"{out} {s}".strip()
+        if out and len(probe) > max_chars:
+            break
+        out = probe
+    return (out or t[:max_chars]).strip() + "…"
+
+
 def _audio_stats(path: str) -> dict[str, Any]:
     """Métricas do WAV (sem conteúdo sensível): formato + níveis."""
     import array
@@ -554,7 +574,7 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
         _stt_cmd += ["--language", _stt_lang() or "pt"]
         _stt_proc = subprocess.run(_stt_cmd, capture_output=True, text=True, timeout=60)
         text = (_stt_proc.stdout or "").strip()
-        if _stt_proc.returncode != 0 or not text:
+        if _stt_proc.returncode != 0:
             stderr_out = (_stt_proc.stderr or "")[:200]
             set_status("error", f"STT falhou: {stderr_out[:60]}")
             print(f"ERROR: STT falhou (exit {_stt_proc.returncode}): {stderr_out}", file=sys.stderr)
@@ -565,6 +585,12 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
             except Exception:
                 pass
             return 1
+        if not text:
+            # Vazio (só ruído/VAD comeu tudo): volta a idle SEM erro —
+            # follow-up em ambiente ruidoso gera isso direto (forense 2026-09).
+            set_status("idle", "")
+            print("(voz vazia)", file=sys.stderr)
+            return 0
     except subprocess.TimeoutExpired:
         set_status("error", "STT timeout")
         print("ERROR: STT timeout (60s)", file=sys.stderr)
@@ -586,6 +612,11 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
 
     print(f"🎤 {text}", flush=True)
     _t_stt_done = _time.time()
+    # Só wakeword, sem comando: o ack do confirm já cobriu. Sem turno LLM.
+    if text.lower().strip().rstrip(".!,?;: ") in ("hey jarvis", "ei jarvis", "jarvis"):
+        set_status("idle", "")
+        print("(só wakeword, sem comando)", file=sys.stderr)
+        return 0
     text = _strip_wakewords(text)
     if not text:
         set_status("idle", "")
@@ -654,12 +685,18 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
         print(f"ERROR: rota '{route.handler}' falhou: {exc}", file=sys.stderr)
         return 1
 
-    # 5. TTS
+    # 5. TTS — primeira frase é a resposta (Siri pattern: voz é unidirecional,
+    #    parágrafo longo = espera longa; forense 2026-09). Texto completo no notify.
     answer = _text_for_tts(out)
     set_status("speaking", answer[:60])
     if tts:
-        wav = speak(answer, clone=clone)
+        wav = speak(_tts_short(answer), clone=clone)
         print(f"🔊 {answer}", flush=True)
+        try:
+            from jarvis.core.feedback import notify as _notify3
+            _notify3("Jarvis responde", answer[:300])
+        except Exception:
+            pass
         if wav.startswith("ERROR"):
             print(wav, file=sys.stderr)
     else:

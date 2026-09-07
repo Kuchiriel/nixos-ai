@@ -9,6 +9,7 @@ from jarvis.core.persona import PersonaRegistry, filter_tools
 from jarvis.core import websearch
 from jarvis.core import keys as _keys
 from jarvis.core import lang as _lang
+from jarvis.core import voice as _voice
 
 
 class TestJarvisPersona:
@@ -61,6 +62,22 @@ class TestWebSearch:
     def test_key_from_env(self, monkeypatch):
         monkeypatch.setenv("TAVILY_API_KEY", "tvly-test")
         assert websearch.has_key()
+
+
+class TestTtsShort:
+    def test_short_passthrough(self):
+        assert _voice._tts_short("Oi, senhor.") == "Oi, senhor."
+
+    def test_caps_at_sentence(self):
+        long = "Primeira frase curta. " + "bla " * 200 + "Fim."
+        out = _voice._tts_short(long)
+        assert out.startswith("Primeira frase curta.")
+        assert out.endswith("…")
+        assert len(out) < len(long)
+
+    def test_wake_only_detected(self):
+        for w in ("Hey Jarvis.", "hey jarvis", "  Jarvis!  "):
+            assert w.lower().strip().rstrip(".!,?;: ") in ("hey jarvis", "ei jarvis", "jarvis")
 
 
 class TestRagTilde:

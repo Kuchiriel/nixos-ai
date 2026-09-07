@@ -56,6 +56,13 @@ def set_status(state: str, text: str = "", **extra: Any) -> None:
         STATUS_FILE.write_text(json.dumps(payload, ensure_ascii=False))
     except OSError:
         pass
+    # Refresh imediato da Waybar (módulo custom/jarvis com "signal": 8;
+    # polling de 2s sozinho atrasa o feedback em até 2s — forense 2026-09).
+    try:
+        subprocess.run(["pkill", "-RTMIN+8", "waybar"],
+                       capture_output=True, timeout=2)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
     # Update Control Plane state
     try:
         from jarvis.control_plane.state import get_state_store, Sections
@@ -70,12 +77,12 @@ def get_status() -> dict[str, Any]:
         data = json.loads(STATUS_FILE.read_text())
     except (OSError, json.JSONDecodeError):
         return {"state": "idle", "text": ""}
-    # TTL anti-travamento: estado transitório mais velho que 120s (ex: crash
+    # TTL anti-travamento: estado transitório mais velho que 45s (ex: crash
     # entre set_status("speaking") e o fim) volta a idle em vez de mentir.
     if data.get("state") in ("transcribing", "thinking", "speaking",
-                             "processing", "listening"):
+                             "processing", "listening", "busy"):
         try:
-            if time.time() - float(data.get("ts", 0)) > 120:
+            if time.time() - float(data.get("ts", 0)) > 45:
                 return {"state": "idle", "text": ""}
         except (TypeError, ValueError):
             pass

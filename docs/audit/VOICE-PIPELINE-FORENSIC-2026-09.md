@@ -217,6 +217,20 @@ VERIFIED:
   `jarvis voice --clone` (opt-in; default off pelo custo de ~20s/turno).
 ```
 
+## 18. Teste ao vivo 2 + follow-up (2026-09-07)
+
+```text
+VERIFIED:
+- Endpoint novo encerra em 2.5-4s (adeus 12s); scorer confirma wake limpo
+  (0.9792); baseline bilateral saudável (211-359 grudada no ruído).
+- Rejects 0.38/0.005 = usuário falando SEM o wake (conversa natural) —
+  head-4s no scorer NÃO elevou (pico já estava no head): hipótese diluição
+  REJEITADA, arquitetura exige wake por turno.
+- Fix: follow-up — 1 captura em até 20s pós-brain OK dispensa o scorer
+  (uso único); supressão pós-brain 8s→5s; peak decay 0.995→0.999.
+- Uso: "hey jarvis, <comando>" num fôlego; follow-up sem wake em 20s.
+```
+
 ## 17. Auditoria dinamismo + STT/GPU (2026-09-07)
 
 ```text
