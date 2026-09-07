@@ -232,13 +232,14 @@ let
           speech_frames = []
           speech_peak = 0.0  # pico RMS da fala atual (endpoint relativo, legado)
           suppress_until = 0.0  # anti self-trigger: ignora onset após brain/TTS
+          followup_until = 0.0  # conversa: 1 captura pós-brain dispensa wake
           speech_buf = []  # buffer for consecutive speech chunks
           pre_roll = []  # circular buffer: last N chunks before speech onset (~770ms)
           BRAIN_TIMEOUT = 120  # STT cold start ~30s + LLM + TTS
 
           def _process_speech():
               """Save WAV, score wakeword, run brain pipeline."""
-              nonlocal arecord_proc, suppress_until
+              nonlocal arecord_proc, suppress_until, followup_until
               if KILL_TTS:
                   for pat in ["pw-play", "paplay", "aplay", "enhanced_audiobook.py"]:
                       subprocess.run(["pkill", "-9", pat], stderr=subprocess.DEVNULL)
@@ -251,29 +252,36 @@ let
                   wf.writeframes(b"".join(speech_frames))
               print(f"[WW] 📼 Capturado: {temp_wav} ({len(speech_frames)} chunks, {len(speech_frames)*CHUNK/RATE:.1f}s)", flush=True)
               if BRAIN_CMD:
-                  try:
-                      import sys as _sys
-                      _score = subprocess.run(
-                          [_sys.executable, WW_SCORER, "--models",
-                           os.path.expanduser(OWW_MODELS),
-                           "--wav", temp_wav,
-                           "--threshold", WW_THRESHOLD],
-                          capture_output=True, text=True, timeout=60,
-                      )
-                      print(f"[WW] 🎯 {(_score.stdout or "").strip()}", flush=True)
-                      if _score.returncode != 0:
-                          print(f"[WW] 🔇 wakeword rejeitado, ignorando", flush=True)
-                          update_status("idle", "󰆪 Aguardando...")
-                          suppress_until = time.time() + 3
-                          arecord_proc.terminate()
-                          time.sleep(0.5)
-                          arecord_proc = start_arecord()
-                          return
-                      print(f"[WW] 🫡 Hey Jarvis confirmado", flush=True)
-                      notify("Jarvis", "Ouvindo…")
-                      _play_ack()
-                  except Exception as _ww_err:
-                      print(f"[WW] ⚠️ scorer falhou: {_ww_err}, seguindo p/ STT", flush=True)
+                  confirmed = False
+                  if time.time() < followup_until:
+                      followup_until = 0.0  # uso único
+                      confirmed = True
+                      print(f"[WW] 💬 follow-up (sem wake, conversa ativa)", flush=True)
+                  if not confirmed:
+                      try:
+                          import sys as _sys
+                          _score = subprocess.run(
+                              [_sys.executable, WW_SCORER, "--models",
+                               os.path.expanduser(OWW_MODELS),
+                               "--wav", temp_wav,
+                               "--threshold", WW_THRESHOLD,
+                               "--head-seconds", "4"],
+                              capture_output=True, text=True, timeout=60,
+                          )
+                          print(f"[WW] 🎯 {(_score.stdout or "").strip()}", flush=True)
+                          if _score.returncode != 0:
+                              print(f"[WW] 🔇 wakeword rejeitado, ignorando", flush=True)
+                              update_status("idle", "󰆪 Aguardando...")
+                              suppress_until = time.time() + 3
+                              arecord_proc.terminate()
+                              time.sleep(0.5)
+                              arecord_proc = start_arecord()
+                              return
+                          print(f"[WW] 🫡 Hey Jarvis confirmado", flush=True)
+                          notify("Jarvis", "Ouvindo…")
+                          _play_ack()
+                      except Exception as _ww_err:
+                          print(f"[WW] ⚠️ scorer falhou: {_ww_err}, seguindo p/ STT", flush=True)
                   import shutil as _shutil
                   update_status("transcribing", "Transcrevendo...")
                   try:
@@ -297,6 +305,8 @@ let
                           else:
                               print(f"[WW] ✅ brain OK: {(result.stdout or "")[:100]}", flush=True)
                               update_status("done", "Concluído")
+                              # Conversa: próxima captura em 20s dispensa o wake.
+                              followup_until = time.time() + 20
                   except subprocess.TimeoutExpired:
                       print(f"[WW] ⏰ brain timeout ({BRAIN_TIMEOUT}s) — STT/LLM/TTS travou", flush=True)
                       update_status("error", f"Timeout: pipeline nao respondeu ({BRAIN_TIMEOUT}s)")
@@ -307,9 +317,10 @@ let
                       update_status("error", f"Exceção: {str(e)[:60]}")
                       notify("Jarvis", f"Erro: {str(e)[:80]}")
                       play_sound(ERROR_SOUND)
-              # Supressão pós-brain: ack + TTS ainda estão no ar; sem isso o
+              # Supressão pós-brain: cauda do TTS ainda está no ar; sem isso o
               # daemon captura a própria voz (self-trigger, forense 2026-09).
-              suppress_until = time.time() + 8
+              # 5s (antes 8s): follow-up abre em seguida (até 20s).
+              suppress_until = time.time() + 5
               try:
                   arecord_proc.kill()
               except Exception:
@@ -424,7 +435,9 @@ let
 
                   # Currently speaking — accumulate frames
                   speech_frames.append(data)
-                  speech_peak = max(float(rms), speech_peak * 0.995)
+                  # Decay lento: em 12s o pico cai a ~70% (não ~15%) para o
+                  # endpoint continuar valendo em capturas longas ruidosas.
+                  speech_peak = max(float(rms), speech_peak * 0.999)
 
                   # Fim-por-silêncio relativo ao pico (legado: 40% drop do pico
                   # RMS) com pisos: funciona mesmo com baseline descalibrada.

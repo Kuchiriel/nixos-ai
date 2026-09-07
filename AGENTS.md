@@ -29,7 +29,7 @@ git add -A && nix build .#jarvis --no-link && nix flake check
 
 **Always do:**
 - Rodar testes antes de commitar
-- `git add -A` antes de build (flake só vê arquivos trackeados)
+- `git add -A` antes de build (flake só vê arquivos trackeados) + confira `git ls-files` p/ arquivos novos criados na sessão
 - Commit messages em PT-BR com verbo (`feat:`/`fix:`/`chore:`/`docs:`)
 - Tasks do harness em inglês (o modelo local rende mais; PT-BR só p/ docs e chat)
 

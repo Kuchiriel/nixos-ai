@@ -631,3 +631,41 @@ Qwen3-Coder-30B-A3B-Instruct (coding-specialized MoE):
 - Download: unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF
 
 For 6GB VRAM: UD-IQ3_XXS quantization (~10GB file)
+
+---
+
+## 23. SESSION LESSONS (2026-09-07 — voice forensics + dynamism)
+
+### Flakes see the git index, not the filesystem
+Two rebuilds failed with new files "missing" (secrets.py, keys.py): files
+created after the script's internal `git add` are invisible to the flake copy.
+Rule (AGENTS.md updated): `git add -A` + verify `git ls-files` BEFORE
+rebuilding — never create files concurrent with a build.
+
+### Diagnose the full chain with evidence, then fix
+Live session proved, in order: baseline stuck at 38 → 12s noise windows →
+tiny mistranscription ("A e charles") → 58KB TTS → self-trigger (0.9972).
+Each link verified (logs/RMS/STT diffs) before patching. Full report:
+`docs/audit/VOICE-PIPELINE-FORENSIC-2026-09.md`.
+
+### Single-slot LLM + voice needs wait, not instant shed
+Bonsai profile runs parallel=1: any local client (opencode/Roo) holds the
+only slot. voice_loop now waits up to 25s (Waybar `busy`) before shedding.
+Don't touch llama-server flags without asking (VRAM budget).
+
+### STT stays on CPU (measured, not assumed)
+nixpkgs ctranslate2 is CPU-only (no libcudart) and small/int8/GPU (~2.9GB)
+wouldn't fit next to Bonsai in 6GB VRAM. Real latency win available: warm
+persistent STT (cold load ~10s/turn today). Applied instead:
+`condition_on_previous_text=False` + `initial_prompt="Hey Jarvis."`.
+
+### Persona must be wired, not just displayed
+`jarvis dev` computed a persona but never injected it into the system prompt
+— literally "default". New `jarvis` MCU persona (butler, "senhor", dry wit,
+tool discipline) is now default for repl/autopilot/agent+voice, with an MCP
+capability matrix (`filter_tools`) and Tavily `web_search` in REPL + MCP server.
+
+### Dynamic over hardcoded
+New: `jarvis.core.keys` (secrets), `jarvis.core.lang` (JARVIS_LANG, default
+pt), `JARVIS_STT_MODEL` mirroring `models.nix`. Rule: swap = .nix + env
+together; prompts derive language, never hardcode it.

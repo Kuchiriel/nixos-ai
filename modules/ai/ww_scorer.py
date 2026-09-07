@@ -151,6 +151,9 @@ def main() -> int:
     ap.add_argument("--models", required=True)
     ap.add_argument("--wav", required=True)
     ap.add_argument("--threshold", type=float, default=0.5)
+    ap.add_argument("--head-seconds", type=float, default=None,
+                    help="pontua só os primeiros N segundos (wake fica no onset; "
+                         "janela longa dilui o score e rejeita wake real)")
     args = ap.parse_args()
     sc = Scorer(
         f"{args.models}/melspectrogram.onnx",
@@ -158,6 +161,8 @@ def main() -> int:
         f"{args.models}/hey_jarvis_v0.1.onnx",
     )
     pcm = load_mono16k(args.wav)
+    if args.head_seconds:
+        pcm = pcm[:int(16000 * args.head_seconds)]
     score = sc.score_clip(pcm)
     print(f"score={score:.4f}")
     return 0 if score >= args.threshold else 1

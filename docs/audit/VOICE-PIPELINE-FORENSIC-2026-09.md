@@ -216,3 +216,40 @@ VERIFIED:
   Smoke manual: jarvis_tts_611505839-clone.wav em 21s. Pipeline ganhou
   `jarvis voice --clone` (opt-in; default off pelo custo de ~20s/turno).
 ```
+
+## 17. Auditoria dinamismo + STT/GPU (2026-09-07)
+
+```text
+SECRETS (antes → depois):
+- tavily/hackmd liam /etc direto (hardcode) ou só env solto.
+- Agora: jarvis.core.keys (env → arquivos legados best-effort, nunca exceção);
+  keys-wrapper.sh exporta TAVILY_API_KEY + HMD_API_ACCESS_TOKEN;
+  websearch/hackmd consomem só a abstração. Nota: /etc/jarvis-secrets é
+  root-only — services usam EnvironmentFile, shells usam o wrapper.
+
+IDIOMA (antes → depois):
+- "PT-BR" hardcoded em prompts + "pt" espalhado no voice.py.
+- Agora: jarvis.core.lang (JARVIS_LANG, default pt); STT hint, TTS default,
+  headers dos prompts e persona derivam dele. Trocar idioma = 1 env.
+
+MODELOS (antes → depois):
+- STT "small" literal em 3 lugares + models.nix whisper-small sem ponte.
+- Agora: JARVIS_STT_MODEL (service exporta small com comentário → models.nix);
+  CLI usa o default quando --model omitido. Trocar modelo = .nix + env juntos.
+- STT flags pesquisadas (doc faster-whisper): condition_on_previous_text=False
+  (anti-loop "AJRs AJRs") + initial_prompt="Hey Jarvis." (nomes do domínio).
+  Verificado ao vivo: transcrição limpa, sem cauda alucinada.
+
+STT GPU (decisão medida, não chute):
+- nixpkgs ctranslate2 é CPU-only (sem libcudart linkada) → device=cuda
+  FALHARIA. Habilitar = override com CUDA (rebuild pesado, GBs).
+- VRAM livre ~2GB; small/int8/GPU precisaria ~2.9GB → nem caberia com Bonsai.
+- Conclusão: CPU int8 mantido. Ganho real disponível: STT persistente quente
+  (cold load ~10s/turno hoje) — follow-up, não deste lote.
+
+LIÇÃO DE PROCESSO (forense):
+- 2 rebuilds falharam com arquivos novos "sumidos" (secrets.py, keys.py):
+  flakes copiam o índice git; arquivos criados após o `git add` do script
+  são invisíveis. Regra: `git add -A` + `git ls-files` ANTES de rebuildar.
+  (AGENTS.md já mandava; o erro foi criar arquivos concorrente ao build.)
+```
