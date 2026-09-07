@@ -82,3 +82,63 @@ PersonaExecutor
 - Core: eventbus, feedback, queue, harness_e2e, gaming
 - Nightwatch: validator, safe_editor, safety, checkpoint
 - Control Plane: events, state, commands, notifications
+
+## 2026-09-07 — opencode auth + fast path enriquecido
+
+### opencode (config/home.nix)
+
+Problema real: "só alguns modelos funcionam; header/token error na maioria".
+Duas causas raiz (ambas corrigidas em home.nix):
+
+1. `headers.Authorization = "Bearer \${VAR}"` — o opencode NÃO expande `${VAR}`;
+   a sintaxe é `{env:VAR}`. Virou `options.apiKey = "{env:VAR}"` em
+   openrouter/groq/cerebras/together/huggingface (sem header Authorization;
+   o SDK monta o header a partir do apiKey). Verificado: `opencode debug config`
+   mostra o apiKey expandido com a chave real.
+2. Shell do usuário é **zsh** mas as chaves só eram carregadas em
+   `programs.bash.initExtra` → zsh abria opencode sem env vars. Adicionado o
+   mesmo sourcing (keys-wrapper.sh + opencode-auth-sync.sh) ao
+   `programs.zsh.initContent`.
+
+Versão: `pkgs.kilo` = opencode do nixpkgs-unstable pinado no flake.lock
+(1.18.16, lock de 2026-08-13). `nix run nixpkgs#opencode` é o canal estável
+(1.15.10, MAIS VELHO). autoupdate não funciona em Nix. Atualizado:
+`nix flake lock --update-input nixpkgs-unstable` → 2026-09-07 (deve trazer
+~1.18.29 no próximo rebuild). Modelos mortos atualizados: groq →
+`qwen/qwen3.6-27b`, cerebras → `qwen-3.8-27b`.
+
+Testes manuais pós-fix (via OPENCODE_CONFIG com apiKey): groq responde,
+cerebras = "Payment required" (conta sem billing — não é config), openrouter =
+rota OK (modelos :free às vezes sem endpoint — capacidade). Chaves validadas
+por curl direto (HTTP 200).
+
+### Fast path (rules.py + router.py) — portado do legado Manjaro/AI_SYSTEM
+
+- Engine: `! array nome = a b c` + `@nome` (dentro de `[]`/`()` também),
+  `[*]` (wildcard opcional), `#` (número), `<star1>..<starN>`, ordenação por
+  especificidade (literal > número/alternativa > opcional > wildcard),
+  normalização de entrada (tira "jarvis/hey/ei/por favor/pode/você pode/fala"
+  do INÍCIO, nunca do final), wildcard `*` agora lazy (não engole o 2º número
+  em matemática).
+- Handlers novos: `math` (ast-safe, sem eval; "quanto é 8 + 2" → 10, aceita
+  vírgula decimal e multi-operando) e `screenshot` (grim).
+- DEFAULT_RULES: audiobook com controle completo (pausa/continua/next/prev/
+  status no tópico, sem expulsar do tópico), voz com variações PT/EN, sistema
+  (cpu/memória/disco/temperatura/hora/data/kernel/uptime/processos),
+  saudações, screenshot.
+- SEGURANÇA: matching ANCORADO — trigger curto só casa frase EXATA;
+  filler no fim nunca é removido; regras com `*` que roubariam pergunta real
+  foram removidas (`que livros *`). Testes negativos garantem que perguntas
+  reais ("explique como funciona uma cpu", "quanto é a capital da frança")
+  NUNCA casam fast path → vão pro LLM.
+- Testes: `tests/test_rules.py` (26 → 33 testes). Rodados: test_rules,
+  test_router, test_voice, test_benchmark, test_regression, test_intents —
+  verdes no env disponível; falhas de `requests`/`hypothesis` são só do env
+  ad-hoc (bare pytest), não regressões (a suíte Nix roda com deps completas).
+
+### Pendências abertas
+
+- Validar opencode pós-rebuild (versão esperada ~1.18.29 + modelos reais).
+- Cerebras: conta sem billing (pagamento necessário para usar).
+- RiveScript legado tem mais regras aproveitáveis (git, typing, vision) —
+  portar quando houver handler correspondente no jarvis atual.

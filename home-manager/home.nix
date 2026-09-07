@@ -319,9 +319,19 @@
           models = {
             "qwen/qwen3.6-27b" = {
               name = "Groq Qwen3.6 27B";
+              # Tier grátis: OTPM 1000 → limita saída p/ caber (ITPM 7000 ainda
+              # é apertado p/ o system prompt do opencode; requer tier pago p/ uso real).
+              limit = {
+                context = 131072;
+                output = 800;
+              };
             };
-            "llama-3.1-8b-instant" = {
-              name = "Groq Llama 3.1 8B Instant";
+            "qwen/qwen3.8-27b" = {
+              name = "Groq Qwen3.8 27B";
+              limit = {
+                context = 131072;
+                output = 800;
+              };
             };
           };
         };
