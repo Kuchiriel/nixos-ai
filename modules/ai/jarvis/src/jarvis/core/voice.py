@@ -457,7 +457,7 @@ def speak(
 
         if clone:
             from jarvis.core.voice_clone import clone_wav
-            cloned = clone_wav(str(out_path), pitch=pitch)
+            cloned = clone_wav(str(out_path), pitch=pitch, cpu_only=True)
             if cloned.startswith("ERROR"):
                 return cloned
             out_path = Path(cloned)
