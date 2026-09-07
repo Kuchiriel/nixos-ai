@@ -62,11 +62,11 @@
     read LOAD _rest _ < /proc/loadavg
     printf '{"text": "%s%%", "tooltip": "Load: %s\\\\nUsage: %s%%", "class": "%s"}\\n' "$CPU" "$LOAD" "$CPU" "$CLASS"
 
-    # Reap zombies promptly to avoid defunct processes accumulating
-    while kill -0 $PPID 2>/dev/null; do
-      wait -n 2>/dev/null || true
-      sleep 0.1
-    done
+    # Reap zombies promptly to avoid defunct processes accumulating.
+    # The script itself is short-lived, but wait here to let the parent
+    # (waybar) reap this process. Without this, waybar may leave
+    # defunct waybar-cpu processes when it cycles modules.
+    wait "$PPID" 2>/dev/null || true
   '';
 
   memoryScript = pkgs.writeShellScriptBin "waybar-memory" ''

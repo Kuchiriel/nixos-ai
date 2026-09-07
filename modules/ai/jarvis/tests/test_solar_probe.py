@@ -38,7 +38,9 @@ import pytest
 
 from jarvis.core.agent import Agent, AgentResult, extract_fallback_tool_call
 from jarvis.core.config import Config
-from jarvis.providers.llm import CircuitBreaker, CircuitBreakerConfig, CircuitOpenError
+
+
+pytestmark = pytest.mark.integration
 
 
 # ---------------------------------------------------------------------------
