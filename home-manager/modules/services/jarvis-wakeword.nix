@@ -273,13 +273,20 @@ let
           speech_peak = 0.0  # pico RMS da fala atual (endpoint relativo, legado)
           suppress_until = 0.0  # anti self-trigger: ignora onset após brain/TTS
           followup_until = 0.0  # conversa: 1 captura pós-brain dispensa wake
+          expect_command_until = 0.0  # two-phase: comando puro pós-ack
           speech_buf = []  # buffer for consecutive speech chunks
           pre_roll = []  # circular buffer: last N chunks before speech onset (~770ms)
           BRAIN_TIMEOUT = 120  # STT cold start ~30s + LLM + TTS
 
           def _process_speech():
-              """Save WAV, score wakeword, run brain pipeline."""
-              nonlocal arecord_proc, suppress_until, followup_until
+              """Loop VAD entregou uma captura: wake → (ack) → comando → brain.
+
+              Two-phase (forense 2026-09): o wake e o comando andam juntos na
+              mesma janela SÓ no one-breath (>3s). Caso comum: confirma o wake,
+              toca o ack, e OUVE O COMANDO numa captura nova — sem wake junto
+              na transcrição e sem turno LLM para "hey jarvis" sozinho.
+              """
+              nonlocal arecord_proc, suppress_until, followup_until, expect_command_until
               if KILL_TTS:
                   for pat in ["pw-play", "paplay", "aplay", "enhanced_audiobook.py"]:
                       subprocess.run(["pkill", "-9", pat], stderr=subprocess.DEVNULL)
@@ -290,81 +297,75 @@ let
                   wf.setsampwidth(2)
                   wf.setframerate(RATE)
                   wf.writeframes(b"".join(speech_frames))
-              print(f"[WW] 📼 Capturado: {temp_wav} ({len(speech_frames)} chunks, {len(speech_frames)*CHUNK/RATE:.1f}s)", flush=True)
-              if BRAIN_CMD:
-                  confirmed = False
+              duration_s = len(speech_frames) * CHUNK / RATE
+              print(f"[WW] 📼 Capturado: {temp_wav} ({len(speech_frames)} chunks, {duration_s:.1f}s)", flush=True)
+              if not BRAIN_CMD:
+                  _restart_capture()
+                  return
+              # Fase 2 ou follow-up: comando puro, sem scorer.
+              if time.time() < expect_command_until or time.time() < followup_until:
                   if time.time() < followup_until:
                       followup_until = 0.0  # uso único
-                      confirmed = True
                       print(f"[WW] 💬 follow-up (sem wake, conversa ativa)", flush=True)
-                  if not confirmed:
-                      try:
-                          import sys as _sys
-                          _score = subprocess.run(
-                              [_sys.executable, WW_SCORER, "--models",
-                               os.path.expanduser(OWW_MODELS),
-                               "--wav", temp_wav,
-                               "--threshold", WW_THRESHOLD,
-                               "--head-seconds", "4"],
-                              capture_output=True, text=True, timeout=60,
-                          )
-                          print(f"[WW] 🎯 {(_score.stdout or "").strip()}", flush=True)
-                          if _score.returncode != 0:
-                              print(f"[WW] 🔇 wakeword rejeitado, ignorando", flush=True)
-                              update_status("idle", "󰆪 Aguardando...")
-                              suppress_until = time.time() + 3
-                              arecord_proc.terminate()
-                              time.sleep(0.5)
-                              arecord_proc = start_arecord()
-                              return
-                          print(f"[WW] 🫡 Hey Jarvis confirmado", flush=True)
-                          update_status("listening", "🎤 Ouvindo...")
-                          notify("Jarvis", "Ouvindo…")
-                          # Blip imediato (<1s): a geração do ack clonado leva
-                          # ~2min na 1a vez; sem isso o usuário acha que morreu.
-                          play_sound(BEEP_SOUND)
-                          _play_ack()
-                      except Exception as _ww_err:
-                          print(f"[WW] ⚠️ scorer falhou: {_ww_err}, seguindo p/ STT", flush=True)
-                  import shutil as _shutil
-                  update_status("transcribing", "Transcrevendo...")
-                  try:
-                      if not _shutil.which(BRAIN_CMD[0]):
-                          print(f"[WW] ❌ BRAIN_CMD '{BRAIN_CMD[0]}' não encontrado no PATH", flush=True)
-                          update_status("error", f"Comando '{BRAIN_CMD[0]}' não encontrado")
-                      else:
-                          result = subprocess.run(
-                              BRAIN_CMD + [temp_wav],
-                              timeout=BRAIN_TIMEOUT,
-                              capture_output=True, text=True,
-                          )
-                          if result.returncode != 0:
-                              stderr_msg = (result.stderr or "")[:300]
-                              stdout_msg = (result.stdout or "")[:300]
-                              combined = stdout_msg + stderr_msg
-                              print(f"[WW] ❌ brain falhou (exit {result.returncode}): {combined[:200]}", flush=True)
-                              update_status("error", f"Erro: {stderr_msg[:60]}")
-                              notify("Jarvis", f"Erro no pipeline: {stderr_msg[:80]}")
-                              play_sound(ERROR_SOUND)
-                          else:
-                              print(f"[WW] ✅ brain OK: {(result.stdout or "")[:100]}", flush=True)
-                              update_status("done", "Concluído")
-                              # Conversa: próxima captura em 20s dispensa o wake.
-                              followup_until = time.time() + 20
-                  except subprocess.TimeoutExpired:
-                      print(f"[WW] ⏰ brain timeout ({BRAIN_TIMEOUT}s) — STT/LLM/TTS travou", flush=True)
-                      update_status("error", f"Timeout: pipeline nao respondeu ({BRAIN_TIMEOUT}s)")
-                      notify("Jarvis", "Pipeline de voz não respondeu (timeout)")
-                      play_sound(ERROR_SOUND)
-                  except Exception as e:
-                      print(f"[WW] ❌ brain error: {str(e)[:100]}", flush=True)
-                      update_status("error", f"Exceção: {str(e)[:60]}")
-                      notify("Jarvis", f"Erro: {str(e)[:80]}")
-                      play_sound(ERROR_SOUND)
-              # Supressão pós-brain: cauda do TTS ainda está no ar; sem isso o
-              # daemon captura a própria voz (self-trigger, forense 2026-09).
-              # 5s (antes 8s): follow-up abre em seguida (até 20s).
-              suppress_until = time.time() + 5
+                  else:
+                      expect_command_until = 0.0
+                      print(f"[WW] 💬 comando pós-ack (two-phase)", flush=True)
+                  _run_brain(temp_wav)
+                  return
+              # Fase 1: verifica o wake.
+              if not _score_wake(temp_wav):
+                  return  # rejeitado (restart interno)
+              print(f"[WW] 🫡 Hey Jarvis confirmado", flush=True)
+              update_status("listening", "🎤 Ouvindo...")
+              notify("Jarvis", "Ouvindo…")
+              play_sound(BEEP_SOUND)
+              if duration_s > 3.0:
+                  # One-breath: comando veio junto; sem ack de 2s, direto ao brain.
+                  print(f"[WW] ⚡ one-breath ({duration_s:.1f}s), pulando ack", flush=True)
+                  _run_brain(temp_wav)
+                  return
+              _play_ack()
+              # Drena o eco do ack do stream antes de ouvir (senão a fase 2
+              # captura a própria voz).
+              try:
+                  for _ in range(25):
+                      arecord_proc.stdout.read(CHUNK * 4)
+              except Exception:
+                  pass
+              speech_frames.clear()
+              pre_roll.clear()
+              speech_buf.clear()
+              expect_command_until = time.time() + 12
+              update_status("listening", "Fale agora…")
+              print(f"[WW] 👂 fase 2: ouvindo comando (12s)", flush=True)
+
+          def _score_wake(temp_wav):
+              """Roda o verificador offline. True = wake confirmado."""
+              import sys as _sys
+              try:
+                  _score = subprocess.run(
+                      [_sys.executable, WW_SCORER, "--models",
+                       os.path.expanduser(OWW_MODELS),
+                       "--wav", temp_wav,
+                       "--threshold", WW_THRESHOLD,
+                       "--head-seconds", "4"],
+                      capture_output=True, text=True, timeout=60,
+                  )
+              except Exception as _ww_err:
+                  print(f"[WW] ⚠️ scorer falhou: {_ww_err}, seguindo p/ STT", flush=True)
+                  return True
+              print(f"[WW] 🎯 {(_score.stdout or "").strip()}", flush=True)
+              if _score.returncode != 0:
+                  print(f"[WW] 🔇 wakeword rejeitado, ignorando", flush=True)
+                  update_status("idle", "󰆪 Aguardando...")
+                  suppress_until = time.time() + 3
+                  _restart_capture()
+                  return False
+              return True
+
+          def _restart_capture():
+              """Reinicia o pw-record com re-kill e aviso de órfão."""
+              nonlocal arecord_proc
               try:
                   arecord_proc.kill()
               except Exception:
@@ -381,6 +382,51 @@ let
               update_status("idle", "Aguardando...")
               arecord_proc = start_arecord()
               print(f"[WW] pw-record restarted PID: {arecord_proc.pid}", flush=True)
+
+          def _run_brain(temp_wav):
+              """STT → LLM → TTS + pós-turno (suppress/follow-up/restart)."""
+              nonlocal suppress_until, followup_until, expect_command_until
+              import shutil as _shutil
+              update_status("transcribing", "Transcrevendo...")
+              try:
+                  if not _shutil.which(BRAIN_CMD[0]):
+                      print(f"[WW] ❌ BRAIN_CMD '{BRAIN_CMD[0]}' não encontrado no PATH", flush=True)
+                      update_status("error", f"Comando '{BRAIN_CMD[0]}' não encontrado")
+                  else:
+                      result = subprocess.run(
+                          BRAIN_CMD + [temp_wav],
+                          timeout=BRAIN_TIMEOUT,
+                          capture_output=True, text=True,
+                      )
+                      if result.returncode != 0:
+                          stderr_msg = (result.stderr or "")[:300]
+                          stdout_msg = (result.stdout or "")[:300]
+                          combined = stdout_msg + stderr_msg
+                          print(f"[WW] ❌ brain falhou (exit {result.returncode}): {combined[:200]}", flush=True)
+                          update_status("error", f"Erro: {stderr_msg[:60]}")
+                          notify("Jarvis", f"Erro no pipeline: {stderr_msg[:80]}")
+                          play_sound(ERROR_SOUND)
+                      else:
+                          print(f"[WW] ✅ brain OK: {(result.stdout or "")[:100]}", flush=True)
+                          update_status("done", "Concluído")
+                          # Conversa: próxima captura em 20s dispensa o wake.
+                          followup_until = time.time() + 20
+              except subprocess.TimeoutExpired:
+                  print(f"[WW] ⏰ brain timeout ({BRAIN_TIMEOUT}s) — STT/LLM/TTS travou", flush=True)
+                  update_status("error", f"Timeout: pipeline nao respondeu ({BRAIN_TIMEOUT}s)")
+                  notify("Jarvis", "Pipeline de voz não respondeu (timeout)")
+                  play_sound(ERROR_SOUND)
+              except Exception as e:
+                  print(f"[WW] ❌ brain error: {str(e)[:100]}", flush=True)
+                  update_status("error", f"Exceção: {str(e)[:60]}")
+                  notify("Jarvis", f"Erro: {str(e)[:80]}")
+                  play_sound(ERROR_SOUND)
+              # Supressão pós-brain: cauda do TTS ainda está no ar; sem isso o
+              # daemon captura a própria voz (self-trigger, forense 2026-09).
+              # 5s (antes 8s): follow-up abre em seguida (até 20s).
+              suppress_until = time.time() + 5
+              expect_command_until = 0.0
+              _restart_capture()
 
           while True:
               try:
@@ -462,6 +508,12 @@ let
                   if not speaking:
                       if time.time() < suppress_until:
                           speech_buf = []
+                          continue
+                      # Fase 2 expirou sem comando: volta a idle.
+                      if expect_command_until and time.time() >= expect_command_until:
+                          expect_command_until = 0.0
+                          update_status("idle", "󰆪 Aguardando...")
+                          print(f"[WW] ⌛ fase 2 expirou sem comando", flush=True)
                           continue
                       onset_gate = max(noise_baseline * 1.8, 450)
                       speech_buf.append(1 if rms > onset_gate else 0)

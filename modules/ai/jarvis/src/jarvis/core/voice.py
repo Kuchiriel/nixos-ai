@@ -622,13 +622,14 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
         set_status("idle", "")
         print("(só wakeword, sem comando)", file=sys.stderr)
         return 0
-    if debug_wav:
-        _write_debug_wav(audio_path, debug_wav, {
-            "audio": _audio_meta,
-            "model_size": model_size,
-            "stt_s": round(_t_stt_done - _t_session, 3),
-            "text_chars": len(text),
-        })
+    _dbg: dict[str, Any] = {
+        "audio": _audio_meta,
+        "model_size": model_size,
+        "clone": clone,
+        "stt_s": round(_t_stt_done - _t_session, 3),
+        "text_chars": len(text),
+        "text": text[:200],
+    }
     try:
         from jarvis.core.feedback import notify as _notify
         _notify("Jarvis ouviu", text[:120])
@@ -636,7 +637,10 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
         pass
 
     # 2. Roteamento
+    _t_route = _time.time()
     route = route_request(text)
+    _dbg["route"] = route.handler
+    _dbg["route_s"] = round(_time.time() - _t_route, 3)
     try:
         from jarvis.core.feedback import notify as _notify2
         _notify2(f"Rota: {route.handler}", route.query[:120])
@@ -669,6 +673,7 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
 
     # 4. Executa a rota
     set_status("thinking", f"{route.handler}: {text[:40]}")
+    _t_llm = _time.time()
     try:
         if route.handler == "fastpath":
             out = handle_fastpath(route.query)
@@ -688,7 +693,10 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
     # 5. TTS — primeira frase é a resposta (Siri pattern: voz é unidirecional,
     #    parágrafo longo = espera longa; forense 2026-09). Texto completo no notify.
     answer = _text_for_tts(out)
+    _dbg["llm_s"] = round(_time.time() - _t_llm, 3)
+    _dbg["answer_chars"] = len(answer)
     set_status("speaking", answer[:60])
+    _t_tts = _time.time()
     if tts:
         wav = speak(_tts_short(answer), clone=clone)
         if clone and wav.startswith("ERROR"):
@@ -706,6 +714,11 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
             print(wav, file=sys.stderr)
     else:
         print(f"💬 {answer}", flush=True)
+
+    if debug_wav:
+        _dbg["tts_s"] = round(_time.time() - _t_tts, 3)
+        _dbg["total_s"] = round(_time.time() - _t_session, 3)
+        _write_debug_wav(audio_path, debug_wav, _dbg)
 
     set_status("done", "")
     return 0
