@@ -94,6 +94,7 @@ let
       CHUNK = 512
       DEVICE = "${micTarget}"
       COOLDOWN = ${toString cfg.cooldownSeconds}
+      MAX_RECORD = ${toString cfg.maxRecordSeconds}
       KILL_TTS = ${
         if cfg.killTTSOnTrigger
         then "True"
@@ -106,6 +107,7 @@ let
       OWW_MODELS = os.path.expanduser("~/.local/share/openwakeword")
       STARTUP_SOUND = "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/service-login.oga"
       BEEP_SOUND = "${pkgs.sound-theme-freedesktop}/share/sounds/freedesktop/stereo/message-new-instant.oga"
+      PRE_ROLL_CHUNKS = 15  # ~770ms pre-roll buffer before speech onset
 
 
       def update_status(state, text=""):
@@ -228,6 +230,8 @@ let
           silence_start = None
           speech_frames = []
           speech_buf = []  # buffer for consecutive speech chunks
+          pre_roll = []  # circular buffer: last N chunks before speech onset (~770ms)
+          BRAIN_TIMEOUT = 120  # STT cold start ~30s + LLM + TTS
 
           while True:
               try:
@@ -272,16 +276,19 @@ let
                   if chunk_count < WARMUP_CHUNKS:
                       continue
 
+                  # Pre-roll: mantém últimos PRE_ROLL_CHUNKS chunks (~770ms)
+                  # antes do onset de fala para capturar o início da frase.
+                  pre_roll.append(data)
+                  if len(pre_roll) > PRE_ROLL_CHUNKS:
+                      pre_roll.pop(0)
+
                   # Atualiza o ruído de fundo de forma suave (Filtro Passa-Baixa)
                   if not speaking:
                       if rms < noise_baseline * 1.2:
-                          # Taxa de aprendizado menor para a ventoinha do notebook não estourar o ganho
                           noise_baseline = noise_baseline * 0.95 + rms * 0.05
 
-                      # Evita que o gate caia a zero e cause ganho infinito
                       speech_gate = max(noise_baseline * 1.6, 400)
                   else:
-                      speech_gate = max(noise_baseline * 1.6, 400)
                       speech_gate = max(noise_baseline * 1.5, 250)
 
                   # Cooldown check
@@ -293,34 +300,43 @@ let
                   if rms < 50:
                       continue
 
-                  # 2. Adaptive threshold: 50% above baseline (was 10%)
-                  # 3. Require 3 consecutive chunks (was 2)
+                  # 2. Adaptive threshold: 50% above baseline
+                  # 3. Require 3 of last 5 chunks above gate
                   if not speaking:
-                      # Windowed onset: 3 of last 5 chunks (syllable
-                      # valleys reset a strict consecutive counter)
                       speech_buf.append(1 if rms > speech_gate else 0)
                       speech_buf = speech_buf[-5:]
                       if sum(speech_buf) >= 3:
                           speaking = True
-                          speech_frames = [data]
+                          # Pre-roll: inclui os últimos ~770ms antes do onset
+                          speech_frames = list(pre_roll) + [data]
                           silence_start = None
                           speech_buf = []
-                          print(f"[WW] 🎤 Speech detected (RMS={rms:.0f}, baseline={noise_baseline:.0f}, gate={speech_gate:.0f})", flush=True)
+                          update_status("listening", "🎤 Ouvindo...")
+                          print(f"[WW] 🎤 Speech detected (RMS={rms:.0f}, baseline={noise_baseline:.0f}, gate={speech_gate:.0f}, pre_roll={len(pre_roll)} chunks)", flush=True)
                       continue
 
                   # Currently speaking — accumulate frames
                   speech_frames.append(data)
 
-                  # Check for silence (adaptive: < baseline * 1.1 for 2s, min 1s recording)
+                  # Check for silence or max duration
                   recording_duration = len(speech_frames) * CHUNK / RATE
-                  if rms < noise_baseline * 1.1 and recording_duration > 3.0:
+                  if recording_duration > MAX_RECORD:
+                      # Hard limit — stop recording                          speaking = False
+                          last_trigger_time = time.time()
+                          update_status("processing", "Gravação máxima atingida")
+                          print(f"[WW] ⏱️ Max record reached ({MAX_RECORD}s)", flush=True)
+                  elif rms < noise_baseline * 1.1 and recording_duration > 1.0:
+                      # Silence detected: < baseline * 1.1 for 2.5s, min 1s recording
                       if silence_start is None:
                           silence_start = time.time()
-                      elif time.time() - silence_start > 2.0:
-                          # End of speech — save WAV and process
+                      elif time.time() - silence_start > 2.5:
                           speaking = False
                           last_trigger_time = time.time()
+                          update_status("transcribing", "Transcrevendo...")
                           print(f"[WW] ✅ Speech ended ({len(speech_frames)} chunks, {len(speech_frames)*CHUNK/RATE:.1f}s)", flush=True)
+                  else:
+                      # Speech continuing — reset silence timer
+                      silence_start = None
 
                       # Kill TTS/audiobook para o usuário falar
                       if KILL_TTS:
@@ -341,8 +357,7 @@ let
                       speech_frames = []
 
                       if BRAIN_CMD:
-                          # 1. Scorer hey_jarvis (ONNX, barato) ANTES do STT:
-                          # ruído/TV é descartado aqui, sem 40s de CPU.
+                          # 1. Scorer hey_jarvis (ONNX, barato) — filtra ruído/TV
                           try:
                               import sys as _sys
                               _score = subprocess.run(
@@ -364,35 +379,10 @@ let
                               _play_ack()
                           except Exception as _ww_err:
                               print(f"[WW] ⚠️ scorer falhou: {_ww_err}, seguindo p/ STT", flush=True)
-                          # 2. Pre-check: run STT, skip if no speech detected
-                          try:
-                              import shutil as _shutil
-                              # Quick STT check
-                              # Modelo small (não tiny): PT-BR curto alucina
-                              # ou esvazia no tiny; small custa ~30s mas ouve.
-                              _stt_args = [BRAIN_CMD[0], "stt", "--model", "small", temp_wav]
-                              if _ack_lang() == "pt":
-                                  _stt_args += ["--language", "pt"]
-                              _stt_check = subprocess.run(
-                                  _stt_args,
-                                  # Cold start: faster-whisper carrega o
-                                  # modelo a cada chamada (~20-40s CPU)
-                                  timeout=90, capture_output=True, text=True,
-                              )
-                              _stt_text = (_stt_check.stdout or "").strip()
-                              if not _stt_text or _stt_text.startswith("ERROR"):
-                                  print(f"[WW] ⏭️ No speech in audio (STT: '{_stt_text[:50]}'), skipping brain", flush=True)
-                                  update_status("idle", "󰆪 Aguardando...")
-                                  # Reset for next recording
-                                  arecord_proc.terminate()
-                                  time.sleep(0.5)
-                                  arecord_proc = start_arecord()
-                                  continue
-                              print(f"[WW] 🗣️ STT detected: '{_stt_text[:80]}'", flush=True)
-                          except Exception as _stt_err:
-                              print(f"[WW] ⚠️ STT pre-check failed: {_stt_err}", flush=True)
 
-                          update_status("processing", "Pensando...")
+                          # 2. Brain: STT → LLM → TTS (sem pre-check duplicado)
+                          import shutil as _shutil
+                          update_status("transcribing", "Transcrevendo...")
                           try:
                               if not _shutil.which(BRAIN_CMD[0]):
                                   print(f"[WW] ❌ BRAIN_CMD '{BRAIN_CMD[0]}' não encontrado no PATH", flush=True)
@@ -400,13 +390,12 @@ let
                               else:
                                   result = subprocess.run(
                                       BRAIN_CMD + [temp_wav],
-                                      timeout=30,
+                                      timeout=BRAIN_TIMEOUT,
                                       capture_output=True, text=True,
                                   )
                                   if result.returncode != 0:
                                       stderr_msg = (result.stderr or "")[:300]
                                       stdout_msg = (result.stdout or "")[:300]
-                                      # Mostra stdout tb (STT output, agent response)
                                       combined = stdout_msg + stderr_msg
                                       print(f"[WW] ❌ brain falhou (exit {result.returncode}): {combined[:200]}", flush=True)
                                       update_status("error", f"Erro: {stderr_msg[:60]}")
@@ -414,8 +403,8 @@ let
                                       print(f"[WW] ✅ brain OK: {(result.stdout or "")[:100]}", flush=True)
                                       update_status("done", "Concluído")
                           except subprocess.TimeoutExpired:
-                              print("[WW] ⏰ brain timeout (30s) — STT/LLM/TTS travou", flush=True)
-                              update_status("error", "Timeout: pipeline nao respondeu")
+                              print(f"[WW] ⏰ brain timeout ({BRAIN_TIMEOUT}s) — STT/LLM/TTS travou", flush=True)
+                              update_status("error", f"Timeout: pipeline nao respondeu ({BRAIN_TIMEOUT}s)")
                           except Exception as e:
                               print(f"[WW] ❌ brain error: {str(e)[:100]}", flush=True)
                               update_status("error", f"Exceção: {str(e)[:60]}")
