@@ -113,6 +113,27 @@ class TestSttConfidence:
         assert v.transcribe(str(w)) == ""
 
 
+class TestShellTilde:
+    def test_tilde_expands_without_shell(self, monkeypatch, tmp_path):
+        from jarvis.core.security import run_shell_dict
+        monkeypatch.setenv("HOME", str(tmp_path))
+        (tmp_path / "Books").mkdir()
+        (tmp_path / "Books" / "a.epub").write_text("x")
+        r = run_shell_dict("ls ~/Books")
+        assert r["ok"] is True
+        assert "a.epub" in r["output"]
+
+    def test_no_shell_injection(self):
+        import os as _os
+        from jarvis.core.security import run_shell
+        target = "/tmp/pwned-xyz-test"
+        if _os.path.exists(target):
+            _os.remove(target)
+        r = run_shell("echo hi; touch " + target)
+        assert not _os.path.exists(target)
+        assert "hi;" in r.stdout  # ecoado literal, sem interpretar
+
+
 class TestRagTilde:
     def test_iter_expands_tilde(self, monkeypatch, tmp_path):
         import pytest

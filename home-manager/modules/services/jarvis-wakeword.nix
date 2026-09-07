@@ -327,11 +327,13 @@ let
                   return  # rejeitado (restart interno)
               print(f"[WW] 🫡 Hey Jarvis confirmado", flush=True)
               update_status("listening", "🎤 Ouvindo...")
-              notify("Jarvis", "Ouvindo…")
               play_sound(BEEP_SOUND)
               # Sempre ack + fase 2 (one-breath removido: heurística por duração
               # errava "wake + pausa" e queimava o comando — forense 2026-09).
               _play_ack()
+              # Notify APÓS o ack (não junto): o usuário fala depois do ack;
+              # notify antecipado dessincronizava o ritmo (forense 2026-09).
+              notify("Jarvis", "Ouvindo…")
               # Eco do ack: ignora onsets por 1s (NÃO drena por tempo — dreno
               # cego comia o comando do usuário; forense 2026-09). O pre-roll
               # continua enchendo, então nada se perde.

@@ -8,6 +8,7 @@ Previously duplicated across: agent.py, devtools.py, mcp_server.py
 
 from __future__ import annotations
 
+import os
 import shlex
 import subprocess
 from typing import Any
@@ -119,8 +120,13 @@ def command_allowed(
 
 
 def run_shell(cmd: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
-    """Execute a command safely via shlex (no shell=True)."""
-    argv = shlex.split(cmd)
+    """Execute a command safely via shlex (no shell=True).
+
+    Expande ~ e $VAR por token (forense 2026-09: `ls ~/Books` falhava com
+    "No such file" porque sem shell não há expansão — o agente concluía
+    "vazio"). Sem shell continua: sem risco de injection.
+    """
+    argv = [os.path.expandvars(os.path.expanduser(tok)) for tok in shlex.split(cmd)]
     return subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
 
 
