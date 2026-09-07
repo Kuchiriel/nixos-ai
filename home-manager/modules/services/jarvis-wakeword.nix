@@ -310,6 +310,7 @@ let
                   else:
                       expect_command_until = 0.0
                       print(f"[WW] 💬 comando pós-ack (two-phase)", flush=True)
+                  play_sound(BEEP_SOUND)  # confirma que ouviu (sem ack de 2s)
                   _run_brain(temp_wav)
                   return
               # Fase 1: verifica o wake.
@@ -326,10 +327,11 @@ let
                   return
               _play_ack()
               # Drena o eco do ack do stream antes de ouvir (senão a fase 2
-              # captura a própria voz).
+              # captura a própria voz). Ack tem ~2s: drena 70 chunks (~2.2s).
               try:
-                  for _ in range(25):
+                  for _ in range(70):
                       arecord_proc.stdout.read(CHUNK * 4)
+                  time.sleep(0.5)
               except Exception:
                   pass
               speech_frames.clear()
@@ -409,8 +411,13 @@ let
                       else:
                           print(f"[WW] ✅ brain OK: {(result.stdout or "")[:100]}", flush=True)
                           update_status("done", "Concluído")
-                          # Conversa: próxima captura em 20s dispensa o wake.
-                          followup_until = time.time() + 20
+                          # Follow-up SÓ em turno real: rc=2 (voz vazia/wake
+                          # puro) ou stderr marcado NÃO estendem — senão
+                          # capturas de ruído viram loop infinito (2026-09).
+                          _err = result.stderr or ""
+                          if result.returncode == 0 and "(voz vazia)" not in _err and "(só wakeword" not in _err:
+                              # Conversa: próxima captura em 20s dispensa o wake.
+                              followup_until = time.time() + 20
               except subprocess.TimeoutExpired:
                   print(f"[WW] ⏰ brain timeout ({BRAIN_TIMEOUT}s) — STT/LLM/TTS travou", flush=True)
                   update_status("error", f"Timeout: pipeline nao respondeu ({BRAIN_TIMEOUT}s)")

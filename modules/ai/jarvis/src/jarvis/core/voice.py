@@ -588,9 +588,10 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
         if not text:
             # Vazio (só ruído/VAD comeu tudo): volta a idle SEM erro —
             # follow-up em ambiente ruidoso gera isso direto (forense 2026-09).
+            # rc=2: daemon NÃO estende follow-up (senão loop infinito).
             set_status("idle", "")
             print("(voz vazia)", file=sys.stderr)
-            return 0
+            return 2
     except subprocess.TimeoutExpired:
         set_status("error", "STT timeout")
         print("ERROR: STT timeout (60s)", file=sys.stderr)
@@ -613,10 +614,11 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
     print(f"🎤 {text}", flush=True)
     _t_stt_done = _time.time()
     # Só wakeword, sem comando: o ack do confirm já cobriu. Sem turno LLM.
+    # rc=2: daemon NÃO estende follow-up.
     if text.lower().strip().rstrip(".!,?;: ") in ("hey jarvis", "ei jarvis", "jarvis"):
         set_status("idle", "")
         print("(só wakeword, sem comando)", file=sys.stderr)
-        return 0
+        return 2
     text = _strip_wakewords(text)
     if not text:
         set_status("idle", "")

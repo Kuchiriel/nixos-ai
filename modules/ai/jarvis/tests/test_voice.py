@@ -154,11 +154,25 @@ def test_speak_generates_wav(monkeypatch, tmp_path) -> None:
 # voice_loop (STT → roteador → TTS)
 # ---------------------------------------------------------------------------
 
+def _fake_stt(text: str, returncode: int = 0):
+    """Fake p/ o subprocess `jarvis stt` que o voice_loop invoca.
+
+    Delega o resto (ex: pkill do feedback) p/ stub neutro.
+    """
+    import subprocess
+
+    def _run(cmd, **kwargs):
+        if isinstance(cmd, list) and len(cmd) > 1 and cmd[1] == "stt":
+            return subprocess.CompletedProcess(cmd, returncode, stdout=text, stderr="")
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+    return _run
+
+
 def test_voice_loop_routes_and_responds(monkeypatch, tmp_path) -> None:
     wav = tmp_path / "cmd.wav"
     wav.write_bytes(b"RIFF")
 
-    monkeypatch.setattr(voice, "transcribe", lambda p, model_size="small": "como está o sistema?")
+    monkeypatch.setattr(voice.subprocess, "run", _fake_stt("como está o sistema?"))
 
     class FakeRoute:
         handler = "doctor"
@@ -173,7 +187,7 @@ def test_voice_loop_routes_and_responds(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(router_mod, "handle_fastpath", lambda q: {"response": "fp"})
     monkeypatch.setattr(router_mod, "handle_nixos", lambda q, cfg=None, mcp_bin=None: {"response": "nix"})
     monkeypatch.setattr(router_mod, "handle_rag", lambda q, cfg=None, top_k=5: {"response": "rag"})
-    monkeypatch.setattr(voice, "speak", lambda text, play=True: str(tmp_path / "out.wav"))
+    monkeypatch.setattr(voice, "speak", lambda text, play=True, clone=False: str(tmp_path / "out.wav"))
 
     rc = voice.voice_loop(str(wav), tts=True)
     assert rc == 0
@@ -182,15 +196,22 @@ def test_voice_loop_routes_and_responds(monkeypatch, tmp_path) -> None:
 def test_voice_loop_handles_stt_error(monkeypatch, tmp_path) -> None:
     wav = tmp_path / "cmd.wav"
     wav.write_bytes(b"RIFF")
-    monkeypatch.setattr(voice, "transcribe", lambda p, model_size="small": "ERROR: falha na transcrição: x")
+    monkeypatch.setattr(voice.subprocess, "run", _fake_stt("", returncode=1))
     assert voice.voice_loop(str(wav), tts=False) == 1
 
 
 def test_voice_loop_handles_empty(monkeypatch, tmp_path) -> None:
     wav = tmp_path / "cmd.wav"
     wav.write_bytes(b"RIFF")
-    monkeypatch.setattr(voice, "transcribe", lambda p, model_size="small": "")
-    assert voice.voice_loop(str(wav), tts=False) == 0
+    monkeypatch.setattr(voice.subprocess, "run", _fake_stt(""))
+    assert voice.voice_loop(str(wav), tts=False) == 2
+
+
+def test_voice_loop_handles_wake_only(monkeypatch, tmp_path) -> None:
+    wav = tmp_path / "cmd.wav"
+    wav.write_bytes(b"RIFF")
+    monkeypatch.setattr(voice.subprocess, "run", _fake_stt("Hey Jarvis."))
+    assert voice.voice_loop(str(wav), tts=False) == 2
 
 
 def test_main_stt_missing_file() -> None:
