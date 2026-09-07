@@ -219,7 +219,9 @@ let
               if not existing:
                   existing = _gen_ack(base, phrases, False)
               if existing:
-                  subprocess.run(["pw-play", random.choice(existing)],
+                  picked = random.choice(existing)
+                  print(f"[WW] 🔊 ack: {os.path.basename(os.path.dirname(picked))}/{os.path.basename(picked)}", flush=True)
+                  subprocess.run(["pw-play", picked],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
           except Exception as e:
               print(f"[WW] ACK falhou: {e}", flush=True)
@@ -329,7 +331,6 @@ let
               play_sound(BEEP_SOUND)
               # Sempre ack + fase 2 (one-breath removido: heurística por duração
               # errava "wake + pausa" e queimava o comando — forense 2026-09).
-              _play_ack()
               _play_ack()
               # Eco do ack: ignora onsets por 1s (NÃO drena por tempo — dreno
               # cego comia o comando do usuário; forense 2026-09). O pre-roll

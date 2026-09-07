@@ -661,9 +661,10 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
     # Earcon "ouvi, processando" (phone pattern): o turno leva 30-90s
     # (STT+LLM+TTS+clone); sem isso o usuário acha que morreu no STT.
     # Só em comando real (vazio/wake já retornaram acima).
+    # Som "success" (complete.oga): distinto do beep de wake (pedido 2026-09).
     try:
         from jarvis.core.feedback import play_sound as _psnd0
-        _psnd0("notification")
+        _psnd0("success")
     except Exception:
         pass
     try:
