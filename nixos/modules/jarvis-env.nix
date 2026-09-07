@@ -65,8 +65,9 @@ with lib; {
         "llama-fan-control.service"
         # Consumidores
         "jarvis-telegram.service"
-        # Nightwatch (execução noturna autônoma)
-        "nightwatch.service"
+        # Nightwatch FORA do target: só via timer 03:00. No target, cada
+        # rebuild reiniciava o target e subia o nightwatch junto, queimando
+        # a GPU em horário de uso — forense 2026-09-07.
         # Auto-reparo e gaming (só quando habilitados)
         "jarvis-heal.service"
         "jarvis-gaming-watcher.service"
