@@ -187,10 +187,16 @@ aviso de órfão, notify "Ouvindo…" no confirm, som+notify de erro no STT
 e no brain, `processing`/`boot` no mapa da Waybar.
 
 ```text
-BLOCKED (deploy):
-- ./rebuild-host.sh trava na Layer 2: base16-schemes drv inválido.
-  Provado pré-existente (mesmo erro com meus arquivos em stash).
-  Origem provável: flake.lock/flake.nix modificados (uncommitted, de outra
-  sessão: opencode-flake URL + sox). Resolver isso (revert ou
-  nix flake update) e re-rodar ./rebuild-host.sh.
+BLOCKED (deploy) — RESOLVIDO 2026-09-07 09:52:
+- Causa raiz: GC (nh-clean) removeu o .drv base16-schemes; output veio do
+  cache, .drv foi reconstruído via `nix build nixpkgs#base16-schemes` no rev
+  travado. Mais um E111 meu no daemon (indent) — corrigido.
+- ./rebuild-host.sh: ✅ SISTEMA ATUALIZADO. Daemon novo (PID 1398756):
+  baseline parte de 200.0 (clamp), órfãos limpos (1 pw-record), jarvis-voice
+  com default small, Waybar processing/boot, supressão 8s, kill pw-play.
+- Nightwatch: roda via timer de sistema (03:05); run de ontem 21:21-22:33 fez
+  os 9 "chore" commits (edições sãs no voice/wakeword) + `nix flake update`
+  parcial que quebrou o eval. Trabalho dele preservado em
+  /tmp/nightly-flake-work.patch; revertido só o par flake.nix/flake.lock
+  (sox mantido e implantado).
 ```

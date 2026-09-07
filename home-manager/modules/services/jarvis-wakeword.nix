@@ -553,6 +553,9 @@ in {
           "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus"
           "DISPLAY=:0"
           "WAYLAND_DISPLAY=wayland-1"
+          # Voz do TTS segue o ackLang (pm_alex p/ pt) em vez do LANG do sistema
+          # (forense 2026-09: resposta sem acentos caía em af_heart).
+          "JARVIS_TTS_LANG=${if cfg.ackLang == null then "auto" else cfg.ackLang}"
         ];
       };
       Install = {

@@ -66,7 +66,16 @@ def _detect_lang_code(text: str) -> str:
     - Japanese: high count of hiragana/katakana
     - Chinese: high count of CJK
     - Default: system LANG (PT-BR → 'p', else English 'a')
+
+    Override: JARVIS_TTS_LANG (pt|en|auto) — o daemon exporta o ackLang,
+    que é a verdade declarada do usuário. Sem isso, sistema en_US + resposta
+    sem acentos caía em af_heart enquanto o ack era pm_alex (forense 2026-09).
     """
+    forced = (os.environ.get("JARVIS_TTS_LANG", "auto") or "auto").lower()
+    if forced != "auto":
+        mapped = {"pt": "p", "en": "a"}.get(forced, forced)
+        if mapped in VOICE_BY_LANG:
+            return mapped
     if len(text) < 10:
         return _default_lang()
     sample = text[:5000]  # Check first 5000 chars
@@ -173,6 +182,20 @@ def _split_chunks(text: str, max_chars: int = 600) -> list[str]:
 # ---------------------------------------------------------------------------
 # Instrumentação / observabilidade (forense 2026-09)
 # ---------------------------------------------------------------------------
+
+def _strip_wakewords(text: str) -> str:
+    """Remove o wakeword do texto transcrito ("hey jarvis, ..." → "...").
+
+    O VAD captura o wake junto do comando; sem strip, o router tenta lidar
+    com "hey jarvis" como parte do pedido e a resposta não tem nada a ver
+    (forense 2026-09, ao vivo).
+    """
+    import re
+    t = text.strip()
+    t = re.sub(r"^(hey[,\s]+jarvis|ei[,\s]+jarvis|jarvis)[,\s.!?;:]+", "", t, flags=re.I)
+    t = re.sub(r"[,\s.!?;:]+(hey[,\s]+jarvis|ei[,\s]+jarvis)[.!?]*$", "", t, flags=re.I)
+    return t.strip() or text.strip()
+
 
 def _audio_stats(path: str) -> dict[str, Any]:
     """Métricas do WAV (sem conteúdo sensível): formato + níveis."""
@@ -376,7 +399,10 @@ def speak(
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / f"jarvis_tts_{abs(hash(text)) % 10**9}.wav"
 
-        speed = speed if speed is not None else speed_for(text)
+        if speed is None:
+            # Auto-emoção clampada: 1.2 (urgent, ex. "agora" na resposta) soava
+            # "rápida demais" e 0.9 arrastada (forense 2026-09). --speed passa direto.
+            speed = min(1.05, max(0.95, speed_for(text)))
         if clone:
             speed *= CLONE_SPEED_FACTOR
         chunks = []
@@ -554,6 +580,11 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
 
     print(f"🎤 {text}", flush=True)
     _t_stt_done = _time.time()
+    text = _strip_wakewords(text)
+    if not text:
+        set_status("idle", "")
+        print("(só wakeword, sem comando)", file=sys.stderr)
+        return 0
     if debug_wav:
         _write_debug_wav(audio_path, debug_wav, {
             "audio": _audio_meta,

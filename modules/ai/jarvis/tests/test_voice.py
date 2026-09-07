@@ -241,3 +241,18 @@ def test_main_stt_debug_wav_writes_session(monkeypatch, tmp_path) -> None:
     meta = json.loads(js[0].read_text())
     assert meta["audio"]["sample_rate"] == 16000
     assert meta["text_chars"] == len("oi jarvis")
+
+
+def test_strip_wakewords() -> None:
+    assert voice._strip_wakewords("Hey Jarvis, qual a temperatura?") == "qual a temperatura?"
+    assert voice._strip_wakewords("jarvis me ajuda") == "me ajuda"
+    assert voice._strip_wakewords("o que é isso Hey Jarvis") == "o que é isso"
+    assert voice._strip_wakewords("como está o sistema?") == "como está o sistema?"
+    assert voice._strip_wakewords("hey jarvis") == "hey jarvis"  # sem comando: mantém
+
+
+def test_detect_lang_respects_env(monkeypatch) -> None:
+    monkeypatch.setenv("JARVIS_TTS_LANG", "pt")
+    assert voice._detect_lang_code("short text") == "p"
+    monkeypatch.setenv("JARVIS_TTS_LANG", "auto")
+    assert voice._detect_lang_code("short") in ("p", "a")
