@@ -600,11 +600,29 @@ class Agent:
             # Execute tools
             for tc in tool_calls:
                 func = tc.get("function", tc)
+                if not isinstance(func, dict):
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", f"call-{turn}"),
+                        "content": "ERROR: Malformed tool call structure",
+                    })
+                    continue
                 name = func.get("name", "")
                 try:
-                    args = json.loads(func.get("arguments", "{}"))
+                    raw_args = func.get("arguments", "{}")
+                    if isinstance(raw_args, str):
+                        args = json.loads(raw_args)
+                    else:
+                        args = raw_args
                 except (json.JSONDecodeError, TypeError):
-                    args = func.get("arguments", {})
+                    args = {}
+                if not isinstance(args, dict):
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", f"call-{turn}"),
+                        "content": "ERROR: Invalid tool arguments",
+                    })
+                    continue
                 
                 if name == "execute_shell":
                     cmd = args.get("cmd", "")
@@ -671,15 +689,6 @@ class Agent:
 
     def _get_llm_response(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
         """Get response from LLM via session or config."""
-        # Inject lessons into system prompt if memory is available
-        if self.memory and messages and messages[0].get("role") == "system":
-            try:
-                lessons = self.memory.lessons("", top_k=3)
-                if lessons:
-                    messages[0]["content"] += f"\n\nAVOID (past errors):{lessons}"
-            except Exception:
-                pass
-        
         # Use session if available (for testing)
         if self.session:
             base = self.config.llm_base_url.rstrip('/')
