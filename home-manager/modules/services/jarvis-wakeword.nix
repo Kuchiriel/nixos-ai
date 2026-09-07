@@ -320,30 +320,13 @@ let
 
                   # Check for silence or max duration
                   recording_duration = len(speech_frames) * CHUNK / RATE
-                  if recording_duration > MAX_RECORD:
-                      # Hard limit — stop recording                          speaking = False
-                          last_trigger_time = time.time()
-                          update_status("processing", "Gravação máxima atingida")
-                          print(f"[WW] ⏱️ Max record reached ({MAX_RECORD}s)", flush=True)
-                  elif rms < noise_baseline * 1.1 and recording_duration > 1.0:
-                      # Silence detected: < baseline * 1.1 for 2.5s, min 1s recording
-                      if silence_start is None:
-                          silence_start = time.time()
-                      elif time.time() - silence_start > 2.5:
-                          speaking = False
-                          last_trigger_time = time.time()
-                          update_status("transcribing", "Transcrevendo...")
-                          print(f"[WW] ✅ Speech ended ({len(speech_frames)} chunks, {len(speech_frames)*CHUNK/RATE:.1f}s)", flush=True)
-                  else:
-                      # Speech continuing — reset silence timer
-                      silence_start = None
-
+                  def _process_speech():
+                      """Save WAV, score wakeword, run brain pipeline."""
+                      nonlocal arecord_proc
                       # Kill TTS/audiobook para o usuário falar
                       if KILL_TTS:
                           for pat in ["paplay", "aplay", "enhanced_audiobook.py"]:
                               subprocess.run(["pkill", "-9", pat], stderr=subprocess.DEVNULL)
-
-                      # Sem beep aqui: só responde após wakeword confirmado.
 
                       # Save the speech we already captured
                       timestamp = int(time.time())
@@ -354,7 +337,6 @@ let
                           wf.setframerate(RATE)
                           wf.writeframes(b"".join(speech_frames))
                       print(f"[WW] 📼 Capturado: {temp_wav} ({len(speech_frames)} chunks, {len(speech_frames)*CHUNK/RATE:.1f}s)", flush=True)
-                      speech_frames = []
 
                       if BRAIN_CMD:
                           # 1. Scorer hey_jarvis (ONNX, barato) — filtra ruído/TV
@@ -374,7 +356,7 @@ let
                                   arecord_proc.terminate()
                                   time.sleep(0.5)
                                   arecord_proc = start_arecord()
-                                  continue
+                                  return
                               print(f"[WW] 🫡 Hey Jarvis confirmado", flush=True)
                               _play_ack()
                           except Exception as _ww_err:
@@ -422,6 +404,27 @@ let
                       update_status("idle", "Aguardando...")
                       arecord_proc = start_arecord()
                       print(f"[WW] pw-record restarted PID: {arecord_proc.pid}", flush=True)
+
+                  if recording_duration > MAX_RECORD:
+                      # Hard limit — stop recording and process
+                      speaking = False
+                      last_trigger_time = time.time()
+                      update_status("processing", "Gravação máxima atingida")
+                      print(f"[WW] ⏱️ Max record reached ({MAX_RECORD}s)", flush=True)
+                      _process_speech()
+                  elif rms < noise_baseline * 1.1 and recording_duration > 1.0:
+                      # Silence detected: < baseline * 1.1 for 2.5s, min 1s recording
+                      if silence_start is None:
+                          silence_start = time.time()
+                      elif time.time() - silence_start > 2.5:
+                          speaking = False
+                          last_trigger_time = time.time()
+                          update_status("transcribing", "Transcrevendo...")
+                          print(f"[WW] ✅ Speech ended ({len(speech_frames)} chunks, {len(speech_frames)*CHUNK/RATE:.1f}s)", flush=True)
+                          _process_speech()
+                  else:
+                      # Speech continuing — reset silence timer
+                      silence_start = None
               except Exception as e:
                   print(f"[WW] ERROR: {str(e)[:100]}", flush=True)
                   time.sleep(0.1)
