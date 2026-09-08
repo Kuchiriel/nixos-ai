@@ -45,15 +45,21 @@ class ControlPlane:
         self.notifications = get_notification_manager()
         self._systemd = None  # Lazy init
         self._event_history: list[dict[str, Any]] = []
+        self._setup_done = False
 
     def setup(self) -> None:
-        """Wire everything together."""
+        """Wire everything together (idempotente: 2º setup não duplica
+        subscribers no bus global — antes cada chamada re-registrava
+        cp-* handlers, gerando double-delivery)."""
+        if self._setup_done:
+            return
         self._setup_systemd()
         self._setup_event_subscriptions()
         self._setup_state_subscriptions()
         self._register_core_commands()
         self.state.update(Sections.SYSTEM, "boot_time", time.time())
         self.state.update(Sections.SYSTEM, "status", "running")
+        self._setup_done = True
 
     def _setup_systemd(self) -> None:
         """Initialize systemd adapter (registers commands)."""

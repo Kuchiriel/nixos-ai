@@ -122,6 +122,10 @@ class SessionTelemetry:
             cached_tokens=cached_tokens,
         )
         self.calls.append(call)
+        # Cap: sessões longas (100+ turns) vazavam sem limite; agregados
+        # (total_prompt/...) continuam corretos sobre a janela recente.
+        if len(self.calls) > 2000:
+            del self.calls[:-2000]
         return call
 
     @property

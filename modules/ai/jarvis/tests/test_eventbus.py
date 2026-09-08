@@ -244,3 +244,44 @@ def test_sync_retry_still_works() -> None:
     bus.publish("r", {})
     assert attempts["n"] == 2
     assert bus.stats["events_delivered"] == 1
+
+
+def test_sync_dispatch_runs_async_handler() -> None:
+    """Handler async no dispatch síncrono executa (antes: drop silencioso)."""
+    bus = EventBus()
+    seen: list = []
+
+    async def _h(event):
+        seen.append(event.topic)
+
+    bus.subscribe("t", _h, name="h-async")
+    bus.publish("t", {})
+    assert seen == ["t"]
+    assert bus.stats["events_delivered"] == 1
+
+
+def test_sync_dispatch_async_failure_is_observable() -> None:
+    """Handler async que falha no sync vai para DLQ (não some)."""
+    bus = EventBus()
+
+    async def _boom(event):
+        raise RuntimeError("x")
+
+    bus.subscribe("t", _boom, name="h-boom", max_retries=0)
+    bus.publish("t", {})
+    assert bus.stats["events_failed"] == 1
+    assert len(bus.drain_dlq()) == 1
+
+
+def test_dlq_bounded() -> None:
+    """DLQ não vaza: cap em 1000 com contador de descarte."""
+    bus = EventBus()
+
+    def _boom(event):
+        raise RuntimeError("x")
+
+    bus.subscribe("t", _boom, name="h-boom", max_retries=0)
+    for _ in range(1050):
+        bus.publish("t", {})
+    assert len(bus._dlq) == 1000
+    assert bus.stats["dlq_dropped"] == 50

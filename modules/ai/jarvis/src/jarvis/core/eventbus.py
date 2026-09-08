@@ -77,6 +77,7 @@ class BusStats:
     events_delivered: int = 0
     events_failed: int = 0
     dlq_size: int = 0
+    dlq_dropped: int = 0  # eventos descartados pelo cap da DLQ
 
 
 class EventBus:
@@ -109,6 +110,7 @@ class EventBus:
             "events_delivered": self._stats.events_delivered,
             "events_failed": self._stats.events_failed,
             "dlq_size": len(self._dlq),
+            "dlq_dropped": self._stats.dlq_dropped,
             "subscribers": sum(len(v) for v in self._subscribers.values()),
         }
 
@@ -167,6 +169,14 @@ class EventBus:
         self._stats.events_published += 1
         self._dispatch_sync(event)
 
+    def _drop_to_dlq(self, event: Event) -> None:
+        """DLQ limitada (1000): sem o cap, subscribers que falham sempre
+        vazam memória — um evento por retry × max_retries para sempre."""
+        self._dlq.append(event)
+        if len(self._dlq) > 1000:
+            del self._dlq[:-1000]
+            self._stats.dlq_dropped += 1
+
     def _dispatch_sync(self, event: Event) -> None:
         """Dispatch síncrono — roda handlers diretamente (CLI/testes).
 
@@ -176,13 +186,27 @@ class EventBus:
         for sub in targets:
             for attempt in range(sub.max_retries + 1):
                 try:
-                    sub.handler(event)
+                    result = sub.handler(event)
+                    if asyncio.iscoroutine(result):
+                        # Handler async no dispatch síncrono: antes a
+                        # coroutine era descartada em silêncio. Sem loop
+                        # rodando, executa com timeout; com loop, falha
+                        # observável (DLQ) em vez de drop silencioso.
+                        try:
+                            asyncio.get_running_loop()
+                        except RuntimeError:
+                            asyncio.run(asyncio.wait_for(result, timeout=sub.timeout_s))
+                        else:
+                            result.close()
+                            raise RuntimeError(
+                                "async handler em dispatch síncrono com event loop rodando"
+                            )
                     self._stats.events_delivered += 1
                     break
                 except Exception:  # noqa: BLE001
                     if attempt == sub.max_retries:
                         self._stats.events_failed += 1
-                        self._dlq.append(event)
+                        self._drop_to_dlq(event)
                         break
                     _retry_pause(attempt)
 
@@ -230,7 +254,7 @@ class EventBus:
             self._queue.put_nowait(event)
         except asyncio.QueueFull:
             self._stats.events_failed += 1
-            self._dlq.append(event)
+            self._drop_to_dlq(event)
 
     async def _process_loop(self) -> None:
         """Loop principal: consome eventos e distribui para subscribers."""
@@ -261,13 +285,13 @@ class EventBus:
                 event.retries = attempt + 1
                 if attempt == sub.max_retries:
                     self._stats.events_failed += 1
-                    self._dlq.append(event)
+                    self._drop_to_dlq(event)
                     return
             except Exception:  # noqa: BLE001
                 event.retries = attempt + 1
                 if attempt == sub.max_retries:
                     self._stats.events_failed += 1
-                    self._dlq.append(event)
+                    self._drop_to_dlq(event)
                     return
                 await asyncio.sleep(0.1 * (attempt + 1))
 

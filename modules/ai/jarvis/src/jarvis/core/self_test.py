@@ -126,12 +126,14 @@ class BlackBoxTests:
 
     def _run_cli(self, args: str, timeout: int = 30) -> tuple[bool, str]:
         """Run a JARVIS CLI command and return (success, output)."""
+        import shlex
         import subprocess
         from jarvis.core.paths import find_repo_root
         try:
             result = subprocess.run(
-                f"cd {find_repo_root()} && ./scripts/jarvis-cli.sh {args}",
-                shell=True, capture_output=True, text=True,
+                ["./scripts/jarvis-cli.sh", *shlex.split(args)],
+                cwd=find_repo_root(),
+                shell=False, capture_output=True, text=True,
                 timeout=timeout,
             )
             return result.returncode == 0, result.stdout + result.stderr
