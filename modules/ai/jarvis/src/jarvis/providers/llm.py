@@ -193,6 +193,21 @@ class LLMClient:
             backend: Pre-configured backend instance (overrides config-based creation)
         """
         self._cfg = config or Config()
+
+        # "default" é alias resolvido pelo registry (model.nix `routing`):
+        # com o router ativo, o campo `model` do payload precisa ser um
+        # preset real (o servidor single-model antigo ignorava o valor).
+        # Best-effort: sem registry, mantém "default" (compat single-model).
+        if self._cfg.llm_model in ("", "default"):
+            try:
+                from dataclasses import replace as _replace
+
+                from jarvis.core.model_registry import ModelRegistry
+                _resolved = ModelRegistry.load().default
+                logger.info("llm_model 'default' → registry default %r", _resolved)
+                self._cfg = _replace(self._cfg, llm_model=_resolved)
+            except Exception:
+                pass
         
         # Create or use provided backend
         if backend is not None:

@@ -245,3 +245,74 @@ class ModelPolicy:
 
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
+
+
+# ── Router local (registry-driven) ─────────────────────────────────────
+# Converge com modules/ai/models.nix `routing`: capabilities são HARD
+# (modelo sem a capability nunca é selecionado), tier é preferência com
+# fallback registrado em `reason`. Nenhum nome de modelo hardcoded aqui —
+# tudo vem do ModelRegistry (JSON gerado pelo Nix).
+
+class ModelRouteError(ValueError):
+    """Nenhum modelo elegível para os requisitos."""
+
+
+# Ordem de preferência quando o tier pedido não tem elegível (menor 1º).
+_TIER_RANK = {"speed": 0, "fast": 1, "reasoning": 2}
+
+# Stage legado (cheap/medium/strong) → tier do registry.
+_STAGE_TO_TIER = {"cheap": "fast", "medium": "fast", "strong": "reasoning"}
+
+
+def select_model(
+    requirements: dict | None = None,
+    registry=None,
+) -> tuple[str, dict]:
+    """Seleciona modelo do registry por requisitos.
+
+    requirements: {
+      "capabilities": set[str] (ex.: {"coding","tools"}),
+      "tier": "fast"|"reasoning"|"speed"|None,
+      "stage": "cheap"|"medium"|"strong"|None (legado, mapeado p/ tier),
+      "local_only": bool (registry é local por construção; só documenta),
+    }
+    Retorna (model_id, reason). Capabilities insatisfeitas → ModelRouteError
+    (nunca fallback silencioso p/ modelo incapaz). Tier é soft: se o tier
+    pedido não tem elegível, usa o elegível mais barato e registra em reason.
+    """
+    from jarvis.core.model_registry import ModelRegistry
+
+    req = requirements or {}
+    reg = registry or ModelRegistry.load()
+    caps = set(req.get("capabilities", ()))
+    tier = req.get("tier")
+    if tier is None and req.get("stage"):
+        tier = _STAGE_TO_TIER.get(req["stage"])
+
+    eligible = [
+        m for m in reg.models.values()
+        if caps <= set(m.capabilities)
+    ]
+    if not eligible:
+        raise ModelRouteError(
+            f"nenhum modelo com capabilities {sorted(caps)} "
+            f"(registry: {reg.source})"
+        )
+    eligible.sort(key=lambda m: (_TIER_RANK.get(m.tier, 9), m.params_b))
+
+    if tier is not None:
+        for m in eligible:
+            if m.tier == tier:
+                return m.id, {
+                    "requested": dict(req, capabilities=sorted(caps)),
+                    "selected": m.id, "tier_match": True,
+                    "local_only": True,
+                }
+        reason = {"tier_fallback": tier, "tier_match": False}
+    else:
+        reason = {"tier_match": None}
+    chosen = eligible[0]
+    return chosen.id, {
+        "requested": dict(req, capabilities=sorted(caps)),
+        "selected": chosen.id, "local_only": True, **reason,
+    }

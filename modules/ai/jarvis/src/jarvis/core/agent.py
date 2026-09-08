@@ -265,9 +265,15 @@ class Agent:
         mcp_servers: dict[str, str] | None = None,
         approve: bool = False,
         llm_client: Any | None = None,
+        model_requirements: dict | None = None,
     ):
         self.config = config or get_config()
         self.approval_callback = approval_callback
+        self._session = session
+        # Requisitos de modelo p/ routing local (None = comportamento atual:
+        # usa config.llm_model sem ensure). Ex.: {"capabilities": {"coding",
+        # "tools"}, "tier": "fast"}.
+        self.model_requirements = model_requirements
         if llm_client is None:
             from jarvis.providers.llm import LLMClient
             llm_client = LLMClient(self.config, session=session)
@@ -363,6 +369,12 @@ class Agent:
             {"role": "system", "content": system_content},
             {"role": "user", "content": prompt},
         ]
+
+        # Routing local (model_requirements): seleciona pelo registry e
+        # garante residência via router (ensure idempotente). Sem
+        # requirements, nada muda (config.llm_model como antes).
+        if self.model_requirements:
+            self._ensure_routed_model()
 
         # Anti-loop: fresh detector state per prompt
         self.loop_detector.reset()
@@ -577,6 +589,33 @@ class Agent:
             "final_length": len(result.final_response),
         })
         return result
+
+    def _ensure_routed_model(self) -> None:
+        """Seleciona modelo pelo registry e garante residência (router).
+
+        O campo `model` do payload passa a ser significativo: o router
+        atende o preset pedido (antes, "default" era ignorado pelo servidor
+        single-model). Falha de routing/ensure propaga — nunca fallback
+        silencioso p/ modelo incapaz.
+        """
+        from dataclasses import replace
+        from jarvis.core.model_lifecycle import ensure_model
+        from jarvis.core.model_policy import select_model
+
+        model_id, reason = select_model(self.model_requirements)
+        report = ensure_model(model_id, base_url=self.config.llm_base_url)
+        self.logger.emit("model_routed", detail={
+            "requested": report.requested,
+            "selected": report.selected,
+            "switched": report.switched,
+            "previous": report.previous,
+            "startup_latency_s": round(report.startup_latency_s, 2),
+            "reason": reason,
+        })
+        if model_id != self.config.llm_model:
+            self.config = replace(self.config, llm_model=model_id)
+            from jarvis.providers.llm import LLMClient
+            self.llm = LLMClient(self.config, session=self._session)
 
     def _get_llm_response(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
         """Get response from LLM via the canonical LLMClient abstraction.

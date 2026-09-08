@@ -2087,8 +2087,44 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             console.print("[dim]🗺️  repo map atualizado[/]")
             continue
 
-        if user_input == "/model":
-            console.print(f"[dim]{active_model} · {mode}[/]")
+        if user_input == "/model" or user_input.startswith("/model "):
+            from jarvis.core.model_registry import ModelRegistry, RegistryError
+            arg = user_input[len("/model"):].strip()
+            try:
+                reg = ModelRegistry.load()
+            except RegistryError as e:
+                console.print(f"[dim]/model: registry indisponível ({e})[/]")
+                continue
+            if not arg:
+                try:
+                    from jarvis.core.model_lifecycle import active_model as _active
+                    resident = _active(_get_config().llm_base_url)
+                except Exception:
+                    resident = "?"
+                tiers = ", ".join(
+                    f"{mid} [{m.tier}]" for mid, m in reg.models.items())
+                console.print(
+                    f"[dim]uso: {profile.get('model_id')} · residente: {resident} · "
+                    f"registry: {tiers}[/]")
+                continue
+            try:
+                entry = reg.get(arg)
+            except RegistryError:
+                console.print(
+                    f"[dim]modelo desconhecido: {arg} "
+                    f"(registry: {', '.join(reg.ids())})[/]")
+                continue
+            try:
+                from jarvis.core.model_lifecycle import ensure_model as _ensure
+                rep = _ensure(arg, base_url=_get_config().llm_base_url)
+            except Exception as e:
+                console.print(f"[dim]/model {arg}: ensure falhou ({e})[/]")
+                continue
+            profile["model_id"] = arg
+            active_model = entry.tier
+            console.print(
+                f"[dim]modelo: {arg} [{entry.tier}] "
+                f"({'já residente' if not rep.switched else f'switch {rep.startup_latency_s:.1f}s'})[/]")
             continue
 
         if user_input == "/stats":

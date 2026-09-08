@@ -121,8 +121,11 @@ def test_probe_session_captures_exact_payload(tmp_path: Path) -> None:
     assert isinstance(probe.last_payload["messages"], list)
     assert len(probe.last_payload["messages"]) >= 2  # system + user minimum
 
-    # Check the model field
-    assert probe.last_payload["model"] in ("default", "solar-probe-model", cfg.llm_model)
+    # Check the model field ("default" é alias resolvido pelo registry —
+    # com o router ativo o payload precisa de um preset real).
+    from jarvis.core.model_registry import ModelRegistry
+    assert probe.last_payload["model"] in (
+        "solar-probe-model", ModelRegistry.load().default)
 
     # The payload should contain max_tokens and temperature (profile-aware)
     assert "max_tokens" in probe.last_payload
@@ -398,8 +401,11 @@ To test with your REAL Solar:
 Safety: The harness runs commands through allowlist + approval.
 Dangerous commands are denied by default.
 """)
-    # Assert the probe recorded something useful
-    assert probe.last_payload["model"] in ("default", cfg.llm_model)
+    # Assert the probe recorded something useful ("default" resolvido
+    # pelo registry — ver comentário acima).
+    from jarvis.core.model_registry import ModelRegistry
+    assert probe.last_payload["model"] in (
+        "default", cfg.llm_model, ModelRegistry.load().default)
     assert "messages" in probe.last_payload
     assert len(probe.last_payload["messages"]) >= 2
 
