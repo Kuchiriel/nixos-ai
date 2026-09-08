@@ -97,7 +97,9 @@ def is_available() -> tuple[bool, str]:
             capture_output=True, text=True, timeout=20,
         )
         if probe.returncode != 0:
-            return False, f"RVC python presente mas stack não carrega: {probe.stderr.strip().splitlines()[-1] if probe.stderr else 'import torch falhou'}"
+            tail = (probe.stderr or "").strip().splitlines()
+            detail = tail[-1] if tail else "import torch falhou"
+            return False, f"RVC python presente mas stack não carrega: {detail}"
     except OSError as exc:
         return False, f"RVC python inválido: {exc}"
     except subprocess.TimeoutExpired:
@@ -117,8 +119,13 @@ def _run_driver(
     index: str,
     timeout_s: int,
     pitch: int = 0,
+    extra_env: dict[str, str] | None = None,
 ) -> tuple[bool, str]:
-    """Executa o driver batch (UM processo, modelos carregados 1x)."""
+    """Executa o driver batch (UM processo, modelos carregados 1x).
+
+    Único caminho de spawn do driver — `clone_many` e `clone_wav` delegam
+    aqui. `extra_env` permite overrides (ex.: JARVIS_RVC_CPU_ONLY).
+    """
     items = "\n".join(f"{i}\t{o}" for i, o in pairs)
     driver = _BATCH_TEMPLATE.format(
         items=items, model_path=model, index_path=index, pitch=pitch,
@@ -128,6 +135,8 @@ def _run_driver(
             f.write(driver)
             driver_path = f.name
         env = dict(os.environ)
+        if extra_env:
+            env.update(extra_env)
         app_dir = _cfg("JARVIS_RVC_APP_DIR")
         env["PYTHONPATH"] = app_dir + (":" + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
         extra_ld = _cfg("JARVIS_RVC_LD_PATH")
@@ -161,8 +170,13 @@ def clone_many(
     index_path: str | None = None,
     timeout_s: int = 1800,
     pitch: int | None = None,
+    cpu_only: bool = False,
 ) -> dict[str, str]:
-    """Converte N arquivos com UMA carga de modelos. Retorna {input: output|ERROR}."""
+    """Converte N arquivos com UMA carga de modelos. Retorna {input: output|ERROR}.
+
+    cpu_only: força RVC a rodar em CPU (via JARVIS_RVC_CPU_ONLY no env do
+    driver — útil onde o torch-cuda trava na inicialização do dispositivo).
+    """
     result: dict[str, str] = {}
     if not pairs:
         return result
@@ -180,7 +194,8 @@ def clone_many(
     if pitch is None:
         pitch = DEFAULT_PITCH
     t0 = time.monotonic()
-    good, err = _run_driver(todo, model, index, timeout_s, pitch=pitch)
+    extra = {"JARVIS_RVC_CPU_ONLY": "1"} if cpu_only else None
+    good, err = _run_driver(todo, model, index, timeout_s, pitch=pitch, extra_env=extra)
     elapsed = time.monotonic() - t0
     for i, o in todo:
         result[i] = o if good and Path(o).exists() else f"ERROR: voice-clone falhou: {err}"
@@ -207,85 +222,30 @@ def clone_wav(
 ) -> str:
     """Converte input_wav para o timbre do modelo. Retorna path ou ERROR:.
 
+    Adapter fino sobre `clone_many` (implementação canônica: gate
+    is_available, verificação de output, telemetria — tudo herdado).
+
     cpu_only: força RVC a rodar em CPU mesmo que CUDA esteja visível (útil em
     hosts onde o torch-cuda do spike trava na inicialização do dispositivo).
     """
     if output_wav is None and input_wav:
         output_wav = str(Path(input_wav).with_name(Path(input_wav).stem + "-clone.wav"))
-
-    # Quando cpu_only, injeta uma sinalização no ambiente para que o driver
-    # puppy use torch.device('cpu') explícito ao instanciar VoiceConverter.
-    env = dict(os.environ)
-    if cpu_only:
-        env["JARVIS_RVC_CPU_ONLY"] = "1"
-
-    extra_ld = _cfg("JARVIS_RVC_LD_PATH")
-    if extra_ld:
-        env["LD_LIBRARY_PATH"] = extra_ld + (":" + env.get("LD_LIBRARY_PATH", "") if env.get("LD_LIBRARY_PATH") else "")
-
-    app_dir = _cfg("JARVIS_RVC_APP_DIR")
-    env["PYTHONPATH"] = app_dir + (":" + env.get("PYTHONPATH", "") if env.get("PYTHONPATH") else "")
-
-    # monkeypatch temporário: executar driver com env modificado sem alterar
-    # o subprocess.run abaixo (que usa [_cfg('JARVIS_RVC_PYTHON'), driver_path]
-    # e já monta env próprio). Recriamos o subprocess.call inline paraHer passar
-    # o env estendido.
-    result = {}
-    if not Path(input_wav).exists():
-        return f"ERROR: input inexistente: {input_wav}"
-
-    todo = [(input_wav, output_wav)]
-    model = _resolve_model(model_path)
-    index = _resolve_index(index_path)
-    if pitch is None:
-        pitch = DEFAULT_PITCH
-
-    items = "\n".join(f"{i}\t{o}" for i, o in todo)
-    driver = _BATCH_TEMPLATE.format(
-        items=items, model_path=model, index_path=index, pitch=pitch,
+    result = clone_many(
+        [(input_wav, output_wav or "")],
+        model_path=model_path, index_path=index_path, timeout_s=timeout_s,
+        pitch=pitch, cpu_only=cpu_only,
     )
-    try:
-        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
-            f.write(driver)
-            driver_path = f.name
-
-        py = _cfg("JARVIS_RVC_PYTHON")
-        if not py or not Path(py).exists():
-            return "ERROR: JARVIS_RVC_PYTHON ausente (ver scripts/rvc-spike-bootstrap.sh)"
-
-        env_clone = dict(os.environ)
-        env_clone["PYTHONPATH"] = app_dir + (":" + env_clone.get("PYTHONPATH", "") if env_clone.get("PYTHONPATH") else "")
-        extra_ld = _cfg("JARVIS_RVC_LD_PATH")
-        if extra_ld:
-            env_clone["LD_LIBRARY_PATH"] = extra_ld + (":" + env_clone.get("LD_LIBRARY_PATH", "") if env_clone.get("LD_LIBRARY_PATH") else "")
-        if cpu_only:
-            env_clone["JARVIS_RVC_CPU_ONLY"] = "1"
-
-        proc = subprocess.run(
-            [py, driver_path],
-            cwd=app_dir, env=env_clone, capture_output=True, text=True,
-            timeout=timeout_s,
-        )
-    except subprocess.TimeoutExpired:
-        return f"ERROR: timeout após {timeout_s}s"
-    except OSError as exc:
-        return f"ERROR: spawn falhou: {exc}"
-    finally:
-        try:
-            Path(driver_path).unlink()
-        except (NameError, OSError):
-            pass
-
-    if proc.returncode != 0 or "RVC-BATCH-OK" not in (proc.stdout or ""):
-        err = (proc.stderr or proc.stdout or "").strip().splitlines()
-        tail = " | ".join(err[-3:]) if err else f"exit={proc.returncode}"
-        return f"ERROR: voice-clone falhou: {tail[:300]}"
-    return output_wav or "ERROR: saída não gerada"
+    return result.get(input_wav, f"ERROR: input inexistente: {input_wav}")
 
 
 # Driver batch: UMA carga (VoiceConverter+hubert+rmvpe), N conversões.
 # stdin: linhas "input\toutput" (evita shell quoting).
 _BATCH_TEMPLATE = """\
+import os as _os
+# JARVIS_RVC_CPU_ONLY=1 (via clone_many(cpu_only=True)): esconde CUDA antes
+# do torch carregar — força CPU sem depender da API do VoiceConverter.
+if _os.environ.get("JARVIS_RVC_CPU_ONLY") == "1":
+    _os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import sys
 from unittest.mock import MagicMock
 sys.modules['pedalboard'] = MagicMock()
