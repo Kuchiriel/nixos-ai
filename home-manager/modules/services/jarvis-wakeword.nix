@@ -311,8 +311,21 @@ EOF
               """
               nonlocal followup_until, expect_command_until, echo_until
               if KILL_TTS:
-                  for pat in ["pw-play", "paplay", "aplay", "enhanced_audiobook.py"]:
-                      subprocess.run(["pkill", "-9", pat], stderr=subprocess.DEVNULL)
+                  # Não mata durante speaking FRESCO (brain ou `jarvis speak`
+                  # CLI em playback): o próprio TTS no alto-falante dispara
+                  # o VAD e o pkill cortava a fala no meio (forense 2026-09).
+                  # speak() sinaliza via status canônico; sem sinal, mata.
+                  _speaking = False
+                  try:
+                      with open("/tmp/jarvis-status.json") as _stf:
+                          _st = json.load(_stf)
+                      _speaking = (_st.get("state") == "speaking"
+                                   and (time.time() - float(_st.get("ts", 0))) < 30)
+                  except Exception:
+                      pass
+                  if not _speaking:
+                      for pat in ["pw-play", "paplay", "aplay", "enhanced_audiobook.py"]:
+                          subprocess.run(["pkill", "-9", pat], stderr=subprocess.DEVNULL)
               timestamp = int(time.time())
               temp_wav = f"/tmp/jarvis_cmd_{timestamp}.wav"
               with wave.open(temp_wav, "wb") as wf:

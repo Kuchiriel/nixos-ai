@@ -83,7 +83,9 @@ def is_available() -> tuple[bool, str]:
     model = _resolve_model(None)
     index = _resolve_index(None)
     if not py or not Path(py).exists():
-        return False, "JARVIS_RVC_PYTHON ausente (ver scripts/rvc-spike-bootstrap.sh)"
+        return False, ("JARVIS_RVC_PYTHON ausente (shell antigo pós-rebuild? abra um "
+                       "terminal novo ou rode: source scripts/rvc-env.sh; "
+                       "spike sumiu no reboot? ./scripts/rvc-spike-bootstrap.sh)")
 
     # Nix-sourced python binaries frequently need LD_LIBRARY_PATH injected
     # BEFORE process start (rpath on the venv's torch/libtorch is often

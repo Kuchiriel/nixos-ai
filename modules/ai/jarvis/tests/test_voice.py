@@ -280,3 +280,83 @@ def test_detect_lang_respects_env(monkeypatch) -> None:
     assert voice._detect_lang_code("short text") == "p"
     monkeypatch.setenv("JARVIS_TTS_LANG", "auto")
     assert voice._detect_lang_code("short") in ("p", "a")
+
+
+def test_speak_signals_speaking_around_playback(monkeypatch, tmp_path) -> None:
+    """speak(play=True) sinaliza speaking→idle (anti self-cut do wakeword).
+
+    Sem o sinal, o daemon ouve o próprio TTS no mic, dispara o VAD e o
+    killTTS corta a fala no meio (forense 2026-09).
+    """
+    from jarvis.core import feedback as _fb
+
+    class FakeKModel:
+        def __init__(self, **k):
+            pass
+
+    class FakePipeline:
+        def __init__(self, **k):
+            pass
+
+        def __call__(self, text, voice=None, speed=1.0):
+            return iter([SimpleNamespace(audio=__import__("numpy").array([0.1, 0.2]))])
+
+    def _fake_write(path, audio, rate):
+        Path(path).write_bytes(b"WAV")
+
+    states: list[str] = []
+    played: list[str] = []
+    monkeypatch.setitem(voice.sys.modules, "kokoro", _fake_module(KModel=FakeKModel, KPipeline=FakePipeline))
+    monkeypatch.setitem(voice.sys.modules, "soundfile", _fake_module(write=_fake_write))
+    monkeypatch.setitem(voice.sys.modules, "numpy", __import__("numpy"))
+    (tmp_path / "config.json").write_bytes(b"{}")
+    (tmp_path / "kokoro.pth").write_bytes(b"model")
+    (tmp_path / "af_heart.pt").write_bytes(b"voice")
+    monkeypatch.setattr(voice, "KOKORO_CONFIG_DEFAULT", str(tmp_path / "config.json"))
+    monkeypatch.setattr(voice, "KOKORO_MODEL_DEFAULT", str(tmp_path / "kokoro.pth"))
+    monkeypatch.setattr(voice, "KOKORO_VOICE_DEFAULT", str(tmp_path / "af_heart.pt"))
+    monkeypatch.setattr(voice, "_voice_for_lang", lambda lang, override=None: str(tmp_path / "af_heart.pt"))
+    monkeypatch.setattr(voice, "_play", lambda p: played.append(p))
+    monkeypatch.setattr(_fb, "set_status", lambda state, text="", **kw: states.append(state))
+
+    out = voice.speak("olá mundo falado", play=True)
+    assert not out.startswith("ERROR")
+    assert played, "playback deveria ter ocorrido"
+    assert states[0] == "speaking", states
+    assert states[-1] == "idle", states
+
+
+def test_speak_no_play_emits_no_status(monkeypatch, tmp_path) -> None:
+    """--no-play não mente speaking (nada está tocando)."""
+    from jarvis.core import feedback as _fb
+
+    class FakeKModel:
+        def __init__(self, **k):
+            pass
+
+    class FakePipeline:
+        def __init__(self, **k):
+            pass
+
+        def __call__(self, text, voice=None, speed=1.0):
+            return iter([SimpleNamespace(audio=__import__("numpy").array([0.1, 0.2]))])
+
+    def _fake_write(path, audio, rate):
+        Path(path).write_bytes(b"WAV")
+
+    states: list[str] = []
+    monkeypatch.setitem(voice.sys.modules, "kokoro", _fake_module(KModel=FakeKModel, KPipeline=FakePipeline))
+    monkeypatch.setitem(voice.sys.modules, "soundfile", _fake_module(write=_fake_write))
+    monkeypatch.setitem(voice.sys.modules, "numpy", __import__("numpy"))
+    (tmp_path / "config.json").write_bytes(b"{}")
+    (tmp_path / "kokoro.pth").write_bytes(b"model")
+    (tmp_path / "af_heart.pt").write_bytes(b"voice")
+    monkeypatch.setattr(voice, "KOKORO_CONFIG_DEFAULT", str(tmp_path / "config.json"))
+    monkeypatch.setattr(voice, "KOKORO_MODEL_DEFAULT", str(tmp_path / "kokoro.pth"))
+    monkeypatch.setattr(voice, "KOKORO_VOICE_DEFAULT", str(tmp_path / "af_heart.pt"))
+    monkeypatch.setattr(voice, "_voice_for_lang", lambda lang, override=None: str(tmp_path / "af_heart.pt"))
+    monkeypatch.setattr(_fb, "set_status", lambda state, text="", **kw: states.append(state))
+
+    out = voice.speak("só gera", play=False)
+    assert not out.startswith("ERROR")
+    assert "speaking" not in states

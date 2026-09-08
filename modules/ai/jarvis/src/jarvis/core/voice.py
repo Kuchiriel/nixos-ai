@@ -475,7 +475,23 @@ def speak(
             pass
 
         if play:
-            _play(str(out_path))
+            # Sinaliza speaking ANTES de tocar: o daemon wakeword mata
+            # players no trigger (killTTS) e o próprio TTS no alto-falante
+            # dispara o VAD → sem o sinal, ele corta a fala no meio.
+            # (O brain já sinalizava; o CLI não — corte reportado 2026-09.)
+            try:
+                from jarvis.core.feedback import set_status as _set_spk
+                _set_spk("speaking", text[:60])
+            except Exception:
+                pass
+            try:
+                _play(str(out_path))
+            finally:
+                try:
+                    from jarvis.core.feedback import set_status as _set_idle
+                    _set_idle("idle", "")
+                except Exception:
+                    pass
         return str(out_path)
     except Exception as exc:  # noqa: BLE001
         return f"ERROR: falha no TTS: {exc}"
