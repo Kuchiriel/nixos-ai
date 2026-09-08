@@ -70,6 +70,22 @@ in rec {
     sha256 = "sha256-dIX+bxGvKUM7xRyrWACVIfIFhA9bSuOjL6f5LoU0/fU=";
   };
 
+  # --- Candidatos fast avaliados 2026-09-08 (arquivos verificados) ---
+  # Gemma 3 4B Q4_K_M: melhor chat/coding textual 4B + único multimodal
+  # pequeno (visão). SEM tool-calling nativo neste server path: 0/35
+  # free, 35/35 constrained — só serve sob strict_tools. (A/B n=5.)
+  llm-gemma-4b = mkModel {
+    url = "https://huggingface.co/unsloth/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf";
+    sha256 = "sha256-BKQ6IujSAD3tpazCYvaOwQBfp2xzWpliqMdwQqdKfRk=";
+  };
+
+  # Phi-4-mini Q4_K_M: chat correto, postura de recusa p/ tools (0/35
+  # free, 30/35 constrained). Não recomendado p/ agent (ver relatório).
+  llm-phi-4-mini = mkModel {
+    url = "https://huggingface.co/unsloth/Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf";
+    sha256 = "sha256-iMACKZFAg80RKFOquE7VG4e99rnOQvUy2MhcfGOxcwo=";
+  };
+
   # --- LLM — Host (bare metal) ---
   # Qwen3.6-35B-A3B: MoE (35B total, 3B ativos por token) com vision encoder
   llm-host = mkModel {

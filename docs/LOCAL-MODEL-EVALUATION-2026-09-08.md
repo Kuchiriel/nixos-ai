@@ -283,3 +283,45 @@ Gemma/Phi/Ministral (arquivos+banda); GPU t/s Qwen/MoE + VRAM de switch
 - Harness de eval commitado em `scripts/eval-model.py`; A/B em
   `/tmp/opencode/ab-grammar.py` (promover p/ scripts/ quando estabilizar
   o formato — ainda sujeito a mudança).
+
+---
+
+# ADDENDUM 2026-09-08 (noite) — Gemma 3 4B + Phi-4-mini (arquivos do usuário)
+
+Arquivos verificados (magic GGUF + tamanho == HF): `~/models/`
+(2.49GB cada). Fiados no models.nix (`llm-gemma-4b`, `llm-phi-4-mini`,
+hashes SRI computados localmente; fetchurl valida no build).
+
+## Suite 19 tarefas (CPU, mesmo harness)
+
+- Gemma: general 3/3, coding 4/4 (com docstrings!), resto 0 — **zero
+  tool calls emitidos** (descreve ações em texto; chega a alucinar
+  output "myhostname"). Melhor chat/PT-BR do grupo; r1 começa sólido.
+- Phi: general 3/3, coding 4/4 (c4 correto), resto 0 — postura de
+  **recusa explícita** ("como IA, não tenho capacidade..."), r1 errado.
+
+## A/B final (n=5, 7 tarefas) — o discriminador
+
+| Modelo | free | free+sys | constrained |
+|---|---|---|---|
+| Bonsai | 30/35 | 35/35 | 35/35 |
+| Qwen3-4B nt | **35/35** | **35/35** | 20/35 |
+| Gemma 3 4B | 0/35 | 0/35 | **35/35** |
+| Phi-4-mini | 0/35 | 0/35 | 30/35 (t1 arg-name) |
+
+- Gemma: template nativo não ativa tool-calls neste server path
+  (sysprompt não adianta); grammar resolve 100%. Único multimodal
+  pequeno → especialista de visão sob strict_tools.
+- Phi: mesma forma, teto menor (30/35 + recusa) — não recomendado p/ agent.
+- Qwen segue o único free-capable pequeno → fast confirmado de novo,
+  agora contra 4 modelos.
+- Nuance: grammar garante FORMA, não vocabulário de arg-names
+  (Qwen `"command"` vs `"cmd"`, Phi t1) — assinaturas continuam
+  necessárias (Agent strict já faz).
+
+## Decisão fast (final, 5 modelos)
+
+1. `jarvis-fast` = Qwen3-4B (único autônomo no protocolo padrão).
+2. Alternativa vision = Gemma 3 4B sob strict_tools (preset futuro).
+3. Bonsai = speed com disciplina/strict (comportamento atual).
+4. Phi = fora. MoE = strong. Default inalterado (produto).
