@@ -835,3 +835,27 @@ def test_agent_strict_tools_rejects_unknown_tool() -> None:
         resp, [{"type": "function", "function": {"name": "read_file"}}])
     assert out.tool_calls == []
     assert "rm_rf" in out.content
+
+
+def test_detect_profile_registry_tier_overrides_param_count(tmp_path, monkeypatch):
+    """Registry vence regex: jarvis-fast (4B) é small COM tools, não tiny."""
+    import json as jsonlib
+    from jarvis.core.agent import detect_profile
+    reg = {"version": 1, "default": "bonsai", "maxResident": 1,
+           "models": {
+               "bonsai": {"tier": "speed",
+                          "capabilities": ["general"], "params_b": 8},
+               "jarvis-fast": {"tier": "fast",
+                               "capabilities": ["general"], "params_b": 4},
+               "jarvis-strong": {"tier": "reasoning",
+                                 "capabilities": ["general"], "params_b": 35}}}
+    p = tmp_path / "registry.json"
+    p.write_text(jsonlib.dumps(reg))
+    monkeypatch.setenv("JARVIS_MODEL_REGISTRY", str(p))
+    fast = detect_profile("jarvis-fast")
+    assert fast["name"] == "small"
+    assert fast["tool_choice"] == "auto"
+    assert detect_profile("jarvis-strong")["name"] == "large"
+    # Fora do registry: legado intacto (4B desconhecido continua tiny).
+    assert detect_profile("mini-4b")["name"] == "tiny"
+    assert detect_profile("default")["name"] == "default"

@@ -273,11 +273,40 @@ def _detect_profile() -> dict[str, Any]:
         resp.raise_for_status()
         data = resp.json()
         if data.get("data"):
-            model_id = data["data"][0].get("id", model_id)
+            sid = data["data"][0].get("id", model_id)
+            # Router declara preset lógico (ex.: jarvis-fast) — esse vale.
+            # Servidor single-model declara filename de store (ex.:
+            # ...Qwen3-4B-Q4_K_M.gguf) — inútil p/ profile; mantém o id
+            # lógico da config. Registry decide (fonte única).
+            try:
+                from jarvis.core.model_registry import ModelRegistry
+                ModelRegistry.load().get(sid)
+                model_id = sid
+            except Exception:
+                pass
     except Exception:  # noqa: BLE001 — model_id é best-effort
         pass
 
     m = model_id.lower()
+
+    # Registry primeiro: tiers declarados vencem param-count. Sem isso,
+    # "Qwen3-4B" caía em "tiny" (native_tools=False) e o REPL anulava o
+    # fast tier inteiro — mesmo com modelo tool-capable carregado.
+    try:
+        from jarvis.core.agent import _registry_tier_profile as _tier_prof
+        _tp = _tier_prof(model_id)
+    except Exception:
+        _tp = None
+    if _tp is not None:
+        profile = {"name": _tp["name"], "max_tokens": _tp["max_tokens"],
+                   "temperature": 0.0}
+        override = getattr(cfg, "llm_native_tools", None)
+        profile["native_tools"] = override if override is not None else True
+        profile["model_id"] = model_id
+        actual_n_ctx = _query_server_context_size()
+        profile["context_size"] = actual_n_ctx if actual_n_ctx > 0 else max(
+            profile["max_tokens"] * 8, 8192)
+        return profile
 
     # Extrai o total de parâmetros do nome (ex: "35b" em "qwen3.6-35b-a3b"),
     # não o de ativos (o "a3b" indica ativos por token em modelos MoE — o
@@ -1092,6 +1121,22 @@ def _auto_commit(tool_name: str, args: dict[str, Any], success: bool) -> None:
 # ---------------------------------------------------------------------------
 # Tools — delegação para devtools.py unificado
 # ---------------------------------------------------------------------------
+def _validated_output(name: str, args: dict[str, Any], output: str) -> str:
+    """Anexa hints de recovery do validator (ex.: candidatos p/ not-found).
+
+    O REPL nunca chamava o validator (só Agent.run): erro voltava cru e
+    o modelo desistia. Best-effort — nunca quebra o loop.
+    """
+    try:
+        from jarvis.core.validator import ToolValidator
+        vr = ToolValidator().validate(name, args, output)
+        if vr.warnings:
+            return output + "\n[validation: " + "; ".join(vr.warnings[:6]) + "]"
+    except Exception:
+        pass
+    return output
+
+
 def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -> tuple[str, str | None]:
     """Executa tool via handle_dev_tool (devtools.py). Retorna (texto, diff_ou_None)."""
     # ── Vision ──
@@ -1817,6 +1862,13 @@ def _run_agent_loop(
     compact_threshold = int(context_size * 0.70)
     compact_target = int(context_size * 0.50)
 
+    # LoopDetector (mesmo do Agent): repetição idêntica ×3 (observado em
+    # runs UX) vira abort honesto em vez de rc=0 silencioso. Contador de
+    # sucessos distingue "travado" (nada funcionou) de "incompleto".
+    from jarvis.core.loop_detector import LoopDetector, RecoveryAction
+    detector = LoopDetector()
+    successes = 0
+
     for turn in range(max_turns):
         est = _estimate_tokens(messages)
         if est > compact_threshold:
@@ -1835,6 +1887,14 @@ def _run_agent_loop(
         message = data["choices"][0]["message"]
         content = message.get("content") or ""
         tool_calls = message.get("tool_calls")
+
+        strategy = detector.check(tool_calls, content)
+        if strategy.action == RecoveryAction.ABORT:
+            console.print(f"[tool.error]⚠️  loop detectado: {strategy.message}[/]")
+            _repl_emit("session.loop_abort", detail=strategy.message)
+            return False
+        if strategy.action != RecoveryAction.NONE:
+            messages.append({"role": "system", "content": strategy.message})
 
         # Extract thinking content if present
         thinking = ""
@@ -1891,6 +1951,9 @@ def _run_agent_loop(
             console.print(f"  [tool]🔧 {func_name}[/] [path]{preview_arg}[/]")
 
             output, diff = _execute_tool_call(func_name, args, approve)
+            output = _validated_output(func_name, args, output)
+            if not output.startswith("ERROR"):
+                successes += 1
 
             is_error = output.startswith("ERROR")
             style = "tool.error" if is_error else "tool.ok"
@@ -1913,7 +1976,13 @@ def _run_agent_loop(
             })
 
     _repl_emit("session.max_turns", max_turns=max_turns)
-    console.print(f"[tool.error]⚠️  {max_turns} turnos atingidos[/]")
+    if successes == 0:
+        # Nenhuma tool funcionou: travado, não "concluído" (rc honesto —
+        # antes retornava False igual a max_turns, indistinguível).
+        console.print("[tool.error]⚠️  travado: nenhuma ferramenta teve sucesso[/]")
+        _repl_emit("session.stuck", turns=max_turns)
+    else:
+        console.print(f"[tool.error]⚠️  {max_turns} turnos atingidos[/]")
     return False
 
 
@@ -2432,6 +2501,7 @@ def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) 
                 except json.JSONDecodeError:
                     a = {}
                 result, _diff = _execute_tool_call(fn, a)
+                result = _validated_output(fn, a, result)
                 tool_id = tc.get("id") or f"call_{uuid.uuid4().hex[:6]}"
                 plan_messages.append({"role": "assistant", "content": None, "tool_calls": [tc]})
                 plan_messages.append({

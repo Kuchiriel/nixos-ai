@@ -37,9 +37,32 @@ class ValidationResult:
     severity: str         # "ok" | "warning" | "error"
 
 
+def _locate_candidates(path: str, limit: int = 5) -> list[str]:
+    """Candidatos p/ file-not-found: rglob do basename a partir do CWD.
+
+    O harness SABE onde o arquivo está (0.05s) — antes o modelo recebia
+    só "not found" e desistia pedindo o path ao usuário (observado 4/4
+    runs UX). Best-effort: nunca levanta, nunca trava o loop.
+    """
+    name = Path(path).name.strip()
+    if not name:
+        return []
+    try:
+        out = []
+        for p in Path.cwd().rglob(name):
+            if len(out) >= limit:
+                break
+            try:
+                out.append(str(p.relative_to(Path.cwd())))
+            except ValueError:
+                out.append(str(p))
+        return out
+    except Exception:
+        return []
+
+
 class ToolValidator:
     """Validates tool call results before passing to the model."""
-
     # Patterns that indicate shell command failure
     SHELL_ERROR_PATTERNS = [
         r"(?i)^error[:\s]",
@@ -163,6 +186,8 @@ class ToolValidator:
 
         if "not found" in output.lower() or "no such file" in output.lower():
             warnings.append(f"read_file: file not found: {path}")
+            for cand in _locate_candidates(path):
+                warnings.append(f"read_file: candidato: {cand}")
             severity = "error"
         elif "permission denied" in output.lower():
             warnings.append(f"read_file: permission denied: {path}")

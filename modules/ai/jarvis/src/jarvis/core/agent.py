@@ -36,26 +36,21 @@ from jarvis.core.security import command_allowed, has_chaining_operators, run_sh
 def detect_profile(model_id: str) -> dict[str, Any]:
     """Detect model profile from model name. Used by tests and REPL.
 
-    Analyzes the model ID string to determine the appropriate inference
-    profile (large, small, tiny, or default) based on parameter count.
-
-    Args:
-        model_id: The identifier of the model (e.g., "llama-3-70b", "qwen-7b").
-
-    Returns:
-        A dictionary containing the profile configuration:
-        - name (str): Profile category ('large', 'small', 'tiny', 'default').
-        - max_tokens (int): Recommended maximum output tokens.
-        - max_tokens_per_turn (int): Max tokens per generation turn.
-        - temperature (float): Recommended temperature setting.
-        - tool_choice (str): Tool choice strategy.
+    Primeiro o registry (tiers declarados em models.nix): um `jarvis-fast`
+    de 4B recebe perfil small COM tools (param-count puro o jogaria em
+    "tiny" sem tools — foi assim que o REPL anulou o fast tier inteiro).
+    Fallback: regex de parâmetros (comportamento legado p/ ids fora do
+    registry, ex.: cloud).
     """
+    tier_profile = _registry_tier_profile(model_id)
+    if tier_profile is not None:
+        return tier_profile
     m = model_id.lower()
-    
+
     # Extract total parameters from name
     total_b_match = re.search(r"(?<![a-z])(\d+(?:\.\d+)?)b(?!\w)", m)
     total_b = float(total_b_match.group(1)) if total_b_match else None
-    
+
     if total_b is not None and total_b >= 30:
         return {"name": "large", "max_tokens": 768, "max_tokens_per_turn": 768, "temperature": 0.0, "tool_choice": "auto"}
     elif total_b is not None and total_b >= 7:
@@ -64,6 +59,23 @@ def detect_profile(model_id: str) -> dict[str, Any]:
         return {"name": "tiny", "max_tokens": 512, "max_tokens_per_turn": 512, "temperature": 0.0, "tool_choice": "none"}
     else:
         return {"name": "default", "max_tokens": 1024, "max_tokens_per_turn": 1024, "temperature": 0.0, "tool_choice": "auto"}
+
+
+def _registry_tier_profile(model_id: str) -> dict[str, Any] | None:
+    """Perfil por tier do registry (None = id fora do registry)."""
+    try:
+        from jarvis.core.model_registry import ModelRegistry
+        entry = ModelRegistry.load().get(model_id)
+    except Exception:
+        return None
+    base = {"max_tokens_per_turn": 1024, "temperature": 0.0, "tool_choice": "auto"}
+    if entry.tier == "reasoning":
+        return {"name": "large", "max_tokens": 768, **base}
+    if entry.tier == "fast":
+        return {"name": "small", "max_tokens": 1024, **base}
+    if entry.tier == "speed":
+        return {"name": "default", "max_tokens": 1024, **base}
+    return None
 
 
 def _normalize_tool_call(tc: dict[str, Any]) -> dict[str, Any] | None:
@@ -223,6 +235,9 @@ TOOL_USE_DISCIPLINE = """TOOL DISCIPLINE (mandatory):
 - When the request needs an action, call EXACTLY ONE tool per turn: the one that directly performs it.
 - read_file for reading files; execute_shell ONLY for explicit shell commands.
 - NEVER invent filenames, paths, or results — only use what you observed.
+- Path unknown? LOCATE first (list_directory/semantic_search) — never ask the user for the path before searching.
+- A tool failed? Read the [validation] hint and try the suggested alternative — one miss is not a stop.
+- Claiming a cause? Cite file:line you actually read this session.
 - Two-step request? Do the FIRST step now; the rest in later turns.
 - No suitable tool? Answer with text and call nothing."""
 

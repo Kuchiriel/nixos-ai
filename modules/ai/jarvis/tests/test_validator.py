@@ -106,3 +106,23 @@ class TestEnhanceOutput:
     def test_unknown_tool_passes_through(self, validator):
         output = validator.enhance_tool_output("unknown_tool", {}, "some output")
         assert output == "some output"
+
+
+def test_read_not_found_suggests_candidates(tmp_path, monkeypatch) -> None:
+    """Recovery coach: not-found vem com candidatos (não só erro)."""
+    from jarvis.core.validator import ToolValidator
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "alvo.txt").write_text("x")
+    monkeypatch.chdir(tmp_path)
+    vr = ToolValidator().validate("read_file", {"path": "alvo.txt"},
+                                  "ERROR: File not found: alvo.txt")
+    assert any("candidato" in w for w in vr.warnings)
+    assert any("sub/alvo.txt" in w for w in vr.warnings)
+
+
+def test_read_not_found_no_candidate_still_error(tmp_path, monkeypatch) -> None:
+    from jarvis.core.validator import ToolValidator
+    monkeypatch.chdir(tmp_path)
+    vr = ToolValidator().validate("read_file", {"path": "nada.txt"},
+                                  "ERROR: File not found: nada.txt")
+    assert any("not found" in w for w in vr.warnings)
