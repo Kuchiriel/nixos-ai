@@ -69,7 +69,16 @@ let
     ln -sf ${pkgs.aiModels.openwakeword.hey_jarvis} "$HOME/.local/share/openwakeword/hey_jarvis_v0.1.onnx"
     ln -sf ${pkgs.aiModels.openwakeword.embedding} "$HOME/.local/share/openwakeword/embedding_model.onnx"
     ln -sf ${pkgs.aiModels.openwakeword.melspectrogram} "$HOME/.local/share/openwakeword/melspectrogram.onnx"
-    EOF
+    # STT small (faster-whisper, layout de cache HF): fonte de verdade em
+    # modules/ai/models.nix (whisper-small, 4 arquivos). Declarativo —
+    # sobrevive sem rede; o wget imperativo foi removido.
+    STT_SNAP="$HOME/.local/share/jarvis/voice/models--Systran--faster-whisper-small/snapshots/main"
+    mkdir -p "$STT_SNAP"
+    ln -sf ${pkgs.aiModels.whisper-small.model} "$STT_SNAP/model.bin"
+    ln -sf ${pkgs.aiModels.whisper-small.config} "$STT_SNAP/config.json"
+    ln -sf ${pkgs.aiModels.whisper-small.vocabulary} "$STT_SNAP/vocabulary.txt"
+    ln -sf ${pkgs.aiModels.whisper-small.tokenizer} "$STT_SNAP/tokenizer.json"
+EOF
     chmod +x $out/lib/link-models.sh
   '';
 
@@ -655,19 +664,11 @@ in {
   config = lib.mkIf cfg.enable {
     home.packages = [jarvisPythonEnv jarvisScript modelsLink];
 
-    # Cria os symlinks dos modelos declarativos (store → ~/.local/share)
+    # Cria os symlinks dos modelos declarativos (store → ~/.local/share).
+    # O snapshot STT small é linkado em link-models.sh (acima), a partir de
+    # modules/ai/models.nix — sem downloads imperativos aqui.
     home.activation.jarvisModels = lib.hm.dag.entryAfter ["writeBoundary"] ''
       run ${modelsLink}/lib/link-models.sh
-      # Pré-baixa modelo STT small (multilingual, ~500MB, PT-BR correto) — evita timeout
-      STT_DIR="$HOME/.local/share/jarvis/voice"
-      SMALL_DIR="$STT_DIR/models--Systran--faster-whisper-small/snapshots/main"
-      if [ ! -f "$SMALL_DIR/model.bin" ]; then
-        mkdir -p "$SMALL_DIR"
-        echo "[jarvis] Baixando modelo STT small (multilingual)..."
-        for f in model.bin config.json vocabulary.txt tokenizer.json; do
-          wget -q --timeout=30 "https://huggingface.co/Systran/faster-whisper-small/resolve/main/$f" -O "$SMALL_DIR/$f" 2>/dev/null || true
-        done
-      fi
     '';
 
     systemd.user.services.jarvis-wakeword = {

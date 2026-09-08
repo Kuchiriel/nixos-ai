@@ -159,14 +159,8 @@
     universal-ctags
   ];
 
-  # ══════════════════════════════════════════════════════════════
-  # JARVIS STT — Download declarativo do modelo faster-whisper-tiny.en
-  # ══════════════════════════════════════════════════════════════
-  home.file.".local/share/jarvis/voice/models--Systran--faster-whisper-tiny.en/snapshots/main/model.bin".source = pkgs.fetchurl {
-    url = "https://huggingface.co";
-    # ATUALIZADO: Substituído pelo hash correto apontado pelo log do Nix
-    hash = "sha256-RNPNvS2++DhYGMDtE5nans36CII9kdDo/acqVxwx2Qs=";
-  };
+  # (STT small vive em modules/ai/models.nix → linkado pelo wakeword nix;
+  # tiny.en foi removido: nada o referencia e é English-only.)
 
   # ══════════════════════════════════════════════════════════════
   # JARVIS — API Keys abstraction (keys-wrapper.sh + keys.env)

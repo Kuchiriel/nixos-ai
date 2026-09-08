@@ -157,9 +157,26 @@ in {
   };
 
   # --- faster-whisper (STT) — small CTranslate2 (multi-língua, PT-BR) ---
-  whisper-small = fetchurl {
-    url = "https://huggingface.co/Systran/faster-whisper-small/resolve/main/model.bin";
-    sha256 = "0wfnf10y3g779xxsjkdji7xij92xwxrw5r13c20p523da0hmjc1y";
+  # Snapshot completo (4 arquivos): linkado p/ o cache HF em
+  # home-manager/modules/services/jarvis-wakeword.nix (modelsLink).
+  # Fonte de verdade dos 4 hashes — nada de wget imperativo.
+  whisper-small = {
+    model = fetchurl {
+      url = "https://huggingface.co/Systran/faster-whisper-small/resolve/main/model.bin";
+      sha256 = "0wfnf10y3g779xxsjkdji7xij92xwxrw5r13c20p523da0hmjc1y";
+    };
+    config = fetchurl {
+      url = "https://huggingface.co/Systran/faster-whisper-small/resolve/main/config.json";
+      sha256 = "0a5q7ww1805lwg6dja8jxkz031zxxm0an7n0s93sx9s0g6n9cm5m";
+    };
+    vocabulary = fetchurl {
+      url = "https://huggingface.co/Systran/faster-whisper-small/resolve/main/vocabulary.txt";
+      sha256 = "04rr8lg4mqsiz4kwyd5vqkdqdyck14ki4aflz2rjf404qphkzkil";
+    };
+    tokenizer = fetchurl {
+      url = "https://huggingface.co/Systran/faster-whisper-small/resolve/main/tokenizer.json";
+      sha256 = "1ayhdz5sczyll3s0vcrsa6cjr88664m79zbr5h44bc4v3qcn6yzv";
+    };
   };
 
   # =========================================================================
