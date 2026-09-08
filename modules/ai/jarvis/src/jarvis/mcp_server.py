@@ -462,22 +462,30 @@ def _vault_sync_to_hackmd() -> list[dict[str, Any]]:
 
 
 def _vault_read_from_obsidian(query: str) -> list[dict[str, str]]:
-    """Search Obsidian vault using ripgrep."""
+    """Search Obsidian vault using ripgrep (fixed-string, sem regex).
+
+    Vault via JARVIS_OBSIDIAN_VAULT (default ~/vaults/projects) — antes
+    hardcoded. Falhas viram [{"error": ...}] observável em vez de []
+    silencioso (que indistinguia "sem resultados" de "vault ausente").
+    """
     from pathlib import Path
+    import os
     import subprocess
-    
-    OBSIDIAN_VAULT = Path.home() / "vaults/projects"
+
+    OBSIDIAN_VAULT = Path(
+        os.environ.get("JARVIS_OBSIDIAN_VAULT", str(Path.home() / "vaults/projects"))
+    ).expanduser()
     if not OBSIDIAN_VAULT.exists():
-        return []
-    
+        return [{"error": f"obsidian vault ausente: {OBSIDIAN_VAULT}"}]
+
     try:
         result = subprocess.run(
-            ["rg", "-l", "-i", query, str(OBSIDIAN_VAULT)],
+            ["rg", "-l", "-i", "-F", query, str(OBSIDIAN_VAULT)],
             capture_output=True, text=True, timeout=10,
         )
         return [{"path": p, "name": Path(p).stem} for p in result.stdout.splitlines()]
-    except Exception:
-        return []
+    except Exception as e:
+        return [{"error": f"ripgrep falhou: {e}"}]
 
 
 def _vault_status() -> dict[str, Any]:
