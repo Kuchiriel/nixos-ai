@@ -84,3 +84,20 @@ def test_remote_shape():
     r = A.remote_status()
     assert set(r) == {"env_file", "providers", "cascade"}
     assert r["cascade"][0] == "local"
+
+
+def test_key_line_name_tolerates_export_legacy():
+    from jarvis.webui import api as A
+    assert A._key_line_name("GROQ_API_KEY=\"x\"") == "GROQ_API_KEY"
+    assert A._key_line_name("export GROQ_API_KEY=\"x\"") == "GROQ_API_KEY"
+    assert A._key_line_name("  export  GEMINI_API_KEY = \"y\" ") == "GEMINI_API_KEY"
+
+
+def test_keys_file_parser_tolerates_export_prefix(tmp_path, monkeypatch):
+    """keys.py lê arquivos legados com prefixo `export ` (WebUI escrevia)."""
+    from jarvis.core import keys as K
+    f = tmp_path / "litellm.env"
+    f.write_text("export GROQ_API_KEY=\"sekrit\"\n")
+    monkeypatch.setitem(K._SOURCES["groq"], "files", [str(f)])
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    assert K.get("groq") == "sekrit"

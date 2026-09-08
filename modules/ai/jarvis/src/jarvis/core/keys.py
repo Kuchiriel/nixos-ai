@@ -64,9 +64,13 @@ def _from_files(spec: dict[str, Any]) -> str:
                 if not line or line.startswith("#") or "=" not in line:
                     continue
                 k, v = line.split("=", 1)
+                # Tolera legado `export KEY="v"` (WebUI escrevia assim).
+                k = k.strip()
+                if k.startswith("export "):
+                    k = k[len("export "):].strip()
                 v = v.strip().strip("\"'")
                 for env_name in spec.get("env", []):
-                    if k.strip() == env_name and v:
+                    if k == env_name and v:
                         return v
         except OSError:
             continue

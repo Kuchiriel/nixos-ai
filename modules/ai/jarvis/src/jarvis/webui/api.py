@@ -289,9 +289,9 @@ def update_system_config(req: ConfigUpdateRequest) -> dict[str, Any]:
     if req.tavily_api_key:
         os.environ["TAVILY_API_KEY"] = req.tavily_api_key
 
-    from jarvis.core.config import get_config
-    if hasattr(get_config, "cache_clear"):
-        get_config.cache_clear()
+    # Nota: get_config() não tem cache (lê env a cada chamada) e clientes
+    # LLM são construídos por request — o ajuste vale para próximas
+    # chamadas, mas é efêmero (perdido no restart; sem persistência).
     return {"status": "updated"}
 
 
@@ -410,6 +410,14 @@ PROVIDER_KEY_MAP = {
 }
 
 
+def _key_line_name(line: str) -> str:
+    """Nome da KEY numa linha de env file (tolera legado `export KEY=`)."""
+    stripped = line.strip()
+    if stripped.startswith("export "):
+        stripped = stripped[len("export "):].strip()
+    return stripped.split("=", 1)[0].strip()
+
+
 @app.get("/api/keys")
 def keys_status() -> dict[str, Any]:
     """List which API-key providers have keys configured (names only, never values)."""
@@ -448,13 +456,16 @@ def set_key(req: KeysUpdateRequest) -> dict[str, Any]:
     try:
         if env_file.exists():
             content = env_file.read_text(encoding="utf-8")
-            lines = content.splitlines()
-            new_lines = [l for l in lines if not l.startswith(f"{key_name}=")]
-            new_lines.append(f'export {key_name}="{req.key}"')
+            new_lines = [l for l in content.splitlines()
+                         if _key_line_name(l) != key_name]
+            new_lines.append(f'{key_name}="{req.key}"')
             env_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
         else:
-            env_file.write_text(f'export {key_name}="{req.key}"\n', encoding="utf-8")
-        os.chmod(env_file, 0o644)
+            env_file.write_text(f'{key_name}="{req.key}"\n', encoding="utf-8")
+        # 600: secrets legíveis só pelo dono (antes: 644 world-readable).
+        # Sem prefixo `export`: formato válido tanto para EnvironmentFile
+        # do systemd quanto para o parser de keys.py.
+        os.chmod(env_file, 0o600)
     except OSError as e:
         raise HTTPException(500, f"Failed to write key: {e}")
 
@@ -477,9 +488,10 @@ def remove_key(provider: str) -> dict[str, Any]:
         if env_file.exists():
             content = env_file.read_text(encoding="utf-8")
             lines = content.splitlines()
-            new_lines = [l for l in lines if not any(l.startswith(f"{kn}=") for kn in key_names)]
+            new_lines = [l for l in lines
+                         if _key_line_name(l) not in key_names]
             env_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-            os.chmod(env_file, 0o644)
+            os.chmod(env_file, 0o600)
     except OSError as e:
         raise HTTPException(500, f"Failed to remove key: {e}")
 
