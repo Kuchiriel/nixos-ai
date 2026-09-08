@@ -186,3 +186,74 @@ PYTHONPATH=src:<store-paths de requests/urllib3/certifi/charset-normalizer/idna>
 | Bypasses de config.py | 4 (`JARVIS_LLM_URL`, `LLAMA_CPP_URL` ×2, HealthMonitor default) | 0 |
 | Arquivos órfãos | 1 (`_regex.txt`) | 0 |
 | Injeções de lessons por turno | N (crescimento N×) | 1 |
+
+---
+
+## 10. Sessão 3 — 2026-09-08 (checkpoint + validação paralela + BLOCKEDs)
+
+Checkpoint: tree limpo, commits íntegros (`a5882fa`, `9b17339`, `78d16eb`,
+`dd65ea2`, `b4361ca`). Sessão paralela (Codebuff) commitou por cima
+(`23fc348`, `a0ae4ea`, voice `e4a4e24`/`873d94f`/`af1cfb8`) — validada abaixo.
+
+### 10.1 Validação do trabalho paralelo (veredito misto)
+
+- `a0ae4ea` (solar import cleanup, waybar zombie fix, flake description): OK.
+- `e4a4e24` (probe `import torch` em `is_available`): sólido; 1 edge
+  IndexError (stderr whitespace-only) corrigido nesta sessão.
+- `873d94f` (clone_wav LD + cpu_only): **duplicação arquitetural** — ~60
+  linhas de spawn do driver reimplementadas inline em vez de estender
+  `clone_many`/`_run_driver`; bloco `env` morto; pula gate `is_available`,
+  check de output e telemetria; flag `JARVIS_RVC_CPU_ONLY` setada mas
+  ignorada pelo template (theater). **Consolidado** (commit `532f135`):
+  `clone_wav` volta a ser adapter fino, `_run_driver(extra_env=...)` é o
+  único spawn, template honra CPU_ONLY via `CUDA_VISIBLE_DEVICES=""`.
+  Tests: 107 passed (voice, wakeword, llm_backend).
+- `af1cfb8` (voice.py 1 linha, cpu_only default): preservado via novo
+  parâmetro `clone_many(cpu_only=...)`.
+
+### 10.2 BLOCKED 1 — migração `_get_llm_response()` → LLMClient (FEITO)
+
+`Agent` agora detém `LLMClient` (injetável via `llm_client=`; `session=`
+pass-through para o backend). `_get_llm_response` delega a
+`chat_with_tools` + adapta `ChatResponse` → dict (run() inalterado).
+Ganhos: circuit breaker, telemetria real, classificação de erro,
+roteamento de backend no REPL. Remove `import requests` + `MAX_REPAIR_RETRIES`
+morta. Custo: 26 mocks `post()` ganham `**kw` (backend passa `stream=`);
+**nenhuma** mudança de lógica/assert nos testes. Commit `1723b4b`.
+
+### 10.3 BLOCKED 2 — `read_file` + rota `read` (FEITO, CASE 1/5)
+
+- Agent expõe `read_file(path, offset?, limit?)` sempre (read-only);
+  execução via `devtools.read_file` canônica; default limit 200 (contexto).
+- Router: rota `read` (zero LLM/RAG) para paths exatos; precedência por
+  evidência sobre wildcard fuzzy do audiobook (`@ler/read+*` roubava
+  "leia o arquivo X" e "leia X e explique"): path → read, pergunta
+  composta → agent (LLM + read_file), resto → audiobook/fastpath.
+- Contratos pré-existentes preservados (`test_route_extension_forces_rag`
+  verde: "mostra"/"o que tem" continuam RAG). Commit `1482622`.
+- Tests: `test_read_route.py` (11 contratos).
+
+### 10.4 Wiring final do run() (FEITO)
+
+- `ToolValidator` pós-execução (FASE 16): warnings no tool result.
+- Context guard por prompt (FASE 13): budget fresco + overflow break.
+- Removidos breaker próprio duplicado e `turn_count` morto.
+- Tests: +2 (validation hook, overflow stop). Commit `1ffb095`.
+
+### 10.5 Métricas sessão 3
+
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| Acoplamento llama.cpp no REPL | direto (`requests.post`) | via `LLMClient`/backend |
+| Tools do Agent | só `execute_shell` (condicional) | `+ read_file` (sempre) |
+| "leia o arquivo X" | → RAG (ou audiobook!) | → read direta |
+| Componentes instanciados sem uso no `run()` | 3 (validator, budget, breaker) | 0 |
+| Duplicação spawn RVC | 2 implementações | 1 (`_run_driver`) |
+| Suite | 987 passed / 5 infra | (ver §10.6) |
+
+### 10.6 Pendências restantes (requerem decisão de produto, não só técnica)
+
+1. Personas alteram capability de verdade? (`persona.py` vs `persona_executor.py` vs `.jarvismodes` — 3 mecanismos.)
+2. `dev.py` (2529 linhas) vs `agent.py`: convergência planejada (`agent_loop.py`) não iniciada.
+3. WebUI lê estado canônico ou mantém cópia? (não auditado — fora do runtime Python testável aqui.)
+4. Long-run >30min com LLM online (TODO-MISSAO P3-2, bloqueado por runtime).

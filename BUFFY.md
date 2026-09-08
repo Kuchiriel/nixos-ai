@@ -302,6 +302,23 @@ SvelteKit (12 routes, SSE real-time)
 
 **Evidence:** `docs/audit/DEEP-ARCHITECTURAL-AUDIT-2026-09.md` §9.
 
+### 2026-09-08: Checkpoint + BLOCKEDs (LLMClient, read_file, wiring, RVC)
+
+**What was done (VERIFIED, tests green):**
+- Validated parallel Codebuff session: `a0ae4ea` OK; `e4a4e24` solid (+1 edge fix); `873d94f` duplicated RVC spawn → consolidated (`532f135`: single `_run_driver`, `clone_wav` thin adapter, template honors CPU_ONLY via CUDA_VISIBLE_DEVICES).
+- P1: `_get_llm_response()` → `LLMClient` (`1723b4b`) — end of llama.cpp bypass in REPL (breaker, telemetry, backend routing). 26 mocks `+**kw`, zero logic change.
+- P1: `read_file` tool + `read` route (`1482622`) — mission CASE 1/5 unblocked. "leia o arquivo X" → direct read; evidence precedence over audiobook wildcard (path→read, compound→agent, rest→audiobook). `test_read_route.py` (11 contracts).
+- P2: final `run()` wiring (`1ffb095`) — post-execution ToolValidator, per-prompt context guard, duplicate breaker + dead `turn_count` removed. +2 tests.
+
+**Metrics:** full suite pending confirmation (5 pre-existing infra failures expected: `nightwatch_real_e2e` ×3, `platform_e2e` ×2).
+
+**Still open (need product decision, not just technique):**
+- 3 persona mechanisms (`persona.py` vs `persona_executor.py` vs `.jarvismodes`).
+- `dev.py` convergence (`agent_loop.py` plan not started).
+- WebUI canonical-state audit; long-run >30min E2E (TODO-MISSAO P3-2).
+
+**Evidence:** `docs/audit/DEEP-ARCHITECTURAL-AUDIT-2026-09.md` §10.
+
 ## Consolidation 2026-09-03 — Complete
 
 ### What was eliminated

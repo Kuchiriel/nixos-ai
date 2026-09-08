@@ -211,3 +211,39 @@ PYTHONPATH=src:<store de requests+urllib3+certifi+charset-normalizer+idna> \
 | MCP | Not yet audited in this session |
 | EventBus / Control Plane | Not yet audited in this session |
 | Hardcodes | Not yet audited in this session |
+
+---
+
+## 2026-09-08 — Deep Forensic Audit (session 3: checkpoint + BLOCKEDs)
+
+Checkpoint + validação da sessão paralela (Codebuff): `a0ae4ea` OK;
+`e4a4e24` sólido (+1 edge fix); `873d94f` duplicava spawn RVC →
+**consolidado** (`532f135`: `clone_wav` adapter fino, `_run_driver`
+canônico, template honra CPU_ONLY); `af1cfb8` preservado.
+
+### Fixes (verified, tests green)
+
+3. **P1 — `_get_llm_response()` → `LLMClient`** (`1723b4b`): fim do bypass;
+   breaker + telemetria + roteamento de backend no REPL. 26 mocks `+**kw`,
+   zero mudança de lógica de teste.
+4. **P1 — `read_file` + rota `read`** (`1482622`): CASE 1/5 desbloqueados.
+   "leia o arquivo X" → leitura direta; precedência sobre wildcard do
+   audiobook (path → read, composta → agent, resto → audiobook).
+   `test_read_route.py` (11 contratos).
+5. **P2 — wiring final do `run()`** (`1ffb095`): `ToolValidator`
+   pós-execução, context guard por prompt, breaker duplicado removido.
+   +2 testes.
+
+### Current audit state (updated)
+| Area | Status |
+|------|--------|
+| Agent loop | crashes FIXED; dead code REMOVED; validator+budget WIRED |
+| Tool exposure | `execute_shell` + `read_file` (sempre); LLM via `LLMClient` |
+| Router | read/audiobook/agent/RAG por evidência (contratos em test_read_route) |
+| Config | 4 bypasses eliminados (`9b17339`); envs mortas removidas |
+| ContextBudget | implementação única (c866439, pré-existente) |
+| Voice RVC | spawn único (`532f135`); CPU_ONLY funcional |
+| EventBus/privacy/errors | auditados, íntegros, sem mudança |
+| Open P1 | personas ×3 mecanismos; dev.py convergence; WebUI state; long-run E2E |
+
+Evidência: `docs/audit/DEEP-ARCHITECTURAL-AUDIT-2026-09.md` §10.
