@@ -143,6 +143,17 @@ class CircuitBreaker:
                     "circuit breaker: CLOSED -> OPEN (%d falhas consecutivas)", self._consecutive_failures
                 )
 
+    def release(self) -> None:
+        """Libera um slot de sondagem sem contar sucesso nem falha.
+
+        Usado quando o consumidor abandona um stream (GeneratorExit): sem
+        isso, _half_open_calls_in_flight ficava preso em 1 e o circuito
+        nunca mais saía de HALF_OPEN (liveness bug — recovery impossível
+        sem restart do processo).
+        """
+        with self._lock:
+            self._half_open_calls_in_flight = max(0, self._half_open_calls_in_flight - 1)
+
     @property
     def state(self) -> str:
         with self._lock:
@@ -193,6 +204,15 @@ class LLMClient:
             )
 
         self._breaker = CircuitBreaker(
+            CircuitBreakerConfig(
+                failure_threshold=getattr(self._cfg, "llm_circuit_failure_threshold", 4),
+                recovery_timeout=getattr(self._cfg, "llm_circuit_recovery_timeout", 15.0),
+            )
+        )
+        # Breaker separado para embeddings: o servidor de embed (8081) é
+        # processo independente do chat (8080) — um chat morto não pode
+        # vetar RAG, e vice-versa (domínios de falha distintos).
+        self._embed_breaker = CircuitBreaker(
             CircuitBreakerConfig(
                 failure_threshold=getattr(self._cfg, "llm_circuit_failure_threshold", 4),
                 recovery_timeout=getattr(self._cfg, "llm_circuit_recovery_timeout", 15.0),
@@ -334,8 +354,14 @@ class LLMClient:
         with self._telemetry_lock:
             return self._last_ttft_s
 
-    def chat(self, messages: list[dict[str, str]], *, temperature: float = 0.0, max_tokens: int | None = None) -> str:
-        """Chat completion — retorna conteúdo como string."""
+    def chat_full(
+        self, messages: list[dict[str, Any]], *, temperature: float = 0.0, max_tokens: int | None = None
+    ) -> ChatResponse:
+        """Chat completion — retorna ChatResponse crua (breaker + telemetria).
+
+        Caminho canônico para callers que precisam de campos além de
+        `content` (ex.: vision precisa de `reasoning`).
+        """
         request_id = uuid.uuid4().hex[:12]
 
         self._breaker.before_call()
@@ -348,7 +374,7 @@ class LLMClient:
             )
             self._breaker.record_success()
             self._record_telemetry(response, latency_s=time.monotonic() - t0)
-            return response.content
+            return response
         except Exception as exc:
             self._breaker.record_failure()
             if "context" in str(exc).lower() and ("exceed" in str(exc).lower() or "overflow" in str(exc).lower()):
@@ -358,6 +384,10 @@ class LLMClient:
             if "connection" in str(exc).lower():
                 raise LLMConnectionError(f"[{request_id}] connection failed: {exc}") from exc
             raise LLMError(f"[{request_id}] {exc}") from exc
+
+    def chat(self, messages: list[dict[str, str]], *, temperature: float = 0.0, max_tokens: int | None = None) -> str:
+        """Chat completion — retorna conteúdo como string."""
+        return self.chat_full(messages, temperature=temperature, max_tokens=max_tokens).content
 
     # --- chat com tool calling (retorna ChatResponse) ---
 
@@ -421,6 +451,11 @@ class LLMClient:
                 chunks.append(token)
                 yield token
             self._breaker.record_success()
+        except GeneratorExit:
+            # Consumidor abandonou o stream: libera o slot sem contar
+            # sucesso nem falha (abandono não é evidência de saúde).
+            self._breaker.release()
+            raise
         except Exception as exc:
             self._breaker.record_failure()
             raise LLMError(f"stream failed: {exc}") from exc
@@ -452,6 +487,9 @@ class LLMClient:
                     ttft_s = time.monotonic() - t0
                 yield token
             self._breaker.record_success()
+        except GeneratorExit:
+            self._breaker.release()
+            raise
         except Exception as exc:
             self._breaker.record_failure()
             raise LLMError(f"async stream failed: {exc}") from exc
@@ -479,12 +517,16 @@ class LLMClient:
         return truncated
 
     def embed(self, text: str, model: str | None = None) -> list[float]:
-        """Embedding via backend."""
+        """Embedding via backend (sob o breaker de embed: falha conta como as demais)."""
         text = self._truncate_for_embedding(text)
+        self._embed_breaker.before_call()
         try:
-            return self._backend.embed(text, model=model)
+            result = self._backend.embed(text, model=model)
         except Exception as exc:
+            self._embed_breaker.record_failure()
             raise LLMError(f"embedding failed: {exc}") from exc
+        self._embed_breaker.record_success()
+        return result
 
     @property
     def base_url(self) -> str:

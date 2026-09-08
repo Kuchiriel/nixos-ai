@@ -137,6 +137,7 @@ class PrismMLBackend(LLMBackend):
 
         return ChatResponse(
             content=message.get("content", ""),
+            reasoning=message.get("reasoning_content", "") or "",
             tool_calls=message.get("tool_calls", []),
             finish_reason=choice.get("finish_reason", ""),
             usage=data.get("usage", {}),

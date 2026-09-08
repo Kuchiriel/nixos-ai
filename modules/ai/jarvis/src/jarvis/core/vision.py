@@ -279,36 +279,25 @@ def observe_screen(args: dict[str, Any]) -> str:
         with open(image_path, "rb") as f:
             img_b64 = base64.b64encode(f.read()).decode()
 
-    # 3. Send to model via llama.cpp API
-    import requests
+    # 3. Send to model via caminho canônico (LLMClient: breaker +
+    # telemetria + fallback). Antes: requests.post manual que pulava tudo.
+    from jarvis.providers.llm import LLMClient, LLMError
 
-    from jarvis.core.config import get_config
-    api_url = get_config().llm_base_url.replace("/v1", "")
-    payload = {
-        "model": "local",
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
-                    {"type": "text", "text": question},
-                ],
-            }
-        ],
-        "max_tokens": 2000,
-        "temperature": 0.0,
-    }
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
+                {"type": "text", "text": question},
+            ],
+        }
+    ]
 
     try:
-        r = requests.post(
-            f"{api_url}/v1/chat/completions",
-            json=payload,
-            timeout=180,
-        )
-        data = r.json()
-        msg = data["choices"][0]["message"]
-        content = msg.get("content", "")
-        reasoning = msg.get("reasoning_content", "")
+        with LLMClient() as client:
+            resp = client.chat_full(messages, temperature=0.0, max_tokens=2000)
+        content = resp.content
+        reasoning = resp.reasoning
 
         # Build response
         parts = []
@@ -323,7 +312,5 @@ def observe_screen(args: dict[str, Any]) -> str:
         parts.append(f"\n[screenshot: {image_path} ({result.get('size_kb', '?')}KB)]")
         return "\n".join(parts)
 
-    except requests.Timeout:
-        return f"ERROR: vision API timeout (120s). Screenshot saved at {image_path}"
-    except Exception as e:
+    except LLMError as e:
         return f"ERROR: vision analysis failed: {e}. Screenshot saved at {image_path}"

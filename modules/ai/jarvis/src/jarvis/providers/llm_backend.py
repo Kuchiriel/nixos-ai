@@ -43,6 +43,7 @@ class ChatMessage:
 class ChatResponse:
     """Response from a chat completion."""
     content: str = ""
+    reasoning: str = ""  # reasoning_content (thinking models; "" quando ausente)
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     finish_reason: str = ""
     usage: dict[str, Any] = field(default_factory=dict)
