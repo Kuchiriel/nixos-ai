@@ -277,3 +277,13 @@ Evidência: `docs/audit/DEEP-ARCHITECTURAL-AUDIT-2026-09.md` §10.
   `hostname`→`echo` (sandbox); docstring-mark corrigida.
 
 Evidência: `docs/FORENSIC-SYSTEM-COHERENCE-2026-09-08.md`.
+
+### Validação viva pós-rebuild-4 (2026-09-08 ~10:46)
+- `jarvis speak <270 chars>`: 17.4s wall (síntese + playback integral),
+  path impresso, exit 0 — corte eliminado.
+- Daemon reagiu ao playback (Speech detected RMS 630-1075) e rejeitou
+  corretamente via scorer (não era wake); kill pulado via status speaking.
+- Status transitions: speaking (speak) → listening (daemon phase-1) →
+  idle. Waybar exibe estados reais (contrato ts ativo).
+- Usuário: ABRIR NOVO TERMINAL (shells pré-rebuild não têm RVC env;
+  erro agora instrui isso). tmux antigo: restart do servidor tmux.
