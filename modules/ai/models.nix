@@ -85,7 +85,10 @@ in rec {
 
   # --- LLM Bonsai — Host (bare metal), motor ternário ---
   # Ternary-Bonsai-8B Q2_0_g64 (Qwen3-8B denso ternário {-1,0,+1}, 2.15GiB).
-  # Requer fork PrismML (Q2_0 g64 fora do upstream; nixpkgs trava no load).
+  # Servidor atual: fork PrismML. VERIFICADO 2026-09-08: upstream b10809
+  # também serve Q2_0 (chat ok em CPU) — o "trava no load" era de builds
+  # antigos. Prism mantido pelo desempenho (kernels ternários CUDA,
+  # medido TG 71-76 t/s) — trocar p/ upstream exige remediar GPU antes.
   # Medido 2026-09-05 (prism llama-bench, RTX 4050): PP512 1956 t/s, TG128 76.7 t/s.
   llm-bonsai = mkModel {
     url = "https://huggingface.co/prism-ml/Ternary-Bonsai-8B-gguf/resolve/main/Ternary-Bonsai-8B-Q2_0_g64.gguf";

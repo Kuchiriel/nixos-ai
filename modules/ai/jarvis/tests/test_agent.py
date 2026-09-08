@@ -798,3 +798,40 @@ class _ReasoningOnlyClient:
     def chat_with_tools(self, *a, **k):
         from jarvis.providers.llm_backend import ChatResponse
         return ChatResponse(content="", reasoning="passo 1: penso")
+
+
+def test_agent_strict_tools_converts_json_to_calls(tmp_path) -> None:
+    """strict_tools: content JSON vira tool_calls; payload sem tools + schema."""
+    import json as jsonlib
+    from jarvis.providers.llm_backend import ChatResponse
+
+    seen = {}
+
+    class StrictSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            seen.setdefault("payloads", []).append(json)
+            msg = {"role": "assistant",
+                   "content": jsonlib.dumps(
+                       {"tool": "read_file", "arguments": {"path": "/x"}})}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    agent = Agent(Config(), session=StrictSession(), strict_tools=True)
+    result = agent.run("leia /x")
+    first = seen["payloads"][0]
+    assert "tools" not in first
+    assert first["response_format"]["type"] == "json_schema"
+    # read_file canônica executou de verdade (arquivo inexistente → erro honesto)
+    assert result.turns >= 1
+
+
+def test_agent_strict_tools_rejects_unknown_tool() -> None:
+    """strict_tools: tool fora do set vira texto, nunca call inventada."""
+    from jarvis.core.agent import Agent
+    from jarvis.providers.llm_backend import ChatResponse
+
+    agent = Agent(Config(), session=FakeSession("x"))
+    resp = ChatResponse(content='{"tool": "rm_rf", "arguments": {}}')
+    out = Agent._strict_to_response(
+        resp, [{"type": "function", "function": {"name": "read_file"}}])
+    assert out.tool_calls == []
+    assert "rm_rf" in out.content

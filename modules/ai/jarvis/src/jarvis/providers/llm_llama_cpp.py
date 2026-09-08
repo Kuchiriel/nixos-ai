@@ -127,11 +127,7 @@ class LlamaCppBackend(LLMBackend):
         if extra:
             payload.update(extra)
         if not self._enable_thinking:
-            # Desliga thinking no template (Qwen3.x): resposta volta em
-            # `content`. Merge permite override explícito via extra.
-            tpl = dict((extra or {}).get("chat_template_kwargs") or {})
-            tpl.setdefault("enable_thinking", False)
-            payload["chat_template_kwargs"] = tpl
+            payload["chat_template_kwargs"] = self._thinking_kwarg(extra)
 
         resp = self._session.post(
             f"{self._base_url}/v1/chat/completions",
@@ -158,6 +154,16 @@ class LlamaCppBackend(LLMBackend):
             model_id=data.get("model", self._model),
         )
 
+    def _thinking_kwarg(self, extra: dict[str, Any] | None) -> dict[str, Any]:
+        """chat_template_kwargs p/ desligar thinking (mesma regra do chat()).
+
+        Extraído p/ uso compartilhado: chat() e _stream_payload() (streams
+        de modelos thinking rendiam zero tokens úteis sem isso).
+        """
+        tpl = dict((extra or {}).get("chat_template_kwargs") or {})
+        tpl.setdefault("enable_thinking", False)
+        return tpl
+
     def _stream_payload(
         self,
         messages: list[dict[str, Any]],
@@ -177,6 +183,8 @@ class LlamaCppBackend(LLMBackend):
             payload["max_tokens"] = max_tokens
         if tools:
             payload["tools"] = tools
+        if not self._enable_thinking:
+            payload["chat_template_kwargs"] = self._thinking_kwarg(None)
         return payload
 
     @staticmethod

@@ -237,3 +237,38 @@ def test_chat_sends_thinking_off_when_disabled():
     out = LLMClient(cfg, session=session).chat([{"role": "user", "content": "oi"}])
     assert out == "391"
     assert captured["payload"]["chat_template_kwargs"] == {"enable_thinking": False}
+
+
+@pytest.mark.integration
+def test_stream_respects_thinking_off():
+    """chat_stream envia o kwarg (antes: streams de thinking rendiam zero)."""
+    captured = {}
+
+    class _SSE:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def raise_for_status(self):
+            pass
+
+        def iter_lines(self, decode_unicode=False):
+            yield 'data: {"choices": [{"delta": {"content": "oi"}}]}'
+            yield "data: [DONE]"
+
+    def capture_post(*args, **kwargs):
+        captured["payload"] = kwargs.get("json")
+        return _SSE(kwargs.get("json"))
+
+    session = Mock(spec=requests.Session)
+    session.post.side_effect = capture_post
+    cfg = Config(llm_disable_thinking=True)
+    toks = list(LLMClient(cfg, session=session).chat_stream(
+        [{"role": "user", "content": "oi"}]))
+    assert toks == ["oi"]
+    assert captured["payload"]["chat_template_kwargs"] == {"enable_thinking": False}

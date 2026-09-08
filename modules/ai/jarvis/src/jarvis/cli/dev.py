@@ -906,7 +906,16 @@ RULES:
 6. Use MCP tools quando built-in tools não bastam
 7. ANTES de ler arquivo grande: wc -l (saber tamanho)
 {persona_block}
+
+{tool_discipline}
 """.replace("{LANG_NAME}", _template_lang())
+
+# Disciplina de tool-use validada por A/B (30/35 → 35/35 no Bonsai):
+# fonte única em core.agent (sem duplicar o texto aqui).
+try:
+    from jarvis.core.agent import TOOL_USE_DISCIPLINE as _TOOL_DISCIPLINE
+except ImportError:  # pragma: no cover
+    _TOOL_DISCIPLINE = ""
 
 PLAN_PROMPT = """JARVIS architect. {LANG_NAME}. Direto.
 
@@ -2010,7 +2019,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
     memory_ctx = _build_memory_context()
     agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
     system_prompt = _maybe_disable_thinking(
-        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona))
+        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE)
     )
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     if continue_session:
@@ -2052,7 +2061,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             memory_ctx = _build_memory_context()
             agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
             system_prompt = _maybe_disable_thinking(
-                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona))
+                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE)
             )
             messages = [{"role": "system", "content": system_prompt}]
             _persist_session(messages, project_root or os.getcwd())
@@ -2081,7 +2090,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             memory_ctx = _build_memory_context()
             agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
             system_prompt = _maybe_disable_thinking(
-                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona))
+                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE)
             )
             messages[0] = {"role": "system", "content": system_prompt}
             console.print("[dim]🗺️  repo map atualizado[/]")
@@ -2152,7 +2161,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
                     memory_ctx = _build_memory_context()
                     agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section() + _pinned_section()
                     messages[0] = {"role": "system", "content": _maybe_disable_thinking(
-                        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona)))}
+                        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE))}
                     console.print(f"[dim]📌 {target} fixado ({len(content)} chars)[/]")
             continue
 
@@ -2169,7 +2178,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             memory_ctx = _build_memory_context()
             agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section() + _pinned_section()
             messages[0] = {"role": "system", "content": _maybe_disable_thinking(
-                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona)))}
+                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE))}
             left = ", ".join(PINNED_FILES) or "nenhum"
             console.print(f"[dim]fixados: {left}[/]")
             continue
@@ -2467,7 +2476,7 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
     memory_ctx = _build_memory_context(task)
     agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
     system_prompt = _maybe_disable_thinking(
-        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(ap_persona))
+        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(ap_persona), tool_discipline=_TOOL_DISCIPLINE)
     )
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     if continue_session:
@@ -2516,7 +2525,7 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
     memory_ctx = _build_memory_context(task)
     agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
     system_prompt = _maybe_disable_thinking(
-        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(ss_persona))
+        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(ss_persona), tool_discipline=_TOOL_DISCIPLINE)
     )
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     if continue_session:

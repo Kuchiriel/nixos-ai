@@ -214,6 +214,18 @@ from jarvis.providers.mcp import MCPClient, MCPError, parse_command, to_function
 # Constantes (espelho do pi.nix, parametrizadas via Config/env)
 # ---------------------------------------------------------------------------
 
+# Disciplina de tool-use injetada no system prompt (Agent + REPL).
+# Evidência (A/B n=5, 7 tarefas, Bonsai): bare-free 30/35 com 0/5 em
+# `echo hello` (no-call); COM este bloco 35/35; grammar-constrained 35/35.
+# Modelos pequenos não "sabem" o protocolo do harness sozinhos — dizer
+# explicitamente fecha boa parte do gap p/ harnesses comerciais.
+TOOL_USE_DISCIPLINE = """TOOL DISCIPLINE (mandatory):
+- When the request needs an action, call EXACTLY ONE tool per turn: the one that directly performs it.
+- read_file for reading files; execute_shell ONLY for explicit shell commands.
+- NEVER invent filenames, paths, or results — only use what you observed.
+- Two-step request? Do the FIRST step now; the rest in later turns.
+- No suitable tool? Answer with text and call nothing."""
+
 MAX_TURNS: int = int(os.environ.get("JARVIS_AGENT_MAX_TURNS", "8"))
 
 # Comandos read-only seguros — permitidos sem aprovação (diagnóstico/self-heal).
@@ -266,10 +278,14 @@ class Agent:
         approve: bool = False,
         llm_client: Any | None = None,
         model_requirements: dict | None = None,
+        strict_tools: bool = False,
     ):
         self.config = config or get_config()
         self.approval_callback = approval_callback
         self._session = session
+        # strict_tools: tool-calls via grammar constrained (response_format
+        # JSON) em vez do template jinja — 35/35 no A/B c/ Bonsai.
+        self.strict_tools = strict_tools
         # Requisitos de modelo p/ routing local (None = comportamento atual:
         # usa config.llm_model sem ensure). Ex.: {"capabilities": {"coding",
         # "tools"}, "tier": "fast"}.
@@ -320,6 +336,7 @@ class Agent:
         result = AgentResult()
         self.logger.emit("agent_start", detail={"prompt": prompt[:100]})
         system_content = "You are JARVIS, an AI coding assistant."
+        system_content += f"\n\n{TOOL_USE_DISCIPLINE}"
 
         # Persona MCU (default do repl + voz; antes o agente ignorava personas)
         try:
@@ -617,6 +634,73 @@ class Agent:
             from jarvis.providers.llm import LLMClient
             self.llm = LLMClient(self.config, session=self._session)
 
+    @staticmethod
+    def _strict_extra(tools: list[dict[str, Any]]) -> dict[str, Any]:
+        """response_format p/ tool-calls 100% parseáveis (grammar do server)."""
+        names = [t.get("function", {}).get("name", "?") for t in tools]
+        return {"response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "toolcall",
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "tool": {"type": "string", "enum": names},
+                        "arguments": {"type": "object"},
+                    },
+                    "required": ["tool", "arguments"],
+                    "additionalProperties": False,
+                },
+            },
+        }}
+
+    @staticmethod
+    def _strict_signatures(tools: list[dict[str, Any]]) -> str:
+        """Bloco de assinaturas p/ modo strict (A/B: sem isso o modelo
+        adivinha nomes de args — ex.: 'file' em vez de 'path').
+
+        Derivado dos schemas OpenAI já oferecidos (sem duplicar nada)."""
+        lines = ["Available tools (respond with ONLY "
+                 '{"tool": "<name>", "arguments": {...}}):']
+        for t in tools:
+            fn = t.get("function", {})
+            props = (fn.get("parameters", {}) or {}).get("properties", {})
+            req = (fn.get("parameters", {}) or {}).get("required", [])
+            args = ", ".join(
+                f"{k}{'' if k in req else '?'}"
+                for k in props) or "no args"
+            lines.append(f"- {fn.get('name', '?')}({args}): "
+                         f"{fn.get('description', '')}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _strict_to_response(resp: Any, tools: list[dict[str, Any]]) -> Any:
+        """Converte content JSON {tool, arguments} em tool_calls.
+
+        Fora do set oferecido ou JSON inválido: mantém como texto (o loop
+        decide; nunca inventa call).
+        """
+        from jarvis.providers.llm_backend import ChatResponse
+        names = {t.get("function", {}).get("name") for t in tools}
+        try:
+            obj = json.loads(resp.content or "")
+        except (ValueError, TypeError, AttributeError):
+            return resp
+        if not isinstance(obj, dict) or obj.get("tool") not in names:
+            return resp
+        args = obj.get("arguments")
+        if not isinstance(args, dict):
+            return resp
+        return ChatResponse(
+            content="",
+            reasoning=resp.reasoning,
+            tool_calls=[{
+                "id": "strict-1", "type": "function",
+                "function": {"name": obj["tool"],
+                             "arguments": json.dumps(args)},
+            }],
+        )
+
     def _get_llm_response(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
         """Get response from LLM via the canonical LLMClient abstraction.
 
@@ -679,12 +763,29 @@ class Agent:
                         }
                     }
                 })
+        # Strict: schema só nos turnos de chamada. Após observations
+        # (role tool presente), o modelo precisa de texto livre p/ a
+        # resposta final — schema em todo turno o impediria de concluir.
+        need_call = self.strict_tools and not any(
+            m.get("role") == "tool" for m in messages)
+        if need_call:
+            # Assinaturas no system (1x): sem elas o modelo adivinha nomes
+            # de args. Modo constrained: content JSON vira tool_calls do
+            # loop (A/B 35/35). Nome fora do set = texto.
+            if messages and messages[0].get("role") == "system":
+                sig = self._strict_signatures(tools)
+                if "Available tools (respond with ONLY" not in messages[0].get("content", ""):
+                    messages[0] = {**messages[0],
+                                   "content": messages[0].get("content", "") + "\n\n" + sig}
         resp = self.llm.chat_with_tools(
             messages,
-            tools=tools,
+            tools=None if need_call else tools,
             temperature=profile["temperature"],
             max_tokens=profile["max_tokens"],
+            extra=self._strict_extra(tools) if need_call else None,
         )
+        if need_call:
+            resp = self._strict_to_response(resp, tools)
         return {
             "role": "assistant",
             # Modelos thinking (MoE) podem voltar com content vazio e
