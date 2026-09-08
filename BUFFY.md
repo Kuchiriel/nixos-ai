@@ -705,3 +705,27 @@ capability matrix (`filter_tools`) and Tavily `web_search` in REPL + MCP server.
 New: `jarvis.core.keys` (secrets), `jarvis.core.lang` (JARVIS_LANG, default
 pt), `JARVIS_STT_MODEL` mirroring `models.nix`. Rule: swap = .nix + env
 together; prompts derive language, never hardcode it.
+
+### 2026-09-08: RVC urgente + Forense de coerência (paths, MCP, personas, voz)
+
+**What was done (VERIFIED, tests + builds green):**
+- RVC/--clone E2E: causa raiz (zsh sem env + binário stale com fake-success).
+  Método superior: patchelf venv→nix-ld (prova `env -i`), `rvc-env.sh`
+  canônico, bash+zsh declarativos, bootstrap durável. Texto do usuário →
+  15.9s Jarvis real. 2 rebuilds OK.
+- STT small declarativo (models.nix ×4, symlinks); tiny.en morto removido
+  (149MB); STT PT-BR + wakeword VAD provados ao vivo.
+- Project-root canônico (`core/paths.py`, 19 arquivos): fim de 3 resolvers
+  + monkeypatch→contextvar; testes A/B reescritos; `or True` corrigido.
+- MCP rag ensure → store (schema divergente eliminado); lessons(prompt);
+  waybar ts fix (mentia IDLE em listening).
+- Suite do Agent no sandbox Nix: 833→834 passed, 0 failed (unmark + fixture;
+  hostname→echo).
+- ADRs 003 (personas) / 004 (routing policy unwired) como BLOCKED com evidência.
+
+**Metrics:** build 834/0; local 998+/5 infra (pré-existentes).
+
+**Still open:** jarvismodes overlap, registry wiring, dev.py convergence,
+WebUI state, long-run E2E, `chat` vs `ask` overlap (observado).
+
+**Evidence:** `docs/FORENSIC-SYSTEM-COHERENCE-2026-09-08.md`.

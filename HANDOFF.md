@@ -247,3 +247,33 @@ canônico, template honra CPU_ONLY); `af1cfb8` preservado.
 | Open P1 | personas ×3 mecanismos; dev.py convergence; WebUI state; long-run E2E |
 
 Evidência: `docs/audit/DEEP-ARCHITECTURAL-AUDIT-2026-09.md` §10.
+
+---
+
+## 2026-09-08 — Pré-missão voz + Forense (RVC urgente, project-root, MCP, personas)
+
+### Voz/RVC (pré-requisito do usuário — ENTREGUE)
+- Causa do `--clone` quebrado: zsh sem env (bash tinha) + binário instalado
+  STALE com fake-success (driver converteu 0 arquivos, sem verificação).
+- Método superior: patchelf do venv → loader nix-ld (prova `env -i`);
+  `scripts/rvc-env.sh` canônico; bash+zsh via home.nix; bootstrap com passo
+  patchelf. Validação: texto exato do usuário → 15.9s Jarvis real.
+- STT small declarativo (models.nix ×4 + symlinks); tiny.en morto (149MB,
+  URL quebrada) removido; wget `|| true` eliminado. 2 rebuilds OK.
+- STT PT-BR provado; wakeword ativo com VAD; waybar corrigida (writer sem
+  ts mentia IDLE durante listening).
+
+### Forense (coerência)
+- **Project-root canônico** (`c98288a`, 19 arquivos): `core/paths.py`
+  (ctx>env>walk), fim de 3 resolvers + monkeypatch (→contextvar, como o
+  próprio código prescrevia). Testes A/B reescritos; `or True` corrigido.
+- **MCP**: adapters finos OK; `_handle_rag_search` com schema divergente
+  convertido ao store (`8770df8`).
+- **Memória**: `lessons("")`→`lessons(prompt)` + teste.
+- **Personas**: ADR-003 (Registry canônico, Executor consumidor,
+  jarvismodes overlap BLOCKED com stack+não-persistência provados).
+- **Registry privacidade**: zero consumidores → ADR-004 BLOCKED (honesto).
+- **Integridade**: suite do Agent no sandbox (833→834, 0 failed);
+  `hostname`→`echo` (sandbox); docstring-mark corrigida.
+
+Evidência: `docs/FORENSIC-SYSTEM-COHERENCE-2026-09-08.md`.
