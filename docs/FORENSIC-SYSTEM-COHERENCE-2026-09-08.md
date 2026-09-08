@@ -221,6 +221,21 @@ As 5 acima + default multi-provider (custo×latência×privacidade).
 - Logs: clone_e2e/direct/nold/final, stt_probe/postrebuild, rebuild(2).
 - Commits listados abaixo; suite local 998+ (5 infra pré-existentes).
 
+## Addendum 2026-09-08 ~11h — Waybar flicker (CPU + REC fantasma)
+
+Causa raiz única com dois sintomas: `pkill -RTMIN+8 waybar` (refresh do
+módulo a cada set_status + pulse do daemon a cada ~1.6s) casava por regex
+substring `waybar-cpu`, `waybar-memory`, `waybar-gpu`, `*-waybar` — o sinal
+matava os scripts no meio do `sleep 0.5`/read (reproduzido: 4/15 runs,
+rc=170=128+SIGRTMIN+8, zero bytes) e gerava os 7 defuncts. Fix: `-x`
+(feedback.py + daemon). Removido `wait $PPID` teatral do cpuScript.
+
+REC fantasma: daemon afirmava `listening` no onset do VAD (ruído 456-773
+dispara gate 400), até 10s antes de qualquer verificação, com falsos
+positivos do scorer entrando em fase 2. Fix: estado `hearing` (HEAR) até
+confirmação; TTL cobre hearing; waybar mapeia. Evidência: watch de 2min
++ journal RMS correlacionado.
+
 ## Before/after metrics
 
 | Métrica | Antes | Depois |
