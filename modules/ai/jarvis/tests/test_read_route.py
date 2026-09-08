@@ -6,12 +6,21 @@ extraível). Pedidos compostos/perguntas seguem para RAG/agent.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from jarvis.core.agent import Agent
 from jarvis.core.config import Config
 from jarvis.core.router import handle_read, route_request
+
+
+@pytest.fixture
+def agent_cfg(tmp_path: Path) -> Config:
+    """Config com state_dir isolado: Agent nunca toca $HOME (sandbox-safe)."""
+    return replace(Config(), state_dir=tmp_path / "state")
 
 
 # ---------------------------------------------------------------------------
@@ -126,11 +135,11 @@ class _ReadProbeSession:
         return _FakeResponse({"choices": [{"message": msg}]})
 
 
-def test_agent_executes_read_file_tool(tmp_path: Path) -> None:
+def test_agent_executes_read_file_tool(tmp_path: Path, agent_cfg: Config) -> None:
     f = tmp_path / "alvo.txt"
     f.write_text("conteudo secreto 123\n", encoding="utf-8")
     probe = _ReadProbeSession(str(f))
-    agent = Agent(Config(), session=probe)
+    agent = Agent(agent_cfg, session=probe)
     result = agent.run("leia o arquivo alvo")
 
     assert result.turns >= 2
@@ -141,9 +150,9 @@ def test_agent_executes_read_file_tool(tmp_path: Path) -> None:
     assert "read_file" in tool_names
 
 
-def test_agent_read_file_missing_returns_error(tmp_path: Path) -> None:
+def test_agent_read_file_missing_returns_error(tmp_path: Path, agent_cfg: Config) -> None:
     probe = _ReadProbeSession("/nao/existe-xyz.txt")
-    agent = Agent(Config(), session=probe)
+    agent = Agent(agent_cfg, session=probe)
     result = agent.run("leia o que não existe")
     # Sem crash; o erro vira tool result e o loop conclui.
     assert result.turns >= 1

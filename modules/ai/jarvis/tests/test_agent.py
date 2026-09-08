@@ -1,7 +1,5 @@
 """Testes do agente tool-calling seguro (core/agent.py)."""
 import pytest
-pytestmark = pytest.mark.integration
-
 import json as jsonlib
 
 import pytest
@@ -16,6 +14,17 @@ from jarvis.core.agent import (
     run_shell,
 )
 from jarvis.core.config import Config
+
+
+@pytest.fixture(autouse=True)
+def _sandbox_state_dir(tmp_path, monkeypatch) -> None:
+    """Isola state_dir por teste: Agent nunca toca $HOME.
+
+    Sem isso, Agent(Config()) faz mkdir em ~/.local/state/jarvis e o
+    teste quebra no sandbox Nix (/homeless-shelter read-only). Com a
+    fixture, estes testes são unitários puros (mocks) e rodam no build.
+    """
+    monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path / "state"))
 
 
 # ---------------------------------------------------------------------------
@@ -359,7 +368,7 @@ def test_agent_recovers_fallback_tool_call(tmp_path) -> None:
                     "role": "assistant",
                     "content": (
                         'I will check. <tool_call>{"name": "execute_shell", '
-                        '"arguments": {"cmd": "hostname"}}</tool_call>'
+                        '"arguments": {"cmd": "echo fallback-ok"}}</tool_call>'
                     ),
                 }
             else:
@@ -368,8 +377,8 @@ def test_agent_recovers_fallback_tool_call(tmp_path) -> None:
 
     cfg = Config()
     agent = Agent(cfg, session=FallbackSession())
-    result = agent.run("hostname?")
-    assert result.commands_run == ["hostname"]
+    result = agent.run("echo?")
+    assert result.commands_run == ["echo fallback-ok"]
     assert result.final_response == "ok done"
 
 

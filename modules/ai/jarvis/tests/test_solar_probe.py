@@ -40,7 +40,10 @@ from jarvis.core.agent import Agent, AgentResult, extract_fallback_tool_call
 from jarvis.core.config import Config
 
 
-pytestmark = pytest.mark.integration
+@pytest.fixture(autouse=True)
+def _sandbox_state_dir(tmp_path, monkeypatch) -> None:
+    """Isola state_dir por teste (ver test_agent.py): unitários puros rodam no build."""
+    monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path / "state"))
 
 
 # ---------------------------------------------------------------------------
