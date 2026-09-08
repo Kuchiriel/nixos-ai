@@ -95,3 +95,27 @@ def test_status_file_is_json(tmp_path, monkeypatch) -> None:
     parsed = json.loads(raw)
     assert parsed["state"] == "done"
     assert parsed["text"] == "ok"
+
+
+def test_waybar_format_hearing(tmp_path, monkeypatch) -> None:
+    """hearing (som não verificado) tem label próprio — nunca REC fantasma."""
+    import json
+    import time
+
+    monkeypatch.setattr("jarvis.core.feedback.STATUS_FILE", tmp_path / "status.json")
+    set_status("hearing", "♪ Ouvindo...")
+    out = waybar_format()
+    assert out["class"] == "hearing"
+    assert "HEAR" in out["text"]
+    assert "REC" not in out["text"]
+
+
+def test_hearing_stale_reverts_to_idle(tmp_path, monkeypatch) -> None:
+    """TTL anti-travamento cobre hearing (daemon pode morrer no onset)."""
+    import json
+    import time
+
+    p = tmp_path / "status.json"
+    monkeypatch.setattr("jarvis.core.feedback.STATUS_FILE", p)
+    p.write_text(json.dumps({"state": "hearing", "text": "x", "ts": time.time() - 120}))
+    assert get_status()["state"] == "idle"

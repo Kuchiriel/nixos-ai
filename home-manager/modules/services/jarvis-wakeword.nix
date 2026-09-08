@@ -131,8 +131,10 @@ EOF
                              "iso": time.strftime("%Y-%m-%dT%H:%M:%S%z")}, f)
           except Exception:
               pass
+          # -x: match EXATO (sem ele o sinal matava waybar-cpu/-memory
+          # no meio da coleta → flicker + defuncts; forense 2026-09).
           try:
-              subprocess.run(["pkill", "-RTMIN+8", "waybar"],
+              subprocess.run(["pkill", "-x", "-RTMIN+8", "waybar"],
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                              timeout=2)
           except Exception:
@@ -571,7 +573,11 @@ EOF
                           speech_frames = list(pre_roll) + [data]
                           silence_start = None
                           speech_buf = []
-                          update_status("listening", "🎤 Ouvindo...")
+                          # Som detectado, wake AINDA não verificado: estado
+                          # "hearing" (nunca "listening"/REC — REC fantasma a
+                          # cada ruído era o flicker reportado; forense 2026-09).
+                          # Só pós-confirmação vira listening (fase 1) / fase 2.
+                          update_status("hearing", "♪ Ouvindo...")
                           print(f"[WW] 🎤 Speech detected (RMS={rms:.0f}, baseline={noise_baseline:.0f}, gate={speech_gate:.0f}, pre_roll={len(pre_roll)} chunks)", flush=True)
                       continue
 

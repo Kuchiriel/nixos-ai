@@ -58,8 +58,11 @@ def set_status(state: str, text: str = "", **extra: Any) -> None:
         pass
     # Refresh imediato da Waybar (módulo custom/jarvis com "signal": 8;
     # polling de 2s sozinho atrasa o feedback em até 2s — forense 2026-09).
+    # -x: match EXATO do nome (sem ele, o regex "waybar" casa waybar-cpu,
+    # waybar-memory, etc. e o SIGRTMIN+8 matava os scripts no meio do
+    # sleep/read → flicker + defuncts; forense 2026-09).
     try:
-        subprocess.run(["pkill", "-RTMIN+8", "waybar"],
+        subprocess.run(["pkill", "-x", "-RTMIN+8", "waybar"],
                        capture_output=True, timeout=2)
     except (OSError, subprocess.TimeoutExpired):
         pass
@@ -80,7 +83,7 @@ def get_status() -> dict[str, Any]:
     # TTL anti-travamento: estado transitório mais velho que 45s (ex: crash
     # entre set_status("speaking") e o fim) volta a idle em vez de mentir.
     if data.get("state") in ("transcribing", "thinking", "speaking",
-                             "processing", "listening", "busy"):
+                             "processing", "listening", "busy", "hearing"):
         try:
             if time.time() - float(data.get("ts", 0)) > 45:
                 return {"state": "idle", "text": ""}
@@ -185,6 +188,7 @@ def waybar_format() -> dict[str, Any]:
     # nf-md icons — verified in JetBrainsMono Nerd Font
     state_map = {
         "idle":          ("󰧑", "JARVIS"),    # nf-md-brain (U+F09D1) — AI standby
+        "hearing":       ("󰍬", "HEAR"),      # som detectado, wake ainda NÃO verificado (não é REC)
         "listening":     ("󰍬", "REC"),        # nf-md-microphone
         "transcribing":  ("󰈙", "STT"),        # nf-md-text-box
         "processing":    ("󰈙", "STT"),        # alias do daemon (gravou máx / processando)
