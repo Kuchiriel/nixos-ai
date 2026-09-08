@@ -780,3 +780,21 @@ def test_agent_max_turns_read_at_runtime(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("JARVIS_AGENT_MAX_TURNS", "1")
     result = agent.run("check")
     assert result.turns == 1
+
+
+def test_agent_uses_reasoning_when_content_empty(tmp_path) -> None:
+    """Modelo thinking sem content: loop recebe reasoning (nunca vazio)."""
+    from jarvis.providers.llm_backend import ChatResponse
+
+    cfg = Config()
+    agent = Agent(cfg, session=FakeSession("x"))
+    agent.llm = _ReasoningOnlyClient()
+    msg = agent._get_llm_response([{"role": "user", "content": "oi"}])
+    assert "[thinking]" in msg["content"]
+    assert "passo" in msg["content"]
+
+
+class _ReasoningOnlyClient:
+    def chat_with_tools(self, *a, **k):
+        from jarvis.providers.llm_backend import ChatResponse
+        return ChatResponse(content="", reasoning="passo 1: penso")

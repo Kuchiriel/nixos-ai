@@ -57,6 +57,8 @@ def create_backend(
             connect_timeout=kwargs.get("connect_timeout", 5.0),
             read_timeout=kwargs.get("read_timeout", float(config.llm_timeout)),
             session=kwargs.get("session"),
+            enable_thinking=kwargs.get(
+                "enable_thinking", not config.llm_disable_thinking),
         )
     
     elif backend == "prismml":
@@ -68,6 +70,8 @@ def create_backend(
             connect_timeout=kwargs.get("connect_timeout", 5.0),
             read_timeout=kwargs.get("read_timeout", float(config.llm_timeout)),
             session=kwargs.get("session"),
+            enable_thinking=kwargs.get(
+                "enable_thinking", not config.llm_disable_thinking),
         )
     
     elif backend == "bonsai":
@@ -80,6 +84,8 @@ def create_backend(
             connect_timeout=kwargs.get("connect_timeout", 5.0),
             read_timeout=kwargs.get("read_timeout", float(config.llm_timeout)),
             session=kwargs.get("session"),
+            enable_thinking=kwargs.get(
+                "enable_thinking", not config.llm_disable_thinking),
         )
     
     else:

@@ -74,6 +74,7 @@ class LlamaCppBackend(LLMBackend):
         connect_timeout: float = 5.0,
         read_timeout: float = 120.0,
         session: requests.Session | None = None,
+        enable_thinking: bool = True,
     ):
         """
         Args:
@@ -83,6 +84,10 @@ class LlamaCppBackend(LLMBackend):
             connect_timeout: Connection timeout in seconds
             read_timeout: Read timeout in seconds
             session: Optional pre-built requests session (for testing)
+            enable_thinking: Marmaps JARVIS_LLM_DISABLE_THINKING (invertido).
+                False envia chat_template_kwargs.enable_thinking=false
+                (modelos thinking respondem em `content`; sem isso o Agent
+                recebe content vazio). True = nada enviado (auto, como antes).
         """
         self._base_url = base_url.rstrip("/")
         self._embed_url = (embed_url or base_url).rstrip("/")
@@ -90,6 +95,7 @@ class LlamaCppBackend(LLMBackend):
         self._connect_timeout = connect_timeout
         self._read_timeout = read_timeout
         self._session = session or _build_session()
+        self._enable_thinking = enable_thinking
         self._info_cache: BackendInfo | None = None
 
     def chat(
@@ -120,6 +126,12 @@ class LlamaCppBackend(LLMBackend):
                 payload["tool_choice"] = tool_choice
         if extra:
             payload.update(extra)
+        if not self._enable_thinking:
+            # Desliga thinking no template (Qwen3.x): resposta volta em
+            # `content`. Merge permite override explícito via extra.
+            tpl = dict((extra or {}).get("chat_template_kwargs") or {})
+            tpl.setdefault("enable_thinking", False)
+            payload["chat_template_kwargs"] = tpl
 
         resp = self._session.post(
             f"{self._base_url}/v1/chat/completions",

@@ -687,7 +687,11 @@ class Agent:
         )
         return {
             "role": "assistant",
-            "content": resp.content or "",
+            # Modelos thinking (MoE) podem voltar com content vazio e
+            # reasoning preenchido — o loop precisa de algo observável
+            # (mesmo fallback do vision: nunca content vazio silencioso).
+            "content": resp.content or (
+                f"[thinking]\n{resp.reasoning}" if resp.reasoning else ""),
             "tool_calls": resp.tool_calls or [],
         }
         

@@ -20,6 +20,7 @@ import time
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.error import HTTPError
 
 
 class ModelSwitchError(RuntimeError):
@@ -83,6 +84,23 @@ def _lock_path() -> Path:
     return d / "model-switch.lock"
 
 
+def _wait_settled(base_url: str, budget_s: float, poll_s: float) -> None:
+    """Espera nenhum modelo em loading/downloading (router ocupado).
+
+    Best-effort: esgota o budget em silêncio — quem chamou decide retry.
+    """
+    deadline = time.monotonic() + budget_s
+    while time.monotonic() < deadline:
+        try:
+            states = [(m.get("status") or {}).get("value")
+                      for m in _models_data(base_url)]
+        except Exception:
+            return
+        if not any(s in ("loading", "downloading") for s in states):
+            return
+        time.sleep(poll_s)
+
+
 def ensure_model(
     model_id: str,
     base_url: str = "http://127.0.0.1:8080",
@@ -132,13 +150,29 @@ def ensure_model(
                                 selected=model_id, switched=False,
                                 identity_verified=True,
                                 reason={"noop": "switched while waiting lock"})
-        try:
-            _http(base_url, "/models/load", {"model": model_id}, timeout=30.0)
-        except Exception as e:
-            # Servidor single-model (404): só aceita se já for o ativo.
-            raise ModelSwitchError(
-                "load", f"POST /models/load rejeitado ({e}); "
-                f"servidor single-model? ativo={current}") from e
+        attempts = 0
+        while True:
+            attempts += 1
+            try:
+                _http(base_url, "/models/load", {"model": model_id}, timeout=30.0)
+                break
+            except HTTPError as e:
+                # 500 "model limit reached": outro load em andamento
+                # (router max N ou autoload de um chat concorrente) —
+                # transitório: espera assentar e tenta de novo (1x).
+                # 404: preset desconhecido ou servidor single-model.
+                if e.code == 500 and attempts == 1:
+                    _wait_settled(base_url, budget_s=120.0,
+                                  poll_s=poll_interval_s)
+                    continue
+                raise ModelSwitchError(
+                    "load", f"POST /models/load rejeitado (HTTP {e.code}: "
+                    f"{e.reason}; 404=preset desconhecido/single-model, "
+                    f"500=router ocupado; ativo={current})") from e
+            except Exception as e:
+                raise ModelSwitchError(
+                    "load", f"POST /models/load falhou ({e}); "
+                    f"servidor single-model? ativo={current}") from e
         deadline = time.monotonic() + load_timeout_s
         while time.monotonic() < deadline:
             for m in _models_data(base_url):

@@ -218,3 +218,22 @@ def test_chat_full_returns_reasoning():
     resp = LLMClient(Config(), backend=_Think()).chat_full(
         [{"role": "user", "content": "oi"}])
     assert resp.reasoning == "hmm"
+
+
+@pytest.mark.integration
+def test_chat_sends_thinking_off_when_disabled():
+    """JARVIS_LLM_DISABLE_THINKING=1 → chat_template_kwargs no payload."""
+    captured = {}
+
+    def capture_post(*args, **kwargs):
+        captured["payload"] = kwargs.get("json")
+        return _resp_with({
+            "choices": [{"message": {"content": "391"}}],
+        })
+
+    session = Mock(spec=requests.Session)
+    session.post.side_effect = capture_post
+    cfg = Config(llm_disable_thinking=True)
+    out = LLMClient(cfg, session=session).chat([{"role": "user", "content": "oi"}])
+    assert out == "391"
+    assert captured["payload"]["chat_template_kwargs"] == {"enable_thinking": False}

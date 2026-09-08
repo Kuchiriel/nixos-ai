@@ -138,6 +138,7 @@ class _RouterState:
         self.known = {"bonsai", "jarvis-fast", "jarvis-strong"}
         self.fail_status: str | None = None  # força status arbitrário
         self.hang = False  # nunca completa o load
+        self.busy_once = False  # 1º POST 500 "model limit reached"
 
 
 def _serve(state: _RouterState):
@@ -176,6 +177,15 @@ def _serve(state: _RouterState):
                     self._send({"error": "unknown model"}, 400)
                     return
                 state.loads += 1
+                if state.busy_once:
+                    # Simula "model limit reached" (outro load em curso):
+                    # ensure deve esperar assentar e tentar de novo.
+                    state.busy_once = False
+                    self._send({"error": {"code": 500,
+                                          "message": "model limit reached, "
+                                                     "try again later",
+                                          "type": "server_error"}}, 500)
+                    return
                 if not state.hang:
                     state.loaded = mid
                 self._send({"success": True})
@@ -268,6 +278,18 @@ def test_readiness_timeout(router, tmp_path, monkeypatch):
         L.ensure_model("jarvis-fast", base, load_timeout_s=1,
                        poll_interval_s=0.2)
     assert ei.value.phase == "readiness"
+
+
+def test_busy_router_retries_after_settle(router, tmp_path, monkeypatch):
+    """500 'model limit reached' → espera + retry (achado dogfood real)."""
+    from jarvis.core import model_lifecycle as L
+    monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path))
+    base, state = router
+    state.busy_once = True
+    rep = L.ensure_model("jarvis-fast", base, poll_interval_s=0.1)
+    assert rep.switched is True
+    assert rep.identity_verified is True
+    assert state.loads == 2  # 1ª rejeitada + retry
 
 
 def test_server_down_is_discover_error(tmp_path, monkeypatch):

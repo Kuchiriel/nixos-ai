@@ -74,6 +74,7 @@ class PrismMLBackend(LLMBackend):
         connect_timeout: float = 5.0,
         read_timeout: float = 120.0,
         session: requests.Session | None = None,
+        enable_thinking: bool = True,
     ):
         """
         Args:
@@ -83,6 +84,8 @@ class PrismMLBackend(LLMBackend):
             connect_timeout: Connection timeout in seconds
             read_timeout: Read timeout in seconds
             session: Optional pre-built requests session (for testing)
+            enable_thinking: idem LlamaCppBackend (False envia
+                chat_template_kwargs.enable_thinking=false).
         """
         # Strip trailing /v1 if present — adapter appends it
         self._base_url = base_url.rstrip("/").removesuffix("/v1")
@@ -91,6 +94,7 @@ class PrismMLBackend(LLMBackend):
         self._connect_timeout = connect_timeout
         self._read_timeout = read_timeout
         self._session = session or _build_session()
+        self._enable_thinking = enable_thinking
         self._info_cache: BackendInfo | None = None
 
     def chat(
@@ -121,6 +125,10 @@ class PrismMLBackend(LLMBackend):
                 payload["tool_choice"] = tool_choice
         if extra:
             payload.update(extra)
+        if not self._enable_thinking:
+            tpl = dict((extra or {}).get("chat_template_kwargs") or {})
+            tpl.setdefault("enable_thinking", False)
+            payload["chat_template_kwargs"] = tpl
 
         resp = self._session.post(
             f"{self._base_url}/v1/chat/completions",
