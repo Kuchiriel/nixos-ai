@@ -280,10 +280,10 @@ def observe_screen(args: dict[str, Any]) -> str:
             img_b64 = base64.b64encode(f.read()).decode()
 
     # 3. Send to model via llama.cpp API
-    import os
     import requests
 
-    api_url = os.environ.get("JARVIS_LLM_URL", "http://127.0.0.1:8080")
+    from jarvis.core.config import get_config
+    api_url = get_config().llm_base_url.replace("/v1", "")
     payload = {
         "model": "local",
         "messages": [

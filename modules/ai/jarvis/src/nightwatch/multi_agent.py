@@ -252,9 +252,9 @@ def create_llm_executor(
 
         messages.append({"role": "user", "content": task})
 
-        # Detect LLM endpoint
-        import os as _os
-        base_url = _os.environ.get("LLAMA_CPP_URL", "http://127.0.0.1:8080")
+        # Detect LLM endpoint (canonical source: Config)
+        from jarvis.core.config import get_config
+        base_url = get_config().llm_base_url
 
         payload = {
             "messages": messages,

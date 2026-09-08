@@ -60,10 +60,10 @@ def query_server_context_size() -> int:
 
     Returns 0 if server is unavailable.
     """
-    import os
     try:
         import requests
-        base_url = os.environ.get("LLAMA_CPP_URL", "http://127.0.0.1:8080")
+        from jarvis.core.config import get_config
+        base_url = get_config().llm_base_url
         # /props is at root, not under /v1
         base = base_url.rstrip("/").replace("/v1", "")
         resp = requests.get(f"{base}/props", timeout=3)

@@ -282,7 +282,7 @@ class Agent:
         self.loop_detector = LoopDetector()
         try:
             from jarvis.core.health_monitor import BackendHealthMonitor
-            monitor = BackendHealthMonitor()
+            monitor = BackendHealthMonitor(self.config.llm_base_url.replace("/v1", ""))
             self.circuit_breaker = CircuitBreaker(health_monitor=monitor)
         except Exception:
             self.circuit_breaker = None
