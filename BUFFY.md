@@ -283,6 +283,25 @@ SvelteKit (12 routes, SSE real-time)
 **Unfixed (needs separate session):**
 - 6 pre-existing test failures (LLM server, API mismatches, voice paths)
 
+### 2026-09-07: Deep Forensic Audit Session 2 (agent robustness + config + dead code)
+
+**What was done (VERIFIED, tests green):**
+- P0: `Agent.run()` no longer crashes on malformed tool calls (non-dict `func`, invalid-JSON `arguments`, non-dict `args`) — error tool result + continue instead of exception propagation. `tests/test_solar_probe.py` 8 failures → 0.
+- P1: Removed double PAST LESSONS injection (`_get_llm_response` re-injected every turn; canonical single injection in `run()`).
+- P2: Removed ~200 lines dead code from `agent.py` (`execute_tool`, `run_loop`, `TOOLS`, `_extract_tool_calls`, `AgentError`, `ApprovalDeniedError` + helpers) — zero external importers verified.
+- P1: Eliminated 4 `config.py` bypasses (`JARVIS_LLM_URL`, `LLAMA_CPP_URL` ×2, `BackendHealthMonitor()` default) — canonical `JARVIS_LLM_BASE_URL` only.
+- P2: Removed orphaned `_regex.txt` (superseded by `tool_patterns.py`).
+- Audited (no change, architecture sound): ContextBudget already consolidated (`c866439`); EventBus single canonical + async-safe; privacy choke point intact (remote capped PUBLIC); `except: pass` only in optional paths; `archive/` zero production imports.
+
+**Metrics:** 987 passed / 5 failed (pre-existing infra: `nightwatch_real_e2e` ×3, `platform_e2e` ×2 — require live Qdrant/llama.cpp; BLOCKED, not regressions).
+
+**Still open (P1, require architectural refactor):**
+- Router keyword-matching routes "leia o arquivo X" → RAG (agent exposes only `execute_shell`, no `read_file`/`write_file`).
+- `_get_llm_response()` still bypasses `LLMClient` (direct `requests.post`; ~20 mocks to adapt).
+- `ToolValidator`/`CircuitBreaker`/`ContextBudget` instantiated in `Agent` but not wired into `run()` (component theater, same pattern as F1-fixed LoopDetector).
+
+**Evidence:** `docs/audit/DEEP-ARCHITECTURAL-AUDIT-2026-09.md` §9.
+
 ## Consolidation 2026-09-03 — Complete
 
 ### What was eliminated
