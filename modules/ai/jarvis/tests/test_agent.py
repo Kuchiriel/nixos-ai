@@ -734,3 +734,49 @@ def test_lessons_recall_uses_prompt_not_empty_query() -> None:
     agent = Agent(Config(), session=FakeSession("ok"), memory=QueryRecordingMemory())
     agent.run("consertar o qdrant que caiu")
     assert seen.get("query") == "consertar o qdrant que caiu"
+
+
+def test_agent_tool_timeout_becomes_observation(tmp_path, monkeypatch) -> None:
+    """Timeout de tool vira observation — run() não aborta (integração E).
+
+    Regressão: run_shell() levantava TimeoutExpired sem try, matando o
+    run() inteiro sem final_response nem audit.
+    """
+    import subprocess
+    from unittest.mock import patch
+
+    session = FakeSession("nunca-veremos")
+    seen_payloads: list = []
+    _orig_post = session.post
+
+    def _capture(url, json=None, timeout=120, **kw):
+        seen_payloads.append(json)
+        return _orig_post(url, json=json, timeout=timeout, **kw)
+
+    session.post = _capture
+    agent = Agent(Config(), session=session,
+                  audit_path=tmp_path / "audit.jsonl")
+
+    def _boom(cmd, timeout=60):
+        raise subprocess.TimeoutExpired(cmd, timeout)
+
+    with patch("jarvis.core.agent.run_shell", side_effect=_boom):
+        result = agent.run("check")
+
+    assert result.commands_run == ["echo hello"]
+    assert result.turns == 2  # run sobreviveu (antes: TimeoutExpired matava tudo)
+    # A observation de timeout chegou às mensagens do turno 2.
+    turn2_text = jsonlib.dumps(seen_payloads[1])
+    assert "timed out" in turn2_text
+    lines = (tmp_path / "audit.jsonl").read_text().strip().splitlines()
+    assert len(lines) == 1
+    assert jsonlib.loads(lines[0])["exit_code"] == -1
+
+
+def test_agent_max_turns_read_at_runtime(tmp_path, monkeypatch) -> None:
+    """JARVIS_AGENT_MAX_TURNS vale no runtime (não congelado no import)."""
+    session = FakeSession("x")
+    agent = Agent(Config(), session=session)
+    monkeypatch.setenv("JARVIS_AGENT_MAX_TURNS", "1")
+    result = agent.run("check")
+    assert result.turns == 1

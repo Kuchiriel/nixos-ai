@@ -379,7 +379,13 @@ class Agent:
         except Exception:
             pass
 
-        for turn in range(MAX_TURNS):
+        # Limites lidos no runtime (não congelados no import): WebUI/CLI
+        # podem ajustar JARVIS_AGENT_MAX_TURNS sem reiniciar o processo.
+        try:
+            max_turns = int(os.environ.get("JARVIS_AGENT_MAX_TURNS", str(MAX_TURNS)))
+        except ValueError:
+            max_turns = MAX_TURNS
+        for turn in range(max_turns):
             result.turns += 1
             response = self._get_llm_response(messages)
             messages.append(response)
@@ -467,18 +473,29 @@ class Agent:
                             tool_result = f"ERROR: Chaining operators not allowed: {cmd}"
                         else:
                             # Execute
-                            proc = run_shell(cmd)
-                            result.commands_run.append(cmd)
-                            exit_code = proc.returncode
-                            tool_result = proc.stdout + proc.stderr
-                            self._log_audit(cmd, proc.returncode, tool_result, True)
+                            try:
+                                proc = run_shell(cmd)
+                            except subprocess.TimeoutExpired:
+                                # Timeout vira observation (não aborta o run):
+                                # cai no fluxo normal abaixo (validator +
+                                # messages.append) para o modelo ver o erro.
+                                exit_code = -1
+                                tool_result = f"ERROR: Command timed out after 60s: {cmd}"
+                                result.commands_run.append(cmd)
+                                self._log_audit(cmd, -1, tool_result, True)
+                            else:
+                                result.commands_run.append(cmd)
+                                exit_code = proc.returncode
+                                tool_result = proc.stdout + proc.stderr
+                                self._log_audit(cmd, proc.returncode, tool_result, True)
                             # Auto-learn: record lesson on command failure
-                            if proc.returncode != 0 and self.memory:
+                            # (usa exit_code: no timeout não há proc).
+                            if exit_code != 0 and self.memory:
                                 try:
                                     self.memory.remember_lesson(
                                         task=f"shell: {cmd[:80]}",
                                         error_pattern=tool_result[:200],
-                                        fix=f"Command '{cmd[:60]}' failed with exit code {proc.returncode}",
+                                        fix=f"Command '{cmd[:60]}' failed with exit code {exit_code}",
                                     )
                                 except Exception:
                                     pass
@@ -486,11 +503,18 @@ class Agent:
                         # Needs approval
                         if self.approve:
                             if human_approve(cmd):
-                                proc = run_shell(cmd)
-                                result.commands_run.append(cmd)
-                                exit_code = proc.returncode
-                                tool_result = proc.stdout + proc.stderr
-                                self._log_audit(cmd, proc.returncode, tool_result, True)
+                                try:
+                                    proc = run_shell(cmd)
+                                except subprocess.TimeoutExpired:
+                                    exit_code = -1
+                                    tool_result = f"ERROR: Command timed out after 60s: {cmd}"
+                                    result.commands_run.append(cmd)
+                                    self._log_audit(cmd, -1, tool_result, True)
+                                else:
+                                    result.commands_run.append(cmd)
+                                    exit_code = proc.returncode
+                                    tool_result = proc.stdout + proc.stderr
+                                    self._log_audit(cmd, proc.returncode, tool_result, True)
                             else:
                                 result.commands_denied.append(cmd)
                                 tool_result = f"ERROR: Command denied by user: {cmd}"
