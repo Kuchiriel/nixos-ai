@@ -470,6 +470,23 @@ class Agent:
                             result.commands_denied.append(cmd)
                             tool_result = f"ERROR: Command not allowed: {cmd}"
                             self._log_audit(cmd, None, tool_result, False)
+                elif name == "read_file":
+                    # Leitura read-only via implementação canônica (devtools).
+                    # Sem aprovação: risco zero. Erros viram tool result.
+                    from jarvis.core.devtools import read_file as _canonical_read
+                    try:
+                        offset = int(args.get("offset", 0) or 0)
+                    except (TypeError, ValueError):
+                        offset = 0
+                    try:
+                        limit = int(args.get("limit", 200) or 200)
+                    except (TypeError, ValueError):
+                        limit = 200
+                    res = _canonical_read(str(args.get("path", "")), offset=offset, limit=limit)
+                    if res.get("ok"):
+                        tool_result = f"# {res.get('path', '')} ({res.get('total_lines', 0)} linhas)\n{res.get('content', '')}"
+                    else:
+                        tool_result = f"ERROR: {res.get('error', 'read failed')}"
                 else:
                     tool_result = f"ERROR: Unknown tool: {name}"
                 
@@ -505,10 +522,27 @@ class Agent:
         # Profile-aware generation params (hardcoded 1024/0.0 ignored the
         # detected model profile and tool_choice strategy)
         profile = detect_profile(self.config.llm_model or "")
-        # Add tools if MCP servers are configured
-        tools: list[dict[str, Any]] | None = None
+        # Tools expostas ao LLM. `read_file` é sempre oferecida (read-only,
+        # risco zero, capacidade central — CASE 1: "leia o arquivo X" nunca
+        # deve precisar de RAG). `execute_shell` + MCP exigem mcp_servers.
+        tools: list[dict[str, Any]] = [{
+            "type": "function",
+            "function": {
+                "name": "read_file",
+                "description": "Read a file with line numbers. Use for exact known paths (no RAG needed).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "File path (absolute or relative to CWD)"},
+                        "offset": {"type": "integer", "description": "Start line, 0-indexed (default 0)"},
+                        "limit": {"type": "integer", "description": "Max lines (default 200)"},
+                    },
+                    "required": ["path"],
+                },
+            },
+        }]
         if self.mcp_servers:
-            tools = [{
+            tools.append({
                 "type": "function",
                 "function": {
                     "name": "execute_shell",
@@ -521,7 +555,7 @@ class Agent:
                         "required": ["cmd"]
                     }
                 }
-            }]
+            })
             # Add MCP tools
             for server_name, server_cmd in self.mcp_servers.items():
                 tools.append({

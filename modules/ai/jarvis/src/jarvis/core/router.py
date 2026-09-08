@@ -68,6 +68,26 @@ _RAG_TRIGGERS: tuple[str, ...] = (
 # Expressões de fallback técnico: extensões de arquivo forçam RAG
 _RAG_EXT_RE = re.compile(r"\.(py|nix|rs|go|ts|js|lua|sh|cpp|c|h|md|toml|json)\b", re.IGNORECASE)
 
+# Rota READ — pedido direto de leitura ("leia o arquivo X"). Verbos ancorados
+# no início; conjunto estreito de propósito: "mostra/mostre" e "o que tem"
+# continuam no RAG (perguntas sobre conteúdo, não leitura direta — ver
+# test_route_extension_forces_rag). Pedidos compostos ("leia X e explique")
+# caem no agent (LLM + read_file tool).
+_READ_VERB_RE = re.compile(r"^(leia|ler|read|cat)\b", re.IGNORECASE)
+_READ_PATH_RE = re.compile(r"(?:^|[\s\"'`(\[])(~?/(?:[\w.\-]+/)*[\w.\-]+|\./(?:[\w.\-]+/)*[\w.\-]+|[\w.\-]+\.(?:py|nix|rs|go|ts|js|lua|sh|cpp|c|h|md|toml|json|yaml|yml|txt|toml|service|timer|conf))", re.IGNORECASE)
+_READ_QUESTION_RE = re.compile(
+    r"\b(explique|explica|explana|como funciona|por que|o que|qual|quais|onde|analise|resuma|resume|traduza|para que|pra que)\b",
+    re.IGNORECASE,
+)
+
+
+def _extract_read_path(text: str) -> str | None:
+    """Extrai path de pedido de leitura direta. None se não houver path."""
+    m = _READ_PATH_RE.search(text)
+    if not m:
+        return None
+    return m.group(1).strip().strip("\"'`")
+
 
 @dataclass
 class Route:
@@ -215,6 +235,21 @@ def route_request(text: str) -> Route:
     fp = get_fast_paths()
     match = fp.match(low)
     if match is not None:
+        # Precedência por evidência: path exato e pergunta vencem wildcard fuzzy.
+        # As regras `@ler [o] [@livro] *` / `read [the] [book] *` (audiobook)
+        # casam QUALQUER "leia X" — incluindo "leia o arquivo X" (leitura de
+        # arquivo, não audiobook) e "leia X e explique" (composto, precisa de
+        # raciocínio). Se há pergunta → agent (LLM + read_file tool). Se há
+        # path exato → read (igualmente zero LLM). Só o restante é audiobook.
+        if "<call>audiobook read" in (match.response or ""):
+            if _READ_QUESTION_RE.search(low):
+                log.info("route_agent", detail={"over": "fastpath-audiobook", "text": text[:100]})
+                return Route("agent", "pedido composto com leitura — LLM com tools", text, 0.5)
+            read_path = _extract_read_path(text)
+            if read_path:
+                log.info("route_read", detail={"path": read_path, "over": "fastpath-audiobook"})
+                return Route("read", f"leitura direta: '{read_path}'", text, 0.95,
+                             hints={"path": read_path})
         log.info("fastpath_match", detail={"trigger": match.rule.trigger, "text": text[:100]})
         return Route("fastpath", f"regra declarativa: '{match.rule.trigger}'", text, 1.0)
 
@@ -231,6 +266,17 @@ def route_request(text: str) -> Route:
     if ok:
         log.info("route_nixos", detail={"trigger": trigger})
         return Route("nixos", f"gatilho de nixpkgs: '{trigger}'", text, 0.85)
+
+    # 2b. READ — leitura direta de path exato (zero LLM, sem RAG).
+    #     Só para pedidos puros ("leia o arquivo X"); compostos ("leia X
+    #     e explique") e perguntas ("mostra/Me mostra/o que tem") seguem
+    #     para RAG/agent. Política: EXACT KNOWN FILE → read_file.
+    if _READ_VERB_RE.match(low) and not _READ_QUESTION_RE.search(low):
+        read_path = _extract_read_path(text)
+        if read_path:
+            log.info("route_read", detail={"path": read_path})
+            return Route("read", f"leitura direta: '{read_path}'", text, 0.95,
+                         hints={"path": read_path})
 
     # 3. RAG — código indexado (zero LLM para recuperação)
     ok, trigger = _match_any(low, _RAG_TRIGGERS)
@@ -322,6 +368,27 @@ def handle_rag(query: str, cfg: Any = None, top_k: int = 5) -> dict[str, Any]:
             for h in hits
         ],
     }
+
+
+def handle_read(path: str, cfg: Any = None, limit: int = 200) -> dict[str, Any]:
+    """Executa a rota read: leitura direta via implementação canônica.
+
+    Zero LLM, zero RAG — para paths exatos conhecidos. Erros (arquivo
+    inexistente, fora do projeto) viram `error` estruturado, nunca crash.
+    """
+    from jarvis.core.devtools import read_file
+
+    res = read_file(path, limit=limit)
+    out: dict[str, Any] = {"route": "read", "path": path}
+    if res.get("ok"):
+        out.update({
+            "content": res.get("content", ""),
+            "total_lines": res.get("total_lines", 0),
+            "error": None,
+        })
+    else:
+        out.update({"content": "", "total_lines": 0, "error": res.get("error", "read failed")})
+    return out
 
 
 def handle_agent(query: str, cfg: Any = None, *, approve: bool = False,

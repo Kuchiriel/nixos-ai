@@ -12,7 +12,7 @@ Subcomandos:
   jarvis doctor                  — diagnóstico de saúde de todos os serviços
   jarvis metrics                 — métricas e telemetria dos logs JSONL
   jarvis agent "tarefa"         — agente tool-calling (allowlist + aprovação + audit)
-  jarvis ask "pedido"           — roteador: doctor/nixos/rag/agent (caminho mais barato)
+  jarvis ask "pedido"           — roteador: fastpath/doctor/nixos/read/rag/agent (caminho mais barato)
   jarvis remember "fato"        — grava um evento na memória episódica
   jarvis recall "busca"         — recupera eventos da memória (híbrido)
   jarvis lessons "erro"         — lições passadas relevantes (estilo experience_buffer)
@@ -383,7 +383,7 @@ def _cmd_idle_worker(args: argparse.Namespace) -> int:
 def _cmd_ask(args: argparse.Namespace) -> int:
     from jarvis.core.feedback import notify, set_status
     from jarvis.core.router import (
-        handle_agent, handle_doctor, handle_fastpath, handle_nixos, handle_rag, route_request,
+        handle_agent, handle_doctor, handle_fastpath, handle_nixos, handle_rag, handle_read, route_request,
     )
     from jarvis.control_plane.events import Events, Severity
     from jarvis.control_plane.notifications import get_notification_manager
@@ -400,6 +400,8 @@ def _cmd_ask(args: argparse.Namespace) -> int:
             out = handle_nixos(route.query, cfg)
         elif route.handler == "rag":
             out = handle_rag(route.query, cfg, top_k=args.top_k)
+        elif route.handler == "read":
+            out = handle_read(route.hints.get("path", route.query), cfg)
         else:
             out = handle_agent(route.query, cfg, approve=args.approve)
     except Exception as exc:  # noqa: BLE001
