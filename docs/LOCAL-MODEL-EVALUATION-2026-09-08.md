@@ -193,3 +193,93 @@ Gemma/Phi/Ministral (arquivos+banda); GPU t/s Qwen/MoE + VRAM de switch
    (temp 0, 19 tarefas; mini-loop agent executa de verdade no sandbox).
 4. Qwen3-4B: `nix-store --realise` do .drv em models.nix (hash verificado).
 5. Kill :18080 ao fim (harness não gerencia ciclo de vida do servidor).
+
+---
+
+# ADDENDUM 2026-09-08 (tarde) — A/B de harness, thinking plumbing, paridade
+
+## A/B tool-use (n=5, 7 tarefas, BFCL-style AST-lite)
+
+| Modelo | bare-free | free+sysprompt | constrained |
+|---|---|---|---|
+| Bonsai (GPU) | 30/35 (t2 `echo` 0/5 no-call) | **35/35** | **35/35** |
+| Qwen3-4B no-think (CPU) | **35/35** | **35/35** | 20/35 (t2/x2/a3 bad-json) |
+| Qwen3-4B thinking-ON | colapsa (no-call generalizado) | idem | parcial (bad-json) |
+
+- Evidência: disciplina explícita no system prompt fecha o gap do Bonsai
+  (30→35); grammar-constrained também 35/35 no Bonsai, mas PIORA o Qwen
+  (20/35) — grammar garante FORMA, não vocabulário (Qwen: `"command"` vs
+  `"cmd"`); e thinking-ON envenena tool-use em qualquer modo.
+- Conclusão harness: strict mode = opt-in por tier (speed→sim, fast→não
+  precisa); thinking OFF obrigatório p/ tool-use em Qwen/MoE.
+
+## Thinking plumbing (P1, implementado+testado)
+
+- `JARVIS_LLM_DISABLE_THINKING` era config morta (lida, nunca consumida):
+  thinking models devolviam `content` vazio (MoE) ou zero tokens no stream.
+- Fix: backends enviam `chat_template_kwargs.enable_thinking=false`
+  (só quando desligado — default byte-idêntico); factory mapeia o flag
+  nos 3 backends; `_stream_payload` consolidado via `_thinking_kwarg()`;
+  Agent usa `reasoning` quando `content` vazio (mesmo fallback do vision).
+- Verificado ao vivo: MoE `391` em content; stream Qwen TTFT 0.33s.
+- TTFT medidos: Bonsai GPU 0.05s (~60 t/s stream); Qwen CPU 0.33s.
+
+## Números oficiais (llama-bench, CPU ngl=0, t8, -r 3)
+
+- Qwen3-4B: pp512 400.27 ± 6.89, tg128 5.15 ± 0.18.
+- Bonsai-8B: pp512 768.58 ± 11.58, tg128 1.35 ± 0.52 (tg sob contenção
+  de threads — 3 cargas simultâneas; pp é o número confiável).
+- MoE-35B: pp128 5.19, tg32 0.96 (sondagem -r 1; RAM 19GB ok via mmap).
+- GPU bench de terceiros exige desalojar :8080 (não feito).
+
+## Disciplina no harness (implementado)
+
+- `TOOL_USE_DISCIPLINE` (core.agent, fonte única) injetado no system do
+  Agent e no template do REPL dev.py (7 sites, sem duplicar texto).
+- `Agent(strict_tools=...)`: turnos de chamada via response_format +
+  assinaturas derivadas dos schemas (sem elas o modelo adivinha arg names)
+  + conversão p/ tool_calls; turnos pós-observation em texto livre
+  (schema em todo turno impedia a conclusão — achado em teste vivo).
+- Demo viva: loops strict completam de ponta a ponta no Bonsai.
+
+## Paridade com ecosistemas comerciais (veredito honesto)
+
+- Gap de HARNESS (fechável, evidência acima): system prompt sem
+  disciplina, sem constrained-decode, thinking sem plumbing, sem
+  multi-sample. Opencode/Roo/Cline investem exatamente aí + permissão/
+  compactação/retries. Nossa disciplina + strict + thinking plumbing
+  replicam a camada que mais pesava nos testes (30→35/35).
+- Gap de CAPACIDADE (real, não é só harness): Q2_0 ternário e 4B não
+  planejam/debuggam como flash models de 20–50B+ com 200K ctx servidos a
+  100+ t/s. Reasoning 0/3 (Bonsai) e r1-errado-em-todos provam teto.
+- Velocidade: se fosse SÓ velocidade, esperar bastaria — mas não é só:
+  qualidade de planejamento/código complexo é o teto. Para rotina
+  (mecânica + PT-BR + coding simples), paridade é atingível com harness;
+  para arquitetura/debugging profundo, strong local ≈ auxiliar, não
+  substituto, de flash models — com 6GB VRAM não há modelo que mude isso.
+- Vantagem NixOS (computador como usuário: tooling/MCP/computer-use) é
+  real e inexplorada pelos proprietários — é onde dá p/ passar, não
+  empatar: sandbox declarativo + MCP + router local + RAG/vault.
+
+## Downloads (método vencedor + pendência do usuário)
+
+- Medido: throttle POR-CONEXÃO (~5KB/s cada; 4× ≈ 20KB/s agregado;
+  single ≈ 190 B/s). `nix shell`/pip inviáveis (cache a 881 B/s).
+- `scripts/fetch-resume.py` (stdlib, Range+retry) + receita de partes
+  paralelas documentadas; tentativa 8-way travou em ~0 B/s sustentado.
+- PENDENTE DO USUÁRIO (browser, pipe dele funciona):
+  1. https://huggingface.co/unsloth/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf (~2.3GB)
+  2. https://huggingface.co/unsloth/Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf (~2.2GB)
+  destino: `~/models/`; avisar que baixou (eu computo hash e viro
+  avaliação + fiação no models.nix).
+
+## Second pass (metodologia)
+
+- Single-sample tem RUÍDO (slot-cache/KV-reuse do servidor): g3 "401" e
+  g2 "Debian" do Qwen viraram 391/correto em retries 2/2; x1 do Bonsai
+  flipou entre runs. Conclusões usam padrões (n=5) + retries, nunca 1 sample.
+- Scorer só-texto subestima cadeias (a2-MoE provado por arquivo); revisão
+  manual aplicada em todos os 0s. Temps/schemas/ctx documentados por run.
+- Harness de eval commitado em `scripts/eval-model.py`; A/B em
+  `/tmp/opencode/ab-grammar.py` (promover p/ scripts/ quando estabilizar
+  o formato — ainda sujeito a mudança).
