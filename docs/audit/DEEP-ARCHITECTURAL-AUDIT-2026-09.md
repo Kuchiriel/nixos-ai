@@ -138,3 +138,51 @@ PYTHONPATH=src:<store-paths de requests/urllib3/certifi/charset-normalizer/idna>
    consolidar com o plano `agent_loop.py` do `duplication-analysis.md`.
 3. Consolidar os dois `ContextBudget` em um, com auto-detect de `n_ctx` via `/props`.
 4. Ligar `ToolValidator`/`CircuitBreaker` no `run()` (mesmo padrão do F1).
+
+---
+
+## 9. Sessão 2 — 2026-09-07 (forense + correções)
+
+### 9.1 Correções implementadas e verificadas
+
+**F9 — Agent.run() crashava em tool calls malformados** (P0, `core/agent.py`):
+- `func` não-dict → `AttributeError`. Fix: guarda `isinstance(func, dict)` → tool result de erro + continue.
+- `arguments` string com JSON inválido → `args` virava string → crash em `args.get()`. Fix: distingue string (parse via `json.loads`) de dict (uso direto); except → `{}`.
+- `arguments` não-dict pós-parse → guarda `isinstance(args, dict)` → erro + continue.
+- Evidência: `tests/test_solar_probe.py` 8 falhas → 0. Commit `a5882fa`.
+
+**F10 — Injeção dupla de PAST LESSONS** (P1, `core/agent.py`):
+- `run()` injetava lessons no system_content; `_get_llm_response()` re-injetava em `messages[0]` a cada turno → prompt crescia N×. Fix: removida re-injeção (injeção canônica única em `run()`). Commit `a5882fa`.
+
+**F11 — Dead code em agent.py removido** (P2):
+- Removidos: `execute_tool`, `run_loop`, `TOOLS`, `_extract_tool_calls`, `AgentError`, `ApprovalDeniedError`, `_check_allowlist`, `_execute_command`, `_request_approval`, imports `VISION_TOOL`/`DEV_TOOLS`. Zero importadores externos verificados via grep. Commit em `23fc348` (sessão paralela consolidou working tree).
+
+**F12 — Bypasses de config.py eliminados** (P1):
+- `agent.py`: `BackendHealthMonitor()` → recebe `self.config.llm_base_url`.
+- `vision.py`: `JARVIS_LLM_URL` → `get_config().llm_base_url`.
+- `context_budget.py`: `LLAMA_CPP_URL` → `get_config().llm_base_url`.
+- `multi_agent.py`: `LLAMA_CPP_URL` → `get_config().llm_base_url`.
+- Env vars mortas: `JARVIS_LLM_URL`, `LLAMA_CPP_URL`. Canônica: `JARVIS_LLM_BASE_URL`. Commit `9b17339`.
+
+**F13 — _regex.txt órfão removido** (P2): rascunho de 9 linhas, zero referências, superseded por `tool_patterns.py`. Commit `78d16eb`.
+
+### 9.2 Auditorias sem correção (arquitetura íntegra)
+
+- **ContextBudget**: consolidação JÁ feita (`c866439`) — `nightwatch/context_budget.py` é shim de re-export; implementação única em `core` (warning 0.80 / compaction 0.85). Item 3 dos próximos passos: DONE.
+- **EventBus**: implementação única em `core/eventbus.py` (`get_bus()` singleton); control_plane e nightwatch consomem via `get_bus()`. Async sólido (timeout por subscriber, DLQ, tasks isoladas, `asyncio.sleep` não-bloqueante). Sem blocking em async.
+- **Privacidade**: `provider_registry.py` impõe teto por `DataClass` (remote capped em PUBLIC; SECRET/CONFIDENTIAL/INTERNAL só local). REPL usa só backend local — sem bypass.
+- **Error handling**: `except Exception: pass` em `agent.py` restritos a paths opcionais (persona, profile, lessons, lesson-recording) — graceful degradation correta. Path crítico (tool exec, LLM) não engole erro.
+- **archive/**: zero imports de produção (só comentário histórico em teste). Isolado corretamente.
+- **Router**: keyword-matching confirmado como limitação (ex.: "leia o arquivo X" → rota RAG; agent só expõe `execute_shell`, sem `read_file`). Requer refactor arquitetural (fora do escopo desta sessão — documentado como pendência P1).
+- **LLMClient bypass**: `_get_llm_response()` ainda usa `requests.post` direto (item 1 dos próximos passos — BLOCKED, requer adaptação de ~20 mocks).
+
+### 9.3 Métricas antes/depois (sessão 2)
+
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| test_solar_probe falhas | 8 | 0 |
+| Suite total | 984 passed / 8 failed | 987 passed / 5 failed (pré-existentes infra: nightwatch_real_e2e, platform_e2e) |
+| Dead code em agent.py | ~200 linhas (5 métodos, 2 classes, 1 const) | 0 |
+| Bypasses de config.py | 4 (`JARVIS_LLM_URL`, `LLAMA_CPP_URL` ×2, HealthMonitor default) | 0 |
+| Arquivos órfãos | 1 (`_regex.txt`) | 0 |
+| Injeções de lessons por turno | N (crescimento N×) | 1 |
