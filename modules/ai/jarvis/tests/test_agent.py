@@ -634,3 +634,76 @@ def test_execute_shell_only_tool_accepted() -> None:
     assert command_allowed("ls")
     assert command_allowed("hostname")
     assert command_allowed("echo test")
+
+
+def test_tool_result_gets_validation_warnings() -> None:
+    """Hook pós-execução: output com falha recebe [validation: ...] (FASE 16)."""
+
+    class FailSession:
+        def __init__(self):
+            self.calls = 0
+            self.last_payload = {}
+
+        def get(self, url, timeout=5):
+            return FakeResponse({"data": [{"id": "x"}]})
+
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            self.last_payload = dict(json or {})
+            if self.calls == 1:
+                msg = {
+                    "role": "assistant",
+                    "content": "",
+                    "tool_calls": [{
+                        "id": "call-fail-1",
+                        "type": "function",
+                        "function": {
+                            "name": "execute_shell",
+                            "arguments": jsonlib.dumps({"cmd": "cat /nao/existe-xyz-123"}),
+                        },
+                    }],
+                }
+            else:
+                msg = {"role": "assistant", "content": "falhou como esperado"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    probe = FailSession()
+    agent = Agent(Config(), session=probe)
+    result = agent.run("leia arquivo inexistente via shell")
+    assert result.turns >= 2
+    tool_msgs = [m for m in probe.last_payload["messages"] if m.get("role") == "tool"]
+    assert tool_msgs, "esperava tool result no segundo turno"
+    assert "[validation:" in tool_msgs[0]["content"]
+
+
+def test_context_overflow_stops_loop_early() -> None:
+    """Guard de budget: estouro interrompe o loop com nota (FASE 13)."""
+
+    class LoopForeverSession:
+        def __init__(self):
+            self.calls = 0
+
+        def get(self, url, timeout=5):
+            return FakeResponse({"data": [{"id": "x"}]})
+
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            msg = {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{
+                    "id": f"call-{self.calls}",
+                    "type": "function",
+                    "function": {
+                        "name": "execute_shell",
+                        "arguments": jsonlib.dumps({"cmd": "echo x"}),
+                    },
+                }],
+            }
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    agent = Agent(Config(), session=LoopForeverSession())
+    agent.context_budget.max_tokens = 100  # força overflow imediato
+    result = agent.run("loop infinito")
+    assert result.turns == 1
+    assert "Context budget overflow" in result.final_response

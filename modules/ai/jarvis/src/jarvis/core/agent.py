@@ -203,7 +203,6 @@ def extract_fallback_tool_call(text: str | None) -> dict[str, Any] | None:
 
 from jarvis.core.logging import get_logger
 from jarvis.core.user_profile import UserProfile, inject_context
-from jarvis.core.circuit_breaker import CircuitBreaker
 from jarvis.core.loop_detector import LoopDetector, RecoveryAction
 from jarvis.core.context_budget import ContextBudget
 from jarvis.core.validator import ToolValidator
@@ -280,18 +279,14 @@ class Agent:
         self.logger = get_logger(__name__)
         
         # Initialize components
+        # NOTE: sem CircuitBreaker próprio aqui — proteção contra backend
+        # instável vive no LLMClient (breaker + classificação de erro). Um
+        # segundo breaker no Agent contaria falhas em duplicata.
         self.loop_detector = LoopDetector()
-        try:
-            from jarvis.core.health_monitor import BackendHealthMonitor
-            monitor = BackendHealthMonitor(self.config.llm_base_url.replace("/v1", ""))
-            self.circuit_breaker = CircuitBreaker(health_monitor=monitor)
-        except Exception:
-            self.circuit_breaker = None
         self.context_budget = ContextBudget()
         self.validator = ToolValidator()
-        
+
         # State
-        self.turn_count = 0
         self._loop_warnings = 0  # consecutive loop-detector warnings before forced stop
         self.state_dir = Path(self.config.state_dir) if self.config.state_dir else Path.cwd() / "state"
         self.state_dir.mkdir(parents=True, exist_ok=True)
@@ -371,10 +366,39 @@ class Agent:
         self.loop_detector.reset()
         self._loop_warnings = 0
 
+        # Context guard (FASE 13): budget fresco por prompt, semeado com o
+        # n_ctx autodetectado do budget compartilhado (evita re-query /props
+        # e estado vazado entre prompts). Para ao estourar em vez de queimar
+        # turnos que o modelo não consegue mais usar.
+        turn_budget = ContextBudget(max_tokens=self.context_budget.max_tokens)
+        try:
+            turn_budget.add_message(messages[0])
+            turn_budget.add_message(messages[1])
+        except Exception:
+            pass
+
         for turn in range(MAX_TURNS):
             result.turns += 1
             response = self._get_llm_response(messages)
             messages.append(response)
+            try:
+                turn_budget.add_message(response)
+                turn_budget.record_llm_call()
+            except Exception:
+                pass
+
+            # Context guard: overflow → responde com o que há e para.
+            if turn_budget.is_overflow:
+                note = "Context budget overflow — stopping to preserve answer quality."
+                messages.append({"role": "system", "content": note})
+                if not result.final_response:
+                    for msg in reversed(messages):
+                        if msg.get("role") == "assistant" and msg.get("content"):
+                            result.final_response = msg["content"] + f"\n\n[{note}]"
+                            break
+                    else:
+                        result.final_response = f"({note})"
+                break
             
             # Extract tool calls
             tool_calls = response.get("tool_calls", [])
@@ -429,7 +453,8 @@ class Agent:
                         "content": "ERROR: Invalid tool arguments",
                     })
                     continue
-                
+
+                exit_code: int | None = None
                 if name == "execute_shell":
                     cmd = args.get("cmd", "")
                     # Check if command is allowed
@@ -442,6 +467,7 @@ class Agent:
                             # Execute
                             proc = run_shell(cmd)
                             result.commands_run.append(cmd)
+                            exit_code = proc.returncode
                             tool_result = proc.stdout + proc.stderr
                             self._log_audit(cmd, proc.returncode, tool_result, True)
                             # Auto-learn: record lesson on command failure
@@ -460,6 +486,7 @@ class Agent:
                             if human_approve(cmd):
                                 proc = run_shell(cmd)
                                 result.commands_run.append(cmd)
+                                exit_code = proc.returncode
                                 tool_result = proc.stdout + proc.stderr
                                 self._log_audit(cmd, proc.returncode, tool_result, True)
                             else:
@@ -489,7 +516,22 @@ class Agent:
                         tool_result = f"ERROR: {res.get('error', 'read failed')}"
                 else:
                     tool_result = f"ERROR: Unknown tool: {name}"
-                
+
+                # Post-execution validation (FASE 16): structured failure
+                # feedback — padrões de erro, exit codes e hints NixOS que o
+                # modelo nem sempre extrai sozinho do output cru.
+                if self.validator is not None:
+                    try:
+                        vr = self.validator.validate(name, args, tool_result, exit_code)
+                        if vr.warnings:
+                            tool_result += "\n[validation: " + "; ".join(vr.warnings[:3]) + "]"
+                    except Exception:
+                        pass
+                try:
+                    turn_budget.record_tool_call()
+                except Exception:
+                    pass
+
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc.get("id", f"call-{turn}"),
