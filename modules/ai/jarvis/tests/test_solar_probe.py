@@ -63,7 +63,7 @@ class ProbeSession:
     def get(self, url: str, timeout: int | float = 5) -> Any:
         return _fake_response({"data": [{"id": "solar-probe-model"}]})
 
-    def post(self, url: str, json: dict | None = None, timeout: int | float = 120) -> Any:
+    def post(self, url: str, json: dict | None = None, timeout: int | float = 120, **kw: object) -> Any:
         self.last_url = url
         self.last_payload = json or {}
         self.calls.append({"url": url, "payload": dict(json or {})})
@@ -148,7 +148,7 @@ def test_probe_session_shows_tool_call_payload(tmp_path: Path) -> None:
     # native format (not fallback text), so the harness sends tools on turn 1.
 
     class ToolCallingProbeSession(ProbeSession):
-        def post(self, url: str, json: dict | None = None, timeout: int | float = 120) -> Any:
+        def post(self, url: str, json: dict | None = None, timeout: int | float = 120, **kw: object) -> Any:
             self.last_url = url
             self.last_payload = json or {}
             self.calls.append({"url": url, "payload": dict(json or {})})
@@ -274,7 +274,7 @@ def test_probe_session_drug_response_parses_correctly(tmp_path: Path) -> None:
     verifies the harness handles it.
     """
     class FallbackProbeSession(ProbeSession):
-        def post(self, url: str, json: dict | None = None, timeout: int | float = 120) -> Any:
+        def post(self, url: str, json: dict | None = None, timeout: int | float = 120, **kw: object) -> Any:
             self.last_url = url
             self.last_payload = json or {}
             self.calls.append({"url": url, "payload": dict(json or {})})
@@ -413,7 +413,7 @@ def test_agent_safety_allowlist_blocks_dangerous_commands(tmp_path: Path) -> Non
             super().__init__()
             self.executed_commands: list[str] = []
 
-        def post(self, url: str, json: dict | None = None, timeout: int | float = 120) -> Any:
+        def post(self, url: str, json: dict | None = None, timeout: int | float = 120, **kw: object) -> Any:
             self.last_url = url
             self.last_payload = json or {}
             self.calls.append({"url": url, "payload": dict(json or {})})
@@ -454,7 +454,7 @@ def test_agent_requires_approval_for_dangerous_command(tmp_path: Path, monkeypat
     commands not in the allowlist. This test simulates user approval.
     """
     class DangerousProbeSession(ProbeSession):
-        def post(self, url: str, json: dict | None = None, timeout: int | float = 120) -> Any:
+        def post(self, url: str, json: dict | None = None, timeout: int | float = 120, **kw: object) -> Any:
             self.last_url = url
             self.last_payload = json or {}
             self.calls.append({"url": url, "payload": dict(json or {})})
@@ -500,7 +500,7 @@ def test_agent_turns_limit_stops_infinite_loop(tmp_path: Path) -> None:
             super().__init__()
             self.call_count = 0
 
-        def post(self, url: str, json: dict | None = None, timeout: int | float = 120) -> Any:
+        def post(self, url: str, json: dict | None = None, timeout: int | float = 120, **kw: object) -> Any:
             self.last_url = url
             self.last_payload = json or {}
             self.calls.append({"url": url, "payload": dict(json or {})})
@@ -550,7 +550,7 @@ def test_agent_lessons_injected_into_system_prompt(tmp_path: Path) -> None:
             )
 
     class LessonProbeSession(ProbeSession):
-        def post(self, url: str, json: dict | None = None, timeout: int | float = 120) -> Any:
+        def post(self, url: str, json: dict | None = None, timeout: int | float = 120, **kw: object) -> Any:
             self.last_url = url
             self.last_payload = json or {}
             self.calls.append({"url": url, "payload": dict(json or {})})
@@ -595,7 +595,7 @@ def test_probe_session_multiple_tool_calls_in_one_turn(tmp_path: Path) -> None:
     The harness executes them all and feeds the results back.
     """
     class MultiToolProbeSession(ProbeSession):
-        def post(self, url: str, json: dict | None = None, timeout: int | float = 120) -> Any:
+        def post(self, url: str, json: dict | None = None, timeout: int | float = 120, **kw: object) -> Any:
             self.last_url = url
             self.last_payload = json or {}
             self.calls.append({"url": url, "payload": dict(json or {})})
@@ -645,7 +645,7 @@ def test_probe_session_unknown_tool_rejected(tmp_path: Path) -> None:
     the harness returns an error message instead of executing anything.
     """
     class UnknownToolProbeSession(ProbeSession):
-        def post(self, url: str, json: dict | None = None, timeout: int | float = 120) -> Any:
+        def post(self, url: str, json: dict | None = None, timeout: int | float = 120, **kw: object) -> Any:
             self.last_url = url
             self.last_payload = json or {}
             self.calls.append({"url": url, "payload": dict(json or {})})
@@ -692,7 +692,7 @@ def test_probe_session_empty_tool_call_args_handled(tmp_path: Path) -> None:
     implementation. The harness should handle this gracefully.
     """
     class EmptyArgsProbeSession(ProbeSession):
-        def post(self, url: str, json: dict | None = None, timeout: int | float = 120) -> Any:
+        def post(self, url: str, json: dict | None = None, timeout: int | float = 120, **kw: object) -> Any:
             self.last_url = url
             self.last_payload = json or {}
             self.calls.append({"url": url, "payload": dict(json or {})})
@@ -733,7 +733,7 @@ def test_probe_session_json_decode_error_in_tool_args_handled(tmp_path: Path) ->
     catch the JSONDecodeError and handle it gracefully.
     """
     class BadJsonProbeSession(ProbeSession):
-        def post(self, url: str, json: dict | None = None, timeout: int | float = 120) -> Any:
+        def post(self, url: str, json: dict | None = None, timeout: int | float = 120, **kw: object) -> Any:
             self.last_url = url
             self.last_payload = json or {}
             self.calls.append({"url": url, "payload": dict(json or {})})
@@ -783,7 +783,7 @@ def test_probe_session_malformed_tool_call_structure_handled(tmp_path: Path) -> 
     (e.g., missing 'function' key, or 'function' is not a dict).
     """
     class MalformedProbeSession(ProbeSession):
-        def post(self, url: str, json: dict | None = None, timeout: int | float = 120) -> Any:
+        def post(self, url: str, json: dict | None = None, timeout: int | float = 120, **kw: object) -> Any:
             self.last_url = url
             self.last_payload = json or {}
             self.calls.append({"url": url, "payload": dict(json or {})})
@@ -827,7 +827,7 @@ def test_probe_session_tool_call_id_collision_handled(tmp_path: Path) -> None:
     The harness should handle this gracefully.
     """
     class DuplicateIdProbeSession(ProbeSession):
-        def post(self, url: str, json: dict | None = None, timeout: int | float = 120) -> Any:
+        def post(self, url: str, json: dict | None = None, timeout: int | float = 120, **kw: object) -> Any:
             self.last_url = url
             self.last_payload = json or {}
             self.calls.append({"url": url, "payload": dict(json or {})})
@@ -877,7 +877,7 @@ def test_probe_session_tool_call_with_whitespace_args(tmp_path: Path) -> None:
     The harness should handle this gracefully.
     """
     class WhitespaceArgsProbeSession(ProbeSession):
-        def post(self, url: str, json: dict | None = None, timeout: int | float = 120) -> Any:
+        def post(self, url: str, json: dict | None = None, timeout: int | float = 120, **kw: object) -> Any:
             self.last_url = url
             self.last_payload = json or {}
             self.calls.append({"url": url, "payload": dict(json or {})})

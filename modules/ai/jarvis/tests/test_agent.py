@@ -163,7 +163,7 @@ class FakeSession:
     def get(self, url, timeout=5):
         return FakeResponse({"data": [{"id": "qwen2.5-coder-7b-instruct"}]})
 
-    def post(self, url, json=None, timeout=120):
+    def post(self, url, json=None, timeout=120, **kw):
         self.calls += 1
         assert "chat/completions" in url
         if self.calls == 1:
@@ -199,7 +199,7 @@ def test_agent_injects_past_lessons_into_system_prompt(tmp_path) -> None:
     class LessonSession(FakeSession):
         last_payload = {}
 
-        def post(self, url, json=None, timeout=120):
+        def post(self, url, json=None, timeout=120, **kw):
             LessonSession.last_payload = json or {}
             return super().post(url, json=json, timeout=timeout)
 
@@ -217,7 +217,7 @@ def test_agent_without_memory_has_no_lessons_block(tmp_path) -> None:
     class ProbeSession(FakeSession):
         last_payload = {}
 
-        def post(self, url, json=None, timeout=120):
+        def post(self, url, json=None, timeout=120, **kw):
             ProbeSession.last_payload = json or {}
             return super().post(url, json=json, timeout=timeout)
 
@@ -257,7 +257,7 @@ def test_agent_loop_detector_stops_repeated_tool_call(tmp_path) -> None:
     """REPL path: identical tool call repeated 3x triggers the loop detector
     warning, and a second warning (model ignoring it) stops the loop."""
     class RepeatSession(FakeSession):
-        def post(self, url, json=None, timeout=120):
+        def post(self, url, json=None, timeout=120, **kw):
             self.calls += 1
             RepeatSession.last_payload = json or {}
             msg = {
@@ -294,7 +294,7 @@ def test_agent_loop_detector_stops_repeated_tool_call(tmp_path) -> None:
 def test_agent_loop_detector_does_not_fire_on_progress(tmp_path) -> None:
     """Normal multi-turn flow (different commands) never triggers warnings."""
     class ProgressSession(FakeSession):
-        def post(self, url, json=None, timeout=120):
+        def post(self, url, json=None, timeout=120, **kw):
             self.calls += 1
             if self.calls <= 2:
                 msg = {
@@ -323,7 +323,7 @@ def test_agent_loop_detector_does_not_fire_on_progress(tmp_path) -> None:
 
 def test_agent_denies_side_effect_without_approve(tmp_path) -> None:
     class DenySession(FakeSession):
-        def post(self, url, json=None, timeout=120):
+        def post(self, url, json=None, timeout=120, **kw):
             self.calls += 1
             if self.calls == 1:
                 msg = {
@@ -351,7 +351,7 @@ def test_agent_denies_side_effect_without_approve(tmp_path) -> None:
 
 def test_agent_recovers_fallback_tool_call(tmp_path) -> None:
     class FallbackSession(FakeSession):
-        def post(self, url, json=None, timeout=120):
+        def post(self, url, json=None, timeout=120, **kw):
             self.calls += 1
             if self.calls == 1:
                 # vaza tool_call como texto puro (bug do Qwen)
@@ -375,7 +375,7 @@ def test_agent_recovers_fallback_tool_call(tmp_path) -> None:
 
 def test_agent_approval_grants_side_effect(tmp_path, monkeypatch) -> None:
     class EffectSession(FakeSession):
-        def post(self, url, json=None, timeout=120):
+        def post(self, url, json=None, timeout=120, **kw):
             self.calls += 1
             if self.calls == 1:
                 msg = {
@@ -403,7 +403,7 @@ def test_agent_approval_grants_side_effect(tmp_path, monkeypatch) -> None:
 
 def test_agent_approval_rejects(tmp_path, monkeypatch) -> None:
     class EffectSession(FakeSession):
-        def post(self, url, json=None, timeout=120):
+        def post(self, url, json=None, timeout=120, **kw):
             self.calls += 1
             if self.calls == 1:
                 msg = {
@@ -432,7 +432,7 @@ def test_agent_approval_rejects(tmp_path, monkeypatch) -> None:
 
 def test_agent_ignores_malformed_tool_calls() -> None:
     class MixedFormatSession(FakeSession):
-        def post(self, url, json=None, timeout=120):
+        def post(self, url, json=None, timeout=120, **kw):
             self.calls += 1
             if self.calls == 1:
                 msg = {
@@ -506,7 +506,7 @@ def test_agent_uses_mcp_tool(tmp_path) -> None:
     class MCPTurnSession(FakeSession):
         last_payload = {}
 
-        def post(self, url, json=None, timeout=120):
+        def post(self, url, json=None, timeout=120, **kw):
             self.calls += 1
             MCPTurnSession.last_payload = json or {}
             if self.calls == 1:

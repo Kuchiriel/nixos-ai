@@ -134,7 +134,7 @@ def test_agent_learns_on_failure(tmp_path, monkeypatch) -> None:
         def get(self, url, timeout=5):
             return self._resp({"data": [{"id": "m"}]})
 
-        def post(self, url, json=None, timeout=120):
+        def post(self, url, json=None, timeout=120, **kw):
             self.calls += 1
             if self.calls == 1:
                 msg = {"role": "assistant", "content": "", "tool_calls": [{

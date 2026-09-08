@@ -201,8 +201,6 @@ def extract_fallback_tool_call(text: str | None) -> dict[str, Any] | None:
     
     return result
 
-import requests
-
 from jarvis.core.logging import get_logger
 from jarvis.core.user_profile import UserProfile, inject_context
 from jarvis.core.circuit_breaker import CircuitBreaker
@@ -218,7 +216,6 @@ from jarvis.providers.mcp import MCPClient, MCPError, parse_command, to_function
 # ---------------------------------------------------------------------------
 
 MAX_TURNS: int = int(os.environ.get("JARVIS_AGENT_MAX_TURNS", "8"))
-MAX_REPAIR_RETRIES: int = int(os.environ.get("JARVIS_AGENT_MAX_REPAIR_RETRIES", "2"))
 
 # Comandos read-only seguros — permitidos sem aprovação (diagnóstico/self-heal).
 DEFAULT_ALLOWED_PREFIXES: tuple[str, ...] = (
@@ -268,10 +265,14 @@ class Agent:
         audit_path: Path | None = None,
         mcp_servers: dict[str, str] | None = None,
         approve: bool = False,
+        llm_client: Any | None = None,
     ):
         self.config = config or get_config()
         self.approval_callback = approval_callback
-        self.session = session or requests.Session()
+        if llm_client is None:
+            from jarvis.providers.llm import LLMClient
+            llm_client = LLMClient(self.config, session=session)
+        self.llm = llm_client
         self.memory = memory
         self.approve = approve
         self.audit_path = audit_path
@@ -493,55 +494,61 @@ class Agent:
         return result
 
     def _get_llm_response(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
-        """Get response from LLM via session or config."""
-        # Use session if available (for testing)
-        if self.session:
-            base = self.config.llm_base_url.rstrip('/')
-            url = f"{base}/chat/completions" if base.endswith('/v1') else f"{base}/v1/chat/completions"
-            # Profile-aware generation params (hardcoded 1024/0.0 ignored the
-            # detected model profile and tool_choice strategy)
-            profile = detect_profile(self.config.llm_model or "")
-            payload = {
-                "model": self.config.llm_model,
-                "messages": messages,
-                "max_tokens": profile["max_tokens"],
-                "temperature": profile["temperature"],
-            }
-            # Add tools if MCP servers are configured
-            if self.mcp_servers:
-                tools = [{
+        """Get response from LLM via the canonical LLMClient abstraction.
+
+        Previously this method did a raw `requests.post` to llama.cpp,
+        bypassing `LLMClient`/backend (circuit breaker, telemetry, error
+        classification, backend routing). Now it delegates to
+        `LLMClient.chat_with_tools` and adapts `ChatResponse` to the
+        OpenAI-style message dict the loop consumes.
+        """
+        # Profile-aware generation params (hardcoded 1024/0.0 ignored the
+        # detected model profile and tool_choice strategy)
+        profile = detect_profile(self.config.llm_model or "")
+        # Add tools if MCP servers are configured
+        tools: list[dict[str, Any]] | None = None
+        if self.mcp_servers:
+            tools = [{
+                "type": "function",
+                "function": {
+                    "name": "execute_shell",
+                    "description": "Execute a shell command.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "cmd": {"type": "string", "description": "Command to execute"}
+                        },
+                        "required": ["cmd"]
+                    }
+                }
+            }]
+            # Add MCP tools
+            for server_name, server_cmd in self.mcp_servers.items():
+                tools.append({
                     "type": "function",
                     "function": {
-                        "name": "execute_shell",
-                        "description": "Execute a shell command.",
+                        "name": f"{server_name}_query",
+                        "description": f"Query {server_name} MCP server",
                         "parameters": {
                             "type": "object",
                             "properties": {
-                                "cmd": {"type": "string", "description": "Command to execute"}
+                                "q": {"type": "string", "description": "Query"}
                             },
-                            "required": ["cmd"]
+                            "required": ["q"]
                         }
                     }
-                }]
-                # Add MCP tools
-                for server_name, server_cmd in self.mcp_servers.items():
-                    tools.append({
-                        "type": "function",
-                        "function": {
-                            "name": f"{server_name}_query",
-                            "description": f"Query {server_name} MCP server",
-                            "parameters": {
-                                "type": "object",
-                                "properties": {
-                                    "q": {"type": "string", "description": "Query"}
-                                },
-                                "required": ["q"]
-                            }
-                        }
-                    })
-                payload["tools"] = tools
-            resp = self.session.post(url, json=payload, timeout=120)
-            return resp.json()["choices"][0]["message"]
+                })
+        resp = self.llm.chat_with_tools(
+            messages,
+            tools=tools,
+            temperature=profile["temperature"],
+            max_tokens=profile["max_tokens"],
+        )
+        return {
+            "role": "assistant",
+            "content": resp.content or "",
+            "tool_calls": resp.tool_calls or [],
+        }
         
         # Fallback: raise not implemented
         raise NotImplementedError("LLM provider not configured")
