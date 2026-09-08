@@ -319,8 +319,7 @@ EOF
                   try:
                       with open("/tmp/jarvis-status.json") as _stf:
                           _st = json.load(_stf)
-                      _speaking = (_st.get("state") == "speaking"
-                                   and (time.time() - float(_st.get("ts", 0))) < 30)
+                      _speaking = _st.get("state") == "speaking" and (time.time() - float(_st.get("ts", 0))) < 30
                   except Exception:
                       pass
                   if not _speaking:
