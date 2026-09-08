@@ -15,9 +15,7 @@ from pathlib import Path
 import subprocess
 import re
 
-REPO_ROOT = Path(__file__).parent.parent.parent.parent.parent.resolve()
-if not (REPO_ROOT / ".git").exists():
-    REPO_ROOT = Path.home() / "projects" / "nixos-ai"
+from jarvis.core.paths import find_repo_root
 
 
 @dataclass
@@ -40,7 +38,7 @@ def discover_test() -> list[Task]:
         result = subprocess.run(
             ["python3", "-m", "pytest", "modules/ai/jarvis/tests/test_agent.py", "-q", "--tb=line"],
             capture_output=True, text=True, timeout=120,
-            cwd=str(REPO_ROOT),
+            cwd=str(find_repo_root()),
         )
         if result.returncode != 0:
             return [Task(
@@ -63,7 +61,7 @@ def discover_docs() -> list[Task]:
         result = subprocess.run(
             ["grep", "-rn", "TODO\\|FIXME\\|HACK", "modules/ai/jarvis/src/", "--include=*.py"],
             capture_output=True, text=True, timeout=10,
-            cwd=str(REPO_ROOT),
+            cwd=str(find_repo_root()),
         )
         for line in result.stdout.splitlines()[:5]:
             parts = line.split(":", 2)
@@ -104,7 +102,7 @@ def discover_security() -> list[Task]:
             result = subprocess.run(
                 ["grep", "-rn", pattern, "modules/ai/jarvis/src/", "--include=*.py", "-i"],
                 capture_output=True, text=True, timeout=10,
-                cwd=str(REPO_ROOT),
+                cwd=str(find_repo_root()),
             )
             for line in result.stdout.splitlines()[:5]:
                 parts = line.split(":", 1)
@@ -140,7 +138,7 @@ def discover_dedup() -> list[Task]:
             result = subprocess.run(
                 ["grep", "-rn", pat, "modules/ai/jarvis/src/", "--include=*.py"],
                 capture_output=True, text=True, timeout=10,
-                cwd=str(REPO_ROOT),
+                cwd=str(find_repo_root()),
             )
             matches = result.stdout.strip().splitlines()
             if len(matches) > 2:
@@ -164,7 +162,7 @@ def discover_dead_code() -> list[Task]:
         result = subprocess.run(
             ["grep", "-rn", "^def ", "modules/ai/jarvis/src/jarvis/core/", "--include=*.py"],
             capture_output=True, text=True, timeout=10,
-            cwd=str(REPO_ROOT),
+            cwd=str(find_repo_root()),
         )
         func_count = len(result.stdout.strip().splitlines())
         if func_count > 50:
@@ -188,7 +186,7 @@ def discover_git_hygiene() -> list[Task]:
         result = subprocess.run(
             ["git", "status", "--porcelain"],
             capture_output=True, text=True, timeout=10,
-            cwd=str(REPO_ROOT),
+            cwd=str(find_repo_root()),
         )
         dirty = len(result.stdout.strip().splitlines())
         if dirty > 0:
@@ -213,7 +211,7 @@ def discover_nix_lint() -> list[Task]:
             result = subprocess.run(
                 [linter, "."] if linter == "statix" else [linter, "."],
                 capture_output=True, text=True, timeout=30,
-                cwd=str(REPO_ROOT),
+                cwd=str(find_repo_root()),
             )
             if result.returncode != 0 and result.stdout.strip():
                 tasks.append(Task(
@@ -236,7 +234,7 @@ def discover_nix_check() -> list[Task]:
         result = subprocess.run(
             ["nix", "build", ".#jarvis", "--dry-run"],
             capture_output=True, text=True, timeout=60,
-            cwd=str(REPO_ROOT),
+            cwd=str(find_repo_root()),
         )
         if result.returncode != 0:
             tasks.append(Task(
@@ -259,7 +257,7 @@ def discover_performance() -> list[Task]:
         result = subprocess.run(
             ["grep", "-rn", "time\\.time\\|time\\.monotonic", "modules/ai/jarvis/src/", "--include=*.py"],
             capture_output=True, text=True, timeout=10,
-            cwd=str(REPO_ROOT),
+            cwd=str(find_repo_root()),
         )
         count = len(result.stdout.strip().splitlines())
         if count > 10:
@@ -282,7 +280,7 @@ def discover_missao() -> list[Task]:
     P0/P1 (security/Nix architecture) → auto_fixable=False (supervised only)
     P2/P3 (quality/docs) → auto_fixable=True (can go through safety gate)
     """
-    path = REPO_ROOT / "TODO-MISSAO.md"
+    path = find_repo_root() / "TODO-MISSAO.md"
     if not path.exists():
         return []
     text = path.read_text(encoding="utf-8")

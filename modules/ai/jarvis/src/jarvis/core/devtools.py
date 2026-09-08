@@ -36,10 +36,9 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 def _project_root() -> Path:
-    root = os.environ.get("JARVIS_PROJECT_ROOT", "")
-    if root:
-        return Path(root).expanduser().resolve()
-    return Path.cwd().resolve()
+    """Root ativo via resolver canônico (jarvis.core.paths)."""
+    from jarvis.core.paths import find_repo_root
+    return find_repo_root()
 
 
 def _safe_path(path: str, root: Path | None = None) -> Path:

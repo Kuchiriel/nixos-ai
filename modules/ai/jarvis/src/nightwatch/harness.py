@@ -103,7 +103,7 @@ from nightwatch.project_isolation import (
     get_project_root, validate_project_path, run_in_project,
 )
 from nightwatch.context_budget import ContextBudget, query_server_context_size
-from nightwatch.paths import REPO_ROOT
+from nightwatch.paths import find_repo_root
 
 
 STATE_DIR = Path.home() / ".local/state/jarvis/nightwatch"
@@ -256,12 +256,10 @@ def _discover_llm_tasks(call_llm_fn: Callable, project: str = "nixos-ai") -> lis
     """Use the LLM to discover improvement tasks in the codebase.
     
     Enhanced version that uses workspace context and RAG for better discovery.
-    Uses project root (not REPO_ROOT) for external projects.
+    Uses the active project root (task > env > discovery).
     """
     # Get project root for file discovery
-    import os
-    env_root = os.environ.get("JARVIS_PROJECT_ROOT")
-    project_root = Path(env_root) if env_root and Path(env_root).exists() else REPO_ROOT
+    project_root = find_repo_root()
     
     # Get codebase overview
     try:
@@ -474,25 +472,16 @@ def _extract_relevant_section(content: str, path: str, max_chars: int, task_desc
     return result[:max_chars]
 
 
-def _get_project_root() -> Path:
-    """Get the active project root, preferring JARVIS_PROJECT_ROOT env var."""
-    import os
-    env_root = os.environ.get("JARVIS_PROJECT_ROOT")
-    if env_root and Path(env_root).exists():
-        return Path(env_root)
-    return REPO_ROOT
-
-
 def _resolve_file_path(path: str) -> Path:
     """Resolve a file path to an absolute path.
 
     Tries multiple strategies:
     1. Absolute path as-is
-    2. Relative to project root (JARVIS_PROJECT_ROOT or REPO_ROOT)
+    2. Relative to the active project root
     3. With common source prefixes stripped
     4. Glob search in project
     """
-    project_root = _get_project_root()
+    project_root = find_repo_root()
 
     if path.startswith("/"):
         return Path(path)
@@ -572,9 +561,7 @@ def _request_structured_patch(
     recovery_ctx = ""
     try:
         from nightwatch.checkpoint import generate_recovery_summary
-        import os
-        _proj = os.environ.get("JARVIS_PROJECT_ROOT", "nixos-ai")
-        _proj_name = os.path.basename(_proj) if _proj else "nixos-ai"
+        _proj_name = find_repo_root().name or "nixos-ai"
         recovery_ctx = generate_recovery_summary(project=_proj_name)
     except Exception:
         pass
@@ -741,7 +728,7 @@ def _git_diff_stat() -> str:
         result = subprocess.run(
             ["git", "diff", "--stat"],
             capture_output=True, text=True, timeout=10,
-            cwd=str(REPO_ROOT),
+            cwd=str(find_repo_root()),
         )
         return result.stdout
     except Exception:
@@ -754,18 +741,18 @@ def _git_commit(message: str) -> str | None:
         subprocess.run(
             ["git", "add", "-A"],
             capture_output=True, timeout=10,
-            cwd=str(REPO_ROOT),
+            cwd=str(find_repo_root()),
         )
         result = subprocess.run(
             ["git", "commit", "-m", message],
             capture_output=True, text=True, timeout=30,
-            cwd=str(REPO_ROOT),
+            cwd=str(find_repo_root()),
         )
         if result.returncode == 0:
             sha = subprocess.run(
                 ["git", "rev-parse", "HEAD"],
                 capture_output=True, text=True, timeout=5,
-                cwd=str(REPO_ROOT),
+                cwd=str(find_repo_root()),
             ).stdout.strip()
             return sha
     except Exception:
@@ -788,19 +775,19 @@ def _git_revert(files: list[str] | None = None) -> None:
                     subprocess.run(
                         ["git", "checkout", "--", str(resolved)],
                         capture_output=True, timeout=10,
-                        cwd=str(REPO_ROOT),
+                        cwd=str(find_repo_root()),
                     )
         else:
             # Full revert — last resort
             subprocess.run(
                 ["git", "checkout", "--", "."],
                 capture_output=True, timeout=10,
-                cwd=str(REPO_ROOT),
+                cwd=str(find_repo_root()),
             )
             subprocess.run(
                 ["git", "clean", "-fd"],
                 capture_output=True, timeout=10,
-                cwd=str(REPO_ROOT),
+                cwd=str(find_repo_root()),
             )
     except Exception:
         pass
@@ -882,7 +869,7 @@ class Harness:
             self.notify(f"♻️ Recovered {recovered} stuck tasks")
         # Sweep leftover nightwatch/* branches from a crashed/killed prior run
         # Pass project root so external project branches are also cleaned
-        project_root = _get_project_root()
+        project_root = find_repo_root()
         pruned = safety.prune_orphan_branches(project_root)
         if pruned > 0:
             self.notify(f"🧹 Pruned {pruned} orphaned nightwatch branches")
@@ -923,7 +910,7 @@ class Harness:
         AGENTS.md so future sessions read them as constraints.
         """
         import os
-        project_root = os.environ.get('JARVIS_PROJECT_ROOT', str(REPO_ROOT))
+        project_root = str(find_repo_root())
         agents_file = os.path.join(project_root, 'AGENTS.md')
         
         # Classify the failure type

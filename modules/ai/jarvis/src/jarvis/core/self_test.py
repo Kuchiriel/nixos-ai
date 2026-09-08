@@ -88,7 +88,8 @@ class BlackBoxTests:
 
     def __init__(self, jarvis_cli_path: str = None):
         if jarvis_cli_path is None:
-            jarvis_cli_path = Path(os.environ.get("JARVIS_PROJECT_ROOT", os.path.expanduser("~/projects"))) / "nixos-ai" / "scripts" / "jarvis-cli.sh"
+            from jarvis.core.paths import find_repo_root
+            jarvis_cli_path = find_repo_root() / "scripts" / "jarvis-cli.sh"
         self.cli_path = jarvis_cli_path
 
     def run_all(self) -> TestSuite:
@@ -126,9 +127,10 @@ class BlackBoxTests:
     def _run_cli(self, args: str, timeout: int = 30) -> tuple[bool, str]:
         """Run a JARVIS CLI command and return (success, output)."""
         import subprocess
+        from jarvis.core.paths import find_repo_root
         try:
             result = subprocess.run(
-                f"cd {Path(os.environ.get("JARVIS_PROJECT_ROOT", os.path.expanduser("~/projects"))) / "nixos-ai"} && ./scripts/jarvis-cli.sh {args}",
+                f"cd {find_repo_root()} && ./scripts/jarvis-cli.sh {args}",
                 shell=True, capture_output=True, text=True,
                 timeout=timeout,
             )
@@ -409,7 +411,8 @@ class WhiteBoxTests:
 
     def __init__(self, project_root: str = None):
         if project_root is None:
-            project_root = str(Path(os.environ.get("JARVIS_PROJECT_ROOT", os.path.expanduser("~/projects"))) / "nixos-ai")
+            from jarvis.core.paths import find_repo_root
+            project_root = str(find_repo_root())
         self.project_root = Path(project_root)
 
     def run_all(self) -> TestSuite:

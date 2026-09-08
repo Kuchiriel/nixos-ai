@@ -1961,7 +1961,8 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
         project_root = _find_project_root()
 
     if project_root:
-        os.environ["JARVIS_PROJECT_ROOT"] = project_root
+        from jarvis.core.paths import set_project_root
+        set_project_root(project_root)
         os.chdir(project_root)
 
     if yolo:
@@ -2413,7 +2414,8 @@ def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) 
 def _run_autopilot(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False, continue_session: bool = False, yolo: bool = False) -> int:
     """Modo lote: planeja → executa → checkpoint."""
     if project_root:
-        os.environ["JARVIS_PROJECT_ROOT"] = project_root
+        from jarvis.core.paths import set_project_root
+        set_project_root(project_root)
         os.chdir(project_root)
     if yolo:
         approve = True
@@ -2455,7 +2457,8 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
 
 def dev_once(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False, continue_session: bool = False, yolo: bool = False, autopilot: bool = False) -> int:
     if project_root:
-        os.environ["JARVIS_PROJECT_ROOT"] = project_root
+        from jarvis.core.paths import set_project_root
+        set_project_root(project_root)
         os.chdir(project_root)
 
     if yolo:

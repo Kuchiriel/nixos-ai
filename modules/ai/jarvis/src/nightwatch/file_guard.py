@@ -17,9 +17,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from nightwatch.paths import REPO_ROOT
-
-
 @dataclass
 class ValidationResult:
     """Result of file validation."""

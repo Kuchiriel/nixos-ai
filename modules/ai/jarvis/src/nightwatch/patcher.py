@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from nightwatch.file_guard import apply_with_guard, strip_markdown_fences
-from nightwatch.paths import REPO_ROOT
+from jarvis.core.paths import find_repo_root
 
 
 @dataclass
@@ -64,11 +64,12 @@ def get_file_baseline(path: Path) -> str | None:
 def get_git_baseline(path: Path) -> str | None:
     """Get the git version of a file (last committed)."""
     try:
-        rel = path.relative_to(REPO_ROOT)
+        repo_root = find_repo_root()
+        rel = path.relative_to(repo_root)
         result = subprocess.run(
             ["git", "show", f"HEAD:{rel}"],
             capture_output=True, text=True, timeout=10,
-            cwd=str(REPO_ROOT),
+            cwd=str(repo_root),
         )
         if result.returncode == 0:
             return result.stdout
@@ -296,18 +297,16 @@ def apply_patch(patch: FilePatch) -> tuple[bool, str, str]:
     
     Returns (success, new_content_or_error, diff).
     """
-    import os
-    env_root = os.environ.get("JARVIS_PROJECT_ROOT")
-    project_root = Path(env_root) if env_root and Path(env_root).exists() else REPO_ROOT
-    
-    # Try project root first (external projects), then REPO_ROOT
+    from jarvis.core.paths import find_repo_root
+    project_root = find_repo_root()
+
+    # Resolve relative ao root ativo (task > env > discovery); depois
+    # tenta prefixos comuns de layout.
     path = project_root / patch.path
-    if not path.exists():
-        path = REPO_ROOT / patch.path
     if not path.exists():
         # Try with common prefixes
         for prefix in ["modules/ai/jarvis/src/", "src/jarvis/", "jarvis/"]:
-            alt = REPO_ROOT / prefix / patch.path
+            alt = project_root / prefix / patch.path
             if alt.exists():
                 path = alt
                 break
@@ -422,11 +421,12 @@ def request_patch_from_llm(
     """Ask the LLM to generate patches and apply them."""
     # Read current files
     file_contents = {}
+    root = find_repo_root()
     for path_str in target_files:
-        path = REPO_ROOT / path_str
+        path = root / path_str
         if not path.exists():
             for prefix in ["modules/ai/jarvis/src/", "src/jarvis/", "jarvis/"]:
-                alt = REPO_ROOT / prefix / path_str
+                alt = root / prefix / path_str
                 if alt.exists():
                     path = alt
                     break

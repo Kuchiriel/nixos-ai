@@ -28,8 +28,9 @@ def isolated_repo(tmp_path, monkeypatch):
     subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=repo, check=True)
     subprocess.run(["git", "branch", "-M", "main"], cwd=repo, check=True)
 
-    monkeypatch.setattr(safety_mod, "REPO_ROOT", repo)
-    return repo
+    from nightwatch.project_isolation import use_project_root
+    with use_project_root(repo):
+        yield repo
 
 
 def _head_sha(repo):

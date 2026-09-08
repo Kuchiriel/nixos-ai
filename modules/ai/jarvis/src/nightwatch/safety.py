@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from fnmatch import fnmatch
 from typing import Any
 
-from nightwatch.paths import REPO_ROOT
+from jarvis.core.paths import find_repo_root
 
 # ═══ Protected Paths ═══
 # NEVER auto-modify — requires explicit human approval
@@ -112,7 +112,7 @@ def validate_task_quality(description: str, target_files: list[str],
         if prim == "file":
             continue
         # Exists only outside the project = wrong-project hallucination.
-        elsewhere = [REPO_ROOT / p, REPO_ROOT / "modules/ai/jarvis/src" / p]
+        elsewhere = [find_repo_root() / p, find_repo_root() / "modules/ai/jarvis/src" / p]
         if any(_exists(c) for c in elsewhere):
             return GateResult(False, "phantom-targets",
                               f"target not in project {project}: {t}")
@@ -162,7 +162,7 @@ def pre_task_snapshot(task_id: str) -> str:
     # Fallback: git stash
     try:
         result = subprocess.run(
-            ["git", "-C", str(REPO_ROOT), "stash", "push", "-m", desc],
+            ["git", "-C", str(find_repo_root()), "stash", "push", "-m", desc],
             capture_output=True, text=True, timeout=10,
         )
         if result.returncode == 0:
@@ -177,7 +177,7 @@ def rollback_snapshot(snapshot_ref: str) -> None:
     """Rollback to a snapshot. Last resort — logs CRITICAL."""
     if snapshot_ref.startswith("git-stash:"):
         subprocess.run(
-            ["git", "-C", str(REPO_ROOT), "stash", "pop"],
+            ["git", "-C", str(find_repo_root()), "stash", "pop"],
             capture_output=True, timeout=10,
         )
     # btrfs rollback requires reboot — just log it
@@ -187,7 +187,7 @@ def rollback_snapshot(snapshot_ref: str) -> None:
 
 def _tree_is_dirty(repo: str | Path | None = None) -> bool:
     """True if the working tree has uncommitted changes."""
-    repo = REPO_ROOT if repo is None else repo
+    repo = find_repo_root() if repo is None else repo
     try:
         out = subprocess.run(
             ["git", "-C", str(repo), "status", "--porcelain"],
@@ -218,13 +218,13 @@ def create_task_branch(task_id: str, category: str) -> str | None:
 
     # Ensure we're on main
     subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "checkout", "main"],
+        ["git", "-C", str(find_repo_root()), "checkout", "main"],
         capture_output=True, timeout=10,
     )
 
     # Create and checkout branch
     result = subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "checkout", "-b", branch],
+        ["git", "-C", str(find_repo_root()), "checkout", "-b", branch],
         capture_output=True, text=True, timeout=10,
     )
     if result.returncode != 0:
@@ -235,7 +235,7 @@ def create_task_branch(task_id: str, category: str) -> str | None:
     # branch was previously checked out (main), defeating the isolation
     # this function exists for.
     current = subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "branch", "--show-current"],
+        ["git", "-C", str(find_repo_root()), "branch", "--show-current"],
         capture_output=True, text=True, timeout=10,
     ).stdout.strip()
     if current != branch:
@@ -252,20 +252,20 @@ def abort_task_branch(branch: str) -> None:
     """
     if _tree_is_dirty():
         subprocess.run(
-            ["git", "-C", str(REPO_ROOT), "stash", "push", "-m",
+            ["git", "-C", str(find_repo_root()), "stash", "push", "-m",
              "nightwatch-autosave-uncommitted", "--include-untracked"],
             capture_output=True, timeout=30,
         )
     subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "checkout", "main"],
+        ["git", "-C", str(find_repo_root()), "checkout", "main"],
         capture_output=True, timeout=10,
     )
     subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "reset", "--hard", "HEAD"],
+        ["git", "-C", str(find_repo_root()), "reset", "--hard", "HEAD"],
         capture_output=True, timeout=10,
     )
     subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "branch", "-D", branch],
+        ["git", "-C", str(find_repo_root()), "branch", "-D", branch],
         capture_output=True, timeout=10,
     )
 
@@ -273,21 +273,21 @@ def abort_task_branch(branch: str) -> None:
 def merge_task_branch(branch: str) -> str:
     """Merge task branch into main. Returns commit SHA."""
     subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "checkout", "main"],
+        ["git", "-C", str(find_repo_root()), "checkout", "main"],
         capture_output=True, timeout=10,
     )
     subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "merge", "--no-ff", branch, "-m", f"nightwatch: merge {branch}"],
+        ["git", "-C", str(find_repo_root()), "merge", "--no-ff", branch, "-m", f"nightwatch: merge {branch}"],
         capture_output=True, timeout=10,
     )
     result = subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
+        ["git", "-C", str(find_repo_root()), "rev-parse", "HEAD"],
         capture_output=True, text=True, timeout=5,
     )
     sha = result.stdout.strip()
 
     subprocess.run(
-        ["git", "-C", str(REPO_ROOT), "branch", "-d", branch],
+        ["git", "-C", str(find_repo_root()), "branch", "-d", branch],
         capture_output=True, timeout=10,
     )
 
@@ -303,7 +303,7 @@ def _count_passing_tests() -> int:
             result = subprocess.run(
                 ["python3", "-m", "pytest", "modules/ai/jarvis/tests/test_agent.py", "-q", "--tb=no"],
                 capture_output=True, text=True, timeout=60,
-                cwd=str(REPO_ROOT),
+                cwd=str(find_repo_root()),
             )
             # Parse "28 passed"
             for part in result.stdout.split():
@@ -333,7 +333,7 @@ def run_gate(changed_files: list[str]) -> GateResult:
             result = subprocess.run(
                 ["python3", "-m", "py_compile", f],
                 capture_output=True, text=True, timeout=10,
-                cwd=str(REPO_ROOT),
+                cwd=str(find_repo_root()),
             )
             if result.returncode != 0:
                 return GateResult(False, "syntax", result.stderr[:2000])
@@ -341,7 +341,7 @@ def run_gate(changed_files: list[str]) -> GateResult:
             result = subprocess.run(
                 ["nix-instantiate", "--parse", f],
                 capture_output=True, text=True, timeout=10,
-                cwd=str(REPO_ROOT),
+                cwd=str(find_repo_root()),
             )
             if result.returncode != 0:
                 return GateResult(False, "syntax", result.stderr[:2000])
@@ -352,7 +352,7 @@ def run_gate(changed_files: list[str]) -> GateResult:
         result = subprocess.run(
             ["python3", "-m", "pytest", "modules/ai/jarvis/tests/test_agent.py", "-q", "--tb=short"],
             capture_output=True, text=True, timeout=120,
-            cwd=str(REPO_ROOT),
+            cwd=str(find_repo_root()),
         )
         if result.returncode != 0:
             return GateResult(False, "tests", result.stdout[-3000:])
@@ -375,7 +375,7 @@ def run_gate(changed_files: list[str]) -> GateResult:
             result = subprocess.run(
                 ["nix", "build", ".#jarvis", "--dry-run"],
                 capture_output=True, text=True, timeout=60,
-                cwd=str(REPO_ROOT),
+                cwd=str(find_repo_root()),
             )
             if result.returncode != 0:
                 return GateResult(False, "nix-build", result.stderr[:2000])
@@ -397,12 +397,12 @@ def commit_or_revert(task_id: str, category: str, description: str, branch: str,
     if gate.passed:
         # Stage and commit
         subprocess.run(
-            ["git", "-C", str(REPO_ROOT), "add", "-A"],
+            ["git", "-C", str(find_repo_root()), "add", "-A"],
             capture_output=True, timeout=10,
         )
         msg = f"nightwatch({category}): {description}\n\nauto-fix | task={task_id}"
         subprocess.run(
-            ["git", "-C", str(REPO_ROOT), "commit", "-m", msg, "--no-verify"],
+            ["git", "-C", str(find_repo_root()), "commit", "-m", msg, "--no-verify"],
             capture_output=True, timeout=30,
         )
 
@@ -436,10 +436,10 @@ def prune_orphan_branches(project_root: Path | None = None) -> int:
     
     Args:
         project_root: Repository root to clean branches in.
-                     Defaults to REPO_ROOT (nixos-ai), but should be
+                     Defaults to the active project root, but should be
                      set to the target project for external projects.
     """
-    repo = str(project_root) if project_root else str(REPO_ROOT)
+    repo = str(project_root) if project_root else str(find_repo_root())
     subprocess.run(
         ["git", "-C", repo, "checkout", "main"],
         capture_output=True, timeout=10,

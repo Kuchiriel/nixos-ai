@@ -68,8 +68,9 @@ class PersonaExecutor:
                 "JARVIS_PROJECTS_DIR",
                 str(Path.home() / "projects"),
             ))
+            from jarvis.core.paths import set_project_root
             project_path = projects_dir / self.project
-            os.environ["JARVIS_PROJECT_ROOT"] = str(project_path)
+            set_project_root(project_path)
 
             from nightwatch.harness import Harness, HarnessConfig
             config = HarnessConfig(
@@ -175,7 +176,8 @@ class PersonaExecutor:
 
             # Determine actually changed files via git diff (not candidates)
             actual_files_changed: list[str] = []
-            project_path = Path(os.environ.get("JARVIS_PROJECT_ROOT", "."))
+            from jarvis.core.paths import find_repo_root
+            project_path = find_repo_root()
             try:
                 diff_result = subprocess.run(
                     ["git", "diff", "--name-only", "HEAD"],

@@ -1,21 +1,14 @@
-"""Integration tests for real cross-project isolation.
+"""Integration tests for real cross-project isolation."""
+from __future__ import annotations
+
 import pytest
 pytestmark = pytest.mark.integration
 
-Before this: nightwatch.paths.REPO_ROOT was computed once at process
-import time and referenced directly (not as a parameter) inside
-patcher.py, safe_editor.py, validator.py, evaluator.py, safety.py.
-project_isolation.py had ProjectRegistry/ProjectConfig/discover_projects
-already built, but nothing ever called anything from it to change where
-those five modules actually read and wrote — self.project_registry was
-instantiated in Harness.__init__ and never consulted again. One process
-= one repo, for its entire lifetime, no matter what task.project said.
-
-These tests exercise use_project_root() + resolve_project_root() against
-two real, separate git repos and confirm actual file/git isolation, not
-just that the functions return without error.
-"""
-from __future__ import annotations
+# Contrato (consolidação 2026-09): o root ativo resolve via
+# jarvis.core.paths.find_repo_root() NO USO (task-context > env >
+# discovery). use_project_root() injeta o override de task via contextvar —
+# sem monkeypatch de atributo de módulo. Estes testes provam isolamento
+# real de arquivos/git entre dois repos, não só retorno de função.
 
 import subprocess
 
@@ -53,33 +46,31 @@ class TestResolveProjectRoot:
         assert pi.resolve_project_root("project-b") == b
 
     def test_unresolvable_name_falls_back_to_nixos_ai_default(self, two_projects):
-        from nightwatch.paths import REPO_ROOT as DEFAULT_ROOT
-        assert pi.resolve_project_root("this-does-not-exist") == DEFAULT_ROOT
+        from jarvis.core.paths import find_repo_root
+        assert pi.resolve_project_root("this-does-not-exist") == find_repo_root()
 
     def test_nixos_ai_or_empty_always_falls_back_without_lookup(self, two_projects):
-        from nightwatch.paths import REPO_ROOT as DEFAULT_ROOT
-        assert pi.resolve_project_root("nixos-ai") == DEFAULT_ROOT
-        assert pi.resolve_project_root("") == DEFAULT_ROOT
+        from jarvis.core.paths import find_repo_root
+        assert pi.resolve_project_root("nixos-ai") == find_repo_root()
+        assert pi.resolve_project_root("") == find_repo_root()
 
 
 class TestUseProjectRootIsolation:
     def test_isolated_modules_see_the_override(self, two_projects):
         a, b = two_projects
-        import nightwatch.safety as safety_mod
-        original = safety_mod.REPO_ROOT
+        from jarvis.core.paths import find_repo_root
         with pi.use_project_root(a):
-            assert safety_mod.REPO_ROOT == a
-        assert safety_mod.REPO_ROOT == original, "não restaurou depois do with"
+            assert find_repo_root() == a
+        assert find_repo_root() != a, "vazou override depois do with"
 
     def test_restores_on_exception(self, two_projects):
         a, b = two_projects
-        import nightwatch.validator as validator_mod
-        original = validator_mod.REPO_ROOT
+        from jarvis.core.paths import find_repo_root
         with pytest.raises(ValueError):
             with pi.use_project_root(a):
-                assert validator_mod.REPO_ROOT == a
+                assert find_repo_root() == a
                 raise ValueError("simula task explodindo no meio")
-        assert validator_mod.REPO_ROOT == original, (
+        assert find_repo_root() != a, (
             "uma excecao no meio da task nao pode deixar o proximo task "
             "(de outro projeto) apontando pro repo errado"
         )
@@ -113,11 +104,11 @@ class TestUseProjectRootIsolation:
     def test_sequential_tasks_different_projects_dont_bleed(self, two_projects):
         """A -> B -> A, cada troca tem que apontar certo, nao so a primeira."""
         a, b = two_projects
-        import nightwatch.patcher as patcher_mod
+        from jarvis.core.paths import find_repo_root
 
         with pi.use_project_root(a):
-            assert patcher_mod.REPO_ROOT == a
+            assert find_repo_root() == a
         with pi.use_project_root(b):
-            assert patcher_mod.REPO_ROOT == b
+            assert find_repo_root() == b
         with pi.use_project_root(a):
-            assert patcher_mod.REPO_ROOT == a
+            assert find_repo_root() == a

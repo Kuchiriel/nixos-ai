@@ -235,67 +235,40 @@ def run_in_project(
 # ═══════════════════════════════════════════════════════════════════════
 # Actual isolation enforcement.
 #
-# Everything above this line (ProjectRegistry, discover_projects,
-# get_project_root, validate_project_path, run_in_project) existed
-# before this and was imported by harness.py — but nothing ever called
-# it to change where patcher.py / safe_editor.py / validator.py /
-# evaluator.py / safety.py actually read and write. Those five modules
-# each do `from nightwatch.paths import REPO_ROOT` at import time and
-# reference that frozen value directly in function bodies (not as an
-# overridable parameter). One process = one REPO_ROOT for its entire
-# lifetime, regardless of which project a Task claims to belong to.
-#
-# use_project_root() below overrides the REPO_ROOT attribute on each of
-# those modules for the duration of a single task. This is safe *only*
-# because nightwatch executes one task at a time, sequentially — there
-# is no thread/async concurrency in Harness.execute_task() to race
-# against. If that ever changes, this needs to become a contextvar
-# instead of a module-global reassignment.
+# Os 5 módulos de execução (patcher/safe_editor/validator/evaluator/
+# safety) resolvem o root via jarvis.core.paths.find_repo_root() NO USO,
+# que consulta primeiro o override de task (contextvar). use_project_root()
+# abaixo é o re-export canônico — mesma garantia de restauração do
+# monkeypatch antigo (inclusive em exceção), sem global mutável e
+# aninhável. Registry (ProjectRegistry/discover/get_project_root) acima
+# resolve NOMES → paths; o contexto decide qual vale durante a task.
 # ═══════════════════════════════════════════════════════════════════════
 
-import contextlib
-import importlib
+# ═══════════════════════════════════════════════════════════════════════
+# Isolation enforcement (consolidação 2026-09).
+#
+# Antes: use_project_root() fazia monkeypatch do atributo REPO_ROOT em 5
+# módulos (patcher/safe_editor/validator/evaluator/safety) por task, com
+# restore manual. Frágil (esquecia módulos novos), global por processo
+# (inseguro p/ concorrência futura) e invisível (grep não mostra o vínculo).
+#
+# Agora: o override vive em jarvis.core.paths (contextvar). Os 5 módulos
+# chamam find_repo_root() no USO, que consulta o contexto primeiro. Mesmo
+# isolamento por task, sem global mutável; aninhável; seguro p/ async.
+# ═══════════════════════════════════════════════════════════════════════
 
-_ISOLATED_MODULES = (
-    "nightwatch.patcher",
-    "nightwatch.safe_editor",
-    "nightwatch.validator",
-    "nightwatch.evaluator",
-    "nightwatch.safety",
-)
+from jarvis.core.paths import use_project_root as use_project_root  # noqa: F401 (contrato estável p/ harness/tests)
 
 
 def resolve_project_root(project_name: str) -> Path:
     """Resolve a project name to its actual root path.
 
-    Falls back to the frozen nightwatch.paths.REPO_ROOT default for
-    "nixos-ai" (or an unresolvable name) so existing single-project
-    behavior is unchanged when a task's project can't be located.
+    Falls back to the active default (find_repo_root) for "nixos-ai" (or
+    an unresolvable name) so existing single-project behavior is unchanged
+    when a task's project can't be located.
     """
-    from nightwatch.paths import REPO_ROOT as DEFAULT_ROOT
+    from jarvis.core.paths import find_repo_root
     if not project_name or project_name == "nixos-ai":
-        return DEFAULT_ROOT
+        return find_repo_root()
     root = get_project_root(project_name)
-    return root if root is not None else DEFAULT_ROOT
-
-
-@contextlib.contextmanager
-def use_project_root(new_root: Path):
-    """Temporarily point every isolation-aware module at new_root.
-
-    Restores each module's original REPO_ROOT on exit, including on
-    exception, so a task that dies mid-flight can't leave a later task
-    (for a different project, in the same process) pointed at the
-    wrong repo.
-    """
-    mods = [importlib.import_module(name) for name in _ISOLATED_MODULES]
-    originals = [getattr(m, "REPO_ROOT", None) for m in mods]
-    for m in mods:
-        if hasattr(m, "REPO_ROOT"):
-            m.REPO_ROOT = new_root
-    try:
-        yield new_root
-    finally:
-        for m, orig in zip(mods, originals):
-            if hasattr(m, "REPO_ROOT"):
-                m.REPO_ROOT = orig
+    return root if root is not None else find_repo_root()

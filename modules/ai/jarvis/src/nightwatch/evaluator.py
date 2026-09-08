@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 
-from nightwatch.paths import REPO_ROOT
+from jarvis.core.paths import find_repo_root
 
 
 @dataclass
@@ -40,12 +40,8 @@ class ReviewResult:
 
 
 def _get_git_cwd() -> str:
-    """Get the correct git working directory (project root, not nixos-ai)."""
-    import os
-    env_root = os.environ.get("JARVIS_PROJECT_ROOT")
-    if env_root and Path(env_root).exists():
-        return env_root
-    return str(REPO_ROOT)
+    """Get the correct git working directory (active project root)."""
+    return str(find_repo_root())
 
 
 def get_git_diff() -> str:

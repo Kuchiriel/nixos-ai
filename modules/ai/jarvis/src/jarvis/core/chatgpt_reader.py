@@ -34,8 +34,9 @@ def read_chatgpt_share(url: str, max_chars: int = 50000) -> dict[str, Any]:
     # Use the standalone script (avoids shell escaping issues)
     script_path = Path(__file__).parent.parent.parent.parent / "scripts" / "read_chatgpt.py"
     if not script_path.exists():
-        # Fallback: look in project root
-        script_path = Path(os.environ.get("JARVIS_PROJECT_ROOT", str(Path(os.environ.get("JARVIS_PROJECT_ROOT", os.path.expanduser("~/projects"))) / "nixos-ai"))) / "scripts" / "read_chatgpt.py"
+        # Fallback: script ao lado do repo ativo (resolver canônico).
+        from jarvis.core.paths import find_repo_root
+        script_path = find_repo_root() / "scripts" / "read_chatgpt.py"
 
     try:
         result = subprocess.run(

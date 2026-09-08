@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from nightwatch.file_guard import detect_language, validate_file, ValidationResult
-from nightwatch.paths import REPO_ROOT
+from jarvis.core.paths import find_repo_root
 
 
 @dataclass
@@ -55,7 +55,7 @@ def run_command(cmd: str, timeout: int = 60) -> tuple[bool, str, int]:
     try:
         result = subprocess.run(
             shlex.split(cmd), capture_output=True, text=True,
-            timeout=timeout, cwd=str(REPO_ROOT),
+            timeout=timeout, cwd=str(find_repo_root()),
         )
         duration = int((time.time() - start) * 1000)
         output = result.stdout + result.stderr
@@ -71,12 +71,11 @@ def run_command(cmd: str, timeout: int = 60) -> tuple[bool, str, int]:
 def discover_test_files() -> list[str]:
     """Discover test files in the project.
 
-    Checks JARVIS_PROJECT_ROOT first (for external projects),
-    then falls back to nixos-ai's own layout.
+    Checks the active project root, then common subdirectory layouts.
+    (O fallback antigo para os testes do próprio nixos-ai foi removido:
+    cada projeto valida com seus testes — ver comentário em run_tests_for.)
     """
-    import os
-    env_root = os.environ.get("JARVIS_PROJECT_ROOT")
-    project_root = Path(env_root) if env_root and Path(env_root).exists() else REPO_ROOT
+    project_root = find_repo_root()
 
     # Check project root directly for test_*.py files (flat layout)
     flat_tests = list(project_root.glob("test_*.py"))
@@ -87,9 +86,6 @@ def discover_test_files() -> list[str]:
     candidates = [
         project_root / "tests",
         project_root / "test",
-        REPO_ROOT / "modules/ai/jarvis/tests",  # nixos-ai fallback
-        REPO_ROOT / "tests",
-        REPO_ROOT / "test",
     ]
     for test_dir in candidates:
         if test_dir.exists():
@@ -99,16 +95,11 @@ def discover_test_files() -> list[str]:
 
 def validate_changed_files(files: list[str]) -> ValidationReport:
     """Validate all changed files."""
-    import os
     report = ValidationReport()
-    env_root = os.environ.get("JARVIS_PROJECT_ROOT")
-    project_root = Path(env_root) if env_root and Path(env_root).exists() else REPO_ROOT
-    
+    project_root = find_repo_root()
+
     for file_path in files:
-        # Try project root first (external projects), then REPO_ROOT
         path = project_root / file_path
-        if not path.exists():
-            path = REPO_ROOT / file_path
         if not path.exists():
             continue
         
@@ -137,9 +128,10 @@ def validate_changed_files(files: list[str]) -> ValidationReport:
 def run_syntax_checks(files: list[str]) -> ValidationReport:
     """Run syntax checks on changed files."""
     report = ValidationReport()
-    
+    project_root = find_repo_root()
+
     for file_path in files:
-        path = REPO_ROOT / file_path
+        path = project_root / file_path
         if not path.exists():
             continue
         
@@ -227,9 +219,7 @@ def run_targeted_tests(files: list[str]) -> ValidationReport:
     if not relevant_tests:
         # No test maps to the changed file — run the test suite from
         # the project being worked on (not nixos-ai's own tests).
-        import os
-        env_root = os.environ.get("JARVIS_PROJECT_ROOT")
-        project_root = Path(env_root) if env_root and Path(env_root).exists() else REPO_ROOT
+        project_root = find_repo_root()
 
         # Find the test directory in the target project
         test_dir = next(
@@ -238,13 +228,16 @@ def run_targeted_tests(files: list[str]) -> ValidationReport:
              if d.exists() and d.is_dir()),
             None,
         )
-        # Fall back to nixos-ai tests only if the project IS nixos-ai
-        if test_dir is None and project_root == REPO_ROOT:
-            test_dir = next(
-                (d for d in (REPO_ROOT / "modules/ai/jarvis/tests", REPO_ROOT / "tests")
-                 if d.exists()),
-                None,
-            )
+        # Fall back to nixos-ai layout only when working nixos-ai itself
+        # (detectado pelo layout, não por comparação de identidade).
+        if test_dir is None:
+            own = project_root / "modules" / "ai" / "jarvis" / "tests"
+            if own.exists():
+                test_dir = own
+            else:
+                legacy = project_root / "tests"
+                if legacy.exists():
+                    test_dir = legacy
         if test_dir:
             test_target = str(test_dir)
             test_cmd = f"python3 -m pytest {test_target} -q --tb=short"
@@ -285,13 +278,13 @@ def run_import_check(files: list[str]) -> ValidationReport:
     
     # Try to import each module
     for file_path in py_files:
-        path = REPO_ROOT / file_path
+        path = find_repo_root() / file_path
         if not path.exists():
             continue
-        
+
         # Convert file path to module path
         try:
-            rel = path.relative_to(REPO_ROOT / "modules" / "ai" / "jarvis" / "src")
+            rel = path.relative_to(find_repo_root() / "modules" / "ai" / "jarvis" / "src")
             module = "jarvis." + str(rel.with_suffix("")).replace("/", ".")
         except ValueError:
             continue

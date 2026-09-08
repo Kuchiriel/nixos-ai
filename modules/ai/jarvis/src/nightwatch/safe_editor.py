@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 
-from nightwatch.paths import REPO_ROOT
+from nightwatch.paths import find_repo_root
 BACKUP_DIR = Path.home() / ".local/state/jarvis/nightwatch/backups"
 
 
@@ -386,13 +386,14 @@ class SafeEditor:
         
         # Resolve path
         if not path.is_absolute():
+            root = find_repo_root()
             for prefix in ["modules/ai/jarvis/src/", "src/jarvis/", "jarvis/", "src/"]:
-                alt = REPO_ROOT / prefix / path
+                alt = root / prefix / path
                 if alt.exists():
                     path = alt
                     break
             else:
-                path = REPO_ROOT / path
+                path = root / path
         
         # Read original
         original = None
@@ -477,13 +478,14 @@ class SafeEditor:
     def rollback(self, path: Path) -> bool:
         """Rollback to backup."""
         if not path.is_absolute():
+            root = find_repo_root()
             for prefix in ["modules/ai/jarvis/src/", "src/jarvis/", "jarvis/", "src/"]:
-                alt = REPO_ROOT / prefix / path
+                alt = root / prefix / path
                 if alt.exists():
                     path = alt
                     break
             else:
-                path = REPO_ROOT / path
+                path = root / path
         
         # Find most recent backup
         backups = sorted(
