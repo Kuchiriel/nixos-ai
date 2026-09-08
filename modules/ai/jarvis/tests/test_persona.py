@@ -163,3 +163,34 @@ class TestPersonaSystemPrompts:
         engineer = registry.get("backend_engineer")
         assert len(engineer.system_prompt_additions) > 0
         assert "Backend Engineer" in engineer.system_prompt_additions
+
+
+class TestPolicyEnforcement:
+    """filter_tools honra can_write/can_execute (policies não decorativas)."""
+
+    def test_coordinator_loses_shell(self):
+        from jarvis.core.persona import PersonaRegistry, filter_tools
+        p = PersonaRegistry().get("cto")
+        assert p is not None
+        assert p.policies.can_write is False
+        got = filter_tools(
+            ["read_file", "write_file", "execute_shell", "web_search"], p)
+        assert "read_file" in got
+        assert "execute_shell" not in got  # shell escreve: cai com can_write=False
+        assert "write_file" not in got
+
+    def test_devops_keeps_shell(self):
+        from jarvis.core.persona import PersonaRegistry, filter_tools
+        p = PersonaRegistry().get("devops_engineer")
+        got = filter_tools(["read_file", "execute_shell", "nix_eval"], p)
+        assert "execute_shell" in got
+
+    def test_execute_without_write_still_blocked(self):
+        """can_execute=True + can_write=False: shell cai (implica escrita)."""
+        from jarvis.core.persona import Persona, PersonaPolicy, filter_tools
+        p = Persona(id="x", name="x", role="x", description="x",
+                    tools=["read", "shell"],
+                    policies=PersonaPolicy(can_read=True, can_write=False,
+                                           can_execute=True))
+        got = filter_tools(["read_file", "execute_shell"], p)
+        assert got == ["read_file"]

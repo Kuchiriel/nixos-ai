@@ -332,6 +332,15 @@ Never suppress errors silently.""",
 
 # Matriz MCP: capability declarada na persona → tool names do REPL/MCP.
 # jarvis (default) tem tools=[] = todas. researcher e demais filtram.
+#
+# Conjuntos de enforcement das policies (filter_tools): shell implica
+# escrita — qualquer tool de execução cai com can_write=False também.
+_EXEC_TOOLS = frozenset({"execute_shell", "jarvis_execute"})
+_WRITE_TOOLS = frozenset({
+    "write_file", "str_replace",
+    "jarvis_write_file", "jarvis_str_replace",
+    "vault_write", "jarvis_vault_write",
+})
 CAPABILITY_TOOLS: dict[str, list[str]] = {
     "read": ["read_file", "list_directory", "jarvis_read_file"],
     "write": ["write_file", "str_replace", "jarvis_write_file", "jarvis_str_replace"],
@@ -355,13 +364,28 @@ CAPABILITY_TOOLS: dict[str, list[str]] = {
 
 
 def filter_tools(tool_names: list[str], persona: Persona | None) -> list[str]:
-    """Filtra tool names pelas capabilities da persona. Sem persona/tools = todas."""
+    """Filtra tool names pelas capabilities + policies da persona.
+
+    Sem persona/tools = todas. Com persona: interseção das capabilities,
+    depois enforcement das policies declaradas — can_write=False remove
+    escrita (incl. shell, que escreve via comandos); can_execute=False
+    remove execução. Antes as policies eram decorativas: coordinator/cto
+    (can_write=False) recebiam execute_shell.
+    """
     if persona is None or not getattr(persona, "tools", None):
         return list(tool_names)
     allowed: set[str] = set()
     for cap in persona.tools:
         allowed.update(CAPABILITY_TOOLS.get(cap, []))
-    return [t for t in tool_names if t in allowed]
+    kept = [t for t in tool_names if t in allowed]
+    policies = getattr(persona, "policies", None)
+    if policies is not None:
+        if not getattr(policies, "can_execute", False):
+            kept = [t for t in kept if t not in _EXEC_TOOLS]
+        if not getattr(policies, "can_write", False):
+            # Shell implica escrita (>, sed, rm, git, ...) — cai junto.
+            kept = [t for t in kept if t not in _WRITE_TOOLS and t not in _EXEC_TOOLS]
+    return kept
 
 
 class PersonaRegistry:
