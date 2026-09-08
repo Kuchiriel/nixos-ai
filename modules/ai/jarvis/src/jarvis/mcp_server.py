@@ -852,22 +852,16 @@ def _handle_rag_search(args: dict[str, Any]) -> str:
     try:
         from jarvis.core.rag import HybridSearch
         from jarvis.core.config import Config
+        from jarvis.providers.vector_store import QdrantStore
         cfg = Config()
         # Override collection if specified
         if collection == "memories":
             cfg.qdrant_collection_code = cfg.qdrant_collection_memories
         elif collection == "books":
             cfg.qdrant_collection_code = cfg.qdrant_collection_books
-        # Check if collection exists, create if not
-        import requests
-        resp = requests.get(f"{cfg.qdrant_url}/collections/{cfg.qdrant_collection_code}")
-        if resp.status_code == 404:
-            # Create collection with default vectors
-            create_payload = {
-                "vectors": {"dense": {"size": 768, "distance": "Cosine"}},
-                "sparse_vectors": {"sparse": {"modifier": "Idf"}}
-            }
-            requests.put(f"{cfg.qdrant_url}/collections/{cfg.qdrant_collection_code}", json=create_payload)
+        # Garante a coleção via store canônico (schema dense+bm25, dim do
+        # config) — nunca recriar via requests com schema divergente.
+        QdrantStore(cfg).ensure_collection(cfg.qdrant_collection_code, dim=cfg.embed_dim)
         hs = HybridSearch(config=cfg)
         results = hs.search(query, top_k=limit)
         if not results:

@@ -121,9 +121,14 @@ EOF
 
 
       def update_status(state, text=""):
+          # Mesmo contrato de jarvis.core.feedback.set_status: {state, text,
+          # ts, iso}. Sem ts, o TTL do get_status() declara idle imediato e
+          # a Waybar mente durante listening/transcribing (forense 2026-09).
           try:
               with open("/tmp/jarvis-status.json", "w") as f:
-                  json.dump({"state": state, "text": text}, f)
+                  json.dump({"state": state, "text": text,
+                             "ts": time.time(),
+                             "iso": time.strftime("%Y-%m-%dT%H:%M:%S%z")}, f)
           except Exception:
               pass
           try:

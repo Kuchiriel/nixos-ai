@@ -348,10 +348,12 @@ class Agent:
         except Exception:
             pass
         
-        # Inject lessons from memory
+        # Inject lessons from memory — qualificadas pelo PROMPT (não ""):
+        # lessons("") embaralha por embedding vazio e injeta lições
+        # irrelevantes; com o prompt, o recall retorna o que importa.
         if self.memory:
             try:
-                lessons = self.memory.lessons("", top_k=3)
+                lessons = self.memory.lessons(prompt, top_k=3)
                 if lessons:
                     system_content += f"\n\nAVOID (past errors):{lessons}"
             except Exception:

@@ -716,3 +716,21 @@ def test_context_overflow_stops_loop_early() -> None:
     result = agent.run("loop infinito")
     assert result.turns == 1
     assert "Context budget overflow" in result.final_response
+
+
+def test_lessons_recall_uses_prompt_not_empty_query() -> None:
+    """Recall de lições é qualificado pelo prompt (FASE 20/21).
+
+    lessons("") embaralha por embedding vazio; o Agent deve passar o
+    prompt para trazer lições relevantes à tarefa atual.
+    """
+    seen: dict[str, str] = {}
+
+    class QueryRecordingMemory:
+        def lessons(self, query: str, *, top_k: int = 3) -> str:
+            seen["query"] = query
+            return ""
+
+    agent = Agent(Config(), session=FakeSession("ok"), memory=QueryRecordingMemory())
+    agent.run("consertar o qdrant que caiu")
+    assert seen.get("query") == "consertar o qdrant que caiu"
