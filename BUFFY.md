@@ -729,3 +729,51 @@ together; prompts derive language, never hardcode it.
 WebUI state, long-run E2E, `chat` vs `ask` overlap (observado).
 
 **Evidence:** `docs/FORENSIC-SYSTEM-COHERENCE-2026-09-08.md`.
+
+## 24. SESSION LESSONS (2026-09-08 — routing local + eval + abismo UX)
+
+### Verificado antes de presumido, sempre
+Router NATIVO do llama-server existia nos 2 binários (b10809/b10660) —
+a hipótese SIGTERM-dance morreu na investigação, não no código. Upstream
+serve Q2_0 (b10809) e Prism serve Qwen (CPU): "requer fork" era de builds
+antigos. Regra: `llama-server --help | grep models-` antes de desenhar
+lifecycle.
+
+### Benchmarks: método oficial + n=5 + retries, nunca 1 sample
+llama-bench (pp/tg) p/ perf; BFCL-style AST-lite p/ tool-use; suíte de
+tarefas representativas p/ agent; protocolo user-fiel (1 prompt terso,
+fresh session) p/ UX. Slot-cache/KV-reuse do servidor gera RUÍDO
+(g3 "401"→391, g2 "Debian"→ok em retries) — conclusões exigem padrões.
+Scorer só-texto subestima cadeias (a2 provado por arquivo).
+
+### Harness fecha formato, não juízo (A/B n=5, 7 tarefas)
+Bonsai 30→35/35 com disciplina; Qwen 35/35 livre; Gemma 0/0/35;
+Phi 0/0/30. Grammar garante FORMA, não vocabulário (assinaturas
+continuam necessárias). Thinking-ON envenena tool-use em qualquer modo.
+12 runs UX user-fiéis: 0/12 conclusões — desiste após 1 erro, agente-cego,
+rc=0 falso, loop-cego, especulação sem evidência. Fixes: registry vence
+regex, recovery coach, LoopDetector no REPL, rc honesto, disciplina,
+strict_tools, thinking plumbing (backends+stream+fallback).
+
+### UX real > métrica de código
+Tool accuracy 35/35 conviveu com 0/12 em tarefas reais. Medir: conclusão
+verificada, turns, ações desperdiçadas, recovery, stalls — com o MESMO
+harness do usuário (dev_once, não Agent read-only).
+
+### Downloads: throttle é por-conexão
+Single ~190 B/s; 4× ≈ 20KB/s; 8-way trava em ~0. Pedir ao usuário via
+browser (pipe dele funciona) com URLs exatas da API HF + destino
+~/models/ + verificação (magic GGUF + tamanho == Content-Length).
+`scripts/fetch-resume.py` (stdlib, Range+retry) p/ resto.
+
+### Leads abertos (não executados)
+xLAM-2-8B Q4_K_M (~4.9GB, BFCL SOTA) como executor fast; patterns
+Anthropic (orquestrador-workers, evaluator-optimizer, effort-scaling);
+MoE planeja + small executa; tools em paralelo (loop é serial!);
+verificação pós-edit forçada. Prompt cirúrgico p/ ChatGPT em
+`docs/CHATGPT-ATTACK-PROMPT.md`.
+
+**Evidence:** `docs/LOCAL-MODEL-ROUTING-FORENSIC-2026-09-08.md`,
+`docs/LOCAL-MODEL-EVALUATION-2026-09-08.md`, `docs/UX-ABISMO-2026-09-08.md`.
+**Metrics:** suite 1049/5 infra; flake verde; fast=Qwen3-4B (único
+free-capable); default Bonsai preservado (produto).

@@ -76,8 +76,16 @@ scripts/                # Scripts auxiliares
 
 ## Estado do sistema
 
-- Modelo: Ternary-Bonsai-8B Q2_0_g64, ngl=99, ctx=32K (medido 2026-09-05: TG 71.6 t/s; ver docs/benchmarks/bonsai-vs-qwen-2026-09-05.md)
-- Serviços: llama-server (8080), embeddings (8081), rerank (8082), qdrant (6333)
+- Router nativo llama-server (:8080, `--models-max 1`); tiers em
+  `models.nix:routing`: `bonsai` (speed, default), `jarvis-fast`
+  (Qwen3-4B), `jarvis-strong` (Qwen3.6-MoE). Default NÃO muda sem decisão.
+- Serviços: router/chat (8080), embeddings (8081), rerank (8082), qdrant (6333)
+- Registry: `/etc/jarvis/model-registry.json` (gerado; override
+  `JARVIS_MODEL_REGISTRY`); vence param-count em profiles e model-id.
+- Harness (evidência A/B n=5): `TOOL_USE_DISCIPLINE` no system SEMPRE;
+  thinking OFF p/ tool-use (`JARVIS_LLM_DISABLE_THINKING=1` funciona!);
+  `strict_tools` opt-in por tier (Bonsai/Gemma sim, Qwen não precisa);
+  validator+LoopDetector no REPL; rc honesto (stuck ≠ done).
 - Roo Dev: VSCodium + Roo Code, MCP servers ativos:
   - `jarvis` — shell, file ops, vision, nix eval, chatgpt reader
   - `tavily-search` — pesquisa web
