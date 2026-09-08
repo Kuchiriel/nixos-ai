@@ -45,8 +45,7 @@ let
   maxExpertsOnGpu = availableForKvAndExperts / expertSize; # ~32 experts
 
   # Base profile for host models
-  hostBase = {
-    model = "llm-host";
+  hostBase = {    model = "llm-host";
     mmproj = "llm-host-mmproj";
     gpuLayers = 45; # Max layers on GPU for RTX 4050
     kvCache = "-fa on -ctk q4_0 -ctv q4_0";
@@ -59,7 +58,7 @@ let
     user = "nixos";
     scheduler = null;
   };
-in {
+in rec {
   # =========================================================================
   # 1. ARQUIVOS DE MODELO
   # =========================================================================
@@ -433,5 +432,83 @@ in {
       ];
       user = "nixos";
     };
+
+    # ── Qwen Fast Profile (host, GPU) ──
+    # Qwen3-4B denso para o tier `jarvis-fast` do router: tool calling
+    # nativo, ~2.5GB, full offload (28 layers densas, sem MoE flags).
+    # KV q4_0 16K ≈ 1GB; total ≈ 3.5GB < 6GB com folga p/ Bonsai→fast
+    # convivência transitória durante o switch do router (max 1 residente,
+    # mas o unload/load transiente pode sobrepor brevemente).
+    qwen-fast = {
+      model = "llm-vm";
+      mmproj = null;
+      gpuLayers = 99; # todas as layers densas na GPU (ngl alto = "todas")
+      kvCache = "-fa on -ctk q4_0 -ctv q4_0";
+      threads = 8;
+      ctxSize = 16384;
+      batchSize = 1024;
+      ubatch = 512;
+      moeFlags = "";
+      extraArgs = [
+        "--parallel"
+        "1"
+        "--jinja"
+        "--no-warmup"
+      ];
+      user = "nixos";
+      scheduler = null;
+    };
   };
+
+  # =========================================================================
+  # 3. ROUTING — metadata declarativa p/ o router nativo do llama-server
+  #    + registry JSON consumido pelo Python (model_registry.py).
+  #    ÚNICA FONTE: este bloco referencia `profiles` e arquivos acima —
+  #    nada de dict Python espelhando estes dados.
+  # =========================================================================
+  routing = {
+    version = 1;
+    # Default EFETIVO hoje (bonsai serve :8080): preservado — §21, produto
+    # decide eventual troca p/ jarvis-fast.
+    default = "bonsai";
+    # Residência simultânea máxima (VRAM 6GB: 1 modelo por vez).
+    maxResident = 1;
+    models = {
+      bonsai = {
+        profile = "bonsai";
+        tier = "speed";
+        capabilities = ["general" "coding" "tools" "pt"];
+        params_b = 8;
+        vram_mb = 2400;
+        # Prism fork exigido (Q2_0 g64 fora do upstream).
+        needsWrapper = "llama-prism-wrapper";
+        serve = { host = true; vm = true; };
+      };
+      jarvis-fast = {
+        profile = "qwen-fast";
+        profileVm = "vm";
+        tier = "fast";
+        capabilities = ["general" "coding" "tools" "pt"];
+        params_b = 4;
+        vram_mb = 2600;
+        needsWrapper = null;
+        serve = { host = true; vm = true; };
+      };
+      jarvis-strong = {
+        profile = "chat";
+        tier = "reasoning";
+        capabilities = ["general" "coding" "tools" "reasoning" "analysis" "vision" "pt"];
+        params_b = 35;
+        vram_mb = 4600;
+        needsWrapper = null;
+        serve = { host = true; vm = false; };
+        # Herdado do profile chat: mmproj na CPU (861MB VRAM) + visão dinâmica.
+        iniExtra = ["no-mmproj-offload = true" "image-min-tokens = 1024"];
+      };
+    };
+  };
+
+  # JSON derivado (builtins.toJSON puro — sem derivação): llama-cpp.nix
+  # gera o preset INI e /etc/jarvis/model-registry.json daqui.
+  registryJson = builtins.toJSON routing;
 }
