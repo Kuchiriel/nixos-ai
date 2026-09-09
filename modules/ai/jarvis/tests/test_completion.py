@@ -40,25 +40,27 @@ def test_written_missing_file_is_unverified(tmp_path, monkeypatch):
 
 
 def test_written_py_compiles(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
+    from jarvis.core.paths import use_project_root
     (tmp_path / "ok.py").write_text("x = 1\n")
     msgs = [{"role": "assistant", "tool_calls": [
         {"function": {"name": "write_file",
                       "arguments": {"path": "ok.py"}}}]},
             {"role": "tool", "content": "written"}]
-    v = check_completion(msgs)
+    with use_project_root(tmp_path):
+        v = check_completion(msgs)
     assert v.status == "VERIFIED"
     assert any("compila" in e for e in v.evidence)
 
 
 def test_written_py_syntax_error(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
+    from jarvis.core.paths import use_project_root
     (tmp_path / "bad.py").write_text("def f(:\n")
     msgs = [{"role": "assistant", "tool_calls": [
         {"function": {"name": "write_file",
                       "arguments": {"path": "bad.py"}}}]},
             {"role": "tool", "content": "written"}]
-    v = check_completion(msgs)
+    with use_project_root(tmp_path):
+        v = check_completion(msgs)
     assert v.status == "UNVERIFIED"
     assert any("não compila" in m for m in v.missing)
 

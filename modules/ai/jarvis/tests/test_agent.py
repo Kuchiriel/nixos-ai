@@ -952,3 +952,73 @@ def test_mixed_batch_stays_serial(tmp_path, monkeypatch) -> None:
             result = agent.run("faça os dois")
     assert seen["parallel"] == 0
     assert result.verdict == "VERIFIED"
+
+
+def test_write_tools_need_approval(tmp_path) -> None:
+    """write/str_replace sem approve: negação honesta, sem escrita."""
+    import json as jsonlib
+    from unittest.mock import patch
+    from jarvis.core.agent import Agent
+    from jarvis.core.config import Config
+
+    import sys
+    sys.path.insert(0, "tests")
+    from test_agent import FakeSession, FakeResponse  # noqa (self)
+
+    class WantWrite(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{
+                           "id": "c1", "type": "function",
+                           "function": {"name": "write_file",
+                                        "arguments": jsonlib.dumps(
+                                            {"path": "novo.txt",
+                                             "content": "x"})}}]}
+            else:
+                msg = {"role": "assistant", "content": "sem permissão, ok"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    from jarvis.core.paths import use_project_root
+    agent = Agent(Config(), session=WantWrite())
+    with use_project_root(tmp_path):
+        result = agent.run("crie novo.txt")
+    assert not (tmp_path / "novo.txt").exists()
+    assert any("write_file" in c for c in result.commands_denied)
+
+
+def test_write_tools_executes_with_approval(tmp_path) -> None:
+    """Com approve + human_approve: escreve de verdade (jail do projeto)."""
+    import json as jsonlib
+    from unittest.mock import patch
+    from jarvis.core.agent import Agent, human_approve
+    from jarvis.core.config import Config
+
+    import sys
+    sys.path.insert(0, "tests")
+    from test_agent import FakeSession, FakeResponse  # noqa (self)
+
+    class WantWrite(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{
+                           "id": "c1", "type": "function",
+                           "function": {"name": "write_file",
+                                        "arguments": jsonlib.dumps(
+                                            {"path": "novo.txt",
+                                             "content": "conteúdo"})}}]}
+            else:
+                msg = {"role": "assistant", "content": "criado e verificado"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    from jarvis.core.paths import use_project_root
+    agent = Agent(Config(), session=WantWrite(), approve=True)
+    with patch("jarvis.core.agent.human_approve", return_value=True):
+        with use_project_root(tmp_path):
+            result = agent.run("crie novo.txt")
+    assert (tmp_path / "novo.txt").read_text() == "conteúdo"
+    assert result.verdict == "VERIFIED"
+    assert result.verified is True

@@ -777,3 +777,34 @@ verificação pós-edit forçada. Prompt cirúrgico p/ ChatGPT em
 `docs/LOCAL-MODEL-EVALUATION-2026-09-08.md`, `docs/UX-ABISMO-2026-09-08.md`.
 **Metrics:** suite 1049/5 infra; flake verde; fast=Qwen3-4B (único
 free-capable); default Bonsai preservado (produto).
+
+## 25. SESSION LESSONS (2026-09-08 noite — ataque cirúrgico P0/P1)
+
+### DONE com evidência, não com afirmação
+`core/completion.py`: trailing-error, zero-success, artefato-existe+AST,
+afirma-sem-escrita (C2 real), nega-evidência (N2 real). AgentResult leva
+verdict/evidence/missing; 2 turnos de verificação; erro idêntico 3x →
+STUCK. False-DONE virou UNVERIFIED rotulado (C2/N2 pegos).
+
+### Planner MoE→executor small: plano excelente, execução travava sem write
+MoE-alone e Qwen-alone: VERIFIED vazio (sem fix). MoE-plan + Qwen-exec
+(+approve): VERIFIED + fix em 3 turns. Mas Agent NÃO TINHA write tools
+(só shell-redirect, negado por policy) → adicionados write_file/
+str_replace com approval-gating + jail. Lição: comparar arquiteturas
+exige paridade de ferramentas, senão mede o harness disfarçado.
+
+### Rigs: 1 leve por vez; MoE-CPU nunca; GPU com janela
+MoE 22GB mmap + t8 paralelos travou o desktop.pattern: 1 rig CPU
+(-t 4, modelo pequeno) por vez; GPU só com :8080 livre (heal ressuscita
+unit parada em ~7min — não lutar contra systemd, usar porta ímpar ou
+janela). pkill -f pendura a sessão: matar por PID/porta.
+
+### Pi ambíguo, pi.nix morto
+"Pi" do hype = pi-coding-agent (badlogic/earendil-works, MIT): testado
+0.85.1 vs :8080 — explora melhor, julga igual (T1 errado, T2 crash).
+Nosso pi.nix era outro programa (era-Qwen2.5, desabilitado) — deletado.
+Pythagoras-dev/Pythagoras = compute distribuído, nada p/ harness.
+Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
+
+**Evidence:** `docs/P0-ATAQUE-2026-09-08.md`. **Metrics:** suite
+1066 passed / 5 failed (só infra); planner C2 VERIFIED+fix/3 turns; paralelo 2.9x.

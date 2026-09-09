@@ -659,6 +659,26 @@ class Agent:
                     # Leitura read-only via implementação canônica (devtools).
                     # Sem aprovação: risco zero. Erros viram tool result.
                     tool_result = self._exec_read_file(args)
+                elif name in ("write_file", "str_replace"):
+                    # Escrita: jail de projeto + aprovação explícita.
+                    # Sem approve: negação honesta (o modelo pede ao usuário
+                    # em vez de improvisar redirect via shell).
+                    if self.approve and human_approve(
+                            f"{name} {args.get('path', '')}"):
+                        tool_result = self._exec_write(name, args)
+                        result.commands_run.append(f"{name} {args.get('path', '')}")
+                        self._log_audit(f"{name} {args.get('path', '')}",
+                                        0 if not tool_result.startswith("ERROR") else 1,
+                                        tool_result, True)
+                    else:
+                        result.commands_denied.append(
+                            f"{name} {args.get('path', '')}")
+                        tool_result = (
+                            f"ERROR: {name} needs approval "
+                            f"(approve=True + human approval). "
+                            f"Path stays inside project jail.")
+                        self._log_audit(f"{name} {args.get('path', '')}",
+                                        None, tool_result, False)
                 else:
                     tool_result = f"ERROR: Unknown tool: {name}"
 
@@ -856,6 +876,24 @@ class Agent:
         return f"ERROR: {res.get('error', 'read failed')}"
 
     @staticmethod
+    def _exec_write(name: str, args: dict[str, Any]) -> str:
+        """write_file/str_replace canônicos (devtools, project jail)."""
+        from jarvis.core import devtools as _dt
+        try:
+            if name == "write_file":
+                res = _dt.write_file(str(args.get("path", "")),
+                                     str(args.get("content", "")))
+            else:
+                res = _dt.str_replace(str(args.get("path", "")),
+                                      str(args.get("old", "")),
+                                      str(args.get("new", "")))
+        except Exception as e:
+            return f"ERROR: write failed: {e}"
+        if res.get("ok"):
+            return f"ok: {name} {res.get('path', args.get('path', ''))}"
+        return f"ERROR: {res.get('error', 'write failed')}"
+
+    @staticmethod
     def _parallel_read_batch(items: list[tuple[str, dict[str, Any]]]) -> list[str]:
         """Executa reads independentes em paralelo (P1).
 
@@ -902,6 +940,10 @@ class Agent:
         # Tools expostas ao LLM. `read_file` é sempre oferecida (read-only,
         # risco zero, capacidade central — CASE 1: "leia o arquivo X" nunca
         # deve precisar de RAG). `execute_shell` + MCP exigem mcp_servers.
+        # `write_file`/`str_replace` exigem aprovação (self.approve +
+        # human_approve): escrita nunca é silenciosa, mas o jail de projeto
+        # do devtools impede escape — sem elas o Agent não conclui nenhuma
+        # tarefa de edição (observado: planner travou em redirect negado).
         tools: list[dict[str, Any]] = [{
             "type": "function",
             "function": {
@@ -915,6 +957,35 @@ class Agent:
                         "limit": {"type": "integer", "description": "Max lines (default 200)"},
                     },
                     "required": ["path"],
+                },
+            },
+        }, {
+            "type": "function",
+            "function": {
+                "name": "write_file",
+                "description": "Create/overwrite a file (project jail; needs approval). Use for new files.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Destination path"},
+                        "content": {"type": "string", "description": "Full content"},
+                    },
+                    "required": ["path", "content"],
+                },
+            },
+        }, {
+            "type": "function",
+            "function": {
+                "name": "str_replace",
+                "description": "Exact string replacement in a file (project jail; needs approval). Use for edits.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string"},
+                        "old": {"type": "string", "description": "Exact text to find"},
+                        "new": {"type": "string", "description": "Replacement"},
+                    },
+                    "required": ["path", "old", "new"],
                 },
             },
         }]

@@ -122,7 +122,17 @@ def check_completion(messages: list[dict],
     """Veredito estrutural de conclusão."""
     ev: list[str] = []
     miss: list[str] = []
-    root = Path(project_root or ".")
+    if project_root is None:
+        # Raiz canônica (task-ctx > env > walk-up): live mostra CWD, mas
+        # o Agent opera sob use_project_root — sem isso, artefatos "somem"
+        # e tudo vira UNVERIFIED (observado em teste com tmp_path).
+        try:
+            from jarvis.core.paths import find_repo_root
+            root = find_repo_root()
+        except Exception:
+            root = Path(".")
+    else:
+        root = Path(project_root)
     ok = True
 
     if not _any_tool_success(messages):

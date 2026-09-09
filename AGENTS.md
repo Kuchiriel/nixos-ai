@@ -86,6 +86,10 @@ scripts/                # Scripts auxiliares
   thinking OFF p/ tool-use (`JARVIS_LLM_DISABLE_THINKING=1` funciona!);
   `strict_tools` opt-in por tier (Bonsai/Gemma sim, Qwen não precisa);
   validator+LoopDetector no REPL; rc honesto (stuck ≠ done).
+- Agent: DONE só com evidência (`completion.py`: trailing-error,
+  artefato-existe+AST, sem afirmação sem escrita); erro idêntico 3x →
+  STUCK; reads paralelos ok (shell/escrita jamais); write_file/
+  str_replace exigem aprovação (jail de projeto).
 - Roo Dev: VSCodium + Roo Code, MCP servers ativos:
   - `jarvis` — shell, file ops, vision, nix eval, chatgpt reader
   - `tavily-search` — pesquisa web
