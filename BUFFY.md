@@ -808,3 +808,11 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
 
 **Evidence:** `docs/P0-ATAQUE-2026-09-08.md`. **Metrics:** suite
 1066 passed / 5 failed (só infra); planner C2 VERIFIED+fix/3 turns; paralelo 2.9x.
+
+## 26. SESSION NOTES (2026-09-09 — xLAM executor)
+- xLAM-2-8B Q4_K_M (~/models, 4.92GB, hash fiado `llm-xlam-8b`): GPU solo
+  5.3GB VRAM. A/B 0/0/35 — GGUF sem chat_template (400 em tools param);
+  só strict. Emite arrays (fallback/strict aceitam listas agora).
+  Planner C2 (MoE-plan→Qwen+approve): VERIFIED+fix/3 turns (único que
+  fixou). Adotado executor strict; Qwen segue fast. Licença CC-BY-NC-4.0.
+- Suite 1068/5infra; flake verde. Commit 0699161.
