@@ -86,6 +86,19 @@ in rec {
     sha256 = "sha256-iMACKZFAg80RKFOquE7VG4e99rnOQvUy2MhcfGOxcwo=";
   };
 
+  # --- xLAM-2-8B Q4_K_M (Salesforce, executor especialista) ---
+  # Action model BFCL-SOTA (~4.9GB). MEDIDO 2026-09-09 (GPU, prism):
+  # A/B 0/0/35 (free/sys/constrained) — SEM template nativo no GGUF
+  # (server: "Unable to generate parser", 400 em tools param) → opera
+  # SÓ via strict/constrained; emite arrays (calls paralelas!) e chains
+  # corretas; chat puro incapaz (sempre aciona). Licença CC-BY-NC-4.0
+  # (não-comercial — difere do resto MIT/Apache; notar no uso).
+  # Adotado como executor strict (Qwen segue fast geral).
+  llm-xlam-8b = mkModel {
+    url = "https://huggingface.co/Salesforce/Llama-xLAM-2-8b-fc-r-gguf/resolve/main/Llama-xLAM-2-8B-fc-r-Q4_K_M.gguf";
+    sha256 = "sha256-6xC0DTbIDoGmb4BGSisAn0gcTMWxkm7TZpMjn6Yt1+k=";
+  };
+
   # --- LLM — Host (bare metal) ---
   # Qwen3.6-35B-A3B: MoE (35B total, 3B ativos por token) com vision encoder
   llm-host = mkModel {

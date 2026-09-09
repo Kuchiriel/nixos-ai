@@ -210,8 +210,42 @@ def extract_fallback_tool_call(text: str | None) -> dict[str, Any] | None:
                 result["arguments"] = json.loads(args_str)
             except json.JSONDecodeError:
                 pass  # Keep as string if invalid
-    
+
     return result
+
+
+def extract_fallback_tool_calls(text: str | None,
+                                limit: int = 3) -> list[dict[str, Any]]:
+    """Plural: modelos-ação (xLAM) emitem LISTAS de calls.
+
+    `[{name,arguments}, ...]` (até `limit`) — cada elemento vira uma
+    tool_call (base do paralelismo P1). Cai para singular quando não
+    é lista. Elementos inválidos são descartados, nunca inventados.
+    """
+    if not text:
+        return []
+    stripped = text.strip()
+    if stripped.startswith("["):
+        try:
+            arr = json.loads(stripped)
+        except (json.JSONDecodeError, ValueError):
+            arr = None
+        if isinstance(arr, list):
+            out = []
+            for el in arr:
+                if len(out) >= limit:
+                    break
+                if not isinstance(el, dict):
+                    continue
+                name = el.get("name")
+                args = el.get("arguments", {})
+                if not name or not isinstance(args, dict):
+                    continue
+                out.append({"name": name, "arguments": args})
+            if out:
+                return out
+    single = extract_fallback_tool_call(text)
+    return [single] if single else []
 
 from jarvis.core.logging import get_logger
 from jarvis.core.user_profile import UserProfile, inject_context
@@ -497,11 +531,15 @@ class Agent:
             tool_calls = response.get("tool_calls", [])
             content = response.get("content", "")
             if not tool_calls:
-                # Check for fallback tool call in content
-                fallback = extract_fallback_tool_call(content)
-                if fallback:
-                    tool_calls = [{"function": fallback}]
-                else:
+                # Fallback em texto (singular ou lista — xLAM emite arrays;
+                # o plural já cobre o singular).
+                for _i, _fb in enumerate(extract_fallback_tool_calls(content)):
+                    tool_calls.append({
+                        "id": f"fb-{turn}-{_i}",
+                        "type": "function",
+                        "function": _fb,
+                    })
+                if not tool_calls:
                     # P0.2: texto afirmativo NÃO é DONE — verifica evidência.
                     # Sem evidência e com turnos restantes: continua (máx 2
                     # turnos de verificação) em vez de aceitar calado.
@@ -825,31 +863,38 @@ class Agent:
 
     @staticmethod
     def _strict_to_response(resp: Any, tools: list[dict[str, Any]]) -> Any:
-        """Converte content JSON {tool, arguments} em tool_calls.
+        """Converte content JSON em tool_calls (objeto OU lista).
 
-        Fora do set oferecido ou JSON inválido: mantém como texto (o loop
-        decide; nunca inventa call).
+        Listas (xLAM) viram múltiplas calls (cap 3, base do P1). Fora do
+        set oferecido ou JSON inválido: mantém como texto (o loop decide;
+        nunca inventa call).
         """
         from jarvis.providers.llm_backend import ChatResponse
         names = {t.get("function", {}).get("name") for t in tools}
-        try:
-            obj = json.loads(resp.content or "")
-        except (ValueError, TypeError, AttributeError):
-            return resp
-        if not isinstance(obj, dict) or obj.get("tool") not in names:
-            return resp
-        args = obj.get("arguments")
-        if not isinstance(args, dict):
-            return resp
-        return ChatResponse(
-            content="",
-            reasoning=resp.reasoning,
-            tool_calls=[{
-                "id": "strict-1", "type": "function",
+
+        def _one(obj: Any, idx: int) -> dict[str, Any] | None:
+            if not isinstance(obj, dict) or obj.get("tool") not in names:
+                return None
+            args = obj.get("arguments")
+            if not isinstance(args, dict):
+                return None
+            return {
+                "id": f"strict-{idx}", "type": "function",
                 "function": {"name": obj["tool"],
                              "arguments": json.dumps(args)},
-            }],
-        )
+            }
+
+        try:
+            parsed = json.loads(resp.content or "")
+        except (ValueError, TypeError, AttributeError):
+            return resp
+        objs = parsed if isinstance(parsed, list) else [parsed]
+        calls = [c for i, o in enumerate(objs[:3])
+                 if (c := _one(o, i)) is not None]
+        if not calls:
+            return resp
+        return ChatResponse(content="", reasoning=resp.reasoning,
+                            tool_calls=calls)
 
     @staticmethod
     def _exec_read_file(args: dict[str, Any]) -> str:

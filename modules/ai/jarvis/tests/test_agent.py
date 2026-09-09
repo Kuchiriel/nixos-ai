@@ -1022,3 +1022,36 @@ def test_write_tools_executes_with_approval(tmp_path) -> None:
     assert (tmp_path / "novo.txt").read_text() == "conteúdo"
     assert result.verdict == "VERIFIED"
     assert result.verified is True
+
+
+def test_fallback_parses_xlam_array() -> None:
+    """xLAM emite listas: cada elemento vira call (cap 3)."""
+    from jarvis.core.agent import extract_fallback_tool_calls
+    text = ('[{"name": "read_file", "arguments": {"path": "a"}}, '
+            '{"name": "execute_shell", "arguments": {"cmd": "ls"}}, '
+            '{"name": "x", "arguments": "não-dict"}, '
+            '{"name": "read_file", "arguments": {"path": "b"}}]')
+    got = extract_fallback_tool_calls(text)
+    assert [c["name"] for c in got] == ["read_file", "execute_shell",
+                                        "read_file"]
+    assert got[0]["arguments"] == {"path": "a"}
+    assert extract_fallback_tool_calls("texto puro") == []
+    assert extract_fallback_tool_calls("") == []
+
+
+def test_strict_accepts_list_content() -> None:
+    """strict com array JSON vira múltiplas tool_calls."""
+    import json as jsonlib
+    from jarvis.core.agent import Agent
+    from jarvis.providers.llm_backend import ChatResponse
+    tools = [{"type": "function",
+              "function": {"name": n}} for n in ("read_file", "execute_shell")]
+    resp = ChatResponse(content=jsonlib.dumps([
+        {"tool": "read_file", "arguments": {"path": "a"}},
+        {"tool": "execute_shell", "arguments": {"cmd": "ls"}},
+        {"tool": "unknown", "arguments": {}},
+        "lixo",
+    ]))
+    out = Agent._strict_to_response(resp, tools)
+    assert [c["function"]["name"] for c in out.tool_calls] == [
+        "read_file", "execute_shell"]

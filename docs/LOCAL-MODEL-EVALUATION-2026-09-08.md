@@ -325,3 +325,32 @@ hashes SRI computados localmente; fetchurl valida no build).
 2. Alternativa vision = Gemma 3 4B sob strict_tools (preset futuro).
 3. Bonsai = speed com disciplina/strict (comportamento atual).
 4. Phi = fora. MoE = strong. Default inalterado (produto).
+
+---
+
+# ADDENDUM 2026-09-09 — xLAM-2-8B (arquivo do usuário, GPU)
+
+Arquivo: `~/models/Llama-xLAM-2-8B-fc-r-Q4_K_M.gguf` (4.920.736.992 B ==
+HF; magic GGUF; fiado no models.nix `llm-xlam-8b`). GPU prism, ctx 8K:
+5.3GB VRAM (cabe solo; NUNCA com Bonsai junto).
+
+## Achados (todos medidos)
+
+- A/B n=5: **0/0/35** (free/sys/constrained). Causa raiz: GGUF SEM
+  `tokenizer.chat_template` → server 400 "Unable to generate parser"
+  em qualquer request com `tools`. Template llama3 piora (lixo).
+  Opera SÓ via strict/constrained.
+- Suite 19: tool-selection excelente (read/write/chains/paralelas
+  corretas), chat incapaz (tudo vira action; g1 pede web_search!).
+- Parser: fallback agora aceita arrays (`[{...}]`, cap 3) e strict
+  aceita lista → múltiplas calls (base do paralelismo P1). Testes verdes.
+- Planner C2 (MoE-plan→Qwen+approve, GPU): VERIFIED + fix em 3 turns
+  (única condição que fixou; MoE-alone e Qwen-alone: VERIFIED vazio).
+- Licença **CC-BY-NC-4.0** (não-comercial) — exceção no stack.
+
+## Decisão
+
+- ADOTADO como **executor strict** (preset futuro); Qwen segue fast
+  geral (único free-capable). Executor sempre-strict (sem turnos livres)
+  é próximo passo com o 400 documentado. Planner manual virou
+  recomendação de modo `Agent(plan_with=...)` (não implementado).
