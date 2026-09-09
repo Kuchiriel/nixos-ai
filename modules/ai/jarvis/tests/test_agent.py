@@ -764,7 +764,11 @@ def test_agent_tool_timeout_becomes_observation(tmp_path, monkeypatch) -> None:
         result = agent.run("check")
 
     assert result.commands_run == ["echo hello"]
-    assert result.turns == 2  # run sobreviveu (antes: TimeoutExpired matava tudo)
+    assert result.turns > 2  # P0.2: texto "done" sobre tool com erro NÃO é
+    # DONE — consome turnos de verificação e fecha UNVERIFIED honesto.
+    assert result.verified is False
+    assert result.verdict == "UNVERIFIED"
+    assert any("ground truth" in m for m in result.missing)
     # A observation de timeout chegou às mensagens do turno 2.
     turn2_text = jsonlib.dumps(seen_payloads[1])
     assert "timed out" in turn2_text
@@ -859,3 +863,92 @@ def test_detect_profile_registry_tier_overrides_param_count(tmp_path, monkeypatc
     # Fora do registry: legado intacto (4B desconhecido continua tiny).
     assert detect_profile("mini-4b")["name"] == "tiny"
     assert detect_profile("default")["name"] == "default"
+
+
+def test_parallel_reads_preserve_order(tmp_path, monkeypatch) -> None:
+    """Turno só de reads roda em batch com ordem determinística (P1)."""
+    from jarvis.core.agent import Agent
+    (tmp_path / "a.txt").write_text("AAA")
+    (tmp_path / "b.txt").write_text("BBB")
+    (tmp_path / "c.txt").write_text("CCC")
+    from jarvis.core.paths import use_project_root
+    with use_project_root(tmp_path):
+        got = Agent._parallel_read_batch([
+            ("read_file", {"path": "a.txt"}),
+            ("read_file", {"path": "b.txt"}),
+            ("read_file", {"path": "nope.txt"}),
+            ("read_file", {"path": "c.txt"}),
+        ])
+    assert "AAA" in got[0] and "BBB" in got[1]
+    assert got[2].startswith("ERROR")
+    assert "CCC" in got[3]
+
+
+def test_parallel_read_isolates_exceptions(monkeypatch) -> None:
+    """Exceção num read não derruba o lote (P1)."""
+    from jarvis.core.agent import Agent
+    import jarvis.core.agent as A
+
+    def _boom(path, offset=0, limit=200):
+        if "bad" in path:
+            raise RuntimeError("io")
+        return {"ok": True, "content": "fine", "path": path, "total_lines": 1}
+
+    monkeypatch.setattr("jarvis.core.devtools.read_file", _boom)
+    got = A.Agent._parallel_read_batch([
+        ("read_file", {"path": "good.txt"}),
+        ("read_file", {"path": "bad.txt"}),
+    ])
+    assert "fine" in got[0]
+    assert got[1].startswith("ERROR")
+
+
+def test_mixed_batch_stays_serial(tmp_path, monkeypatch) -> None:
+    """Turno com shell+read NÃO usa batch (side effect serial)."""
+    import json as jsonlib
+    from unittest.mock import patch
+    from jarvis.core.agent import Agent
+    from jarvis.core.config import Config
+
+    import sys
+    sys.path.insert(0, "tests")
+    from test_agent import FakeSession, FakeResponse  # noqa (self)
+
+    (tmp_path / "f.txt").write_text("hi")
+    monkeypatch.chdir(tmp_path)
+    seen = {"parallel": 0}
+    real_batch = Agent._parallel_read_batch
+
+    def _spy(items):
+        seen["parallel"] += 1
+        return real_batch(items)
+
+    class Mixed(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [
+                           {"id": "c1", "type": "function",
+                            "function": {"name": "execute_shell",
+                                         "arguments": jsonlib.dumps({"cmd": "echo x"})}},
+                           {"id": "c2", "type": "function",
+                            "function": {"name": "read_file",
+                                         "arguments": jsonlib.dumps({"path": "f.txt"})}},
+                       ]}
+            else:
+                msg = {"role": "assistant", "content": "pronto"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    agent = Agent(Config(), session=Mixed())
+    from jarvis.core.paths import use_project_root
+    with patch.object(Agent, "_parallel_read_batch",
+                      staticmethod(_spy)), \
+        patch("jarvis.core.agent.run_shell") as rs:
+        import subprocess
+        rs.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="x", stderr="")
+        with use_project_root(tmp_path):
+            result = agent.run("faça os dois")
+    assert seen["parallel"] == 0
+    assert result.verdict == "VERIFIED"

@@ -270,6 +270,12 @@ class AgentResult:
     commands_denied: list[str] = field(default_factory=list)
     final_response: str = ""
     turns: int = 0
+    # P0 — conclusão baseada em evidência (completion.py), nunca em afirmação.
+    verified: bool = False
+    verdict: str = "unknown"  # VERIFIED | UNVERIFIED | STUCK | FAILED
+    evidence: list[str] = field(default_factory=list)
+    missing: list[str] = field(default_factory=list)
+    steps: list[dict[str, Any]] = field(default_factory=list)
 
 
 def human_approve(cmd: str) -> bool:
@@ -345,6 +351,37 @@ class Agent:
                 f.write(json.dumps(entry, ensure_ascii=False) + "\n")
         except IOError as e:
             self.logger.error(f"Failed to write audit log: {e}")
+
+    def _finalize(self, result: "AgentResult",
+                  messages: list[dict[str, Any]],
+                  forced: str | None = None) -> None:
+        """Veredito de conclusão baseado em evidência (P0.2).
+
+        forced: STUCK | FAILED (abort/overflow) — ainda coleta evidence
+        do que existe; nunca declara VERIFIED sem check passar.
+        """
+        from jarvis.core.completion import check_completion
+        try:
+            v = check_completion(messages)
+        except Exception:
+            v = None
+        if forced in ("STUCK", "FAILED"):
+            result.verdict = forced
+            result.verified = False
+        elif v is not None and v.status == "VERIFIED":
+            result.verdict = "VERIFIED"
+            result.verified = True
+        else:
+            result.verdict = "UNVERIFIED"
+            result.verified = False
+        if v is not None:
+            result.evidence = v.evidence
+            result.missing = v.missing
+        self.logger.emit("agent_verdict", detail={
+            "verdict": result.verdict,
+            "evidence": len(result.evidence),
+            "missing": result.missing[:3],
+        })
 
     def run(self, prompt: str) -> AgentResult:
         """Run agent with a single prompt. Returns AgentResult."""
@@ -429,6 +466,10 @@ class Agent:
             max_turns = int(os.environ.get("JARVIS_AGENT_MAX_TURNS", str(MAX_TURNS)))
         except ValueError:
             max_turns = MAX_TURNS
+        # P0.2: turnos de verificação (DONE sem evidência → continua).
+        verify_turns = 0
+        # P0.3: erro idêntico repetido (nome+args) → variar ou STUCK.
+        error_seen: dict[str, int] = {}
         for turn in range(max_turns):
             result.turns += 1
             response = self._get_llm_response(messages)
@@ -461,8 +502,27 @@ class Agent:
                 if fallback:
                     tool_calls = [{"function": fallback}]
                 else:
-                    result.final_response = content
-                    break
+                    # P0.2: texto afirmativo NÃO é DONE — verifica evidência.
+                    # Sem evidência e com turnos restantes: continua (máx 2
+                    # turnos de verificação) em vez de aceitar calado.
+                    from jarvis.core.completion import check_completion
+                    try:
+                        _v = check_completion(messages)
+                    except Exception:
+                        _v = None
+                    if (_v is not None and _v.status == "VERIFIED") or verify_turns >= 2:
+                        result.final_response = content
+                        self._finalize(result, messages)
+                        break
+                    verify_turns += 1
+                    messages.append({
+                        "role": "system",
+                        "content": ("Conclusão sem evidência ainda: "
+                                    + "; ".join(_v.missing[:3]) +
+                                    ". Continue com a próxima ação concreta "
+                                    "(não repita a última tool idêntica)."),
+                    })
+                    continue
 
             # Anti-loop: detect repeated/cyclic tool calls and inject a
             # recovery message. If the model ignores the warning twice in a
@@ -470,17 +530,43 @@ class Agent:
             strategy = self.loop_detector.check(tool_calls, content)
             if strategy.action in (RecoveryAction.ABORT, RecoveryAction.FORCE_ANSWER):
                 messages.append({"role": "system", "content": strategy.message})
+                self._finalize(result, messages, forced="STUCK")
                 break
             if strategy.action != RecoveryAction.NONE:
                 messages.append({"role": "system", "content": strategy.message})
                 self._loop_warnings += 1
                 if self._loop_warnings >= 2:
+                    self._finalize(result, messages, forced="STUCK")
                     break
             else:
                 self._loop_warnings = 0
             
             # Execute tools
-            for tc in tool_calls:
+            _stuck_abort = False
+            # P1: batch paralelo quando o turno inteiro é reads puros (>1).
+            # Qualquer shell/escrita/parse-error no lote → caminho serial.
+            _pre: dict[int, str] = {}
+            if len(tool_calls) > 1:
+                _batch: list[tuple[str, dict[str, Any]]] | None = []
+                for _tc in tool_calls:
+                    _fn = _tc.get("function", _tc)
+                    if not isinstance(_fn, dict):
+                        _batch = None
+                        break
+                    try:
+                        _ra = _fn.get("arguments", "{}")
+                        _ag = json.loads(_ra) if isinstance(_ra, str) else _ra
+                    except (json.JSONDecodeError, TypeError):
+                        _batch = None
+                        break
+                    if not isinstance(_ag, dict) or _fn.get("name") != "read_file":
+                        _batch = None
+                        break
+                    _batch.append((_fn.get("name", ""), _ag))
+                if _batch is not None:
+                    for _i, _r in enumerate(self._parallel_read_batch(_batch)):
+                        _pre[_i] = _r
+            for _i, tc in enumerate(tool_calls):
                 func = tc.get("function", tc)
                 if not isinstance(func, dict):
                     messages.append({
@@ -507,7 +593,9 @@ class Agent:
                     continue
 
                 exit_code: int | None = None
-                if name == "execute_shell":
+                if _i in _pre:
+                    tool_result = _pre[_i]
+                elif name == "execute_shell":
                     cmd = args.get("cmd", "")
                     # Check if command is allowed
                     if command_allowed(cmd):
@@ -570,20 +658,7 @@ class Agent:
                 elif name == "read_file":
                     # Leitura read-only via implementação canônica (devtools).
                     # Sem aprovação: risco zero. Erros viram tool result.
-                    from jarvis.core.devtools import read_file as _canonical_read
-                    try:
-                        offset = int(args.get("offset", 0) or 0)
-                    except (TypeError, ValueError):
-                        offset = 0
-                    try:
-                        limit = int(args.get("limit", 200) or 200)
-                    except (TypeError, ValueError):
-                        limit = 200
-                    res = _canonical_read(str(args.get("path", "")), offset=offset, limit=limit)
-                    if res.get("ok"):
-                        tool_result = f"# {res.get('path', '')} ({res.get('total_lines', 0)} linhas)\n{res.get('content', '')}"
-                    else:
-                        tool_result = f"ERROR: {res.get('error', 'read failed')}"
+                    tool_result = self._exec_read_file(args)
                 else:
                     tool_result = f"ERROR: Unknown tool: {name}"
 
@@ -602,12 +677,47 @@ class Agent:
                 except Exception:
                     pass
 
+                if _stuck_abort:
+                    break
+
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc.get("id", f"call-{turn}"),
                     "content": tool_result[:TOOL_OUTPUT_MAX_CHARS],
                 })
-        
+                # P0.1/P0.3: passo observável + erro idêntico repetido.
+                from jarvis.core.completion import classify_error
+                _kind = classify_error(tool_result)
+                _ok = _kind == "ok"
+                result.steps.append({"turn": turn, "tool": name,
+                                     "ok": _ok, "kind": _kind})
+                try:
+                    self.logger.emit("agent_step", detail={
+                        "turn": turn, "tool": name, "ok": _ok, "kind": _kind})
+                except Exception:
+                    pass
+                if not _ok:
+                    _sig = f"{name}::{json.dumps(args, sort_keys=True, default=str)}"
+                    error_seen[_sig] = error_seen.get(_sig, 0) + 1
+                    if error_seen[_sig] == 2:
+                        messages.append({
+                            "role": "system",
+                            "content": (f"A mesma chamada falhou 2x ({name}, "
+                                        f"erro {_kind}). NÃO repita idêntica: "
+                                        f"varie a abordagem (outra tool, outro "
+                                        f"path, leia antes, ou conclua STUCK)."),
+                        })
+                    elif error_seen[_sig] >= 3:
+                        self._finalize(result, messages, forced="STUCK")
+                        _stuck_abort = True
+                        break
+
+            if _stuck_abort:
+                if not result.final_response:
+                    result.final_response = (
+                        "STUCK: mesmo erro 3x seguidas (ver verdict.missing).")
+                break
+
         # Get final response if not set
         if not result.final_response:
             for msg in reversed(messages):
@@ -615,10 +725,15 @@ class Agent:
                     result.final_response = msg["content"]
                     break
         
+        if result.verdict == "unknown":
+            # Saídas sem veredito (overflow, max_turns): verifica o que há.
+            self._finalize(result, messages)
         self.logger.emit("agent_done", detail={
             "turns": result.turns,
             "commands_run": len(result.commands_run),
             "final_length": len(result.final_response),
+            "verdict": result.verdict,
+            "verified": result.verified,
         })
         return result
 
@@ -715,6 +830,62 @@ class Agent:
                              "arguments": json.dumps(args)},
             }],
         )
+
+    @staticmethod
+    def _exec_read_file(args: dict[str, Any]) -> str:
+        """read_file canônico (puro: sem side effects fora do FS lido).
+
+        Ponto único usado pelo caminho serial E pelo batch paralelo (P1):
+        mesma semântica, mesma formatação, mesmos erros.
+        """
+        from jarvis.core.devtools import read_file as _canonical_read
+        try:
+            offset = int(args.get("offset", 0) or 0)
+        except (TypeError, ValueError):
+            offset = 0
+        try:
+            limit = int(args.get("limit", 200) or 200)
+        except (TypeError, ValueError):
+            limit = 200
+        try:
+            res = _canonical_read(str(args.get("path", "")), offset=offset, limit=limit)
+        except Exception as e:
+            return f"ERROR: read failed: {e}"
+        if res.get("ok"):
+            return f"# {res.get('path', '')} ({res.get('total_lines', 0)} linhas)\n{res.get('content', '')}"
+        return f"ERROR: {res.get('error', 'read failed')}"
+
+    @staticmethod
+    def _parallel_read_batch(items: list[tuple[str, dict[str, Any]]]) -> list[str]:
+        """Executa reads independentes em paralelo (P1).
+
+        Regras: SÓ read_file (puro); max 3 workers; timeout 60s cada;
+        exceção isolada vira ERROR (nunca derruba o lote); ORDEM
+        determinística = ordem de entrada. Shell/escrita JAMAIS entram
+        aqui (side effects não admitem reordenação).
+        """
+        from concurrent.futures import ThreadPoolExecutor
+        import contextvars
+        results: list[str] = [""] * len(items)
+        # Contexto (project root, etc.) NÃO atravessa threads sozinho:
+        # copia por item, senão reads resolvem no projeto errado.
+        ctxs = [contextvars.copy_context() for _ in items]
+
+        def _one(idx: int, args: dict[str, Any]) -> None:
+            try:
+                results[idx] = ctxs[idx].run(Agent._exec_read_file, args)
+            except Exception as e:
+                results[idx] = f"ERROR: parallel read failed: {e}"
+
+        with ThreadPoolExecutor(max_workers=min(3, len(items))) as ex:
+            futs = [ex.submit(_one, i, a) for i, (_, a) in enumerate(items)]
+            for f in futs:
+                try:
+                    f.result(timeout=60)
+                except Exception as e:
+                    pass
+        # Timeout sem resultado = erro honesto (slot preservado).
+        return [r if r else "ERROR: parallel read timed out" for r in results]
 
     def _get_llm_response(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
         """Get response from LLM via the canonical LLMClient abstraction.
