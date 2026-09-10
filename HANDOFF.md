@@ -287,3 +287,20 @@ Evidência: `docs/FORENSIC-SYSTEM-COHERENCE-2026-09-08.md`.
   idle. Waybar exibe estados reais (contrato ts ativo).
 - Usuário: ABRIR NOVO TERMINAL (shells pré-rebuild não têm RVC env;
   erro agora instrui isso). tmux antigo: restart do servidor tmux.
+
+## 2026-09-09 noite — handoff compactação (Muse Spark)
+
+HEAD nixos-ai: `9ecc320`. Tree: só dirt do Solar (docs dele + legacy-moves
+staged). Nada meu pendente. :8080 Bonsai saudável; máquina livre.
+
+Onde parei: P0/P1 ataque executado (verdict, writes c/ approval, paralelos
+2.9x, plan mode, transcript, gates, exit-code); xLAM adotado executor
+strict; planner C2 VERIFIED+fix manual; suite 1068→1085/5infra; flake verde.
+Docs forenses em docs/archive/forensics/ (refs atualizadas).
+
+Aguardando usuário: janela GPU (benches terceiros, planner automático,
+Gemma-vision), download nada pendente, retorno ChatGPT, voz/wakeword
+(SEGURADO p/ presença dele), modelo Applio (não recebido).
+Solar: branch docs/consolidacao-monorepo (prompt enviado); prompt p/ ele
+na conversa. Não tocar no dirt dele. Não usar pkill -f (trava a sessão;
+kill por PID/porta). Não rodar MoE-CPU nem rigs paralelos pesados.
