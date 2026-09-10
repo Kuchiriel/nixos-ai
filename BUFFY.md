@@ -931,3 +931,18 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
   em ~/projects/plans/automancerz-prospeccao-v2-blueprint.json.
 - Fase 2 pendente (chaves do usuário): SerpApi free (250/mês) via
   HTTP no lugar do Apify; Groq free no lugar do Mistral.
+
+## 34. SESSION NOTES (2026-09-10 — v2 ativado; causa raiz 402)
+
+- Ativação falhava com "contains errors" genérico; bisseção via CLI
+  (scratch por módulo) provou: blueprint e conns OK. Causa raiz:
+  Error 402 Pythagor — meus 2 scratch de teste ficaram ATIVOS e
+  estouraram a cota do plano. Limpeza feita, v2 ATIVO.
+- Detalhe: update com metadata.designer.messages limpas parece ter
+  forçado revalidação (mensagem fantasma do {{32}} sumiu do caminho).
+- v2 id 6232705 ativo, nextExec 2026-09-11 23:22 UTC, schedule
+  diário. Primeiro run real consome Apify (free $5) + Mistral.
+- Groq tem app NATIVO no Make (apps.make.com/groq) — fase 2 não
+  precisa de HTTP genérico. Make AI Web Search existe (built-in).
+- Chave Make em /etc/litellm.env (MAKE_API_KEY); zona us2.
+- Blueprint final em plans/automancerz-prospeccao-v2-blueprint.json.
