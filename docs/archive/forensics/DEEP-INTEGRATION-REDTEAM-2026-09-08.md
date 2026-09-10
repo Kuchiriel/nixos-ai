@@ -17,7 +17,7 @@
 - Herdado como BLOCKED (não tocado): ADR-003 personas/jarvismodes, ADR-004
   privacy registry wiring, dev.py convergence (2529L), WebUI source-of-truth,
   chat vs ask, long-run >30min E2E.
-- Detalhe: `docs/FORENSIC-SYSTEM-COHERENCE-2026-09-08.md` + BUFFY/HANDOFF
+- Detalhe: `docs/archive/forensics/FORENSIC-SYSTEM-COHERENCE-2026-09-08.md` + BUFFY/HANDOFF
   usados como mapa, não como verdade — cada afirmação reauditada no código.
 
 ## 2. Boundary map

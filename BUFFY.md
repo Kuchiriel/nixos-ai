@@ -728,7 +728,7 @@ together; prompts derive language, never hardcode it.
 **Still open:** jarvismodes overlap, registry wiring, dev.py convergence,
 WebUI state, long-run E2E, `chat` vs `ask` overlap (observado).
 
-**Evidence:** `docs/FORENSIC-SYSTEM-COHERENCE-2026-09-08.md`.
+**Evidence:** `docs/archive/forensics/FORENSIC-SYSTEM-COHERENCE-2026-09-08.md`.
 
 ## 24. SESSION LESSONS (2026-09-08 — routing local + eval + abismo UX)
 
@@ -771,10 +771,10 @@ xLAM-2-8B Q4_K_M (~4.9GB, BFCL SOTA) como executor fast; patterns
 Anthropic (orquestrador-workers, evaluator-optimizer, effort-scaling);
 MoE planeja + small executa; tools em paralelo (loop é serial!);
 verificação pós-edit forçada. Prompt cirúrgico p/ ChatGPT em
-`docs/CHATGPT-ATTACK-PROMPT.md`.
+`docs/archive/forensics/CHATGPT-ATTACK-PROMPT.md`.
 
-**Evidence:** `docs/LOCAL-MODEL-ROUTING-FORENSIC-2026-09-08.md`,
-`docs/LOCAL-MODEL-EVALUATION-2026-09-08.md`, `docs/UX-ABISMO-2026-09-08.md`.
+**Evidence:** `docs/archive/forensics/LOCAL-MODEL-ROUTING-FORENSIC-2026-09-08.md`,
+`docs/archive/forensics/LOCAL-MODEL-EVALUATION-2026-09-08.md`, `docs/archive/forensics/UX-ABISMO-2026-09-08.md`.
 **Metrics:** suite 1049/5 infra; flake verde; fast=Qwen3-4B (único
 free-capable); default Bonsai preservado (produto).
 
@@ -806,7 +806,7 @@ Nosso pi.nix era outro programa (era-Qwen2.5, desabilitado) — deletado.
 Pythagoras-dev/Pythagoras = compute distribuído, nada p/ harness.
 Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
 
-**Evidence:** `docs/P0-ATAQUE-2026-09-08.md`. **Metrics:** suite
+**Evidence:** `docs/archive/forensics/P0-ATAQUE-2026-09-08.md`. **Metrics:** suite
 1066 passed / 5 failed (só infra); planner C2 VERIFIED+fix/3 turns; paralelo 2.9x.
 
 ## 26. SESSION NOTES (2026-09-09 — xLAM executor)
