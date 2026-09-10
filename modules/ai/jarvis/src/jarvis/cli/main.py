@@ -955,6 +955,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_dev.add_argument("task", nargs="?", default=None, help="tarefa única (se omitido, abre REPL)")
     p_dev.add_argument("--project", default=None, help="diretório raiz do projeto")
     p_dev.add_argument("--approve", action="store_true", help="permite aprovação para comandos com efeito")
+    p_dev.add_argument("--transcript", default=None, help="salva transcript JSON (task, perfil, rc, mensagens) p/ scripting")
     p_dev.set_defaults(func=_cmd_dev)
 
     p_launcher = sub.add_parser("launcher", help="abre o launcher GUI (Yad) para todas as features")
@@ -1083,7 +1084,9 @@ def _cmd_dev(args: argparse.Namespace) -> int:
     from jarvis.cli.dev import dev_repl, dev_once
 
     if args.task:
-        return dev_once(args.task, project_root=args.project, approve=args.approve)
+        return dev_once(args.task, project_root=args.project,
+                        approve=args.approve,
+                        transcript_path=getattr(args, "transcript", None))
     else:
         dev_repl(project_root=args.project, approve=args.approve)
         return 0

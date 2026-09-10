@@ -310,6 +310,7 @@ class AgentResult:
     evidence: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
     steps: list[dict[str, Any]] = field(default_factory=list)
+    plan: str = ""
 
 
 def human_approve(cmd: str) -> bool:
@@ -334,6 +335,7 @@ class Agent:
         llm_client: Any | None = None,
         model_requirements: dict | None = None,
         strict_tools: bool = False,
+        plan: bool | str | dict | None = None,
     ):
         self.config = config or get_config()
         self.approval_callback = approval_callback
@@ -341,6 +343,12 @@ class Agent:
         # strict_tools: tool-calls via grammar constrained (response_format
         # JSON) em vez do template jinja — 35/35 no A/B c/ Bonsai.
         self.strict_tools = strict_tools
+        # plan: planejamento explícito antes de executar (P0.4).
+        # True = self-plan (turno 0 pede plano numerado ao próprio modelo
+        # e ancora no contexto); str/dict = {"planner_model": id} (roteia
+        # via ensure_model p/ MoE/strong quando o servidor suporta —
+        # verificado: MoE-plan→Qwen-exec fixou M1 em 3 turns).
+        self.plan = plan
         # Requisitos de modelo p/ routing local (None = comportamento atual:
         # usa config.llm_model sem ensure). Ex.: {"capabilities": {"coding",
         # "tools"}, "tier": "fast"}.
@@ -478,6 +486,25 @@ class Agent:
         # requirements, nada muda (config.llm_model como antes).
         if self.model_requirements:
             self._ensure_routed_model()
+
+        # P0.4: plano explícito ancorado antes do loop (self ou roteado).
+        # Falha no plano nunca aborta o run (segue sem plano).
+        if self.plan:
+            try:
+                _plan_text = self._draft_plan(prompt)
+            except Exception:
+                _plan_text = ""
+            if _plan_text.strip():
+                result.plan = _plan_text.strip()[:2000]
+                messages.append({
+                    "role": "user",
+                    "content": "Siga EXATAMENTE este plano, um passo por vez:\n" + result.plan,
+                })
+                try:
+                    self.logger.emit("agent_plan", detail={
+                        "chars": len(result.plan)})
+                except Exception:
+                    pass
 
         # Anti-loop: fresh detector state per prompt
         self.loop_detector.reset()
@@ -656,7 +683,7 @@ class Agent:
                             else:
                                 result.commands_run.append(cmd)
                                 exit_code = proc.returncode
-                                tool_result = proc.stdout + proc.stderr
+                                tool_result = (proc.stdout + proc.stderr).rstrip() + "\n[exit: %d]" % proc.returncode
                                 self._log_audit(cmd, proc.returncode, tool_result, True)
                             # Auto-learn: record lesson on command failure
                             # (usa exit_code: no timeout não há proc).
@@ -683,7 +710,7 @@ class Agent:
                                 else:
                                     result.commands_run.append(cmd)
                                     exit_code = proc.returncode
-                                    tool_result = proc.stdout + proc.stderr
+                                    tool_result = (proc.stdout + proc.stderr).rstrip() + "\n[exit: %d]" % proc.returncode
                                     self._log_audit(cmd, proc.returncode, tool_result, True)
                             else:
                                 result.commands_denied.append(cmd)
@@ -794,6 +821,52 @@ class Agent:
             "verified": result.verified,
         })
         return result
+
+    def _draft_plan(self, prompt: str) -> str:
+        """Gera plano numerado antes de executar (P0.4).
+
+        self: turno 0 com o próprio executor. routed: garante o modelo
+        planejador via ensure_model e usa cliente temporário (restaura o
+        executor depois). Falha no plano = segue sem plano (nunca aborta
+        o run por isso).
+        """
+        instruction = (
+            "Tarefa: " + prompt + "\nDevolva APENAS um plano numerado de "
+            "passos concretos (localizar, ler, diagnosticar, editar, "
+            "verificar). Sem executar nada, sem explicações extras.")
+        planner = self.llm
+        closer = None
+        try:
+            spec = self.plan
+            planner_id = None
+            if isinstance(spec, str):
+                planner_id = spec
+            elif isinstance(spec, dict):
+                planner_id = spec.get("planner_model")
+            if planner_id:
+                from dataclasses import replace
+                from jarvis.core.model_lifecycle import ensure_model
+                from jarvis.providers.llm import LLMClient
+                ensure_model(planner_id, base_url=self.config.llm_base_url)
+                cfg = replace(self.config, llm_model=planner_id)
+                planner = LLMClient(cfg, session=self._session)
+                closer = planner
+            if hasattr(planner, "chat"):
+                resp = planner.chat(
+                    [{"role": "user", "content": instruction}],
+                    temperature=0.0, max_tokens=256)
+                text = resp.content if hasattr(resp, "content") else resp
+            else:
+                text = ""
+            return text if isinstance(text, str) else ""
+        except Exception:
+            return ""
+        finally:
+            try:
+                if closer is not None and hasattr(closer, "close"):
+                    closer.close()
+            except Exception:
+                pass
 
     def _ensure_routed_model(self) -> None:
         """Seleciona modelo pelo registry e garante residência (router).

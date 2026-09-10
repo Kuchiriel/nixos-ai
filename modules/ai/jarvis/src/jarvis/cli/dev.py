@@ -2570,7 +2570,7 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
     return 0 if ok else 1
 
 
-def dev_once(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False, continue_session: bool = False, yolo: bool = False, autopilot: bool = False) -> int:
+def dev_once(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False, continue_session: bool = False, yolo: bool = False, autopilot: bool = False, transcript_path: str | None = None) -> int:
     if project_root:
         from jarvis.core.paths import set_project_root
         set_project_root(project_root)
@@ -2610,6 +2610,33 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
     messages.append({"role": "user", "content": task})
     ok = _run_agent_loop(messages, tools, profile, approve, debug, max_turns=10)
     _persist_session(messages, project_root or os.getcwd())
+    if transcript_path:
+        # Transcript JSON p/ scripting (paridade pi --mode json): prompt,
+        # perfil, rc e mensagens (tools inclusas, conteúdo truncado p/
+        # não explodir disco). Best-effort: nunca quebra o rc.
+        try:
+            import time as _t
+            slim = []
+            for m in messages:
+                e = {"role": m.get("role")}
+                if m.get("content"):
+                    e["content"] = str(m["content"])[:2000]
+                if m.get("tool_calls"):
+                    e["tool_calls"] = [
+                        {"name": (t.get("function") or {}).get("name"),
+                         "args": str((t.get("function") or {}).get(
+                             "arguments"))[:500]}
+                        for t in m["tool_calls"]]
+                slim.append(e)
+            with open(transcript_path, "w", encoding="utf-8") as f:
+                json.dump({"task": task,
+                           "profile": profile.get("name"),
+                           "model": profile.get("model_id"),
+                           "rc": 0 if ok else 1,
+                           "ts": _t.time(),
+                           "messages": slim}, f, ensure_ascii=False, indent=1)
+        except Exception:
+            pass
     return 0 if ok else 1
 
 
@@ -2623,6 +2650,7 @@ if __name__ == "__main__":
     parser.add_argument("--continue", dest="continue_session", action="store_true", help="Continua a última sessão persistida do projeto")
     parser.add_argument("--autopilot", action="store_true", help="Modo seguro em lote: plano → execução → validação → checkpoint")
     parser.add_argument("--once", type=str, default=None, help="Executa uma tarefa única e sai")
+    parser.add_argument("--transcript", type=str, default=None, help="Salva transcript JSON p/ scripting")
     parser.add_argument("--debug", action="store_true", help="Modo debug (payloads crus da API)")
     ns = parser.parse_args()
 
@@ -2636,6 +2664,7 @@ if __name__ == "__main__":
                 continue_session=ns.continue_session,
                 yolo=ns.yolo,
                 autopilot=ns.autopilot,
+                transcript_path=ns.transcript,
             )
         )
     else:

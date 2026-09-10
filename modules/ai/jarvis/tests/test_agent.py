@@ -1055,3 +1055,86 @@ def test_strict_accepts_list_content() -> None:
     out = Agent._strict_to_response(resp, tools)
     assert [c["function"]["name"] for c in out.tool_calls] == [
         "read_file", "execute_shell"]
+
+
+def test_agent_self_plan_anchors_before_loop(tmp_path) -> None:
+    """plan=True: turno 0 gera plano e ancora (P0.4)."""
+    import json as jsonlib
+    from jarvis.core.agent import Agent
+    from jarvis.core.config import Config
+
+    import sys
+    sys.path.insert(0, "tests")
+    from test_agent import FakeSession, FakeResponse  # noqa (self)
+
+    seen = {}
+
+    class PlanThenDone(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant",
+                       "content": "1. Ler\n2. Fazer"}
+            else:
+                msg = {"role": "assistant", "content": "feito"}
+                seen["n"] = self.calls
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    agent = Agent(Config(), session=PlanThenDone(), plan=True)
+    result = agent.run("faça algo")
+    assert "1. Ler" in result.plan
+    assert seen.get("n", 0) >= 2
+
+
+def test_agent_plan_failure_never_aborts(tmp_path) -> None:
+    """Plano que falha: run segue sem plano (nunca aborta por isso)."""
+    from unittest.mock import patch
+    from jarvis.core.agent import Agent
+    from jarvis.core.config import Config
+
+    import sys
+    sys.path.insert(0, "tests")
+    from test_agent import FakeSession  # noqa (self)
+
+    agent = Agent(Config(), session=FakeSession("ok"), plan=True)
+    with patch.object(Agent, "_draft_plan", side_effect=RuntimeError("x")):
+        result = agent.run("oi")
+    assert result.plan == ""
+    assert result.final_response == "done: ok"
+
+
+def test_shell_observation_carries_exit_code(tmp_path) -> None:
+    """Observation de shell inclui [exit: N] (modelo distingue falha muda)."""
+    import json as jsonlib
+    from unittest.mock import patch
+    from jarvis.core.agent import Agent
+    from jarvis.core.config import Config
+
+    import sys
+    sys.path.insert(0, "tests")
+    from test_agent import FakeSession, FakeResponse  # noqa (self)
+
+    seen = {}
+
+    class OneShell(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{
+                           "id": "c1", "type": "function",
+                           "function": {"name": "execute_shell",
+                                        "arguments": jsonlib.dumps({"cmd": "echo hi"})}}]}
+            else:
+                seen["msgs"] = json
+                msg = {"role": "assistant", "content": "ok"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    agent = Agent(Config(), session=OneShell())
+    with patch("jarvis.core.agent.run_shell") as rs:
+        import subprocess
+        rs.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="hi\n", stderr="")
+        agent.run("diga hi")
+    tool_msgs = [m for m in seen["msgs"]["messages"] if m.get("role") == "tool"]
+    assert tool_msgs and "[exit: 0]" in tool_msgs[0]["content"]

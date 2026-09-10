@@ -41,11 +41,16 @@ def _project_root() -> Path:
     return find_repo_root()
 
 
-def _safe_path(path: str, root: Path | None = None) -> Path:
+def _safe_path(path: str, root: Path | None = None,
+               write: bool = False) -> Path:
     """Resolve um path e valida que está dentro do projeto.
 
     Aceita paths relativos (resolvidos em relacao ao project root) ou absolutos
     (se estiverem dentro do projeto ou em /tmp para testes).
+
+    write=True: além do jail, barra nomes protegidos (.env, *secret*,
+    *.key, *credential*, *token*) — permission gate estilo pi. Leitura
+    continua permitida (debug precisa ler); escrita, nunca silenciosa.
     """
     p = Path(path)
     r = root or _project_root()
@@ -57,6 +62,15 @@ def _safe_path(path: str, root: Path | None = None) -> Path:
     _allowed_prefixes = ("/tmp", "/build", str(r))
     if not any(str(target).startswith(pfx) for pfx in _allowed_prefixes):
         raise ValueError(f"Path outside project: {target}")
+    if write:
+        lowered = target.name.lower()
+        if lowered == ".env" or lowered.endswith(".env"):
+            raise ValueError(f"Protected file (no escrita): {target.name}")
+        for marker in ("secret", "credential", "token", "password", "passwd"):
+            if marker in lowered:
+                raise ValueError(f"Protected file (no escrita): {target.name}")
+        if lowered.endswith((".key", ".pem", ".p12", ".pfx")):
+            raise ValueError(f"Protected file (no escrita): {target.name}")
     return target
 
 
@@ -312,7 +326,7 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
     Returns: {"ok": True, "replacements": N, "path": "...", "strategy": "..."}
     """
     try:
-        target = _safe_path(path)
+        target = _safe_path(path, write=True)
 
         # Criar arquivo novo (old vazio)
         if old == "":
@@ -475,7 +489,7 @@ def semantic_search(query: str, top_k: int = 5) -> dict[str, Any]:
 def write_file(path: str, content: str, backup: bool = True) -> dict[str, Any]:
     """Escreve um arquivo (cria ou sobrescreve). Núcleo único: SafeEditor."""
     try:
-        target = _safe_path(path)
+        target = _safe_path(path, write=True)
 
         from nightwatch.safe_editor import SafeEditor
         res = SafeEditor().apply_edit(target, content)
