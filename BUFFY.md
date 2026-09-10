@@ -960,3 +960,14 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
   Resend (100/dia free); WhatsApp Business in-app grátis agora,
   API bot só com volume; preço: pedir depoimento + indicação do
   cliente feliz + teste de preço nos próximos 3.
+
+## 36. SESSION NOTES (2026-09-11 — v3 SerpApi+Groq criado)
+
+- v3 id 6233082 INATIVO (aguardando keys): SerpApi search → feeder
+  → addRow cru → filterRows ctx → Groq proposta → updateRow
+  (status+proposta). filterRows é v2 (v1 rejeita no create).
+- Ativou limpo (placeholders não barram validação). Desativei até
+  as keys entrarem (run falharia com 401 à toa).
+- Groq key: GROQ_API_KEY no litellm.env. SerpApi key do usuário
+  (não persistida — só no blueprint placeholder + sessão).
+- Blueprint em plans/automancerz-prospeccao-v3-blueprint.json.
