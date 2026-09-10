@@ -336,6 +336,7 @@ class Agent:
         model_requirements: dict | None = None,
         strict_tools: bool = False,
         plan: bool | str | dict | None = None,
+        persona_id: str | None = None,
     ):
         self.config = config or get_config()
         self.approval_callback = approval_callback
@@ -353,6 +354,9 @@ class Agent:
         # usa config.llm_model sem ensure). Ex.: {"capabilities": {"coding",
         # "tools"}, "tier": "fast"}.
         self.model_requirements = model_requirements
+        # Persona ativa (None/"jarvis" = default histórico; "agent" = modo
+        # voz/operador). Via registry — sem if/else de strings espalhados.
+        self.persona_id = persona_id or "jarvis"
         if llm_client is None:
             from jarvis.providers.llm import LLMClient
             llm_client = LLMClient(self.config, session=session)
@@ -432,10 +436,12 @@ class Agent:
         system_content = "You are JARVIS, an AI coding assistant."
         system_content += f"\n\n{TOOL_USE_DISCIPLINE}"
 
-        # Persona MCU (default do repl + voz; antes o agente ignorava personas)
+        # Persona (default jarvis; voz usa "agent"). Via registry.
         try:
             from jarvis.core.persona import PersonaRegistry
-            _persona = PersonaRegistry().get("jarvis")
+            _persona = PersonaRegistry().get(self.persona_id)
+            if _persona is None:
+                _persona = PersonaRegistry().get("jarvis")
             if _persona and _persona.system_prompt_additions:
                 system_content += f"\n\nPERSONA ATIVA: {_persona.name} ({_persona.role})\n{_persona.system_prompt_additions}"
         except Exception:

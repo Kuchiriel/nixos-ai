@@ -717,7 +717,9 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
         elif route.handler == "rag":
             out = handle_rag(route.query)
         else:
-            out = handle_agent(route.query)
+            # Modo voz usa persona "agent" (terse, falável) — distinta do
+            # modo texto, como todo agent comercial tem.
+            out = handle_agent(route.query, persona_id="agent")
     except Exception as exc:  # noqa: BLE001
         set_status("error", str(exc)[:80])
         print(f"ERROR: rota '{route.handler}' falhou: {exc}", file=sys.stderr)

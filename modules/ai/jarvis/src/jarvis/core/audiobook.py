@@ -917,3 +917,134 @@ def dispatch(args: list[str]) -> str:
         return cmd_status()
     else:
         return f"Ação desconhecida: {action}. Opções: scan, list, read, stop, pause, resume, next, prev, status"
+
+
+# ---------------------------------------------------------------------------
+# RAG de livros — índice hierárquico (livro → capítulo → chunk) no Qdrant
+# `books`, mesma pilha do RAG de código (dense nomic + BM25 + rerank).
+# Keyword search_book() continua existindo; isto é o caminho semântico
+# (resume ambíguo, "onde acontece X?", cross-capítulo).
+# ---------------------------------------------------------------------------
+
+def _rag_deps():
+    from jarvis.core.config import Config
+    from jarvis.providers.llm import LLMClient
+    from jarvis.providers.vector_store import QdrantStore
+    from jarvis.core.rag import sparse_terms, sparse_vector, dense_key
+    return Config, LLMClient, QdrantStore, sparse_terms, sparse_vector, dense_key
+
+
+def index_book(book_name: str, books_dir: str | Path | None = None,
+               *, force: bool = False,
+               chunk_chars: int = 1200,
+               max_chunks: int | None = None) -> dict[str, Any]:
+    """Indexa um livro em chunks com metadados (livro, capítulo).
+
+    Idempotente por chunk-id (re-index sobrescreve). Retorna contagem.
+    max_chunks limita p/ validação rápida (None = livro inteiro).
+    """
+    Config, LLMClient, QdrantStore, sparse_terms, sparse_vector, dense_key = _rag_deps()
+    cfg = Config()
+    path = _find_book(book_name, books_dir)
+    if path is None:
+        return {"ok": False, "error": f"livro não encontrado: {book_name}"}
+    text = extract_text(path)
+    chapters = get_content_chapters(text)
+    if not chapters:
+        chapters = [{"num": 0, "title": "texto corrido", "text": text}]
+    store = QdrantStore(cfg)
+    store.ensure_collection(cfg.qdrant_collection_books, dim=cfg.embed_dim)
+    llm = LLMClient(cfg)
+    n_chunks = 0
+    for ch in chapters:
+        ch_text = text[ch.get("start", 0):ch.get("end", len(text))]
+        for i, piece in enumerate(chunk_text(ch_text, target_chars=chunk_chars)):
+            if max_chunks is not None and n_chunks >= max_chunks:
+                return {"ok": True, "book": path.stem,
+                        "chapters": len(chapters), "chunks": n_chunks,
+                        "truncated": True}
+            rich = f"{path.stem} — {ch.get('title', '')}\n{piece[:chunk_chars]}"
+            try:
+                dense = llm.embed(rich)
+            except Exception:
+                continue
+            if not dense:
+                continue
+            store.upsert(cfg.qdrant_collection_books, [{
+                "id": abs(dense_key(f"{path.stem}|{ch['num']}|{i}")),
+                "vector": {"dense": dense,
+                           "bm25": sparse_vector(sparse_terms(rich))},
+                "payload": {"book": path.stem,
+                            "chapter": ch["num"],
+                            "title": ch.get("title", ""),
+                            "chunk_index": i,
+                            "content": piece[:chunk_chars]},
+            }])
+            n_chunks += 1
+    return {"ok": True, "book": path.stem, "chapters": len(chapters),
+            "chunks": n_chunks}
+
+
+def search_books(query: str, book: str | None = None,
+                 top_k: int = 5) -> list[dict[str, Any]]:
+    """Busca semântica+híbrida nos livros (filtro opcional por livro)."""
+    Config, LLMClient, QdrantStore, sparse_terms, sparse_vector, dense_key = _rag_deps()
+    cfg = Config()
+    store = QdrantStore(cfg)
+    llm = LLMClient(cfg)
+    dense = llm.embed(query)
+    if not dense:
+        return []
+    raw = store.search_hybrid(
+        cfg.qdrant_collection_books, dense,
+        sparse_vector(sparse_terms(query)), top_k=top_k * 4)
+    hits = []
+    for h in raw:
+        p = h.get("payload", {})
+        if book and p.get("book", "").lower() != book.lower():
+            continue
+        hits.append({"book": p.get("book", ""), "chapter": p.get("chapter"),
+                     "title": p.get("title", ""), "score": h.get("score", 0.0),
+                     "content": str(p.get("content", ""))[:600]})
+        if len(hits) >= top_k:
+            break
+    return hits
+
+
+def resume_book(book_name: str | None = None, hint: str = "",
+                books_dir: str | Path | None = None) -> dict[str, Any]:
+    """Onde continuar: bookmark + recência + busca semântica do hint.
+
+    Query ambígua ("onde parei?") = estado, não conteúdo: sem hint, volta
+    o bookmark. Com hint ("a parte do dragão"), busca decide o capítulo;
+    se for o mesmo do bookmark, mantém a posição exata.
+    """
+    state = _load_bookmark()
+    target = book_name or state.book
+    if not target:
+        return {"ok": False, "error": "nenhum livro ativo (leia um primeiro)"}
+    out: dict[str, Any] = {"ok": True, "book": target,
+                            "chapter": None, "position": None,
+                            "reason": "bookmark"}
+    if hint.strip():
+        try:
+            hits = search_books(hint, book=target, top_k=3)
+        except Exception:
+            hits = []
+        if hits:
+            out["chapter"] = hits[0]["chapter"]
+            out["snippet"] = hits[0]["content"][:200]
+            out["reason"] = "semantic-hint"
+            if state.book == target and state.chunk_index:
+                out["position"] = state.chunk_index
+                out["reason"] = "semantic-hint+bookmark"
+            return out
+    if state.book == target:
+        out["position"] = state.chunk_index
+        out["total"] = state.total_chunks
+        return out
+    # Sem bookmark: começa do capítulo 1 (fallback honesto, não chute).
+    out["chapter"] = 1
+    out["position"] = 0
+    out["reason"] = "start"
+    return out

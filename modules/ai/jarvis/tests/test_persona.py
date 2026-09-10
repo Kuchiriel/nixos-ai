@@ -12,10 +12,10 @@ class TestPersonaRegistry:
     """Test PersonaRegistry functionality."""
 
     def test_registry_loads_builtin_personas(self):
-        """Registry should load all 11 built-in personas (10 + jarvis MCU)."""
+        """Registry should load all 12 built-in personas (11 + agent)."""
         registry = PersonaRegistry()
         personas = registry.list_all()
-        assert len(personas) == 11
+        assert len(personas) == 12
 
     def test_get_persona_by_id(self):
         """Should retrieve persona by ID."""
@@ -49,7 +49,7 @@ class TestPersonaRegistry:
         registry = PersonaRegistry()
         for persona in registry.list_all():
             assert isinstance(persona.tools, list)
-            if persona.id != "jarvis":
+            if persona.id not in ("jarvis", "agent"):
                 assert len(persona.tools) > 0
 
 
@@ -194,3 +194,49 @@ class TestPolicyEnforcement:
                                            can_execute=True))
         got = filter_tools(["read_file", "execute_shell"], p)
         assert got == ["read_file"]
+
+
+class TestAgentPersona:
+    def test_agent_persona_exists_with_voice_mode(self):
+        from jarvis.core.persona import PersonaRegistry
+        p = PersonaRegistry().get("agent")
+        assert p is not None
+        assert "voice" in p.tags
+        assert "1-2" in p.system_prompt_additions or "SHORT" in p.system_prompt_additions
+
+    def test_agent_uses_agent_persona_in_voice_mode(self, tmp_path) -> None:
+        import json as jsonlib
+        from jarvis.core.agent import Agent
+        from jarvis.core.config import Config
+        import sys
+        sys.path.insert(0, "tests")
+        from test_agent import FakeSession  # noqa
+
+        seen = {}
+
+        class Cap(FakeSession):
+            def post(self, url, json=None, timeout=120, **kw):
+                seen["sys"] = json["messages"][0]["content"]
+                return super().post(url, json=json, timeout=timeout, **kw)
+
+        Agent(Config(), session=Cap(), persona_id="agent").run("oi")
+        assert "AGENT MODE" in seen["sys"]
+
+    def test_agent_default_persona_unchanged(self, tmp_path) -> None:
+        import json as jsonlib
+        from jarvis.core.agent import Agent
+        from jarvis.core.config import Config
+        import sys
+        sys.path.insert(0, "tests")
+        from test_agent import FakeSession  # noqa
+
+        seen = {}
+
+        class Cap(FakeSession):
+            def post(self, url, json=None, timeout=120, **kw):
+                seen["sys"] = json["messages"][0]["content"]
+                return super().post(url, json=json, timeout=timeout, **kw)
+
+        Agent(Config(), session=Cap()).run("oi")
+        assert "AGENT MODE" not in seen["sys"]
+        assert "JARVIS" in seen["sys"]

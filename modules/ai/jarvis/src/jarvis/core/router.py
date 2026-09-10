@@ -393,7 +393,7 @@ def handle_read(path: str, cfg: Any = None, limit: int = 200) -> dict[str, Any]:
 
 def handle_agent(query: str, cfg: Any = None, *, approve: bool = False,
                  mcp_bin: str | None = None, state_dir=None,
-                 approver=None) -> dict[str, Any]:
+                 approver=None, persona_id: str | None = None) -> dict[str, Any]:
     """Executa a rota agent: LLM com tools (execute_shell + mcp-nixos)."""
     from jarvis.core.agent import Agent
     from jarvis.core.config import get_config
@@ -405,7 +405,8 @@ def handle_agent(query: str, cfg: Any = None, *, approve: bool = False,
     if binary:
         mcp_servers["nixos"] = binary
     agent = Agent(cfg, approve=approve, approval_callback=approver,
-                  audit_path=audit, mcp_servers=mcp_servers)
+                  audit_path=audit, mcp_servers=mcp_servers,
+                  persona_id=persona_id)
     result = agent.run(query)
     return {
         "route": "agent",
