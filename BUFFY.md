@@ -881,3 +881,20 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
   passa em ausência; judge segue assist-only, nunca gate.
 - Receita Qwen-CPU documentada no log; processo sempre morto após uso
   (kill por PID; :18081 nunca persiste).
+
+## 31. SESSION NOTES (2026-09-10 — 5 infra zerados + forks + pesquisa)
+
+- Root cause do Solar confirmado e executado (Abordagem A): testes com
+  descrições curtas/targets fantasmas vs gate correto. Fix só nos
+  testes (descrições válidas + intent create). Gate INTACTO + provado
+  (rejeita "Task 1"/phantom, aceita válidas; test_task_gate 5/5).
+- Suite: **1096 passed / 0 failed** (era 1091/5) + flake verde.
+  Primeira vez 100% verde desde o red-team.
+- FORK-STATUS.md criado nos 6 forks (classificação por remote+uso).
+  Quarentena já tinha README adequado — nada a fazer.
+- Triagem Solar: itens 9 "untracked" e 7 "stashes" já estavam
+  resolvidos (b213ac4/58f2165/ecd02a2); dirt docs dele continua
+  intocado aguardando revisão.
+- Web: Tavily sem key (anotado); usei provider da sessão. Achados p/
+  GuiaRenamer: HWID estável = MachineGuid (nunca MAC); token offline
+  assinado RSA; política de reativação (PC novo) obrigatória.

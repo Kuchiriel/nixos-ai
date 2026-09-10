@@ -280,7 +280,7 @@ class TestTaskQueueReal:
         task = Task(
             id="test-task-1",
             project="test-repo",
-            description="Add divide function",
+            description="Create calculator module with divide function",
             target_files=["src/calculator.py"],
         )
         q.add_task(task)
@@ -307,8 +307,11 @@ class TestTaskQueueReal:
         monkeypatch.setattr(tq_mod, "STATE_DIR", tmp_path / "state")
         q = TaskQueue(project="test-fail-block")
 
-        task1 = Task(id="t1", project="test", description="Task 1", max_attempts=1)
-        task2 = Task(id="t2", project="test", description="Task 2")
+        task1 = Task(id="t1", project="test",
+                       description="Fix syntax error in first task",
+                       max_attempts=1)
+        task2 = Task(id="t2", project="test",
+                       description="Block second task on protected path")
         q.add_task(task1)
         q.add_task(task2)
 
@@ -331,7 +334,8 @@ class TestTaskQueueReal:
         q = TaskQueue(project="test-stats")
 
         for i in range(5):
-            q.add_task(Task(id=f"t{i}", project="test", description=f"Task {i}"))
+            q.add_task(Task(id=f"t{i}", project="test",
+                            description=f"Process batch item number {i} now"))
 
         # Complete 2, fail 1 (must go through full lifecycle)
         t = q.get_next_task()

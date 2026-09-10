@@ -74,11 +74,13 @@ class TestTaskQueue:
             tq.STATE_DIR.mkdir(parents=True, exist_ok=True)
             queue = tq.TaskQueue()
             queue.add_task(Task(
-                id="low-1", project="test", description="Low priority",
+                id="low-1", project="test",
+                description="Handle low priority background chore",
                 priority=8, risk="low",
             ))
             queue.add_task(Task(
-                id="high-1", project="test", description="High priority",
+                id="high-1", project="test",
+                description="Handle high priority urgent chore",
                 priority=2, risk="low",
             ))
 
@@ -99,14 +101,15 @@ class TestTaskQueue:
         try:
             queue1 = TaskQueue()
             queue1.add_task(Task(
-                id="persist-1", project="test", description="Persistent task",
+                id="persist-1", project="test",
+                description="Persist queue state across restarts",
                 priority=5, risk="low",
             ))
 
             queue2 = TaskQueue()
             loaded = [t for t in queue2._tasks if t.id == "persist-1"]
             assert len(loaded) == 1
-            assert loaded[0].description == "Persistent task"
+            assert loaded[0].description == "Persist queue state across restarts"
         finally:
             del os.environ["JARVIS_STATE_DIR"]
 
