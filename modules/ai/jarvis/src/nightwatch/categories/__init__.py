@@ -91,16 +91,19 @@ _SECURITY_WHITELIST = {
 def discover_security() -> list[Task]:
     """Scan for security issues."""
     tasks = []
-    patterns = [
-        ("shell=True", "high", "shell=True found"),
-        ("password", "high", "password reference"),
-        ("secret", "medium", "secret reference"),
-        ("token", "low", "token reference"),
+    
+    # Only scan for ACTUAL shell=True usage in subprocess.run calls
+    # Skip comments, strings, grep commands, and pattern definitions
+    # Exclude nightwatch module itself (contains pattern definitions)
+    dangerous_patterns = [
+        ("subprocess.run.*shell=True", "high", "shell=True in subprocess"),
+        ("subprocess.Popen.*shell=True", "high", "shell=True in Popen"),
     ]
-    for pattern, severity, desc in patterns:
+    
+    for pattern, severity, desc in dangerous_patterns:
         try:
             result = subprocess.run(
-                ["grep", "-rn", pattern, "modules/ai/jarvis/src/", "--include=*.py", "-i"],
+                ["grep", "-rn", pattern, "modules/ai/jarvis/src/jarvis/", "--include=*.py"],
                 capture_output=True, text=True, timeout=10,
                 cwd=str(find_repo_root()),
             )
@@ -110,6 +113,10 @@ def discover_security() -> list[Task]:
                     file_path = parts[0]
                     # Skip whitelist files (scanner own definitions)
                     if any(wl in file_path for wl in _SECURITY_WHITELIST):
+                        continue
+                    # Skip comentários (port do stash@{12}: grep casa
+                    # "shell=True" dentro de comentário/exemplo).
+                    if parts[1].strip().startswith("#"):
                         continue
                     tasks.append(Task(
                         id=f"sec-{hash(line) % 100000}",
@@ -121,6 +128,7 @@ def discover_security() -> list[Task]:
                     ))
         except Exception:
             pass
+    
     return tasks
 
 

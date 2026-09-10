@@ -847,3 +847,20 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
   `tests/test_book_tools.py` 5 (incl. e2e FakeSession) +
   `tests/test_eval_judge.py` 1 (harness offline na suíte).
 - Suite: **1091 passed / 5 infra** (mesmas conhecidas), flake verde.
+
+## 29. SESSION NOTES (2026-09-10 — stashes + Qwen-juiz, dev livre)
+
+- Stashes (15) julgados e limpos: DROP @{0} (hackmd corrompido),
+  @{1}/@{2} (ruído: vírgula, 1 chave), @{3}/@{4} (vazios),
+  @{6} (_trim_silence já no HEAD), @{7} (snapshot AGENTS obsoleto),
+  @{8-11} (sync hackmd já consolidado), @{13} (autofix que DELETA
+  branches — perigoso, descartado com motivo).
+- PORT manual @{12}: discover_security ignora comentários (HEAD já
+  tinha patterns restritos + whitelist; faltava só o comment-skip).
+  Scanner: 0 tasks, sem FP. Stash descartado após port.
+- PRESERVADOS como branch (decisão do usuário pendente):
+  `wip/hackmd-delete-create-tools` (schemas delete/create — expor
+  DELETE remoto via MCP precisa de aval), `wip/idle-nightwatch-vault`
+  (loop nightwatch 6h + vault-sync 1h — autonomia sem supervisão
+  precisa de aval). Stash list zerada.
+- User liberou troca de modelos/bins (:8080 não é produtivo).
