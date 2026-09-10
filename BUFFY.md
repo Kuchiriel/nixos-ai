@@ -831,3 +831,19 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
 - Resto da sujeira (AI_SYSTEM .baks, OTServer backups, ik github-data
   626 arquivos, raízes soltas) confirmado por spot-check; decisões na
   resposta ao usuário (não mexi — workstream dele).
+
+## 28. SESSION NOTES (2026-09-10 — autônomo pós-compactação)
+
+- Solar: branch `docs/consolidacao-monorepo` criada + commit 1 limpo
+  (6c90f1a, 17 arquivos, moves puros). Archive README dele bem
+  estruturado. Não toquei em nada dele.
+- `scripts/eval-judge.py` (novo): harness rotulado 10 casos p/ judge.
+  Self-check 10/10; LIVE :8080 (Bonsai) **8/10** — cego em
+  number-swap (contar 3 linhas) e wrong-entity (ausência). Judge segue
+  assist-only; Qwen-como-juiz pendente (exige trocar modelo no :8080
+  produtivo — deixei p/ janela com usuário).
+- Book tools no Agent: `book_search` + `book_resume` (schemas +
+  `_exec_book`, read-only sem aprovação, serial como read_file).
+  `tests/test_book_tools.py` 5 (incl. e2e FakeSession) +
+  `tests/test_eval_judge.py` 1 (harness offline na suíte).
+- Suite: **1091 passed / 5 infra** (mesmas conhecidas), flake verde.

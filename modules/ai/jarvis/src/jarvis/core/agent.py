@@ -730,6 +730,10 @@ class Agent:
                     # Leitura read-only via implementação canônica (devtools).
                     # Sem aprovação: risco zero. Erros viram tool result.
                     tool_result = self._exec_read_file(args)
+                elif name in ("book_search", "book_resume"):
+                    # Livros: read-only como read_file (Qdrant + bookmark).
+                    # Sem aprovação, sem escrita. Erros viram tool result.
+                    tool_result = self._exec_book(name, args)
                 elif name in ("write_file", "str_replace"):
                     # Escrita: jail de projeto + aprovação explícita.
                     # Sem approve: negação honesta (o modelo pede ao usuário
@@ -1018,6 +1022,31 @@ class Agent:
         return f"ERROR: {res.get('error', 'write failed')}"
 
     @staticmethod
+    def _exec_book(name: str, args: dict[str, Any]) -> str:
+        """book_search/book_resume (audiobook.py, read-only, sem aprovação)."""
+        from jarvis.core import audiobook as _ab
+        try:
+            if name == "book_search":
+                hits = _ab.search_books(str(args.get("query", "")),
+                                        book=args.get("book") or None)
+                if not hits:
+                    return "no hits"
+                lines = [f"- {h.get('book', '')} cap.{h.get('chapter')} "
+                         f"({h.get('title', '')}) [{h.get('score', 0):.2f}]: "
+                         f"{h.get('content', '')[:200]}" for h in hits[:5]]
+                return "\n".join(lines)
+            res = _ab.resume_book(book_name=args.get("book") or None,
+                                  hint=str(args.get("hint", "")))
+        except Exception as e:
+            return f"ERROR: book failed: {e}"
+        if res.get("ok"):
+            return (f"book={res.get('book')} chapter={res.get('chapter')} "
+                    f"position={res.get('position')} reason={res.get('reason')}"
+                    + (f" snippet: {res.get('snippet', '')[:200]}"
+                       if res.get("snippet") else ""))
+        return f"ERROR: {res.get('error', 'book failed')}"
+
+    @staticmethod
     def _parallel_read_batch(items: list[tuple[str, dict[str, Any]]]) -> list[str]:
         """Executa reads independentes em paralelo (P1).
 
@@ -1110,6 +1139,34 @@ class Agent:
                         "new": {"type": "string", "description": "Replacement"},
                     },
                     "required": ["path", "old", "new"],
+                },
+            },
+        }, {
+            "type": "function",
+            "function": {
+                "name": "book_search",
+                "description": "Semantic search over indexed audiobooks (read-only). Use for 'where was the dragon part' questions.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "What to find"},
+                        "book": {"type": "string", "description": "Optional book filter"},
+                    },
+                    "required": ["query"],
+                },
+            },
+        }, {
+            "type": "function",
+            "function": {
+                "name": "book_resume",
+                "description": "Where to continue reading: bookmark + recency + semantic hint (read-only). Empty hint returns the bookmark.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "book": {"type": "string", "description": "Optional book name"},
+                        "hint": {"type": "string", "description": "Optional semantic hint"},
+                    },
+                    "required": [],
                 },
             },
         }]
