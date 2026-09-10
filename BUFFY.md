@@ -913,3 +913,21 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
   Plano: consolidar 1 cenário, SerpApi free (250/mês) via HTTP,
   Qwen local :8080 como IA default, Groq fallback, deduplicar antes
   de escrever (Search Rows → filtro → Add).
+
+## 33. SESSION NOTES (2026-09-10 — make CLI + prospecção v2)
+
+- Make CLI oficial: `npx @makehq/cli` 1.4.0 (pacote @makehq/cli;
+  `make-cli` do npm é outro projeto). Auth via MAKE_API_KEY +
+  MAKE_ZONE=us2.make.com. API /apps indisponível (tier), mas
+  scenarios list/get/create/logs funcionam.
+- Auditoria: 3 cenários Apify (0 runs, inativos, schedule 900s,
+  PRD isinvalid). Root cause do erro v2: updateRow mirava
+  {{32.__ROW_NUMBER__}} (linha fantasma, id inexistente).
+- Criado "Prospecção v2 (Apify+Mistral)" id 6232705, INATIVO,
+  isinvalid=false: mesma cadeia, ordem corrigida
+  (agregador→filter→mistral→addRow→updateRow na linha {{7}}),
+  coluna 23 = proposta (ref {{27.result}} = BEST GUESS, verificar
+  na UI), schedule diário 86400 (era 900s). Blueprint versionado
+  em ~/projects/plans/automancerz-prospeccao-v2-blueprint.json.
+- Fase 2 pendente (chaves do usuário): SerpApi free (250/mês) via
+  HTTP no lugar do Apify; Groq free no lugar do Mistral.
