@@ -12,10 +12,10 @@ class TestPersonaRegistry:
     """Test PersonaRegistry functionality."""
 
     def test_registry_loads_builtin_personas(self):
-        """Registry should load all 12 built-in personas (11 + agent)."""
+        """Registry should load all 13 built-in personas (11 + agent + marketing)."""
         registry = PersonaRegistry()
         personas = registry.list_all()
-        assert len(personas) == 12
+        assert len(personas) == 13
 
     def test_get_persona_by_id(self):
         """Should retrieve persona by ID."""
@@ -49,7 +49,7 @@ class TestPersonaRegistry:
         registry = PersonaRegistry()
         for persona in registry.list_all():
             assert isinstance(persona.tools, list)
-            if persona.id not in ("jarvis", "agent"):
+            if persona.id not in ("jarvis", "agent", "marketing"):
                 assert len(persona.tools) > 0
 
 
@@ -240,3 +240,34 @@ class TestAgentPersona:
         Agent(Config(), session=Cap()).run("oi")
         assert "AGENT MODE" not in seen["sys"]
         assert "JARVIS" in seen["sys"]
+
+
+class TestMarketingPersona:
+    def test_marketing_persona_exists_with_price_table(self):
+        from jarvis.core.persona import PersonaRegistry
+        p = PersonaRegistry().get("marketing")
+        assert p is not None
+        assert "149,99" in p.system_prompt_additions
+        assert "382,47" in p.system_prompt_additions
+        assert "1.259,88" in p.system_prompt_additions
+        assert "PROIBIDO" in p.system_prompt_additions
+        assert p.policies.can_write is False
+        assert p.policies.can_execute is False
+
+    def test_marketing_uses_marketing_persona(self, tmp_path) -> None:
+        from jarvis.core.agent import Agent
+        from jarvis.core.config import Config
+        import sys
+        sys.path.insert(0, "tests")
+        from test_agent import FakeSession  # noqa
+
+        seen = {}
+
+        class Cap(FakeSession):
+            def post(self, url, json=None, timeout=120, **kw):
+                seen["sys"] = json["messages"][0]["content"]
+                return super().post(url, json=json, timeout=timeout, **kw)
+
+        Agent(Config(), session=Cap(), persona_id="marketing").run("quanto custa?")
+        assert "MARKETING MODE" in seen["sys"]
+        assert "149,99" in seen["sys"]

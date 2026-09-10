@@ -898,3 +898,18 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
 - Web: Tavily sem key (anotado); usei provider da sessão. Achados p/
   GuiaRenamer: HWID estável = MachineGuid (nunca MAC); token offline
   assinado RSA; política de reativação (PC novo) obrigatória.
+
+## 32. SESSION NOTES (2026-09-10 — marketing persona + make CLI)
+
+- Persona `marketing` criada (tabela oficial 149,99/382,47/1.259,88,
+  CTA oferta, PROIBIDO inventar desconto/depoimento/urgência,
+  write/execute false). Testes 31/31 em test_persona.py.
+- Make CLI oficial existe: `npx @makehq/cli` 1.4.0 funcional (NÃO o
+  pacote `make-cli` do npm — esse é outro projeto). API REST us2 +
+  token com escopos. Execução real pendente de token do usuário.
+- Diagnóstico fluxo prospecção (prints): 3 cenários Apify DEV/QA/PRD
+  (0 runs, desde abr/2025), ordem esquisita (Sheets Add Row ANTES da
+  IA no v1), erro no Update Row do v2, Claude pago + Mistral pago.
+  Plano: consolidar 1 cenário, SerpApi free (250/mês) via HTTP,
+  Qwen local :8080 como IA default, Groq fallback, deduplicar antes
+  de escrever (Search Rows → filtro → Add).
