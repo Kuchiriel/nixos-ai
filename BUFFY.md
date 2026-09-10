@@ -946,3 +946,17 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
   precisa de HTTP genérico. Make AI Web Search existe (built-in).
 - Chave Make em /etc/litellm.env (MAKE_API_KEY); zona us2.
 - Blueprint final em plans/automancerz-prospeccao-v2-blueprint.json.
+
+## 35. SESSION NOTES (2026-09-11 — run real: Apify estourado; HTTP descoberto)
+
+- 1º run v2: ERROR dataset-locked (Apify free $5 esgotado). v2
+  DESATIVADO (runs diários falhariam à toa). SerpApi vira primário.
+- Descoberto via tentativa: módulo HTTP = `http:ActionSendData`
+  (v3 ativa e limpa). Groq tem app nativo (próxima tentativa se
+  HTTP falhar). Pendente: keys SerpApi + Groq (usuário cria, free).
+- Apps Script avaliado: aprimorarPlanilha manual OK; onEdit cosmético
+  (limpa URLs, formata fones) — não quebra mapping por letras; manter.
+- Resposta p/ usuário: Sheets agora, Supabase depois; follow-up via
+  Resend (100/dia free); WhatsApp Business in-app grátis agora,
+  API bot só com volume; preço: pedir depoimento + indicação do
+  cliente feliz + teste de preço nos próximos 3.
