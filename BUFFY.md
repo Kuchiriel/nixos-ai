@@ -816,3 +816,18 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
   Planner C2 (MoE-plan→Qwen+approve): VERIFIED+fix/3 turns (único que
   fixou). Adotado executor strict; Qwen segue fast. Licença CC-BY-NC-4.0.
 - Suite 1068/5infra; flake verde. Commit 0699161.
+
+## 27. SESSION NOTES (2026-09-09 — consolidação monorepo p/ Solar)
+
+- Confirmado p/ Solar: suíte dele parou em 657 pq `-x` aborta na 1ª falha
+  infra (nightwatch); run completo = 1068 passed / 5 infra (meu log).
+  Falha preexistente, não da reorganização — concordo (stash+pop dele
+  prova; meus runs mostram o mesmo).
+- Wikilinks: `[[../../X]]` vivem em docs/architecture/* (não movidos —
+  corretos). Movidos p/ archive/forensics/ NÃO têm wikilinks: nada a
+  consertar no move.
+- Dangerous: `extract_passwords.py` (regex demo) + `delete_user_files.py`
+  existem e são inertes; recomendo quarentena com nota, não delete.
+- Resto da sujeira (AI_SYSTEM .baks, OTServer backups, ik github-data
+  626 arquivos, raízes soltas) confirmado por spot-check; decisões na
+  resposta ao usuário (não mexi — workstream dele).
