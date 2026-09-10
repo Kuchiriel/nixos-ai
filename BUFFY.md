@@ -864,3 +864,20 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
   (loop nightwatch 6h + vault-sync 1h — autonomia sem supervisão
   precisa de aval). Stash list zerada.
 - User liberou troca de modelos/bins (:8080 não é produtivo).
+
+## 30. SESSION NOTES (2026-09-10 — reboot + Qwen-juiz)
+
+- Reboot (carregador): sem perda. Todos os serviços voltaram sozinhos
+  (8080/6333/8081/8082 = 200) — resiliência confirmada na prática.
+  Git intacto (ecd02a2, stash 0, wip×2, branch Solar). Único prejuízo:
+  run Qwen-juiz abortado no meio — refeito do zero.
+- :8080 produtivo é single-model (POST /models/load → 404): hot-switch
+  via ensure_model NÃO funciona aqui; troca exige restart do serviço.
+  Alternativa usada: 2º llama-server Qwen3-4B-CPU :18081 (LD_LIBRARY_PATH
+  extraído do /proc do :8080; -ngl 0 -t 8; ~2.5GB RAM, :8080 intocado).
+- Judge medido: Bonsai 8/10, **Qwen3-4B 9/10** (conserta number-swap;
+  wrong-entity cega os dois — entidade ausente vira "supported").
+  Conclusão: Qwen é o melhor juiz local hoje, mas nenhum dos dois
+  passa em ausência; judge segue assist-only, nunca gate.
+- Receita Qwen-CPU documentada no log; processo sempre morto após uso
+  (kill por PID; :18081 nunca persiste).

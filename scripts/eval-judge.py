@@ -105,11 +105,14 @@ def main() -> int:
     args = ap.parse_args()
 
     if args.live:
+        import os
         from jarvis.core.config import Config
         from jarvis.providers.llm import LLMClient
         llm = LLMClient(Config())
+        base = os.environ.get("JARVIS_LLM_BASE_URL", "http://127.0.0.1:8080")
         passed, rows = run(lambda _c: llm)
     else:
+        base = "SELF-CHECK"
         passed, rows = run(lambda c: _ScriptedClient(_verdict_for(c)))
 
     total = len(CASES)
@@ -121,8 +124,7 @@ def main() -> int:
             flag = "ok " if r["pass"] else "FAIL"
             print(f"[{flag}] {r['case']:16s} expect={r['expect']!s:5s} "
                   f"got={r['got']!s:5s} contra={r['contradicted']}")
-        print(f"\njudge-harness: {passed}/{total} "
-              f"({'SELF-CHECK' if not args.live else 'LIVE :8080'})")
+        print(f"\njudge-harness: {passed}/{total} ({base})")
     return 0 if passed == total else 1
 
 
