@@ -971,3 +971,13 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
 - Groq key: GROQ_API_KEY no litellm.env. SerpApi key do usuário
   (não persistida — só no blueprint placeholder + sessão).
 - Blueprint em plans/automancerz-prospeccao-v3-blueprint.json.
+
+## 37. SESSION NOTES (2026-09-11 — v3 estável; feeder era parameters)
+
+- Causa raiz da invalidação: BasicAggregator com `feeder` no MAPPER;
+  correto é `parameters:{feeder:id}` + mapper = estrutura agregada
+  (padrão DEV). Bisseção completa documentada (8 scratch criados e
+  deletados; nenhum resíduo).
+- v3 id 6233082 estável (ativo+válido após 40s), DESATIVADO até as
+  keys (SerpApi/Groq) entrarem nos 2 módulos HTTP. Blueprint final
+  em plans/automancerz-prospeccao-v3-blueprint.json.
