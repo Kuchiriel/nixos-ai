@@ -304,3 +304,16 @@ Gemma-vision), download nada pendente, retorno ChatGPT, voz/wakeword
 Solar: branch docs/consolidacao-monorepo (prompt enviado); prompt p/ ele
 na conversa. Não tocar no dirt dele. Não usar pkill -f (trava a sessão;
 kill por PID/porta). Não rodar MoE-CPU nem rigs paralelos pesados.
+
+## 2026-09-11 dia — handoff p/ outro agente (Muse Spark)
+
+HEAD: `8671c3b`. Suite 1105/0 host; rebuild verde; binário do
+serviço fresco (nightwatch com discipline/retry/evidence).
+GuiaRenamer: funil provado e2e (4 eventos), falta cupom-100%,
+service_role p/ uploads, linhas legado, redirects.
+Make v3 ativo (SerpApi+Groq). Docs de continuidade:
+guia-renamer-pro/{AGENTS.md,docs/OPERACAO.md,scripts/operacao/},
+BUFFY §42 (mapa completo), monorepo AGENTS (seção ponte).
+Proibições vigentes: sem push sem permissão; sem pkill -f (PID);
+sem MoE-CPU pesado; voz/wakeword só com usuário; segredos nunca
+em código/chat/commit (só nomes + origem).
