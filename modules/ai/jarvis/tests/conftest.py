@@ -69,3 +69,14 @@ def pytest_configure(config):
         "markers",
         "requires_audio: tests that need audio hardware",
     )
+
+
+@pytest.fixture(autouse=True)
+def _sandbox_state_dir(tmp_path, monkeypatch) -> None:
+    """Isola state_dir por teste: Agent nunca toca $HOME.
+
+    Sandbox Nix (/homeless-shelter read-only) quebra qualquer teste que
+    construa Agent/Config sem isso. Global aqui em vez de repetir por
+    arquivo (test_agent.py mantém o seu local — redundância inofensiva).
+    """
+    monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path / "state"))

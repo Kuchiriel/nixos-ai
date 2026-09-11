@@ -4,6 +4,7 @@
   makeWrapper,
   mcp-nixos,
   mcpNixos ? mcp-nixos,
+  ripgrep,
 }: let
   base = python3Packages.buildPythonPackage rec {
     pname = "jarvis";
@@ -42,7 +43,7 @@
     # `mcpNixos` é o fast (cache de canais pré-computado) quando vem do overlay.
     propagatedBuildInputs = [mcpNixos];
 
-    nativeCheckInputs = with python3Packages; [pytest hypothesis];
+    nativeCheckInputs = with python3Packages; [pytest hypothesis] ++ [ripgrep];
     checkPhase = ''
       runHook preCheck
       # P8: Sandbox-safe subset via markers, not file-name ignores.

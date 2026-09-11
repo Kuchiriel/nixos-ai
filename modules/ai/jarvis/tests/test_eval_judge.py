@@ -4,8 +4,12 @@ from pathlib import Path
 
 
 def _load():
-    p = Path(__file__).resolve().parents[4] / "scripts" / "eval-judge.py"
-    return SourceFileLoader("eval_judge", str(p)).load_module()
+    here = Path(__file__).resolve()
+    for parent in [here.parent, *here.parents]:
+        cand = parent / "scripts" / "eval-judge.py"
+        if cand.exists():
+            return SourceFileLoader("eval_judge", str(cand)).load_module()
+    raise FileNotFoundError("scripts/eval-judge.py não encontrado subindo de " + str(here))
 
 
 def test_judge_harness_selfcheck() -> None:
