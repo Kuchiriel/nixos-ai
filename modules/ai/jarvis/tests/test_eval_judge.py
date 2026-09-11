@@ -2,6 +2,10 @@
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.integration  # scripts/ fora do src do pacote Nix
+
 
 def _load():
     here = Path(__file__).resolve()
