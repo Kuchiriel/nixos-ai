@@ -1016,3 +1016,18 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
   journal vira dado diagnóstico. Nada commita sem gates; sem push.
 - Melhorias enfileiradas (com usuário): heartbeat por fase no
   history + timeout hard por task + rebuild .#jarvis pós-mudanças.
+
+## 40. SESSION NOTES (2026-09-11 manhã — rebuild OK + 8 sandbox fixes)
+
+- Rebuild BLOQUEADO na Layer 5 (8 falhas sandbox): 7× HOME
+  (/homeless-shelter) + rg ausente + eval-judge fora do src.
+  Fixes: fixture JARVIS_STATE_DIR GLOBAL no tests/conftest.py
+  (reverteu per-file), ripgrep no nativeCheckInputs (package.nix),
+  eval-judge marcado integration.
+- Rebuild passou: sistema em switch novo, :8080/:6333 OK,
+  binário com código fresco (_exec_book presente). Run 03:04 de
+  hoje ainda foi STALE; o de amanhã já pega tudo.
+- FORK-STATUS.md: criados no path errado (nixos-ai/...) — movidos
+  p/ os forks reais em ~/projects/. Dirt Solar commitado (dd4512b).
+- clean.sh reescrito: safe GC (atual+rollback, nunca -d, verifica
+  antes/depois). Commit 58d8188.
