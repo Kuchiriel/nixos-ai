@@ -981,3 +981,22 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
 - v3 id 6233082 estável (ativo+válido após 40s), DESATIVADO até as
   keys (SerpApi/Groq) entrarem nos 2 módulos HTTP. Blueprint final
   em plans/automancerz-prospeccao-v3-blueprint.json.
+
+## 38. SESSION NOTES (2026-09-11 — v3 FUNCIONANDO fim-a-fim)
+
+- http:ActionSendData shape real (achado em export da comunidade):
+  mapper completo (ca/qs/url/data/gzip/method/headers/timeout/
+  useMtls/auth/bodyType/contentType/serializeUrl/shareCookies/
+  parseResponse/followRedirect/useQuerystring/followAllRedirects/
+  rejectUnauthorized). Mapper mínimo = BundleValidationError no run.
+- Groq: llama-3.3-70b-versatile MORTO; models vivos incluem
+  qwen3.6-27b (adotado), gpt-oss-120b/20b. Groq testado direto OK.
+- SerpApi key OK (20 resultados; campos title/address/phone/
+  website/rating/reviews/type/place_id confirmados).
+- updateRow removido do v3 (multi-insert não gera __ROW_NUMBER__
+  único → range Aundefined). Fluxo final [serp,agg,groq,addRow]
+  com status+proposta na mesma escrita.
+- Output Groq: {{6.data.choices[].message.content}} (OpenAI-shape;
+  {{6.data}} cru = struct rejeitado pelo Sheets 400).
+- v3 id 6233082 ATIVO, run real status 1 (sucesso). Blueprint
+  sanitizado (sem keys) em plans/.
