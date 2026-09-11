@@ -1,3 +1,14 @@
+---
+title: "Getting Started"
+status: active
+layer: development
+related:
+  - development/testing
+  - development/repl-guide
+  - architecture/system-overview
+  - architecture/agent-harness
+---
+
 # 🚀 Getting Started
 
 > Quick start guide for nixos-ai development.
@@ -118,3 +129,8 @@ nix develop --command python3 -m pytest modules/ai/jarvis/tests/test_agent.py -x
 # Run E2E tests (requires live services)
 nix develop --command python3 -m pytest modules/ai/jarvis/tests/test_mcp_tools_e2e.py -x -v
 ```
+
+---
+
+**Ver também:** [[testing]] | [[repl-guide]]
+[[system-overview]] | [[agent-harness]]

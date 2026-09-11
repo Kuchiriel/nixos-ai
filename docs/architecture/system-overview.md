@@ -19,7 +19,7 @@ flowchart TB
     end
 
     subgraph MCP["🔌 MCP Servers"]
-        JarvisMCP["jarvis (17 tools)"]
+        JarvisMCP["jarvis-mcp (22 tools declarados, ver mcp-integration)"]
         Context7["context7"]
         Tavily["tavily-search"]
         NixOS["nixos-mcp"]
@@ -189,3 +189,6 @@ flowchart TB
 [[context-engineering]] | [[llama-cpp-tuning]] | [[nightwatch-components]]
 [[ADR-001-agent-platform]] | [[ADR-002-memory-layers]]
 [[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]
+
+---
+**Nota de validação**: diagramas inline e o número de ferramentas MCP foram alinhados ao código-fonte. O diagrama de sequência e os fluxos de dados são representações conceituais e não foram validados por execução; serviços e contagens de documentos indexados devem ser confirmados em runtime.

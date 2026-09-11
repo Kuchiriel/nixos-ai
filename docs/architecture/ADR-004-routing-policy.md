@@ -1,3 +1,14 @@
+---
+title: "ADR-004: Routing Policy (declarada) vs Mechanism (ligado)"
+status: proposed
+status_note: BLOCKED — wiring com blast radius no hot path LLM
+layer: architecture
+related:
+  - architecture/ADR-001-agent-platform
+  - architecture/agent-harness
+  - architecture/context-engineering
+---
+
 # ADR-004: Routing Policy (declarada) vs Mechanism (ligado)
 
 ## Status: Proposed (BLOCKED — wiring com blast radius no hot path LLM)
@@ -50,3 +61,8 @@ com backends reais.
 - Deletar o Registry ("código morto"): ele é a política declarada e
   seu teste trava regressão de teto. Morte aqui = perda de segurança.
 - Wire parcial (só alguns call sites): choke point precisa ser único.
+
+---
+
+**Ver também:** [[ADR-001-agent-platform]] | [[agent-harness]]
+[[context-engineering]]

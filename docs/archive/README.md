@@ -56,7 +56,9 @@ Componentes de arquitetura que foram redesenhados ou substituídos.
 | `legacy-compiler-expert.md` | `modules/ai/jarvis/` (harness atual) |
 | `legacy-inventory-findings.md` | `audit/legacy/` (inventário atual) |
 | `architecture-audit.md` | `audit/current/FULL-REPO-AUDIT-2026-09-03.md` |
-| `architecture-proposal-legacy.md` | `architecture/ADR-001-agent-platform.md` |
+| `architecture-proposal-legacy.md` | `architecture/ADR-001-agent-platform.md` (com ressalva: é uma proposta de época, não um ADR formal atual) |
+
+> **Nota de integridade**: `architecture-proposal-legacy.md` é a proposta de estrutura de 2026-08-16 que antecedeu a consolidação. Se quiser que eu o mova para `audit/archive/` ou crie um inventário mais fino entre o que foi implementado vs o que foi apenas proposto, eu posso separar isso sem remover o conteúdo.
 
 ### `research/` — Pesquisa Histórica
 
@@ -70,6 +72,23 @@ Material de pesquisa que informou decisões de arquitetura, mas não é guia ope
 | `chatgpt-conversation-2026-08-27.md` | Gap analysis ChatGPT |
 | `claude-web-prompt-template.md` | Template de prompt web (histórico) |
 | `llama-moe-optimization.md` | Otimização MoE (supersedido por ncmoe-sweep) |
+| `BP-BONSAI-TEST.md` | Testes com Bonsai (histórico) |
+| `STATE-OF-2026-09-09.md` | Snapshot de estado do sistema (histórico) |
+| `MISSAO-2026-09-09.md` | Conteúdo da missão de 2026-09-09 (histórico) |
+
+### `misc-forensics/` — Forense e incidentes documentados
+
+Documentos de investigação de episódios pontuais que não são guia operacional e podem conter afirmações não validadas por teste.
+
+| Arquivo | Foco |
+|---------|------|
+| `FORENSIC-SYSTEM-COHERENCE-2026-09-08.md` | Coerência do sistema em 2026-09-08 |
+| `LOCAL-MODEL-EVALUATION-2026-09-08.md` | Avaliação de modelo local |
+| `LOCAL-MODEL-ROUTING-FORENSIC-2026-09-08.md` | Roteamento de modelo local |
+| `DEEP-INTEGRATION-REDTEAM-2026-09-08.md` | Integração e red team |
+| `P0-ATAQUE-2026-09-08.md` | Episódio de ataque P0 |
+| `UX-ABISMO-2026-09-08.md` | Investigação de UX |
+| `CHATGPT-ATTACK-PROMPT.md` | Prompt de ataque via ChatGPT (histórico) |
 
 ### `_trash/` — NÃO INDEXAR
 
@@ -83,4 +102,7 @@ Arquivos que **não devem** ser incluídos no corpus RAG:
 | `JARVIS-COMPARISON.mmd` | Duplicata do `.md` equivalente |
 
 ---
-**Ver também:** [[../architecture/system-overview]] | [[../audit/INDEX]]
+**Ver também:** [[../architecture/system-overview]] | [[../audit/INDEX]] | [[../README]]
+
+---
+**Nota de validação**: os documentos listados aqui foram arquivados por critério narrativo/temporal; onde possível o arquivamento foi alinhado ao que o código/docs atuais dizem, mas alguns itens podem ainda precisar de decisão manual para confirmar que não há versão viva que os substituiu.

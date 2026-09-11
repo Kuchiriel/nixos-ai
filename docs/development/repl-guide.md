@@ -1,3 +1,14 @@
+---
+title: "REPL Guide"
+status: active
+layer: development
+related:
+  - development/getting-started
+  - development/testing
+  - architecture/agent-harness
+  - architecture/nightwatch-components
+---
+
 # 🖥️ REPL Guide
 
 > How to use `jarvis dev` effectively.
@@ -103,3 +114,8 @@ The model has 32K context. System prompt takes ~15-20K. **You have ~12K for conv
 3. **Test after editing** — Run relevant tests
 4. **Commit after testing** — Atomic commits
 5. **Use modes** — Switch to appropriate mode for task type
+
+---
+
+**Ver também:** [[getting-started]] | [[testing]]
+[[agent-harness]] | [[nightwatch-components]]

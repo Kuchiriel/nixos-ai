@@ -1,3 +1,14 @@
+---
+title: "Índice de Auditorias — nixos-ai"
+status: active
+layer: audit
+related:
+  - architecture/nightwatch-components
+  - architecture/mission-consolidation
+  - architecture/agent-harness
+  - development/testing
+---
+
 # Índice de Auditorias — nixos-ai
 
 > Índice cronológico de todas as auditorias do projeto.
@@ -27,9 +38,11 @@
 
 | Arquivo | Foco |
 |---------|------|
-| [[01-current-nixos]] | Estado do NixOS atual |
-| [[02-legacy-inventory]] | Inventário do sistema legado |
-| [[03-legacy-functionality-map]] | Mapa funcional do legado |
+| [[01-current-nixos]] | Estado do NixOS atual (legado pré-consolidação; contém referências a arquivos que não existem mais) |
+| [[02-legacy-inventory]] | Inventário do sistema legado (auditoria forense do snapshot) |
+| [[03-legacy-functionality-map]] | Mapa funcional do legado (o que foi preservado/adaptado/reimplementado) |
+
+> **Nota de integridade**: os três arquivos acima foram lidos agora. Eles fazem sentido como inventário histórico, mas estão **desatualizados em relação ao repo consolidado** — alguns destinos que eles referenciam existem só como documentos da época ou não têm mais contraparte viva. Se quiser que eu separe esse inventário do arquivo ativo do audit, eu movo ele para `audit/legacy/` ou `audit/archive/` e ajusto os cross-refs.
 
 ## Achados Críticos Consolidados (BUFFY §13)
 
@@ -55,6 +68,7 @@ De SESSION-AUDIT-2026-09-04:
 - [ ] **Pipeline E2E real** (não mocks) — trajetória real de agente (HIGH)
 
 ---
+
 **Ver também:** [[../architecture/nightwatch-components]]
 [[../architecture/mission-consolidation]] | [[../architecture/agent-harness]]
-[[../../HANDOFF]] | [[../../BUFFY]]
+[[../../HANDOFF]] | [[../../BUFFY]] | [[development/testing]]

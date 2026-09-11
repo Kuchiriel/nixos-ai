@@ -1,3 +1,12 @@
+---
+title: "Monorepo Schema & Refactoring Prompts — State of the Art 2026"
+status: active
+layer: architecture
+related:
+  - architecture/ADR-001-agent-platform
+  - architecture/mission-consolidation
+---
+
 # Monorepo Schema & Refactoring Prompts — State of the Art 2026
 
 > Research from: monorepo.tools, GitClear, Augment Code, Prompt Architects
@@ -217,3 +226,7 @@ BEFORE:                          AFTER:
 3. **Consolidate first**, create new only when consolidation is impossible
 4. **One module per responsibility** — if two modules do the same thing, merge them
 5. **Test consolidation** — ensure no functionality is lost
+
+---
+
+**Ver também:** [[ADR-001-agent-platform]] | [[mission-consolidation]]

@@ -13,22 +13,23 @@ flowchart TB
     end
 
     subgraph Servers["MCP Servers"]
-        Jarvis["jarvis-mcp (17 tools)"]
+        Jarvis["jarvis-mcp (22 tools declarados)"]
         Context7["context7"]
         Tavily["tavily-search"]
         NixOS["nixos-mcp"]
         Playwright["playwright"]
     end
 
-    subgraph JarvisTools["JARVIS Tools"]
-        Exec["execute_shell"]
-        FileOps["read/write/str_replace"]
-        Vision["capture/observe_screen"]
-        NixTools["nix_eval/check/search"]
-        MemTools["remember/recall/lessons"]
-        VaultTools["vault_list/write"]
-        RAGTools["rag_search/index"]
-        ChatGPT["read_chatgpt"]
+    subgraph JarvisTools["JARVIS Tools (REPL + MCP)"]
+        Exec["execute_shell / jarvis_execute"]
+        FileOps["read/write/str_replace + jarvis_*"]
+        Vision["capture/observe_screen + jarvis_*"]
+        NixTools["nix_eval/check/search + jarvis_*"]
+        MemTools["remember/recall/lessons + jarvis_*"]
+        VaultTools["vault_list/write + jarvis_*"]
+        RAGTools["rag_search/index + jarvis_*"]
+        WebTools["web_search + jarvis_web_search"]
+        ChatTools["read_chatgpt/read_ai_conversation + jarvis_*"]
     end
 
     RooDev --> Jarvis
@@ -69,6 +70,10 @@ flowchart TB
 | rag_search | ✅ | ✅ jarvis_rag_search | Same implementation |
 | rag_index | ✅ | ✅ jarvis_rag_index | Same implementation |
 | read_chatgpt | ✅ | ✅ jarvis_read_chatgpt | Same implementation |
+| read_ai_conversation | ✅ | ✅ jarvis_read_ai_conversation | Same implementation |
+| web_search | ✅ | ✅ jarvis_web_search | Same implementation |
+
+**Observação sobre escopo da contagem**: `jarvis-mcp` lista publicamente 22 ferramentas via `tools/list` (array `JARVIS_TOOLS` em `mcp_server.py`). Diferente do REPL, o MCP também declara ferramentas de sincronização de vault (`jarvis_vault_sync_obsidian`, `jarvis_vault_sync_hackmd`, `jarvis_vault_search_obsidian`, `jarvis_vault_status`) e ferramentas extras não expandidas na matriz de capability do persona (`jarvis_proactive_check`, `jarvis_system_health`, `jarvis_classify_file`, `jarvis_classify_directory`) em `call_tool()`, mas estas últimas não são listadas no schema público de ferramentas do usuário.
 
 ## MCP Configuration (VSCodium)
 
@@ -105,34 +110,32 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    subgraph Allowlist["Command Allowlist"]
-        Safe["ls, cat, head, tail, grep, find, wc, df, free, ps, git, nix, curl, nvidia-smi"]
-    end
+    Input["(LLM ou usuário)"] --> L1["L1: Command Allowlist"]
 
-    subgraph PipeValidation["Pipe Validation"]
-        SafePipe["head, tail, grep, wc, sort, uniq, cut, awk, sed, tr, column, jq"]
-    end
+    L1 -->|blocked| Deny1["❌ deny"]
+    L1 -->|allowed| L2["L2: Chaining / dangerous patterns"]
 
-    subgraph Blocked["Blocked Patterns"]
-        Dangerous["&&, ||, $(), rm, mv, cp, chmod, chown, dd, mkfs"]
-    end
+    L2 -->|dangerous| Deny2["❌ deny"]
+    L2 -->|safe| L3["L3: Pipe + validator allowlist"]
 
-    subgraph Approval["Approval Required"]
-        WriteCmds["Commands not in allowlist"]
-    end
+    L3 -->|unsafe pipe| Deny3["❌ deny"]
+    L3 -->|safe pipe| L4["L4: shlex.split + run_shell"]
 
-    Allowlist -->|Pass| PipeValidation
-    PipeValidation -->|Pass| Execute["Execute via shlex"]
-    Blocked -->|Found| Deny["❌ Deny"]
-    WriteCmds -->|Ask| User["User Approval"]
+    L4 --> Out["command output"]
 
-    style Allowlist fill:#c8e6c9
-    style PipeValidation fill:#c8e6c9
-    style Blocked fill:#ffcdd2
-    style Approval fill:#fff9c4
+    style L1 fill:#ffcdd2
+    style L2 fill:#ffcdd2
+    style L3 fill:#ffcdd2
+    style L4 fill:#c8e6c9
+    style Deny1 fill:#f44336
+    style Deny2 fill:#f44336
+    style Deny3 fill:#f44336
 ```
 
 ---
 **Ver também:** [[system-overview]] | [[agent-harness]] | [[rag-improvements]]
 [[context-engineering]] | [[ADR-001-agent-platform]]
 [[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]
+
+---
+**Nota de validação**: contagem de ferramentas e o diagrama de segurança foram alinhados ao código-fonte (`mcp_server.py`, `devtools.py`, `persona.py`) em 2026-09-09. Números exatos de ferramentas em execução por persona, estado de sincronização de vault e lista de comandos allowlist efetiva precisam de validação por teste/observação em runtime — não são garantidos apenas pela leitura estática.

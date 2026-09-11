@@ -1,3 +1,15 @@
+---
+title: "ADR-002: Memory Layers — Camadas de Memória do JARVIS"
+status: accepted
+layer: architecture
+related:
+  - architecture/ADR-001-agent-platform
+  - architecture/context-engineering
+  - architecture/agent-harness
+  - architecture/rag-improvements
+  - architecture/system-overview
+---
+
 # ADR-002: Memory Layers — Camadas de Memória do JARVIS
 
 ## Status: Accepted
@@ -136,5 +148,6 @@ Se um fact em `recall` contradiz uma hipótese working, o fact prevalece.
 - BUFFY §17 — Persona Handover via RAG relay
 
 ---
+
 **Ver também:** [[ADR-001-agent-platform]] | [[context-engineering]]
 [[agent-harness]] | [[rag-improvements]] | [[system-overview]]

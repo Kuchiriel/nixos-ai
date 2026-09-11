@@ -34,6 +34,8 @@ architecture-beta
     waybar:B --> T:jarvis
 ```
 
+> Renderização: esse diagrama usa a sintaxe `architecture-beta` do Mermaid. Em alguns editores/Render engines ainda não é suportada de forma estável; se não renderizar, o mesmo sistema está descrito nos diagramas `flowchart` de `architecture/system-overview.md` e `architecture/mcp-integration.md`.
+
 ## 📁 Documentation Structure
 
 ```
@@ -54,7 +56,9 @@ docs/
 │   ├── nightwatch-components.md      # Componentes Nightwatch + validação long-run
 │   ├── mission-consolidation.md      # Missão: eliminar entropia, unificar pipeline
 │   ├── monorepo-schema.md            # Schema de monorepo e prompts de refatoração
-│   └── platform-assessment.md        # Avaliação completa da plataforma
+│   ├── platform-assessment.md        # Avaliação completa da plataforma
+│   ├── ARCHITECTURE.mmd              # Diagrama Mermaid independente da arquitetura (artefato reutilizável)
+│   └── SELF-IMPROVEMENT-LOOP.mmd     # Diagrama Mermaid do loop de auto-melhoria (artefato reutilizável)
 ├── benchmarks/                       # Evidências de performance
 │   ├── README.md                     # Metodologia + índice de resultados
 │   ├── ncmoe-sweep.md                # Sweep de --n-cpu-moe
@@ -72,12 +76,15 @@ docs/
 │   ├── testing.md                    # Suíte de testes e convenções
 │   ├── env-vars-reference.md         # Variáveis de ambiente
 │   └── repl-improvements-backlog.md  # Backlog de melhorias do REPL
+
+> **Nota de honestidade do índice**: os caminhos acima descrevem a intenção do projeto e a estrutura pública dos docs. Alguns itens podem estar desatualizados em relação ao código ou a serviços rodando; documentos marcados como "Revisado" foram auditados por leitura estática/cross-ref em 2026-09-09, não por teste de runtime.
 └── archive/                          # Documentação histórica (não editar)
     ├── README.md                     # Critério de arquivamento + inventário
     ├── benchmarks/                   # Benchmarks históricos (pré-Qwen3.6)
     ├── diagnostics/                  # Diagnósticos resolvidos
     ├── legacy-components/            # Arquitetura legada substituída
     ├── research/                     # Pesquisa que informou decisões
+    ├── forensics/                    # Documentos de investigação/episódios pontuais (não guia operacional)
     └── _trash/                       # NÃO indexar no RAG
 ```
 
@@ -85,34 +92,33 @@ docs/
 
 | Tópico | Documento | Status |
 |--------|-----------|--------|
-| **Arquitetura geral** | [architecture/system-overview.md](architecture/system-overview.md) | ✅ Atual |
-| **MCPs e ferramentas** | [architecture/mcp-integration.md](architecture/mcp-integration.md) | ✅ Atual |
-| **Harness (Nightwatch)** | [architecture/agent-harness.md](architecture/agent-harness.md) | ✅ Atual |
-| **Engenharia de contexto** | [architecture/context-engineering.md](architecture/context-engineering.md) | ✅ Atual |
-| **RAG e memória** | [architecture/rag-improvements.md](architecture/rag-improvements.md) | ✅ Atual |
-| **Camadas de memória** | [architecture/ADR-002-memory-layers.md](architecture/ADR-002-memory-layers.md) | ✅ Atual |
-| **Decisão de plataforma** | [architecture/ADR-001-agent-platform.md](architecture/ADR-001-agent-platform.md) | ✅ Atual |
-| **Benchmarks** | [benchmarks/README.md](benchmarks/README.md) | ✅ Atual |
-| **Auditorias ativas** | [audit/INDEX.md](audit/INDEX.md) | ✅ Atual |
-| **Quick start** | [development/getting-started.md](development/getting-started.md) | ✅ Atual |
-| **Guia de testes** | [development/testing.md](development/testing.md) | ✅ Atual |
-| **REPL** | [development/repl-guide.md](development/repl-guide.md) | ✅ Atual |
+| **Arquitetura geral** | [architecture/system-overview.md](architecture/system-overview.md) | ✅ Revisado (MCP tools + notas de validação) |
+| **MCPs e ferramentas** | [architecture/mcp-integration.md](architecture/mcp-integration.md) | ✅ Revisado (escopo de ferramentas alinhado ao código) |
+| **Harness (Nightwatch)** | [architecture/agent-harness.md](architecture/agent-harness.md) | ✅ Revisado (diagramas inline coherence check) |
+| **Engenharia de contexto** | [architecture/context-engineering.md](architecture/context-engineering.md) | ✅ Revisado (frontmatter/cross-refs) |
+| **RAG e memória** | [architecture/rag-improvements.md](architecture/rag-improvements.md) | ✅ Revisado (frontmatter/cross-refs) |
+| **Camadas de memória** | [architecture/ADR-002-memory-layers.md](architecture/ADR-002-memory-layers.md) | ✅ Revisado (frontmatter/status) |
+| **Decisão de plataforma** | [architecture/ADR-001-agent-platform.md](architecture/ADR-001-agent-platform.md) | ✅ Revisado (frontmatter) |
+| **Benchmarks** | [benchmarks/README.md](benchmarks/README.md) | ✅ Revisado (frontmatter/metodologia/índice) |
+| **Auditorias ativas** | [audit/INDEX.md](audit/INDEX.md) | ✅ Revisado (frontmatter e cross-refs) |
+| **Quick start** | [development/getting-started.md](development/getting-started.md) | ✅ Revisado (frontmatter + caminhos) |
+| **Guia de testes** | [development/testing.md](development/testing.md) | ✅ Revisado (status e estrutura) |
+| **REPL** | [development/repl-guide.md](development/repl-guide.md) | ✅ Revisado (frontmatter) |
 
 ## 📊 System Status
 
-> ⚠️ Este status é HISTORICAL (2026-09-03). Verificar serviços com `jarvis status`.
+> ⚠️ Estes status são documentação estática revisada em 2026-09-09. Eles refletem o que o código-fonte e os docs dizem, não necessariamente o que está rodando na máquina agora. Verificar serviços com `jarvis status`.
 
-| Componente | Status | Detalhes |
-|-----------|--------|----------|
-| JARVIS Agent | ✅ Running | 18 MCP tools, REPL com modos customizáveis |
-| llama.cpp | ✅ Running | Qwen3.6-35B-A3B Q4_K_M, RTX 4050 6GB |
-| Qdrant | ✅ Running | 1143 code chunks indexados |
-| Embeddings | ✅ Running | nomic-embed-text-v2-moe :8081 |
-| Reranker | ✅ Running | bge-reranker-v2-m3 :8082 |
-| Roo Dev | ✅ Running | Conectado ao LLM local |
-| Telegram Bot | ✅ Running | @jarvis_lab_bot |
-| Waybar | ✅ Running | Indicador de status do agente |
-| Testes | ✅ 859/859 | 0 failures, 26 skipped, 5 xpassed |
+| Componente | Status documentado | Detalhes / o que precisa de validação |
+|-----------|--------------------|---------------------------------------|
+| JARVIS Agent | ✅ Documentado | REPL (`jarvis dev`) e MCP `jarvis-mcp` declarados no código. MCP lista publicamente **22 ferramentas** em `JARVIS_TOOLS` (`mcp_server.py`). Persona expande o catálogo por capability (`persona.py`).
+| llama.cpp | ✅ Documentado | Qwen3.6-35B-A3B é o modelo referência nos docs; precisão de versão/quants e flags de runtime precisa de conferência no serviço/nix em vigor.
+| Qdrant | ✅ Documentado | Coleção/código aparece nos docs como indexado; contagem exata de chunks e state do cluster exigem verificação em runtime.
+| Embeddings | ✅ Documentado | `nomic-embed-text-v2-moe` referenciado nos configs e docs; porta/config real deve ser confirmada.
+| Reranker | ✅ Documentado | `bge-reranker-v2-m3` referenciado; porta real deve ser confirmada.
+| Roo Dev | ✅ Documentado | Integrazione MCP definida no docs; efetividade em runtime a validar.
+| Telegram Bot | ✅ Documentado | `@jarvis_lab_bot` aparece nos docs; existência e estado exigem verificação.
+| Testes | ✅ Documentado | Suite reportada como `859 passed, 0 failed, 26 skipped, 5 xpassed` (2026-09-03) nos docs/`. Número e passagem devem ser reproduzidos com o comando do `development/testing.md` para garantir.
 
 ## 🔗 External Resources
 
@@ -126,3 +132,25 @@ docs/
 
 Ver [AGENTS.md](../AGENTS.md) para regras do projeto e convenções.
 Ver [BUFFY.md](../../BUFFY.md) para protocolo de qualidade e evidência.
+
+## 🧭 Estado desta documentação (honestidade)
+
+Esta pasta `docs/` foi revisada em 2026-09-09 com foco em:
+1. **Alinhar o que o índice/docs prometem ao que o código-fonte diz**, especialmente em contagens e escopo de ferramentas MCP/REPL.
+2. **Separar diagramas conceituais de afirmações validadas por execução**; alguns números e fluxos ainda dependem de teste/observação em runtime.
+3. **Nunca remover documento**; o que estiver fora de sincronia com a realidade vigente precisa ser arquivado, não apagado.
+
+**O que foi revisado agora, com razoável confiança estática:**
+- `architecture/mcp-integration.md`: descrição de ferramentas, diagrama de clientes/servidores/ferramentas e diagrama de segurança foram alinhados ao código (`mcp_server.py`, `devtools.py`, `persona.py`).
+- `architecture/system-overview.md`: número de ferramentas MCP e notas de validação atualizados.
+- `development/testing.md`, `development/getting-started.md`, `development/repl-guide.md`, `benchmarks/README.md`, `audit/INDEX.md`, `architecture/platform-assessment.md`, `architecture/jarvis-comparison.md`, `architecture/ADR-002-memory-layers.md`, `architecture/ADR-003-persona-layers.md`, `architecture/ADR-004-routing-policy.md`, `architecture/context-engineering.md`, `architecture/monorepo-schema.md`: frontmatter/status/cross-refs ajustados para coerência.
+
+**O que ainda não tenho como validar só com leitura de código/docs (deixado para validação externa):**
+- Contagem exata de ferramentas ativas em cada persona em runtime.
+- Estado de serviços (running/stop), contagem real de chunks no Qdrant, portas efetivas de embeddings/reranker.
+- Parte de itens abertos de auditorias que dependem de teste E2E ou teste com LLM online.
+- Validação de renderização de diagramas Mermaid por engine real (o diagrama `architecture-beta` do README é suspeito em alguns editores).
+
+**Histórico/legado (ainda preservado, não é fonte viva):**
+- `docs/archive/` contém documentação histórica e duplicados antigos; o README do archive explica o critério.
+- Alguns documentos de benchmarks e auditorias mantêm números de sessões passadas por rastreabilidade, não como estado atual.

@@ -1,3 +1,15 @@
+---
+title: "ADR-003: Persona Layers — Identidade, Execução e Modos REPL"
+status: proposed
+status_note: BLOCKED — decisão de produto pendente, evidência técnica completa
+layer: architecture
+related:
+  - architecture/ADR-001-agent-platform
+  - architecture/agent-harness
+  - architecture/nightwatch-components
+  - development/repl-guide
+---
+
 # ADR-003: Persona Layers — Identidade, Execução e Modos REPL
 
 ## Status: Proposed (BLOCKED — decisão de produto pendente, evidência técnica completa)
@@ -52,3 +64,8 @@ Implementar junto da convergência do dev.py.
    `_persona_block()` suprimido quando modo tem role própria; extra do
    modo entra no template (todos os rebuilds).
 3. Testes: modo persiste após /clear; prompt contém UMA identidade.
+
+---
+
+**Ver também:** [[ADR-001-agent-platform]] | [[agent-harness]]
+[[nightwatch-components]] | [[repl-guide]]

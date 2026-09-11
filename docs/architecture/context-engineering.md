@@ -1,3 +1,17 @@
+---
+title: "Context Engineering — Protocolo de Contexto do JARVIS"
+status: active
+layer: architecture
+related:
+  - architecture/mcp-integration
+  - architecture/rag-improvements
+  - architecture/agent-harness
+  - architecture/ADR-001-agent-platform
+  - architecture/ADR-002-memory-layers
+  - architecture/system-overview
+  - development/repl-guide
+---
+
 # Context Engineering — Protocolo de Contexto do JARVIS
 
 > Formaliza as decisões de engenharia de contexto aplicadas ao JARVIS.
@@ -133,6 +147,7 @@ Sem transferência de histórico de conversa
 recupera apenas o que é relevante; handoff docs são auditáveis.
 
 ---
+
 **Ver também:** [[mcp-integration]] | [[rag-improvements]] | [[agent-harness]]
 [[ADR-001-agent-platform]] | [[ADR-002-memory-layers]] | [[system-overview]]
 [[HANDOFF]] | [[../../BUFFY]]

@@ -1,3 +1,13 @@
+---
+title: "Official Benchmark Protocol — llama.cpp MoE Inference"
+status: active
+layer: benchmarks
+related:
+  - architecture/llama-cpp-tuning
+  - architecture/rag-improvements
+  - development/testing
+---
+
 # Official Benchmark Protocol — llama.cpp MoE Inference
 
 ## Purpose
@@ -46,7 +56,7 @@ Establish a reproducible methodology for measuring llama.cpp performance on the 
 ### Measurement Metrics
 
 | Metric | How to Measure |
-|--------|----------------|
+|--------|---------------|
 | **Sustained tok/s** | median tok/s during measurement phase |
 | **P90 latency** | 90th percentile ms/token during measurement |
 | **GPU temp start** | nvidia-smi at measurement start |
@@ -148,7 +158,7 @@ notes: |
 - Q3_K_M: improve hit rate (**UNTESTED**, download failed)
 - Poll=25 better than poll=50 (**UNTESTED** in server context)
 
-See `docs/benchmarks/performance-evidence-audit.md` for full classification.
+See `performance-evidence-audit.md` for full classification.
 
 ## Scripts
 
@@ -157,4 +167,5 @@ See `docs/benchmarks/performance-evidence-audit.md` for full classification.
 - `scripts/mlock-benchmark.sh` — mlock comparison test
 
 ---
+
 **Ver também:** [[../../HANDOFF]] | [[../../AGENTS.md]] | [[architecture/llama-cpp-tuning]]

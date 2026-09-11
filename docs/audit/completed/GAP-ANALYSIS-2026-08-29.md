@@ -110,7 +110,9 @@ Isso é exatamente o que o `AGENTS.md` + `HANDOFF.md` + `NIGHTLOG.md` deveriam s
 
 ---
 
-# Round 3 — Verificação (2026-08-29)
+**Nota de integridade**: esta seção abaixo é uma verificação da época (2026-08-29) que vem do histórico do projeto; ela ainda está no arquivo como rastreabilidade, mas **não é o estado atual do repo** e não substitui auditoria nova. Links como `[[JARVIS-COMPARISON]]` e `[[NIGHTWATCH]]` faziam sentido na época; eles não têm mais destino direto no vault atual.
+
+# Round 3 — Verificação (2026-08-29) — histórico
 
 ## Componentes verificados nesta rodada
 
@@ -170,4 +172,4 @@ rodando por >30 minutos com múltiplas tasks.
 **Ver também:** [[../HANDOFF]] | [[../AGENTS.md]] | [[../README]]
 
 ---
-**Ver também:** [[../HANDOFF]] | [[../AGENTS.md]] | [[JARVIS-COMPARISON]] | [[NIGHTWATCH]]
+**Ver também (histórico):** [[../HANDOFF]] | [[../AGENTS.md]] | *(JARVIS-COMPARISON e NIGHTWATCH eram destinos na época; não têm mais contraparte direta no vault atual)*

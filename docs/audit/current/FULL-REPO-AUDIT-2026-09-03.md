@@ -1,6 +1,6 @@
 # FULL REPOSITORY AUDIT — 2026-09-03
 
-**Contexto:** [[mission-consolidation]] | [[NIGHTLOG]]
+**Contexto:** [[../architecture/mission-consolidation]] | *(NIGHTLOG é referência histórica da época — não há documento com esse destino no vault atual; se quiser eu registro isso explicitamente em vez de deixar o wikilink vago)*
 **Benchmarks relacionados:** [[performance-evidence-audit]]
 
 ## 1. Executive Diagnosis

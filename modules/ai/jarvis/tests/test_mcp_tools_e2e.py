@@ -1,4 +1,10 @@
-"""E2E tests for all 17 JARVIS MCP tools.
+"""E2E tests for JARVIS MCP tools públicos (lista `tools/list`).
+
+Contagem: o servidor JARVIS declara publicamente 22 ferramentas via `JARVIS_TOOLS`
+(`modules/ai/jarvis/src/jarvis/mcp_server.py`). Este arquivo concentra os testes E2E
+nas ferramentas que não dependem de display/vision (`capture_screen` e `observe_screen`
+podem falhar em headless).
+
 import pytest
 pytestmark = pytest.mark.integration
 
@@ -179,6 +185,10 @@ class TestJarvisStrReplace:
 class TestJarvisCaptureScreen:
     """Test jarvis_capture_screen tool."""
 
+    @pytest.mark.skipif(
+        os.environ.get("HEADLESS") == "1",
+        reason="vision/capture depends on display; skipped em HEADLESS=1"
+    )
     def test_capture(self):
         result = _mcp_call("jarvis_capture_screen", {})
         text = _get_text(result).lower()
