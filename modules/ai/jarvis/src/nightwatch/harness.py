@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -175,14 +176,34 @@ def _default_call_llm(prompt: str, max_tokens: int = 2048) -> str:
 
     Disables thinking tokens for coding tasks to prevent
     reasoning from consuming the entire max_tokens budget.
+
+    Choke point ÚNICO de todo LLM do nightwatch (discovery, patcher,
+    three_agent): a disciplina de tool-use mora aqui e vale para
+    todos os chamadores (lição do UX-abismo: modelo fraco sem
+    disciplina improvisa; com disciplina, segue o formato).
     """
+    import time
+    t0 = time.monotonic()
+    print(f"[nightwatch] llm-call start (max_tokens={max_tokens})",
+          file=sys.stderr)
     try:
         from jarvis.providers.llm import LLMClient
         from jarvis.core.config import Config
         client = LLMClient(Config())
         messages = [
-            {"role": "system", "content": "You are a code improvement assistant. "
-             "Follow the format instructions exactly. Return structured patches as requested."},
+            {"role": "system", "content": (
+                "You are a code improvement assistant. "
+                "Follow the format instructions exactly. "
+                "Return structured patches as requested.\n\n"
+                "TOOL_USE_DISCIPLINE (always):\n"
+                "1. Locate first: reference exact file paths and line "
+                "numbers; never invent paths.\n"
+                "2. Evidence before answer: only describe what the code "
+                "shows; no speculative claims.\n"
+                "3. Structured output only: emit exactly the requested "
+                "format (JSON/patch), no prose around it.\n"
+                "4. If the task is ambiguous, return the safest minimal "
+                "change, never a guess.")},
             {"role": "user", "content": prompt},
         ]
         response = client.chat_with_tools(
@@ -197,8 +218,14 @@ def _default_call_llm(prompt: str, max_tokens: int = 2048) -> str:
             # Tool calls present — stringify them
             import json
             content = json.dumps(response.tool_calls, indent=2)
+        dt = time.monotonic() - t0
+        print(f"[nightwatch] llm-call done in {dt:.1f}s "
+              f"({len(content)} chars)", file=sys.stderr)
         return content or "ERROR: empty response from LLM"
     except Exception as e:
+        dt = time.monotonic() - t0
+        print(f"[nightwatch] llm-call FAILED after {dt:.1f}s: {e}",
+              file=sys.stderr)
         return f"ERROR: {e}"
 
 
@@ -250,6 +277,52 @@ def _discover_scripted_tasks() -> list[Task]:
         except Exception:
             pass
     return tasks
+
+
+def _extract_json_array(text: str) -> list:
+    """Extrai o primeiro array JSON completo do texto (tolerante).
+
+    Modelos fracos embrulham o array em prosa/cercas ```json. find/
+    rfind quebra com colchetes dentro de strings ou texto após o
+    array — aqui o matching respeita strings e escapes, com fallback
+    para objetos avulsos {...}.
+    """
+    start = text.find("[")
+    if start < 0:
+        return []
+    depth = 0
+    in_str = False
+    esc = False
+    for i in range(start, len(text)):
+        c = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif c == "\\":
+                esc = True
+            elif c == '"':
+                in_str = False
+            continue
+        if c == '"':
+            in_str = True
+        elif c == "[":
+            depth += 1
+        elif c == "]":
+            depth -= 1
+            if depth == 0:
+                try:
+                    data = json.loads(text[start:i + 1])
+                    return data if isinstance(data, list) else []
+                except json.JSONDecodeError:
+                    break
+    # Fallback: objetos avulsos
+    objs = []
+    for m in re.finditer(r"\{[^{}]*\"description\"\s*:\s*\"([^\"]+)\"[^{}]*\}", text):
+        try:
+            objs.append(json.loads(m.group(0)))
+        except json.JSONDecodeError:
+            continue
+    return objs
 
 
 def _discover_llm_tasks(call_llm_fn: Callable, project: str = "nixos-ai") -> list[Task]:
@@ -317,26 +390,40 @@ Focus on: error handling, code quality, security, missing tests, documentation, 
 Prioritize tasks that improve reliability and reduce technical debt.
 Return JSON array."""
 
-    # Call LLM with timeout protection
+    # Call LLM with timeout protection. 300s: prefill de prompt
+    # grande no Bonsai-GPU pode passar de 120s; timeout curto gerava
+    # loop de "LLM timeout" a noite inteira (observado 2026-09-11:
+    # retries a cada ~8min por 8h). Uma retentativa, depois desiste
+    # com honestidade (não loop infinito).
     import concurrent.futures
     response = ""
-    try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(call_llm_fn, prompt, 1500)
-            response = future.result(timeout=120)  # 2 min max for discovery
-    except concurrent.futures.TimeoutError:
-        print("[discovery] LLM timeout — skipping LLM discovery", file=sys.stderr)
-        return []
-    except Exception as e:
-        print(f"[discovery] LLM error: {e}", file=sys.stderr)
+    last_err: str | None = None
+    for attempt in (1, 2):
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(call_llm_fn, prompt, 1500)
+                response = future.result(timeout=300)
+            last_err = None
+            break
+        except concurrent.futures.TimeoutError as e:
+            last_err = f"timeout@{attempt}"
+            print(f"[discovery] LLM timeout (attempt {attempt}/2) — retrying once",
+                  file=sys.stderr)
+        except Exception as e:
+            print(f"[discovery] LLM error: {e}", file=sys.stderr)
+            return []
+    if last_err is not None:
+        print("[discovery] LLM timeout twice — skipping LLM discovery",
+              file=sys.stderr)
         return []
 
     tasks = []
     try:
-        start = response.find("[")
-        end = response.rfind("]") + 1
-        if start >= 0 and end > start:
-            items = json.loads(response[start:end])
+        items = _extract_json_array(response)
+        if not items:
+            print(f"[discovery] sem array parseável "
+                  f"({len(response)} chars)", file=sys.stderr)
+        else:
             for i, item in enumerate(items):
                 # LLM may return strings or dicts
                 if isinstance(item, str):
@@ -758,6 +845,21 @@ def _git_commit(message: str) -> str | None:
     except Exception:
         pass
     return None
+
+
+def _verify_completion_evidence(commit_sha: str | None,
+                                applied_files: list[str] | None) -> tuple[bool, str]:
+    """Veredito de evidência p/ fechar task (lição do UX-abismo).
+
+    DONE só com: commit real (sha não-vazio) + ≥1 arquivo aplicado.
+    Validator/review já passaram antes; isto impede o caso "complete
+    sem artefato" (commit vazio, sha None, lista vazia).
+    """
+    if not commit_sha:
+        return False, "sem commit (sha vazio)"
+    if not applied_files:
+        return False, "sem arquivos aplicados"
+    return True, ""
 
 
 def _git_revert(files: list[str] | None = None) -> None:
@@ -1319,7 +1421,18 @@ class Harness:
                 commit_sha = safety.merge_task_branch(branch)
                 cp.record_operation("commit", commit_sha is not None)
 
-                # ── Step 6: Complete ──
+                # ── Step 6: Complete (com veredito de evidência) ──
+                ev_ok, ev_why = _verify_completion_evidence(
+                    commit_sha, applied_files)
+                if not ev_ok:
+                    safety.abort_task_branch(branch)
+                    self._fail_task(
+                        task, f"evidence verdict: {ev_why}")
+                    self.notify(f"❌ *Evidence Verdict*\n{ev_why}")
+                    _log_progress({"task_id": task.id,
+                                   "status": "evidence_failed",
+                                   "reason": ev_why})
+                    return False
                 task.complete(commit_sha)
                 self.loop_detector.reset(task.id)  # Clear loop tracking on success
                 self.mission.total_tasks_completed += 1
