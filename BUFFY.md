@@ -1046,3 +1046,40 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
   complete — sem artefato, falha honesta + abort do branch.
 - Suite 1105/0. Rebuild OK; serviço 03:04 com código fresco
   (conferido no store j156...). Blueprint: v2/v3 Make intactos.
+
+## 42. SESSION NOTES (2026-09-11 — handoff p/ outro agente)
+
+MAPA RÁPIDO (valores de segredos NUNCA aqui; nomes + onde obter em
+guia-renamer-pro/docs/OPERACAO.md):
+- Supabase ref dipdkgefcsfskdsuhcek (SP). Functions: yampi-webhook
+  (paid/refused/cart/cancel+suspend, HMAC, sendEmail helper, signed
+  URL 90d via RELEASES_BUCKET) + validate-license. Secrets:
+  RESEND_API_KEY, RESEND_FROM=root, YAMPI_WEBHOOK_SECRET(wh_, NÃO
+  girado), RELEASES_BUCKET=guia-renamer-dist. RLS travado
+  (lockdown_rls.sql aplicado). Bucket novo guia-renamer-dist com
+  exe CI; bucket legado "Guia Renamer Dist" sobrando.
+- Make us2, team 750102, folder 80728, token em MAKE_API_KEY
+  (/etc/litellm.env). CLI: npx @makehq/cli (NÃO pacote make-cli).
+  v3 id 6233082 ATIVO diário (SerpApi→agg→Groq qwen3.6-27b→Sheets;
+  keys nos módulos). v2 6232705 inativo. Legados Apify inativos.
+  Blueprint sanitizado em plans/automancerz-prospeccao-v3-*.json.
+  SerpApi key só na sessão; Groq = GROQ_API_KEY (litellm.env).
+- Yampi alias automancerz: webhook Order Triggers (4 eventos),
+  API plena via User-Token+Secret (docs.yampi.com.br). Token API
+  GIRADO. Domínio ATIVO. Redirects pendentes.
+- Resend: send.* verificado, From raiz, reply-to gmail. Domínio
+  raiz verificado; DKIM2 pendente de recheck.
+- GitHub Kuchiriel/guia-renamer: Actions build Windows (tag v* +
+  upload Storage via secrets SUPABASE_*). gh autenticado
+  (hosts.yml). Tag v0.1.0 FALHOU no upload (diagnosticar).
+- Nightwatch: binário fresco no ar; 03:04 com report-telegram
+  (bot falha — sem token válido?). Melhorias aplicadas:
+  discipline, retry300, parse tolerante, evidence gate, patcher
+  diagnostics. Falta: heartbeat/timeout-hard, unificar patcher
+  no Agent. Protocolo manhã: journalctl + history.jsonl.
+- Suite 1105/0 host; sandbox-safe (conftest global, rg no check,
+  eval-judge=integration). rebuild-host.sh verde; clean.sh seguro.
+- Persona marketing (tabela oficial) + books RAG + judge 8-9/10.
+- PENDENTE usuário: cupom 100% e2e, service_role p/ uploads
+  futuros (ou dashboard), mover linhas legado p/ aba Legado,
+  nichos/cidades prospecção, voz/wakeword, Applio.
