@@ -1000,3 +1000,19 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
   {{6.data}} cru = struct rejeitado pelo Sheets 400).
 - v3 id 6233082 ATIVO, run real status 1 (sucesso). Blueprint
   sanitizado (sem keys) em plans/.
+
+## 39. SESSION NOTES (2026-09-11 madrugada — nightwatch observado)
+
+- Último output útil: 29/08 (só flags, nada commitado). Checkpoints
+  03-10/09 = discovery sem conclusão.
+- Serviço das 03:04 usa binário STALE do store (sem book-tools e sem
+  fixes de setembro). Rebuild do sistema pendente (com usuário).
+- Run supervisionado agora (código fresco, nixos-ai, 2 tasks/15min):
+  TRAVOU 20min sem escrever NADA (sem processo zumbi, sem commit,
+  history.jsonl intocado desde 29/08). Hipótese: hang em chamada
+  LLM/subprocesso sem timeout efetivo + history só gravado ao
+  concluir task (sem heartbeat).
+- Timer das 03:04 MANTIDO (pedido): pior caso = CPU idle queimada;
+  journal vira dado diagnóstico. Nada commita sem gates; sem push.
+- Melhorias enfileiradas (com usuário): heartbeat por fase no
+  history + timeout hard por task + rebuild .#jarvis pós-mudanças.
