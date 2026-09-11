@@ -389,7 +389,12 @@ def create_patch_from_llm(
     llm_response: str,
 ) -> PatchResult:
     """Parse LLM response and create structured patches."""
+    import sys
     patches = parse_llm_patch(llm_response)
+    if not patches:
+        print(f"[patcher] PARSE-ZERO: nenhum bloco === em "
+              f"{len(llm_response)} chars; head={llm_response[:200]!r}",
+              file=sys.stderr)
     
     if not patches:
         return PatchResult(
@@ -408,8 +413,13 @@ def create_patch_from_llm(
         else:
             result.files_failed.append(patch.path)
             result.errors.append(f"{patch.path}: {content_or_error}")
-    
+            print(f"[patcher] APPLY-FAIL {patch.path}: "
+                  f"{content_or_error[:160]}", file=sys.stderr)
+
     result.success = len(result.files_failed) == 0
+    if result.success:
+        print(f"[patcher] APPLY-OK {result.files_applied}",
+              file=sys.stderr)
     return result
 
 
