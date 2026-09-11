@@ -1083,3 +1083,23 @@ guia-renamer-pro/docs/OPERACAO.md):
 - PENDENTE usuário: cupom 100% e2e, service_role p/ uploads
   futuros (ou dashboard), mover linhas legado p/ aba Legado,
   nichos/cidades prospecção, voz/wakeword, Applio.
+
+## 43. SESSION NOTES (2026-09-11 — erros que não se repetem)
+
+ERROS COMETIDOS (registrar p/ qualquer agente):
+1. E-mail com placeholder: montei HTML com SIGNED_URL_AQUI e enviei
+   sem assert no href. REGRA: nenhum e-mail sai sem verificar que
+   todo href contém URL válida (assert 'http' em cada link).
+2. PowerShell `curl` = alias Invoke-WebRequest (AmbiguousParameter).
+   REGRA: no CI Windows usar curl.exe explícito ou Invoke-RestMethod.
+3. Supabase Storage POST não sobrescreve (falha silenciosa com -s).
+   REGRA: PUT-com-fallback-POST + nunca `-s` sem mostrar resposta
+   em step de deploy.
+4. Release GitHub 403: faltava `permissions: contents: write`.
+5. Chamar API externa ~10×/hora do mesmo IP = Cloudflare 1010
+   (bloqueio temporário). REGRA: espaçar chamadas de teste e ter
+   fallback manual (link pronto p/ o usuário reencaminhar).
+6. FORK-STATUS.md criados no repo errado (path relativo resolveu
+   p/ nixos-ai, não ~/projects). REGRA: conferir `pwd`/destino.
+7. Sauvola perde em scan limpo 300dpi (33→30): SOTA de binarização
+   mira documento degradado. Não aplicar sem A/B nos 53.
