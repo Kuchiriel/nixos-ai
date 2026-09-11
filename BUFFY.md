@@ -1031,3 +1031,18 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
   p/ os forks reais em ~/projects/. Dirt Solar commitado (dd4512b).
 - clean.sh reescrito: safe GC (atual+rollback, nunca -d, verifica
   antes/depois). Commit 58d8188.
+
+## 41. SESSION NOTES (2026-09-11 — nightwatch herdou o abismo)
+
+- Gap confirmado: nightwatch usava call_llm cru (sem discipline,
+  sem verdicts) — dev.py/Agent tinham tudo, harness nada.
+- Aplicado no choke point _default_call_llm (vale p/ discovery,
+  patcher, three_agent): TOOL_USE_DISCIPLINE + heartbeat stderr
+  (start/done/fail com tempo) + thinking já off.
+- Discovery: timeout 120→300 + 1 retry (loop de 8h resolvido por
+  construção) + parse tolerante _extract_json_array (cercas,
+  strings com colchetes, fallback objetos). Prova viva: 0→5 tasks.
+- Step 6: _verify_completion_evidence (sha + arquivos) antes do
+  complete — sem artefato, falha honesta + abort do branch.
+- Suite 1105/0. Rebuild OK; serviço 03:04 com código fresco
+  (conferido no store j156...). Blueprint: v2/v3 Make intactos.
