@@ -1163,3 +1163,17 @@ relatório Solar, sudo kill nightwatch se quiser, cupom-100% final.
   400-500 epochs/batch4/RMVPE/TensorBoard em RECEITA-JARVIS.md.
 - Modelo atual 62e = provável undertrained. Falta (usuário):
   rodar treino no Kaggle (UI) e trazer .pth/.index novos.
+
+## 48. SESSION NOTES (2026-09-12 — treino RVC Kaggle concluído)
+
+- Kernel v10 COMPLETE no T4x2: 300 epochs (step 3588), loss 24.7→14.5
+  ainda descendo (sem platô = sem overfit). Quota gasta ~4h (v8+v9+v10).
+- Export CLI da Applio NÃO gera modelo de inferência (só G_*). Extração
+  local via extract_model.py + 48000.json + ckpt["model"] →
+  Jarvis_300e_infer.pth (57MB) + v3.index. Lição: pipeline CLI precisa
+  do passo extract; doc oficial omite.
+- A/B mesma frase: 62e vs 300e soam igual, 300e mais limpo. Promovido
+  a oficial (wakeword.nix); 62e em ~/models/backup-62e/.
+- Kaggle CLI nixpkgs (1.8.3) IGNORA machine_shape em silêncio; usar
+  kvenv (/tmp, CLI 2.2.4) + --accelerator NvidiaTeslaT4. P100 é default
+  e torch 2.11 não tem sm_60 (falha silenciosa, exit 0 sem gerar nada).
