@@ -1153,3 +1153,13 @@ ONDE ESTÁ TUDO (persistido em disco/git):
 
 PENDENTE usuário: ~/.kaggle/kaggle.json (CLI; token solto NÃO serve),
 relatório Solar, sudo kill nightwatch se quiser, cupom-100% final.
+
+## 47. SESSION NOTES (2026-09-12 — kaggle+applio)
+
+- Correção registrada 2×: Kaggle moderno = API tokens KGAT_
+  (~/.kaggle/access_token) com CLI >= 1.8 (nixpkgs 1.8.3 OK).
+  kaggle.json é LEGADO. Pesquisar antes de recomendar (regra).
+- Dataset jarvis: 7 wavs, 2.8min, 48kHz, RMS ok. TINY → receita
+  400-500 epochs/batch4/RMVPE/TensorBoard em RECEITA-JARVIS.md.
+- Modelo atual 62e = provável undertrained. Falta (usuário):
+  rodar treino no Kaggle (UI) e trazer .pth/.index novos.
