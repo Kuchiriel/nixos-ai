@@ -1103,3 +1103,11 @@ ERROS COMETIDOS (registrar p/ qualquer agente):
    p/ nixos-ai, não ~/projects). REGRA: conferir `pwd`/destino.
 7. Sauvola perde em scan limpo 300dpi (33→30): SOTA de binarização
    mira documento degradado. Não aplicar sem A/B nos 53.
+
+## 44. SESSION NOTES (2026-09-12 — backlog Make↔JARVIS)
+
+- Decisão: Make vira MCP do JARVIS (wrapper list/get/run/logs sobre
+  a API us2; usar npx @makehq/cli como referência de endpoints).
+  Fase 2: webhook inbound Make→JARVIS (lead respondeu → qualifica).
+- Missão docs enviada ao Solar (ingestão total + contradições +
+  obsoletos + índice; sem código/commit).
