@@ -971,6 +971,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_nw.add_argument("--report-telegram", action="store_true", help="envia status pro Telegram")
     p_nw.add_argument("--dry-run", action="store_true", help="mostra o que faria sem executar")
     p_nw.add_argument("--only", nargs="+", help="executar apenas estas categorias")
+    p_nw.add_argument("--projects", nargs="+", default=None,
+                      help="projetos-alvo (default: auto-descobre TUDO — nunca usar em produção sem filtrar)")
     p_nw.set_defaults(func=_cmd_nightwatch)
 
     # watchdog — monitoramento proativo com TTS
@@ -1099,6 +1101,7 @@ def _cmd_nightwatch(args: argparse.Namespace) -> int:
         max_minutes=60,
         report_telegram=args.report_telegram,
         dry_run=args.dry_run,
+        projects=args.projects,
     )
     # Exit 0 on clean completion (even with zero commits — pause, skips
     # and empty queues are normal states, not failures; a failing exit

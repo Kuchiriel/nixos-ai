@@ -603,6 +603,86 @@ def _resolve_file_path(path: str) -> Path:
     return project_root / path  # Return best guess
 
 
+def _request_json_patch(
+    task_description: str,
+    file_contents: dict[str, str],
+) -> tuple[bool, list, list[str]]:
+    """Patch via grammar JSON (determinístico) — antes do texto livre.
+
+    Evidência (forense 2026-09-12): Bonsai falha 3 modos no formato
+    === (cercas, truncamento, sem wrapper) mas tem 35/35 em JSON com
+    grammar. JSON parseia sempre; o risco restante é só o conteúdo
+    (old_text inexato → apply falha honesto, não parse).
+    """
+    from nightwatch.patcher import FilePatch, PatchHunk
+    schema = {"response_format": {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "patches",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "patches": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "path": {"type": "string"},
+                                "old_text": {"type": "string"},
+                                "new_text": {"type": "string"},
+                            },
+                            "required": ["path", "old_text",
+                                         "new_text"],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                "required": ["patches"],
+                "additionalProperties": False,
+            },
+        },
+    }}
+    files_bit = "\n\n".join(
+        f"=== FILE: {p} ===\n```\n{c[:4000]}\n```"
+        for p, c in list(file_contents.items())[:3])
+    prompt = (
+        f"TASK: {task_description}\n\nFILES:\n{files_bit}\n\n"
+        "Return small hunks (<=15 lines each), old_text copied "
+        "character-for-character. If no change needed, return "
+        '{"patches": []}.')
+    try:
+        from jarvis.providers.llm import LLMClient
+        from jarvis.core.config import Config
+        import time as _t
+        print("[patcher] json-patch start (grammar)", file=sys.stderr)
+        _t0 = _t.monotonic()
+        resp = LLMClient(Config()).chat_with_tools(
+            messages=[
+                {"role": "system",
+                 "content": "You emit patch JSON only."},
+                {"role": "user", "content": prompt}],
+            temperature=0.0,
+            max_tokens=1024,
+            extra=schema,
+        )
+        print(f"[patcher] json-patch done in {_t.monotonic() - _t0:.1f}s",
+              file=sys.stderr)
+        raw = resp.content or ""
+        data = json.loads(raw[raw.index("{"):raw.rindex("}") + 1])
+        out = []
+        for item in data.get("patches", []):
+            fp = FilePatch(path=item.get("path", ""))
+            fp.hunks.append(PatchHunk(
+                old_text=item.get("old_text", ""),
+                new_text=item.get("new_text", "")))
+            out.append(fp)
+        return True, out, []
+    except Exception as e:
+        print(f"[patcher] json-patch falhou ({e}); fallback texto",
+              file=sys.stderr)
+        return False, [], [f"json-patch: {e}"]
+
+
 def _request_structured_patch(
     task_description: str,
     target_files: list[str],
@@ -716,6 +796,8 @@ full file content here
 
 RULES:
 - old text MUST be an exact substring of the file
+- NEVER echo whole files: each hunk ≤15 lines, copied character-for-character
+- Small hunks apply reliably; big echoes NEVER match — prefer 3 small hunks over 1 big
 - To CREATE: use --- content --- with the full file content
 - You can have multiple hunks per file
 - Return only files that need changes. If no changes needed, return "NO_CHANGES"."""
@@ -730,6 +812,15 @@ FILES:
 {"\n\n⚠️ The following files DO NOT EXIST yet. The task requires creating them.\nYou MUST use the CREATE format below for these files.\n" + chr(10).join(f"  - {p}" for p in missing_files) + chr(10) if missing_files else ""}
 {format_block}"""
 
+    # Caminho 1 (determinístico): JSON com grammar ANTES do texto
+    # (1 chamada LLM em vez de 2). Só usa se gerar ≥1 hunk com
+    # old_text não-vazio; senão cai no texto livre abaixo.
+    json_ok, json_patches, _ = _request_json_patch(
+        task_description, file_contents)
+    if json_ok and any(h.old_text.strip()
+                       for p in json_patches for h in p.hunks):
+        return True, json_patches, []
+
     response = call_llm_fn(prompt, 4096)
 
     if "ERROR" in response:
@@ -741,7 +832,7 @@ FILES:
             return _request_file_creation(task_description, missing_files, call_llm_fn)
         return True, [], []
 
-    # Parse structured patches
+    # Caminho 2 (legado): texto livre com parse tolerante.
     patches = parse_llm_patch(response)
 
     if not patches:

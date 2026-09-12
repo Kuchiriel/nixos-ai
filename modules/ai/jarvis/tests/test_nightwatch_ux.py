@@ -105,3 +105,48 @@ def test_discovery_parses_fenced_response() -> None:
         lambda p, m: "Segue:\n```json\n" + json.dumps(arr) + "\n```\nFim.",
         "nixos-ai")
     assert len(tasks) == 1
+
+
+def test_parse_strips_fences() -> None:
+    """Bonsai embrulha código em ``` — parser deve ignorar (151 fails)."""
+    from nightwatch.patcher import parse_llm_patch
+    resp = ("=== FILE: a.py ===\n--- old text ---\n```python\nx = 1\n```\n"
+            "--- new text ---\n```python\nx = 2\n```\n--- end ---\n")
+    ps = parse_llm_patch(resp)
+    assert len(ps) == 1 and len(ps[0].hunks) == 1
+    assert "```" not in ps[0].hunks[0].old_text
+    assert "x = 2" in ps[0].hunks[0].new_text
+
+
+def test_json_patch_success(monkeypatch) -> None:
+    from nightwatch import harness as H
+
+    class FakeResp:
+        content = ('{"patches": [{"path": "a.py", "old_text": "x = 1", '
+                   '"new_text": "x = 2"}]}')
+        tool_calls = []
+
+    class FakeClient:
+        def __init__(self, cfg):
+            pass
+
+        def chat_with_tools(self, messages, **kw):
+            assert "response_format" in kw.get("extra", {})  # grammar exigida
+            return FakeResp()
+
+    monkeypatch.setattr("jarvis.providers.llm.LLMClient", FakeClient)
+    ok, ps, errs = H._request_json_patch("troca x", {"a.py": "x = 1"})
+    assert ok and len(ps) == 1
+    assert ps[0].hunks[0].old_text == "x = 1"
+
+
+def test_json_patch_fallback_on_error(monkeypatch) -> None:
+    from nightwatch import harness as H
+
+    class BadClient:
+        def __init__(self, cfg):
+            raise RuntimeError("down")
+
+    monkeypatch.setattr("jarvis.providers.llm.LLMClient", BadClient)
+    ok, ps, errs = H._request_json_patch("troca x", {"a.py": "x = 1"})
+    assert not ok and ps == [] and errs

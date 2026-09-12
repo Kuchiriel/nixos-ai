@@ -100,8 +100,13 @@ def parse_llm_patch(response: str) -> list[FilePatch]:
     current_patch = None
     current_hunk = None
     mode = None  # None, "old", "new"
-    
-    for line in response.split("\n"):
+
+    # Bonsai (e outros fracos) embrulham o código em cercas ```python
+    # dentro dos blocos old/new — o parser as engolia como texto literal
+    # e 151 tasks falharam com "Could not parse" (forense 2026-09-12).
+    lines = [ln for ln in response.split("\n")
+             if not ln.strip().startswith("```")]
+    for line in lines:
         # New file patch (modify existing)
         if line.startswith("=== FILE: ") and line.endswith(" ==="):
             if current_patch and current_patch.hunks:
@@ -177,6 +182,12 @@ def parse_llm_patch(response: str) -> list[FilePatch]:
                     current_hunk.new_text += "\n" + line
                 else:
                     current_hunk.new_text = line    # Don't forget last patch
+    # EOF sem "--- end ---" (truncamento ou modelo que não fecha):
+    # finaliza hunk aberto com old+new em vez de descartar tudo.
+    if current_hunk is not None and current_hunk.old_text and current_hunk.new_text:
+        if current_patch is not None:
+            current_patch.hunks.append(current_hunk)
+        current_hunk = None
     if current_patch and current_patch.hunks:
         patches.append(current_patch)
 

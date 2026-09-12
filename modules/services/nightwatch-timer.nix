@@ -34,7 +34,9 @@ in {
         "JARVIS_PROJECT_ROOT=${projectRoot}"
         "PATH=/run/current-system/sw/bin:${pkgs.git}/bin:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.findutils}/bin:${pkgs.gnused}/bin"
       ];
-      ExecStart = "${jarvisPackage}/bin/jarvis nightwatch --tasks 10 --report-telegram";
+      ExecStart = "${jarvisPackage}/bin/jarvis nightwatch --tasks 10 --report-telegram --projects nixos-ai";
+      # ^ escopo explícito: auto-discover varria TUDO (incl. repos de
+      # produção como guia-renamer-pro). Timer só toca nixos-ai.
       WorkingDirectory = projectRoot;
       User = "nixos";
 
