@@ -720,8 +720,8 @@ in {
           "JARVIS_RVC_PYTHON=/tmp/opencode/tts-venv/bin/python"
           "JARVIS_RVC_APP_DIR=/tmp/opencode/applio"
           "JARVIS_RVC_LD_PATH=${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.zlib}/lib"
-          "JARVIS_VOICE_CLONE_MODEL=${config.home.homeDirectory}/models/Jarvis_62e_434s_best_epoch.pth"
-          "JARVIS_VOICE_CLONE_INDEX=${config.home.homeDirectory}/models/added_Jarvis_v2.index"
+          "JARVIS_VOICE_CLONE_MODEL=${config.home.homeDirectory}/models/Jarvis_300e_infer.pth"
+          "JARVIS_VOICE_CLONE_INDEX=${config.home.homeDirectory}/models/added_Jarvis_v3.index"
         ];
       };
       Install = {
