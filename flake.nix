@@ -205,7 +205,9 @@
           python313Packages.ebooklib  
           python313Packages.beautifulsoup4  
           python313Packages.kokoro  
-          python313Packages.soundfile  
+          python313Packages.soundfile
+          python313Packages.playwright
+          playwright-driver  
           
           # Nomes corrigidos também no devShell para evitar quebra de variáveis
           kilo

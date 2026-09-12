@@ -892,11 +892,16 @@ TOOLS (21 tools disponíveis):
 --- Arquivos ---
 - read_file(path, offset?, limit?) → ler ANTES de editar
 - write_file(path, content) → criar/escrever arquivo
+  (cria pastas-pai sozinhas; p/ criar estrutura, chame write_file
+  com o caminho COMPLETO de cada arquivo; mkdir/touch via shell
+  são bloqueados)
 - str_replace(path, old, new) → old EXATO; vazio = criar
 - list_directory(path, max_depth?) → listar diretório
 --- Shell ---
 - execute_shell(cmd) → bash (ls/grep/pytest/git/curl)
   Pipes e ; são permitidos: find ... -o ... | head -20
+- browser(action, url?, selector?, text?) → navegador headless
+  open=url (leitura), click/fill=selector (+text; pedem aprovação)
 --- Busca ---
 - semantic_search(query, top_k) → busca semântica
 - rag_search(query) → busca RAG no codebase
@@ -1281,6 +1286,14 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
         except Exception as e:
             return f"ERROR: {e}", None
 
+    # ── Browser (Playwright headless) ──
+    if name == "browser":
+        try:
+            from jarvis.core.browser import handle_browser
+            return handle_browser(args, approve=approve), None
+        except Exception as e:
+            return f"ERROR: {e}", None
+
     # ── Multi-AI Reader ──
     if name == "read_ai_conversation":
         try:
@@ -1347,6 +1360,9 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
             lines.append(f"  {icon} {e['name']}")
         return "\n".join(lines), diff
     elif "path" in result:
+        if name == "write_file":
+            return (f"OK: arquivo escrito em {result['path']} "
+                    f"({result.get('bytes', 0)} bytes)"), diff
         strategy = result.get("strategy", "")
         replacements = result.get("replacements", 1)
         return f"OK: {replacements} substituição(ões) em {result['path']} ({strategy})", diff
@@ -1450,7 +1466,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "write_file",
-                "description": "Cria/escreve arquivo completo. Backup automático + AST guard.",
+                "description": "Cria/escreve arquivo completo. Backup automático + AST guard. Cria pastas-pai ausentes: para criar uma estrutura de pastas, chame write_file com o caminho completo de cada arquivo (mkdir via shell é bloqueado).",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1682,6 +1698,27 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 },
             },
         },
+        {
+            "type": "function",
+            "function": {
+                "name": "browser",
+                "description": ("Navegador headless (somente leitura de páginas + "
+                                "interação simples). Ações: open (url), click "
+                                "(selector CSS), fill (selector, text). Use para "
+                                "verificar sites locais e ler conteúdo web. "
+                                "click/fill pedem aprovação."),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string", "description": "open, click ou fill"},
+                        "url": {"type": "string", "description": "URL (para open)"},
+                        "selector": {"type": "string", "description": "Seletor CSS (para click/fill)"},
+                        "text": {"type": "string", "description": "Texto (para fill)"},
+                    },
+                    "required": ["action"],
+                },
+            },
+        },
     ]
     if persona is None or not getattr(persona, "tools", None):
         return tools  # jarvis/default: todas
@@ -1833,6 +1870,21 @@ def _to_tool_calls(actions: list[dict[str, Any]] | None) -> list[dict[str, Any]]
     ]
 
 
+def _looks_like_promise(content: str) -> bool:
+    """Texto promete ação futura sem tool call? (F1 abismo).
+
+    PT-BR e EN, futuro imediato + verbo de ação. Limitado a 2 nudges
+    por run (contador no loop) para nunca virar loop infinito.
+    """
+    import re as _re
+    pats = (r"\bvou (criar|fazer|executar|gerar|verificar|buscar|ler|escrever|rodar|corrigir|adicionar|remover|atualizar|tentar)\b",
+            r"\birei (criar|fazer|executar|gerar|verificar|tentar)\b",
+            r"\blet me (create|make|run|check|fix|write|read)\b",
+            r"\bi('ll| will) (create|make|run|check|fix|write|read)\b")
+    low = content.lower()
+    return any(_re.search(p, low) for p in pats)
+
+
 # ---------------------------------------------------------------------------
 # Loop de execução de agente — ÚNICO em todo o projeto (NOVO em v2.2)
 #
@@ -1868,6 +1920,7 @@ def _run_agent_loop(
     from jarvis.core.loop_detector import LoopDetector, RecoveryAction
     detector = LoopDetector()
     successes = 0
+    _run_agent_loop._nudges = 0  # type: ignore[attr-defined]
 
     for turn in range(max_turns):
         est = _estimate_tokens(messages)
@@ -1932,6 +1985,22 @@ def _run_agent_loop(
 
         if not tool_calls:
             if content:
+                # Promise-catcher (F1 abismo): texto que promete ação
+                # futura ("vou criar...") sem tool call encerrava com
+                # rc=0 e nada feito. Devolve 1 nudge limitado em vez de
+                # aceitar o falso DONE.
+                if _looks_like_promise(content):
+                    _nudges = getattr(_run_agent_loop, "_nudges", 0)
+                    if _nudges < 2:
+                        _run_agent_loop._nudges = _nudges + 1  # type: ignore[attr-defined]
+                        console.print("[dim]  (promessa sem ação — pedindo execução)[/]")
+                        messages.append({
+                            "role": "system",
+                            "content": ("Você disse que faria algo mas não "
+                                        "chamou nenhuma tool. Execute AGORA "
+                                        "com a tool adequada, sem narrar."),
+                        })
+                        continue
                 console.print(Panel(
                     Markdown(content), title="🤖", title_align="left", border_style="jarvis",
                 ))

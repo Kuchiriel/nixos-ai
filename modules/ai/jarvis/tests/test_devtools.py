@@ -417,3 +417,38 @@ def test_semantic_search_tool_exists() -> None:
     """semantic_search está no DEV_TOOLS."""
     names = [t["function"]["name"] for t in DEV_TOOLS]
     assert "semantic_search" in names
+
+
+def test_write_file_recusa_diretorio(tmp_path, monkeypatch) -> None:
+    """write_file em path de diretório: erro honesto + hint (F2)."""
+    from jarvis.core import devtools as D
+    from jarvis.core.paths import use_project_root
+    monkeypatch.chdir(tmp_path)
+    d = tmp_path / "pasta"
+    d.mkdir()
+    with use_project_root(tmp_path):
+        res = D.write_file(str(d), "x")
+    assert res["ok"] is False
+    assert "diretório" in res["error"]
+    assert "hint" in res
+
+
+def test_write_file_cria_pais(tmp_path, monkeypatch) -> None:
+    """write_file cria diretórios-pais ausentes (F2)."""
+    from jarvis.core import devtools as D
+    from jarvis.core.paths import use_project_root
+    monkeypatch.chdir(tmp_path)
+    with use_project_root(tmp_path):
+        res = D.write_file(str(tmp_path / "a" / "b" / "f.txt"), "oi")
+    assert res["ok"] is True
+    assert (tmp_path / "a" / "b" / "f.txt").read_text() == "oi"
+
+
+def test_looks_like_promise() -> None:
+    import sys
+    sys.path.insert(0, "modules/ai/jarvis/src")
+    from jarvis.cli.dev import _looks_like_promise
+    assert _looks_like_promise("Vou criar a pasta e os arquivos agora.")
+    assert _looks_like_promise("I will check the logs.")
+    assert not _looks_like_promise("A pasta foi criada com sucesso.")
+    assert not _looks_like_promise("Não encontrei o arquivo.")

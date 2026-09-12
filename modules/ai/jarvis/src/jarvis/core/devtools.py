@@ -491,6 +491,21 @@ def write_file(path: str, content: str, backup: bool = True) -> dict[str, Any]:
     try:
         target = _safe_path(path, write=True)
 
+        # Caminho é diretório existente: recusar com instrução (nunca
+        # criar arquivo em cima de diretório — observado: modelo
+        # escreveu nomes de arquivos COMO CONTEÚDO num path de pasta).
+        if target.is_dir():
+            return {"ok": False,
+                    "error": f"'{path}' é um diretório, não arquivo",
+                    "hint": "Para criar arquivos DENTRO dele, chame "
+                            "write_file com o caminho completo de cada "
+                            "arquivo (ex.: dir/a.txt)."}
+        # Cria diretórios-pais ausentes (modelo não tem tool mkdir).
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            return {"ok": False, "error": f"mkdir falhou: {e}"}
+
         from nightwatch.safe_editor import SafeEditor
         res = SafeEditor().apply_edit(target, content)
         if not res.success:
