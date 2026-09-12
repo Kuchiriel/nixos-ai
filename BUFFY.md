@@ -1128,3 +1128,28 @@ ERROS COMETIDOS (registrar p/ qualquer agente):
 - Scope: --projects no CLI + timer só nixos-ai (produção
   guia-renamer-pro estava no alvo!). Rebuild verde.
 - Tabela 2-loops + convergência: relatório final pendente.
+
+## 46. SESSION NOTES (2026-09-12 — handoff compactação 65%)
+
+VOLÁTIL (morre na compactação — registrado aqui):
+- SerpApi key 50616cee...: SÓ nesta sessão; já injetada nos módulos
+  HTTP do cenário v3 (6233082). Não precisa dela de novo salvo para
+  novos cenários via CLI (aí pede de novo).
+- Retry-resend loop VIVO (PID background, /tmp/opencode/retry-resend.sh,
+  tenta 20min até 6h; última 09:56 BLOQUEADO). Log em
+  /tmp/opencode/retry-resend.log. /tmp SOBREvive a compactação
+  (não a reboot).
+- Lab :8931 VIVO (site/server.py, estado clicks=2). Suite XD usa ele.
+- Qwen :18081 MORTO (kill feito). Receita de subida em BUFFY §30.
+- Nightwatch: run das 03:04 ainda vivo? ver com
+  `pgrep -f 'nightwatch --tasks'` + journal; kill exige sudo.
+
+ONDE ESTÁ TUDO (persistido em disco/git):
+- Código: commits até 32f590f (nixos-ai) + guia-renamer no GitHub.
+- Mapa sessão: BUFFY §42, §45; convergência em
+  docs/audit/NIGHT-SHIFT-2-CONVERGENCE.md; reality lab §40-doc.
+- Make v3 blueprint sanitizado: plans/automancerz-prospeccao-v3-*.json.
+- GuiaRenamer ops: guia-renamer-pro/{AGENTS.md,docs/OPERACAO.md,scripts/operacao/}.
+
+PENDENTE usuário: ~/.kaggle/kaggle.json (CLI; token solto NÃO serve),
+relatório Solar, sudo kill nightwatch se quiser, cupom-100% final.
