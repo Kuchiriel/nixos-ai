@@ -1111,3 +1111,20 @@ ERROS COMETIDOS (registrar p/ qualquer agente):
   Fase 2: webhook inbound Make→JARVIS (lead respondeu → qualifica).
 - Missão docs enviada ao Solar (ingestão total + contradições +
   obsoletos + índice; sem código/commit).
+
+## 45. SESSION NOTES (2026-09-12 shift 2 — convergência parcial)
+
+- Noite 03:04: 6.5h, 151× "Could not parse", 0 commits. GPU queimada
+  à toa (Bonsai residente normal; custo foi inferência inútil).
+- Kill exige sudo (anotado p/ usuário).
+- Causa raiz parse: Bonsai emite cercas ``` + não fecha bloco +
+  ecoa arquivo inteiro (3 modos). Fixes: strip cercas, finaliza
+  hunk aberto no EOF, prompt small-hunks.
+- A/B Qwen-CPU: micro OK, realista TIMEOUT (CPU não serve prompt
+  grande). Qwen-GPU exigiria mexer no :8080 (adiado c/ motivo).
+- Solução estrutural: _request_json_patch via grammar (35/35
+  provado) primeiro, texto como fallback. Parse determinístico
+  provado ao vivo (1.1s); conteúdo ruim cai no validator (correto).
+- Scope: --projects no CLI + timer só nixos-ai (produção
+  guia-renamer-pro estava no alvo!). Rebuild verde.
+- Tabela 2-loops + convergência: relatório final pendente.
