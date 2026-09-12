@@ -70,3 +70,22 @@ timeout de primeira chamada pendente (Nix + rebuild, com usuário).
 
 A/B B2 no Qwen (mesmo driver, mesma task) → decide se F6 é
 harness (descrição/aprovação) ou modelo. Depois: F1-retest T3.
+
+## BATERIA FINAL (00:40, bonsai, driver+aprovação+fixes)
+
+- 11/12, mean 2.2 turns, mean 3.8s, p95 5.7s, false_done 1 (só T3).
+- B2/B3 com verificação SERVIDOR independente (/state): clicks e
+  fills registrados fora do browser do modelo. Critério E: OK.
+- T3 0/5 determinístico no modo de falha (arquivo-no-lugar-da-pasta
+  ou promessa). Tarefa ambígua sem nomes + sem mkdir tool = limite
+  arquitetural, não estocástico.
+- F6 resolvido: causa = approval (click exigia flag, modelo ou
+  alucinava ou mendigava). Fix: Confirm.ask interativo no REPL.
+  Qwen A/B: NÃO executado (Qwen-CPU não serve o prompt gigante do
+  dev; GPU exigiria mexer no :8080 à noite). UNVERIFIED c/ motivo.
+- Router: descarrega em idle; primeira chamada paga minutos.
+  TODO declarativo (warmup/timeout) documentado, sem execução.
+- World-state: scripts/ux_world.py (filesystem + /state servidor).
+  NÃO é tool do modelo (benchmark-side).
+- Suite: scripts/ux-suite.py (T1-T9, B1-B3) + ux_driver.py
+  (aprovação auto-respondida e registrada).

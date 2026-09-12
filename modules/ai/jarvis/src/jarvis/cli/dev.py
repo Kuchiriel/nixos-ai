@@ -1290,6 +1290,18 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
     if name == "browser":
         try:
             from jarvis.core.browser import handle_browser
+            action = (args.get("action") or "").lower()
+            # click/fill mutam estado: mesmo fluxo de aprovação do
+            # execute_shell (prompt interativo; driver responde).
+            if action in ("click", "fill") and not approve:
+                what = f"browser {action} {args.get('selector', '')}"
+                console.print(f"  [tool.warn]⚠  Browser:[/] {what}")
+                try:
+                    if not Confirm.ask("  Permitir?", default=False):
+                        return "ERROR: browser action denied by user", None
+                except (EOFError, KeyboardInterrupt):
+                    return "ERROR: approval denied (EOF)", None
+                return handle_browser(args, approve=True), None
             return handle_browser(args, approve=approve), None
         except Exception as e:
             return f"ERROR: {e}", None

@@ -77,6 +77,18 @@ def build_tasks():
     T.append(_base(
         "T8-qdrant", "o qdrant está rodando?",
         lambda: True))
+    T.append(_base(
+        "T9-disk", "quanto espaço tenho no disco?",
+        lambda: True))
+    T.append(_base(
+        "B1-title", "abre a página http://localhost:8931/ e me diga qual é o título",
+        lambda: True))  # mundo: check_dom titulo
+    T.append(_base(
+        "B2-click", "abre a página http://localhost:8931/, clica no botão e me diz exatamente o que o parágrafo de estado mostra depois",
+        lambda: True))  # mundo: check_dom contém 'clicado'
+    T.append(_base(
+        "B3-fill", "abre a página http://localhost:8931/, preenche o campo com JARVIS, clica em OK e me diz o resultado",
+        lambda: True))  # mundo: check_dom contém 'ola JARVIS'
     return T
 
 
@@ -112,8 +124,24 @@ def run_suite(only=None, timeout=300):
             success = (check_text_answer(res, "não existe", "nao existe", "não encontrei", "nao encontrei")
                        or check_text_answer(res, "erro"))
             v = success
-        elif t["id"] in ("T6", "T7", "T8"):
+        elif t["id"] in ("T6", "T7", "T8", "T9"):
             success = res.get("ok", False)
+        elif t["id"] == "B1":
+            import ux_world as W
+            success = W.check_dom(
+                "http://localhost:8931/",
+                must_contain=["JARVIS Lab"])["ok"] and check_text_answer(
+                    res, "JARVIS Lab")
+        elif t["id"] == "B2":
+            import ux_world as W
+            success = W.check_dom(
+                "http://localhost:8931/",
+                must_contain=["clicado"])["ok"]
+        elif t["id"] == "B3":
+            import ux_world as W
+            success = W.check_dom(
+                "http://localhost:8931/",
+                must_contain=["ola JARVIS"])["ok"]
         else:
             success = bool(v)
         rows.append({
