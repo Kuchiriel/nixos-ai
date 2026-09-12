@@ -41,6 +41,7 @@ from jarvis.core.vision import VISION_TOOL, handle_capture, observe_screen
 from jarvis.core.chatgpt_reader import CHATGPT_READER_TOOL, handle_chatgpt_read
 from jarvis.core.multi_ai_reader import MULTI_AI_READER_TOOL, read_ai_conversation
 from jarvis.core.hackmd import HACKMD_TOOLS, list_notes as hackmd_list, get_note as hackmd_get, create_note as hackmd_create, update_note as hackmd_update, sync_local_to_hackmd
+from jarvis.core.make_ops import MAKE_TOOLS, handle_make
 
 
 import subprocess
@@ -299,6 +300,7 @@ JARVIS_TOOLS = [
     },
     MULTI_AI_READER_TOOL,
     *HACKMD_TOOLS,
+    *MAKE_TOOLS,
     # Vault Sync tools
     {
         "name": "jarvis_vault_sync_obsidian",
@@ -569,6 +571,9 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
         if name == "jarvis_hackmd_sync":
             result = sync_local_to_hackmd(args.get("path", ""), args.get("title"))
             return json.dumps(result, indent=2)
+
+        if name.startswith("jarvis_make_"):
+            return handle_make(name, args)
 
         if name == "jarvis_nix_eval":
             expr = args.get("expr", "")
