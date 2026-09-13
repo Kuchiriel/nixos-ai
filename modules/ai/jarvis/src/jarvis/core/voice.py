@@ -454,7 +454,7 @@ def speak(
     clone: bool = False,
     speed: float | None = None,
     pitch: int | None = None,
-    base: str = "kokoro",
+    base: str | None = None,
     rvc: str | None = None,
     rvc_index: str | None = None,
 ) -> str:
@@ -495,18 +495,26 @@ def speak(
         # Auto-detect language from text content
         lang_code = _detect_lang_code(text)
         voice_path = _voice_for_lang(lang_code, voice)
-        kmodel, pipeline = _get_pipeline(config_path, model_path, lang_code)
+        if base is None:
+            base = os.environ.get("JARVIS_TTS_BASE", "antonio")
+        use_edge = base == "antonio"
+        kmodel, pipeline = (None, None)
+        if not use_edge:
+            kmodel, pipeline = _get_pipeline(config_path, model_path, lang_code)
         out_dir = Path(_model_dir()) / "tts"
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / f"jarvis_tts_{abs(hash(text)) % 10**9}.wav"
 
-        if base == "antonio":
-            # Base Edge TTS (jovem, sem Kokoro). Pula o resto do pipeline Kokoro.
+        if use_edge:
+            # Base Edge TTS (jovem, sem Kokoro). Fallback p/ Kokoro se offline.
             edge_wav = _edge_base_wav(text, out_path)
-            if edge_wav.startswith("ERROR"):
-                return edge_wav
-            out_path = Path(edge_wav)
-        else:
+            if not edge_wav.startswith("ERROR"):
+                out_path = Path(edge_wav)
+            else:
+                print(f"[speak] edge falhou ({edge_wav[:80]}), fallback kokoro", flush=True)
+                use_edge = False
+                _, pipeline = _get_pipeline(config_path, model_path, lang_code)
+        if not use_edge:
             if speed is None:
                 # Auto-emoção clampada: 1.2 (urgent, ex. "agora" na resposta) soava
                 # "rápida demais" e 0.9 arrastada (forense 2026-09). --speed passa direto.
@@ -889,7 +897,7 @@ def main_tts(argv: list[str] | None = None) -> int:
     parser.add_argument("--clone", action="store_true", help="converte p/ timbre RVC (JARVIS_VOICE_CLONE_MODEL)")
     parser.add_argument("--speed", type=float, default=None, help="velocidade base Kokoro (padrão: emoção; clone aplica ×0.9)")
     parser.add_argument("--pitch", type=int, default=None, help="semitons RVC (-12..12; default 0 = neutro)")
-    parser.add_argument("--base", default="kokoro", choices=["kokoro", "antonio"],
+    parser.add_argument("--base", default=None, choices=["kokoro", "antonio"],
                         help="voz base: kokoro (local) ou antonio (Edge TTS, jovem)")
     parser.add_argument("--rvc", default=None,
                         help="timbre RVC: jarvis|klein|silver, path .pth, ou vazio = env atual")

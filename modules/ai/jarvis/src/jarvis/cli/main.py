@@ -696,7 +696,7 @@ def _cmd_speak(args: argparse.Namespace) -> int:
         argv += ["--speed", str(args.speed)]
     if args.pitch is not None:
         argv += ["--pitch", str(args.pitch)]
-    if getattr(args, "base", "kokoro") != "kokoro":
+    if getattr(args, "base", None):
         argv += ["--base", args.base]
     if getattr(args, "rvc", None):
         argv += ["--rvc", args.rvc]
@@ -940,7 +940,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_speak.add_argument("--clone", action="store_true", help="converte p/ timbre RVC do personagem")
     p_speak.add_argument("--speed", type=float, default=None, help="velocidade base Kokoro")
     p_speak.add_argument("--pitch", type=int, default=None, help="semitons RVC no clone (default 0)")
-    p_speak.add_argument("--base", default="kokoro", choices=["kokoro", "antonio"],
+    p_speak.add_argument("--base", default=None, choices=["kokoro", "antonio"],
                          help="voz base: kokoro (local) ou antonio (Edge TTS, jovem)")
     p_speak.add_argument("--rvc", default=None,
                          help="timbre RVC: jarvis|klein|silver, path .pth, ou vazio = env atual")
