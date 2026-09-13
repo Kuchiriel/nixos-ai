@@ -131,9 +131,12 @@ def _edge_base_wav(text: str, out_path: Path, voice: str = EDGE_VOICE_DEFAULT,
     if binary is None or ("/" not in binary and shutil.which(binary) is None):
         return "ERROR: edge-tts não instalado (pip install edge-tts)"
     mp3 = out_path.with_suffix(".edge.mp3")
+    rstr = str(rate)
+    if rstr and not rstr.endswith("%"):
+        rstr += "%"
     cmd = [binary, "--voice", voice, "--text", text, "--write-media", str(mp3)]
-    if rate:
-        cmd += ["--rate", rate]
+    if rstr:
+        cmd += ["--rate", rstr]
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     if r.returncode != 0 or not mp3.exists():
         return f"ERROR: edge-tts falhou: {(r.stderr or '')[:150]}"
@@ -985,7 +988,7 @@ def main_tts(argv: list[str] | None = None) -> int:
     parser.add_argument("--rvc", default=None,
                         help="timbre RVC: jarvis|klein|silver, path .pth, ou vazio = env atual")
     parser.add_argument("--rvc-index", default=None, help="index .index (só com --rvc=path)")
-    parser.add_argument("--rate", default=None, help="velocidade Edge (ex: -10%%, +10%%; só base antonio)")
+    parser.add_argument("--rate", default=None, help="velocidade Edge (ex: -10; use =, ex: --rate=-10; só base antonio)")
     args = parser.parse_args(argv)
 
     # id da voz → path (mesmo diretório do modelo, voices/<id>.pt).

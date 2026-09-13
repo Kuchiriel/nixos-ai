@@ -947,7 +947,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_speak.add_argument("--rvc", default=None,
                          help="timbre RVC: jarvis|klein|silver, path .pth, ou vazio = env atual")
     p_speak.add_argument("--rvc-index", default=None, help="index .index (só com --rvc=path)")
-    p_speak.add_argument("--rate", default=None, help="velocidade Edge (ex: -10%%; só base antonio)")
+    p_speak.add_argument("--rate", default=None, help="velocidade Edge (ex: -10; use =, ex: --rate=-10; só base antonio)")
     p_speak.set_defaults(func=_cmd_speak)
 
     p_voice = sub.add_parser("voice", help="loop de voz: STT → roteador → TTS (brainCommand do wakeword)")
