@@ -13,6 +13,8 @@
     yazi
     imv
     mpv
+    vlc # player p/ revisar áudio/vídeo (LOTM)
+    audacity # editor de áudio leve (datasets voz)
     pavucontrol
 
     # TUI tools (porta do legado Manjaro — abre via on-click no Waybar)

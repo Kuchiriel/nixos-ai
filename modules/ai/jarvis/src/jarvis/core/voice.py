@@ -57,6 +57,29 @@ EDGE_BIN_CANDIDATES = (
 )
 EDGE_VOICE_DEFAULT = "pt-BR-AntonioNeural"
 
+# Higiene pré-TTS: markdown que o TTS leria literalmente ("asterisco"...).
+TTS_STRIP_RE = r"[*_#`>]"
+# Dicionário de pronúncia (regex, case-insensitive) — aplicado antes do TTS.
+TTS_PRONUNC = [
+    (r"\bBeyonders\b", "Biónders"),
+    (r"\bbeyonders\b", "biónders"),
+    (r"\bBeyonder\b", "Biónder"),
+    (r"\bbeyonder\b", "biónder"),
+    (r"\bUh\b", "Ãh"),
+    (r"\buh\b", "ãh"),
+    (r"\.{4,}", "…"),
+]
+
+
+def _clean_tts_text(text: str) -> str:
+    """Remove markdown literal e aplica dicionário de pronúncia."""
+    import re
+    text = re.sub(TTS_STRIP_RE, "", text)
+    for pat, rep in TTS_PRONUNC:
+        text = re.sub(pat, rep, text)
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    return text.strip()
+
 
 TTS_CHUNK_MAX = 800  # chars por fatia (Edge/Kokoro truncam texto longo)
 
@@ -97,7 +120,8 @@ def _resolve_rvc(rvc: str | None) -> tuple[str | None, str | None]:
     return str(p), idx
 
 
-def _edge_base_wav(text: str, out_path: Path, voice: str = EDGE_VOICE_DEFAULT) -> str:
+def _edge_base_wav(text: str, out_path: Path, voice: str = EDGE_VOICE_DEFAULT,
+                   rate: str | None = None) -> str:
     """Sintetiza base via Edge TTS (subprocess). Retorna path ou ERROR:."""
     import shutil
     import subprocess
@@ -107,9 +131,10 @@ def _edge_base_wav(text: str, out_path: Path, voice: str = EDGE_VOICE_DEFAULT) -
     if binary is None or ("/" not in binary and shutil.which(binary) is None):
         return "ERROR: edge-tts não instalado (pip install edge-tts)"
     mp3 = out_path.with_suffix(".edge.mp3")
-    r = subprocess.run(
-        [binary, "--voice", voice, "--text", text, "--write-media", str(mp3)],
-        capture_output=True, text=True, timeout=120)
+    cmd = [binary, "--voice", voice, "--text", text, "--write-media", str(mp3)]
+    if rate:
+        cmd += ["--rate", rate]
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     if r.returncode != 0 or not mp3.exists():
         return f"ERROR: edge-tts falhou: {(r.stderr or '')[:150]}"
     wav = out_path.with_name(out_path.stem + "-edge.wav")
@@ -481,6 +506,7 @@ def speak(
     rvc: str | None = None,
     rvc_index: str | None = None,
     keep_wav: bool = False,
+    rate: str | None = None,
 ) -> str:
     """Sintetiza `text` (Kokoro local ou Edge Antonio) e (opcionalmente) toca.
 
@@ -490,6 +516,7 @@ def speak(
     Sem keep_wav, os WAVs são apagados após tocar (só --no-play mantém).
     Retorna o path do WAV gerado ou mensagem ERROR:.
     """
+    text = _clean_tts_text(text)
     try:
         import numpy as np  # noqa: F401  (kokoro depende)
         from kokoro import KModel, KPipeline  # type: ignore[import-not-found]
@@ -535,7 +562,7 @@ def speak(
             for i, part in enumerate(slices):
                 part_path = out_dir / f"{out_path.stem}-p{i}.wav"
                 if use_edge:
-                    edge_wav = _edge_base_wav(part, part_path)
+                    edge_wav = _edge_base_wav(part, part_path, rate=rate)
                     if edge_wav.startswith("ERROR"):
                         print(f"[speak] edge falhou ({edge_wav[:80]}), fallback kokoro", flush=True)
                         use_edge = False
@@ -958,6 +985,7 @@ def main_tts(argv: list[str] | None = None) -> int:
     parser.add_argument("--rvc", default=None,
                         help="timbre RVC: jarvis|klein|silver, path .pth, ou vazio = env atual")
     parser.add_argument("--rvc-index", default=None, help="index .index (só com --rvc=path)")
+    parser.add_argument("--rate", default=None, help="velocidade Edge (ex: -10%%, +10%%; só base antonio)")
     args = parser.parse_args(argv)
 
     # id da voz → path (mesmo diretório do modelo, voices/<id>.pt).
@@ -972,7 +1000,7 @@ def main_tts(argv: list[str] | None = None) -> int:
             voice_path = str(candidate) if candidate.exists() else args.voice
 
     out = speak(args.text, voice=voice_path, play=not args.no_play, clone=args.clone, speed=args.speed, pitch=args.pitch,
-                base=args.base, rvc=args.rvc, rvc_index=args.rvc_index, keep_wav=args.no_play)
+                base=args.base, rvc=args.rvc, rvc_index=args.rvc_index, keep_wav=args.no_play, rate=args.rate)
     print(out)
     return 0 if not out.startswith("ERROR") else 1
 

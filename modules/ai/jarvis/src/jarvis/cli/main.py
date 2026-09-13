@@ -702,6 +702,8 @@ def _cmd_speak(args: argparse.Namespace) -> int:
         argv += ["--rvc", args.rvc]
     if getattr(args, "rvc_index", None):
         argv += ["--rvc-index", args.rvc_index]
+    if getattr(args, "rate", None):
+        argv += ["--rate", args.rate]
     return main_tts(argv)
 
 
@@ -945,6 +947,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_speak.add_argument("--rvc", default=None,
                          help="timbre RVC: jarvis|klein|silver, path .pth, ou vazio = env atual")
     p_speak.add_argument("--rvc-index", default=None, help="index .index (só com --rvc=path)")
+    p_speak.add_argument("--rate", default=None, help="velocidade Edge (ex: -10%%; só base antonio)")
     p_speak.set_defaults(func=_cmd_speak)
 
     p_voice = sub.add_parser("voice", help="loop de voz: STT → roteador → TTS (brainCommand do wakeword)")
