@@ -271,14 +271,14 @@ for line in sys.stdin:
         clean_audio=False,
         post_process=False,
     )
-    # Pipeline padronizado em 24kHz (taxa do Kokoro): o RVC cospe na taxa
-    # nativa do modelo (ex. 40k), que soava "arrastada" no playback
-    # (forense 2026-09).
+    # Normaliza p/ taxa do INPUT (não 24k fixo: base Edge é 44.1k e modelo
+    # 48k — resample duplo rouba qualidade).
     try:
         import librosa
         import soundfile as _sf
-        y, _ = librosa.load(dst, sr=24000, mono=True)
-        _sf.write(dst, y, 24000)
+        info = _sf.info(src)
+        y, _ = librosa.load(dst, sr=info.samplerate, mono=True)
+        _sf.write(dst, y, info.samplerate)
     except Exception as _e:
         print(f"RVC-RESAMPLE-WARN {{_e}}", flush=True)
     count += 1
