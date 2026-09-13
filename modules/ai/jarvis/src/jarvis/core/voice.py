@@ -58,6 +58,29 @@ EDGE_BIN_CANDIDATES = (
 EDGE_VOICE_DEFAULT = "pt-BR-AntonioNeural"
 
 
+TTS_CHUNK_MAX = 800  # chars por fatia (Edge/Kokoro truncam texto longo)
+
+
+def _split_chunks(text: str, limit: int = TTS_CHUNK_MAX) -> list[str]:
+    """Fatia texto em frases, sem estourar `limit` chars por fatia."""
+    import re
+    parts = re.split(r"(?<=[.!?…])\s+", text.strip())
+    chunks, cur = [], ""
+    for p in parts:
+        if len(cur) + len(p) + 1 <= limit:
+            cur = (cur + " " + p).strip()
+        else:
+            if cur:
+                chunks.append(cur)
+            while len(p) > limit:  # frase gigante: corta duro
+                chunks.append(p[:limit])
+                p = p[limit:]
+            cur = p
+    if cur:
+        chunks.append(cur)
+    return chunks or [text]
+
+
 def _resolve_rvc(rvc: str | None) -> tuple[str | None, str | None]:
     """Alias|path → (model_path, index_path). (None, None) = env atual."""
     if not rvc:
@@ -457,15 +480,14 @@ def speak(
     base: str | None = None,
     rvc: str | None = None,
     rvc_index: str | None = None,
+    keep_wav: bool = False,
 ) -> str:
-    """Sintetiza `text` com Kokoro-82M (formato torch do nixpkgs) e (opcionalmente) toca.
+    """Sintetiza `text` (Kokoro local ou Edge Antonio) e (opcionalmente) toca.
 
-    Aplica a prosódia emocional (speed) do `jarvis.core.emotion` — porta do
-    emotional_state do legado (keywords → perfil → speed do Kokoro).
-    Bypass automático de spaCy via espeak-ng quando o modelo spaCy não está
-    disponível (comum em NixOS declarativo).
-    Com clone=True, pós-processa o WAV via RVC (jarvis.core.voice_clone,
-    timbre do JARVIS_VOICE_CLONE_MODEL) e toca/retorna o WAV convertido.
+    Texto longo é fatiado em frases (limite ~800 chars/fatia) e concatenado —
+    nem Kokoro nem Edge entregam texto longo num request só.
+    Com clone=True, pós-processa o WAV via RVC (jarvis.core.voice_clone).
+    Sem keep_wav, os WAVs são apagados após tocar (só --no-play mantém).
     Retorna o path do WAV gerado ou mensagem ERROR:.
     """
     try:
@@ -505,41 +527,66 @@ def speak(
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / f"jarvis_tts_{abs(hash(text)) % 10**9}.wav"
 
-        if use_edge:
-            # Base Edge TTS (jovem, sem Kokoro). Fallback p/ Kokoro se offline.
-            edge_wav = _edge_base_wav(text, out_path)
-            if not edge_wav.startswith("ERROR"):
-                out_path = Path(edge_wav)
+        # Texto longo: fatia em frases e concatena (nenhuma base entrega tudo).
+        slices = _split_chunks(text)
+        base_sr = 44100 if use_edge else 24000
+        base_parts: list[Path] = []
+        try:
+            for i, part in enumerate(slices):
+                part_path = out_dir / f"{out_path.stem}-p{i}.wav"
+                if use_edge:
+                    edge_wav = _edge_base_wav(part, part_path)
+                    if edge_wav.startswith("ERROR"):
+                        print(f"[speak] edge falhou ({edge_wav[:80]}), fallback kokoro", flush=True)
+                        use_edge = False
+                        _, pipeline = _get_pipeline(config_path, model_path, lang_code)
+                    else:
+                        base_parts.append(Path(edge_wav))
+                        continue
+                if not use_edge:
+                    if speed is None:
+                        # Auto-emoção clampada (forense 2026-09). --speed passa direto.
+                        speed = min(1.05, max(0.95, speed_for(text)))
+                        if clone:
+                            speed *= CLONE_SPEED_FACTOR
+                    chunks = []
+                    for _result in pipeline(part, voice=voice_path, speed=speed):
+                        chunks.append(_result.audio)
+                    if not chunks:
+                        return "ERROR: kokoro não gerou áudio"
+                    audio = np.concatenate(chunks)
+                    sf.write(str(part_path), audio, 24000)
+                    base_parts.append(part_path)
+            if not base_parts:
+                return "ERROR: nenhuma base gerada"
+            if len(base_parts) == 1:
+                base_parts[0].replace(out_path)
             else:
-                print(f"[speak] edge falhou ({edge_wav[:80]}), fallback kokoro", flush=True)
-                use_edge = False
-                _, pipeline = _get_pipeline(config_path, model_path, lang_code)
-        if not use_edge:
-            if speed is None:
-                # Auto-emoção clampada: 1.2 (urgent, ex. "agora" na resposta) soava
-                # "rápida demais" e 0.9 arrastada (forense 2026-09). --speed passa direto.
-                speed = min(1.05, max(0.95, speed_for(text)))
-            if clone:
-                speed *= CLONE_SPEED_FACTOR
-            chunks = []
-            for _result in pipeline(text, voice=voice_path, speed=speed):
-                chunks.append(_result.audio)
-            if not chunks:
-                return "ERROR: kokoro não gerou áudio"
-            audio = np.concatenate(chunks)
-            sf.write(str(out_path), audio, 24000)
+                import soundfile as _sf
+                arrays = []
+                for bp in base_parts:
+                    data, _ = _sf.read(str(bp))
+                    arrays.append(data)
+                _sf.write(str(out_path), np.concatenate(arrays), base_sr)
+        finally:
+            for bp in base_parts:
+                if bp != out_path and bp.exists():
+                    bp.unlink(missing_ok=True)
 
         if clone:
             from jarvis.core.voice_clone import clone_wav
             model_path, index_path = _resolve_rvc(rvc)
             if model_path and model_path.startswith("ERROR"):
                 return model_path
-            cloned = clone_wav(str(out_path), pitch=pitch, cpu_only=True,
+            base_for_clone = str(out_path)
+            cloned = clone_wav(base_for_clone, pitch=pitch, cpu_only=True,
                                model_path=model_path,
                                index_path=rvc_index or index_path)
             if cloned.startswith("ERROR"):
                 return cloned
             out_path = Path(cloned)
+            if not keep_wav:
+                Path(base_for_clone).unlink(missing_ok=True)
 
         # Publish to Event Bus
         try:
@@ -571,6 +618,10 @@ def speak(
                     _set_idle("idle", "")
                 except Exception:
                     pass
+            if not keep_wav:
+                # Tocou: some com o WAV (só --no-play mantém arquivo).
+                Path(out_path).unlink(missing_ok=True)
+                return "OK (played, wav removido)"
         return str(out_path)
     except Exception as exc:  # noqa: BLE001
         return f"ERROR: falha no TTS: {exc}"
@@ -893,7 +944,7 @@ def main_tts(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="jarvis speak", description="Sintetiza texto com Kokoro (TTS)")
     parser.add_argument("text", help="texto a falar")
     parser.add_argument("--voice", default=None, help="id da voz Kokoro (ex: af_heart, pf_dora, pm_alex); vazio = auto por idioma")
-    parser.add_argument("--no-play", action="store_true", help="gera WAV sem tocar")
+    parser.add_argument("--no-play", action="store_true", help="gera WAV sem tocar (mantém arquivo; sem ele, toca e apaga)")
     parser.add_argument("--clone", action="store_true", help="converte p/ timbre RVC (JARVIS_VOICE_CLONE_MODEL)")
     parser.add_argument("--speed", type=float, default=None, help="velocidade base Kokoro (padrão: emoção; clone aplica ×0.9)")
     parser.add_argument("--pitch", type=int, default=None, help="semitons RVC (-12..12; default 0 = neutro)")
@@ -916,7 +967,7 @@ def main_tts(argv: list[str] | None = None) -> int:
             voice_path = str(candidate) if candidate.exists() else args.voice
 
     out = speak(args.text, voice=voice_path, play=not args.no_play, clone=args.clone, speed=args.speed, pitch=args.pitch,
-                base=args.base, rvc=args.rvc, rvc_index=args.rvc_index)
+                base=args.base, rvc=args.rvc, rvc_index=args.rvc_index, keep_wav=args.no_play)
     print(out)
     return 0 if not out.startswith("ERROR") else 1
 
