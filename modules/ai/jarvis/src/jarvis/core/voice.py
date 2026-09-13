@@ -579,9 +579,14 @@ def speak(
             if model_path and model_path.startswith("ERROR"):
                 return model_path
             base_for_clone = str(out_path)
-            cloned = clone_wav(base_for_clone, pitch=pitch, cpu_only=True,
+            cloned = clone_wav(base_for_clone, pitch=pitch,
                                model_path=model_path,
                                index_path=rvc_index or index_path)
+            if cloned.startswith("ERROR"):
+                print(f"[speak] RVC/GPU falhou ({cloned[:100]}), tentando CPU", flush=True)
+                cloned = clone_wav(base_for_clone, pitch=pitch, cpu_only=True,
+                                   model_path=model_path,
+                                   index_path=rvc_index or index_path)
             if cloned.startswith("ERROR"):
                 return cloned
             out_path = Path(cloned)
