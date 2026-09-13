@@ -42,6 +42,62 @@ KOKORO_MODEL_DEFAULT = os.environ.get("JARVIS_KOKORO_MODEL", "~/.local/share/kok
 KOKORO_VOICE_DEFAULT = os.environ.get("JARVIS_KOKORO_VOICE", "~/.local/share/kokoro/af_heart.pt")
 KOKORO_VOICE_ID_DEFAULT = "af_heart"  # id da voz (para o nome do arquivo)
 
+# Aliases RVC p/ teste A/B (--rvc): nome curto → (.pth, .index) em ~/models.
+RVC_ALIASES: dict[str, tuple[str, str]] = {
+    "jarvis": ("Jarvis_300e_infer.pth", "added_Jarvis_v3.index"),
+    "klein": ("Klein_400e_infer.pth", "added_Klein_v1.index"),
+    "silver": ("Silverhand_500e_14500s_best_epoch.pth", "added_Silverhand_v2.index"),
+}
+
+# Base alternativa ao Kokoro: Edge TTS (Microsoft, requer internet).
+EDGE_BIN_CANDIDATES = (
+    "/tmp/opencode/kvenv/bin/edge-tts",
+    os.path.expanduser("~/.local/bin/edge-tts"),
+    "edge-tts",
+)
+EDGE_VOICE_DEFAULT = "pt-BR-AntonioNeural"
+
+
+def _resolve_rvc(rvc: str | None) -> tuple[str | None, str | None]:
+    """Alias|path → (model_path, index_path). (None, None) = env atual."""
+    if not rvc:
+        return None, None
+    home = Path(os.path.expanduser("~/models"))
+    if rvc in RVC_ALIASES:
+        pth, idx = RVC_ALIASES[rvc]
+        return str(home / pth), str(home / idx)
+    p = Path(os.path.expanduser(rvc))
+    if not p.exists():
+        return f"ERROR: modelo RVC não encontrado: {rvc}", None
+    stem = p.with_suffix(".index")
+    idx = str(stem) if stem.exists() else None
+    return str(p), idx
+
+
+def _edge_base_wav(text: str, out_path: Path, voice: str = EDGE_VOICE_DEFAULT) -> str:
+    """Sintetiza base via Edge TTS (subprocess). Retorna path ou ERROR:."""
+    import shutil
+    import subprocess
+
+    binary = next((b for b in EDGE_BIN_CANDIDATES
+                   if "/" not in b or Path(b).exists()), None)
+    if binary is None or ("/" not in binary and shutil.which(binary) is None):
+        return "ERROR: edge-tts não instalado (pip install edge-tts)"
+    mp3 = out_path.with_suffix(".edge.mp3")
+    r = subprocess.run(
+        [binary, "--voice", voice, "--text", text, "--write-media", str(mp3)],
+        capture_output=True, text=True, timeout=120)
+    if r.returncode != 0 or not mp3.exists():
+        return f"ERROR: edge-tts falhou: {(r.stderr or '')[:150]}"
+    wav = out_path.with_name(out_path.stem + "-edge.wav")
+    r2 = subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(mp3),
+         "-ar", "44100", "-ac", "1", str(wav)],
+        capture_output=True, text=True, timeout=120)
+    if r2.returncode != 0 or not wav.exists():
+        return "ERROR: ffmpeg não converteu base edge"
+    return str(wav)
+
 # Voice mapping by language code (Kokoro lang_code → voice file prefix)
 # First letter: a=Australian/US English, b=British, j=Japanese, z=Chinese,
 #              e=Spanish, f=French, h=Hindi, i=Italian, p=Brazilian Portuguese
@@ -398,6 +454,9 @@ def speak(
     clone: bool = False,
     speed: float | None = None,
     pitch: int | None = None,
+    base: str = "kokoro",
+    rvc: str | None = None,
+    rvc_index: str | None = None,
 ) -> str:
     """Sintetiza `text` com Kokoro-82M (formato torch do nixpkgs) e (opcionalmente) toca.
 
@@ -441,23 +500,35 @@ def speak(
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / f"jarvis_tts_{abs(hash(text)) % 10**9}.wav"
 
-        if speed is None:
-            # Auto-emoção clampada: 1.2 (urgent, ex. "agora" na resposta) soava
-            # "rápida demais" e 0.9 arrastada (forense 2026-09). --speed passa direto.
-            speed = min(1.05, max(0.95, speed_for(text)))
-        if clone:
-            speed *= CLONE_SPEED_FACTOR
-        chunks = []
-        for _result in pipeline(text, voice=voice_path, speed=speed):
-            chunks.append(_result.audio)
-        if not chunks:
-            return "ERROR: kokoro não gerou áudio"
-        audio = np.concatenate(chunks)
-        sf.write(str(out_path), audio, 24000)
+        if base == "antonio":
+            # Base Edge TTS (jovem, sem Kokoro). Pula o resto do pipeline Kokoro.
+            edge_wav = _edge_base_wav(text, out_path)
+            if edge_wav.startswith("ERROR"):
+                return edge_wav
+            out_path = Path(edge_wav)
+        else:
+            if speed is None:
+                # Auto-emoção clampada: 1.2 (urgent, ex. "agora" na resposta) soava
+                # "rápida demais" e 0.9 arrastada (forense 2026-09). --speed passa direto.
+                speed = min(1.05, max(0.95, speed_for(text)))
+            if clone:
+                speed *= CLONE_SPEED_FACTOR
+            chunks = []
+            for _result in pipeline(text, voice=voice_path, speed=speed):
+                chunks.append(_result.audio)
+            if not chunks:
+                return "ERROR: kokoro não gerou áudio"
+            audio = np.concatenate(chunks)
+            sf.write(str(out_path), audio, 24000)
 
         if clone:
             from jarvis.core.voice_clone import clone_wav
-            cloned = clone_wav(str(out_path), pitch=pitch, cpu_only=True)
+            model_path, index_path = _resolve_rvc(rvc)
+            if model_path and model_path.startswith("ERROR"):
+                return model_path
+            cloned = clone_wav(str(out_path), pitch=pitch, cpu_only=True,
+                               model_path=model_path,
+                               index_path=rvc_index or index_path)
             if cloned.startswith("ERROR"):
                 return cloned
             out_path = Path(cloned)
@@ -818,6 +889,11 @@ def main_tts(argv: list[str] | None = None) -> int:
     parser.add_argument("--clone", action="store_true", help="converte p/ timbre RVC (JARVIS_VOICE_CLONE_MODEL)")
     parser.add_argument("--speed", type=float, default=None, help="velocidade base Kokoro (padrão: emoção; clone aplica ×0.9)")
     parser.add_argument("--pitch", type=int, default=None, help="semitons RVC (-12..12; default 0 = neutro)")
+    parser.add_argument("--base", default="kokoro", choices=["kokoro", "antonio"],
+                        help="voz base: kokoro (local) ou antonio (Edge TTS, jovem)")
+    parser.add_argument("--rvc", default=None,
+                        help="timbre RVC: jarvis|klein|silver, path .pth, ou vazio = env atual")
+    parser.add_argument("--rvc-index", default=None, help="index .index (só com --rvc=path)")
     args = parser.parse_args(argv)
 
     # id da voz → path (mesmo diretório do modelo, voices/<id>.pt).
@@ -831,7 +907,8 @@ def main_tts(argv: list[str] | None = None) -> int:
             candidate = voice_dir / f"{args.voice}.pt"
             voice_path = str(candidate) if candidate.exists() else args.voice
 
-    out = speak(args.text, voice=voice_path, play=not args.no_play, clone=args.clone, speed=args.speed, pitch=args.pitch)
+    out = speak(args.text, voice=voice_path, play=not args.no_play, clone=args.clone, speed=args.speed, pitch=args.pitch,
+                base=args.base, rvc=args.rvc, rvc_index=args.rvc_index)
     print(out)
     return 0 if not out.startswith("ERROR") else 1
 
