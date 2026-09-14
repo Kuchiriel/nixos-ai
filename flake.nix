@@ -19,6 +19,10 @@
       # `bright-yellow` (issue nix-community/stylix#1635), quebrando a
       # avaliação dos targets starship/alacritty com qualquer scheme.
       inputs.base16.url = "github:SenchoPens/base16.nix";
+      # Fix 2026-09-14: tinted-schemes pinado com drv sumido do store/cache
+      # (base16-schemes-0-unstable-2026-01-15.drv is not valid), quebrando
+      # a avaliação do nixos-lab. Segue HEAD como os demais inputs.
+      inputs.tinted-schemes.url = "github:tinted-theming/schemes";
     };
 
     disko = {

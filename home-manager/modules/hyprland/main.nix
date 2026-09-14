@@ -99,6 +99,7 @@ in {
       misc = {
         disable_hyprland_logo = true;
         force_default_wallpaper = 0;
+        focus_on_activate = true;
       };
 
       monitor = ",preferred,auto,1";
@@ -108,6 +109,10 @@ in {
         "opacity 0.90 0.90, match:class ^(foot)$"
         "float 1, match:class ^(mpv)$"
         "float 1, match:class ^(imv)$"
+        # Apps clicáveis da Waybar (foot --app-id floating_shell): sempre float+centro
+        "float 1, match:class ^(floating_shell)$"
+        "size 1000 650, match:class ^(floating_shell)$"
+        "center 1, match:class ^(floating_shell)$"
         "float 1, match:class ^(showmethekey-gtk)$"
         "move 990 60, match:class ^(showmethekey-gtk)$"
         "size 900 170, match:class ^(showmethekey-gtk)$"

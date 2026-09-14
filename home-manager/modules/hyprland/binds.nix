@@ -140,6 +140,7 @@ in {
       "$mainMod,       L, exec, loginctl lock-session"
       "$mainMod,       P, exec, hyprpicker -an"
       "$mainMod,       N, exec, swaync-client -t"
+      "$mainMod SHIFT, N, exec, sh -c 'pkill hyprsunset || hyprsunset --temperature 4500'"
       "$mainMod,       W, exec, ${booksScript}/bin/open_books"
       "$mainMod,       A, exec, ${launcherScript}/bin/nixos-ai-launcher"
       "$mainMod,       G, exec, python3 -c \"from jarvis.core.gaming import toggle_gaming; import json; r=toggle_gaming(); print(json.dumps(r))\""

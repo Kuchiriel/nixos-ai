@@ -17,6 +17,9 @@
 #   ./scripts/nix-validate.sh              # Full validation
 #   ./scripts/nix-validate.sh --quick      # Syntax + eval only
 #   ./scripts/nix-validate.sh --host NAME  # Specific host
+#   ./scripts/nix-validate.sh --host-only  # Host+HM+packages, sem flake-check
+#     total (pula nixos-lab e testes; usar quando outro config quebra a
+#     avaliação global — o lab continua exigindo validação total quando tocado).
 #
 set -euo pipefail
 
@@ -25,12 +28,14 @@ set -euo pipefail
 FLAKE_DIR="${FLAKE_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 TARGET_HOST="${TARGET_HOST:-nitro-v15}"
 QUICK=false
+HOST_ONLY=false
 VERBOSE=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
     --quick) QUICK=true; shift ;;
+    --host-only) HOST_ONLY=true; shift ;;
     --verbose) VERBOSE=true; shift ;;
     --host) TARGET_HOST="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -197,7 +202,7 @@ echo "║        Nix/NixOS Multi-Layer Validation             ║"
 echo "╠══════════════════════════════════════════════════════╣"
 echo "║  Host: $TARGET_HOST"
 echo "║  Flake: $FLAKE_DIR"
-echo "║  Mode: $(if $QUICK; then echo 'Quick'; else echo 'Full'; fi)"
+echo "║  Mode: $(if $HOST_ONLY; then echo 'Host-only'; elif $QUICK; then echo 'Quick'; else echo 'Full'; fi)"
 echo "╚══════════════════════════════════════════════════════╝"
 
 START_TIME=$(date +%s)
@@ -212,13 +217,18 @@ if ! validate_syntax; then
   exit 1
 fi
 
-# Layer 2: Flake check (always run)
+# Layer 2: Flake check (always run, exceto --host-only)
+if ! $HOST_ONLY; then
 if ! validate_flake; then
   FAILED=$((FAILED + 1))
   echo ""
   fail "VALIDATION FAILED at Layer 2 (Flake)"
   fail "Fix flake errors before proceeding."
   exit 1
+fi
+else
+  echo ""
+  warn "Layer 2 pulado (--host-only): nixos-lab/testes exigem valid total"
 fi
 
 if ! $QUICK; then
@@ -241,6 +251,7 @@ if ! $QUICK; then
   fi
   
   # Layer 5: Package builds
+  if ! $HOST_ONLY; then
   if ! validate_packages; then
     FAILED=$((FAILED + 1))
     echo ""
@@ -256,6 +267,10 @@ if ! $QUICK; then
     fail "VALIDATION FAILED at Layer 6 (Tests)"
     fail "Fix test failures before proceeding."
     exit 1
+  fi
+  else
+    echo ""
+    warn "Layers 5-6 pulados (--host-only)"
   fi
 fi
 

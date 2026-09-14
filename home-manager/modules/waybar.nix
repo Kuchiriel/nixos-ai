@@ -14,18 +14,25 @@
   hostOnlySettings = lib.optionalAttrs isHost {
     battery = {
       format = "{icon} {capacity}%";
-      format-icons = ["󰂎" "󰁺" "󰁌" "󰁞" "󰂀" "󰁹"];
-      format-charging = " {capacity}%";
-      tooltip = false;
+      format-icons = ["󰂎" "󰁺" "󰁻" "󰁼" "󰁽" "󰁾" "󰁿" "󰂀" "󰂁" "󰁹"];
+      format-charging = "󰂄 {capacity}%";
+      format-plugged = "󰂄 {capacity}%";
+      states = {
+        warning = 30;
+        critical = 15;
+      };
+      tooltip = true;
+      on-click = "foot --app-id floating_shell -e sh -c 'upower -i $(upower -e | grep -i bat | head -1); echo; read -p \"[Enter fecha]\"'";
     };
     backlight = {
       format = "󰃠 {percent}%";
       tooltip = false;
+      on-click = "sh -c 'pkill hyprsunset || hyprsunset --temperature 4500'";
     };
     bluetooth = {
       format = "󰂯 {status}";
       tooltip = false;
-      on-click = "foot --app-id floating_shell -e bluetuith";
+      on-click = "foot --app-id floating_shell -e bluetui";
     };
   };
 
@@ -395,7 +402,7 @@ in {
             interval = 3;
             return-type = "json";
             tooltip = true;
-            on-click = "foot --app-id floating_shell -e nvidia-smi";
+            on-click = "foot --app-id floating_shell -e watch -n1 nvidia-smi";
           };
 
           "custom/igpu" = {

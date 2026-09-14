@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Rebuild do sistema NixOS a partir do flake local.
 # Valida avaliação ANTES de executar o switch.
-# Uso: ./rebuild-host.sh
+# Uso: ./rebuild-host.sh [--host-only]
+#   --host-only: valida host+HM sem flake-check total (lab quebrado não trava o host).
 set -e
 
 FLAKE_DIR="$HOME/projects/nixos-ai"
@@ -19,7 +20,7 @@ echo "===================================================="
 echo "EXECUTANDO VALIDAÇÃO MULTI-CAMADA"
 echo "===================================================="
 
-if ! "$FLAKE_DIR/scripts/nix-validate.sh" --host "$TARGET_HOST"; then
+if ! "$FLAKE_DIR/scripts/nix-validate.sh" --host "$TARGET_HOST" "$@"; then
   echo ""
   echo "[ERRO CRÍTICO] Validação falhou!"
   echo "Corrija os erros acima ANTES de fazer rebuild."

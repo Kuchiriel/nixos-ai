@@ -131,7 +131,7 @@ def _edge_base_wav(text: str, out_path: Path, voice: str = EDGE_VOICE_DEFAULT,
     if binary is None or ("/" not in binary and shutil.which(binary) is None):
         return "ERROR: edge-tts não instalado (pip install edge-tts)"
     mp3 = out_path.with_suffix(".edge.mp3")
-    rstr = str(rate)
+    rstr = "" if rate is None else str(rate)
     if rstr and not rstr.endswith("%"):
         rstr += "%"
     cmd = [binary, "--voice", voice, "--text", text, "--write-media", str(mp3)]

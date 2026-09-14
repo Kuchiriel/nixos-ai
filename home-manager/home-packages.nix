@@ -15,10 +15,12 @@
     mpv
     vlc # player p/ revisar áudio/vídeo (LOTM)
     audacity # editor de áudio leve (datasets voz)
+    mousepad # notepad gráfico simples (legendas/checks)
     pavucontrol
 
     # TUI tools (porta do legado Manjaro — abre via on-click no Waybar)
-    bluetuith # Bluetooth TUI (on-click no módulo bluetooth)
+    bluetui # Bluetooth TUI (on-click no módulo bluetooth; melhor que bluetuith)
+    hyprsunset # modo noturno quente/frio (toggle no módulo brilho)
     ncpamixer # Audio mixer TUI (on-click no módulo pulseaudio)
     networkmanagerapplet # nmtui-connect (on-click no módulo network)
     calcurse # Calendar TUI (on-click no clock)

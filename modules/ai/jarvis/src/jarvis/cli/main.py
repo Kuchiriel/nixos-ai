@@ -690,7 +690,7 @@ def _cmd_speak(args: argparse.Namespace) -> int:
         argv += ["--voice", args.voice]
     if args.no_play:
         argv.append("--no-play")
-    if args.clone:
+    if args.clone or getattr(args, "rvc", None):
         argv.append("--clone")
     if args.speed is not None:
         argv += ["--speed", str(args.speed)]
