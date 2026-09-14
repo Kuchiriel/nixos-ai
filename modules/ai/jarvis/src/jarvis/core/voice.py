@@ -510,6 +510,8 @@ def speak(
     rvc_index: str | None = None,
     keep_wav: bool = False,
     rate: str | None = None,
+    index_rate: float = 0.75,
+    f0_method: str = "rmvpe",
 ) -> str:
     """Sintetiza `text` (Kokoro local ou Edge Antonio) e (opcionalmente) toca.
 
