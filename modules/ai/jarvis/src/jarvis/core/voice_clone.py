@@ -124,6 +124,7 @@ def _run_driver(
     extra_env: dict[str, str] | None = None,
     index_rate: float = 0.75,
     f0_method: str = "rmvpe",
+    protect: float = 0.5,
 ) -> tuple[bool, str]:
     """Executa o driver batch (UM processo, modelos carregados 1x).
 
@@ -133,7 +134,7 @@ def _run_driver(
     items = "\n".join(f"{i}\t{o}" for i, o in pairs)
     driver = _BATCH_TEMPLATE.format(
         items=items, model_path=model, index_path=index, pitch=pitch,
-        index_rate=index_rate, f0_method=f0_method,
+        index_rate=index_rate, f0_method=f0_method, protect=protect,
     )
     try:
         with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
@@ -178,6 +179,7 @@ def clone_many(
     cpu_only: bool = False,
     index_rate: float = 0.75,
     f0_method: str = "rmvpe",
+    protect: float = 0.5,
 ) -> dict[str, str]:
     """Converte N arquivos com UMA carga de modelos. Retorna {input: output|ERROR}.
 
@@ -203,7 +205,8 @@ def clone_many(
     t0 = time.monotonic()
     extra = {"JARVIS_RVC_CPU_ONLY": "1"} if cpu_only else None
     good, err = _run_driver(todo, model, index, timeout_s, pitch=pitch, extra_env=extra,
-                          index_rate=index_rate, f0_method=f0_method)
+                          index_rate=index_rate, f0_method=f0_method,
+                          protect=protect)
     elapsed = time.monotonic() - t0
     for i, o in todo:
         result[i] = o if good and Path(o).exists() else f"ERROR: voice-clone falhou: {err}"
@@ -229,6 +232,7 @@ def clone_wav(
     cpu_only: bool = False,
     index_rate: float = 0.75,
     f0_method: str = "rmvpe",
+    protect: float = 0.5,
 ) -> str:
     """Converte input_wav para o timbre do modelo. Retorna path ou ERROR:.
 
@@ -244,7 +248,7 @@ def clone_wav(
         [(input_wav, output_wav or "")],
         model_path=model_path, index_path=index_path, timeout_s=timeout_s,
         pitch=pitch, cpu_only=cpu_only, index_rate=index_rate,
-        f0_method=f0_method,
+        f0_method=f0_method, protect=protect,
     )
     return result.get(input_wav, f"ERROR: input inexistente: {input_wav}")
 
@@ -276,6 +280,7 @@ for line in sys.stdin:
         f0_method={f0_method!r},
         embedder_model='contentvec',
         index_rate={index_rate!r},
+        protect={protect!r},
         pitch={pitch!r},
         clean_audio=False,
         post_process=False,
