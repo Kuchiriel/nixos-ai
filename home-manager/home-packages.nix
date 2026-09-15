@@ -34,6 +34,7 @@
 
     # Core CLI utils
     nodejs # npx para MCP servers (Roo Dev, etc.)
+    gitleaks # secret scanning git (IMP-001; docs/audits/SECURITY.md)
     bc
     bottom
     brightnessctl
