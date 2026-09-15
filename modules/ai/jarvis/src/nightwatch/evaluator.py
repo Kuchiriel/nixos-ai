@@ -259,15 +259,15 @@ def auto_review(diff: str, test_output: str) -> ReviewResult:
         suggestions.append(f"Large change: +{added}/-{removed} lines")
 
     # 4. Check for import removal (structural damage indicator)
-    removed_lines = [l[1:] for l in diff.split("\n") if l.startswith("-") and not l.startswith("---")]
-    removed_imports = [l for l in removed_lines if l.strip().startswith("import ") or l.strip().startswith("from ")]
+    removed_lines = [ln[1:] for ln in diff.split("\n") if ln.startswith("-") and not ln.startswith("---")]
+    removed_imports = [ln for ln in removed_lines if ln.strip().startswith("import ") or ln.strip().startswith("from ")]
     if removed_imports:
         issues.append(f"Imports removed: {len(removed_imports)} import statements")
 
     # 5. Check for function/class removal
-    removed_defs = [l for l in removed_lines if l.strip().startswith("def ") or l.strip().startswith("class ")]
+    removed_defs = [ln for ln in removed_lines if ln.strip().startswith("def ") or ln.strip().startswith("class ")]
     if removed_defs:
-        names = [l.strip().split("(")[0].split(":")[0].replace("def ", "").replace("class ", "") for l in removed_defs]
+        names = [ln.strip().split("(")[0].split(":")[0].replace("def ", "").replace("class ", "") for ln in removed_defs]
         issues.append(f"Definitions removed: {', '.join(names)}")
 
     # 6. Check for missing tests

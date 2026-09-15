@@ -161,7 +161,7 @@ def _normalize_line(line: str) -> str:
 
 
 def _normalize_text(text: str) -> str:
-    return "\n".join(_normalize_line(l) for l in text.splitlines())
+    return "\n".join(_normalize_line(line) for line in text.splitlines())
 
 
 def _fuzzy_find(content: str, old: str) -> tuple[str | None, str]:

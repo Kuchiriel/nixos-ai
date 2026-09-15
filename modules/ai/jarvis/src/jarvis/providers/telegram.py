@@ -235,7 +235,8 @@ class TelegramChannel:
             return "Uso: /dev <tarefa>\nEx: /dev leia o arquivo config.py"
         try:
             from jarvis.cli.dev import dev_once
-            import io, contextlib
+            import io
+            import contextlib
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
                 dev_once(task)

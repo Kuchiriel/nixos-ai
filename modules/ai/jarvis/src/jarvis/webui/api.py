@@ -456,8 +456,8 @@ def set_key(req: KeysUpdateRequest) -> dict[str, Any]:
     try:
         if env_file.exists():
             content = env_file.read_text(encoding="utf-8")
-            new_lines = [l for l in content.splitlines()
-                         if _key_line_name(l) != key_name]
+            new_lines = [line for line in content.splitlines()
+                         if _key_line_name(line) != key_name]
             new_lines.append(f'{key_name}="{req.key}"')
             env_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
         else:
@@ -488,8 +488,8 @@ def remove_key(provider: str) -> dict[str, Any]:
         if env_file.exists():
             content = env_file.read_text(encoding="utf-8")
             lines = content.splitlines()
-            new_lines = [l for l in lines
-                         if _key_line_name(l) not in key_names]
+            new_lines = [line for line in lines
+                         if _key_line_name(line) not in key_names]
             env_file.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
             os.chmod(env_file, 0o600)
     except OSError as e:
@@ -758,9 +758,12 @@ def projects_list() -> list[dict[str, Any]]:
             has_nix = (entry / "flake.nix").exists() or (entry / "default.nix").exists()
             has_node = (entry / "package.json").exists()
             proj_type = "unknown"
-            if has_py: proj_type = "python"
-            if has_nix: proj_type = "nix" if proj_type == "unknown" else f"{proj_type}+nix"
-            if has_node: proj_type = "node" if proj_type == "unknown" else f"{proj_type}+node"
+            if has_py:
+                proj_type = "python"
+            if has_nix:
+                proj_type = "nix" if proj_type == "unknown" else f"{proj_type}+nix"
+            if has_node:
+                proj_type = "node" if proj_type == "unknown" else f"{proj_type}+node"
             result.append({
                 "name": entry.name,
                 "path": str(entry),

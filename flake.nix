@@ -186,6 +186,21 @@
       inherit (pkg) jarvis jarvis-voice kilo antigravity-ide;
     };
 
+    # ── checks: linting fail-closed (checks/default.nix) ────────────
+    # Wired em 2026-09-15 (IMP-009): o arquivo existia desde sempre mas
+    # nunca foi referenciado — "component theater". Expõe só python-lint
+    # (ruff fail-closed); markdown-lint/nix-check ficam sem wiring por
+    # enquanto (sem config de markdownlint; nix-check dentro de sandbox
+    # de build é arriscado) — liga-los exige trabalho próprio antes.
+    checks.${system} = let
+      checkLib = import ./checks {
+        pkgs = nixpkgs.legacyPackages.${system};
+        lib = nixpkgs.lib;
+      };
+    in {
+      python-lint = checkLib.python-lint;
+    };
+
     # ── lib: fonts, colors, ports (nosso próprio lib/) ──────────────
     lib.nixos-ai = import ./lib {
       inherit (nixpkgs.lib) lib;

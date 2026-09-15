@@ -6,25 +6,31 @@
 {
   # ── Python linting (ruff) ──
   # Fail on errors (E). Warnings (W) are informational — reported but not blocking.
+  # Sandbox-safe: copia src + ruff.toml para um workdir para que a descoberta
+  # automática de config do ruff encontre o ruff.toml REAL do repo (senão o
+  # ruff usa defaults e falha em E501/E402 que o repo ignora por design).
   python-lint = pkgs.runCommand "python-lint" {
     nativeBuildInputs = [ pkgs.ruff ];
     src = ../modules/ai/jarvis/src;
+    ruffConfig = ../ruff.toml;
   } ''
-    mkdir -p $out
+    mkdir -p $out work
+    cp -r $src work/src
+    cp $ruffConfig work/ruff.toml
 
-    # Full report (all rules) — stored for inspection
-    ruff check $src --output-format json > $out/ruff-report.json 2>&1 || true
-    ruff check $src 2>&1 | tee $out/ruff-report.txt || true
+    # Full report (all rules from repo config) — stored for inspection
+    ruff check work/src --output-format json > $out/ruff-report.json 2>&1 || true
+    ruff check work/src 2>&1 | tee $out/ruff-report.txt || true
 
-    # Fail-closed: errors (E) must not exist
-    if ruff check $src --select E 2>&1 | grep -q "^Found"; then
+    # Fail-closed: errors (E) must not exist (config já ignora E501/E402)
+    if ruff check work/src --select E 2>&1 | grep -q "^Found"; then
       echo "FAIL: Python lint errors found (E rules)" >&2
-      ruff check $src --select E 2>&1 >&2
+      ruff check work/src --select E 2>&1 >&2
       exit 1
     fi
 
     # Warnings are informational — count them for the report
-    warn_count=$(ruff check $src --select W 2>&1 | grep -o "[0-9]* warning" | head -1 || echo "0 warnings")
+    warn_count=$(ruff check work/src --select W 2>&1 | grep -o "[0-9]* warning" | head -1 || echo "0 warnings")
     echo "Python lint: 0 errors, $warn_count" > $out/summary.txt
 
     touch $out/pass

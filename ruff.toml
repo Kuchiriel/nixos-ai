@@ -18,6 +18,8 @@ select = [
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
+    "E402",   # module-import-not-at-top (imports lazy sao padrao deliberado:
+              # kokoro/espeak em voice.py, mcp_server, cli/dev — ver docstring)
     "B008",   # function call in default argument
     "UP007",  # use X | Y for union types
     "N802",   # function name should be lowercase (some exceptions)
