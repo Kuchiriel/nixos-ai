@@ -86,8 +86,11 @@ def test_transcribe_handles_exception(monkeypatch, tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 def test_speak_returns_error_without_kokoro(monkeypatch) -> None:
+    # base="kokoro" explícito: default hoje é "antonio" (Edge), que funciona
+    # com rede e não depende de kokoro (corrige 3 falhas de 2026-09-15).
+    monkeypatch.delenv("JARVIS_TTS_BASE", raising=False)
     monkeypatch.setitem(voice.sys.modules, "kokoro", None)
-    out = voice.speak("oi", play=False)
+    out = voice.speak("oi", play=False, base="kokoro")
     assert out.startswith("ERROR:")
     assert "kokoro" in out
 
@@ -97,12 +100,13 @@ def test_speak_returns_error_when_model_missing(monkeypatch, tmp_path) -> None:
     monkeypatch.setitem(voice.sys.modules, "kokoro", _fake_module(KModel=object, KPipeline=object))
     monkeypatch.setitem(voice.sys.modules, "soundfile", _fake_module())
     monkeypatch.setitem(voice.sys.modules, "numpy", _fake_module())
+    monkeypatch.delenv("JARVIS_TTS_BASE", raising=False)
 
     missing = tmp_path / "nao-existe.pth"
     monkeypatch.setattr(voice, "KOKORO_CONFIG_DEFAULT", str(missing))
     monkeypatch.setattr(voice, "KOKORO_MODEL_DEFAULT", str(missing))
     monkeypatch.setattr(voice, "KOKORO_VOICE_DEFAULT", str(missing))
-    out = voice.speak("oi", play=False)
+    out = voice.speak("oi", play=False, base="kokoro")
     assert out.startswith("ERROR:")
     assert "Kokoro" in out
 
@@ -132,6 +136,7 @@ def test_speak_generates_wav(monkeypatch, tmp_path) -> None:
     monkeypatch.setitem(voice.sys.modules, "kokoro", _fake_module(KModel=FakeKModel, KPipeline=FakePipeline))
     monkeypatch.setitem(voice.sys.modules, "soundfile", _fake_module(write=_fake_write))
     monkeypatch.setitem(voice.sys.modules, "numpy", fake_np)
+    monkeypatch.delenv("JARVIS_TTS_BASE", raising=False)
     (tmp_path / "config.json").write_bytes(b"{}")
     (tmp_path / "kokoro.pth").write_bytes(b"model")
     (tmp_path / "af_heart.pt").write_bytes(b"voice")
@@ -142,7 +147,7 @@ def test_speak_generates_wav(monkeypatch, tmp_path) -> None:
     # Force _voice_for_lang to use our tmp_path voice (system may have real kokoro installed)
     monkeypatch.setattr(voice, "_voice_for_lang", lambda lang, override=None: str(tmp_path / "af_heart.pt"))
 
-    out = voice.speak("olá mundo", play=False)
+    out = voice.speak("olá mundo", play=False, base="kokoro")
     assert not out.startswith("ERROR")
     assert out.endswith(".wav")
     assert Path(out).exists()
