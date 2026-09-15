@@ -65,16 +65,28 @@ TTS_PRONUNC = [
     (r"\bbeyonders\b", "biónders"),
     (r"\bBeyonder\b", "Biónder"),
     (r"\bbeyonder\b", "biónder"),
+    (r"\bMoretti\b", "Moréti"),
+    (r"\bKhoy\b", "Cói"),
+    (r"\bTingen\b", "Tínguem"),
+    (r"\bweb novels\b", "web nóvels"),
+    (r"\bnovels\b", "nóvels"),
+    (r"\bnovel\b", "nóvel"),
     (r"\bUh\b", "Ãh"),
     (r"\buh\b", "ãh"),
+    (r"\bmiolos\b", "miólos"),
+    (r"\bHehe\b", "Rêrê"),
+    (r"\bhehe\b", "rêrê"),
     (r"\.{4,}", "…"),
 ]
+# Notas de rodapé [1] [23]: o Edge lê como "hmm" — remover antes do TTS.
+TTS_FOOTNOTE_RE = r"\[\d+\]"
 
 
 def _clean_tts_text(text: str) -> str:
     """Remove markdown literal e aplica dicionário de pronúncia."""
     import re
     text = re.sub(TTS_STRIP_RE, "", text)
+    text = re.sub(TTS_FOOTNOTE_RE, "", text)
     for pat, rep in TTS_PRONUNC:
         text = re.sub(pat, rep, text)
     text = re.sub(r"[ \t]{2,}", " ", text)
@@ -120,26 +132,72 @@ def _resolve_rvc(rvc: str | None) -> tuple[str | None, str | None]:
     return str(p), idx
 
 
+# Style Edge (dono 15/09): mstts:express-as é rejeitado pelo serviço via
+# edge-tts (NoAudioReceived) — style aqui = preset de prosódia, que funciona.
+STYLE_PROSODY = {
+    "angry": {"pitch": "+15Hz", "rate": "-5%"},
+    "cheerful": {"pitch": "+20Hz", "rate": "+5%"},
+    "sad": {"pitch": "-10Hz", "rate": "-15%"},
+    "unfriendly": {"pitch": "-5Hz", "rate": "-8%"},
+    "calm": {"pitch": "-5Hz", "rate": "-12%"},
+}
+
+
 def _edge_base_wav(text: str, out_path: Path, voice: str = EDGE_VOICE_DEFAULT,
-                   rate: str | None = None) -> str:
-    """Sintetiza base via Edge TTS (subprocess). Retorna path ou ERROR:."""
-    import shutil
+                   rate: str | None = None, style: str | None = None) -> str:
+    """Sintetiza base via Edge TTS. Com style= usa preset de prosódia
+    (angry/cheerful/sad/unfriendly/calm); sem style usa texto puro."""
     import subprocess
 
-    binary = next((b for b in EDGE_BIN_CANDIDATES
-                   if "/" not in b or Path(b).exists()), None)
-    if binary is None or ("/" not in binary and shutil.which(binary) is None):
-        return "ERROR: edge-tts não instalado (pip install edge-tts)"
     mp3 = out_path.with_suffix(".edge.mp3")
-    rstr = "" if rate is None else str(rate)
-    if rstr and not rstr.endswith("%"):
-        rstr += "%"
-    cmd = [binary, "--voice", voice, "--text", text, "--write-media", str(mp3)]
-    if rstr:
-        cmd += ["--rate", rstr]
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    if r.returncode != 0 or not mp3.exists():
-        return f"ERROR: edge-tts falhou: {(r.stderr or '')[:150]}"
+    # 1. biblioteca edge_tts (se instalada): falha rápido
+    try:
+        import asyncio
+        import edge_tts
+
+        async def _gen():
+            if style and style in STYLE_PROSODY:
+                pr = STYLE_PROSODY[style]
+                await asyncio.wait_for(
+                    edge_tts.Communicate(
+                        text, voice, pitch=pr["pitch"],
+                        rate=pr["rate"] if rate is None else rate).save(str(mp3)),
+                    timeout=60)
+            else:
+                await asyncio.wait_for(
+                    edge_tts.Communicate(text, voice).save(str(mp3)), timeout=60)
+
+        asyncio.run(_gen())
+        if mp3.exists():
+            pass  # ok, converte abaixo
+        else:
+            return "ERROR: edge-tts lib nao gerou audio%s" % (" (style=%s)" % style if style else "")
+    except Exception as e:
+        if style:
+            return ("ERROR: edge-tts style falhou: %s" % e)[:150]
+        # sem style: cai p/ CLI abaixo
+        try:
+            mp3.unlink(missing_ok=True)
+        except Exception:
+            pass
+        lib_err = str(e)[:80]
+    else:
+        lib_err = ""
+    if not style and not mp3.exists():
+        import shutil
+        binary = next((b for b in EDGE_BIN_CANDIDATES
+                       if "/" not in b or Path(b).exists()), None)
+        if binary is None or ("/" not in binary and shutil.which(binary) is None):
+            return "ERROR: edge-tts falhou (%s)" % (lib_err or "sem CLI")
+        rstr = "" if rate is None else str(rate)
+        if rstr and not rstr.endswith("%"):
+            rstr += "%"
+        cmd = [binary, "--voice", voice, "--text", text, "--write-media", str(mp3)]
+        if rstr:
+            cmd += ["--rate", rstr]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+        if r.returncode != 0 or not mp3.exists():
+            return f"ERROR: edge-tts falhou: {(r.stderr or '')[:150]}"
     wav = out_path.with_name(out_path.stem + "-edge.wav")
     r2 = subprocess.run(
         ["ffmpeg", "-y", "-v", "error", "-i", str(mp3),
@@ -512,6 +570,7 @@ def speak(
     rate: str | None = None,
     index_rate: float = 0.75,
     f0_method: str = "rmvpe",
+    style: str | None = None,
 ) -> str:
     """Sintetiza `text` (Kokoro local ou Edge Antonio) e (opcionalmente) toca.
 
@@ -522,42 +581,46 @@ def speak(
     Retorna o path do WAV gerado ou mensagem ERROR:.
     """
     text = _clean_tts_text(text)
-    try:
-        import numpy as np  # noqa: F401  (kokoro depende)
-        from kokoro import KModel, KPipeline  # type: ignore[import-not-found]
-        import soundfile as sf  # type: ignore[import-not-found]
-    except ImportError as exc:  # pragma: no cover
-        return f"ERROR: kokoro não instalado: {exc}"
+    if base is None:
+        base = os.environ.get("JARVIS_TTS_BASE", "antonio")
+    use_edge_early = base == "antonio"
+    if not use_edge_early:
+        try:
+            import numpy as np  # noqa: F401  (kokoro depende)
+            from kokoro import KModel, KPipeline  # type: ignore[import-not-found]
+            import soundfile as sf  # type: ignore[import-not-found]
+        except ImportError as exc:  # pragma: no cover
+            return f"ERROR: kokoro não instalado: {exc}"
 
     try:
         from jarvis.core.emotion import speed_for
 
         config_path = os.path.expanduser(KOKORO_CONFIG_DEFAULT)
         model_path = os.path.expanduser(KOKORO_MODEL_DEFAULT)
-        missing = [p for p in (config_path, model_path) if not Path(p).exists()]
-        voice_path = os.path.expanduser(KOKORO_VOICE_DEFAULT)
-        if not Path(voice_path).exists():
-            missing.append(voice_path)
-        if missing:
-            return (
-                f"ERROR: arquivos Kokoro não encontrados: {', '.join(missing)}. "
-                "No host, eles vêm do store Nix (modules/ai/models.nix) e o PATH "
-                "via JARVIS_KOKORO_* — provisionamento declarativo."
-            )
-        voice_path = voice or os.path.expanduser(KOKORO_VOICE_DEFAULT)
-        _setup_kokoro_espeak()  # bypass spaCy antes de criar pipeline
-        # Auto-detect language from text content
-        lang_code = _detect_lang_code(text)
-        voice_path = _voice_for_lang(lang_code, voice)
-        if base is None:
-            base = os.environ.get("JARVIS_TTS_BASE", "antonio")
         use_edge = base == "antonio"
         kmodel, pipeline = (None, None)
         if not use_edge:
+            missing = [p for p in (config_path, model_path) if not Path(p).exists()]
+            voice_path = os.path.expanduser(KOKORO_VOICE_DEFAULT)
+            if not Path(voice_path).exists():
+                missing.append(voice_path)
+            if missing:
+                return (
+                    f"ERROR: arquivos Kokoro não encontrados: {', '.join(missing)}. "
+                    "No host, eles vêm do store Nix (modules/ai/models.nix) e o PATH "
+                    "via JARVIS_KOKORO_* — provisionamento declarativo."
+                )
+            voice_path = voice or os.path.expanduser(KOKORO_VOICE_DEFAULT)
+            _setup_kokoro_espeak()  # bypass spaCy antes de criar pipeline
+            # Auto-detect language from text content
+            lang_code = _detect_lang_code(text)
+            voice_path = _voice_for_lang(lang_code, voice)
             kmodel, pipeline = _get_pipeline(config_path, model_path, lang_code)
+        else:
+            voice_path, lang_code = voice, "p"
         out_dir = Path(_model_dir()) / "tts"
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"jarvis_tts_{abs(hash(text)) % 10**9}.wav"
+        out_path = out_dir / f"jarvis_tts_{abs(hash((text, voice, speed, base, rate, style))) % 10**9}.wav"
 
         # Texto longo: fatia em frases e concatena (nenhuma base entrega tudo).
         slices = _split_chunks(text)
@@ -567,8 +630,10 @@ def speak(
             for i, part in enumerate(slices):
                 part_path = out_dir / f"{out_path.stem}-p{i}.wav"
                 if use_edge:
-                    edge_wav = _edge_base_wav(part, part_path, rate=rate)
+                    edge_wav = _edge_base_wav(part, part_path, rate=rate, style=style)
                     if edge_wav.startswith("ERROR"):
+                        if use_edge_early:
+                            return edge_wav  # sem kokoro aqui; falha limpa p/ retry
                         print(f"[speak] edge falhou ({edge_wav[:80]}), fallback kokoro", flush=True)
                         use_edge = False
                         _, pipeline = _get_pipeline(config_path, model_path, lang_code)
@@ -594,12 +659,13 @@ def speak(
             if len(base_parts) == 1:
                 base_parts[0].replace(out_path)
             else:
+                import numpy as _np
                 import soundfile as _sf
                 arrays = []
                 for bp in base_parts:
                     data, _ = _sf.read(str(bp))
                     arrays.append(data)
-                _sf.write(str(out_path), np.concatenate(arrays), base_sr)
+                _sf.write(str(out_path), _np.concatenate(arrays), base_sr)
         finally:
             for bp in base_parts:
                 if bp != out_path and bp.exists():
@@ -991,6 +1057,7 @@ def main_tts(argv: list[str] | None = None) -> int:
                         help="timbre RVC: jarvis|klein|silver, path .pth, ou vazio = env atual")
     parser.add_argument("--rvc-index", default=None, help="index .index (só com --rvc=path)")
     parser.add_argument("--rate", default=None, help="velocidade Edge (ex: -10; use =, ex: --rate=-10; só base antonio)")
+    parser.add_argument("--style", default=None, help="estilo Edge mstts (cheerful/sad/angry/unfriendly; só base antonio)")
     args = parser.parse_args(argv)
 
     # id da voz → path (mesmo diretório do modelo, voices/<id>.pt).
@@ -1005,7 +1072,7 @@ def main_tts(argv: list[str] | None = None) -> int:
             voice_path = str(candidate) if candidate.exists() else args.voice
 
     out = speak(args.text, voice=voice_path, play=not args.no_play, clone=args.clone, speed=args.speed, pitch=args.pitch,
-                base=args.base, rvc=args.rvc, rvc_index=args.rvc_index, keep_wav=args.no_play, rate=args.rate)
+                base=args.base, rvc=args.rvc, rvc_index=args.rvc_index, keep_wav=args.no_play, rate=args.rate, style=args.style)
     print(out)
     return 0 if not out.startswith("ERROR") else 1
 
