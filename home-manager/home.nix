@@ -59,10 +59,6 @@
     if [ -x ~/.config/ai-agents/opencode-auth-sync.sh ]; then
       ~/.config/ai-agents/opencode-auth-sync.sh >/dev/null 2>&1 || true
     fi
-    # Garante httpx p/ MCP jarvis (memory/vault/lessons/RAG).
-    if [ -x ~/.config/ai-agents/opencode-mcp-pythonpath.sh ]; then
-      ~/.config/ai-agents/opencode-mcp-pythonpath.sh >/dev/null 2>&1 || true
-    fi
     # RVC voice-clone (timbre Jarvis): env canônico em scripts/rvc-env.sh
     # (só exporta se o spike existir; pós-reboot: ./scripts/rvc-spike-bootstrap.sh).
     # O python do venv usa o loader nix-ld → sem LD_LIBRARY_PATH manual.
@@ -123,53 +119,6 @@
   '';
   home.file.".config/ai-agents/opencode-auth-sync.sh".executable = true;
 
-  # Patch declarativo do MCP jarvis no opencode.json: injeta /tmp/opencode/pytlib
-  # (httpx e deps p/ memory/vault/lessons/RAG) no PYTHONPATH do servidor MCP.
-  # Idempotente, com backup .prev; recria a lib via kvenv se sumir (reboot).
-  home.file.".config/ai-agents/opencode-mcp-pythonpath.sh".source = builtins.toFile "opencode-mcp-pythonpath.sh" ''
-    #!/usr/bin/env bash
-    # Garante httpx importável e injeta pytlib no command do MCP jarvis.
-    set -u
-    PYTLIB="$HOME/.local/share/opencode/pytlib"
-    if [ ! -f "$PYTLIB/httpx/__init__.py" ]; then
-      mkdir -p "$PYTLIB"
-      KVENVPY="/tmp/opencode/kvenv/bin/python"
-      if [ -x "$KVENVPY" ]; then
-        "$KVENVPY" -m pip install -q --target="$PYTLIB" httpx >/dev/null 2>&1 || true
-      fi
-    fi
-    CFG="$HOME/.config/opencode/opencode.json"
-    [ -f "$CFG" ] || exit 0
-    [ -f "$PYTLIB/httpx/__init__.py" ] || exit 0
-    python3 - "$CFG" "$PYTLIB" <<'PYEOF'
-    import json, sys
-    path, pytlib = sys.argv[1], sys.argv[2]
-    try:
-        with open(path) as f:
-            data = json.load(f)
-    except (OSError, ValueError):
-        sys.exit(0)
-    try:
-        cmd = data["mcp"]["jarvis"]["command"]
-        idx = next(i for i, c in enumerate(cmd) if "jarvis.mcp_server" in c)
-    except (KeyError, IndexError, StopIteration):
-        sys.exit(0)
-    old = cmd[idx]
-    prefix = "PYTHONPATH=" + pytlib + ":"
-    if pytlib not in old:
-        import shutil
-        try:
-            shutil.copy2(path, path + ".prev")
-        except OSError:
-            pass
-        cmd[idx] = old.replace("PYTHONPATH=", prefix, 1)
-        with open(path, "w") as f:
-            json.dump(data, f, indent=2)
-        print("opencode mcp pythonpath: pytlib injetado")
-    PYEOF
-  '';
-  home.file.".config/ai-agents/opencode-mcp-pythonpath.sh".executable = true;
-
   # ZSH — emacs keybindings (Ctrl+A/E/Ctrl+K, etc)
   programs.zsh = {
     enable = true;
@@ -193,10 +142,6 @@
       # Reconcilia auth.json do opencode com o env
       if [ -x "$HOME/.config/ai-agents/opencode-auth-sync.sh" ]; then
         "$HOME/.config/ai-agents/opencode-auth-sync.sh" >/dev/null 2>&1 || true
-      fi
-      # Garante httpx p/ MCP jarvis (memory/vault/lessons/RAG)
-      if [ -x "$HOME/.config/ai-agents/opencode-mcp-pythonpath.sh" ]; then
-        "$HOME/.config/ai-agents/opencode-mcp-pythonpath.sh" >/dev/null 2>&1 || true
       fi
       # RVC voice-clone (timbre Jarvis): mesma fonte canônica do bash.
       # Sem isso, `jarvis speak --clone` no zsh falha com JARVIS_RVC_PYTHON ausente.
@@ -433,7 +378,7 @@
       mcp = {
         jarvis = {
           type = "local";
-          command = [ "bash" "-c" "cd /home/nixos/projects/nixos-ai && PYTHONPATH=modules/ai/jarvis/src JARVIS_PROJECT_ROOT=/home/nixos/projects/nixos-ai exec /etc/profiles/per-user/nixos/bin/python3 -m jarvis.mcp_server" ];
+          command = [ "bash" "-c" "cd /home/nixos/projects/nixos-ai && PYTHONPATH=${pkgs.python3.withPackages (ps: [ ps.httpx ])}/${pkgs.python3.sitePackages}:modules/ai/jarvis/src JARVIS_PROJECT_ROOT=/home/nixos/projects/nixos-ai exec /etc/profiles/per-user/nixos/bin/python3 -m jarvis.mcp_server" ];
           cwd = "/home/nixos/projects/nixos-ai";
           enabled = true;
           timeout = 30000;

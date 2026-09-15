@@ -1177,3 +1177,14 @@ relatório Solar, sudo kill nightwatch se quiser, cupom-100% final.
 - Kaggle CLI nixpkgs (1.8.3) IGNORA machine_shape em silêncio; usar
   kvenv (/tmp, CLI 2.2.4) + --accelerator NvidiaTeslaT4. P100 é default
   e torch 2.11 não tem sm_60 (falha silenciosa, exit 0 sem gerar nada).
+
+## 49. SESSION NOTES (2026-09-14 — opencode.json é gerenciado!)
+- REGRA DURA: `~/.config/opencode/opencode.json` é SYMLINK p/ /nix/store
+  (gerado por home.nix). JAMAIS tentar editar/patch — sempre editar o
+  GERADOR em home-manager/home.nix. Patch-script furado foi revertido.
+- MCP sem httpx (memory/vault/lessons/RAG mortos): fix no gerador via
+  `pkgs.python3.withPackages (ps: [ ps.httpx ])` no PYTHONPATH do command.
+- rebuild --host-only criado (nix-validate.sh + rebuild-host.sh aceitam):
+  sintaxe+host+HM sem flake-check total (nixos-lab quebrado não trava host).
+- Flake: pin SenchoPens/base16.nix + tinted-schemes HEAD; nixos-lab segue
+  quebrado (drv sumido, sem cache) — lab exige validação total quando tocado.
