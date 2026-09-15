@@ -867,11 +867,12 @@ def _handle_rag_search(args: dict[str, Any]) -> str:
         from jarvis.core.config import Config
         from jarvis.providers.vector_store import QdrantStore
         cfg = Config()
-        # Override collection if specified
+        # Override collection if specified (Config é frozen: replace, nunca assign)
+        import dataclasses
         if collection == "memories":
-            cfg.qdrant_collection_code = cfg.qdrant_collection_memories
+            cfg = dataclasses.replace(cfg, qdrant_collection_code=cfg.qdrant_collection_memories)
         elif collection == "books":
-            cfg.qdrant_collection_code = cfg.qdrant_collection_books
+            cfg = dataclasses.replace(cfg, qdrant_collection_code=cfg.qdrant_collection_books)
         # Garante a coleção via store canônico (schema dense+bm25, dim do
         # config) — nunca recriar via requests com schema divergente.
         QdrantStore(cfg).ensure_collection(cfg.qdrant_collection_code, dim=cfg.embed_dim)
