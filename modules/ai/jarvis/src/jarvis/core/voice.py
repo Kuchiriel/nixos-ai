@@ -74,8 +74,8 @@ TTS_PRONUNC = [
     (r"\bUh\b", "Ãh"),
     (r"\buh\b", "ãh"),
     (r"\bmiolos\b", "miólos"),
-    (r"\bHehe\b", "Rêrê"),
-    (r"\bhehe\b", "rêrê"),
+    (r"\bHehe\b", "Re Re"),
+    (r"\bhehe\b", "re re"),
     (r"\.{4,}", "…"),
 ]
 # Notas de rodapé [1] [23]: o Edge lê como "hmm" — remover antes do TTS.
