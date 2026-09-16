@@ -252,10 +252,16 @@
             baseURL = "http://127.0.0.1:8080/v1";
           };
           models = {
-            "qwen3-35b-a3b" = {
-              name = "Qwen3 35B Local";
+            # Ids = EXATAMENTE os do server /v1/models (bonsai,
+            # jarvis-fast, jarvis-strong) — opencode valida contra o
+            # server; nome divergente → "model not found" (bug 16/09).
+            "jarvis-strong" = {
+              name = "Qwen3.6 35B MoE Local (strong)";
             };
-            "bonsai-8b" = {
+            "jarvis-fast" = {
+              name = "Qwen3-4B Local (fast)";
+            };
+            "bonsai" = {
               name = "Bonsai 8B Local (ternary)";
             };
           };
@@ -382,7 +388,7 @@
       # Default E2E-validado 16/09 ("opencode run" respondeu): Gemini free
       # via GEMINI_API_KEY. openrouter/free era slug morto = causa raiz do
       # "opencode quebrado".
-      model = "google/gemini-2.5-flash";
+      model = "local/bonsai";
 
       # MCP Jarvis: RAG, memória, vault, files, shell, nix — via stdio.
       # Handshake validado (tools/list retorna 20 tools). Env inline no
