@@ -297,12 +297,9 @@ def _is_allowed(root: str, file: str) -> bool:
     if ext in _ALLOWED_EXTENSIONS:
         return True
     if ext in _METADATA_EXTENSIONS:
-        return (
-            "/AI_SYSTEM" in root
-            or "forensic" in root.lower()
-            or "capture" in root.lower()
-            or file in {"GEMINI.md", "JARVIS.md", "AGENTS.md", "README.md"}
-        )
+        # .md/.json/.yaml em TODO lugar (dono 16/09: docs são o mapa;
+        # gate antigo escondia AGENTS/SESSAO/audits do RAG)
+        return True
     return False
 
 
