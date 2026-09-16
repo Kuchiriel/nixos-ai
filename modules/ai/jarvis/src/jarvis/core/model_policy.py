@@ -43,13 +43,28 @@ class ModelTier:
         }
 
 
-# Default model tiers (can be overridden by user config)
+# Default model tiers (contexto vem do registry/models.nix; fallback 32000)
+def _registry_ctx(model_id: str, default: int = 32000) -> int:
+    """Lê ctx do /etc/jarvis/model-registry.json (fonte: models.nix)."""
+    try:
+        from jarvis.core.model_registry import ModelRegistry
+        m = ModelRegistry.load().models.get(model_id)
+        c = (m.extra if hasattr(m, "extra") else {}).get("ctx")
+        if c:
+            return int(c)
+    except Exception:
+        pass
+    return default
+
+
+_CTX_BONSAI = _registry_ctx("bonsai")
+_CTX_FAST = _registry_ctx("jarvis-fast")
 DEFAULT_TIERS = {
     "cheap": ModelTier(
         name="cheap",
         tier="cheap",
         model_name="qwen3.6-4b",
-        context_size=32000,
+        context_size=_CTX_FAST,
         tokens_per_second=45,
         vram_required_gb=2.5,
         description="Fast classification, routing, simple tasks",

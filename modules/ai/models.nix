@@ -321,7 +321,7 @@ in rec {
       gpuLayers = 99; # todas as 36 layers na GPU (denso, sem experts)
       kvCache = "-fa on -ctk q4_0 -ctv q4_0";
       threads = 8;
-      ctxSize = 32768;
+      ctxSize = 49152;
       batchSize = 2048;
       ubatch = 512;
       moeFlags = "";
@@ -508,6 +508,7 @@ in rec {
     models = {
       bonsai = {
         profile = "bonsai";
+        ctx = 49152;
         tier = "speed";
         capabilities = ["general" "coding" "tools" "pt"];
         params_b = 8;
@@ -518,6 +519,7 @@ in rec {
       };
       jarvis-fast = {
         profile = "qwen-fast";
+        ctx = 49152;
         profileVm = "vm";
         tier = "fast";
         capabilities = ["general" "coding" "tools" "pt"];
@@ -528,6 +530,7 @@ in rec {
       };
       jarvis-strong = {
         profile = "chat";
+        ctx = 32768;
         tier = "reasoning";
         capabilities = ["general" "coding" "tools" "reasoning" "analysis" "vision" "pt"];
         params_b = 35;
