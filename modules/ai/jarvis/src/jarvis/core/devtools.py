@@ -430,7 +430,22 @@ def execute_shell(cmd: str, approve: bool = False) -> dict[str, Any]:
     # Quick validation before execution
     stripped = cmd.strip()
     if not command_allowed(stripped):
-        return {"ok": False, "error": f"Command not in allowlist: {stripped[:100]}"}
+        # A/B 16/09: modelo fraco tenta chamar write_file/mkdir como COMANDO
+        # shell (não estão na allowlist por design — são tools). O erro tem
+        # que ensinar a interface certa, senão ele tenta variantes de shell
+        # em loop (B5: 3 tentativas seguidas).
+        _first = stripped.split()[0] if stripped.split() else ""
+        _tool_hint = ""
+        if _first in ("write_file", "str_replace", "read_file", "list_directory",
+                      "semantic_search", "code_search", "run_tests", "run_linter"):
+            _tool_hint = (" — esse nome é uma TOOL, não um comando shell. "
+                          "Chame como tool call: "
+                          '{"name": "' + _first + '", "args": {...}}')
+        elif _first in ("mkdir", "touch", "tee"):
+            _tool_hint = (" — para criar arquivo/pasta, chame a tool write_file "
+                          "(cria diretórios-pai): "
+                          '{"name": "write_file", "args": {"path": "...", "content": "..."}}')
+        return {"ok": False, "error": f"Command not in allowlist: {stripped[:100]}" + _tool_hint}
     return run_shell_dict(cmd)
 
 
@@ -569,17 +584,33 @@ def list_directory(path: str = ".", max_depth: int = 2) -> dict[str, Any]:
                 pass
 
         _scan(target, 0)
+        # Cap de output (§23): listagem de 21k itens soterrava a atenção do
+        # modelo (A/B 16/09: ~5k chars de lixo por chamada em /tmp, hints
+        # menores invisíveis). 100 entradas + aviso explícito.
+        _MAX_ENTRIES = 100
+        _truncated = max(0, len(entries) - _MAX_ENTRIES)
+        if _truncated > 0:
+            entries = entries[:_MAX_ENTRIES]
         try:
             rel = str(target.relative_to(_project_root()))
         except ValueError:
             rel = str(target)
 
-        return {
+        result: dict[str, Any] = {
             "ok": True,
             "entries": entries,
             "path": rel,
             "count": len(entries),
         }
+        if _truncated > 0:
+            result["truncated"] = True
+            result["total_found"] = len(entries) + _truncated
+            result["hint"] = (
+                f"{_truncated}+ entradas omitidas — listagem CAPADA. "
+                "Não use listagem gigante como 'verificação': se a task é "
+                "CRIAR, chame write_file; para achar arquivo, use code_search."
+            )
+        return result
     except ValueError as e:
         return {"ok": False, "error": str(e)}
     except OSError as e:
@@ -914,6 +945,28 @@ def handle_dev_tool(name: str, args: dict[str, Any]) -> str:
     handler = handlers.get(name)
     if handler is None:
         return json.dumps({"ok": False, "error": f"Unknown tool: {name}"})
+
+    # Args ausentes com schema explícito: "ERROR: 'path'" (KeyError cru)
+    # não ensina nada a um modelo fraco (A/B 16/09: write_file com args
+    # {} → erro críptico → abandono da tool). Retorna o formato esperado.
+    _required = {
+        "read_file": ("path",),
+        "write_file": ("path", "content"),
+        "str_replace": ("path", "old", "new"),
+        "execute_shell": ("cmd",),
+        "semantic_search": ("query",),
+        "code_search": ("pattern",),
+        "jarvis_command": ("subcommand",),
+    }.get(name, ())
+    _missing = [k for k in _required if k not in (args or {})]
+    if _missing:
+        return json.dumps({
+            "ok": False,
+            "error": f"args ausentes: {_missing}",
+            "expected_format": json.dumps(
+                {"name": name, "args": {k: "..." for k in _required}},
+                ensure_ascii=False),
+        }, ensure_ascii=False)
 
     try:
         result = handler(args)

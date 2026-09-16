@@ -151,13 +151,24 @@ class LoopDetector:
 
         if self._consecutive_duplicates >= self.max_consecutive_duplicates:
             self._consecutive_duplicates = 0
+            # A/B 16/09: "try a completely different approach" sem nomear a
+            # alternativa devolvia o modelo pra MESMA leitura (B5 [10]).
+            # Mesma dose acionável do cycle: leitura repetida = path não
+            # existe, criar ou encerrar.
+            _dup_extra = ""
+            if sig.name in ("read_file", "list_directory", "semantic_search", "code_search"):
+                _dup_extra = (
+                    " O path lido NÃO EXISTE (você já viu o erro 3 vezes) — "
+                    "mais leitura nunca vai resolver. Se a task é CRIAR, chame "
+                    "write_file com o path completo AGORA; senão, responda e encerre."
+                )
             return RecoveryStrategy(
                 action=RecoveryAction.INJECT_WARNING,
                 message=(
                     f"You repeated '{sig.name}' with identical arguments "
                     f"{self.max_consecutive_duplicates + 1} times. This is not productive. "
                     f"Use the data you already have to provide a final answer, "
-                    f"or try a completely different approach."
+                    f"or try a completely different approach.{_dup_extra}"
                 ),
                 loop_type=LoopType.DUPLICATE,
                 iteration=self._total_iterations,
@@ -183,12 +194,26 @@ class LoopDetector:
             second_half = window[cycle_len:]
             if first_half == second_half:
                 tools_seq = " → ".join(s.name for s in first_half)
+                # A/B 16/09: ciclo só de leitura = agente procurando algo que
+                # não existe. "Try a different strategy" sem nomear a estratégia
+                # devolvia o modelo pro mesmo ciclo (mundo verificado: 0/3).
+                # Nomear a alternativa (criar) quebra o beco sem saída.
+                _read_only = {"read_file", "list_directory", "semantic_search", "code_search"}
+                _extra = ""
+                if {s.name for s in first_half} <= _read_only:
+                    _extra = (
+                        " Você está lendo paths em loop e eles NÃO EXISTEM — "
+                        "mais leitura nunca vai resolver. Se a task é CRIAR, "
+                        "chame write_file com o path completo AGORA (cria o arquivo "
+                        "e os diretórios-pai). Se a task não é criar, responda com "
+                        "o que descobriu e termine."
+                    )
                 return RecoveryStrategy(
                     action=RecoveryAction.CHANGE_STRATEGY,
                     message=(
                         f"Cycle detected: [{tools_seq}] repeated. "
                         f"Your current approach is not making progress. "
-                        f"Stop this pattern and try a fundamentally different strategy."
+                        f"Stop this pattern.{_extra}"
                     ),
                     loop_type=LoopType.CYCLE,
                     iteration=self._total_iterations,
