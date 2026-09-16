@@ -16,6 +16,7 @@
     ./llama-cpp.nix
     ./llama-fan-control.nix
     ./nightwatch-timer.nix
+    ./audiobook-audit-timer.nix
     ./qdrant.nix
   ];
 }
