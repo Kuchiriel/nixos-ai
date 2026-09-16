@@ -1291,9 +1291,9 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
         try:
             from jarvis.core.browser import handle_browser
             action = (args.get("action") or "").lower()
-            # click/fill mutam estado: mesmo fluxo de aprovação do
+            # click/fill/press mutam estado: mesmo fluxo de aprovação do
             # execute_shell (prompt interativo; driver responde).
-            if action in ("click", "fill") and not approve:
+            if action in ("click", "fill", "press") and not approve:
                 what = f"browser {action} {args.get('selector', '')}"
                 console.print(f"  [tool.warn]⚠  Browser:[/] {what}")
                 try:
@@ -2006,11 +2006,60 @@ def _run_agent_loop(
                     if _nudges < 2:
                         _run_agent_loop._nudges = _nudges + 1  # type: ignore[attr-defined]
                         console.print("[dim]  (promessa sem ação — pedindo execução)[/]")
+                        # A/B 16/09: nudge genérico ("execute AGORA") fazia o
+                        # modelo fraco escolher a tool ERRADA — pedia read_file
+                        # do alvo que deveria criar, logo após anunciar
+                        # write_file (0/3 na task de criação, mundo verificado).
+                        # O nudge agora ecoa a tool que o próprio modelo anunciou
+                        # + formato exato de tool_call (âncora de interface).
+                        import re as _re_p
+                        _announced = ""
+                        for _t in ("write_file", "str_replace", "read_file",
+                                   "execute_shell", "list_directory",
+                                   "semantic_search", "run_tests"):
+                            if _re_p.search(rf"\b{_t}\b", content):
+                                _announced = _t
+                                break
+                        _nudge = "Você disse que faria algo mas não chamou nenhuma tool."
+                        if _announced:
+                            if _announced == "write_file":
+                                _fmt = '{"name": "write_file", "args": {"path": "...", "content": "..."}}'
+                            else:
+                                _fmt = '{"name": "' + _announced + '", "args": {}}'
+                            _nudge += (" Você mesmo anunciou `" + _announced
+                                       + "`. Chame-a AGORA no formato: " + _fmt)
+                        _nudge += " Sem narrar, sem verificar antes."
                         messages.append({
                             "role": "system",
-                            "content": ("Você disse que faria algo mas não "
-                                        "chamou nenhuma tool. Execute AGORA "
-                                        "com a tool adequada, sem narrar."),
+                            "content": _nudge,
+                        })
+                        continue
+                # Claim-checker (§11): sucesso declarado precisa bater com o
+                # que write_file realmente gravou (A/B 16/09: modelo escreveu
+                # path errado e declarou "ola.txt foi escrito" — falso DONE
+                # verificável). Uma correção factual, depois aceita o verbo.
+                import re as _re_c
+                _claims = _re_c.findall(
+                    r"[\w./\-]+\.(?:txt|md|py|json|nix|sh|yaml|yml|toml|csv|log)",
+                    content)
+                _writes = getattr(_run_agent_loop, "_writes_ok", [])
+                if _claims and ("cri" in content.lower() or "escrev" in content.lower()):
+                    _false_claims = [c for c in _claims if c not in " ".join(_writes)
+                                     and not any(c.endswith(w.split("/")[-1]) and w
+                                                 for w in _writes)]
+                    if _false_claims and getattr(_run_agent_loop, "_claims_nudged", 0) < 1:
+                        _run_agent_loop._claims_nudged = 1  # type: ignore[attr-defined]
+                        console.print("[dim]  (claim não verificado — corrigindo)[/]")
+                        messages.append({
+                            "role": "system",
+                            "content": ("ATENÇÃO: você declarou que "
+                                        + ", ".join(_false_claims[:3])
+                                        + " foi criado/escrito, mas write_file NUNCA "
+                                          "gravou esse path nesta sessão (gravou: "
+                                        + (", ".join(_writes[-3:]) or "nada")
+                                        + "). Se a task pede esse arquivo, chame "
+                                          'write_file(path="…", content="…") AGORA. '
+                                          "Não declare sucesso não verificado."),
                         })
                         continue
                 console.print(Panel(
@@ -2035,6 +2084,13 @@ def _run_agent_loop(
             output = _validated_output(func_name, args, output)
             if not output.startswith("ERROR"):
                 successes += 1
+                # Rastreio p/ claim-checker (§11): quais paths write_file
+                # realmente gravou nesta sessão (verificação de mundo,
+                # não confiança na narrativa do modelo).
+                if func_name == "write_file":
+                    _w = getattr(_run_agent_loop, "_writes_ok", [])
+                    _w.append(str(args.get("path", "")))
+                    _run_agent_loop._writes_ok = _w  # type: ignore[attr-defined]
 
             is_error = output.startswith("ERROR")
             style = "tool.error" if is_error else "tool.ok"

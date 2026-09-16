@@ -252,3 +252,30 @@ class TestCompare:
         assert report["conditions"]["A"]["n"] == 2
         assert len(report["conditions"]["A"]["tasks"]) == 2
         assert report["conditions"]["A"]["avg_turns"] == 1.0
+
+
+class TestBrowserDispatch:
+    def test_browser_dispatch_new_actions(self):
+        """Regressão §17: press/scroll/extract/wait no handle_browser."""
+        from jarvis.core.browser import handle_browser
+        # press sem key → erro claro (não crash)
+        r = handle_browser({"action": "press"})
+        assert "ERROR" in r and "key" in r
+        # extract sem selector → erro claro
+        r = handle_browser({"action": "extract"})
+        assert "ERROR" in r and "selector" in r
+        # wait sem selector → erro claro
+        r = handle_browser({"action": "wait"})
+        assert "ERROR" in r and "selector" in r
+        # click sem approve → erro de aprovação (gate intacto)
+        r = handle_browser({"action": "click", "selector": "a"})
+        assert "aprovação" in r
+        # press sem approve → erro de aprovação (gate cobre press, dispara
+        # ANTES do check de key — ordem correta: aprovação primeiro)
+        r = handle_browser({"action": "press", "key": "Enter"})
+        assert "aprovação" in r
+        # press com approve mas sem key → erro claro de key (sem playwright)
+        r = handle_browser({"action": "press", "key": ""}, approve=True)
+        assert "ERROR" in r and "key" in r
+        # scroll sem approve → leitura, NÃO pede aprovação
+        # (não roda playwright aqui — só valida o gate via mock de erro)

@@ -1,7 +1,9 @@
 """Browser tool do Agent (Playwright headless persistente).
 
 Ações: open(url) → título+texto; click(selector) → estado;
-fill(selector, text) → estado; snapshot() → título+elementos.
+fill(selector, text) → estado; press(key) → teclado; scroll(dy) → página;
+extract(selector) → lista de textos; wait(selector) → espera elemento;
+snapshot() → título+elementos.
 Guarda: só http(s); localhost livre, externo exige approve=True
 (padrão do harness: mutação pede aprovação).
 """
@@ -99,26 +101,96 @@ def browser_fill(selector: str, text: str) -> dict[str, Any]:
         return {"ok": False, "error": str(e)[:300]}
 
 
+def browser_press(selector: str, key: str) -> dict[str, Any]:
+    """Tecla no teclado (mutação: harness pede aprovação antes).
+
+    Foca num elemento (se passado) e envia a tecla (Enter, Tab, ArrowDown…).
+    Útil para formulários que fill não dispara (onChange/onKeydown).
+    """
+    if not key:
+        return {"ok": False, "error": "press precisa de key (ex.: Enter)"}
+    try:
+        page = _ensure()
+        if selector:
+            page.focus(selector, timeout=10000)
+        page.keyboard.press(key)
+        page.wait_for_timeout(300)
+        out = _state(page)
+        out["pressed"] = key
+        return {"ok": True, **out}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300]}
+
+
+def browser_scroll(dy: int = 600) -> dict[str, Any]:
+    """Rola a página (leitura: revela conteúdo abaixo da dobra)."""
+    try:
+        page = _ensure()
+        page.mouse.wheel(0, int(dy))
+        page.wait_for_timeout(300)
+        return {"ok": True, "scrolled": int(dy), **_state(page)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300]}
+
+
+def browser_extract(selector: str) -> dict[str, Any]:
+    """Extrai textos de todos os elementos que casam com o seletor (leitura).
+
+    Mais cirúrgico que o texto do body: lista item-a-item (links, rows,
+    cards) — o modelo lê a lista sem 1500 chars de ruído.
+    """
+    if not selector:
+        return {"ok": False, "error": "extract precisa de selector"}
+    try:
+        page = _ensure()
+        els = page.query_selector_all(selector)
+        items = [(e.inner_text() or "").strip()[:200]
+                 for e in els[:50] if (e.inner_text() or "").strip()]
+        return {"ok": True, "selector": selector, "items": items,
+                "total": len(items), "url": page.url}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300]}
+
+
+def browser_wait(selector: str, timeout_ms: int = 10000) -> dict[str, Any]:
+    """Espera elemento aparecer (leitura: sincroniza com SPA/carregamento)."""
+    if not selector:
+        return {"ok": False, "error": "wait precisa de selector"}
+    try:
+        page = _ensure()
+        page.wait_for_selector(selector, timeout=int(timeout_ms))
+        return {"ok": True, "appeared": selector, **_state(page)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300]}
+
+
 BROWSER_TOOL = {
     "type": "function",
     "function": {
         "name": "browser",
-        "description": ("Navegador headless (somente leitura de páginas + "
-                        "interação simples). Ações: open (url), click "
-                        "(selector CSS), fill (selector, text). Use para "
-                        "verificar sites locais e ler conteúdo web. "
-                        "click/fill pedem aprovação."),
+        "description": ("Navegador headless (leitura + interação). Ações: "
+                        "open (url), click (selector), fill (selector, text), "
+                        "press (selector?, key — teclado), scroll (dy), "
+                        "extract (selector — lista de textos), wait "
+                        "(selector — espera carregar). Use para verificar "
+                        "sites locais e ler conteúdo web. click/fill/press "
+                        "pedem aprovação; scroll/extract/wait são leitura."),
         "parameters": {
             "type": "object",
             "properties": {
                 "action": {"type": "string",
-                           "description": "open, click ou fill"},
+                           "description": ("open, click, fill, press, scroll, "
+                                           "extract ou wait")},
                 "url": {"type": "string",
                         "description": "URL (para open)"},
                 "selector": {"type": "string",
-                             "description": "Seletor CSS (para click/fill)"},
+                             "description": "Seletor CSS (click/fill/press/extract/wait)"},
                 "text": {"type": "string",
                          "description": "Texto (para fill)"},
+                "key": {"type": "string",
+                        "description": "Tecla (para press: Enter, Tab, ArrowDown)"},
+                "dy": {"type": "integer",
+                       "description": "Pixels de rolagem (para scroll, default 600)"},
             },
             "required": ["action"],
         },
@@ -127,7 +199,7 @@ BROWSER_TOOL = {
 
 
 def handle_browser(args: dict[str, Any], approve: bool = False) -> str:
-    """Despacha ação do browser. click/fill exigem approve=True."""
+    """Despacha ação do browser. Mutações (click/fill/press) exigem approve."""
     import json
     action = (args.get("action") or "").lower()
     if action == "open":
@@ -135,17 +207,29 @@ def handle_browser(args: dict[str, Any], approve: bool = False) -> str:
         if not url:
             return "ERROR: open precisa de url"
         r = browser_open(url)
-    elif action in ("click", "fill"):
+    elif action in ("click", "fill", "press"):
         if not approve:
             return (f"ERROR: browser {action} precisa de aprovação "
                     f"(rode com --approve ou confirme)")
         sel = args.get("selector", "")
-        if not sel:
+        if action == "press":
+            r = browser_press(sel, args.get("key", ""))
+        elif not sel:
             return f"ERROR: {action} precisa de selector"
-        r = (browser_click(sel) if action == "click"
-             else browser_fill(sel, args.get("text", "")))
+        elif action == "click":
+            r = browser_click(sel)
+        else:
+            r = browser_fill(sel, args.get("text", ""))
+    elif action == "scroll":
+        r = browser_scroll(args.get("dy", 600))
+    elif action == "extract":
+        r = browser_extract(args.get("selector", ""))
+    elif action == "wait":
+        r = browser_wait(args.get("selector", ""),
+                         args.get("timeout", 10000))
     else:
-        return "ERROR: action deve ser open, click ou fill"
+        return ("ERROR: action deve ser open, click, fill, press, "
+                "scroll, extract ou wait")
     if not r.get("ok"):
         return f"ERROR: {r.get('error', 'browser falhou')}"
     out = {k: v for k, v in r.items() if k != "ok"}
