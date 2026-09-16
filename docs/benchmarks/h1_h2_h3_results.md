@@ -62,3 +62,39 @@ latência H3: low < medium < high (98 turns é 3× o low em classify)
 2. Substituir persona `B_persona` por `C_rules` como default no `Agent.run()` system_content (linha 436-446 de agent.py)
 3. Investigar se `Agent.run()` loop in-line vs `dev.py` loop divergem; consolidar duplicação
 4. Migrar todos os scripts soltos de bench para `EvalHarness.compare` (já concluído)
+
+---
+
+## H4 — Model swap idle-reload (dono 16/09, pós-fixes do outro agente)
+
+**Swap latency real** (`ensure_model` bonsai↔jarvis-fast, n=3, idle-reload):
+```
+n=0: up=5.6s | down=2.1s
+n=1: up=2.1s | down=2.1s
+n=2: up=2.1s | down=2.1s
+```
+Infra **viável**: 2.1s por troca (idle-unload + reload funciona).
+
+**A/B task difícil (pasta+arquivo, n=5, PTY real, world-state verificado):**
+| Modelo | world_ok | latência média |
+|--------|----------|----------------|
+| bonsai (default) | **5/5** | 14.4s |
+| jarvis-fast | 3/5 | **9.1s** |
+
+**A/B task simples (arquivo único, n=5):** ambos 5/5 (~3s) — sem diferença.
+
+**Resultado: hipótese CONTRA-dita.** Trocar modelo para write tasks degrada
+world-state (5/5 → 3/5). Bonsai é mais confiável; jarvis-fast só ganha
+latência (~5s). Como WORLD STATE é a métrica primária (§10), **default
+bonsai permanece** (§21 preservado). Swap condicional por tarefa: NÃO
+justificado para escrita.
+
+**Nota histórica:** bonsai 5/5 neste experimente vs 0/9 do braço B do
+outro agente (pré-fixes) — as 8 correções (`5422dc0`: validator ensina
+criar, allowlist nomeia tool, promise-guard, claim-checker…) moveram o
+indicador de 0/9 → 5/5. LOCAL_EVIDENCE de que as correções funcionam.
+
+**Swap idle-reload permanece útil para:** strong tier em
+planning/review (qualidade > latência); recovery de falha repetida de
+escrita (STUCK → swap); tarefas de análise longa que precisam de
+raciocínio profundo.
