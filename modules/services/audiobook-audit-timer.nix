@@ -22,10 +22,10 @@
     };
   };
   systemd.timers.audiobook-audit = {
-    description = "LOTM audiobook audit diário 03:30";
+    description = "LOTM audiobook audit diário 01:00";
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnCalendar = "03:30";
+      OnCalendar = "01:00";
       Persistent = true;
     };
   };

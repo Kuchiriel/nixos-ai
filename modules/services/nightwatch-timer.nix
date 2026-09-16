@@ -61,7 +61,9 @@ in {
 
   systemd.timers.nightwatch = {
     description = "Run JARVIS nightwatch daily at 03:00";
-    wantedBy = [ "timers.target" ];
+    # DESABILITADO 2026-09-16 (dono): briga por GPU com audiobook; nunca
+    # entregou nada útil. Arquivo preservado p/ reavaliação futura.
+    # wantedBy = [ "timers.target" ];
 
     timerConfig = {
       OnCalendar = "*-*-* 03:00:00";
