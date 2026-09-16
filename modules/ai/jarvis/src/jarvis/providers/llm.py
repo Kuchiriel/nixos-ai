@@ -414,6 +414,54 @@ class LLMClient:
         temperature: float = 0.0,
         max_tokens: int | None = None,
         extra: dict[str, Any] | None = None,
+        reasoning_effort: str | None = None,
+    ) -> ChatResponse:
+        """Chat completion com tool calling — retorna ChatResponse completo.
+
+        reasoning_effort (OpenAI-style, imitado por loops — bonsai não tem
+        thinking nativo): None/low = direto; medium = +1 revisão grounded;
+        high = +2 revisões. Cada revisão exige CITAÇÃO VERBATIM da resposta
+        anterior; sem ela, mantém anterior e para (anti-alucinação).
+        """
+        response = self._chat_once(
+            messages, tools=tools, temperature=temperature,
+            max_tokens=max_tokens, extra=extra)
+        passes = {"low": 0, None: 0, "medium": 1, "high": 2}.get(
+            reasoning_effort, 0)
+        for _ in range(passes):
+            review = self._chat_once(
+                messages + [
+                    {"role": "assistant", "content": response.content or ""},
+                    {"role": "user", "content": (
+                        "REVISE sua resposta acima. Responda: MANTER, ou NOVA "
+                        "RESPOSTA corrigida. Exija de si: toda afirmação factual "
+                        "precisa de CITAÇÃO EXATA copiada do contexto (proibido "
+                        "paráfrase/reticências). Sem citação válida: MANTER.")},
+                ], tools=None, temperature=temperature,
+                max_tokens=max_tokens, extra=extra)
+            txt = (review.content or "").strip()
+            if txt.startswith("MANTER"):
+                break
+            import re as _re
+            quotes = _re.findall(r"[\"“]([^\"”]{8,})[\"”]", txt)
+            ctx = " ".join(
+                m.get("content", "") for m in messages
+                if isinstance(m.get("content"), str))
+            ctx += " " + (response.content or "")
+            if quotes and all(q in ctx for q in quotes):
+                response.content = txt
+            else:
+                break  # sem evidência grounded: para (não degrada)
+        return response
+
+    def _chat_once(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        temperature: float = 0.0,
+        max_tokens: int | None = None,
+        extra: dict[str, Any] | None = None,
     ) -> ChatResponse:
         """Chat completion com tool calling — retorna ChatResponse completo."""
         request_id = uuid.uuid4().hex[:12]
