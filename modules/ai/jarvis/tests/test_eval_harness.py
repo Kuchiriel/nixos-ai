@@ -162,3 +162,26 @@ class TestEvalHarness:
         assert result.trajectory[0].tool_name == "read_file"
         assert result.trajectory[1].tool_name == "run_tests"
         assert result.trajectory[2].role == "assistant"
+
+
+class TestCompare:
+    def test_compare_same_tasks_all_conditions(self, harness):
+        tasks = [
+            TaskTemplate(id="t1", description="d", prompt="p1",
+                         success_criteria={"output_contains": "ok"}),
+            TaskTemplate(id="t2", description="d", prompt="p2",
+                         success_criteria={"output_contains": "ok"}),
+        ]
+
+        def good(prompt):
+            return {"final_response": "ok done", "turns": 1, "tools_called": []}
+
+        def bad(prompt):
+            return {"final_response": "fail", "turns": 2, "tools_called": []}
+
+        report = harness.compare({"A": good, "B": bad}, tasks)
+        assert report["conditions"]["A"]["success_rate"] == 1.0
+        assert report["conditions"]["B"]["success_rate"] == 0.0
+        assert report["conditions"]["A"]["n"] == 2
+        assert len(report["conditions"]["A"]["tasks"]) == 2
+        assert report["conditions"]["A"]["avg_turns"] == 1.0

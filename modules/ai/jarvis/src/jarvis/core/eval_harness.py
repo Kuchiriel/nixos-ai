@@ -200,6 +200,43 @@ class EvalHarness:
         })
         return eval_result
 
+    def compare(self, conditions: dict[str, Callable[[str], dict[str, Any]]],
+                tasks: list[TaskTemplate]) -> dict[str, Any]:
+        """A/B controlado (§8-9 protocolo): mesmas tasks, N agent_fn variants.
+
+        Cada condition = pipeline diferente (ex. cru vs +persona vs +rules).
+        Retorna por condição: success_rate, avg_turns, avg_time_s,
+        avg_tool_calls + per-task detail. Modelo/ambiente/timeout devem ser
+        iguais entre conditions (caller garante; registrado em report).
+        """
+        report: dict[str, Any] = {"conditions": {}}
+        for name, agent_fn in conditions.items():
+            cond_results = []
+            for task in tasks:
+                r = self.run_task(task, agent_fn)
+                cond_results.append({
+                    "task_id": r.task_id,
+                    "success": r.success,
+                    "turns": r.total_turns,
+                    "time_s": round(r.total_time_s, 2),
+                    "tool_calls": r.total_tool_calls,
+                    "error": r.error,
+                })
+            n = len(cond_results)
+            report["conditions"][name] = {
+                "n": n,
+                "success_rate": round(
+                    sum(1 for c in cond_results if c["success"]) / max(1, n), 3),
+                "avg_turns": round(
+                    sum(c["turns"] for c in cond_results) / max(1, n), 1),
+                "avg_time_s": round(
+                    sum(c["time_s"] for c in cond_results) / max(1, n), 1),
+                "avg_tool_calls": round(
+                    sum(c["tool_calls"] for c in cond_results) / max(1, n), 1),
+                "tasks": cond_results,
+            }
+        return report
+
     def save_results(self, filename: str = "eval_results.jsonl") -> Path:
         """Save all results to JSONL."""
         path = self.results_dir / filename
