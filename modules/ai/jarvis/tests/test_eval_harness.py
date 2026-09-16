@@ -164,6 +164,73 @@ class TestEvalHarness:
         assert result.trajectory[2].role == "assistant"
 
 
+class TestWorldState:
+    def test_world_check_pass(self, harness, tmp_path):
+        # §11: world_check = prova EXTERNA do estado do mundo (exit 0)
+        marker = tmp_path / "marcador.txt"
+        task = TaskTemplate(
+            id="world-ok", description="d", prompt="cria o arquivo",
+            success_criteria={"world_check": "test -f %s" % marker},
+        )
+
+        def agent_fn(prompt):
+            marker.write_text("feito")
+            return {"final_response": "criei", "tools_called": [], "turns": 1}
+
+        r = harness.run_task(task, agent_fn)
+        assert r.criteria_met["world_check"] is True
+        assert r.success is True
+
+    def test_world_check_fail_quando_llm_mentira(self, harness, tmp_path):
+        # agente DIZ que criou, mundo não mudou → success False mesmo com
+        # output_contains batendo (anti falso-verde)
+        marker = tmp_path / "ausente.txt"
+        task = TaskTemplate(
+            id="world-mentira", description="d", prompt="cria o arquivo",
+            success_criteria={
+                "output_contains": "criei",
+                "world_check": "test -f %s" % marker,
+            },
+        )
+
+        def agent_fn(prompt):
+            return {"final_response": "criei o arquivo!", "tools_called": [], "turns": 1}
+
+        r = harness.run_task(task, agent_fn)
+        assert r.criteria_met["output_contains"] is True
+        assert r.criteria_met["world_check"] is False
+        assert r.success is False
+
+    def test_malformed_args_preview_nao_derruba_task(self, harness):
+        # agent_fn real (LLM) pode emitir args malformados; era crash
+        task = TaskTemplate(id="args-ruins", description="d", prompt="p")
+
+        def agent_fn(prompt):
+            return {
+                "final_response": "ok",
+                "tools_called": [
+                    {"name": "shell", "args_preview": "{cmd quebrado", "output": "x"},
+                ],
+                "turns": 1,
+            }
+
+        r = harness.run_task(task, agent_fn)
+        assert r.success is True
+        assert r.trajectory[0].tool_args == {"raw": "{cmd quebrado"}
+
+    def test_tokens_capturados(self, harness):
+        # §10: tokens_in/out reportados pelo agent_fn chegam no resultado
+        task = TaskTemplate(id="tokens", description="d", prompt="p")
+
+        def agent_fn(prompt):
+            return {"final_response": "ok", "tools_called": [], "turns": 1,
+                    "tokens_in": 123, "tokens_out": 45}
+
+        r = harness.run_task(task, agent_fn)
+        assert r.tokens_in == 123
+        assert r.tokens_out == 45
+
+
 class TestCompare:
     def test_compare_same_tasks_all_conditions(self, harness):
         tasks = [

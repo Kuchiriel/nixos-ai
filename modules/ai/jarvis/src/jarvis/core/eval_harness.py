@@ -76,6 +76,10 @@ class EvalResult:
     total_time_s: float
     total_tool_calls: int
     error: str | None = None
+    # §10: tokens agora são capturados quando o agent_fn os reporta
+    # (antes: campos existiam no TrajectoryStep e nunca eram preenchidos)
+    tokens_in: int = 0
+    tokens_out: int = 0
 
 
 class EvalHarness:
@@ -120,12 +124,18 @@ class EvalHarness:
             tool_calls = result.get("tools_called", [])
 
             for i, tc in enumerate(tool_calls):
+                # args_preview pode vir malformado do agente real (LLM);
+                # não pode derrubar a task inteira (era falso-fail)
+                try:
+                    args = json.loads(tc["args_preview"]) if tc.get("args_preview") else None
+                except (ValueError, TypeError):
+                    args = {"raw": str(tc.get("args_preview", ""))[:200]}
                 trajectory.append(TrajectoryStep(
                     turn=i,
                     role="tool",
                     content=tc.get("output", "")[:500],
                     tool_name=tc.get("name"),
-                    tool_args=json.loads(tc["args_preview"]) if tc.get("args_preview") else None,
+                    tool_args=args,
                 ))
 
             # Final response
@@ -151,6 +161,14 @@ class EvalHarness:
                 )
             if "file_exists" in task.success_criteria:
                 criteria_met["file_exists"] = Path(task.success_criteria["file_exists"]).exists()
+            if "world_check" in task.success_criteria:
+                # §11: verificação EXTERNA por comando (exit 0 = pass) —
+                # prova o estado do mundo, não a palavra do LLM. Ex:
+                # "grep -q conteudo /tmp/arquivo" ou "test -d pasta".
+                wc = subprocess.run(
+                    shlex.split(task.success_criteria["world_check"]),
+                    capture_output=True, timeout=30, text=True)
+                criteria_met["world_check"] = (wc.returncode == 0)
             if "max_turns" in task.success_criteria:
                 criteria_met["max_turns"] = (turns <= task.success_criteria["max_turns"])
             if "max_time_s" in task.success_criteria:
@@ -176,6 +194,8 @@ class EvalHarness:
                 total_turns=turns,
                 total_time_s=elapsed,
                 total_tool_calls=len(tool_calls),
+                tokens_in=result.get("tokens_in", 0),
+                tokens_out=result.get("tokens_out", 0),
             )
 
         except Exception as e:
@@ -249,6 +269,8 @@ class EvalHarness:
                     "total_turns": r.total_turns,
                     "total_time_s": round(r.total_time_s, 2),
                     "total_tool_calls": r.total_tool_calls,
+                    "tokens_in": r.tokens_in,
+                    "tokens_out": r.tokens_out,
                     "error": r.error,
                     "trajectory_summary": [
                         {"role": s.role, "tool": s.tool_name, "content": s.content[:200]}
