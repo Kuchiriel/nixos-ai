@@ -113,3 +113,17 @@ scripts/                # Scripts auxiliares
 - Personas: `jarvis persona --list`; auditoria áudio = `forensic_audio_auditor`.
 - Timers: `audiobook-audit` 01:00 (applio-lab); `nightwatch` DESABILITADO.
 - MCP discoverability: descrições com gatilho (WHEN primeiro) + tool `jarvis_persona`.
+
+## Benchmark do sistema (dono 16/09) — resultados H1/H2/H3
+
+### H1 — Memória/RAG como fator diferencial
+Teste: `ux_driver` + `ux_world` verification (world_state). Tarefa: write+read.
+Resultado: **INCONCLUSIVE** — ambas condições (controle vs +memória) criaram o arquivo. Memória não é fator diferencial para tasks que o modelo já sabe executar. Injeção automática de lessons (agent.py:477) já é o mecanismo primário.
+
+### H2 — Persona vs Regra vs Neutro
+Teste: `ux_driver` classificação falante.
+Resultado: **persona PERTURBA** (respondeu NARRADOR quando deveria ser KLEIN); neutro e regras ACERTARAM. Persona só é usada para tasks de domínio específico (forensic/áudio/auditoria). Regras são mais eficazes para tasks genéricas.
+
+### H3 — reasoning_effort gate
+Teste: `ux_driver` com /no_think vs pense vs pense extensivamente.
+Resultado: **higher effort = 3× turns sem ganho** em tasks curtas/classificação. Gate implementado em `llm.py`: tasks curtas (<80 chars ou keywords como "uma palavra"/"quem fala") downgrade para `low`.
