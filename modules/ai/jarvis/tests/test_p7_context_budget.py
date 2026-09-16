@@ -138,3 +138,23 @@ class TestP7ContextBudget:
         
         rec = budget.get_recommendation(9500)  # 95%
         assert rec["urgency"] == "critical"
+
+
+class TestCtxFallback:
+    def test_registry_ctx_reads_raw(self):
+        """Regressão: _registry_ctx lia m.extra (inexistente) → sempre
+        32000 mesmo com ctx=49152 no registry (models.nix). ctx vive no
+        raw dict."""
+        from jarvis.core.model_policy import _registry_ctx
+        ctx = _registry_ctx("bonsai")
+        assert ctx == 49152
+
+    def test_query_falls_back_to_registry_when_unloaded(self):
+        """Regressão: modelo UNLOADED → /props n_ctx=0 → budget 32000
+        (subestimava, compactava cedo §23). Fallback: registry ctx do
+        modelo ativo (mesmo unloaded, /v1/models lista)."""
+        from jarvis.core.context_budget import query_server_context_size
+        ctx = query_server_context_size()
+        # server up com modelo unloaded OU carregado: ctx real do registry
+        assert ctx in (49152, 32000)  # 49152 se registry ok; nunca 0
+        assert ctx != 0

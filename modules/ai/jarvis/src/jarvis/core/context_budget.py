@@ -58,8 +58,15 @@ CONTEXT_LOG = STATE_DIR / "context_usage.jsonl"
 def query_server_context_size() -> int:
     """Query llama.cpp /props endpoint for actual n_ctx.
 
-    Returns 0 if server is unavailable.
+    Fallback em cascata (dono 16/09 — consciência de contexto):
+    1. /props do servidor (ctx real do modelo carregado)
+    2. REGISTRY ctx do modelo ativo (fonte declarada models.nix —
+       adaptativa a edições de ctx; cobre modelo UNLOADED, quando
+       /props retorna n_ctx=0 e o budget subestimava → compactava
+       cedo demais, desperdiçando tokens úteis §23)
+    Returns 0 only se nem server nem registry responderem.
     """
+    active_model = ""
     try:
         import requests
         from jarvis.core.config import get_config
@@ -72,8 +79,22 @@ def query_server_context_size() -> int:
         n_ctx = data.get("default_generation_settings", {}).get("n_ctx", 0)
         if n_ctx > 0:
             return n_ctx
+        # Modelo unloaded → descobre o ativo (mesmo unloaded, /v1/models
+        # lista com status) p/ fallback no registry. Usa `base` (já sem
+        # /v1) — base_url.rstrip ainda contém /v1 → /v1/v1/models (bug).
+        try:
+            models = requests.get(f"{base}/v1/models",
+                                  timeout=3).json()
+            active_model = models["data"][0]["id"]
+        except Exception:  # noqa: BLE001
+            pass
     except Exception:  # noqa: BLE001
         pass
+    if active_model:
+        from jarvis.core.model_policy import _registry_ctx
+        ctx = _registry_ctx(active_model)
+        if ctx:
+            return ctx
     return 0
 
 

@@ -45,11 +45,18 @@ class ModelTier:
 
 # Default model tiers (contexto vem do registry/models.nix; fallback 32000)
 def _registry_ctx(model_id: str, default: int = 32000) -> int:
-    """Lê ctx do /etc/jarvis/model-registry.json (fonte: models.nix)."""
+    """Lê ctx do /etc/jarvis/model-registry.json (fonte: models.nix).
+
+    Bug fix (dono 16/09): lia m.extra (campo INEXISTENTE em ModelEntry —
+    sempre default 32000 mesmo com ctx=49152 no registry). ctx vive no
+    raw dict (routing models.nix) → m.raw.get("ctx").
+    """
     try:
         from jarvis.core.model_registry import ModelRegistry
         m = ModelRegistry.load().models.get(model_id)
-        c = (m.extra if hasattr(m, "extra") else {}).get("ctx")
+        if m is None:
+            return default
+        c = (m.raw or {}).get("ctx")
         if c:
             return int(c)
     except Exception:

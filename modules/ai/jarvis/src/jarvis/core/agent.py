@@ -928,6 +928,14 @@ class Agent:
             self.config = replace(self.config, llm_model=model_id)
             from jarvis.providers.llm import LLMClient
             self.llm = LLMClient(self.config, session=self._session)
+        # Consciência de contexto (dono 16/09): após swap, o ctx do modelo
+        # novo pode diferir — budget re-criado (auto-detect fresh do /props
+        # ou registry). Budget stale subestimava/estourava silencioso.
+        if report.switched:
+            try:
+                self.context_budget = ContextBudget()
+            except Exception:
+                pass
 
     @staticmethod
     def _strict_extra(tools: list[dict[str, Any]]) -> dict[str, Any]:
