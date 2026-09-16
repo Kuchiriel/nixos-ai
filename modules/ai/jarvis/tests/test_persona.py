@@ -12,10 +12,20 @@ class TestPersonaRegistry:
     """Test PersonaRegistry functionality."""
 
     def test_registry_loads_builtin_personas(self):
-        """Registry should load all 13 built-in personas (11 + agent + marketing)."""
+        """Registry should load all 14 built-in personas (12 + agent + marketing)."""
         registry = PersonaRegistry()
         personas = registry.list_all()
-        assert len(personas) == 13
+        assert len(personas) == 14
+
+    def test_forensic_audio_auditor_present(self):
+        """Forensic audio auditor: ferramentas e seleção por tarefa."""
+        registry = PersonaRegistry()
+        p = registry.get("forensic_audio_auditor")
+        assert p is not None
+        for t in ("read", "rag_search", "memory", "shell", "web_search"):
+            assert t in p.tools
+        sel = registry.select_for_task("speaker attribution audiobook cap22")
+        assert sel.id == "forensic_audio_auditor"
 
     def test_get_persona_by_id(self):
         """Should retrieve persona by ID."""

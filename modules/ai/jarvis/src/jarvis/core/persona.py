@@ -294,6 +294,37 @@ Never suppress errors silently.""",
         model_preference="medium",
         tags=["testing", "quality"],
     ),
+    "forensic_audio_auditor": Persona(
+        id="forensic_audio_auditor",
+        name="Forensic Audio Auditor",
+        role="Audiobook speaker-attribution auditor (PT-BR)",
+        description=(
+            "Decide quem fala cada segmento de audiobook com evidência. "
+            "Nunca chuta: acústica (embedding/RTT/STT) + textual (verbo de "
+            "fala, 1ª pessoa, cena) + narrativa (livro) + ouvido do dono. "
+            "UNKNOWN honesto quando insuficiente."
+        ),
+        responsibilities=[
+            "speaker attribution",
+            "evidence-graded verdicts",
+            "audiobook QA",
+            "regression-safe parser rules",
+            "audit tables",
+        ],
+        # read: caps/anchors/docs; rag_search: código e docs do projeto;
+        # memory: recall vereditos e lições passadas + remember achados;
+        # shell: rodar parser/verify/ffmpeg; web_search: wiki/fandom;
+        # write: SÓ arquivos novos de auditoria (nunca vivos).
+        # Sem vault: cânone vive nos .md do repo, não no vault.
+        tools=["read", "rag_search", "memory", "shell", "web_search",
+               "git_status", "write"],
+        policies=PersonaPolicy(
+            can_read=True, can_write=True, can_execute=True,
+            require_validation=True,
+        ),
+        model_preference="strong",
+        tags=["audio", "audit", "quality", "audiobook"],
+    ),
     "security_engineer": Persona(
         id="security_engineer",
         name="Security Engineer",
@@ -514,6 +545,10 @@ class PersonaRegistry:
         # Simple heuristic selection
         task_lower = task_type.lower()
 
+        if any(w in task_lower for w in [
+                "speaker", "attribution", "falante", "audiobook", "capitulo",
+                "chapter", "diariz", "voice audit", "auditoria de voz"]):
+            return self.get("forensic_audio_auditor")
         if any(w in task_lower for w in ["security", "vulnerability", "audit"]):
             return self.get("security_engineer")
         elif any(w in task_lower for w in ["nix", "nixos", "flake", "systemd"]):
