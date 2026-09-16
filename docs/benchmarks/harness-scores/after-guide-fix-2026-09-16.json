@@ -1,0 +1,185 @@
+{
+  "ts": "2026-09-16__19-29-22",
+  "summary": {
+    "total": 9,
+    "world_ok": 6,
+    "false_done": 2,
+    "by_tier": {
+      "easy": {
+        "n": 3,
+        "ok": 3
+      },
+      "medium": {
+        "n": 3,
+        "ok": 2
+      },
+      "hard": {
+        "n": 3,
+        "ok": 1
+      }
+    },
+    "avg_elapsed_s": 7.4
+  },
+  "results": [
+    {
+      "task_id": "E1-write",
+      "tier": "easy",
+      "world_ok": true,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 3.0,
+      "rc": 0
+    },
+    {
+      "task_id": "E2-read",
+      "tier": "easy",
+      "world_ok": true,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 3.4,
+      "rc": 0
+    },
+    {
+      "task_id": "E3-count",
+      "tier": "easy",
+      "world_ok": true,
+      "missed": [],
+      "turns": 11,
+      "tool_calls": [
+        "execute_shell",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 6.4,
+      "rc": 0
+    },
+    {
+      "task_id": "M1-dirfile",
+      "tier": "medium",
+      "world_ok": true,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 2.8,
+      "rc": 0
+    },
+    {
+      "task_id": "M2-script-run",
+      "tier": "medium",
+      "world_ok": false,
+      "missed": [
+        "output_contains:42"
+      ],
+      "turns": 7,
+      "tool_calls": [
+        "write_file",
+        "execute_shell"
+      ],
+      "wrong_tools": [],
+      "false_done": true,
+      "elapsed_s": 3.8,
+      "rc": 0
+    },
+    {
+      "task_id": "M3-fix-offbyone",
+      "tier": "medium",
+      "world_ok": true,
+      "missed": [],
+      "turns": 26,
+      "tool_calls": [
+        "read_file",
+        "str_replace",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 22.9,
+      "rc": 1
+    },
+    {
+      "task_id": "H1-config-discovery",
+      "tier": "hard",
+      "world_ok": false,
+      "missed": [
+        "output_contains:bonsai"
+      ],
+      "turns": 9,
+      "tool_calls": [
+        "list_directory"
+      ],
+      "wrong_tools": [],
+      "false_done": true,
+      "elapsed_s": 5.7,
+      "rc": 0
+    },
+    {
+      "task_id": "H2-syntax-fix",
+      "tier": "hard",
+      "world_ok": true,
+      "missed": [],
+      "turns": 13,
+      "tool_calls": [
+        "read_file",
+        "str_replace",
+        "execute_shell",
+        "execute_shell",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 5.5,
+      "rc": 0
+    },
+    {
+      "task_id": "H3-chain",
+      "tier": "hard",
+      "world_ok": false,
+      "missed": [
+        "file_contains:/tmp/jarvis-ch/data/total.txt::3"
+      ],
+      "turns": 25,
+      "tool_calls": [
+        "list_directory",
+        "execute_shell",
+        "write_file",
+        "list_directory",
+        "write_file",
+        "list_directory",
+        "write_file",
+        "list_directory",
+        "execute_shell",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 13.0,
+      "rc": 1
+    }
+  ]
+}
