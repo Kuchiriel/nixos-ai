@@ -107,9 +107,17 @@ def main() -> int:
     ap.add_argument("--task", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--timeout", type=int, default=300)
+    ap.add_argument("--world-check", default=None,
+                    help="comando shell de verificação externa do mundo (§11); "
+                         "gravado no JSON — rc do CLI sozinho NÃO prova sucesso")
     args = ap.parse_args()
     res = run_task(args.task, args.timeout)
     res["task"] = args.task
+    if args.world_check:
+        rc = subprocess.run(["bash", "-c", args.world_check],
+                            capture_output=True, text=True, timeout=30)
+        res["world_check"] = {"cmd": args.world_check, "rc": rc.returncode,
+                              "out": (rc.stdout + rc.stderr)[-400:]}
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(res, f, ensure_ascii=False, indent=1)
     print(json.dumps({k: v for k, v in res.items() if k != "transcript"},

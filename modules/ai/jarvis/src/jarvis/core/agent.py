@@ -271,6 +271,7 @@ TOOL_USE_DISCIPLINE = """TOOL DISCIPLINE (mandatory):
 - NEVER invent filenames, paths, or results — only use what you observed.
 - Path unknown? LOCATE first (list_directory/semantic_search) — never ask the user for the path before searching.
 - A tool failed? Read the [validation] hint and try the suggested alternative — one miss is not a stop.
+- Task asks to CREATE a file or folder? NEVER verify-then-read the target first: "not found" is the NORMAL state before creation. Call write_file directly with the FULL target path — it creates the file and all missing parent folders. mkdir is unnecessary.
 - Claiming a cause? Cite file:line you actually read this session.
 - Two-step request? Do the FIRST step now; the rest in later turns.
 - No suitable tool? Answer with text and call nothing."""

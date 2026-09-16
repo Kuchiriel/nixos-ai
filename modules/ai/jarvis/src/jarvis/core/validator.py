@@ -186,8 +186,20 @@ class ToolValidator:
 
         if "not found" in output.lower() or "no such file" in output.lower():
             warnings.append(f"read_file: file not found: {path}")
-            for cand in _locate_candidates(path):
-                warnings.append(f"read_file: candidato: {cand}")
+            cands = _locate_candidates(path)
+            if cands:
+                for cand in cands:
+                    warnings.append(f"read_file: candidato: {cand}")
+            else:
+                # Observação anti-loop (A/B 16/09: 0/3 → modelo verificava o
+                # alvo que deveria criar e morria em "File not found"). Sem
+                # candidato nenhum, "not found" é beco sem saída: ensina a
+                # ação de criação em vez de só reportar ausência.
+                warnings.append(
+                    "read_file: nenhum arquivo com esse nome existe no projeto — "
+                    "se a task é CRIAR, chame write_file (cria diretórios-pai "
+                    "automaticamente); read_file/str_replace nunca criam arquivo"
+                )
             severity = "error"
         elif "permission denied" in output.lower():
             warnings.append(f"read_file: permission denied: {path}")

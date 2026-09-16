@@ -126,3 +126,15 @@ def test_read_not_found_no_candidate_still_error(tmp_path, monkeypatch) -> None:
     vr = ToolValidator().validate("read_file", {"path": "nada.txt"},
                                   "ERROR: File not found: nada.txt")
     assert any("not found" in w for w in vr.warnings)
+
+
+def test_read_not_found_without_candidates_teaches_creation(tmp_path, monkeypatch) -> None:
+    """Anti-loop: sem candidato nenhum, a observação ensina a ação de criar
+    (A/B 16/09 — modelo verificava o alvo que deveria criar e morria em
+    "File not found" sem saída)."""
+    from jarvis.core.validator import ToolValidator
+    monkeypatch.chdir(tmp_path)
+    vr = ToolValidator().validate("read_file", {"path": "novo/nada.txt"},
+                                  "ERROR: File not found: novo/nada.txt")
+    assert any("write_file" in w for w in vr.warnings)
+    assert any("CRIAR" in w for w in vr.warnings)
