@@ -1,5 +1,10 @@
 # Resultados H1/H2/H3 — Benchmark do Sistema (dono 16/09)
 
+> **Graph:** [[agent-harness]] · [[context-engineering]] · [[harness-maxxing-e-testes-2026-09-16 (vault)]] · [[SELF-IMPROVEMENT-LOOP.mmd]]
+> Estados H1-H4 + consolidação framing + harness-maxxing. Evidência: PTY
+> real (ux_driver) + world-state verification. Fontes externas: RRP,
+> Wharton, Sukhareva, LangChain, arXiv.
+
 ## H1 — Memória/RAG como fator diferencial
 
 **Teste:** `ux_driver` + `ux_world` verification (world_state).
