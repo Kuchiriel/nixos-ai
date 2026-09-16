@@ -210,7 +210,7 @@ JARVIS_TOOLS = [
     },
     {
         "name": "jarvis_remember",
-        "description": "Store a fact or event in episodic memory. Use for things to remember across sessions.",
+        "description": "MANDATORY at task end: store facts, decisions, lessons. ALSO call BEFORE switching topics. Without this, nightwatch/agents lose context across sessions. Categories: fact, event, decision, error.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -222,7 +222,7 @@ JARVIS_TOOLS = [
     },
     {
         "name": "jarvis_recall",
-        "description": "Recall memories matching a query. Returns relevant past events and facts.",
+        "description": "MANDATORY FIRST STEP on any task: recall past facts/decisions about the topic BEFORE reading files or guessing. If empty, say so and proceed. This is how agents see nightwatch findings, past verdicts and lessons.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -234,7 +234,7 @@ JARVIS_TOOLS = [
     },
     {
         "name": "jarvis_lessons",
-        "description": "Recall lessons learned from past errors. Use when encountering a known problem pattern.",
+        "description": "MANDATORY when hitting errors, retrying, or starting unfamiliar work: recall lessons from past failures FIRST. Prevents repeating solved problems.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -265,7 +265,7 @@ JARVIS_TOOLS = [
     },
     {
         "name": "jarvis_rag_search",
-        "description": "Search the project codebase using RAG (semantic search). Returns relevant code snippets and documentation.",
+        "description": "BEFORE grepping code blindly: semantic search over indexed code AND docs (use collection memories/books as needed). If empty, run jarvis_rag_index first instead of guessing.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -274,6 +274,19 @@ JARVIS_TOOLS = [
                 "limit": {"type": "integer", "description": "Max results (default: 5)"}
             },
             "required": ["query"]
+        }
+    },
+    {
+        "name": "jarvis_persona",
+        "description": "List/select JARVIS personas (roles with tools, policies, model). Call FIRST when a task needs a specialized framing (audit, review, research, implementation). Returns persona details including allowed tools and handoff protocol.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "description": "list, show, or select (auto-pick by task text)"},
+                "persona_id": {"type": "string", "description": "persona id for show (optional)"},
+                "task": {"type": "string", "description": "task text for select (optional)"}
+            },
+            "required": ["action"]
         }
     },
     {
@@ -528,6 +541,28 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
             if len(output) > 8000:
                 output = output[:8000] + f"\n... [truncated from {len(res.stdout)} chars]"
             return output or f"Exit code: {res.returncode}"
+
+        if name == "jarvis_persona":
+            from jarvis.core.persona import PersonaRegistry
+            reg = PersonaRegistry()
+            action = args.get("action", "list")
+            if action == "list":
+                return reg.summary()
+            if action == "show":
+                p = reg.get(args.get("persona_id", ""))
+                if not p:
+                    return "ERROR: persona desconhecida"
+                return json.dumps(p.to_dict(), indent=2, ensure_ascii=False, default=str)
+            if action == "select":
+                p = reg.select_for_task(args.get("task", ""))
+                if not p:
+                    return "ERROR: nenhuma persona"
+                return json.dumps({"selected": p.id, "role": p.role,
+                                   "tools": p.tools,
+                                   "handoff": "salve contexto em arquivo + delegue; "
+                                   "próxima persona lê o arquivo (economia de contexto)"},
+                                  indent=2, ensure_ascii=False, default=str)
+            return "ERROR: action inválida (list|show|select)"
 
         if name == "jarvis_read_file":
             return handle_dev_tool("read_file", args)
