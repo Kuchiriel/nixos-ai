@@ -442,9 +442,16 @@ def execute_shell(cmd: str, approve: bool = False) -> dict[str, Any]:
                           "Chame como tool call: "
                           '{"name": "' + _first + '", "args": {...}}')
         elif _first in ("mkdir", "touch", "tee"):
-            _tool_hint = (" — para criar arquivo/pasta, chame a tool write_file "
-                          "(cria diretórios-pai): "
-                          '{"name": "write_file", "args": {"path": "...", "content": "..."}}')
+            # Hint corrigido (dono 16/09, elo H3): o antigo mandava
+            # "criar arquivo/pasta" via write_file → modelo escrevia ARQUIVO
+            # placeholder NO path do diretório → "Not a directory" travava
+            # a cadeia em loop. O certo: write_file cria o ARQUIVO com
+            # caminho completo; pastas-pai surgem sozinhas.
+            _tool_hint = (" — para criar estrutura de pastas, chame write_file "
+                          "com o caminho COMPLETO do ARQUIVO dentro dela "
+                          "(pastas-pai são criadas sozinhas): "
+                          '{"name": "write_file", "args": {"path": '
+                          '"pasta/arquivo.txt", "content": "..."}}')
         return {"ok": False, "error": f"Command not in allowlist: {stripped[:100]}" + _tool_hint}
     return run_shell_dict(cmd)
 
