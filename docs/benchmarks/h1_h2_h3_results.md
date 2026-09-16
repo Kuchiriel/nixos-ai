@@ -98,3 +98,40 @@ indicador de 0/9 → 5/5. LOCAL_EVIDENCE de que as correções funcionam.
 planning/review (qualidade > latência); recovery de falha repetida de
 escrita (STUCK → swap); tarefas de análise longa que precisam de
 raciocínio profundo.
+
+---
+
+## Consolidação Framing: Rules vs Persona (evidência externa + local)
+
+**Paradigma externo: RRP — Rule-based Role Prompting** (emergentmind.com/topics/rule-based-role-prompting-rrp; refs: PRBoost 2203.09735, RulePrompt 2403.02932, RoleLLM 2310.00746, RadPrompt 2408.04121, PDL 2507.06396, ORPP 2506.02480):
+
+- Prompts implícitos/descritivos (persona natural-language) sofrem **drift,
+  inconsistência, brittleness, falta de verificabilidade** — exatamente o que
+  H2 mediu (persona PERTURBA classificação).
+- Regras explícitas (RRP) dão **consistência, interpretabilidade,
+  confiabilidade operacional**: F1 +7% (PRBoost), +2.1% radiologia
+  (RadPrompt), +2-3 pts GPQA/MMLU (ORPP), 4× compliance em tool calls (PDL).
+- **"Action-first" policy** (character-card/scene-contract, Ruangtanusak
+  2509.00482): regras turn-by-turn "action-first / single-shot /
+  schema-correct" — mesma arquitetura do promise-guard + gate de rota do
+  outro agente (5422dc0). O que transfere entre personas são ÂNCORAS
+  comportamentais (arXiv 2607.18566: narrative priors explicam 5-31× mais
+  variância que persona).
+- **Scalability: RRP permite modelos PEQUENOS lidarem com tasks
+  decision-heavy** — valida a estratégia bonsai-first (envelope do sistema
+  no modelo mais fraco; se funciona nele, funciona em qualquer outro).
+- **PDL (Prompt Declaration Language)**: patterns declarativos em YAML —
+  alinha com a filosofia NixOS-first do repo (declaração > imperativo).
+
+**Síntese local + externa:** persona = fantasia de expertise (Wharton
+GPQA/MMLU-Pro, 6 modelos, 25 trials/condição — sem ganho; H2 local:
+persona 0% vs rules 100%); rules/âncoras = o ativo real (RRP
+consistente). Frase do dono confirmada: "o framing de persona não é tão
+útil quanto o framing de rules".
+
+**Aplicação no JARVIS:** system prompt = regras operacionais
+(TOOL_USE_DISCIPLINE + action-first), persona só quando o domínio exige
+(forensic/áudio — contrato do caller). Próximo passo do paradigma:
+discovery automático de regras dos erros do modelo (PRBoost-style: casos
+de alto erro → rule mining) — os lessons do sistema já fazem metade
+disso (recall qualificado por prompt injeta AVOID de erros passados).
