@@ -135,3 +135,41 @@ consistente). Frase do dono confirmada: "o framing de persona não é tão
 discovery automático de regras dos erros do modelo (PRBoost-style: casos
 de alto erro → rule mining) — os lessons do sistema já fazem metade
 disso (recall qualificado por prompt injeta AVOID de erros passados).
+
+---
+
+## Harness-Maxxing (validação da tese do dono, ago/2026)
+
+Fonte: msukhareva.substack.com "How a Small Open Model Beat a Frontier LLM"
+(+ LangChain anatomy-of-an-agent-harness + tbench.ai/leaderboard):
+
+- Qwen3.6-27B **59.3 no Terminal-Bench 2.0** ≈ Sonnet 4.6 (59.1) — modelo
+  aberto 27B empata com frontier.
+- SWE-bench Pro: dev reproduziu model card 53.5% → **28% com agente
+  bash-only → 50.7% adicionando UMA tool (`str_replace`)**. "Todos esses
+  números são do HARNESS e não do modelo."
+- **Agent = Model + Harness**; harness = loop + tools + context + policy
+  + persistence. Mesmo modelo em harnesses diferentes = **até 5.1 pts de
+  diferença** (GPT-5.5: 83.1 Codex vs 78.0 Terminus).
+- **Camadas do outer harness**: GUIDES (antes: instruções, exemplos,
+  tool descriptions) + SENSORS (depois: tests, linters, validators,
+  reviewers) + **CAPS** (boundary que o modelo não atravessa por
+  conversa — permissões/infra).
+
+**Mapeamento JARVIS (inner+outer):**
+| Camada | JARVIS |
+|--------|--------|
+| Guide | `TOOL_USE_DISCIPLINE` + FERRAMATAS + descrições WHEN-first |
+| Sensor | validator + completion (claim-checker) + LoopDetector + verify |
+| Cap | permission gates (approve/write-jail/protected-files) |
+| Tools | devtools 9 + browser 7 ações + memory/rag/vault |
+| Context | REPO MAP + RECENT LESSONS + compact + âncoras |
+
+**Conclusão:** a tese do dono (bonsai + envelope maxado no modelo mais
+fraco) = **harness-maxxing** — validada pela indústria. O trabalho está
+no outer harness (guides/sensors/caps), não em trocar modelo (H4
+contra-dito: bonsai 5/5 vs fast 3/5).
+
+**Desafios baixáveis:** terminal-bench (github.com/harbor-framework/
+terminal-bench) — Docker ATIVO no host; tasks com docker-compose +
+testes. Instalação: venv (não pip global) ou nix.
