@@ -437,23 +437,35 @@ class Agent:
         system_content += f"\n\n{TOOL_USE_DISCIPLINE}"
 
         # Persona (default jarvis; voz usa "agent"). Via registry.
-        # H2: persona PERTURBA acurácia em tasks genéricas (classificação,
-        # código). Só usar persona quando o domínio exige expertise
-        # (áudio forense, auditoria especializada). Tasks de sistema/código
-        # usam regras base (TOOL_USE_DISCIPLINE) que são mais eficazes.
-        _joined = prompt.lower() if prompt else ""
-        _task_is_domain_specific = any(
-            k in _joined for k in ("forensic", "áudio", "auditoria",
-                                    "specialist", "persona"))
-        if not _task_is_domain_specific:
-            _persona = None
-        else:
+        # H2: persona AUTOMÁTICA (implícita) perturba acurácia em tasks
+        # genéricas — só entra quando o domínio exige expertise. Mas persona
+        # EXPLÍCITA (caller passou persona_id != default, ex: voice mode
+        # "agent", marketing) é contrato do caller: injeta SEMPRE — o gate
+        # antigo suprimia até persona explícita e quebrou test_persona.py
+        # (2 failures no build Nix 16/09).
+        _explicit_persona = self.persona_id not in (None, "", "jarvis")
+        if _explicit_persona:
             try:
                 from jarvis.core.persona import PersonaRegistry
                 _persona = PersonaRegistry().get(self.persona_id)
                 if _persona is None:
                     _persona = PersonaRegistry().get("jarvis")
             except Exception:
+                _persona = None
+        else:
+            _joined = prompt.lower() if prompt else ""
+            _task_is_domain_specific = any(
+                k in _joined for k in ("forensic", "áudio", "auditoria",
+                                        "specialist", "persona"))
+            if _task_is_domain_specific:
+                try:
+                    from jarvis.core.persona import PersonaRegistry
+                    _persona = PersonaRegistry().get(self.persona_id)
+                    if _persona is None:
+                        _persona = PersonaRegistry().get("jarvis")
+                except Exception:
+                    _persona = None
+            else:
                 _persona = None
         if _persona and _persona.system_prompt_additions:
             system_content += f"\n\nPERSONA ATIVA: {_persona.name} ({_persona.role})\n{_persona.system_prompt_additions}"

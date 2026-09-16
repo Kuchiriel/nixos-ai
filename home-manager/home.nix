@@ -284,14 +284,14 @@
             };
           };
           models = {
-            "free" = {
-              name = "OpenRouter Free Cascade";
+            # slugs VERIFICADOS no catálogo 16/09 ("free" puro era slug
+            # morto: "No endpoints available" — era o default quebrado).
+            # Free tier = rate limit diário por conta (esgotou 16/09).
+            "z-ai/glm-5.2:free" = {
+              name = "GLM 5.2 Free";
             };
-            "qwen/qwen3-coder" = {
-              name = "Qwen Coder";
-            };
-            "qwen/qwen3-coder:free" = {
-              name = "Qwen Coder Free (as vezes sem endpoint)";
+            "nvidia/nemotron-3.5-lightning:free" = {
+              name = "Nemotron 3.5 Lightning Free";
             };
           };
         };
@@ -323,7 +323,29 @@
           };
         };
         
+        # NVIDIA NIM (chave NVIDIA_API_KEY validada 16/09: HTTP 200, 82
+        # modelos — provider free vivo que estava fora do config)
+        nvidia = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "https://integrate.api.nvidia.com/v1";
+            apiKey = "{env:NVIDIA_API_KEY}";
+          };
+          models = {
+            "deepseek-ai/deepseek-v4-flash-0731" = {
+              name = "DeepSeek V4 Flash (NIM free)";
+            };
+            "z-ai/glm-5.3-flash" = {
+              name = "GLM 5.3 Flash (NIM free)";
+            };
+            "nvidia/nemotron-3-super-120b-a12b" = {
+              name = "Nemotron 3 Super 120B (NIM free)";
+            };
+          };
+        };
+
         # ADICIONADO: Cerebras (fast inference)
+        # 16/09: chave válida mas conta sem crédito → "Payment Required".
         cerebras = {
           npm = "@ai-sdk/openai-compatible";
           options = {
@@ -337,28 +359,16 @@
           };
         };
 
-        # ADICIONADO: Together AI (open-source models)
-        together = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "https://api.together.xyz/v1";
-            apiKey = "{env:TOGETHER_API_KEY}";
-          };
-          models = {
-            "meta-llama/Llama-3.3-70B-Instruct-Turbo" = {
-              name = "Llama 3.3 70B Turbo";
-            };
-            "Qwen/Qwen3-Coder-480B-A35B-Instruct" = {
-              name = "Qwen3 Coder 480B";
-            };
-          };
-        };
+        # Together REMOVIDO 16/09: conta exige US$5 de crédito (dono
+        # recusou) e a chave retorna 401. Re-add só se billing resolver.
 
         # ADICIONADO: HuggingFace Inference API
         huggingface = {
           npm = "@ai-sdk/openai-compatible";
           options = {
-            baseURL = "https://api-inference.huggingface.co/v1";
+            # api-inference = endpoint legado; o vivo é o router (chat
+            # completions validado 16/09: HTTP 200 com resposta real)
+            baseURL = "https://router.huggingface.co/v1";
             apiKey = "{env:HF_TOKEN}";
           };
           models = {
@@ -369,8 +379,10 @@
         };
       };
       
-      # Define o modelo padrão para cascade/fallback
-      model = "openrouter/free";
+      # Default E2E-validado 16/09 ("opencode run" respondeu): Gemini free
+      # via GEMINI_API_KEY. openrouter/free era slug morto = causa raiz do
+      # "opencode quebrado".
+      model = "google/gemini-2.5-flash";
 
       # MCP Jarvis: RAG, memória, vault, files, shell, nix — via stdio.
       # Handshake validado (tools/list retorna 20 tools). Env inline no
