@@ -106,3 +106,10 @@ scripts/                # Scripts auxiliares
 - Nightwatch: binário do serviço rebuildado via `./rebuild-host.sh`
   após mudar `modules/ai/jarvis/` (store congela código!); protocolo
   manhã em BUFFY §39; ponte p/ GuiaRenamer em BUFFY §42.
+
+## Doutrina de tooling agentes (dono 16/09)
+- Caminho oficial: MCPs (rag/memory/lessons/vault) + harness (`LLMClient`,
+  safe_editor, validator, checkpoint) + personas com handoff. Ver BUFFY §50.
+- Personas: `jarvis persona --list`; auditoria áudio = `forensic_audio_auditor`.
+- Timers: `audiobook-audit` 01:00 (applio-lab); `nightwatch` DESABILITADO.
+- MCP discoverability: descrições com gatilho (WHEN primeiro) + tool `jarvis_persona`.
