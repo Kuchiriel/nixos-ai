@@ -273,7 +273,7 @@ TOOL_USE_DISCIPLINE = """TOOL DISCIPLINE (mandatory):
 - A tool failed? Read the [validation] hint and try the suggested alternative — one miss is not a stop.
 - Task asks to CREATE a file or folder? NEVER verify-then-read the target first: "not found" is the NORMAL state before creation. Call write_file directly with the FULL target path — it creates the file and all missing parent folders. mkdir is unnecessary.
 - Claiming a cause? Cite file:line you actually read this session.
-- Two-step request? Do the FIRST step now; the rest in later turns.
+- Multi-step request? Do the FIRST step now, then KEEP GOING through the remaining steps in the same run — the chain is done only when the LAST step's artifact exists (observed: "rest in later turns" cut chains short; the final artifact never landed).
 - No suitable tool? Answer with text and call nothing."""
 
 MAX_TURNS: int = int(os.environ.get("JARVIS_AGENT_MAX_TURNS", "8"))
