@@ -141,20 +141,56 @@ class TestP7ContextBudget:
 
 
 class TestCtxFallback:
-    def test_registry_ctx_reads_raw(self):
+    def test_registry_ctx_reads_raw(self, tmp_path, monkeypatch):
         """Regressão: _registry_ctx lia m.extra (inexistente) → sempre
         32000 mesmo com ctx=49152 no registry (models.nix). ctx vive no
-        raw dict."""
+        raw dict. Registry temporário via env (sandbox-safe — /etc pode
+        não existir; fallback embutido não tem ctx)."""
+        import json, os
+        reg = tmp_path / "model-registry.json"
+        reg.write_text(json.dumps({
+            "version": 1, "default": "bonsai", "maxResident": 1,
+            "models": {"bonsai": {
+                "tier": "speed", "capabilities": ["general"],
+                "ctx": 49152}}},
+        ))
+        monkeypatch.setenv("JARVIS_MODEL_REGISTRY", str(reg))
         from jarvis.core.model_policy import _registry_ctx
-        ctx = _registry_ctx("bonsai")
-        assert ctx == 49152
+        assert _registry_ctx("bonsai") == 49152
 
-    def test_query_falls_back_to_registry_when_unloaded(self):
+    def test_query_falls_back_to_registry_when_unloaded(self, tmp_path, monkeypatch):
         """Regressão: modelo UNLOADED → /props n_ctx=0 → budget 32000
         (subestimava, compactava cedo §23). Fallback: registry ctx do
-        modelo ativo (mesmo unloaded, /v1/models lista)."""
-        from jarvis.core.context_budget import query_server_context_size
-        ctx = query_server_context_size()
-        # server up com modelo unloaded OU carregado: ctx real do registry
-        assert ctx in (49152, 32000)  # 49152 se registry ok; nunca 0
-        assert ctx != 0
+        modelo ativo (mesmo unloaded, /v1/models lista). Server mockado
+        offline para forçar o caminho do registry."""
+        import json
+        reg = tmp_path / "model-registry.json"
+        reg.write_text(json.dumps({
+            "version": 1, "default": "bonsai", "maxResident": 1,
+            "models": {"bonsai": {
+                "tier": "speed", "capabilities": ["general"],
+                "ctx": 49152}}},
+        ))
+        monkeypatch.setenv("JARVIS_MODEL_REGISTRY", str(reg))
+        from jarvis.core import context_budget as cb
+        # monkeypatcha /props p/ retornar n_ctx=0 (unloaded) e /v1/models
+        import types
+        class _Resp:
+            status_code = 200
+            def raise_for_status(self): pass
+            def json(self):
+                return {"default_generation_settings": {"n_ctx": 0}}
+        class _Req:
+            @staticmethod
+            def get(url, timeout=3):
+                if url.endswith("/v1/models"):
+                    r = types.SimpleNamespace()
+                    r.json = lambda: {"data": [{"id": "bonsai"}]}
+                    return r
+                return _Resp()
+        import sys as _sys
+        fake = types.ModuleType("requests")
+        fake.get = _Req.get
+        monkeypatch.setitem(_sys.modules, "requests", fake)
+        ctx = cb.query_server_context_size()
+        assert ctx == 49152
