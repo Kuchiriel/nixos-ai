@@ -441,12 +441,7 @@ class Agent:
         # código). Só usar persona quando o domínio exige expertise
         # (áudio forense, auditoria especializada). Tasks de sistema/código
         # usam regras base (TOOL_USE_DISCIPLINE) que são mais eficazes.
-        _user_prompt = ""
-        for _m in messages:
-            if isinstance(_m, dict) and _m.get("role") == "user":
-                _user_prompt = _m.get("content", "")
-                break
-        _joined = _user_prompt.lower() if _user_prompt else ""
+        _joined = prompt.lower() if prompt else ""
         _task_is_domain_specific = any(
             k in _joined for k in ("forensic", "áudio", "auditoria",
                                     "specialist", "persona"))
