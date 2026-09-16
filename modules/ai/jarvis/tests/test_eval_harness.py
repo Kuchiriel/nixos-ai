@@ -258,9 +258,10 @@ class TestBrowserDispatch:
     def test_browser_dispatch_new_actions(self):
         """Regressão §17: press/scroll/extract/wait no handle_browser."""
         from jarvis.core.browser import handle_browser
-        # press sem key → erro claro (não crash)
+        # press sem approve → gate de aprovação dispara PRIMEIRO (antes
+        # mesmo do check de key — ordem correta)
         r = handle_browser({"action": "press"})
-        assert "ERROR" in r and "key" in r
+        assert "aprovação" in r
         # extract sem selector → erro claro
         r = handle_browser({"action": "extract"})
         assert "ERROR" in r and "selector" in r
