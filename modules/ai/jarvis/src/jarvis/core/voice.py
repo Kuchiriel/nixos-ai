@@ -630,7 +630,13 @@ def speak(
             for i, part in enumerate(slices):
                 part_path = out_dir / f"{out_path.stem}-p{i}.wav"
                 if use_edge:
-                    edge_wav = _edge_base_wav(part, part_path, rate=rate, style=style)
+                    # BUG 16/09 (cap00-smoke, ouvido do dono): `voice` era
+                    # ignorado no Edge — Audrey/Rozanne (Francisca/Thalita)
+                    # saíam na voz padrão ANTONIO (homem). Kokoro respeita;
+                    # Edge não passava o parâmetro adiante.
+                    edge_wav = _edge_base_wav(part, part_path,
+                                              voice=voice or EDGE_VOICE_DEFAULT,
+                                              rate=rate, style=style)
                     if edge_wav.startswith("ERROR"):
                         if use_edge_early:
                             return edge_wav  # sem kokoro aqui; falha limpa p/ retry
