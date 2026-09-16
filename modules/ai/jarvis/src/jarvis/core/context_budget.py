@@ -206,6 +206,21 @@ class ContextSnapshot:
     phase: str = ""  # "discovery", "execution", "validation", "review"
 
 
+# Linhas-âncora: nunca descartadas no truncate (dono 16/09 — corte cego
+# perde vereditos/paths; ring-context exige âncoras preservadas).
+_ANCHOR_RE = None
+
+
+def _anchor_lines(text: str) -> list[str]:
+    import re
+    global _ANCHOR_RE
+    if _ANCHOR_RE is None:
+        _ANCHOR_RE = re.compile(
+            r"^(\[.+?\]|→|CONFIRMADO|CORRIGIDO|REFUTADA|HIPÓTESE:|VEREDITO:|"
+            r"issues: |MANTER|EXPULSAR|OK: |FALHA|/home/nixos/\S+)", re.M)
+    return [m.group(0)[:200] for m in _ANCHOR_RE.finditer(text)]
+
+
 @dataclass
 class ContextBudget:
     """Unified context budget manager for all JARVIS systems.
@@ -396,7 +411,11 @@ class ContextBudget:
                 limit = limit // 2
 
             if len(content) > limit:
-                truncated = content[:limit] + f"\n... [truncated from {len(content)} chars]"
+                anchors = _anchor_lines(content)
+                tail = ""
+                if anchors:
+                    tail = "\n[âncoras preservadas]\n" + "\n".join(anchors[:20])
+                truncated = content[:limit] + f"\n... [truncated from {len(content)} chars]" + tail
                 removed += len(content) - len(truncated)
                 msg["content"] = truncated
                 # Update token estimate
