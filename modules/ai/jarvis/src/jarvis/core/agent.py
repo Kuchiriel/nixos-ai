@@ -437,15 +437,31 @@ class Agent:
         system_content += f"\n\n{TOOL_USE_DISCIPLINE}"
 
         # Persona (default jarvis; voz usa "agent"). Via registry.
-        try:
-            from jarvis.core.persona import PersonaRegistry
-            _persona = PersonaRegistry().get(self.persona_id)
-            if _persona is None:
-                _persona = PersonaRegistry().get("jarvis")
-            if _persona and _persona.system_prompt_additions:
-                system_content += f"\n\nPERSONA ATIVA: {_persona.name} ({_persona.role})\n{_persona.system_prompt_additions}"
-        except Exception:
-            pass
+        # H2: persona PERTURBA acurácia em tasks genéricas (classificação,
+        # código). Só usar persona quando o domínio exige expertise
+        # (áudio forense, auditoria especializada). Tasks de sistema/código
+        # usam regras base (TOOL_USE_DISCIPLINE) que são mais eficazes.
+        _user_prompt = ""
+        for _m in messages:
+            if isinstance(_m, dict) and _m.get("role") == "user":
+                _user_prompt = _m.get("content", "")
+                break
+        _joined = _user_prompt.lower() if _user_prompt else ""
+        _task_is_domain_specific = any(
+            k in _joined for k in ("forensic", "áudio", "auditoria",
+                                    "specialist", "persona"))
+        if not _task_is_domain_specific:
+            _persona = None
+        else:
+            try:
+                from jarvis.core.persona import PersonaRegistry
+                _persona = PersonaRegistry().get(self.persona_id)
+                if _persona is None:
+                    _persona = PersonaRegistry().get("jarvis")
+            except Exception:
+                _persona = None
+        if _persona and _persona.system_prompt_additions:
+            system_content += f"\n\nPERSONA ATIVA: {_persona.name} ({_persona.role})\n{_persona.system_prompt_additions}"
 
         # Inject user profile
         try:

@@ -422,7 +422,23 @@ class LLMClient:
         thinking nativo): None/low = direto; medium = +1 revisão grounded;
         high = +2 revisões. Cada revisão exige CITAÇÃO VERBATIM da resposta
         anterior; sem ela, mantém anterior e para (anti-alucinação).
+
+        GATE (H3): reasoning_effort é custo puro em tasks curtas/classificação
+        (evidência local: 3× turns sem ganho). Ativa-se automaticamente quando
+        a task exige raciocínio profundo (factual-grounded, multi-step,
+        tool-use complexo). Detectado via heuristica simples no conteúdo.
         """
+        # Gate automático H3: tasks longas/factual precisam de review;
+        # curtas/classificação não (evita desperdício de contexto).
+        _joined = " ".join(
+            m.get("content", "") for m in messages
+            if isinstance(m.get("content"), str)).lower()
+        if reasoning_effort and reasoning_effort != "low":
+            _short = len(_joined) < 80 or any(
+                k in _joined for k in ("uma palavra", "quem fala",
+                                        "classifique", "resuma"))
+            if _short:
+                reasoning_effort = "low"
         response = self._chat_once(
             messages, tools=tools, temperature=temperature,
             max_tokens=max_tokens, extra=extra)
