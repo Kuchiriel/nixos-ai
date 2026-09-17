@@ -467,3 +467,31 @@ class TestReadDirHint:
         assert r["ok"] is False
         assert "2 itens" in r["hint"]
         assert "a.txt" in r["hint"] and "b.txt" in r["hint"]
+
+
+class TestRelapseShellContent:
+    def test_shell_script_to_extensionless_path_refused(self, tmp_path, monkeypatch):
+        """Cap estendido (elo H3b): modelo escreveu shell script
+        (mkdir/echo) NO path do diretório — padrão fence/placeholder não
+        pegava. Sem tool de delete, o erro é irrecuperável → fail-closed."""
+        import os
+        monkeypatch.chdir(tmp_path)
+        from jarvis.core import devtools as dt
+        r = dt.write_file("data", "mkdir -p /tmp/x\necho '' > f.txt\n")
+        assert r["ok"] is False
+        assert "DIRET" in r["error"]
+
+    def test_legit_extensionless_still_allowed(self, tmp_path, monkeypatch):
+        """Arquivo legítimo sem extensão (LICENSE-like) continua OK."""
+        import os
+        monkeypatch.chdir(tmp_path)
+        from jarvis.core import devtools as dt
+        import pathlib
+        try:
+            r = dt.write_file("CH-UNIQUE-NOTES-XYZ", "Release notes\n\nVersion 2 fixes the parser.\n")
+            assert r["ok"] is True
+        finally:
+            for _p in pathlib.Path(".").glob("CH-UNIQUE-NOTES-XYZ*"):
+                _p.unlink(missing_ok=True)
+            for _b in pathlib.Path.home().glob(".local/state/jarvis/backups/CH-UNIQUE-NOTES-XYZ*"):
+                _b.unlink(missing_ok=True)

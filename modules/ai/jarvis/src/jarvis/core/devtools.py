@@ -544,9 +544,16 @@ def write_file(path: str, content: str, backup: bool = True) -> dict[str, Any]:
         # diretório → "Not a directory" travava a cadeia em loop).
         # Recusa com instrução — o path de pasta nunca vira arquivo.
         if not target.suffix:
-            head = content.strip()[:80].lower()
+            import re as _re
+            head = content.strip()[:120].lower()
+            lines = content.strip().splitlines()[:6]
+            _shell = any(
+                _re.match(r"^\s*(mkdir|touch|echo|cd |ls |cp |mv |rm |"
+                          r"chmod |cat |grep |find |python3? |bash|sh |"
+                          r"export |source )", ln.lower())
+                for ln in lines)
             if (head.startswith("```") or "placeholder" in head
-                    or "directory" in head or "#" == head[:1]):
+                    or "directory" in head or "#" == head[:1] or _shell):
                 return {"ok": False,
                         "error": f"'{path}' parece DIRETÓRIO (sem extensão) "
                                  f"e o content parece placeholder",
