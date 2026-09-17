@@ -169,3 +169,18 @@ class TestWindowedRelapse:
         r = d.check([{"function": {"name": "write_file",
                                    "arguments": {"path": "b", "content": "2"}}}])
         assert r.action == RecoveryAction.NONE
+
+
+class TestWindowedPathRepeat:
+    def test_same_path_drifting_content(self):
+        """Elo H3b: mesmo tool+path com conteúdo variando (hash difere,
+        path trava igual) → pega na 3a ocorrência na janela."""
+        from jarvis.core.loop_detector import LoopDetector, RecoveryAction
+        d = LoopDetector()
+        mk = lambda c: {"function": {"name": "write_file",
+                                     "arguments": {"path": "data",
+                                                   "content": c}}}
+        d.check([mk("mkdir -p a")]); d.check([mk("mkdir -p a b")])
+        r = d.check([mk("mkdir -p a b c")])
+        assert r.action == RecoveryAction.INJECT_WARNING
+        assert "CORRECT the final one" in r.message

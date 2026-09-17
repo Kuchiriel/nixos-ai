@@ -275,7 +275,23 @@ class LoopDetector:
         write→list→write→list (elo D H3-chain m22-m24: relapso no fim)."""
         window = self._history[-self.max_history:]
         hits = sum(1 for s in window if s == sig)
-        if hits >= 3:
+        # Elo H3b (16/09): modelo reitera a MESMA tool+path variando o
+        # conteúdo (hashes diferentes → assinatura exata nunca repete,
+        # mas o path trava igual). Conta por (tool, path) também.
+        def _key_path(raw: str) -> str:
+            try:
+                args = json.loads(raw) if raw else {}
+            except Exception:
+                return ""
+            return str(args.get("path") or args.get("selector")
+                       or args.get("cmd", "")[:60] or "")
+        _path = _key_path(sig.raw_args)
+        path_hits = (sum(1 for s in window
+                         if s.name == sig.name
+                         and _key_path(s.raw_args) == _path)
+                     if _path else 0)
+        if hits >= 3 or path_hits >= 3:
+            hits = max(hits, path_hits)
             key = ""
             try:
                 args = json.loads(sig.raw_args) if sig.raw_args else {}
