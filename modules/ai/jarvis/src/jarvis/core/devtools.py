@@ -932,7 +932,13 @@ DEV_TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "jarvis_command",
-            "description": "Run a JARVIS CLI command (doctor, status, profile, metrics).",
+            "description": ("Run a JARVIS CLI command (doctor, status, "
+                            "profile, metrics). WHEN: system-level info — "
+                            "model registry path, config locations, service "
+                            "health. Shell is jailed to the project (paths "
+                            "outside like /etc are invisible); THIS tool "
+                            "reaches system paths — prefer it over "
+                            "list_directory when the answer is system-level."),
             "parameters": {
                 "type": "object",
                 "properties": {
