@@ -314,11 +314,26 @@ class AgentResult:
     missing: list[str] = field(default_factory=list)
     steps: list[dict[str, Any]] = field(default_factory=list)
     plan: str = ""
+    api_fallback: bool = False  # True se o resultado veio da cascata API
+    api_model: str = ""  # "provider/model" usado no fallback (telemetria)
 
 
 def human_approve(cmd: str) -> bool:
     """Ask user for approval. Stub — monkeypatchable in tests."""
     return False
+
+
+def _api_layer_for(prompt: str) -> str:
+    """Camada da cascata pelo prompt (keywords; default dev)."""
+    p = (prompt or "").lower()
+    if any(k in p for k in ("classifi", "quem fala", "categoria")):
+        return "classify"
+    if any(k in p for k in ("document", "audit")):
+        return "docs"
+    if any(k in p for k in ("refactor", "refator", "massa de", "lote",
+                             "batch")):
+        return "batch"
+    return "dev"
 
 
 class Agent:
@@ -553,6 +568,9 @@ class Agent:
         # Anti-loop: fresh detector state per prompt
         self.loop_detector.reset()
         self._loop_warnings = 0
+        # Cascata API: 1 tentativa por run, SÓ no teto local (3 caminhos
+        # STUCK abaixo). Flag fresca por prompt como o detector.
+        self._api_fallback_used = False
 
         # Context guard (FASE 13): budget fresco por prompt, semeado com o
         # n_ctx autodetectado do budget compartilhado (evita re-query /props
@@ -639,12 +657,18 @@ class Agent:
             strategy = self.loop_detector.check(tool_calls, content)
             if strategy.action in (RecoveryAction.ABORT, RecoveryAction.FORCE_ANSWER):
                 messages.append({"role": "system", "content": strategy.message})
+                if self._stuck_or_cascade(result, messages, prompt,
+                                          system_content):
+                    break
                 self._finalize(result, messages, forced="STUCK")
                 break
             if strategy.action != RecoveryAction.NONE:
                 messages.append({"role": "system", "content": strategy.message})
                 self._loop_warnings += 1
                 if self._loop_warnings >= 2:
+                    if self._stuck_or_cascade(result, messages, prompt,
+                                              system_content):
+                        break
                     self._finalize(result, messages, forced="STUCK")
                     break
             else:
@@ -841,6 +865,10 @@ class Agent:
                                         f"path, leia antes, ou conclua STUCK)."),
                         })
                     elif error_seen[_sig] >= 3:
+                        if self._stuck_or_cascade(result, messages, prompt,
+                                                  system_content):
+                            _stuck_abort = True
+                            break
                         self._finalize(result, messages, forced="STUCK")
                         _stuck_abort = True
                         break
@@ -915,6 +943,74 @@ class Agent:
                     closer.close()
             except Exception:
                 pass
+
+    def _try_api_cascade(self, prompt: str,
+                           system_content: str) -> str | None:
+        """Fallback API UMA vez por run, SÓ no teto local comprovado.
+
+        Anti-preguiça (dono 17/09): (1) só chamado nos 3 caminhos STUCK
+        (loop abortado, warnings ignorados 2x, mesmo erro 3x) — nunca na
+        primeira dificuldade; (2) 1x por run (flag resetada por prompt);
+        (3) só se houver key (sem key = sem chamada, segue STUCK);
+        (4) tentativa FRESCA (system+prompt, sem trajetória envenenada);
+        (5) telemetria (api_fallback/api_model no result + evento).
+        Retorna conteúdo ou None. v1: sem trajectory shipping, sem cost
+        caps (tiers free), sem tuning por camada.
+        """
+        if getattr(self, "_api_fallback_used", False):
+            return None
+        try:
+            from jarvis.core.model_policy import cascade_for
+            from jarvis.providers.llm_remote import RemoteBackend
+        except Exception:
+            return None
+        layer = _api_layer_for(prompt)
+        for provider, model, base_url, env_key in cascade_for(layer):
+            key = os.environ.get(env_key, "")
+            if not key:
+                continue
+            try:
+                resp = RemoteBackend(
+                    base_url=base_url, model=model,
+                    api_key=key, provider=provider).chat(
+                    [{"role": "system", "content": system_content},
+                     {"role": "user", "content": prompt}],
+                    temperature=0.0, max_tokens=1024)
+                if resp and (resp.content or "").strip():
+                    self._api_fallback_used = True
+                    self._last_api_provider = provider
+                    self._last_api_model = model
+                    try:
+                        self.logger.emit("api_fallback", detail={
+                            "layer": layer, "provider": provider,
+                            "model": model})
+                    except Exception:
+                        pass
+                    return resp.content
+            except Exception:
+                continue
+        return None
+
+    def _stuck_or_cascade(self, result: "AgentResult",
+                          messages: list[dict[str, Any]],
+                          prompt: str, system_content: str) -> bool:
+        """STUCK ou cascata: tenta API 1x antes de declarar STUCK.
+
+        Retorna True se resolveu via cascata (caller faz break);
+        False se segue STUCK normal.
+        """
+        fb = self._try_api_cascade(prompt, system_content)
+        if fb:
+            result.final_response = fb
+            result.api_fallback = True
+            try:
+                result.api_model = f"{self._last_api_provider}/{self._last_api_model}"
+            except Exception:
+                pass
+            self._finalize(result, messages)
+            return True
+        self._finalize(result, messages, forced="STUCK")
+        return False
 
     def _ensure_routed_model(self) -> None:
         """Seleciona modelo pelo registry e garante residência (router).

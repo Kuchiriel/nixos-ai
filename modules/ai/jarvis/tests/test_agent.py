@@ -1138,3 +1138,61 @@ def test_shell_observation_carries_exit_code(tmp_path) -> None:
         agent.run("diga hi")
     tool_msgs = [m for m in seen["msgs"]["messages"] if m.get("role") == "tool"]
     assert tool_msgs and "[exit: 0]" in tool_msgs[0]["content"]
+
+
+class TestApiCascadeGate:
+    def test_layer_mapping(self):
+        from jarvis.core.agent import _api_layer_for
+        assert _api_layer_for("classifique este texto") == "classify"
+        assert _api_layer_for("quem fala neste trecho?") == "classify"
+        assert _api_layer_for("audite o sistema") == "docs"
+        assert _api_layer_for("refatore o módulo") == "batch"
+        assert _api_layer_for("crie um arquivo qualquer") == "dev"
+
+    def test_no_key_no_call(self, monkeypatch):
+        """Sem key no env → None, sem rede (anti-preguiça trava 3)."""
+        import os
+        for k in ("OPENROUTER_API_KEY", "OPENCODE_CONFIG", "NVIDIA_API_KEY"):
+            monkeypatch.delenv(k, raising=False)
+        from jarvis.core.agent import Agent
+        from jarvis.core.config import Config
+        from dataclasses import replace
+        a = Agent(replace(Config(), llm_model="bonsai"))
+        a._api_fallback_used = False
+        assert a._try_api_cascade("crie um arquivo x", "sys") is None
+
+    def test_once_per_run(self, monkeypatch):
+        """Segunda chamada → None mesmo com key (trava 2)."""
+        import os
+        monkeypatch.setenv("OPENROUTER_API_KEY", "fake-key")
+        from jarvis.core.agent import Agent
+        from jarvis.core.config import Config
+        from dataclasses import replace
+        a = Agent(replace(Config(), llm_model="bonsai"))
+        a._api_fallback_used = True
+        assert a._try_api_cascade("crie um arquivo x", "sys") is None
+
+    def test_success_marks_result(self, monkeypatch):
+        """Backend fake OK → conteúdo + flags de telemetria."""
+        import os
+        import types
+        monkeypatch.setenv("OPENROUTER_API_KEY", "fake-key")
+
+        class _Resp:
+            content = "resposta da api"
+        class _FakeBackend:
+            def __init__(self, **kw):
+                pass
+            def chat(self, *a, **k):
+                return _Resp()
+        import jarvis.providers.llm_remote as _lr
+        monkeypatch.setattr(_lr, "RemoteBackend", _FakeBackend)
+        from jarvis.core.agent import Agent
+        from jarvis.core.config import Config
+        from dataclasses import replace
+        a = Agent(replace(Config(), llm_model="bonsai"))
+        a._api_fallback_used = False
+        out = a._try_api_cascade("crie um arquivo x", "sys")
+        assert out == "resposta da api"
+        assert a._api_fallback_used is True
+        assert a._stuck_or_cascade.__name__ == "_stuck_or_cascade"
