@@ -186,3 +186,35 @@ def test_denied_but_observed_is_unverified():
     v = check_completion(msgs)
     assert v.status == "UNVERIFIED"
     assert any("nega evidência" in m for m in v.missing)
+
+
+def test_claimed_content_without_read_is_unverified():
+    """Elo H1: afirma valor de arquivo nunca lido → UNVERIFIED com miss."""
+    from jarvis.core.completion import check_completion
+    msgs = [
+        {"role": "user", "content": "qual o default?"},
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "list_directory",
+                          "arguments": {"path": "/etc/jarvis"}}}]},
+        {"role": "tool", "content": "DIRECTORY (1 items): model-registry.json"},
+        {"role": "assistant",
+         "content": "O default declarado em /etc/jarvis/model-registry.json é `bonsai`."},
+    ]
+    v = check_completion(msgs)
+    assert v.status == "UNVERIFIED"
+    assert any("sem leitura" in m for m in v.missing)
+
+
+def test_claimed_content_with_read_is_verified():
+    from jarvis.core.completion import check_completion
+    msgs = [
+        {"role": "user", "content": "qual o default?"},
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "read_file",
+                          "arguments": {"path": "/etc/jarvis/model-registry.json"}}}]},
+        {"role": "tool", "content": '{"default": "bonsai"}'},
+        {"role": "assistant",
+         "content": "O default declarado em /etc/jarvis/model-registry.json é `bonsai`."},
+    ]
+    v = check_completion(msgs)
+    assert v.status == "VERIFIED"

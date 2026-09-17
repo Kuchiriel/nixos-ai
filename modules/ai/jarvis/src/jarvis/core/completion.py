@@ -31,6 +31,11 @@ _CREATION_VERBS = re.compile(
     re.IGNORECASE,
 )
 _PATH_LIKE = re.compile(r"[`\"']?([\w\-./]+\.(?:py|md|nix|txt|json|sh|toml))[,.`\"']?")
+_CONTENT_VERBS = re.compile(
+    r"(declara|declarad[oa]|cont[ée]m|valor|diz que|states?|"
+    r"says?|contains?|shows?|reads?|is `)",
+    re.IGNORECASE,
+)
 
 
 _DENIAL_WORDS = (r"não existe|não há|não encontrado|not found|no such file|"
@@ -76,6 +81,41 @@ def _claimed_artifacts(messages: list[dict]) -> list[str]:
                     if p not in out:
                         out.append(p)
             break
+    return out
+
+
+def _claimed_contents(messages: list[dict]) -> list[str]:
+    """Paths cujo CONTEÚDO o texto final afirma conhecer (elo H1 16/09:
+    respondeu 'é `default`' sem nunca ler o arquivo — chave no lugar
+    do valor). Simétrico a _claimed_artifacts."""
+    out = []
+    for m in reversed(messages):
+        if m.get("role") == "assistant" and m.get("content"):
+            text = m["content"]
+            if _CONTENT_VERBS.search(text):
+                for mm in _PATH_LIKE.finditer(text):
+                    p = mm.group(1)
+                    if p not in out:
+                        out.append(p)
+            break
+    return out
+
+
+def _read_paths(messages: list[dict]) -> list[str]:
+    """Paths passados a read_file (intenção de leitura)."""
+    out = []
+    for m in messages:
+        for tc in m.get("tool_calls") or []:
+            fn = (tc.get("function") or {})
+            if fn.get("name") == "read_file":
+                try:
+                    import json
+                    a = fn.get("arguments", {})
+                    a = json.loads(a) if isinstance(a, str) else a
+                    if isinstance(a, dict) and a.get("path"):
+                        out.append(str(a["path"]))
+                except Exception:
+                    pass
     return out
 
 
@@ -171,6 +211,12 @@ def check_completion(messages: list[dict],
             if c not in _made:
                 ok = False
                 miss.append(f"afirma artefato sem escrita: {c}")
+        _grounded = set(_read_paths(messages)) | set(_made)
+        for c in _claimed_contents(messages):
+            if not any(c.endswith(g) or g.endswith(c) for g in _grounded):
+                ok = False
+                miss.append(f"afirma conteúdo sem leitura: {c} "
+                            f"(leia o arquivo antes de declarar o valor)")
         for d in _denied_but_observed(messages):
             ok = False
             miss.append(f"nega evidência observada: {d}")
