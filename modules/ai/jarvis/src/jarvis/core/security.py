@@ -88,6 +88,43 @@ def validate_pipes(cmd: str) -> bool:
     return True
 
 
+def _python_file_allowed(part: str) -> bool:
+    """Permite `python3 <arquivo>` SÓ se o arquivo está no jail.
+
+    Elo M2 (16/09): o modelo escrevia o script certo e não podia RODÁ-LO
+    (`python` fora do allowlist) — o passo "run" morria e a cadeia quebrava.
+    Cap cirúrgico (não prefixo cego): primeiro token python/python3,
+    NENHUMA flag `-x` (sem `-c` inline, sem `-m`), exatamente ≥1 path, e
+    TODOS os paths dentro do jail (projeto, /tmp, /build — mesma regra
+    do _safe_path de leitura). Fora do jail ou com flag → bloqueado.
+    """
+    import shlex as _shlex
+    from pathlib import Path as _P
+    try:
+        argv = _shlex.split(part)
+    except ValueError:
+        return False
+    if not argv or argv[0] not in ("python", "python3"):
+        return False
+    rest = argv[1:]
+    if not rest or any(a.startswith("-") for a in rest):
+        return False
+    try:
+        from jarvis.core.paths import find_repo_root
+        root = str(find_repo_root())
+    except Exception:
+        root = ""
+    allowed = tuple(p for p in ("/tmp", "/build", root) if p)
+    for a in rest:
+        p = _P(a)
+        target = str(((_P(root) / p).resolve() if not p.is_absolute()
+                      else p))
+        if not any(target == pfx or target.startswith(pfx.rstrip("/") + "/")
+                   for pfx in allowed):
+            return False
+    return True
+
+
 def command_allowed(
     cmd: str,
     allowed_prefixes: tuple[str, ...] | None = None,
@@ -114,6 +151,11 @@ def command_allowed(
         if not part:
             continue
         check_cmd = part.split("|")[0].strip()
+        first = check_cmd.split()[0] if check_cmd.split() else ""
+        if first in ("python", "python3"):
+            if not _python_file_allowed(check_cmd):
+                return False
+            continue
         if not any(check_cmd.startswith(p) for p in prefixes):
             return False
     return True
