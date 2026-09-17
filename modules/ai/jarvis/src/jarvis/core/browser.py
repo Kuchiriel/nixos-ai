@@ -246,6 +246,12 @@ def browser_menu_flow(items: list) -> dict[str, Any]:
         for i, label in enumerate(items):
             box = page.evaluate(_LEAF_JS, label)
             if box and box[0]:
+                if i == 0:
+                    # primeiro item (menu): HOVER abre o dropdown;
+                    # click pode só focar sem renderizar os filhos
+                    page.mouse.move(box[0], box[1])
+                    _t.sleep(1.0)
+                    box = page.evaluate(_LEAF_JS, label)
                 page.mouse.click(box[0], box[1])
                 done.append(label)
             else:
