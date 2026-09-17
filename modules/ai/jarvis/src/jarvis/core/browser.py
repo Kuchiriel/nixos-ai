@@ -234,19 +234,21 @@ def browser_menu_flow(items: list) -> dict[str, Any]:
     try:
         page = _ensure()
         import time as _t
+        done = []
         for i, label in enumerate(items):
             box = page.evaluate(_LEAF_JS, label)
             if box and box[0]:
                 page.mouse.click(box[0], box[1])
+                done.append(label)
             else:
-                # fallback: seta+Enter (navegação por teclado)
-                page.keyboard.press("ArrowDown")
+                return {"ok": False,
+                        "error": f"menu parado em '{label}' (não visível; "
+                                 f"feitos: {' → '.join(done) or 'nenhum'})",
+                        "hint": "O menu anterior pode ter fechado — chame "
+                                "menu de novo com a lista completa."}
             _t.sleep(1.5)
-            if i < len(items) - 1:
-                # re-localiza o próximo item (menu pode ter re-renderizado)
-                continue
         page.wait_for_timeout(1000)
-        return {"ok": True, "menu": " → ".join(items)[:100],
+        return {"ok": True, "menu": " → ".join(done)[:100],
                 **_state(page)}
     except Exception as e:
         return {"ok": False, "error": str(e)[:300]}
@@ -367,6 +369,18 @@ def handle_browser(args: dict[str, Any], approve: bool = False) -> str:
         sel = args.get("selector", "")
         if action == "press":
             r = browser_press(sel, args.get("key", ""))
+        elif action in ("click_text", "menu", "shadow"):
+            # Não usam selector CSS (texto/menu/shadow têm params próprios);
+            # o gate de aprovação acima já valeu.
+            if action == "click_text":
+                r = browser_click_text(args.get("text", ""))
+            elif action == "menu":
+                items = args.get("items", [])
+                if isinstance(items, str):
+                    items = [items]
+                r = browser_menu_flow(items)
+            else:
+                r = browser_shadow_click(sel, args.get("text", ""))
         elif not sel:
             return f"ERROR: {action} precisa de selector"
         elif action == "click":
