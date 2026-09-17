@@ -245,6 +245,17 @@ def browser_menu_flow(items: list) -> dict[str, Any]:
         done = []
         for i, label in enumerate(items):
             box = page.evaluate(_LEAF_JS, label)
+            if not (box and box[0]) and i > 0:
+                # fallback: revela overlay escondido UMA vez (Colab monta
+                # .goog-menu com display=none; hover/click nem sempre abre).
+                page.evaluate("""() => {
+                  document.querySelectorAll('.goog-menu,[role=menu]').forEach(function(e) {
+                    const cs = getComputedStyle(e);
+                    if (cs.display === 'none') e.style.display = 'block';
+                  });
+                }""")
+                _t.sleep(1.0)
+                box = page.evaluate(_LEAF_JS, label)
             if box and box[0]:
                 if i == 0:
                     # primeiro item (menu): HOVER abre o dropdown;
