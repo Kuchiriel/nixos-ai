@@ -192,9 +192,17 @@ def browser_wait(selector: str, timeout_ms: int = 10000) -> dict[str, Any]:
 # zerados. O LLM entende por nome; o harness resolve o COMO.
 
 _LEAF_JS = """(text) => {
-  const els = Array.from(document.querySelectorAll('*')).filter(function(e) {
-    return e.children.length === 0 && (e.innerText || '').trim() === text;
+  const norm = function(s) { return (s || '').replace(/\\s+/g, ' ').trim(); };
+  const all = Array.from(document.querySelectorAll('*')).filter(function(e) {
+    if (e.children.length !== 0) return false;
+    const r = e.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
   });
+  let els = all.filter(function(e) { return norm(e.innerText) === norm(text); });
+  if (!els.length) {
+    // fallback: contém (atalhos "Ctrl+X" grudados quebram o exato)
+    els = all.filter(function(e) { return norm(e.innerText).indexOf(norm(text)) === 0; });
+  }
   if (!els.length) return null;
   const r = els[0].getBoundingClientRect();
   return [r.x + r.width / 2, r.y + r.height / 2];
