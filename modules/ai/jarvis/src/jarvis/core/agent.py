@@ -274,6 +274,8 @@ TOOL_USE_DISCIPLINE = """TOOL DISCIPLINE (mandatory):
 - Task asks to CREATE a file or folder? NEVER verify-then-read the target first: "not found" is the NORMAL state before creation. Call write_file directly with the FULL target path — it creates the file and all missing parent folders. mkdir is unnecessary.
 - Claiming a cause? Cite file:line you actually read this session.
 - Multi-step request? Do the FIRST step now, then KEEP GOING through the remaining steps in the same run — the chain is done only when the LAST step's artifact exists (observed: "rest in later turns" cut chains short; the final artifact never landed).
+- Task asks to WRITE a computed result? COMPUTE FIRST (create inputs, run), write the result AFTER — writing a placeholder value early leaves a stale artifact (observed: total.txt="0" written before counting; never updated).
+- Do NOT revisit a refuted pattern: once an approach failed and an alternative worked, never go back to the failed one (observed: model completed the correct chain then relapsed into mkdir+placeholder at the end).
 - No suitable tool? Answer with text and call nothing."""
 
 MAX_TURNS: int = int(os.environ.get("JARVIS_AGENT_MAX_TURNS", "8"))

@@ -522,6 +522,22 @@ def write_file(path: str, content: str, backup: bool = True) -> dict[str, Any]:
                     "hint": "Para criar arquivos DENTRO dele, chame "
                             "write_file com o caminho completo de cada "
                             "arquivo (ex.: dir/a.txt)."}
+        # Cap relapso (dono 16/09, elo D): path SEM extensão + content
+        # com fence/placeholder → o modelo está "criando a pasta como
+        # arquivo" de novo (observado: placeholder 150 bytes no path do
+        # diretório → "Not a directory" travava a cadeia em loop).
+        # Recusa com instrução — o path de pasta nunca vira arquivo.
+        if not target.suffix:
+            head = content.strip()[:80].lower()
+            if (head.startswith("```") or "placeholder" in head
+                    or "directory" in head or "#" == head[:1]):
+                return {"ok": False,
+                        "error": f"'{path}' parece DIRETÓRIO (sem extensão) "
+                                 f"e o content parece placeholder",
+                        "hint": "NÃO crie a pasta como arquivo. Chame "
+                                "write_file com o caminho COMPLETO do "
+                                "ARQUIVO dentro dela (ex.: dir/a.txt) — "
+                                "pastas-pai são criadas sozinhas."}
         # Cria diretórios-pais ausentes (modelo não tem tool mkdir).
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
