@@ -361,3 +361,68 @@ def select_model(
         "requested": dict(req, capabilities=sorted(caps)),
         "selected": chosen.id, "local_only": True, **reason,
     }
+
+
+# Cascata por API (catálogo 17/09, docs/models/api-catalog-2026-09-17.md).
+# Camada → ordem de fallback (provider, model, base_url, env_key).
+# Uso: quando o modelo local trava (STUCK) ou cai — o harness tenta cada
+# entrada em ordem. Chaves via env (abstração /etc/litellm.env).
+CASCADE_MAP: dict[str, list[tuple[str, str, str, str]]] = {
+    "coding-long": [
+        ("zen", "muse-spark-1.3", "https://api.openrouter.ai/api",
+         "OPENCODE_CONFIG"),
+        ("zen", "union-alpha", "https://api.openrouter.ai/api",
+         "OPENCODE_CONFIG"),
+        ("zen", "muse-spark-1.2", "https://api.openrouter.ai/api",
+         "OPENCODE_CONFIG"),
+    ],
+    "dev": [
+        ("openrouter", "nex-n2.5-pro", "https://openrouter.ai/api",
+         "OPENROUTER_API_KEY"),
+        ("zen", "mimo-v2.5", "https://api.openrouter.ai/api",
+         "OPENCODE_CONFIG"),
+        ("openrouter", "nex-n2.5-mini", "https://openrouter.ai/api",
+         "OPENROUTER_API_KEY"),
+    ],
+    "batch": [
+        ("nvidia", "deepseek-v4-flash", "https://integrate.api.nvidia.com",
+         "NVIDIA_API_KEY"),
+        ("openrouter", "ling-3-flash-fin", "https://openrouter.ai/api",
+         "OPENROUTER_API_KEY"),
+    ],
+    "mechanical": [
+        ("zen", "nemotron-3.5-lightning", "https://api.openrouter.ai/api",
+         "OPENCODE_CONFIG"),
+        ("zen", "mimo-v2.5", "https://api.openrouter.ai/api",
+         "OPENCODE_CONFIG"),
+    ],
+    "docs": [
+        ("zen", "nemotron-3-ultra", "https://api.openrouter.ai/api",
+         "OPENCODE_CONFIG"),
+        ("nvidia", "nemotron-3-super", "https://integrate.api.nvidia.com",
+         "NVIDIA_API_KEY"),
+    ],
+    "classify": [
+        ("nvidia", "glm-5.3-flash", "https://integrate.api.nvidia.com",
+         "NVIDIA_API_KEY"),
+    ],
+    "rag": [
+        ("openrouter", "ling-3-flash-sante", "https://openrouter.ai/api",
+         "OPENROUTER_API_KEY"),
+    ],
+    "vision": [
+        ("openrouter", "ling-3-flash-vl", "https://openrouter.ai/api",
+         "OPENROUTER_API_KEY"),
+    ],
+}
+
+
+def cascade_for(layer: str) -> list[tuple[str, str, str, str]]:
+    """Ordem de fallback API p/ camada (vazia se camada desconhecida)."""
+    return list(CASCADE_MAP.get(layer, []))
+
+
+def cascade_key_present(entry: tuple[str, str, str, str]) -> bool:
+    """True se a env key da entrada existe e não está vazia."""
+    import os
+    return bool(os.environ.get(entry[3], ""))
