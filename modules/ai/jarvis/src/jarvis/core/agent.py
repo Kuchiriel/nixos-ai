@@ -507,7 +507,19 @@ class Agent:
                     system_content += f"\n\nAVOID (past errors):{lessons}"
             except Exception:
                 pass
-        
+
+        # Framing RRP por modelo (catálogo 17/09): regras operacionais
+        # curtas pelo comportamento conhecido do modelo em uso. Vazio =
+        # sem framing (modelos locais sem nota). Persona NÃO entra aqui.
+        try:
+            from jarvis.core.model_policy import ModelPolicy
+            _framing = ModelPolicy.framing_for(
+                getattr(self.config, "llm_model", ""))
+            if _framing:
+                system_content += f"\n\nMODEL FRAMING:\n{_framing}"
+        except Exception:
+            pass
+
         messages = [
             {"role": "system", "content": system_content},
             {"role": "user", "content": prompt},

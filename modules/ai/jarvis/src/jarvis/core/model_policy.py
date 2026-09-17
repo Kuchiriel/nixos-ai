@@ -217,6 +217,29 @@ class ModelPolicy:
 
         return tier
 
+    # Framings por modelo API (catálogo 17/09, docs/models/api-catalog).
+    # Regras operacionais curtas (RRP) por comportamento conhecido —
+    # persona NÃO entra aqui (H2: persona perturba; rules funcionam).
+    MODEL_FRAMINGS: dict[str, str] = {
+        "nemotron": "Reason with thinking enabled before answering; keep the final answer structured.",
+        "ling": "Output strict structured data (JSON) when the task asks for extraction; stay literal.",
+        "mimo": "Be concise and direct; short answers first, details only if asked.",
+        "spark": "Long-horizon task: keep a running plan, avoid repeating tool calls already made.",
+        "union": "Privacy-critical repo: never include secrets or full file dumps in reasoning.",
+        "deepseek": "Batch coding task: surgical diffs, one concern per edit, verify with tests.",
+        "glm": "Classification only: output the label, no explanation.",
+        "nex": "Follow instructions literally; stable Markdown formatting.",
+    }
+
+    @classmethod
+    def framing_for(cls, model_id: str) -> str:
+        """Framing RRP por id do modelo (match por substring, case-insensitive)."""
+        mid = (model_id or "").lower()
+        for key, framing in cls.MODEL_FRAMINGS.items():
+            if key in mid:
+                return framing
+        return ""
+
     def get_system_prompt_addition(self, tier: ModelTier) -> str:
         """Get system prompt additions based on model tier."""
         if tier.tier == "cheap":
