@@ -59,7 +59,7 @@ def _safe_path(path: str, root: Path | None = None,
     else:
         target = (r / p).resolve()
 
-    _allowed_prefixes = ("/tmp", "/build", str(r))
+    _allowed_prefixes = ("/tmp", "/build", "/etc/jarvis", str(r))
     if not any(str(target).startswith(pfx) for pfx in _allowed_prefixes):
         raise ValueError(f"Path outside project: {target}")
     if write:
