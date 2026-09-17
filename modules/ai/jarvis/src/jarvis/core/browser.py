@@ -307,6 +307,26 @@ def browser_shadow_click(host_sel: str, inner_sel: str) -> dict[str, Any]:
         return {"ok": False, "error": str(e)[:300]}
 
 
+def browser_lclick(selector: str, timeout_ms: int = 15000) -> dict[str, Any]:
+    """Click via locator NATIVO do Playwright (mutação: pede aprovação).
+
+    Diferença p/ click/shadow manuais (lição Colab 17/09): o engine CSS
+    do Playwright atravessa shadow DOM ABERTO sozinho, espera o elemento
+    ficar acionável (visível+estável+habilitado) e falha com erro CLARO
+    em vez de no-op silencioso. Use SEMPRE que click/shadow falharem
+    sem erro — evaluate-click em elemento não-acionável não faz nada.
+    """
+    if not selector:
+        return {"ok": False, "error": "lclick precisa de selector"}
+    try:
+        page = _ensure()
+        page.locator(selector).click(timeout=int(timeout_ms))
+        page.wait_for_timeout(500)
+        return {"ok": True, "lclicked": selector[:80], **_state(page)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300]}
+
+
 def browser_wait_text(text: str, timeout_ms: int = 30000) -> dict[str, Any]:
     """Espera TEXTO aparecer na página (leitura: polling, sem seletor).
 
@@ -352,7 +372,7 @@ BROWSER_TOOL = {
             "type": "object",
             "properties": {
                 "action": {"type": "string",
-                           "description": ("open, click, fill, press, scroll, "
+                           "description": ("open, click, fill, press, lclick, scroll, "
                                            "extract, wait, attach, click_text, "
                                            "menu, shadow ou wait_text")},
                 "url": {"type": "string",
@@ -386,7 +406,7 @@ def handle_browser(args: dict[str, Any], approve: bool = False) -> str:
         if not url:
             return "ERROR: open precisa de url"
         r = browser_open(url)
-    elif action in ("click", "fill", "press", "click_text", "menu",
+    elif action in ("click", "fill", "press", "lclick", "click_text", "menu",
                       "shadow"):
         if not approve:
             return (f"ERROR: browser {action} precisa de aprovação "
@@ -394,6 +414,10 @@ def handle_browser(args: dict[str, Any], approve: bool = False) -> str:
         sel = args.get("selector", "")
         if action == "press":
             r = browser_press(sel, args.get("key", ""))
+        elif action == "lclick":
+            if not sel:
+                return "ERROR: lclick precisa de selector"
+            r = browser_lclick(sel, args.get("timeout", 15000))
         elif action in ("click_text", "menu", "shadow"):
             # Não usam selector CSS (texto/menu/shadow têm params próprios);
             # o gate de aprovação acima já valeu.
@@ -436,7 +460,7 @@ def handle_browser(args: dict[str, Any], approve: bool = False) -> str:
                               args.get("timeout", 30000))
     else:
         return ("ERROR: action deve ser open, click, fill, press, "
-                "scroll, extract, wait, attach, click_text, menu, "
+                "scroll, extract, wait, attach, lclick, click_text, menu, "
                 "shadow ou wait_text")
     if not r.get("ok"):
         return f"ERROR: {r.get('error', 'browser falhou')}"
