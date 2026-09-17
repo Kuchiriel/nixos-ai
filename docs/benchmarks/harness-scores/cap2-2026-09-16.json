@@ -1,0 +1,75 @@
+{
+  "ts": "2026-09-16__23-37-11",
+  "summary": {
+    "total": 3,
+    "world_ok": 1,
+    "false_done": 2,
+    "by_tier": {
+      "hard": {
+        "n": 3,
+        "ok": 1
+      }
+    },
+    "avg_elapsed_s": 9.4
+  },
+  "results": [
+    {
+      "task_id": "H1-config-discovery",
+      "tier": "hard",
+      "world_ok": false,
+      "missed": [
+        "output_contains:bonsai"
+      ],
+      "turns": 9,
+      "tool_calls": [
+        "list_directory",
+        "semantic_search",
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": true,
+      "elapsed_s": 6.7,
+      "rc": 0
+    },
+    {
+      "task_id": "H2-syntax-fix",
+      "tier": "hard",
+      "world_ok": true,
+      "missed": [],
+      "turns": 17,
+      "tool_calls": [
+        "read_file",
+        "str_replace",
+        "execute_shell",
+        "read_file",
+        "write_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 8.7,
+      "rc": 0
+    },
+    {
+      "task_id": "H3-chain",
+      "tier": "hard",
+      "world_ok": false,
+      "missed": [
+        "file_contains:/tmp/jarvis-ch/data/total.txt::3"
+      ],
+      "turns": 21,
+      "tool_calls": [
+        "write_file",
+        "list_directory",
+        "write_file",
+        "write_file",
+        "write_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": true,
+      "elapsed_s": 12.7,
+      "rc": 0
+    }
+  ]
+}
