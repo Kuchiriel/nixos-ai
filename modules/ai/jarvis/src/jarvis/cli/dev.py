@@ -1358,8 +1358,14 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
         return result_json[:3000], None
 
     if not result.get("ok", False):
-        error = result.get("error", "Unknown error")
+        error = result.get("error", "")
         hint = result.get("hint", "")
+        # Elo H2 (16/09): run_shell_dict devolve `output` (stderr real)
+        # sem chave `error` → caía em "Unknown error" e descartava o
+        # traceback que apontava o bug exato (modelo corrigia a linha
+        # errada 3x). Erro real SEMPRE chega ao modelo.
+        if not error:
+            error = str(result.get("output", "")).strip()[:800] or "Unknown error"
         msg = f"ERROR: {error}"
         if hint:
             msg += f"\n{hint}"
