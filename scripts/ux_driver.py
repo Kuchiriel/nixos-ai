@@ -16,6 +16,7 @@ import select
 import subprocess
 import sys
 import time
+import time
 
 
 def run_task(task: str, timeout_s: int = 300,
@@ -26,7 +27,16 @@ def run_task(task: str, timeout_s: int = 300,
     cooperativo; "n" nega; None ignora e deixa travar até timeout).
     Cada aprovação é registrada (métrica approvals).
     """
-    tpath = f"/tmp/ux-transcript-{os.getpid()}.json"
+    # Transcript único por run (PID + timestamp ms + contador): a suite
+    # roda N tasks no MESMO processo e PID puro sobrescrevia os anteriores
+    # (só o último transcript sobrevivia — evidência perdida).
+    global _run_counter
+    try:
+        _run_counter += 1
+    except NameError:
+        _run_counter = 1
+    tpath = (f"/tmp/ux-transcript-{os.getpid()}-"
+             f"{int(time.time() * 1000)}-{_run_counter}.json")
     cmd = ["jarvis", "dev", task, "--transcript", tpath]
     t0 = time.monotonic()
     m_out, s_out = pty.openpty()
