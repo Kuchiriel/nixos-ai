@@ -452,3 +452,18 @@ def test_looks_like_promise() -> None:
     assert _looks_like_promise("I will check the logs.")
     assert not _looks_like_promise("A pasta foi criada com sucesso.")
     assert not _looks_like_promise("Não encontrei o arquivo.")
+
+
+class TestReadDirHint:
+    def test_read_directory_returns_listing(self, tmp_path, monkeypatch):
+        """Sensor elo H3: read_file em diretório devolve a listagem junto
+        (modelo conta sem outra call) em vez de erro seco."""
+        import os
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "a.txt").write_text("a")
+        (tmp_path / "b.txt").write_text("b")
+        from jarvis.core import devtools as dt
+        r = dt.read_file(str(tmp_path), 0, 10)
+        assert r["ok"] is False
+        assert "2 itens" in r["hint"]
+        assert "a.txt" in r["hint"] and "b.txt" in r["hint"]

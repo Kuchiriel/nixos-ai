@@ -273,6 +273,22 @@ def read_file(path: str, offset: int = 0, limit: int = 2000) -> dict[str, Any]:
         if not target.exists():
             return {"ok": False, "error": f"File not found: {path}"}
         if not target.is_file():
+            # Sensor (elo H3 16/09): modelo leu DIRETÓRIO como arquivo
+            # (queria contar). Devolve a listagem junto — ele conta sem
+            # outra call em vez de travar. Só nomes (barato, sem recursão).
+            if target.is_dir():
+                try:
+                    names = sorted(p.name for p in target.iterdir()
+                                   if not p.name.startswith("."))
+                except OSError:
+                    names = []
+                return {"ok": False,
+                        "error": f"Not a file: {path}",
+                        "hint": (f"'{path}' é um DIRETÓRIO com "
+                                 f"{len(names)} itens: "
+                                 f"{', '.join(names[:30])}. Para contar ou "
+                                 f"listar, use esses dados — não chame "
+                                 f"read_file nele de novo.")}
             return {"ok": False, "error": f"Not a file: {path}"}
 
         content = target.read_text(encoding="utf-8", errors="replace")
