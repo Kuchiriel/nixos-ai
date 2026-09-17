@@ -351,6 +351,23 @@ def _maybe_disable_thinking(system_prompt: str) -> str:
     return system_prompt
 
 
+def _approve_all_active() -> bool:
+    """Approve-once/approve-all persistente (dono 16/09).
+
+    Ativo via env JARVIS_APPROVE_ALL=1 OU arquivo de estado
+    ~/.local/state/jarvis/approve-all (autorização do dono salva).
+    Bypass legítimo das limitações do shell do harness p/ sessões
+    confiáveis — write-jail e protected-files continuam valendo.
+    """
+    if os.environ.get("JARVIS_APPROVE_ALL") == "1":
+        return True
+    try:
+        from pathlib import Path
+        return (Path.home() / ".local/state/jarvis/approve-all").exists()
+    except Exception:
+        return False
+
+
 def _estimate_tokens(messages: list[dict[str, Any]]) -> int:
     """Estimativa via interface única (tokens.py) — nunca heurística inline.
 
@@ -2183,6 +2200,9 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
     if yolo:
         approve = True
         console.print("[tool.ok]⚡ YOLO mode[/]")
+    if not approve and _approve_all_active():
+        approve = True
+        console.print("[tool.ok]⚡ approve-all ativo (estado salvo)[/]")
 
     _auto_index_rag()
 
@@ -2671,6 +2691,8 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
         os.chdir(project_root)
     if yolo:
         approve = True
+    if not approve and _approve_all_active():
+        approve = True
 
     _auto_index_rag()
 
@@ -2714,6 +2736,8 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
         os.chdir(project_root)
 
     if yolo:
+        approve = True
+    if not approve and _approve_all_active():
         approve = True
 
     if autopilot:
