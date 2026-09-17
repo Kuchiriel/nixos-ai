@@ -135,6 +135,27 @@ JARVIS_TOOLS = [
         }
     },
     {
+        "name": "jarvis_browser",
+        "description": ("WHEN you need to interact with any web page: read, click, fill forms, "
+                        "drive menus, or operate the owner's logged-in browser (attach). "
+                        "Actions: open, click, fill, press, scroll, extract, wait, attach, "
+                        "click_text, menu, shadow, wait_text. Mutations need approval."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "description": "Browser action"},
+                "url": {"type": "string", "description": "URL (open) or CDP url (attach)"},
+                "selector": {"type": "string", "description": "CSS selector (or shadow host)"},
+                "text": {"type": "string", "description": "Text (fill/click_text/wait_text/shadow inner)"},
+                "key": {"type": "string", "description": "Key for press"},
+                "dy": {"type": "integer", "description": "Scroll pixels"},
+                "items": {"type": "array", "items": {"type": "string"}, "description": "Menu path"},
+                "timeout": {"type": "integer", "description": "Wait ms"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
         "name": "jarvis_nix_eval",
         "description": "Evaluate a Nix expression and return the result.",
         "inputSchema": {
@@ -578,6 +599,10 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
 
         if name == "jarvis_observe_screen":
             return observe_screen(args)
+
+        if name == "jarvis_browser":
+            from jarvis.core.browser import handle_browser
+            return handle_browser(args)
 
         if name == "jarvis_read_chatgpt":
             return handle_chatgpt_read(args)
