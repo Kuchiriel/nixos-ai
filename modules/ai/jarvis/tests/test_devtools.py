@@ -495,3 +495,27 @@ class TestRelapseShellContent:
                 _p.unlink(missing_ok=True)
             for _b in pathlib.Path.home().glob(".local/state/jarvis/backups/CH-UNIQUE-NOTES-XYZ*"):
                 _b.unlink(missing_ok=True)
+
+
+class TestReadTruncationNotice:
+    def test_truncated_read_announces(self, tmp_path, monkeypatch):
+        """Sensor E3: leitura parcial anuncia total (modelo extrapolava)."""
+        import os
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "l.txt").write_text("a\nb\nc\nd\n")
+        from jarvis.core import devtools as dt
+        import pathlib
+        # resolve via project root: usa path absoluto no tmp
+        r = dt.read_file(str(tmp_path / "l.txt"), 0, 1)
+        assert r["ok"] is True
+        assert "de 4 total" in r["content"]
+        assert "MAIS linhas" in r["content"]
+
+    def test_full_read_no_notice(self, tmp_path, monkeypatch):
+        import os
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "l.txt").write_text("a\nb\n")
+        from jarvis.core import devtools as dt
+        r = dt.read_file(str(tmp_path / "l.txt"), 0, 10)
+        assert r["ok"] is True
+        assert "MAIS linhas" not in r["content"]

@@ -299,8 +299,15 @@ def read_file(path: str, offset: int = 0, limit: int = 2000) -> dict[str, Any]:
         end = min(total, start + limit) if limit > 0 else total
         selected = "\n".join(lines[start:end])
 
-        # Formato com números de linha (dev.py style) para o LLM
+        # Formato com números de linha (dev.py style) para o LLM.
+        # Sensor E3 (16/09): leitura truncada ANUNCIA a truncagem — o
+        # modelo lia limit=1, via 1 linha e extrapolava o total (o
+        # total_lines morria no formato e ele nunca sabia que havia mais).
         numbered = "\n".join(f"{start + i + 1:>5} | {line}" for i, line in enumerate(lines[start:end]))
+        if end < total:
+            numbered += (f"\n[…mostrando linhas {start + 1}–{end} de "
+                         f"{total} total — o arquivo tem MAIS linhas que "
+                         f"o mostrado; aumente limit ou conte via shell]")
 
         try:
             rel = str(target.relative_to(_project_root()))
