@@ -883,6 +883,15 @@ def _build_repo_map(root: str, max_files: int = 20, max_tokens: int = 500) -> st
         out.append(entry)
         used += len(entry) + 1
 
+    # SYSTEM PATHS (elo H1 16/09): paths declarativos de sistema legíveis
+    # (SÓ paths, nunca valores/segredos). H1 flakava porque o modelo não
+    # sabia onde procurar fora do projeto e alucinava paths. Contexto,
+    # não instrução: ~6 linhas, determinístico, zero turns extras.
+    out.append("SYSTEM PATHS (leitura permitida, fora do jail):")
+    out.append("  /etc/jarvis/model-registry.json (modelos + default)")
+    out.append("  ~/.local/share/opencode/auth.json (providers, só nomes)")
+    out.append("  ~/models (pesos .pth locais)")
+
     return "\n".join(out)
 
 

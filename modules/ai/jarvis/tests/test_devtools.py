@@ -519,3 +519,16 @@ class TestReadTruncationNotice:
         r = dt.read_file(str(tmp_path / "l.txt"), 0, 10)
         assert r["ok"] is True
         assert "MAIS linhas" not in r["content"]
+
+
+class TestSystemPaths:
+    def test_repo_map_has_system_paths_no_secrets(self):
+        """SYSTEM PATHS no REPO MAP: paths declarativos legíveis, nunca
+        valores (elo H1 — descoberta determinística, zero turns)."""
+        import sys
+        sys.path.insert(0, 'modules/ai/jarvis/src')
+        from jarvis.cli.dev import _build_repo_map
+        m = _build_repo_map('.', max_files=2, max_tokens=50)
+        assert "SYSTEM PATHS" in m
+        assert "/etc/jarvis/model-registry.json" in m
+        assert "sk-" not in m and "gsk_" not in m and "tvly-" not in m
