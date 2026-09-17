@@ -139,6 +139,14 @@ class LoopDetector:
             if result.action != RecoveryAction.NONE:
                 return result
 
+            # 3b. Windowed relapse (elo D 16/09): mesma assinatura volta
+            # pela 3a vez dentro da janela mesmo com calls intercaladas
+            # (write→list→write→list quebra streak consecutivo). Ex.:
+            # placeholder escrito no path do diretório m6/m10/m16/m23.
+            result = self._check_windowed_relapse(sig)
+            if result.action != RecoveryAction.NONE:
+                return result
+
         # 4. Stagnation (genérico)
         return self._check_stagnation(content)
 
@@ -254,6 +262,39 @@ class LoopDetector:
                     f"Read the file completely, understand the issue, then make one correct edit."
                 ),
                 loop_type=LoopType.EDIT_REVERT,
+                iteration=self._total_iterations,
+            )
+        return RecoveryStrategy(
+            action=RecoveryAction.NONE, message="",
+            loop_type=LoopType.NONE, iteration=self._total_iterations,
+        )
+
+    def _check_windowed_relapse(self, sig: ToolSignature) -> RecoveryStrategy:
+        """Detecta relapso: mesma assinatura 3+ vezes na janela (max_history),
+        mesmo com calls intercaladas. Streak consecutivo não pega
+        write→list→write→list (elo D H3-chain m22-m24: relapso no fim)."""
+        window = self._history[-self.max_history:]
+        hits = sum(1 for s in window if s == sig)
+        if hits >= 3:
+            key = ""
+            try:
+                args = json.loads(sig.raw_args) if sig.raw_args else {}
+                key = str(args.get("path") or args.get("cmd")
+                          or args.get("selector") or "")[:80]
+            except Exception:
+                pass
+            return RecoveryStrategy(
+                action=RecoveryAction.INJECT_WARNING,
+                message=(
+                    f"You already called '{sig.name} {key}' {hits} times "
+                    f"in this run — the outcome is not changing. Do NOT "
+                    f"call it again with the same arguments. Instead: "
+                    f"re-read the artifacts you already produced and "
+                    f"CORRECT the final one (a stale/partial result left "
+                    f"behind fails verification). If nothing else helps, "
+                    f"answer with what you have and stop."
+                ),
+                loop_type=LoopType.DUPLICATE,
                 iteration=self._total_iterations,
             )
         return RecoveryStrategy(

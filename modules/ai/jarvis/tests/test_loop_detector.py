@@ -139,3 +139,33 @@ class TestContextBudget:
         b = ContextBudget(max_tokens=100)
         b.add_message({"role": "user", "content": "x" * 1000})
         assert b.is_overflow
+
+
+class TestWindowedRelapse:
+    def test_relapse_interleaved(self):
+        """Regressão elo D: write→list→write→list com mesmos args —
+        streak consecutivo não pega; janela pega na 3a ocorrência."""
+        from jarvis.core.loop_detector import LoopDetector, RecoveryAction
+        d = LoopDetector()
+        w = {"function": {"name": "write_file",
+                          "arguments": {"path": "data", "content": "x"}}}
+        l = {"function": {"name": "list_directory",
+                          "arguments": {"path": "data"}}}
+        r2 = {"function": {"name": "read_file",
+                            "arguments": {"path": "other.txt"}}}
+        s2 = {"function": {"name": "execute_shell",
+                           "arguments": {"cmd": "ls"}}}
+        d.check([w]); d.check([l]); d.check([w]); d.check([r2])
+        d.check([w]); d.check([s2])
+        r = d.check([w])
+        assert r.action == RecoveryAction.INJECT_WARNING
+        assert "CORRECT the final one" in r.message
+
+    def test_no_false_positive(self):
+        from jarvis.core.loop_detector import LoopDetector, RecoveryAction
+        d = LoopDetector()
+        d.check([{"function": {"name": "write_file",
+                               "arguments": {"path": "a", "content": "1"}}}])
+        r = d.check([{"function": {"name": "write_file",
+                                   "arguments": {"path": "b", "content": "2"}}}])
+        assert r.action == RecoveryAction.NONE
