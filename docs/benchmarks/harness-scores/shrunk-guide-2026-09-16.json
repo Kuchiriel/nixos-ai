@@ -1,0 +1,67 @@
+{
+  "ts": "2026-09-16__23-10-25",
+  "summary": {
+    "total": 3,
+    "world_ok": 2,
+    "false_done": 1,
+    "by_tier": {
+      "medium": {
+        "n": 3,
+        "ok": 2
+      }
+    },
+    "avg_elapsed_s": 36.4
+  },
+  "results": [
+    {
+      "task_id": "M1-dirfile",
+      "tier": "medium",
+      "world_ok": true,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 97.5,
+      "rc": 0
+    },
+    {
+      "task_id": "M2-script-run",
+      "tier": "medium",
+      "world_ok": false,
+      "missed": [
+        "output_contains:42"
+      ],
+      "turns": 7,
+      "tool_calls": [
+        "write_file",
+        "execute_shell"
+      ],
+      "wrong_tools": [],
+      "false_done": true,
+      "elapsed_s": 4.1,
+      "rc": 0
+    },
+    {
+      "task_id": "M3-fix-offbyone",
+      "tier": "medium",
+      "world_ok": true,
+      "missed": [],
+      "turns": 15,
+      "tool_calls": [
+        "read_file",
+        "str_replace",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 7.5,
+      "rc": 0
+    }
+  ]
+}
