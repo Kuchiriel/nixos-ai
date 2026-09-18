@@ -69,6 +69,10 @@ _ALLOWED_EXTENSIONS: tuple[str, ...] = (
 
     # Texto Pleno
     ".txt",
+
+    # Documentos sanitizados pré-RAG (doc_sanitize: extract→normalize→
+    # validate; quarentena em vez de lixo no Qdrant)
+    ".pdf", ".epub", ".htm",
 )
 
 # Metadados, Documentação & Configurações Estruturadas
@@ -354,6 +358,11 @@ class HybridIndexer:
 
         Pula arquivos que não mudaram desde a última indexação (por mtime).
         Use force=True para re-indexar mesmo sem mudanças.
+
+        Sanitização pré-RAG (doc_sanitize): quando o conteúdo vem do disco,
+        passa por detect→extract→normalize→validate ANTES do chunking.
+        Quarentena (malformado/corrompido/não-suportado) NÃO é indexada —
+        retorna None (mesmo contrato de "pular"), com manifest gravado.
         """
         ext = os.path.splitext(path)[1].lower()
         if content is None:
@@ -363,7 +372,11 @@ class HybridIndexer:
                 if not force and path in self._indexed_hashes and self._indexed_hashes[path] >= mtime:
                     return None  # arquivo não mudou, pula
                 self._indexed_hashes[path] = mtime
-                content = Path(path).read_text(encoding="utf-8", errors="ignore")
+                from jarvis.core.doc_sanitize import sanitize_document
+                san = sanitize_document(path)
+                if san.status != "ok":
+                    return None  # quarentena: manifest gravado, sem indexar
+                content = san.text
             except OSError:
                 return None
 

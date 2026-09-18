@@ -95,6 +95,13 @@ def _safe_path(path: str, root: Path | None = None,
     nesse caso o comportamento antigo (base=raiz) prevalece — inclui
     testes que mockam _project_root com cwd no repo.
     """
+    import re as _re2
+    # Join bug do modelo (L8 real 3x: "/tmp/.../ script.sh" — concatena
+    # CWD + nome com espaço). Rejeitar travava o run em STUCK (o modelo
+    # nunca se autocorrige); NORMALIZAR (OpenDev fuzzy-match: absorver
+    # imprecisão) deixa prosseguir no path pretendido. "My Docs/x"
+    # passa intacto (sem adjacência espaço-barra).
+    path = _re2.sub(r"/ +", "/", path.strip())
     p = Path(path)
     r = root or _project_root()
     if p.is_absolute():
@@ -106,16 +113,6 @@ def _safe_path(path: str, root: Path | None = None,
     if not any(str(target).startswith(pfx) for pfx in _allowed_prefixes):
         raise ValueError(f"Path outside project: {target}")
     if write:
-        # Join bug do modelo (L8 real 2x: "/tmp/eval-l8-local/ script.sh"
-        # com ESPAÇO — concatena CWD + nome com espaço; cria arquivos-lixo
-        # e tudo downstream falha). Espaço adjacente a separador quase
-        # nunca é intencional ("My Docs/x" passa — sem adjacência).
-        # Enforcement (Bhatt P4: 100% vs 70-90%): rejeita, não avisa.
-        if " /" in path or "/ " in path:
-            raise ValueError(
-                f"Suspected path join bug (space next to '/'): {path!r} — "
-                "remove the space (dir + '/' + name, no spaces) and retry. "
-                "If the space is really part of the name, quote it exactly.")
         lowered = target.name.lower()
         if lowered == ".env" or lowered.endswith(".env"):
             raise ValueError(f"Protected file (no escrita): {target.name}")

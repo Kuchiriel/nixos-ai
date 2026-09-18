@@ -99,13 +99,14 @@ def test_write_file_creates_dirs() -> None:
     assert f.read_text() == "nested"
 
 
-def test_write_file_rejects_space_join_bug() -> None:
+def test_write_file_normalizes_space_join_bug() -> None:
     """Path com espaço adjacente a '/' (join bug L8: 'dir/ file') é
-    rejeitado na escrita — enforcement, não aviso."""
+    NORMALIZADO p/ o path pretendido (fuzzy OpenDev) — rejeitar travava
+    em STUCK pois o modelo nunca se autocorrige."""
     d = _tmp()
     result = write_file(str(d) + "/ script.sh", "echo")
-    assert result["ok"] is False
-    assert "join bug" in result["error"]
+    assert result["ok"] is True
+    assert (d / "script.sh").read_text() == "echo"
     assert not (d / " script.sh").exists()
 
 
