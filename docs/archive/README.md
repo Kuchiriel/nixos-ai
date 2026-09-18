@@ -19,7 +19,7 @@ módulo substituto quando aplicável.
 ### `benchmarks/` — Benchmarks Históricos
 
 Resultados de performance anteriores à adoção do Qwen3.6-35B-A3B como modelo
-principal. Fonte atual: [[../benchmarks/README]].
+principal. Fonte atual: [[../benchmarks/README|/home/nixos/projects/nixos-ai/docs/README.md]].
 
 | Arquivo | Data | Supersedido por |
 |---------|------|-----------------|
@@ -102,7 +102,7 @@ Arquivos que **não devem** ser incluídos no corpus RAG:
 | `JARVIS-COMPARISON.mmd` | Duplicata do `.md` equivalente |
 
 ---
-**Ver também:** [[../architecture/system-overview]] | [[../audit/INDEX]] | [[../README]]
+**Ver também:** [[../architecture/system-overview|/home/nixos/projects/nixos-ai/docs/architecture/system-overview.md]] | [[../audit/INDEX|/home/nixos/projects/nixos-ai/docs/architecture/INDEX.md]] | [[../README|/home/nixos/projects/nixos-ai/docs/README.md]]
 
 ---
 **Nota de validação**: os documentos listados aqui foram arquivados por critério narrativo/temporal; onde possível o arquivamento foi alinhado ao que o código/docs atuais dizem, mas alguns itens podem ainda precisar de decisão manual para confirmar que não há versão viva que os substituiu.

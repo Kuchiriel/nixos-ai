@@ -340,7 +340,7 @@ Diagrama do pipeline real com apenas módulos que existem.
 **Total estimado: 3-4 sessões de trabalho focado.**
 
 ---
-**Ver também:** [[agent-harness]] | [[nightwatch-components]]
-[[ADR-001-agent-platform]] | [[../audit/current/FULL-REPO-AUDIT-2026-09-03]]
-[[../audit/current/SESSION-AUDIT-2026-09-04]]
-[[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]
+**Ver também:** [[agent-harness|agent-harness.md]] | [[nightwatch-components|nightwatch-components.md]]
+[[ADR-001-agent-platform|ADR-001-agent-platform.md]] | [[../audit/current/FULL-REPO-AUDIT-2026-09-03|/home/nixos/projects/nixos-ai/docs/audit/current/FULL-REPO-AUDIT-2026-09-03.md]]
+[[../audit/current/SESSION-AUDIT-2026-09-04|/home/nixos/projects/nixos-ai/docs/audit/current/SESSION-AUDIT-2026-09-04.md]]
+[[../../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../README|/home/nixos/projects/nixos-ai/docs/README.md]]

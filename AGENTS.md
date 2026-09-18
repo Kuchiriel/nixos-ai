@@ -3,7 +3,14 @@
 > Formato agents.md (Linux Foundation) — toda IA que trabalhar neste repo
 > lê este arquivo. É a fonte de premissas universais.
 > Regras de modo específico estão em `.roomodes`.
+> Tags: #status/active #type/rules #project/nixos-ai
 >
+> **ENTRADA POR AQUI (primeira leitura):**
+> - [[docs/architecture/SYSTEM-MAP]] — 🗺️ mapa do sistema (repos, camadas, código)
+> - [[docs/README]] — índice da documentação
+> - [[docs/architecture/INDEX]] · [[docs/audit/INDEX]] · [[docs/benchmarks/INDEX]] · [[docs/development/INDEX]] · [[docs/models/INDEX]]
+> - [[BUFFY]] — estado operacional detalhado (§39/§42/§50)
+> CLAUDE.md e GEMINI.md são symlinks deste arquivo (fonte única).
 > Tags: #status/active #type/rules #project/nixos-ai
 >
 > **Graph:** [[HANDOFF]] | [[BUFFY.md]] | [[README]] | [[CONTEXT-ENGINEERING]]

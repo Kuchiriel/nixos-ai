@@ -228,9 +228,9 @@ Our JARVIS: Should classify file sensitivity and ask if needed
 
 ---
 
-**Ver também:** [[../HANDOFF]] | [[../AGENTS.md]] | [[../README]]
+**Ver também:** [[../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../README|/home/nixos/projects/nixos-ai/docs/README.md]]
 
 ---
 
-**Ver também:** [[system-overview]] | [[agent-harness]] | [[nightwatch-components]]
-[[repl-guide]]
+**Ver também:** [[system-overview|system-overview.md]] | [[agent-harness|agent-harness.md]] | [[nightwatch-components|nightwatch-components.md]]
+[[repl-guide|/home/nixos/projects/nixos-ai/docs/development/repl-guide.md]]

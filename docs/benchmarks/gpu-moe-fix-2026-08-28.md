@@ -1,8 +1,8 @@
 # GPU Activation Fix — --cpu-moe Benchmark Results
 
-**Contexto:** [[llama-cpp-tuning]] | [[slm-techniques]]
-**Hardware:** [[system-overview]]
-**Sweep relacionado:** [[ncmoe-sweep]]
+**Contexto:** [[llama-cpp-tuning|/home/nixos/projects/nixos-ai/docs/architecture/llama-cpp-tuning.md]] | [[slm-techniques|/home/nixos/projects/nixos-ai/docs/architecture/slm-techniques.md]]
+**Hardware:** [[system-overview|/home/nixos/projects/nixos-ai/docs/architecture/system-overview.md]]
+**Sweep relacionado:** [[ncmoe-sweep|ncmoe-sweep.md]]
 
 **Date:** 2026-08-28
 **Hardware:** RTX 4050 Laptop 6GB, i7-13620H, 32GB RAM

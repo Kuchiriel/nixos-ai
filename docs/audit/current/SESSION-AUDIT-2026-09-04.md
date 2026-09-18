@@ -148,7 +148,7 @@ From Addy Osmani / Viv Trivedy:
 4. Verify deliverable works
 
 ---
-**Contexto arquitetural:** [[../../architecture/agent-harness]] | [[../../architecture/nightwatch-components]]
-**Personas:** [[../../architecture/ADR-001-agent-platform]]
-**Missão:** [[../../architecture/mission-consolidation]]
-**Índice:** [[../INDEX]]
+**Contexto arquitetural:** [[../../architecture/agent-harness|/home/nixos/projects/nixos-ai/docs/architecture/agent-harness.md]] | [[../../architecture/nightwatch-components|/home/nixos/projects/nixos-ai/docs/architecture/nightwatch-components.md]]
+**Personas:** [[../../architecture/ADR-001-agent-platform|/home/nixos/projects/nixos-ai/docs/architecture/ADR-001-agent-platform.md]]
+**Missão:** [[../../architecture/mission-consolidation|/home/nixos/projects/nixos-ai/docs/architecture/mission-consolidation.md]]
+**Índice:** [[../INDEX|/home/nixos/projects/nixos-ai/docs/architecture/INDEX.md]]

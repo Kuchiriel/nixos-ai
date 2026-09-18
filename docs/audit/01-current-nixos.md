@@ -63,4 +63,4 @@ scripts: rebuild.sh, limpar_nixos.sh, mount_manjaro.sh, shell.nix
 - **Remover (em commits isolados, após confirmar ausência de referências)**: hosts stale, `.bak` commitados, porta 11434, cleanup ollama, README desatualizado.
 
 ---
-**Ver também:** [[../../HANDOFF]] | [[../PLATFORM-ASSESSMENT]] | [[../GAP-ANALYSIS-2026-08-29]]
+**Ver também:** [[../../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../architecture/platform-assessment]] | [[../GAP-ANALYSIS-2026-08-29|completed/GAP-ANALYSIS-2026-08-29.md]]

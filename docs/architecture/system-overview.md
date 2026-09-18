@@ -185,10 +185,10 @@ flowchart TB
 ```
 
 ---
-**Ver também:** [[mcp-integration]] | [[agent-harness]] | [[rag-improvements]]
-[[context-engineering]] | [[llama-cpp-tuning]] | [[nightwatch-components]]
-[[ADR-001-agent-platform]] | [[ADR-002-memory-layers]]
-[[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]
+**Ver também:** [[mcp-integration|mcp-integration.md]] | [[agent-harness|agent-harness.md]] | [[rag-improvements|rag-improvements.md]]
+[[context-engineering|context-engineering.md]] | [[llama-cpp-tuning|llama-cpp-tuning.md]] | [[nightwatch-components|nightwatch-components.md]]
+[[ADR-001-agent-platform|ADR-001-agent-platform.md]] | [[ADR-002-memory-layers|ADR-002-memory-layers.md]]
+[[../../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../README|/home/nixos/projects/nixos-ai/docs/README.md]]
 
 ---
 **Nota de validação**: diagramas inline e o número de ferramentas MCP foram alinhados ao código-fonte. O diagrama de sequência e os fluxos de dados são representações conceituais e não foram validados por execução; serviços e contagens de documentos indexados devem ser confirmados em runtime.

@@ -153,7 +153,7 @@ flowchart TB
 ```
 
 ---
-**Ver também:** [[nightwatch-components]] | [[mission-consolidation]]
-[[mcp-integration]] | [[context-engineering]] | [[ADR-001-agent-platform]]
-[[ADR-002-memory-layers]] | [[system-overview]]
-[[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]
+**Ver também:** [[nightwatch-components|nightwatch-components.md]] | [[mission-consolidation|mission-consolidation.md]]
+[[mcp-integration|mcp-integration.md]] | [[context-engineering|context-engineering.md]] | [[ADR-001-agent-platform|ADR-001-agent-platform.md]]
+[[ADR-002-memory-layers|ADR-002-memory-layers.md]] | [[system-overview|system-overview.md]]
+[[../../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../README|/home/nixos/projects/nixos-ai/docs/README.md]]

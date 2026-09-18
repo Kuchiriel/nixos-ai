@@ -104,5 +104,5 @@ Os 2GB livres são margem de segurança, não desperdício.
 p/ encoder dedicado). Decisão: **aceitar text-only**; revisitar só com
 troca de motor. Registrado como limitação, não como bug.
 
-**Ver também:** [[../architecture/system-overview]] | [[../architecture/llama-cpp-tuning]]
-[[ncmoe-sweep]] | [[performance-evidence-audit]]
+**Ver também:** [[../architecture/system-overview|/home/nixos/projects/nixos-ai/docs/architecture/system-overview.md]] | [[../architecture/llama-cpp-tuning|/home/nixos/projects/nixos-ai/docs/architecture/llama-cpp-tuning.md]]
+[[ncmoe-sweep|ncmoe-sweep.md]] | [[performance-evidence-audit|performance-evidence-audit.md]]

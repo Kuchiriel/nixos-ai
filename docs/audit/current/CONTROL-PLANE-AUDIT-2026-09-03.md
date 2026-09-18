@@ -135,7 +135,7 @@ What's missing:
 - Approval workflow
 
 ---
-**Contexto arquitetural:** [[../../architecture/system-overview]] | [[../../architecture/mcp-integration]]
-**Estado de hardening:** [[CONTROL-PLANE-AUDIT-2026-09-03-HARDENING]]
-**Missão associada:** [[../../architecture/mission-consolidation]]
-**Índice:** [[../INDEX]]
+**Contexto arquitetural:** [[../../architecture/system-overview|/home/nixos/projects/nixos-ai/docs/architecture/system-overview.md]] | [[../../architecture/mcp-integration|/home/nixos/projects/nixos-ai/docs/architecture/mcp-integration.md]]
+**Estado de hardening:** [[CONTROL-PLANE-AUDIT-2026-09-03-HARDENING|CONTROL-PLANE-AUDIT-2026-09-03-HARDENING.md]]
+**Missão associada:** [[../../architecture/mission-consolidation|/home/nixos/projects/nixos-ai/docs/architecture/mission-consolidation.md]]
+**Índice:** [[../INDEX|/home/nixos/projects/nixos-ai/docs/architecture/INDEX.md]]

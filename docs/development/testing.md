@@ -149,5 +149,5 @@ checkPhase = ''
 Estes testes devem ser executados manualmente em ambiente real.
 
 ---
-**Ver também:** [[getting-started]] | [[repl-guide]]
-[[agent-harness]] | [[nightwatch-components]] | [[../../BUFFY]]
+**Ver também:** [[getting-started|getting-started.md]] | [[repl-guide|repl-guide.md]]
+[[agent-harness|/home/nixos/projects/nixos-ai/docs/architecture/agent-harness.md]] | [[nightwatch-components|/home/nixos/projects/nixos-ai/docs/architecture/nightwatch-components.md]] | [[../../BUFFY|/home/nixos/projects/nixos-ai/BUFFY.md]]

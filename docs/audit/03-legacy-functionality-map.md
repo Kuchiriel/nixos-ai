@@ -131,4 +131,4 @@
 10. **Memória de sessão em /tmp** (volátil) — reimplementar persistente; comportamento antigo de perda de contexto não deve ser "preservado".
 
 ---
-**Ver também:** [[../../HANDOFF]] | [[../PLATFORM-ASSESSMENT]] | [[../GAP-ANALYSIS-2026-08-29]]
+**Ver também:** [[../../AGENTS.md]] | [[../architecture/platform-assessment]] | [[../audit/completed/GAP-ANALYSIS-2026-08-29]]

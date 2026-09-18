@@ -132,5 +132,5 @@ nix develop --command python3 -m pytest modules/ai/jarvis/tests/test_mcp_tools_e
 
 ---
 
-**Ver também:** [[testing]] | [[repl-guide]]
-[[system-overview]] | [[agent-harness]]
+**Ver também:** [[testing|testing.md]] | [[repl-guide|repl-guide.md]]
+[[system-overview|/home/nixos/projects/nixos-ai/docs/architecture/system-overview.md]] | [[agent-harness|/home/nixos/projects/nixos-ai/docs/architecture/agent-harness.md]]

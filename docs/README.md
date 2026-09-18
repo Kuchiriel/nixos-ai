@@ -38,10 +38,15 @@ architecture-beta
 
 ## 📁 Documentation Structure
 
+> Entrypoints: cada diretório tem `INDEX.md` com wikilinks; mapas de
+> primeira leitura: [[architecture/SYSTEM-MAP|architecture/SYSTEM-MAP.md]] (sistema) e o tree abaixo.
+
 ```
 docs/
 ├── README.md                         # Este arquivo — índice da documentação
 ├── architecture/                     # Documentação técnica viva (fonte de verdade)
+│   ├── INDEX.md                      # Índice do diretório (wikilinks coerentes)
+│   ├── SYSTEM-MAP.md                 # 🗺️ Mapa de primeira leitura (repos + camadas + código)
 │   ├── system-overview.md            # Arquitetura geral + topologia de serviços
 │   ├── mcp-integration.md            # MCP servers: tools, segurança, config
 │   ├── agent-harness.md              # Design do harness (nightwatch core)
@@ -60,6 +65,7 @@ docs/
 │   ├── ARCHITECTURE.mmd              # Diagrama Mermaid independente da arquitetura (artefato reutilizável)
 │   └── SELF-IMPROVEMENT-LOOP.mmd     # Diagrama Mermaid do loop de auto-melhoria (artefato reutilizável)
 ├── benchmarks/                       # Evidências de performance
+│   ├── INDEX.md                      # Índice do diretório
 │   ├── README.md                     # Metodologia + índice de resultados
 │   ├── ncmoe-sweep.md                # Sweep de --n-cpu-moe
 │   ├── performance-evidence-audit.md # Auditoria de evidências
@@ -71,13 +77,16 @@ docs/
 │   ├── completed/                    # Auditorias completamente resolvidas
 │   └── legacy/                       # Inventário do sistema legado
 ├── development/                      # Guias práticos
+│   ├── INDEX.md                      # Índice do diretório
 │   ├── getting-started.md            # Quick start
 │   ├── repl-guide.md                 # Guia do REPL (jarvis dev)
 │   ├── testing.md                    # Suíte de testes e convenções
 │   ├── env-vars-reference.md         # Variáveis de ambiente
 │   └── repl-improvements-backlog.md  # Backlog de melhorias do REPL
-
-> **Nota de honestidade do índice**: os caminhos acima descrevem a intenção do projeto e a estrutura pública dos docs. Alguns itens podem estar desatualizados em relação ao código ou a serviços rodando; documentos marcados como "Revisado" foram auditados por leitura estática/cross-ref em 2026-09-09, não por teste de runtime.
+├── models/                           # Catálogos e docs de modelos
+│   ├── INDEX.md                      # Índice do diretório
+│   ├── api-catalog-2026-09-17.md     # 14 modelos free + cascata
+│   └── gpu-flows-2026-09-17.md       # Fluxos GPU grátis
 └── archive/                          # Documentação histórica (não editar)
     ├── README.md                     # Critério de arquivamento + inventário
     ├── benchmarks/                   # Benchmarks históricos (pré-Qwen3.6)

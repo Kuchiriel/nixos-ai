@@ -18,29 +18,29 @@ related:
 
 | Auditoria | Data | Foco | Itens abertos |
 |-----------|------|------|---------------|
-| [[CONTROL-PLANE-AUDIT-2026-09-03]] | 2026-09-03 | EventBus, SSE, CommandRegistry | SSE→browser, Telegram, Voice |
-| [[CONTROL-PLANE-AUDIT-2026-09-03-HARDENING]] | 2026-09-03 | Hardening e segurança | Ver doc |
-| [[SESSION-AUDIT-2026-09-04]] | 2026-09-04 | Personas, pipeline E2E | 9/10 personas não testadas, 0 handovers |
-| [[FULL-REPO-AUDIT-2026-09-03]] | 2026-09-03 | Auditoria completa do repo | Ver doc |
+| [[CONTROL-PLANE-AUDIT-2026-09-03|current/CONTROL-PLANE-AUDIT-2026-09-03.md]] | 2026-09-03 | EventBus, SSE, CommandRegistry | SSE→browser, Telegram, Voice |
+| [[CONTROL-PLANE-AUDIT-2026-09-03-HARDENING|current/CONTROL-PLANE-AUDIT-2026-09-03-HARDENING.md]] | 2026-09-03 | Hardening e segurança | Ver doc |
+| [[SESSION-AUDIT-2026-09-04|current/SESSION-AUDIT-2026-09-04.md]] | 2026-09-04 | Personas, pipeline E2E | 9/10 personas não testadas, 0 handovers |
+| [[FULL-REPO-AUDIT-2026-09-03|current/FULL-REPO-AUDIT-2026-09-03.md]] | 2026-09-03 | Auditoria completa do repo | Ver doc |
 
 ## Auditorias Concluídas (todos os itens resolvidos)
 
 | Auditoria | Data | Foco | Resultado |
 |-----------|------|------|-----------|
-| [[AUDIT-2026-08-29]] | 2026-08-29 | Auditoria inicial | ✅ Resolvido |
-| [[FORENSIC-VERIFICATION-2026-09-03]] | 2026-09-03 | Verificação forense P0-P3 | ✅ 10/10 findings resolvidos |
-| [[HARNESS-AUDIT-2026-09-01]] | 2026-09-01 | Harness Nightwatch | ✅ Resolvido |
-| [[BENCHMARK-AUDIT-2026-09-01]] | 2026-09-01 | Auditoria de benchmarks | ✅ Resolvido |
-| [[GAP-ANALYSIS-2026-08-29]] | 2026-08-29 | Gap analysis (ChatGPT) | ✅ P0.1-P0.4 resolvidos; P1.2 framework |
-| [[CONTROL-PLANE-AUDIT]] | (sem data) | Auditoria base do control plane | ✅ Base resolvida |
+| [[AUDIT-2026-08-29|completed/AUDIT-2026-08-29.md]] | 2026-08-29 | Auditoria inicial | ✅ Resolvido |
+| [[FORENSIC-VERIFICATION-2026-09-03|completed/FORENSIC-VERIFICATION-2026-09-03.md]] | 2026-09-03 | Verificação forense P0-P3 | ✅ 10/10 findings resolvidos |
+| [[HARNESS-AUDIT-2026-09-01|completed/HARNESS-AUDIT-2026-09-01.md]] | 2026-09-01 | Harness Nightwatch | ✅ Resolvido |
+| [[BENCHMARK-AUDIT-2026-09-01|completed/BENCHMARK-AUDIT-2026-09-01.md]] | 2026-09-01 | Auditoria de benchmarks | ✅ Resolvido |
+| [[GAP-ANALYSIS-2026-08-29|completed/GAP-ANALYSIS-2026-08-29.md]] | 2026-08-29 | Gap analysis (ChatGPT) | ✅ P0.1-P0.4 resolvidos; P1.2 framework |
+| [[CONTROL-PLANE-AUDIT|completed/CONTROL-PLANE-AUDIT.md]] | (sem data) | Auditoria base do control plane | ✅ Base resolvida |
 
 ## Inventário Legado
 
 | Arquivo | Foco |
 |---------|------|
-| [[01-current-nixos]] | Estado do NixOS atual (legado pré-consolidação; contém referências a arquivos que não existem mais) |
-| [[02-legacy-inventory]] | Inventário do sistema legado (auditoria forense do snapshot) |
-| [[03-legacy-functionality-map]] | Mapa funcional do legado (o que foi preservado/adaptado/reimplementado) |
+| [[01-current-nixos|01-current-nixos.md]] | Estado do NixOS atual (legado pré-consolidação; contém referências a arquivos que não existem mais) |
+| [[02-legacy-inventory|02-legacy-inventory.md]] | Inventário do sistema legado (auditoria forense do snapshot) |
+| [[03-legacy-functionality-map|03-legacy-functionality-map.md]] | Mapa funcional do legado (o que foi preservado/adaptado/reimplementado) |
 
 > **Nota de integridade**: os três arquivos acima foram lidos agora. Eles fazem sentido como inventário histórico, mas estão **desatualizados em relação ao repo consolidado** — alguns destinos que eles referenciam existem só como documentos da época ou não têm mais contraparte viva. Se quiser que eu separe esse inventário do arquivo ativo do audit, eu movo ele para `audit/legacy/` ou `audit/archive/` e ajusto os cross-refs.
 
@@ -69,6 +69,6 @@ De SESSION-AUDIT-2026-09-04:
 
 ---
 
-**Ver também:** [[../architecture/nightwatch-components]]
-[[../architecture/mission-consolidation]] | [[../architecture/agent-harness]]
-[[../../HANDOFF]] | [[../../BUFFY]] | [[development/testing]]
+**Ver também:** [[../architecture/nightwatch-components|/home/nixos/projects/nixos-ai/docs/architecture/nightwatch-components.md]]
+[[../architecture/mission-consolidation|/home/nixos/projects/nixos-ai/docs/architecture/mission-consolidation.md]] | [[../architecture/agent-harness|/home/nixos/projects/nixos-ai/docs/architecture/agent-harness.md]]
+[[../../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../BUFFY|/home/nixos/projects/nixos-ai/BUFFY.md]] | [[development/testing|/home/nixos/projects/nixos-ai/docs/development/testing.md]]

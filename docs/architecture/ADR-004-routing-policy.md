@@ -64,5 +64,5 @@ com backends reais.
 
 ---
 
-**Ver também:** [[ADR-001-agent-platform]] | [[agent-harness]]
-[[context-engineering]]
+**Ver também:** [[ADR-001-agent-platform|ADR-001-agent-platform.md]] | [[agent-harness|agent-harness.md]]
+[[context-engineering|context-engineering.md]]

@@ -149,5 +149,5 @@ Se um fact em `recall` contradiz uma hipótese working, o fact prevalece.
 
 ---
 
-**Ver também:** [[ADR-001-agent-platform]] | [[context-engineering]]
-[[agent-harness]] | [[rag-improvements]] | [[system-overview]]
+**Ver também:** [[ADR-001-agent-platform|ADR-001-agent-platform.md]] | [[context-engineering|context-engineering.md]]
+[[agent-harness|agent-harness.md]] | [[rag-improvements|rag-improvements.md]] | [[system-overview|system-overview.md]]

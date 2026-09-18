@@ -315,7 +315,7 @@ This shows poll=25 IS faster than poll=50! But the conclusion says "Default poll
 **⚠️ All raw data is in /tmp (ephemeral).** If reproducibility is needed, raw data should be copied to `docs/benchmarks/data/` before next reboot.
 
 ---
-**Ver também:** [[ncmoe-sweep]] | [[../architecture/llama-cpp-tuning]]
-[[../architecture/rag-improvements]] | [[../architecture/system-overview]]
+**Ver também:** [[ncmoe-sweep|ncmoe-sweep.md]] | [[../architecture/llama-cpp-tuning|/home/nixos/projects/nixos-ai/docs/architecture/llama-cpp-tuning.md]]
+[[../architecture/rag-improvements|/home/nixos/projects/nixos-ai/docs/architecture/rag-improvements.md]] | [[../architecture/system-overview|/home/nixos/projects/nixos-ai/docs/architecture/system-overview.md]]
 **Evidência BUFFY**: Este doc satisfaz LEVEL 4 do Evidence Ladder
-[[../../HANDOFF]] | [[../../AGENTS.md]]
+[[../../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]]

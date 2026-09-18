@@ -1,7 +1,7 @@
 # FULL REPOSITORY AUDIT — 2026-09-03
 
-**Contexto:** [[../architecture/mission-consolidation]] | *(NIGHTLOG é referência histórica da época — não há documento com esse destino no vault atual; se quiser eu registro isso explicitamente em vez de deixar o wikilink vago)*
-**Benchmarks relacionados:** [[performance-evidence-audit]]
+**Contexto:** [[../architecture/mission-consolidation|/home/nixos/projects/nixos-ai/docs/architecture/mission-consolidation.md]] | *(NIGHTLOG é referência histórica da época — não há documento com esse destino no vault atual; se quiser eu registro isso explicitamente em vez de deixar o wikilink vago)*
+**Benchmarks relacionados:** [[performance-evidence-audit|/home/nixos/projects/nixos-ai/docs/benchmarks/performance-evidence-audit.md]]
 
 ## 1. Executive Diagnosis
 

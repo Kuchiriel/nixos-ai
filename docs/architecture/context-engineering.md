@@ -63,7 +63,7 @@ read_file() para módulos específicos (quando necessário)
 - **Ritual RAG**: chamar `recall()` / `rag_search()` em todo prompt sem necessidade
   > BUFFY §9: "Do NOT run RAG/recall/lessons blindly on every prompt."
 - **Brute-force file reading**: ler o repositório inteiro em vez de recuperar o relevante
-- **Context cliff**: chunks > 2500 tokens perdem contexto nas bordas (ver [[rag-improvements]])
+- **Context cliff**: chunks > 2500 tokens perdem contexto nas bordas (ver [[rag-improvements|rag-improvements.md]])
 
 ### Configuração de Janela de Contexto
 
@@ -116,7 +116,7 @@ flowchart TB
 
 ## 4. Tools (Pillar 4)
 
-Ver [[mcp-integration]] para o mapa completo de ferramentas.
+Ver [[mcp-integration|mcp-integration.md]] para o mapa completo de ferramentas.
 
 ### Princípio de Lazy Tool Discovery
 
@@ -148,6 +148,6 @@ recupera apenas o que é relevante; handoff docs são auditáveis.
 
 ---
 
-**Ver também:** [[mcp-integration]] | [[rag-improvements]] | [[agent-harness]]
-[[ADR-001-agent-platform]] | [[ADR-002-memory-layers]] | [[system-overview]]
-[[HANDOFF]] | [[../../BUFFY]]
+**Ver também:** [[mcp-integration|mcp-integration.md]] | [[rag-improvements|rag-improvements.md]] | [[agent-harness|agent-harness.md]]
+[[ADR-001-agent-platform|ADR-001-agent-platform.md]] | [[ADR-002-memory-layers|ADR-002-memory-layers.md]] | [[system-overview|system-overview.md]]
+[[HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../BUFFY|/home/nixos/projects/nixos-ai/BUFFY.md]]

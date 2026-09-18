@@ -168,4 +168,4 @@ See `performance-evidence-audit.md` for full classification.
 
 ---
 
-**Ver também:** [[../../HANDOFF]] | [[../../AGENTS.md]] | [[architecture/llama-cpp-tuning]]
+**Ver também:** [[../../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[architecture/llama-cpp-tuning|/home/nixos/projects/nixos-ai/docs/architecture/llama-cpp-tuning.md]]

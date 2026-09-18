@@ -229,4 +229,4 @@ BEFORE:                          AFTER:
 
 ---
 
-**Ver também:** [[ADR-001-agent-platform]] | [[mission-consolidation]]
+**Ver também:** [[ADR-001-agent-platform|ADR-001-agent-platform.md]] | [[mission-consolidation|mission-consolidation.md]]

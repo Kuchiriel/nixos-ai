@@ -1,8 +1,8 @@
 # Control Plane Hardening Audit — 2026-09-03
 
-**Contexto arquitetural:** [[system-overview]] | [[mcp-integration]]
-**Estado anterior:** [[CONTROL-PLANE-AUDIT-2026-09-03]]
-**Missão associada:** [[mission-consolidation]]
+**Contexto arquitetural:** [[system-overview|/home/nixos/projects/nixos-ai/docs/architecture/system-overview.md]] | [[mcp-integration|/home/nixos/projects/nixos-ai/docs/architecture/mcp-integration.md]]
+**Estado anterior:** [[CONTROL-PLANE-AUDIT-2026-09-03|CONTROL-PLANE-AUDIT-2026-09-03.md]]
+**Missão associada:** [[mission-consolidation|/home/nixos/projects/nixos-ai/docs/architecture/mission-consolidation.md]]
 
 ## A. Buffy Audit
 

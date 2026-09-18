@@ -133,9 +133,9 @@ flowchart TB
 ```
 
 ---
-**Ver também:** [[system-overview]] | [[agent-harness]] | [[rag-improvements]]
-[[context-engineering]] | [[ADR-001-agent-platform]]
-[[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]
+**Ver também:** [[system-overview|system-overview.md]] | [[agent-harness|agent-harness.md]] | [[rag-improvements|rag-improvements.md]]
+[[context-engineering|context-engineering.md]] | [[ADR-001-agent-platform|ADR-001-agent-platform.md]]
+[[../../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../README|/home/nixos/projects/nixos-ai/docs/README.md]]
 
 ---
 **Nota de validação**: contagem de ferramentas e o diagrama de segurança foram alinhados ao código-fonte (`mcp_server.py`, `devtools.py`, `persona.py`) em 2026-09-09. Números exatos de ferramentas em execução por persona, estado de sincronização de vault e lista de comandos allowlist efetiva precisam de validação por teste/observação em runtime — não são garantidos apenas pela leitura estática.

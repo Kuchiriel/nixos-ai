@@ -51,7 +51,7 @@
   extrai o bloco — base para o chunking por símbolo.
 
 ---
-**Ver também:** [[mcp-integration]] | [[llama-cpp-tuning]] | [[slm-techniques]]
-[[pillar-diagnostic]] | [[ADR-002-memory-layers]] | [[context-engineering]]
-[[../benchmarks/performance-evidence-audit]] | [[system-overview]]
-[[../../HANDOFF]] | [[../../AGENTS.md]] | [[../../README]]
+**Ver também:** [[mcp-integration|mcp-integration.md]] | [[llama-cpp-tuning|llama-cpp-tuning.md]] | [[slm-techniques|slm-techniques.md]]
+[[pillar-diagnostic|pillar-diagnostic.md]] | [[ADR-002-memory-layers|ADR-002-memory-layers.md]] | [[context-engineering|context-engineering.md]]
+[[../benchmarks/performance-evidence-audit|/home/nixos/projects/nixos-ai/docs/benchmarks/performance-evidence-audit.md]] | [[system-overview|system-overview.md]]
+[[../../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../README|/home/nixos/projects/nixos-ai/docs/README.md]]

@@ -262,8 +262,8 @@ f2ab9d2 fix(platform): security hardening + Systemd sandboxing
 
 ---
 
-**Ver também:** [[../HANDOFF]] | [[../AGENTS.md]] | [[../README]]
+**Ver também:** [[../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../README|/home/nixos/projects/nixos-ai/docs/README.md]]
 
 ---
 
-**Ver também:** [[system-overview]] | [[llama-cpp-tuning]] | [[testing]]
+**Ver também:** [[system-overview|system-overview.md]] | [[llama-cpp-tuning|llama-cpp-tuning.md]] | [[testing|/home/nixos/projects/nixos-ai/docs/development/testing.md]]

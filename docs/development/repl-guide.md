@@ -117,5 +117,5 @@ The model has 32K context. System prompt takes ~15-20K. **You have ~12K for conv
 
 ---
 
-**Ver também:** [[getting-started]] | [[testing]]
-[[agent-harness]] | [[nightwatch-components]]
+**Ver também:** [[getting-started|getting-started.md]] | [[testing|testing.md]]
+[[agent-harness|/home/nixos/projects/nixos-ai/docs/architecture/agent-harness.md]] | [[nightwatch-components|/home/nixos/projects/nixos-ai/docs/architecture/nightwatch-components.md]]

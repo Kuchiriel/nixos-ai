@@ -221,6 +221,6 @@ No software optimization can overcome the 67°C thermal wall on this laptop.
 - Sustained test: `/tmp/sustained-results.log`
 
 ---
-**Ver também:** [[performance-evidence-audit]] | [[../architecture/llama-cpp-tuning]]
-[[../architecture/slm-techniques]] | [[../architecture/system-overview]]
-[[../../HANDOFF]] | [[../../AGENTS.md]]
+**Ver também:** [[performance-evidence-audit|performance-evidence-audit.md]] | [[../architecture/llama-cpp-tuning|/home/nixos/projects/nixos-ai/docs/architecture/llama-cpp-tuning.md]]
+[[../architecture/slm-techniques|/home/nixos/projects/nixos-ai/docs/architecture/slm-techniques.md]] | [[../architecture/system-overview|/home/nixos/projects/nixos-ai/docs/architecture/system-overview.md]]
+[[../../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]]

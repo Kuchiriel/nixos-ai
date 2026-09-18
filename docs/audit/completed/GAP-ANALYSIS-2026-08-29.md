@@ -106,11 +106,11 @@ O ChatGPT sugere: **não mandar mais um prompt genérico**. Em vez disso:
 Isso é exatamente o que o `AGENTS.md` + `HANDOFF.md` + `NIGHTLOG.md` deveriam suportar — e parcialmente suportam.
 
 ---
-**Ver também:** [[../HANDOFF]] | [[../AGENTS.md]] | [[../README]]
+**Ver também:** [[../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../README|/home/nixos/projects/nixos-ai/docs/README.md]]
 
 ---
 
-**Nota de integridade**: esta seção abaixo é uma verificação da época (2026-08-29) que vem do histórico do projeto; ela ainda está no arquivo como rastreabilidade, mas **não é o estado atual do repo** e não substitui auditoria nova. Links como `[[JARVIS-COMPARISON]]` e `[[NIGHTWATCH]]` faziam sentido na época; eles não têm mais destino direto no vault atual.
+**Nota de integridade**: esta seção abaixo é uma verificação da época (2026-08-29) que vem do histórico do projeto; ela ainda está no arquivo como rastreabilidade, mas **não é o estado atual do repo** e não substitui auditoria nova. Links como [[../architecture/jarvis-comparison]] e [[../architecture/nightwatch-components]] apontam agora para as docs atuais.
 
 # Round 3 — Verificação (2026-08-29) — histórico
 
@@ -169,7 +169,7 @@ rodando por >30 minutos com múltiplas tasks.
 | 3 | Orquestração, módulos não integrados | Event Bus não integrado, 3 módulos sem teste |
 
 ---
-**Ver também:** [[../HANDOFF]] | [[../AGENTS.md]] | [[../README]]
+**Ver também:** [[../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../README|/home/nixos/projects/nixos-ai/docs/README.md]]
 
 ---
-**Ver também (histórico):** [[../HANDOFF]] | [[../AGENTS.md]] | *(JARVIS-COMPARISON e NIGHTWATCH eram destinos na época; não têm mais contraparte direta no vault atual)*
+**Ver também (histórico):** [[../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | *(JARVIS-COMPARISON e NIGHTWATCH eram destinos na época; não têm mais contraparte direta no vault atual)*

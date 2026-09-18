@@ -103,4 +103,4 @@ archive/       consolidados, scripts legados, session_manager.py antigo (referê
 - **Sem separação core/adapters** — tudo acoplado a caminhos absolutos `/home/kuchiriel/Projects/AI_SYSTEM`, hardcoded `hw:1,7`, `localhost:11434`.
 
 ---
-**Ver também:** [[../../HANDOFF]] | [[../PLATFORM-ASSESSMENT]] | [[../GAP-ANALYSIS-2026-08-29]]
+**Ver também:** [[../../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../architecture/platform-assessment]] | [[../GAP-ANALYSIS-2026-08-29|completed/GAP-ANALYSIS-2026-08-29.md]]
