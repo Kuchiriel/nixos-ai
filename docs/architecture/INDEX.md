@@ -29,3 +29,6 @@
 - [[mission-consolidation|mission-consolidation.md]] — consolidação de missões
 - [[platform-assessment|platform-assessment.md]] — avaliação da plataforma
 - [[pillar-diagnostic|pillar-diagnostic.md]] — diagnóstico de pilares
+
+## Auditoria
+- [[KNOWLEDGE_SYSTEM_ARCHITECTURE_AUDIT]] — contratos e dependências do knowledge system (read-only)
