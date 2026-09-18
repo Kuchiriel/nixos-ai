@@ -146,3 +146,33 @@ def test_identity_uses_crc32_documented() -> None:
     audit_txt = audit.read_text()
     assert "crc32" in audit_txt and "P0" in audit_txt, (
         "dívida de identidade crc32 deve estar registrada no audit")
+
+
+# ---------------------------------------------------------------------------
+# 6. Reproducibilidade: todo [project.scripts] resolve (jarvis-mcp class of bug)
+# ---------------------------------------------------------------------------
+
+def test_all_console_scripts_resolve() -> None:
+    """TODO entrypoint declarado em [project.scripts] deve importar e ser
+    callable. Pega a classe de bug 'declarado mas sem função' (ex: jarvis-mcp
+    declarado em af7ad14 mas ausente do build até o rebuild). Sem NixOS
+    reprodutível, o binário não existe mesmo com a declaração certa."""
+    import tomllib
+
+    py = (SRC.parent.parent / "pyproject.toml")  # jarvis/pyproject.toml
+    cfg = tomllib.loads(py.read_text())
+    scripts = cfg["project"]["scripts"]
+    assert scripts, "pyproject sem [project.scripts]"
+    broken = []
+    for name, target in scripts.items():
+        mod, _, attr = target.partition(":")
+        try:
+            m = __import__(mod)
+            for part in mod.split(".")[1:]:
+                m = getattr(m, part)
+            fn = getattr(m, attr)
+            if not callable(fn):
+                broken.append((name, "não-callable"))
+        except Exception as e:  # noqa: BLE001
+            broken.append((name, f"{type(e).__name__}: {e}"))
+    assert not broken, f"[project.scripts] com target quebrado: {broken}"
