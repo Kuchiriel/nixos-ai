@@ -903,9 +903,14 @@ def _handle_vault_write(args: dict[str, Any]) -> str:
     if not name or not content:
         return "ERROR: name and content required"
     try:
+        from pathlib import PurePath
         from jarvis.core.vault import MemoryVault
+        # Audit P1-5: só basename, sem traversal (../, absolute, subdirs)
+        safe_name = PurePath(name).name
+        if not safe_name or safe_name in (".", "..") or "\\" in name or "/" in name:
+            return "ERROR: invalid note name (subdirs/traversal não permitidos)"
         mv = MemoryVault()
-        note_path = mv.vault_dir / f"{name}.md"
+        note_path = mv.vault_dir / f"{safe_name}.md"
         note_path.parent.mkdir(parents=True, exist_ok=True)
         note_path.write_text(content)
         return f"Note saved: {note_path}"
@@ -925,7 +930,7 @@ def _handle_rag_search(args: dict[str, Any]) -> str:
     try:
         from jarvis.core.rag import HybridSearch
         from jarvis.core.config import Config
-        from jarvis.providers.vector_store import QdrantStore
+        from jarvis.providers.vector_store import QdrantStore, VectorStoreError
         cfg = Config()
         # Override collection if specified (Config é frozen: replace, nunca assign)
         import dataclasses
@@ -933,11 +938,16 @@ def _handle_rag_search(args: dict[str, Any]) -> str:
             cfg = dataclasses.replace(cfg, qdrant_collection_code=cfg.qdrant_collection_memories)
         elif collection == "books":
             cfg = dataclasses.replace(cfg, qdrant_collection_code=cfg.qdrant_collection_books)
-        # Garante a coleção via store canônico (schema dense+bm25, dim do
-        # config) — nunca recriar via requests com schema divergente.
-        QdrantStore(cfg).ensure_collection(cfg.qdrant_collection_code, dim=cfg.embed_dim)
+        # Audit P1-4: NÃO criar/garantir coleção na LEITURA (mutação oculta).
+        # Coleção ausente → erro explícito apontando o tool de indexação.
         hs = HybridSearch(config=cfg)
-        results = hs.search(query, top_k=limit)
+        try:
+            results = hs.search(query, top_k=limit)
+        except VectorStoreError as e:
+            if "404" in str(e):
+                return (f"Collection '{cfg.qdrant_collection_code}' não existe ainda. "
+                        "Rode jarvis_rag_index primeiro (ex.: path do repo).")
+            raise
         if not results:
             return "No results found."
         lines = []

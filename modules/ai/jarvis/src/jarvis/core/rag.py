@@ -24,7 +24,7 @@ from typing import Any, Iterable, Sequence
 
 from jarvis.core.config import Config
 from jarvis.providers.llm import LLMClient
-from jarvis.providers.vector_store import QdrantStore, dense_key
+from jarvis.providers.vector_store import QdrantStore, dense_key, stable_id
 
 # ---------------------------------------------------------------------------
 # Porta do V4.0.5  padrões de símbolos por extensão
@@ -388,6 +388,12 @@ class HybridIndexer:
             if san.status != "ok":
                 return None  # quarentena in-memory: sem indexar
 
+        # proveniência canônica do ponto (§13; audit P1-6)
+        from datetime import datetime, timezone as _tz
+        from jarvis.core.doc_sanitize import SANITIZER_VERSION
+        _sanitizer_version = SANITIZER_VERSION
+        _ingested_at = datetime.now(_tz.utc).isoformat()
+
         # Chunking alinhado com o contexto do modelo de embedding.
         # nomic-embed-text-v2-moe tem ctx 2048; 1500 chars ≈ 700 tokens.
         # Com metadata, total fica ~800-900 tokens (safe for ubatch 1024).
@@ -414,19 +420,31 @@ class HybridIndexer:
                 continue
 
             terms = sparse_terms(rich)
+            # Point id = sha256 63-bit de (source_sha256, chunk_index) —
+            # estável a rename/move (audit P0-1): reindex sobrescreve em vez
+            # de duplicar, e a colisão 32-bit de crc32 não se aplica.
+            import hashlib as _hl
+            source_sha = _hl.sha256(open(path, 'rb').read()).hexdigest() if os.path.exists(path) else _hl.sha256(content.encode()).hexdigest()
             point = {
-                "id": abs(dense_key(f"{path}_chunk_{i}")),
+                "id": stable_id("doc", source_sha, str(i)),
                 "vector": {
                     "dense": dense,
                     "bm25": sparse_vector(terms),
                 },
                 "payload": {
                     "path": path,
+                    "document_id": f"doc:{source_sha[:16]}",
+                    "chunk_id": f"{source_sha[:16]}:{i}",
                     "chunk_index": i,
                     "filename": os.path.basename(path),
                     "ext": ext,
                     "facts": facts if i == 0 else [],
                     "content": chunk,
+                    "source_sha256": source_sha,
+                    "content_hash": _hl.sha256(chunk.encode()).hexdigest(),
+                    "sanitizer_version": _sanitizer_version if _sanitizer_version else "1.0.0",
+                    "ingested_at": _ingested_at,
+                    "embedding_model": self._cfg.embed_model,
                 },
             }
             self._store.upsert(self._cfg.qdrant_collection_code, [point])

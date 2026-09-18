@@ -944,10 +944,16 @@ def index_book(book_name: str, books_dir: str | Path | None = None,
     max_chunks limita p/ validação rápida (None = livro inteiro).
     """
     Config, LLMClient, QdrantStore, sparse_terms, sparse_vector, dense_key = _rag_deps()
+    from jarvis.providers.vector_store import stable_id
+    from jarvis.core.doc_sanitize import SANITIZER_VERSION
+    import hashlib as _hl
+    from datetime import datetime, timezone as _tz
     cfg = Config()
     path = _find_book(book_name, books_dir)
     if path is None:
         return {"ok": False, "error": f"livro não encontrado: {book_name}"}
+    # identidade estável: sha do ARQUIVO FONTE (idempotente a rename, audit P0-1)
+    source_sha = _hl.sha256(Path(path).read_bytes()).hexdigest()
     text = extract_text(path)
     # §19: barreira do sanitizer ANTES de chunk/embed (mesma normalização do
     # pipeline de disco). Extração vazia/corrompida → quarentena, sem upsert.
@@ -979,14 +985,21 @@ def index_book(book_name: str, books_dir: str | Path | None = None,
             if not dense:
                 continue
             store.upsert(cfg.qdrant_collection_books, [{
-                "id": abs(dense_key(f"{path.stem}|{ch['num']}|{i}")),
+                "id": stable_id("book", source_sha, str(ch["num"]), str(i)),
                 "vector": {"dense": dense,
                            "bm25": sparse_vector(sparse_terms(rich))},
                 "payload": {"book": path.stem,
                             "chapter": ch["num"],
                             "title": ch.get("title", ""),
                             "chunk_index": i,
-                            "content": piece[:chunk_chars]},
+                            "content": piece[:chunk_chars],
+                            "document_id": f"book:{source_sha[:16]}",
+                            "chunk_id": f"{source_sha[:16]}:{ch['num']}:{i}",
+                            "source_sha256": source_sha,
+                            "content_hash": _hl.sha256(piece[:chunk_chars].encode()).hexdigest(),
+                            "sanitizer_version": SANITIZER_VERSION,
+                            "embedding_model": cfg.embed_model,
+                            "ingested_at": datetime.now(_tz.utc).isoformat()},
             }])
             n_chunks += 1
     return {"ok": True, "book": path.stem, "chapters": len(chapters),

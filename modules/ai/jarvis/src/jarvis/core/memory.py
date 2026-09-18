@@ -63,10 +63,14 @@ class MemoryEvent:
 
 
 def _stable_id(text: str, timestamp: float) -> int:
-    """ID determinístico: crc32 do texto + timestamp truncado."""
-    import zlib
+    """ID determinístico de 63 bits: sha256 do CONTEÚDO (sem timestamp).
 
-    return zlib.crc32(f"{timestamp:.0f}:{text}".encode()) & 0x7FFFFFFF
+    Audit P0-1: o id antigo (crc32 de ts:text) NÃO era idempotente —
+    re-remember do mesmo texto criava ponto novo (ts na hash). Agora:
+    mesmo texto ⇒ mesmo id ⇒ upsert sobrescreve (atualiza ts/kind).
+    """
+    from jarvis.providers.vector_store import stable_id
+    return stable_id("mem", text)
 
 
 class EpisodicMemory:
@@ -224,5 +228,14 @@ class EpisodicMemory:
         except Exception:  # noqa: BLE001
             return 0
 
-    def clear(self) -> None:
+    def clear(self, *, confirm: bool = False) -> None:
+        """Apaga TODA a memória episódica (destrutivo — audit P0-3).
+
+        Exige confirm=True explicitamente; sem ele, levanta erro em vez
+        de deletar a coleção por engano (chamador descuidado/bug).
+        """
+        if not confirm:
+            raise RuntimeError(
+                "EpisodicMemory.clear() é destrutivo (delete da coleção "
+                f"'{self.collection}'): chame com confirm=True")
         self._store.delete_collection(self.collection)

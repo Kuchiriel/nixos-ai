@@ -36,8 +36,27 @@ def dense_key(term: str) -> int:
 
     `hash()` do Python é randomizado por processo (PYTHONHASHSEED), o que
     quebraria a estabilidade entre execuções — crc32 é determinístico.
+
+    NOTA (audit P0): crc32 é 32-bit e sujeito a colisão (~50% em ~77k
+    termos). PERMANECE aqui porque Qdrant exige sparse indices u32 —
+    não há espaço para 64-bit em sparse vectors. Impacto de colisão:
+    peso confundido entre 2 termos raros no BM25 (degradação branda).
+    Point IDs (documentos) NÃO usam crc32: ver `stable_id`.
     """
     return zlib.crc32(term.encode("utf-8"))
+
+
+def stable_id(*parts: str) -> int:
+    """Point ID determinístico de 63 bits (sha256 truncado).
+
+    Substitui crc32 p/ point ids (audit P0-1: colisão em escala).
+    A estabilidade a rename/move é responsabilidade do CALLER: derive
+    de content-hash + posição (não de path absoluto) quando quiser
+    sobrescrita idempotente através de renomeios.
+    """
+    import hashlib
+    h = hashlib.sha256("|".join(parts).encode("utf-8")).digest()
+    return int.from_bytes(h[:8], "big") & 0x7FFFFFFFFFFFFFFF
 
 
 class QdrantStore:
