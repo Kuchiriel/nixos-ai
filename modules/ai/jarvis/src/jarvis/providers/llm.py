@@ -632,4 +632,6 @@ class LLMClient:
     def n_ctx(self) -> int:
         """Backward compat: expose context size."""
         info = self.get_backend_info()
-        return info.n_ctx if info else 32768
+        # Derivado do registry — mudar a fonte propaga (test_context_drift).
+        from jarvis.core.provider_registry import CANONICAL_CONTEXT
+        return info.n_ctx if info else CANONICAL_CONTEXT

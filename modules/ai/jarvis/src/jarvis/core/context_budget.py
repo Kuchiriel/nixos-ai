@@ -19,6 +19,8 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
+
+from jarvis.core.provider_registry import CANONICAL_CONTEXT  # fonte única de context budget
 from pathlib import Path
 from typing import Any
 
@@ -215,7 +217,7 @@ class ContextSnapshot:
     """A single point-in-time measurement of context usage."""
     timestamp: float = field(default_factory=time.time)
     tokens_used: int = 0
-    tokens_budget: int = 8192
+    tokens_budget: int = CANONICAL_CONTEXT  # derivado do registry (fonte única)
     tool_calls_in_context: int = 0
     messages_in_context: int = 0
     files_read: int = 0

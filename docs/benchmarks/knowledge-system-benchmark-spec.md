@@ -25,7 +25,7 @@ Não medir "Qdrant funciona" nem "sanitize funciona". Medir:
 | J | Temporal | current/historical/unknown | "versão atual de X" |
 | K | Multi-Document | combinar 2+ fontes | pergunta que exige 2 docs |
 | L | Performance | TTFT, retrieval, embedding, generation separados | — |
-| M | Config Propagation | 1-mudança→todos-consumidores (mutation) | "mudar context budget reflete em todos?" |
+| M | Config Propagation — **IMPLEMENTADA**: `provider_registry.{CANONICAL_CONTEXT,MIN_PROFILE_CONTEXT}` como fonte única + `tests/test_context_drift.py` (derivação por site; fonte mutada falha enumerando consumidores; hardcodes novos detectados). Consolidação executada 18/09. | 1-mudança→todos-consumidores (mutation) | "mudar context budget reflete em todos?" |
 | N | Failure Recovery | falha injetada → detectada/classificada/recuperada | Qdrant down, sanitizer reject, empty retrieval |
 | O | Architecture Integrity | invariantes estruturais (fonte única, sanitizer-before-index) | já em test_architecture_invariants.py |
 

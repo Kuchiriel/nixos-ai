@@ -1,25 +1,19 @@
 """Tripwire de drift do context budget (benchmark spec, categoria M).
 
-Responde à pergunta da missão: "se eu mudar uma fonte de verdade amanhã,
-como o sistema sabe?"
+PÓS-CONSOLIDAÇÃO: os consumidores derivam de
+jarvis.core.provider_registry.{CANONICAL_CONTEXT, MIN_PROFILE_CONTEXT}.
+A pergunta da missão — "se eu mudar uma fonte de verdade amanhã, como o
+sistema sabe?" — tem duas respostas verificadas aqui:
 
-Hoje (consolidação PENDENTE — ver docs/benchmarks/knowledge-system-
-benchmark-spec.md e docs/architecture/KNOWLEDGE_SYSTEM_ARCHITECTURE_AUDIT.md)
-o context budget tem fallbacks hardcoded em consumidores. Estes testes NÃO
-refatoram nada (evita colisão com o consolidator em curso); eles garantem que:
+  1. DERIVAÇÃO: consumidores referenciam as constantes do registry (não
+     literais) — mudar o valor na fonte é a ÚNICA forma de mudar o budget
+     (test_consumers_derive_from_source, test_registry_binds_constant_not_literal).
+  2. DETECÇÃO: se a fonte mudar de VALOR, o teste falha enumerando os
+     consumidores (custos de VRAM/latência não derivam automaticamente) —
+     a mudança nunca passa em silêncio (test_registry_source_value).
 
-  1. mudança na FONTE (provider_registry.ModelCaps.context / bonsai-8b)
-     quebra o build LOUD, enumerando os consumidores que exigem revisão;
-  2. o censo de fallbacks conhecidos é explícito — fallback alterado sem
-     derivação do registry quebra o teste;
-  3. novos hardcodes de contexto em arquivos fora do censo são detectados.
-
-Limitação honesta: o censo (2) cobre os SITES registrados; novas linhas de
-contexto dentro de arquivos já aprovados não são detectadas — a consolidação
-(derivar do registry) elimina essa classe inteira de drift.
-
-Caminho de escape: quando a consolidação acontecer, os testes continuam
-passando — derive do registry em vez de editar este arquivo.
+Novos hardcodes de contexto fora do censo continuam detectados
+(test_no_new_context_hardcodes_outside_census).
 """
 from __future__ import annotations
 
@@ -29,37 +23,42 @@ from pathlib import Path
 import pytest
 
 SRC = Path(__file__).resolve().parent.parent / "src"
-
-# --- Fonte de verdade -------------------------------------------------------
 REGISTRY = SRC / "jarvis" / "core" / "provider_registry.py"
 
-# Valor canônico vigente. Se a fonte mudar, o teste 1 FALLA de propósito:
-# revise os consumidores (ou derive-os) e então atualize este valor —
-# a mudança nunca pode passar silenciosamente.
+# Valores vigentes. Se a FONTE mudar, test_registry_source_value FALLA de
+# propósito: revise consumidores/VRAM e atualize aqui — nunca silêncio.
 EXPECTED_CANONICAL = 32768
+EXPECTED_MIN_PROFILE = 8192
 
-# --- Censo de fallbacks hardcoded (dívida registrada, não oculta) -----------
-# relpath (a partir de src/) → (descrição, regex do literal, valor registrado)
-FALLBACK_SITES: dict[str, tuple[str, str, int]] = {
+# --- Censo dos sites derivados ----------------------------------------------
+# relpath → (descrição, regex do site, constante esperada no grupo 1).
+# Regex casa a forma derivada OU literal legado: constante = OK,
+# número = regressão (mensagem aponta a derivação correta).
+DERIVED_SITES: dict[str, tuple[str, str, str]] = {
     "jarvis/providers/llm.py": (
         "n_ctx fallback (backend info ausente)",
-        r"info\.n_ctx if info else (\d+)",
-        32768,
+        r"info\.n_ctx if info else (CANONICAL_CONTEXT|\d+)",
+        "CANONICAL_CONTEXT",
     ),
     "jarvis/cli/dev.py": (
         "context_size default de perfil",
-        r'profile\.get\("context_size",\s*(\d+)\)',
-        8192,
+        r'profile\.get\("context_size",\s*(MIN_PROFILE_CONTEXT|\d+)\)',
+        "MIN_PROFILE_CONTEXT",
     ),
     "jarvis/core/context_budget.py": (
         "ContextSnapshot.tokens_budget default",
-        r"tokens_budget: int = (\d+)",
-        8192,
+        r"tokens_budget: int = (CANONICAL_CONTEXT|\d+)",
+        "CANONICAL_CONTEXT",
     ),
     "nightwatch/harness.py": (
         "fallback server-unavailable (documentado no notify)",
-        r"budget = (\d+)\n",
-        8192,
+        r"budget = (MIN_PROFILE_CONTEXT|\d+)\b",
+        "MIN_PROFILE_CONTEXT",
+    ),
+    "jarvis/core/hwprofile.py": (
+        "ctx_target default na síntese de perfil de hardware",
+        r"ctx_target or (CANONICAL_CONTEXT|\d+)",
+        "CANONICAL_CONTEXT",
     ),
 }
 
@@ -83,59 +82,62 @@ _CONTEXT_LINE = re.compile(r"\b(ctx|context|budget)", re.IGNORECASE)
 
 def _dependency_list() -> str:
     return "\n".join(
-        f"  - {path} ({desc})" for path, (desc, _, _) in FALLBACK_SITES.items()
+        f"  - {path} ({desc})" for path, (desc, _, _) in DERIVED_SITES.items()
     )
 
 
 # ---------------------------------------------------------------------------
-# 1. A fonte é a fonte — mudança nela quebra o build enumerando dependentes
+# 1. PROPAGAÇÃO: consumidores derivam da fonte (não de literais)
 # ---------------------------------------------------------------------------
 
-def test_registry_is_context_source_of_truth() -> None:
+@pytest.mark.parametrize("relpath", sorted(DERIVED_SITES))
+def test_consumers_derive_from_source(relpath: str) -> None:
+    desc, pattern, expected_const = DERIVED_SITES[relpath]
+    m = re.search(pattern, (SRC / relpath).read_text())
+    assert m is not None, (
+        f"{relpath}: site '{desc}' não encontrado — layout mudou? "
+        "Atualize o censo de test_context_drift.py.")
+    assert m.group(1) == expected_const, (
+        f"{relpath}: '{desc}' está como {m.group(1)!r} em vez de derivar "
+        f"de provider_registry.{expected_const} — regressão a literal "
+        "quebra a propagação da fonte de verdade (benchmark spec, cat. M)."
+    )
+
+
+def test_registry_binds_constant_not_literal() -> None:
+    """A fonte interna não pode regredir a literal: ModelCaps.context e o
+    modelo de referência devem usar CANONICAL_CONTEXT."""
     src = REGISTRY.read_text()
-    m_default = re.search(r"class ModelCaps[\s\S]*?context: int = (\d+)", src)
-    m_bonsai = re.search(r'"bonsai-8b": ModelCaps\(context=(\d+)', src)
-    assert m_default and m_bonsai, (
-        "provider_registry não parseável — fonte de verdade do context "
-        "budget movida/renomeada? Atualize este teste e o benchmark spec (M)."
-    )
-    deps = _dependency_list()
-    msg = (
-        "FONTE DO CONTEXT BUDGET MUDOU ({old} → {new}).\n"
-        "Consumidores hardcoded que exigem revisão/derivação:\n{deps}\n"
-        "É ISTO que responde 'como o sistema sabe': a mudança não passou "
-        "silenciosamente. Derive os consumidores do registry e atualize "
+    assert "context: int = CANONICAL_CONTEXT" in src, (
+        "provider_registry: ModelCaps.context regrediu a literal — a fonte "
+        "deve ser CANONICAL_CONTEXT.")
+    assert re.search(
+        r'"bonsai-8b": ModelCaps\(context=CANONICAL_CONTEXT', src), (
+        "provider_registry: bonsai-8b regrediu a literal de contexto.")
+
+
+# ---------------------------------------------------------------------------
+# 2. DETECÇÃO: mudança de VALOR na fonte quebra o build enumerando dependentes
+# ---------------------------------------------------------------------------
+
+def test_registry_source_value() -> None:
+    m = re.search(r"^CANONICAL_CONTEXT = (\d+)", REGISTRY.read_text(), re.M)
+    assert m, "CANONICAL_CONTEXT não encontrada no registry (fonte movida?)"
+    assert int(m.group(1)) == EXPECTED_CANONICAL, (
+        f"FONTE DO CONTEXT BUDGET MUDOU ({EXPECTED_CANONICAL} → "
+        f"{m.group(1)}).\nConsumidores que exigem revisão (custos de "
+        f"VRAM/latência não derivam sozinhos):\n{_dependency_list()}\n"
+        "A mudança NÃO passou em silêncio. Após revisar, atualize "
         "EXPECTED_CANONICAL."
     )
-    assert int(m_default.group(1)) == EXPECTED_CANONICAL, msg.format(
-        old=EXPECTED_CANONICAL, new=m_default.group(1), deps=deps)
-    assert int(m_bonsai.group(1)) == EXPECTED_CANONICAL, msg.format(
-        old=EXPECTED_CANONICAL, new=m_bonsai.group(1), deps=deps)
 
 
-# ---------------------------------------------------------------------------
-# 2. Censo de fallbacks: alteração sem derivação quebra o teste
-# ---------------------------------------------------------------------------
-
-@pytest.mark.parametrize("relpath", sorted(FALLBACK_SITES))
-def test_known_fallbacks_match_census(relpath: str) -> None:
-    desc, pattern, recorded = FALLBACK_SITES[relpath]
-    src = (SRC / relpath).read_text()
-    m = re.search(pattern, src)
-    if m is None:
-        # Literal sumiu: ou foi consolidado (deve derivar da fonte) ou mudou
-        # de forma. Falha se não houver evidência de derivação do registry.
-        derives = "provider_registry" in src or "canonical_context" in src
-        assert derives, (
-            f"{relpath}: fallback '{desc}' desapareceu sem derivação do "
-            "registry — ou a consolidação aconteceu (derive explicitamente "
-            "e atualize o censo) ou o literal mudou de forma."
-        )
-        return
-    assert int(m.group(1)) == recorded, (
-        f"{relpath}: '{desc}' mudou {recorded} → {m.group(1)} sem derivação "
-        "do registry — verifique a propagação da fonte antes de aceitar "
-        "(benchmark spec, categoria M)."
+def test_min_profile_value() -> None:
+    m = re.search(r"^MIN_PROFILE_CONTEXT = (\d+)", REGISTRY.read_text(), re.M)
+    assert m, "MIN_PROFILE_CONTEXT não encontrada no registry"
+    assert int(m.group(1)) == EXPECTED_MIN_PROFILE, (
+        f"PISO DE PERFIL MUDOU ({EXPECTED_MIN_PROFILE} → {m.group(1)}).\n"
+        f"Consumidores:\n{_dependency_list()}"
     )
 
 
@@ -154,7 +156,8 @@ def test_no_new_context_hardcodes_outside_census() -> None:
             if _CONTEXT_LINE.search(line) and _CONTEXT_LITERAL.search(line):
                 offenders.append(f"{rel}:{lineno}: {line.strip()[:100]}")
     assert not offenders, (
-        "novos hardcodes de contexto fora do censo — derive do registry "
-        "(provider_registry.ModelCaps.context) ou, se legítimo, registre no "
-        "censo de test_context_drift.py:\n" + "\n".join(offenders)
+        "novos hardcodes de contexto fora do censo — derive de "
+        "provider_registry (CANONICAL_CONTEXT/MIN_PROFILE_CONTEXT) ou, se "
+        "legítimo, registre no censo de test_context_drift.py:\n"
+        + "\n".join(offenders)
     )

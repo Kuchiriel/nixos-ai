@@ -1040,7 +1040,8 @@ class Harness:
                 budget = server_ctx
                 self.notify(f"📊 Context: {budget:,} tokens (from server)")
             else:
-                budget = 8192
+                from jarvis.core.provider_registry import MIN_PROFILE_CONTEXT
+                budget = MIN_PROFILE_CONTEXT
                 self.notify(f"⚠️ Context: {budget:,} tokens (server unavailable, fallback)")
         self.context_budget = ContextBudget(
             max_tokens=budget,

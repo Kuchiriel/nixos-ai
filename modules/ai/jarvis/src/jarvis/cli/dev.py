@@ -34,6 +34,7 @@ from typing import Any
 import requests
 
 from jarvis.core.config import get_config as _get_config
+from jarvis.core.provider_registry import MIN_PROFILE_CONTEXT
 
 # Tools unificadas — AST guard, backup, safety, fuzzy match 4 camadas
 from jarvis.core.devtools import (
@@ -305,7 +306,7 @@ def _detect_profile() -> dict[str, Any]:
         profile["model_id"] = model_id
         actual_n_ctx = _query_server_context_size()
         profile["context_size"] = actual_n_ctx if actual_n_ctx > 0 else max(
-            profile["max_tokens"] * 8, 8192)
+            profile["max_tokens"] * 8, MIN_PROFILE_CONTEXT)
         return profile
 
     # Extrai o total de parâmetros do nome (ex: "35b" em "qwen3.6-35b-a3b"),
@@ -333,7 +334,7 @@ def _detect_profile() -> dict[str, Any]:
     if actual_n_ctx > 0:
         profile["context_size"] = actual_n_ctx
     else:
-        profile["context_size"] = max(profile["max_tokens"] * 8, 8192)
+        profile["context_size"] = max(profile["max_tokens"] * 8, MIN_PROFILE_CONTEXT)
 
     # Modelos "tiny" costumam ter function-calling nativo pouco confiável em
     # GGUF quantizado — por padrão operam só em modo texto (0 tokens de
@@ -1954,7 +1955,7 @@ def _run_agent_loop(
     max_tokens do modelo, compacta automaticamente.
     """
     # Use actual context size from server, not the old max_tokens * 8 heuristic
-    context_size = profile.get("context_size", 8192)
+    context_size = profile.get("context_size", MIN_PROFILE_CONTEXT)
     compact_threshold = int(context_size * 0.70)
     compact_target = int(context_size * 0.50)
 

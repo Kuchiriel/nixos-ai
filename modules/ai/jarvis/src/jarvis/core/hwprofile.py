@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from jarvis.core.hwdetect import HardwareProfile, classify
+from jarvis.core.provider_registry import CANONICAL_CONTEXT  # fonte única de context budget
 
 GB = 2**30
 
@@ -283,7 +284,7 @@ def derive_flags(
 
     # ── 1. Contexto (tokens) ──────────────────────────────────────────────
     f16_per_tok = kv_bytes_per_token(model, "f16")
-    target = min(model.ctx_max, ctx_target or 32768)
+    target = min(model.ctx_max, ctx_target or CANONICAL_CONTEXT)
     if ram > size_gb + RAM_OVERHEAD_GB and f16_per_tok > 0:
         ctx_by_ram = int((ram - size_gb - RAM_OVERHEAD_GB) * GB / f16_per_tok)
     else:

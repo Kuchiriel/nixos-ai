@@ -32,6 +32,18 @@ from typing import Any
 from jarvis.core.circuit_breaker import DataClass
 
 
+# --- Fonte única de context budget (benchmark spec, categoria M) -----------
+# CANONICAL_CONTEXT: contexto real do modelo local de referência (bonsai-8b).
+# Consumidores DEVEM derivar daqui (llm.n_ctx, ContextSnapshot.tokens_budget,
+# hwprofile ctx_target) — literal de contexto duplicado fora deste arquivo
+# quebra tests/test_context_drift.py.
+CANONICAL_CONTEXT = 32768
+# MIN_PROFILE_CONTEXT: piso para context_size de perfil quando o servidor
+# llama.cpp não responde (cli/dev.py, nightwatch/harness.py). Não é o
+# contexto do modelo — é o menor orçamento de contexto utilizável.
+MIN_PROFILE_CONTEXT = 8192
+
+
 class ProviderTier(str, Enum):
     LOCAL = "local"  # $0, dados nunca saem — sempre primeiro
     FREE = "free"    # $0, cotas variáveis — meio
@@ -46,7 +58,7 @@ class ProviderKind(str, Enum):
 @dataclass(frozen=True)
 class ModelCaps:
     """Capacidades de um modelo p/ capability matching."""
-    context: int = 32768
+    context: int = CANONICAL_CONTEXT
     tools: bool = True
     reasoning: bool = False
     vision: bool = False
@@ -71,7 +83,7 @@ LOCAL_BONSAI = Provider(
     base_url="http://127.0.0.1:8080/v1",
     max_data_class=DataClass.SECRET,  # tudo pode ficar local
     models={
-        "bonsai-8b": ModelCaps(context=32768, tools=True, reasoning=True),
+        "bonsai-8b": ModelCaps(context=CANONICAL_CONTEXT, tools=True, reasoning=True),
         "qwen3-35b-a3b": ModelCaps(context=131072, tools=True, reasoning=True),
     },
     notes="Ternary-Bonsai-8B Q2_0, TG 71.6 t/s medido",
