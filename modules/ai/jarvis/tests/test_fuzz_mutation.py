@@ -513,12 +513,19 @@ class TestFuzzMemory:
         assert len(ids) >= 45
 
     def test_stable_id_different_timestamp(self) -> None:
-        """Timestamps diferentes geram IDs diferentes."""
+        """Mesmo CONTEÚDO gera mesmo ID independente do timestamp (idempotente).
+
+        Audit P0-1 (commit 543f37f): o id antigo tinha ts na hash → re-remember
+        do mesmo texto criava duplicata. Agora sha256 do conteúdo ⇒ upsert
+        sobrescreve (atualiza ts/kind), não duplica. Este teste afirma o
+        invariante CORRETO (antes assertava o comportamento bugado id1!=id2)."""
         from jarvis.core.memory import _stable_id
         text = "same text"
         id1 = _stable_id(text, 1.0)
         id2 = _stable_id(text, 2.0)
-        assert id1 != id2
+        assert id1 == id2, "identidade deve ser por conteúdo (idempotente)"
+        # textos diferentes ainda diferem
+        assert _stable_id("other", 1.0) != id1
 
     def test_memory_event_payload(self) -> None:
         """MemoryEvent gera payload válido."""
