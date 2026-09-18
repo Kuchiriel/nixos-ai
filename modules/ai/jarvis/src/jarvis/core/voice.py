@@ -620,7 +620,9 @@ def speak(
             voice_path, lang_code = voice, "p"
         out_dir = Path(_model_dir()) / "tts"
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"jarvis_tts_{abs(hash((text, voice, speed, base, rate, style))) % 10**9}.wav"
+        # pitch no cache-key (bug 17/09: pool-gate/Melissa pitch4 recebiam o
+        # wav pitch-0 em cache — hash ignorava pitch e vozes 'colidiam')
+        out_path = out_dir / f"jarvis_tts_{abs(hash((text, voice, speed, base, rate, style, pitch))) % 10**9}.wav"
 
         # Texto longo: fatia em frases e concatena (nenhuma base entrega tudo).
         slices = _split_chunks(text)

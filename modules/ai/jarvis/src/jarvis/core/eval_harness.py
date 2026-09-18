@@ -240,6 +240,8 @@ class EvalHarness:
                     "turns": r.total_turns,
                     "time_s": round(r.total_time_s, 2),
                     "tool_calls": r.total_tool_calls,
+                    "tokens_in": r.tokens_in,
+                    "tokens_out": r.tokens_out,
                     "error": r.error,
                 })
             n = len(cond_results)
@@ -253,6 +255,12 @@ class EvalHarness:
                     sum(c["time_s"] for c in cond_results) / max(1, n), 1),
                 "avg_tool_calls": round(
                     sum(c["tool_calls"] for c in cond_results) / max(1, n), 1),
+                # Token efficiency como métrica de primeira classe: mesma
+                # task, conditions diferentes — custo decide o desempate.
+                "avg_tokens_in": round(
+                    sum(c["tokens_in"] for c in cond_results) / max(1, n), 1),
+                "avg_tokens_out": round(
+                    sum(c["tokens_out"] for c in cond_results) / max(1, n), 1),
                 "tasks": cond_results,
             }
         return report
@@ -327,5 +335,21 @@ JARVIS_EVAL_TASKS = [
         description="Search for a function definition",
         prompt="Use code_search to find the function 'get_config' in the jarvis codebase.",
         success_criteria={"output_contains": "get_config"},
+    ),
+    # Equivalente local da TB hello-world (file-operations/easy): o
+    # veredito vem do MUNDO (grep exato), não da palavra do agente —
+    # foi assim que o braço terminus-2+bonsai falhou (arquivo criado,
+    # conteúdo errado). Padrão p/ tasks tri-harness futuras.
+    TaskTemplate(
+        id="tb-hello-world",
+        description="TB hello-world equivalent: exact file content",
+        prompt=("Create the file /tmp/jarvis-tb-hello.txt containing "
+                "exactly the line 'Hello, world!' (with trailing newline). "
+                "Do not create any other files. Then read it back."),
+        success_criteria={
+            "file_exists": "/tmp/jarvis-tb-hello.txt",
+            "world_check": "grep -qx 'Hello, world!' /tmp/jarvis-tb-hello.txt",
+        },
+        teardown="rm -f /tmp/jarvis-tb-hello.txt",
     ),
 ]

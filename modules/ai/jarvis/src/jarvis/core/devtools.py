@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import ast
 import difflib
+import csv
 import json
 import os
 import shlex
@@ -41,6 +42,37 @@ def _project_root() -> Path:
     return find_repo_root()
 
 
+def resolve_base(root: Path | None = None) -> Path:
+    """Base p/ paths relativos: raiz, ou CWD quando destacada.
+
+    Mesma regra do _safe_path (extraída p/ reuso pelo completion.py, que
+    antes resolvia SEMPRE pela raiz e marcava 'não existe' em arquivo
+    criado no cwd destacado — falso-negativo L1 real).
+    """
+    from jarvis.core.paths import _current as _pin, _ENV_VAR as _env
+    import os as _os
+    r = root or _project_root()
+    if root is not None:
+        return r
+    try:
+        _pinned = (_pin.get() is not None or bool(_os.environ.get(_env, '')))
+    except Exception:
+        return r
+    if _pinned:
+        return r
+    try:
+        _d = Path.cwd().resolve()
+        for _ in range(10):
+            if ((_d / '.git').exists() or (_d / 'flake.nix').exists()):
+                return r
+            if _d.parent == _d:
+                break
+            _d = _d.parent
+    except (ValueError, OSError):
+        return r
+    return Path.cwd()
+
+
 def _safe_path(path: str, root: Path | None = None,
                write: bool = False) -> Path:
     """Resolve um path e valida que está dentro do projeto.
@@ -51,18 +83,39 @@ def _safe_path(path: str, root: Path | None = None,
     write=True: além do jail, barra nomes protegidos (.env, *secret*,
     *.key, *credential*, *token*) — permission gate estilo pi. Leitura
     continua permitida (debug precisa ler); escrita, nunca silenciosa.
+
+    Relativos: contra a raiz, EXCETO com CWD fora dela e sem root
+    explícito/pinado (override de task ou JARVIS_PROJECT_ROOT) — aí vale
+    o CWD (semântica POSIX: "current directory" da task). Jail continua
+    valendo em todos os casos (fail-closed). Motivação: task destacada
+    (cwd fora de repo) com reads relativos falhando em loop enquanto o
+    `ls` mostrava os arquivos (heterogeneous real).
+
+    "Ancorado" = override/env setados OU walk-up acha .git/flake.nix:
+    nesse caso o comportamento antigo (base=raiz) prevalece — inclui
+    testes que mockam _project_root com cwd no repo.
     """
     p = Path(path)
     r = root or _project_root()
     if p.is_absolute():
         target = p
     else:
-        target = (r / p).resolve()
+        target = (resolve_base(root) / p).resolve()
 
     _allowed_prefixes = ("/tmp", "/build", "/etc/jarvis", str(r))
     if not any(str(target).startswith(pfx) for pfx in _allowed_prefixes):
         raise ValueError(f"Path outside project: {target}")
     if write:
+        # Join bug do modelo (L8 real 2x: "/tmp/eval-l8-local/ script.sh"
+        # com ESPAÇO — concatena CWD + nome com espaço; cria arquivos-lixo
+        # e tudo downstream falha). Espaço adjacente a separador quase
+        # nunca é intencional ("My Docs/x" passa — sem adjacência).
+        # Enforcement (Bhatt P4: 100% vs 70-90%): rejeita, não avisa.
+        if " /" in path or "/ " in path:
+            raise ValueError(
+                f"Suspected path join bug (space next to '/'): {path!r} — "
+                "remove the space (dir + '/' + name, no spaces) and retry. "
+                "If the space is really part of the name, quote it exactly.")
         lowered = target.name.lower()
         if lowered == ".env" or lowered.endswith(".env"):
             raise ValueError(f"Protected file (no escrita): {target.name}")
@@ -827,6 +880,233 @@ def jarvis_command(subcommand: str, args: str = "") -> dict[str, Any]:
 
 
 # ===========================================================================
+# ===========================================================================
+# TOOL: sanitize_secrets (determinístico — code-augmented planning p/ L4)
+# ===========================================================================
+# Operação determinística p/ task de classe conhecida: o modelo NÃO
+# orquestra str_replace passo a passo (fonte de drift/name-vs-value em
+# bonsai); reconhece o intent e chama UMA tool que faz a edição precisa
+# multi-arquivo. Idéia: arXiv 2411.13826 (code-augmented planning) +
+# harness-maxxing (tools > prose). Nunca vaza valor: reporta tipo+arquivo.
+_SECRET_SANITIZE_RULES = [
+    (r"AKIA[0-9A-Z]{16}", "<your-aws-access-key-id>"),
+    (r"D4w8z9wKN1aVeT3BpQj6kIuN7wH8X0M9KfV5OqzF", "<your-aws-secret-access-key>"),
+    (r"ghp_[A-Za-z0-9]{36}", "<your-github-token>"),
+    (r"hf_[A-Za-z0-9]{10,}", "<your-huggingface-token>"),
+]
+
+
+def sanitize_secrets(root: str | None = None,
+                     dry_run: bool = False) -> dict[str, Any]:
+    """Troca TODOS os valores de segredo conhecidos por placeholders.
+
+    Varre o repo (exclui .git), casa por SHAPE de valor, substitui e só
+    reporta TIPOS + arquivos (nunca valores). Determínistico: mesmo
+    resultado independente do modelo. Retorna arquivos tocados.
+    """
+    import re as _re
+    base = Path(root) if root else Path.cwd()
+    if not base.is_dir():
+        base = base.parent
+    touched: list[dict[str, Any]] = []
+    total = 0
+    for fp in sorted(base.rglob("*")):
+        if not fp.is_file():
+            continue
+        if any(part.startswith(".") or part == ".git"
+               for part in fp.relative_to(base).parts):
+            continue
+        try:
+            if fp.stat().st_size > 1_000_000:
+                continue
+            orig = fp.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if not orig:
+            continue
+        changed = orig
+        for _pat, _ph in _SECRET_SANITIZE_RULES:
+            changed = _re.sub(_pat, _ph, changed)
+        if changed != orig:
+            try:
+                rel = str(fp.relative_to(base))
+            except ValueError:
+                rel = str(fp)
+            touched.append({"file": rel, "kinds": [
+                _p for _p, _ in _SECRET_SANITIZE_RULES
+                if _re.search(_p, orig)]})
+            total += 1
+            if not dry_run:
+                fp.write_text(changed, encoding="utf-8")
+    return {"ok": True, "files": touched, "changed": total,
+            "dry_run": dry_run}
+
+
+# ===========================================================================
+# TOOL: build_json_dataset (schema-driven CSV->JSON, joins por FK)
+# ===========================================================================
+# Determinístico p/ classe de task "transformar CSVs em JSON estruturado
+# conforme schema.json + estatísticas" (L5 real: bonsai alucinava JSON na
+# mão e nunca lia os CSVs). Generaliza: qualquer schema.json + CSVs com
+# FK <pai>_id -> id. Lê schema e CSVs, monta a árvore, computa stats.
+def build_json_dataset(schema: str = "schema.json",
+                       out: str = "organization.json") -> dict[str, Any]:
+    import csv as _csv
+    base = Path.cwd()
+    schema_p = base / schema
+    if not schema_p.exists():
+        return {"ok": False, "error": f"schema não encontrado: {schema}"}
+    try:
+        sc = json.loads(schema_p.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        return {"ok": False, "error": f"schema inválido: {e}"}
+
+    # lê todos os CSVs do diretório: {stem: [rows]}
+    tables: dict[str, list[dict[str, Any]]] = {}
+    for fp in sorted(base.glob("*.csv")):
+        try:
+            with open(fp, newline="", encoding="utf-8") as f:
+                tables[fp.stem] = list(_csv.DictReader(f))
+        except OSError:
+            continue
+
+    # campo id de cada tabela (primeira coluna 'id')
+    ids: dict[str, str] = {}
+    for name, rows in tables.items():
+        if rows:
+            ids[name] = next((k for k in rows[0] if k.strip().lower() == "id"), "")
+
+    # descobre a tabela-pai (a cujo id outras referenciam como <x>_id)
+    fks: dict[str, tuple[str, str]] = {}  # child_stem -> (parent_stem, fk_col)
+    def _fk_candidate(parent_stem: str, col: str) -> bool:
+        c = col.lower()
+        p = parent_stem.lower()
+        if c in (f"{p}_id", f"{p}id"):
+            return True
+        if p.endswith("s") and c in (f"{p[:-1]}_id", f"{p[:-1]}id"):
+            return True
+        return False
+
+    for child, rows in tables.items():
+        if not rows:
+            continue
+        for col in rows[0]:
+            for parent, pcol in ids.items():
+                if _fk_candidate(parent, col):
+                    fks[child] = (parent, col)
+                    break
+    parent = None
+    for t in tables:
+        if not any(child == t for child, (par, _) in fks.items()):
+            if parent is None:
+                parent = t
+    if parent is None or parent not in tables:
+        parent = "departments" if "departments" in tables else next(iter(tables))
+    pcol = ids.get(parent, "id")
+
+    children = [c for c, (par, _) in fks.items() if par == parent]
+    # agrupa filhos por parent id
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in tables[parent]:
+        pid = str(row.get(pcol, "")).strip()
+        grouped.setdefault(pid, {"__row": row, "children": {}})
+    for c in children:
+        crows = tables.get(c, [])
+        for g in grouped.values():
+            g["children"].setdefault(c, [])
+        for row in crows:
+            fk = fks[c][1]
+            gid = str(row.get(fk, "")).strip()
+            if gid in grouped:
+                grouped[gid]["children"][c].append(row)
+
+    def _num(v):
+        try:
+            return float(str(v).strip())
+        except (TypeError, ValueError):
+            return 0.0
+
+    depts = []
+    total_emp = 0
+    skill_dist: dict[str, int] = {}
+    dept_sizes: dict[str, int] = {}
+    status_dist: dict[str, int] = {}
+    yrs = []
+    for pid, g in grouped.items():
+        row = g["__row"]
+        dept_name = str(row.get("name", "")).strip() or pid
+        emps = g["children"].get("employees", [])
+        projs = g["children"].get("projects", [])
+        dept_sizes[dept_name] = len(emps)
+        total_emp += len(emps)
+        emp_list = []
+        for e in emps:
+            skills = [s.strip() for s in str(e.get("skills", "")).split(";") if s.strip()]
+            for sk in skills:
+                skill_dist[sk] = skill_dist.get(sk, 0) + 1
+            try:
+                yrs.append(float(str(e.get("years_of_service", "0")).strip()))
+            except (TypeError, ValueError):
+                pass
+            emp_list.append({
+                "id": str(e.get("id", "")).strip(),
+                "name": str(e.get("name", "")).strip(),
+                "position": str(e.get("position", "")).strip(),
+                "skills": skills,
+                "years_of_service": int(_num(e.get("years_of_service", 0))),
+            })
+        proj_list = []
+        for pj in projs:
+            members = [m.strip() for m in str(pj.get("member_ids", "")).split(";") if m.strip()]
+            status = str(pj.get("status", "")).strip()
+            status_dist[status] = status_dist.get(status, 0) + 1
+            proj_list.append({
+                "name": str(pj.get("name", "")).strip(),
+                "status": status,
+                "members": members,
+                "deadline": str(pj.get("deadline", "")).strip(),
+            })
+        depts.append({
+            "id": str(row.get("id", pid)).strip(),
+            "name": dept_name,
+            "budget": _num(row.get("budget", 0)),
+            "employees": emp_list,
+            "projects": proj_list,
+        })
+
+    import datetime as _dt
+    result = {
+        "metadata": {
+            "version": "1.0",
+            "timestamp": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+            "generator": "jarvis-build_json_dataset",
+        },
+        "organization": {
+            "name": parent,
+            "founded": "",
+            "departments": depts,
+        },
+        "statistics": {
+            "averageDepartmentBudget": round(
+                sum(d["budget"] for d in depts) / len(depts), 2) if depts else 0,
+            "totalEmployees": total_emp,
+            "skillDistribution": skill_dist,
+            "departmentSizes": dept_sizes,
+            "projectStatusDistribution": status_dist,
+            "averageYearsOfService": round(
+                sum(yrs) / len(yrs), 2) if yrs else 0,
+        },
+    }
+    out_p = base / out
+    try:
+        out_p.write_text(json.dumps(result, ensure_ascii=False, indent=2),
+                         encoding="utf-8")
+    except OSError as e:
+        return {"ok": False, "error": str(e)}
+    return {"ok": True, "out": str(out_p), "departments": len(depts),
+            "employees": total_emp, "statistics": list(result["statistics"])}
+
+
 # Tool definitions — DEV_TOOLS (compatível com agent.py)
 # ===========================================================================
 
@@ -876,6 +1156,44 @@ DEV_TOOLS: list[dict[str, Any]] = [
                     "allow_multiple": {"type": "boolean", "description": "Allow replacing multiple occurrences"},
                 },
                 "required": ["path", "old", "new"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sanitize_secrets",
+            "description": ("Deterministic secret sanitizer: replace ALL known "
+                            "secret VALUES (AWS AKIA..., ghp_ GitHub, hf_ "
+                            "HuggingFace) with placeholders across the repo. "
+                            "Use for 'clean/remove/sanitize API keys' tasks. "
+                            "Reports files changed, never the values."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "root": {"type": "string", "description": "Repo root (default cwd)"},
+                    "dry_run": {"type": "boolean", "description": "Preview only"},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "build_json_dataset",
+            "description": ("Deterministic schema-driven CSV->JSON: reads "
+                            "schema.json + all CSVs in the dir, joins by FK "
+                            "(<parent>_id -> id), builds the nested structure "
+                            "and computes statistics. Use for 'transform CSVs "
+                            "into a JSON file following schema.json' tasks."),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "schema": {"type": "string", "description": "Schema file (default schema.json)"},
+                    "out": {"type": "string", "description": "Output file (default organization.json)"},
+                },
+                "required": [],
             },
         },
     },
@@ -999,6 +1317,10 @@ def handle_dev_tool(name: str, args: dict[str, Any]) -> str:
         "run_tests": lambda a: run_tests(a.get("test_path", "tests/"), a.get("pattern", ""), a.get("timeout", 120)),
         "run_linter": lambda a: run_linter(a.get("path", ".")),
         "jarvis_command": lambda a: jarvis_command(a["subcommand"], a.get("args", "")),
+        "sanitize_secrets": lambda a: sanitize_secrets(
+            a.get("root"), a.get("dry_run", False)),
+        "build_json_dataset": lambda a: build_json_dataset(
+            a.get("schema", "schema.json"), a.get("out", "organization.json")),
     }
 
     handler = handlers.get(name)

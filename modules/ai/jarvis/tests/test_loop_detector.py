@@ -56,6 +56,18 @@ class TestLoopDetector:
         assert result.action == RecoveryAction.INJECT_WARNING
         assert result.loop_type == LoopType.DUPLICATE
 
+    def test_duplicate_search_names_read_action(self):
+        """Busca repetida: mensagem manda LER um arquivo da lista."""
+        from jarvis.core.loop_detector import LoopDetector
+        d = LoopDetector(max_consecutive_duplicates=2)
+        tc = [{"function": {"name": "execute_shell",
+                            "arguments": '{"cmd": "grep -r KEY ."}'}}]
+        d.check(tc, "o1")
+        d.check(tc, "o2")
+        result = d.check(tc, "o3")
+        assert result.action == RecoveryAction.INJECT_WARNING
+        assert "read_file" in result.message
+
     def test_cycle_detection(self):
         d = LoopDetector(max_cycle_length=6)
         tc_a = [{"function": {"name": "read_file", "arguments": '{"path": "a.py"}'}}]

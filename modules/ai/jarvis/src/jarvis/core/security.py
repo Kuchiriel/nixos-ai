@@ -167,8 +167,18 @@ def run_shell(cmd: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
     Expande ~ e $VAR por token (forense 2026-09: `ls ~/Books` falhava com
     "No such file" porque sem shell não há expansão — o agente concluía
     "vazio"). Sem shell continua: sem risco de injection.
+
+    Aspas desbalanceadas viram CompletedProcess 127 (nunca exceção: L2
+    real matou o run inteiro com ValueError do shlex).
     """
-    argv = [os.path.expandvars(os.path.expanduser(tok)) for tok in shlex.split(cmd)]
+    try:
+        argv = [os.path.expandvars(os.path.expanduser(tok))
+                for tok in shlex.split(cmd)]
+    except ValueError as e:
+        return subprocess.CompletedProcess(
+            args=cmd, returncode=127, stdout="",
+            stderr=f"ERROR: quoting inválido ({e}) — reescreva o comando "
+                   f"com aspas balanceadas ou grave script .py e rode-o.")
     return subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
 
 

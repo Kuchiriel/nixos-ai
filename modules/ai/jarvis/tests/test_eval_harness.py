@@ -253,6 +253,73 @@ class TestCompare:
         assert len(report["conditions"]["A"]["tasks"]) == 2
         assert report["conditions"]["A"]["avg_turns"] == 1.0
 
+    def test_compare_agrega_tokens(self, harness):
+        tasks = [TaskTemplate(id="t1", description="d", prompt="p1")]
+
+        def costly(prompt):
+            return {"final_response": "ok", "turns": 2, "tools_called": [],
+                    "tokens_in": 1000, "tokens_out": 200}
+
+        def lean(prompt):
+            return {"final_response": "ok", "turns": 1, "tools_called": [],
+                    "tokens_in": 100, "tokens_out": 20}
+
+        report = harness.compare({"costly": costly, "lean": lean}, tasks)
+        assert report["conditions"]["costly"]["avg_tokens_in"] == 1000.0
+        assert report["conditions"]["costly"]["avg_tokens_out"] == 200.0
+        assert report["conditions"]["lean"]["avg_tokens_in"] == 100.0
+        assert report["conditions"]["lean"]["avg_tokens_out"] == 20.0
+        assert report["conditions"]["lean"]["tasks"][0]["tokens_in"] == 100
+
+
+class TestTbHelloWorld:
+    """Template tri-harness: veredito pelo mundo, não pela palavra."""
+
+    def test_template_existe_com_world_check(self):
+        from jarvis.core.eval_harness import JARVIS_EVAL_TASKS
+        t = next(t for t in JARVIS_EVAL_TASKS if t.id == "tb-hello-world")
+        assert "world_check" in t.success_criteria
+        assert "file_exists" in t.success_criteria
+        assert t.teardown == "rm -f /tmp/jarvis-tb-hello.txt"
+
+    def test_conteudo_exato_passa(self, harness, tmp_path):
+        marker = tmp_path / "hello.txt"
+        task = TaskTemplate(
+            id="tb-hw", description="d", prompt="p",
+            success_criteria={
+                "file_exists": str(marker),
+                "world_check": "grep -qx 'Hello, world!' %s" % marker,
+            },
+        )
+
+        def agent_fn(prompt):
+            marker.write_text("Hello, world!\n")
+            return {"final_response": "criei", "tools_called": [], "turns": 1}
+
+        r = harness.run_task(task, agent_fn)
+        assert r.success is True
+
+    def test_conteudo_errado_falha_como_terminus(self, harness, tmp_path):
+        # Modo de falha observado no braço terminus-2: arquivo existe mas
+        # conteúdo errado (newline literal). file_exists passa, mundo veta.
+        marker = tmp_path / "hello.txt"
+        task = TaskTemplate(
+            id="tb-hw", description="d", prompt="p",
+            success_criteria={
+                "file_exists": str(marker),
+                "world_check": "grep -qx 'Hello, world!' %s" % marker,
+            },
+        )
+
+        def agent_fn(prompt):
+            marker.write_text("Hello, world!\\n")
+            return {"final_response": "criei", "tools_called": [], "turns": 1}
+
+        r = harness.run_task(task, agent_fn)
+        assert r.criteria_met["file_exists"] is True
+        assert r.criteria_met["world_check"] is False
+        assert r.success is False
+
 
 class TestBrowserDispatch:
     def test_browser_dispatch_new_actions(self):

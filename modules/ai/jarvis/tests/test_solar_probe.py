@@ -226,7 +226,8 @@ def test_probe_session_uses_profile_detected_max_tokens_and_temperature(tmp_path
     """Verify that the harness uses profile-aware max_tokens and temperature.
 
     This matters for your Solar: if the detected profile says 'large' (>= 30B),
-    the harness sends max_tokens=768. For 'small' (7-30B), it sends 1024.
+    the harness sends max_tokens=768. For 'small' (7-30B), it sends 2048
+    (exp. 18/09 alavanca B: 1024 truncava writes médios no meio do JSON).
     For 'tiny' (<7B), it sends 512 and tool_choice='none'.
     """
     probe = ProbeSession()
@@ -235,8 +236,8 @@ def test_probe_session_uses_profile_detected_max_tokens_and_temperature(tmp_path
     agent.run("test")
 
     payload = probe.last_payload
-    # Default model "default" → profile "default" → max_tokens 1024
-    assert payload["max_tokens"] == 1024
+    # Default model "default" → profile "default" → max_tokens 2048
+    assert payload["max_tokens"] == 2048
     assert payload["temperature"] == 0.0
 
     # Test with a small model profile
@@ -245,7 +246,7 @@ def test_probe_session_uses_profile_detected_max_tokens_and_temperature(tmp_path
     agent_small.run("test")
 
     payload_small = probe_small.last_payload
-    assert payload_small["max_tokens"] == 1024  # small profile = 1024
+    assert payload_small["max_tokens"] == 2048  # small profile = 2048
     assert payload_small["temperature"] == 0.0
 
     # Test with a large model profile
@@ -259,7 +260,8 @@ def test_probe_session_uses_profile_detected_max_tokens_and_temperature(tmp_path
 
 
 def test_probe_session_captures_tool_definitions_when_mcp_configured(tmp_path: Path) -> None:
-    """Verify that when MCP servers are configured, the harness sends tool definitions."""
+    """MCP configurado: execute_shell oferecida; `{server}_query` NÃO
+    anunciada sem dispatch no loop (armadilha 'Unknown tool' — 18/09)."""
     probe = ProbeSession()
     cfg = Config()
     agent = Agent(cfg, session=probe, mcp_servers={"nix": "/usr/bin/nix"})
@@ -269,7 +271,7 @@ def test_probe_session_captures_tool_definitions_when_mcp_configured(tmp_path: P
     assert "tools" in payload
     tool_names = [t["function"]["name"] for t in payload["tools"]]
     assert "execute_shell" in tool_names
-    assert "nix_query" in tool_names
+    assert "nix_query" not in tool_names
 
 
 def test_probe_session_drug_response_parses_correctly(tmp_path: Path) -> None:

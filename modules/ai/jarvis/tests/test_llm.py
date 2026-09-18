@@ -272,3 +272,66 @@ def test_stream_respects_thinking_off():
         [{"role": "user", "content": "oi"}]))
     assert toks == ["oi"]
     assert captured["payload"]["chat_template_kwargs"] == {"enable_thinking": False}
+
+
+class _CountingBackend:
+    """Backend que conta chamadas chat (mede passes de revisão)."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def chat(self, messages, **kw):
+        from jarvis.providers.llm_backend import ChatResponse
+        self.calls += 1
+        # Sem aspas/citações: review nunca encontra evidência grounded.
+        return ChatResponse(content="resposta direta sem citacoes", tool_calls=[])
+
+    def close(self):
+        pass
+
+
+def _msgs():
+    # Task longa/factual: passa pelo gate H3 sem downgrade (isola o teste
+    # no comportamento de role).
+    return [{"role": "user", "content": (
+        "Analise factual multi-step em profundidade: compare as evidências "
+        "documentadas sobre o mecanismo e conclua com raciocínio detalhado.")}]
+
+
+class TestReasoningPlacement:
+    """Placement de reasoning: orquestrador raciocina, worker executa.
+
+    (orchestrator-only reasoning concentra o ganho; revisão em subagente
+    tem benefício limitado/negativo e custo integral em modelo pequeno.)
+    """
+
+    def test_orchestrator_medium_faz_review(self):
+        b = _CountingBackend()
+        LLMClient(Config(), backend=b).chat_with_tools(
+            _msgs(), reasoning_effort="medium", role="orchestrator")
+        assert b.calls == 2  # 1 inicial + 1 revisão
+
+    def test_worker_medium_forcado_low(self):
+        b = _CountingBackend()
+        LLMClient(Config(), backend=b).chat_with_tools(
+            _msgs(), reasoning_effort="medium", role="worker")
+        assert b.calls == 1  # zero revisões, pedido ignorado
+
+    def test_worker_high_forcado_low(self):
+        b = _CountingBackend()
+        LLMClient(Config(), backend=b).chat_with_tools(
+            _msgs(), reasoning_effort="high", role="worker")
+        assert b.calls == 1
+
+    def test_role_default_e_orchestrator(self):
+        b = _CountingBackend()
+        LLMClient(Config(), backend=b).chat_with_tools(
+            _msgs(), reasoning_effort="medium")
+        assert b.calls == 2
+
+    def test_role_invalido_falha_fechado(self):
+        b = _CountingBackend()
+        with pytest.raises(ValueError):
+            LLMClient(Config(), backend=b).chat_with_tools(
+                _msgs(), role="planner")
+        assert b.calls == 0

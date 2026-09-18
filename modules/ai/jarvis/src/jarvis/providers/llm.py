@@ -415,6 +415,7 @@ class LLMClient:
         max_tokens: int | None = None,
         extra: dict[str, Any] | None = None,
         reasoning_effort: str | None = None,
+        role: str = "orchestrator",
     ) -> ChatResponse:
         """Chat completion com tool calling — retorna ChatResponse completo.
 
@@ -427,7 +428,17 @@ class LLMClient:
         (evidência local: 3× turns sem ganho). Ativa-se automaticamente quando
         a task exige raciocínio profundo (factual-grounded, multi-step,
         tool-use complexo). Detectado via heuristica simples no conteúdo.
+
+        ROLE (reasoning placement): "orchestrator" (default) mantém o effort
+        pedido; "worker" força effort low (zero revisões), independente do
+        pedido — loops de revisão em subagente têm benefício limitado ou
+        negativo e custo integral em modelo pequeno. Role inválido = erro
+        (fail-closed, nunca default silencioso).
         """
+        if role not in ("orchestrator", "worker"):
+            raise ValueError(f"role inválido: {role!r} (use 'orchestrator' ou 'worker')")
+        if role == "worker":
+            reasoning_effort = "low"
         # Gate automático H3: tasks longas/factual precisam de review;
         # curtas/classificação não (evita desperdício de contexto).
         _joined = " ".join(
@@ -450,9 +461,12 @@ class LLMClient:
                     {"role": "assistant", "content": response.content or ""},
                     {"role": "user", "content": (
                         "REVISE sua resposta acima. Responda: MANTER, ou NOVA "
-                        "RESPOSTA corrigida. Exija de si: toda afirmação factual "
-                        "precisa de CITAÇÃO EXATA copiada do contexto (proibido "
-                        "paráfrase/reticências). Sem citação válida: MANTER.")},
+                        "RESPOSTA corrigida. Exija de si: (1) toda afirmação "
+                        "factual precisa de CITAÇÃO EXATA copiada do contexto "
+                        "(proibido paráfrase/reticências); (2) todo NÚMERO "
+                        "calculado precisa ser RECALCULADO passo a passo a "
+                        "partir dos dados observados — se divergir, corrija o "
+                        "número. Sem citação válida: MANTER.")},
                 ], tools=None, temperature=temperature,
                 max_tokens=max_tokens, extra=extra)
             txt = (review.content or "").strip()

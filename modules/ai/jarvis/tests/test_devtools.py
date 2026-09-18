@@ -99,6 +99,24 @@ def test_write_file_creates_dirs() -> None:
     assert f.read_text() == "nested"
 
 
+def test_write_file_rejects_space_join_bug() -> None:
+    """Path com espaço adjacente a '/' (join bug L8: 'dir/ file') é
+    rejeitado na escrita — enforcement, não aviso."""
+    d = _tmp()
+    result = write_file(str(d) + "/ script.sh", "echo")
+    assert result["ok"] is False
+    assert "join bug" in result["error"]
+    assert not (d / " script.sh").exists()
+
+
+def test_write_file_allows_space_inside_name() -> None:
+    """Espaço DENTRO do nome ('My Docs/x') continua válido."""
+    d = _tmp()
+    f = d / "My Docs" / "x.txt"
+    result = write_file(str(f), "v")
+    assert result["ok"] is True
+
+
 # ---------------------------------------------------------------------------
 # str_replace
 # ---------------------------------------------------------------------------
@@ -345,10 +363,14 @@ def test_run_tests_basic() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_handle_dev_tool_read_file(tmp_path: Path) -> None:
+def test_handle_dev_tool_read_file(tmp_path: Path, monkeypatch) -> None:
     import jarvis.core.devtools as mod
     original = mod._project_root
     mod._project_root = lambda: tmp_path
+    # Hermético: CWD == raiz mockada (resolve_base faz walk-up do CWD;
+    # fora de repo — ex.: sandbox nix sem .git — voltava CWD e o teste
+    # falhava sem relação com o código. Gate de rebuild 18/09).
+    monkeypatch.chdir(tmp_path)
     try:
         (tmp_path / "test.py").write_text("hello")
         result = handle_dev_tool("read_file", {"path": "test.py"})
@@ -368,6 +390,56 @@ def test_handle_dev_tool_unknown() -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_sanitize_secrets_deterministic(tmp_path) -> None:
+    """sanitize_secrets: troca valores por placeholders, só tipos no report."""
+    from jarvis.core.devtools import sanitize_secrets
+    (tmp_path / "a.py").write_text(
+        'k = "AKIA1234567890123456"; t = "hf_abcdefghijklmnopqrstuvwxyz123456"\n')
+    (tmp_path / "b.txt").write_text("ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789 ok\n")
+    r = sanitize_secrets(str(tmp_path))
+    assert r["changed"] == 2
+    txt = (tmp_path / "a.py").read_text()
+    assert "AKIA1234567890123456" not in txt
+    assert "<your-aws-access-key-id>" in txt
+    assert "AKIA1234567890123456" not in str(r)  # nunca vaza valor
+    assert (tmp_path / "b.txt").read_text() == "<your-github-token> ok\n"
+
+
+def test_build_json_dataset(tmp_path, monkeypatch) -> None:
+    """build_json_dataset: lê CSVs, junta por FK, gera JSON + stats."""
+    from jarvis.core.devtools import build_json_dataset
+    (tmp_path / "departments.csv").write_text("id,name,budget\nD1,Eng,100\nD2,Sales,60\n")
+    (tmp_path / "employees.csv").write_text(
+        "id,name,position,skills,years_of_service,department_id\n"
+        "E1,A,Mgr,Python;SQL,5,D1\nE2,B,Dev,Python,3,D1\nE3,C,Dev,SQL,2,D2\n")
+    (tmp_path / "projects.csv").write_text(
+        "name,status,member_ids,deadline,department_id\n"
+        "P1,In Progress,E1;E2,2025-01-01,D1\nP2,Planning,E3,2025-02-01,D2\n")
+    (tmp_path / "schema.json").write_text("{}")
+    monkeypatch.chdir(tmp_path)
+    r = build_json_dataset(schema="schema.json", out="organization.json")
+    assert r["ok"] is True
+    assert r["departments"] == 2
+    assert r["employees"] == 3
+    d = json.loads((tmp_path / "organization.json").read_text())
+    assert d["statistics"]["averageDepartmentBudget"] == 80.0
+    assert d["statistics"]["totalEmployees"] == 3
+    assert d["statistics"]["skillDistribution"] == {"Python": 2, "SQL": 2}
+    # integrity: project members estão nos employees do dept
+    for dept in d["organization"]["departments"]:
+        eids = {e["id"] for e in dept["employees"]}
+        for proj in dept["projects"]:
+            assert set(proj["members"]) <= eids
+
+
+def test_sanitize_secrets_dry_run(tmp_path) -> None:
+    from jarvis.core.devtools import sanitize_secrets
+    (tmp_path / "a.py").write_text("k = \"AKIA1234567890123456\"\n")
+    r = sanitize_secrets(str(tmp_path), dry_run=True)
+    assert r["changed"] == 1
+    assert "AKIA1234567890123456" in (tmp_path / "a.py").read_text()  # intacto
+
+
 def test_dev_tools_schema() -> None:
     """Todas as dev tools têm schema válido."""
     names = [t["function"]["name"] for t in DEV_TOOLS]
@@ -377,7 +449,9 @@ def test_dev_tools_schema() -> None:
     assert "list_directory" in names
     assert "code_search" in names
     assert "run_tests" in names
-    assert len(DEV_TOOLS) == 9  # read, write, str_replace, list, code_search, run_tests, run_linter, semantic, jarvis_command (execute_shell is in agent.py TOOLS)
+    assert "sanitize_secrets" in names
+    assert "build_json_dataset" in names
+    assert len(DEV_TOOLS) == 11  # read, write, str_replace, list, code_search, run_tests, run_linter, semantic, jarvis_command, sanitize_secrets, build_json_dataset (execute_shell is in agent.py TOOLS)
 
 
 def test_dev_tools_have_required_params() -> None:
@@ -487,12 +561,17 @@ class TestRelapseShellContent:
         monkeypatch.chdir(tmp_path)
         from jarvis.core import devtools as dt
         import pathlib
+        # _safe_path resolve paths relativos contra o project root (não o
+        # cwd), então um nome relativo poluiria a raiz do repo a cada run
+        # (artefato CH-UNIQUE-NOTES-XYZ comitado por git add -A). Usar path
+        # absoluto sob tmp_path (/tmp é prefixo permitido pelo jail).
+        target = tmp_path / "CH-UNIQUE-NOTES-XYZ"
         try:
-            r = dt.write_file("CH-UNIQUE-NOTES-XYZ", "Release notes\n\nVersion 2 fixes the parser.\n")
+            r = dt.write_file(str(target), "Release notes\n\nVersion 2 fixes the parser.\n")
             assert r["ok"] is True
+            assert target.read_text() == "Release notes\n\nVersion 2 fixes the parser.\n"
         finally:
-            for _p in pathlib.Path(".").glob("CH-UNIQUE-NOTES-XYZ*"):
-                _p.unlink(missing_ok=True)
+            target.unlink(missing_ok=True)
             for _b in pathlib.Path.home().glob(".local/state/jarvis/backups/CH-UNIQUE-NOTES-XYZ*"):
                 _b.unlink(missing_ok=True)
 
@@ -519,6 +598,40 @@ class TestReadTruncationNotice:
         r = dt.read_file(str(tmp_path / "l.txt"), 0, 10)
         assert r["ok"] is True
         assert "MAIS linhas" not in r["content"]
+
+
+class TestCwdRelativeFallback:
+    """CWD fora da raiz + sem pin: relativo = relativo ao CWD (POSIX).
+
+    (heterogeneous real: task destacada lia relativo contra a raiz do
+    repo em loop enquanto o `ls` mostrava os arquivos no cwd.)
+    """
+
+    def test_detached_cwd_resolves_relative(self, tmp_path, monkeypatch):
+        import os
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "dado.csv").write_text("a\n")
+        from jarvis.core import devtools as dt
+        assert dt._safe_path("dado.csv") == (tmp_path / "dado.csv").resolve()
+
+    def test_pinned_root_wins_over_cwd(self, tmp_path, monkeypatch):
+        import os
+        from jarvis.core.paths import use_project_root
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "dado.csv").write_text("a\n")
+        from jarvis.core import devtools as dt
+        from pathlib import Path
+        other = tmp_path / "outro"
+        other.mkdir()
+        with use_project_root(other):
+            assert dt._safe_path("dado.csv") == (other / "dado.csv").resolve()
+
+    def test_explicit_root_param_wins(self, tmp_path, monkeypatch):
+        import os
+        from pathlib import Path
+        monkeypatch.chdir(tmp_path)
+        from jarvis.core import devtools as dt
+        assert dt._safe_path("x.txt", root=Path("/tmp")) == Path("/tmp/x.txt")
 
 
 class TestSystemPaths:

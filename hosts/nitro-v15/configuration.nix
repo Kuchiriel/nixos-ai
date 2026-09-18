@@ -87,6 +87,11 @@
   services.udisks2.enable = true;
   services.upower.enable = true; # Battery detection for waybar
 
+  # envfs (FUSE /bin via PATH): shebangs hardcoded #!/bin/bash passam a
+  # resolver (aprovado pelo dono 18/09 — réplicas TB/Ubuntu fiéis; sem
+  # isso, ./script.sh com #!/bin/bash dá ENOENT fantasma no NixOS).
+  services.envfs.enable = true;
+
   services.cloudflare-warp.enable = false;
 
   security.rtkit.enable = true;

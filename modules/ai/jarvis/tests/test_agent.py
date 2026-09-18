@@ -464,99 +464,143 @@ def test_agent_ignores_malformed_tool_calls() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Integração MCP (servidor MCP fake via subprocess + LLM mockado)
+# MCP: `{server}_query` NÃO anunciado sem dispatch no loop (ver teste
+# test_agent_does_not_advertise_undispatched_mcp_tools acima).
 # ---------------------------------------------------------------------------
 
-FAKE_MCP_SERVER = r"""
-import json, sys
 
-def respond(msg):
-    sys.stdout.write(json.dumps(msg) + "\n")
-    sys.stdout.flush()
-
-for line in sys.stdin:
-    line = line.strip()
-    if not line:
-        continue
-    try:
-        req = json.loads(line)
-    except json.JSONDecodeError:
-        continue
-    if req.get("method") == "initialize":
-        respond({"jsonrpc": "2.0", "id": req["id"], "result": {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {"tools": {}},
-            "serverInfo": {"name": "fake", "version": "1.0"},
-        }})
-    elif req.get("method") == "tools/list":
-        respond({"jsonrpc": "2.0", "id": req["id"], "result": {
-            "tools": [{
-                "name": "fake_query",
-                "description": "Query fake data",
-                "inputSchema": {"type": "object", "properties": {"q": {"type": "string"}}},
-            }]
-        }})
-    elif req.get("method") == "tools/call":
-        args = req["params"]["arguments"]
-        respond({"jsonrpc": "2.0", "id": req["id"], "result": {
-            "content": [{"type": "text", "text": f"result for {args.get('q', '')}"}]
-        }})
-"""
-
-
-def test_agent_uses_mcp_tool(tmp_path) -> None:
-    """O agente chama tool MCP (via servidor fake) e o LLM recebe o resultado."""
+def test_agent_does_not_advertise_undispatched_mcp_tools(tmp_path) -> None:
+    """`{server}_query` sem dispatch no loop = armadilha de erro garantido
+    (L8 real: nixos_query → 'Unknown tool', turno queimado). Não anunciar
+    até haver dispatch real p/ MCPClient; execute_shell continua."""
     import sys
 
-    mcp_path = tmp_path / "fake_mcp.py"
-    mcp_path.write_text(FAKE_MCP_SERVER)
-
-    # turn 1: LLM chama a tool MCP fake_query; turn 2: responde com o resultado
-    class MCPTurnSession(FakeSession):
+    class CapMCP(FakeSession):
         last_payload = {}
 
         def post(self, url, json=None, timeout=120, **kw):
             self.calls += 1
-            MCPTurnSession.last_payload = json or {}
-            if self.calls == 1:
-                msg = {
-                    "role": "assistant",
-                    "content": "",
-                    "tool_calls": [{
-                        "id": "call-1",
-                        "type": "function",
-                        "function": {
-                            "name": "fake_query",
-                            "arguments": jsonlib.dumps({"q": "hello"}),
-                        },
-                    }],
-                }
-            else:
-                # turn 2: vê o resultado da tool MCP no histórico e responde
-                msg = {"role": "assistant", "content": "done"}
+            CapMCP.last_payload = json or {}
+            msg = {"role": "assistant", "content": "done"}
             return FakeResponse({"choices": [{"message": msg}]})
 
-    cfg = Config()
     agent = Agent(
-        cfg,
-        session=MCPTurnSession(),
-        mcp_servers={"fake": f"{sys.executable} {mcp_path}"},
+        Config(),
+        session=CapMCP(),
+        mcp_servers={"fake": f"{sys.executable} /dev/null"},
     )
-    result = agent.run("use the fake tool")
-    assert result.final_response == "done"
-
-    # confirma que a tool MCP foi registrada no payload do chat
+    agent.run("faça algo")
     sent_tools = [
         t["function"]["name"]
-        for t in MCPTurnSession.last_payload["tools"]
+        for t in CapMCP.last_payload.get("tools", [])
     ]
-    assert "fake_query" in sent_tools
+    assert "fake_query" not in sent_tools
     assert "execute_shell" in sent_tools
+
+
+def _tool_names_for(prompt):
+    """Roda 1 turno capturando as tools oferecidas no payload."""
+    import sys
+
+    class Cap(FakeSession):
+        last = {}
+
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            Cap.last = json or {}
+            msg = {"role": "assistant", "content": "done"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    agent = Agent(Config(), session=Cap())
+    agent.run(prompt)
+    return [t["function"]["name"] for t in Cap.last.get("tools", [])]
+
+
+def test_book_tools_hidden_without_book_signals() -> None:
+    """Sem sinal de livro/áudio: book_* fora da oferta (progressive)."""
+    names = _tool_names_for("limpe o repo de chaves de API e troque valores")
+    assert "book_search" not in names
+    assert "book_resume" not in names
+    assert "read_file" in names
+
+
+def test_book_tools_shown_with_book_signals() -> None:
+    """Com sinal ('leia o livro'): book_* oferecidas."""
+    names = _tool_names_for("leia o livro hobbit capitulo 3")
+    assert "book_search" in names
+    assert "book_resume" in names
+
+
+def test_execute_shell_description_bans_narration() -> None:
+    """Descrição da shell proíbe narrar comando em vez de chamar.
+
+    (fix-git real: modelo colava `git checkout/merge` em bloco bash pro
+    usuário em vez de executar — prose blocks don't execute.)
+    """
+    import sys
+
+    class CaptureTools(FakeSession):
+        last_payload = {}
+
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            CaptureTools.last_payload = json or {}
+            msg = {"role": "assistant", "content": "done"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    agent = Agent(
+        Config(),
+        session=CaptureTools(),
+        mcp_servers={"fake": f"{sys.executable} /dev/null"},
+    )
+    agent.run("faça algo")
+    tools = {t["function"]["name"]: t["function"]["description"]
+             for t in CaptureTools.last_payload["tools"]}
+    assert "DO NOT execute" in tools["execute_shell"]
 
 
 # ---------------------------------------------------------------------------
 # Security: chaining operator bypass
 # ---------------------------------------------------------------------------
+
+
+def test_secret_worked_example_uses_observed_values() -> None:
+    """Valores observados + nome trocado → worked example de valor."""
+    from jarvis.core.agent import _secret_worked_example
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "grep", "arguments": "{}"}}]},
+        {"role": "tool", "content": "process.py: AKIA1234567890123456"},
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "str_replace",
+                          "arguments": '{"old": "AWS_ACCESS_KEY_ID"}'}}]},
+    ]
+    we = _secret_worked_example(msgs, "limpe as chaves de API")
+    assert we is not None
+    assert "AKIA1234567890123456" in we
+    assert "<your-aws-access-key-id>" in we
+    assert _secret_worked_example(msgs, "qual a capital?") is None
+
+
+def test_partial_coverage_note() -> None:
+    """Edição além do trecho lido: nota aponta cobertura parcial."""
+    from jarvis.core.agent import _partial_coverage_note
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "read_file",
+                          "arguments": '{"path": "f.py"}'}}]},
+        {"role": "tool", "content": "1 | a\n[…mostrando linhas 1–100 de 130 total — MAIS linhas]"},
+    ]
+    n = _partial_coverage_note(msgs, "f.py")
+    assert n is not None and "PARCIAL" in n
+    assert _partial_coverage_note(msgs, "outro.py") is None
+    msgs2 = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "read_file",
+                          "arguments": '{"path": "f.py"}'}}]},
+        {"role": "tool", "content": "1 | a\n2 | b\n"},
+    ]
+    assert _partial_coverage_note(msgs2, "f.py") is None
 
 
 def test_chaining_operators_detected() -> None:
@@ -839,6 +883,298 @@ def test_agent_strict_tools_rejects_unknown_tool() -> None:
         resp, [{"type": "function", "function": {"name": "read_file"}}])
     assert out.tool_calls == []
     assert "rm_rf" in out.content
+
+
+def test_agent_repairs_truncated_tool_args(tmp_path) -> None:
+    """args JSON inválido (truncado no max_tokens, L8 real): run não
+    crasha e o servidor nunca recebe a mensagem malformada (era 500)."""
+    import json as jsonlib
+
+    seen = []
+
+    class TruncSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            seen.append(json)
+            if len(seen) == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{
+                           "id": "call-1", "type": "function",
+                           "function": {
+                               "name": "write_file",
+                               "arguments": '{"path": "/x", "content": "TRUNCADO',
+                           }}]}
+            else:
+                msg = {"role": "assistant", "content": "done: /x"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    agent = Agent(Config(), session=TruncSession())
+    result = agent.run("escreve /x")
+    assert result.turns >= 2
+    # Hint codificado chegou ao payload do turno 2.
+    assert "malformed_tool_args" in jsonlib.dumps(seen[1])
+    # Nenhum payload enviado contém args inválidos.
+    for p in seen:
+        for m in p["messages"]:
+            if m.get("role") == "assistant":
+                for tc in (m.get("tool_calls") or []):
+                    jsonlib.loads(tc["function"]["arguments"])
+
+
+def test_agent_success_output_with_error_keywords_is_ok(tmp_path, monkeypatch) -> None:
+    """stdout com keywords de erro + exit 0 é SUCESSO (L8 real: grep em
+    auth.log contém 'not allowed'; conteúdo ≠ falha)."""
+    import json as jsonlib
+
+    class EchoSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{
+                           "id": "c1", "type": "function",
+                           "function": {
+                               "name": "execute_shell",
+                               "arguments": jsonlib.dumps(
+                                   {"cmd": "echo 'command not allowed here'"}),
+                           }}]}
+            else:
+                msg = {"role": "assistant", "content": "done"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=EchoSession(), approve=True)
+    result = agent.run("echo test")
+    assert result.steps[0]["ok"] is True
+    assert result.steps[0]["kind"] == "ok"
+
+
+def test_strict_to_response_preserves_finish_reason() -> None:
+    """strict: finish_reason sobrevive à conversão (truncamento detectável)."""
+    from jarvis.core.agent import Agent
+    from jarvis.providers.llm_backend import ChatResponse
+    resp = ChatResponse(
+        content='{"tool": "read_file", "arguments": {"path": "/x"}}',
+        finish_reason="length")
+    out = Agent._strict_to_response(
+        resp, [{"type": "function", "function": {"name": "read_file"}}])
+    assert out.tool_calls and out.finish_reason == "length"
+
+
+def test_agent_truncation_note_on_length_finish(tmp_path) -> None:
+    """finish_reason=length (ironclaw/2026): nota tipada p/ dividir em
+    partes; run sobrevive sem crash."""
+    import json as jsonlib
+
+    seen = []
+
+    class LengthSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            seen.append(json)
+            if len(seen) == 1:
+                msg = {"role": "assistant", "content": "partial"}
+                fr = "length"
+            else:
+                msg = {"role": "assistant", "content": "done"}
+                fr = "stop"
+            return FakeResponse(
+                {"choices": [{"message": msg, "finish_reason": fr}]})
+
+    agent = Agent(Config(), session=LengthSession())
+    result = agent.run("diga oi")
+    assert result.turns >= 2
+    assert "truncated_output" in jsonlib.dumps(seen[1])
+
+
+def test_agent_truncation_escalates_after_3(tmp_path) -> None:
+    """3 cortes seguidos: ESCALATION força plano em prosa, sem tools."""
+    import json as jsonlib
+
+    seen = []
+
+    class Length3Session(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            seen.append(json)
+            if len(seen) <= 3:
+                msg = {"role": "assistant",
+                       "content": f"partial {len(seen)}"}
+                fr = "length"
+            else:
+                msg = {"role": "assistant", "content": "done"}
+                fr = "stop"
+            return FakeResponse(
+                {"choices": [{"message": msg, "finish_reason": fr}]})
+
+    agent = Agent(Config(), session=Length3Session())
+    agent.run("diga oi")
+    blob = jsonlib.dumps(seen)
+    assert "streak=3" in blob
+    assert "ESCALATION" in blob
+
+
+def test_book_gate_ignores_generic_read_verbs() -> None:
+    """'deve ler logs' NÃO é task de livro (L8 real: book_search em task
+    shell por causa de 'ler '). Só marcadores específicos abrem."""
+    names = _tool_names_for("deve ler logs/auth.log e http.log com detecção")
+    assert "book_search" not in names
+    assert "book_resume" not in names
+
+
+def _tc_msg(name, args):
+    import json as _j
+    return {"role": "assistant", "content": "",
+            "tool_calls": [{"id": "c1", "type": "function",
+                            "function": {"name": name, "arguments": _j.dumps(args)}}]}
+
+
+def test_unexecuted_script_note_fires() -> None:
+    """write .sh sem run → nota EXECUTE com o path."""
+    from jarvis.core.agent import _unexecuted_script_note
+    msgs = [{"role": "user", "content": "x"},
+            _tc_msg("write_file", {"path": "det.sh", "content": "echo"})]
+    note = _unexecuted_script_note(msgs)
+    assert note and "det.sh" in note and "execute NOW" in note
+
+
+def test_unexecuted_script_note_silent_when_run() -> None:
+    """write + ./run → sem nota."""
+    from jarvis.core.agent import _unexecuted_script_note
+    msgs = [{"role": "user", "content": "x"},
+            _tc_msg("write_file", {"path": "det.sh", "content": "echo"}),
+            _tc_msg("execute_shell", {"cmd": "./det.sh"})]
+    assert _unexecuted_script_note(msgs) is None
+
+
+def test_unexecuted_script_note_chmod_does_not_count() -> None:
+    """chmod prepara, não executa: nota continua devida."""
+    from jarvis.core.agent import _unexecuted_script_note
+    msgs = [{"role": "user", "content": "x"},
+            _tc_msg("write_file", {"path": "det.sh", "content": "echo"}),
+            _tc_msg("execute_shell", {"cmd": "chmod +x det.sh"})]
+    note = _unexecuted_script_note(msgs)
+    assert note and "det.sh" in note
+
+
+def test_agent_appends_unexecuted_script_note(tmp_path) -> None:
+    """Loop: script escrito e 'done' sem rodar → nota no payload seguinte."""
+    import json as jsonlib
+
+    seen = []
+
+    class WriteSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            seen.append(json)
+            if len(seen) == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{
+                           "id": "c1", "type": "function",
+                           "function": {
+                               "name": "write_file",
+                               "arguments": jsonlib.dumps(
+                                   {"path": "det.sh", "content": "echo ok"}),
+                           }}]}
+            else:
+                msg = {"role": "assistant", "content": "done"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    agent = Agent(Config(), session=WriteSession())
+    agent.run("cria det.sh")
+    assert "unexecuted_script" in jsonlib.dumps(seen)
+
+
+def test_chaining_denied_even_when_approved(tmp_path, monkeypatch) -> None:
+    """Chaining negado SEMPRE: approve=True não pode vazar p/ shlex
+    quebrado (L8 real: `chmod && ./` com approve parcial aplicava e
+    falhava críptico). Guidance aponta script .sh."""
+    import json as jsonlib
+
+    seen = []
+
+    class ChainSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            seen.append(json)
+            if len(seen) == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{
+                           "id": "c1", "type": "function",
+                           "function": {
+                               "name": "execute_shell",
+                               "arguments": jsonlib.dumps(
+                                   {"cmd": "chmod +x x.sh && ./x.sh"}),
+                           }}]}
+            else:
+                msg = {"role": "assistant", "content": "done"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=ChainSession(), approve=True)
+    result = agent.run("roda x.sh")
+    assert result.commands_run == []
+    assert any("chmod +x x.sh && ./x.sh" in d for d in result.commands_denied)
+    assert "write a .sh via write_file" in jsonlib.dumps(seen)
+
+
+def test_unread_refs_note_fires(tmp_path, monkeypatch) -> None:
+    """Script referencia arquivo EXISTENTE nunca lido → nota READ-FIRST."""
+    from jarvis.core.agent import _unread_refs_note
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "logs" / "auth.log").write_text("Failed password")
+    (tmp_path / "logs" / "http.log").write_text("GET /")
+    monkeypatch.chdir(tmp_path)
+    msgs = [{"role": "user", "content": "x"},
+            _tc_msg("read_file", {"path": "logs/http.log"}),
+            {"role": "tool", "tool_call_id": "c1", "content": "# ok\n200"},
+            _tc_msg("write_file", {"path": "d.sh",
+                                   "content": "grep x logs/auth.log"})]
+    note = _unread_refs_note(msgs)
+    assert note and "logs/auth.log" in note and "read_file" in note
+
+
+def test_unread_refs_note_ignores_missing_outputs(tmp_path, monkeypatch) -> None:
+    """Refs inexistentes (outputs-a-criar, lixo de variável shell) NÃO
+    geram nota (L8 real: 8 leituras de alert.json inexistente)."""
+    from jarvis.core.agent import _unread_refs_note
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "logs" / "auth.log").write_text("Failed password")
+    monkeypatch.chdir(tmp_path)
+    msgs = [{"role": "user", "content": "x"},
+            _tc_msg("read_file", {"path": "logs/auth.log"}),
+            {"role": "tool", "tool_call_id": "c1", "content": "# ok\nFailed"},
+            _tc_msg("write_file", {"path": "d.sh",
+                                   "content": "grep x logs/auth.log > alert.json; cat $logs_dir/auth.log"})]
+    assert _unread_refs_note(msgs) is None
+
+
+def test_unread_refs_note_silent_when_all_read() -> None:
+    """Tudo lido → sem nota."""
+    from jarvis.core.agent import _unread_refs_note
+    msgs = [{"role": "user", "content": "x"},
+            _tc_msg("read_file", {"path": "logs/auth.log"}),
+            {"role": "tool", "tool_call_id": "c1", "content": "# ok\nFailed"},
+            _tc_msg("write_file", {"path": "d.sh",
+                                   "content": "grep x logs/auth.log"})]
+    assert _unread_refs_note(msgs) is None
+
+
+def test_missing_binary_hint_detects_broken_shebang(tmp_path, monkeypatch) -> None:
+    """ENOENT em script existente = shebang quebrado (NixOS sem /bin/bash):
+    hint aponta interpretador, não arquivo."""
+    from jarvis.core.agent import _missing_binary_hint
+    s = tmp_path / "x.sh"
+    s.write_text("#!/nonexistent-interp-xyz\nsleep 999\n")
+    monkeypatch.chdir(tmp_path)
+    hint = _missing_binary_hint("./x.sh")
+    assert "shebang" in hint and "nonexistent-interp-xyz" in hint
+    assert "bash" in hint  # alternativa acionável
+
+
+def test_missing_binary_hint_silent_for_valid_script(tmp_path, monkeypatch) -> None:
+    """Shebang válido (/bin/sh existe) → sem hint."""
+    from jarvis.core.agent import _missing_binary_hint
+    s = tmp_path / "ok.sh"
+    s.write_text("#!/bin/sh\necho ok\n")
+    monkeypatch.chdir(tmp_path)
+    assert _missing_binary_hint("./ok.sh") == ""
+    assert _missing_binary_hint("definitely-not-a-binary-xyz") == ""
 
 
 def test_detect_profile_registry_tier_overrides_param_count(tmp_path, monkeypatch):

@@ -49,6 +49,11 @@ hosts/nitro-v15/hardware-configuration.nix
 result
 result-*
 
+# Artefato de quoting: diretório literal "~" criado quando um processo
+# (ex.: Chromium) roda com HOME="~" não expandido. É HOME viva de processo
+# em execução — NUNCA deletar; apenas ignorar no git (IMP-009).
+/~/
+
 # Python build artifacts
 __pycache__/
 *.pyc

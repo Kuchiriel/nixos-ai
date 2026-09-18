@@ -170,6 +170,17 @@ class LoopDetector:
                     "mais leitura nunca vai resolver. Se a task é CRIAR, chame "
                     "write_file com o path completo AGORA; senão, responda e encerre."
                 )
+            elif sig.name == "execute_shell" and any(
+                    k in (sig.raw_args or "") for k in ("grep", "find ", "rg ")):
+                # Busca repetida com sucesso e sem progresso (sanitize real:
+                # mesmo find+grep 3x, 20 arquivos, nunca leu nenhum). A
+                # resposta está NA LISTA que você já tem: leia um arquivo
+                # dela com read_file AGORA em vez de buscar de novo.
+                _dup_extra = (
+                    " A busca funcionou — REPETI-LA não filtra nada. Você já "
+                    "tem a lista de arquivos: chame read_file num deles "
+                    "AGORA (ou estreite com --exclude-dir=.git)."
+                )
             return RecoveryStrategy(
                 action=RecoveryAction.INJECT_WARNING,
                 message=(

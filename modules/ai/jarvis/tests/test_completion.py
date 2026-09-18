@@ -218,3 +218,458 @@ def test_claimed_content_with_read_is_verified():
     ]
     v = check_completion(msgs)
     assert v.status == "VERIFIED"
+
+
+def _shell_msgs(cmd, final):
+    return [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "execute_shell",
+                          "arguments": '{"cmd": "%s"}' % cmd}}]},
+        {"role": "tool", "content": "ok"},
+        {"role": "assistant", "content": final},
+    ]
+
+
+def test_shell_written_claimed_exists_is_verified(tmp_path):
+    """Escrita via shell `>` é write-action: afirmado + existe = VERIFIED."""
+    from jarvis.core.completion import check_completion
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "relatorio.md").write_text("# ok\n")
+    with use_project_root(tmp_path):
+        v = check_completion(_shell_msgs(
+            "echo conteudo > relatorio.md",
+            "O arquivo relatorio.md foi criado."))
+    assert v.status == "VERIFIED"
+    assert any("relatorio.md" in e for e in v.evidence)
+
+
+def test_shell_written_py_syntax_error_is_unverified(tmp_path):
+    """AST vale p/ escrita via shell também."""
+    from jarvis.core.completion import check_completion
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "bad.py").write_text("def f(:\n")
+    with use_project_root(tmp_path):
+        v = check_completion(_shell_msgs(
+            "echo 'def f(:' > bad.py",
+            "O arquivo bad.py foi criado."))
+    assert v.status == "UNVERIFIED"
+    assert any("não compila" in m for m in v.missing)
+
+
+def test_shell_without_redir_claim_still_unverified(tmp_path):
+    """Shell sem escrita (`ls`) + afirmação de criação = UNVERIFIED (sem
+    enfraquecer a regra: só redirecionamento conta como write-action)."""
+    from jarvis.core.completion import check_completion
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "velho.md").write_text("x\n")
+    with use_project_root(tmp_path):
+        v = check_completion(_shell_msgs(
+            "ls",
+            "O arquivo velho.md foi criado."))
+    assert v.status == "UNVERIFIED"
+    assert any("sem escrita" in m for m in v.missing)
+
+
+def test_shell_redir_noise_ignored(tmp_path):
+    """`>&2`, `/dev/null` e `2>` sem extensão não viram artefatos."""
+    from jarvis.core.completion import _shell_write_paths
+    msgs = _shell_msgs("cmd >&2; outro > /dev/null", "fim.")
+    assert _shell_write_paths(msgs) == []
+    assert _shell_write_paths(_shell_msgs(
+        "echo x | tee saida.txt", "fim.")) == ["saida.txt"]
+    assert _shell_write_paths(_shell_msgs(
+        "echo a >> log.txt && echo b > rel.md", "fim.")) == [
+        "log.txt", "rel.md"]
+
+
+def test_claimed_merge_without_mutation_is_unverified():
+    """fix-git real: checkout+leitura e 'merge feito' sem mutação."""
+    from jarvis.core.completion import check_completion
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "execute_shell",
+                          "arguments": '{"cmd": "git log --all --oneline"}'}}]},
+        {"role": "tool", "content": "19b5d10 Update site"},
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "execute_shell",
+                          "arguments": '{"cmd": "git checkout master"}'}}]},
+        {"role": "tool", "content": "Switched to branch master"},
+        {"role": "assistant", "content":
+         "Recuperei as mudancas perdidas e fiz merge delas na master."},
+    ]
+    v = check_completion(msgs)
+    assert v.status == "UNVERIFIED"
+    assert any("sem ação de escrita" in m for m in v.missing)
+
+
+def test_claimed_merge_with_git_mutation_is_verified():
+    """Merge real via shell conta como mutação (sem enfraquecer)."""
+    from jarvis.core.completion import check_completion
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "execute_shell",
+                          "arguments": '{"cmd": "git merge recovery-branch"}'}}]},
+        {"role": "tool", "content": "Merge made"},
+        {"role": "assistant", "content": "Fiz merge da recovery-branch."},
+    ]
+    v = check_completion(msgs)
+    assert v.status == "VERIFIED"
+
+
+def test_plain_checkout_is_not_mutation():
+    """`git checkout master` sozinho não é ação mutante."""
+    from jarvis.core.completion import _mutating_shell
+    assert _mutating_shell("git checkout master") is False
+    assert _mutating_shell("git checkout -b nova") is True
+    assert _mutating_shell("git merge ramo") is True
+    assert _mutating_shell("git commit -m x") is True
+    assert _mutating_shell("ls -la") is False
+
+
+def test_final_question_is_handoff_not_verified():
+    """Tools irrelevantes com sucesso + final em pergunta = UNVERIFIED."""
+    from jarvis.core.completion import check_completion
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "book_search",
+                          "arguments": '{"q": "personal site"}'}}]},
+        {"role": "tool", "content": "nada relevante"},
+        {"role": "assistant", "content":
+         "Nao encontrei. Quer que eu busque a estrutura de diretorios?"},
+    ]
+    v = check_completion(msgs)
+    assert v.status == "UNVERIFIED"
+    assert any("handoff" in m or "nada a fazer" in m for m in v.missing)
+
+
+def test_final_plea_without_question_is_handoff():
+    """Súplica sem '?' ('forneça mais detalhes') também é handoff."""
+    from jarvis.core.completion import check_completion
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "book_search",
+                          "arguments": '{"q": "x"}'}}]},
+        {"role": "tool", "content": "nada"},
+        {"role": "assistant", "content":
+         "Nao encontrei o dragao. Por favor, forneça mais detalhes."},
+    ]
+    v = check_completion(msgs)
+    assert v.status == "UNVERIFIED"
+    assert any("handoff" in m or "nada a fazer" in m for m in v.missing)
+
+
+def test_handoff_provide_path_pattern():
+    """"provide the correct path" sem "?" também é handoff."""
+    from jarvis.core.completion import check_completion
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "execute_shell",
+                          "arguments": '{"cmd": "grep -r x ."}'}}]},
+        {"role": "tool", "content": "nada"},
+        {"role": "assistant", "content":
+         "Not found. Please ensure it is present and provide the correct path."},
+    ]
+    v = check_completion(msgs)
+    assert v.status == "UNVERIFIED"
+    assert any("handoff" in m for m in v.missing)
+
+
+def test_handoff_matches_without_accent():
+    """'posso ajudá-lo' casa com padrão sem acento (fuga real)."""
+    from jarvis.core.completion import check_completion
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "execute_shell",
+                          "arguments": '{"cmd": "git stash list"}'}}]},
+        {"role": "tool", "content": "sem entradas no stash"},
+        {"role": "assistant", "content":
+         "Nada no stash. Se você puder me informar mais, posso ajudá-lo."},
+    ]
+    v = check_completion(msgs)
+    assert v.status == "UNVERIFIED"
+    assert any("handoff" in m for m in v.missing)
+
+
+def test_noop_without_grounded_search_is_unverified():
+    """'cannot find any' sem busca/leitura com sucesso no repo = miss."""
+    from jarvis.core.completion import check_completion
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "book_search",
+                          "arguments": '{"q": "keys"}'}}]},
+        {"role": "tool", "content": "no hits"},
+        {"role": "assistant", "content":
+         "I cannot find any API keys. No changes were made."},
+    ]
+    v = check_completion(msgs)
+    assert v.status == "UNVERIFIED"
+    assert any("nada a fazer" in m for m in v.missing)
+
+
+def test_numeric_write_without_compute_is_unverified():
+    """Número 'calculado' de cabeça sem execute_shell = miss (L2 real)."""
+    from jarvis.core.completion import check_completion
+    msgs = [
+        {"role": "user", "content": "calcule a média e grave em n.txt"},
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "write_file",
+                          "arguments": '{"path": "n.txt", "content": "15.0"}'}}]},
+        {"role": "tool", "content": "ok: write_file n.txt"},
+        {"role": "assistant", "content": "Média 15.0 gravada."},
+    ]
+    import tempfile
+    from pathlib import Path as _P
+    from jarvis.core.paths import use_project_root
+    d = _P(tempfile.mkdtemp())
+    (d / "n.txt").write_text("15.0\n")
+    with use_project_root(d):
+        v = check_completion(msgs)
+    assert v.status == "UNVERIFIED"
+    assert any("sem cálculo" in m for m in v.missing)
+
+
+def test_numeric_write_after_compute_passes_rule():
+    """Número impresso pelo cálculo e depois gravado: regra não veta."""
+    from jarvis.core.completion import check_completion
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "execute_shell",
+                          "arguments": '{"cmd": "python3 -c print(15.0)"}'}}]},
+        {"role": "tool", "content": "15.0"},
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "write_file",
+                          "arguments": '{"path": "n.txt"}'}}]},
+        {"role": "tool", "content": "ok: write_file n.txt"},
+        {"role": "assistant", "content": "Média 15.0 gravada."},
+    ]
+    import tempfile
+    from pathlib import Path as _P
+    from jarvis.core.paths import use_project_root
+    d = _P(tempfile.mkdtemp())
+    (d / "n.txt").write_text("15.0\n")
+    with use_project_root(d):
+        v = check_completion(msgs)
+    assert not any("sem cálculo" in m for m in v.missing)
+
+
+def test_noop_with_successful_read_stays_eligible():
+    """Triage com leitura real: regra noop não veta (outras decidem)."""
+    from jarvis.core.completion import check_completion
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "read_file",
+                          "arguments": '{"path": "cfg.yaml"}'}}]},
+        {"role": "tool", "content": "key: ok"},
+        {"role": "assistant", "content": "Checked cfg.yaml, nothing to fix."},
+    ]
+    v = check_completion(msgs)
+    assert not any("nada a fazer" in m for m in v.missing)
+
+
+def test_residual_secret_value_in_edited_file_is_unverified():
+    """L4 real: trocou o NOME, valor AKIA ficou — mundo deve vetar."""
+    from jarvis.core.completion import check_completion
+    from jarvis.core.paths import use_project_root
+    import tempfile
+    from pathlib import Path
+    d = Path(tempfile.mkdtemp())
+    (d / "process.py").write_text(
+        'os.environ["<your-aws-access-key-id>"] = "AKIA1234567890123456"\n')
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "str_replace",
+                          "arguments": '{"path": "process.py"}'}}]},
+        {"role": "tool", "content": "ok: str_replace process.py"},
+        {"role": "assistant", "content":
+         "Troquei as chaves por placeholders, tudo limpo."},
+    ]
+    with use_project_root(d):
+        v = check_completion(msgs)
+    assert v.status == "UNVERIFIED"
+    assert any("segurado" in m or "padrão" in m for m in v.missing)
+
+
+def test_no_residual_secret_value_is_eligible():
+    from jarvis.core.completion import check_completion
+    from jarvis.core.paths import use_project_root
+    import tempfile
+    from pathlib import Path
+    d = Path(tempfile.mkdtemp())
+    (d / "process.py").write_text(
+        'os.environ["AWS_ACCESS_KEY_ID"] = "<your-aws-access-key-id>"\n')
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "str_replace",
+                          "arguments": '{"path": "process.py"}'}}]},
+        {"role": "tool", "content": "ok: str_replace process.py"},
+        {"role": "assistant", "content": "Valores trocados por placeholders."},
+    ]
+    with use_project_root(d):
+        v = check_completion(msgs)
+    assert not any("padrão de segredo" in m for m in v.missing)
+
+
+def test_content_claim_without_successful_write_is_unverified():
+    """'successfully sanitized/replacing' sem write com sucesso = miss
+    (sanitize real: só git-ops irrelevantes, segredos intactos)."""
+    from jarvis.core.completion import check_completion
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "execute_shell",
+                          "arguments": '{"cmd": "git merge recovery"}'}}]},
+        {"role": "tool", "content": "Already up to date."},
+        {"role": "assistant", "content":
+         "I have successfully sanitized the repo, replacing all secrets."},
+    ]
+    v = check_completion(msgs)
+    assert v.status == "UNVERIFIED"
+    assert any("sem escrita" in m for m in v.missing)
+
+
+def test_content_claim_with_successful_write_is_verified():
+    from jarvis.core.completion import check_completion
+    from jarvis.core.paths import use_project_root
+    import tempfile
+    from pathlib import Path
+    d = Path(tempfile.mkdtemp())
+    (d / "f.txt").write_text("limpo\n")
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "write_file",
+                          "arguments": '{"path": "f.txt"}'}}]},
+        {"role": "tool", "content": "ok: write_file f.txt"},
+        {"role": "assistant", "content": "Sanitizei f.txt, removendo tudo."},
+    ]
+    with use_project_root(d):
+        v = check_completion(msgs)
+    assert v.status == "VERIFIED"
+
+
+def test_final_question_with_verified_artifact_stays_verified():
+    """Pergunta extra após artefato verificado não derruba o veredito."""
+    from jarvis.core.completion import check_completion
+    from jarvis.core.paths import use_project_root
+    import tempfile
+    from pathlib import Path
+    d = Path(tempfile.mkdtemp())
+    (d / "nota.txt").write_text("x\n")
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "write_file",
+                          "arguments": '{"path": "nota.txt"}'}}]},
+        {"role": "tool", "content": "written"},
+        {"role": "assistant", "content": "Criei nota.txt. Precisa de mais?"},
+    ]
+    with use_project_root(d):
+        v = check_completion(msgs)
+    assert v.status == "VERIFIED"
+
+
+def test_verify_budget_exhaustion_is_unverified():
+    """Stall ("aguarde...") até o fim do orçamento: UNVERIFIED, nunca
+    VERIFIED vazio herdado (fix-git real: enrolação sem git)."""
+    from jarvis.core.agent import Agent
+    from jarvis.core.config import Config
+
+    import sys
+    sys.path.insert(0, "tests")
+    from test_agent import FakeSession, FakeResponse  # noqa
+
+    texts = ["Vou verificar o repositorio.",
+             "Por favor, aguarde enquanto eu faço isso.",
+             "Só mais um instante, estou localizando."]
+
+    class Staller(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            i = min(self.calls - 1, len(texts) - 1)
+            return FakeResponse({"choices": [{"message": {
+                "role": "assistant", "content": texts[i]}}]})
+
+    agent = Agent(Config(), session=Staller())
+    result = agent.run("faça algo")
+    assert result.verdict == "UNVERIFIED"
+    assert result.verified is False
+    assert any("orçamento" in m for m in result.missing)
+
+
+def test_hollow_promise_consumes_verify_turn():
+    """Promessa futura com veredito oco não finaliza de imediato: consome
+    turno de verificação (fix-git real: 'I will check...' e parou)."""
+    from jarvis.core.agent import Agent
+    from jarvis.core.config import Config
+
+    import sys
+    sys.path.insert(0, "tests")
+    from test_agent import FakeSession, FakeResponse  # noqa
+
+    class Promiser(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            return FakeResponse({"choices": [{"message": {
+                "role": "assistant",
+                "content": "Working on it. I will check the logs next."}}]})
+
+    agent = Agent(Config(), session=Promiser())
+    result = agent.run("faça algo")
+    assert result.verdict == "UNVERIFIED"
+    assert result.turns >= 3
+
+
+def test_traceback_counts_as_error_not_success():
+    """Traceback Python é falha (csv real: import com ModuleNotFoundError
+    contou como leitura ok e o modelo seguiu iludido)."""
+    from jarvis.core.completion import check_completion
+    tb = ("Traceback (most recent call last):\n  File \"x\", line 1\n"
+          "ModuleNotFoundError: No module named 'pandas'")
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "execute_shell",
+                          "arguments": '{"cmd": "python3 -c import pandas"}'}}]},
+        {"role": "tool", "content": tb},
+        {"role": "assistant", "content": "Li o CSV, vou converter."},
+    ]
+    v = check_completion(msgs)
+    assert v.status == "UNVERIFIED"
+    assert any("ground truth" in m for m in v.missing)
+
+
+def test_pending_recovery_note_blocks_verified():
+    """STATE(unexecuted_script) sem execução posterior → nunca VERIFIED
+    (L8 real: over-claim sem rodar os scripts)."""
+    from jarvis.core.completion import check_completion
+    msgs = [
+        {"role": "assistant", "tool_calls": [{
+            "id": "c1", "type": "function",
+            "function": {"name": "write_file",
+                         "arguments": '{"path": "d.sh", "content": "echo"}'}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "ok: write_file d.sh"},
+        {"role": "user",
+         "content": "STATE(unexecuted_script:d.sh). You WROTE but never RAN."},
+        {"role": "assistant", "content": "done: d.sh"},
+    ]
+    v = check_completion(msgs)
+    assert v.status != "VERIFIED"
+    assert any("nunca executado" in m for m in v.missing)
+
+
+def test_resolved_recovery_note_allows_verified():
+    """Nota + execução posterior → sem bloqueio."""
+    from jarvis.core.completion import check_completion
+    msgs = [
+        {"role": "assistant", "tool_calls": [{
+            "id": "c1", "type": "function",
+            "function": {"name": "write_file",
+                         "arguments": '{"path": "d.sh", "content": "echo"}'}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "ok: write_file d.sh"},
+        {"role": "user",
+         "content": "STATE(unexecuted_script:d.sh). You WROTE but never RAN."},
+        {"role": "assistant", "tool_calls": [{
+            "id": "c2", "type": "function",
+            "function": {"name": "execute_shell",
+                         "arguments": '{"cmd": "./d.sh"}'}}]},
+        {"role": "tool", "tool_call_id": "c2", "content": "ok\n[exit: 0]"},
+        {"role": "assistant", "content": "done"},
+    ]
+    v = check_completion(msgs)
+    assert not any("nunca executado" in m for m in v.missing)
