@@ -1,6 +1,6 @@
 # Resultados H1/H2/H3 — Benchmark do Sistema (dono 16/09)
 
-> **Graph:** [[agent-harness|/home/nixos/projects/nixos-ai/docs/architecture/agent-harness.md]] · [[context-engineering|/home/nixos/projects/nixos-ai/docs/architecture/context-engineering.md]] · [[harness-maxxing-e-testes-2026-09-16 (vault)|/home/nixos/.local/state/jarvis/vault/harness-maxxing-e-testes-2026-09-16.md]] · [[SELF-IMPROVEMENT-LOOP.mmd|/home/nixos/projects/nixos-ai/docs/architecture/SELF-IMPROVEMENT-LOOP.mmd]]
+> **Graph:** [[agent-harness|/home/nixos/projects/nixos-ai/docs/architecture/agent-harness.md]] · [[context-engineering|/home/nixos/projects/nixos-ai/docs/architecture/context-engineering.md]] · [[../Books/memory/harness-e-fixes|/home/nixos/Books/memory/harness-e-fixes.md]] · [[SELF-IMPROVEMENT-LOOP.mmd|/home/nixos/projects/nixos-ai/docs/architecture/SELF-IMPROVEMENT-LOOP.mmd]]
 > Estados H1-H4 + consolidação framing + harness-maxxing. Evidência: PTY
 > real (ux_driver) + world-state verification. Fontes externas: RRP,
 > Wharton, Sukhareva, LangChain, arXiv.

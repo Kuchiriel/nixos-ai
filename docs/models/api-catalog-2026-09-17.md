@@ -1,6 +1,6 @@
 # Catálogo de Modelos por API (dono 17/09) — o que é / pra que serve / pros / cons / onde usar
 
-> **Graph:** [[ADR-004-routing-policy|/home/nixos/projects/nixos-ai/docs/architecture/ADR-004-routing-policy.md]] · [[h1_h2_h3_results|/home/nixos/projects/nixos-ai/docs/benchmarks/h1_h2_h3_results.md]] · [[vault:harness-maxxing-e-testes-2026-09-16|/home/nixos/.local/state/jarvis/vault/harness-maxxing-e-testes-2026-09-16.md]]
+> **Graph:** [[ADR-004-routing-policy|/home/nixos/projects/nixos-ai/docs/architecture/ADR-004-routing-policy.md]] · [[h1_h2_h3_results|/home/nixos/projects/nixos-ai/docs/benchmarks/h1_h2_h3_results.md]] · [[../Books/memory/harness-e-fixes|/home/nixos/Books/memory/harness-e-fixes.md]]
 > Pesquisa do dono (prints NVIDIA NIM + Zen/OpenRouter). Chaves via
 > `/etc/litellm.env` (abstração home.nix). Invocáveis via `opencode run
 > --model provider/model` e/ou fallback da cascata (`LLMClient`).
