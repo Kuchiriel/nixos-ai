@@ -13,3 +13,6 @@
 - `harness-scores/` — scores de harness por execução
 - `results/` — resultados crus
 - [[../README|/home/nixos/projects/nixos-ai/docs/README.md]] — README do diretório
+
+## Knowledge System
+- [[knowledge-system-benchmark-spec]] — spec de benchmark pós-ingestão (15 dimensões) + invariantes
