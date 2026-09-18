@@ -76,12 +76,17 @@ def _resolve_index(index_path: str | None) -> str:
     return _best_model()[1]
 
 
-def is_available() -> tuple[bool, str]:
-    """Verifica se a stack RVC está configurada. (ok, motivo)."""
+def is_available(model: str | None = None, index: str | None = None) -> tuple[bool, str]:
+    """Verifica se a stack RVC está configurada. (ok, motivo).
+
+    model/index: valores já resolvidos (ex.: args explícitos do chamador);
+    se omitidos, valida o auto-detect — evita falso negativo quando o
+    chamador passa modelo/index explícitos e o default não existe.
+    """
     py = _cfg("JARVIS_RVC_PYTHON")
     app = _cfg("JARVIS_RVC_APP_DIR")
-    model = _resolve_model(None)
-    index = _resolve_index(None)
+    model = model or _resolve_model(None)
+    index = index or _resolve_index(None)
     if not py or not Path(py).exists():
         return False, ("JARVIS_RVC_PYTHON ausente (shell antigo pós-rebuild? abra um "
                        "terminal novo ou rode: source scripts/rvc-env.sh; "
@@ -189,7 +194,9 @@ def clone_many(
     result: dict[str, str] = {}
     if not pairs:
         return result
-    ok, reason = is_available()
+    model = _resolve_model(model_path)
+    index = _resolve_index(index_path)
+    ok, reason = is_available(model, index)
     if not ok:
         return {i: f"ERROR: voice-clone indisponível: {reason}" for i, _ in pairs}
     missing = [i for i, _ in pairs if not Path(i).exists()]
@@ -198,8 +205,6 @@ def clone_many(
     todo = [(i, o) for i, o in pairs if i not in result]
     if not todo:
         return result
-    model = _resolve_model(model_path)
-    index = _resolve_index(index_path)
     if pitch is None:
         pitch = DEFAULT_PITCH
     t0 = time.monotonic()
