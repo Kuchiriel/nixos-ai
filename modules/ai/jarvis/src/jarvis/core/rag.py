@@ -365,6 +365,12 @@ class HybridIndexer:
         retorna None (mesmo contrato de "pular"), com manifest gravado.
         """
         ext = os.path.splitext(path)[1].lower()
+        # Código-fonte: leitura DIRETA preservando whitespace (indentação é
+        # semântica em Python/YAML). normalize_text colapsaria espaços →
+        # corromperia código. Sanitizer de DOCUMENTOS não se aplica aqui;
+        # proveniência marca o caminho (code-direct-read).
+        CODE_EXTS = {".py", ".sh", ".nix", ".toml", ".yaml", ".yml", ".js",
+                     ".ts", ".tsx", ".lua", ".c", ".h", ".cpp", ".rs", ".go", ".sql"}
         if content is None:
             try:
                 stat = Path(path).stat()
@@ -372,11 +378,15 @@ class HybridIndexer:
                 if not force and path in self._indexed_hashes and self._indexed_hashes[path] >= mtime:
                     return None  # arquivo não mudou, pula
                 self._indexed_hashes[path] = mtime
-                from jarvis.core.doc_sanitize import sanitize_document
-                san = sanitize_document(path)
-                if san.status != "ok":
-                    return None  # quarentena: manifest gravado, sem indexar
-                content = san.text
+                if ext in CODE_EXTS:
+                    content = Path(path).read_text(encoding="utf-8", errors="replace")
+                    _sanitizer_version = "code-direct-read"
+                else:
+                    from jarvis.core.doc_sanitize import sanitize_document
+                    san = sanitize_document(path)
+                    if san.status != "ok":
+                        return None  # quarentena: manifest gravado, sem indexar
+                    content = san.text
             except OSError:
                 return None
         else:
@@ -391,7 +401,10 @@ class HybridIndexer:
         # proveniência canônica do ponto (§13; audit P1-6)
         from datetime import datetime, timezone as _tz
         from jarvis.core.doc_sanitize import SANITIZER_VERSION
-        _sanitizer_version = SANITIZER_VERSION
+        try:
+            _sanitizer_version  # code-direct-read já definiu
+        except NameError:
+            _sanitizer_version = SANITIZER_VERSION
         _ingested_at = datetime.now(_tz.utc).isoformat()
 
         # Chunking alinhado com o contexto do modelo de embedding.

@@ -204,7 +204,7 @@ def extract_text(path: Path | str) -> str:
     suffix = path.suffix.lower()
     if suffix == ".epub":
         return _extract_epub(path)
-    elif suffix == ".txt":
+    elif suffix in (".txt", ".md"):
         return _extract_txt(path)
     elif suffix == ".pdf":
         return _extract_pdf(path)
@@ -698,6 +698,13 @@ def _find_book(name: str, books_dir: str | Path | None = None) -> Path | None:
     for b in books:
         if low_name in b["name"].lower():
             return Path(b["path"])
+    # Match direto por sufixo textual (digests .md de notas não estão no
+    # scan_books — usado pelo audiobook; aqui só resolve path existente)
+    base = Path(books_dir) if books_dir else Path.home() / "Books"
+    for suf in (".md", ".txt", ".pdf", ".epub"):
+        cand = base / f"{name}{suf}"
+        if cand.is_file():
+            return cand
     return None
 
 
