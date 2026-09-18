@@ -110,8 +110,33 @@ def ensure_collection(store: Any, name: str, *, recreate: bool = False) -> dict[
         _create_payload_index(store, name, field, "keyword")
     for field in spec["datetime"]:
         _create_payload_index(store, name, field, "datetime")
-    info = store.info(name)
-    return info
+    # criação de index é ASSÍNCRONA no Qdrant (ack != construído):
+    # espera limitada até payload_schema refletir todos os indexes.
+    # Stores que não expõem payload_schema (fakes/compat) → sem verificação
+    # estrita possível; com Qdrant real, timeout → erro explícito.
+    expected = set(spec["keyword"]) | set(spec["datetime"])
+    import time as _time
+    deadline = _time.monotonic() + 15.0
+    last_fields: set[str] | None = None
+    while _time.monotonic() < deadline:
+        try:
+            info = store.info(name)
+            schema = info.get("result", {}).get("payload_schema")
+            if schema is None:
+                return info  # store não reporta schema (fake/compat): nada a provar aqui
+            fields = set(schema.keys())
+            last_fields = fields
+            if expected <= fields:
+                return info
+        except Exception:
+            pass
+        _time.sleep(0.3)
+    if last_fields is None:
+        # nunca conseguiu ler info nem expor schema → não bloquear stores compat
+        return store.info(name)
+    raise RuntimeError(
+        f"bootstrap {name}: indexes não apareceram em 15s "
+        f"(esperados {sorted(expected)}, vistos {sorted(last_fields)})")
 
 
 def _create_payload_index(store: Any, name: str, field: str, schema_type: str) -> None:
