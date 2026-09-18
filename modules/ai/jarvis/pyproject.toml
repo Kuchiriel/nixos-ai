@@ -28,6 +28,7 @@ dev = [
 jarvis = "jarvis.cli.main:main"
 jarvis-intent = "jarvis.cli.main:intent_main"
 jarvis-rag = "jarvis.cli.main:rag_main"
+jarvis-mcp = "jarvis.mcp_server:main"
 jarvis-waybar = "jarvis.cli.main:waybar_main"
 jarvis-stt = "jarvis.core.voice:main_stt"
 jarvis-speak = "jarvis.core.voice:main_tts"

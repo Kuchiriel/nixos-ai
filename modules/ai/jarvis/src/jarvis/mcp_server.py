@@ -952,9 +952,15 @@ def _handle_rag_search(args: dict[str, Any]) -> str:
             return "No results found."
         lines = []
         for r in results:
-            path = r.path if hasattr(r, 'path') else 'unknown'
-            score = r.score if hasattr(r, 'score') else 0
-            text = r.text if hasattr(r, 'text') else ''
+            pl = getattr(r, "payload", {}) or {}
+            # code tem path; books tem book+chapter; memories tem kind
+            path = pl.get("path") or pl.get("book") or pl.get("kind") or "unknown"
+            if pl.get("chapter") is not None:
+                path = f"{path} (cap. {pl['chapter']})"
+            score = getattr(r, "score", 0)
+            # HybridHit não tem .text: conteúdo vive no payload (bug do
+            # handler antigo — hasattr(r,'text') era sempre False)
+            text = str(pl.get("content") or pl.get("title") or "")
             lines.append(f"[{score:.2f}] {path}\n{text[:200]}\n")
         return "\n".join(lines)
     except Exception as e:
