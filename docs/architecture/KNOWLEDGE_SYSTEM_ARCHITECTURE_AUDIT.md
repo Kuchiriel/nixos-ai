@@ -255,4 +255,58 @@ FILESYSTEM ⇄ Git ⇄ manifest ⇄ knowledge index ⇄ Qdrant
 4. Aplicar `build_payload` a todos os pontos (proveniência completa).
 5. Guard em `memory.clear()`; sanitizar `vault_write`.
 6. Estruturar observabilidade: contagem ok/quarentena/skip por ingestão.
-7. Versionar os E2E reais em `tests/` como integration.
+7. Versionar os E2E reais em `tests/` como integration.# 21. ADDENDUM — SOURCE-OF-TRUTH / STATIC DEBT MAP (auditoria estática)
+
+> Contribuição auxiliar (18/09) — análise de configuração dinâmica, sem tocar
+> runtime/pipeline. Alimenta a consolidação §17-24 da missão pós-ingestão.
+> Prioridade por princípio §24: runtime config > generated > docs > indexes.
+
+## Context budget — VIOLAÇÃO (P1, 2 valores divergentes)
+
+| Local | Valor |
+|---|---|
+| context_budget.py:257 (default) | 32000 |
+| context_budget.py:283 (auto-detect sentinel) | 32000 |
+| model_policy.py:29,83,92 | 32000 |
+| hwdetect.py:253 | min(32768, ...) |
+| hwprofile.py:115,286 | 32768 |
+| provider_registry.py:49,74 | 32768 |
+| llm.py:635 (fallback) | 32768 |
+| **router real (bonsai)** | **49152** |
+
+- model_policy.py:51 já documenta o BUG: "default 32000 mesmo com ctx=49152 no registry".
+- Fonte de verdade deveria ser models.nix/registry; 8 pontos hardcoded, 2 valores.
+- Mutation test §18 deve provar 1-mudança→todos-os-consumidores; hoje falha (drift).
+
+## Embedding dimension — 3 definições (mesmo valor, mas não-derivadas)
+
+| Local | Valor |
+|---|---|
+| config.py:71 | 768 (default, env-override) |
+| vector_store.py:23 DEFAULT_DIM | 768 |
+| knowledge_schema.py:38 EMBED_DIM | 768 |
+- Trocar o modelo de embedding (dimensão muda) exige editar 3 lugares + recriar coleção. P1: env-override sem recriar → 400 silencioso.
+
+## Chunk size — 2 hardcodes
+
+| Local | Valor |
+|---|---|
+| rag.py:401 chunk_size | 1200 (janela fixa) |
+| audiobook.py:939 chunk_chars | 1200 (target) |
+- Sem fonte única; rag é janela fixa (não structure-aware), audiobook é alvo.
+
+## Collection names — enum MCP ≠ config
+
+- mcp_server.py:294 enum: [code, memories, books] — mas o código do código é code_index (config.py:74). O label MCP "code" ≠ collection real "code_index" (handler mapeia, mas a enum mente o nome físico). P3 (nomenclatura).
+
+## Static inventories (risco §21/§32)
+
+- scripts/corpus_inventory.py + corpus.jsonl (360 entradas) — útil como ponte, mas é SNAPSHOT não auto-regenerado (regenerar via script). Não é fonte de verdade do runtime.
+- ~/Books/PROVENANCE.md (v2, 73/73) — derivável do fs; serve como provenance, não como config.
+- Não duplicar: preferir git ls-files / os.walk em runtime a inventários estaticamente commitados.
+
+## Recomendado (para a consolidação do outro agente, NÃO agora)
+1. Criar fonte única de config (ex: models.nix/registry) e fazer context budget/embed_dim/chunk derivados.
+2. Mutation test por valor crítico: mudar → validar consumidores.
+3. Remover os 2 valores divergentes (32000/32768) → derivar do registry.
+4. Alinhar enum MCP p/ code_index ou abstrair nome lógico.
