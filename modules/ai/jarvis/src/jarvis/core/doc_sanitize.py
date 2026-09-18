@@ -353,6 +353,39 @@ def _write_manifest(state: Path, record: dict[str, Any], quarantine: bool) -> st
     return ""
 
 
+def sanitize_text(raw: str, *, fmt: str = ".md", min_chars: int | None = None) -> SanitizedDoc:
+    """Sanitiza conteúdo de memória (mesma normalização/validação do pipeline de disco).
+
+    Barreira para caminhos que NÃO vêm de arquivo: index_file(content=...),
+    extract_text do audiobook, MCP content strings. Mesmo normalize+validate,
+    mesmo contrato de quarentena. Proveniência marca origem 'in-memory'.
+    """
+    if not isinstance(raw, str):
+        return SanitizedDoc(status="quarantine", reason=REASON_UNSUPPORTED,
+                            failures=["conteúdo não é string"])
+    if len(raw) > MAX_INPUT_BYTES:  # mesmo teto do caminho de disco
+        return SanitizedDoc(status="quarantine",
+                            reason=REASON_TOO_LARGE,
+                            failures=[f"{len(raw)} chars > {MAX_INPUT_BYTES}"])
+    text, notes = normalize_text(raw, fmt)
+    floor = MIN_OUTPUT_CHARS if min_chars is None else min_chars
+    failures, warnings = validate_normalized(text, fmt, len(raw) or 1)
+    # origem in-memory: sem fonte em disco, piso absoluto de 1 char não-vazio
+    # (o piso proporcional do validate_normalized assume extração de arquivo)
+    if not text.strip():
+        failures = failures + ["in-memory: conteúdo vazio"]
+    elif floor > 0 and len(text.strip()) < floor:
+        failures = failures + [f"in-memory: {len(text.strip())} chars < piso {floor}"]
+    return SanitizedDoc(status="ok" if not failures else "quarantine",
+                        reason=REASON_OK if not failures else REASON_QUALITY,
+                        text=text,
+                        warnings=warnings + notes,
+                        failures=failures,
+                        provenance={"source": "in-memory", "fmt": fmt,
+                                    "extractor": "direct-read",
+                                    "sanitizer_version": SANITIZER_VERSION})
+
+
 def sanitize_document(path: str | Path, *, state_dir: str | Path | None = None,
                       write_manifest: bool = True,
                       glossary: dict[str, str] | None = None) -> SanitizedDoc:

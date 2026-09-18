@@ -379,6 +379,14 @@ class HybridIndexer:
                 content = san.text
             except OSError:
                 return None
+        else:
+            # §19: barreira efetiva também p/ conteúdo explícito (MCP/agentes).
+            # Sem fonte em disco, piso mínimo absoluto (1 char não-vazio).
+            from jarvis.core.doc_sanitize import sanitize_text
+            san = sanitize_text(content, fmt=ext if ext.startswith(".") else ".md",
+                                min_chars=1)
+            if san.status != "ok":
+                return None  # quarentena in-memory: sem indexar
 
         # Chunking alinhado com o contexto do modelo de embedding.
         # nomic-embed-text-v2-moe tem ctx 2048; 1500 chars ≈ 700 tokens.

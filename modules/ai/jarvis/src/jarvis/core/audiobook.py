@@ -949,6 +949,14 @@ def index_book(book_name: str, books_dir: str | Path | None = None,
     if path is None:
         return {"ok": False, "error": f"livro não encontrado: {book_name}"}
     text = extract_text(path)
+    # §19: barreira do sanitizer ANTES de chunk/embed (mesma normalização do
+    # pipeline de disco). Extração vazia/corrompida → quarentena, sem upsert.
+    from jarvis.core.doc_sanitize import sanitize_text
+    san = sanitize_text(text, fmt=".txt", min_chars=1)
+    if san.status != "ok":
+        return {"ok": False, "error": f"quarentena do sanitizer: {san.reason}",
+                "failures": san.failures, "book": path.stem}
+    text = san.text
     chapters = get_content_chapters(text)
     if not chapters:
         chapters = [{"num": 0, "title": "texto corrido", "text": text}]
