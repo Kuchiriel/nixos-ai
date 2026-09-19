@@ -7,9 +7,11 @@
 set -e
 
 DEBUG=false
+VALIDATE_ARGS=()
 for arg in "$@"; do
     case "$arg" in
         --debug) DEBUG=true ;;
+        *) VALIDATE_ARGS+=("$arg") ;;
     esac
 done
 
@@ -34,7 +36,7 @@ echo "===================================================="
 echo "EXECUTANDO VALIDAÇÃO MULTI-CAMADA"
 echo "===================================================="
 
-if ! "$FLAKE_DIR/scripts/nix-validate.sh" --host "$TARGET_HOST" "$@"; then
+if ! "$FLAKE_DIR/scripts/nix-validate.sh" --host "$TARGET_HOST" "${VALIDATE_ARGS[@]}"; then
   echo ""
   echo "[ERRO CRÍTICO] Validação falhou!"
   echo "Corrija os erros acima ANTES de fazer rebuild."
@@ -64,11 +66,11 @@ echo "===================================================="
 echo "EXECUTANDO REBUILD"
 echo "===================================================="
 
-    if [ "$DEBUG" = true ]; then
-      nh os switch "$FLAKE_DIR" -H "$TARGET_HOST" -- --show-trace --option binary-caches-parallel-connections 4 --option http-connections 5 2>&1 | tee -a "$LOG_FILE"
-    else
-      nh os switch "$FLAKE_DIR" -H "$TARGET_HOST" -- --option binary-caches-parallel-connections 4 --option http-connections 5
-    fi
+if [ "$DEBUG" = true ]; then
+  nh os switch "$FLAKE_DIR" -H "$TARGET_HOST" -- --show-trace --option binary-caches-parallel-connections 4 --option http-connections 5 2>&1 | tee -a "$LOG_FILE"
+else
+  nh os switch "$FLAKE_DIR" -H "$TARGET_HOST" -- --option binary-caches-parallel-connections 4 --option http-connections 5
+fi
 
 echo ""
 echo "===================================================="
