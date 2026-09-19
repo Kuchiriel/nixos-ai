@@ -673,3 +673,49 @@ def test_resolved_recovery_note_allows_verified():
     ]
     v = check_completion(msgs)
     assert not any("nunca executado" in m for m in v.missing)
+
+
+def test_written_sh_never_executed_blocks_verified(tmp_path):
+    """.sh escrito com +x mas nunca executado → nunca VERIFIED
+    (execution-based verification, Code-as-Harness 2605.18747: generaliza
+    STATE(unexecuted_script) p/ todo .sh escrito, sem nota do harness)."""
+    import os
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "e.sh").write_text("#!/bin/sh\necho hi\n")
+    os.chmod(tmp_path / "e.sh", 0o755)
+    msgs = [
+        {"role": "assistant", "tool_calls": [{
+            "id": "c1", "type": "function",
+            "function": {"name": "write_file",
+                         "arguments": '{"path": "e.sh", "content": "echo hi"}'}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "ok: write_file e.sh"},
+        {"role": "assistant", "content": "done: e.sh"},
+    ]
+    with use_project_root(tmp_path):
+        v = check_completion(msgs)
+    assert v.status != "VERIFIED"
+    assert any("nunca executado" in m for m in v.missing)
+
+
+def test_written_sh_executed_allows_verified(tmp_path):
+    """.sh escrito + executado → sem bloqueio de execução."""
+    import os
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "e.sh").write_text("#!/bin/sh\necho hi\n")
+    os.chmod(tmp_path / "e.sh", 0o755)
+    msgs = [
+        {"role": "assistant", "tool_calls": [{
+            "id": "c1", "type": "function",
+            "function": {"name": "write_file",
+                         "arguments": '{"path": "e.sh", "content": "echo hi"}'}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "ok: write_file e.sh"},
+        {"role": "assistant", "tool_calls": [{
+            "id": "c2", "type": "function",
+            "function": {"name": "execute_shell",
+                         "arguments": '{"cmd": "chmod +x e.sh && ./e.sh"}'}}]},
+        {"role": "tool", "tool_call_id": "c2", "content": "hi\n[exit: 0]"},
+        {"role": "assistant", "content": "done"},
+    ]
+    with use_project_root(tmp_path):
+        v = check_completion(msgs)
+    assert not any("nunca executado" in m for m in v.missing)

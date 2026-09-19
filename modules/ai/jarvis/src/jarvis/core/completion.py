@@ -570,6 +570,57 @@ def check_completion(messages: list[dict],
                             break
             except OSError:
                 pass
+            # Execution-based verification (Code-as-Harness 2605.18747):
+            # .sh escrito exige EVIDÊNCIA de execução — chmod sozinho não
+            # prova nada (L8 real: scripts nunca rodaram → VERIFIED vazio).
+            # Generaliza STATE(unexecuted_script) p/ todo .sh escrito no run,
+            # sem depender de nota emitida pelo harness. Mecânico, sem saber
+            # a task: tentativa de execução conta (falha de run cai na regra
+            # trailing-error separadamente).
+            import json as _jl2
+            _base = p.rsplit("/", 1)[-1]
+
+            def _args_of(_tc: dict) -> dict:
+                try:
+                    _fn = _tc.get("function", {}) or {}
+                    _a = _fn.get("arguments", {})
+                    _a = _jl2.loads(_a) if isinstance(_a, str) else _a
+                    return _a if isinstance(_a, dict) else {}
+                except Exception:
+                    return {}
+
+            _widx: int | None = None
+            for _i, _m in enumerate(messages):
+                for _tc in _m.get("tool_calls") or []:
+                    _fn = ((_tc.get("function", {}) or {}).get("name"))
+                    if _fn not in ("write_file", "str_replace"):
+                        continue
+                    if str(_args_of(_tc).get("path", "")).endswith(_base):
+                        _widx = _i
+                        break
+                if _widx is not None:
+                    break
+            _ran = False
+            if _widx is not None:
+                for _m in messages[_widx + 1:]:
+                    for _tc in _m.get("tool_calls") or []:
+                        _fn = ((_tc.get("function", {}) or {}).get("name"))
+                        if _fn not in ("execute_shell", "jarvis_execute"):
+                            continue
+                        _cmd = str(_args_of(_tc).get("cmd", ""))
+                        if (f"./{_base}" in _cmd or re.search(
+                                r"\b(bash|sh)\s+\S*" + re.escape(_base),
+                                _cmd)):
+                            _ran = True
+                            break
+                    if _ran:
+                        break
+            if _widx is not None and not _ran:
+                ok = False
+                miss.append(
+                    f"{p} escrito mas nunca executado — rode `chmod +x {p}` "
+                    f"e execute (`./{_base}` ou `bash {_base}`) antes de "
+                    f"declarar conclusão")
         # JSON de recuperação sem execução real (sqlite real: write dummy sem sqlite3/python)
         if fp.name == "recover.json":
             _has_sql = any(
