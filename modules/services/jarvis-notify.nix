@@ -44,9 +44,6 @@ in {
           "JARVIS_NOTIFY_LAST=/tmp/jarvis-notify-last.json"
         ];
       };
-      Install = {
-        WantedBy = [ "graphical-session.target" ];
-      };
     };
   };
 }

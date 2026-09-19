@@ -34,9 +34,6 @@ in {
           "JARVIS_FOCUS_STATE=/tmp/jarvis-focus-state"
         ];
       };
-      Install = {
-        WantedBy = [ "graphical-session.target" ];
-      };
     };
   };
 }

@@ -70,9 +70,6 @@ in {
           "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus"
         ];
       };
-      Install = {
-        WantedBy = [ "graphical-session.target" ];
-      };
     };
   };
 }
