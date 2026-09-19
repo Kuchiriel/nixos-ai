@@ -227,6 +227,24 @@ class ToolValidator:
                 "output will be empty. To drop empty lines use grep -v "
                 "'^$'; to drop comments use grep -v '^#'")
 
+        # Dado invocado como comando (L8r real: `$1` solto virou comando
+        # `45.32.67.89` → exit 127; plano narrado dentro do artefato).
+        # Binário ausente de verdade mantém o hint atual — só dispara se o
+        # "comando" tem forma de DADO (IP/número). PT+EN (bash PT-BR).
+        _m = re.search(
+            r"linha\s+\d+:\s*(\S+?):\s*(?:comando n[ãa]o encontrado|"
+            r"command not found)|(\S+?):\s*(?:command not found|"
+            r"comando n[ãa]o encontrado)", output, re.IGNORECASE)
+        if _m:
+            _tok = ((_m.group(1) or _m.group(2)) or "").strip("'\"")
+            if re.fullmatch(r"[\d.]+", _tok) and any(
+                    c.isdigit() for c in _tok):
+                warnings.append(
+                    f"'{_tok}' is DATA, not a command — you invoked a value "
+                    "(bare $1/$var as a statement?). Pass values as "
+                    "ARGUMENTS (grep \"$var\" file), never as the command "
+                    "itself")
+
         # Check for empty output on commands that should produce output
         cmd = args.get("cmd", "")
         if not output.strip() and any(cmd.startswith(p) for p in
@@ -488,6 +506,24 @@ class ToolValidator:
                         severity = 'ok'
         else:
             severity = 'ok'
+        # Script que invoca A SI MESMO incondicionalmente (L8r real:
+        # `./response.sh $ip` no fim do response.sh → recursão infinita,
+        # hang que nem timeout de subprocess mata os netos). Linha de
+        # invocação real (não comentário/echo de uso): ./nome ou bash nome
+        # no início da linha. Re-exec intencional exige guarda/condição.
+        # Bloco independente (não rouba o else dos size-checks acima).
+        if str(path or "").endswith(".sh"):
+            _base = str(path).rsplit("/", 1)[-1]
+            _content = str(args.get("content", "") or "")
+            if _content and re.search(
+                    r"(?m)^[ \t]*(?:\./|bash\s+)" + re.escape(_base) +
+                    r"(?:\s|$|;)", _content):
+                warnings.append(
+                    f"write_file: {_base} invokes ITSELF (./{_base}) — "
+                    "unconditional self-call recurses FOREVER (hang). "
+                    "Remove it, or guard the re-exec with a condition/flag."
+                )
+                severity = "error"
 
         return ValidationResult(valid=True, enhanced_output=output,
                                 warnings=warnings, severity=severity)

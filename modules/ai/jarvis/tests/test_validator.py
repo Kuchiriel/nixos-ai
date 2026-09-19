@@ -460,3 +460,59 @@ def test_read_directory_teaches_listing_and_git(tmp_path, monkeypatch) -> None:
         "ERROR: 'pasta' é um diretório, não arquivo")
     assert any("list_directory" in w for w in vr.warnings)
     assert any("reflog" in w for w in vr.warnings)
+
+
+def test_jq_text_hint(validator) -> None:
+    """jq abrindo texto como arquivo → hint dirigido (L8 real)."""
+    vr = validator.validate(
+        "execute_shell", {"cmd": "grep x f | jq -r .a"},
+        "jq: error: Could not open file Failed\n[exit: 2]")
+    assert any("don't pipe grep" in w for w in vr.warnings)
+
+
+def test_grep_v_caret_hint(validator) -> None:
+    """grep -v '^' sozinho → hint; ^$ e ^# NÃO disparam."""
+    vr = validator.validate(
+        "execute_shell", {"cmd": "grep -v '^' f.log"}, "x\n")
+    assert any("matches NOTHING" in w for w in vr.warnings)
+    vr = validator.validate(
+        "execute_shell", {"cmd": "grep -v '^$' f.log"}, "x\n")
+    assert not any("matches NOTHING" in w for w in vr.warnings)
+    vr = validator.validate(
+        "execute_shell", {"cmd": "grep -v '^#' f.log"}, "x\n")
+    assert not any("matches NOTHING" in w for w in vr.warnings)
+
+
+def test_data_as_command_hint_pt(validator) -> None:
+    """`$1` solto virou comando `45.32.67.89` (bash PT) → hint (L8r)."""
+    vr = validator.validate(
+        "execute_shell", {"cmd": "./response.sh 45.32.67.89"},
+        "./response.sh: linha 38: 45.32.67.89: comando não encontrado\n"
+        "[exit: 127]")
+    assert any("is DATA, not a command" in w for w in vr.warnings)
+
+
+def test_real_missing_binary_no_data_hint(validator) -> None:
+    """Binário ausente de verdade (jq) → sem hint de dado."""
+    vr = validator.validate(
+        "execute_shell", {"cmd": "jq . a.json"},
+        "jq: command not found\n[exit: 127]")
+    assert not any("is DATA" in w for w in vr.warnings)
+
+
+def test_self_invoking_script_warns(validator) -> None:
+    """Script que invoca a si mesmo → aviso de recursão (L8r real)."""
+    vr = validator.validate(
+        "write_file", {"path": "r.sh", "content": "#!/bin/bash\n./r.sh $1\n"},
+        "ok")
+    assert any("invokes ITSELF" in w for w in vr.warnings)
+
+
+def test_usage_echo_no_self_invoke_warning(validator) -> None:
+    """Mencionar ./x.sh em echo/usage/comentário NÃO é auto-invocação."""
+    content = ("#!/bin/bash\n# Run with ./r.sh <ip>\n"
+               'echo "usage: ./r.sh <ip>"\n'
+               'grep "$1" f.log\n')
+    vr = validator.validate(
+        "write_file", {"path": "r.sh", "content": content}, "ok")
+    assert not any("invokes ITSELF" in w for w in vr.warnings)
