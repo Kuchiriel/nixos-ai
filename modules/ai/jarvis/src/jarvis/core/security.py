@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import shlex
+import signal
 import subprocess
 from typing import Any
 
@@ -179,7 +180,32 @@ def run_shell(cmd: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
             args=cmd, returncode=127, stdout="",
             stderr=f"ERROR: quoting inválido ({e}) — reescreva o comando "
                    f"com aspas balanceadas ou grave script .py e rode-o.")
-    return subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+    # Sessão própria p/ matar a ÁRVORE no timeout (L8r real: script com
+    # auto-invocação `./response.sh $ip` recursa infinito — matar só o
+    # filho direto órfã os netos que seguem se replicando. killpg fecha).
+    try:
+        proc = subprocess.Popen(argv, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, text=True,
+                                start_new_session=True)
+    except OSError as e:
+        return subprocess.CompletedProcess(
+            args=cmd, returncode=127, stdout="",
+            stderr=f"ERROR: Command failed to start: {e}")
+    try:
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+        out, err = proc.communicate()
+        return subprocess.CompletedProcess(
+            args=cmd, returncode=-1, stdout=out or "",
+            stderr=((err or "")
+                    + f"\nERROR: Command timed out after {timeout}s "
+                    "(process tree killed)"))
+    return subprocess.CompletedProcess(
+        args=cmd, returncode=proc.returncode, stdout=out, stderr=err)
 
 
 def run_shell_dict(cmd: str, timeout: int = 60) -> dict[str, Any]:
