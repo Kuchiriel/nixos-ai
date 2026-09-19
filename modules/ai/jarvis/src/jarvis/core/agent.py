@@ -672,7 +672,7 @@ def _placeholder_script_note(messages: list[dict[str, Any]]) -> str | None:
                 continue
             return (
                 f"STATE(placeholder_script:{_base}). Your script {_base} is a PLACEHOLDER (dummy echos, no real logic — it exits 0 but creates no valid output). "
-                "NEXT: REWRITE it with REAL logic: read rules/detection_rules.json, grep -c each pattern in logs/auth.log+logs/http.log, extract unique IPs with grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+', build alert.json/report.json with timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ) and jq/python3. Zero prose, one tool call."
+                "NEXT: REWRITE it with REAL logic: read rules/detection_rules.json, grep -c each pattern in logs/auth.log+logs/http.log, extract unique IPs with grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+', build alert.json/report.json with python3 + json.dumps (stdlib, always valid) and timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ). Do NOT pipe grep text into jq (jq reads JSON files, not log lines). Zero prose, one tool call."
             )
     except Exception:
         return None
