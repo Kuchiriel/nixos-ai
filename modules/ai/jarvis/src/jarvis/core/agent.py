@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Callable, Any
 
 # Re-export from security.py for backward compatibility
-from jarvis.core.security import command_allowed, has_chaining_operators, run_shell  # noqa: F401
+from jarvis.core.security import command_allowed, has_chaining_operators, run_shell, strip_redundant_chmod_run  # noqa: F401
 
 
 def detect_profile(model_id: str) -> dict[str, Any]:
@@ -69,10 +69,11 @@ def _ctx_derived_max_tokens(ctx: Any) -> int:
     """Orçamento de geração por turno derivado do ctx do models.nix
     (dono 19/09: budget fixo 2048 truncava writes encadeados no L8; cap
     deve escalar com o ctx servido, não ser chutado à mão).
-    Fórmula: ctx//12 (~8% do ctx por turno — sobra p/ prompt + histórico
-    do ring em ~10 turns), piso 1024 (não estrangula), teto 8192 (guarda
-    de latência: ~2min/turn no pior caso a 70 t/s). Sem ctx válido →
-    2048 (status quo ante).
+    Tudo em frações do ctx (test_context_drift proíbe literais de tamanho
+    fora da fonte): turno = ctx//12 (~8% — sobra p/ prompt + histórico do
+    ring em ~10 turns). Proporcional puro: ctx pequeno ganha budget
+    pequeno (coerente — janela menor, menos folga). @49k → 4096.
+    Sem ctx válido → 2048 (status quo ante).
     """
     try:
         ctx = int(ctx)
@@ -80,7 +81,7 @@ def _ctx_derived_max_tokens(ctx: Any) -> int:
         return 2048
     if ctx <= 0:
         return 2048
-    return min(8192, max(1024, ctx // 12))
+    return max(1, ctx // 12)
 
 
 def _registry_tier_profile(model_id: str) -> dict[str, Any] | None:
@@ -1309,10 +1310,22 @@ class Agent:
                     continue
 
                 exit_code: int | None = None
+                _strip_note = ""
                 if _i in _pre:
                     tool_result = _pre[_i]
                 elif name == "execute_shell":
                     cmd = args.get("cmd", "")
+                    # Carve-out do idiom fundido `chmod +x F && ./F [args]`
+                    # (L8: banido pela policy virava STUCK certo; write já
+                    # dá +x então o chmod é redundante). Executa SÓ o run —
+                    # menos comandos, nunca mais. Resto encadeado cai no
+                    # ban normal abaixo.
+                    _stripped = strip_redundant_chmod_run(cmd)
+                    if _stripped is not None:
+                        cmd = _stripped
+                        args = {**args, "cmd": cmd}
+                        _strip_note = ("[harness: redundant `chmod +x` "
+                                       "skipped (.sh already executable)] ")
                     # Chaining negado SEMPRE (não só no allowlist): com
                     # approve=True o denial caía no human_approve e o shlex
                     # executava QUEBRADO (L8 real: `chmod && ./` aplicava
@@ -1579,6 +1592,9 @@ class Agent:
                                         None, tool_result, False)
                 else:
                     tool_result = f"ERROR: Unknown tool: {name}"
+
+                if _strip_note and not tool_result.startswith("ERROR"):
+                    tool_result = _strip_note + tool_result
 
                 # Post-execution validation (FASE 16): structured failure
                 # feedback — padrões de erro, exit codes e hints NixOS que o

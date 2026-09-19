@@ -1108,8 +1108,43 @@ def test_chaining_denied_even_when_approved(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
     agent = Agent(Config(), session=ChainSession(), approve=True)
     result = agent.run("roda x.sh")
+    # Carve-out (dono 19/09): idiom fundido `chmod +x F && ./F` executa o
+    # run-half (write já deu +x) em vez de negar — o ban total virava
+    # STUCK certo no L8. Demais chaining continua negado (teste abaixo).
+    assert any("./x.sh" in c for c in result.commands_run)
+    assert not any("chmod +x x.sh && ./x.sh" in d
+                   for d in result.commands_denied)
+
+
+def test_general_chaining_still_denied(tmp_path, monkeypatch) -> None:
+    """Chaining genérico (`ls && echo`) segue NEGADO mesmo com approve —
+    só o idiom chmod+run tem carve-out."""
+    import json as jsonlib
+
+    seen = []
+
+    class ChainSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            seen.append(json)
+            if len(seen) == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{
+                           "id": "c1",
+                           "type": "function",
+                           "function": {
+                               "name": "execute_shell",
+                               "arguments": jsonlib.dumps(
+                                   {"cmd": "ls /tmp && echo done"}),
+                           }}]}
+            else:
+                msg = {"role": "assistant", "content": "done"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=ChainSession(), approve=True)
+    result = agent.run("lista")
     assert result.commands_run == []
-    assert any("chmod +x x.sh && ./x.sh" in d for d in result.commands_denied)
+    assert any("ls /tmp && echo done" in d for d in result.commands_denied)
     assert "write a .sh via write_file" in jsonlib.dumps(seen)
 
 
@@ -1664,6 +1699,35 @@ def test_silent_exhaustion_is_stuck_not_verified(tmp_path, monkeypatch) -> None:
     assert result.turns == 3
     assert result.verdict == "STUCK"
     assert "sem declaração" in (result.final_response or "")
+
+
+def test_fused_chmod_run_executes_run_half(tmp_path, monkeypatch) -> None:
+    """`chmod +x F && ./F` fundido executa ./F (L8: fixação no idiom
+    morria no ban; write já deu +x)."""
+    import os as _os
+    (tmp_path / "d.sh").write_text("#!/bin/sh\necho ran > ran.txt\n")
+    _os.chmod(tmp_path / "d.sh", 0o755)
+
+    class FusedSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-1", "type": "function",
+                           "function": {"name": "execute_shell",
+                               "arguments": jsonlib.dumps({
+                                   "cmd": "chmod +x d.sh && ./d.sh"})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=FusedSession(), approve=True)
+    result = agent.run("run it")
+    assert (tmp_path / "ran.txt").read_text().strip() == "ran"
+    assert not any("Chaining" in str(m.get("content", "")) for m in
+                   getattr(result, "messages", []))
 
 
 def test_list_directory_offered_and_dispatched(tmp_path, monkeypatch) -> None:
