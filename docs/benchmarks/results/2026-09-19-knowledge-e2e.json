@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-09-19T12:00:00Z",
+  "commit": "pending-harness-evolution-2026-09-19",
+  "model": "bonsai (Ternary-Bonsai-8B-Q2_0, router :8080, ctx 49152)",
+  "embedding": "nomic-embed-text-v2-moe Q8_0 768 :8081 + bge-reranker :8082 + Qdrant :6333",
+  "benchmark_version": "knowledge-system-benchmark-spec 2026-09-18 (15 dims)",
+  "categories_tested": ["A", "B", "D", "I", "sanitize_barrier", "O", "M"],
+  "results": {
+    "A_retrieval_literal_vector_store": {"query": "vector_store.py", "hits": 5, "relevance": true, "ms": 12235, "top": "vector_store.py"},
+    "A_semantic_sanitizer": {"query": "onde está o sanitizer", "hits": 5, "relevance": true, "ms": 11768},
+    "D_self_knowledge_provider_registry": {"query": "onde está provider_registry", "hits": 5, "relevance": true, "ms": 11754},
+    "I_negative_xyz123": {"query": "xyz123 pergunta inventada", "hits": 5, "relevance": true, "ms": 13184, "note": "negative: no strong hit (score <0.05)"},
+    "B_grounding_skipped": {"note": "grounding requires LLM synthesis, not just retrieval — deferred to agent E2E"},
+    "sanitize_barrier": {"status": "ok", "note": "sanitize_document blocks raw->Qdrant, quarantine on secret shape"},
+    "O_invariants": {"tests": "10/10 passed", "file": "test_architecture_invariants.py"},
+    "M_context_drift": {"tests": "pending, provider_registry CANONICAL_CONTEXT 32768"}
+  },
+  "retrieval_latency_note": "12s/hit = embed via LLMClient (router) + rerank + Qdrant hybrid; baseline 134ms is fastpath only, not RAG. RAG target <1500ms not met for bonsai — embedding is bottleneck (nomic via llama-server, not via separate embed service). Investigate embed service :8081 usage.",
+  "next": ["fix embed path to use nomic :8081 directly (skip LLM router)", "add LLM synthesis benchmark for B/C/K", "run full TB tasks via docker for L1-L7 with kvenv pandas"]
+}

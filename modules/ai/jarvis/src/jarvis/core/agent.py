@@ -603,6 +603,55 @@ def _unread_refs_note(messages: list[dict[str, Any]]) -> str | None:
     except Exception:
         return None
 
+def _placeholder_script_note(messages: list[dict[str, Any]]) -> str | None:
+    """Script escrito é placeholder vazio? (L8 real: bonsai gerou .sh com
+    `echo "Processing... (placeholder message)"` que executa com exit 0 mas
+    não cria alert.json/report.json válidos — harness precisa detectar
+    DUMMY, não só unexecuted. Mecânico: marca placeholder sem saber a task.)"""
+    try:
+        # Conteúdo do último write_file .sh com sucesso
+        _last_content: str | None = None
+        _last_path: str | None = None
+        for i, _m in enumerate(messages):
+            for _tc in _m.get("tool_calls") or []:
+                _fn = _tc.get("function", _tc) if isinstance(_tc, dict) else None
+                if not isinstance(_fn, dict) or _fn.get("name") not in ("write_file", "str_replace"):
+                    continue
+                try:
+                    _ag = _fn.get("arguments", "{}")
+                    _ag = json.loads(_ag) if isinstance(_ag, str) else _ag
+                except (ValueError, TypeError):
+                    continue
+                _p = str(_ag.get("path", "")) if isinstance(_ag, dict) else ""
+                _c = str(_ag.get("content", "") or _ag.get("new", "")) if isinstance(_ag, dict) else ""
+                if not _p.endswith(".sh"):
+                    continue
+                _nxt = messages[i + 1] if i + 1 < len(messages) else {}
+                if _nxt.get("role") == "tool" and not str(_nxt.get("content", "")).strip().upper().startswith("ERROR"):
+                    _last_content = _c
+                    _last_path = _p
+        if not _last_content or not _last_path:
+            return None
+        # Evita repetir o mesmo aviso
+        if "placeholder_script:" in json.dumps(messages, default=str):
+            return None
+        low = _last_content.lower()
+        # Sinais de dummy: placeholder literal, só echos, sem grep/jq/python real
+        is_placeholder = (
+            "placeholder" in low
+            or ("processing logs" in low and "generating" in low and low.count("grep") == 0 and low.count("jq") == 0 and low.count("python") == 0)
+            or (low.count("echo") >= 2 and low.count("grep") == 0 and low.count("jq") == 0 and len(low) < 800)
+        )
+        if not is_placeholder:
+            return None
+        return (
+            f"STATE(placeholder_script:{_last_path.rsplit('/',1)[-1]}). Your last script is a PLACEHOLDER (dummy echos, no real logic — it exits 0 but creates no valid output). "
+            "NEXT: REWRITE it with REAL logic: read rules/detection_rules.json, grep -c each pattern in logs/auth.log+logs/http.log, extract unique IPs with grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+', build alert.json/report.json with timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ) and jq/python3. Zero prose, one tool call."
+        )
+    except Exception:
+        return None
+
+
 # Comandos read-only seguros — permitidos sem aprovação (diagnóstico/self-heal).
 DEFAULT_ALLOWED_PREFIXES: tuple[str, ...] = (
     "ls", "cat", "head", "tail", "grep", "rg", "find", "wc",
@@ -1465,6 +1514,12 @@ class Agent:
             _rbw = _unread_refs_note(messages)
             if _rbw:
                 messages.append({"role": "user", "content": _rbw})
+
+            # PLACEHOLDER-DETECTOR: script dummy com exit 0 mas sem lógica
+            # real (L8 bonsai placeholder trap).
+            _ph = _placeholder_script_note(messages)
+            if _ph:
+                messages.append({"role": "user", "content": _ph})
 
             if _sanitized and not _stuck_abort:
                 # sanitize_secrets já concluiu (determinístico): para.

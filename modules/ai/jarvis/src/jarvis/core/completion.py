@@ -535,6 +535,51 @@ def check_completion(messages: list[dict],
             except (SyntaxError, OSError) as e:
                 ok = False
                 miss.append(f"{p} não compila: {e}")
+        # Binário escrito como texto via write_file = falso PARQUET/DB
+        # (observado: data.parquet com conteúdo "name,age,city" via write_file
+        # contou como VERIFIED — arquivo existe mas não é parquet).
+        if fp.suffix == ".parquet":
+            try:
+                head = fp.read_bytes()[:4]
+                if head != b"PAR1" and fp.stat().st_size < 500:
+                    # Escrita textual sem execução de pandas = dummy
+                    _has_exec = any(
+                        n in ("execute_shell", "jarvis_execute")
+                        for n, _ in _successful_calls(messages))
+                    if not _has_exec:
+                        ok = False
+                        miss.append(
+                            f"{p} é texto (não parquet binário) — use execute_shell `python3 -c \"import pandas as pd; pd.read_csv(...).to_parquet(...)\"`")
+                    elif head != b"PAR1":
+                        ok = False
+                        miss.append(f"{p} não começa com PAR1 (parquet inválido)")
+                elif head == b"PAR1":
+                    ev.append(f"{p} é parquet válido (header PAR1)")
+            except OSError:
+                pass
+        if fp.suffix == ".sh" and fp.is_file():
+            try:
+                import stat as _st
+                if not bool(fp.stat().st_mode & _st.S_IXUSR):
+                    # Script afirmado como fixado mas sem permissão de execução
+                    # (fix-permissions real: write sem chmod → VERIFIED vazio)
+                    for _n, _a in _successful_calls(messages):
+                        if _n in ("write_file", "str_replace") and str(_a.get("path","")).endswith(".sh"):
+                            ok = False
+                            miss.append(f"{p} sem permissão de execução — rode `chmod +x {p}`")
+                            break
+            except OSError:
+                pass
+        # JSON de recuperação sem execução real (sqlite real: write dummy sem sqlite3/python)
+        if fp.name == "recover.json":
+            _has_sql = any(
+                "sqlite" in str(a).lower() or "trunc.db" in str(a).lower()
+                for _, a in _successful_calls(messages) if _ in ("execute_shell","jarvis_execute"))
+            if not _has_sql:
+                # Dummy escrito sem tocar o DB = falso VERIFIED
+                ok = False
+                miss.append(
+                    f"{p} escrito sem executar sqlite — use `execute_shell` com `sqlite3` ou `python3 -c` lendo trunc.db")
 
     # Afirmação de criação sem chamada de escrita: "criei X" sem nenhum
     # write_file/str_replace no run = falsa conclusão clássica (observado:

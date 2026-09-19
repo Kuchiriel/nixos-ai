@@ -1,0 +1,14 @@
+{
+  "ts": "2026-09-19T09:39",
+  "harness": "agent.py+completion.py + placeholder-detector + parquet/executable/recover checks (commit pending)",
+  "model": "bonsai local router :8080 max_tokens 2048",
+  "tasks": [
+    {"id": "csv-to-parquet", "prompt": "csv->parquet via pandas", "verdict": "VERIFIED (false)", "world_ok": false, "note": "write_file text not PAR1, no execute_shell — agora bloqueado como UNVERIFIED (parquet texto)"},
+    {"id": "sqlite-db-truncate", "prompt": "recover trunc.db", "verdict": "VERIFIED (false)", "world_ok": false, "score": 0, "note": "dummy JSON sem sqlite execution — agora bloqueado (recover.json sem sqlite)"},
+    {"id": "heterogeneous-dates", "prompt": "avg diff high/low", "verdict": "STUCK", "world_ok": false, "value": "0.0", "note": "numeric guard bloqueou VERIFIED corretamente (0.0 sem cálculo)"},
+    {"id": "fix-permissions", "prompt": "process_data.sh won't run", "verdict": "VERIFIED (false)", "world_ok": false, "mode": "0644", "note": "write sem chmod +x — agora bloqueado (sh sem exec)"},
+    {"id": "intrusion-detection", "prompt": "intrusion_detector.sh + response.sh", "verdict": "STUCK", "world_ok": false, "note": "placeholder detector novo: dummy echos -> STATE(placeholder_script) força rewrite com grep/jq; anteriormente placeholder exit 0 enganava"}
+  ],
+  "summary": "4/5 eram falsos VERIFIED — harness agora detecta 3 classes (parquet binário, sh executável, recover sem sqlite) + placeholder. Baseline real: 0/5 world_ok com bonsai neste lote (heterogeneous e intrusion requerem cálculo/exec real). Próximo: re-run após harness fix + usar docker TB para deps (pandas) ou kvenv.",
+  "next_action": "commit harness evolution, rebuild-host.sh, re-run parity via TB docker + benchmark B/C/K synthesis"
+}
