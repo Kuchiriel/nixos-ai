@@ -1968,6 +1968,35 @@ class Agent:
             return f"ERROR: read failed: {e}"
         if res.get("ok"):
             return f"# {res.get('path', '')} ({res.get('total_lines', 0)} linhas)\n{res.get('content', '')}"
+        if "not found" in str(res.get("error", "")).lower():
+            # Auto-relocate em candidato ÚNICO (L8r real: modelo ignorou o
+            # path exato dado no warning 3x seguidas → STUCK). Doutrina
+            # absorver-imprecisão (precedente: redirect container→base):
+            # rglob do basename no CWD; 1 arquivo → serve direto com nota.
+            # 0 ou 2+ → erro normal (ambíguo não se adivinha).
+            from pathlib import Path as _P
+            _name = _P(str(args.get("path", ""))).name.strip()
+            _hits: list = []
+            if _name:
+                try:
+                    for _p in _P.cwd().rglob(_name):
+                        if _p.is_file():
+                            _hits.append(_p)
+                            if len(_hits) > 1:
+                                break
+                except Exception:
+                    _hits = []
+            if len(_hits) == 1:
+                try:
+                    res2 = _canonical_read(str(_hits[0]), offset=offset,
+                                           limit=limit)
+                except Exception:
+                    res2 = None
+                if res2 and res2.get("ok"):
+                    return (f"# {res2.get('path', '')} "
+                            f"({res2.get('total_lines', 0)} linhas) "
+                            f"[auto-relocated from {args.get('path', '')}]\n"
+                            f"{res2.get('content', '')}")
         return f"ERROR: {res.get('error', 'read failed')}"
 
     @staticmethod

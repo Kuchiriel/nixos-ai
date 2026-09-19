@@ -1606,6 +1606,31 @@ def test_time_budget_aborts_hung_run(tmp_path, monkeypatch) -> None:
     assert "time budget" in (result.final_response or "")
 
 
+def test_read_auto_relocates_unique_candidate(tmp_path, monkeypatch) -> None:
+    """read de basename com 1 candidato no CWD → serve direto com nota
+    (L8r: modelo ignorou path exato do warning 3x)."""
+    from jarvis.core.agent import Agent
+    (tmp_path / "rules").mkdir()
+    (tmp_path / "rules" / "det.json").write_text('{"a": 1}\n')
+    monkeypatch.chdir(tmp_path)
+    out = Agent._exec_read_file({"path": "det.json"})
+    assert "auto-relocated" in out
+    assert '"a": 1' in out
+
+
+def test_read_ambiguous_stays_error(tmp_path, monkeypatch) -> None:
+    """2+ candidatos → erro normal (ambíguo não se adivinha)."""
+    from jarvis.core.agent import Agent
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    (tmp_path / "a" / "same.txt").write_text("1\n")
+    (tmp_path / "b" / "same.txt").write_text("2\n")
+    monkeypatch.chdir(tmp_path)
+    out = Agent._exec_read_file({"path": "same.txt"})
+    assert out.startswith("ERROR")
+    assert "auto-relocated" not in out
+
+
 def test_list_directory_offered_and_dispatched(tmp_path, monkeypatch) -> None:
     """list_directory existe como tool e despacha (L8: disciplina mandava
     LOCATE-first mas a tool nunca existiu — instrução impossível)."""
