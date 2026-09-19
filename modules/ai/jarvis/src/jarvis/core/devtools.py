@@ -651,6 +651,22 @@ def write_file(path: str, content: str, backup: bool = True) -> dict[str, Any]:
         if not res.success:
             return {"ok": False, "error": "; ".join(res.errors) or "validation failed"}
 
+        # .sh nasce EXECUTÁVEL (dono 19/09, L8v10: modelo tentou `chmod &&
+        # ./` 2x — bloqueado pela policy — em vez de 2 calls; fricção de
+        # permission-bit não é skill da task). Mesma doutrina do mkdir
+        # automático: harness absorve atrito de SO. +x ≠ execução (riscos
+        # inalterados: jail + aprovação do conteúdo continuam valendo).
+        # Best-effort: nunca falha a escrita por causa do chmod.
+        _made_exec = False
+        if target.suffix == ".sh":
+            try:
+                import stat as _st
+                if not bool(target.stat().st_mode & _st.S_IXUSR):
+                    target.chmod(0o755)
+                _made_exec = True
+            except OSError:
+                pass
+
         try:
             rel = str(target.relative_to(_project_root()))
         except ValueError:
@@ -661,6 +677,7 @@ def write_file(path: str, content: str, backup: bool = True) -> dict[str, Any]:
             "path": rel,
             "bytes": len(content.encode("utf-8")),
             "backup": res.backup_path if backup else None,
+            "executable": _made_exec,
         }
     except ValueError as e:
         return {"ok": False, "error": str(e)}

@@ -2068,7 +2068,8 @@ class Agent:
         except Exception as e:
             return f"ERROR: write failed: {e}"
         if res.get("ok"):
-            return f"ok: {name} {res.get('path', args.get('path', ''))}"
+            _x = " (executable, no chmod needed)" if res.get("executable") else ""
+            return f"ok: {name} {res.get('path', args.get('path', ''))}{_x}"
         return f"ERROR: {res.get('error', 'write failed')}"
 
     @staticmethod
