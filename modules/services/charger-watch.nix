@@ -41,19 +41,19 @@ in {
           LAST=0
           ac_status() { cat "$AC" 2>/dev/null || echo 1; }
           echo $$ > /tmp/charger-watch.pid
-          LAST=$$(ac_status)
-          echo "charger-watch: monitorando $AC (intervalo $$INTERVALs, pid $$)"
+          LAST=$(ac_status)
+          echo "charger-watch: monitorando $AC (intervalo $INTERVALs, pid $$)"
           while true; do
-            ON=$$(ac_status)
-            if [[ "$$LAST" == "1" && "$$ON" == "0" ]]; then
+            ON=$(ac_status)
+            if [ "$LAST" = "1" ] && [ "$ON" = "0" ]; then
               echo "[$(date +%H:%M:%S)] DESCONECTADO"
-              aplay -q "$$OFF" 2>/dev/null
-            elif [[ "$$LAST" == "0" && "$$ON" == "1" ]]; then
+              aplay -q "$OFF" 2>/dev/null
+            elif [ "$LAST" = "0" ] && [ "$ON" = "1" ]; then
               echo "[$(date +%H:%M:%S)] CONECTADO"
-              aplay -q "$$ON_MSG" 2>/dev/null
+              aplay -q "$ON_MSG" 2>/dev/null
             fi
-            LAST=$$ON
-            sleep "$$INTERVAL"
+            LAST=$ON
+            sleep "$INTERVAL"
           done
         '';
         Restart = "always";
