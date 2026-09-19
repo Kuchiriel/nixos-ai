@@ -27,12 +27,22 @@
     backlight = {
       format = "󰃠 {percent}%";
       tooltip = false;
-      on-click = "sh -c 'pkill hyprsunset || hyprsunset --temperature 4500'";
+      on-click = "${hyprsunsetToggle}/bin/hyprsunset-toggle";
     };
     bluetooth = {
       format = "󰂯 {status}";
       tooltip = false;
       on-click = "foot --app-id floating_shell -e bluetui";
+    };
+
+    "custom/notification" = {
+      exec = "${waybarNotification}/bin/waybar-notification";
+      exec-on-event = true;
+      interval = 5;
+      return-type = "json";
+      format = "{}";
+      tooltip = true;
+      on-click = "${hyprsunsetToggle}/bin/hyprsunset-toggle";
     };
   };
 
@@ -157,7 +167,71 @@
     esac
   '';
 
-  audiobookWaybarScript = pkgs.writeShellScriptBin "jarvis-audiobook-waybar" ''
+  waybarNotification = pkgs.writeShellScriptBin "waybar-notification" ''
+      #!/usr/bin/env bash
+      STATE_DIR="/home/$USER/.local/state/jarvis"
+      NOTIFY_FILE="$STATE_DIR/notify-last.json"
+      TEMP_FILE="/tmp/hyprsunset-current-temp"
+      WARM_TEMP=4500
+      COLD_TEMP=6500
+      DEFAULT_TEMP=6500
+      if [ -f "$TEMP_FILE" ]; then
+          CURRENT_TEMP=$(cat "$TEMP_FILE" 2>/dev/null)
+      else
+          CURRENT_TEMP=$DEFAULT_TEMP
+      fi
+      if [ "$CURRENT_TEMP" -lt 5000 ] 2>/dev/null; then
+          MODE="warm"
+      else
+          MODE="cold"
+      fi
+      if [ -f "$NOTIFY_FILE" ]; then
+          EVENT=$(python3 -c "import json; d=json.load(open('$NOTIFY_FILE')); print(d.get('event','none'))" 2>/dev/null || echo "none")
+          PRIORITY=$(python3 -c "import json; d=json.load(open('$NOTIFY_FILE')); print(d.get('priority','normal'))" 2>/dev/null || echo "normal")
+      else
+          EVENT="none"
+          PRIORITY="normal"
+      fi
+      case "$MODE" in
+          warm) ICON_BASE="🌙" ;;
+          cold) ICON_BASE="🌞" ;;
+      esac
+      case "$PRIORITY" in
+          critical) ICON="$ICON_BASE🔥"; CLASS="critical" ;;
+          urgent) ICON="$ICON_BASE🔪"; CLASS="urgent" ;;
+          normal) ICON="$ICON_BASE"; CLASS="normal" ;;
+          info) ICON="$ICON_BASE👁"; CLASS="info" ;;
+          *) ICON="$ICON_BASE"; CLASS="normal" ;;
+      esac
+      TOOLTIP="Modo: $MODE ($CURRENT_TEMP K)"
+      [ "$EVENT" != "none" ] && TOOLTIP="$TOOLTIP | Ultimo: $EVENT"
+      printf '{"text": "%s", "tooltip": "%s", "class": "%s"}
+' "$ICON" "$TOOLTIP" "$CLASS"
+    '';
+
+    hyprsunsetToggle = pkgs.writeShellScriptBin "hyprsunset-toggle" ''
+      #!/usr/bin/env bash
+      TEMP_FILE="/tmp/hyprsunset-current-temp"
+      WARM_TEMP=4500
+      COLD_TEMP=6500
+      DEFAULT_TEMP=6500
+      if [ -f "$TEMP_FILE" ]; then
+          CURRENT_TEMP=$(cat "$TEMP_FILE" 2>/dev/null)
+      else
+          CURRENT_TEMP=$DEFAULT_TEMP
+      fi
+      if [ "$CURRENT_TEMP" -lt 5000 ] 2>/dev/null; then
+          hyprsunset --temperature $COLD_TEMP 2>/dev/null
+          echo "$COLD_TEMP" > "$TEMP_FILE"
+          notify-send "Modo Dia" "Temperatura: $COLD_TEMP K" 2>/dev/null || true
+      else
+          hyprsunset --temperature $WARM_TEMP 2>/dev/null
+          echo "$WARM_TEMP" > "$TEMP_FILE"
+          notify-send "Modo Noite" "Temperatura: $WARM_TEMP K" 2>/dev/null || true
+      fi
+    '';
+
+    audiobookWaybarScript = pkgs.writeShellScriptBin "jarvis-audiobook-waybar" ''
     status=$(jarvis audiobook status 2>/dev/null)
     if echo "$status" | grep -q "Tocando\|playing"; then
       book=$(echo "$status" | grep -oP 'Livro: \K.*' | head -1)
@@ -186,6 +260,8 @@ in {
       igpuScript
       audiobookMenuScript
       audiobookWaybarScript
+      waybarNotification
+      hyprsunsetToggle
     ];
 
   programs.waybar = {
@@ -309,6 +385,7 @@ in {
 
           modules-right =
             [
+              "custom/notification"
               "custom/jarvis"
               "custom/audiobook"
               "custom/files"

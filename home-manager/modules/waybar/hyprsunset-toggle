@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# hyprsunset-toggle — toggle between warm (night) and cold (day) color temperature
+# Updates state file for waybar notification icon switching
+
+TEMP_FILE="/tmp/hyprsunset-current-temp"
+WARM_TEMP=4500
+COLD_TEMP=6500
+DEFAULT_TEMP=6500
+
+if [ -f "$TEMP_FILE" ]; then
+    CURRENT_TEMP=$(cat "$TEMP_FILE" 2>/dev/null)
+else
+    CURRENT_TEMP=$DEFAULT_TEMP
+fi
+
+if [ "$CURRENT_TEMP" -lt 5000 ] 2>/dev/null; then
+    hyprsunset --temperature $COLD_TEMP 2>/dev/null
+    echo $COLD_TEMP > "$TEMP_FILE"
+    notify-send "Modo Dia" "Temperatura: ${COLD_TEMP}K" 2>/dev/null || true
+else
+    hyprsunset --temperature $WARM_TEMP 2>/dev/null
+    echo $WARM_TEMP > "$TEMP_FILE"
+    notify-send "Modo Noite" "Temperatura: ${WARM_TEMP}K" 2>/dev/null || true
+fi

@@ -5,9 +5,11 @@
 {...}: {
   imports = [
     ./charger-watch.nix
+    ./jarvis-focus.nix
     ./jarvis-gaming.nix
     ./jarvis-heal.nix
     ./jarvis-idle.nix
+    ./jarvis-notify.nix
     ./jarvis-watchdog.nix
     ./jarvis-telegram.nix
     ./jarvis-vault.nix

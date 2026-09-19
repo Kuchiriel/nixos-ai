@@ -32,3 +32,5 @@
 
 ## Auditoria
 - [[KNOWLEDGE_SYSTEM_ARCHITECTURE_AUDIT]] — contratos e dependências do knowledge system (read-only)
+
+- [[agent-memory-mcp-audit]] — audit inicial: memory policy, MCP semantics, tool selection
