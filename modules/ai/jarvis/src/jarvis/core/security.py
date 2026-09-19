@@ -9,6 +9,7 @@ Previously duplicated across: agent.py, devtools.py, mcp_server.py
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import signal
 import subprocess
@@ -160,6 +161,31 @@ def command_allowed(
         if not any(check_cmd.startswith(p) for p in prefixes):
             return False
     return True
+
+
+_CHMOD_RUN_RE = re.compile(
+    r"^\s*chmod\s+\+x\s+(\S+)\s*(?:&&|;)\s*\./(\S+)(.*)$"
+)
+
+
+def strip_redundant_chmod_run(cmd: str) -> str | None:
+    """`chmod +x F && ./F [args]` fundido → só `./F [args]` (L8: idiom
+    fused no treino; banido pela policy virava STUCK certo em 2 runs).
+    write_file já dá +x: o chmod é redundante. Forma ESTRITA (mesma
+    basename, sem outros operadores no resto — senão None e o ban vale):
+    roda MENOS comandos, nunca mais (sem superfície nova). Retorna a
+    parte run ou None.
+    """
+    m = _CHMOD_RUN_RE.match(cmd or "")
+    if not m:
+        return None
+    if os.path.basename(m.group(1)) != os.path.basename(m.group(2)):
+        return None
+    tail = m.group(3) or ""
+    if re.search(r"&&|\|\||[;|`]|\$\(", tail):
+        return None
+    run = ("./" + m.group(2) + tail).strip()
+    return run or None
 
 
 def run_shell(cmd: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
