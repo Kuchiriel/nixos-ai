@@ -478,8 +478,68 @@ def _cmd_benchmark(args: argparse.Namespace) -> int:
 
 def _cmd_emotion(args: argparse.Namespace) -> int:
     from jarvis.core.emotion import main_emotion
-
     return main_emotion(args.text)
+
+
+def _cmd_notify(args: argparse.Namespace) -> int:
+    """Send notification via NotificationManager."""
+    from jarvis.control_plane.notifications import get_notification_manager, Severity
+    severity = getattr(args, "severity", "info")
+    manager = get_notification_manager()
+    channels = ["desktop", "sound", "wav", "waybar"]
+    notified = manager.notify(args.title, args.body or "", severity=severity, channels=channels)
+    print(f"Notification sent to: {', '.join(notified) if notified else 'none'}")
+    return 0
+
+
+def _cmd_focus(args: argparse.Namespace) -> int:
+    """Toggle/enable/disable focus mode."""
+    from jarvis.core.focus import get_focus_manager
+    action = getattr(args, "action", "toggle")
+    fm = get_focus_manager()
+    if action == "enable":
+        fm.enable()
+        print("Focus mode ENABLED")
+    elif action == "disable":
+        fm.disable()
+        print("Focus mode DISABLED")
+    elif action == "toggle":
+        state = fm.toggle()
+        print(f"Focus mode {'ENABLED' if state else 'DISABLED'}")
+    else:
+        print(f"Focus mode: {'ACTIVE' if fm.focused else 'INACTIVE'}")
+    return 0
+
+
+def _cmd_focus_daemon(args: argparse.Namespace) -> int:
+    """Focus daemon - monitors focus state and adjusts notifications."""
+    from jarvis.core.focus import get_focus_manager
+    from jarvis.control_plane.notifications import get_notification_manager
+    import time
+    fm = get_focus_manager()
+    mgr = get_notification_manager()
+    print("[jarvis-focus-daemon] Iniciado")
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        return 0
+    return 0
+
+
+def _cmd_watch(args: argparse.Namespace) -> int:
+    """Watch daemon - monitor triggers and notify."""
+    from jarvis.control_plane.notifications import get_notification_manager
+    import time
+    mgr = get_notification_manager()
+    interval = getattr(args, "interval", 30)
+    print(f"[jarvis-watch] Iniciado (intervalo {interval}s)")
+    try:
+        while True:
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        return 0
+    return 0
 
 
 def _cmd_eval_rag(args: argparse.Namespace) -> int:

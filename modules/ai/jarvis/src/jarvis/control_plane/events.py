@@ -101,6 +101,34 @@ class Events:
     WATCHDOG_ALERT = "watchdog.alert"
     WATCHDOG_CYCLE = "watchdog.cycle"
 
+    # Battery
+    BATTERY_LOW = "battery.low"
+    BATTERY_CRITICAL = "battery.critical"
+
+    # Network
+    NETWORK_DOWN = "network.down"
+    NETWORK_UP = "network.up"
+
+    # Bluetooth
+    BLUETOOTH_DISCONNECT = "bluetooth.disconnect"
+    BLUETOOTH_RECONNECT = "bluetooth.reconnect"
+
+    # Charger
+    CHARGER_CONNECT = "charger.connect"
+    CHARGER_DISCONNECT = "charger.disconnect"
+
+    # Focus
+    FOCUS_ENABLED = "focus.enabled"
+    FOCUS_DISABLED = "focus.disabled"
+    FOCUS_CHANGED = "focus.changed"
+
+    # System
+    SYSTEM_ERROR = "system.error"
+    SYSTEM_RECOVERED = "system.recovered"
+
+    # Service
+    SERVICE_DOWN = "service.down"
+
     # Memory / RAG
     MEMORY_STORED = "memory.stored"
     MEMORY_RECALLED = "memory.recalled"
@@ -199,8 +227,33 @@ DEFAULT_EVENT_ROUTES: dict[str, list[str]] = {
     # Watchdog
     Events.WATCHDOG_ALERT: ["web", "desktop", "telegram"],
 
+    # Battery
+    Events.BATTERY_LOW: ["desktop", "sound", "waybar"],
+    Events.BATTERY_CRITICAL: ["desktop", "sound", "waybar", "telegram", "voice"],
+
+    # Network
+    Events.NETWORK_DOWN: ["desktop", "sound", "waybar"],
+    Events.NETWORK_UP: ["desktop", "waybar"],
+
+    # Bluetooth
+    Events.BLUETOOTH_DISCONNECT: ["desktop", "sound", "waybar"],
+    Events.BLUETOOTH_RECONNECT: ["desktop", "waybar"],
+
+    # Charger
+    Events.CHARGER_CONNECT: ["desktop", "sound", "waybar"],
+    Events.CHARGER_DISCONNECT: ["desktop", "sound", "waybar"],
+
+    # Focus
+    Events.FOCUS_ENABLED: ["waybar"],
+    Events.FOCUS_DISABLED: ["waybar"],
+
     # System
     Events.SYSTEM_ERROR: ["web", "desktop", "sound", "telegram"],
+    Events.SYSTEM_RECOVERED: ["web", "desktop", "waybar"],
+
+    # Service
+    Events.SERVICE_DOWN: ["desktop", "sound", "waybar", "telegram"],
+    Events.SERVICE_FAILED: ["web", "desktop", "sound", "telegram"],
 }
 
 

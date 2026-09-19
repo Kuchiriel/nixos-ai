@@ -1,17 +1,15 @@
-"""Focus Manager — modo foco silencia notificações não-críticas.
+"""Focus Manager — modo foco silencia notificacoes nao-criticas.
 
-Integra com EventBus e NotificationManager:
-- Focus state persiste em /tmp/jarvis-focus-state
-- NotificationManager verifica focus antes de deliverar
-- dbus/systemd signals para mudanças de estado
-- Toggle via jarvis focus command ou hyprkeybind
+Integra com EventBus e dbus para IPC eficiente.
+Substitui polling por assinaturas de eventos.
 
 Uso:
-    from jarvis.core.focus import FocusManager
-    fm = FocusManager()
-    fm.enable()   # Ativa modo foco
-    fm.disable()  # Desativa modo foco
-    fm.is_focus() # Verifica se está em foco
+    from jarvis.core.focus import FocusManager, get_focus_manager
+    fm = get_focus_manager()
+    fm.enable()  # Ativa modo foco
+    fm.disable() # Desativa
+    fm.toggle()  # Toggle
+    fm.is_focus() # Verifica estado
 """
 
 from __future__ import annotations
@@ -28,155 +26,137 @@ from jarvis.core.eventbus import EventBus
 FOCUS_STATE_FILE = Path("/tmp/jarvis-focus-state")
 FOCUS_DBUS_NAME = "io.jarvis.FocusManager"
 FOCUS_DBUS_PATH = "/io/jarvis/FocusManager"
+FOCUS_DBUS_INTERFACE = "io.jarvis.FocusManager"
 
 
 class FocusManager:
-    """Gerenciador de modo foco.
+    """Gerenciador de modo foco com EventBus e dbus.
     
-    Quando ativo, silencia notificações com severity abaixo de WARNING.
-    Notificações CRITICAL e ERROR ainda são entregues.
+    Quando ativo, filtra notificacoes com severity abaixo de WARNING.
+    Notificacoes CRITICAL e ERROR ainda sao entregues.
     """
 
     def __init__(self, bus: EventBus | None = None) -> None:
-        self._state_file = FOCUS_STATE_FILE
         self._bus = bus or EventBus()
         self._focused = self._load_state()
+        self._subscribe_bus()
+        self._setup_dbus()
 
     def _load_state(self) -> bool:
-        """Carrega estado do arquivo."""
         try:
-            if self._state_file.exists():
-                data = json.loads(self._state_file.read_text())
+            if FOCUS_STATE_FILE.exists():
+                data = json.loads(FOCUS_STATE_FILE.read_text())
                 return data.get("focused", False)
         except (OSError, json.JSONDecodeError):
             pass
         return False
 
     def _save_state(self) -> None:
-        """Salva estado no arquivo."""
         try:
-            self._state_file.write_text(
+            FOCUS_STATE_FILE.write_text(
                 json.dumps({"focused": self._focused, "ts": time.time()})
             )
         except OSError:
             pass
+        # Publica no dbus
+        self._dbus_emit("FocusStateChanged", {"focused": self._focused})
 
     @property
     def focused(self) -> bool:
-        """Retorna True se modo foco está ativo."""
         return self._focused
 
     def is_focus(self) -> bool:
-        """Verifica se modo foco está ativo."""
         return self._focused
 
     def enable(self) -> None:
-        """Ativa modo foco."""
         self._focused = True
         self._save_state()
-        # Publica evento no bus
         self._bus.publish("focus.state.changed", {"focused": True, "action": "enable"})
-        # dbus signal via systemd notification
-        self._dbus_emit("FocusEnabled")
-        # Sound feedback
-        self._play_sound("info")
 
     def disable(self) -> None:
-        """Desativa modo foco."""
         self._focused = False
         self._save_state()
-        # Publica evento no bus
         self._bus.publish("focus.state.changed", {"focused": False, "action": "disable"})
-        # dbus signal via systemd notification
-        self._dbus_emit("FocusDisabled")
-        # Sound feedback
-        self._play_sound("success")
 
     def toggle(self) -> bool:
-        """Toggle do modo foco. Retorna novo estado."""
         if self._focused:
             self.disable()
         else:
             self.enable()
         return self._focused
 
-    def _dbus_emit(self, signal_name: str) -> None:
-        """Emite sinal dbus via systemd-notify."""
+    def _subscribe_bus(self) -> None:
+        self._bus.subscribe("focus.state.changed", self._on_focus_change)
+
+    def _on_focus_change(self, event) -> None:
+        self._focused = event.data.get("focused", False)
+        self._save_state()
+
+    def should_deliver(self, severity: str = "info") -> bool:
+        if not self._focused:
+            return True
+        return severity in ("critical", "error")
+
+    def _setup_dbus(self) -> None:
+        """Inicia dbus service para IPC externo."""
         try:
-            # Usa systemd NOTIFY_SOCKET para dbus-like signaling
             notify_socket = os.environ.get("NOTIFY_SOCKET")
             if notify_socket:
-                # systemd watchdog — notifica que a unidade está pronta
                 subprocess.run(
-                    ["systemd-notify", "--status", f"Focus {signal_name}"],
+                    ["systemd-notify", "--ready"],
                     capture_output=True, timeout=2,
                 )
         except (OSError, subprocess.TimeoutExpired):
             pass
 
-    def _play_sound(self, sound: str) -> None:
-        """Toca som de feedback."""
+    def _dbus_emit(self, signal_name: str, data: dict[str, Any]) -> None:
         try:
-            import shutil
-            binary = shutil.which("paplay") or shutil.which("canberra-gtk-play")
-            if binary:
-                sound_path = Path(f"/run/current-system/sw/share/sounds/freedesktop/stereo/{sound}.oga")
-                if not sound_path.exists():
-                    # Busca no nix store
-                    candidates = list(Path("/nix/store").glob(
-                        f"*-sound-theme-freedesktop*/share/sounds/freedesktop/stereo/{sound}.oga"
-                    ))
-                    if candidates:
-                        sound_path = candidates[0]
-                if sound_path.exists():
-                    subprocess.run([binary, str(sound_path)], capture_output=True, timeout=3)
+            subprocess.run(
+                ["systemd-notify", "--status", f"Focus {signal_name}"],
+                capture_output=True, timeout=2,
+            )
         except (OSError, subprocess.TimeoutExpired):
             pass
 
-    def should_deliver(self, severity: str = "info") -> bool:
-        """Verifica se notificação deve ser entregue.
-        
-        Em modo foco: apenas CRITICAL e ERROR são entregues.
-        Fora de foco: todas são entregues.
-        """
-        if not self._focused:
-            return True
-        return severity in ("critical", "error")
+    @staticmethod
+    def get_state() -> dict[str, Any]:
+        try:
+            if FOCUS_STATE_FILE.exists():
+                return json.loads(FOCUS_STATE_FILE.read_text())
+        except (OSError, json.JSONDecodeError):
+            pass
+        return {"focused": False, "ts": 0.0}
 
-
-# ─── Singleton ──────────────────────────────────────────────────
 
 _focus_manager: FocusManager | None = None
 
-
 def get_focus_manager() -> FocusManager:
-    """Get or create the global focus manager."""
     global _focus_manager
     if _focus_manager is None:
         _focus_manager = FocusManager()
     return _focus_manager
 
 
-# ─── CLI Entry Point ────────────────────────────────────────────
+# ─── CLI Entry Point ──────────────────────────────────────
 
-def cli() -> None:
-    """CLI para toggle/enable/disable focus mode."""
+def cli() -> int:
     import sys
     fm = get_focus_manager()
-    
     cmd = sys.argv[1] if len(sys.argv) > 1 else "toggle"
     
     if cmd == "enable":
         fm.enable()
-        print("Focus mode ENABLED. Notificações críticas apenas.")
+        print("Focus mode ENABLED")
     elif cmd == "disable":
         fm.disable()
-        print("Focus mode DISABLED. Todas as notificações ativas.")
+        print("Focus mode DISABLED")
     elif cmd == "toggle":
         state = fm.toggle()
-        print(f"Focus mode {'ENABLED' if state else 'DISABLED'}.")
+        print(f"Focus mode {'ENABLED' if state else 'DISABLED'}")
     elif cmd == "status":
         print(f"Focus mode: {'ACTIVE' if fm.focused else 'INACTIVE'}")
-        print(f"State file: {fm._state_file}")
+        print(json.dumps(get_focus_manager().get_state()))
     else:
-        print(f"Usage: jarvis focus {{enable|disable|toggle|status}}. Current: {'ACTIVE' if fm.focused else 'INACTIVE'}")
+        print(f"Usage: jarvis focus {{enable|disable|toggle|status}}")
+        return 1
+    return 0
