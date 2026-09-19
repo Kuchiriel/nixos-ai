@@ -1,9 +1,23 @@
 #!/usr/bin/env bash
 # Rebuild do sistema NixOS a partir do flake local.
 # Valida avaliação ANTES de executar o switch.
-# Uso: ./rebuild-host.sh [--host-only]
+# Uso: ./rebuild-host.sh [--host-only] [--debug]
 #   --host-only: valida host+HM sem flake-check total (lab quebrado não trava o host).
+#   --debug:    executa tudo com output redirecionado para log e exibe o log ao final.
 set -e
+
+DEBUG=false
+for arg in "$@"; do
+    case "$arg" in
+        --debug) DEBUG=true ;;
+    esac
+done
+
+if [ "$DEBUG" = true ]; then
+    LOG_FILE="/tmp/rebuild-$(date +%Y%m%d-%H%M%S).log"
+    exec > >(tee "$LOG_FILE") 2>&1
+    echo "🔍 Modo DEBUG ativo. Log: $LOG_FILE"
+fi
 
 FLAKE_DIR="$HOME/projects/nixos-ai"
 TARGET_HOST="nitro-v15"
@@ -50,7 +64,11 @@ echo "===================================================="
 echo "EXECUTANDO REBUILD"
 echo "===================================================="
 
-nh os switch "$FLAKE_DIR" -H "$TARGET_HOST" -- --option binary-caches-parallel-connections 4 --option http-connections 5
+    if [ "$DEBUG" = true ]; then
+      nh os switch "$FLAKE_DIR" -H "$TARGET_HOST" -- --show-trace --option binary-caches-parallel-connections 4 --option http-connections 5 2>&1 | tee -a "$LOG_FILE"
+    else
+      nh os switch "$FLAKE_DIR" -H "$TARGET_HOST" -- --option binary-caches-parallel-connections 4 --option http-connections 5
+    fi
 
 echo ""
 echo "===================================================="

@@ -42,7 +42,6 @@
       return-type = "json";
       format = "{}";
       tooltip = true;
-      on-click = "${hyprsunsetToggle}/bin/hyprsunset-toggle";
     };
   };
 
@@ -169,8 +168,7 @@
 
   waybarNotification = pkgs.writeShellScriptBin "waybar-notification" ''
       #!/usr/bin/env bash
-      STATE_DIR="/home/$USER/.local/state/jarvis"
-      NOTIFY_FILE="$STATE_DIR/notify-last.json"
+      NOTIFY_FILE="/tmp/jarvis-notify-last.json"
       TEMP_FILE="/tmp/hyprsunset-current-temp"
       WARM_TEMP=4500
       COLD_TEMP=6500
@@ -194,7 +192,7 @@
       fi
       case "$MODE" in
           warm) ICON_BASE="🌙" ;;
-          cold) ICON_BASE="🌞" ;;
+           cold) ICON_BASE="☀️" ;;
       esac
       case "$PRIORITY" in
           critical) ICON="$ICON_BASE🔥"; CLASS="critical" ;;
@@ -215,6 +213,8 @@
       WARM_TEMP=4500
       COLD_TEMP=6500
       DEFAULT_TEMP=6500
+      pkill -f "hyprsunset" 2>/dev/null || true
+      sleep 0.2
       if [ -f "$TEMP_FILE" ]; then
           CURRENT_TEMP=$(cat "$TEMP_FILE" 2>/dev/null)
       else

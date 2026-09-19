@@ -6,6 +6,8 @@ TEMP_FILE="/tmp/hyprsunset-current-temp"
 WARM_TEMP=4500
 COLD_TEMP=6500
 DEFAULT_TEMP=6500
+pkill -f "hyprsunset" 2>/dev/null || true
+sleep 0.2
 
 if [ -f "$TEMP_FILE" ]; then
     CURRENT_TEMP=$(cat "$TEMP_FILE" 2>/dev/null)
