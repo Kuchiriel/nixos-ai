@@ -217,6 +217,16 @@ class ToolValidator:
                 "with grep/awk into shell vars, then build JSON with "
                 "`jq -n --arg ...` or python3 json.dumps")
 
+        # grep -v "^" casa com NADA (toda linha tem início) → saída sempre
+        # vazia (L8r real: incident vazio, activity zerada). `^$` (não-vazias)
+        # e `^#` (não-comentários) são válidos e NÃO disparam (lookahead).
+        if re.search(r"grep\b[^\n|;]*-v\s*['\"]?\^['\"]?(?![\$#\w])",
+                       args.get("cmd", "")):
+            warnings.append(
+                "grep -v '^' matches NOTHING (every line has a start) — "
+                "output will be empty. To drop empty lines use grep -v "
+                "'^$'; to drop comments use grep -v '^#'")
+
         # Check for empty output on commands that should produce output
         cmd = args.get("cmd", "")
         if not output.strip() and any(cmd.startswith(p) for p in
