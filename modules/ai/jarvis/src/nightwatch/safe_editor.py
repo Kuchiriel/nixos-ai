@@ -174,6 +174,32 @@ def validate_json(content: str) -> tuple[bool, list[str], list[str]]:
     return True, errors, []
 
 
+def validate_bash(content: str) -> tuple[bool, list[str], list[str]]:
+    """Validate shell content with `bash -n` (parse, never execute).
+
+    Fecha a assimetria write-time: .py tinha AST gate, .nix parse, .json
+    loads — .sh passava sem nada e a sintaxe quebrada só aparecia no run,
+    3 turns depois (L8v11: `case` malformado, linha 18). Erro do bash -n
+    já traz a linha: o modelo corrige no ato em vez de fiddlar às cegas.
+    """
+    errors = []
+    warnings = []
+
+    try:
+        proc = subprocess.run(
+            ["bash", "-n"],
+            input=content, capture_output=True, text=True, timeout=10,
+        )
+        if proc.returncode != 0:
+            return False, [f"Bash syntax error: {proc.stderr.strip()[:300]}"], []
+    except FileNotFoundError:
+        warnings.append("bash not available for syntax check")
+    except subprocess.TimeoutExpired:
+        warnings.append("Bash validation timed out")
+
+    return True, errors, warnings
+
+
 def check_import_integrity(original: str, new: str) -> tuple[bool, list[str]]:
     """Check that imports haven't been removed. Returns (ok, warnings)."""
     warnings = []
@@ -323,6 +349,13 @@ class SafeEditor:
         
         elif lang == "json":
             valid, errors, warnings = validate_json(content)
+            all_errors.extend(errors)
+            all_warnings.extend(warnings)
+            if not valid:
+                return False, all_errors, all_warnings
+
+        elif lang == "bash":
+            valid, errors, warnings = validate_bash(content)
             all_errors.extend(errors)
             all_warnings.extend(warnings)
             if not valid:

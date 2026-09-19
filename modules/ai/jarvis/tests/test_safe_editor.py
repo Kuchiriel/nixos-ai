@@ -21,12 +21,39 @@ from nightwatch.safe_editor import (
     SafeEditor,
     EditResult,
     strip_markdown_fences,
+    validate_bash,
     validate_python,
     check_import_integrity,
     check_structural_integrity,
     detect_language,
     compute_checksum,
 )
+
+
+def test_validate_bash_rejects_syntax_error(tmp_editor):
+    """Script com erro de sintaxe é barrado no ato com a linha (L8v11:
+    `case` malformado só aparecia no run, 3 turns depois)."""
+    ok, errors, _ = validate_bash("#!/bin/bash\nif [ x ]; then\necho hi\n")
+    assert not ok
+    assert any("line" in e.lower() for e in errors)
+
+
+def test_validate_bash_accepts_valid(tmp_editor):
+    """Script válido passa (sem falso-positivo em construção normal)."""
+    content = ("#!/bin/bash\nset -e\nfor f in logs/*.log; do\n"
+               '  grep -c "Failed password" "$f"\ndone\n')
+    ok, errors, _ = validate_bash(content)
+    assert ok, errors
+
+
+def test_apply_edit_blocks_broken_sh(tmp_path):
+    """.sh com sintaxe quebrada não chega ao disco (gate write-time)."""
+    path = tmp_path / "broken.sh"
+    res = SafeEditor().apply_edit(path, "#!/bin/bash\ncase x in\na)\n")
+    assert not res.success
+    assert not path.exists()
+    assert any("bash" in e.lower() or "syntax" in e.lower()
+               for e in res.errors)
 
 
 # --- Fixtures ---
