@@ -311,8 +311,8 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_rag_index",
-        "description": "Index a directory into the RAG system. Use to make code searchable.",
+            "name": "jarvis_rag_index",
+            "description": "Index a directory into the RAG system (code + auto-sweep of new Books papers/notes). Use to make code searchable.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -968,18 +968,30 @@ def _handle_rag_search(args: dict[str, Any]) -> str:
 
 
 def _handle_rag_index(args: dict[str, Any]) -> str:
-    """Index a directory into the RAG system."""
+    """Index a directory into the RAG system (code + auto-sweep Books)."""
     path = args.get("path", ".")
     try:
         from jarvis.core.rag import HybridIndexer
         hi = HybridIndexer()
         count = hi.index_directory(path)
-        return f"Indexed {count} files from {path}"
+        out = f"Indexed {count} files from {path}"
     except Exception as e:
         error_msg = str(e)
         if "batch size" in error_msg:
             return "ERROR: Embedding server batch size too small (512 tokens). Increase --batch-size in llama-server config."
         return f"ERROR: rag_index failed: {e}"
+    # Acoplamento Books (dono 19/09): UMA chamada cobre código+livros —
+    # varredura idempotente de PDFs/notas novos, sem script manual.
+    try:
+        from jarvis.core.audiobook import sweep_books
+        sw = sweep_books()
+        if sw.get("new"):
+            out += f"; books: {', '.join(sw['new'])}"
+        if sw.get("pending"):
+            out += f"; books pending: {sw['pending']} (re-run index)"
+    except Exception as e:
+        out += f"; books sweep skipped: {e}"
+    return out
 
 
 # ═══ Stdio Server ═══

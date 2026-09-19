@@ -1039,6 +1039,84 @@ def search_books(query: str, book: str | None = None,
     return hits
 
 
+BOOKS_INGEST_LOG = Path(BOOKS_DIR_DEFAULT) / "session-2026-09-18" / "logs" / "books-batch.jsonl"
+
+
+def sweep_books(limit: int = 3) -> dict[str, Any]:
+    """Varredura idempotente de Books: ingere PDFs novos em ~/Books e notas
+    .md novas em ~/Books/harness ainda não registradas no log do ingest.
+
+    Acoplamento (dono 19/09): indexação NÃO pode depender de lembrar de
+    chamar scripts/ingest_books.py — o rag_index (mcp_server) chama isto a
+    cada indexação, então UMA chamada cobre código+livros. Idempotente:
+    pula o que já está ok no log; index_book usa stable_id por sha (re-run
+    sobrescreve). LotM/epub fora (decisão do dono P3); só .pdf + digests.
+    """
+    import hashlib as _hl
+    import json as _jl
+    books = Path(BOOKS_DIR_DEFAULT)
+    harness = books / "harness"
+    done: set[tuple[str, str]] = set()
+    attempted_sha: set[str] = set()
+    try:
+        if BOOKS_INGEST_LOG.exists():
+            for line in BOOKS_INGEST_LOG.read_text().splitlines():
+                try:
+                    r = _jl.loads(line)
+                    if r.get("ok"):
+                        done.add((str(r.get("name")), str(r.get("cat"))))
+                    if r.get("source_sha"):
+                        attempted_sha.add(str(r.get("source_sha")))
+                except Exception:
+                    pass
+    except OSError:
+        pass
+    candidates: list[tuple[str, str, str, Path]] = []
+    try:
+        if books.is_dir():
+            for f in sorted(books.glob("*.pdf")):
+                if f.is_file() and "lotm" not in f.stem.lower():
+                    candidates.append((f.stem, str(books), "paper", f))
+        if harness.is_dir():
+            for f in sorted(harness.glob("*.md")):
+                if f.is_file():
+                    candidates.append((f.stem, str(harness), "harness_digest",
+                                       f))
+    except OSError:
+        return {"ok": True, "new": [], "pending": 0}
+    # Idempotência por CONTEÚDO (sha), não só por nome: quarentena/falha com
+    # o mesmo sha nunca é retentada (observado: 2 PDFs scanned reprocessados
+    # a cada sweep); conteúdo novo/alterado (sha novo) tenta de novo.
+    fresh: list[tuple[str, str, str, str]] = []
+    for name, root, cat, f in candidates:
+        if (name, cat) in done:
+            continue
+        try:
+            sha = _hl.sha256(f.read_bytes()).hexdigest()
+        except OSError:
+            continue
+        if sha in attempted_sha:
+            continue
+        fresh.append((name, root, cat, sha))
+    ingested: list[str] = []
+    for name, root, cat, sha in fresh[:limit]:
+        try:
+            r = index_book(name, root)
+        except Exception as e:
+            r = {"ok": False, "error": str(e)[:200]}
+        rec = {"name": name, "cat": cat, "source_sha": sha, **r}
+        try:
+            BOOKS_INGEST_LOG.parent.mkdir(parents=True, exist_ok=True)
+            with BOOKS_INGEST_LOG.open("a") as fh:
+                fh.write(_jl.dumps(rec, ensure_ascii=False) + "\n")
+        except OSError:
+            pass
+        if r.get("ok"):
+            ingested.append(f"{name} (+{r.get('chunks', 0)})")
+    return {"ok": True, "new": ingested,
+            "pending": max(0, len(fresh) - limit)}
+
+
 def resume_book(book_name: str | None = None, hint: str = "",
                 books_dir: str | Path | None = None) -> dict[str, Any]:
     """Onde continuar: bookmark + recência + busca semântica do hint.
