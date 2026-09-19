@@ -4,6 +4,7 @@
 
 {...}: {
   imports = [
+    ./charger-watch.nix
     ./jarvis-gaming.nix
     ./jarvis-heal.nix
     ./jarvis-idle.nix

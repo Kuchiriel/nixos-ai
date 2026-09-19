@@ -16,6 +16,10 @@
       ../../modules/services/default.nix
     ];
 
+  services.charger-watch.enable = true;
+  services.charger-watch.interval = 3;
+  services.charger-watch.user = user;
+
   programs.steam = {
     enable = true;
     # Steam client UI DEVE rodar na iGPU (Intel) para evitar segfault

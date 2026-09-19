@@ -18,6 +18,7 @@
         {
           timeout = 300;
           on-timeout = "loginctl lock-session";
+          on-resume = "systemctl restart bluetooth.service 2>/dev/null || true";
         }
         {
           timeout = 600;

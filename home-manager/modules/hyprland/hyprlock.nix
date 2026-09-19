@@ -10,6 +10,7 @@ in {
     settings = {
       general = {
         hide_cursor = true;
+        ignore_empty_input = true;
       };
 
       label = {
