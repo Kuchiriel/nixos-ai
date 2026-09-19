@@ -1379,7 +1379,60 @@ class Agent:
                     # Escrita: jail de projeto + aprovação explícita.
                     # Sem approve: negação honesta (o modelo pede ao usuário
                     # em vez de improvisar redirect via shell).
-                    if self.approve and human_approve(
+                    # Prefix-gating AgentLTL-style (dono 19/09, L8 real 4x):
+                    # .json INVÁLIDO com NADA computado no run (zero
+                    # execute_shell, zero .sh/.py escritos) = fabricação de
+                    # output sem produtores. Bloqueio MECÂNICO pré-execução
+                    # (prompt, erro dirigido e validator foram ignorados):
+                    # autorar o script que computa, RODAR, depois escrever
+                    # a saída. .json válido (ex.: config) passa intacto.
+                    _gate_block = False
+                    if name == "write_file" and str(
+                            args.get("path", "")).endswith(".json"):
+                        try:
+                            json.loads(str(args.get("content", "")))
+                        except Exception:
+                            _has_exec = _has_prod = False
+                            for _m in messages:
+                                for _tc in _m.get("tool_calls") or []:
+                                    _f = _tc.get("function", _tc)
+                                    if not isinstance(_f, dict):
+                                        continue
+                                    _fn = _f.get("name")
+                                    if _fn in ("execute_shell",
+                                               "jarvis_execute"):
+                                        _has_exec = True
+                                    elif _fn in ("write_file",
+                                                 "str_replace"):
+                                        try:
+                                            _ga = _f.get("arguments", {})
+                                            _ga = (json.loads(_ga)
+                                                   if isinstance(_ga, str)
+                                                   else _ga)
+                                        except Exception:
+                                            _ga = {}
+                                        if str((_ga or {}).get(
+                                                "path", "")).endswith(
+                                                    (".sh", ".py")):
+                                            _has_prod = True
+                                    if _has_exec and _has_prod:
+                                        break
+                                if _has_exec and _has_prod:
+                                    break
+                            _gate_block = not _has_exec and not _has_prod
+                    if _gate_block:
+                        result.commands_denied.append(
+                            f"{name} {args.get('path', '')}")
+                        tool_result = (
+                            "ERROR: BLOCKED — invalid JSON with nothing "
+                            "computed this run (no execute_shell, no "
+                            ".sh/.py written). Do NOT hand-write JSON "
+                            "outputs. Author the script that computes this "
+                            "(.py reading the real inputs + json.dumps, or "
+                            ".sh), RUN it, then write its output.")
+                        self._log_audit(f"{name} {args.get('path', '')}",
+                                        None, tool_result, False)
+                    elif self.approve and human_approve(
                             f"{name} {args.get('path', '')}"):
                         tool_result = self._exec_write(name, args)
                         result.commands_run.append(f"{name} {args.get('path', '')}")

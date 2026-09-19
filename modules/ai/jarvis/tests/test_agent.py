@@ -1532,3 +1532,49 @@ class TestApiCascadeGate:
         assert out == "resposta da api"
         assert a._api_fallback_used is True
         assert a._stuck_or_cascade.__name__ == "_stuck_or_cascade"
+
+
+def test_prefix_gate_blocks_json_without_producers(tmp_path, monkeypatch) -> None:
+    """.json INVÁLIDO sem nada computado no run → BLOCKED mecânico,
+    arquivo NÃO criado (L8 real 4x: AgentLTL block-and-warn)."""
+    class GateSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-1", "type": "function",
+                           "function": {"name": "write_file",
+                               "arguments": jsonlib.dumps({
+                                   "path": str(tmp_path / "o.json"),
+                                   "content": "[{'id': 'X'}]"})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=GateSession(), approve=True)
+    result = agent.run("write output")
+    assert not (tmp_path / "o.json").exists()
+    assert any("o.json" in c for c in result.commands_denied)
+
+
+def test_prefix_gate_allows_valid_json(tmp_path, monkeypatch) -> None:
+    """.json VÁLIDO passa pelo gate intacto (ex.: config escrita à mão)."""
+    class ValidSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-1", "type": "function",
+                           "function": {"name": "write_file",
+                               "arguments": jsonlib.dumps({
+                                   "path": str(tmp_path / "cfg.json"),
+                                   "content": '{"a": 1}'})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=ValidSession(), approve=True)
+    agent.run("write config")
+    assert (tmp_path / "cfg.json").exists()
