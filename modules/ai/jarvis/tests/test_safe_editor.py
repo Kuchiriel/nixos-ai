@@ -55,6 +55,29 @@ def test_validate_bash_accepts_valid(tmp_editor):
     assert ok, errors
 
 
+def test_echo_single_quoted_json_blocked(tmp_path):
+    """.sh com echo de JSON em aspas simples → barrado (L8: 100% saía
+    inválido). Direciona p/ python3."""
+    path = tmp_path / "bad.sh"
+    res = SafeEditor().apply_edit(
+        path, "#!/bin/bash\necho \"{'id': 'x'}\" > a.json\n")
+    assert not res.success
+    assert any("python3" in e for e in res.errors)
+
+
+def test_echo_valid_json_and_awk_pass(tmp_path):
+    """JSON válido em aspas duplas e awk idiomático NÃO disparam."""
+    for content in (
+            '#!/bin/bash\necho \'{"id": "x"}\' > a.json\n',
+            '#!/bin/bash\necho "$(awk \'{print $1}\' f)"\n',
+            '#!/bin/bash\necho hello\n'):
+        path = tmp_path / "ok.sh"
+        if path.exists():
+            path.unlink()
+        res = SafeEditor().apply_edit(path, content)
+        assert res.success, (content, res.errors)
+
+
 def test_apply_edit_blocks_broken_sh(tmp_path):
     """.sh com sintaxe quebrada não chega ao disco (gate write-time)."""
     path = tmp_path / "broken.sh"

@@ -383,6 +383,25 @@ class SafeEditor:
             all_warnings.extend(warnings)
             if not valid:
                 return False, all_errors, all_warnings
+            # JSON com aspas simples via echo NUNCA é JSON válido (JSON
+            # exige aspas duplas) — e o modelo repete o padrão (L8: 100%
+            # dos echo-JSON saíram inválidos). Sinais: "'{" / "}'" (aspa
+            # simples colada em chave). JSON válido ("{\"") e awk ('{...}')
+            # nunca casam (exigem " do outro lado). Direciona p/ python3.
+            for _ln, _line in enumerate(content.split("\n"), 1):
+                if "echo" not in _line:
+                    continue
+                # Aspa simples colada em chave ("'{" / "}'"): JSON com
+                # aspas simples nunca é válido; JSON válido ("{\"") e
+                # awk ('{...}') nunca têm esse vizinhança. Substrings
+                # literais — sem regex (quoting é traiçoeiro até aqui).
+                if ("\"'{" in _line) or ("'}\"" in _line):
+                    all_errors.append(
+                        f"Line {_ln}: single-quoted JSON via echo is never "
+                        f"valid JSON (found `{_line.strip()[:100]}`). Build "
+                        f"JSON with python3 + json.dumps (stdlib, always "
+                        f"valid), or use double quotes throughout.")
+                    return False, all_errors, all_warnings
         
         # Size checks against original. Emptying a file is always
         # rejected; tiny files are exempt from the ratio (a 1-line fix
