@@ -38,6 +38,15 @@ def test_validate_bash_rejects_syntax_error(tmp_editor):
     assert any("line" in e.lower() for e in errors)
 
 
+def test_validate_bash_shows_offending_line(tmp_editor):
+    """Erro traz a LINHA culpada, não só o número (L8v13: modelo não
+    conta linhas até o erro — entregar a linha remove o passo)."""
+    ok, errors, _ = validate_bash('#!/bin/bash\necho "aberto\necho fim\n')
+    assert not ok
+    assert any("Offending line" in e and 'echo "aberto' in e
+               for e in errors)
+
+
 def test_validate_bash_accepts_valid(tmp_editor):
     """Script válido passa (sem falso-positivo em construção normal)."""
     content = ("#!/bin/bash\nset -e\nfor f in logs/*.log; do\n"

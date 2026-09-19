@@ -1618,6 +1618,18 @@ def test_read_auto_relocates_unique_candidate(tmp_path, monkeypatch) -> None:
     assert '"a": 1' in out
 
 
+def test_read_empty_decoy_stays_error(tmp_path, monkeypatch) -> None:
+    """Decoy vazio com mesmo basename NÃO é servido (L8v12: relocate
+    confirmou alucinação servindo artefato vazio do script quebrado)."""
+    from jarvis.core.agent import Agent
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "auth.json").write_text("")
+    monkeypatch.chdir(tmp_path)
+    out = Agent._exec_read_file({"path": "logs/auth.json"})
+    assert out.startswith("ERROR")
+    assert "auto-relocated" not in out
+
+
 def test_read_ambiguous_stays_error(tmp_path, monkeypatch) -> None:
     """2+ candidatos → erro normal (ambíguo não se adivinha)."""
     from jarvis.core.agent import Agent

@@ -191,7 +191,30 @@ def validate_bash(content: str) -> tuple[bool, list[str], list[str]]:
             input=content, capture_output=True, text=True, timeout=10,
         )
         if proc.returncode != 0:
-            return False, [f"Bash syntax error: {proc.stderr.strip()[:300]}"], []
+            _msg = proc.stderr.strip()[:300]
+            # Mostra A LINHA culpada, não só o número (L8v13: modelo recebeu
+            # "line 50" e repetiu idêntico 3x — contar linhas até o erro é
+            # um passo que ele não executa; entregar a linha remove o passo).
+            try:
+                import re as _re
+                _m = _re.search(r"line\s+(\d+)", _msg)
+                if _m:
+                    _ln = int(_m.group(1))
+                    _lines = content.split("\n")
+                    _txt = _lines[_ln - 1][:200] if 1 <= _ln <= len(
+                        _lines) else ""
+                    if not _txt.strip():
+                        # EOF error: a linha apontada está vazia — o culpado
+                        # real (quote/bloco não fechado) está acima: mostra
+                        # a última linha com conteúdo.
+                        _nonempty = [ln[:200] for ln in _lines if ln.strip()]
+                        if _nonempty:
+                            _txt = _nonempty[-1] + "  [last non-empty line; unclosed quote/block is at or before it]"
+                    if _txt:
+                        _msg += f"\nOffending line {_ln}: {_txt}"
+            except Exception:
+                pass
+            return False, [f"Bash syntax error: {_msg}"], []
     except FileNotFoundError:
         warnings.append("bash not available for syntax check")
     except subprocess.TimeoutExpired:

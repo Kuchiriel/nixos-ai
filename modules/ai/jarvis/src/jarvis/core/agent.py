@@ -2018,6 +2018,15 @@ class Agent:
                     _hits = []
             if len(_hits) == 1:
                 try:
+                    # Decoys vazios NÃO servem (L8v12: script quebrado criou
+                    # auth.json vazio e o relocate o serviu, confirmando a
+                    # alucinação). Dado real nunca tem 0 bytes.
+                    if _hits[0].stat().st_size == 0:
+                        _hits = []
+                except OSError:
+                    _hits = []
+            if len(_hits) == 1:
+                try:
                     res2 = _canonical_read(str(_hits[0]), offset=offset,
                                            limit=limit)
                 except Exception:
