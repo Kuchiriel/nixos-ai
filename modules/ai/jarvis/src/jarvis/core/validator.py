@@ -204,6 +204,19 @@ class ToolValidator:
         if exit_code is not None and exit_code != 0:
             warnings.append(f"Command exited with code {exit_code}")
 
+        # jq recebeu TEXTO onde esperava arquivos/JSON (L8 real: `grep ... |
+        # jq -r '.matches[]'` — grep solta linhas de log e jq tenta abrir
+        # cada palavra como arquivo). Conhecimento de tool (precedente L2
+        # awk): texto se parseia com grep/awk; JSON se constrói com
+        # jq -n/--arg ou python3 json.dumps. Só dispara na assinatura.
+        if re.search(r"jq:\s*error:\s*could not open file", output,
+                     re.IGNORECASE):
+            warnings.append(
+                "jq got TEXT where it expected files: don't pipe grep "
+                "output into jq (log lines are not JSON files). Parse text "
+                "with grep/awk into shell vars, then build JSON with "
+                "`jq -n --arg ...` or python3 json.dumps")
+
         # Check for empty output on commands that should produce output
         cmd = args.get("cmd", "")
         if not output.strip() and any(cmd.startswith(p) for p in

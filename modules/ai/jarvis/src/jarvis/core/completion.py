@@ -566,7 +566,7 @@ def check_completion(messages: list[dict],
                     for _n, _a in _successful_calls(messages):
                         if _n in ("write_file", "str_replace") and str(_a.get("path","")).endswith(".sh"):
                             ok = False
-                            miss.append(f"{p} sem permissão de execução — rode `chmod +x {p}`")
+                            miss.append(f"{p} sem permissão de execução — rode `chmod +x {p}` (call separada; `&&` é bloqueado)")
                             break
             except OSError:
                 pass
@@ -619,8 +619,9 @@ def check_completion(messages: list[dict],
                 ok = False
                 miss.append(
                     f"{p} escrito mas nunca executado — rode `chmod +x {p}` "
-                    f"e execute (`./{_base}` ou `bash {_base}`) antes de "
-                    f"declarar conclusão")
+                    f"e execute (`./{_base}` ou `bash {_base}`) em DUAS "
+                    f"calls separadas (`&&` é bloqueado) antes de declarar "
+                    f"conclusão")
         # JSON de recuperação sem execução real (sqlite real: write dummy sem sqlite3/python)
         if fp.name == "recover.json":
             _has_sql = any(
