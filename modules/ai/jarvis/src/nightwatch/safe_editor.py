@@ -398,9 +398,12 @@ class SafeEditor:
                 if ("\"'{" in _line) or ("'}\"" in _line):
                     all_errors.append(
                         f"Line {_ln}: single-quoted JSON via echo is never "
-                        f"valid JSON (found `{_line.strip()[:100]}`). Build "
-                        f"JSON with python3 + json.dumps (stdlib, always "
-                        f"valid), or use double quotes throughout.")
+                        f"valid JSON (found `{_line.strip()[:100]}`). Imitate "
+                        f"this shape instead (single-quotes live INSIDE "
+                        f"python, shell stays double-quoted): "
+                        f"python3 -c \"import json; open('OUT.json','w')."
+                        f"write(json.dumps({{'timestamp': 'TS', 'alerts': []}}, "
+                        f"indent=2))\" — fill values from shell vars, then run it.")
                     return False, all_errors, all_warnings
         
         # Size checks against original. Emptying a file is always

@@ -63,6 +63,7 @@ def test_echo_single_quoted_json_blocked(tmp_path):
         path, "#!/bin/bash\necho \"{'id': 'x'}\" > a.json\n")
     assert not res.success
     assert any("python3" in e for e in res.errors)
+    assert any("json.dumps" in e for e in res.errors)
 
 
 def test_echo_valid_json_and_awk_pass(tmp_path):
