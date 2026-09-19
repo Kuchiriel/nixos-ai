@@ -24,17 +24,17 @@ else
     STATE="idle"
 fi
 
+# Ícone único sol/lua (Nerd Font, cor via CSS #custom-notification). Sem emoji.
 case "$MODE" in
-    warm) ICON_BASE="🌙" ;;
-    cold) ICON_BASE="☀️" ;;
+    warm) ICON="" ;;
+    cold) ICON="" ;;
 esac
 
 case "$STATE" in
-    critical) ICON="${ICON_BASE}🔥"; CLASS="critical" ;;
-    error)    ICON="${ICON_BASE}⚡"; CLASS="urgent" ;;
-    done)     ICON="${ICON_BASE}✅"; CLASS="normal" ;;
-    info)     ICON="${ICON_BASE}ℹ️"; CLASS="info" ;;
-    *)        ICON="$ICON_BASE"; CLASS="normal" ;;
+    critical) CLASS="critical" ;;
+    error)    CLASS="urgent" ;;
+    info)     CLASS="info" ;;
+    *)        CLASS="normal" ;;
 esac
 
 TOOLTIP="Modo: $MODE (${CURRENT_TEMP}K)"

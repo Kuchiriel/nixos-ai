@@ -164,11 +164,11 @@ in {
     # ════════════════════════════════════════════════════════
     # 1. VSCODIUM + EXTENSÕES
     # ════════════════════════════════════════════════════════
-    programs.vscode = {
+    programs.vscodium = {
       enable = true;
       package = pkgs.vscodium;
 
-      extensions = with pkgs.vscode-extensions;
+      profiles.default.extensions = with pkgs.vscode-extensions;
         [
           # ── Roo Code (coding agent) ──
           rooveterinaryinc.roo-cline
@@ -185,7 +185,7 @@ in {
         ]
         ++ cfg.extensions;
 
-      userSettings =
+      profiles.default.userSettings =
         {
           # ── Roo Code ──
           "roo-cline.apiRequestTimeout" = 1800;

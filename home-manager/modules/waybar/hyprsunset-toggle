@@ -6,8 +6,10 @@ TEMP_FILE="/tmp/hyprsunset-current-temp"
 WARM_TEMP=4500
 COLD_TEMP=6500
 DEFAULT_TEMP=6500
-pkill -f "hyprsunset" 2>/dev/null || true
-sleep 0.2
+# pkill -x (nome exato): -f se mataria (o próprio script contém "hyprsunset").
+# hyprsunset roda em foreground: lançar em background e atualizar o state já.
+pkill -x hyprsunset 2>/dev/null || true
+sleep 0.3
 
 if [ -f "$TEMP_FILE" ]; then
     CURRENT_TEMP=$(cat "$TEMP_FILE" 2>/dev/null)
@@ -16,11 +18,13 @@ else
 fi
 
 if [ "$CURRENT_TEMP" -lt 5000 ] 2>/dev/null; then
-    hyprsunset --temperature $COLD_TEMP 2>/dev/null
+    hyprsunset --temperature $COLD_TEMP >/dev/null 2>&1 &
+    disown 2>/dev/null || true
     echo $COLD_TEMP > "$TEMP_FILE"
     notify-send "Modo Dia" "Temperatura: ${COLD_TEMP}K" 2>/dev/null || true
 else
-    hyprsunset --temperature $WARM_TEMP 2>/dev/null
+    hyprsunset --temperature $WARM_TEMP >/dev/null 2>&1 &
+    disown 2>/dev/null || true
     echo $WARM_TEMP > "$TEMP_FILE"
     notify-send "Modo Noite" "Temperatura: ${WARM_TEMP}K" 2>/dev/null || true
 fi

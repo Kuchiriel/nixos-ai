@@ -41,13 +41,15 @@
 
   virtualisation.docker = {
     enable = true;
-    # A mágica para IA em containers no NixOS acontece aqui:
-    enableNvidia = true; 
   };
+
+  # Suporte NVIDIA em containers (substitui o deprecado
+  # virtualisation.docker.enableNvidia).
+  hardware.nvidia-container-toolkit.enable = true;
 
   programs.thunar = {
     enable = true;
-    plugins = with pkgs.xfce; [
+    plugins = with pkgs; [
       thunar-archive-plugin
       thunar-volman
     ];
@@ -298,6 +300,11 @@
     keep-outputs = true;
     keep-derivations = true;
   };
+
+  # Stylix injeta um overlay (nixos-icons) no escopo do home-manager, o que
+  # dispara o warning do HM (useGlobalPkgs + nixpkgs.overlays será erro no
+  # futuro). Mesmo padrão já aplicado em hosts/nixos-lab/configuration.nix.
+  home-manager.users.${user}.nixpkgs.overlays = lib.mkForce null;
 
   # =========================================================================
   # 7. SISTEMA
