@@ -43,7 +43,6 @@ in {
       env = baseEnv ++ (lib.mapAttrsToList (n: v: "${n},${v}") nvidiaEnv);
 
       exec-once = [
-        "waybar"
         "wl-paste --type text --watch cliphist store"
         "wl-paste --type image --watch cliphist store"
       ];

@@ -27,6 +27,7 @@
     backlight = {
       format = "󰃠 {percent}%";
       tooltip = false;
+      on-click = "sh -c 'pkill -x hyprsunset || exec hyprsunset --temperature 4500'";
     };
     bluetooth = {
       format = "󰂯 {status}";
@@ -34,15 +35,6 @@
       on-click = "foot --app-id floating_shell -e bluetui";
     };
 
-    "custom/notification" = {
-      exec = "${waybarNotification}/bin/waybar-notification";
-      exec-on-event = true;
-      interval = 5;
-      return-type = "json";
-      format = "{}";
-      tooltip = true;
-      on-click = "${hyprsunsetToggle}/bin/hyprsunset-toggle";
-    };
   };
 
   # Scripts bash — output APENAS valores ASCII puro.
@@ -166,78 +158,6 @@
     esac
   '';
 
-  waybarNotification = pkgs.writeShellScriptBin "waybar-notification" ''
-      #!/usr/bin/env bash
-      # Ícone único sol/lua (Nerd Font, cor via CSS #custom-notification).
-      # Sem emoji: o brilho/cor vem do tema, não do glifo.
-      NOTIFY_FILE="/tmp/jarvis-notify-last.json"
-      TEMP_FILE="/tmp/hyprsunset-current-temp"
-      WARM_TEMP=4500
-      COLD_TEMP=6500
-      DEFAULT_TEMP=6500
-      if [ -f "$TEMP_FILE" ]; then
-          CURRENT_TEMP=$(cat "$TEMP_FILE" 2>/dev/null)
-      else
-          CURRENT_TEMP=$DEFAULT_TEMP
-      fi
-      if [ "$CURRENT_TEMP" -lt 5000 ] 2>/dev/null; then
-          MODE="warm"
-      else
-          MODE="cold"
-      fi
-      if [ -f "$NOTIFY_FILE" ]; then
-          EVENT=$(python3 -c "import json; d=json.load(open('$NOTIFY_FILE')); print(d.get('event','none'))" 2>/dev/null || echo "none")
-          PRIORITY=$(python3 -c "import json; d=json.load(open('$NOTIFY_FILE')); print(d.get('priority','normal'))" 2>/dev/null || echo "normal")
-      else
-          EVENT="none"
-          PRIORITY="normal"
-      fi
-      case "$MODE" in
-          warm) ICON="" ; LABEL="Lua" ;;
-          cold) ICON="" ; LABEL="Sol" ;;
-      esac
-      case "$PRIORITY" in
-          critical) CLASS="critical" ;;
-          urgent) CLASS="urgent" ;;
-          info) CLASS="info" ;;
-          *) CLASS="normal" ;;
-      esac
-      TOOLTIP="$LABEL $CURRENT_TEMP K (clique alterna dia/noite)"
-      [ "$EVENT" != "none" ] && TOOLTIP="$TOOLTIP | Último: $EVENT"
-      printf '{"text": "%s", "tooltip": "%s", "class": "%s"}\n' "$ICON" "$TOOLTIP" "$CLASS"
-    '';
-
-    hyprsunsetToggle = pkgs.writeShellScriptBin "hyprsunset-toggle" ''
-      #!/usr/bin/env bash
-      # hyprsunset roda em foreground e nunca sai: lança em background e
-      # atualiza o state file imediatamente (sem isso, o 2º clique relê
-      # temperatura velha e o toggle "vai e não volta").
-      # pkill -x (nome exato): -f se mataria (o próprio script contém
-      # "hyprsunset" no caminho).
-      TEMP_FILE="/tmp/hyprsunset-current-temp"
-      WARM_TEMP=4500
-      COLD_TEMP=6500
-      DEFAULT_TEMP=6500
-      pkill -x hyprsunset 2>/dev/null || true
-      sleep 0.3
-      if [ -f "$TEMP_FILE" ]; then
-          CURRENT_TEMP=$(cat "$TEMP_FILE" 2>/dev/null)
-      else
-          CURRENT_TEMP=$DEFAULT_TEMP
-      fi
-      if [ "$CURRENT_TEMP" -lt 5000 ] 2>/dev/null; then
-          hyprsunset --temperature $COLD_TEMP >/dev/null 2>&1 &
-          disown 2>/dev/null || true
-          echo "$COLD_TEMP" > "$TEMP_FILE"
-          notify-send "Modo Dia" "Temperatura: $COLD_TEMP K" 2>/dev/null || true
-      else
-          hyprsunset --temperature $WARM_TEMP >/dev/null 2>&1 &
-          disown 2>/dev/null || true
-          echo "$WARM_TEMP" > "$TEMP_FILE"
-          notify-send "Modo Noite" "Temperatura: $WARM_TEMP K" 2>/dev/null || true
-      fi
-    '';
-
     audiobookWaybarScript = pkgs.writeShellScriptBin "jarvis-audiobook-waybar" ''
     status=$(jarvis audiobook status 2>/dev/null)
     if echo "$status" | grep -q "Tocando\|playing"; then
@@ -267,12 +187,13 @@ in {
       igpuScript
       audiobookMenuScript
       audiobookWaybarScript
-      waybarNotification
-      hyprsunsetToggle
     ];
 
   programs.waybar = {
     enable = true;
+    # Dono único da bar: systemd a mantém viva no switch e no boot.
+    # (exec-once=waybar foi removido do Hyprland — ele duplicava a bar.)
+    systemd.enable = true;
     style = ''
       * {
         border: none;
@@ -299,7 +220,6 @@ in {
       #pulseaudio,
       #bluetooth,
       #backlight,
-      #custom-notification,
       #tray,
       #custom-files,
       #custom-gpu,
@@ -361,12 +281,6 @@ in {
         font-weight: bold;
       }
 
-      #custom-notification {
-        color: #00ffff;
-      }
-      #custom-notification.critical { color: #FF5555; }
-      #custom-notification.urgent { color: #FFB86C; }
-
       #custom-cpu, #custom-memory, #custom-gpu, #custom-igpu {
         padding: 0 4px;
         font-weight: bold;
@@ -399,7 +313,6 @@ in {
 
           modules-right =
             [
-              "custom/notification"
               "custom/jarvis"
               "custom/audiobook"
               "custom/files"
