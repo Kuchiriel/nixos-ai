@@ -478,7 +478,7 @@ class HybridIndexer:
 # Busca híbrida
 # ---------------------------------------------------------------------------
 
-def diversify_by_source(hits: list[dict[str, Any]], *, penalty: float = 0.85) -> list[dict[str, Any]]:
+def diversify_by_source(hits: list[dict[str, Any]], *, penalty: float = 0.95) -> list[dict[str, Any]]:
     """Diversidade por fonte (MMR-lite determinístico, pós-fusão/rerank).
 
     Arquivos grandes inundam o top-k com chunks medíocres (medido 18/09:
@@ -557,6 +557,12 @@ class HybridSearch:
         else:
             ranked = boosted
 
+        # Diversidade por fonte default ON com penalty=0.95: benchmark v2
+        # (10 queries) mostrou dominação estrita — ON(0.95) = 10/10 na janela
+        # MCP=5 (OFF 10/10 também) E 10/10 na janela 3 para books (OFF 9/10:
+        # nickyeo afogado pelo paper dominante). Penalty 0.85/0.90 regredia o
+        # alvo intra-arquivo (semantic-loop 11→25); 0.95 não. Fonte da
+        # decisão: logs/acceptance-bench-v2.json + sweep 0.85–0.95 de 18/09.
         if diversify:
             ranked = diversify_by_source(ranked)
 

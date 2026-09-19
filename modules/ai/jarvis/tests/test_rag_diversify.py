@@ -18,7 +18,7 @@ def _hit(path: str, score: float) -> dict:
 
 def test_single_source_preserves_relative_order() -> None:
     hits = [_hit("a.py", 3.0), _hit("a.py", 2.0), _hit("a.py", 1.0)]
-    out = diversify_by_source(hits)
+    out = diversify_by_source(hits, penalty=0.85)
     # Ordem relativa preservada; scores ajustados monotonicamente
     # (2.0×0.85, 1.0×0.85²) — re-sort posterior mantém a diversidade.
     assert out[0]["score"] == 3.0
@@ -43,7 +43,7 @@ def test_no_source_key_is_never_penalized() -> None:
         _hit("a.py", 1.9),
         _hit("a.py", 1.8),
     ]
-    out = diversify_by_source(hits)
+    out = diversify_by_source(hits, penalty=0.85)
     assert out[0]["payload"]["content"] == "sem fonte"
     assert [h["payload"]["path"] for h in out[1:]] == ["a.py", "a.py"]
 
