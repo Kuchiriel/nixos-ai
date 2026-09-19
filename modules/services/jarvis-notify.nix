@@ -12,24 +12,10 @@ in {
   };
 
   config = lib.mkIf (config.services.jarvis.enable && cfg.enable) {
-    environment.systemPackages = [
-      (pkgs.writeShellScript "jarvis-notify" ''
-        #!/usr/bin/env bash
-        EVENT="$1"
-        TEXT="$2"
-        PRIORITY="$3"
-        [ -z "$EVENT" ] && EVENT="unknown"
-        [ -z "$PRIORITY" ] && PRIORITY="normal"
-        exec jarvis notify "$TEXT" --body "$EVENT" --severity "$PRIORITY"
-      '')
-    ];
-
     systemd.user.services.jarvis-notify-watcher = {
-      Unit = {
-        Description = "JARVIS MCU - Notification Watcher (EventBus)";
-        After = [ "graphical-session.target" ];
-      };
-      Service = {
+      description = "JARVIS MCU - Notification Watcher (EventBus)";
+      wantedBy = [ "graphical-session.target" ];
+      serviceConfig = {
         Type = "simple";
         ExecStart = "${pkgs.jarvis}/bin/jarvis watch --interval 30";
         Restart = "always";

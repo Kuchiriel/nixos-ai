@@ -14,11 +14,9 @@ in {
 
   config = lib.mkIf cfg.enable {
     systemd.user.services.jarvis-focus = {
-      Unit = {
-        Description = "JARVIS — Focus Mode Manager (EventBus)";
-        After = [ "graphical-session.target" ];
-      };
-      Service = {
+      description = "JARVIS — Focus Mode Manager (EventBus)";
+      wantedBy = [ "graphical-session.target" ];
+      serviceConfig = {
         Type = "simple";
         ExecStart = "${pkgs.jarvis}/bin/jarvis focus-daemon";
         Restart = "always";
