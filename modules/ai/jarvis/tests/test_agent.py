@@ -1558,6 +1558,66 @@ def test_prefix_gate_blocks_json_without_producers(tmp_path, monkeypatch) -> Non
     assert any("o.json" in c for c in result.commands_denied)
 
 
+def test_run_first_gate_blocks_reedit_before_exec(tmp_path, monkeypatch) -> None:
+    """Re-editar .sh escrito mas nunca executado → BLOCKED (fiddle sem
+    feedback vira run forçado; L8 variante: 3x str_replace no-op até STUCK)."""
+    target = str(tmp_path / "run.sh")
+
+    class FiddleSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-1", "type": "function",
+                           "function": {"name": "write_file",
+                               "arguments": jsonlib.dumps({
+                                   "path": target,
+                                   "content": "#!/bin/sh\necho hi\n"})}}]}
+            elif self.calls == 2:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-2", "type": "function",
+                           "function": {"name": "str_replace",
+                               "arguments": jsonlib.dumps({
+                                   "path": target,
+                                   "old": "echo hi",
+                                   "new": "echo yo"})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=FiddleSession(), approve=True)
+    result = agent.run("write and fiddle")
+    assert (tmp_path / "run.sh").read_text() == "#!/bin/sh\necho hi\n"
+    assert any("run.sh" in c for c in result.commands_denied)
+
+
+def test_list_directory_offered_and_dispatched(tmp_path, monkeypatch) -> None:
+    """list_directory existe como tool e despacha (L8: disciplina mandava
+    LOCATE-first mas a tool nunca existiu — instrução impossível)."""
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "logs" / "a.log").write_text("x\n")
+
+    class LsSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-1", "type": "function",
+                           "function": {"name": "list_directory",
+                               "arguments": jsonlib.dumps(
+                                   {"path": str(tmp_path)})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    agent = Agent(Config(), session=LsSession(), approve=True)
+    result = agent.run("list files")
+    assert any("logs" in str(m.get("content", "")) for m in
+               getattr(result, "messages", []))
+
+
 def test_prefix_gate_allows_valid_json(tmp_path, monkeypatch) -> None:
     """.json VÁLIDO passa pelo gate intacto (ex.: config escrita à mão)."""
     class ValidSession(FakeSession):

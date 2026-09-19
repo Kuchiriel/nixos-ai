@@ -296,6 +296,7 @@ TOOL_USE_DISCIPLINE = """TOOL DISCIPLINE (mandatory):
 - Claiming a cause? Cite file:line you actually read this session.
 - Multi-step request? Do the steps in order until done.
 - Task asks to WRITE a computed result? COMPUTE FIRST (create inputs, run), write the result AFTER — compute with python3 stdlib one-liner (csv/json/datetime), never awk/sed gymnastics for joins, dates or averages (pattern: write calc.py with `import csv`, skip header via `next(reader)`, parse dates per-format, compute, `print` ONLY the result, run `python3 calc.py`, THEN write_file with that exact output) — writing a placeholder value early leaves a stale artifact (observed: placeholder written before computing; never updated).
+- Deliverables are SCRIPTS that generate files (not the files themselves)? SCRIPT FIRST, always in this shape — (1) write_file the .sh with the REAL logic over the inputs you just read (grep/parse/compute, CWD-relative paths); (2) execute_shell `chmod +x` it (one call); (3) execute_shell run it (`./name.sh`, one call); (4) read_file the GENERATED output to confirm. Hand-writing the generated files instead of running = fabrication (blocked + STUCK). The outputs only exist AFTER the run.
 - Do NOT revisit a refuted pattern: once an approach failed and an alternative worked, never go back to the failed one (observed: model completed the correct chain then relapsed into mkdir+placeholder at the end).
 - Task is to CLEAN/SANITIZE API keys or secrets? Call sanitize_secrets (one deterministic tool) — do NOT hand-edit str_replace per file.
 - Task is to transform CSVs into a structured JSON per schema.json? Call build_json_dataset (deterministic) — do NOT hand-write the JSON.
@@ -612,9 +613,18 @@ def _placeholder_script_note(messages: list[dict[str, Any]]) -> str | None:
     não cria alert.json/report.json válidos — harness precisa detectar
     DUMMY, não só unexecuted. Mecânico: marca placeholder sem saber a task.)"""
     try:
-        # Conteúdo do último write_file .sh com sucesso
-        _last_content: str | None = None
-        _last_path: str | None = None
+        from pathlib import Path as _P
+        try:
+            from jarvis.core.devtools import resolve_base as _rb
+            _root = _rb()
+        except Exception:
+            _root = _P(".")
+        # TODOS os .sh escritos com sucesso no run (não só o último: L8
+        # real — intrusion_detector.sh placeholder foi ofuscado por writes
+        # posteriores no response.sh). Avalia o ARQUIVO NO DISCO (verdade
+        # atual; fragmentos de str_replace diluem o sinal), com fallback
+        # p/ conteúdo da mensagem se ilegível.
+        _written: dict[str, str] = {}
         for i, _m in enumerate(messages):
             for _tc in _m.get("tool_calls") or []:
                 _fn = _tc.get("function", _tc) if isinstance(_tc, dict) else None
@@ -631,28 +641,38 @@ def _placeholder_script_note(messages: list[dict[str, Any]]) -> str | None:
                     continue
                 _nxt = messages[i + 1] if i + 1 < len(messages) else {}
                 if _nxt.get("role") == "tool" and not str(_nxt.get("content", "")).strip().upper().startswith("ERROR"):
-                    _last_content = _c
-                    _last_path = _p
-        if not _last_content or not _last_path:
+                    _written[_p] = _c
+        if not _written:
             return None
-        # Evita repetir o mesmo aviso
-        if "placeholder_script:" in json.dumps(messages, default=str):
-            return None
-        low = _last_content.lower()
-        # Sinais de dummy: placeholder literal, só echos, sem grep/jq/python real
-        is_placeholder = (
-            "placeholder" in low
-            or ("processing logs" in low and "generating" in low and low.count("grep") == 0 and low.count("jq") == 0 and low.count("python") == 0)
-            or (low.count("echo") >= 2 and low.count("grep") == 0 and low.count("jq") == 0 and len(low) < 800)
-        )
-        if not is_placeholder:
-            return None
-        return (
-            f"STATE(placeholder_script:{_last_path.rsplit('/',1)[-1]}). Your last script is a PLACEHOLDER (dummy echos, no real logic — it exits 0 but creates no valid output). "
-            "NEXT: REWRITE it with REAL logic: read rules/detection_rules.json, grep -c each pattern in logs/auth.log+logs/http.log, extract unique IPs with grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+', build alert.json/report.json with timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ) and jq/python3. Zero prose, one tool call."
-        )
+        _dump = json.dumps(messages, default=str)
+        for _last_path in _written:
+            _base = _last_path.rsplit("/", 1)[-1]
+            # Um aviso por path (evita spam; próximos turns pegam os demais)
+            if f"placeholder_script:{_base}" in _dump:
+                continue
+            _fp = (_root / _last_path) if not _P(_last_path).is_absolute() else _P(_last_path)
+            try:
+                _last_content = _fp.read_text(encoding="utf-8") if _fp.is_file() else _written[_last_path]
+            except OSError:
+                _last_content = _written[_last_path]
+            if not _last_content:
+                continue
+            low = _last_content.lower()
+            # Sinais de dummy: placeholder literal, só echos, sem grep/jq/python real
+            is_placeholder = (
+                "placeholder" in low
+                or ("processing logs" in low and "generating" in low and low.count("grep") == 0 and low.count("jq") == 0 and low.count("python") == 0)
+                or (low.count("echo") >= 2 and low.count("grep") == 0 and low.count("jq") == 0 and len(low) < 800)
+            )
+            if not is_placeholder:
+                continue
+            return (
+                f"STATE(placeholder_script:{_base}). Your script {_base} is a PLACEHOLDER (dummy echos, no real logic — it exits 0 but creates no valid output). "
+                "NEXT: REWRITE it with REAL logic: read rules/detection_rules.json, grep -c each pattern in logs/auth.log+logs/http.log, extract unique IPs with grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+', build alert.json/report.json with timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ) and jq/python3. Zero prose, one tool call."
+            )
     except Exception:
         return None
+    return None
 
 
 # Comandos read-only seguros — permitidos sem aprovação (diagnóstico/self-heal).
@@ -1347,6 +1367,11 @@ class Agent:
                     # Leitura read-only via implementação canônica (devtools).
                     # Sem aprovação: risco zero. Erros viram tool result.
                     tool_result = self._exec_read_file(args)
+                elif name == "list_directory":
+                    # Listagem read-only (devtools, cap 100). Sem aprovação:
+                    # risco zero. É o LOCATE-first da disciplina — existia
+                    # na frase mas nunca como tool (L8: instrução impossível).
+                    tool_result = self._exec_list(args)
                 elif name == "build_json_dataset":
                     from jarvis.core.devtools import build_json_dataset as _bj
                     tool_result = json.dumps(
@@ -1420,16 +1445,81 @@ class Agent:
                                 if _has_exec and _has_prod:
                                     break
                             _gate_block = not _has_exec and not _has_prod
+                    _gate_msg = (
+                        "ERROR: BLOCKED — invalid JSON with nothing "
+                        "computed this run (no execute_shell, no "
+                        ".sh/.py written). Do NOT hand-write JSON "
+                        "outputs. Author the script that computes this "
+                        "(.py reading the real inputs + json.dumps, or "
+                        ".sh), RUN it, then write its output.")
+                    if not _gate_block:
+                        # RUN-WHAT-YOU-WROTE mecânico (L8 variante real):
+                        # re-editar .sh escrito com sucesso mas NUNCA
+                        # executado = fiddle sem feedback (3x str_replace
+                        # no-op até STUCK). Trava a re-escrita e força
+                        # chmod+run primeiro; typo real aparece no erro do
+                        # run. Só conta write com resultado ok (exclui a
+                        # call atual, ainda sem resultado).
+                        _tpath = str(args.get("path", ""))
+                        if _tpath.endswith(".sh"):
+                            _base2 = _tpath.rsplit("/", 1)[-1]
+                            _wok = _ran2 = False
+                            for _i2, _m in enumerate(messages):
+                                for _tc in _m.get("tool_calls") or []:
+                                    _f = _tc.get("function", _tc)
+                                    if not isinstance(_f, dict):
+                                        continue
+                                    if _f.get("name") in ("write_file",
+                                                          "str_replace"):
+                                        try:
+                                            _ga = _f.get("arguments", {})
+                                            _ga = (json.loads(_ga)
+                                                   if isinstance(_ga, str)
+                                                   else _ga)
+                                        except Exception:
+                                            _ga = {}
+                                        if str((_ga or {}).get(
+                                                "path", "")).endswith(_base2):
+                                            _nx = (messages[_i2 + 1]
+                                                   if _i2 + 1 < len(messages)
+                                                   else {})
+                                            if (_nx.get("role") == "tool"
+                                                    and not str(_nx.get(
+                                                        "content", "")).strip(
+                                                        ).upper().startswith(
+                                                        "ERROR")):
+                                                _wok = True
+                                    elif _f.get("name") in (
+                                            "execute_shell",
+                                            "jarvis_execute"):
+                                        try:
+                                            _ga = _f.get("arguments", {})
+                                            _ga = (json.loads(_ga)
+                                                   if isinstance(_ga, str)
+                                                   else _ga)
+                                        except Exception:
+                                            _ga = {}
+                                        _c = str((_ga or {}).get("cmd", ""))
+                                        if (f"./{_base2}" in _c
+                                                or re.search(
+                                                    r"\b(bash|sh)\s+\S*"
+                                                    + re.escape(_base2),
+                                                    _c)):
+                                            _ran2 = True
+                            if _wok and not _ran2:
+                                _gate_block = True
+                                _gate_msg = (
+                                    f"ERROR: BLOCKED — {_base2} was written "
+                                    "but never executed. Do NOT re-edit it "
+                                    "blind: RUN it first in TWO separate "
+                                    "calls (`chmod +x "
+                                    f"{_base2}`, then `./{_base2}` — `&&` is "
+                                    "blocked), read its real output/errors, "
+                                    "THEN fix.")
                     if _gate_block:
                         result.commands_denied.append(
                             f"{name} {args.get('path', '')}")
-                        tool_result = (
-                            "ERROR: BLOCKED — invalid JSON with nothing "
-                            "computed this run (no execute_shell, no "
-                            ".sh/.py written). Do NOT hand-write JSON "
-                            "outputs. Author the script that computes this "
-                            "(.py reading the real inputs + json.dumps, or "
-                            ".sh), RUN it, then write its output.")
+                        tool_result = _gate_msg
                         self._log_audit(f"{name} {args.get('path', '')}",
                                         None, tool_result, False)
                     elif self.approve and human_approve(
@@ -1863,6 +1953,29 @@ class Agent:
         return f"ERROR: {res.get('error', 'read failed')}"
 
     @staticmethod
+    def _exec_list(args: dict[str, Any]) -> str:
+        """list_directory canônico (devtools, read-only, sem aprovação)."""
+        from jarvis.core.devtools import list_directory as _canonical_ls
+        try:
+            res = _canonical_ls(str(args.get("path", ".") or "."))
+        except Exception as e:
+            return f"ERROR: list failed: {e}"
+        if res.get("ok"):
+            names = [f"{e.get('name', '')}/" if e.get("type") == "dir" else str(e.get("name", ""))
+                     for e in res.get("entries", [])]
+            extra = ""
+            if res.get("truncated"):
+                try:
+                    _omit = int(res.get("total_found", 0)) - int(res.get("count", 0))
+                except (TypeError, ValueError):
+                    _omit = 0
+                extra = f" (+{_omit} omitidos)"
+            return f"# {res.get('path', '')} ({res.get('count', 0)} itens{extra}): " + ", ".join(names[:100])
+        err = str(res.get("error", "list failed"))
+        hint = str(res.get("hint", ""))
+        return f"ERROR: {err}" + (f" [{hint}]" if hint else "")
+
+    @staticmethod
     def _exec_write(name: str, args: dict[str, Any]) -> str:
         """write_file/str_replace canônicos (devtools, project jail)."""
         from jarvis.core import devtools as _dt
@@ -1873,7 +1986,8 @@ class Agent:
             else:
                 res = _dt.str_replace(str(args.get("path", "")),
                                       str(args.get("old", "")),
-                                      str(args.get("new", "")))
+                                      str(args.get("new", "")),
+                                      bool(args.get("allow_multiple", False)))
         except Exception as e:
             return f"ERROR: write failed: {e}"
         if res.get("ok"):
@@ -1974,6 +2088,19 @@ class Agent:
         }, {
             "type": "function",
             "function": {
+                "name": "list_directory",
+                "description": "List a directory (names + dir/file, capped). ALWAYS call on CWD first when a task references files — paths in prompts may be container paths that don't exist here.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Directory (absolute or relative to CWD, default .)"},
+                    },
+                    "required": [],
+                },
+            },
+        }, {
+            "type": "function",
+            "function": {
                 "name": "write_file",
                 "description": "Create/overwrite a file (project jail; needs approval). Use for new files.",
                 "parameters": {
@@ -1996,6 +2123,7 @@ class Agent:
                         "path": {"type": "string"},
                         "old": {"type": "string", "description": "Exact text to find"},
                         "new": {"type": "string", "description": "Replacement"},
+                        "allow_multiple": {"type": "boolean", "description": "Replace all occurrences when old matches N times"},
                     },
                     "required": ["path", "old", "new"],
                 },
