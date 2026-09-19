@@ -1631,6 +1631,29 @@ def test_read_ambiguous_stays_error(tmp_path, monkeypatch) -> None:
     assert "auto-relocated" not in out
 
 
+def test_silent_exhaustion_is_stuck_not_verified(tmp_path, monkeypatch) -> None:
+    """Turns esgotados sem mensagem final → STUCK (L8v9: VERIFIED vácuo).
+    Com declaração final, segue o caminho normal."""
+    class SilentSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            msg = {"role": "assistant", "content": "",
+                   "tool_calls": [{"id": f"call-{self.calls}",
+                       "type": "function",
+                       "function": {"name": "list_directory",
+                           "arguments": jsonlib.dumps(
+                               {"path": str(tmp_path)})}}]}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("JARVIS_AGENT_MAX_TURNS", "3")
+    agent = Agent(Config(), session=SilentSession(), approve=True)
+    result = agent.run("list files")
+    assert result.turns == 3
+    assert result.verdict == "STUCK"
+    assert "sem declaração" in (result.final_response or "")
+
+
 def test_list_directory_offered_and_dispatched(tmp_path, monkeypatch) -> None:
     """list_directory existe como tool e despacha (L8: disciplina mandava
     LOCATE-first mas a tool nunca existiu — instrução impossível)."""

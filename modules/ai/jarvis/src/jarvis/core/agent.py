@@ -65,6 +65,24 @@ def detect_profile(model_id: str) -> dict[str, Any]:
         return {"name": "default", "max_tokens": 2048, "max_tokens_per_turn": 2048, "temperature": 0.0, "tool_choice": "auto"}
 
 
+def _ctx_derived_max_tokens(ctx: Any) -> int:
+    """Orçamento de geração por turno derivado do ctx do models.nix
+    (dono 19/09: budget fixo 2048 truncava writes encadeados no L8; cap
+    deve escalar com o ctx servido, não ser chutado à mão).
+    Fórmula: ctx//12 (~8% do ctx por turno — sobra p/ prompt + histórico
+    do ring em ~10 turns), piso 1024 (não estrangula), teto 8192 (guarda
+    de latência: ~2min/turn no pior caso a 70 t/s). Sem ctx válido →
+    2048 (status quo ante).
+    """
+    try:
+        ctx = int(ctx)
+    except (TypeError, ValueError):
+        return 2048
+    if ctx <= 0:
+        return 2048
+    return min(8192, max(1024, ctx // 12))
+
+
 def _registry_tier_profile(model_id: str) -> dict[str, Any] | None:
     """Perfil por tier do registry (None = id fora do registry)."""
     try:
@@ -72,13 +90,16 @@ def _registry_tier_profile(model_id: str) -> dict[str, Any] | None:
         entry = ModelRegistry.load().get(model_id)
     except Exception:
         return None
-    base = {"max_tokens_per_turn": 2048, "temperature": 0.0, "tool_choice": "auto"}
+    mt = _ctx_derived_max_tokens((entry.raw or {}).get("ctx"))
+    base = {"max_tokens_per_turn": mt, "temperature": 0.0,
+            "tool_choice": "auto"}
     if entry.tier == "reasoning":
+        # 768 deliberado (resposta concisa p/ reasoning; ver detect_profile)
         return {"name": "large", "max_tokens": 768, **base}
     if entry.tier == "fast":
-        return {"name": "small", "max_tokens": 2048, **base}
+        return {"name": "small", "max_tokens": mt, **base}
     if entry.tier == "speed":
-        return {"name": "default", "max_tokens": 2048, **base}
+        return {"name": "default", "max_tokens": mt, **base}
     return None
 
 
@@ -1708,8 +1729,17 @@ class Agent:
                 if msg.get("role") == "assistant" and msg.get("content"):
                     result.final_response = msg["content"]
                     break
-        
-        if result.verdict == "unknown":
+
+        if (result.verdict == "unknown" and result.turns >= max_turns
+                and not (result.final_response or "").strip()):
+            # Esgotou turns sem declarar nada: silêncio ≠ conclusão (L8v9
+            # real: 18 turns só de tool-calls, final vazio → VERIFIED vácuo
+            # sobre trabalho parcial). STUCK forçado com motivo; evidência
+            # do que existe vai p/ evidence/missing normalmente.
+            result.final_response = (
+                "STUCK: turnos esgotados sem declaração de conclusão.")
+            self._finalize(result, messages, forced="STUCK")
+        elif result.verdict == "unknown":
             # Saídas sem veredito (overflow, max_turns): verifica o que há.
             self._finalize(result, messages)
         result.messages = messages
