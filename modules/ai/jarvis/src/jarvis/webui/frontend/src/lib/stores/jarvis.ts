@@ -4,12 +4,21 @@ import {
   fetchCommands,
   fetchServices,
   connectSSE,
+  fetchFocusStatus,
+  focusEnable,
+  focusDisable,
+  focusToggle,
+  fetchNotificationStatus,
+  fetchNotificationHistory,
   type SystemStatus,
   type Command,
-  type ServiceInfo
+  type ServiceInfo,
+  type FocusState,
+  type NotificationStatus,
+  type NotificationHistory
 } from '$lib/api/client';
 
-// ─── Stores ───────────────────────────────────────────────────────────
+// ─── Stores ──────────────────────────────────────────────────────
 
 export const status = writable<SystemStatus | null>(null);
 export const commands = writable<Command[]>([]);
@@ -19,8 +28,11 @@ export const events = writable<any[]>([]);
 export const loading = writable(true);
 export const error = writable<string | null>(null);
 export const connected = writable(false);
+export const focus = writable<FocusState>({ focused: false });
+export const notificationStatus = writable<NotificationStatus>({ focused: false });
+export const notificationHistory = writable<NotificationHistory>({ history: [], total: 0 });
 
-// ─── Derived ──────────────────────────────────────────────────────────
+// ─── Derived ──────────────────────────────────────────────────────
 
 export const health = derived(status, ($s) => $s?.state?.health?.overall ?? 'unknown');
 export const gamingProfile = derived(status, ($s) => $s?.state?.gaming?.profile ?? 'normal');
@@ -28,6 +40,10 @@ export const llmModel = derived(status, ($s) => $s?.state?.llm?.model ?? 'unknow
 export const voiceStatus = derived(status, ($s) => $s?.state?.voice?.status ?? 'idle');
 export const activeServices = derived(services, ($s) => $s.filter(s => s.active).length);
 export const totalServices = derived(services, ($s) => $s.length);
+export const focusActive = derived(focus, ($f) => $f.focused);
+export const focusText = derived(focus, ($f) => $f.focused ? 'Foco Ativo' : 'Normal');
+export const lastNotification = derived(notificationStatus, ($n) => $n.last?.text ?? '');
+export const lastNotificationPriority = derived(notificationStatus, ($n) => $n.last?.priority ?? 'normal');
 
 export const commandsByCategory = derived(commands, ($cmds) => {
   const cats: Record<string, Command[]> = {};
@@ -38,7 +54,7 @@ export const commandsByCategory = derived(commands, ($cmds) => {
   return cats;
 });
 
-// ─── Actions ──────────────────────────────────────────────────────────
+// ─── Actions ──────────────────────────────────────────────────────
 
 let sseConnection: EventSource | null = null;
 
@@ -64,6 +80,51 @@ export async function loadAll() {
   }
 }
 
+export async function loadFocus() {
+  try {
+    const fs = await fetchFocusStatus();
+    focus.set(fs);
+  } catch { /* ignore */ }
+}
+
+export async function loadNotificationStatus() {
+  try {
+    const ns = await fetchNotificationStatus();
+    notificationStatus.set(ns);
+  } catch { /* ignore */ }
+}
+
+export async function loadNotificationHistory() {
+  try {
+    const nh = await fetchNotificationHistory();
+    notificationHistory.set(nh);
+  } catch { /* ignore */ }
+}
+
+export async function doFocusEnable() {
+  try {
+    const fs = await focusEnable();
+    focus.set(fs);
+    await loadNotificationStatus();
+  } catch (e: any) { error.set(e.message); }
+}
+
+export async function doFocusDisable() {
+  try {
+    const fs = await focusDisable();
+    focus.set(fs);
+    await loadNotificationStatus();
+  } catch (e: any) { error.set(e.message); }
+}
+
+export async function doFocusToggle() {
+  try {
+    const fs = await focusToggle();
+    focus.set(fs);
+    await loadNotificationStatus();
+  } catch (e: any) { error.set(e.message); }
+}
+
 export function connectRealtime() {
   if (sseConnection) sseConnection.close();
 
@@ -84,6 +145,19 @@ export function connectRealtime() {
         const newEvts = [...evts, { ...data, ts: Date.now() }];
         return newEvts.slice(-100);
       });
+      // Update notification status from SSE events
+      if (data.type === 'event') {
+        notificationStatus.update((ns) => ({
+          ...ns,
+          last: {
+            event: data.topic,
+            priority: data.data?.severity ?? 'info',
+            text: data.data?.title ?? data.topic,
+            focused: focus.get().focused,
+            ts: Date.now(),
+          }
+        }));
+      }
     },
     () => connected.set(false)
   );

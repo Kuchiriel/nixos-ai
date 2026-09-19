@@ -243,6 +243,65 @@ export async function sendNotification(
   return res.json();
 }
 
+export interface FocusState {
+  focused: boolean;
+  action?: string;
+}
+
+export async function fetchFocusStatus(): Promise<FocusState> {
+  const res = await fetch(`${API_BASE}/focus/status`);
+  if (!res.ok) throw new Error(`Focus status fetch failed: ${res.status}`);
+  return res.json();
+}
+
+export async function focusEnable(): Promise<FocusState> {
+  const res = await fetch(`${API_BASE}/focus/enable`, { method: 'POST' });
+  if (!res.ok) throw new Error(`Focus enable failed: ${res.status}`);
+  return res.json();
+}
+
+export async function focusDisable(): Promise<FocusState> {
+  const res = await fetch(`${API_BASE}/focus/disable`, { method: 'POST' });
+  if (!res.ok) throw new Error(`Focus disable failed: ${res.status}`);
+  return res.json();
+}
+
+export async function focusToggle(): Promise<FocusState> {
+  const res = await fetch(`${API_BASE}/focus/toggle`, { method: 'POST' });
+  if (!res.ok) throw new Error(`Focus toggle failed: ${res.status}`);
+  return res.json();
+}
+
+export interface NotificationStatus {
+  status?: { state: string; text: string; ts: number };
+  last?: { event: string; priority: string; text: string; focused: boolean; ts: number };
+  focused: boolean;
+}
+
+export async function fetchNotificationStatus(): Promise<NotificationStatus> {
+  const res = await fetch(`${API_BASE}/notifications/status`);
+  if (!res.ok) throw new Error(`Notification status fetch failed: ${res.status}`);
+  return res.json();
+}
+
+export interface NotificationHistoryEntry {
+  ts: number;
+  event: string;
+  channels: string[];
+  data_keys: string[];
+}
+
+export interface NotificationHistory {
+  history: NotificationHistoryEntry[];
+  total: number;
+}
+
+export async function fetchNotificationHistory(limit = 50): Promise<NotificationHistory> {
+  const res = await fetch(`${API_BASE}/notifications/history?limit=${limit}`);
+  if (!res.ok) throw new Error(`Notification history fetch failed: ${res.status}`);
+  return res.json();
+}
+
 export function connectSSE(
   onStateChange: (data: any) => void,
   onError?: (err: Event) => void

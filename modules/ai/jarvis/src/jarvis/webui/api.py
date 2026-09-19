@@ -9,6 +9,12 @@ Exposes:
     - GET /api/services — list systemd services
     - POST /api/notify — send notification
     - GET /api/health — health check
+    - GET /api/focus/status — get focus mode state
+    - POST /api/focus/enable — enable focus mode
+    - POST /api/focus/disable — disable focus mode
+    - POST /api/focus/toggle — toggle focus mode
+    - GET /api/notifications/status — get notification status
+    - GET /api/notifications/history — get notification history
 
 SSE Transport:
     GET /api/events/stream — Server-Sent Events for real-time updates
@@ -19,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import queue
 import threading
 import time
@@ -31,6 +38,8 @@ from pydantic import BaseModel
 
 from jarvis.control_plane.plane import get_control_plane
 from jarvis.control_plane.integration import setup_integration
+from jarvis.control_plane.events import Severity
+from jarvis.control_plane.notifications import get_notification_manager
 
 # ─── App ───────────────────────────────────────────────────────────────
 
@@ -330,6 +339,81 @@ def notify(req: NotifyRequest) -> dict[str, Any]:
         channels=req.channels,
     )
     return {"notified": notified}
+
+
+class FocusRequest(BaseModel):
+    action: str = "toggle"
+
+
+class NotifyStatusRequest(BaseModel):
+    event: str = ""
+    priority: str = "normal"
+    text: str = ""
+    focused: bool = False
+
+
+@app.get("/api/focus/status")
+def focus_status() -> dict[str, Any]:
+    """Get current focus mode state."""
+    from jarvis.core.focus import get_focus_manager
+    fm = get_focus_manager()
+    return {"focused": fm.focused}
+
+
+@app.post("/api/focus/enable")
+def focus_enable() -> dict[str, Any]:
+    """Enable focus mode."""
+    from jarvis.core.focus import get_focus_manager
+    fm = get_focus_manager()
+    fm.enable()
+    return {"focused": True, "action": "enable"}
+
+
+@app.post("/api/focus/disable")
+def focus_disable() -> dict[str, Any]:
+    """Disable focus mode."""
+    from jarvis.core.focus import get_focus_manager
+    fm = get_focus_manager()
+    fm.disable()
+    return {"focused": False, "action": "disable"}
+
+
+@app.post("/api/focus/toggle")
+def focus_toggle() -> dict[str, Any]:
+    """Toggle focus mode."""
+    from jarvis.core.focus import get_focus_manager
+    fm = get_focus_manager()
+    state = fm.toggle()
+    return {"focused": state, "action": "toggle"}
+
+
+@app.get("/api/notifications/status")
+def notification_status() -> dict[str, Any]:
+    """Get current notification status from /tmp/jarvis-status.json."""
+    status_file = os.environ.get("JARVIS_STATUS_FILE", "/tmp/jarvis-status.json")
+    notify_file = os.environ.get("JARVIS_NOTIFY_LAST", "/tmp/jarvis-notify-last.json")
+    result: dict[str, Any] = {}
+    try:
+        if os.path.exists(status_file):
+            result["status"] = json.loads(open(status_file).read())
+    except (OSError, json.JSONDecodeError):
+        pass
+    try:
+        if os.path.exists(notify_file):
+            result["last"] = json.loads(open(notify_file).read())
+    except (OSError, json.JSONDecodeError):
+        pass
+    from jarvis.core.focus import get_focus_manager
+    result["focused"] = get_focus_manager().focused
+    return result
+
+
+@app.get("/api/notifications/history")
+def notification_history(limit: int = 50) -> dict[str, Any]:
+    """Get notification history from the notification manager."""
+    plane = _get_plane()
+    history = plane.notifications._audit_log if hasattr(plane.notifications, '_audit_log') else []
+    return {"history": history[-limit:], "total": len(history)}
 
 
 @app.post("/api/services/{name}/{action}")
