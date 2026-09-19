@@ -719,3 +719,39 @@ def test_written_sh_executed_allows_verified(tmp_path):
     with use_project_root(tmp_path):
         v = check_completion(msgs)
     assert not any("nunca executado" in m for m in v.missing)
+
+
+def test_prompt_deliverable_missing_is_miss(tmp_path):
+    """Prompt pede a.sh+b.sh, só a.sh existe → miss nomeando b.sh (L8:
+    parte 2 nunca começada)."""
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "a.sh").write_text("#!/bin/sh\necho hi\n")
+    msgs = [
+        {"role": "user",
+         "content": "Create two scripts a.sh and b.sh that process logs."},
+        {"role": "assistant", "tool_calls": [{
+            "id": "c1", "type": "function",
+            "function": {"name": "write_file",
+                         "arguments": '{"path": "a.sh", "content": "echo hi"}'}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "ok"},
+        {"role": "assistant", "content": "done"},
+    ]
+    with use_project_root(tmp_path):
+        v = check_completion(msgs)
+    assert v.status != "VERIFIED"
+    assert any("b.sh" in m and "doesn't exist" in m for m in v.missing)
+
+
+def test_prompt_deliverable_present_no_miss(tmp_path):
+    """Ambos citados existem → sem miss de cobertura."""
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "a.sh").write_text("#!/bin/sh\necho hi\n")
+    (tmp_path / "b.sh").write_text("#!/bin/sh\necho yo\n")
+    msgs = [
+        {"role": "user",
+         "content": "Create two scripts a.sh and b.sh that process logs."},
+        {"role": "assistant", "content": "done"},
+    ]
+    with use_project_root(tmp_path):
+        v = check_completion(msgs)
+    assert not any("doesn't exist yet" in m for m in v.missing)

@@ -639,6 +639,28 @@ def check_completion(messages: list[dict],
     # tools (runs puramente textuais não têm como provar nada estrutural).
     _used_tools = any(m.get("tool_calls") for m in messages)
     if _used_tools:
+        # Cobertura de deliverables citados no prompt (L8 real 5x: modelo
+        # queima todos os turns na parte 1 e a parte 2 nunca começa).
+        # Task-grounded sem ensinar solução: extrai *.sh do prompt original
+        # e cobra existência. Fraseado condicional (não manda criar o que
+        # pode ser só referência): criar se deliverable, esclarecer se não.
+        _task_text = ""
+        for _m in messages:
+            if _m.get("role") == "user" and "STATE(" not in str(
+                    _m.get("content", "")):
+                _task_text = str(_m.get("content", ""))
+                break
+        if _task_text:
+            for _need in sorted(set(re.findall(
+                    r"[A-Za-z0-9_.\-]+\.sh\b", _task_text))):
+                _fp = root / _need
+                if not _fp.exists() and not any(
+                        str(_w).endswith(_need) for _w in _all_writes):
+                    ok = False
+                    miss.append(
+                        f"prompt requires {_need} which doesn't exist yet "
+                        f"— create it if it's a deliverable, otherwise "
+                        f"clarify")
         _created = _claimed_artifacts(messages)
         _made = set(_written_paths(messages)) | set(
             _shell_write_paths(messages))
