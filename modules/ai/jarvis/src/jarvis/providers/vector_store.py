@@ -19,8 +19,18 @@ from typing import Any
 from jarvis.core.config import Config
 from jarvis.providers.http_service import http_health_check
 
-# dimensões dos embeddings: defaults coerentes com modelos locais comuns
-DEFAULT_DIM = 768
+# Dimensão dos embeddings: DERIVADA do Config (fonte única JARVIS_EMBED_DIM),
+# não constante mágica (audit P1: 3 cópias divergiam ao trocar o modelo).
+# DEFAULT_DIM mantido como compat, mas o valor real vem de Config.embed_dim.
+def _embed_dim() -> int:
+    try:
+        from jarvis.core.config import Config
+        return Config().embed_dim
+    except Exception:
+        return 768
+
+
+DEFAULT_DIM = _embed_dim()
 
 # nomes dos vetores na coleção híbrida
 DENSE_VECTOR_NAME = "dense"

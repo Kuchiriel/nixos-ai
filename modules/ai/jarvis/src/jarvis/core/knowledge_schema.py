@@ -35,7 +35,18 @@ from datetime import datetime, timezone
 from typing import Any
 
 SCHEMA_VERSION = "2.0.0"
-EMBED_DIM = 768
+
+
+def _embed_dim() -> int:
+    """Dimensão derivada do Config (fonte única JARVIS_EMBED_DIM), não cópia."""
+    try:
+        from jarvis.core.config import Config
+        return Config().embed_dim
+    except Exception:
+        return 768
+
+
+EMBED_DIM = _embed_dim()  # compat; real vem de Config.embed_dim
 
 # (nome, sparse, indexes-keyword, indexes-datetime)
 COLLECTIONS = {

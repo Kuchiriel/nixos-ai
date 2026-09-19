@@ -4,6 +4,7 @@ Os testes de integração (migração real + paridade contra Qdrant) são
 marcados `integration` e pulam quando o Qdrant não está disponível.
 """
 
+import dataclasses
 import json
 import os
 
@@ -178,7 +179,11 @@ def test_parity_with_synthetic_index(tmp_path):
 
     cfg = Config()
     store = QdrantStore(cfg)
-    collection = cfg.qdrant_collection_code
+    # NUNCA usar cfg.qdrant_collection_code (coleção de PRODUÇÃO) em teste:
+    # o delete_collection do finally apagaria o code_index real (ocorrido em
+    # 18/09 20:15 — 1263 pts destruídos). Fixture usa nome exclusivo.
+    collection = "jarvis_test_parity"
+    cfg = dataclasses.replace(cfg, qdrant_collection_code=collection)
     index = _make_index(tmp_path, n=8, dim=16)
     try:
         store.delete_collection(collection)

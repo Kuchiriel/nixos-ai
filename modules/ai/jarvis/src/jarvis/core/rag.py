@@ -478,6 +478,41 @@ class HybridIndexer:
 # Busca híbrida
 # ---------------------------------------------------------------------------
 
+def diversify_by_source(hits: list[dict[str, Any]], *, penalty: float = 0.85) -> list[dict[str, Any]]:
+    """Diversidade por fonte (MMR-lite determinístico, pós-fusão/rerank).
+
+    Arquivos grandes inundam o top-k com chunks medíocres (medido 18/09:
+    18 chunks de harness.py no top-100 afundavam a definição de
+    loop_detector.py para além do rank 100). Penalidade multiplicativa
+    cumulativa por fonte: a 1ª ocorrência mantém o score, cada repetição
+    decai ×penalty — reordena apenas quando uma fonte já saturou o topo.
+    Hit sem chave de fonte (payload sem path/book/source_id) não é
+    penalizado. Single-source: ordem relativa preservada.
+    """
+    def _src(hit: dict[str, Any]) -> str:
+        payload = hit.get("payload", {}) or {}
+        return str(payload.get("path") or payload.get("book") or payload.get("source_id") or "")
+
+    counts: dict[str, int] = {}
+    pool = [dict(h) for h in hits]
+    out: list[dict[str, Any]] = []
+    while pool:
+        best_i, best_adj, best_src = 0, -1.0, ""
+        for i, hit in enumerate(pool):
+            src = _src(hit)
+            adj = float(hit.get("score", 0.0) or 0.0)
+            if src:
+                adj *= penalty ** counts.get(src, 0)
+            if adj > best_adj:
+                best_i, best_adj, best_src = i, adj, src
+        hit = pool.pop(best_i)
+        if best_src:
+            counts[best_src] = counts.get(best_src, 0) + 1
+        hit["score"] = float(best_adj)
+        out.append(hit)
+    return out
+
+
 class HybridSearch:
     """Busca híbrida (dense + sparse BM25, fusão RRF) + re-rank V4.0.5."""
 
@@ -495,6 +530,7 @@ class HybridSearch:
         sparse_limit: int = 50,
         dense_override: list[float] | None = None,
         use_rerank: bool = True,
+        diversify: bool = True,
     ) -> list[HybridHit]:
         """Busca híbrida (prefetch dense+sparse + RRF) e re-rank V4.0.5."""
         if dense_override is not None:
@@ -520,6 +556,9 @@ class HybridSearch:
             ranked = self._rerank_candidates(query, boosted)
         else:
             ranked = boosted
+
+        if diversify:
+            ranked = diversify_by_source(ranked)
 
         return [
             HybridHit(
