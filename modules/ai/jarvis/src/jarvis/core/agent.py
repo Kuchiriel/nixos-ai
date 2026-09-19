@@ -304,6 +304,10 @@ TOOL_USE_DISCIPLINE = """TOOL DISCIPLINE (mandatory):
 - No suitable tool? Answer with text and call nothing."""
 
 MAX_TURNS: int = int(os.environ.get("JARVIS_AGENT_MAX_TURNS", "8"))
+# Orçamento wall-clock do run (19/09: run L8 travou numa call LLM stallada,
+# sem traj, GPU pinada até aborto manual — max_turns não limita tempo).
+# Estoura → STUCK honesto com motivo, sem travar o loop p/ sempre.
+MAX_TIME_S: int = int(os.environ.get("JARVIS_AGENT_MAX_TIME_S", "600"))
 
 
 def _data_task_prompt(prompt: str) -> bool:
@@ -1057,11 +1061,16 @@ class Agent:
             pass
 
         # Limites lidos no runtime (não congelados no import): WebUI/CLI
-        # podem ajustar JARVIS_AGENT_MAX_TURNS sem reiniciar o processo.
+        # podem ajustar JARVIS_AGENT_MAX_TURNS/_TIME_S sem reiniciar.
         try:
             max_turns = int(os.environ.get("JARVIS_AGENT_MAX_TURNS", str(MAX_TURNS)))
         except ValueError:
             max_turns = MAX_TURNS
+        try:
+            max_time_s = int(os.environ.get("JARVIS_AGENT_MAX_TIME_S", str(MAX_TIME_S)))
+        except ValueError:
+            max_time_s = MAX_TIME_S
+        _t0 = time.monotonic()
         # P0.2: turnos de verificação (DONE sem evidência → continua).
         verify_turns = 0
         # P0.3: erro idêntico repetido (nome+args) → variar ou STUCK.
@@ -1071,6 +1080,15 @@ class Agent:
         _trunc_streak = 0
         for turn in range(max_turns):
             result.turns += 1
+            # Circuit breaker de tempo: call stallada (TTFT travado sob
+            # carga) não respeita max_turns — aborta honesto em vez de
+            # pinar GPU até aborto manual (L8n3 real 19/09).
+            if time.monotonic() - _t0 > max_time_s:
+                if not result.final_response:
+                    result.final_response = (
+                        f"STUCK: time budget exceeded ({max_time_s}s "
+                        "wall-clock).")
+                break
             response = self._get_llm_response(messages)
             # Args truncados (helper acima): repara antes de guardar —
             # o servidor nunca recebe a mensagem malformada (era 500

@@ -1592,6 +1592,20 @@ def test_run_first_gate_blocks_reedit_before_exec(tmp_path, monkeypatch) -> None
     assert any("run.sh" in c for c in result.commands_denied)
 
 
+def test_time_budget_aborts_hung_run(tmp_path, monkeypatch) -> None:
+    """Orçamento wall-clock estourado → STUCK honesto com motivo, sem
+    chamar o LLM (L8n3 real: call stallada pinou GPU até aborto manual)."""
+    class NeverSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            raise AssertionError("LLM não deveria ser chamado com budget 0")
+
+    monkeypatch.setenv("JARVIS_AGENT_MAX_TIME_S", "0")
+    agent = Agent(Config(), session=NeverSession(), approve=True)
+    result = agent.run("qualquer coisa")
+    assert result.turns == 1
+    assert "time budget" in (result.final_response or "")
+
+
 def test_list_directory_offered_and_dispatched(tmp_path, monkeypatch) -> None:
     """list_directory existe como tool e despacha (L8: disciplina mandava
     LOCATE-first mas a tool nunca existiu — instrução impossível)."""
