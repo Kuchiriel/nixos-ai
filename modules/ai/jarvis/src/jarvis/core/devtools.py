@@ -111,7 +111,29 @@ def _safe_path(path: str, root: Path | None = None,
 
     _allowed_prefixes = ("/tmp", "/build", "/etc/jarvis", str(r))
     if not any(str(target).startswith(pfx) for pfx in _allowed_prefixes):
-        raise ValueError(f"Path outside project: {target}")
+        # Tradução mecânica container→base (L8 real: modelo fixou em /app e
+        # ignorou prompt E erro dirigido — texto não contém, mecanismo sim).
+        # Doutrina "absorver imprecisão" (join-bug, dir-as-file, bhatt fuzzy):
+        # SÓ LEITURA (write redirecionado corromperia arquivos reais) e SÓ
+        # p/ arquivo EXISTENTE dentro da base (sem escalação: leitura
+        # in-jail já é permitida; o modelo poderia ler o path direto).
+        if not write:
+            base = resolve_base(root)
+            tail = [x for x in p.parts if x != "/"]
+            for i in range(min(len(tail), 4), 0, -1):
+                try:
+                    cand = base.joinpath(*tail[-i:])
+                    if cand.is_file():
+                        return cand
+                except OSError:
+                    pass
+        # Correção dirigida ao modelo (padrão toolcall-guard): erro nu não
+        # ensina — o modelo repetiu o mesmo path 7x (L8 real). Dizer ONDE
+        # estão os arquivos e QUAL a próxima call fecha o loop.
+        base = resolve_base(root)
+        raise ValueError(
+            f"Path outside project: {target}. Your task files are under "
+            f"{base} — call list_directory on it, then use relative paths.")
     if write:
         lowered = target.name.lower()
         if lowered == ".env" or lowered.endswith(".env"):

@@ -286,6 +286,9 @@ TOOL_USE_DISCIPLINE = """TOOL DISCIPLINE (mandatory):
 - One turn = one intent: prefer ONE tool per turn; pure-read batches are one intent. Writes/shell: one per turn, in dependency order (write → chmod → run, never `&&`).
 - read_file for reading files; execute_shell ONLY for explicit shell commands.
 - NEVER invent filenames, paths, or results — only use what you observed.
+- A task may cite ABSOLUTE container paths (e.g. /app/..., /root/...) that DON'T exist on this host. Before reading/writing any referenced file, list_directory CWD (and the referenced subdir, e.g. logs/ rules/) to find the REAL location — resolve to CWD-relative paths.
+- A read/write that FAILS on a path is a signal the path is WRONG: list_directory CWD and relocate. NEVER retry writing the same fabricated content to the same failed path (observed: 3x re-write of 'Sample log content' to nonexistent /app/logs → STUCK).
+- NEVER write fabricated/sample data for files you have not read. Files you must analyze (logs, csv, rules, json) live in CWD — READ them, do not synthesize.
 - Path unknown? LOCATE first (list_directory/semantic_search) — never ask the user for the path before searching.
 - Task is FIND something (keys, bugs, files)? SEARCH the whole scope first (grep -r PATTERN dir/ excluding .git, or semantic_search) — reading random files hoping to stumble on it is lottery. Read only what the search returns.
 - A tool failed? Read the [validation] hint and try the suggested alternative — one miss is not a stop.
