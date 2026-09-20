@@ -500,6 +500,20 @@ def test_real_missing_binary_no_data_hint(validator) -> None:
     assert not any("is DATA" in w for w in vr.warnings)
 
 
+def test_unquoted_for_expansion_warns(validator) -> None:
+    """`for x in $VAR` com dados → aviso (L8v28: word-split); glob passa."""
+    vr = validator.validate(
+        "write_file", {"path": "s.sh",
+                       "content": "#!/bin/bash\nfor r in $rules; do\n:\ndone\n"},
+        "ok")
+    assert any("word-split" in w for w in vr.warnings)
+    vr = validator.validate(
+        "write_file", {"path": "s.sh",
+                       "content": "#!/bin/bash\nfor f in logs/*.log; do\n:\ndone\n"},
+        "ok")
+    assert not any("word-split" in w for w in vr.warnings)
+
+
 def test_self_invoking_script_warns(validator) -> None:
     """Script que invoca a si mesmo → aviso de recursão (L8r real)."""
     vr = validator.validate(

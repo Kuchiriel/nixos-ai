@@ -20,6 +20,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -405,6 +406,18 @@ class SafeEditor:
                 # aspas simples nunca é válido; JSON válido ("{\"") e
                 # awk ('{...}') nunca têm esse vizinhança. Substrings
                 # literais — sem regex (quoting é traiçoeiro até aqui).
+                # Aspas DUPAS coladas em JSON (`{""key""`): em shell, `""`
+                # CONCATENA (não escapa!) — vira `{key` sem aspas (L8v28:
+                # outputs inválidos apesar de exit 0). JSON válido (`{"k"`)
+                # e string vazia (`=""`, `echo ""`) nunca casam.
+                if ('{""' in _line) or (
+                        re.search(r'""[A-Za-z_]', _line)):
+                    all_errors.append(
+                        f"Line {_ln}: doubled quotes CONCATENATE in shell "
+                        f"(no escaping) — `{_line.strip()[:100]}` yields "
+                        f"UNQUOTED keys. Write JSON keys with ONE pair of "
+                        f"double-quotes, or build via python3 + json.dumps.")
+                    return False, all_errors, all_warnings
                 if ("\"'{" in _line) or ("'}\"" in _line):
                     all_errors.append(
                         f"Line {_ln}: single-quoted JSON via echo is never "

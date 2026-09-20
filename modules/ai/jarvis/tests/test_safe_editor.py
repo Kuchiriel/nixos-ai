@@ -90,6 +90,20 @@ def test_echo_valid_json_and_awk_pass(tmp_path):
         assert res.success, (content, res.errors)
 
 
+def test_doubled_quotes_json_blocked(tmp_path):
+    """`{""key""` em echo/assign: aspas duplas CONCATENAM em shell (L8v28:
+    chaves sem aspas no output). Válido (`{"k"}`, `=""`) passa."""
+    path = tmp_path / "q.sh"
+    res = SafeEditor().apply_edit(
+        path, '#!/bin/bash\necho "{""id"": 1}"\n')
+    assert not res.success
+    assert any("CONCATENATE" in e for e in res.errors)
+    path.unlink(missing_ok=True)
+    res = SafeEditor().apply_edit(
+        path, '#!/bin/bash\necho \'{"id": 1}\'\nx=""\n')
+    assert res.success, res.errors
+
+
 def test_apply_edit_blocks_broken_sh(tmp_path):
     """.sh com sintaxe quebrada não chega ao disco (gate write-time)."""
     path = tmp_path / "broken.sh"

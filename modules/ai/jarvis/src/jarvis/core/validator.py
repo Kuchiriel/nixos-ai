@@ -524,6 +524,22 @@ class ToolValidator:
                     "Remove it, or guard the re-exec with a condition/flag."
                 )
                 severity = "error"
+            # Expansão sem aspas sobre dado estruturado (L8v28: `for x in
+            # $VAR` com JSON/lista → word-split corrompe; `grep $f` sem
+            # aspas quebra em path com espaço). Só aviso (há usos legítimos
+            # como `for f in *.log`): quote vars que carregam dados.
+            _unq = [ln.strip() for ln in _content.split("\n")
+                    if re.search(r"\bfor\s+\w+\s+in\s+\$[A-Za-z_]",
+                                 ln) and "*" not in ln.split("in", 1)[1]]
+            if _unq:
+                warnings.append(
+                    "write_file: unquoted expansion in "
+                    f"`{(_unq[0][:80])}` — word-splits structured data; "
+                    "quote it (`\"$var\"`) or iterate lines with "
+                    "`while IFS= read -r`."
+                )
+                if severity == "ok":
+                    severity = "warning"
 
         return ValidationResult(valid=True, enhanced_output=output,
                                 warnings=warnings, severity=severity)
