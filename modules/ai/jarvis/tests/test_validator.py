@@ -514,6 +514,20 @@ def test_unquoted_for_expansion_warns(validator) -> None:
     assert not any("word-split" in w for w in vr.warnings)
 
 
+def test_heredoc_variable_delimiter_warns(validator) -> None:
+    """Heredoc com delimitador variável → aviso (L8v35: loop engolido)."""
+    vr = validator.validate(
+        "write_file", {"path": "s.sh",
+                       "content": "#!/bin/bash\nwhile read l; do\n:\ndone <<$f\n"},
+        "ok")
+    assert any("heredoc" in w.lower() for w in vr.warnings)
+    vr = validator.validate(
+        "write_file", {"path": "s.sh",
+                       "content": "#!/bin/bash\ncat <<'EOF'\nhi\nEOF\n"},
+        "ok")
+    assert not any("heredoc" in w.lower() for w in vr.warnings)
+
+
 def test_self_invoking_script_warns(validator) -> None:
     """Script que invoca a si mesmo → aviso de recursão (L8r real)."""
     vr = validator.validate(

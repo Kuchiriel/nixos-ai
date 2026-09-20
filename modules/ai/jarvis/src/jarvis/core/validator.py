@@ -531,6 +531,22 @@ class ToolValidator:
             _unq = [ln.strip() for ln in _content.split("\n")
                     if re.search(r"\bfor\s+\w+\s+in\s+\$[A-Za-z_]",
                                  ln) and "*" not in ln.split("in", 1)[1]]
+            # Heredoc com delimitador VARIÁVEL (`<<$f`, `<< $f`): delimitador
+            # precisa ser literal — variável vira string literal inesperada e
+            # o bloco nunca executa como intended (L8v35: `done <<$rules_file`
+            # engoliu o loop; outputs nunca nasceram). `<<EOF`/`<<'EOF` passam.
+            _hd = [ln.strip() for ln in _content.split("\n")
+                   if re.search(r"<<\s*\$[A-Za-z_]", ln)]
+            if _hd:
+                warnings.append(
+                    "write_file: heredoc delimiter is a VARIABLE "
+                    f"`{(_hd[0][:60])}` — delimiters must be LITERAL words "
+                    "(`<<EOF ... EOF`); a variable becomes an unmatched "
+                    "literal and the block misbehaves. To feed a variable, "
+                    "use `<<< \"$var\"` (herestring) or a pipe."
+                )
+                if severity == "ok":
+                    severity = "warning"
             if _unq:
                 warnings.append(
                     "write_file: unquoted expansion in "
