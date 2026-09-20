@@ -283,3 +283,25 @@ def run_shell_dict(cmd: str, timeout: int = 60) -> dict[str, Any]:
         return {"ok": False, "error": "Command timed out", "exit_code": -1}
     except Exception as e:
         return {"ok": False, "error": str(e), "exit_code": -1}
+
+
+_ECHO_JSON_HEAD = re.compile(r"^\s*(echo|printf)\s")
+
+
+def echo_to_json(cmd: str) -> bool:
+    """echo/printf com redirect direto p/ *.json no mesmo segmento de pipe.
+
+    L8: echo-JSON é a representação que mais falha (v27 4x echo-surgery
+    idêntica, b3 runtime inválido ×3, w2 doubled-quote) e conselho não muta
+    representação — após escalada, vira BLOCKED vinculante (soft→binding).
+    `echo x | jq ... > a.json` passa: o redirect está em segmento jq, não
+    echo. Split ingênuo em `|` (limitação: echo com pipe quotado pode
+    escapar — o ban é best-effort, a ordem TROQUE segue valendo).
+    """
+    for seg in (cmd or "").split("|"):
+        seg = seg.strip()
+        if not _ECHO_JSON_HEAD.match(seg):
+            continue
+        if re.search(r">>?\s*[\"']?[^\s\"']*\.json", seg):
+            return True
+    return False

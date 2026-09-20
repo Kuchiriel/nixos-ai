@@ -68,3 +68,14 @@ def test_run_shell_kills_tree_on_timeout():
     assert "timed out" in r.stderr
     p = _sp.run(["pgrep", "-f", "[s]leep 60"], capture_output=True, text=True)
     assert p.returncode != 0, "stray process sobreviveu ao timeout"
+
+
+def test_echo_to_json():
+    """echo/printf com redirect direto p/ *.json no mesmo segmento
+    (v27/b3/w2: representação que mais falha; pós-escalada vira ban)."""
+    from jarvis.core.security import echo_to_json
+    assert echo_to_json("echo '{\"a\":1}' > a.json") is True
+    assert echo_to_json("printf '%s' x >> out.json") is True
+    assert echo_to_json("echo hi | jq -R . > a.json") is False
+    assert echo_to_json("jq -n '{a:1}' > a.json") is False
+    assert echo_to_json("echo hello") is False

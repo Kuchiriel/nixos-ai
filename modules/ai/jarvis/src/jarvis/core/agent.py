@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Callable, Any
 
 # Re-export from security.py for backward compatibility
-from jarvis.core.security import command_allowed, has_chaining_operators, run_shell, strip_redundant_chmod_run  # noqa: F401
+from jarvis.core.security import command_allowed, echo_to_json, has_chaining_operators, run_shell, strip_redundant_chmod_run  # noqa: F401
 
 
 def detect_profile(model_id: str) -> dict[str, Any]:
@@ -1154,6 +1154,11 @@ class Agent:
         # Artifact-repeat: .json → nº de checks seguidos inválido (ordem de
         # troca no 2º; L8b3 20/09).
         self._artifact_repeat: dict[str, int] = {}
+        # Escalada de serialização: 2º artifact-repeat engata ban
+        # vinculante de echo-em-JSON no resto do run (L10 retry: repetir a
+        # mesma representação amplifica falha; conselho não muta
+        # representação — §19 prompt-only → harness-enforced).
+        self._json_echo_banned = False
         # P0.3: erro idêntico repetido (nome+args) → variar ou STUCK.
         error_seen: dict[str, int] = {}
         # Truncamentos seguidos no limite de saída (ironclaw/2026): 3x
@@ -1411,6 +1416,14 @@ class Agent:
                         args = {**args, "cmd": cmd}
                         _strip_note = ("[harness: redundant `chmod +x` "
                                        "skipped (.sh already executable)] ")
+                    # Ban vinculante pós-escalada: echo/printf com redirect
+                    # direto p/ *.json (v27: 4x echo-surgery idêntica; b3:
+                    # runtime inválido ×3 — conselho não mutou representação).
+                    # jq/write_file intactos (pipe antes do redirect passa).
+                    # Computa flag aqui; o ban entra como 1º elo da cadeia
+                    # abaixo (não sobrescreve nem executa depois).
+                    _echoban = (self._json_echo_banned
+                                and echo_to_json(cmd))
                     # Chaining negado SEMPRE (não só no allowlist): com
                     # approve=True o denial caía no human_approve e o shlex
                     # executava QUEBRADO (L8 real: `chmod && ./` aplicava
@@ -1430,7 +1443,16 @@ class Agent:
                     _clob = re.search(
                         r"open\(\s*['\"][^'\"]+\.sh['\"]\s*,\s*['\"]w",
                         cmd)
-                    if _clob is not None:
+                    if _echoban:
+                        result.commands_denied.append(cmd)
+                        tool_result = (
+                            "ERROR: BLOCKED — echo-to-JSON banned for this "
+                            "run (2 invalid JSON artifacts already; repeating "
+                            "the representation failed). Emit via jq -n "
+                            "--arg/--argjson, or write_file the .json "
+                            "(server grammar enforces syntax).")
+                        self._log_audit(cmd, None, tool_result, False)
+                    elif _clob is not None:
                         result.commands_denied.append(cmd)
                         tool_result = (
                             "ERROR: Refused — writing over a .sh script via "
@@ -1926,6 +1948,12 @@ class Agent:
                             _acount = self._artifact_repeat.get(_akey, 0) + 1
                             self._artifact_repeat[_akey] = _acount
                             if _acount >= 2:
+                                # Escalada soft→binding: a partir daqui
+                                # echo/printf com redirect p/ *.json é
+                                # BLOCKED (só jq/write_file). Monotônico no
+                                # run (falha semântica determinística, não
+                                # transiente).
+                                self._json_echo_banned = True
                                 tool_result += (
                                     f"\nBLOQUEADO 2x: {_akey} segue inválido "
                                     f"— repetir o gerador falhou. TROQUE DE "

@@ -2149,6 +2149,43 @@ def test_placeholder_literal_blocked_in_exec_and_read(tmp_path, monkeypatch) -> 
     assert sum("Literal placeholder <IP>" in h for h in hits) == 2
 
 
+def test_echo_ban_engages_after_second_invalid_artifact(tmp_path, monkeypatch) -> None:
+    """2º artifact inválido engata ban vinculante de echo-em-JSON (escalada
+    soft→binding, L10 retry: v27/b3/w2 repetiram a representação até STUCK).
+    jq passa intacto."""
+    class EscSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                cmd = "python3 -c \"open('a.json','w').write('{bad')\""
+            elif self.calls == 2:
+                cmd = "ls"
+            elif self.calls == 3:
+                cmd = "echo '{\"k\":1}' > b.json"
+            elif self.calls == 4:
+                cmd = "jq -n '{k:1}'"
+            else:
+                return FakeResponse({"choices": [
+                    {"message": {"role": "assistant",
+                                 "content": "stopped"}}]})
+            msg = {"role": "assistant", "content": "",
+                   "tool_calls": [{"id": f"call-{self.calls}",
+                       "type": "function",
+                       "function": {"name": "execute_shell",
+                           "arguments": jsonlib.dumps({"cmd": cmd})}}]}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=EscSession(), approve=True)
+    result = agent.run("produce json")
+    hits = [str(m.get("content", ""))
+            for m in getattr(result, "messages", [])]
+    assert any("echo-to-JSON banned" in h for h in hits)
+    assert not (tmp_path / "b.json").exists()
+    assert any('"k"' in h for h in hits)
+
+
 def test_malformed_budget_stops_run(tmp_path, monkeypatch) -> None:
     """Args-JSON inválido 3x seguidas → STUCK honesto na 3ª (L8b3 20/09: até
     8 turns queimados em hint sem teto; verify_turns não cobre esse caso)."""
