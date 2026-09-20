@@ -281,12 +281,20 @@ def parity_report(
     *,
     queries: Iterable[str],
     top_k: int = 5,
+    raw: bool = False,
 ) -> dict[str, Any]:
     """Compara o top-k da busca legada (NumPy) vs a busca híbrida nova (Qdrant).
 
     Usa os vetores dense existentes como query vectors (amostras do próprio
     índice) — a paridade mede se o ranking novo reproduz o ranking legado,
     não a qualidade dos embeddings (modelo novo entra em `jarvis index`).
+
+    raw=True desliga rerank/diversify: mede a FIDELIDADE DA MIGRAÇÃO
+    (promessa documentada do migrate: "paridade dense exata"). Com o pipeline
+    completo (rerank cross-encoder + diversify por fonte), a reordenação é
+    intencional — paridade de ranking exata não é invariante da arquitetura
+    (regressão de teste quando esses estágios entraram, nunca falha de
+    produção).
 
     Retorna {overlap_medio, por_query: [{query, overlap, legado: [...], novo: [...]}]}.
     """
@@ -318,6 +326,8 @@ def parity_report(
             query,
             top_k=top_k,
             dense_override=[float(v) for v in qvec],
+            use_rerank=not raw,
+            diversify=not raw,
         )
         novo_paths = [h.path for h in novo]
 

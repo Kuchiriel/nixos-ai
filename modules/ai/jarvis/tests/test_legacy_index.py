@@ -193,9 +193,23 @@ def test_parity_with_synthetic_index(tmp_path):
             cfg,
             queries=[f"/home/dev/proj/file{i}.py" for i in range(4)],
             top_k=3,
+            raw=True,
         )
         assert report["total_queries"] >= 3
-        # no mínimo 2 de 3 no top-3 (≥ 66%) para índice sintético coeso
+        # Fidelidade da MIGRAÇÃO (modo raw: sem rerank/diversify): o migrate
+        # promete "paridade dense exata". O pipeline completo reordena por
+        # desenho (rerank + diversify) — paridade de ranking exata nunca foi
+        # invariante da arquitetura; o threshold antigo media o invariante
+        # errado (0.0 estável) e apodreceu quando os estágios entraram.
         assert report["overlap_medio"] >= 0.6
+        # Pipeline completo: executa e retorna (robustez, sem threshold de
+        # ranking — reordenação intencional).
+        full = parity_report(
+            index,
+            cfg,
+            queries=[f"/home/dev/proj/file{i}.py" for i in range(4)],
+            top_k=3,
+        )
+        assert full["total_queries"] >= 3
     finally:
         store.delete_collection(collection)
