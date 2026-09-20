@@ -2236,6 +2236,30 @@ def test_synthesize_unknown_grammar(tmp_path, monkeypatch) -> None:
                for m in getattr(result, "messages", []))
 
 
+def test_synthesize_script_intent_redirects_to_write(tmp_path, monkeypatch) -> None:
+    """grammar='write' p/ script → redireciona a write_file (g2 20/09:
+    modelo quer sintetizar script, máscara só cobre comandos)."""
+    class WriteGSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-1", "type": "function",
+                           "function": {"name": "synthesize_command",
+                               "arguments": jsonlib.dumps({
+                                   "desc": "write detector script",
+                                   "grammar": "write"})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    agent = Agent(Config(), session=WriteGSession(), approve=True)
+    result = agent.run("synthesize")
+    assert any("masks cover SINGLE commands only" in str(m.get("content", ""))
+               for m in getattr(result, "messages", []))
+
+
 def test_echo_ban_engages_after_second_invalid_artifact(tmp_path, monkeypatch) -> None:
     """2º artifact inválido engata ban vinculante de echo-em-JSON (escalada
     soft→binding, L10 retry: v27/b3/w2 repetiram a representação até STUCK).

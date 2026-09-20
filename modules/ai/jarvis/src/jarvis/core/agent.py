@@ -1587,9 +1587,25 @@ class Agent:
                     _gname = str(args.get("grammar", ""))
                     _gbnf = SYNTH_GRAMMARS.get(_gname)
                     if _gbnf is None:
-                        tool_result = (
-                            f"ERROR: unknown grammar '{_gname}' (available: "
-                            f"{', '.join(sorted(SYNTH_GRAMMARS))}).")
+                        # Id desconhecido (g2 20/09: grammar='write' 3x) —
+                        # redireciona pela INTENÇÃO: script→write_file,
+                        # comando→família. Erro que ensina o próximo passo.
+                        _dd = str(args.get("desc", "")).lower()
+                        if any(k in _dd for k in (
+                                "script", "file", ".sh", "write", "program")):
+                            tool_result = (
+                                f"ERROR: grammar '{_gname}' doesn't exist — "
+                                f"masks cover SINGLE commands only, never "
+                                f"scripts. For scripts: write_file a minimal "
+                                f"skeleton (shebang + set -uo pipefail), "
+                                f"chmod +x, execute, then extend.")
+                        else:
+                            tool_result = (
+                                f"ERROR: unknown grammar '{_gname}' "
+                                f"(available: "
+                                f"{', '.join(sorted(SYNTH_GRAMMARS))}). "
+                                f"Pick by family: count/search=grep, read "
+                                f"JSON=jqread, timestamp=date, chmod=chmod.")
                     else:
                         try:
                             _sresp = self.llm.chat_with_tools(
