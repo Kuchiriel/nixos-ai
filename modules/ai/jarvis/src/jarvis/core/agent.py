@@ -1151,11 +1151,18 @@ class Agent:
         # Bar-repeat: path → hash do último conteúdo barrado (ordem de
         # troca de estratégia no 2º bar idêntico; L8b1 20/09).
         self._bar_repeat: dict[str, str] = {}
+        # Artifact-repeat: .json → nº de checks seguidos inválido (ordem de
+        # troca no 2º; L8b3 20/09).
+        self._artifact_repeat: dict[str, int] = {}
         # P0.3: erro idêntico repetido (nome+args) → variar ou STUCK.
         error_seen: dict[str, int] = {}
         # Truncamentos seguidos no limite de saída (ironclaw/2026): 3x
         # seguidas escala p/ plano em prosa ( giant calls condenados).
         _trunc_streak = 0
+        # Turnos só-malformados seguidos (L8b3 20/09: 17 turns, 9 tool calls
+        # — até 8 turns queimados em hint sem teto; verify_turns só cobre
+        # no-tool-call, não args-malformados).
+        _mal_streak = 0
         for turn in range(max_turns):
             result.turns += 1
             # Circuit breaker de tempo: call stallada (TTFT travado sob
@@ -1203,9 +1210,24 @@ class Agent:
                        " small enough to fit), then execute one per turn."))
             messages.append(response)
             if _note and not response.get("tool_calls"):
-                # Nenhum call válido: só a nota, sem executar.
+                # Nenhum call válido: só a nota, sem executar. Só conta o
+                # caso MALFORMED (truncamento tem escalada própria p/ plano
+                # em prosa — contar junto mataria a estratégia que o próprio
+                # harness ordenou). SEM TETO o malformed queimava budget
+                # (L8b3: até 8 turns em hint) — 3x seguidas = STUCK honesto.
+                if _mal_hint:
+                    _mal_streak += 1
+                    if _mal_streak >= 3:
+                        result.final_response = (
+                            "STUCK: tool-call JSON inválido 3x seguidas "
+                            "(geração instável no limite de tokens?) — "
+                            "parando em vez de queimar budget; reduza o "
+                            "tamanho de cada call e tente de novo.")
+                        self._finalize(result, messages, forced="STUCK")
+                        break
                 messages.append({"role": "user", "content": _note})
                 continue
+            _mal_streak = 0
             try:
                 turn_budget.add_message(response)
                 turn_budget.record_llm_call()
@@ -1854,6 +1876,25 @@ class Agent:
                 if name in ("execute_shell", "jarvis_execute"):
                     for _anote in _check_run_json_artifacts(_t0):
                         tool_result += "\n" + _anote
+                        # Repeat: mesmo .json inválido em 2 checks seguidos →
+                        # ordem de TROCA DE ESTRATÉGIA (L8b3 20/09: detector
+                        # válido+executável gerando JSON inválido; o aviso
+                        # "regenerate" sozinho não moveu — ovo inviável pede
+                        # método novo, não repetição do gerador).
+                        _am = re.search(r"artifact-check: (\S+\.json)", _anote)
+                        if _am is not None:
+                            _akey = _am.group(1)
+                            _acount = self._artifact_repeat.get(_akey, 0) + 1
+                            self._artifact_repeat[_akey] = _acount
+                            if _acount >= 2:
+                                tool_result += (
+                                    f"\nBLOQUEADO 2x: {_akey} segue inválido "
+                                    f"— repetir o gerador falhou. TROQUE DE "
+                                    f"ESTRATÉGIA: delete {_akey} (`rm "
+                                    f"{_akey}`), gere-o via python3 -c com "
+                                    f"VALORES reais já computados (grep -c, "
+                                    f"grep -o), e SÓ então ajuste o script "
+                                    f"p/ replicar o formato válido.")
 
                 # Post-execution validation (FASE 16): structured failure
                 # feedback — padrões de erro, exit codes e hints NixOS que o

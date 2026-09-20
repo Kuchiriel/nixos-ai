@@ -2119,6 +2119,57 @@ def test_placeholder_literal_blocked_in_exec_and_read(tmp_path, monkeypatch) -> 
     assert sum("Literal placeholder <IP>" in h for h in hits) == 2
 
 
+def test_malformed_budget_stops_run(tmp_path, monkeypatch) -> None:
+    """Args-JSON inválido 3x seguidas → STUCK honesto na 3ª (L8b3 20/09: até
+    8 turns queimados em hint sem teto; verify_turns não cobre esse caso)."""
+    class BadSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            msg = {"role": "assistant", "content": "",
+                   "tool_calls": [{"id": f"call-{self.calls}",
+                       "type": "function",
+                       "function": {"name": "write_file",
+                           "arguments": "{invalid json,"}}]}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    sess = BadSession()
+    agent = Agent(Config(), session=sess, approve=True)
+    result = agent.run("write big file")
+    assert sess.calls == 3
+    assert "3x seguidas" in (result.final_response or "")
+    assert result.verdict == "STUCK"
+
+
+def test_artifact_repeat_orders_strategy(tmp_path, monkeypatch) -> None:
+    """Mesmo .json inválido em 2 artifact-checks → ordem de TROCA (L8b3
+    20/09: detector válido gerando JSON inválido; 'regenerate' não moveu)."""
+    class ArtSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                cmd = "python3 -c \"open('a.json','w').write('{bad')\""
+            elif self.calls == 2:
+                cmd = "ls"
+            else:
+                return FakeResponse({"choices": [
+                    {"message": {"role": "assistant",
+                                 "content": "stopped"}}]})
+            msg = {"role": "assistant", "content": "",
+                   "tool_calls": [{"id": f"call-{self.calls}",
+                       "type": "function",
+                       "function": {"name": "execute_shell",
+                           "arguments": jsonlib.dumps({"cmd": cmd})}}]}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=ArtSession(), approve=True)
+    result = agent.run("produce json")
+    assert any("TROQUE DE ESTRATÉGIA" in str(m.get("content", ""))
+               for m in getattr(result, "messages", []))
+
+
 def test_clobber_sh_via_python_refused(tmp_path, monkeypatch) -> None:
     """`python3 -c open('x.sh','w').write(json...)` → ERROR dirigido (L8b2
     20/09: molde-JSON aplicado no .sh 2x, matando o detector). Leitura
