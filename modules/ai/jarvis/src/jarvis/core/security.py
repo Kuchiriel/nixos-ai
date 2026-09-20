@@ -55,16 +55,48 @@ def has_dangerous_operators(cmd: str) -> bool:
     return False
 
 
+def _strip_quoted(cmd: str) -> str:
+    """Remove spans entre aspas (operadores lá dentro são literais, não
+    shell). `"` e `'` com escape `\\` respeitado; backtick NÃO é stripped
+    (command substitution — falha p/ o lado seguro)."""
+    out: list[str] = []
+    i, n = 0, len(cmd or "")
+    q: str | None = None
+    while i < n:
+        c = cmd[i]
+        if q is not None:
+            if c == "\\":
+                i += 2
+                continue
+            if c == q:
+                q = None
+        elif c in ("'", '"'):
+            q = c
+        else:
+            out.append(c)
+        i += 1
+    return "".join(out)
+
+
 def has_chaining_operators(cmd: str) -> bool:
     """True if command contains ANY chaining operators (including ; and |).
+
+    Operadores DENTRO de aspas são literais (L8v40: sketch python3-c com
+    `;` foi barrado — o modelo seguiu nossa instrução e a policy puniu!).
+    run_shell usa shlex (sem shell): string quotada nunca vira comando.
+    Backtick continua sempre bloqueado (fail-closed).
 
     Used for backward compatibility with tests.
     For security validation, use command_allowed() instead.
     """
+    bare = _strip_quoted(cmd)
     _ALL_CHAINING = ("&&", "||", ";", "|", "`", "$(", "${", "\n")
     for pat in _ALL_CHAINING:
-        if pat in cmd:
+        if pat in bare:
             return True
+    # Backtick mesmo quotado (conservador: _strip_quoted não o remove).
+    if "`" in (cmd or ""):
+        return True
     return False
 
 

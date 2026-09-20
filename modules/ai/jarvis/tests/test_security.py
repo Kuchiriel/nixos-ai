@@ -43,6 +43,21 @@ def test_strip_redundant_chmod_run():
     assert strip_redundant_chmod_run("ls -la") is None
 
 
+def test_chaining_ignores_quoted_operators():
+    """Operador dentro de aspas é literal (L8v40: sketch python3-c com `;`
+    foi barrado — seguir a instrução virou punição)."""
+    from jarvis.core.security import has_chaining_operators as hco
+    assert hco('python3 -c "import json; open(\'a\',\'w\')"') is False
+    assert hco("echo \"a && b\"") is False
+    assert hco("grep 'a|b' f.log") is False
+    assert hco("chmod +x x.sh && ./x.sh") is True
+    assert hco("ls /tmp; echo done") is True
+    assert hco("echo `whoami`") is True
+    # Aspa não fechada NÃO é chaining (shlex barra depois com msg de
+    # quoting — diagnóstico certo p/ sintoma certo).
+    assert hco('echo "unclosed && ./x') is False
+
+
 def test_run_shell_kills_tree_on_timeout():
     """Timeout mata a ÁRVORE (killpg), não só o filho (L8r: script com
     auto-invocação recursava órfão após timeout)."""
