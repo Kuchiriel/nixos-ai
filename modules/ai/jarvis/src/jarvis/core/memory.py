@@ -32,6 +32,7 @@ KIND_LESSON = "lesson"
 KIND_FACT = "fact"
 KIND_DECISION = "decision"
 KIND_PREFERENCE = "preference"
+KIND_ERROR = "error"
 
 # Keep: kinds válidos para recall por padrão
 _ALL_KINDS = (KIND_LESSON, KIND_FACT, KIND_DECISION, KIND_PREFERENCE)
@@ -189,13 +190,23 @@ class EpisodicMemory:
             max_chars: limite de caracteres para não saturar o contexto de SLMs.
                        Lições mais recentes e com score maior têm prioridade.
         """
-        hits = self.recall(query, top_k=top_k, kinds=(KIND_LESSON,))
+        hits = self.recall(query, top_k=top_k,
+                           kinds=(KIND_LESSON, KIND_FACT, KIND_ERROR))
         if not hits:
             return ""
         out = "\nPAST LESSONS (avoid these mistakes):\n"
         for h in hits:
-            line = (f"- When task was '{h['task'] or '?'}', error "
-                    f"'{h['error_pattern'] or '?'}' was fixed with:\n{h['fix'] or '?'}\n")
+            if h["kind"] == KIND_LESSON and (h["task"] or h["fix"]):
+                line = (f"- When task was '{h['task'] or '?'}', error "
+                        f"'{h['error_pattern'] or '?'}' was fixed with:\n{h['fix'] or '?'}\n")
+            else:
+                # Fact/error sem campos task/fix: injeta o texto compacto
+                # (L8: v41 + quoting facts score 0.9 no recall mas invisíveis
+                # ao filtro lesson-only — 41 falhas com a cura no store).
+                txt = (h["text"] or "").strip().replace("\n", " ")
+                if not txt:
+                    continue
+                line = f"- Known ({h['kind']}): {txt[:180]}\n"
             if len(out) + len(line) > max_chars:
                 break
             out += line

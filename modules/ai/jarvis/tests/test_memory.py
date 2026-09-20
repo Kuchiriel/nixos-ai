@@ -158,3 +158,25 @@ def test_stable_id_deterministic() -> None:
     ts = 1700000000.0
     assert _stable_id("texto", ts) == _stable_id("texto", ts)
     assert _stable_id("texto", ts) != _stable_id("outro", ts)
+
+
+def test_lessons_includes_facts_and_errors(monkeypatch) -> None:
+    """lessons() injeta facts/errors além de lessons (L8: v41 + quoting
+    facts no store mas invisíveis ao filtro lesson-only — 41 falhas com a
+    cura guardada). Decisions continuam fora."""
+    from jarvis.core.memory import MemoryEvent
+    mem, _, _ = _mem(monkeypatch)
+    mem.remember(MemoryEvent(kind=KIND_LESSON, text="Task: t. Error: e. Fix: f",
+                             task="t", error_pattern="e", fix="f"))
+    mem.remember_fact("bonsai: JSON com aspas simples quebra; usar jq -n")
+    mem.remember(MemoryEvent(kind="decision", text="usar jq sempre"))
+    out = mem.lessons("shell json quoting fix")
+    assert "When task was 't'" in out
+    assert "jq -n" in out
+    assert "usar jq sempre" not in out
+
+
+def test_lessons_empty_without_hits(monkeypatch) -> None:
+    """Store vazio → string vazia (sem injeção fantasma)."""
+    mem, _, _ = _mem(monkeypatch)
+    assert mem.lessons("qualquer coisa") == ""
