@@ -53,6 +53,7 @@ QUEUE: list[tuple[str, str, str]] = [
     ("arxiv-2405.00218-constrained-secure-code", HARNESS, "harness_digest"),
     ("arxiv-2505.14172-strawberry", HARNESS, "harness_digest"),
     ("arxiv-2510.14365-char-perturb", HARNESS, "harness_digest"),
+    ("arxiv-2606.08610-harbor-robot", HARNESS, "harness_digest"),
     ("codeagents-pseudocode-2507.03254", HARNESS, "harness_digest"),
     ("faros-harness-engineering-mit-2026", HARNESS, "harness_digest"),
     ("nickyeo-model-vs-harness-4-sdks", HARNESS, "harness_digest"),
@@ -74,6 +75,7 @@ QUEUE: list[tuple[str, str, str]] = [
     ("arxiv-2405.00218-constrained-secure-code", BOOKS, "paper"),
     ("arxiv-2505.14172-strawberry", BOOKS, "paper"),
     ("arxiv-2510.14365-char-perturb", BOOKS, "paper"),
+    ("arxiv-2606.08610-harbor-robot", BOOKS, "paper"),
 ]
 
 LOG = Path("/home/nixos/Books/session-2026-09-18/logs/books-batch.jsonl")

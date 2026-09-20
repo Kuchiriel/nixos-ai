@@ -1098,7 +1098,10 @@ class Agent:
         # Revisão-sintaxe armada: write barrado por `Bash syntax error`
         # agenda 1 pass de review polimórfico (thinking externalizado) na
         # próxima chamada (dono 19/09; caderno > cadeia volátil). One-shot.
+        # Teto de 3 passes/run (L8v34: 2 reviews, 143s, zero fix — review
+        # sem limite queima latência sem garantia de ganho).
         self._review_syntax_armed = False
+        self._reviews_used = 0
         # P0.3: erro idêntico repetido (nome+args) → variar ou STUCK.
         error_seen: dict[str, int] = {}
         # Truncamentos seguidos no limite de saída (ironclaw/2026): 3x
@@ -1115,8 +1118,11 @@ class Agent:
                         f"STUCK: time budget exceeded ({max_time_s}s "
                         "wall-clock).")
                 break
-            _effort = ("medium" if self._review_syntax_armed else None)
-            _focus = ("syntax" if self._review_syntax_armed else None)
+            _armed = self._review_syntax_armed and self._reviews_used < 3
+            _effort = ("medium" if _armed else None)
+            _focus = ("syntax" if _armed else None)
+            if _armed:
+                self._reviews_used += 1
             self._review_syntax_armed = False
             response = self._get_llm_response(
                 messages, reasoning_effort=_effort, review_focus=_focus)
