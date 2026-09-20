@@ -200,6 +200,46 @@ def _synth_offered(bar_repeat, artifact_repeat, echo_banned) -> bool:
     return bool(bar_repeat or artifact_repeat or echo_banned)
 
 
+_HIST_TOOL_BUDGET = 12000
+_HIST_KEEP_LAST = 2
+_HIST_FLOOR = 500
+
+
+def _truncate_history_for_send(
+    messages: list[dict[str, Any]],
+    budget: int = _HIST_TOOL_BUDGET,
+    keep_last: int = _HIST_KEEP_LAST,
+    floor: int = _HIST_FLOOR,
+) -> list[dict[str, Any]]:
+    """Cópia do histórico p/ envio com tool-results antigas truncadas.
+
+    Sliding window de payload (donkey §20: msgs 51% e crescendo; dedup só
+    pega repetição idêntica). Preserva roles/ordem/últimas intactas; nunca
+    muta o histórico armazenado (só a cópia enviada). Assistant preservado
+    (coerência); só role=="tool" trunca, com marcador de re-leitura.
+    """
+    tool_idx = [i for i, m in enumerate(messages)
+                if m.get("role") == "tool"]
+    if not tool_idx:
+        return list(messages)
+    keep = set(tool_idx[-keep_last:] if keep_last > 0 else [])
+    total = sum(len(str(messages[i].get("content", ""))) for i in tool_idx
+                if i not in keep)
+    if total <= budget:
+        return list(messages)
+    out = [dict(m) for m in messages]
+    for i in tool_idx:
+        if i in keep:
+            continue
+        content = str(out[i].get("content", ""))
+        if len(content) > floor:
+            out[i] = {**out[i],
+                      "content": (content[:floor] + f"\n[truncated "
+                                  f"{len(content)}→{floor} chars; re-read "
+                                  f"the file if needed]")}
+    return out
+
+
 def extract_fallback_tool_call(text: str | None) -> dict[str, Any] | None:
     """Extract tool call from text when native tool calls fail.
     
@@ -2926,8 +2966,12 @@ class Agent:
                 if "Available tools (respond with ONLY" not in messages[0].get("content", ""):
                     messages[0] = {**messages[0],
                                    "content": messages[0].get("content", "") + "\n\n" + sig}
+        # Sliding window de payload: envia cópia com tool-results antigas
+        # truncadas; histórico armazenado segue intacto (forense, gates,
+        # completion leem o original). Donkey §20.
+        send_messages = _truncate_history_for_send(messages)
         resp = self.llm.chat_with_tools(
-            messages,
+            send_messages,
             tools=None if need_call else tools,
             temperature=profile["temperature"],
             max_tokens=profile["max_tokens"],
@@ -2948,12 +2992,12 @@ class Agent:
             if _last is not None:
                 import json as _pj
                 _last.stage = "llm"
-                _last.sys_chars = len(str((messages[0].get("content", "")
-                                           if messages else "")))
+                _last.sys_chars = len(str((send_messages[0].get("content", "")
+                                           if send_messages else "")))
                 _last.tools_chars = len(_pj.dumps(
                     [] if need_call else tools, default=str))
                 _last.msgs_chars = sum(
-                    len(str(m.get("content", ""))) for m in messages[1:])
+                    len(str(m.get("content", ""))) for m in send_messages[1:])
         except Exception:
             pass
         if need_call:

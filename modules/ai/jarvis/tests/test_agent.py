@@ -2324,6 +2324,33 @@ def test_synth_offered_only_after_bar() -> None:
     assert _synth_offered({}, {}, True) is True
 
 
+def test_truncate_history_for_send() -> None:
+    """Sliding window: tool-results antigas truncam, últimas intactas,
+    histórico original nunca muta (donkey §20)."""
+    from jarvis.core.agent import _truncate_history_for_send
+    big1 = "x" * 15000
+    big2 = "y" * 8000
+    fresh = "z" * 8000
+    msgs = [{"role": "system", "content": "sys"},
+            {"role": "assistant", "content": "a1"},
+            {"role": "tool", "content": big1},
+            {"role": "assistant", "content": "a2"},
+            {"role": "tool", "content": big2},
+            {"role": "assistant", "content": "a3"},
+            {"role": "tool", "content": fresh}]
+    out = _truncate_history_for_send(msgs)
+    roles = [m.get("role") for m in out]
+    assert roles == [m.get("role") for m in msgs]
+    assert out[-1]["content"] == fresh
+    assert out[4]["content"] == big2
+    assert "truncated" in out[2]["content"]
+    assert len(out[2]["content"]) < 1000
+    assert msgs[2]["content"] == big1
+    small = [{"role": "system", "content": "s"},
+             {"role": "tool", "content": "tiny"}]
+    assert _truncate_history_for_send(small)[1]["content"] == "tiny"
+
+
 def test_synthesize_command_dispatch(tmp_path, monkeypatch) -> None:
     """synthesize_command faz sub-call mascarada e devolve o comando
     (H-grammar: gera sob GBNF, nunca executa — sem aprovação)."""
