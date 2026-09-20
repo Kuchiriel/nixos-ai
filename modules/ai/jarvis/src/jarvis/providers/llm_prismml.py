@@ -140,7 +140,10 @@ class PrismMLBackend(LLMBackend):
         resp.raise_for_status()
         data = resp.json()
 
-        choice = data["choices"][0]
+        _choices = data.get("choices") or []
+        if not _choices:
+            raise RuntimeError("LLM returned no choices (empty response)")
+        choice = _choices[0]
         message = choice["message"]
 
         return ChatResponse(

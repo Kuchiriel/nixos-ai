@@ -2466,6 +2466,21 @@ def test_echo_ban_engages_after_second_invalid_artifact(tmp_path, monkeypatch) -
         assert any('"k"' in h for h in hits)
 
 
+def test_llm_empty_choices_stuck_honest(monkeypatch) -> None:
+    """Provider sem choices (EXP-G 20/09: 1 run real morreu com IndexError
+    cru em choices[0]) → STUCK honesto com motivo, nunca exceção."""
+
+    class EmptySession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            return FakeResponse({"choices": []})
+
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=EmptySession(), approve=True)
+    result = agent.run("qualquer coisa")
+    assert result.verdict == "STUCK"
+    assert "no choices" in result.final_response
+
+
 def test_malformed_budget_stops_run(tmp_path, monkeypatch) -> None:
     """Args-JSON inválido 3x seguidas → STUCK honesto na 3ª (L8b3 20/09: até
     8 turns queimados em hint sem teto; verify_turns não cobre esse caso)."""

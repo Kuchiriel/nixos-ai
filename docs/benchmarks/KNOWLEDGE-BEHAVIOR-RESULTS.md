@@ -101,3 +101,67 @@ Runner: `EvalHarness.compare` semântica (n=3/braço), world_check externo.
   p/ policy (RAG-discovery + filesystem-truth, §31).
 - Runner: `/tmp/exp-d-run.py`; `/tmp/exp-d-summary.json`.
 - Status: PARTIALLY VERIFIED.
+
+## EXP-E2/D2 — attribution by tool restriction ✅ ENTROPY, NOT CAPABILITY
+
+- recall ("previous execution"): E1-all 3/3, E2-only 3/3, E3-pair 3/3 —
+  confusão do EXP-E ("decide"→lessons) é verbo-dependente, não
+  incapacidade geral.
+- execute (git): E1 0/3 → E2-only 3/3 → E3-pair(+read_file) 0/3.
+- vault (policy): E1 0/3 → E2-only 3/3 → E3-pair 3/3.
+- Interpretation (§37): com a tool correta isolada o modelo SEMPRE
+  seleciona certo (9/9 E2); com read_file no menu ele SEMPRE prefere
+  read_file (0/6 E1/E3 git). Falha = entropia de escolha
+  (MCP presentation), NÃO incapacidade. Restrição/divulgação
+  progressiva é alavanca arquitetural real. R5/R6: E6 (progressive
+  disclosure) passa a ser o próximo teste, não mais prosa.
+- Runner: `/tmp/exp-e2-run.py`; `/tmp/exp-e2-summary.json`. n=3/célula.
+- Status: STRONG EVIDENCE (replicado em 2 substratos: git e vault).
+
+## R1 — EXP-A replication n=5 + generalization (2 new docs) ✅ STRONG
+
+- T1 replicate (181): C0 **0/5**, C1 **0/5**, C2 **5/5** (turns 2 sempre).
+  C0 outputs: 42,13,13,42,42 (exemplo + nº-modelos — mesmas classes).
+- T2 (not-the-size, VCR 0.625, decimal): C0 0/3, C2 3/3.
+- T3 (judge digest, count=5, small-int): C0 0/3 (turns 5,6,5 — tenta e
+  erra), C2 3/3 (turns 2).
+- Total: C2 11/11, controles 0/16, 3 docs × 3 formulações × 3 formatos.
+  Interpretation: efeito arquitetural (retrieval→behavior), não
+  memorização de benchmark. Confiança: STRONG EVIDENCE.
+- Runner: `/tmp/exp-r1/run_r1.py`; `/tmp/exp-r1/r1-replication.jsonl`.
+- Status: VERIFIED (replicado n=5 + generalizado 2 tasks).
+
+## R2 — lesson representation ablation ✅ MECANISMO CONFIRMADO
+
+Variant B (WARN/32/truth 8), bonsai, n=3 (B2/B0 estendidos a n=5):
+- B0 no-lesson: **4/5** (3/3 + 1/2; baseline wobble: um 5).
+- B2 values-lesson: **1/5** (1/3 + 0/2; ambos extras escreveram 10).
+- L3 compressed value-free ("count exactly"): 1/3.
+- L4 scoped values ("PAST EPISODE ONLY... truth was 10"): 1/3 —
+  escreveu **10 duas vezes**: o rótulo NÃO neutraliza a atração.
+- L5 rule form ("RULE: output = ... enumeration"): 2/3.
+- Ranking: value-free (B3 3/3) > rule 2/3 > compressed/scoped/values
+  1/3 ≈ values-lesson 1/5.
+- Hipóteses: H-C8 (valores históricos lidos como atuais) SUPPORTED;
+  H-C3 (verbosidade) REJECTED (L3 curta falha igual); H-C10 (variância)
+  presente mas separação B2×B3 é larga (1/5 vs 3/3); H-C9 (representação
+  nociva) SUPPORTED. L6 respondida por leitura: handlers MCP chamam os
+  mesmos métodos EpisodicMemory (path-equivalente por código).
+- REGRA (§15, regression R4): lessons sem números episódicos.
+- Runner: `/tmp/exp-r2/run_r2.py`; coleção `exp_r2_lessons`.
+- Status: STRONG EVIDENCE (preliminary-strong, n≤5 — sem teatro).
+
+## EXP-F — context ablation (chain-D FAIL/40/truth 8) ⚠️ MORE ≠ BETTER
+
+- F0 bare: **0/3** — escreveu 4,4,4 (erro SISTEMÁTICO, não ruído).
+- F3 +value-free lesson: **1/3** (7, ausente, 8).
+- F8 +lesson +RAG worked-example (4,8,12→3): **0/3** — escreveu 3,3,3
+  (o número DO EXEMPLO). Interação negativa confirmada.
+- Interpretation: menor condição suficiente NÃO encontrada aqui; cada
+  substrato adicionado puxa o modelo p/ seus próprios números
+  (atração generalizada). E: sensibilidade de variante — mesmo formato,
+  superfície diferente (WARN/32 vs FAIL/40): baseline B 4/5 vs D 0/3.
+  Benchmark integrity: wording/superfície da task decide o resultado
+  tanto quanto a condição (§34 anti-gaming: variar é obrigatório).
+- Runner: `/tmp/exp-f/run_f.py`; coleção `exp_f_lessons`.
+- Status: STRONG EVIDENCE (efeito adverso replicado 2ª vez, outro par).

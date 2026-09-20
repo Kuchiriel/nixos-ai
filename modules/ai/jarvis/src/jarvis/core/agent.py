@@ -1255,8 +1255,19 @@ class Agent:
             if _armed:
                 self._reviews_used += 1
             self._review_syntax_armed = False
-            response = self._get_llm_response(
-                messages, reasoning_effort=_effort, review_focus=_focus)
+            response = None
+            try:
+                response = self._get_llm_response(
+                    messages, reasoning_effort=_effort, review_focus=_focus)
+            except Exception as _llm_e:  # noqa: BLE001
+                # §26 (EXP-G 20/09): provider sem choices/timeout/conexão
+                # derrubava o run com exceção crua (IndexError). Falha
+                # legível: STUCK honesto, nunca crash.
+                result.final_response = (
+                    f"STUCK: LLM call failed ({type(_llm_e).__name__}: "
+                    f"{str(_llm_e)[:160]}).")
+                result.verdict = "STUCK"
+                break
             # Args truncados (helper acima): repara antes de guardar —
             # o servidor nunca recebe a mensagem malformada (era 500
             # fatal). Hint consome o turno; budget de turnos limita.
