@@ -2170,6 +2170,66 @@ def test_artifact_repeat_orders_strategy(tmp_path, monkeypatch) -> None:
                for m in getattr(result, "messages", []))
 
 
+def test_burro_blocks_oversized_script_write(tmp_path, monkeypatch) -> None:
+    """write_file .sh >4000 chars → BLOCKED carga excessiva com molde
+    (burro 20/09: gigante trunca nos 4096 tokens → malformado → budget)."""
+    big = "#!/bin/sh\n" + "echo x\n" * 900
+    assert len(big) > 4000
+
+    class HeavySession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-1", "type": "function",
+                           "function": {"name": "write_file",
+                               "arguments": jsonlib.dumps({
+                                   "path": "big.sh", "content": big})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=HeavySession(), approve=True)
+    result = agent.run("write big script")
+    assert not (tmp_path / "big.sh").exists()
+    assert any("carga excessiva" in str(m.get("content", ""))
+               for m in getattr(result, "messages", []))
+
+
+def test_burro_allows_big_prose_and_small_script(tmp_path, monkeypatch) -> None:
+    """Prosa gigante passa intacta; script pequeno passa (burro só barra
+    carga de código/dados — sem falso-positivo em ovo bom)."""
+    class MixedSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                tc = {"name": "write_file",
+                      "arguments": jsonlib.dumps({
+                          "path": "notes.md", "content": "lorem ipsum\n" * 500})}
+            elif self.calls == 2:
+                tc = {"name": "write_file",
+                      "arguments": jsonlib.dumps({
+                          "path": "tiny.sh",
+                          "content": "#!/bin/sh\necho hi\n"})}
+            else:
+                return FakeResponse({"choices": [
+                    {"message": {"role": "assistant",
+                                 "content": "stopped"}}]})
+            return FakeResponse({"choices": [{"message": {
+                "role": "assistant", "content": "",
+                "tool_calls": [{"id": f"call-{self.calls}", "type": "function",
+                                "function": tc}]}}]})
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=MixedSession(), approve=True)
+    agent.run("write docs and helper")
+    assert (tmp_path / "notes.md").exists()
+    assert (tmp_path / "tiny.sh").exists()
+
+
 def test_clobber_sh_via_python_refused(tmp_path, monkeypatch) -> None:
     """`python3 -c open('x.sh','w').write(json...)` → ERROR dirigido (L8b2
     20/09: molde-JSON aplicado no .sh 2x, matando o detector). Leitura

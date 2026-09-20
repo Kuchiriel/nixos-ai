@@ -1795,6 +1795,27 @@ class Agent:
                                 f"live under CWD: replace every "
                                 f"`{_pm.group(0)}` with `{_pm.group(0)[1:]}` "
                                 f"and rewrite.")
+                    if not _gate_block and name == "write_file":
+                        # Burro: recusa carga excessiva (write gigante →
+                        # trunca nos 4096 tokens do tier → args malformados →
+                        # hint → budget queimado; L8b3/b4). Castor no lugar:
+                        # primeiro graveto = esqueleto mínimo + molde de
+                        # forma (sem valores da task), depois estende. Só
+                        # código/dados (.sh/.py/.json) — prosa passa intacta.
+                        _wpath4 = str(args.get("path", ""))
+                        _wcont4 = str(args.get("content", ""))
+                        if (_wpath4.endswith((".sh", ".py", ".json"))
+                                and len(_wcont4) > 4000):
+                            _gate_block = True
+                            _gate_msg = (
+                                "ERROR: BLOCKED — carga excessiva "
+                                f"({len(_wcont4)} chars; limite 4000 p/ "
+                                "código/dados). Writes gigantes truncam no "
+                                "limite de tokens e voltam malformados. "
+                                "FRACIONE (graveto por graveto): 1) escreva "
+                                "o ESQUELETO mínimo válido (molde abaixo), "
+                                "2) execute, 3) estenda via str_replace.\n"
+                                "Molde .sh:\n#!/bin/sh\nset -uo pipefail")
                     if _gate_block:
                         result.commands_denied.append(
                             f"{name} {args.get('path', '')}")
