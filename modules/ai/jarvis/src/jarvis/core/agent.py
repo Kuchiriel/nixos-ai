@@ -1802,6 +1802,21 @@ class Agent:
                                 f"deliverables exist.")
                     if not _gate_block and name in ("write_file",
                                                     "str_replace"):
+                        # Placeholder literal no PATH do write (h1 20/09:
+                        # `incident_<IP>_<timestamp>.txt` criado literal no
+                        # disco; guards de read/exec não cobrem write —
+                        # mesma família do 1d39951, fecha o buraco).
+                        _wpp = re.search(r"<[A-Z][A-Z0-9_]*>",
+                                         str(args.get("path", "")))
+                        if _wpp is not None:
+                            _gate_block = True
+                            _gate_msg = (
+                                f"ERROR: BLOCKED — literal placeholder "
+                                f"{_wpp.group(0)} in write path. Template "
+                                f"tokens never exist on disk: resolve the "
+                                f"REAL filename first (list_directory, run "
+                                f"the producer with real values), then write "
+                                f"the concrete name.")
                         # Poison absoluto NO CONTEÚDO (L8b1 20/09: conteúdo com
                         # `rules_file=/rules/...` passou no gate de sintaxe e
                         # falhou só no run. Só dispara quando o relativo EXISTE

@@ -2149,6 +2149,33 @@ def test_placeholder_literal_blocked_in_exec_and_read(tmp_path, monkeypatch) -> 
     assert sum("Literal placeholder <IP>" in h for h in hits) == 2
 
 
+def test_write_placeholder_path_blocked(tmp_path, monkeypatch) -> None:
+    """write_file com <TOKEN> no path → BLOCKED dirigido (h1 20/09:
+    `incident_<IP>_<timestamp>.txt` criado literal; read/exec guards não
+    cobriam write)."""
+    class WpSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-1", "type": "function",
+                           "function": {"name": "write_file",
+                               "arguments": jsonlib.dumps({
+                                   "path": "incident_<IP>_x.txt",
+                                   "content": "data"})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=WpSession(), approve=True)
+    result = agent.run("write incident")
+    assert not (tmp_path / "incident_<IP>_x.txt").exists()
+    assert any("literal placeholder <IP>" in str(m.get("content", ""))
+               for m in getattr(result, "messages", []))
+
+
 def test_echo_ban_engages_after_second_invalid_artifact(tmp_path, monkeypatch) -> None:
     """2º artifact inválido engata ban vinculante de echo-em-JSON (escalada
     soft→binding, L10 retry: v27/b3/w2 repetiram a representação até STUCK).
