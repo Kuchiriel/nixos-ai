@@ -165,3 +165,22 @@ Variant B (WARN/32/truth 8), bonsai, n=3 (B2/B0 estendidos a n=5):
   tanto quanto a condição (§34 anti-gaming: variar é obrigatório).
 - Runner: `/tmp/exp-f/run_f.py`; coleção `exp_f_lessons`.
 - Status: STRONG EVIDENCE (efeito adverso replicado 2ª vez, outro par).
+
+## EXP-G — self-knowledge (grounding) ⚠️ ADIVINHAÇÃO MATERIALIZADA
+
+- Ga (qual arquivo define HybridSearch?): **0/3** — leu `core/ai/j…`,
+  `core/hybrid…` (plausíveis, errados; verdade=rag.py). Sem busca
+  sistemática (nenhum list_directory).
+- Gb (nativeCheckInputs): **2/3** grounded (leu package.nix de verdade);
+  1/6 crash real do provider (choices vazio → IndexError) — virou fix
+  (guards + STUCK honesto + teste).
+- **Side-effect grave**: um agente Ga CRIOU
+  `modules/ai/jarvis/src/jarvis/core/hybrid_search.py` (`class
+  HybridSearch:` placeholder) — materializou o palpite no repo
+  (removido em fa9bb0e). Self-knowledge falha + escrita especulativa.
+  REGRA (R6): agentes de experimento SEMPRE em jail /tmp (approval
+  restrito por path), nunca approve-irrestrito no repo.
+- Interpretation (§64): plausível ≠ verificado; grounding = leitura do
+  arquivo autoritativo (Gb prova que funciona quando lê). RAG-discovery
+  + filesystem-truth sustentado.
+- Runner: `/tmp/exp-g/run_g.py`. Status: PARTIALLY VERIFIED.

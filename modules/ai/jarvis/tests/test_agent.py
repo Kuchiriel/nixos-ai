@@ -2481,6 +2481,44 @@ def test_llm_empty_choices_stuck_honest(monkeypatch) -> None:
     assert "no choices" in result.final_response
 
 
+def test_lessons_outage_logged_not_silent(monkeypatch) -> None:
+    """Qdrant down no inject de lessons (EXP-J 20/09: "" idêntico a miss)
+    → evento lessons_unavailable emitido; run segue sem lessons."""
+    from jarvis.core import logging as _log
+
+    class DeadMemory:
+        def lessons(self, query, top_k=3):
+            raise ConnectionError("qdrant down")
+
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    seen: list[tuple[str, dict]] = []
+    _orig_emit = _log.Logger.emit
+
+    def _rec(self, event: str, *, level: str = "info",
+             detail: object = None, **kw) -> None:
+        seen.append((event, dict(detail) if detail else {}))
+        try:
+            _orig_emit(self, event, level=level, detail=detail, **kw)
+        except Exception:
+            pass
+
+    monkeypatch.setattr(_log.Logger, "emit", _rec)
+
+    class StopSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            return FakeResponse({"choices": [
+                {"message": {"role": "assistant",
+                             "content": "nada a fazer"}}]})
+
+    agent = Agent(Config(), session=StopSession(), approve=True,
+                  memory=DeadMemory())
+    result = agent.run("oi")
+    assert result.verdict in ("VERIFIED", "UNVERIFIED", "STUCK", "FAILED")
+    assert any(e == "lessons_unavailable" for e, _ in seen)
+    assert any("ConnectionError" in str(d) for e, d in seen
+               if e == "lessons_unavailable")
+
+
 def test_malformed_budget_stops_run(tmp_path, monkeypatch) -> None:
     """Args-JSON inválido 3x seguidas → STUCK honesto na 3ª (L8b3 20/09: até
     8 turns queimados em hint sem teto; verify_turns não cobre esse caso)."""

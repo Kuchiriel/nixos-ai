@@ -1130,8 +1130,16 @@ class Agent:
                 lessons = self.memory.lessons(prompt, top_k=3)
                 if lessons:
                     system_content += f"\n\nAVOID (past errors):{lessons}"
-            except Exception:
-                pass
+            except Exception as _les_e:  # noqa: BLE001
+                # §27 (EXP-J 20/09): outage (Qdrant down) era indistinguível
+                # de "sem lessons" — mesmo "" silencioso. Falha legível:
+                # registra tipo/motivo no JSONL; run segue sem lessons.
+                try:
+                    self.logger.emit("lessons_unavailable", detail={
+                        "error": type(_les_e).__name__,
+                        "msg": str(_les_e)[:160]})
+                except Exception:
+                    pass
 
         # Framing RRP por modelo (catálogo 17/09): regras operacionais
         # curtas pelo comportamento conhecido do modelo em uso. Vazio =
