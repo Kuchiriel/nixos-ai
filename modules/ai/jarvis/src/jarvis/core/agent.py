@@ -177,6 +177,12 @@ def _extract_json_object(text: str) -> str | None:
     return None
 
 
+def _synth_offered(bar_repeat, artifact_repeat, echo_banned) -> bool:
+    """synthesize_command aparece no schema? Só pós-bar (progressive
+    disclosure — L8g1: oferecida de cara virou distração)."""
+    return bool(bar_repeat or artifact_repeat or echo_banned)
+
+
 def extract_fallback_tool_call(text: str | None) -> dict[str, Any] | None:
     """Extract tool call from text when native tool calls fail.
     
@@ -2775,7 +2781,7 @@ class Agent:
             "type": "function",
             "function": {
                 "name": "synthesize_command",
-                "description": ("Generate ONE shell command under a grammar mask (server-enforced syntax — use after a syntax bar or when quoting is fragile). Returns the bare command string; execute it via execute_shell afterwards. Grammars: grep, jqread, date, chmod."),
+                "description": ("Generate ONE shell command under a grammar mask (server-enforced syntax). Use ONLY after a syntax bar, picking the family: count/search lines=grep, read JSON=jqread, timestamp=date, chmod file=chmod. Returns the bare command; execute it via execute_shell afterwards."),
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -2799,6 +2805,15 @@ class Agent:
             tools = [t for t in tools
                      if t.get("function", {}).get("name")
                      != "sanitize_secrets"]
+        # synthesize_command: só pós-bar de sintaxe/serialização (mesmo
+        # padrão — L8g1: no schema desde o turno 1 virou distração).
+        if not _synth_offered(
+                getattr(self, "_bar_repeat", None),
+                getattr(self, "_artifact_repeat", None),
+                getattr(self, "_json_echo_banned", False)):
+            tools = [t for t in tools
+                     if t.get("function", {}).get("name")
+                     != "synthesize_command"]
         if self.mcp_servers:
             tools.append({
                 "type": "function",

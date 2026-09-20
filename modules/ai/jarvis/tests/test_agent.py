@@ -2176,6 +2176,16 @@ def test_write_placeholder_path_blocked(tmp_path, monkeypatch) -> None:
                for m in getattr(result, "messages", []))
 
 
+def test_synth_offered_only_after_bar() -> None:
+    """synthesize_command no schema só pós-bar (L8g1: visível desde o turno
+    1 virou distração — 3/4 turns em grammar inexistente)."""
+    from jarvis.core.agent import _synth_offered
+    assert _synth_offered({}, {}, False) is False
+    assert _synth_offered({"p": "h"}, {}, False) is True
+    assert _synth_offered({}, {"a.json": 2}, False) is True
+    assert _synth_offered({}, {}, True) is True
+
+
 def test_synthesize_command_dispatch(tmp_path, monkeypatch) -> None:
     """synthesize_command faz sub-call mascarada e devolve o comando
     (H-grammar: gera sob GBNF, nunca executa — sem aprovação)."""
