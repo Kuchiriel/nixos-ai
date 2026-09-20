@@ -73,6 +73,34 @@ def resolve_base(root: Path | None = None) -> Path:
     return Path.cwd()
 
 
+# Arquivos de DADOS criados pelo próprio run (em-processo). Inputs
+# pré-existentes (.log/.csv/.db/...) NUNCA são reescritos pelo modelo:
+# analisar = LER (L8v33: modelo reescreveu logs/auth.log p/ casar com a
+# expectativa — corrupção do ground truth de medição). Stateless entre
+# runs: tudo que já estava no disco ao iniciar o processo é input.
+_CREATED_BY_RUN: set[str] = set()
+_IMMUTABLE_SUFFIXES = (".log", ".csv", ".db", ".sqlite", ".sqlite3",
+                       ".parquet")
+
+
+def _immutable_input(target: Path) -> str | None:
+    """Motivo se target for dado pré-existente imutável, senão None."""
+    if target.suffix.lower() not in _IMMUTABLE_SUFFIXES:
+        return None
+    try:
+        key = str(target.resolve())
+    except OSError:
+        return None
+    if key in _CREATED_BY_RUN:
+        return None
+    if target.exists():
+        return (f"'{target.name}' looks like task INPUT data (pre-existing "
+                f"{target.suffix}), not something you authored — analyzing "
+                f"means READING it, never rewriting it. Fix your CODE to "
+                f"parse it instead.")
+    return None
+
+
 def _safe_path(path: str, root: Path | None = None,
                write: bool = False) -> Path:
     """Resolve um path e valida que está dentro do projeto.
@@ -423,6 +451,11 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
     try:
         target = _safe_path(path, write=True)
 
+        # Inputs pré-existentes não se reescrevem (ver _immutable_input).
+        _imm = _immutable_input(target)
+        if _imm:
+            return {"ok": False, "error": _imm}
+
         # Criar arquivo novo (old vazio)
         if old == "":
             if target.exists():
@@ -433,6 +466,10 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
                 return ast_err
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(new, encoding="utf-8")
+            try:
+                _CREATED_BY_RUN.add(str(target.resolve()))
+            except OSError:
+                pass
             try:
                 rel = str(target.relative_to(_project_root()))
             except ValueError:
@@ -607,6 +644,13 @@ def write_file(path: str, content: str, backup: bool = True) -> dict[str, Any]:
     """Escreve um arquivo (cria ou sobrescreve). Núcleo único: SafeEditor."""
     try:
         target = _safe_path(path, write=True)
+        _existed = target.exists()
+
+        # Inputs pré-existentes não se reescrevem (ver _immutable_input).
+        _imm = _immutable_input(target)
+        if _imm:
+            return {"ok": False, "error": _imm,
+                    "hint": "READ input files; write NEW output files."}
 
         # Caminho é diretório existente: recusar com instrução (nunca
         # criar arquivo em cima de diretório — observado: modelo
@@ -672,6 +716,11 @@ def write_file(path: str, content: str, backup: bool = True) -> dict[str, Any]:
         except ValueError:
             rel = str(target)
 
+        if not _existed:
+            try:
+                _CREATED_BY_RUN.add(str(target.resolve()))
+            except OSError:
+                pass
         return {
             "ok": True,
             "path": rel,

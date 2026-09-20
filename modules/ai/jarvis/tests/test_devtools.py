@@ -646,3 +646,50 @@ class TestSystemPaths:
         assert "SYSTEM PATHS" in m
         assert "/etc/jarvis/model-registry.json" in m
         assert "sk-" not in m and "gsk_" not in m and "tvly-" not in m
+
+
+# ---------------------------------------------------------------------------
+# immutable inputs (L8v33: modelo reescreveu logs de entrada)
+# ---------------------------------------------------------------------------
+
+
+def test_write_overwrite_log_blocked() -> None:
+    """Sobrescrever .log pré-existente é bloqueado (input, não artefato)."""
+    d = _tmp()
+    f = d / "auth.log"
+    f.write_text("line\n")
+    r = write_file(str(f), "tampered\n")
+    assert r["ok"] is False
+    assert "INPUT" in r["error"]
+    assert f.read_text() == "line\n"
+
+
+def test_str_replace_log_blocked() -> None:
+    """.log pré-existente nem via str_replace."""
+    d = _tmp()
+    f = d / "auth.log"
+    f.write_text("Failed password\n")
+    r = str_replace(str(f), "Failed", "X")
+    assert r["ok"] is False
+    assert "INPUT" in r["error"]
+    assert "Failed" in f.read_text()
+
+
+def test_run_created_csv_editable() -> None:
+    """.csv criado no run pode ser editado (só pré-existente é imutável)."""
+    d = _tmp()
+    f = d / "data.csv"
+    assert write_file(str(f), "a,b\n")["ok"] is True
+    r = str_replace(str(f), "a,b", "a,c")
+    assert r["ok"] is True
+    assert "a,c" in f.read_text()
+
+
+def test_preexisting_py_still_editable() -> None:
+    """.py pré-existente edita normal (fix-tasks intactas)."""
+    d = _tmp()
+    f = d / "broken.py"
+    f.write_text("x = 1\n")
+    r = str_replace(str(f), "x = 1", "x = 2")
+    assert r["ok"] is True
+    assert "x = 2" in f.read_text()
