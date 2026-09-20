@@ -55,6 +55,17 @@ def test_validate_bash_accepts_valid(tmp_editor):
     assert ok, errors
 
 
+def test_bash_gate_delivers_python_shape_on_json_failure(tmp_editor):
+    """Falha de sintaxe em script com cheiro de JSON entrega o molde
+    python3 (L8v27: ver a linha não bastou 4x). Sem cheiro, sem sketch."""
+    ok, errors, _ = validate_bash('#!/bin/bash\necho "{x\n')
+    assert not ok
+    assert any("python3 -c" in e for e in errors)
+    ok, errors, _ = validate_bash('#!/bin/bash\nif [ x ]; then\necho hi\n')
+    assert not ok
+    assert not any("python3 -c" in e for e in errors)
+
+
 def test_echo_single_quoted_json_blocked(tmp_path):
     """.sh com echo de JSON em aspas simples → barrado (L8: 100% saía
     inválido). Direciona p/ python3."""

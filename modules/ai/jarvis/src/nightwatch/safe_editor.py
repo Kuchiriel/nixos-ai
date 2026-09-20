@@ -214,6 +214,16 @@ def validate_bash(content: str) -> tuple[bool, list[str], list[str]]:
                         _msg += f"\nOffending line {_ln}: {_txt}"
             except Exception:
                 pass
+            # JSON via echo quebrou DE NOVO? Entrega o shape que funciona
+            # (L8v27: 4x mesmo erro com a linha exibida — ver não basta,
+            # precisa do molde imitável NA HORA da falha, não na disciplina).
+            # Só quando o script cheira a JSON (echo + json/{), senão ruído.
+            _low = content.lower()
+            if "echo" in _low and ("json" in _low or "{" in content):
+                _msg += ("\nInstead of echo-JSON, delegate: python3 -c "
+                         "\"import json; open('OUT.json','w').write("
+                         "json.dumps({'timestamp': 'TS', 'alerts': []}, "
+                         "indent=2))\" — single-quotes INSIDE python.")
             return False, [f"Bash syntax error: {_msg}"], []
     except FileNotFoundError:
         warnings.append("bash not available for syntax check")
