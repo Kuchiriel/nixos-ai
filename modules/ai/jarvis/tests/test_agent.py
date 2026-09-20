@@ -1840,6 +1840,27 @@ def test_invalid_json_write_retried_via_grammar(tmp_path, monkeypatch) -> None:
     assert _j.loads((tmp_path / "o.json").read_text()) == {"a": 1}
 
 
+def test_artifact_check_flags_run_json(tmp_path, monkeypatch) -> None:
+    """Só .json do CWD tocado no run e inválido fala (L8v37: outputs de
+    runtime invisíveis a todo gate de write)."""
+    import time as _t
+    from jarvis.core.agent import _check_run_json_artifacts
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "new-bad.json").write_text("{oops\n")
+    (tmp_path / "good.json").write_text('{"a": 1}\n')
+    (tmp_path / "old-bad.json").write_text("{oops\n")
+    import os as _os
+    _past = _t.time() - 1000
+    _os.utime(tmp_path / "old-bad.json", (_past, _past))
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "bad.json").write_text("{oops\n")
+    notes = _check_run_json_artifacts(_t.time() - 10)
+    assert any("new-bad.json" in n and "not valid JSON" in n for n in notes)
+    assert not any("good.json" in n for n in notes)
+    assert not any("old-bad.json" in n for n in notes)
+    assert not any("sub" in n for n in notes)
+
+
 def test_list_directory_offered_and_dispatched(tmp_path, monkeypatch) -> None:
     """list_directory existe como tool e despacha (L8: disciplina mandava
     LOCATE-first mas a tool nunca existiu — instrução impossível)."""

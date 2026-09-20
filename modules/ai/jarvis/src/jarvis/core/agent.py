@@ -451,6 +451,40 @@ def _partial_coverage_note(messages: list[dict[str, Any]], path: str) -> str | N
     return None
 
 
+def _check_run_json_artifacts(since_ts: float) -> list[str]:
+    """ finding .json criados/modificados no run que estão inválidos.
+
+    L8v37: scripts geram alert/report inválidos EM RUNTIME — nenhum gate
+    de write enxerga (só completion, no fim do run). Traz a evidência p/
+    o momento da observação: após execute_shell, valida *.json do CWD
+    tocados neste run (mtime > since_ts). Só top-level, só inválidos
+    falam (válido = silêncio). Best-effort, nunca levanta.
+    """
+    import json as _j4
+    from pathlib import Path as _P2
+    notes: list[str] = []
+    try:
+        base = _P2.cwd()
+        if not base.is_dir():
+            return notes
+        for _jf in sorted(base.glob("*.json")):
+            try:
+                if _jf.stat().st_mtime < since_ts:
+                    continue
+                if _jf.stat().st_size > 1_000_000:
+                    continue
+                _j4.loads(_jf.read_text(encoding="utf-8"))
+            except OSError:
+                continue
+            except Exception as _e:
+                notes.append(
+                    f"[artifact-check: {_jf.name} is not valid JSON: "
+                    f"{str(_e)[:120]}]")
+    except Exception:
+        pass
+    return notes
+
+
 def _missing_binary_hint(cmd: str) -> str:
     """ENOENT num path que EXISTE = shebang quebrado, não arquivo ausente.
 
@@ -1629,6 +1663,14 @@ class Agent:
 
                 if _strip_note and not tool_result.startswith("ERROR"):
                     tool_result = _strip_note + tool_result
+
+                # Artefatos JSON do run validados no momento da observação
+                # (não só no veredito): scripts geram outputs em runtime,
+                # fora de todo gate de write. Vale p/ sucesso E falha
+                # (writes parciais acontecem antes do exit != 0).
+                if name in ("execute_shell", "jarvis_execute"):
+                    for _anote in _check_run_json_artifacts(_t0):
+                        tool_result += "\n" + _anote
 
                 # Post-execution validation (FASE 16): structured failure
                 # feedback — padrões de erro, exit codes e hints NixOS que o
