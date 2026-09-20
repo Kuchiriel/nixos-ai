@@ -474,6 +474,21 @@ class TestSessionTelemetry:
         assert tel.avg_tps == 0.0
         assert "chamadas: 0" in tel.render()
 
+    def test_payload_summary_segments(self):
+        """Composição do payload por segmento (donkey §20: servidor só dá
+        totais; sem isso budget por estágio é especulação)."""
+        from jarvis.core.context_budget import SessionTelemetry
+        tel = SessionTelemetry()
+        assert tel.payload_summary() == "payload: sem calls"
+        c = tel.record(model="m", prompt_tokens=100, completion_tokens=10)
+        c.stage = "llm"
+        c.sys_chars = 4000
+        c.tools_chars = 2000
+        c.msgs_chars = 2000
+        s = tel.payload_summary()
+        assert "sys=4000" in s and "tools=2000" in s and "msgs=2000" in s
+        assert "sys=50%" in s
+
 
 class TestBudgetReconciliation:
     def test_record_actual_feeds_totals(self):

@@ -2804,6 +2804,23 @@ class Agent:
             # subagente devem usar role="worker" (effort forçado low).
             role="orchestrator",
         )
+        # Donkey observável: composição do payload desta call (chars por
+        # segmento, espelhando o que foi ENVIADO: tools=None no modo
+        # constrained também manda []). Best-effort, nunca quebra a call.
+        try:
+            _tel = self.llm.session_telemetry
+            _last = _tel.last if _tel is not None else None
+            if _last is not None:
+                import json as _pj
+                _last.stage = "llm"
+                _last.sys_chars = len(str((messages[0].get("content", "")
+                                           if messages else "")))
+                _last.tools_chars = len(_pj.dumps(
+                    [] if need_call else tools, default=str))
+                _last.msgs_chars = sum(
+                    len(str(m.get("content", ""))) for m in messages[1:])
+        except Exception:
+            pass
         if need_call:
             resp = self._strict_to_response(resp, tools)
         return {

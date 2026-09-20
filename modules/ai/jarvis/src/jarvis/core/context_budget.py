@@ -108,10 +108,14 @@ class TelemetryCall:
     backend: str = ""
     prompt_tokens: int = 0       # usage.prompt_tokens real
     completion_tokens: int = 0   # usage.completion_tokens real
-    ttft_s: float = 0.0          # t_primeiro_token - t0_envio (streaming)
-    latency_s: float = 0.0       # latência total
-    tps: float = 0.0             # throughput real (timings.predicted_per_second)
-    cached_tokens: int = 0       # prompt cache hit (KV)
+    ttft_s: float = 0.0       # t_primeiro_token - t0_envio (streaming)
+    latency_s: float = 0.0      # latência total
+    tps: float = 0.0            # throughput real (timings.predicted_per_second)
+    cached_tokens: int = 0      # prompt cache hit (KV)
+    stage: str = ""             # rótulo do estágio (ex.: "llm")
+    sys_chars: int = 0          # system prompt enviado (chars, estimado local)
+    tools_chars: int = 0        # schemas de tools enviados (chars)
+    msgs_chars: int = 0         # conversa enviada (chars)
 
 
 @dataclass
@@ -210,6 +214,27 @@ class SessionTelemetry:
                 f"cache={last.cached_tokens}"
             )
         return "\n".join(lines)
+
+    def payload_summary(self) -> str:
+        """Composição média do payload enviado (chars por segmento).
+
+        Donkey observável (§20): o servidor só reporta totais; sem isso o
+        budget por estágio é especulação. Chars, não tokens — rótulos
+        honestos, sem heurística disfarçada.
+        """
+        n = len(self.calls)
+        if not n:
+            return "payload: sem calls"
+        tot_s = sum(c.sys_chars for c in self.calls)
+        tot_t = sum(c.tools_chars for c in self.calls)
+        tot_m = sum(c.msgs_chars for c in self.calls)
+        tot = tot_s + tot_t + tot_m or 1
+        return (
+            f"payload médio/call (chars): sys={tot_s // n} "
+            f"tools={tot_t // n} msgs={tot_m // n} | "
+            f"fração: sys={tot_s * 100 // tot}% "
+            f"tools={tot_t * 100 // tot}% msgs={tot_m * 100 // tot}%"
+        )
 
 
 @dataclass
