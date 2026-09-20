@@ -661,6 +661,27 @@ def check_completion(messages: list[dict],
                         f"prompt requires {_need} which doesn't exist yet "
                         f"— create it if it's a deliverable, otherwise "
                         f"clarify")
+        # Artefato .json inválido no CWD (L8v23: alert/report gerados pelo
+        # script, inválidos, e NADA no loop acusou — validator só enxerga
+        # tool results, nunca arquivos). Mecânico e genérico: parseia e o
+        # erro exato vira miss (sem ensinar conteúdo). Só top-level (outputs
+        # vivem no CWD; inputs em subdirs intactos). >1MB pula (raro).
+        import json as _jl3
+        try:
+            _root_jsons = sorted(root.glob("*.json"))
+        except Exception:
+            _root_jsons = []
+        for _jf in _root_jsons:
+            try:
+                if _jf.stat().st_size > 1_000_000:
+                    continue
+                _jl3.loads(_jf.read_text(encoding="utf-8"))
+            except Exception as _e:
+                ok = False
+                miss.append(
+                    f"{_jf.name} is not valid JSON: {str(_e)[:120]} — "
+                    f"regenerate it (python3 + json.dumps, never hand-write)")
+                break
         _created = _claimed_artifacts(messages)
         _made = set(_written_paths(messages)) | set(
             _shell_write_paths(messages))

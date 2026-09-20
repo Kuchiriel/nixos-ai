@@ -742,6 +742,38 @@ def test_prompt_deliverable_missing_is_miss(tmp_path):
     assert any("b.sh" in m and "doesn't exist" in m for m in v.missing)
 
 
+def test_invalid_root_json_is_miss(tmp_path):
+    """.json inválido no CWD vira miss com o erro (L8v23: outputs gerados
+    inválidos sem nada acusar no loop)."""
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "alert.json").write_text("{invalid\n")
+    msgs = [
+        {"role": "assistant", "tool_calls": [{
+            "id": "c1", "type": "function",
+            "function": {"name": "write_file",
+                         "arguments": '{"path": "x.sh", "content": "echo"}'}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "ok"},
+        {"role": "assistant", "content": "done"},
+    ]
+    with use_project_root(tmp_path):
+        v = check_completion(msgs)
+    assert v.status != "VERIFIED"
+    assert any("alert.json" in m and "not valid JSON" in m
+               for m in v.missing)
+
+
+def test_valid_root_json_silent(tmp_path):
+    """.json válido no CWD não dispara (nem inputs nem outputs bons)."""
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "alert.json").write_text('{"a": 1}\n')
+    msgs = [
+        {"role": "assistant", "content": "done"},
+    ]
+    with use_project_root(tmp_path):
+        v = check_completion(msgs)
+    assert not any("not valid JSON" in m for m in v.missing)
+
+
 def test_prompt_deliverable_present_no_miss(tmp_path):
     """Ambos citados existem → sem miss de cobertura."""
     from jarvis.core.paths import use_project_root
