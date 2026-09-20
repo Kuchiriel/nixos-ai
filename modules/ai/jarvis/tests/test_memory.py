@@ -199,6 +199,21 @@ def test_lessons_empty_without_hits(monkeypatch) -> None:
     assert mem.lessons("qualquer coisa") == ""
 
 
+def test_lessons_fact_carries_age(monkeypatch) -> None:
+    """Fact velho anota idade (freshness visível; fato de setembro ≠ hoje).
+    Sem ts → sem marcador."""
+    import time
+    from jarvis.core.memory import MemoryEvent
+    mem, _, _ = _mem(monkeypatch)
+    mem.remember(MemoryEvent(
+        kind="fact", text="dado antigo relevante",
+        timestamp=time.time() - 10 * 86400))
+    mem.remember(MemoryEvent(kind="fact", text="dado novo relevante"))
+    out = mem.lessons("dado relevante")
+    assert "[10d ago] dado antigo relevante" in out
+    assert "STATE(known-fact): dado novo relevante" in out
+
+
 def test_lesson_supersedes_same_task(monkeypatch) -> None:
     """Segunda lesson mesma task aposenta a anterior (freshness: sem isso
     '0/3' convive com '0/47' e ambos injetam)."""

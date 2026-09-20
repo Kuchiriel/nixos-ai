@@ -239,10 +239,22 @@ class EpisodicMemory:
                 # Fact/error sem campos task/fix: injeta o texto compacto
                 # (L8: v41 + quoting facts score 0.9 no recall mas invisíveis
                 # ao filtro lesson-only — 41 falhas com a cura no store).
+                # Idade anotada (freshness visível: fato de setembro não vale
+                # o mesmo que fato de hoje; modelo desconta sozinho).
                 txt = (h["text"] or "").strip().replace("\n", " ")
                 if not txt:
                     continue
-                line = f"STATE(known-{h['kind']}): {txt[:180]}\n"
+                _age = ""
+                try:
+                    _ts = float(h.get("ts") or 0)
+                    if _ts > 0:
+                        import time as _tm
+                        _days = int((_tm.time() - _ts) // 86400)
+                        if _days >= 1:
+                            _age = f"[{_days}d ago] "
+                except Exception:  # noqa: BLE001
+                    pass
+                line = f"STATE(known-{h['kind']}): {_age}{txt[:180]}\n"
             if len(out) + len(line) > max_chars:
                 break
             out += line
