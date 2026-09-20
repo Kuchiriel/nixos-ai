@@ -43,6 +43,38 @@ _CREATION_VERBS = re.compile(
     re.IGNORECASE,
 )
 _PATH_LIKE = re.compile(r"[`\"']?([\w\-./]+\.(?:py|md|nix|txt|json|sh|toml))[,.`\"']?")
+
+# Placeholder literal em VALOR de JSON (d3 20/09: alert.json válido com
+# "rule_id" → VERIFIED vácuo). GAIA-2: soft check task-agnóstico no verifier
+# contra reward hacking; AgentLTL: vacuous-pass; harbor-robot: gates com
+# checks semânticos além dos de interface. Só full-value + <TOKEN>, nunca
+# substring ("ALERTS" contém "TS" e é texto legítimo).
+_PLACEHOLDER_VALUES = frozenset({
+    "TS", "TBD", "TODO", "FIXME", "XXX", "UNKNOWN", "rule_id",
+    "severity_level", "placeholder", "sample", "example", "dummy", "fake",
+    "REPLACE_ME", "$PLACEHOLDER", "events []", "matches []", "[]", "{}",
+    "...", "omitted",
+})
+_PLACEHOLDER_TOKEN = re.compile(r"<[A-Z][A-Z0-9_]*>")
+
+
+def _find_placeholder_value(data):
+    """Valor placeholder literal em estrutura JSON (vácuo válido)."""
+    if isinstance(data, dict):
+        for v in data.values():
+            hit = _find_placeholder_value(v)
+            if hit is not None:
+                return hit
+    elif isinstance(data, list):
+        for v in data:
+            hit = _find_placeholder_value(v)
+            if hit is not None:
+                return hit
+    elif isinstance(data, str):
+        if (data in _PLACEHOLDER_VALUES
+                or _PLACEHOLDER_TOKEN.fullmatch(data)):
+            return data
+    return None
 _CONTENT_VERBS = re.compile(
     r"(declara|declarad[oa]|cont[ée]m|valor|diz que|states?|"
     r"says?|contains?|shows?|reads?|is `)",
@@ -690,7 +722,18 @@ def check_completion(messages: list[dict],
                 if _jf.stat().st_size > 1_000_000:
                     continue
                 _txt = _jf.read_text(encoding="utf-8")
-                _jl3.loads(_txt)
+                _data = _jl3.loads(_txt)
+                # Placeholder em VALOR de JSON válido (d3 20/09: "rule_id"
+                # passou no parse e deu VERIFIED vácuo; s3/w2 confirmam a
+                # classe). Scan task-agnóstico: full-value + <TOKEN>.
+                _ph = _find_placeholder_value(_data)
+                if _ph is not None:
+                    ok = False
+                    miss.append(
+                        f"{_jf.name} contains placeholder value {_ph!r} — "
+                        f"compute the real value from inputs and rewrite "
+                        f"(passes syntax, fails semantics)")
+                    break
             except Exception as _e:
                 ok = False
                 _diag = str(_e)[:120]
