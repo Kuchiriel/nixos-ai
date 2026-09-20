@@ -2117,3 +2117,38 @@ def test_placeholder_literal_blocked_in_exec_and_read(tmp_path, monkeypatch) -> 
     hits = [str(m.get("content", ""))
             for m in getattr(result, "messages", [])]
     assert sum("Literal placeholder <IP>" in h for h in hits) == 2
+
+
+def test_clobber_sh_via_python_refused(tmp_path, monkeypatch) -> None:
+    """`python3 -c open('x.sh','w').write(json...)` → ERROR dirigido (L8b2
+    20/09: molde-JSON aplicado no .sh 2x, matando o detector). Leitura
+    open('x.sh') sem 'w' passa intacto."""
+    class ClobSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-1", "type": "function",
+                           "function": {"name": "execute_shell",
+                               "arguments": jsonlib.dumps({
+                                   "cmd": "python3 -c \"import json; open('d.sh','w').write('x')\""})}}]}
+            elif self.calls == 2:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-2", "type": "function",
+                           "function": {"name": "execute_shell",
+                               "arguments": jsonlib.dumps({
+                                   "cmd": "python3 -c \"print(open('d.sh').read())\""})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=ClobSession(), approve=True)
+    result = agent.run("emit")
+    hits = [str(m.get("content", ""))
+            for m in getattr(result, "messages", [])]
+    assert any("never\nfor scripts" in h or "never for scripts" in h
+               for h in hits)
+    # segunda call (leitura) não foi barrada pelo guard:
+    assert sum("never for scripts" in h for h in hits) == 1

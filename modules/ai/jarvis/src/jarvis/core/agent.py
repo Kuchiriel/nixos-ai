@@ -1400,7 +1400,24 @@ class Agent:
                     # ALL-CAPS como <IP> nunca existe no disco; redirect
                     # `<f>` minúsculo passa intacto). Antes do chaining.
                     _ph = re.search(r"<[A-Z][A-Z0-9_]*>", cmd)
-                    if _ph is not None:
+                    # Molde-JSON aplicado no alvo errado (L8b2 20/09: 2x
+                    # `python3 -c open('intrusion_detector.sh','w').write(
+                    # json.dumps(...))` — o molde python3-c é p/ OUTPUTS
+                    # .json, nunca p/ sobrescrever .sh via shell. Só dispara
+                    # com modo 'w' explícito; leitura open('x.sh') passa).
+                    _clob = re.search(
+                        r"open\(\s*['\"][^'\"]+\.sh['\"]\s*,\s*['\"]w",
+                        cmd)
+                    if _clob is not None:
+                        result.commands_denied.append(cmd)
+                        tool_result = (
+                            "ERROR: Refused — writing over a .sh script via "
+                            "python3 in shell. The python3 -c mold is for "
+                            ".json OUTPUTS (alert.json/report.json), never "
+                            "for scripts. Scripts via write_file; data files "
+                            "via the mold with a .json path.")
+                        self._log_audit(cmd, None, tool_result, False)
+                    elif _ph is not None:
                         result.commands_denied.append(cmd)
                         tool_result = (
                             f"ERROR: Literal placeholder {_ph.group(0)} in "
