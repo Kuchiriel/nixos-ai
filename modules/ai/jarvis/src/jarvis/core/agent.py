@@ -1798,6 +1798,32 @@ class Agent:
             if _ph:
                 messages.append({"role": "user", "content": _ph})
 
+            # PROGRESS-CHECK periódico (L8v38: 15 turns só na parte 1, parte
+            # 2 nunca começada; o miss de deliverable só aparecia no fim).
+            # A cada ~6 turns, nomeia deliverables ainda ausentes (mesma
+            # extração do veredito). Genérico, limitado, sem ensinar solução.
+            if turn in (5, 11):
+                try:
+                    from jarvis.core.completion import missing_deliverables
+                    from jarvis.core.devtools import resolve_base as _rb3
+                    try:
+                        _proot = _rb3()
+                    except Exception:
+                        from pathlib import Path as _P4
+                        _proot = _P4(".")
+                    _pdm = missing_deliverables(messages, _proot)
+                except Exception:
+                    _pdm = []
+                if _pdm:
+                    messages.append({
+                        "role": "system",
+                        "content": (
+                            f"PROGRESS-CHECK (turn {turn + 1}): still "
+                            f"missing: {'; '.join(_pdm[:3])}. If the current "
+                            f"part works, START the next deliverable now "
+                            f"instead of perfecting this one."),
+                    })
+
             if _sanitized and not _stuck_abort:
                 # sanitize_secrets já concluiu (determinístico): para.
                 messages.append({

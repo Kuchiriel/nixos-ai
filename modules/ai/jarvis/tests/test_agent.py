@@ -1861,6 +1861,39 @@ def test_artifact_check_flags_run_json(tmp_path, monkeypatch) -> None:
     assert not any("sub" in n for n in notes)
 
 
+def test_progress_check_names_missing_deliverable(tmp_path, monkeypatch) -> None:
+    """Aos ~6 turns, deliverable ausente é nomeado mid-run (L8v38: parte 2
+    nunca começada; antes só aparecia no veredito final)."""
+    _files = [f"f{i}.txt" for i in range(7)]
+
+    class ReadLoopSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls <= 7:
+                # Paths distintos: o detector de duplicatas ignora offset
+                # (assinatura = name+path), então re-ler o mesmo arquivo
+                # abortaria antes do turno 5.
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": f"call-{self.calls}",
+                           "type": "function",
+                           "function": {"name": "read_file",
+                               "arguments": jsonlib.dumps({
+                                   "path": str(tmp_path / "logs" /
+                                               _files[self.calls - 1])})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    (tmp_path / "logs").mkdir()
+    for _f in _files:
+        (tmp_path / "logs" / _f).write_text("x\n" * 100)
+    monkeypatch.chdir(tmp_path)
+    agent = Agent(Config(), session=ReadLoopSession(), approve=True)
+    result = agent.run("create a.sh and b.sh helpers")
+    assert any("PROGRESS-CHECK" in str(m.get("content", "")) and "b.sh" in str(
+        m.get("content", "")) for m in getattr(result, "messages", []))
+
+
 def test_list_directory_offered_and_dispatched(tmp_path, monkeypatch) -> None:
     """list_directory existe como tool e despacha (L8: disciplina mandava
     LOCATE-first mas a tool nunca existiu — instrução impossível)."""

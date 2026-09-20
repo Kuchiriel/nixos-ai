@@ -484,6 +484,34 @@ def _pending_recovery_notes(messages: list[dict]) -> list[str]:
     return pend
 
 
+def missing_deliverables(messages: list[dict], root,
+                           all_writes=None) -> list[str]:
+    """Deliverables `*.sh` citados no prompt original que não existem.
+
+    Fatorado p/ reuso: check_completion (veredito) e o loop do Agent
+    (progress-check periódico mid-run). Task-grounded, sem ensinar solução.
+    """
+    if all_writes is None:
+        all_writes = _written_paths(messages)
+    out: list[str] = []
+    _task_text = ""
+    for _m in messages:
+        if _m.get("role") == "user" and "STATE(" not in str(
+                _m.get("content", "")):
+            _task_text = str(_m.get("content", ""))
+            break
+    if _task_text:
+        for _need in sorted(set(re.findall(
+                r"[A-Za-z0-9_.\-]+\.sh\b", _task_text))):
+            _fp = root / _need
+            if not _fp.exists() and not any(
+                    str(_w).endswith(_need) for _w in all_writes):
+                out.append(
+                    f"prompt requires {_need} which doesn't exist yet "
+                    f"— create it if it's a deliverable, otherwise clarify")
+    return out
+
+
 def check_completion(messages: list[dict],
                      project_root: str | None = None) -> CompletionVerdict:
     """Veredito estrutural de conclusão."""
@@ -644,23 +672,9 @@ def check_completion(messages: list[dict],
         # Task-grounded sem ensinar solução: extrai *.sh do prompt original
         # e cobra existência. Fraseado condicional (não manda criar o que
         # pode ser só referência): criar se deliverable, esclarecer se não.
-        _task_text = ""
-        for _m in messages:
-            if _m.get("role") == "user" and "STATE(" not in str(
-                    _m.get("content", "")):
-                _task_text = str(_m.get("content", ""))
-                break
-        if _task_text:
-            for _need in sorted(set(re.findall(
-                    r"[A-Za-z0-9_.\-]+\.sh\b", _task_text))):
-                _fp = root / _need
-                if not _fp.exists() and not any(
-                        str(_w).endswith(_need) for _w in _all_writes):
-                    ok = False
-                    miss.append(
-                        f"prompt requires {_need} which doesn't exist yet "
-                        f"— create it if it's a deliverable, otherwise "
-                        f"clarify")
+        for _dm in missing_deliverables(messages, root, _all_writes):
+            ok = False
+            miss.append(_dm)
         # Artefato .json inválido no CWD (L8v23: alert/report gerados pelo
         # script, inválidos, e NADA no loop acusou — validator só enxerga
         # tool results, nunca arquivos). Mecânico e genérico: parseia e o

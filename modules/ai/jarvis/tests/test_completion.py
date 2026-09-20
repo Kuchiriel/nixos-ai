@@ -779,6 +779,24 @@ def test_unquoted_keys_named(tmp_path):
     assert any('{"timestamp"' in m for m in v.missing)
 
 
+def test_missing_deliverables_helper(tmp_path):
+    """Helper reutilizável (veredito + progress-check do loop)."""
+    from jarvis.core.completion import missing_deliverables
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "a.sh").write_text("#!/bin/sh\n")
+    msgs = [{"role": "user", "content": "Make a.sh and b.sh please."},
+            {"role": "assistant", "tool_calls": [{
+                "id": "c1", "type": "function",
+                "function": {"name": "write_file",
+                             "arguments": '{"path": "a.sh"}'}}]},
+            {"role": "tool", "content": "ok"}]
+    with use_project_root(tmp_path):
+        from jarvis.core.devtools import resolve_base
+        out = missing_deliverables(msgs, resolve_base())
+    assert any("b.sh" in m for m in out)
+    assert not any("a.sh" in m for m in out)
+
+
 def test_valid_root_json_silent(tmp_path):
     """.json válido no CWD não dispara (nem inputs nem outputs bons)."""
     from jarvis.core.paths import use_project_root
