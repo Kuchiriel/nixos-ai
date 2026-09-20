@@ -229,8 +229,12 @@ class EpisodicMemory:
         out = "\nPAST LESSONS (avoid these mistakes):\n"
         for h in hits:
             if h["kind"] == KIND_LESSON and (h["task"] or h["fix"]):
-                line = (f"- When task was '{h['task'] or '?'}', error "
-                        f"'{h['error_pattern'] or '?'}' was fixed with:\n{h['fix'] or '?'}\n")
+                # Formato STATE codificado (não prosa): modelo pequeno ignora
+                # conselho em prosa; diretiva tipada parseável adere melhor
+                # (precedente: nudges STATE do loop com fallback parseável).
+                line = (f"STATE(lesson): task='{h['task'] or '?'}' "
+                        f"error='{h['error_pattern'] or '?'}' "
+                        f"fix='{h['fix'] or '?'}'\n")
             else:
                 # Fact/error sem campos task/fix: injeta o texto compacto
                 # (L8: v41 + quoting facts score 0.9 no recall mas invisíveis
@@ -238,7 +242,7 @@ class EpisodicMemory:
                 txt = (h["text"] or "").strip().replace("\n", " ")
                 if not txt:
                     continue
-                line = f"- Known ({h['kind']}): {txt[:180]}\n"
+                line = f"STATE(known-{h['kind']}): {txt[:180]}\n"
             if len(out) + len(line) > max_chars:
                 break
             out += line

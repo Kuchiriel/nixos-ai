@@ -188,7 +188,7 @@ def test_lessons_includes_facts_and_errors(monkeypatch) -> None:
     mem.remember_fact("bonsai: JSON com aspas simples quebra; usar jq -n")
     mem.remember(MemoryEvent(kind="decision", text="usar jq sempre"))
     out = mem.lessons("shell json quoting fix")
-    assert "When task was 't'" in out
+    assert "STATE(lesson): task='t'" in out
     assert "jq -n" in out
     assert "usar jq sempre" not in out
 
