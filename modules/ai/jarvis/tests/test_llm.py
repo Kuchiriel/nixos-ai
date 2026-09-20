@@ -335,3 +335,78 @@ class TestReasoningPlacement:
             LLMClient(Config(), backend=b).chat_with_tools(
                 _msgs(), role="planner")
         assert b.calls == 0
+
+
+def test_review_prompt_polymorphic():
+    """Framing da revisão muda por foco (dono 19/09: thinking como revisão
+    externalizada; sintaxe ≠ factual)."""
+    from jarvis.providers.llm import _review_prompt
+    assert "SINTAXE" in _review_prompt("syntax")
+    assert "json.dumps" in _review_prompt("syntax")
+    assert "SINTAXE" not in _review_prompt(None)
+    assert "CITAÇÃO EXATA" in _review_prompt("factual")
+
+
+class _ScriptedBackend:
+    """Backend com roteiro: call quebrada, depois revisão (adota/recusa)."""
+
+    def __init__(self, review_calls):
+        self.calls = 0
+        self.review_calls = review_calls
+        self.tools_seen = []
+
+    def chat(self, messages, **kw):
+        from jarvis.providers.llm_backend import ChatResponse
+        import json as _j
+        self.calls += 1
+        self.tools_seen.append(kw.get("tools"))
+        if self.calls == 1:
+            return ChatResponse(content="", tool_calls=[{
+                "id": "c1", "type": "function",
+                "function": {"name": "write_file", "arguments": _j.dumps(
+                    {"path": "d.sh", "content": "#!/bin/bash\necho hi\n"})}}])
+        return ChatResponse(content="revisado", tool_calls=self.review_calls)
+
+    def close(self):
+        pass
+
+
+def _fixed_call():
+    import json as _j
+    return [{"id": "c2", "type": "function",
+             "function": {"name": "write_file", "arguments": _j.dumps(
+                 {"path": "d.sh", "content": "#!/bin/bash\necho fixed\n"})}}]
+
+
+_TOOLS = [{"type": "function",
+           "function": {"name": "write_file",
+                        "description": "write",
+                        "parameters": {"type": "object",
+                                       "properties": {}}}}]
+
+
+def test_syntax_review_adopts_same_path():
+    """Revisão syntax com MESMO path é adotada (é o que o loop despacha)."""
+    b = _ScriptedBackend(_fixed_call())
+    r = LLMClient(Config(), backend=b).chat_with_tools(
+        _msgs(), tools=_TOOLS, reasoning_effort="medium",
+        review_focus="syntax", role="orchestrator")
+    assert b.calls == 2
+    assert b.tools_seen[1] is not None  # review recebe tools p/ emitir calls
+    assert r.tool_calls == _fixed_call()
+
+
+def test_syntax_review_rejects_drift():
+    """Revisão que muda de path é descartada (mantém original)."""
+    import json as _j
+    other = [{"id": "c9", "type": "function",
+              "function": {"name": "write_file", "arguments": _j.dumps(
+                  {"path": "other.sh", "content": "x"})}}]
+    b = _ScriptedBackend(other)
+    r = LLMClient(Config(), backend=b).chat_with_tools(
+        _msgs(), reasoning_effort="medium", review_focus="syntax",
+        role="orchestrator")
+    assert b.calls == 2
+    import json as _j2
+    assert "d.sh" in _j2.dumps(r.tool_calls)
+    assert "other.sh" not in _j2.dumps(r.tool_calls)

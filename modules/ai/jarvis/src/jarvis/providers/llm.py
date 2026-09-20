@@ -171,6 +171,34 @@ def _classify_error_response(status_code: int, body_text: str) -> type[LLMError]
     return LLMError
 
 
+def _review_prompt(focus: str | None) -> str:
+    """Framing polimórfico do loop de revisão (dono 19/09: thinking como
+    revisão externalizada; caderno > cadeia volátil).
+    - factual (default): fatos com citação verbatim + números recalculados.
+    - syntax: quoting/sintaxe shell+JSON — reexamina cada aspa/echo e, se
+      quebrado, reemite a tool call corrigida (mesmo path); a forma robusta
+      é python3 -c com json.dumps, nunca echo-JSON aninhado.
+    """
+    if focus == "syntax":
+        return (
+            "REVISE sua resposta acima focando em SINTAXE shell+JSON. "
+            "Releia cada linha com echo/aspas da sua chamada: toda aspa "
+            "aberta precisa fechar na mesma construção; JSON exige aspas "
+            "DUPLAS nas chaves; `grep ... | jq` nunca (jq lê arquivos JSON, "
+            "não texto). Se quebrado, responda com a tool call CORRIGIDA "
+            "(MESMO path, lógica preservada) — forma robusta: python3 -c "
+            "com json.dumps p/ qualquer saída JSON. Se está correto, "
+            "responda MANTER.")
+    return (
+        "REVISE sua resposta acima. Responda: MANTER, ou NOVA "
+        "RESPOSTA corrigida. Exija de si: (1) toda afirmação "
+        "factual precisa de CITAÇÃO EXATA copiada do contexto "
+        "(proibido paráfrase/reticências); (2) todo NÚMERO "
+        "calculado precisa ser RECALCULADO passo a passo a "
+        "partir dos dados observados — se divergir, corrija o "
+        "número. Sem citação válida: MANTER.")
+
+
 class LLMClient:
     """Cliente para LLM com suporte a múltiplos backends.
 
@@ -405,7 +433,6 @@ class LLMClient:
         return self.chat_full(messages, temperature=temperature, max_tokens=max_tokens).content
 
     # --- chat com tool calling (retorna ChatResponse) ---
-
     def chat_with_tools(
         self,
         messages: list[dict[str, Any]],
@@ -415,6 +442,7 @@ class LLMClient:
         max_tokens: int | None = None,
         extra: dict[str, Any] | None = None,
         reasoning_effort: str | None = None,
+        review_focus: str | None = None,
         role: str = "orchestrator",
     ) -> ChatResponse:
         """Chat completion com tool calling — retorna ChatResponse completo.
@@ -423,6 +451,8 @@ class LLMClient:
         thinking nativo): None/low = direto; medium = +1 revisão grounded;
         high = +2 revisões. Cada revisão exige CITAÇÃO VERBATIM da resposta
         anterior; sem ela, mantém anterior e para (anti-alucinação).
+        review_focus seleciona o framing ("factual" default; "syntax" p/
+        quoting/shell — aceita revisão que refina o mesmo path).
 
         GATE (H3): reasoning_effort é custo puro em tasks curtas/classificação
         (evidência local: 3× turns sem ganho). Ativa-se automaticamente quando
@@ -455,22 +485,56 @@ class LLMClient:
             max_tokens=max_tokens, extra=extra)
         passes = {"low": 0, None: 0, "medium": 1, "high": 2}.get(
             reasoning_effort, 0)
+        # Contexto da revisão inclui as tool calls anteriores serializadas:
+        # turns tool-only têm content vazio e sem isso a revisão não vê nada.
+        def _tc_paths(tcs: list) -> set:
+            import re as _re0
+            out: set = set()
+            for _tc in tcs or []:
+                try:
+                    _fn = _tc.get("function", {}) or {}
+                    _a = _fn.get("arguments", {})
+                    _a = json.loads(_a) if isinstance(_a, str) else _a
+                    if isinstance(_a, dict) and _a.get("path"):
+                        out.add(str(_a["path"]))
+                except Exception:
+                    pass
+            return out
+
+        _prior_calls = json.dumps(
+            [{"name": (tc.get("function", {}) or {}).get("name"),
+              "arguments": (tc.get("function", {}) or {}).get("arguments")}
+             for tc in (response.tool_calls or [])], ensure_ascii=False,
+            default=str)[:4000]
+        # Revisão de SINTAXE precisa EMITIR calls (o loop despacha
+        # tool_calls, não texto!): passa as tools; factual passa None
+        # (força resposta textual avaliável por quote-grounding).
+        _review_tools = tools if review_focus == "syntax" else None
         for _ in range(passes):
             review = self._chat_once(
                 messages + [
-                    {"role": "assistant", "content": response.content or ""},
-                    {"role": "user", "content": (
-                        "REVISE sua resposta acima. Responda: MANTER, ou NOVA "
-                        "RESPOSTA corrigida. Exija de si: (1) toda afirmação "
-                        "factual precisa de CITAÇÃO EXATA copiada do contexto "
-                        "(proibido paráfrase/reticências); (2) todo NÚMERO "
-                        "calculado precisa ser RECALCULADO passo a passo a "
-                        "partir dos dados observados — se divergir, corrija o "
-                        "número. Sem citação válida: MANTER.")},
-                ], tools=None, temperature=temperature,
+                    {"role": "assistant", "content": (
+                        (response.content or "")
+                        + ("\n[tool_calls] " + _prior_calls
+                           if _prior_calls != "[]" else ""))},
+                    {"role": "user",
+                     "content": _review_prompt(review_focus)},
+                ], tools=_review_tools, temperature=temperature,
                 max_tokens=max_tokens, extra=extra)
             txt = (review.content or "").strip()
             if txt.startswith("MANTER"):
+                break
+            if review_focus == "syntax":
+                # Aceitação p/ código (novo por natureza — quote-grounding
+                # fático o rejeitaria sempre): refinou os MESMOS paths, sem
+                # deriva de tópico; adota AS CALLS (é o que o loop despacha).
+                # Backstop continua sendo o harness (bash -n etc. barram o
+                # inválido de qualquer forma).
+                _p0 = _tc_paths(response.tool_calls)
+                _p1 = _tc_paths(review.tool_calls)
+                if _p0 and _p1 and _p1 <= _p0:
+                    response.tool_calls = review.tool_calls
+                    response.content = txt
                 break
             import re as _re
             quotes = _re.findall(r"[\"“]([^\"”]{8,})[\"”]", txt)

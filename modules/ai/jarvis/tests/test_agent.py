@@ -1730,6 +1730,51 @@ def test_fused_chmod_run_executes_run_half(tmp_path, monkeypatch) -> None:
                    getattr(result, "messages", []))
 
 
+def test_syntax_rejection_arms_polymorphic_review(tmp_path, monkeypatch) -> None:
+    """Write barrado por sintaxe arma 1 pass de revisão polimórfica
+    (foco syntax) na próxima chamada (dono 19/09: thinking externalizado).
+    Prova: post extra no backend + payload REVISE/SINTAXE + fix aplicado."""
+    target = str(tmp_path / "d.sh")
+    seen_prompts = []
+
+    class ReviewSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            payload = jsonlib.dumps(json or {}, ensure_ascii=False)
+            if "SINTAXE" in payload or "REVISE" in payload:
+                seen_prompts.append(payload)
+                return FakeResponse({"choices": [{"message": {
+                    "role": "assistant", "content": "MANTER revisado ok"}}]})
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-1", "type": "function",
+                           "function": {"name": "write_file",
+                               "arguments": jsonlib.dumps({
+                                   "path": target,
+                                   "content": "#!/bin/bash\nif [ x ]; then\necho hi\n"})}}]}
+            elif self.calls == 2:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-2", "type": "function",
+                           "function": {"name": "write_file",
+                               "arguments": jsonlib.dumps({
+                                   "path": target,
+                                   "content": "#!/bin/bash\necho fixed\n"})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    sess = ReviewSession()
+    agent = Agent(Config(), session=sess, approve=True)
+    agent.run("write script")
+    # inicial + inicial + review (+ verification turns eventuais): o que
+    # importa é que o review extra aconteceu com framing syntax e o fix
+    # foi aplicado.
+    assert sess.calls >= 4, f"review extra não aconteceu: {sess.calls}"
+    assert any("SINTAXE" in p for p in seen_prompts)
+    assert (tmp_path / "d.sh").read_text() == "#!/bin/bash\necho fixed\n"
+
+
 def test_list_directory_offered_and_dispatched(tmp_path, monkeypatch) -> None:
     """list_directory existe como tool e despacha (L8: disciplina mandava
     LOCATE-first mas a tool nunca existiu — instrução impossível)."""

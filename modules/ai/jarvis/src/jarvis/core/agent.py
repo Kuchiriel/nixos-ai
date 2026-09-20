@@ -1095,6 +1095,10 @@ class Agent:
         _t0 = time.monotonic()
         # P0.2: turnos de verificação (DONE sem evidência → continua).
         verify_turns = 0
+        # Revisão-sintaxe armada: write barrado por `Bash syntax error`
+        # agenda 1 pass de review polimórfico (thinking externalizado) na
+        # próxima chamada (dono 19/09; caderno > cadeia volátil). One-shot.
+        self._review_syntax_armed = False
         # P0.3: erro idêntico repetido (nome+args) → variar ou STUCK.
         error_seen: dict[str, int] = {}
         # Truncamentos seguidos no limite de saída (ironclaw/2026): 3x
@@ -1111,7 +1115,11 @@ class Agent:
                         f"STUCK: time budget exceeded ({max_time_s}s "
                         "wall-clock).")
                 break
-            response = self._get_llm_response(messages)
+            _effort = ("medium" if self._review_syntax_armed else None)
+            _focus = ("syntax" if self._review_syntax_armed else None)
+            self._review_syntax_armed = False
+            response = self._get_llm_response(
+                messages, reasoning_effort=_effort, review_focus=_focus)
             # Args truncados (helper acima): repara antes de guardar —
             # o servidor nunca recebe a mensagem malformada (era 500
             # fatal). Hint consome o turno; budget de turnos limita.
@@ -1577,6 +1585,11 @@ class Agent:
                     elif self.approve and human_approve(
                             f"{name} {args.get('path', '')}"):
                         tool_result = self._exec_write(name, args)
+                        # Falha de SINTAXE no write arma 1 pass de revisão
+                        # polimórfica (foco syntax) na próxima chamada: o
+                        # modelo reexamina com molde, em vez de repetir cego.
+                        if "Bash syntax error" in tool_result:
+                            self._review_syntax_armed = True
                         result.commands_run.append(f"{name} {args.get('path', '')}")
                         self._log_audit(f"{name} {args.get('path', '')}",
                                         0 if not tool_result.startswith("ERROR") else 1,
@@ -2154,7 +2167,9 @@ class Agent:
         # Timeout sem resultado = erro honesto (slot preservado).
         return [r if r else "ERROR: parallel read timed out" for r in results]
 
-    def _get_llm_response(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
+    def _get_llm_response(self, messages: list[dict[str, Any]],
+                            reasoning_effort: str | None = None,
+                            review_focus: str | None = None) -> dict[str, Any]:
         """Get response from LLM via the canonical LLMClient abstraction.
 
         Previously this method did a raw `requests.post` to llama.cpp,
@@ -2351,6 +2366,8 @@ class Agent:
             tools=None if need_call else tools,
             temperature=profile["temperature"],
             max_tokens=profile["max_tokens"],
+            reasoning_effort=reasoning_effort,
+            review_focus=review_focus,
             extra=self._strict_extra(tools) if need_call else None,
             # Placement explícito: este é o loop do orquestrador — único
             # ponto onde review loops são admitidos. Chamadas worker/
