@@ -670,8 +670,10 @@ def _unread_refs_note(messages: list[dict[str, Any]]) -> str | None:
 def _placeholder_script_note(messages: list[dict[str, Any]]) -> str | None:
     """Script escrito é placeholder vazio? (L8 real: bonsai gerou .sh com
     `echo "Processing... (placeholder message)"` que executa com exit 0 mas
-    não cria alert.json/report.json válidos — harness precisa detectar
-    DUMMY, não só unexecuted. Mecânico: marca placeholder sem saber a task.)"""
+    não cria alert.json/report.json válidos; L8v15: mesmo padrão em .py com
+    "placeholder for the actual logic" — harness precisa detectar DUMMY em
+    ambas linguagens, não só unexecuted. Mecânico: marca placeholder sem
+    saber a task; instrução de rewrite por linguagem.)"""
     try:
         from pathlib import Path as _P
         try:
@@ -679,11 +681,12 @@ def _placeholder_script_note(messages: list[dict[str, Any]]) -> str | None:
             _root = _rb()
         except Exception:
             _root = _P(".")
-        # TODOS os .sh escritos com sucesso no run (não só o último: L8
+        # TODOS os .sh/.py escritos com sucesso no run (não só o último: L8
         # real — intrusion_detector.sh placeholder foi ofuscado por writes
-        # posteriores no response.sh). Avalia o ARQUIVO NO DISCO (verdade
-        # atual; fragmentos de str_replace diluem o sinal), com fallback
-        # p/ conteúdo da mensagem se ilegível.
+        # posteriores no response.sh; L8v15 mostrou .py com placeholder
+        # passando batido). Avalia o ARQUIVO NO DISCO (verdade atual;
+        # fragmentos de str_replace diluem o sinal), com fallback p/
+        # conteúdo da mensagem se ilegível.
         _written: dict[str, str] = {}
         for i, _m in enumerate(messages):
             for _tc in _m.get("tool_calls") or []:
@@ -697,7 +700,7 @@ def _placeholder_script_note(messages: list[dict[str, Any]]) -> str | None:
                     continue
                 _p = str(_ag.get("path", "")) if isinstance(_ag, dict) else ""
                 _c = str(_ag.get("content", "") or _ag.get("new", "")) if isinstance(_ag, dict) else ""
-                if not _p.endswith(".sh"):
+                if not _p.endswith((".sh", ".py")):
                     continue
                 _nxt = messages[i + 1] if i + 1 < len(messages) else {}
                 if _nxt.get("role") == "tool" and not str(_nxt.get("content", "")).strip().upper().startswith("ERROR"):
@@ -726,9 +729,18 @@ def _placeholder_script_note(messages: list[dict[str, Any]]) -> str | None:
             )
             if not is_placeholder:
                 continue
+            if _base.endswith(".py"):
+                _next = ("NEXT: IMPLEMENT the loop body with REAL working "
+                         "code (no placeholder comments): open() the inputs, "
+                         "for each rule count pattern matches per log line "
+                         "(use `pattern in line` or re.search), collect "
+                         "unique IPs, write outputs with json.dump. Then RUN "
+                         "it (`python3 " + _base + "`) and read the outputs.")
+            else:
+                _next = ("NEXT: REWRITE it with REAL logic: read rules/detection_rules.json, grep -c each pattern in logs/auth.log+logs/http.log, extract unique IPs with grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+', build alert.json/report.json with python3 + json.dumps (stdlib, always valid) and timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ). Do NOT pipe grep text into jq (jq reads JSON files, not log lines). Zero prose, one tool call.")
             return (
                 f"STATE(placeholder_script:{_base}). Your script {_base} is a PLACEHOLDER (dummy echos, no real logic — it exits 0 but creates no valid output). "
-                "NEXT: REWRITE it with REAL logic: read rules/detection_rules.json, grep -c each pattern in logs/auth.log+logs/http.log, extract unique IPs with grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+', build alert.json/report.json with python3 + json.dumps (stdlib, always valid) and timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ). Do NOT pipe grep text into jq (jq reads JSON files, not log lines). Zero prose, one tool call."
+                + _next
             )
     except Exception:
         return None

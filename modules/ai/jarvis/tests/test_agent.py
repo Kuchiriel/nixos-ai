@@ -1894,6 +1894,46 @@ def test_progress_check_names_missing_deliverable(tmp_path, monkeypatch) -> None
         m.get("content", "")) for m in getattr(result, "messages", []))
 
 
+def test_placeholder_py_detected_with_python_guidance(tmp_path, monkeypatch) -> None:
+    """.py placeholder é detectado com instrução python (L8v15: passava
+    batido — detector só via .sh)."""
+    from jarvis.core.agent import _placeholder_script_note
+    monkeypatch.chdir(tmp_path)
+    msgs = [
+        {"role": "assistant", "tool_calls": [{
+            "id": "c1", "type": "function",
+            "function": {"name": "write_file",
+                         "arguments": jsonlib.dumps({
+                             "path": "h.py",
+                             "content": "import json\n# placeholder for logic\nprint('hi')\n"})}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "ok: write_file h.py"},
+        {"role": "assistant", "content": "done"},
+    ]
+    note = _placeholder_script_note(msgs)
+    assert note is not None
+    assert "placeholder_script:h.py" in note
+    assert "json.dump" in note
+    assert "grep -c" not in note
+
+
+def test_real_py_not_flagged(tmp_path, monkeypatch) -> None:
+    """.py com lógica real (loop + json.dump, sem placeholder) passa."""
+    from jarvis.core.agent import _placeholder_script_note
+    monkeypatch.chdir(tmp_path)
+    content = ("import json\nfor line in open('f.log'):\n"
+               "    print(line)\njson.dump({'a': 1}, open('o.json', 'w'))\n")
+    msgs = [
+        {"role": "assistant", "tool_calls": [{
+            "id": "c1", "type": "function",
+            "function": {"name": "write_file",
+                         "arguments": jsonlib.dumps({
+                             "path": "h.py", "content": content})}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "ok: write_file h.py"},
+        {"role": "assistant", "content": "done"},
+    ]
+    assert _placeholder_script_note(msgs) is None
+
+
 def test_list_directory_offered_and_dispatched(tmp_path, monkeypatch) -> None:
     """list_directory existe como tool e despacha (L8: disciplina mandava
     LOCATE-first mas a tool nunca existiu — instrução impossível)."""
