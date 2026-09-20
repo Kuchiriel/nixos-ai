@@ -2315,7 +2315,10 @@ class Agent:
                 "name": "execute_shell",
                 "description": ("Execute a shell command. Code blocks in prose "
                                 "DO NOT execute — to run anything, call this "
-                                "tool (never paste the command for the user)."),
+                                "tool (never paste the command for the user). "
+                                "For JSON output or computation prefer "
+                                "`python3 -c` with json.dumps (stdlib, always "
+                                "valid) over echo/jq pipelines."),
                     "parameters": {
                         "type": "object",
                         "properties": {

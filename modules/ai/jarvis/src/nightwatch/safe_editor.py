@@ -218,9 +218,11 @@ def validate_bash(content: str) -> tuple[bool, list[str], list[str]]:
             # JSON via echo quebrou DE NOVO? Entrega o shape que funciona
             # (L8v27: 4x mesmo erro com a linha exibida — ver não basta,
             # precisa do molde imitável NA HORA da falha, não na disciplina).
-            # Só quando o script cheira a JSON (echo + json/{), senão ruído.
+            # Cheiro de JSON-building: echo ou json/alert/timestamp no
+            # conteúdo (L8v29: array-append sem echo escapava do gatilho).
             _low = content.lower()
-            if "echo" in _low and ("json" in _low or "{" in content):
+            if ("echo" in _low or "json" in _low or "alert" in _low) and (
+                    "{" in content):
                 _msg += ("\nInstead of echo-JSON, delegate: python3 -c "
                          "\"import json; open('OUT.json','w').write("
                          "json.dumps({'timestamp': 'TS', 'alerts': []}, "
