@@ -1775,6 +1775,71 @@ def test_syntax_rejection_arms_polymorphic_review(tmp_path, monkeypatch) -> None
     assert (tmp_path / "d.sh").read_text() == "#!/bin/bash\necho fixed\n"
 
 
+def test_grammar_rewrite_repairs_quotes() -> None:
+    """Rewrite gramatical converte repr-single-quote em JSON (C1)."""
+    from unittest.mock import Mock
+    from jarvis.providers.llm_backend import ChatResponse
+    llm = Mock()
+    llm.chat_with_tools.return_value = ChatResponse(
+        content='{"a": 1}', tool_calls=[])
+    agent = Agent(Config(), llm_client=llm)
+    out = agent._grammar_json_rewrite("[{'a': 1}]")
+    assert out is not None
+    import json as _j
+    assert _j.loads(out) == {"a": 1}
+    sent = llm.chat_with_tools.call_args
+    assert sent.kwargs.get("extra", {}).get("response_format", {}).get(
+        "type") == "json_object"
+
+
+def test_grammar_rewrite_garbage_returns_none() -> None:
+    """Rewrite que volta lixo → None (mantém erro original)."""
+    from unittest.mock import Mock
+    from jarvis.providers.llm_backend import ChatResponse
+    llm = Mock()
+    llm.chat_with_tools.return_value = ChatResponse(
+        content="not json at all", tool_calls=[])
+    agent = Agent(Config(), llm_client=llm)
+    assert agent._grammar_json_rewrite("[{'a': 1}]") is None
+
+
+def test_invalid_json_write_retried_via_grammar(tmp_path, monkeypatch) -> None:
+    """Write .json inválido (com produtor no run) é reescrito via gramática
+    e o arquivo final é válido (C1 end-to-end)."""
+    target = str(tmp_path / "o.json")
+
+    class RewriteSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            payload = jsonlib.dumps(json or {}, ensure_ascii=False)
+            if "json_object" in payload:
+                return FakeResponse({"choices": [{"message": {
+                    "role": "assistant",
+                    "content": '{"a": 1}'}}]})
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-1", "type": "function",
+                           "function": {"name": "execute_shell",
+                               "arguments": jsonlib.dumps(
+                                   {"cmd": "echo hi"})}}]}
+            elif self.calls == 2:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-2", "type": "function",
+                           "function": {"name": "write_file",
+                               "arguments": jsonlib.dumps({
+                                   "path": target,
+                                   "content": "[{'a': 1}]"})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=RewriteSession(), approve=True)
+    agent.run("compute and save")
+    import json as _j
+    assert _j.loads((tmp_path / "o.json").read_text()) == {"a": 1}
+
+
 def test_list_directory_offered_and_dispatched(tmp_path, monkeypatch) -> None:
     """list_directory existe como tool e despacha (L8: disciplina mandava
     LOCATE-first mas a tool nunca existiu — instrução impossível)."""

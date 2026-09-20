@@ -1596,6 +1596,21 @@ class Agent:
                         # modelo reexamina com molde, em vez de repetir cego.
                         if "Bash syntax error" in tool_result:
                             self._review_syntax_armed = True
+                        # JSON inválido COM produtores no run: 1 reescrita sob
+                        # gramática json_object (C1). Sem produtores = fabricação
+                        # (prefix-gate acima já barrou antes de chegar aqui).
+                        if (name == "write_file"
+                                and str(args.get("path", "")).endswith(".json")
+                                and "JSON error" in tool_result):
+                            _rw = self._grammar_json_rewrite(
+                                str(args.get("content", "")))
+                            if _rw is not None:
+                                args = {**args, "content": _rw}
+                                tool_result = self._exec_write(name, args)
+                                if not tool_result.startswith("ERROR"):
+                                    tool_result += (
+                                        "\n[grammar-rewrite: syntax enforced "
+                                        "by server grammar; values from model]")
                         result.commands_run.append(f"{name} {args.get('path', '')}")
                         self._log_audit(f"{name} {args.get('path', '')}",
                                         0 if not tool_result.startswith("ERROR") else 1,
@@ -2095,6 +2110,41 @@ class Agent:
         err = str(res.get("error", "list failed"))
         hint = str(res.get("hint", ""))
         return f"ERROR: {err}" + (f" [{hint}]" if hint else "")
+
+    def _grammar_json_rewrite(self, content: str) -> str | None:
+        """Reescreve conteúdo como JSON estrito sob gramática do servidor.
+
+        C1 (dono 19/09, Portão do Caractere): `response_format: json_object`
+        remove o livre-arbítrio sobre caracteres de controle no decode —
+        aspas simples/formas inválidas viram impossíveis. VALORES continuam
+        100% do modelo (sintaxe ≠ semântica); world check e completion
+        julgam o conteúdo depois (sem maquiar benchmark: a camada é
+        explícita e logada). UMA tentativa por call (custo limitado);
+        None = mantém o erro original.
+        """
+        try:
+            profile = detect_profile(self.config.llm_model or "")
+            resp = self.llm.chat_with_tools(
+                [{"role": "user", "content": (
+                    "Rewrite the following as STRICT valid JSON, preserving "
+                    "all keys and values exactly (only fix quoting/syntax):\n"
+                    + content[:4000])}],
+                tools=None,
+                temperature=0.0,
+                max_tokens=min(profile.get("max_tokens", 2048),
+                               len(content) + 512),
+                extra={"response_format": {"type": "json_object"}},
+                role="orchestrator",
+            )
+            out = (resp.content or "").strip()
+            if not out.startswith(("{", "[")):
+                import re as _re9
+                _m = _re9.search(r"(\{.*\}|\[.*\])", out, re.DOTALL)
+                out = _m.group(1) if _m else out
+            json.loads(out)
+            return out
+        except Exception:
+            return None
 
     @staticmethod
     def _exec_write(name: str, args: dict[str, Any]) -> str:
