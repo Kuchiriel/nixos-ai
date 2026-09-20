@@ -264,7 +264,8 @@ def test_probe_session_captures_tool_definitions_when_mcp_configured(tmp_path: P
     anunciada sem dispatch no loop (armadilha 'Unknown tool' — 18/09)."""
     probe = ProbeSession()
     cfg = Config()
-    agent = Agent(cfg, session=probe, mcp_servers={"nix": "/usr/bin/nix"})
+    agent = Agent(cfg, session=probe, mcp_servers={"nix": "/usr/bin/nix"},
+                  strict_tools=False)
     agent.run("query nixpkgs for python")
 
     payload = probe.last_payload
