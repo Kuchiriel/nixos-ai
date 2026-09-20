@@ -501,9 +501,14 @@ class LLMClient:
                     pass
             return out
 
+        def _fn_of(tc):
+            # function pode vir string (modelo malformado) — nunca .get nu.
+            fn = tc.get("function", {}) if isinstance(tc, dict) else {}
+            return fn if isinstance(fn, dict) else {}
+
         _prior_calls = json.dumps(
-            [{"name": (tc.get("function", {}) or {}).get("name"),
-              "arguments": (tc.get("function", {}) or {}).get("arguments")}
+            [{"name": _fn_of(tc).get("name"),
+              "arguments": _fn_of(tc).get("arguments")}
              for tc in (response.tool_calls or [])], ensure_ascii=False,
             default=str)[:4000]
         # Revisão de SINTAXE precisa EMITIR calls (o loop despacha
