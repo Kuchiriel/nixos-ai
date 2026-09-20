@@ -18,6 +18,7 @@ class FakeStore:
         self.points = []
         self.created = []
         self.deleted = []
+        self.deleted_ids = []
 
     def is_available(self):
         return True
@@ -40,6 +41,22 @@ class FakeStore:
 
     def count(self, name):
         return len(self.points)
+
+    def _request(self, method, path, json=None):
+        if "scroll" in path:
+            flt = (json or {}).get("filter", {}).get("must", [])
+            kinds = [c["match"]["value"] for c in flt
+                     if c.get("key") == "kind"]
+            pts = [{"id": p["id"], "payload": p["payload"]}
+                   for p in self.points
+                   if not kinds or p["payload"].get("kind") in kinds]
+            lim = (json or {}).get("limit", 20)
+            return {"result": {"points": pts[:lim]}}
+        raise AssertionError("unexpected " + path)
+
+    def delete_points(self, name, ids):
+        self.deleted_ids.extend(ids)
+        self.points = [p for p in self.points if p["id"] not in ids]
 
 
 class FakeLLM:
@@ -180,3 +197,24 @@ def test_lessons_empty_without_hits(monkeypatch) -> None:
     """Store vazio → string vazia (sem injeção fantasma)."""
     mem, _, _ = _mem(monkeypatch)
     assert mem.lessons("qualquer coisa") == ""
+
+
+def test_lesson_supersedes_same_task(monkeypatch) -> None:
+    """Segunda lesson mesma task aposenta a anterior (freshness: sem isso
+    '0/3' convive com '0/47' e ambos injetam)."""
+    mem, store, _ = _mem(monkeypatch)
+    mem.remember_lesson(task="Shell JSON", error_pattern="e1", fix="old")
+    assert len(store.points) == 1
+    mem.remember_lesson(task="shell  json", error_pattern="e2", fix="new")
+    assert len(store.points) == 1
+    assert len(store.deleted_ids) == 1
+    assert store.points[0]["payload"]["fix"] == "new"
+
+
+def test_lesson_keeps_different_task(monkeypatch) -> None:
+    """Tasks distintas convivem (supersede só no match normalizado)."""
+    mem, store, _ = _mem(monkeypatch)
+    mem.remember_lesson(task="Alpha", error_pattern="e", fix="f1")
+    mem.remember_lesson(task="Beta", error_pattern="e", fix="f2")
+    assert len(store.points) == 2
+    assert store.deleted_ids == []

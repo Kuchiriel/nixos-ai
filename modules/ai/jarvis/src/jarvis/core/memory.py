@@ -120,11 +120,43 @@ class EpisodicMemory:
 
     def remember_lesson(self, *, task: str, error_pattern: str, fix: str) -> int | None:
         """Porta do add_lesson do experience_buffer legado."""
+        # Supersede: mesma task aposenta a anterior (freshness — sem isso
+        # "local 0/3" de setembro convive com "0/47" de hoje e ambos injetam).
+        # Best-effort: nunca bloqueia a gravação nova.
+        try:
+            self.forget_task(task)
+        except Exception:  # noqa: BLE001
+            pass
         text = f"Task: {task}. Error: {error_pattern}. Fix: {fix}"
         return self.remember(MemoryEvent(
             kind=KIND_LESSON, text=text, task=task,
             error_pattern=error_pattern, fix=fix,
         ))
+
+    def forget_task(self, task: str) -> int:
+        """Apaga lessons com mesma task normalizada. Retorna nº apagados."""
+        key = " ".join((task or "").strip().lower().split())
+        if not key:
+            return 0
+        try:
+            result = self._store._request(
+                "POST", f"/collections/{self.collection}/points/scroll",
+                json={"limit": 200, "with_payload": True, "filter": {"must": [
+                    {"key": "kind", "match": {"value": KIND_LESSON}}]}})
+        except Exception:  # noqa: BLE001
+            return 0
+        ids = [p.get("id")
+               for p in result.get("result", {}).get("points", [])
+               if " ".join(str((p.get("payload", {}) or {}).get(
+                   "task", "")).strip().lower().split()) == key
+               and p.get("id") is not None]
+        if not ids:
+            return 0
+        try:
+            self._store.delete_points(self.collection, ids)
+        except Exception:  # noqa: BLE001
+            return 0
+        return len(ids)
 
     def remember_fact(self, text: str, **meta: Any) -> int | None:
         return self.remember(MemoryEvent(kind=KIND_FACT, text=text, meta=meta))
