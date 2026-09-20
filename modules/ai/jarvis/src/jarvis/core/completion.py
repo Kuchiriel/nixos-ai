@@ -675,11 +675,22 @@ def check_completion(messages: list[dict],
             try:
                 if _jf.stat().st_size > 1_000_000:
                     continue
-                _jl3.loads(_jf.read_text(encoding="utf-8"))
+                _txt = _jf.read_text(encoding="utf-8")
+                _jl3.loads(_txt)
             except Exception as _e:
                 ok = False
+                _diag = str(_e)[:120]
+                # Defeito mais comum do modelo fraco: chaves sem aspas
+                # (`{timestamp:` estilo YAML). Nomeia o defeito exato em
+                # vez de só mandar regenerar (L8v24: 3 ciclos sem achar).
+                import re as _re3
+                _m = _re3.search(r"\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*:",
+                                 _txt[:2000])
+                if _m:
+                    _diag += (" — keys need double quotes: "
+                              '{"' + _m.group(1) + '": ...}')
                 miss.append(
-                    f"{_jf.name} is not valid JSON: {str(_e)[:120]} — "
+                    f"{_jf.name} is not valid JSON: {_diag} — "
                     f"regenerate it (python3 + json.dumps, never hand-write)")
                 break
         _created = _claimed_artifacts(messages)

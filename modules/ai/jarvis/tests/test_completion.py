@@ -762,6 +762,23 @@ def test_invalid_root_json_is_miss(tmp_path):
                for m in v.missing)
 
 
+def test_unquoted_keys_named(tmp_path):
+    """Chave sem aspas é nomeada no diagnóstico (L8v24: 3 ciclos)."""
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "alert.json").write_text("{timestamp: 1}\n")
+    msgs = [
+        {"role": "assistant", "tool_calls": [{
+            "id": "c1", "type": "function",
+            "function": {"name": "write_file",
+                         "arguments": '{"path": "x"}'}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "ok"},
+        {"role": "assistant", "content": "done"},
+    ]
+    with use_project_root(tmp_path):
+        v = check_completion(msgs)
+    assert any('{"timestamp"' in m for m in v.missing)
+
+
 def test_valid_root_json_silent(tmp_path):
     """.json válido no CWD não dispara (nem inputs nem outputs bons)."""
     from jarvis.core.paths import use_project_root
