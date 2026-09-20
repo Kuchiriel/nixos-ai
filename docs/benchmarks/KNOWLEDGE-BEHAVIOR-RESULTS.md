@@ -81,3 +81,23 @@ Runner: `EvalHarness.compare` semântica (n=3/braço), world_check externo.
   recall vs lessons (recall=fatos/decisões gerais; lessons=falhas).
 - Runner: `/tmp/exp-e/run_exp_e.py`; `/tmp/exp-e-summary.json`.
 - Status: PARTIALLY VERIFIED (n=3; confusão recall→lessons replicada 3/3).
+
+## EXP-D — substrate selection (probe-form) ⚠️ PARCIAL
+
+- Método: mesmo probe single-turn do EXP-E; 6 tasks diferenciadas por
+  substrato; n=3.
+- recall 3/3 ("previous execution" → recall ✓ — notar: EXP-E "decide"
+  falhou; a confusão recall↔lessons depende do verbo), lessons 3/3,
+  rag_search 3/3, read_file-filesystem 3/3.
+- **vault 0/3** → read_file 3/3 ("stable policy" → ler arquivo; AMBÍGUO:
+  a policy mora em .md legíveis — falha do desenho da task tanto quanto
+  do modelo; vault como superfície distinta não se justifica aqui).
+- **git 0/3** → read_file 3/3 ("recent commit" → read_file, que NÃO
+  responde; read-first bias, evita shell mesmo quando incapaz).
+- Total 12/18. Interpretation: seleção funciona quando o verbo casa
+  (execution→recall, rule→lessons, paper→RAG); falha em superfícies sem
+  verbo próprio (vault, git-história). Implicação: ou vault ganha verbo
+  ("stable policy" nas descrições) ou assume-se filesystem como verdade
+  p/ policy (RAG-discovery + filesystem-truth, §31).
+- Runner: `/tmp/exp-d-run.py`; `/tmp/exp-d-summary.json`.
+- Status: PARTIALLY VERIFIED.
