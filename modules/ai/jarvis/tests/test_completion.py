@@ -822,3 +822,35 @@ def test_prompt_deliverable_present_no_miss(tmp_path):
     with use_project_root(tmp_path):
         v = check_completion(msgs)
     assert not any("doesn't exist yet" in m for m in v.missing)
+
+
+def test_placeholder_value_blocks_verified(tmp_path, monkeypatch):
+    """JSON válido com valor placeholder → UNVERIFIED (d3 20/09: VERIFIED
+    vácuo com 'rule_id'; GAIA-2 soft check contra reward hacking)."""
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "alert.json").write_text('{"id": "rule_id", "n": 1}\n')
+    msgs = [{"role": "assistant", "tool_calls": [
+        {"function": {"name": "write_file",
+                      "arguments": {"path": "alert.json"}}}]},
+            {"role": "tool", "content": "written"}]
+    monkeypatch.chdir(tmp_path)
+    with use_project_root(tmp_path):
+        v = check_completion(msgs)
+    assert v.status == "UNVERIFIED"
+    assert any("placeholder" in m for m in v.missing)
+
+
+def test_clean_json_values_stay_verified(tmp_path, monkeypatch):
+    """Valores reais (incl. substring 'TS' em 'ALERTS') não disparam —
+    só full-value + <TOKEN> (sem falso-positivo em texto legítimo)."""
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "a.json").write_text(
+        '{"msg": "ALERTS processed", "ip": "45.32.67.89"}\n')
+    msgs = [{"role": "assistant", "tool_calls": [
+        {"function": {"name": "write_file",
+                      "arguments": {"path": "a.json"}}}]},
+            {"role": "tool", "content": "written"}]
+    monkeypatch.chdir(tmp_path)
+    with use_project_root(tmp_path):
+        v = check_completion(msgs)
+    assert not any("placeholder" in m for m in v.missing)
