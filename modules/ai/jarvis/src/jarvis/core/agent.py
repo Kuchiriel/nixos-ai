@@ -1179,6 +1179,11 @@ class Agent:
         # Artifact-repeat: .json → nº de checks seguidos inválido (ordem de
         # troca no 2º; L8b3 20/09).
         self._artifact_repeat: dict[str, int] = {}
+        # Dedup de observations: (tool, path) → turno da última ocorrência.
+        # Re-read idêntico sem write no meio devolve ponteiro, não o
+        # conteúdo (n-batch: mesmos logs relidos 3x; msgs = 51% do payload
+        # e crescendo). Só read-only; write invalida (conteúdo pode mudar).
+        self._obs_cache: dict[str, int] = {}
         # Escalada de serialização: 2º artifact-repeat engata ban
         # vinculante de echo-em-JSON no resto do run (L10 retry: repetir a
         # mesma representação amplifica falha; conselho não muta
@@ -1594,11 +1599,33 @@ class Agent:
                             f"read the concrete name.")
                     else:
                         tool_result = self._exec_read_file(args)
+                        if not tool_result.startswith("ERROR"):
+                            _okey = f"read_file|{args.get('path', '')}"
+                            if _okey in self._obs_cache:
+                                tool_result = (
+                                    f"[repeated observation — identical read "
+                                    f"already returned at turn "
+                                    f"{self._obs_cache[_okey]}; unchanged "
+                                    f"(no writes to this path since). Re-read "
+                                    f"only if you suspect change.]")
+                            else:
+                                self._obs_cache[_okey] = turn
                 elif name == "list_directory":
                     # Listagem read-only (devtools, cap 100). Sem aprovação:
                     # risco zero. É o LOCATE-first da disciplina — existia
                     # na frase mas nunca como tool (L8: instrução impossível).
                     tool_result = self._exec_list(args)
+                    if not tool_result.startswith("ERROR"):
+                        _okey = f"list_directory|{args.get('path', '')}"
+                        if _okey in self._obs_cache:
+                            tool_result = (
+                                f"[repeated observation — identical listing "
+                                f"already returned at turn "
+                                f"{self._obs_cache[_okey]}; unchanged (no "
+                                f"writes since). Re-list only if you suspect "
+                                f"change.]")
+                        else:
+                            self._obs_cache[_okey] = turn
                 elif name == "synthesize_command":
                     # Geração mascarada (H-grammar, NVIDIA GCD-bash): sub-call
                     # com GBNF no decode; SÓ gera, nunca executa (sem
@@ -1953,6 +1980,18 @@ class Agent:
                     elif self.approve and human_approve(
                             f"{name} {args.get('path', '')}"):
                         tool_result = self._exec_write(name, args)
+                        # Write com sucesso invalida cache de observations:
+                        # listagens (arquivo novo pode aparecer) + leitura do
+                        # mesmo path (conteúdo pode ter mudado). Sem isso o
+                        # dedup serviria conteúdo velho no ciclo
+                        # write→read→verify.
+                        if (not tool_result.startswith("ERROR")
+                                and name in ("write_file", "str_replace")):
+                            _wp = str(args.get("path", ""))
+                            self._obs_cache = {
+                                k: t for k, t in self._obs_cache.items()
+                                if not (k.startswith("list_directory|")
+                                        or k == f"read_file|{_wp}")}
                         # Falha de SINTAXE no write arma 1 pass de revisão
                         # polimórfica (foco syntax) na próxima chamada: o
                         # modelo reexamina com molde, em vez de repetir cego.

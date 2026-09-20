@@ -2178,6 +2178,107 @@ def test_write_placeholder_path_blocked(tmp_path, monkeypatch) -> None:
                for m in getattr(result, "messages", []))
 
 
+def _read_two_session(reads):
+    """FakeSession que emite N reads e para (stopped)."""
+    class RSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls <= len(reads):
+                name, args = reads[self.calls - 1]
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": f"call-{self.calls}",
+                           "type": "function",
+                           "function": {"name": name,
+                               "arguments": jsonlib.dumps(args)}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+    return RSession()
+
+
+def test_obs_dedup_repeated_read(tmp_path, monkeypatch) -> None:
+    """Mesmo read 2x sem write → 2ª vira ponteiro (msgs 51% do payload;
+    n-batch relia os mesmos logs 3x)."""
+    (tmp_path / "a.log").write_text("hello log\n")
+    monkeypatch.chdir(tmp_path)
+    agent = Agent(Config(), session=_read_two_session([
+        ("read_file", {"path": "a.log"}),
+        ("read_file", {"path": "a.log"})]), approve=True)
+    result = agent.run("read twice")
+    hits = [str(m.get("content", ""))
+            for m in getattr(result, "messages", [])]
+    assert sum("hello log" in h for h in hits) == 1
+    assert any("repeated observation" in h for h in hits)
+
+
+def test_obs_dedup_write_invalidates(tmp_path, monkeypatch) -> None:
+    """Write no path invalida o cache: re-read traz conteúdo real
+    (ciclo write→read→verify nunca serve velho)."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+
+    class WSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            calls = {
+                1: ("write_file", {"path": "b.txt", "content": "v1\n"}),
+                2: ("read_file", {"path": "b.txt"}),
+                3: ("write_file", {"path": "b.txt", "content": "v2\n"}),
+                4: ("read_file", {"path": "b.txt"}),
+            }
+            if self.calls in calls:
+                name, args = calls[self.calls]
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": f"call-{self.calls}",
+                           "type": "function",
+                           "function": {"name": name,
+                               "arguments": jsonlib.dumps(args)}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    agent = Agent(Config(), session=WSession(), approve=True)
+    result = agent.run("write read write read")
+    hits = [str(m.get("content", ""))
+            for m in getattr(result, "messages", [])]
+    assert not any("repeated observation" in h for h in hits)
+    assert sum("v2" in h for h in hits) >= 1
+
+
+def test_obs_dedup_list_and_write(tmp_path, monkeypatch) -> None:
+    """List repetido vira ponteiro; write (qualquer path) invalida lists
+    (arquivo novo pode aparecer)."""
+    (tmp_path / "a.txt").write_text("x\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+
+    class LSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            calls = {
+                1: ("list_directory", {"path": "."}),
+                2: ("list_directory", {"path": "."}),
+                3: ("write_file", {"path": "b.txt", "content": "y\n"}),
+                4: ("list_directory", {"path": "."}),
+            }
+            if self.calls in calls:
+                name, args = calls[self.calls]
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": f"call-{self.calls}",
+                           "type": "function",
+                           "function": {"name": name,
+                               "arguments": jsonlib.dumps(args)}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    agent = Agent(Config(), session=LSession(), approve=True)
+    result = agent.run("list list write list")
+    hits = [str(m.get("content", ""))
+            for m in getattr(result, "messages", [])]
+    assert sum("repeated observation" in h for h in hits) == 1
+
+
 def test_strict_default_by_tier(monkeypatch) -> None:
     """strict_tools=None → tier speed/fast True, resto False (H-strict
     20/09: tiers locais ganham constrained; reasoning/cloud preservam)."""
