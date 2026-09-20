@@ -1783,11 +1783,29 @@ class Agent:
                         # Poison absoluto NO CONTEÚDO (L8b1 20/09: conteúdo com
                         # `rules_file=/rules/...` passou no gate de sintaxe e
                         # falhou só no run. Só dispara quando o relativo EXISTE
-                        # no CWD — sem falso-positivo em /tmp, /etc).
+                        # no CWD e o absoluto NÃO — absoluto real (ex.: CWD
+                        # absoluto /tmp/l8bX/logs/x, L8b5 20/09) é legítimo e
+                        # passar batido virava STUCK por falso-positivo).
                         _wcontent = str(args.get("content", "") or args.get(
                             "new_string", ""))
-                        _pm = re.search(r"/(app|rules|logs)/", _wcontent)
-                        if _pm and os.path.exists(_pm.group(1)):
+                        _pm = None
+                        for _m in re.finditer(r"/(app|rules|logs)/",
+                                              _wcontent):
+                            _s, _e = _m.span()
+                            _a = _s
+                            while (_a > 0 and _wcontent[_a - 1]
+                                   not in " \t\n\"'=():;"):
+                                _a -= 1
+                            _b = _e
+                            while (_b < len(_wcontent) and _wcontent[_b]
+                                   not in " \t\n\"'=():;"):
+                                _b += 1
+                            if os.path.exists(_wcontent[_a:_b]):
+                                continue
+                            if os.path.exists(_m.group(1)):
+                                _pm = _m
+                                break
+                        if _pm is not None:
                             _gate_block = True
                             _gate_msg = (
                                 f"ERROR: BLOCKED — absolute container path "

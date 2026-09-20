@@ -2062,6 +2062,36 @@ def test_write_blocks_absolute_container_path_in_content(tmp_path, monkeypatch) 
                for m in getattr(result, "messages", []))
 
 
+def test_poison_gate_skips_existing_absolute_path(tmp_path, monkeypatch) -> None:
+    """Absoluto que EXISTE (ex.: CWD absoluto /tmp/l8bX/logs/x) é legítimo —
+    o gate não dispara (L8b5 20/09: falso-positivo matou o run)."""
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "logs" / "a.log").write_text("x\n")
+    absref = str(tmp_path / "logs" / "a.log")
+
+    class AbsSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-1", "type": "function",
+                           "function": {"name": "write_file",
+                               "arguments": jsonlib.dumps({
+                                   "path": "det.sh",
+                                   "content": "#!/bin/sh\nF=" + absref + "\n"})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=AbsSession(), approve=True)
+    result = agent.run("write detector")
+    assert (tmp_path / "det.sh").exists()
+    assert not any("absolute container path" in str(m.get("content", ""))
+                   for m in getattr(result, "messages", []))
+
+
 def test_bar_repeat_orders_strategy_switch(tmp_path, monkeypatch) -> None:
     """Mesmo .sh barrado 2x por sintaxe → ordem de TROCA DE ESTRATÉGIA
     (L8b1 20/09: 3x mesmo intrusion_detector.sh; linha+molde não moveram)."""
