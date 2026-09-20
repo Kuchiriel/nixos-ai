@@ -60,14 +60,24 @@ def test_chaining_ignores_quoted_operators():
 
 def test_run_shell_kills_tree_on_timeout():
     """Timeout mata a ÁRVORE (killpg), não só o filho (L8r: script com
-    auto-invocação recursava órfão após timeout)."""
-    import subprocess as _sp
+    auto-invocação recursava órfão após timeout). Varredura /proc pura
+    (stdlib): pgrep não existe no sandbox Nix (procps ausente — rebuild
+    20/09 falhou aqui)."""
     from jarvis.core.security import run_shell
     r = run_shell("bash -c 'sleep 60 & wait'", timeout=2)
     assert r.returncode == -1
     assert "timed out" in r.stderr
-    p = _sp.run(["pgrep", "-f", "[s]leep 60"], capture_output=True, text=True)
-    assert p.returncode != 0, "stray process sobreviveu ao timeout"
+    strays = []
+    for _pid in filter(str.isdigit, __import__("os").listdir("/proc")):
+        try:
+            with open(f"/proc/{_pid}/cmdline", "rb") as _f:
+                _cl = _f.read().replace(b"\x00", b" ").decode(
+                    "utf-8", "replace")
+        except OSError:
+            continue
+        if "sleep 60" in _cl:
+            strays.append((_pid, _cl.strip()))
+    assert not strays, f"stray process sobreviveu ao timeout: {strays}"
 
 
 def test_echo_to_json():

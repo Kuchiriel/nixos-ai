@@ -2459,7 +2459,11 @@ def test_echo_ban_engages_after_second_invalid_artifact(tmp_path, monkeypatch) -
             for m in getattr(result, "messages", [])]
     assert any("echo-to-JSON banned" in h for h in hits)
     assert not (tmp_path / "b.json").exists()
-    assert any('"k"' in h for h in hits)
+    # call-4 (jq real) só asserta onde o binário existe: sandbox Nix não
+    # tem jq (rebuild 20/09) — o mecanismo (ban) já está provado acima;
+    # echo_to_json("jq...")==False é coberto em test_echo_to_json.
+    if __import__("shutil").which("jq") is not None:
+        assert any('"k"' in h for h in hits)
 
 
 def test_malformed_budget_stops_run(tmp_path, monkeypatch) -> None:
