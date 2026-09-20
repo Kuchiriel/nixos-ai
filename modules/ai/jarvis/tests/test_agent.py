@@ -2032,3 +2032,88 @@ def test_prefix_gate_allows_valid_json(tmp_path, monkeypatch) -> None:
     agent = Agent(Config(), session=ValidSession(), approve=True)
     agent.run("write config")
     assert (tmp_path / "cfg.json").exists()
+
+
+def test_write_blocks_absolute_container_path_in_content(tmp_path, monkeypatch) -> None:
+    """Conteúdo com `/rules/...` e rules/ existindo no CWD → BLOCKED dirigido
+    (L8b1 20/09: passou no gate de sintaxe, falhou só no run)."""
+    (tmp_path / "rules").mkdir()
+
+    class PoisonSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-1", "type": "function",
+                           "function": {"name": "write_file",
+                               "arguments": jsonlib.dumps({
+                                   "path": "det.sh",
+                                   "content": "#!/bin/sh\nRULES=/rules/detection_rules.json\n"})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=PoisonSession(), approve=True)
+    result = agent.run("write detector")
+    assert not (tmp_path / "det.sh").exists()
+    assert any("absolute container path" in str(m.get("content", ""))
+               for m in getattr(result, "messages", []))
+
+
+def test_bar_repeat_orders_strategy_switch(tmp_path, monkeypatch) -> None:
+    """Mesmo .sh barrado 2x por sintaxe → ordem de TROCA DE ESTRATÉGIA
+    (L8b1 20/09: 3x mesmo intrusion_detector.sh; linha+molde não moveram)."""
+    bad = "#!/bin/sh\nif true; then\necho unclosed\n"
+
+    class RepeatSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls <= 2:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": f"call-{self.calls}",
+                           "type": "function",
+                           "function": {"name": "write_file",
+                               "arguments": jsonlib.dumps({
+                                   "path": "det.sh", "content": bad})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=RepeatSession(), approve=True)
+    result = agent.run("write detector")
+    assert any("TROQUE DE ESTRAT" in str(m.get("content", ""))
+               for m in getattr(result, "messages", []))
+
+
+def test_placeholder_literal_blocked_in_exec_and_read(tmp_path, monkeypatch) -> None:
+    """Token ALL-CAPS (<IP>) em cmd e em path de read → ERROR dirigido
+    (L8b1 20/09: `response.py "$1"`, read de `incident_<IP>_...`)."""
+    class PhSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-1", "type": "function",
+                           "function": {"name": "execute_shell",
+                               "arguments": jsonlib.dumps({
+                                   "cmd": "python3 response.py <IP>"})}}]}
+            elif self.calls == 2:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-2", "type": "function",
+                           "function": {"name": "read_file",
+                               "arguments": jsonlib.dumps({
+                                   "path": "incident_<IP>_x.txt"})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    agent = Agent(Config(), session=PhSession(), approve=True)
+    result = agent.run("respond")
+    hits = [str(m.get("content", ""))
+            for m in getattr(result, "messages", [])]
+    assert sum("Literal placeholder <IP>" in h for h in hits) == 2

@@ -1148,6 +1148,9 @@ class Agent:
         # sem limite queima latência sem garantia de ganho).
         self._review_syntax_armed = False
         self._reviews_used = 0
+        # Bar-repeat: path → hash do último conteúdo barrado (ordem de
+        # troca de estratégia no 2º bar idêntico; L8b1 20/09).
+        self._bar_repeat: dict[str, str] = {}
         # P0.3: erro idêntico repetido (nome+args) → variar ou STUCK.
         error_seen: dict[str, int] = {}
         # Truncamentos seguidos no limite de saída (ironclaw/2026): 3x
@@ -1392,7 +1395,21 @@ class Agent:
                     # parcial e falhava críptico; `a | b` corrompia silente
                     # com rc 0). Segurança não negocia; alternativa: 1 cmd
                     # por call, ou grave .sh via write_file e execute-o.
-                    if has_chaining_operators(cmd):
+                    # Placeholder literal no comando (L8b1 20/09: `python3
+                    # response.py "$1"`, read de `incident_<IP>_...` — token
+                    # ALL-CAPS como <IP> nunca existe no disco; redirect
+                    # `<f>` minúsculo passa intacto). Antes do chaining.
+                    _ph = re.search(r"<[A-Z][A-Z0-9_]*>", cmd)
+                    if _ph is not None:
+                        result.commands_denied.append(cmd)
+                        tool_result = (
+                            f"ERROR: Literal placeholder {_ph.group(0)} in "
+                            f"command — template tokens never exist on disk. "
+                            f"Resolve the REAL value first (list_directory, "
+                            f"run the producer script), then call with "
+                            f"concrete names.")
+                        self._log_audit(cmd, None, tool_result, False)
+                    elif has_chaining_operators(cmd):
                         result.commands_denied.append(cmd)
                         tool_result = (
                             f"ERROR: Chaining operators not allowed: {cmd}. "
@@ -1478,7 +1495,19 @@ class Agent:
                 elif name == "read_file":
                     # Leitura read-only via implementação canônica (devtools).
                     # Sem aprovação: risco zero. Erros viram tool result.
-                    tool_result = self._exec_read_file(args)
+                    # Placeholder literal no path (L8b1 20/09: read de
+                    # `incident_<IP>_<timestamp>.txt` — token de template nunca
+                    # existe no disco; barra dirigido em vez de "not found").
+                    _php = re.search(r"<[A-Z][A-Z0-9_]*>",
+                                     str(args.get("path", "")))
+                    if _php is not None:
+                        tool_result = (
+                            f"ERROR: Literal placeholder {_php.group(0)} in "
+                            f"path — resolve the REAL filename first "
+                            f"(list_directory, run the producer script), then "
+                            f"read the concrete name.")
+                    else:
+                        tool_result = self._exec_read_file(args)
                 elif name == "list_directory":
                     # Listagem read-only (devtools, cap 100). Sem aprovação:
                     # risco zero. É o LOCATE-first da disciplina — existia
@@ -1706,10 +1735,27 @@ class Agent:
                                         f"ERROR: BLOCKED — {_base3} already "
                                         f"runs successfully, but "
                                         f"{'; '.join(_miss3[:2])}. Write the "
-                                        f"missing deliverable FIRST "
-                                        f"(skeleton is fine); {_base3} "
-                                        f"unlocks for refinement after all "
-                                        f"deliverables exist.")
+                                f"missing deliverable FIRST "
+                                f"(skeleton is fine); {_base3} "
+                                f"unlocks for refinement after all "
+                                f"deliverables exist.")
+                    if not _gate_block and name in ("write_file",
+                                                    "str_replace"):
+                        # Poison absoluto NO CONTEÚDO (L8b1 20/09: conteúdo com
+                        # `rules_file=/rules/...` passou no gate de sintaxe e
+                        # falhou só no run. Só dispara quando o relativo EXISTE
+                        # no CWD — sem falso-positivo em /tmp, /etc).
+                        _wcontent = str(args.get("content", "") or args.get(
+                            "new_string", ""))
+                        _pm = re.search(r"/(app|rules|logs)/", _wcontent)
+                        if _pm and os.path.exists(_pm.group(1)):
+                            _gate_block = True
+                            _gate_msg = (
+                                f"ERROR: BLOCKED — absolute container path "
+                                f"`{_pm.group(0)}` in written content. Files "
+                                f"live under CWD: replace every "
+                                f"`{_pm.group(0)}` with `{_pm.group(0)[1:]}` "
+                                f"and rewrite.")
                     if _gate_block:
                         result.commands_denied.append(
                             f"{name} {args.get('path', '')}")
@@ -1724,6 +1770,32 @@ class Agent:
                         # modelo reexamina com molde, em vez de repetir cego.
                         if "Bash syntax error" in tool_result:
                             self._review_syntax_armed = True
+                        # Bar-repeat: mesmo path + conteúdo idêntico barrado
+                        # 2x seguidas → ordem de TROCA DE ESTRATÉGIA (L8b1
+                        # 20/09: 3x mesmo intrusion_detector.sh barrado; ver a
+                        # linha + molde não moveu — repetir texto falhou, o
+                        # método tem que mudar).
+                        if name in ("write_file", "str_replace"):
+                            import hashlib as _hl
+                            _bkey = str(args.get("path", ""))
+                            _bval = str(args.get("content", "") or args.get(
+                                "new_string", ""))
+                            _bhash = _hl.md5(_bval.encode()).hexdigest()[:12]
+                            if tool_result.startswith("ERROR") and (
+                                    "Bash syntax error" in tool_result
+                                    or "JSON error" in tool_result):
+                                if self._bar_repeat.get(_bkey) == _bhash:
+                                    tool_result += (
+                                        "\nBLOQUEADO 2x com CONTEÚDO IDÊNTICO "
+                                        "— repetir o texto falhou. TROQUE DE "
+                                        "ESTRATÉGIA agora: emita o script via "
+                                        "python3 (molde acima) ou escreva a "
+                                        "versão MÍNIMA (shebang + greps + "
+                                        "python3 -c p/ o JSON), execute, e só "
+                                        "então estenda.")
+                                self._bar_repeat[_bkey] = _bhash
+                            elif not tool_result.startswith("ERROR"):
+                                self._bar_repeat.pop(_bkey, None)
                         # JSON inválido COM produtores no run: 1 reescrita sob
                         # gramática json_object (C1). Sem produtores = fabricação
                         # (prefix-gate acima já barrou antes de chegar aqui).
