@@ -104,6 +104,23 @@ def _registry_tier_profile(model_id: str) -> dict[str, Any] | None:
     return None
 
 
+def _strict_default(model_id: str) -> bool:
+    """strict_tools default por tier (H-strict 20/09): tiers locais pequenos
+    (speed/fast) ganham tool-calling constrained — A/B 35/35 bonsai; elsung:
+    remover a opção de 'só falar'. reasoning/cloud preservam False.
+    Registry ausente/ilegível → False (comportamento histórico)."""
+    try:
+        from jarvis.core.model_registry import ModelRegistry
+        reg = ModelRegistry.load()
+        mid = model_id
+        if not mid or mid == "default":
+            mid = reg.default or ""
+        entry = reg.get(mid) if mid else None
+        return getattr(entry, "tier", "") in ("speed", "fast")
+    except Exception:
+        return False
+
+
 def _normalize_tool_call(tc: dict[str, Any]) -> dict[str, Any] | None:
     """Normalize a tool call to a standard format.
     
@@ -828,7 +845,7 @@ class Agent:
         approve: bool = False,
         llm_client: Any | None = None,
         model_requirements: dict | None = None,
-        strict_tools: bool = False,
+        strict_tools: bool | None = None,
         plan: bool | str | dict | None = None,
         persona_id: str | None = None,
     ):
@@ -836,8 +853,10 @@ class Agent:
         self.approval_callback = approval_callback
         self._session = session
         # strict_tools: tool-calls via grammar constrained (response_format
-        # JSON) em vez do template jinja — 35/35 no A/B c/ Bonsai.
-        self.strict_tools = strict_tools
+        # JSON) em vez do template jinja — 35/35 no A/B c/ Bonsai. None =
+        # decide por tier (speed/fast → True; H-strict).
+        self.strict_tools = (_strict_default(self.config.llm_model)
+                             if strict_tools is None else strict_tools)
         # plan: planejamento explícito antes de executar (P0.4).
         # True = self-plan (turno 0 pede plano numerado ao próprio modelo
         # e ancora no contexto); str/dict = {"planner_model": id} (roteia

@@ -488,6 +488,7 @@ def test_agent_does_not_advertise_undispatched_mcp_tools(tmp_path) -> None:
         Config(),
         session=CapMCP(),
         mcp_servers={"fake": f"{sys.executable} /dev/null"},
+        strict_tools=False,
     )
     agent.run("faça algo")
     sent_tools = [
@@ -511,7 +512,7 @@ def _tool_names_for(prompt):
             msg = {"role": "assistant", "content": "done"}
             return FakeResponse({"choices": [{"message": msg}]})
 
-    agent = Agent(Config(), session=Cap())
+    agent = Agent(Config(), session=Cap(), strict_tools=False)
     agent.run(prompt)
     return [t["function"]["name"] for t in Cap.last.get("tools", [])]
 
@@ -552,6 +553,7 @@ def test_execute_shell_description_bans_narration() -> None:
         Config(),
         session=CaptureTools(),
         mcp_servers={"fake": f"{sys.executable} /dev/null"},
+        strict_tools=False,
     )
     agent.run("faça algo")
     tools = {t["function"]["name"]: t["function"]["description"]
@@ -2174,6 +2176,41 @@ def test_write_placeholder_path_blocked(tmp_path, monkeypatch) -> None:
     assert not (tmp_path / "incident_<IP>_x.txt").exists()
     assert any("literal placeholder <IP>" in str(m.get("content", ""))
                for m in getattr(result, "messages", []))
+
+
+def test_strict_default_by_tier(monkeypatch) -> None:
+    """strict_tools=None → tier speed/fast True, resto False (H-strict
+    20/09: tiers locais ganham constrained; reasoning/cloud preservam)."""
+    from jarvis.core import agent as _ag
+    from jarvis.core import model_registry as _mr
+
+    class FakeEntry:
+        def __init__(self, tier):
+            self.tier = tier
+            self.raw = {}
+
+    class FakeReg:
+        default = "bonsai"
+        _t = {"bonsai": "speed", "jarvis-fast": "fast",
+              "jarvis-strong": "reasoning"}
+
+        @classmethod
+        def load(cls, path=None):
+            return cls()
+
+        def get(self, mid):
+            return FakeEntry(self._t[mid]) if mid in self._t else None
+
+    monkeypatch.setattr(_mr, "ModelRegistry", FakeReg)
+    monkeypatch.setenv("JARVIS_LLM_MODEL", "default")
+    assert _ag._strict_default("") is True
+    assert _ag._strict_default("default") is True
+    assert _ag._strict_default("jarvis-fast") is True
+    assert _ag._strict_default("jarvis-strong") is False
+    assert _ag._strict_default("nope") is False
+    assert Agent(Config(), session=FakeSession()).strict_tools is True
+    assert Agent(Config(), session=FakeSession(),
+                 strict_tools=False).strict_tools is False
 
 
 def test_synth_offered_only_after_bar() -> None:
