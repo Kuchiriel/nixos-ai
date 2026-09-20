@@ -227,6 +227,19 @@ def validate_bash(content: str) -> tuple[bool, list[str], list[str]]:
                          "\"import json; open('OUT.json','w').write("
                          "json.dumps({'timestamp': 'TS', 'alerts': []}, "
                          "indent=2))\" — single-quotes INSIDE python.")
+            # One-liner barrado? Geração mascarada resolve no decode
+            # (H-grammar, GCD-bash): sugere synthesize_command com a máscara
+            # da família. Só conteúdo curto — script longo pede reescrita,
+            # não one-liner.
+            if content.count("\n") <= 15:
+                from jarvis.core.security import (
+                    suggest_synth_grammar as _ssg)
+                _sg = _ssg(content)
+                if _sg is not None:
+                    _msg += (f"\nOr emit it masked: synthesize_command(desc="
+                            f"'<what the command must do>', grammar='{_sg}') "
+                            f"— server-enforced syntax, then execute the "
+                            f"returned command.")
             return False, [f"Bash syntax error: {_msg}"], []
     except FileNotFoundError:
         warnings.append("bash not available for syntax check")

@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Callable, Any
 
 # Re-export from security.py for backward compatibility
-from jarvis.core.security import command_allowed, echo_to_json, has_chaining_operators, run_shell, strip_redundant_chmod_run  # noqa: F401
+from jarvis.core.security import command_allowed, echo_to_json, has_chaining_operators, run_shell, strip_redundant_chmod_run, suggest_synth_grammar, SYNTH_GRAMMARS  # noqa: F401
 
 
 def detect_profile(model_id: str) -> dict[str, Any]:
@@ -1574,6 +1574,38 @@ class Agent:
                     # risco zero. É o LOCATE-first da disciplina — existia
                     # na frase mas nunca como tool (L8: instrução impossível).
                     tool_result = self._exec_list(args)
+                elif name == "synthesize_command":
+                    # Geração mascarada (H-grammar, NVIDIA GCD-bash): sub-call
+                    # com GBNF no decode; SÓ gera, nunca executa (sem
+                    # aprovação — risco zero; execução passa pelos gates).
+                    _gname = str(args.get("grammar", ""))
+                    _gbnf = SYNTH_GRAMMARS.get(_gname)
+                    if _gbnf is None:
+                        tool_result = (
+                            f"ERROR: unknown grammar '{_gname}' (available: "
+                            f"{', '.join(sorted(SYNTH_GRAMMARS))}).")
+                    else:
+                        try:
+                            _sresp = self.llm.chat_with_tools(
+                                [{"role": "system", "content": (
+                                    "Emit ONLY the shell command, no prose, "
+                                    "no fences.")},
+                                 {"role": "user", "content": str(
+                                     args.get("desc", ""))}],
+                                tools=None, temperature=0.0, max_tokens=128,
+                                role="worker", extra={"grammar": _gbnf})
+                            _lines = [
+                                _ln.strip().strip("`").strip()
+                                for _ln in (_sresp.content or "").splitlines()
+                                if _ln.strip()]
+                            tool_result = (_lines[0] if _lines else
+                                           "ERROR: empty synthesis — "
+                                           "rephrase desc and retry.")
+                        except Exception as _e:
+                            tool_result = (
+                                f"ERROR: synthesis failed: {str(_e)[:150]}")
+                    result.commands_run.append("synthesize_command")
+                    self._log_audit("synthesize_command", 0, tool_result, True)
                 elif name == "build_json_dataset":
                     from jarvis.core.devtools import build_json_dataset as _bj
                     tool_result = json.dumps(
@@ -2729,14 +2761,28 @@ class Agent:
             "type": "function",
             "function": {
                 "name": "book_resume",
-                "description": "Where to continue reading: bookmark + recency + semantic hint (read-only). Empty hint returns the bookmark.",
+                    "description": "Where to continue reading: bookmark + recency + semantic hint (read-only). Empty hint returns the bookmark.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "book": {"type": "string", "description": "Optional book name"},
+                            "hint": {"type": "string", "description": "Optional semantic hint"},
+                        },
+                        "required": [],
+                    },
+                },
+            }, {
+            "type": "function",
+            "function": {
+                "name": "synthesize_command",
+                "description": ("Generate ONE shell command under a grammar mask (server-enforced syntax — use after a syntax bar or when quoting is fragile). Returns the bare command string; execute it via execute_shell afterwards. Grammars: grep, jqread, date, chmod."),
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "book": {"type": "string", "description": "Optional book name"},
-                        "hint": {"type": "string", "description": "Optional semantic hint"},
+                        "desc": {"type": "string", "description": "What the command must do"},
+                        "grammar": {"type": "string", "description": "Mask id: grep, jqread, date, chmod"},
                     },
-                    "required": [],
+                    "required": ["desc", "grammar"],
                 },
             },
         }]

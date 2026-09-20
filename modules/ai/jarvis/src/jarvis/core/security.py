@@ -285,6 +285,45 @@ def run_shell_dict(cmd: str, timeout: int = 60) -> dict[str, Any]:
         return {"ok": False, "error": str(e), "exit_code": -1}
 
 
+# --- Máscaras GBNF p/ synthesize_command (H-grammar) ---
+# Restrições descobertas no servidor (spike 20/09, fork prism):
+# literais/classes/negação/repetição/alternação OK; `/regex/` NÃO;
+# escape `\"` NÃO é confiável (funcionou 1x, depois 400 consistente) —
+# NENHUMA gramática aqui usa `\"`: single-quotes p/ literais shell,
+# formatos date SEM aspas (`date -u +%Y...` é válido sem elas).
+# PATH genérico (nunca paths de task hardcoded — sem contaminação).
+_SYNTH_PATH = 'PATH ::= [a-zA-Z0-9_.~-]+ ("/" [a-zA-Z0-9_.~-]+)*'
+
+SYNTH_GRAMMARS: dict[str, str] = {
+    "grep": (
+        'root ::= "grep" (" -c" | " -h" | " -E" | " -oE" | " -F" | " -q")? '
+        '" \'" [^\']+ "\' " PATH\n' + _SYNTH_PATH
+    ),
+    "jqread": (
+        'root ::= "jq " ("-r ")? "\'" [^\']+ "\' " PATH\n' + _SYNTH_PATH
+    ),
+    "date": 'root ::= "date -u +" [A-Za-z0-9%.:_-]+',
+    "chmod": 'root ::= "chmod +x " PATH\n' + _SYNTH_PATH,
+}
+
+_SYNTH_FAMILY = (
+    ("grep", ("grep ",)),
+    ("jqread", ("jq ",)),
+    ("date", ("date ",)),
+    ("chmod", ("chmod ",)),
+)
+
+
+def suggest_synth_grammar(text: str) -> str | None:
+    """Família de comando → id de gramática (ou None). Match no primeiro
+    token parecido-com-comando; conservador (desconhecido = None)."""
+    low = (text or "").lower()
+    for name, markers in _SYNTH_FAMILY:
+        if any(m in low for m in markers):
+            return name
+    return None
+
+
 _ECHO_JSON_HEAD = re.compile(r"^\s*(echo|printf)\s")
 
 

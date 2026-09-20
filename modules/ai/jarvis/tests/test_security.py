@@ -79,3 +79,18 @@ def test_echo_to_json():
     assert echo_to_json("echo hi | jq -R . > a.json") is False
     assert echo_to_json("jq -n '{a:1}' > a.json") is False
     assert echo_to_json("echo hello") is False
+
+
+def test_synth_grammars_escape_free_and_mapped():
+    """Biblioteca GBNF sem escape `\\` (fork prism rejeita — spike 20/09) e
+    suggest mapeia família (H-grammar)."""
+    from jarvis.core.security import SYNTH_GRAMMARS, suggest_synth_grammar
+    assert set(SYNTH_GRAMMARS) == {"grep", "jqread", "date", "chmod"}
+    for g in SYNTH_GRAMMARS.values():
+        assert '\\"' not in g
+    assert suggest_synth_grammar("grep -c 'x' a.log") == "grep"
+    assert suggest_synth_grammar("jq '.a' f.json") == "jqread"
+    assert suggest_synth_grammar("date -u +%Y") == "date"
+    assert suggest_synth_grammar("chmod +x f.sh") == "chmod"
+    assert suggest_synth_grammar("python3 -c 'x'") is None
+    assert suggest_synth_grammar("") is None

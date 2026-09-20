@@ -55,6 +55,21 @@ def test_validate_bash_accepts_valid(tmp_editor):
     assert ok, errors
 
 
+def test_validate_bash_suggests_synth_for_short(tmp_editor):
+    """One-liner barrado sugere synthesize_command mascarado (H-grammar);
+    script longo não (pede reescrita, não one-liner)."""
+    ok, errors, _ = validate_bash(
+        "#!/bin/sh\ngrep -c 'x' logs/a.log\nif true; then\necho hi\n")
+    assert not ok
+    assert any("synthesize_command" in e and "grammar='grep'" in e
+               for e in errors)
+    long_bad = ("#!/bin/sh\n" + "grep -c 'x' logs/a.log\n" * 18
+                + "if true; then\necho hi\n")
+    ok2, errors2, _ = validate_bash(long_bad)
+    assert not ok2
+    assert not any("synthesize_command" in e for e in errors2)
+
+
 def test_bash_gate_delivers_python_shape_on_json_failure(tmp_editor):
     """Falha de sintaxe em script com cheiro de JSON entrega o molde
     python3 (L8v27: ver a linha não bastou 4x). Sem cheiro, sem sketch."""

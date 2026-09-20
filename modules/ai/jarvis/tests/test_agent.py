@@ -2176,6 +2176,56 @@ def test_write_placeholder_path_blocked(tmp_path, monkeypatch) -> None:
                for m in getattr(result, "messages", []))
 
 
+def test_synthesize_command_dispatch(tmp_path, monkeypatch) -> None:
+    """synthesize_command faz sub-call mascarada e devolve o comando
+    (H-grammar: gera sob GBNF, nunca executa — sem aprovação)."""
+    class SynthSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-1", "type": "function",
+                           "function": {"name": "synthesize_command",
+                               "arguments": jsonlib.dumps({
+                                   "desc": "make f.sh executable",
+                                   "grammar": "chmod"})}}]}
+            elif self.calls == 2:
+                msg = {"role": "assistant",
+                       "content": "chmod +x f.sh"}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    agent = Agent(Config(), session=SynthSession(), approve=True)
+    result = agent.run("make executable")
+    assert any("chmod +x f.sh" in str(m.get("content", ""))
+               for m in getattr(result, "messages", []))
+    assert any("synthesize_command" in c for c in result.commands_run)
+
+
+def test_synthesize_unknown_grammar(tmp_path, monkeypatch) -> None:
+    """Gramática inexistente → ERROR dirigido (sem sub-call, sem crash)."""
+    class BadGSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{"id": "call-1", "type": "function",
+                           "function": {"name": "synthesize_command",
+                               "arguments": jsonlib.dumps({
+                                   "desc": "x", "grammar": "awk"})}}]}
+            else:
+                msg = {"role": "assistant", "content": "stopped"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    agent = Agent(Config(), session=BadGSession(), approve=True)
+    result = agent.run("synthesize")
+    assert any("unknown grammar" in str(m.get("content", ""))
+               for m in getattr(result, "messages", []))
+
+
 def test_echo_ban_engages_after_second_invalid_artifact(tmp_path, monkeypatch) -> None:
     """2º artifact inválido engata ban vinculante de echo-em-JSON (escalada
     soft→binding, L10 retry: v27/b3/w2 repetiram a representação até STUCK).
