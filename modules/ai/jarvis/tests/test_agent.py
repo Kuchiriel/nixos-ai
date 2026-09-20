@@ -1934,6 +1934,58 @@ def test_real_py_not_flagged(tmp_path, monkeypatch) -> None:
     assert _placeholder_script_note(msgs) is None
 
 
+def test_move_forward_blocks_polish_before_coverage(tmp_path, monkeypatch) -> None:
+    """Re-editar .sh com exit 0 e deliverable ausente = BLOCKED
+    (formigueiro: L8v41 queimou 11 turns na parte 1); libera após todos
+    existirem."""
+    class AllocSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                tc = ("write_file", {"path": "a.sh",
+                                     "content": "echo ran-a\n"})
+            elif self.calls == 2:
+                tc = ("execute_shell", {"cmd": "bash a.sh"})
+            elif self.calls == 3:
+                tc = ("str_replace", {"path": "a.sh", "old": "ran-a",
+                                      "new": "exit 1"})
+            elif self.calls == 4:
+                tc = ("write_file", {"path": "b.sh",
+                                     "content": "echo ran-b\n"})
+            elif self.calls == 5:
+                tc = ("str_replace", {"path": "a.sh", "old": "ran-a",
+                                      "new": "# polished"})
+            else:
+                return FakeResponse({"choices": [{"message": {
+                    "role": "assistant", "content": "stopped"}}]})
+            name, args = tc
+            msg = {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{
+                    "id": f"call-{self.calls}",
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "arguments": jsonlib.dumps(args),
+                    },
+                }],
+            }
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    # exec resulta exit 0: FakeSession envolve; dispatch executa de verdade
+    # (a.sh real no tmp). Para o resultado conter [exit: 0] o script deve
+    # sair 0 — `exit 0` garante.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=AllocSession(), approve=True)
+    result = agent.run("create a.sh and b.sh helpers")
+    assert any("already runs successfully" in str(m.get("content", ""))
+               for m in getattr(result, "messages", []))
+    assert (tmp_path / "b.sh").exists()
+    assert "# polished" in (tmp_path / "a.sh").read_text()
+
+
 def test_list_directory_offered_and_dispatched(tmp_path, monkeypatch) -> None:
     """list_directory existe como tool e despacha (L8: disciplina mandava
     LOCATE-first mas a tool nunca existiu — instrução impossível)."""

@@ -1628,6 +1628,88 @@ class Agent:
                                     f"{_base2}`, then `./{_base2}` — `&&` is "
                                     "blocked), read its real output/errors, "
                                     "THEN fix.")
+                    if not _gate_block:
+                        # MOVE-FORWARD (formigueiro: não aperfeiçoa uma câmara
+                        # enquanto as outras estão vazias — L8v41: 11 turns
+                        # só no detector, response.sh nunca começado).
+                        # Re-editar .sh que já EXECUTOU COM SUCESSO (exit 0)
+                        # com deliverable citado ausente = polimento antes da
+                        # cobertura. Trava até o ausente existir; depois
+                        # libera tudo (fase de refinamento). Só re-edit
+                        # (arquivo tem que EXISTIR): criar nunca trava.
+                        _tpath3 = str(args.get("path", ""))
+                        if _tpath3.endswith(".sh"):
+                            _base3 = _tpath3.rsplit("/", 1)[-1]
+                            try:
+                                from jarvis.core.devtools import (
+                                    resolve_base as _rb4)
+                                _root3 = _rb4()
+                            except Exception:
+                                from pathlib import Path as _P5
+                                _root3 = _P5(".")
+                            from pathlib import Path as _P6
+                            _fp3 = (_root3 / _tpath3 if not _P6(
+                                _tpath).is_absolute() else _P6(_tpath3))
+                            _ran_ok = False
+                            try:
+                                if _fp3.is_file():
+                                    for _i3, _m3 in enumerate(messages):
+                                        for _tc3 in (_m3.get("tool_calls")
+                                                     or []):
+                                            _f3 = _tc3.get("function", _tc3)
+                                            if not isinstance(_f3, dict):
+                                                continue
+                                            if _f3.get("name") not in (
+                                                    "execute_shell",
+                                                    "jarvis_execute"):
+                                                continue
+                                            try:
+                                                _ga3 = _f3.get("arguments",
+                                                                {})
+                                                _ga3 = (json.loads(_ga3)
+                                                        if isinstance(
+                                                            _ga3, str)
+                                                        else _ga3)
+                                            except Exception:
+                                                _ga3 = {}
+                                            _c3 = str((_ga3 or {}).get(
+                                                "cmd", ""))
+                                            if (f"./{_base3}" not in _c3
+                                                    and not re.search(
+                                                        r"\b(bash|sh)\s+\S*"
+                                                        + re.escape(_base3),
+                                                        _c3)):
+                                                continue
+                                            _nx3 = (messages[_i3 + 1]
+                                                    if _i3 + 1 < len(messages)
+                                                    else {})
+                                            if ("[exit: 0]" in str(_nx3.get(
+                                                    "content", ""))):
+                                                _ran_ok = True
+                                                break
+                                        if _ran_ok:
+                                            break
+                            except Exception:
+                                _ran_ok = False
+                            if _ran_ok:
+                                try:
+                                    from jarvis.core.completion import (
+                                        missing_deliverables as _md3)
+                                    _miss3 = _md3(messages, _root3)
+                                except Exception:
+                                    _miss3 = []
+                                _miss3 = [
+                                    _m for _m in _miss3 if _base3 not in _m]
+                                if _miss3:
+                                    _gate_block = True
+                                    _gate_msg = (
+                                        f"ERROR: BLOCKED — {_base3} already "
+                                        f"runs successfully, but "
+                                        f"{'; '.join(_miss3[:2])}. Write the "
+                                        f"missing deliverable FIRST "
+                                        f"(skeleton is fine); {_base3} "
+                                        f"unlocks for refinement after all "
+                                        f"deliverables exist.")
                     if _gate_block:
                         result.commands_denied.append(
                             f"{name} {args.get('path', '')}")
