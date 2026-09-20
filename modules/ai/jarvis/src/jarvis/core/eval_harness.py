@@ -105,6 +105,16 @@ class EvalHarness:
         error = None
 
         try:
+            # §25 (EXP-C 20/09): snapshot de artefatos-alvo ANTES do setup —
+            # file_exists/world_check passavam em arquivo STALE de run
+            # anterior (falso-verde). Flag observável, não bloqueante:
+            # success usa só os critérios originais.
+            _targets = []
+            if "file_exists" in task.success_criteria:
+                _targets.append(task.success_criteria["file_exists"])
+            if "file_contains" in task.success_criteria:
+                _targets.extend(task.success_criteria["file_contains"].keys())
+            _pre_existed = {t: Path(t).exists() for t in _targets}
             # Setup
             if task.setup:
                 # Usa shlex.split() ao invés de shell=True para segurança
@@ -179,6 +189,9 @@ class EvalHarness:
                 criteria_met["has_response"] = bool(final_text)
 
             success = all(criteria_met.values()) if criteria_met else True
+
+            for _t, _pre in _pre_existed.items():
+                criteria_met[f"stale_artifact:{_t}"] = _pre
 
             # Teardown
             if task.teardown:

@@ -59,3 +59,25 @@ Runner: `EvalHarness.compare` semântica (n=3/braço), world_check externo.
   `exp_c2_lessons`, `exp_c3_lessons` (compartilhada `memories` intacta).
 - Status: PARTIALLY VERIFIED (n=3/braço; efeito adverso replicado B2 vs
   B3 em mesma variante — mecanismo confirmado).
+
+## EXP-E — MCP tool selection (description discriminability) ⚠️ CONFUSÃO SISTEMÁTICA
+
+- Método: probes single-turn (LLMClient, bonsai :8080), catálogo real de
+  12 tools (nomes+descrições verbatim de `mcp_server.JARVIS_TOOLS`),
+  resposta constrangida ao nome exato; n=3/task, 6 tasks.
+- rag_search 3/3, lessons 3/3, web_search 3/3, read_file 3/3.
+- **recall 0/3**: escolhe `jarvis_lessons` 3/3 ("what did we decide" →
+  lessons). Descrição do recall ("recall past facts/decisions") perde
+  para lessons ("recall lessons from past failures FIRST") — par de
+  confusão SISTEMÁTICO, não ruído.
+- **nix_search 0/3**: responde "jq" (o conteúdo, não a tool) 3/3 —
+  violação de constrangimento quando a task parece pergunta direta.
+- Total 12/18. Interpretation: verbos distintivos vencem; superfícies
+  sobrepostas (recall/lessons) confundem; modelo pequeno troca seleção
+  de tool por resposta direta quando o formato da pergunta sugere.
+- Implicação (§12): "MANDATORY FIRST STEP" do recall é prosa que o
+  próprio modelo não consegue operacionalizar na seleção — advisory,
+  não enforcement. Candidata a REGRESSION-PLAN: desambiguar descrições
+  recall vs lessons (recall=fatos/decisões gerais; lessons=falhas).
+- Runner: `/tmp/exp-e/run_exp_e.py`; `/tmp/exp-e-summary.json`.
+- Status: PARTIALLY VERIFIED (n=3; confusão recall→lessons replicada 3/3).

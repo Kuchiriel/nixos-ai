@@ -164,6 +164,43 @@ class TestEvalHarness:
         assert result.trajectory[2].role == "assistant"
 
 
+class TestStaleArtifact:
+    def test_preexisting_target_flagged_not_blocking(self, harness, tmp_path):
+        # §25 (EXP-C 20/09): artefato de run anterior satisfaz
+        # file_exists/world_check (falso-verde). run_task sinaliza
+        # stale_artifact:<path> sem mudar a semântica de success.
+        stale = tmp_path / "out.txt"
+        stale.write_text("velho")
+
+        task = TaskTemplate(
+            id="stale", description="d", prompt="p",
+            success_criteria={"file_exists": str(stale)},
+        )
+
+        def agent_fn(prompt):
+            return {"final_response": "nada fiz", "tools_called": [], "turns": 1}
+
+        r = harness.run_task(task, agent_fn)
+        assert r.criteria_met["file_exists"] is True
+        assert r.criteria_met[f"stale_artifact:{stale}"] is True
+        assert r.success is True  # não-bloqueante por desenho
+
+    def test_fresh_target_not_flagged(self, harness, tmp_path):
+        fresh = tmp_path / "novo.txt"
+        task = TaskTemplate(
+            id="fresh", description="d", prompt="p",
+            success_criteria={"file_exists": str(fresh)},
+        )
+
+        def agent_fn(prompt):
+            fresh.write_text("novo")
+            return {"final_response": "ok", "tools_called": [], "turns": 1}
+
+        r = harness.run_task(task, agent_fn)
+        assert r.success is True
+        assert r.criteria_met[f"stale_artifact:{fresh}"] is False
+
+
 class TestWorldState:
     def test_world_check_pass(self, harness, tmp_path):
         # §11: world_check = prova EXTERNA do estado do mundo (exit 0)
