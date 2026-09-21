@@ -1,0 +1,74 @@
+{
+ "T1": {
+  "api": "3/3",
+  "samples": [
+   "02,03,05,08",
+   "02,03,05,08",
+   "02,03,05,08"
+  ]
+ },
+ "T2-R1": {
+  "api": "3/3",
+  "samples": [
+   "01:ok\n02:repaired\n03:quarantined\n04:ok\n05:repaired\n06:skipped\n07:ok\n08:quarantin",
+   "01:ok\n02:repaired\n03:quarantined\n04:ok\n05:repaired\n06:skipped\n07:ok\n08:quarantin",
+   "01:ok\n02:repaired\n03:quarantined\n04:ok\n05:repaired\n06:skipped\n07:ok\n08:quarantin"
+  ]
+ },
+ "T4": {
+  "api": "3/3",
+  "samples": [
+   "{\"a\": 1, \"b\": [true, null], \"c\": \"x\"}",
+   "{\"a\": 1, \"b\": [true, null], \"c\": \"x\"}",
+   "{\"a\": 1, \"b\": [true, null], \"c\": \"x\"}"
+  ]
+ },
+ "T5": {
+  "api": "3/3",
+  "samples": [
+   "01,AB-100,ok\n02,AB-101,broken",
+   "01,AB-100,ok\n02,AB-101,broken",
+   "01,AB-100,ok\n02,AB-101,broken"
+  ]
+ },
+ "F6": {
+  "api": "3/3",
+  "samples": [
+   "a \t b",
+   "a \t b",
+   "a \t b"
+  ]
+ },
+ "F7": {
+  "api": "3/3",
+  "samples": [
+   "x\n\n\ny",
+   "x\n\n\ny",
+   "x\n\n\ny"
+  ]
+ },
+ "F8": {
+  "api": "0/3",
+  "samples": [
+   "end",
+   "end",
+   "end"
+  ]
+ },
+ "E1": {
+  "api": "0/3",
+  "samples": [
+   "alpha-42 {\u00e9} tail  \nsecond line\tend",
+   "alpha-42 {\u00e9} tail  \nsecond line\tend",
+   "alpha-42 {\u00e9} tail  \nsecond line\tend"
+  ]
+ },
+ "T-fact": {
+  "api": "3/3",
+  "samples": [
+   "181",
+   "181",
+   "181"
+  ]
+ }
+}

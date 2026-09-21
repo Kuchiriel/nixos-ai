@@ -1,0 +1,1 @@
+nixos-ai main / nix develop / router :8080 bonsai default / OR direct HTTP max_tokens=150 temp=0.0

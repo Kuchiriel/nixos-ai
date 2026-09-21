@@ -1,0 +1,12 @@
+{
+ "cycle": 9,
+ "commit": "9769fd47b3517ad0b4b6c95a2198663ac4bfa341",
+ "branch": "main",
+ "worktree": "clean",
+ "api_model": "google/gemini-3.5-flash-lite",
+ "bonsai": "router:8080/default",
+ "harbor": "BLOCKED (no framework, docker daemon permission-denied, no uv)",
+ "agent_loop_api": "BLOCKED (~9933 token credits; loops need 10-100x)",
+ "n": 3,
+ "tuning": "none"
+}
