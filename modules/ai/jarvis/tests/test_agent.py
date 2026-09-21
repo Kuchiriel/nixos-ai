@@ -2663,3 +2663,48 @@ def test_clobber_sh_via_python_refused(tmp_path, monkeypatch) -> None:
                for h in hits)
     # segunda call (leitura) não foi barrada pelo guard:
     assert sum("never for scripts" in h for h in hits) == 1
+
+
+class _CaptureSession(FakeSession):
+    """Captura o payload (tools anunciadas) de cada chamada."""
+
+    def __init__(self):
+        super().__init__()
+        self.payloads = []
+
+    def post(self, url, json=None, timeout=120, **kw):
+        self.calls += 1
+        assert "chat/completions" in url
+        self.payloads.append(json)
+        if self.calls == 1:
+            msg = {
+                "role": "assistant", "content": "",
+                "tool_calls": [{
+                    "id": "call-1", "type": "function",
+                    "function": {"name": "execute_shell",
+                                 "arguments": jsonlib.dumps({"cmd": "ls"})}}]}
+        else:
+            msg = {"role": "assistant", "content": "done"}
+        return FakeResponse({"choices": [{"message": msg}]})
+
+
+def test_tool_class_filters_attractor(monkeypatch) -> None:
+    """Contract A: tool_class='action' remove read_file da superfície
+    (atractor E6); default (None) mantém o schema atual."""
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+
+    s_default = _CaptureSession()
+    Agent(Config(), session=s_default, approve=True, memory=None).run(
+        "count lines in a log")
+    names_default = {t["function"]["name"]
+                     for p in s_default.payloads for t in (p.get("tools") or [])}
+    assert "read_file" in names_default
+
+    s_filtered = _CaptureSession()
+    Agent(Config(), session=s_filtered, approve=True, memory=None,
+          tool_class="action",
+          mcp_servers={"nix": "/usr/bin/nix"}).run("count lines in a log")
+    names_f = {t["function"]["name"]
+               for p in s_filtered.payloads for t in (p.get("tools") or [])}
+    assert "read_file" not in names_f
+    assert "execute_shell" in names_f

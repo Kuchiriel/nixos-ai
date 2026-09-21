@@ -888,10 +888,15 @@ class Agent:
         strict_tools: bool | None = None,
         plan: bool | str | dict | None = None,
         persona_id: str | None = None,
+        tool_class: str | None = None,
     ):
         self.config = config or get_config()
         self.approval_callback = approval_callback
         self._session = session
+        # tool_class (E6/20/09): classe determinística de task ->
+        # superfície reduzida (drop attractors). None = comportamento
+        # atual (sem filtro). Regressão-safe: opt-in.
+        self.tool_class = tool_class
         # strict_tools: tool-calls via grammar constrained (response_format
         # JSON) em vez do template jinja — 35/35 no A/B c/ Bonsai. None =
         # decide por tier (speed/fast → True; H-strict).
@@ -2947,6 +2952,23 @@ class Agent:
             tools = [t for t in tools
                      if t.get("function", {}).get("name")
                      != "synthesize_command"]
+        # Contract A (E6): superfície por classe de task — drops
+        # attractors (read_file em action/write). Determinístico, unit-
+        # testado em test_tool_surface. execute_shell sempre disponível
+        # (subsume leitura/escrita via shell; contrato não cripple).
+        if self.tool_class:
+            try:
+                from jarvis.core.tool_surface import surface_for
+                _allowed = set(surface_for(
+                    self.tool_class,
+                    [t.get("function", {}).get("name")
+                     for t in tools]).available)
+                _allowed.add("execute_shell")
+                _allowed.add("synthesize_command")
+                tools = [t for t in tools
+                         if t.get("function", {}).get("name") in _allowed]
+            except Exception:  # noqa: BLE001 — contrato best-effort
+                pass
         if self.mcp_servers:
             tools.append({
                 "type": "function",

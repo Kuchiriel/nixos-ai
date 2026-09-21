@@ -19,6 +19,7 @@ mesmo Qdrant híbrido, coleções diferentes.
 
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -118,8 +119,31 @@ class EpisodicMemory:
         self._store.upsert(self.collection, [point])
         return point_id
 
-    def remember_lesson(self, *, task: str, error_pattern: str, fix: str) -> int | None:
-        """Porta do add_lesson do experience_buffer legado."""
+    def remember_lesson(self, *, task: str, error_pattern: str, fix: str,
+                        lint: bool | str | None = None) -> int | None:
+        """Porta do add_lesson do experience_buffer legado.
+
+        lint (Contract B, R2/20/09): "auto" = env JARVIS_LESSON_LINT
+        (default off; "1"/"transform" liga). Quando ativo, fix episódico
+        com números é transformado em regra value-free (menos atração p/
+        SLM) e o original preservado como evidência em meta.
+        """
+        if lint is None:
+            lint = os.environ.get("JARVIS_LESSON_LINT", "").lower()
+        transformed = ""
+        if lint in ("1", "true", "transform", "auto"):
+            try:
+                from jarvis.core.lesson_lint import lint_lesson
+                res = lint_lesson(task, error_pattern, fix)
+                if res.policy == "transformed" and res.transformed:
+                    transformed = res.transformed
+            except Exception:  # noqa: BLE001 — lint best-effort
+                pass
+        _fix = transformed or fix
+        meta: dict = {}
+        if transformed:
+            meta["lint"] = "transformed"
+            meta["original_fix"] = fix  # proveniência preservada (§4)
         # Supersede: mesma task aposenta a anterior (freshness — sem isso
         # "local 0/3" de setembro convive com "0/47" de hoje e ambos injetam).
         # Best-effort: nunca bloqueia a gravação nova.
@@ -127,10 +151,10 @@ class EpisodicMemory:
             self.forget_task(task)
         except Exception:  # noqa: BLE001
             pass
-        text = f"Task: {task}. Error: {error_pattern}. Fix: {fix}"
+        text = f"Task: {task}. Error: {error_pattern}. Fix: {_fix}"
         return self.remember(MemoryEvent(
             kind=KIND_LESSON, text=text, task=task,
-            error_pattern=error_pattern, fix=fix,
+            error_pattern=error_pattern, fix=_fix, meta=meta,
         ))
 
     def forget_task(self, task: str) -> int:

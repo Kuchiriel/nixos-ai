@@ -200,3 +200,30 @@ Variant B (WARN/32/truth 8), bonsai, n=3 (B2/B0 estendidos a n=5):
   experimento em jail /tmp, approval restrito por path.
 - Status: PARTIALLY VERIFIED; R7 prioriza: Qdrant down ≠ "sem
   conhecimento" agora é observável.
+
+## E6 — progressive disclosure (Ciclo 3) ✅ ARQUITETURALIZADO
+
+- S1 all-tools: git 0, vault 0 (reproduz E1). S2a {só-correta}: git ✓,
+  vault ✓, recall ✓. S2b categoria {correta+read_file}: git ✗ (atrai),
+  vault ✓. S4 classifier determinístico: atingido por bug de prioridade
+  de keyword ("commit" em "pushing commits" venceu "policy" — dependência
+  do classificador, NÃO do modelo). E6-E router livre: picked rag_search
+  (hop extra = entropia extra).
+- Conclusão: categoria deve EXCLUIR attractors (read_file p/ ação);
+  classifier simples+testado > router-livre. Threshold exato (2/4/6/8/12)
+  fica p/ P2.
+- Implementado: `core/tool_surface.py` (classify+surface+entropy) +
+  `Agent(tool_class=)` filtro opt-in + `test_tool_surface` (8 testes).
+- Harness-value (PHASE 17, mesma família 181): MODEL-ONLY 0/2,
+  +TOOLS (C0) 0/3, +KNOWLEDGE (C2) 3/3→5/5, +VERIFICATION = honestidade
+  (STUCK vs crash/mentira). Ganho = harness+representação, não modelo.
+
+## CICLO 3 — contratos executáveis (implementado+testado)
+- Contract A disclosure: tool_surface + tool_class (E6).
+- Contract B value-free: lesson_lint + remember_lesson(lint/env
+  JARVIS_LESSON_LINT, proveniência em meta) (R2).
+- Contract C/D grounding+state: knowledge_state (CURRENT/HISTORICAL/
+  SUPERSEDED/UNKNOWN/UNAVAILABLE/UNVERIFIED; OBSERVED/RETRIEVED/INFERRED)
+  (G/J).
+- Suite permanente: benchmarks/kb_regression.py (host-only).
+- Docs: CAPABILITY-CONTRACTS.md, ANCHOR-PLAN.md (P0-P3/DEFERRED).
