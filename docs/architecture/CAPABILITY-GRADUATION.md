@@ -23,11 +23,11 @@ variância); n=5 p/ claims causais fortes (R1); n=1 nunca decide (H1).
 | Outage≠empty | GRADUATED | emit + teste; VectorStoreError propaga |
 | Stale≠success | GRADUATED | flag + 2 testes |
 | Provider-empty STUCK | GRADUATED | guard + teste |
-| Lesson lint transform | REPRODUCIBLE* | unit ok; *behavioral c/ lint ON pendente (Ciclo 4) |
+| Lesson lint transform | VERIFIED (mecânico) / PARTIAL (comportamental) | strip digits ok + teste; limpo 1/3 |
 | Disclosure progressiva | REPRODUCIBLE | E6 n=1-3; threshold exato P2 |
 | Grounding self-knowledge | VERIFIED | Gb 2/3; Ga 0/3 (limite mapeado) |
-| Substrate auto-select | PARTIAL | probes 12/18; vault/git falham c/ menu cheio |
-| Context-loss persistence | DISCOVERED | hipótese; experimento Ciclo 4 |
-| L9 multi-step | DISCOVERED | spec Ciclo 4 |
+| Substrate auto-select | PARTIAL | probes E2 9/9; agente git 0/6 (probe→exec gap) |
+| Context-loss persistence | VERIFIED | B0 0/3, B2/B3 3/3, UB 3/3 (PERSIST) |
+| L9 multi-step | UNVERIFIED (capability) | 0/9; attractor+no-pivot+fidelidade; checker+runner permanentes |
 | Long-horizon (Z) | UNVERIFIED | sem experimento |
 | Cross-doc synthesis (S) | UNVERIFIED | sem experimento |
