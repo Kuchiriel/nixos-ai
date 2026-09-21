@@ -797,6 +797,35 @@ def test_missing_deliverables_helper(tmp_path):
     assert not any("a.sh" in m for m in out)
 
 
+def test_missing_deliverables_json_txt_with_creation_verb(tmp_path):
+    """Generalização (Ciclo 5/L9-werr): artefatos .json/.txt citados no
+    prompt COM verbo de criação e ausentes são cobrados (antes só .sh)."""
+    from jarvis.core.completion import missing_deliverables
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "in.csv").write_text("a,b\n")
+    msgs = [{"role": "user",
+             "content": "Read in.csv and write report.json and notes.txt."}]
+    with use_project_root(tmp_path):
+        from jarvis.core.devtools import resolve_base
+        out = missing_deliverables(msgs, resolve_base())
+    assert any("report.json" in m for m in out)
+    assert any("notes.txt" in m for m in out)
+    # input existente não é cobrado
+    assert not any("in.csv" in m for m in out)
+
+
+def test_missing_deliverables_no_verb_no_charge(tmp_path):
+    """Sem verbo de criação, .json mencionado não é cobrado (input)."""
+    from jarvis.core.completion import missing_deliverables
+    from jarvis.core.paths import use_project_root
+    msgs = [{"role": "user",
+             "content": "Look at config.json and tell me the version."}]
+    with use_project_root(tmp_path):
+        from jarvis.core.devtools import resolve_base
+        out = missing_deliverables(msgs, resolve_base())
+    assert not any("config.json" in m for m in out)
+
+
 def test_valid_root_json_silent(tmp_path):
     """.json válido no CWD não dispara (nem inputs nem outputs bons)."""
     from jarvis.core.paths import use_project_root

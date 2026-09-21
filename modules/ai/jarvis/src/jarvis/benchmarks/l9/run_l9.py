@@ -30,8 +30,19 @@ Use write_file with real content only. Repo writes forbidden."""
 
 
 def run_agent(prompt, tool_class=None):
-    agent = Agent(Config(), approve=True, memory=None, tool_class=tool_class)
-    res = agent.run(prompt)
+    import traceback
+    agent = Agent(Config(), approve=True, memory=None, tool_class=tool_class,
+                  mcp_servers={"nix": "/usr/bin/nix"})  # prod parity: execute_shell on
+    try:
+        res = agent.run(prompt)
+    except Exception:
+        # FAILURE-TRACE-CONTRACT (Ciclo 5): crash nunca passa sem rastro —
+        # traceback vai p/ disco; harness registra error. Sem segredos:
+        # só prompt + traceback (sem env).
+        with open(f"/tmp/l9repo-trace-{os.getpid()}.log", "a") as f:
+            f.write(f"PROMPT: {prompt[:500]}\n")
+            traceback.print_exc(file=f)
+        raise
     tools = [{"name": s.get("tool"), "args_preview": s.get("args", ""),
               "output": ""} for s in res.steps]
     return {"response": res.final_response, "final_response": res.final_response,

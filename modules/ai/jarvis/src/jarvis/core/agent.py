@@ -1220,6 +1220,13 @@ class Agent:
         except ValueError:
             max_time_s = MAX_TIME_S
         _t0 = time.monotonic()
+        # PIVOT signal (Ciclo 5): snapshot do mundo no início — no 2º erro
+        # idêntico o harness informa se o mundo mudou ou não (fato
+        # determinístico, não prescrição). Best-effort, nunca quebra.
+        try:
+            _world0: set[str] | None = set(os.listdir("."))
+        except OSError:
+            _world0 = None
         # P0.2: turnos de verificação (DONE sem evidência → continua).
         verify_turns = 0
         # Revisão-sintaxe armada: write barrado por `Bash syntax error`
@@ -1743,10 +1750,18 @@ class Agent:
                     self._log_audit("synthesize_command", 0, tool_result, True)
                 elif name == "build_json_dataset":
                     from jarvis.core.devtools import build_json_dataset as _bj
+                    # Contrato anti-crash (Ciclo 5/L9: StopIteration cru em
+                    # tables vazio derrubou o run APÓS trabalho útil).
+                    # Tool determinística nunca crasha o loop: exceção vira
+                    # ERROR observável (STUCK/UNAVAILABLE/ERROR, nunca crash).
+                    try:
+                        _bjr = _bj(args.get("schema", "schema.json"),
+                                   args.get("out", "organization.json"))
+                    except Exception as _bje:  # noqa: BLE001
+                        _bjr = {"ok": False,
+                                "error": f"tool crashed: {type(_bje).__name__}: {_bje}"}
                     tool_result = json.dumps(
-                        _bj(args.get("schema", "schema.json"),
-                            args.get("out", "organization.json")),
-                        ensure_ascii=False, default=str)
+                        _bjr, ensure_ascii=False, default=str)
                     # Honestidade de tool determinística (L9 real 21/09:
                     # {"ok": false} virava string sem ERROR → chamada
                     # "bem-sucedida" → VERIFIED vácuo sem artefato).
@@ -1759,9 +1774,14 @@ class Agent:
                     self._log_audit("build_json_dataset", 0, tool_result, True)
                 elif name == "sanitize_secrets":
                     from jarvis.core.devtools import sanitize_secrets as _ss
+                    try:
+                        _ssr_raw = _ss(args.get("root"),
+                                       args.get("dry_run", False))
+                    except Exception as _sse:  # noqa: BLE001 (idem acima)
+                        _ssr_raw = {"ok": False,
+                                    "error": f"tool crashed: {type(_sse).__name__}: {_sse}"}
                     tool_result = json.dumps(
-                        _ss(args.get("root"), args.get("dry_run", False)),
-                        ensure_ascii=False, default=str)
+                        _ssr_raw, ensure_ascii=False, default=str)
                     try:
                         if not json.loads(tool_result).get("ok", True):
                             tool_result = "ERROR: " + tool_result
@@ -2221,13 +2241,24 @@ class Agent:
                         # exato do fallback + alternativa concreta. Prosa
                         # ("varie a abordagem") foi ignorada e rendeu 3ª
                         # repetição idêntica no fix-git.
+                        # + world-delta (Ciclo 5/L9): fato observável sobre
+                        # o mundo — mudou ou não desde o início do run.
+                        try:
+                            _w1 = set(os.listdir("."))
+                            _wdelta = ("STATE(world_unchanged: no files "
+                                       "created/removed in CWD since run "
+                                       "start). "
+                                       if _world0 is not None and _w1 == _world0
+                                       else "STATE(world_changed). ")
+                        except OSError:
+                            _wdelta = ""
                         messages.append({
                             "role": "system",
                             "content": (
                                 f"STATE(same_call_failed_2x,tool={name},"
-                                f"error={_kind}). NEXT: EXACTLY ONE action, "
-                                "zero prose, DIFFERENT call. Entire reply must "
-                                "be ONE fenced block:\n"
+                                f"error={_kind}). {_wdelta}NEXT: EXACTLY ONE "
+                                "action, zero prose, DIFFERENT call. Entire "
+                                "reply must be ONE fenced block:\n"
                                 '```json\n{"name": "<other tool>", '
                                 '"arguments": {...}}\n```\n'
                                 "RULES: never repeat this call; read_file "

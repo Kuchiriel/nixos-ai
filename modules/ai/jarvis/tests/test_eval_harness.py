@@ -384,3 +384,24 @@ class TestBrowserDispatch:
         assert "ERROR" in r and "key" in r
         # scroll sem approve → leitura, NÃO pede aprovação
         # (não roda playwright aqui — só valida o gate via mock de erro)
+
+
+class TestPivotMetrics:
+    def test_retry_vs_pivot_counts(self):
+        from jarvis.core.eval_harness import pivot_metrics
+        m = pivot_metrics(["read", "read", "write", "write", "write", "read"])
+        assert m == {"calls": 6, "retries": 3, "pivots": 2,
+                     "pivot_rate": 2 / 5}
+
+    def test_empty_and_single(self):
+        from jarvis.core.eval_harness import pivot_metrics
+        assert pivot_metrics([])["pivot_rate"] == 0.0
+        assert pivot_metrics(["read"])["calls"] == 1
+
+    def test_l9_base_shape(self):
+        # base-1 real: list,read,read,build,build,read,build
+        from jarvis.core.eval_harness import pivot_metrics
+        m = pivot_metrics(["list_directory", "read_file", "read_file",
+                           "build_json_dataset", "build_json_dataset",
+                           "read_file", "build_json_dataset"])
+        assert m["retries"] == 2 and m["pivots"] == 4

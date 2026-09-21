@@ -1086,6 +1086,10 @@ def build_json_dataset(schema: str = "schema.json",
             if parent is None:
                 parent = t
     if parent is None or parent not in tables:
+        if not tables:
+            # Sem CSVs legíveis no CWD (L9 real 21/09: StopIteration cru
+            # derrubou o run — falha legível, nunca crash).
+            return {"ok": False, "error": "no readable CSV tables in CWD"}
         parent = "departments" if "departments" in tables else next(iter(tables))
     pcol = ids.get(parent, "id")
 

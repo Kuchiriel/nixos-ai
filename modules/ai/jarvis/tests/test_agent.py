@@ -2738,3 +2738,30 @@ def test_tool_class_filters_attractor(monkeypatch) -> None:
                for p in s_filtered.payloads for t in (p.get("tools") or [])}
     assert "read_file" not in names_f
     assert "execute_shell" in names_f
+
+
+def test_deterministic_tool_crash_becomes_error(tmp_path, monkeypatch) -> None:
+    """build_json_dataset sem CSVs (L9 real 21/09: StopIteration cru
+    derrubou o run). Tool determinística nunca crasha o loop."""
+
+    class BjCrashSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{
+                           "id": "call-1", "type": "function",
+                           "function": {
+                               "name": "build_json_dataset",
+                               "arguments": jsonlib.dumps(
+                                   {"schema": "s.json",
+                                    "out": "o.json"})}}]}
+            else:
+                msg = {"role": "assistant", "content": "paro"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=BjCrashSession(), approve=True)
+    result = agent.run("transform")  # não levanta
+    assert result.verdict in ("VERIFIED", "UNVERIFIED", "STUCK", "FAILED")

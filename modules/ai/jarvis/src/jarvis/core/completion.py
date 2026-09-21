@@ -39,7 +39,8 @@ class CompletionVerdict:
 
 _CREATION_VERBS = re.compile(
     r"(criad[oa]|criou|foi criado|escrit[oa]|escrevi|salv[oa]|salvei|"
-    r"created|wrote|written|saved|adicionad[oa]|adicionei)",
+    r"created|wrote|written|saved|adicionad[oa]|adicionei|"
+    r"\bwrite\b|\bcreate\b|\bsave\b|\bgenerate\b)",
     re.IGNORECASE,
 )
 _PATH_LIKE = re.compile(r"[`\"']?([\w\-./]+\.(?:py|md|nix|txt|json|sh|toml))[,.`\"']?")
@@ -538,6 +539,23 @@ def missing_deliverables(messages: list[dict], root,
             _fp = root / _need
             if not _fp.exists() and not any(
                     str(_w).endswith(_need) for _w in all_writes):
+                out.append(
+                    f"prompt requires {_need} which doesn't exist yet "
+                    f"— create it if it's a deliverable, otherwise clarify")
+        # Generalização (Ciclo 5/L9-werr: task pedia write report.json +
+        # summary.txt, nada escrito, VERIFIED vácuo — o mecanismo acima só
+        # cobria *.sh). Artefatos citados no prompt COM verbo de criação
+        # (write/create/save...) valem o mesmo: SUCCESS refere-se ao
+        # estado atual (PHASE 16), não a afirmações.
+        if _CREATION_VERBS.search(_task_text):
+            for _mm in _PATH_LIKE.finditer(_task_text):
+                _need = _mm.group(1)
+                if _need.endswith(".sh"):
+                    continue  # já coberto acima
+                _fp = root / _need
+                if _fp.exists() or any(
+                        str(_w).endswith(_need) for _w in all_writes):
+                    continue
                 out.append(
                     f"prompt requires {_need} which doesn't exist yet "
                     f"— create it if it's a deliverable, otherwise clarify")

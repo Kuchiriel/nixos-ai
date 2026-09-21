@@ -30,6 +30,22 @@ from jarvis.core.logging import get_logger
 log = get_logger("eval_harness")
 
 
+def pivot_metrics(tool_sequence: list[str]) -> dict[str, Any]:
+    """Retry vs pivot (Ciclo 5/PHASE 5, mecânico, sem LLM).
+
+    retry = mesma tool em chamadas consecutivas (mesma estratégia de novo).
+    pivot = troca de tool entre chamadas consecutivas (estratégia
+    materialmente diferente). Retorna contagens + taxa. Sequência vazia
+    ou unitária => zeros (não inventa sinal).
+    """
+    seq = [t for t in tool_sequence if t]
+    retries = sum(1 for a, b in zip(seq, seq[1:]) if a == b)
+    pivots = sum(1 for a, b in zip(seq, seq[1:]) if a != b)
+    moves = retries + pivots
+    return {"calls": len(seq), "retries": retries, "pivots": pivots,
+            "pivot_rate": (pivots / moves) if moves else 0.0}
+
+
 @dataclass
 class TaskTemplate:
     """Defines an eval task with setup, prompt, and success criteria."""
