@@ -19,6 +19,8 @@
   services.charger-watch.enable = true;
   services.charger-watch.interval = 3;
   services.charger-watch.user = user;
+  services.chromium-cdp.enable = true;   # browser dos agentes (CDP :9223)
+  services.chromium-cdp.user = user;
   services.jarvis-notify.enable = true;
   services.jarvis-focus.enable = true;
 

@@ -4,6 +4,7 @@
 
 {...}: {
   imports = [
+    ./chromium-cdp.nix
     ./charger-watch.nix
     ./jarvis-focus.nix
     ./jarvis-gaming.nix

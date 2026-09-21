@@ -327,6 +327,78 @@ def browser_lclick(selector: str, timeout_ms: int = 15000) -> dict[str, Any]:
         return {"ok": False, "error": str(e)[:300]}
 
 
+def browser_screenshot(path: str = "") -> dict[str, Any]:
+    """Screenshot da página atual (PNG em disco; retorno com path).
+
+    Vision local não temos — o dono olha o PNG ou manda pro modelo com
+    visão (ex.: freebuff). Sempre aprovação (captura tela real)."""
+    try:
+        page = _ensure()
+        if not path:
+            import time as _t
+            path = f"/tmp/jarvis-shot-{_t.strftime('%H%M%S')}.png"
+        page.screenshot(path=path, full_page=False)
+        return {"ok": True, "path": path}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+
+def browser_js(expr: str) -> dict[str, Any]:
+    """Roda JS na página (fetch de API com sessão, localStorage, DOM profundo).
+
+    Padrão-ouro p/ páginas SPA: o fetch roda com os cookies/token da aba.
+    Mutação real → aprovação (mesma régua do click)."""
+    try:
+        page = _ensure()
+        out = page.evaluate(expr)
+        import json as _j
+        return {"ok": True, "result": _j.loads(_j.dumps(out, default=str))[:2000] if isinstance(out, str) else out}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300]}
+
+
+def browser_storage(kind: str = "local", key: str = "") -> dict[str, Any]:
+    """Lê localStorage/sessionStorage da página (ex.: token de sessão SPA)."""
+    try:
+        page = _ensure()
+        if key:
+            expr = f"() => localStorage.getItem('{key}')" if kind == "local" else f"() => sessionStorage.getItem('{key}')"
+            val = page.evaluate(expr)
+            return {"ok": True, "key": key, "value": (val or "")[:200]}
+        n = "localStorage" if kind == "local" else "sessionStorage"
+        keys = page.evaluate(f"() => Object.keys({n})")
+        return {"ok": True, "keys": keys[:50]}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+
+def browser_fingerprint(name: str = "") -> dict[str, Any]:
+    """Fingerprint da rota atual: botões/abas/dialogs/inputs p/ diff entre rotas.
+
+    Uso: fingerprint A → interage → fingerprint B → diff mostra o que a
+    interação mudou (qual dialog abriu, qual botão sumiu). Complements
+    o snapshot por TEXTO existente."""
+    try:
+        page = _ensure()
+        fp = page.evaluate(
+            """() => ({
+          url: location.href,
+          buttons: [...document.querySelectorAll('button')].filter(b => b.offsetParent).map(b => (b.innerText.trim() || b.getAttribute('aria-label') || '').slice(0, 40)).filter(Boolean).slice(0, 60),
+          tabs: [...document.querySelectorAll('[role=tab]')].map(e => e.innerText.trim().slice(0, 30)),
+          dialogs: !!document.querySelector('[role=dialog]'),
+          inputs: [...document.querySelectorAll('input,textarea,[contenteditable=true]')].filter(e => e.offsetParent).map(e => ({tag: e.tagName, ph: (e.placeholder || '').slice(0, 30), type: e.type || ''})).slice(0, 15),
+        })""")
+        if name:
+            import json as _j
+            import os as _os
+            _os.makedirs("/tmp/jarvis-fp", exist_ok=True)
+            _j.dump(fp, open(f"/tmp/jarvis-fp/{name}.json", "w"), ensure_ascii=False)
+            fp["saved"] = f"/tmp/jarvis-fp/{name}.json"
+        return {"ok": True, "fp": fp}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+
 def browser_wait_text(text: str, timeout_ms: int = 30000) -> dict[str, Any]:
     """Espera TEXTO aparecer na página (leitura: polling, sem seletor).
 
@@ -365,7 +437,11 @@ BROWSER_TOOL = {
                         "click_text (text — clica pelo texto visível), "
                         "menu (items — navega menu+item numa sessão), "
                         "shadow (host_sel+inner_sel — dentro de shadow DOM), "
-                        "wait_text (text — espera texto aparecer). "
+                        "wait_text (text — espera texto aparecer), "
+                        "screenshot (path — PNG p/ visão externa), "
+                        "js (expr — JS na aba; fetch com sessão), "
+                        "storage (kind=local|session — keys/valor), "
+                        "fingerprint (nome — botões/tabs/dialogs p/ diff). "
                         "click/fill/press/click_text/menu/shadow pedem "
                         "aprovação; resto é leitura."),
         "parameters": {
@@ -374,7 +450,8 @@ BROWSER_TOOL = {
                 "action": {"type": "string",
                            "description": ("open, click, fill, press, lclick, scroll, "
                                            "extract, wait, attach, click_text, "
-                                           "menu, shadow ou wait_text")},
+                                           "menu, shadow, wait_text, screenshot, "
+                                           "js, storage ou fingerprint")},
                 "url": {"type": "string",
                         "description": "URL (para open; cdp_url p/ attach)"},
                 "selector": {"type": "string",
@@ -390,6 +467,10 @@ BROWSER_TOOL = {
                           "items": {"type": "string"}},
                 "timeout": {"type": "integer",
                             "description": "Ms p/ wait/wait_text (default 10000/30000)"},
+                "expr": {"type": "string",
+                         "description": "JS p/ action=js (async ok; roda na aba)"},
+                "kind": {"type": "string",
+                         "description": "local|session p/ storage; nome p/ fingerprint"},
             },
             "required": ["action"],
         },
@@ -458,10 +539,22 @@ def handle_browser(args: dict[str, Any], approve: bool = False) -> str:
     elif action == "wait_text":
         r = browser_wait_text(args.get("text", ""),
                               args.get("timeout", 30000))
+    elif action == "screenshot":
+        if not approve:
+            return "ERROR: browser screenshot precisa de aprovação"
+        r = browser_screenshot(args.get("url", ""))
+    elif action == "js":
+        if not approve:
+            return "ERROR: browser js precisa de aprovação (pode mutar a página)"
+        r = browser_js(args.get("expr", ""))
+    elif action == "storage":
+        r = browser_storage(args.get("kind", "local"), args.get("text", ""))
+    elif action == "fingerprint":
+        r = browser_fingerprint(args.get("kind", ""))
     else:
         return ("ERROR: action deve ser open, click, fill, press, "
                 "scroll, extract, wait, attach, lclick, click_text, menu, "
-                "shadow ou wait_text")
+                "shadow, wait_text, screenshot, js, storage ou fingerprint")
     if not r.get("ok"):
         return f"ERROR: {r.get('error', 'browser falhou')}"
     out = {k: v for k, v in r.items() if k != "ok"}
