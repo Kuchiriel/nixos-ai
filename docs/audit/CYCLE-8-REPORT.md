@@ -1,6 +1,6 @@
 # CYCLE-8 REPORT (21/09)
 
-Suite: 1431+? (rodar) / L8 WORLD OK / sem push.
+Suite: **1431 passed, 0 falhas** / L8 WORLD OK / sem push.
 1. Primeira divergência: ARGUMENTO do modelo (disk==arg 100%).
 2. Corrupção: model-generation (F6/F7/F8/CPRO) + presentation
    (TR-F4/F13); protocol/tool/FS inocentados.
