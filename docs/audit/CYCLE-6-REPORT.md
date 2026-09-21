@@ -1,6 +1,6 @@
 # CYCLE-6 REPORT (21/09)
 
-Suite: 1430+? (rodar) / L8 WORLD OK / sem push.
+Suite: **1431 passed, 0 falhas** (+1 empty-cmd) / L8 WORLD OK / sem push.
 1. Regras explícitas: SIM (R1/R3/R4 3/3).
 2. Serializar independently: SIM (T4/S9 3/3).
 3. Evidence purity: SIM c/ instrução (3/3); NÃO em loop (0/3+).
