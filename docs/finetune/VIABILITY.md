@@ -63,3 +63,11 @@ números. Sem teatro.
 - Estimativa T4 (literatura, confirmar): 0.5-1.5 steps/s → 500 steps
   ≈ 1-2h. Cabe folgado em 30h/semana.
 - Serviços religados e verificados (chat ok) após a janela de treino.
+
+## Kaggle run 21/09 (T4, em andamento)
+- Kernel `kuchiriel/bonsai-qlora-r8` v4 RUNNING: QLoRA r8, SFT 77 pares,
+  holdout 15%, 500 steps, eval 250, bf16, paged-8bit, loss nll.
+- Falhas v1-v3: dataset_sources não monta (embed 77 pares no script),
+  TRL-chunked vs PEFT (loss_type=nll).
+- Adapter sai em /kaggle/working (baixar + converter p/ GGUF-LoRA +
+  servir com --lora quando COMPLETE).
