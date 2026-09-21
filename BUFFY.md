@@ -1188,3 +1188,20 @@ relatório Solar, sudo kill nightwatch se quiser, cupom-100% final.
   sintaxe+host+HM sem flake-check total (nixos-lab quebrado não trava host).
 - Flake: pin SenchoPens/base16.nix + tinted-schemes HEAD; nixos-lab segue
   quebrado (drv sumido, sem cache) — lab exige validação total quando tocado.
+
+## §43 LOTM audiobook — entrypoint applio-lab (2026-09-21)
+
+- Estado completo da sessão: `applio-lab/docs/SESSAO-2026-09-21.md`
+  (ler PRIMEIRO — contém pendências, decisões do dono, entrypoints).
+- fish.audio: `applio-lab/docs/fish-audio-playbook.md` (receita provada,
+  deltas). Crédito renova DIA 20 (mensal, 8000/mês no Free); Drama 3 é o
+  escolhido do dono (~1 crédito/char). `scripts/fish-credit-probe.py`
+  monitora (timer 11:00, CSV em datasets-reports/).
+- Triagem RVC LOCAL: `applio-lab/scripts/rvc-triage.py` (CPU; pedalboard
+  dá core dump — stub antes do import; kokoro via `jarvis speak --no-play
+  --base kokoro`, NÃO import direto).
+- Registry de clones fish: `applio-lab/fish-voices.json` (11 vozes).
+- Ouvidoria (o que espera o ouvido do dono): `applio-lab/docs/OUVIDORIA/`
+  + `~/Audio/lotm/ouvir/` (rvc-triage/, daly-ab/).
+- Regra do dono: browser do agente COM áudio (ele audita ouvindo) — nunca
+  mutar; frases sintéticas vêm dos livros (CSVs em `personagens/`).
