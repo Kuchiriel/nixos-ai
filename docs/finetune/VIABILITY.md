@@ -71,3 +71,14 @@ números. Sem teatro.
   TRL-chunked vs PEFT (loss_type=nll).
 - Adapter sai em /kaggle/working (baixar + converter p/ GGUF-LoRA +
   servir com --lora quando COMPLETE).
+
+## Eval adapter r8 21/09 — NÃO PROMOVIDO
+- Treino: 500/500 T4, loss 3.43→0.011, acc 99.5% (overfit: só 77 pares).
+- GGUF-LoRA 7.7MB servido em :8091 (porta separada; produção intacta).
+- Base × LoRA (mesmos probes n=3): E1 ambos erram (base tab→@, LoRA
+  tab→","; resto igual); T8-short ambos trocam 02↔03 igual; T-fact 3/3
+  ambos. NENHUMA melhora mensurável; suspeita de memorização.
+- Incidente: 2ª instância derrubou :8080 (500, VRAM) — evals 8B SEMPRE
+  sequenciais nesta máquina (parar prod ou aceitar contenção).
+- DECISÃO: arquivar números, reverter. Re-teste exige dataset maior e
+  diverso (P2) + DPO, não mais epochs no mesmo.
