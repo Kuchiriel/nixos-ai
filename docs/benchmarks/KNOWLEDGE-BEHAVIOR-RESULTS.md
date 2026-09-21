@@ -300,3 +300,15 @@ Variant B (WARN/32/truth 8), bonsai, n=3 (B2/B0 estendidos a n=5):
   loop (probe 3/3 → loop 0/9). Menor unsolved: R8-shape.
 - Runners: `/tmp/c6/atomic.py`, `/tmp/c6/arms.py`.
 - Status: VERIFIED (decomposição); boundary = COMPOSITION-LIMITED.
+
+## C7 — R8 decomposition (fidelidade é o átomo)
+
+- E1 (bytes exatos, sem recovery): 0/3 — decorações vazam, trailing-space
+  some, tab vira ", ", newline final some. R3/R4/B4 (recovery/decisão/
+  constante): 9/9. R5: 0/3 (rec 3/3, bytes 0/3). S6C/S6D/ST8/D2: 0/12.
+- B-ladder: B1(E1) 0/3 tricky, B2(H2) 3/3 trivial, B3(H5) 2/3, B4 3/3,
+  B5(R4) 3/3 simples, B6(R5) 0/3.
+- S9/H2 passam (ASCII trivial); E1 falha (unicode/trailing/tab) — o
+  átomo degrada com complexidade-de-byte. Refinamento do C6:
+  "composition-limited" → fidelidade-átomo + composição amplifica.
+- Runner: `/tmp/c7/run_c7.py`. Status: VERIFIED.

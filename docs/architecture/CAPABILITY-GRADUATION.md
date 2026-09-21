@@ -31,3 +31,5 @@ variância); n=5 p/ claims causais fortes (R1); n=1 nunca decide (H1).
 | L9 multi-step | UNVERIFIED (capability) | 0/12; boundary decomposto (C6): atômicas ✓, composição ✗ |
 | Long-horizon (Z) | UNVERIFIED | sem experimento |
 | Cross-doc synthesis (S) | UNVERIFIED | sem experimento |
+| Byte-fidelity (exact bytes) | MODEL-LIMITED | E1 0/3; S9/H2 trivial ok; R5 0/3 |
+| Recovery decision | GRADUATED | R3/R4/B4 9/9 + pivot metrics |
