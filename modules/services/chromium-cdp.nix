@@ -43,6 +43,9 @@ in
         DISPLAY = ":0";
         WAYLAND_DISPLAY = "wayland-1";
       };
+      # Áudio INTENCIONALMENTE ativo: o dono usa o playback do browser dos
+      # agentes pra auditar os wavs gerados (TTS, fish, etc.). NÃO adicionar
+      # --mute-audio.
       script = ''
         exec ${pkgs.chromium}/bin/chromium \
           --remote-debugging-port=${toString cfg.port} \
