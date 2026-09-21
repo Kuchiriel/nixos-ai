@@ -184,3 +184,19 @@ Variant B (WARN/32/truth 8), bonsai, n=3 (B2/B0 estendidos a n=5):
   arquivo autoritativo (Gb prova que funciona quando lê). RAG-discovery
   + filesystem-truth sustentado.
 - Runner: `/tmp/exp-g/run_g.py`. Status: PARTIALLY VERIFIED.
+
+## EXP-J — failure injection (Qdrant down) ⚠️ OUTAGE ≠ NADA
+
+- Injeção: JARVIS_QDRANT_URL=:9 (refused), coleção isolada exp_j_probe.
+- remember/remember_lesson/recall/lessons → **RAISED VectorStoreError**
+  (conexão) — distinguível de "vazio" NA API, mas o inject de lessons no
+  Agent engolia com `except: pass` → igual a miss (§27 viram fix).
+- FIX: lessons_outage emitido no JSONL (tipo+motivo); run segue sem
+  lessons; teste `test_lessons_outage_logged_not_silent`.
+- count() degrada 0 (ok — é contador, não presença).
+- FALSO-VERDE adicional (EXP-G): agente criou
+  `core/hybrid_search.py` placeholder no repo (removido) — escrita
+  especulativa guiada por self-knowledge errado. REGRA R6: agentes de
+  experimento em jail /tmp, approval restrito por path.
+- Status: PARTIALLY VERIFIED; R7 prioriza: Qdrant down ≠ "sem
+  conhecimento" agora é observável.
