@@ -252,7 +252,7 @@
 
   users.users.${user} = {
     isNormalUser = true;
-    extraGroups = ["wheel" "video" "audio" "networkmanager" "qdrant" "input" "uinput"];
+    extraGroups = ["wheel" "video" "audio" "networkmanager" "qdrant" "input" "uinput" "docker"];
   };
 
   security.sudo.extraRules = [
