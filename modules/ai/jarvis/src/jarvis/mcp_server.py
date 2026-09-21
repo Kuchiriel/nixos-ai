@@ -548,6 +548,41 @@ def _vault_status() -> dict[str, Any]:
     }
 
 
+def _mcp_mutation_policy() -> str:
+    """Política de mutação via MCP (approval-gap fechado 21/09, autorizado):
+    auto = comportamento atual (cliente MCP já autenticado local);
+    deny = mutações exigem aprovação (nega c/ mensagem, como o Agent).
+    Env JARVIS_MCP_MUTATION. Default auto = sem quebra."""
+    return os.environ.get("JARVIS_MCP_MUTATION", "auto").lower()
+
+
+def _mcp_audit(name: str, args: dict[str, Any], rc: int | None) -> None:
+    """Audit best-effort de mutações MCP (paridade c/ Agent._log_audit)."""
+    try:
+        from pathlib import Path as _P
+        from jarvis.core.paths import ensure_state_dir
+        log = _P(ensure_state_dir()) / "mcp-audit.jsonl"
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"ts": __import__("time").time(), "tool": name,
+                                "args": str(args)[:300], "rc": rc}) + "\n")
+    except Exception:
+        pass
+
+
+def _guarded_mutation(name: str, args: dict[str, Any], fn) -> str:
+    if _mcp_mutation_policy() == "deny":
+        _mcp_audit(name, args, None)
+        return (f"ERROR: {name} needs approval "
+                f"(JARVIS_MCP_MUTATION=deny). Path stays inside project jail.")
+    try:
+        out = fn()
+    except Exception as e:
+        _mcp_audit(name, args, -1)
+        return f"ERROR: {e}"
+    _mcp_audit(name, args, 0 if not str(out).startswith("ERROR") else 1)
+    return out
+
+
 def call_tool(name: str, args: dict[str, Any]) -> str:
     """Executa uma tool JARVIS."""
     try:
@@ -561,6 +596,7 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
             output = res.stdout if res.returncode == 0 else res.stderr
             if len(output) > 8000:
                 output = output[:8000] + f"\n... [truncated from {len(res.stdout)} chars]"
+            _mcp_audit(name, args, res.returncode)
             return output or f"Exit code: {res.returncode}"
 
         if name == "jarvis_persona":
@@ -589,10 +625,10 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
             return handle_dev_tool("read_file", args)
 
         if name == "jarvis_write_file":
-            return handle_dev_tool("write_file", args)
+            return _guarded_mutation(name, args, lambda: handle_dev_tool("write_file", args))
 
         if name == "jarvis_str_replace":
-            return handle_dev_tool("str_replace", args)
+            return _guarded_mutation(name, args, lambda: handle_dev_tool("str_replace", args))
 
         if name == "jarvis_capture_screen":
             return handle_capture(args)

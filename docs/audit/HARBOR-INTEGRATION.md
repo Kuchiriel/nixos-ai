@@ -18,3 +18,13 @@ container ↔ nosso Agent (P1 próximo). Células C/D seguem NOT INTEGRATED;
 A-vs-B Harbor real pendente do adapter.
 Evidência: /tmp/harbor-work/jobs/2026-09-21__14-45-19/ (trajectory.json,
 trial.log, verifier/).
+
+## Trial 2 — adapter próprio (nosso harness no Harbor) 15:00
+`jarvis_adapter:HarborJarvis` (Agent+Bonsai local; shell/read/write
+roteados p/ container via exec/upload b64). Trial SEM exceção:
+7 turns, 3 writes ok via bridge, veredito interno UNVERIFIED
+(completion checa paths no HOST — gap esperado; autoridade é o
+verifier Harbor), reward Harbor 0.0.
+Leitura: bridge MECANICAMENTE funcional; bytes errados (consistente
+c/ E1 interno 0/3) → CONSISTENT FAILURE (fronteira transfere, não só
+capability). A-vs-B Harbor real agora é questão de rodar N trials.
