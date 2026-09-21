@@ -286,3 +286,17 @@ Variant B (WARN/32/truth 8), bonsai, n=3 (B2/B0 estendidos a n=5):
   sanitize_secrets) + teste `test_deterministic_tool_failure_is_error`.
 - Pós-fix L9: agente recebe ERROR, tenta 3×, STUCK honesto — zero
   VERIFIED vácuo. Falha legível ≠ falha resolvida (L9 segue 0/9).
+
+## C6 — boundary decomposition (atômicas ✓, composição ✗)
+
+- Probes (n=3): T1 3/3, T2 R1/R3/R4 perfect 3/3 (R2 0/3, R5 7/8),
+  T3 3/3, T4 3/3, T5 3/3, T6 4/4.
+- Agentes (n=3): S9 3/3, H2 3/3, H5 2/3, H6 1/3, R8 0/3 world (ação
+  OK, "1 | hello" fidelidade), T8/X10A/X10B 0/9 (attractor).
+- Crash tardio RESOLVIDO: Popen([]) em run_shell c/ cmd="" (reproduzido
+  com traceback!) → ERROR 127 + teste. Era o "list index out of range"
+  pós-trabalho (H2-0: arquivo certo + crash).
+- Boundary: composição com observações (decorações vazam) + regra em
+  loop (probe 3/3 → loop 0/9). Menor unsolved: R8-shape.
+- Runners: `/tmp/c6/atomic.py`, `/tmp/c6/arms.py`.
+- Status: VERIFIED (decomposição); boundary = COMPOSITION-LIMITED.

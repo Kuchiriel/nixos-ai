@@ -238,6 +238,13 @@ def run_shell(cmd: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
             args=cmd, returncode=127, stdout="",
             stderr=f"ERROR: quoting inválido ({e}) — reescreva o comando "
                    f"com aspas balanceadas ou grave script .py e rode-o.")
+    if not argv:
+        # Comando vazio (Ciclo 6: modelo chamou execute_shell c/ cmd=""
+        # → Popen([]) → IndexError cru derrubando o run APÓS trabalho
+        # útil). Falha legível, nunca crash.
+        return subprocess.CompletedProcess(
+            args=cmd, returncode=127, stdout="",
+            stderr="ERROR: empty command — passe um comando não-vazio.")
     # Sessão própria p/ matar a ÁRVORE no timeout (L8r real: script com
     # auto-invocação `./response.sh $ip` recursa infinito — matar só o
     # filho direto órfã os netos que seguem se replicando. killpg fecha).

@@ -8,7 +8,7 @@ Legenda: ✅ GRADUATED · 🔶 PARTIAL/VERIFIED · 🔴 MODEL-LIMITED ·
 | A | filesystem discovery | 🔶 | modelo acha c/ list; Ga mostra palpite sem busca | I |
 | B | filesystem mutation | 🔶 | write funciona; approval jail enforced | I,X |
 | C | file reading | ✅ | reads paralelos ok; Gb grounded | I |
-| D | code generation | 🔴 | mold quoting; serialização fraca | H,X |
+| D | code generation | 🔴 | repr-hábito em loop (probe ok) | H,X |
 | E | shell execution | ✅ | shlex+killpg+allowlist; testado | I |
 | F | debugging | 🔶 | validator hints; recovery parcial | A,E,X |
 | G | JSON/schema | 🔴 | aspas/simplessome; mold 0/63 | X |
@@ -30,7 +30,7 @@ Legenda: ✅ GRADUATED · 🔶 PARTIAL/VERIFIED · 🔴 MODEL-LIMITED ·
 | W | outage handling | ✅ | lessons_unavailable; propaga | S |
 | X | completion verify | ✅ | evidence-gated + world_check | — |
 | Y | failure recovery | 🔶 | retry/STUCK; cascade 1× | X |
-| Z | long-horizon | ❓ | >10 turns não medido | H |
+| Z | long-horizon | 🔴 | P3 0/12; horizonte 3 steps (H2) | H |
 
 Dependência crítica: quase tudo passa por I (tool selection) → por isso
 Contract A é P1. O (lesson application) passa por representação (Contract B).

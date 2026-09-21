@@ -104,3 +104,13 @@ def test_synth_grammars_escape_free_and_mapped():
     assert suggest_synth_grammar("chmod +x f.sh") == "chmod"
     assert suggest_synth_grammar("python3 -c 'x'") is None
     assert suggest_synth_grammar("") is None
+
+
+def test_run_shell_empty_command_is_error_not_crash():
+    """cmd vazio (Ciclo 6: execute_shell c/ cmd='' → Popen([]) →
+    IndexError cru, run perdido APÓS trabalho). ERROR legível."""
+    from jarvis.core.security import run_shell
+    for cmd in ("", "   "):
+        r = run_shell(cmd)
+        assert r.returncode == 127
+        assert r.stderr.startswith("ERROR")

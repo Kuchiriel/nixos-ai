@@ -28,6 +28,6 @@ variância); n=5 p/ claims causais fortes (R1); n=1 nunca decide (H1).
 | Grounding self-knowledge | VERIFIED | Gb 2/3; Ga 0/3 (limite mapeado) |
 | Substrate auto-select | PARTIAL | probes E2 9/9; agente git 0/6 (probe→exec gap) |
 | Context-loss persistence | VERIFIED | B0 0/3, B2/B3 3/3, UB 3/3 (PERSIST) |
-| L9 multi-step | UNVERIFIED (capability) | 0/9; attractor+no-pivot+fidelidade; checker+runner permanentes |
+| L9 multi-step | UNVERIFIED (capability) | 0/12; boundary decomposto (C6): atômicas ✓, composição ✗ |
 | Long-horizon (Z) | UNVERIFIED | sem experimento |
 | Cross-doc synthesis (S) | UNVERIFIED | sem experimento |
