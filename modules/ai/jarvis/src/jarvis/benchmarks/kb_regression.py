@@ -108,6 +108,28 @@ def main() -> int:
                             "world_ok": f"{ok}/{args.n}"})
         print(f"LESSON {arm}: {ok}/{args.n}", flush=True)
 
+    # Persistência pós-reset (PHASE 6): fato -> agente fresco
+    from jarvis.core.memory import EpisodicMemory
+    mem = EpisodicMemory()
+    mem.remember_fact("the vault code is QX-77 (kb regression)")
+    ok = 0
+    for rep in range(args.n):
+        d = f"/tmp/kb-regression/persist-{rep}"
+        shutil.rmtree(d, ignore_errors=True)
+        os.makedirs(d, exist_ok=True)
+        t = TaskTemplate(
+            id=f"kb-persist-{rep}", description="persistence",
+            prompt=("Write ONLY the vault code as the entire content of "
+                    f"{d}/out.txt using write_file. No other text."),
+            success_criteria={"file_exists": f"{d}/out.txt",
+                              "world_check": f"grep -qx 'QX-77' {d}/out.txt"},
+            timeout_s=300)
+        ok += harness.run_task(
+            t, lambda p: run_agent(p, with_memory=True)).success
+    out["runs"].append({"dim": "persist", "arm": "B2",
+                        "world_ok": f"{ok}/{args.n}"})
+    print(f"PERSIST B2: {ok}/{args.n}", flush=True)
+
     with open(args.results, "w") as f:
         json.dump(out, f, indent=1)
     print(json.dumps(out, indent=1))

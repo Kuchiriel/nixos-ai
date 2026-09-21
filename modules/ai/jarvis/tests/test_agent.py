@@ -2519,6 +2519,36 @@ def test_lessons_outage_logged_not_silent(monkeypatch) -> None:
                if e == "lessons_unavailable")
 
 
+def test_deterministic_tool_failure_is_error(tmp_path, monkeypatch) -> None:
+    """build_json_dataset c/ schema ausente (L9 real 21/09: {"ok": false}
+    virava string sem ERROR → chamada "ok" → VERIFIED vácuo sem artefato).
+    Falha determinística vira ERROR observável; veredito NÃO é VERIFIED."""
+
+    class BjSession(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{
+                           "id": "call-1", "type": "function",
+                           "function": {
+                               "name": "build_json_dataset",
+                               "arguments": jsonlib.dumps(
+                                   {"schema": "ausente.json",
+                                    "out": "out.json"})}}]}
+            else:
+                msg = {"role": "assistant", "content": "falhou, paro"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: True)
+    agent = Agent(Config(), session=BjSession(), approve=True)
+    result = agent.run("transform csv to json")
+    assert result.verdict != "VERIFIED"
+    assert any(str(m.get("content", "")).startswith("ERROR")
+               for m in result.messages if m.get("role") == "tool")
+
+
 def test_malformed_budget_stops_run(tmp_path, monkeypatch) -> None:
     """Args-JSON inválido 3x seguidas → STUCK honesto na 3ª (L8b3 20/09: até
     8 turns queimados em hint sem teto; verify_turns não cobre esse caso)."""

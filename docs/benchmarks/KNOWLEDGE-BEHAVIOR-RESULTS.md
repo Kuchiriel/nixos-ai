@@ -227,3 +227,62 @@ Variant B (WARN/32/truth 8), bonsai, n=3 (B2/B0 estendidos a n=5):
   (G/J).
 - Suite permanente: benchmarks/kb_regression.py (host-only).
 - Docs: CAPABILITY-CONTRACTS.md, ANCHOR-PLAN.md (P0-P3/DEFERRED).
+
+## PERSIST — context-loss persistence (PHASE 6) ✅ FUNCIONA VIA INJECT
+
+- RUN A: fato "vault code QX-77" em coleção isolada. RUN B (agente
+  fresco): escrever só o código. B0 sem memória: **0/3** (escreveu
+  "vault_code" — palpite das palavras do prompt). B2 mesma memória
+  (lessons() auto-injeta facts+lessons): **3/3** (QX-77 exato, turns 2).
+  B3 (+tool_class): 3/3. UB (código no contexto): 3/3.
+- Interpretation: persistência pós-reset funciona PELO inject
+  (B2 == UB comportamentalmente); sem retrieval o modelo adivinha.
+  Distingue model-memory (falha) vs retrieval+presentation (ok).
+  Nota: facts SÓ valem porque lessons() inclui KIND_FACT — recall puro
+  nunca é auto-chamado (boundary documentado).
+- Runner: `/tmp/persist/run_persist.py`; coleção `persist_exp`.
+- Status: VERIFIED (n=3; mecanismo = inject path).
+
+## L9 — multi-step c/ regra arbitrária (PHASE 4/5) ❌ 0/9, FRONTEIRA MAPEADA
+
+- Base 0/3 + tool_class=write 0/3 + base-pós-fix 0/3.
+- Mecanismos: (1) attractor build_json_dataset (task diz CSV→JSON;
+  ferramenta casa perfeitamente) → 3× ERROR → STUCK honesto pós-fix
+  (antes: VERIFIED vácuo — fix de honestidade validado
+  comportamentalmente); (2) dispositions CORRETAS mas evidence com
+  números de linha do read-tool (fidelidade de evidência);
+  (3) sem pivot p/ write_file (perseveração).
+- Atribuição (§37): baseline falha + correct-tool-only falha → problema
+  é CAPACIDADE (planejamento/serialização/fidelidade), não interface.
+  Disclosure necessária mas insuficiente p/ L9.
+- Crash-after-work (2/15 runs: Gb-0, l9-write-2, "list index out of
+  range" tardio, arquivos escritos, resultado perdido) — OPEN,
+  caçada em andamento (3 sites choices[0] já guardados; falta o site).
+- Runner: `/tmp/l9/run_l9.py`; checker `/tmp/l9/l9_lib.py`.
+- Status: UNVERIFIED (capability); fronteira = próximo bottleneck.
+
+## SUBST-AGENT — substrate selection at agent level (PHASE 7) ⚠️ PARCIAL
+
+- Git task (files HEAD~1..HEAD → out.txt), mcp on: default 0/3 (first
+  tool list_directory ×3 — read-first), tool_class=action 0/3 (first:
+  list,list,execute). Nenhum arquivo escrito em 6 runs. Probe→agente
+  gap: nomear a tool ≠ executar a cadeia (git→parse→write).
+- S2 lint (chain-B, coleção compartilhada + execute on): raw 0/3, lint
+  0/3 — AMBOS escreveram 10 (número da lesson). Contaminação cruzada +
+  execute mudam a dinâmica: experimento inválido como comparação;
+  VÁLIDO como 3ª replicação da atração por números (6/6 escreveram o
+  número da lesson!). Re-teste limpo (coleção só-linted, sem execute):
+  stored value-free ✓ mecanicamente, comportamento 1/3.
+- Wiring gap fechado: lint agora transforma error_pattern também
+  (só-fix deixava "30 lines as 3" no texto injetado) + teste.
+- Status: agent-level substrate = UNVERIFIED (0/6); lint mecânico
+  VERIFIED, lint comportamental PARTIAL (1/3 limpo).
+
+## TOOL-HONESTY FIX (L9 forense) ✅ COMPORTAMENTALMENTE VALIDADO
+
+- Causa do VERIFIED vácuo: `{"ok": false}` de build_json_dataset virava
+  string sem ERROR → successful_call → completion VERIFIED sem artefato.
+- Fix: prefixo ERROR: quando ok==False (build_json_dataset +
+  sanitize_secrets) + teste `test_deterministic_tool_failure_is_error`.
+- Pós-fix L9: agente recebe ERROR, tenta 3×, STUCK honesto — zero
+  VERIFIED vácuo. Falha legível ≠ falha resolvida (L9 segue 0/9).

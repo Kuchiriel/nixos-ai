@@ -131,19 +131,28 @@ class EpisodicMemory:
         if lint is None:
             lint = os.environ.get("JARVIS_LESSON_LINT", "").lower()
         transformed = ""
+        transformed_error = ""
         if lint in ("1", "true", "transform", "auto"):
             try:
-                from jarvis.core.lesson_lint import lint_lesson
+                from jarvis.core.lesson_lint import lint_lesson, _strip_numerics
                 res = lint_lesson(task, error_pattern, fix)
-                if res.policy == "transformed" and res.transformed:
-                    transformed = res.transformed
+                if res.policy == "transformed":
+                    # R2: QUALQUER número episódico atrai (L4 rotulado
+                    # falhou igual) — transforma fix E error_pattern;
+                    # task fica intacta (identidade do supersede).
+                    if res.transformed:
+                        transformed = res.transformed
+                    transformed_error = _strip_numerics(
+                        error_pattern).strip(" .:")
             except Exception:  # noqa: BLE001 — lint best-effort
                 pass
         _fix = transformed or fix
+        _err = transformed_error or error_pattern
         meta: dict = {}
-        if transformed:
+        if transformed or transformed_error:
             meta["lint"] = "transformed"
             meta["original_fix"] = fix  # proveniência preservada (§4)
+            meta["original_error_pattern"] = error_pattern
         # Supersede: mesma task aposenta a anterior (freshness — sem isso
         # "local 0/3" de setembro convive com "0/47" de hoje e ambos injetam).
         # Best-effort: nunca bloqueia a gravação nova.
@@ -154,7 +163,7 @@ class EpisodicMemory:
         text = f"Task: {task}. Error: {error_pattern}. Fix: {_fix}"
         return self.remember(MemoryEvent(
             kind=KIND_LESSON, text=text, task=task,
-            error_pattern=error_pattern, fix=_fix, meta=meta,
+            error_pattern=_err, fix=_fix, meta=meta,
         ))
 
     def forget_task(self, task: str) -> int:

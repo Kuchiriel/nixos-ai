@@ -570,7 +570,10 @@ def _missing_binary_hint(cmd: str) -> str:
         _lines = _cand.read_text(encoding="utf-8", errors="replace").splitlines()
         if not _lines or not _lines[0].startswith("#!"):
             return ""
-        _interp = _lines[0][2:].strip().split()[0]
+        _interp_parts = _lines[0][2:].strip().split()
+        if not _interp_parts:
+            return ""
+        _interp = _interp_parts[0]
         if not _interp:
             return ""
         if _sh.which(_interp) is None and _sh.which(_P(_interp).name) is None:
@@ -1744,6 +1747,14 @@ class Agent:
                         _bj(args.get("schema", "schema.json"),
                             args.get("out", "organization.json")),
                         ensure_ascii=False, default=str)
+                    # Honestidade de tool determinística (L9 real 21/09:
+                    # {"ok": false} virava string sem ERROR → chamada
+                    # "bem-sucedida" → VERIFIED vácuo sem artefato).
+                    try:
+                        if not json.loads(tool_result).get("ok", True):
+                            tool_result = "ERROR: " + tool_result
+                    except (ValueError, TypeError):
+                        pass
                     result.commands_run.append("build_json_dataset")
                     self._log_audit("build_json_dataset", 0, tool_result, True)
                 elif name == "sanitize_secrets":
@@ -1751,6 +1762,11 @@ class Agent:
                     tool_result = json.dumps(
                         _ss(args.get("root"), args.get("dry_run", False)),
                         ensure_ascii=False, default=str)
+                    try:
+                        if not json.loads(tool_result).get("ok", True):
+                            tool_result = "ERROR: " + tool_result
+                    except (ValueError, TypeError):
+                        pass
                     result.commands_run.append("sanitize_secrets")
                     self._log_audit("sanitize_secrets", 0, tool_result, True)
                     try:
