@@ -28,3 +28,10 @@ verifier Harbor), reward Harbor 0.0.
 Leitura: bridge MECANICAMENTE funcional; bytes errados (consistente
 c/ E1 interno 0/3) → CONSISTENT FAILURE (fronteira transfere, não só
 capability). A-vs-B Harbor real agora é questão de rodar N trials.
+
+## A-cell n=3 (+1): 0/4, zero erros (21/09 15:07)
+3 trials completos, n_errors=0, reward 0.0 em todos. Interna E1 0/3 →
+externa 0/4: CONSISTENT FAILURE bidirecionalmente estável. Job:
+jobs/2026-09-21__15-07-34. Próximo: célula B (outro modelo) quando
+houver; adapter versionado (hoje em /tmp — promover p/ repo se virar
+rotina).

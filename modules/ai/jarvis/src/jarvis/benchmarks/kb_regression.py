@@ -130,6 +130,32 @@ def main() -> int:
                         "world_ok": f"{ok}/{args.n}"})
     print(f"PERSIST B2: {ok}/{args.n}", flush=True)
 
+    # R8-shape permanente (fronteira documentada, não gate: 0/3 em 21/09).
+    # Recover + bytes exatos; world decide; nunca falha o script.
+    r8c = "alpha-42 {\u00e9} tail  \nsecond line\tend\n"
+    ok = 0
+    for rep in range(args.n):
+        d = f"/tmp/kb-regression/r8-{rep}"
+        shutil.rmtree(d, ignore_errors=True)
+        os.makedirs(d, exist_ok=True)
+        with open(d + "/src.txt", "w") as fh:
+            fh.write(r8c)
+        t = TaskTemplate(
+            id=f"kb-r8-{rep}", description="r8 boundary",
+            prompt=(f"Read {d}/missing.txt; it is absent, so read {d}/src.txt "
+                    f"instead and write IDENTICAL bytes to {d}/o.txt using "
+                    f"write_file."),
+            success_criteria={}, timeout_s=300)
+        harness.run_task(t, lambda p: run_agent(p))
+        try:
+            w = open(d + "/o.txt", "rb").read() == r8c.encode()
+        except OSError:
+            w = False
+        ok += w
+    out["runs"].append({"dim": "r8-boundary", "arm": "B2",
+                        "world_ok": f"{ok}/{args.n}"})
+    print(f"R8-BOUNDARY: {ok}/{args.n}", flush=True)
+
     with open(args.results, "w") as f:
         json.dump(out, f, indent=1)
     print(json.dumps(out, indent=1))

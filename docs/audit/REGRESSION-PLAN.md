@@ -18,4 +18,4 @@ ABERTO (ordenado por valor/custo):
 
 - R9. Contract A: tool_class filter (E6) — FEITO (test_tool_surface).
 - R10. knowledge_state + outage emit — FEITO (testes).
-- R11. KB-regression host (`benchmarks/kb_regression.py`) — rodar 1×/semana.
+- R11. KB-regression host (`benchmarks/kb_regression.py`: RAG+lesson+persist+R8-boundary) — rodar 1×/semana.
