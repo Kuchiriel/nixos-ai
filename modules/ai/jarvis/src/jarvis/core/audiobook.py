@@ -1047,7 +1047,7 @@ def sweep_books(limit: int = 3) -> dict[str, Any]:
     .md novas em ~/Books/harness ainda não registradas no log do ingest.
 
     Acoplamento (dono 19/09): indexação NÃO pode depender de lembrar de
-    chamar scripts/ingest_books.py — o rag_index (mcp_server) chama isto a
+    chamar um script externo — o rag_index (mcp_server) chama isto a
     cada indexação, então UMA chamada cobre código+livros. Idempotente:
     pula o que já está ok no log; index_book usa stable_id por sha (re-run
     sobrescreve). LotM/epub fora (decisão do dono P3); só .pdf + digests.

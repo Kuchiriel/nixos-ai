@@ -859,6 +859,15 @@ def human_approve(cmd: str) -> bool:
     return False
 
 
+def _approver_of(agent: "Agent") -> Callable[[str], bool]:
+    """Approval authority (eliminação F8/opencode-fix 21/09): o callback
+    do construtor (router aprova via ele) tem prioridade; sem ele,
+    human_approve de módulo. Antes o callback era armazenado e ignorado
+    (router.approver nunca disparava)."""
+    cb = getattr(agent, "approval_callback", None)
+    return cb if callable(cb) else human_approve
+
+
 def _api_layer_for(prompt: str) -> str:
     """Camada da cascata pelo prompt (keywords; default dev)."""
     p = (prompt or "").lower()
@@ -1626,7 +1635,7 @@ class Agent:
                     else:
                         # Needs approval
                         if self.approve:
-                            if human_approve(cmd):
+                            if _approver_of(self)(cmd):
                                 try:
                                     proc = run_shell(cmd)
                                 except subprocess.TimeoutExpired:
@@ -2077,7 +2086,7 @@ class Agent:
                         tool_result = _gate_msg
                         self._log_audit(f"{name} {args.get('path', '')}",
                                         None, tool_result, False)
-                    elif self.approve and human_approve(
+                    elif self.approve and _approver_of(self)(
                             f"{name} {args.get('path', '')}"):
                         tool_result = self._exec_write(name, args)
                         # Write com sucesso invalida cache de observations:

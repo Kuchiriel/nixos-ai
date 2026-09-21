@@ -2765,3 +2765,33 @@ def test_deterministic_tool_crash_becomes_error(tmp_path, monkeypatch) -> None:
     agent = Agent(Config(), session=BjCrashSession(), approve=True)
     result = agent.run("transform")  # não levanta
     assert result.verdict in ("VERIFIED", "UNVERIFIED", "STUCK", "FAILED")
+
+
+def test_approval_callback_fires_when_provided(tmp_path, monkeypatch) -> None:
+    """approval_callback do construtor (router.approver era ignorado —
+    eliminação 21/09). Com callback=True escreve; sem callback vale
+    human_approve."""
+
+    class WriteOnce(FakeSession):
+        def post(self, url, json=None, timeout=120, **kw):
+            self.calls += 1
+            if self.calls == 1:
+                msg = {"role": "assistant", "content": "",
+                       "tool_calls": [{
+                           "id": "c1", "type": "function",
+                           "function": {
+                               "name": "write_file",
+                               "arguments": jsonlib.dumps(
+                                   {"path": "f.txt",
+                                    "content": "x"})}}]}
+            else:
+                msg = {"role": "assistant", "content": "done"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("jarvis.core.agent.human_approve", lambda cmd: False)
+    agent = Agent(Config(), session=WriteOnce(), approve=True,
+                  approval_callback=lambda cmd: True)
+    result = agent.run("write it")
+    assert (tmp_path / "f.txt").exists()
+    assert not result.commands_denied
