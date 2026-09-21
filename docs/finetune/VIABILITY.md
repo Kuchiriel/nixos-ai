@@ -48,3 +48,18 @@
 ## Regra de parada
 Qualquer eval-regressão (KB-suite ou geral) → reverte adapter, publica
 números. Sem teatro.
+
+## Medições locais 21/09 (4050-6GB, venv ~/.venvs/finetune, env.sh)
+- Stack OK: torch-cu126 + bnb0.50 + peft + trl1.13 + paged-8bit OK.
+  Shims NixOS: /sbin/ldconfig stub, CC=gcc-wrapper, cuda.h symlink,
+  Python.h via CPATH, bf16 (não fp16), loss_type=nll (TRL×offload).
+- 0.6B probe: 20 steps, 5 steps/s, pico 1.24GB, loss ↓. Stack válida.
+- 8B: carrega c/ spill (23 GPU/17 CPU, 3.64GB repouso) mas TREINO
+  BLOQUEADO em 3 camadas independentes: bnb exige tudo-na-GPU →
+  fp32-prep OOM (2.31GB transient) → TRL-chunked vs offload →
+  bnb meta-tensor em módulos CPU. VEREDITO: local insuficiente p/ 8B.
+- Base 16GB baixada em 27min (~10MB/s) p/ ~/.cache/bonsai-unpacked.
+  Upload p/ Kaggle inviável (3-70kB/s); baixar DIRETO no Kaggle do HF.
+- Estimativa T4 (literatura, confirmar): 0.5-1.5 steps/s → 500 steps
+  ≈ 1-2h. Cabe folgado em 30h/semana.
+- Serviços religados e verificados (chat ok) após a janela de treino.
