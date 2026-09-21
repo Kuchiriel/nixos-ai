@@ -1,6 +1,6 @@
 # CYCLE-7 REPORT (21/09)
 
-Suite: 1431+? (rodar) / L8 WORLD OK / sem push.
+Suite: **1431 passed, 0 falhas** / L8 WORLD OK / sem push.
 1. Bytes exatos sem recovery: NÃO (E1 0/3).
 2. Recovery sem serialização: SIM (R3/R4/B4 9/9).
 3. Recovery + write simples: SIM (R4 3/3).
