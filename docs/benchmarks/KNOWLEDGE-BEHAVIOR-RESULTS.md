@@ -325,3 +325,17 @@ Variant B (WARN/32/truth 8), bonsai, n=3 (B2/B0 estendidos a n=5):
 - Veredito: MODEL (F6/F7/F8) + PRESENTATION (decorações) + TASK-DESIGN
   (pedir repro quando str_replace 6/6). Responsabilidade: modelo opera,
   harness preserva. Runners: `/tmp/c8/probes.py`, `/tmp/c8/arms.py`.
+
+## C10 — presentation + Harbor-variety (soberania + comparação)
+
+- Presentation (n=3, payload generacionalmente OK): P0 raw 6/6 (trail +
+  toolish); P1/P2/P3 (qualquer header/número) 0/6; P4 fence 3/6.
+  Instrução explícita de strip NÃO adianta. Implicação: byte-tasks
+  roteiam p/ str_replace (6/6, já implementado); SEM mudança de
+  produção (read precisa de headers p/ navegar). L10-note: evidência
+  por contenção vs exatidão é decisão de task-design futura.
+- Harbor-variety: task E1 própria + terminus-2 + Bonsai fim-a-fim →
+  reward 0.0 por mismatch de PROTOCOLO (prosa vs JSON-batch), classe
+  INTEGRATION. Adapter próprio mapeado (BaseAgent; falta bridge
+  exec/paths). opencode-agent BLOCKED (auth no container).
+- Runners: `/tmp/c10/pres.py`; task `/tmp/harbor-work/bytecopy-task`.
