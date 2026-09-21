@@ -312,3 +312,16 @@ Variant B (WARN/32/truth 8), bonsai, n=3 (B2/B0 estendidos a n=5):
   átomo degrada com complexidade-de-byte. Refinamento do C6:
   "composition-limited" → fidelidade-átomo + composição amplifica.
 - Runner: `/tmp/c7/run_c7.py`. Status: VERIFIED.
+
+## C8 — byte boundary fechado (geração vs presentation vs tool)
+
+- Probes F1-F17 (n=2): 13/17 exatos; falham F6/F7/F8/F9(1/2).
+  Reps: escaped/hex/base64 2/2; literal/JSON-str/numbered/len 0/2.
+- Arg-trace (n=2): disk==arg 100% (tool/FS inocentados); TR-F5 2/2;
+  TR-F4/F13 corrompem no ARG (probe passava → presentation);
+  CP escolheu write_file 2/2; SR/M2/M6 f.txt exatos 6/6 (bug meu no
+  checker, corrigido na leitura); CPRO corrompe mesmo limpo.
+- NIM referência: BLOCKED (6× timeout; sem invenção).
+- Veredito: MODEL (F6/F7/F8) + PRESENTATION (decorações) + TASK-DESIGN
+  (pedir repro quando str_replace 6/6). Responsabilidade: modelo opera,
+  harness preserva. Runners: `/tmp/c8/probes.py`, `/tmp/c8/arms.py`.

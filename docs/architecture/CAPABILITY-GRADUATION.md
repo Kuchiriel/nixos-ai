@@ -33,3 +33,5 @@ variância); n=5 p/ claims causais fortes (R1); n=1 nunca decide (H1).
 | Cross-doc synthesis (S) | UNVERIFIED | sem experimento |
 | Byte-fidelity (exact bytes) | MODEL-LIMITED | E1 0/3; S9/H2 trivial ok; R5 0/3 |
 | Recovery decision | GRADUATED | R3/R4/B4 9/9 + pivot metrics |
+| Exact mutation (str_replace) | GRADUATED | SR/M2/M6 6/6 + testes existentes |
+| Byte-repro full | MODEL-LIMITED (by design) | F6/F7/F8; usar mutação (task-design) |
