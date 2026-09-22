@@ -360,3 +360,13 @@ Variant B (WARN/32/truth 8), bonsai, n=3 (B2/B0 estendidos a n=5):
 - Implicação: disclosure deve excluir por SOBREPOSIÇÃO SEMÂNTICA,
   não só reduzir N. Threshold-numérico MORTO como parâmetro.
 - Runner: `/tmp/c11/threshold.py`. Status: VERIFIED (sinal claro).
+
+## MOE-30B no PC (22/09 — ideia do dono, funciona)
+- Qwen3-30B-A3B-Q4_K_M (18.5GB) roda em CPU+RAM c/ --cpu-moe (binário
+  prism já tinha a flag; sem compilar). Responde certo (2+2=4 em 6.8s),
+  tool-call NATIVO perfeito (write_file + args JSON + id).
+- E1/T8 falham igual ao Bonsai (fidelidade é geral); thinking come
+  ~100+ tokens (max_tokens>=400 p/ resposta).
+- Mesma classe do tier-strong configurado (Qwen3.6-35B-A3B). Caminho
+  viável p/ strong local sem GPU extra. Instância de teste morta.
+- Modelo em /home/nixos/models/Qwen3-30B-A3B-Q4_K_M.gguf.
