@@ -99,3 +99,27 @@ números. Sem teatro.
 - Fix principista: base de treino = GGUF ternário DEQUANTIZADO p/ FP
   (valores idênticos à inferência) + LoRA em cima. Conversão exata,
   custo zero. Próximo round usa essa base.
+
+## Pesquisa overnight 22/09 (web)
+- Reddit r/LocalLLaMA: finetune Bonsai-8B "on metal" existe (QAT code +
+  LogMiner: sessões Claude/OpenCode raspadas p/ corpus!). Repo exato não
+  resolvido (403); seguir via HF blog Axolotl+TII.
+- HF blog Axolotl: treino ternary SIMULADO (QAT, bf16 ativações) — receita
+  p/ mismatch zero (treina ternário, não denso). Próximo round se
+  DPO-synth400 zerar.
+- Harness-externo (WinderAI 2026): Vercel -80% tools → 80→100%;
+  LangChain +13.7pp Terminal-Bench só-harness; CORE 42→78 mesmo modelo;
+  SWE 50.2→55.4 mesmo modelo. Suporte externo à nossa tese harness-first.
+- Formato PrismML: grupos-128, escala FP16, estados {-s,0,+s}; F16-GGUF
+  existe como "re-quantization source".
+
+## Eval DPO-synth400 22/09 — TAMBÉM ZERO (3 treinos, 0 transferência)
+- E1: 0/3. Detalhe: trailing-space MORRE mesmo treinado (echo-synth),
+  tab-único ok, `[ab  cd]` ok. T-fact 3/3. Chain-agent 0/2. T8 n/a.
+- Padrão 3/3 runs: converge no treino, nada no eval. Hipóteses vivas:
+  (a) mismatch denso×ternário (base treino ≠ inferência — PROVÁVEL,
+  decoder g64 pendente); (b) rank/capacidade; (c) alvo errado
+  (fidelidade-byte pode exigir QAT, não LoRA).
+- GPU devolvida (instância morta, 444MB). Produção segue parada
+  (overnight) — RELIGAR de manhã: sudo systemctl start
+  llama-cpp-server llama-cpp-embeddings llama-cpp-rerank.
