@@ -90,3 +90,12 @@ números. Sem teatro.
 - DPO-synth400 no ar (400 pares diversos, 600 steps): testa se
   VARIEDADE quebra o teto. Se também zerar → veredito preliminar:
   LoRA-r8 não move fidelidade/byte (alvo errado ou capacidade).
+
+## Mismatch base treino×inferência (achado 21/09, verificar no próximo)
+- Unpacked = denso FP (q_proj 425 valores únicos em slice — NÃO ternário).
+- LoRA treina contra ativações DENSAS, mas inferência roda TERNÁRIO
+  (Q2_0) + adapter → mismatch calibração→aplicação. Explica parte do
+  zero-efeito (além de overfit/dados).
+- Fix principista: base de treino = GGUF ternário DEQUANTIZADO p/ FP
+  (valores idênticos à inferência) + LoRA em cima. Conversão exata,
+  custo zero. Próximo round usa essa base.
