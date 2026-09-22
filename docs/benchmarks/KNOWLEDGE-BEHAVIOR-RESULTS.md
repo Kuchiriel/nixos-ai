@@ -346,6 +346,7 @@ Variant B (WARN/32/truth 8), bonsai, n=3 (B2/B0 estendidos a n=5):
 - Hipótese principal: POLUIÇÃO da coleção compartilhada `memories`
   (junk de sessão + lessons de experimentos degradam retrieval) +
   variância n=3. kb usa EpisodicMemory() default = compartilhada!
-- Follow-up: re-rodar braços de memória c/ coleções isoladas p/ separar
-  poluição de variância. P1: poda/esquecimento + coleção por task.
+- Follow-up FEITO 22/09: mesma task B3 em coleção isolada = 3/3 (vs 0/3
+  compartilhada). Poluição CONFIRMADA como causa (não só variância).
+  P1 elevado: isolamento por task + poda/esquecimento vira requirement.
 - r8-boundary 0/3 (esperado).
