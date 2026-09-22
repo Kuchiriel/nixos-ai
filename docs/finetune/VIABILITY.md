@@ -123,3 +123,12 @@ números. Sem teatro.
 - GPU devolvida (instância morta, 444MB). Produção segue parada
   (overnight) — RELIGAR de manhã: sudo systemctl start
   llama-cpp-server llama-cpp-embeddings llama-cpp-rerank.
+
+## Mismatch REFUTADO 22/09 (decoder próprio + correlação)
+- Q2_0 numpy-decoder (QK=64, (q-1)*d, wackmall) → corr=1.0000 em 8/8
+  tensores vs unpacked. Unpacked JÁ É ternário-faithful (valores =
+  ternário×escala em FP16). Treino no unpacked == treino no comportamento
+  de inferência. Hipótese mismatch MORTA com evidência.
+- Restam: dados estreitos (templates! synth-400 = 4 templates) e
+  rank/capacidade. DPO-synth400 dirá; se zerar, próximo = diversidade
+  real (não templates) ou rank maior.
