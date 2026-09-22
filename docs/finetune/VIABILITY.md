@@ -82,3 +82,11 @@ números. Sem teatro.
   sequenciais nesta máquina (parar prod ou aceitar contenção).
 - DECISÃO: arquivar números, reverter. Re-teste exige dataset maior e
   diverso (P2) + DPO, não mais epochs no mesmo.
+
+## Eval DPO-77 21/09 — TAMBÉM NÃO MOVE (base×DPO iguais)
+- E1: base tab→@, DPO tab→@ (idêntico). T-fact 3/3 ambos. T8-short:
+  ambos trocam 02↔03 igual. Margem DPO 0.3→8.3 no treino, zero
+  transferência. DPO-77 = SFT-77: memoriza, não generaliza.
+- DPO-synth400 no ar (400 pares diversos, 600 steps): testa se
+  VARIEDADE quebra o teto. Se também zerar → veredito preliminar:
+  LoRA-r8 não move fidelidade/byte (alvo errado ou capacidade).
