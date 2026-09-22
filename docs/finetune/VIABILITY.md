@@ -132,3 +132,9 @@ números. Sem teatro.
 - Restam: dados estreitos (templates! synth-400 = 4 templates) e
   rank/capacidade. DPO-synth400 dirá; se zerar, próximo = diversidade
   real (não templates) ou rank maior.
+
+## DPO-synth400 eval 22/09 — ZERO de novo (3/3 treinos)
+- E1 0/3, T-fact 3/3, chain-agent 0/2. Variedade (4 templates) não
+  quebrou o teto. Veredito preliminar: LoRA-r8 não move fidelidade.
+- Último teste barato: DPO-r32 + lm_head (capacidade 16×) no ar.
+  Se zerar → QAT-ternário (Axolotl) ou aceitar teto + harness-only.
