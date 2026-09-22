@@ -350,3 +350,13 @@ Variant B (WARN/32/truth 8), bonsai, n=3 (B2/B0 estendidos a n=5):
   compartilhada). Poluição CONFIRMADA como causa (não só variância).
   P1 elevado: isolamento por task + poda/esquecimento vira requirement.
 - r8-boundary 0/3 (esperado).
+
+## E6-THRESHOLD 22/09 — não é N, é sobreposição vocabular
+- N=2..12 git-task: 0/15 (rag_search vence N=2-6, read_file N=8+).
+- Pares N=2: +nix_search→nix 0/3, +remember→remember 0/3,
+  +web_search→execute 3/3. Modelo escolhe por KEYWORD
+  (search/find/change), não por capacidade. UM distrator plausível
+  basta p/ quebrar; N é irrelevante.
+- Implicação: disclosure deve excluir por SOBREPOSIÇÃO SEMÂNTICA,
+  não só reduzir N. Threshold-numérico MORTO como parâmetro.
+- Runner: `/tmp/c11/threshold.py`. Status: VERIFIED (sinal claro).

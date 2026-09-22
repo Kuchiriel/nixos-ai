@@ -120,7 +120,8 @@ class EpisodicMemory:
         return point_id
 
     def remember_lesson(self, *, task: str, error_pattern: str, fix: str,
-                        lint: bool | str | None = None) -> int | None:
+                        lint: bool | str | None = None,
+                        tenant: str | None = None) -> int | None:
         """Porta do add_lesson do experience_buffer legado.
 
         lint (Contract B, R2/20/09): "auto" = env JARVIS_LESSON_LINT
@@ -149,6 +150,8 @@ class EpisodicMemory:
         _fix = transformed or fix
         _err = transformed_error or error_pattern
         meta: dict = {}
+        if tenant is not None:
+            meta["tenant"] = tenant
         if transformed or transformed_error:
             meta["lint"] = "transformed"
             meta["original_fix"] = fix  # proveniência preservada (§4)
@@ -202,12 +205,17 @@ class EpisodicMemory:
         *,
         top_k: int = 5,
         kinds: tuple[str, ...] | None = None,
+        tenant: str | None = None,
     ) -> list[dict[str, Any]]:
         """Busca híbrida por eventos semânticamente relevantes.
 
         Inclui deduplicação por texto (memórias com texto igual ou >95% similar
         são consolidadas, mantendo a mais recente) e limite de contexto para
         não saturar o prompt de SLMs.
+
+        tenant (isolamento 22/09, evidência: isolada 3/3 vs 0/3): quando
+        dado, só retornam hits do mesmo tenant; hits sem tenant seguem
+        visíveis (compat). None = comportamento atual.
         """
         vector = self._llm.embed(query)
         if vector is None:
@@ -228,6 +236,10 @@ class EpisodicMemory:
             payload = p.get("payload", {})
             if kinds and payload.get("kind") not in kinds:
                 continue
+            if tenant is not None:
+                _pt = payload.get("tenant")
+                if _pt is not None and _pt != tenant:
+                    continue
             text = payload.get("text", "")
             # dedup: texto idêntico ou muito similar → mantém o mais recente
             text_key = text.strip().lower()[:500]  # chave de dedup — 500 chars evita falsos positivos
@@ -248,15 +260,18 @@ class EpisodicMemory:
                 break
         return hits
 
-    def lessons(self, query: str, *, top_k: int = 3, max_chars: int = 500) -> str:
+    def lessons(self, query: str, *, top_k: int = 3, max_chars: int = 500,
+                tenant: str | None = None) -> str:
         """Formato do legado ('PAST LESSONS') para injetar no prompt do agente.
 
         Args:
             max_chars: limite de caracteres para não saturar o contexto de SLMs.
                        Lições mais recentes e com score maior têm prioridade.
+            tenant: isolamento por task/domínio (opt-in, default None).
         """
         hits = self.recall(query, top_k=top_k,
-                           kinds=(KIND_LESSON, KIND_FACT, KIND_ERROR))
+                           kinds=(KIND_LESSON, KIND_FACT, KIND_ERROR),
+                           tenant=tenant)
         if not hits:
             return ""
         out = "\nPAST LESSONS (avoid these mistakes):\n"

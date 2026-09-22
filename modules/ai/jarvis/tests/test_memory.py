@@ -233,3 +233,19 @@ def test_lesson_keeps_different_task(monkeypatch) -> None:
     mem.remember_lesson(task="Beta", error_pattern="e", fix="f2")
     assert len(store.points) == 2
     assert store.deleted_ids == []
+
+
+def test_tenant_isolation(monkeypatch) -> None:
+    """Tenant filter (evidência 22/09: isolada 3/3 vs 0/3). Hits de outro
+    tenant somem; sem tenant some; default None mantém tudo."""
+    mem, store, _ = _mem(monkeypatch)
+    mem.remember_lesson(task="tarefa A", error_pattern="eA", fix="fA", tenant="alpha")
+    mem.remember_lesson(task="tarefa B", error_pattern="eB", fix="fB", tenant="beta")
+    mem.remember_lesson(task="tarefa C", error_pattern="eC", fix="fC")
+    assert store.points[0]["payload"]["tenant"] == "alpha"
+    got_a = mem.recall("tarefa", tenant="alpha")
+    assert {h["task"] for h in got_a} == {"tarefa A", "tarefa C"}
+    got_b = mem.lessons("tarefa", tenant="beta")
+    assert "tarefa B" in got_b and "tarefa A" not in got_b
+    got_all = mem.recall("tarefa")
+    assert {h["task"] for h in got_all} == {"tarefa A", "tarefa B", "tarefa C"}
