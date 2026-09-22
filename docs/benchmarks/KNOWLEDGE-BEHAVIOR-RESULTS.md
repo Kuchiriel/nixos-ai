@@ -339,3 +339,13 @@ Variant B (WARN/32/truth 8), bonsai, n=3 (B2/B0 estendidos a n=5):
   INTEGRATION. Adapter próprio mapeado (BaseAgent; falta bridge
   exec/paths). opencode-agent BLOCKED (auth no container).
 - Runners: `/tmp/c10/pres.py`; task `/tmp/harbor-work/bytecopy-task`.
+
+## KB-WEEKLY 22/09 (overnight, n=3)
+- RAG C0 0/3, C2 3/3 — causal effect STABLE across weeks.
+- lesson B0 0/3, B3 0/3 (era B0 4/5, B3 3/3); persist B2 0/3 (era 3/3).
+- Hipótese principal: POLUIÇÃO da coleção compartilhada `memories`
+  (junk de sessão + lessons de experimentos degradam retrieval) +
+  variância n=3. kb usa EpisodicMemory() default = compartilhada!
+- Follow-up: re-rodar braços de memória c/ coleções isoladas p/ separar
+  poluição de variância. P1: poda/esquecimento + coleção por task.
+- r8-boundary 0/3 (esperado).
