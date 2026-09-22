@@ -24,6 +24,12 @@
   services.jarvis-notify.enable = true;
   services.jarvis-focus.enable = true;
 
+services.avahi = {
+  enable = true;
+  nssmdns4 = true;
+  openFirewall = true;
+};
+
   programs.steam = {
     enable = true;
     # Steam client UI DEVE rodar na iGPU (Intel) para evitar segfault
@@ -245,7 +251,7 @@
   time.timeZone = lib.mkForce "America/Sao_Paulo";
   i18n.defaultLocale = "pt_BR.UTF-8";
   networking.nameservers = ["8.8.8.8" "1.1.1.1"];
-  networking.firewall.allowedTCPPorts = [22 8080 8081 4000 5353];
+  networking.firewall.allowedTCPPorts = [22 8080 8081 4000 5353 8099]; # 8099 = karaok cast (letra+som p/ TV)
 
   services.openssh = {
     enable = true;
