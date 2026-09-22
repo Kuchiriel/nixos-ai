@@ -1,4 +1,4 @@
-{
+{ pkgs, ... }: {
   services.hypridle = {
     enable = true;
     settings = {
@@ -31,5 +31,35 @@
         }
       ];
     };
+  };
+
+  # Noites de agentes (opencode/freebuff/buffy) não podem ser mortas pelo
+  # suspend de 20min do hypridle. Este serviço segura um lock de inibição
+  # (sleep:idle, mode=block) enquanto qualquer agente estiver rodando e
+  # LIBERA sozinho ≤4min depois que o último sai (lock expira sem renovação).
+  # O logind nega o `systemctl suspend` enquanto o lock existe; tela pode
+  # apagar (dpms) — processos seguem vivos.
+  systemd.user.services.agent-keepawake = {
+    Unit = {
+      Description = "Inibe suspend/idle enquanto agentes de IA estiverem rodando";
+      After = [ "graphical-session.target" ];
+    };
+    Service = {
+      Type = "simple";
+      ExecStart = toString (pkgs.writeShellScript "agent-keepawake" ''
+        while true; do
+          # [x] trick: não casa com o próprio pgrep na cmdline deste script
+          if pgrep -u "$USER" -f '[o]pencode|[f]reebuff|[b]uffy' >/dev/null 2>&1; then
+            systemd-inhibit --what=sleep:idle --who=agents --mode=block \
+              --why="agentes de IA ativos" sleep 240
+          else
+            sleep 60
+          fi
+        done
+      '');
+      Restart = "on-failure";
+      RestartSec = "30s";
+    };
+    Install.WantedBy = [ "default.target" ];
   };
 }
