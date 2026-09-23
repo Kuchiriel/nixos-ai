@@ -91,10 +91,16 @@ class Config:
     # CMake/otclient do jogo) — quebrava o index de repos NixOS, onde
     # "modules" é código. Removidos também os resquícios do jogo
     # (monster/world/items/npc/clientdata). Ajustável via JARVIS_INDEX_EXCLUDE_DIRS.
+    # 23/09: expandido com artefatos ÓBVIOS de build/cache/deps (mesma lista
+    # dos templates .gitignore de mercado). Match é por SUBSTRING no nome do
+    # dir — por isso NÃO entram tokens largos tipo "log" (pegaria "catalogs"),
+    # "bin", "obj", "env", "data". Dirs ocultos (.* ) já são podados no walk.
+    # Por-PROJETO: use .ragignore (sintaxe gitignore; ver rag.py).
     index_exclude_dirs: tuple[str, ...] = field(default_factory=lambda: tuple(
         d for d in _env_str(
             "JARVIS_INDEX_EXCLUDE_DIRS",
-            "git,node_modules,pycache,backup,temp,venv,site-packages,dist,target,vendor,.idea,.vscode,build,result,.direnv",
+            "git,node_modules,pycache,backup,temp,venv,site-packages,dist,target,vendor,.idea,.vscode,build,result,.direnv,"
+            "cache,tmp,coverage,htmlcov,egg-info,gradle,cmake,bower_components,jspm_packages,elm-stuff,_build,deps,DerivedData",
         ).split(",") if d
     ))
 

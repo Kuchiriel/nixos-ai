@@ -33,6 +33,7 @@
       prompt-toolkit
       fastapi
       uvicorn
+      pathspec # .ragignore: matching gitignore-canônico no index RAG
     ];
 
     nativeBuildInputs = [makeWrapper];

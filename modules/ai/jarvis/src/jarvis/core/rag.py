@@ -27,6 +27,124 @@ from jarvis.providers.llm import LLMClient
 from jarvis.providers.vector_store import QdrantStore, dense_key, stable_id
 
 # ---------------------------------------------------------------------------
+# .ragignore — sintaxe gitignore (padrão de mercado: mesma engine do .gitignore,
+# via pathspec quando disponível; fallback embutido com subconjunto da spec).
+# Descoberta na raiz do tree indexado; `!` re-inclui; último match vence.
+# ---------------------------------------------------------------------------
+_RAGIGNORE_NAME = ".ragignore"
+
+
+def _load_ragignore(root: Path) -> "object | None":
+    """Carrega o .ragignore da raiz. Retorna spec (pathspec) ou matcher fallback."""
+    ignore_file = root / _RAGIGNORE_NAME
+    if not ignore_file.is_file():
+        return None
+    try:
+        lines = ignore_file.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return None
+    patterns = [ln for ln in (l.strip() for l in lines) if ln and not ln.startswith("#")]
+    if not patterns:
+        return None
+    try:
+        import pathspec  # lib-canônica de gitignore (black/ruff); opcional
+        return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+    except ImportError:
+        return _SimpleIgnoreMatcher(patterns)
+
+
+def _ragignore_rejects(matcher: "object | None", rel: str) -> bool:
+    """True se `rel` (caminho relativo à raiz, POSIX) deve ser ignorado.
+    pathspec ≥1.1: check_file().include é 'casou regra POSITIVA?' (última
+    regra vence) — na semântica gitignore, positivo = IGNORAR; negação (!)
+    devolve False (manter); None = sem match (manter)."""
+    if matcher is None:
+        return False
+    chk = getattr(matcher, "check_file", None)
+    if chk is not None:
+        return chk(rel).include is True
+    m = getattr(matcher, "match_file", None)
+    if m is None:
+        return False
+    return bool(m(rel))
+
+
+class _SimpleIgnoreMatcher:
+    """Fallback SEM deps: subconjunto gitignore — `*`, `?`, `**`, classes [abc],
+    âncora `/` inicial, trailing `/` (só dir), `!` negação; último match vence.
+    Implementado por tradução p/ regex (o mesmo desenho do gitignore real)."""
+
+    _GLOB_RE = {"**": ".*", "*": "[^/]*", "?": "[^/]"}
+
+    def __init__(self, patterns: list[str]):
+        # (neg, rx, dir_only, base_literal) — base_literal p/ semântica de
+        # dir-only: "x/" casa o dir (com "/") e TUDO sob ele, nunca um
+        # ARQUIVO de nome "x" (spec gitignore).
+        self._rules: list[tuple[bool, re.Pattern[str], bool, str]] = []
+        for pat in patterns:
+            neg = pat.startswith("!")
+            if neg:
+                pat = pat[1:]
+            dir_only = pat.endswith("/")
+            if dir_only:
+                pat = pat.rstrip("/")
+            # Spec gitignore: separador no INÍCIO ou MEIO ancora na raiz;
+            # no FIM não ("anchors-v2/" segue casando em qualquer nível).
+            anchored = pat.startswith("/") or "/" in pat
+            if anchored:
+                pat = pat.lstrip("/")
+            if pat.startswith("**/"):
+                anchored = False  # "**/x" ≡ "x" (explícito any-depth)
+            rx = ""
+            i = 0
+            while i < len(pat):
+                ch = pat[i]
+                if ch == "*":
+                    if pat[i:i+2] == "**":
+                        rx += self._GLOB_RE["**"]
+                        i += 2
+                        # "a/**/b" também casa "a/b" (spec gitignore)
+                        if pat[i:i+1] == "/":
+                            rx += "[/]?"
+                            i += 1  # separador já emitido como opcional
+                        continue
+                    rx += self._GLOB_RE["*"]
+                elif ch == "?":
+                    rx += self._GLOB_RE["?"]
+                elif ch == "[":
+                    j = pat.find("]", i + 1)
+                    if j == -1:
+                        rx += re.escape(ch)
+                    else:
+                        cls = pat[i:j+1]  # "[abc]" / "[!abc]" / "[a-z]"
+                        if cls[1] == "!":
+                            cls = "[^" + cls[2:]
+                        rx += cls
+                        i = j
+                else:
+                    rx += re.escape(ch)
+                i += 1
+            if dir_only:
+                rx += "(/.*)?$"
+            elif anchored:
+                rx = "^" + rx + "(/.*)?$"
+            else:
+                rx = "(^|/)" + rx + "(/.*)?$"
+            self._rules.append((neg, re.compile(rx), dir_only, pat))
+
+    def match_file(self, rel: str) -> bool:
+        # search (não match): padrões não-ancorados casam em QUALQUER nível
+        # ("personagens/" pega "deep/nested/personagens/" — spec gitignore);
+        # padrões ancorados já carregam ^...$ na própria regex.
+        ignored = False
+        for neg, rx, dir_only, base in self._rules:
+            if dir_only and not rel.endswith("/") and not rel.startswith(base + "/"):
+                continue  # padrão "x/" não ignora um arquivo chamado "x"
+            if rx.search(rel):
+                ignored = not neg
+        return ignored
+
+# ---------------------------------------------------------------------------
 # Porta do V4.0.5  padrões de símbolos por extensão
 # ---------------------------------------------------------------------------
 
@@ -308,10 +426,12 @@ def _is_allowed(root: str, file: str) -> bool:
 
 
 def iter_indexable_files(root: str | Path, exclude_dirs: Iterable[str] | None = None) -> Iterable[str]:
-    """Varre um diretório/arquivo com as mesmas regras do V4.0.5 (excludes, tamanho)."""
+    """Varre um diretório/arquivo com as mesmas regras do V4.0.5 (excludes, tamanho).
+    Respeita também um .ragignore na raiz (sintaxe gitignore; ver _load_ragignore)."""
     excludes = tuple(e.lower() for e in (exclude_dirs if exclude_dirs is not None else _EXCLUDE_DIRS))
     root_path = Path(root).expanduser()
-    
+    rag = _load_ragignore(root_path)
+
     if root_path.is_file():
         if _is_allowed(str(root_path.parent), root_path.name):
             try:
@@ -329,9 +449,20 @@ def iter_indexable_files(root: str | Path, exclude_dirs: Iterable[str] | None = 
             and d.lower() not in excludes
             and not any(ex in d.lower() for ex in excludes)
         ]
-        
+        if rag is not None:
+            # Poda dir inteiro se o rel-path casa com padrão de ignore (mesma
+            # regra do git: dir excluído não é nem descido; `!` não resgata).
+            # Trailing "/" = contexto de diretório (dir-only patterns).
+            dirnames[:] = [
+                d for d in dirnames
+                if not _ragignore_rejects(rag, os.path.relpath(os.path.join(dirpath, d), root_path).replace(os.sep, "/") + "/")
+            ]
+
         for file in filenames:
             if file.startswith("."):
+                continue
+            if rag is not None and _ragignore_rejects(
+                    rag, os.path.relpath(os.path.join(dirpath, file), root_path).replace(os.sep, "/")):
                 continue
             if _is_allowed(dirpath, file):
                 path = Path(dirpath) / file
