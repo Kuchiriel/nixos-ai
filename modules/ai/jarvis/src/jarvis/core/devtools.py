@@ -137,7 +137,12 @@ def _safe_path(path: str, root: Path | None = None,
     else:
         target = (resolve_base(root) / p).resolve()
 
-    _allowed_prefixes = ("/tmp", "/build", "/etc/jarvis", str(r))
+    # JARVIS_EXTRA_READ_ROOTS (dono 23/09): raizes extras p/ LEITURA apenas
+    # (ex.: ~/Pessoal no RAG). Fail-closed: vazio = comportamento anterior;
+    # write=True NUNCA aceita extras (jail de escrita permanece absoluto).
+    _extra = os.environ.get("JARVIS_EXTRA_READ_ROOTS", "")
+    _extra_roots = tuple(x for x in _extra.split(":") if x) if not write else ()
+    _allowed_prefixes = ("/tmp", "/build", "/etc/jarvis", str(r)) + _extra_roots
     if not any(str(target).startswith(pfx) for pfx in _allowed_prefixes):
         # Tradução mecânica container→base (L8 real: modelo fixou em /app e
         # ignorou prompt E erro dirigido — texto não contém, mecanismo sim).

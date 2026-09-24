@@ -9,12 +9,35 @@ Guarda: só http(s); localhost livre, externo exige approve=True
 """
 from __future__ import annotations
 
+import random
+import time as _time
 from typing import Any
 
 _pw = None
 _browser = None
 _page = None
 _cdp_url = ""
+
+
+# ── Humanização (port de Wurm Ultimate core/idle_behavior.py) ──
+# No modo attach (browser LOGADO do dono) ações ganham delays gaussianos
+# e digitação por tecla: cadência fixa/fill instantâneo é fingerprint de
+# automação. Headless próprio (leitura pública) não precisa.
+
+def _human_pause(lo: float = 0.6, hi: float = 2.4) -> None:
+    """Delay gaussiano com jitter (padrão idle_behavior._interval)."""
+    mu = random.uniform(lo, hi)
+    _time.sleep(max(0.05, random.gauss(mu, (hi - lo) * 0.25)))
+
+
+def _human_typing(page, selector: str, text: str) -> None:
+    """Digita por tecla com delay aleatório (Ctrl+A limpa antes)."""
+    page.click(selector, timeout=10000)
+    _human_pause(0.2, 0.9)
+    page.keyboard.press("Control+A")
+    for ch in (text or ""):
+        page.keyboard.type(ch)
+        _time.sleep(random.uniform(0.03, 0.13))
 
 
 def cdp_attach(url: str = "http://127.0.0.1:9222") -> dict[str, Any]:
@@ -100,6 +123,8 @@ def browser_click(selector: str) -> dict[str, Any]:
     """Clica num seletor CSS (mutação: harness pede aprovação antes)."""
     try:
         page = _ensure()
+        if _cdp_url:
+            _human_pause()
         page.click(selector, timeout=10000)
         page.wait_for_timeout(500)
         return {"ok": True, "clicked": selector, **_state(page)}
@@ -108,10 +133,21 @@ def browser_click(selector: str) -> dict[str, Any]:
 
 
 def browser_fill(selector: str, text: str) -> dict[str, Any]:
-    """Preenche campo (mutação: harness pede aprovação antes)."""
+    """Preenche campo (mutação: harness pede aprovação antes).
+
+    Modo attach: digitação humanizada (por tecla, Ctrl+A antes).
+    Headless: fill direto (instantâneo, sem risco — não é sessão real).
+    """
     try:
         page = _ensure()
-        page.fill(selector, text, timeout=10000)
+        if _cdp_url and text:
+            _human_pause(0.4, 1.8)
+            try:
+                _human_typing(page, selector, text)
+            except Exception:
+                page.fill(selector, text, timeout=10000)
+        else:
+            page.fill(selector, text, timeout=10000)
         page.wait_for_timeout(300)
         try:
             val = page.input_value(selector)
@@ -219,6 +255,8 @@ def browser_click_text(text: str) -> dict[str, Any]:
         return {"ok": False, "error": "click_text precisa de text"}
     try:
         page = _ensure()
+        if _cdp_url:
+            _human_pause()
         box = page.evaluate(_LEAF_JS, text)
         if not box or not box[0]:
             return {"ok": False,
