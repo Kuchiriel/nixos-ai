@@ -36,3 +36,6 @@
 
 ## Insights externos a cruzar (agente B)
 FINDINGS.md (Codacus) + web: tudo que citar flag/binário/modelo vira braço aqui.
+
+## Braço 6 (novo, resolve discrepância BINARIES.md)
+6. **ik_llama vs upstream no 35B-A3B** (mesmas flags ngl45+ncmoe35): Muse aponta ik como binário MoE; sweep casa + meu 32 t/s = upstream. 3 reps cada; quem vencer atualiza BINARIES.md (regra: dado decide, não autoria).
