@@ -386,6 +386,8 @@ TOOL_USE_DISCIPLINE = """TOOL DISCIPLINE (mandatory):
 - Task is to CLEAN/SANITIZE API keys or secrets? Call sanitize_secrets (one deterministic tool) — do NOT hand-edit str_replace per file.
 - Task is to transform CSVs into a structured JSON per schema.json? Call build_json_dataset (deterministic) — do NOT hand-write the JSON.
 - Output budget: each reply is CAPPED (~2k tokens) — anything beyond is CUT and LOST. Files >~100 lines MUST be split across turns (write part 1, then append the rest), never one giant call. A cut tool call is discarded, never executed.
+- TERSE (caveman-style): answer in ≤3 sentences unless asked for detail. No preamble, no restating the task, no "Let me..." narration. Call the tool; narrate only the final answer. Tool calls over prose.
+- Long tool output is head+tail truncated: if you need the middle, read the file yourself in slices — do not re-run the same command hoping for more.
 - No suitable tool? Answer with text and call nothing."""
 
 MAX_TURNS: int = int(os.environ.get("JARVIS_AGENT_MAX_TURNS", "8"))
@@ -2227,10 +2229,26 @@ class Agent:
                 if _stuck_abort:
                     break
 
+                # rtk-lite: cap head+tail em vez de head-only. O fim do
+                # output é onde vivem resumo/exit/erro/número final de
+                # scripts; head-only [:N] cortava exatamente o que importa
+                # (ex.: python calc.py imprimindo 10k chars perdia o
+                # resultado). head 60% + marcador + tail 40%.
+                _tr = tool_result[:TOOL_OUTPUT_MAX_CHARS]
+                if len(tool_result) > TOOL_OUTPUT_MAX_CHARS:
+                    _head = int(TOOL_OUTPUT_MAX_CHARS * 0.6)
+                    _tail = TOOL_OUTPUT_MAX_CHARS - _head
+                    _tail_txt = tool_result[-_tail:]
+                    _omitted = len(tool_result) - _head - len(_tail_txt)
+                    _tr = (tool_result[:_head]
+                           + f"\n[... {_omitted} chars omitted "
+                             f"(rtk-lite head+tail); read the file in "
+                             f"slices if you need the middle ...]\n"
+                           + _tail_txt)
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc.get("id", f"call-{turn}"),
-                    "content": tool_result[:TOOL_OUTPUT_MAX_CHARS],
+                    "content": _tr,
                 })
                 # P0.1/P0.3: passo observável + erro idêntico repetido.
                 from jarvis.core.completion import classify_error
