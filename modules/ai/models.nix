@@ -124,6 +124,21 @@ in rec {
     sha256 = "sha256-4XspjYTueHl5Fq5cLsyCEUacxlzM/jCAzZqbtQP7xV4=";
   };
 
+  # BENCH SPEC-DECODE 24/09 (llama-server :8095, prompt código, n=128, 3 reps,
+  # draft=Qwen3-0.6B-Q8_0, ngram-mod-n-max 16): bonsai baseline 72.0-72.3 t/s
+  # · +draft 71.9-72.2 t/s · +ngram 71.8-72.3 t/s → GANHO ZERO no bonsai:
+  # kernels ternários prism já saturam; spec-decode só paga em dense-Q4
+  # lento (~12 t/s — régua do vídeo DFlash/GTX1060). NÃO ativar no bonsai.
+  # PREPARADO p/ OUTROS regimes (ver llm-draft-qwen05 abaixo): Qwen3-4B Q4
+  # (~/models, cabe INTEIRO + drafter na 6GB = regime DFlash de verdade);
+  # MoE (A3B/35B) + spec = PESSIMO (verify acorda todos os experts — lição
+  # DFlash). Flags prontos: --spec-draft-model F [-ctkd q4_0 -ctvd q4_0]
+  # e --spec-ngram-mod-n-max 16 (spec sem modelo).
+  llm-draft-qwen05 = mkModel {
+    url = "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf";
+    sha256 = "sha256-lGXmOiKt1TVNm7S5npARcEPHEkAHZkkHJZvRbQQ7sDE=";
+  };
+
   # --- Embeddings (RAG) — nomic-embed-text-v2-moe Q8_0 (512MB) ---
   embed = mkModel {
     url = "https://huggingface.co/nomic-ai/nomic-embed-text-v2-moe-GGUF/resolve/main/nomic-embed-text-v2-moe.Q8_0.gguf";
