@@ -1,0 +1,90 @@
+{
+  "ts": "2026-09-24__17-10-34",
+  "summary": {
+    "total": 3,
+    "world_ok": 2,
+    "false_done": 1,
+    "by_tier": {
+      "hard": {
+        "n": 3,
+        "ok": 2
+      }
+    },
+    "avg_elapsed_s": 19.3
+  },
+  "results": [
+    {
+      "task_id": "H1-config-discovery",
+      "tier": "hard",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [
+        "output_contains:bonsai"
+      ],
+      "turns": 32,
+      "tool_calls": [
+        "nix_eval",
+        "list_directory",
+        "list_directory",
+        "list_directory",
+        "list_directory",
+        "list_directory",
+        "list_directory",
+        "list_directory",
+        "read_file",
+        "nix_search"
+      ],
+      "wrong_tools": [],
+      "false_done": true,
+      "elapsed_s": 27.5,
+      "rc": 0
+    },
+    {
+      "task_id": "H2-syntax-fix",
+      "tier": "hard",
+      "world_ok": true,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [],
+      "turns": 38,
+      "tool_calls": [
+        "read_file",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "execute_shell",
+        "read_file",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "execute_shell",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 23.4,
+      "rc": 0
+    },
+    {
+      "task_id": "H3-chain",
+      "tier": "hard",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 9,
+      "tool_calls": [
+        "list_directory",
+        "execute_shell",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 7.0,
+      "rc": 0
+    }
+  ]
+}
