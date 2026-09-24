@@ -129,7 +129,7 @@ in rec {
   # · +draft 71.9-72.2 t/s · +ngram 71.8-72.3 t/s → GANHO ZERO no bonsai:
   # kernels ternários prism já saturam; spec-decode só paga em dense-Q4
   # LENTO (~12 t/s — régua do vídeo DFlash/GTX1060). NÃO ativar no bonsai.
-  # BENCH 2 24/09: Qwen3-4B-Q4_K_M (~/models) baseline 60.3-60.7 t/s
+  # BENCH 2 24/09: Qwen3-4B-Q4_K_M (~/models, PRISM) baseline 60.3-60.7 t/s
   # · +draft 60.1-60.6 · +ngram 59.5-60.2 → GANHO ZERO TAMBÉM. VEREDITO
   # GERAL p/ RTX 4050 6GB: spec-decode NÃO APLICÁVEL — qualquer modelo que
   # cabe inteiro já roda >=60 t/s (sem headroom); MoE+spec = piora (DFlash).
@@ -521,6 +521,10 @@ in rec {
     default = "bonsai";
     # Residência simultânea máxima (VRAM 6GB: 1 modelo por vez).
     maxResident = 1;
+    # Binário CORRETO por modelo (docs/models/BINARIES.md — D2/D5: binário
+    # errado invalida o veredito). O router NÃO escolhe binário por request:
+    # llama-cpp.nix gera UM serviço por grupo (porta = endpoints.${binary}).
+    endpoints = { prism = 8080; upstream = 8083; ik = 8084; };
     models = {
       bonsai = {
         profile = "bonsai";
@@ -531,6 +535,8 @@ in rec {
         vram_mb = 2400;
         # Prism fork exigido (Q2_0 g64 fora do upstream).
         needsWrapper = "llama-prism-wrapper";
+        binary = "prism";
+        endpoint = 8080;
         serve = { host = true; vm = true; };
       };
       jarvis-fast = {
@@ -542,6 +548,8 @@ in rec {
         params_b = 4;
         vram_mb = 2600;
         needsWrapper = null;
+        binary = "upstream";
+        endpoint = 8083;
         serve = { host = true; vm = true; };
       };
       jarvis-strong = {
@@ -552,6 +560,8 @@ in rec {
         params_b = 35;
         vram_mb = 4600;
         needsWrapper = null;
+        binary = "ik";
+        endpoint = 8084;
         serve = { host = true; vm = false; };
         # Herdado do profile chat: mmproj na CPU (861MB VRAM) + visão dinâmica.
         iniExtra = ["no-mmproj-offload = true" "image-min-tokens = 1024"];
