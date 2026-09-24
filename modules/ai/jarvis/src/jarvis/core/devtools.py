@@ -457,6 +457,20 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
 
     Returns: {"ok": True, "replacements": N, "path": "...", "strategy": "..."}
     """
+    # Anti-compounding guard (24/09 forense H2: o modelo repetiu o
+    # MESMO str_replace 5x após cada SyntaxError — vírgulas acumulando
+    # `def greet(name, , , ,`; o texto do erro MUDA a cada vez, então
+    # o detector de erro-idêntico do agent loop nunca dispara. Mecanismo
+    # > texto (L8): a 2ª edição idêntica recebe o estado real da linha
+    # alvo + direção de saída. Só a 3ª+ vira erro de verdade.)
+    global _SR_REPEAT
+    try:
+        _SR_REPEAT
+    except NameError:
+        _SR_REPEAT = {}
+    _key = (str(path), old, new)
+    _n = _SR_REPEAT.get(_key, 0) + 1
+    _SR_REPEAT[_key] = _n
     try:
         target = _safe_path(path, write=True)
 
@@ -524,6 +538,21 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
             new_content = content.replace(found_text, new, 1)
             replacements = 1
 
+        # Anti-compounding: 3ª+ edição idêntica = RECUSA antes de escrever.
+        # O dano acumula (vírgulas, duplicações) — o erro do run seguinte
+        # muda de texto, então detectores de erro-idêntico não disparam.
+        if _n >= 3:
+            return {
+                "ok": False,
+                "error": (f"GUARD: same edit applied {_n}x — compounding "
+                          f"damage. Your edit is WRONG, not unlucky. The "
+                          f"file currently reads: "
+                          f"{_find_context(content, old)}. Stop "
+                          f"str_replace here: read the file and use "
+                          f"write_file with the FULL corrected content."),
+                "strategy": strategy,
+            }
+
         # Núcleo único de escrita: SafeEditor (atômico + validação completa
         # python/nix/json + integridade estrutural + backup central).
         from nightwatch.safe_editor import SafeEditor
@@ -542,7 +571,7 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
             rel = str(target)
 
         diff = _make_diff(path, found_text, new)
-        return {
+        out = {
             "ok": True,
             "replacements": replacements,
             "path": rel,
@@ -550,6 +579,16 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
             "strategy": strategy,
             "diff": diff,
         }
+        # 2ª edição idêntica deixa passar COM o estado real da linha:
+        # se o run seguinte errar, o modelo vê a própria corrupção.
+        if _n == 2:
+            out["guard_warning"] = (
+                f"Same edit 2x on this file. Current state now: "
+                f"{_find_context(new_content, new)}. If the next command "
+                f"errors again, do NOT str_replace a 3rd time (it will "
+                f"be refused) — use write_file with the full corrected "
+                f"content.")
+        return out
     except ValueError as e:
         return {"ok": False, "error": str(e)}
     except OSError as e:
