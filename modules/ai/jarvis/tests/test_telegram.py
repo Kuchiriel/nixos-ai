@@ -260,15 +260,20 @@ def test_opencode_usage_and_unknown_model_flag() -> None:
 # --- fuzzy dispatch ---
 
 def test_fuzzy_prefix_case_and_no_slash() -> None:
-    ch, _ = _channel()
-    assert ch.handle_message("/ST", chat_id=123) == ch.handle_message("/status", chat_id=123)
-    assert ch.handle_message("status", chat_id=123) == ch.handle_message("/status", chat_id=123)
+    ch, _ = _channel(
+        ask_fn=lambda q: f"ASK:{q}",
+        status_fn=lambda: "STATUS",
+        remember_fn=lambda t: f"REM:{t}",
+    )
+    assert ch.handle_message("/STAT", chat_id=123) == "STATUS"
+    assert ch.handle_message("/STA", chat_id=123).startswith("comando desconhecido")  # ambíguo: status/start
+    assert ch.handle_message("status", chat_id=123) == "STATUS"
     assert ch.handle_message("/opencode", chat_id=123).startswith("Uso")
     assert ch.handle_message("OPENCOD", chat_id=123).startswith("Uso")
-    assert ch.handle_message("/a", chat_id=123) != "ASK:"  # ambíguo/curto não casa
+    assert ch.handle_message("/a", chat_id=123) != "ASK:"  # curto não casa
 
 
 def test_fuzzy_preserves_arg_case() -> None:
-    ch, _ = _channel()
+    ch, _ = _channel(remember_fn=lambda t: f"REM:{t}")
     out = ch.handle_message("/REMEMBER Prefiro Café", chat_id=123)
     assert out == "REM:Prefiro Café"

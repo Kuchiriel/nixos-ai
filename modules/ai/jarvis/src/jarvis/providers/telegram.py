@@ -310,6 +310,8 @@ class TelegramChannel:
         if m:
             model = m.group(1)
             task = (arg[:m.start()] + " " + arg[m.end():]).strip()
+        elif re.search(r"(?:^|\s)-m(?:\s|$)", arg):
+            return "Uso: `/opencode -m provider/model <tarefa>`"
         else:
             task = arg
         if not task:
