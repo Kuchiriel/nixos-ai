@@ -86,18 +86,43 @@ class MemoryVault:
             return False
 
     def _month_file(self, ts: float) -> Path:
-        return self.vault_dir / f"{datetime.fromtimestamp(ts):%Y-%m}.md"
+        from jarvis.core import vault_cipher
+
+        return vault_cipher.note_path(
+            self.vault_dir, f"{datetime.fromtimestamp(ts):%Y-%m}.md")
 
     # --- leitura ---
 
     def list_notes(self) -> list[str]:
-        """Arquivos .md do vault (mais recentes primeiro)."""
+        """Arquivos de nota do vault (mais recentes primeiro).
+
+        Cifrado: os `.md.enc` aparecem com o sufixo removido.
+        """
+        from jarvis.core import vault_cipher
+
         if not self.vault_dir.exists():
             return []
-        return sorted(
-            (p.name for p in self.vault_dir.glob("*.md")),
-            reverse=True,
-        )
+        names = []
+        for p in vault_cipher.iter_notes(self.vault_dir):
+            n = p.name
+            if n.endswith(vault_cipher.ENC_SUFFIX):
+                n = n[: -len(vault_cipher.ENC_SUFFIX)]
+            names.append(n)
+        return sorted(names, reverse=True)
+
+    def read_note(self, name: str) -> str:
+        """Lê uma nota (decifra se o vault estiver cifrado)."""
+        from pathlib import PurePath
+
+        from jarvis.core import vault_cipher
+
+        safe = PurePath(name).name
+        if not safe or "/" in name or "\\" in name:
+            raise ValueError("invalid note name")
+        if not safe.endswith(".md"):
+            safe = f"{safe}.md"
+        return vault_cipher.read_text(vault_cipher.note_path(
+            self.vault_dir, safe))
 
     # --- síntese ---
 
@@ -140,8 +165,10 @@ class MemoryVault:
         month_file = self._month_file(now)
         self._ensure_vault()
         heading = f"## Resumo {datetime.fromtimestamp(now):%Y-%m-%d %H:%M} ({len(events)} eventos)\n"
-        with month_file.open("a", encoding="utf-8") as fh:
-            fh.write(f"\n{heading}\n\n{summary}\n")
+        from jarvis.core import vault_cipher
+
+        vault_cipher.write_text(month_file, f"\n{heading}\n\n{summary}\n",
+                                append=True)
 
         if commit:
             self._git("add", "-A")

@@ -922,9 +922,10 @@ def _handle_vault_write(args: dict[str, Any]) -> str:
         if not safe_name or safe_name in (".", "..") or "\\" in name or "/" in name:
             return "ERROR: invalid note name (subdirs/traversal não permitidos)"
         mv = MemoryVault()
-        note_path = mv.vault_dir / f"{safe_name}.md"
-        note_path.parent.mkdir(parents=True, exist_ok=True)
-        note_path.write_text(content)
+        from jarvis.core import vault_cipher
+
+        note_path = vault_cipher.note_path(mv.vault_dir, f"{safe_name}.md")
+        vault_cipher.write_text(note_path, content)
         return f"Note saved: {note_path}"
     except Exception as e:
         return f"ERROR: vault_write failed: {e}"

@@ -5,6 +5,7 @@
   mcp-nixos,
   mcpNixos ? mcp-nixos,
   ripgrep,
+  age,
 }: let
   base = python3Packages.buildPythonPackage rec {
     pname = "jarvis";
@@ -34,15 +35,17 @@
       fastapi
       uvicorn
       pathspec # .ragignore: matching gitignore-canônico no index RAG
+      cryptography # vault cifrado opt-in (Fernet) p/ perfis isolados
     ];
 
     nativeBuildInputs = [makeWrapper];
+
 
     # mcp-nixos (MCP server read-only de packages/options do nixpkgs) é usado
     # pelo agente via stdio; entra como propagado para o binário jarvis saber
     # o caminho (JARVIS_MCP_NIXOS_BIN) sem hardcode de store path.
     # `mcpNixos` é o fast (cache de canais pré-computado) quando vem do overlay.
-    propagatedBuildInputs = [mcpNixos];
+    propagatedBuildInputs = [mcpNixos age];
 
     nativeCheckInputs = with python3Packages; [pytest hypothesis] ++ [ripgrep];
     checkPhase = ''
