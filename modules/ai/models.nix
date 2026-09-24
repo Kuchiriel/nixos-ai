@@ -128,12 +128,13 @@ in rec {
   # draft=Qwen3-0.6B-Q8_0, ngram-mod-n-max 16): bonsai baseline 72.0-72.3 t/s
   # · +draft 71.9-72.2 t/s · +ngram 71.8-72.3 t/s → GANHO ZERO no bonsai:
   # kernels ternários prism já saturam; spec-decode só paga em dense-Q4
-  # lento (~12 t/s — régua do vídeo DFlash/GTX1060). NÃO ativar no bonsai.
-  # PREPARADO p/ OUTROS regimes (ver llm-draft-qwen05 abaixo): Qwen3-4B Q4
-  # (~/models, cabe INTEIRO + drafter na 6GB = regime DFlash de verdade);
-  # MoE (A3B/35B) + spec = PESSIMO (verify acorda todos os experts — lição
-  # DFlash). Flags prontos: --spec-draft-model F [-ctkd q4_0 -ctvd q4_0]
-  # e --spec-ngram-mod-n-max 16 (spec sem modelo).
+  # LENTO (~12 t/s — régua do vídeo DFlash/GTX1060). NÃO ativar no bonsai.
+  # BENCH 2 24/09: Qwen3-4B-Q4_K_M (~/models) baseline 60.3-60.7 t/s
+  # · +draft 60.1-60.6 · +ngram 59.5-60.2 → GANHO ZERO TAMBÉM. VEREDITO
+  # GERAL p/ RTX 4050 6GB: spec-decode NÃO APLICÁVEL — qualquer modelo que
+  # cabe inteiro já roda >=60 t/s (sem headroom); MoE+spec = piora (DFlash).
+  # LINHA ENCERRADA — não refazer sem hardware novo. Flags ficam p/ referência:
+  # --spec-draft-model F [-ctkd q4_0 -ctvd q4_0] / --spec-ngram-mod-n-max 16.
   llm-draft-qwen05 = mkModel {
     url = "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf";
     sha256 = "sha256-lGXmOiKt1TVNm7S5npARcEPHEkAHZkkHJZvRbQQ7sDE=";
