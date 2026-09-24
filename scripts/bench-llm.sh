@@ -37,16 +37,24 @@ pkill -f "port $PORT" 2>/dev/null || true; sleep 2
 # Guard VRAM 24/09: um server órfão de bench anterior (4.5GB) impediu o
 # router de carregar e a suíte mediu 0/3 achando que era o modelo. Aborta
 # se outro llama-server segura peso de modelo além das embeddings/rerank.
-_used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1)
-_other=$(for p in $(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null); do
-           m=$(nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader,nounits 2>/dev/null | awk -F', ' -v P=$p '$1==P {print $2}')
-           [ "${m:-0}" -gt 1200 ] && echo x; done | wc -l)
-[ "${_other:-0}" -gt 0 ] && { echo "ABORT: outro llama-server com ${_used}MiB em uso — VRAM ocupada, veredito seria inválido" >&2; exit 1; }
+# (if, NUNCA `[ ] && exit` — com set -e o false mata o script em silêncio)
+for _w in 1 2 3 4 5 6 7 8 9 10; do
+  _other=$(for p in $(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null); do
+             m=$(nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader,nounits 2>/dev/null | awk -F', ' -v P=$p '$1==P {print $2}')
+             if [ "${m:-0}" -gt 1200 ]; then echo x; fi; done | wc -l)
+  if [ "${_other:-0}" -eq 0 ]; then break; fi
+  sleep 3
+done
+if [ "${_other:-0}" -gt 0 ]; then
+  _used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1)
+  echo "ABORT: outro llama-server com ${_used}MiB em uso — VRAM ocupada, veredito seria inválido" >&2
+  exit 1
+fi
 
 
 run -m "$MODEL" --host 127.0.0.1 --port $PORT $EXTRA > /tmp/bench-srv-$TAG.log 2>&1 &
 PID=$!
-trap 'kill $PID 2>/dev/null' EXIT
+trap 'kill $PID 2>/dev/null; pkill -f "port $PORT" 2>/dev/null' EXIT
 for i in $(seq 1 300); do
   curl -sf --max-time 2 http://127.0.0.1:$PORT/health >/dev/null 2>&1 && break
   kill -0 $PID 2>/dev/null || { echo "server morreu no load" >&2; exit 1; }

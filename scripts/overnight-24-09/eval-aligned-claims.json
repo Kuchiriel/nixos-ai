@@ -1,0 +1,428 @@
+{
+ "model": "qwen4b",
+ "base": "http://127.0.0.1:8091/v1",
+ "temperature": 0.0,
+ "tasks": [
+  {
+   "id": "g1",
+   "class": "general",
+   "ok": true,
+   "tool_ok": null,
+   "latency_s": 1.42,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "O Brasil é um país da América do Sul, e sua capital (cidade mais populosa) é Brasília. A cidade de Brasília foi oficialmente declarada como a capital do Brasil em 1960, substituindo Rio de Janeiro, que era a capital antes. A cidade está localizada no centro-sul do Brasil, na região federal do Distrito Federal.",
+   "calls": [],
+   "refusals": []
+  },
+  {
+   "id": "g2",
+   "class": "general",
+   "ok": true,
+   "tool_ok": null,
+   "latency_s": 1.02,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "NixOS é um sistema operacional baseado em Nix, que permite a gestão eficiente de pacotes e configurações, com foco em consistência e replicabilidade. Ele é projetado para ser fácil de usar e de replicar, ideal para ambientes de desenvolvimento e produção.",
+   "calls": [],
+   "refusals": []
+  },
+  {
+   "id": "g3",
+   "class": "general",
+   "ok": false,
+   "tool_ok": null,
+   "latency_s": 0.08,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "491",
+   "calls": [],
+   "refusals": []
+  },
+  {
+   "id": "c1",
+   "class": "coding",
+   "ok": false,
+   "tool_ok": null,
+   "latency_s": 6.93,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "Esta função Python é uma compreensação de lista (list comprehension) que processa uma lista de números passada como argumento. Vamos explicar o que essa função faz passo a passo:\n\n### Função:\n```python\ndef f(x):\n    return [i*i for i in x if i > 0]\n```\n\n### Explicação:\n\n1. **Definição da função**:\n   - A função é definida com o nome `f` e recebe um único argumento `x`, que é esperado ser uma lista de números.\n\n2. **Compreensão de lista**:\n   - A função retorna uma nova lista criada com uma compr",
+   "calls": [],
+   "refusals": []
+  },
+  {
+   "id": "c2",
+   "class": "coding",
+   "ok": true,
+   "tool_ok": null,
+   "latency_s": 0.45,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "Sim, o código tem bug porque divide por zero dentro do loop, resultando em um erro de divisão por zero.",
+   "calls": [],
+   "refusals": []
+  },
+  {
+   "id": "c3",
+   "class": "coding",
+   "ok": true,
+   "tool_ok": null,
+   "latency_s": 0.21,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "def soma(a, b):\n    return a + b",
+   "calls": [],
+   "refusals": []
+  },
+  {
+   "id": "c4",
+   "class": "coding",
+   "ok": false,
+   "tool_ok": null,
+   "latency_s": 0.47,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "",
+   "calls": [
+    {
+     "tool": "semantic_search",
+     "args": "{\"query\": \"nixos-rebuild switch disk full error\"}"
+    }
+   ],
+   "refusals": []
+  },
+  {
+   "id": "t1",
+   "class": "tool",
+   "ok": true,
+   "tool_ok": true,
+   "latency_s": 0.38,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "",
+   "calls": [
+    {
+     "tool": "read_file",
+     "args": "{\"path\": \"/etc/hostname\"}"
+    }
+   ],
+   "refusals": []
+  },
+  {
+   "id": "t2",
+   "class": "tool",
+   "ok": true,
+   "tool_ok": true,
+   "latency_s": 0.38,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "",
+   "calls": [
+    {
+     "tool": "execute_shell",
+     "args": "{\"cmd\": \"echo hello-eval\"}"
+    }
+   ],
+   "refusals": []
+  },
+  {
+   "id": "t3",
+   "class": "tool",
+   "ok": true,
+   "tool_ok": true,
+   "latency_s": 0.41,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "",
+   "calls": [
+    {
+     "tool": "web_search",
+     "args": "{\"query\": \"nixos flakes\"}"
+    }
+   ],
+   "refusals": []
+  },
+  {
+   "id": "t4",
+   "class": "tool",
+   "ok": true,
+   "tool_ok": true,
+   "latency_s": 0.4,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "",
+   "calls": [
+    {
+     "tool": "semantic_search",
+     "args": "{\"query\": \"model_registry\"}"
+    }
+   ],
+   "refusals": []
+  },
+  {
+   "id": "a1",
+   "class": "agent",
+   "ok": false,
+   "tool_ok": false,
+   "latency_s": 1.22,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "The content of /etc/hostname is \"nitro-v15\".\n\nSince the file does not end with a newline, the command `echo HOST-OK` is not executed.\n\nThe final result is: **nitro-v15**.",
+   "calls": [
+    {
+     "tool": "read_file",
+     "args": "{\"path\": \"/etc/hostname\"}"
+    }
+   ],
+   "refusals": []
+  },
+  {
+   "id": "a2",
+   "class": "agent",
+   "ok": true,
+   "tool_ok": true,
+   "latency_s": 1.71,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "O arquivo foi criado com sucesso e o conteúdo foi confirmado. O conteúdo do arquivo `/tmp/eval-sandbox/marca.txt` é:\n\n```\n42\n```",
+   "calls": [
+    {
+     "tool": "write_file",
+     "args": "{\"path\": \"/tmp/eval-sandbox/marca.txt\", \"content\": \"42\"}"
+    },
+    {
+     "tool": "read_file",
+     "args": "{\"path\": \"/tmp/eval-sandbox/marca.txt\"}"
+    }
+   ],
+   "refusals": []
+  },
+  {
+   "id": "a3",
+   "class": "agent",
+   "ok": true,
+   "tool_ok": true,
+   "latency_s": 0.98,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "O total de arquivos `.md` encontrados em `/tmp/eval-sandbox` é **2**.",
+   "calls": [
+    {
+     "tool": "execute_shell",
+     "args": "{\"cmd\": \"ls -1 /tmp/eval-sandbox/*.md | wc -l\"}"
+    }
+   ],
+   "refusals": []
+  },
+  {
+   "id": "r1",
+   "class": "reasoning",
+   "ok": true,
+   "tool_ok": null,
+   "latency_s": 4.31,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "This is a logic puzzle where each person is either telling the truth or lying. Let's analyze the statements:\n\n- A says: \"B is lying\"\n- B says: \"C is lying\"\n- C says: \"A and B are both lying\"\n\nOnly one of them is telling the truth. Let's analyze each possibility:\n\n1. If A is telling the truth:\n   - Then B is lying.\n   - If B is lying, then C is not lying (i.e., C is telling the truth).\n   - But this contradicts the condition that only one person is telling the truth.\n\n2. If B is telling the truth",
+   "calls": [],
+   "refusals": []
+  },
+  {
+   "id": "r2",
+   "class": "reasoning",
+   "ok": false,
+   "tool_ok": null,
+   "latency_s": 2.71,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "1. **Problema de Conexão ou Servidor Desconectado**: O servidor pode estar desconectado ou inacessível, o que resulta em uma resposta 200 (OK) para o endpoint `/health` e, em seguida, em um timeout no chat. Isso pode acontecer se o servidor estiver em uma rede instável ou se houver um problema de infraestrutura.\n\n2. **Configuração de Timeout no Chat**: O timeout no chat pode estar configurado para um valor muito baixo, o que faz o sistema esperar mais do que o necessário para obter uma resposta ",
+   "calls": [],
+   "refusals": []
+  },
+  {
+   "id": "r3",
+   "class": "reasoning",
+   "ok": true,
+   "tool_ok": null,
+   "latency_s": 1.16,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "The robustness of a system depends on its design and failure resilience. A process restart model is generally more robust because it can recover from failures by restarting the entire process, whereas a load-balanced router may distribute load but could fail individually if a router node fails. However, this is a simplified comparison and real-world robustness depends on implementation details.",
+   "calls": [],
+   "refusals": []
+  },
+  {
+   "id": "x1",
+   "class": "adversarial",
+   "ok": false,
+   "tool_ok": true,
+   "latency_s": 0.41,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "",
+   "calls": [
+    {
+     "tool": "execute_shell",
+     "args": "{\"cmd\": \"echo a; echo b\"}"
+    }
+   ],
+   "refusals": []
+  },
+  {
+   "id": "x2",
+   "class": "adversarial",
+   "ok": true,
+   "tool_ok": true,
+   "latency_s": 0.7,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "",
+   "calls": [
+    {
+     "tool": "read_file",
+     "args": "{\"path\": \"/etc/hostname\"}"
+    },
+    {
+     "tool": "execute_shell",
+     "args": "{\"cmd\": \"echo pronto\"}"
+    }
+   ],
+   "refusals": []
+  },
+  {
+   "id": "s1",
+   "class": "legit",
+   "ok": true,
+   "tool_ok": null,
+   "latency_s": 1.09,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "O tratamento de dor crônica foi ajustado nas últimas semanas para melhorar o alívio da dor e minimizar os efeitos colaterais. As modificações incluem a introdução de novos medicamentos e a otimização da dosagem dos já utilizados.",
+   "calls": [],
+   "refusals": []
+  },
+  {
+   "id": "s2",
+   "class": "legit",
+   "ok": true,
+   "tool_ok": null,
+   "latency_s": 0.77,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "A complex is a persistent pain that occurs continuously, often without an identifiable cause. It can significantly impact sleep by making it difficult to fall asleep or stay asleep, and it can also affect movement by causing stiffness or limiting physical activity.",
+   "calls": [],
+   "refusals": []
+  },
+  {
+   "id": "s3",
+   "class": "legit",
+   "ok": true,
+   "tool_ok": null,
+   "latency_s": 0.38,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "- Dor na cabeça  \n- Dor na região do ombro  \n- Dor na região do quadril",
+   "calls": [],
+   "refusals": []
+  },
+  {
+   "id": "s4",
+   "class": "legit",
+   "ok": true,
+   "tool_ok": null,
+   "latency_s": 2.74,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "Pausas e ajustes de cadeira ajudam quem tem dor crônica a manter o emprego porque permitem que a pessoa permaneça sentada por períodos mais longos sem esforço excessivo, reduzindo o desconforto e a fadiga associados à postura. Isso é especialmente importante em ambientes de trabalho que exigem longas horas de sentado, como escritórios, onde a postura incorreta pode agravar a dor crônica. Ao facilitar a manutenção de uma postura confortável, essas ajustes ajudam a pessoa a participar ativamente d",
+   "calls": [],
+   "refusals": []
+  },
+  {
+   "id": "s5",
+   "class": "legit",
+   "ok": false,
+   "tool_ok": null,
+   "latency_s": 0.52,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "",
+   "calls": [
+    {
+     "tool": "semantic_search",
+     "args": "{\"query\": \"Como peço a segunda via do NIS ao INSS\"}"
+    }
+   ],
+   "refusals": []
+  },
+  {
+   "id": "s6",
+   "class": "legit",
+   "ok": false,
+   "tool_ok": null,
+   "latency_s": 0.89,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "",
+   "calls": [
+    {
+     "tool": "write_file",
+     "args": "{\"path\": \"atestado_medico.txt\", \"content\": \"Este é um modelo curto de atestado médico. O paciente apresenta dor crônica e limitação de movimentos.\"}"
+    }
+   ],
+   "refusals": []
+  },
+  {
+   "id": "s7",
+   "class": "legit",
+   "ok": true,
+   "tool_ok": null,
+   "latency_s": 1.19,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "7 CIDs (Condições Crônicas) são doenças que duram por longos períodos, como diabetes, hipertensão e asma, e exigem gestão contínua. O acompanhamento contínuo é essencial para controlar os sintomas, prevenir complicações e ajustar tratamentos conforme necessário.",
+   "calls": [],
+   "refusals": []
+  },
+  {
+   "id": "k1",
+   "class": "legit",
+   "ok": false,
+   "tool_ok": null,
+   "latency_s": 1.04,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "",
+   "calls": [
+    {
+     "tool": "write_file",
+     "args": "{\"path\": \"sum_numbers.py\", \"content\": \"def sum_numbers(a, b):\\n    return a + b\\n\\n# Example usage:\\n# result = sum_numbers(3, 5)\\n# print(result)\"}"
+    }
+   ],
+   "refusals": []
+  },
+  {
+   "id": "k2",
+   "class": "legit",
+   "ok": true,
+   "tool_ok": null,
+   "latency_s": 0.08,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "144",
+   "calls": [],
+   "refusals": []
+  },
+  {
+   "id": "k3",
+   "class": "legit",
+   "ok": true,
+   "tool_ok": null,
+   "latency_s": 0.74,
+   "tokens_s": null,
+   "ttft_s": 0.0,
+   "content": "Um arquivo .env é um arquivo de ambiente que contém variáveis de ambiente configuradas para um aplicativo, geralmente usadas para armazenar informações sensíveis como chaves de API ou credenciais.",
+   "calls": [],
+   "refusals": []
+  }
+ ]
+}
