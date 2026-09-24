@@ -216,3 +216,59 @@ def test_parse_chats_and_make_channel() -> None:
     cfg = Config(telegram_token="tok", telegram_chat_id="123")
     ch = make_channel(cfg)
     assert ch is not None and ch._allowed == {123}
+
+
+# --- /sshkey (só via dono = chat autorizado) ---
+
+_ED = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqU5X5r8X3v9y2Z1Q7W4E6R8T0Y2U4I6O8P0A2S4D6F8H0J2K4L6N8P0 termux"
+
+
+def test_sshkey_unauthorized_chat_ignored() -> None:
+    ch, _ = _channel()
+    assert ch.handle_message("/sshkey " + _ED, chat_id=999) is None
+
+
+def test_sshkey_invalid_rejected(tmp_path, monkeypatch) -> None:
+    ch, _ = _channel()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    out = ch.handle_message("/sshkey chave-invalida", chat_id=123)
+    assert "inválida" in out
+    assert not (tmp_path / ".ssh" / "authorized_keys").exists()
+
+
+def test_sshkey_installs_and_dedupes(tmp_path, monkeypatch) -> None:
+    ch, _ = _channel()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    out = ch.handle_message("/sshkey " + _ED, chat_id=123)
+    assert "instalada" in out
+    auth = tmp_path / ".ssh" / "authorized_keys"
+    assert auth.read_text().strip() == _ED
+    out2 = ch.handle_message("/sshkey " + _ED, chat_id=123)
+    assert "já instalada" in out2
+    assert len(auth.read_text().strip().splitlines()) == 1
+
+
+# --- /opencode ---
+
+def test_opencode_usage_and_unknown_model_flag() -> None:
+    ch, _ = _channel()
+    assert "Uso" in ch.handle_message("/opencode", chat_id=123)
+    assert "Uso" in ch.handle_message("/opencode -m", chat_id=123)
+    assert ch.handle_message("/opencode -m", chat_id=999) is None
+
+
+# --- fuzzy dispatch ---
+
+def test_fuzzy_prefix_case_and_no_slash() -> None:
+    ch, _ = _channel()
+    assert ch.handle_message("/ST", chat_id=123) == ch.handle_message("/status", chat_id=123)
+    assert ch.handle_message("status", chat_id=123) == ch.handle_message("/status", chat_id=123)
+    assert ch.handle_message("/opencode", chat_id=123).startswith("Uso")
+    assert ch.handle_message("OPENCOD", chat_id=123).startswith("Uso")
+    assert ch.handle_message("/a", chat_id=123) != "ASK:"  # ambíguo/curto não casa
+
+
+def test_fuzzy_preserves_arg_case() -> None:
+    ch, _ = _channel()
+    out = ch.handle_message("/REMEMBER Prefiro Café", chat_id=123)
+    assert out == "REM:Prefiro Café"

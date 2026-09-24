@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
 
 import requests
@@ -162,36 +163,62 @@ class TelegramChannel:
 
     # --- roteamento de mensagens (testável, sem IO de rede além dos fns) ---
 
+    # Comandos fuzzy: minúsculo, com ou sem /, prefixo inequívoco vale
+    # ("/st"→/status, "opencode ..."→/opencode). Sem decorar linha exata.
+    _COMMANDS = ("ask", "agent", "dev", "status", "sshkey", "opencode",
+                 "remember", "vault", "force_local", "force_remote",
+                 "start", "help")
+
+    @classmethod
+    def _fuzzy_cmd(cls, text: str) -> tuple[str | None, str]:
+        low = (text or "").strip().lower()
+        if not low:
+            return None, ""
+        word, _, _rest = low.partition(" ")
+        word = word.lstrip("/")
+        # arg preserva case original (modelos, paths): recorta 1º token do original.
+        _orig = (text or "").strip().split(None, 1)
+        arg = _orig[1] if len(_orig) > 1 else ""
+        if word in cls._COMMANDS:
+            return word, arg.strip()
+        if len(word) >= 3:
+            hits = [c for c in cls._COMMANDS if c.startswith(word)]
+            if len(hits) == 1:
+                return hits[0], arg.strip()
+        return None, (text or "").strip()
+
     def handle_message(self, text: str, *, chat_id: int) -> str | None:
         """Roteia uma mensagem; None = ignorada (chat não autorizado)."""
         if chat_id not in self._allowed:
             return None
-        text = (text or "").strip()
-        if text in ("/start", "/help"):
+        cmd, arg = self._fuzzy_cmd(text)
+        if cmd in ("start", "help"):
             return self._help_text()
-        if text == "/status":
+        if cmd == "status":
             return self._handle_status()
-        if text == "/force_local":
+        if cmd == "force_local":
             return self._handle_force_local()
-        if text == "/force_remote":
+        if cmd == "force_remote":
             return self._handle_force_remote()
-        if text.startswith("/ask "):
-            return (self._ask or (lambda q: f"ask indisponível: {q}"))(text[5:].strip())
-        if text.startswith("/remember "):
-            return (self._remember or (lambda t: f"remember indisponível: {t}"))(text[10:].strip())
-        if text.startswith("/vault"):
-            return (self._vault or (lambda a: f"vault indisponível: {a}"))(text[6:].strip())
-        if text.startswith("/agent "):
+        if cmd == "ask":
+            return (self._ask or (lambda q: f"ask indisponível: {q}"))(arg)
+        if cmd == "remember":
+            return (self._remember or (lambda t: f"remember indisponível: {t}"))(arg)
+        if cmd == "vault":
+            return (self._vault or (lambda a: f"vault indisponível: {a}"))(arg)
+        if cmd == "agent":
             # executado em thread pelo run(); aqui retornamos a tarefa
             return None
-        if text == "/dev":
-            return self._handle_dev("")
-        if text.startswith("/dev "):
-            return self._handle_dev(text[5:].strip())
-        if text.startswith("/"):
-            return f"comando desconhecido: {text.split()[0]}\n\n{self._help_text()}"
+        if cmd == "dev":
+            return self._handle_dev(arg)
+        if cmd == "sshkey":
+            return self._handle_sshkey(arg)
+        if cmd == "opencode":
+            return self._handle_opencode(arg)
+        if (text or "").strip().startswith("/"):
+            return f"comando desconhecido: {(text or '').strip().split()[0]}\n\n{self._help_text()}"
         # default: pergunta livre
-        return (self._ask or (lambda q: f"ask indisponível: {q}"))(text)
+        return (self._ask or (lambda q: f"ask indisponível: {q}"))((text or "").strip())
 
     def _handle_status(self) -> str:
         """Status do backend com info do circuit breaker."""
@@ -229,6 +256,82 @@ class TelegramChannel:
             return self._circuit_breaker.force_open()
         return "Circuit breaker não configurado."
 
+    @staticmethod
+    def _handle_sshkey(key: str) -> str:
+        """Adiciona chave pública SSH ao authorized_keys.
+
+        SEGURANÇA: este método só é alcançável via handle_message, que já
+        rejeita chat_id fora da allowlist (dono). Chave via Telegram = dono
+        provou posse do chat privado — única via aceita p/ instalar chave.
+        NUNCA aceitar chave de outra origem (arquivo, prompt, outro chat).
+        """
+        import re
+        parts = key.split()
+        if len(parts) < 2 or parts[0] not in (
+                "ssh-ed25519", "ssh-rsa", "ecdsa-sha2-nistp256",
+                "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521",
+                "sk-ssh-ed25519@openssh.com", "sk-ecdsa-sha2-nistp256@openssh.com"):
+            return ("Chave inválida. Cole a linha inteira do Termux:\n"
+                    "`cat ~/.ssh/id_ed25519.pub`\n"
+                    "Uso: `/sshkey ssh-ed25519 AAAA... termux`")
+        if not re.fullmatch(r"[A-Za-z0-9+/=]+", parts[1]):
+            return "Chave inválida (corpo base64 malformado)."
+        try:
+            from pathlib import Path
+            sshdir = Path.home() / ".ssh"
+            sshdir.mkdir(mode=0o700, exist_ok=True)
+            auth = sshdir / "authorized_keys"
+            line = " ".join(parts[:3]) if len(parts) >= 3 else " ".join(parts[:2])
+            existing = auth.read_text(encoding="utf-8").splitlines() if auth.exists() else []
+            if any(line.split()[1] == e.split()[1] for e in existing if len(e.split()) >= 2):
+                return "Chave já instalada (nada a fazer)."
+            with auth.open("a", encoding="utf-8") as f:
+                f.write(line + "\n")
+            auth.chmod(0o600)
+            return f"Chave instalada ({parts[0]}, {parts[2] if len(parts) >= 3 else 'sem comentário'}). Teste: `ssh nixos@<host> -i ~/.ssh/id_ed25519` no Termux (via VPN)."
+        except Exception as e:
+            return f"Falha ao instalar: {e}"
+
+    @staticmethod
+    def _handle_opencode(arg: str) -> str:
+        """Roda opencode não-interativo com modelo por parâmetro.
+
+        Uso: `/opencode [-m provider/model] <tarefa>`
+        Ex: `/opencode -m nvidia/z-ai/glm-5.3-flash liste os serviços ativos`
+        Sem -m: usa o default do opencode. Timeout 240s, saída truncada p/ Telegram.
+        """
+        import re
+        import subprocess
+        if not arg:
+            return ("Uso: `/opencode [-m provider/model] <tarefa>`\n"
+                    "Ex: `/opencode -m nvidia/z-ai/glm-5.3-flash corrija o teste X`")
+        model = None
+        m = re.search(r"(?:^|\s)-m\s+(\S+)", arg)
+        if m:
+            model = m.group(1)
+            task = (arg[:m.start()] + " " + arg[m.end():]).strip()
+        else:
+            task = arg
+        if not task:
+            return "Uso: `/opencode -m provider/model <tarefa>`"
+        cmd = ["opencode", "run", task]
+        if model:
+            cmd += ["-m", model]
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=240,
+                               cwd=str(Path.home() / "projects" / "nixos-ai"))
+        except subprocess.TimeoutExpired:
+            return "opencode excedeu 240s (tarefa longa — divida em partes)."
+        except FileNotFoundError:
+            return "opencode não encontrado no PATH do serviço."
+        except Exception as e:
+            return f"Falha ao rodar opencode: {e}"
+        out = (r.stdout or "") + (("\n[stderr]\n" + r.stderr) if r.stderr else "")
+        out = out.strip() or "(sem saída)"
+        if len(out) > 3800:
+            out = out[:3800] + "\n... (truncado)"
+        return out
+
     def _handle_dev(self, task: str) -> str:
         """Executa uma tarefa de dev via REPL remoto."""
         if not task:
@@ -259,7 +362,7 @@ class TelegramChannel:
     def _help_text() -> str:
         return (
             "🤖 *JARVIS — canal Telegram*\n\n"
-            "*Comandos*\n"
+            "*Comandos (fuzzy: vale minúsculo, sem /, prefixo único)*\n"
             "`/ask <pergunta>` — cascata (fastpath/doctor/nixos/rag/agent)\n"
             "`/agent <tarefa>` — agente com aprovação por botões\n"
             "`/dev <tarefa>` — dev REPL remoto (ler/editar/criar arquivos)\n"
@@ -267,7 +370,9 @@ class TelegramChannel:
             "`/force_local` — força modo local (desliga fallback)\n"
             "`/force_remote` — força fallback remoto\n"
             "`/remember <fato>` — grava na memória episódica\n"
-            "`/vault summarize|list` — memória de longo prazo\n\n"
+            "`/vault summarize|list` — memória de longo prazo\n"
+            "`/sshkey <chave.pub>` — instala sua chave SSH (só aqui = só você)\n"
+            "`/opencode [-m prov/model] <tarefa>` — roda opencode remoto\n\n"
             "*Comandos diretos (respondem em ms, sem LLM)*\n"
             "`espaço em disco` · `quanto de memória tem?` · `uptime` · `qual kernel?`\n"
             "`processos ativos` · `quais livros tenho` · `leia o livro <nome>`\n\n"

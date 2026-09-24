@@ -251,11 +251,20 @@ services.avahi = {
   time.timeZone = lib.mkForce "America/Sao_Paulo";
   i18n.defaultLocale = "pt_BR.UTF-8";
   networking.nameservers = ["8.8.8.8" "1.1.1.1"];
-  networking.firewall.allowedTCPPorts = [22 8080 8081 4000 5353 8099]; # 8099 = karaok cast (letra+som p/ TV)
+  networking.firewall.allowedTCPPorts = [22 8080 8081 4000 5353 8099 47984 47989 47990 48010]; # 8099 = karaok cast (letra+som p/ TV); 47984-48010 = Sunshine/Moonlight
+  networking.firewall.allowedUDPPorts = [47998 47999 48000 48002 48010]; # Sunshine/Moonlight stream
 
   services.openssh = {
     enable = true;
     settings.PermitRootLogin = "prohibit-password"; # Segurança: login root só por chave SSH
+  };
+
+  # Tailscale — VPN mesh p/ acesso remoto (SSH Termux + Moonlight no 4G).
+  # Após rebuild: `sudo tailscale up` (login 1x) → celular no mesmo tailnet
+  # (app Android) → ssh nixos@<ip-100.x> / Moonlight pelo IP tailnet.
+  services.tailscale = {
+    enable = true;
+    openFirewall = true;
   };
 
   users.users.${user} = {

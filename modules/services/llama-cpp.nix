@@ -61,7 +61,7 @@ with lib; let
     # Binários fora do store precisam das libs de runtime via Environment
     # — precedente: llama-wackmall-wrapper.sh.
     environment = optionalAttrs (b == "prism") {
-      LD_LIBRARY_PATH = "/home/nixos/projects/prism-bin/llama-prism-b10660-e311ed3:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
+      LD_LIBRARY_PATH = "/home/nixos/projects/prism-bin/llama-prism-b10735-842b188:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
     } // optionalAttrs (b == "ik") {
       LD_LIBRARY_PATH = "/home/nixos/projects/ik_llama.cpp/build/bin:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
     };

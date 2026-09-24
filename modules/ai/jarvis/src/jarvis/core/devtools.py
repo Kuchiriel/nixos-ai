@@ -1217,6 +1217,18 @@ def build_json_dataset(schema: str = "schema.json",
             "employees": total_emp, "statistics": list(result["statistics"])}
 
 
+# TOOL: load_skill (standard Agent Skills — carrega SKILL.md on-demand)
+# ===========================================================================
+
+def load_skill(name: str) -> dict[str, Any]:
+    """Carrega o SKILL.md completo de uma skill descoberta."""
+    try:
+        from jarvis.core.skills import load_skill as _load
+        return _load(name)
+    except Exception as e:
+        return {"ok": False, "error": f"load_skill falhou: {e}"}
+
+
 # Tool definitions — DEV_TOOLS (compatível com agent.py)
 # ===========================================================================
 
@@ -1407,6 +1419,20 @@ DEV_TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "load_skill",
+            "description": "Load a skill's full SKILL.md on demand (progressive disclosure). Call when a task matches a <skill> in the system prompt.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Skill name (from <skills> block)"},
+                },
+                "required": ["name"],
+            },
+        },
+    },
 ]
 
 
@@ -1431,6 +1457,7 @@ def handle_dev_tool(name: str, args: dict[str, Any]) -> str:
             a.get("root"), a.get("dry_run", False)),
         "build_json_dataset": lambda a: build_json_dataset(
             a.get("schema", "schema.json"), a.get("out", "organization.json")),
+        "load_skill": lambda a: load_skill(a["name"]),
     }
 
     handler = handlers.get(name)
@@ -1448,6 +1475,7 @@ def handle_dev_tool(name: str, args: dict[str, Any]) -> str:
         "semantic_search": ("query",),
         "code_search": ("pattern",),
         "jarvis_command": ("subcommand",),
+        "load_skill": ("name",),
     }.get(name, ())
     _missing = [k for k in _required if k not in (args or {})]
     if _missing:

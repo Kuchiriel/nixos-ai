@@ -118,7 +118,9 @@ in rec {
   # também serve Q2_0 (chat ok em CPU) — o "trava no load" era de builds
   # antigos. Prism mantido pelo desempenho (kernels ternários CUDA,
   # medido TG 71-76 t/s) — trocar p/ upstream exige remediar GPU antes.
-  # Medido 2026-09-05 (prism llama-bench, RTX 4050): PP512 1956 t/s, TG128 76.7 t/s.
+  # Medido 2026-09-05 (b10660, RTX 4050): PP512 1956, TG128 76.7. b10735 (24/09):
+  # TG 72.6-72.7 (=par), PP512 1776 (ruído térmico), MAS lê layouts novos
+  # (27B, PQ2_0/PTQ) que o b10660 NÃO abre — wrapper/roteador apontam p/ b10735.
   llm-bonsai = mkModel {
     url = "https://huggingface.co/prism-ml/Ternary-Bonsai-8B-gguf/resolve/main/Ternary-Bonsai-8B-Q2_0_g64.gguf";
     sha256 = "sha256-4XspjYTueHl5Fq5cLsyCEUacxlzM/jCAzZqbtQP7xV4=";

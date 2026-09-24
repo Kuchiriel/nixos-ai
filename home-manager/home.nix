@@ -11,6 +11,7 @@
     ./modules/rclone-sync.nix
     ./modules/ai
     ./modules/services/jarvis-wakeword.nix
+    ./modules/services/sunshine.nix
     # coding: coding agents (Pi, OpenCode)
     # ./modules/coding/pi.nix
     # ./modules/coding/shared/default.nix

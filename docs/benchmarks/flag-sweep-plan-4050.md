@@ -39,3 +39,14 @@ FINDINGS.md (Codacus) + web: tudo que citar flag/binário/modelo vira braço aqu
 
 ## Braço 6 (novo, resolve discrepância BINARIES.md)
 6. **ik_llama vs upstream no 35B-A3B** (mesmas flags ngl45+ncmoe35): Muse aponta ik como binário MoE; sweep casa + meu 32 t/s = upstream. 3 reps cada; quem vencer atualiza BINARIES.md (regra: dado decide, não autoria).
+
+## Braços EVIDENCE-BASED (FINDINGS Muse + papers, 24/09)
+7. **P1 [IH8XmxiwliQ]: threads = físicos** — i7-13620H = 6P+4E → '-t 6' (usei -t 8 = errado;
+   vídeo: +48% no 3060 MoE). RE-BENCH strong c/ -t 6 AGORA.
+8. **P0 [8F_5pdcD3HY, GXT1060-6GB]: --no-mmap --mlock** no MoE offload (meu A3B
+   sofreu do mmap frio). Progressive: 3→10→13.5→17 t/s; ctx 64K→256K @17.
+9. KV 'turbo' (turbo4/turbo3): fork comunitário — checar se prism-b10735 aceita
+   (--cache-type list); se não, braço futuro.
+10. LRU expert-cache (hot experts em VRAM): fork, 25-26 t/s no P1 — futuro.
+11. Contexto: paper 'Prompts→Harnesses' (RAG ~/Books): stable-prefix split p/ o
+    ring-context do dono; caveman-skill: -65% tokens (docs/HONEST-NUMBERS.md).

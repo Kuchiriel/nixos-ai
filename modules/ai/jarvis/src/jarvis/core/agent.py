@@ -1069,6 +1069,16 @@ class Agent:
         self.logger.emit("agent_start", detail={"prompt": prompt[:100]})
         system_content = "You are JARVIS, an AI coding assistant."
         system_content += f"\n\n{TOOL_USE_DISCIPLINE}"
+        # Skills on-demand (standard Agent Skills, filosofia Pi): só
+        # nomes+descrições no prompt; SKILL.md carrega via load_skill.
+        # Best-effort como as demais injeções — nunca quebra o run.
+        try:
+            from jarvis.core.skills import descriptions_block as _skills_block
+            _sb = _skills_block()
+            if _sb:
+                system_content += f"\n\n{_sb}"
+        except Exception:
+            pass
         if _secret_task_prompt(prompt):
             # Framing de tarefa (evita hijack do git-recovery e o loop
             # nome-vs-valor — L4 real: ia pro reflog/merge em vez de editar
