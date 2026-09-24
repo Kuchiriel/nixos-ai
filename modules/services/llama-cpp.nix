@@ -11,13 +11,111 @@ with lib; let
   # Presets habilitados neste ambiente — ÚNICA FONTE: models.nix `routing`.
   enabledPresets = filterAttrs (id: m: m.serve.${envName} or false) routing.models;
 
-  # Router roda UM binário: se qualquer preset exige o fork Prism
-  # (bonsai Q2_0 g64), o router inteiro usa o wrapper Prism.
-  needsPrism = any (m: m.needsWrapper != null) (attrValues enabledPresets);
-  routerBin =
-    if needsPrism
+  # UM serviço por grupo de binário (docs/models/BINARIES.md): o router
+  # NÃO escolhe binário por request — cada preset roda no binário certo
+  # (prism=ternário :8080, upstream=denso :8083, ik=MoE :8084). Grupos não
+  # default sobem manualmente (VRAM 6GB = 1 LLM residente por vez).
+  groupList = mapAttrsToList (id: m: { inherit id; model = m; }) enabledPresets;
+  byBinary = groupBy (g: g.model.binary or "prism") groupList;
+  groupPort = b: routing.endpoints.${b};
+  groupBin = b:
+    if b == "prism"
     then "${../ai}/llama-prism-wrapper.sh"
-    else "${pkgs.llama-cpp.override {cudaSupport = true;}}/bin/llama-server";
+    else if b == "upstream"
+    then "${llamaCppPkg}/bin/llama-server"
+    else if b == "ik"
+    then "${../ai}/llama-ik-wrapper.sh"
+    else throw "llama-cpp: grupo de binário desconhecido: ${b}";
+  # Primeiro preset do grupo (ids ordenados — determinístico) fornece os
+  # defaults CLI da instância (threads/batch/KV herdados pelos presets).
+  firstModel = g: (head (sort (a: b: a.id < b.id) g)).model;
+  groupProf = g: presetProfile (firstModel g);
+  groupIds = g: concatStringsSep ", " (sort (a: b: a < b) (map (x: x.id) g));
+  mkGroupIni = b: g: pkgs.writeText "jarvis-models-${b}.ini" ''
+    version = 1
+
+    [*]
+    # Defaults globais (instâncias herdam CLI do router + isto; preset sobrescreve).
+    jinja = true
+
+    ${concatStringsSep "\n" (map (x: mkPresetSection x.id x.model) g)}
+  '';
+
+  # Um serviço systemd por grupo de binário. O grupo do default sobe no
+  # boot (wantedBy); os demais sobem manualmente (VRAM 6GB = 1 LLM por vez):
+  #   systemctl start llama-cpp-upstream   # denso :8083 (jarvis-fast)
+  #   systemctl start llama-cpp-ik         # MoE :8084 (jarvis-strong)
+  # Porta = routing.endpoints (FONTE ÚNICA com o registry Python).
+  mkGroupService = b: name: g: let
+    port = groupPort b;
+    prof = groupProf g;
+    kv = parseKv prof.kvCache;
+    isDefault = elem defaultId (map (x: x.id) g);
+  in {
+    description = "Llama.cpp [${b}] (presets: ${groupIds g}; default: ${defaultId})";
+    after = ["network-online.target" "qdrant.service"];
+    wants = ["network-online.target"];
+    # PartOf jarvis.target: para junto com o ecossistema
+    partOf = ["jarvis.target"];
+    wantedBy = optionals isDefault ["jarvis.target" "multi-user.target"];
+    # Binários fora do store precisam das libs de runtime via Environment
+    # — precedente: llama-wackmall-wrapper.sh.
+    environment = optionalAttrs (b == "prism") {
+      LD_LIBRARY_PATH = "/home/nixos/projects/prism-bin/llama-prism-b10660-e311ed3:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
+    } // optionalAttrs (b == "ik") {
+      LD_LIBRARY_PATH = "/home/nixos/projects/ik_llama.cpp/build/bin:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
+    };
+
+    script = ''
+      exec ${groupBin b} \
+        --host ${config.services.llama-cpp-server.bindAddress} --port ${toString port} \
+        --models-preset ${mkGroupIni b g} \
+        --models-max ${toString routing.maxResident} \
+        -t ${toString prof.threads} -b ${toString prof.batchSize} -ub ${toString prof.ubatch} \
+        -fa ${kv.flash-attn} -ctk ${kv.cache-type-k} -ctv ${kv.cache-type-v} \
+        --parallel 1 \
+        ${escapeShellArgs config.services.llama-cpp-server.extraFlags}
+    '';
+
+    # Warmup best-effort do default: preserva o comportamento boot-ready
+    # (sem isso, o 1º chat após reboot pagaria o cold start). Falha aqui
+    # NÃO derruba o serviço (on-demand cobre). Só no grupo do default.
+    postStart = optionalString isDefault ''
+      ${pkgs.python3}/bin/python3 - "${toString port}" "${defaultId}" <<'EOF' || echo "router warmup: modelo sob demanda (cold start no 1o request)" >&2
+      import json, sys, time, urllib.request
+      port, model = sys.argv[1], sys.argv[2]
+      base = f"http://127.0.0.1:{port}"
+      def call(path, payload=None):
+          req = urllib.request.Request(base + path,
+              data=json.dumps(payload).encode() if payload else None,
+              headers={"Content-Type": "application/json"})
+          with urllib.request.urlopen(req, timeout=30) as r:
+              return json.load(r)
+      try:
+          call("/models/load", {"model": model})
+      except Exception as e:
+          print(f"router warmup: load falhou ({e})", file=sys.stderr)
+          sys.exit(0)
+      for _ in range(150):  # até 5min (MoE 20GB)
+          try:
+              data = call("/v1/models")
+              for m in data.get("data", []):
+                  if m.get("id") == model and (m.get("status") or {}).get("value") == "loaded":
+                      print(f"router warmup: {model} loaded")
+                      sys.exit(0)
+          except Exception:
+              pass
+          time.sleep(2)
+      print(f"router warmup: timeout aguardando {model} (on-demand cobre)", file=sys.stderr)
+      EOF
+    '';
+
+    serviceConfig =
+      {
+        User = "nixos";
+        Restart = "on-failure";
+      };
+  };
 
   # Perfil de execução do preset (variante VM quando declarada).
   presetProfile = m:
@@ -63,20 +161,8 @@ with lib; let
     ${concatStringsSep "\n" (m.iniExtra or [])}
   '';
 
-  presetIni = pkgs.writeText "jarvis-router-models.ini" ''
-    version = 1
-
-    [*]
-    # Defaults globais (instâncias herdam CLI do router + isto; preset sobrescreve).
-    jinja = true
-
-    ${concatStringsSep "\n" (mapAttrsToList mkPresetSection enabledPresets)}
-  '';
-
-  # Valores comuns da linha do router: do modelo default (warmup + herança).
+  # Modelo default (warmup + grupo que sobe no boot).
   defaultId = config.services.llama-cpp-server.defaultModel;
-  defaultProf = presetProfile routing.models.${defaultId};
-  defaultKv = parseKv defaultProf.kvCache;
 
   # Compila o llama-cpp com suporte a CUDA forçado.
   # Usa o `pkgs` já recebido pelo módulo (herda allowUnfree + overlay
@@ -89,6 +175,10 @@ in {
       port = mkOption {
         type = types.port;
         default = 8080;
+        description = ''
+          LEGADO: portas agora vêm de models.nix `routing.endpoints`
+          (fonte única com o registry Python). Esta opção está ignorada.
+        '';
       };
       # Router nativo (llama-server --models-preset): default EFETIVO
       # preservado por ambiente — host servia bonsai, lab servia vm/Qwen.
@@ -145,69 +235,12 @@ in {
     # Mesma fonte que gera o preset INI acima — sem dict duplicado.
     environment.etc."jarvis/model-registry.json".text = pkgs.aiModels.registryJson;
     systemd.services = {
-      llama-cpp-server = mkIf config.services.llama-cpp-server.enable {
-        description = "Llama.cpp Router (presets: ${concatStringsSep ", " (attrNames enabledPresets)}; default: ${defaultId})";
-        after = ["network-online.target" "qdrant.service"];
-        wants = ["network-online.target"];
-        # PartOf jarvis.target: para junto com o ecossistema
-        partOf = ["jarvis.target"];
-        wantedBy = ["jarvis.target" "multi-user.target"];
-        # Router Prism (binário fora do store) precisa das libs de runtime
-        # via Environment — precedente: llama-wackmall-wrapper.sh.
-        environment = optionalAttrs needsPrism {
-          LD_LIBRARY_PATH = "/home/nixos/projects/prism-bin/llama-prism-b10660-e311ed3:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
-        };
-
-        script = ''
-          exec ${routerBin} \
-            --host ${config.services.llama-cpp-server.bindAddress} --port ${toString config.services.llama-cpp-server.port} \
-            --models-preset ${presetIni} \
-            --models-max ${toString routing.maxResident} \
-            -t ${toString defaultProf.threads} -b ${toString defaultProf.batchSize} -ub ${toString defaultProf.ubatch} \
-            -fa ${defaultKv.flash-attn} -ctk ${defaultKv.cache-type-k} -ctv ${defaultKv.cache-type-v} \
-            --parallel 1 \
-            ${escapeShellArgs config.services.llama-cpp-server.extraFlags}
-        '';
-
-        # Warmup best-effort do default: preserva o comportamento boot-ready
-        # do servidor single-model (sem isso, o 1º chat após reboot pagaria
-        # o cold start). Falha aqui NÃO derruba o serviço (on-demand cobre).
-        postStart = ''
-          ${pkgs.python3}/bin/python3 - "${toString config.services.llama-cpp-server.port}" "${defaultId}" <<'EOF' || echo "router warmup: modelo sob demanda (cold start no 1o request)" >&2
-          import json, sys, time, urllib.request
-          port, model = sys.argv[1], sys.argv[2]
-          base = f"http://127.0.0.1:{port}"
-          def call(path, payload=None):
-              req = urllib.request.Request(base + path,
-                  data=json.dumps(payload).encode() if payload else None,
-                  headers={"Content-Type": "application/json"})
-              with urllib.request.urlopen(req, timeout=30) as r:
-                  return json.load(r)
-          try:
-              call("/models/load", {"model": model})
-          except Exception as e:
-              print(f"router warmup: load falhou ({e})", file=sys.stderr)
-              sys.exit(0)
-          for _ in range(150):  # até 5min (MoE 20GB)
-              try:
-                  data = call("/v1/models")
-                  for m in data.get("data", []):
-                      if m.get("id") == model and (m.get("status") or {}).get("value") == "loaded":
-                          print(f"router warmup: {model} loaded")
-                          sys.exit(0)
-              except Exception:
-                  pass
-              time.sleep(2)
-          print(f"router warmup: timeout aguardando {model} (on-demand cobre)", file=sys.stderr)
-          EOF
-        '';
-
-        serviceConfig =
-          {
-            User = "nixos";
-            Restart = "on-failure";
-          };
-      };
+      llama-cpp-server = mkIf (config.services.llama-cpp-server.enable && byBinary ? prism)
+        (mkGroupService "prism" "llama-cpp-server" byBinary.prism);
+      llama-cpp-upstream = mkIf (config.services.llama-cpp-server.enable && byBinary ? upstream)
+        (mkGroupService "upstream" "llama-cpp-upstream" byBinary.upstream);
+      llama-cpp-ik = mkIf (config.services.llama-cpp-server.enable && byBinary ? ik)
+        (mkGroupService "ik" "llama-cpp-ik" byBinary.ik);
 
       llama-cpp-embeddings = mkIf config.services.llama-cpp-embeddings.enable {
         description = "Llama.cpp Embeddings Server";

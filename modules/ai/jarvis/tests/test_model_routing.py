@@ -24,15 +24,15 @@ REG = {
     "models": {
         "bonsai": {"tier": "speed",
                    "capabilities": ["general", "coding", "tools", "pt"],
-                   "params_b": 8, "vram_mb": 2400},
+                   "params_b": 8, "vram_mb": 2400, "endpoint": 8080},
         "jarvis-fast": {"tier": "fast",
                         "capabilities": ["general", "coding", "tools", "pt"],
-                        "params_b": 4, "vram_mb": 2600},
+                        "params_b": 4, "vram_mb": 2600, "endpoint": 8083},
         "jarvis-strong": {"tier": "reasoning",
                           "capabilities": ["general", "coding", "tools",
                                            "reasoning", "analysis",
                                            "vision", "pt"],
-                          "params_b": 35, "vram_mb": 4600},
+                          "params_b": 35, "vram_mb": 4600, "endpoint": 8084},
     },
 }
 
@@ -83,6 +83,28 @@ def test_registry_unknown_model(tmp_path, monkeypatch):
     reg = _reg(tmp_path, monkeypatch)
     with pytest.raises(RegistryError):
         reg.get("fantasma")
+
+
+def test_registry_endpoint_defaults_8080(tmp_path, monkeypatch):
+    bad = json.loads(json.dumps(REG))
+    del bad["models"]["bonsai"]["endpoint"]
+    reg = _reg(tmp_path, monkeypatch, bad)
+    assert reg.get("bonsai").endpoint == 8080
+
+
+def test_registry_endpoints_per_binary(tmp_path, monkeypatch):
+    reg = _reg(tmp_path, monkeypatch)
+    assert reg.get("bonsai").endpoint == 8080
+    assert reg.get("jarvis-fast").endpoint == 8083
+    assert reg.get("jarvis-strong").endpoint == 8084
+
+
+def test_base_url_for_uses_endpoint(tmp_path, monkeypatch):
+    from jarvis.core import model_lifecycle as L
+    reg = _reg(tmp_path, monkeypatch)
+    assert L.base_url_for("bonsai", reg) == "http://127.0.0.1:8080"
+    assert L.base_url_for("jarvis-fast", reg) == "http://127.0.0.1:8083"
+    assert L.base_url_for("jarvis-strong", reg) == "http://127.0.0.1:8084"
 
 
 # ── Policy ───────────────────────────────────────────────────────────
@@ -307,11 +329,17 @@ def test_agent_routes_and_swaps_model(router, tmp_path, monkeypatch):
     from jarvis.core.agent import Agent
     from jarvis.core.config import Config
 
+    base, state = router
+    # Endpoints do registry apontam p/ o router fake (porta dinâmica):
+    # o agent DEVE seguir o endpoint do modelo, não o base_url do config.
+    fake_port = int(base.rsplit(":", 1)[1])
+    reg_data = json.loads(json.dumps(REG))
+    for mid in reg_data["models"]:
+        reg_data["models"][mid]["endpoint"] = fake_port
     monkeypatch.setenv("JARVIS_MODEL_REGISTRY",
                        str(tmp_path / "registry.json"))
-    (tmp_path / "registry.json").write_text(json.dumps(REG))
+    (tmp_path / "registry.json").write_text(json.dumps(reg_data))
     monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path))
-    base, state = router
     cfg = Config()
     # Config frozen: rebuild com base_url do router fake.
     from dataclasses import replace

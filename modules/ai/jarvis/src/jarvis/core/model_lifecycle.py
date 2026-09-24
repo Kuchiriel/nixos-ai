@@ -29,6 +29,22 @@ class ModelSwitchError(RuntimeError):
     def __init__(self, phase: str, detail: str):
         super().__init__(f"[{phase}] {detail}")
         self.phase = phase
+        self.detail = detail
+
+
+def base_url_for(model_id: str, registry=None) -> str:
+    """Base URL do serviço com o BINÁRIO CERTO p/ o modelo.
+
+    Fonte: registry (models.nix `routing.endpoints` via campo `endpoint`
+    por modelo). Sem isso, tiers densos/MoE cairiam no router prism
+    (kernels errados — D2/D5). Serviço fora do ar → ensure falha em
+    "discover" com dica (systemctl start ...), nunca fallback silencioso.
+    """
+    if registry is None:
+        from jarvis.core.model_registry import ModelRegistry
+        registry = ModelRegistry.load()
+    entry = registry.get(model_id)
+    return f"http://127.0.0.1:{entry.endpoint}"
 
 
 @dataclass

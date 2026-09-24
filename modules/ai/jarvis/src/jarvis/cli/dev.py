@@ -2353,7 +2353,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
                 except Exception:
                     resident = "?"
                 tiers = ", ".join(
-                    f"{mid} [{m.tier}]" for mid, m in reg.models.items())
+                    f"{mid} [{m.tier} :{m.endpoint}]" for mid, m in reg.models.items())
                 console.print(
                     f"[dim]uso: {profile.get('model_id')} · residente: {resident} · "
                     f"registry: {tiers}[/]")
@@ -2366,8 +2366,10 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
                     f"(registry: {', '.join(reg.ids())})[/]")
                 continue
             try:
+                from jarvis.core.model_lifecycle import base_url_for
                 from jarvis.core.model_lifecycle import ensure_model as _ensure
-                rep = _ensure(arg, base_url=_get_config().llm_base_url)
+                arg_base = base_url_for(arg, reg)
+                rep = _ensure(arg, base_url=arg_base)
             except Exception as e:
                 console.print(f"[dim]/model {arg}: ensure falhou ({e})[/]")
                 continue

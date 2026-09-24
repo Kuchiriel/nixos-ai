@@ -105,6 +105,8 @@ scripts/                # Scripts auxiliares
   - `playwright` — browser automation
 
 > ⚠️ Este arquivo deve ter <150 linhas. Regras detalhadas ficam em `.roomodes`.
+> ⚠️ BINÁRIO CERTO OU VEREDITO INVÁLIDO: [[docs/models/BINARIES]] — prism=ternário,
+> ik=MoE, nix-upstream=tudo o mais. Router rodando ≠ binário certo.
 - When patching files, the old_text must be an EXACT substring of the file content. Read the file first, then use the exact text.
 - After generating code, verify it has no syntax errors before returning. Use python -c 'compile()' to check.
 - Always run validation checks on generated code before returning it.

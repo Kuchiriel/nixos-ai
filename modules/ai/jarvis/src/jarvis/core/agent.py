@@ -2431,10 +2431,12 @@ class Agent:
                 planner_id = spec.get("planner_model")
             if planner_id:
                 from dataclasses import replace
-                from jarvis.core.model_lifecycle import ensure_model
+                from jarvis.core.model_lifecycle import base_url_for, ensure_model
                 from jarvis.providers.llm import LLMClient
-                ensure_model(planner_id, base_url=self.config.llm_base_url)
-                cfg = replace(self.config, llm_model=planner_id)
+                planner_base = base_url_for(planner_id)
+                ensure_model(planner_id, base_url=planner_base)
+                cfg = replace(self.config, llm_model=planner_id,
+                              llm_base_url=planner_base)
                 planner = LLMClient(cfg, session=self._session)
                 closer = planner
             if hasattr(planner, "chat"):
@@ -2531,11 +2533,15 @@ class Agent:
         silencioso p/ modelo incapaz.
         """
         from dataclasses import replace
-        from jarvis.core.model_lifecycle import ensure_model
+        from jarvis.core.model_lifecycle import base_url_for, ensure_model
         from jarvis.core.model_policy import select_model
 
         model_id, reason = select_model(self.model_requirements)
-        report = ensure_model(model_id, base_url=self.config.llm_base_url)
+        # Endpoint do BINÁRIO CERTO (models.nix endpoints; nunca o router
+        # prism p/ denso/MoE — D2/D5). Serviço parado → ensure falha em
+        # discover (sem fallback silencioso p/ binário errado).
+        routed_base = base_url_for(model_id)
+        report = ensure_model(model_id, base_url=routed_base)
         self.logger.emit("model_routed", detail={
             "requested": report.requested,
             "selected": report.selected,
@@ -2544,8 +2550,9 @@ class Agent:
             "startup_latency_s": round(report.startup_latency_s, 2),
             "reason": reason,
         })
-        if model_id != self.config.llm_model:
-            self.config = replace(self.config, llm_model=model_id)
+        if model_id != self.config.llm_model or routed_base != self.config.llm_base_url:
+            self.config = replace(self.config, llm_model=model_id,
+                                  llm_base_url=routed_base)
             from jarvis.providers.llm import LLMClient
             self.llm = LLMClient(self.config, session=self._session)
         # Consciência de contexto (dono 16/09): após swap, o ctx do modelo

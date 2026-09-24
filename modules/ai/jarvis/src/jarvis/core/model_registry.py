@@ -34,18 +34,21 @@ _FALLBACK = {
             "capabilities": ["general", "coding", "tools", "pt"],
             "params_b": 8,
             "vram_mb": 2400,
+            "endpoint": 8080,
         },
         "jarvis-fast": {
             "tier": "fast",
             "capabilities": ["general", "coding", "tools", "pt"],
             "params_b": 4,
             "vram_mb": 2600,
+            "endpoint": 8083,
         },
         "jarvis-strong": {
             "tier": "reasoning",
             "capabilities": ["general", "coding", "tools", "reasoning", "analysis", "vision", "pt"],
             "params_b": 35,
             "vram_mb": 4600,
+            "endpoint": 8084,
         },
     },
 }
@@ -62,6 +65,9 @@ class ModelEntry:
     capabilities: frozenset = field(default_factory=frozenset)
     params_b: float = 0
     vram_mb: int = 0
+    # Porta do serviço que roda o BINÁRIO CERTO p/ este modelo
+    # (models.nix `routing.endpoints`; docs/models/BINARIES.md).
+    endpoint: int = 8080
     raw: dict = field(default_factory=dict)
 
 
@@ -118,6 +124,7 @@ class ModelRegistry:
                 capabilities=frozenset(caps),
                 params_b=float(m.get("params_b", 0) or 0),
                 vram_mb=int(m.get("vram_mb", 0) or 0),
+                endpoint=int(m.get("endpoint", 8080) or 8080),
                 raw=m,
             )
         default = str(data.get("default", ""))
