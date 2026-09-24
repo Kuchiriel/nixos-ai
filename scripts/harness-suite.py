@@ -53,7 +53,7 @@ def check_world(world: dict, output: str) -> tuple[bool, list[str]]:
 
 
 def run_suite(tasks: list[dict], approve: str = "y",
-              timeout_s: int = 180) -> list[dict]:
+              timeout_s: int = 180, rounds: int = 2) -> list[dict]:
     results = []
     for t in tasks:
         if t.get("setup"):
@@ -62,33 +62,58 @@ def run_suite(tasks: list[dict], approve: str = "y",
             import shlex
             subprocess.run(["bash", "-c", t["setup"]],
                            capture_output=True, timeout=30)
-        out_raw = ""
-        tool_calls = 0
+        tool_calls_all = []
+        msgs_all = []
+        attempts = []
+        world_ok = False
+        missed = []
         t0 = time.monotonic()
-        r = run_task(t["prompt"], timeout_s=timeout_s, approve=approve)
+        # Verifier-in-the-loop (§10 + FINDINGS harness-video): até `rounds`
+        # tentativas; se o mundo reprovar E houver claims, o feedback vira
+        # prompt da rodada seguinte. A mentira vira retry acionável.
+        for attempt in range(1, max(1, rounds) + 1):
+            if attempt == 1:
+                prompt = t["prompt"]
+            else:
+                prompt = (
+                    f"{t['prompt']}\n\n"
+                    f"FEEDBACK from an independent world check on your "
+                    f"previous attempt (you claimed completion, but these "
+                    f"are NOT satisfied): {'; '.join(missed)}.\n"
+                    f"Continue and ACTUALLY complete the task — do not "
+                    f"claim done until it truly exists."
+                )
+            r = run_task(prompt, timeout_s=timeout_s, approve=approve)
+            out_raw = _ansi(str(r.get("output", "")))
+            trans = r.get("transcript") or {}
+            msgs = trans.get("messages", []) if isinstance(trans, dict) else []
+            tools = []
+            for m in msgs:
+                for tc in (m.get("tool_calls") or []):
+                    if isinstance(tc, dict) and tc.get("name"):
+                        tools.append(tc["name"])
+            world_ok, missed = check_world(t.get("world"), out_raw)
+            attempts.append({"round": attempt, "world_ok": world_ok,
+                             "missed": missed, "turns": len(msgs)})
+            tool_calls_all.extend(tools)
+            msgs_all.extend(msgs)
+            if world_ok:
+                break
         elapsed = time.monotonic() - t0
-        out_raw = _ansi(str(r.get("output", "")))
-        # tool calls reais do transcript (estrutura FLAT: name+args)
-        trans = r.get("transcript") or {}
-        msgs = trans.get("messages", []) if isinstance(trans, dict) else []
-        tools = []
-        for m in msgs:
-            for tc in (m.get("tool_calls") or []):
-                if isinstance(tc, dict) and tc.get("name"):
-                    tools.append(tc["name"])
-        world_ok, missed = check_world(t.get("world"), out_raw)
         results.append({
             "task_id": t["id"],
             "tier": t.get("tier", "?"),
             "world_ok": world_ok,
+            "first_pass": attempts[0]["world_ok"] if attempts else False,
+            "rounds_used": len(attempts),
             "missed": missed,
-            "turns": len(msgs),
-            "tool_calls": tools,
+            "turns": len(msgs_all),
+            "tool_calls": tool_calls_all,
             "wrong_tools": [],
             "false_done": bool(
-                not world_ok and msgs
-                and msgs[-1].get("role") == "assistant"
-                and (msgs[-1].get("content") or "").strip()),
+                not world_ok and msgs_all
+                and msgs_all[-1].get("role") == "assistant"
+                and (msgs_all[-1].get("content") or "").strip()),
             "elapsed_s": round(elapsed, 1),
             "rc": r.get("rc"),
         })
@@ -120,6 +145,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tier", choices=["easy", "medium", "hard"])
     ap.add_argument("--out", default=None)
+    ap.add_argument("--rounds", type=int, default=2,
+                    help="tentativas máximas c/ feedback de mundo (1 = antigo)")
     ap.add_argument("--compare", nargs=2, metavar=("OLD", "NEW"))
     args = ap.parse_args()
 
@@ -142,7 +169,7 @@ def main() -> None:
     if args.tier:
         tasks = [t for t in tasks if t["tier"] == args.tier]
 
-    results = run_suite(tasks)
+    results = run_suite(tasks, rounds=args.rounds)
     summary = summarize(results)
     stamp = time.strftime("%Y-%m-%d__%H-%M-%S")
     out_path = args.out or f"/tmp/opencode/harness-suite-{stamp}.json"
@@ -153,7 +180,11 @@ def main() -> None:
     print(f"=== SUITE {stamp} ===")
     for tier, s in summary["by_tier"].items():
         print(f"  {tier}: {s['ok']}/{s['n']} world_ok")
+    first_pass = sum(1 for r in results if r.get("first_pass"))
+    retried = sum(1 for r in results
+                  if r.get("rounds_used", 1) > 1 and r["world_ok"])
     print(f"  TOTAL: {summary['world_ok']}/{summary['total']} | "
+          f"first_pass={first_pass} | salvos_por_retry={retried} | "
           f"false_done={summary['false_done']} | "
           f"avg={summary['avg_elapsed_s']}s")
     print(f"salvo: {out_path}")
