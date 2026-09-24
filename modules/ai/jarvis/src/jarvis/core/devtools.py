@@ -130,6 +130,10 @@ def _safe_path(path: str, root: Path | None = None,
     # imprecisão) deixa prosseguir no path pretendido. "My Docs/x"
     # passa intacto (sem adjacência espaço-barra).
     path = _re2.sub(r"/ +", "/", path.strip())
+    # Forense 24/09 (transcript real): `list_directory ~/projects/nixos-ai`
+    # falhava "Directory not found" — Path("~/...") é RELATIVO sem shell.
+    # run_shell já expande por token (security.py:234); aqui faltava.
+    path = os.path.expanduser(path)
     p = Path(path)
     r = root or _project_root()
     if p.is_absolute():
@@ -560,13 +564,25 @@ def execute_shell(cmd: str, approve: bool = False) -> dict[str, Any]:
     """Execute shell command — delegates to security.run_shell_dict().
 
     Single implementation. No duplicated validation logic.
+
+    Gates (24/09, forense do transcript com approve-all):
+    1. HARD-NEVER bloqueia SEMPRE (regras da casa: nixos-rebuild direto,
+       escrita em /nix/store, dd/mkfs, shutdown/reboot) — nem approve-all
+       passa (o dono aprova AÇÕES, não buracos irreversíveis).
+    2. Allowlist: sem approve (autônomo/default), comando tem que estar na
+       allowlist. Com approve=True (dono aprovou), allowlist é liberada —
+       o segundo gate não pode contradizer a decisão do dono, senão o
+       approve-all vira mentira e o modelo entra em loop de alternativas.
     """
-    from jarvis.core.security import run_shell_dict, command_allowed
+    from jarvis.core.security import run_shell_dict, command_allowed, command_forbidden
     if not cmd:
         return {"ok": False, "error": "Empty command"}
-    # Quick validation before execution
     stripped = cmd.strip()
-    if not command_allowed(stripped):
+    motivo = command_forbidden(stripped)
+    if motivo:
+        return {"ok": False,
+                "error": f"BLOQUEADO (regra dura da casa): {motivo} — {stripped[:100]}"}
+    if not command_allowed(stripped) and not approve:
         # A/B 16/09: modelo fraco tenta chamar write_file/mkdir como COMANDO
         # shell (não estão na allowlist por design — são tools). O erro tem
         # que ensinar a interface certa, senão ele tenta variantes de shell

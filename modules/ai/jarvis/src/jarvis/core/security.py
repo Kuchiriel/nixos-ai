@@ -159,6 +159,37 @@ def _python_file_allowed(part: str) -> bool:
     return True
 
 
+# ── HARD-NEVER (24/09, approve-all forense) ─────────────────────────────
+# Bloqueia SEMPRE, mesmo com approve=True. O dono aprova AÇÕES, não buracos
+# irreversíveis. Fonte das regras: AGENTS.md (Never do) + óbvio destrutivo.
+
+_HARD_NEVER: tuple[tuple[str, str], ...] = (
+    (r"(^|[\s;/])nixos-rebuild\b",
+     "NUNCA nixos-rebuild direto — use ./rebuild-host.sh (AGENTS.md)"),
+    (r"\brm\b[^;|]*\s/nix/store",
+     "nunca deletar nada de /nix/store"),
+    (r"\b(cp|mv|chmod|chown|touch|tee|ln|rsync)\b[^;|]*\s(/nix/store|/nix/store/\S)",
+     "nunca escrever/modificar em /nix/store"),
+    (r"\bdd\b[^;|]*of=/dev/",
+     "dd em device físico é irreversível"),
+    (r"\bmkfs\b",
+     "formatar filesystem é irreversível"),
+    (r"(^|\s)(shutdown|reboot|halt|poweroff)\b",
+     "desligar/reiniciar o host é decisão humana"),
+    (r":\(\)\s*\{.*\}\s*;\s*:",
+     "fork bomb"),
+)
+
+
+def command_forbidden(cmd: str) -> str | None:
+    """Motivo do bloqueio duro (None = liberado). Vale MESMO com approve."""
+    stripped = (cmd or "").strip()
+    for pat, motivo in _HARD_NEVER:
+        if re.search(pat, stripped):
+            return motivo
+    return None
+
+
 def command_allowed(
     cmd: str,
     allowed_prefixes: tuple[str, ...] | None = None,
