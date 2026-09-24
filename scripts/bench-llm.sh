@@ -5,11 +5,12 @@
 # router dance opcional (-R). Saída: TSV stdout (pipe-friendly) + append JSONL.
 #
 # Uso:
-#   scripts/bench-llm.sh -b <wrapper|bin> -m <model.gguf> [flags do server...]
+#   scripts/bench-llm.sh -b <wrapper|bin> -m <model.gguf> [-n N] [-g tag] [-o out] [-R] -- [flags do server...]
 #   scripts/bench-llm.sh -b /home/nixos/projects/nixos-ai/modules/ai/llama-ik-wrapper.sh \
-#       -m /nix/store/...-Qwen3.6-35B-A3B-UD-Q4_K_M.gguf -ngl 45 --n-cpu-moe 35 -t 8
+#       -m /nix/store/...-Qwen3.6-35B-A3B-UD-Q4_K_M.gguf -n 2 -g ik35-base -- -ngl 45 --n-cpu-moe 35 -t 8
+#   ATENÇÃO: flags do server SEMPRE após `--` (getopts come `-ngl` como `-n gl`!).
 #   -R = para/religa llama-cpp-server (router) em volta do bench
-#   -n N = reps (default 3) · -c "tag" = rótulo no resultado
+#   -n N = reps (default 3) · -g "tag" = rótulo no resultado
 # stdin: nada. stdout: TSV tag/rep/tgs/pps. stderr: logs do server.
 # side-effects: server efêmero :8095 (se ocupado: pkill anterior); nenhum arquivo
 #               além do --out (default /tmp/bench-results.jsonl).
@@ -20,6 +21,9 @@ while getopts "b:m:n:g:o:R" o; do case $o in
   o) OUT=$OPTARG;; R) ROUTER=1;; *) echo "flag inválida" >&2; exit 1;;
 esac; done
 [ -z "$BIN" ] || [ -z "$MODEL" ] && { echo "precisa -b e -m" >&2; exit 1; }
+# Guard 24/09: `-ngl` sem `--` é comido como `-n gl` (REPS vira lixo e o
+# server morre com arg posicional). Falha cedo com mensagem útil.
+case "$REPS" in ''|*[!0-9]*) echo "REPS inválido ('$REPS'): flags do server vão após \`--\`" >&2; exit 1;; esac
 shift $((OPTIND-1)); EXTRA="$@"
 
 run() { $BIN "$@"; }   # -b = PREFIXO de comando (ex.: "bash run-prism.sh llama-server" ou wrapper direto)
