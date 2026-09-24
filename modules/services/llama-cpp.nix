@@ -157,6 +157,9 @@ with lib; let
     c = ${toString p.ctxSize}
     n-gpu-layers = ${toString p.gpuLayers}
     jinja = true
+    cache-type-k = ${kv.cache-type-k}
+    cache-type-v = ${kv.cache-type-v}
+    flash-attn = ${kv.flash-attn}
     ${optionalString (moe != null) "n-cpu-moe = ${moe}"}
     ${concatStringsSep "\n" (m.iniExtra or [])}
   '';
