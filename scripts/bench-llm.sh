@@ -22,7 +22,7 @@ esac; done
 [ -z "$BIN" ] || [ -z "$MODEL" ] && { echo "precisa -b e -m" >&2; exit 1; }
 shift $((OPTIND-1)); EXTRA="$@"
 
-run() { if [[ $BIN == *.sh ]]; then bash "$BIN" llama-server "$@"; else "$BIN" "$@"; fi; }
+run() { $BIN "$@"; }   # -b = PREFIXO de comando (ex.: "bash run-prism.sh llama-server" ou wrapper direto)
 
 # Evidência R1: binário versionado no log
 echo "BIN=$(readlink -f "$BIN" 2>/dev/null || echo "$BIN")" >&2
@@ -37,6 +37,7 @@ PID=$!
 trap 'kill $PID 2>/dev/null' EXIT
 for i in $(seq 1 300); do
   curl -sf --max-time 2 http://127.0.0.1:$PORT/health >/dev/null 2>&1 && break
+  kill -0 $PID 2>/dev/null || { echo "server morreu no load" >&2; exit 1; }
   sleep 2
 done
 curl -sf --max-time 2 http://127.0.0.1:$PORT/health >/dev/null || { echo "server não subiu (ver /tmp/bench-srv-$TAG.log)" >&2; exit 1; }
