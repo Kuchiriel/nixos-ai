@@ -1,0 +1,66 @@
+{
+  "ts": "2026-09-24__16-42-20",
+  "summary": {
+    "total": 3,
+    "world_ok": 2,
+    "false_done": 1,
+    "by_tier": {
+      "medium": {
+        "n": 3,
+        "ok": 2
+      }
+    },
+    "avg_elapsed_s": 8.4
+  },
+  "results": [
+    {
+      "task_id": "M1-dirfile",
+      "tier": "medium",
+      "world_ok": false,
+      "missed": [
+        "file_contains:/tmp/jarvis-ch/inside/out.txt::nested-ok"
+      ],
+      "turns": 5,
+      "tool_calls": [
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": true,
+      "elapsed_s": 4.2,
+      "rc": 0
+    },
+    {
+      "task_id": "M2-script-run",
+      "tier": "medium",
+      "world_ok": true,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "write_file",
+        "execute_shell"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 4.7,
+      "rc": 0
+    },
+    {
+      "task_id": "M3-fix-offbyone",
+      "tier": "medium",
+      "world_ok": true,
+      "missed": [],
+      "turns": 15,
+      "tool_calls": [
+        "read_file",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 16.4,
+      "rc": 0
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "ts": "2026-09-24__16-20-31",
+  "summary": {
+    "total": 3,
+    "world_ok": 0,
+    "false_done": 0,
+    "by_tier": {
+      "easy": {
+        "n": 3,
+        "ok": 0
+      }
+    },
+    "avg_elapsed_s": 13.0
+  },
+  "results": [
+    {
+      "task_id": "E1-write",
+      "tier": "easy",
+      "world_ok": false,
+      "missed": [
+        "file_exists:/tmp/jarvis-ch/e1.txt",
+        "file_contains:/tmp/jarvis-ch/e1.txt::progressive-one"
+      ],
+      "turns": 2,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 12.9,
+      "rc": 1
+    },
+    {
+      "task_id": "E2-read",
+      "tier": "easy",
+      "world_ok": false,
+      "missed": [
+        "output_contains:quick brown fox"
+      ],
+      "turns": 2,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 13.0,
+      "rc": 1
+    },
+    {
+      "task_id": "E3-count",
+      "tier": "easy",
+      "world_ok": false,
+      "missed": [
+        "file_contains:/tmp/jarvis-ch/count.txt::4"
+      ],
+      "turns": 2,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 13.0,
+      "rc": 1
+    }
+  ]
+}

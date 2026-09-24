@@ -1,0 +1,78 @@
+{
+  "ts": "2026-09-24__16-47-02",
+  "summary": {
+    "total": 3,
+    "world_ok": 0,
+    "false_done": 2,
+    "by_tier": {
+      "hard": {
+        "n": 3,
+        "ok": 0
+      }
+    },
+    "avg_elapsed_s": 38.2
+  },
+  "results": [
+    {
+      "task_id": "H1-config-discovery",
+      "tier": "hard",
+      "world_ok": false,
+      "missed": [
+        "output_contains:bonsai"
+      ],
+      "turns": 16,
+      "tool_calls": [
+        "nix_eval",
+        "nix_search",
+        "nix_search",
+        "list_directory",
+        "list_directory",
+        "list_directory"
+      ],
+      "wrong_tools": [],
+      "false_done": true,
+      "elapsed_s": 10.8,
+      "rc": 0
+    },
+    {
+      "task_id": "H2-syntax-fix",
+      "tier": "hard",
+      "world_ok": false,
+      "missed": [
+        "file_contains:/tmp/jarvis-ch/greeting.txt::hello world"
+      ],
+      "turns": 10,
+      "tool_calls": [
+        "read_file",
+        "str_replace",
+        "execute_shell",
+        "str_replace"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 92.3,
+      "rc": 1
+    },
+    {
+      "task_id": "H3-chain",
+      "tier": "hard",
+      "world_ok": false,
+      "missed": [
+        "file_contains:/tmp/jarvis-ch/data/total.txt::3"
+      ],
+      "turns": 16,
+      "tool_calls": [
+        "list_directory",
+        "execute_shell",
+        "write_file",
+        "list_directory",
+        "write_file",
+        "list_directory"
+      ],
+      "wrong_tools": [],
+      "false_done": true,
+      "elapsed_s": 11.5,
+      "rc": 0
+    }
+  ]
+}
