@@ -72,6 +72,15 @@ def run_suite(tasks: list[dict], approve: str = "y",
         # tentativas; se o mundo reprovar E houver claims, o feedback vira
         # prompt da rodada seguinte. A mentira vira retry acionável.
         for attempt in range(1, max(1, rounds) + 1):
+            # Mundo limpo POR ROUND (24/09 forense: round 1 criou um ARQUIVO
+            # chamado 'inside' → mkdir dos rounds 2-3 morria ENOTDIR pra
+            # sempre — round de feedback herda veneno do round anterior).
+            if t.get("setup"):
+                subprocess.run(["bash", "-c", t["setup"]],
+                               capture_output=True, timeout=30)
+            elif attempt > 1 and t.get("teardown"):
+                subprocess.run(["bash", "-c", t["teardown"]],
+                               capture_output=True, timeout=30)
             if attempt == 1:
                 prompt = t["prompt"]
             else:
@@ -117,7 +126,7 @@ def run_suite(tasks: list[dict], approve: str = "y",
             "elapsed_s": round(elapsed, 1),
             "rc": r.get("rc"),
         })
-        # teardown
+        # teardown final: limpa o mundo do último round
         if t.get("teardown"):
             subprocess.run(["bash", "-c", t["teardown"]],
                            capture_output=True, timeout=30)
