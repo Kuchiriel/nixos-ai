@@ -1,3 +1,17 @@
+# INVENTORY — contratos unix-like (24/09, grind 1/2: top-10 agent-callable)
+Formato: stdin · args · stdout · side-effects · pipe-safe? (o agent precisa
+disso p/ CHAMAR sem ler o fonte). Restante (archive/legacy): só headers abaixo.
+- `scripts/bench-llm.sh -b <wrapper> -m <gguf> [server-flags] [-n N] [-g tag] [-o out] [-R]`: stdin nada · stdout TSV tag/rep/tgs/pps, stderr logs · side-effects: server efêmero :8095 (pkill anterior se ocupado), GPU/VRAM exclusiva, `-R` para/religa o router :8080 em volta · pipe-safe SIM (TSV parseável; JSONL no --out default /tmp/bench-results.jsonl).
+- `scripts/jarvis-cli.sh <tool> [args]`: dispatcher fino p/ `jarvis <sub>` · stdin repassado · stdout do subcomando · side-effects = os do subcomando · pipe-safe SIM.
+- `scripts/moe-profiler.py --server URL --prompt P --tokens N --output J [--analyze J --budget N]`: precisa `requests` + servidor ATIVO com o modelo · stdout sumário, JSON c/ hot-experts por layer · side-effects: inferência no server alvo (NÃO subir nada; só lê via API) · pipe-safe SIM (JSON).
+- `scripts/mlock-benchmark.sh`: MODEL hardcoded (store path válido 24/09), PORT=8080 = CONFLITA COM O ROUTER — parametrizar antes de usar · stdout tabela TG/faults/IO · side-effects: sobe llama-server direto, GPU exclusiva · pipe-safe PARCIAL (requer porta livre + modelo válido).
+- `scripts/ncmoe-sweep.py [--coarse] [--fine] [--configs F] [--runs N] [--cooldown S]`: sweep ngl×ncmoe do 26/08 · stdout matriz · side-effects: N servidores efêmeros em sequência, GPU exclusiva por horas · pipe-safe SIM (matriz TSV/JSON).
+- `scripts/ctx-usage.sh [--since X]`: SÓ LEITURA (journal do serviço) · stdout reqs/média/max tokens/TG/erros · side-effects: nenhum · pipe-safe SIM.
+- `scripts/thermal-curve.sh`: 5min de inferência contínua · stdout curva temp×t/s · side-effects: GPU quente por 5min (não rodar junto de bench!) · pipe-safe SIM.
+- `scripts/harness-suite.py --tier E|M|H [--rounds N] [--out F] [--compare A B]`: stdin nada · stdout resumo + JSON c/ results (world_ok/first_pass/rounds_used/missed/false_done) · side-effects: N runs `jarvis dev` via PTY contra o router :8080 (modelo default!), setup/teardown por round em /tmp/jarvis-ch · pipe-safe SIM (JSON).
+- `scripts/ux_driver.py --task T --out F`: 1 run `jarvis dev` sob PTY c/ approve manual · stdout JSON da execução · side-effects: 1 run contra o router · pipe-safe SIM.
+- `scripts/quick-bench.sh` / `proper-benchmark.sh` / `systematic-benchmark.sh` / `bench-one.sh` / `a-b-compare.sh`: LEGADOS pré-bench-llm.sh (24/09: bench-llm.sh é a ferramenta canônica; os demais = referência/arqueologia, NÃO usar p/ novos vereditos).
+
 ### clean.sh (4KB, #!/usr/bin/env bash)
 Faxina SEGURA do NixOS: nunca deixa o sistema sem rollback. |  | Regras duras:
 
