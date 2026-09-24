@@ -1084,6 +1084,13 @@ guia-renamer-pro/docs/OPERACAO.md):
   futuros (ou dashboard), mover linhas legado p/ aba Legado,
   nichos/cidades prospecção, voz/wakeword, Applio.
 
+> ATUALIZAÇÃO 24/09 (lê isto, ignora o resto desta §42 sobre Make):
+> Make APOSENTADO da prospecção 23/09 — todos os cenários isActive=false
+> (verificado). Prospecção = Supabase-only: prospecta-leads + envia-propostas
+> (pg_cron 03:00/09:00 BRT). Fonte de verdade: guia-renamer-pro/docs/OPERACAO.md
+> §11 + AGENTS.md. Bugs 24/09 corrigidos+deploy: props[] misalignment,
+> outbox insert sem check, extraiEmail /contato fallback, ntfy charset.
+
 ## 43. SESSION NOTES (2026-09-11 — erros que não se repetem)
 
 ERROS COMETIDOS (registrar p/ qualquer agente):
