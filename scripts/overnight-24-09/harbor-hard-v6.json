@@ -1,0 +1,109 @@
+{
+  "ts": "2026-09-24__18-16-27",
+  "summary": {
+    "total": 3,
+    "world_ok": 1,
+    "false_done": 1,
+    "by_tier": {
+      "hard": {
+        "n": 3,
+        "ok": 1
+      }
+    },
+    "avg_elapsed_s": 56.7
+  },
+  "results": [
+    {
+      "task_id": "H1-config-discovery",
+      "tier": "hard",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 3,
+      "missed": [
+        "output_contains:bonsai"
+      ],
+      "turns": 44,
+      "tool_calls": [
+        "nix_eval",
+        "nix_search",
+        "list_directory",
+        "read_file",
+        "list_directory",
+        "read_file",
+        "nix_search",
+        "list_directory",
+        "read_file",
+        "list_directory",
+        "read_file",
+        "nix_search",
+        "list_directory",
+        "read_file",
+        "list_directory",
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": true,
+      "elapsed_s": 44.1,
+      "rc": 0
+    },
+    {
+      "task_id": "H2-syntax-fix",
+      "tier": "hard",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 3,
+      "missed": [
+        "file_contains:/tmp/jarvis-ch/greeting.txt::hello world"
+      ],
+      "turns": 60,
+      "tool_calls": [
+        "read_file",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "read_file",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "read_file",
+        "write_file",
+        "read_file",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 119.2,
+      "rc": 1
+    },
+    {
+      "task_id": "H3-chain",
+      "tier": "hard",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 9,
+      "tool_calls": [
+        "list_directory",
+        "write_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 6.8,
+      "rc": 0
+    }
+  ]
+}
