@@ -168,7 +168,8 @@ def preflight(model: str = "bonsai", base_url: str = None) -> None:
     import urllib.request as _u
     base = (base_url or os.environ.get(
         "JARVIS_LLM_BASE_URL", "http://127.0.0.1:8080/v1")).rstrip("/")
-    body = _json.dumps({"model": model, "max_tokens": 4,
+    body = _json.dumps({"model": model, "max_tokens": 16,
+                        "chat_template_kwargs": {"enable_thinking": False},
                         "messages": [{"role": "user", "content": "ok"}]}
                        ).encode()
     req = _u.Request(f"{base}/chat/completions", data=body,
@@ -177,8 +178,11 @@ def preflight(model: str = "bonsai", base_url: str = None) -> None:
         with _u.urlopen(req, timeout=120) as r:
             out = _json.loads(r.read().decode())
         msg = (out.get("choices") or [{}])[0].get("message", {})
-        if not (msg.get("content") or "").strip():
-            raise ValueError("resposta vazia")
+        # `content` vazio com `reasoning_content` = o modelo gastou o budget
+        # pensando (Qwen3/MoE) — ainda é evidência de que SERVE (24/09).
+        if not ((msg.get("content") or "").strip()
+                or (msg.get("reasoning_content") or "").strip()):
+            raise ValueError("resposta vazia (sem content nem reasoning)")
     except Exception as e:
         raise SystemExit(
             f"PREFLIGHT FALHOU ({type(e).__name__}: {e})\n"
