@@ -258,8 +258,8 @@ class TestMarketingPersona:
         p = PersonaRegistry().get("marketing")
         assert p is not None
         assert "149,99" in p.system_prompt_additions
-        assert "382,47" in p.system_prompt_additions
-        assert "1.259,88" in p.system_prompt_additions
+        assert "379,99" in p.system_prompt_additions
+        assert "1.259,99" in p.system_prompt_additions
         assert "PROIBIDO" in p.system_prompt_additions
         assert p.policies.can_write is False
         assert p.policies.can_execute is False

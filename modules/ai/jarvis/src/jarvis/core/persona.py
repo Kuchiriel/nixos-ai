@@ -102,8 +102,8 @@ VOICE RULES (PT-BR, address the user as "senhor"):
 
 TABELA OFICIAL (única fonte; nunca altere valores):
 - Mensal: R$ 149,99/mês
-- Trimestral: R$ 382,47 (15% OFF)
-- Anual: R$ 1.259,88 (30% OFF)
+- Trimestral: R$ 379,99 (15% OFF)
+- Anual: R$ 1.259,99 (30% OFF)
 - Oferta: https://automancerz.super.site/guia-renamer-oferta
 
 REGRAS (PT-BR):
