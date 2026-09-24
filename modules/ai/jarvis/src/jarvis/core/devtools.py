@@ -134,8 +134,28 @@ def _safe_path(path: str, root: Path | None = None,
     # falhava "Directory not found" — Path("~/...") é RELATIVO sem shell.
     # run_shell já expande por token (security.py:234); aqui faltava.
     path = os.path.expanduser(path)
+    # Doença `~` (forense H1 v1-v5: `list_directory ~` recusado "fora do
+    # projeto" → o modelo repete 3-5x e/ou inventa `~projects/x` colado
+    # sem barra). Doutrina absorver-imprecisão: normalizar em vez de
+    # recusar (leitura; escrita continua fail-closed no jail abaixo).
+    # 1) `~colado/resto` (sem barra após o til) = `~/resto`. `~outro-user/`
+    #    POSIX real é raríssimo no agent loop, e o jail abaixo continua
+    #    valendo de qualquer forma.
+    if _re2.match(r"^~[^/]", path):
+        path = "~/" + path[1:]
+        path = os.path.expanduser(path)
+    # 2) `$HOME` literal (sem shell aqui) → expande.
+    if path == "$HOME" or path.startswith("$HOME/"):
+        path = os.path.expanduser("~") + path[5:]
+    elif path == "${HOME}" or path.startswith("${HOME}/"):
+        path = os.path.expanduser("~") + path[7:]
     p = Path(path)
     r = root or _project_root()
+    # 3) `~` pelado = $HOME = fora do jail → o modelo quer "explorar a
+    #    partir de cima"; redireciona p/ a raiz do projeto (LEITURA).
+    #    Escrita continua recusada (escrever na raiz por engano = surpresa).
+    if not write and os.path.expanduser("~") in (path, path.rstrip("/")):
+        p = r
     if p.is_absolute():
         target = p
     else:
