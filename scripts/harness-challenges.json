@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Progressive harness challenges (easy to hard) for jarvis dev. Natural prompts, NO tool hints (protocol 14: never teach the solution). World-state verified independently.",
+  "description": "Progressive harness challenges (easy to hard) for jarvis dev. Natural prompts, NO tool hints (protocol 14: never teach the solution). World-state verified independently. Tiers easy/medium/hard stay in ENGLISH (comparability across models; the local model yields more). Tier 'ptbr' is a DELIBERATE deficiency probe (2026-09-24: bonsai/ternary handles PT-BR poorly and PT-BR is the owner's real language) — it is NOT part of the E/M/H ladder and its score must be reported separately.",
   "tasks": [
     {"id": "E1-write", "tier": "easy",
      "prompt": "create the file /tmp/jarvis-ch/e1.txt with the exact content 'progressive-one'",
@@ -41,6 +41,20 @@
     {"id": "H3-chain", "tier": "hard",
      "prompt": "count the files in /tmp/jarvis-ch/data (create the folder first and put three empty .txt files inside it), then write that count to /tmp/jarvis-ch/data/total.txt",
      "world": {"file_contains": "/tmp/jarvis-ch/data/total.txt::3"},
+     "teardown": "rm -rf /tmp/jarvis-ch"},
+    {"id": "P1-ptbr-exato", "tier": "ptbr",
+     "prompt": "crie o arquivo /tmp/jarvis-ch/pt1.txt com o conteúdo exato: acesso liberado — protocolo nº 42",
+     "world": {"file_contains": "/tmp/jarvis-ch/pt1.txt::acesso liberado — protocolo nº 42"},
+     "teardown": "rm -rf /tmp/jarvis-ch"},
+    {"id": "P2-ptbr-leitura", "tier": "ptbr",
+     "setup": "mkdir -p /tmp/jarvis-ch && printf 'A reuniao ficou marcada para as 14h30 com a equipe toda.\\n' > /tmp/jarvis-ch/aviso.txt",
+     "prompt": "leia o arquivo /tmp/jarvis-ch/aviso.txt e escreva APENAS o horario da reuniao em /tmp/jarvis-ch/hora.txt, sem nenhuma outra palavra",
+     "world": {"file_contains": "/tmp/jarvis-ch/hora.txt::14h30", "file_absent": "/tmp/jarvis-ch/hora.txt::reuniao"},
+     "teardown": "rm -rf /tmp/jarvis-ch"},
+    {"id": "P3-ptbr-negativa", "tier": "ptbr",
+     "setup": "mkdir -p /tmp/jarvis-ch && printf 'linha um\\nlinha dois\\nlinha tres\\nlinha quatro\\n' > /tmp/jarvis-ch/dados.txt",
+     "prompt": "quantas linhas tem o arquivo /tmp/jarvis-ch/dados.txt? escreva so o numero em /tmp/jarvis-ch/resultado.txt. IMPORTANTE: nao crie nenhum outro arquivo nessa pasta",
+     "world": {"file_contains": "/tmp/jarvis-ch/resultado.txt::4", "file_absent": "/tmp/jarvis-ch/nao-crie.txt"},
      "teardown": "rm -rf /tmp/jarvis-ch"}
   ]
 }

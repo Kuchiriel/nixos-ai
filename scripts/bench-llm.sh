@@ -34,6 +34,14 @@ run --version >&2 2>/dev/null || true
 
 if [ $ROUTER = 1 ]; then sudo systemctl stop llama-cpp-server; trap "sudo systemctl start llama-cpp-server" EXIT; fi
 pkill -f "port $PORT" 2>/dev/null || true; sleep 2
+# Guard VRAM 24/09: um server órfão de bench anterior (4.5GB) impediu o
+# router de carregar e a suíte mediu 0/3 achando que era o modelo. Aborta
+# se outro llama-server segura peso de modelo além das embeddings/rerank.
+_used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1)
+_other=$(for p in $(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null); do
+           m=$(nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader,nounits 2>/dev/null | awk -F', ' -v P=$p '$1==P {print $2}')
+           [ "${m:-0}" -gt 1200 ] && echo x; done | wc -l)
+[ "${_other:-0}" -gt 0 ] && { echo "ABORT: outro llama-server com ${_used}MiB em uso — VRAM ocupada, veredito seria inválido" >&2; exit 1; }
 
 
 run -m "$MODEL" --host 127.0.0.1 --port $PORT $EXTRA > /tmp/bench-srv-$TAG.log 2>&1 &

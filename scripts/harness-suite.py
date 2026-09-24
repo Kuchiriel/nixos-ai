@@ -44,6 +44,13 @@ def check_world(world: dict, output: str) -> tuple[bool, list[str]]:
                 ok = False
         elif key == "output_contains":
             ok = spec.lower() in output.lower()
+        elif key == "file_absent":
+            path, _, needle = spec.partition("::")
+            try:
+                ok = needle not in Path(path).read_text(encoding="utf-8",
+                                                        errors="replace")
+            except OSError:
+                ok = True
         else:
             ok = False
         ok_parts.append(ok)
@@ -150,9 +157,39 @@ def summarize(results: list[dict]) -> dict:
     }
 
 
+def preflight(model: str = "bonsai", base_url: str = None) -> None:
+    """ABORTA se a infra do LLM não está de pé (24/09 forense: um server
+    órfão de bench segurava 4.5GB, o router não carregava o bonsai, tudo
+    deu 500 e a suíte somou 0/3 como se fosse falha do MODELO). Regra:
+    /health sozinho NÃO basta (o b10735 responde ok mesmo com o modelo
+    unloaded) — exige uma completion real.
+    """
+    import json as _json
+    import urllib.request as _u
+    base = (base_url or os.environ.get(
+        "JARVIS_LLM_BASE_URL", "http://127.0.0.1:8080/v1")).rstrip("/")
+    body = _json.dumps({"model": model, "max_tokens": 4,
+                        "messages": [{"role": "user", "content": "ok"}]}
+                       ).encode()
+    req = _u.Request(f"{base}/chat/completions", data=body,
+                      headers={"Content-Type": "application/json"})
+    try:
+        with _u.urlopen(req, timeout=120) as r:
+            out = _json.loads(r.read().decode())
+        msg = (out.get("choices") or [{}])[0].get("message", {})
+        if not (msg.get("content") or "").strip():
+            raise ValueError("resposta vazia")
+    except Exception as e:
+        raise SystemExit(
+            f"PREFLIGHT FALHOU ({type(e).__name__}: {e})\n"
+            f"LLM em {base} (model={model}) não está servindo. "
+            f"Abortando SEM medir — score de modelo com infra caída é "
+            f"veredito inválido (incidente 24/09).")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--tier", choices=["easy", "medium", "hard"])
+    ap.add_argument("--tier", choices=["easy", "medium", "hard", "ptbr", "all"])
     ap.add_argument("--out", default=None)
     ap.add_argument("--rounds", type=int, default=2,
                     help="tentativas máximas c/ feedback de mundo (1 = antigo)")
@@ -175,8 +212,10 @@ def main() -> None:
 
     tasks = json.load(open(Path(__file__).parent / "harness-challenges.json"))
     tasks = tasks["tasks"]
-    if args.tier:
+    if args.tier and args.tier != "all":
         tasks = [t for t in tasks if t["tier"] == args.tier]
+
+    preflight(model=os.environ.get("JARVIS_LLM_MODEL", "bonsai"))
 
     results = run_suite(tasks, rounds=args.rounds)
     summary = summarize(results)
