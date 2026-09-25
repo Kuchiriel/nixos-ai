@@ -170,6 +170,29 @@ class QdrantStore:
                 r["payload"] = decrypt_payload(r["payload"])
         return results
 
+    def get_points(self, name: str, ids: list[int]) -> list[dict[str, Any]]:
+        """Lê pontos por ID (payload + vetor), na ordem pedida.
+
+        Existe para o guardrail de arquivamento (core/safe_archive.py):
+        sem poder ler de volta, "arquivar" é só uma escrita que a gente
+        acredita, e foi exatamente assim que 6 pontos foram perdidos em
+        25/09 (o Qdrant aceitou o upsert e não gravou).
+        """
+        if not ids:
+            return []
+        out: list[dict[str, Any]] = []
+        # Qdrant aceita no máximo um punhado grande por request; 256 é
+        # folgado e evita request gigante.
+        for i in range(0, len(ids), 256):
+            bloco = ids[i : i + 256]
+            res = self._request(
+                "POST",
+                f"/collections/{name}/points",
+                json={"ids": bloco, "with_payload": True, "with_vector": True},
+            )
+            out.extend(self._decrypt_results(name, res.get("result", [])))
+        return out
+
     def delete_points(self, name: str, ids: list[int]) -> None:
         self._request(
             "POST",
