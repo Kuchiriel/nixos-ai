@@ -2857,9 +2857,12 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context(task)
     agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
+    _tpl2 = (MINIMAL_PROMPT if os.environ.get("JARVIS_PROMPT_PROFILE", "").lower() == "minimal"
+             else SYSTEM_PROMPT_TEMPLATE)
     system_prompt = _maybe_disable_thinking(
-        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(ss_persona), tool_discipline=_TOOL_DISCIPLINE)
+        _tpl2.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(ss_persona), tool_discipline=_TOOL_DISCIPLINE)
     )
+    system_prompt = _apply_prompt_profile(system_prompt, "lean")
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     if continue_session:
         resumed = _resume_session(project_root or os.getcwd())
