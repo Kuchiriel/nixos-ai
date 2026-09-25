@@ -35,6 +35,9 @@ _FALLBACK = {
             "params_b": 8,
             "vram_mb": 2400,
             "endpoint": 8080,
+            "sampling": {"temperature": 0.5, "top_p": 0.9, "top_k": 20,
+                         "min_p": 0.0, "presence_penalty": 0.0,
+                         "repetition_penalty": 1.0},
         },
         "jarvis-fast": {
             "tier": "fast",
@@ -42,6 +45,9 @@ _FALLBACK = {
             "params_b": 4,
             "vram_mb": 2600,
             "endpoint": 8083,
+            "sampling": {"temperature": 0.7, "top_p": 0.8, "top_k": 20,
+                         "min_p": 0.0, "presence_penalty": 1.5,
+                         "repetition_penalty": 1.0},
         },
         "jarvis-strong": {
             "tier": "reasoning",
@@ -49,6 +55,9 @@ _FALLBACK = {
             "params_b": 35,
             "vram_mb": 4600,
             "endpoint": 8084,
+            "sampling": {"temperature": 1.0, "top_p": 0.95, "top_k": 20,
+                         "min_p": 0.0, "presence_penalty": 1.5,
+                         "repetition_penalty": 1.0},
         },
         "jarvis-raw": {
             "tier": "fast",
@@ -56,6 +65,9 @@ _FALLBACK = {
             "params_b": 4,
             "vram_mb": 2700,
             "endpoint": 8083,
+            "sampling": {"temperature": 0.7, "top_p": 0.8, "top_k": 20,
+                         "min_p": 0.0, "presence_penalty": 1.5,
+                         "repetition_penalty": 1.0},
         },
         "jarvis-raw-strong": {
             "tier": "reasoning",
@@ -63,6 +75,9 @@ _FALLBACK = {
             "params_b": 35,
             "vram_mb": 4600,
             "endpoint": 8084,
+            "sampling": {"temperature": 1.0, "top_p": 0.95, "top_k": 20,
+                         "min_p": 0.0, "presence_penalty": 1.5,
+                         "repetition_penalty": 1.0},
         },
     },
 }
@@ -82,6 +97,8 @@ class ModelEntry:
     # Porta do serviço que roda o BINÁRIO CERTO p/ este modelo
     # (models.nix `routing.endpoints`; docs/models/BINARIES.md).
     endpoint: int = 8080
+    # Defaults de geração — ÚNICA FONTE: models.nix `routing.models.<id>.sampling`.
+    sampling: dict = field(default_factory=dict)
     raw: dict = field(default_factory=dict)
 
 
@@ -139,6 +156,7 @@ class ModelRegistry:
                 params_b=float(m.get("params_b", 0) or 0),
                 vram_mb=int(m.get("vram_mb", 0) or 0),
                 endpoint=int(m.get("endpoint", 8080) or 8080),
+                sampling=dict(m.get("sampling", {}) or {}),
                 raw=m,
             )
         default = str(data.get("default", ""))
@@ -158,3 +176,10 @@ class ModelRegistry:
 
     def ids(self) -> list[str]:
         return list(self.models)
+
+    def sampling_for(self, model_id: str) -> dict:
+        """Defaults de geração do modelo (models.nix `sampling`). Vazio se ausente."""
+        try:
+            return dict(self.get(model_id).sampling)
+        except RegistryError:
+            return {}

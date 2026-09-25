@@ -445,9 +445,21 @@ class LLMClient:
         cfg_t = getattr(self._cfg, "llm_temperature", -1.0)
         if cfg_t is not None and float(cfg_t) >= 0:
             return float(cfg_t)
-        mid = (self._served_model_id() or "").lower()
-        name = (getattr(self._cfg, "llm_model", "") or "").lower()
-        blob = f"{mid} {name}"
+        # SSOT: models.nix `routing.models.<id>.sampling` via registry.
+        mid = (self._served_model_id() or "").strip()
+        name = (getattr(self._cfg, "llm_model", "") or "").strip()
+        for cand in (mid, name):
+            if not cand:
+                continue
+            try:
+                from jarvis.core.model_registry import ModelRegistry
+                s = ModelRegistry.load().sampling_for(cand)
+                if "temperature" in s:
+                    return float(s["temperature"])
+            except Exception:  # noqa: BLE001 — política nunca derruba a chamada
+                break
+        # Legado (servidor sem registry): heurística antiga preservada.
+        blob = f"{mid} {name}".lower()
         if "bonsai" in blob or "ternary" in blob or "q2_0" in blob or "pq2" in blob:
             return 0.0
         if mid or name:

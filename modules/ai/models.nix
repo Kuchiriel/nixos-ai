@@ -188,6 +188,10 @@ in rec {
 
   # --- LLM Bonsai — Host (bare metal), motor ternário ---
   # Ternary-Bonsai-8B Q2_0_g64 (Qwen3-8B denso ternário {-1,0,+1}, 2.15GiB).
+  # ANTI-APAGAR (docs/models/MODEL-SAFETY.md): este fetch é content-addressed
+  # (sha256) — o store pode ser GC'd e volta com rebuild; NUNCA `rm` pesos
+  # sem checar inventário + lsof + dono. Recomendado Prism seria o Q2_0 g128
+  # (2.18GB, lossless p/ ternário) — trocar de arquivo muda baseline (decisão dono).
   # Servidor atual: fork PrismML. VERIFICADO 2026-09-08: upstream b10809
   # também serve Q2_0 (chat ok em CPU) — o "trava no load" era de builds
   # antigos. Prism mantido pelo desempenho (kernels ternários CUDA,
@@ -618,6 +622,17 @@ in rec {
     # Default EFETIVO hoje (bonsai serve :8080): preservado — §21, produto
     # decide eventual troca p/ jarvis-fast.
     default = "bonsai";
+    # SAMPLING — ÚNICA FONTE dos defaults de geração por modelo. O Python
+    # (model_registry.sampling_for → llm._resolve_temperature) lê daqui via
+    # registryJson; NADA de temperature hardcoded no .py. Ordem de vitória:
+    # explicit (caller) > JARVIS_LLM_TEMPERATURE > sampling.temperature.
+    # Harness/agente passa explicit 0.0 p/ tools — determinismo preservado.
+    # Fontes vendor (25/09/2026):
+    # - Prism 1-bit 8B card: temp 0.5 (range 0.5-0.7), top_k 20, top_p 0.9.
+    # - Prism ternary-27B card (thinking): temp 0.7, top_p 0.95, top_k 20.
+    # - Qwen3 base: thinking 0.6/0.95/20/0; non-thinking 0.7/0.8/20/0.
+    # - Qwen3.5/3.6: thinking-geral 1.0/0.95/20/0/presence 1.5; thinking-code
+    #   0.6/presence 0.0; instruct-geral 0.7/0.8/20/0/presence 1.5.
     # Residência simultânea máxima (VRAM 6GB: 1 modelo por vez).
     maxResident = 1;
     # Binário CORRETO por modelo (docs/models/BINARIES.md — D2/D5: binário
@@ -637,6 +652,9 @@ in rec {
         binary = "prism";
         endpoint = 8080;
         serve = { host = true; vm = true; };
+        # Prism recomenda 0.5 p/ Bonsai (não é regra global — ver Qwen abaixo).
+        sampling = { temperature = 0.5; top_p = 0.9; top_k = 20; min_p = 0.0;
+                     presence_penalty = 0.0; repetition_penalty = 1.0; };
       };
       jarvis-fast = {
         profile = "qwen-fast";
@@ -650,6 +668,9 @@ in rec {
         binary = "upstream";
         endpoint = 8083;
         serve = { host = true; vm = true; };
+        # Qwen3 non-thinking/instruct-geral (vendor).
+        sampling = { temperature = 0.7; top_p = 0.8; top_k = 20; min_p = 0.0;
+                     presence_penalty = 1.5; repetition_penalty = 1.0; };
       };
       jarvis-strong = {
         profile = "chat";
@@ -664,6 +685,9 @@ in rec {
         serve = { host = true; vm = false; };
         # Herdado do profile chat: mmproj na CPU (861MB VRAM) + visão dinâmica.
         iniExtra = ["no-mmproj-offload = true" "image-min-tokens = 1024"];
+        # Qwen3.5 thinking-geral (vendor). Agente usa explicit 0.0 em tools.
+        sampling = { temperature = 1.0; top_p = 0.95; top_k = 20; min_p = 0.0;
+                     presence_penalty = 1.5; repetition_penalty = 1.0; };
       };
       # Hot-swap raw (uncensored, A/B 24-25/09): sem refusal em gates.
       # /model jarvis-raw* ou capability "uncensored" no select_model.
@@ -678,6 +702,9 @@ in rec {
         binary = "upstream";
         endpoint = 8083;
         serve = { host = true; vm = false; };
+        # Qwen3.5 instruct-geral (vendor; mesmo do jarvis-fast).
+        sampling = { temperature = 0.7; top_p = 0.8; top_k = 20; min_p = 0.0;
+                     presence_penalty = 1.5; repetition_penalty = 1.0; };
       };
       jarvis-raw-strong = {
         profile = "raw-strong";
@@ -691,6 +718,9 @@ in rec {
         endpoint = 8084;
         serve = { host = true; vm = false; };
         iniExtra = ["no-mmproj-offload = true" "image-min-tokens = 1024"];
+        # Qwen3.6 thinking-geral (vendor). Agente usa explicit 0.0 em tools.
+        sampling = { temperature = 1.0; top_p = 0.95; top_k = 20; min_p = 0.0;
+                     presence_penalty = 1.5; repetition_penalty = 1.0; };
       };
     };
   };

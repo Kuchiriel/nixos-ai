@@ -61,6 +61,13 @@ nix flake check
 
 - `modules/ai/models.nix` é a **única fonte de verdade** de modelos,
   perfis e flags. Perfis são consumidos por `services/llama-cpp.nix`.
+  Sampling (temperature/top_p/top_k/...) também mora lá
+  (`routing.models.<id>.sampling`, por modelo — Prism 0.5 NÃO vale p/ Qwen);
+  Python lê via registry, nada hardcoded.
+- **Modelos: nunca apagar, nunca baixar sem checar.** Inventário e regras em
+  `docs/models/MODEL-SAFETY.md` (incidente 27B 25/09). Bonsai 8B mora no
+  nix store (GC volta com rebuild), não em `~/models`. Checar VRAM 6GB
+  antes de qualquer download.
 - VRAM 6GB: **1 LLM por vez.** P/ modelo que não cabe, experts na GPU
   **atrapalham** (o fetch vem por PCIe, 6-7 GB/s, contra 41-83 GB/s da
   RAM). Denso que cabe na VRAM roda ~3,2× mais rápido.
