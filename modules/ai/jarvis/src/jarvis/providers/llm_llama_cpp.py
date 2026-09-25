@@ -173,10 +173,11 @@ class LlamaCppBackend(LLMBackend):
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
         # 25/09 — o "server error" no 1o turno do REPL: o payload real
-        # (system 1.5k + schema de 22 tools 1.8k + histórico) chega a 3.9k
-        # tokens e o perfil pede 1024 de resposta. Com ctx 4096 isso estoura
-        # a janela e o build devolve 500. Aqui a gente NUNCA pede mais do
-        # que cabe: max_tokens = ctx - prompt - margem.
+        # (system prompt + schema de 22 tools + historico) chegou a quase
+        # a janela inteira do endpoint fraco, e o budget de resposta
+        # pedido estourava o resto -> build devolvia 500. Aqui nunca se
+        # pede mais do que cabe: a folga vem do n_ctx real (lido do
+        # /props), nunca de um literal aqui.
         _nctx = self._context_window()
         if _nctx:
             _est = len(json.dumps(payload["messages"], ensure_ascii=False)) // 4
