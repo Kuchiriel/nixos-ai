@@ -91,3 +91,12 @@
 ## ciclo 9 — 2026-09-25 13:07 · modelo=bonsai
 - harness: /tmp/overnight/loop-bonsai-20260925-130310.json (evidência copiada em scripts/overnight-24-09/)
 - prompt A/B: loop-bonsai-20260925-130310-p{full,lean,minimal}.json
+
+## frente @bonsai — 2026-09-25 13:12
+- score: 11/12
+- gates que este tier NAO fecha: H2-syntax-fix
+- false_done: nenhum
+
+## ciclo 10 — 2026-09-25 13:12 · modelo=bonsai
+- harness: /tmp/overnight/loop-bonsai-20260925-130842.json (evidência copiada em scripts/overnight-24-09/)
+- prompt A/B: loop-bonsai-20260925-130842-p{full,lean,minimal}.json
