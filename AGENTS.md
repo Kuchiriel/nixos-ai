@@ -116,6 +116,29 @@ scripts/                # Scripts auxiliares
   após mudar `modules/ai/jarvis/` (store congela código!); protocolo
   manhã em BUFFY §39; ponte p/ GuiaRenamer em BUFFY §42.
 
+## COLEÇÕES DE PRODUÇÃO — nunca apague (25/09)
+Um agente apagou a coleção `code_index` **de produção (1263 pontos)** ao
+rodar teste. As proteções existem no código; esta seção é só o índice.
+
+- **Produção** (estado do usuário — não escrever, não renomear, não
+  remover): `code_index`, `memories`, `books`, `vault` + por espaço
+  `pessoal_code`, `pessoal_memories`, `moe_code`, `moe_memories`,
+  `qwen4b_code`, `qwen4b_memories`. `memories` é a memória do agente.
+- **Limpar dado** = `core/safe_archive.archive_then_delete()`:
+  copiar → **ler de volta** → conferir contagem e hash → só então remover.
+  Já houve Qdrant aceitar a escrita e não gravar (HTTP 200 enganoso).
+  `safe` só é True com `verified` e `removed == requested`. Comece
+  sempre em `dry_run=True`. Aceita **IDs explícitos**, nunca filtro por
+  substring (filtro casa com texto que *cita* o termo).
+- **Teste só toca `jarvis_test_*`**, e sempre derivado:
+  `dataclasses.replace(Config(), qdrant_collection_code="jarvis_test_x")`.
+  O guard `tests/test_test_isolation.py` reprova o build se violar — ele
+  existe por causa do incidente acima; não burle o guard.
+- Antes de commitar: suíte + `git add -A` + `git ls-files`.
+  `./rebuild-host.sh` **só com o dono autorizando** (ativa config e
+  reinicia serviços).
+- Prompt pronto para mandar a outro agente: `docs/PROMPT-AGENTE-EXTERNO.md`.
+
 ## REGRA DE ARQUIVAMENTO (dono 25/09) — nunca apagar
 1. **Verificar antes de mover.** Não-versionado ≠ lixo (pode ser trabalho
    esquecido). "Duplicata" raramente é duplicata — os `FORK-STATUS.md` dos
