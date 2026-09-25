@@ -129,6 +129,27 @@ class LlamaCppBackend(LLMBackend):
             pass
         return requested or "default"
 
+
+    _CTX_CACHE: dict[str, int] = {}
+
+    def _context_window(self) -> int:
+        """n_ctx real do endpoint (o dev.py detecta e mostra no banner)."""
+        cached = self._CTX_CACHE.get(self._base_url)
+        if cached:
+            return cached
+        try:
+            r = self._session.get(f"{self._base_url}/props", timeout=3)
+            if r.status_code == 200:
+                d = r.json()
+                n = (d.get("default_generation_settings", {}) or {}).get("n_ctx") \
+                    or d.get("n_ctx") or d.get("context_length")
+                if n:
+                    self._CTX_CACHE[self._base_url] = int(n)
+                    return int(n)
+        except Exception:  # noqa: BLE001
+            pass
+        return 0
+
     def chat(
         self,
         messages: list[dict[str, Any]],
@@ -151,6 +172,20 @@ class LlamaCppBackend(LLMBackend):
         }
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+        # 25/09 — o "server error" no 1o turno do REPL: o payload real
+        # (system 1.5k + schema de 22 tools 1.8k + histórico) chega a 3.9k
+        # tokens e o perfil pede 1024 de resposta. Com ctx 4096 isso estoura
+        # a janela e o build devolve 500. Aqui a gente NUNCA pede mais do
+        # que cabe: max_tokens = ctx - prompt - margem.
+        _nctx = self._context_window()
+        if _nctx:
+            _est = len(json.dumps(payload["messages"], ensure_ascii=False)) // 4
+            _est += len(json.dumps(payload.get("tools", []), ensure_ascii=False)) // 4
+            _room = _nctx - _est - 128
+            if _room < 32:
+                _room = 32
+            want = max_tokens if max_tokens is not None else _room
+            payload["max_tokens"] = max(16, min(int(want), _room))
         if tools:
             payload["tools"] = tools
             if tool_choice:
