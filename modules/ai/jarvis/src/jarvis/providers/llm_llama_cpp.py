@@ -173,8 +173,9 @@ class LlamaCppBackend(LLMBackend):
             timeout=(self._connect_timeout, self._read_timeout),
             stream=stream,
         )
-        if resp.status_code >= 500:
-            body = resp.text[:200].lower()
+        _code = getattr(resp, "status_code", 200)
+        if _code >= 500:
+            body = str(getattr(resp, "text", ""))[:200].lower()
             if "failed to load" in body or "loading" in body:
                 # reload em andamento: espera e tenta 2x (2s, 5s)
                 for wait_s in (2.0, 5.0):
@@ -185,7 +186,7 @@ class LlamaCppBackend(LLMBackend):
                         timeout=(self._connect_timeout, self._read_timeout),
                         stream=stream,
                     )
-                    if resp.status_code < 500:
+                    if getattr(resp, "status_code", 200) < 500:
                         break
         elapsed = time.monotonic() - t0
         resp.raise_for_status()
