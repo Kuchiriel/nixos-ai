@@ -56,11 +56,11 @@ def test_fallback_tem_sampling_vendor():
     assert reg.sampling_for("jarvis-raw-strong")["top_k"] == 20
 
 
-def _client(monkeypatch, served, env_temp="-1"):
+def _client(monkeypatch, served, env_temp="-1", model="bonsai"):
     from unittest.mock import Mock
     from jarvis.providers.llm import LLMClient
     monkeypatch.setenv("JARVIS_LLM_TEMPERATURE", env_temp)
-    cfg = Config(llm_temperature=float(env_temp), llm_model="bonsai")
+    cfg = Config(llm_temperature=float(env_temp), llm_model=model)
     c = LLMClient(cfg, session=Mock())
     monkeypatch.setattr(c, "_served_model_id", lambda: served)
     return c
@@ -83,3 +83,11 @@ def test_resolve_env_vence_registry(tmp_path, monkeypatch):
     _reg_json(tmp_path, monkeypatch)
     c = _client(monkeypatch, "bonsai", env_temp="0.2")
     assert c._resolve_temperature(None) == 0.2
+
+
+def test_resolve_legado_bonsai_nunca_greedy(tmp_path, monkeypatch):
+    # Servidor fora do registry: bonsai cai no legado → 0.5 (vendor),
+    # nunca 0.0 (greedy colapsa, medido 25/09).
+    _reg_json(tmp_path, monkeypatch)
+    c = _client(monkeypatch, "bonsai-desconhecido", model="")
+    assert c._resolve_temperature(None) == 0.5

@@ -458,10 +458,12 @@ class LLMClient:
                     return float(s["temperature"])
             except Exception:  # noqa: BLE001 — política nunca derruba a chamada
                 break
-        # Legado (servidor sem registry): heurística antiga preservada.
+        # Legado (servidor sem registry): heurística antiga preservada, mas
+        # bonsai NUNCA 0.0 — greedy colapsa (2/2 idênticas, medido 25/09);
+        # vendor/GGUF default é 0.5.
         blob = f"{mid} {name}".lower()
         if "bonsai" in blob or "ternary" in blob or "q2_0" in blob or "pq2" in blob:
-            return 0.0
+            return 0.5
         if mid or name:
             return 0.7
         return 0.0
