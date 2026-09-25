@@ -1,0 +1,111 @@
+{
+  "rodadas": [
+    {
+      "ts": "2026-09-25T14:16:12",
+      "modelo": "/home/nixos/models/gemma-3-4b-it-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10735-842b188/llama-server",
+      "flags": {
+        "threads": 8,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "gemma-3-4b-it-Q4_K_M.gguf",
+          "rotulo": "ngl0",
+          "ngl": 0,
+          "n_cpu_moe": null,
+          "threads": 8,
+          "ctx": 8192,
+          "port": 8901,
+          "carregou": false,
+          "erro": "nao_carregou",
+          "pp_tps": null,
+          "tg_tps": null,
+          "tps_relatido": null,
+          "segundos": null,
+          "vram_mb": null,
+          "gpu_util_pct": null,
+          "ram_rss_gb": null,
+          "raw_timings": {}
+        },
+        {
+          "modelo": "gemma-3-4b-it-Q4_K_M.gguf",
+          "rotulo": "ngl99",
+          "ngl": 99,
+          "n_cpu_moe": null,
+          "threads": 8,
+          "ctx": 8192,
+          "port": 8902,
+          "carregou": false,
+          "erro": "nao_carregou",
+          "pp_tps": null,
+          "tg_tps": null,
+          "tps_relatido": null,
+          "segundos": null,
+          "vram_mb": null,
+          "gpu_util_pct": null,
+          "ram_rss_gb": null,
+          "raw_timings": {}
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T14:16:59",
+      "modelo": "/home/nixos/models/gemma-3-4b-it-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10735-842b188/llama-server",
+      "flags": {
+        "threads": 8,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "gemma-3-4b-it-Q4_K_M.gguf",
+          "rotulo": "ngl0",
+          "ngl": 0,
+          "n_cpu_moe": null,
+          "threads": 8,
+          "ctx": 8192,
+          "port": 8903,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 108.52,
+          "tg_tps": 18.88,
+          "tps_relatido": 1.0,
+          "segundos": 16.33,
+          "vram_mb": 4763,
+          "gpu_util_pct": 0,
+          "ram_rss_gb": 2.89,
+          "raw_timings": {
+            "prompt_n": 53,
+            "prompt_ms": 488.408,
+            "prompt_per_second": 108.51583102651881,
+            "predicted_n": 300,
+            "predicted_ms": 15837.805,
+            "predicted_per_second": 18.878878733511364
+          }
+        },
+        {
+          "modelo": "gemma-3-4b-it-Q4_K_M.gguf",
+          "rotulo": "ngl99",
+          "ngl": 99,
+          "n_cpu_moe": null,
+          "threads": 8,
+          "ctx": 8192,
+          "port": 8904,
+          "carregou": false,
+          "erro": "nao_carregou",
+          "pp_tps": null,
+          "tg_tps": null,
+          "tps_relatido": null,
+          "segundos": null,
+          "vram_mb": null,
+          "gpu_util_pct": null,
+          "ram_rss_gb": null,
+          "raw_timings": {}
+        }
+      ]
+    }
+  ]
+}
