@@ -171,6 +171,17 @@ def _log_dir() -> Path:
     return Path.home() / ".local" / "state" / "jarvis" / "logs"
 
 
+def _cmd_space_serve(args: argparse.Namespace) -> int:
+    import json
+
+    from jarvis.core import spaces
+
+    sp = spaces.get(args.name)
+    rep = spaces.serve(sp, stop=args.stop)
+    print(json.dumps(rep, ensure_ascii=False))
+    return 0
+
+
 def _cmd_space_list(_args: argparse.Namespace) -> int:
     from jarvis.core import spaces
 
@@ -241,6 +252,10 @@ def _cmd_space_shell(args: argparse.Namespace) -> int:
     if sp.vault_enc and sp.key_path() and not sp.key_path().exists():
         print(f"aviso: chave ausente ({sp.key_file}) — rode:"
               f" sudo jarvis space keygen {sp.name}", file=sys.stderr)
+    # sobe o modelo do space se ele tem seção `model` (1 LLM por vez)
+    if sp.model:
+        rep = spaces.serve(sp)
+        print(f"[space {sp.name}] modelo: {rep}", file=sys.stderr)
     return spaces.exec_in(sp, ["jarvis", "dev"])
 
 
@@ -1013,6 +1028,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp_purge.add_argument("--apply", action="store_true",
                           help="executa (sem isto é só dry-run)")
     sp_purge.set_defaults(func=_cmd_space_purge)
+
+    sp_serve = space_sub.add_parser(
+        "serve", help="sobe/derruba o modelo local do space")
+    sp_serve.add_argument("name")
+    sp_serve.add_argument("--stop", action="store_true")
+    sp_serve.set_defaults(func=_cmd_space_serve)
 
     p_intent = sub.add_parser("intent", help="classifica a intenção de um texto")
     p_intent.add_argument("text")
