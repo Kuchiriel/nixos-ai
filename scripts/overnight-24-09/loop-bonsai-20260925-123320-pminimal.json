@@ -1,0 +1,66 @@
+{
+  "ts": "2026-09-25__12-36-13",
+  "summary": {
+    "total": 3,
+    "world_ok": 0,
+    "false_done": 0,
+    "by_tier": {
+      "easy": {
+        "n": 3,
+        "ok": 0
+      }
+    },
+    "avg_elapsed_s": 0.6
+  },
+  "results": [
+    {
+      "task_id": "E1-write",
+      "tier": "easy",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 1,
+      "missed": [
+        "file_exists:/tmp/jarvis-ch/e1.txt",
+        "file_contains:/tmp/jarvis-ch/e1.txt::progressive-one"
+      ],
+      "turns": 0,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 0.6,
+      "rc": 1
+    },
+    {
+      "task_id": "E2-read",
+      "tier": "easy",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 1,
+      "missed": [
+        "output_contains:quick brown fox"
+      ],
+      "turns": 0,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 0.7,
+      "rc": 1
+    },
+    {
+      "task_id": "E3-count",
+      "tier": "easy",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 1,
+      "missed": [
+        "file_contains:/tmp/jarvis-ch/count.txt::4"
+      ],
+      "turns": 0,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 0.6,
+      "rc": 1
+    }
+  ]
+}
