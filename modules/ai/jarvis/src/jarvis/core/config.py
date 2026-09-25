@@ -54,6 +54,10 @@ class Config:
 
     # --- Qdrant ---
     qdrant_url: str = field(default_factory=lambda: _env_str("JARVIS_QDRANT_URL", "http://127.0.0.1:6333"))
+    # Chave do Qdrant em arquivo (24/09): self-hosted sem api_key deixa
+    # qualquer processo local ler/escrever qualquer coleção. O arquivo é
+    # root/nixos 600 fora do repo — a chave nunca vai pro git nem pro env.
+    qdrant_api_key_file: str = field(default_factory=lambda: _env_str("JARVIS_QDRANT_API_KEY_FILE", ""))
 
     # --- Estado da aplicação (separado da config NixOS) ---
     state_dir: Path = field(default_factory=lambda: Path(_env_str("JARVIS_STATE_DIR", "~/.local/state/jarvis")).expanduser())

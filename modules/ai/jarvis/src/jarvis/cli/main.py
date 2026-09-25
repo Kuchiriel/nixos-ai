@@ -171,6 +171,144 @@ def _log_dir() -> Path:
     return Path.home() / ".local" / "state" / "jarvis" / "logs"
 
 
+def _cmd_space_list(_args: argparse.Namespace) -> int:
+    from jarvis.core import spaces
+
+    for name, sp in sorted(spaces.load().items()):
+        marks = []
+        if sp.vault_enc:
+            marks.append("vault cifrado")
+        if sp.local_only:
+            marks.append("local-only")
+        if sp.read_roots:
+            marks.append(f"raízes: {', '.join(sp.read_roots)}")
+        if sp.encrypt_collections:
+            marks.append(f"payload cifrado: {', '.join(sp.encrypt_collections)}")
+        print(f"{name:12} {' | '.join(marks) or 'aberto'}")
+    return 0
+
+
+def _cmd_space_create(args: argparse.Namespace) -> int:
+    from jarvis.core import spaces
+
+    sp = spaces.create(args.name, description=args.description,
+                       read_roots=args.read_root,
+                       encrypted=not args.no_encrypt)
+    spaces.ensure_dirs(sp)
+    print(f"space '{sp.name}' criado: {sp.state_dir}")
+    print(f"  vault cifrado: {'sim' if sp.vault_enc else 'NÃO'}"
+          f" (chave: {sp.key_file or '-'})")
+    print(f"  coleções: {sp.collection('code')}, {sp.collection('memories')},"
+          f" {sp.collection('books')}")
+    if sp.vault_enc:
+        print(f"  próximo passo: sudo jarvis space keygen {sp.name}")
+    return 0
+
+
+def _cmd_space_show(args: argparse.Namespace) -> int:
+    from jarvis.core import spaces
+
+    print(spaces.show(spaces.get(args.name)))
+    return 0
+
+
+def _cmd_space_env(args: argparse.Namespace) -> int:
+    from jarvis.core import spaces
+
+    print(spaces.shell_hint(spaces.get(args.name)))
+    return 0
+
+
+def _cmd_space_exec(args: argparse.Namespace) -> int:
+    from jarvis.core import spaces
+
+    argv = list(args.argv)
+    if argv and argv[0] == "--":
+        argv = argv[1:]
+    if not argv:
+        print("uso: jarvis space exec <name> -- <comando>", file=sys.stderr)
+        return 2
+    sp = spaces.get(args.name)
+    spaces.ensure_dirs(sp)
+    return spaces.exec_in(sp, argv)
+
+
+def _cmd_space_shell(args: argparse.Namespace) -> int:
+    from jarvis.core import spaces
+
+    sp = spaces.get(args.name)
+    spaces.ensure_dirs(sp)
+    if sp.vault_enc and sp.key_path() and not sp.key_path().exists():
+        print(f"aviso: chave ausente ({sp.key_file}) — rode:"
+              f" sudo jarvis space keygen {sp.name}", file=sys.stderr)
+    return spaces.exec_in(sp, ["jarvis", "dev"])
+
+
+def _cmd_space_keygen(args: argparse.Namespace) -> int:
+    from jarvis.core import spaces
+
+    sp = spaces.get(args.name)
+    path = spaces.keygen(sp)
+    print(f"chave: {path}")
+    print("guarde uma cópia fora da máquina — sem ela o vault é ilegível")
+    return 0
+
+
+def _cmd_space_doctor(args: argparse.Namespace) -> int:
+    import json
+
+    from jarvis.core import spaces
+
+    rep = spaces.doctor(spaces.get(args.name))
+    print(json.dumps(rep, indent=2, ensure_ascii=False))
+    return 0
+
+
+def _cmd_space_purge(args: argparse.Namespace) -> int:
+    from jarvis.core import spaces
+
+    sp = spaces.get(args.name)
+    coll = args.collection
+    needle = args.path_contains
+    base = os.environ.get("JARVIS_QDRANT_URL", "http://127.0.0.1:6333")
+    import requests
+
+    total, matched, ids = 0, 0, []
+    offset = None
+    while True:
+        body = {"limit": 1000, "with_payload": ["path"], "with_vector": False}
+        if offset is not None:
+            body["offset"] = offset
+        r = requests.post(f"{base}/collections/{coll}/points/scroll",
+                          json=body, timeout=30)
+        r.raise_for_status()
+        res = r.json()["result"]
+        pts = res["points"]
+        total += len(pts)
+        for p in pts:
+            path = (p.get("payload") or {}).get("path", "")
+            if needle in path:
+                matched += 1
+                ids.append(p["id"])
+        offset = res.get("next_page_offset")
+        if offset is None:
+            break
+    print(f"coleção {coll}: {total} pontos, {matched} casam '{needle}'")
+    if not matched:
+        return 0
+    if not args.apply:
+        print("dry-run: nada apagado. rode de novo com --apply")
+        return 0
+    for i in range(0, len(ids), 256):
+        chunk = ids[i:i + 256]
+        rr = requests.post(
+            f"{base}/collections/{coll}/points/delete",
+            json={"points": chunk}, timeout=60)
+        rr.raise_for_status()
+    print(f"purados {matched} pontos de {coll}")
+    return 0
+
+
 def _cmd_profile_show(_args: argparse.Namespace) -> int:
     from jarvis.core.user_profile import UserProfile, profile_show
 
@@ -833,6 +971,48 @@ def build_parser() -> argparse.ArgumentParser:
     p_pforget = profile_sub.add_parser("forget", help="remove uma preferencia")
     p_pforget.add_argument("key", help="chave a remover")
     p_pforget.set_defaults(func=_cmd_profile_forget)
+
+    p_space = sub.add_parser(
+        "space",
+        help="spaces: ambientes isolados (state/vault cifrado/coleções)")
+    space_sub = p_space.add_subparsers(dest="space_cmd", required=True)
+    sp_list = space_sub.add_parser("list", help="lista os spaces")
+    sp_list.set_defaults(func=_cmd_space_list)
+    sp_create = space_sub.add_parser("create", help="cria um space isolado")
+    sp_create.add_argument("name")
+    sp_create.add_argument("--description", default="")
+    sp_create.add_argument("--read-root", action="append", default=[],
+                           help="raiz que o space pode ler (repetível)")
+    sp_create.add_argument("--no-encrypt", action="store_true",
+                           help="sem vault cifrado (não recomendado p/ pessoal)")
+    sp_create.set_defaults(func=_cmd_space_create)
+    sp_show = space_sub.add_parser("show", help="detalhes + env de um space")
+    sp_show.add_argument("name", nargs="?", default="default")
+    sp_show.set_defaults(func=_cmd_space_show)
+    sp_env = space_sub.add_parser("env", help="imprime o env (para eval/export)")
+    sp_env.add_argument("name", nargs="?", default="default")
+    sp_env.set_defaults(func=_cmd_space_env)
+    sp_exec = space_sub.add_parser("exec", help="roda um comando dentro do space")
+    sp_exec.add_argument("name")
+    sp_exec.add_argument("argv", nargs=argparse.REMAINDER)
+    sp_exec.set_defaults(func=_cmd_space_exec)
+    sp_shell = space_sub.add_parser("shell", help="abre o jarvis dev no space")
+    sp_shell.add_argument("name")
+    sp_shell.set_defaults(func=_cmd_space_shell)
+    sp_keygen = space_sub.add_parser("keygen", help="gera a chave do vault")
+    sp_keygen.add_argument("name")
+    sp_keygen.set_defaults(func=_cmd_space_keygen)
+    sp_doctor = space_sub.add_parser("doctor", help="diagnostica o space")
+    sp_doctor.add_argument("name", nargs="?", default="default")
+    sp_doctor.set_defaults(func=_cmd_space_doctor)
+    sp_purge = space_sub.add_parser(
+        "purge", help="apaga pontos de uma coleção por filtro de path")
+    sp_purge.add_argument("name")
+    sp_purge.add_argument("--collection", required=True)
+    sp_purge.add_argument("--path-contains", required=True)
+    sp_purge.add_argument("--apply", action="store_true",
+                          help="executa (sem isto é só dry-run)")
+    sp_purge.set_defaults(func=_cmd_space_purge)
 
     p_intent = sub.add_parser("intent", help="classifica a intenção de um texto")
     p_intent.add_argument("text")

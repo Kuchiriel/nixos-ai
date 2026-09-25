@@ -31,6 +31,10 @@ lib.mkIf config.services.jarvis.enable {
   systemd.services.qdrant = {
     partOf = ["jarvis.target"];
     wantedBy = ["jarvis.target" "multi-user.target"];
+    # 24/09: self-hosted sem api_key deixa qualquer processo local (e
+    # qualquer agente) ler QUALQUER coleção — inclusive pessoal_code. A
+    # chave vem de EnvironmentFile root:nixos 600, nunca do store do Nix.
+    environmentFiles = ["/etc/jarvis-secrets/qdrant.env"];
   };
 
   systemd.tmpfiles.rules = [

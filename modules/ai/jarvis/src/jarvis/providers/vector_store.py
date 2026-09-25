@@ -12,8 +12,10 @@ algoritmo híbrido do legado (semântico + símbolos + filename) sobre Qdrant.
 
 from __future__ import annotations
 
+import os
 import requests
 import zlib
+from pathlib import Path
 from typing import Any
 
 from jarvis.core.config import Config
@@ -74,6 +76,20 @@ class QdrantStore:
         self._cfg = config or Config()
         self._base = self._cfg.qdrant_url.rstrip("/")
         self._timeout = 10.0
+        # Chave do Qdrant (24/09): self-hosted sem api_key = qualquer processo
+        # local lê tudo. A chave vem de arquivo (root/nixos 600), nunca do repo.
+        self._api_key: str | None = None
+        key_file = getattr(self._cfg, "qdrant_api_key_file", "") or ""
+        if key_file:
+            try:
+                self._api_key = Path(key_file).expanduser().read_text(
+                    encoding="utf-8").strip() or None
+            except OSError:
+                self._api_key = None
+        self._enc_collections = {
+            c.strip() for c in os.environ.get(
+                "JARVIS_RAG_ENCRYPT_COLLECTIONS", "").split(",") if c.strip()
+        }
 
     # --- infra ---
 
@@ -81,8 +97,12 @@ class QdrantStore:
         return http_health_check(f"{self._base}/collections", timeout=2.0)
 
     def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        headers = dict(kwargs.pop("headers", {}) or {})
+        if self._api_key:
+            headers.setdefault("api-key", self._api_key)
         try:
-            resp = requests.request(method, f"{self._base}{path}", timeout=self._timeout, **kwargs)
+            resp = requests.request(method, f"{self._base}{path}", timeout=self._timeout,
+                                    headers=headers or None, **kwargs)
         except requests.RequestException as exc:
             raise VectorStoreError(f"falha de conexão com Qdrant: {exc}") from exc
         if resp.status_code >= 400:
@@ -120,13 +140,35 @@ class QdrantStore:
         return vector
 
     def upsert(self, name: str, points: list[dict[str, Any]]) -> None:
-        """points: [{id, vector, payload}] — vector pode ser lista (dense) ou dict nomeado."""
+        """points: [{id, vector, payload}] — vector pode ser lista (dense) ou dict nomeado.
+
+        Coleção em JARVIS_RAG_ENCRYPT_COLLECTIONS → os campos de TEXTO do
+        payload são cifrados (Fernet) antes de irem ao Qdrant. O embedding
+        continua em claro porque é computado localmente; o índice vira
+        ilegível sem a chave do space (proteção real at-rest, 24/09).
+        """
+        from jarvis.core.rag_crypto import encrypt_payload
+
         normalized = []
         for p in points:
             item = dict(p)
             item["vector"] = self._normalize_vector(p["vector"])
+            if "payload" in item and self._enc_collections and (
+                    name in self._enc_collections):
+                item["payload"] = encrypt_payload(item["payload"])
             normalized.append(item)
         self._request("PUT", f"/collections/{name}/points", json={"points": normalized})
+
+    def _decrypt_results(self, name: str, results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Decifra o payload na volta (só nas coleções protegidas)."""
+        if not self._enc_collections or name not in self._enc_collections:
+            return results
+        from jarvis.core.rag_crypto import decrypt_payload
+
+        for r in results:
+            if isinstance(r, dict) and isinstance(r.get("payload"), dict):
+                r["payload"] = decrypt_payload(r["payload"])
+        return results
 
     def delete_points(self, name: str, ids: list[int]) -> None:
         self._request(
@@ -154,7 +196,7 @@ class QdrantStore:
         if score_threshold is not None:
             payload["score_threshold"] = score_threshold
         result = self._request("POST", f"/collections/{name}/points/search", json=payload)
-        return result.get("result", [])
+        return self._decrypt_results(name, result.get("result", []))
 
     def search_hybrid(
         self,
@@ -196,8 +238,8 @@ class QdrantStore:
         # Query API retorna {"result": {"points": [...]}} (diferente do /points/search)
         inner = result.get("result", {})
         if isinstance(inner, dict):
-            return inner.get("points", [])
-        return inner if isinstance(inner, list) else []
+            return self._decrypt_results(name, inner.get("points", []))
+        return self._decrypt_results(name, inner) if isinstance(inner, list) else []
 
     def count(self, name: str) -> int:
         result = self._request("POST", f"/collections/{name}/points/count", json={"exact": True})
