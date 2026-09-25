@@ -277,3 +277,15 @@ def test_fuzzy_preserves_arg_case() -> None:
     ch, _ = _channel(remember_fn=lambda t: f"REM:{t}")
     out = ch.handle_message("/REMEMBER Prefiro Café", chat_id=123)
     assert out == "REM:Prefiro Café"
+
+
+# --- steering ---
+
+def test_steer_stop_routing(tmp_path, monkeypatch) -> None:
+    ch, _ = _channel()
+    monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path))
+    assert ch.handle_message("/steer vá pela esquerda", chat_id=123).startswith("Steering")
+    assert (tmp_path / "steer.md").exists()
+    assert ch.handle_message("/stop", chat_id=123).startswith("STOP")
+    assert ch.handle_message("/steer", chat_id=123).startswith("Uso")
+    assert ch.handle_message("/stop", chat_id=999) is None

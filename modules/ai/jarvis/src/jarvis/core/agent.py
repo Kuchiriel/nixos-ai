@@ -1284,6 +1284,28 @@ class Agent:
         _mal_streak = 0
         for turn in range(max_turns):
             result.turns += 1
+            # Steering (dono, dia de dor): arquivo bem-conhecido lido no
+            # topo do turno — redireciona ou para o run sem matar processo.
+            # Origens: terminal, Telegram /steer|/stop, vault.
+            try:
+                from jarvis.core.steer import check_steer, is_stop
+                _steer = check_steer()
+            except Exception:
+                _steer = None
+            if _steer:
+                if is_stop(_steer):
+                    result.final_response = (
+                        "STOPPED: parada pedida pelo dono mid-run "
+                        f"({result.turns} turnos executados).")
+                    result.verdict = "STOPPED"
+                    break
+                messages.append({"role": "user",
+                                 "content": f"[STEER do dono mid-run] {_steer}"})
+                try:
+                    self.logger.emit("steered", detail={"turn": turn,
+                                                       "msg": _steer[:120]})
+                except Exception:
+                    pass
             # Circuit breaker de tempo: call stallada (TTFT travado sob
             # carga) não respeita max_turns — aborta honesto em vez de
             # pinar GPU até aborto manual (L8n3 real 19/09).

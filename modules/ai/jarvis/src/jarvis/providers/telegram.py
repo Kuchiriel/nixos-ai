@@ -167,7 +167,7 @@ class TelegramChannel:
     # ("/st"→/status, "opencode ..."→/opencode). Sem decorar linha exata.
     _COMMANDS = ("ask", "agent", "dev", "status", "sshkey", "opencode",
                  "remember", "vault", "force_local", "force_remote",
-                 "start", "help")
+                 "steer", "stop", "start", "help")
 
     @classmethod
     def _fuzzy_cmd(cls, text: str) -> tuple[str | None, str]:
@@ -215,6 +215,10 @@ class TelegramChannel:
             return self._handle_sshkey(arg)
         if cmd == "opencode":
             return self._handle_opencode(arg)
+        if cmd == "steer":
+            return self._handle_steer(arg)
+        if cmd == "stop":
+            return self._handle_steer("stop")
         if (text or "").strip().startswith("/"):
             return f"comando desconhecido: {(text or '').strip().split()[0]}\n\n{self._help_text()}"
         # default: pergunta livre
@@ -334,6 +338,22 @@ class TelegramChannel:
             out = out[:3800] + "\n... (truncado)"
         return out
 
+    @staticmethod
+    def _handle_steer(msg: str) -> str:
+        """Redireciona (ou para) o run ativo via arquivo steer."""
+        try:
+            from jarvis.core.steer import is_stop, send_steer
+        except Exception as e:
+            return f"steer indisponível: {e}"
+        if not (msg or "").strip():
+            return "Uso: `/steer <instrução>` ou `/stop`"
+        r = send_steer(msg)
+        if not r.get("ok"):
+            return f"steer falhou: {r.get('error')}"
+        if is_stop(msg):
+            return "STOP enfileirado — o run para no próximo turno."
+        return f"Steering enfileirado ({len(msg)} chars) — entra no próximo turno."
+
     def _handle_dev(self, task: str) -> str:
         """Executa uma tarefa de dev via REPL remoto."""
         if not task:
@@ -374,7 +394,8 @@ class TelegramChannel:
             "`/remember <fato>` — grava na memória episódica\n"
             "`/vault summarize|list` — memória de longo prazo\n"
             "`/sshkey <chave.pub>` — instala sua chave SSH (só aqui = só você)\n"
-            "`/opencode [-m prov/model] <tarefa>` — roda opencode remoto\n\n"
+            "`/opencode [-m prov/model] <tarefa>` — roda opencode remoto\n"
+            "`/steer <msg>` — redireciona o run ativo · `/stop` — para o run\n\n"
             "*Comandos diretos (respondem em ms, sem LLM)*\n"
             "`espaço em disco` · `quanto de memória tem?` · `uptime` · `qual kernel?`\n"
             "`processos ativos` · `quais livros tenho` · `leia o livro <nome>`\n\n"

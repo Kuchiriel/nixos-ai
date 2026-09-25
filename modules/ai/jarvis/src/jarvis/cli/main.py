@@ -64,6 +64,42 @@ def _cmd_chat(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_run(args: argparse.Namespace) -> int:
+    """One-shot não-interativo p/ scripts (estilo pi -p).
+
+    text: imprime resposta final. json: objeto {task, turns, verdict,
+    verified, response} p/ automação. Steering via steer.md continua
+    valendo durante o run.
+    """
+    import json as _json
+
+    from jarvis.core.agent import Agent
+
+    task = " ".join(args.task or [])
+    if not task.strip():
+        print("uso: jarvis run [--mode text|json] <tarefa>", file=sys.stderr)
+        return 2
+    agent = Agent(get_config())
+    try:
+        result = agent.run(task)
+    except KeyboardInterrupt:
+        print("interrompido (Ctrl+C)", file=sys.stderr)
+        return 130
+    if args.mode == "json":
+        print(_json.dumps({
+            "task": task,
+            "turns": result.turns,
+            "verdict": result.verdict,
+            "verified": result.verified,
+            "evidence": result.evidence,
+            "missing": result.missing,
+            "response": result.final_response,
+        }, ensure_ascii=False))
+    else:
+        print(result.final_response)
+    return 0 if result.verdict in ("VERIFIED", "STOPPED") else 1
+
+
 def _cmd_rag(args: argparse.Namespace) -> int:
     from jarvis.core.rag import HybridSearch
 
@@ -1235,6 +1271,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_dev.add_argument("--approve", action="store_true", help="permite aprovação para comandos com efeito")
     p_dev.add_argument("--transcript", default=None, help="salva transcript JSON (task, perfil, rc, mensagens) p/ scripting")
     p_dev.set_defaults(func=_cmd_dev)
+
+    # run — one-shot não-interativo p/ scripts (print/JSON, estilo pi -p).
+    p_run = sub.add_parser("run", help="executa 1 tarefa e sai (text|json)")
+    p_run.add_argument("task", nargs="+", help="tarefa")
+    p_run.add_argument("--mode", choices=["text", "json"], default="text",
+                       help="text: resposta final · json: objeto com turns/verdict/verified")
+    p_run.set_defaults(func=_cmd_run)
 
     p_launcher = sub.add_parser("launcher", help="abre o launcher GUI (Yad) para todas as features")
     p_launcher.add_argument("--status", action="store_true", help="status rápido (notification)")
