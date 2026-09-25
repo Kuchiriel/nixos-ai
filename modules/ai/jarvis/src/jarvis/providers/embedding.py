@@ -1,7 +1,7 @@
 """Embedding de texto longo: chunk + mean-pool.
 
-Contexto: o servidor de embeddings roda com n_ctx pequeno (2048 no
-nomic-embed-text-v2-moe). Texto acima disso faz o llama-server devolver
+Contexto: o servidor de embeddings roda com n_ctx pequeno (512 tokens,
+medido neste box). Texto acima disso faz o llama-server devolver
 500, e o chamador (remember/index) só vê exceção — memória some em
 silêncio. Aqui o texto é partido em pedaços que cabem, cada pedaço é
 embedado, e os vetores são combinados por mean-pooling com
@@ -13,8 +13,15 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 
-# ~1200 tokens por pedaço com folga; o servidor aceita 2048.
-CHUNK_CHARS = 4000
+# O servidor de embeddings deste box tem max context de 512 TOKENS (medido
+# 25/09: 4000 chars ~500 tokens passa, 7200 chars/902 tokens devolve 400
+# "larger than max context size (512)"). 4000 chars ficava RASPAR o
+# limite — e texto com mais chars/token (código, acentos, CJK) estourava.
+# Medido com texto PT-BR (acentos + maiusculas tokenizam pior que ASCII):
+# 2000 chars FALHA, 1600 OK. Ou seja ~3,1 chars/token nao vale: precisa
+# de folga real. 1200 chars ≈ 375 tokens = 27% abaixo do teto de 512.
+# Custa mais requests, e requests a mais e barato; perder a memoria e caro.
+CHUNK_CHARS = 1200
 OVERLAP_CHARS = 200
 
 
