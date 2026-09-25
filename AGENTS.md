@@ -116,6 +116,26 @@ scripts/                # Scripts auxiliares
   após mudar `modules/ai/jarvis/` (store congela código!); protocolo
   manhã em BUFFY §39; ponte p/ GuiaRenamer em BUFFY §42.
 
+## Loop overnight — o trabalho continua quando o dono dorme
+- **Método**: `scripts/LOOP-v2.md` (leia ANTES de inventar método). Ordem
+  fixa: modelo pequeno até o teto → endurecer o instrumento (gate novo) →
+  **atribuir** (mesma task em bonsai/Qwen3-4B/35B MoE: só no pequeno =
+  modelo; nos três = harness; só no grande = framing) → corrigir a camada
+  certa (mecânica antes de prompt) → medir → literatura quando o sintoma
+  tem nome (arXiv + `~/Books` + web).
+- **Executor**: `scripts/loop-runner.sh <ciclos> <modelo> [tier] [rounds]`
+  (`bonsai|fast|strong|moe`). Por ciclo: preflight → harness → A/B de
+  prompt (full/lean/minimal) → probe factual (CRPS) + de repetição.
+- **Onde está o estado**: log `/tmp/overnight/loop-runner.log`; evidência
+  datada `scripts/overnight-24-09/loop-*.json`; resumo `loop-STATE.md`.
+- **Proibido por design** (o runner não faz): serviço/rebuild/rota, push,
+  purga do `code_index`, medir com infra caída.
+- ⚠ **NUNCA afirmar "o overnight está rodando" sem verificar agora**:
+  `pgrep -af "[l]oop-runner"` + `tail /tmp/overnight/loop-runner.log` +
+  contagem de `TOTAL` no log. Já houve loop "rodando" que na verdade só
+  pulava ciclo por preflight falho (ver LOOP-OVERNIGHT-1: 39/40 pulados
+  porque o MoE morreu de OOM). Afirmar sem verificar = veredito inválido.
+
 ## Doutrina de tooling agentes (dono 16/09)
 - Caminho oficial: MCPs (rag/memory/lessons/vault) + harness (`LLMClient`,
   safe_editor, validator, checkpoint) + personas com handoff. Ver BUFFY §50.
