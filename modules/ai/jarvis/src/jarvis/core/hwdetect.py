@@ -37,6 +37,8 @@ class GPUInfo:
 class CPUInfo:
     name: str = "unknown"
     cores_physical: int = 0
+    cores_perf: int = 0   # P-cores (hyperthread) — o alvo de -t
+    cores_eff: int = 0    # E-cores (sem hyperthread)
     cores_logical: int = 0
     frequency_ghz: float = 0.0
     architecture: str = "unknown"
@@ -55,12 +57,14 @@ class SystemInfo:
 class LlamaConfig:
     """Recommended llama.cpp configuration."""
     gpu_layers: int = 99
+    layers_total: int = 0
     threads: int = 4
     context_size: int = 4096
     batch_size: int = 512
     ubatch_size: int = 256
     cpu_moe: int = 0
     kv_cache_type: str = "f16"
+    mlock: bool = False
     flash_attention: bool = True
     split_mode: str = "layer"
     reasoning: str = "medium"
@@ -81,13 +85,23 @@ def detect_hardware() -> SystemInfo:
         if result.returncode == 0:
             parts = result.stdout.strip().split(", ")
             if len(parts) >= 7:
+                def _num(txt: str) -> float | None:
+                    """nvidia-smi devolve '[N/A]' em notebook (ex.: power.limit
+                    em GPU laptop). float('[N/A]') CRASHAVA a deteccao inteira
+                    neste hardware (25/09) — agora vira None."""
+                    t = txt.strip()
+                    try:
+                        return float(t)
+                    except ValueError:
+                        return None
+
                 hw.gpu.name = parts[0].strip()
-                hw.gpu.vram_mb = int(float(parts[1].strip()))
+                v = _num(parts[1]); hw.gpu.vram_mb = int(v) if v else 0
                 hw.gpu.driver = parts[2].strip()
                 hw.gpu.compute_capability = parts[3].strip()
-                hw.gpu.power_limit_w = int(float(parts[4].strip()))
-                hw.gpu.temperature_c = int(float(parts[5].strip()))
-                hw.gpu.utilization_pct = int(float(parts[6].strip()))
+                v = _num(parts[4]); hw.gpu.power_limit_w = int(v) if v else 0
+                v = _num(parts[5]); hw.gpu.temperature_c = int(v) if v else 0
+                v = _num(parts[6]); hw.gpu.utilization_pct = int(v) if v else 0
 
         # CUDA version
         result2 = subprocess.run(
@@ -124,6 +138,41 @@ def detect_hardware() -> SystemInfo:
                 hw.cpu.frequency_ghz = float(line.split(":")[1].strip()) / 1000
 
         hw.cpu.cores_physical = len(physical_ids) * len(core_ids) if physical_ids and core_ids else os.cpu_count() or 1
+        # P-cores vs E-cores. Dois erros ja vistos aqui: (a) thread_siblings_list
+        # usa FAIXAS ("0-1"), entao split(',') da 1 para todo mundo; (b) cada
+        # P-core aparece em DUAS entradas (cpu0 e cpu1 tem o mesmo sibling list),
+        # entao contar por CPU da 12 em vez de 6. Aqui conta por GRUPO unico.
+        # Medido 25/09 no i7-13620H: 6P+4E = 10 fisicos, e o lscpu reporta
+        # "8". O alvo do -t sao os P-cores: -t6=16,4 | -t8=14,1 | -t10=10,4.
+        try:
+            cbase = Path("/sys/devices/system/cpu")
+            grupos: dict[str, int] = {}
+            for cp in cbase.glob("cpu[0-9]*"):
+                sibf = cp / "topology" / "thread_siblings_list"
+                if not sibf.exists():
+                    continue
+                txt = sibf.read_text().strip()
+                if not txt:
+                    continue
+                n = 0
+                for parte in txt.split(","):
+                    parte = parte.strip()
+                    if "-" in parte:
+                        a, _, b = parte.partition("-")
+                        try:
+                            n += int(b) - int(a) + 1
+                        except ValueError:
+                            n += 1
+                    elif parte:
+                        n += 1
+                grupos[txt] = n
+            perf = sum(n // 2 for n in grupos.values() if n >= 2)
+            eff = sum(1 for n in grupos.values() if n < 2)
+            if perf:
+                hw.cpu.cores_perf = perf
+                hw.cpu.cores_eff = eff
+        except Exception:
+            pass
         hw.cpu.cores_logical = os.cpu_count() or 1
         hw.cpu.architecture = os.uname().machine
     except Exception:
@@ -208,7 +257,23 @@ def recommend_config(
 
     # Estimate model size in bytes
     quant_multiplier = _quant_multiplier(model_quant)
-    model_size_gb = (model_size_b * 1e9 * quant_multiplier) / (8 * 1e9)  # bytes
+    # params(B) x bytes/param = bytes; /1e9 = GB. A versao anterior dividia
+    # por 8 DEPOIS de ja converter para bytes, ou seja, 8x menor: um 35B
+    # Q4_K_M (20GB em disco) aparecia como 2,8GB e cabia "facilmente" na
+    # VRAM. Isso e a raiz do erro de fit — e do config 2,7x mais lento.
+    model_size_gb = model_size_b * quant_multiplier
+
+    # MoE: TODO expert tem que estar residente em ALGUM lugar (GPU ou RAM),
+    # porque o router pode escolher qualquer um no proximo token. Entao o
+    # FIT e decidido pelo TAMANHO TOTAL do arquivo, nunca pelos parametros
+    # ATIVOS. A versao anterior usava ativos (3B x 0,55 = 1,6GB) e conclui
+    # "cabe na VRAM" -> gpu_layers=99, cpu_moe=0, que e exatamente a config
+    # que o sweep de 25/09 mediu como 2,7x MAIS LENTA (cmoe37=16,1 t/s).
+    # Se active_params_b for informado e o total nao, sobe o total a partir
+    # dele e sinaliza a uncertainties em vez de fingir que cabe.
+    if model_type == "moe" and active_params_b and model_size_b < active_params_b:
+        model_size_b = active_params_b * 2.0  # piso conservador p/ MoE denso-em-total
+        notes.append(f"MoE: total estimado como {model_size_b:.0f}B (de active_params)")
 
     # VRAM budget (leave 1GB for system/overhead)
     vram_budget_gb = (hw.gpu.vram_mb - 1024) / 1024 if hw.gpu.vram_mb > 1024 else 0
@@ -239,12 +304,16 @@ def recommend_config(
 
     # Threads: use physical cores, not hyperthreads
     # For MoE models, fewer threads can be better (less contention)
-    if model_type == "moe":
-        config.threads = max(2, hw.cpu.cores_physical // 2)
-        notes.append(f"MoE mode: {config.threads} threads (half physical cores)")
-    else:
-        config.threads = max(2, hw.cpu.cores_physical - 2)
-        notes.append(f"Dense mode: {config.threads} threads (physical cores - 2)")
+    # Threads = P-CORES, nao "metade dos fisicos" nem "fisicos - 2".
+    # Medido 25/09 no i7-13620H (hibrido 6P+4E=10 fisicos, e o lscpu
+    # reporta "8" escondendo a assimetria):
+    #   -t 6 = 16,4 | -t 8 = 14,1 | -t 10 = 10,4 | -t 12 = 7,9 t/s
+    # E-cores e hyperthread competem e custam ~14%. No MoE -t 6 == -t 8
+    # (bandwidth-bound), mas -t 6 e seguro nos dois casos.
+    perf = hw.cpu.cores_perf or hw.cpu.cores_physical
+    config.threads = max(2, perf)
+    notes.append(f"{config.threads} threads (P-cores; {hw.cpu.cores_physical} fisicos"
+                 + (f", {hw.cpu.cores_eff} E-cores ignorados" if hw.cpu.cores_eff else "") + ")")
 
     # Context size: based on available RAM after model
     remaining_ram_gb = total_budget_gb - model_size_gb
@@ -255,32 +324,52 @@ def recommend_config(
         config.context_size = 2048
         notes.append(f"Limited context ({config.context_size}) due to memory")
 
-    # Batch size: based on VRAM
-    if vram_budget_gb > 8:
-        config.batch_size = 2048
-    elif vram_budget_gb > 4:
-        config.batch_size = 1024
-    else:
-        config.batch_size = 512
-
-    # Ubatch: typically 1/4 of batch
-    config.ubatch_size = config.batch_size // 4
+    # Batch/ubatch: ALINHADO com models.nix (512/512). Antes o heuristico
+    # dava 1024/256 nesta maquina, que (a) discordava do service e (b) mexia
+    # na decisao de offload do ik_llama.cpp, cujo threshold e
+    # 32 * total_experts/active_experts (~1024 tokens p/ 35B-A3B). Errar o
+    # ubatch muda se os experts vao ou nao pela PCIe — que e exatamente o
+    # comportamento bimodal (40 vs 15 t/s) que o sweep de 25/09 expôs.
+    config.batch_size = 512
+    config.ubatch_size = 512
 
     # CPU MoE layers (for MoE models)
     if model_type == "moe" and config.gpu_layers > 0:
         # Offload some MoE layers to CPU to reduce VRAM pressure
-        config.cpu_moe = max(0, config.gpu_layers - 20)
+        # Direcao INVERTIDA (medido 25/09 no 35B-A3B): experts na VRAM
+        # sao piores, nao melhores. Expert na GPU tem que vir pelo PCIe
+        # (Gen4 x4 = 6-7 GB/s) em vez de RAM (41-83 GB/s). Curva em U
+        # invertido: cmoe41 = 40,3 t/s | cmoe39 = 19,9 | cmoe37 = 16,1.
+        # A heuristica antiga (gpu_layers - 20) punha experts na GPU.
+        # Agora: quase tudo na CPU, e o que sobra de VRAM vai para
+        # attention/dense/KV — que correm em TODOS os tokens.
+        # Sem contagem de camadas conhecida, assume o PESSIM caso seguro
+        # para o que medimos: quase tudo na CPU. experts na GPU afogam no
+        # PCIe (sweep 25/09: cmoe37 = 16,1 t/s vs cmoe41 = 40,3). Um
+        # default otimista aqui custa 2,7x; um pessimista so custa um pouco
+        # de PP. models.nix usa 35 de 48.
+        total = config.layers_total or 48
+        config.cpu_moe = max(0, total - 1)
         if config.cpu_moe > 0:
-            notes.append(f"Offloading {config.cpu_moe} MoE layers to CPU")
+            notes.append(f"{config.cpu_moe}/{total} MoE layers on CPU "
+                         f"(experts na GPU afogam no PCIe; medido 25/09)")
 
     # KV cache type
+    # KV: nesta maquina (6GB VRAM) a heuristica antiga escolhia q8_0, mas o
+    # service roda q4_0 e foi com q4_0 que o sweep mediu 40 t/s. Alineado.
     if vram_budget_gb > 8:
-        config.kv_cache_type = "f16"
-    elif vram_budget_gb > 4:
         config.kv_cache_type = "q8_0"
     else:
         config.kv_cache_type = "q4_0"
-        notes.append(f"Using {config.kv_cache_type} KV cache to save memory")
+    notes.append(f"KV cache {config.kv_cache_type} (alinhado com models.nix)")
+
+    # mlock: para modelo grande em RAM, evita paginacao/zram. Medido 25/09:
+    # --mlock esta nos perfis MoE do models.nix. O sweep NAO conseguiu medir
+    # se estabiliza o bimodal (runs estouraram o timeout), entao aqui e
+    # coerencia com o service, nao um ganho comprovado.
+    config.mlock = model_size_gb > 16
+    if config.mlock:
+        notes.append("--mlock: pesos >16GB travados na RAM (alinhado com models.nix)")
 
     # Flash attention
     config.flash_attention = hw.gpu.vram_mb >= 4096  # Enable if >= 4GB VRAM
