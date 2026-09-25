@@ -136,3 +136,57 @@
 ## ciclo 14 — 2026-09-25 13:28 · modelo=bonsai
 - harness: /tmp/overnight/loop-bonsai-20260925-132455.json (evidência copiada em scripts/overnight-24-09/)
 - prompt A/B: loop-bonsai-20260925-132455-p{full,lean,minimal}.json
+
+## frente @bonsai — 2026-09-25 13:35
+- score: 10/12
+- gates que este tier NAO fecha: H1-config-discovery, H2-syntax-fix
+- false_done: H1-config-discovery
+
+## ciclo 15 — 2026-09-25 13:35 · modelo=bonsai
+- harness: /tmp/overnight/loop-bonsai-20260925-132921.json (evidência copiada em scripts/overnight-24-09/)
+- prompt A/B: loop-bonsai-20260925-132921-p{full,lean,minimal}.json
+
+## frente @bonsai — 2026-09-25 13:40
+- score: 11/12
+- gates que este tier NAO fecha: H1-config-discovery
+- false_done: H1-config-discovery
+
+## ciclo 16 — 2026-09-25 13:40 · modelo=bonsai
+- harness: /tmp/overnight/loop-bonsai-20260925-133648.json (evidência copiada em scripts/overnight-24-09/)
+- prompt A/B: loop-bonsai-20260925-133648-p{full,lean,minimal}.json
+
+## frente @bonsai — 2026-09-25 13:43
+- score: 12/12
+- gates que este tier NAO fecha: nenhum
+- false_done: nenhum
+
+## ciclo 17 — 2026-09-25 13:43 · modelo=bonsai
+- harness: /tmp/overnight/loop-bonsai-20260925-134102.json (evidência copiada em scripts/overnight-24-09/)
+- prompt A/B: loop-bonsai-20260925-134102-p{full,lean,minimal}.json
+
+## frente @bonsai — 2026-09-25 13:47
+- score: 11/12
+- gates que este tier NAO fecha: H2-syntax-fix
+- false_done: nenhum
+
+## ciclo 18 — 2026-09-25 13:47 · modelo=bonsai
+- harness: /tmp/overnight/loop-bonsai-20260925-134443.json (evidência copiada em scripts/overnight-24-09/)
+- prompt A/B: loop-bonsai-20260925-134443-p{full,lean,minimal}.json
+
+## frente @bonsai — 2026-09-25 13:52
+- score: 11/12
+- gates que este tier NAO fecha: H1-config-discovery
+- false_done: H1-config-discovery
+
+## ciclo 19 — 2026-09-25 13:52 · modelo=bonsai
+- harness: /tmp/overnight/loop-bonsai-20260925-134850.json (evidência copiada em scripts/overnight-24-09/)
+- prompt A/B: loop-bonsai-20260925-134850-p{full,lean,minimal}.json
+
+## frente @bonsai — 2026-09-25 13:56
+- score: 11/12
+- gates que este tier NAO fecha: H1-config-discovery
+- false_done: H1-config-discovery
+
+## ciclo 20 — 2026-09-25 13:56 · modelo=bonsai
+- harness: /tmp/overnight/loop-bonsai-20260925-135306.json (evidência copiada em scripts/overnight-24-09/)
+- prompt A/B: loop-bonsai-20260925-135306-p{full,lean,minimal}.json

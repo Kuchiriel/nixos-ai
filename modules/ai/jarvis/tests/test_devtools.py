@@ -452,7 +452,7 @@ def test_dev_tools_schema() -> None:
     assert "run_tests" in names
     assert "sanitize_secrets" in names
     assert "build_json_dataset" in names
-    assert len(DEV_TOOLS) == 12  # +load_skill (skills on-demand) às 11 acima (execute_shell is in agent.py TOOLS)
+    assert len(DEV_TOOLS) == 15  # 11 +load_skill +human_click/human_type/human_key (execute_shell is in agent.py TOOLS)
 
 
 def test_dev_tools_have_required_params() -> None:

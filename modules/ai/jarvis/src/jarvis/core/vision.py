@@ -314,3 +314,153 @@ def observe_screen(args: dict[str, Any]) -> str:
 
     except LLMError as e:
         return f"ERROR: vision analysis failed: {e}. Screenshot saved at {image_path}"
+
+
+# ---------------------------------------------------------------------------
+# Fallback em cascata — observe NUNCA falha por falta de modelo vision
+# (dono 24/09): mmproj local → Gemini free → NVIDIA NIM vision → OCR.
+# Cada nível registra `via:` no output (honestidade > adivinhação).
+# ---------------------------------------------------------------------------
+
+def _vision_local(image_path: str, question: str) -> dict[str, Any]:
+    """Nível 1: modelo local com mmproj (via LLMClient canônico)."""
+    import base64
+    import io
+
+    try:
+        from PIL import Image
+        img = Image.open(image_path)
+        img.thumbnail((1024, 1024), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=80)
+        img_b64 = base64.b64encode(buf.getvalue()).decode()
+    except ImportError:
+        with open(image_path, "rb") as f:
+            img_b64 = base64.b64encode(f.read()).decode()
+
+    from jarvis.providers.llm import LLMClient, LLMError
+
+    messages = [{
+        "role": "user",
+        "content": [
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
+            {"type": "text", "text": question},
+        ],
+    }]
+    try:
+        with LLMClient() as client:
+            resp = client.chat_full(messages, temperature=0.0, max_tokens=2000)
+        content = (resp.content or "").strip()
+        if not content and resp.reasoning:
+            content = f"[model thinking only]\n{resp.reasoning[:1000]}"
+        if not content:
+            return {"ok": False, "error": "modelo local retornou vazio (sem mmproj?)"}
+        return {"ok": True, "via": "local", "text": content}
+    except LLMError as e:
+        return {"ok": False, "error": f"vision local falhou: {e}"}
+    except Exception as e:
+        return {"ok": False, "error": f"vision local erro: {e}"}
+
+
+def _vision_gemini(image_path: str, question: str,
+                   timeout: float = 60.0) -> dict[str, Any]:
+    """Nível 2: Gemini free (AI Studio, 1M ctx, vision nativo, sem cartão)."""
+    import base64
+    import io
+    import urllib.request
+
+    key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not key:
+        return {"ok": False, "error": "GEMINI_API_KEY ausente"}
+    try:
+        from PIL import Image
+        img = Image.open(image_path).convert("RGB")
+        img.thumbnail((1024, 1024), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=80)
+        img_b64 = base64.b64encode(buf.getvalue()).decode()
+    except ImportError:
+        return {"ok": False, "error": "PIL ausente p/ redimensionar"}
+    payload = json.dumps({
+        "contents": [{"parts": [
+            {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}},
+            {"text": question},
+        ]}],
+        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 2000},
+    }).encode()
+    try:
+        req = urllib.request.Request(
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"gemini-2.5-flash:generateContent?key={key}",
+            data=payload, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data = json.loads(r.read().decode())
+        parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+        text = "".join(p.get("text", "") for p in parts).strip()
+        if not text:
+            return {"ok": False, "error": "gemini retornou vazio"}
+        return {"ok": True, "via": "gemini", "text": text}
+    except Exception as e:
+        return {"ok": False, "error": f"gemini falhou: {str(e)[:150]}"}
+
+
+def _ocr_text(image_path: str, lang: str = "por+eng") -> dict[str, Any]:
+    """Nível 3 (final): Tesseract OCR — sempre funciona se há imagem."""
+    if not _has_binary("tesseract"):
+        return {"ok": False, "error": "tesseract ausente (nix: tesseract)"}
+    try:
+        result = subprocess.run(
+            ["tesseract", image_path, "stdout", "-l", lang, "--psm", "6"],
+            capture_output=True, text=True, timeout=60,
+        )
+        text = (result.stdout or "").strip()
+        if not text:
+            return {"ok": False, "error": "OCR não encontrou texto"}
+        return {"ok": True, "via": "ocr", "text": text}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "OCR timeout"}
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"ok": False, "error": f"OCR erro: {exc}"}
+
+
+def observe_with_fallback(args: dict[str, Any]) -> str:
+    """Observe que NUNCA falha por falta de vision: local → gemini → OCR.
+
+    Retorna descrição + tag `via:` (local/gemini/ocr). Só falha de verdade
+    sem display (nada p/ capturar) — aí diz isso honestamente.
+    """
+    mode = args.get("mode", "full")
+    window_title = args.get("window_title")
+    question = args.get("question",
+                        "Describe what you see. List applications, errors, and UI state.")
+
+    if mode == "window":
+        shot = capture_window(window_title)
+    elif mode == "region":
+        shot = capture_region()
+    else:
+        shot = capture_full()
+    if not shot.get("ok"):
+        return f"SEM DISPLAY: {shot.get('error', 'captura impossível')}"
+
+    image_path = shot["path"]
+    attempts = []
+
+    for fn in (_vision_local, _vision_gemini):
+        try:
+            r = fn(image_path, question)
+        except Exception as e:
+            r = {"ok": False, "error": str(e)[:150]}
+        if r.get("ok"):
+            return (f"{r['text']}\n\n[via: {r['via']} | "
+                    f"screenshot: {image_path} ({shot.get('size_kb', '?')}KB)]")
+        attempts.append(r.get("error", "?"))
+
+    ocr = _ocr_text(image_path)
+    if ocr.get("ok"):
+        return (f"[visão indisponível ({' | '.join(attempts)}); fallback OCR]\n"
+                f"{ocr['text']}\n\n[via: ocr | screenshot: {image_path}]")
+
+    return (f"OBSERVE FALHOU em todos os níveis — local: {attempts[0] if attempts else '?'}; "
+            f"gemini: {attempts[1] if len(attempts) > 1 else '?'}; ocr: {ocr.get('error')}. "
+            f"Screenshot salva em {image_path}.")

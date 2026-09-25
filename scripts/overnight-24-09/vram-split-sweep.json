@@ -106,6 +106,351 @@
           "raw_timings": {}
         }
       ]
+    },
+    {
+      "ts": "2026-09-25T14:17:33",
+      "modelo": "/home/nixos/models/gemma-3-4b-it-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10735-842b188/llama-server",
+      "flags": {
+        "threads": 8,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "gemma-3-4b-it-Q4_K_M.gguf",
+          "rotulo": "ngl99",
+          "ngl": 99,
+          "n_cpu_moe": null,
+          "threads": 8,
+          "ctx": 8192,
+          "port": 8907,
+          "carregou": false,
+          "erro": "vram_ocupada(4553MB em uso de 6141MB): pare o outro modelo",
+          "pp_tps": null,
+          "tg_tps": null,
+          "tps_relatido": null,
+          "segundos": null,
+          "vram_mb": null,
+          "vram_delta_mb": null,
+          "vram_livre_antes_mb": 1588,
+          "gpu_util_pct": null,
+          "ram_rss_gb": null,
+          "raw_timings": {}
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T14:20:15",
+      "modelo": "/home/nixos/models/gemma-3-4b-it-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10735-842b188/llama-server",
+      "flags": {
+        "threads": 8,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "gemma-3-4b-it-Q4_K_M.gguf",
+          "rotulo": "ngl0",
+          "ngl": 0,
+          "n_cpu_moe": null,
+          "threads": 8,
+          "ctx": 8192,
+          "port": 8911,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 112.84,
+          "tg_tps": 18.91,
+          "tps_relatido": 1.0,
+          "segundos": 16.29,
+          "vram_mb": 401,
+          "vram_delta_mb": 209,
+          "vram_livre_antes_mb": 5949,
+          "gpu_util_pct": 4,
+          "ram_rss_gb": 2.89,
+          "raw_timings": {
+            "prompt_n": 53,
+            "prompt_ms": 469.701,
+            "prompt_per_second": 112.83774145679911,
+            "predicted_n": 300,
+            "predicted_ms": 15815.268,
+            "predicted_per_second": 18.90578142589806
+          }
+        },
+        {
+          "modelo": "gemma-3-4b-it-Q4_K_M.gguf",
+          "rotulo": "ngl99",
+          "ngl": 99,
+          "n_cpu_moe": null,
+          "threads": 8,
+          "ctx": 8192,
+          "port": 8912,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 778.85,
+          "tg_tps": 61.04,
+          "tps_relatido": 3.23,
+          "segundos": 4.97,
+          "vram_mb": 2951,
+          "vram_delta_mb": 2759,
+          "vram_livre_antes_mb": 5949,
+          "gpu_util_pct": 82,
+          "ram_rss_gb": 0.95,
+          "raw_timings": {
+            "prompt_n": 53,
+            "prompt_ms": 68.049,
+            "prompt_per_second": 778.850534173904,
+            "predicted_n": 300,
+            "predicted_ms": 4898.746,
+            "predicted_per_second": 61.0360284040038
+          }
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T14:39:56",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
+      "flags": {
+        "threads": 8,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe41",
+          "ngl": 99,
+          "n_cpu_moe": 41,
+          "threads": 8,
+          "ctx": 8192,
+          "port": 8921,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 149.96,
+          "tg_tps": 40.34,
+          "tps_relatido": 2.5,
+          "segundos": 7.81,
+          "vram_mb": 2154,
+          "vram_delta_mb": 2152,
+          "vram_livre_antes_mb": 6139,
+          "gpu_util_pct": 38,
+          "ram_rss_gb": 18.97,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 360.101,
+            "prompt_per_second": 149.9579284700681,
+            "predicted_n": 300,
+            "predicted_ms": 7436.328,
+            "predicted_per_second": 40.34249161683024
+          }
+        },
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe39",
+          "ngl": 99,
+          "n_cpu_moe": 39,
+          "threads": 8,
+          "ctx": 8192,
+          "port": 8922,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 130.3,
+          "tg_tps": 19.9,
+          "tps_relatido": 1.23,
+          "segundos": 15.49,
+          "vram_mb": 3091,
+          "vram_delta_mb": 3086,
+          "vram_livre_antes_mb": 6136,
+          "gpu_util_pct": 22,
+          "ram_rss_gb": 18.7,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 414.433,
+            "prompt_per_second": 130.29850422143025,
+            "predicted_n": 300,
+            "predicted_ms": 15075.219,
+            "predicted_per_second": 19.90020841488273
+          }
+        },
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe37",
+          "ngl": 99,
+          "n_cpu_moe": 37,
+          "threads": 8,
+          "ctx": 8192,
+          "port": 8923,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 61.74,
+          "tg_tps": 16.13,
+          "tps_relatido": 1.0,
+          "segundos": 19.48,
+          "vram_mb": 4085,
+          "vram_delta_mb": 3641,
+          "vram_livre_antes_mb": 5697,
+          "gpu_util_pct": 18,
+          "ram_rss_gb": 17.71,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 874.706,
+            "prompt_per_second": 61.73502868392352,
+            "predicted_n": 300,
+            "predicted_ms": 18603.886,
+            "predicted_per_second": 16.125663208213595
+          }
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T14:41:45",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
+      "flags": {
+        "threads": 8,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe43",
+          "ngl": 99,
+          "n_cpu_moe": 43,
+          "threads": 8,
+          "ctx": 8192,
+          "port": 8931,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 157.6,
+          "tg_tps": 38.27,
+          "tps_relatido": 2.66,
+          "segundos": 8.19,
+          "vram_mb": 2593,
+          "vram_delta_mb": 2149,
+          "vram_livre_antes_mb": 5697,
+          "gpu_util_pct": 37,
+          "ram_rss_gb": 19.13,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 342.639,
+            "prompt_per_second": 157.6002731738068,
+            "predicted_n": 300,
+            "predicted_ms": 7839.928,
+            "predicted_per_second": 38.26565754175294
+          }
+        },
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe45",
+          "ngl": 99,
+          "n_cpu_moe": 45,
+          "threads": 8,
+          "ctx": 8192,
+          "port": 8932,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 49.08,
+          "tg_tps": 14.38,
+          "tps_relatido": 1.0,
+          "segundos": 21.97,
+          "vram_mb": 2593,
+          "vram_delta_mb": 2149,
+          "vram_livre_antes_mb": 5697,
+          "gpu_util_pct": 16,
+          "ram_rss_gb": 19.13,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 1100.189,
+            "prompt_per_second": 49.08247582915298,
+            "predicted_n": 300,
+            "predicted_ms": 20866.352,
+            "predicted_per_second": 14.377213611655742
+          }
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T15:16:03",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe41",
+          "ngl": 99,
+          "n_cpu_moe": 41,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 8947,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 105.17,
+          "tg_tps": 14.78,
+          "tps_relatido": 1.0,
+          "segundos": 20.83,
+          "vram_mb": 2597,
+          "vram_delta_mb": 2151,
+          "vram_livre_antes_mb": 5695,
+          "gpu_util_pct": 17,
+          "ram_rss_gb": 19.03,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 513.453,
+            "prompt_per_second": 105.17028822501769,
+            "predicted_n": 300,
+            "predicted_ms": 20298.249,
+            "predicted_per_second": 14.779599954656188
+          }
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T15:17:05",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
+      "flags": {
+        "threads": 8,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe41",
+          "ngl": 99,
+          "n_cpu_moe": 41,
+          "threads": 8,
+          "ctx": 8192,
+          "port": 8949,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 55.67,
+          "tg_tps": 14.98,
+          "tps_relatido": 1.0,
+          "segundos": 21.01,
+          "vram_mb": 2597,
+          "vram_delta_mb": 2151,
+          "vram_livre_antes_mb": 5695,
+          "gpu_util_pct": 17,
+          "ram_rss_gb": 19.13,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 970.056,
+            "prompt_per_second": 55.66688933422401,
+            "predicted_n": 300,
+            "predicted_ms": 20032.089,
+            "predicted_per_second": 14.975971802042213
+          }
+        }
+      ]
     }
   ]
 }

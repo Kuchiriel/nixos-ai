@@ -37,7 +37,7 @@ if _src_dir not in sys.path:
     sys.path.insert(0, _src_dir)
 
 from jarvis.core.devtools import handle_dev_tool, DEV_TOOLS
-from jarvis.core.vision import VISION_TOOL, handle_capture, observe_screen
+from jarvis.core.vision import VISION_TOOL, handle_capture, observe_with_fallback as observe_screen
 from jarvis.core.chatgpt_reader import CHATGPT_READER_TOOL, handle_chatgpt_read
 from jarvis.core.multi_ai_reader import MULTI_AI_READER_TOOL, read_ai_conversation
 from jarvis.core.hackmd import HACKMD_TOOLS, list_notes as hackmd_list, get_note as hackmd_get, create_note as hackmd_create, update_note as hackmd_update, sync_local_to_hackmd
@@ -114,7 +114,7 @@ JARVIS_TOOLS = [
     },
     {
         "name": "jarvis_observe_screen",
-        "description": "Capture screenshot AND analyze it with vision AI. Returns what the model sees on screen. Use this instead of capture_screen when you need to understand the current UI state.",
+        "description": "Capture screenshot AND analyze it (vision local → Gemini free → OCR fallback, never fails for missing vision model). Returns what is on screen. Use this instead of capture_screen when you need to understand the current UI state.",
         "inputSchema": {
             "type": "object",
             "properties": {

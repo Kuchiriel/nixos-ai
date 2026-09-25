@@ -36,6 +36,7 @@
       uvicorn
       pathspec # .ragignore: matching gitignore-canônico no index RAG
       cryptography # vault cifrado opt-in (Fernet) p/ perfis isolados
+      evdev # computer-use: mouse/teclado via uinput (humanize.py)
     ];
 
     nativeBuildInputs = [makeWrapper];

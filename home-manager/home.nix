@@ -158,6 +158,10 @@
   # Garante que as ferramentas universais de AST/tags estejam disponíveis no PATH do usuário para o Aider
   home.packages = with pkgs; [
     universal-ctags
+    # Computer-use (harness humanizado 24/09): digitação Wayland + OCR.
+    # Mouse via python-evdev (uinput, dep do pacote jarvis).
+    wtype
+    tesseract
   ];
 
   # (STT small vive em modules/ai/models.nix → linkado pelo wakeword nix;
@@ -398,6 +402,16 @@
         jarvis = {
           type = "local";
           command = [ "bash" "-c" "cd /home/nixos/projects/nixos-ai && PYTHONPATH=${pkgs.python3.withPackages (ps: [ ps.httpx ])}/${pkgs.python3.sitePackages}:modules/ai/jarvis/src JARVIS_PROJECT_ROOT=/home/nixos/projects/nixos-ai exec /etc/profiles/per-user/nixos/bin/python3 -m jarvis.mcp_server" ];
+          cwd = "/home/nixos/projects/nixos-ai";
+          enabled = true;
+          timeout = 30000;
+        };
+        # Playwright (browser automation 24/09): scraping público, verificação
+        # visual de páginas, testes. NUNCA em contas pessoais de terceiros
+        # (Discord self-bot = ban — só webhooks autorizados).
+        playwright = {
+          type = "local";
+          command = [ "${pkgs.playwright-mcp}/bin/playwright-mcp" ];
           cwd = "/home/nixos/projects/nixos-ai";
           enabled = true;
           timeout = 30000;

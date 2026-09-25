@@ -1302,6 +1302,37 @@ def load_skill(name: str) -> dict[str, Any]:
         return {"ok": False, "error": f"load_skill falhou: {e}"}
 
 
+# TOOLs: computer-use humanizado (Wurm Ultimate → harness)
+# ===========================================================================
+
+def human_click(x: int, y: int, button: str = "left",
+                dry_run: bool = False) -> dict[str, Any]:
+    """Clique humanizado (Bezier + jitter + duração log-normal)."""
+    try:
+        from jarvis.core.humanize import HumanHand
+        return HumanHand(dry_run=dry_run).click(int(x), int(y), button)
+    except Exception as e:
+        return {"ok": False, "error": f"human_click falhou: {e}"}
+
+
+def human_type(text: str, dry_run: bool = False) -> dict[str, Any]:
+    """Digitação com cadência humana via Wayland."""
+    try:
+        from jarvis.core.humanize import HumanHand
+        return HumanHand(dry_run=dry_run).type(text)
+    except Exception as e:
+        return {"ok": False, "error": f"human_type falhou: {e}"}
+
+
+def human_key(keys: list, dry_run: bool = False) -> dict[str, Any]:
+    """Teclas especiais (Return, Tab, ctrl+c...)."""
+    try:
+        from jarvis.core.humanize import HumanHand
+        return HumanHand(dry_run=dry_run).key(*list(keys or []))
+    except Exception as e:
+        return {"ok": False, "error": f"human_key falhou: {e}"}
+
+
 # Tool definitions — DEV_TOOLS (compatível com agent.py)
 # ===========================================================================
 
@@ -1506,6 +1537,53 @@ DEV_TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "human_click",
+            "description": "Move mouse in human-like curve and click at x,y (NEVER on third-party personal accounts). Returns landing coords.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "x": {"type": "integer", "description": "Target X pixels"},
+                    "y": {"type": "integer", "description": "Target Y pixels"},
+                    "button": {"type": "string", "description": "left|right (default left)"},
+                    "dry_run": {"type": "boolean", "description": "Plan only, no action (default false)"},
+                },
+                "required": ["x", "y"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "human_type",
+            "description": "Type text with human cadence via Wayland (NEVER credentials into untrusted fields).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "Text to type"},
+                    "dry_run": {"type": "boolean", "description": "Plan only (default false)"},
+                },
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "human_key",
+            "description": "Press special keys (Return, Tab, ctrl+c, Super, etc).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "keys": {"type": "array", "items": {"type": "string"}, "description": "Keys, e.g. [\"ctrl\",\"c\"]"},
+                    "dry_run": {"type": "boolean", "description": "Plan only (default false)"},
+                },
+                "required": ["keys"],
+            },
+        },
+    },
 ]
 
 
@@ -1531,6 +1609,11 @@ def handle_dev_tool(name: str, args: dict[str, Any]) -> str:
         "build_json_dataset": lambda a: build_json_dataset(
             a.get("schema", "schema.json"), a.get("out", "organization.json")),
         "load_skill": lambda a: load_skill(a["name"]),
+        "human_click": lambda a: human_click(a["x"], a["y"],
+                                            a.get("button", "left"),
+                                            a.get("dry_run", False)),
+        "human_type": lambda a: human_type(a["text"], a.get("dry_run", False)),
+        "human_key": lambda a: human_key(a["keys"], a.get("dry_run", False)),
     }
 
     handler = handlers.get(name)
@@ -1549,6 +1632,9 @@ def handle_dev_tool(name: str, args: dict[str, Any]) -> str:
         "code_search": ("pattern",),
         "jarvis_command": ("subcommand",),
         "load_skill": ("name",),
+        "human_click": ("x", "y"),
+        "human_type": ("text",),
+        "human_key": ("keys",),
     }.get(name, ())
     _missing = [k for k in _required if k not in (args or {})]
     if _missing:
