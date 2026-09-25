@@ -123,7 +123,14 @@ in rec {
   # — binario errado = veredito invalido):
   #   binario = ik_llama.cpp (unico com --n-cpu-moe; prism = ternario,
   #            upstream = sem offload de MoE). Tier endpoint 8084.
-  #   perfil  = chat/jarvis (hostBase + moeFlags "--n-cpu-moe 35")
+  #   perfil  = chat/jarvis (hostBase + moeFlags "--n-cpu-moe 35 --mlock")
+#   --mlock (25/09): trava os 20GB de pesos do MoE na RAM. Alvo do resultado
+#   BIMODAL medido (40 t/s ou 15 t/s, 2,7x, sem ser config): a suspeita e
+#   paginacao do mmap — 20GB de pesos contra 32GB de RAM com zram de 15,5GB.
+#   Com mlock o kernel nao pode despejar as paginas do modelo no zram nem
+#   reler do disco, que e o mecanismo que faria o mesmo config cair 2,7x.
+#   Degradacao graciosa: se nao houver memoria para travar, o llama.cpp avisa
+#   e segue (nao aborta), entao o risco e baixo e o upside e o maior da lista.
   #   flags   = -ngl 45 (attn+dense na GPU, experts na CPU), -t 6,
   #             -c >= 4096, -fa on, -ctk/-ctv q4_0, -b/-ub 512,
   #             --parallel 1, --jinja
@@ -333,7 +340,7 @@ in rec {
 #   assimetria. Medido no denso (gemma-3-4b CPU-only): -t6=16,4 | -t8=14,1 |
 #   -t10=10,4 | -t12=7,9 t/s. E-cores e HT competem e custam ~14%.
 #   No MoE -t6 vs -t8 dao o mesmo TG (14,8 vs 15,0) — bandwidth-bound.
-      moeFlags = "--n-cpu-moe 35";
+      moeFlags = "--n-cpu-moe 35 --mlock";
       extraArgs = [
         "--no-mmproj-offload"
         "--image-min-tokens"
@@ -350,7 +357,7 @@ in rec {
       ctxSize = 8192;
       batchSize = 512;
       ubatch = 512;
-      moeFlags = "--n-cpu-moe 35";
+      moeFlags = "--n-cpu-moe 35 --mlock";
       extraArgs = [
         "--no-mmproj-offload"
         "--parallel"
@@ -365,7 +372,7 @@ in rec {
       ctxSize = 4096;
       batchSize = 512;
       ubatch = 512;
-      moeFlags = "--n-cpu-moe 35";
+      moeFlags = "--n-cpu-moe 35 --mlock";
       extraArgs = [
         "--no-mmproj-offload"
         "--parallel"
@@ -386,7 +393,7 @@ in rec {
       batchSize = 512;
       ubatch = 512;
       # Mantém ncmoe=36 — experts na CPU para não estourar VRAM
-      moeFlags = "--n-cpu-moe 35";
+      moeFlags = "--n-cpu-moe 35 --mlock";
       extraArgs = [
         "--no-mmproj-offload"
         "--image-min-tokens"
@@ -544,7 +551,7 @@ in rec {
       batchSize = 512;
       ubatch = 512;
       mmproj = null; # Disable vision model — saves 861MB VRAM + prevents crash
-      moeFlags = "--n-cpu-moe 35";
+      moeFlags = "--n-cpu-moe 35 --mlock";
       extraArgs = [
         "--parallel"
         "1"
