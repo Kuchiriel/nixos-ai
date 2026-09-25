@@ -12,10 +12,18 @@ class TestPersonaRegistry:
     """Test PersonaRegistry functionality."""
 
     def test_registry_loads_builtin_personas(self):
-        """Registry should load all 14 built-in personas (12 + agent + marketing)."""
+        """Registry should load all 15 built-ins (12 + agent + marketing + uncensored)."""
         registry = PersonaRegistry()
         personas = registry.list_all()
-        assert len(personas) == 14
+        assert len(personas) == 15
+        # 25/09: a persona do tier local sem filtro precisa existir e ser
+        # OBRIGATORAMENTE enxuta (sem web_search/vision) — é o tier que o
+        # dono usa pra não levar consulta pra fora nem carregar tool morto.
+        unc = registry.get("uncensored")
+        assert unc is not None
+        assert "web" not in unc.tools
+        assert "vision" not in unc.tools
+        assert "execut" in unc.system_prompt_additions.lower() or "obede" in unc.system_prompt_additions.lower()
 
     def test_forensic_audio_auditor_present(self):
         """Forensic audio auditor: ferramentas e seleção por tarefa."""
