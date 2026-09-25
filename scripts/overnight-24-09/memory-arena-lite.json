@@ -1,0 +1,25 @@
+{
+  "n_por_braco": 3,
+  "instrumento": "memory-arena-lite (uso ativo, Mechanical, sem LLM-judge)",
+  "resultados": [
+    {
+      "braco": "C0",
+      "n": 3,
+      "acertos": 1,
+      "falhas": [
+        "não está em inglês (fato pedia inglês)",
+        "não está em inglês (fato pedia inglês)"
+      ],
+      "erro": null,
+      "t_mediano": 2.786705255508423
+    },
+    {
+      "braco": "C1",
+      "n": 3,
+      "acertos": 3,
+      "falhas": [],
+      "erro": null,
+      "t_mediano": 1.8831861019134521
+    }
+  ]
+}
