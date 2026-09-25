@@ -60,8 +60,11 @@ with lib; let
     wantedBy = optionals isDefault ["jarvis.target" "multi-user.target"];
     # Binários fora do store precisam das libs de runtime via Environment
     # — precedente: llama-wackmall-wrapper.sh.
+    # b10743 (25/09) traz os kernels de CPU dos quants ternarios que faltavam
+    # no b10735: SSE2/SSSE3 vec_dot para PTQ1_0/PQ2_0 (#248) e PQ2_0 AVX-512
+    # VNNI gemm (#256). Verificado: build 10743, commit adfffbe41.
     environment = optionalAttrs (b == "prism") {
-      LD_LIBRARY_PATH = "/home/nixos/projects/prism-bin/llama-prism-b10735-842b188:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
+      LD_LIBRARY_PATH = "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
     } // optionalAttrs (b == "ik") {
       LD_LIBRARY_PATH = "/home/nixos/projects/ik_llama.cpp/build/bin:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
     };
