@@ -48,6 +48,13 @@ class Space:
     qdrant_token_file: str | None = None
     local_only: bool = True
     description: str = ""
+    # Persona padrão do space (25/09: o MoE respondia como "jarvis" —
+    # o REPL ignorava o space e usava a persona default). Vazio = jarvis.
+    persona: str = ""
+    # Thinking: por padrão DESLIGADO em space (25/09: com thinking o MoE
+    # queima o orçamento em raciocínio — resposta lenta e truncada, e o
+    # "raciocínio" vazava como se fosse a resposta). 1 = ligar.
+    thinking: int = 0
     # Modelo local servido por este space (opcional). Substitui os scripts
     # soltos: `jarvis space serve <name>` sobe e `shell` sobe sozinho.
     # flags = flags do llama-server (medidas, sem mf-hallucination).
@@ -248,6 +255,9 @@ def env_for(space: Space) -> dict[str, str]:
     if space.model_port:
         env["JARVIS_LLM_BASE_URL"] = f"http://127.0.0.1:{space.model_port}/v1"
         env["JARVIS_LLM_MODEL"] = str((space.model or {}).get("model_id", space.name))
+    if space.persona:
+        env["JARVIS_PERSONA"] = space.persona
+    env["JARVIS_LLM_DISABLE_THINKING"] = "1" if not space.thinking else "0"
     if space.local_only:
         # fail-closed: nuvem não pode tocar space protegido
         env["JARVIS_SPACE_LOCAL_ONLY"] = "1"

@@ -2288,6 +2288,20 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
     except Exception:
         pass
     if active_persona is None:
+        # 25/09: space define a persona (JARVIS_PERSONA). Sem isso, o MoE
+        # respondia como "jarvis" — persona errada, framing errado.
+        _sp_persona = os.environ.get("JARVIS_PERSONA", "").strip()
+        if _sp_persona:
+            try:
+                from jarvis.core.persona import PersonaRegistry as _PR
+
+                _p = _PR().get(_sp_persona)
+                if _p is not None:
+                    active_persona = _p
+                    console.print(f"[dim]persona do space: {_p.name}[/]")
+            except Exception:  # noqa: BLE001
+                pass
+    if active_persona is None:
         active_persona = _select_persona("")
     if profile["native_tools"]:
         tools = _get_tools(active_persona)
