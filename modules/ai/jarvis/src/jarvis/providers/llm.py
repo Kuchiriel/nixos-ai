@@ -397,8 +397,65 @@ class LLMClient:
         with self._telemetry_lock:
             return self._last_ttft_s
 
+    # --- temperatura: política por modelo (24/09) ---
+    # O bonsai é ternário Q2_0 e o harness o mede PERFEITO a temp 0
+    # (12/12 world_ok). Modelos denso-comuns (Qwen 4B etc.) repetem/loop
+    # a temp 0. Então: default 0.0 SÓ para ternário/bonsai; 0.7 para o
+    # resto. Override explícito (arg ou JARVIS_LLM_TEMPERATURE) manda.
+    _TERMINAL_ID: dict[str, str] = {}
+    _MODEL_ID_TTL = 120.0
+
+    def _served_model_id(self) -> str:
+        import time as _t
+
+        base = self._cfg.llm_base_url.rstrip("/")
+        cached = self._TERMINAL_ID.get(base)
+        if cached and (_t.time() - cached[1] if isinstance(cached, tuple) else 0) < self._MODEL_ID_TTL:
+            return cached[0] if isinstance(cached, tuple) else cached
+        model_id = ""
+        try:
+            import httpx
+
+            with httpx.Client(timeout=2.0) as c:
+                r = c.get(f"{base}/props")
+                if r.status_code == 200:
+                    d = r.json()
+                    model_id = (d.get("model_path") or d.get("default_generation_settings", {})
+                               .get("model") or d.get("model") or "")
+        except Exception:  # noqa: BLE001 — política nunca derruba a chamada
+            model_id = ""
+        if not model_id:
+            try:
+                import httpx
+
+                with httpx.Client(timeout=2.0) as c:
+                    r = c.get(f"{base}/models")
+                    if r.status_code == 200:
+                        data = r.json().get("data") or []
+                        if data:
+                            model_id = str(data[0].get("id", ""))
+            except Exception:  # noqa: BLE001
+                model_id = ""
+        self._TERMINAL_ID[base] = (model_id, _t.time())
+        return model_id
+
+    def _resolve_temperature(self, explicit: float | None) -> float:
+        if explicit is not None:
+            return float(explicit)
+        cfg_t = getattr(self._cfg, "llm_temperature", -1.0)
+        if cfg_t is not None and float(cfg_t) >= 0:
+            return float(cfg_t)
+        mid = (self._served_model_id() or "").lower()
+        name = (getattr(self._cfg, "llm_model", "") or "").lower()
+        blob = f"{mid} {name}"
+        if "bonsai" in blob or "ternary" in blob or "q2_0" in blob or "pq2" in blob:
+            return 0.0
+        if mid or name:
+            return 0.7
+        return 0.0
+
     def chat_full(
-        self, messages: list[dict[str, Any]], *, temperature: float = 0.0, max_tokens: int | None = None
+        self, messages: list[dict[str, Any]], *, temperature: float | None = None, max_tokens: int | None = None
     ) -> ChatResponse:
         """Chat completion — retorna ChatResponse crua (breaker + telemetria).
 
@@ -406,13 +463,14 @@ class LLMClient:
         `content` (ex.: vision precisa de `reasoning`).
         """
         request_id = uuid.uuid4().hex[:12]
+        temperature = self._resolve_temperature(temperature)
 
         self._breaker.before_call()
         t0 = time.monotonic()
         try:
             response = self._backend.chat(
                 messages=messages,
-                temperature=temperature,
+                temperature=self._resolve_temperature(temperature),
                 max_tokens=max_tokens,
             )
             self._breaker.record_success()
@@ -428,7 +486,7 @@ class LLMClient:
                 raise LLMConnectionError(f"[{request_id}] connection failed: {exc}") from exc
             raise LLMError(f"[{request_id}] {exc}") from exc
 
-    def chat(self, messages: list[dict[str, str]], *, temperature: float = 0.0, max_tokens: int | None = None) -> str:
+    def chat(self, messages: list[dict[str, str]], *, temperature: float | None = None, max_tokens: int | None = None) -> str:
         """Chat completion — retorna conteúdo como string."""
         return self.chat_full(messages, temperature=temperature, max_tokens=max_tokens).content
 
@@ -438,7 +496,7 @@ class LLMClient:
         messages: list[dict[str, Any]],
         *,
         tools: list[dict[str, Any]] | None = None,
-        temperature: float = 0.0,
+        temperature: float | None = None,
         max_tokens: int | None = None,
         extra: dict[str, Any] | None = None,
         reasoning_effort: str | None = None,
@@ -481,7 +539,7 @@ class LLMClient:
             if _short:
                 reasoning_effort = "low"
         response = self._chat_once(
-            messages, tools=tools, temperature=temperature,
+            messages, tools=tools, temperature=self._resolve_temperature(temperature),
             max_tokens=max_tokens, extra=extra)
         passes = {"low": 0, None: 0, "medium": 1, "high": 2}.get(
             reasoning_effort, 0)
@@ -524,7 +582,7 @@ class LLMClient:
                            if _prior_calls != "[]" else ""))},
                     {"role": "user",
                      "content": _review_prompt(review_focus)},
-                ], tools=_review_tools, temperature=temperature,
+                ], tools=_review_tools, temperature=self._resolve_temperature(temperature),
                 max_tokens=max_tokens, extra=extra)
             txt = (review.content or "").strip()
             if txt.startswith("MANTER"):
@@ -558,7 +616,7 @@ class LLMClient:
         messages: list[dict[str, Any]],
         *,
         tools: list[dict[str, Any]] | None = None,
-        temperature: float = 0.0,
+        temperature: float | None = None,
         max_tokens: int | None = None,
         extra: dict[str, Any] | None = None,
     ) -> ChatResponse:
@@ -570,7 +628,7 @@ class LLMClient:
         try:
             response = self._backend.chat(
                 messages=messages,
-                temperature=temperature,
+                temperature=self._resolve_temperature(temperature),
                 max_tokens=max_tokens,
                 tools=tools,
                 extra=extra,
@@ -591,7 +649,7 @@ class LLMClient:
     # --- chat (streaming) ---
 
     def chat_stream(
-        self, messages: list[dict[str, str]], *, temperature: float = 0.0, max_tokens: int | None = None
+        self, messages: list[dict[str, str]], *, temperature: float | None = None, max_tokens: int | None = None
     ) -> Iterator[str]:
         """Gera tokens incrementais via SSE real do backend (MISSÃO 2).
 
@@ -633,7 +691,7 @@ class LLMClient:
                 )
 
     async def achat_stream(
-        self, messages: list[dict[str, str]], *, temperature: float = 0.0, max_tokens: int | None = None
+        self, messages: list[dict[str, str]], *, temperature: float | None = None, max_tokens: int | None = None
     ) -> AsyncIterator[str]:
         """Versão async sem bloquear o event loop (httpx no backend)."""
         backend_astream = getattr(self._backend, "achat_stream", None)

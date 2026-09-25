@@ -44,6 +44,11 @@ class Config:
     llm_disable_thinking: bool = field(default_factory=lambda: _env_str("JARVIS_LLM_DISABLE_THINKING", "0") == "1")
     # Tool calling support (True for llama.cpp with jinja, False for simpler backends)
     llm_tool_calling: bool = field(default_factory=lambda: _env_bool("JARVIS_LLM_TOOL_CALLING", True))
+    # Temperatura: -1 = AUTO por modelo (24/09). Medido: o bonsai (ternário
+    # Q2_0) é determinístico e MELHOR a temp 0 (12/12 no harness); já
+    # modelos denso-comuns (ex.: Qwen 4B) caem em repetição/loop a temp 0 —
+    # para eles o auto usa 0.7. Override explícito sempre manda.
+    llm_temperature: float = field(default_factory=lambda: float(_env_str("JARVIS_LLM_TEMPERATURE", "-1")))
 
     # --- Embeddings (servidor dedicado llama.cpp --embeddings, porta 8081) ---
     embed_base_url: str = field(default_factory=lambda: _env_str("JARVIS_EMBED_BASE_URL", "http://127.0.0.1:8081/v1"))
