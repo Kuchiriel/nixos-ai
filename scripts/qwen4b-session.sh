@@ -22,7 +22,7 @@
 set -euo pipefail
 
 MODEL="${QWEN4B_MODEL:-/home/nixos/models/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf}"
-PORT="${QWEN4B_PORT:-8090}"
+PORT="${QWEN4B_PORT:-8092}"
 PRISM=/home/nixos/projects/prism-bin/run-prism-b10735.sh
 LOG=/tmp/qwen4b-$$.log
 STATE="$HOME/.local/state/jarvis-qwen4b"
@@ -49,7 +49,7 @@ profile_env() {
   export JARVIS_QDRANT_COLLECTION_BOOKS=qwen4b_books
   export JARVIS_LLM_BASE_URL="http://127.0.0.1:$PORT/v1"
   export JARVIS_LLM_MODEL="${QWEN4B_MODEL_ID:-qwen4b}"
-  export JARVIS_LLM_DISABLE_THINKING="${QWEN4B_THINKING:-0}"
+  export JARVIS_LLM_DISABLE_THINKING="${QWEN4B_THINKING:-1}"  # H3: effort alto = 3x turnos sem ganho
   unset JARVIS_EXTRA_READ_ROOTS
   unset JARVIS_TELEGRAM_TOKEN JARVIS_TELEGRAM_CHAT_ID
   mkdir -p "$STATE"
@@ -109,11 +109,12 @@ print(generate_key('$KEYFILE'))" | tail -1
     serve >/dev/null
     profile_env
     nix develop "$NIXAI" --command python3 - "$msg" <<'PY'
-import sys, urllib.request, json
+import os, sys, urllib.request, json
 msg = sys.argv[1]
 body = json.dumps({"model": "qwen4b", "max_tokens": 512,
+                   "chat_template_kwargs": {"enable_thinking": False},
                    "messages": [{"role": "user", "content": msg}]}).encode()
-req = urllib.request.Request("http://127.0.0.1:8090/v1/chat/completions",
+req = urllib.request.Request(f"http://127.0.0.1:{os.environ.get('QWEN4B_PORT','8092')}/v1/chat/completions",
                              data=body,
                              headers={"Content-Type": "application/json"})
 with urllib.request.urlopen(req, timeout=180) as r:
