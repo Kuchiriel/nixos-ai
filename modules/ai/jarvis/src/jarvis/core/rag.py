@@ -508,7 +508,13 @@ class HybridIndexer:
                 mtime = stat.st_mtime
                 if not force and path in self._indexed_hashes and self._indexed_hashes[path] >= mtime:
                     return None  # arquivo não mudou, pula
-                self._indexed_hashes[path] = mtime
+                # NÃO grava o manifest aqui: o arquivo pode cair em
+                # quarentena (PATH_ERROR/PII) ou falhar no embed, e um
+                # arquivo marcado como indexado sem ter sido indexado
+                # nunca mais é retryado — perda silenciosa (vault inteiro
+                # ficava invisível por estar fora das read roots). O
+                # registro é feito em _mark_indexed(), no fim, só se
+                # algum chunk foi de fato upsertado.
                 if ext in CODE_EXTS:
                     content = Path(path).read_text(encoding="utf-8", errors="replace")
                     _sanitizer_version = "code-direct-read"
@@ -594,7 +600,22 @@ class HybridIndexer:
             self._store.upsert(self._cfg.qdrant_collection_code, [point])
             last_payload = point["payload"]
             
+        if last_payload is not None:
+            self._mark_indexed(path)
         return last_payload
+
+    def _mark_indexed(self, path: str) -> None:
+        """Registra no manifest que `path` foi REALMENTE indexado.
+
+        Só pode ser chamado depois de um upsert bem-sucedido: o manifest
+        é o que faz `index_file` pular arquivo inalterado, então gravar
+        antes de indexar transforma quarentena/erro de embed em perda
+        permanente e silenciosa.
+        """
+        try:
+            self._indexed_hashes[path] = Path(path).stat().st_mtime
+        except OSError:
+            pass
 
     def index_directory(self, root: str | Path) -> int:
         """Indexa todos os arquivos elegíveis de um diretório. Retorna o total de arquivos."""
