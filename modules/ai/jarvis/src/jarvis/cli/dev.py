@@ -669,22 +669,62 @@ def _persist_session(messages: list[dict[str, Any]], project_root: str | None = 
             "tool_calls": sum(1 for m in messages if m.get("role") == "tool"),
         }
         path = _session_state_path(project_root)
-        path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+        # Sessão do REPL = conteúdo da conversa (pode ter dado sensível).
+        # Em space cifrado (JARVIS_VAULT_ENC=1) vai para disco como .enc.
+        from jarvis.core import vault_cipher
+
+        blob = json.dumps(state, ensure_ascii=False, indent=2)
+        if vault_cipher.enabled():
+            vault_cipher.write_text(path.with_name(path.name + vault_cipher.ENC_SUFFIX),
+                                    blob)
+        else:
+            path.write_text(blob, encoding="utf-8")
     except Exception:  # noqa: BLE001 — persistência é best-effort
         pass
+
+
+def _wants_continue(messages: list[dict[str, Any]]) -> bool:
+    """A última fala do modelo é literalmente um pedido de 'continuar'?
+
+    24/09 (Qwen 4B): o modelo fecha o turno com "continue"/"prosseguir" e o
+    REPL tratava como concluído — o usuário ficava preso. Só dispara com a
+    fala CURTA e sem conteúdo útil (heurística conservadora).
+    """
+    for m in reversed(messages):
+        if m.get("role") == "assistant":
+            txt = str(m.get("content") or "").strip().lower()
+            if not txt:
+                return bool(m.get("tool_calls"))
+            # pedido de continuação é CURTO: qualquer fala longa que
+            # só contém a palavra não conta (evita auto-nudge em texto real)
+            if len(txt) > 60:
+                return False
+            pats = ("continue", "continuar", "prosseguir", "continua",
+                    "vou continuar", "devo continuar", "posso continuar",
+                    "quer que eu continue", "deseja que eu continue")
+            return any(p in txt for p in pats)
+    return False
 
 
 def _resume_session(project_root: str | None = None) -> list[dict[str, Any]]:
     """Carrega a última sessão persistida, se existir."""
     try:
+        from jarvis.core import vault_cipher
+
         path = _session_state_path(project_root)
-        if not path.exists():
-            return []
-        obj = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(obj, dict):
-            msg = obj.get("messages")
-            if isinstance(msg, list):
-                return msg
+        candidates = [path]
+        if vault_cipher.enabled():
+            candidates = [path.with_name(path.name + vault_cipher.ENC_SUFFIX), path]
+        for cand in candidates:
+            if not cand.exists():
+                continue
+            raw = (vault_cipher.read_text(cand) if vault_cipher.enabled()
+                   else cand.read_text(encoding="utf-8"))
+            obj = json.loads(raw)
+            if isinstance(obj, dict):
+                msg = obj.get("messages")
+                if isinstance(msg, list):
+                    return msg
     except Exception:  # noqa: BLE001 — resume é best-effort
         pass
     return []
@@ -2788,6 +2828,19 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
 
     messages.append({"role": "user", "content": task})
     ok = _run_agent_loop(messages, tools, profile, approve, debug, max_turns=10)
+    # Auto-continue (24/09: modelo pequeno degenera em repetição e termina
+    # pedindo "continue"; o留给 humano). Se a última fala for
+    # essencialmente um pedido de continuação, damos até 2 continuatas
+    # automáticos com um nudge de objetivo — bounded, senão vira loop.
+    for _ in range(2):
+        if ok or not _wants_continue(messages):
+            break
+        messages.append({"role": "user", "content": (
+            "Continue e CONCLUA agora. Se a tarefa já estiver pronta, "
+            "entregue o resultado final (arquivo/texto) e pare — não peça "
+            "permissão para continuar e não repita o mesmo texto.")})
+        ok = _run_agent_loop(messages, tools, profile, approve, debug,
+                             max_turns=10)
     _persist_session(messages, project_root or os.getcwd())
     if transcript_path:
         # Transcript JSON p/ scripting (paridade pi --mode json): prompt,
@@ -2807,13 +2860,24 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
                              "arguments"))[:500]}
                         for t in m["tool_calls"]]
                 slim.append(e)
-            with open(transcript_path, "w", encoding="utf-8") as f:
-                json.dump({"task": task,
-                           "profile": profile.get("name"),
-                           "model": profile.get("model_id"),
-                           "rc": 0 if ok else 1,
-                           "ts": _t.time(),
-                           "messages": slim}, f, ensure_ascii=False, indent=1)
+            from jarvis.core import vault_cipher
+
+            _tdict = {"task": task,
+                      "profile": profile.get("name"),
+                      "model": profile.get("model_id"),
+                      "rc": 0 if ok else 1,
+                      "ts": _t.time(),
+                      "messages": slim}
+            # Transcript = conteúdo da conversa: em space cifrado vai .enc
+            # (o harness do /tmp continua lendo json puro quando fora dele).
+            if vault_cipher.enabled() and not transcript_path.startswith("/tmp"):
+                vault_cipher.write_text(
+                    Path(transcript_path).with_name(
+                        Path(transcript_path).name + vault_cipher.ENC_SUFFIX),
+                    json.dumps(_tdict, ensure_ascii=False, indent=1))
+            else:
+                with open(transcript_path, "w", encoding="utf-8") as f:
+                    json.dump(_tdict, f, ensure_ascii=False, indent=1)
         except Exception:
             pass
     return 0 if ok else 1

@@ -116,9 +116,26 @@ class Logger:
             entry["detail"] = detail
         if extra:
             entry.update(extra)
+        # Space cifrado (24/09): o log carrega prompts e resultados de
+        # ferramenta, ou seja, a mesma conteúdo da conversa. Ciframos o
+        # `detail` linha a linha (JSONL segue append-only e legível por
+        # linha); metadados (ts/module/event/level) ficam em claro para
+        # diagnóstico.
+        line: str | None = None
+        try:
+            from jarvis.core import vault_cipher
+
+            if vault_cipher.enabled() and "detail" in entry:
+                line = vault_cipher.encrypt_text(
+                    json.dumps(entry.pop("detail"), ensure_ascii=False,
+                               default=str))
+        except Exception:  # noqa: BLE001 — log nunca derruba o run
+            line = None
         self._rotate_if_needed()
         try:
             with self._file.open("a", encoding="utf-8") as fh:
+                if line is not None:
+                    entry["detail_enc"] = line
                 fh.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
         except OSError:
             pass

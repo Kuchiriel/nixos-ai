@@ -96,6 +96,15 @@ def read_text(path: Path) -> str:
     return _fernet().decrypt(path.read_bytes()).decode("utf-8")
 
 
+def encrypt_text(plain: str) -> str:
+    """Cifra um texto solto (uso: detalhe de log JSONL, linha a linha)."""
+    return _fernet().encrypt(plain.encode("utf-8")).decode()
+
+
+def decrypt_text(token: str) -> str:
+    return _fernet().decrypt(token.encode()).decode("utf-8")
+
+
 def iter_notes(base: Path) -> list[Path]:
     """Lista as notas, decifradas (nomes sem .enc)."""
     if not base.exists():
