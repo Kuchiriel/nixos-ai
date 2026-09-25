@@ -2304,7 +2304,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
     memory_ctx = _build_memory_context()
     agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
     system_prompt = _maybe_disable_thinking(
-        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE)
+        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE, tools_catalog=_tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else []))
     )
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     if continue_session:
@@ -2346,7 +2346,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             memory_ctx = _build_memory_context()
             agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
             system_prompt = _maybe_disable_thinking(
-                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE)
+                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE, tools_catalog=_tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else []))
             )
             messages = [{"role": "system", "content": system_prompt}]
             _persist_session(messages, project_root or os.getcwd())
@@ -2375,7 +2375,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             memory_ctx = _build_memory_context()
             agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
             system_prompt = _maybe_disable_thinking(
-                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE)
+                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE, tools_catalog=_tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else []))
             )
             messages[0] = {"role": "system", "content": system_prompt}
             console.print("[dim]🗺️  repo map atualizado[/]")
@@ -2448,7 +2448,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
                     memory_ctx = _build_memory_context()
                     agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section() + _pinned_section()
                     messages[0] = {"role": "system", "content": _maybe_disable_thinking(
-                        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE))}
+                        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE, tools_catalog=_tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else [])))}
                     console.print(f"[dim]📌 {target} fixado ({len(content)} chars)[/]")
             continue
 
@@ -2465,7 +2465,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             memory_ctx = _build_memory_context()
             agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section() + _pinned_section()
             messages[0] = {"role": "system", "content": _maybe_disable_thinking(
-                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE))}
+                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE, tools_catalog=_tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else [])))}
             left = ", ".join(PINNED_FILES) or "nenhum"
             console.print(f"[dim]fixados: {left}[/]")
             continue

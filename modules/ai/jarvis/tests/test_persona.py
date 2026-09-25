@@ -289,3 +289,20 @@ class TestMarketingPersona:
         Agent(Config(), session=Cap(), persona_id="marketing").run("quanto custa?")
         assert "MARKETING MODE" in seen["sys"]
         assert "149,99" in seen["sys"]
+
+
+def test_system_prompt_template_all_call_sites_pass_tools_catalog():
+    """25/09: o REPL quebrou com KeyError 'tools_catalog' porque um
+    call-site do .format() esqueceu o kwarg novo. Este teste falha se
+    alguém criar um call-site sem ele."""
+    import pathlib
+    import re
+
+    src = pathlib.Path(__file__).resolve().parents[1] / "src/jarvis/cli/dev.py"
+    text = src.read_text(encoding="utf-8")
+    starts = [m.start() for m in re.finditer(r"SYSTEM_PROMPT_TEMPLATE\.format\(", text)]
+    assert starts, "template não encontrado"
+    for i in starts:
+        assert "tools_catalog=" in text[i:i + 400], (
+            "call-site do SYSTEM_PROMPT_TEMPLATE sem tools_catalog= — "
+            "vai quebrar com KeyError no REPL")
