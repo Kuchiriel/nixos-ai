@@ -691,6 +691,206 @@
           }
         }
       ]
+    },
+    {
+      "ts": "2026-09-25T16:35:57",
+      "modelo": "/home/nixos/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": [
+          "--fit",
+          "--fit-margin",
+          "256"
+        ]
+      },
+      "resultados": [
+        {
+          "modelo": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+          "rotulo": "ngl0",
+          "ngl": 0,
+          "n_cpu_moe": null,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9421,
+          "carregou": false,
+          "erro": "nao_carregou",
+          "pp_tps": null,
+          "tg_tps": null,
+          "tps_relatido": null,
+          "segundos": null,
+          "vram_mb": null,
+          "vram_delta_mb": null,
+          "vram_livre_antes_mb": 5691,
+          "gpu_util_pct": null,
+          "ram_rss_gb": null,
+          "raw_timings": {}
+        },
+        {
+          "modelo": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+          "rotulo": "ngl99",
+          "ngl": 99,
+          "n_cpu_moe": null,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9422,
+          "carregou": false,
+          "erro": "nao_carregou",
+          "pp_tps": null,
+          "tg_tps": null,
+          "tps_relatido": null,
+          "segundos": null,
+          "vram_mb": null,
+          "vram_delta_mb": null,
+          "vram_livre_antes_mb": 5691,
+          "gpu_util_pct": null,
+          "ram_rss_gb": null,
+          "raw_timings": {}
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T16:42:04",
+      "modelo": "/home/nixos/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": [
+          "-ngl",
+          "40"
+        ]
+      },
+      "resultados": [
+        {
+          "modelo": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+          "rotulo": "ngl0",
+          "ngl": 0,
+          "n_cpu_moe": null,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9421,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 31.61,
+          "tg_tps": 1.99,
+          "tps_relatido": 1.2,
+          "segundos": 151.76,
+          "vram_mb": 4633,
+          "vram_delta_mb": 4183,
+          "vram_livre_antes_mb": 5691,
+          "gpu_util_pct": 7,
+          "ram_rss_gb": 3.41,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 1708.555,
+            "prompt_per_second": 31.60565507109809,
+            "predicted_n": 300,
+            "predicted_ms": 150024.213,
+            "predicted_per_second": 1.9930116213974076
+          }
+        },
+        {
+          "modelo": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+          "rotulo": "ngl99",
+          "ngl": 99,
+          "n_cpu_moe": null,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9422,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 17.24,
+          "tg_tps": 1.66,
+          "tps_relatido": 1.0,
+          "segundos": 183.22,
+          "vram_mb": 4633,
+          "vram_delta_mb": 4183,
+          "vram_livre_antes_mb": 5691,
+          "gpu_util_pct": 6,
+          "ram_rss_gb": 3.42,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 3131.944,
+            "prompt_per_second": 17.24168759083815,
+            "predicted_n": 300,
+            "predicted_ms": 180076.468,
+            "predicted_per_second": 1.6604057338574634
+          }
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T16:46:18",
+      "modelo": "/home/nixos/models/Ternary-Bonsai-27B-PQ2_0.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": [
+          "-ngl",
+          "40"
+        ]
+      },
+      "resultados": [
+        {
+          "modelo": "Ternary-Bonsai-27B-PQ2_0.gguf",
+          "rotulo": "ngl0",
+          "ngl": 0,
+          "n_cpu_moe": null,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9464,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 49.5,
+          "tg_tps": 3.48,
+          "tps_relatido": 1.32,
+          "segundos": 87.06,
+          "vram_mb": 5319,
+          "vram_delta_mb": 4869,
+          "vram_livre_antes_mb": 5691,
+          "gpu_util_pct": 12,
+          "ram_rss_gb": 3.74,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 1090.881,
+            "prompt_per_second": 49.501274657822435,
+            "predicted_n": 300,
+            "predicted_ms": 85968.865,
+            "predicted_per_second": 3.478003344582948
+          }
+        },
+        {
+          "modelo": "Ternary-Bonsai-27B-PQ2_0.gguf",
+          "rotulo": "ngl99",
+          "ngl": 99,
+          "n_cpu_moe": null,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9465,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 33.54,
+          "tg_tps": 2.63,
+          "tps_relatido": 1.0,
+          "segundos": 115.2,
+          "vram_mb": 5319,
+          "vram_delta_mb": 4869,
+          "vram_livre_antes_mb": 5691,
+          "gpu_util_pct": 9,
+          "ram_rss_gb": 3.74,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 1610.146,
+            "prompt_per_second": 33.53733139727702,
+            "predicted_n": 300,
+            "predicted_ms": 113583.335,
+            "predicted_per_second": 2.632428427990779
+          }
+        }
+      ]
     }
   ]
 }
