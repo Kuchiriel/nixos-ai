@@ -724,21 +724,16 @@ class LLMClient:
 
     # --- embeddings ---
 
-    def _truncate_for_embedding(self, text: str) -> str:
-        """Trunca por estimativa de tokens (não por char cru)."""
-        max_chars = int(self._EMBED_MAX_TOKENS * self._EMBED_CHARS_PER_TOKEN_ESTIMATE)
-        if len(text) <= max_chars:
-            return text
-        truncated = text[:max_chars].rsplit(" ", 1)[0]
-        logger.warning(
-            "texto truncado para embedding: %d -> %d chars (~%d tokens estimados)",
-            len(text), len(truncated), self._EMBED_MAX_TOKENS,
-        )
-        return truncated
-
     def embed(self, text: str, model: str | None = None) -> list[float]:
-        """Embedding via backend (sob o breaker de embed: falha conta como as demais)."""
-        text = self._truncate_for_embedding(text)
+        """Embedding via backend (sob o breaker de embed: falha conta como as demais).
+
+        (25/09) NÃO trunca mais aqui. O truncamento client-side (~480 tokens)
+        derrotava o chunk+mean-pool do backend: texto de 10k chars era cortado
+        para ~1.4k ANTES de chegar no providers/embedding.py, perdendo ~85%
+        em silêncio — a mesma classe de bug que o remember já tinha. Quem
+        respeita o limite de 512 tokens do servidor é o chunker do backend,
+        que não perde dado: parte, embeda e combina por mean-pooling L2.
+        """
         self._embed_breaker.before_call()
         try:
             result = self._backend.embed(text, model=model)

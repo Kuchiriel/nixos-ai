@@ -74,13 +74,17 @@ def test_chat_omits_disable_thinking_when_enabled():
 
 
 @pytest.mark.integration
-def test_embed_truncates_long_text():
-    # ctx do modelo de embedding é 512 tokens — texto longo deve ser truncado
-    # antes do POST (o llama-server rejeita com HTTP 400 caso contrário)
-    captured = {}
+def test_embed_chunks_long_text():
+    # (25/09) O servidor de embeddings tem max context de 512 TOKENS — e o
+    # texto PT-BR tokeniza pior que ASCII (medido: 2000 chars FALHA, 1600 OK).
+    # O contrato novo NAO e truncar (perder dado): e partir em chunks e
+    # combinar por mean-pooling L2. Ver providers/embedding.py.
+    import math
+
+    calls = []
 
     def capture_post(*args, **kwargs):
-        captured["input"] = kwargs["json"]["input"]
+        calls.append(kwargs["json"]["input"])
         return _FakeResp({"data": [{"embedding": [0.1, 0.2]}]})
 
     session = Mock(spec=requests.Session)
@@ -88,9 +92,18 @@ def test_embed_truncates_long_text():
     llm = LLMClient(Config(embed_base_url="http://x"), session=session)
     long_text = "palavra " * 500  # ~4000 chars
     vec = llm.embed(long_text)
-    assert vec == [0.1, 0.2]
-    max_chars = int(LLMClient._EMBED_MAX_TOKENS * LLMClient._EMBED_CHARS_PER_TOKEN_ESTIMATE)
-    assert len(captured["input"]) <= max_chars
+
+    # 1) nao estoura o limite do servidor: nenhum chunk acima do teto
+    assert len(calls) > 1, "deveria ter partido em varios chunks"
+    assert max(len(c) for c in calls) <= 1200  # CHUNK_CHARS com folga real
+    # 2) nada e perdido onde o truncamento antigo perdia: a CAUDA do texto
+    # tem que aparecer em algum chunk (truncar cortava exatamente o fim)
+    cauda = long_text[-80:]
+    assert any(cauda in c for c in calls), "o fim do texto sumiu: truncou"
+    # 3) o resultado e o pool normalizado dos chunks ([0.1,0.2]/norm)
+    norm = math.sqrt(0.1**2 + 0.2**2)
+    assert abs(vec[0] - 0.1 / norm) < 1e-9 and abs(vec[1] - 0.2 / norm) < 1e-9
+
 
 
 def test_embed_raises_on_http_400():

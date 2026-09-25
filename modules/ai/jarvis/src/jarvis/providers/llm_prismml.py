@@ -102,7 +102,7 @@ class PrismMLBackend(LLMBackend):
         self,
         messages: list[dict[str, Any]],
         *,
-        temperature: float = 0.0,
+        temperature: float | None = None,
         max_tokens: int | None = None,
         tools: list[dict[str, Any]] | None = None,
         tool_choice: str | None = None,
@@ -115,7 +115,7 @@ class PrismMLBackend(LLMBackend):
         payload: dict[str, Any] = {
             "model": self._model,
             "messages": messages,
-            "temperature": temperature,
+            **({"temperature": temperature} if temperature is not None else {}),
             "stream": stream,
         }
         if max_tokens is not None:

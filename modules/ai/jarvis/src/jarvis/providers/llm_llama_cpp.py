@@ -155,7 +155,7 @@ class LlamaCppBackend(LLMBackend):
         self,
         messages: list[dict[str, Any]],
         *,
-        temperature: float = 0.0,
+        temperature: float | None = None,
         max_tokens: int | None = None,
         tools: list[dict[str, Any]] | None = None,
         tool_choice: str | None = None,
@@ -168,9 +168,15 @@ class LlamaCppBackend(LLMBackend):
         payload: dict[str, Any] = {
             "model": self._model,
             "messages": messages,
-            "temperature": temperature,
             "stream": stream,
         }
+        # (25/09) Temperature so vai no payload se o caller definiu. Antes o
+        # default 0.0 era enviado SEMPRE, sobrescrevendo o sampling afinado
+        # que o modelo carrega no GGUF (general.sampling.*). Medido no bonsai
+        # 8B: temp 0.0 -> 2/2 respostas IDENTICAS (greedy colapsa); default
+        # do modelo (0.5 p/ bonsai) -> 2/2 diferentes. O vendor recomenda 0.5.
+        if temperature is not None:
+            payload["temperature"] = temperature
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
         # 25/09 — o "server error" no 1o turno do REPL: o payload real
@@ -261,7 +267,7 @@ class LlamaCppBackend(LLMBackend):
         self,
         messages: list[dict[str, Any]],
         *,
-        temperature: float = 0.0,
+        temperature: float | None = None,
         max_tokens: int | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
@@ -269,9 +275,11 @@ class LlamaCppBackend(LLMBackend):
         payload: dict[str, Any] = {
             "model": self._model,
             "messages": messages,
-            "temperature": temperature,
             "stream": True,
         }
+        # mesma regra do chat(): so envia temperature se o caller definiu
+        if temperature is not None:
+            payload["temperature"] = temperature
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
         if tools:
@@ -302,7 +310,7 @@ class LlamaCppBackend(LLMBackend):
         self,
         messages: list[dict[str, Any]],
         *,
-        temperature: float = 0.0,
+        temperature: float | None = None,
         max_tokens: int | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> Iterator[str]:
@@ -332,7 +340,7 @@ class LlamaCppBackend(LLMBackend):
         self,
         messages: list[dict[str, Any]],
         *,
-        temperature: float = 0.0,
+        temperature: float | None = None,
         max_tokens: int | None = None,
         tools: list[dict[str, Any]] | None = None,
     ) -> AsyncIterator[str]:
