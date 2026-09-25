@@ -1334,6 +1334,463 @@
           }
         }
       ]
+    },
+    {
+      "ts": "2026-09-25T17:44:45",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe35",
+          "ngl": 99,
+          "n_cpu_moe": 35,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9219,
+          "carregou": false,
+          "erro": "outro llama-server de CHAT rodando (pids 533194,534714,534718,534723): contaminaria a medicao. Pare o outro ou use --allow-contention",
+          "pp_tps": null,
+          "tg_tps": null,
+          "tps_relatido": null,
+          "segundos": null,
+          "vram_mb": null,
+          "vram_delta_mb": null,
+          "vram_livre_antes_mb": null,
+          "gpu_util_pct": null,
+          "ram_rss_gb": null,
+          "raw_timings": {}
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T17:45:01",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe35",
+          "ngl": 99,
+          "n_cpu_moe": 35,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9219,
+          "carregou": false,
+          "erro": "outro llama-server de CHAT rodando (pids 533194,534714,535525,535530): contaminaria a medicao. Pare o outro ou use --allow-contention",
+          "pp_tps": null,
+          "tg_tps": null,
+          "tps_relatido": null,
+          "segundos": null,
+          "vram_mb": null,
+          "vram_delta_mb": null,
+          "vram_livre_antes_mb": null,
+          "gpu_util_pct": null,
+          "ram_rss_gb": null,
+          "raw_timings": {}
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T17:45:13",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe41",
+          "ngl": 99,
+          "n_cpu_moe": 41,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9219,
+          "carregou": false,
+          "erro": "outro llama-server de CHAT rodando (pids 533194,534714,536043,536048): contaminaria a medicao. Pare o outro ou use --allow-contention",
+          "pp_tps": null,
+          "tg_tps": null,
+          "tps_relatido": null,
+          "segundos": null,
+          "vram_mb": null,
+          "vram_delta_mb": null,
+          "vram_livre_antes_mb": null,
+          "gpu_util_pct": null,
+          "ram_rss_gb": null,
+          "raw_timings": {}
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T17:45:22",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe41",
+          "ngl": 99,
+          "n_cpu_moe": 41,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9219,
+          "carregou": false,
+          "erro": "outro llama-server de CHAT rodando (pids 533194,534714,536437,536442): contaminaria a medicao. Pare o outro ou use --allow-contention",
+          "pp_tps": null,
+          "tg_tps": null,
+          "tps_relatido": null,
+          "segundos": null,
+          "vram_mb": null,
+          "vram_delta_mb": null,
+          "vram_livre_antes_mb": null,
+          "gpu_util_pct": null,
+          "ram_rss_gb": null,
+          "raw_timings": {}
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T17:45:56",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe35",
+          "ngl": 99,
+          "n_cpu_moe": 35,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9266,
+          "carregou": false,
+          "erro": "outro llama-server de CHAT rodando (pids 537920,537925): contaminaria a medicao. Pare o outro ou use --allow-contention",
+          "pp_tps": null,
+          "tg_tps": null,
+          "tps_relatido": null,
+          "segundos": null,
+          "vram_mb": null,
+          "vram_delta_mb": null,
+          "vram_livre_antes_mb": null,
+          "gpu_util_pct": null,
+          "ram_rss_gb": null,
+          "raw_timings": {}
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T17:46:13",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe35",
+          "ngl": 99,
+          "n_cpu_moe": 35,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9266,
+          "carregou": false,
+          "erro": "outro llama-server de CHAT rodando (pids 538398,538403): contaminaria a medicao. Pare o outro ou use --allow-contention",
+          "pp_tps": null,
+          "tg_tps": null,
+          "tps_relatido": null,
+          "segundos": null,
+          "vram_mb": null,
+          "vram_delta_mb": null,
+          "vram_livre_antes_mb": null,
+          "gpu_util_pct": null,
+          "ram_rss_gb": null,
+          "raw_timings": {}
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T17:46:32",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe41",
+          "ngl": 99,
+          "n_cpu_moe": 41,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9266,
+          "carregou": false,
+          "erro": "outro llama-server de CHAT rodando (pids 539269,539274): contaminaria a medicao. Pare o outro ou use --allow-contention",
+          "pp_tps": null,
+          "tg_tps": null,
+          "tps_relatido": null,
+          "segundos": null,
+          "vram_mb": null,
+          "vram_delta_mb": null,
+          "vram_livre_antes_mb": null,
+          "gpu_util_pct": null,
+          "ram_rss_gb": null,
+          "raw_timings": {}
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T17:46:45",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe41",
+          "ngl": 99,
+          "n_cpu_moe": 41,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9266,
+          "carregou": false,
+          "erro": "outro llama-server de CHAT rodando (pids 540184,540189): contaminaria a medicao. Pare o outro ou use --allow-contention",
+          "pp_tps": null,
+          "tg_tps": null,
+          "tps_relatido": null,
+          "segundos": null,
+          "vram_mb": null,
+          "vram_delta_mb": null,
+          "vram_livre_antes_mb": null,
+          "gpu_util_pct": null,
+          "ram_rss_gb": null,
+          "raw_timings": {}
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T17:47:23",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe35",
+          "ngl": 99,
+          "n_cpu_moe": 35,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9288,
+          "carregou": false,
+          "erro": "outro llama-server de CHAT rodando (pids 541219,541223,541226): contaminaria a medicao. Pare o outro ou use --allow-contention",
+          "pp_tps": null,
+          "tg_tps": null,
+          "tps_relatido": null,
+          "segundos": null,
+          "vram_mb": null,
+          "vram_delta_mb": null,
+          "vram_livre_antes_mb": null,
+          "gpu_util_pct": null,
+          "ram_rss_gb": null,
+          "raw_timings": {}
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T17:49:31",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe35",
+          "ngl": 99,
+          "n_cpu_moe": 35,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9300,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 4.96,
+          "tg_tps": 8.57,
+          "tps_relatido": 1.0,
+          "segundos": 45.8,
+          "vram_mb": 5741,
+          "vram_delta_mb": 5297,
+          "vram_livre_antes_mb": 5697,
+          "gpu_util_pct": 10,
+          "ram_rss_gb": 13.92,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 10882.723,
+            "prompt_per_second": 4.961993427564039,
+            "predicted_n": 300,
+            "predicted_ms": 34877.036,
+            "predicted_per_second": 8.57297621277221
+          }
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T17:50:34",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe35",
+          "ngl": 99,
+          "n_cpu_moe": 35,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9300,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 37.68,
+          "tg_tps": 9.28,
+          "tps_relatido": 1.0,
+          "segundos": 33.67,
+          "vram_mb": 5741,
+          "vram_delta_mb": 3610,
+          "vram_livre_antes_mb": 4010,
+          "gpu_util_pct": 13,
+          "ram_rss_gb": 17.42,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 1433.289,
+            "prompt_per_second": 37.67558391922355,
+            "predicted_n": 300,
+            "predicted_ms": 32228.541,
+            "predicted_per_second": 9.277491028836831
+          }
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T17:51:36",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe41",
+          "ngl": 99,
+          "n_cpu_moe": 41,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9300,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 19.21,
+          "tg_tps": 9.64,
+          "tps_relatido": 1.0,
+          "segundos": 33.82,
+          "vram_mb": 4677,
+          "vram_delta_mb": 4146,
+          "vram_livre_antes_mb": 5610,
+          "gpu_util_pct": 19,
+          "ram_rss_gb": 19.99,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 2811.445,
+            "prompt_per_second": 19.207204835947348,
+            "predicted_n": 300,
+            "predicted_ms": 31006.123,
+            "predicted_per_second": 9.643256591609342
+          }
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T17:52:41",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe41",
+          "ngl": 99,
+          "n_cpu_moe": 41,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9300,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 18.31,
+          "tg_tps": 9.55,
+          "tps_relatido": 1.0,
+          "segundos": 34.27,
+          "vram_mb": 4677,
+          "vram_delta_mb": 4146,
+          "vram_livre_antes_mb": 5610,
+          "gpu_util_pct": 18,
+          "ram_rss_gb": 19.99,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 2949.259,
+            "prompt_per_second": 18.309683890089,
+            "predicted_n": 300,
+            "predicted_ms": 31319.039,
+            "predicted_per_second": 9.546908511464862
+          }
+        }
+      ]
     }
   ]
 }
