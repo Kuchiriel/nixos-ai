@@ -1147,11 +1147,22 @@ def _auto_commit(tool_name: str, args: dict[str, Any], success: bool) -> None:
     else:
         msg = f"jarvis: create/update {path}"
     
-    # Stage and commit
+    # Stage and commit — SOMENTE o arquivo editado.
+    # Antes: `git add -A` stageava o repo inteiro, então uma edição de
+    # arquivo de teste sob /tmp rotulava um commit com o nome do /tmp e
+    # carregava junto mudanças de código de outra sessão (medido 25/09:
+    # 8 commits "jarvis: edit /tmp/..." engolindo rag.py, devtools.py e
+    # config.py). Commit automático é conveniência, não autoridade: o
+    # escopo tem que ser o arquivo que o agente mexeu.
+    if os.environ.get("JARVIS_NO_AUTO_COMMIT") == "1":
+        return
     try:
-        _sp.run(["git", "add", "-A"], capture_output=True, timeout=5)
+        if path and path not in ("unknown",) and not str(path).startswith("/tmp/"):
+            _sp.run(["git", "add", "--", str(path)], capture_output=True, timeout=5)
+        else:
+            return  # path fora do repo ou desconhecido: não commitar às cegas
         _sp.run(
-            ["git", "commit", "-m", msg, "--no-verify"],
+            ["git", "commit", "-m", msg, "--no-verify", "--", str(path)],
             capture_output=True, text=True, timeout=10,
         )
     except Exception:
