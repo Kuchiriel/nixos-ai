@@ -2762,9 +2762,12 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context(task)
     agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
+    _tpl = (MINIMAL_PROMPT if os.environ.get("JARVIS_PROMPT_PROFILE", "").lower() == "minimal"
+            else SYSTEM_PROMPT_TEMPLATE)
     system_prompt = _maybe_disable_thinking(
-        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(ap_persona), tool_discipline=_TOOL_DISCIPLINE)
+        _tpl.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(ap_persona), tool_discipline=_TOOL_DISCIPLINE)
     )
+    system_prompt = _apply_prompt_profile(system_prompt, "lean")
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     if continue_session:
         resumed = _resume_session(project_root or os.getcwd())
@@ -2785,6 +2788,47 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
     console.print("[dim]🧭 checkpoint salvo[/]")
     _repl_emit("session.ended", success=ok, turns=len(messages))
     return 0 if ok else 1
+
+
+MINIMAL_PROMPT = """JARVIS dev agent. {LANG_NAME}. Direto.
+
+{memory_context}
+{agent_context}
+{persona_block}
+RULES:
+1. Responda em {LANG_NAME}, sem rodeios e sem pedir desculpa por nada.
+2. Use ferramenta quando a tarefa exigir; responda em texto quando não.
+3. Entregue o resultado (arquivo/texto) e pare. Não peça para continuar.
+"""
+
+
+def _apply_prompt_profile(prompt: str, profile_name: str) -> str:
+    """A/B de system prompt (24/09, evidência: arXiv 2603.18507 — persona
+    longa DESTRÓI factual; arXiv 2608.02639 — stacking de instruções
+    colapsa o compliance; EACL 2026 — persona degrada em diálogo longo).
+
+    full    = o prompt atual (repo map + catálogo de tools + limites + regras
+              + persona + tool_discipline) ~3k tokens
+    lean    = sem repo map, sem catálogo de tools (o schema JSON já vem na
+              API), sem limites de output — só contexto + regras + disciplina
+    minimal = 4 linhas: contexto, persona e 3 regras
+    """
+    mode = os.environ.get("JARVIS_PROMPT_PROFILE", "full").strip().lower()
+    if mode == "minimal" or profile_name == "minimal":
+        return prompt
+    if mode != "lean":
+        return prompt
+    out = prompt
+    # corta blocos ruidosos mantendo a ordem
+    for start, end in (
+        ("REPO MAP", "TOOLS ("),
+        ("TOOLS (", "LIMITES DE OUTPUT"),
+        ("LIMITES DE OUTPUT", "RULES:"),
+    ):
+        i, j = out.find(start), out.find(end)
+        if i != -1 and j != -1 and j > i:
+            out = out[:i] + out[j:]
+    return out
 
 
 def dev_once(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False, continue_session: bool = False, yolo: bool = False, autopilot: bool = False, transcript_path: str | None = None) -> int:
