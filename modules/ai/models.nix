@@ -112,6 +112,73 @@ in rec {
     sha256 = "sha256-NW36oxETdqT3Fl4y6HSXEzeNFwCzfPUuDFDZ8jMiM00=";
   };
 
+  # ══════════════════════════════════════════════════════════════════
+  # Qwen3.6-35B-A3B-UNCENSORED (HauhauCS Aggressive) — variantes de quant
+  # ══════════════════════════════════════════════════════════════════
+  # Base: Qwen/Qwen3.6-35B-A3B · 35B total / ~3B ativos · 256 experts,
+  # 8 roteados/token · atencao hibrida (linear 3:1) · 40 camadas · 262K
+  # nativo · multimodal (texto/imagem/video) · thinking por padrao.
+  #
+  # RODAR EXATAMENTE COMO O Qwen3-30B-A3B (fonte: docs/models/BINARIES.md
+  # — binario errado = veredito invalido):
+  #   binario = ik_llama.cpp (unico com --n-cpu-moe; prism = ternario,
+  #            upstream = sem offload de MoE). Tier endpoint 8084.
+  #   perfil  = chat/jarvis (hostBase + moeFlags "--n-cpu-moe 35")
+  #   flags   = -ngl 45 (attn+dense na GPU, experts na CPU), -t 8,
+  #             -c >= 4096, -fa on, -ctk/-ctv q4_0, -b/-ub 512,
+  #             --parallel 1, --jinja
+  #   thinking: authors recomendam ON (geral temp 1.0/top_p .95/top_k 20/
+  #     presence_penalty 1.5; coding temp 0.6/presence 0). O JARVIS desliga
+  #     thinking por padrao (H3: 3x turnos sem ganho no bonsai) — para este
+  #     tier o DONO decide: JARVIS_LLM_DISABLE_THINKING=0.
+  #   contexto: authors pedem >=128K p/ preservar thinking. Na 6GB com
+  #     experts na CPU e inviavel agora (KV+RAM); validado com 4k-8k.
+  #
+  # EVIDENCIA (RTX 4050 6GB, ik build 4854/b166e269, 2-3 reps):
+  #   - Qwen3.6-35B-A3B-UD-Q4_K_M (mesmo porte, base): 35,5 t/s
+  #     (-ngl 45 --n-cpu-moe 35 -t 8) — bench-ik35-final 24/09
+  #   - mesmo com --n-cpu-moe 36 (todos experts CPU): 19,25 t/s → 35 vence
+  #   - ik vs upstream no mesmo modelo: 36 vs 32 t/s (+11%) → ik e o binario
+  #   - wackmall EHS 18 t/s · prism no MoE 2-3 t/s (PROIBIDO)
+  #   - Qwen3-30B-A3B-Q4_K_M ja roda a 30+ t/s neste mesmo perfil
+  # ! RAM (25/09, incidente): este MoE segura ~18GB de RAM (experts CPU).
+  #   Com router+embeddings+rerank+sessao, 32GB estouram (28/31, 0 livre) e
+  #   o SO congela. Rodar com esses servicos PARADOS + ulimit, ou nao rodar.
+  #   O guard de VRAM do `jarvis space serve` existe exatamente por isso.
+  # ──────────────────────────────────────────────────────────────────
+
+  # Família completa do autor (sha256 oficial via API HF; o sha local do
+  # Q4_K_M em ~/models confere com o oficial — download íntegro):
+  llm-uncensored-35b = mkModel {
+    # Q4_K_M.gguf · 21.2GB  # baixado 25/09 em ~/models
+    url = "https://huggingface.co/HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
+    sha256 = "sha256-u+9Yw3zoiCC+nZi2Q38c9LrIkMlHvVX8e2jiIJhXQjE=";
+  };
+
+  llm-uncensored-35b-kp = mkModel {
+    # Q4_K_P.gguf · 23.4GB  # K_P = imatrix por modelo (+1-2 niveis de quant)
+    url = "https://huggingface.co/HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf";
+    sha256 = "sha256-jTRKQzbY6n2gy/wSeS0UceVovnq+iTDFImBpi/0B1zE=";
+  };
+
+  llm-uncensored-35b-kp-q3 = mkModel {
+    # Q3_K_P.gguf · 19.0GB  # MENOR que o K_M: menos RAM — alvo p/ 6GB VRAM + 32GB RAM
+    url = "https://huggingface.co/HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q3_K_P.gguf";
+    sha256 = "sha256-GFCPN/x3h/Jg33rBo5NLFd2UltBQstS4ZCQbSTWI/pU=";
+  };
+
+  llm-uncensored-35b-kp-q2 = mkModel {
+    # Q2_K_P.gguf · 15.0GB  # o menor da familia K_P (15GB)
+    url = "https://huggingface.co/HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q2_K_P.gguf";
+    sha256 = "sha256-WpfzjbD/tFW7y6enx7joLR5CdA3dMIk6wa1Xot9elKQ=";
+  };
+
+  llm-uncensored-35b-mmproj = mkModel {
+    # mmproj-f16.gguf · 0.9GB  # visao/video: exige o projector ao lado do GGUF
+    url = "https://huggingface.co/HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive/resolve/main/mmproj-Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-f16.gguf";
+    sha256 = "sha256-yOcCNEqB+MImqRSqmA7W4fYEvOk3Tx/tjmXIlpCK9BQ=";
+  };
+
   # --- LLM Bonsai — Host (bare metal), motor ternário ---
   # Ternary-Bonsai-8B Q2_0_g64 (Qwen3-8B denso ternário {-1,0,+1}, 2.15GiB).
   # Servidor atual: fork PrismML. VERIFICADO 2026-09-08: upstream b10809
