@@ -1,0 +1,66 @@
+{
+  "ts": "2026-09-25__12-40-43",
+  "summary": {
+    "total": 3,
+    "world_ok": 3,
+    "false_done": 0,
+    "by_tier": {
+      "easy": {
+        "n": 3,
+        "ok": 3
+      }
+    },
+    "avg_elapsed_s": 6.3
+  },
+  "results": [
+    {
+      "task_id": "E1-write",
+      "tier": "easy",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 5.3,
+      "rc": 0
+    },
+    {
+      "task_id": "E2-read",
+      "tier": "easy",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 6.3,
+      "rc": 0
+    },
+    {
+      "task_id": "E3-count",
+      "tier": "easy",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 7.4,
+      "rc": 0
+    }
+  ]
+}
