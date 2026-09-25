@@ -164,9 +164,9 @@ def env_for(space: Space) -> dict[str, str]:
             str(Path(r).expanduser()) for r in space.read_roots)
     if space.encrypt_collections:
         env["JARVIS_RAG_ENCRYPT_COLLECTIONS"] = ",".join(space.encrypt_collections)
-    if space.qdrant_token_file:
-        env["JARVIS_QDRANT_API_KEY_FILE"] = str(
-            Path(space.qdrant_token_file).expanduser())
+    # qdrant_token_file: suporte PRONTO para quando a auth do Qdrant for
+    # ativada por drop-in systemd (hoje desligada de propósito — ver nota
+    # em modules/services/qdrant.nix).
     if space.local_only:
         # fail-closed: nuvem não pode tocar space protegido
         env["JARVIS_SPACE_LOCAL_ONLY"] = "1"
