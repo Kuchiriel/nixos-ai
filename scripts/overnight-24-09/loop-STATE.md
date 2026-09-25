@@ -64,3 +64,12 @@
 ## ciclo 6 — 2026-09-25 12:54 · modelo=bonsai
 - harness: /tmp/overnight/loop-bonsai-20260925-125141.json (evidência copiada em scripts/overnight-24-09/)
 - prompt A/B: loop-bonsai-20260925-125141-p{full,lean,minimal}.json
+
+## frente @bonsai — 2026-09-25 12:58
+- score: 7/12
+- gates que este tier NAO fecha: H1-config-discovery, H3-chain, P1-ptbr-exato, P2-ptbr-leitura, P3-ptbr-negativa
+- false_done: H1-config-discovery
+
+## ciclo 7 — 2026-09-25 12:58 · modelo=bonsai
+- harness: /tmp/overnight/loop-bonsai-20260925-125551.json (evidência copiada em scripts/overnight-24-09/)
+- prompt A/B: loop-bonsai-20260925-125551-p{full,lean,minimal}.json
