@@ -69,8 +69,28 @@ def test_run_benchmark_captures_error(monkeypatch) -> None:
             handler = "doctor"
         return R()
 
+    # (25/09, LOOP-v3) Hermético como o sibling: SEM estes mocks os casos
+    # rag/nixos/agent chamam Qdrant :6333, mcp-nixos e o loop do agente com
+    # LLM REAL multi-turn — com a máquina carregada o teste "pendura" por
+    # vários timeouts de 120s (violava o isolamento de teste).
+    def _fast(query):
+        return {"response": "f"}
+
+    def _nixos(query):
+        return {"result": "x"}
+
+    def _rag(query, **k):
+        return {"hits": [1]}
+
+    def _agent(query, **k):
+        return {"response": "r"}
+
     monkeypatch.setattr(router_mod, "route_request", _route)
     monkeypatch.setattr(router_mod, "handle_doctor", _boom)
+    monkeypatch.setattr(router_mod, "handle_fastpath", _fast)
+    monkeypatch.setattr(router_mod, "handle_nixos", _nixos)
+    monkeypatch.setattr(router_mod, "handle_rag", _rag)
+    monkeypatch.setattr(router_mod, "handle_agent", _agent)
 
     results = benchmark.run_benchmark()
     agent = next(r for r in results if r.route == "doctor")

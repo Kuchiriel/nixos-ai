@@ -60,11 +60,24 @@ def note_path(base: Path, name: str) -> Path:
     return p.with_name(p.name + ENC_SUFFIX) if enabled() else p
 
 
+def _enc_path(path: Path) -> Path:
+    """Com cifragem on, garante suffix `.enc` (idempotente: nunca dobra).
+
+    (25/09, LOOP-v3 ciclo 1 — armadilha achada por teste Wycheproof-style:
+    write_text cifrado gravava no path que o caller desse; se o caller
+    esquecesse note_path(), a nota ficava INVISÍVEL para iter_notes para
+    sempre. Agora o mecanismo garante o suffix, não a disciplina do caller.)
+    """
+    if enabled() and not path.name.endswith(ENC_SUFFIX):
+        return path.with_name(path.name + ENC_SUFFIX)
+    return path
+
+
 def write_text(path: Path, content: str, *, append: bool = False) -> None:
     """Escreve (ou anexa) cifrando quando habilitado.
 
     Append exige reescritura do arquivo inteiro: o conteúdo antigo é
-    decifrado, o novo é concatenado e o arquivo é recifrado. Vaults são
+    decifrado, o novo é concatenado e o arquivo é recifado. Vaults são
     pequenos (notas mensais), o custo é irrelevante.
     """
     if not enabled():
@@ -77,6 +90,7 @@ def write_text(path: Path, content: str, *, append: bool = False) -> None:
         return
 
     existing = ""
+    path = _enc_path(path)
     if append and path.exists():
         existing = read_text(path)
     f = _fernet()
@@ -91,9 +105,14 @@ def write_text(path: Path, content: str, *, append: bool = False) -> None:
 def read_text(path: Path) -> str:
     if not enabled():
         return path.read_text(encoding="utf-8", errors="replace")
-    if not path.exists():
-        return ""
-    return _fernet().decrypt(path.read_bytes()).decode("utf-8")
+    enc = _enc_path(path)
+    if not enc.exists():
+        # Nota legada pré-cifragem ainda em claro: lê transparente
+        # (mesma filosofia de migração do rag_crypto — mistura de claro
+        # e cifrado é lida pelos dois caminhos). Se nenhum dos dois
+        # existe, contrato anterior: string vazia.
+        return path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
+    return _fernet().decrypt(enc.read_bytes()).decode("utf-8")
 
 
 def encrypt_text(plain: str) -> str:
