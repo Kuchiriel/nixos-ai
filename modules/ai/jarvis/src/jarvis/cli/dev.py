@@ -216,7 +216,8 @@ def _print_help() -> None:
         ("/clear", "limpar contexto"),
         ("/compact", "compactar sessão (auto ao estourar)"),
         ("/status", "status do backend"),
-        ("/map", "atualizar repo map"),
+        ("/map", "atualizar repo map (sob demanda)"),
+        ("/tools", "listar tools da persona | /tools +nome | -nome | all"),
         ("/add <path>", "fixar arquivo no contexto"),
         ("/drop <path|--all>", "soltar arquivo do contexto"),
         ("/undo", "desfazer última edição"),
@@ -955,40 +956,7 @@ SYSTEM_PROMPT_TEMPLATE = """JARVIS dev agent. {LANG_NAME}. Direto.
 {memory_context}
 {agent_context}
 
-TOOLS (21 tools disponíveis):
---- Arquivos ---
-- read_file(path, offset?, limit?) → ler ANTES de editar
-- write_file(path, content) → criar/escrever arquivo
-  (cria pastas-pai sozinhas; p/ criar estrutura, chame write_file
-  com o caminho COMPLETO de cada arquivo; mkdir/touch via shell
-  são bloqueados)
-- str_replace(path, old, new) → old EXATO; vazio = criar
-- list_directory(path, max_depth?) → listar diretório
---- Shell ---
-- execute_shell(cmd) → bash (ls/grep/pytest/git/curl)
-  Pipes e ; são permitidos: find ... -o ... | head -20
-- browser(action, url?, selector?, text?) → navegador headless
-  open=url (leitura), click/fill=selector (+text; pedem aprovação)
---- Busca ---
-- semantic_search(query, top_k) → busca semântica
-- rag_search(query) → busca RAG no codebase
-- rag_index(path?) → indexar diretório no RAG
---- Vision ---
-- capture_screen() → screenshot
-- observe_screen(mode?, question?) → screenshot + vision
---- NixOS ---
-- nix_eval(expr) → avaliar Nix
-- nix_check() → nix flake check
-- nix_search(query) → pesquisar nixpkgs
---- Memória ---
-- remember(text, category?) → gravar memória
-- recall(query) → buscar memórias
-- lessons(query) → lições aprendidas
-- vault_list() → notas persistentes
-- vault_write(name, content) → escrever nota
---- Web ---
-- read_chatgpt(url) → ler conversa ChatGPT compartilhada
-- web_search(query) → PESQUISA NA INTERNET (Tavily). USE para atualidades, docs de libs e tudo fora do codebase. NÃO diga que não tem acesso à internet.
+{tools_catalog}
 
 LIMITES DE OUTPUT (OBRIGATÓRIO):
 - find: máx 30 resultados (use -maxdepth 2 | head -30)
@@ -1477,6 +1445,41 @@ def _persona_block(persona) -> str:
         return f"\n\nPERSONA ATIVA: {persona.name} ({persona.role})\n{additions}"
     except Exception:
         return ""
+
+
+
+def _tools_catalog(tools: list[dict[str, Any]]) -> str:
+    """Catálogo de tools DERIVADO das tools ativas (25/09).
+
+    Antes: as 21 tools eram listadas em prosa no system prompt, sempre —
+    mesmo com persona filtrando o schema. O modelo via advertised tools que
+    não podia usar (poluição) e, segundo a pesquisa (arXiv 2607.19257 /
+    2608.02639), instruction-stacking cobra caro. Agora: o prompt anuncia
+    só o que a persona liberou; `/tools` expande em runtime.
+    """
+    if not tools:
+        return ("SEM FERRAMENTAS NESTE PERFIL: responda em texto. "
+                "Se precisar de ferramenta, peça ao dono para liberar "
+                "com `/tools +nome` no REPL.")
+    by_group: dict[str, list[str]] = {}
+    for t in tools:
+        fn = (t.get("function") or {})
+        name = fn.get("name", "?")
+        desc = (fn.get("description") or "").strip().split("\n")[0]
+        grp = ("shell" if "shell" in name else
+               "arquivos" if name in ("read_file", "write_file", "str_replace", "list_directory") else
+               "memoria" if name in ("remember", "recall", "lessons", "vault_list", "vault_write") else
+               "busca" if name in ("semantic_search", "rag_search", "rag_index") else
+               "nix" if name.startswith("nix_") else
+               "web" if name in ("web_search", "read_chatgpt") else
+               "visao" if name in ("capture_screen", "observe_screen", "browser") else
+               "outras")
+        by_group.setdefault(grp, []).append(f"- {name}: {desc[:90]}")
+    out = [f"FERRAMENTAS ({len(tools)} disponiveis nesta persona):"]
+    for grp in sorted(by_group):
+        out.append(f"  [{grp}]")
+        out.extend("  " + line for line in by_group[grp])
+    return "\n".join(out)
 
 
 def _get_tools(persona=None) -> list[dict[str, Any]]:
@@ -2471,6 +2474,53 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             _print_recall()
             continue
 
+        if user_input == "/tools" or user_input.startswith("/tools "):
+            # 25/09: persona decide as tools; expandir é explícito e
+            # temporário (o MCP entra no schema e no catálogo do prompt).
+            arg = user_input[len("/tools"):].strip()
+            active = {t["function"]["name"] for t in tools}
+            if not arg:
+                console.print(f"[dim]tools ativas ({len(active)}):[/] "
+                              + ", ".join(sorted(active)))
+                console.print("[dim]use /tools +nome, /tools -nome ou /tools all[/]")
+                continue
+            if arg == "all":
+                tools = _get_tools(None)
+            else:
+                for tok in arg.replace(",", " ").split():
+                    if tok.startswith("+"):
+                        nome = tok[1:]
+                        cand = [t for t in _get_tools(None)
+                                if t["function"]["name"] == nome]
+                        if not cand:
+                            console.print(f"[yellow]tool desconhecida: {nome}[/]")
+                            continue
+                        if cand[0] not in tools:
+                            tools.append(cand[0])
+                    elif tok.startswith("-"):
+                        nome = tok[1:]
+                        before = len(tools)
+                        tools[:] = [t for t in tools
+                                    if t["function"]["name"] != nome]
+                        if len(tools) == before:
+                            console.print(f"[yellow]não estava ativa: {nome}[/]")
+            system_prompt = system_prompt.replace(
+                "SEM FERRAMENTAS NESTE PERFIL",
+                _tools_catalog(tools)).replace(
+                _tools_catalog([]), _tools_catalog(tools))
+            # reescreve o bloco de catálogo no prompt com o estado atual
+            i = system_prompt.find("FERRAMENTAS (")
+            if i == -1:
+                i = system_prompt.find("SEM FERRAMENTAS NESTE PERFIL")
+            if i != -1:
+                j = system_prompt.find("\n\n", i)
+                system_prompt = (system_prompt[:i] + _tools_catalog(tools)
+                                 + (system_prompt[j:] if j != -1 else "\n"))
+            messages[0]["content"] = system_prompt
+            console.print(f"[green]tools → {len(tools)}[/] "
+                          f"({', '.join(sorted(t['function']['name'] for t in tools))[:120]})")
+            continue
+
         if user_input == "/help":
             _print_help()
             continue
@@ -2765,7 +2815,7 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
     _tpl = (MINIMAL_PROMPT if os.environ.get("JARVIS_PROMPT_PROFILE", "").lower() == "minimal"
             else SYSTEM_PROMPT_TEMPLATE)
     system_prompt = _maybe_disable_thinking(
-        _tpl.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(ap_persona), tool_discipline=_TOOL_DISCIPLINE)
+        _tpl.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(ap_persona), tool_discipline=_TOOL_DISCIPLINE, tools_catalog=_tools_catalog(tools))
     )
     system_prompt = _apply_prompt_profile(system_prompt, "lean")
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
@@ -2860,7 +2910,7 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
     _tpl2 = (MINIMAL_PROMPT if os.environ.get("JARVIS_PROMPT_PROFILE", "").lower() == "minimal"
              else SYSTEM_PROMPT_TEMPLATE)
     system_prompt = _maybe_disable_thinking(
-        _tpl2.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(ss_persona), tool_discipline=_TOOL_DISCIPLINE)
+        _tpl2.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(ss_persona), tool_discipline=_TOOL_DISCIPLINE, tools_catalog=_tools_catalog(tools))
     )
     system_prompt = _apply_prompt_profile(system_prompt, "lean")
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
