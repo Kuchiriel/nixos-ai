@@ -1254,6 +1254,86 @@
           }
         }
       ]
+    },
+    {
+      "ts": "2026-09-25T17:15:37",
+      "modelo": "/home/nixos/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+          "rotulo": "ngl0",
+          "ngl": 0,
+          "n_cpu_moe": null,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9810,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 13.84,
+          "tg_tps": 0.72,
+          "tps_relatido": 1.0,
+          "segundos": 419.04,
+          "vram_mb": 757,
+          "vram_delta_mb": 307,
+          "vram_livre_antes_mb": 5691,
+          "gpu_util_pct": 0,
+          "ram_rss_gb": 7.06,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 3900.895,
+            "prompt_per_second": 13.842977060392553,
+            "predicted_n": 300,
+            "predicted_ms": 415139.352,
+            "predicted_per_second": 0.720240079769648
+          }
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T17:23:17",
+      "modelo": "/home/nixos/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
+      "flags": {
+        "threads": 8,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+          "rotulo": "ngl0",
+          "ngl": 0,
+          "n_cpu_moe": null,
+          "threads": 8,
+          "ctx": 8192,
+          "port": 9810,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 13.49,
+          "tg_tps": 0.69,
+          "tps_relatido": 1.0,
+          "segundos": 438.75,
+          "vram_mb": 757,
+          "vram_delta_mb": 307,
+          "vram_livre_antes_mb": 5691,
+          "gpu_util_pct": 0,
+          "ram_rss_gb": 7.06,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 4002.619,
+            "prompt_per_second": 13.491166658630261,
+            "predicted_n": 300,
+            "predicted_ms": 434747.623,
+            "predicted_per_second": 0.6877553416778543
+          }
+        }
+      ]
     }
   ]
 }

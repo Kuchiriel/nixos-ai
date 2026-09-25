@@ -134,10 +134,35 @@ def uma_config(binpath: str, modelo: str, rotulo: str, port: int, *,
     # sem VRAM livre o ngl99 morre com cudaMalloc OOM. Então: snapshot
     # antes, delta depois, e recusa se não houver folga.
     vram_antes = int(nvidia("memory.used") or 0)
-    llms = subprocess.run(["pgrep", "-c", "-f", "llama-server"],
-                          capture_output=True, text=True).stdout.strip()
-    if llms and llms.isdigit() and int(llms) > 1 and not allow_contention:
-        a.erro = (f"outro llama-server rodando ({llms} processos): "
+    # So conta MODELO DE CHAT. Embeddings e reranker sao servicos de apoio e
+    # ficam parados durante a medicao; conta-los seria falso positivo (e o
+    # sweep se recusaria sozinho, sem motivo real).
+    chat_pids = []
+    for pid in subprocess.run(["pgrep", "-f", "llama-server"],
+                              capture_output=True, text=True).stdout.split():
+        try:
+            argv = open(f"/proc/{pid}/cmdline", "rb").read().decode("utf-8", "replace")
+        except OSError:
+            continue
+        if not argv:
+            continue
+        low = argv.lower()
+        if "vram-split-sweep" in low or "nix develop" in low:
+            # O proprio sweep aparece no pgrep porque a linha de comando dele
+            # contem o caminho do binario. Sem este guarda o precheck casa
+            # consigo mesmo e recusa toda medicao (falso positivo).
+            continue
+        if ".gguf" not in low:
+            continue   # so conta quem tem MODELO carregado, nao quem foi invocado
+        if ("embed" in low or "rerank" in low or "bge-" in low or "nomic-" in low
+                or "models-preset" in low or "--port 8080" in low):
+            # Servico de apoio (embeddings/rerank) ou o ROUTER, que apenas
+            # entrega os tiers sob demanda e nao segura VRAM. Contar qualquer
+            # um deles seria falso positivo — o sweep se recusaria sozinho.
+            continue
+        chat_pids.append(pid)
+    if len(chat_pids) > 0 and not allow_contention:
+        a.erro = (f"outro llama-server de CHAT rodando (pids {','.join(chat_pids)}): "
                   "contaminaria a medicao. Pare o outro ou use --allow-contention")
         return a
     vram_total = int(nvidia("memory.total") or 0)
