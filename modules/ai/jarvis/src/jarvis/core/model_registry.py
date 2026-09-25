@@ -50,6 +50,20 @@ _FALLBACK = {
             "vram_mb": 4600,
             "endpoint": 8084,
         },
+        "jarvis-raw": {
+            "tier": "fast",
+            "capabilities": ["general", "coding", "tools", "pt", "uncensored"],
+            "params_b": 4,
+            "vram_mb": 2700,
+            "endpoint": 8083,
+        },
+        "jarvis-raw-strong": {
+            "tier": "reasoning",
+            "capabilities": ["general", "coding", "tools", "reasoning", "analysis", "pt", "uncensored"],
+            "params_b": 35,
+            "vram_mb": 4600,
+            "endpoint": 8084,
+        },
     },
 }
 

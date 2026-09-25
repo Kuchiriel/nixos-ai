@@ -651,6 +651,46 @@
           }
         }
       ]
+    },
+    {
+      "ts": "2026-09-25T15:58:58",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/prism-bin/llama-prism-b10735-842b188/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe41",
+          "ngl": 99,
+          "n_cpu_moe": 41,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9066,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 41.27,
+          "tg_tps": 37.1,
+          "tps_relatido": 1.0,
+          "segundos": 9.37,
+          "vram_mb": 2625,
+          "vram_delta_mb": 2175,
+          "vram_livre_antes_mb": 5691,
+          "gpu_util_pct": 43,
+          "ram_rss_gb": 20.0,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 1308.438,
+            "prompt_per_second": 41.27058370362218,
+            "predicted_n": 300,
+            "predicted_ms": 8058.547,
+            "predicted_per_second": 37.10346294437446
+          }
+        }
+      ]
     }
   ]
 }

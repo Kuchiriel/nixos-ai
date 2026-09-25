@@ -581,6 +581,20 @@ in rec {
     };
   };
 
+  # ── Raw Profiles (uncensored, A/B 24-25/09: sem refusal bobo em gates;
+  #  aligned desvia com tools/genérico/negação, uncensored passa direto) ──
+  # Arquivos em ~/models (impuro, fora do store — precedente: wrappers
+  # prism/ik). modelFile absoluto; mkPresetSection usa o literal.
+  # Alvo de hot-swap (idle reload): /model jarvis-raw*.
+  extraProfiles = {
+    raw-fast = profiles.qwen-fast // {
+      modelFile = "/home/nixos/models/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
+    };
+    raw-strong = profiles.chat // {
+      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
+    };
+  };
+
   # =========================================================================
   # 3. ROUTING — metadata declarativa p/ o router nativo do llama-server
   #    + registry JSON consumido pelo Python (model_registry.py).
@@ -637,6 +651,33 @@ in rec {
         endpoint = 8084;
         serve = { host = true; vm = false; };
         # Herdado do profile chat: mmproj na CPU (861MB VRAM) + visão dinâmica.
+        iniExtra = ["no-mmproj-offload = true" "image-min-tokens = 1024"];
+      };
+      # Hot-swap raw (uncensored, A/B 24-25/09): sem refusal em gates.
+      # /model jarvis-raw* ou capability "uncensored" no select_model.
+      jarvis-raw = {
+        profile = "raw-fast";
+        ctx = 16384;
+        tier = "fast";
+        capabilities = ["general" "coding" "tools" "pt" "uncensored"];
+        params_b = 4;
+        vram_mb = 2700;
+        needsWrapper = null;
+        binary = "upstream";
+        endpoint = 8083;
+        serve = { host = true; vm = false; };
+      };
+      jarvis-raw-strong = {
+        profile = "raw-strong";
+        ctx = 8192;
+        tier = "reasoning";
+        capabilities = ["general" "coding" "tools" "reasoning" "analysis" "pt" "uncensored"];
+        params_b = 35;
+        vram_mb = 4600;
+        needsWrapper = null;
+        binary = "ik";
+        endpoint = 8084;
+        serve = { host = true; vm = false; };
         iniExtra = ["no-mmproj-offload = true" "image-min-tokens = 1024"];
       };
     };

@@ -118,8 +118,10 @@ with lib; let
   };
 
   # Perfil de execução do preset (variante VM quando declarada).
+  # Inclui extraProfiles (raw/uncensored) além dos profiles base.
+  allProfiles = pkgs.aiModels.profiles // pkgs.aiModels.extraProfiles;
   presetProfile = m:
-    pkgs.aiModels.profiles.${if envName == "vm" && m ? profileVm then m.profileVm else m.profile};
+    allProfiles.${if envName == "vm" && m ? profileVm then m.profileVm else m.profile};
 
   # kvCache ("-fa on -ctk q4_0 -ctv q4_0") → chaves INI/CLI. Falha no eval
   # (não em runtime) se aparecer um formato novo — honestidade > adivinhação.
@@ -146,13 +148,15 @@ with lib; let
       else builtins.elemAt mm 0;
 
   # Uma seção [id] do preset INI (formato: README tools/server, "Model presets").
+  # modelFile (~/models, impuro) vence o store quando presente.
   mkPresetSection = id: m: let
     p = presetProfile m;
     kv = parseKv p.kvCache;
     moe = parseMoe p.moeFlags;
+    modelPath = if p ? modelFile then p.modelFile else "${pkgs.aiModels.${p.model}}";
   in ''
     [${id}]
-    model = ${pkgs.aiModels.${p.model}}
+    model = ${modelPath}
     ${optionalString (p ? mmproj && p.mmproj != null) "mmproj = ${pkgs.aiModels.${p.mmproj}}"}
     c = ${toString p.ctxSize}
     n-gpu-layers = ${toString p.gpuLayers}

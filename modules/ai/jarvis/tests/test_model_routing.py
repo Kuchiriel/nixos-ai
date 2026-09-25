@@ -33,6 +33,15 @@ REG = {
                                            "reasoning", "analysis",
                                            "vision", "pt"],
                           "params_b": 35, "vram_mb": 4600, "endpoint": 8084},
+        "jarvis-raw": {"tier": "fast",
+                       "capabilities": ["general", "coding", "tools", "pt",
+                                        "uncensored"],
+                       "params_b": 4, "vram_mb": 2700, "endpoint": 8083},
+        "jarvis-raw-strong": {"tier": "reasoning",
+                              "capabilities": ["general", "coding", "tools",
+                                               "reasoning", "analysis",
+                                               "pt", "uncensored"],
+                              "params_b": 35, "vram_mb": 4600, "endpoint": 8084},
     },
 }
 
@@ -49,7 +58,8 @@ def _reg(tmp_path, monkeypatch, data=None):
 def test_registry_loads_and_defaults(tmp_path, monkeypatch):
     reg = _reg(tmp_path, monkeypatch)
     assert reg.default == "bonsai"
-    assert set(reg.ids()) == {"bonsai", "jarvis-fast", "jarvis-strong"}
+    assert set(reg.ids()) == {"bonsai", "jarvis-fast", "jarvis-strong",
+                               "jarvis-raw", "jarvis-raw-strong"}
     assert reg.get("jarvis-fast").tier == "fast"
 
 
@@ -90,6 +100,20 @@ def test_registry_endpoint_defaults_8080(tmp_path, monkeypatch):
     del bad["models"]["bonsai"]["endpoint"]
     reg = _reg(tmp_path, monkeypatch, bad)
     assert reg.get("bonsai").endpoint == 8080
+
+
+def test_uncensored_capability_selects_raw(tmp_path, monkeypatch):
+    reg = _reg(tmp_path, monkeypatch)
+    mid, _ = select_model({"capabilities": {"coding", "uncensored"},
+                           "tier": "fast"}, reg)
+    assert mid == "jarvis-raw"
+
+
+def test_base_url_for_raw_endpoints(tmp_path, monkeypatch):
+    from jarvis.core import model_lifecycle as L
+    reg = _reg(tmp_path, monkeypatch)
+    assert L.base_url_for("jarvis-raw", reg) == "http://127.0.0.1:8083"
+    assert L.base_url_for("jarvis-raw-strong", reg) == "http://127.0.0.1:8084"
 
 
 def test_registry_endpoints_per_binary(tmp_path, monkeypatch):
