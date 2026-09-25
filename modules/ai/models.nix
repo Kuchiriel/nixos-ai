@@ -124,7 +124,7 @@ in rec {
   #   binario = ik_llama.cpp (unico com --n-cpu-moe; prism = ternario,
   #            upstream = sem offload de MoE). Tier endpoint 8084.
   #   perfil  = chat/jarvis (hostBase + moeFlags "--n-cpu-moe 35")
-  #   flags   = -ngl 45 (attn+dense na GPU, experts na CPU), -t 8,
+  #   flags   = -ngl 45 (attn+dense na GPU, experts na CPU), -t 6,
   #             -c >= 4096, -fa on, -ctk/-ctv q4_0, -b/-ub 512,
   #             --parallel 1, --jinja
   #   thinking: authors recomendam ON (geral temp 1.0/top_p .95/top_k 20/
@@ -136,7 +136,7 @@ in rec {
   #
   # EVIDENCIA (RTX 4050 6GB, ik build 4854/b166e269, 2-3 reps):
   #   - Qwen3.6-35B-A3B-UD-Q4_K_M (mesmo porte, base): 35,5 t/s
-  #     (-ngl 45 --n-cpu-moe 35 -t 8) — bench-ik35-final 24/09
+  #     (-ngl 45 --n-cpu-moe 35 -t 6) — ver sweep 25/09: -t 6 = so P-cores
   #   - mesmo com --n-cpu-moe 36 (todos experts CPU): 19,25 t/s → 35 vence
   #   - ik vs upstream no mesmo modelo: 36 vs 32 t/s (+11%) → ik e o binario
   #   - wackmall EHS 18 t/s · prism no MoE 2-3 t/s (PROIBIDO)
@@ -328,7 +328,11 @@ in rec {
       ubatch = 1024;
       # Mantém ncmoe=36 (todos experts na CPU) — RTX 4050 não tem VRAM suficiente
       # para experts na GPU E contexto grande E modelo dense layers
-      # Benchmark: ncmoe=35 -ngl 45 -t 8 = 32.5 tok/s (2026-08-26)
+      # Benchmark: ncmoe=35 -ngl 45 -t 8 = 32.5 tok/s (2026-08-26). -t 6 escolhido 25/09:
+#   o i7-13620H e HIBRIDO (6P+4E=10 fisicos) e o lscpu reporta '8', escondendo a
+#   assimetria. Medido no denso (gemma-3-4b CPU-only): -t6=16,4 | -t8=14,1 |
+#   -t10=10,4 | -t12=7,9 t/s. E-cores e HT competem e custam ~14%.
+#   No MoE -t6 vs -t8 dao o mesmo TG (14,8 vs 15,0) — bandwidth-bound.
       moeFlags = "--n-cpu-moe 35";
       extraArgs = [
         "--no-mmproj-offload"
@@ -342,7 +346,7 @@ in rec {
 
     # ── Chat Profile ──
     chat = hostBase // {
-      threads = 8;
+      threads = 6;
       ctxSize = 8192;
       batchSize = 512;
       ubatch = 512;
@@ -357,7 +361,7 @@ in rec {
 
     # ── Jarvis Profile ──
     jarvis = hostBase // {
-      threads = 8;
+      threads = 6;
       ctxSize = 4096;
       batchSize = 512;
       ubatch = 512;
@@ -377,7 +381,7 @@ in rec {
     # VRAM budget: 6141 MB total - 2400 MB (model) - 500 MB (safety) = 3241 MB
     # Mantém ncmoe=36 para estabilidade — experts na CPU
     benchmark = hostBase // {
-      threads = 8;
+      threads = 6;
       ctxSize = 2048; # Pequeno para benchmarks rápidos
       batchSize = 512;
       ubatch = 512;
@@ -405,7 +409,7 @@ in rec {
       mmproj = null;
       gpuLayers = 99; # todas as 36 layers na GPU (denso, sem experts)
       kvCache = "-fa on -ctk q4_0 -ctv q4_0";
-      threads = 8;
+      threads = 6;
       ctxSize = 49152;
       batchSize = 2048;
       ubatch = 512;
@@ -452,7 +456,7 @@ in rec {
 
     # host-ncmoe35: Variante mais rápida com mais experts na GPU
     host-ncmoe35 = hostBase // {
-      threads = 8;
+      threads = 6;
       ctxSize = 32768;
       batchSize = 512;
       ubatch = 512;
@@ -471,7 +475,7 @@ in rec {
 
     # host-ehs: Expert Hot Store (fork wackmall)
     host-ehs = hostBase // {
-      threads = 8;
+      threads = 6;
       ctxSize = 8192;
       batchSize = 512;
       ubatch = 512;
@@ -535,7 +539,7 @@ in rec {
     # fazer nixos-rebuild switch.
     fast = hostBase // {
       gpuLayers = 25;
-      threads = 8;
+      threads = 6;
       ctxSize = 4096;
       batchSize = 512;
       ubatch = 512;
@@ -561,7 +565,7 @@ in rec {
       mmproj = null;
       gpuLayers = 99; # todas as layers densas na GPU (ngl alto = "todas")
       kvCache = "-fa on -ctk q4_0 -ctv q4_0";
-      threads = 8;
+      threads = 6;
       ctxSize = 16384;
       batchSize = 1024;
       ubatch = 512;
