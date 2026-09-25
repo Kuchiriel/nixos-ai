@@ -340,7 +340,7 @@ in rec {
 #   assimetria. Medido no denso (gemma-3-4b CPU-only): -t6=16,4 | -t8=14,1 |
 #   -t10=10,4 | -t12=7,9 t/s. E-cores e HT competem e custam ~14%.
 #   No MoE -t6 vs -t8 dao o mesmo TG (14,8 vs 15,0) — bandwidth-bound.
-      moeFlags = "--n-cpu-moe 35 --mlock";
+      moeFlags = "--n-cpu-moe 35";
       extraArgs = [
         "--no-mmproj-offload"
         "--image-min-tokens"
@@ -348,6 +348,7 @@ in rec {
         "--parallel"
         "2"
         "--jinja"
+        "--mlock"
       ];
     };
 
@@ -357,12 +358,13 @@ in rec {
       ctxSize = 8192;
       batchSize = 512;
       ubatch = 512;
-      moeFlags = "--n-cpu-moe 35 --mlock";
+      moeFlags = "--n-cpu-moe 35";
       extraArgs = [
         "--no-mmproj-offload"
         "--parallel"
         "1"
         "--jinja"
+        "--mlock"
       ];
     };
 
@@ -372,12 +374,13 @@ in rec {
       ctxSize = 4096;
       batchSize = 512;
       ubatch = 512;
-      moeFlags = "--n-cpu-moe 35 --mlock";
+      moeFlags = "--n-cpu-moe 35";
       extraArgs = [
         "--no-mmproj-offload"
         "--parallel"
         "1"
         "--jinja"
+        "--mlock"
       ];
     };
 
@@ -393,7 +396,7 @@ in rec {
       batchSize = 512;
       ubatch = 512;
       # Mantém ncmoe=36 — experts na CPU para não estourar VRAM
-      moeFlags = "--n-cpu-moe 35 --mlock";
+      moeFlags = "--n-cpu-moe 35";
       extraArgs = [
         "--no-mmproj-offload"
         "--image-min-tokens"
@@ -402,6 +405,7 @@ in rec {
         "1"
         "--no-warmup"
         "--jinja"
+        "--mlock"
       ];
     };
 
@@ -551,11 +555,12 @@ in rec {
       batchSize = 512;
       ubatch = 512;
       mmproj = null; # Disable vision model — saves 861MB VRAM + prevents crash
-      moeFlags = "--n-cpu-moe 35 --mlock";
+      moeFlags = "--n-cpu-moe 35";
       extraArgs = [
         "--parallel"
         "1"
         "--jinja"
+        "--mlock"
         "--no-warmup"
       ];
       user = "nixos";

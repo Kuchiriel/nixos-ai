@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+import dataclasses
+
 from jarvis.core.config import Config
 from jarvis.core.rag import HybridIndexer
 
@@ -49,7 +51,9 @@ class _LLM:
 
 
 def _indexer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> HybridIndexer:
-    cfg = Config(qdrant_collection_code="t")
+    # Col derivada via replace (convenção do test_test_isolation.py): nunca
+    # nome de coleção de produção em arquivo de teste.
+    cfg = dataclasses.replace(Config(), qdrant_collection_code="jarvis_test_manifest")
     ix = HybridIndexer(cfg)
     ix._store = _Store()
     ix._llm = _LLM()
