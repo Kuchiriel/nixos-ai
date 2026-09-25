@@ -87,7 +87,7 @@ for n in MemoryVault().list_notes(): print(n)
     dir="${2:-$PESSOAL_DIR}"
     profile_env
     echo "indexando $dir nas coleções pessoais (isso NÃO toca no code_index)…"
-    nix develop "$NIXAI" --command jarvis rag index "$dir"
+    nix develop "$NIXAI" --command jarvis index "$dir"
     ;;
   stop)
     sudo systemctl stop llama-cpp-server 2>/dev/null || true

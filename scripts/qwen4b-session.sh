@@ -135,8 +135,7 @@ PY
   index)
     dir="${2:?uso: index DIR}"
     profile_env
-    nix develop "$NIXAI" --command python3 -m jarvis.rag_index "$dir" 2>/dev/null \
-      || nix develop "$NIXAI" --command jarvis rag index "$dir"
+    nix develop "$NIXAI" --command jarvis index "$dir"
     ;;
   repl)
     profile_env
