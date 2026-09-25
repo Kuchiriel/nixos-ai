@@ -1,25 +1,26 @@
 {
-  "n_por_braco": 3,
+  "n_por_braco": 5,
   "instrumento": "memory-arena-lite (uso ativo, Mechanical, sem LLM-judge)",
   "resultados": [
     {
       "braco": "C0",
-      "n": 3,
-      "acertos": 1,
+      "n": 5,
+      "acertos": 2,
       "falhas": [
+        "não está em inglês (fato pedia inglês)",
         "não está em inglês (fato pedia inglês)",
         "não está em inglês (fato pedia inglês)"
       ],
       "erro": null,
-      "t_mediano": 2.786705255508423
+      "t_mediano": 2.91351056098938
     },
     {
       "braco": "C1",
-      "n": 3,
-      "acertos": 3,
+      "n": 5,
+      "acertos": 5,
       "falhas": [],
       "erro": null,
-      "t_mediano": 1.8831861019134521
+      "t_mediano": 3.1391654014587402
     }
   ]
 }
