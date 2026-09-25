@@ -8,6 +8,7 @@
     curl
     jq
     htop
+    unar # Descompactar .rar/.rar5 (livre; unrar original precisaria allowUnfree)
   ];
 
   # Regras de udev para otimizar o scheduler de I/O nos NVMes de alta performance
