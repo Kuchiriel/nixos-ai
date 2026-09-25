@@ -80,3 +80,35 @@ def _sandbox_state_dir(tmp_path, monkeypatch) -> None:
     arquivo (test_agent.py mantém o seu local — redundância inofensiva).
     """
     monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path / "state"))
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _isolated_qdrant_collections() -> None:
+    """Isola as coleções Qdrant da execução de teste (25/09).
+
+    Descoberto: a suíte escrevia na coleção `memories` REAL — 6 eventos
+    "E2E test fact" foram parar na memória viva do agente. Isolar só o
+    `JARVIS_STATE_DIR` (arquivos) não cobre o Qdrant, que é servidor.
+
+    Padrão de mercado (Testcontainers/DB-per-test): **unique resource
+    names em vez de limpeza depois** — a quote é "isolation is
+    established before application code runs rather than repaired after
+    each test". Limpar depois é justamente o que corre mal com suíte
+    paralela e com processo morto no meio do teste.
+
+    Então: um prefixo único por execução, aplicado às coleções que a
+    suíte escreve, e nenhuma tentativa de consertar a coleção real.
+    """
+    import uuid
+
+    prefix = f"test_{os.getpid()}_{uuid.uuid4().hex[:8]}"
+    for var in (
+        "JARVIS_QDRANT_COLLECTION_CODE",
+        "JARVIS_QDRANT_COLLECTION_MEMORIES",
+        "JARVIS_QDRANT_COLLECTION_BOOKS",
+        "JARVIS_QDRANT_COLLECTION_VAULT",
+    ):
+        os.environ[var] = f"{prefix}_{var.removeprefix('JARVIS_QDRANT_COLLECTION_').lower()}"
+    yield
+    # teardown é opcional: coleções `test_*` são descartáveis por nome
+    # (ou seja: o próximo `doctor`/limpeza as vê e o dono decide).
