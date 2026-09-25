@@ -47,10 +47,21 @@ profile_env() {
   export JARVIS_QDRANT_COLLECTION_CODE=qwen4b_code
   export JARVIS_QDRANT_COLLECTION_MEMORIES=qwen4b_memories
   export JARVIS_QDRANT_COLLECTION_BOOKS=qwen4b_books
+  # `--pessoal` (QWEN4B_PESSOAL=1): este é o ÚNICO perfil que pode ler
+  # ~/Pessoal e as coleções protegidas. Só habilite para trabalho local
+  # (perícia, diário) — NUNCA com provider de nuvem, que levaria o
+  # conteúdo para fora da máquina.
+  if [ "${QWEN4B_PESSOAL:-0}" = "1" ]; then
+    export JARVIS_EXTRA_READ_ROOTS="$HOME/Pessoal"
+    export JARVIS_QDRANT_COLLECTION_CODE=pessoal_code
+    export JARVIS_QDRANT_COLLECTION_MEMORIES=pessoal_memories
+    echo "⚠ modo PESSOAL: RAG+litura de ~/Pessoal ativos (só local)" >&2
+  else
+    unset JARVIS_EXTRA_READ_ROOTS
+  fi
   export JARVIS_LLM_BASE_URL="http://127.0.0.1:$PORT/v1"
   export JARVIS_LLM_MODEL="${QWEN4B_MODEL_ID:-qwen4b}"
   export JARVIS_LLM_DISABLE_THINKING="${QWEN4B_THINKING:-1}"  # H3: effort alto = 3x turnos sem ganho
-  unset JARVIS_EXTRA_READ_ROOTS
   unset JARVIS_TELEGRAM_TOKEN JARVIS_TELEGRAM_CHAT_ID
   mkdir -p "$STATE"
   chmod 700 "$STATE"
