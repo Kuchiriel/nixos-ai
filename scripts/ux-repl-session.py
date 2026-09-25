@@ -22,14 +22,24 @@ from pathlib import Path
 
 # Falas naturais de um dono com 7 CIDs usando o REPL: pedem coisas
 # pequeno->maior, mezclam dúvida, tarefa e pedido de continuação.
-TURNS = [
-    ("oi, tudo certo?", 4),
-    ("guarda isso aí: minha perícia do INSS é dia 28, preciso levar laudo e carta de concessão", 6),
-    ("ok. agora me explica em 3 linhas o que é CRPS", 25),
-    ("agora um trabalho de verdade: cria o arquivo /tmp/repl-teste/Plano.md com o conteúdo exato: 28/09 pericia INSS", 30),
-    ("confere o que você escreveu lendo o arquivo de volta", 30),
-    ("agora continua e me dá um resumo do que falta pra perícia", 40),
+TURNS = []
+# Sessão LONGA (o bug do dono: quebra por volta de 30 mensagens)
+_sequencia = [
+    "oi", "guarda que a perícia é 28/09", "me explica CRPS em 2 linhas",
+    "cria /tmp/repl-teste/A.md com 'a1'", "leia o A.md de volta",
+    "agora explica NixOS em 2 linhas", "cria /tmp/repl-teste/B.md com 'b1'",
+    "leia o B.md", "qual o maior desses dois arquivos?", "some 17+25",
+    "multiplica 12 por 12", "liste 3 comandos git", "o que faz nix flake check?",
+    "cria /tmp/repl-teste/C.md com 'c1'", "leia o C.md", "quantos arquivos tem em /tmp/repl-teste?",
+    "resuma em 1 linha o que fizemos ate agora", "qual o PID do llama-server?",
+    "cria /tmp/repl-teste/D.md com 'd1'", "leia o D.md", "crie uma pasta /tmp/repl-teste/sub e um E.md dentro",
+    "liste /tmp/repl-teste", "leia E.md", "some 1+2+3+4+5",
+    "crie /tmp/repl-teste/F.md com 'f1'", "leia F.md", "quantos .md existem em /tmp/repl-teste?",
+    "me da 2 dicas de organizacao", "crie /tmp/repl-teste/G.md com 'g1'", "leia G.md",
+    "obrigado, resumindo tudo que Fizemos?",
 ]
+for i, t in enumerate(_sequencia):
+    TURNS.append((t, 8 if i % 3 else 16))
 
 ANSI = re.compile(r"\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*\x07")
 

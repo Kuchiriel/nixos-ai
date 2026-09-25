@@ -98,6 +98,37 @@ class LlamaCppBackend(LLMBackend):
         self._enable_thinking = enable_thinking
         self._info_cache: BackendInfo | None = None
 
+
+    _STABLE_MODEL: dict[str, str] = {}
+
+    def _stable_model_name(self, requested: str) -> str:
+        """Fixa o nome do modelo servido (25/09: evita unload/load no router).
+
+        Se chamarmos com 'default' e antes com 'bonsai', o router
+        --models-max 1 descarrega e recarrega o modelo a cada troca — e o
+        reload falha se a VRAM estiver ocupada (500). Fixamos no primeiro
+        nome que o servidor aceitar.
+        """
+        key = self._base_url
+        fixed = self._STABLE_MODEL.get(key)
+        if fixed:
+            return fixed
+        if requested and requested not in ("default", "", None):
+            self._STABLE_MODEL[key] = requested
+            return requested
+        # 'default': pergunta o que está residente e fixa nesse
+        try:
+            r = self._session.get(f"{self._base_url}/props", timeout=3)
+            if r.status_code == 200:
+                d = r.json()
+                name = d.get("model_path") or d.get("model") or ""
+                if name:
+                    self._STABLE_MODEL[key] = "bonsai" if "bonsai" in name.lower() else requested
+                    return self._STABLE_MODEL[key]
+        except Exception:  # noqa: BLE001
+            pass
+        return requested or "default"
+
     def chat(
         self,
         messages: list[dict[str, Any]],
@@ -129,12 +160,33 @@ class LlamaCppBackend(LLMBackend):
         if not self._enable_thinking:
             payload["chat_template_kwargs"] = self._thinking_kwarg(extra)
 
+        # 25/09 — o "server error" no meio da conversa: o router
+        # (--models-preset --models-max 1) faz UNLOAD+LOAD quando o nome do
+        # modelo muda na requisição; se o reload cai enquanto a VRAM está
+        # ocupada, o server responde 500 {"failed to load"} e a sessão morre.
+        # Dois consertos aqui: (1) pin do nome do modelo já carregado
+        # (evita o churn), (2) retry curtoSpecifically para esse 500.
+        payload["model"] = self._stable_model_name(payload["model"])
         resp = self._session.post(
             f"{self._base_url}/v1/chat/completions",
             json=payload,
             timeout=(self._connect_timeout, self._read_timeout),
             stream=stream,
         )
+        if resp.status_code >= 500:
+            body = resp.text[:200].lower()
+            if "failed to load" in body or "loading" in body:
+                # reload em andamento: espera e tenta 2x (2s, 5s)
+                for wait_s in (2.0, 5.0):
+                    time.sleep(wait_s)
+                    resp = self._session.post(
+                        f"{self._base_url}/v1/chat/completions",
+                        json=payload,
+                        timeout=(self._connect_timeout, self._read_timeout),
+                        stream=stream,
+                    )
+                    if resp.status_code < 500:
+                        break
         elapsed = time.monotonic() - t0
         resp.raise_for_status()
         data = resp.json()
