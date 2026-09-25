@@ -1,0 +1,244 @@
+{
+  "ts": "2026-09-25__12-00-53",
+  "summary": {
+    "total": 12,
+    "world_ok": 12,
+    "false_done": 0,
+    "by_tier": {
+      "easy": {
+        "n": 3,
+        "ok": 3
+      },
+      "medium": {
+        "n": 3,
+        "ok": 3
+      },
+      "hard": {
+        "n": 3,
+        "ok": 3
+      },
+      "ptbr": {
+        "n": 3,
+        "ok": 3
+      }
+    },
+    "avg_elapsed_s": 6.6
+  },
+  "results": [
+    {
+      "task_id": "E1-write",
+      "tier": "easy",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 4.0,
+      "rc": 0
+    },
+    {
+      "task_id": "E2-read",
+      "tier": "easy",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 4.8,
+      "rc": 0
+    },
+    {
+      "task_id": "E3-count",
+      "tier": "easy",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 6.1,
+      "rc": 0
+    },
+    {
+      "task_id": "M1-dirfile",
+      "tier": "medium",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 10,
+      "tool_calls": [
+        "write_file",
+        "execute_shell",
+        "write_file",
+        "execute_shell"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 6.0,
+      "rc": 0
+    },
+    {
+      "task_id": "M2-script-run",
+      "tier": "medium",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "write_file",
+        "execute_shell"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 4.4,
+      "rc": 0
+    },
+    {
+      "task_id": "M3-fix-offbyone",
+      "tier": "medium",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 9,
+      "tool_calls": [
+        "read_file",
+        "str_replace",
+        "execute_shell"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 5.8,
+      "rc": 0
+    },
+    {
+      "task_id": "H1-config-discovery",
+      "tier": "hard",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 5.2,
+      "rc": 0
+    },
+    {
+      "task_id": "H2-syntax-fix",
+      "tier": "hard",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 27,
+      "tool_calls": [
+        "read_file",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 12.2,
+      "rc": 0
+    },
+    {
+      "task_id": "H3-chain",
+      "tier": "hard",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 9,
+      "tool_calls": [
+        "list_directory",
+        "write_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 5.7,
+      "rc": 0
+    },
+    {
+      "task_id": "P1-ptbr-exato",
+      "tier": "ptbr",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 5.6,
+      "rc": 0
+    },
+    {
+      "task_id": "P2-ptbr-leitura",
+      "tier": "ptbr",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 5.9,
+      "rc": 0
+    },
+    {
+      "task_id": "P3-ptbr-negativa",
+      "tier": "ptbr",
+      "world_ok": true,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [],
+      "turns": 18,
+      "tool_calls": [
+        "read_file",
+        "write_file",
+        "write_file",
+        "execute_shell",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 14.1,
+      "rc": 0
+    }
+  ]
+}
