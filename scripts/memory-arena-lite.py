@@ -43,22 +43,53 @@ EVIDENCE = Path("scripts/overnight-24-09/memory-arena-lite.json")
 # não, emoji sim) e a checagem mecânica reprova.
 FACTOS = [
     {
-        "id": "idioma-formato",
-        "fato": "IMPORTANTE: neste projeto o dono trabalha em INGLÊS e NUNCA "
-                "usa emoji nas respostas. Responda em inglês, sem emoji.",
-        "default": {"lang": "pt", "emoji": True},
-        "esperado": {"lang": "en", "emoji": False},
+        "id": "en_sem_emoji",
+        "fato": "IMPORTANTE: neste projeto o dono trabalha em INGLES e NUNCA usa "
+                "emoji. Responda em ingles, sem emoji.",
+        "proibido": [r"[\U0001F300-\U0001FAFF\u2600-\u27BF]"],
+        # >=2 palavras que EXISTEM em ingles e NAO em portugues. A primeira
+        # versao aceitava "status do projeto hoje" porque 'status' existe
+        # nos dois idiomas — falsava o veredito e inflava o C0.
+        "exigido_min": ["the", "and", "is", "are", "we", "today", "currently",
+                        "finished", "updated", "this"],
     },
     {
-        "id": "sem-carangue",
-        "fato": "IMPORTANTE: neste projeto é PROIBIDO usar emoji e ele e"
-                "qualquer resposta final. Sem exceção.",
-        "default": {"lang": "pt", "emoji": True},
-        "esperado": {"lang": "pt", "emoji": False},
+        "id": "sem_emoji",
+        "fato": "IMPORTANTE: neste projeto e PROIBIDO usar emoji, sem excecao, em "
+                "qualquer resposta.",
+        "proibido": [r"[\U0001F300-\U0001FAFF\u2600-\u27BF]"],
+        "exigido": None,
+    },
+    {
+        "id": "minusculas",
+        "fato": "IMPORTANTE: neste projeto TODAS as respostas devem ser escritas "
+                "inteiramente em minusculas, sem nenhuma letra maiuscula.",
+        "proibido": [r"[A-Z]"],
+        "exigido": None,
+    },
+    {
+        "id": "sem_numeros",
+        "fato": "IMPORTANTE: neste projeto e PROIBIDO usar algarismos em qualquer "
+                "resposta. Escreva as quantidades por extenso.",
+        "proibido": [r"\d"],
+        "exigido": None,
+    },
+    {
+        "id": "tres_itens",
+        "fato": "IMPORTANTE: neste projeto toda resposta final deve ser uma lista "
+                "com TRES itens, cada um comecando com '- '.",
+        "proibido": [],
+        "exigido": r"(?m)^- .+\n- .+\n- ",
+    },
+    {
+        "id": "sem_aspas",
+        "fato": "IMPORTANTE: neste projeto e PROIBIDO usar aspas nas respostas.",
+        "proibido": ["\u201c", "\u201d", "\u2018", "\u2019"],
+        "exigido": None,
     },
 ]
 
-PERGUNTA = ("Escreva um parágrafo curto de status do projeto de hoje, "
+PERGUNTA = ("Escreva um paragrafo curto de status do projeto de hoje, "
             "obedecendo o formato que o dono definiu para este projeto.")
 
 REGRAS = [
@@ -77,17 +108,28 @@ class Resultado:
     erro: str | None = None
 
 
-def avalia(texto: str, esperado: dict) -> tuple[bool, str | None]:
-    """Checagem mecânica: o formato pedido foi obedecido?"""
+def avalia(texto: str, item: dict) -> tuple[bool, str | None]:
+    """Veredito MECANICO: as restricoes do item foram obedecidas?
+
+    Sem LLM-judge de proposito: se o juiz fosse o proprio modelo sob
+    teste, o numero passaria a medir o humor do juiz.
+    """
     import re
 
-    for padrao, motivo in REGRAS:
-        if re.search(padrao, texto):
-            return False, motivo
-    if esperado["lang"] == "en" and not re.search(r"\b(the|and|project|today|status)\b", texto, re.I):
-        return False, "não está em inglês (fato pedia inglês)"
+    for padrao in item.get("proibido") or []:
+        m = re.search(padrao, texto)
+        if m:
+            return False, f"violou proibido {m.group(0)!r}"
+    exigido = item.get("exigido")
+    if exigido and not re.search(exigido, texto):
+        return False, f"nao atende exigido {exigido!r}"
+    minimo = item.get("exigido_min")
+    if minimo:
+        palavras = set(re.findall(r"[a-z']+", texto.lower()))
+        achadas = palavras & set(w.lower() for w in minimo)
+        if len(achadas) < 2:
+            return False, f"so {len(achadas)} palavra(s) de ingles: {sorted(achadas)}"
     return True, None
-
 
 def roda_braço(agent, braço: str, n: int) -> Resultado:
     r = Resultado(braço=braço, n=n)
@@ -104,7 +146,7 @@ def roda_braço(agent, braço: str, n: int) -> Resultado:
             r.falhas.append(r.erro)
             continue
         r.duracoes.append(time.time() - t0)
-        ok, motivo = avalia(texto, fato["esperado"])
+        ok, motivo = avalia(texto, fato)
         if ok:
             r.acertos += 1
         else:
