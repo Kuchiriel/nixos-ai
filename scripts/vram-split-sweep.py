@@ -43,6 +43,14 @@ from pathlib import Path
 
 EVIDENCE = Path("scripts/overnight-24-09/vram-split-sweep.json")
 
+# PRECONDICAO (25/09): nenhuma outra llama-server pode estar rodando.
+# Descobri o jeito caro: um sweep interrompido deixou o 27B vivo em RAM+VRAM
+# e o bonsai de PRODUCAO caiu de 70,1 t/s (mediana de 3) para 38,7 t/s — uma
+# variacao de 1,8x que eu tinha atribuido a 'bimodal inexplicavel' e quase
+# chasei como bug de config. Nao era: era contencao. Vale para TODOS os
+# numeros ja medidos: os que tinham outro processo vivo nao sao confiaveis.
+# O sweep nao pode matar processos de terceiros; ele so RECUSA de medir.
+
 # Prompt fixo: longo o bastante para ter PP mensurável, e o MESMO texto
 # em toda configuração (é a variável de controle).
 PROMPT = (
@@ -109,7 +117,8 @@ def espera_saude(port: int, proc: subprocess.Popen, timeout: int = 900) -> bool:
 
 def uma_config(binpath: str, modelo: str, rotulo: str, port: int, *,
                ngl: int, n_cpu_moe: int | None, threads: int, ctx: int,
-               extra: list[str] | None = None) -> Amostra:
+               extra: list[str] | None = None,
+               allow_contention: bool = False) -> Amostra:
     a = Amostra(modelo=os.path.basename(modelo), rotulo=rotulo, ngl=ngl,
                 n_cpu_moe=n_cpu_moe, threads=threads, ctx=ctx, port=port)
     cmd = [binpath, "-m", modelo, "--host", "127.0.0.1", "--port", str(port),
@@ -125,6 +134,12 @@ def uma_config(binpath: str, modelo: str, rotulo: str, port: int, *,
     # sem VRAM livre o ngl99 morre com cudaMalloc OOM. Então: snapshot
     # antes, delta depois, e recusa se não houver folga.
     vram_antes = int(nvidia("memory.used") or 0)
+    llms = subprocess.run(["pgrep", "-c", "-f", "llama-server"],
+                          capture_output=True, text=True).stdout.strip()
+    if llms and llms.isdigit() and int(llms) > 1 and not allow_contention:
+        a.erro = (f"outro llama-server rodando ({llms} processos): "
+                  "contaminaria a medicao. Pare o outro ou use --allow-contention")
+        return a
     vram_total = int(nvidia("memory.total") or 0)
     a.vram_livre_antes_mb = vram_total - vram_antes
     if vram_total - vram_antes < 3500 and ngl > 0:
@@ -201,6 +216,8 @@ def main() -> int:
     ap.add_argument("--ctx", type=int, default=8192)
     ap.add_argument("--port", type=int, default=8901)
     ap.add_argument("--extra", default="", help="flags extras separadas por espaço")
+    ap.add_argument("--allow-contention", action="store_true",
+                    help="medir mesmo com outro llama-server vivo (NAO confiavel)")
     args = ap.parse_args()
 
     ngis = [int(x) for x in args.ngl.split(",") if x.strip()]
@@ -215,7 +232,7 @@ def main() -> int:
             print(f"--- {rot}")
             a = uma_config(args.bin, args.model, rot, port, ngl=ngl,
                            n_cpu_moe=moe, threads=args.threads, ctx=args.ctx,
-                           extra=extra)
+                           extra=extra, allow_contention=args.allow_contention)
             print(f"    carregou={a.carregou} PP={a.pp_tps} TG={a.tg_tps} "
                   f"vram={a.vram_mb}MB gpu={a.gpu_util_pct}% rss={a.ram_rss_gb}GB"
                   f"{' ERRO=' + a.erro if a.erro else ''}")
