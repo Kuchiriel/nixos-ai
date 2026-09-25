@@ -80,3 +80,10 @@ modules/ai/jarvis/tests/_e2e_*.py
 modules/ai/jarvis/src/jarvis/webui/frontend/.svelte-kit/
 modules/ai/jarvis/src/jarvis/webui/frontend/build/
 modules/ai/jarvis/src/jarvis/webui/frontend/dist/
+
+# ── Arquivos (24/09): arquivar NUNCA é apagar ─────────────────────────────
+# Regra da casa: antes de mover/apagar, VERIFICAR o que é (unversionado
+# pode ser esquecimento, "duplicata" pode ser informação de outro fork).
+# Destino é sempre scripts/archive/… — nunca rm.
+scripts/archive/
+scripts/overnight-24-09/loop-*.json
