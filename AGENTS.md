@@ -116,6 +116,23 @@ scripts/                # Scripts auxiliares
   após mudar `modules/ai/jarvis/` (store congela código!); protocolo
   manhã em BUFFY §39; ponte p/ GuiaRenamer em BUFFY §42.
 
+## REGRA DE ARQUIVAMENTO (dono 25/09) — nunca apagar
+1. **Verificar antes de mover.** Não-versionado ≠ lixo (pode ser trabalho
+   esquecido). "Duplicata" raramente é duplicata — os `FORK-STATUS.md` dos
+   forks são diferentes de propósito (espelho upstream × fork ativo).
+2. **Nunca apagar.** Destino é sempre `archive/<assunto>-AAAA-MM-DD/`
+   (criar se não existir). `rm` é proibido para material do dono.
+3. **Antes de arquivar script:** `rg "<nome>"` e confirmar 0 referência.
+4. **Registrar o veredito em commit** ("arquivado X: N refs, Y segue
+   canônico"). Arquivar sem registrar volta a ser entropia.
+5. **`.gitignore` + `.ragignore`**: listam o que é arquivo, para o índice do
+   RAG não gastar tempo com material arquivado.
+6. Movimento grande (modelo, checkpoint, dataset) vai para o lugar
+   canônico (`~/models/`, `~/experiments/`) com **symlink** no caminho
+   antigo — nada quebra, e o dado não fica em /tmp.
+Case verificada: o DPO de 20GB em /tmp tinha checkpoints reais; `htdemucs`
+(3,6GB) era modelo, não lixo.
+
 ## Loop overnight — o trabalho continua quando o dono dorme
 - **Método**: `scripts/LOOP-v2.md` (leia ANTES de inventar método). Ordem
   fixa: modelo pequeno até o teto → endurecer o instrumento (gate novo) →
