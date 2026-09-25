@@ -35,7 +35,7 @@ log() { echo "[$(date +%H:%M:%S)] $*" | tee -a "$LOG"; }
 
 endpoint_for() {
   case "$1" in
-    bonsai) echo "http://127.0.0.1:8080/v1|default" ;;
+    bonsai) echo "http://127.0.0.1:8080/v1|bonsai" ;;
     fast)   echo "http://127.0.0.1:8083/v1|jarvis-fast" ;;
     strong) echo "http://127.0.0.1:8084/v1|jarvis-strong" ;;
     moe)    echo "http://127.0.0.1:8092/v1|qwen35-uncensored" ;;
@@ -58,18 +58,39 @@ for c in $(seq 1 "$CYCLES"); do
         -H 'Content-Type: application/json' \
         -d "{\"model\":\"$MID\",\"max_tokens\":4,\"chat_template_kwargs\":{\"enable_thinking\":false},\"messages\":[{\"role\":\"user\",\"content\":\"ok\"}]}" \
         -o /dev/null 2>/dev/null; then
-    log "preflight FALHOU em $BASE — ciclo pulado (infra, não é resultado)"
-    if vram_busy; then log "VRAM ocupada por outro LLM: esperando o ciclo seguinte"
+    log "preflight FALHOU em $BASE (infra, não é resultado)"
+    if vram_busy; then
+      log "VRAM ocupada por outro LLM: esperando o ciclo seguinte"
+      sleep 120; continue
     fi
-    sleep 120
-    continue
+    # sem VRAM ocupada e o modelo pedido fora = caiu sozinho (OOM?):
+    # aproveita a noite e mede o router, que é o braço de referência.
+    if [ "$MODEL" != "bonsai" ] && curl -sf --max-time 8 \
+         http://127.0.0.1:8080/chat/completions \
+         -H 'Content-Type: application/json' \
+         -d '{"model":"bonsai","max_tokens":4,"chat_template_kwargs":{"enable_thinking":false},"messages":[{"role":"user","content":"ok"}]}' \
+         -o /dev/null 2>/dev/null; then
+      log "fallback: medindo o router (bonsai) neste ciclo"
+      BASE="http://127.0.0.1:8080/v1"; MID="bonsai"; MODEL="bonsai"
+    else
+      log "nada medível agora (VRAM ocupada e modelo fora) — dormindo 120s"
+      sleep 120; continue
+    fi
   fi
 
   STAMP=$(TS)
+  # 1b) o REPL/harness TEM de rodar dentro do env do SPACE: sem isso a
+  # persona (uncensored) e o thinking-off não chegam, e o resultado é
+  # inválido (25/09: 6/12 era o MoE SEM framing e COM thinking).
+  SPACE_ENV=""
+  case "$MODEL" in
+    moe) SPACE_ENV="JARVIS_PERSONA=uncensored JARVIS_LLM_DISABLE_THINKING=1" ;;
+    qwen4b) SPACE_ENV="JARVIS_PERSONA=uncensored JARVIS_LLM_DISABLE_THINKING=1" ;;
+  esac
   # 2) harness
-  log "harness…"
+  log "harness…${SPACE_ENV:+ (env do space)}"
   (cd "$NIXAI" && nix develop --command bash -c \
-    "cd $NIXAI && JARVIS_LLM_BASE_URL=$BASE JARVIS_LLM_MODEL=$MID \
+    "cd $NIXAI && $SPACE_ENV JARVIS_LLM_BASE_URL=$BASE JARVIS_LLM_MODEL=$MID \
      python3 scripts/harness-suite.py --tier $TIER --rounds $ROUNDS \
      --out /tmp/overnight/loop-$MODEL-$STAMP.json" 2>&1) \
     | grep -E "world_ok|TOTAL|PREFLIGHT" | tee -a "$LOG"
@@ -106,12 +127,22 @@ def ask(msg, temp, think=False, mt=160):
 out = {"stamp": stamp, "model": mid}
 out["crps_think_off"] = ask("o que é CRPS?", 0.7)[:160]
 out["crps_think_on"] = ask("o que é CRPS?", 1.0, think=True)[:160]
-outs = [ask("me dá 2 dicas de organização, lista curta.", t) for t in (0.0, 0.7)]
-out["distinct_0.0"] = len(set(outs[0].split("||")[0].strip() for _ in [0]))
-out["distinct_0.7"] = len({o.split("||")[0].strip() for o in [outs[1]]})
+# 3 amostras por temperatura: distinct != total => está repetindo
+# (25/09: media 1 amostra sempre dava 1 — probe mentia)
+probe = "me dá 2 dicas de organização, lista curta."
+for t in (0.0, 0.7):
+    outs = [ask(probe, t) for _ in range(3)]
+    uniq = len({o.split("||")[0].strip() for o in outs})
+    out[f"distinct_{t}"] = f"{uniq}/3"
 print("PROBE " + json.dumps(out, ensure_ascii=False)[:900])
 PY
 
+  if ! curl -sf --max-time 8 "$BASE/chat/completions" -H 'Content-Type: application/json' \
+       -d "{\"model\":\"$MID\",\"max_tokens\":4,\"messages\":[{\"role\":\"user\",\"content\":\"ok\"}]}" \
+       -o /dev/null 2>/dev/null; then
+    log "AVISO: o modelo ficou indisponivel no fim do ciclo (provavel OOM: ~18GB de experts na CPU)"
+    sudo dmesg 2>/dev/null | grep -i "Killed process" | tail -1 >> "$LOG" || true
+  fi
   log "ciclo $c finalizado"
   # 5) estado
   {
