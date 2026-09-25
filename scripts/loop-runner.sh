@@ -33,6 +33,11 @@ TS() { date +%Y%m%d-%H%M%S; }
 
 log() { echo "[$(date +%H:%M:%S)] $*" | tee -a "$LOG"; }
 
+# ESCADA (25/09, o dono definiu): do mais rápido/barato ao mais forte.
+# Cada tier esgota seu teto nos gates; o próximo assume o que o anterior
+# não fecha. O runner SOBE a escada: usa o primeiro tier que estiver no ar.
+LADDER_ORDER=("${LADDER_OVERRIDE:-}" bonsai fast strong moe)
+
 endpoint_for() {
   case "$1" in
     bonsai) echo "http://127.0.0.1:8080/v1|bonsai" ;;
@@ -43,6 +48,23 @@ endpoint_for() {
   esac
 }
 
+probe_ok() {  # completion real (não só /health): $1=base $2=model
+  curl -sf --max-time 20 "$1/chat/completions" -H 'Content-Type: application/json' \
+    -d "{\"model\":\"$2\",\"max_tokens\":4,\"chat_template_kwargs\":{\"enable_thinking\":false},\"messages\":[{\"role\":\"user\",\"content\":\"ok\"}]}" \
+    -o /dev/null 2>/dev/null
+}
+
+# primeiro tier vivo da escada (não gasta ciclo dormindo se há braço vivo)
+pick_tier() {
+  for t in "${LADDER_ORDER[@]}"; do
+    [ -z "$t" ] && continue
+    IFS='|' read -r b m <<< "$(endpoint_for "$t")"
+    [ -z "$b" ] && continue
+    if probe_ok "$b" "$m"; then echo "$t|$b|$m"; return 0; fi
+  done
+  return 1
+}
+
 vram_busy() {  # >1 LLM na GPU?
   nvidia-smi --query-compute-apps=used_memory --format=csv,noheader,nounits 2>/dev/null \
     | awk '$1>1200' | grep -q .
@@ -50,14 +72,16 @@ vram_busy() {  # >1 LLM na GPU?
 
 for c in $(seq 1 "$CYCLES"); do
   log "=== ciclo $c/$CYCLES · modelo=$MODEL tier=$TIER rounds=$ROUNDS"
-  IFS='|' read -r BASE MID <<< "$(endpoint_for "$MODEL")"
-  if [ -z "$BASE" ]; then log "modelo desconhecido: $MODEL — pulando"; break; fi
+  if TIER_PICK="$(pick_tier)"; then
+    IFS='|' read -r MODEL BASE MID <<< "$TIER_PICK"
+    log "escada → tier '$MODEL' vivo ($BASE)"
+  else
+    log "nenhum tier da escada no ar (VRAM/serviços) — dormindo 120s"
+    sleep 120; continue
+  fi
 
-  # 1) preflight: completion real (não só /health)
-  if ! curl -sf --max-time 20 "$BASE/chat/completions" \
-        -H 'Content-Type: application/json' \
-        -d "{\"model\":\"$MID\",\"max_tokens\":4,\"chat_template_kwargs\":{\"enable_thinking\":false},\"messages\":[{\"role\":\"user\",\"content\":\"ok\"}]}" \
-        -o /dev/null 2>/dev/null; then
+  # 1) preflight já feito no pick_tier; se caiu entre o pick e agora:
+  if ! probe_ok "$BASE" "$MID"; then
     log "preflight FALHOU em $BASE (infra, não é resultado)"
     if vram_busy; then
       log "VRAM ocupada por outro LLM: esperando o ciclo seguinte"
@@ -143,6 +167,26 @@ PY
     log "AVISO: o modelo ficou indisponivel no fim do ciclo (provavel OOM: ~18GB de experts na CPU)"
     sudo dmesg 2>/dev/null | grep -i "Killed process" | tail -1 >> "$LOG" || true
   fi
+  # 6) FRONTEIRA: quais gates este tier NAO fecha (o proximo tier assume)
+  python3 - "/tmp/overnight/loop-$MODEL-$STAMP.json" "$MODEL" "$STATE" <<'PY' 2>&1 | tee -a "$LOG"
+import json, sys, pathlib, datetime
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception as e:
+    print("FRONTEIRA: sem JSON:", e); raise SystemExit
+model = sys.argv[2]; state = pathlib.Path(sys.argv[3])
+falhas = [r["task_id"] for r in d.get("results", []) if not r.get("world_ok")]
+fd = [r["task_id"] for r in d.get("results", []) if r.get("false_done")]
+tot = d.get("summary", {}).get("world_ok", 0)
+n = d.get("summary", {}).get("total", 0)
+print(f"FRONTEIRA {model}: {tot}/{n} | gates abertos: {', '.join(falhas) or 'nenhum'} | false_done: {', '.join(fd) or 'nenhum'}")
+with state.open("a", encoding="utf-8") as fh:
+    fh.write(f"\n## frente @{model} — {datetime.datetime.now():%Y-%m-%d %H:%M}\n")
+    fh.write(f"- score: {tot}/{n}\n")
+    fh.write(f"- gates que este tier NAO fecha: {', '.join(falhas) or 'nenhum'}\n")
+    fh.write(f"- false_done: {', '.join(fd) or 'nenhum'}\n")
+PY
+
   log "ciclo $c finalizado"
   # 5) estado
   {
