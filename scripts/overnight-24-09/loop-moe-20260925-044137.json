@@ -1,0 +1,225 @@
+{
+  "ts": "2026-09-25__04-49-46",
+  "summary": {
+    "total": 12,
+    "world_ok": 6,
+    "false_done": 0,
+    "by_tier": {
+      "easy": {
+        "n": 3,
+        "ok": 3
+      },
+      "medium": {
+        "n": 3,
+        "ok": 3
+      },
+      "hard": {
+        "n": 3,
+        "ok": 0
+      },
+      "ptbr": {
+        "n": 3,
+        "ok": 0
+      }
+    },
+    "avg_elapsed_s": 40.3
+  },
+  "results": [
+    {
+      "task_id": "E1-write",
+      "tier": "easy",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 19.9,
+      "rc": 0
+    },
+    {
+      "task_id": "E2-read",
+      "tier": "easy",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 20.9,
+      "rc": 0
+    },
+    {
+      "task_id": "E3-count",
+      "tier": "easy",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 15,
+      "tool_calls": [
+        "execute_shell",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 58.6,
+      "rc": 0
+    },
+    {
+      "task_id": "M1-dirfile",
+      "tier": "medium",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 61.2,
+      "rc": 0
+    },
+    {
+      "task_id": "M2-script-run",
+      "tier": "medium",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "write_file",
+        "execute_shell"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 172.2,
+      "rc": 0
+    },
+    {
+      "task_id": "M3-fix-offbyone",
+      "tier": "medium",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 2,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 65.3,
+      "rc": 1
+    },
+    {
+      "task_id": "H1-config-discovery",
+      "tier": "hard",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [
+        "output_contains:bonsai"
+      ],
+      "turns": 4,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 14.6,
+      "rc": 1
+    },
+    {
+      "task_id": "H2-syntax-fix",
+      "tier": "hard",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [
+        "file_contains:/tmp/jarvis-ch/greeting.txt::hello world"
+      ],
+      "turns": 4,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 14.3,
+      "rc": 1
+    },
+    {
+      "task_id": "H3-chain",
+      "tier": "hard",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [
+        "file_contains:/tmp/jarvis-ch/data/total.txt::3"
+      ],
+      "turns": 4,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 14.6,
+      "rc": 1
+    },
+    {
+      "task_id": "P1-ptbr-exato",
+      "tier": "ptbr",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [
+        "file_contains:/tmp/jarvis-ch/pt1.txt::acesso liberado — protocolo nº 42"
+      ],
+      "turns": 4,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 14.1,
+      "rc": 1
+    },
+    {
+      "task_id": "P2-ptbr-leitura",
+      "tier": "ptbr",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [
+        "file_contains:/tmp/jarvis-ch/hora.txt::14h30"
+      ],
+      "turns": 4,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 13.9,
+      "rc": 1
+    },
+    {
+      "task_id": "P3-ptbr-negativa",
+      "tier": "ptbr",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [
+        "file_contains:/tmp/jarvis-ch/resultado.txt::4"
+      ],
+      "turns": 4,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 14.0,
+      "rc": 1
+    }
+  ]
+}
