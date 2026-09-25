@@ -27,6 +27,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
 from .llm_backend import LLMBackend, ChatResponse, BackendInfo
+from jarvis.providers.embedding import embed_long
 
 logger = logging.getLogger(__name__)
 
@@ -158,19 +159,21 @@ class PrismMLBackend(LLMBackend):
         )
 
     def embed(self, text: str, model: str | None = None) -> list[float]:
-        """Generate embedding via PrismML llama-server /v1/embeddings."""
-        payload: dict[str, Any] = {
-            "model": model or self._model,
-            "input": text,
-        }
-        resp = self._session.post(
-            f"{self._embed_url}/v1/embeddings",
-            json=payload,
-            timeout=(self._connect_timeout, self._read_timeout),
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["data"][0]["embedding"]
+        """Embedding via PrismML llama-server (texto longo: chunk + mean-pool)."""
+        def _one(chunk: str) -> list[float]:
+            payload: dict[str, Any] = {
+                "model": model or self._model,
+                "input": chunk,
+            }
+            resp = self._session.post(
+                f"{self._embed_url}/v1/embeddings",
+                json=payload,
+                timeout=(self._connect_timeout, self._read_timeout),
+            )
+            resp.raise_for_status()
+            return resp.json()["data"][0]["embedding"]
+
+        return embed_long(_one, text)
 
     def health(self, timeout: float = 3.0) -> bool:
         """Check if PrismML llama-server is responding."""
