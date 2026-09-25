@@ -1,0 +1,12 @@
+{
+  "name": "nixos-ai",
+  "description": "Config NixOS do host + JARVIS (harness de agente: LLM router, embeddings, RAG/Qdrant, memoria, vault)",
+  "state": "active",
+  "stack": ["nix", "python"],
+  "test_cmd": "nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -x -q",
+  "nix_check_cmd": "nix flake check",
+  "rebuild_cmd": "./rebuild-host.sh",
+  "entry_points": ["scripts/jarvis-cli.sh", "modules/ai/models.nix"],
+  "agents_md": "AGENTS.md",
+  "notes": "Fonte de verdade de modelos/flags = modules/ai/models.nix. Handoff do dia em docs/HANDOFF-<data>.md. Guard test_test_isolation.py reprova o build se teste tocar colecao de producao."
+}
