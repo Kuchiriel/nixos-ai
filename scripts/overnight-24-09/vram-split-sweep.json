@@ -451,6 +451,206 @@
           }
         }
       ]
+    },
+    {
+      "ts": "2026-09-25T15:45:46",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe41",
+          "ngl": 99,
+          "n_cpu_moe": 41,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9051,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 140.39,
+          "tg_tps": 41.01,
+          "tps_relatido": 1.0,
+          "segundos": 7.7,
+          "vram_mb": 2601,
+          "vram_delta_mb": 2151,
+          "vram_livre_antes_mb": 5691,
+          "gpu_util_pct": 38,
+          "ram_rss_gb": 19.14,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 384.631,
+            "prompt_per_second": 140.39429999142035,
+            "predicted_n": 300,
+            "predicted_ms": 7314.743,
+            "predicted_per_second": 41.013060882658486
+          }
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T15:46:24",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe43",
+          "ngl": 99,
+          "n_cpu_moe": 43,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9053,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 147.95,
+          "tg_tps": 40.88,
+          "tps_relatido": 1.0,
+          "segundos": 7.71,
+          "vram_mb": 2601,
+          "vram_delta_mb": 2151,
+          "vram_livre_antes_mb": 5691,
+          "gpu_util_pct": 41,
+          "ram_rss_gb": 19.13,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 364.976,
+            "prompt_per_second": 147.95493402305905,
+            "predicted_n": 300,
+            "predicted_ms": 7338.757,
+            "predicted_per_second": 40.87885727787417
+          }
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T15:47:02",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe41",
+          "ngl": 99,
+          "n_cpu_moe": 41,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9061,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 143.0,
+          "tg_tps": 40.53,
+          "tps_relatido": 1.0,
+          "segundos": 7.78,
+          "vram_mb": 2601,
+          "vram_delta_mb": 2151,
+          "vram_livre_antes_mb": 5691,
+          "gpu_util_pct": 40,
+          "ram_rss_gb": 19.13,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 377.621,
+            "prompt_per_second": 143.0005216870884,
+            "predicted_n": 300,
+            "predicted_ms": 7401.494,
+            "predicted_per_second": 40.532357386225
+          }
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T15:47:53",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe43",
+          "ngl": 99,
+          "n_cpu_moe": 43,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9063,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 64.67,
+          "tg_tps": 15.78,
+          "tps_relatido": 1.0,
+          "segundos": 19.85,
+          "vram_mb": 2601,
+          "vram_delta_mb": 2151,
+          "vram_livre_antes_mb": 5691,
+          "gpu_util_pct": 17,
+          "ram_rss_gb": 19.13,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 835.024,
+            "prompt_per_second": 64.6687999386844,
+            "predicted_n": 300,
+            "predicted_ms": 19007.703,
+            "predicted_per_second": 15.783074893373492
+          }
+        }
+      ]
+    },
+    {
+      "ts": "2026-09-25T15:49:18",
+      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
+      "flags": {
+        "threads": 6,
+        "ctx": 8192,
+        "extra": null
+      },
+      "resultados": [
+        {
+          "modelo": "Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+          "rotulo": "ngl99-cmoe41",
+          "ngl": 99,
+          "n_cpu_moe": 41,
+          "threads": 6,
+          "ctx": 8192,
+          "port": 9098,
+          "carregou": true,
+          "erro": "",
+          "pp_tps": 145.18,
+          "tg_tps": 40.04,
+          "tps_relatido": 1.0,
+          "segundos": 7.87,
+          "vram_mb": 2601,
+          "vram_delta_mb": 2151,
+          "vram_livre_antes_mb": 5691,
+          "gpu_util_pct": 38,
+          "ram_rss_gb": 19.13,
+          "raw_timings": {
+            "prompt_n": 54,
+            "prompt_ms": 371.949,
+            "prompt_per_second": 145.18119419597846,
+            "predicted_n": 300,
+            "predicted_ms": 7492.861,
+            "predicted_per_second": 40.03811094320314
+          }
+        }
+      ]
     }
   ]
 }

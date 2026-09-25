@@ -1,5 +1,12 @@
 """Ações humanizadas — o harness usa o computador como gente.
 
+FERRAMENTA DE ACESSIBILIDADE (dono, 7 CIDs, 24/09 — não negociável):
+opera o PC via periféricos simulados no nível do SO (evdev/uinput),
+como leitor de tela, controle por voz ou o setup do Hawking — tecnologia
+assistiva, não bot. Cadência humana + sem spam + regras dos servidores
+respeitadas = uso legítimo. O que continua proibido: manipulação de DOM
+em escala, spam/postagem em massa, violar ToS (isso bane e queima a conta).
+
 Port da matemática do Wurm Ultimate (core/human_model.py — log-normal,
 jitter gaussiano, burst-pause, fadiga) + caminho de mouse Bezier cúbico
 + atuadores Wayland (evdev/uinput direto; wtype p/ digitação).
@@ -11,9 +18,9 @@ Uso:
     hand.type("olá mundo")    # cadência por tecla com variação
 
 Anti-detecção E anti-ban: delays nunca fixos; movimento nunca retilíneo.
-NUNCA usar em contas pessoais de terceiros (Discord self-bot = ban —
-ver docs do MuDream). Uso legítimo: testes próprios, automação
-consentida, acessibilidade do dono.
+Acessibilidade do dono primeiro; abuso (spam, DOM em massa, rate violation)
+continua recusado pelo harness. Uso legítimo: operação assistiva do próprio
+dono, testes próprios, automação consentida.
 """
 
 from __future__ import annotations

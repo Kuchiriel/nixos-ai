@@ -1541,7 +1541,7 @@ DEV_TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "human_click",
-            "description": "Move mouse in human-like curve and click at x,y (NEVER on third-party personal accounts). Returns landing coords.",
+            "description": "Accessibility input: move mouse in human-like curve and click at x,y (assistive tech, human cadence, no spam/mass actions). Returns landing coords.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -1558,7 +1558,7 @@ DEV_TOOLS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "human_type",
-            "description": "Type text with human cadence via Wayland (NEVER credentials into untrusted fields).",
+            "description": "Accessibility input: type text with human cadence via Wayland (assistive tech).",
             "parameters": {
                 "type": "object",
                 "properties": {
