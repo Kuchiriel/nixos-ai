@@ -166,7 +166,21 @@ def _safe_path(path: str, root: Path | None = None,
     # write=True NUNCA aceita extras (jail de escrita permanece absoluto).
     _extra = os.environ.get("JARVIS_EXTRA_READ_ROOTS", "")
     _extra_roots = tuple(x for x in _extra.split(":") if x) if not write else ()
-    _allowed_prefixes = ("/tmp", "/build", "/etc/jarvis", str(r)) + _extra_roots
+    # O VAULT é a memória escrita-pelo-agente: por padrão de 2026 ela é
+    # endereçada por caminho (filesystem), não por similaridade. Se o RAG
+    # não puder LER o vault, o agente fica cego para a própria memória
+    # (medido 25/09: as 33 notas do vault davam 0 indexadas, PATH_ERROR).
+    # Leitura apenas — write=True continua sem extras (jail intacto).
+    _vault_roots: tuple[str, ...] = ()
+    if not write:
+        _sd = os.environ.get("JARVIS_STATE_DIR", "~/.local/state/jarvis")
+        _vault_roots = (
+            str(Path(_sd).expanduser() / "vault"),
+            str(Path(_sd).expanduser()),
+        )
+    _allowed_prefixes = (
+        ("/tmp", "/build", "/etc/jarvis", str(r)) + _extra_roots + _vault_roots
+    )
     if not any(str(target).startswith(pfx) for pfx in _allowed_prefixes):
         # Tradução mecânica container→base (L8 real: modelo fixou em /app e
         # ignorou prompt E erro dirigido — texto não contém, mecanismo sim).
