@@ -32,6 +32,47 @@ _spec = _ilu.spec_from_file_location("harness_suite", SYS / "harness-suite.py")
 HS = _ilu.module_from_spec(_spec)
 _spec.loader.exec_module(HS)
 
+# Classe → arquivos-alvo p/ patch do nightwatch (pequenos e precisos).
+_CLASS_TARGETS = {
+    "verification": ["modules/ai/jarvis/src/jarvis/core/completion.py",
+                     "modules/ai/jarvis/tests/test_completion.py"],
+    "constraint": ["modules/ai/jarvis/src/jarvis/core/devtools.py"],
+    "context": ["modules/ai/jarvis/src/jarvis/runtime/context.py"],
+    "planning": ["modules/ai/jarvis/src/jarvis/runtime/agent_runtime.py"],
+}
+
+
+def file_tasks(results: list[dict], project: str = "nixos-ai") -> int:
+    """Falha de HARNESS vira Task do nightwatch (risk medium = com review).
+
+    Acceptance = reproduzir a task da bateria (mundo decide). Retorna nº.
+    """
+    sys.path.insert(0, str(Path.home() /
+                           "projects/nixos-ai/modules/ai/jarvis/src"))
+    from nightwatch.task_queue import TaskQueue, Task
+    q = TaskQueue(project=project)
+    n = 0
+    for r in results:
+        cls = r.get("failure_class", "")
+        if cls not in _CLASS_TARGETS:
+            continue
+        tid = r["task_id"]
+        desc = (f"[loop-close] Falha {cls} em {tid}: {r.get('failure_why','')} "
+                f"(missed={r.get('missed')}). Reproduzir: "
+                f"python3 scripts/loop-close.py --tier {r.get('tier','?')} "
+                f"--rounds 1 --only {tid}. Corrigir o componente sem quebrar "
+                f"os testes existentes; a task só completa se a bateria voltar "
+                f"a passar.")
+        t = Task(id=f"lc-{int(time.time())}-{tid.replace('/', '-')[:24]}",
+                 project=project, description=desc, priority=4,
+                 risk="medium", target_files=_CLASS_TARGETS[cls][:2],
+                 acceptance_criteria=f"loop-close --only {tid} world_ok",
+                 language="python")
+        if q.add_task(t):
+            n += 1
+    print(f"LOOP-CLOSE: {n} tasks arquivadas p/ o nightwatch")
+    return n
+
 
 def classify(result: dict) -> tuple[str, str]:
     """missed+turns+tools → (classe, motivo). Taxonomia deepset adaptada."""
@@ -59,6 +100,8 @@ def main() -> int:
     ap.add_argument("--only", default=None)
     ap.add_argument("--apply-lessons", action="store_true",
                     help="grava lesson candidata p/ falhas de HARNESS")
+    ap.add_argument("--file-tasks", action="store_true",
+                    help="arquiva falhas de HARNESS como tasks do nightwatch")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -111,6 +154,9 @@ def main() -> int:
             print(f"LOOP-CLOSE: {len(lessons)} lessons GRAVADAS")
     else:
         print("LOOP-CLOSE: nenhuma falha de harness (só model/ok)")
+
+    if args.file_tasks:
+        file_tasks(results)
 
     stamp = time.strftime("%Y-%m-%d__%H-%M-%S")
     out = args.out or f"/tmp/opencode/loop-close-{stamp}.json"
