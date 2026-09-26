@@ -108,3 +108,4 @@ nix flake check
 
 Tags: #status/active #type/rules #project/nixos-ai
 - When patching files, the old_text must be an EXACT substring of the file content. Read the file first, then use the exact text.
+- Always run validation checks on generated code before returning it.
