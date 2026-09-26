@@ -1,6 +1,4 @@
 """E2E tests for the Nightwatch harness.
-import pytest
-pytestmark = pytest.mark.integration
 
 Tests real tool calls through the full pipeline.
 No mocks — every tool call hits the real system.
@@ -24,7 +22,12 @@ Metrics collected per scenario:
     - evidence: list of observable outcomes
 """
 
+
 from __future__ import annotations
+
+import pytest
+
+pytestmark = pytest.mark.integration
 
 import ast
 import json

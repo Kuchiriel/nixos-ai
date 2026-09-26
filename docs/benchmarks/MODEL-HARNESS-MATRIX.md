@@ -127,3 +127,27 @@ permitirem, e marcadores slow/integration nos e2e (pendura da suíte).
 
 Evidência: `harness-scores/gates-bonsai-baseline-2026-09-25.json`,
 `harness-scores/gates-tier-bonsai-2026-09-25.json`.
+
+## 6. G6 + fix da suíte (25/09, mesma noite)
+
+- **G6-middle-instruction** (instrução no MEIO, Liu et al. TACL 2023 —
+  baixado e indexado): **PASS first-try** (7 turns). **G3-end falhou DE
+  NOVO** (23 turns, false_done) → G3 é **systemático** (2/2 medições).
+- **Inversão da curva U neste modelo**: fim pior que meio — contrário à
+  previsão da literatura. CONFOUND declarado: G3 tem 50 parágrafos de
+  ruído antes da instrução vs 10 no G6; posição está confundida com
+  volume de ruído + framing ("at the very bottom"). Próximo experimento:
+  design pareado (mesmo nº de parágrafos, só posição muda) antes de
+  afirmar qualquer coisa sobre posição.
+- **Fix de suíte (bug real)**: `pytestmark` de test_longrun_e2e.py e
+  test_harness_e2e.py estava DENTRO da docstring — código morto desde o
+  commit 2f980d4 (que "migrou ignorações para markers"). Nenhum
+  deselecionava; e2e rodava em toda suíte e pendurava sob carga.
+  Corrigido → suíte `-m "not integration"` completa:
+  **1433 passed / 21 skipped / 104 deselected, 3:27, exit 0**.
+- Lição dupla de instrumento: (1) grep acha "pytestmark" na linha sem
+  ver a docstring em volta — validar marcador é COUNT de coleção, não
+  grep; (2) predição de literatura invertida com confound declarado é
+  dado, não erro — o gate espera design pareado pra fechar.
+
+Evidência: `harness-scores/gates2-tier-bonsai-2026-09-25.json`.

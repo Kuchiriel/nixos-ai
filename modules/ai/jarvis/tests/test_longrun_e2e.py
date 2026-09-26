@@ -1,6 +1,4 @@
 """E2E tests for long-run autonomy and multi-project isolation.
-import pytest
-pytestmark = pytest.mark.integration
 
 Tests:
 - Multi-project task isolation
@@ -11,7 +9,12 @@ Tests:
 - Project switching
 """
 
+
 from __future__ import annotations
+
+import pytest
+
+pytestmark = pytest.mark.integration
 
 import json
 import shutil

@@ -1,0 +1,130 @@
+{
+  "ts": "2026-09-25__22-29-54",
+  "summary": {
+    "total": 6,
+    "world_ok": 5,
+    "false_done": 1,
+    "by_tier": {
+      "gate": {
+        "n": 6,
+        "ok": 5
+      }
+    },
+    "avg_elapsed_s": 9.2
+  },
+  "results": [
+    {
+      "task_id": "G1-search-read",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "list_directory",
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 4.9,
+      "rc": 0
+    },
+    {
+      "task_id": "G2-state-update",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 6.1,
+      "rc": 0
+    },
+    {
+      "task_id": "G3-longfile-end",
+      "tier": "gate",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [
+        "file_contains:/tmp/jarvis-ch/marker.txt::DELTA"
+      ],
+      "turns": 23,
+      "tool_calls": [
+        "read_file",
+        "execute_shell",
+        "read_file",
+        "read_file",
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": true,
+      "elapsed_s": 22.9,
+      "rc": 0
+    },
+    {
+      "task_id": "G4-authority-vs-truth",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 7.1,
+      "rc": 0
+    },
+    {
+      "task_id": "G5-run-verify",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 19,
+      "tool_calls": [
+        "write_file",
+        "execute_shell",
+        "read_file",
+        "write_file",
+        "execute_shell",
+        "read_file",
+        "execute_shell",
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 10.1,
+      "rc": 0
+    },
+    {
+      "task_id": "G6-middle-instruction",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 4.1,
+      "rc": 0
+    }
+  ]
+}
