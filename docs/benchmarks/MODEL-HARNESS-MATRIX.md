@@ -203,3 +203,18 @@ Terminal-Bench ICLR 2026 / Harbor; tau-bench pass^k; factwash):
    demonstrada como variância entre variantes.
 
 Evidência: `harness-scores/trials-pk-bonsai-2026-09-25.json`.
+
+## 9. Tier fast: upstream vs prism (26/09 — fila 4a, FECHADO sem mudança)
+
+- upstream (nixpkgs llama-cpp 0.4.0, deploy real do tier): **61,9 t/s TG**
+  / PP 642-1222 (bench canônico, -t6, Qwen3-4B-Q4_K_M, ctx 8192)
+- prism b10743: **61,0 t/s TG** (manhã 25/09, mesma receita, b10735→medido
+  pré-b10743 — dentro do ruído de run)
+- Guard do bench abortou a remedição prism com router no ar (4811MiB
+  VRAM; -R mataria a própria sessão do agente — o cérebro do opencode É
+  o router). Decisão com os dados existentes: **diferença ~1,5% =
+  equivalência; "prism vencer CLARO" não ocorreu → models.nix intacto.**
+- Correção de registro: upstream **não** é CPU-only (61,9 t/s excede o
+  teto de banda de RAM p/ 4B Q4 ≈ 26 t/s — física). A ausência de
+  strings/lib CUDA no store path era leitura errada; veredito de throughput
+  é o que manda. Tier fast segue upstream, como deployado.
