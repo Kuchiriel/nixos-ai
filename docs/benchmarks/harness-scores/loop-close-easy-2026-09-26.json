@@ -1,0 +1,65 @@
+{
+  "ts": "2026-09-26__18-14-28",
+  "tier": "easy",
+  "engine": "runtime",
+  "by_class": {
+    "ok": 3
+  },
+  "results": [
+    {
+      "task_id": "E1-write",
+      "engine": "runtime",
+      "variant_of": null,
+      "tier": "easy",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 1.6,
+      "rc": 0,
+      "failure_class": "ok",
+      "failure_why": ""
+    },
+    {
+      "task_id": "E2-read",
+      "engine": "runtime",
+      "variant_of": null,
+      "tier": "easy",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 1.6,
+      "rc": 0,
+      "failure_class": "ok",
+      "failure_why": ""
+    },
+    {
+      "task_id": "E3-count",
+      "engine": "runtime",
+      "variant_of": null,
+      "tier": "easy",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 13,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 4.7,
+      "rc": 0,
+      "failure_class": "ok",
+      "failure_why": ""
+    }
+  ],
+  "lessons": []
+}
