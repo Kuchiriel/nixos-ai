@@ -56,6 +56,17 @@
 6. **Fechar o ciclo**: `remember` (categoria + citação), uma linha no
    arquivo de auditoria do dia, handoff se descobrir algo grande.
 
+## DIVISÃO DIA/NOITE (mandato do dono 26/09)
+
+- **NOITE = nightwatch com o MoE uncensored, thinking OFF, padrão**
+  (harness.py: llm_base_url :8084 / llm_model jarvis-strong / gate
+  ensure_strong_llm que DEFERA se o MoE não puder subir — NUNCA degrada
+  pro bonsai em silêncio; qualidade > tempo, o dono está dormindo).
+  Thinking ON = A/B futuro (campo llm_thinking / env
+  JARVIS_LLM_DISABLE_THINKING=0) — medir antes de adotar.
+- **DIA = stress de gates/harness COM o dono acordado** (baterias,
+  benches, cmoe, UX) — noite não é pra medir, é pra trabalhar.
+
 ## Lições pagas na sessão 25-26/09 (viram regras do loop)
 
 1. **Claim de mudança exige o guard no MESMO passo**: nenhum "fix

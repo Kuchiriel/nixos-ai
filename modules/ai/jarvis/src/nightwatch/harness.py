@@ -121,6 +121,13 @@ class HarnessConfig:
     project: str = "nixos-ai"
     max_tasks: int = 10
     strict_projects: bool = False  # (26/09) --projects explícito = não expandir
+    # (26/09, mandato do dono) Nightwatch = QUALIDADE, tempo não importa
+    # (roda de noite). Padrão: MoE uncensored :8084 sem thinking — o bonsai
+    # provou não emitir json-patch legível (3/3 no teste do dia). Override
+    # por env continua valendo (JARVIS_LLM_BASE_URL/MODEL/DISABLE_THINKING).
+    llm_base_url: str = "http://127.0.0.1:8084/v1"
+    llm_model: str = "jarvis-strong"
+    llm_thinking: bool = False
     max_minutes: int = 180
     max_retries: int = 3
     auto_approve: bool = True
@@ -190,6 +197,9 @@ def _default_call_llm(prompt: str, max_tokens: int = 2048) -> str:
     try:
         from jarvis.providers.llm import LLMClient
         from jarvis.core.config import Config
+        # (26/09) Endpoint vem do ENV — o run_nightwatch seta JARVIS_LLM_*
+        # com os defaults do HarnessConfig (MoE :8084) ANTES de qualquer
+        # chamada; env explícito do usuário continua mandando.
         client = LLMClient(Config())
         messages = [
             {"role": "system", "content": (
@@ -1267,6 +1277,39 @@ class Harness:
 
     # ── Task Execution ─────────────────────────────────────────────────────
 
+    def ensure_strong_llm(self) -> bool:
+        """(26/09) Garante o tier forte :8084; DEFERE a execução se não
+        puder — nunca degrada pro bonsai em silêncio (padrão de qualidade
+        do dono: noite = MoE, tempo não importa).
+
+        Ordem: healthy? → sobe a unidade on-demand → espera load →
+        RAM insuficiente/health falhou? → False (caller notifica e sai).
+        """
+        import subprocess, urllib.request
+        def _up() -> bool:
+            try:
+                urllib.request.urlopen("http://127.0.0.1:8084/health",
+                                       timeout=3).read(1)
+                return True
+            except Exception:
+                return False
+        if _up():
+            return True
+        avail = int(open("/proc/meminfo").read().split("MemAvailable:")[1]
+                    .split()[0]) // 1024
+        if avail < 19000:
+            self.notify(f"⏸️ *Deferred*: MoE precisa ~19GB, avail {avail}MB "
+                        "— nightwatch espera RAM (nunca degrada pro bonsai)")
+            return False
+        subprocess.run(["sudo", "systemctl", "start", "llama-cpp-ik"],
+                       capture_output=True, timeout=60)
+        for _ in range(90):  # load do 35B leva minutos
+            if _up():
+                return True
+            time.sleep(20)
+        self.notify("⏸️ *Deferred*: MoE não subiu (ver journal llama-cpp-ik)")
+        return False
+
     def execute_task(self, task: Task) -> bool:
         """Execute a single task through the full pipeline.
 
@@ -1838,5 +1881,14 @@ def run_nightwatch(
         strict_projects=bool(projects),
         context_budget=context_budget,
     )
+    os.environ.setdefault("JARVIS_LLM_BASE_URL", config.llm_base_url)
+    os.environ.setdefault("JARVIS_LLM_MODEL", config.llm_model)
+    os.environ["JARVIS_LLM_DISABLE_THINKING"] = \
+        "0" if config.llm_thinking else "1"
     harness = Harness(config=config)
+    if not harness.ensure_strong_llm():
+        return HarnessResult(
+            tasks_completed=0, tasks_failed=0, tasks_blocked=0,
+            tasks_skipped=0, commits=[], files_changed=[],
+            duration_seconds=0.0, errors=["deferred: strong LLM unavailable"])
     return harness.run()
