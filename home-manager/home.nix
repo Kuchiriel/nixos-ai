@@ -406,16 +406,11 @@
           enabled = true;
           timeout = 30000;
         };
-        # Playwright (browser automation 24/09): scraping público, verificação
-        # visual de páginas, testes. NUNCA em contas pessoais de terceiros
-        # (Discord self-bot = ban — só webhooks autorizados).
-        playwright = {
-          type = "local";
-          command = [ "${pkgs.playwright-mcp}/bin/playwright-mcp" ];
-          cwd = "/home/nixos/projects/nixos-ai";
-          enabled = true;
-          timeout = 30000;
-        };
+        # (26/09) Playwright MCP standalone REMOVIDO: redundante com o
+        # jarvis_browser do MCP jarvis (mesma engine Playwright por baixo,
+        # 1 set de tools de browser só — menos contexto duplicado p/ o
+        # agente). Se um dia precisar de isolamento (sessão de browser
+        # separada da do jarvis), religar aqui com type=local.
       };
     };
   };

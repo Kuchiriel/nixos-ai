@@ -131,26 +131,45 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    subgraph Budget["32K Context Budget"]
-        System["System Prompt ~15-20K"]
-        Agent["Agent Context ~1-2K"]
-        Memory["Memory Context ~0.5K"]
-        RepoMap["Repo Map ~0.5K"]
-        Conversation["Conversation ~10-15K"]
+    subgraph Turn["Context por turno (contexto real do servidor)"]
+        Server["context_size consultado do llama-server
+(_query_server_context_size — nunca assumir)"]
+        Compact["auto-compact em 70%"]
+        Target["alvo da compactação: 50%"]
     end
 
-    subgraph Strategies["Strategies"]
-        Compact["Auto-compact at 70%"]
-        Trim["Trim old messages"]
-        Probing["wc -l before read"]
-        HeadTail["head/tail instead of cat"]
+    subgraph Shift["Context shift (REPL nunca para)"]
+        Sliding["janela deslizante:
+compactação preserva system+recente,
+derruba o meio antigo"]
+        Budget["LLM Budget/overflow honesto (agent.py)"]
     end
 
-    Budget --> Strategies
-
-    style Budget fill:#e3f2fd
-    style Strategies fill:#fff3e0
+    Turn --> Shift
+    style Server fill:#e3f2fd
+    style Compact fill:#fff3e0
+    style Sliding fill:#e8f5e9
 ```
+
+- O REPL **não para**: contexto estourando → auto-compact (70% → 50%)
+  e segue o turno. Sem "contexto cheio, recomece".
+- `context_size` vem DO SERVIDOR por turno (não hardcoded por modelo).
+
+## Turn Hooks (fim de turno — o que desconfia antes de aceitar)
+
+Ordem em `_run_agent_loop` (dev.py), todas bounded (contadores no loop):
+
+1. **Promise-catcher (F1)**: "vou criar…" sem tool call → nudge com a
+   tool anunciada + formato exato (máx 2×).
+2. **Claim-checker (§11)**: declarou que escreveu X sem write_file de X
+   na sessão → correção factual (máx 1×).
+3. **Reopen-on-UNVERIFIED (25/09)**: com tool activity, `check_completion`
+  (completion.py) verifica o MUNDO estruturalmente — arquivos escritos
+   existem, .py compila, **instrução lida dentro de arquivo foi executada**
+   (check `_unexecuted_read_instructions`). Missing de classe artefato →
+   1 reopen com a lista (mesmo feedback que salva 5/12 no harness).
+   Trailing-error sozinho NÃO reabre ("por que falhou?" é diagnóstico).
+4. LoopDetector: repetição idêntica ×3 → abort honesto (STUCK ≠ done).
 
 ---
 **Ver também:** [[nightwatch-components|nightwatch-components.md]] | [[mission-consolidation|mission-consolidation.md]]
