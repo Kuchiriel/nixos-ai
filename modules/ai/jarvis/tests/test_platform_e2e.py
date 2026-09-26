@@ -4,6 +4,10 @@ Platform E2E tests — validates core platform modules work correctly.
 Updated 2026-09-03: migrated from archived workitem/orchestrator to task_queue/harness.
 """
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 import json
 import os
 import sys

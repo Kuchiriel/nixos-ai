@@ -185,6 +185,66 @@
    },
    "teardown": "rm -rf /tmp/jarvis-ch",
    "edge": "model<->context: instrucao no MEIO (lost-in-the-middle, Liu 2023 — pior posicao da curva U)"
+  },
+  {
+   "id": "G7-position-start",
+   "tier": "gate",
+   "setup": "mkdir -p /tmp/jarvis-ch && { echo 'this brief contains one actionable instruction. everything else is background reading only.'; for i in $(seq 1 31); do echo \"background paragraph $i: general context, no action needed here.\"; done; } > /tmp/jarvis-ch/brief.txt && sed -i \"2i ACTION: create /tmp/jarvis-ch/marker.txt containing the single word KILO\" /tmp/jarvis-ch/brief.txt",
+   "prompt": "read /tmp/jarvis-ch/brief.txt carefully and do exactly what it asks",
+   "world": {
+    "file_contains": "/tmp/jarvis-ch/marker.txt::KILO"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch",
+   "edge": "model<->context: POSICAO ISOLADA (pareado: intro+31 fillers identicos, framing neutro, soh a posicao da ACTION muda; Liu 2023 curva U)",
+   "position": 2
+  },
+  {
+   "id": "G8-position-middle",
+   "tier": "gate",
+   "setup": "mkdir -p /tmp/jarvis-ch && { echo 'this brief contains one actionable instruction. everything else is background reading only.'; for i in $(seq 1 31); do echo \"background paragraph $i: general context, no action needed here.\"; done; } > /tmp/jarvis-ch/brief.txt && sed -i \"17i ACTION: create /tmp/jarvis-ch/marker.txt containing the single word JULIET\" /tmp/jarvis-ch/brief.txt",
+   "prompt": "read /tmp/jarvis-ch/brief.txt carefully and do exactly what it asks",
+   "world": {
+    "file_contains": "/tmp/jarvis-ch/marker.txt::JULIET"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch",
+   "edge": "model<->context: POSICAO ISOLADA (pareado: intro+31 fillers identicos, framing neutro, soh a posicao da ACTION muda; Liu 2023 curva U)",
+   "position": 17
+  },
+  {
+   "id": "G9-position-end",
+   "tier": "gate",
+   "setup": "mkdir -p /tmp/jarvis-ch && { echo 'this brief contains one actionable instruction. everything else is background reading only.'; for i in $(seq 1 31); do echo \"background paragraph $i: general context, no action needed here.\"; done; } > /tmp/jarvis-ch/brief.txt && echo 'ACTION: create /tmp/jarvis-ch/marker.txt containing the single word PAPA' >> /tmp/jarvis-ch/brief.txt",
+   "prompt": "read /tmp/jarvis-ch/brief.txt carefully and do exactly what it asks",
+   "world": {
+    "file_contains": "/tmp/jarvis-ch/marker.txt::PAPA"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch",
+   "edge": "model<->context: POSICAO ISOLADA (pareado: intro+31 fillers identicos, framing neutro, soh a posicao da ACTION muda; Liu 2023 curva U)",
+   "position": 33
+  },
+  {
+   "id": "G10-volume-end",
+   "tier": "gate",
+   "setup": "mkdir -p /tmp/jarvis-ch && { echo 'this brief contains one actionable instruction. everything else is background reading only.'; for i in $(seq 1 50); do echo \"background paragraph $i: general context, no action needed here.\"; done; } > /tmp/jarvis-ch/brief.txt && echo 'ACTION: create /tmp/jarvis-ch/marker.txt containing the single word OSCAR' >> /tmp/jarvis-ch/brief.txt",
+   "prompt": "read /tmp/jarvis-ch/brief.txt carefully and do exactly what it asks",
+   "world": {
+    "file_contains": "/tmp/jarvis-ch/marker.txt::OSCAR"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch",
+   "edge": "model<->context: VOLUME ISOLADO (pareado c/ G9: mesmos 31+19=50 fillers, framing neutro, ACTION no fim; discrimina volume vs framing na falha do G3)",
+   "position": 52
+  },
+  {
+   "id": "G11-framing-end",
+   "tier": "gate",
+   "setup": "mkdir -p /tmp/jarvis-ch && { echo 'this brief has one actionable instruction at the very bottom. everything above the bottom line is background reading only.'; for i in $(seq 1 50); do echo \"background paragraph $i: general context, no action needed here.\"; done; } > /tmp/jarvis-ch/brief.txt && echo 'FINAL INSTRUCTION: create /tmp/jarvis-ch/marker.txt containing the single word TANGO' >> /tmp/jarvis-ch/brief.txt",
+   "prompt": "read /tmp/jarvis-ch/brief.txt carefully and do exactly what it asks",
+   "world": {
+    "file_contains": "/tmp/jarvis-ch/marker.txt::TANGO"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch",
+   "edge": "model<->instruction: FRAMING ISOLADO (pareado c/ G10: mesmo corpo 50-fillers, soh intro+label do G3; discrimina framing vs conteudo na falha do G3)",
+   "position": 52
   }
  ]
 }

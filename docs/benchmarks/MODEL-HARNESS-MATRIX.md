@@ -151,3 +151,31 @@ Evidência: `harness-scores/gates-bonsai-baseline-2026-09-25.json`,
   dado, não erro — o gate espera design pareado pra fechar.
 
 Evidência: `harness-scores/gates2-tier-bonsai-2026-09-25.json`.
+
+## 7. Cadeia de eliminação do G3 (25/09, mesma noite) — posição, volume e framing MORTOS
+
+Experimento pareado (design: 33/52 linhas idênticas, framing neutro, só
+1 variável muda por gate; Liu 2023 como hipótese inicial):
+
+| Gate | Variável isolada | Resultado | Conclusão |
+|---|---|---|---|
+| G7-position-start (linha 2) | posição=start | PASS 7t | posição não mata |
+| G8-position-middle (17) | posição=middle | PASS 7t | **curva U morta p/ bonsai** |
+| G9-position-end (33) | posição=end | PASS 7t | fim também passa |
+| G10-volume-end (50 fillers) | volume | PASS 7t | volume não mata |
+| G11-framing-end (intro+label do G3) | framing | PASS 7t | framing não mata |
+| **G3-longfile-end (original)** | — | **FAIL 6/6 baterias** (~11 tentativas) | atrator específico |
+
+Delta residual G3↔G11: frase do filler ("about project workstreams") +
+palavra do marcador (DELTA/TANGO). Uma diferença dessas flipando 11-0
+contra 2-0 = **brittleness caótica no nível de token** — propriedade
+conhecida de modelo fraco.
+
+**Conclusão instrumental (a que importa)**: veredito de gate sobre
+prompt n=1 é frágil. Gates precisam de **variantes de paráfrase**
+(mesmo desafio, k formas de superfície; veredito por variante + maioria;
+variância entre variantes = métrica de brittleness). Igual à lição H1 da
+memória: n alto com poucos itens mede repetição, n=1 mede ruído.
+
+Evidência: `harness-scores/gates-elimination-bonsai-2026-09-25.json`.
+Bateria atual no bonsai: 10/11 gates world_ok (só G3 falha), avg 4,9s.
