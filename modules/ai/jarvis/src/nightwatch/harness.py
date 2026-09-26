@@ -120,6 +120,7 @@ class HarnessConfig:
     """Configuration for the harness."""
     project: str = "nixos-ai"
     max_tasks: int = 10
+    strict_projects: bool = False  # (26/09) --projects explícito = não expandir
     max_minutes: int = 180
     max_retries: int = 3
     auto_approve: bool = True
@@ -1198,6 +1199,11 @@ class Harness:
                 for proj in ws_projects:
                     if safety.is_project_protected(proj["name"]):
                         continue
+                    # (26/09, bug do run overnight) --projects explícito é
+                    # ESTRITO: 115 tasks/23 projetos ignoraram o filtro e o
+                    # executor gastou a noite fora do alvo.
+                    if self.config.strict_projects:
+                        continue
                     if proj["name"] not in self.config.projects:
                         self.config.projects.append(proj["name"])
                         self.notify(f"🏗️ Discovered project: {proj['name']}")
@@ -1261,11 +1267,14 @@ class Harness:
         """
         task_start = time.time()
 
-        # Timeout check: skip tasks that have been running too long
+        # (26/09, bug do run overnight) Task criada há muito tempo não é
+        # 'running' — é STALE. Descartar com mensagem honesta (o timeout
+        # antigo media created_at e mentia 'running for 4h' em task recém-
+        # iniciada; 3 tasks da noite morreram sem executar NADA).
         task_age = task_start - task.created_at
-        if task_age > self.config.task_timeout:
-            self._fail_task(task, f"Task timeout: running for {task_age:.0f}s (limit: {self.config.task_timeout}s)")
-            self.notify(f"⏰ *Task Timeout*\n{task.description[:50]}")
+        if task_age > self.config.task_timeout * 6:
+            task.skip(f"stale task: criada há {task_age/60:.0f} min, descartada")
+            self.notify(f"🗑️ *Stale*\n{task.description[:50]}")
             return False
 
         # Global pause gate: any IDE/CLI/AI (or the watchdog on memory
@@ -1663,6 +1672,10 @@ class Harness:
         self.notify("🔍 Discovering tasks...")
         new_tasks = self.discover_tasks()
         for task in new_tasks:
+            # (26/09) strict: task fora dos projetos-alvo não entra na fila
+            if (self.config.strict_projects and self.config.projects
+                    and task.project not in self.config.projects):
+                continue
             self.queue.add_task(task)
 
         self.notify(f"📋 Found {len(new_tasks)} tasks across {len(self.config.projects)} projects")
@@ -1793,6 +1806,7 @@ def run_nightwatch(
     projects: list[str] | None = None,
     context_budget: int = 0,  # 0 = auto-detect from server
 ) -> HarnessResult:
+    # (26/09) projects explícito = estrito (bridge não expande)
     """Convenience function to run nightwatch.
 
     This replaces both:
@@ -1807,6 +1821,7 @@ def run_nightwatch(
         use_llm_discovery=use_llm,
         use_scripted_discovery=use_scripted,
         projects=projects or [],
+        strict_projects=bool(projects),
         context_budget=context_budget,
     )
     harness = Harness(config=config)

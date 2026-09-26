@@ -59,7 +59,9 @@ def discover_docs() -> list[Task]:
     tasks = []
     try:
         result = subprocess.run(
-            ["grep", "-rn", "TODO\\|FIXME\\|HACK", "modules/ai/jarvis/src/", "--include=*.py"],
+            # (26/09) --exclude-dir=nightwatch: o próprio scanner contém o padrão
+            # literal (self-match propunha tasks no fonte do nightwatch).
+            ["grep", "-rn", "TODO\\|FIXME\\|HACK", "modules/ai/jarvis/src/", "--include=*.py", "--exclude-dir=nightwatch"],
             capture_output=True, text=True, timeout=10,
             cwd=str(find_repo_root()),
         )
