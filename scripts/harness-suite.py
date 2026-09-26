@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from ux_driver import run_task
+from ux_driver import run_task, run_task_runtime
 
 
 def _ansi(s: str) -> str:
@@ -109,7 +109,10 @@ def preflight_tasks(tasks: list[dict]) -> tuple[list[dict], list[dict]]:
 
 
 def run_suite(tasks: list[dict], approve: str = "y",
-              timeout_s: int = 180, rounds: int = 2) -> list[dict]:
+              timeout_s: int = 180, rounds: int = 2,
+              engine: str = "dev") -> list[dict]:
+    """engine=dev: PTY no binário instalado (baseline histórico).
+    engine=runtime: AgentRuntime.run na fonte (mede o KERNEL)."""
     results = []
     for t in tasks:
         if t.get("setup"):
@@ -148,7 +151,10 @@ def run_suite(tasks: list[dict], approve: str = "y",
                     f"Continue and ACTUALLY complete the task — do not "
                     f"claim done until it truly exists."
                 )
-            r = run_task(prompt, timeout_s=timeout_s, approve=approve)
+            if engine == "runtime":
+                r = run_task_runtime(prompt, timeout_s=timeout_s)
+            else:
+                r = run_task(prompt, timeout_s=timeout_s, approve=approve)
             out_raw = _ansi(str(r.get("output", "")))
             trans = r.get("transcript") or {}
             msgs = trans.get("messages", []) if isinstance(trans, dict) else []
@@ -167,6 +173,7 @@ def run_suite(tasks: list[dict], approve: str = "y",
         elapsed = time.monotonic() - t0
         results.append({
             "task_id": t["id"],
+            "engine": engine,
             "variant_of": t.get("variant_of"),
             "tier": t.get("tier", "?"),
             "world_ok": world_ok,
@@ -252,6 +259,10 @@ def main() -> None:
                     help="valida oraculos e sai (CI sem gastar modelo)")
     ap.add_argument("--trials", type=int, default=1,
                     help="baterias independentes p/ pass@k/pass^k (tau-bench)")
+    ap.add_argument("--engine", choices=["dev", "runtime"], default="dev",
+                    help="dev=PTY no instalado (baseline); runtime=kernel na fonte")
+    ap.add_argument("--only", default=None,
+                    help="roda só tasks cujo id contém este texto (smoke/debug)")
     args = ap.parse_args()
 
     if args.compare:
@@ -272,6 +283,12 @@ def main() -> None:
     tasks = _CHALLENGES["tasks"]
     if args.tier and args.tier != "all":
         tasks = [t for t in tasks if t["tier"] == args.tier]
+    if args.only:
+        tasks = [t for t in tasks if args.only in t["id"]]
+        if not tasks:
+            print(f"--only {args.only!r}: nenhuma task; ids fáceis: "
+                  "E1-write E2-read E3-count")
+            return
 
     preflight(model=os.environ.get("JARVIS_LLM_MODEL", "bonsai"))
 
@@ -300,9 +317,10 @@ def main() -> None:
     tasks = exp_tasks
 
     trials = max(1, getattr(args, "trials", 1))
+    engine = getattr(args, "engine", "dev")
     results = []
     for _ in range(trials):
-        results = run_suite(tasks, rounds=args.rounds)
+        results = run_suite(tasks, rounds=args.rounds, engine=engine)
         # trials>1: acumula em dict p/ pass@k / pass^k
         if trials > 1:
             key = {r["task_id"]: r for r in results}
@@ -327,6 +345,7 @@ def main() -> None:
     out_path = args.out or f"/tmp/opencode/harness-suite-{stamp}.json"
     with open(out_path, "w") as f:
         json.dump({"ts": stamp,
+                   "engine": engine,
                    "model": os.environ.get("JARVIS_LLM_MODEL", "bonsai"),
                    "llm_base_url": os.environ.get("JARVIS_LLM_BASE_URL",
                                                   "http://127.0.0.1:8080/v1"),

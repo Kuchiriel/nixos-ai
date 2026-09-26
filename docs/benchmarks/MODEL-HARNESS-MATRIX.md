@@ -255,3 +255,16 @@ Evidência: `harness-scores/trials-pk-bonsai-2026-09-25.json`.
   --agent-import-path modules/ai/jarvis/src/jarvis/runtime/harbor_agent.py
   --n-tasks 3 --n-concurrent 1 --n-attempts 2`, comparar reward externo vs
   pass@k interno (divergência = gap do instrumento, nunca do modelo).
+
+## 12. Bateria interna vira cliente do runtime (26/09, F8b/KERNEL)
+
+- **`--engine runtime|dev`** (default dev = baseline histórico intacto) +
+  `--only ID` (smoke). Engine runtime = `AgentRuntime.run` na FONTE
+  (in-process, approval auto, transcript da sessão); engine dev = PTY no
+  instalado. Evidência carimba `engine` (grade 2×2 modelo×harness, §9).
+- **Primeira linha do kernel** (bonsai, rounds 1, tier easy): **3/3 world_ok,
+  first_pass 3, false_done 0** (E1-write, E2-read, E3-count; avg 2.5s).
+  Evidências: `harness-scores/suite-runtime-easy-2026-09-26.json`.
+- Leitura honesta: easy sempre passou (teto); o teste real do kernel é o
+  tier medium/gates em rounds 2 — fila p/ máquina idle (não medir com
+  contenção; ver bench-llm.sh).

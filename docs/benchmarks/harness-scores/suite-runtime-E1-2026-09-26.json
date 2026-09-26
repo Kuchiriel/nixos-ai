@@ -1,0 +1,39 @@
+{
+  "ts": "2026-09-26__16-50-20",
+  "engine": "runtime",
+  "model": "bonsai",
+  "llm_base_url": "http://127.0.0.1:8080/v1",
+  "thinking_disabled": true,
+  "harness_version": 2,
+  "summary": {
+    "total": 1,
+    "world_ok": 1,
+    "false_done": 0,
+    "by_tier": {
+      "easy": {
+        "n": 1,
+        "ok": 1
+      }
+    },
+    "avg_elapsed_s": 2.1
+  },
+  "results": [
+    {
+      "task_id": "E1-write",
+      "engine": "runtime",
+      "variant_of": null,
+      "tier": "easy",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 2.1,
+      "rc": 0
+    }
+  ],
+  "preflight_reprovadas": []
+}

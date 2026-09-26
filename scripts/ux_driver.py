@@ -16,7 +16,7 @@ import select
 import subprocess
 import sys
 import time
-import time
+from pathlib import Path
 
 
 def run_task(task: str, timeout_s: int = 300,
@@ -109,7 +109,68 @@ def run_task(task: str, timeout_s: int = 300,
         "approvals": approvals,
         "output": text[-6000:],
         "transcript": transcript,
+        "engine": "dev",
     }
+
+
+def run_task_runtime(task: str, timeout_s: int = 180) -> dict:
+    """Engine runtime (KERNEL): AgentRuntime.run in-process.
+
+    Diferenças honestas vs run_task (engine dev):
+    - Mede a FONTE (source tree, kernel atual), não o binário instalado.
+    - Sem PTY aprovações: approval_callback sempre-True (paridade com o
+      approve=y do driver humano) — approvals="auto".
+    - Sem kill duro: vale o budget interno do Agent (MAX_TURNS/MAX_TIME_S);
+      timeout_s documenta o teto desejado; elapsed real é registrado.
+    Retorna o MESMO shape (ok/rc/elapsed/output/transcript) + engine.
+    """
+    t0 = time.monotonic()
+    try:
+        repo = Path(__file__).resolve().parents[1]
+        src = repo / "modules/ai/jarvis/src"
+        if str(src) not in sys.path:
+            sys.path.insert(0, str(src))
+        from jarvis.runtime.agent_runtime import AgentRuntime
+        from jarvis.core.config import get_config
+        rt = AgentRuntime(
+            get_config(),
+            agent_kwargs={"approve": True,
+                          "approval_callback": lambda cmd: True})
+        r = rt.run(task)
+        msgs = r.session.messages or []
+        chunks: list[str] = []
+        for m in msgs:
+            c = m.get("content")
+            if isinstance(c, str) and c.strip():
+                chunks.append(c)
+            elif isinstance(c, list):
+                for b in c:
+                    if isinstance(b, dict) and b.get("text"):
+                        chunks.append(str(b["text"]))
+        text = "\n".join(chunks)[-6000:]
+        return {
+            "ok": r.verdict == "VERIFIED",
+            "rc": 0,
+            "elapsed_s": round(time.monotonic() - t0, 1),
+            "approvals": "auto",
+            "output": text,
+            "transcript": {"messages": msgs},
+            "engine": "runtime",
+            "verdict": r.verdict,
+            "turns": r.turns,
+        }
+    except Exception as e:  # noqa: BLE001 — rc=1, mundo decide o resto
+        return {
+            "ok": False,
+            "rc": 1,
+            "elapsed_s": round(time.monotonic() - t0, 1),
+            "approvals": "auto",
+            "output": f"ENGINE ERROR: {type(e).__name__}: {e}"[-6000:],
+            "transcript": {"messages": []},
+            "engine": "runtime",
+            "verdict": "FAILED",
+            "turns": 0,
+        }
 
 
 def main() -> int:
