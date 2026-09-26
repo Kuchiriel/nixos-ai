@@ -36,17 +36,67 @@ from jarvis.core.intents import classify_intent
 
 
 def _cmd_status(_args: argparse.Namespace) -> int:
+    """(26/09, LOOP-v3 — doutrina UX) status diz a VERDADE do tier no ar:
+    o que o router serve, com QUAL binário, saúde das portas, e a
+    confiabilidade da última bateria medida (não auto-relato)."""
+    from pathlib import Path as _P
+    import subprocess as _sp
     from jarvis.providers.llm import LLMClient
     from jarvis.providers.vector_store import QdrantStore
 
     cfg = get_config()
     llm = LLMClient(cfg)
     store = QdrantStore(cfg)
-    print(json.dumps({
+    out = {
         "llama_cpp": llm.is_available(),
         "qdrant": store.is_available(),
         "state_dir": str(cfg.ensure_state_dir()),
-    }, indent=2))
+    }
+
+    # o que o router serve AGORA + binário REAL (exe do processo, não crença)
+    try:
+        import urllib.request as _u
+        import json as _j
+        with _u.urlopen("http://127.0.0.1:8080/v1/models", timeout=4) as _r:
+            out["router_serving"] = [m.get("id") for m in
+                                     _j.load(_r).get("data", [])]
+        _pids = _sp.run(["pgrep", "-f", "llama-server.*--port 8080"],
+                        capture_output=True, text=True).stdout.split()
+        if _pids:
+            _exe = _P(f"/proc/{_pids[0].strip()}/exe").readlink()
+            out["router_binary"] = _exe.parent.name  # pasta versionada (b10743...)
+    except Exception:
+        out["router_serving"] = None
+
+    # saúde das portas do stack
+    def _up(port: int) -> bool:
+        try:
+            import urllib.request as _u2
+            _u2.urlopen(f"http://127.0.0.1:{port}/v1/models",
+                        timeout=2).read(1)
+            return True
+        except Exception:
+            return False
+    out["ports"] = {p: _up(p) for p in (8080, 8081, 8082)}
+
+    # confiabilidade da última bateria medida (evidência, não promessa)
+    try:
+        _scores = sorted(_P("/home/nixos/projects/nixos-ai/docs/benchmarks/"
+                            "harness-scores").glob("*.json"),
+                         key=lambda f: f.stat().st_mtime)
+        if _scores:
+            _d = json.loads(_scores[-1].read_text(encoding="utf-8"))
+            out["last_battery"] = {
+                "file": _scores[-1].name,
+                "model": _d.get("model", "?"),
+                "harness_version": _d.get("harness_version", 1),
+                "world_ok": _d.get("summary", {}).get("world_ok"),
+                "total": _d.get("summary", {}).get("total"),
+                "ts": _d.get("ts"),
+            }
+    except Exception:
+        pass
+    print(json.dumps(out, indent=2))
     return 0
 
 

@@ -268,8 +268,8 @@ def main() -> None:
                   f"{r_old.get('world_ok', 0)} → {r_new['world_ok']}")
         return
 
-    tasks = json.load(open(Path(__file__).parent / "harness-challenges.json"))
-    tasks = tasks["tasks"]
+    _CHALLENGES = json.load(open(Path(__file__).parent / "harness-challenges.json"))
+    tasks = _CHALLENGES["tasks"]
     if args.tier and args.tier != "all":
         tasks = [t for t in tasks if t["tier"] == args.tier]
 
@@ -326,7 +326,14 @@ def main() -> None:
     stamp = time.strftime("%Y-%m-%d__%H-%M-%S")
     out_path = args.out or f"/tmp/opencode/harness-suite-{stamp}.json"
     with open(out_path, "w") as f:
-        json.dump({"ts": stamp, "summary": summary, "results": results,
+        json.dump({"ts": stamp,
+                   "model": os.environ.get("JARVIS_LLM_MODEL", "bonsai"),
+                   "llm_base_url": os.environ.get("JARVIS_LLM_BASE_URL",
+                                                  "http://127.0.0.1:8080/v1"),
+                   "thinking_disabled": os.environ.get(
+                       "JARVIS_LLM_DISABLE_THINKING", "1") == "1",
+                   "harness_version": _CHALLENGES.get("harness_version", 1),
+                   "summary": summary, "results": results,
                    "preflight_reprovadas": preflight_bad},
                   f, ensure_ascii=False, indent=2)
     if preflight_bad:
