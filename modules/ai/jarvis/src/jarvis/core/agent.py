@@ -2561,9 +2561,11 @@ class Agent:
         """
         from dataclasses import replace
         from jarvis.core.model_lifecycle import base_url_for, ensure_model
-        from jarvis.core.model_policy import select_model
+        from jarvis.runtime.policy import select_model_for_task
 
-        model_id, reason = select_model(self.model_requirements)
+        model_id, reason = select_model_for_task(
+            self.model_requirements, caller="Agent.run",
+            emit=self.logger.emit)
         # Endpoint do BINÁRIO CERTO (models.nix endpoints; nunca o router
         # prism p/ denso/MoE — D2/D5). Serviço parado → ensure falha em
         # discover (sem fallback silencioso p/ binário errado).

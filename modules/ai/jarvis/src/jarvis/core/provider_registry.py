@@ -205,6 +205,13 @@ def route(
 ) -> list[str]:
     """Lista ordenada de providers candidatos (nunca um único ponto de falha).
 
+    DEPRECATED (F6/ADR-005, 26/09/2026): 0 callers produtivos — política de
+    fallback cloud (free tiers/agregadores) nunca ligada. A seleção LOCAL
+    canônica é `model_policy.select_model` via `runtime.policy`. Se o
+    fallback cloud for ligado um dia, entra pelo funil do runtime (o linter
+    `test_dead_routing_policy` exige revisão de ADR). Mantida (não apagada)
+    como especificação da política, não como código vivo.
+
     SECRET/CONFIDENTIAL/INTERNAL → só local (ou vazio = erro controlado).
     PUBLIC → local → free rápidos → agregadores por último.
     """
@@ -244,7 +251,10 @@ def route(
 
 
 def route_for_persona(persona_tier: str, task_kind: str = "chat", **kw: Any) -> list[str]:
-    """Atalho: roteamento pelo model_preference da persona."""
+    """Atalho: roteamento pelo model_preference da persona.
+
+    DEPRECATED junto com `route()` (F6/ADR-005): 0 callers produtivos.
+    """
     return route(tier=persona_tier or "medium", task_kind=task_kind, **kw)
 
 

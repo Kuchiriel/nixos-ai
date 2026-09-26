@@ -248,3 +248,71 @@ def test_no_invented_verdict_semantics() -> None:
                                    "FAILED", "DEFERRED"):
                 bad.append(f"{p.name}: {m.group(0)}")
     assert bad == [], f"semântica de veredito inventada: {bad}"
+
+
+# ---------------------------------------------------------------------------
+# F6: choke point único de seleção de modelo
+# ---------------------------------------------------------------------------
+
+def test_model_selection_chokepoint() -> None:
+    """Toda seleção p/ execução passa pelo funil do runtime (TARGET: 1+n
+    adapters declarados). Hoje: só Agent.run. dev usa perfil (registry) e
+    nightwatch usa gate de RAM — quando selectionarem, entram aqui e este
+    teste é atualizado junto (nunca por fora)."""
+    import re
+    funnel: set[str] = set()
+    bypass: set[str] = set()
+    for p in list((SRC / "jarvis").rglob("*.py")):
+        if p.name in ("model_policy.py", "policy.py"):
+            continue
+        try:
+            text = p.read_text()
+        except Exception:
+            continue
+        rel = p.relative_to(SRC).as_posix()
+        if re.search(r"(?<![\w.])select_model_for_task\(", text):
+            funnel.add(rel)
+        if re.search(r"(?<![\w.])select_model\(", text):
+            bypass.add(rel)
+    assert funnel == {"jarvis/core/agent.py"}, (
+        f"funil com callers inesperados: {funnel}")
+    assert bypass == set(), (
+        f"seleção direta fora do funil: {bypass}")
+
+
+def test_dead_routing_policy() -> None:
+    """provider_registry.route() tem 0 callers (DEPRECATED F6).
+
+    Se alguém religar fallback cloud, este teste força a passar pelo funil
+    do runtime + revisão de ADR — nunca ressuscitar silenciosamente."""
+    import re
+    callers: list[str] = []
+    for p in list((SRC / "jarvis").rglob("*.py")):
+        if p.name in ("provider_registry.py",):
+            continue
+        try:
+            text = p.read_text()
+        except Exception:
+            continue
+        for m in re.finditer(r"(?<![\w.])route_for_persona\(|(?<![\w.])route\(",
+                             text):
+            if "test_dead_routing" in text[max(0, m.start() - 200):m.start()]:
+                continue
+            callers.append(f"{p.relative_to(SRC)}: {m.group(0)}")
+    callers = [c for c in callers if "test_runtime_convergence" not in c]
+    assert callers == [], f"política morta religada: {callers}"
+
+
+def test_funnel_preserves_decision() -> None:
+    """O funil não decide — delega e carimba provenance."""
+    from jarvis.runtime.policy import select_model_for_task
+
+    seen: list = []
+    mid, reason = select_model_for_task(
+        {"capabilities": ["tools"]}, caller="probe",
+        emit=lambda e, **k: seen.append((e, k)))
+    assert isinstance(mid, str) and mid
+    assert isinstance(reason, dict)
+    assert seen and seen[0][0] == "model_selected"
+    assert seen[0][1]["detail"]["caller"] == "probe"
+    assert seen[0][1]["detail"]["model"] == mid
