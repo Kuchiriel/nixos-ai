@@ -316,3 +316,46 @@ def test_funnel_preserves_decision() -> None:
     assert seen and seen[0][0] == "model_selected"
     assert seen[0][1]["detail"]["caller"] == "probe"
     assert seen[0][1]["detail"]["model"] == mid
+
+
+# ---------------------------------------------------------------------------
+# F9: identidade única (PersonaRegistry) + matriz canônica
+# ---------------------------------------------------------------------------
+
+def test_persona_matrix_canonical() -> None:
+    """CAPABILITY_TOOLS só fala canônico (F9): toda entrada existe no
+    ToolRegistry, sem prefixo jarvis_, sem fantasma (rag_search→
+    semantic_search, read_ai_conversation removido). E toda capability
+    usada por personas existe na matriz (cap órfã = persona sem tools)."""
+    from jarvis.core.persona import CAPABILITY_TOOLS, PersonaRegistry
+    from jarvis.runtime.registry import ToolRegistry
+
+    reg = ToolRegistry.build_default()
+    have = set(reg.tools)
+    for cap, names in CAPABILITY_TOOLS.items():
+        for n in names:
+            assert not n.startswith("jarvis_"), (
+                f"dialeto morto na matriz: {cap} -> {n}")
+            assert n in have, f"fantasma na matriz: {cap} -> {n}"
+    caps_used: set[str] = set()
+    for p in PersonaRegistry().list_all():
+        caps_used.update(getattr(p, "tools", []) or [])
+    orphans = caps_used - set(CAPABILITY_TOOLS)
+    assert orphans == set(), f"capabilities órfãs em personas: {orphans}"
+
+
+def test_single_identity_in_dev_mode() -> None:
+    """F9: /mode com roleDefinition SUBSTITUI a persona (nunca empilha).
+
+    Estrutural: o handler usa _rebuild_system("") no caminho com role
+    (uma identidade) e preserva a persona no caminho só-instruções.
+    """
+    import inspect
+    from jarvis.cli import dev as _devmod
+
+    src = inspect.getsource(_devmod)
+    assert "def _rebuild_system" in src
+    # caminho role: rebuild sem persona + bloco MODE
+    assert '_rebuild_system("")' in src, "modo-role voltou a empilhar"
+    # caminho instruções: rebuild COM persona + framing MODE
+    assert "_rebuild_system(_persona_block(active_persona))" in src

@@ -2368,6 +2368,13 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
     system_prompt = _maybe_disable_thinking(
         SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE, tools_catalog=_tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else []))
     )
+
+    def _rebuild_system(persona_block_text: str) -> str:
+        """F9: rebuild do system prompt com UMA identidade (persona OU modo,
+        nunca ambas empilhadas). Usado pelo /mode; resto deriva do base."""
+        return _maybe_disable_thinking(
+            SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=persona_block_text, tool_discipline=_TOOL_DISCIPLINE, tools_catalog=_tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else []))
+        )
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     if continue_session:
         resumed = _resume_session(project_root or os.getcwd())
@@ -2645,9 +2652,18 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
                 # Reload system prompt with mode-specific instructions
                 mode_instructions = m.get("instructions", "")
                 mode_role = m.get("roleDefinition", "")
-                if mode_instructions or mode_role:
+                if mode_role:
+                    # F9: role do modo SUBSTITUI a persona da sessão — UMA
+                    # identidade por vez (antes: PERSONA ATIVA + MODE
+                    # empilhados no mesmo prompt).
+                    base = _rebuild_system("")
                     extra = f"\n\nMODE: {m.get('name', target_slug)}\n{mode_role}\n\n{mode_instructions}"
-                    messages[0] = {"role": "system", "content": system_prompt + extra}
+                    messages[0] = {"role": "system", "content": base + extra}
+                    console.print(f"[jarvis]modo: {m.get('name', target_slug)} (identidade do modo substitui a persona da sessão)[/]")
+                elif mode_instructions:
+                    base = _rebuild_system(_persona_block(active_persona))
+                    extra = f"\n\nMODE: {m.get('name', target_slug)}\n\n{mode_instructions}"
+                    messages[0] = {"role": "system", "content": base + extra}
                     console.print(f"[jarvis]modo: {m.get('name', target_slug)}[/]")
                 else:
                     console.print(f"[dim]modo '{target_slug}' sem instruções extras[/]")

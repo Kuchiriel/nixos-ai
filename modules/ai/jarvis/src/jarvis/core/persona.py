@@ -479,24 +479,28 @@ _WRITE_TOOLS = frozenset({
     "vault_write", "jarvis_vault_write",
 })
 CAPABILITY_TOOLS: dict[str, list[str]] = {
-    "read": ["read_file", "list_directory", "jarvis_read_file"],
-    "write": ["write_file", "str_replace", "jarvis_write_file", "jarvis_str_replace"],
-    "shell": ["execute_shell", "jarvis_execute"],
-    "git": ["execute_shell", "jarvis_execute"],
-    "git_status": ["execute_shell", "jarvis_execute"],
-    "test": ["execute_shell", "jarvis_execute"],
-    "nix_eval": ["nix_eval", "jarvis_nix_eval"],
-    "nix_build": ["nix_check", "execute_shell", "jarvis_nix_check", "jarvis_execute"],
-    "nix_check": ["nix_check", "jarvis_nix_check"],
-    "nix_search": ["nix_search", "jarvis_nix_search"],
-    "systemctl": ["execute_shell", "jarvis_execute"],
-    "rag_search": ["semantic_search", "rag_search", "rag_index", "jarvis_rag_search", "jarvis_rag_index"],
-    "memory": ["remember", "recall", "lessons", "jarvis_remember", "jarvis_recall", "jarvis_lessons"],
-    "vault": ["vault_list", "vault_write", "jarvis_vault_list", "jarvis_vault_write"],
-    "web_search": ["web_search", "jarvis_web_search"],
-    "read_url": ["read_chatgpt", "read_ai_conversation", "jarvis_read_chatgpt"],
-    "vision": ["capture_screen", "observe_screen", "jarvis_capture_screen", "jarvis_observe_screen"],
-    "workitem": ["execute_shell", "jarvis_execute"],
+    # F9 (kernel): nomes CANÔNICOS do ToolRegistry (sem prefixo jarvis_ —
+    # o dialeto com prefixo morreu na F2). Toda entrada existe no registry
+    # (linter test_persona_matrix_canonical). _EXEC/_WRITE abaixo continuam
+    # com ambos os dialetos de propósito (enforcement, não identidade).
+    "read": ["read_file", "list_directory"],
+    "write": ["write_file", "str_replace"],
+    "shell": ["execute_shell"],
+    "git": ["execute_shell"],
+    "git_status": ["execute_shell"],
+    "test": ["execute_shell"],
+    "nix_eval": ["nix_eval"],
+    "nix_build": ["nix_check", "execute_shell"],
+    "nix_check": ["nix_check"],
+    "nix_search": ["nix_search"],
+    "systemctl": ["execute_shell"],
+    "rag_search": ["semantic_search", "rag_index"],
+    "memory": ["remember", "recall", "lessons"],
+    "vault": ["vault_list", "vault_write"],
+    "web_search": ["web_search"],
+    "read_url": ["read_chatgpt"],
+    "vision": ["capture_screen", "observe_screen"],
+    "workitem": ["execute_shell"],
 }
 
 
