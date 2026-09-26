@@ -82,17 +82,36 @@ Escada de atribuição (ordem do dono 25/09, base arXiv 2607.28802):
    first_pass separado de world_ok. Gates vivem em
    scripts/harness-challenges.json (tier "gate", campo "edge" obrigatório).
 
-## Fila que este loop herda (25/09)
+## DOUTRINA UX (dica do dono, 25/09 noite)
+
+O harness precisa funcionar **pro usuário também, não apenas pros
+testes**. Tradução prática:
+- Todo mecanismo de gate (world-check, pass^k, preflight) que melhora a
+  medição deve SEGUIR para a sessão real: o dono não quer um JARVIS que
+  passa em benchmark e mente false_done na sessão dele.
+- Sessão real = UX: responsividade do REPL, `status`/`doctor` dizendo a
+  VERDADE do tier no ar (binário, modelo, confiabilidade), waybar
+  honesto, e o agente que alega done sem fazer sendo pego da mesma
+  forma que o gate pega.
+- Antes de declarar um ciclo de harness concluído, responder: "o que o
+  USUÁRIO ganha com isso?" — se a resposta for só "score sobe no
+  benchmark", o ciclo não acabou.
+
+## Fila que este loop herda (25/09 — pós-rebuild, benchmarks liberados)
 
 1. `consolidate.py`: escrever `apply()` (marca `superseded_by`, nunca
    deleta) + verificar que recall filtra superseded + teste + revisar
    as 43 dup/6 supersede por amostra ANTES do apply real.
 2. Docs >400 linhas nos repos ativos (mesma receita do karaok).
 3. `manifest.json` nos repos secundários (harness-research, OTServer).
-4. Depois do treino liberar: medir tier fast (upstream), cmoe 41v35,
-   **MoE na bateria de gates G1-G5** (confirmar G3 model-side).
-5. Gates mais duros: G3-variantes (instrução no MEIO, multi-hop),
-   ptbr-gate, e marcadores slow/integration nos e2e não-marcados.
+4. **BENCHMARKS (sistema fresco pós-rebuild, autorizados 25/09 noite)**:
+   (a) tier fast com o binário REAL (upstream do nixpkgs) vs prism — se
+   prism vencer claro, mudar `binary` no models.nix do jarvis-fast;
+   (b) cmoe 41 vs 35 com sistema quieto — se confirmar 41, aplicar;
+   (c) **MoE na bateria de gates** (confirmar G3 model-side no forte).
+5. Gates: variantes de paráfrase k>=2 como PADRÃO de task nova;
+   furo substring do clássico 12 (migrar c/ bump de versão);
+   UX: status/doctor mostrando confiabilidade do tier no ar.
 
 ## Frontmatter
 Tags: #status/active #type/process #project/nixos-ai
