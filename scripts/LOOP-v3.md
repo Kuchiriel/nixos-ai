@@ -115,6 +115,19 @@ testes**. Tradução prática:
   USUÁRIO ganha com isso?" — se a resposta for só "score sobe no
   benchmark", o ciclo não acabou.
 
+## Ciclo SELF-STUDY (o ponto crítico que o dono pediu)
+
+Após cada bateria com falhas: `self-study.py --evidence <json>` — o
+modelo DISPONÍVEL (começa no fraco; escada melhora o analista) estuda
+a própria falha com a taxonomia (aresta+lado) e a lista de MECANISMOS
+EXISTENTES (pra proposta mirar o gap residual, não repropor o que já
+tem). Saída: docs/benchmarks/SELF-STUDY-<ts>.md. Propostas são
+CANDIDATOS: aplicação exige A/B no harness (só entra o que se prova).
+Verificado 26/09: bonsai propõe mecanismo-classe correto quando recebe
+a taxonomia (G3: "verificação de mundo antes do done" — o que foi
+construído na mesma noite); análise imperfeita do fraco é esperada e o
+filtro do loop segura.
+
 ## Fila que este loop herda (25/09 — pós-rebuild, benchmarks liberados)
 
 1. `consolidate.py`: escrever `apply()` (marca `superseded_by`, nunca
