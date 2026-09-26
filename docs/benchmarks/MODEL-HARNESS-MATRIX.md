@@ -179,3 +179,27 @@ memória: n alto com poucos itens mede repetição, n=1 mede ruído.
 
 Evidência: `harness-scores/gates-elimination-bonsai-2026-09-25.json`.
 Bateria atual no bonsai: 10/11 gates world_ok (só G3 falha), avg 4,9s.
+
+## 8. O harness EVOLUIU com os testes (25/09, noite — resposta à pergunta do dono)
+
+Pergunta: "os testes estão resultando em edições no harness?" — agora SIM,
+com recibos. Implementado no harness-suite.py + challenges (respaldo:
+Terminal-Bench ICLR 2026 / Harbor; tau-bench pass^k; factwash):
+
+1. **Preflight de oráculo mecanizado** (`--preflight-only`): toda task do
+   tier gate tem `solution` (referência) + `anti` (comportamento típico de
+   fraco). Task só mede modelo se solução PASSA e anti FALHA. CI sem
+   gastar modelo: `11 ok, 0 reprovadas`.
+2. **`file_equals` (check exato)** — ACHADO DO PRÓPRIO PREFLIGHT na 1ª
+   execução: `file_contains` por substring aceitava "DELTAX" para needle
+   "DELTA" (grader com falso-positivo). Gates "conteúdo exato" migraram
+   para file_equals; o clássico 12 fica como está (comparabilidade
+   histórica — furo registrado como dívida).
+3. **pass@k / pass^k (--trials N)**: baterias independentes + métrica
+   de confiabilidade do tau-bench. G3: pass@2=0 pass^2=0 (sistemático,
+   ~15 tentativas/8 baterias hoje); resto pass^2=1.
+4. **variant_group**: G3↔G11 = mesmo desafio, formas de superfície
+   diferentes, veredito oposto (0/8 vs 8/8) — brittleness de token
+   demonstrada como variância entre variantes.
+
+Evidência: `harness-scores/trials-pk-bonsai-2026-09-25.json`.
