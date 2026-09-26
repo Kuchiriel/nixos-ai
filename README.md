@@ -6,6 +6,10 @@ Configuração NixOS declarativa e reprodutível com sistema de IA local integra
 
 **Stack principal**: NixOS 26.05 + llama.cpp + Qdrant + Python 3.13 + Hyprland.
 
+> 👋 **Trazendo p/ outra máquina?** Comece por [Instalação](#instalação)
+> (VM primeiro, sem wipe) + [`docs/SECRETS.md`](docs/SECRETS.md) (onde
+> mora cada chave) + `jarvis hwprofile` (qual modelo cabe no teu hardware).
+
 ---
 
 ## Estado do Sistema
@@ -19,9 +23,10 @@ Configuração NixOS declarativa e reprodutível com sistema de IA local integra
 | Qdrant (vetores) | ✅ Funcional | Módulo NixOS declarativo, `enable = true` |
 | Embeddings (nomic) | ✅ Funcional | nomic-embed-text-v2-moe Q8_0 (512MB, CPU) |
 | Reranker (bge) | ✅ Funcional | bge-reranker-v2-m3 Q4_K_M (438MB, CPU) |
-| CLI (`jarvis`) | ✅ Funcional | ~30 subcomandos: status, ask, agent, rag, doctor, heal, etc. |
+| CLI (`jarvis`) | ✅ Funcional | ~40 subcomandos: status, ask, agent, rag, doctor, heal, voice, etc. |
 | Agent (tool-calling) | ✅ Implementado | allowlist + aprovação + audit JSONL; testes unitários passam |
-| MCP server (jarvis-mcp) | ✅ Implementado | 18 tools: shell, files, vision, NixOS, memory, vault, RAG |
+| Agent Runtime Kernel | ✅ Funcional | 1 loop cognitivo (`jarvis/runtime/`), adapters finos, linter anti-drift; ver `docs/audit/RECONSTRUCTION-REPORT.md` |
+| MCP server (jarvis-mcp) | ✅ Implementado | 33 tools: shell, files, browser (CDP headless), vision, NixOS, memory, vault, RAG |
 | RAG híbrido (Qdrant) | ✅ Implementado | dense + sparse BM25 + RRF + reranker; `jarvis rag` / `jarvis index` |
 | Memória episódica | ✅ Implementado | `jarvis remember` / `jarvis recall` via Qdrant |
 | Vault (markdown) | ✅ Implementado | `jarvis vault summarize` / `jarvis vault list` |
@@ -36,9 +41,9 @@ Configuração NixOS declarativa e reprodutível com sistema de IA local integra
 | Segurança (anti-chaining) | ✅ Implementado | shlex.split, DANGEROUS_CHAINING, DANGEROUS_COMMANDS, safe pipes |
 | Property-based tests (hypothesis) | ✅ Funcional | 31 testes adversariais para parsers e regex |
 | Fuzzing + mutation testing | ✅ Funcional | 56 testes de stress |
-| Nightwatch (loop autônomo) | ✅ Implementado | harness.py com failure classification + anti-loop + checkpoint + Event Bus + task timeout + persistent LoopDetector |
+| Nightwatch (loop autônomo) | ✅ Funcional | supervisor com branch isolation + review + checkpoint + loop de auto-melhoria (`scripts/loop-close.py` + `overnight-loop.sh` com gate de revert) |
 | Multi-agent / sub-agents | 🧪 Experimental | multi_agent.py com AgentPersona + Orchestrator + handoff via Event Bus; 14 testes; sem integração LLM real |
-| Voz (STT/TTS/wakeword) | 🧪 Experimental | código existe (voice.py, STT faster-whisper, TTS Kokoro, openwakeword); requer `jarvis-voice` para ativar |
+| Voz (STT/TTS/wakeword) | ✅ Funcional | faster-whisper (morno ~1s) + Kokoro + openwakeword + modo fique-acordado; `jarvis voice`, `jarvis speak`, `jarvis stt` |
 | Audiobook | ✅ Implementado | audiobook.py com 27 testes — EPUB/PDF/TXT + OCR fallback + SFX + chapter detection + TTS (Kokoro) + LLM search |
 | Obsidian / HackMD | ✅ Implementado | hackmd.py com 8 testes (token, headers, reports, API errors) |
 | Multi-AI Reader | ✅ Implementado | multi_ai_reader.py com 8 testes (ChatGPT/Gemini/Claude dispatch, HTML extraction) |
@@ -74,15 +79,16 @@ flake.nix
 │   ├── package.nix           ← Pacote Python (jarvis + jarvis-voice)
 │   ├── jarvis/src/
 │   │   ├── cli/              ← CLI: jarvis <subcommand>
-│   │   ├── core/             ← Lógica: agent, rag, memory, heal, vision, etc.
+│   │   ├── core/             ← Lógica: agent, rag, memory, heal, vision, voz, etc.
+│   │   ├── runtime/          ← Kernel: 1 loop (AgentRuntime), registry, sessão, vereditos
 │   │   ├── providers/        ← Adaptadores: llm, vector_store, telegram, mcp
-│   │   └── mcp_server.py     ← MCP server (18 tools)
-│   └── nightwatch/           ← Harness autônomo (4.994 linhas)
+│   │   └── mcp_server.py     ← MCP server (33 tools)
+│   └── nightwatch/           ← Supervisor autônomo (queue, branches, review)
 ├── modules/services/         ← Serviços NixOS (llama-cpp, qdrant, telegram, etc.)
 ├── nixos/modules/            ← Módulos base (audio, hyprland, bluetooth, etc.)
 ├── home-manager/             ← Desktop (hyprland, waybar) + daemons IA
-├── scripts/                  ← Operação (benchmark, validação, diagnóstico)
-└── docs/                     ← Arquitetura, auditorias, benchmarks
+├── scripts/                  ← Operação (ver scripts/INDEX.md p/ o mapa)
+└── docs/                     ← Arquitetura, auditorias, benchmarks (+ SECRETS.md)
 ```
 
 ---
@@ -165,7 +171,7 @@ jarvis telegram               # canal Telegram
 | jarvis_capture_screen | Captura screenshot (grim/slurp) |
 | jarvis_observe_screen | Analisa screenshot com vision |
 | jarvis_nix_eval | Avalia expressão Nix |
-| jarvis_nix_check | Verifica包 NixOS |
+| jarvis_nix_check | Verifica NixOS |
 | jarvis_nix_search | Busca no nixpkgs |
 | jarvis_read_chatgpt | Lê conversa compartilhada do ChatGPT |
 | jarvis_remember | Grava memória episódica |
@@ -205,6 +211,49 @@ jarvis telegram               # canal Telegram
 ---
 
 ## Instalação
+
+### Rota recomendada p/ outra máquina (sem wipe)
+
+> Requisitos: NixOS 26.05 com flakes. Fora do NixOS, este repo não instala
+> (é configuração de sistema, não app portátil). Sem chaves, tudo local
+> funciona — chaves só p/ fallback remoto e Telegram (ver abaixo).
+>
+> ⚠️ **Não** dê `switch` p/ `nixos-lab` no teu hardware físico (é config
+> de VM convidada). A ordem segura é: avaliar → testar em VM → adotar.
+
+```bash
+# 1. Clone (não precisa de chave p/ clonar)
+git clone https://github.com/Kuchiriel/nixos-ai.git
+cd nixos-ai
+
+# 2. Avalie sem tocar no sistema (só build, nada ativa)
+nix flake check
+nix build .#jarvis         # pacote Python (CLI + MCP)
+
+# 3. Teste numa VM NixOS convidada (seguro: nada do teu sistema muda)
+#    Rode .#nixos-lab DENTRO da VM, nunca switch no teu host físico.
+
+# 4. Segredos (só quando quiser fallback remoto/Telegram — ver docs/SECRETS.md)
+sudo cp docs/secrets-templates/litellm.env.example /etc/litellm.env
+sudo chmod 600 /etc/litellm.env && sudoedit /etc/litellm.env
+
+# 5. Qual modelo cabe no teu hardware? (consultivo: ele sugere, tu decides)
+jarvis hwdetect     # o que a máquina tem (RAM/VRAM/CPU/GPU)
+jarvis hwprofile    # melhor modelo + flags (edite modules/ai/models.nix)
+
+# 6. Validação (o sistema se verifica sozinho)
+jarvis doctor       # 10 checks: LLM, embeddings, Qdrant, wakeword, disco...
+jarvis ask "que dia é hoje"   # fumaça do roteador
+
+# 7. REPL e agentes externos
+jarvis dev          # REPL com ferramentas de código
+# opencode: chaves de nuvem (opcional) entram sozinhas via
+# opencode-auth-sync.sh a partir do env (GROQ_API_KEY, GEMINI_API_KEY...)
+```
+
+Adotar de verdade = criar teu próprio host (copiar `hosts/nixos-lab`
+como base, ajustar `hardware-configuration.nix` + `models.nix` p/ teu
+hardware) e só então `nixos-rebuild switch --flake .#teu-host`.
 
 ### VM de Laboratório
 
@@ -268,7 +317,7 @@ nix develop                # shell de desenvolvimento
 ```bash
 # Contagem de testes (reproduzível)
 nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -q --co 2>&1 | tail -1
-# Resultado: ~790 testes coletados
+# Resultado: ~1600 testes coletados
 
 # Rodar todos
 nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -q
@@ -280,7 +329,7 @@ nix develop --command python3 -m pytest modules/ai/jarvis/tests/test_nightwatch_
 nix flake check
 ```
 
-**Categorias de testes** (52 arquivos, ~790 testes):
+**Categorias de testes** (100+ arquivos, ~1600 testes):
 - Unitários (core, providers, CLI)
 - Integration (MCP, RAG, memory)
 - E2E (nightwatch, harness, real filesystem)
@@ -316,11 +365,10 @@ Resultados em `logs/benchmark/` e `docs/benchmarks/`.
 
 - **VRAM 6GB**: limita modelos a ~4B dense ou ~35B MoE com offload parcial
 - **Thermal throttling**: sessions longas podem degradar performance; `thermald.service` + fan control ativos
-- **Nightwatch**: harness existe mas não foi validado em execução autônoma de longa duração
-- **Voz**: código completo mas requer `jarvis-voice` para ativar; não validado em produção
+- **Troca de modelo por hardware**: `jarvis hwprofile` SUGERE (não aplica sozinho) — o default mora em `modules/ai/models.nix`
 - **Multi-agent**: task queue + LoopDetector existem sem orquestração real entre agentes
 - **Obsidian/HackMD**: integração existe mas não foi testada end-to-end
-- **Fallback remoto**: circuit breaker funcional mas fallback requer API keys configuradas
+- **Fallback remoto**: circuit breaker funcional mas fallback requer API keys configuradas (`docs/SECRETS.md`)
 - **VM vs bare metal**: modelos e flags diferem entre hosts; configuração via `models.nix` profiles
 
 ---
@@ -339,12 +387,12 @@ Resultados em `logs/benchmark/` e `docs/benchmarks/`.
 ## Roadmap
 
 ### Crítico
-- [ ] Validar nightwatch em execução autônoma real (multi-hora)
-- [ ] Testar voz (STT/TTS) end-to-end em produção
+- [x] Validar nightwatch em execução autônoma real (primeira noite: 26/09, com gate de revert)
+- [x] Testar voz (STT/TTS) end-to-end em produção (loop 2.4s, RC 0)
 - [ ] Resolver thermal throttling em sessions longas
 
 ### Estabilidade
-- [x] Testes unitários passam (~700)
+- [x] Testes unitários passam (~1600)
 - [x] `nix flake check` passa
 - [x] Circuit breaker funcional
 - [x] Doctor + heal funcionais
@@ -352,11 +400,11 @@ Resultados em `logs/benchmark/` e `docs/benchmarks/`.
 - [ ] Estabilizar test_memory (1 falha pre-existente)
 
 ### Integração
-- [x] MCP server funcional (18 tools)
+- [x] MCP server funcional (33 tools)
 - [x] Roo Dev integration via .roomodes
 - [x] Telegram bot funcional
+- [x] Integrar wakeword com pipeline de voz completo
 - [ ] Integrar Obsidian/HackMD com vault
-- [ ] Integrar wakeword com pipeline de voz completo
 
 ### Capacidade
 - [x] RAG híbrido funcional
