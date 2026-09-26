@@ -1601,8 +1601,12 @@ class Harness:
                     self._fail_task(
                         task, f"evidence verdict: {ev_why}")
                     self.notify(f"❌ *Evidence Verdict*\n{ev_why}")
+                    from jarvis.core.completion import verdict_for_outcome
+                    _ev_verdict = verdict_for_outcome(
+                        "evidence_failed", ev_why).status
                     _log_progress({"task_id": task.id,
                                    "status": "evidence_failed",
+                                   "verdict": _ev_verdict,
                                    "reason": ev_why})
                     return False
                 task.complete(commit_sha)
@@ -1631,10 +1635,10 @@ class Harness:
                 )
                 self._emit("task_completed", task_id=task.id, commit=commit_sha, files=applied_files)
 
-                _log_progress({
-                    "task_id": task.id, "status": "completed",
-                    "commit": commit_sha, "files": applied_files,
-                })
+                _log_progress({"task_id": task.id, "status": "completed",
+                               "verdict": task.verdict,
+                               "commit": commit_sha, "files": applied_files,
+                               })
 
                 return True
 

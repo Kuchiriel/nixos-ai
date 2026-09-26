@@ -32,9 +32,46 @@ def _norm(s: str) -> str:
 
 @dataclass
 class CompletionVerdict:
-    status: str  # VERIFIED | UNVERIFIED | STUCK | FAILED
+    status: str  # VERIFIED | UNVERIFIED | STUCK | FAILED | DEFERRED
     evidence: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
+
+
+# Vocabulário único de veredito (F5/ADR-005): todo caminho que afirma DONE
+# (Agent.run, dev loop, Nightwatch) fala estas 5 palavras — nunca "SUCCESS",
+# "COMPLETED", "DONE" como semântica própria. DEFERRED = adiado sem falha
+# (stale/pause/dry-run) — distingue "não feito" de "falhou".
+VERDICTS = frozenset({"VERIFIED", "UNVERIFIED", "STUCK", "FAILED", "DEFERRED"})
+
+
+def verdict_for_task_status(status: str) -> str:
+    """TaskStatus (ciclo de vida) → veredito do contrato (avaliação).
+
+    Ciclo de vida diz ONDE a task está; veredito diz O QUE aquilo significa.
+    Não-terminal = UNVERIFIED (nada a afirmar ainda).
+    """
+    mapping = {
+        "COMPLETED": "VERIFIED",
+        "BLOCKED": "STUCK",
+        "FAILED": "FAILED",
+        "ABANDONED": "DEFERRED",
+    }
+    return mapping.get(str(status), "UNVERIFIED")
+
+
+def verdict_for_outcome(outcome: str, detail: str = "") -> CompletionVerdict:
+    """Outcome textual do supervisor → CompletionVerdict do contrato."""
+    o = (outcome or "").lower()
+    if o in ("completed", "verified"):
+        return CompletionVerdict("VERIFIED", [detail or outcome])
+    if o in ("evidence_failed", "unverified"):
+        return CompletionVerdict("UNVERIFIED", [], [detail or outcome])
+    if o in ("blocked", "loop", "stuck"):
+        return CompletionVerdict("STUCK", [], [detail or outcome])
+    if o in ("skipped", "stale", "paused", "dry_run", "no_changes",
+             "deferred"):
+        return CompletionVerdict("DEFERRED", [], [detail or outcome])
+    return CompletionVerdict("FAILED", [], [detail or outcome])
 
 
 _CREATION_VERBS = re.compile(

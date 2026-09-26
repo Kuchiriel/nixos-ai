@@ -188,3 +188,63 @@ def test_single_schema_emission() -> None:
     assert not any(n.startswith("jarvis_") for n in names), (
         "schema canônico não usa prefixo jarvis_")
     assert len(names) == len(reg.tools)
+
+
+# ---------------------------------------------------------------------------
+# F5: contrato único de completion (vocabulário de veredito)
+# ---------------------------------------------------------------------------
+
+def test_verdict_vocabulary_is_closed() -> None:
+    """5 palavras, nem uma a mais (TARGET atingido na F5).
+
+    Todo DONE/SKIP/FAIL do sistema — Agent, dev, Nightwatch — fala VERIFIED/
+    UNVERIFIED/STUCK/FAILED/DEFERRED. Inventar 'SUCCESS'/'DONE'/'COMPLETED'
+    como veredito = falha aqui.
+    """
+    from jarvis.core.completion import (
+        VERDICTS, verdict_for_outcome, verdict_for_task_status)
+    from nightwatch.task_queue import Task, TaskStatus
+
+    assert VERDICTS == {"VERIFIED", "UNVERIFIED", "STUCK", "FAILED",
+                        "DEFERRED"}
+    # todo TaskStatus mapeia (nenhum ciclo de vida sem veredito)
+    for st in TaskStatus:
+        v = verdict_for_task_status(st.value)
+        assert v in VERDICTS, f"{st.value} sem veredito"
+    assert verdict_for_task_status("COMPLETED") == "VERIFIED"
+    assert verdict_for_task_status("ABANDONED") == "DEFERRED"
+    assert verdict_for_task_status("IN_PROGRESS") == "UNVERIFIED"
+    # outcomes do supervisor
+    assert verdict_for_outcome("completed").status == "VERIFIED"
+    assert verdict_for_outcome("evidence_failed").status == "UNVERIFIED"
+    assert verdict_for_outcome("loop").status == "STUCK"
+    assert verdict_for_outcome("paused").status == "DEFERRED"
+    assert verdict_for_outcome("whatever").status == "FAILED"
+    # propriedade computada (sem persistência: asdict não a inclui)
+    t = Task(id="t", project="p", description="d")
+    t.status = TaskStatus.COMPLETED.value
+    assert t.verdict == "VERIFIED"
+    assert "verdict" not in t.to_dict()
+    t.status = TaskStatus.ABANDONED.value
+    assert t.verdict == "DEFERRED"
+
+
+def test_no_invented_verdict_semantics() -> None:
+    """Ninguém redefine semântica de DONE fora de completion.py."""
+    import re
+    allowed_files = {"completion.py", "task_queue.py", "agent.py", "dev.py",
+                     "main.py", "harness.py"}
+    bad: list[str] = []
+    for p in list((SRC / "jarvis").rglob("*.py")) + list((SRC / "nightwatch").rglob("*.py")):
+        if p.name in allowed_files:
+            continue
+        try:
+            text = p.read_text()
+        except Exception:
+            continue
+        for m in re.finditer(
+                r'verdict\s*=\s*["\']([A-Z_]+)["\']', text):
+            if m.group(1) not in ("VERIFIED", "UNVERIFIED", "STUCK",
+                                   "FAILED", "DEFERRED"):
+                bad.append(f"{p.name}: {m.group(0)}")
+    assert bad == [], f"semântica de veredito inventada: {bad}"

@@ -312,6 +312,13 @@ class Task:
             TaskStatus.FAILED.value,
             TaskStatus.ABANDONED.value,
         )
+
+    @property
+    def verdict(self) -> str:
+        """Veredito do contrato único (F5/ADR-005) — COMPUTADO, não
+        armazenado (state machine e persistência intactos)."""
+        from jarvis.core.completion import verdict_for_task_status
+        return verdict_for_task_status(self.status)
     
     @property
     def can_retry(self) -> bool:
