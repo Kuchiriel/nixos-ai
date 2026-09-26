@@ -432,6 +432,40 @@ def _is_error_output(content: str) -> bool:
     return c.upper().startswith("ERROR") or "Traceback (most recent call last)" in c
 
 
+_INSTR_LINE_RE = re.compile(
+    r"\b(?:final\s+)?(?:instruction|instru[çc][ãa]o|action|todo)\b[^\n]{0,120}?"
+    r"\b(?:create|write|crie|escreva|save|salve|touch)\b[^\w/]{1,4}"
+    r"((?:/[\w.\-]+)+|[\w.\-]+/?[\w.\-]*\.[A-Za-z0-9]{1,6})",
+    re.IGNORECASE,
+)
+
+
+def _unexecuted_read_instructions(messages: list[dict],
+                                  all_writes: list[str],
+                                  root) -> list[str]:
+    """(25/09, LOOP-v3 — G3) Paths pedidos por instruções lidas em
+    resultados de tool, nunca criados na sessão nem existentes no disco.
+    Conservador: só linhas com marcador de instrução + verbo de criação
+    + path explícito. Victory-bias com evidência estrutural."""
+    seen_paths: list[str] = []
+    for m in messages:
+        if m.get("role") != "tool":
+            continue
+        for _m in _INSTR_LINE_RE.finditer(str(m.get("content") or "")):
+            p = _m.group(1).rstrip(".,;:)")
+            if p and p not in seen_paths:
+                seen_paths.append(p)
+    missing = []
+    for p in seen_paths[:6]:
+        if p in all_writes:
+            continue
+        fp = Path(p) if Path(p).is_absolute() else root / p
+        if fp.exists():
+            continue
+        missing.append(f"instrucao lida no mundo nao executada: {p}")
+    return missing
+
+
 def _last_tool_error(messages: list[dict]) -> str | None:
     """Conteúdo do último resultado de tool, se for erro."""
     for m in reversed(messages):
@@ -599,6 +633,11 @@ def check_completion(messages: list[dict],
     for p in _shell_write_paths(messages):
         if p not in _all_writes:
             _all_writes.append(p)
+
+    # (25/09, LOOP-v3 — G3) instrução lida no mundo nunca executada
+    for _ip in _unexecuted_read_instructions(messages, _all_writes, root):
+        ok = False
+        miss.append(_ip)
     for p in _all_writes:
         fp = (root / p) if not Path(p).is_absolute() else Path(p)
         if not fp.exists():

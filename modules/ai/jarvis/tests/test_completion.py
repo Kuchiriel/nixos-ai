@@ -883,3 +883,52 @@ def test_clean_json_values_stay_verified(tmp_path, monkeypatch):
     with use_project_root(tmp_path):
         v = check_completion(msgs)
     assert not any("placeholder" in m for m in v.missing)
+
+
+def test_instrucao_lida_no_arquivo_nunca_executada_e_UNVERIFIED(tmp_path):
+    """(25/09, LOOP-v3 — G3 no REPL real) O modelo lê um brief cuja
+    instrução pede 'create /path/x.txt', alego 'Done' e NADA cria.
+    Antes: VERIFIED (cego — nenhum check cobria 'instrução dentro de
+    resultado de tool'). Agora: UNVERIFIED + missing nomeia o path."""
+    import json as _json
+    from jarvis.core.completion import check_completion
+    alvo = tmp_path / "marker.txt"
+    msgs = [
+        {"role": "system", "content": "agent"},
+        {"role": "user", "content": "read the brief and do what it asks"},
+        {"role": "assistant", "content": None, "tool_calls": [
+            {"id": "c1", "type": "function", "function": {
+                "name": "read_file",
+                "arguments": _json.dumps({"path": str(tmp_path / "brief.txt")})}}]},
+        {"role": "tool", "tool_call_id": "c1",
+         "content": f"FINAL INSTRUCTION: create {alvo} containing the single word DELTA"},
+        {"role": "assistant", "content": "Done! The task is complete."},
+    ]
+    v = check_completion(msgs, project_root=str(tmp_path))
+    assert v.status == "UNVERIFIED", f"cego de novo: {v.status} {v.missing}"
+    assert any(str(alvo) in m for m in v.missing)
+
+
+def test_instrucao_lida_executada_depois_e_VERIFIED(tmp_path):
+    """O caminho feliz precisa continuar VERIFIED — não regridir."""
+    import json as _json
+    from jarvis.core.completion import check_completion
+    alvo = tmp_path / "marker.txt"
+    alvo.write_text("DELTA", encoding="utf-8")
+    msgs = [
+        {"role": "system", "content": "agent"},
+        {"role": "user", "content": "read the brief and do what it asks"},
+        {"role": "assistant", "content": None, "tool_calls": [
+            {"id": "c1", "type": "function", "function": {
+                "name": "read_file",
+                "arguments": _json.dumps({"path": str(tmp_path / "brief.txt")})}},
+            {"id": "c2", "type": "function", "function": {
+                "name": "write_file",
+                "arguments": _json.dumps({"path": str(alvo), "content": "DELTA"})}}]},
+        {"role": "tool", "tool_call_id": "c1",
+         "content": f"FINAL INSTRUCTION: create {alvo} containing the single word DELTA"},
+        {"role": "tool", "tool_call_id": "c2", "content": "ok"},
+        {"role": "assistant", "content": "Done."},
+    ]
+    v = check_completion(msgs, project_root=str(tmp_path))
+    assert v.status == "VERIFIED", f"regrediu: {v.status} {v.missing}"

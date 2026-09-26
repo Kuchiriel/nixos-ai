@@ -2149,6 +2149,43 @@ def _run_agent_loop(
                                           "Não declare sucesso não verificado."),
                         })
                         continue
+                # (25/09, LOOP-v3 — victory-bias) Veredito estrutural antes
+                # de aceitar o fim do turno: check_completion (completion.py)
+                # verifica o MUNDO (arquivos escritos existem, .py compila,
+                # instrução lida em arquivo foi executada). UNVERIFIED com
+                # missing = 1 reopen com a lista (mecanismo comprovado no
+                # harness: 5/12 salvos com esse feedback estrutural). Bounded
+                # 1x por task; sem NLP de intenção — só fatos.
+                if any(m.get("tool_calls") for m in messages) and \
+                        getattr(_run_agent_loop, "_verdict_nudged", 0) < 1:
+                    from jarvis.core.completion import check_completion
+                    try:
+                        v = check_completion(messages)
+                    except Exception:
+                        v = None
+                    # classe artefato, nao diagnostico: trailing-error pode
+                    # ser O ASSUNTO da pergunta ("por que falhou?") — nao
+                    # reabre por ele sozinho. So reopen com trabalho nao feito.
+                    _art = [m for m in v.missing
+                            if ("instrucao lida" in m
+                                or "nao existe" in m
+                                or "não existe" in m
+                                or "nao compila" in m)] if v else []
+                    if v is not None and v.status != "VERIFIED" and _art:
+                        _run_agent_loop._verdict_nudged = 1  # type: ignore[attr-defined]
+                        console.print(f"[dim]  (veredito {v.status}: "
+                                      f"{'; '.join(v.missing[:3])[:110]})[/]")
+                        messages.append({
+                            "role": "system",
+                            "content": (
+                                "An independent world check says these are NOT "
+                                "satisfied: "
+                                + "; ".join(_art[:5])
+                                + ". Finish the task NOW with tools (create/fix "
+                                  "what is listed). Do not claim completion "
+                                  "until every item truly exists."),
+                        })
+                        continue
                 console.print(Panel(
                     Markdown(content), title="🤖", title_align="left", border_style="jarvis",
                 ))
