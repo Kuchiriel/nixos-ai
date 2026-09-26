@@ -1,0 +1,177 @@
+"""ToolRegistry único — Fase 1 (ADR-005).
+
+NÃO muda comportamento: lê os schemas existentes (DEV_TOOLS + JARVIS_TOOLS),
+normaliza num único registro e MEDE a divergência entre dialetos.
+
+`dialect_report()` é a worklist da Fase 2 (convergência de schema): cada
+divergência listada aqui precisa desaparecer (merge) ou virar alias declarado.
+Os testes em test_runtime_convergence.py travam o estado atual — qualquer
+NOVA divergência falha alto.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+
+# Canonical name = DEV_TOOLS name (sem prefixo jarvis_). MCP names com prefixo
+# jarvis_ mapeiam p/ o canônico; o que não mapeia é superfície exclusiva.
+_CANONICAL_ALIASES = {
+    "jarvis_execute": "execute_shell",
+    "jarvis_read_file": "read_file",
+    "jarvis_write_file": "write_file",
+    "jarvis_str_replace": "str_replace",
+    "jarvis_remember": "remember",
+    "jarvis_recall": "recall",
+    "jarvis_lessons": "lessons",
+    "jarvis_rag_search": "semantic_search",
+    "jarvis_rag_index": "rag_index",
+    "jarvis_vault_list": "vault_list",
+    "jarvis_vault_write": "vault_write",
+    "jarvis_web_search": "web_search",
+    "jarvis_persona": "persona",
+}
+
+# capability / mutation / approval inferidos por nome canônico.
+# approval: none | policy | always. mutation: a tool altera mundo persistente.
+_TOOL_POLICY: dict[str, tuple[str, bool, str]] = {
+    "read_file": ("filesystem.read", False, "none"),
+    "list_directory": ("filesystem.read", False, "none"),
+    "code_search": ("filesystem.read", False, "none"),
+    "semantic_search": ("knowledge.retrieve", False, "none"),
+    "rag_index": ("knowledge.write", True, "none"),
+    "recall": ("memory.read", False, "none"),
+    "lessons": ("memory.read", False, "none"),
+    "remember": ("memory.write", True, "none"),
+    "vault_list": ("memory.read", False, "none"),
+    "vault_write": ("memory.write", True, "none"),
+    "write_file": ("filesystem.write", True, "policy"),
+    "str_replace": ("filesystem.write", True, "policy"),
+    "sanitize_secrets": ("safety.transform", True, "none"),
+    "build_json_dataset": ("data.build", True, "none"),
+    "run_tests": ("system.verify", True, "none"),
+    "run_linter": ("system.verify", True, "none"),
+    "execute_shell": ("system.execute", True, "policy"),
+    "jarvis_command": ("system.execute", True, "policy"),
+    "load_skill": ("session.config", False, "none"),
+    "persona": ("session.config", False, "none"),
+    "human_click": ("interaction.act", True, "always"),
+    "human_type": ("interaction.act", True, "always"),
+    "human_key": ("interaction.act", True, "always"),
+    "browser": ("interaction.act", True, "policy"),
+    "capture_screen": ("interaction.observe", False, "none"),
+    "observe_screen": ("interaction.observe", False, "none"),
+    "nix_eval": ("system.nix", False, "none"),
+    "nix_check": ("system.verify", False, "none"),
+    "nix_search": ("system.nix", False, "none"),
+    "read_chatgpt": ("knowledge.retrieve", False, "none"),
+    "web_search": ("knowledge.retrieve", False, "none"),
+    "vault_sync_obsidian": ("memory.write", True, "policy"),
+    "vault_sync_hackmd": ("memory.write", True, "policy"),
+    "vault_search_obsidian": ("memory.read", False, "none"),
+    "vault_status": ("memory.read", False, "none"),
+}
+
+
+@dataclass
+class Tool:
+    """Um conceito de ferramenta, independente do dialeto que a declara."""
+
+    name: str  # canônico
+    description: str = ""
+    parameters: dict[str, Any] = field(default_factory=dict)
+    capability: str = "misc"
+    mutation: bool = False
+    approval: str = "policy"
+    providers: list[str] = field(default_factory=list)  # dialetos que declaram
+    aliases: list[str] = field(default_factory=list)  # nomes alternativos
+
+
+@dataclass
+class DialectDivergence:
+    """Um ponto onde dois dialetos discordam sobre o mesmo conceito."""
+
+    canonical: str
+    kind: str  # name | params | required | capability | missing
+    detail: str
+
+
+class ToolRegistry:
+    """Registro único construído das fontes existentes (read-only)."""
+
+    def __init__(self) -> None:
+        self.tools: dict[str, Tool] = {}
+        self.divergences: list[DialectDivergence] = []
+
+    # -- construção ------------------------------------------------------
+    @classmethod
+    def build_default(cls) -> ToolRegistry:
+        from jarvis.core import devtools
+        from jarvis import mcp_server
+
+        reg = cls()
+        for entry in devtools.DEV_TOOLS:
+            fn = entry.get("function", {})
+            reg._add(
+                name=str(fn.get("name", "")),
+                description=str(fn.get("description", "")),
+                parameters=dict(fn.get("parameters", {})),
+                provider="devtools",
+            )
+        for entry in mcp_server.JARVIS_TOOLS:
+            reg._add(
+                name=str(entry.get("name", "")),
+                description=str(entry.get("description", "")),
+                parameters=dict(entry.get("inputSchema", {})),
+                provider="mcp",
+            )
+        return reg
+
+    def _add(self, *, name: str, description: str,
+             parameters: dict[str, Any], provider: str) -> None:
+        if not name:
+            return
+        # Canônico = sem prefixo jarvis_ (1 dialeto na emissão; forma prefixada
+        # vira alias). Aliases explícitos cobrem os mapeamentos não-triviais.
+        canonical = _CANONICAL_ALIASES.get(name, name.removeprefix("jarvis_"))
+        tool = self.tools.get(canonical)
+        if tool is None:
+            cap, mut, appr = _TOOL_POLICY.get(canonical, ("misc", False, "policy"))
+            tool = self.tools[canonical] = Tool(
+                name=canonical, description=description, parameters=parameters,
+                capability=cap, mutation=mut, approval=appr)
+        if provider not in tool.providers:
+            tool.providers.append(provider)
+        if name != canonical and name not in tool.aliases:
+            tool.aliases.append(name)
+        # mede divergência de params entre dialetos do mesmo conceito
+        if provider == "mcp" and "devtools" in tool.providers:
+            dev_params = set(tool.parameters.get("properties", {}))
+            mcp_params = set(parameters.get("properties", {}))
+            # tool.parameters ainda guarda o do primeiro provider; compara:
+            if dev_params != mcp_params:
+                self.divergences.append(DialectDivergence(
+                    canonical=canonical, kind="params",
+                    detail=f"devtools={sorted(dev_params)} vs mcp={sorted(mcp_params)}"))
+
+    # -- consultas --------------------------------------------------------
+    def names(self) -> list[str]:
+        return sorted(self.tools)
+
+    def for_task(self, _task_context: str = "") -> list[Tool]:
+        """Fase 1: retorna tudo. Fase 2+: progressive disclosure real."""
+        return [self.tools[n] for n in self.names()]
+
+    def to_openai_tools(self) -> list[dict[str, Any]]:
+        """Emissão única de schema (o que o LLM recebe — 1 dialeto)."""
+        out = []
+        for name in self.names():
+            t = self.tools[name]
+            out.append({"type": "function", "function": {
+                "name": t.name, "description": t.description,
+                "parameters": t.parameters or {"type": "object", "properties": {}},
+            }})
+        return out
+
+    def dialect_report(self) -> list[DialectDivergence]:
+        return list(self.divergences)
