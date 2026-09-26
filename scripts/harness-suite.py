@@ -193,7 +193,7 @@ def preflight(model: str = "bonsai", base_url: str = None) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--tier", choices=["easy", "medium", "hard", "ptbr", "all"])
+    ap.add_argument("--tier", choices=["easy", "medium", "hard", "ptbr", "gate", "all"])
     ap.add_argument("--out", default=None)
     ap.add_argument("--rounds", type=int, default=2,
                     help="tentativas máximas c/ feedback de mundo (1 = antigo)")

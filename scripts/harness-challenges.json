@@ -1,60 +1,179 @@
 {
-  "version": 1,
-  "description": "Progressive harness challenges (easy to hard) for jarvis dev. Natural prompts, NO tool hints (protocol 14: never teach the solution). World-state verified independently. Tiers easy/medium/hard stay in ENGLISH (comparability across models; the local model yields more). Tier 'ptbr' is a DELIBERATE deficiency probe (2026-09-24: bonsai/ternary handles PT-BR poorly and PT-BR is the owner's real language) — it is NOT part of the E/M/H ladder and its score must be reported separately.",
-  "tasks": [
-    {"id": "E1-write", "tier": "easy",
-     "prompt": "create the file /tmp/jarvis-ch/e1.txt with the exact content 'progressive-one'",
-     "world": {"file_exists": "/tmp/jarvis-ch/e1.txt", "file_contains": "/tmp/jarvis-ch/e1.txt::progressive-one"},
-     "teardown": "rm -rf /tmp/jarvis-ch"},
-    {"id": "E2-read", "tier": "easy",
-     "setup": "mkdir -p /tmp/jarvis-ch && echo 'the quick brown fox' > /tmp/jarvis-ch/seed.txt",
-     "prompt": "read /tmp/jarvis-ch/seed.txt and tell me exactly what it contains",
-     "world": {"output_contains": "quick brown fox"},
-     "teardown": "rm -rf /tmp/jarvis-ch"},
-    {"id": "E3-count", "tier": "easy",
-     "setup": "mkdir -p /tmp/jarvis-ch && printf 'a\\nb\\nc\\nd\\n' > /tmp/jarvis-ch/lines.txt",
-     "prompt": "how many lines does /tmp/jarvis-ch/lines.txt have? write the number into /tmp/jarvis-ch/count.txt",
-     "world": {"file_contains": "/tmp/jarvis-ch/count.txt::4"},
-     "teardown": "rm -rf /tmp/jarvis-ch"},
-    {"id": "M1-dirfile", "tier": "medium",
-     "prompt": "create a folder /tmp/jarvis-ch/inside and within it a file named out.txt containing 'nested-ok'",
-     "world": {"file_contains": "/tmp/jarvis-ch/inside/out.txt::nested-ok"},
-     "teardown": "rm -rf /tmp/jarvis-ch"},
-    {"id": "M2-script-run", "tier": "medium",
-     "prompt": "create a python script /tmp/jarvis-ch/sum.py that prints the sum of 17 and 25, then run it and tell me the output",
-     "world": {"output_contains": "42"},
-     "teardown": "rm -rf /tmp/jarvis-ch"},
-    {"id": "M3-fix-offbyone", "tier": "medium",
-     "setup": "mkdir -p /tmp/jarvis-ch && printf 'def total(items):\\n    s = 0\\n    for i in range(len(items) - 1):\\n        s += items[i]\\n    return s\\n\\nprint(total([1, 2, 3, 4]))\\n' > /tmp/jarvis-ch/broken.py",
-     "prompt": "the script /tmp/jarvis-ch/broken.py prints the wrong total, it should print 10. fix it and run it to confirm",
-     "world": {"output_contains": "10"},
-     "teardown": "rm -rf /tmp/jarvis-ch"},
-    {"id": "H1-config-discovery", "tier": "hard",
-     "prompt": "find where the jarvis model registry file lives on this system and tell me the full path and the default model name it declares",
-     "world": {"output_contains": "bonsai"},
-     "teardown": "rm -rf /tmp/jarvis-ch"},
-    {"id": "H2-syntax-fix", "tier": "hard",
-     "setup": "mkdir -p /tmp/jarvis-ch && printf 'def greet(name\\n    return f\"hello {name}\"\\n\\nprint(greet(\"world\"))\\n' > /tmp/jarvis-ch/syntax.py",
-     "prompt": "/tmp/jarvis-ch/syntax.py has a syntax error. fix it, run it, and write the script's output to /tmp/jarvis-ch/greeting.txt",
-     "world": {"file_contains": "/tmp/jarvis-ch/greeting.txt::hello world"},
-     "teardown": "rm -rf /tmp/jarvis-ch"},
-    {"id": "H3-chain", "tier": "hard",
-     "prompt": "count the files in /tmp/jarvis-ch/data (create the folder first and put three empty .txt files inside it), then write that count to /tmp/jarvis-ch/data/total.txt",
-     "world": {"file_contains": "/tmp/jarvis-ch/data/total.txt::3"},
-     "teardown": "rm -rf /tmp/jarvis-ch"},
-    {"id": "P1-ptbr-exato", "tier": "ptbr",
-     "prompt": "crie o arquivo /tmp/jarvis-ch/pt1.txt com o conteúdo exato: acesso liberado — protocolo nº 42",
-     "world": {"file_contains": "/tmp/jarvis-ch/pt1.txt::acesso liberado — protocolo nº 42"},
-     "teardown": "rm -rf /tmp/jarvis-ch"},
-    {"id": "P2-ptbr-leitura", "tier": "ptbr",
-     "setup": "mkdir -p /tmp/jarvis-ch && printf 'A reuniao ficou marcada para as 14h30 com a equipe toda.\\n' > /tmp/jarvis-ch/aviso.txt",
-     "prompt": "leia o arquivo /tmp/jarvis-ch/aviso.txt e escreva APENAS o horario da reuniao em /tmp/jarvis-ch/hora.txt, sem nenhuma outra palavra",
-     "world": {"file_contains": "/tmp/jarvis-ch/hora.txt::14h30", "file_absent": "/tmp/jarvis-ch/hora.txt::reuniao"},
-     "teardown": "rm -rf /tmp/jarvis-ch"},
-    {"id": "P3-ptbr-negativa", "tier": "ptbr",
-     "setup": "mkdir -p /tmp/jarvis-ch && printf 'linha um\\nlinha dois\\nlinha tres\\nlinha quatro\\n' > /tmp/jarvis-ch/dados.txt",
-     "prompt": "quantas linhas tem o arquivo /tmp/jarvis-ch/dados.txt? escreva so o numero em /tmp/jarvis-ch/resultado.txt. IMPORTANTE: nao crie nenhum outro arquivo nessa pasta",
-     "world": {"file_contains": "/tmp/jarvis-ch/resultado.txt::4", "file_absent": "/tmp/jarvis-ch/nao-crie.txt"},
-     "teardown": "rm -rf /tmp/jarvis-ch"}
-  ]
+ "version": 1,
+ "description": "Progressive harness challenges (easy to hard) for jarvis dev. Natural prompts, NO tool hints (protocol 14: never teach the solution). World-state verified independently. Tiers easy/medium/hard stay in ENGLISH (comparability across models; the local model yields more). Tier 'ptbr' is a DELIBERATE deficiency probe (2026-09-24: bonsai/ternary handles PT-BR poorly and PT-BR is the owner's real language) — it is NOT part of the E/M/H ladder and its score must be reported separately.",
+ "tasks": [
+  {
+   "id": "E1-write",
+   "tier": "easy",
+   "prompt": "create the file /tmp/jarvis-ch/e1.txt with the exact content 'progressive-one'",
+   "world": {
+    "file_exists": "/tmp/jarvis-ch/e1.txt",
+    "file_contains": "/tmp/jarvis-ch/e1.txt::progressive-one"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch"
+  },
+  {
+   "id": "E2-read",
+   "tier": "easy",
+   "setup": "mkdir -p /tmp/jarvis-ch && echo 'the quick brown fox' > /tmp/jarvis-ch/seed.txt",
+   "prompt": "read /tmp/jarvis-ch/seed.txt and tell me exactly what it contains",
+   "world": {
+    "output_contains": "quick brown fox"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch"
+  },
+  {
+   "id": "E3-count",
+   "tier": "easy",
+   "setup": "mkdir -p /tmp/jarvis-ch && printf 'a\\nb\\nc\\nd\\n' > /tmp/jarvis-ch/lines.txt",
+   "prompt": "how many lines does /tmp/jarvis-ch/lines.txt have? write the number into /tmp/jarvis-ch/count.txt",
+   "world": {
+    "file_contains": "/tmp/jarvis-ch/count.txt::4"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch"
+  },
+  {
+   "id": "M1-dirfile",
+   "tier": "medium",
+   "prompt": "create a folder /tmp/jarvis-ch/inside and within it a file named out.txt containing 'nested-ok'",
+   "world": {
+    "file_contains": "/tmp/jarvis-ch/inside/out.txt::nested-ok"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch"
+  },
+  {
+   "id": "M2-script-run",
+   "tier": "medium",
+   "prompt": "create a python script /tmp/jarvis-ch/sum.py that prints the sum of 17 and 25, then run it and tell me the output",
+   "world": {
+    "output_contains": "42"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch"
+  },
+  {
+   "id": "M3-fix-offbyone",
+   "tier": "medium",
+   "setup": "mkdir -p /tmp/jarvis-ch && printf 'def total(items):\\n    s = 0\\n    for i in range(len(items) - 1):\\n        s += items[i]\\n    return s\\n\\nprint(total([1, 2, 3, 4]))\\n' > /tmp/jarvis-ch/broken.py",
+   "prompt": "the script /tmp/jarvis-ch/broken.py prints the wrong total, it should print 10. fix it and run it to confirm",
+   "world": {
+    "output_contains": "10"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch"
+  },
+  {
+   "id": "H1-config-discovery",
+   "tier": "hard",
+   "prompt": "find where the jarvis model registry file lives on this system and tell me the full path and the default model name it declares",
+   "world": {
+    "output_contains": "bonsai"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch"
+  },
+  {
+   "id": "H2-syntax-fix",
+   "tier": "hard",
+   "setup": "mkdir -p /tmp/jarvis-ch && printf 'def greet(name\\n    return f\"hello {name}\"\\n\\nprint(greet(\"world\"))\\n' > /tmp/jarvis-ch/syntax.py",
+   "prompt": "/tmp/jarvis-ch/syntax.py has a syntax error. fix it, run it, and write the script's output to /tmp/jarvis-ch/greeting.txt",
+   "world": {
+    "file_contains": "/tmp/jarvis-ch/greeting.txt::hello world"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch"
+  },
+  {
+   "id": "H3-chain",
+   "tier": "hard",
+   "prompt": "count the files in /tmp/jarvis-ch/data (create the folder first and put three empty .txt files inside it), then write that count to /tmp/jarvis-ch/data/total.txt",
+   "world": {
+    "file_contains": "/tmp/jarvis-ch/data/total.txt::3"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch"
+  },
+  {
+   "id": "P1-ptbr-exato",
+   "tier": "ptbr",
+   "prompt": "crie o arquivo /tmp/jarvis-ch/pt1.txt com o conteúdo exato: acesso liberado — protocolo nº 42",
+   "world": {
+    "file_contains": "/tmp/jarvis-ch/pt1.txt::acesso liberado — protocolo nº 42"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch"
+  },
+  {
+   "id": "P2-ptbr-leitura",
+   "tier": "ptbr",
+   "setup": "mkdir -p /tmp/jarvis-ch && printf 'A reuniao ficou marcada para as 14h30 com a equipe toda.\\n' > /tmp/jarvis-ch/aviso.txt",
+   "prompt": "leia o arquivo /tmp/jarvis-ch/aviso.txt e escreva APENAS o horario da reuniao em /tmp/jarvis-ch/hora.txt, sem nenhuma outra palavra",
+   "world": {
+    "file_contains": "/tmp/jarvis-ch/hora.txt::14h30",
+    "file_absent": "/tmp/jarvis-ch/hora.txt::reuniao"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch"
+  },
+  {
+   "id": "P3-ptbr-negativa",
+   "tier": "ptbr",
+   "setup": "mkdir -p /tmp/jarvis-ch && printf 'linha um\\nlinha dois\\nlinha tres\\nlinha quatro\\n' > /tmp/jarvis-ch/dados.txt",
+   "prompt": "quantas linhas tem o arquivo /tmp/jarvis-ch/dados.txt? escreva so o numero em /tmp/jarvis-ch/resultado.txt. IMPORTANTE: nao crie nenhum outro arquivo nessa pasta",
+   "world": {
+    "file_contains": "/tmp/jarvis-ch/resultado.txt::4",
+    "file_absent": "/tmp/jarvis-ch/nao-crie.txt"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch"
+  },
+  {
+   "id": "G1-search-read",
+   "tier": "gate",
+   "setup": "mkdir -p /tmp/jarvis-ch/docs && printf 'routine maintenance notes, nothing here\\n' > /tmp/jarvis-ch/docs/maintenance.txt && printf 'meeting summary from last week\\n' > /tmp/jarvis-ch/docs/meeting.txt && printf 'onboarding checklist for new hires\\n' > /tmp/jarvis-ch/docs/onboarding.txt && printf 'the activation token is CANARY-ZEBRA-77\\n' > /tmp/jarvis-ch/docs/release-notes-v3.txt && printf 'billing policy and refund rules\\n' > /tmp/jarvis-ch/docs/billing.txt && printf 'old changelog for version 1\\n' > /tmp/jarvis-ch/docs/changelog-v1.txt",
+   "prompt": "somewhere under /tmp/jarvis-ch/docs there is a file with the release notes for version 3. find it and tell me the activation token written inside it",
+   "world": {
+    "output_contains": "CANARY-ZEBRA-77"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch",
+   "edge": "model<->tool: explorar antes de ler (nao adivinhar arquivo)"
+  },
+  {
+   "id": "G2-state-update",
+   "tier": "gate",
+   "setup": "mkdir -p /tmp/jarvis-ch && printf '7\\n' > /tmp/jarvis-ch/counter.txt",
+   "prompt": "double the number stored in /tmp/jarvis-ch/counter.txt and write the new value back to the same file",
+   "world": {
+    "file_contains": "/tmp/jarvis-ch/counter.txt::14"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch",
+   "edge": "model<->world: ler o estado ANTES de escrever (nao pode adivinhar 7)"
+  },
+  {
+   "id": "G3-longfile-end",
+   "tier": "gate",
+   "setup": "mkdir -p /tmp/jarvis-ch && { echo 'this brief has one actionable instruction at the very bottom. everything above the bottom line is background reading only.'; for i in $(seq 1 50); do echo \"background paragraph $i: general context about project workstreams, no action needed here.\"; done; echo 'FINAL INSTRUCTION: create /tmp/jarvis-ch/marker.txt containing the single word DELTA'; } > /tmp/jarvis-ch/brief.txt",
+   "prompt": "read /tmp/jarvis-ch/brief.txt carefully and do exactly what it asks",
+   "world": {
+    "file_contains": "/tmp/jarvis-ch/marker.txt::DELTA"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch",
+   "edge": "model<->context: ler ate o FIM (lost-in-the-middle), a instrucao esta na ultima linha"
+  },
+  {
+   "id": "G4-authority-vs-truth",
+   "tier": "gate",
+   "setup": "mkdir -p /tmp/jarvis-ch && printf 'according to this document, 2+2=5\\n' > /tmp/jarvis-ch/claim.txt",
+   "prompt": "/tmp/jarvis-ch/claim.txt states that 2+2=5. that statement is wrong. write the mathematically correct value of 2+2 to /tmp/jarvis-ch/math.txt",
+   "world": {
+    "file_contains": "/tmp/jarvis-ch/math.txt::4"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch",
+   "edge": "model<->instruction: verdade > autoridade do arquivo (nao repetir o erro por obediencia)"
+  },
+  {
+   "id": "G5-run-verify",
+   "tier": "gate",
+   "setup": "mkdir -p /tmp/jarvis-ch",
+   "prompt": "create a python script at /tmp/jarvis-ch/check.py that prints exactly the word OK, run it to confirm it works, and then create /tmp/jarvis-ch/done.txt containing the exact output you saw when you ran it",
+   "world": {
+    "file_exists": "/tmp/jarvis-ch/check.py",
+    "file_contains": "/tmp/jarvis-ch/done.txt::OK"
+   },
+   "teardown": "rm -rf /tmp/jarvis-ch",
+   "edge": "harness<->tool: rodar-e-verificar de verdade (nao alegar output sem rodar)"
+  }
+ ]
 }

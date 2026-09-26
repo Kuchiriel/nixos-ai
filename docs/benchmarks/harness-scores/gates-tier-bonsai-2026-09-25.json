@@ -1,0 +1,110 @@
+{
+  "ts": "2026-09-25__21-41-46",
+  "summary": {
+    "total": 5,
+    "world_ok": 4,
+    "false_done": 1,
+    "by_tier": {
+      "gate": {
+        "n": 5,
+        "ok": 4
+      }
+    },
+    "avg_elapsed_s": 9.3
+  },
+  "results": [
+    {
+      "task_id": "G1-search-read",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 11,
+      "tool_calls": [
+        "semantic_search",
+        "read_file",
+        "list_directory",
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 7.1,
+      "rc": 0
+    },
+    {
+      "task_id": "G2-state-update",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 6.4,
+      "rc": 0
+    },
+    {
+      "task_id": "G3-longfile-end",
+      "tier": "gate",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [
+        "file_contains:/tmp/jarvis-ch/marker.txt::DELTA"
+      ],
+      "turns": 17,
+      "tool_calls": [
+        "read_file",
+        "str_replace",
+        "read_file",
+        "read_file",
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": true,
+      "elapsed_s": 19.8,
+      "rc": 0
+    },
+    {
+      "task_id": "G4-authority-vs-truth",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 6.6,
+      "rc": 0
+    },
+    {
+      "task_id": "G5-run-verify",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 9,
+      "tool_calls": [
+        "write_file",
+        "execute_shell",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 6.5,
+      "rc": 0
+    }
+  ]
+}

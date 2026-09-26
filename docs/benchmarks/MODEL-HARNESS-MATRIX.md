@@ -87,3 +87,43 @@ wackmall 55,2 · nix upstream 54,4 t/s.
 **Falta testar (próxima sonda):** a recusa moralizante de verdade aparece em
 pergunta de **dosagem** (morfina/pregabalina). Falta classe com cenário
 ficcional de ajuste de dose, pra nãoandos de validação clínica.
+
+## 5. Gates G1–G5 (25/09) — resolução restaurada pós-b10743
+
+> Ciclo de evolução do harness (LOOP-v3). Método: arXiv 2607.28802
+> ("Model or Harness?" — falha localiza por ARESTA + LADO).
+> Gates: tier novo em `scripts/harness-challenges.json`, world-state
+> mecânico, sem juiz. Grader validado offline ANTES de medir modelos
+> (solução certa PASSA, solução errada REJEITA — 4/5; G1 é output-only).
+
+**Contexto da medição**: bonsai 8B Q2_0, binário **b10743-adfffbe**
+(prism, router :8080), greedy (agent passa temperature=0.0 explícito —
+verificado em dev.py perfis). NÃO é o mesmo binário do 12/12 (era b10735).
+
+| Medição | Resultado | Leitura |
+|---|---|---|
+| Baseline 12 clássicas, rounds=1 | **10/12** (2 false_done: M1-dirfile, H1-config-discovery) | teto NÃO está mais saturado |
+| Mesmas 12, rounds=2 | **12/12** world_ok, **first_pass 7/12**, 5 salvos por retry, 0 false_done | falhas do baseline = estocásticas |
+| Gates G1–G5, rounds=2 | **4/5** world_ok | separação limpa existe |
+
+**Atribuição por falha (aresta, lado):**
+
+- **G3-longfile-end FAIL (false_done, 17 turns)** — instrução na última
+  linha de arquivo 4.749 chars ignorada. Verificação de integridade:
+  4.749 < TOOL_OUTPUT_MAX_CHARS=8000 → **sem truncamento rtk-lite**; a
+  instrução estava ÍNTEGRA no contexto. Aresta model↔instruction,
+  **lado MODEL** (atenção fim-de-contexto com 50 parágrafos de ruído;
+  alegou conclusão sem executar). Passo confirmatório com MoE forte:
+  pós-treino (RAM 24GB vs 19GB do MoE = risco OOM sem ganho de info).
+- M1/H1 do baseline: estocásticas no teto (b10743 muda numérica dos
+  logits; argmax vira em near-ties). Aresta config↔generation, lado
+  HARNESS-NOISE: reportar first_pass separado de world_ok daqui pra frente.
+- G1/G2/G4/G5 PASS — doutrina "fraco falha" não se confirmou neles
+  (bonsai 8B b10743 mais capaz que o b10735 da era da saturação).
+
+**Fila derivada**: gates mais duros (G3-variantes: instrução no MEIO;
+multi-G3; ptbr-gate), qwen/moe na mesma bateria quando RAM/liberação
+permitirem, e marcadores slow/integration nos e2e (pendura da suíte).
+
+Evidência: `harness-scores/gates-bonsai-baseline-2026-09-25.json`,
+`harness-scores/gates-tier-bonsai-2026-09-25.json`.
