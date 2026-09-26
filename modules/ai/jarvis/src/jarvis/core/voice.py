@@ -835,49 +835,59 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
     _t_session = _time.time()
     _audio_meta = _audio_stats(audio_path)
 
-    # 1. STT — via subprocess para isolar CTranslate2/torch de Kokoro/torch
-    #    (CTranslate2 + Kokoro no mesmo processo causa Floating-point exception)
+    # 1. STT — servidor morno primeiro (F-voz: modelo residente, ~2s),
+    # subprocesso como fallback (cold start ~30s). Isolamento CTranslate2
+    # × Kokoro preservado nos dois (processos separados).
     set_status("transcribing", "Transcrevendo...")
+    text: str | None = None
     try:
-        import shutil as _shutil
-        _stt_bin = _shutil.which("jarvis") or "jarvis"
-        _stt_cmd = [_stt_bin, "stt", "--model", model_size, audio_path]
-        from jarvis.core.lang import stt_code as _stt_lang
-        _stt_cmd += ["--language", _stt_lang() or "pt"]
-        _stt_proc = subprocess.run(_stt_cmd, capture_output=True, text=True, timeout=60)
-        text = (_stt_proc.stdout or "").strip()
-        if _stt_proc.returncode != 0:
-            stderr_out = (_stt_proc.stderr or "")[:200]
-            set_status("error", f"STT falhou: {stderr_out[:60]}")
-            print(f"ERROR: STT falhou (exit {_stt_proc.returncode}): {stderr_out}", file=sys.stderr)
+        from jarvis.core.stt_server import transcribe_warm
+        text = transcribe_warm(audio_path)
+        if text is not None:
+            set_status("transcribing", "Transcrevendo (morno)...")
+    except Exception:
+        text = None
+    if text is None:
+        try:
+            import shutil as _shutil
+            _stt_bin = _shutil.which("jarvis") or "jarvis"
+            _stt_cmd = [_stt_bin, "stt", "--model", model_size, audio_path]
+            from jarvis.core.lang import stt_code as _stt_lang
+            _stt_cmd += ["--language", _stt_lang() or "pt"]
+            _stt_proc = subprocess.run(_stt_cmd, capture_output=True, text=True, timeout=60)
+            text = (_stt_proc.stdout or "").strip()
+            if _stt_proc.returncode != 0:
+                stderr_out = (_stt_proc.stderr or "")[:200]
+                set_status("error", f"STT falhou: {stderr_out[:60]}")
+                print(f"ERROR: STT falhou (exit {_stt_proc.returncode}): {stderr_out}", file=sys.stderr)
+                try:
+                    from jarvis.core.feedback import notify as _nfail, play_sound as _psnd
+                    _nfail("Jarvis", "Falha ao transcrever o áudio")
+                    _psnd("error")
+                except Exception:
+                    pass
+                return 1
+            if not text:
+                # Vazio (só ruído/VAD comeu tudo): volta a idle SEM erro —
+                # follow-up em ambiente ruidoso gera isso direto (forense 2026-09).
+                # rc=2: daemon NÃO estende follow-up (senão loop infinito).
+                set_status("idle", "")
+                print("(voz vazia)", file=sys.stderr)
+                return 2
+        except subprocess.TimeoutExpired:
+            set_status("error", "STT timeout")
+            print("ERROR: STT timeout (60s)", file=sys.stderr)
             try:
-                from jarvis.core.feedback import notify as _nfail, play_sound as _psnd
-                _nfail("Jarvis", "Falha ao transcrever o áudio")
-                _psnd("error")
+                from jarvis.core.feedback import notify as _nfail2, play_sound as _psnd2
+                _nfail2("Jarvis", "STT demorou demais (timeout)")
+                _psnd2("error")
             except Exception:
                 pass
             return 1
-        if not text:
-            # Vazio (só ruído/VAD comeu tudo): volta a idle SEM erro —
-            # follow-up em ambiente ruidoso gera isso direto (forense 2026-09).
-            # rc=2: daemon NÃO estende follow-up (senão loop infinito).
-            set_status("idle", "")
-            print("(voz vazia)", file=sys.stderr)
-            return 2
-    except subprocess.TimeoutExpired:
-        set_status("error", "STT timeout")
-        print("ERROR: STT timeout (60s)", file=sys.stderr)
-        try:
-            from jarvis.core.feedback import notify as _nfail2, play_sound as _psnd2
-            _nfail2("Jarvis", "STT demorou demais (timeout)")
-            _psnd2("error")
-        except Exception:
-            pass
-        return 1
-    except Exception as exc:
-        set_status("error", str(exc)[:80])
-        print(f"ERROR: STT exceção: {exc}", file=sys.stderr)
-        return 1
+        except Exception as exc:
+            set_status("error", str(exc)[:80])
+            print(f"ERROR: STT exceção: {exc}", file=sys.stderr)
+            return 1
     if not text:
         set_status("idle", "")
         print("(voz vazia)", file=sys.stderr)
