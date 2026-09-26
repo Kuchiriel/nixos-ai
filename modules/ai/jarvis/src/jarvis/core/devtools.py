@@ -178,8 +178,17 @@ def _safe_path(path: str, root: Path | None = None,
             str(Path(_sd).expanduser() / "vault"),
             str(Path(_sd).expanduser()),
         )
+    # (26/09, LOOP-v3) ~/Books PADRÃO é fonte do RAG (papers/ com
+    # digest de literatura + harness/): estilo vault, leitura apenas.
+    # Medido: sanitize_document dava quarantine/PATH_ERROR em TODAS as
+    # notas de ~/Books/papers — os arquivos entravam no disco e o RAG
+    # nunca os via (6 refs baixadas 25/09 invisíveis na busca).
+    _books_roots: tuple[str, ...] = ()
+    if not write:
+        _books_roots = (str(Path.home() / "Books"),)
     _allowed_prefixes = (
-        ("/tmp", "/build", "/etc/jarvis", str(r)) + _extra_roots + _vault_roots
+        ("/tmp", "/build", "/etc/jarvis", str(r)) + _extra_roots
+        + _vault_roots + _books_roots
     )
     if not any(str(target).startswith(pfx) for pfx in _allowed_prefixes):
         # Tradução mecânica container→base (L8 real: modelo fixou em /app e

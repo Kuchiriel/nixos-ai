@@ -1082,6 +1082,16 @@ def sweep_books(limit: int = 3) -> dict[str, Any]:
                 if f.is_file():
                     candidates.append((f.stem, str(harness), "harness_digest",
                                        f))
+        # (26/09, LOOP-v3) papers/*.md também são digests de 1a classe
+        # (papers acadêmicos + refs web com INDEX.md): antes caíam em
+        # NENHUM pipeline — 17 refs do morning + 6 da madrugada órfãs do
+        # RAG (medido: sanitize PATH_ERROR + fora do sweep = invisíveis).
+        papers = books / "papers"
+        if papers.is_dir():
+            for f in sorted(papers.glob("*.md")):
+                if f.is_file() and f.name != "INDEX.md":
+                    candidates.append((f.stem, str(papers), "paper_digest",
+                                       f))
     except OSError:
         return {"ok": True, "new": [], "pending": 0}
     # Idempotência por CONTEÚDO (sha), não só por nome: quarentena/falha com
