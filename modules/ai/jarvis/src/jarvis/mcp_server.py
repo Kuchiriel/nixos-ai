@@ -36,7 +36,8 @@ _src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # jarvis
 if _src_dir not in sys.path:
     sys.path.insert(0, _src_dir)
 
-from jarvis.core.devtools import handle_dev_tool, DEV_TOOLS
+from jarvis.core.devtools import handle_dev_tool
+from jarvis.runtime.registry import ToolRegistry
 from jarvis.core.vision import VISION_TOOL, handle_capture, observe_with_fallback as observe_screen
 from jarvis.core.chatgpt_reader import CHATGPT_READER_TOOL, handle_chatgpt_read
 from jarvis.core.multi_ai_reader import MULTI_AI_READER_TOOL, read_ai_conversation
@@ -99,7 +100,8 @@ JARVIS_TOOLS = [
             "properties": {
                 "path": {"type": "string", "description": "File path"},
                 "old_string": {"type": "string", "description": "String to find"},
-                "new_string": {"type": "string", "description": "Replacement string"}
+                "new_string": {"type": "string", "description": "Replacement string"},
+                "allow_multiple": {"type": "boolean", "description": "Allow replacing multiple occurrences (default false)"}
             },
             "required": ["path", "old_string", "new_string"]
         }
@@ -583,6 +585,18 @@ def _guarded_mutation(name: str, args: dict[str, Any], fn) -> str:
     return out
 
 
+def _transport_registry() -> ToolRegistry:
+    """Singleton lazy do registry (transporte MCP → nomes/args canônicos)."""
+    global _TRANSPORT_REGISTRY
+    try:
+        _TRANSPORT_REGISTRY
+    except NameError:
+        _TRANSPORT_REGISTRY = None
+    if _TRANSPORT_REGISTRY is None:
+        _TRANSPORT_REGISTRY = ToolRegistry.build_default()
+    return _TRANSPORT_REGISTRY
+
+
 def call_tool(name: str, args: dict[str, Any]) -> str:
     """Executa uma tool JARVIS."""
     try:
@@ -622,13 +636,20 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
             return "ERROR: action inválida (list|show|select)"
 
         if name == "jarvis_read_file":
-            return handle_dev_tool("read_file", args)
+            _canon, _targs = _transport_registry().resolve(name, args)
+            return handle_dev_tool(_canon, _targs)
 
         if name == "jarvis_write_file":
-            return _guarded_mutation(name, args, lambda: handle_dev_tool("write_file", args))
+            _canon, _targs = _transport_registry().resolve(name, args)
+            return _guarded_mutation(
+                name, _targs, lambda: handle_dev_tool(_canon, _targs))
 
         if name == "jarvis_str_replace":
-            return _guarded_mutation(name, args, lambda: handle_dev_tool("str_replace", args))
+            # F2: transporte traduz old_string/new_string → old/new via
+            # registry (antes: KeyError/args-ausentes — MCP str_replace morto).
+            _canon, _targs = _transport_registry().resolve(name, args)
+            return _guarded_mutation(
+                name, _targs, lambda: handle_dev_tool(_canon, _targs))
 
         if name == "jarvis_capture_screen":
             return handle_capture(args)

@@ -32,6 +32,15 @@ _CANONICAL_ALIASES = {
     "jarvis_persona": "persona",
 }
 
+# Alias de PARÂMETROS por ferramenta canônica (transporte → canônico).
+# Declarado aqui = divergência CONHECIDA, traduzida no transporte (Fase 2).
+# O que diverge e NÃO está aqui = SILENT (o linter falha).
+PARAM_ALIASES: dict[str, dict[str, str]] = {
+    # MCP declara old_string/new_string; executor canônico usa old/new.
+    # Contrato externo MCP congelado → tradução na borda, não no schema.
+    "str_replace": {"old_string": "old", "new_string": "new"},
+}
+
 # capability / mutation / approval inferidos por nome canônico.
 # approval: none | policy | always. mutation: a tool altera mundo persistente.
 _TOOL_POLICY: dict[str, tuple[str, bool, str]] = {
@@ -146,13 +155,18 @@ class ToolRegistry:
             tool.aliases.append(name)
         # mede divergência de params entre dialetos do mesmo conceito
         if provider == "mcp" and "devtools" in tool.providers:
+            # Normaliza renames declarados; o que sobra divergindo é SILENT.
+            # (Param opcional exclusivo e documentado, ex. allow_multiple,
+            # casa via schema — ver F2: o transporte declara o que passa.)
+            alias = PARAM_ALIASES.get(canonical, {})
             dev_params = set(tool.parameters.get("properties", {}))
-            mcp_params = set(parameters.get("properties", {}))
-            # tool.parameters ainda guarda o do primeiro provider; compara:
-            if dev_params != mcp_params:
+            mcp_norm = {alias.get(p, p)
+                        for p in parameters.get("properties", {})}
+            if dev_params != mcp_norm:
+                mcp_raw = set(parameters.get("properties", {}))
                 self.divergences.append(DialectDivergence(
                     canonical=canonical, kind="params",
-                    detail=f"devtools={sorted(dev_params)} vs mcp={sorted(mcp_params)}"))
+                    detail=f"devtools={sorted(dev_params)} vs mcp={sorted(mcp_raw)}"))
 
     # -- consultas --------------------------------------------------------
     def names(self) -> list[str]:
@@ -175,3 +189,20 @@ class ToolRegistry:
 
     def dialect_report(self) -> list[DialectDivergence]:
         return list(self.divergences)
+
+    def declared_aliases(self) -> dict[str, dict[str, str]]:
+        """Renames transporte→canônico declarados (Fase 2+)."""
+        return {k: dict(v) for k, v in PARAM_ALIASES.items()}
+
+    def resolve(self, name: str, args: dict[str, Any] | None) -> tuple[str, dict[str, Any]]:
+        """Transporte → (nome canônico, args canônicos).
+
+        Aplica alias de nome + renames declarados. Chave desconhecida passa
+        intacta (o executor decide o erro, nunca o transporte).
+        """
+        canonical = _CANONICAL_ALIASES.get(name, name.removeprefix("jarvis_"))
+        translated = dict(args or {})
+        for alias, canon_arg in PARAM_ALIASES.get(canonical, {}).items():
+            if alias in translated and canon_arg not in translated:
+                translated[canon_arg] = translated.pop(alias)
+        return canonical, translated

@@ -85,20 +85,54 @@ def test_registry_covers_both_dialects() -> None:
 
 
 def test_known_divergences_are_tracked() -> None:
-    """Divergências conhecidas DEVEM estar no report (worklist da Fase 2).
+    """Lista FECHADA de divergências SILENT (worklist da Fase 4).
 
-    Se uma some sem merge declarado = alguém unificou sem registrar (ou o
-    teste de leitura quebrou). Se uma NOVA aparece, este teste também falha
-    (lista fechada) — atualizar junto com o merge real.
+    F2 mergeou str_replace no transporte (alias declarado old_string→old +
+    passthrough de allow_multiple): ela SAIU do silent e entrou no declarado.
+    Resta semantic_search (mesmo nome, executores E params diferentes —
+    HybridSearch no MCP vs Qdrant próprio em devtools; merge = F4).
+    Qualquer NOVA entrada ou sumiço sem merge = falha.
     """
     from jarvis.runtime.registry import ToolRegistry
 
     reg = ToolRegistry.build_default()
-    by_canon = {d.canonical for d in reg.dialect_report()}
-    # str_replace: devtools(old/new) vs mcp(old_string/new_string) — prova viva
-    assert "str_replace" in by_canon, (
-        "divergência str_replace sumiu do report sem merge registrado")
-    assert len(reg.dialect_report()) >= 1
+    silent = {d.canonical for d in reg.dialect_report()}
+    assert silent == {"semantic_search"}, f"silent mudou: {silent}"
+    assert "str_replace" in reg.declared_aliases(), (
+        "alias declarado de str_replace sumiu — transporte voltou a forkar")
+
+
+def test_resolve_translates_str_replace() -> None:
+    """Transporte MCP → canônico: renames sem esmagar chaves existentes."""
+    from jarvis.runtime.registry import ToolRegistry
+
+    reg = ToolRegistry.build_default()
+    canon, targs = reg.resolve("jarvis_str_replace", {
+        "path": "f", "old_string": "A", "new_string": "B"})
+    assert canon == "str_replace"
+    assert targs == {"path": "f", "old": "A", "new": "B"}
+    # explícito canônico vence alias (nunca esmaga)
+    _, t2 = reg.resolve("jarvis_str_replace", {
+        "path": "f", "old": "X", "old_string": "A", "new_string": "B"})
+    assert t2["old"] == "X" and t2["new"] == "B"
+    # desconhecido passa intacto (executor decide o erro)
+    c3, t3 = reg.resolve("jarvis_nope", {"a": 1})
+    assert (c3, t3) == ("nope", {"a": 1})
+
+
+def test_mcp_str_replace_roundtrip(tmp_path) -> None:
+    """REGRESSÃO F2: jarvis_str_replace via MCP estava MORTO (KeyError/
+    args-ausentes — o executor esperava old/new, o transporte enviava
+    old_string/new_string). Prova viva no caminho real."""
+    import json
+    from jarvis.mcp_server import call_tool
+
+    f = tmp_path / "mcp.txt"
+    f.write_text("AAA-BBB", encoding="utf-8")
+    out = json.loads(call_tool("jarvis_str_replace", {
+        "path": str(f), "old_string": "AAA", "new_string": "CCC"}))
+    assert out.get("ok") is True, out
+    assert f.read_text(encoding="utf-8") == "CCC-BBB"
 
 
 def test_single_schema_emission() -> None:
