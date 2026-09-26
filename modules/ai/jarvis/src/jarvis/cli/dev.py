@@ -1458,6 +1458,49 @@ def _persona_block(persona) -> str:
         return ""
 
 
+# Bloco estático de limites do REPL (F8: seção do Assembler; texto idêntico
+# ao de SYSTEM_PROMPT_TEMPLATE — o golden test trava byte-identidade).
+_DEV_LIMITS_SECTION = """LIMITES DE OUTPUT (OBRIGATÓRIO):
+- find: máx 30 resultados (use -maxdepth 2 | head -30)
+- ls: NUNCA recursivo (sem -R)
+- git log: máx 10 linhas (git log --oneline -10)
+- cat: PROIBIDO (usar head/tail/sed)
+- grep: máx 20 resultados (-m 20)
+- Output >50 linhas = resuma em bullets
+
+RULES:
+1. read_file ANTES de str_replace no mesmo path
+2. old = cópia EXATA do read_file
+3. Se falhar, re-leia com mais contexto
+4. Teste após editar, commit após testar
+5. Não invente conteúdo sem ler
+6. Use MCP tools quando built-in tools não bastam
+7. ANTES de ler arquivo grande: wc -l (saber tamanho)"""
+
+def _build_system_prompt(repo_map: str, memory_context: str,
+                         agent_context: str, persona_block: str,
+                         tool_discipline: str, tools_catalog: str) -> str:
+    """F8: montagem do system prompt do REPL via ContextAssembler (1 mecanismo).
+
+    Byte-idêntico ao template antigo com as mesmas partes — separadores
+    preservados inclusive com partes vazias (seções incondicionais).
+    6 call sites → 1 helper (golden test em test_runtime_context.py).
+    """
+    from jarvis.runtime.context import ContextAssembler
+    asm = ContextAssembler()
+    asm.add("identity",
+            lambda: f"JARVIS dev agent. {_template_lang()}. Direto.\n\n")
+    asm.add("repo_map", lambda: repo_map + "\n")
+    asm.add("memory", lambda: memory_context + "\n")
+    asm.add("agent_ctx", lambda: agent_context + "\n\n")
+    asm.add("catalog", lambda: tools_catalog + "\n\n")
+    asm.add("limits", lambda: _DEV_LIMITS_SECTION + "\n")
+    asm.add("persona", lambda: (persona_block + "\n\n") if persona_block else "\n\n")
+    asm.add("discipline", lambda: tool_discipline + "\n")
+    system, _prov = asm.assemble()
+    return system
+
+
 
 def _tools_catalog(tools: list[dict[str, Any]]) -> str:
     """Catálogo de tools DERIVADO das tools ativas (25/09).
@@ -2366,14 +2409,14 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
     memory_ctx = _build_memory_context()
     agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
     system_prompt = _maybe_disable_thinking(
-        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE, tools_catalog=_tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else []))
+        _build_system_prompt(repo_map, memory_ctx, agent_ctx, _persona_block(active_persona), _TOOL_DISCIPLINE, _tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else []))
     )
 
     def _rebuild_system(persona_block_text: str) -> str:
         """F9: rebuild do system prompt com UMA identidade (persona OU modo,
         nunca ambas empilhadas). Usado pelo /mode; resto deriva do base."""
         return _maybe_disable_thinking(
-            SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=persona_block_text, tool_discipline=_TOOL_DISCIPLINE, tools_catalog=_tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else []))
+            _build_system_prompt(repo_map, memory_ctx, agent_ctx, persona_block_text, _TOOL_DISCIPLINE, _tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else []))
         )
     messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     if continue_session:
@@ -2415,7 +2458,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             memory_ctx = _build_memory_context()
             agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
             system_prompt = _maybe_disable_thinking(
-                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE, tools_catalog=_tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else []))
+                _build_system_prompt(repo_map, memory_ctx, agent_ctx, _persona_block(active_persona), _TOOL_DISCIPLINE, _tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else []))
             )
             messages = [{"role": "system", "content": system_prompt}]
             _persist_session(messages, project_root or os.getcwd())
@@ -2444,7 +2487,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             memory_ctx = _build_memory_context()
             agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
             system_prompt = _maybe_disable_thinking(
-                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE, tools_catalog=_tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else []))
+                _build_system_prompt(repo_map, memory_ctx, agent_ctx, _persona_block(active_persona), _TOOL_DISCIPLINE, _tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else []))
             )
             messages[0] = {"role": "system", "content": system_prompt}
             console.print("[dim]🗺️  repo map atualizado[/]")
@@ -2517,7 +2560,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
                     memory_ctx = _build_memory_context()
                     agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section() + _pinned_section()
                     messages[0] = {"role": "system", "content": _maybe_disable_thinking(
-                        SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE, tools_catalog=_tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else [])))}
+                        _build_system_prompt(repo_map, memory_ctx, agent_ctx, _persona_block(active_persona), _TOOL_DISCIPLINE, _tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else [])))}
                     console.print(f"[dim]📌 {target} fixado ({len(content)} chars)[/]")
             continue
 
@@ -2534,7 +2577,7 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
             memory_ctx = _build_memory_context()
             agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section() + _pinned_section()
             messages[0] = {"role": "system", "content": _maybe_disable_thinking(
-                SYSTEM_PROMPT_TEMPLATE.format(repo_map=repo_map, memory_context=memory_ctx, agent_context=agent_ctx, persona_block=_persona_block(active_persona), tool_discipline=_TOOL_DISCIPLINE, tools_catalog=_tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else [])))}
+                _build_system_prompt(repo_map, memory_ctx, agent_ctx, _persona_block(active_persona), _TOOL_DISCIPLINE, _tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else [])))}
             left = ", ".join(PINNED_FILES) or "nenhum"
             console.print(f"[dim]fixados: {left}[/]")
             continue

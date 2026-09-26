@@ -123,15 +123,15 @@ def _cmd_run(args: argparse.Namespace) -> int:
     """
     import json as _json
 
-    from jarvis.core.agent import Agent
+    from jarvis.runtime.agent_runtime import AgentRuntime
 
     task = " ".join(args.task or [])
     if not task.strip():
         print("uso: jarvis run [--mode text|json] <tarefa>", file=sys.stderr)
         return 2
-    agent = Agent(get_config())
+    result = None
     try:
-        result = agent.run(task)
+        result = AgentRuntime(get_config()).run(task)
     except KeyboardInterrupt:
         print("interrompido (Ctrl+C)", file=sys.stderr)
         return 130
@@ -143,10 +143,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
             "verified": result.verified,
             "evidence": result.evidence,
             "missing": result.missing,
-            "response": result.final_response,
+            "response": result.response,
         }, ensure_ascii=False))
     else:
-        print(result.final_response)
+        print(result.response)
     return 0 if result.verdict in ("VERIFIED", "STOPPED") else 1
 
 
@@ -664,8 +664,6 @@ def _cmd_ask(args: argparse.Namespace) -> int:
 def _cmd_agent(args: argparse.Namespace) -> int:
     import shutil
 
-    from jarvis.core.agent import Agent
-
     cfg = get_config()
     state = cfg.ensure_state_dir()
     mcp_servers = {}
@@ -686,13 +684,14 @@ def _cmd_agent(args: argparse.Namespace) -> int:
         memory = EpisodicMemory(cfg)
     except Exception:  # noqa: BLE001 — sem memória, agente segue normal
         pass
-    agent = Agent(
-        cfg, approve=args.approve, audit_path=state / "agent-audit.jsonl",
-        mcp_servers=mcp_servers, memory=memory,
-    )
-    result = agent.run(args.prompt)
+    from jarvis.runtime.agent_runtime import AgentRuntime
+    result = AgentRuntime(
+        cfg, memory=memory,
+        agent_kwargs={"approve": args.approve,
+                      "audit_path": state / "agent-audit.jsonl",
+                      "mcp_servers": mcp_servers}).run(args.prompt)
 
-    print(result.final_response)
+    print(result.response)
     if result.commands_run:
         print(f"\n# comandos executados ({len(result.commands_run)}):")
         for c in result.commands_run:

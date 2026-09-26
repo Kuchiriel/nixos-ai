@@ -19,7 +19,6 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from jarvis.core.agent import Agent  # noqa: E402
 from jarvis.core.config import Config  # noqa: E402
 from jarvis.core.eval_harness import EvalHarness, TaskTemplate  # noqa: E402
 
@@ -27,13 +26,14 @@ from jarvis.core.eval_harness import EvalHarness, TaskTemplate  # noqa: E402
 def run_agent(prompt, with_memory=False, tool_class=None):
     import jarvis.core.agent as _ag
     _ag.human_approve = lambda cmd: True
-    agent = Agent(Config(), approve=True,
-                  memory=(_make_mem() if with_memory else None),
-                  tool_class=tool_class)
-    res = agent.run(prompt)
+    from jarvis.runtime.agent_runtime import AgentRuntime
+    rt = AgentRuntime(Config(), memory=(_make_mem() if with_memory else None),
+                      agent_kwargs={"approve": True,
+                                    "tool_class": tool_class})
+    res = rt.run(prompt)
     tools = [{"name": s.get("tool"), "args_preview": s.get("args", ""),
               "output": ""} for s in res.steps]
-    return {"response": res.final_response, "final_response": res.final_response,
+    return {"response": res.response, "final_response": res.response,
             "tool_calls": tools, "tools_called": tools, "turns": res.turns,
             "exit_code": 0, "verdict": res.verdict}
 

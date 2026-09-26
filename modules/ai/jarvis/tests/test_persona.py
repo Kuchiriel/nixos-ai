@@ -293,16 +293,24 @@ class TestMarketingPersona:
 
 def test_system_prompt_template_all_call_sites_pass_tools_catalog():
     """25/09: o REPL quebrou com KeyError 'tools_catalog' porque um
-    call-site do .format() esqueceu o kwarg novo. Este teste falha se
-    alguém criar um call-site sem ele."""
+    call-site do .format() esqueceu o kwarg novo. F8: o mecanismo mudou —
+    6 sites .format() viraram 1 helper (_build_system_prompt) sobre o
+    Assembler. Este teste agora trava o NOVO mecanismo: zero .format() rest,
+    e todo call-site do helper passa as 6 partes."""
     import pathlib
     import re
 
     src = pathlib.Path(__file__).resolve().parents[1] / "src/jarvis/cli/dev.py"
     text = src.read_text(encoding="utf-8")
-    starts = [m.start() for m in re.finditer(r"SYSTEM_PROMPT_TEMPLATE\.format\(", text)]
-    assert starts, "template não encontrado"
+    assert not re.search(r"SYSTEM_PROMPT_TEMPLATE\.format\(", text), (
+        "call-site .format() residual — usar _build_system_prompt")
+    starts = [m.start() for m in re.finditer(r"_build_system_prompt\(", text)
+              if not text[max(0, m.start() - 4):m.start()].endswith("def ")]
+    assert starts, "helper não encontrado"
     for i in starts:
-        assert "tools_catalog=" in text[i:i + 400], (
-            "call-site do SYSTEM_PROMPT_TEMPLATE sem tools_catalog= — "
-            "vai quebrar com KeyError no REPL")
+        window = text[i:i + 700]
+        for part in ("repo_map", "memory_ctx", "agent_ctx", "persona",
+                     "_TOOL_DISCIPLINE", "_tools_catalog"):
+            assert part in window, (
+                f"call-site de _build_system_prompt sem {part} — "
+                "prompt do REPL incompleto")

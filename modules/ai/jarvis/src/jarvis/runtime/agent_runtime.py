@@ -26,6 +26,11 @@ class RuntimeResult:
     turns: int = 0
     evidence: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
+    # Espelhos p/ migração mecânica dos compositores (F8) — fonte: session.
+    verified: bool = False
+    commands_run: list[str] = field(default_factory=list)
+    commands_denied: list[str] = field(default_factory=list)
+    steps: list[dict[str, Any]] = field(default_factory=list)
 
 
 class AgentRuntime:
@@ -62,4 +67,6 @@ class AgentRuntime:
         return RuntimeResult(
             session=session, verdict=session.termination,
             response=session.response, turns=session.turns,
-            evidence=session.evidence, missing=session.missing)
+            evidence=session.evidence, missing=session.missing,
+            verified=session.verified, commands_run=session.commands_run,
+            commands_denied=session.commands_denied, steps=session.steps)

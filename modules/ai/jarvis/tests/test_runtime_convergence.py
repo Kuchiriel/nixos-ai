@@ -390,13 +390,7 @@ def test_supervisor_does_not_own_the_loop() -> None:
         if re.search(r"(?<![\w.])Agent\(", text):
             composers.add(p.relative_to(SRC).as_posix())
     tests_ok = {c for c in composers if "/tests/" in c or "test_" in c}
-    # Consumidores legítimos do loop (roteiam PARA ele, não possuem loop):
-    # router (pré-runtime determinístico), main (entrada CLI), benchmarks
-    # (clientes do runtime por doutrina). Migração p/ runtime.run no lote
-    # F8. Novo compositor fora desta lista = falha.
-    assert composers - tests_ok == {
-        "jarvis/core/router.py",
-        "jarvis/cli/main.py",
-        "jarvis/benchmarks/l9/run_l9.py",
-        "jarvis/benchmarks/kb_regression.py",
-    }, f"compositor do loop fora do permitido: {composers - tests_ok}"
+    # F8: todos os compositores migrados p/ runtime.run (router, main CLI,
+    # 2 benchmarks). Novo Agent() fora do runtime = falha.
+    assert composers - tests_ok == set(), (
+        f"compositor do loop fora do runtime: {composers - tests_ok}")

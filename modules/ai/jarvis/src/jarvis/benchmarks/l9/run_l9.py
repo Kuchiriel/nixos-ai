@@ -14,7 +14,6 @@ from jarvis.benchmarks.l9.l9_lib import check, fixture
 import jarvis.core.agent as _ag
 _ag.human_approve = lambda cmd: True
 
-from jarvis.core.agent import Agent
 from jarvis.core.config import Config
 from jarvis.core.eval_harness import EvalHarness, TaskTemplate
 
@@ -31,10 +30,12 @@ Use write_file with real content only. Repo writes forbidden."""
 
 def run_agent(prompt, tool_class=None):
     import traceback
-    agent = Agent(Config(), approve=True, memory=None, tool_class=tool_class,
-                  mcp_servers={"nix": "/usr/bin/nix"})  # prod parity: execute_shell on
+    from jarvis.runtime.agent_runtime import AgentRuntime
+    rt = AgentRuntime(Config(), agent_kwargs={
+        "approve": True, "memory": None, "tool_class": tool_class,
+        "mcp_servers": {"nix": "/usr/bin/nix"}})  # prod parity: execute_shell on
     try:
-        res = agent.run(prompt)
+        res = rt.run(prompt)
     except Exception:
         # FAILURE-TRACE-CONTRACT (Ciclo 5): crash nunca passa sem rastro —
         # traceback vai p/ disco; harness registra error. Sem segredos:
@@ -45,7 +46,7 @@ def run_agent(prompt, tool_class=None):
         raise
     tools = [{"name": s.get("tool"), "args_preview": s.get("args", ""),
               "output": ""} for s in res.steps]
-    return {"response": res.final_response, "final_response": res.final_response,
+    return {"response": res.response, "final_response": res.response,
             "tool_calls": tools, "tools_called": tools, "turns": res.turns,
             "exit_code": 0, "verdict": res.verdict}
 

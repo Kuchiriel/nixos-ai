@@ -91,3 +91,28 @@ def test_assembly_sites_bounded() -> None:
         if "SYSTEM_PROMPT_TEMPLATE" in t or 'system_content = "You are JARVIS' in t:
             others.append(p.name)
     assert others == [], f"novo site de montagem: {others}"
+
+
+def test_dev_prompt_byte_identical_to_template() -> None:
+    """F8: _build_system_prompt == SYSTEM_PROMPT_TEMPLATE.format (bytes).
+
+    Com partes cheias E vazias (separadores preservados). Se o template
+    mudar, este teste quebra junto — atualizar os dois.
+    """
+    from jarvis.cli.dev import (
+        SYSTEM_PROMPT_TEMPLATE,
+        _TOOL_DISCIPLINE,
+        _build_system_prompt,
+    )
+
+    cases = [
+        ("MAPA", "MEM", "CTX", "\n\nPERSONA ATIVA: j (r)\nADD", "DISC", "CAT"),
+        ("MAPA", "", "", "", "", ""),
+        ("", "", "", "", "", ""),
+    ]
+    for repo, mem, ctx, pers, disc, cat in cases:
+        expected = SYSTEM_PROMPT_TEMPLATE.format(
+            repo_map=repo, memory_context=mem, agent_context=ctx,
+            persona_block=pers, tool_discipline=disc, tools_catalog=cat)
+        got = _build_system_prompt(repo, mem, ctx, pers, disc, cat)
+        assert got == expected, f"divergiu com persona={pers!r:.20}"

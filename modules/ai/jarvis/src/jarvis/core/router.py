@@ -416,8 +416,11 @@ def handle_read(path: str, cfg: Any = None, limit: int = 200) -> dict[str, Any]:
 def handle_agent(query: str, cfg: Any = None, *, approve: bool = False,
                  mcp_bin: str | None = None, state_dir=None,
                  approver=None, persona_id: str | None = None) -> dict[str, Any]:
-    """Executa a rota agent: LLM com tools (execute_shell + mcp-nixos)."""
-    from jarvis.core.agent import Agent
+    """Executa a rota agent: LLM com tools (execute_shell + mcp-nixos).
+
+    F8: via AgentRuntime (mesmo loop, mesma decisão — o router roteia PARA
+    o runtime, nunca possui loop)."""
+    from jarvis.runtime.agent_runtime import AgentRuntime
     from jarvis.core.config import get_config
 
     cfg = cfg or get_config()
@@ -426,13 +429,13 @@ def handle_agent(query: str, cfg: Any = None, *, approve: bool = False,
     binary = mcp_bin or cfg.mcp_nixos_bin
     if binary:
         mcp_servers["nixos"] = binary
-    agent = Agent(cfg, approve=approve, approval_callback=approver,
-                  audit_path=audit, mcp_servers=mcp_servers,
-                  persona_id=persona_id)
-    result = agent.run(query)
+    rt = AgentRuntime(cfg, agent_kwargs={
+        "approve": approve, "approval_callback": approver,
+        "audit_path": audit, "mcp_servers": mcp_servers})
+    result = rt.run(query, persona_id=persona_id)
     return {
         "route": "agent",
-        "response": result.final_response,
+        "response": result.response,
         "commands_run": result.commands_run,
         "commands_denied": result.commands_denied,
     }
