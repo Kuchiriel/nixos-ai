@@ -1137,6 +1137,20 @@ class Harness:
                         existing += f"\n\n## Harness Rules\n\nThese rules were automatically generated from failures. Do not edit manually.\n"
                     with open(agents_file, 'a') as f:
                         f.write(f"{rule}\n")
+                    # (26/09, run overnight) Regra aprendida = meta-trabalho
+                    # seguro: commit IMEDIATO. Sem isso a árvore fica suja e
+                    # o safety bloqueia TODAS as tasks seguintes (conflito
+                    # learning × branch-isolation pago no run 26/09: task 2
+                    # morreu com 'dirty tree' causado pela regra da task 1).
+                    try:
+                        repo = os.path.dirname(agents_file)
+                        subprocess.run(["git", "-C", repo, "add", agents_file],
+                                       capture_output=True, timeout=10)
+                        subprocess.run(["git", "-C", repo, "commit", "-q", "-m",
+                                       f"learn(nightwatch): {rule[:70]}"],
+                                       capture_output=True, timeout=15)
+                    except Exception:
+                        pass
                     self.notify(f"📏 Rule added: {rule[:60]}...")
             except Exception:
                 pass  # Don't fail the task just because rule recording failed

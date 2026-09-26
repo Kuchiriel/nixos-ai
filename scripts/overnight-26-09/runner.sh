@@ -29,6 +29,7 @@ restore_services() {
   [ -n "$RESTORE_PID" ] && kill "$RESTORE_PID" 2>/dev/null
   sleep 2
   sudo systemctl start llama-cpp-server llama-cpp-embeddings llama-cpp-rerank 2>>"$LOG"
+  sudo systemctl start qdrant 2>>"$LOG" || true
   sleep 10
   for p in 8080 8081 8082; do
     curl -sf --max-time 4 "http://127.0.0.1:$p/v1/models" >/dev/null 2>&1 \
@@ -55,15 +56,17 @@ done
 # ── P2: para serviços p/ RAM do MoE; exige 19GB p/ tentar o MoE ──
 RAM_OK=""
 if [ -n "$IDLE" ]; then
-  log "P2 parando embeddings/rerank (RAM p/ MoE)..."
-  sudo systemctl stop llama-cpp-embeddings llama-cpp-rerank 2>>"$LOG"
-  sleep 5
+  log "P2 parando embeddings/rerank/qdrant + router (RAM p/ MoE; incidente 25/09)..."
+  sudo systemctl stop llama-cpp-embeddings llama-cpp-rerank llama-cpp-server 2>>"$LOG"
+  sudo systemctl stop qdrant 2>>"$LOG" || true
+  sleep 8
   A=$(free_avail); log "  avail agora: ${A}MB"
   if [ "$A" -ge 19000 ]; then
     RAM_OK=1
   else
-    log "P2 <19GB mesmo sem embeddings/rerank — MoE INVIÁVEL, religa e segue p/ P7"
-    sudo systemctl start llama-cpp-embeddings llama-cpp-rerank 2>>"$LOG"
+    log "P2 <19GB mesmo com serviços parados — MoE INVIÁVEL, religa e segue p/ P7"
+    sudo systemctl start llama-cpp-embeddings llama-cpp-rerank llama-cpp-server 2>>"$LOG"
+    sudo systemctl start qdrant 2>>"$LOG" || true
   fi
 fi
 if [ -n "$RAM_OK" ]; then
@@ -83,9 +86,8 @@ for i in $(seq 1 90); do
   kill -0 "$RESTORE_PID" 2>/dev/null || { log "  P3 server MORREU — ver moe-server.log"; break; }
   sleep 20
 done
-if [ -z "$UP" ]; then
-  log "P3 FALHOU: MoE não subiu. Pula P4-P5, segue P6 com router parado."
-else
+
+if [ -n "$UP" ]; then
   log "P3 MoE UP."
 
   # ── P4: bateria completa vs MoE (thinking OFF) ──
@@ -104,9 +106,8 @@ else
     --evidence "$OUT/battery-uncensored35.json" \
     --task-file scripts/harness-challenges.json \
     --model "$ALIAS" >>"$LOG" 2>&1
-  log "  self-study salvo em docs/benchmarks/SELF-STUDY-*.md (do MoE)"
 
-  # ── P5b: self-study do MoE sobre as falhas do bonsai (analista cruzado) ──
+  # ── P5b: self-study cruzado sobre falhas do bonsai ──
   if [ -f /tmp/opencode/harness-evolve/reopen-hook-classic.json ]; then
     log "P5b self-study cruzado (falhas do bonsai, analista MoE)..."
     JARVIS_LLM_BASE_URL=http://127.0.0.1:8084/v1 \
@@ -116,10 +117,26 @@ else
       --model "$ALIAS" >>"$LOG" 2>&1
   fi
 
+  # ── P5c: NIGHTWATCH com o modelo FORTE (mandato: bonsai não emite
+  # json-patch legível 3/3; escada sobe pro MoE). Árvore limpa primeiro
+  # (safety bloqueia dirty tree — pago no teste do dia).
+  log "P5c nightwatch com o MoE (nixos-ai, 3 tasks, 1 ciclo)..."
+  git -C "$BASE" add -A >/dev/null 2>&1
+  git -C "$BASE" diff --cached --quiet || \
+    git -C "$BASE" commit -q -m "chore(overnight): arvore limpa p/ nightwatch"
+  JARVIS_LLM_BASE_URL=http://127.0.0.1:8084/v1 JARVIS_LLM_MODEL="$ALIAS" \
+    JARVIS_LLM_DISABLE_THINKING=1 \
+    timeout 3600 jarvis nightwatch --projects nixos-ai --tasks 3 --cycles 1 \
+    >> "$OUT/nightwatch-moe.log" 2>&1
+  log "P5c nightwatch(MoE) terminou — ver $OUT/nightwatch-moe.log"
+
   log "P5.x desligando MoE p/ P6 (bench precisa de RAM+VRAM limpas)..."
   kill "$RESTORE_PID" 2>/dev/null; RESTORE_PID=""
   sleep 10
+else
+  log "P3 FALHOU: MoE não subiu — P4/P5 pulados, segue P6."
 fi
+fi  # RAM_OK
 
 # ── P6: cmoe 41 vs 35 (bench canônico; router PARADO = guard válido) ──
 log "P6 parando router p/ bench válido..."
@@ -139,15 +156,22 @@ nice -n 19 timeout 1800 nix develop --command bash scripts/bench-llm.sh \
   > "$OUT/cmoe35.tsv" 2>"$OUT/cmoe35.err"
 log "P6b: $(tail -2 "$OUT/cmoe35.tsv" 2>/dev/null | tr '\n' ' ')"
 
-fi  # RAM_OK
+  # ── P5c: NIGHTWATCH COM O MODELO FORTE (enquanto o MoE está no ar) ──
+  # (mandato do dono: bonsai não dá conta do patcher — 3/3 json-patch
+  # ilegíveis no teste do dia; escada sobe pro MoE uncensored)
+  if [ -n "$UP" ]; then
+    log "P5c nightwatch com o MoE (nixos-ai, 3 tasks, 1 ciclo)..."
+    cd "$BASE"
+    git -C "$BASE" add -A 2>/dev/null; git -C "$BASE" commit -q -m \
+      "chore(overnight): árvore limpa p/ nightwatch (safety exige)" 2>/dev/null
+    JARVIS_LLM_BASE_URL=http://127.0.0.1:8084/v1 JARVIS_LLM_MODEL="$ALIAS" \
+      JARVIS_LLM_DISABLE_THINKING=1 \
+      timeout 3600 jarvis nightwatch --projects nixos-ai --tasks 3 --cycles 1 \
+      >> "$OUT/nightwatch-moe.log" 2>&1
+    log "P5c nightwatch(MoE) terminou — ver $OUT/nightwatch-moe.log"
+  fi
 
-# ── P7: RESTAURA + nightwatch bounded (o REPL trabalhando sozinho) ──
-restore_services
-log "P7b nightwatch bounded: nixos-ai, 3 tasks, 1 ciclo, sem telegram..."
-cd "$BASE"
-timeout 3600 jarvis nightwatch --projects nixos-ai --tasks 3 --cycles 1 \
-  >> "$OUT/nightwatch.log" 2>&1
-log "P7b nightwatch terminou — ver $OUT/nightwatch.log"
+  log "P5.x desligando MoE p/ P6 (bench precisa de RAM+VRAM limpas)..."
 
 # ── P8: handoff da manhã ──
 cat > "$BASE/docs/HANDOFF-2026-09-26-MANHA.md" <<EOF
