@@ -167,6 +167,7 @@ def run_suite(tasks: list[dict], approve: str = "y",
         elapsed = time.monotonic() - t0
         results.append({
             "task_id": t["id"],
+            "variant_of": t.get("variant_of"),
             "tier": t.get("tier", "?"),
             "world_ok": world_ok,
             "first_pass": attempts[0]["world_ok"] if attempts else False,
@@ -281,6 +282,23 @@ def main() -> None:
         print(f"PREFLIGHT-ONLY: {len(tasks)} ok, {len(preflight_bad)} reprovadas")
         return
 
+    # (26/09, LOOP-v3) variantes de paráfrase: mesmo desafio, k formas de
+    # superfície. Veredito POR variante; variância entre elas = brittleness
+    # (a cadeia de eliminação provou: prompt n=1 é frágil — G3 0/8 vs G11 8/8).
+    exp_tasks = []
+    for t in tasks:
+        vs = t.get("variants")
+        if not vs or len(vs) < 2:
+            exp_tasks.append(t)
+            continue
+        for vi, v in enumerate(vs):
+            nt = dict(t)
+            nt["prompt"] = v
+            nt["id"] = f"{t['id']}/v{vi + 1}"
+            nt["variant_of"] = t["id"]
+            exp_tasks.append(nt)
+    tasks = exp_tasks
+
     trials = max(1, getattr(args, "trials", 1))
     results = []
     for _ in range(trials):
@@ -314,6 +332,16 @@ def main() -> None:
     if preflight_bad:
         print(f"  ATENCAO: {len(preflight_bad)} task(s) reprovada(s) no "
               f"oraculo — NAO medida(s): {[b['id'] for b in preflight_bad]}")
+    _groups: dict[str, list] = {}
+    for r in results:
+        _groups.setdefault(r.get("variant_of") or r["task_id"], []).append(r)
+    _brit = [g for g in _groups.values() if len(g) > 1]
+    if _brit:
+        print("=== BRITTLENESS (variantes de paráfrase) ===")
+        for g in _brit:
+            oks = [x["world_ok"] for x in g]
+            tag = "BRITTLE" if (any(oks) and not all(oks)) else "estável"
+            print(f"  {g[0].get('variant_of')}: {sum(oks)}/{len(oks)} variantes world_ok — {tag}")
 
     print(f"=== SUITE {stamp} ===")
     for tier, s in summary["by_tier"].items():

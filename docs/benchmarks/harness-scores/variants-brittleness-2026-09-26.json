@@ -1,0 +1,284 @@
+{
+  "ts": "2026-09-26__01-55-30",
+  "summary": {
+    "total": 14,
+    "world_ok": 13,
+    "false_done": 1,
+    "by_tier": {
+      "gate": {
+        "n": 14,
+        "ok": 13
+      }
+    },
+    "avg_elapsed_s": 4.6
+  },
+  "results": [
+    {
+      "task_id": "G1-search-read",
+      "variant_of": null,
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 11,
+      "tool_calls": [
+        "semantic_search",
+        "read_file",
+        "list_directory",
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 4.1,
+      "rc": 0
+    },
+    {
+      "task_id": "G2-state-update/v1",
+      "variant_of": "G2-state-update",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "str_replace"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 2.9,
+      "rc": 0
+    },
+    {
+      "task_id": "G2-state-update/v2",
+      "variant_of": "G2-state-update",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "str_replace"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 2.8,
+      "rc": 0
+    },
+    {
+      "task_id": "G3-longfile-end/v1",
+      "variant_of": "G3-longfile-end",
+      "tier": "gate",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [
+        "file_equals:/tmp/jarvis-ch/marker.txt::DELTA"
+      ],
+      "turns": 15,
+      "tool_calls": [
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": true,
+      "elapsed_s": 10.7,
+      "rc": 0
+    },
+    {
+      "task_id": "G3-longfile-end/v2",
+      "variant_of": "G3-longfile-end",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [],
+      "turns": 20,
+      "tool_calls": [
+        "browser",
+        "list_directory",
+        "list_directory",
+        "execute_shell",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 10.2,
+      "rc": 0
+    },
+    {
+      "task_id": "G4-authority-vs-truth",
+      "variant_of": null,
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 6,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 3.1,
+      "rc": 0
+    },
+    {
+      "task_id": "G5-run-verify",
+      "variant_of": null,
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 16,
+      "tool_calls": [
+        "write_file",
+        "execute_shell",
+        "read_file",
+        "write_file",
+        "execute_shell",
+        "execute_shell",
+        "execute_shell"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 6.5,
+      "rc": 0
+    },
+    {
+      "task_id": "G6-middle-instruction",
+      "variant_of": null,
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 3.4,
+      "rc": 0
+    },
+    {
+      "task_id": "G7-position-start",
+      "variant_of": null,
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 3.6,
+      "rc": 0
+    },
+    {
+      "task_id": "G8-position-middle",
+      "variant_of": null,
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 3.1,
+      "rc": 0
+    },
+    {
+      "task_id": "G9-position-end/v1",
+      "variant_of": "G9-position-end",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 3.1,
+      "rc": 0
+    },
+    {
+      "task_id": "G9-position-end/v2",
+      "variant_of": "G9-position-end",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 3.2,
+      "rc": 0
+    },
+    {
+      "task_id": "G10-volume-end",
+      "variant_of": null,
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 3.7,
+      "rc": 0
+    },
+    {
+      "task_id": "G11-framing-end",
+      "variant_of": null,
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 3.4,
+      "rc": 0
+    }
+  ],
+  "preflight_reprovadas": []
+}
