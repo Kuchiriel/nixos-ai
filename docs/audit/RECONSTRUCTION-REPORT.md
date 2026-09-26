@@ -75,6 +75,8 @@ Item por item do prompt gigante — o que foi cumprido, parcial ou gap:
   honesto. §29 autonomia exercida; BLOCKED formal = Harbor real + F7b
   (condições de prova registradas).
 
+## Critério de conclusão (§28) — estado
+
 [x] runtime único existe · [x] MCP sem lógica própria (transporte) ·
 [x] 1 registry · [x] 1 assembler (mecanismo) · [x] 1 completion (vocabulário) ·
 [x] 1 choke point · [x] contratos memory/knowledge (providers) ·
