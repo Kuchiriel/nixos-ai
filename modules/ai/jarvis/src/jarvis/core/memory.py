@@ -234,6 +234,11 @@ class EpisodicMemory:
         seen_texts: set[str] = set()
         for p in points:
             payload = p.get("payload", {})
+            # (26/09, LOOP-v3) superseded fora do recall: a versão mais nova
+            # existe e pontua melhor — a antiga só duplica/contradiz.
+            # (consolidate.apply marca; NUNCA deleta — rollback = limpar flag)
+            if payload.get("superseded"):
+                continue
             if kinds and payload.get("kind") not in kinds:
                 continue
             if tenant is not None:

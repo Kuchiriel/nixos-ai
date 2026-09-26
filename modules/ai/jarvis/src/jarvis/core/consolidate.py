@@ -96,6 +96,45 @@ def _text(ev: dict[str, Any]) -> str:
     return str(ev.get("text", "") or "").strip()
 
 
+def apply(report, store, collection: str, *, dry_run: bool = True) -> dict:
+    """(26/09, LOOP-v3 — fila #1) Aplica o veredito do detect(): marca o
+    ponto ANTIGO de cada duplicate/supersede com `superseded_by` + `ts`.
+
+    NUNCA deleta (regra #1 da casa): quem filta é o recall. dry_run
+    default True — casa: comece sempre em dry_run. Read-modify-write via
+    get_points+upsert (o store não tem set_payload; o vetor preserva).
+    """
+    import time as _t
+    targets = {}
+    for f in getattr(report, "findings", []):
+        if f.kind not in ("duplicate", "supersede"):
+            continue
+        targets.setdefault(str(f.older_id), str(f.newer_id))
+    if not targets:
+        return {"dry_run": dry_run, "marked": 0, "ids": []}
+    ids = [int(i) for i in targets.keys() if str(i).lstrip("-").isdigit()]
+    pts = store.get_points(collection, ids)
+    marked = []
+    now = _t.time()
+    for p in pts:
+        pid = str(p.get("id"))
+        if pid not in targets:
+            continue
+        payload = dict(p.get("payload") or {})  # copia: nunca mutar objeto do store
+        payload["superseded"] = True
+        payload["superseded_by"] = int(targets[pid])
+        payload["superseded_ts"] = now
+        marked.append({"id": p["id"], "vector": p.get("vector"),
+                       "payload": payload})
+    if dry_run:
+        return {"dry_run": True, "marked": len(marked),
+                "ids": [str(m["id"]) for m in marked]}
+    if marked:
+        store.upsert(collection, marked)
+    return {"dry_run": False, "marked": len(marked),
+            "ids": [str(m["id"]) for m in marked]}
+
+
 def detect(events: list[dict[str, Any]], vectors: dict[str, list[float]] | None = None,
            *, now: float | None = None, access: dict[str, int] | None = None) -> Report:
     """Analisa eventos e devolve o que CONSOLIDARIA (sem aplicar nada).
