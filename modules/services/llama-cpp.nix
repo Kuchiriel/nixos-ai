@@ -46,6 +46,17 @@ with lib; let
   #   systemctl start llama-cpp-upstream   # denso :8083 (jarvis-fast)
   #   systemctl start llama-cpp-ik         # MoE :8084 (jarvis-strong)
   # Porta = routing.endpoints (FONTE ÚNICA com o registry Python).
+  # ik fork: CLI divergente (26/09: --models-preset/--models-max/-fa/
+  # -ctk/-ctv/--parallel rejeitados → help dump + exit 1; o MoE nunca
+  # subia pela unit). Single-model direto no GGUF (uncensored-first via
+  # firstModel); só flags que o fork aceita (-m/-c/-t/--n-cpu-moe/
+  # --mlock/--jinja, verificado contra --help do binário).
+  ikModelPath = g: let p = groupProf g;
+    in if p ? modelFile then p.modelFile else "${pkgs.aiModels.${p.model}}";
+  ikMoeN = g: parseMoe (groupProf g).moeFlags;
+  ikMlock = g: optionalString
+    (builtins.elem "--mlock" ((groupProf g).extraArgs or [])) "--mlock";
+
   mkGroupService = b: name: g: let
     port = groupPort b;
     prof = groupProf g;
@@ -69,7 +80,16 @@ with lib; let
       LD_LIBRARY_PATH = "/home/nixos/projects/ik_llama.cpp/build/bin:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
     };
 
-    script = ''
+    script = if b == "ik" then ''
+      exec ${groupBin b} \
+        --host ${config.services.llama-cpp-server.bindAddress} --port ${toString port} \
+        -m ${ikModelPath g} \
+        -c ${toString prof.ctxSize} \
+        -t ${toString prof.threads} \
+        --n-cpu-moe ${ikMoeN g} \
+        ${ikMlock g} \
+        --jinja
+    '' else ''
       exec ${groupBin b} \
         --host ${config.services.llama-cpp-server.bindAddress} --port ${toString port} \
         --models-preset ${mkGroupIni b g} \
