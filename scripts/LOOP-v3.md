@@ -67,6 +67,21 @@
   ou incompleta — nunca "consertar" o teste para passar.
 - Fila bloqueada por treino (tier fast, cmoe 41v35): não puxe pra cá.
 
+## Ciclo de evolução do HARNESS (tipo especial — quando o dono mandar)
+
+Escada de atribuição (ordem do dono 25/09, base arXiv 2607.28802):
+1. **bonsai** (fraco) primeiro. Falhou? Anotar (aresta, lado).
+2. **qwen** (médio) na MESMA bateria SE stuck/ambíguo.
+3. **moe** (forte) SÓ se a atribuição ainda estiver em dúvida — e só
+   com RAM livre (19GB; OOM já matou chromium uma vez).
+4. Verificar integridade do input ANTES de culpar o modelo: truncamento
+   rtk-lite (TOOL_OUTPUT_MAX_CHARS=8000), compactação de contexto, tool
+   que corta. "Disponível mas não seguido" ≠ "removido pelo harness".
+5. Grader validado offline antes de medir (certa passa / errada rejeita).
+6. Registrar em docs/benchmarks/MODEL-HARNESS-MATRIX.md com binário +
+   first_pass separado de world_ok. Gates vivem em
+   scripts/harness-challenges.json (tier "gate", campo "edge" obrigatório).
+
 ## Fila que este loop herda (25/09)
 
 1. `consolidate.py`: escrever `apply()` (marca `superseded_by`, nunca
@@ -74,7 +89,10 @@
    as 43 dup/6 supersede por amostra ANTES do apply real.
 2. Docs >400 linhas nos repos ativos (mesma receita do karaok).
 3. `manifest.json` nos repos secundários (harness-research, OTServer).
-4. Depois do treino liberar: medir tier fast (upstream), cmoe 41v35.
+4. Depois do treino liberar: medir tier fast (upstream), cmoe 41v35,
+   **MoE na bateria de gates G1-G5** (confirmar G3 model-side).
+5. Gates mais duros: G3-variantes (instrução no MEIO, multi-hop),
+   ptbr-gate, e marcadores slow/integration nos e2e não-marcados.
 
 ## Frontmatter
 Tags: #status/active #type/process #project/nixos-ai
