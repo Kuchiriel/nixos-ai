@@ -37,6 +37,7 @@
       pathspec # .ragignore: matching gitignore-canônico no index RAG
       cryptography # vault cifrado opt-in (Fernet) p/ perfis isolados
       evdev # computer-use: mouse/teclado via uinput (humanize.py)
+      playwright # browser tool via CDP (connect_over_cdp; sem ms-playwright)
     ];
 
     nativeBuildInputs = [makeWrapper];

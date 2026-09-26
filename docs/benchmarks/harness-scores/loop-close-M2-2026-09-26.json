@@ -1,0 +1,37 @@
+{
+  "ts": "2026-09-26__18-32-32",
+  "tier": "medium",
+  "engine": "runtime",
+  "by_class": {
+    "verification": 1
+  },
+  "results": [
+    {
+      "task_id": "M2-script-run",
+      "engine": "runtime",
+      "variant_of": null,
+      "tier": "medium",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 1,
+      "missed": [
+        "output_contains:42"
+      ],
+      "turns": 22,
+      "tool_calls": [],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 7.5,
+      "rc": 0,
+      "failure_class": "verification",
+      "failure_why": "resposta sem o conteúdo (juízo, não mundo)"
+    }
+  ],
+  "lessons": [
+    {
+      "task": "loop-close M2-script-run (verification)",
+      "error_pattern": "M2-script-run: resposta sem o conteúdo (juízo, não mundo) (missed=['output_contains:42'])",
+      "fix": "INVESTIGAR: falha com assinatura de harness — reproduzir, localizar componente, patch + re-medir"
+    }
+  ]
+}
