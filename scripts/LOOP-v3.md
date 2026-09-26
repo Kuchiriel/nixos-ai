@@ -56,6 +56,22 @@
 6. **Fechar o ciclo**: `remember` (categoria + citação), uma linha no
    arquivo de auditoria do dia, handoff se descobrir algo grande.
 
+## Lições pagas na sessão 25-26/09 (viram regras do loop)
+
+1. **Claim de mudança exige o guard no MESMO passo**: nenhum "fix
+   aplicado" sem bash -n / collect-only / preflight / pytest rodando no
+   mesmo bloco que o edit. Replace silencioso no-op e "veredito" sem
+   física foram pegos pelo instrumento — quando executado.
+2. **Gatilho numérico exige baseline medido**: threshold de RAM, timeout,
+   score — medir o estado real da máquina/sistema ANTES de definir.
+3. **Autônomo nunca-rodado-E2E = quebrado por construção**: rodar com fila
+   real revela bugs que revisão de código não vê (3 no nightwatch).
+4. **Self-match é classe recorrente**: scanner que casa o próprio fonte,
+   marcador dentro de docstring, grep que acha o padrão do grepper —
+   excluir o instrumento da própria medição SEMPRE.
+5. **Memória: 1 fato por entrada** — registros de sessão longa duplicam
+   e viram alvo de consolidate.
+
 ## Regras (inegociáveis)
 
 - **1 problema por ciclo.** Caça larga, mudança estreita.
