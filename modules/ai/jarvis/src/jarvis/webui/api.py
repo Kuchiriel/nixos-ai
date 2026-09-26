@@ -803,20 +803,54 @@ def agent_info() -> dict[str, Any]:
 
 @app.get("/api/nightwatch")
 def nightwatch_info() -> dict[str, Any]:
-    """Get nightwatch state."""
+    """Get nightwatch state — LIVE (fila + lock), não só progress.json.
+
+    (26/09: a versão antiga dizia active:false com o MoE rodando, porque
+    lia só progress.json. Fila + RUNNING.lock = verdade.)
+    """
     from pathlib import Path
     import json
     state_dir = Path.home() / ".local/state/jarvis/nightwatch"
-    info: dict[str, Any] = {"active": False, "last_run": None}
+    info: dict[str, Any] = {"active": False, "last_run": None,
+                            "running": False, "queue": {}}
     progress_file = state_dir / "progress.json"
     if progress_file.exists():
         try:
             data = json.loads(progress_file.read_text())
             info["last_run"] = data
-            info["active"] = True
         except (json.JSONDecodeError, OSError):
             pass
+    try:
+        lock = state_dir / "RUNNING.lock"
+        info["running"] = lock.exists() and (
+            time.time() - lock.stat().st_mtime) < 1800
+    except OSError:
+        pass
+    try:
+        from nightwatch.task_queue import TaskQueue
+        q = TaskQueue(project="nixos-ai")
+        counts: dict[str, int] = {}
+        for t in q._tasks:
+            counts[t.status] = counts.get(t.status, 0) + 1
+        info["queue"] = counts
+        info["active"] = bool(info["running"] or counts)
+    except Exception:
+        pass
     return info
+
+
+class SteerRequest(BaseModel):
+    message: str = ""
+
+
+@app.post("/api/steer")
+def steer_run(req: SteerRequest) -> dict[str, Any]:
+    """Redireciona (ou para) o run ativo — o botão 'intervir' da UI.
+
+    Mesma semântica do steer.md: 'stop' encerra com veredito honesto.
+    """
+    from jarvis.core.steer import send_steer
+    return send_steer(req.message)
 
 
 # ─── Projects ──────────────────────────────────────────────────────────

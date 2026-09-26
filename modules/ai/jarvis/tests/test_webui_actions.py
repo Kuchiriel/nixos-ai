@@ -101,3 +101,33 @@ def test_keys_file_parser_tolerates_export_prefix(tmp_path, monkeypatch):
     monkeypatch.setitem(K._SOURCES["groq"], "files", [str(f)])
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
     assert K.get("groq") == "sekrit"
+
+
+def test_nightwatch_info_sees_live_queue(tmp_path, monkeypatch) -> None:
+    """26/09: /api/nightwatch via fila+lock (nunca mais active:false cego)."""
+    import json as _j
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path / "state"))
+    import nightwatch.task_queue as _tq
+    monkeypatch.setattr(_tq, "STATE_DIR", tmp_path / "nw")
+    # fila com 1 DISCOVERED + lock fresco => ativo e visível
+    q = _tq.TaskQueue(project="nixos-ai")
+    q.add_task(_tq.Task(id="t1", project="nixos-ai", description="d"))
+    lock = tmp_path / ".local"  # HOME-based: nightwatch dir real abaixo
+    import os
+    real_nw = Path(os.environ["HOME"]) / ".local/state/jarvis/nightwatch"
+    real_nw.mkdir(parents=True, exist_ok=True)
+    (real_nw / "RUNNING.lock").write_text("x")
+    info = A.nightwatch_info()
+    assert info["running"] is True
+    assert info["active"] is True
+
+
+def test_steer_endpoint_queues_message(tmp_path, monkeypatch) -> None:
+    """POST /api/steer escreve steer.md (botão intervir)."""
+    monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path))
+    out = A.steer_run(A.SteerRequest(message="olha o teste X"))
+    assert out.get("ok") is True
+    assert "olha o teste X" in (tmp_path / "steer.md").read_text()
+    out2 = A.steer_run(A.SteerRequest(message=""))
+    assert out2.get("ok") is False
