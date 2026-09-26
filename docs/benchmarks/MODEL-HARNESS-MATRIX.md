@@ -234,3 +234,24 @@ Evidência: `harness-scores/trials-pk-bonsai-2026-09-25.json`.
   "12/12" histórico tinha perdão de substring embutido. Linhas v1 ≠
   linhas v2 (comparar só dentro da mesma versão).
 - Preflight v2: 23 ok / 0 reprovadas.
+
+## 11. Primeiras medidas ATRAVÉS do kernel (26/09, F10/F11)
+
+> `AgentRuntime.run` no router bonsai vivo (2 probes, sessão 26/09).
+> N=2 não decide nada — registra o ponto de partida do kernel medido.
+
+- **Probe A** (listar /tmp, read-only): STUCK 7 turns, 0 tools chamadas —
+  modelo ALUCINOU o listing (LuxTTS/...) em vez de chamar `list_directory`,
+  errou 3× no mesmo `read` fantasma. Claim-checker funcionou ("afirma
+  conteúdo sem leitura"). Falha model-side, veredito honesto.
+- **Probe B** (responder só "PONG", sem tools): modelo acertou em 4 turns,
+  veredito UNVERIFIED ("zero ground truth"). **Gap de contrato, não de
+  modelo**: completion exige evidência de tool mesmo p/ task-resposta.
+  Afrouxar = risco de vacuous-pass (d3 20/09); NÃO mexer sem grade A/B —
+  registrado como questão aberta do contrato (answer-class vs action-class).
+- **Comando do run real** (fila noite, máquina idle): instalar harbor
+  (`pip install harbor-framework` ou binário do repo harbor-framework),
+  `harbor run --tasks ./tasks-smoke --agent jarvis_harbor_agent:JarvisHarborAgent
+  --agent-import-path modules/ai/jarvis/src/jarvis/runtime/harbor_agent.py
+  --n-tasks 3 --n-concurrent 1 --n-attempts 2`, comparar reward externo vs
+  pass@k interno (divergência = gap do instrumento, nunca do modelo).
