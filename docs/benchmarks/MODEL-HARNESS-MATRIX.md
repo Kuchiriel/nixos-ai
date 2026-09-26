@@ -218,3 +218,19 @@ Evidência: `harness-scores/trials-pk-bonsai-2026-09-25.json`.
   teto de banda de RAM p/ 4B Q4 ≈ 26 t/s — física). A ausência de
   strings/lib CUDA no store path era leitura errada; veredito de throughput
   é o que manda. Tier fast segue upstream, como deployado.
+
+## 10. Instrumento v2 — checks exatos no clássico (26/09, ~02:30)
+
+- **Bump harness_version 1→2**: 6 tasks de conteúdo exato migradas de
+  `file_contains` (substring, aceitava "DELTAX" p/ "DELTA", "40" p/ "4")
+  para `file_equals` + oráculos solution/anti no preflight (que pegou
+  2 oráculos MEUS sem mkdir na primeira execução — 3ª vez que o
+  instrumento se desconfia e vira guard real hoje).
+- **Primeira linha v2** (bonsai b10743, jarvis instalado, rounds 2):
+  **23/26** world_ok, first_pass 18, fd 3 (H1 teto estocástico,
+  **H2 NOVO false_done**, G3/v1 attractor conhecido).
+- **H2 exposto pelo aperto**: passava com qualquer greeting.txt que
+  CONTIVESSE "hello world"; com exato, o arquivo sujo não passa — o
+  "12/12" histórico tinha perdão de substring embutido. Linhas v1 ≠
+  linhas v2 (comparar só dentro da mesma versão).
+- Preflight v2: 23 ok / 0 reprovadas.

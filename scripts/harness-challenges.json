@@ -7,10 +7,11 @@
    "tier": "easy",
    "prompt": "create the file /tmp/jarvis-ch/e1.txt with the exact content 'progressive-one'",
    "world": {
-    "file_exists": "/tmp/jarvis-ch/e1.txt",
-    "file_contains": "/tmp/jarvis-ch/e1.txt::progressive-one"
+    "file_equals": "/tmp/jarvis-ch/e1.txt::progressive-one"
    },
-   "teardown": "rm -rf /tmp/jarvis-ch"
+   "teardown": "rm -rf /tmp/jarvis-ch",
+   "solution": "mkdir -p /tmp/jarvis-ch && echo progressive-one > /tmp/jarvis-ch/e1.txt",
+   "anti": "echo progressive-one-EXTRA > /tmp/jarvis-ch/e1.txt"
   },
   {
    "id": "E2-read",
@@ -28,18 +29,22 @@
    "setup": "mkdir -p /tmp/jarvis-ch && printf 'a\\nb\\nc\\nd\\n' > /tmp/jarvis-ch/lines.txt",
    "prompt": "how many lines does /tmp/jarvis-ch/lines.txt have? write the number into /tmp/jarvis-ch/count.txt",
    "world": {
-    "file_contains": "/tmp/jarvis-ch/count.txt::4"
+    "file_equals": "/tmp/jarvis-ch/count.txt::4"
    },
-   "teardown": "rm -rf /tmp/jarvis-ch"
+   "teardown": "rm -rf /tmp/jarvis-ch",
+   "solution": "wc -l < /tmp/jarvis-ch/lines.txt | tr -d ' ' > /tmp/jarvis-ch/count.txt",
+   "anti": "echo 40 > /tmp/jarvis-ch/count.txt"
   },
   {
    "id": "M1-dirfile",
    "tier": "medium",
    "prompt": "create a folder /tmp/jarvis-ch/inside and within it a file named out.txt containing 'nested-ok'",
    "world": {
-    "file_contains": "/tmp/jarvis-ch/inside/out.txt::nested-ok"
+    "file_equals": "/tmp/jarvis-ch/inside/out.txt::nested-ok"
    },
-   "teardown": "rm -rf /tmp/jarvis-ch"
+   "teardown": "rm -rf /tmp/jarvis-ch",
+   "solution": "mkdir -p /tmp/jarvis-ch/inside && echo nested-ok > /tmp/jarvis-ch/inside/out.txt",
+   "anti": "mkdir -p /tmp/jarvis-ch/inside && echo nested-ok-Mais > /tmp/jarvis-ch/inside/out.txt"
   },
   {
    "id": "M2-script-run",
@@ -75,27 +80,33 @@
    "setup": "mkdir -p /tmp/jarvis-ch && printf 'def greet(name\\n    return f\"hello {name}\"\\n\\nprint(greet(\"world\"))\\n' > /tmp/jarvis-ch/syntax.py",
    "prompt": "/tmp/jarvis-ch/syntax.py has a syntax error. fix it, run it, and write the script's output to /tmp/jarvis-ch/greeting.txt",
    "world": {
-    "file_contains": "/tmp/jarvis-ch/greeting.txt::hello world"
+    "file_equals": "/tmp/jarvis-ch/greeting.txt::hello world"
    },
-   "teardown": "rm -rf /tmp/jarvis-ch"
+   "teardown": "rm -rf /tmp/jarvis-ch",
+   "solution": "printf 'def greet(name):\n    return f\"hello {name}\"\n\nprint(greet(\"world\"))\n' > /tmp/jarvis-ch/syntax.py && cd /tmp/jarvis-ch && python3 syntax.py > greeting.txt",
+   "anti": "printf 'ola mundo falso' > /tmp/jarvis-ch/greeting.txt"
   },
   {
    "id": "H3-chain",
    "tier": "hard",
    "prompt": "count the files in /tmp/jarvis-ch/data (create the folder first and put three empty .txt files inside it), then write that count to /tmp/jarvis-ch/data/total.txt",
    "world": {
-    "file_contains": "/tmp/jarvis-ch/data/total.txt::3"
+    "file_equals": "/tmp/jarvis-ch/data/total.txt::3"
    },
-   "teardown": "rm -rf /tmp/jarvis-ch"
+   "teardown": "rm -rf /tmp/jarvis-ch",
+   "solution": "mkdir -p /tmp/jarvis-ch/data && touch /tmp/jarvis-ch/data/a.txt /tmp/jarvis-ch/data/b.txt /tmp/jarvis-ch/data/c.txt && echo 3 > /tmp/jarvis-ch/data/total.txt",
+   "anti": "echo 30 > /tmp/jarvis-ch/data/total.txt 2>/dev/null || true"
   },
   {
    "id": "P1-ptbr-exato",
    "tier": "ptbr",
    "prompt": "crie o arquivo /tmp/jarvis-ch/pt1.txt com o conteúdo exato: acesso liberado — protocolo nº 42",
    "world": {
-    "file_contains": "/tmp/jarvis-ch/pt1.txt::acesso liberado — protocolo nº 42"
+    "file_equals": "/tmp/jarvis-ch/pt1.txt::acesso liberado — protocolo nº 42"
    },
-   "teardown": "rm -rf /tmp/jarvis-ch"
+   "teardown": "rm -rf /tmp/jarvis-ch",
+   "solution": "mkdir -p /tmp/jarvis-ch && printf 'acesso liberado — protocolo nº 42' > /tmp/jarvis-ch/pt1.txt",
+   "anti": "printf 'acesso liberado - protocolo n 42' > /tmp/jarvis-ch/pt1.txt"
   },
   {
    "id": "P2-ptbr-leitura",
@@ -287,5 +298,6 @@
    "anti": "echo XRAY > /tmp/jarvis-ch/marker.txt",
    "variant_group": "ctx-end-52"
   }
- ]
+ ],
+ "harness_version": 2
 }

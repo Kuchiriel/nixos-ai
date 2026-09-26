@@ -1,0 +1,554 @@
+{
+  "ts": "2026-09-26__02-26-09",
+  "summary": {
+    "total": 26,
+    "world_ok": 23,
+    "false_done": 3,
+    "by_tier": {
+      "easy": {
+        "n": 3,
+        "ok": 3
+      },
+      "medium": {
+        "n": 3,
+        "ok": 3
+      },
+      "hard": {
+        "n": 3,
+        "ok": 1
+      },
+      "ptbr": {
+        "n": 3,
+        "ok": 3
+      },
+      "gate": {
+        "n": 14,
+        "ok": 13
+      }
+    },
+    "avg_elapsed_s": 8.7
+  },
+  "results": [
+    {
+      "task_id": "E1-write",
+      "variant_of": null,
+      "tier": "easy",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 4.0,
+      "rc": 0
+    },
+    {
+      "task_id": "E2-read",
+      "variant_of": null,
+      "tier": "easy",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 4.8,
+      "rc": 0
+    },
+    {
+      "task_id": "E3-count",
+      "variant_of": null,
+      "tier": "easy",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "execute_shell",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 5.8,
+      "rc": 0
+    },
+    {
+      "task_id": "M1-dirfile",
+      "variant_of": null,
+      "tier": "medium",
+      "world_ok": true,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [],
+      "turns": 17,
+      "tool_calls": [
+        "write_file",
+        "write_file",
+        "list_directory",
+        "write_file",
+        "list_directory"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 10.2,
+      "rc": 0
+    },
+    {
+      "task_id": "M2-script-run",
+      "variant_of": null,
+      "tier": "medium",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "write_file",
+        "execute_shell"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 4.4,
+      "rc": 0
+    },
+    {
+      "task_id": "M3-fix-offbyone",
+      "variant_of": null,
+      "tier": "medium",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 9,
+      "tool_calls": [
+        "read_file",
+        "str_replace",
+        "execute_shell"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 6.0,
+      "rc": 0
+    },
+    {
+      "task_id": "H1-config-discovery",
+      "variant_of": null,
+      "tier": "hard",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [
+        "output_contains:bonsai"
+      ],
+      "turns": 29,
+      "tool_calls": [
+        "list_directory",
+        "read_file",
+        "list_directory",
+        "read_file",
+        "list_directory",
+        "list_directory",
+        "read_file",
+        "list_directory",
+        "read_file",
+        "list_directory"
+      ],
+      "wrong_tools": [],
+      "false_done": true,
+      "elapsed_s": 23.9,
+      "rc": 0
+    },
+    {
+      "task_id": "H2-syntax-fix",
+      "variant_of": null,
+      "tier": "hard",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [
+        "file_equals:/tmp/jarvis-ch/greeting.txt::hello world"
+      ],
+      "turns": 80,
+      "tool_calls": [
+        "read_file",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "execute_shell",
+        "read_file",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "read_file",
+        "write_file",
+        "execute_shell",
+        "read_file",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "execute_shell",
+        "str_replace",
+        "read_file",
+        "write_file",
+        "execute_shell",
+        "str_replace",
+        "write_file",
+        "execute_shell"
+      ],
+      "wrong_tools": [],
+      "false_done": true,
+      "elapsed_s": 36.9,
+      "rc": 0
+    },
+    {
+      "task_id": "H3-chain",
+      "variant_of": null,
+      "tier": "hard",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 9,
+      "tool_calls": [
+        "list_directory",
+        "write_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 5.8,
+      "rc": 0
+    },
+    {
+      "task_id": "P1-ptbr-exato",
+      "variant_of": null,
+      "tier": "ptbr",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 5.6,
+      "rc": 0
+    },
+    {
+      "task_id": "P2-ptbr-leitura",
+      "variant_of": null,
+      "tier": "ptbr",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 6.1,
+      "rc": 0
+    },
+    {
+      "task_id": "P3-ptbr-negativa",
+      "variant_of": null,
+      "tier": "ptbr",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 9,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 7.0,
+      "rc": 0
+    },
+    {
+      "task_id": "G1-search-read",
+      "variant_of": null,
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [],
+      "turns": 14,
+      "tool_calls": [
+        "semantic_search",
+        "read_file",
+        "list_directory",
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 11.2,
+      "rc": 0
+    },
+    {
+      "task_id": "G2-state-update/v1",
+      "variant_of": "G2-state-update",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [],
+      "turns": 14,
+      "tool_calls": [
+        "read_file",
+        "write_file",
+        "read_file",
+        "str_replace"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 12.9,
+      "rc": 0
+    },
+    {
+      "task_id": "G2-state-update/v2",
+      "variant_of": "G2-state-update",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [],
+      "turns": 14,
+      "tool_calls": [
+        "read_file",
+        "str_replace",
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 12.3,
+      "rc": 0
+    },
+    {
+      "task_id": "G3-longfile-end/v1",
+      "variant_of": "G3-longfile-end",
+      "tier": "gate",
+      "world_ok": false,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [
+        "file_equals:/tmp/jarvis-ch/marker.txt::DELTA"
+      ],
+      "turns": 15,
+      "tool_calls": [
+        "read_file",
+        "read_file",
+        "read_file",
+        "read_file"
+      ],
+      "wrong_tools": [],
+      "false_done": true,
+      "elapsed_s": 19.8,
+      "rc": 0
+    },
+    {
+      "task_id": "G3-longfile-end/v2",
+      "variant_of": "G3-longfile-end",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": false,
+      "rounds_used": 2,
+      "missed": [],
+      "turns": 12,
+      "tool_calls": [
+        "browser",
+        "execute_shell",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 12.7,
+      "rc": 0
+    },
+    {
+      "task_id": "G4-authority-vs-truth",
+      "variant_of": null,
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 5,
+      "tool_calls": [
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 5.4,
+      "rc": 0
+    },
+    {
+      "task_id": "G5-run-verify",
+      "variant_of": null,
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 9,
+      "tool_calls": [
+        "write_file",
+        "execute_shell",
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 6.0,
+      "rc": 0
+    },
+    {
+      "task_id": "G6-middle-instruction",
+      "variant_of": null,
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 3.3,
+      "rc": 0
+    },
+    {
+      "task_id": "G7-position-start",
+      "variant_of": null,
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 3.1,
+      "rc": 0
+    },
+    {
+      "task_id": "G8-position-middle",
+      "variant_of": null,
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 3.2,
+      "rc": 0
+    },
+    {
+      "task_id": "G9-position-end/v1",
+      "variant_of": "G9-position-end",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 2.9,
+      "rc": 0
+    },
+    {
+      "task_id": "G9-position-end/v2",
+      "variant_of": "G9-position-end",
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 6.3,
+      "rc": 0
+    },
+    {
+      "task_id": "G10-volume-end",
+      "variant_of": null,
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 3.5,
+      "rc": 0
+    },
+    {
+      "task_id": "G11-framing-end",
+      "variant_of": null,
+      "tier": "gate",
+      "world_ok": true,
+      "first_pass": true,
+      "rounds_used": 1,
+      "missed": [],
+      "turns": 7,
+      "tool_calls": [
+        "read_file",
+        "write_file"
+      ],
+      "wrong_tools": [],
+      "false_done": false,
+      "elapsed_s": 3.3,
+      "rc": 0
+    }
+  ],
+  "preflight_reprovadas": []
+}
