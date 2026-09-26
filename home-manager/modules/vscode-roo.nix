@@ -96,12 +96,11 @@ with lib; let
     };
 
     # ── JARVIS (agent harness local — shell, files, vision, nix) ──
+    # Binário instalado (jarvis-mcp): env completo (playwright, etc.).
+    # O combo python3+source quebrava em deps (browser 100% morto em prod).
     jarvis = {
-      command = "${pkgs.bash}/bin/bash";
-      args = [
-        "-c"
-        "cd ${toString ../../.} && PYTHONPATH=modules/ai/jarvis/src exec ${pkgs.python3}/bin/python3 -m jarvis.mcp_server"
-      ];
+      command = "${pkgs.jarvis-voice}/bin/jarvis-mcp";
+      args = [];
       env = {
         JARVIS_PROJECT_ROOT = toString ../../.;
       };
