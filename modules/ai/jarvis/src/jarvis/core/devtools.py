@@ -696,30 +696,32 @@ def execute_shell(cmd: str, approve: bool = False) -> dict[str, Any]:
 # ===========================================================================
 
 def semantic_search(query: str, top_k: int = 5) -> dict[str, Any]:
-    """Busca semântica no code_index do Qdrant."""
+    """Busca semântica no code_index do Qdrant.
+
+    F4 (kernel): executor ÚNICO — delega p/ HybridSearch (dense + sparse
+    BM25 + RRF + rerank). Antes: dense-only com LLMClient+Qdrant próprios
+    (ranking inferior: sem boosts, sem diversify, sem rerank). Contrato de
+    retorno preservado. Micro-mudança honesta: falha de embedding vira
+    "sem resultados" (HybridSearch não distingue) em vez de erro dedicado.
+    """
     if not query or not query.strip():
         return {"ok": False, "error": "Empty query"}
 
     try:
-        from jarvis.core.config import get_config
-        from jarvis.providers.llm import LLMClient
-        from jarvis.providers.vector_store import QdrantStore
+        from jarvis.core.rag import HybridSearch
 
-        cfg = get_config()
-        llm = LLMClient(cfg)
-        vec = llm.embed(query)
-        if not vec:
-            return {"ok": False, "error": "Embedding generation failed"}
-
-        vs = QdrantStore(cfg)
-        raw = vs.search(cfg.qdrant_collection_code, vec, top_k=top_k)
-
+        hits = HybridSearch().search(query, top_k=top_k)
         formatted = []
-        for r in raw:
+        for h in hits:
+            pl = getattr(h, "payload", {}) or {}
+            text = str(pl.get("content") or pl.get("title")
+                       or pl.get("text") or "")
+            source = (pl.get("path") or pl.get("book") or pl.get("kind")
+                      or getattr(h, "path", "") or "unknown")
             formatted.append({
-                "text": r.get("payload", {}).get("text", "")[:300],
-                "score": round(r.get("score", 0), 3),
-                "source": r.get("payload", {}).get("path", "unknown"),
+                "text": text[:300],
+                "score": round(getattr(h, "score", 0), 3),
+                "source": source,
             })
 
         return {

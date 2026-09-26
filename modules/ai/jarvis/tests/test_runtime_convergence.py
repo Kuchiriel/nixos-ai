@@ -85,21 +85,63 @@ def test_registry_covers_both_dialects() -> None:
 
 
 def test_known_divergences_are_tracked() -> None:
-    """Lista FECHADA de divergências SILENT (worklist da Fase 4).
+    """Lista FECHADA de divergências SILENT (TARGET: vazia — atingido na F4).
 
-    F2 mergeou str_replace no transporte (alias declarado old_string→old +
-    passthrough de allow_multiple): ela SAIU do silent e entrou no declarado.
-    Resta semantic_search (mesmo nome, executores E params diferentes —
-    HybridSearch no MCP vs Qdrant próprio em devtools; merge = F4).
-    Qualquer NOVA entrada ou sumiço sem merge = falha.
+    F2 mergeou str_replace no transporte (alias declarado). F4 mergeou o
+    EXECUTOR de semantic_search (devtools delega p/ HybridSearch — o caminho
+    com RRF+rerank) e declarou limit→top_k. Critério: obrigatórios
+    normalizados iguais = transporte, não fork. Qualquer NOVA entrada = falha.
     """
     from jarvis.runtime.registry import ToolRegistry
 
     reg = ToolRegistry.build_default()
     silent = {d.canonical for d in reg.dialect_report()}
-    assert silent == {"semantic_search"}, f"silent mudou: {silent}"
-    assert "str_replace" in reg.declared_aliases(), (
-        "alias declarado de str_replace sumiu — transporte voltou a forkar")
+    assert silent == set(), f"silent regrediu: {silent}"
+    assert set(reg.declared_aliases()) == {"str_replace", "semantic_search"}
+
+
+def test_semantic_search_delegates_to_hybrid() -> None:
+    """F4: executor único — devtools.semantic_search USA HybridSearch.
+
+    Estrutural (anti-drift: reintroduzir Qdrant próprio quebra) +
+    comportamental (mapeamento HybridHit → contrato preservado).
+    """
+    import inspect
+    from jarvis.core import devtools
+    from jarvis.core import rag
+
+    src = inspect.getsource(devtools.semantic_search)
+    assert "HybridSearch" in src, "executor paralelo reintroduzido"
+    assert "QdrantStore" not in src, "fachada paralela reintroduzida"
+
+    real_hs = rag.HybridSearch
+
+    class Hit:
+        def __init__(self, path, score, payload):
+            self.path = path
+            self.score = score
+            self.payload = payload
+
+    class FakeHS:
+        def __init__(self, *a, **k):
+            pass
+
+        def search(self, query, *, top_k=5):
+            assert query == "q" and top_k == 3
+            return [Hit("a.py", 0.91234, {"content": "x" * 500}),
+                    Hit("", 0.5, {"book": "b", "kind": "k"})]
+
+    rag.HybridSearch = FakeHS
+    try:
+        out = devtools.semantic_search("q", top_k=3)
+    finally:
+        rag.HybridSearch = real_hs
+    assert out["ok"] is True and out["total"] == 2 and out["query"] == "q"
+    assert out["results"][0] == {"text": "x" * 300, "score": 0.912,
+                                 "source": "a.py"}
+    assert out["results"][1]["source"] == "b"  # book antes de kind
+    assert devtools.semantic_search("") == {"ok": False, "error": "Empty query"}
+    assert devtools.semantic_search("   ")["ok"] is False
 
 
 def test_resolve_translates_str_replace() -> None:

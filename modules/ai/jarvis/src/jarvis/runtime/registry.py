@@ -39,6 +39,8 @@ PARAM_ALIASES: dict[str, dict[str, str]] = {
     # MCP declara old_string/new_string; executor canônico usa old/new.
     # Contrato externo MCP congelado → tradução na borda, não no schema.
     "str_replace": {"old_string": "old", "new_string": "new"},
+    # MCP declara limit; executor canônico usa top_k (mesmo conceito).
+    "semantic_search": {"limit": "top_k"},
 }
 
 # capability / mutation / approval inferidos por nome canônico.
@@ -155,14 +157,15 @@ class ToolRegistry:
             tool.aliases.append(name)
         # mede divergência de params entre dialetos do mesmo conceito
         if provider == "mcp" and "devtools" in tool.providers:
-            # Normaliza renames declarados; o que sobra divergindo é SILENT.
-            # (Param opcional exclusivo e documentado, ex. allow_multiple,
-            # casa via schema — ver F2: o transporte declara o que passa.)
+            # F4: compara OBRIGATÓRIOS normalizados. Params opcionais de
+            # escopo do transporte (collection, allow_multiple) não são fork
+            # — o executor único decide; renames vivem em PARAM_ALIASES.
             alias = PARAM_ALIASES.get(canonical, {})
-            dev_params = set(tool.parameters.get("properties", {}))
-            mcp_norm = {alias.get(p, p)
-                        for p in parameters.get("properties", {})}
-            if dev_params != mcp_norm:
+            dev_req = set(tool.parameters.get("required", []))
+            mcp_req = {alias.get(p, p)
+                       for p in parameters.get("required", [])}
+            if dev_req != mcp_req:
+                dev_params = set(tool.parameters.get("properties", {}))
                 mcp_raw = set(parameters.get("properties", {}))
                 self.divergences.append(DialectDivergence(
                     canonical=canonical, kind="params",
