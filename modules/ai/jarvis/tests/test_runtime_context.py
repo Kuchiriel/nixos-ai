@@ -16,6 +16,7 @@ def test_environment_block_golden() -> None:
     out = environment_block()
     assert out.startswith("\n\nENVIRONMENT:\n- OS: ")
     assert "\n- Python: " in out and "\n- CWD: " in out and "\n- User: " in out
+    assert "\n- Now: 20" in out  # data/hora/timezone estáticas (F-pesquisa)
 
 
 def test_lessons_block_golden_and_outage() -> None:

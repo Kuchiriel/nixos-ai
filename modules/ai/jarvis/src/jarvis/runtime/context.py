@@ -18,16 +18,26 @@ from typing import Any, Callable
 # -- builders puros (seções compartilhadas) --------------------------------
 
 def environment_block() -> str:
-    """Bloco ENVIRONMENT — byte-idêntico ao inline de Agent.run."""
+    """Bloco ENVIRONMENT — byte-idêntico ao inline de Agent.run.
+
+    F-pesquisa (26/09): data/hora/timezone INJETADAS estaticamente (prática
+    consolidada dos harnesses: 1 linha sempre correta > 1 turn pedindo
+    `date` que o modelo pode pular — e elimina a regra do AGENTS.md que
+    mandava o modelo rodar date/timedatectl).
+    """
     try:
         import platform
         import os
+        from datetime import datetime
+        _now = datetime.now().astimezone()
         return (
             "\n\nENVIRONMENT:\n"
             f"- OS: {platform.system()} {platform.release()}\n"
             f"- Python: {platform.python_version()}\n"
             f"- CWD: {os.getcwd()}\n"
-            f"- User: {os.environ.get('USER', 'unknown')}"
+            f"- User: {os.environ.get('USER', 'unknown')}\n"
+            f"- Now: {_now.strftime('%Y-%m-%d %H:%M %Z')} "
+            f"({_now.astimezone().tzname()})"
         )
     except Exception:
         return ""
