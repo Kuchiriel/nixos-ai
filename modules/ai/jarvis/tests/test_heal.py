@@ -47,7 +47,12 @@ def fake_doctor(monkeypatch):
 
 
 def test_allowlist_only_known_services():
-    assert ALLOWLIST == ("llama-cpp-server", "llama-cpp-embeddings", "qdrant")
+    assert ALLOWLIST == ("llama-cpp-server", "llama-cpp-embeddings", "qdrant",
+                         "jarvis-wakeword")
+    # ouvido é user service (nunca system): restart via --user
+    from jarvis.core.heal import SERVICE_MAP
+    assert SERVICE_MAP["wakeword"] == {"service": "jarvis-wakeword",
+                                       "scope": "user"}
 
 
 def test_heal_restarts_down_service(monkeypatch, tmp_path, fake_doctor):
