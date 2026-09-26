@@ -42,20 +42,31 @@ free_avail() { free -m | awk 'NR==2 {print $7}'; }
 log "=== P0 estado inicial ==="
 free -g | awk 'NR==2 {print "[P0] RAM avail: "$7"GB"}' | tee -a "$LOG"
 
-# ── P1: espera idle (avail >= 22000MB) — timeout 5h ──
-log "P1 esperando idle (>=22GB avail; humano dormindo)..."
-for i in $(seq 1 60); do
+# ── P1: esperaidle (avail >= 17000MB; 5min/poll, timeout 4h) ──
+log "P1 esperando idle (>=17GB avail; humano dormindo)..."
+IDLE=""
+for i in $(seq 1 48); do
   A=$(free_avail)
-  [ "$A" -ge 22000 ] && { log "P1 idle: ${A}MB livres"; break; }
-  [ $i -eq 60 ] && { log "P1 TIMEOUT 5h sem idle — PULA bateria MoE (sem RAM não há veredito válido)"; exit 0; }
+  [ "$A" -ge 17000 ] && { log "P1 idle: ${A}MB livres"; IDLE=1; break; }
   sleep 300
 done
+[ -z "$IDLE" ] && log "P1 sem idle em 4h — segue p/ P7 nightwatch (sem RAM pesada)"
 
-# ── P2: para serviços p/ RAM do MoE (incidente 25/09 documentado) ──
-log "P2 parando embeddings/rerank (RAM p/ MoE)..."
-sudo systemctl stop llama-cpp-embeddings llama-cpp-rerank 2>>"$LOG"
-sleep 5
-A=$(free_avail); log "  avail agora: ${A}MB"
+# ── P2: para serviços p/ RAM do MoE; exige 19GB p/ tentar o MoE ──
+RAM_OK=""
+if [ -n "$IDLE" ]; then
+  log "P2 parando embeddings/rerank (RAM p/ MoE)..."
+  sudo systemctl stop llama-cpp-embeddings llama-cpp-rerank 2>>"$LOG"
+  sleep 5
+  A=$(free_avail); log "  avail agora: ${A}MB"
+  if [ "$A" -ge 19000 ]; then
+    RAM_OK=1
+  else
+    log "P2 <19GB mesmo sem embeddings/rerank — MoE INVIÁVEL, religa e segue p/ P7"
+    sudo systemctl start llama-cpp-embeddings llama-cpp-rerank 2>>"$LOG"
+  fi
+fi
+if [ -n "$RAM_OK" ]; then
 
 # ── P3: sobe MoE uncensored :8084 ──
 log "P3 subindo MoE uncensored :8084 (receita models.nix)..."
@@ -128,8 +139,15 @@ nice -n 19 timeout 1800 nix develop --command bash scripts/bench-llm.sh \
   > "$OUT/cmoe35.tsv" 2>"$OUT/cmoe35.err"
 log "P6b: $(tail -2 "$OUT/cmoe35.tsv" 2>/dev/null | tr '\n' ' ')"
 
-# ── P7: restaura (trap faria, mas log explícito) ──
+fi  # RAM_OK
+
+# ── P7: RESTAURA + nightwatch bounded (o REPL trabalhando sozinho) ──
 restore_services
+log "P7b nightwatch bounded: nixos-ai, 3 tasks, 1 ciclo, sem telegram..."
+cd "$BASE"
+timeout 3600 jarvis nightwatch --projects nixos-ai --tasks 3 --cycles 1 \
+  >> "$OUT/nightwatch.log" 2>&1
+log "P7b nightwatch terminou — ver $OUT/nightwatch.log"
 
 # ── P8: handoff da manhã ──
 cat > "$BASE/docs/HANDOFF-2026-09-26-MANHA.md" <<EOF
