@@ -51,7 +51,7 @@ in
           --remote-debugging-port=${toString cfg.port} \
           --user-data-dir=/home/${cfg.user}/.config/jarvis-chromium \
           --no-first-run --no-default-browser-check \
-          --start-maximized ${cfg.startUrl}
+          --headless=new ${cfg.startUrl}
       '';
     };
   };

@@ -26,7 +26,7 @@ RESTORE_PID=""
 
 restore_services() {
   log "RESTAURANDO serviços (trap/exit)..."
-  [ -n "$RESTORE_PID" ] && kill "$RESTORE_PID" 2>/dev/null
+  sudo systemctl stop llama-cpp-ik 2>>"$LOG" || true
   sleep 2
   sudo systemctl start llama-cpp-server llama-cpp-embeddings llama-cpp-rerank 2>>"$LOG"
   sudo systemctl start qdrant 2>>"$LOG" || true
@@ -71,19 +71,18 @@ if [ -n "$IDLE" ]; then
 fi
 if [ -n "$RAM_OK" ]; then
 
-# ── P3: sobe MoE uncensored :8084 ──
-log "P3 subindo MoE uncensored :8084 (receita models.nix)..."
-LD_LIBRARY_PATH="$IK_LD" nohup /home/nixos/projects/ik_llama.cpp/build/bin/llama-server \
-  -m "$MOE" --host 127.0.0.1 --port 8084 --jinja --alias "$ALIAS" \
-  -ngl 45 --n-cpu-moe 35 --mlock -t 6 -c 8192 -fa on \
-  -ctk q4_0 -ctv q4_0 -b 512 -ub 512 --parallel 1 \
-  > "$OUT/moe-server.log" 2>&1 &
-RESTORE_PID=$!
-log "  PID $RESTORE_PID — esperando /health (load 21GB leva minutos)..."
+# ── P3: sobe MoE uncensored :8084 VIA SYSTEMD (26/09) ──
+# NADA de nohup fora do systemd: tudo supervisionado, logável e parável
+# via systemctl (aula do freeze: processo órfão não responde a pkill de
+# unidade porque... não é unidade). A unidade llama-cpp-ik serve o
+# Uncensored primeiro (preset jarvis-raw-strong, --models-max 1).
+log "P3 systemctl start llama-cpp-ik (MoE uncensored, on-demand)..."
+sudo systemctl start llama-cpp-ik 2>>"$LOG"
+log "  esperando /health (load 21GB leva minutos)..."
 UP=""
 for i in $(seq 1 90); do
   curl -sf --max-time 3 http://127.0.0.1:8084/health >/dev/null 2>&1 && { UP=1; break; }
-  kill -0 "$RESTORE_PID" 2>/dev/null || { log "  P3 server MORREU — ver moe-server.log"; break; }
+  systemctl is-active --quiet llama-cpp-ik || { log "  P3 unidade MORREU — ver journalctl -u llama-cpp-ik"; break; }
   sleep 20
 done
 
@@ -93,7 +92,9 @@ if [ -n "$UP" ]; then
   # ── P4: bateria completa vs MoE (thinking OFF) ──
   log "P4 bateria (tier all, rounds 2, thinking OFF) vs uncensored35..."
   cd "$BASE"
-  JARVIS_LLM_BASE_URL=http://127.0.0.1:8084/v1 JARVIS_LLM_MODEL="$ALIAS" \
+  RALIAS=$(curl -sf --max-time 5 http://127.0.0.1:8084/v1/models | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
+  log "  unidade serve alias: ${RALIAS:-?}"
+  JARVIS_LLM_BASE_URL=http://127.0.0.1:8084/v1 JARVIS_LLM_MODEL="${RALIAS:-uncensored35}" \
     JARVIS_LLM_DISABLE_THINKING=1 \
     timeout 3600 nix develop --command python3 scripts/harness-suite.py \
     --tier all --rounds 2 --out "$OUT/battery-uncensored35.json" >>"$LOG" 2>&1
@@ -105,7 +106,7 @@ if [ -n "$UP" ]; then
     timeout 1200 nix develop --command python3 scripts/self-study.py \
     --evidence "$OUT/battery-uncensored35.json" \
     --task-file scripts/harness-challenges.json \
-    --model "$ALIAS" >>"$LOG" 2>&1
+    --model "${RALIAS:-uncensored35}" >>"$LOG" 2>&1
 
   # ── P5b: self-study cruzado sobre falhas do bonsai ──
   if [ -f /tmp/opencode/harness-evolve/reopen-hook-classic.json ]; then
@@ -114,7 +115,7 @@ if [ -n "$UP" ]; then
       timeout 1200 nix develop --command python3 scripts/self-study.py \
       --evidence /tmp/opencode/harness-evolve/reopen-hook-classic.json \
       --task-file scripts/harness-challenges.json \
-      --model "$ALIAS" >>"$LOG" 2>&1
+      --model "${RALIAS:-uncensored35}" >>"$LOG" 2>&1
   fi
 
   # ── P5c: NIGHTWATCH com o modelo FORTE (mandato: bonsai não emite
@@ -131,7 +132,7 @@ if [ -n "$UP" ]; then
   log "P5c nightwatch(MoE) terminou — ver $OUT/nightwatch-moe.log"
 
   log "P5.x desligando MoE p/ P6 (bench precisa de RAM+VRAM limpas)..."
-  kill "$RESTORE_PID" 2>/dev/null; RESTORE_PID=""
+  sudo systemctl stop llama-cpp-ik 2>>"$LOG"
   sleep 10
 else
   log "P3 FALHOU: MoE não subiu — P4/P5 pulados, segue P6."

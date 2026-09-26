@@ -1305,10 +1305,24 @@ class Harness:
                        capture_output=True, timeout=60)
         for _ in range(90):  # load do 35B leva minutos
             if _up():
-                return True
+                break
             time.sleep(20)
-        self.notify("⏸️ *Deferred*: MoE não subiu (ver journal llama-cpp-ik)")
-        return False
+        else:
+            self.notify("⏸️ *Deferred*: MoE não subiu (ver journal llama-cpp-ik)")
+            return False
+        # Alias dinâmico: lê o que a unidade REALMENTE serve (/v1/models).
+        # Preset tem jarvis-raw-strong (uncensored) + jarvis-strong com
+        # --models-max 1: adivinhar o nome quebrava (bug pago 26/09).
+        try:
+            with urllib.request.urlopen("http://127.0.0.1:8084/v1/models",
+                                        timeout=5) as _r:
+                import json as _j
+                _ms = _j.load(_r).get("data", [])
+                model_id = (_ms[0].get("id") if _ms else "") or "jarvis-raw-strong"
+                os.environ["JARVIS_LLM_MODEL"] = model_id
+        except Exception:
+            os.environ.setdefault("JARVIS_LLM_MODEL", "jarvis-raw-strong")
+        return True
 
     def execute_task(self, task: Task) -> bool:
         """Execute a single task through the full pipeline.

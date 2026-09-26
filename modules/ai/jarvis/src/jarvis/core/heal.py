@@ -286,6 +286,22 @@ def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_S
             )
             continue
         service, scope = spec["service"], spec["scope"]
+        # (26/09, incidente freeze) `jarvis pause` = manutenção do dono:
+        # NUNCA religar o que o dono derrubou de propósito. Antes o heal
+        # reiniciava em ~60s tudo que o usuário parava no freeze ("pkill
+        # não adiantava") — o inimigo era o próprio guardião.
+        try:
+            from nightwatch.pause import is_paused
+            _paused, _why = is_paused()
+        except Exception:
+            _paused, _why = False, ""
+        if _paused:
+            report_inst.actions.append(
+                HealAction(component=comp, service=service, scope=scope,
+                           action="report_only",
+                           skipped_reason=f"pausado pelo dono: {_why or 'manutenção'}")
+            )
+            continue
         if service not in ALLOWLIST:
             report_inst.actions.append(
                 HealAction(component=comp, service=service, scope=scope, action="report_only", skipped_reason="fora da allowlist")

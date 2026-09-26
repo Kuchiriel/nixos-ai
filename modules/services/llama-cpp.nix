@@ -117,6 +117,15 @@ with lib; let
       {
         User = "nixos";
         Restart = "on-failure";
+        # (26/09, incidente freeze) Resource firewall: o OOM mata SÓ o
+        # serviço, nunca a máquina. MemoryHigh = throttle (kernel reclama
+        # antes, sem matar); MemoryMax = teto duro (OOM só dentro da
+        # cgroup). ik 35B mede ~19-21GB RSS: 24G de teto deixa 8G p/ o
+        # resto do box. Pesquisa: high ~10-20% abaixo do max.
+        MemoryHigh =
+          { prism = "6G"; upstream = "5G"; ik = "20G"; }.${b};
+        MemoryMax =
+          { prism = "8G"; upstream = "6G"; ik = "24G"; }.${b};
       };
   };
 
