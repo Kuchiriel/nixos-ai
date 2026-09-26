@@ -1010,7 +1010,7 @@ def _cmd_speak(args: argparse.Namespace) -> int:
 def _cmd_voice(args: argparse.Namespace) -> int:
     from jarvis.core.voice import main_voice
 
-    argv = [args.wav]
+    argv = [args.wav] if getattr(args, "wav", None) else []
     if getattr(args, "model", None):
         argv += ["--model", args.model]
     if args.no_tts:
@@ -1019,6 +1019,10 @@ def _cmd_voice(args: argparse.Namespace) -> int:
         argv += ["--debug-wav", args.debug_wav]
     if getattr(args, "clone", False):
         argv.append("--clone")
+    if getattr(args, "awake", 0):
+        argv += ["--awake", str(args.awake)]
+    if getattr(args, "sleep", False):
+        argv.append("--sleep")
     return main_voice(argv)
 
 
@@ -1300,11 +1304,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_speak.set_defaults(func=_cmd_speak)
 
     p_voice = sub.add_parser("voice", help="loop de voz: STT → roteador → TTS (brainCommand do wakeword)")
-    p_voice.add_argument("wav", help="arquivo de áudio capturado pelo wakeword")
+    p_voice.add_argument("wav", nargs="?", default=None, help="arquivo de áudio capturado pelo wakeword")
     p_voice.add_argument("--no-tts", action="store_true", help="não sintetizar resposta em voz")
     p_voice.add_argument("--model", default=None, help="tamanho do modelo faster-whisper (default: JARVIS_STT_MODEL/small)")
     p_voice.add_argument("--debug-wav", default=None, help="dir p/ salvar WAV + session.json de diagnóstico")
     p_voice.add_argument("--clone", action="store_true", help="converte resposta p/ timbre RVC (~+20s)")
+    p_voice.add_argument("--awake", type=int, default=0, metavar="MIN", help="modo fique-acordado por MIN minutos")
+    p_voice.add_argument("--sleep", action="store_true", help="sai do modo fique-acordado")
     p_voice.set_defaults(func=_cmd_voice)
 
     p_audiobook = sub.add_parser("audiobook", help="leitor de livros (.epub/.txt) com TTS Kokoro")

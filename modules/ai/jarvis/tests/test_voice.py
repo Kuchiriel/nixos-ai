@@ -399,3 +399,17 @@ def test_voice_awake_cli(tmp_path, monkeypatch, capsys) -> None:
     assert _v.stay_awake_until() > 0
     assert _v.main_voice(["--sleep"]) == 0
     assert _v.stay_awake_until() == 0.0
+
+
+def test_cli_parser_forwards_awake_flags() -> None:
+    """Anti-duplicação: o subparser `voice` do main.py precisa aceitar e
+    repassar --awake/--sleep (26/09: main_voice tinha, main.py rejeitava
+    antes de chegar lá — flag morta em produção)."""
+    import pathlib
+    src = pathlib.Path(__file__).resolve().parents[1] / "src/jarvis/cli/main.py"
+    text = src.read_text(encoding="utf-8")
+    assert '"--awake"' in text and '"--sleep"' in text, "flags fora do parser"
+    assert "awake" in text and "sleep" in text
+    # repasse real p/ main_voice (getattr ou acesso direto)
+    assert ('"awake"' in text.split("def _cmd_voice")[1].split("def ")[0]), \
+        "flags sem repasse em _cmd_voice"
