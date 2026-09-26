@@ -36,7 +36,6 @@ _src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # jarvis
 if _src_dir not in sys.path:
     sys.path.insert(0, _src_dir)
 
-from jarvis.core.devtools import handle_dev_tool
 from jarvis.runtime.registry import ToolRegistry
 from jarvis.core.vision import VISION_TOOL, handle_capture, observe_with_fallback as observe_screen
 from jarvis.core.chatgpt_reader import CHATGPT_READER_TOOL, handle_chatgpt_read
@@ -635,21 +634,20 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
                                   indent=2, ensure_ascii=False, default=str)
             return "ERROR: action inválida (list|show|select)"
 
-        if name == "jarvis_read_file":
-            _canon, _targs = _transport_registry().resolve(name, args)
-            return handle_dev_tool(_canon, _targs)
-
-        if name == "jarvis_write_file":
-            _canon, _targs = _transport_registry().resolve(name, args)
+        if name in ("jarvis_read_file", "jarvis_write_file",
+                      "jarvis_str_replace"):
+            # Transporte genérico via registry (resolve + executor
+            # declarado). F2 ressuscitou str_replace aqui; o dispatch
+            # elimina os branches manuais (F2+).
+            reg = _transport_registry()
+            if name == "jarvis_read_file":
+                out = reg.dispatch(name, args)
+                return out if out is not None else f"ERROR: unknown tool: {name}"
+            _canon, _targs = reg.resolve(name, args)
             return _guarded_mutation(
-                name, _targs, lambda: handle_dev_tool(_canon, _targs))
-
-        if name == "jarvis_str_replace":
-            # F2: transporte traduz old_string/new_string → old/new via
-            # registry (antes: KeyError/args-ausentes — MCP str_replace morto).
-            _canon, _targs = _transport_registry().resolve(name, args)
-            return _guarded_mutation(
-                name, _targs, lambda: handle_dev_tool(_canon, _targs))
+                name, _targs,
+                lambda: reg.dispatch(name, args)
+                or f"ERROR: unknown tool: {name}")
 
         if name == "jarvis_capture_screen":
             return handle_capture(args)

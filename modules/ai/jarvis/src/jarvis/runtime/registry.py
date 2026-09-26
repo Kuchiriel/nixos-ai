@@ -32,6 +32,21 @@ _CANONICAL_ALIASES = {
     "jarvis_persona": "persona",
 }
 
+# Canônico → chave do handle_dev_tool quando divergem.
+_HANDLER_KEYS = {"command": "jarvis_command"}
+
+# Contrato de verificação v1 por capability (§6): como o runtime confirma
+# o efeito (world = estado do mundo; self-report = ok do próprio retorno).
+_VERIFY_BY_CAPABILITY = {
+    "filesystem.write": "world:file-exists",
+    "system.execute": "self-report",
+    "system.verify": "self-report",
+    "system.nix": "self-report",
+    "safety.transform": "self-report",
+    "data.build": "self-report",
+    "interaction.act": "policy-gate",
+}
+
 # Alias de PARÂMETROS por ferramenta canônica (transporte → canônico).
 # Declarado aqui = divergência CONHECIDA, traduzida no transporte (Fase 2).
 # O que diverge e NÃO está aqui = SILENT (o linter falha).
@@ -93,9 +108,12 @@ class Tool:
     parameters: dict[str, Any] = field(default_factory=dict)
     capability: str = "misc"
     mutation: bool = False
-    approval: str = "policy"
+    approval: str = "policy"  # none | policy | always
     providers: list[str] = field(default_factory=list)  # dialetos que declaram
     aliases: list[str] = field(default_factory=list)  # nomes alternativos
+    # §6: executor + contrato de verificação (transporte genérico).
+    handler: str = ""  # "devtools:<nome>" ou "mcp:<nome>" (executor dedicado)
+    verify: str = ""  # "world:file-exists" | "world:compiles" | "none"...
 
 
 @dataclass
@@ -155,6 +173,10 @@ class ToolRegistry:
             tool.providers.append(provider)
         if name != canonical and name not in tool.aliases:
             tool.aliases.append(name)
+        if provider == "devtools":
+            tool.handler = f"devtools:{_HANDLER_KEYS.get(canonical, canonical)}"
+        if not tool.verify:
+            tool.verify = _VERIFY_BY_CAPABILITY.get(tool.capability, "none")
         # mede divergência de params entre dialetos do mesmo conceito
         if provider == "mcp" and "devtools" in tool.providers:
             # F4: compara OBRIGATÓRIOS normalizados. Params opcionais de
@@ -175,9 +197,16 @@ class ToolRegistry:
     def names(self) -> list[str]:
         return sorted(self.tools)
 
-    def for_task(self, _task_context: str = "") -> list[Tool]:
-        """Fase 1: retorna tudo. Fase 2+: progressive disclosure real."""
-        return [self.tools[n] for n in self.names()]
+    def for_task(self, _task_context: str = "",
+                 capabilities: list[str] | None = None) -> list[Tool]:
+        """Progressive disclosure estrutural (§7): com capabilities, só as
+        ferramentas dessas capabilities; sem filtro, tudo (F2+ = seleção
+        por tarefa via modelo fica p/ quando o runtime decidir)."""
+        tools = [self.tools[n] for n in self.names()]
+        if capabilities is None:
+            return tools
+        want = set(capabilities)
+        return [t for t in tools if t.capability in want]
 
     def to_openai_tools(self) -> list[dict[str, Any]]:
         """Emissão única de schema (o que o LLM recebe — 1 dialeto)."""
@@ -196,6 +225,28 @@ class ToolRegistry:
     def declared_aliases(self) -> dict[str, dict[str, str]]:
         """Renames transporte→canônico declarados (Fase 2+)."""
         return {k: dict(v) for k, v in PARAM_ALIASES.items()}
+
+    def dispatch(self, name: str, args: dict[str, Any] | None) -> str | None:
+        """Transporte genérico: resolve + executa via executor declarado.
+
+        Retorna None quando o conceito não tem executor devtools (o
+        transporte cai p/ handlers dedicados). Erro 'Unknown tool' do
+        executor também vira None (nunca exceção no transporte).
+        """
+        import json
+
+        from jarvis.core.devtools import handle_dev_tool  # lazy: sem ciclo
+        canonical, targs = self.resolve(name, args)
+        key = _HANDLER_KEYS.get(canonical, canonical)
+        out = handle_dev_tool(key, targs)
+        try:
+            data = json.loads(out) if isinstance(out, str) else {}
+        except Exception:
+            return out
+        if isinstance(data, dict) and str(
+                data.get("error", "")).startswith("Unknown tool"):
+            return None
+        return out
 
     def resolve(self, name: str, args: dict[str, Any] | None) -> tuple[str, dict[str, Any]]:
         """Transporte → (nome canônico, args canônicos).

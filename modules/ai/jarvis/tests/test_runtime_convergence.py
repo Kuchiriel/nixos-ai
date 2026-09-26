@@ -318,6 +318,40 @@ def test_funnel_preserves_decision() -> None:
     assert seen[0][1]["detail"]["model"] == mid
 
 
+def test_registry_dispatch_executes(tmp_path) -> None:
+    """Transporte genérico: dispatch resolve + executa (volta None p/
+    conceito sem executor devtools)."""
+    from jarvis.runtime.registry import ToolRegistry
+
+    reg = ToolRegistry.build_default()
+    f = tmp_path / "d.txt"
+    f.write_text("AAA", encoding="utf-8")
+    import json
+    out = json.loads(reg.dispatch(
+        "jarvis_str_replace",
+        {"path": str(f), "old_string": "AAA", "new_string": "BBB"}))
+    assert out.get("ok") is True
+    assert f.read_text(encoding="utf-8") == "BBB"
+    assert reg.dispatch("jarvis_nope", {}) is None
+    # metadados §6 presentes
+    t = reg.tools["str_replace"]
+    assert t.handler.startswith("devtools:")
+    assert t.verify == "world:file-exists"
+    assert reg.tools["read_file"].verify == "none"
+
+
+def test_for_task_filters_by_capability() -> None:
+    """Disclosure estrutural: com capabilities, só elas; sem, tudo."""
+    from jarvis.runtime.registry import ToolRegistry
+
+    reg = ToolRegistry.build_default()
+    all_names = {t.name for t in reg.for_task()}
+    assert "read_file" in all_names and "execute_shell" in all_names
+    ro = {t.name for t in reg.for_task(capabilities=["filesystem.read"])}
+    assert "read_file" in ro and "execute_shell" not in ro
+    assert reg.for_task(capabilities=["nope"]) == []
+
+
 # ---------------------------------------------------------------------------
 # F9: identidade única (PersonaRegistry) + matriz canônica
 # ---------------------------------------------------------------------------
