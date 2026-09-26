@@ -1124,51 +1124,28 @@ class Agent:
                     _persona = None
             else:
                 _persona = None
-        if _persona and _persona.system_prompt_additions:
-            system_content += f"\n\nPERSONA ATIVA: {_persona.name} ({_persona.role})\n{_persona.system_prompt_additions}"
+        # Render da persona (F3: builder único; o GATE explícita/implícita
+        # acima é política do caller e fica aqui).
+        from jarvis.runtime.context import persona_section as _persona_section
+        system_content += _persona_section(_persona)
 
-        # Inject user profile
-        try:
-            from jarvis.core.user_profile import UserProfile, build_context_block
-            profile = UserProfile()
-            profile.load()
-            profile_block = build_context_block(profile)
-            if profile_block:
-                system_content += f"\n\nUSER PREFERENCES:\n{profile_block}"
-        except Exception:
-            pass
-        
-        # Inject environment context
-        try:
-            import platform
-            import os
-            env_block = f"""ENVIRONMENT:
-- OS: {platform.system()} {platform.release()}
-- Python: {platform.python_version()}
-- CWD: {os.getcwd()}
-- User: {os.environ.get('USER', 'unknown')}"""
-            system_content += f"\n\n{env_block}"
-        except Exception:
-            pass
+        # Inject user profile (F3: builder único em runtime.context).
+        from jarvis.runtime.context import user_profile_block as _user_profile_block
+        system_content += _user_profile_block()
+
+        # Inject environment context (F3: builder único em runtime.context).
+        from jarvis.runtime.context import environment_block as _environment_block
+        system_content += _environment_block()
         
         # Inject lessons from memory — qualificadas pelo PROMPT (não ""):
         # lessons("") embaralha por embedding vazio e injeta lições
         # irrelevantes; com o prompt, o recall retorna o que importa.
         if self.memory:
-            try:
-                lessons = self.memory.lessons(prompt, top_k=3)
-                if lessons:
-                    system_content += f"\n\nAVOID (past errors):{lessons}"
-            except Exception as _les_e:  # noqa: BLE001
-                # §27 (EXP-J 20/09): outage (Qdrant down) era indistinguível
-                # de "sem lessons" — mesmo "" silencioso. Falha legível:
-                # registra tipo/motivo no JSONL; run segue sem lessons.
-                try:
-                    self.logger.emit("lessons_unavailable", detail={
-                        "error": type(_les_e).__name__,
-                        "msg": str(_les_e)[:160]})
-                except Exception:
-                    pass
+            # F3: builder único em runtime.context (emite lessons_unavailable
+            # no logger em outage — distinguível de "sem lessons").
+            from jarvis.runtime.context import lessons_block as _lessons_block
+            system_content += _lessons_block(
+                self.memory, prompt, emit=self.logger.emit)
 
         # Framing RRP por modelo (catálogo 17/09): regras operacionais
         # curtas pelo comportamento conhecido do modelo em uso. Vazio =
