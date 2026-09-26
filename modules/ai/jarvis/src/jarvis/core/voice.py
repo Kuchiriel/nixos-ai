@@ -368,6 +368,79 @@ def _strip_wakewords(text: str) -> str:
     return t.strip() or text.strip()
 
 
+# ---------------------------------------------------------------------------
+# Stay-awake — modo "fique acordado" (F-voz 26/09)
+# ---------------------------------------------------------------------------
+# "hey jarvis, fique acordado" (ou `jarvis voice --awake MIN`): por MIN
+# minutos o daemon manda TODA captura p/ o brain sem exigir wake. O gate
+# de destinatário vive AQUI (não no daemon): segmento sem marca de
+# endereço é ignorado COM LOG (auditável em stay-awake-ignored.jsonl) —
+# falso-negativo visível > comando fantasma. v1 = marcadores explícitos
+# (nome, "?", imperativo); v2 = juiz LLM barato (fila).
+# ---------------------------------------------------------------------------
+
+def _stay_awake_path() -> str:
+    base = os.path.expanduser(os.environ.get(
+        "JARVIS_STATE_DIR", "~/.local/state/jarvis"))
+    return os.path.join(base, "stay-awake")
+
+
+def stay_awake_until() -> float:
+    """Epoch até quando ficar acordado (0 = dormindo)."""
+    try:
+        with open(_stay_awake_path(), encoding="utf-8") as f:
+            return float((f.read() or "0").strip() or 0)
+    except Exception:
+        return 0.0
+
+
+def set_stay_awake(seconds: int) -> float:
+    """Liga (ttl) ou desliga (0) o modo. Retorna o epoch gravado."""
+    import time as _t
+    until = _t.time() + max(0, seconds) if seconds > 0 else 0.0
+    try:
+        os.makedirs(os.path.dirname(_stay_awake_path()), exist_ok=True)
+        with open(_stay_awake_path(), "w", encoding="utf-8") as f:
+            f.write(str(until))
+    except Exception:
+        pass
+    return until
+
+
+_ADDRESSEE_IMPERATIVES = frozenset(
+    "ligue desligue abra feche toque pare mostre diga me lembre anote "
+    "pesquise toque pause continue aumenta abaixa acenda apague "
+    "turn open close play stop show tell remind search pause resume "
+    "qual quanto quantos onde quando como que horas que horas".split())
+
+
+def is_addressed(text: str) -> bool:
+    """v1: nome, pergunta ou imperativo inicial = comigo."""
+    import re
+    t = (text or "").strip().lower()
+    if not t:
+        return False
+    if "jarvis" in t or t.endswith("?"):
+        return True
+    first = re.split(r"[\s,.;:!]+", t, maxsplit=1)[0]
+    return first in _ADDRESSEE_IMPERATIVES
+
+
+def log_ignored_segment(text: str) -> None:
+    """Ignorados auditáveis (o dono vê o que o gate comeu)."""
+    import json as _j
+    import time as _t
+    try:
+        base = os.path.dirname(_stay_awake_path())
+        os.makedirs(base, exist_ok=True)
+        with open(os.path.join(base, "stay-awake-ignored.jsonl"), "a",
+                  encoding="utf-8") as f:
+            f.write(_j.dumps({"ts": _t.time(), "text": text[:200]},
+                             ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
 def _tts_short(text: str, max_chars: int = 500) -> str:
     """Corta resposta p/ TTS na fronteira de sentença (primeira frase responde).
 
@@ -906,6 +979,13 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
         set_status("idle", "")
         print("(só wakeword, sem comando)", file=sys.stderr)
         return 0
+    # Stay-awake gate (F-voz): captura veio sem wake (daemon em modo
+    # acordado) — só endereçado vira turno LLM; resto é logado, não falado.
+    if stay_awake_until() > _time.time() and not is_addressed(text):
+        log_ignored_segment(text)
+        set_status("idle", "")
+        print("(stay-awake: ignorado — sem endereço)", file=sys.stderr)
+        return 0
     _dbg: dict[str, Any] = {
         "audio": _audio_meta,
         "model_size": model_size,
@@ -1015,14 +1095,26 @@ def main_voice(argv: list[str] | None = None) -> int:
     import argparse
 
     parser = argparse.ArgumentParser(prog="jarvis voice", description="STT → roteador → TTS a partir de um WAV")
-    parser.add_argument("wav", help="arquivo de áudio capturado pelo wakeword")
+    parser.add_argument("wav", nargs="?", default=None, help="arquivo de áudio capturado pelo wakeword")
     parser.add_argument("--no-tts", action="store_true", help="não sintetizar resposta em voz")
     parser.add_argument("--model", default=STT_MODEL_DEFAULT, help="tamanho do modelo faster-whisper")
     parser.add_argument("--debug-wav", default=None, help="dir p/ salvar WAV + session.json de diagnóstico")
     parser.add_argument("--clone", action="store_true", help="converte resposta p/ timbre RVC (~+20s; exige envs do spike)")
+    parser.add_argument("--awake", type=int, default=0, metavar="MIN",
+                        help="modo fique-acordado por MIN minutos (daemon manda tudo; gate no brain)")
+    parser.add_argument("--sleep", action="store_true", help="sai do modo fique-acordado")
     args = parser.parse_args(argv)
 
-    if not Path(args.wav).exists():
+    if args.sleep:
+        set_stay_awake(0)
+        print("dormindo (stay-awake off)")
+        return 0
+    if args.awake:
+        until = set_stay_awake(args.awake * 60)
+        import datetime as _dt
+        print(f"acordado por {args.awake}min (até {_dt.datetime.fromtimestamp(until).strftime('%H:%M')})")
+        return 0
+    if not args.wav or not Path(args.wav).exists():
         print(f"ERROR: arquivo não existe: {args.wav}", file=sys.stderr)
         return 1
     return voice_loop(args.wav, tts=not args.no_tts, model_size=args.model,

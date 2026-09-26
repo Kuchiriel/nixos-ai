@@ -365,3 +365,37 @@ def test_speak_no_play_emits_no_status(monkeypatch, tmp_path) -> None:
     out = voice.speak("só gera", play=False)
     assert not out.startswith("ERROR")
     assert "speaking" not in states
+
+
+def test_stay_awake_flag_and_gate(tmp_path, monkeypatch) -> None:
+    """F-voz: flag TTL + gate de destinatário v1 (sem áudio)."""
+    import time as _t
+    from jarvis.core import voice as _v
+    monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path))
+    assert _v.stay_awake_until() == 0.0
+    until = _v.set_stay_awake(600)
+    assert until > _t.time()
+    assert _v.stay_awake_until() == until
+    _v.set_stay_awake(0)
+    assert _v.stay_awake_until() == 0.0
+    # gate: nome/pergunta/imperativo passam; resto não
+    assert _v.is_addressed("hey jarvis, que horas são") is True
+    assert _v.is_addressed("qual é a capital?") is True
+    assert _v.is_addressed("me lembre de beber água") is True
+    assert _v.is_addressed("ligue a luz") is True
+    assert _v.is_addressed("o cachorro latiu alto ontem") is False
+    assert _v.is_addressed("") is False
+    _v.log_ignored_segment("o cachorro latiu")
+    logged = (tmp_path / "stay-awake-ignored.jsonl").read_text()
+    assert "cachorro" in logged
+
+
+def test_voice_awake_cli(tmp_path, monkeypatch, capsys) -> None:
+    """CLI --awake/--sleep sem WAV."""
+    from jarvis.core import voice as _v
+    monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path))
+    assert _v.main_voice(["--awake", "5"]) == 0
+    assert "acordado" in capsys.readouterr().out
+    assert _v.stay_awake_until() > 0
+    assert _v.main_voice(["--sleep"]) == 0
+    assert _v.stay_awake_until() == 0.0

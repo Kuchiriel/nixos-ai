@@ -339,6 +339,19 @@ EOF
               if not BRAIN_CMD:
                   _restart_capture()
                   return
+              # Stay-awake (F-voz): TTL em arquivo → dispensa o wake; o gate
+              # de destinatário vive no brain (voice_loop), com log dos
+              # ignorados em stay-awake-ignored.jsonl. `jarvis voice --awake`.
+              try:
+                  with open(os.path.expanduser("~/.local/state/jarvis/stay-awake")) as _af:
+                      _awake_until = float((_af.read() or "0").strip() or 0)
+              except Exception:
+                  _awake_until = 0.0
+              if _awake_until > time.time():
+                  print(f"[WW] 👁️ stay-awake (sem wake, gate no brain)", flush=True)
+                  play_sound(BEEP_SOUND)
+                  _run_brain(temp_wav)
+                  return
               # Fase 2 ou follow-up: comando puro, sem scorer.
               if time.time() < expect_command_until or time.time() < followup_until:
                   if time.time() < followup_until:
