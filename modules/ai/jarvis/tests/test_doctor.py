@@ -113,8 +113,8 @@ def test_run_doctor_returns_checks(monkeypatch) -> None:
     monkeypatch.setattr("jarvis.core.doctor.requests.get", fake_get)
     checks = run_doctor(cfg)
     assert all(isinstance(c, ComponentHealth) for c in checks)
-    # 6 originais + 3 novos proativos (network, sockets, btrfs)
-    assert len(checks) == 9
+    # 6 originais + 3 novos proativos (network, sockets, btrfs) + wakeword (voz)
+    assert len(checks) == 10
 
 
 def test_check_ui_shape(monkeypatch) -> None:
@@ -137,3 +137,18 @@ def test_check_ui_all_ok(monkeypatch) -> None:
                         lambda *a, **k: type("R", (), {"returncode": 1})())
     h = check_ui()
     assert h.status == "ok"
+
+
+def test_check_wakeword_states(monkeypatch) -> None:
+    """26/09 voz: daemon ouvido no doctor (ok/down); heal religa via mapa."""
+    from jarvis.core.doctor import check_wakeword
+    monkeypatch.setattr("jarvis.core.doctor._user_unit_active",
+                        lambda unit: (True, "ativo"))
+    assert check_wakeword().status == "ok"
+    monkeypatch.setattr("jarvis.core.doctor._user_unit_active",
+                        lambda unit: (False, "inativo (esperado?)"))
+    h = check_wakeword()
+    assert h.status == "down" and "heal religa" in h.detail
+    from jarvis.core.heal import SERVICE_MAP
+    assert SERVICE_MAP["wakeword"] == {"service": "jarvis-wakeword",
+                                       "scope": "user"}

@@ -710,3 +710,56 @@ class TestVoiceClone:
         assert out.endswith("-clone.wav")
         assert calls["cmd"][0] == str(fake_py)
         assert calls["cwd"] == str(tmp_path)
+
+
+class TestSlotsModelParam:
+    """26/09 UX-voz: /slots sem ?model= → 400 no router b10743 → status
+    vazio → is_busy sempre True → voice_loop recusava tudo."""
+
+    def _slot(self):
+        return {"id": 0, "n_ctx": 100, "is_processing": False,
+                "n_prompt_tokens": 10}
+
+    def _resp(self, code, payload):
+        m = MagicMock()
+        m.status_code = code
+        m.json.return_value = payload
+        return m
+
+    def test_llamacpp_sends_model_param(self):
+        from jarvis.providers.llm_llama_cpp import LlamaCppBackend
+        b = LlamaCppBackend(model="bonsai")
+        sess = MagicMock()
+        sess.get.return_value = self._resp(200, [self._slot()])
+        b._session = sess
+        st = b.get_slots_status()
+        assert st["slots_total"] == 1 and st["slots_busy"] == 0
+        url, kwargs = sess.get.call_args[0][0], sess.get.call_args[1]
+        assert url.endswith("/slots") and kwargs["params"] == {"model": "bonsai"}
+        assert b.is_busy() is False
+
+    def test_prism_resolves_model_via_api(self):
+        from jarvis.providers.llm_prismml import PrismMLBackend
+        b = PrismMLBackend()  # model=default → resolve via /v1/models
+        sess = MagicMock()
+
+        def fake_get(url, **kw):
+            if url.endswith("/v1/models"):
+                return self._resp(200, {"data": [{"id": "bonsai"}]})
+            return self._resp(200, [self._slot()])
+        sess.get.side_effect = fake_get
+        b._session = sess
+        st = b.get_slots_status()
+        assert st["slots_total"] == 1
+        slots_calls = [c for c in sess.get.call_args_list
+                       if c[0][0].endswith("/slots")]
+        assert slots_calls and slots_calls[0][1]["params"] == {"model": "bonsai"}
+
+    def test_busy_when_server_errors(self):
+        from jarvis.providers.llm_llama_cpp import LlamaCppBackend
+        b = LlamaCppBackend(model="bonsai")
+        sess = MagicMock()
+        sess.get.return_value = self._resp(500, {})
+        b._session = sess
+        assert b.get_slots_status() == {}
+        assert b.is_busy() is True  # fail-closed preservado

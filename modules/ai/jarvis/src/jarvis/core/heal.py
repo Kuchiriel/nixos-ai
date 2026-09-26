@@ -35,6 +35,8 @@ SERVICE_MAP: dict[str, dict[str, str]] = {
     "llama_cpp": {"service": "llama-cpp-server", "scope": "system"},
     "llama_cpp_embeddings": {"service": "llama-cpp-embeddings", "scope": "system"},
     "qdrant": {"service": "qdrant", "scope": "system"},
+    # (26/09, voz) ouvido do JARVIS: user service, heal religa se cair.
+    "wakeword": {"service": "jarvis-wakeword", "scope": "user"},
 }
 ALLOWLIST = tuple(v["service"] for v in SERVICE_MAP.values())
 

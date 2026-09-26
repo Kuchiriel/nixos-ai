@@ -425,13 +425,42 @@ class LlamaCppBackend(LLMBackend):
                 is_available=False,
             )
 
+    _SLOTS_MODEL: dict[str, str] = {}
+
+    def _slots_model_id(self) -> str:
+        """Id do modelo p/ /slots (26/09, voz quebrada: router b10743 exige
+        ?model= — sem ele, 400 → status vazio → is_busy sempre True → o
+        voice_loop recusava TUDO com 'outra tarefa'. Espelhar em prism)."""
+        cached = self._SLOTS_MODEL.get(self._base_url)
+        if cached:
+            return cached
+        if self._model and self._model not in ("default", "", None):
+            return self._model
+        try:
+            r = self._session.get(f"{self._base_url}/v1/models", timeout=3)
+            if r.status_code == 200:
+                data = (r.json().get("data") or [])
+                if data and data[0].get("id"):
+                    self._SLOTS_MODEL[self._base_url] = data[0]["id"]
+                    return data[0]["id"]
+        except Exception:  # noqa: BLE001
+            pass
+        return self._model or "default"
+
     def get_slots_status(self) -> dict[str, Any]:
         """Get slot status from /slots endpoint (llama.cpp specific)."""
         try:
             resp = self._session.get(
                 f"{self._base_url}/slots",
+                params={"model": self._slots_model_id()},
                 timeout=(self._connect_timeout, 3),
             )
+            if resp.status_code != 200:
+                # servidor antigo sem ?model=: tenta nu (compat)
+                resp = self._session.get(
+                    f"{self._base_url}/slots",
+                    timeout=(self._connect_timeout, 3),
+                )
             if resp.status_code != 200:
                 return {}
             slots = resp.json()

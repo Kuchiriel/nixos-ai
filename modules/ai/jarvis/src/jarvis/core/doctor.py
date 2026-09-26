@@ -93,6 +93,28 @@ def check_qdrant(cfg: Config) -> ComponentHealth:
     return h
 
 
+def check_wakeword() -> ComponentHealth:
+    """Daemon wakeword (ouvido do JARVIS) — user service dedicado.
+
+    (26/09, voz ponta a ponta: daemon morto desde o incidente freeze e
+    NADA o religava — heal não o conhecia. Sem ouvido, `jarvis voice`
+    só funciona com arquivo; controle por voz "não tá bom".)
+    """
+    h = ComponentHealth("wakeword")
+    try:
+        active, state = _user_unit_active("jarvis-wakeword")
+        if active:
+            h.status = "ok"
+            h.detail = "jarvis-wakeword ativo (ouvindo)"
+        else:
+            h.status = "down"
+            h.detail = f"jarvis-wakeword {state} (heal religa)"
+    except Exception as e:  # noqa: BLE001 — doctor nunca quebra
+        h.status = "degraded"
+        h.detail = f"wakeword inverificável: {e}"
+    return h
+
+
 def check_disk() -> ComponentHealth:
     """Espaço em disco do sistema."""
     h = ComponentHealth("disk")
@@ -331,6 +353,7 @@ def run_doctor(cfg: Config | None = None) -> list[ComponentHealth]:
         check_llm(cfg),
         check_embeddings(cfg),
         check_qdrant(cfg),
+        check_wakeword(),
         check_disk(),
         check_nixos_generations(),
         check_ui(),
