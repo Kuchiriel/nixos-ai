@@ -263,7 +263,7 @@ def recommend_config(
     # VRAM. Isso e a raiz do erro de fit — e do config 2,7x mais lento.
     model_size_gb = model_size_b * quant_multiplier
 
-    # MoE: TODO expert tem que estar residente em ALGUM lugar (GPU ou RAM),
+    # MoE: experts tem que estar residentes em ALGUM lugar (GPU ou RAM),
     # porque o router pode escolher qualquer um no proximo token. Entao o
     # FIT e decidido pelo TAMANHO TOTAL do arquivo, nunca pelos parametros
     # ATIVOS. A versao anterior usava ativos (3B x 0,55 = 1,6GB) e conclui
