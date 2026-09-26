@@ -932,3 +932,21 @@ def test_instrucao_lida_executada_depois_e_VERIFIED(tmp_path):
     ]
     v = check_completion(msgs, project_root=str(tmp_path))
     assert v.status == "VERIFIED", f"regrediu: {v.status} {v.missing}"
+
+
+def test_ok_false_json_counts_as_error_not_success():
+    """Envelope {"ok": false} do handle_dev_tool é falha (UX real S1 26/09:
+    3 reads em arquivos inexistentes contaram como sucesso → VERIFIED
+    vácuo com zero comandos executados)."""
+    from jarvis.core.completion import check_completion
+    msgs = [
+        {"role": "assistant", "tool_calls": [
+            {"function": {"name": "read_file",
+                          "arguments": '{"path": "hostname"}'}}]},
+        {"role": "tool",
+         "content": '{"ok": false, "error": "File not found: hostname"}'},
+        {"role": "assistant", "content": "O arquivo hostname não foi encontrado."},
+    ]
+    v = check_completion(msgs)
+    assert v.status == "UNVERIFIED"
+    assert any("ground truth" in m for m in v.missing)

@@ -459,14 +459,25 @@ def _shell_write_paths(messages: list[dict]) -> list[str]:
 
 
 def _is_error_output(content: str) -> bool:
-    """Output de tool é erro? Prefixo ERROR ou traceback Python.
+    """Output de tool é erro? Prefixo ERROR, traceback Python, ou envelope
+    JSON {"ok": false} do handle_dev_tool.
 
-    Traceback não começa com ERROR mas é falha inequívoca (csv real:
-    `import pandas` com ModuleNotFoundError contou como SUCESSO e o
-    modelo seguiu achando que tinha lido o CSV).
+    (26/09, UX real S1: read_file em arquivo inexistente devolve
+    '{"ok": false, "error": ...}' — NÃO começa com ERROR, contava como
+    SUCESSO e gerava VERIFIED vácuo com zero comandos executados.)
     """
     c = (content or "").strip()
-    return c.upper().startswith("ERROR") or "Traceback (most recent call last)" in c
+    if c.upper().startswith("ERROR") or "Traceback (most recent call last)" in c:
+        return True
+    if c.startswith("{"):
+        try:
+            import json
+            data = json.loads(c)
+            if isinstance(data, dict) and data.get("ok") is False:
+                return True
+        except Exception:
+            pass
+    return False
 
 
 _INSTR_LINE_RE = re.compile(
