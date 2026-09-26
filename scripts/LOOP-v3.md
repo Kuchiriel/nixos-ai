@@ -82,6 +82,24 @@ Escada de atribuição (ordem do dono 25/09, base arXiv 2607.28802):
    first_pass separado de world_ok. Gates vivem em
    scripts/harness-challenges.json (tier "gate", campo "edge" obrigatório).
 
+## PROTOCOLO DE OPERAÇÃO PESADA (incidente 25/09 23:55 — tela preta durante bench)
+
+Contexto: crash do compositor (Hyprland+Sunshine, sem log de kernel/GPU/OOM)
+com a máquina sob load de bench. Causa inconclusiva; agente não pode se
+dar o luxo de repetir. DAQUI PRA FRENTE, toda operação pesada segue:
+
+1. **Anunciar antes**: "vou rodar X por ~N min, usa GPU/CPU Y" — o dono
+   decide se espera ou se afasta da máquina.
+2. **`nice -n 19` + `ionice -c3`** em todo processo de bench — o desktop
+   (compositor) tem prioridade SEMPRE. Compositor com fome de CPU em
+   máquina carregada = tela preta.
+3. **Com o dono NA máquina: não passar de -t 4 threads** e um processo
+   pesado por vez. Full load só overnight ou com autorização explícita.
+4. Antes de operação pesada: conferir `free` (zram já congelou a máquina
+   uma vez com páginas frias) e NÃO rodar se livres < 6GB além do esperado.
+5. Bench que crasha a máquina = benchmark inválido + dano real ao usuário.
+   O número não vale a tela preta — SEMPRE.
+
 ## DOUTRINA UX (dica do dono, 25/09 noite)
 
 O harness precisa funcionar **pro usuário também, não apenas pros
