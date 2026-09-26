@@ -42,6 +42,15 @@ def check_world(world: dict, output: str) -> tuple[bool, list[str]]:
                                                      errors="replace")
             except OSError:
                 ok = False
+        elif key == "file_equals":
+            # (25/09, LOOP-v3) achado pelo preflight: substring aceitava
+            # 'DELTAX' p/ needle 'DELTA'. Exato p/ tasks "conteudo exato".
+            path, _, want = spec.partition("::")
+            try:
+                ok = Path(path).read_text(encoding="utf-8",
+                                          errors="replace").strip() == want.strip()
+            except OSError:
+                ok = False
         elif key == "output_contains":
             ok = spec.lower() in output.lower()
         elif key == "file_absent":
@@ -57,6 +66,46 @@ def check_world(world: dict, output: str) -> tuple[bool, list[str]]:
         if not ok:
             missed.append(f"{key}:{spec}")
     return (all(ok_parts) if ok_parts else False), missed
+
+
+def preflight_tasks(tasks: list[dict]) -> tuple[list[dict], list[dict]]:
+    """(25/09, LOOP-v3, cf. Terminal-Bench ICLR 2026 + factwash) Task só
+    mede modelo se: (1) a SOLUÇÃO de referência passa no world-check
+    (solvable, grader não impossível); (2) a ANTI-solução típica de modelo
+    fraco FALHA (grader não aceita qualquer coisa). O que antes era
+    validação manual/offline vira guard mecânico na entrada."""
+    ok_tasks, bad = [], []
+    for t in tasks:
+        if not t.get("solution"):
+            ok_tasks.append(t)  # sem oráculo declarado: passa reto (legado)
+            continue
+        prob = None
+        subprocess.run(["bash", "-c", t.get("setup", "true")],
+                       capture_output=True, timeout=30)
+        r = subprocess.run(["bash", "-c", t["solution"]],
+                           capture_output=True, timeout=60)
+        out = (r.stdout + b"\n" + r.stderr).decode("utf-8", "replace")
+        passed, _ = check_world(t.get("world", {}), out)
+        if not passed:
+            prob = "solucao_de_referencia_NAO_passa_no_check"
+        if prob is None and t.get("anti"):
+            subprocess.run(["bash", "-c", t["teardown"]], capture_output=True, timeout=30)
+            subprocess.run(["bash", "-c", t.get("setup", "true")],
+                           capture_output=True, timeout=30)
+            r = subprocess.run(["bash", "-c", t["anti"]],
+                               capture_output=True, timeout=60)
+            out_a = (r.stdout + b"\n" + r.stderr).decode("utf-8", "replace")
+            passed_a, _ = check_world(t.get("world", {}), out_a)
+            if passed_a:
+                prob = "anti_solucao_PASSA_no_check (grader aceita qualquer coisa)"
+        subprocess.run(["bash", "-c", t.get("teardown", "true")],
+                       capture_output=True, timeout=30)
+        if prob:
+            bad.append({"id": t["id"], "problema": prob})
+            print(f"  PREFLIGHT-REPROVA {t['id']}: {prob}")
+        else:
+            ok_tasks.append(t)
+    return ok_tasks, bad
 
 
 def run_suite(tasks: list[dict], approve: str = "y",
@@ -198,6 +247,10 @@ def main() -> None:
     ap.add_argument("--rounds", type=int, default=2,
                     help="tentativas máximas c/ feedback de mundo (1 = antigo)")
     ap.add_argument("--compare", nargs=2, metavar=("OLD", "NEW"))
+    ap.add_argument("--preflight-only", action="store_true",
+                    help="valida oraculos e sai (CI sem gastar modelo)")
+    ap.add_argument("--trials", type=int, default=1,
+                    help="baterias independentes p/ pass@k/pass^k (tau-bench)")
     args = ap.parse_args()
 
     if args.compare:
@@ -221,13 +274,46 @@ def main() -> None:
 
     preflight(model=os.environ.get("JARVIS_LLM_MODEL", "bonsai"))
 
-    results = run_suite(tasks, rounds=args.rounds)
+    # (25/09, LOOP-v3) oraculo por task ANTES da bateria (Terminal-Bench:
+    # solucao de referencia precisa passar; anti precisa falhar)
+    tasks, preflight_bad = preflight_tasks(tasks)
+    if args.preflight_only:
+        print(f"PREFLIGHT-ONLY: {len(tasks)} ok, {len(preflight_bad)} reprovadas")
+        return
+
+    trials = max(1, getattr(args, "trials", 1))
+    results = []
+    for _ in range(trials):
+        results = run_suite(tasks, rounds=args.rounds)
+        # trials>1: acumula em dict p/ pass@k / pass^k
+        if trials > 1:
+            key = {r["task_id"]: r for r in results}
+            try:
+                acc
+            except NameError:
+                acc = {r["task_id"]: {"world": [], "first": []} for r in results}
+            for tid, r in key.items():
+                acc[tid]["world"].append(bool(r["world_ok"]))
+                acc[tid]["first"].append(bool(r["first_pass"]))
+    if trials > 1:
+        print("=== CONFIABILIDADE (tau-bench: pass@k vs pass^k) ===")
+        for tid, a in acc.items():
+            k = len(a["world"])
+            pak = any(a["world"])
+            pkk = all(a["world"])
+            fragil = " <— BRITTLE (passa as vezes)" if pak and not pkk else ""
+            print(f"  {tid:24s} pass@{k}={int(pak)} pass^{k}={int(pkk)}{fragil}")
+        results = [dict(r) for r in results]  # o JSON salva a ultima trial
     summary = summarize(results)
     stamp = time.strftime("%Y-%m-%d__%H-%M-%S")
     out_path = args.out or f"/tmp/opencode/harness-suite-{stamp}.json"
     with open(out_path, "w") as f:
-        json.dump({"ts": stamp, "summary": summary, "results": results},
+        json.dump({"ts": stamp, "summary": summary, "results": results,
+                   "preflight_reprovadas": preflight_bad},
                   f, ensure_ascii=False, indent=2)
+    if preflight_bad:
+        print(f"  ATENCAO: {len(preflight_bad)} task(s) reprovada(s) no "
+              f"oraculo — NAO medida(s): {[b['id'] for b in preflight_bad]}")
 
     print(f"=== SUITE {stamp} ===")
     for tier, s in summary["by_tier"].items():

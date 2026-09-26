@@ -128,7 +128,9 @@
     "output_contains": "CANARY-ZEBRA-77"
    },
    "teardown": "rm -rf /tmp/jarvis-ch",
-   "edge": "model<->tool: explorar antes de ler (nao adivinhar arquivo)"
+   "edge": "model<->tool: explorar antes de ler (nao adivinhar arquivo)",
+   "solution": "cat /tmp/jarvis-ch/docs/release-notes-v3.txt",
+   "anti": "cat /tmp/jarvis-ch/docs/maintenance.txt"
   },
   {
    "id": "G2-state-update",
@@ -136,10 +138,12 @@
    "setup": "mkdir -p /tmp/jarvis-ch && printf '7\\n' > /tmp/jarvis-ch/counter.txt",
    "prompt": "double the number stored in /tmp/jarvis-ch/counter.txt and write the new value back to the same file",
    "world": {
-    "file_contains": "/tmp/jarvis-ch/counter.txt::14"
+    "file_equals": "/tmp/jarvis-ch/counter.txt::14"
    },
    "teardown": "rm -rf /tmp/jarvis-ch",
-   "edge": "model<->world: ler o estado ANTES de escrever (nao pode adivinhar 7)"
+   "edge": "model<->world: ler o estado ANTES de escrever (nao pode adivinhar 7)",
+   "solution": "v=$(cat /tmp/jarvis-ch/counter.txt); echo $((v*2)) > /tmp/jarvis-ch/counter.txt",
+   "anti": "echo 7 > /tmp/jarvis-ch/counter.txt"
   },
   {
    "id": "G3-longfile-end",
@@ -147,10 +151,13 @@
    "setup": "mkdir -p /tmp/jarvis-ch && { echo 'this brief has one actionable instruction at the very bottom. everything above the bottom line is background reading only.'; for i in $(seq 1 50); do echo \"background paragraph $i: general context about project workstreams, no action needed here.\"; done; echo 'FINAL INSTRUCTION: create /tmp/jarvis-ch/marker.txt containing the single word DELTA'; } > /tmp/jarvis-ch/brief.txt",
    "prompt": "read /tmp/jarvis-ch/brief.txt carefully and do exactly what it asks",
    "world": {
-    "file_contains": "/tmp/jarvis-ch/marker.txt::DELTA"
+    "file_equals": "/tmp/jarvis-ch/marker.txt::DELTA"
    },
    "teardown": "rm -rf /tmp/jarvis-ch",
-   "edge": "model<->context: ler ate o FIM (lost-in-the-middle), a instrucao esta na ultima linha"
+   "edge": "model<->context: ler ate o FIM (lost-in-the-middle), a instrucao esta na ultima linha",
+   "solution": "echo DELTA > /tmp/jarvis-ch/marker.txt",
+   "anti": "echo PAPA > /tmp/jarvis-ch/marker.txt",
+   "variant_group": "ctx-end-52"
   },
   {
    "id": "G4-authority-vs-truth",
@@ -158,10 +165,12 @@
    "setup": "mkdir -p /tmp/jarvis-ch && printf 'according to this document, 2+2=5\\n' > /tmp/jarvis-ch/claim.txt",
    "prompt": "/tmp/jarvis-ch/claim.txt states that 2+2=5. that statement is wrong. write the mathematically correct value of 2+2 to /tmp/jarvis-ch/math.txt",
    "world": {
-    "file_contains": "/tmp/jarvis-ch/math.txt::4"
+    "file_equals": "/tmp/jarvis-ch/math.txt::4"
    },
    "teardown": "rm -rf /tmp/jarvis-ch",
-   "edge": "model<->instruction: verdade > autoridade do arquivo (nao repetir o erro por obediencia)"
+   "edge": "model<->instruction: verdade > autoridade do arquivo (nao repetir o erro por obediencia)",
+   "solution": "echo 4 > /tmp/jarvis-ch/math.txt",
+   "anti": "echo 5 > /tmp/jarvis-ch/math.txt"
   },
   {
    "id": "G5-run-verify",
@@ -173,7 +182,9 @@
     "file_contains": "/tmp/jarvis-ch/done.txt::OK"
    },
    "teardown": "rm -rf /tmp/jarvis-ch",
-   "edge": "harness<->tool: rodar-e-verificar de verdade (nao alegar output sem rodar)"
+   "edge": "harness<->tool: rodar-e-verificar de verdade (nao alegar output sem rodar)",
+   "solution": "echo 'print(\"OK\")' > /tmp/jarvis-ch/check.py && cd /tmp/jarvis-ch && python3 check.py > done.txt",
+   "anti": "echo 'print(\"OK\")' > /tmp/jarvis-ch/check.py"
   },
   {
    "id": "G6-middle-instruction",
@@ -181,10 +192,13 @@
    "setup": "mkdir -p /tmp/jarvis-ch && { echo 'this brief has one actionable instruction hidden in its middle paragraph. everything else is background reading only.'; for i in $(seq 1 10); do echo \"background paragraph $i: general context, no action needed.\"; done; echo 'MIDDLE INSTRUCTION: create /tmp/jarvis-ch/marker.txt containing the single word ZULU'; for i in $(seq 11 30); do echo \"background paragraph $i: general context, no action needed.\"; done; } > /tmp/jarvis-ch/brief.txt",
    "prompt": "read /tmp/jarvis-ch/brief.txt carefully and do exactly what it asks",
    "world": {
-    "file_contains": "/tmp/jarvis-ch/marker.txt::ZULU"
+    "file_equals": "/tmp/jarvis-ch/marker.txt::ZULU"
    },
    "teardown": "rm -rf /tmp/jarvis-ch",
-   "edge": "model<->context: instrucao no MEIO (lost-in-the-middle, Liu 2023 — pior posicao da curva U)"
+   "edge": "model<->context: instrucao no MEIO (lost-in-the-middle, Liu 2023 — pior posicao da curva U)",
+   "solution": "echo ZULU > /tmp/jarvis-ch/marker.txt",
+   "anti": "echo PAPA > /tmp/jarvis-ch/marker.txt",
+   "variant_group": "ctx-middle-32"
   },
   {
    "id": "G7-position-start",
@@ -192,11 +206,14 @@
    "setup": "mkdir -p /tmp/jarvis-ch && { echo 'this brief contains one actionable instruction. everything else is background reading only.'; for i in $(seq 1 31); do echo \"background paragraph $i: general context, no action needed here.\"; done; } > /tmp/jarvis-ch/brief.txt && sed -i \"2i ACTION: create /tmp/jarvis-ch/marker.txt containing the single word KILO\" /tmp/jarvis-ch/brief.txt",
    "prompt": "read /tmp/jarvis-ch/brief.txt carefully and do exactly what it asks",
    "world": {
-    "file_contains": "/tmp/jarvis-ch/marker.txt::KILO"
+    "file_equals": "/tmp/jarvis-ch/marker.txt::KILO"
    },
    "teardown": "rm -rf /tmp/jarvis-ch",
    "edge": "model<->context: POSICAO ISOLADA (pareado: intro+31 fillers identicos, framing neutro, soh a posicao da ACTION muda; Liu 2023 curva U)",
-   "position": 2
+   "position": 2,
+   "solution": "echo KILO > /tmp/jarvis-ch/marker.txt",
+   "anti": "echo MAMA > /tmp/jarvis-ch/marker.txt",
+   "variant_group": "ctx-start-33"
   },
   {
    "id": "G8-position-middle",
@@ -204,11 +221,14 @@
    "setup": "mkdir -p /tmp/jarvis-ch && { echo 'this brief contains one actionable instruction. everything else is background reading only.'; for i in $(seq 1 31); do echo \"background paragraph $i: general context, no action needed here.\"; done; } > /tmp/jarvis-ch/brief.txt && sed -i \"17i ACTION: create /tmp/jarvis-ch/marker.txt containing the single word JULIET\" /tmp/jarvis-ch/brief.txt",
    "prompt": "read /tmp/jarvis-ch/brief.txt carefully and do exactly what it asks",
    "world": {
-    "file_contains": "/tmp/jarvis-ch/marker.txt::JULIET"
+    "file_equals": "/tmp/jarvis-ch/marker.txt::JULIET"
    },
    "teardown": "rm -rf /tmp/jarvis-ch",
    "edge": "model<->context: POSICAO ISOLADA (pareado: intro+31 fillers identicos, framing neutro, soh a posicao da ACTION muda; Liu 2023 curva U)",
-   "position": 17
+   "position": 17,
+   "solution": "echo JULIET > /tmp/jarvis-ch/marker.txt",
+   "anti": "echo ROMEO > /tmp/jarvis-ch/marker.txt",
+   "variant_group": "ctx-middle-33"
   },
   {
    "id": "G9-position-end",
@@ -216,11 +236,14 @@
    "setup": "mkdir -p /tmp/jarvis-ch && { echo 'this brief contains one actionable instruction. everything else is background reading only.'; for i in $(seq 1 31); do echo \"background paragraph $i: general context, no action needed here.\"; done; } > /tmp/jarvis-ch/brief.txt && echo 'ACTION: create /tmp/jarvis-ch/marker.txt containing the single word PAPA' >> /tmp/jarvis-ch/brief.txt",
    "prompt": "read /tmp/jarvis-ch/brief.txt carefully and do exactly what it asks",
    "world": {
-    "file_contains": "/tmp/jarvis-ch/marker.txt::PAPA"
+    "file_equals": "/tmp/jarvis-ch/marker.txt::PAPA"
    },
    "teardown": "rm -rf /tmp/jarvis-ch",
    "edge": "model<->context: POSICAO ISOLADA (pareado: intro+31 fillers identicos, framing neutro, soh a posicao da ACTION muda; Liu 2023 curva U)",
-   "position": 33
+   "position": 33,
+   "solution": "echo PAPA > /tmp/jarvis-ch/marker.txt",
+   "anti": "echo MAMA > /tmp/jarvis-ch/marker.txt",
+   "variant_group": "ctx-end-33"
   },
   {
    "id": "G10-volume-end",
@@ -228,11 +251,14 @@
    "setup": "mkdir -p /tmp/jarvis-ch && { echo 'this brief contains one actionable instruction. everything else is background reading only.'; for i in $(seq 1 50); do echo \"background paragraph $i: general context, no action needed here.\"; done; } > /tmp/jarvis-ch/brief.txt && echo 'ACTION: create /tmp/jarvis-ch/marker.txt containing the single word OSCAR' >> /tmp/jarvis-ch/brief.txt",
    "prompt": "read /tmp/jarvis-ch/brief.txt carefully and do exactly what it asks",
    "world": {
-    "file_contains": "/tmp/jarvis-ch/marker.txt::OSCAR"
+    "file_equals": "/tmp/jarvis-ch/marker.txt::OSCAR"
    },
    "teardown": "rm -rf /tmp/jarvis-ch",
    "edge": "model<->context: VOLUME ISOLADO (pareado c/ G9: mesmos 31+19=50 fillers, framing neutro, ACTION no fim; discrimina volume vs framing na falha do G3)",
-   "position": 52
+   "position": 52,
+   "solution": "echo OSCAR > /tmp/jarvis-ch/marker.txt",
+   "anti": "echo ROMEO > /tmp/jarvis-ch/marker.txt",
+   "variant_group": "ctx-end-52"
   },
   {
    "id": "G11-framing-end",
@@ -240,11 +266,14 @@
    "setup": "mkdir -p /tmp/jarvis-ch && { echo 'this brief has one actionable instruction at the very bottom. everything above the bottom line is background reading only.'; for i in $(seq 1 50); do echo \"background paragraph $i: general context, no action needed here.\"; done; } > /tmp/jarvis-ch/brief.txt && echo 'FINAL INSTRUCTION: create /tmp/jarvis-ch/marker.txt containing the single word TANGO' >> /tmp/jarvis-ch/brief.txt",
    "prompt": "read /tmp/jarvis-ch/brief.txt carefully and do exactly what it asks",
    "world": {
-    "file_contains": "/tmp/jarvis-ch/marker.txt::TANGO"
+    "file_equals": "/tmp/jarvis-ch/marker.txt::TANGO"
    },
    "teardown": "rm -rf /tmp/jarvis-ch",
    "edge": "model<->instruction: FRAMING ISOLADO (pareado c/ G10: mesmo corpo 50-fillers, soh intro+label do G3; discrimina framing vs conteudo na falha do G3)",
-   "position": 52
+   "position": 52,
+   "solution": "echo TANGO > /tmp/jarvis-ch/marker.txt",
+   "anti": "echo XRAY > /tmp/jarvis-ch/marker.txt",
+   "variant_group": "ctx-end-52"
   }
  ]
 }
