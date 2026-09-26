@@ -359,3 +359,44 @@ def test_single_identity_in_dev_mode() -> None:
     assert '_rebuild_system("")' in src, "modo-role voltou a empilhar"
     # caminho instruções: rebuild COM persona + framing MODE
     assert "_rebuild_system(_persona_block(active_persona))" in src
+
+
+# ---------------------------------------------------------------------------
+# F7: fronteira supervisor/loop + runtime único
+# ---------------------------------------------------------------------------
+
+def test_supervisor_does_not_own_the_loop() -> None:
+    """Nightwatch é supervisor: consome contratos, nunca o loop do Agent.
+
+    Trava: harness.py não importa Agent (nem constrói); o único compositor
+    do loop é runtime/agent_runtime.py. Quando o supervisor chamar
+    runtime.run (F7b, com prova em bateria), este teste ganha o caller.
+    """
+    import re
+    harness = (SRC / "nightwatch/harness.py").read_text()
+    assert "from jarvis.core.agent import" not in harness, (
+        "supervisor importando o loop — fronteira violada")
+    assert re.search(r"(?<![\w.])Agent\(", harness) is None, (
+        "supervisor construindo Agent — usar runtime.run (F7b)")
+
+    composers: set[str] = set()
+    for p in list((SRC / "jarvis").rglob("*.py")):
+        if p.name in ("agent.py", "agent_runtime.py"):
+            continue
+        try:
+            text = p.read_text()
+        except Exception:
+            continue
+        if re.search(r"(?<![\w.])Agent\(", text):
+            composers.add(p.relative_to(SRC).as_posix())
+    tests_ok = {c for c in composers if "/tests/" in c or "test_" in c}
+    # Consumidores legítimos do loop (roteiam PARA ele, não possuem loop):
+    # router (pré-runtime determinístico), main (entrada CLI), benchmarks
+    # (clientes do runtime por doutrina). Migração p/ runtime.run no lote
+    # F8. Novo compositor fora desta lista = falha.
+    assert composers - tests_ok == {
+        "jarvis/core/router.py",
+        "jarvis/cli/main.py",
+        "jarvis/benchmarks/l9/run_l9.py",
+        "jarvis/benchmarks/kb_regression.py",
+    }, f"compositor do loop fora do permitido: {composers - tests_ok}"
