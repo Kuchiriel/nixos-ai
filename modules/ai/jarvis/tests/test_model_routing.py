@@ -405,3 +405,21 @@ def test_agent_routes_and_swaps_model(router, tmp_path, monkeypatch):
     assert agent.config.llm_model == "jarvis-fast"
     assert state.loaded == "jarvis-fast"
     assert "jarvis-fast" in result.final_response
+
+
+def test_read_fastpath_nao_engole_instrucao_nem_regride():
+    """(25/09, LOOP-v3, bug pago no REPL real) 'read X e FAÇA o que pede'
+    era comido pelo fastpath read (devolvia conteúdo, agente nunca rodava).
+    Fix estrutural: verbo+path+resquício = composto → agent. Sem lista de
+    verbos (falso positivo em does/made). Regressões vigiadas: leitura
+    pura e audiobook legítimo seguem nas rotas baratas."""
+    from jarvis.core.router import route_request
+    # instruções compostas → agent
+    assert route_request("read /tmp/brief.txt carefully and do exactly what it asks").handler == "agent"
+    assert route_request("leia o arquivo /tmp/x.py e faça o que ele pede").handler == "agent"
+    # leitura pura → fastpath read (zero LLM) — NÃO regridir
+    assert route_request("leia o arquivo /tmp/x.py").handler == "read"
+    assert route_request("read /tmp/report.md").handler == "read"
+    # audiobook legítimo → fastpath — NÃO regridir
+    assert route_request("leia o livro a metamorfose").handler == "fastpath"
+    assert route_request("read the book dune").handler == "fastpath"

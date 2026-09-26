@@ -81,6 +81,22 @@ _READ_QUESTION_RE = re.compile(
 )
 
 
+def _is_pure_read(text: str) -> bool:
+    """(25/09, LOOP-v3) Fastpath read exige pedido INTEIRO = "leia <path>".
+    Estrutural: remove verbo+path e tolera só cortesia; qualquer resquicio
+    ("and do what it asks") e composto -> agent. Sem lista de verbos (listas
+    pegam falso positivo/negativo; bug pago no REPL real 25/09)."""
+    m = _READ_PATH_RE.search(text)
+    if not m:
+        return False
+    resto = text.replace(m.group(1), " ", 1)
+    resto = _READ_VERB_RE.sub(" ", resto.strip(), count=1)
+    resto = re.sub(r"[\s\"'`(\[\])]+", " ", resto)
+    resto = re.sub(r"\b(o|a|os|as|the|arquivo|file|por favor|please|carefully)\b",
+                  " ", resto, flags=re.IGNORECASE)
+    return len(resto.split()) <= 1
+
+
 def _extract_read_path(text: str) -> str | None:
     """Extrai path de pedido de leitura direta. None se não houver path."""
     m = _READ_PATH_RE.search(text)
@@ -245,11 +261,17 @@ def route_request(text: str) -> Route:
             if _READ_QUESTION_RE.search(low):
                 log.info("route_agent", detail={"over": "fastpath-audiobook", "text": text[:100]})
                 return Route("agent", "pedido composto com leitura — LLM com tools", text, 0.5)
-            read_path = _extract_read_path(text)
+            read_path = _extract_read_path(text) if _is_pure_read(text) else None
             if read_path:
                 log.info("route_read", detail={"path": read_path, "over": "fastpath-audiobook"})
                 return Route("read", f"leitura direta: '{read_path}'", text, 0.95,
                              hints={"path": read_path})
+            if _extract_read_path(text) and not _is_pure_read(text):
+                # (25/09) path + conteúdo além do verbo = tarefa composta
+                # com arquivo (não audiobook, não leitura): agent (LLM+tools).
+                # Antes caía na regra audiobook e despachava errado.
+                log.info("route_agent", detail={"over": "fastpath-audiobook-composto", "text": text[:100]})
+                return Route("agent", "tarefa composta com arquivo — LLM com tools", text, 0.5)
         log.info("fastpath_match", detail={"trigger": match.rule.trigger, "text": text[:100]})
         return Route("fastpath", f"regra declarativa: '{match.rule.trigger}'", text, 1.0)
 
@@ -272,7 +294,7 @@ def route_request(text: str) -> Route:
     #     e explique") e perguntas ("mostra/Me mostra/o que tem") seguem
     #     para RAG/agent. Política: EXACT KNOWN FILE → read_file.
     if _READ_VERB_RE.match(low) and not _READ_QUESTION_RE.search(low):
-        read_path = _extract_read_path(text)
+        read_path = _extract_read_path(text) if _is_pure_read(text) else None
         if read_path:
             log.info("route_read", detail={"path": read_path})
             return Route("read", f"leitura direta: '{read_path}'", text, 0.95,
