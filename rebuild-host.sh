@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Rebuild do sistema NixOS a partir do flake local.
 # Valida avaliação ANTES de executar o switch.
-# Uso: ./rebuild-host.sh [--host-only] [--debug]
+# Uso: ./rebuild-host.sh [--host-only] [--quick] [--debug]
 #   --host-only: valida host+HM sem flake-check total (lab quebrado não trava o host).
+#   --quick:    só sintaxe+eval (pula builds/testes; p/ iterar rápido em .nix).
 #   --debug:    executa tudo com output redirecionado para log e exibe o log ao final.
 set -e
 
