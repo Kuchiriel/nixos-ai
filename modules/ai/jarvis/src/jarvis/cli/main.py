@@ -1592,7 +1592,7 @@ def _cmd_workitem(args: argparse.Namespace) -> int:
     if args.create:
         title, project = args.create
         task = Task(
-            id=f"cli-{int(time.time())}",
+            id=f"cli-{int(time.time()*1000000)}-{os.getpid() % 10000}",
             project=project,
             description=title,
             priority=5,

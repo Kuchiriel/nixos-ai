@@ -56,6 +56,15 @@
 - Commit por ciclo, com o número do challenge e o antes/depois.
 - Se um ciclo não produzir mudança no harness ou no registro, o ciclo
   parou — não encher commit.
+- **Repo limpo antes da noite** (27/09: nightwatch recusou tudo com "dirty
+  tree" porque o main estava 1 commit à frente sem push). Pré-noite:
+  `git status` limpo + push do dia feito + `workitem --list` sem lixo.
+  Tarefa fora de repo (ex: arquivos em `~/Pessoal`) NÃO vai pra fila do
+  nightwatch — ele isola por branch de código.
+- **IDs de task únicos**: `workitem --create` usava `int(time.time())`
+  (segundo) — duas criações no mesmo segundo colidiam e uma engolia a
+  outra. Fix 27/09 em `cli/main.py`: microssegundos + pid
+  (`cli-<us>-<pid>`). Vale após rebuild (binário instalado ≠ fonte).
 
 ## Fila que o loop herda (25/09)
 
