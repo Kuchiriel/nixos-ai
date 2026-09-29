@@ -117,3 +117,37 @@ def test_dev_prompt_byte_identical_to_template() -> None:
             persona_block=pers, tool_discipline=disc, tools_catalog=cat)
         got = _build_system_prompt(repo, mem, ctx, pers, disc, cat)
         assert got == expected, f"divergiu com persona={pers!r:.20}"
+
+
+def test_compact_prompt_shorter_and_en(monkeypatch) -> None:
+    """Prompt enxuto p/ SLM: menor que o full, EN, sem persona/disciplina."""
+    from jarvis.cli.dev import (
+        SYSTEM_PROMPT_TEMPLATE,
+        _build_system_prompt,
+        _compact_prompt_on,
+    )
+
+    full = _build_system_prompt("MAPA", "MEM", "CTX", "PERS", "DISC", "CAT")
+    assert SYSTEM_PROMPT_TEMPLATE.format(
+        repo_map="MAPA", memory_context="MEM", agent_context="CTX",
+        persona_block="PERS", tool_discipline="DISC",
+        tools_catalog="CAT") == full
+    tools = [{"function": {"name": "read_file", "description": "d"}}]
+    # Com partes realistas (memória/persona/disciplina longas) o compact
+    # descarta o grueso: razão < 1/3.
+    big = ("M" * 2000, "C" * 1000, "P" * 500, "D" * 1500, "CAT")
+    full_big = _build_system_prompt("MAPA", *big)
+    small = _build_system_prompt("MAPA", *big,
+                                 compact=True, compact_tools=tools)
+    assert len(small) < len(full_big) // 3, (len(small), len(full_big))
+    assert "coding assistant" in small and "read_file" in small
+    assert "PERSONA" not in small and "cat: PROIBIDO" not in small
+
+    monkeypatch.delenv("JARVIS_COMPACT_PROMPT", raising=False)
+    assert _compact_prompt_on({"name": "tiny"}) is True
+    assert _compact_prompt_on({"name": "small"}) is True
+    assert _compact_prompt_on({"name": "large"}) is False
+    monkeypatch.setenv("JARVIS_COMPACT_PROMPT", "1")
+    assert _compact_prompt_on({"name": "large"}) is True
+    monkeypatch.setenv("JARVIS_COMPACT_PROMPT", "0")
+    assert _compact_prompt_on({"name": "tiny"}) is False

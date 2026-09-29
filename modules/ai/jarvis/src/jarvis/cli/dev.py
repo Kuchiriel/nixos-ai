@@ -986,6 +986,40 @@ try:
 except ImportError:  # pragma: no cover
     _TOOL_DISCIPLINE = ""
 
+# Compact prompt p/ modelos pequenos (tiny/small): instruction-stacking
+# cobra caro em SLM (arXiv 2607.19257/2608.02639) — o prompt full do dev
+# foi afinado p/ fronteira. EN (SLM rende mal em PT-BR), sem persona,
+# sem disciplina longa, catálogo só com nomes. Override p/ experimento:
+# JARVIS_COMPACT_PROMPT=1 força, =0 desliga.
+_COMPACT_SYSTEM_TEMPLATE = """You are JARVIS, a coding assistant. Answer short.
+
+CWD rules: read a file BEFORE editing it; old_string must be an EXACT
+copy from the file. Test after editing. Never invent file content.
+
+{repo_map}
+TOOLS ({n_tools}): {tool_names}
+
+Output limits: find max 30 results; ls never recursive; git log max 10;
+cat FORBIDDEN (use head/tail); grep max 20; >50 lines = bullet summary.
+"""
+
+def _compact_prompt_on(profile: dict[str, Any]) -> bool:
+    env = os.environ.get("JARVIS_COMPACT_PROMPT", "").strip()
+    if env == "1":
+        return True
+    if env == "0":
+        return False
+    return profile.get("name") in ("tiny", "small")
+
+
+def _compact_system_prompt(repo_map: str, tools: list[dict[str, Any]]) -> str:
+    names = sorted({((t.get("function") or {}).get("name", "?")) for t in tools})
+    return _COMPACT_SYSTEM_TEMPLATE.format(
+        repo_map=(repo_map or "").strip()[:2000],
+        n_tools=len(names),
+        tool_names=", ".join(names) if names else "none (text only)",
+    )
+
 PLAN_PROMPT = """JARVIS architect. {LANG_NAME}. Direto.
 
 {repo_map}
@@ -1479,13 +1513,18 @@ RULES:
 
 def _build_system_prompt(repo_map: str, memory_context: str,
                          agent_context: str, persona_block: str,
-                         tool_discipline: str, tools_catalog: str) -> str:
+                         tool_discipline: str, tools_catalog: str,
+                         compact: bool = False,
+                         compact_tools: list | None = None) -> str:
     """F8: montagem do system prompt do REPL via ContextAssembler (1 mecanismo).
 
     Byte-idêntico ao template antigo com as mesmas partes — separadores
     preservados inclusive com partes vazias (seções incondicionais).
     6 call sites → 1 helper (golden test em test_runtime_context.py).
+    compact=True: prompt enxuto p/ SLM (sem persona/disciplina longa).
     """
+    if compact:
+        return _compact_system_prompt(repo_map, compact_tools or [])
     from jarvis.runtime.context import ContextAssembler
     asm = ContextAssembler()
     asm.add("identity",
@@ -2408,8 +2447,10 @@ def dev_repl(project_root: str | None = None, approve: bool = False, continue_se
     repo_map = _build_repo_map(os.getcwd())
     memory_ctx = _build_memory_context()
     agent_ctx = _load_agent_context(os.getcwd()) + _pinned_section()
+    _compact = _compact_prompt_on(profile)
+    _catalog = _tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else [])
     system_prompt = _maybe_disable_thinking(
-        _build_system_prompt(repo_map, memory_ctx, agent_ctx, _persona_block(active_persona), _TOOL_DISCIPLINE, _tools_catalog(_get_tools(active_persona) if profile.get("native_tools") else []))
+        _build_system_prompt(repo_map, memory_ctx, agent_ctx, _persona_block(active_persona), _TOOL_DISCIPLINE, _catalog, compact=_compact, compact_tools=tools)
     )
 
     def _rebuild_system(persona_block_text: str) -> str:
@@ -2970,7 +3011,7 @@ RULES:
 1. Responda em {LANG_NAME}, sem rodeios e sem pedir desculpa por nada.
 2. Use ferramenta quando a tarefa exigir; responda em texto quando não.
 3. Entregue o resultado (arquivo/texto) e pare. Não peça para continuar.
-"""
+""".replace("{LANG_NAME}", _template_lang())
 
 
 def _apply_prompt_profile(prompt: str, profile_name: str) -> str:
