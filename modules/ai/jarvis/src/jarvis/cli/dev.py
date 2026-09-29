@@ -2548,14 +2548,26 @@ def _run_agent_loop(
                         v = check_completion(messages)
                     except Exception:
                         v = None
-                    # classe artefato, nao diagnostico: trailing-error pode
-                    # ser O ASSUNTO da pergunta ("por que falhou?") — nao
-                    # reabre por ele sozinho. So reopen com trabalho nao feito.
+                    # Classe artefato, não diagnóstico: trailing-error pode
+                    # ser O ASSUNTO da pergunta ("por que falhou?") — não
+                    # reabre por ele sozinho. Só reabre com trabalho não feito.
+                    #
+                    # 29/09 (mission-kit): o filtro casava só strings PT-BR.
+                    # Em prompt EN o mundo diz "doesn't exist yet" e o
+                    # nudge NUNCA disparava — o sistema inteiro de segurança
+                    # ficava desligado justamente quando o dono escreve em
+                    # inglês. Casa por CLASSE (idioma-agnóstico), não por
+                    # texto: deliverable ausente / não compila / instrução
+                    # lida não executada.
+                    _ART_MARKERS = (
+                        "instrucao lida", "instrução lida",
+                        "nao existe", "não existe", "does not exist",
+                        "doesn't exist", "doesn\u2019t exist",
+                        "nao compila", "não compila", "doesn't compile",
+                    )
                     _art = [m for m in v.missing
-                            if ("instrucao lida" in m
-                                or "nao existe" in m
-                                or "não existe" in m
-                                or "nao compila" in m)] if v else []
+                            if any(_k in m.lower() for _k in _ART_MARKERS)
+                            ] if v else []
                     if v is not None and v.status != "VERIFIED" and _art:
                         _run_agent_loop._verdict_nudged = 1  # type: ignore[attr-defined]
                         _run_agent_loop._friction = successes  # type: ignore[attr-defined]

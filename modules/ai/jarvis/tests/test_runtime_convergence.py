@@ -743,3 +743,48 @@ def test_sampling_comes_from_registry_not_greedy(monkeypatch) -> None:
     extra = {k: prof[k] for k in ("top_p", "top_k", "presence_penalty")
              if prof.get(k) is not None}
     assert "min_p" not in extra and "repetition_penalty" not in extra
+
+
+def test_verdict_nudge_fires_in_english(monkeypatch) -> None:
+    """29/09 (mission-kit): o filtro de artefato casava só PT-BR. Em EN o
+    mundo diz "doesn't exist yet" e o nudge nunca disparava — segurança
+    desligada quando o dono escreve em inglês."""
+    from jarvis.core.completion import CompletionVerdict
+    import jarvis.cli.dev as _dev
+
+    calls = {"n": 0}
+
+    def _fake_call(messages, tools, profile, debug=False):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            tc = [{"id": "c1", "type": "function",
+                   "function": {"name": "read_file",
+                                "arguments": '{"path": "spec.txt"}'}}]
+            return {"choices": [{"message": {"role": "assistant",
+                                             "content": "", "tool_calls": tc}}]}
+        return {"choices": [{"message": {
+            "role": "assistant", "tool_calls": None,
+            "content": "The sum is 6."}}]}
+
+    class _FakeCC:
+        @staticmethod
+        def check_completion(messages):
+            return CompletionVerdict(
+                "UNVERIFIED", [],
+                ["prompt requires answer.txt which doesn't exist yet "
+                 "— create it if it's a deliverable"])
+
+    import jarvis.core.completion as _comp
+    monkeypatch.setattr(_comp, "check_completion",
+                        _FakeCC.check_completion)
+    monkeypatch.setattr(_dev, "_call_llm", _fake_call)
+    monkeypatch.setattr(_dev, "_execute_tool_call",
+                        lambda *a, **k: ("spec contents", None))
+    msgs: list = [{"role": "system", "content": "s"},
+                  {"role": "user", "content": "sum the DATA line, write "
+                                              "the number to answer.txt"}]
+    _dev._run_agent_loop(msgs, [], {"name": "small"}, approve=True,
+                         max_turns=5)
+    systems = [m.get("content", "") for m in msgs if m.get("role") == "system"]
+    assert any("NOT satisfied" in s or "answer.txt" in s for s in systems), \
+        "nudge de veredito TEM que disparar com texto EN"
