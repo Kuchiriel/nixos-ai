@@ -99,3 +99,37 @@ depois corrigir") — e mesmo assim executa o comando errado 8×. Reasoning
 tokens **não** substituem o mecanismo de **forçar novelty de ação**
 (que aqui é o ABORT). Planning simulado não é o gargalo; grounding +
 variedade de ação são.
+
+## Portão de promoção (29/09) — R1-distill-7B **não** promovido
+
+Modelo só entra no `models.nix` se ganhar do baseline no **mesmo**
+harness, mesmas tasks, mesmo container. Lite battery:
+
+| Modelo | byte | bin | line | **total** | miss��o multi-etapa |
+|---|---|---|---|---|---|
+| bonsai 8B ternary | 1/1 | 2/2 | 1/2 | **4/5** | 0 (nem chega longe) |
+| Qwen3-4B fast | 1/1 | 2/2 | 1/2 | **4/5** | 0 |
+| R1-distill-7B (local) | 1/1 | 2/2 | **0/2** | **3/5** | 0 |
+| DeepSeek-NVIDIA 120B | 1/1 | 2/2 | 2/2 | **5/5** | — |
+
+**R1-7B: 3/5 — abaixo do bonsai. Não promovido.** Modo de falha novo:
+erro de sintaxe shell (`python3 -c` com `with` numa linha só) e confusão
+de interface (nomes de tool como comando). Contexto **não** era o
+limite (3387 tokens em 6 turnos, janela é 8k).
+
+### O experimento que responde "reasoning converte?"
+
+O **MoE local (Qwen3.6-35B, tier reasoning)** na missão multi-etapas:
+rodou → leu o CSV com numeração de linha → `str_replace "5;50"→"5,50"`
+cirúrgico → rodou de novo → **550 (total correto)**. 5 tool calls,
+caminho perfeito. Perdeu **um passo**: encerrou sem escrever
+`total.txt`, e o final veio vazio.
+
+Isso é a resposta: **raciocínio converte na decisão; o que faltava era
+o harness cobrar o último passo.** Duas correções que vieram disso:
+1. final vazio = parada silenciosa (nunca entrava em nudge)
+2. parser de zero-width (o tokenizer emitia U+200B após `<` e a
+   tool-call Hermes virava prosa — a ação **válida** morria no parser)
+
+O MoE já é `jarvis-strong`; nenhum flag novo, nenhuma promoção
+pendente. O R1 fica em `~/models/` como experimento documentado.
