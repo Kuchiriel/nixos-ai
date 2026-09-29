@@ -63,6 +63,12 @@ class _ContainerBridge:
         import threading as _th
         self._env = env
         self._seen: set[str] = set()
+        # Grounding da completion (29/09): "done" sem nenhuma observação
+        # do container é prosa, não trabalho. Contadores alimentam o gate
+        # pós-run (COMPLETED com zero exec → UNVERIFIED honesto).
+        self.n_exec = 0
+        self.n_writes = 0
+        self.written: list[str] = []
         self._loop = _aio.new_event_loop()
         self._thread = _th.Thread(target=self._loop.run_forever, daemon=True)
         self._thread.start()
@@ -90,10 +96,14 @@ class _ContainerBridge:
                     return _NS(return_code=1, stdout="",
                                stderr=(f"harness: write to '{o}' refused — "
                                        f"you never read it. Read the source "
-                                       f"file first (cat/head), then write."))
+                                       f"file first (cat/head), then transfer "
+                                       f"with ONE shell command (cp A B, "
+                                       f"sed -n Np A > B). Never re-type "
+                                       f"bytes — re-typing corrupts."))
                 self._seen.add(base)
         except Exception:
             pass
+        self.n_exec += 1
         fut = _aio.run_coroutine_threadsafe(
             self._env.exec(cmd, timeout_sec=timeout), self._loop)
         r = fut.result(timeout + 20)
@@ -114,6 +124,8 @@ class _ContainerBridge:
     def write(self, path: str, content: bytes) -> str:
         import os as _os
         import tempfile as _tf
+        self.n_writes += 1
+        self.written.append(path)
         fd, tmp = _tf.mkstemp(prefix="hjarvis-")
         try:
             with _os.fdopen(fd, "wb") as f:
@@ -169,7 +181,9 @@ def _container_agent_class(environment: Any) -> Any:
                 # Texto p/ o modelo em EN (bonsai rende mal em PT-BR).
                 return (f"# {path} ({len(raw)} bytes, BINARY — not valid UTF-8)\n"
                         f"Text tools (read/write) CORRUPT this file. "
-                        f"Use execute_shell: `cp`, `xxd`, `base64`, `cmp`.")
+                        f"Use execute_shell: `cp`, `xxd`, `base64`, `cmp`. "
+                        f"Transfer with ONE command (cp A B) — "
+                        f"never re-type bytes.")
             lines = text.split("\n")
             chunk = "\n".join(lines[offset:offset + limit])
             # Trailer anti-vazamento (B-cell 28/09: o MoE copiou o cabeçalho
@@ -340,7 +354,21 @@ class JarvisHarborAgent(BaseAgent):
             _agent_mod.has_chaining_operators = real_chain
             _agent_mod.command_allowed = real_allowed
         sess = result.session
-        self._fill_context(context, sess, time.time() - started)
+        # Completion container-aware (29/09): "done" precisa estar ancorado
+        # em observação do container. COMPLETED com zero exec = prosa, não
+        # trabalho → UNVERIFIED honesto (o verifier continua decidindo o
+        # score; aqui só não se declara feito sem ter tocado o ambiente).
+        # Genérico (contadores, zero conhecimento de task).
+        grounding = {
+            "n_exec": getattr(bridge, "n_exec", 0) if bridge else 0,
+            "n_writes": getattr(bridge, "n_writes", 0) if bridge else 0,
+        }
+        verdict = getattr(sess, "termination", "?")
+        if verdict == "COMPLETED" and grounding["n_exec"] == 0:
+            verdict = "UNVERIFIED"
+            grounding["downgraded"] = "completed-without-container-exec"
+        self._fill_context(context, sess, time.time() - started,
+                           grounding=grounding, verdict=verdict)
         # ATIF-ish: trajetória + sessão serializada no logs_dir
         try:
             logs = Path(getattr(self, "logs_dir", "/tmp"))
@@ -351,6 +379,7 @@ class JarvisHarborAgent(BaseAgent):
                 "verdict": sess.termination, "turns": sess.turns,
                 "model": sess.model_id,
                 "duration_s": round(time.time() - started, 1),
+                "grounding": grounding,
                 "steps": sess.steps,
                 "evidence": sess.evidence, "missing": sess.missing,
             }, ensure_ascii=False, default=str)[:200000], encoding="utf-8")
@@ -361,20 +390,25 @@ class JarvisHarborAgent(BaseAgent):
             pass
 
     @staticmethod
-    def _fill_context(context: Any, sess: Any, duration_s: float) -> None:
+    def _fill_context(context: Any, sess: Any, duration_s: float,
+                      grounding: dict | None = None,
+                      verdict: str | None = None) -> None:
         """Preenche SÓ campos que existem no context (duck-typing).
 
         Funciona no AgentContext real (pydantic, harbor instalado) e no
         stub local. Campos desconhecidos são ignorados, nunca erro.
         """
         meta = {
-            "verdict": getattr(sess, "termination", "?"),
+            "verdict": verdict if verdict is not None else getattr(
+                sess, "termination", "?"),
             "turns": getattr(sess, "turns", 0),
             "model": getattr(sess, "model_id", "?"),
             "verified": getattr(sess, "verified", False),
             "missing": list(getattr(sess, "missing", []) or [])[:3],
             "duration_s": round(duration_s, 1),
         }
+        if grounding:
+            meta["grounding"] = grounding
         if hasattr(context, "metadata"):
             try:
                 if isinstance(context.metadata, dict):

@@ -233,3 +233,46 @@ def test_bridge_warns_write_without_read() -> None:
     assert r2.return_code == 0
     r3 = bridge.sh("echo x > /app/run.sh")
     assert r3.return_code == 0
+
+
+def test_bridge_counters_and_grounding() -> None:
+    """29/09 (completion container-aware): a ponte conta execs/writes;
+    COMPLETED sem nenhum exec no container = UNVERIFIED honesto."""
+    import jarvis.runtime.harbor_agent as _ham
+
+    env = FakeEnv()
+    bridge = _ham._ContainerBridge(env)
+    assert bridge.n_exec == 0 and bridge.n_writes == 0
+    bridge.sh("cat /app/src.txt")
+    assert bridge.n_exec == 1
+    cls = _ham._container_agent_class(env)
+    cls._bridge = bridge
+    cls._exec_write("write_file", {"path": "/app/o.txt", "content": "x"})
+    assert bridge.n_writes == 1 and bridge.written == ["/app/o.txt"]
+
+    # Refusal não conta como exec (nada tocou o container).
+    bridge2 = _ham._ContainerBridge(FakeEnv())
+    r = bridge2.sh("echo hello > /app/line2.txt")
+    assert r.return_code == 1
+    assert bridge2.n_exec == 0
+    assert "ONE shell command" in (r.stderr or "")
+
+    # Gate: prosa-only COMPLETED → UNVERIFIED; com exec mantém.
+    class Sess:
+        termination = "COMPLETED"
+        turns = 3
+        model_id = "bonsai"
+        verified = False
+        missing = []
+    ctx = Ctx()
+    _ham.JarvisHarborAgent._fill_context(
+        ctx, Sess(), 1.0,
+        grounding={"n_exec": 0, "n_writes": 0,
+                   "downgraded": "completed-without-container-exec"},
+        verdict="UNVERIFIED")
+    assert ctx.metadata["verdict"] == "UNVERIFIED"
+    assert ctx.metadata["grounding"]["n_exec"] == 0
+    ctx2 = Ctx()
+    _ham.JarvisHarborAgent._fill_context(ctx2, Sess(), 1.0)
+    assert ctx2.metadata["verdict"] == "COMPLETED"
+    assert "grounding" not in ctx2.metadata
