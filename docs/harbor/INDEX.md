@@ -33,6 +33,8 @@
 | 29/09 | **ensure com evicção** | — | **`JARVIS_ENSURE_EVICT=1`**: `_evict_peers` despeja residentes de outros endpoints do registry antes do load. Validado ida e volta (bonsai→fast→bonsai). `harbor-lite.sh fast` já exporta. Opt-in (bot não despeja ninguém por padrão) |
 | 29/09 | **bateria Lite fixa** | bonsai bash-first | **`scripts/harbor-lite.sh [bonsai\|fast]`**: bytecopy + bin + extract-line. Baseline bonsai **4/5** (bin 2/2, byte 1/1, line 1/2 — sensível, bom p/ regressão) |
 | 29/09 | no-tool nudge (dev loop) | bonsai | texto final sem nenhuma tool na sessão ganhava RC 0 direto (A/B lean/minimal). Agora 1 nudge limitado + teste. Q&A em texto segue funcionando |
+| 29/09 | **RC honesto + claim rastreia shell** | bonsai | claim-checker rastreia `>`/`cp` do shell; texto final após nudge com evidência e sem sucesso posterior = **RC 1** (validado ao vivo: era RC 0). Reset de attrs por run (bug latente). Série A/B: lean≈minimal p/ bonsai (ambos falham igual), minimal 2-4x mais rápido em wall |
+| 29/09 | **lite fast 4/5 (evicção automática)** | Qwen3-4B fast | bin 2/2, byte 1/1, line 1/2 — sem dança manual (ensure+evict). Custo: fast 55-390s wall vs bonsai 2-5s (10-80x). `harbor-lite.sh` restaura bonsai no fim |
 
 ## Estratégia por modelo (`scripts/grade-harbor.py`)
 

@@ -23,3 +23,10 @@ for job in job-one.json job-bin.json job-task3.json; do
     2>&1 | tail -1
 done
 nix develop --command python3 scripts/grade-harbor.py 2>&1 | grep -E "^$STAMP|job " | head -12
+if [ "$MODEL" = "fast" ]; then
+  # Devolve o residente padrão do bot (a bateria despejou o bonsai).
+  nix develop --command python3 -c "
+from jarvis.core.model_lifecycle import ensure_model
+r = ensure_model('bonsai', base_url='http://127.0.0.1:8080')
+print('restore bonsai:', r.selected, r.reason.get('evicted'))" 2>&1 | tail -1
+fi
