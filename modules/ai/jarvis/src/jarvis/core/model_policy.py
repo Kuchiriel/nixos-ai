@@ -383,6 +383,10 @@ CASCADE_MAP: dict[str, list[tuple[str, str, str, str]]] = {
          "OPENCODE_CONFIG"),
         ("openrouter", "nex-n2.5-mini", "https://openrouter.ai/api",
          "OPENROUTER_API_KEY"),
+        # 29/09 (E-cell Harbor): validado via RemoteBackend sanitizado
+        # (finish_reason dava 400; sanitize resolveu). Último recurso.
+        ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai",
+         "GROQ_API_KEY"),
     ],
     "batch": [
         ("nvidia", "deepseek-v4-flash", "https://integrate.api.nvidia.com",

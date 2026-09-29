@@ -41,7 +41,10 @@ in {
       serviceConfig = {
         Type = "simple";
         User = cfg.user;
-        EnvironmentFile = "-${cfg.environmentFile}";
+        # 29/09: + litellm.env p/ a cascata API funcionar (STUCK → Groq).
+        # Sem keys no env, _try_api_cascade nunca disparava (dormente).
+        # Arquivo é world-readable; bot já roda como nixos (mesmo acesso).
+        EnvironmentFile = ["-${cfg.environmentFile}" "-/etc/litellm.env"];
         ExecStart = "${pkgs.jarvis}/bin/jarvis telegram";
         Restart = "on-failure";
         RestartSec = "5";

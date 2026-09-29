@@ -1525,7 +1525,8 @@ class TestApiCascadeGate:
     def test_no_key_no_call(self, monkeypatch):
         """Sem key no env → None, sem rede (anti-preguiça trava 3)."""
         import os
-        for k in ("OPENROUTER_API_KEY", "OPENCODE_CONFIG", "NVIDIA_API_KEY"):
+        for k in ("OPENROUTER_API_KEY", "OPENCODE_CONFIG", "NVIDIA_API_KEY",
+                  "GROQ_API_KEY"):
             monkeypatch.delenv(k, raising=False)
         from jarvis.core.agent import Agent
         from jarvis.core.config import Config
