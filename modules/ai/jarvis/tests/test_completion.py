@@ -826,6 +826,21 @@ def test_missing_deliverables_no_verb_no_charge(tmp_path):
     assert not any("config.json" in m for m in out)
 
 
+def test_missing_deliverables_imperative_pt(tmp_path):
+    """29/09 (A/B ao vivo): 'escreva ... em /tmp/x/out.txt' sem deliverable
+    dava VERIFIED — imperativo PT não casava nos verbos."""
+    from jarvis.core.completion import missing_deliverables
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "data.txt").write_text("alpha\nbeta\n")
+    msgs = [{"role": "user",
+             "content": "leia data.txt e escreva a segunda linha em out.txt"}]
+    with use_project_root(tmp_path):
+        from jarvis.core.devtools import resolve_base
+        out = missing_deliverables(msgs, resolve_base())
+    assert any("out.txt" in m for m in out)
+    assert not any("data.txt" in m for m in out)
+
+
 def test_valid_root_json_silent(tmp_path):
     """.json válido no CWD não dispara (nem inputs nem outputs bons)."""
     from jarvis.core.paths import use_project_root

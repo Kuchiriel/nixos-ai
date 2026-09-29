@@ -77,7 +77,10 @@ def verdict_for_outcome(outcome: str, detail: str = "") -> CompletionVerdict:
 _CREATION_VERBS = re.compile(
     r"(criad[oa]|criou|foi criado|escrit[oa]|escrevi|salv[oa]|salvei|"
     r"created|wrote|written|saved|adicionad[oa]|adicionei|"
-    r"\bwrite\b|\bcreate\b|\bsave\b|\bgenerate\b)",
+    r"\bwrite\b|\bcreate\b|\bsave\b|\bgenerate\b|"
+    # Imperativo PT (29/09: "escreva X em /tmp/y" passava batido e dava
+    # VERIFIED sem deliverable — A/B ao vivo).
+    r"\bcri[ea]\b|\bescrev[ea]\b|\bsalv[ea]\b|\bger[ea]\b)",
     re.IGNORECASE,
 )
 _PATH_LIKE = re.compile(r"[`\"']?([\w\-./]+\.(?:py|md|nix|txt|json|sh|toml))[,.`\"']?")

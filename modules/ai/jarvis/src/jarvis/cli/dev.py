@@ -3158,6 +3158,23 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
         ok = _run_agent_loop(messages, tools, profile, approve, debug,
                              max_turns=10)
     _persist_session(messages, project_root or os.getcwd())
+    # Veredito de grounding no fim da sessão (29/09, integração REPL dos
+    # aprendizados Harbor: completion ancorada no mundo, não na narrativa).
+    # Informativo (rc segue do loop); vai p/ o transcript p/ scripting.
+    _ground_status, _ground_missing = "?", []
+    try:
+        from jarvis.core.completion import check_completion as _cc
+        _gv = _cc(messages)
+        _ground_status = _gv.status
+        _ground_missing = list(_gv.missing or [])
+        if _gv.status == "VERIFIED":
+            console.print(f"[tool.ok]✓ verificado no mundo "
+                          f"({len(_gv.evidence or [])} evidências)[/]")
+        else:
+            console.print(f"[dim]  (mundo: {_gv.status}: "
+                          f"{'; '.join(_ground_missing[:2])[:130]})[/]")
+    except Exception:
+        pass
     if transcript_path:
         # Transcript JSON p/ scripting (paridade pi --mode json): prompt,
         # perfil, rc e mensagens (tools inclusas, conteúdo truncado p/
@@ -3182,6 +3199,8 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
                       "profile": profile.get("name"),
                       "model": profile.get("model_id"),
                       "rc": 0 if ok else 1,
+                      "grounding": _ground_status,
+                      "grounding_missing": _ground_missing[:3],
                       "ts": _t.time(),
                       "messages": slim}
             # Transcript = conteúdo da conversa: em space cifrado vai .enc

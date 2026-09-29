@@ -82,6 +82,19 @@ def _sandbox_state_dir(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path / "state"))
 
 
+@pytest.fixture(autouse=True)
+def _no_api_cascade(monkeypatch) -> None:
+    """Cascata API desligada nos testes (29/09).
+
+    STUCK chamava Groq/NVIDIA de VERDADE quando havia key no env — mock
+    de LLM furado por rede real (test_identical_error_thrice_is_stuck
+    virou VERIFIED via cascata). Teste unitário nunca toca API paga.
+    """
+    for _k in ("GROQ_API_KEY", "NVIDIA_API_KEY", "OPENROUTER_API_KEY",
+               "TOGETHER_API_KEY", "GEMINI_API_KEY"):
+        monkeypatch.delenv(_k, raising=False)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _isolated_qdrant_collections() -> None:
     """Isola as coleções Qdrant da execução de teste (25/09).
