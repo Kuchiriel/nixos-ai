@@ -85,27 +85,32 @@ class _ContainerBridge:
         # (.sh/.py) isentos (criação é legítima). Só existe na ponte
         # (trials); host nunca passa aqui.
         _SCRIPT_EXT = (".sh", ".py", ".js", ".ts", ".json")
+        # 29/09 (4ª, princípio): MENÇÃO ≠ LEITURA. `_reads` só recebe o que
+        # foi efetivamente OBSERVADO (exec rc 0 / bridge.read ok). Mencionar
+        # o output num cmd falho (`| write_file /app/line2.txt`, exit 127)
+        # envenenava o set e recusava a transferência legítima seguinte.
+        # `cur` (menções deste cmd) vale p/ o gate de intenção; proteção de
+        # fonte usa só o committed.
+        cur: set[str] = set()
         try:
             # 29/09 (2ª): o regex capturava FLAGS como paths (`grep -n '2'
             # /app/data.txt registrava "-n", não o fonte — clobber passava).
             # Só conta o que parece path (ignora -flags); além do operando
             # imediato, qualquer token com `/` (cobre `cmd -flag ... /path`).
-            reads = {m.group(1).split("/")[-1] for m in _re.finditer(
+            cur = {m.group(1).split("/")[-1] for m in _re.finditer(
                 r"(?:cat|grep|sed|awk|head|tail|less|xxd|base64|cmp|diff)\s+([/\w.\-]+)", cmd)
                 if not m.group(1).startswith("-")}
             _outs = {o.split("/")[-1]
                      for o in _re.findall(r">{1,2}\s*([/\w.\-]+)", cmd)}
-            reads |= {t.strip("'\"").split("/")[-1]
-                      for t in _re.findall(r"[\"']?(/[-\w./]+)[\"']?", cmd)}
-            reads.discard("")
+            cur |= {t.strip("'\"").split("/")[-1]
+                    for t in _re.findall(r"[\"']?(/[-\w./]+)[\"']?", cmd)}
+            cur.discard("")
             # Alvo de redirect é OUTPUT, nunca fonte (senão toda primeira
             # escrita seria recusada).
-            reads -= _outs
-            self._seen.update(reads)
-            self._reads.update(reads)
+            cur -= _outs
             for o in _re.findall(r">{1,2}\s*([/\w.\-]+)", cmd):
                 base = o.split("/")[-1]
-                # Fonte lida primeiro: read-only p/ redirect. Exceção:
+                # Fonte OBSERVADA primeiro: read-only p/ redirect. Exceção:
                 # output PRÓPRIO (retry legítimo — 7GzVSVq turn 7).
                 if (base in self._reads and o not in self.written
                         and base not in self._out_bases
@@ -115,17 +120,18 @@ class _ContainerBridge:
                                        f"read — read-only. Write the OUTPUT "
                                        f"to its own path, never overwrite "
                                        f"the source."))
-                if base in self._seen or o.endswith(_SCRIPT_EXT):
+                if (base in self._seen or base in cur
+                        or o.endswith(_SCRIPT_EXT)):
                     self._seen.add(base)
                     self._out_bases.add(base)
                     continue
                 # task3 29/09: modelo lia data.txt e depois o SOBRESCREVIA
                 # (echo invented > data.txt) p/ "extrair" da própria
-                # fabricação. Higiene genérica de sandbox: input lido e
+                # fabricação. Higiene genérica de sandbox: input observado e
                 # nunca criado pelo agente é read-only p/ redirect —
                 # escreva no OUTPUT, não no fonte. (write_file segue
                 # permitido p/ edição cirúrgica com old-string.)
-                if not reads:
+                if not cur and base not in self._reads:
                     return _NS(return_code=1, stdout="",
                                stderr=(f"harness: write to '{o}' refused — "
                                        f"you never read it. Read the source "
@@ -141,19 +147,27 @@ class _ContainerBridge:
         fut = _aio.run_coroutine_threadsafe(
             self._env.exec(cmd, timeout_sec=timeout), self._loop)
         r = fut.result(timeout + 20)
+        try:
+            # Commit pós-sucesso: só observação efetiva vira fonte protegida.
+            if getattr(r, "return_code", 1) == 0:
+                self._seen.update(cur)
+                self._reads.update(cur)
+        except Exception:
+            pass
         return r
 
     def read(self, path: str) -> tuple[Any, str]:
         self._seen.add(path.split("/")[-1])
         # 29/09 (3ª): leitura via TOOL não alimentava _reads — modelo lia
         # com read_file e o redirect seguinte caía no "never read it".
-        # Leitura é leitura, qualquer que seja a interface.
-        self._reads.add(path.split("/")[-1])
+        # Leitura é leitura, qualquer que seja a interface. (4ª: só conta
+        # se OBSERVOU — falha não protege nada.)
         import base64 as _b64
         import shlex as _shlex
         r = self.sh("base64 -- " + _shlex.quote(path))
         if r.return_code != 0:
             return None, (r.stderr or "not found").strip()[:160]
+        self._reads.add(path.split("/")[-1])
         try:
             return _b64.b64decode(r.stdout), ""
         except Exception as exc:
