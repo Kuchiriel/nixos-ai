@@ -17,14 +17,35 @@ from typing import Any, Callable
 
 # -- builders puros (seções compartilhadas) --------------------------------
 
-def environment_block() -> str:
+def environment_block(for_container: bool = False) -> str:
     """Bloco ENVIRONMENT — byte-idêntico ao inline de Agent.run.
 
     F-pesquisa (26/09): data/hora/timezone INJETADAS estaticamente (prática
     consolidada dos harnesses: 1 linha sempre correta > 1 turn pedindo
     `date` que o modelo pode pular — e elimina a regra do AGENTS.md que
     mandava o modelo rodar date/timedatectl).
+
+    for_container (29/09, N-cell): trials rodam tools no CONTAINER mas o
+    processo é do host — CWD do host no prompt virava exploração de
+    `/home/nixos/...` dentro do container (DeepSeek vagou no host e zerou).
+    No sandbox, declara o mundo verdadeiro (/app) e nega o host.
     """
+    if for_container:
+        try:
+            from datetime import datetime
+            _now = datetime.now().astimezone()
+            _ts = (_now.strftime("%Y-%m-%d %H:%M %Z")
+                   + f" ({_now.astimezone().tzname()})")
+        except Exception:
+            _ts = "unknown"
+        return (
+            "\n\nENVIRONMENT:\n"
+            "- Sandbox: Harbor container (isolated)\n"
+            "- CWD: /app\n"
+            "- Host paths (e.g. /home/...) DO NOT EXIST here — "
+            "never use them\n"
+            f"- Now: {_ts}"
+        )
     try:
         import platform
         import os

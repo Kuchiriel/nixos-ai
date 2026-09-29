@@ -207,6 +207,10 @@ def _container_agent_class(environment: Any) -> Any:
         """Mesmo loop, tools no container (override de @staticmethods)."""
 
         _bridge: Any = None
+        # Sandbox (29/09): o mundo do trial é o container (/app) — o
+        # environment_block declara isso em vez do CWD do host (vazamento
+        # que fazia o modelo explorar /home/... dentro do container).
+        _sandbox: bool = True
 
         @staticmethod
         def _exec_read_file(args: dict) -> str:

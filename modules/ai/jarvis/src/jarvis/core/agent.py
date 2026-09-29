@@ -1152,7 +1152,8 @@ class Agent:
 
         # Inject environment context (F3: builder único em runtime.context).
         from jarvis.runtime.context import environment_block as _environment_block
-        system_content += _environment_block()
+        _sandbox = bool(getattr(self, "_sandbox", False))
+        system_content += _environment_block(for_container=_sandbox)
         
         # Inject lessons from memory — qualificadas pelo PROMPT (não ""):
         # lessons("") embaralha por embedding vazio e injeta lições

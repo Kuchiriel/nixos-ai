@@ -19,6 +19,17 @@ def test_environment_block_golden() -> None:
     assert "\n- Now: 20" in out  # data/hora/timezone estáticas (F-pesquisa)
 
 
+def test_environment_block_container_declares_app() -> None:
+    """29/09 (N-cell): no sandbox o bloco declara /app e nega o host
+    (CWD do host vazava e o modelo explorava /home/... no container)."""
+    from jarvis.runtime.context import environment_block
+
+    out = environment_block(for_container=True)
+    assert "CWD: /app" in out
+    assert "DO NOT EXIST here" in out
+    assert "/home/" not in out.replace("/home/...", "")
+
+
 def test_lessons_block_golden_and_outage() -> None:
     from jarvis.runtime.context import lessons_block
 
