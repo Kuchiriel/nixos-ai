@@ -627,3 +627,27 @@ def test_repeated_error_nudge_inspects_data(monkeypatch) -> None:
     systems = [m.get("content", "") for m in msgs if m.get("role") == "system"]
     assert any("INSPECT the real data" in s for s in systems)
     assert _dev._run_agent_loop._err_nudged == 1
+
+
+def test_to_text_history_flattens_tool_protocol() -> None:
+    """29/09 (R1-distill): template deepseek-v3 degenera com role='tool'.
+    Achatar vira conversa legível (observação como texto)."""
+    import jarvis.cli.dev as _dev
+
+    msgs = [
+        {"role": "system", "content": "s"},
+        {"role": "user", "content": "rode"},
+        {"role": "assistant", "content": "", "tool_calls": [
+            {"id": "c1", "function": {"name": "execute_shell",
+                                      "arguments": '{"cmd": "cat a"}'}}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "alpha\nbeta"},
+        {"role": "assistant", "content": "pronto"},
+    ]
+    flat = _dev._to_text_history(msgs)
+    assert all(m["role"] in ("system", "user", "assistant") for m in flat)
+    assert not any(m.get("tool_calls") for m in flat)
+    a = flat[2]
+    assert a["role"] == "assistant"
+    assert "commands run" in a["content"] and "cat a" in a["content"]
+    assert "output of c1" in a["content"] and "alpha" in a["content"]
+    assert flat[-1]["content"] == "pronto"

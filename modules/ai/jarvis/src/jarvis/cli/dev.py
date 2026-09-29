@@ -2096,6 +2096,46 @@ def _looks_like_promise(content: str) -> bool:
     return any(_re.search(p, low) for p in pats)
 
 
+def _to_text_history(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Achata tool_calls/tool em prosa (29/09, R1-distill).
+
+    O template deepseek-v3 (usado pelo R1-distill) NÃO entende o
+    protocolo OpenAI: com mensagens role='tool' ele degenera em
+    `<｜tool｜>` e ruído. Achatar = conversa legível (observação como
+    texto), que o modelo entende e que qualquer template renderiza.
+    Lossless pro nosso propósito: a provenance fica nos steps/session.
+    """
+    out: list[dict[str, Any]] = []
+    for m in messages:
+        role = m.get("role")
+        if role == "tool":
+            # Saída pertence ao turno que a pediu: anexa ao assistant
+            # anterior (o comando já está lá como texto).
+            prev = out[-1] if out else None
+            if prev is not None and prev.get("role") == "assistant":
+                prev["content"] = (
+                    f"{prev.get('content', '')}\n"
+                    f"[output of {m.get('tool_call_id', '?')}]\n"
+                    f"{m.get('content', '')}")
+                continue
+            out.append({"role": "user",
+                        "content": f"[tool output]\n{m.get('content', '')}"})
+            continue
+        if m.get("tool_calls"):
+            _cmds = []
+            for tc in m["tool_calls"]:
+                fn = tc.get("function", {}) or {}
+                _a = fn.get("arguments", "")
+                _cmds.append(f"$ {fn.get('name', '?')} "
+                             f"{_a if isinstance(_a, str) else ''}".strip())
+            out.append({"role": "assistant",
+                        "content": (m.get("content") or "")
+                        + "\n[commands run]\n" + "\n".join(_cmds)})
+            continue
+        out.append(dict(m))
+    return out
+
+
 def _looks_like_prose_only(content: str) -> bool:
     """Resposta conversacional que DELEGA trabalho ao usuário (29/09).
 
@@ -2196,9 +2236,14 @@ def _run_agent_loop(
             if debug:
                 console.print(f"[dim]🗜️  auto-compact: {est:,} → ~{_estimate_tokens(messages):,} tok (threshold: {compact_threshold:,})[/]")
 
+        # Bash-first: histórico em prosa (template sem suporte a role=tool)
+        # e nada de schema de tools no payload (o modelo ignora de novo).
+        _fenced = bool(getattr(_run_agent_loop, "_fence_hinted", 0))
+        _req_msgs = _to_text_history(messages) if _fenced else messages
+        _req_tools = [] if _fenced else tools
         with console.status(f"[jarvis]pensando…[/] ({turn + 1}/{max_turns})", spinner="dots"):
             try:
-                data = _call_llm(messages, tools, profile, debug=debug)
+                data = _call_llm(_req_msgs, _req_tools, profile, debug=debug)
             except Exception as e:
                 console.print(f"[tool.error]❌ LLM error: {e}[/]")
                 return False
@@ -2206,14 +2251,6 @@ def _run_agent_loop(
         message = data["choices"][0]["message"]
         content = message.get("content") or ""
         tool_calls = message.get("tool_calls")
-
-        strategy = detector.check(tool_calls, content)
-        if strategy.action == RecoveryAction.ABORT:
-            console.print(f"[tool.error]⚠️  loop detectado: {strategy.message}[/]")
-            _repl_emit("session.loop_abort", detail=strategy.message)
-            return False
-        if strategy.action != RecoveryAction.NONE:
-            messages.append({"role": "system", "content": strategy.message})
 
         # Extract thinking content if present
         thinking = message.get("reasoning_content") or ""
@@ -2243,6 +2280,17 @@ def _run_agent_loop(
         if not tool_calls and content:
             tool_calls = _to_tool_calls(_parse_text_actions(content))
             used_text_fallback = tool_calls is not None
+
+        # Loop detection APOS o parse (29/09, R1-distill): antes ele via
+        # n_tc=0 em toda chamada vinda de fence/texto, entao nunca abortava
+        # o beco de 8x mesmo comando. Mesma decisao, evidencia real.
+        strategy = detector.check(tool_calls, content)
+        if strategy.action == RecoveryAction.ABORT:
+            console.print(f"[tool.error]⚠️  loop detectado: {strategy.message}[/]")
+            _repl_emit("session.loop_abort", detail=strategy.message)
+            return False
+        if strategy.action != RecoveryAction.NONE:
+            messages.append({"role": "system", "content": strategy.message})
 
         assistant_msg: dict[str, Any] = {"role": "assistant", "content": content or None}
         if tool_calls:
@@ -2280,16 +2328,19 @@ def _run_agent_loop(
                                              "_claims_nudged", 0) < 1)):
                     _run_agent_loop._fence_hinted = 1  # type: ignore[attr-defined]
                     console.print("[dim]  (schema ignorado → superfície "
-                                  "bash-first)[/]")
+                                  "bash-first + histórico em prosa)[/]")
                     messages.append({
                         "role": "system",
-                        "content": ("You cannot call tools directly. Use the "
-                                    "shell instead: your ENTIRE reply must be "
-                                    "ONE fenced block, nothing else:\n"
-                                    "```bash\n<one real command>\n```\n"
-                                    "Never ask me to paste files and never "
-                                    "describe the plan — read and run the "
-                                    "commands yourself (cat/head/ls/python3)."),
+                        "content": (
+                            "You cannot call tools directly. Use the shell: "
+                            "your ENTIRE reply must be ONE fenced block with "
+                            "ONE single command, NOTHING else — no "
+                            "explanation, no numbered plan, no '#' comments.\n"
+                            "```bash\ncat -A input.csv\n```\n"
+                            "Bad: multi-line scripts with # comments.\n"
+                            "Good: a single cat/head/grep/python3 line.\n"
+                            "Never ask me to paste files — read them "
+                            "yourself. Do not explain; run the command."),
                     })
                     continue
                 # No-tool nudge (A/B 29/09: lean/minimal terminaram RC 0 sem
@@ -2494,11 +2545,11 @@ def _run_agent_loop(
                 "content": output[:5000],
             })
 
-            # Recuperação por erro REPETIDO (29/09, R1-distill na missão):
-            # o modelo reexecuta o mesmo comando que falha (8x) — raciocínio
-            # existe, mas não muda a ação. Após 2 erros iguais, 1 nudge
-            # adaptativo: manda INSPECIONAR o dado real (cat/head) em vez de
-            # repetir. Bounded 1x por run.
+            # Recuperacao por erro REPETIDO (29/09, R1-distill na missao):
+            # o modelo reexecuta o mesmo comando que falha (8x) - raciocinio
+            # existe, mas nao muda a acao. Apos 2 erros iguais, marca o
+            # nudge (fora deste laco: `continue` aqui reinicia a iteracao
+            # das calls, nao o turno). Bounded 1x por run.
             if is_error and func_name == "execute_shell":
                 _errs = getattr(_run_agent_loop, "_err_cmds", {})
                 _k = str(args.get("cmd", ""))[:200]
@@ -2507,21 +2558,26 @@ def _run_agent_loop(
                 if (_errs[_k] >= 2 and successes == 0
                         and getattr(_run_agent_loop, "_err_nudged", 0) < 1):
                     _run_agent_loop._err_nudged = 1  # type: ignore[attr-defined]
-                    console.print("[dim]  (mesmo comando falhando — "
-                                  "inspecione o dado)[/]")
-                    messages.append({
-                        "role": "system",
-                        "content": (
-                            f"The command `{_k[:90]}` failed twice with the "
-                            f"SAME error — repeating it will not help. STOP "
-                            f"and INSPECT the real data first: your next "
-                            f"reply must be ONE fenced block reading the "
-                            f"input file (e.g. ```bash\ncat -A input.csv\n```"
-                            f" or `head -n 20 file`). Then fix based on what "
-                            f"you actually see. Do not re-run the failing "
-                            f"command."),
-                    })
-                    break
+                    _run_agent_loop._err_pending = _k  # type: ignore[attr-defined]
+
+        if getattr(_run_agent_loop, "_err_pending", None):
+            _k2 = _run_agent_loop._err_pending  # type: ignore[attr-defined]
+            _run_agent_loop._err_pending = None  # type: ignore[attr-defined]
+            console.print("[dim]  (mesmo comando falhando - "
+                          "inspecione o dado)[/]")
+            messages.append({
+                "role": "system",
+                "content": (
+                    f"The command `{_k2[:90]}` failed twice with the "
+                    f"SAME error - repeating it will not help. STOP and "
+                    f"INSPECT the real data first: your next reply must be "
+                    f"ONE fenced block reading the input file (e.g. "
+                    f"```bash\ncat -A input.csv\n``` or `head -n 20 file`). "
+                    f"Then fix based on what you actually see. Do not "
+                    f"re-run the failing command."),
+            })
+            continue
+
 
     _repl_emit("session.max_turns", max_turns=max_turns)
     if successes == 0:
