@@ -49,3 +49,36 @@ treinado majoritariamente em EN, com poda). Todo o A/B de hoje roda em
 PT-BR porque é a língua do dono — o que **subestima** o bonsai
 sistematicamente. Comparação honesta exige o mesmo idioma nos dois
 lados, e o idioma nativo do modelo é o critério.
+
+## A/B de idioma, medido (29/09)
+
+Mesma task (extrair 2ª linha), mesmo modelo (bonsai), mesmo sampling,
+só muda o idioma do prompt:
+
+| Prompt | Resultado | Bytes entregues |
+|---|---|---|
+| EN | RC 0 (declarado sucesso) | **0 — arquivo vazio** |
+| PT-BR | RC 1 (declarado fracasso) | **8 — conteúdo correto** |
+
+Duas coisas, nenhuma é "o inglês é melhor":
+
+1. **O hypothesis se confirma por um caminho inesperado**: em EN o
+   modelo para mais cedo — cumpre o *shape* da tarefa (cria o arquivo)
+   sem cumprir o *conteúdo*. Não é dificuldade de inglés, é adherence
+   literal ao verbo: "write ... to out.txt" mapeia para criar o
+   arquivo. Em PT-BR ("escreva SÓ a segunda linha em") o "SÓ" força
+   atenção ao conteúdo.
+2. **Achado de harness (mais importante que o idioma)**: o verificador
+   deu **VERIFIED para 0 bytes** — "arquivo existe". Falso positivo
+   puro, exatamente o que a gente disse querer evitar. Corrigido:
+   deliverable vazio é UNVERIFIED, com exceção quando a task pede
+   vazio explicitamente.
+
+### O que isso diz sobre medir
+O EN "ganhou" o RC e perdeu a entrega. RC honesto e entrega real são
+coisas diferentes, e só a segunda importa. Um A/B medido só por RC
+teria dado "EN 1×0, PT 0×1" — leitura totalmente invertida.
+
+Ação de prompt (barata, geral): pedir o conteúdo **explicitamente** em
+EN ("write ONLY the second line, no headers") em vez de confiar no
+verbo. Isso é hipótese, ainda não medida.
