@@ -540,7 +540,7 @@ class TestReadDirHint:
         from jarvis.core import devtools as dt
         r = dt.read_file(str(tmp_path), 0, 10)
         assert r["ok"] is False
-        assert "2 itens" in r["hint"]
+        assert "2 items" in r["hint"]
         assert "a.txt" in r["hint"] and "b.txt" in r["hint"]
 
 
@@ -588,8 +588,9 @@ class TestReadTruncationNotice:
         # resolve via project root: usa path absoluto no tmp
         r = dt.read_file(str(tmp_path / "l.txt"), 0, 1)
         assert r["ok"] is True
-        assert "de 4 total" in r["content"]
-        assert "MAIS linhas" in r["content"]
+        assert "de 4 total" not in r["content"]
+        assert "of 4 total" in r["content"]
+        assert "MORE lines" in r["content"]
 
     def test_full_read_no_notice(self, tmp_path, monkeypatch):
         import os
@@ -598,7 +599,7 @@ class TestReadTruncationNotice:
         from jarvis.core import devtools as dt
         r = dt.read_file(str(tmp_path / "l.txt"), 0, 10)
         assert r["ok"] is True
-        assert "MAIS linhas" not in r["content"]
+        assert "MORE lines" not in r["content"]
 
 
 class TestCwdRelativeFallback:

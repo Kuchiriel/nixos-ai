@@ -517,12 +517,12 @@ def _partial_coverage_note(messages: list[dict[str, Any]], path: str) -> str | N
                     if c.strip().upper().startswith("ERROR"):
                         continue
                     _last = c
-        if _last and "MAIS linhas" in _last:
+        if _last and "showing lines" in _last:
             import re as _re3
-            _mm = _re3.search(r"linhas\s+(\d+)\D+(\d+)\s+de\s+(\d+)", _last)
+            _mm = _re3.search(r"lines\s+(\d+)\D+(\d+)\s+of\s+(\d+)", _last)
             _rng = f" ({_mm.group(0)})" if _mm else ""
-            return (f"{path}: você leu PARCIAL{_rng} — edite SÓ o trecho "
-                    f"observado ou complete a leitura (offset/limit) antes.")
+            return (f"{path}: you read PARTIAL{_rng} — edit ONLY the "
+                    f"observed span or finish reading (offset/limit) first.")
     except Exception:
         pass
     return None
@@ -928,6 +928,11 @@ class Agent:
         # decide por tier (speed/fast → True; H-strict).
         self.strict_tools = (_strict_default(self.config.llm_model)
                              if strict_tools is None else strict_tools)
+        # Probe de template (29/09, X-cell xLAM): servidor sem template de
+        # tools responde 400. Na 1a ocorrência, modo texto pelo resto do
+        # run (sem tools no payload, sem grammar). Regressão-safe: só
+        # ativa após falha real; servidores normais nunca veem.
+        self._force_text = False
         # plan: planejamento explícito antes de executar (P0.4).
         # True = self-plan (turno 0 pede plano numerado ao próprio modelo
         # e ancora no contexto); str/dict = {"planner_model": id} (roteia
@@ -1318,6 +1323,15 @@ class Agent:
                 # §26 (EXP-G 20/09): provider sem choices/timeout/conexão
                 # derrubava o run com exceção crua (IndexError). Falha
                 # legível: STUCK honesto, nunca crash.
+                # Probe de template (29/09): 400 com tools = servidor sem
+                # template (xLAM) — diagnóstico já na 1a ocorrência
+                # (servidor normal nunca 400a tool call válida): modo
+                # texto + retry do turno 1x; se falhar de novo, STUCK.
+                _msg400 = str(_llm_e)
+                if (("400" in _msg400 or "Bad Request" in _msg400)
+                        and not self._force_text):
+                    self._force_text = True
+                    continue
                 result.final_response = (
                     f"STUCK: LLM call failed ({type(_llm_e).__name__}: "
                     f"{str(_llm_e)[:160]}).")
@@ -2714,7 +2728,7 @@ class Agent:
         except Exception as e:
             return f"ERROR: read failed: {e}"
         if res.get("ok"):
-            return f"# {res.get('path', '')} ({res.get('total_lines', 0)} linhas)\n{res.get('content', '')}"
+            return f"# {res.get('path', '')} ({res.get('total_lines', 0)} lines)\n{res.get('content', '')}"
         if "not found" in str(res.get("error", "")).lower():
             # Auto-relocate em candidato ÚNICO (L8r real: modelo ignorou o
             # path exato dado no warning 3x seguidas → STUCK). Doutrina
@@ -2750,7 +2764,7 @@ class Agent:
                     res2 = None
                 if res2 and res2.get("ok"):
                     return (f"# {res2.get('path', '')} "
-                            f"({res2.get('total_lines', 0)} linhas) "
+                            f"({res2.get('total_lines', 0)} lines) "
                             f"[auto-relocated from {args.get('path', '')}]\n"
                             f"{res2.get('content', '')}")
         return f"ERROR: {res.get('error', 'read failed')}"
@@ -2772,8 +2786,8 @@ class Agent:
                     _omit = int(res.get("total_found", 0)) - int(res.get("count", 0))
                 except (TypeError, ValueError):
                     _omit = 0
-                extra = f" (+{_omit} omitidos)"
-            return f"# {res.get('path', '')} ({res.get('count', 0)} itens{extra}): " + ", ".join(names[:100])
+                extra = f" (+{_omit} omitted)"
+            return f"# {res.get('path', '')} ({res.get('count', 0)} items{extra}): " + ", ".join(names[:100])
         err = str(res.get("error", "list failed"))
         hint = str(res.get("hint", ""))
         return f"ERROR: {err}" + (f" [{hint}]" if hint else "")
@@ -3128,14 +3142,17 @@ class Agent:
         # truncadas; histórico armazenado segue intacto (forense, gates,
         # completion leem o original). Donkey §20.
         send_messages = _truncate_history_for_send(messages)
+        # Probe de template: em modo texto forçado, sem tools e sem
+        # grammar no payload (o 400 veio deles); fallback de texto assume.
+        _ft = bool(getattr(self, "_force_text", False))
         resp = self.llm.chat_with_tools(
             send_messages,
-            tools=None if need_call else tools,
+            tools=None if (need_call or _ft) else tools,
             temperature=profile["temperature"],
             max_tokens=profile["max_tokens"],
             reasoning_effort=reasoning_effort,
             review_focus=review_focus,
-            extra=self._strict_extra(tools) if need_call else None,
+            extra=self._strict_extra(tools) if (need_call and not _ft) else None,
             # Placement explícito: este é o loop do orquestrador — único
             # ponto onde review loops são admitidos. Chamadas worker/
             # subagente devem usar role="worker" (effort forçado low).

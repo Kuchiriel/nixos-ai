@@ -591,10 +591,10 @@ def test_partial_coverage_note() -> None:
         {"role": "assistant", "tool_calls": [
             {"function": {"name": "read_file",
                           "arguments": '{"path": "f.py"}'}}]},
-        {"role": "tool", "content": "1 | a\n[…mostrando linhas 1–100 de 130 total — MAIS linhas]"},
+        {"role": "tool", "content": "1 | a\n[…showing lines 1–100 of 130 total — MORE lines]"},
     ]
     n = _partial_coverage_note(msgs, "f.py")
-    assert n is not None and "PARCIAL" in n
+    assert n is not None and "PARTIAL" in n
     assert _partial_coverage_note(msgs, "outro.py") is None
     msgs2 = [
         {"role": "assistant", "tool_calls": [
@@ -2807,3 +2807,36 @@ def test_fallback_bash_fence_opt_in() -> None:
     got = extract_fallback_tool_calls(text, bash_fence=True)
     assert got == [{"name": "execute_shell",
                     "arguments": {"cmd": "ls -la /app"}}]
+
+
+def test_template_probe_falls_back_to_text(tmp_path, monkeypatch) -> None:
+    """29/09 (X-cell xLAM): 2x 400 com tools → modo texto (sem tools no
+    payload); 3a call sucede. Sem o probe, o run morreria no 1o 400."""
+    import json as jsonlib
+
+    from jarvis.core.agent import Agent
+    from jarvis.core.config import Config
+
+    payloads = []
+    state = {"n": 0}
+
+    class Fake400:
+        def get(self, url, timeout=5):
+            return FakeResponse({"data": [{"id": "xlam-8b"}]})
+
+        def post(self, url, json=None, timeout=120, **kw):
+            payloads.append(json)
+            state["n"] += 1
+            if state["n"] <= 1:
+                raise RuntimeError("HTTP 400 Bad Request: template")
+            msg = {"role": "assistant", "content": "done via text"}
+            return FakeResponse({"choices": [{"message": msg}]})
+
+    monkeypatch.chdir(tmp_path)
+    a = Agent(Config(), session=Fake400(), approve=False)
+    a.run("diga done")
+    assert len(payloads) >= 2
+    assert payloads[0].get("response_format"), "1a call com grammar"
+    assert not payloads[1].get("tools"), "2a call sem tools (probe)"
+    assert not payloads[1].get("response_format"), "2a call sem grammar"
+    assert a._force_text is True

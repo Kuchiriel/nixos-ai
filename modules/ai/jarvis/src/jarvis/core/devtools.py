@@ -436,11 +436,12 @@ def read_file(path: str, offset: int = 0, limit: int = 2000) -> dict[str, Any]:
                     names = []
                 return {"ok": False,
                         "error": f"Not a file: {path}",
-                        "hint": (f"'{path}' é um DIRETÓRIO com "
-                                 f"{len(names)} itens: "
-                                 f"{', '.join(names[:30])}. Para contar ou "
-                                 f"listar, use esses dados — não chame "
-                                 f"read_file nele de novo.")}
+                        # EN p/ o modelo (29/09: SLMs rendem mal em PT-BR).
+                        "hint": (f"'{path}' is a DIRECTORY with "
+                                 f"{len(names)} items: "
+                                 f"{', '.join(names[:30])}. Count or list "
+                                 f"from this data — do not call "
+                                 f"read_file on it again.")}
             return {"ok": False, "error": f"Not a file: {path}"}
 
         content = target.read_text(encoding="utf-8", errors="replace")
@@ -457,9 +458,9 @@ def read_file(path: str, offset: int = 0, limit: int = 2000) -> dict[str, Any]:
         # total_lines morria no formato e ele nunca sabia que havia mais).
         numbered = "\n".join(f"{start + i + 1:>5} | {line}" for i, line in enumerate(lines[start:end]))
         if end < total:
-            numbered += (f"\n[…mostrando linhas {start + 1}–{end} de "
-                         f"{total} total — o arquivo tem MAIS linhas que "
-                         f"o mostrado; aumente limit ou conte via shell]")
+            numbered += (f"\n[…showing lines {start + 1}–{end} of "
+                         f"{total} total — the file has MORE lines than "
+                         f"shown; raise limit or count via shell]")
 
         try:
             rel = str(target.relative_to(_project_root()))
