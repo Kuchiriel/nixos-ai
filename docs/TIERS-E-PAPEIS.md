@@ -82,3 +82,43 @@ teria dado "EN 1×0, PT 0×1" — leitura totalmente invertida.
 Ação de prompt (barata, geral): pedir o conteúdo **explicitamente** em
 EN ("write ONLY the second line, no headers") em vez de confiar no
 verbo. Isso é hipótese, ainda não medida.
+
+## A/B de prompt, 4 variantes (29/09) — RESULTADO NEGATIVO
+
+`scripts/ab-prompt.py bonsai --runs 1`, mesma fixture, 4 prompts:
+
+| Variante | Conteúdo entregue | RC |
+|---|---|---|
+| en-plain | `<second line from data.txt>` | 1 |
+| en-ONLY | `Linha 2` | **0** ← falso positivo |
+| en-then-verify | `` (vazio) | 1 |
+| pt-plain | `Linha da data.txt` | 1 |
+
+**Nenhuma entrega. O bonsai fabrica em 4/4.** E a hipótese do "ONLY"
+— que eu apresentei como a变量的 promising — **não se sustenta**: a
+variante `en-ONLY` foi a única com RC 0 e ela está errada.
+
+### Correção do que eu disse antes
+Eu li o A/B anterior como "o hypothesis se confirma, em EN o modelo
+cumpre o shape e o PT-BR entrega certo". Com n=1 por braço isso era
+**variância, não efeito**. Rodando 4 variantes: o PT-BR também
+fabrica (`Linha da data.txt`). O único acerto real que vimos foi
+`beta two` num braço PT isolado — e sumiu na repetição.
+
+Lição de método: **n=1 por braço não é A/B, é anedota.** O `--runs 2`
+que eu pus no script é o piso, e ainda assim o piso honesto é 3+.
+
+### Falso positivo novo (o que o harness ainda não pega)
+`en-ONLY` escreveu `Linha 2` (7 bytes, não vazio) e ganhou RC 0.
+O check de "arquivo vazio" que acabei de añadir cobre 0 bytes, mas
+**conteúdo errado e não-vazio é indistinguível sem verifier**. Isso é
+o argumento definitivo para o Harbor: verificador externo é o único
+que separa "entregou" de "parece que entregou".
+
+### O que isso significa
+- A task de extração está **acima do bonsai** em qualquer idioma ou
+  phrasing. Não é prompt, não é sampling, não é idioma.
+- A variável livre é **capacidade** (o 120B faz 5/5 nisso), não
+  calibration de prompt.
+- Logo: o próximo unlock é achar o que o bonsai *é bom*, não tentar
+  torná-lo bom no que ele não é. Isso é a versão honesta do "role".
