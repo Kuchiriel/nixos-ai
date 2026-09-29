@@ -19,6 +19,7 @@
 | 29/09 | F-cell bash-first | Qwen3-4B fast | **3/4** (incl. 1 `cp-executed` real) |
 | 29/09 | F-cell bash-first | MoE Qwen3.6 | 0/4 (dialeto próprio `f(path=)`, ignora cerca; 500s frios) |
 | 29/09 | task3 extract-line (transferência) | bonsai bash-first | 0/4 (`sed -n 2p` descoberto mas fabricação persiste; guarda write-without-read adicionada) |
+| 29/09 | task3 + read-gate bloqueante | bonsai bash-first | 0/2 (gate dispara mas modelo põe leitura-token e fabrica igual — dado negativo; completion container-aware é o próximo candidato) |
 
 ## Estratégia por modelo (`scripts/grade-harbor.py`)
 
