@@ -215,7 +215,8 @@ def test_container_read_flags_binary() -> None:
 
 def test_bridge_warns_write_without_read() -> None:
     """29/09 (task3): modelo escreveu conteúdo imaginado sem ler o fonte.
-    Redirect p/ arquivo nunca lido ganha nota de verificação no stderr."""
+    Redirect p/ dado nunca lido, sem leitura no cmd = RECUSADO;
+    com leitura no cmd ou script novo = permitido."""
     import jarvis.runtime.harbor_agent as _ham
 
     class ShEnv(FakeEnv):
@@ -226,6 +227,9 @@ def test_bridge_warns_write_without_read() -> None:
     env = ShEnv()
     bridge = _ham._ContainerBridge(env)
     r = bridge.sh("echo hello > /app/line2.txt")
-    assert "without being read" in (r.stderr or "")
+    assert r.return_code == 1 and "refused" in (r.stderr or "")
+    assert "/app/line2.txt" not in " ".join(env.cmds)
     r2 = bridge.sh("cat /app/data.txt > /app/line2.txt")
-    assert "without being read" not in (r2.stderr or "")
+    assert r2.return_code == 0
+    r3 = bridge.sh("echo x > /app/run.sh")
+    assert r3.return_code == 0

@@ -70,27 +70,33 @@ class _ContainerBridge:
     def sh(self, cmd: str, timeout: int = 60) -> Any:
         import asyncio as _aio
         import re as _re
-        fut = _aio.run_coroutine_threadsafe(
-            self._env.exec(cmd, timeout_sec=timeout), self._loop)
-        r = fut.result(timeout + 20)
-        # Guarda anti-fabricação (task3 29/09: modelo escreveu conteúdo
-        # imaginado sem ler o fonte — 2x). Rastreia lidos; redirect p/
-        # arquivo nunca lido ganha nota de verificação no stderr
-        # (vai p/ observation; task-agnóstico).
+        from types import SimpleNamespace as _NS
+        # Read-gate bloqueante (29/09: a nota de aviso não converteu —
+        # task3 0/4 com aviso). Redirect p/ arquivo de DADOS nunca lido,
+        # num cmd que não lê nada = RECUSADO (lê primeiro). Scripts
+        # (.sh/.py) isentos (criação é legítima). Só existe na ponte
+        # (trials); host nunca passa aqui.
+        _SCRIPT_EXT = (".sh", ".py", ".js", ".ts", ".json")
         try:
-            for m in _re.finditer(
-                    r"(?:cat|grep|sed|awk|head|tail|less)\s+([/\w.\-]+)", cmd):
-                self._seen.add(m.group(1).split("/")[-1])
-            outs = _re.findall(r">{1,2}\s*([/\w.\-]+)", cmd)
-            for o in outs:
+            reads = {m.group(1).split("/")[-1] for m in _re.finditer(
+                r"(?:cat|grep|sed|awk|head|tail|less|xxd|base64|cmp|diff)\s+([/\w.\-]+)", cmd)}
+            self._seen.update(reads)
+            for o in _re.findall(r">{1,2}\s*([/\w.\-]+)", cmd):
                 base = o.split("/")[-1]
-                if base not in self._seen:
-                    r.stderr = ((r.stderr or "")
-                                + f"\n[harness: {o} written without being read"
-                                   f" first — verify content with cat/cmp]")
+                if base in self._seen or o.endswith(_SCRIPT_EXT):
+                    self._seen.add(base)
+                    continue
+                if not reads:
+                    return _NS(return_code=1, stdout="",
+                               stderr=(f"harness: write to '{o}' refused — "
+                                       f"you never read it. Read the source "
+                                       f"file first (cat/head), then write."))
                 self._seen.add(base)
         except Exception:
             pass
+        fut = _aio.run_coroutine_threadsafe(
+            self._env.exec(cmd, timeout_sec=timeout), self._loop)
+        r = fut.result(timeout + 20)
         return r
 
     def read(self, path: str) -> tuple[Any, str]:
