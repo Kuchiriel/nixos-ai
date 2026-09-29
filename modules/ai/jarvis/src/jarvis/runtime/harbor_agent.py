@@ -130,14 +130,26 @@ def _container_agent_class(environment: Any) -> Any:
             raw, err = bridge.read(path)
             if raw is None:
                 return f"ERROR: File not found: {path} ({err})"
-            lines = raw.decode("utf-8", "replace").split("\n")
+            try:
+                text = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                # task2-bin 29/09: 256 bytes binários viraram "trailer" e o
+                # modelo copiou o único token legível 5x. Informação verdadeira
+                # sobre o ambiente (não dica de task): binário não passa por
+                # ferramenta de texto — shell (cp/xxd/base64/cmp) resolve.
+                # Texto p/ o modelo em EN (bonsai rende mal em PT-BR).
+                return (f"# {path} ({len(raw)} bytes, BINARY — not valid UTF-8)\n"
+                        f"Text tools (read/write) CORRUPT this file. "
+                        f"Use execute_shell: `cp`, `xxd`, `base64`, `cmp`.")
+            lines = text.split("\n")
             chunk = "\n".join(lines[offset:offset + limit])
             # Trailer anti-vazamento (B-cell 28/09: o MoE copiou o cabeçalho
             # "# path (N linhas)" p/ DENTRO do o.txt 3/3 — target-agnóstico,
-            # só marca o que é anotação do harness).
-            return (f"# {path} ({len(lines)} linhas)\n{chunk}\n"
-                    f"--- (nota do harness: a linha '# ...' acima é anotação, "
-                    f"não faz parte do arquivo)")
+            # só marca o que é anotação do harness). Texto p/ o MODELO em EN
+            # (bonsai rende mal em PT-BR — 29/09).
+            return (f"# {path} ({len(lines)} lines)\n{chunk}\n"
+                    f"--- (harness note: the '# ...' line above is an annotation, "
+                    f"not part of the file)")
 
         @staticmethod
         def _exec_list(args: dict) -> str:

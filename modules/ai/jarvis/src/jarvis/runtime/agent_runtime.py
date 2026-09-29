@@ -58,10 +58,17 @@ class AgentRuntime:
 
         started = time.time()
         cls = self.agent_class or Agent
+        # model_requirements=None explícito + dict com a chave = TypeError
+        # (duplicado; pago 29/09 na C-cell). Só entra se não-None.
+        extra = dict(self.agent_kwargs)
+        extra.update(agent_kw)
+        if model_requirements is not None:
+            extra["model_requirements"] = model_requirements
+        if persona_id is not None:
+            extra["persona_id"] = persona_id
         agent = cls(
             self.config, session=self.http_session, memory=self.memory,
-            model_requirements=model_requirements, persona_id=persona_id,
-            **{**self.agent_kwargs, **agent_kw})
+            **extra)
         result = agent.run(task)
         ended = time.time()
         model_id = getattr(getattr(agent, "config", self.config),

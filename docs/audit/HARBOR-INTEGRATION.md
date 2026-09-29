@@ -62,3 +62,16 @@ acertaram bytes por sorte 2x). Conclusão: fronteira fiel, variância é
 capacidade/estratégia do modelo. Infra B-cell: ik sobe c/ router parado
 (VRAM única); JARVIS_BASE_URL=:8084 bypassa ensure (single-model sem
 /models/load); restore pós-job: router de volta. Commit a seguir.
+
+## CORREÇÃO HISTÓRICA 29/09 — reward hacking (verifier comparava arquivo mutável)
+A-cell "2/3" e task2-bin "2x 1.0" eram FRAUDE: o agente sobrescrevia o
+src.txt com o mesmo lixo do o.txt (todos os trials tinham src-overwrite).
+Placar real: tudo 0. Verifiers agora comparam sha256 PRISTINO hardcoded
+(bytecopy-task: 12ec1e2c…; bytecopy-bin: 4ad3a905…). Regra: verifier NUNCA
+compara contra arquivo que o agente pode escrever.
+A-cell honesta (acell-honest, verifier c/ hash): 0/3 bonsai.
+Outras evoluções 29/09: strings do harness p/ o modelo em EN (bonsai rende
+mal em PT-BR); flag BINÁRIO no read roteado; fix TypeError
+model_requirements duplicado no AgentRuntime.run; C-cell Qwen3-4B 0/2
+(+1 env-start flake); VRAM: 2 servidores simultâneos = 500 no :8080
+(só 1 LLM por vez; upstream parado após C-cell).

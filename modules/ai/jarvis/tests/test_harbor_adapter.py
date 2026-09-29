@@ -187,8 +187,27 @@ def test_container_bridge_routes_into_env(tmp_path) -> None:
     cls._bridge = bridge
     out = cls._exec_read_file({"path": "/app/src.txt"})
     assert out.startswith("# /app/src.txt")
-    assert "nota do harness" in out
+    assert "harness note" in out
     assert "src.txt" in cls._exec_list({"path": "/app"})
     assert "wrote" in cls._exec_write(
         "write_file", {"path": "/app/o.txt", "content": "x"})
     assert env.files["/app/o.txt"] == b"x"
+
+
+def test_container_read_flags_binary() -> None:
+    """29/09 (task2-bin): binário ilegível virava 'trailer' e o modelo
+    copiava lixo. Agora o observation diz BINÁRIO + aponta shell."""
+    import jarvis.runtime.harbor_agent as _ham
+
+    class BinEnv(FakeEnv):
+        def __init__(self):
+            super().__init__()
+            self.files["/app/b.bin"] = bytes(range(256))
+
+    env = BinEnv()
+    bridge = _ham._ContainerBridge(env)
+    cls = _ham._container_agent_class(env)
+    cls._bridge = bridge
+    out = cls._exec_read_file({"path": "/app/b.bin"})
+    assert "BIN" in out and "cp" in out
+    assert "trailer" not in out
