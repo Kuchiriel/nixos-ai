@@ -185,7 +185,9 @@ def test_container_bridge_routes_into_env(tmp_path) -> None:
     assert bridge.read("/app/inexistente.txt")[0] is None
     cls = _ham._container_agent_class(env)
     cls._bridge = bridge
-    assert cls._exec_read_file({"path": "/app/src.txt"}).startswith("# /app/src.txt")
+    out = cls._exec_read_file({"path": "/app/src.txt"})
+    assert out.startswith("# /app/src.txt")
+    assert "nota do harness" in out
     assert "src.txt" in cls._exec_list({"path": "/app"})
     assert "wrote" in cls._exec_write(
         "write_file", {"path": "/app/o.txt", "content": "x"})

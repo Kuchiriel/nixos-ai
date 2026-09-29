@@ -132,7 +132,12 @@ def _container_agent_class(environment: Any) -> Any:
                 return f"ERROR: File not found: {path} ({err})"
             lines = raw.decode("utf-8", "replace").split("\n")
             chunk = "\n".join(lines[offset:offset + limit])
-            return f"# {path} ({len(lines)} linhas)\n{chunk}"
+            # Trailer anti-vazamento (B-cell 28/09: o MoE copiou o cabeçalho
+            # "# path (N linhas)" p/ DENTRO do o.txt 3/3 — target-agnóstico,
+            # só marca o que é anotação do harness).
+            return (f"# {path} ({len(lines)} linhas)\n{chunk}\n"
+                    f"--- (nota do harness: a linha '# ...' acima é anotação, "
+                    f"não faz parte do arquivo)")
 
         @staticmethod
         def _exec_list(args: dict) -> str:
@@ -167,6 +172,31 @@ def _container_agent_class(environment: Any) -> Any:
     return ContainerAgent
 
 
+def _direct_config() -> Any:
+    """Config apontando p/ um servidor single-model (bypass do router).
+
+    JARVIS_BASE_URL=http://127.0.0.1:8084: lê o id ativo em /v1/models e
+    fixa llm_model/llm_base_url (sem model_requirements não há roteamento
+    nem ensure — o servidor serve um arquivo fixo). Sem env → None
+    (comportamento padrão via router :8080).
+    """
+    import os as _os
+    base = _os.environ.get("JARVIS_BASE_URL", "").strip().rstrip("/")
+    if not base:
+        return None
+    import json as _json
+    import urllib.request as _url
+    try:
+        with _url.urlopen(base + "/v1/models", timeout=15) as r:
+            data = _json.load(r).get("data", [])
+        mid = data[0].get("id", "default") if data else "default"
+    except Exception:
+        mid = "default"
+    from dataclasses import replace
+    from jarvis.core.config import get_config
+    return replace(get_config(), llm_model=mid, llm_base_url=base)
+
+
 class JarvisHarborAgent(BaseAgent):
     """AgentRuntime como custom agent do Harbor. Modelo via AgentRuntime."""
 
@@ -175,6 +205,16 @@ class JarvisHarborAgent(BaseAgent):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._model_requirements: dict = kwargs.get("model_requirements") or {}
+        if not self._model_requirements:
+            # B-cell e rotina: tier via env (ex: {"tier":"reasoning"}).
+            import os as _os
+            import json as _json
+            raw = _os.environ.get("JARVIS_MODEL_REQUIREMENTS", "")
+            if raw.strip():
+                try:
+                    self._model_requirements = _json.loads(raw)
+                except ValueError:
+                    pass
 
     @staticmethod
     def name() -> str:
@@ -218,9 +258,14 @@ class JarvisHarborAgent(BaseAgent):
                                             r.stdout or "", r.stderr or "")
             _agent_mod.run_shell = _routed
         try:
-            rt = AgentRuntime(agent_class=cls)
+            cfg = _direct_config()
+            # Com config direta NÃO passa model_requirements (se passar, o
+            # Agent roteia e o ensure quebra no single-model — pago 28/09).
+            akw = {} if cfg is not None else (
+                {"model_requirements": self._model_requirements}
+                if self._model_requirements else {})
+            rt = AgentRuntime(agent_class=cls, config=cfg, agent_kwargs=akw)
             result = rt.run(instruction,
-                            model_requirements=self._model_requirements or None,
                             approve=True, approval_callback=lambda cmd: True)
         finally:
             _agent_mod.run_shell = real_sh

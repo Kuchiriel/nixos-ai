@@ -35,3 +35,30 @@ externa 0/4: CONSISTENT FAILURE bidirecionalmente estável. Job:
 jobs/2026-09-21__15-07-34. Próximo: célula B (outro modelo) quando
 houver; adapter versionado (hoje em /tmp — promover p/ repo se virar
 rotina).
+
+## A-cell n=3 com adapter do repo (28/09, F10 evoluído) — 2/3
+Job `acell-final`: 2×reward 1.0, 1×0.0 (21/09 era 0/4). Evoluções pagas no
+fogo, commit 0989b11:
+1. AgentContext real 0.23.0 só tem tokens/custo/metadata — escrever em
+   commands_executed dava ValueError e matava o trial (3x exceção).
+2. Ponte container (_ContainerBridge: read/write/shell via env.exec/upload;
+   sem ela o agente lia /app no HOST + jail bloqueava write = 0.0 certo).
+3. Deadlock: Harbor awaita agent.run() na thread do loop; bridge com loop
+   próprio em thread dedicada (3x AgentTimeoutError, zero tools).
+4. AgentRuntime aceita agent_class (None = Agent canônico).
+Padrão da falha restante: modelo briga com byte UTF-8 (Ω) via tools de
+texto — capacidade do modelo, não harness. Próximo: célula B (modelo
+maior), não mais tweak de harness. Jobs em /tmp/harbor-work/jobs/
+(acell-fixed, acell-bridge, debug-*, acell-final).
+
+## B-cell MoE n=3 (28/09, Qwen3.6-35B :8084) — 0/3, com achado
+Job `bcell-moe3`: 0.0 nos 3, MAS新 bug de harness achado e corrigido:
+trailer anti-vazamento no read roteado (MoE copiava o cabeçalho
+"# path (N linhas)" p/ DENTRO do o.txt 3/3 — bonsai não fazia isso).
+Pós-trailer o header sumiu, mas o MoE normaliza bytes (Ω→é, espaços) —
+task adversarial p/ cópia via texto; `cp` seria 1 call, modelo não escolhe.
+Inversão: bonsai 2/3 > MoE 0/3 nesta task (escapes crus do bonsai
+acertaram bytes por sorte 2x). Conclusão: fronteira fiel, variância é
+capacidade/estratégia do modelo. Infra B-cell: ik sobe c/ router parado
+(VRAM única); JARVIS_BASE_URL=:8084 bypassa ensure (single-model sem
+/models/load); restore pós-job: router de volta. Commit a seguir.
