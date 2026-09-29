@@ -602,11 +602,11 @@ def test_repeated_error_nudge_inspects_data(monkeypatch) -> None:
         {"choices": [{"message": {"role": "assistant", "content": "",
                     "tool_calls": [{"id": "c1", "function": {
                         "name": "execute_shell",
-                        "arguments": '{"cmd": "python3 process.py"}'}}]}}]},
+                        "arguments": '{"cmd": "python3 process.py input.csv"}'}}]}}]},
         {"choices": [{"message": {"role": "assistant", "content": "",
                     "tool_calls": [{"id": "c2", "function": {
                         "name": "execute_shell",
-                        "arguments": '{"cmd": "python3 process.py"}'}}]}}]},
+                        "arguments": '{"cmd": "python3 process.py input.csv"}'}}]}}]},
         {"choices": [{"message": {"role": "assistant", "content": "done.",
                                   "tool_calls": None}}]},
     ]
@@ -625,7 +625,7 @@ def test_repeated_error_nudge_inspects_data(monkeypatch) -> None:
     _dev._run_agent_loop(msgs, [], {"name": "default"}, approve=True,
                          max_turns=6)
     systems = [m.get("content", "") for m in msgs if m.get("role") == "system"]
-    assert any("INSPECT the real data" in s for s in systems)
+    assert any("SAME error" in s for s in systems)
     assert _dev._run_agent_loop._err_nudged == 1
 
 
@@ -651,3 +651,54 @@ def test_to_text_history_flattens_tool_protocol() -> None:
     assert "commands run" in a["content"] and "cat a" in a["content"]
     assert "output of c1" in a["content"] and "alpha" in a["content"]
     assert flat[-1]["content"] == "pronto"
+
+
+def test_sed_in_is_allowed_but_hard_never_still_blocks(tmp_path, monkeypatch) -> None:
+    """29/09 (missão): `sed -i` é a correção legítima e estava fora do
+    allowlist. Liberado; HARD-NEVER e jail continuam valendo."""
+    from jarvis.core.security import (DEFAULT_ALLOWED_PREFIXES,
+                                      command_allowed, command_forbidden)
+
+    assert any(p.startswith("sed -i") for p in DEFAULT_ALLOWED_PREFIXES)
+    assert command_allowed("sed -i 's/a/b/' data.txt") is True
+    assert command_forbidden("rm -rf /nix/store/x") is not None
+    assert command_forbidden("sed -i 's/a/b/' /nix/store/x") is not None
+
+
+def test_error_nudge_injects_real_content(tmp_path, monkeypatch) -> None:
+    """29/09: o nudge de erro repetido anexa o conteúdo real do arquivo
+    citado (modelo que só repete comando não tem o dado)."""
+    import jarvis.cli.dev as _dev
+
+    (tmp_path / "input.csv").write_text("id,val\n1,10\n5;50\n")
+    monkeypatch.chdir(tmp_path)
+
+    script = [
+        {"choices": [{"message": {"role": "assistant", "content": "",
+                    "tool_calls": [{"id": "c1", "function": {
+                        "name": "execute_shell",
+                        "arguments": '{"cmd": "python3 process.py input.csv"}'}}]}}]},
+        {"choices": [{"message": {"role": "assistant", "content": "",
+                    "tool_calls": [{"id": "c2", "function": {
+                        "name": "execute_shell",
+                        "arguments": '{"cmd": "python3 process.py input.csv"}'}}]}}]},
+        {"choices": [{"message": {"role": "assistant", "content": "fim.",
+                                  "tool_calls": None}}]},
+    ]
+    state = {"n": 0}
+
+    def _fake_call(messages, tools, profile, debug=False):
+        r = script[min(state["n"], 2)]
+        state["n"] += 1
+        return r
+
+    monkeypatch.setattr(_dev, "_call_llm", _fake_call)
+    monkeypatch.setattr(_dev, "_execute_tool_call",
+                        lambda *a, **k: ("ERROR: IndexError", None))
+    msgs: list = [{"role": "system", "content": "s"},
+                  {"role": "user", "content": "roda o script"}]
+    _dev._run_agent_loop(msgs, [], {"name": "default"}, approve=True,
+                         max_turns=6)
+    systems = [m.get("content", "") for m in msgs if m.get("role") == "system"]
+    assert any("REAL CONTENT" in s and "5;50" in s for s in systems), \
+        "conteudo real do input tem que chegar no nudge"

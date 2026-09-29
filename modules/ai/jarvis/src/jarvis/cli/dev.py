@@ -169,6 +169,21 @@ EDIT_HISTORY: list[dict[str, Any]] = []
 PINNED_FILES: dict[str, str] = {}
 
 
+def _resolve_project_path(path_str: str):
+    """Path existente sob o project root/CWD, pelo mesmo jail das tools.
+
+    Usado p/ anexar conteúdo real em nudges de erro (29/09): o jail é
+    reaproveitado (nada de ler fora do root).
+    """
+    from pathlib import Path as _P
+    try:
+        from jarvis.core.devtools import _safe_path as _sp
+        return _sp(path_str)
+    except Exception:
+        p = _P(path_str)
+        return p if p.is_absolute() else (_P(os.getcwd()) / path_str)
+
+
 def _snapshot_file(path_str: str) -> str | None:
     try:
         from pathlib import Path as _P
@@ -2565,16 +2580,33 @@ def _run_agent_loop(
             _run_agent_loop._err_pending = None  # type: ignore[attr-defined]
             console.print("[dim]  (mesmo comando falhando - "
                           "inspecione o dado)[/]")
+            # Anexa o CONTEUDO REAL dos inputs citados no comando (29/09):
+            # modelo que so repete comando nao tem o dado; dar o dado e
+            # cheaper que 3 turnos de insistencia (evidencia: R1 rodou o
+            # mesmo comando 8x sem nunca ver o arquivo). Genérico: extrai
+            # paths do cmd, lê os que existem no project root (bounded).
+            _snip = []
+            for _p in dict.fromkeys(
+                    re.findall(r"[\w./-]+\.[a-z]{1,5}\b", _k2)):
+                try:
+                    _fp = _resolve_project_path(_p)
+                    if _fp and _fp.is_file() and _fp.stat().st_size < 8192:
+                        _snip.append(f"--- {_p} ---\n"
+                                     f"{_fp.read_text(encoding='utf-8', errors='replace')[:2000]}")
+                except OSError:
+                    continue
+            _extra = ("\n\nREAL CONTENT (do not re-read, act on it):\n"
+                      + "\n".join(_snip[:3])) if _snip else ""
             messages.append({
                 "role": "system",
                 "content": (
                     f"The command `{_k2[:90]}` failed twice with the "
-                    f"SAME error - repeating it will not help. STOP and "
-                    f"INSPECT the real data first: your next reply must be "
-                    f"ONE fenced block reading the input file (e.g. "
-                    f"```bash\ncat -A input.csv\n``` or `head -n 20 file`). "
-                    f"Then fix based on what you actually see. Do not "
-                    f"re-run the failing command."),
+                    f"SAME error - repeating it will not help."
+                    + _extra
+                    + "\n\nYour next reply must be ONE fenced block with "
+                    f"ONE different command that acts on this data (fix the "
+                    f"file with sed/python3, or write the answer). No plan, "
+                    f"no comments, no re-run."),
             })
             continue
 

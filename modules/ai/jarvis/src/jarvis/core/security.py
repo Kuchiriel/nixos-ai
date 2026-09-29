@@ -44,6 +44,12 @@ DEFAULT_ALLOWED_PREFIXES = (
     "nix search", "nix develop",
     "git log", "git status", "git diff", "git show", "git branch",
     "curl -sf", "curl -s", "nvidia-smi",
+    # Editores in-place (29/09, missão multi-etapas): sem `sed -i` o modelo
+    # lia o dado, tentava a correção certa e era barrado pelo allowlist
+    # (R1: `sed -i "s/1.5/2/5" input.csv` → "not in allowlist"). O jail
+    # de path (_path_allowed) e o HARD-NEVER continuam valendo — isto
+    # libera o verbo, não o destino.
+    "sed -i", "sort -o", "truncate", "cut -d", "awk -F",
 )
 
 
@@ -170,6 +176,13 @@ _HARD_NEVER: tuple[tuple[str, str], ...] = (
      "nunca deletar nada de /nix/store"),
     (r"\b(cp|mv|chmod|chown|touch|tee|ln|rsync)\b[^;|]*\s(/nix/store|/nix/store/\S)",
      "nunca escrever/modificar em /nix/store"),
+    # 29/09: `sed -i` entrou no allowlist (missão multi-etapas) e o
+    # HARD-NEVER não o cobria — edição in-place em /nix/store ficava
+    # possível. Qualquer verbo de escrita sobre o store é proibido.
+    (r"\bsed\s+-i\b[^;|]*\s/nix/store",
+     "nunca editar /nix/store (sed -i) — readonly por regra da casa"),
+    (r"\b(truncate|tee|dd)\b[^;|]*\s/nix/store",
+     "nunca escrever em /nix/store"),
     (r"\bdd\b[^;|]*of=/dev/",
      "dd em device físico é irreversível"),
     (r"\bmkfs\b",
