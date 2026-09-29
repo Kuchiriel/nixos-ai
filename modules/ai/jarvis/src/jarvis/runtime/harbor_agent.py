@@ -63,6 +63,7 @@ class _ContainerBridge:
         import threading as _th
         self._env = env
         self._seen: set[str] = set()
+        self._reads: set[str] = set()
         # Grounding da completion (29/09): "done" sem nenhuma observação
         # do container é prosa, não trabalho. Contadores alimentam o gate
         # pós-run (COMPLETED com zero exec → UNVERIFIED honesto).
@@ -87,11 +88,26 @@ class _ContainerBridge:
             reads = {m.group(1).split("/")[-1] for m in _re.finditer(
                 r"(?:cat|grep|sed|awk|head|tail|less|xxd|base64|cmp|diff)\s+([/\w.\-]+)", cmd)}
             self._seen.update(reads)
+            self._reads.update(reads)
             for o in _re.findall(r">{1,2}\s*([/\w.\-]+)", cmd):
                 base = o.split("/")[-1]
+                # Fonte lida primeiro: read-only p/ redirect (ver acima).
+                if (base in self._reads and o not in self.written
+                        and not o.endswith(_SCRIPT_EXT)):
+                    return _NS(return_code=1, stdout="",
+                               stderr=(f"harness: '{o}' is a SOURCE file you "
+                                       f"read — read-only. Write the OUTPUT "
+                                       f"to its own path, never overwrite "
+                                       f"the source."))
                 if base in self._seen or o.endswith(_SCRIPT_EXT):
                     self._seen.add(base)
                     continue
+                # task3 29/09: modelo lia data.txt e depois o SOBRESCREVIA
+                # (echo invented > data.txt) p/ "extrair" da própria
+                # fabricação. Higiene genérica de sandbox: input lido e
+                # nunca criado pelo agente é read-only p/ redirect —
+                # escreva no OUTPUT, não no fonte. (write_file segue
+                # permitido p/ edição cirúrgica com old-string.)
                 if not reads:
                     return _NS(return_code=1, stdout="",
                                stderr=(f"harness: write to '{o}' refused — "

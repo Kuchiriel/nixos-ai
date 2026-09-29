@@ -276,3 +276,24 @@ def test_bridge_counters_and_grounding() -> None:
     _ham.JarvisHarborAgent._fill_context(ctx2, Sess(), 1.0)
     assert ctx2.metadata["verdict"] == "COMPLETED"
     assert "grounding" not in ctx2.metadata
+
+
+def test_bridge_source_files_readonly() -> None:
+    """29/09 (task3): modelo lia data.txt e o sobrescrevia com conteúdo
+    inventado. Redirect p/ fonte lida (nunca criada pelo agente) = RECUSADO;
+    output novo e reescrita do próprio output = permitido."""
+    import jarvis.runtime.harbor_agent as _ham
+
+    class ShEnv(FakeEnv):
+        async def exec(self, command, timeout_sec=None):
+            self.cmds.append(command)
+            return FakeExecResult(stdout="alpha\nbeta two\ngamma\n",
+                                  stderr="", return_code=0)
+
+    env = ShEnv()
+    bridge = _ham._ContainerBridge(env)
+    assert bridge.sh("cat /app/data.txt").return_code == 0
+    r = bridge.sh("echo invented > /app/data.txt")
+    assert r.return_code == 1 and "SOURCE file" in (r.stderr or "")
+    assert not any("echo invented" in c for c in env.cmds)
+    assert bridge.sh("sed -n 2p /app/data.txt > /app/line2.txt").return_code == 0
