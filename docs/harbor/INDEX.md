@@ -35,6 +35,7 @@
 | 29/09 | no-tool nudge (dev loop) | bonsai | texto final sem nenhuma tool na sessão ganhava RC 0 direto (A/B lean/minimal). Agora 1 nudge limitado + teste. Q&A em texto segue funcionando |
 | 29/09 | **RC honesto + claim rastreia shell** | bonsai | claim-checker rastreia `>`/`cp` do shell; texto final após nudge com evidência e sem sucesso posterior = **RC 1** (validado ao vivo: era RC 0). Reset de attrs por run (bug latente). Série A/B: lean≈minimal p/ bonsai (ambos falham igual), minimal 2-4x mais rápido em wall |
 | 29/09 | **lite fast 4/5 (evicção automática)** | Qwen3-4B fast | bin 2/2, byte 1/1, line 1/2 — sem dança manual (ensure+evict). Custo: fast 55-390s wall vs bonsai 2-5s (10-80x). `harbor-lite.sh` restaura bonsai no fim |
+| 29/09 | **grounding no REPL + VERIFIED honesto** | — | `dev_once` exibe veredito check_completion + grava no transcript. Verbos imperativo PT cobram deliverable (falso VERIFIED ao vivo corrigido). **conftest sem keys**: cascata Groq/NVIDIA real furava mocks (teste quebrado há dias). Suite: **1405 verdes** |
 
 ## Estratégia por modelo (`scripts/grade-harbor.py`)
 
