@@ -58,7 +58,11 @@ def classify(traj, sess):
 
 def main():
     rows = []
-    for tj in sorted(glob.glob(os.path.join(JOBS, "*/bytecopy-*/agent/trajectory.json"))):
+    import itertools as _it
+    pats = [os.path.join(JOBS, "*/bytecopy-*/agent/trajectory.json"),
+            os.path.join(JOBS, "*/extract-line__*/agent/trajectory.json")]
+    trajs = sorted(set(_it.chain.from_iterable(glob.glob(p) for p in pats)))
+    for tj in trajs:
         try:
             traj = json.load(open(tj))
         except Exception:
@@ -71,7 +75,7 @@ def main():
             pass
         model = str(traj.get("model", "?"))[:45]
         job = tj.split("/jobs/")[1].split("/")[0]
-        task = "bin" if "bytecopy-bin" in tj else "byte"
+        task = "bin" if "bytecopy-bin" in tj else ("line" if "extract-line" in tj else "byte")
         diag = ""
         dj = tj.replace("agent/trajectory.json", "verifier/diag.json")
         try:
@@ -80,10 +84,12 @@ def main():
         except Exception:
             pass
         rows.append((job, task, model.split("/")[-1][:28],
-                     classify(traj, sess), traj.get("turns", "?"), diag))
-    print(f"{'job':<16}{'task':<5}{'model':<30}{'strategy':<16}{'turns':<6}bytes")
+                     classify(traj, sess), traj.get("turns", "?"), diag,
+                     round(float(traj.get("duration_s", 0) or 0), 1),
+                     (traj.get("grounding") or {}).get("n_exec", "?")))
+    print(f"{'job':<16}{'task':<5}{'model':<30}{'strategy':<16}{'turns':<6}{'bytes':<7}wall_s execs")
     for r in rows:
-        print(f"{r[0]:<16}{r[1]:<5}{r[2]:<30}{r[3]:<16}{r[4]:<6}{r[5]}")
+        print(f"{r[0]:<16}{r[1]:<5}{r[2]:<30}{r[3]:<16}{r[4]:<6}{r[5]:<7}{r[6]:<7}{r[7]}")
 
 
 if __name__ == "__main__":

@@ -25,6 +25,11 @@
 | 29/09 | task3 fast tier | Qwen3-4B fast | 0/2 mas técnica perfeita (`head -n2\|tail -n1`) num trial → zerou por FIXTURE quebrada (ver abaixo), não por modelo |
 | 29/09 | **task3 fixture fix** | bonsai bash-first | **2/2 (1.0)** — `Dockerfile` usava `printf "\n" a b c` (=4×`\n`, fonte sem conteúdo!). O "muro de capacidade" era bug do instrumento. Lição: validar fixture com `cat` antes de atribuir falha ao modelo |
 | 29/09 | infra: VRAM leak | — | servidor efêmero `--alias jarvis-fast :42911` (origem desconhecida, 12:16) segurou 3.2GB VRAM → bonsai 500 "unable to allocate CUDA0". `kill -9` resolveu. TODO: guarda anti-vazamento (pgrep antes de bench/trial) |
+| 29/09 | F-cell regressão pós-rebuild | bonsai bash-first | **3/3 (1.0)** — harness intacto |
+| 29/09 | task3 fast (fixture fixa) | Qwen3-4B fast | **1/2** — `sed -n 2p A > B` single-command converte (1.0); outro trial fabrica fonte ("as deliverable", 0.0). Série fast em task3: 1/4 |
+| 29/09 | task2-bin | bonsai bash-first | **1/2** — `cp` single-command = 1.0; `read_file\|write_file` como shell + touch = 0.0. Padrão geral: transferência num comando só vence, resto perde |
+| 29/09 | A/B lean vs minimal (dev, bonsai, piloto n=1) | bonsai | inconclusivo: minimal 4.4s vs lean 17.2s wall, mas NENHUM escreveu o arquivo (RC 0 sem deliverable). Gap: grounding de completion só existe nos trials, não no loop dev |
+| 29/09 | ensure multi-serviço | — | **sem evicção cross-service**: bonsai (4.3GB :8080) × fast (2.6GB :8083) não coexistem; ensure falha 300s sem despejar o outro. Dança manual `/models/unload` necessária. TODO: ensure com evicção |
 
 ## Estratégia por modelo (`scripts/grade-harbor.py`)
 
