@@ -2166,6 +2166,26 @@ def _run_agent_loop(
 
         if not tool_calls:
             if content:
+                # No-tool nudge (A/B 29/09: lean/minimal terminaram RC 0 sem
+                # tocar tools — texto final sem promessa nem claim cai direto
+                # no `return True`). Se NENHUMA tool foi chamada na sessão
+                # inteira, 1 nudge limitado: ou a task precisa de ação (use
+                # tools agora) ou é só resposta (diga e encerra). Bounded 1x.
+                if successes == 0 and not any(
+                        m.get("tool_calls") for m in messages) and \
+                        getattr(_run_agent_loop, "_no_tool_nudged", 0) < 1:
+                    _run_agent_loop._no_tool_nudged = 1  # type: ignore[attr-defined]
+                    console.print("[dim]  (nenhuma tool usada — confirmando)[/]")
+                    messages.append({
+                        "role": "system",
+                        "content": ("You have not used ANY tool yet this "
+                                    "session. If the task needs a file, "
+                                    "command, or lookup, do it NOW with "
+                                    "tools (one action). If the task is "
+                                    "purely answerable in text, give the "
+                                    "final short answer now."),
+                    })
+                    continue
                 # Promise-catcher (F1 abismo): texto que promete ação
                 # futura ("vou criar...") sem tool call encerrava com
                 # rc=0 e nada feito. Devolve 1 nudge limitado em vez de

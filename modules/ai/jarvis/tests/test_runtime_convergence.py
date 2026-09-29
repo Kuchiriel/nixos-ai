@@ -428,3 +428,28 @@ def test_supervisor_does_not_own_the_loop() -> None:
     # 2 benchmarks). Novo Agent() fora do runtime = falha.
     assert composers - tests_ok == set(), (
         f"compositor do loop fora do runtime: {composers - tests_ok}")
+
+
+def test_no_tool_nudge_once_then_accept(monkeypatch) -> None:
+    """A/B 29/09: texto final sem nenhuma tool na sessão ganhava RC 0
+    direto. Agora: 1 nudge limitado, depois aceita (Q&A em texto continua
+    funcionando)."""
+    import jarvis.cli.dev as _dev
+
+    calls = {"n": 0}
+
+    def _fake_call(messages, tools, profile, debug=False):
+        calls["n"] += 1
+        return {"choices": [{"message": {"role": "assistant",
+                                         "content": "done.",
+                                         "tool_calls": None}}]}
+
+    monkeypatch.setattr(_dev, "_call_llm", _fake_call)
+    msgs: list = [{"role": "system", "content": "s"},
+                  {"role": "user", "content": "diga done"}]
+    ok = _dev._run_agent_loop(msgs, [], {"name": "tiny"}, approve=True,
+                              max_turns=5)
+    assert ok is True
+    assert calls["n"] == 2, "1 nudge + resposta final"
+    systems = [m.get("content", "") for m in msgs if m.get("role") == "system"]
+    assert any("not used ANY tool" in s for s in systems)

@@ -423,3 +423,84 @@ def test_read_fastpath_nao_engole_instrucao_nem_regride():
     # audiobook legítimo → fastpath — NÃO regridir
     assert route_request("leia o livro a metamorfose").handler == "fastpath"
     assert route_request("read the book dune").handler == "fastpath"
+
+
+def test_evict_peers_unloads_other_services(monkeypatch) -> None:
+    """29/09: VRAM 6GB não comporta 2 residentes — ensure com
+    JARVIS_ENSURE_EVICT=1 despeja peers antes do load."""
+    import json as _json
+    import threading as _th
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from jarvis.core import model_lifecycle as L
+
+    unloaded: list = []
+
+    def _serve_peer(loaded_id):
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def _send(self, obj, code=200):
+                body = _json.dumps(obj).encode()
+                self.send_response(code)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def do_GET(self):
+                if self.path == "/v1/models":
+                    self._send({"data": [
+                        {"id": loaded_id,
+                         "status": {"value": "loaded"}}]})
+                else:
+                    self._send({"error": "nope"}, 404)
+
+            def do_POST(self):
+                if self.path == "/models/unload":
+                    ln = int(self.headers.get("Content-Length", 0))
+                    mid = _json.loads(self.rfile.read(ln) or b"{}").get(
+                        "model")
+                    unloaded.append(mid)
+                    self._send({"success": True})
+                else:
+                    self._send({"error": "nope"}, 404)
+
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        _th.Thread(target=srv.serve_forever, daemon=True).start()
+        return srv
+
+    peer = _serve_peer("bonsai")
+    target = _serve_peer("nobody-loaded")
+    peer_base = f"http://127.0.0.1:{peer.server_port}"
+    target_base = f"http://127.0.0.1:{target.server_port}"
+
+    class _Entry:
+        def __init__(self, endpoint):
+            self.endpoint = endpoint
+
+    class _Reg:
+        def ids(self):
+            return ["bonsai", "jarvis-fast"]
+
+        def get(self, mid):
+            port = (peer.server_port if mid == "bonsai"
+                    else target.server_port)
+            return _Entry(port)
+
+    try:
+        got = L._evict_peers(target_base, registry=_Reg())
+        assert got == [f"bonsai@:{peer.server_port}"]
+        assert unloaded == ["bonsai"]
+        # Serviço parado = skip silencioso (best-effort).
+        got2 = L._evict_peers("http://127.0.0.1:9", registry=_Reg())
+        assert sorted(got2) == sorted(
+            [f"bonsai@:{peer.server_port}",
+             f"nobody-loaded@:{target.server_port}"])
+        monkeypatch.delenv("JARVIS_ENSURE_EVICT", raising=False)
+        assert L._evict_enabled() is False
+        monkeypatch.setenv("JARVIS_ENSURE_EVICT", "1")
+        assert L._evict_enabled() is True
+    finally:
+        peer.shutdown()
+        target.shutdown()

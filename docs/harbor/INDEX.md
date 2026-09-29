@@ -30,6 +30,9 @@
 | 29/09 | task2-bin | bonsai bash-first | **1/2** — `cp` single-command = 1.0; `read_file\|write_file` como shell + touch = 0.0. Padrão geral: transferência num comando só vence, resto perde |
 | 29/09 | A/B lean vs minimal (dev, bonsai, piloto n=1) | bonsai | inconclusivo: minimal 4.4s vs lean 17.2s wall, mas NENHUM escreveu o arquivo (RC 0 sem deliverable). Gap: grounding de completion só existe nos trials, não no loop dev |
 | 29/09 | ensure multi-serviço | — | **sem evicção cross-service**: bonsai (4.3GB :8080) × fast (2.6GB :8083) não coexistem; ensure falha 300s sem despejar o outro. Dança manual `/models/unload` necessária. TODO: ensure com evicção |
+| 29/09 | **ensure com evicção** | — | **`JARVIS_ENSURE_EVICT=1`**: `_evict_peers` despeja residentes de outros endpoints do registry antes do load. Validado ida e volta (bonsai→fast→bonsai). `harbor-lite.sh fast` já exporta. Opt-in (bot não despeja ninguém por padrão) |
+| 29/09 | **bateria Lite fixa** | bonsai bash-first | **`scripts/harbor-lite.sh [bonsai\|fast]`**: bytecopy + bin + extract-line. Baseline bonsai **4/5** (bin 2/2, byte 1/1, line 1/2 — sensível, bom p/ regressão) |
+| 29/09 | no-tool nudge (dev loop) | bonsai | texto final sem nenhuma tool na sessão ganhava RC 0 direto (A/B lean/minimal). Agora 1 nudge limitado + teste. Q&A em texto segue funcionando |
 
 ## Estratégia por modelo (`scripts/grade-harbor.py`)
 

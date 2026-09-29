@@ -93,6 +93,52 @@ def active_model(base_url: str, timeout: float = 30.0) -> str | None:
     return None
 
 
+def _evict_peers(target_base: str, registry=None) -> list[str]:
+    """Despeja residentes de OUTROS serviços (VRAM 6GB = 1 LLM por vez).
+
+    29/09: bonsai (4.3GB :8080) x fast (2.6GB :8083) não coexistem — o
+    ensure falhava 300s em readiness sem nunca liberar o competidor.
+    Iteração genérica sobre endpoints do registry (sem hardcode de
+    modelo/serviço); best-effort por peer (serviço parado = skip).
+    Retorna ids despejados.
+    """
+    import os as _os
+    if registry is None:
+        from jarvis.core.model_registry import ModelRegistry
+        try:
+            registry = ModelRegistry.load()
+        except Exception:
+            return []
+    try:
+        ports = {str(getattr(registry.get(mid), "endpoint", ""))
+                 for mid in registry.ids()}
+    except Exception:
+        return []
+    target = target_base.rstrip("/").split(":")[-1]
+    evicted: list[str] = []
+    for port in sorted(p for p in ports if p and p != target):
+        base = f"http://127.0.0.1:{port}"
+        try:
+            models = _models_data(base, timeout=10.0)
+        except Exception:
+            continue
+        for m in models:
+            if (m.get("status") or {}).get("value") != "loaded":
+                continue
+            mid = m.get("id", "?")
+            try:
+                _http(base, "/models/unload", {"model": mid}, timeout=60.0)
+                evicted.append(f"{mid}@:{port}")
+            except Exception:
+                continue
+    return evicted
+
+
+def _evict_enabled() -> bool:
+    import os as _os
+    return _os.environ.get("JARVIS_ENSURE_EVICT", "").strip() == "1"
+
+
 def _lock_path() -> Path:
     from jarvis.core.config import get_config
     d = Path(get_config().state_dir)
@@ -166,6 +212,12 @@ def ensure_model(
                                 selected=model_id, switched=False,
                                 identity_verified=True,
                                 reason={"noop": "switched while waiting lock"})
+        # Evicção cross-service (29/09, opt-in via JARVIS_ENSURE_EVICT=1):
+        # VRAM 6GB não comporta 2 residentes — despeja peers ANTES do
+        # load em vez de falhar 300s em readiness.
+        evicted: list[str] = []
+        if _evict_enabled():
+            evicted = _evict_peers(base_url)
         attempts = 0
         while True:
             attempts += 1
@@ -205,7 +257,8 @@ def ensure_model(
                         requested=model_id, previous=current, selected=model_id,
                         switched=True, startup_latency_s=lat,
                         identity_verified=True,
-                        reason={"load": "router", "previous": current})
+                        reason={"load": "router", "previous": current,
+                                "evicted": evicted})
                 if m.get("id") == model_id and st == "failed":
                     raise ModelSwitchError(
                         "load", f"router marcou {model_id} como 'failed'") from None
