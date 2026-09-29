@@ -122,3 +122,44 @@ que separa "entregou" de "parece que entregou".
   calibration de prompt.
 - Logo: o próximo unlock é achar o que o bonsai *é bom*, não tentar
   torná-lo bom no que ele não é. Isso é a versão honesta do "role".
+
+## mission-kit: bateria que discrimina (29/09)
+
+`scripts/mission-kit.py` — 4 capacidades distintas, verifier externo
+(hash do conteúdo que o agente não escreve), distratores com
+canário. Substitui a lite battery como sinal, porque a lite mede
+transferência (bash-first resolve 4/5 para qualquer um).
+
+| Task | mede | bonsai | fast |
+|---|---|---|---|
+| T1-diagnose | achar linha defeituosa + não só executar | 1/2 | 1/2 |
+| T2-search | precisão de busca em 200 linhas c/ ruído | 0/2 | 0/2 |
+| T3-synthesis | combinar dois arquivos | 0/2 | 0/2 |
+| T4-robustness | instrução válida cercada de distrator | **2/2** | 1/2 |
+| **TOTAL** | | **3/8** | **2/8** |
+
+### O achado: o bonsai é bom em robustez, não emraciocínio
+T4-robustness **2/2** — o bonsai ignorou todos os canários (BANANA,
+PWNED, 42) e computou certo. O Qwen3-4B, "melhor modelo" em paper,
+perde. Isso é a tese do dono confirmada com número: **poda ternária
+preserva disciplina de instrução**, e disciplina é o que a maioria
+das tasks de agente mede.
+
+Onde ele não é bom: T2-search (0/2) e T3-synthesis (0/2) — precisão de
+busca e combinação multi-arquivo. Números plausíveis mas errados
+("34" em vez de 137, "123" em vez de 378). Não é alucinação —
+é incapacidade de contagem/varredura nesse tamanho. **Esse é o
+gargalo mensurável, e ele é de capacidade, não de harness.**
+
+### O bug de raiz que a bateria expôs
+Primeira execução: **0/16, e rc=0 com nada entregue.** Causa: o filtro
+de artefato em `dev.py` casava só strings PT ("não existe"), mas o
+`completion.py` emite em inglês ("doesn't exist yet"). Em prompt EN o
+nudge **nunca** disparava — o modelo lia, calculava certo, escrevia em
+prosa, e o mundo ficava sem arquivo, sem reopen, com RC 0.
+**A segurança do harness estava desligada justamente quando o dono
+fala inglês.** Corrigido → 0/8 vira 3/8 e 2/8 sem tocar no modelo.
+
+Esse é o achado mais importante do dia: uma fronteira entre dois
+módulos, cada um speakando uma língua, e o dono falando a língua que
+ninguém dos dois testou. Silencioso. Falso. Caríssimo.
