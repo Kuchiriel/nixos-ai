@@ -153,6 +153,52 @@ def test_get_fast_paths_singleton() -> None:
     assert get_fast_paths() is get_fast_paths()
 
 
+def test_route_fastpath_ops_sunshine() -> None:
+    # 28/09: bonsai alucinou 3x no Telegram ("echo sunshine > /tmp/...").
+    # Ops pré-aprovadas bypassam o LLM (zero LLM, comando fixo).
+    for text in [
+        "turn on sunshine",
+        "liga o sunshine",
+        "ligar sunshine",
+        "por favor liga o sunshine",
+        "turn off sunshine",
+        "desliga o sunshine",
+        "desativar o sunshine",
+        "status do sunshine",
+        "is sunshine on?",
+        "como está o sunshine",
+    ]:
+        assert route_request(text).handler == "fastpath", text
+
+
+def test_ops_runs_fixed_commands_only(monkeypatch) -> None:
+    import subprocess
+
+    from jarvis.core import router as router_mod
+
+    calls = []
+
+    class _FakeRes:
+        returncode = 0
+        stdout = "active\n"
+        stderr = ""
+
+    def _fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return _FakeRes()
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    router_mod._fast_paths = None
+    try:
+        fp = router_mod.get_fast_paths()
+        out = fp.respond("status do sunshine")
+        assert out is not None and "ATIVO" in out
+        assert calls == [["systemctl", "--user", "is-active", "sunshine"]]
+    finally:
+        router_mod._fast_paths = None
+        router_mod.get_fast_paths()
+
+
 # ---------------------------------------------------------------------------
 # Motor enriquecido (portado do RiveScript do legado)
 # ---------------------------------------------------------------------------

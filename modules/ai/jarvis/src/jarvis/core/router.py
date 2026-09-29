@@ -222,11 +222,50 @@ def get_fast_paths() -> FastPaths:
         out = res.stdout if res.returncode == 0 else res.stderr
         return (out or f"(exit {res.returncode})").strip()[:1500]
 
+    # Allowlist de efeitos pré-aprovados (28/09, Telegram): comandos FIXOS
+    # e idempotentes. Os args vêm do texto da REGRA, nunca da frase do
+    # usuário — nada digitado chega ao shell.
+    _OPS_CMDS = {
+        "sunshine_on": ["systemctl", "--user", "start", "sunshine"],
+        "sunshine_off": ["systemctl", "--user", "stop", "sunshine"],
+        "sunshine_status": ["systemctl", "--user", "is-active", "sunshine"],
+    }
+
+    def _ops(args: list[str]) -> str:
+        """Executa um efeito pré-aprovado da allowlist. Zero LLM."""
+        import os
+        import subprocess
+
+        if not args or args[0] not in _OPS_CMDS:
+            return "(op desconhecida)"
+        op = args[0]
+        # systemctl --user fala com o user manager via D-Bus da sessão; o
+        # serviço Telegram (system, User=nixos) nem sempre tem o env —
+        # deriva do euid (1000 = nixos) sem hardcodar.
+        env = dict(os.environ)
+        env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.geteuid()}")
+        env.setdefault(
+            "DBUS_SESSION_BUS_ADDRESS",
+            f"unix:path=/run/user/{os.geteuid()}/bus",
+        )
+        try:
+            res = subprocess.run(
+                _OPS_CMDS[op], capture_output=True, text=True, timeout=20, env=env)
+        except Exception as exc:  # noqa: BLE001
+            return f"erro: {exc}"
+        out = (res.stdout or res.stderr or "").strip()
+        if op == "sunshine_status":
+            return "☀️ Sunshine ATIVO." if out == "active" else f"🌙 Sunshine: {out or 'inativo'}."
+        if op == "sunshine_on":
+            return "☀️ Sunshine ligando..." if res.returncode == 0 else f"falhou: {out}"
+        return "🌙 Sunshine desligado." if res.returncode == 0 else f"falhou: {out}"
+
     fp.register("audiobook", _audio)
     fp.register("voice", _voice)
     fp.register("sys", _sys)
     fp.register("math", _math)
     fp.register("screenshot", _screenshot)
+    fp.register("ops", _ops)
     _fast_paths = fp
     return fp
 

@@ -467,6 +467,20 @@ print [da tela] → <call>screenshot</call>
 captura de tela → <call>screenshot</call>
 capturar a tela → <call>screenshot</call>
 
+# --- OPS (efeitos PRÉ-APROVADOS, zero LLM). Exceção à regra acima,
+# paga no Telegram real 28/09: o bonsai alucinou 3x ("echo sunshine >
+# /tmp/sunshine.txt") em vez de ligar o Sunshine. Só entra aqui comando
+# fixo e idempotente da allowlist _OPS_CMDS (router.py) — NENHUM input do
+# usuário chega ao shell; os args vêm do texto da regra, não da frase. ---
+[*] (liga|ligar|ative|ativar|inicia|iniciar) [o] sunshine → <call>ops sunshine_on</call>
+(turn on|start|enable) [*] sunshine → <call>ops sunshine_on</call>
+[*] (desliga|desligar|desative|desativar|para|parar) [o] sunshine → <call>ops sunshine_off</call>
+(turn off|stop|disable) [*] sunshine → <call>ops sunshine_off</call>
+sunshine [está|esta] (ligado|on|rodando|ativo|no ar) → <call>ops sunshine_status</call>
+is sunshine (on|up|running) → <call>ops sunshine_status</call>
+status [do] sunshine → <call>ops sunshine_status</call>
+como [está|esta] o sunshine → <call>ops sunshine_status</call>
+
 # --- SAUDAÇÕES (resposta instantânea; só casam frase EXATA) ---
 (ola|olá) → Olá! 👋
 oi → Oi! 👋
