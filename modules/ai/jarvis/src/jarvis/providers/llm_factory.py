@@ -87,11 +87,26 @@ def create_backend(
             enable_thinking=kwargs.get(
                 "enable_thinking", not config.llm_disable_thinking),
         )
-    
+
+    elif backend == "remote":
+        # 29/09 (E-cell): OpenAI-compatible remoto (Groq etc.) — mesmo
+        # harness, cérebro forte (isola cérebro vs latitude). Key SEMPRE
+        # via env (JARVIS_REMOTE_API_KEY), nunca no código.
+        import os as _os
+        from .llm_remote import RemoteBackend
+        return RemoteBackend(
+            base_url=base_url or _os.environ.get(
+                "JARVIS_REMOTE_BASE_URL", "https://api.groq.com/openai"),
+            api_key=kwargs.get("api_key") or _os.environ.get(
+                "JARVIS_REMOTE_API_KEY", ""),
+            model=model or config.llm_model,
+            session=kwargs.get("session"),
+        )
+
     else:
         raise ValueError(
             f"Unknown LLM backend: {backend!r}. "
-            f"Supported: llama-cpp, prismml, bonsai. "
+            f"Supported: llama-cpp, prismml, bonsai, remote. "
             f"Set JARVIS_LLM_BACKEND environment variable."
         )
 

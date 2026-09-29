@@ -13,9 +13,31 @@ from typing import Any
 from .llm_backend import BackendInfo, ChatResponse, LLMBackend
 
 
+def _sanitize_message(m: dict[str, Any]) -> dict[str, Any]:
+    """Reduz mensagem ao schema OpenAI estrito.
+
+    Campos internos do harness (finish_reason, index, provider_extra...)
+    quebram providers que validam (Groq 400). tool_calls preservadas no
+    formato canônico.
+    """
+    out: dict[str, Any] = {"role": m.get("role", "user")}
+    for k in ("content", "name", "tool_call_id"):
+        if m.get(k) is not None:
+            out[k] = m[k]
+    tcs = m.get("tool_calls")
+    if tcs:
+        clean = []
+        for tc in tcs:
+            fn = (tc.get("function") or {})
+            clean.append({"id": tc.get("id", ""), "type": "function",
+                          "function": {"name": fn.get("name", ""),
+                                       "arguments": fn.get("arguments", "{}")}})
+        out["tool_calls"] = clean
+    return out
+
+
 class RemoteBackend(LLMBackend):
     """Backend remoto OpenAI-compatible com API key."""
-
     def __init__(
         self,
         base_url: str,
@@ -56,7 +78,10 @@ class RemoteBackend(LLMBackend):
         t0 = time.monotonic()
         payload: dict[str, Any] = {
             "model": self._model,
-            "messages": messages,
+            # 29/09 (E-cell): Groq valida estrito — finish_reason e outros
+            # campos internos do histórico dão 400. Sanitiza p/ o schema
+            # OpenAI (llama.cpp ignora extras; provider externo não).
+            "messages": [_sanitize_message(m) for m in messages],
             "temperature": temperature,
             "stream": False,
         }

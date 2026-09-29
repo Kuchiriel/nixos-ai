@@ -763,3 +763,35 @@ class TestSlotsModelParam:
         b._session = sess
         assert b.get_slots_status() == {}
         assert b.is_busy() is True  # fail-closed preservado
+
+
+def test_remote_sanitize_strips_finish_reason() -> None:
+    """29/09 (E-cell): Groq 400 em finish_reason no histórico. Sanitizer
+    mantém só o schema OpenAI estrito."""
+    from jarvis.providers.llm_remote import _sanitize_message
+
+    m = {"role": "assistant", "content": "",
+         "finish_reason": "tool_calls", "index": 0,
+         "tool_calls": [{"id": "c1", "type": "function",
+                         "function": {"name": "ls", "arguments": "{}"},
+                         "extra": 1}]}
+    out = _sanitize_message(m)
+    assert out == {"role": "assistant", "content": "",
+                   "tool_calls": [{"id": "c1", "type": "function",
+                                   "function": {"name": "ls",
+                                                "arguments": "{}"}}]}
+
+
+def test_factory_remote_backend() -> None:
+    """Backend 'remote' cria RemoteBackend com key do env (E-cell)."""
+    import os
+
+    from jarvis.providers.llm_factory import create_backend
+
+    os.environ["JARVIS_REMOTE_API_KEY"] = "test-key"
+    try:
+        b = create_backend(backend_type="remote", base_url="https://x.test",
+                           model="m")
+    finally:
+        del os.environ["JARVIS_REMOTE_API_KEY"]
+    assert type(b).__name__ == "RemoteBackend"
