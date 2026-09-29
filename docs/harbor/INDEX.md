@@ -14,6 +14,7 @@
 | 29/09 | task2-bin (binário 0x00-0xFF) | bonsai | 0/4 (sem `cp` não há cópia; flag BINÁRIO adicionada) |
 | 29/09 | X-cell (template xLAM obtido) | xLAM-2-8B | incompatível: sem template 400 (parser); com template 500 (output fora do peg-native). Precisa dialeto nativo (formato fc-r + parser de arrays), não tweak. |
 | 29/09 | D-cell (byte + bin) | Phi-4-mini-instruct | 0/4 (text-fight, src-overwrite; diag 0.0%) |
+| 29/09 | E-cell (Groq, mesmo harness) | gpt-oss-120b | 0/1 (relative-path drift: usa `src.txt`, nunca `/app`; bytes) |
 
 ## Estratégia por modelo (`scripts/grade-harbor.py`)
 
