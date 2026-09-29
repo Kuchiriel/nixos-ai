@@ -341,12 +341,52 @@ def extract_fallback_tool_calls(text: str | None,
     single = extract_fallback_tool_call(text)
     if single:
         return [single]
+    dsml = _parse_dsml_calls(text, limit=limit)
+    if dsml:
+        return dsml
     if bash_fence:
         m = re.search(r"```bash\s*\n(.*?)```", text, re.DOTALL)
         if m and m.group(1).strip():
             return [{"name": "execute_shell",
                      "arguments": {"cmd": m.group(1).strip()}}]
     return []
+
+
+def _parse_dsml_calls(text: str | None, limit: int = 3) -> list[dict[str, Any]]:
+    """Dialeto DSML do DeepSeek servido via NVIDIA (29/09, N-cell).
+
+    O modelo emite tool calls em XML proprio (barras fullwidth U+FF5C),
+    nao OpenAI tool_calls -- sem parser, trial inteiro vira UNVERIFIED
+    com zero execs. Tags tem sufixo (`calls>`, `invoke>`, `parameter>`).
+    Mapeia `command`->`cmd` p/ execute_shell (nosso schema usa `cmd`).
+    Generico por construcao (nome+params), sem conhecimento de task.
+    """
+    if not text or "DSML" not in text:
+        return []
+    _bar = "[|\uFF5C\u2502]"
+    norm = re.sub(f"</?{_bar}DSML{_bar}", "<DSML>", text)
+    norm = norm.replace("</DSML>", "<DSML>")
+    out: list[dict[str, Any]] = []
+    for inv in re.finditer(
+            r"<DSML>\s*invoke\s+name=\"([^\"]+)\""
+            r"(.*?)<DSML>\s*invoke\s*>", norm, re.DOTALL):
+        if len(out) >= limit:
+            break
+        name, body = inv.group(1).strip(), inv.group(2)
+        args: dict[str, Any] = {}
+        for pm in re.finditer(
+                r"<DSML>\s*parameter\s+name=\"([^\"]+)\"[^>]*>"
+                r"(.*?)<DSML>\s*parameter\s*>", body, re.DOTALL):
+            args[pm.group(1).strip()] = pm.group(2).strip()
+        if not name:
+            continue
+        if name == "execute_shell" and "cmd" not in args and "command" in args:
+            args = dict(args)
+            args["cmd"] = args.pop("command")
+        out.append({"name": name, "arguments": args})
+    return out
+
+
 
 from jarvis.core.logging import get_logger
 from jarvis.core.user_profile import UserProfile, inject_context

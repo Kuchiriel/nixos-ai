@@ -318,3 +318,21 @@ def test_bridge_flag_first_read_counts_and_retry_allowed() -> None:
     # Output próprio: escreve e reescreve (retry legítimo).
     assert bridge.sh("sed -n 2p /app/data.txt > /app/line2.txt").return_code == 0
     assert bridge.sh("sed -n 1p /app/data.txt > /app/line2.txt").return_code == 0
+
+
+def test_dsml_dialect_parses() -> None:
+    """29/09 (N-cell): DeepSeek via NVIDIA emite DSML (barras fullwidth),
+    não OpenAI tool_calls. Sem parser = zero execs."""
+    from jarvis.core.agent import extract_fallback_tool_calls as _fb
+
+    sample = ('<｜DSML｜ calls>\n<｜DSML｜ invoke name="read_file">\n'
+              '<｜DSML｜ parameter name="path" string="true">/app/data.txt'
+              '</｜DSML｜ parameter>\n</｜DSML｜ invoke>\n</｜DSML｜ calls>')
+    calls = _fb(sample)
+    assert calls == [{"name": "read_file",
+                      "arguments": {"path": "/app/data.txt"}}]
+    sh = _fb('<｜DSML｜ invoke name="execute_shell">'
+             '<｜DSML｜ parameter name="command">cat /app/a</｜DSML｜ parameter>'
+             '</｜DSML｜ invoke>')
+    assert sh == [{"name": "execute_shell", "arguments": {"cmd": "cat /app/a"}}]
+    assert _fb("texto normal") == []
