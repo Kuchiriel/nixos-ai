@@ -2102,6 +2102,13 @@ def _run_agent_loop(
     detector = LoopDetector()
     successes = 0
     _run_agent_loop._nudges = 0  # type: ignore[attr-defined]
+    # Attrs de função persistem entre runs no mesmo processo (29/09: 2º
+    # dev_once herdava nudges/writes do 1º e pulava correções). Reset total.
+    _run_agent_loop._friction = None  # type: ignore[attr-defined]
+    _run_agent_loop._no_tool_nudged = 0  # type: ignore[attr-defined]
+    _run_agent_loop._claims_nudged = 0  # type: ignore[attr-defined]
+    _run_agent_loop._verdict_nudged = 0  # type: ignore[attr-defined]
+    _run_agent_loop._writes_ok = []  # type: ignore[attr-defined]
 
     for turn in range(max_turns):
         est = _estimate_tokens(messages)
@@ -2194,6 +2201,7 @@ def _run_agent_loop(
                     _nudges = getattr(_run_agent_loop, "_nudges", 0)
                     if _nudges < 2:
                         _run_agent_loop._nudges = _nudges + 1  # type: ignore[attr-defined]
+                        _run_agent_loop._friction = successes  # type: ignore[attr-defined]
                         console.print("[dim]  (promessa sem ação — pedindo execução)[/]")
                         # A/B 16/09: nudge genérico ("execute AGORA") fazia o
                         # modelo fraco escolher a tool ERRADA — pedia read_file
@@ -2238,6 +2246,7 @@ def _run_agent_loop(
                                                  for w in _writes)]
                     if _false_claims and getattr(_run_agent_loop, "_claims_nudged", 0) < 1:
                         _run_agent_loop._claims_nudged = 1  # type: ignore[attr-defined]
+                        _run_agent_loop._friction = successes  # type: ignore[attr-defined]
                         console.print("[dim]  (claim não verificado — corrigindo)[/]")
                         messages.append({
                             "role": "system",
@@ -2275,6 +2284,7 @@ def _run_agent_loop(
                                 or "nao compila" in m)] if v else []
                     if v is not None and v.status != "VERIFIED" and _art:
                         _run_agent_loop._verdict_nudged = 1  # type: ignore[attr-defined]
+                        _run_agent_loop._friction = successes  # type: ignore[attr-defined]
                         console.print(f"[dim]  (veredito {v.status}: "
                                       f"{'; '.join(v.missing[:3])[:110]})[/]")
                         messages.append({
@@ -2291,6 +2301,17 @@ def _run_agent_loop(
                 console.print(Panel(
                     Markdown(content), title="🤖", title_align="left", border_style="jarvis",
                 ))
+            # RC honesto (29/09): texto final após atrito COM EVIDÊNCIA de
+            # trabalho não feito (promise/claim/verdict nudge) sem NENHUM
+            # sucesso de tool DEPOIS do nudge = não entregue. Snapshot de
+            # successes no nudge: sucesso posterior (leu→escreveu) libera.
+            # No-tool puro não conta (Q&A legítimo é zero-tool por natureza).
+            _fr = getattr(_run_agent_loop, "_friction", None)
+            if _fr is not None and successes == _fr:
+                console.print("[tool.error]⚠️  sem entrega: nudges esgotados e "
+                              "nenhuma ferramenta teve sucesso desde o aviso[/]")
+                _repl_emit("session.unfulfilled", turns=turn + 1)
+                return False
             return True
 
         if used_text_fallback:
@@ -2317,6 +2338,22 @@ def _run_agent_loop(
                     _w = getattr(_run_agent_loop, "_writes_ok", [])
                     _w.append(str(args.get("path", "")))
                     _run_agent_loop._writes_ok = _w  # type: ignore[attr-defined]
+                elif func_name == "execute_shell":
+                    # 29/09: claim-checker só via write_file — shell
+                    # (`> out`, `cp A B`) passava batido e o modelo
+                    # declarava arquivo nunca rastreado. Extrai alvos
+                    # de redirect + destino de cp (mesma semântica:
+                    # path efetivamente escrito).
+                    import re as _re_w
+                    _cmd = str(args.get("cmd", ""))
+                    _targets = _re_w.findall(r">{1,2}\s*([/\w.\-]+)", _cmd)
+                    _targets += [m.group(2) for m in _re_w.finditer(
+                        r"\bcp\s+(?:-[^\s]+\s+)*([/\w.\-]+)\s+([/\w.\-]+)",
+                        _cmd)]
+                    if _targets:
+                        _w = getattr(_run_agent_loop, "_writes_ok", [])
+                        _w.extend(_targets)
+                        _run_agent_loop._writes_ok = _w  # type: ignore[attr-defined]
 
             is_error = output.startswith("ERROR")
             style = "tool.error" if is_error else "tool.ok"

@@ -453,3 +453,84 @@ def test_no_tool_nudge_once_then_accept(monkeypatch) -> None:
     assert calls["n"] == 2, "1 nudge + resposta final"
     systems = [m.get("content", "") for m in msgs if m.get("role") == "system"]
     assert any("not used ANY tool" in s for s in systems)
+
+
+def test_friction_without_success_is_honest_rc(monkeypatch) -> None:
+    """29/09: texto final após nudge COM EVIDÊNCIA (claim), zero tools com
+    sucesso = RC 1 (antes: RC 0 desonesto). Q&A puro segue RC 0."""
+    import jarvis.cli.dev as _dev
+
+    answers = {"n": 0}
+
+    def _fake_call(messages, tools, profile, debug=False):
+        answers["n"] += 1
+        text = ("done." if answers["n"] != 2
+                else "o arquivo /tmp/x.txt foi criado com sucesso")
+        return {"choices": [{"message": {"role": "assistant",
+                                         "content": text,
+                                         "tool_calls": None}}]}
+
+    monkeypatch.setattr(_dev, "_call_llm", _fake_call)
+    msgs: list = [{"role": "system", "content": "s"},
+                  {"role": "user", "content": "crie o arquivo /tmp/x.txt"}]
+    ok = _dev._run_agent_loop(msgs, [], {"name": "tiny"}, approve=True,
+                              max_turns=6)
+    assert ok is False, "claim falso + zero tools = não entregue"
+    # Q&A puro: no-tool nudge dispara, mas sem evidência de trabalho
+    # pendente o RC segue 0.
+    answers["n"] = 0
+
+    def _fake_qa(messages, tools, profile, debug=False):
+        return {"choices": [{"message": {"role": "assistant",
+                                         "content": "olá, tudo bem.",
+                                         "tool_calls": None}}]}
+
+    monkeypatch.setattr(_dev, "_call_llm", _fake_qa)
+    msgs2: list = [{"role": "system", "content": "s"},
+                   {"role": "user", "content": "oi"}]
+    ok2 = _dev._run_agent_loop(msgs2, [], {"name": "tiny"}, approve=True,
+                               max_turns=5)
+    assert ok2 is True, "Q&A puro segue RC 0"
+
+
+def test_writes_ok_tracks_shell_redirects_and_cp(monkeypatch) -> None:
+    """29/09: claim-checker só via write_file — shell (`>`, `cp`)
+    passava batido. Alvos de redirect + destino de cp entram no rastreio."""
+    import jarvis.cli.dev as _dev
+
+    script = [
+        {"choices": [{"message": {
+            "role": "assistant", "content": "",
+            "tool_calls": [{"id": "c1", "function": {
+                "name": "execute_shell",
+                "arguments": '{"cmd": "sed -n 2p /a.txt > /b.txt"}'}}]}}]},
+        {"choices": [{"message": {
+            "role": "assistant", "content": "",
+            "tool_calls": [{"id": "c2", "function": {
+                "name": "execute_shell",
+                "arguments": '{"cmd": "cp /b.txt /c.txt"}'}}]}}]},
+        {"choices": [{"message": {"role": "assistant",
+                                  "content": "done.",
+                                  "tool_calls": None}}]},
+    ]
+    state = {"n": 0}
+
+    def _fake_call(messages, tools, profile, debug=False):
+        r = script[min(state["n"], 2)]
+        state["n"] += 1
+        return r
+
+    monkeypatch.setattr(_dev, "_call_llm", _fake_call)
+    monkeypatch.setattr(_dev, "_execute_tool_call",
+                        lambda *a, **k: ("ok", ""))
+    monkeypatch.setattr(_dev, "_validated_output",
+                        lambda *a, **k: a[2] if len(a) > 2 else "ok")
+    msgs: list = [{"role": "system", "content": "s"},
+                  {"role": "user", "content": "go"}]
+    ok = _dev._run_agent_loop(msgs, [], {"name": "tiny"}, approve=True,
+                              max_turns=6)
+    # "done." vazio após shell-only: verdict-nudge suspeita (conservador) —
+    # o que importa aqui é o rastreio, não o RC.
+    assert ok is False
+    assert "/b.txt" in _dev._run_agent_loop._writes_ok
+    assert "/c.txt" in _dev._run_agent_loop._writes_ok
