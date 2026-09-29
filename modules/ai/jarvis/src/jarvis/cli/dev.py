@@ -278,6 +278,38 @@ def _query_server_context_size() -> int:
     return 0
 
 
+def _sampling_for_model(model_id: str) -> dict[str, Any]:
+    """Sampling do registry (models.nix) — o valor MEDIDO por modelo.
+
+    29/09: o REPL hardcodava `temperature: 0.0` em todo o path e jogava
+    fora o `sampling` que ja vivia no registry (bonsai 0.5/0.9/20,
+    fast 0.7/0.8/20, reasoning 1.0/0.95/20). Duas consequencias:
+
+    1. Desperdicio: os valores foram medidos antes e nao eram usados.
+    2. **Greedy (0.0) e anti-padro para reasoning models** — a literatura
+       do fornecedor (DeepSeek-R1, Qwen3) recomenda 0.6-1.0 com top_p
+       0.95; greedy degenera em repeticao. Foi exatamente o que se viu
+       no MoE: 8x o mesmo comando, ciclo de beco.
+
+    `JARVIS_SAMPLING`:
+      registry (padrao) | greedy (forca 0.0, so p/ A/B) | default (0.0)
+    """
+    import os as _os
+    mode = _os.environ.get("JARVIS_SAMPLING", "registry").strip().lower()
+    if mode == "greedy":
+        return {"temperature": 0.0}
+    if mode == "default":
+        return {"temperature": 0.0}
+    try:
+        from jarvis.core.model_registry import ModelRegistry
+        s = dict(ModelRegistry.load().sampling_for(model_id) or {})
+    except Exception:
+        s = {}
+    if not s:
+        return {"temperature": 0.0}
+    return s
+
+
 def _detect_profile() -> dict[str, Any]:
     """Detecta o perfil do modelo, o model_id correto para o payload, e se
     devemos usar tool_calls nativas ou operar 100% via blocos de texto.
@@ -316,7 +348,7 @@ def _detect_profile() -> dict[str, Any]:
         _tp = None
     if _tp is not None:
         profile = {"name": _tp["name"], "max_tokens": _tp["max_tokens"],
-                   "temperature": 0.0}
+                   **_sampling_for_model(model_id)}
         override = getattr(cfg, "llm_native_tools", None)
         profile["native_tools"] = override if override is not None else True
         profile["model_id"] = model_id
@@ -1075,6 +1107,13 @@ def _call_llm(
         "temperature": profile["temperature"],
         "max_tokens": profile["max_tokens"],
     }
+    # Sampling completo do registry (29/09): top_p/top_k/presence_penalty
+    # chegam no payload — antes so temperature via, o resto era medido e
+    # descartado. `min_p` e `repetition_penalty` ficam de fora (o backend
+    # lida em `extra`/sampling do llama.cpp, nao no chat payload).
+    for _k in ("top_p", "top_k", "presence_penalty"):
+        if profile.get(_k) is not None:
+            payload[_k] = profile[_k]
     if tools:
         payload["tools"] = tools
         payload["tool_choice"] = "auto"
@@ -1101,6 +1140,9 @@ def _call_llm(
             tools=tools or None,
             temperature=profile["temperature"],
             max_tokens=profile["max_tokens"],
+            extra={_k: profile[_k] for _k in
+                   ("top_p", "top_k", "presence_penalty")
+                   if profile.get(_k) is not None} or None,
         )
     elapsed = time.monotonic() - t0
 

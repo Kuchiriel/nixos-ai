@@ -717,3 +717,29 @@ def test_zero_width_does_not_break_tool_parse() -> None:
     assert acts == [{"name": "write_file",
                      "arguments": {"content": "550", "path": "total.txt"}}]
     assert _dev._strip_zero_width("a<b") == "a<b"
+
+
+def test_sampling_comes_from_registry_not_greedy(monkeypatch) -> None:
+    """29/09: o REPL hardcodava temperature 0.0 e descartava o sampling
+    medido que já vivia no registry. Greedy é anti-padrão em reasoning
+    (DeepSeek-R1/Qwen3 pedem 0.6-1.0)."""
+    import jarvis.cli.dev as _dev
+
+    monkeypatch.delenv("JARVIS_SAMPLING", raising=False)
+    s = _dev._sampling_for_model("jarvis-fast")
+    assert s.get("temperature") == 0.7, s
+    assert s.get("top_p") == 0.8 and s.get("top_k") == 20, s
+    assert s.get("presence_penalty") == 1.5, s
+    # Bonsai não é greedy por acidente também.
+    assert _dev._sampling_for_model("bonsai").get("temperature") == 0.5
+    # A/B explícito para experimento.
+    monkeypatch.setenv("JARVIS_SAMPLING", "greedy")
+    assert _dev._sampling_for_model("jarvis-fast") == {"temperature": 0.0}
+    monkeypatch.setenv("JARVIS_SAMPLING", "default")
+    assert _dev._sampling_for_model("jarvis-fast") == {"temperature": 0.0}
+    # Idempotente no payload: top_p etc. não vazam min_p/repetition.
+    prof = {"temperature": 0.7, "top_p": 0.8, "top_k": 20,
+            "presence_penalty": 1.5, "min_p": 0.0, "repetition_penalty": 1.0}
+    extra = {k: prof[k] for k in ("top_p", "top_k", "presence_penalty")
+             if prof.get(k) is not None}
+    assert "min_p" not in extra and "repetition_penalty" not in extra
