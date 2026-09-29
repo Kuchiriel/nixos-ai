@@ -2241,14 +2241,21 @@ def _mentions_work_files(content: str) -> bool:
     if not _has_file:
         # Nome genérico ("o arquivo CSV", "o script process.py", "the file")
         # também conta — o R1 escreve plano sem citar path exato.
+        # PT + EN (29/09, auditoria de idioma: o fallback era so PT, e
+        # a escalada bash-first nao disparava em prompt ingles — o
+        # mesmo bug de classe do filtro de artefato, agora no meu
+        # proprio codigo do mesmo dia).
         _has_file = bool(_re.search(
-            r"\b(arquivo|script|planilha|csv|input\.csv)\b", content.lower()))
+            r"\b(arquivo|script|planilha|csv|input\.csv|file|script|"
+            r"spreadsheet|input\.txt)\b", content.lower()))
     if not _has_file:
         return False
     return bool(_re.search(
         r"\b(vou|ser[aá]|preciso|precisamos|passo|etapa|arquivo|script|"
         r"leio|crio|corrigo|verifico|executo|rodei|import|construa|"
-        r"identificar|solve|step)\b", content.lower()))
+        r"identificar|i will|let me|need to|step|stage|read the|"
+        r"check the|inspect|open the|run the|fix the|create the|"
+        r"look at)\b", content.lower()))
 
 
 # ---------------------------------------------------------------------------

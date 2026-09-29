@@ -788,3 +788,17 @@ def test_verdict_nudge_fires_in_english(monkeypatch) -> None:
     systems = [m.get("content", "") for m in msgs if m.get("role") == "system"]
     assert any("NOT satisfied" in s or "answer.txt" in s for s in systems), \
         "nudge de veredito TEM que disparar com texto EN"
+
+
+def test_mentions_work_files_is_bilingual() -> None:
+    """29/09 (auditoria de idioma): o fallback era só PT, então a escalada
+    bash-first não disparava em EN — mesma classe do bug do filtro de
+    artefato, no meu próprio código do mesmo dia."""
+    import jarvis.cli.dev as _dev
+
+    for c in ("Please check the file and report",
+              "I will read data.txt and fix it",
+              "Vou ler o arquivo e corrigir"):
+        assert _dev._mentions_work_files(c) is True, c
+    for c in ("A resposta e 6", "done", "```bash\ncat a\n```"):
+        assert _dev._mentions_work_files(c) is False, c
