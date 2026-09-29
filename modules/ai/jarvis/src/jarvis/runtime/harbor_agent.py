@@ -145,6 +145,10 @@ class _ContainerBridge:
 
     def read(self, path: str) -> tuple[Any, str]:
         self._seen.add(path.split("/")[-1])
+        # 29/09 (3ª): leitura via TOOL não alimentava _reads — modelo lia
+        # com read_file e o redirect seguinte caía no "never read it".
+        # Leitura é leitura, qualquer que seja a interface.
+        self._reads.add(path.split("/")[-1])
         import base64 as _b64
         import shlex as _shlex
         r = self.sh("base64 -- " + _shlex.quote(path))
