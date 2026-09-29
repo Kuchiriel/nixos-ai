@@ -64,6 +64,7 @@ class _ContainerBridge:
         self._env = env
         self._seen: set[str] = set()
         self._reads: set[str] = set()
+        self._out_bases: set[str] = set()
         # Grounding da completion (29/09): "done" sem nenhuma observação
         # do container é prosa, não trabalho. Contadores alimentam o gate
         # pós-run (COMPLETED com zero exec → UNVERIFIED honesto).
@@ -85,14 +86,29 @@ class _ContainerBridge:
         # (trials); host nunca passa aqui.
         _SCRIPT_EXT = (".sh", ".py", ".js", ".ts", ".json")
         try:
+            # 29/09 (2ª): o regex capturava FLAGS como paths (`grep -n '2'
+            # /app/data.txt registrava "-n", não o fonte — clobber passava).
+            # Só conta o que parece path (ignora -flags); além do operando
+            # imediato, qualquer token com `/` (cobre `cmd -flag ... /path`).
             reads = {m.group(1).split("/")[-1] for m in _re.finditer(
-                r"(?:cat|grep|sed|awk|head|tail|less|xxd|base64|cmp|diff)\s+([/\w.\-]+)", cmd)}
+                r"(?:cat|grep|sed|awk|head|tail|less|xxd|base64|cmp|diff)\s+([/\w.\-]+)", cmd)
+                if not m.group(1).startswith("-")}
+            _outs = {o.split("/")[-1]
+                     for o in _re.findall(r">{1,2}\s*([/\w.\-]+)", cmd)}
+            reads |= {t.strip("'\"").split("/")[-1]
+                      for t in _re.findall(r"[\"']?(/[-\w./]+)[\"']?", cmd)}
+            reads.discard("")
+            # Alvo de redirect é OUTPUT, nunca fonte (senão toda primeira
+            # escrita seria recusada).
+            reads -= _outs
             self._seen.update(reads)
             self._reads.update(reads)
             for o in _re.findall(r">{1,2}\s*([/\w.\-]+)", cmd):
                 base = o.split("/")[-1]
-                # Fonte lida primeiro: read-only p/ redirect (ver acima).
+                # Fonte lida primeiro: read-only p/ redirect. Exceção:
+                # output PRÓPRIO (retry legítimo — 7GzVSVq turn 7).
                 if (base in self._reads and o not in self.written
+                        and base not in self._out_bases
                         and not o.endswith(_SCRIPT_EXT)):
                     return _NS(return_code=1, stdout="",
                                stderr=(f"harness: '{o}' is a SOURCE file you "
@@ -101,6 +117,7 @@ class _ContainerBridge:
                                        f"the source."))
                 if base in self._seen or o.endswith(_SCRIPT_EXT):
                     self._seen.add(base)
+                    self._out_bases.add(base)
                     continue
                 # task3 29/09: modelo lia data.txt e depois o SOBRESCREVIA
                 # (echo invented > data.txt) p/ "extrair" da própria
@@ -117,6 +134,7 @@ class _ContainerBridge:
                                        f"sed -n Np A > B). Never re-type "
                                        f"bytes — re-typing corrupts."))
                 self._seen.add(base)
+                self._out_bases.add(base)
         except Exception:
             pass
         self.n_exec += 1

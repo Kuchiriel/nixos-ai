@@ -297,3 +297,24 @@ def test_bridge_source_files_readonly() -> None:
     assert r.return_code == 1 and "SOURCE file" in (r.stderr or "")
     assert not any("echo invented" in c for c in env.cmds)
     assert bridge.sh("sed -n 2p /app/data.txt > /app/line2.txt").return_code == 0
+
+
+def test_bridge_flag_first_read_counts_and_retry_allowed() -> None:
+    """29/09 (2ª): `grep -n '2' /app/data.txt` registrava '-n' e o clobber
+    passava. Flags ignoradas, paths com `/` contam; retry do próprio
+    output segue permitido."""
+    import jarvis.runtime.harbor_agent as _ham
+
+    class ShEnv(FakeEnv):
+        async def exec(self, command, timeout_sec=None):
+            self.cmds.append(command)
+            return FakeExecResult(stdout="x", stderr="", return_code=0)
+
+    bridge = _ham._ContainerBridge(ShEnv())
+    assert bridge.sh("grep -n '2' /app/data.txt").return_code == 0
+    assert "data.txt" in bridge._reads and "-n" not in bridge._reads
+    r = bridge.sh("echo invented > /app/data.txt")
+    assert r.return_code == 1 and "SOURCE file" in (r.stderr or "")
+    # Output próprio: escreve e reescreve (retry legítimo).
+    assert bridge.sh("sed -n 2p /app/data.txt > /app/line2.txt").return_code == 0
+    assert bridge.sh("sed -n 1p /app/data.txt > /app/line2.txt").return_code == 0
