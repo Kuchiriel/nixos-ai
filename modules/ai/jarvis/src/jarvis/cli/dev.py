@@ -1993,6 +1993,19 @@ _PARAMETER_TAG_RE = re.compile(
 )
 
 
+# Zero-width / BOM (29/09, missao com o MoE): o tokenizer do modelo
+# emite U+200B logo apos `<` nas tags de tool-call
+# (`</\u200btool_call>`, `<\u200bfunction=...>`) — o parser Hermes nao
+# casava, a resposta virava "vazia" e a missao morria a um passo do fim
+# (o modelo JA tinha a resposta certa, 550). Custo zero, ganho: a
+# acao parseada. Aplicado antes de qualquer parse de texto.
+_ZW_RE = re.compile(r"[\u200b-\u200d\u2060\ufeff]")
+
+
+def _strip_zero_width(text: str) -> str:
+    return _ZW_RE.sub("", text or "")
+
+
 def _dedupe_actions(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Remove ações idênticas (mesmo nome+args) — o modelo às vezes repete o
     mesmo tool_call duas vezes no mesmo texto (ex: menciona a ação em prosa
@@ -2019,6 +2032,7 @@ def _parse_text_actions(content: str) -> list[dict[str, Any]] | None:
     inflando o histórico e duplicando conteúdo de arquivo no contexto."""
     if not content:
         return None
+    content = _strip_zero_width(content)
 
     function_actions: list[dict[str, Any]] = []
     for m in _FUNCTION_TAG_RE.finditer(content):
@@ -2242,6 +2256,7 @@ def _run_agent_loop(
     _run_agent_loop._fence_hinted = 0  # type: ignore[attr-defined]
     _run_agent_loop._err_cmds = {}  # type: ignore[attr-defined]
     _run_agent_loop._err_nudged = 0  # type: ignore[attr-defined]
+    _run_agent_loop._empty_nudged = 0  # type: ignore[attr-defined]
 
     for turn in range(max_turns):
         est = _estimate_tokens(messages)
@@ -2313,6 +2328,38 @@ def _run_agent_loop(
         messages.append(assistant_msg)
 
         if not tool_calls:
+            # Resposta VAZIA = parada silenciosa (29/09, missao com o MoE:
+            # o modelo entregou o total correto (550) e encerrou sem
+            # escrever o deliverable — final vazio nao passa por nenhum
+            # nudge, entao o veredito so aparecia DEPOIS, como relatorio
+            # post-mortem). Trata vazio como "ainda nao terminou": cobra o
+            # que falta do mundo, 1x.
+            if not content and successes > 0 and \
+                    getattr(_run_agent_loop, "_empty_nudged", 0) < 1:
+                _pend: list[str] = []
+                try:
+                    from jarvis.core.completion import (
+                        check_completion as _cc2, missing_deliverables as _md2)
+                    _cv = _cc2(messages)
+                    _pend = [m for m in (_cv.missing or []) if m][:3]
+                    if not _pend:
+                        _pend = _md2(messages, None)[:3]
+                except Exception:
+                    _pend = []
+                _run_agent_loop._empty_nudged = 1  # type: ignore[attr-defined]
+                console.print("[dim]  (resposta vazia — falta o "
+                              "deliverable)[/]")
+                messages.append({
+                    "role": "system",
+                    "content": (
+                        "Your reply was empty and the task is NOT finished. "
+                        "Still missing in the world: "
+                        + "; ".join(_pend)[:300]
+                        + ". Finish it NOW with ONE tool call that creates or "
+                          "writes exactly what is missing. Then reply with a "
+                          "short final summary."),
+                })
+                continue
             if content:
                 # Escalada bash-first (29/09, R1-distill): modelo com
                 # raciocínio mas SEM template de tool-call responde em

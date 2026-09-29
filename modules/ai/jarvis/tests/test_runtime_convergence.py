@@ -702,3 +702,18 @@ def test_error_nudge_injects_real_content(tmp_path, monkeypatch) -> None:
     systems = [m.get("content", "") for m in msgs if m.get("role") == "system"]
     assert any("REAL CONTENT" in s and "5;50" in s for s in systems), \
         "conteudo real do input tem que chegar no nudge"
+
+
+def test_zero_width_does_not_break_tool_parse() -> None:
+    """29/09 (missão MoE): tokenizer emite U+200B após `<` nas tags
+    Hermes — o parser falhava e a resposta virava vazia."""
+    import jarvis.cli.dev as _dev
+
+    raw = ("pronto<tool_call>\n<function=write_file>\n"
+           "<parameter=content>550</parameter>\n"
+           "<parameter=path>total.txt</parameter>\n"
+           "</function>\n</tool_call>")
+    acts = _dev._parse_text_actions(raw)
+    assert acts == [{"name": "write_file",
+                     "arguments": {"content": "550", "path": "total.txt"}}]
+    assert _dev._strip_zero_width("a<b") == "a<b"
