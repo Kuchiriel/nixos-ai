@@ -10,6 +10,7 @@ NUNCA adaptar o runtime p/ passar numa task (otimizar o instrumento).
 from __future__ import annotations
 
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -191,9 +192,20 @@ def _direct_config() -> Any:
     fixa llm_model/llm_base_url (sem model_requirements não há roteamento
     nem ensure — o servidor serve um arquivo fixo). Sem env → None
     (comportamento padrão via router :8080).
+    E-cell (29/09): JARVIS_LLM_BACKEND=remote + JARVIS_LLM_MODEL p/ cérebro
+    cloud OpenAI-compatible (Groq); key via JARVIS_REMOTE_API_KEY (env,
+    nunca código). Mesmo harness, outro cérebro.
     """
     import os as _os
     base = _os.environ.get("JARVIS_BASE_URL", "").strip().rstrip("/")
+    backend = _os.environ.get("JARVIS_LLM_BACKEND", "").strip()
+    from dataclasses import replace
+    from jarvis.core.config import get_config
+    if backend:
+        model = _os.environ.get("JARVIS_LLM_MODEL", "").strip() or "default"
+        return replace(get_config(), llm_backend=backend,
+                       llm_base_url=base or "https://api.groq.com/openai",
+                       llm_model=model)
     if not base:
         return None
     import json as _json
@@ -204,9 +216,9 @@ def _direct_config() -> Any:
         mid = data[0].get("id", "default") if data else "default"
     except Exception:
         mid = "default"
-    from dataclasses import replace
-    from jarvis.core.config import get_config
-    return replace(get_config(), llm_model=mid, llm_base_url=base)
+    from dataclasses import replace as _replace2
+    from jarvis.core.config import get_config as _get_config
+    return _replace2(_get_config(), llm_model=mid, llm_base_url=base)
 
 
 class JarvisHarborAgent(BaseAgent):
@@ -256,6 +268,8 @@ class JarvisHarborAgent(BaseAgent):
         import jarvis.core.agent as _agent_mod
 
         real_sh = _agent_mod.run_shell
+        real_chain = _agent_mod.has_chaining_operators
+        real_allowed = _agent_mod.command_allowed
         bridge = None
         if environment is not None:
             bridge = _ContainerBridge(environment)
@@ -269,6 +283,11 @@ class JarvisHarborAgent(BaseAgent):
                 return _sp.CompletedProcess(cmd, r.return_code,
                                             r.stdout or "", r.stderr or "")
             _agent_mod.run_shell = _routed
+            if os.environ.get("JARVIS_TRIAL_TOOLS", "") == "bash-first":
+                # Sandbox = container: chaining e allowlist liberados SÓ aqui
+                # (host mantém as travas; restore no finally).
+                _agent_mod.has_chaining_operators = lambda cmd: False
+                _agent_mod.command_allowed = lambda cmd: True
         try:
             cfg = _direct_config()
             # Com config direta NÃO passa model_requirements (se passar, o
@@ -276,11 +295,22 @@ class JarvisHarborAgent(BaseAgent):
             akw = {} if cfg is not None else (
                 {"model_requirements": self._model_requirements}
                 if self._model_requirements else {})
+            # F-cell (29/09, tese mini-SWE-agent): JARVIS_TRIAL_TOOLS=bash-first
+            # reduz a superfície a execute_shell (container É o sandbox:
+            # chaining + allowlist liberados só aqui, com restore).
+            if os.environ.get("JARVIS_TRIAL_TOOLS", "") == "bash-first":
+                akw["tool_class"] = "shell"
+                # Gramática constrained quebra com superfície reduzida
+                # (parser do server rejeita); texto livre + parser de texto
+                # (tese mini-SWE: sem interface de tool-calling).
+                akw["strict_tools"] = False
             rt = AgentRuntime(agent_class=cls, config=cfg, agent_kwargs=akw)
             result = rt.run(instruction,
                             approve=True, approval_callback=lambda cmd: True)
         finally:
             _agent_mod.run_shell = real_sh
+            _agent_mod.has_chaining_operators = real_chain
+            _agent_mod.command_allowed = real_allowed
         sess = result.session
         self._fill_context(context, sess, time.time() - started)
         # ATIF-ish: trajetória + sessão serializada no logs_dir

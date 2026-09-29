@@ -77,6 +77,9 @@ _SURFACE = {
     "secret": SECRET_TOOLS,
     "knowledge": KNOWLEDGE_TOOLS,
     "web": WEB_TOOLS,
+    # 29/09 (tese mini-SWE-agent, 65-74% SWE-bench só com bash): superfície
+    # mínima p/ trials em sandbox — shell cobre ler/escrever/executar.
+    "shell": SHELL_ONLY,
 }
 
 

@@ -304,12 +304,17 @@ def extract_fallback_tool_call(text: str | None) -> dict[str, Any] | None:
 
 
 def extract_fallback_tool_calls(text: str | None,
-                                limit: int = 3) -> list[dict[str, Any]]:
+                                limit: int = 3,
+                                bash_fence: bool = False) -> list[dict[str, Any]]:
     """Plural: modelos-ação (xLAM) emitem LISTAS de calls.
 
     `[{name,arguments}, ...]` (até `limit`) — cada elemento vira uma
     tool_call (base do paralelismo P1). Cai para singular quando não
     é lista. Elementos inválidos são descartados, nunca inventados.
+
+    bash_fence (tese mini-SWE-agent, F-cell 29/09): como ÚLTIMO recurso,
+    cerca ```bash vira execute_shell (só quando o chamador opta —
+    superfície shell-only; no host o approval gate continua valendo).
     """
     if not text:
         return []
@@ -334,7 +339,14 @@ def extract_fallback_tool_calls(text: str | None,
             if out:
                 return out
     single = extract_fallback_tool_call(text)
-    return [single] if single else []
+    if single:
+        return [single]
+    if bash_fence:
+        m = re.search(r"```bash\s*\n(.*?)```", text, re.DOTALL)
+        if m and m.group(1).strip():
+            return [{"name": "execute_shell",
+                     "arguments": {"cmd": m.group(1).strip()}}]
+    return []
 
 from jarvis.core.logging import get_logger
 from jarvis.core.user_profile import UserProfile, inject_context
@@ -1381,8 +1393,10 @@ class Agent:
             content = response.get("content", "")
             if not tool_calls:
                 # Fallback em texto (singular ou lista — xLAM emite arrays;
-                # o plural já cobre o singular).
-                for _i, _fb in enumerate(extract_fallback_tool_calls(content)):
+                # o plural já cobre o singular). bash_fence só em superfície
+                # shell-only (F-cell): cerca ```bash vira execute_shell.
+                for _i, _fb in enumerate(extract_fallback_tool_calls(
+                        content, bash_fence=(self.tool_class == "shell"))):
                     tool_calls.append({
                         "id": f"fb-{turn}-{_i}",
                         "type": "function",
@@ -1438,10 +1452,18 @@ class Agent:
                             f"STATE(no_tool_call,verify={verify_turns}/2)."
                             f" MISSING: {'; '.join(_v.missing[:3])}."
                             " NEXT: emit EXACTLY ONE action, zero prose."
-                            " Entire reply must be ONE fenced block:\n"
-                            '```json\n{"name": '
-                            '"execute_shell"|"read_file"|"list_directory", '
-                            '"arguments": {...}}\n```\n'
+                            + (
+                                # F-cell: superfície shell-only documenta a
+                                # cerca bash (mini-SWE-agent); json segue p/
+                                # superfícies normais.
+                                " Entire reply must be ONE fenced block:\n"
+                                "```bash\n<real shell command>\n```\n"
+                                if self.tool_class == "shell" else
+                                " Entire reply must be ONE fenced block:\n"
+                                '```json\n{"name": '
+                                '"execute_shell"|"read_file"|"list_directory", '
+                                '"arguments": {...}}\n```\n'
+                            ) +
                             "RULES: action != last failed call; paths only "
                             "from observations; unknown path -> "
                             "list_directory/semantic_search first."),
