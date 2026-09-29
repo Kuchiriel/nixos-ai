@@ -92,6 +92,7 @@ nix flake check
 | `docs/PROMPT-AGENTE-EXTERNO.md` | prompt pronto para outro agente |
 | **`docs/HANDOFF-2026-09-25.md`** | **estado da sessão 25/09 + próximo passo exato** |
 | `scripts/LOOP-v2.md` | método do loop overnight |
+| `docs/harbor/INDEX.md` | placar + arquivos da calibração Harbor |
 | `scripts/overnight-24-09/` | evidência datada de benchs |
 | `.agents/*.md` | detalhe por tema (carregue só se o gatilho casar) |
 
@@ -101,6 +102,8 @@ nix flake check
   Gatilhos: RAG, memória, vault, qdrant, collection, embedding, recall.
 - `.agents/loop-e-bench.md` — overnight, harness, sweep, benchmark.
   Gatilhos: loop, harness, bench, sweep, cmoe, t/s, overnight.
+- `.agents/harbor-e-harness.md` — calibração externa Harbor, trials, adapter.
+  Gatilhos: harbor, calibração, trial, verifier, A-cell, B-cell.
 - `.agents/memoria-do-projeto.md` — decisões e armadilhas já pagas.
   Gatilhos: já quebrou, antes de mexer, armadilha, por que.
 

@@ -132,6 +132,27 @@
     printf '{"text": "%sMHz", "tooltip": "Intel UHD 770\\nFreq: %s/%s MHz (%s%%)\\nPower: %s", "class": "%s"}\n' "$CUR" "$CUR" "$MAX" "$PCT" "$STATUS" "$CLASS"
   '';
 
+  # ── Tailscale on/off + dados (29/09, pedido do dono: sem ícone não dá
+  # p/ saber se tá ligado; transmissão lenta foi WiFi, não VPN) ─────────
+  tailscaleScript = pkgs.writeShellScriptBin "waybar-tailscale" ''
+    TS="${pkgs.tailscale}/bin/tailscale"
+    # --json sai pretty-printed: achata p/ o grep casar (hostname não tem espaço).
+    ST=$($TS status --json 2>/dev/null | tr -d '\n ')
+    if [ -z "$ST" ] || ! echo "$ST" | grep -q '"BackendState":"Running"'; then
+      printf '{"text": "off", "tooltip": "Tailscale parado\\nClick: status", "class": "off"}\n'
+      exit 0
+    fi
+    IP=$(echo "$ST" | grep -oP '"TailscaleIPs":\["\K[0-9.]+' | head -1)
+    NAMES=$(echo "$ST" | grep -oP '"HostName":"\K[^"]+' | grep -v '^nitro-v15$' | head -5 | tr '\n' ' ')
+    NPEERS=$(echo "$ST" | grep -oP '"HostName":"\K[^"]+' | grep -vc '^nitro-v15$')
+    [ -z "$IP" ] && IP="?"
+    if [ "$NPEERS" -gt 0 ]; then
+      printf '{"text": "%s (%s)", "tooltip": "Tailscale ON\\nIP: %s\\nPeers (%s): %s", "class": "on"}\n' "$IP" "$NPEERS" "$IP" "$NPEERS" "$NAMES"
+    else
+      printf '{"text": "%s", "tooltip": "Tailscale ON\\nIP: %s\\nSem peers", "class": "on"}\n' "$IP" "$IP"
+    fi
+  '';
+
   # ── Audiobook waybar + menu scripts ──────────────────────────────────────
   audiobookMenuScript = pkgs.writeShellScriptBin "jarvis-audiobook-menu" ''
     choice=$(echo -e "📚 Scan livros\n📖 Listar livros\n▶️  Tocar livro\n⏸  Pausar\n▶️  Continuar\n⏹  Parar\n📊 Status" | \
@@ -226,6 +247,7 @@ in {
       #custom-igpu,
       #custom-cpu,
       #custom-memory,
+      #custom-tailscale,
       #custom-jarvis,
       #custom-audiobook {
         padding: 0 16px;
@@ -254,6 +276,8 @@ in {
         color: ${colors.status.error};
       }
       #custom-gpu.disabled { color: #666666; }
+      #custom-tailscale.on { color: ${colors.status.success}; }
+      #custom-tailscale.off { color: #666666; }
 
       #battery.warning { color: ${colors.status.warning}; }
       #battery.critical { color: ${colors.status.error}; }
@@ -320,6 +344,7 @@ in {
               "custom/memory"
               "custom/gpu"
               "custom/igpu"
+              "custom/tailscale"
             ]
             ++ hostOnlyModules
             ++ [
@@ -416,6 +441,15 @@ in {
             return-type = "json";
             tooltip = true;
             on-click = "foot --app-id floating_shell -e sudo intel_gpu_top";
+          };
+
+          "custom/tailscale" = {
+            format = "󰖂 {}";
+            exec = "${tailscaleScript}/bin/waybar-tailscale";
+            interval = 10;
+            return-type = "json";
+            tooltip = true;
+            on-click = "foot --app-id floating_shell -e sh -c 'tailscale status; echo; read -p \"[Enter fecha]\"'";
           };
 
           network = {
