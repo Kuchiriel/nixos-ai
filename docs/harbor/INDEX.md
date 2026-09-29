@@ -22,6 +22,9 @@
 | 29/09 | task3 + read-gate bloqueante | bonsai bash-first | 0/2 (gate dispara mas modelo põe leitura-token e fabrica igual — dado negativo; completion container-aware é o próximo candidato) |
 | 29/09 | dev loop + prompt | MoE Qwen3.6 | prompt full = 500; `JARVIS_PROMPT_PROFILE=minimal` = sem 500 e com tool calls. Prompt gigante é o gatilho, não o modelo. Fix: `MINIMAL_PROMPT` sem LANG_NAME (KeyError) + `_COMPACT_SYSTEM_TEMPLATE` p/ tiny/small (auto) e `JARVIS_COMPACT_PROMPT=1/0` p/ experimento |
 | 29/09 | task3 + grounding + source-readonly | bonsai bash-first | 0/2 (ponte agora conta execs/writes, COMPLETED sem exec → UNVERIFIED, fonte lida é read-only p/ redirect, dica "ONE shell command / never re-type". Gate dispara certo — modelo insiste no clobber em vez de se adaptar: parede de capacidade em transferência exata, não falta de gate) |
+| 29/09 | task3 fast tier | Qwen3-4B fast | 0/2 mas técnica perfeita (`head -n2\|tail -n1`) num trial → zerou por FIXTURE quebrada (ver abaixo), não por modelo |
+| 29/09 | **task3 fixture fix** | bonsai bash-first | **2/2 (1.0)** — `Dockerfile` usava `printf "\n" a b c` (=4×`\n`, fonte sem conteúdo!). O "muro de capacidade" era bug do instrumento. Lição: validar fixture com `cat` antes de atribuir falha ao modelo |
+| 29/09 | infra: VRAM leak | — | servidor efêmero `--alias jarvis-fast :42911` (origem desconhecida, 12:16) segurou 3.2GB VRAM → bonsai 500 "unable to allocate CUDA0". `kill -9` resolveu. TODO: guarda anti-vazamento (pgrep antes de bench/trial) |
 
 ## Estratégia por modelo (`scripts/grade-harbor.py`)
 
