@@ -38,6 +38,8 @@
 | 29/09 | **grounding no REPL + VERIFIED honesto** | — | `dev_once` exibe veredito check_completion + grava no transcript. Verbos imperativo PT cobram deliverable (falso VERIFIED ao vivo corrigido). **conftest sem keys**: cascata Groq/NVIDIA real furava mocks (teste quebrado há dias). Suite: **1405 verdes** |
 | 29/09 | **gate por observação (menção≠leitura)** | bonsai bash-first | `_reads` só com observação efetiva (rc 0); flags ignoradas; retry de output próprio permitido. 1/2. Série task3 bonsai total: **5/9 (~55%)**. Falha restante típica: acerta (turn 3) e sobrescreve o próprio output certo (turn 5) — déficit de verificação do modelo, próximo alvo (ritual de read-back) |
 | 29/09 | **N-cell NVIDIA (deepseek-v4.1-flash)** | DeepSeek v4.1 | **5/5 (100%)**: byte 1/1, bin 2/2, line 2/2. Vencedor faz read-back ritual + `od -c` espontâneo. Infra: `--env-file` p/ vars no worker; `JARVIS_REMOTE_BASE_URL` (não `JARVIS_BASE_URL`) manda no backend remoto; base sem `/v1` (duplica); modelo 0731→410 (usar v4.1-flash). Groq segue instável (payload validado 200 no replay) |
+| 29/09 | **R1-distill-7B local** | DeepSeek-R1-Distill-Qwen-7B Q4_K_M | **KV cache q4_0 DESTRÓI a saída** (texto lixo repetido); **KV fp16 = raciocínio funcionando**. Sem template de tool-call → `_parse_dsml` não (é outro dialeto): responde em prosa. 4.68GB, roda em VRAM 6GB a 8k ctx, ~5.5GB usado |
+| 29/09 | **missão multi-etapas (R1-7B local)** | — | 6 falhas de harness consertadas, ver linhas seguintes. Modelo continua sem entregar: teto de capacidade do distill a Q4, não falta de nudge |
 | 29/09 | **parser DSML** | — | DeepSeek-NVIDIA emite XML próprio (barras U+FF5C), não OpenAI calls — 1 trial perdido p/ dialeto. `_parse_dsml_calls` no fallback (command→cmd) + teste. task3 DeepSeek: 1/2 → **2/2** |
 | 29/09 | **sandbox declara /app** | — | `environment_block(for_container)` (CWD/host vazavam; DeepSeek vagou em `/home/...` e zerou). Host-wandering: 2+ steps → **0**. Via `_sandbox` no ContainerAgent |
 
@@ -66,3 +68,34 @@ nix develop --command python3 -m pytest modules/ai/jarvis/tests/test_harbor_adap
 source /tmp/harbor-env/ldenv.sh
 sg docker -c "/tmp/harbor-env/bin/harbor job start --config /tmp/harbor-work/job-acell.json --job-name <nome>"
 ```
+
+## Missão multi-etapas (29/09) — 6 falhas de harness achadas por 1 task
+
+Missão: rodar script que falha → achar a linha de CSV defeituosa →
+corrigir o CSV → rodar de novo → escrever o total. Verifier: total
+correto **e** CSV original preservado. Fora da caixa do Harbor, porque
+o gargalo é o loop do dev REPL, não o adapter.
+
+| # | Falha | Sintoma | Correção |
+|---|---|---|---|
+| 1 | CWD do host no prompt do trial | modelo explorava `/home/...` dentro do container | `environment_block(for_container=True)` declara `/app` e nega o host |
+| 2 | Loop detector antes do parse | 8× mesmo comando, nunca abortava (via `n_tc=0` em toda call de fence) | detector roda **depois** do parse de texto/fence |
+| 3 | Recuperação só por texto | warning→change_strategy→warning, ambos ignorados | `ABORT` quando 2 recoveries são ignoradas sem mudar assinatura |
+| 4 | `continue` dentro do laço de tool_calls | reiniciava a iteração das calls, não o turno | nudge movido para fora do laço |
+| 5 | `sed -i` fora do allowlist | modelo lia o dado, tentava a correção **certa**, era barrado | `sed -i` liberado + **HARD-NEVER** cobre `/nix/store` (brecha que o allowlist novo abriu) |
+| 6 | Nudge mandava "olhe o arquivo" | modelo nunca olhava (rodava o mesmo cmd) | nudge **anexa o conteúdo real** do input citado, via `_safe_path` |
+
+Sobreviventes do R1-7B: escalada pra bash-first (funcionou), razão
+injetada, nudge de erro repetido, ABORT honesto (parou em vez de
+queimar 8 turnos). Ainda assim 0 entrega. **Diagnóstico: teto de
+capacidade do distill a Q4 em 8k de contexto**, não falta de nudge —
+o modelo tem raciocínio mas não converge. O harness está honesto
+nas duas direções: não declara sucesso vazio, e aborta beco.
+
+### O que o R1 provou sobre planning
+Raciocínio ≠ convergência. O `reasoning_content` chega (o REPL mostra),
+o modelo articula um plano correto em prosa ("identificar a linha,
+depois corrigir") — e mesmo assim executa o comando errado 8×. Reasoning
+tokens **não** substituem o mecanismo de **forçar novelty de ação**
+(que aqui é o ABORT). Planning simulado não é o gargalo; grounding +
+variedade de ação são.
