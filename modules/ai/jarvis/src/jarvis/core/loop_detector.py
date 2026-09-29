@@ -116,6 +116,32 @@ class LoopDetector:
         """Verifica padrões de loop. Retorna RecoveryStrategy."""
         self._total_iterations += 1
 
+        # Hard-stop por loop ignorado (29/09, R1-distill na missão): o mesmo
+        # execute_shell rodou 8x; o detector oscilava entre INJECT_WARNING e
+        # CHANGE_STRATEGY (ambos são só texto no histórico) e modelo que
+        # ignora mensagem continua. Contador de recoveries EMITIDOS sem
+        # mudança de assinatura → ABORT. Honesto: trabalho não avançou.
+        if self._history:
+            _changed = self._history[-1] != self._history[-2] if len(
+                self._history) >= 2 else False
+            if _changed:
+                self._ignored_recoveries = 0
+            elif getattr(self, "_last_recovery", None) is not None:
+                self._ignored_recoveries = getattr(
+                    self, "_ignored_recoveries", 0) + 1
+                if self._ignored_recoveries >= 2:
+                    self._ignored_recoveries = 0
+                    self._last_recovery = None
+                    return RecoveryStrategy(
+                        action=RecoveryAction.ABORT,
+                        message=(
+                            "ABORT: the same tool call with identical "
+                            f"arguments repeated after warnings "
+                            f"({self._history[-1].name}). No progress."),
+                        loop_type=LoopType.DUPLICATE,
+                        iteration=self._total_iterations,
+                    )
+
         if not tool_calls:
             # Sem tool calls — verificar stagnation
             return self._check_stagnation(content)
@@ -127,16 +153,19 @@ class LoopDetector:
             # 1. Duplicate detection
             result = self._check_duplicate(sig)
             if result.action != RecoveryAction.NONE:
+                self._last_recovery = result
                 return result
 
             # 2. Cycle detection
             result = self._check_cycle()
             if result.action != RecoveryAction.NONE:
+                self._last_recovery = result
                 return result
 
             # 3. Edit-revert detection
             result = self._check_edit_revert(sig)
             if result.action != RecoveryAction.NONE:
+                self._last_recovery = result
                 return result
 
             # 3b. Windowed relapse (elo D 16/09): mesma assinatura volta

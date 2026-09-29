@@ -534,3 +534,96 @@ def test_writes_ok_tracks_shell_redirects_and_cp(monkeypatch) -> None:
     assert ok is False
     assert "/b.txt" in _dev._run_agent_loop._writes_ok
     assert "/c.txt" in _dev._run_agent_loop._writes_ok
+
+
+def test_write_guard_refuses_unread_overwrite(tmp_path, monkeypatch) -> None:
+    """29/09 (missão): write_file full em arquivo existente nunca lido =
+    RECUSADO; após read_file = permitido; criação livre."""
+    import jarvis.cli.dev as _dev
+
+    src = tmp_path / "data.txt"
+    src.write_text("aaa\n")
+    monkeypatch.chdir(tmp_path)
+    _dev._run_agent_loop._reads_ok = []
+
+    out, _ = _dev._execute_tool_call(
+        "write_file", {"path": "data.txt", "content": "x"}, approve=True)
+    assert out.startswith("ERROR") and "never" in out
+    assert src.read_text() == "aaa\n"
+
+    _dev._execute_tool_call("read_file", {"path": "data.txt"}, approve=True)
+    out2, _ = _dev._execute_tool_call(
+        "write_file", {"path": "data.txt", "content": "x"}, approve=True)
+    assert not out2.startswith("ERROR")
+    out3, _ = _dev._execute_tool_call(
+        "write_file", {"path": "novo.txt", "content": "x"}, approve=True)
+    assert not out3.startswith("ERROR")
+
+
+def test_prose_only_detection_and_fence_escalation(monkeypatch) -> None:
+    """29/09 (R1-distill): modelo sem template de tool responde pedindo o
+    arquivo. 1º nudge genérico; 2º turno vira superfície bash-first."""
+    import jarvis.cli.dev as _dev
+
+    assert _dev._looks_like_prose_only(
+        "Por favor, me envie o arquivo input.csv") is True
+    assert _dev._looks_like_prose_only(
+        "```bash\ncat a.txt\n```") is False
+    assert _dev._looks_like_prose_only("resposta curta") is False
+
+    script = [
+        "Preciso que voce me envie o arquivo.",
+        "Preciso que voce me envie o arquivo.",
+    ]
+    state = {"n": 0}
+
+    def _fake_call(messages, tools, profile, debug=False):
+        r = script[min(state["n"], 1)]
+        state["n"] += 1
+        return {"choices": [{"message": {"role": "assistant",
+                                         "content": r, "tool_calls": None}}]}
+
+    monkeypatch.setattr(_dev, "_call_llm", _fake_call)
+    msgs: list = [{"role": "system", "content": "s"},
+                  {"role": "user", "content": "conserta o csv"}]
+    _dev._run_agent_loop(msgs, [], {"name": "default"}, approve=True,
+                         max_turns=4)
+    systems = [m.get("content", "") for m in msgs if m.get("role") == "system"]
+    assert any("ONE fenced block" in s for s in systems)
+    assert _dev._run_agent_loop._fence_hinted == 1
+
+
+def test_repeated_error_nudge_inspects_data(monkeypatch) -> None:
+    """29/09 (R1-distill): mesmo comando falha 2x → 1 nudge manda
+    inspecionar o dado real em vez de repetir (bounded 1x)."""
+    import jarvis.cli.dev as _dev
+
+    script = [
+        {"choices": [{"message": {"role": "assistant", "content": "",
+                    "tool_calls": [{"id": "c1", "function": {
+                        "name": "execute_shell",
+                        "arguments": '{"cmd": "python3 process.py"}'}}]}}]},
+        {"choices": [{"message": {"role": "assistant", "content": "",
+                    "tool_calls": [{"id": "c2", "function": {
+                        "name": "execute_shell",
+                        "arguments": '{"cmd": "python3 process.py"}'}}]}}]},
+        {"choices": [{"message": {"role": "assistant", "content": "done.",
+                                  "tool_calls": None}}]},
+    ]
+    state = {"n": 0}
+
+    def _fake_call(messages, tools, profile, debug=False):
+        r = script[min(state["n"], 2)]
+        state["n"] += 1
+        return r
+
+    monkeypatch.setattr(_dev, "_call_llm", _fake_call)
+    monkeypatch.setattr(_dev, "_execute_tool_call",
+                        lambda *a, **k: ("ERROR: IndexError: list index", None))
+    msgs: list = [{"role": "system", "content": "s"},
+                  {"role": "user", "content": "roda o script"}]
+    _dev._run_agent_loop(msgs, [], {"name": "default"}, approve=True,
+                         max_turns=6)
+    systems = [m.get("content", "") for m in msgs if m.get("role") == "system"]
+    assert any("INSPECT the real data" in s for s in systems)
+    assert _dev._run_agent_loop._err_nudged == 1

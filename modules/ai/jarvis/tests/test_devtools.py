@@ -666,7 +666,7 @@ def test_write_overwrite_log_blocked() -> None:
 
 
 def test_str_replace_log_blocked() -> None:
-    """.log pré-existente nem via str_replace."""
+    """.log pré-existente nem via str_replace (gr tamper de medição)."""
     d = _tmp()
     f = d / "auth.log"
     f.write_text("Failed password\n")
@@ -674,6 +674,22 @@ def test_str_replace_log_blocked() -> None:
     assert r["ok"] is False
     assert "INPUT" in r["error"]
     assert "Failed" in f.read_text()
+
+
+def test_str_replace_csv_preciso_permitido(tmp_path) -> None:
+    """29/09 (missão multi-etapas): tarefa pedia CORRIGIR o CSV de entrada
+    e o guarda de imutável barrava tudo. str_replace cirúrgico (old casa
+    bytes reais) é permitido; write_file full no mesmo arquivo continua
+    barrado (fabricação impossível por construção)."""
+    d = _tmp()
+    f = d / "input.csv"
+    f.write_text("1,10\n5;50\n6,60\n")
+    r = str_replace(str(f), "5;50", "5,50")
+    assert r["ok"] is True
+    assert "5,50" in f.read_text()
+    w = write_file(str(f), "inventado\n")
+    assert w["ok"] is False and "INPUT" in w["error"]
+    assert f.read_text() == "1,10\n5,50\n6,60\n"
 
 
 def test_run_created_csv_editable() -> None:

@@ -83,9 +83,20 @@ _IMMUTABLE_SUFFIXES = (".log", ".csv", ".db", ".sqlite", ".sqlite3",
                        ".parquet")
 
 
-def _immutable_input(target: Path) -> str | None:
-    """Motivo se target for dado pré-existente imutável, senão None."""
-    if target.suffix.lower() not in _IMMUTABLE_SUFFIXES:
+def _immutable_input(target: Path, surgical: bool = False) -> str | None:
+    """Motivo se target for dado pré-existente imutável, senão None.
+
+    surgical=True (str_replace com old-string): libera datasets de formato
+    tabelar/estruturado (.csv/.db/.sqlite/.parquet) — 29/09, missão
+    multi-etapas: a task era CORRIGIR o csv de entrada e o guarda barrava
+    tudo. old-string precisa casar bytes reais do arquivo (fabricação é
+    impossível por construção). .log segue SEMPRE imutável: log é
+    ground truth de medição (L8v33) e a task nunca pede "consertar" log.
+    """
+    _sfx = target.suffix.lower()
+    if _sfx not in _IMMUTABLE_SUFFIXES:
+        return None
+    if surgical and _sfx != ".log":
         return None
     try:
         key = str(target.resolve())
@@ -518,8 +529,10 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
     try:
         target = _safe_path(path, write=True)
 
-        # Inputs pré-existentes não se reescrevem (ver _immutable_input).
-        _imm = _immutable_input(target)
+        # Inputs pré-existentes não se reescrevem (ver _immutable_input) —
+        # EXCETO str_replace cirúrgico com old-string em dataset tabular
+        # (29/09, missão multi-etapas: a task pedia corrigir o csv).
+        _imm = _immutable_input(target, surgical=(old != ""))
         if _imm:
             return {"ok": False, "error": _imm}
 

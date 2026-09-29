@@ -196,3 +196,26 @@ class TestWindowedPathRepeat:
         r = d.check([mk("mkdir -p a b c")])
         assert r.action == RecoveryAction.INJECT_WARNING
         assert "CORRECT the final one" in r.message
+
+
+def test_hard_abort_when_recovery_ignored() -> None:
+    """29/09 (R1-distill na missão): mesmo execute_shell 8x. O detector
+    oscilava warning↔change-strategy (texto no histórico) e o modelo
+    ignorava. recoveries 2x sem mudança de assinatura = ABORT."""
+    from jarvis.core.loop_detector import LoopDetector, RecoveryAction
+
+    d = LoopDetector()
+    same = [{"id": "x", "type": "function",
+             "function": {"name": "execute_shell",
+                          "arguments": '{"cmd": "python3 process.py"}'}}]
+    actions = [d.check(same, "").action for _ in range(6)]
+    assert RecoveryAction.ABORT in actions, "precisa abortar no beco"
+    assert actions.index(RecoveryAction.ABORT) < 5
+
+    # Variar assinatura = trabalho real: nunca aborta.
+    d2 = LoopDetector()
+    for i in range(10):
+        a = d2.check([{"id": "x", "type": "function", "function": {
+            "name": "execute_shell",
+            "arguments": '{"cmd": "cmd%d"}' % i}}], "").action
+        assert a != RecoveryAction.ABORT

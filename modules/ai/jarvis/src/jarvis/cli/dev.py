@@ -1095,6 +1095,9 @@ def _call_llm(
             "message": {
                 "role": "assistant",
                 "content": response.content,
+                # R1-style: o raciocínio vem em campo próprio; sem isto o
+                # REPL mostrava só a resposta e perdia o plano (29/09).
+                "reasoning_content": getattr(response, "reasoning", "") or "",
                 "tool_calls": response.tool_calls or None,
             },
             "finish_reason": response.finish_reason,
@@ -1410,6 +1413,22 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
     # Snapshot prévio p/ /undo (só edições de arquivo)
     _prev = None
     _tracked = name in ("write_file", "str_replace") and isinstance(args.get("path"), str)
+    # Guarda de fonte (29/09, missão multi-etapas): write_file que SUBSTITUI
+    # por inteiro um arquivo existente e nunca lido na sessão = clobber
+    # (fast trocou input.csv por dados inventados). str_replace exige
+    # old-string (cirúrgico, isento). Criação (inexistente/vazio) livre.
+    if name == "write_file" and isinstance(args.get("path"), str):
+        try:
+            _ap = os.path.abspath(args["path"])
+            if (os.path.isfile(_ap) and os.path.getsize(_ap) > 0
+                    and _ap not in getattr(_run_agent_loop, "_reads_ok", [])):
+                return (
+                    f"ERROR: harness: '{args['path']}' exists and you never "
+                    f"read it this session — full overwrite refused. Read it "
+                    f"first (read_file), then edit surgically (str_replace) "
+                    f"or confirm the replacement is intended.", None)
+        except OSError:
+            pass
     if _tracked:
         _prev = _snapshot_file(args["path"])
 
@@ -1437,6 +1456,17 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
     if _tracked:
         EDIT_HISTORY.append({"path": args["path"], "prev": _prev})
         del EDIT_HISTORY[:-20]
+
+    # Rastreio de leituras p/ guarda de fonte (29/09): read_file com
+    # sucesso registra abspath — vale p/ loop e architect (ambos passam
+    # aqui). Reset por run em _run_agent_loop.
+    if name == "read_file" and isinstance(args.get("path"), str):
+        try:
+            _r = getattr(_run_agent_loop, "_reads_ok", [])
+            _r.append(os.path.abspath(args["path"]))
+            _run_agent_loop._reads_ok = _r  # type: ignore[attr-defined]
+        except OSError:
+            pass
 
     # Extrai diff do resultado do str_replace
     diff = result.pop("diff", None)
@@ -2066,6 +2096,50 @@ def _looks_like_promise(content: str) -> bool:
     return any(_re.search(p, low) for p in pats)
 
 
+def _looks_like_prose_only(content: str) -> bool:
+    """Resposta conversacional que DELEGA trabalho ao usuário (29/09).
+
+    Sinais: pede arquivo/conteúdo ("send me", "me envie", "cole aqui",
+    "please provide", "can you share") em prosa, sem nenhum comando. É o
+    padrão de quem ignora o schema de tools (R1-distill). Grito de
+    subsystem: a harness troca a superfície em vez de repetir o nudge.
+    """
+    import re as _re
+    if "```" in content:
+        return False
+    low = content.lower()
+    asks = (r"\bme envie\b", r"\bme mande\b", r"\bcole (aqui|o arquivo)\b",
+            r"\bplease (send|provide|paste|share|upload)\b",
+            r"\bcan you (send|provide|paste|share|upload)\b",
+            r"\b(i need|send me) the (file|content|script)\b",
+            r"\battach\b", r"\bpode enviar\b")
+    return any(_re.search(p, low) for p in asks)
+
+
+def _mentions_work_files(content: str) -> bool:
+    """Fala dos arquivos da tarefa como se os tivesse tratado (29/09).
+
+    "vou ler o input.csv", "process.py foi criado" em prosa = trabalho
+    declarado, não executado. Dispara a escalada bash-first.
+    """
+    import re as _re
+    if "```" in content:
+        return False
+    _has_file = bool(_re.search(
+        r"[\w\-]+\.(?:csv|txt|py|json|md|sh|log|yaml|yml)\b", content))
+    if not _has_file:
+        # Nome genérico ("o arquivo CSV", "o script process.py", "the file")
+        # também conta — o R1 escreve plano sem citar path exato.
+        _has_file = bool(_re.search(
+            r"\b(arquivo|script|planilha|csv|input\.csv)\b", content.lower()))
+    if not _has_file:
+        return False
+    return bool(_re.search(
+        r"\b(vou|ser[aá]|preciso|precisamos|passo|etapa|arquivo|script|"
+        r"leio|crio|corrigo|verifico|executo|rodei|import|construa|"
+        r"identificar|solve|step)\b", content.lower()))
+
+
 # ---------------------------------------------------------------------------
 # Loop de execução de agente — ÚNICO em todo o projeto (NOVO em v2.2)
 #
@@ -2109,6 +2183,10 @@ def _run_agent_loop(
     _run_agent_loop._claims_nudged = 0  # type: ignore[attr-defined]
     _run_agent_loop._verdict_nudged = 0  # type: ignore[attr-defined]
     _run_agent_loop._writes_ok = []  # type: ignore[attr-defined]
+    _run_agent_loop._reads_ok = []  # type: ignore[attr-defined]
+    _run_agent_loop._fence_hinted = 0  # type: ignore[attr-defined]
+    _run_agent_loop._err_cmds = {}  # type: ignore[attr-defined]
+    _run_agent_loop._err_nudged = 0  # type: ignore[attr-defined]
 
     for turn in range(max_turns):
         est = _estimate_tokens(messages)
@@ -2138,7 +2216,7 @@ def _run_agent_loop(
             messages.append({"role": "system", "content": strategy.message})
 
         # Extract thinking content if present
-        thinking = ""
+        thinking = message.get("reasoning_content") or ""
         if "<thinking>" in content and "</thinking>" in content:
             import re as _re
             thinking_match = _re.search(r"<thinking>(.*?)</thinking>", content, _re.DOTALL)
@@ -2173,6 +2251,47 @@ def _run_agent_loop(
 
         if not tool_calls:
             if content:
+                # Escalada bash-first (29/09, R1-distill): modelo com
+                # raciocínio mas SEM template de tool-call responde em
+                # prosa ("me envie o arquivo", plano em texto) e o schema é
+                # ignorado. Depois do 1º nudge, troca a superfície: 1 bloco
+                # ```bash por turno (surfacing que o modelo USA — F-cell).
+                # Só quando o claim-checker NÃO tem evidência de trabalho
+                # (ver abaixo): se ele acusou claim falso, o caminho certo é
+                # cobrar a escrita, não trocar de superfície.
+                _claimed = False
+                import re as _re_c2
+                _cl = _re_c2.findall(
+                    r"[\w./\-]+\.(?:txt|md|py|json|nix|sh|yaml|yml|toml|csv|log)",
+                    content)
+                if _cl and ("cri" in content.lower() or "escrev" in content.lower()):
+                    _ws = getattr(_run_agent_loop, "_writes_ok", [])
+                    _claimed = any(
+                        c not in " ".join(_ws)
+                        and not any(c.endswith(w.split("/")[-1]) and w
+                                    for w in _ws) for c in _cl)
+                if (getattr(_run_agent_loop, "_no_tool_nudged", 0) >= 1
+                        and successes == 0
+                        and getattr(_run_agent_loop, "_fence_hinted", 0) < 1
+                        and (_looks_like_prose_only(content)
+                             or _mentions_work_files(content))
+                        and not (_claimed
+                                 and getattr(_run_agent_loop,
+                                             "_claims_nudged", 0) < 1)):
+                    _run_agent_loop._fence_hinted = 1  # type: ignore[attr-defined]
+                    console.print("[dim]  (schema ignorado → superfície "
+                                  "bash-first)[/]")
+                    messages.append({
+                        "role": "system",
+                        "content": ("You cannot call tools directly. Use the "
+                                    "shell instead: your ENTIRE reply must be "
+                                    "ONE fenced block, nothing else:\n"
+                                    "```bash\n<one real command>\n```\n"
+                                    "Never ask me to paste files and never "
+                                    "describe the plan — read and run the "
+                                    "commands yourself (cat/head/ls/python3)."),
+                    })
+                    continue
                 # No-tool nudge (A/B 29/09: lean/minimal terminaram RC 0 sem
                 # tocar tools — texto final sem promessa nem claim cai direto
                 # no `return True`). Se NENHUMA tool foi chamada na sessão
@@ -2374,6 +2493,35 @@ def _run_agent_loop(
                 "tool_call_id": tool_call_id,
                 "content": output[:5000],
             })
+
+            # Recuperação por erro REPETIDO (29/09, R1-distill na missão):
+            # o modelo reexecuta o mesmo comando que falha (8x) — raciocínio
+            # existe, mas não muda a ação. Após 2 erros iguais, 1 nudge
+            # adaptativo: manda INSPECIONAR o dado real (cat/head) em vez de
+            # repetir. Bounded 1x por run.
+            if is_error and func_name == "execute_shell":
+                _errs = getattr(_run_agent_loop, "_err_cmds", {})
+                _k = str(args.get("cmd", ""))[:200]
+                _errs[_k] = _errs.get(_k, 0) + 1
+                _run_agent_loop._err_cmds = _errs  # type: ignore[attr-defined]
+                if (_errs[_k] >= 2 and successes == 0
+                        and getattr(_run_agent_loop, "_err_nudged", 0) < 1):
+                    _run_agent_loop._err_nudged = 1  # type: ignore[attr-defined]
+                    console.print("[dim]  (mesmo comando falhando — "
+                                  "inspecione o dado)[/]")
+                    messages.append({
+                        "role": "system",
+                        "content": (
+                            f"The command `{_k[:90]}` failed twice with the "
+                            f"SAME error — repeating it will not help. STOP "
+                            f"and INSPECT the real data first: your next "
+                            f"reply must be ONE fenced block reading the "
+                            f"input file (e.g. ```bash\ncat -A input.csv\n```"
+                            f" or `head -n 20 file`). Then fix based on what "
+                            f"you actually see. Do not re-run the failing "
+                            f"command."),
+                    })
+                    break
 
     _repl_emit("session.max_turns", max_turns=max_turns)
     if successes == 0:
