@@ -965,3 +965,38 @@ def test_ok_false_json_counts_as_error_not_success():
     v = check_completion(msgs)
     assert v.status == "UNVERIFIED"
     assert any("ground truth" in m for m in v.missing)
+
+
+def test_empty_deliverable_is_not_verified(tmp_path) -> None:
+    """29/09 (A/B de idioma): o modelo criou o arquivo com 0 bytes e o
+    verificador deu VERIFIED ("arquivo existe"). Falso positivo exato:
+    criar arquivo não é entregar conteúdo."""
+    from jarvis.core.completion import check_completion
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "out.txt").write_text("")
+    msgs = [{"role": "user", "content": "escreva a segunda linha em out.txt"},
+            {"role": "assistant", "tool_calls": [{
+                "id": "c1", "type": "function",
+                "function": {"name": "write_file",
+                             "arguments": '{"path": "out.txt"}'}}]},
+            {"role": "tool", "content": "OK: arquivo escrito em out.txt (0 bytes)"}]
+    with use_project_root(tmp_path):
+        v = check_completion(msgs)
+    assert v.status == "UNVERIFIED", v.status
+    assert any("VAZIO" in m for m in v.missing)
+
+
+def test_task_may_explicitly_want_empty(tmp_path) -> None:
+    """Exceção: se a task pede arquivo vazio, 0 bytes é a entrega."""
+    from jarvis.core.completion import check_completion
+    from jarvis.core.paths import use_project_root
+    (tmp_path / "out.txt").write_text("")
+    msgs = [{"role": "user", "content": "crie out.txt vazio"},
+            {"role": "assistant", "tool_calls": [{
+                "id": "c1", "type": "function",
+                "function": {"name": "write_file",
+                             "arguments": '{"path": "out.txt"}'}}]},
+            {"role": "tool", "content": "OK: arquivo escrito em out.txt (0 bytes)"}]
+    with use_project_root(tmp_path):
+        v = check_completion(msgs)
+    assert v.status == "VERIFIED", (v.status, v.missing)

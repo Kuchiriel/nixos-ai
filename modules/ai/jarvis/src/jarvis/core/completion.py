@@ -647,6 +647,17 @@ def missing_deliverables(messages: list[dict], root,
     return out
 
 
+def _task_wants_empty(messages: list[dict]) -> bool:
+    """A task pediu explicitamente um arquivo vazio?"""
+    for m in messages:
+        if m.get("role") == "user" and "STATE(" not in str(
+                m.get("content", "")):
+            low = str(m.get("content", "")).lower()
+            return ("vazio" in low or "empty" in low
+                    or "zero bytes" in low)
+    return False
+
+
 def check_completion(messages: list[dict],
                      project_root: str | None = None) -> CompletionVerdict:
     """Veredito estrutural de conclusão."""
@@ -695,6 +706,21 @@ def check_completion(messages: list[dict],
             ok = False
             miss.append(f"arquivo escrito não existe: {p}")
             continue
+        # Deliverable VAZIO nao e entrega (29/09, A/B de idioma): o
+        # verificador contava "arquivo existe" e dava VERIFIED pra 0
+        # bytes — falso positivo exato. O modelo criava o arquivo e
+        # parava. Arquivo vazio so vale se a task pediu explicitamente
+        # (ex: "crie o arquivo vazio") — sinal fraco: 0 bytes num
+        # deliverable pedido = suspiciously empty.
+        try:
+            if fp.stat().st_size == 0 and not _task_wants_empty(messages):
+                ok = False
+                miss.append(
+                    f"{p} foi criado mas está VAZIO (0 bytes) — entrega "
+                    f"não é criar o arquivo, é escrever o conteúdo")
+                continue
+        except OSError:
+            pass
         ev.append(f"arquivo existe: {p}")
         if fp.suffix == ".py":
             try:
