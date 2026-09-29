@@ -37,6 +37,9 @@
 | 29/09 | **lite fast 4/5 (evicção automática)** | Qwen3-4B fast | bin 2/2, byte 1/1, line 1/2 — sem dança manual (ensure+evict). Custo: fast 55-390s wall vs bonsai 2-5s (10-80x). `harbor-lite.sh` restaura bonsai no fim |
 | 29/09 | **grounding no REPL + VERIFIED honesto** | — | `dev_once` exibe veredito check_completion + grava no transcript. Verbos imperativo PT cobram deliverable (falso VERIFIED ao vivo corrigido). **conftest sem keys**: cascata Groq/NVIDIA real furava mocks (teste quebrado há dias). Suite: **1405 verdes** |
 | 29/09 | **gate por observação (menção≠leitura)** | bonsai bash-first | `_reads` só com observação efetiva (rc 0); flags ignoradas; retry de output próprio permitido. 1/2. Série task3 bonsai total: **5/9 (~55%)**. Falha restante típica: acerta (turn 3) e sobrescreve o próprio output certo (turn 5) — déficit de verificação do modelo, próximo alvo (ritual de read-back) |
+| 29/09 | **N-cell NVIDIA (deepseek-v4.1-flash)** | DeepSeek v4.1 | **5/5 (100%)**: byte 1/1, bin 2/2, line 2/2. Vencedor faz read-back ritual + `od -c` espontâneo. Infra: `--env-file` p/ vars no worker; `JARVIS_REMOTE_BASE_URL` (não `JARVIS_BASE_URL`) manda no backend remoto; base sem `/v1` (duplica); modelo 0731→410 (usar v4.1-flash). Groq segue instável (payload validado 200 no replay) |
+| 29/09 | **parser DSML** | — | DeepSeek-NVIDIA emite XML próprio (barras U+FF5C), não OpenAI calls — 1 trial perdido p/ dialeto. `_parse_dsml_calls` no fallback (command→cmd) + teste. task3 DeepSeek: 1/2 → **2/2** |
+| 29/09 | **sandbox declara /app** | — | `environment_block(for_container)` (CWD/host vazavam; DeepSeek vagou em `/home/...` e zerou). Host-wandering: 2+ steps → **0**. Via `_sandbox` no ContainerAgent |
 
 ## Estratégia por modelo (`scripts/grade-harbor.py`)
 
