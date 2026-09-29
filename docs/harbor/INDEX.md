@@ -20,6 +20,8 @@
 | 29/09 | F-cell bash-first | MoE Qwen3.6 | 0/4 (dialeto próprio `f(path=)`, ignora cerca; 500s frios) |
 | 29/09 | task3 extract-line (transferência) | bonsai bash-first | 0/4 (`sed -n 2p` descoberto mas fabricação persiste; guarda write-without-read adicionada) |
 | 29/09 | task3 + read-gate bloqueante | bonsai bash-first | 0/2 (gate dispara mas modelo põe leitura-token e fabrica igual — dado negativo; completion container-aware é o próximo candidato) |
+| 29/09 | dev loop + prompt | MoE Qwen3.6 | prompt full = 500; `JARVIS_PROMPT_PROFILE=minimal` = sem 500 e com tool calls. Prompt gigante é o gatilho, não o modelo. Fix: `MINIMAL_PROMPT` sem LANG_NAME (KeyError) + `_COMPACT_SYSTEM_TEMPLATE` p/ tiny/small (auto) e `JARVIS_COMPACT_PROMPT=1/0` p/ experimento |
+| 29/09 | task3 + grounding + source-readonly | bonsai bash-first | 0/2 (ponte agora conta execs/writes, COMPLETED sem exec → UNVERIFIED, fonte lida é read-only p/ redirect, dica "ONE shell command / never re-type". Gate dispara certo — modelo insiste no clobber em vez de se adaptar: parede de capacidade em transferência exata, não falta de gate) |
 
 ## Estratégia por modelo (`scripts/grade-harbor.py`)
 
