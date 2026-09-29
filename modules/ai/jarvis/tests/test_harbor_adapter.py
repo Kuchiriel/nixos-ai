@@ -43,13 +43,37 @@ class FakeSession:
 
 
 class Ctx:
+    """Espelho fiel do AgentContext real (harbor 0.23.0)."""
+
     def __init__(self):
-        self.commands_executed = 0
-        self.exit_code = 0
         self.n_input_tokens = 0
+        self.n_cache_tokens = 0
         self.n_output_tokens = 0
         self.cost_usd = 0.0
-        self.error_message = None
+        self.model_usage = {}
+        self.rollout_details = {}
+        self.metadata = {}
+
+
+class StrictCtx:
+    """Como pydantic: atributo desconhecido = erro (regressão 28/09)."""
+
+    def __init__(self):
+        self.n_input_tokens = 0
+        self.n_cache_tokens = 0
+        self.n_output_tokens = 0
+        self.cost_usd = 0.0
+        self.model_usage = {}
+        self.rollout_details = {}
+        self.metadata = {}
+
+    def __setattr__(self, name, value):
+        if name.startswith("_") or name in self.__dict__ or name in (
+                "n_input_tokens", "n_cache_tokens", "n_output_tokens",
+                "cost_usd", "model_usage", "rollout_details", "metadata"):
+            object.__setattr__(self, name, value)
+        else:
+            raise ValueError(f'"{type(self).__name__}" object has no field "{name}"')
 
 
 def test_interface_matches_harbor_guide(tmp_path, monkeypatch) -> None:
@@ -80,9 +104,89 @@ def test_run_maps_runtime_to_context(tmp_path, monkeypatch) -> None:
     agent = ha.JarvisHarborAgent(logs_dir=tmp_path)
     ctx = Ctx()
     asyncio.run(agent.run("do the thing", environment=None, context=ctx))
-    assert ctx.commands_executed >= 1
+    assert ctx.metadata.get("turns", 0) >= 1
     traj = jsonlib.loads((tmp_path / "trajectory.json").read_text())
     assert traj["agent"] == "jarvis-kernel"
     assert "verdict" in traj and "steps" in traj
     sess = jsonlib.loads((tmp_path / "session.json").read_text())
     assert sess["task"] == "do the thing"
+
+
+def test_run_survives_strict_context(tmp_path, monkeypatch) -> None:
+    """Regressão 28/09 (A-cell real): context pydantic rejeita campo
+    desconhecido — o adapter não pode matar o trial antes do verifier,
+    e UNVERIFIED não levanta."""
+    monkeypatch.setenv("JARVIS_STATE_DIR", str(tmp_path / "state"))
+    import jarvis.runtime.agent_runtime as _rt
+
+    real = _rt.AgentRuntime
+
+    class RT(real):
+        def __init__(self, *a, **k):
+            super().__init__(*a, http_session=FakeSession(), **k)
+
+    monkeypatch.setattr(_rt, "AgentRuntime", RT)
+    agent = ha.JarvisHarborAgent(logs_dir=tmp_path)
+    ctx = StrictCtx()
+    asyncio.run(agent.run("do the thing", environment=None, context=ctx))
+    assert ctx.metadata.get("verdict")
+    assert "turns" in ctx.metadata
+
+
+class FakeExecResult:
+    def __init__(self, stdout="", stderr="", return_code=0):
+        self.stdout = stdout
+        self.stderr = stderr
+        self.return_code = return_code
+
+
+class FakeEnv:
+    """Container fake: exec/upload async como o Harbor real."""
+
+    def __init__(self):
+        self.files = {"/app/src.txt": b"abc 123 \t\n"}
+        self.cmds = []
+
+    async def exec(self, command, timeout_sec=None):
+        self.cmds.append(command)
+        if command.startswith("base64 -- "):
+            import base64 as _b64
+            path = command[len("base64 -- "):].strip().strip("'\"")
+            if path in self.files:
+                return FakeExecResult(
+                    stdout=_b64.b64encode(self.files[path]).decode())
+            return FakeExecResult(stderr="not found", return_code=1)
+        if command.startswith("ls -la -- "):
+            return FakeExecResult(stdout="total 4\n-rw-r--r-- 1 root root 10 src.txt")
+        if command.startswith("cat "):
+            path = command[4:].strip()
+            if path in self.files:
+                return FakeExecResult(stdout=self.files[path].decode())
+            return FakeExecResult(stderr="no such file", return_code=1)
+        return FakeExecResult(stdout="ok")
+
+    async def upload_file(self, source_path, target_path):
+        with open(source_path, "rb") as f:
+            self.files[target_path] = f.read()
+
+
+def test_container_bridge_routes_into_env(tmp_path) -> None:
+    """28/09 (A-cell): read/write/shell do agente operam DENTRO do
+    container, não no host."""
+    import jarvis.runtime.harbor_agent as _ham
+
+    # A bridge tem loop próprio em thread dedicada: chamadas sync nunca
+    # bloqueiam o loop do chamador (deadlock pago 28/09 no Harbor real,
+    # que awaita agent.run() na thread do loop).
+    env = FakeEnv()
+    bridge = _ham._ContainerBridge(env)
+    raw, _err = bridge.read("/app/src.txt")
+    assert raw == b"abc 123 \t\n"
+    assert bridge.read("/app/inexistente.txt")[0] is None
+    cls = _ham._container_agent_class(env)
+    cls._bridge = bridge
+    assert cls._exec_read_file({"path": "/app/src.txt"}).startswith("# /app/src.txt")
+    assert "src.txt" in cls._exec_list({"path": "/app"})
+    assert "wrote" in cls._exec_write(
+        "write_file", {"path": "/app/o.txt", "content": "x"})
+    assert env.files["/app/o.txt"] == b"x"

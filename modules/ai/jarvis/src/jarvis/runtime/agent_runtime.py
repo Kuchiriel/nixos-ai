@@ -39,12 +39,16 @@ class AgentRuntime:
     def __init__(self, config: Any | None = None,
                  http_session: Any | None = None,
                  memory: Any | None = None,
-                 agent_kwargs: dict[str, Any] | None = None) -> None:
+                 agent_kwargs: dict[str, Any] | None = None,
+                 agent_class: Any | None = None) -> None:
         from jarvis.core.config import get_config
         self.config = config or get_config()
         self.http_session = http_session
         self.memory = memory
         self.agent_kwargs = dict(agent_kwargs or {})
+        # agent_class (28/09, Harbor): subclasse de Agent com tools
+        # roteadas (ex: container do trial). None = Agent canônico.
+        self.agent_class = agent_class
 
     def run(self, task: str,
             model_requirements: dict | None = None,
@@ -53,7 +57,8 @@ class AgentRuntime:
         from jarvis.core.agent import Agent
 
         started = time.time()
-        agent = Agent(
+        cls = self.agent_class or Agent
+        agent = cls(
             self.config, session=self.http_session, memory=self.memory,
             model_requirements=model_requirements, persona_id=persona_id,
             **{**self.agent_kwargs, **agent_kw})

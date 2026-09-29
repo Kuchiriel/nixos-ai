@@ -30,13 +30,141 @@ except Exception:  # sem harbor: stubs p/ teste local
         pass
 
     class AgentContext:  # type: ignore[no-redef]
+        """Espelho dos campos reais (harbor 0.23.0) p/ teste local fiel."""
+
         def __init__(self) -> None:
-            self.commands_executed = 0
-            self.exit_code = 0
             self.n_input_tokens = 0
+            self.n_cache_tokens = 0
             self.n_output_tokens = 0
             self.cost_usd = 0.0
-            self.error_message = None
+            self.model_usage: dict = {}
+            self.rollout_details: dict = {}
+            self.metadata: dict = {}
+
+
+class _ContainerBridge:
+    """Roteia file/shell p/ dentro do container do trial (env.exec/upload).
+
+    28/09 (A-cell): sem isso o agente lia /app/src.txt no HOST (inexistente)
+    e o jail do devtools bloqueava write em /app/o.txt — 0.0 garantido.
+    O container É o jail (sandbox Harbor) — roteamento é contrato do
+    harness, não tuning de task.
+
+    Threading: o Harbor awaita agent.run() NA thread do loop dele; o Agent
+    (sync) roda nessa mesma thread. Bloquear nela esperando o próprio loop
+    = deadlock (pago 28/09: 3x AgentTimeoutError, zero tools). Por isso a
+    bridge tem loop PRÓPRIO em thread dedicada — env.exec é só I/O, sem
+    afinidade com o loop do Harbor.
+    """
+
+    def __init__(self, env: Any) -> None:
+        import asyncio as _aio
+        import threading as _th
+        self._env = env
+        self._loop = _aio.new_event_loop()
+        self._thread = _th.Thread(target=self._loop.run_forever, daemon=True)
+        self._thread.start()
+
+    def sh(self, cmd: str, timeout: int = 60) -> Any:
+        import asyncio as _aio
+        fut = _aio.run_coroutine_threadsafe(
+            self._env.exec(cmd, timeout_sec=timeout), self._loop)
+        return fut.result(timeout + 20)
+
+    def read(self, path: str) -> tuple[Any, str]:
+        import base64 as _b64
+        import shlex as _shlex
+        r = self.sh("base64 -- " + _shlex.quote(path))
+        if r.return_code != 0:
+            return None, (r.stderr or "not found").strip()[:160]
+        try:
+            return _b64.b64decode(r.stdout), ""
+        except Exception as exc:
+            return None, f"base64 decode failed: {exc}"
+
+    def write(self, path: str, content: bytes) -> str:
+        import os as _os
+        import tempfile as _tf
+        fd, tmp = _tf.mkstemp(prefix="hjarvis-")
+        try:
+            with _os.fdopen(fd, "wb") as f:
+                f.write(content)
+            fut = self._run_coro(self._env.upload_file(tmp, path))
+            fut.result(60)
+        finally:
+            try:
+                _os.unlink(tmp)
+            except OSError:
+                pass
+        return f"wrote {len(content)} bytes to {path}"
+
+    def _run_coro(self, coro: Any) -> Any:
+        import asyncio as _aio
+        return _aio.run_coroutine_threadsafe(coro, self._loop)
+
+
+def _container_agent_class(environment: Any) -> Any:
+    """Agent com tools roteadas p/ o container; None env = Agent canônico."""
+    if environment is None:
+        from jarvis.core.agent import Agent
+        return Agent
+    from jarvis.core.agent import Agent
+
+    class ContainerAgent(Agent):
+        """Mesmo loop, tools no container (override de @staticmethods)."""
+
+        _bridge: Any = None
+
+        @staticmethod
+        def _exec_read_file(args: dict) -> str:
+            bridge = ContainerAgent._bridge
+            path = str(args.get("path", ""))
+            try:
+                offset = int(args.get("offset", 0) or 0)
+            except (TypeError, ValueError):
+                offset = 0
+            try:
+                limit = int(args.get("limit", 200) or 200)
+            except (TypeError, ValueError):
+                limit = 200
+            raw, err = bridge.read(path)
+            if raw is None:
+                return f"ERROR: File not found: {path} ({err})"
+            lines = raw.decode("utf-8", "replace").split("\n")
+            chunk = "\n".join(lines[offset:offset + limit])
+            return f"# {path} ({len(lines)} linhas)\n{chunk}"
+
+        @staticmethod
+        def _exec_list(args: dict) -> str:
+            import shlex as _shlex
+            bridge = ContainerAgent._bridge
+            path = str(args.get("path", ".") or ".")
+            r = bridge.sh("ls -la -- " + _shlex.quote(path))
+            if r.return_code != 0:
+                return f"ERROR: {(r.stderr or 'list failed').strip()[:200]}"
+            return (r.stdout or "").strip()[:4000]
+
+        @staticmethod
+        def _exec_write(name: str, args: dict) -> str:
+            bridge = ContainerAgent._bridge
+            path = str(args.get("path", ""))
+            if name == "write_file":
+                content = str(args.get("content", "")).encode("utf-8")
+            else:
+                raw, _err = bridge.read(path)
+                if raw is None:
+                    return f"ERROR: File not found: {path}"
+                old, new = str(args.get("old", "")), str(args.get("new", ""))
+                text = raw.decode("utf-8", "replace")
+                if old not in text:
+                    return "ERROR: old string not found in content"
+                content = text.replace(old, new, 1).encode("utf-8")
+            try:
+                return bridge.write(path, content)
+            except Exception as exc:
+                return f"ERROR: write failed: {exc}"
+
+    return ContainerAgent
 
 
 class JarvisHarborAgent(BaseAgent):
@@ -59,19 +187,45 @@ class JarvisHarborAgent(BaseAgent):
         return None
 
     async def run(self, instruction: str, environment: BaseEnvironment,
-                  context: AgentContext) -> None:
+                   context: AgentContext) -> None:
+        """Roda o runtime e devolve o veredito no metadata.
+
+        28/09 (A-cell real): o AgentContext do Harbor 0.23.0 NÃO tem
+        commands_executed/exit_code/error_message (só tokens/custo/
+        metadata) — escrever neles dava ValueError e matava o trial
+        antes do verifier. Agora: só campos reais + metadata; UNVERIFIED
+        NÃO levanta (o verifier decide; autoridade é dele, não nossa).
+        """
         from jarvis.runtime.agent_runtime import AgentRuntime
 
         started = time.time()
-        rt = AgentRuntime()
-        result = rt.run(instruction,
-                        model_requirements=self._model_requirements or None)
+        cls = _container_agent_class(environment)
+        import subprocess as _sp
+        import jarvis.core.agent as _agent_mod
+
+        real_sh = _agent_mod.run_shell
+        bridge = None
+        if environment is not None:
+            bridge = _ContainerBridge(environment)
+            if hasattr(cls, "_bridge"):
+                cls._bridge = bridge
+
+            def _routed(cmd: str, timeout: int = 60) -> _sp.CompletedProcess:
+                if bridge is None:
+                    return real_sh(cmd, timeout)
+                r = bridge.sh(cmd, timeout)
+                return _sp.CompletedProcess(cmd, r.return_code,
+                                            r.stdout or "", r.stderr or "")
+            _agent_mod.run_shell = _routed
+        try:
+            rt = AgentRuntime(agent_class=cls)
+            result = rt.run(instruction,
+                            model_requirements=self._model_requirements or None,
+                            approve=True, approval_callback=lambda cmd: True)
+        finally:
+            _agent_mod.run_shell = real_sh
         sess = result.session
-        context.commands_executed = sess.turns
-        context.exit_code = 0 if sess.verified else 1
-        if sess.termination not in ("VERIFIED",):
-            context.error_message = (
-                f"{sess.termination}: {'; '.join(sess.missing[:3])}"[:500])
+        self._fill_context(context, sess, time.time() - started)
         # ATIF-ish: trajetória + sessão serializada no logs_dir
         try:
             logs = Path(getattr(self, "logs_dir", "/tmp"))
@@ -90,3 +244,27 @@ class JarvisHarborAgent(BaseAgent):
                 encoding="utf-8")
         except Exception:
             pass
+
+    @staticmethod
+    def _fill_context(context: Any, sess: Any, duration_s: float) -> None:
+        """Preenche SÓ campos que existem no context (duck-typing).
+
+        Funciona no AgentContext real (pydantic, harbor instalado) e no
+        stub local. Campos desconhecidos são ignorados, nunca erro.
+        """
+        meta = {
+            "verdict": getattr(sess, "termination", "?"),
+            "turns": getattr(sess, "turns", 0),
+            "model": getattr(sess, "model_id", "?"),
+            "verified": getattr(sess, "verified", False),
+            "missing": list(getattr(sess, "missing", []) or [])[:3],
+            "duration_s": round(duration_s, 1),
+        }
+        if hasattr(context, "metadata"):
+            try:
+                if isinstance(context.metadata, dict):
+                    context.metadata.update(meta)
+                else:
+                    context.metadata = meta
+            except Exception:
+                pass
