@@ -62,17 +62,39 @@ class _ContainerBridge:
         import asyncio as _aio
         import threading as _th
         self._env = env
+        self._seen: set[str] = set()
         self._loop = _aio.new_event_loop()
         self._thread = _th.Thread(target=self._loop.run_forever, daemon=True)
         self._thread.start()
 
     def sh(self, cmd: str, timeout: int = 60) -> Any:
         import asyncio as _aio
+        import re as _re
         fut = _aio.run_coroutine_threadsafe(
             self._env.exec(cmd, timeout_sec=timeout), self._loop)
-        return fut.result(timeout + 20)
+        r = fut.result(timeout + 20)
+        # Guarda anti-fabricação (task3 29/09: modelo escreveu conteúdo
+        # imaginado sem ler o fonte — 2x). Rastreia lidos; redirect p/
+        # arquivo nunca lido ganha nota de verificação no stderr
+        # (vai p/ observation; task-agnóstico).
+        try:
+            for m in _re.finditer(
+                    r"(?:cat|grep|sed|awk|head|tail|less)\s+([/\w.\-]+)", cmd):
+                self._seen.add(m.group(1).split("/")[-1])
+            outs = _re.findall(r">{1,2}\s*([/\w.\-]+)", cmd)
+            for o in outs:
+                base = o.split("/")[-1]
+                if base not in self._seen:
+                    r.stderr = ((r.stderr or "")
+                                + f"\n[harness: {o} written without being read"
+                                   f" first — verify content with cat/cmp]")
+                self._seen.add(base)
+        except Exception:
+            pass
+        return r
 
     def read(self, path: str) -> tuple[Any, str]:
+        self._seen.add(path.split("/")[-1])
         import base64 as _b64
         import shlex as _shlex
         r = self.sh("base64 -- " + _shlex.quote(path))

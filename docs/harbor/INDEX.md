@@ -16,6 +16,9 @@
 | 29/09 | D-cell (byte + bin) | Phi-4-mini-instruct | 0/4 (text-fight, src-overwrite; diag 0.0%) |
 | 29/09 | E-cell (Groq, mesmo harness) | gpt-oss-120b | 0/1 (relative-path drift: usa `src.txt`, nunca `/app`; bytes) |
 | 29/09 | **F-cell bash-first (tese mini-SWE-agent)** | bonsai | **4/4** (byte+bin; cerca ```bash→shell, chaining liberado no container). Mesmo modelo: 0/25+ → 4/4. |
+| 29/09 | F-cell bash-first | Qwen3-4B fast | **3/4** (incl. 1 `cp-executed` real) |
+| 29/09 | F-cell bash-first | MoE Qwen3.6 | 0/4 (dialeto próprio `f(path=)`, ignora cerca; 500s frios) |
+| 29/09 | task3 extract-line (transferência) | bonsai bash-first | 0/4 (`sed -n 2p` descoberto mas fabricação persiste; guarda write-without-read adicionada) |
 
 ## Estratégia por modelo (`scripts/grade-harbor.py`)
 

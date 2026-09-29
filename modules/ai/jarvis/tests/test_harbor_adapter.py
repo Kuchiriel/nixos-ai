@@ -211,3 +211,21 @@ def test_container_read_flags_binary() -> None:
     out = cls._exec_read_file({"path": "/app/b.bin"})
     assert "BIN" in out and "cp" in out
     assert "trailer" not in out
+
+
+def test_bridge_warns_write_without_read() -> None:
+    """29/09 (task3): modelo escreveu conteúdo imaginado sem ler o fonte.
+    Redirect p/ arquivo nunca lido ganha nota de verificação no stderr."""
+    import jarvis.runtime.harbor_agent as _ham
+
+    class ShEnv(FakeEnv):
+        async def exec(self, command, timeout_sec=None):
+            self.cmds.append(command)
+            return FakeExecResult(stdout="", stderr="", return_code=0)
+
+    env = ShEnv()
+    bridge = _ham._ContainerBridge(env)
+    r = bridge.sh("echo hello > /app/line2.txt")
+    assert "without being read" in (r.stderr or "")
+    r2 = bridge.sh("cat /app/data.txt > /app/line2.txt")
+    assert "without being read" not in (r2.stderr or "")
