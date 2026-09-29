@@ -2796,3 +2796,14 @@ def test_approval_callback_fires_when_provided(tmp_path, monkeypatch) -> None:
     result = agent.run("write it")
     assert (tmp_path / "f.txt").exists()
     assert not result.commands_denied
+
+
+def test_fallback_bash_fence_opt_in() -> None:
+    """29/09 (F-cell): cerca ```bash vira execute_shell só com opt-in
+    (fora do strict); default continua droppando (segurança no host)."""
+    from jarvis.core.agent import extract_fallback_tool_calls
+    text = "vou listar:\n```bash\nls -la /app\n```\npronto."
+    assert extract_fallback_tool_calls(text) == []
+    got = extract_fallback_tool_calls(text, bash_fence=True)
+    assert got == [{"name": "execute_shell",
+                    "arguments": {"cmd": "ls -la /app"}}]

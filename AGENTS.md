@@ -96,8 +96,20 @@ nix flake check
 | `scripts/overnight-24-09/` | evidência datada de benchs |
 | `.agents/*.md` | detalhe por tema (carregue só se o gatilho casar) |
 
-## Regras de agentes (gatilho → arquivo)
+## Modelo-agnóstico (detecção → adaptação — ler antes de mexer em prompt/tools)
 
+- `cli/dev.py:_detect_profile` — registry tier vence param-count; tiny →
+  `native_tools=False` (só texto, sem overhead de `tools`); override
+  `cfg.llm_native_tools`. REPL prova local: bonsai lê exato (29/09).
+- `core/agent.py:_strict_default` — tiers speed/fast ganham grammar
+  constrained; resto texto livre. Fora do strict, cerca ```bash vira
+  `execute_shell` (F-cell; dev.py já aceitava cerca há tempos).
+- `core/agent.py:_try_api_cascade` — STUCK comprovado → API 1x
+  (CASCADE_MAP; Groq último recurso). Bot tem keys via litellm.env.
+- Template ausente (xLAM) não é detectável barato: presume tool-capable
+  pelo tamanho e quebra (400/500). Suspeita de template → modo texto.
+
+## Regras de agentes (gatilho → arquivo)
 - `.agents/dados-e-memoria.md` — RAG, memória, vault, spaces, cifrado.
   Gatilhos: RAG, memória, vault, qdrant, collection, embedding, recall.
 - `.agents/loop-e-bench.md` — overnight, harness, sweep, benchmark.

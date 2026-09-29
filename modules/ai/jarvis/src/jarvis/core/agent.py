@@ -1393,10 +1393,13 @@ class Agent:
             content = response.get("content", "")
             if not tool_calls:
                 # Fallback em texto (singular ou lista — xLAM emite arrays;
-                # o plural já cobre o singular). bash_fence só em superfície
-                # shell-only (F-cell): cerca ```bash vira execute_shell.
+                # o plural já cobre o singular). bash_fence fora do modo
+                # strict (29/09, F-cell): sem gramática o modelo emite cerca
+                # ```bash — dropar era perda pura (dev.py já aceita cerca
+                # há tempos; paridade). Strict continua só-gramática.
+                # Approval gate continua valendo em ambos.
                 for _i, _fb in enumerate(extract_fallback_tool_calls(
-                        content, bash_fence=(self.tool_class == "shell"))):
+                        content, bash_fence=not self.strict_tools)):
                     tool_calls.append({
                         "id": f"fb-{turn}-{_i}",
                         "type": "function",
