@@ -252,3 +252,52 @@ conserta decomposição sem forçar a sequência.
   MoE tinha erro de sintaxe real (`a*b` em vez de `a[k]*b[k]`) — um
   plano de terceiro precisa de verificação como código, não é
   confiável por construção. E a extração pegava a moldura do Rich.
+
+## O gargalo tem nome: **conteúdo do raciocínio** (29/29, `scripts/decomp.py`)
+
+Teste decisivo: **executar o ACT do plano mecanicamente, sem modelo
+no meio.** Se o harness sozinho acerta, a decomposição é o gargalo.
+Se falha, o plano em si é o gargalo.
+
+| Task | o que o MoE planejou | execução mecânica do plano | veredito |
+|---|---|---|---|
+| T1 | resposta certa no plano (`10`, `10;70`) | ACT vazio (task é responder) | plano **certo** |
+| T3 | `sum(a*b for k in a …)` | **rc=1, TypeError** | plano **errado** |
+
+E o executor, com o plano certo na mão (T1), respondeu **`9`**.
+
+### Conclusão (corrige a hipótese da seção anterior)
+
+Eu tinha escrito que o gargalo era decomposição. **Não é.** É o
+conteúdo do raciocínio, e há trêsanderSpecies de falhar nele:
+
+1. **O plano pode estar errado** (T3: `a*b` em vez de `a[k]*b[k]` — o
+   MoE produz Python que não roda). Planejador não é oráculo.
+2. **O plano pode estar certo e ser ignorado** (T1: plano dizia
+   `10`, executor respondeu `9`). Ele não *segue* o plano — ele
+   **re-pensa** e erra no mesmo lugar.
+3. **O executor recita em vez de executar** (T3 com plano: `123`
+   sem nenhuma tool call).
+
+Ou seja: **plano de terceiro modelo não é confiável nem como código
+nem como instrução.** E um executor que re-pensa não é um executor
+— é um segundo rambling.
+
+### O que isso fecha
+
+- Pipeline MoE→bonsai: **descartado com evidência** (era a hipótese
+  do dia, refutada com rigor, não com opinião).
+- A "decomposição forçada pelo harness" do roadmap: **também não é o
+  caminho** — porque o gargalo está um nível abaixo, no raciocínio.
+- **O unlock real é modelo maior no executor**, não camada de
+  orquestração. Terceira vez que a mesma conclusão aparece por
+  caminhos diferentes:bonsai 8B podado não é um executor forte, e
+  nenhuma quantidade de harness faz dele um.
+
+### A lição de método
+
+Testar a hipótese até ela morrer custou ~4 rodadas longas (pipeline
+solo, com plano, comando pronto, via correta, mecânica). Cada uma
+eliminou uma explicação. A última — execução mecânica do plano —
+foi a que matou a hipótese, e é a que ninguém teria feito se parasse
+no "o executor falhou, então ele é fraco".
