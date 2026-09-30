@@ -260,19 +260,63 @@ def _lines_match_fuzzy(line_a: str, line_b: str, tolerance: float = 0.2) -> bool
     return matches / max_len >= (1 - tolerance)
 
 
+def _realign_indent(new_text: str, old_text: str) -> str:
+    """(30/09, C3b) Re-alinha a indentação do new_text ao old_text real.
+
+    A falha real (run 16:45, ast_cache.py linha 126, 3 tentativas no
+    MESMO ponto): o modelo copiava a indentação que *achava* que o
+    arquivo tinha e, ao 'otimizar', reescrevia o bloco com um nível a
+    menos → 'unindent does not match'. O old_text casava (o harness casa
+    ignorando whitespace nas estratégias 2/3), mas o new_text entrava
+    com a indentação errada e o safe_editor barrava.
+
+    Algoritmo: como já garantimos que o conteúdo não-indentado bate
+    1:1 linha-a-linha (guarda abaixo), a indentação CORRETA de cada
+    linha é simplesmente a indentação que o BASELINE (o old_text real
+    do arquivo) tem nessa mesma posição. Então re-aplicamos o indent do
+    baseline ao conteúdo do new_text. Cobre delta uniforme E não-uniforme
+    (o caso real: linhas em branco + `return False` que é legitamente
+    mais fundo). Zero aritmética de delta, zero caso especial.
+
+    Só age quando o conteúdo bate 1:1 — se a LÓGICA difere de verdade,
+    não toca, e o safe_editor reprova normalmente. Nunca mascaramos
+    mudança de código real; só corrigimos deslize mecânico de indentação.
+    """
+    old_lines = old_text.split("\n")
+    new_lines = new_text.split("\n")
+    if len(old_lines) != len(new_lines) or len(old_lines) < 2:
+        return new_text
+    out = []
+    for o, n in zip(old_lines, new_lines):
+        if not n.strip():
+            out.append("")            # linha vazia fica vazia
+            continue
+        if o.strip() != n.strip():
+            return new_text          # conteúdo diverge → não toca
+        oi = len(o) - len(o.lstrip())
+        out.append(" " * oi + n.strip())   # indent do baseline + conteúdo novo
+    return "\n".join(out)
+
+
 def apply_hunk(content: str, hunk: PatchHunk) -> tuple[bool, str]:
     """Apply a single hunk to file content.
-    
+
     Matching strategy (from Aider research):
     1. Exact match
     2. Whitespace-insensitive line-by-line match
     3. Fuzzy line-by-line match (20% tolerance per line)
-    
+
     Returns (success, new_content).
     """
     # 1. Exact match
     if hunk.old_text in content:
-        new_content = content.replace(hunk.old_text, hunk.new_text, 1)
+        # (30/09, C3b) mesmo no match exato, re-alinha a indentação: o
+        # old_text pode estar 100% certo (casa literal) e ainda assim o
+        # new_text entrar com indent quebrada — que é EXATAMENTE a falha
+        # 'unindent does not match'. Sem isto aqui, a estratégia 1 (a mais
+        # comum!) era um beco sem realign.
+        _new = _realign_indent(hunk.new_text, hunk.old_text)
+        new_content = content.replace(hunk.old_text, _new, 1)
         return True, new_content
 
     old_lines = hunk.old_text.strip().split("\n")
@@ -286,7 +330,11 @@ def apply_hunk(content: str, hunk: PatchHunk) -> tuple[bool, str]:
                 match = False
                 break
         if match:
-            new_lines = content_lines[:i] + hunk.new_text.split("\n") + content_lines[i + len(old_lines):]
+            # (30/09) re-alinha a indentação ao que o old_text realmente
+            # tem no arquivo (drift de indent do modelo é consertado
+            # aqui, não reprovado).
+            _new = _realign_indent(hunk.new_text, "\n".join(content_lines[i:i+len(old_lines)]))
+            new_lines = content_lines[:i] + _new.split("\n") + content_lines[i + len(old_lines):]
             return True, "\n".join(new_lines)
 
     # 3. Fuzzy line-by-line match (allows minor variations)
@@ -297,7 +345,8 @@ def apply_hunk(content: str, hunk: PatchHunk) -> tuple[bool, str]:
                 match = False
                 break
         if match:
-            new_lines = content_lines[:i] + hunk.new_text.split("\n") + content_lines[i + len(old_lines):]
+            _new = _realign_indent(hunk.new_text, "\n".join(content_lines[i:i+len(old_lines)]))
+            new_lines = content_lines[:i] + _new.split("\n") + content_lines[i + len(old_lines):]
             return True, "\n".join(new_lines)
 
     return False, content

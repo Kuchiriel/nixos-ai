@@ -902,12 +902,38 @@ def _request_json_patch(
         },
     }}
     files_bit = "\n\n".join(
-        f"=== FILE: {p} ===\n```\n{c[:4000]}\n```"
+        f"=== FILE: {p} ===\n```python\n{c}\n```"
         for p, c in list(file_contents.items())[:3])
+    # (30/09, C3b) Duas correções de harness, ambas custo zero de tokens
+    # e ambasMirror da falha real 'unindent does not match' (a run 16:45
+    # perdeu 3 tentativas no MESMO ponto, linha 126 de ast_cache.py):
+    #
+    # 1) NÃO truncar em c[:4000]. O corte caía no meio de um bloco
+    #    indentado, e o modelo via hierarquia quebrada —然后 reescrevia
+    #    o bloco com indent inconsistente. A regra do patch loop é o
+    #    old_text casar com o arquivo REAL; mandar o arquivo INTEIRO
+    #    (o budget ctx-derived já limita) maximiza a chance.
+    # 2) Dizer explicitamente que a indentação é sagrada + exemplo. O
+    #    modelo não erra por não saber Python, erra por re-indentar ao
+    #    "otimizar". O harness deve dizer isso.
     prompt = (
         f"TASK: {task_description}\n\nFILES:\n{files_bit}\n\n"
-        "Return small hunks (<=15 lines each), old_text copied "
-        "character-for-character. If no change needed, return "
+        "RULES:\n"
+        "1. old_text MUST be copied character-for-character from the "
+        "file above, INCLUDING exact leading whitespace/indentation.\n"
+        "2. new_text MUST use the SAME indentation as old_text unless "
+        "you are deliberately changing nesting — keep every line at its "
+        "current indent level.\n"
+        "3. Make the SMALLEST change that accomplishes the task. Do NOT "
+        "rewrite surrounding lines, do NOT reflow indentation.\n"
+        "4. If old_text has a line indented 12 spaces, every line you "
+        "keep around it keeps those 12 spaces.\n\n"
+        "EXAMPLE (correct - note indentation preserved):\n"
+        '{"patches":[{"path":"a.py","old_text":"def f():\\n'
+        '    if x:\\n        return 1","new_text":"def f():\\n'
+        '    if x:\\n        return 2"}]}\n\n'
+        "Return small hunks (<=15 lines each). If no change needed, "
+        "return "
         '{"patches": []}.')
     try:
         from jarvis.providers.llm import LLMClient
