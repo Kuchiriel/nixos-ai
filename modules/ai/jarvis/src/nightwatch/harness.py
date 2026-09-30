@@ -1415,6 +1415,15 @@ class Harness:
             if self.config.project not in self.config.projects:
                 self.config.projects.append(self.config.project)
     
+    def _has_real_target(self, task: Task) -> bool:
+        """(30/09) Task tem pelo menos um target que é ARQUIVO de verdade?
+
+        Usado pra priorizar actionable sobre review-only. Reaproveita
+        _target_is_actionable (mesma régua do filtro de execução) — não
+        duplica conceito de "isto é um arquivo".
+        """
+        return any(_target_is_actionable(t) for t in (task.target_files or []))
+
     def discover_tasks(self, project: str | None = None) -> list[Task]:
         """Discover tasks from all enabled sources.
         
@@ -1455,8 +1464,24 @@ class Harness:
             if self.config.use_llm_discovery:
                 tasks.extend(_discover_llm_tasks(self.call_llm, proj_name))
 
+        # (30/09) Task ACTIONABLE (tem target de arquivo real) tem
+        # PREFERÊNCIA sobre task de review — Independentemente do cap.
+        # Motivo (bug observado na run 15:37): o discovery SCRIPTADO entra
+        # primeiro na lista e, sendo todo review-task (priority 1-2), o
+        # cap "5 por projeto" (por ordem de chegada) enchia com elas e
+        # EXPULSAVA as tasks do LLM — que são as únicas com target de
+        # arquivo real (as únicas que o patch loop consegue aplicar). O
+        # nightwatch rodava 2.5min, 0 commits, "No more tasks" —看似 fez
+        # trabalho mas nunca chegou no patch. Regra: actionable primeiro,
+        # review preenche o resto.
+        actionable = [t for t in tasks if self._has_real_target(t)]
+        review_only = [t for t in tasks if not self._has_real_target(t)]
+        tasks = actionable + review_only
+
         # Cap: max 5 new tasks per project per round (flood control —
         # generic LLM slop multiplied by N projects burned the queue).
+        # (30/09) Aplicado DEPOIS do actionable-first, então o cap já
+        # conta primeiro as Useful.
         capped: list[Task] = []
         per_project: dict[str, int] = {}
         for t in tasks:
