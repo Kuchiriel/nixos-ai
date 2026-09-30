@@ -1,0 +1,1 @@
+echo exit 1
