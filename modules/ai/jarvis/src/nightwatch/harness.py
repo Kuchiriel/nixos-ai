@@ -1053,10 +1053,16 @@ def _request_structured_patch(
 
     error_section = ""
     if previous_errors:
+        # (30/09, C3b-2) Truncava em 300 chars — cortava justamente o
+        # traceback do teste que acabamos de começar a entregar. O sinal
+        # é o que faz o retry aprender; cortar o sinal é o equivalente a
+        # retry às cegas. 2500 chars cabem no budget sem estourar.
         error_section = (
             "\n\n⚠️ PREVIOUS ATTEMPT FAILED — DO NOT REPEAT THESE ERRORS:\n"
-            + "\n".join(f"  - {e[:300]}" for e in previous_errors[-3:])
-            + "\n\nAnalyze why the previous patches failed and produce corrected patches."
+            + "\n".join(f"  - {e[:2500]}" for e in previous_errors[-3:])
+            + "\n\nAnalyze why the previous patches failed (read the actual "
+              "test failure above) and produce corrected patches. Fix the "
+              "ROOT CAUSE shown in the traceback, not the symptom."
         )
 
     total_chars = sum(len(c) for c in file_contents.values())
@@ -1909,7 +1915,22 @@ class Harness:
                     cp.record_operation("validate", validation.passed, validation.summary)
 
                     if not validation.passed:
-                        previous_errors.append(f"Validation failed: {validation.summary}")
+                        # (30/09, C3b-2) Dava ao modelo só
+                        # validation.summary = "2 passed, 2 failed" —
+                        # contagens, ZERO informação de QUALQUE teste
+                        # quebrou e POR QUÊ. O modelo retryava às cegas
+                        # (3x o mesmo patch). O sinal já existe no
+                        # report: ValidationStep.output tem o traceback
+                        # real do pytest (até 3k chars). É o sinal que o
+                        # RHO precisa: sem ele, "aprender com o erro" é
+                        # fiction — o modelo nunca viu o erro.
+                        # Isso é engenharia de harness, não modelo.
+                        _err_detail = ""
+                        for _s in validation.steps:
+                            if not _s.passed and not _s.skipped and _s.output:
+                                _err_detail += f"\n{_s.output[:2000]}"
+                        previous_errors.append(
+                            f"Validation failed: {validation.summary}{_err_detail}")
                         if attempt < max_attempts - 1:
                             self.notify(f"⚠️ Validation failed (attempt {attempt + 1}), retrying with error context")
                             continue
