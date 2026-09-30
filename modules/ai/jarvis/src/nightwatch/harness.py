@@ -1382,6 +1382,19 @@ class Harness:
 
     # ── Task Execution ─────────────────────────────────────────────────────
 
+    def _moe_unit_state(self) -> str:
+        """(30/09) Estado da unidade llama-cpp-ik, sem sudo (query pura).
+        `systemctl is-active` lê o estado; não precisa de privilégio, então
+        funciona dentro do serviço. Vazio se o systemctl falhar.
+        """
+        import subprocess as _sp
+        try:
+            r = _sp.run(["systemctl", "is-active", "llama-cpp-ik"],
+                        capture_output=True, timeout=10)
+            return r.stdout.decode().strip()
+        except Exception:
+            return ""
+
     def ensure_strong_llm(self) -> bool:
         """(26/09) Garante o tier forte :8084; DEFERE a execução se não
         puder — nunca degrada pro bonsai em silêncio (padrão de qualidade
@@ -1389,6 +1402,13 @@ class Harness:
 
         Ordem: healthy? → sobe a unidade on-demand → espera load →
         RAM insuficiente/health falhou? → False (caller notifica e sai).
+
+        (30/09) A unidade agora é Wants= do systemd, então ela JÁ pode estar
+        carregando quando este código roda (Type=simple retorna no fork, o
+        load do 35B leva minutos e come ~16GB). Se a unidade está
+        activating/active, o gate de RAM dispararia um DEFER espúrio
+        enquanto o MoE está legitimamente carregando — então, nesse caso,
+        só espera o :8084 ficar healthy, sem o gate.
         """
         import subprocess, urllib.request
         def _up() -> bool:
@@ -1416,6 +1436,18 @@ class Harness:
                 time.sleep(8)
         except Exception:
             pass
+        # Se o systemd já está subindo o MoE (Wants=), não faça o gate de
+        # RAM: o load legítimo do 35B (16GB) derrubaria MemAvailable e
+        # dispararia um DEFER espúrio. Nesse caso é só esperar healthy.
+        unit_state = self._moe_unit_state()
+        if unit_state in ("activating", "active", "reloading"):
+            for _ in range(90):  # systemd está subindo; só espera o load
+                if _up():
+                    return True
+                time.sleep(20)
+            self.notify("⏸️ *Deferred*: MoE foi iniciado pelo systemd mas "
+                        "não ficou healthy (ver journal llama-cpp-ik)")
+            return False
         avail = int(open("/proc/meminfo").read().split("MemAvailable:")[1]
                     .split()[0]) // 1024
         if avail < 19000:

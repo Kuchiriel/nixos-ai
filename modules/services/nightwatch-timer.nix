@@ -20,8 +20,16 @@ let
 in {
   systemd.services.nightwatch = {
     description = "JARVIS nightwatch — autonomous overnight maintenance";
-    after = [ "llama-cpp-server.service" "jarvis.target" ];
-    wants = [ "llama-cpp-server.service" ];
+    # 30/09: llama-cpp-ik (MoE :8084) como dependência systemd. O harness
+    # tentava subir o MoE via `sudo systemctl start` num subprocess — o
+    # sudo do PATH do serviço (/run/current-system/sw/bin) é o binário do
+    # store SEM setuid, morria com "deve ter bit setuid", e o nightwatch
+    # dormia 30min achando que o MoE subia. Declarar Wants+After deixa o
+    # systemd subir o MoE como dependência real (robust, sem sudo), e o
+    # harness só espera o :8084 ficar healthy. ensure_strong_llm() ainda
+    # funciona como fallback (inicia o MoE sob demanda).
+    after = [ "llama-cpp-server.service" "jarvis.target" "llama-cpp-ik.service" ];
+    wants = [ "llama-cpp-server.service" "llama-cpp-ik.service" ];
     partOf = [ "jarvis.target" ];
     # SEM wantedBy: o timer é o único gatilho. Com wantedBy o service subia a
     # cada `nixos-rebuild switch` (restart do jarvis.target) e queimava a GPU
@@ -32,7 +40,9 @@ in {
       Environment = [
         "PYTHONPATH=${jarvisPackage}/lib/python3.13/site-packages"
         "JARVIS_PROJECT_ROOT=${projectRoot}"
-        "PATH=/run/current-system/sw/bin:${pkgs.git}/bin:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.findutils}/bin:${pkgs.gnused}/bin"
+        # 30/09: /run/wrappers/bin PRIMEIRO — é onde vive o sudo setuid
+        # (o de sw/bin é symlink pro store, sem setuid, morre no serviço).
+        "PATH=/run/wrappers/bin:/run/current-system/sw/bin:${pkgs.git}/bin:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.findutils}/bin:${pkgs.gnused}/bin"
       ];
       ExecStart = "${jarvisPackage}/bin/jarvis nightwatch --tasks 10 --report-telegram --projects nixos-ai";
       # ^ escopo explícito: auto-discover varria TUDO (incl. repos de
