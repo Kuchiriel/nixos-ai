@@ -1411,6 +1411,9 @@ class Harness:
         self._bus = get_bus()
         self._bus.subscribe("harness.notify", self._handle_bus_notify, name="telegram")
         self._bus.subscribe("harness.task", self._handle_bus_log, name="jsonl_logger")
+        # (30/09) início do run p/ retry consciente de orçamento (None =
+        # execut_task chamado fora de run(), usa o max_retries cheio).
+        self._run_started_at: float | None = None
         # Auto-detect context size from llama.cpp server if not specified
         budget = self.config.context_budget
         if budget <= 0:
@@ -1888,6 +1891,23 @@ class Harness:
                 previous_errors: list[str] = []
                 max_attempts = max(self.config.max_retries, 1)
 
+                # (30/09) Retry consciente do ORÇAMENTO: mediram-se runs
+                # em que as 3 tentativas de UMA task consomiam o run
+                # inteiro (3×~45s de LLM + validação) e as 4 outras tasks
+                # da fila nunca rodavam. Retry deve servir pra convergir,
+                # não pra monopolizar o budget. Se o run já gastou uma
+                # fração grande do tempo, tentamos menos — sobra tempo
+                # pra mais tasks distintas, que é onde está a informação.
+                _t_start = self._run_started_at
+                if _t_start:
+                    _elapsed = time.time() - _t_start
+                    _budget = self.config.max_minutes * 60
+                    _frac = _elapsed / _budget if _budget else 0.0
+                    if _frac > 0.5 and max_attempts > 2:
+                        max_attempts = 2
+                    elif _frac > 0.75 and max_attempts > 1:
+                        max_attempts = 1
+
                 for attempt in range(max_attempts):
                     if attempt > 0:
                         safety.abort_task_branch(branch)
@@ -2181,6 +2201,9 @@ class Harness:
             6. Report results
         """
         start = time.time()
+        # (30/09) execut_task usa isto para deixar o retry consciente do
+        # orçamento de tempo (não monopolizar o run numa task só).
+        self._run_started_at = start
         result = HarnessResult()
 
         # Concurrency guard: um loop por vez (discovery LLM paralela
