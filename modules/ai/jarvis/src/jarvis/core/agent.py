@@ -2473,10 +2473,13 @@ class Agent:
                 # sanitize_secrets já concluiu (determinístico): para.
                 messages.append({
                     "role": "system",
-                    "content": ("DONE_SANITIZE: todos os segredos conhecidos "
-                                "foram trocados por placeholders. Reporte "
-                                "isso e PARE — não edite mais nenhum arquivo "
-                                "nem substitua literais de padrão."),
+                    # EN primeiro (29/09, auditoria de idioma): nudge
+                    # injetado no historico — o modelo precisa ler em EN.
+                    "content": ("DONE_SANITIZE: all known secrets were "
+                                "replaced with placeholders. Report that "
+                                "and STOP - do not edit any more files, do "
+                                "not substitute pattern literals.\n"
+                                "Reporte e PARE."),
                 })
                 break
 

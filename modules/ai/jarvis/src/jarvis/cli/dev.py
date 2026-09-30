@@ -3495,10 +3495,16 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
     for _ in range(2):
         if ok or not _wants_continue(messages):
             break
+        # EN + PT no mesmo nudge (29/09, auditoria de idioma): o harness
+        # injeta isto como INSTRUCAO para o MODELO ler; se so um
+        # idioma, um modelo nao-bilingue perde a instrucao inteira.
+        # Harness sempre em ingles (consenso), PT como cortesia.
         messages.append({"role": "user", "content": (
-            "Continue e CONCLUA agora. Se a tarefa já estiver pronta, "
-            "entregue o resultado final (arquivo/texto) e pare — não peça "
-            "permissão para continuar e não repita o mesmo texto.")})
+            "Continue and FINISH now. If the task is already done, "
+            "deliver the final result (write the file / give the text) "
+            "and STOP - do not ask permission to continue, do not "
+            "repeat yourself.\n"
+            "Continue e CONCLUA agora: entregue o resultado e pare.")})
         ok = _run_agent_loop(messages, tools, profile, approve, debug,
                              max_turns=10)
     _persist_session(messages, project_root or os.getcwd())
