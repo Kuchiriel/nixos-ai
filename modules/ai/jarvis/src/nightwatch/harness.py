@@ -480,6 +480,38 @@ Return JSON array."""
 # File Editing (via Patcher + SafeEditor)
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _sudo_systemctl(*args: str, timeout: int = 60) -> subprocess.CompletedProcess:
+    """(30/09) systemctl via sudo que FUNCIONA dentro do serviço systemd.
+
+    Diagnóstico (a run travava dormindo achando que o MoE subia): o
+    PATH do `nightwatch.service` é `/run/current-system/sw/bin`, onde o
+    `sudo` é symlink pro binário do Nix store — **sem bit setuid**.
+    Invocado de lá, o sudo morre com:
+        sudo: .../sw/bin/sudo deve ter como dono o uid 0 e tem definido
+        o bit setuid
+    No shell do dono funciona porque `/run/wrappers/bin` (o wrapper
+    setuid) vem PRIMEIRO no PATH. Como o harness usava
+    `capture_output=True` sem checar returncode, o erro era engolido e
+    o nightwatch só dormia no loop de espera.
+
+    Aqui: (a) usa o wrapper setuid (/run/wrappers/bin) explícito,
+    independente de como o nightwatch foi iniciado; (b) NÃO engole o
+    erro — loga o returncode/stderr. O silêncio foi o que escondeu o
+    bug; henceforth o sudo fala.
+    """
+    env = dict(os.environ)
+    wrapper = "/run/wrappers/bin"
+    parts = env.get("PATH", "").split(":")
+    if wrapper not in parts:
+        env["PATH"] = f"{wrapper}:{env.get('PATH', '')}"
+    r = subprocess.run(["sudo", "systemctl", *args],
+                       capture_output=True, timeout=timeout, env=env)
+    if r.returncode != 0:
+        print(f"[nightwatch] sudo systemctl {' '.join(args)} FALHOU "
+              f"rc={r.returncode}: {r.stderr.decode(errors='replace').strip()[:200]}")
+    return r
+
+
 def _target_is_actionable(target: str) -> bool:
     """(30/09) Um target só é 'de patch' se for um ARQUIVO real (patch) ou
     um path limpo de arquivo novo (CREATE).
@@ -1389,8 +1421,7 @@ class Harness:
             self.notify(f"⏸️ *Deferred*: MoE precisa ~19GB, avail {avail}MB "
                         "— nightwatch espera RAM (nunca degrada pro bonsai)")
             return False
-        subprocess.run(["sudo", "systemctl", "start", "llama-cpp-ik"],
-                       capture_output=True, timeout=60)
+        _sudo_systemctl("start", "llama-cpp-ik")
         for _ in range(90):  # load do 35B leva minutos
             if _up():
                 break
@@ -2035,10 +2066,8 @@ def run_nightwatch(
             import time as _t
             import urllib.request as _url
             _url.urlopen("http://127.0.0.1:8084/health", timeout=3).read(1)
-            subprocess.run(["sudo", "systemctl", "stop", "llama-cpp-ik"],
-                           capture_output=True, timeout=60)
+            _sudo_systemctl("stop", "llama-cpp-ik")
             _t.sleep(3)
-            subprocess.run(["sudo", "systemctl", "restart", "llama-cpp-server"],
-                           capture_output=True, timeout=90)
+            _sudo_systemctl("restart", "llama-cpp-server", timeout=90)
         except Exception:
             pass
