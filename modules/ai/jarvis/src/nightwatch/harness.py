@@ -495,16 +495,17 @@ def _sudo_systemctl(*args: str, timeout: int = 60) -> subprocess.CompletedProces
     o nightwatch só dormia no loop de espera.
 
     Aqui: (a) usa o wrapper setuid (/run/wrappers/bin) explícito,
-    independente de como o nightwatch foi iniciado; (b) NÃO engole o
-    erro — loga o returncode/stderr. O silêncio foi o que escondeu o
-    bug; henceforth o sudo fala.
+    independente de como o nightwatch foi iniciado; (b) `-n`
+    (non-interactive) — serviço não tem TTY, e o sudo sem -n no restore
+    reclamava de "contêiner/sem terminal" (rc=1); (c) NÃO engole o erro
+    — loga o returncode/stderr. O silêncio foi o que escondeu o bug.
     """
     env = dict(os.environ)
     wrapper = "/run/wrappers/bin"
     parts = env.get("PATH", "").split(":")
     if wrapper not in parts:
         env["PATH"] = f"{wrapper}:{env.get('PATH', '')}"
-    r = subprocess.run(["sudo", "systemctl", *args],
+    r = subprocess.run(["sudo", "-n", "systemctl", *args],
                        capture_output=True, timeout=timeout, env=env)
     if r.returncode != 0:
         print(f"[nightwatch] sudo systemctl {' '.join(args)} FALHOU "
