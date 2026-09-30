@@ -193,3 +193,38 @@ commits, 16 min. E a culpa quase caiu no patcher (lição 6: o nightwatch
 
 **Não mexi no `apply_hunk`/`patcher`** — eles estão certos. A lição
 mais cara da noite: *verificar o log real antes de agir*.
+
+### Terceira camada + veredito (30/09, run pós-rebuild)
+
+Run pós-rebuild: `Patch failed`×3 = **`No readable target files`**.
+Causa: geradores alimentavam `target_path` com **descrição em prosa**,
+não caminho (`Todos os módulos que usam...`, `` `AGENTS.md`, `HANDOFF.md` ``,
+`core/`). `_read_file_for_llm`→ERROR→virava CREATE→modelo criava
+arquivo chamado "Todos os módulos..."→falhava. 3 tentativas×~80s por task.
+
+**Fix** (`2c78ef5`): `_target_is_actionable()` — target só é patch se for
+**arquivo real** ou path limpo de CREATE (sem prosa/espaço/vírgula,
+extensão de código). Diretório/prosa/backtick = não acionável.
+`execute_task` skip com motivo em vez de retry cego.
+
+**Verificação end-to-end:** run nova **2m55s** (era 15m58s), tasks
+puladas com honestidade, 0 patch-garbage, `Deactivated successfully`.
+
+### 🔴 Achado arquitetural honesto
+As 8 tasks do discovery **scriptado são de REVIEW** ("586 functions",
+"Models.nix profiles", "Systemd target topology") — **0 acionáveis** como
+patch. Não é bug do guard: o discovery scriptado gera *observação*
+("olha isso"), não *patch* ("mexe neste arquivo"). O guard está certo em
+pular. Trabalho acionável tem que vir do **discovery por LLM com target
+concreto** (LLM devolvendo `target_files` com path real), ou os geradores
+precisam evoluir pra emitir path de arquivo em vez de prosa.
+
+**Pendências pro nightwatch virar daemon confiável:**
+1. **MoE não auto-sobe no contexto do serviço** — o `sudo systemctl start
+   llama-cpp-ik` do harness não dispara (só funcionou q eu iniciei na mão),
+   e o nightwatch fica em sleep-loop esperando :8084. Corrigir: unit
+   com `Wants=llama-cpp-ik` ou `nsenter`/polkit sem prompt.
+2. **Discovery por LLM precisa emitir target concreto** (o único caminho
+   pra task realmente patchável).
+3. Timer segue **desabilitado** (decisão do dono 16/09) — decisão nova
+   depende de (1) e (2), senão a run só queima GPU em discovery e skip.
