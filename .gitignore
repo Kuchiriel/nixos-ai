@@ -85,5 +85,15 @@ modules/ai/jarvis/src/jarvis/webui/frontend/dist/
 # Regra da casa: antes de mover/apagar, VERIFICAR o que é (unversionado
 # pode ser esquecimento, "duplicata" pode ser informação de outro fork).
 # Destino é sempre scripts/archive/… — nunca rm.
-scripts/archive/
+#
+# 29/09 (auditoria de consolidação): a regra era `scripts/archive/`
+# (pasta INTEIRA). Isso é auto-contraditório — a política é "arquivar
+# nunca é apagar", mas ignorava do git justamente o que foi arquivado.
+# Os 26 arquivos já estão tracked (force-add antigo), mas qualquer
+# arquivamento NOVO sumiria em silêncio, e até os README de política
+# estavam invisíveis. Agora: o conteúdo do arquivo é versionado
+# (é o registro durável do veredito); só evidência pesada e Runs
+# locais ficam de fora.
+scripts/archive/**/*.log
+scripts/archive/**/raw/
 scripts/overnight-24-09/loop-*.json

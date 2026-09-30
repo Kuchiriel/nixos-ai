@@ -2,8 +2,10 @@
 """session-primer: reidrata sessão em <100 linhas (anti-redescoberta).
 
 Monta a partir de disco (sem LLM, rápido): último HANDOFF + placar Harbor
-+ lições do vault + git log. Uso: ./scripts/session-primer.sh (ou .py
-direto). Cole a saída no início da sessão em vez de prompt enorme.
++ lições do vault + git log.
+
+Uso: nix develop --command python3 scripts/session-primer.py
+Cole a saída no início da sessão em vez de prompt enorme.
 """
 import glob
 import os

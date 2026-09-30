@@ -1,7 +1,33 @@
 # 📚 nixos-ai Documentation
 
-> **Last updated:** 2026-09-05
+> **Last updated:** 2026-09-29
 > **Status:** Active development
+
+## 🔬 Camada atual (29/09) — comece por aqui
+
+A árvore abaixo é a estrutura **histórica/estável**. A camada de
+pesquisa ativa do harness (29/09) vive na raiz de `docs/` e nos
+índices por tema:
+
+| Documento | O que é | Leia quando |
+|---|---|---|
+| [ROADMAP-HARNESS.md](ROADMAP-HARNESS.md) | roadmap com critério de sucesso por item | "qual é o próximo passo do harness?" |
+| [TIERS-E-PAPEIS.md](TIERS-E-PAPEIS.md) | tier ≠ nota bruta; mission-kit;(role) por tier | "por que o MoE não compete com o DeepSeek?" |
+| [harbor/INDEX.md](harbor/INDEX.md) | placar vivo do harness por célula/modelo | "o que já medimos?" |
+| [HANDOFF-2026-09-29.md](HANDOFF-2026-09-29.md) | estado multi-projeto no último fecho | "de onde a sessão parou?" |
+
+**Os três princípios que emergedaram em 29/09** (valem acima de
+qualquer tabela):
+
+1. **Tier compara com tier.** Bonsai é executor (poda ternária),
+   MoE é estrategista (raciocínio), DeepSeek é executor forte.
+   Nota bruta entre papéis é injusto — ver TIERS-E-PAPEIS.
+2. **Harness fala inglês.** Consenso do setor + aderência medida.
+   PT só no que é *exibido* ao dono. `test_harness_language.py`
+   é o guard (falha se lógica PT voltar a casar com o modelo).
+3. **RC honesto ≠ entrega real.** A/B medido só por RC lê
+   invertido (EN "ganhou" entregando 0 bytes). Métrica primária é
+   **conteúdo entregue** — ver `scripts/ab-prompt.py`.
 
 ## 🏗️ Architecture Overview
 

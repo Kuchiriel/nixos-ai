@@ -1,4 +1,4 @@
-# scripts/INDEX — o que existe, o que usar (26/09/2026)
+# scripts/INDEX — o que existe, o que usar (29/09/2026)
 
 > Resposta ao "monte de script jogado": cada script tem **uma frase** aqui.
 > Detalhe de contrato (stdin/args/stdout/side-effects) em
@@ -35,9 +35,14 @@
 | `scripts/ux-suite.py`, `ux-repl-session.py`, `ux_world.py`, `ux-autonomy.py` | harness UX (sessões REPL instrumentadas) |
 | `scripts/read_chatgpt.py` | lê conversa compartilhada (legado do MCP reader) |
 | `scripts/setup-hackmd.sh`, `scripts/night-anchor.sh`, `scripts/charger-watch.sh`, `scripts/jarvis-gaming-mode.sh`, `scripts/rvc-env.sh`, `scripts/rvc-spike-bootstrap.sh`, `scripts/roo-nightwatch-setup.sh`, `scripts/loop-runner.sh`, `scripts/bench-final.py` | utilitários pontuais (ver INVENTORY-DRAFT antes de usar) |
-| `scripts/gates/` | gates do harness (G1–G11 + variantes) |
+| `scripts/gates/gate3_sanitize_e2e.py` | gate de sanitize E2E (único gate que **existe**; o índice dizia G1–G11 — Wrong, corrigido 29/09) |
 | `scripts/overnight-24-09/`, `overnight-26-09/` | evidências datadas de noites (não rodar; histórico) |
 | `scripts/overnight-*-24-09.sh` | runners antigos (arqueologia; o atual é `overnight-loop.sh`) |
+| `scripts/harbor-lite.sh` | bateria Lite fixa de regressão do harness (`[bonsai\|fast]`, restaura o resident ao fim) |
+| `scripts/grade-harbor.py` | taxonomia de estratégia sobre trajetórias Harbor (`cp-executed`, `text-fight`, `header-leak`, …) + colunas custo |
+| `scripts/mission-kit.py` | bateria que discrimina **capacidade** (T1-diagnose/T2-search/T3-synthesis/T4-robustness), verifier externo, canários anti-distrator |
+| `scripts/ab-prompt.py` | A/B de prompt com métrica honesta (conteúdo+bytes+RC — RC honesto ≠ entrega real) |
+| `scripts/session-primer.py` | reidrata a sessão em <100 linhas (anti-redescoberta) |
 
 ## Legados (não usar p/ novos vereditos)
 
