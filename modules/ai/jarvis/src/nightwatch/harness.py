@@ -730,35 +730,90 @@ def _extract_relevant_section(content: str, path: str, max_chars: int, task_desc
     # Try to find the function mentioned in the task description
     task_lower = task_description.lower()
     target_section = ""
-    
+    target_func_name = ""
+
+    def _name_variants(fname: str) -> set[str]:
+        # (30/09, C3) task diz "cmd_metrics", def diz "_cmd_metrics" —
+        # o match exato falhava e caía no head (que não contém a
+        # função). Compara sem o underscore à esquerda, e também sem
+        # prefixos comuns (_cmd_, cmd_, handler_, on_).
+        base = fname.lower()
+        stripped = base.lstrip("_")
+        variants = {base, stripped}
+        for p in ("cmd_", "handler_", "on_", "handle_"):
+            if stripped.startswith(p):
+                variants.add(stripped[len(p):])
+        if base.startswith("cmd_"):
+            variants.add("_" + base)
+        return {v for v in variants if v}
+
+    # 30/09: mede qual função casa melhor (match mais longo = menos
+    # chance de colidir com palavra genérica).
+    best: tuple[int, int, str, str] | None = None  # (len, def_line, name, body)
     for i, (def_line, def_text) in enumerate(definitions):
         fname = def_text.split('(')[0].split(':')[0].replace('def ', '').replace('class ', '').strip()
-        if fname and fname.lower() in task_lower:
-            # Found the target function — send just this function
-            end_line = definitions[i+1][0] if i+1 < len(definitions) else len(lines)
-            target_section = '\n'.join(lines[def_line:end_line])
-            break
+        if not fname:
+            continue
+        for v in _name_variants(fname):
+            if v and v in task_lower:
+                end_line = definitions[i+1][0] if i+1 < len(definitions) else len(lines)
+                body = '\n'.join(lines[def_line:end_line])
+                cand = (len(v), def_line, fname, body)
+                if best is None or cand[0] > best[0]:
+                    best = cand
+                break
+    if best:
+        target_func_name = best[2]
+        target_section = best[3]
     
     # If task mentions adding something new (not editing existing),
     # send imports + last function + the function it calls (if any)
     if not target_section:
-        last_def = definitions[-1]
-        end_line = len(lines)
-        target_section = '\n'.join(lines[last_def[0]:end_line])
-        # Also include the 'correct' function if mentioned in task
-        if 'correct' in task_lower:
-            for i, (def_line, def_text) in enumerate(definitions):
-                if 'correct' in def_text and i < len(definitions) - 1:
-                    correct_end = definitions[i+1][0]
-                    correct_section = '\n'.join(lines[def_line:correct_end])
-                    target_section = correct_section + '\n\n# ... [later code] ...\n\n' + target_section
-                    break
-    
+        # (30/09, C3-classificado) Causa (c) = contexto insuficiente.
+        # Quando a task NÃO nomeia função, o fallback antigo mandava só
+        # "imports + ÚLTIMA função" — uma fatia arbitrária minúscula. Num
+        # arquivo grande (cli/main.py = 73k chars), o modelo recebia ~870
+        # chars e escrevia old_text a partir dessa lasca → "Hunk not
+        # found" garantido. Medido: 84x menor que o arquivo real.
+        # Agora, sem função-alvo identificada, mandamos um trecho
+        # substancial (até max_chars) a partir do topo — imports +
+        # começo do código real, que é onde o modelo costuma trabalhar.
+        head = '\n'.join(lines[: max(1, max_chars // 40)])  # ~25% do budget em linhas
+        target_section = head
+        if len(target_section) < max_chars:
+            # completa com o resto do arquivo até max_chars, pra maximize
+            # a chance do old_text casar com alguma coisa real
+            more_needed = max_chars - len(target_section)
+            used_lines = len(target_section.split('\n'))
+            target_section += '\n' + '\n'.join(lines[used_lines:used_lines + more_needed // 40])
+        # 'correct' handling só faz sentido agora sobre o head, mas o
+        # modelo montava contexto próprio; mantém simples.
+
     # Budget: imports + target function, fit within max_chars
-    budget_per_part = max_chars // 2
-    imports = imports[:budget_per_part]
-    target_section = target_section[:budget_per_part]
-    
+    # (30/09) Budget generoso pro target_section: a regra #1 do patch loop
+    # é o old_text casar com o arquivo REAL. Cortar demais garante falha.
+    # Damos ~2/3 ao target e ~1/3 aos imports.
+    budget_imports = max(200, max_chars // 3)
+    budget_target = max_chars - budget_imports
+    imports = imports[:budget_imports]
+
+    # (30/09, C3) Se achamos a função-alvo, anexa o resto do arquivo
+    # (a partir dela, até o budget) como contexto adicional. Sem isso o
+    # modelo recebe SÓ a função e, se escrever um old_text que inclua
+    # linhas vizinhas (dispatcher, decorators), não casa. Mais contexto
+    # real = mais chance do old_text bater.
+    if target_func_name and len(target_section) < budget_target:
+        try:
+            idx = lines.index(target_section.split('\n')[0])
+        except ValueError:
+            idx = 0
+        remaining = lines[idx + len(target_section.split('\n')):]
+        filler = '\n'.join(remaining)
+        target_section = (target_section + "\n\n# ... [continuação do arquivo] ...\n\n"
+                          + filler)[:budget_target]
+
+    target_section = target_section[:budget_target]
+
     result = f"{imports}\n\n# ... [file middle omitted] ...\n\n{target_section}"
     return result[:max_chars]
 
