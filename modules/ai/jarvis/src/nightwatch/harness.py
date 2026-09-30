@@ -363,7 +363,13 @@ def _discover_llm_tasks(call_llm_fn: Callable, project: str = "nixos-ai") -> lis
     try:
         result = subprocess.run(
             ["find", str(project_root), "-name", "*.py", "-type", "f",
-             "-not", "-path", "*/__pycache__/*", "-not", "-path", "*/node_modules/*"],
+             "-not", "-path", "*/__pycache__/*", "-not", "-path", "*/node_modules/*",
+             # (30/09) archive/ = código ARQUIVADO deliberadamente (0 imports,
+             # substituído — ver archive/README.md). Medido: 5/5 tasks da noite
+             # apontam p/ archive/core/*, ou seja a noite inteira gasta
+             # testando/refatorando código MORTO. Não roda, não tem usuário,
+             # não é-blob de melhoria. Fora da lista de alvos.
+             "-not", "-path", "*/archive/*"],
             capture_output=True, text=True, timeout=10,
         )
         rel_files = []
@@ -1850,6 +1856,16 @@ class Harness:
         if not any(_target_is_actionable(f) for f in task.target_files):
             task.skip("targets não são arquivos reais (prosa/diretório) — task de review")
             self.notify(f"⏭️ *Skipped* (alvo não é arquivo)\n{task.description[:70]}")
+            return False
+
+        # (30/09) Código ARQUIVADO não é alvo de melhoria autônoma.
+        # archive/README.md: módulos removidos de propósito (0 imports,
+        # substituídos). Medido: a noite inteira foi gasta em
+        # archive/core/* — testar/refatorar código morto é trabalho sem
+        # valor nenhum. Pula antes de queimar tentativa de LLM.
+        if all(f.startswith("archive/") for f in task.target_files):
+            task.skip("target em archive/ — código arquivado (não roda)")
+            self.notify(f"⏭️ *Skipped* (código arquivado)\n{task.description[:70]}")
             return False
 
         # Dry run
