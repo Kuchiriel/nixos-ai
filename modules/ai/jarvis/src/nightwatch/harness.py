@@ -1405,14 +1405,27 @@ class Harness:
         for f in task.target_files:
             if safety.is_path_protected(f):
                 task.block(f"Protected path: {f}")
-                self.notify(f"🚫 *Task Blocked*\nProtected path: {f}")
-                return False
+                # 30/09: "blocked" sem motivo é beco — o agente (e o
+                # humano) não sabe onde-acting dentro da fronteira. O
+                # guard agora expõe o PORQUÊ; blocked vira "consulta o
+                # guard e reformula" em vez de "desiste".
+                from nightwatch.safety import path_protection_reason
+                _why = path_protection_reason(f) or "consultar nightwatch/safety.py"
+                self.notify(f"🚫 *Task Blocked*\n{f}\n_Razão_: {_why[:180]}")
+                continue
 
         # Check protected projects (defense in depth — discovery filters,
         # but explicit tasks must also be refused)
         if safety.is_project_protected(task.project):
+            from nightwatch.safety import project_protection_reason
+            _why = project_protection_reason(task.project) or "projeto protegido"
             task.block(f"Protected project: {task.project}")
-            self.notify(f"🚫 *Task Blocked*\nProtected project: {task.project}")
+            self.notify(f"🚫 *Task Blocked*\n{task.project}\n_Razão_: {_why[:180]}")
+            return False
+
+        # Se tudo em target_files é protegido, blocked (não seguir tentando).
+        if task.target_files and all(
+                safety.is_path_protected(f) for f in task.target_files):
             return False
 
         # Mark in progress

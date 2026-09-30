@@ -131,6 +131,57 @@ def is_path_protected(path: str) -> bool:
     return False
 
 
+# Por que cada coisa é protegida (30/09): `is_path_protected` responde
+# SIM/NÃO, e o nightwatch viajava um "blocked" sem explicação — não
+# sobra nada pra ele adaptar a proposta ou pro humano entender. Motivos
+# aqui viram consulta: quem é bloqueado LÊ o guard e reformula DENTRO
+# da fronteira (o pedido do dono: antes de desistir, consultar o guard).
+PATH_PROTECT_REASONS = {
+    "flake.nix": "system flake — flags/timers/scripts; editar via PR "
+                 "do dono (AGENTS.md §Perguntar). Trabalhe nos .nix de "
+                 "módulo ou nos scripts, não no flake raiz.",
+    "hosts/*/configuration.nix": "config do host — mudança exige rebuild "
+                 "e autorização do dono (AGENTS.md: ./rebuild-host.sh só "
+                 "com o dono autorizando).",
+    "hosts/*/hardware-configuration.nix": "gerado pelo hardware-config; "
+                 "só regenera (nixos-rebuild hardware-configuration) com "
+                 "o dono presente.",
+    "*.age": "segredo cifrado — nunca ler/apagar/reescrever (PROIBIÇÕES).",
+    "*.secret": "segredo — idem *.age.",
+    "secrets/": "segredos — idem.",
+    "modules/services/llama-cpp.nix": "define como os servidores de LLM "
+                 "sobem (flags, VRAM, evict). Tocar aqui muda o runtime do "
+                 "modelo — editar em modules/ai/models.nix ou nos perfis.",
+    "modules/ai/models.nix": "FONTE ÚNICA das flags/sampling/perfis de "
+                 "modelo (AGENTS.md). Mudança de flag é decisão de "
+                 "sistema — propose no doc, aplique com o dono.",
+}
+
+PROJECT_PROTECT_REASONS = {
+    "nixpkgs": "fork upstream — track only (AGENTS.md). Fix upstream, "
+               "nunca editar aqui.",
+    "models": "GGUFs binários (GBs) — não é código. MODEL-SAFETY.md.",
+    "llama.cpp": "upstream — track only; fixes no wrapper do repo.",
+    "ik_llama.cpp": "fork com otimizações — só via fluxo explícito e "
+                    "medição (docs/models/BINARIES.md).",
+    "prism-bin": "binários pré-compilados — trocar via artefato novo, "
+                 "não editando aqui.",
+}
+
+
+def path_protection_reason(path: str) -> str | None:
+    """Motivo legível se `path` for protegido, senão None."""
+    for pat in PROTECTED_PATHS:
+        if fnmatch(path, pat) or path.startswith(pat.rstrip("*")):
+            return PATH_PROTECT_REASONS.get(pat)
+    return None
+
+
+def project_protection_reason(project: str) -> str | None:
+    """Motivo legível se o projeto for protegido, senão None."""
+    return PROJECT_PROTECT_REASONS.get((project or "").strip().lower())
+
+
 @dataclass
 class GateResult:
     """Result of a safety gate check."""
