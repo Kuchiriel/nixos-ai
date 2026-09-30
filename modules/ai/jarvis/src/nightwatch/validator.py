@@ -86,11 +86,28 @@ def discover_test_files() -> list[str]:
     candidates = [
         project_root / "tests",
         project_root / "test",
+        # (30/09) Layout Nix do próprio nixos-ai: os testes NÃO ficam em
+        # tests/ nem na raiz — ficam em modules/ai/jarvis/tests/. Sem esta
+        # linha, discover_test_files() devolvia [] pra工作 no nixos-ai, e o
+        # run_targeted_tests caía no fallback "roda a suíte inteira" — que
+        # pegava falha PRÉ-EXISTENTE e reprovava o patch do modelo por
+        # algo que ele não fez. Lição (1): verifier que não acha o
+        # próprio teste é o instrumento mentindo, não o modelo errando.
+        project_root / "modules" / "ai" / "jarvis" / "tests",
     ]
     for test_dir in candidates:
         if test_dir.exists():
-            return [str(f) for f in test_dir.glob("test_*.py")]
-    return []
+            found = [str(f) for f in test_dir.glob("test_*.py")]
+            if found:
+                return found
+    # (30/09) Varredura ampla como último recurso: qualquer test_*.py
+    # sob o root (pega layouts aninhados/raros que os candidatos fixos
+    # acima não cobrem). Barato (uns walked dozens de dirs) e só roda
+    # quando nada mais achou — evita "verifier não achou teste" que
+    # degrada pra suíte errada.
+    wide = [str(f) for f in project_root.rglob("test_*.py")
+            if "__pycache__" not in f.parts and "node_modules" not in f.parts]
+    return wide
 
 
 def validate_changed_files(files: list[str]) -> ValidationReport:
