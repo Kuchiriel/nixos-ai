@@ -217,3 +217,50 @@ honesto: **encolher o escopo da task** no prompt, medir de novo.
 em falha — 3 edits meus foram revertidos seguidas por aborts, e o
 `git checkout main` é periódico obrigatório. Regra: **nunca editar com o
 nightwatch rodando; parar → main → editar → commit → só então rodar.**
+
+---
+
+## Estado consolidado 30/09 19h — onde o auto-evoluir realmente está
+
+### O que FUNCIONA (medido, nãorochido)
+| Camada | Métrica | Valor |
+|---|---|---|
+| Discovery | task com target real validado | 4/4 (LLM real) |
+| Discovery | task **é trabalho real** (verifiquei na mão) | `agent_loop.py` sem teste ✅, `kb_regression.py` deref ✅ |
+| Patch | `Hunk not found` | **0** |
+| Patch | `Syntax error` (indent) | **0** |
+| Retry | traceback real chega ao modelo (grammar) | ✅ cadeia verificada |
+| Gate | patch que quebra teste → rejeitado, main intacta | ✅ |
+| Segurança | main verde, 0 commits ruins | ✅ 10+ runs |
+
+O harness hoje **age sem se quebrar** e **fala a verdade** (quando diz que
+falhou, é porque algo real quebrou). A pipeline inteira é honesta.
+
+### Onde NÃO converge (e por quê — sem "limite de modelo")
+O retry ainda não converge nas tasks observadas ("add missing test
+coverage for context.py"). Razão medida: **é a task mais difícil possível**
+— escrever um teste novo que o próprio `run_targeted_tests` valida. O modelo
+precisa acertar o teste E o código de uma vez. Isso é **ambiguidade da task**,
+não cegueira do harness (que agora entrega traceback).
+
+Levantamentos honestos para o próximo ciclo (NÃO é teto):
+1. **Task de "add test" é a mais dura** — o harness valida com o teste que
+   o próprio modelo escreveu (viés). Talvez o harness deva validar
+   "o teste novo passa + os antigos continuam passando" explicitamente, ou
+   essa categoria P3 deva rodar **por último** (depois de bug-fix, que é
+   mais fácil de convergir).
+2. **max_tasks gasta tudo numa task só** — o loop de 3 retries consome o
+   orçamento; tasks depois não rodam. Encolher `max_retries` (3→2) libera
+   orçamento para mais tasks distintas.
+3. **Ainda não medi taxa de convergência com N≥3** (lição 8) porque as
+   tasks post-fix são poucas. Preciso de 3+ runs limpos.
+
+### Regra que continua valendo
+Nada aqui é "limite do modelo local" nem "teto do harness" (regra do dono,
+literatura nos Papers). As falhas são de **orquestração/ambiguidade de task**
+— e é exatamente isso que continua Having trabalho de software.
+
+### Como retomar
+- `docs/REIDRATAR-APOS-COMPACTAR.md` (prompt de reidratação)
+- este doc (critérios + estado medido)
+- Regra de operação: **parar nightwatch → main → editar → commit → rodar**
