@@ -274,6 +274,14 @@ def _discover_scripted_tasks() -> list[Task]:
         try:
             scripted_tasks = cat_fn()
             for st in scripted_tasks:
+                # (30/09) Task sem target_path não tem arquivo pro patch
+                # loop ler → _request_patch morre em "No readable target
+                # files" (task de review tipo "586 functions in core/" não
+                # nomeia UM arquivo). Não é tarefa de patch: descarta aqui
+                # em vez de queimar 3 tentativas de LLM. Mesmo espírito do
+                # fix do discovery (não alimentar o loop com inaplicável).
+                if not st.target_path:
+                    continue
                 # Convert categories.Task → task_queue.Task
                 tasks.append(Task(
                     id=st.id,
@@ -445,6 +453,11 @@ Return JSON array."""
                         priority=5,
                         risk="low",
                         status=TaskStatus.READY.value,
+                        # (30/09) LLM que devolve só string não diz qual
+                        # arquivo mexer → task inaplicável pro patch loop.
+                        # target_files fixo no único arquivo que o harness
+                        # sempre tem à mão (o próprio fonte) seria falsificar
+                        # a task; melhor deixar o filtro de execução lidar.
                     ))
                 elif isinstance(item, dict):
                     tasks.append(Task(
@@ -466,6 +479,46 @@ Return JSON array."""
 # ═══════════════════════════════════════════════════════════════════════════════
 # File Editing (via Patcher + SafeEditor)
 # ═══════════════════════════════════════════════════════════════════════════════
+
+def _target_is_actionable(target: str) -> bool:
+    """(30/09) Um target só é 'de patch' se for um ARQUIVO real (patch) ou
+    um path limpo de arquivo novo (CREATE).
+
+    Os geradores de task alimentavam target_path com DESCRIÇÃO em prosa,
+    não caminho: 'Todos os módulos que usam `config...`', '`AGENTS.md`,
+    `HANDOFF.md`' (backticks + vírgula), 'modules/.../core/' (diretório).
+    _read_file_for_llm devolvia ERROR → task virava 'CREATE candidate' →
+    o modelo criava um arquivo chamado 'Todos os módulos...' → falha.
+
+    Regras (conservadoras — na dúvida, deixa passar, o safe_editor é a
+    última rede):
+      - resolve pra arquivo existente E legível  → PATCH
+      - não existe mas parece path de código
+        (sem espaços/prosa, tem extensão de código) → CREATE
+      - diretório / prosa / não-arquivo           → não acionável
+    """
+    try:
+        t = (target or "").strip()
+        if not t:
+            return False
+        # resolve path
+        full = Path(t) if t.startswith("/") else _resolve_file_path(t)
+        if full.is_file():
+            return True
+        if full.is_dir():
+            return False  # diretório não é alvo de patch
+        # não existe: CREATE válido só se PARECE caminho de código
+        # (sem espaços, sem vírgula-lista, extensão conhecida)
+        if any(ch.isspace() for ch in t) or "," in t or "`" in t:
+            return False
+        if t.endswith("/"):
+            return False
+        ext = Path(t).suffix.lower()
+        return ext in {".py", ".md", ".nix", ".json", ".yaml", ".yml",
+                       ".toml", ".sh", ".txt", ".cfg", ".ini"}
+    except Exception:
+        return False
+
 
 def _read_file_for_llm(path: str, max_chars: int = 0, task_description: str = "") -> str:
     """Read a file for LLM context, with path resolution.
@@ -1430,6 +1483,19 @@ class Harness:
 
         # Mark in progress
         self.queue.update_task(task.id, status=TaskStatus.IN_PROGRESS.value)
+
+# (30/09) Task sem target_files não tem o que o patch loop ler →
+# _request_patch morre em "No readable target files" e queima 3
+        # tentativas de LLM (~80s cada) pra nada. Task de review ("586
+        # functions in core/") não nomeia UM arquivo; LLM que devolve só
+        # string também não. Não é tarefa de patch — marca e segue em vez
+        # de retry cego. (CREATE com caminho explícito continua: vem em
+        # target_files e _read_file_for_llm devolve ERROR → treated as
+        # CREATE candidate, que é o caminho certo.)
+        if not any(_target_is_actionable(f) for f in task.target_files):
+            task.skip("targets não são arquivos reais (prosa/diretório) — task de review")
+            self.notify(f"⏭️ *Skipped* (alvo não é arquivo)\n{task.description[:70]}")
+            return False
 
         # Dry run
         if self.config.dry_run:
