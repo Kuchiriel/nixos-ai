@@ -404,9 +404,44 @@ def _discover_llm_tasks(call_llm_fn: Callable, project: str = "nixos-ai") -> lis
     except Exception:
         pass
 
+    # (30/09) GROUND TRUTH dos testes existentes. Causa medida: o LLM
+    # propunha "Add unit tests for AST cache" — mas o harness SÓ lhe
+    # mostrava `find *.py` do código-fonte, nunca os arquivos de teste.
+    # Ele não tinha como saber que o teste já existia, então inventava
+    # trabalho já feito (task que nunca converge: o patch "cria" o que
+    # já está lá). Não é o modelo propose besteira — é o harness
+    # escondendo a evidência que a tornaria besta impossível
+    # (arxiv-2607.28802: falha de execução/orquestração, não de
+    # conhecimento).
+    tests_context = ""
+    try:
+        t = subprocess.run(
+            ["find", str(project_root), "-name", "test_*.py", "-type", "f",
+             "-not", "-path", "*/__pycache__/*"],
+            capture_output=True, text=True, timeout=10,
+        )
+        test_files = []
+        for line in t.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            rel = _normalize_target(line, project_root)
+            if rel:
+                test_files.append(rel)
+        test_files = sorted(set(test_files))
+        if test_files:
+            tests_context = (
+                "\nEXISTING TEST FILES (these tests ALREADY EXIST — do "
+                "NOT propose 'add tests for X' if a test file for X is "
+                "here; instead look for GAPS: a source file with NO "
+                "matching test):\n"
+                + "\n".join(f"  {x}" for x in test_files[:40])
+                + "\n")
+    except Exception:
+        pass
+
     prompt = f"""Analyze this Python codebase and identify 3-5 improvement tasks.
 
-{workspace_context}{git_context}
+{workspace_context}{git_context}{tests_context}
 Real source files (relative to project root — cite these EXACT paths in
 target_files, do NOT invent files that are not listed here):
 {chr(10).join(files[:30])}
@@ -421,9 +456,27 @@ For each task provide JSON:
   "persona": "which persona should handle this"
 }}
 
-Focus on: error handling, code quality, security, missing tests, documentation, performance.
-Prioritize tasks that improve reliability and reduce technical debt.
-Every task MUST cite real target_files from the list above.
+Focus on, in this ORDER of value:
+  1. ACTUAL DEFECTS: unhandled exceptions, None dereference, off-by-one,
+     resource leaks, race conditions, wrong conditionals — a concrete
+     input that produces a wrong/crashed result.
+  2. SECURITY: unvalidated input, secrets in code, unsafe eval/exec.
+  3. TEST GAPS: a source file listed above with NO matching file in
+     EXISTING TEST FILES.
+  4. Only then: documentation, style, speculative refactors.
+
+RULES:
+- Every task MUST cite real target_files from the source list above.
+- Do NOT propose work that is already done: if a test file for the
+  module already exists, do not "add tests"; if the function already
+  has type hints/docstrings, do not "add type hints/docstrings".
+- AVOID large speculative refactors ("consolidate X", "extract Y",
+  "restructure Z"). They are ambiguous, they break working code, and
+  they are hard to verify. Prefer a SMALL, DEFINITE defect fix that
+  you can point at with exact lines.
+- If you find no real defects, return an empty array [] — that is a
+  valid, useful answer. Do not invent work to fill the list.
+
 Return JSON array."""
 
     # Call LLM with timeout protection. 300s: prefill de prompt
