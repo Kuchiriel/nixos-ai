@@ -228,6 +228,12 @@
           python313Packages.playwright
           playwright-driver  
           
+          # Documentos/PDF/OCR (vendas, propostas, guias)
+          pandoc
+          tesseract
+          poppler-utils
+          bind.dnsutils # dig/host/nslookup (DNS: registro.br, SPF/DKIM/DMARC)
+
           # Nomes corrigidos também no devShell para evitar quebra de variáveis
           kilo
           antigravity-ide
