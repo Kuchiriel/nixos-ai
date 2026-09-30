@@ -184,3 +184,36 @@ Nunca "limite do modelo local" / "teto do harness". Se falhar: ler
 ~/Books + rag + online; perguntar **conhecimento vs execução**; se
 execução → conserta no harness. Só N≥3 tentativas **E** literatura. A
 régua do dono: **paridade 1:1 de ENTREGA** com API (não velocidade).
+
+---
+
+## C5 — sinal entregue, convergência ainda não medida (30/09 19h)
+
+O que era o **pre-requisito** do RHO (o harness tem que entregar o erro
+ao modelo no caminho que ele realmente usa) está **feito e verificado**:
+
+- O caminho **grammar/JSON** é o que o nightwatch **sempre** usa (o de
+  texto livre nunca é alcançado). Ele **não recebia** `previous_errors`
+  — então o traceback, que eu tinha acabado de montar, **nunca chegava**
+  ao modelo no retry real. O loop estava cego no caminho que ele roda.
+- `_request_json_patch()` agora aceita `previous_errors`; `error_section`
+  entra no prompt JSON; o caller passa. Cadeia verificada in-process.
+- O traceback real (`ValidationStep.output`) entra em `previous_errors`
+  (antes só iam contagens "2 passed, 2 failed"); truncamento 300→2500.
+
+Run pós-fix: retries **continuam sem convergir** — mas agora são retries
+**informados** (o modelo vê a falha), não cegos. As tasks em questão
+("refactor L9 benchmark runner", "centralize logging") são difíceis e o
+modelo quebra o teste. Isso é **trabalho real** (patch aplica, teste
+reprova), não harness quebrado.
+
+**Não chamo isso de "limite do modelo"** (regra do dono). É C5 ainda
+**aberto**: converge exige (a) sinal ✅, (b) task com escopo menor
+(refactor grande é ambíguo — talvez o harness deva quebrar task grande
+em hunks menores), (c) N≥3 pra medir taxa (lição 8). Próximo experimento
+honesto: **encolher o escopo da task** no prompt, medir de novo.
+
+**Nota de operação (3a vez):** nightwatch recria branch de task e ABORTA
+em falha — 3 edits meus foram revertidos seguidas por aborts, e o
+`git checkout main` é periódico obrigatório. Regra: **nunca editar com o
+nightwatch rodando; parar → main → editar → commit → só então rodar.**
