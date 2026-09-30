@@ -267,3 +267,34 @@ funciona") não era o obstáculo — era o *sinal*. A solução não foi
 contornar o sandbox, foi **dar o trabalho a quem tem o privilégio**
 (systemd). Cegar o erro com `capture_output` foi o que escondeu o bug
 por um dia inteiro.
+
+### ✅ Fechada a 4a camada: LLM discovery emite target_files REAIS (30/09)
+
+Falta (2) da lista — "o discovery por LLM precisa emitir target concreto"
+— era **o único caminho pra task realmente patchável**. Fechado:
+
+- `_normalize_target()`: tira crase/aspas/vírgula, absoluto→relativo ao
+  root (o que o patch loop resolve).
+- `_resolve_llm_targets()`: exige arquivo **EXISTENTE** (patch), com
+  fallback por basename (`agent.py`→caminho completo). Path inventado é
+  **descartado**. NÃO reusa `_target_is_actionable` de propósito: ela
+  aceita path inexistente como CREATE, e isso faria o modelo criar
+  arquivo que ninguém pediu — discovery é "melhorar o que existe".
+- prompt: entrega ao LLM a lista REAL de arquivos acionáveis (relativos)
+  e manda citar exatamente dela (antes: só 15 absolutos → chutava).
+- task dict sem alvo acionável não entra na fila.
+
+**Verificado com o LLM real (bonsai, filtro do dia):** 5 tasks, todas
+com target validado e resolúvel (`archive/core/agent_loop.py`, …).
+Nada de path inventado, nada de prosa.
+
+Bug que meu PRÓPRIO teste pegou antes do commit: o path inventado
+`.py` passava como CREATE válido. Segundo a lição (1): verifier/teste
+antes de confiar no código — funcionou.
+
+### 🔓 O que destrava: nightwatch pode SE AUTO-CORRIGIR
+Com patch loop recebendo target real, o ciclo fecha:
+**task válida → patch aplica → teste roda → feedback real → lição vira
+aprendizado.** É o loop do RHO (arXiv 2606.06324) que faltava. Ainda
+falta o harness *usar* o feedback (hoje ele só grava lição no
+AGENTS.md), mas a pre-condição (patch aplicável) está resolvida.
