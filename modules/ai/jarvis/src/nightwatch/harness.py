@@ -865,6 +865,7 @@ def _resolve_file_path(path: str) -> Path:
 def _request_json_patch(
     task_description: str,
     file_contents: dict[str, str],
+    previous_errors: list[str] | None = None,
 ) -> tuple[bool, list, list[str]]:
     """Patch via grammar JSON (determinístico) — antes do texto livre.
 
@@ -916,8 +917,23 @@ def _request_json_patch(
     # 2) Dizer explicitamente que a indentação é sagrada + exemplo. O
     #    modelo não erra por não saber Python, erra por re-indentar ao
     #    "otimizar". O harness deve dizer isso.
+    # (30/09, C5-pre) O caminho JSON (grammar) é o que o nightwatch SEMPRE
+    # usa (o de texto livre nunca é alcançado). Ele não recebia
+    # previous_errors — então o traceback que a gente passou a montar
+    # NUNCA chegava ao modelo no retry grammar. O loop RHO estava cego
+    # justamente no caminho que ele roda. Agora o erro entra aqui.
+    error_section = ""
+    if previous_errors:
+        error_section = (
+            "\n\n⚠️ PREVIOUS ATTEMPT FAILED — read the actual failure "
+            "below, do NOT repeat it:\n"
+            + "\n".join(f"  - {e[:2500]}" for e in previous_errors[-3:])
+            + "\n\nFix the ROOT CAUSE shown in the failure output, not the "
+              "symptom.\n"
+        )
     prompt = (
         f"TASK: {task_description}\n\nFILES:\n{files_bit}\n\n"
+        f"{error_section}"
         "RULES:\n"
         "1. old_text MUST be copied character-for-character from the "
         "file above, INCLUDING exact leading whitespace/indentation.\n"
@@ -1126,7 +1142,7 @@ FILES:
     # (1 chamada LLM em vez de 2). Só usa se gerar ≥1 hunk com
     # old_text não-vazio; senão cai no texto livre abaixo.
     json_ok, json_patches, _ = _request_json_patch(
-        task_description, file_contents)
+        task_description, file_contents, previous_errors=previous_errors)
     if json_ok and any(h.old_text.strip()
                        for p in json_patches for h in p.hunks):
         return True, json_patches, []
