@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 from jarvis.core.provider_registry import CANONICAL_CONTEXT  # fonte única de context budget
 from pathlib import Path
@@ -55,6 +56,30 @@ TRUNCATE_LIMITS = {
 # State directory for logging
 STATE_DIR = Path.home() / ".local/state/jarvis"
 CONTEXT_LOG = STATE_DIR / "context_usage.jsonl"
+
+
+def ctx_derived_max_tokens(ctx: Any) -> int:
+    """Orçamento de geração por turno derivado do ctx do models.nix.
+
+    Morava em core/agent.py (dono 19/09: budget fixo 2048 truncava
+    writes encadeados no L8). **Movido pra cá** (29/09): o nightwatch
+    precisa do mesmo cálculo e não pode importar core.agent — a
+    fronteira do supervisor proíbe o nightwatch de puxar o loop
+    (test_supervisor_does_not_own_the_loop). Este é o módulo neutro
+    de budget; agent.py re-exporta pra não quebrar import existente.
+
+    Tudo em frações do ctx: turno = ctx//12 (~8% — sobra p/ prompt +
+    histórico do ring em ~10 turns). Proporcional puro: ctx pequeno
+    ganha budget pequeno (coerente — janela menor, menos folga).
+    Sem ctx válido → 2048 (status quo).
+    """
+    try:
+        ctx = int(ctx)
+    except (TypeError, ValueError):
+        return 2048
+    if ctx <= 0:
+        return 2048
+    return max(1, ctx // 12)
 
 
 def query_server_context_size() -> int:

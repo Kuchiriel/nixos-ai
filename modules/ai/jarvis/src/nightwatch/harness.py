@@ -667,19 +667,32 @@ def _request_json_patch(
         import time as _t
         print("[patcher] json-patch start (grammar)", file=sys.stderr)
         _t0 = _t.monotonic()
-        # max_tokens 29/09: 1024 TRUNCAVA o JSON da gramática sempre no
-        # mesmo ponto ("Unterminated string at char 2159") — 3 arquivos de
-        # contexto (até 4000 chars cada) + hunks de patch não cabem em 1024
-        # tokens, então a resposta morre no meio de uma string e o parse
-        # JSON falha. Grammar NÃO limita tamanho, só forma: sobe pra dar
-        # cabida real ao patch (~3× o conteúdo de entrada).
+        # max_tokens 29/09 (bug real, dono 19/09 já tinha o mecanismo):
+        # 1024 TRUNCAVA o JSON da gramática sempre no mesmo ponto
+        # ("Unterminated string at char 2159"). Grammar limita forma, não
+        # tamanho. Mas 4096 hardcoded seria OUTRO chute no mesmo buraco —
+        # a fonte de verdade é o ctx do models.nix, e o helper que traduz
+        # ctx → budget POR TURNO (`ctx//12`, com piso) já existe em
+        # core/agent.py e é usado pelo Agent. O nightwatch herda dele:
+        # mesmo modelo, mesmo orçamento, sem número mágico local.
+        try:
+            from jarvis.core.context_budget import ctx_derived_max_tokens
+            from jarvis.core.config import get_config as _gc
+            from jarvis.core.model_registry import ModelRegistry as _MR
+            _e = _MR.load().get(_gc().llm_model)
+            _ctx = (_e.raw or {}).get("ctx") if _e else None
+            _mt = max(4096, ctx_derived_max_tokens(_ctx))
+        except Exception:
+            _mt = 4096
+        print(f"[patcher] json-patch budget={_mt} (ctx-derived, piso 4096)",
+              file=sys.stderr)
         resp = LLMClient(Config()).chat_with_tools(
             messages=[
                 {"role": "system",
                  "content": "You emit patch JSON only."},
                 {"role": "user", "content": prompt}],
             temperature=0.0,
-            max_tokens=4096,
+            max_tokens=_mt,
             extra=schema,
         )
         print(f"[patcher] json-patch done in {_t.monotonic() - _t0:.1f}s",

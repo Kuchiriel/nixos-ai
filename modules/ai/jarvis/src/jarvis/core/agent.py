@@ -65,23 +65,13 @@ def detect_profile(model_id: str) -> dict[str, Any]:
         return {"name": "default", "max_tokens": 2048, "max_tokens_per_turn": 2048, "temperature": 0.0, "tool_choice": "auto"}
 
 
-def _ctx_derived_max_tokens(ctx: Any) -> int:
-    """Orçamento de geração por turno derivado do ctx do models.nix
-    (dono 19/09: budget fixo 2048 truncava writes encadeados no L8; cap
-    deve escalar com o ctx servido, não ser chutado à mão).
-    Tudo em frações do ctx (test_context_drift proíbe literais de tamanho
-    fora da fonte): turno = ctx//12 (~8% — sobra p/ prompt + histórico do
-    ring em ~10 turns). Proporcional puro: ctx pequeno ganha budget
-    pequeno (coerente — janela menor, menos folga). @49k → 4096.
-    Sem ctx válido → 2048 (status quo ante).
-    """
-    try:
-        ctx = int(ctx)
-    except (TypeError, ValueError):
-        return 2048
-    if ctx <= 0:
-        return 2048
-    return max(1, ctx // 12)
+# 29/09: a implementação foi para core/context_budget.py (módulo neutro
+# de budget) porque o nightwatch precisa do MESMO cálculo e a fronteira
+# do supervisor proíbe o nightwatch de importar este módulo (o loop).
+# Re-exportado aqui para não quebrar imports/uso existentes.
+from jarvis.core.context_budget import (  # noqa: E402
+    ctx_derived_max_tokens as _ctx_derived_max_tokens,
+)
 
 
 def _registry_tier_profile(model_id: str) -> dict[str, Any] | None:
