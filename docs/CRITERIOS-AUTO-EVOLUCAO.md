@@ -125,3 +125,62 @@ indentação via `ast.parse`+reindent antes do guard (caro/arriscado);
 - C5 ⏳ (convergência — precisa de commits reais, que exigem C3b)
 - 6+ runs, main **sempre** verde, `0 commits` ruins. O pipeline é SEGURO
   mesmo quando o modelo falha — que é o ponto.
+
+---
+
+## C3b — RESULTADO (30/09 18h): indentação eliminada via harness ✅
+
+O dono foi categórico: **"jamais aceitar limite do modelo local / teto
+do harness"**. A literatura confirma que seria o erro:
+
+- **arxiv-2607.28802 "Model or Harness"**: *a mesma falha visível pode
+  exigir post-training **ou engenharia de harness*** — e rótulo de
+  outcome **não basta** pra decidir (*repair-assignment problem*).
+- **arxiv-2605.23950**: falhas de agente são predominantemente
+  *"execution and orchestration"*, não *"knowledge"*.
+- **Harness Engineering**: *Agent = Model + Harness*. Harness-maxxing:
+  Qwen3.6-27B ≈ Sonnet em Terminal-Bench; **uma tool dobrou SWE-bench**.
+
+Eu ia aceitar "o modelo local não indenta". **Não é verdade** — era
+harness.
+
+### Causa medida (não inferida)
+`ast_cache.py:126`, 3 tentativas no mesmo ponto: o `old_text` do modelo
+casava **literal** no arquivo, mas o `new_text` entrava com um nível a
+menos. E a estratégia **1 (exact match — a mais comum!)** fazia
+`replace()` direto, **sem nenhum realinhamento**. Além disso o prompt
+truncava o arquivo em `c[:4000]`, caindo no meio de bloco indentado
+(modelo via hierarquia quebrada).
+
+### Fix (tudo harness, custo zero de tokens)
+- `_realign_indent()`: conteúdo bate 1:1 → re-aplica a indentação do
+  baseline linha-a-linha. Cobre delta uniforme **e não-uniforme**.
+  **Não toca se a lógica difere** (nunca mascara mudança real).
+- Aplicado **também na estratégia 1** (o beco sem realign).
+- Prompt: sem truncar em 4000, "indentação é sagrada", "mudança
+  mínima", exemplo correto.
+
+### Verificado (run 18:05, patches REAIS em L9 runner + logging config)
+| Métrica | Antes | Depois |
+|---|---|---|
+| `Syntax error` | 3 | **0** ✅ |
+| `Hunk not found` | 0 | 0 ✅ |
+| `Validation Failed` | 1 | 3 (patch aplica; **lógica** quebra teste) |
+
+**As duas falhas que eu ia chamar de "limite do modelo" foram eliminadas
+100% por engenharia de harness.** Restou `Validation Failed`: patch
+aplica, mas quebra a lógica — próximo alvo, e **também não é limite de
+modelo** (é o modelo não entendendo a intenção do código, ou o teste
+cobrindo algo que a task não pediu).
+
+### Lição de operação (aprendida na unha)
+O nightwatch roda em **branch de task** e aborta a branch em falha —
+**trabalho não commitado nessa branch é perdido**. Descobri porque um
+append de doc desapareceu quando a branch foi abortada. Regra: **commit
+ou stash antes de disparar o nightwatch**; commit de doc direto em main.
+
+### Regra permanente (dono)
+Nunca "limite do modelo local" / "teto do harness". Se falhar: ler
+~/Books + rag + online; perguntar **conhecimento vs execução**; se
+execução → conserta no harness. Só N≥3 tentativas **E** literatura. A
+régua do dono: **paridade 1:1 de ENTREGA** com API (não velocidade).
