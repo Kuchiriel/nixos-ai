@@ -228,3 +228,42 @@ precisam evoluir pra emitir path de arquivo em vez de prosa.
    pra task realmente patchável).
 3. Timer segue **desabilitado** (decisão do dono 16/09) — decisão nova
    depende de (1) e (2), senão a run só queima GPU em discovery e skip.
+
+### ✅ Ciclo do MoE 100% no systemd (30/09, fim da pendência 1)
+
+A lista de pendências tinha "MoE não auto-sobe no serviço". **Resolvido
+— e a raiz era mais profunda que PATH.** Diagnóstico completo:
+
+1. O `sudo` do PATH do serviço (`/run/current-system/sw/bin`) é symlink
+   pro binário do **store, sem setuid** → morria com "deve ter bit
+   setuid". Wrapper setuid vive em `/run/wrappers/bin`.
+2. `NoNewPrivileges=yes` + `RestrictSUIDSGID=true` no unit → **o kernel
+   bloqueia escalada setuid**, então `sudo` é *estruturalmente
+   impossível* no serviço (rc=1, "sem novos privilégios"). Não era PATH,
+   era o sandbox (que é proposital).
+3. `sudo` com `capture_output` sem checar rc **engolia o erro** → o
+   nightwatch dormia 30min achando que o MoE subia.
+
+**Correção (arquitetural, não remendo):** quem tem privilégio é o
+systemd, então ele gerencia o ciclo:
+- `Wants=`/`After=` llama-cpp-ik no nightwatch.service → systemd sobe o
+  MoE (Type=simple; o harness só espera :8084 healthy).
+- `ExecStopPost = "+/bin/sh -c 'systemctl stop llama-cpp-ik; systemctl
+  start llama-cpp-server'"` → o `+` roda com root (senão herda
+  User=nixos → Access denied). Devolve a máquina pós-run: MoE para,
+  router volta. ExecStart segue User=nixos, sandbox intacto.
+- `ensure_strong_llm()`: se a unidade já está activating (systemd puxou),
+  pula o gate de RAM (que dispararia DEFER espúrio durante o load de
+  16GB do 35B) e só espera healthy.
+- harness: restore best-effort sem privilégio; `_sudo_systemctl` fica
+  como fallback pra run manual (fora do timer/sandbox).
+
+**Verificado end-to-end (tudo DOWN → run):** systemd sobe MoE+router,
+run executa, ExecStopPost devolve. Final: **MoE inactive, router
+active**, `Deactivated successfully`, zero erro no log.
+
+**Lição que vale mais que o fix:** o hardening do serviço (o "sudo não
+funciona") não era o obstáculo — era o *sinal*. A solução não foi
+contornar o sandbox, foi **dar o trabalho a quem tem o privilégio**
+(systemd). Cegar o erro com `capture_output` foi o que escondeu o bug
+por um dia inteiro.
