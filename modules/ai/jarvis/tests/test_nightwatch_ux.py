@@ -52,9 +52,19 @@ def test_evidence_verdict() -> None:
     assert not ok
 
 
-def test_discovery_retries_once_then_gives_up(capsys) -> None:
+def test_discovery_retries_once_then_gives_up(capsys, tmp_path, monkeypatch) -> None:
     import concurrent.futures
     from nightwatch import harness as H
+
+    # (30/09) hermético: o discovery valida target_files contra um arquivo
+    # REAL (a validação é o que garante task patchável). Este teste é
+    # sobre RETRY, então cria um arquivo de verdade num tmp_path e aponta
+    # find_repo_root pra ele — assim não depende do layout do repo nem
+    # quebra no sandbox de build (onde modules/ai/... não existe).
+    real = tmp_path / "sample.py"
+    real.write_text("x = 1\n")
+    monkeypatch.setattr(H, "find_repo_root", lambda: tmp_path)
+    monkeypatch.setattr(H, "_resolve_file_path", lambda p: tmp_path / p)
 
     calls = []
 
@@ -62,13 +72,9 @@ def test_discovery_retries_once_then_gives_up(capsys) -> None:
         calls.append(1)
         if len(calls) == 1:
             raise concurrent.futures.TimeoutError()
-        # (30/09) target_files com arquivo REAL: o discovery agora valida
-        # o alvo e descarta task sem path acionável. Este teste é sobre
-        # RETRY (não sobre validação), então o fixture só precisa passar
-        # pelo filtro.
         return json.dumps([{
             "description": "Create missing unit tests for login handler",
-            "target_files": ["modules/ai/jarvis/src/jarvis/core/agent.py"],
+            "target_files": ["sample.py"],
             "acceptance_criteria": "pytest passes",
             "priority": 5, "risk": "low"}])
 
@@ -99,12 +105,21 @@ def test_extract_json_array_tolerant() -> None:
     assert len(got) == 1 and "[bracket]" in got[0]["description"]
 
 
-def test_discovery_parses_fenced_response() -> None:
+def test_discovery_parses_fenced_response(tmp_path, monkeypatch) -> None:
     import json
     from nightwatch import harness as H
 
+    # (30/09) hermético — ver test_discovery_retries_once_then_gives_up:
+    # o discovery valida target_files contra arquivo real, então este
+    # teste de PARSE usa um tmp com arquivo de verdade (independe do
+    # layout do repo / sandbox de build).
+    real = tmp_path / "sample.py"
+    real.write_text("x = 1\n")
+    monkeypatch.setattr(H, "find_repo_root", lambda: tmp_path)
+    monkeypatch.setattr(H, "_resolve_file_path", lambda p: tmp_path / p)
+
     arr = [{"description": "Create missing unit tests for login handler",
-            "target_files": ["modules/ai/jarvis/src/jarvis/core/agent.py"],
+            "target_files": ["sample.py"],
             "acceptance_criteria": "pytest passes",
             "priority": 5, "risk": "low"}]
     tasks = H._discover_llm_tasks(
