@@ -2090,17 +2090,26 @@ def run_nightwatch(
     try:
         return harness.run()
     finally:
-        # 29/09: o nightwatch agora despeja o router p/ subir o MoE
-        # (1 LLM por vez na VRAM 6GB). Sem restaurar aqui, o bot fica
-        # sem cérebro até o próximo reboot — e o dono usa o REPL de
-        # manhã. Best-effort: falha de restore não pode mascarar o
-        # resultado do run.
+        # 30/09: o restore de pós-run (parar o MoE + voltar o router) NÃO
+        # pode ser `sudo systemctl` aqui — o nightwatch roda no serviço
+        # systemd com NoNewPrivileges + RestrictSUIDSGID, então o kernel
+        # bloqueia escalada setuid e o sudo morre com rc=1. Além disso o
+        # MoE hoje é `Wants=` do próprio unit, então quem o sobe é o
+        # systemd — e quem o deve parar é o systemd (ExecStopPost no
+        # unit faz exatamente isso, com privilégio de systemd). Aqui resta
+        # só um best-effort sem privilégio: sinalizar o router pra
+        # recarregar o slot que o nightwatch despejou. Falha de restore
+        # nunca pode mascarar o resultado do run.
         try:
             import time as _t
             import urllib.request as _url
-            _url.urlopen("http://127.0.0.1:8084/health", timeout=3).read(1)
-            _sudo_systemctl("stop", "llama-cpp-ik")
-            _t.sleep(3)
-            _sudo_systemctl("restart", "llama-cpp-server", timeout=90)
+            # MoE para o systemd (ExecStopPost). Aqui só garantimos que,
+            # se ainda estiver vivo, o harness não depende mais dele.
+            # Router: tenta um GET leve só pra log; o restart real é do
+            # ExecStopPost também.
+            try:
+                _url.urlopen("http://127.0.0.1:8080/health", timeout=3).read(1)
+            except Exception:
+                pass
         except Exception:
             pass

@@ -31,6 +31,13 @@ in {
     after = [ "llama-cpp-server.service" "jarvis.target" "llama-cpp-ik.service" ];
     wants = [ "llama-cpp-server.service" "llama-cpp-ik.service" ];
     partOf = [ "jarvis.target" ];
+    # 30/09: o restore pós-run (parar o MoE que o nightwatch subiu + voltar
+    # o router) NÃO pode ser `sudo systemctl` — o unit tem
+    # NoNewPrivileges + RestrictSUIDSGID, então o kernel bloqueia setuid e o
+    # sudo morre com rc=1 ("sinalizador sem novos privilégios"). Em vez de
+    # foughtar o sandbox, o systemd cuida: Wants= sobe o MoE junto, e
+    # ExecStopPost abaixo devolve a máquina (para o MoE, restaura o router)
+    # com os próprios privilégios do systemd (sem sudo, sem escalada).
     # SEM wantedBy: o timer é o único gatilho. Com wantedBy o service subia a
     # cada `nixos-rebuild switch` (restart do jarvis.target) e queimava a GPU
     # em horário de uso — forense 2026-09-07.
@@ -56,6 +63,12 @@ in {
 
       # Safety: do NOT restart on failure (prevents crash loops)
       Restart = "no";
+
+      # 30/09: devolve a máquina depois do run, com os privilégios do
+      # systemd (o harness não tem — NoNewPrivileges bloqueia sudo).
+      # - stop MoE: ele só subiu por causa do Wants= deste unit.
+      # - start router: devolve o bonsai pro dono (usa REPL de manhã).
+      ExecStopPost = "${pkgs.coreutils}/bin/sh -c 'systemctl stop llama-cpp-ik.service || true; systemctl start llama-cpp-server.service || true'";
 
       # ── Sandboxing ──
       ProtectSystem = "strict";       # /usr e /boot read-only
