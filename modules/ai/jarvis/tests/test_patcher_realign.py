@@ -75,3 +75,33 @@ def test_apply_hunk_preserves_real_change():
     content = "def f():\n    " + old + "\n"
     ok, out = apply_hunk(content, PatchHunk(old_text=old, new_text=new))
     assert ok and "a = 2" in out
+
+# ── (30/09) Reward-hacking guard: teste novo precisa provar que testa algo ──
+
+def test_vacuous_test_rejected():
+    """`assert True` não é melhoria — é o modelo se premiando com nada."""
+    from nightwatch.validator import _test_has_real_assertion
+    ok, why = _test_has_real_assertion("def test_x():\n    assert True\n")
+    assert not ok and "reward" in why.lower()
+
+
+def test_no_test_function_rejected():
+    from nightwatch.validator import _test_has_real_assertion
+    ok, why = _test_has_real_assertion("x = 1\n")
+    assert not ok and "test_" in why
+
+
+def test_real_assertion_accepted():
+    from nightwatch.validator import _test_has_real_assertion
+    ok, _ = _test_has_real_assertion("def test_x():\n    assert 1 + 1 == 2\n")
+    assert ok
+    ok2, _ = _test_has_real_assertion(
+        "def test_x():\n    assert f() is not None\n")
+    assert ok2
+
+
+def test_syntax_error_left_to_other_validator():
+    from nightwatch.validator import _test_has_real_assertion
+    # sintaxe é tratada no validate_file; aqui não duplica nem bloqueia
+    ok, _ = _test_has_real_assertion("def test_x(:\n    assert True\n")
+    assert ok

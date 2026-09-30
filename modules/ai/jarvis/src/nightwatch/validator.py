@@ -110,6 +110,48 @@ def discover_test_files() -> list[str]:
     return wide
 
 
+def _test_has_real_assertion(content: str) -> tuple[bool, str]:
+    """(30/09) Um teste NOVO precisa provar que testa algo.
+
+    Reward-hacking medido: o harness rodava o teste que o próprio modelo
+    acabou de escrever, então um teste VACUO (`def test_x(): assert True`)
+    passava e contava como "melhoria". Num harness que se auto-evolui isso
+    é o pior tipo de falha: ele se premia com nada, para sempre.
+
+    Regras (conservadoras — só reprova o óbvio, nunca o sutil):
+      - needs at least one test function (def test_*)
+      - needs a real assertion: assert X where X is not literally
+        True/1/"" — i.e. something with a comparison or a call
+    Anything subtler is pytest's job; here we only reject the obvious
+    vacuous case.
+    """
+    import ast as _ast
+    try:
+        tree = _ast.parse(content)
+    except SyntaxError:
+        return True, ""  # sintaxe é tratada em outro lugar; não duplica
+    test_funcs = [n for n in _ast.walk(tree)
+                  if isinstance(n, (_ast.FunctionDef, _ast.AsyncFunctionDef))
+                  and n.name.startswith("test")]
+    if not test_funcs:
+        return False, "novo arquivo de teste não define nenhuma função test_*"
+    real_asserts = 0
+    for fn in test_funcs:
+        for node in _ast.walk(fn):
+            if not isinstance(node, _ast.Assert):
+                continue
+            t = node.test
+            # assert True / assert 1 / assert "x" (constante trivial) = vazio
+            if isinstance(t, _ast.Constant):
+                continue
+            # assert not X / assert X.is_... / assert x == y => real
+            real_asserts += 1
+    if real_asserts == 0:
+        return False, ("teste novo só tem assert de constante (assert True) — "
+                       "não prova nada; reward-hacking, não melhoria")
+    return True, ""
+
+
 def validate_changed_files(files: list[str]) -> ValidationReport:
     """Validate all changed files."""
     report = ValidationReport()
@@ -119,26 +161,40 @@ def validate_changed_files(files: list[str]) -> ValidationReport:
         path = project_root / file_path
         if not path.exists():
             continue
-        
+
         try:
             content = path.read_text(encoding="utf-8")
         except Exception:
             continue
-        
+
         step = ValidationStep(name=f"validate:{file_path}")
         start = time.time()
-        
+
+        # (30/09) Guard de significado para teste NOVO/CRIADO: fecha o
+        # reward-hacking de "teste vazio conta como melhoria". Só para
+        # arquivo de teste que o agente acabou de criar.
+        name = Path(file_path).name
+        if name.startswith("test_") and name.endswith(".py"):
+            ok, why = _test_has_real_assertion(content)
+            if not ok:
+                step.passed = False
+                step.output = why
+                report.steps.append(step)
+                report.files_validated.append(file_path)
+                report.passed = False
+                continue
+
         result = validate_file(path, content)
         step.duration_ms = int((time.time() - start) * 1000)
         step.passed = result.valid
         step.output = "; ".join(result.errors) if result.errors else "ok"
-        
+
         report.steps.append(step)
         report.files_validated.append(file_path)
-        
+
         if not result.valid:
             report.passed = False
-    
+
     return report
 
 
