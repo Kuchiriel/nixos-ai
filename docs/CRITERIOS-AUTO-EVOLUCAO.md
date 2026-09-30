@@ -264,3 +264,47 @@ literatura nos Papers). As falhas são de **orquestração/ambiguidade de task**
 - `docs/REIDRATAR-APOS-COMPACTAR.md` (prompt de reidratação)
 - este doc (critérios + estado medido)
 - Regra de operação: **parar nightwatch → main → editar → commit → rodar**
+
+---
+
+## Ciclos N=2 (30/09 20h) — 3 fixes de desperdício medidos
+
+### Reward-hacking fechado (segurança)
+Probe: o harness rodava o teste que o **próprio modelo** criava. Um teste
+**vazio** (`def test_x(): assert True`) passava e contava como melhoria —
+`passed=True` verificado. Num harness auto-evolutivo isso é o pior tipo de
+falha: **ele se premia com nada, para sempre, e parece progresso**.
+Fix: `_test_has_real_assertion()` — teste novo exige ≥1 `test_*` e ≥1 assert
+não-constante. Verificado 4/4 (vazio→reprova, real→aceita). 4 testes.
+
+### Retry consumia o run inteiro numa task só
+Medido: 3 tentativas × ~45s de uma task impediam as outras 4 da fila de
+rodarem. Fix: retry **consciente de orçamento** — >50% do budget → 2
+tentativas, >75% → 1. Preserva convergência quando há tempo, libera
+orçamento p/ mais tasks distintas.
+
+### A noite inteira ia para código morto
+Medido no ciclo 1: **5/5 targets** em `archive/`. O `archive/README.md`
+diz: módulos arquivados de propósito (0 imports, substituídos por
+`nightwatch/*`). Testar/refatorar código que não roda = valor zero, mas
+custava 3 retries por task e impedia o run de tocar código vivo.
+Fix: discovery exclui `*/archive/*`; execução pula task 100% archive.
+
+### Ciclo 2 (pós-fix): targets em código VIVO
+| Ciclo | Tasks | Commits | Alvos |
+|---|---|---|---|
+| 1 (pre-archive-fix) | 9 | 0 | 5/5 em `archive/` (morto) |
+| 2 (pós-fix) | 9 | 0 | `benchmark tracker`, `CLI launcher` (**vivo**) |
+
+Ainda **0 commits** — mas agora o trabalho é sobre código que roda. Os
+targets reais são bons ("Fix unhandled exception…", "Fix unvalidated
+input in CLI launcher…").
+
+### Onde está (honesto, sem "teto")
+Falta **convergência**: o modelo propõe defeito real, gera patch que
+aplica, mas o teste reprova. O sinal (traceback) chega. O que falta é o
+modelo acertar a correção — que é trabalho de engenharia de contexto
+(grounding melhor no código), não mistério. **N=2 ainda não é medida**
+(lição 8: N≥3). Próximo: ciclo 3 p/ fechar N, e se não convergir,
+aprofundar no *porquê* (ler o traceback que ele recebeu vs o que ele
+produziu).
