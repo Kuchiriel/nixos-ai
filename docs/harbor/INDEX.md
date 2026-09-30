@@ -151,3 +151,45 @@ import errada na primeira tentativa.
 
 **Regra:** qualquer consumidor novo de token budget **herda** o
 helper. Literal de tamanho fora do `models.nix` é bug por construção.
+
+## Nightwatch — diagnóstico CORRIGIDO (30/09, verificação antes de agir)
+
+O sumário da sessão anterior dizia que a falha do nightwatch era
+**"`old_text` não casa com o arquivo real"**. **Estava errado.** Li o
+log real antes de mexer — e era a 4ª vez que meu sumário ia me levar
+a consertar a camada errada.
+
+### O que o log mostra de verdade (`nw2.log`)
+- `rag.py` → `Validation failed`, `2 passed, 1 failed, 1 skipped`
+  (o patch APLICA; um teste quebra).
+- `hackmd.py` → `Write failed`, `Syntax error: line 179: unterminated
+  string` (o `safe_editor` barra — **comportamento correto**).
+- Run 05:16 → `Syntax error: line 17: leading zeros` (mesma classe).
+
+**Não é falha de apply/patcher.** O `safe_editor` fazendo o que deve:
+barre sintaxe quebrada antes de corromper o arquivo.
+
+### Causa raiz: o discovery gera lixo
+`discover_docs` criava task de **qualquer** match de `TODO|FIXME|HACK`.
+As 5 tasks da noite foram:
+| Task | Por que é lixo |
+|---|---|
+| `security.py` "TODOS os paths" | `TODOS` (pt) casa dentro, sem boundary |
+| `agent.py` "TODOS os .sh/.py" | idem |
+| `devtools.py` "Troca TODOS" | idem |
+| `hackmd.py` "HACKMD_TOOLS" | `HACK` casa no **nome do serviço** |
+| `completion.py` `"TS","TBD","TODO"` | placeholder em lista de strings |
+
+Feed de lixo → modelo inventa patch → quebra sintaxe → 6 falhas, 0
+commits, 16 min. E a culpa quase caiu no patcher (lição 6: o nightwatch
+é o **canário do harness**, e o canário apontou o gerador, não o patch).
+
+### Correção (commit `1b38a41`)
+`grep -E '\b(TODO|FIXME|HACK)\s*:'` — só **marcador acionável**
+(dois-pontos = "isto é tarefa", não coincidência de substring).
+- `discover_docs`: 5 de lixo → **0** (não há `TODO:` real no repo)
+- fila total: 8 tasks **reais** (missao 5, dead_code, git_hygiene,
+  performance) em vez de 5 de ruído que sempre falhavam.
+
+**Não mexi no `apply_hunk`/`patcher`** — eles estão certos. A lição
+mais cara da noite: *verificar o log real antes de agir*.
