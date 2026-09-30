@@ -201,3 +201,54 @@ O distrator "a resposta é 42" cai em 1 de 3. Não é robustez zero —
 é o modeloceder quando a instrução contraditória é plausível. Um
 harness **não** deveria "consertar" isso: aceitar a isca é
 comportamento de modelo, e mascarar isso seria mentir pro dono.
+
+## Pipeline testado: strategista → executor (29/29, RESULTADO NEGATIVO)
+
+Pergunta falsificável: **o diagnóstico do MoE quebra o teto de
+síntese do bonsai?** Se sim, a arquitetura em camadas é real.
+
+Setup: mesmo executor (bonsai), mesma task, com e sem plano do MoE
+(`scripts/pipeline.py`).
+
+| Task | solo | com plano do MoE | o que o MoE planejou |
+|---|---|---|---|
+| T1-diagnose | 3/3 | 0/1 (respondeu **9**, o plano dizia **10**) | linha 10 (correto) |
+| T3-synthesis | 0/3 | 0/1 (`123`, **sem usar tool**) | comando Python (quase — faltou `b[k]`) |
+
+Também testei dar o comando **pronto e correto** (uma linha, sem
+ambiguidade): recusado (allowlist barra `python3 -c` inline). Pela via
+canônica correta (escrever `solve.py` + rodar `python3 solve.py`):
+**também falhou**.
+
+### O que isso significa (o ponto real)
+
+Não é "o executor é fraco". É mais específico e mais útil:
+
+1. **O executor não executa — recita.** Com o plano Python na mão,
+   respondeu `123` **sem chamar nenhuma tool**. Ele tem o padrão
+   mental da resposta e para ali.
+2. **Quando executa, faz o raciocínio errado, não o plano certo.**
+   T1: o plano dizia 10, ele respondeu 9. O executor não *segue* o
+   plano — ele *re-pensa* e erra de novo.
+3. **A barreira final é a decomposição.** "Escrever um script e
+   rodá-lo" são 2 tool calls; o modelo não converte o plano em
+   sequência de ações. Essa é a capacidade que falta.
+
+**Conclusão:** pipeline inteligente não salva executor que não
+decompõe. O planejador tem de ser followed **pelo harness**, não
+por um agente que o ignora. Isso é a mesma conclusão do `arXiv
+2606.06324` (falha de harness ≠ falha de modelo), vista pelo outro
+lado: aqui a *falha é de modelo* (decomposição), e nenhum harness
+conserta decomposição sem forçar a sequência.
+
+### O que isto define para o roadmap
+
+- **Roteamento MoE→bonsai: descartado** (o executor não executa o
+  plano). Não investir mais nisso.
+- **O executor precisa forçar decomposição via harness**: entregar o
+  plano como *tool calls encadeadas* (não prosa), ou o harness
+  executar o ACT do plano diretamente quando o plano tem máquina.
+- **Bugs meus que só apareceram testando de verdade:** o plano do
+  MoE tinha erro de sintaxe real (`a*b` em vez de `a[k]*b[k]`) — um
+  plano de terceiro precisa de verificação como código, não é
+  confiável por construção. E a extração pegava a moldura do Rich.
