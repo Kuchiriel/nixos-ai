@@ -1295,6 +1295,22 @@ class Harness:
                 return False
         if _up():
             return True
+        # 29/09: a checagem de RAM acontecia DEPOIS de o bonsai já estar
+        # segurando a VRAM. Na prática o MoE quase nunca estava no ar
+        # (1 LLM por vez, VRAM 6GB), então o nightwatch caía no "avail
+        # < 19000 → deferred" para SEMPRE — mesmo com 16GB livres, porque
+        # a RAM estava sendo consumida pelo router. Ordem correta:
+        # despejar o router primeiro (libera VRAM+RAM), DEPOIS medir RAM,
+        # DEPOIS subir o MoE.
+        try:
+            from jarvis.core.model_lifecycle import _evict_peers
+            evicted = _evict_peers("http://127.0.0.1:8084")
+            if evicted:
+                self.notify(f"🧹 Nightwatch despejou o router p/ "
+                            f"liberar o MoE: {', '.join(evicted)}")
+                time.sleep(8)
+        except Exception:
+            pass
         avail = int(open("/proc/meminfo").read().split("MemAvailable:")[1]
                     .split()[0]) // 1024
         if avail < 19000:
@@ -1909,4 +1925,22 @@ def run_nightwatch(
             tasks_completed=0, tasks_failed=0, tasks_blocked=0,
             tasks_skipped=0, commits=[], files_changed=[],
             duration_seconds=0.0, errors=["deferred: strong LLM unavailable"])
-    return harness.run()
+    try:
+        return harness.run()
+    finally:
+        # 29/09: o nightwatch agora despeja o router p/ subir o MoE
+        # (1 LLM por vez na VRAM 6GB). Sem restaurar aqui, o bot fica
+        # sem cérebro até o próximo reboot — e o dono usa o REPL de
+        # manhã. Best-effort: falha de restore não pode mascarar o
+        # resultado do run.
+        try:
+            import time as _t
+            import urllib.request as _url
+            _url.urlopen("http://127.0.0.1:8084/health", timeout=3).read(1)
+            subprocess.run(["sudo", "systemctl", "stop", "llama-cpp-ik"],
+                           capture_output=True, timeout=60)
+            _t.sleep(3)
+            subprocess.run(["sudo", "systemctl", "restart", "llama-cpp-server"],
+                           capture_output=True, timeout=90)
+        except Exception:
+            pass
