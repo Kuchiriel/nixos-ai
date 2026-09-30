@@ -68,7 +68,10 @@ in {
       # systemd (o harness não tem — NoNewPrivileges bloqueia sudo).
       # - stop MoE: ele só subiu por causa do Wants= deste unit.
       # - start router: devolve o bonsai pro dono (usa REPL de manhã).
-      ExecStopPost = "/bin/sh -c '/run/current-system/sw/bin/systemctl stop llama-cpp-ik.service || true; /run/current-system/sw/bin/systemctl start llama-cpp-server.service || true'";
+      ExecStopPost = "+/bin/sh -c '/run/current-system/sw/bin/systemctl stop llama-cpp-ik.service || true; /run/current-system/sw/bin/systemctl start llama-cpp-server.service || true'";
+      # ^ prefixo '+': roda o ExecStopPost com privilégio de root (senão
+      # herda User=nixos e o 'systemctl stop' dá Access denied). O
+      # ExecStart principal continua User=nixos, sem escalated.
 
       # ── Sandboxing ──
       ProtectSystem = "strict";       # /usr e /boot read-only
