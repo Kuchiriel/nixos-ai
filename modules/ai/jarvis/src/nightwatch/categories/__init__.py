@@ -55,13 +55,32 @@ def discover_test() -> list[Task]:
 
 
 def discover_docs() -> list[Task]:
-    """Find TODO/FIXME/HACK markers."""
+    """Find ACTIONABLE TODO/FIXME/HACK markers.
+
+    30/09 — o nightwatch queimou 2 voltas (16min, 6 tasks, 0 commits)
+    tentando "consertar" task que NÃO eram TODO nenhum:
+      - `TODOS` (pt: "TODOS os paths") — o grep "TODO" casa dentro da
+        palavra, sem word-boundary
+      - `HACKMD_TOOLS` — o grep "HACK" casa no nome do serviço HackMD
+      - `em TODO lugar` (pt: "em todo lugar" = everywhere) — prosa
+      - `"TS","TBD","TODO"` — placeholder dentro de lista de strings
+    Feed de lixo pro modelo: ele inventa patch, quebra sintaxe, e a
+    gente quase blameou o patcher (era o gerador de task — lição 6).
+
+    Um marcador real é `TODO:`/`FIXME:`/`HACK:` — o dois-pontos é o
+    sinal de "isto é uma tarefa", não uma coincidência de substring.
+    Sem ele, um TODO em prosa é documentação, não defeito.
+    """
     tasks = []
     try:
         result = subprocess.run(
             # (26/09) --exclude-dir=nightwatch: o próprio scanner contém o padrão
             # literal (self-match propunha tasks no fonte do nightwatch).
-            ["grep", "-rn", "TODO\\|FIXME\\|HACK", "modules/ai/jarvis/src/", "--include=*.py", "--exclude-dir=nightwatch"],
+            # (30/09) -E + word-boundary + dois-pontos: só marcador
+            # acionável vira task (ver docstring).grep básico casava
+            # TODOS/HACKMD/prosa.
+            ["grep", "-rnE", r"\b(TODO|FIXME|HACK)\s*:",
+             "modules/ai/jarvis/src/", "--include=*.py", "--exclude-dir=nightwatch"],
             capture_output=True, text=True, timeout=10,
             cwd=str(find_repo_root()),
         )
