@@ -301,3 +301,58 @@ solo, com plano, comando pronto, via correta, mecânica). Cada uma
 eliminou uma explicação. A última — execução mecânica do plano —
 foi a que matou a hipótese, e é a que ninguém teria feito se parasse
 no "o executor falhou, então ele é fraco".
+
+## O verifier estava errado. EU ESTAVA ERRADO. (29/29, n≥3)
+
+Corrigi o fixture do T3 e a conclusão mudou deSIGNIFICADO.
+
+**O que aconteceu:** escrevi o `expected` do T3-synthesis à mão
+(`378`), assumindo que as chaves k6/k7 existiam em `a.csv`. Não
+existiam — `a.csv` vai até k5. Os dois modelos responderam **`123`**,
+que é a resposta **certa** (k4: 48 + k5: 75), e eu marquei como
+falha. O "gargalo de síntese" era **meu verifier quebrado**, não a
+capacidade do modelo.
+
+Classe idêntica ao que o `AGENTS.md` já proíbe ("verifier não
+confiável") e ao que eu mesma registrei no início da sessão sobre o
+fixture do bytecopy (`printf` sem `%s`). **É a terceira vez.**
+
+### Correção permanente
+`expected` do T3 agora é **derivado do fixture por código**
+(`_t3_expected()`), não escrito à mão. Verifiquei os outros 3
+expecteds por cálculo — T1=10, T2=137, T4=6, todos conferem. Só o
+T3 estava quebrado.
+
+### Placar corrigido (n≥3)
+
+| Task | bonsai 8B | MoE 35B (raciocínio) |
+|---|---|---|
+| T1-diagnose | 2/3 | 2/2 |
+| T2-search | 0/3 | 0/2 |
+| T3-synthesis | **1/3** | **2/2** ← era 0, era meu erro |
+| T4-robustness | 3/3 | 2/2 |
+| **TOTAL** | **6/12** | **6/8** |
+
+### O que sobrevive da conclusão
+
+O "gargalo é o conteúdo do raciocínio" **parcialmente sobrevive**,
+mas a versão precisa é esta:
+
+- **O MoE NÃO é executor melhor que o bonsai.** Mesma taxa global
+  (~50%), e onde o bonsai é sólido (T4 3/3) o MoE também é. Não há
+  "unlock em modelo maior no executor" — isso estava errado.
+- **O gargalo real é o T2 (busca de precisão em 200 linhas), e ele é
+  de capacidade, comum aos dois.** O MoE leva **656s** pra errar num
+  task que o bonsai erra em **5s**. Mesmo erro, 100× o custo.
+  Esse é o argumento econômico, não o argumento de score.
+- **A diferença real entre os dois é custo-por-erro, não acerto.**
+  Isso é exatamente o critério que decide **qual** tier roda **qual**
+  task — a versão honesta do "tier tem papel".
+
+### Lição (a que mais importa da sessão)
+
+Verifier escrito à mão é um **modelo** do resposta certa, e erra
+como modelo erra. Só que ninguém mede a acurácia dele. **Todo
+expected numérico deve ser derivado do fixture por código.** Um
+teste que verifica o verifier contra o fixture vale mais que o
+placar.

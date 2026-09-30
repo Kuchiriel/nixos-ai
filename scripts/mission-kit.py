@@ -88,14 +88,32 @@ def t3_synthesis(d: Path) -> dict:
         f"k{i},{i}\n" for i in range(1, 6)))
     (d / "b.csv").write_text("k,w\n" + "".join(
         f"k{i},{i * 3}\n" for i in range(4, 8)))
-    # soma de v*w onde as chaves existem nos dois arquivos: k4=4*12=48,
-    # k5=5*15=75, k6=6*18=108, k7=7*21=147 → 378
+    # a.csv: k1..k5 (1..5). b.csv: k4..k7 (12,15,18,21).
+    # Chaves COMUNS: k4, k5 → 4*12=48 + 5*15=75 = **123**.
+    #
+    # 29/29: o expected aqui era 378, que assumia k6 e k7 em a.csv — mas
+    # a.csv só tem k1..k5. ERRO DE FIXTURE, não erro de modelo: os dois
+    # modelos (bonsai E MoE) responderam 123, a resposta CORRETA, e eu
+    # marquei como falha. Mesma classe do "verifier não confiável" que
+    # o AGENTS.md já proibia. O expected é derivado do fixture por
+    # código agora, não escrito à mão.
     return {
         "task": ("a.csv has k,v and b.csv has k,w. Compute the SUM of "
                  "v*w for every key k that appears in BOTH files. Write "
                  "only the number to answer.txt"),
-        "expected": "378\n",
+        "expected": f"{_t3_expected()}\n",
     }
+
+
+def _t3_expected() -> int:
+    """Deriva a resposta do fixture (nunca hardcode à mão)."""
+    import csv as _csv
+    import io as _io
+    a_txt = "k,v\n" + "".join(f"k{i},{i}\n" for i in range(1, 6))
+    b_txt = "k,w\n" + "".join(f"k{i},{i * 3}\n" for i in range(4, 8))
+    a = {k: int(v) for k, v in _csv.reader(_io.StringIO(a_txt)) if k != "k"}
+    b = {k: int(w) for k, w in _csv.reader(_io.StringIO(b_txt)) if k != "k"}
+    return sum(a[k] * b[k] for k in a if k in b)
 
 
 def t4_robustness(d: Path) -> dict:
@@ -150,10 +168,17 @@ def run_task(model: str, name: str, runs: int) -> list[dict]:
         d.mkdir(parents=True, exist_ok=True)
         spec = TASKS[name](d)
         env = dict(os.environ)
-        env["JARVIS_LLM_BASE_URL"] = "http://127.0.0.1:8080"
+        # Endpoint por tier (29/09): o MoE vive em :8084 (ik) e o
+        # bonsai/fast em :8080/:8083. A bateria antes assumia :8080,
+        # o que media SÓ executores densos — nunca testou a conclusão
+        # "o unlock é modelo maior no executor". `MISSION_BASE_URL`
+        # sobrescreve; default preserva o comportamento antigo.
+        env["JARVIS_LLM_BASE_URL"] = os.environ.get(
+            "MISSION_BASE_URL", "http://127.0.0.1:8080")
         env["JARVIS_LLM_MODEL"] = model
         env["JARVIS_PROMPT_PROFILE"] = "minimal"
-        env["JARVIS_SAMPLING"] = "registry"
+        env["JARVIS_SAMPLING"] = os.environ.get(
+            "MISSION_SAMPLING", "registry")
         t0 = time.monotonic()
         code = ("from jarvis.cli.dev import dev_once; "
                 f"raise SystemExit(dev_once({spec['task']!r}, "
