@@ -86,3 +86,42 @@ feedback do teste como sinal na próxima tentativa**, e — quando a lição
 for "isto aqui quebrou" — virar um **teste de regressão** que protege o
 harness. Ou seja: **o harness usa as próprias falhas como escudo.** É o
 RHO (arXiv 2606.06324). C3→C5 são a pré-condição disso.
+---
+
+## C3 — RESULTADO (30/09 17h): classificado e corrigido ✅
+
+**Classificação por MEDIÇÃO** (não chute — contei os chars que o modelo
+realmente vê):
+
+| | Antes | Depois |
+|---|---|---|
+| Contexto de `cli/main.py` | **873 chars** (84× menor) | **7.944 chars** (9.2× menor) |
+| Causa do `Hunk not found` | fallback mandava "imports + ÚLTIMA função" (lasc arbitrária) | head do arquivo (código real) |
+| `cmd_metrics` na task casa com `_cmd_metrics`? | ❌ (caía no head) | ✅ (variantes sem `_`/prefixo) |
+
+**Run pós-fix (16:45), 6 tasks distintas tentadas:**
+
+| Métrica | Valor | Significado |
+|---|---|---|
+| `Hunk not found` | **0** | ✅ patch aplica agora |
+| `Syntax error (unindent)` | 3 | patch **aplicou**, modelo errou indentação |
+| `Validation Failed` | 1 | patch **aplicou**, quebrou teste |
+| Commits | 0 | safe_editor/branch segurando (correto) |
+
+**Conclusão do C3:** a causa era (c) contexto — **corrigida**. O patch
+agora **aplica** (chega ao stage de sintaxe/validação). A falha restante
+**não é mais do instrumento**: é o modelo escrever indentação errada /
+quebrar teste — problema de **capacidade**, que o `safe_editor` barra
+corretamente (é o papel dele). `Hunk not found` = 0 é o sinal limpo.
+
+**Próximo (C3b, capacidade, não contexto):** o modelo recebe 8k chars e
+ainda erra indentação. Opções: (a) exigir que o patcher normalize
+indentação via `ast.parse`+reindent antes do guard (caro/arriscado);
+(b) dar ao modelo um exemplo de patch válido no prompt (few-shot);
+(c) aceitar: é limite do modelo local, medir taxa. **Decisão do dono.**
+
+## Estado consolidado até aqui
+- C1 ✅ C2 ✅ C3 ✅(contexto) C4 ✅ C6 ✅ — o harness **age sem se quebrar**
+- C5 ⏳ (convergência — precisa de commits reais, que exigem C3b)
+- 6+ runs, main **sempre** verde, `0 commits` ruins. O pipeline é SEGURO
+  mesmo quando o modelo falha — que é o ponto.
