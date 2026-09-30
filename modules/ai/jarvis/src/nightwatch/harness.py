@@ -354,14 +354,29 @@ def _discover_llm_tasks(call_llm_fn: Callable, project: str = "nixos-ai") -> lis
     project_root = find_repo_root()
     
     # Get codebase overview
+    # (30/09) fingerprint de arquivos REAIS e ACIONÁVEIS, em path RELATIVO
+    # ao root. Antes: `find <abs>` devolvia absolutos e a lista ia crua pro
+    # LLM — o modelo não tinha os arquivos do projeto, só invivia path, e o
+    # patch loop morria em "No readable target files". Agora o LLM vê paths
+    # que ele pode realmente citar, e Known-files vira a base do
+    # _resolve_llm_targets (match por basename).
     try:
         result = subprocess.run(
             ["find", str(project_root), "-name", "*.py", "-type", "f",
              "-not", "-path", "*/__pycache__/*", "-not", "-path", "*/node_modules/*"],
             capture_output=True, text=True, timeout=10,
         )
-        files = result.stdout.strip().split("\n")[:20]
+        rel_files = []
+        for line in result.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            rel = _normalize_target(line, project_root)
+            if rel and _target_is_actionable(rel):
+                rel_files.append(rel)
+        rel_files = sorted(set(rel_files))
+        files = rel_files[:40]
     except Exception:
+        rel_files = []
         files = []
 
     # Get workspace context if available
@@ -392,13 +407,14 @@ def _discover_llm_tasks(call_llm_fn: Callable, project: str = "nixos-ai") -> lis
     prompt = f"""Analyze this Python codebase and identify 3-5 improvement tasks.
 
 {workspace_context}{git_context}
-Key files:
-{chr(10).join(files[:15])}
+Real source files (relative to project root — cite these EXACT paths in
+target_files, do NOT invent files that are not listed here):
+{chr(10).join(files[:30])}
 
 For each task provide JSON:
 {{
   "description": "what to do",
-  "target_files": ["file.py"],
+  "target_files": ["one-of-the-files-listed-above.py"],
   "acceptance_criteria": "how to verify",
   "priority": 1-10,
   "risk": "low/medium/high",
@@ -407,6 +423,7 @@ For each task provide JSON:
 
 Focus on: error handling, code quality, security, missing tests, documentation, performance.
 Prioritize tasks that improve reliability and reduce technical debt.
+Every task MUST cite real target_files from the list above.
 Return JSON array."""
 
     # Call LLM with timeout protection. 300s: prefill de prompt
@@ -460,11 +477,23 @@ Return JSON array."""
                         # a task; melhor deixar o filtro de execução lidar.
                     ))
                 elif isinstance(item, dict):
+                    # (30/09) resolve target_files do LLM p/ paths
+                    # realmente acionáveis (basename-match + validação).
+                    targets = _resolve_llm_targets(
+                        item.get("target_files", []),
+                        project_root=project_root,
+                        known_files=rel_files,
+                    )
+                    if not targets:
+                        # task sem alvo acionável = task de review, não de
+                        # patch. Não entra na fila (o filtro de execução
+                        # também pegaria, mas melhor não encher a fila).
+                        continue
                     tasks.append(Task(
                         id=f"disc-{int(time.time())}-{i}",
                         project=project,
                         description=item.get("description", ""),
-                        target_files=item.get("target_files", []),
+                        target_files=targets,
                         acceptance_criteria=item.get("acceptance_criteria", ""),
                         priority=item.get("priority", 5),
                         risk=item.get("risk", "low"),
@@ -551,6 +580,84 @@ def _target_is_actionable(target: str) -> bool:
                        ".toml", ".sh", ".txt", ".cfg", ".ini"}
     except Exception:
         return False
+
+
+def _normalize_target(raw: str, project_root: Path | None = None) -> str:
+    """(30/09) Limpa um target_file que o LLM devolveu para um path
+    relativo-usável pelo patch loop.
+
+    O LLM costuma devolver o path ABSOLUTO (o `find` do discovery lista
+    absolutos) ou com crase/aspas/vírgula. O patch loop resolve
+    relativo ao project root. Aqui: tira crase/aspas/ vírgula, corta
+    qualquer prefixo absoluto até o project root, e devolve relativo.
+    Devolve "" se não sobrar nada utilizável.
+    """
+    if not raw:
+        return ""
+    # split por vírgula ANTES de tirar aspas: '"A.md", "B.md"' -> 'A.md'
+    t = str(raw).split(",")[0].strip().strip("`'\" ")
+    if not t:
+        return ""
+    root = str(project_root or find_repo_root())
+    # se o path é absoluto e está sob o root, vira relativo
+    if t.startswith(root):
+        t = t[len(root):]
+    t = t.lstrip("/")
+    return t
+
+
+def _resolve_llm_targets(raw_targets, project_root: Path | None = None,
+                         known_files: list[str] | None = None) -> list[str]:
+    """(30/09) Converte o `target_files` que o LLM devolveu em paths
+    REAIS (arquivos que existem, patcháveis), resolvendo por basename
+    quando o LLM gave um nome solto.
+
+    Sem isso o LLM inventa path ("src/utils.py" que não existe) e a task
+    morre no patch loop (o motivo do "No readable target files").
+
+    IMPORTANTE (por que NÃO reusamos _target_is_actionable aqui): aquela
+    função aceita path inexistente com extensão de código como CREATE
+    válido. Pra discovery isso é Errado — task de discovery é "melhore
+    código que EXISTE"; aceitar path inventado como CREATE faria o modelo
+    criar um arquivo que ninguém pediu. Então exigimos arquivo EXISTENTE:
+      1. normaliza → é arquivo real? aceita.
+      2. senão casa por basename contra os arquivos conhecidos (o LLM às
+         vezes devolve só "agent.py") → aceita o path completo.
+      3. senão descarta (path inventado = task de review, não de patch).
+    """
+    if isinstance(raw_targets, str):
+        raw_targets = [raw_targets]
+    if not raw_targets:
+        return []
+    known = known_files or []
+    root = project_root or find_repo_root()
+    out: list[str] = []
+
+    def _exists_file(p: str) -> bool:
+        full = Path(p) if p.startswith("/") else (root / p)
+        return full.is_file()
+
+    for raw in raw_targets:
+        cand = _normalize_target(raw, root)
+        if not cand:
+            continue
+        if _exists_file(cand):
+            out.append(cand)
+            continue
+        # casa por basename contra os arquivos conhecidos
+        base = Path(cand).name
+        for kf in known:
+            if Path(kf).name == base:
+                out.append(kf)
+                break
+    # dedupe preservando ordem
+    seen = set()
+    uniq = []
+    for t in out:
+        if t not in seen:
+            seen.add(t)
+            uniq.append(t)
+    return uniq
 
 
 def _read_file_for_llm(path: str, max_chars: int = 0, task_description: str = "") -> str:
