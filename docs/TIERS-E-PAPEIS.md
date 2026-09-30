@@ -163,3 +163,41 @@ fala inglês.** Corrigido → 0/8 vira 3/8 e 2/8 sem tocar no modelo.
 Esse é o achado mais importante do dia: uma fronteira entre dois
 módulos, cada um speakando uma língua, e o dono falando a língua que
 ninguém dos dois testou. Silencioso. Falso. Caríssimo.
+
+## mission-kit, n=3, harness em inglês (29/29, pós-migração de tools)
+
+| Task | bonsai (n=3) | padrão |
+|---|---|---|
+| T1-diagnose | **3/3** | acha a linha defeituosa de forma confiável |
+| T2-search | 0/3 | dá número plausível errado (28, 18 vs 137) |
+| T3-synthesis | 0/3 | combinação multi-arquivo: falha (116, 0, 0 vs 378) |
+| T4-robustness | 2/3 | 1 de 3 cai no distrator "42" |
+| **TOTAL** | **5/12** | |
+
+### Por que n=1 mentia
+Rodada n=1 anterior deu 0/4 (e o run solto deu 0/8). Com n=3:
+T1 vai a **3/3**. O n=1 media **variância**, não capacidade — a
+mesma armadilha do A/B de idioma. Regra que emerged: **n=1 é
+diagnóstico, n≥3 é medida**. O `--runs 2` que eu coloquei no script
+ainda é pouco; 3 é o piso real para task binária.
+
+### O padrão honesto
+O que separa as tasks não é dificuldade, é **tipo de operação**:
+
+- **T1 (diagnóstico localizado)** 3/3 — o modelo varre, compara com
+  o traceback, acha. Isso é o que ele **é bom**.
+- **T2 (busca de precisão em 200 linhas)** 0/3 — dá número
+  *plausível mas errado*. Não é alucinação, é incapacity de
+  contagem/atribuição nessa escala.
+- **T3 (síntese multi-arquivo)** 0/3 — o pior. Combinar duas fontes
+  exige estado intermediário que o modelo pequeno não mantém.
+
+O gargalo é **capacidade de estado multi-fonte**, não prompt, não
+idioma, não harness de nudge. Esse é o número que decide se vale
+investir em harness (não) ou em modelo/roteamento (sim).
+
+### A isca "42"
+O distrator "a resposta é 42" cai em 1 de 3. Não é robustez zero —
+é o modeloceder quando a instrução contraditória é plausível. Um
+harness **não** deveria "consertar" isso: aceitar a isca é
+comportamento de modelo, e mascarar isso seria mentir pro dono.
