@@ -1673,13 +1673,13 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "read_file",
-                "description": "Lê um arquivo com números de linha. Use sempre antes de str_replace.",
+                "description": "Read a file with line numbers. Always read before str_replace.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "path": {"type": "string", "description": "Caminho relativo do arquivo"},
-                        "offset": {"type": "integer", "description": "Linha inicial (opcional, 0-indexed)"},
-                        "limit": {"type": "integer", "description": "Máximo de linhas (padrão 2000)"},
+                        "path": {"type": "string", "description": "File path (relative to project root)"},
+                        "offset": {"type": "integer", "description": "Start line (optional, 0-indexed)"},
+                        "limit": {"type": "integer", "description": "Max lines (default 2000)"},
                     },
                     "required": ["path"],
                 },
@@ -1689,13 +1689,13 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "str_replace",
-                "description": "Substitui trecho EXATO. old vazio = criar arquivo novo. Fuzzy match automático.",
+                "description": "Replace an EXACT snippet. Empty old = create a new file. Automatic fuzzy match.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "path": {"type": "string", "description": "Caminho relativo do arquivo"},
-                        "old": {"type": "string", "description": "Texto exato (vazio para criar)"},
-                        "new": {"type": "string", "description": "Texto novo"},
+                        "path": {"type": "string", "description": "File path (relative to project root)"},
+                        "old": {"type": "string", "description": "Exact text (empty to create)"},
+                        "new": {"type": "string", "description": "New text"},
                     },
                     "required": ["path", "old", "new"],
                 },
@@ -1705,7 +1705,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "execute_shell",
-                "description": "Executa comando shell (bash -c). Explorar, testar, git, curl.",
+                "description": "Run a shell command (bash -c). Explore, test, git, curl.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1719,7 +1719,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "semantic_search",
-                "description": "Busca semântica no código (mais inteligente que grep, mais lenta).",
+                "description": "Semantic search over the codebase (smarter than grep, slower).",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1734,12 +1734,12 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "write_file",
-                "description": "Cria/escreve arquivo completo. Backup automático + AST guard. Cria pastas-pai ausentes: para criar uma estrutura de pastas, chame write_file com o caminho completo de cada arquivo (mkdir via shell é bloqueado).",
+                "description": "Create/write a whole file. Auto-backup + AST guard. Creates missing parent directories: to build a directory structure, call write_file with the full path of each FILE inside it (the folders appear by themselves).as, chame write_file com o caminho completo de cada arquivo (mkdir via shell é bloqueado).",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "path": {"type": "string", "description": "Caminho do arquivo"},
-                        "content": {"type": "string", "description": "Conteúdo completo"},
+                        "path": {"type": "string", "description": "File path"},
+                        "content": {"type": "string", "description": "Full file content"},
                     },
                     "required": ["path", "content"],
                 },
@@ -1749,7 +1749,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "list_directory",
-                "description": "Lista diretório (recursivo limitado).",
+                "description": "List a directory (limited recursion).",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1765,7 +1765,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "capture_screen",
-                "description": "Captura screenshot da tela atual.",
+                "description": "Take a screenshot of the current screen.",
                 "parameters": {"type": "object", "properties": {}},
             },
         },
@@ -1773,11 +1773,11 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "observe_screen",
-                "description": "Captura e analisa screenshot com vision AI.",
+                "description": "Capture and analyze a screenshot with vision AI.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "mode": {"type": "string", "enum": ["full", "window"], "description": "Modo de captura"},
+                        "mode": {"type": "string", "enum": ["full", "window"], "description": "Capture mode"},
                         "question": {"type": "string", "description": "O que analisar"},
                     },
                 },
@@ -1788,7 +1788,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "nix_eval",
-                "description": "Avalia expressão Nix.",
+                "description": "Evaluate a Nix expression.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1802,7 +1802,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "nix_check",
-                "description": "Roda nix flake check.",
+                "description": "Run `nix flake check`.",
                 "parameters": {"type": "object", "properties": {}},
             },
         },
@@ -1810,11 +1810,11 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "nix_search",
-                "description": "Pesquisa packages/options no nixpkgs.",
+                "description": "Search packages/options in nixpkgs.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "Termo de busca"},
+                        "query": {"type": "string", "description": "Search term"},
                         "type": {"type": "string", "enum": ["packages", "options"], "description": "Tipo"},
                     },
                     "required": ["query"],
@@ -1826,11 +1826,11 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "remember",
-                "description": "Grava fato/evento na memória episódica.",
+                "description": "Store a fact/event in episodic memory.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "text": {"type": "string", "description": "O que gravar"},
+                        "text": {"type": "string", "description": "What to store"},
                         "category": {"type": "string", "description": "Categoria: fact, event, decision"},
                     },
                     "required": ["text"],
@@ -1841,7 +1841,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "recall",
-                "description": "Busca memórias por similaridade.",
+                "description": "Search memories by similarity.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1856,7 +1856,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "vault_list",
-                "description": "Lista notas no vault persistente.",
+                "description": "List notes in the persistent vault.",
                 "parameters": {"type": "object", "properties": {}},
             },
         },
@@ -1864,12 +1864,12 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "vault_write",
-                "description": "Escreve nota no vault.",
+                "description": "Write a note to the vault.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "name": {"type": "string", "description": "Nome da nota"},
-                        "content": {"type": "string", "description": "Conteúdo"},
+                        "content": {"type": "string", "description": "Content"},
                     },
                     "required": ["name", "content"],
                 },
@@ -1880,7 +1880,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "rag_search",
-                "description": "Busca semântica no codebase.",
+                "description": "Semantic search over the codebase.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1894,11 +1894,11 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "rag_index",
-                "description": "Indexa diretório no RAG (torna código buscabável).",
+                "description": "Index a directory into RAG (makes code searchable).",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "path": {"type": "string", "description": "Diretório para indexar (padrão: atual)"},
+                        "path": {"type": "string", "description": "Directory to index (default: current)"},
                     },
                 },
             },
@@ -1908,7 +1908,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "lessons",
-                "description": "Busca lições aprendidas de erros passados.",
+                "description": "Search lessons learned from past mistakes.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1923,7 +1923,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "read_chatgpt",
-                "description": "Lê conversa compartilhada do ChatGPT.",
+                "description": "Read a shared ChatGPT conversation.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1939,7 +1939,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "read_ai_conversation",
-                "description": "Lê conversa de qualquer IA (ChatGPT, Gemini, Claude). Auto-detecta da URL.",
+                "description": "Read a shared AI conversation (ChatGPT, Gemini, Claude). Auto-detects the platform from the URL.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1955,7 +1955,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "web_search",
-                "description": "Pesquisa na internet (Tavily). Use para atualidades, docs e qualquer pergunta fora do codebase.",
+                "description": "Search the web (Tavily). Use for current events, docs, and any question outside the codebase.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1970,11 +1970,11 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "browser",
-                "description": ("Navegador headless (somente leitura de páginas + "
-                                "interação simples). Ações: open (url), click "
-                                "(selector CSS), fill (selector, text). Use para "
-                                "verificar sites locais e ler conteúdo web. "
-                                "click/fill pedem aprovação."),
+                "description": ("Headless browser (page reading + simple "
+                                "interaction). Actions: open (url), click "
+                                "(CSS selector), fill (selector, text). Use to "
+                                "verify local sites and read web content. "
+                                "click/fill require approval."),
                 "parameters": {
                     "type": "object",
                     "properties": {

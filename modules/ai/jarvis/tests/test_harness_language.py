@@ -116,3 +116,34 @@ def test_system_nudges_are_english_first() -> None:
     assert not offenders, (
         "nudge injetado em PT-BR sem cabeçalho EN — o modelo pode não "
         "entender a instrução:\n" + "\n".join(offenders))
+
+
+def test_tool_descriptions_are_english() -> None:
+    """29/09: as 22 descrições de tool que o modelo lê em CADA call
+    estavam em PT-BR. Tradução de schema é contrato — migração por
+    dicionário determinístico (`scripts/migrate-tools-en.py`), nunca
+    por LLM."""
+    import re as _re
+    import jarvis.cli.dev as _dev
+    from jarvis.core.completion import _PATH_LIKE  # noqa: F401
+
+    # verbos PT em forma de verbo (naoradical: 'Cria' tambem eh
+    # 'Creates' em EN, entao exige palavra PT inteira).
+    PT_DESC = _re.compile(
+        r'\b(leia|escreva|escrita|corrija|correção|procure|procurar|'
+        r'navegador|obrigatório|obrigatorio|conteúdo|conteudo|'
+        r'retorna|devolve|listar|gravar|rodar|avaliar|indexar)\b', _re.I)
+    tools = _dev._get_tools(None)
+    assert tools, "tool surface vazia — o guard testaria nada"
+    offenders = []
+    for t in tools:
+        fn = t.get("function") or {}
+        for text in (fn.get("description", ""), *[
+                (p.get("description") or "") for p in
+                ((fn.get("parameters") or {}).get("properties") or {}).values()
+                if isinstance(p, dict)]):
+            if text and PT_DESC.search(text):
+                offenders.append(f"{fn.get('name')}: {text[:60]}")
+    assert not offenders, (
+        "tool description em PT-BR — o modelo le isso a cada call:\n"
+        + "\n".join(offenders))
