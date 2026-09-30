@@ -133,3 +133,21 @@ o harness cobrar o último passo.** Duas correções que vieram disso:
 
 O MoE já é `jarvis-strong`; nenhum flag novo, nenhuma promoção
 pendente. O R1 fica em `~/models/` como experimento documentado.
+
+### Budget derivado (30/09) — o dono tinha razão
+`_ctx_derived_max_tokens` (ctx//12, piso) existe desde 19/09 para
+exatamente isto. O nightwatch usava **1024 hardcoded**; meu "fix"
+de 4096 hardcoded era o **mesmo buraco**. Grammar-limited
+`response_format` garante JSON **válido**, não JSON **ilimitado** —
+3 arquivos × 4000 chars + hunks estoura qualquer teto pequeno, e a
+resposta morre no meio de uma string.
+
+Corrigido sem número mágico: helper morou em
+`core/context_budget.py` (módulo **neutro** — o nightwatch não pode
+importar `core.agent`, fronteira do supervisor), `agent.py`
+re-exporta, patcher usa `max(4096, ctx//12)` do registry e **loga o
+valor** (auditável). `test_supervisor_does_not_own_the_loop` pegou a
+import errada na primeira tentativa.
+
+**Regra:** qualquer consumidor novo de token budget **herda** o
+helper. Literal de tamanho fora do `models.nix` é bug por construção.
