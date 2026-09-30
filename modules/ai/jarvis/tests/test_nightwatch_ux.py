@@ -62,9 +62,14 @@ def test_discovery_retries_once_then_gives_up(capsys) -> None:
         calls.append(1)
         if len(calls) == 1:
             raise concurrent.futures.TimeoutError()
+        # (30/09) target_files com arquivo REAL: o discovery agora valida
+        # o alvo e descarta task sem path acionável. Este teste é sobre
+        # RETRY (não sobre validação), então o fixture só precisa passar
+        # pelo filtro.
         return json.dumps([{
             "description": "Create missing unit tests for login handler",
-            "target_files": [], "acceptance_criteria": "pytest passes",
+            "target_files": ["modules/ai/jarvis/src/jarvis/core/agent.py"],
+            "acceptance_criteria": "pytest passes",
             "priority": 5, "risk": "low"}])
 
     tasks = H._discover_llm_tasks(_flaky, "nixos-ai")
@@ -99,7 +104,8 @@ def test_discovery_parses_fenced_response() -> None:
     from nightwatch import harness as H
 
     arr = [{"description": "Create missing unit tests for login handler",
-            "target_files": [], "acceptance_criteria": "pytest passes",
+            "target_files": ["modules/ai/jarvis/src/jarvis/core/agent.py"],
+            "acceptance_criteria": "pytest passes",
             "priority": 5, "risk": "low"}]
     tasks = H._discover_llm_tasks(
         lambda p, m: "Segue:\n```json\n" + json.dumps(arr) + "\n```\nFim.",
