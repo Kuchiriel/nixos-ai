@@ -453,3 +453,43 @@ convergir", verifique se o **verificador nem estava medindo certo**.
 Ainda **0 commits** nests ciclos — mas agora o "falhou" significa
 falha REAL do patch, não verifier mentindo. Essa é a base pra medir
 convergência de verdade.
+
+---
+
+## 🔬 TESTES DECISIVOS (30/09 madrugada) — capacidade 2/2 COMPROVADA
+
+Dois testes com o **mesmo MoE** e o **mesmo grounding** que o nightwatch
+usa:
+
+**T1 — bug de 1 linha (typo)**: `projectz` → `projects` em
+`find_repo_root`. **ACERTOU**: `old_text` exato, `new_text` certo.
+
+**T2 — bug realista (IndexError sem guarda)**:
+```python
+def get_size(self):
+    return self.items[0].size   # IndexError se vazio
+```
+**ACERTOU**: produziu `if not self.items:` guard.
+
+**Conclusão: o modelo TEM a capacidade (2/2).** O "não converge"
+(0/31 em 5 ciclos) **não é limitação do modelo**. As duas hipóteses
+restantes, em ordem de evidência:
+
+1. **A task é auto-referencial/ambígua** (add-test, add-docstring) —
+   testado e filtrado (`_is_meta_task`). Restam só bug-fix.
+2. **O patch precisa acertar num arquivo REAL grande** com o
+   contexto real (minhas tasks eram isoladas, do próprio jeito que o
+   modelo acerta). O nightwatch mexe em `cli/main.py` (73k), `agent.py`
+   etc. — onde o mesmo raciocínio é mais difícil de aplicar.
+
+### Filtro de meta-task no ar
+`_is_meta_task()` (código) + prompt. Verificado com LLM real: discovery
+agora devolve **só "Fix <defeito concreto>"** — a família que o modelo
+**acerta** (2/2 provado). Ciclo 5 (05:35) já processou "Fix potential
+memory leak…", "Fix AttributeError…" etc. — zero add-test.
+
+### O que falta medir (amanhã, com N≥3 do v5)
+Se o bug-fix-only converge. Se ainda 0: o gap é **contexto em arquivo
+real grande** (o modelo acerta isolado, não no arquivo de 73k com
+constraints) → aí o fix é dar mais contexto, ou quebrar a task em hunks
+menores, ou ancorar por número de linha.
