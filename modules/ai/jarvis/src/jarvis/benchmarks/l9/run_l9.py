@@ -44,8 +44,9 @@ def run_agent(prompt, tool_class=None):
             f.write(f"PROMPT: {prompt[:500]}\n")
             traceback.print_exc(file=f)
         raise
+    steps = res.steps if res.steps else []
     tools = [{"name": s.get("tool"), "args_preview": s.get("args", ""),
-              "output": ""} for s in res.steps]
+              "output": ""} for s in steps]
     return {"response": res.response, "final_response": res.response,
             "tool_calls": tools, "tools_called": tools, "turns": res.turns,
             "exit_code": 0, "verdict": res.verdict}
