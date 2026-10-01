@@ -42,6 +42,7 @@ import re
 import subprocess
 import sys
 import time
+import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -2514,6 +2515,22 @@ class Harness:
         except Exception as e:
             cp.record_operation("error", False, str(e))
             error_msg = str(e)
+            # (30/09) O traceback COMPLETO vai para o log e para a evidencia.
+            # Medido: o run falhava com "❌ Task Error [task_failure]" e a
+            # causa some — `error_msg[:100]` truncava, e a evidencia so era
+            # gravada no caminho de FALHA DE VALIDACAO, nao no de excecao.
+            # Resultado: um run inteiro (4 tasks) sem nenhum dado de
+            # diagnostico. Agora excecao tambem e evidencia.
+            tb = traceback.format_exc()
+            log.error("task %s falhou: %s\n%s", task.id, error_msg, tb)
+            try:
+                _dump_evidence(task, -1, [], None, [], set())
+                with open(
+                    Path.home() / ".local/state/jarvis/nightwatch/evidence/traceback.txt", "a"
+                ) as fh:
+                    fh.write(f"=== {task.id} {task.description[:80]}\n{tb}\n")
+            except Exception:
+                pass
             failure_type = classify_failure(error_msg, task.status)
             self._fail_task(task, error_msg)
             self.notify(
