@@ -13,6 +13,7 @@ antigo -> safety.py -> validator.py).
 from __future__ import annotations
 
 import nightwatch.validator as validator_mod
+from jarvis.core import testenv
 
 
 def test_no_relevant_match_falls_back_to_full_suite(monkeypatch):
@@ -20,11 +21,11 @@ def test_no_relevant_match_falls_back_to_full_suite(monkeypatch):
     test_agent.py isolado."""
     executed_cmds = []
 
-    def fake_run_command(cmd: str, timeout: int = 60, env=None):
-        executed_cmds.append((cmd, timeout))
-        return True, "1 passed", 10
+    def fake_run_pytest(target, **kw):
+        executed_cmds.append((" ".join(str(target).split()) + " " + str(kw.get("extra_args", "")), kw.get("timeout", 120)))
+        return testenv.TestRun(ok=True, passed=1, failed=0, python_used="py")
 
-    monkeypatch.setattr(validator_mod, "run_command", fake_run_command)
+    monkeypatch.setattr(testenv, "run_pytest", fake_run_pytest)
     monkeypatch.setattr(
         validator_mod,
         "discover_test_files",
@@ -53,11 +54,11 @@ def test_relevant_match_still_uses_targeted_fast_path(monkeypatch):
     a correcao nao deve forcar full-suite sempre."""
     executed_cmds = []
 
-    def fake_run_command(cmd: str, timeout: int = 60, env=None):
-        executed_cmds.append((cmd, timeout))
-        return True, "1 passed", 10
+    def fake_run_pytest(target, **kw):
+        executed_cmds.append((" ".join(str(target).split()) + " " + str(kw.get("extra_args", "")), kw.get("timeout", 120)))
+        return testenv.TestRun(ok=True, passed=1, failed=0, python_used="py")
 
-    monkeypatch.setattr(validator_mod, "run_command", fake_run_command)
+    monkeypatch.setattr(testenv, "run_pytest", fake_run_pytest)
     monkeypatch.setattr(
         validator_mod,
         "discover_test_files",

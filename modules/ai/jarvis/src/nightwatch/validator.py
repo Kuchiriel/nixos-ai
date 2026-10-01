@@ -33,6 +33,13 @@ class ValidationStep:
     duration_ms: int = 0
     skipped: bool = False
     skip_reason: str = ""
+    # (30/09) Atribuição. `passed` sozinho não diz se a falha é nossa —
+    # `regressed=False` com `passed=False` significa "a suíte tem lixo
+    # antigo, mas minha mudança não quebrou nada", que é uma situação
+    # diferente de "regressão".
+    baseline: list[str] = field(default_factory=list)
+    new_failures: list[str] = field(default_factory=list)
+    regressed: bool | None = None
 
 
 @dataclass
@@ -52,30 +59,18 @@ class ValidationReport:
 
 
 def run_command(cmd: str, timeout: int = 60, env: dict | None = None) -> tuple[bool, str, int]:
-    """Run a command and return (success, output, duration_ms).
+    """(30/09) DELEGA para `jarvis.core.testenv.run_argv`.
 
-    (30/09) `env` existe porque `shlex.split` nao entende prefixo
-    `VAR=valor cmd` — ele viraria um token so. Passar o env explicitamente
-    e' a unica forma correta de prepender o path da FONTE.
+    Mantém a API por string (vários call sites já a usam), mas a execução
+    em si é a do dono único. `shlex.split` numa string é armadilha — foi o
+    que impediu `VAR=valor cmd` de funcionar e o que quase me fez escribir
+    `run_command` duas vezes.
     """
-    start = time.time()
-    full_env = None
-    if env:
-        full_env = {**os.environ, **env}
-    try:
-        result = subprocess.run(
-            shlex.split(cmd), capture_output=True, text=True,
-            timeout=timeout, cwd=str(find_repo_root()), env=full_env,
-        )
-        duration = int((time.time() - start) * 1000)
-        output = result.stdout + result.stderr
-        return result.returncode == 0, output[:5000], duration
-    except subprocess.TimeoutExpired:
-        duration = int((time.time() - start) * 1000)
-        return False, f"Timeout after {timeout}s", duration
-    except Exception as e:
-        duration = int((time.time() - start) * 1000)
-        return False, str(e), duration
+    import shlex
+    from jarvis.core.testenv import run_argv
+    argv = shlex.split(cmd)
+    rc, output, ms = run_argv(argv, cwd=find_repo_root(), timeout=timeout, env=env)
+    return rc == 0, output, ms
 
 
 def discover_test_files() -> list[str]:
@@ -162,78 +157,20 @@ def _test_has_real_assertion(content: str) -> tuple[bool, str]:
     return True, ""
 
 
+# (30/09) Dono único da política de teste: `jarvis.core.testenv`.
+# Estas duas funções eram cópias literais das que estavam em
+# `core/devtools.py` — e os 5 bugs do verifier (sem pytest, env do store,
+# import duplicado, sem deps, sem baseline) precisei corrigir duas vezes,
+# uma em cada lado. Agora os dois harnesses importam o mesmo módulo e o
+# próximo bug é corrigido uma vez.
 def _python_with_pytest() -> str:
-    """(30/09) O interpretador que TEM pytest -- para o validador.
+    from jarvis.core.testenv import python_with_pytest
+    return python_with_pytest()
 
-    Bug real medido (a convergencia media 0/23 por isto, nao pelo modelo):
-    o nightwatch roda como servico systemd e o validador chamava
-    `python3 -m pytest`. Medido no unit real:
-      - /run/current-system/sw/bin/python3 NAO EXISTE (o PATH do unit nao
-        tem python3; o processo roda com o python do proprio closure);
-      - o site-packages do jarvis tem so `jarvis` e `nightwatch`.
-    Resultado: "No module named pytest" contava como FALHA DA TASK.
-    A evidencia instrumentada provou: summary "2 passed 1 failed",
-    new_fails=[] (a falha NAO era do patch), val_output "No module
-    named pytest".
 
-    Tentativas REJEITADAS por medicao (nao repetir):
-      a) achar um python com pytest no PATH -> nao existe nenhum no servico;
-      b) `nix develop --command python -m pytest` -> no unit quebra
-         (ProtectSystem=strict nao deixa o nix escrever cache, MemoryMax=2G
-         estoura no nix-eval) e o servico saia com codigo 0 no meio da
-         task (Result=success, ExecMainStatus=0, journal vazio);
-      c) makeSearchPathOutput sobre propagatedBuildInputs -> o atributo
-         Nix nao bate com o nix-support real; pytest nao entrava.
-
-    A via canonica: python3.withPackages monta um ambiente com pytest de
-    verdade, e o Nix o passa em JARVIS_TEST_PYTHON. O Python nao inventa
-    interpretador -- usa o indicado e se CERTIFICA (import pytest) antes.
-
-    Ordem: JARVIS_TEST_PYTHON -> sys.executable -> python3/python do PATH.
-    """
-    import os as _os
-    import shutil as _sh
-    import subprocess as _sp
-    import sys as _sys
-    cands = [
-        _os.environ.get("JARVIS_TEST_PYTHON") or "",
-        _sys.executable or "",
-    ]
-    for name in ("python3", "python"):
-        p = _sh.which(name)
-        if p:
-            cands.append(p)
-    for c in cands:
-        if not c:
-            continue
-        resolved = c if _os.path.isfile(c) else _sh.which(c)
-        if not resolved:
-            continue
-        try:
-            r = _sp.run([resolved, "-c", "import pytest"],
-                         capture_output=True, timeout=20)
-            if r.returncode == 0:
-                return resolved
-        except Exception:
-            continue
-    return "python3"
-
-def _source_env() -> dict:
-    """(30/09) PYTHONPATH que testa a FONTE, nao a copia do store.
-
-    Medido: sem isto, `import jarvis.core.agent` resolvia para
-    /nix/store/...-jarvis-0.1.0/lib/python3.13/site-packages/jarvis/ — a
-    copia INSTALADA, stale por definicao (o patch acabou de ser aplicado na
-    arvore de fontes). Validar um patch contra a copia stale e' errado por
-    construcao: da ImportError em `context_budget` e o harness culpava o
-    modelo por isso.
-
-    Prepende `modules/ai/jarvis/src` ao PYTHONPATH herdado, que mantem as
-    deps do store (numpy, httpx, ...) disponiveis.
-    """
-    src = find_repo_root() / "modules" / "ai" / "jarvis" / "src"
-    prev = os.environ.get("PYTHONPATH", "")
-    return {"PYTHONPATH": f"{src}:{prev}" if prev else str(src)}
+def _test_env(root=None) -> dict:
+    from jarvis.core.testenv import test_env
+    return test_env(root)
 
 
 def _test_command(target: str, extra: str = "") -> str:
@@ -342,8 +279,38 @@ def run_syntax_checks(files: list[str]) -> ValidationReport:
     return report
 
 
-def run_targeted_tests(files: list[str]) -> ValidationReport:
-    """Run tests relevant to the changed files."""
+def _run_and_attribute(target: str, extra: str, timeout: int,
+                       baseline: list[str] | None,
+                       step_name: str = "tests") -> "ValidationStep":
+    """Roda pytest via testenv e monta o ValidationStep com ATRIBUIÇÃO.
+
+    (30/09) `-x` saiu de propósito: com -x o processo morre no primeiro
+    erro e o resto da suíte (o baseline inteiro) fica desconhecido — sem
+    baseline completo não dá para distinguir regressão de lixo antigo.
+    """
+    from jarvis.core import testenv
+    run = testenv.run_pytest(target, timeout=timeout, baseline=baseline,
+                             extra_args=extra, cwd=find_repo_root(),
+                             test_root=testenv.jarvis_test_root())
+    step = ValidationStep(name=step_name, command=" ".join(run.argv))
+    step.passed = run.passed_no_regression
+    step.output = (run.verdict_line() + "\n" + run.output)[-3000:]
+    step.duration_ms = run.duration_ms
+    step.baseline = list(baseline or ())
+    step.new_failures = list(run.new_failures)
+    step.regressed = run.regressed
+    return step
+
+
+def run_targeted_tests(files: list[str], baseline: list[str] | None = None) -> ValidationReport:
+    """Run tests relevant to the changed files.
+
+    (30/09) `baseline` = IDs que já falhavam ANTES do patch. Sem ele o
+    veredito é `returncode == 0`, ou seja: qualquer teste já quebrado no
+    repo reprova a task e o modelo é culpado por nada (o bug 6). Com ele,
+    o veredito passa a ser "o patch introduziu alguma falha nova?" — que é
+    a pergunta certa. A política mora em jarvis.core.testenv.
+    """
     report = ValidationReport()
     
     # Determine which test files to run
@@ -420,25 +387,17 @@ def run_targeted_tests(files: list[str]) -> ValidationReport:
             test_cmd = _test_command(test_target, "-q --tb=short")
         else:
             test_cmd = f"cd {project_root} && {_test_command('.', '-q --tb=short')}"
-        step = ValidationStep(name="tests:full-suite-fallback", command=test_cmd)
-        success, output, duration = run_command(test_cmd, env=_source_env(), timeout=600)
-        step.passed = success
-        step.output = output[-3000:]
-        step.duration_ms = duration
-        report.steps.append(step)
-        report.passed = success
+        run = _run_and_attribute(str(test_dir), "-q --tb=short -rf", 600, baseline,
+                                 step_name="tests:full-suite-fallback")
+        report.steps.append(run)
+        report.passed = run.passed
         return report
 
-    # Run tests
-    test_cmd = _test_command(" ".join(relevant_tests), "-x -q --tb=short")
-    step = ValidationStep(name="tests", command=test_cmd)
-    success, output, duration = run_command(test_cmd, env=_source_env(), timeout=120)
-    step.passed = success
-    step.output = output[:3000]
-    step.duration_ms = duration
+    # Run tests (atribuídos via testenv — dono único)
+    step = _run_and_attribute(" ".join(relevant_tests), "-q --tb=short -rf", 120,
+                              baseline, step_name="tests")
     report.steps.append(step)
-    report.passed = success
-    
+    report.passed = step.passed
     return report
 
 
@@ -478,7 +437,7 @@ def run_import_check(files: list[str]) -> ValidationReport:
         # interpretador do próprio processo — que tem o jarvis importável.
         success, output, duration = run_command(
             f'"{sys.executable}" -c "import {module}"',
-            timeout=60, env=_source_env(),
+            timeout=60, env=_test_env(),
         )
         step.passed = success
         step.output = output[:500]
@@ -495,6 +454,7 @@ def validate_change(
     files: list[str],
     run_tests: bool = True,
     run_imports: bool = True,
+    baseline: list[str] | None = None,
 ) -> ValidationReport:
     """Run full validation pipeline on changed files."""
     start = time.time()
@@ -513,7 +473,7 @@ def validate_change(
     # 4. Targeted tests
     tests = ValidationReport()
     if run_tests:
-        tests = run_targeted_tests(files)
+        tests = run_targeted_tests(files, baseline=baseline)
     
     # Combine results
     combined = ValidationReport()

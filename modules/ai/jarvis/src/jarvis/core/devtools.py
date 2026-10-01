@@ -982,187 +982,25 @@ def code_search(pattern: str, path: str = ".", max_results: int = 50) -> dict[st
 # TOOL: run_tests
 # ===========================================================================
 
-def _python_with_pytest() -> str:
-    """(30/09) O interpretador que TEM pytest.
-
-    Medido no dev.py: `run_tests` chamava `["python", "-m", "pytest"]` —
-    `python` (nem `python3`) do PATH, que no serviço/sandbox pode não ter
-    pytest. Sintoma: "No module named pytest" lido como teste falhando.
-    Mesma família dos 5 bugs do verificador do nightwatch.
-
-    Ordem: JARVIS_TEST_PYTHON (o Nix escolhe) → sys.executable → PATH.
-    Cada candidado é CERTIFICADO com `import pytest` antes de ser aceito.
-    """
-    import os as _os
-    import shutil as _sh
-
-    cands = [
-        _os.environ.get("JARVIS_TEST_PYTHON") or "",
-        sys.executable or "",
-    ]
-    for name in ("python3", "python"):
-        p = _sh.which(name)
-        if p:
-            cands.append(p)
-    for c in cands:
-        if not c:
-            continue
-        resolved = c if _os.path.isfile(c) else _sh.which(c)
-        if not resolved:
-            continue
-        try:
-            r = subprocess.run(
-                [resolved, "-c", "import pytest"],
-                capture_output=True, timeout=20,
-            )
-            if r.returncode == 0:
-                return resolved
-        except Exception:
-            continue
-    return sys.executable or "python3"
-
-
-def _test_env() -> dict[str, str]:
-    """(30/09) PYTHONPATH com a FONTE na frente, não a cópia do store.
-
-    Sem isto os testes importam o jarvis instalado (stale) em vez da
-    árvore que acabou de ser editada — o agente valida uma coisa e altera
-    outra. Mesma lição do bug 4 do nightwatch (validar contra /nix/store).
-    """
-    env = dict(os.environ)
-    src = _project_root() / "modules" / "ai" / "jarvis" / "src"
-    prev = env.get("PYTHONPATH", "")
-    env["PYTHONPATH"] = f"{src}:{prev}" if prev else str(src)
-    return env
-
-
 def run_tests(test_path: str = "tests/", pattern: str = "", timeout: int = 120,
               baseline: list[str] | None = None) -> dict[str, Any]:
     """Executa testes pytest e retorna resultado parseado.
 
-    (30/09) Mudanças vindas do nightwatch, aplicadas aqui:
+    (30/09) DELEGA para `jarvis.core.testenv` — o dono único. Antes esta
+    função tinha sua própria `_python_with_pytest`/`_test_env`/`run_tests`,
+    duplicando o `nightwatch/validator.py`; os 5 bugs do verifier foram
+    corrigidos DUAS VEZES por causa disso (e a segunda eu ainda esqueci).
+    Conceito tem um dono só: quem precisa, delega.
 
-    1. Usa um interpretador que TEM pytest (era `python` do PATH).
-    2. PYTHONPATH com a fonte na frente (não o store stale).
-    3. **Distingue falha pré-existente de falha nova** — este é o bug que
-       mais custou a noite toda. Antes, `ok` era só `returncode == 0`, então
-       qualquer teste já quebrado no repo aparecia como "minha mudança
-       quebrou" e o agente caçava fantasma. Passe `baseline` (lista de IDs
-       que já falhavam ANTES da mudança) e leia `new_failures`/`regressed`.
-    4. Extrai os IDs reais dos testes que falharam (antes `errors` recebia a
-       linha de resumo, que não diz nada) e o traceback de verdade.
-    5. Sem `-x`: com -x o processo para no primeiro erro e o resto da suíte
-       (o baseline inteiro) fica desconhecido.
+    Ganho concreto: `baseline` separa regressão NOVA de falha
+    PRÉ-EXISTENTE. Sem isso, `ok` era só `returncode == 0` e qualquer
+    teste já quebrado no repo aparecia como "minha mudança quebrou" — o
+    agente caçava fantasma. É o bug 6, e aqui era o caminho padrão.
     """
-    try:
-        py = _python_with_pytest()
-        cmd = [py, "-m", "pytest", test_path, "-q", "--tb=short", "-rf"]
-        if pattern:
-            cmd.extend(["-k", pattern])
-
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout,
-            cwd=str(_project_root() / "modules" / "ai" / "jarvis"),
-            env=_test_env(),
-        )
-
-        output = result.stdout + result.stderr
-        passed = failed = 0
-        for line in output.splitlines():
-            if " passed" in line or line.strip().endswith("passed"):
-                try:
-                    passed = int(line.split(" passed")[0].strip().split()[-1])
-                except (ValueError, IndexError):
-                    pass
-            if " failed" in line or line.strip().endswith("failed"):
-                try:
-                    failed = int(line.split(" failed")[0].strip().split()[-1])
-                except (ValueError, IndexError):
-                    pass
-
-        # IDs reais dos que falharam (linhas "FAILED path::test - msg").
-        # (30/09) Normalizados para relativos à raiz do pytest. Antes saíam
-        # como "../../../../../../../tmp/x.py::test_y" e o baseline que o
-        # agente monta não casava com nada — inviável de usar. Id stable é
-        # requisito, não estética: sem isso o bug 6 continua vivo na
-        # prática mesmo com o código certo.
-        test_root = _project_root() / "modules" / "ai" / "jarvis"
-        failing: list[str] = []
-        for line in output.splitlines():
-            s = line.strip()
-            if s.startswith("FAILED ") or s.startswith("ERROR "):
-                tid = s.split(" ", 1)[1].split(" - ")[0].strip()
-                if not tid:
-                    continue
-                head = tid.split("::", 1)[0]
-                p = Path(head)
-                if p.is_absolute():
-                    try:
-                        head = str(p.relative_to(test_root))
-                    except ValueError:
-                        head = p.name
-                else:
-                    # sobe até a raiz do pytest, sem depender de "../"
-                    try:
-                        head = os.path.normpath(str((test_root / p).resolve().relative_to(test_root)))
-                    except Exception:
-                        head = p.name
-                tid = head + ("::" + tid.split("::", 1)[1] if "::" in tid else "")
-                if tid not in failing:
-                    failing.append(tid)
-
-        # Traceback de verdade: bloco entre "FAILURES"/"ERRORS" e "short
-        # test summary". `errors` antes recebia a linha de resumo — inútil.
-        errors: list[str] = []
-        grab = False
-        for line in output.splitlines():
-            if "=== FAILURES" in line or "=== ERRORS" in line:
-                grab = True
-            elif "=== short test summary" in line:
-                grab = False
-            elif grab and line.strip():
-                errors.append(line.rstrip()[:300])
-
-        base = set(baseline or ())
-        new_failures = [t for t in failing if t not in base]
-        regressed = bool(new_failures) if base else None
-
-        out: dict[str, Any] = {
-            "ok": result.returncode == 0,
-            "passed": passed,
-            "failed": failed,
-            "failing": failing,
-            "errors": errors[-40:],
-            "output": output[-2000:],
-            "exit_code": result.returncode,
-            "python_used": py,
-        }
-        if base:
-            out["new_failures"] = new_failures
-            out["regressed"] = regressed
-            out["note"] = (
-                f"baseline: {len(base)} teste(s) já falhavam. "
-                f"regressed={regressed} (new_failures={len(new_failures)}). "
-                "Se regressed=False, sua mudança NÃO quebrou nada — "
-                "as falhas em `failing` são pré-existentes."
-            )
-        else:
-            out["note"] = (
-                "SEM baseline: `ok` significa 'a suíte inteira passa'. "
-                "Passe baseline=[IDs que já falhavam] para distinguir "
-                "regressão de falha pré-existente."
-            )
-        if "No module named pytest" in output:
-            out["ok"] = False
-            out["error"] = (
-                "python_sem_pytest: o interpretador escolhido não tem pytest. "
-                f"tentado={py}"
-            )
-        return out
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": f"Tests timed out ({timeout}s)", "passed": 0, "failed": -1}
-    except (OSError, subprocess.SubprocessError) as e:
-        return {"ok": False, "error": f"Test error: {e}", "passed": 0, "failed": -1}
+    from jarvis.core import testenv
+    run = testenv.run_pytest(test_path, pattern=pattern, timeout=timeout,
+                             baseline=baseline)
+    return run.to_dict()
 
 
 # ===========================================================================

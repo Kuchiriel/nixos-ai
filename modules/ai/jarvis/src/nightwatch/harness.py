@@ -2344,10 +2344,19 @@ class Harness:
                     # que o nightwatch via SEMPRE era esse teste de
                     # ambiente, não o patch. A correção: baseline antes.
                     # Só reprova o que o patch QUEBROU de novo.
+                    # (30/09) O baseline entra na VALIDAÇÃO, não é corrigido
+                    # depois. Antes o veredito era `returncode == 0` e a
+                    # correção vinha DEPOIS (se all_fails and not new_fails),
+                    # ou seja: a task já tinha sido reprovada. Com o baseline
+                    # dentro, `passed` já responde "o patch introduziu falha?".
+                    # Sem baseline disponível, cai no comportamento antigo e a
+                    # lógica pós-hoc abaixo ainda salva.
+                    _bl = getattr(_pre_patch_test_baseline, "_cache", None)
                     validation = validate_change(
                         applied_files,
                         run_tests=self.config.run_tests,
                         run_imports=self.config.run_imports,
+                        baseline=sorted(_bl) if _bl is not None else None,
                     )
 
                     cp.record_operation("validate", validation.passed, validation.summary)
