@@ -73,7 +73,7 @@ def test_discovery_retries_once_then_gives_up(capsys, tmp_path, monkeypatch) -> 
         if len(calls) == 1:
             raise concurrent.futures.TimeoutError()
         return json.dumps([{
-            "description": "Create missing unit tests for login handler",
+            "description": "Fix None dereference in login handler when user is None",
             "target_files": ["sample.py"],
             "acceptance_criteria": "pytest passes",
             "priority": 5, "risk": "low"}])
@@ -81,7 +81,7 @@ def test_discovery_retries_once_then_gives_up(capsys, tmp_path, monkeypatch) -> 
     tasks = H._discover_llm_tasks(_flaky, "nixos-ai")
     assert len(calls) == 2
     assert len(tasks) == 1
-    assert tasks[0].description.startswith("Create missing")
+    assert tasks[0].description.startswith("Fix None dereference")
 
 
 def test_discovery_twice_timeout_returns_empty(capsys) -> None:
@@ -118,7 +118,7 @@ def test_discovery_parses_fenced_response(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(H, "find_repo_root", lambda: tmp_path)
     monkeypatch.setattr(H, "_resolve_file_path", lambda p: tmp_path / p)
 
-    arr = [{"description": "Create missing unit tests for login handler",
+    arr = [{"description": "Fix None dereference in login handler when user is None",
             "target_files": ["sample.py"],
             "acceptance_criteria": "pytest passes",
             "priority": 5, "risk": "low"}]
