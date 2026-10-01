@@ -183,7 +183,7 @@ class ToolValidator:
         elif func_name == "read_file":
             return self._validate_read(args, output)
         elif func_name == "run_tests":
-            return self._validate_tests(output)
+            return self._validate_tests(output, args)
         else:
             return ValidationResult(valid=True, enhanced_output=output,
                                     warnings=[], severity="ok")
@@ -735,14 +735,43 @@ class ToolValidator:
         return ValidationResult(valid=True, enhanced_output=output,
                                 warnings=warnings, severity=severity)
 
-    def _validate_tests(self, output: str) -> ValidationResult:
-        """Validate run_tests output."""
+    def _validate_tests(self, output: str, args: dict | None = None) -> ValidationResult:
+        """Validate run_tests output.
+
+        (30/09) Bug 6, terceira instância. Antes: qualquer "N failed" no
+        output virava severity="error", sem distinguir falha NOVA de
+        falha PRÉ-EXISTENTE. Como o repo já tem teste quebrado, isso punia
+        o agente por algo que ele não quebrou — e é a razão de fundo do
+        "nightwatch nunca converge".
+
+        Agora: se o agente passou `baseline` (IDs que já falhavam), só
+        `new_failures`/`regressed` contam. Sem baseline, comportamento
+        antigo (qualquer falha é erro) — mas o aviso passa a dizer
+        explicitamente que a distinção não foi feita, para o modelo não
+        assumir que a falha é dele.
+        """
         warnings = []
+        args = args or {}
+        tem_baseline = bool(args.get("baseline"))
+
+        if tem_baseline and '"regressed": false' in output.replace("'", '"'):
+            # nada novo quebrou — a suíte pode estar apenas com lixo antigo
+            return ValidationResult(
+                valid=True, enhanced_output=output,
+                warnings=["Testes: NENHUMA regressão nova (baseline aplicado). "
+                          "As falhas listadas são pré-existentes — não são suas."],
+                severity="ok")
 
         for pattern in self.TEST_FAILURE_PATTERNS:
             match = re.search(pattern, output)
             if match:
-                warnings.append(f"Tests reported failures: {match.group(0)}")
+                msg = f"Tests reported failures: {match.group(0)}"
+                if not tem_baseline:
+                    msg += (" — ATENÇÃO: você não passou `baseline`, então não "
+                            "dá para saber se é regressão sua ou falha "
+                            "pré-existente. Rode de novo com baseline=[...] "
+                            "antes de tentar consertar.")
+                warnings.append(msg)
                 severity = "error"
                 return ValidationResult(valid=True, enhanced_output=output,
                                         warnings=warnings, severity=severity)
