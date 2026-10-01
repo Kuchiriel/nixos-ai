@@ -67,8 +67,13 @@ def run_cycle(n):
             break
         time.sleep(20)
     else:
-        print("  (teto de 1h atingido, parando o serviço)", flush=True)
-        sh("sudo systemctl stop nightwatch.service")
+        print("  (teto de 1h atingido — kill direto, stop pendura em call LLM)",
+              flush=True)
+        # NOTA (30/09): `systemctl stop` PENDURA quando o nightwatch esta
+        # no meio de uma chamada LLM longa (o MoE carrega por minutos).
+        # `kill` nao espera o ExecStopPost. Usa kill primeiro.
+        sh("sudo systemctl kill -s SIGKILL nightwatch.service")
+        sh("sudo systemctl reset-failed nightwatch.service")
 
     # captura o resultado
     j = sh("sudo journalctl -u nightwatch.service -b --no-pager --since '10min ago'").stdout
