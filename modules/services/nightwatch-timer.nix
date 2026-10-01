@@ -51,7 +51,12 @@ in {
         # (o de sw/bin é symlink pro store, sem setuid, morre no serviço).
         "PATH=/run/wrappers/bin:/run/current-system/sw/bin:${pkgs.git}/bin:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.findutils}/bin:${pkgs.gnused}/bin"
       ];
-      ExecStart = "${jarvisPackage}/bin/jarvis nightwatch --tasks 10 --report-telegram --projects nixos-ai";
+      ExecStart = "${jarvisPackage}/bin/jarvis nightwatch --tasks 4 --report-telegram --projects nixos-ai";
+      # (30/09) --tasks 4 (era 10): medido, 10 tasks x ~2min (MoE 60-90s
+      # por chamada + retries) estoura o teto de 1h e o run é morto ANTES
+      # do summary — o ciclo fecha sem Retry convergence. 4 tasks cabem,
+      # produzem summary completo, e cabem MAIS ciclos completos por noite
+      # (cada um com o dado de convergência medido).
       # ^ escopo explícito: auto-discover varria TUDO (incl. repos de
       # produção como guia-renamer-pro). Timer só toca nixos-ai.
       WorkingDirectory = projectRoot;
