@@ -295,10 +295,24 @@ def run_targeted_tests(files: list[str]) -> ValidationReport:
         project_root = find_repo_root()
 
         # Find the test directory in the target project
+        #
+        # (30/09) Bug real medido: a raiz tem um `tests/` VAZIO (sem
+        # nenhum test_*.py). O `next(...)` pegava esse diretório vazio
+        # PRIMEIRO, rodava `pytest tests/` → "no tests ran" →
+        # passed=False. A task era reprovada por "não achou teste", e o
+        # baseline nunca era populado (não havia linha FAILED). Os 112
+        # testes reais em modules/ai/jarvis/tests/ nunca eram alcançados.
+        # Só agoracorre o fallback Nix.
+        def _has_tests(d):
+            try:
+                return d.is_dir() and any(d.glob("test_*.py"))
+            except Exception:
+                return False
+
         test_dir = next(
             (d for d in (project_root / "tests", project_root / "test",
                          project_root,)  # flat layout
-             if d.exists() and d.is_dir()),
+             if _has_tests(d)),
             None,
         )
         # Fall back to nixos-ai layout only when working nixos-ai itself
