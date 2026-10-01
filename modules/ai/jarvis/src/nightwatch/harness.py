@@ -487,12 +487,23 @@ Focus on, in this ORDER of value:
      resource leaks, race conditions, wrong conditionals — a concrete
      input that produces a wrong/crashed result.
   2. SECURITY: unvalidated input, secrets in code, unsafe eval/exec.
-  3. TEST GAPS: a source file listed above with NO matching file in
-     EXISTING TEST FILES.
-  4. Only then: documentation, style, speculative refactors.
+  3. Only then: documentation, style.
 
 RULES:
 - Every task MUST cite real target_files from the source list above.
+- (30/09, PROVADO por teste decisivo) O modelo ACERTA bug de 1 linha com
+  grounding completo (typo, None-deref pontual — old_text exato,
+  new_text certo). O que ele NÃO converge é task AUTO-REFERENCIAL ou
+  ambígua: "add test coverage" (o modelo escreve o teste E o contrato,
+  que pode não bater com o código) e "add type hints/docstrings"
+  (sem resposta única, nada a verificar). 5 ciclos noturnos: 0/31 de
+  convergência, e praticamente TODAS as tasks eram dessas duas famílias.
+  => NÃO proponha "add test", "add type hints", "add docstrings",
+  "improve coverage", "add documentation". São tarefas sem resposta
+  única.
+  Se a sua análise é real e based no código, o QUE ela propõe é um
+  DEFETO (1), não meta-trabalho (add-test/doc). Sem defeito real?
+  Devolva [].
 - Do NOT propose work that is already done: if a test file for the
   module already exists, do not "add tests"; if the function already
   has type hints/docstrings, do not "add type hints/docstrings".
@@ -567,6 +578,16 @@ Return JSON array."""
                         # task sem alvo acionável = task de review, não de
                         # patch. Não entra na fila (o filtro de execução
                         # também pegaria, mas melhor não encher a fila).
+                        continue
+                    # (30/09, teste decisivo) Filtro de task AUTO-REFERENCIAL
+                    # (defesa em profundidade — não confia só no prompt).
+                    # "add test/docstring/type hints" não converge (5 ciclos
+                    # noturnos: 0/31, e quase toda task era dessa família).
+                    # Proof: o MESMO modelo acerta bug de 1 linha com o
+                    # grounding completo. O que falha é a task sem resposta
+                    # única — meta-trabalho, não defeito. Não entra na fila.
+                    _desc = (item.get("description", "") or "").lower()
+                    if _is_meta_task(_desc):
                         continue
                     tasks.append(Task(
                         id=f"disc-{int(time.time())}-{i}",
@@ -683,6 +704,37 @@ def _normalize_target(raw: str, project_root: Path | None = None) -> str:
         t = t[len(root):]
     t = t.lstrip("/")
     return t
+
+
+_META_VERB = r"(?:add|write|create|improve|increase|update|ensure|include|document|cover)"
+_META_NOUN = r"(?:tests?|testing|docstrings?|type\s*hints?|documentation|coverage|comments?|readme)"
+_META_TASK_RE = re.compile(
+    # verbo de meta-trabalho seguido (até 60 chars) do alvo de meta-trabalho
+    rf"\b{_META_VERB}\b.{{0,60}}?\b{_META_NOUN}\b"
+    # ou: "all/every source modules have/have matching tests"
+    r"|\b(?:all|every)\b.{0,30}\b(?:source|module)s?\b.{0,30}"
+    r"\b(?:have|has|with|matching|corresponding)\b.{0,20}\btests?\b"
+    # ou o alvo vem primeiro: "test coverage for X", "testing gaps"
+    rf"|\b{_META_NOUN}\b.{{0,30}}\b(?:for|across|in|of)\b"
+)
+
+
+def _is_meta_task(description: str) -> bool:
+    """(30/09) Task AUTO-REFERENCIAL/ambígua que o patch loop não converge.
+
+    Medido em 5 ciclos noturnos (convergência 0/31): quase toda task era
+    "add test coverage" / "add type hints and docstrings" / "ensure all
+    files have tests". São meta-trabalho — o modelo escreve o teste E o
+    contrato (que pode não bater com o código), ou "add docstring" não
+    tem resposta única. Não há resposta certa dentro, logo não converge.
+
+    Prova de que NÃO é limitação do modelo: o MESMO modelo, com o MESMO
+    grounding, ACERTA um bug de 1 linha (old_text exato, new_text certo).
+    O que não converge é a task sem resposta única.
+
+    Devolve True se a descrição for meta-trabalho (e deve ser filtrada).
+    """
+    return bool(_META_TASK_RE.search(description or ""))
 
 
 def _resolve_llm_targets(raw_targets, project_root: Path | None = None,
