@@ -409,3 +409,47 @@ rodar add-test por último, depois das que já convergem.
 - Se convergência continuar 0 com grounding no ar: comparar *o que o
   modelo recebeu* vs *o patch que produziu* — a pergunta vira "a
   informação não basta ou ele não a usa?".
+
+---
+
+## Noite 30/09 — 2 bugs de VERIFIER encontrados (a Lição 1，奇数 vez)
+
+Medindo os ciclos noturnos (o `baseline-check` que criei não pegava),
+achei **dois** bugs onde o próprio nightwatch estava mentindo — ambos
+**verifier quebrado**, não modelo:
+
+### V1 — `run_targeted_tests` parava no `tests/` VAZIO
+A raiz do repo tem um `tests/` **vazio** (0 `test_*.py`). O fallback
+usava `next(d for d in (...,"tests",...) if d.exists())` — pegava o
+vazio **primeiro**, rodava `pytest tests/` → **"no tests ran"** →
+`passed=False`. Os **112 testes reais** em `modules/ai/jarvis/tests/`
+nunca eram alcançados. Duas falhas de uma vez: (a) task reprovada por
+"não achou teste", (b) baseline nunca populado (sem linha `FAILED`).
+Fix: `_has_tests()` só aceita dir com `test_*.py`. Verificado: agora
+`1637 passed` (antes "no tests ran").
+
+### V2 — baseline de teste falhava por AMBIENTE
+`test_integration::test_llama_cpp_chat` exige o LLM carregado; com o
+MoE no ar ele falha (500). O nightwatch via isso como falha **da task**
+— o modelo culpado por algo que não fez. O padrão "2 passed, 2 failed"
+de 2 ciclos consecutivos era **esse** teste. Fix: baseline captura as
+falhas de ambiente (1ª task, branch limpa, cacheado) — task só é
+reprovada por falha **NOVA** que o patch introduziu.
+
+### A lição que importa (repetição da Lição 1)
+V1 é a **mesma classe** do bug de `discover_test_files` que corrigi de
+manhã (não achava o layout Nix) — mas **no outro lado** do validador.
+Dois lugares com a mesma suposição de layout, um corrigido e um não.
+**Lição: quando um fix de layout funciona, audite os outros que
+assumem o mesmo layout.** E: antes de culpar o modelo por "não
+convergir", verifique se o **verificador nem estava medindo certo**.
+
+### Estado do loop (o que o pipeline faz agora)
+- baseline: falha de ambiente não reprova
+- `_has_tests`: suíte real roda (1637 testes, não "no tests ran")
+- retry entrega traceback + o **teste que reprovou** (grounding)
+- métrica de convergência reportada por run
+
+Ainda **0 commits** nests ciclos — mas agora o "falhou" significa
+falha REAL do patch, não verifier mentindo. Essa é a base pra medir
+convergência de verdade.
