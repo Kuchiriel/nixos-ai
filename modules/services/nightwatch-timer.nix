@@ -36,13 +36,16 @@ let
   #      não bate com o nix-support real; pytest não entrava no path.
   #
   # A via canônica: python3.withPackages monta um ambiente com pytest de
-  # verdade. O Nix ESCOLHE o interpretador e o passa em JARVIS_TEST_PYTHON;
-  # o Python apenas obedece e se certifica (`import pytest`) antes de usar.
-  testPythonEnv = pkgs.python3.withPackages (ps: [
-    ps.pytest
-    ps.pytest-timeout
-    ps.hypothesis
-  ]);
+  # verdade, e o Nix o passa em JARVIS_TEST_PYTHON. O Python apenas obedece
+  # e se certifica (`import pytest`) antes de usar.
+  #
+  # (30/09) E com as DEPES REAIS do jarvis: só pytest não bastava — os testes
+  # do projeto importam requests/numpy/httpx, e dava "ModuleNotFoundError:
+  # No module named 'requests'", contado como falha da task (5a vez da mesma
+  # família: verifier com ambiente diferente do projeto). O ambiente de teste
+  # tem que ser o closure real + pytest. Montado no overlay (flake.nix →
+  # pkgs.jarvis-test-env) para não duplicar a lista de deps aqui.
+  testPythonEnv = pkgs.jarvis-test-env;
 in {
   systemd.services.nightwatch = {
     description = "JARVIS nightwatch — autonomous overnight maintenance";

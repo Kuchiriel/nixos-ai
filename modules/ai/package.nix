@@ -27,7 +27,11 @@
 
     build-system = with python3Packages; [setuptools];
 
-    dependencies = with python3Packages; [
+    # FONTE ÚNICA da lista de deps (30/09). Antes esta lista vivia só em
+    # `dependencies`, e o ambiente de TESTE do nightwatch precisava dela
+    # para não falhar com "No module named 'requests'" — sem acesso, a
+    # lista seria duplicada (e driftaria). `dependencies` deriva daqui.
+    pythonDeps = with python3Packages; [
       requests
       httpx
       numpy
@@ -40,7 +44,10 @@
       playwright # browser tool via CDP (connect_over_cdp; sem ms-playwright)
     ];
 
+    dependencies = pythonDeps;
+
     nativeBuildInputs = [makeWrapper];
+
 
 
     # mcp-nixos (MCP server read-only de packages/options do nixpkgs) é usado

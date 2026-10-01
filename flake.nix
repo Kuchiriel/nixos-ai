@@ -95,6 +95,13 @@
         # Pacote Python do JARVIS
         jarvis = (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast;}).base;
         jarvis-voice = (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast;}).withVoice;
+        # (30/09) Ambiente de TESTE do nightwatch: as deps REAIS do jarvis +
+        # pytest. Sem as deps, os testes do projeto falhavam com
+        # "No module named 'requests'" e o harness culpava o modelo.
+        # Montado pelo Nix — Python só obedece (JARVIS_TEST_PYTHON).
+        jarvis-test-env = final.python3.withPackages (ps:
+          [ ps.pytest ps.pytest-timeout ps.hypothesis ]
+          ++ (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast;}).base.pythonDeps);
         
         # opencode via nixpkgs-unstable (dan-online/opencode-nix parou em 2026-05;
         # bumps vivem em branches chore/*; unstable verificado via one-shot).
