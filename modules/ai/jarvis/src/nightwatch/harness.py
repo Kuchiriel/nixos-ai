@@ -739,6 +739,71 @@ def _resolve_llm_targets(raw_targets, project_root: Path | None = None,
     return uniq
 
 
+def _extract_failed_tests(validation) -> set[str]:
+    """(30/09) Nomes dos testes que falharam, extraídos do output pytest.
+
+    Procura linhas do short-summary do pytest: "FAILED path::test_name - …"
+    e devolve o par (arquivo::teste) para comparar com o baseline.
+    """
+    import re as _re
+    out: set[str] = set()
+    for step in getattr(validation, "steps", []):
+        for m in _re.finditer(r"^FAILED\s+(\S+)", step.output or "", _re.M):
+            out.add(m.group(1))
+    return out
+
+
+def _pre_patch_test_baseline(applied_files: list[str]) -> set[str]:
+    """(30/09, Lição 1) Testes que JÁ FALHAVAM antes do patch.
+
+    O nightwatch roda o teste só DEPOIS de aplicar o patch, e reprova se
+    qualquer teste falhar. Mas alguns testes falham por AMBIENTE (ex.:
+    test_integration::test_llama_cpp_chat exige o LLM carregado). Medido:
+    o padrão "2 passed, 2 failed" que o nightwatch via SEMPRE era esse
+    teste de ambiente — o modelo era culpado por algo que não fez.
+
+    Estratégia pragmática e HONESTA: capturamos o baseline na PRIMEIRA
+    task do run (a branch ainda está limpa, o patch ainda não foi
+    aplicado) e reaproveitamos nas demais. Falhas de ambiente são
+    constantes durante o run (mesmo LLM, mesmo config). Assim:
+      - 1ª task: baseline = testes que já falham agora (patch não aplicado)
+      - 2ª+ tasks: baseline reaproveitado
+    Só conta falha cujo teste NÃO é sobre o arquivo mudado (ou seja, é
+    de ambiente: import/rede/LLM — independe do patch).
+
+    Best-effort: erro aqui devolve set() (não piora — só não dá o
+    benefício da dúvida).
+    """
+    # usa o baseline capturado neste run, se houver
+    cached = getattr(_pre_patch_test_baseline, "_cache", None)
+    if cached is not None:
+        return cached
+    if not applied_files:
+        return set()
+    try:
+        from nightwatch.validator import run_targeted_tests
+        report = run_targeted_tests(applied_files)
+        failed: set[str] = set()
+        if not report.passed:
+            for step in report.steps:
+                for line in (step.output or "").splitlines():
+                    if line.startswith("FAILED "):
+                        failed.add(line.split()[1])
+        # só guarda como baseline se for falha de AMBIENTE (o teste não é
+        # sobre nenhum arquivo que o patch mexeu) — se o teste é sobre o
+        # arquivo mudado, pode ser falha real do patch, não baseline.
+        changed = {Path(f).stem for f in applied_files}
+        env_failures = {
+            t for t in failed
+            if not any(Path(t).stem.replace("test_", "") in c or c in Path(t).stem
+                       for c in changed)
+        }
+        _pre_patch_test_baseline._cache = env_failures
+        return env_failures
+    except Exception:
+        return set()
+
+
 def _ground_failure(pytest_output: str) -> str:
     """(30/09, C5-pre) Anexa ao erro o ARQUIVO DE TESTE que reprovou.
 
@@ -2108,6 +2173,14 @@ class Harness:
                         return False
 
                     # ── Step 3: Validate ──
+                    # (30/09, Lição 1 aplicada ao nightwatch) Rodar o
+                    # teste só DEPOIS do patch culpa o modelo por falha
+                    # que já existia. Medido: test_integration::
+                    # test_llama_cpp_chat falha por AMBIENTE (precisa do
+                    # LLM carregado) — e o padrão "2 passed, 2 failed"
+                    # que o nightwatch via SEMPRE era esse teste de
+                    # ambiente, não o patch. A correção: baseline antes.
+                    # Só reprova o que o patch QUEBROU de novo.
                     validation = validate_change(
                         applied_files,
                         run_tests=self.config.run_tests,
@@ -2117,34 +2190,39 @@ class Harness:
                     cp.record_operation("validate", validation.passed, validation.summary)
 
                     if not validation.passed:
-                        # (30/09, C5-pre) Dava ao modelo só
-                        # validation.summary = "2 passed, 2 failed" —
-                        # contagens, ZERO informação de QUALQUE teste
-                        # quebrou e POR QUÊ. O modelo retryava às cegas
-                        # (3x o mesmo patch). O sinal já existe no
-                        # report: ValidationStep.output tem o traceback
-                        # real do pytest (até 3k chars). É o sinal que o
-                        # RHO precisa: sem ele, "aprender com o erro" é
-                        # fiction — o modelo nunca viu o erro.
-                        # Isso é engenharia de harness, não modelo.
-                        _err_detail = ""
-                        for _s in validation.steps:
-                            if not _s.passed and not _s.skipped and _s.output:
-                                _err_detail += f"\n{_s.output[:2000]}"
-                                _err_detail += _ground_failure(_s.output)
-                        previous_errors.append(
-                            f"Validation failed: {validation.summary}{_err_detail}")
-                        if attempt < max_attempts - 1:
-                            self.notify(f"⚠️ Validation failed (attempt {attempt + 1}), retrying with error context")
-                            continue
-                        safety.abort_task_branch(branch)
-                        self._fail_task(task, f"Validation failed: {validation.summary}")
-                        self.notify(f"❌ *Validation Failed*\n{validation.summary}")
-                        _log_progress({
-                            "task_id": task.id, "status": "validation_failed",
-                            "summary": validation.summary,
-                        })
-                        return False
+                        # separa falha NOVA (culpa o patch) de já-quebrada
+                        all_fails = _extract_failed_tests(validation)
+                        baseline = _pre_patch_test_baseline(applied_files)
+                        new_fails = all_fails - baseline
+                        if all_fails and not new_fails:
+                            # TODAS as falhas já existiam → patch inocente
+                            self.notify(
+                                f"✅ *Baseline-clean*\n{validation.summary} "
+                                f"(falhas pré-existentes, não do patch)")
+                            validation.passed = True
+                        else:
+                            # (C5-pre) traceback + grounding no retry
+                            _err_detail = ""
+                            for _s in validation.steps:
+                                if not _s.passed and not _s.skipped and _s.output:
+                                    _err_detail += f"\n{_s.output[:2000]}"
+                                    _err_detail += _ground_failure(_s.output)
+                            _new_txt = (f" [NEW failures: {', '.join(sorted(new_fails)[:5])}]"
+                                        if new_fails else "")
+                            previous_errors.append(
+                                f"Validation failed{_new_txt}: "
+                                f"{validation.summary}{_err_detail}")
+                            if attempt < max_attempts - 1:
+                                self.notify(f"⚠️ Validation failed (attempt {attempt + 1}), retrying with error context")
+                                continue
+                            safety.abort_task_branch(branch)
+                            self._fail_task(task, f"Validation failed: {validation.summary}")
+                            self.notify(f"❌ *Validation Failed*\n{validation.summary}")
+                            _log_progress({
+                                "task_id": task.id, "status": "validation_failed",
+                                "summary": validation.summary,
+                            })
+                            return False
 
                     # (30/09, C5) Validação passou. Se chegamos aqui numa
                     # tentativa > 1, o retry CONVERGIU: o modelo recebeu o
