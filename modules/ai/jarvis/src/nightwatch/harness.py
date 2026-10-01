@@ -1972,6 +1972,22 @@ class Harness:
         except Exception:
             pass
         
+        # Descarta task sem alvo de patch (30/09). Medido: a fila tinha
+        # head = id='stuck', desc='test', target_files=[] — o run escolheu
+        # essa, pulou ("alvo não é arquivo") e o ciclo fechou 0/0 sem
+        # trabalhar. Com --tasks 1 isso come o ciclo INTEIRO; com 4, 25%.
+        # Task sem target não tem o que patchear: não é candidata.
+        com_alvo = [t for t in tasks if (getattr(t, "target_files", None) or [])]
+        if len(com_alvo) != len(tasks):
+            sem = [t for t in tasks if not (getattr(t, "target_files", None) or [])]
+            log.info(
+                "discovery: %d task(s) sem target_files descartadas "
+                "(ex.: %s) — não têm o que patchear",
+                len(sem),
+                ", ".join(repr((t.description or "")[:30]) for t in sem[:3]),
+            )
+            tasks = com_alvo
+
         # Deduplicate by description
         seen = set()
         unique = []
