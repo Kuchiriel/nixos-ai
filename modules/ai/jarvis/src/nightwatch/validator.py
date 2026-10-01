@@ -12,6 +12,7 @@ from __future__ import annotations
 import shlex
 
 import subprocess
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -432,16 +433,25 @@ def run_import_check(files: list[str]) -> ValidationReport:
             continue
 
         # Convert file path to module path
+        # (30/09) BUG: prefixava "jarvis." com rel JÁ vindo de dentro de
+        # src/, que contém o pacote jarvis/ — então rel JA começa com
+        # "jarvis" e o resultado era `jarvis.jarvis.control_plane.events`.
+        # Ou seja, o check de import falhava em TODO arquivo do pacote, e
+        # contava como falha da task (a Lição 1 de novo: verificador
+        # mentindo). O nome do módulo é o próprio rel com "/"→".".
         try:
             rel = path.relative_to(find_repo_root() / "modules" / "ai" / "jarvis" / "src")
-            module = "jarvis." + str(rel.with_suffix("")).replace("/", ".")
+            module = str(rel.with_suffix("")).replace("/", ".")
         except ValueError:
             continue
-        
+
         step = ValidationStep(name=f"import:{module}")
+        # (30/09) `python3` bare NÃO EXISTE no PATH do unit (medido:
+        # /run/current-system/sw/bin/python3 não existe). Usar o
+        # interpretador do próprio processo — que tem o jarvis importável.
         success, output, duration = run_command(
-            f"python3 -c \"import {module}\"",
-            timeout=10,
+            f'"{sys.executable}" -c "import {module}"',
+            timeout=30,
         )
         step.passed = success
         step.output = output[:500]
