@@ -28,74 +28,35 @@ class ValidationResult:
 
 
 def detect_language(path: Path) -> str:
-    """Detect file language from extension."""
-    ext = path.suffix.lower()
-    return {
-        ".py": "python",
-        ".nix": "nix",
-        ".json": "json",
-        ".yaml": "yaml",
-        ".yml": "yaml",
-        ".toml": "toml",
-        ".sh": "bash",
-        ".md": "markdown",
-    }.get(ext, "unknown")
+    """(30/09) DELEGA para `jarvis.core.syntax.detect_language` — o dono único."""
+    from jarvis.core.syntax import detect_language as _dl
+    return _dl(path)
 
 
 def strip_markdown_fences(content: str) -> str:
-    """Strip markdown code fences that LLMs sometimes add around files.
-
-    Only fence lines are removed — surrounding whitespace (incl. trailing
-    newline) is preserved byte-for-byte for editor exactness.
-    """
-    lines = content.split("\n")
-    if lines and lines[0].strip().startswith("```"):
-        lines = lines[1:]
-    if lines and lines[-1].strip() == "```":
-        lines = lines[:-1]
-    if lines and lines[0].strip().startswith("```"):
-        lines = lines[1:]
-    return "\n".join(lines)
+    """(30/09) DELEGA para `jarvis.core.syntax.strip_markdown_fences` — o dono único."""
+    from jarvis.core.syntax import strip_markdown_fences as _smf
+    return _smf(content)
 
 
 def validate_python(content: str, path: Path | None = None) -> ValidationResult:
-    """Validate Python file structure."""
-    result = ValidationResult(valid=True, original_size=len(content))
-    
-    # Strip markdown fences
-    content = strip_markdown_fences(content)
-    result.new_size = len(content)
-    
-    # Syntax check
-    try:
-        tree = ast.parse(content)
-    except SyntaxError as e:
-        result.valid = False
-        result.errors.append(f"Syntax error at line {e.lineno}: {e.msg}")
-        return result
-    
-    # Check for common LLM mistakes
-    source = content
-    
-    # Check imports exist
-    imports = [node for node in ast.walk(tree) if isinstance(node, (ast.Import, ast.ImportFrom))]
-    if not imports and "import" in source.lower():
-        result.warnings.append("File has 'import' text but no import statements")
-    
-    # Check functions/classes exist
-    functions = [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
-    classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
-    
-    if not functions and not classes and len(source) > 500:
-        result.warnings.append("Large file with no functions or classes")
-    
-    # Check for truncated files (unclosed brackets/parens)
-    opens = source.count("(") + source.count("[") + source.count("{")
-    closes = source.count(")") + source.count("]") + source.count("}")
-    if opens > closes + 5:
-        result.warnings.append(f"Possibly truncated: {opens} opens vs {closes} closes")
-    
-    return result
+    """(30/09) DELEGA para `jarvis.core.syntax.check_python` — o dono único.
+
+    A versão Rica (ast + heurísticas de import/truncamento) morava AQUI e
+    só aqui; o `core/devtools._validate_python_syntax` tinha um `compile()`
+    quase cego. Guarda mais permissivo no caminho mais usado (o REPL), e
+    ninguém via porque os nomes eram diferentes. Agora os dois usam a
+    mesma política, e este só mapeia o veredito para ValidationResult.
+    """
+    from jarvis.core.syntax import check_python
+    r = check_python(content, path)
+    return ValidationResult(
+        valid=r.valid,
+        original_size=r.original_size,
+        new_size=r.new_size,
+        errors=list(r.errors),
+        warnings=list(r.warnings),
+    )
 
 
 def validate_nix(content: str) -> ValidationResult:

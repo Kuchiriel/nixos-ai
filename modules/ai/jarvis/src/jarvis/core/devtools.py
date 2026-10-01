@@ -243,12 +243,16 @@ def _safe_path(path: str, root: Path | None = None,
 # ---------------------------------------------------------------------------
 
 def _validate_python_syntax(code: str) -> tuple[bool, str | None]:
-    """Valida sintaxe Python. Retorna (is_valid, error_message)."""
-    try:
-        compile(code, "<devtools>", "exec")
-        return True, None
-    except SyntaxError as e:
-        return False, f"Line {e.lineno}: {e.msg}"
+    """(30/09) DELEGA para `jarvis.core.syntax` — o dono único.
+
+    Era `compile(code, "<devtools>", "exec")`: quase cego, só pegava
+    erro de sintaxe. O nightwatch tinha a versão RICA (ast + heurísticas
+    de import e truncamento) em `file_guard.validate_python`. Guarda mais
+    permissivo no caminho mais usado (o REPL, que é onde o modelo
+    trabalha). Agora ambos usam a mesma política.
+    """
+    from jarvis.core.syntax import validate_python_syntax
+    return validate_python_syntax(code)
 
 
 def _ast_guard(target: Path, new_content: str) -> dict[str, Any] | None:
