@@ -99,3 +99,40 @@ trabalho de software claro pela frente.
 - `docs/REIDRATAR-APOS-COMPACTAR.md` — prompt de reidratação
 - `/tmp/opencode/overnight/loop-night6.log` — dado bruto dos ciclos
 - Vault `noite-30-09-harness-loop.md` — contexto noturno
+
+---
+
+## 🌅 A CAUSA RAIZ DO "NÃO CONVERGE" (08h) — o maior achado
+
+Depois de 2 testes decisivos provarem **capacidade 2/2**, o gap
+permanecia. A causa real só apareceu medindo a cadeia inteira:
+
+1. **`models.nix` mente sobre o contexto.** Declara `ctx = 32768` pro
+   `jarvis-strong`, mas a unit llama-cpp usa **`prof.ctxSize` do profile**
+   (`chat` = **8192**). O `/props` do servidor confirma: `n_ctx: 8192`.
+   Dois campos (`ctx` do modelo, `ctxSize` do profile) divergem — o
+   registry não descreve a realidade.
+2. O patcher mandava o **arquivo inteiro**: `context_budget.py` = 769
+   linhas = 30k chars ≈ **7.5k tokens**.
+3. Sob ctx 8192 sobra ~600 tokens. O cliente recorta `max_tokens` e a
+   **resposta trunca**: medido, JSON de 334 chars cortado em **99**,
+   sem `}` → `substring not found` → patch **descartado**.
+4. Isso parecia "grammar falha" e "modelo não acerta" — mas era o
+   **PROMPT comendo o contexto**. Nem o modelo nem a grammar.
+
+**Fix:** `files_bit` com orçamento derivado do **ctx real do servidor**
+(`_context_window()`), deixando ~1024 tokens para a resposta — em vez
+de mandar tudo e truncar a resposta no fim (o que perde o patch
+inteiro).
+
+**Verificado no MESMO bug que antes falhava: `ok=True`, patch com a
+guarda correta.** Este é o fix que pode destravar a convergência.
+
+### A lição mais cara da noite (e a mais útil)
+Por **seis horas** o sintoma foi "o modelo não converge". A verdade
+era: **o harness estava truncando a resposta do modelo antes dela
+chegar ao patcher**, e eu estava olhando a camada errada (o modelo) em
+vez do instrumento (o orçamento de prompt). Isso é literalmente o
+*repair-assignment problem* do paper — e a **6ª** vez que a Lição 1
+me pegava. **Sempre que algo "não funciona", perguntar: o instrumento
+mediu certo?**
