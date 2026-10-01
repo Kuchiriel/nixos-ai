@@ -162,6 +162,26 @@ class HarnessResult:
     commits: list[str] = field(default_factory=list)
     duration_seconds: float = 0.0
     errors: list[str] = field(default_factory=list)
+    # (30/09, C5) Métrica de convergência. Sem ela, "o retry converge?"
+    # era resposta de ler log na mão — e a lição (8) exige N≥3 medido.
+    # retry_succeeded conta tasks que passaram numa tentativa > 1 (o
+    # modelo aprendeu com o erro); retry_attempted conta quantas
+    # tentaram retry. convergence = retry_succeeded / retry_attempted.
+    retry_succeeded: int = 0
+    retry_attempted: int = 0
+
+    def _retry_succeeded_here(self, attempt: int) -> None:
+        """(30/09, C5) Marca convergência se a validação passou numa
+        tentativa > 1. Guarda no estado do harness; o run() agrega no
+        HarnessResult. Se attempt == 0, não é retry — não conta."""
+        if attempt > 0:
+            self._retry_ok = getattr(self, "_retry_ok", 0) + 1
+
+    @property
+    def convergence(self) -> float:
+        if self.retry_attempted == 0:
+            return 0.0
+        return self.retry_succeeded / self.retry_attempted
 
     @property
     def total(self) -> int:
@@ -1420,6 +1440,9 @@ class Harness:
         # (30/09) início do run p/ retry consciente de orçamento (None =
         # execut_task chamado fora de run(), usa o max_retries cheio).
         self._run_started_at: float | None = None
+        # (30/09, C5) métrica de convergência
+        self._task_retried: bool = False
+        self._retry_ok: int = 0
         # Auto-detect context size from llama.cpp server if not specified
         budget = self.config.context_budget
         if budget <= 0:
@@ -1926,6 +1949,8 @@ class Harness:
 
                 for attempt in range(max_attempts):
                     if attempt > 0:
+                        # (30/09, C5) esta task realmente vai RETRYar
+                        self._task_retried = True
                         safety.abort_task_branch(branch)
                         branch = safety.create_task_branch(task.id, task.project)
                         if not branch:
@@ -2047,6 +2072,12 @@ class Harness:
                             "summary": validation.summary,
                         })
                         return False
+
+                    # (30/09, C5) Validação passou. Se chegamos aqui numa
+                    # tentativa > 1, o retry CONVERGIU: o modelo recebeu o
+                    # traceback e corrigiu. Contabiliza pra métrica de
+                    # convergência (que antes eu media lendo log à mão).
+                    self._retry_succeeded_here(attempt)
 
                     # ── Step 4: Independent review ──
                     # Skip LLM review for low-risk tasks that pass validation.
@@ -2300,6 +2331,16 @@ class Harness:
 
             success = self.execute_task(task)
 
+            # (30/09, C5) Agrega métrica de convergência: uma task
+            #Xlixhou retry conta 1 em attempted; convergiu (passou numa
+            # tentativa >1) conta +1 em succeeded. Torna o C5 um número
+            # medido, não leitura de log.
+            if getattr(self, "_task_retried", False):
+                result.retry_attempted += 1
+                if success:
+                    result.retry_succeeded += 1
+            self._task_retried = False
+
             if success:
                 result.tasks_completed += 1
                 result.files_changed.extend(task.target_files)
@@ -2362,6 +2403,7 @@ class Harness:
 - Commits: {len(result.commits)}
 - Duration: {int(elapsed // 60)}m {int(elapsed % 60)}s
 - Success rate: {result.success_rate:.0%}
+- Retry convergence: {result.retry_succeeded}/{result.retry_attempted} ({result.convergence:.0%})
 
 📈 Projects:
 {chr(10).join(project_stats)}
