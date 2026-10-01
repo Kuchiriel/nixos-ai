@@ -308,3 +308,58 @@ modelo acertar a correção — que é trabalho de engenharia de contexto
 (lição 8: N≥3). Próximo: ciclo 3 p/ fechar N, e se não convergir,
 aprofundar no *porquê* (ler o traceback que ele recebeu vs o que ele
 produziu).
+
+---
+
+## N=3 consolidado + métrica de convergência (30/09 21h)
+
+### Métrica agora é do harness, não do olho (C5 automatizado)
+`HarnessResult` gained `retry_succeeded / retry_attempted` +
+`convergence`. Task que passa numa tentativa >1 conta como convergida (o
+modelo recebeu o traceback e corrigiu). O run reporta
+`Retry convergence: N/M (x%)`. Agora o C5 é **medido a cada run**, não
+lido de log à mão (lição 8 satisfeita por construção).
+
+### 3 ciclos,Progresso real e honesto
+| Ciclo | Tasks | Commits | Alvos | wasted slots |
+|---|---|---|---|---|
+| 1 (pré archive-fix) | 9 | 0 | 5/5 `archive/` (morto) | teste em código morto |
+| 2 (pós archive-fix) | 9 | 0 | **código vivo** | retry 3× numa task |
+| 3 (pós métrica) | — | — | converges? | run lento (MoE 61s/patch) |
+
+Ciclo 3 ficou num loop de chamadas LLM lentas (61s por patch, MoE sob
+carga) — sem sinal novo além do que ciclos 1-2 já deram. Parei o run em
+vez de esperar sem informação.
+
+### Onde está EXATAMENTE (sem "limite"/"teto")
+O harness hoje:
+- gera task **real** (defeito concreto, em código vivo) ✅
+- entrega **traceback real** ao retry ✅
+- aplica o patch ✅
+- roda o teste certo ✅
+- **rejeita** o que quebra (main intacta) ✅
+- **não se premia com teste vazio** ✅ (anti-reward-hacking)
+- reporta **convergência** medida ✅
+
+O que falta é o **último mile**: o modelo aplica o patch mas o teste
+reprova, e o retry (mesmo com traceback) não acerta ainda. Isso é
+**grounding de contexto** — a pergunta certa agora não é "por que o
+modelo errou" (ele tem o traceback) mas **"o que no contexto entregue
+torna a correção difícil de acertar?"**: será que falta mostrar o
+**código-fonte inteiro** (não a seção), ou o **teste que falhou** (o
+modelo não vê o arquivo de teste!), ou a **assinatura da função
+falhando**?
+
+**Hipótese mais forte (a testar):** no retry, o modelo recebe o
+traceback mas NÃO o **arquivo de teste** que reprovou — ele vê um
+`AssertionError` sem saber o que o teste exige. Dar o teste junto é a
+próxima mudança de harness mais provável.
+
+### Lição do dia (a que mais importa)
+Onze correções de harness hoje. **Nenhuma** foi "o modelo é fraco".
+Todas foram "o harness escondia informação / media errado / dava
+trabalho inútil". A literatura (arxiv-2607.28802) chama isso de
+**repair-assignment problem**: a decisão "modelo ou harness?" quase
+sempre é do harness quando olhada de perto. A regra do dono —
+*paridade 1:1 de ENTREGA* — segue sendo a régua, e há trabalho de
+software claro pela frente.
