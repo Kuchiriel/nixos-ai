@@ -152,6 +152,53 @@ def _test_has_real_assertion(content: str) -> tuple[bool, str]:
     return True, ""
 
 
+def _python_with_pytest() -> str:
+    """(30/09) O interpretador que TEM pytest — não o do PATH.
+
+    Bug real medido (a convergência era 0/23 por isto, não pelo modelo):
+    o nightwatch roda como serviço systemd, SEM `nix develop`, e o PATH do
+    unit é `/run/current-system/sw/bin:...` — onde o `python3` é o do
+    sistema, **sem pytest**. O validador chamava `python3 -m pytest`, que
+    saía com `No module named pytest` — e isso contava como FALHA DA TASK.
+    O modelo era culpado por um erro de ambiente do verificador, a
+    evidência (30/09) provou: summary "2 passed 1 failed" com
+    val_output "No module named pytest" e new_fails=[].
+
+    Aqui: procura o python que de fato tem pytest e usa-o. Se nenhum
+    existir, devolve "python3" (comportamento anterior) — mas agora o
+    chamador pode detectar e reportar em vez de mentir.
+    """
+    import shutil as _sh
+    import subprocess as _sp
+    cands = []
+    for name in ("python3", "python"):
+        p = _sh.which(name)
+        if p:
+            cands.append(p)
+    # interpretadores do próprio pacote (o jarvis roda num python com deps)
+    try:
+        import sys as _sys
+        cands.insert(0, _sys.executable or "")
+    except Exception:
+        pass
+    for c in cands:
+        if not c:
+            continue
+        try:
+            r = _sp.run([c, "-c", "import pytest"], capture_output=True, timeout=20)
+            if r.returncode == 0:
+                return c
+        except Exception:
+            continue
+    return "python3"
+
+
+def _test_command(target: str, extra: str = "") -> str:
+    """Monta o comando de pytest com o interpretador que TEM pytest."""
+    py = _python_with_pytest()
+    return f"{py} -m pytest {target} {extra}".strip()
+
+
 def validate_changed_files(files: list[str]) -> ValidationReport:
     """Validate all changed files."""
     report = ValidationReport()
@@ -327,9 +374,9 @@ def run_targeted_tests(files: list[str]) -> ValidationReport:
                     test_dir = legacy
         if test_dir:
             test_target = str(test_dir)
-            test_cmd = f"python3 -m pytest {test_target} -q --tb=short"
+            test_cmd = _test_command(test_target, "-q --tb=short")
         else:
-            test_cmd = f"cd {project_root} && python3 -m pytest . -q --tb=short"
+            test_cmd = f"cd {project_root} && {_test_command('.', '-q --tb=short')}"
         step = ValidationStep(name="tests:full-suite-fallback", command=test_cmd)
         success, output, duration = run_command(test_cmd, timeout=600)
         step.passed = success
@@ -340,7 +387,7 @@ def run_targeted_tests(files: list[str]) -> ValidationReport:
         return report
 
     # Run tests
-    test_cmd = f"python3 -m pytest {' '.join(relevant_tests)} -x -q --tb=short"
+    test_cmd = _test_command(" ".join(relevant_tests), "-x -q --tb=short")
     step = ValidationStep(name="tests", command=test_cmd)
     success, output, duration = run_command(test_cmd, timeout=120)
     step.passed = success
