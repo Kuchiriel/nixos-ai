@@ -153,38 +153,42 @@ def _test_has_real_assertion(content: str) -> tuple[bool, str]:
 
 
 def _python_with_pytest() -> str:
-    """(30/09) O comando-base que TEM pytest -- para rodar os testes.
+    """(30/09) O interpretador que TEM pytest -- para o validador.
 
-    Bug real medido DUAS vezes (a convergencia era 0/23 por isto, nao
-    pelo modelo). Cadeia:
-      1. O nightwatch roda como servico systemd, SEM `nix develop`.
-      2. O PATH do unit e' /run/current-system/sw/bin:... -- o `python3`
-         de la NAO tem pytest. `python3 -m pytest` -> "No module named
-         pytest" -> contava como FALHA DA TASK.
-      3. O pacote do jarvis (lib/python3.13/site-packages) tem so
-         `jarvis` e `nightwatch` -- tambem sem pytest. Nao existe
-         interpretador com pytest no ambiente do servico.
-      4. A evidencia instrumentada mostrou: summary "2 passed 1 failed",
-         new_fails=[] (a falha NAO e' do patch), val_output "No module
-         named pytest".
+    Bug real medido (a convergencia media 0/23 por isto, nao pelo modelo):
+    o nightwatch roda como servico systemd e o validador chamava
+    `python3 -m pytest`. Medido no unit real:
+      - /run/current-system/sw/bin/python3 NAO EXISTE (o PATH do unit nao
+        tem python3; o processo roda com o python do proprio closure);
+      - o site-packages do jarvis tem so `jarvis` e `nightwatch`.
+    Resultado: "No module named pytest" contava como FALHA DA TASK.
+    A evidencia instrumentada provou: summary "2 passed 1 failed",
+    new_fails=[] (a falha NAO era do patch), val_output "No module
+    named pytest".
 
-    A evidencia tambem mostrou um 2o bug: rodando pytest de um cwd onde
-    `jarvis/` e' importavel, os testes importam `jarvis.jarvis...`
-    (path duplicado) e falham no IMPORT, nao no patch.
+    Tentativas REJEITADAS por medicao (nao repetir):
+      a) achar um python com pytest no PATH -> nao existe nenhum no servico;
+      b) `nix develop --command python -m pytest` -> no unit quebra
+         (ProtectSystem=strict nao deixa o nix escrever cache, MemoryMax=2G
+         estoura no nix-eval) e o servico saia com codigo 0 no meio da
+         task (Result=success, ExecMainStatus=0, journal vazio);
+      c) makeSearchPathOutput sobre propagatedBuildInputs -> o atributo
+         Nix nao bate com o nix-support real; pytest nao entrava.
 
-    Solucao: rodar os testes ATRAVES do ambiente do PROJETO, que tem
-    pytest de verdade -- `nix develop --command python3 -m pytest` e' o
-    contrato de teste do repo. Fora do Nix, cai no melhor interpretador
-    com pytest que existir.
+    A via canonica: python3.withPackages monta um ambiente com pytest de
+    verdade, e o Nix o passa em JARVIS_TEST_PYTHON. O Python nao inventa
+    interpretador -- usa o indicado e se CERTIFICA (import pytest) antes.
+
+    Ordem: JARVIS_TEST_PYTHON -> sys.executable -> python3/python do PATH.
     """
+    import os as _os
     import shutil as _sh
     import subprocess as _sp
-    # 1) preferimos o ambiente do projeto (unico que tem pytest real)
-    if _sh.which("nix"):
-        return "nix develop --command python3"
-    # 2) senao, o melhor interpretador com pytest local
     import sys as _sys
-    cands = [_sys.executable or ""]
+    cands = [
+        _os.environ.get("JARVIS_TEST_PYTHON") or "",
+        _sys.executable or "",
+    ]
     for name in ("python3", "python"):
         p = _sh.which(name)
         if p:
@@ -192,10 +196,14 @@ def _python_with_pytest() -> str:
     for c in cands:
         if not c:
             continue
+        resolved = c if _os.path.isfile(c) else _sh.which(c)
+        if not resolved:
+            continue
         try:
-            r = _sp.run([c, "-c", "import pytest"], capture_output=True, timeout=20)
+            r = _sp.run([resolved, "-c", "import pytest"],
+                         capture_output=True, timeout=20)
             if r.returncode == 0:
-                return c
+                return resolved
         except Exception:
             continue
     return "python3"

@@ -18,21 +18,31 @@ let
   # Other projects should use their own timer or the jarvis CLI.
   projectRoot = "/home/nixos/projects/nixos-ai";
 
-  # (30/09) O PYTHONPATH do serviço precisa ser MONTADO PELO NIX, não escrito
-  # à mão. O validador do nightwatch EXECUTA os testes do projeto que ele
-  # patcheou — logo precisa de `pytest` importável. Dois motivos para o
-  # PYTHONPATH manual estar errado:
-  #   1. apontava só para o site-packages do jarvis (que tem só `jarvis` e
-  #      `nightwatch`), então `import pytest` falhava → "No module named
-  #      pytest" contava como FALHA DA TASK (convergência 0/23, não o modelo);
-  #   2. o PATH do unit não tem `python3` nenhum (/run/current-system/sw/bin
-  #      não expõe python3), então o interpretador é o do próprio closure.
-  # Aqui o Nix monta a search path com o pacote + todos os propagatedBuildInputs
-  # (pytest, pytest-timeout, hypothesis, mcp-nixos, age, …) e o path fica
-  # correto por construção — se um dia pytest sair do package.nix, isto
-  # deixa de funcionar e o serviço avisa em vez de mentir.
-  jarvisPyPath = lib.makeSearchPathOutput "lib" "python3.13/site-packages"
-    ([jarvisPackage] ++ jarvisPackage.propagatedBuildInputs);
+  # (30/09) O validador do nightwatch EXECUTA os testes do projeto que ele
+  # patcheou — logo precisa de um python COM pytest. Medido no unit real:
+  #   - /run/current-system/sw/bin/python3 NÃO EXISTE (o PATH do unit não tem
+  #     python3; o processo roda com o python do próprio closure);
+  #   - o site-packages do jarvis tem só `jarvis` e `nightwatch`.
+  # Resultado: `import pytest` falhava → "No module named pytest" contava
+  # como FALHA DA TASK, e a convergência media 0/23 — não era o modelo.
+  #
+  # Tentativas REJEITADAS por medição (não repetir):
+  #   a) achar um python com pytest no PATH → não existe nenhum no serviço;
+  #   b) `nix develop --command python -m pytest` por validação → no unit
+  #      quebra (ProtectSystem=strict não deixa o nix escrever cache,
+  #      MemoryMax=2G estoura no nix-eval) e o serviço saía com código 0 no
+  #      meio da task (Result=success, ExecMainStatus=0, journal vazio);
+  #   c) makeSearchPathOutput sobre propagatedBuildInputs → o atributo Nix
+  #      não bate com o nix-support real; pytest não entrava no path.
+  #
+  # A via canônica: python3.withPackages monta um ambiente com pytest de
+  # verdade. O Nix ESCOLHE o interpretador e o passa em JARVIS_TEST_PYTHON;
+  # o Python apenas obedece e se certifica (`import pytest`) antes de usar.
+  testPythonEnv = pkgs.python3.withPackages (ps: [
+    ps.pytest
+    ps.pytest-timeout
+    ps.hypothesis
+  ]);
 in {
   systemd.services.nightwatch = {
     description = "JARVIS nightwatch — autonomous overnight maintenance";
@@ -61,11 +71,14 @@ in {
     serviceConfig = {
       Type = "oneshot";
       Environment = [
-        "PYTHONPATH=${jarvisPyPath}"
+        "PYTHONPATH=${jarvisPackage}/lib/python3.13/site-packages"
+        # O interpretador COM pytest, escolhido pelo Nix (ver testPythonEnv).
+        # O validador lê isto e se certifica (`import pytest`) antes de usar.
+        "JARVIS_TEST_PYTHON=${testPythonEnv}/bin/python3"
         "JARVIS_PROJECT_ROOT=${projectRoot}"
         # 30/09: /run/wrappers/bin PRIMEIRO — é onde vive o sudo setuid
         # (o de sw/bin é symlink pro store, sem setuid, morre no serviço).
-        "PATH=/run/wrappers/bin:/run/current-system/sw/bin:${pkgs.git}/bin:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.findutils}/bin:${pkgs.gnused}/bin"
+        "PATH=${testPythonEnv}/bin:/run/wrappers/bin:/run/current-system/sw/bin:${pkgs.git}/bin:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.findutils}/bin:${pkgs.gnused}/bin"
       ];
       ExecStart = "${jarvisPackage}/bin/jarvis nightwatch --tasks 1 --report-telegram --projects nixos-ai";
       # (30/09, EXPERIMENTO) --tasks 1 (era 4): isola DRIFT de branch. Com
