@@ -136,3 +136,38 @@ vez do instrumento (o orçamento de prompt). Isso é literalmente o
 *repair-assignment problem* do paper — e a **6ª** vez que a Lição 1
 me pegava. **Sempre que algo "não funciona", perguntar: o instrumento
 mediu certo?**
+
+---
+
+## ✅ Fim da noite — v7 com o fix (09h30)
+
+O loop v7 rodou **6 ciclos** com o fix de budget de prompt.
+**Instrumento limpo de ponta a ponta:**
+
+| Erro de instrumento (antes constante) | v7 |
+|---|---|
+| `substring not found` (resposta truncada) | **0** |
+| `no tests ran` (suite não achada) | **0** |
+| `Hunk not found` | **0** |
+| `Syntax error` (indent) | **0** |
+
+Convergência 0/23, 0 commits — mas **agora a falha é legítima**: o
+patch **aplica** (json-patch 15-33s, resposta inteira) e o **teste
+reprova**. Isso é trabalho real sendo medido, não instrumento quebrado.
+
+### Onde estamos (09h30, 24 commits na noite)
+- Pipeline **mede certo** do discovery ao gate — cada camada verificada.
+- O modelo **tem capacidade** (2/2 testes decisivos).
+- Falta: ele acerta o bug **isolado** mas não no ciclo real
+  (branch + 4 tasks + validação ampla).
+
+### A pergunta seguinte (dados apontam para cá)
+Com o instrumento correto, a convergência 0 é do **modelo no contexto
+do ciclo** ou da **validação ser mais ampla que o bug**? O próximo
+teste decisivo: **1 task por ciclo** (isola drift de branch) e
+comparar com 4 tasks. Se 1 task converge → era drift/contexto
+acumulado. Se nem 1 converge → a validação é o filtro estrito demais
+(o bug é corrigido mas o teste exige mais).
+
+Nenhum dos dois é "limite do modelo" — são hipóteses de harness, e é
+exatamente onde a literatura diz que o ganho está.
