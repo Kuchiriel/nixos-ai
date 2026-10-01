@@ -363,3 +363,49 @@ trabalho inútil". A literatura (arxiv-2607.28802) chama isso de
 sempre é do harness quando olhada de perto. A regra do dono —
 *paridade 1:1 de ENTREGA* — segue sendo a régua, e há trabalho de
 software claro pela frente.
+
+---
+
+## Noite 30/09 → 01/10 — loop automático (12 ciclos)
+
+`scripts/overnight-harness-loop.py` roda 12 ciclos (cooldown 90s, teto
+1h/ciclo). Entre ciclos: limpa a fila, mede **convergência** (o harness
+reporta), diagnostica o **último mile**. **Nunca commita** — só o
+nightwatch, e só se a validação passar. Log: `loop-night.log` + `cycle-N.log`.
+
+### Fixes que entraram antes da noite
+- **Grounding no retry** (`_ground_failure`): o harness entrega o
+  **arquivo de teste que reprovou** (em volta da linha + o corpo da
+  função de teste = o contrato), não só o traceback. Medido: o modelo
+  via `AssertionError` mas não via *o que o teste exige*.
+- **Métrica de convergência** no `HarnessResult` + no summary do run.
+- **Anti-reward-hacking**: teste vazio (`assert True`) não conta como
+  melhoria (o harness rodava o teste que o próprio modelo criava).
+- **`archive/` fora dos alvos** (código arquivado = valor zero).
+- **Retry com orçamento**: não monopoliza o run numa task só.
+- **systemctl kill** no overnight (`stop` pendura em call LLM).
+
+### Padrão observado no ciclo 1 (diagnóstico, não chute)
+As tasks que o nightwatch converge não são aleatórias — há **duas
+famílias**:
+1. **Bug-fix pequeno e localizado** ("Fix None dereference in CLI
+   launcher…", código vivo) → o modelo **tenta**, o patch aplica, mas o
+   teste ainda reprova.
+2. **Add-test** ("Add missing test coverage for X") → o modelo **não
+   acerta** (é a mais dura: precisa escrever um teste novo que o próprio
+   harness valida).
+
+**Isto não é "modelo fraco"** — é **ambiguidade de task**. O gargalo do
+último mile está concentrado na família add-test. Próximo ataque (depois
+dos dados da noite): (a) discovery prioriza bug-fix pequeno sobre
+add-test, (b) tratar add-test como categoria com validação diferente
+(valida que o teste novo *cobre algo* + não quebra os outros), ou (c)
+rodar add-test por último, depois das que já convergem.
+
+### O que medir de manhã
+- **Convergência por ciclo** (o número que faltava, agora automático).
+- **Primeiro commit real** (0 até agora). Se aparecer, o pipeline
+  fechou de ponta a ponta.
+- Se convergência continuar 0 com grounding no ar: comparar *o que o
+  modelo recebeu* vs *o patch que produziu* — a pergunta vira "a
+  informação não basta ou ele não a usa?".
