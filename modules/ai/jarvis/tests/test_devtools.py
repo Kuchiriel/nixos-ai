@@ -189,7 +189,7 @@ def test_str_replace_fuzzy_normalized_whitespace() -> None:
     # SLM normalizou os espaços extras
     result = str_replace(str(f), "def hello():\n    return True", "def hello():\n    return False")
     assert result["ok"] is True
-    assert result["strategy"] in ("normalized", "fuzzy (95%)")
+    assert result["strategy"] in ("whitespace", "line-fuzzy", "difflib (95%)")
     assert "return False" in f.read_text()
 
 
@@ -201,7 +201,7 @@ def test_str_replace_fuzzy_indentation() -> None:
     # SLM usou 2 espaços em vez de 4
     result = str_replace(str(f), "if True:\n  x = 1\n  y = 2", "if True:\n    x = 1\n    y = 2\n    z = 3")
     assert result["ok"] is True
-    # Pode ser normalized, fuzzy, ou line-match dependendo da similaridade
+    # Pode ser whitespace, line-fuzzy, difflib ou line-match (escada unificada)
     assert result["strategy"] != "none"
     assert "z = 3" in f.read_text()
 
@@ -249,7 +249,8 @@ def test_str_replace_fuzzy_strategy_reported() -> None:
     f.write_text("hello   world\n")
     result = str_replace(str(f), "hello world", "hi world")
     assert result["ok"] is True
-    assert result["strategy"] in ("exact", "normalized", "line-match")
+    assert result["strategy"] in ("exact", "whitespace", "line-fuzzy",
+                                  "difflib (95%)", "line-match")
 
 
 def test_str_replace_truly_not_found_returns_context() -> None:

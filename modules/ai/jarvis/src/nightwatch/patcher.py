@@ -234,68 +234,23 @@ def _find_similar_content(search_text: str, file_content: str, context_lines: in
 
 
 def _lines_match_fuzzy(line_a: str, line_b: str, tolerance: float = 0.2) -> bool:
-    """Check if two lines match with fuzzy tolerance.
-    
-    Allows up to `tolerance` fraction of characters to differ.
-    This handles LLM generating slightly different whitespace,
-    comments, or minor variations.
-    
-    For short lines (<20 chars), fuzzy matching is disabled to prevent
-    false positives (e.g., 'def f():' matching 'def g():').
-    """
-    a, b = line_a.strip(), line_b.strip()
-    if a == b:
-        return True
-    if not a or not b:
-        return False
-    # Short lines must match exactly — fuzzy is too risky for short strings
-    if len(a) < 20 or len(b) < 20:
-        return False
-    # Quick check: same length ±20%
-    if abs(len(a) - len(b)) > max(len(a), len(b)) * tolerance:
-        return False
-    # Count matching characters
-    matches = sum(1 for ca, cb in zip(a, b) if ca == cb)
-    max_len = max(len(a), len(b))
-    return matches / max_len >= (1 - tolerance)
+    """(30/09) DELEGA para `jarvis.core.patching.lines_match_fuzzy` — o dono único."""
+    from jarvis.core.patching import lines_match_fuzzy
+    return lines_match_fuzzy(line_a, line_b, tolerance)
 
 
 def _realign_indent(new_text: str, old_text: str) -> str:
-    """(30/09, C3b) Re-alinha a indentação do new_text ao old_text real.
+    """(30/09) DELEGA para `jarvis.core.patching.realign_indent` — o dono único.
 
-    A falha real (run 16:45, ast_cache.py linha 126, 3 tentativas no
-    MESMO ponto): o modelo copiava a indentação que *achava* que o
-    arquivo tinha e, ao 'otimizar', reescrevia o bloco com um nível a
-    menos → 'unindent does not match'. O old_text casava (o harness casa
-    ignorando whitespace nas estratégias 2/3), mas o new_text entrava
-    com a indentação errada e o safe_editor barrava.
-
-    Algoritmo: como já garantimos que o conteúdo não-indentado bate
-    1:1 linha-a-linha (guarda abaixo), a indentação CORRETA de cada
-    linha é simplesmente a indentação que o BASELINE (o old_text real
-    do arquivo) tem nessa mesma posição. Então re-aplicamos o indent do
-    baseline ao conteúdo do new_text. Cobre delta uniforme E não-uniforme
-    (o caso real: linhas em branco + `return False` que é legitamente
-    mais fundo). Zero aritmética de delta, zero caso especial.
-
-    Só age quando o conteúdo bate 1:1 — se a LÓGICA difere de verdade,
-    não toca, e o safe_editor reprova normalmente. Nunca mascaramos
-    mudança de código real; só corrigimos deslize mecânico de indentação.
+    Este era o ÚNICO lugar com realinhamento de indentação. O
+    `core/devtools.str_replace` — a ferramenta que o modelo USA no REPL —
+    tinha a mesma política de busca mas SEM o realign, e caía no mesmo
+    bug 'unindent does not match'. O algoritmo (e o porquê de ele ser
+    seguro: só age quando o conteúdo bate 1:1, nunca mascara mudança de
+    lógica) está agora no dono único, com o texto completo.
     """
-    old_lines = old_text.split("\n")
-    new_lines = new_text.split("\n")
-    if len(old_lines) != len(new_lines) or len(old_lines) < 2:
-        return new_text
-    out = []
-    for o, n in zip(old_lines, new_lines):
-        if not n.strip():
-            out.append("")            # linha vazia fica vazia
-            continue
-        if o.strip() != n.strip():
-            return new_text          # conteúdo diverge → não toca
-        oi = len(o) - len(o.lstrip())
-        out.append(" " * oi + n.strip())   # indent do baseline + conteúdo novo
-    return "\n".join(out)
+    from jarvis.core.patching import realign_indent
+    return realign_indent(new_text, old_text)
 
 
 def apply_hunk(content: str, hunk: PatchHunk) -> tuple[bool, str]:

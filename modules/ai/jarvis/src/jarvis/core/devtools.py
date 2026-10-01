@@ -320,64 +320,6 @@ def _ast_guard(target: Path, new_content: str) -> dict[str, Any] | None:
 # Fuzzy matching — 4 camadas (inspirado em devtools.py)
 # ---------------------------------------------------------------------------
 
-def _normalize_line(line: str) -> str:
-    return " ".join(line.expandtabs().split())
-
-
-def _normalize_text(text: str) -> str:
-    return "\n".join(_normalize_line(line) for line in text.splitlines())
-
-
-def _fuzzy_find(content: str, old: str) -> tuple[str | None, str]:
-    """Encontra `old` em `content` com estratégias crescentes.
-
-    Retorna (found_text, strategy) ou (None, "none").
-    """
-    # 1. Match exato (rápido)
-    if old in content:
-        return old, "exact"
-
-    # 2. Match normalizado (whitespace collapsing)
-    norm_old = _normalize_text(old)
-    content_lines = content.splitlines()
-    old_lines = old.splitlines()
-
-    if old_lines:
-        for i in range(len(content_lines) - len(old_lines) + 1):
-            window = content_lines[i:i + len(old_lines)]
-            if _normalize_text("\n".join(window)) == norm_old:
-                return "\n".join(window), "normalized"
-
-    # 3. Match por similaridade (difflib, threshold 75%)
-    if len(old_lines) >= 2:
-        best_ratio = 0.0
-        best_start = -1
-        window_size = len(old_lines)
-
-        for i in range(len(content_lines) - window_size + 1):
-            window = content_lines[i:i + window_size]
-            ratio = difflib.SequenceMatcher(
-                None, "\n".join(old_lines), "\n".join(window),
-            ).ratio()
-            if ratio > best_ratio:
-                best_ratio = ratio
-                best_start = i
-
-        if best_ratio >= 0.75 and best_start >= 0:
-            found = "\n".join(content_lines[best_start:best_start + window_size])
-            return found, f"fuzzy ({best_ratio:.0%})"
-
-    # 4. Match por linha única (último recurso)
-    if old_lines:
-        first_norm = _normalize_line(old_lines[0])
-        for i, line in enumerate(content_lines):
-            if _normalize_line(line) == first_norm:
-                end = min(i + len(old_lines), len(content_lines))
-                found = "\n".join(content_lines[i:end])
-                if len(found.strip()) > 0:
-                    return found, "line-match"
-
-    return None, "none"
 
 
 def _find_context(content: str, old: str, context_lines: int = 3) -> str:
@@ -568,8 +510,15 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
 
         content = target.read_text(encoding="utf-8", errors="replace")
 
-        # Fuzzy match 4 camadas
-        found_text, strategy = _fuzzy_find(content, old)
+        # (30/09) DELEGA a busca ao dono único `jarvis.core.patching` —
+        # a mesma escada que o nightwatch/patcher usa. Antes aqui havia
+        # uma cópia local (_fuzzy_find, 4 estratégias) que DIVIRGIA da do
+        # patcher (3) e não tinha `realign_indent` — ou seja, a
+        # ferramenta que o modelo usa no REPL caía no bug de
+        # "unindent does not match" que levou horas para achar no
+        # nightwatch. Agora as duas usam a mesma política.
+        from jarvis.core.patching import find_replacement, realign_indent
+        found_text, strategy = find_replacement(content, old)
 
         if found_text is None:
             ctx = _find_context(content, old)
@@ -588,12 +537,17 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
                 "strategy": strategy,
             }
 
-        # Substitui
+        # Substitui. (30/09) `realign_indent` aplicado em TODO caminho,
+        # inclusive no match exato — que é onde o deslize de indentação
+        # entrava e não era corrigido. O baseline do realign é o
+        # `found_text` (o que está NO ARQUIVO), não o `old` que o modelo
+        # mandou: é o arquivo que define a indentação correta.
+        _new = realign_indent(new, found_text)
         if allow_multiple:
-            new_content = content.replace(found_text, new)
+            new_content = content.replace(found_text, _new)
             replacements = count
         else:
-            new_content = content.replace(found_text, new, 1)
+            new_content = content.replace(found_text, _new, 1)
             replacements = 1
 
         # Anti-compounding: 3ª+ edição idêntica = RECUSA antes de escrever.
