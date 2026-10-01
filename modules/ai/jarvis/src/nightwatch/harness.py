@@ -739,6 +739,78 @@ def _resolve_llm_targets(raw_targets, project_root: Path | None = None,
     return uniq
 
 
+def _ground_failure(pytest_output: str) -> str:
+    """(30/09, C5-pre) Anexa ao erro o ARQUIVO DE TESTE que reprovou.
+
+    Medido: o harness entregava ao retry só o traceback `--tb=short`
+    (file:line + a asserção + o erro). O modelo via `AssertionError:
+    expected 3 tiers, got 2` mas NÃO via **o que o teste exige** — o
+    arquivo de teste inteiro, nem o código-fonte ao redor da linha que
+    falhou. Ou seja: ele sabe onde quebrou, mas não qual é o CONTRATO
+    que o código deve satisfazer. É informação que o harness tem e não
+    entregava — o mesmo padrão dos fixes anteriores.
+
+    Parseia o traceback, acha o primeiro `...test_arquivo.py:N:` (a
+    linha que falhou) e anexa: (a) as linhas do teste em volta do
+    assert, (b) o código-fonte ao redor da linha N. Best-effort: se não
+    parsear, devolve "" (não quebra o retry).
+    """
+    import re as _re
+    if not pytest_output:
+        return ""
+    root = find_repo_root()
+    # A linha "X.py:N: in test_nome" dá o ponto de falha. O pytest --tb=short
+    # JÁ mostra a linha do assert (a que começa com "E ") — o que falta é o
+    # CONTEXTO ao redor (o resto do teste + o código-fonte). É isso que
+    # entregamos abaixo.
+    m = _re.search(r"([\w./-]+\.py):(\d+): in ", pytest_output)
+    if not m:
+        return ""
+    file_ref, lineno = m.group(1), int(m.group(2))
+    grounded = ["\n[GROUNDING — o que o harness tem e nao te entregou antes]"]
+    # (a) o arquivo de TESTE, linhas em volta da que falhou
+    try:
+        tp = Path(file_ref) if file_ref.startswith("/") else root / file_ref
+        if tp.is_file():
+            tlines = tp.read_text(encoding="utf-8", errors="replace").splitlines()
+            lo = max(0, lineno - 8)
+            snippet = "\n".join(
+                f"{i+1:>4}| {tlines[i]}" for i in range(lo, min(len(tlines), lineno + 4))
+            )
+            grounded.append(f"\nArquivo de teste que REPROVOU (em volta da linha {lineno}):\n{snippet}")
+            # a função de teste completa (contrato)
+            _re_func = _re.search(r"def\s+(test_\w+)", pytest_output)
+            if _re_func:
+                fname = _re_func.group(1)
+                for i, L in enumerate(tlines):
+                    if L.strip().startswith(f"def {fname}"):
+                        j = i + 1
+                        while j < len(tlines) and not (
+                            tlines[j].strip().startswith("def ") or
+                            (tlines[j].strip() and not tlines[j].startswith((" ", ")", "\t")))
+                        ):
+                            j += 1
+                        grounded.append(
+                            f"\nO que o teste {fname} exige (corpo completo):\n"
+                            + "\n".join(tlines[i:j])[:1500])
+                        break
+    except Exception:
+        pass
+    # (b) o código-fonte em volta da linha que falhou (se for arquivo-fonte)
+    try:
+        sp = Path(file_ref) if file_ref.startswith("/") else root / file_ref
+        if sp.is_file():
+            slines = sp.read_text(encoding="utf-8", errors="replace").splitlines()
+            lo = max(0, lineno - 6)
+            snippet = "\n".join(
+                f"{i+1:>4}| {slines[i]}" for i in range(lo, min(len(slines), lineno + 6))
+            )
+            grounded.append(f"\nCódigo em volta da linha {lineno} de {file_ref}:\n{snippet}")
+    except Exception:
+        pass
+    return "\n".join(grounded) if len(grounded) > 1 else ""
+
+
 def _read_file_for_llm(path: str, max_chars: int = 0, task_description: str = "") -> str:
     """Read a file for LLM context, with path resolution.
 
@@ -2045,7 +2117,7 @@ class Harness:
                     cp.record_operation("validate", validation.passed, validation.summary)
 
                     if not validation.passed:
-                        # (30/09, C3b-2) Dava ao modelo só
+                        # (30/09, C5-pre) Dava ao modelo só
                         # validation.summary = "2 passed, 2 failed" —
                         # contagens, ZERO informação de QUALQUE teste
                         # quebrou e POR QUÊ. O modelo retryava às cegas
@@ -2059,6 +2131,7 @@ class Harness:
                         for _s in validation.steps:
                             if not _s.passed and not _s.skipped and _s.output:
                                 _err_detail += f"\n{_s.output[:2000]}"
+                                _err_detail += _ground_failure(_s.output)
                         previous_errors.append(
                             f"Validation failed: {validation.summary}{_err_detail}")
                         if attempt < max_attempts - 1:
