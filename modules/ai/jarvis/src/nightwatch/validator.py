@@ -281,7 +281,8 @@ def run_syntax_checks(files: list[str]) -> ValidationReport:
 
 def _run_and_attribute(target: str, extra: str, timeout: int,
                        baseline: list[str] | None,
-                       step_name: str = "tests") -> "ValidationStep":
+                       step_name: str = "tests",
+                       cwd: str | None = None) -> "ValidationStep":
     """Roda pytest via testenv e monta o ValidationStep com ATRIBUIÇÃO.
 
     (30/09) `-x` saiu de propósito: com -x o processo morre no primeiro
@@ -290,7 +291,7 @@ def _run_and_attribute(target: str, extra: str, timeout: int,
     """
     from jarvis.core import testenv
     run = testenv.run_pytest(target, timeout=timeout, baseline=baseline,
-                             extra_args=extra, cwd=find_repo_root(),
+                             extra_args=extra, cwd=cwd or find_repo_root(),
                              test_root=testenv.jarvis_test_root())
     step = ValidationStep(name=step_name, command=" ".join(run.argv))
     step.passed = run.passed_no_regression
@@ -382,13 +383,20 @@ def run_targeted_tests(files: list[str], baseline: list[str] | None = None) -> V
                 legacy = project_root / "tests"
                 if legacy.exists():
                     test_dir = legacy
+        # (30/09) BUG introduzido na consolidação: passava
+        # `str(test_dir)`, que é "None" quando nenhum layout serve — o
+        # pytest recebia literally "None" como path. O `test_target`
+        # abaixo já resolvia isso (dir, ou "." na raiz). O gate do rebuild
+        # pegou (o teste de fallback affirmations 'tests' in cmd).
         if test_dir:
             test_target = str(test_dir)
-            test_cmd = _test_command(test_target, "-q --tb=short")
+            run_cwd = str(project_root)
         else:
-            test_cmd = f"cd {project_root} && {_test_command('.', '-q --tb=short')}"
-        run = _run_and_attribute(str(test_dir), "-q --tb=short -rf", 600, baseline,
-                                 step_name="tests:full-suite-fallback")
+            test_target = "."
+            run_cwd = str(project_root)
+        run = _run_and_attribute(test_target, "-q --tb=short -rf", 600, baseline,
+                                 step_name="tests:full-suite-fallback",
+                                 cwd=run_cwd)
         report.steps.append(run)
         report.passed = run.passed
         return report
