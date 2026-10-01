@@ -791,6 +791,53 @@ def _resolve_llm_targets(raw_targets, project_root: Path | None = None,
     return uniq
 
 
+def _dump_evidence(task, attempt, patches, validation, new_fails, baseline) -> None:
+    """(30/09) Grava evidência de POR QUE a task falhou, pra análise depois.
+
+    Sem isso, a pergunta "o modelo patchou errado ou a validação é ampla
+    demais?" exige adivinhar. Este arquivo tem, por tentativa:
+      - a task (o que ela queria)
+      - o patch EXATO que o modelo produziu (old_text/new_text)
+      - o output da validação (qual teste reprovou e por quê)
+      - quais falhas são NOVAS vs pré-existentes (baseline)
+
+    Escreve em /tmp/opencode/overnight/evidence/ (efêmero de propósito:
+    é dado de diagnóstico de UMA noite, não estado do sistema).
+    """
+    import json as _json
+    import time as _t
+    try:
+        d = Path("/tmp/opencode/overnight/evidence")
+        d.mkdir(parents=True, exist_ok=True)
+        patch_dump = []
+        for p in (patches or []):
+            for h in getattr(p, "hunks", []):
+                patch_dump.append({
+                    "path": getattr(p, "path", "?"),
+                    "old_text": getattr(h, "old_text", "")[:1500],
+                    "new_text": getattr(h, "new_text", "")[:1500],
+                })
+        val_out = ""
+        for s in getattr(validation, "steps", []):
+            if not s.passed and not s.skipped and s.output:
+                val_out += s.output[:3000] + "\n"
+        rec = {
+            "ts": int(_t.time()),
+            "task": getattr(task, "id", "?"),
+            "desc": getattr(task, "description", "")[:200],
+            "attempt": attempt,
+            "patches": patch_dump,
+            "validation_summary": getattr(validation, "summary", ""),
+            "new_fails": sorted(new_fails)[:8],
+            "baseline": sorted(baseline)[:8],
+            "val_output": val_out[:3000],
+        }
+        with open(d / "evidence.jsonl", "a") as fh:
+            fh.write(_json.dumps(rec) + "\n")
+    except Exception:
+        pass
+
+
 def _extract_failed_tests(validation) -> set[str]:
     """(30/09) Nomes dos testes que falharam, extraídos do output pytest.
 
@@ -2306,6 +2353,14 @@ class Harness:
                                 if not _s.passed and not _s.skipped and _s.output:
                                     _err_detail += f"\n{_s.output[:2000]}"
                                     _err_detail += _ground_failure(_s.output)
+                            # (30/09, EVIDÊNCIA) Grava o patch exato que o
+                            # modelo produziu + o erro de validação, para
+                            # distinguir "patch errado" de "patch certo mas
+                            # teste amplo demais" sem adivinhar. Responde à
+                            # pergunta do ciclo: a falha é o modelo ou é a
+                            # validação? (o bug de 6h foi o segundo)
+                            _dump_evidence(task, attempt, patches, validation,
+                                           new_fails, baseline)
                             _new_txt = (f" [NEW failures: {', '.join(sorted(new_fails)[:5])}]"
                                         if new_fails else "")
                             previous_errors.append(

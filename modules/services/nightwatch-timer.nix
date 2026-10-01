@@ -51,12 +51,13 @@ in {
         # (o de sw/bin é symlink pro store, sem setuid, morre no serviço).
         "PATH=/run/wrappers/bin:/run/current-system/sw/bin:${pkgs.git}/bin:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.findutils}/bin:${pkgs.gnused}/bin"
       ];
-      ExecStart = "${jarvisPackage}/bin/jarvis nightwatch --tasks 4 --report-telegram --projects nixos-ai";
-      # (30/09) --tasks 4 (era 10): medido, 10 tasks x ~2min (MoE 60-90s
-      # por chamada + retries) estoura o teto de 1h e o run é morto ANTES
-      # do summary — o ciclo fecha sem Retry convergence. 4 tasks cabem,
-      # produzem summary completo, e cabem MAIS ciclos completos por noite
-      # (cada um com o dado de convergência medido).
+      ExecStart = "${jarvisPackage}/bin/jarvis nightwatch --tasks 1 --report-telegram --projects nixos-ai";
+      # (30/09, EXPERIMENTO) --tasks 1 (era 4): isola DRIFT de branch. Com
+      # 4 tasks numa branch, a 2ª vê o arquivo já modificado pela 1ª, e o
+      # old_text do modelo pode não casar com o arquivo ATUAL. Com 1 task
+      # por run, cada tentativa é um arquivo limpo — se ainda assim não
+      # converge, a hipótese de drift cai e o gap é a VALIDAÇÃO ser mais
+      # ampla que o bug.
       # ^ escopo explícito: auto-discover varria TUDO (incl. repos de
       # produção como guia-renamer-pro). Timer só toca nixos-ai.
       WorkingDirectory = projectRoot;
