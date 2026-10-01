@@ -153,34 +153,42 @@ def _test_has_real_assertion(content: str) -> tuple[bool, str]:
 
 
 def _python_with_pytest() -> str:
-    """(30/09) O interpretador que TEM pytest — não o do PATH.
+    """(30/09) O comando-base que TEM pytest -- para rodar os testes.
 
-    Bug real medido (a convergência era 0/23 por isto, não pelo modelo):
-    o nightwatch roda como serviço systemd, SEM `nix develop`, e o PATH do
-    unit é `/run/current-system/sw/bin:...` — onde o `python3` é o do
-    sistema, **sem pytest**. O validador chamava `python3 -m pytest`, que
-    saía com `No module named pytest` — e isso contava como FALHA DA TASK.
-    O modelo era culpado por um erro de ambiente do verificador, a
-    evidência (30/09) provou: summary "2 passed 1 failed" com
-    val_output "No module named pytest" e new_fails=[].
+    Bug real medido DUAS vezes (a convergencia era 0/23 por isto, nao
+    pelo modelo). Cadeia:
+      1. O nightwatch roda como servico systemd, SEM `nix develop`.
+      2. O PATH do unit e' /run/current-system/sw/bin:... -- o `python3`
+         de la NAO tem pytest. `python3 -m pytest` -> "No module named
+         pytest" -> contava como FALHA DA TASK.
+      3. O pacote do jarvis (lib/python3.13/site-packages) tem so
+         `jarvis` e `nightwatch` -- tambem sem pytest. Nao existe
+         interpretador com pytest no ambiente do servico.
+      4. A evidencia instrumentada mostrou: summary "2 passed 1 failed",
+         new_fails=[] (a falha NAO e' do patch), val_output "No module
+         named pytest".
 
-    Aqui: procura o python que de fato tem pytest e usa-o. Se nenhum
-    existir, devolve "python3" (comportamento anterior) — mas agora o
-    chamador pode detectar e reportar em vez de mentir.
+    A evidencia tambem mostrou um 2o bug: rodando pytest de um cwd onde
+    `jarvis/` e' importavel, os testes importam `jarvis.jarvis...`
+    (path duplicado) e falham no IMPORT, nao no patch.
+
+    Solucao: rodar os testes ATRAVES do ambiente do PROJETO, que tem
+    pytest de verdade -- `nix develop --command python3 -m pytest` e' o
+    contrato de teste do repo. Fora do Nix, cai no melhor interpretador
+    com pytest que existir.
     """
     import shutil as _sh
     import subprocess as _sp
-    cands = []
+    # 1) preferimos o ambiente do projeto (unico que tem pytest real)
+    if _sh.which("nix"):
+        return "nix develop --command python3"
+    # 2) senao, o melhor interpretador com pytest local
+    import sys as _sys
+    cands = [_sys.executable or ""]
     for name in ("python3", "python"):
         p = _sh.which(name)
         if p:
             cands.append(p)
-    # interpretadores do próprio pacote (o jarvis roda num python com deps)
-    try:
-        import sys as _sys
-        cands.insert(0, _sys.executable or "")
-    except Exception:
-        pass
     for c in cands:
         if not c:
             continue
@@ -191,7 +199,6 @@ def _python_with_pytest() -> str:
         except Exception:
             continue
     return "python3"
-
 
 def _test_command(target: str, extra: str = "") -> str:
     """Monta o comando de pytest com o interpretador que TEM pytest."""
