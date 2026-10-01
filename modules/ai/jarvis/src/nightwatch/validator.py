@@ -9,6 +9,7 @@ Runs proportional checks based on what changed:
 """
 
 from __future__ import annotations
+import os
 import shlex
 
 import subprocess
@@ -50,13 +51,21 @@ class ValidationReport:
         return f"{passed} passed, {failed} failed, {skipped} skipped"
 
 
-def run_command(cmd: str, timeout: int = 60) -> tuple[bool, str, int]:
-    """Run a command and return (success, output, duration_ms)."""
+def run_command(cmd: str, timeout: int = 60, env: dict | None = None) -> tuple[bool, str, int]:
+    """Run a command and return (success, output, duration_ms).
+
+    (30/09) `env` existe porque `shlex.split` nao entende prefixo
+    `VAR=valor cmd` — ele viraria um token so. Passar o env explicitamente
+    e' a unica forma correta de prepender o path da FONTE.
+    """
     start = time.time()
+    full_env = None
+    if env:
+        full_env = {**os.environ, **env}
     try:
         result = subprocess.run(
             shlex.split(cmd), capture_output=True, text=True,
-            timeout=timeout, cwd=str(find_repo_root()),
+            timeout=timeout, cwd=str(find_repo_root()), env=full_env,
         )
         duration = int((time.time() - start) * 1000)
         output = result.stdout + result.stderr
@@ -208,6 +217,24 @@ def _python_with_pytest() -> str:
         except Exception:
             continue
     return "python3"
+
+def _source_env() -> dict:
+    """(30/09) PYTHONPATH que testa a FONTE, nao a copia do store.
+
+    Medido: sem isto, `import jarvis.core.agent` resolvia para
+    /nix/store/...-jarvis-0.1.0/lib/python3.13/site-packages/jarvis/ — a
+    copia INSTALADA, stale por definicao (o patch acabou de ser aplicado na
+    arvore de fontes). Validar um patch contra a copia stale e' errado por
+    construcao: da ImportError em `context_budget` e o harness culpava o
+    modelo por isso.
+
+    Prepende `modules/ai/jarvis/src` ao PYTHONPATH herdado, que mantem as
+    deps do store (numpy, httpx, ...) disponiveis.
+    """
+    src = find_repo_root() / "modules" / "ai" / "jarvis" / "src"
+    prev = os.environ.get("PYTHONPATH", "")
+    return {"PYTHONPATH": f"{src}:{prev}" if prev else str(src)}
+
 
 def _test_command(target: str, extra: str = "") -> str:
     """Monta o comando de pytest com o interpretador que TEM pytest."""
@@ -394,7 +421,7 @@ def run_targeted_tests(files: list[str]) -> ValidationReport:
         else:
             test_cmd = f"cd {project_root} && {_test_command('.', '-q --tb=short')}"
         step = ValidationStep(name="tests:full-suite-fallback", command=test_cmd)
-        success, output, duration = run_command(test_cmd, timeout=600)
+        success, output, duration = run_command(test_cmd, env=_source_env(), timeout=600)
         step.passed = success
         step.output = output[-3000:]
         step.duration_ms = duration
@@ -405,7 +432,7 @@ def run_targeted_tests(files: list[str]) -> ValidationReport:
     # Run tests
     test_cmd = _test_command(" ".join(relevant_tests), "-x -q --tb=short")
     step = ValidationStep(name="tests", command=test_cmd)
-    success, output, duration = run_command(test_cmd, timeout=120)
+    success, output, duration = run_command(test_cmd, env=_source_env(), timeout=120)
     step.passed = success
     step.output = output[:3000]
     step.duration_ms = duration
@@ -451,7 +478,7 @@ def run_import_check(files: list[str]) -> ValidationReport:
         # interpretador do próprio processo — que tem o jarvis importável.
         success, output, duration = run_command(
             f'"{sys.executable}" -c "import {module}"',
-            timeout=30,
+            timeout=60, env=_source_env(),
         )
         step.passed = success
         step.output = output[:500]
