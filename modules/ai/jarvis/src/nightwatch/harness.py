@@ -1170,9 +1170,33 @@ def _request_json_patch(
             },
         },
     }}
-    files_bit = "\n\n".join(
-        f"=== FILE: {p} ===\n```python\n{c}\n```"
-        for p, c in list(file_contents.items())[:3])
+    # (30/09) Prompt com ORÇAMENTO — a CAUSA do "não converge".
+    # Medido: context_budget.py tem 769 linhas = 30k chars ≈ 7.5k tokens.
+    # O chat profile roda com n_ctx=8192 (
+    # prof.ctxSize do profile (8192): os dois divergem e o registry mente
+    # sobre o contexto real. Sob 8192, sobra ~600 tokens, o cliente
+    # recorta max_tokens e a resposta TRUNCA (medido: JSON de 334 chars
+    # cortado em 99, sem '}' → "substring not found" → patch descartado).
+    # Parecia "grammar falha"/"modelo não acerta", mas era o PROMPT comendo
+    # o contexto. Aqui: limita o arquivo enviado para deixar ~1024 tokens
+    # de resposta, em vez de truncar a resposta no fim (perde o patch).
+    _real_ctx = 8192  # fallback = profile chat
+    try:
+        from jarvis.providers.llm import LLMClient as _LC
+        from jarvis.core.config import Config as _Cfg
+        _r = _LC(_Cfg())._context_window()
+        if _r:
+            _real_ctx = int(_r)
+    except Exception:
+        pass
+    _prompt_budget = max(2000, (_real_ctx - 1024) * 3)  # ~3 chars/tok, sobra p/ resposta
+    _fb = []
+    for _p, _c in list(file_contents.items())[:3]:
+        _room = _prompt_budget - sum(len(x) for x in _fb)
+        if _room <= 500:
+            break
+        _fb.append(f"=== FILE: {_p} ===\n```python\n{_c[:_room]}\n```")
+    files_bit = "\n\n".join(_fb)
     # (30/09, C3b) Duas correções de harness, ambas custo zero de tokens
     # e ambasMirror da falha real 'unindent does not match' (a run 16:45
     # perdeu 3 tentativas no MESMO ponto, linha 126 de ast_cache.py):
