@@ -1256,20 +1256,43 @@ def _request_json_patch(
         print(f"[patcher] json-patch done in {_t.monotonic() - _t0:.1f}s",
               file=sys.stderr)
         raw = resp.content or ""
+        if not raw.strip():
+            # (30/09) Grammar devolveu VAZIO — medido: acontece em arquivo
+            # grande (context_budget.py, 769 linhas) com temperature=0.0 +
+            # json_schema. Sem isso, cai no "substring not found" e a task
+            # morre. Mas o MESMO modelo em texto livre (temperature>0)
+            # responde em ~27s com patch correto (verificado). Então: grammar
+            # vazio/quebrado → regere em texto livre AGORA, com o parser
+            # tolerante a before/after. Não é "o modelo": é o
+            # instrumento (grammar) que falhou no caso difícil.
+            print("[patcher] grammar vazia; regenerando em texto livre",
+                  file=sys.stderr)
+            _free = LLMClient(Config()).chat(
+                [{"role": "user", "content": prompt}],
+                max_tokens=_mt, temperature=0.3)
+            raw = _free.content or ""
         data = json.loads(raw[raw.index("{"):raw.rindex("}") + 1])
         out = []
         for item in data.get("patches", []):
-            fp = FilePatch(path=item.get("path", ""))
-            fp.hunks.append(PatchHunk(
-                old_text=item.get("old_text", ""),
-                new_text=item.get("new_text", "")))
+            fp = FilePatch(path=item.get("path") or item.get("file", ""))
+            # (30/09) Chaves tolerantes. Medido: quando a GRAMMAR falha
+            # (arquivo grande), o fallback texto-livre responde em JSON
+            # com chaves `before`/`after` (o dialeto do modelo), não
+            # `old_text`/`new_text` (o dialeto do schema). O parser pegava
+            # as chagas do schema, vinha old_text="" e o patch era
+            # DESCARTADO — mesmo com o modelo tendo acertado. Aceita
+            # ambos os dialetos.
+            _old = (item.get("old_text") or item.get("before")
+                    or item.get("original") or item.get("old") or "")
+            _new = (item.get("new_text") or item.get("after")
+                    or item.get("replacement") or item.get("new") or "")
+            fp.hunks.append(PatchHunk(old_text=_old, new_text=_new))
             out.append(fp)
         return True, out, []
     except Exception as e:
         print(f"[patcher] json-patch falhou ({e}); fallback texto",
               file=sys.stderr)
         return False, [], [f"json-patch: {e}"]
-
 
 def _request_structured_patch(
     task_description: str,
