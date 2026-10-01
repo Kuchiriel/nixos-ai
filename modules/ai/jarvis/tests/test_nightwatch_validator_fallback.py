@@ -22,7 +22,8 @@ def test_no_relevant_match_falls_back_to_full_suite(monkeypatch):
     executed_cmds = []
 
     def fake_run_pytest(target, **kw):
-        executed_cmds.append((" ".join(str(target).split()) + " " + str(kw.get("extra_args", "")), kw.get("timeout", 120)))
+        argv = ["py", "-m", "pytest", str(target), str(kw.get("extra_args", ""))]
+        executed_cmds.append((" ".join(argv), kw.get("timeout", 120)))
         return testenv.TestRun(ok=True, passed=1, failed=0, python_used="py")
 
     monkeypatch.setattr(testenv, "run_pytest", fake_run_pytest)
@@ -55,7 +56,8 @@ def test_relevant_match_still_uses_targeted_fast_path(monkeypatch):
     executed_cmds = []
 
     def fake_run_pytest(target, **kw):
-        executed_cmds.append((" ".join(str(target).split()) + " " + str(kw.get("extra_args", "")), kw.get("timeout", 120)))
+        argv = ["py", "-m", "pytest", str(target), str(kw.get("extra_args", ""))]
+        executed_cmds.append((" ".join(argv), kw.get("timeout", 120)))
         return testenv.TestRun(ok=True, passed=1, failed=0, python_used="py")
 
     monkeypatch.setattr(testenv, "run_pytest", fake_run_pytest)
