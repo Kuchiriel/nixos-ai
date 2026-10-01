@@ -20,7 +20,7 @@ def test_no_relevant_match_falls_back_to_full_suite(monkeypatch):
     test_agent.py isolado."""
     executed_cmds = []
 
-    def fake_run_command(cmd: str, timeout: int = 60):
+    def fake_run_command(cmd: str, timeout: int = 60, env=None):
         executed_cmds.append((cmd, timeout))
         return True, "1 passed", 10
 
@@ -53,7 +53,7 @@ def test_relevant_match_still_uses_targeted_fast_path(monkeypatch):
     a correcao nao deve forcar full-suite sempre."""
     executed_cmds = []
 
-    def fake_run_command(cmd: str, timeout: int = 60):
+    def fake_run_command(cmd: str, timeout: int = 60, env=None):
         executed_cmds.append((cmd, timeout))
         return True, "1 passed", 10
 
