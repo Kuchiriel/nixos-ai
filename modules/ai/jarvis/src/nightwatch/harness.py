@@ -807,7 +807,7 @@ def _dump_evidence(task, attempt, patches, validation, new_fails, baseline) -> N
     import json as _json
     import time as _t
     try:
-        d = Path("/tmp/opencode/overnight/evidence")
+        d = Path.home() / ".local/state/jarvis/nightwatch/evidence"
         d.mkdir(parents=True, exist_ok=True)
         patch_dump = []
         for p in (patches or []):
