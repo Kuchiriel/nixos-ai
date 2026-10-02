@@ -99,7 +99,6 @@
       for bin in $out/bin/*; do
         wrapProgram "$bin" \
           --prefix PATH : ${lib.makeBinPath [mcpNixos]} \
-          --prefix PYTHONPATH :${pythonDepsPath} \
           --set MCP_NIXOS_CHANNEL_CACHE "${mcpNixos}/share/mcp-nixos/channels.json"
       done
     '';
