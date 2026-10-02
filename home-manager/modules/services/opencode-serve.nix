@@ -39,7 +39,12 @@
       # `kilo` é o nome do pacote opencode no overlay do flake (flake.nix:~108):
       # vem de nixpkgs-unstable, porque o opencode-nix do dan-online parou em
       # 2026-05. `pkgs.opencode` aqui devolveria a versão velha/inexistente.
-      ExecStart = "${pkgs.kilo}/bin/opencode serve --hostname 100.121.100.103 --port 4599";
+      # 0.0.0.0 (e não o IP do Tailscale) de propósito: escutar só no IP do
+      # tailnet quebrava `opencode attach http://127.0.0.1:4599`, que é o
+      # comando natural — o loopback não tinha nada ouvindo e dava "unable to
+      # connect". A exposição NÃO vem do bind, vem do firewall: a porta 4599 só
+      # está liberada em `interfaces.tailscale0`, então a LAN não chega nela.
+      ExecStart = "${pkgs.kilo}/bin/opencode serve --hostname 0.0.0.0 --port 4599";
       Restart = "always";
       RestartSec = 3;
       # sem isto o opencode segura um terminal e o journal enche de lixo
