@@ -173,7 +173,77 @@ def click(button: str = "left", title_match: str = "") -> dict[str, Any]:
 # quebrava quando o jogo ia fullscreen 1920x1080). Agora a região é calculada
 # como FRAÇÃO da janela: faixa inferior, metade direita. Sem isso o helper
 # lia o recorte errado e devolvia UNKNOWN.
-_CHAT_BTN_FRAC = (0.58, 0.90, 0.75, 1.0)
+# calibrado no layout FULLSCREEN 1920x1080 (2026-10-02): o botao
+# "Chat Off" fica no canto inferior direito, ~ (1860,1058).
+_CHAT_BTN_FRAC = (0.90, 0.955, 1.0, 1.0)
+
+
+def locate(what: str, window_match: str = "OTClient") -> dict[str, Any]:
+    """Acha um elemento NA TELA e devolve o centro em coords RELATIVAS à janela.
+
+    2026-10-02: era o que faltava. Eu vinha com coordenadas fixas medidas numa
+    janela 941x504 e, quando o jogo foi fullscreen 1920x1080, tudo quebrou — o
+    layout escala, então posição fixa não sobrevive a mudança de tamanho.
+
+    A visão devolve bounding box, então a posição é sempre a do que está
+    NA TELA agora. Depois `click_at` converte relativo→absoluto. Assim não há
+    coordenada hardcoded em lugar nenhum.
+    """
+    from jarvis.core import vision
+    f = _focus(window_match)
+    if not f.get("ok"):
+        return f
+    shot = vision.capture_window(window_match)
+    if not shot.get("ok"):
+        return {"ok": False, "error": "nao capturou a janela"}
+    prov = ("PROCURANDO no jogo. O elemento é o retangulo que CONTIEM este texto "
+            "exatamente como escrito: ")
+    ask = (f"{prov}'{what}'. Responda SOMENTE com as coordenadas do retangulo "
+           f"em pixels da imagem, no formato: x1,y1,x2,y2. Sem texto, sem "
+           f"explicacao. Se nao existir, responda: NAO_ENCONTRADO")
+    r = vision.observe_with_fallback({
+        "mode": "window", "window_title": window_match,
+        "focus_window": False, "opaque": False, "question": ask})
+    if "NAO_ENCONTRADO" in r:
+        return {"ok": False, "erro": f"elemento '{what}' nao esta na tela",
+                "ocr": r[:120]}
+    import re
+    nums = [int(n) for n in re.findall(r"(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)", r)[0]] \
+        if re.findall(r"(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)", r) else []
+    if len(nums) != 4:
+        return {"ok": False, "erro": "a visao nao devolveu bbox", "resposta": r[:140]}
+    cx, cy = (nums[0] + nums[2]) // 2, (nums[1] + nums[3]) // 2
+    return {"ok": True, "elemento": what, "bbox": nums,
+            "rel": [cx, cy], "resposta": r[:80]}
+
+
+def click_element(what: str, window_match: str = "OTClient",
+                  button: str = "left") -> dict[str, Any]:
+    """localize() + click_at(). Sem coordenada hardcoded."""
+    loc = locate(what, window_match)
+    if not loc.get("ok"):
+        return loc
+    if button == "right":
+        w = find_window(window_match)
+        at = w.get("at", [0, 0])
+        _hyprctl("dispatch", "focuswindow", f"address:{w.get('address','')}")
+        for _ in range(12):
+            time.sleep(0.15)
+            try:
+                if json.loads(_hyprctl("activewindow", "-j") or "{}").get(
+                        "address") == w.get("address"):
+                    break
+            except ValueError:
+                pass
+        cx, cy = loc["rel"]
+        _hyprctl("dispatch", "movecursor", str(at[0] + cx), str(at[1] + cy))
+        time.sleep(0.25)
+        yt = shutil.which("ydotool")
+        if yt:
+            code = {"left": "0xC0", "right": "0xC1"}.get(button, "0xC0")
+            subprocess.run([yt, "click", code], capture_output=True, timeout=10)
+        return {"ok": True, "acao": f"{button}-click em '{what}'", **loc}
+    return click_at(loc["rel"][0], loc["rel"][1], window_match)
 
 
 def _ocr(path: str) -> str:
@@ -207,10 +277,10 @@ def chat_state(window_match: str = "OTClient") -> dict[str, Any]:
         k = max(2, min(4, 900 // max(1, crop.width)))
         crop.resize((crop.width * k, crop.height * k),
                     Image.LANCZOS).save(p)
-        st["box"] = list(box)
-        st["tamanho"] = [W, H]
+        geo = {"box": list(box), "tamanho": [W, H]}
     except ImportError:
         p = shot["path"]
+        geo = {}
     txt = _ocr(p).lower().replace("\n", " ")
     if "on" in txt and "off" not in txt:
         estado = "ON"
@@ -219,7 +289,7 @@ def chat_state(window_match: str = "OTClient") -> dict[str, Any]:
     else:
         estado = "UNKNOWN"
     return {"ok": True, "estado": estado, "ocr": txt.strip()[:40],
-            "foco": f.get("foco_confirmado")}
+            "foco": f.get("foco_confirmado"), **geo}
 
 
 def ensure_chat(window_match: str = "OTClient") -> dict[str, Any]:
@@ -292,6 +362,11 @@ def handle(args: dict[str, Any]) -> str:
     try:
         if action == "state":
             r = window_state(title)
+        elif action == "locate":
+            r = locate(args.get("element") or "", title)
+        elif action == "click_element":
+            r = click_element(args.get("element") or "", title,
+                              args.get("button", "left"))
         elif action == "chat_state":
             r = chat_state(title)
         elif action == "ensure_chat":
@@ -314,7 +389,7 @@ def handle(args: dict[str, Any]) -> str:
             else:
                 r = click(args.get("button", "left"), title)
         else:
-            return (f"acao invalida: {action}. Use state|chat_state|ensure_chat|chat_command|focus|key|type|click. "
+            return (f"acao invalida: {action}. Use state|locate|click_element|chat_state|ensure_chat|chat_command|focus|key|type|click. "
                     "Teclas: Return, Escape, Tab, BackSpace, F1…")
         return json.dumps(r, ensure_ascii=False)
     except Exception as e:                      # nunca levanta no MCP
