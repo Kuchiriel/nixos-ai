@@ -27,7 +27,15 @@
     };
     Service = {
       Type = "simple";
+      # SEM `export` no arquivo: o systemd EnvironmentFile recusa a linha e
+      # loga o valor em texto claro no journal ("Ignoring invalid environment
+      # assignment") — aí o servidor sobe UNSECURED e a senha fica no log.
+      # Formato obrigatório: KEY=valor (gerado pela activation abaixo).
       EnvironmentFile = "${config.home.homeDirectory}/.config/opencode/server.env";
+      # As sessões do opencode são escopadas por diretório. Com o serviço em
+      # $HOME o servidor via só 1 sessão; em ~/projects ele vê as 90 — e é
+      # nesta que a sessão do TUI mora, que é a que o celular vai Assumeir.
+      WorkingDirectory = "${config.home.homeDirectory}/projects";
       # `kilo` é o nome do pacote opencode no overlay do flake (flake.nix:~108):
       # vem de nixpkgs-unstable, porque o opencode-nix do dan-online parou em
       # 2026-05. `pkgs.opencode` aqui devolveria a versão velha/inexistente.
@@ -42,13 +50,15 @@
   };
 
   # O env da senha é gerado fora do git; cria se faltar para o serviço subir.
+  # Rotaciona se o arquivo já tiver o prefixo `export` (que o systemd ignora e
+  # loga em claro) — foi assim que a senha acabou no journal em 02/10/2026.
   home.activation."opencode-server-env" = lib.mkIf true ''
     envFile="$HOME/.config/opencode/server.env"
-    if [ ! -f "$envFile" ]; then
+    if [ ! -f "$envFile" ] || grep -q '^export ' "$envFile"; then
       mkdir -p "$(dirname "$envFile")"
       umask 077
       pw="$(python3 -c 'import secrets; print(secrets.token_urlsafe(18))')"
-      printf 'export OPENCODE_SERVER_PASSWORD=%s\n' "$pw" > "$envFile"
+      printf 'OPENCODE_SERVER_PASSWORD=%s\n' "$pw" > "$envFile"
       chmod 600 "$envFile"
     fi
   '';
