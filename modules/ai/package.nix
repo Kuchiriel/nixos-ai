@@ -50,6 +50,18 @@
 
     nativeBuildInputs = [makeWrapper];
 
+    # PIL/PYTHONPATH (2026-10-02): `dependencies` do buildPythonPackage NÃO
+    # coloca as libs no sys.path deste wrapper — sem isto `import PIL` falha em
+    # runtime mesmo com pillow no closure do pacote (diagnosticado: pillow
+    # 12.3.0 presente em `nix-store -q --references`, porém "No module named
+    # PIL"). Efeito prático: vision.py caía no PNG cru de 1,5MB e o Gemini
+    # respondia "Unable to process input image". Agora as deps entram no path.
+    depsPath = lib.makeSearchPathOutput "out" "python3/site-packages" pythonDeps;
+
+    makeWrapperArgs = [
+      "--prefix PYTHONPATH :${depsPath}"
+    ];
+
 
 
     # mcp-nixos (MCP server read-only de packages/options do nixpkgs) é usado

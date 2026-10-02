@@ -20,10 +20,41 @@ import os
 import shutil
 import subprocess
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
 SCREENSHOT_DIR = Path(os.environ.get("JARVIS_SCREENSHOT_DIR", "/tmp"))
+
+# CAUSA RAIZ (2026-10-02): TODAS as APIs de visão rejeitavam o request porque
+# o python-urllib envia `User-Agent: Python-urllib/3.13`, que a borda bloqueia:
+#   - Groq     -> 403 Cloudflare "error code: 1010"
+#   - Gemini   -> 401 "invalid authentication credentials"
+# Com um UA de cliente HTTP normal, as MESMAS chaves passaram. Sem isto a
+# cascata jurava que as chaves estavam mortas e eu quase aposentei as 4.
+_UA = "curl/8.6.0 (jarvis-vision)"
+_HEADERS = {"Content-Type": "application/json", "User-Agent": _UA}
+
+
+def _http_get(url: str, headers: dict[str, str],
+              timeout: float) -> Any:
+    """GET JSON com User-Agent garantido."""
+    h = dict(_HEADERS)
+    h.update(headers)
+    req = urllib.request.Request(url, headers=h)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode())
+
+
+def _http_json(url: str, payload: bytes, headers: dict[str, str],
+               timeout: float) -> dict[str, Any]:
+    """POST JSON com User-Agent garantido. Erros HTTP voltam como dict."""
+    h = dict(_HEADERS)
+    h.update(headers)
+    req = urllib.request.Request(url, data=payload, headers=h)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode())
 SCREENSHOT_PREFIX = "jarvis-screenshot"
 
 
@@ -396,27 +427,40 @@ def _vision_gemini(image_path: str, question: str,
         with open(image_path, "rb") as f:
             img_b64 = base64.b64encode(f.read()).decode()
 
-    payload = json.dumps({
-        "contents": [{"parts": [
-            {"inline_data": {"mime_type": mime, "data": img_b64}},
-            {"text": question},
-        ]}],
-        "generationConfig": {"temperature": 0.0, "maxOutputTokens": 2000},
-    }).encode()
-    try:
-        req = urllib.request.Request(
-            "https://generativelanguage.googleapis.com/v1beta/models/"
-            f"gemini-2.5-flash:generateContent?key={key}",
-            data=payload, headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            data = json.loads(r.read().decode())
-        parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-        text = "".join(p.get("text", "") for p in parts).strip()
-        if not text:
-            return {"ok": False, "error": "gemini retornou vazio"}
-        return {"ok": True, "via": "gemini", "text": text}
-    except Exception as e:
-        return {"ok": False, "error": f"gemini falhou: {str(e)[:150]}"}
+    # sem modelo hardcoded: o catálogo decide (free rotaciona toda semana)
+    models = _discover_vision_models("gemini")[:3]
+    if not models:
+        return {"ok": False, "error": "nenhum modelo de visão no catálogo"}
+    last = "?"
+    for model in models:
+        payload = json.dumps({
+            "contents": [{"parts": [
+                {"inline_data": {"mime_type": mime, "data": img_b64}},
+                {"text": question},
+            ]}],
+            "generationConfig": {"temperature": 0.0, "maxOutputTokens": 2000,
+                              # sem thoughts: 2.5-flash gasta o orçamento neles e
+                              # devolve finishReason=MAX_TOKENS sem nenhum texto.
+                              "thinkingConfig": {"thinkingBudget": 0}},
+        }).encode()
+        try:
+            data = _http_json(
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{model}:generateContent?key={key}",
+                payload, {}, timeout)
+            parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+            text = "".join(p.get("text", "") for p in parts).strip()
+            if text:
+                return {"ok": True, "via": f"gemini:{model}", "text": text}
+            # MAX_TOKENS sem texto = orçamento gasto em thoughts, não é auth
+            last = "sem texto (provável thoughts)"
+        except urllib.error.HTTPError as e:
+            last = f"HTTP {e.code} {e.read().decode()[:80]}"
+            continue
+        except Exception as e:
+            last = str(e)[:100]
+            continue
+    return {"ok": False, "error": f"gemini falhou: {last}"}
 
 
 def _vision_groq(image_path: str, question: str,
@@ -465,13 +509,9 @@ def _vision_groq(image_path: str, question: str,
         "temperature": 0.0,
     }).encode()
     try:
-        req = urllib.request.Request(
-            "https://api.groq.com/openai/v1/chat/completions",
-            data=payload,
-            headers={"Content-Type": "application/json",
-                     "Authorization": f"Bearer {key}"})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            data = json.loads(r.read().decode())
+        data = _http_json(
+            "https://api.groq.com/openai/v1/chat/completions", payload,
+            {"Authorization": f"Bearer {key}"}, timeout)
         text = (data.get("choices", [{}])[0].get("message", {})
                 .get("content", "") or "").strip()
         if not text:
@@ -504,9 +544,8 @@ def _vision_openrouter(image_path: str, question: str,
     if not key:
         return {"ok": False, "error": "OPENROUTER_API_KEY ausente"}
 
-    # modelos com visão, do mais leve pro mais capaz (todos :free)
-    for model in ("google/gemma-4-26b-a4b-it:free",
-                  "google/gemma-4-31b-it:free"):
+    # catálogo :free com input_modalities contendo "image" (dinâmico)
+    for model in _discover_vision_models("openrouter")[:4]:
         mime = "image/jpeg"
         try:
             from PIL import Image
@@ -532,20 +571,22 @@ def _vision_openrouter(image_path: str, question: str,
             "temperature": 0.0,
         }).encode()
         try:
-            req = urllib.request.Request(
-                "https://openrouter.ai/api/v1/chat/completions",
-                data=payload,
-                headers={"Content-Type": "application/json",
-                         "Authorization": f"Bearer {key}"})
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                data = json.loads(r.read().decode())
+            data = _http_json(
+                "https://openrouter.ai/api/v1/chat/completions", payload,
+                {"Authorization": f"Bearer {key}",
+                 "HTTP-Referer": "https://opencode.ai",
+                 "X-Title": "JARVIS"}, timeout)
             text = (data.get("choices", [{}])[0].get("message", {})
                     .get("content", "") or "").strip()
             if text:
                 return {"ok": True, "via": f"openrouter:{model}", "text": text}
-        except Exception:
-            continue   # tenta o proximo modelo
-    return {"ok": False, "error": "openrouter: nenhum modelo de visao respondeu"}
+        except urllib.error.HTTPError as e:
+            errs.append(f"{model}: HTTP {e.code} {e.read().decode()[:60]}")
+        except Exception as e:
+            errs.append(f"{model}: {str(e)[:60]}")
+        continue
+    return {"ok": False, "error": "openrouter: " +
+            ("; ".join(errs[:3]) or "nenhum modelo :free com visão no catálogo")}
 
 
 def _vision_nvidia(image_path: str, question: str,
@@ -587,33 +628,141 @@ def _vision_nvidia(image_path: str, question: str,
         with open(image_path, "rb") as f:
             img_b64 = base64.b64encode(f.read()).decode()
 
-    payload = json.dumps({
-        "model": "meta/llama-3.2-11b-vision-instruct",
-        "messages": [{"role": "user", "content": [
-            {"type": "image_url",
-             "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
-            {"type": "text", "text": question},
-        ]}],
-        "max_tokens": 800,
-        "temperature": 0.0,
-    }).encode()
-    try:
-        req = urllib.request.Request(
-            "https://integrate.api.nvidia.com/v1/chat/completions",
-            data=payload,
-            headers={"Content-Type": "application/json",
-                     "Authorization": f"Bearer {key}",
-                     "Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            data = json.loads(r.read().decode())
-        text = (data.get("choices", [{}])[0].get("message", {})
-                .get("content", "") or "").strip()
-        if not text:
-            return {"ok": False, "error": "nvidia retornou vazio"}
-        return {"ok": True, "via": "nvidia-nim-vision", "text": text}
-    except Exception as e:
-        return {"ok": False, "error": f"nvidia falhou: {str(e)[:150]}"}
+    models = _discover_vision_models("nvidia")[:3]
+    if not models:
+        return {"ok": False, "error": "nenhum VLM no catálogo NIM"}
+    last = "?"
+    for model in models:
+        payload = json.dumps({
+            "model": model,
+            "messages": [{"role": "user", "content": [
+                {"type": "image_url",
+                 "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
+                {"type": "text", "text": question},
+            ]}],
+            "max_tokens": 800,
+            "temperature": 0.0,
+        }).encode()
+        try:
+            data = _http_json(
+                "https://integrate.api.nvidia.com/v1/chat/completions", payload,
+                {"Authorization": f"Bearer {key}",
+                 "Accept": "application/json"}, timeout)
+            text = (data.get("choices", [{}])[0].get("message", {})
+                    .get("content", "") or "").strip()
+            if text:
+                return {"ok": True, "via": f"nvidia:{model}", "text": text}
+            last = "retornou vazio"
+        except urllib.error.HTTPError as e:
+            last = f"HTTP {e.code} {e.read().decode()[:80]}"
+            continue
+        except Exception as e:
+            last = str(e)[:100]
+            continue
+    return {"ok": False, "error": f"nvidia falhou: {last}"}
 
+
+
+# --------------------------------------------------------------------------
+# DESCOBERTA DINÂMICA DE MODELO (2026-10-02)
+#
+# Modelos "free"/baratos mudam toda semana — e foi exatamente o que aconteceu:
+# a Groq descontinuou TODOS os VLM em 2026-10-01 (llama-3.2-11b-vision,
+# llama-4-maverick em 09/03, llama-4-scout em 17/07); a OpenRouter tirou
+# llama-3.3-70b:free do :free; o gemma-4:free cai em 429 sem parar. Hardcodar
+# slug garante 404/429 em semanas. Então: lê o catálogo do provider, filtra o
+# que aceita imagem, ordena por preferência e guarda 1h de cache.
+# --------------------------------------------------------------------------
+_MODEL_TTL = 3600.0
+_MODEL_CACHE: dict[str, tuple[list[str], float]] = {}
+
+# termos que indicam entrada de imagem
+_NEG = ("embed", "tts", "safety", "moderation", "audio", "rerank")
+
+
+def _catalog(url: str, headers: dict[str, str],
+             timeout: float = 40.0) -> list[dict[str, Any]]:
+    """GET JSON com UA. Catálogo vazio em qualquer erro (nunca levanta)."""
+    try:
+        return _http_get(url, headers, timeout)
+    except Exception:
+        return []
+
+
+def _discover_vision_models(provider: str) -> list[str]:
+    """Modelos com visão do `provider`, ordenados por preferência.
+
+    Cache de 1h: é o suficiente para o catálogo free rotacionar sem refazer
+    request a cada `observe_screen`, e curto o bastante para pegar a troca.
+    """
+    hit = _MODEL_CACHE.get(provider)
+    if hit and time.time() - hit[1] < _MODEL_TTL:
+        return hit[0]
+
+    found: list[str] = []
+    try:
+        if provider == "gemini":
+            key = _secret("gemini")
+            data = _catalog(
+                "https://generativelanguage.googleapis.com/v1beta/"
+                f"models?key={key}&pageSize=200", {})
+            names = [m.get("name", "").replace("models/", "")
+                     for m in data.get("models", [])
+                     if "generateContent" in
+                     (m.get("supportedGenerationMethods") or [])]
+            # "-image"/"image-preview" geram imagem (input texto), não
+            # entendem imagem — fora, senão o catálogo as põe na frente.
+            vis = [n for n in names
+                   if not any(t in n.lower() for t in _NEG)
+                   and not n.lower().endswith("-image")
+                   and "-image-" not in n.lower()]
+            # flash primeiro (rápido/grátis), depois lite, depois o resto
+            found = sorted(vis, key=lambda n: (
+                0 if "-flash" in n and "lite" not in n else
+                1 if "-flash-lite" in n else 2, n))
+
+        elif provider == "nvidia":
+            key = _secret("nvidia")
+            data = _catalog("https://integrate.api.nvidia.com/v1/models",
+                            {"Authorization": f"Bearer {key}"})
+            ids = [m.get("id", "") for m in
+                   (data.get("data") if isinstance(data, dict) else data)]
+            vis = [i for i in ids
+                   if any(t in i.lower() for t in ("vision", "-vl", "vlm"))
+                   and "embed" not in i.lower()]
+            found = vis
+
+        elif provider == "openrouter":
+            key = _secret("openrouter")
+            data = _catalog("https://openrouter.ai/api/v1/models",
+                            {"Authorization": f"Bearer {key}"})
+            rows = data.get("data", []) if isinstance(data, dict) else []
+            for m in rows:
+                arch = m.get("architecture") or {}
+                price = (m.get("pricing") or {}).get("prompt")
+                if "image" not in (arch.get("input_modalities") or []):
+                    continue
+                if price != "0":        # só :free — sem crédito não roda
+                    continue
+                if any(t in m["id"].lower() for t in _NEG):
+                    continue
+                found.append(m["id"])
+    except Exception:
+        found = []
+
+    if found:
+        _MODEL_CACHE[provider] = (found, time.time())
+    elif hit:                        # catálogo falhou: usa o cache velho
+        return hit[0]
+    return found
+
+
+def _secret(name: str) -> str:
+    try:
+        from jarvis.core import keys as _keys
+        return _keys.get(name)
+    except Exception:
+        return os.environ.get(name.upper(), "")
 
 def _ocr_text(image_path: str, lang: str = "por+eng") -> dict[str, Any]:
     """Nível 3 (final): Tesseract OCR — local, grátis, sempre disponível.
@@ -671,8 +820,9 @@ _DEAD_TTL = 300.0   # 5 min: provider morto sai da cascata sem custar chamada,
 
 
 def _mark_dead(via: str, err: str) -> None:
-    if any(m in err for m in ("401", "403", "404", "User not found",
-                              "Internal Server")):
+    if any(m in err for m in ("401", "403", "404", "402", "429",
+                              "User not found", "Internal Server",
+                              "decommissioned")):
         _DEAD_PROVIDERS[via] = (err[:120], time.time())
 
 
@@ -713,10 +863,14 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
     # Nível 0 (barato, sem rede): vision local. Só tenta 1x se já sabermos
     # que o llama-router está fora — 8080 devolve 500 e custa segundos.
     # ordem: local (grátis) → nvidia (funciona) → gemini → groq → openrouter
+    # Groq saiu da cascata: EM 2026-10-01 a Groq descontinuou TODOS os VLM
+    # (llama-3.2-11b-vision, llama-4-maverick 09/03, llama-4-scout 17/07) e
+    # passou a servir só texto. Chamar era gastar request em 404 garantido.
+    # Ordem: local (grátis) → gemini (grátis, funciona) → nvidia (crédito)
+    # → openrouter (crédito) → OCR.
     levels = [(_vision_local, "local"),
-              (_vision_nvidia, "nvidia-nim-vision"),
               (_vision_gemini, "gemini"),
-              (_vision_groq, "groq-vision"),
+              (_vision_nvidia, "nvidia-nim-vision"),
               (_vision_openrouter, "openrouter")]
 
     for fn, via in levels:

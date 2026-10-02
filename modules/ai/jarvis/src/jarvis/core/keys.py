@@ -63,17 +63,26 @@ def _from_files(spec: dict[str, Any]) -> str:
                 except (ValueError, AttributeError):
                     continue
                 continue
-            for line in text.splitlines():
-                line = line.strip()
+            # ORDEM DE PREFERÊNCIA (2026-10-02): os alias são testados na
+            # ordem do registry, com as linhas por dentro. Antes era o
+            # contrário (linha por fora, alias por dentro) e devolvia o
+            # PRIMEIRO alias encontrado no arquivo: como `GOOGLE_API_KEY` vem
+            # antes de `GEMINI_API_KEY` no /etc/litellm.env, o getter "gemini"
+            # devolvia a chave velha do Google e a visão levava 401 com a
+            # chave boa sitting right there no arquivo.
+            wanted = list(spec.get("env", []))
+            lines = []
+            for raw_line in text.splitlines():
+                line = raw_line.strip()
                 if not line or line.startswith("#") or "=" not in line:
                     continue
                 k, v = line.split("=", 1)
-                # Tolera legado `export KEY="v"` (WebUI escrevia assim).
                 k = k.strip()
                 if k.startswith("export "):
                     k = k[len("export "):].strip()
-                v = v.strip().strip("\"'")
-                for env_name in spec.get("env", []):
+                lines.append((k, v.strip().strip("\"'")))
+            for env_name in wanted:
+                for k, v in lines:
                     if k == env_name and v:
                         return v
         except OSError:
@@ -82,13 +91,25 @@ def _from_files(spec: dict[str, Any]) -> str:
 
 
 def get(name: str) -> str:
-    """Retorna o secret `name` ("" se ausente). Nunca levanta."""
+    """Retorna o secret `name` ("" se ausente). Nunca levanta.
+
+    PRECEDÊNCIA: ARQUIVO antes do environment (2026-10-02). Diagnosticado
+    na prática: o processo JARVIS carrega uma `GEMINI_API_KEY` exportada há
+    semanas; quando a chave foi renovada em `/etc/litellm.env`, o `os.environ`
+    continuou servindo a velha e a visão recebeu 401 mesmo com o arquivo
+    correto. Como quem renova chave edita o arquivo gerenciado por root, o
+    arquivo tem de ganhar. O `environment` fica como fallback (útil p/ CI e
+    p/ containers sem /etc).
+    """
     spec = _SOURCES.get(name, {})
+    val = _from_files(spec)
+    if val:
+        return val
     for env_name in spec.get("env", []):
         val = (os.environ.get(env_name, "") or "").strip().strip("\"'")
         if val:
             return val
-    return _from_files(spec)
+    return ""
 
 
 def require(name: str) -> str:
