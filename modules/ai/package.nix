@@ -58,9 +58,14 @@
     # respondia "Unable to process input image". Agora as deps entram no path.
     depsPath = lib.makeSearchPathOutput "out" "python3/site-packages" pythonDeps;
 
-    makeWrapperArgs = [
-      "--prefix PYTHONPATH :${depsPath}"
-    ];
+    # makeWrapperArgs sozinho NÃO funcionou: o hook de python do nixpkgs monta
+    # o wrapper por cima e o PYTHONPATH some (medido: pillow 12.3.0 no closure
+    # via `nix-store -q --references`, mas `import PIL` → ModuleNotFoundError
+    # em runtime). postFixup roda DEPOIS de qualquer hook, então aqui o prefixo
+    # sobrevive. É o que faz o vision.py ter PIL de verdade.
+    postFixup = ''
+      wrapProgram $out/bin/jarvis --prefix PYTHONPATH :${depsPath}
+    '';
 
 
 

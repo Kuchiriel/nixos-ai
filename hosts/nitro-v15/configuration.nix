@@ -94,6 +94,15 @@ services.avahi = {
     espeak-ng
     sox
     alsa-utils
+    # PIL/Pillow + pytesseract system-wide (2026-10-02, pedido do dono).
+    # Motivo: vision.py do jarvis redimensiona a captura antes de mandar p/ a
+    # API de visão; sem PIL ele mandava PNG cru de 1,5MB e o Gemini respondia
+    # "Unable to process input image". pytesseract é o fallback OCR final da
+    # cascata. ATENÇÃO: isto NÃO basta p/ o processo `jarvis` — ele roda com o
+    # python3 do próprio store do pacote, que não enxerga systemPackages. O
+    # PYTHONPATH efetivo do jarvis é montado em modules/ai/package.nix.
+    (python3.withPackages (ps: with ps; [ pillow pytesseract ]))
+    tesseract
     # Editor
     # vscodium — gerenciado por home-manager (vscode-roo.nix)
   ];
