@@ -364,26 +364,41 @@ def _vision_local(image_path: str, question: str) -> dict[str, Any]:
 
 def _vision_gemini(image_path: str, question: str,
                    timeout: float = 60.0) -> dict[str, Any]:
-    """Nível 2: Gemini free (AI Studio, 1M ctx, vision nativo, sem cartão)."""
+    """Nível 2: Gemini free (AI Studio, vision nativa, sem cartão)."""
     import base64
-    import io
+    import json
     import urllib.request
 
-    key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    # A chave vive em /etc/litellm.env; keys.get() le a env E cai pro arquivo.
+    # Antes era so os.environ, entao a chave nunca chegava ao processo e este
+    # nivel nao era nunca tentado (o observe caia direto no OCR).
+    try:
+        from jarvis.core import keys as _keys
+        key = _keys.get("gemini")
+    except Exception:
+        key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not key:
         return {"ok": False, "error": "GEMINI_API_KEY ausente"}
+
+    # Encode da imagem. Sem PIL, manda o arquivo CRU (a Gemini aceita PNG) em
+    # vez de abortar: PIL ausente nao e motivo p/ pular uma vision free.
+    mime = "image/jpeg"
     try:
         from PIL import Image
+        import io
         img = Image.open(image_path).convert("RGB")
         img.thumbnail((1024, 1024), Image.LANCZOS)
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=80)
         img_b64 = base64.b64encode(buf.getvalue()).decode()
     except ImportError:
-        return {"ok": False, "error": "PIL ausente p/ redimensionar"}
+        mime = "image/png"
+        with open(image_path, "rb") as f:
+            img_b64 = base64.b64encode(f.read()).decode()
+
     payload = json.dumps({
         "contents": [{"parts": [
-            {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}},
+            {"inline_data": {"mime_type": mime, "data": img_b64}},
             {"text": question},
         ]}],
         "generationConfig": {"temperature": 0.0, "maxOutputTokens": 2000},
