@@ -276,6 +276,15 @@ services.avahi = {
     allowedTCPPorts = [4599];
   };
 
+  # opencode serve com nome curto (2026-10-02). O MagicDNS do Tailscale só
+  # devolve IPv6 para `nitro-v15`, e o servidor escuta só o IPv4 100.121.100.103
+  # — então o nome não resolvia para o lado certo. `/etc/hosts` não serve
+  # (é symlink pro nix store, read-only), então vai por extraHosts.
+  # O IP do Tailscale é estável por node; só muda se refizer o login do tailnet.
+  networking.extraHosts = {
+    "100.121.100.103" = ["oc" "nitro-v15"];
+  };
+
   services.openssh = {
     enable = true;
     settings.PermitRootLogin = "prohibit-password"; # Segurança: login root só por chave SSH
