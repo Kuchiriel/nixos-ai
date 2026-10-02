@@ -143,9 +143,18 @@ def capture_region(timeout: float = 10.0) -> dict[str, Any]:
 
 def _hyprctl_raw(*args: str) -> str:
     import subprocess as _sp
+    # Sem a assinatura do Hyprland o `hyprctl` devolve VAZIO e o
+    # capture_window/capture_region falham sem erro claro (2026-10-02). O
+    # saneamento mora em gameinput (fonte única) — aqui só delegamos.
     try:
-        return _sp.run(["hyprctl", *args], capture_output=True, text=True,
-                       timeout=5).stdout or ""
+        from jarvis.core.gameinput import _hyprctl
+        return _hyprctl(*args)
+    except Exception:
+        try:
+            return _sp.run(["hyprctl", *args], capture_output=True,
+                           text=True, timeout=5).stdout or ""
+        except (OSError, _sp.SubprocessError):
+            return ""
     except (OSError, _sp.SubprocessError):
         return ""
 

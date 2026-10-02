@@ -26,11 +26,45 @@ import time
 from typing import Any
 
 
+def _sanear_wayland() -> str:
+    """Descobre a assinatura do Hyprland quando ela sumiu do ambiente.
+
+    MESMA classe de bug do ydotoald (2026-10-02): um ATUADOR sem ambiente
+    falha e devolve "vazio" sem erro. Meu shell perdeu
+    HYPRLAND_INSTANCE_SIGNATURE e WAYLAND_DISPLAY, então `hyprctl clients -j`
+    devolvia `[]` — o jogo era declarado "janela não encontrada" e TODA a
+    lógica de posição/clique degradava silenciosamente. Não é o app que sumiu.
+
+    Busca a assinatura em /run/user/$UID/hypr/ (o Hyprland cria lá a cada
+    start) e o wayland socket, e exporta no próprio processo.
+    """
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        return ""
+    uid = os.getuid()
+    hypr_dir = f"/run/user/{uid}/hypr"
+    try:
+        entries = [e for e in os.listdir(hypr_dir) if os.path.isdir(
+            os.path.join(hypr_dir, e))]
+    except OSError:
+        entries = []
+    if entries:
+        os.environ["HYPRLAND_INSTANCE_SIGNATURE"] = max(
+            entries, key=lambda e: os.path.getmtime(os.path.join(hypr_dir, e)))
+    for sock in sorted(os.listdir(f"/run/user/{uid}")) if os.path.isdir(
+            f"/run/user/{uid}") else []:
+        if sock.startswith("wayland-"):
+            os.environ.setdefault("WAYLAND_DISPLAY", sock)
+            break
+    return os.environ.get("HYPRLAND_INSTANCE_SIGNATURE", "")
+
+
 def _hyprctl(*args: str, timeout: float = 5.0) -> str:
     if not shutil.which("hyprctl"):
         raise RuntimeError("hyprctl ausente (não é Hyprland?)")
+    if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        _sanear_wayland()
     out = subprocess.run(["hyprctl", *args], capture_output=True, text=True,
-                         timeout=timeout)
+                         timeout=timeout, env=os.environ.copy())
     return out.stdout or ""
 
 
