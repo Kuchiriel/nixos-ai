@@ -81,6 +81,15 @@ def _focus(title_match: str) -> dict[str, Any]:
                 "janelas": [c.get("title", "")[:30] for c in _clients()]}
     addr = w.get("address", "")
     _hyprctl("dispatch", "focuswindow", f"address:{addr}")
+    # espera o foco CONFIRMAR (a janela precisa estar ativa antes da tecla)
+    for _ in range(12):
+        time.sleep(0.15)
+        try:
+            act = json.loads(_hyprctl("activewindow", "-j") or "{}")
+            if act.get("address") == addr:
+                break
+        except ValueError:
+            pass
     at, size = w.get("at", [0, 0]), w.get("size", [0, 0])
     cx = at[0] + size[0] // 2
     cy = at[1] + size[1] // 2
@@ -152,6 +161,14 @@ def click_at(x: int, y: int, window_match: str = "OTClient") -> dict[str, Any]:
         return {"ok": False, "error": f"janela '{window_match}' nao encontrada"}
     addr = w.get("address", "")
     _hyprctl("dispatch", "focuswindow", f"address:{addr}")
+    for _ in range(12):
+        time.sleep(0.15)
+        try:
+            act = json.loads(_hyprctl("activewindow", "-j") or "{}")
+            if act.get("address") == addr:
+                break
+        except ValueError:
+            pass
     at = w.get("at", [0, 0])
     ax, ay = at[0] + x, at[1] + y
     _hyprctl("dispatch", "movecursor", str(ax), str(ay))

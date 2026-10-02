@@ -141,7 +141,16 @@ def capture_region(timeout: float = 10.0) -> dict[str, Any]:
 
 
 
-def _prepare_window(window_title: str) -> dict[str, Any]:
+def _hyprctl_raw(*args: str) -> str:
+    import subprocess as _sp
+    try:
+        return _sp.run(["hyprctl", *args], capture_output=True, text=True,
+                       timeout=5).stdout or ""
+    except (OSError, _sp.SubprocessError):
+        return ""
+
+
+def _prepare_window(window_title: str, opaque: bool = True) -> dict[str, Any]:
     """Foca a janela e tira a TRANSPARÊNCIA antes de capturar (2026-10-02).
 
     Dois problemas que só aparecem em jogo/terminal, medidos hoje:
@@ -171,15 +180,32 @@ def _prepare_window(window_title: str) -> dict[str, Any]:
     # focus + mouse no centro (o jogo precisa do ponteiro sobre ele)
     subprocess.run(["hyprctl", "dispatch", "focuswindow", f"address:{addr}"],
                    capture_output=True, timeout=5)
+    # Dorme e CONFIRMA o foco antes de qualquer tecla. Sem esta espera o
+    # keystroke é disparado com a janela ainda inativa e se perde — foi
+    # exatamente o sintoma medido em 02/10 (Enter não abria o chat).
+    focado = False
+    for _ in range(12):
+        time.sleep(0.15)
+        try:
+            act = json.loads(_hyprctl_raw("activewindow", "-j") or "{}")
+            if act.get("address") == addr:
+                focado = True
+                break
+        except ValueError:
+            pass
     subprocess.run(["hyprctl", "dispatch", "movecursor",
                     str(at[0] + size[0] // 2), str(at[1] + size[1] // 2)],
                    capture_output=True, timeout=5)
     out["address"] = addr
-    out["focado"] = True
+    out["focado"] = focado
+    if not focado:
+        out["erro"] = "foco nao confirmado apos 1.8s"
 
     # tira transparência só nesta janela (regra temporária, some ao fechar)
     try:
-        # sem SPACE com ":active:on" a regra é global; restringe por address
+        if not opaque:
+            return out
+        # sem o address a regra vira global; restringe por address
         subprocess.run(["hyprctl", "keyword", "windowrule",
                         f"opaque/alpha 1, noblur 1, nofade 1, address:{addr}"],
                        capture_output=True, timeout=5)
@@ -306,7 +332,10 @@ def handle_capture(args: dict[str, Any]) -> str:
     window_title = args.get("window_title")
     # Foco + opacidade ANTES de capturar: é o que faz a visão/OCR lerem a
     # janela certa em vez do terminal que está por trás.
-    prep = _prepare_window(window_title) if (mode == "window" and window_title) else None
+    _want_focus = args.get("focus_window", True)
+    _want_opaque = args.get("opaque", True)
+    prep = (_prepare_window(window_title, opaque=_want_opaque)
+            if (mode == "window" and window_title and _want_focus) else None)
 
     if mode == "full":
         result = capture_full()
@@ -337,7 +366,10 @@ def observe_screen(args: dict[str, Any]) -> str:
     window_title = args.get("window_title")
     # Foco + opacidade ANTES de capturar: é o que faz a visão/OCR lerem a
     # janela certa em vez do terminal que está por trás.
-    prep = _prepare_window(window_title) if (mode == "window" and window_title) else None
+    _want_focus = args.get("focus_window", True)
+    _want_opaque = args.get("opaque", True)
+    prep = (_prepare_window(window_title, opaque=_want_opaque)
+            if (mode == "window" and window_title and _want_focus) else None)
     question = args.get("question", "Describe what you see. List applications, errors, and UI state.")
 
     if mode == "full":
@@ -902,7 +934,10 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
     window_title = args.get("window_title")
     # Foco + opacidade ANTES de capturar: é o que faz a visão/OCR lerem a
     # janela certa em vez do terminal que está por trás.
-    prep = _prepare_window(window_title) if (mode == "window" and window_title) else None
+    _want_focus = args.get("focus_window", True)
+    _want_opaque = args.get("opaque", True)
+    prep = (_prepare_window(window_title, opaque=_want_opaque)
+            if (mode == "window" and window_title and _want_focus) else None)
     question = args.get("question",
                         "Describe what you see. List applications, errors, and UI state.")
 

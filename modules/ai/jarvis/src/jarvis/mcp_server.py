@@ -38,7 +38,6 @@ if _src_dir not in sys.path:
 
 from jarvis.runtime.registry import ToolRegistry
 from jarvis.core.vision import VISION_TOOL, handle_capture, observe_with_fallback as observe_screen
-from jarvis.core.gameinput import GAMEINPUT_TOOL, handle as handle_gameinput
 from jarvis.core.chatgpt_reader import CHATGPT_READER_TOOL, handle_chatgpt_read
 from jarvis.core.multi_ai_reader import MULTI_AI_READER_TOOL, read_ai_conversation
 from jarvis.core.hackmd import HACKMD_TOOLS, list_notes as hackmd_list, get_note as hackmd_get, create_note as hackmd_create, update_note as hackmd_update, sync_local_to_hackmd
@@ -133,10 +132,21 @@ JARVIS_TOOLS = [
                     "type": "string",
                     "description": "What to analyze. Default: describe UI state, apps, errors",
                 },
+                "focus_window": {
+                    "type": "boolean",
+                    "description": ("Foca a janela ANTES de capturar (Hyprland). Use sempre que "
+                                    "modal=window: sem foco, a captura pega o que está POR TRÁS "
+                                    "da janela. Também move o mouse para o centro dela."),
+                },
+                "opaque": {
+                    "type": "boolean",
+                    "description": ("Tira a transparência da janela antes de capturar. Sem isso o "
+                                    "grim capta o conteúdo composto por baixo e o OCR/visao "
+                                    "leem a janela errada. Recomendado com focus_window."),
+                },
             },
         }
     },
-    GAMEINPUT_TOOL,
     {
         "name": "jarvis_browser",
         "description": ("WHEN you need to interact with any web page: read, click, fill forms, "
@@ -656,9 +666,6 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
 
         if name == "jarvis_observe_screen":
             return observe_screen(args)
-
-        if name == "jarvis_input":
-            return handle_gameinput(args)
 
         if name == "jarvis_browser":
             from jarvis.core.browser import handle_browser
