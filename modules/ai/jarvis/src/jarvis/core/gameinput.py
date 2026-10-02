@@ -169,9 +169,11 @@ def click(button: str = "left", title_match: str = "") -> dict[str, Any]:
 # eu mandei um Enter de teste, desliguei o chat, e depois digitei o comando
 # num campo fechado — sem nada acontecer e sem erro visível. Contar toggles na
 # mão é frágil; a ação tem que CONSULTAR o estado antes de agir.
-# A posição do botão é em coordenadas RELATIVAS à janela (medida numa captura
-# de 941x504): o rótulo "Chat On"/"Chat Off" fica em ~(560..685, 468..500).
-_CHAT_BTN = (560, 468, 685, 500)
+# A posição do botão DEPENDE do tamanho da janela (foi medida em 941x504 e
+# quebrava quando o jogo ia fullscreen 1920x1080). Agora a região é calculada
+# como FRAÇÃO da janela: faixa inferior, metade direita. Sem isso o helper
+# lia o recorte errado e devolvia UNKNOWN.
+_CHAT_BTN_FRAC = (0.58, 0.90, 0.75, 1.0)
 
 
 def _ocr(path: str) -> str:
@@ -196,9 +198,17 @@ def chat_state(window_match: str = "OTClient") -> dict[str, Any]:
                 "foco": f.get("foco_confirmado")}
     try:
         from PIL import Image
-        img = Image.open(shot["path"]).crop(_CHAT_BTN)
+        img = Image.open(shot["path"])
+        W, H = img.size
+        x0, y0, x1, y1 = _CHAT_BTN_FRAC
+        box = (int(W * x0), int(H * y0), int(W * x1), int(H * y1))
+        crop = img.crop(box)
         p = "/tmp/jarvis-chatbtn.png"
-        img.resize((img.width * 3, img.height * 3), Image.LANCZOS).save(p)
+        k = max(2, min(4, 900 // max(1, crop.width)))
+        crop.resize((crop.width * k, crop.height * k),
+                    Image.LANCZOS).save(p)
+        st["box"] = list(box)
+        st["tamanho"] = [W, H]
     except ImportError:
         p = shot["path"]
     txt = _ocr(p).lower().replace("\n", " ")
