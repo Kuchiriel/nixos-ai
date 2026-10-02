@@ -112,15 +112,31 @@ def send_key(key: str, title_match: str) -> dict[str, Any]:
     f = _focus(title_match)
     if not f.get("ok"):
         return f
-    if not _wtype():
-        return {"ok": False, "error": "wtype ausente (home-manager/home-packages.nix)",
-                **f}
-    subprocess.run([_wtype(), "-k", key], capture_output=True, timeout=10)
-    return {"ok": True, "acao": f"key {key}", **f}
+    yt = shutil.which("ydotool")
+    if yt:
+        code = {"Return": "28", "Escape": "1", "Tab": "15",
+                "BackSpace": "14", "Space": "57"}.get(key)
+        if code:
+            subprocess.run([yt, "key", f"{code}:1", f"{code}:0"],
+                           capture_output=True, timeout=10)
+            return {"ok": True, "acao": f"key {key} (ydotool)", **f}
+    wt = _wtype()
+    if not wt:
+        return {"ok": False, "error": "nem ydotool nem wtype disponiveis", **f}
+    subprocess.run([wt, "-k", key], capture_output=True, timeout=10)
+    return {"ok": True, "acao": f"key {key} (wtype)", **f}
 
 
 def send_text(text: str, title_match: str, submit: bool = False,
-              enter: bool = False) -> dict[str, Any]:
+              enter: bool = False, ensure_open: bool = True) -> dict[str, Any]:
+    """Digita texto. Com ensure_open, garante que o chat esteja ABERTO antes
+    (o Enter do OTClient é toggle — enviar no chat fechado não dá erro nenhum,
+    só não acontece)."""
+    pre = {}
+    if ensure_open:
+        pre = ensure_chat(title_match)
+        if not pre.get("ok"):
+            return {"ok": False, "erro": "chat nao abriu", "pre": pre}
     f = _focus(title_match)
     if not f.get("ok"):
         return f
@@ -130,7 +146,7 @@ def send_text(text: str, title_match: str, submit: bool = False,
     if submit:
         subprocess.run([_wtype(), "-k", "Return"], capture_output=True, timeout=10)
     return {"ok": True, "acao": ("type+Enter" if submit else "type"),
-            "texto": text[:60], **f}
+            "texto": text[:60], "chat": pre.get("estado"), **f}
 
 
 def click(button: str = "left", title_match: str = "") -> dict[str, Any]:
@@ -146,6 +162,67 @@ def click(button: str = "left", title_match: str = "") -> dict[str, Any]:
         return {"ok": False, "error": "ydotool ausente", **f}
     subprocess.run([yt, "click", btn], capture_output=True, timeout=10)
     return {"ok": True, "acao": f"click {button}", **f}
+
+
+# --- estado do chat do jogo ----------------------------------------------
+# POR QUE ISTO EXISTE: no OTClient o Enter é TOGGLE, não "enviar". Em 02/10
+# eu mandei um Enter de teste, desliguei o chat, e depois digitei o comando
+# num campo fechado — sem nada acontecer e sem erro visível. Contar toggles na
+# mão é frágil; a ação tem que CONSULTAR o estado antes de agir.
+# A posição do botão é em coordenadas RELATIVAS à janela (medida numa captura
+# de 941x504): o rótulo "Chat On"/"Chat Off" fica em ~(560..685, 468..500).
+_CHAT_BTN = (560, 468, 685, 500)
+
+
+def _ocr(path: str) -> str:
+    try:
+        from jarvis.core.vision import _ocr_text
+        return (_ocr_text(path).get("text") or "")
+    except Exception:
+        return ""
+
+
+def chat_state(window_match: str = "OTClient") -> dict[str, Any]:
+    """Lê o rótulo do botão de chat por OCR (ON/OFF/UNKNOWN)."""
+    f = _focus(window_match)
+    shot = None
+    try:
+        from jarvis.core.vision import capture_window
+        shot = capture_window(window_match)
+    except Exception:
+        pass
+    if not shot or not shot.get("ok"):
+        return {"ok": False, "estado": "UNKNOWN", "erro": "nao capturou",
+                "foco": f.get("foco_confirmado")}
+    try:
+        from PIL import Image
+        img = Image.open(shot["path"]).crop(_CHAT_BTN)
+        p = "/tmp/jarvis-chatbtn.png"
+        img.resize((img.width * 3, img.height * 3), Image.LANCZOS).save(p)
+    except ImportError:
+        p = shot["path"]
+    txt = _ocr(p).lower().replace("\n", " ")
+    if "on" in txt and "off" not in txt:
+        estado = "ON"
+    elif "off" in txt:
+        estado = "OFF"
+    else:
+        estado = "UNKNOWN"
+    return {"ok": True, "estado": estado, "ocr": txt.strip()[:40],
+            "foco": f.get("foco_confirmado")}
+
+
+def ensure_chat(window_match: str = "OTClient") -> dict[str, Any]:
+    """Garante chat ABERTO, decidindo se precisa de Enter. Idempotente."""
+    st = chat_state(window_match)
+    if st.get("estado") == "ON":
+        return {"ok": True, "acao": "nenhuma (ja estava ON)", **st}
+    if st.get("estado") != "OFF":
+        return {"ok": False, "acao": "nada (estado ilegivel)", **st}
+    r = send_key("Return", window_match)
+    time.sleep(2)
+    st2 = chat_state(window_match)
+    return {"ok": st2.get("estado") == "ON", "acao": "Enter (OFF->ON)", **st2}
 
 
 def click_at(x: int, y: int, window_match: str = "OTClient") -> dict[str, Any]:
@@ -188,6 +265,10 @@ def handle(args: dict[str, Any]) -> str:
     try:
         if action == "state":
             r = window_state(title)
+        elif action == "chat_state":
+            r = chat_state(title)
+        elif action == "ensure_chat":
+            r = ensure_chat(title)
         elif action == "focus":
             r = _focus(title)
         elif action in ("key", "press"):
@@ -203,7 +284,7 @@ def handle(args: dict[str, Any]) -> str:
             else:
                 r = click(args.get("button", "left"), title)
         else:
-            return (f"acao invalida: {action}. Use state|focus|key|type|click. "
+            return (f"acao invalida: {action}. Use state|chat_state|ensure_chat|focus|key|type|click. "
                     "Teclas: Return, Escape, Tab, BackSpace, F1…")
         return json.dumps(r, ensure_ascii=False)
     except Exception as e:                      # nunca levanta no MCP

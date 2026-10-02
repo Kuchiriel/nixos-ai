@@ -14,6 +14,8 @@
     ./modules/services/sunshine.nix
     # opencode serve headless p/ o celular assumir a mesma sessao (tailnet)
     ./modules/services/opencode-serve.nix
+    # ydotoald no lugar certo (XDG_RUNTIME_DIR) — sem isso o ydotool falha calado
+    ./modules/services/ydotoold.nix
     # coding: coding agents (Pi, OpenCode)
     # ./modules/coding/pi.nix
     # ./modules/coding/shared/default.nix
