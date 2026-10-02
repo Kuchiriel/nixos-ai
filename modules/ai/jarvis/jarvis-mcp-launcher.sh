@@ -30,13 +30,17 @@ if [ -z "$JARVIS_PKG" ] || [ ! -d "$JARVIS_PKG" ]; then
   exit 1
 fi
 
-# As deps (pillow, pytesseract, requests, evdev...) saem da CLOSURE do pacote,
+# O Nix passa o site-packages do env do MCP como $1 (declarado no
+# home-manager/home.nix). Esse e o caminho oficial e o preferido.
+ENV_SP="${1:-}"
+
+# Fallback: se o $1 nao vier, deriva da CLOSURE do pacote.
 # não do wrapper: o `dependencies` do buildPythonPackage não escreve
 # PYTHONPATH no wrapper (medido: `grep -c PYTHONPATH bin/jarvis-mcp` -> 0), e
 # tentar forcing por makeWrapper quebra o build. Ler a closure é à prova de
 # rebuild: qualquer store path que cair for substituído no próximo `ls`.
-PP=""
-if command -v nix-store >/dev/null 2>&1; then
+PP="$ENV_SP"
+if [ -z "$PP" ] && command -v nix-store >/dev/null 2>&1; then
   while IFS= read -r dep; do
     case "$dep" in
       *-python3.13-*)

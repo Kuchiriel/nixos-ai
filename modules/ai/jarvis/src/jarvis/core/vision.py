@@ -844,6 +844,15 @@ def _discover_vision_models(provider: str) -> list[str]:
     return found
 
 
+def _takes_timeout(fn) -> bool:
+    """A funcao aceita `timeout=`? (viaGameinput usa click sem timeout)."""
+    import inspect
+    try:
+        return "timeout" in inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return False
+
+
 def _secret(name: str) -> str:
     try:
         from jarvis.core import keys as _keys
@@ -961,14 +970,30 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
     # passou a servir só texto. Chamar era gastar request em 404 garantido.
     # Ordem: local (grátis) → gemini (grátis, funciona) → nvidia (crédito)
     # → openrouter (crédito) → OCR.
+    # TETO GERAL: com 4 níveis e um deles lento, a soma passou de 120s e o MCP
+    # (timeout 180s) ficava no limite. 45s é folgado para o caso comum
+    # (medido: nvidia 1,8s | gemini 12,5s) e curto o bastante para nunca
+    # estourar. Ao estourar, devolve o que já conseguiu + o que sobrou.
+    budget = float(args.get("budget", 45.0))
+    deadline = time.time() + budget
+
     levels = [(_vision_local, "local"),
               (_vision_gemini, "gemini"),
               (_vision_nvidia, "nvidia-nim-vision"),
               (_vision_openrouter, "openrouter")]
 
     for fn, via in levels:
+        # orçamento por nível: o llama local SEMPRE dá 500 neste host (medido) e
+        # consumia 25,3s do orçamento antes de o Gemini ser tentado. Corto pra
+        # 8s e, se estourar, marco como morto pra não repetir.
+        if via == "local":
+            import functools as _ft
+            fn = _ft.partial(fn, timeout=8.0) if _takes_timeout(fn) else fn
         if _is_dead(via):
             attempts.append(f"{via}: {_DEAD_PROVIDERS[via][0]} (marcado)")
+            continue
+        if time.time() > deadline:
+            attempts.append(f"{via}: sem tempo (orcamento {budget:.0f}s)")
             continue
         try:
             r = fn(image_path, question)
