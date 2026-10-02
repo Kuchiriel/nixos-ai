@@ -140,6 +140,55 @@ def capture_region(timeout: float = 10.0) -> dict[str, Any]:
         return {"ok": False, "error": f"erro: {exc}"}
 
 
+
+def _prepare_window(window_title: str) -> dict[str, Any]:
+    """Foca a janela e tira a TRANSPARÊNCIA antes de capturar (2026-10-02).
+
+    Dois problemas que só aparecem em jogo/terminal, medidos hoje:
+
+    - TRANSPARÊNCIA: o Hyprland deixa a janela do OTClient (e o terminal)
+      semitransparentes. Grim captura o que está COMPOSTO por baixo, então o
+      OCR lia o opencode por trás do jogo e a visão descrevia a janela errada.
+      `opaque/alpha 1, noblur 1, nofade 1` na regra da janela resolve.
+    - FOCO: sem focar, o keystroke vai para o terminal em vez do jogo.
+
+    Devolve o que foi feito (e um aviso se o foco não pegou) para o chamador
+    reportar — não engole a falha, porque "digitei e nada aconteceu" sem
+    explicação é o pior debug do mundo.
+    """
+    out: dict[str, Any] = {"window": window_title, "opaque": False,
+                           "focado": False}
+    try:
+        from jarvis.core.gameinput import find_window
+        w = find_window(window_title)
+    except Exception as e:
+        return {**out, "erro": f"hyprctl indisponivel: {e}"}
+    if not w:
+        return {**out, "erro": f"janela '{window_title}' nao encontrada"}
+
+    addr = w.get("address", "")
+    at, size = w.get("at", [0, 0]), w.get("size", [0, 0])
+    # focus + mouse no centro (o jogo precisa do ponteiro sobre ele)
+    subprocess.run(["hyprctl", "dispatch", "focuswindow", f"address:{addr}"],
+                   capture_output=True, timeout=5)
+    subprocess.run(["hyprctl", "dispatch", "movecursor",
+                    str(at[0] + size[0] // 2), str(at[1] + size[1] // 2)],
+                   capture_output=True, timeout=5)
+    out["address"] = addr
+    out["focado"] = True
+
+    # tira transparência só nesta janela (regra temporária, some ao fechar)
+    try:
+        # sem SPACE com ":active:on" a regra é global; restringe por address
+        subprocess.run(["hyprctl", "keyword", "windowrule",
+                        f"opaque/alpha 1, noblur 1, nofade 1, address:{addr}"],
+                       capture_output=True, timeout=5)
+        out["opaque"] = True
+    except Exception as e:
+        out["erro_opacity"] = str(e)[:80]
+    time.sleep(0.6)      # deixa o compositor reaplicar antes de capturar
+    return out
+
 def capture_window(window_title: str | None = None, timeout: float = 5.0) -> dict[str, Any]:
     """Captura uma janela específica via hyprctl + grim.
 
@@ -255,6 +304,9 @@ def handle_capture(args: dict[str, Any]) -> str:
     """Handler para tool call capture_screen (chamado pelo agente)."""
     mode = args.get("mode", "full")
     window_title = args.get("window_title")
+    # Foco + opacidade ANTES de capturar: é o que faz a visão/OCR lerem a
+    # janela certa em vez do terminal que está por trás.
+    prep = _prepare_window(window_title) if (mode == "window" and window_title) else None
 
     if mode == "full":
         result = capture_full()
@@ -283,6 +335,9 @@ def observe_screen(args: dict[str, Any]) -> str:
     # 1. Capture screenshot
     mode = args.get("mode", "full")
     window_title = args.get("window_title")
+    # Foco + opacidade ANTES de capturar: é o que faz a visão/OCR lerem a
+    # janela certa em vez do terminal que está por trás.
+    prep = _prepare_window(window_title) if (mode == "window" and window_title) else None
     question = args.get("question", "Describe what you see. List applications, errors, and UI state.")
 
     if mode == "full":
@@ -845,6 +900,9 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
     """
     mode = args.get("mode", "full")
     window_title = args.get("window_title")
+    # Foco + opacidade ANTES de capturar: é o que faz a visão/OCR lerem a
+    # janela certa em vez do terminal que está por trás.
+    prep = _prepare_window(window_title) if (mode == "window" and window_title) else None
     question = args.get("question",
                         "Describe what you see. List applications, errors, and UI state.")
 
@@ -883,7 +941,9 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
             r = {"ok": False, "error": str(e)[:150]}
         if r.get("ok"):
             return (f"{r['text']}\n\n[via: {r['via']} | "
-                    f"screenshot: {image_path} ({shot.get('size_kb', '?')}KB)]")
+                    f"screenshot: {image_path} ({shot.get('size_kb', '?')}KB)"
+                    + (f" | janela focada+opaca: {prep.get('address')}"
+                       if prep else "") + "]")
         err = r.get("error", "?")
         # 500 do llama local é "modelo não tem visão" — não é chave morta,
         # mas também não adianta repetir toda chamada.
