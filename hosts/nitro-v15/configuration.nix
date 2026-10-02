@@ -263,6 +263,19 @@ services.avahi = {
   networking.firewall.allowedTCPPorts = [22 8080 8081 4000 5353 8099 47984 47989 47990 48010]; # 8099 = karaok cast (letra+som p/ TV); 47984-48010 = Sunshine/Moonlight
   networking.firewall.allowedUDPPorts = [47998 47999 48000 48002 48010]; # Sunshine/Moonlight stream
 
+  # opencode serve — controle da AGENTE pelo celular, sem TTY (2026-10-02,
+  # pedido do dono). Aberta SÓ no tailscale0, nunca na LAN: o tailnet já é
+  # autenticado por dispositivo, então o celular (motorola-edge) entra sem
+  # expor o agente a vizinhos. O servidor EXIGE senha
+  # (OPENCODE_SERVER_PASSWORD) — sem ela ele sobe "unsecured" e dá acesso às
+  # chaves de API da máquina a qualquer um que alcance a porta.
+  # Uso: celular abre http://100.121.100.103:4599 ; o TUI vira cliente dele
+  # com `opencode attach http://127.0.0.1:4599` (assim os dois veem a MESMA
+  # sessão, com busy-state coordenado).
+  networking.firewall.interfaces.tailscale0 = {
+    allowedTCPPorts = [4599];
+  };
+
   services.openssh = {
     enable = true;
     settings.PermitRootLogin = "prohibit-password"; # Segurança: login root só por chave SSH
