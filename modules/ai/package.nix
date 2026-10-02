@@ -41,6 +41,8 @@
       pathspec # .ragignore: matching gitignore-canônico no index RAG
       cryptography # vault cifrado opt-in (Fernet) p/ perfis isolados
       evdev # computer-use: mouse/teclado via uinput (humanize.py)
+      pillow # vision.py redimensiona antes de mandar pro llama vision; sem isso cai no fallback PNG cru e o modelo devolve 500
+      pytesseract # fallback do vision.py: OCR quando o vision model falha
       playwright # browser tool via CDP (connect_over_cdp; sem ms-playwright)
     ];
 
