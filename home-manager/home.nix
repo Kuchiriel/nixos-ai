@@ -411,7 +411,26 @@
           # "Unable to process input image" e a chamada estourava o timeout.
           # O launcher resolve as deps em runtime, então não depende de
           # re-gitar o Nix depois de cada rebuild. Ver o script p/ o porquê.
-          command = [ "bash" "/home/nixos/projects/nixos-ai/modules/ai/jarvis/jarvis-mcp-launcher.sh" ];
+          # Env do proprio MCP, construido aqui: pillow/pytesseract/requests
+          # etc. NOTA (2026-10-02): `dependencies` do buildPythonPackage do
+          # jarvis-voice NAO vai para o sys.path do wrapper (medido: closure
+          # sem pillow, `grep -c PYTHONPATH bin/jarvis-mcp` -> 0) e forcar por
+          # makeWrapper quebra o build. Em vez de depender dos internos do
+          # pacote, o MCP recebe um env proprio e explicito.
+          command = [
+            "bash"
+            "/home/nixos/projects/nixos-ai/modules/ai/jarvis/jarvis-mcp-launcher.sh"
+            # env do proprio MCP (2026-10-02): `dependencies` do
+            # buildPythonPackage do jarvis-voice nao vai para o sys.path do
+            # wrapper (closure sem pillow; `grep -c PYTHONPATH bin/jarvis-mcp`
+            # -> 0) e forcar por makeWrapper quebra o build. Entao o MCP
+            # recebe um env explicito. pillow e obrigatorio: vision.py
+            # redimensiona a captura antes de mandar pra API — sem ele o
+            # Gemini recusa a imagem ("Unable to process input image").
+            "${pkgs.python3.withPackages (ps: with ps; [
+              pillow pytesseract requests httpx numpy evdev
+            ])}/${pkgs.python3.sitePackages}"
+          ];
           cwd = "/home/nixos/projects/nixos-ai";
           enabled = true;
           # 30s era pouco: o observe_screen medido levou 12,4s / 21,0s / 48,4s

@@ -30,10 +30,26 @@ if [ -z "$JARVIS_PKG" ] || [ ! -d "$JARVIS_PKG" ]; then
   exit 1
 fi
 
-# PYTHONPATH que o Nix pôs no wrapper do proprio pacote (deps: pillow,
-# pytesseract, requests, evdev...).
-PP="$(grep -oE "PYTHONPATH='[^']*'" "$JARVIS_PKG/bin/jarvis-mcp" 2>/dev/null \
-      | head -1 | cut -d= -f2- | tr -d "'")"
+# As deps (pillow, pytesseract, requests, evdev...) saem da CLOSURE do pacote,
+# não do wrapper: o `dependencies` do buildPythonPackage não escreve
+# PYTHONPATH no wrapper (medido: `grep -c PYTHONPATH bin/jarvis-mcp` -> 0), e
+# tentar forcing por makeWrapper quebra o build. Ler a closure é à prova de
+# rebuild: qualquer store path que cair for substituído no próximo `ls`.
+PP=""
+if command -v nix-store >/dev/null 2>&1; then
+  while IFS= read -r dep; do
+    case "$dep" in
+      *-python3.13-*)
+        sp="$dep/lib/python3.13/site-packages"
+        [ -d "$sp" ] && PP="${PP:+$PP:}$sp"
+        ;;
+    esac
+  done < <(nix-store -q --references "$JARVIS_PKG" 2>/dev/null || true)
+fi
+# Se um dia o Nix passar a gravar o prefixo no wrapper, usa o que ele gravou.
+if [ -z "$PP" ] && [ -r "$JARVIS_PKG/bin/jarvis-mcp" ]; then
+  PP="$(sed -n "s/^export PYTHONPATH='\(.*\)'$/\1/p" "$JARVIS_PKG/bin/jarvis-mcp" | head -1)"
+fi
 
 SRC="${JARVIS_SRC:-/home/nixos/projects/nixos-ai/modules/ai/jarvis/src}"
 
