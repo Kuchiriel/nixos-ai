@@ -57,7 +57,9 @@
     if [ ! -f "$envFile" ] || grep -q '^export ' "$envFile"; then
       mkdir -p "$(dirname "$envFile")"
       umask 077
-      pw="$(python3 -c 'import secrets; print(secrets.token_urlsafe(18))')"
+      # caminho ABSOLUTO: a activation roda com PATH mínimo e `python3` não
+      # existe lá (2026-10-02: "line 416: python3: command not found").
+      pw="$(${pkgs.python3}/bin/python3 -c 'import secrets; print(secrets.token_urlsafe(18))')"
       printf 'OPENCODE_SERVER_PASSWORD=%s\n' "$pw" > "$envFile"
       chmod 600 "$envFile"
     fi
