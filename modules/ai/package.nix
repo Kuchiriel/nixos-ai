@@ -56,17 +56,11 @@
     # 12.3.0 presente em `nix-store -q --references`, porém "No module named
     # PIL"). Efeito prático: vision.py caía no PNG cru de 1,5MB e o Gemini
     # respondia "Unable to process input image". Agora as deps entram no path.
-    depsPath = lib.makeSearchPathOutput "out" "python3/site-packages" pythonDeps;
+    pythonDepsPath = lib.makeSearchPathOutput "out" "python3/site-packages" pythonDeps;
 
     # makeWrapperArgs sozinho NÃO funcionou: o hook de python do nixpkgs monta
     # o wrapper por cima e o PYTHONPATH some (medido: pillow 12.3.0 no closure
     # via `nix-store -q --references`, mas `import PIL` → ModuleNotFoundError
-    # em runtime). postFixup roda DEPOIS de qualquer hook, então aqui o prefixo
-    # sobrevive. É o que faz o vision.py ter PIL de verdade.
-    postFixup = ''
-      wrapProgram $out/bin/jarvis --prefix PYTHONPATH :${depsPath}
-    '';
-
 
 
     # mcp-nixos (MCP server read-only de packages/options do nixpkgs) é usado
@@ -89,10 +83,23 @@
 
     # O subprocesso mcp-nixos (stdio) herda o env: aponta para o cache de
     # canais pré-computado no store (zero probes HTTP de descoberta).
+    #
+    # PYTHONPATH (2026-10-02): `dependencies` do buildPythonPackage NÃO põe as
+    # libs no sys.path do wrapper. Medido: pillow 12.3.0 E pytesseract estão no
+    # closure (`nix-store -q --references`) mas `import PIL` dá
+    # ModuleNotFoundError em runtime. Efeito: vision.py caía no PNG cru de
+    # 1,5MB, o Gemini respondia "Unable to process input image", e o
+    # `observe_screen` do MCP estourava o timeout de 30s.
+    #
+    # NOTA: eu tinha tentado num hook `postFixup` — que NÃO EXISTE no stdenv,
+    # então foi ignorado em silêncio e o wrapper saía sem o prefixo (por isso
+    # "PIL ausente" mesmo com pillow instalado). Aqui, no mesmo `wrapProgram`
+    # que já reescreve TODOS os binários, o prefixo vem junto.
     postInstall = ''
       for bin in $out/bin/*; do
         wrapProgram "$bin" \
           --prefix PATH : ${lib.makeBinPath [mcpNixos]} \
+          --prefix PYTHONPATH :${pythonDepsPath} \
           --set MCP_NIXOS_CHANNEL_CACHE "${mcpNixos}/share/mcp-nixos/channels.json"
       done
     '';
