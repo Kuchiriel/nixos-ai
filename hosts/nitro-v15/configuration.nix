@@ -281,9 +281,12 @@ services.avahi = {
   # — então o nome não resolvia para o lado certo. `/etc/hosts` não serve
   # (é symlink pro nix store, read-only), então vai por extraHosts.
   # O IP do Tailscale é estável por node; só muda se refizer o login do tailnet.
-  networking.extraHosts = {
-    "100.121.100.103" = ["oc" "nitro-v15"];
-  };
+  # ATENÇÃO AO TIPO: networking.extraHosts é uma STRING (linhas "IP host"),
+  # não um attrset — passar attrset dá "A definition for option
+  # `networking.extraHosts' is not of type `strings concatenated with \n`".
+  networking.extraHosts = ''
+    100.121.100.103 oc nitro-v15
+  '';
 
   services.openssh = {
     enable = true;
