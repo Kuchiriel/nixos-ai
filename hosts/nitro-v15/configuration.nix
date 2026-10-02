@@ -286,6 +286,12 @@ services.avahi = {
   # `networking.extraHosts' is not of type `strings concatenated with \n`".
   networking.extraHosts = ''
     100.121.100.103 oc nitro-v15
+    # celular no mesmo tailnet (Android via Termux/Moonlight). O MagicDNS JÁ
+    # resolve isto para IPv4 (`getent hosts motorola-edge`), então esta linha é
+    # conveniência/pin, não necessidade. CUIDADO: IP do Tailscale vale até o nó
+    # refazer o login do tailnet — se `motorola-edge` parar de resolver, cheque
+    # `tailscale status | grep motorola` e ajuste aqui.
+    100.104.175.123 motorola-edge
   '';
 
   services.openssh = {
