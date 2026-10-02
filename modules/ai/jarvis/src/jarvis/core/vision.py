@@ -481,23 +481,133 @@ def _vision_groq(image_path: str, question: str,
         return {"ok": False, "error": f"groq falhou: {str(e)[:150]}"}
 
 
+def _vision_openrouter(image_path: str, question: str,
+                       timeout: float = 90.0) -> dict[str, Any]:
+    """Nível 2c: OpenRouter com modelo de visão `:free` (sem cartão).
+
+    DIAGNÓSTICO 2026-10-02: no /etc/litellm.env a chave em GEMINI_API_KEY NÃO
+    é do Google (não começa com "AIza" → 401) e a de GROQ_API_KEY devolve 403
+    até em /models (expirada/revogada). A que FUNCIONA é OPENROUTER_API_KEY, e
+    ela tem visão gratuita: `google/gemma-4-26b-a4b-it:free` e
+    `google/gemma-4-31b-it:free` (descobertos via /api/v1/models). Este é o
+    nível que devolve visão de verdade neste host.
+    """
+    import base64
+    import json
+    import urllib.request
+
+    try:
+        from jarvis.core import keys as _keys
+        key = _keys.get("openrouter")
+    except Exception:
+        key = os.environ.get("OPENROUTER_API_KEY", "")
+    if not key:
+        return {"ok": False, "error": "OPENROUTER_API_KEY ausente"}
+
+    # modelos com visão, do mais leve pro mais capaz (todos :free)
+    for model in ("google/gemma-4-26b-a4b-it:free",
+                  "google/gemma-4-31b-it:free"):
+        mime = "image/jpeg"
+        try:
+            from PIL import Image
+            import io
+            img = Image.open(image_path).convert("RGB")
+            img.thumbnail((1024, 1024), Image.LANCZOS)
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=80)
+            img_b64 = base64.b64encode(buf.getvalue()).decode()
+        except ImportError:
+            mime = "image/png"
+            with open(image_path, "rb") as f:
+                img_b64 = base64.b64encode(f.read()).decode()
+
+        payload = json.dumps({
+            "model": model,
+            "messages": [{"role": "user", "content": [
+                {"type": "image_url",
+                 "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
+                {"type": "text", "text": question},
+            ]}],
+            "max_tokens": 800,
+            "temperature": 0.0,
+        }).encode()
+        try:
+            req = urllib.request.Request(
+                "https://openrouter.ai/api/v1/chat/completions",
+                data=payload,
+                headers={"Content-Type": "application/json",
+                         "Authorization": f"Bearer {key}"})
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                data = json.loads(r.read().decode())
+            text = (data.get("choices", [{}])[0].get("message", {})
+                    .get("content", "") or "").strip()
+            if text:
+                return {"ok": True, "via": f"openrouter:{model}", "text": text}
+        except Exception:
+            continue   # tenta o proximo modelo
+    return {"ok": False, "error": "openrouter: nenhum modelo de visao respondeu"}
+
+
 def _ocr_text(image_path: str, lang: str = "por+eng") -> dict[str, Any]:
-    """Nível 3 (final): Tesseract OCR — sempre funciona se há imagem."""
+    """Nível 3 (final): Tesseract OCR — local, grátis, sempre disponível.
+
+    DIAGNÓSTICO 2026-10-02: o OCR antigo usava só `--psm 6` (bloco uniforme de
+    texto), que é ruim para interface de JOGO — HUD espalhado, números
+    pequenos, spread de inventário. Em tela escura de Tibia/OTClient ele
+    devolvia lixo ou vazio. Aqui:
+      - roda 3 modos de segmentação e fica com o que tem mais caracteres
+        (psm 6 = bloco, 11 = sparse/espalhado, 3 = auto);
+      - se PIL existir, gera uma cópia com AUTO-CONTRASTE/THRESHOLD, porque
+        o jogo é escuro e o tesseract precisa de fundo claro;
+      - tenta `por` e depois `eng` (o nome dos itens vem em inglês do server).
+    """
     if not _has_binary("tesseract"):
         return {"ok": False, "error": "tesseract ausente (nix: tesseract)"}
+
+    # Pré-processa: escurece/ruído de jogo vira binário de alto contraste.
+    path = image_path
     try:
-        result = subprocess.run(
-            ["tesseract", image_path, "stdout", "-l", lang, "--psm", "6"],
-            capture_output=True, text=True, timeout=60,
-        )
-        text = (result.stdout or "").strip()
-        if not text:
-            return {"ok": False, "error": "OCR não encontrou texto"}
-        return {"ok": True, "via": "ocr", "text": text}
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": "OCR timeout"}
-    except (OSError, subprocess.SubprocessError) as exc:
-        return {"ok": False, "error": f"OCR erro: {exc}"}
+        from PIL import Image, ImageOps
+        img = Image.open(image_path).convert("L")
+        img = ImageOps.autocontrast(img)
+        path = image_path.rsplit(".", 1)[0] + "-ocr.png"
+        img.point(lambda p: 255 if p > 140 else 0).save(path)
+    except ImportError:
+        path = image_path  # sem PIL: usa o original
+
+    best = ""
+    for psm in ("11", "6", "3"):        # sparse (jogo) > bloco > auto
+        for lg in (lang, "eng"):
+            try:
+                r = subprocess.run(
+                    ["tesseract", path, "stdout", "-l", lg, "--psm", psm],
+                    capture_output=True, text=True, timeout=60)
+            except (subprocess.TimeoutExpired, OSError,
+                    subprocess.SubprocessError):
+                continue
+            t = (r.stdout or "").strip()
+            if len(t) > len(best):
+                best = t
+    if not best:
+        return {"ok": False, "error": "OCR não encontrou texto"}
+    return {"ok": True, "via": "ocr-multipsm", "text": best}
+
+
+# Provedores que responderam 401/403 ficam fora das próximas tentativas.
+# DIAGNÓSTICO 2026-10-02: as chaves de vision do /etc/litellm.env estão
+# expiradas/revogadas (Gemini 401, Groq 403, OpenRouter 401). Sem isto, cada
+# observe gastava 3 round-trips em rede morrendo antes de chegar no OCR — e o
+# MCP estourava o timeout. Agora a falha é lembrada e o OCR responde na hora.
+_DEAD_PROVIDERS: dict[str, str] = {}
+
+
+def _mark_dead(via: str, err: str) -> None:
+    if "401" in err or "403" in err or "User not found" in err:
+        _DEAD_PROVIDERS[via] = err[:120]
+
+
+def _is_dead(via: str) -> bool:
+    return via in _DEAD_PROVIDERS
 
 
 def observe_with_fallback(args: dict[str, Any]) -> str:
@@ -523,7 +633,16 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
     image_path = shot["path"]
     attempts = []
 
-    for fn in (_vision_local, _vision_gemini, _vision_groq):
+    # Nível 0 (barato, sem rede): vision local. Só tenta 1x se já sabermos
+    # que o llama-router está fora — 8080 devolve 500 e custa segundos.
+    levels = [(_vision_local, "local"), (_vision_gemini, "gemini"),
+              (_vision_groq, "groq-vision"),
+              (_vision_openrouter, "openrouter")]
+
+    for fn, via in levels:
+        if _is_dead(via):
+            attempts.append(f"{via}: {_DEAD_PROVIDERS[via]} (lembrado)")
+            continue
         try:
             r = fn(image_path, question)
         except Exception as e:
@@ -531,7 +650,13 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
         if r.get("ok"):
             return (f"{r['text']}\n\n[via: {r['via']} | "
                     f"screenshot: {image_path} ({shot.get('size_kb', '?')}KB)]")
-        attempts.append(r.get("error", "?"))
+        err = r.get("error", "?")
+        # 500 do llama local é "modelo não tem visão" — não é chave morta,
+        # mas também não adianta repetir toda chamada.
+        if "500" in err or "Internal Server" in err:
+            _DEAD_PROVIDERS[via] = err[:120]
+        _mark_dead(via, err)
+        attempts.append(err)
 
     ocr = _ocr_text(image_path)
     if ocr.get("ok"):
