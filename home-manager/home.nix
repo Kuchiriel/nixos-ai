@@ -12,6 +12,8 @@
     ./modules/ai
     ./modules/services/jarvis-wakeword.nix
     ./modules/services/sunshine.nix
+    # opencode serve headless p/ o celular assumir a mesma sessao (tailnet)
+    ./modules/services/opencode-serve.nix
     # coding: coding agents (Pi, OpenCode)
     # ./modules/coding/pi.nix
     # ./modules/coding/shared/default.nix
