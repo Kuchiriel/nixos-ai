@@ -860,7 +860,8 @@ def _secret(name: str) -> str:
     except Exception:
         return os.environ.get(name.upper(), "")
 
-def _ocr_text(image_path: str, lang: str = "por+eng") -> dict[str, Any]:
+def _ocr_text(image_path: str, lang: str = "por+eng",
+               timeout: float = 60.0) -> dict[str, Any]:
     """Nível 3 (final): Tesseract OCR — local, grátis, sempre disponível.
 
     DIAGNÓSTICO 2026-10-02: o OCR antigo usava só `--psm 6` (bloco uniforme de
@@ -893,7 +894,8 @@ def _ocr_text(image_path: str, lang: str = "por+eng") -> dict[str, Any]:
             try:
                 r = subprocess.run(
                     ["tesseract", path, "stdout", "-l", lg, "--psm", psm],
-                    capture_output=True, text=True, timeout=60)
+                    capture_output=True, text=True,
+                    timeout=max(5, timeout / 3))
             except (subprocess.TimeoutExpired, OSError,
                     subprocess.SubprocessError):
                 continue
@@ -986,17 +988,22 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
         # orçamento por nível: o llama local SEMPRE dá 500 neste host (medido) e
         # consumia 25,3s do orçamento antes de o Gemini ser tentado. Corto pra
         # 8s e, se estourar, marco como morto pra não repetir.
-        if via == "local":
-            import functools as _ft
-            fn = _ft.partial(fn, timeout=8.0) if _takes_timeout(fn) else fn
         if _is_dead(via):
             attempts.append(f"{via}: {_DEAD_PROVIDERS[via][0]} (marcado)")
             continue
-        if time.time() > deadline:
+        restante = deadline - time.time()
+        if restante <= 1.0:
             attempts.append(f"{via}: sem tempo (orcamento {budget:.0f}s)")
             continue
+        # TETO POR CHAMADA: checar o deadline antes não adianta — uma chamada
+        # longa estoura sozinha (medido: 90,2s porque o nível local consumia
+        # 25s e o gemini ainda levava 60s de timeout). Cada nível agora recebe
+        # timeout = min(cap, restante), então a soma respeita o orçamento.
+        cap = min(20.0, restante)
         try:
-            r = fn(image_path, question)
+            r = (fn(image_path, question, timeout=cap)
+                 if _takes_timeout(fn)
+                 else fn(image_path, question))
         except Exception as e:
             r = {"ok": False, "error": str(e)[:150]}
         if r.get("ok"):
@@ -1010,7 +1017,9 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
         _mark_dead(via, err)
         attempts.append(err)
 
-    ocr = _ocr_text(image_path)
+    restante = deadline - time.time()
+    ocr = (_ocr_text(image_path, timeout=max(8.0, min(20.0, restante)))
+           if restante > 3 else {"ok": False, "error": "orcamento esgotado"})
     if ocr.get("ok"):
         return (f"[visão indisponível ({' | '.join(attempts)}); fallback OCR]\n"
                 f"{ocr['text']}\n\n[via: ocr | screenshot: {image_path}]")
