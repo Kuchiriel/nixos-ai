@@ -43,6 +43,14 @@
     fzf
     grimblast
     hyprpicker
+    # Input sintetico (uinput) para o agente operar o desktop sem mouse fisico:
+    # ydotool faz TECLADO e MOUSE (clique com botao, mover cursor). O Hyprland
+    # so tem `dispatch movecursor` e nao tem dispatch de clique, entao sem o
+    # ydotool nao da para clicar no chat do jogo — que e como a automacao de
+    # UI do sandbox (canary-official/data-sandbox/tools/loop.sh) fala com o
+    # client. wtype faz so teclado e ja era usado.
+    ydotool
+    wtype
     ntfs3g
     playerctl
     ripgrep
