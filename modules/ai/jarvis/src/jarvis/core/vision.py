@@ -419,6 +419,68 @@ def _vision_gemini(image_path: str, question: str,
         return {"ok": False, "error": f"gemini falhou: {str(e)[:150]}"}
 
 
+def _vision_groq(image_path: str, question: str,
+                 timeout: float = 60.0) -> dict[str, Any]:
+    """Nível 2b: Groq vision (grátis, llama-3.2-11b-vision-preview).
+
+    DIAGNÓSTICO 2026-10-02: a chave em GEMINI_API_KEY NÃO é do Google — não
+    começa com "AIza" e a API respondeu 401. As chaves que funcionam de fato
+    no /etc/litellm.env são GROQ_API_KEY (gsk_...) e OPENROUTER_API_KEY
+    (sk-or...). Groq tem visão gratuita, então entra na cascata antes do OCR.
+    """
+    import base64
+    import json
+    import urllib.request
+
+    try:
+        from jarvis.core import keys as _keys
+        key = _keys.get("groq")
+    except Exception:
+        key = os.environ.get("GROQ_API_KEY", "")
+    if not key:
+        return {"ok": False, "error": "GROQ_API_KEY ausente"}
+
+    mime = "image/jpeg"
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(image_path).convert("RGB")
+        img.thumbnail((1024, 1024), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=80)
+        img_b64 = base64.b64encode(buf.getvalue()).decode()
+    except ImportError:
+        mime = "image/png"
+        with open(image_path, "rb") as f:
+            img_b64 = base64.b64encode(f.read()).decode()
+
+    payload = json.dumps({
+        "model": "llama-3.2-11b-vision-preview",
+        "messages": [{"role": "user", "content": [
+            {"type": "image_url",
+             "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
+            {"type": "text", "text": question},
+        ]}],
+        "max_tokens": 1000,
+        "temperature": 0.0,
+    }).encode()
+    try:
+        req = urllib.request.Request(
+            "https://api.groq.com/openai/v1/chat/completions",
+            data=payload,
+            headers={"Content-Type": "application/json",
+                     "Authorization": f"Bearer {key}"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data = json.loads(r.read().decode())
+        text = (data.get("choices", [{}])[0].get("message", {})
+                .get("content", "") or "").strip()
+        if not text:
+            return {"ok": False, "error": "groq retornou vazio"}
+        return {"ok": True, "via": "groq-vision", "text": text}
+    except Exception as e:
+        return {"ok": False, "error": f"groq falhou: {str(e)[:150]}"}
+
+
 def _ocr_text(image_path: str, lang: str = "por+eng") -> dict[str, Any]:
     """Nível 3 (final): Tesseract OCR — sempre funciona se há imagem."""
     if not _has_binary("tesseract"):
@@ -461,7 +523,7 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
     image_path = shot["path"]
     attempts = []
 
-    for fn in (_vision_local, _vision_gemini):
+    for fn in (_vision_local, _vision_gemini, _vision_groq):
         try:
             r = fn(image_path, question)
         except Exception as e:
