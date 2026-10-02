@@ -548,6 +548,73 @@ def _vision_openrouter(image_path: str, question: str,
     return {"ok": False, "error": "openrouter: nenhum modelo de visao respondeu"}
 
 
+def _vision_nvidia(image_path: str, question: str,
+                   timeout: float = 75.0) -> dict[str, Any]:
+    """Nível 2d: NVIDIA NIM vision — GRÁTIS, com crédito, e FUNCIONANDO.
+
+    DIAGNÓSTICO 2026-10-02 (build.nvidia.com): `meta/llama-3.2-11b-vision-
+    instruct` respondeu de primeira, sem GPU local. Foi o único provider de
+    visão que autenticou neste host:
+        gemini    401 — a chave em GEMINI_API_KEY não é do Google (não é AIza…)
+        groq      403 — Cloudflare code 1010 bloqueia este IP/região
+        openrouter 401 — "User not found", chave sem conta
+    NIM é creditado (tem cota gratuita generosa) e o endpoint é
+    integrate.api.nvidia.com/v1/chat/completions.
+    """
+    import base64
+    import json
+    import urllib.request
+
+    try:
+        from jarvis.core import keys as _keys
+        key = _keys.get("nvidia")
+    except Exception:
+        key = os.environ.get("NVIDIA_API_KEY", "")
+    if not key:
+        return {"ok": False, "error": "NVIDIA_API_KEY ausente"}
+
+    mime = "image/jpeg"
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(image_path).convert("RGB")
+        img.thumbnail((1024, 1024), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=80)
+        img_b64 = base64.b64encode(buf.getvalue()).decode()
+    except ImportError:
+        mime = "image/png"
+        with open(image_path, "rb") as f:
+            img_b64 = base64.b64encode(f.read()).decode()
+
+    payload = json.dumps({
+        "model": "meta/llama-3.2-11b-vision-instruct",
+        "messages": [{"role": "user", "content": [
+            {"type": "image_url",
+             "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
+            {"type": "text", "text": question},
+        ]}],
+        "max_tokens": 800,
+        "temperature": 0.0,
+    }).encode()
+    try:
+        req = urllib.request.Request(
+            "https://integrate.api.nvidia.com/v1/chat/completions",
+            data=payload,
+            headers={"Content-Type": "application/json",
+                     "Authorization": f"Bearer {key}",
+                     "Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data = json.loads(r.read().decode())
+        text = (data.get("choices", [{}])[0].get("message", {})
+                .get("content", "") or "").strip()
+        if not text:
+            return {"ok": False, "error": "nvidia retornou vazio"}
+        return {"ok": True, "via": "nvidia-nim-vision", "text": text}
+    except Exception as e:
+        return {"ok": False, "error": f"nvidia falhou: {str(e)[:150]}"}
+
+
 def _ocr_text(image_path: str, lang: str = "por+eng") -> dict[str, Any]:
     """Nível 3 (final): Tesseract OCR — local, grátis, sempre disponível.
 
@@ -598,16 +665,26 @@ def _ocr_text(image_path: str, lang: str = "por+eng") -> dict[str, Any]:
 # expiradas/revogadas (Gemini 401, Groq 403, OpenRouter 401). Sem isto, cada
 # observe gastava 3 round-trips em rede morrendo antes de chegar no OCR — e o
 # MCP estourava o timeout. Agora a falha é lembrada e o OCR responde na hora.
-_DEAD_PROVIDERS: dict[str, str] = {}
+_DEAD_PROVIDERS: dict[str, tuple[str, float]] = {}
+_DEAD_TTL = 300.0   # 5 min: provider morto sai da cascata sem custar chamada,
+                    # mas uma chave renovada volta sozinha (sem reiniciar)
 
 
 def _mark_dead(via: str, err: str) -> None:
-    if "401" in err or "403" in err or "User not found" in err:
-        _DEAD_PROVIDERS[via] = err[:120]
+    if any(m in err for m in ("401", "403", "404", "User not found",
+                              "Internal Server")):
+        _DEAD_PROVIDERS[via] = (err[:120], time.time())
 
 
 def _is_dead(via: str) -> bool:
-    return via in _DEAD_PROVIDERS
+    hit = _DEAD_PROVIDERS.get(via)
+    if not hit:
+        return False
+    err, when = hit
+    if time.time() - when > _DEAD_TTL:      # TTL expirou: tenta de novo
+        _DEAD_PROVIDERS.pop(via, None)
+        return False
+    return True
 
 
 def observe_with_fallback(args: dict[str, Any]) -> str:
@@ -635,13 +712,16 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
 
     # Nível 0 (barato, sem rede): vision local. Só tenta 1x se já sabermos
     # que o llama-router está fora — 8080 devolve 500 e custa segundos.
-    levels = [(_vision_local, "local"), (_vision_gemini, "gemini"),
+    # ordem: local (grátis) → nvidia (funciona) → gemini → groq → openrouter
+    levels = [(_vision_local, "local"),
+              (_vision_nvidia, "nvidia-nim-vision"),
+              (_vision_gemini, "gemini"),
               (_vision_groq, "groq-vision"),
               (_vision_openrouter, "openrouter")]
 
     for fn, via in levels:
         if _is_dead(via):
-            attempts.append(f"{via}: {_DEAD_PROVIDERS[via]} (lembrado)")
+            attempts.append(f"{via}: {_DEAD_PROVIDERS[via][0]} (marcado)")
             continue
         try:
             r = fn(image_path, question)
@@ -653,8 +733,6 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
         err = r.get("error", "?")
         # 500 do llama local é "modelo não tem visão" — não é chave morta,
         # mas também não adianta repetir toda chamada.
-        if "500" in err or "Internal Server" in err:
-            _DEAD_PROVIDERS[via] = err[:120]
         _mark_dead(via, err)
         attempts.append(err)
 

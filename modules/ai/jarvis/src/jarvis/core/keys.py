@@ -38,6 +38,10 @@ _SOURCES: dict[str, dict[str, Any]] = {
     "groq": {"env": ["GROQ_API_KEY"], "files": ["/etc/litellm.env"]},
     "gemini": {"env": ["GEMINI_API_KEY", "GOOGLE_API_KEY"], "files": ["/etc/litellm.env"]},
     "openrouter": {"env": ["OPENROUTER_API_KEY"], "files": ["/etc/litellm.env"]},
+    # NVIDIA_NIM_API_KEY tb: o build.nvidia.com emite nvapi-... e o console
+    # antigo emitia NVIDIA_API_KEY. Aceitamos os dois nomes.
+    "nvidia": {"env": ["NVIDIA_API_KEY", "NVIDIA_NIM_API_KEY"],
+               "files": ["/etc/litellm.env"]},
 }
 
 
