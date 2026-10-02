@@ -225,6 +225,23 @@ def ensure_chat(window_match: str = "OTClient") -> dict[str, Any]:
     return {"ok": st2.get("estado") == "ON", "acao": "Enter (OFF->ON)", **st2}
 
 
+def send_chat_command(cmd: str, window_match: str = "OTClient") -> dict[str, Any]:
+    """Fluxo completo e idempotente: garante chat aberto -> digita -> envia.
+
+    Existe porque cada etapa falhou isoladamente antes: chat fechado (Enter é
+    toggle), texto não digitado (wtype), Enter não enviado (wtype). Aqui a
+    ordem é garantida e o estado é conferido no fim.
+    """
+    opened = ensure_chat(window_match)
+    if not opened.get("ok"):
+        return {"ok": False, "etapa": "abrir chat", "pre": opened}
+    r = send_text(cmd, window_match, submit=True, ensure_open=False)
+    time.sleep(1.5)
+    depois = chat_state(window_match)
+    return {"ok": True, "comando": cmd, "chat_antes": opened.get("estado"),
+            "chat_depois": depois.get("estado"), "detalhe": r}
+
+
 def click_at(x: int, y: int, window_match: str = "OTClient") -> dict[str, Any]:
     """Clica em coordenada RELATIVA à janela (o que permite mirar num botão).
 
@@ -269,6 +286,9 @@ def handle(args: dict[str, Any]) -> str:
             r = chat_state(title)
         elif action == "ensure_chat":
             r = ensure_chat(title)
+        elif action == "chat_command":
+            r = send_chat_command(args.get("command") or args.get("text") or "",
+                                  title)
         elif action == "focus":
             r = _focus(title)
         elif action in ("key", "press"):
@@ -284,7 +304,7 @@ def handle(args: dict[str, Any]) -> str:
             else:
                 r = click(args.get("button", "left"), title)
         else:
-            return (f"acao invalida: {action}. Use state|chat_state|ensure_chat|focus|key|type|click. "
+            return (f"acao invalida: {action}. Use state|chat_state|ensure_chat|chat_command|focus|key|type|click. "
                     "Teclas: Return, Escape, Tab, BackSpace, F1…")
         return json.dumps(r, ensure_ascii=False)
     except Exception as e:                      # nunca levanta no MCP

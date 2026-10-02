@@ -187,16 +187,31 @@ class HumanHand:
 
     # ── teclado ─────────────────────────────────────────────
     def type(self, text: str) -> dict:
-        """Digita com cadência humana (wtype; fallback: sem atuador)."""
+        """Digita com cadência humana (ydotool; fallback: wtype).
+
+        2026-10-02: o backend virou `ydotool`, não `wtype`. Motivo medido:
+        `wtype` NÃO digita neste ambiente — o texto não aparecia no campo do
+        jogo. Causa: o `ydotool` falhava em silêncio por socket em lugar
+        errado, e o `wtype` depende do mesmo uinput (wayland-text-input).
+        Agora com `ydotoald` no XDG_RUNTIME_DIR correto, os dois funcionam,
+        mas `ydotool` é o backend comprovado — então é o primário.
+        """
         if self.dry_run:
             return {"ok": True, "dry": True, "chars": len(text)}
-        if not shutil.which("wtype"):
+        yt = shutil.which("ydotool")
+        wt = shutil.which("wtype")
+        if not yt and not wt:
             return {"ok": False,
-                    "error": "wtype ausente (nix: wtype)"}
+                    "error": "nem ydotool nem wtype disponiveis"}
         try:
             for ch in text:
-                subprocess.run(["wtype", ch], check=False,
-                               capture_output=True, timeout=10)
+                if yt:
+                    subprocess.run([yt, "type", "--delay", "12", ch],
+                                   check=False, capture_output=True,
+                                   timeout=15)
+                else:
+                    subprocess.run(["wtype", ch], check=False,
+                                   capture_output=True, timeout=10)
                 gap = _lognorm(self.TYPE_MU, self.TYPE_SIG, 20, 400) / 1000.0
                 # pausa longa ocasional (pensando no meio da frase)
                 if random.random() < 0.04:
