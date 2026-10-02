@@ -22,6 +22,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from typing import Any
 
 
@@ -138,6 +139,31 @@ def click(button: str = "left", title_match: str = "") -> dict[str, Any]:
     return {"ok": True, "acao": f"click {button}", **f}
 
 
+def click_at(x: int, y: int, window_match: str = "OTClient") -> dict[str, Any]:
+    """Clica em coordenada RELATIVA à janela (o que permite mirar num botão).
+
+    Por que relativo e não absoluto: a janela se move (Hyprland, fullscreen),
+    e mirar num botão do jogo por pixel absoluto erra a cada mudança de
+    layout. Uso: leio a captura, identifico o alvo em coordenadas da janela e
+    clico相对 — o offsets é calculado aqui a partir da geometria real.
+    """
+    w = find_window(window_match)
+    if not w:
+        return {"ok": False, "error": f"janela '{window_match}' nao encontrada"}
+    addr = w.get("address", "")
+    _hyprctl("dispatch", "focuswindow", f"address:{addr}")
+    at = w.get("at", [0, 0])
+    ax, ay = at[0] + x, at[1] + y
+    _hyprctl("dispatch", "movecursor", str(ax), str(ay))
+    yt = shutil.which("ydotool")
+    if not yt:
+        return {"ok": False, "error": "ydotool ausente", "abs": [ax, ay]}
+    time.sleep(0.25)
+    subprocess.run([yt, "click", "0xC0"], capture_output=True, timeout=10)
+    return {"ok": True, "acao": f"click em relativo({x},{y})",
+            "address": addr, "abs": [ax, ay]}
+
+
 def handle(args: dict[str, Any]) -> str:
     """Entrada do MCP."""
     action = (args.get("action") or "state").lower()
@@ -154,7 +180,11 @@ def handle(args: dict[str, Any]) -> str:
                           submit=bool(args.get("submit")),
                           enter=bool(args.get("enter")))
         elif action == "click":
-            r = click(args.get("button", "left"), title)
+            if args.get("x") is not None and args.get("y") is not None:
+                r = click_at(int(args["x"]), int(args["y"]),
+                             args.get("window_title") or title)
+            else:
+                r = click(args.get("button", "left"), title)
         else:
             return (f"acao invalida: {action}. Use state|focus|key|type|click. "
                     "Teclas: Return, Escape, Tab, BackSpace, F1…")
@@ -198,6 +228,10 @@ GAMEINPUT_TOOL = {
                 "type": "boolean",
                 "description": "Com action=type, envia Enter depois do texto.",
             },
+            "x": {"type": "integer",
+                  "description": "Coordenada X RELATIVA à janela (para action=click num botão)."},
+            "y": {"type": "integer",
+                  "description": "Coordenada Y RELATIVA à janela."},
             "button": {
                 "type": "string",
                 "enum": ["left", "right", "middle"],
