@@ -405,10 +405,18 @@
       mcp = {
         jarvis = {
           type = "local";
-          command = [ "bash" "-c" "cd /home/nixos/projects/nixos-ai && PYTHONPATH=${pkgs.python3.withPackages (ps: [ ps.httpx ])}/${pkgs.python3.sitePackages}:modules/ai/jarvis/src JARVIS_PROJECT_ROOT=/home/nixos/projects/nixos-ai exec /etc/profiles/per-user/nixos/bin/python3 -m jarvis.mcp_server" ];
+          # Launcher em vez de PYTHONPATH inline (2026-10-02): o path fixo
+          # apontava para um env SEM pillow/pytesseract, então o MCP rodava sem
+          # PIL, o vision.py mandava PNG cru de 1,5MB, o Gemini respondia
+          # "Unable to process input image" e a chamada estourava o timeout.
+          # O launcher resolve as deps em runtime, então não depende de
+          # re-gitar o Nix depois de cada rebuild. Ver o script p/ o porquê.
+          command = [ "bash" "/home/nixos/projects/nixos-ai/modules/ai/jarvis/jarvis-mcp-launcher.sh" ];
           cwd = "/home/nixos/projects/nixos-ai";
           enabled = true;
-          timeout = 30000;
+          # 30s era pouco: o observe_screen medido levou 12,4s / 21,0s / 48,4s
+          # (visão + OCR). Com 30s, 2 de 3 davam timeout.
+          timeout = 180000;
         };
         # (26/09) Playwright MCP standalone REMOVIDO: redundante com o
         # jarvis_browser do MCP jarvis (mesma engine Playwright por baixo,
