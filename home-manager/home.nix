@@ -264,14 +264,36 @@
             # Ids = EXATAMENTE os do server /v1/models (bonsai,
             # jarvis-fast, jarvis-strong) — opencode valida contra o
             # server; nome divergente → "model not found" (bug 16/09).
-            "jarvis-strong" = {
-              name = "Qwen3.6 35B MoE Local (strong)";
-            };
-            "jarvis-fast" = {
-              name = "Qwen3-4B Local (fast)";
-            };
+            # NOTA 03/10: jarvis-fast/strong REMOVIDOS daqui — o router 8080
+            # só serve 'bonsai' (/v1/models). fast mora no upstream 8083
+            # (provider local-fast); strong não tem preset em lugar nenhum —
+            # a classe 35B é o local-uncensored (:8084).
             "bonsai" = {
               name = "Bonsai 8B Local (ternary)";
+              # c=49152 do preset prism (jarvis-models-prism.ini).
+              limit = {
+                context = 49152;
+                output = 8192;
+              };
+            };
+          };
+        };
+
+        # jarvis-fast DE VERDADE: upstream stock na 8083 (preset c=16384,
+        # id verificado via /v1/models). Estava no provider `local` (:8080)
+        # onde o router não o serve.
+        local-fast = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "http://127.0.0.1:8083/v1";
+          };
+          models = {
+            "jarvis-fast" = {
+              name = "Qwen3-4B Local (fast)";
+              limit = {
+                context = 16384;
+                output = 4096;
+              };
             };
           };
         };
@@ -289,6 +311,26 @@
               name = "Qwen MoE 35B Uncensored Local";
               # Sem limit o opencode estima contexto 0 e dispara
               # auto-compaction no primeiro prompt (bug 03/10).
+              limit = {
+                context = 8192;
+                output = 2048;
+              };
+            };
+          };
+        };
+
+        # Qwen3.5-4B UNCENSORED direto (upstream stock, porta 8092, CPU).
+        # Server sobe manual/supervisionado (fora do systemd); -ngl 0 porque
+        # a VRAM está com MoE+nomic. Id = path absoluto (server sem --alias).
+        local-uncensored-4b = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "http://127.0.0.1:8092/v1";
+          };
+          models = {
+            "/home/nixos/models/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf" = {
+              name = "Qwen 4B Uncensored Local";
+              # -c 32768 do launch atual.
               limit = {
                 context = 32768;
                 output = 4096;
@@ -415,6 +457,19 @@
         };
       };
       
+      # Higiene de contexto global (03/10): vale p/ todos os providers.
+      # prune poda tool outputs velhos; tool_output capa outputs gigantes
+      # (prompt de 33k matou o Qwen 2x); small_model tira titles/resumos do 35B.
+      small_model = "local/bonsai";
+      compaction = {
+        auto = true;
+        prune = true;
+      };
+      tool_output = {
+        max_lines = 200;
+        max_bytes = 8192;
+      };
+
       # Default E2E-validado 16/09 ("opencode run" respondeu): Gemini free
       # via GEMINI_API_KEY. openrouter/free era slug morto = causa raiz do
       # "opencode quebrado".

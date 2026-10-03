@@ -19,6 +19,7 @@
     ./litellm-cascade.nix
     ./llama-cpp.nix
     ./llama-fan-control.nix
+    ./llama-uncensored.nix
     ./nightwatch-timer.nix
     ./audiobook-audit-timer.nix
     ./qdrant.nix

@@ -162,6 +162,13 @@ in rec {
     sha256 = "sha256-u+9Yw3zoiCC+nZi2Q38c9LrIkMlHvVX8e2jiIJhXQjE=";
   };
 
+  llm-uncensored-4b = mkModel {
+    # Qwen3.5-4B Q4_K_M.gguf · 2.6GB em ~/models (hash do arquivo local).
+    # Server: upstream stock -ngl 0 (CPU, VRAM com MoE) porta 8092.
+    url = "https://huggingface.co/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
+    sha256 = "sha256-eeKOys+E51tgVs9AWWNtQ1qp62d5V4D3t9vH0yqWJ0E=";
+  };
+
   llm-uncensored-35b-kp = mkModel {
     # Q4_K_P.gguf · 23.4GB  # K_P = imatrix por modelo (+1-2 niveis de quant)
     url = "https://huggingface.co/HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf";
