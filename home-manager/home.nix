@@ -275,6 +275,27 @@
             };
           };
         };
+
+        # Qwen3.6-35B MoE UNCENSORED direto (ik_llama.cpp, porta 8084).
+        # Id = EXATAMENTE o que o server anuncia em /v1/models (path
+        # absoluto, pois o server subiu com -m absoluto e sem --alias).
+        local-uncensored = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "http://127.0.0.1:8084/v1";
+          };
+          models = {
+            "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf" = {
+              name = "Qwen MoE 35B Uncensored Local";
+              # Sem limit o opencode estima contexto 0 e dispara
+              # auto-compaction no primeiro prompt (bug 03/10).
+              limit = {
+                context = 32768;
+                output = 4096;
+              };
+            };
+          };
+        };
         
         # ADICIONADO: Provedor oficial da Google para rodar na nuvem estável
         google = {

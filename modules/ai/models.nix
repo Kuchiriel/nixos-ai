@@ -337,6 +337,24 @@ in rec {
     sha256 = "sha256-DAyKxJhQ1r0XQQfUABaF9PbIdnaKHITd51HyrtafRs4=";
   };
 
+  # --- SigLIP base patch16-224 (match visual p/ reskin: sprite vanilla x donor) ---
+  # Uso: transformers (karaok venv) — AutoModel + AutoImageProcessor, embed 224px,
+  # cosine match. CPU ok (203M fp32). Registro estilo whisper (multi-file).
+  img-siglip-base = {
+    model = fetchurl {
+      url = "https://huggingface.co/google/siglip-base-patch16-224/resolve/main/model.safetensors";
+      sha256 = "158bpxkgwq813af6ncl1dwgjx41kynnc9bmjqxi6np85idimp39j";
+    };
+    config = fetchurl {
+      url = "https://huggingface.co/google/siglip-base-patch16-224/resolve/main/config.json";
+      sha256 = "1z4nr310bz3l3xbrf9ba0f3vbib1jqxk01129gfbfy15q42hfg3s";
+    };
+    preprocessor = fetchurl {
+      url = "https://huggingface.co/google/siglip-base-patch16-224/resolve/main/preprocessor_config.json";
+      sha256 = "0p2yaz0ybaa1c1p9cqyk61yja8qzk0z3r9z94x56fn7zs22kpj6g";
+    };
+  };
+
   # =========================================================================
   # 2. PERFIS DE EXECUÇÃO (llama-cpp) — ÚNICA FONTE DE VERDADE
   # =========================================================================
