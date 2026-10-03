@@ -306,6 +306,37 @@ in rec {
     };
   };
 
+  # --- Flux.1-schnell (geração de imagem) — stack stable-diffusion.cpp ---
+  # DiT Q2_K (3.8GB, cabe na VRAM 6GB) + clip_l + t5xxl + VAE bf16.
+  # Runtime: ~/projects/stable-diffusion.cpp (build/bin/sd-cli).
+  # T5: fp16 p/ CPU (fp8 SEGFAULT em CPU — sem kernels fp8);
+  #     fp8 p/ GPU (CUDA/Vulkan têm kernels fp8, metade da RAM).
+  # VRAM 6GB: auto-fit coloca DiT na GPU, T5 fica em RAM.
+  img-flux-schnell-q2 = mkModel {
+    url = "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-Q2_K.gguf";
+    sha256 = "sha256-o4UBHKt0h9WgR4VEblm0Bf+2QvDehntMjzp6Cgd1mbA=";
+  };
+
+  img-clip-l = mkModel {
+    url = "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors";
+    sha256 = "sha256-ZgxvWxq66dxJisLSHhNH0qvbDPbAwMhXbNeWSR2abN0=";
+  };
+
+  img-t5xxl-fp16 = mkModel {
+    url = "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors";
+    sha256 = "sha256-bkgLCfrgSactKoxfvMuNPpL+vrIzu+nf5yVpWKkWdjU=";
+  };
+
+  img-t5xxl-fp8 = mkModel {
+    url = "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn.safetensors";
+    sha256 = "sha256-fTMNpIFhV1QNa7eDi/Y6DwL1c/xIyk2N40uwy/1RTwk=";
+  };
+
+  img-flux-vae-bf16 = mkModel {
+    url = "https://huggingface.co/Kijai/flux-fp8/resolve/main/flux-vae-bf16.safetensors";
+    sha256 = "sha256-DAyKxJhQ1r0XQQfUABaF9PbIdnaKHITd51HyrtafRs4=";
+  };
+
   # =========================================================================
   # 2. PERFIS DE EXECUÇÃO (llama-cpp) — ÚNICA FONTE DE VERDADE
   # =========================================================================

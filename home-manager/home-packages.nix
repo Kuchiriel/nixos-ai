@@ -43,6 +43,7 @@
     fzf
     grimblast
     hyprpicker
+    xxd # hex dump (análise de formatos binários de clients de jogo)
     # Input sintetico (uinput) para o agente operar o desktop sem mouse fisico:
     # ydotool faz TECLADO e MOUSE (clique com botao, mover cursor). O Hyprland
     # so tem `dispatch movecursor` e nao tem dispatch de clique, entao sem o
@@ -50,6 +51,8 @@
     # UI do sandbox (canary-official/data-sandbox/tools/loop.sh) fala com o
     # client. wtype faz so teclado e ja era usado.
     ydotool
+    xdotool # alternativa X11 (XWayland) ao ydotool — ydotoold (daemon/uinput)
+            # estava dando problema; xdotool nao precisa de daemon nem uinput
     wtype
     ntfs3g
     playerctl

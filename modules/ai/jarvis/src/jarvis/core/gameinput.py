@@ -212,43 +212,108 @@ def click(button: str = "left", title_match: str = "") -> dict[str, Any]:
 _CHAT_BTN_FRAC = (0.90, 0.955, 1.0, 1.0)
 
 
-def locate(what: str, window_match: str = "OTClient") -> dict[str, Any]:
-    """Acha um elemento NA TELA e devolve o centro em coords RELATIVAS à janela.
+def _tsv_words(path: str, lang: str = "eng") -> list[tuple[str, int, int, int, int]]:
+    """Palavras na imagem via TSV do tesseract: (texto, x, y, w, h).
 
-    2026-10-02: era o que faltava. Eu vinha com coordenadas fixas medidas numa
-    janela 941x504 e, quando o jogo foi fullscreen 1920x1080, tudo quebrou — o
-    layout escala, então posição fixa não sobrevive a mudança de tamanho.
-
-    A visão devolve bounding box, então a posição é sempre a do que está
-    NA TELA agora. Depois `click_at` converte relativo→absoluto. Assim não há
-    coordenada hardcoded em lugar nenhum.
+    Por que TSV e não bbox da visão (2026-10-02): pedir coordenadas a um modelo
+    de VISÃO por texto é não-confiável — o Gemini respondeu 'a visão não
+    devolveu bbox'. O tesseract em modo TSV devolve a caixa de CADA palavra,
+    que é o que eu realmente preciso para clicar num rótulo. Determinístico,
+    rápido e sem custo de API.
     """
-    from jarvis.core import vision
+    # Pré-processa igual ao _ocr_text: o jogo é escuro e pixelado, e o
+    # tesseract cru devolvia 70 "palavras" de lixo (€, X}, =, ¥...). Com
+    # autocontraste + threshold + UPSCALE 2x, os rótulos saem legíveis.
+    # BUG 2026-10-02: sem upscale o botão "Chat Off" (~190x50 px em
+    # fullscreen) vira 3-4 px de altura de fonte — ilegível em qualquer PSM.
+    tsv_path = path
+    k = 1
+    try:
+        from PIL import Image, ImageOps
+        im = ImageOps.autocontrast(Image.open(path).convert("L"))
+        w, h = im.size
+        # 2x se janela cheia (texto pequeno), 1x se já é crop pequeno
+        k = 2 if max(w, h) > 800 else 1
+        if k > 1:
+            im = im.resize((w * k, h * k), Image.LANCZOS)
+        im = im.point(lambda p: 255 if p > 140 else 0)
+        tsv_path = path.rsplit(".", 1)[0] + "-tsv.png"
+        im.save(tsv_path)
+    except Exception:
+        k = 1
+    out = []
+    try:
+        r = subprocess.run(["tesseract", tsv_path, "stdout", "-l", lang, "--psm", "11",
+                            "tsv"], capture_output=True, text=True, timeout=25)
+    except (OSError, subprocess.SubprocessError):
+        return out
+    for line in (r.stdout or "").splitlines()[1:]:
+        f = line.split("\t")
+        if len(f) < 12 or not f[11].strip():
+            continue
+        try:
+            # TSV sai no espaço da imagem AMPLIADA — divide por k de volta
+            # para coordenada relativa à janela real.
+            out.append((f[11].strip(), int(f[6]) // k, int(f[7]) // k,
+                        int(f[8]) // k, int(f[9]) // k))
+        except ValueError:
+            continue
+    return out
+
+
+def locate(what: str, window_match: str = "OTClient") -> dict[str, Any]:
+    """Acha um TEXTO na tela e devolve o centro em coords RELATIVAS à janela.
+
+    Substitui as coordenadas fixas que eu mantinha (medidas em 941x504 e
+    quebradas quando o jogo foi fullscreen 1920x1080). O layout escala; o
+    texto na tela não. Portanto: procura o rótulo, clica onde ele ESTÁ agora.
+    """
     f = _focus(window_match)
     if not f.get("ok"):
         return f
-    shot = vision.capture_window(window_match)
-    if not shot.get("ok"):
-        return {"ok": False, "error": "nao capturou a janela"}
-    prov = ("PROCURANDO no jogo. O elemento é o retangulo que CONTIEM este texto "
-            "exatamente como escrito: ")
-    ask = (f"{prov}'{what}'. Responda SOMENTE com as coordenadas do retangulo "
-           f"em pixels da imagem, no formato: x1,y1,x2,y2. Sem texto, sem "
-           f"explicacao. Se nao existir, responda: NAO_ENCONTRADO")
-    r = vision.observe_with_fallback({
-        "mode": "window", "window_title": window_match,
-        "focus_window": False, "opaque": False, "question": ask})
-    if "NAO_ENCONTRADO" in r:
-        return {"ok": False, "erro": f"elemento '{what}' nao esta na tela",
-                "ocr": r[:120]}
-    import re
-    nums = [int(n) for n in re.findall(r"(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)", r)[0]] \
-        if re.findall(r"(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)", r) else []
-    if len(nums) != 4:
-        return {"ok": False, "erro": "a visao nao devolveu bbox", "resposta": r[:140]}
-    cx, cy = (nums[0] + nums[2]) // 2, (nums[1] + nums[3]) // 2
-    return {"ok": True, "elemento": what, "bbox": nums,
-            "rel": [cx, cy], "resposta": r[:80]}
+    shot = None
+    try:
+        from jarvis.core.vision import capture_window
+        shot = capture_window(window_match)
+    except Exception:
+        pass
+    if not shot or not shot.get("ok"):
+        return {"ok": False, "erro": "nao capturou a janela"}
+    alvo = what.strip().lower()
+    # 1) frase completa: une palavras adjacentes na mesma linha
+    words = _tsv_words(shot["path"])
+    if not words:
+        return {"ok": False, "erro": "tesseract nao leu nada da janela",
+                "path": shot["path"]}
+    best = None
+    partes = alvo.split()
+    for i, (txt, x, y, w, h) in enumerate(words):
+        seq = " ".join(t[0].lower() for t in words[i:i + len(partes)])
+        if seq.strip(" .:") == alvo:
+            # caixa da frase: do primeiro ao ultimo termo
+            ult = words[i + len(partes) - 1]
+            best = ((x + ult[1] + ult[3]) // 2, (y + h // 2),
+                    (x, y, ult[1] + ult[3], y + h))
+            break
+    if best is None:
+        # fallback ESTRITO: só a PRIMEIRA palavra do rótulo, comparada por
+        # igualdade. Antes usava `txt in alvo` e casava lixo ('a' dentro de
+        # qualquer coisa) — media (251,43), o canto da janela do Bot, para
+        # "Chat Off" e "Local Chat" ao mesmo tempo.
+        first = partes[0] if partes else alvo
+        cands = [w for w in words if w[0].lower().strip(" .:") == first]
+        if not cands:
+            cands = [w for w in words
+                     if w[0].lower().startswith(first[:4]) and len(first) > 3]
+        if cands:
+            txt, x, y, w, h = cands[0]
+            best = ((x + w // 2, y + h // 2, x, y, x + w, y + h))
+    if best is None:
+        return {"ok": False, "erro": f"texto '{what}' nao encontrado",
+                "palavras": [w[0] for w in words[:14]]}
+    cx, cy = best[0], best[1]
+    return {"ok": True, "elemento": what, "rel": [cx, cy],
+            "bbox": list(best[2:]), "path": shot["path"]}
 
 
 def click_element(what: str, window_match: str = "OTClient",
@@ -289,41 +354,21 @@ def _ocr(path: str) -> str:
 
 
 def chat_state(window_match: str = "OTClient") -> dict[str, Any]:
-    """Lê o rótulo do botão de chat por OCR (ON/OFF/UNKNOWN)."""
-    f = _focus(window_match)
-    shot = None
-    try:
-        from jarvis.core.vision import capture_window
-        shot = capture_window(window_match)
-    except Exception:
-        pass
-    if not shot or not shot.get("ok"):
-        return {"ok": False, "estado": "UNKNOWN", "erro": "nao capturou",
-                "foco": f.get("foco_confirmado")}
-    try:
-        from PIL import Image
-        img = Image.open(shot["path"])
-        W, H = img.size
-        x0, y0, x1, y1 = _CHAT_BTN_FRAC
-        box = (int(W * x0), int(H * y0), int(W * x1), int(H * y1))
-        crop = img.crop(box)
-        p = "/tmp/jarvis-chatbtn.png"
-        k = max(2, min(4, 900 // max(1, crop.width)))
-        crop.resize((crop.width * k, crop.height * k),
-                    Image.LANCZOS).save(p)
-        geo = {"box": list(box), "tamanho": [W, H]}
-    except ImportError:
-        p = shot["path"]
-        geo = {}
-    txt = _ocr(p).lower().replace("\n", " ")
-    if "on" in txt and "off" not in txt:
-        estado = "ON"
-    elif "off" in txt:
-        estado = "OFF"
-    else:
-        estado = "UNKNOWN"
-    return {"ok": True, "estado": estado, "ocr": txt.strip()[:40],
-            "foco": f.get("foco_confirmado"), **geo}
+    """Lê o rótulo do botão de chat por locate() (ON/OFF/UNKNOWN).
+
+    SEM fração fixa: _CHAT_BTN_FRAC quebrava a cada mudança de layout
+    (941x504 -> fullscreen 1920x1080). Agora procura o texto onde ele ESTÁ.
+    """
+    on = locate("Chat On", window_match)
+    if on.get("ok"):
+        return {"ok": True, "estado": "ON", "rel": on["rel"],
+                "bbox": on.get("bbox")}
+    off = locate("Chat Off", window_match)
+    if off.get("ok"):
+        return {"ok": True, "estado": "OFF", "rel": off["rel"],
+                "bbox": off.get("bbox")}
+    return {"ok": True, "estado": "UNKNOWN",
+            "erro": off.get("erro", "rotulo nao achado")}
 
 
 def ensure_chat(window_match: str = "OTClient") -> dict[str, Any]:
