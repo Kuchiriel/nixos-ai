@@ -247,13 +247,24 @@ def recommend_config(
     model_quant: str = "Q4_K_M",
     model_type: str = "dense",
     active_params_b: float | None = None,
+    kv_bytes_per_token: float | None = None,
+    native_ctx: int | None = None,
+    layers_total: int | None = None,
+    cpu_moe_measured: int | None = None,
 ) -> LlamaConfig:
     """Calculate optimal llama.cpp config based on actual hardware.
 
-    All values are calculated, not hardcoded.
+    All values are calculated, not hardcoded. Optional measured values
+    (audit GGUF 03/10, scripts/gguf_audit.py) override heuristics when
+    provided: kv_bytes_per_token (KV real, não regra 8000), native_ctx
+    (teto do modelo), layers_total (p/ cpu_moe), cpu_moe_measured (ótimo
+    medido, ex: 35 p/ 35B-A3B em vez de total-1).
     """
     config = LlamaConfig()
     notes = []
+    if layers_total:
+        # Total real de camadas (audit GGUF) p/ o cálculo de cpu_moe.
+        config.layers_total = layers_total
 
     # Estimate model size in bytes
     quant_multiplier = _quant_multiplier(model_quant)
@@ -318,11 +329,21 @@ def recommend_config(
     # Context size: based on available RAM after model
     remaining_ram_gb = total_budget_gb - model_size_gb
     if remaining_ram_gb > 2:
-        # ~1GB per 8K context for most models
-        config.context_size = min(32768, int(remaining_ram_gb * 8000))
+        if kv_bytes_per_token:
+            # Medido (audit GGUF): KV real varia 11KB (MoE) a 49KB (gemma3)
+            # por token — a regra antiga de 8000 errava até 10x p/ os lados.
+            config.context_size = int(remaining_ram_gb * 1e9 / kv_bytes_per_token)
+        else:
+            # ~1GB per 8K context for most models
+            config.context_size = min(32768, int(remaining_ram_gb * 8000))
     else:
         config.context_size = 2048
         notes.append(f"Limited context ({config.context_size}) due to memory")
+    if native_ctx:
+        # Teto nativo do modelo (GGUF context_length): nunca recomendar além.
+        if config.context_size > native_ctx:
+            notes.append(f"Contexto limitado pelo nativo: {native_ctx:,} (era {config.context_size:,})")
+            config.context_size = native_ctx
 
     # Batch/ubatch: ALINHADO com models.nix (512/512). Antes o heuristico
     # dava 1024/256 nesta maquina, que (a) discordava do service e (b) mexia
@@ -335,24 +356,30 @@ def recommend_config(
 
     # CPU MoE layers (for MoE models)
     if model_type == "moe" and config.gpu_layers > 0:
-        # Offload some MoE layers to CPU to reduce VRAM pressure
-        # Direcao INVERTIDA (medido 25/09 no 35B-A3B): experts na VRAM
-        # sao piores, nao melhores. Expert na GPU tem que vir pelo PCIe
-        # (Gen4 x4 = 6-7 GB/s) em vez de RAM (41-83 GB/s). Curva em U
-        # invertido: cmoe41 = 40,3 t/s | cmoe39 = 19,9 | cmoe37 = 16,1.
-        # A heuristica antiga (gpu_layers - 20) punha experts na GPU.
-        # Agora: quase tudo na CPU, e o que sobra de VRAM vai para
-        # attention/dense/KV — que correm em TODOS os tokens.
-        # Sem contagem de camadas conhecida, assume o PESSIM caso seguro
-        # para o que medimos: quase tudo na CPU. experts na GPU afogam no
-        # PCIe (sweep 25/09: cmoe37 = 16,1 t/s vs cmoe41 = 40,3). Um
-        # default otimista aqui custa 2,7x; um pessimista so custa um pouco
-        # de PP. models.nix usa 35 de 48.
-        total = config.layers_total or 48
-        config.cpu_moe = max(0, total - 1)
-        if config.cpu_moe > 0:
-            notes.append(f"{config.cpu_moe}/{total} MoE layers on CPU "
-                         f"(experts na GPU afogam no PCIe; medido 25/09)")
+        if cpu_moe_measured is not None:
+            # Ótimo medido vence a fórmula (sweep 25/09: 35 p/ 35B-A3B;
+            # total-1 punha experts demais na CPU e custava t/s).
+            config.cpu_moe = cpu_moe_measured
+            notes.append(f"{config.cpu_moe} MoE layers on CPU (ótimo medido)")
+        else:
+            # Offload some MoE layers to CPU to reduce VRAM pressure
+            # Direcao INVERTIDA (medido 25/09 no 35B-A3B): experts na VRAM
+            # sao piores, nao melhores. Expert na GPU tem que vir pelo PCIe
+            # (Gen4 x4 = 6-7 GB/s) em vez de RAM (41-83 GB/s). Curva em U
+            # invertido: cmoe41 = 40,3 t/s | cmoe39 = 19,9 | cmoe37 = 16,1.
+            # A heuristica antiga (gpu_layers - 20) punha experts na GPU.
+            # Agora: quase tudo na CPU, e o que sobra de VRAM vai para
+            # attention/dense/KV — que correm em TODOS os tokens.
+            # Sem contagem de camadas conhecida, assume o PESSIM caso seguro
+            # para o que medimos: quase tudo na CPU. experts na GPU afogam no
+            # PCIe (sweep 25/09: cmoe37 = 16,1 t/s vs cmoe41 = 40,3). Um
+            # default otimista aqui custa 2,7x; um pessimista so custa um pouco
+            # de PP. models.nix usa 35 de 48.
+            total = config.layers_total or 48
+            config.cpu_moe = max(0, total - 1)
+            if config.cpu_moe > 0:
+                notes.append(f"{config.cpu_moe}/{total} MoE layers on CPU "
+                             f"(experts na GPU afogam no PCIe; medido 25/09)")
 
     # KV cache type
     # KV: nesta maquina (6GB VRAM) a heuristica antiga escolhia q8_0, mas o
@@ -396,6 +423,8 @@ def _quant_multiplier(quant: str) -> float:
         "Q4_0": 0.56,
         "Q4_K_S": 0.56,
         "Q4_K_M": 0.63,
+        "Q4_K_P": 0.67,  # medido 03/10: 23.42GB/35B
+        "Q2_0": 0.29,  # medido 03/10: ternary 2.31GB/8B
         "Q4_K_L": 0.69,
         "Q5_0": 0.69,
         "Q5_K_S": 0.69,

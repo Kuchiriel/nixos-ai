@@ -164,9 +164,142 @@ in rec {
 
   llm-uncensored-4b = mkModel {
     # Qwen3.5-4B Q4_K_M.gguf · 2.6GB em ~/models (hash do arquivo local).
-    # Server: upstream stock -ngl 0 (CPU, VRAM com MoE) porta 8092.
+    # Server: upstream stock -ngl 99 (GPU-full, exclusivo via Conflicts)
+    # porta 8092. Ver directServers abaixo.
     url = "https://huggingface.co/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
     sha256 = "sha256-eeKOys+E51tgVs9AWWNtQ1qp62d5V4D3t9vH0yqWJ0E=";
+  };
+
+  llm-uncensored-4b-mtp = mkModel {
+    # Qwen3.5-4B-MTP Q4_K_M.gguf · 2.7GB em ~/models (hash do arquivo local).
+    # NextN REAL (blk.32.nextn.*): +24% TG medido 03/10. É o que roda na 8092.
+    url = "https://huggingface.co/localweights/Qwen3.5-4B-MTP-Q4_K_M-GGUF/resolve/main/Qwen3.5-4B-MTP-Q4_K_M.gguf";
+    sha256 = "sha256-FEPeY6VQp70YkFWJ3Ov6XDB9qLLvhtuFinaR+5o8Fcw=";
+  };
+
+  # ── Registro completo ~/models (auditoria GGUF 03/10) ──
+  # URLs verificadas via API HF (sibling exato); hashes do arquivo local.
+  llm-deepseek-7b = mkModel {
+    # DeepSeek-R1-Distill-Qwen-7B · 4.68GB · reasoning model (NÃO desliga thinking!)
+    url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf";
+    sha256 = "sha256-cx7OjQbcftpvZXKZf+ue4SWNsHhIJ+ZCkJ2bVlZBk3s=";
+  };
+
+  llm-qwen30b-moe = mkModel {
+    # Qwen3-30B-A3B MoE · 18.56GB · 48 layers (ik + --n-cpu-moe, como o 35B)
+    url = "https://huggingface.co/Qwen/Qwen3-30B-A3B-GGUF/resolve/main/Qwen3-30B-A3B-Q4_K_M.gguf";
+    sha256 = "sha256-DQA/ZmL67nhu1do+MbKcl43lrl0nXIeUxgan88AaqPU=";
+  };
+
+  llm-qwen3-4b = mkModel {
+    # Qwen3-4B alinhado · 2.5GB · nativo 40960 (maior que o preset 16384!)
+    # Servido hoje via preset router 8083; directServers dá unit própria.
+    url = "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf";
+    sha256 = "sha256-dIX+bxGvKUM7xRyrWACVIfIFhA9bSuOjL6f5LoU0/fU=";
+  };
+
+  llm-uncensored-35b-q4kp = mkModel {
+    # Q4_K_P.gguf · 23.42GB · SPARE (K_M é o titular; mesmas dims/flags)
+    url = "https://huggingface.co/HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf";
+    sha256 = "sha256-jTRKQzbY6n2gy/wSeS0UceVovnq+iTDFImBpi/0B1zE=";
+  };
+
+  # xLAM + Phi: JÁ REGISTRADOS acima (llm-xlam-8b, llm-phi-4-mini) —
+  # hashes locais 03/10 conferem byte a byte (Salesforce/unsloth íntegros).
+
+  # ── DIRECT SERVERS (um serviço systemd por modelo) ──
+  # Lido pelo gerador em modules/services/llama-uncensored.nix
+  # (systemd.services gerados, Conflicts calculado = um LLM grande por
+  # vez na VRAM 6GB). Flags vindas da auditoria GGUF (scripts/gguf_audit.py).
+  # wanted = partida no boot (só o primário; resto é systemctl start manual).
+  directServers = {
+    uncensored-35b = {
+      port = 8084; binary = "ik";
+      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
+      threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
+      gpuLayers = 45; moeFlags = "--n-cpu-moe 35";
+      fa = true; ctk = "q4_0"; ctv = "q4_0";
+      extraArgs = [ "--parallel" "1" "--jinja" "--mlock" "--reasoning" "off" ];
+      memHigh = "21G"; memMax = "23G"; limitMemlock = true;
+      wanted = true;
+    };
+    uncensored-4b = {
+      port = 8092; binary = "upstream";
+      # ARQUIVO MTP (não o base!): NextN real, +24% TG. Rebuild sem isto
+      # voltaria a 8092 sem speculative decoding (regressão silenciosa).
+      modelFile = "/home/nixos/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
+      # ctx 65536: só 8 de 32 layers carregam KV (híbrido 3:1) → KV cresce
+      # 9.2KB/tok ≈ 0.6GB @64k (oficial Qwen + VRAM medida 3.8GB, 03/10).
+      threads = 6; ctxSize = 65536; batchSize = 512; ubatch = 512;
+      gpuLayers = 99; moeFlags = "";
+      fa = true; ctk = "q4_0"; ctv = "q4_0";
+      extraArgs = [ "--parallel" "1" "--jinja" "--reasoning" "off" "--spec-type" "draft-mtp" ];
+      memHigh = "3G"; memMax = "4G"; limitMemlock = false;
+      wanted = false;
+    };
+    deepseek-7b = {
+      port = 8085; binary = "upstream";
+      modelFile = "/home/nixos/models/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf";
+      threads = 6; ctxSize = 16384; batchSize = 512; ubatch = 512;
+      gpuLayers = 99; moeFlags = "";
+      fa = true; ctk = "q4_0"; ctv = "q4_0";
+      # SEM --reasoning off: R1 é reasoning model, pensar é o propósito.
+      extraArgs = [ "--parallel" "1" "--jinja" ];
+      memHigh = "5G"; memMax = "7G"; limitMemlock = false;
+      wanted = false;
+    };
+    xlam-8b = {
+      port = 8089; binary = "upstream";
+      modelFile = "/home/nixos/models/Llama-xLAM-2-8B-fc-r-Q4_K_M.gguf";
+      threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
+      gpuLayers = 99; moeFlags = "";
+      fa = true; ctk = "q4_0"; ctv = "q4_0";
+      extraArgs = [ "--parallel" "1" "--jinja" ];
+      memHigh = "5G"; memMax = "7G"; limitMemlock = false;
+      wanted = false;
+    };
+    phi-mini = {
+      port = 8086; binary = "upstream";
+      modelFile = "/home/nixos/models/Phi-4-mini-instruct-Q4_K_M.gguf";
+      threads = 6; ctxSize = 32768; batchSize = 512; ubatch = 512;
+      gpuLayers = 99; moeFlags = "";
+      fa = true; ctk = "q4_0"; ctv = "q4_0";
+      extraArgs = [ "--parallel" "1" "--jinja" ];
+      memHigh = "4G"; memMax = "6G"; limitMemlock = false;
+      wanted = false;
+    };
+    gemma-4b = {
+      port = 8087; binary = "upstream";
+      modelFile = "/home/nixos/models/gemma-3-4b-it-Q4_K_M.gguf";
+      threads = 6; ctxSize = 32768; batchSize = 512; ubatch = 512;
+      gpuLayers = 99; moeFlags = "";
+      fa = true; ctk = "q4_0"; ctv = "q4_0";
+      extraArgs = [ "--parallel" "1" "--jinja" ];
+      memHigh = "4G"; memMax = "6G"; limitMemlock = false;
+      wanted = false;
+    };
+    qwen30b-moe = {
+      port = 8091; binary = "ik";
+      modelFile = "/home/nixos/models/Qwen3-30B-A3B-Q4_K_M.gguf";
+      # ctx 8192: classe MoE estourou compute buffers em 32k no irmão 35B
+      # (medido 2x 03/10); 30B não testado → valor seguro, não especulativo.
+      threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
+      gpuLayers = 45; moeFlags = "--n-cpu-moe 35";
+      fa = true; ctk = "q4_0"; ctv = "q4_0";
+      extraArgs = [ "--parallel" "1" "--jinja" "--mlock" "--reasoning" "off" ];
+      memHigh = "21G"; memMax = "23G"; limitMemlock = true;
+      wanted = false;
+    };
+    uncensored-35b-q4kp = {
+      port = 8093; binary = "ik";
+      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf";
+      threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
+      gpuLayers = 45; moeFlags = "--n-cpu-moe 35";
+      fa = true; ctk = "q4_0"; ctv = "q4_0";
+      extraArgs = [ "--parallel" "1" "--jinja" "--mlock" "--reasoning" "off" ];
+      memHigh = "22G"; memMax = "25G"; limitMemlock = true;
+      wanted = false;
+    };
   };
 
   llm-uncensored-35b-kp = mkModel {
@@ -415,6 +548,10 @@ in rec {
     # ── Chat Profile ──
     chat = hostBase // {
       threads = 6;
+      # ctxSize 8192 VALIDADO 03/10 (não subir!): KV do MoE é minúsculo
+      # (~11KB/tok), mas os compute buffers do -c 32768 estouraram a VRAM
+      # compartilhada (6GB com 8083+nomic) — load falhou 2x. 8k é o teto
+      # operacional colocalizado. Auditoria completa em /tmp/opencode/gguf_audit.json.
       ctxSize = 8192;
       batchSize = 512;
       ubatch = 512;
@@ -632,6 +769,11 @@ in rec {
     # KV q4_0 16K ≈ 1GB; total ≈ 3.5GB < 6GB com folga p/ Bonsai→fast
     # convivência transitória durante o switch do router (max 1 residente,
     # mas o unload/load transiente pode sobrepor brevemente).
+    # Auditoria GGUF 03/10 (/tmp/opencode/gguf_audit.json): arquivo local
+    # tem 36 layers, 8 KV heads, head_dim 80 → KV real 25.9KB/tok
+    # (16k = 0.42GB, não 1GB). Nativo 40960: 32768 caberia solo, mas
+    # 16384 está CORRETO p/ deploy colocalizado (divide 6GB com MoE+nomic).
+    # Não subir sem redesenhar o budget compartilhado.
     qwen-fast = {
       model = "llm-vm";
       mmproj = null;

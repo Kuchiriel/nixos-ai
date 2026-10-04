@@ -38,14 +38,18 @@ from jarvis.core.provider_registry import CANONICAL_CONTEXT  # fonte única de c
 
 GB = 2**30
 
-# Bytes por parâmetro por quantização GGUF (empírico, K-quants modernos)
+# Bytes por parâmetro por quantização GGUF (empírico, K-quants modernos;
+# Q4_K_P e Q2_0 medidos 03/10 nos arquivos locais: 23.42GB/35B = 0.669,
+# 2.31GB/8B = 0.289)
 QUANT_BYTES: dict[str, float] = {
-    "Q2_K": 0.35, "Q3_K_M": 0.45, "Q4_0": 0.55, "Q4_K_M": 0.62,
-    "Q5_K_M": 0.72, "Q6_K": 0.82, "Q8_0": 1.02, "F16": 2.0,
+    "Q2_K": 0.35, "Q2_0": 0.29, "Q3_K_M": 0.45, "Q4_0": 0.55, "Q4_K_M": 0.62,
+    "Q4_K_P": 0.67, "Q5_K_M": 0.72, "Q6_K": 0.82, "Q8_0": 1.02, "F16": 2.0,
 }
 
-# Bytes por elemento do KV cache (llama.cpp: f16 = 2, q8_0 = 1)
-KV_BYTES: dict[str, float] = {"f16": 2.0, "q8_0": 1.0}
+# Bytes por elemento do KV cache (llama.cpp: f16 = 2, q8_0 = 1, q4_0 = 0.5625).
+# q4_0 faltava aqui embora seja o padrão da casa (-ctk q4_0 em tudo) —
+# adicionado 03/10 com o valor medido (MoE 45MB @ 8k ctx).
+KV_BYTES: dict[str, float] = {"f16": 2.0, "q8_0": 1.0, "q4_0": 0.5625}
 
 # Folga de VRAM base: CUDA context (~0.3GB) + compute buffers (~0.5GB para ubatch≥512)
 VRAM_OVERHEAD_BASE_GB = 0.8
@@ -87,6 +91,9 @@ class ModelSpec:
     vision: bool = False       # multimodal (mmproj / encoder)
     size_gb: float | None = None  # tamanho GGUF real (override da fórmula)
     quant: str = "Q4_K_M"
+    full_attn_layers: int | None = None  # híbridos (Qwen3.5 3:1): SÓ essas
+        # layers carregam KV crescente; lineares têm estado fixo. None = all.
+        # Qwen3.6-35B: 10/40; Qwen3.5-4B: 8/32 (oficial + VRAM medida 03/10).
     min_ram_gb: float = 0.0    # RAM mínima (modelo + KV + folga)
     approx: bool = False       # arquitetura estimada (não do config oficial)
     note: str = ""
@@ -118,13 +125,57 @@ MODELS: list[ModelSpec] = [
     ),
     ModelSpec(
         key="qwen3.6-35b-a3b", name="Qwen3.6-35B-A3B MoE + vision (UD-Q4_K_M)",
-        params_b=35.9, layers=40, kv_heads=2, head_dim=256, hidden=4096,
+        params_b=35.9, layers=40, kv_heads=2, head_dim=256, hidden=2048,
         ctx_max=262144, moe=True, active_params_b=3.0, routed_experts=8,
         shared_experts=2, vision=True, size_gb=20.6, quant="Q4_K_M",
-        min_ram_gb=28,
+        min_ram_gb=28, full_attn_layers=10,
         note="O ALVO do host: 35B total/3B ativos, expert offload na RAM 32GB "
              "(atenção na GPU, experts na RAM via --n-cpu-moe). Validado por "
-             "relatos reais em RTX 4050 6GB (~30 tps).",
+             "relatos reais em RTX 4050 6GB (~30 tps). hidden=2048 medido no "
+             "GGUF 03/10 (era 4096 no catálogo); head_dim=256 é key_length "
+             "autoritativo. Híbrido 3:1 → 10/40 layers com KV (medido 45MB@8k "
+             "vs 47MB teoria).",
+    ),
+    # ── Medidos no GGUF local 03/10 (scripts/gguf_audit.py; head_dim =
+    # key_length autoritativo) ──
+    ModelSpec(
+        key="qwen3.5-4b-uncensored", name="Qwen3.5-4B Uncensored (Q4_K_M)",
+        params_b=4.0, layers=32, kv_heads=4, head_dim=256, hidden=2560,
+        ctx_max=262144, size_gb=2.71, min_ram_gb=8, full_attn_layers=8,
+        note="Uncensored local (:8092). Híbrido 3:1 → KV cresce 9.2KB/tok "
+             "(8 full layers); 64k ≈ 0.6GB, cabe na 6GB (VRAM medida 03/10).",
+    ),
+    ModelSpec(
+        key="deepseek-7b", name="DeepSeek-R1-Distill-Qwen-7B (Q4_K_M)",
+        params_b=7.0, layers=28, kv_heads=4, head_dim=128, hidden=3584,
+        ctx_max=131072, size_gb=4.68, min_ram_gb=8,
+        note="Reasoning model: PENSA SEMPRE (não desliga thinking!). Solo 16k.",
+    ),
+    ModelSpec(
+        key="xlam-8b", name="Llama-xLAM-2-8B-fc-r (Q4_K_M)",
+        params_b=8.0, layers=32, kv_heads=8, head_dim=128, hidden=4096,
+        ctx_max=131072, size_gb=4.92, min_ram_gb=10,
+        note="Executor strict/tools (CC-BY-NC-4.0!). Parcial/CPU na 6GB.",
+    ),
+    ModelSpec(
+        key="phi-mini", name="Phi-4-mini-instruct (Q4_K_M)",
+        params_b=3.8, layers=32, kv_heads=8, head_dim=128, hidden=3072,
+        ctx_max=131072, size_gb=2.49, min_ram_gb=6,
+        note="Chat correto; recusa tools em free (só constrained). Solo 32k.",
+    ),
+    ModelSpec(
+        key="qwen3-30b-a3b", name="Qwen3-30B-A3B MoE (Q4_K_M)",
+        params_b=30.0, layers=48, kv_heads=4, head_dim=128, hidden=2048,
+        ctx_max=40960, moe=True, active_params_b=3.0,
+        size_gb=18.56, min_ram_gb=28, approx=True,
+        note="MoE CPU-experts (ik + --n-cpu-moe). routed/shared experts NÃO "
+             "verificados — confirmar antes de produção.",
+    ),
+    ModelSpec(
+        key="gemma-4b", name="Gemma-3-4B-it (Q4_K_M)",
+        params_b=4.0, layers=34, kv_heads=4, head_dim=256, hidden=2560,
+        ctx_max=131072, size_gb=2.49, min_ram_gb=6,
+        note="KV GORDO 39KB/tok → teto 32k. Text-only (sem mmproj).",
     ),
     ModelSpec(
         key="qwen3-vl-235b-a22b", name="Qwen3-VL-235B-A22B MoE + vision",
@@ -150,8 +201,10 @@ def by_key(key: str) -> ModelSpec:
 # ---------------------------------------------------------------------------
 
 def kv_bytes_per_token(m: ModelSpec, kv: str) -> float:
-    """KV cache por token (bytes): 2 (K+V) × n_kv_heads × head_dim × layers × bytes."""
-    return 2.0 * m.kv_heads * m.head_dim * m.layers * KV_BYTES[kv]
+    """KV cache por token: 2 (K+V) × heads × head_dim × FULL layers × bytes.
+    Híbridos contam só full_attn_layers (lineares = estado fixo)."""
+    layers = m.full_attn_layers if m.full_attn_layers is not None else m.layers
+    return 2.0 * m.kv_heads * m.head_dim * layers * KV_BYTES[kv]
 
 
 def kv_cache_gb(m: ModelSpec, ctx: int, kv: str) -> float:

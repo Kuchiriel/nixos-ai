@@ -319,21 +319,122 @@
           };
         };
 
-        # Qwen3.5-4B UNCENSORED direto (upstream stock, porta 8092, CPU).
-        # Server sobe manual/supervisionado (fora do systemd); -ngl 0 porque
-        # a VRAM está com MoE+nomic. Id = path absoluto (server sem --alias).
+        # Qwen3.5-4B UNCENSORED direto (upstream stock, porta 8092, GPU-full).
+        # Roda o ARQUIVO MTP (-ngl 99 -c 65536 + draft-mtp, +24% TG medido
+        # 03/10). Id = path absoluto (server sem --alias).
         local-uncensored-4b = {
           npm = "@ai-sdk/openai-compatible";
           options = {
             baseURL = "http://127.0.0.1:8092/v1";
           };
           models = {
-            "/home/nixos/models/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf" = {
-              name = "Qwen 4B Uncensored Local";
-              # -c 32768 do launch atual.
+            "/home/nixos/models/Qwen3.5-4B-MTP-Q4_K_M.gguf" = {
+              name = "Qwen 4B Uncensored MTP Local";
+              # -c 65536 CORRETO (reverti meu revert 03/10): híbrido 3:1, só
+              # 8 layers com KV → 9.2KB/tok ≈ 0.6GB @64k. VRAM medida confirma.
+              limit = {
+                context = 65536;
+                output = 4096;
+              };
+            };
+          };
+        };
+
+        # Direct LLMs (services gerados de models.nix directServers, sem
+        # wantedBy — systemctl start manual; Conflicts garante um por vez).
+        # IDs = paths absolutos (servers sem --alias); limits = audit 03/10.
+        local-deepseek-7b = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "http://127.0.0.1:8085/v1";
+          };
+          models = {
+            "/home/nixos/models/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf" = {
+              name = "DeepSeek R1 7B Local (reasoning!)";
+              limit = {
+                context = 16384;
+                output = 8192;
+              };
+            };
+          };
+        };
+
+        local-phi-mini = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "http://127.0.0.1:8086/v1";
+          };
+          models = {
+            "/home/nixos/models/Phi-4-mini-instruct-Q4_K_M.gguf" = {
+              name = "Phi-4-mini Local";
               limit = {
                 context = 32768;
                 output = 4096;
+              };
+            };
+          };
+        };
+
+        local-gemma-4b = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "http://127.0.0.1:8087/v1";
+          };
+          models = {
+            "/home/nixos/models/gemma-3-4b-it-Q4_K_M.gguf" = {
+              name = "Gemma-3 4B Local";
+              limit = {
+                context = 32768;
+                output = 4096;
+              };
+            };
+          };
+        };
+
+        local-xlam-8b = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "http://127.0.0.1:8089/v1";
+          };
+          models = {
+            "/home/nixos/models/Llama-xLAM-2-8B-fc-r-Q4_K_M.gguf" = {
+              name = "xLAM-2 8B Local (tools)";
+              limit = {
+                context = 8192;
+                output = 2048;
+              };
+            };
+          };
+        };
+
+        local-qwen30b-moe = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "http://127.0.0.1:8091/v1";
+          };
+          models = {
+            "/home/nixos/models/Qwen3-30B-A3B-Q4_K_M.gguf" = {
+              name = "Qwen3-30B MoE Local";
+              limit = {
+                # 8192: classe MoE estourou buffers em 32k (medido no 35B).
+                context = 8192;
+                output = 4096;
+              };
+            };
+          };
+        };
+
+        local-uncensored-q4kp = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "http://127.0.0.1:8093/v1";
+          };
+          models = {
+            "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf" = {
+              name = "Qwen MoE 35B Q4_K_P Local (spare)";
+              limit = {
+                context = 8192;
+                output = 2048;
               };
             };
           };

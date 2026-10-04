@@ -425,10 +425,22 @@ def _is_allowed(root: str, file: str) -> bool:
     return False
 
 
+# ALLOW (03/10, a pedido do dono): dirs que SEMPRE indexam, mesmo que um
+# exclude substring casaria (ex.: "items" mata data-sandbox/items).
+# Match EXATO no nome do dir, com precedência sobre excludes.
+_ALLOW_DIRS: tuple[str, ...] = (
+    "data", "data-sandbox", "data-canary", "dataset", "datasets",
+    "docs", "doc", "lib", "libs", "src", "scripts", "tools", "tests",
+    "items", "world", "monster", "npc", "schema", "facts", "stubs",
+)
+
+
 def iter_indexable_files(root: str | Path, exclude_dirs: Iterable[str] | None = None) -> Iterable[str]:
     """Varre um diretório/arquivo com as mesmas regras do V4.0.5 (excludes, tamanho).
-    Respeita também um .ragignore na raiz (sintaxe gitignore; ver _load_ragignore)."""
+    Respeita também um .ragignore na raiz (sintaxe gitignore; ver _load_ragignore).
+    `_ALLOW_DIRS` tem precedência EXATA sobre os excludes (substring)."""
     excludes = tuple(e.lower() for e in (exclude_dirs if exclude_dirs is not None else _EXCLUDE_DIRS))
+    allows = {a.lower() for a in _ALLOW_DIRS}
     root_path = Path(root).expanduser()
     rag = _load_ragignore(root_path)
 
@@ -443,11 +455,14 @@ def iter_indexable_files(root: str | Path, exclude_dirs: Iterable[str] | None = 
 
     for dirpath, dirnames, filenames in os.walk(root_path):
         # Filtra os subdiretórios verificando o nome do diretório individual, não o caminho absoluto
+        # ALLOW exact-match vence: dir permitido não é excluído por substring
         dirnames[:] = [
             d for d in dirnames
             if not d.startswith(".")
-            and d.lower() not in excludes
-            and not any(ex in d.lower() for ex in excludes)
+            and (d.lower() in allows or (
+                d.lower() not in excludes
+                and not any(ex in d.lower() for ex in excludes)
+            ))
         ]
         if rag is not None:
             # Poda dir inteiro se o rel-path casa com padrão de ignore (mesma
