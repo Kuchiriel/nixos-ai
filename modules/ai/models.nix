@@ -221,7 +221,7 @@ in rec {
       fa = true; ctk = "q4_0"; ctv = "q4_0";
       extraArgs = [ "--parallel" "1" "--jinja" "--mlock" "--reasoning" "off" ];
       memHigh = "21G"; memMax = "23G"; limitMemlock = true;
-      wanted = true;
+      wanted = false;  # default agora é o 4B-MTP (04/10, pedido do dono)
     };
     uncensored-4b = {
       port = 8092; binary = "upstream";
@@ -235,7 +235,7 @@ in rec {
       fa = true; ctk = "q4_0"; ctv = "q4_0";
       extraArgs = [ "--parallel" "1" "--jinja" "--reasoning" "off" "--spec-type" "draft-mtp" ];
       memHigh = "3G"; memMax = "4G"; limitMemlock = false;
-      wanted = false;
+      wanted = true;  # DEFAULT do sistema (04/10, pedido do dono)
     };
     deepseek-7b = {
       port = 8085; binary = "upstream";
@@ -448,7 +448,11 @@ in rec {
 
   # --- Flux.1-schnell (geração de imagem) — stack stable-diffusion.cpp ---
   # DiT Q2_K (3.8GB, cabe na VRAM 6GB) + clip_l + t5xxl + VAE bf16.
-  # Runtime: ~/projects/stable-diffusion.cpp (build/bin/sd-cli).
+  # Runtime: ~/projects/stable-diffusion.cpp/build-cuda/bin/sd-cli
+  #   (build SD_CUDA sm_89, 04/10 — build-vk APOSENTADO: ggml-vulkan deu
+  #   device-lost + 3 hard-freezes 03/10; CUDA estável).
+  # Receita que funciona: auto-fit PURO + --max-vram CUDA0=5 (256px ~21s).
+  # NUNCA --backend/--params-backend manuais (jogam p/ CPU em silêncio, 6min).
   # T5: fp16 p/ CPU (fp8 SEGFAULT em CPU — sem kernels fp8);
   #     fp8 p/ GPU (CUDA/Vulkan têm kernels fp8, metade da RAM).
   # VRAM 6GB: auto-fit coloca DiT na GPU, T5 fica em RAM.
