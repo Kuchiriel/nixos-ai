@@ -55,7 +55,12 @@ class PersonaExecutor:
     def __init__(self, project: str = "nixos-ai", dry_run: bool = False):
         self.project = project
         self.dry_run = dry_run
-        self.registry = PersonaRegistry()
+        try:
+            from jarvis.core.config import get_config
+            _pdir = get_config().personas_dir
+        except Exception:
+            _pdir = None
+        self.registry = PersonaRegistry(personas_dir=_pdir)
         self._harness = None
 
     def _get_harness(self):

@@ -383,6 +383,23 @@ class LlamaCppBackend(LLMBackend):
 
         return embed_long(_one, text)
 
+    def embed_batch(self, texts: list[str], model: str | None = None) -> list[list[float]]:
+        """Lote em 1 POST (input=list). Ordem preservada pelo servidor."""
+        if not texts:
+            return []
+        payload: dict[str, Any] = {
+            "model": model or self._model,
+            "input": list(texts),
+        }
+        resp = self._session.post(
+            f"{self._embed_url}/v1/embeddings",
+            json=payload,
+            timeout=(self._connect_timeout, self._read_timeout),
+        )
+        resp.raise_for_status()
+        items = sorted(resp.json()["data"], key=lambda d: d["index"])
+        return [it["embedding"] for it in items]
+
     def health(self, timeout: float = 3.0) -> bool:
         """Check if llama-server is responding."""
         try:

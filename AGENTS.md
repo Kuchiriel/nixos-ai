@@ -118,6 +118,8 @@ nix flake check
   Gatilhos: harbor, calibração, trial, verifier, A-cell, B-cell.
 - `.agents/memoria-do-projeto.md` — decisões e armadilhas já pagas.
   Gatilhos: já quebrou, antes de mexer, armadilha, por que.
+- `.agents/mcp-catalog.md` — quem expõe o quê (jarvis, nixos, tavily, context7).
+  Gatilhos: mcp, tavily, context7, browser, nix search, vault, github.
 
 ## Frontmatter
 

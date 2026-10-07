@@ -112,15 +112,21 @@ class LLMBackend(ABC):
     @abstractmethod
     def embed(self, text: str, model: str | None = None) -> list[float]:
         """Generate an embedding for the given text.
-        
+
         Args:
             text: Text to embed
             model: Optional model override
-        
+
         Returns:
             List of floats (embedding vector)
         """
         ...
+
+    def embed_batch(self, texts: list[str], model: str | None = None) -> list[list[float]]:
+        """Generate embeddings for many texts. Default: loop (backends sem
+        suporte a lote sobrescrevem com 1 POST; medido 07/10: 44ms/item
+        solo vs 2ms/item em lote no nomic — 22x)."""
+        return [self.embed(t, model=model) for t in texts]
 
     @abstractmethod
     def health(self, timeout: float = 3.0) -> bool:

@@ -148,6 +148,42 @@ JARVIS_TOOLS = [
         }
     },
     {
+        "name": "jarvis_human_input",
+        "description": (
+            "WHEN you need to move the mouse, click, type or press keys on the "
+            "DESKTOP like a human (game clients, native apps, anything outside "
+            "the browser — use jarvis_browser for web pages). Human-like by "
+            "design: Bezier mouse paths with jitter, log-normal cadence "
+            "(~250ms reaction, ~90ms/keystroke with bursts + pauses), fatigue "
+            "modeling. WAYLAND-native (ydotool/uinput; falls back to wtype). "
+            "Actions: move (Bezier to x,y), click (x,y + button), type (text), "
+            "key (keys like 'space' 'return' 'mod+m'), scroll. Pair with "
+            "jarvis_observe_screen (look) + this (act) = closed loop. "
+            "NOTE: actions are REAL input to the owner's desktop — say out "
+            "loud what you are about to click before clicking; never type "
+            "passwords/secrets. Typical script: observe → move/click a UI "
+            "element → observe the result. Coordinates come from the "
+            "screenshot (1920x1080) 1:1 — measure in pixels, then act."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["move", "click", "type", "key", "scroll"],
+                    "description": "What the hand does",
+                },
+                "x": {"type": "integer", "description": "Target pixel X (move/click; screen is 1920x1080)"},
+                "y": {"type": "integer", "description": "Target pixel Y (move/click)"},
+                "button": {"type": "string", "enum": ["left", "right", "middle"], "description": "Mouse button (click). Default left"},
+                "text": {"type": "string", "description": "Text to type with human cadence (type)"},
+                "keys": {"type": "string", "description": "Space-separated keys, e.g. 'mod+m' or 'space' (key)"},
+                "dy": {"type": "integer", "description": "Scroll amount in pixels, positive = down (scroll)"},
+                "dry_run": {"type": "boolean", "description": "Simulate without touching the desktop (returns the path it would take). Use FIRST to validate coordinates"},
+            },
+            "required": ["action"],
+        },
+    },
+    {
         "name": "jarvis_browser",
         "description": ("WHEN you need to interact with any web page: read, click, fill forms, "
                         "drive menus, or operate the owner's logged-in browser (attach). "
@@ -666,6 +702,10 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
 
         if name == "jarvis_observe_screen":
             return observe_screen(args)
+
+        if name == "jarvis_human_input":
+            from jarvis.core.humanize import human_input
+            return human_input(args)
 
         if name == "jarvis_browser":
             from jarvis.core.browser import handle_browser

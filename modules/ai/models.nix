@@ -846,7 +846,15 @@ in rec {
         profile = "bonsai";
         ctx = 49152;
         tier = "speed";
-        capabilities = ["general" "coding" "tools" "pt"];
+        capabilities = ["general" "coding" "tools" "en"];
+        # GUIDANCE p/ IAs (lido via registryJson.raw — select_model NÃO lê,
+        # então isto NÃO muda roteamento; muda a ESCOLHA de quem lê):
+        # bench 07/10 (temp 0.0): TTFT 0.033s, 72/73 t/s; PT-BR dif 6/10
+        # (falhas: ecoa imperativo curto em EN, perde acento, troca nome
+        # próprio, erra sequência); logic 3/4, code 4/4. SEM "pt" (dono
+        # 07/10: ruim em PT, é EN). PT-BR → tier fast. Ver
+        # docs/benchmarks/BENCHMARK-MATRIX.md linha "Tier speed".
+        guidance = "speed/code/EN first; NEVER PT-BR (no pt capability); PT-BR goes to fast tier";
         params_b = 8;
         vram_mb = 2400;
         # Prism fork exigido (Q2_0 g64 fora do upstream).

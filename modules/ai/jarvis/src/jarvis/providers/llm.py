@@ -757,6 +757,17 @@ class LLMClient:
         self._embed_breaker.record_success()
         return result
 
+    def embed_batch(self, texts: list[str], model: str | None = None) -> list[list[float]]:
+        """Lote sob o breaker de embed (mesma contabilidade do embed solo)."""
+        self._embed_breaker.before_call()
+        try:
+            result = self._backend.embed_batch(texts, model=model)
+        except Exception as exc:
+            self._embed_breaker.record_failure()
+            raise LLMError(f"embedding batch failed: {exc}") from exc
+        self._embed_breaker.record_success()
+        return result
+
     @property
     def base_url(self) -> str:
         """Backward compat: expose base_url."""

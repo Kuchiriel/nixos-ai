@@ -31,13 +31,15 @@ _FALLBACK = {
     "models": {
         "bonsai": {
             "tier": "speed",
-            "capabilities": ["general", "coding", "tools", "pt"],
+            "capabilities": ["general", "coding", "tools", "en"],
             "params_b": 8,
             "vram_mb": 2400,
             "endpoint": 8080,
             "sampling": {"temperature": 0.5, "top_p": 0.9, "top_k": 20,
                          "min_p": 0.0, "presence_penalty": 0.0,
                          "repetition_penalty": 1.0},
+            # Espelho do guidance em models.nix (SEM pt desde 07/10).
+            "guidance": "speed/code/EN first; NEVER PT-BR; PT-BR goes to fast tier",
         },
         "jarvis-fast": {
             "tier": "fast",

@@ -526,6 +526,15 @@ class PersonaRegistry:
 
     def __init__(self, personas_dir: str = None):
         self._personas: dict[str, Persona] = {}
+        # Default: dir do painel (Config.personas_dir). Sem isto, personas
+        # criadas pelo painel (JSON) só existiam p/ quem passasse o dir —
+        # ninguém passava (07/10: 6 call sites bare).
+        if personas_dir is None:
+            try:
+                from jarvis.core.config import get_config
+                personas_dir = get_config().personas_dir
+            except Exception:
+                personas_dir = None
         self._personas_dir = personas_dir
 
         # Load built-in personas

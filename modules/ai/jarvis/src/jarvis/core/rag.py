@@ -569,18 +569,34 @@ class HybridIndexer:
         facts = extract_facts(content, ext)
 
         last_payload = None
+        # Lote denso em 1 POST (medido 07/10: 44ms/item solo vs 2ms/item em
+        # lote). Fallback preservado: se o lote falhar, volta ao por-chunk
+        # com metades (semântica antiga intacta).
+        rich_list = [build_rich_content(path, facts if i == 0 else [], chunk, max_chars=chunk_size)
+                     for i, chunk in enumerate(chunks)]
+        try:
+            dense_list = self._llm.embed_batch(rich_list)
+            if len(dense_list) != len(rich_list):
+                raise ValueError("batch size mismatch")
+            batched = True
+        except Exception:
+            dense_list = [None] * len(rich_list)
+            batched = False
         for i, chunk in enumerate(chunks):
-            rich = build_rich_content(path, facts if i == 0 else [], chunk, max_chars=chunk_size)
-            try:
-                dense = self._llm.embed(rich)
-            except Exception:
-                # If embedding fails (e.g., input too large), try with smaller chunk
-                smaller = chunk[:len(chunk) // 2]
-                rich_fallback = build_rich_content(path, facts if i == 0 else [], smaller, max_chars=len(smaller))
+            rich = rich_list[i]
+            if batched:
+                dense = dense_list[i]
+            else:
                 try:
-                    dense = self._llm.embed(rich_fallback)
+                    dense = self._llm.embed(rich)
                 except Exception:
-                    continue  # Skip this chunk entirely
+                    # If embedding fails (e.g., input too large), try with smaller chunk
+                    smaller = chunk[:len(chunk) // 2]
+                    rich_fallback = build_rich_content(path, facts if i == 0 else [], smaller, max_chars=len(smaller))
+                    try:
+                        dense = self._llm.embed(rich_fallback)
+                    except Exception:
+                        continue  # Skip this chunk entirely
             if not dense:
                 continue
 

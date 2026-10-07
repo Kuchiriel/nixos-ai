@@ -32,6 +32,12 @@ def _env_bool(name: str, default: bool) -> bool:
 
 @dataclass(frozen=True)
 class Config:
+    # --- Personas custom (painel de bots, 07/10): JSONs aqui viram personas
+    # sem editar código (PersonaRegistry._load_from_dir). Painel = escrever
+    # arquivo; formato = Persona.to_dict().
+    personas_dir: str = field(default_factory=lambda: _env_str(
+        "JARVIS_PERSONAS_DIR",
+        os.path.join(os.path.expanduser("~"), ".config", "jarvis", "personas")))
     # --- Backend Selection ---
     # Which LLM backend to use: "llama-cpp", "prismml", "bonsai", etc.
     llm_backend: str = field(default_factory=lambda: _env_str("JARVIS_LLM_BACKEND", "llama-cpp"))
