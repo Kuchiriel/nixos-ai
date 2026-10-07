@@ -352,6 +352,22 @@ class LLMClient:
             logger.warning("falha ao detectar model_id, usando fallback '%s': %s", self._cfg.llm_model, exc)
         return self._cfg.llm_model
 
+    def _is_qwen_model(self) -> bool:
+        """Check if the current model is a Qwen variant that needs stop tokens."""
+        mid = self._resolve_model_id().lower()
+        return "qwen" in mid or "jarvis-fast" in mid or "jarvis-strong" in mid or "jarvis-raw" in mid
+
+    def _stop_tokens_for_model(self) -> list[str] | None:
+        """Return stop tokens for Qwen tool calling format."""
+        if self._is_qwen_model():
+            return [
+                "<|tool_call_begin|>",
+                "<|tool_call_end|>",
+                "<|tool_calls_section_begin|>",
+                "<|tool_calls_section_end|>",
+            ]
+        return None
+
     # --- chat (síncrono) ---
 
     def _record_telemetry(
@@ -637,6 +653,14 @@ class LLMClient:
         """Chat completion com tool calling — retorna ChatResponse completo."""
         request_id = uuid.uuid4().hex[:12]
 
+        # Inject stop tokens for Qwen models when tools are provided
+        # to prevent the model from continuing after tool calls.
+        _merged_extra = dict(extra or {})
+        if tools:
+            _stops = self._stop_tokens_for_model()
+            if _stops:
+                _merged_extra["stop"] = _stops
+
         self._breaker.before_call()
         t0 = time.monotonic()
         try:
@@ -645,7 +669,7 @@ class LLMClient:
                 temperature=self._resolve_temperature(temperature),
                 max_tokens=max_tokens,
                 tools=tools,
-                extra=extra,
+                extra=_merged_extra,
             )
             self._breaker.record_success()
             self._record_telemetry(response, latency_s=time.monotonic() - t0)
