@@ -3397,9 +3397,31 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
     if plan:
         messages.append({"role": "user", "content": f"Plano inicial:\n{plan}\n\nExecute em etapas curtas com validação de cada fase."})
     messages.append({"role": "user", "content": task})
+    # Nightwatch convergence: recovery checkpoint (survives crash /
+    # compaction; --continue re-injects the state). Best-effort, never breaks the run.
+    _cp = None
+    try:
+        from nightwatch.checkpoint import (
+            create_checkpoint_for_task, generate_recovery_summary,
+        )
+        _proj = os.path.basename(os.path.abspath(project_root or os.getcwd())) or "nixos-ai"
+        if continue_session:
+            _rec = generate_recovery_summary(_proj)
+            if _rec:
+                messages.append({"role": "user", "content": _rec})
+        _cp = create_checkpoint_for_task(
+            f"autopilot-{int(__import__('time').time())}", task, _proj)
+    except Exception:
+        _cp = None
     messages = _trim_messages(messages)
     ok = _run_agent_loop(messages, tools, profile, approve, debug, max_turns=8)
     _persist_session(messages, project_root or os.getcwd())
+    if _cp is not None:
+        try:
+            _cp.record_operation("autopilot", bool(ok),
+                                 "" if ok else "agent loop failed")
+        except Exception:
+            pass
     console.print("[dim]🧭 checkpoint salvo[/]")
     _repl_emit("session.ended", success=ok, turns=len(messages))
     return 0 if ok else 1
