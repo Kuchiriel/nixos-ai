@@ -235,7 +235,7 @@ in rec {
       fa = true; ctk = "q4_0"; ctv = "q4_0";
       extraArgs = [ "--parallel" "1" "--jinja" "--reasoning" "off" "--spec-type" "draft-mtp" ];
       memHigh = "3G"; memMax = "4G"; limitMemlock = false;
-      wanted = true;  # DEFAULT do sistema (04/10, pedido do dono)
+      wanted = false;  # on-demand; router (8080/bonsai) is default for harness/agents; start 8092 when voice needs PT-BR
     };
     deepseek-7b = {
       port = 8085; binary = "upstream";
