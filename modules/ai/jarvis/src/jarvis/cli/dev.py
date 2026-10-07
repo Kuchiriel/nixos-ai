@@ -35,6 +35,7 @@ import requests
 
 from jarvis.core.config import get_config as _get_config
 from jarvis.core.provider_registry import MIN_PROFILE_CONTEXT
+from jarvis.core.plan_executor import PlanExecutor, ExecutionPlan, PlanStep, build_debug_context
 
 # Tools unificadas — AST guard, backup, safety, fuzzy match 4 camadas
 from jarvis.core.devtools import (
@@ -1664,9 +1665,27 @@ def _tools_catalog(tools: list[dict[str, Any]]) -> str:
     return "\n".join(out)
 
 
-def _get_tools(persona=None) -> list[dict[str, Any]]:
-    """Tools do REPL. Com persona (exceto jarvis/all): filtra por capabilities.
+# Phase-specific tool sets for small models (reduces attention dilution)
+# Each phase gets only the tools actually needed.
+_PHASE_TOOLS: dict[str, set[str]] = {
+    "create": {"write_file", "list_directory", "execute_shell"},
+    "edit": {"read_file", "str_replace", "execute_shell"},
+    "test": {"execute_shell", "read_file", "list_directory"},
+    "search": {"semantic_search", "rag_search", "rag_index", "list_directory"},
+    "read": {"read_file", "list_directory", "semantic_search"},
+    "memory": {"remember", "recall", "lessons", "vault_list", "vault_write"},
+    "web": {"web_search", "read_chatgpt", "read_ai_conversation"},
+    "nix": {"nix_eval", "nix_check", "nix_search", "execute_shell"},
+    "vision": {"capture_screen", "observe_screen"},
+}
 
+
+def _get_tools(persona=None, phase: str | None = None) -> list[dict[str, Any]]:
+    """Tools do REPL. Com persona (exceto jarvis/all): filtra por capabilities.
+    
+    If phase is provided, further filters to only tools needed for that phase.
+    This reduces attention dilution for small models (22 tools -> ~3-5).
+    
     Matriz MCP (capability → tools):
       jarvis (default) = todas. researcher = leitura+RAG+web+memória.
     """
@@ -1991,10 +2010,17 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
         },
     ]
     if persona is None or not getattr(persona, "tools", None):
+        # Apply phase filter even for default persona
+        if phase and phase in _PHASE_TOOLS:
+            allowed = _PHASE_TOOLS[phase]
+            return [t for t in tools if t["function"]["name"] in allowed]
         return tools  # jarvis/default: todas
     from jarvis.core.persona import filter_tools as _filter_tools
     names = [t["function"]["name"] for t in tools]
     keep = set(_filter_tools(names, persona))
+    # Apply phase filter on top of persona filter
+    if phase and phase in _PHASE_TOOLS:
+        keep &= _PHASE_TOOLS[phase]
     return [t for t in tools if t["function"]["name"] in keep]
 
 
@@ -3356,8 +3382,134 @@ def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) 
         return None
 
 
-def _run_autopilot(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False, continue_session: bool = False, yolo: bool = False) -> int:
-    """Modo lote: planeja → executa → checkpoint."""
+def _execute_plan(
+    executor: "PlanExecutor",
+    plan: "ExecutionPlan",
+    messages: list[dict[str, Any]],
+    tools: list[dict],
+    profile: dict,
+    approve: bool,
+    debug: bool,
+    max_turns: int,
+) -> bool:
+    """Execute structured plan with retry, validation, and learning."""
+    from jarvis.core.completion import check_completion
+    
+    _successes = 0
+    
+    while True:
+        # Check if plan is complete
+        next_step = plan.get_next_step()
+        if next_step is None:
+            # All steps done - verify overall completion
+            v = check_completion(messages)
+            if v is not None and v.status == "VERIFIED":
+                plan.status = "completed"
+                console.print("[jarvis]✓ Plan completed and verified[/]")
+                return True
+            elif v is not None and v.missing:
+                console.print(f"[tool.error]⚠️  Plan done but world check failed: {v.missing[:3]}[/]")
+                return False
+            else:
+                plan.status = "completed"
+                return True
+
+        step = plan.get_next_step()
+        console.print(f"[jarvis]step {plan.current_step + 1}/{len(plan.steps)}[/] · {step.description} ({step.action}: {step.target})")
+        
+        # Check if step can be retried
+        if step.retry_count >= step.max_retries:
+            console.print(f"[tool.error]⚠️  Step {step.id} exceeded max retries ({step.max_retries})[/]")
+            plan.status = "failed"
+            return False
+        
+        # Build step execution message
+        step_prompt = f"""Execute step {step.id}: {step.description}
+Action: {step.action}
+Target: {step.target}
+Expected: {step.expected_outcome}
+Validation: {step.validation}
+
+Use the appropriate tool and return the result. Be concise."""
+        
+        messages.append({"role": "user", "content": step_prompt})
+        
+        # Run agent loop for this step (limited turns)
+        step_ok = _run_agent_loop(messages, tools, profile, approve, debug, max_turns=10)
+        
+        if not step_ok:
+            step.retry_count += 1
+            # Learn from failure
+            if step.retry_count < step.max_retries:
+                from jarvis.core.memory import EpisodicMemory
+                em = EpisodicMemory()
+                em.remember(
+                    text=f"Step {step.id} ({step.action}) failed at {step.target}. Retry #{step.retry_count}. Next: verify {step.validation} before proceeding.",
+                    kind="fact",
+                    meta={"task": "autopilot", "step": step.id}
+                )
+                console.print(f"[dim]  Retrying step {step.id} (attempt {step.retry_count + 1}/{step.max_retries})[/]")
+                continue
+            else:
+                console.print(f"[tool.error]⚠️  Step {step.id} failed after {step.max_retries} retries[/]")
+                from jarvis.core.memory import EpisodicMemory
+                em = EpisodicMemory()
+                em.remember(
+                    text=f"Step {step.id} ({step.action}) failed permanently at {step.target}. Validation: {step.validation}. Root cause: check {step.validation} before claiming success.",
+                    kind="fact",
+                    meta={"task": "autopilot", "step": step.id, "permanent_failure": True}
+                )
+                plan.status = "failed"
+                return False
+        
+        # Validate step output
+        last_tool_result = ""
+        for msg in reversed(messages):
+            if msg.get("role") == "tool":
+                last_tool_result = msg.get("content", "")
+                break
+        
+        if step.validation == "file_exists":
+            import os
+            if os.path.exists(step.target):
+                console.print(f"[jarvis]✓ Step {step.id} validated (file exists)[/]")
+                plan.mark_step_complete(step.id, {"validated": True})
+                _successes += 1
+            else:
+                console.print(f"[tool.error]⚠️  Step {step.id} validation failed: {step.target} not found[/]")
+                step.retry_count += 1
+                if step.retry_count >= step.max_retries:
+                    return False
+                continue
+        elif step.validation == "test_passes":
+            plan.mark_step_complete(step.id, {"validated": True})
+            _successes += 1
+        else:
+            plan.mark_step_complete(step.id, {"validated": True})
+            _successes += 1
+        
+        # Learn from success
+        from jarvis.core.memory import EpisodicMemory
+        em = EpisodicMemory()
+        em.remember(
+            text=f"Step {step.id} ({step.action}) succeeded at {step.target}. Validation: {step.validation} passed.",
+            kind="fact",
+            meta={"task": "autopilot", "step": step.id, "success": True}
+        )
+    
+    return True
+
+
+def _run_autopilot(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False, continue_session: bool = False, yolo: bool = False, max_turns: int = 30) -> int:
+    """Modo lote: planeja → executa → checkpoint.
+    
+    Fluxo melhorado com PlanExecutor:
+    1. Cria plano estruturado com LLM (etapas, validações, dependências)
+    2. Usa lessons/recall/rag para evitar erros conhecidos
+    3. Executa cada etapa com validação e retry limitado
+    4. Aprende com falhas (salva em lessons)
+    5. Checkpoint de recuperação
+    """
     if project_root:
         from jarvis.core.paths import set_project_root
         set_project_root(project_root)
@@ -3371,7 +3523,17 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
 
     profile = _detect_profile()
     ap_persona = _select_persona(task)
-    tools = _get_tools(ap_persona) if profile["native_tools"] else []
+    # Detect task phase for tool filtering (reduces attention dilution for small models)
+    _task_lower = task.lower()
+    _phase = (
+        "create" if any(w in _task_lower for w in ["create", "build", "implement", "write", "add"]) else
+        "edit" if any(w in _task_lower for w in ["edit", "fix", "update", "modify", "change", "refactor"]) else
+        "test" if any(w in _task_lower for w in ["test", "validate", "verify", "run test"]) else
+        "search" if any(w in _task_lower for w in ["search", "find", "grep", "look for"]) else
+        "read" if any(w in _task_lower for w in ["read", "show", "view", "display"]) else
+        None
+    )
+    tools = _get_tools(ap_persona, phase=_phase) if profile["native_tools"] else []
     console.print(f"[jarvis]autopilot[/] · {profile['name']} · {task[:60]}")
 
     repo_map = _build_repo_map(os.getcwd())
@@ -3393,12 +3555,44 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
             else:
                 messages.insert(0, {"role": "system", "content": system_prompt})
 
-    plan = _architect_plan(task, profile, tools, debug)
-    if plan:
-        messages.append({"role": "user", "content": f"Plano inicial:\n{plan}\n\nExecute em etapas curtas com validação de cada fase."})
-    messages.append({"role": "user", "content": task})
-    # Nightwatch convergence: recovery checkpoint (survives crash /
-    # compaction; --continue re-injects the state). Best-effort, never breaks the run.
+    # 1. Load known lessons/recall/rag to avoid known failures
+    _known_failures = _load_known_failures(task)
+    _relevant_lessons = _recall_lessons(task)
+    _rag_context = _search_rag(task)
+    
+    # Build context with prior knowledge
+    prior_knowledge = ""
+    if _known_failures:
+        prior_knowledge += f"\nKNOWN FAILURES TO AVOID:\n{_known_failures}\n"
+    if _relevant_lessons:
+        prior_knowledge += f"\nRELEVANT LESSONS:\n{_relevant_lessons}\n"
+    if _rag_context:
+        prior_knowledge += f"\nRELEVANT CODE CONTEXT:\n{_rag_context}\n"
+
+    # 2. Create structured plan with PlanExecutor
+    from jarvis.providers.llm import LLMClient
+    llm_client = LLMClient()
+    executor = PlanExecutor(llm_client=llm_client, tools=tools, debug=debug)
+    
+    # Create structured plan
+    plan_context = f"Task: {task}\n\nRepo map:\n{repo_map}\n\nMemory:\n{memory_ctx}\n\nAgent context:\n{agent_ctx}\n\nPrior knowledge:\n{prior_knowledge}"
+    plan = executor.create_plan(task, plan_context)
+    plan.status = "running"
+    
+    console.print(f"[jarvis]plan[/] · {len(plan.steps)} etapas criadas")
+    for i, step in enumerate(plan.steps):
+        deps = f" (deps: {', '.join(step.depends_on)})" if step.depends_on else ""
+        console.print(f"  [dim]{i+1}. {step.description} ({step.action}: {step.target}){deps}[/]")
+
+    # Add plan to messages
+    plan_json = json.dumps([
+        {"id": s.id, "action": s.action, "description": s.description, 
+         "target": s.target, "validation": s.validation, "depends_on": s.depends_on}
+        for s in plan.steps
+    ], ensure_ascii=False, indent=2)
+    messages.append({"role": "user", "content": f"Plano estruturado ({len(plan.steps)} etapas):\n{plan_json}\n\nExecute cada etapa, valide, e continue. Se falhar, tente novamente (máx {plan.steps[0].max_retries if plan.steps else 2} retries)."})
+
+    # Nightwatch convergence: recovery checkpoint
     _cp = None
     try:
         from nightwatch.checkpoint import (
@@ -3413,8 +3607,11 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
             f"autopilot-{int(__import__('time').time())}", task, _proj)
     except Exception:
         _cp = None
+
+    # 3. Execute plan step by step with retry and validation
     messages = _trim_messages(messages)
-    ok = _run_agent_loop(messages, tools, profile, approve, debug, max_turns=8)
+    ok = _execute_plan(executor, plan, messages, tools, profile, approve, debug, max_turns)
+    
     _persist_session(messages, project_root or os.getcwd())
     if _cp is not None:
         try:
@@ -3468,7 +3665,7 @@ def _apply_prompt_profile(prompt: str, profile_name: str) -> str:
     return out
 
 
-def dev_once(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False, continue_session: bool = False, yolo: bool = False, autopilot: bool = False, transcript_path: str | None = None) -> int:
+def dev_once(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False, continue_session: bool = False, yolo: bool = False, autopilot: bool = False, transcript_path: str | None = None, max_turns: int = 30) -> int:
     if project_root:
         from jarvis.core.paths import set_project_root
         set_project_root(project_root)
@@ -3480,7 +3677,7 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
         approve = True
 
     if autopilot:
-        return _run_autopilot(task, project_root=project_root, approve=approve, debug=debug, continue_session=continue_session, yolo=yolo)
+        return _run_autopilot(task, project_root=project_root, approve=approve, debug=debug, continue_session=continue_session, yolo=yolo, max_turns=max_turns)
 
     _auto_index_rag()
 
@@ -3604,6 +3801,7 @@ if __name__ == "__main__":
     parser.add_argument("--once", type=str, default=None, help="Executa uma tarefa única e sai")
     parser.add_argument("--transcript", type=str, default=None, help="Salva transcript JSON p/ scripting")
     parser.add_argument("--debug", action="store_true", help="Modo debug (payloads crus da API)")
+    parser.add_argument("--max-turns", type=int, default=30, help="Máximo de turnos no modo autopilot")
     ns = parser.parse_args()
 
     if ns.once:
@@ -3617,6 +3815,7 @@ if __name__ == "__main__":
                 yolo=ns.yolo,
                 autopilot=ns.autopilot,
                 transcript_path=ns.transcript,
+                max_turns=ns.max_turns,
             )
         )
     else:

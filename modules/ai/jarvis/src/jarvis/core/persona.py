@@ -641,8 +641,13 @@ class PersonaRegistry:
     def select_for_task(self, task_type: str, project_type: str = "") -> Persona:
         """Select the best persona for a task type."""
         # Simple heuristic selection
-        task_lower = task_type.lower()
+        # Split on first colon: task ID : description
+        # Use description for matching (more signal) if present
+        parts = task_type.split(":", 1)
+        task_lower = (parts[1] if len(parts) > 1 else task_type).lower()
 
+        # Priority order: creation/implementation > testing > docs > research > review > deploy > default
+        # "test" checked AFTER create/implement to avoid matching "test_*" filenames
         if any(w in task_lower for w in [
                 "speaker", "attribution", "falante", "audiobook", "capitulo",
                 "chapter", "diariz", "voice audit", "auditoria de voz"]):
@@ -651,8 +656,8 @@ class PersonaRegistry:
             return self.get("security_engineer")
         elif any(w in task_lower for w in ["nix", "nixos", "flake", "systemd"]):
             return self.get("nixos_engineer")
-        elif any(w in task_lower for w in ["test", "qa", "validate", "regression"]):
-            return self.get("qa_engineer")
+        elif any(w in task_lower for w in ["implement", "build", "create", "fix", "code"]):
+            return self.get("backend_engineer")
         elif any(w in task_lower for w in ["doc", "readme", "adr", "guide"]):
             return self.get("technical_writer")
         elif any(w in task_lower for w in ["research", "compare", "evaluate", "analyze"]):
@@ -661,8 +666,8 @@ class PersonaRegistry:
             return self.get("architect")
         elif any(w in task_lower for w in ["deploy", "ci", "cd", "monitor", "incident"]):
             return self.get("devops_engineer")
-        elif any(w in task_lower for w in ["implement", "build", "create", "fix", "code"]):
-            return self.get("backend_engineer")
+        elif any(w in task_lower for w in ["test", "qa", "validate", "regression"]):
+            return self.get("qa_engineer")
         else:
             return self.get("jarvis")  # default: MCU assistant
 
