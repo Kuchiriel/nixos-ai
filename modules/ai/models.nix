@@ -244,6 +244,7 @@ in rec {
       gpuLayers = 99; moeFlags = "";
       fa = true; ctk = "q4_0"; ctv = "q4_0";
       # SEM --reasoning off: R1 é reasoning model, pensar é o propósito.
+      # Papel candidato: architect (traces de raciocínio) — NÃO medido ainda.
       extraArgs = [ "--parallel" "1" "--jinja" ];
       memHigh = "5G"; memMax = "7G"; limitMemlock = false;
       wanted = false;
@@ -254,6 +255,8 @@ in rec {
       threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
       gpuLayers = 99; moeFlags = "";
       fa = true; ctk = "q4_0"; ctv = "q4_0";
+      # Tool-calling ONLY: excelente em function-call, MUDO em chat
+      # (não serve p/ prosa). Papel: executor backend, nunca conversar.
       extraArgs = [ "--parallel" "1" "--jinja" ];
       memHigh = "5G"; memMax = "7G"; limitMemlock = false;
       wanted = false;
@@ -274,6 +277,8 @@ in rec {
       threads = 6; ctxSize = 32768; batchSize = 512; ubatch = 512;
       gpuLayers = 99; moeFlags = "";
       fa = true; ctk = "q4_0"; ctv = "q4_0";
+      # Papel candidato: prosa/chat geral — NÃO medido ainda (bench cobre
+      # bonsai+qwen; gemma entra na próxima rodada).
       extraArgs = [ "--parallel" "1" "--jinja" ];
       memHigh = "4G"; memMax = "6G"; limitMemlock = false;
       wanted = false;
@@ -872,6 +877,7 @@ in rec {
         profileVm = "vm";
         tier = "fast";
         capabilities = ["general" "coding" "tools" "pt"];
+        guidance = "coder/tool-calling default; PT-BR goes here (bonsai has no pt); bench qwen4bmtp-0710 lands 08/10";
         params_b = 4;
         vram_mb = 2600;
         needsWrapper = null;
@@ -887,6 +893,7 @@ in rec {
         ctx = 32768;
         tier = "reasoning";
         capabilities = ["general" "coding" "tools" "reasoning" "analysis" "vision" "pt"];
+        guidance = "last local tier before API cascade; reasoning + vision (mmproj CPU); heavy (RAM experts), use for hard tasks only";
         params_b = 35;
         vram_mb = 4600;
         needsWrapper = null;

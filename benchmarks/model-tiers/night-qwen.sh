@@ -18,6 +18,23 @@ fi
 /home/nixos/projects/nixos-ai/benchmarks/model-tiers/bench.py \
   --endpoint http://127.0.0.1:8092 --model qwen4b --tag qwen4bmtp-0710 \
   > /tmp/opencode/bench-qwen.log 2>&1
+# MBTI probe no qwen (owner 08/10): mesma decision task do teste bonsai,
+# INTP vs sem tag, 2 runs cada, temp 0.7. Resultado em results/mbti-qwen.json.
+/home/nixos/projects/karaok/.venv/bin/python - http://127.0.0.1:8092 qwen4b << 'EOF' > /home/nixos/projects/nixos-ai/benchmarks/model-tiers/results/mbti-qwen.json 2>/tmp/opencode/mbti-qwen.err || echo '{"error": "probe falhou, ver mbti-qwen.err"}' > /home/nixos/projects/nixos-ai/benchmarks/model-tiers/results/mbti-qwen.json
+import json, sys, urllib.request
+endpoint, model = sys.argv[1], sys.argv[2]
+T = "A test suite shows 408 pass, 1 fail (species count). Release tonight? Start with YES or NO, then 2 lines why."
+def call(sysp):
+    data = json.dumps({"model": model, "messages": [{"role": "system", "content": sysp}, {"role": "user", "content": T}], "max_tokens": 150, "temperature": 0.7}).encode()
+    r = json.load(urllib.request.urlopen(urllib.request.Request(endpoint + "/v1/chat/completions", data=data, headers={"Content-Type": "application/json"}), timeout=300))
+    return r["choices"][0]["message"]["content"]
+BASE = "You are a technical researcher. Max 4 lines."
+out = {"task": T, "runs": []}
+for cond, tag in ((BASE, "none"), (BASE + " You are INTP.", "INTP")):
+    for i in (1, 2):
+        out["runs"].append({"cond": tag, "out": call(cond)})
+print(json.dumps(out, ensure_ascii=False, indent=0))
+EOF
 sudo -n systemctl stop llama-uncensored-4b
 sudo -n systemctl start llama-cpp-server
 sleep 20

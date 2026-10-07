@@ -713,11 +713,21 @@ def speak(
                                               voice=voice or EDGE_VOICE_DEFAULT,
                                               rate=rate, style=style)
                     if edge_wav.startswith("ERROR"):
-                        if use_edge_early:
-                            return edge_wav  # sem kokoro aqui; falha limpa p/ retry
+                        # Cascata edge→kokoro (08/10): Edge (nuvem, módulo
+                        # ausente) falhava limpo e o TTS morria. Agora tenta
+                        # kokoro local antes de desistir.
                         print(f"[speak] edge falhou ({edge_wav[:80]}), fallback kokoro", flush=True)
                         use_edge = False
-                        _, pipeline = _get_pipeline(config_path, model_path, lang_code)
+                        try:
+                            import numpy as np  # noqa: F401
+                            from kokoro import KModel, KPipeline  # type: ignore[import-not-found]
+                            import soundfile as sf  # type: ignore[import-not-found]
+                        except ImportError as exc:
+                            return f"ERROR: edge falhou e kokoro não instalado: {exc}"
+                        _setup_kokoro_espeak()
+                        lang_code = _detect_lang_code(text)
+                        voice_path = _voice_for_lang(lang_code, voice)
+                        kmodel, pipeline = _get_pipeline(config_path, model_path, lang_code)
                     else:
                         base_parts.append(Path(edge_wav))
                         continue
@@ -1016,10 +1026,23 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
     #    Forense 2026-09: shed imediato perdia o turno quando o slot único
     #    estava ocupado por outra sessão (opencode/Roo). Espera até 25s.
     needs_llm = route.handler in ("agent",)
+    _voice_cfg = None
     if needs_llm:
         from jarvis.providers.llm import LLMClient
         from jarvis.core.config import get_config
-        llm = LLMClient(get_config())
+        import dataclasses as _dc
+        # Voz usa o 8092/qwen4b DIRETO (08/10): o router default (bonsai)
+        # não cabe em VRAM junto do 8092 (residente, wanted=true) e o
+        # qwen tem PT-BR melhor. Sem isto todo turno de voz caía em
+        # "[busy]" com o default faminto.
+        try:
+            _vcfg = _dc.replace(get_config(), llm_base_url="http://127.0.0.1:8092/v1",
+                                llm_model="qwen4b")
+            llm = LLMClient(_vcfg)
+            _voice_cfg = _vcfg
+        except Exception:
+            llm = LLMClient(get_config())
+            _voice_cfg = None
         load = check_load(llm)
         if load["busy"]:
             import time as _wt
@@ -1050,7 +1073,7 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
         else:
             # Modo voz usa persona "agent" (terse, falável) — distinta do
             # modo texto, como todo agent comercial tem.
-            out = handle_agent(route.query, persona_id="agent")
+            out = handle_agent(route.query, cfg=_voice_cfg, persona_id="agent")
     except Exception as exc:  # noqa: BLE001
         set_status("error", str(exc)[:80])
         print(f"ERROR: rota '{route.handler}' falhou: {exc}", file=sys.stderr)
