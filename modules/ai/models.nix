@@ -884,8 +884,6 @@ in rec {
         binary = "upstream";
         endpoint = 8083;
         serve = { host = true; vm = true; };
-        # Qwen3 non-thinking/instruct-geral (vendor) — stop tokens for tool calls.
-        iniExtra = [ "stop = <|tool_call_begin|>" "stop = <|tool_call_end|>" "stop = <|tool_calls_section_begin|>" "stop = <|tool_calls_section_end|>" ];
         # Qwen3 non-thinking/instruct-geral (vendor).
         sampling = { temperature = 0.7; top_p = 0.8; top_k = 20; min_p = 0.0;
                      presence_penalty = 1.5; repetition_penalty = 1.0; };
@@ -903,8 +901,7 @@ in rec {
         endpoint = 8084;
         serve = { host = true; vm = false; };
         # Herdado do profile chat: mmproj na CPU (861MB VRAM) + visão dinâmica.
-        # Qwen3.5 thinking-geral (vendor) — stop tokens for tool calls.
-        iniExtra = [ "no-mmproj-offload = true" "image-min-tokens = 1024" "stop = <|tool_call_begin|>" "stop = <|tool_call_end|>" "stop = <|tool_calls_section_begin|>" "stop = <|tool_calls_section_end|>" ];
+        iniExtra = ["no-mmproj-offload = true" "image-min-tokens = 1024"];
         # Qwen3.5 thinking-geral (vendor). Agente usa explicit 0.0 em tools.
         sampling = { temperature = 1.0; top_p = 0.95; top_k = 20; min_p = 0.0;
                      presence_penalty = 1.5; repetition_penalty = 1.0; };
@@ -922,8 +919,6 @@ in rec {
         binary = "upstream";
         endpoint = 8083;
         serve = { host = true; vm = false; };
-        # Qwen3.5 instruct-geral (vendor; mesmo do jarvis-fast) — stop tokens for tool calls.
-        iniExtra = [ "stop = <|tool_call_begin|>" "stop = <|tool_call_end|>" "stop = <|tool_calls_section_begin|>" "stop = <|tool_calls_section_end|>" ];
         # Qwen3.5 instruct-geral (vendor; mesmo do jarvis-fast).
         sampling = { temperature = 0.7; top_p = 0.8; top_k = 20; min_p = 0.0;
                      presence_penalty = 1.5; repetition_penalty = 1.0; };
@@ -939,8 +934,7 @@ in rec {
         binary = "ik";
         endpoint = 8084;
         serve = { host = true; vm = false; };
-        # Qwen3.6 thinking-geral (vendor) — stop tokens for tool calls.
-        iniExtra = [ "no-mmproj-offload = true" "image-min-tokens = 1024" "stop = <|tool_call_begin|>" "stop = <|tool_call_end|>" "stop = <|tool_calls_section_begin|>" "stop = <|tool_calls_section_end|>" ];
+        iniExtra = ["no-mmproj-offload = true" "image-min-tokens = 1024"];
         # Qwen3.6 thinking-geral (vendor). Agente usa explicit 0.0 em tools.
         sampling = { temperature = 1.0; top_p = 0.95; top_k = 20; min_p = 0.0;
                      presence_penalty = 1.5; repetition_penalty = 1.0; };
