@@ -1711,7 +1711,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "cmd": {"type": "string", "description": "Comando shell completo"}
+                        "cmd": {"type": "string", "description": "Full shell command"}
                     },
                     "required": ["cmd"],
                 },
@@ -1725,8 +1725,8 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "Query em linguagem natural"},
-                        "top_k": {"type": "integer", "description": "Número de resultados (padrão 5)"},
+                        "query": {"type": "string", "description": "Natural language query"},
+                        "top_k": {"type": "integer", "description": "Number of results (default 5)"},
                     },
                     "required": ["query"],
                 },
@@ -1736,7 +1736,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "write_file",
-                "description": "Create/write a whole file. Auto-backup + AST guard. Creates missing parent directories: to build a directory structure, call write_file with the full path of each FILE inside it (the folders appear by themselves).as, chame write_file com o caminho completo de cada arquivo (mkdir via shell é bloqueado).",
+                "description": "Create/write a whole file. Auto-backup + AST guard. Creates missing parent directories: to build a directory structure, call write_file with the full path of each FILE inside it (the folders appear by themselves).",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1755,8 +1755,8 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "path": {"type": "string", "description": "Diretório (padrão: raiz)"},
-                        "max_depth": {"type": "integer", "description": "Profundidade (padrão 2)"},
+                        "path": {"type": "string", "description": "Directory (default: project root)"},
+                        "max_depth": {"type": "integer", "description": "Depth (default 2)"},
                     },
                     "required": [],
                 },
@@ -1780,7 +1780,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                     "type": "object",
                     "properties": {
                         "mode": {"type": "string", "enum": ["full", "window"], "description": "Capture mode"},
-                        "question": {"type": "string", "description": "O que analisar"},
+                        "question": {"type": "string", "description": "What to analyze"},
                     },
                 },
             },
@@ -1794,7 +1794,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "expr": {"type": "string", "description": "Expressão Nix"},
+                        "expr": {"type": "string", "description": "Nix expression"},
                     },
                     "required": ["expr"],
                 },
@@ -1817,7 +1817,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                     "type": "object",
                     "properties": {
                         "query": {"type": "string", "description": "Search term"},
-                        "type": {"type": "string", "enum": ["packages", "options"], "description": "Tipo"},
+                        "type": {"type": "string", "enum": ["packages", "options"], "description": "Type"},
                     },
                     "required": ["query"],
                 },
@@ -1833,7 +1833,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                     "type": "object",
                     "properties": {
                         "text": {"type": "string", "description": "What to store"},
-                        "category": {"type": "string", "description": "Categoria: fact, event, decision"},
+                        "category": {"type": "string", "description": "Category: fact, event, decision"},
                     },
                     "required": ["text"],
                 },
@@ -1847,7 +1847,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "O que buscar"},
+                        "query": {"type": "string", "description": "What to search"},
                     },
                     "required": ["query"],
                 },
@@ -1870,7 +1870,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "name": {"type": "string", "description": "Nome da nota"},
+                        "name": {"type": "string", "description": "Note name"},
                         "content": {"type": "string", "description": "Content"},
                     },
                     "required": ["name", "content"],
@@ -1886,7 +1886,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "O que buscar"},
+                        "query": {"type": "string", "description": "What to search"},
                     },
                     "required": ["query"],
                 },
@@ -1914,7 +1914,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "Padrão de erro ou problema"},
+                        "query": {"type": "string", "description": "Error pattern or problem"},
                     },
                     "required": ["query"],
                 },
@@ -1929,8 +1929,8 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "url": {"type": "string", "description": "URL de compartilhamento"},
-                        "max_chars": {"type": "integer", "description": "Máx de caracteres (padrão 50000)"},
+                        "url": {"type": "string", "description": "Share URL"},
+                        "max_chars": {"type": "integer", "description": "Max characters (default 50000)"},
                     },
                     "required": ["url"],
                 },
@@ -1945,8 +1945,8 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "url": {"type": "string", "description": "URL de compartilhamento"},
-                        "max_chars": {"type": "integer", "description": "Máx de caracteres (padrão 50000)"},
+                        "url": {"type": "string", "description": "Share URL"},
+                        "max_chars": {"type": "integer", "description": "Max characters (default 50000)"},
                     },
                     "required": ["url"],
                 },
@@ -1961,8 +1961,8 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "Pergunta ou termos"},
-                        "max_results": {"type": "integer", "description": "Resultados (padrão 5)"},
+                        "query": {"type": "string", "description": "Question or search terms"},
+                        "max_results": {"type": "integer", "description": "Results (default 5)"},
                     },
                     "required": ["query"],
                 },
