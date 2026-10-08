@@ -3382,6 +3382,63 @@ def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) 
         return None
 
 
+def _load_known_failures(task: str) -> str:
+    """Load known failures from team/known-failures.txt relevant to task."""
+    try:
+        from pathlib import Path
+        kf_path = Path("/home/nixos/projects/team/known-failures.txt")
+        if kf_path.exists():
+            content = kf_path.read_text(encoding="utf-8")
+            task_keywords = task.lower().split()
+            relevant = []
+            for line in content.splitlines():
+                if any(kw in line.lower() for kw in task_keywords if len(kw) > 3):
+                    relevant.append(line)
+            if relevant:
+                return "\n".join(relevant[:10])
+    except Exception:
+        pass
+    return ""
+
+
+def _recall_lessons(task: str) -> str:
+    """Recall relevant lessons from episodic memory."""
+    try:
+        from jarvis.core.memory import EpisodicMemory
+        em = EpisodicMemory()
+        results = em.recall(task, top_k=3)
+        if results:
+            lessons = []
+            for r in results:
+                lessons.append(f"- {r.get('kind', '?')}: {r.get('text', '')[:200]}")
+            return "\n".join(lessons)
+    except Exception:
+        pass
+    return ""
+
+
+def _search_rag(task: str) -> str:
+    """Search RAG for relevant code context."""
+    try:
+        from jarvis.providers.vector_store import QdrantStore
+        from jarvis.core.config import Config as _Config
+        cfg = _Config()
+        store = QdrantStore(cfg)
+        if not store.is_available():
+            return ""
+        results = store.search_code(task, top_k=3)
+        if results:
+            snippets = []
+            for r in results:
+                file_path = r.get("payload", {}).get("file_path", "?")
+                content = r.get("payload", {}).get("content", "")[:300]
+                snippets.append(f"{file_path}:\n{content}")
+            return "\n---\n".join(snippets)
+    except Exception:
+        pass
+    return ""
+
+
 def _execute_plan(
     executor: "PlanExecutor",
     plan: "ExecutionPlan",
@@ -3443,9 +3500,8 @@ Use the appropriate tool and return the result. Be concise."""
             if step.retry_count < step.max_retries:
                 from jarvis.core.memory import EpisodicMemory
                 em = EpisodicMemory()
-                em.remember(
-                    text=f"Step {step.id} ({step.action}) failed at {step.target}. Retry #{step.retry_count}. Next: verify {step.validation} before proceeding.",
-                    kind="fact",
+                em.remember_fact(
+                    f"Step {step.id} ({step.action}) failed at {step.target}. Retry #{step.retry_count}. Next: verify {step.validation} before proceeding.",
                     meta={"task": "autopilot", "step": step.id}
                 )
                 console.print(f"[dim]  Retrying step {step.id} (attempt {step.retry_count + 1}/{step.max_retries})[/]")
@@ -3454,9 +3510,8 @@ Use the appropriate tool and return the result. Be concise."""
                 console.print(f"[tool.error]⚠️  Step {step.id} failed after {step.max_retries} retries[/]")
                 from jarvis.core.memory import EpisodicMemory
                 em = EpisodicMemory()
-                em.remember(
-                    text=f"Step {step.id} ({step.action}) failed permanently at {step.target}. Validation: {step.validation}. Root cause: check {step.validation} before claiming success.",
-                    kind="fact",
+                em.remember_fact(
+                    f"Step {step.id} ({step.action}) failed permanently at {step.target}. Validation: {step.validation}. Root cause: check {step.validation} before claiming success.",
                     meta={"task": "autopilot", "step": step.id, "permanent_failure": True}
                 )
                 plan.status = "failed"
@@ -3491,9 +3546,8 @@ Use the appropriate tool and return the result. Be concise."""
         # Learn from success
         from jarvis.core.memory import EpisodicMemory
         em = EpisodicMemory()
-        em.remember(
-            text=f"Step {step.id} ({step.action}) succeeded at {step.target}. Validation: {step.validation} passed.",
-            kind="fact",
+        em.remember_fact(
+            f"Step {step.id} ({step.action}) succeeded at {step.target}. Validation: {step.validation} passed.",
             meta={"task": "autopilot", "step": step.id, "success": True}
         )
     

@@ -44,9 +44,19 @@ class ExecutionPlan:
         self.steps.append(step)
 
     def get_next_step(self) -> PlanStep | None:
+        # Build a lookup dict for O(1) dependency checks
+        step_by_id = {s.id: s for s in self.steps}
         for step in self.steps:
-            if not step.completed and all(self.steps[s].completed for s in step.depends_on):
-                return step
+            if not step.completed:
+                # Check if all dependencies are completed
+                deps_completed = True
+                for dep_id in step.depends_on:
+                    dep_step = step_by_id.get(dep_id)
+                    if dep_step is None or not dep_step.completed:
+                        deps_completed = False
+                        break
+                if deps_completed:
+                    return step
         return None
 
     def mark_step_complete(self, step_id: str, result: Any) -> None:

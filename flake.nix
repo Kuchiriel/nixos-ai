@@ -233,6 +233,7 @@
           python313Packages.kokoro  
           python313Packages.soundfile
           python313Packages.playwright
+          python313Packages.prompt-toolkit
           playwright-driver  
           
           # Documentos/PDF/OCR (vendas, propostas, guias)
