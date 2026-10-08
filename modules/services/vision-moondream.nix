@@ -167,24 +167,24 @@ in
 
     # Porta fica documentada para o proxy/panel; a visao NAO entra no
     # roteamento de texto (models.nix `routing`) porque e VLM e nao LLM.
-    environment.etc."jarvis/vision-moondream.json".text = lib.format ''
-      {
-        "service": "vision-moondream",
-        "port": %d,
-        "model": "vikhyatk/moondream2",
-        "revision": "92d3d73b6fd61ab84d9fe093a9c7fd8c04bf2c0d",
-        "tag": "2024-08-26",
-        "vram_mb": 4120,
-        "dtype": "bfloat16",
-        "transformers": "4.45.2",
-        "prompt_policy": "curto e POSITIVO; negative constraints colapsam o modelo",
-        "precision": {
-          "material_cor": "boa (~60%)",
-          "detalhe_de_forma": "ruim (0%)",
-          "papel": "complementa a medicao de pixel; nao autoritativo"
-        },
-        "docs": "canary-official/dataset/maps/MODELS-VISION.md"
-      }
-    '' cfg.port;
+    # Fix 08/10: `lib.format` nao existe em nixpkgs (avaliacao quebrada) —
+    # substituido por builtins.toJSON com interpolacao da porta.
+    environment.etc."jarvis/vision-moondream.json".text = builtins.toJSON {
+      service = "vision-moondream";
+      port = cfg.port;
+      model = "vikhyatk/moondream2";
+      revision = "92d3d73b6fd61ab84d9fe093a9c7fd8c04bf2c0d";
+      tag = "2024-08-26";
+      vram_mb = 4120;
+      dtype = "bfloat16";
+      transformers = "4.45.2";
+      prompt_policy = "curto e POSITIVO; negative constraints colapsam o modelo";
+      precision = {
+        material_cor = "boa (~60%)";
+        detalhe_de_forma = "ruim (0%)";
+        papel = "complementa a medicao de pixel; nao autoritativo";
+      };
+      docs = "canary-official/dataset/maps/MODELS-VISION.md";
+    };
   };
 }
