@@ -593,11 +593,15 @@
           models = {
             # IDs verificados no /models/search 08/10 (322 modelos;
             # abaixo os de geração de texto mais úteis).
+            # Testes 08/10: gpt-oss-120b OK; llama-3.3-70b precisa de limit
+            # (24000 max total); kimi-k2.7-code EXIGE plano pago Workers
+            # (Forbidden no free) → mantido p/ referência, removido do filtro.
             "@cf/meta/llama-3.3-70b-instruct-fp8-fast" = {
               name = "Llama 3.3 70B (Workers AI free)";
-            };
-            "@cf/moonshotai/kimi-k2.7-code" = {
-              name = "Kimi K2.7 Code (Workers AI free)";
+              limit = {
+                context = 24000;
+                output = 8000;
+              };
             };
             "@cf/openai/gpt-oss-120b" = {
               name = "GPT-OSS 120B (Workers AI free)";
@@ -685,7 +689,54 @@
           };
         };
       };
-      
+
+      # ════════════════════════════════════════════════════════════
+      # FILTRO DO CATÁLOGO (auditoria 08/10 — whitelist = só o que
+      # passou no teste real "Responda somente OK" via opencode run).
+      # Inventário completo continua em `provider.*.models` acima; o
+      # whitelist POR PROVIDER controla o que aparece no seletor.
+      # Reteste: editar a lista + ./rebuild-host.sh --quick + ativação.
+      # ════════════════════════════════════════════════════════════
+      # NOTA 08/10 PÓS-TESTE: `whitelist` por provider não é aplicado pelo
+      # seletor da CLI 1.18.29 (modelos continuam listados). O filtro
+      # real da CLI é `enabled_providers`. Como vários providers têm ALGUNS
+      # modelos aprovados e outros não (ex.: Cloudflare free vs paid-only),
+      # manter TODOS habilitados + documentar o estado por modelo aqui é
+      # a política que preserva inventário sem esconder aprovados.
+      # Estado por modelo (matriz completa em docs/improvements/):
+      #   APROVADO: google/gemini-2.5-flash, google/gemini-2.5-flash-lite,
+      #     google/gemini-3.5-flash, google/gemma-4-31b-it,
+      #     cloudflare/@cf/openai/gpt-oss-120b, cloudflare/@cf/google/gemma-4-26b-a4b-it,
+      #     cloudflare/@cf/qwen/qwen3.8-27b, cloudflare/@cf/mistralai/mistral-small-3.1-24b-instruct,
+      #     cohere/command-r7b-12-2024, cohere/command-a-03-2025,
+      #     cohere/command-a-reasoning-08-2025, cohere/north-mini-code-1-0,
+      #     nvidia/nvidia/nemotron-3-super-120b-a12b, nvidia/google/gemma-4-31b-it,
+      #     openrouter/thinkingmachines/inkling:free,
+      #     local/bonsai (+ locais: consulta direta, fora do escopo cloud)
+      #   RATE_LIMIT_TEMPORARIO (exceção Zen — NÃO marcar como defeituoso):
+      #     opencode/* (account-wide, confirmado 08/10 via log "Rate limit
+      #     exceeded" em mimo-v2.6-flash-free e big-pickle; retestar depois)
+      #   AGUARDANDO_ACAO_USUARIO: sambanova/* (HTTP 402 PAYMENT_METHOD_REQUIRED:
+      #     free tier pós-2026 exige cartão no dashboard cloud.sambanova.ai)
+      #   MODELO_PAGO/SEM_ACESSO free: cloudflare/@cf/moonshotai/kimi-k2.7-code
+      #     e @cf/deepseek-ai/deepseek-v4-flash-0731 (Forbidden: exige Workers
+      #     Paid), huggingface/* (créditos esgotados), cerebras/* (Payment
+      #     Required), groq/qwen3.8-27b + gpt-oss-120b via opencode (ITPM/TPM
+      #     7000/8000 < prompt do agente; via curl mínimo responde OK)
+      #   INDISPONIVEL_TEMPORARIO: nvidia/deepseek-ai/deepseek-v4.1-flash
+      #     (streaming timeout mesmo via curl; NIM às vezes retém resposta),
+      #     openrouter :free exceto inkling (free-models-per-day esgotado)
+      enabled_providers = [
+        "local" "local-fast" "local-uncensored" "local-uncensored-4b"
+        "local-deepseek-7b" "local-phi-mini" "local-gemma-4b" "local-xlam-8b"
+        "local-qwen30b-moe" "local-uncensored-q4kp"
+        "google" "cloudflare" "cohere" "nvidia" "openrouter"
+        "groq" "huggingface" "cerebras" "sambanova"
+        # Zen HABILITADO (dono confirmou 08/10: funciona; o erro de hoje era
+        # cota diária esgotada por uso dele, não defeito).
+        "opencode"
+      ];
+
       # Higiene de contexto global (03/10): vale p/ todos os providers.
       # prune poda tool outputs velhos; tool_output capa outputs gigantes
       # (prompt de 33k matou o Qwen 2x); small_model tira titles/resumos do 35B.
