@@ -441,11 +441,23 @@
         };
         
         # ADICIONADO: Provedor oficial da Google para rodar na nuvem estável
+        # Auditoria 08/10: catálogo real via API (45 modelos); free tier
+        # confirma flash/flash-lite/gemma. GEMINI_API_KEY do env estava podre
+        # (API_KEY_INVALID) — corrigida c/ a chave válida do auth.json.
         google = {
           npm = "@ai-sdk/google";
           models = {
             "gemini-2.5-flash" = {
               name = "Gemini 2.5 Flash Cloud";
+            };
+            "gemini-2.5-flash-lite" = {
+              name = "Gemini 2.5 Flash Lite Cloud";
+            };
+            "gemini-3.5-flash" = {
+              name = "Gemini 3.5 Flash Cloud";
+            };
+            "gemma-4-31b-it" = {
+              name = "Gemma 4 31B IT (free)";
             };
           };
         };
@@ -463,14 +475,23 @@
             };
           };
           models = {
-            # slugs VERIFICADOS no catálogo 16/09 ("free" puro era slug
-            # morto: "No endpoints available" — era o default quebrado).
-            # Free tier = rate limit diário por conta (esgotou 16/09).
-            "z-ai/glm-5.2:free" = {
-              name = "GLM 5.2 Free";
+            # Slugs :free VERIFICADOS no catálogo real 08/10 (GET /api/v1/models,
+            # 16 :free vivos). glm-5.2:free MORREU (fora do catálogo) — removido.
+            # Free tier = rate limit diário por conta.
+            "nvidia/nemotron-3-ultra-550b-a55b:free" = {
+              name = "Nemotron 3 Ultra 550B Free";
+            };
+            "nvidia/nemotron-3-super-120b-a12b:free" = {
+              name = "Nemotron 3 Super 120B Free";
             };
             "nvidia/nemotron-3.5-lightning:free" = {
               name = "Nemotron 3.5 Lightning Free";
+            };
+            "google/gemma-4-31b-it:free" = {
+              name = "Gemma 4 31B Free";
+            };
+            "thinkingmachines/inkling:free" = {
+              name = "Inkling Free (novidade 10/26)";
             };
           };
         };
@@ -483,8 +504,10 @@
             apiKey = "{env:GROQ_API_KEY}";
           };
           models = {
-            "qwen/qwen3.6-27b" = {
-              name = "Groq Qwen3.6 27B";
+            # Auditoria 08/10 (GET /models real): qwen3.6-27b MORREU (removido);
+            # catálogo free atual = qwen3.8-27b + gpt-oss-120b/20b + allam-2-7b.
+            "qwen/qwen3.8-27b" = {
+              name = "Groq Qwen3.8 27B";
               # Tier grátis: OTPM 1000 → limita saída p/ caber (ITPM 7000 ainda
               # é apertado p/ o system prompt do opencode; requer tier pago p/ uso real).
               limit = {
@@ -492,8 +515,15 @@
                 output = 800;
               };
             };
-            "qwen/qwen3.8-27b" = {
-              name = "Groq Qwen3.8 27B";
+            "openai/gpt-oss-120b" = {
+              name = "Groq GPT-OSS 120B";
+              limit = {
+                context = 131072;
+                output = 800;
+              };
+            };
+            "openai/gpt-oss-20b" = {
+              name = "Groq GPT-OSS 20B";
               limit = {
                 context = 131072;
                 output = 800;
@@ -511,14 +541,19 @@
             apiKey = "{env:NVIDIA_API_KEY}";
           };
           models = {
-            "deepseek-ai/deepseek-v4-flash-0731" = {
-              name = "DeepSeek V4 Flash (NIM free)";
+            # Auditoria 08/10 (GET /models real, 80 modelos): v4-flash-0731
+            # saiu do catálogo → v4.1-flash. gemma-4-31b-it adicionado.
+            "deepseek-ai/deepseek-v4.1-flash" = {
+              name = "DeepSeek V4.1 Flash (NIM free)";
             };
             "z-ai/glm-5.3-flash" = {
               name = "GLM 5.3 Flash (NIM free)";
             };
             "nvidia/nemotron-3-super-120b-a12b" = {
               name = "Nemotron 3 Super 120B (NIM free)";
+            };
+            "google/gemma-4-31b-it" = {
+              name = "Gemma 4 31B IT (NIM free)";
             };
           };
         };
@@ -532,8 +567,13 @@
             apiKey = "{env:CEREBRAS_API_KEY}";
           };
           models = {
+            # Auditoria 08/10 (GET /models real): catálogo = gpt-oss-120b +
+            # qwen-3.8-27b. "Payment Required" de 16/09 a retestar.
             "qwen-3.8-27b" = {
               name = "Cerebras Qwen3.8 27B";
+            };
+            "gpt-oss-120b" = {
+              name = "Cerebras GPT-OSS 120B";
             };
           };
         };

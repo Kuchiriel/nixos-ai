@@ -196,6 +196,11 @@ services.avahi = {
   services.jarvis-heal.enable = true;
   services.jarvis-telegram.enable = true;
   services.jarvis-gaming.enable = true;
+
+  # Moondream2 local para tagging de sprites. NAO sobe no boot (VRAM 6 GB =
+  # 1 LLM por vez): `systemctl start vision-moondream` quando precisar.
+  # Conflita com llama-cpp-upstream e faz o swap sozinho via vram-guard.
+  services.vision-moondream.enable = true;
   services.litellm.enable = false;
   programs.freebuff.enable = true;
   programs.jarvis-scripts.enable = false;

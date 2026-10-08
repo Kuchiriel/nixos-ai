@@ -61,30 +61,45 @@ class PersonaExecutor:
         except Exception:
             _pdir = None
         self.registry = PersonaRegistry(personas_dir=_pdir)
-        self._harness = None
+        # Harness cache is keyed BY PROJECT. Before, `self._harness` was a
+        # single slot built for `self.project` on first use, so
+        # execute_with_persona(project="B") on an executor created for "A"
+        # ran the harness rooted at A while reporting B — the "harness built
+        # for a different project" failure.
+        self._harnesses: dict[str, Any] = {}
 
-    def _get_harness(self):
-        """Lazy-load harness to avoid circular imports."""
-        if self._harness is None:
-            # Resolve project root from config or default location
-            from jarvis.core.config import get_config
-            cfg = get_config()
-            projects_dir = Path(os.environ.get(
-                "JARVIS_PROJECTS_DIR",
-                str(Path.home() / "projects"),
-            ))
-            from jarvis.core.paths import set_project_root
-            project_path = projects_dir / self.project
-            set_project_root(project_path)
+    def _get_harness(self, project: str | None = None):
+        """Lazy-load a harness per project to avoid circular imports."""
+        project = project or self.project
+        cached = self._harnesses.get(project)
+        if cached is not None:
+            return cached
 
-            from nightwatch.harness import Harness, HarnessConfig
-            config = HarnessConfig(
-                project=self.project,
-                dry_run=self.dry_run,
-                max_retries=1,
-            )
-            self._harness = Harness(config=config)
-        return self._harness
+        from jarvis.core.config import get_config
+        from pathlib import Path
+        import os as _os
+
+        cfg = get_config()
+        workspace = Path(_os.environ.get("JARVIS_WORKSPACE_ROOT",
+                                         Path.home() / "projects"))
+        project_path = workspace / project
+        # Validate before building: a harness rooted at a path that does not
+        # exist would silently fall back to nixos-ai inside find_repo_root.
+        if not project_path.is_dir():
+            raise FileNotFoundError(
+                f"project directory not found for '{project}': {project_path}")
+        from jarvis.core.paths import set_project_root
+        set_project_root(project_path)
+
+        from nightwatch.harness import Harness, HarnessConfig
+        config = HarnessConfig(
+            project=project,
+            dry_run=self.dry_run,
+            max_retries=1,
+        )
+        harness = Harness(config=config)
+        self._harnesses[project] = harness
+        return harness
 
     def execute_with_persona(
         self,
@@ -125,28 +140,30 @@ class PersonaExecutor:
 
         task_id = f"pe-{int(time.time())}-{persona.id[:8]}"
 
-        # Auto-detect target files from project.
-        # 1. Explicit filenames mentioned in the task (any extension,
-        #    existing or not — missing ones become CREATE candidates).
-        # 2. Fallback: .py files (legacy behavior for code tasks).
-        import re
-        projects_dir = os.environ.get(
-            "JARVIS_PROJECTS_DIR", str(Path.home() / "projects")
-        )
-        project_path = os.path.join(projects_dir, project)
-        target_files = []
-        if os.path.exists(project_path):
-            for m in re.findall(
-                r"[\w\-./]+\.(?:md|py|txt|nix|sh|json|yaml|yml|toml)",
-                task,
-            ):
-                candidate = m.strip("./")
-                if candidate and candidate not in target_files:
-                    target_files.append(candidate)
-            for f in os.listdir(project_path):
-                if f.endswith('.py') and not f.startswith('.'):
-                    if f not in target_files:
-                        target_files.append(f)
+        # Scope the task to the REQUESTED project. Uses the project's real
+        # structure (cited paths / matching files), never a root-level "*.py"
+        # listing, and never a directory outside the project.
+        from jarvis.mission.projects import project_root_for, scoped_files
+        target_files: list[str] = []
+        repository = ""
+        try:
+            root = project_root_for(project)
+            repository = str(root)
+            target_files = scoped_files(root, task, limit=5)
+        except FileNotFoundError:
+            # Unknown project: fail closed instead of guessing a repo.
+            return ExecutionResult(
+                success=False,
+                persona_id=persona.id,
+                task_id=task_id,
+                message=f"project not found: {project}",
+                error=f"project not found: {project}",
+                duration_seconds=time.time() - start_time,
+            )
+
+        # Acceptance criteria must be checkable, not the objective restated.
+        from jarvis.mission.verify import criteria_from_description
+        acceptance = criteria_from_description(task, expect_changes=True)
 
         harness_task = Task(
             id=task_id,
@@ -154,15 +171,16 @@ class PersonaExecutor:
             description=task,
             priority=5,
             risk="low",
-            target_files=target_files[:5],  # Limit to 5 files
-            acceptance_criteria=task,
-            repository=project_path,
+            target_files=target_files[:5],
+            acceptance_criteria="; ".join(
+                f"{c.kind}:{c.target or '-'}" for c in acceptance),
+            repository=repository,
             language="python",
         )
 
-        # 3. Execute through harness pipeline
+        # 3. Execute through harness pipeline, scoped to THIS project
         try:
-            harness = self._get_harness()
+            harness = self._get_harness(project)
             harness.queue.add_task(harness_task)
 
             # Publish task_started event via global EventBus
@@ -175,24 +193,20 @@ class PersonaExecutor:
                 "project": project,
             })
 
+            # Snapshot BEFORE execution so attribution is this task's work,
+            # not everything already dirty in the tree.
+            from jarvis.mission.verify import take_snapshot as _snap
+            before = _snap(repository)
+
             success = harness.execute_task(harness_task)
 
             duration = time.time() - start_time
 
-            # Determine actually changed files via git diff (not candidates)
-            actual_files_changed: list[str] = []
-            from jarvis.core.paths import find_repo_root
-            project_path = find_repo_root()
-            try:
-                diff_result = subprocess.run(
-                    ["git", "diff", "--name-only", "HEAD"],
-                    capture_output=True, text=True, timeout=5,
-                    cwd=str(project_path),
-                )
-                if diff_result.returncode == 0 and diff_result.stdout.strip():
-                    actual_files_changed = diff_result.stdout.strip().split("\n")
-            except (OSError, subprocess.SubprocessError):
-                pass  # Fallback to target_files if git unavailable
+            # Changed files = diff between the two snapshots. Running
+            # `git diff --name-only HEAD` here attributed every pre-existing
+            # or foreign modification to this task.
+            after = _snap(repository)
+            actual_files_changed: list[str] = before.changed_paths(after)
 
             if success:
                 # Publish task_completed event

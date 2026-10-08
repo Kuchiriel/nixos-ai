@@ -23,5 +23,6 @@
     ./nightwatch-timer.nix
     ./audiobook-audit-timer.nix
     ./qdrant.nix
+    ./vision-moondream.nix
   ];
 }

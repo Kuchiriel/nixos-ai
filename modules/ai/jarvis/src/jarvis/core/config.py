@@ -80,6 +80,10 @@ class Config:
     # — nunca no repo/store. chat_id pode ser uma lista separada por vírgula.
     telegram_token: str = field(default_factory=lambda: _env_str("JARVIS_TELEGRAM_TOKEN", ""))
     telegram_chat_id: str = field(default_factory=lambda: _env_str("JARVIS_TELEGRAM_CHAT_ID", ""))
+    # Sender allowlist (comma-separated). Empty = chat_id alone decides, which
+    # is UNSAFE in a group chat: anyone in that group would be authorized.
+    # Set it whenever the bot is added to a group.
+    telegram_user_id: str = field(default_factory=lambda: _env_str("JARVIS_TELEGRAM_USER_ID", ""))
 
     # --- Embeddings ---
     embed_model: str = field(default_factory=lambda: _env_str("JARVIS_EMBED_MODEL", "nomic-embed-text-v2"))

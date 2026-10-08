@@ -113,6 +113,43 @@ in rec {
   };
 
   # ══════════════════════════════════════════════════════════════════
+  # VISÃO — Moondream2 pinado em revision=2024-08-26
+  # ══════════════════════════════════════════════════════════════════
+  # 1.86B · F16 3.49 GiB · serve por PYTHON (transformers), NAO por
+  # llama-server. Medido 08/10 em /home/nixos/projects/canary-official:
+  #
+  #   - llama-server NÃO serve imagem para este modelo (400 "Failed to
+  #     tokenize prompt"): o GGUF local tem chat_template "vicuna" e o
+  #     mtmd injeta um media_marker ALEATORIO que o tokenizer do Moondream
+  #     nao conhece (llama.cpp #27249 / #21955). O GGUF "certo"
+  #     (cjpais/moondream2-llamafile, Q8 1440MB) passa a tokenizar mas o
+  #     Q8 esta DEGENERADO neste build ("capital da Franca?" -> "London").
+  #   - A revision 2024-08-26 (sha 92d3d73) traz pesos + codigo CASADOS;
+  #     pesos de `main` com codigo da 5d6c926 produzem saida corrompida.
+  #     O proprio repo avisa: "or alternately pin to revision=2024-08-26".
+  #   - transformers==4.45.2 (o 5.x quebra a geracao deste trust_remote_code).
+  #   - VRAM 4120 MB em bfloat16 -> NAO divide com jarvis-fast (3.2GB) nos
+  #     6GB. NeedsConflicts + ExecStartPre.
+  #   - Prompt CURTO e POSITIVO: negative constraints fazem o modelo
+  #     colapsar para "Grass" (medido 5/6). Nao anexar o bloco DO NOT:.
+  #   - Precisao: acerta MATERIAL/COR das bordas (~60%), erra TODO detalhe
+  #     de forma. Complementa a medicao de pixel; nao e autoritativo.
+  #     Ver canary-official/dataset/maps/MODELS-VISION.md
+  #
+  # VAO-VisionProfile: visionEnv com transformers/torch/torchvision/einops.
+  vlm-moondream2 = mkModel {
+    url = "https://huggingface.co/vikhyatk/moondream2/resolve/92d3d73b6fd61ab84d9fe093a9c7fd8c04bf2c0d/model.safetensors";
+    sha256 = "sha256-S/eu2LpDJdI/p800jXlaJ/OycmglNvCKykzdYs3nkpM=";
+  };
+
+  # Tokenizer do mesmo par (mesma revision). Sem isto o repo tenta
+  # baixar "moondream/starmie-v1" da rede no __init__ e quebra offline.
+  vlm-moondream2-tokenizer = mkModel {
+    url = "https://huggingface.co/vikhyatk/moondream2/resolve/92d3d73b6fd61ab84d9fe093a9c7fd8c04bf2c0d/tokenizer.json";
+    sha256 = "sha256-M32ja+enGm6IqpFIlnp7yHNvS0fH3o4ZupK4noBzTPw=";
+  };
+
+  # ══════════════════════════════════════════════════════════════════
   # Qwen3.6-35B-A3B-UNCENSORED (HauhauCS Aggressive) — variantes de quant
   # ══════════════════════════════════════════════════════════════════
   # Base: Qwen/Qwen3.6-35B-A3B · 35B total / ~3B ativos · 256 experts,
