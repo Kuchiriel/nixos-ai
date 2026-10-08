@@ -581,6 +581,94 @@
         # Together REMOVIDO 16/09: conta exige US$5 de crédito (dono
         # recusou) e a chave retorna 401. Re-add só se billing resolver.
 
+        # Cloudflare Workers AI (free tier: 10k neurons/dia, sem cartão).
+        # Chave + account id no env (08/10). Endpoint OpenAI-compat
+        # /ai/v1/chat/completions validado 08/10 (HTTP 200, "OK.").
+        cloudflare = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "https://api.cloudflare.com/client/v4/accounts/{env:CLOUDFLARE_ACCOUNT_ID}/ai/v1";
+            apiKey = "{env:CLOUDFLARE_API_TOKEN}";
+          };
+          models = {
+            # IDs verificados no /models/search 08/10 (322 modelos;
+            # abaixo os de geração de texto mais úteis).
+            "@cf/meta/llama-3.3-70b-instruct-fp8-fast" = {
+              name = "Llama 3.3 70B (Workers AI free)";
+            };
+            "@cf/moonshotai/kimi-k2.7-code" = {
+              name = "Kimi K2.7 Code (Workers AI free)";
+            };
+            "@cf/openai/gpt-oss-120b" = {
+              name = "GPT-OSS 120B (Workers AI free)";
+            };
+            "@cf/google/gemma-4-26b-a4b-it" = {
+              name = "Gemma 4 26B A4B (Workers AI free)";
+            };
+            "@cf/qwen/qwen3.8-27b" = {
+              name = "Qwen3.8 27B (Workers AI free)";
+            };
+            "@cf/deepseek-ai/deepseek-v4-flash-0731" = {
+              name = "DeepSeek V4 Flash (Workers AI free)";
+            };
+            "@cf/mistralai/mistral-small-3.1-24b-instruct" = {
+              name = "Mistral Small 3.1 24B (Workers AI free)";
+            };
+          };
+        };
+
+        # SambaNova Cloud — chave válida (catálogo 6 modelos 08/10), MAS
+        # inferência retorna HTTP 402 PAYMENT_METHOD_REQUIRED: o free tier
+        # pós-2026 exige cartão no dashboard. AGUARDANDO_ACAO_USUARIO.
+        sambanova = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "https://api.sambanova.ai/v1";
+            apiKey = "{env:SAMBANOVA_API_KEY}";
+          };
+          models = {
+            "Meta-Llama-3.3-70B-Instruct" = {
+              name = "Llama 3.3 70B (SambaNova)";
+            };
+            "gpt-oss-120b" = {
+              name = "GPT-OSS 120B (SambaNova)";
+            };
+            "gemma-4-31B-it" = {
+              name = "Gemma 4 31B (SambaNova)";
+            };
+            "DeepSeek-V3.2" = {
+              name = "DeepSeek V3.2 (SambaNova)";
+            };
+          };
+        };
+
+        # Cohere — trial key gratuita (rate-limited, sem cartão).
+        # Endpoint OpenAI-compat /compatibility/v1 validado 08/10 (HTTP 200).
+        cohere = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "https://api.cohere.ai/compatibility/v1";
+            apiKey = "{env:COHERE_API_KEY}";
+          };
+          models = {
+            "command-r7b-12-2024" = {
+              name = "Command R7B (Cohere trial)";
+            };
+            "command-r-plus-08-2024" = {
+              name = "Command R+ (Cohere trial)";
+            };
+            "command-a-03-2025" = {
+              name = "Command A (Cohere trial)";
+            };
+            "command-a-reasoning-08-2025" = {
+              name = "Command A Reasoning (Cohere trial)";
+            };
+            "north-mini-code-1-0" = {
+              name = "North Mini Code (Cohere trial)";
+            };
+          };
+        };
+
         # ADICIONADO: HuggingFace Inference API
         huggingface = {
           npm = "@ai-sdk/openai-compatible";
