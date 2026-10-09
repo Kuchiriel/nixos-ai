@@ -213,6 +213,12 @@
   '';
   home.file.".config/ai-agents/keys-wrapper.sh".executable = true;
 
+  # RTK plugin do opencode — declarativo (antes era arquivo solto fora do git).
+  # 08/10: opt-out com `norrtk` + passthrough p/ ambientes explícitos
+  # (venv/python -m/nix develop) — rewrite indiscriminado confundia modelos
+  # fracos (rtk pytest rodava python do PATH sem pytest).
+  home.file.".config/opencode/plugins/rtk.ts".source = ./files/opencode/plugins/rtk.ts;
+
   # ── VS Code + Roo Code — configurado via módulo vscode-roo.nix ──
   # (extensões, userSettings, MCP, custom modes são declarativos)
   vscode-roo = {

@@ -57,6 +57,15 @@ nix flake check
 - **Nunca:** `nixos-rebuild` direto; editar `/nix/store`; `git add .` sem
   ver o que entra; auto-commit com `git add -A`.
 
+## Opencode & rtk (plugins)
+
+- Plugin rtk (`~/.config/opencode/plugins/rtk.ts`, declarativo em
+  `home-manager/files/opencode/plugins/rtk.ts`) reescreve comandos para
+  o rtk economizar contexto. Opt-out: incluir `norrtk` (ou `--no-rtk`) na
+  linha; paths começando com `./` ou `/` passam por cima do rtk.
+- Detalhes da política (inclui quando NÃO usar rtk) estão no AGENTS.md
+  raiz (`~/projects/AGENTS.md` §Tooling) — nixos-ai não duplica.
+
 ## Regras que não dá pra inferir do código
 
 - `modules/ai/models.nix` é a **única fonte de verdade** de modelos,
