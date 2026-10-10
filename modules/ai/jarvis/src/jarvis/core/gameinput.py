@@ -146,19 +146,51 @@ def send_key(key: str, title_match: str) -> dict[str, Any]:
     f = _focus(title_match)
     if not f.get("ok"):
         return f
-    yt = shutil.which("ydotool")
-    if yt:
-        code = {"Return": "28", "Escape": "1", "Tab": "15",
-                "BackSpace": "14", "Space": "57"}.get(key)
-        if code:
-            subprocess.run([yt, "key", f"{code}:1", f"{code}:0"],
-                           capture_output=True, timeout=10)
-            return {"ok": True, "acao": f"key {key} (ydotool)", **f}
+    # (10/10 INCIDENTE, dono: "não consigo pressionar a tecla") o ydotool
+    # key cru PRENDE o down-state no daemon: a tecla real do usuário
+    # MORRE até o ydotoold ser morto. wtype -k é o caminho SEGURO
+    # (protocolo virtual-keyboard do Wayland, sem daemon, sem grab).
     wt = _wtype()
     if not wt:
-        return {"ok": False, "error": "nem ydotool nem wtype disponiveis", **f}
+        return {"ok": False, "error": "wtype ausente (nix: wtype)", **f}
     subprocess.run([wt, "-k", key], capture_output=True, timeout=10)
     return {"ok": True, "acao": f"key {key} (wtype)", **f}
+
+
+def prep_observe(title_match: str = "OTClient", walk: bool = True) -> dict[str, Any]:
+    """Prepara a janela do jogo PRA OBSERVAÇÃO do agente (10/10).
+
+    A sequência medida — cada passo foi bug antes de ser passo:
+    1. FULLSCREEN REAL: `hyprctl dispatch fullscreen 0`. O modo 1
+       (maximize) NÃO preenche a tela e duplica/escurece os sprites
+       (dono 10/10). O 0 preenche tudo — mas deixa o render STALE.
+    2. FOCO pelo address: sem isso a tecla vai pro terminal de quem
+       estiver na frente (o 'w' do agente foi parar no terminal do
+       dono, 10/10).
+    3. ANDAR 2 tiles (w+s via wtype) DEPOIS do fullscreen: o render
+       do real-fullscreen fica preto/duplicado até o mapa se mexer.
+       wtype, nunca ydotool key (incidente do 'S' preso).
+    """
+    f = _focus(title_match)
+    if not f.get("ok"):
+        return f
+    subprocess.run(["hyprctl", "dispatch", "fullscreen", "0"],
+                   capture_output=True, timeout=10)
+    time.sleep(1.0)
+    f2 = _focus(title_match)
+    if not f2.get("ok"):
+        return f2
+    andou = 0
+    if walk:
+        wt = _wtype()
+        if wt:
+            time.sleep(0.5)
+            subprocess.run([wt, "-k", "w"], capture_output=True, timeout=10)
+            time.sleep(0.6)
+            subprocess.run([wt, "-k", "s"], capture_output=True, timeout=10)
+            andou = 2
+    return {"ok": True, "acao": "prep_observe", "fullscreen": "0 (real)",
+            "tiles_andados": andou, **f2}
 
 
 def send_text(text: str, title_match: str, submit: bool = False,
@@ -457,6 +489,10 @@ def handle(args: dict[str, Any]) -> str:
             r = _focus(title)
         elif action in ("key", "press"):
             r = send_key(args.get("key", "Return"), title)
+        elif action in ("prep", "prep_observe", "observe_prep"):
+            # (10/10) fullscreen REAL + foco + 2 tiles de andar — a
+            # preparação completa p/ o agente OBSERVAR o jogo
+            r = prep_observe(title, walk=bool(args.get("walk", True)))
         elif action == "type":
             r = send_text(args.get("text", ""), title,
                           submit=bool(args.get("submit")),

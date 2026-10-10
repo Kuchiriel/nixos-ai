@@ -184,6 +184,38 @@ JARVIS_TOOLS = [
         },
     },
     {
+        "name": "jarvis_game",
+        "description": (
+            "WHEN you need to interact with a GAME window on Hyprland: focus "
+            "by title (safe — keys NEVER go to the wrong window), press keys "
+            "(wtype only; the ydotool key daemon STICKS the user's real key "
+            "down-state — incident 10/10), type text with chat-state checks, "
+            "click at game coordinates, OCR-locate UI elements, and "
+            "prep_observe: REAL fullscreen (mode 0) + focus + walk 2 tiles "
+            "to clear the fullscreen render staleness (black/duplicated "
+            "sprites until the map moves). For the otclient sandbox: launch "
+            "via tools/observe-game.sh in the otclient repo, then call "
+            "jarvis_game with action=prep_observe."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string",
+                           "enum": ["state", "focus", "key", "type", "click",
+                                    "locate", "click_element", "chat_state",
+                                    "ensure_chat", "chat_command",
+                                    "prep_observe"]},
+                "window_title": {"type": "string", "default": "OTClient"},
+                "key": {"type": "string"},
+                "text": {"type": "string"},
+                "element": {"type": "string"},
+                "button": {"type": "string"},
+                "walk": {"type": "boolean", "default": True}
+            },
+            "required": ["action"]
+        }
+    },
+    {
         "name": "jarvis_browser",
         "description": ("WHEN you need to interact with any web page: read, click, fill forms, "
                         "drive menus, or operate the owner's logged-in browser (attach). "
@@ -706,6 +738,10 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
         if name == "jarvis_human_input":
             from jarvis.core.humanize import human_input
             return human_input(args)
+
+        if name == "jarvis_game":
+            from jarvis.core.gameinput import handle as game_handle
+            return game_handle(args)
 
         if name == "jarvis_browser":
             from jarvis.core.browser import handle_browser
