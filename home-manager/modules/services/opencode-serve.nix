@@ -31,7 +31,16 @@
       # loga o valor em texto claro no journal ("Ignoring invalid environment
       # assignment") — aí o servidor sobe UNSECURED e a senha fica no log.
       # Formato obrigatório: KEY=valor (gerado pela activation abaixo).
-      EnvironmentFile = "${config.home.homeDirectory}/.config/opencode/server.env";
+      # keys.env (2º item): o systemd user manager nunca lê .zshrc, então o
+      # serve nascia sem NENHUMA chave ({env:} vazio → 401 em todo modelo
+      # cloud pelo celular; medido 11/10: environ do PID sem API_KEY).
+      # Gerado da /etc/litellm.env pela activation abaixo (formato KEY=valor,
+      # chmod 600). Prefixo `-`: opcional — se a activation ainda não rodou,
+      # o serve sobe (só com local), em vez de falhar o boot.
+      EnvironmentFile = [
+        "${config.home.homeDirectory}/.config/opencode/server.env"
+        "-${config.home.homeDirectory}/.config/opencode/keys.env"
+      ];
       # As sessões do opencode são escopadas por diretório. Com o serviço em
       # $HOME o servidor via só 1 sessão; em ~/projects ele vê as 90 — e é
       # nesta que a sessão do TUI mora, que é a que o celular vai Assumeir.
@@ -69,6 +78,27 @@
       pw="$(${pkgs.python3}/bin/python3 -c 'import secrets; print(secrets.token_urlsafe(18))')"
       printf 'OPENCODE_SERVER_PASSWORD=%s\n' "$pw" > "$envFile"
       chmod 600 "$envFile"
+    fi
+  '';
+
+  # keys.env p/ o serve (11/10): espelha /etc/litellm.env em formato KEY=valor
+  # (sem `export` — systemd recusa e loga em claro). Roda TODA activation, então
+  # rotação de chave no /etc/litellm.env propaga no próximo switch/login.
+  # Se a fonte estiver ilegível (foi assim 11/10: chmod 600 pelo agente do
+  # driver → shell sem chave → 401 em tudo), AVISA no stderr mas não quebra a
+  # activation; o serve sobe sem chaves cloud (só local) até o próximo switch.
+  home.activation."opencode-keys-env" = lib.mkIf true ''
+    keysFile="$HOME/.config/opencode/keys.env"
+    src="/etc/litellm.env"
+    if [ -r "$src" ]; then
+      mkdir -p "$(dirname "$keysFile")"
+      umask 077
+      grep -E '^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=' "$src" \
+        | sed -e 's/^[[:space:]]*export[[:space:]]\+//' -e '/^[[:space:]]*#/d' \
+        > "$keysFile"
+      chmod 600 "$keysFile"
+    else
+      echo "opencode-keys-env: AVISO: $src ilegível — serve sem chaves cloud" >&2
     fi
   '';
 }
