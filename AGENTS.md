@@ -1,134 +1,134 @@
-# AGENTS.md — contexto operacional do JARVIS (nixos-ai)
+# AGENTS.md — JARVIS operational context (nixos-ai)
 
-> Lido por todo agente ao iniciar. **Meta: <150 linhas / ~2000 tokens.**
-> Regra da casa: aqui mora só o que **muda comportamento** e **não é
-> inferível do código**. Histórico, medição e "por quê" vão para
-> `docs/` e entram por link.
-> Base: ETH Zurich (arXiv 2602.11988) mediu que arquivo de contexto
-> inflado **custa +19-23% de custo** e perde sucesso; e o efeito
-> *"too obedient"* (agente obedece instrução irrelevante e faz mais
-> trabalho resolvendo menos). Por isso: sem árvore de diretórios, sem
-> prosa de estilo, sem listas.
+> Read by every agent at startup. **Target: <150 lines / ~2000 tokens.**
+> House rule: only what **changes behavior** and is **not
+> inferable from the code** lives here. History, measurements and
+> "why" go to `docs/` and enter via link.
+> Basis: ETH Zurich (arXiv 2602.11988) measured that an inflated
+> context file **costs +19-23%** and loses success rate; plus the
+> *"too obedient"* effect (agent obeys an irrelevant instruction and
+> does more work solving less). Hence: no directory trees, no
+> style prose, no lists.
 
-## PROIBIÇÕES (leia isto primeiro — maior raio de dano)
+## PROHIBITIONS (read this first — largest blast radius)
 
-1. **NUNCA apague dado.** Zero `rm`, `delete_collection`, `drop_collection`
-   em material que você não criou nos últimos minutos. Use
-   `core.safe_archive.archive_then_delete()`: copia → **lê de volta** →
-   confere contagem e hash → só então remove. Já houve Qdrant aceitar a
-   escrita (HTTP 200) e não gravar; quem confiou no status perdeu 6 pontos.
-   Comece sempre em `dry_run=True`. Aceite **IDs explícitos**, nunca
-   filtro por substring (filtro casa com texto que *cita* o termo).
-2. **Coleções de produção** — `code_index`, `memories`, `books`, `vault`
-   e as por espaço (`pessoal_*`, `moe_*`, `qwen4b_*`). `memories` é a
-   memória do agente. **Não escrever, não renomear, não remover.**
-3. **Teste só toca `jarvis_test_*`**, sempre derivado:
+1. **NEVER delete data.** Zero `rm`, `delete_collection`, `drop_collection`
+   on material you didn't create in the last minutes. Use
+   `core.safe_archive.archive_then_delete()`: copy → **read back** →
+   check count and hash → only then remove. Qdrant once accepted a
+   write (HTTP 200) and didn't persist; whoever trusted the status lost 6 points.
+   Always start with `dry_run=True`. Accept **explicit IDs**, never
+   substring filters (filters match text that merely *mentions* the term).
+2. **Production collections** — `code_index`, `memories`, `books`, `vault`
+   and the per-space ones (`pessoal_*`, `moe_*`, `qwen4b_*`). `memories` is the
+   agent's memory. **Don't write, don't rename, don't remove.**
+3. **Tests only touch `jarvis_test_*`**, always derived:
    `dataclasses.replace(Config(), qdrant_collection_code="jarvis_test_x")`.
-   O guard `tests/test_test_isolation.py` reprova o build se violar — ele
-   existe porque alguém apagou 1263 pontos de `code_index` rodando teste.
-4. **`./rebuild-host.sh` só com o dono autorizando** (ativa config e
-   reinicia serviços). `nixos-rebuild` direto: nunca. `/nix/store`: nunca
-   editar. Reiniciar LLM em sessão ativa: nunca.
-5. **Nunca afirmar "está rodando"/"está no ar" sem verificar agora.**
-   `pgrep` + log + evidência. Código commitado ≠ código no ar: processo
-   de sessão longa carrega o `.py` antigo em memória — confira
-   `ps -o lstart=` contra `git log --date`.
-6. **Nunca medir com outro processo na máquina.** Sweep/bench recusa
-   medir se houver outro `llama-server` vivo (contenção já custou uma
-   investigação inteira de um "bimodal" inexistente).
+   The `tests/test_test_isolation.py` guard fails the build on violation — it
+   exists because someone wiped 1263 points from `code_index` running a test.
+4. **`./rebuild-host.sh` only with the owner authorizing** (activates config and
+   restarts services). Direct `nixos-rebuild`: never. `/nix/store`: never
+   edit. Restarting the LLM mid-session: never.
+5. **Never claim "it's running"/"it's up" without checking now.**
+   `pgrep` + log + evidence. Committed code ≠ live code: long-lived
+   processes carry the old `.py` in memory — check
+   `ps -o lstart=` against `git log --date`.
+6. **Never measure with another process on the machine.** Sweep/bench refuses
+   to measure if another `llama-server` is alive (contention once cost an
+   entire investigation into a nonexistent "bimodal").
 
-## Comandos
+## Commands
 
 ```bash
 nix develop --command python3 -m pytest modules/ai/jarvis/tests/ -x -q --tb=short
-git add -A && git ls-files -o --exclude-standard   # flake só vê trackeado
-./rebuild-host.sh        # HOST — só com o dono autorizando
+git add -A && git ls-files -o --exclude-standard   # flake only sees tracked
+./rebuild-host.sh        # HOST — only with the owner authorizing
 nix flake check
 ```
 
 ## Boundaries
 
-- **Sempre:** rodar testes antes de commitar; conferir `git ls-files` com
-  arquivo novo criado na sessão; commit PT-BR com verbo (`feat:`/`fix:`/
-  `chore:`/`docs:`); toda regra nova entra **depois** de um agente errar
-  de verdade (cresce orgânico, não especulativo).
-- **Perguntar:** mudar `configuration.nix` do host; flags do llama-server;
-  dependências novas; mutar memória viva (`consolidate --apply`).
-- **Nunca:** `nixos-rebuild` direto; editar `/nix/store`; `git add .` sem
-  ver o que entra; auto-commit com `git add -A`.
+- **Always:** run tests before committing; check `git ls-files` for
+   session-created files; commit in EN with a verb (`feat:`/`fix:`/
+   `chore:`/`docs:`); every new rule enters **only after** an agent
+   really errs (grows organically, not speculatively).
+- **Ask:** changing the host `configuration.nix`; llama-server flags;
+   new dependencies; mutating live memory (`consolidate --apply`).
+- **Never:** direct `nixos-rebuild`; edit `/nix/store`; `git add .` without
+   seeing what's in it; auto-commit with `git add -A`.
 
 ## Opencode & rtk (plugins)
 
-- Plugin rtk (`~/.config/opencode/plugins/rtk.ts`, declarativo em
-  `home-manager/files/opencode/plugins/rtk.ts`) reescreve comandos para
-  o rtk economizar contexto. Opt-out: incluir `norrtk` (ou `--no-rtk`) na
-  linha; paths começando com `./` ou `/` passam por cima do rtk.
-- Detalhes da política (inclui quando NÃO usar rtk) estão no AGENTS.md
-  raiz (`~/projects/AGENTS.md` §Tooling) — nixos-ai não duplica.
+- rtk plugin (`~/.config/opencode/plugins/rtk.ts`, declarative in
+  `home-manager/files/opencode/plugins/rtk.ts`) rewrites commands so
+  rtk saves context. Opt-out: include `norrtk` (or `--no-rtk`) on the
+  line; paths starting with `./` or `/` bypass rtk.
+- Policy details (including when NOT to use rtk) live in the root AGENTS.md
+  (`~/projects/AGENTS.md` §Tooling) — nixos-ai doesn't duplicate.
 
-## Regras que não dá pra inferir do código
+## Rules you can't infer from the code
 
-- `modules/ai/models.nix` é a **única fonte de verdade** de modelos,
-  perfis e flags. Perfis são consumidos por `services/llama-cpp.nix`.
-  Sampling (temperature/top_p/top_k/...) também mora lá
-  (`routing.models.<id>.sampling`, por modelo — Prism 0.5 NÃO vale p/ Qwen);
-  Python lê via registry, nada hardcoded.
-- **Modelos: nunca apagar, nunca baixar sem checar.** Inventário e regras em
-  `docs/models/MODEL-SAFETY.md` (incidente 27B 25/09). Bonsai 8B mora no
-  nix store (GC volta com rebuild), não em `~/models`. Checar VRAM 6GB
-  antes de qualquer download.
-- VRAM 6GB: **1 LLM por vez.** P/ modelo que não cabe, experts na GPU
-  **atrapalham** (o fetch vem por PCIe, 6-7 GB/s, contra 41-83 GB/s da
-  RAM). Denso que cabe na VRAM roda ~3,2× mais rápido.
-- `-t` = **P-cores**. Esta CPU é híbrida (6P+4E) e o `lscpu` reporta "8".
-  Medido: `-t 6` = 16,4 t/s · `-t 8` = 14,1 · `-t 10` = 10,4 · `-t 12` = 7,9.
-- `ubatch` muda a decisão de offload do `ik_llama.cpp` (threshold
-  `32 × total_experts/active_experts`); manter 512 alinhado com o service.
-- Servidor de embeddings tem **max context de 512 tokens**: acima disso
-  devolve 400/500. `providers/embedding.py` faz chunk + mean-pool.
-- **Binário importa:** prism = ternário (e MoE); ik = MoE; stock carrega
-  `Q2_0` como lixo silencioso. Ver `docs/models/BINARIES.md`.
-- Hardware e medição desta máquina: `docs/auditoria/SO-LLM-E-ENTROPIA-*.md`.
+- `modules/ai/models.nix` is the **single source of truth** for models,
+  profiles and flags. Profiles are consumed by `services/llama-cpp.nix`.
+  Sampling (temperature/top_p/top_k/...) also lives there
+  (`routing.models.<id>.sampling`, per model — Prism 0.5 does NOT apply to Qwen);
+  Python reads via registry, nothing hardcoded.
+- **Models: never delete, never download without checking.** Inventory and rules in
+  `docs/models/MODEL-SAFETY.md` (27B incident 25/09). Bonsai 8B lives in the
+  nix store (GC brings it back with a rebuild), not in `~/models`. Check 6GB
+  VRAM before any download.
+- 6GB VRAM: **1 LLM at a time.** For models that don't fit, GPU experts
+  **hurt** (fetch comes over PCIe, 6-7 GB/s, vs 41-83 GB/s from
+  RAM). Dense models that fit in VRAM run ~3.2× faster.
+- `-t` = **P-cores**. This CPU is hybrid (6P+4E) and `lscpu` reports "8".
+  Measured: `-t 6` = 16.4 t/s · `-t 8` = 14.1 · `-t 10` = 10.4 · `-t 12` = 7.9.
+- `ubatch` changes the `ik_llama.cpp` offload decision (threshold
+  `32 × total_experts/active_experts`); keep 512 aligned with the service.
+- Embeddings server has a **512-token max context**: above that it
+  returns 400/500. `providers/embedding.py` chunks + mean-pools.
+- **Binary matters:** prism = ternary (and MoE); ik = MoE; stock loads
+  `Q2_0` as silent garbage. See `docs/models/BINARIES.md`.
+- This machine's hardware and measurements: `docs/auditoria/SO-LLM-E-ENTROPIA-*.md`.
 
-## Índice (leia só quando a tarefa pedir)
+## Index (read only when the task asks)
 
-| Documento | Quando consultar |
+| Document | When to consult |
 |---|---|
-| `docs/SISTEMA-ESTADO-E-BENCHMARKS.md` | estado dos tiers, H1/H2/H3, histórico |
-| `docs/architecture/SYSTEM-MAP.md` | mapa do sistema e camadas |
-| `docs/models/BINARIES.md` | qual binário para qual modelo |
-| `docs/auditoria/SO-LLM-E-ENTROPIA-2026-09-25.md` | SO, VRAM/RAM, PCIe, medições |
-| `docs/PROMPT-AGENTE-EXTERNO.md` | prompt pronto para outro agente |
-| **`docs/HANDOFF-2026-09-25.md`** | **estado da sessão 25/09 + próximo passo exato** |
-| `scripts/LOOP-v2.md` | método do loop overnight |
-| `docs/harbor/INDEX.md` | placar + arquivos da calibração Harbor |
-| `scripts/overnight-24-09/` | evidência datada de benchs |
-| `.agents/*.md` | detalhe por tema (carregue só se o gatilho casar) |
+| `docs/SISTEMA-ESTADO-E-BENCHMARKS.md` | tier status, H1/H2/H3, history |
+| `docs/architecture/SYSTEM-MAP.md` | system map and layers |
+| `docs/models/BINARIES.md` | which binary for which model |
+| `docs/auditoria/SO-LLM-E-ENTROPIA-2026-09-25.md` | OS, VRAM/RAM, PCIe, measurements |
+| `docs/PROMPT-AGENTE-EXTERNO.md` | ready-made prompt for an external agent |
+| **`docs/HANDOFF-2026-09-25.md`** | **25/09 session state + exact next step** |
+| `scripts/LOOP-v2.md` | overnight loop method |
+| `docs/harbor/INDEX.md` | Harbor calibration scoreboard + files |
+| `scripts/overnight-24-09/` | dated bench evidence |
+| `.agents/*.md` | detail per topic (load only on trigger match) |
 
-## Modelo-agnóstico (detecção → adaptação — ler antes de mexer em prompt/tools)
+## Model-agnostic (detection → adaptation — read before touching prompts/tools)
 
-- `cli/dev.py:_detect_profile` — registry tier vence param-count; tiny →
-  `native_tools=False` (só texto, sem overhead de `tools`); override
-  `cfg.llm_native_tools`. REPL prova local: bonsai lê exato (29/09).
-- `core/agent.py:_strict_default` — tiers speed/fast ganham grammar
-  constrained; resto texto livre. Fora do strict, cerca ```bash vira
-  `execute_shell` (F-cell; dev.py já aceitava cerca há tempos).
-- `core/agent.py:_try_api_cascade` — STUCK comprovado → API 1x
-  (CASCADE_MAP; Groq último recurso). Bot tem keys via litellm.env.
-- Template ausente (xLAM) não é detectável barato: presume tool-capable
-  pelo tamanho e quebra (400/500). Suspeita de template → modo texto.
+- `cli/dev.py:_detect_profile` — registry tier beats param-count; tiny →
+  `native_tools=False` (text only, no `tools` overhead); override
+  `cfg.llm_native_tools`. Local REPL proof: bonsai reads exact (29/09).
+- `core/agent.py:_strict_default` — speed/fast tiers get constrained
+  grammar; rest free text. Outside strict, ```bash fences become
+  `execute_shell` (F-cell; dev.py accepted fences long ago).
+- `core/agent.py:_try_api_cascade` — proven STUCK → 1× API
+  (CASCADE_MAP; Groq last resort). Bot has keys via litellm.env.
+- Missing template (xLAM) isn't cheaply detectable: assumes tool-capable
+  by size and breaks (400/500). Template suspected → text mode.
 
-## Regras de agentes (gatilho → arquivo)
-- `.agents/dados-e-memoria.md` — RAG, memória, vault, spaces, cifrado.
-  Gatilhos: RAG, memória, vault, qdrant, collection, embedding, recall.
-- `.agents/loop-e-bench.md` — overnight, harness, sweep, benchmark.
-  Gatilhos: loop, harness, bench, sweep, cmoe, t/s, overnight.
-- `.agents/harbor-e-harness.md` — calibração externa Harbor, trials, adapter.
-  Gatilhos: harbor, calibração, trial, verifier, A-cell, B-cell.
-- `.agents/memoria-do-projeto.md` — decisões e armadilhas já pagas.
-  Gatilhos: já quebrou, antes de mexer, armadilha, por que.
-- `.agents/mcp-catalog.md` — quem expõe o quê (jarvis, nixos, tavily, context7).
-  Gatilhos: mcp, tavily, context7, browser, nix search, vault, github.
+## Agent rules (trigger → file)
+- `.agents/dados-e-memoria.md` — RAG, memory, vault, spaces, encryption.
+  Triggers: RAG, memory, vault, qdrant, collection, embedding, recall.
+- `.agents/loop-e-bench.md` — overnight, harness, sweep, bench, cmoe, t/s, overnight.
+  Triggers: loop, harness, bench, sweep, cmoe, t/s, overnight.
+- `.agents/harbor-e-harness.md` — external Harbor calibration, trials, adapter.
+  Triggers: harbor, calibration, trial, verifier, A-cell, B-cell.
+- `.agents/memoria-do-projeto.md` — decisions and already-paid traps.
+  Triggers: broke before, before touching, trap, why.
+- `.agents/mcp-catalog.md` — who exposes what (jarvis, nixos, tavily, context7).
+  Triggers: mcp, tavily, context7, browser, nix search, vault, github.
 
 ## Frontmatter
 
