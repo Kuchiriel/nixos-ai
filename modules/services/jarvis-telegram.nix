@@ -90,7 +90,10 @@ in {
       serviceConfig = {
         Type = "simple";
         User = cfg.user;
-        Group = cfg.user;
+        # Grupo = grupo PRIMÁRIO do user (users), não um grupo com o mesmo
+        # nome (não existe: user nixos tem gid=100 users). Group=nixos dava
+        # 216/GROUP no systemd (Failed at step GROUP) e o bot não subia.
+        Group = "users";
 
         # Credentials come from files OUTSIDE the store, never inline.
         # litellm.env is needed for the API cascade (STUCK -> Groq); the bot

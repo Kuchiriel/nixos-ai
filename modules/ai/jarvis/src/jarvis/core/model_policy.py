@@ -363,11 +363,23 @@ def select_model(
     }
 
 
-# Cascata por API (catálogo 17/09, docs/models/api-catalog-2026-09-17.md).
+# Cascata por API (re-probe AO VIVO 11/10/2026 — ver probe /tmp/probe4,5):
+# Chat completions de verdade contra a key de /etc/litellm.env. Resultado:
+#   ✅ GROQ openai/gpt-oss-120b (respondeu; finish=length com 5 tok — ok)
+#   ✅ GROQ qwen/qwen3.8-27b ('OK') — novo modelo no catálogo
+#   ✅ OpenRouter :free → nvidia/nemotron-3.5-lightning:free / qwen3.8-flash
+#      (o catálogo de :free MUDOU: gpt-oss-120b:free e llama-3.3-70b:free
+#      tornaram-se pagos; qwen3-coder:free desnecessário agora)
+#   ❌ NVIDIA NIM direto: nemotron v1/v1.5 410 Gone; dar立足 429/timeout
+#   ❌ Gemini: 429 quota exceeded na key atual
+#   ❌ Cerebras: 404 no llama-3.3-70b; gpt-oss-120b → 402 payment
+#   ❌ Together: 401 invalid key
 # Camada → ordem de fallback (provider, model, base_url, env_key).
 # Uso: quando o modelo local trava (STUCK) ou cai — o harness tenta cada
 # entrada em ordem. Chaves via env (abstração /etc/litellm.env).
 CASCADE_MAP: dict[str, list[tuple[str, str, str, str]]] = {
+    # dev/coding-long: groq primeiro (LPU rápido, gpt-oss-120b é 120B forte).
+    # OpenRouter :free = segunda opinião (rate 50/dia, não estourar).
     "coding-long": [
         ("zen", "muse-spark-1.3", "https://api.openrouter.ai/api",
          "OPENCODE_CONFIG"),
@@ -384,15 +396,23 @@ CASCADE_MAP: dict[str, list[tuple[str, str, str, str]]] = {
         ("openrouter", "nex-n2.5-mini", "https://openrouter.ai/api",
          "OPENROUTER_API_KEY"),
         # 29/09 (E-cell Harbor): validado via RemoteBackend sanitizado
-        # (finish_reason dava 400; sanitize resolveu). Último recurso.
+        # (finish_reason dava 400; sanitize resolveu). 11/10: re-probe OK.
         ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai",
          "GROQ_API_KEY"),
+        # 11/10 (re-probe AO VIVO): qwen3.8-27b (novo) e nemotron-3.5-lightning
+        # :free (OpenRouter :free whatsoever) OK. NIM direto 410 Gone.
+        ("groq", "qwen/qwen3.8-27b", "https://api.groq.com/openai",
+         "GROQ_API_KEY"),
+        ("openrouter", "nvidia/nemotron-3.5-lightning:free",
+         "https://openrouter.ai/api", "OPENROUTER_API_KEY"),
     ],
     "batch": [
-        ("nvidia", "deepseek-v4-flash", "https://integrate.api.nvidia.com",
-         "NVIDIA_API_KEY"),
-        ("openrouter", "ling-3-flash-fin", "https://openrouter.ai/api",
+        # 11/10: NIM direto fora (410 Gone nos nemotron; timeout no deepseek-
+        # v4.1-flash). OpenRouter :free é o caminho batch (50 req/dia).
+        ("openrouter", "qwen/qwen3.8-flash", "https://openrouter.ai/api",
          "OPENROUTER_API_KEY"),
+        ("openrouter", "nvidia/nemotron-3.5-lightning:free",
+         "https://openrouter.ai/api", "OPENROUTER_API_KEY"),
     ],
     "mechanical": [
         ("zen", "nemotron-3.5-lightning", "https://api.openrouter.ai/api",
@@ -401,14 +421,16 @@ CASCADE_MAP: dict[str, list[tuple[str, str, str, str]]] = {
          "OPENCODE_CONFIG"),
     ],
     "docs": [
-        ("zen", "nemotron-3-ultra", "https://api.openrouter.ai/api",
-         "OPENCODE_CONFIG"),
-        ("nvidia", "nemotron-3-super", "https://integrate.api.nvidia.com",
-         "NVIDIA_API_KEY"),
+        # 11/10: nemotron-3-ultra (NIM) 410 Gone. groq gpt-oss-120b no lugar.
+        ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai",
+         "GROQ_API_KEY"),
+        ("groq", "qwen/qwen3.8-27b", "https://api.groq.com/openai",
+         "GROQ_API_KEY"),
     ],
     "classify": [
-        ("nvidia", "glm-5.3-flash", "https://integrate.api.nvidia.com",
-         "NVIDIA_API_KEY"),
+        # 11/10: glm-5.3-flash (NIM) fora (410). qwen3.8-27b barato/rápido.
+        ("groq", "qwen/qwen3.8-27b", "https://api.groq.com/openai",
+         "GROQ_API_KEY"),
     ],
     "rag": [
         ("openrouter", "ling-3-flash-sante", "https://openrouter.ai/api",

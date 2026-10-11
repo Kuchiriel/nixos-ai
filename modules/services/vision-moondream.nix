@@ -114,7 +114,9 @@ in
       serviceConfig = {
         Type = "exec";
         User = cfg.user;
-        Group = cfg.user;
+        # Grupo primário do user (users) — grupo com o mesmo nome não existe
+        # e systemd reprova com 216/GROUP (mesmo bug do jarvis-telegram).
+        Group = "users";
         WorkingDirectory = cfg.codeDir;
 
         Environment = [
