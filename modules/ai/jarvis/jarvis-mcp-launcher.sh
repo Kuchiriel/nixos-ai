@@ -55,6 +55,19 @@ if [ -z "$PP" ] && [ -r "$JARVIS_PKG/bin/jarvis-mcp" ]; then
   PP="$(sed -n "s/^export PYTHONPATH='\(.*\)'$/\1/p" "$JARVIS_PKG/bin/jarvis-mcp" | head -1)"
 fi
 
+# (10/10, dono: "arruma o mcp") site-packages LOCAL mantido fora do store:
+# playwright (browser tool), PIL, pymupdf, pytesseract. O $1 oficial aponta
+# um env de store que NÃO tem essas libs (medido: browser_open → "No module
+# named 'playwright'"). Entra JUNTO do $1 — sem substituir, à prova de o $1
+# um dia vir a conter tudo.
+LOCAL_SP="/home/nixos/.local/jarvis-mcp-site"
+if [ -d "$LOCAL_SP" ]; then
+  case ":$PP:" in
+    *":$LOCAL_SP:"*) ;;          # já contém
+    *) PP="${LOCAL_SP}${PP:+:$PP}" ;;
+  esac
+fi
+
 SRC="${JARVIS_SRC:-/home/nixos/projects/nixos-ai/modules/ai/jarvis/src}"
 
 export PYTHONPATH="${SRC}${PP:+:$PP}"

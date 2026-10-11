@@ -261,6 +261,55 @@ def _default_call_llm(prompt: str, max_tokens: int = 2048) -> str:
         return f"ERROR: {e}"
 
 
+def _cascade_call_llm(prompt: str, system_content: str,
+                      max_tokens: int = 2048) -> str | None:
+    """Fallback API (free providers validados) — SÓ no teto local comprovado.
+
+    Mesma disciplina do Agent._try_api_cascade (dono 17/09):
+    (1) só chamada quando o local FAILHOU (nunca na primeira dificuldade);
+    (2) 1x por task (flag do chamador); (3) só se houver key no env
+    (sem key = skip — sem chamada externa); (4) tentativa FRESCA
+    (system+prompt, sem trajetória envenenada); (5) telemetria via
+    progress.jsonl. Modelos por camada em model_policy.CASCADE_MAP —
+    free tiers (Groq/NVIDIA NIM/OpenRouter) já validados no catálogo
+    17/09 e no A/B do E-cell 29/09 (Groq precisa do sanitize do
+    RemoteBackend para não dar 400).
+    Retorna conteúdo ou None (nunca lança — caller decide seguir).
+    """
+    try:
+        from jarvis.core.model_policy import cascade_for
+        from jarvis.providers.llm_remote import RemoteBackend
+    except Exception as e:
+        print(f"[nightwatch] cascade imports unavailable: {e}", file=sys.stderr)
+        return None
+    # V2 do _api_layer_for reparte por keywords — no harness, as tasks
+    # são todas coding/patch, que a camada 'dev' cobre; batching/classify
+    # não existe aqui. Campeza também 1 camada só (menos complexidade).
+    for provider, model, base_url, env_key in cascade_for("dev"):
+        key = os.environ.get(env_key, "")
+        if not key:
+            continue
+        try:
+            resp = RemoteBackend(
+                base_url=base_url, model=model,
+                api_key=key, provider=provider).chat(
+                [{"role": "system", "content": system_content},
+                 {"role": "user", "content": prompt}],
+                temperature=0.0, max_tokens=max_tokens)
+            if resp and (resp.content or "").strip():
+                _log_progress({"event": "api_fallback",
+                               "provider": provider, "model": model,
+                               "layer": "dev"})
+                print(f"[nightwatch] cascade OK via {provider}/{model}",
+                      file=sys.stderr)
+                return resp.content
+        except Exception as e:
+            print(f"[nightwatch] cascade {provider}/{model} falhou: {e}",
+                  file=sys.stderr)
+            continue
+    return None
+
+
 def _default_send_telegram(message: str) -> bool:
     """Delegate to canonical telegram provider.
 
@@ -1513,7 +1562,28 @@ FILES:
     response = call_llm_fn(prompt, 4096)
 
     if "ERROR" in response:
-        return False, [], [response]
+        # ── Fallback API (free providers) — teto local comprovado ───────
+        # O local falhou (erro de transporte/timeout/servidor). Antes de
+        # queimar o attempt, tenta a cascata free (Groq/NVIDIA/OpenRouter).
+        # Disciplina: passado o prompt COMPLETO (o format_block vai junto,
+        # para o LLM remoto devolver no mesmo formato parseável) + 1x por
+        # task (flag de escopo na task_description via closure do caller
+        # não existe aqui — a cascata é 1x por PIPELINE CALL, que já é
+        # raro pois o retry do loop reentra aqui só em falha nova).
+        cascade = _cascade_call_llm(
+            prompt,
+            system_content=("You are a code improvement assistant for the "
+                            "JARVIS nightwatch harness. Return structured "
+                            "code patches exactly in the requested format "
+                            "(=== FILE/CREATE/WHOLE blocks with --- old "
+                            "text --- / --- new text --- / --- content --- "
+                            "sections). No prose."),
+            max_tokens=4096,
+        )
+        if cascade:
+            response = cascade
+        else:
+            return False, [], [response]
 
     if "NO_CHANGES" in response:
         # If files need creating, retry with a dedicated create prompt

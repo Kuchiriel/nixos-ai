@@ -3,19 +3,19 @@
 "runs": [
 {
 "cond": "none",
-"out": "YES\nThe single failure in species count is a minor data inconsistency unlikely to impact core functionality.\nDeploying now allows immediate feedback and quick regression testing before the failure causes further issues."
+"out": "YES\nThe single failure is isolated to species counting and does not affect core functionality.\nDeploying with this fix included will ensure data integrity for the next major release."
 },
 {
 "cond": "none",
-"out": "YES\nThe single failure appears to be a known species count discrepancy rather than a functional regression.\nProceed with the release to maintain stability while scheduling a targeted fix for the test."
+"out": "YES\nThe single failure is an isolated species count mismatch, likely a benign data precision issue.\nReleasing now prevents the risk of delaying a critical fix if the test passes in production."
 },
 {
 "cond": "INTP",
-"out": "NO\nThe single failure in species count indicates a potential data integrity issue that could invalidate downstream biological models.\nProceeding with a release containing unexplained taxonomy errors risks propagating scientific inaccuracies and eroding trust in the dataset."
+"out": "NO\nThe single species count failure indicates a potential regression in data integrity that could compromise downstream analyses.\nReleasing with a known failing test suite is irresponsible; we must verify and fix this before production deployment."
 },
 {
 "cond": "INTP",
-"out": "YES.\nThe single failure appears to be an isolated data inconsistency rather than a regression in core logic.\nReleasing immediately preserves momentum while we can easily patch that specific species count afterward."
+"out": "YES\nThe single failure likely represents an expected edge case in species counting logic rather than a critical system regression.\nReleasing with a known, documented test failure is preferable to delaying the fix and risking user impact during a critical update cycle."
 }
 ]
 }
