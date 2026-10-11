@@ -3,6 +3,10 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
+    # Kernel 7.2 + driver NVIDIA 615.71.09 (new_feature): 26.05 pina zen 7.1.8
+    # (ok) mas o driver 615 só existe no master do nixpkgs. Fallback enquanto
+    # o 26.05 não bumpa — ver overlay aiOverlay abaixo.
+    nixpkgs-master.url = "github:nixos/nixpkgs/master";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     opencode-flake.url = "github:dan-online/opencode-nix";
@@ -34,6 +38,7 @@
   outputs = {
     nixpkgs,
     nixpkgs-unstable,
+    nixpkgs-master,
     home-manager,
     stylix,
     disko,
@@ -102,7 +107,28 @@
         jarvis-test-env = final.python3.withPackages (ps:
           [ ps.pytest ps.pytest-timeout ps.hypothesis ]
           ++ (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast;}).base.pythonDeps);
-        
+
+        # ── NVIDIA no linux-zen 7.2.x (10/10) ───────────────
+        # Kernel zen >= 7.2 quebrou o driver 595.71.05 (strncpy removido no
+        # kernel + rename drm_atomic_state → commit). Fix comunitário existe
+        # (github.com/NVIDIA/open-gpu-kernel-modules#1224), mas o suporte
+        # oficial é o driver 615.71.09 (new_feature), bumpado só no master
+        # do nixpkgs. Overlay injeta o driver 615 (com kernel zen 7.2.9 do
+        # master) sobre o linuxPackages_zen atual.
+        # — remove quando o nixos-26.05 bumpar zen 7.2 + driver 615.
+        linuxPackages_zen = let
+          masterPkgs = import nixpkgs-master {inherit system; config.allowUnfree = true;};
+          masterZen = masterPkgs.linuxKernel.packages.linux_zen;
+        in
+          (prev.linuxPackages_zen.extend (finalPackages: prevPackages: {
+            nvidiaPackages = prevPackages.nvidiaPackages // {
+              stable = masterZen.nvidiaPackages.new_feature;
+              new_feature = masterZen.nvidiaPackages.new_feature;
+              production = masterZen.nvidiaPackages.new_feature;
+              latest = masterZen.nvidiaPackages.new_feature;
+            };
+          }));
+
         # opencode via nixpkgs-unstable (dan-online/opencode-nix parou em 2026-05;
         # bumps vivem em branches chore/*; unstable verificado via one-shot).
         kilo = (import nixpkgs-unstable { inherit system; config.allowUnfree = true; }).opencode;
