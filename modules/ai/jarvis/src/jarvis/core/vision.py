@@ -641,6 +641,7 @@ def _vision_openrouter(image_path: str, question: str,
         return {"ok": False, "error": "OPENROUTER_API_KEY ausente"}
 
     # catálogo :free com input_modalities contendo "image" (dinâmico)
+    errs: list[str] = []
     for model in _discover_vision_models("openrouter")[:4]:
         mime = "image/jpeg"
         try:
@@ -826,7 +827,12 @@ def _discover_vision_models(provider: str) -> list[str]:
             vis = [i for i in ids
                    if any(t in i.lower() for t in ("vision", "-vl", "vlm"))
                    and "embed" not in i.lower()]
-            found = vis
+            # 12/10: 90b ANTES de 11b. O 11b alucinou janelas de login ao
+            # descrever UI de jogo (medido no baseline do reskin); o 90b é
+            # o VLM forte do catálogo NIM e deve ser tentado primeiro.
+            found = sorted(vis, key=lambda i: (
+                0 if "90b" in i.lower() else
+                1 if "11b" in i.lower() else 2, i))
 
         elif provider == "openrouter":
             key = _secret("openrouter")
