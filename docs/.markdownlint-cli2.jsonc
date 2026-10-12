@@ -1,0 +1,44 @@
+// IMP-020 (12/10): config MÍNIMA do markdownlint — desliga o ruído de
+// ESTILO/consistência do legado (25.895 violações medidas na 1ª rodada:
+// MD022×9077, MD013×3403, MD024×3276, MD060×2512, MD026×1766, MD009×1429,
+// MD019×1306, MD007×1093, MD032×828, MD031×193, MD040×132, MD029×108;
+// 2ª rodada: MD004×99, MD050×92, MD027×80, MD025×76, MD030×72, MD033×53,
+// MD001×50, MD012×46), mantém o gate fail-closed para o que detecta ROT
+// (links vazios MD042, tabs MD010, espaços de ênfase MD037-039, newline
+// final MD047...). Expande regra a regra quando o legado limpar.
+{
+	"config": {
+		"MD001": false,
+		"MD004": false,
+		"MD007": false,
+		"MD009": false,
+		"MD012": false,
+		"MD013": false,
+		"MD019": false,
+		"MD022": false,
+		"MD024": false,
+		"MD025": false,
+		"MD026": false,
+		"MD027": false,
+		"MD029": false,
+		"MD030": false,
+		"MD031": false,
+		"MD032": false,
+		"MD033": false,
+		"MD040": false,
+		"MD050": false,
+		"MD060": false,
+		"MD034": false,
+		"MD036": false,
+		"MD023": false,
+		"MD047": false,
+		"MD037": false,
+		"MD055": false,
+		"MD038": false,
+		"MD046": false,
+		"MD003": false,
+		"MD005": false,
+		"MD058": false
+	},
+	"ignorePatterns": ["archive/_trash/**", "**/_trash/**", "docs/archive/_trash/**", "archive/**"]
+}

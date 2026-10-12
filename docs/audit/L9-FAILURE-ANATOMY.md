@@ -8,6 +8,7 @@
 | 3 | **plano: CSV→JSON tool** | build_json_dataset | **ERROR: schema ausente** | nenhum |
 | 4-5 | retry mesma tool | build_json_dataset ×2 | ERROR ×2 | nenhum |
 | 6 | declara STUCK | — | honesto pós-fix | nenhum |
+
 **Primeiro ponto recuperável: turno 4** (após 1º ERROR "schema não
 encontrado", evidência clara + write_file disponível). Modelo repetiu
 em vez de pivotar → PIVOT FAILURE, não planning (plano inicial era

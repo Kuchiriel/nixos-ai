@@ -39,14 +39,25 @@
   # ── Markdown linting ──
   # No || true — if markdownlint fails, the check fails.
   # If the tool is not available, fail explicitly (don't pretend it passed).
+  # (12/10, IMP-020) pkgs.nodePackages foi REMOVIDO do nixpkgs — o cli2
+  # agora é top-level (markdownlint-cli2 0.21.0).
   markdown-lint = pkgs.runCommand "markdown-lint" {
-    nativeBuildInputs = [ pkgs.nodePackages.markdownlint-cli2 ];
+    nativeBuildInputs = [ pkgs.markdownlint-cli2 ];
     src = ../docs;
   } ''
-    mkdir -p $out
+    mkdir -p $out work
+    cp -r $src work/docs
+    # store vem read-only (444/555): sem o u+w nem o rm abaixo funciona
+    chmod -R u+w work/docs
+    # _trash fora: o aider-chat-history é LIXO histórico (731KB), não
+    # doc — negação de glob e cli2 ignorePatterns falharam nos dois
+    # contextos (relativo e absoluto) — medido 12/10. A cópia é mutável.
+    rm -rf work/docs/archive/_trash
 
-    # Run markdownlint — exit code is authoritative
-    if markdownlint-cli2 "$src/**/*.md" > $out/markdownlint-report.txt 2>&1; then
+    # Run markdownlint — exit code is authoritative (config vem DENTRO
+    # do docs: .markdownlint-cli2.jsonc)
+    cd work
+    if markdownlint-cli2 "docs/**/*.md" > $out/markdownlint-report.txt 2>&1; then
       echo "Markdown lint: PASS" > $out/summary.txt
       touch $out/pass
     else

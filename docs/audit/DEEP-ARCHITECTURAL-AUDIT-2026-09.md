@@ -59,7 +59,7 @@ Harness.execute_task()
 
 | ID | Problema | Arquivo:linha | Evidência | Real/Hipótese | Severidade | Status |
 |----|----------|---------------|-----------|---------------|------------|--------|
-| F1 | LoopDetector/ContextBudget/ToolValidator/CircuitBreaker instanciados e **nunca usados** no caminho de produção | `core/agent.py:314-322` | `grep self.loop_detector|self.context_budget|self.validator|self.circuit_breaker` → só as linhas do `__init__` | Real | P0 | **CORRIGIDO** |
+| F1 | LoopDetector/ContextBudget/ToolValidator/CircuitBreaker instanciados e **nunca usados** no caminho de produção | `core/agent.py:314-322` | `grep self.loop_detector\|self.context_budget\|self.validator\|self.circuit_breaker` → só as linhas do `__init__` | Real | P0 | **CORRIGIDO** |
 | F2 | Bug latente: `LoopDetector._check_stagnation()` crasha com `content=None` (llama.cpp retorna `content: null` em turno de tool call) | `core/loop_detector.py:238` | `TypeError: 'NoneType' object is not subscriptable` reproduzido por teste | Real | P0 | **CORRIGIDO** |
 | F3 | Três caminhos de tool-call paralelos na mesma classe; `run_loop`/`execute_tool`/`TOOLS` sem chamadores | `core/agent.py` | `grep run_loop / execute_tool / import TOOLS` em src/ e tests/ → zero ocorrências fora de agent.py | Real | P1 | Documentado (remoção futura) |
 | F4 | `_get_llm_response()` ignora `LLMClient`/backend abstraction — post direto com `max_tokens=1024, temperature=0.0` fixos, ignorando perfil detectado | `core/agent.py:~684` | leitura de código; `detect_profile()` existe mas não era aplicado no payload | Real | P1 | Parcial (params agora do perfil; LLMClient segue pendente) |

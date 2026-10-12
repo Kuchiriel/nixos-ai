@@ -220,11 +220,12 @@
     };
 
     # ── checks: linting fail-closed (checks/default.nix) ────────────
-    # Wired em 2026-09-15 (IMP-009): o arquivo existia desde sempre mas
-    # nunca foi referenciado — "component theater". Expõe só python-lint
-    # (ruff fail-closed); markdown-lint/nix-check ficam sem wiring por
-    # enquanto (sem config de markdownlint; nix-check dentro de sandbox
-    # de build é arriscado) — liga-los exige trabalho próprio antes.
+    # Wired em 2026-09-15 (IMP-009): python-lint (ruff fail-closed).
+    # Wired em 2026-10-12 (IMP-020): markdown-lint (fail-closed desde o
+    # nascimento — exit code autoritativo) + nix-check (eval com fallback
+    # de syntax-parse; o "arriscado em sandbox" foi medido: o fallback
+    # cobre o caso de rede negada). MD legado vermelho? O gate fica de
+    # pé — conserta-se o MD, não o gate.
     checks.${system} = let
       checkLib = import ./checks {
         pkgs = nixpkgs.legacyPackages.${system};
@@ -232,6 +233,8 @@
       };
     in {
       python-lint = checkLib.python-lint;
+      markdown-lint = checkLib.markdown-lint;
+      nix-check = checkLib.nix-check;
     };
 
     # ── lib: fonts, colors, ports (nosso próprio lib/) ──────────────
