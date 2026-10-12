@@ -125,7 +125,7 @@ notes: |
 ## Current Known Performance Baseline
 
 **Last updated:** 2026-08-26
-**Measurement method:** `scripts/benchmark-official.py` (45s sustained, upstream llama.cpp)
+**Measurement method:** `scripts/archive/bench-legacy-2026-09-25/benchmark-official.py` (45s sustained, upstream llama.cpp)
 
 ### MEASURED (controlled benchmark, COLD start, order-bias tested, --sustained-only)
 
@@ -163,9 +163,9 @@ See `performance-evidence-audit.md` for full classification.
 ## Scripts
 
 - `scripts/thermal-curve.sh` — Full thermal characterization
-- `scripts/proper-benchmark.sh` — 10-run benchmark with stats
+- `scripts/archive/bench-legacy-2026-09-25/proper-benchmark.sh` — 10-run benchmark with stats
 - `scripts/mlock-benchmark.sh` — mlock comparison test
 
 ---
 
-**Ver também:** [[../../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[architecture/llama-cpp-tuning|/home/nixos/projects/nixos-ai/docs/architecture/llama-cpp-tuning.md]]
+**Ver também:** [[../../HANDOFF.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[architecture/llama-cpp-tuning|/home/nixos/projects/nixos-ai/docs/architecture/llama-cpp-tuning.md]]

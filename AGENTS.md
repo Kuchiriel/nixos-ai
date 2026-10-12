@@ -24,7 +24,7 @@
    agent's memory. **Don't write, don't rename, don't remove.**
 3. **Tests only touch `jarvis_test_*`**, always derived:
    `dataclasses.replace(Config(), qdrant_collection_code="jarvis_test_x")`.
-   The `tests/test_test_isolation.py` guard fails the build on violation — it
+   The `modules/ai/jarvis/tests/test_test_isolation.py` guard fails the build on violation — it
    exists because someone wiped 1263 points from `code_index` running a test.
 4. **`./rebuild-host.sh` only with the owner authorizing** (activates config and
    restarts services). Direct `nixos-rebuild`: never. `/nix/store`: never
@@ -74,7 +74,7 @@ nix flake check
   (`routing.models.<id>.sampling`, per model — Prism 0.5 does NOT apply to Qwen);
   Python reads via registry, nothing hardcoded.
 - **Models: never delete, never download without checking.** Inventory and rules in
-  `docs/models/MODEL-SAFETY.md` (27B incident 25/09). Bonsai 8B lives in the
+  [`docs/models/MODEL-SAFETY.md`](docs/models/MODEL-SAFETY.md) (27B incident 25/09). Bonsai 8B lives in the
   nix store (GC brings it back with a rebuild), not in `~/models`. Check 6GB
   VRAM before any download.
 - 6GB VRAM: **1 LLM at a time.** For models that don't fit, GPU experts
@@ -87,21 +87,21 @@ nix flake check
 - Embeddings server has a **512-token max context**: above that it
   returns 400/500. `providers/embedding.py` chunks + mean-pools.
 - **Binary matters:** prism = ternary (and MoE); ik = MoE; stock loads
-  `Q2_0` as silent garbage. See `docs/models/BINARIES.md`.
+  `Q2_0` as silent garbage. See [`docs/models/BINARIES.md`](docs/models/BINARIES.md).
 - This machine's hardware and measurements: `docs/auditoria/SO-LLM-E-ENTROPIA-*.md`.
 
 ## Index (read only when the task asks)
 
 | Document | When to consult |
 |---|---|
-| `docs/SISTEMA-ESTADO-E-BENCHMARKS.md` | tier status, H1/H2/H3, history |
-| `docs/architecture/SYSTEM-MAP.md` | system map and layers |
-| `docs/models/BINARIES.md` | which binary for which model |
-| `docs/auditoria/SO-LLM-E-ENTROPIA-2026-09-25.md` | OS, VRAM/RAM, PCIe, measurements |
-| `docs/PROMPT-AGENTE-EXTERNO.md` | ready-made prompt for an external agent |
-| **`docs/HANDOFF-2026-09-25.md`** | **25/09 session state + exact next step** |
-| `scripts/LOOP-v2.md` | overnight loop method |
-| `docs/harbor/INDEX.md` | Harbor calibration scoreboard + files |
+| [`docs/SISTEMA-ESTADO-E-BENCHMARKS.md`](docs/SISTEMA-ESTADO-E-BENCHMARKS.md) | tier status, H1/H2/H3, history |
+| [`docs/architecture/SYSTEM-MAP.md`](docs/architecture/SYSTEM-MAP.md) | system map and layers |
+| [`docs/models/BINARIES.md`](docs/models/BINARIES.md) | which binary for which model |
+| [`docs/auditoria/SO-LLM-E-ENTROPIA-2026-09-25.md`](docs/auditoria/SO-LLM-E-ENTROPIA-2026-09-25.md) | OS, VRAM/RAM, PCIe, measurements |
+| [`docs/PROMPT-AGENTE-EXTERNO.md`](docs/PROMPT-AGENTE-EXTERNO.md) | ready-made prompt for an external agent |
+| **[`docs/HANDOFF-2026-10-05.md`](docs/HANDOFF-2026-10-05.md)** | **25/09 session state + exact next step** |
+| [`scripts/LOOP-v2.md`](scripts/LOOP-v2.md) | overnight loop method |
+| [`docs/harbor/INDEX.md`](docs/harbor/INDEX.md) | Harbor calibration scoreboard + files |
 | `scripts/overnight-24-09/` | dated bench evidence |
 | `.agents/*.md` | detail per topic (load only on trigger match) |
 
@@ -119,15 +119,15 @@ nix flake check
   by size and breaks (400/500). Template suspected → text mode.
 
 ## Agent rules (trigger → file)
-- `.agents/dados-e-memoria.md` — RAG, memory, vault, spaces, encryption.
+- [`.agents/dados-e-memoria.md`](.agents/dados-e-memoria.md) — RAG, memory, vault, spaces, encryption.
   Triggers: RAG, memory, vault, qdrant, collection, embedding, recall.
-- `.agents/loop-e-bench.md` — overnight, harness, sweep, bench, cmoe, t/s, overnight.
+- [`.agents/loop-e-bench.md`](.agents/loop-e-bench.md) — overnight, harness, sweep, bench, cmoe, t/s, overnight.
   Triggers: loop, harness, bench, sweep, cmoe, t/s, overnight.
-- `.agents/harbor-e-harness.md` — external Harbor calibration, trials, adapter.
+- [`.agents/harbor-e-harness.md`](.agents/harbor-e-harness.md) — external Harbor calibration, trials, adapter.
   Triggers: harbor, calibration, trial, verifier, A-cell, B-cell.
-- `.agents/memoria-do-projeto.md` — decisions and already-paid traps.
+- [`.agents/memoria-do-projeto.md`](.agents/memoria-do-projeto.md) — decisions and already-paid traps.
   Triggers: broke before, before touching, trap, why.
-- `.agents/mcp-catalog.md` — who exposes what (jarvis, nixos, tavily, context7).
+- [`.agents/mcp-catalog.md`](.agents/mcp-catalog.md) — who exposes what (jarvis, nixos, tavily, context7).
   Triggers: mcp, tavily, context7, browser, nix search, vault, github.
 
 ## Frontmatter

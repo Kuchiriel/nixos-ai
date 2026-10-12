@@ -100,7 +100,7 @@ nixos-ai/
 cd scripts && ./benchmark.sh
 
 # Official benchmark with thermal monitoring
-python3 scripts/benchmark-official.py --config baseline
+python3 scripts/archive/bench-legacy-2026-09-25/benchmark-official.py --config baseline
 ```
 
 ### Debug issues

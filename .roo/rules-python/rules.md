@@ -71,7 +71,7 @@ typeCheckingMode = "strict"
 cd modules/ai/jarvis && python -m pytest -v
 
 # Run specific test
-python -m pytest tests/test_llm.py -v
+python -m pytest modules/ai/jarvis/tests/test_llm.py -v
 
 # Lint
 ruff check src/jarvis/

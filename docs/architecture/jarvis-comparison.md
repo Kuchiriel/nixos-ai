@@ -228,7 +228,7 @@ Our JARVIS: Should classify file sensitivity and ask if needed
 
 ---
 
-**Ver também:** [[../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../README|/home/nixos/projects/nixos-ai/docs/README.md]]
+**Ver também:** [[../../HANDOFF.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../README.md|/home/nixos/projects/nixos-ai/docs/README.md]]
 
 ---
 

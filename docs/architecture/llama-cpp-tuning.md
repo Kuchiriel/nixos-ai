@@ -165,4 +165,4 @@ host = {
 ---
 **Ver também:** [[slm-techniques|slm-techniques.md]] | [[rag-improvements|rag-improvements.md]] | [[system-overview|system-overview.md]]
 [[../benchmarks/ncmoe-sweep|/home/nixos/projects/nixos-ai/docs/benchmarks/ncmoe-sweep.md]] | [[../benchmarks/performance-evidence-audit|/home/nixos/projects/nixos-ai/docs/benchmarks/performance-evidence-audit.md]]
-[[../../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../README|/home/nixos/projects/nixos-ai/docs/README.md]]
+[[../../HANDOFF.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../README.md|/home/nixos/projects/nixos-ai/docs/README.md]]
