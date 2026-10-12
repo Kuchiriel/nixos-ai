@@ -21,8 +21,13 @@
   services.charger-watch.user = user;
   services.chromium-cdp.enable = true;   # browser dos agentes (CDP :9223)
   services.chromium-cdp.user = user;
-  services.jarvis-notify.enable = true;
-  services.jarvis-focus.enable = true;
+  # jarvis-notify/focus DESLIGADOS (12/10, IMP-017): units em crash-loop
+  # (273+ restarts) chamando `jarvis watch` / `jarvis focus-daemon`,
+  # subcomandos com função pronta mas NUNCA registrados no argparse
+  # (main.py:752,768 sem add_parser) — e os corpos são sleep-placeholders.
+  # Religar só com lógica real + wire + fumaça. Reverter: enable = true.
+  services.jarvis-notify.enable = false;
+  services.jarvis-focus.enable = false;
 
 services.avahi = {
   enable = true;

@@ -5,6 +5,11 @@
 #   --host-only: valida host+HM sem flake-check total (lab quebrado não trava o host).
 #   --quick:    só sintaxe+eval (pula builds/testes; p/ iterar rápido em .nix).
 #   --debug:    executa tudo com output redirecionado para log e exibe o log ao final.
+# NOTA (IMP-018): este script faz `git add -A` + commit automático
+# "chore: update N file(s)" com sua identidade — o flake SÓ enxerga o índice
+# git, então sem isso arquivos novos são invisíveis p/ o build. Efeito real:
+# todo rebuild commita a árvore suja. Revise com `git show HEAD` após o
+# rebuild; mensagens genéricas são o preço da visibilidade do flake.
 set -e
 
 DEBUG=false
@@ -58,7 +63,10 @@ if git diff --cached --quiet; then
   echo "      (nenhuma alteração pendente)"
 else
   N_FILES=$(git diff --cached --name-only | wc -l)
+  echo "      Arquivos staged p/ este rebuild (commit automático abaixo):"
+  git diff --cached --name-status | sed 's/^/        /'
   git commit -m "chore: update $N_FILES file(s)"
+  echo "      (revise depois com: git show HEAD --stat)"
 fi
 cd - > /dev/null
 
