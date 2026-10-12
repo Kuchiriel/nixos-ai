@@ -38,6 +38,7 @@ if _src_dir not in sys.path:
 
 from jarvis.runtime.registry import ToolRegistry
 from jarvis.core.vision import VISION_TOOL, handle_capture, observe_with_fallback as observe_screen
+from jarvis.core.vision import observe_file as observe_file_fn
 from jarvis.core.chatgpt_reader import CHATGPT_READER_TOOL, handle_chatgpt_read
 from jarvis.core.multi_ai_reader import MULTI_AI_READER_TOOL, read_ai_conversation
 from jarvis.core.hackmd import HACKMD_TOOLS, list_notes as hackmd_list, get_note as hackmd_get, create_note as hackmd_create, update_note as hackmd_update, sync_local_to_hackmd
@@ -145,6 +146,40 @@ JARVIS_TOOLS = [
                                     "leem a janela errada. Recomendado com focus_window."),
                 },
             },
+        }
+    },
+    {
+        "name": "jarvis_observe_file",
+        "description": (
+            "Analyze an image FILE on disk (PNG/JPEG) with the vision "
+            "cascade (local → Gemini → NVIDIA → OpenRouter → OCR). ZERO "
+            "desktop interference: no viewer, no capture — unlike "
+            "ver-png+observe_screen, nothing opens on the owner's screen "
+            "and nothing is left behind to close. Use this for baselines, "
+            "captures from tools/capture-sessao.sh, and any saved "
+            "screenshot already on disk."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Absolute path of the image file to analyze",
+                },
+                "question": {
+                    "type": "string",
+                    "description": (
+                        "Structured, region-by-region question. Focused "
+                        "questions get reliable answers even from small "
+                        "vision models."
+                    ),
+                },
+                "budget": {
+                    "type": "number",
+                    "description": "Total seconds for the cascade (default 45)",
+                },
+            },
+            "required": ["path"],
         }
     },
     {
@@ -734,6 +769,8 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
 
         if name == "jarvis_observe_screen":
             return observe_screen(args)
+        if name == "jarvis_observe_file":
+            return observe_file_fn(args)
 
         if name == "jarvis_human_input":
             from jarvis.core.humanize import human_input

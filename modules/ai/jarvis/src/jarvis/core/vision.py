@@ -977,21 +977,47 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
         return f"SEM DISPLAY: {shot.get('error', 'captura impossível')}"
 
     image_path = shot["path"]
-    attempts = []
+    budget = float(args.get("budget", 45.0))
+    return _cascade(image_path, question, budget,
+                    size_kb=shot.get("size_kb", "?"),
+                    suffix=(f" | janela focada+opaca: {prep.get('address')}"
+                            if prep else ""))
+
+
+def observe_file(args: dict[str, Any]) -> str:
+    """Analisa um PNG já existente em disco — SEM capturar, SEM viewer.
+
+    (12/10, dono: "vc sempre larga um png aberto pra eu fechar" — o loop
+    ver-png+observe_screen põe a imagem no desktop dele; para arquivo em
+    disco a análise vai direto na cascata, zero interferência.)
+    """
+    path = str(args.get("path") or "")
+    if not path or not os.path.isfile(path):
+        return f"ERROR: arquivo nao encontrado: {path!r}"
+    question = args.get("question",
+                        "Describe what you see in this image, region by region.")
+    budget = float(args.get("budget", 45.0))
+    return _cascade(path, question, budget, size_kb=os.path.getsize(path) // 1024)
+
+
+def _cascade(image_path: str, question: str, budget: float = 45.0,
+             size_kb: Any = "?", suffix: str = "") -> str:
+    """Cascata de visão sobre um ARQUIVO (local → gemini → nvidia → OR → OCR).
+
+    Compartilhada por observe_with_fallback (captura → cascata) e
+    observe_file (PNG em disco). Nunca falha por falta de vision; cada
+    nível registra `via:` no output (honestidade > adivinhação).
+    """
+    attempts: list[str] = []
 
     # Nível 0 (barato, sem rede): vision local. Só tenta 1x se já sabermos
     # que o llama-router está fora — 8080 devolve 500 e custa segundos.
-    # ordem: local (grátis) → nvidia (funciona) → gemini → groq → openrouter
-    # Groq saiu da cascata: EM 2026-10-01 a Groq descontinuou TODOS os VLM
-    # (llama-3.2-11b-vision, llama-4-maverick 09/03, llama-4-scout 17/07) e
-    # passou a servir só texto. Chamar era gastar request em 404 garantido.
     # Ordem: local (grátis) → gemini (grátis, funciona) → nvidia (crédito)
-    # → openrouter (crédito) → OCR.
-    # TETO GERAL: com 4 níveis e um deles lento, a soma passou de 120s e o MCP
-    # (timeout 180s) ficava no limite. 45s é folgado para o caso comum
-    # (medido: nvidia 1,8s | gemini 12,5s) e curto o bastante para nunca
-    # estourar. Ao estourar, devolve o que já conseguiu + o que sobrou.
-    budget = float(args.get("budget", 45.0))
+    # → openrouter (free VLM) → OCR.
+    # Groq saiu da cascata: EM 2026-10-01 a Groq descontinuou TODOS os VLM
+    # e passou a servir só texto. Chamar era gastar request em 404 garantido.
+    # TETO GERAL: 45s é folgado para o caso comum (medido: nvidia 1,8s |
+    # gemini 12,5s) e curto o bastante para nunca estourar o MCP (180s).
     deadline = time.time() + budget
 
     levels = [(_vision_local, "local"),
@@ -1001,8 +1027,7 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
 
     for fn, via in levels:
         # orçamento por nível: o llama local SEMPRE dá 500 neste host (medido) e
-        # consumia 25,3s do orçamento antes de o Gemini ser tentado. Corto pra
-        # 8s e, se estourar, marco como morto pra não repetir.
+        # consumia 25,3s do orçamento antes de o Gemini ser tentado.
         if _is_dead(via):
             attempts.append(f"{via}: {_DEAD_PROVIDERS[via][0]} (marcado)")
             continue
@@ -1011,9 +1036,7 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
             attempts.append(f"{via}: sem tempo (orcamento {budget:.0f}s)")
             continue
         # TETO POR CHAMADA: checar o deadline antes não adianta — uma chamada
-        # longa estoura sozinha (medido: 90,2s porque o nível local consumia
-        # 25s e o gemini ainda levava 60s de timeout). Cada nível agora recebe
-        # timeout = min(cap, restante), então a soma respeita o orçamento.
+        # longa estoura sozinha. Cada nível recebe timeout = min(cap, restante).
         cap = min(20.0, restante)
         try:
             r = (fn(image_path, question, timeout=cap)
@@ -1023,9 +1046,7 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
             r = {"ok": False, "error": str(e)[:150]}
         if r.get("ok"):
             return (f"{r['text']}\n\n[via: {r['via']} | "
-                    f"screenshot: {image_path} ({shot.get('size_kb', '?')}KB)"
-                    + (f" | janela focada+opaca: {prep.get('address')}"
-                       if prep else "") + "]")
+                    f"image: {image_path} ({size_kb}KB)" + suffix + "]")
         err = r.get("error", "?")
         # 500 do llama local é "modelo não tem visão" — não é chave morta,
         # mas também não adianta repetir toda chamada.
@@ -1037,8 +1058,8 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
            if restante > 3 else {"ok": False, "error": "orcamento esgotado"})
     if ocr.get("ok"):
         return (f"[visão indisponível ({' | '.join(attempts)}); fallback OCR]\n"
-                f"{ocr['text']}\n\n[via: ocr | screenshot: {image_path}]")
+                f"{ocr['text']}\n\n[via: ocr | image: {image_path}]")
 
     return (f"OBSERVE FALHOU em todos os níveis — local: {attempts[0] if attempts else '?'}; "
             f"gemini: {attempts[1] if len(attempts) > 1 else '?'}; ocr: {ocr.get('error')}. "
-            f"Screenshot salva em {image_path}.")
+            f"Arquivo: {image_path}.")
