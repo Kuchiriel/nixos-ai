@@ -11,32 +11,32 @@ let
     set -u
     FALHAS=""
 
-    # 1. suíte Lua (524 checks — o gate de TODAS as mecânicas sandbox)
+    # 1. suíte Lua (524 checks) — RESUMO é a linha do veredito (grep,
+    #    não tail: o output tem linhas depois do resumo)
     SUITE=$(cd /home/nixos/projects/canary-official && \
-      ${pkgs.lua}/bin/lua data-sandbox/tests/run_tests.lua 2>&1 | tail -1)
+      ${pkgs.lua}/bin/lua data-sandbox/tests/run_tests.lua 2>&1 \
+      | grep "RESUMO" | tail -1)
     echo "[sandbox-verifica] $SUITE"
     case "$SUITE" in
-      *FALHA*|*lua:*)
-        FALHAS="suite: $SUITE"
-        ;;
+      *"0 FALHA"*) : ;;           # sucesso: "N OK, 0 FALHA"
+      *) FALHAS="suite: $SUITE" ;;
     esac
 
-    # 2. mundo: validador OTBM (estrutura + filtro-mestre + contagens)
+    # 2. mundo: validador OTBM — VÁLIDO está no MEIO do output (grep)
     OTBM=$(cd /home/nixos/projects/canary-official/dataset/maps/src && \
       ${pkgs.python3}/bin/python3 validar_otbm.py \
-        /home/nixos/projects/canary-official/data-sandbox/world/canary.otbm 2>&1 | tail -3)
-    echo "[sandbox-verifica] $OTBM"
-    case "$OTBM" in
-      *VÁLIDO*) : ;;
-      *)
-        FALHAS="$FALHAS otbm: $(echo "$OTBM" | head -1)"
-        ;;
-    esac
+        /home/nixos/projects/canary-official/data-sandbox/world/canary.otbm 2>&1 \
+      | grep -c "VÁLIDO" || true)
+    echo "[sandbox-verifica] otbm VÁLIDO x$OTBM"
+    if [ "$OTBM" -lt 1 ]; then
+      FALHAS="$FALHAS otbm: sem VÁLIDO no output"
+    fi
 
     # 3. server de pé? (o container é o jogador real)
-    if ! ${pkgs.docker}/bin/docker ps --format '{{.Names}}' 2>/dev/null | \
-        grep -q '^otbr-server-1$'; then
-      FALHAS="$FALHAS server: otbr-server-1 DOWN"
+    DOCKER_PS=$(${pkgs.docker}/bin/docker ps --format '{{.Names}}' 2>&1 || true)
+    echo "[sandbox-verifica] containers: $(echo "$DOCKER_PS" | tr '\n' ' ')"
+    if ! echo "$DOCKER_PS" | grep -q '^otbr-server-1$'; then
+      FALHAS="$FALHAS server: otbr-server-1 DOWN (docker ps: $DOCKER_PS)"
     fi
 
     if [ -n "$FALHAS" ]; then
