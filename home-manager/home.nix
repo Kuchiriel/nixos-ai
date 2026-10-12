@@ -9,6 +9,7 @@
     ./modules
     ./home-packages.nix
     ./modules/rclone-sync.nix
+    ./modules/xref-watch.nix
     ./modules/ai
     ./modules/services/jarvis-wakeword.nix
     ./modules/services/sunshine.nix
@@ -218,6 +219,11 @@
   # (venv/python -m/nix develop) — rewrite indiscriminado confundia modelos
   # fracos (rtk pytest rodava python do PATH sem pytest).
   home.file.".config/opencode/plugins/rtk.ts".source = ./files/opencode/plugins/rtk.ts;
+
+  # Memory + safety plugin — plain .js (node --check validatable, 10/10
+  # regex tests). Compaction hook injects the recall/remember protocol;
+  # tool.execute.before denies unanchored root deletes via args rewrite.
+  home.file.".config/opencode/plugins/memory.js".source = ./files/opencode/plugins/memory.js;
 
   # ── VS Code + Roo Code — configurado via módulo vscode-roo.nix ──
   # (extensões, userSettings, MCP, custom modes são declarativos)
