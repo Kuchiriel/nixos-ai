@@ -26,10 +26,10 @@ let
     OTBM=$(cd /home/nixos/projects/canary-official/dataset/maps/src && \
       ${pkgs.python3}/bin/python3 validar_otbm.py \
         /home/nixos/projects/canary-official/data-sandbox/world/canary.otbm 2>&1 \
-      | grep -c "VÁLIDO" || true)
-    echo "[sandbox-verifica] otbm VÁLIDO x$OTBM"
+      | grep -c "VALIDO" || true)
+    echo "[sandbox-verifica] otbm VALIDO x$OTBM (sem acento: output real)"
     if [ "$OTBM" -lt 1 ]; then
-      FALHAS="$FALHAS otbm: sem VÁLIDO no output"
+      FALHAS="$FALHAS otbm: sem VALIDO no output"
     fi
 
     # 3. server de pé? (o container é o jogador real)
