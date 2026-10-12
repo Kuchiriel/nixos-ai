@@ -39,6 +39,11 @@
   qdrant-snapshot = pkgs.writeShellScriptBin "qdrant-snapshot" ''
     ${pkgs.curl}/bin/curl -s http://localhost:6333/collections | ${pkgs.jq}/bin/jq -r '.result.collections[].name' | while read col; do
       ${pkgs.curl}/bin/curl -X POST http://localhost:6333/collections/$col/snapshots
+      # (12/10) prune: snapshots acumulavam desde 08-20 (9.9G medidos) —
+      # mantém as 2 mais novas por coleção (nomes têm timestamp, sort basta).
+      ${pkgs.curl}/bin/curl -s http://localhost:6333/collections/$col/snapshots | ${pkgs.jq}/bin/jq -r '.result[].name' | sort -r | tail -n +3 | while read snap; do
+        ${pkgs.curl}/bin/curl -X DELETE http://localhost:6333/collections/$col/snapshots/$snap
+      done
     done
   '';
 in {
