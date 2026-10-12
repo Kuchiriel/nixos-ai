@@ -99,7 +99,7 @@ nix flake check
 | [`docs/models/BINARIES.md`](docs/models/BINARIES.md) | which binary for which model |
 | [`docs/auditoria/SO-LLM-E-ENTROPIA-2026-09-25.md`](docs/auditoria/SO-LLM-E-ENTROPIA-2026-09-25.md) | OS, VRAM/RAM, PCIe, measurements |
 | [`docs/PROMPT-AGENTE-EXTERNO.md`](docs/PROMPT-AGENTE-EXTERNO.md) | ready-made prompt for an external agent |
-| **[`docs/HANDOFF-2026-10-05.md`](docs/HANDOFF-2026-10-05.md)** | **25/09 session state + exact next step** |
+| **[`docs/HANDOFF-2026-10-12.md`](docs/HANDOFF-2026-10-12.md)** | **12/10 session state + exact next step** |
 | [`scripts/LOOP-v2.md`](scripts/LOOP-v2.md) | overnight loop method |
 | [`docs/harbor/INDEX.md`](docs/harbor/INDEX.md) | Harbor calibration scoreboard + files |
 | `scripts/overnight-24-09/` | dated bench evidence |

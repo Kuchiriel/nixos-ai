@@ -1,5 +1,8 @@
 # NIGHTLOG — Registro de manutenção autônoma
 
+> CONGELADO como histórico (IMP-016, 12/10): o registro vivo é o
+> journal do systemd + docs/HANDOFF-2026-10-12.md. Não acrescentar.
+
 ## 2026-08-22 19:51 - Início da sessão
 
 ### Linha de base

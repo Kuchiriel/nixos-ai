@@ -3,6 +3,7 @@
 > Project-specific rules for the nixos-ai repository.
 > Monorepo governance is in ~/projects/BUFFY.md.
 > Updated: 2026-09-03 (test fixes applied)
+> ESTADO ATUAL: docs/HANDOFF-2026-10-12.md (IMP-016: um entry-point vivo)
 
 ---
 
