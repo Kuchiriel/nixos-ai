@@ -2,11 +2,11 @@
  "tag": "qwen4bmtp-0710",
  "model": "qwen4b",
  "endpoint": "http://127.0.0.1:8092",
- "ts": "2026-10-11 04:00",
+ "ts": "2026-10-12 04:02",
  "speed": {
-  "ttft_s": 0.089,
-  "prefill_ts": 59.1,
-  "gen_ts": 55.9
+  "ttft_s": 0.095,
+  "prefill_ts": 64.8,
+  "gen_ts": 60.7
  },
  "ptbr": {
   "dificeis": {
@@ -15,12 +15,12 @@
    "det": [
     {
      "en": "It contains the smell of a freshly slain slime",
-     "pt": "Contém o cheiro de um slime recém-matado.",
+     "pt": "Contém o cheiro de um lodo recém-matado.",
      "falhas": []
     },
     {
      "en": "Use it on your bed to change the bed to green",
-     "pt": "Use-o em sua cama para mudar a cor da cama para verde.",
+     "pt": "Use-o na sua cama para mudar a cor da cama para verde.",
      "falhas": []
     },
     {
@@ -30,7 +30,7 @@
     },
     {
      "en": "It contains presents which were stolen from Santa. Bring them to the workshop.",
-     "pt": "Ele contém presentes que foram roubados de Papai Noel. Leve-os para o ateliê.",
+     "pt": "Ele contém presentes que foram roubados do Papai Noel. Leve-os para o ateliê.",
      "falhas": []
     },
     {
@@ -52,7 +52,7 @@
     },
     {
      "en": "Offers a soul to the Soulpit. Combine with another soul core to create a random new soul core.",
-     "pt": "Oferece uma alma ao Soulpit. Combine com outra alma para criar uma nova alma aleatória.",
+     "pt": "Oferece uma alma ao Soulpit. Combine com outra alma central para criar uma nova alma central aleatória.",
      "falhas": [
       "ignora termo oficial 'soul core'->'núcleo de alma'"
      ]
@@ -110,7 +110,7 @@
     },
     {
      "en": "You should follow gnomish advice and use it on green crystals",
-     "pt": "Você deve seguir os conselhos dos gnomos e usá-los em cristais verdes.",
+     "pt": "Você deve seguir o conselho dos gnomos e usá-lo em cristais verdes.",
      "falhas": []
     },
     {
@@ -120,7 +120,7 @@
     },
     {
      "en": "This spicy-sweet cake will probably put you into a sugar rush",
-     "pt": "Este bolo picante e doce provavelmente fará você entrar em uma rajada de açúcar.",
+     "pt": "Este bolo picante e doce provavelmente te colocará em uma rajada de açúcar.",
      "falhas": []
     }
    ]
@@ -142,7 +142,7 @@
    },
    {
     "prompt": "Ana diz: 'Beto mente'. Beto diz: 'Ana e eu mentimos'. Quem f",
-    "out": "Beto fala a verdade, pois se ele mentisse, Ana também mentiria, o que tornaria a frase de Beto falsa.",
+    "out": "Beto fala a verdade, pois se ele mentisse, ambos estariam mentindo, o que tornaria a frase de Ana verdadeira, criando uma contradição.",
     "hit": true
    },
    {

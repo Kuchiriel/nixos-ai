@@ -2,7 +2,7 @@
 
 ## Protocol
 
-- **Method:** `scripts/benchmark-official.py --sustained-only 45`
+- **Method:** `scripts/archive/bench-legacy-2026-09-25/benchmark-official.py --sustained-only 45`
 - **Thermal control:** GPU temp checked before each config; threshold ≤62°C = COLD
 - **Order bias:** Two runs with reversed config order
 - **Cooldown:** 90s between configs

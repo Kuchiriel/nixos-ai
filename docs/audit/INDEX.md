@@ -71,4 +71,4 @@ De SESSION-AUDIT-2026-09-04:
 
 **Ver também:** [[../architecture/nightwatch-components|/home/nixos/projects/nixos-ai/docs/architecture/nightwatch-components.md]]
 [[../architecture/mission-consolidation|/home/nixos/projects/nixos-ai/docs/architecture/mission-consolidation.md]] | [[../architecture/agent-harness|/home/nixos/projects/nixos-ai/docs/architecture/agent-harness.md]]
-[[../../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../BUFFY|/home/nixos/projects/nixos-ai/BUFFY.md]] | [[development/testing|/home/nixos/projects/nixos-ai/docs/development/testing.md]]
+[[../../HANDOFF.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../BUFFY.md|/home/nixos/projects/nixos-ai/BUFFY.md]] | [[development/testing|/home/nixos/projects/nixos-ai/docs/development/testing.md]]

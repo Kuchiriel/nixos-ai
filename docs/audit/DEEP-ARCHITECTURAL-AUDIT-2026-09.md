@@ -98,7 +98,7 @@ Harness.execute_task()
 cd modules/ai/jarvis
 PYTHONPATH=src:<store-paths de requests/urllib3/certifi/charset-normalizer/idna> \
   /nix/store/b9xszc8ibgm6c4cm461661qiiqi78zwz-python3.13-pytest-9.0.3/bin/pytest \
-  tests/test_agent.py -q
+  modules/ai/jarvis/tests/test_agent.py -q
 # → 30 passed (inclui 2 novos)
 ```
 
@@ -149,7 +149,7 @@ PYTHONPATH=src:<store-paths de requests/urllib3/certifi/charset-normalizer/idna>
 - `func` não-dict → `AttributeError`. Fix: guarda `isinstance(func, dict)` → tool result de erro + continue.
 - `arguments` string com JSON inválido → `args` virava string → crash em `args.get()`. Fix: distingue string (parse via `json.loads`) de dict (uso direto); except → `{}`.
 - `arguments` não-dict pós-parse → guarda `isinstance(args, dict)` → erro + continue.
-- Evidência: `tests/test_solar_probe.py` 8 falhas → 0. Commit `a5882fa`.
+- Evidência: `modules/ai/jarvis/tests/test_solar_probe.py` 8 falhas → 0. Commit `a5882fa`.
 
 **F10 — Injeção dupla de PAST LESSONS** (P1, `core/agent.py`):
 - `run()` injetava lessons no system_content; `_get_llm_response()` re-injetava em `messages[0]` a cada turno → prompt crescia N×. Fix: removida re-injeção (injeção canônica única em `run()`). Commit `a5882fa`.
