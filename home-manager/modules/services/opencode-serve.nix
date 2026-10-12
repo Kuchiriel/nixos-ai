@@ -24,6 +24,12 @@
       Description = "opencode serve — acesso do celular via Tailscale";
       After = ["network-online.target"];
       Wants = ["network-online.target"];
+      # (11/10) StartLimitIntervalSec=0 = retry PARA SEMPRE. O default
+      # (5 restarts/10s) matou o serviço parado às 19:09 (bind no IP do
+      # tailscale durante restart do tailscaled pelo switch) e ele só
+      # voltou com restart manual. Crash-loop aqui = tailscale ainda
+      # subindo; desistir nunca é a resposta certa.
+      StartLimitIntervalSec = 0;
     };
     Service = {
       Type = "simple";
