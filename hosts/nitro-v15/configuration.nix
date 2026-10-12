@@ -313,6 +313,20 @@ services.avahi = {
     openFirewall = true;
   };
 
+  # nscd/nsncd DESABILITADO (12/10, decisão delegada pelo dono: "vc decide").
+  # Evidência: nsncd 1.5.3 sai com código 0 ~50ms–3s após o primeiro tráfego
+  # NSS real (reproduzido fora do systemd: `getent hosts` e
+  # `getent group netdev` matam o daemon; 5s idle sobrevive) → Restart=always
+  # reacende 5× em 10s → start-limit-hit → nss-lookup.target dead em TODO
+  # boot (11/10 e 12/10). nsncd aqui é proxy SEM cache (zero benefício) e o
+  # fallback direto do glibc já atende tudo (getent/docker/login OK com ele
+  # morto desde o boot; `.local` via glibc já não resolve hoje — sem regressão).
+  # `system.nssModules = []` é exigido pelo assert do nixpkgs ao desligar o
+  # nscd. Contra-indicação (módulo NSS `systemd` p/ DynamicUser): aceita —
+  # só units-template inativas usam DynamicUser. Reverter: apagar as 2 linhas.
+  services.nscd.enable = false;
+  system.nssModules = lib.mkForce [];
+
   users.users.${user} = {
     isNormalUser = true;
     extraGroups = ["wheel" "video" "audio" "networkmanager" "qdrant" "input" "uinput" "docker"];
