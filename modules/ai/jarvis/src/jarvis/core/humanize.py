@@ -257,12 +257,18 @@ class HumanHand:
         try:
             for ch in text:
                 if yt:
-                    subprocess.run([yt, "type", "--delay", "12", ch],
+                    # (12/10, fix "12A12G12E...") ESTE ydotool não tem
+                    # '--delay' (a flag real é '-d/--key-delay=N'): o parser
+                    # engolia '--delay 12' e DIGITAVA "12" antes de cada
+                    # tecla — todo texto do MCP chegava "12"+ch no destino
+                    # (medido no terminal do outro agente). A cadência humana
+                    # já vem do sleep lognorm abaixo; delay interno = letal.
+                    subprocess.run([yt, "type", ch],
                                    check=False, capture_output=True,
                                    timeout=15)
                 else:
                     subprocess.run(["wtype", ch], check=False,
-                                   capture_output=True, timeout=10)
+                                    capture_output=True, timeout=10)
                 gap = _lognorm(self.TYPE_MU, self.TYPE_SIG, 20, 400) / 1000.0
                 # pausa longa ocasional (pensando no meio da frase)
                 if random.random() < 0.04:

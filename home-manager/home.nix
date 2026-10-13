@@ -11,6 +11,7 @@
     ./modules/rclone-sync.nix
     ./modules/xref-watch.nix
     ./modules/sandbox-verificacao.nix
+    ./modules/agents-heartbeat-watchdog.nix
     ./modules/ai
     ./modules/services/jarvis-wakeword.nix
     ./modules/services/sunshine.nix
