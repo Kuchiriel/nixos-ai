@@ -268,7 +268,25 @@
 
     settings = {
       # Provedor local (Bonsai 8B ternário via llama.cpp PrismML, porta 8080)
-      provider = {
+      # Direct LLMs GERADOS de models.nix directServers (14/10:
+      # fim do hardcoded!). Services com `opencode = {key,name,context,
+      # output}` viram providers (id+port da service = fonte única).
+      # Router (:8080), local-fast (alias) e local_small_model manuais.
+      provider = ({
+        # (14/10, dono: small_model NUNCA `local` — pc fraco puxaria modelo
+        # inútil. Nome dedicado pro tier leve, endpoint do bonsai.)
+        local_small_model = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "http://127.0.0.1:8080/v1";
+          };
+          models = {
+            bonsai = {
+              name = "Bonsai 8B Ternário (leve)";
+              limit = { context = 8192; output = 2048; };
+            };
+          };
+        };
         local = {
           npm = "@ai-sdk/openai-compatible";
           options = {
@@ -312,147 +330,6 @@
           };
         };
 
-        # Qwen3.6-35B MoE UNCENSORED direto (ik_llama.cpp, porta 8084).
-        # Id = EXATAMENTE o que o server anuncia em /v1/models (path
-        # absoluto, pois o server subiu com -m absoluto e sem --alias).
-        local-uncensored = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "http://127.0.0.1:8084/v1";
-          };
-          models = {
-            "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf" = {
-              name = "Qwen MoE 35B Uncensored Local";
-              # Sem limit o opencode estima contexto 0 e dispara
-              # auto-compaction no primeiro prompt (bug 03/10).
-              limit = {
-                context = 8192;
-                output = 2048;
-              };
-            };
-          };
-        };
-
-        # Qwen3.5-4B UNCENSORED direto (upstream stock, porta 8092, GPU-full).
-        # Roda o ARQUIVO MTP (-ngl 99 -c 65536 + draft-mtp, +24% TG medido
-        # 03/10). Id = path absoluto (server sem --alias).
-        local-uncensored-4b = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "http://127.0.0.1:8092/v1";
-          };
-          models = {
-            "/home/nixos/models/Qwen3.5-4B-MTP-Q4_K_M.gguf" = {
-              name = "Qwen 4B Uncensored MTP Local";
-              # -c 65536 CORRETO (reverti meu revert 03/10): híbrido 3:1, só
-              # 8 layers com KV → 9.2KB/tok ≈ 0.6GB @64k. VRAM medida confirma.
-              limit = {
-                context = 65536;
-                output = 4096;
-              };
-            };
-          };
-        };
-
-        # Direct LLMs (services gerados de models.nix directServers, sem
-        # wantedBy — systemctl start manual; Conflicts garante um por vez).
-        # IDs = paths absolutos (servers sem --alias); limits = audit 03/10.
-        local-deepseek-7b = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "http://127.0.0.1:8085/v1";
-          };
-          models = {
-            "/home/nixos/models/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf" = {
-              name = "DeepSeek R1 7B Local (reasoning!)";
-              limit = {
-                context = 16384;
-                output = 8192;
-              };
-            };
-          };
-        };
-
-        local-phi-mini = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "http://127.0.0.1:8086/v1";
-          };
-          models = {
-            "/home/nixos/models/Phi-4-mini-instruct-Q4_K_M.gguf" = {
-              name = "Phi-4-mini Local";
-              limit = {
-                context = 32768;
-                output = 4096;
-              };
-            };
-          };
-        };
-
-        local-gemma-4b = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "http://127.0.0.1:8087/v1";
-          };
-          models = {
-            "/home/nixos/models/gemma-3-4b-it-Q4_K_M.gguf" = {
-              name = "Gemma-3 4B Local";
-              limit = {
-                context = 32768;
-                output = 4096;
-              };
-            };
-          };
-        };
-
-        local-xlam-8b = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "http://127.0.0.1:8089/v1";
-          };
-          models = {
-            "/home/nixos/models/Llama-xLAM-2-8B-fc-r-Q4_K_M.gguf" = {
-              name = "xLAM-2 8B Local (tools)";
-              limit = {
-                context = 8192;
-                output = 2048;
-              };
-            };
-          };
-        };
-
-        local-qwen30b-moe = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "http://127.0.0.1:8091/v1";
-          };
-          models = {
-            "/home/nixos/models/Qwen3-30B-A3B-Q4_K_M.gguf" = {
-              name = "Qwen3-30B MoE Local";
-              limit = {
-                # 8192: classe MoE estourou buffers em 32k (medido no 35B).
-                context = 8192;
-                output = 4096;
-              };
-            };
-          };
-        };
-
-        local-uncensored-q4kp = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "http://127.0.0.1:8093/v1";
-          };
-          models = {
-            "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf" = {
-              name = "Qwen MoE 35B Q4_K_P Local (spare)";
-              limit = {
-                context = 8192;
-                output = 2048;
-              };
-            };
-          };
-        };
         
         # ADICIONADO: Provedor oficial da Google para rodar na nuvem estável
         # Auditoria 08/10: catálogo real via API (45 modelos); free tier
@@ -702,7 +579,23 @@
             };
           };
         };
-      };
+      } // pkgs.lib.mapAttrs'
+        (name: svc: pkgs.lib.nameValuePair svc.opencode.key {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "http://127.0.0.1:${toString svc.port}/v1";
+          };
+          models = {
+            "${svc.modelFile}" = {
+              name = svc.opencode.name;
+              limit = {
+                context = svc.opencode.context;
+                output = svc.opencode.output;
+              };
+            };
+          };
+        })
+        (pkgs.lib.filterAttrs (n: s: s ? opencode) pkgs.aiModels.directServers));
 
       # ════════════════════════════════════════════════════════════
       # FILTRO DO CATÁLOGO (auditoria 08/10 — whitelist = só o que
@@ -755,7 +648,7 @@
       # Higiene de contexto global (03/10): vale p/ todos os providers.
       # prune poda tool outputs velhos; tool_output capa outputs gigantes
       # (prompt de 33k matou o Qwen 2x); small_model tira titles/resumos do 35B.
-      small_model = "local/bonsai";
+      small_model = "local_small_model/bonsai";
       warming = true;
       compaction = {
         auto = true;

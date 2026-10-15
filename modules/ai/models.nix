@@ -259,6 +259,9 @@ in rec {
       extraArgs = [ "--parallel" "1" "--jinja" "--mlock" "--reasoning" "off" ];
       memHigh = "21G"; memMax = "23G"; limitMemlock = true;
       wanted = false;  # default agora é o 4B-MTP (04/10, pedido do dono)
+      # opencode provider (gerado em home.nix via mapAttrs):
+      # id = modelFile (o server anuncia o path, sem --alias).
+      opencode = { key = "local-uncensored"; name = "Qwen MoE 35B Uncensored Local"; context = 8192; output = 2048; };
     };
     uncensored-4b = {
       port = 8092; binary = "upstream";
@@ -273,6 +276,9 @@ in rec {
       extraArgs = [ "--parallel" "1" "--jinja" "--reasoning" "off" "--spec-type" "draft-mtp" ];
       memHigh = "3G"; memMax = "4G"; limitMemlock = false;
       wanted = false;  # on-demand; router (8080/bonsai) is default for harness/agents; start 8092 when voice needs PT-BR
+      # opencode provider (gerado em home.nix via mapAttrs):
+      # id = modelFile (o server anuncia o path, sem --alias).
+      opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 65536; output = 4096; };
     };
     deepseek-7b = {
       port = 8085; binary = "upstream";
@@ -285,6 +291,9 @@ in rec {
       extraArgs = [ "--parallel" "1" "--jinja" ];
       memHigh = "5G"; memMax = "7G"; limitMemlock = false;
       wanted = false;
+      # opencode provider (gerado em home.nix via mapAttrs):
+      # id = modelFile (o server anuncia o path, sem --alias).
+      opencode = { key = "local-deepseek-7b"; name = "DeepSeek R1 7B Local (reasoning!)"; context = 16384; output = 8192; };
     };
     xlam-8b = {
       port = 8089; binary = "upstream";
@@ -307,6 +316,9 @@ in rec {
       extraArgs = [ "--parallel" "1" "--jinja" ];
       memHigh = "4G"; memMax = "6G"; limitMemlock = false;
       wanted = false;
+      # opencode provider (gerado em home.nix via mapAttrs):
+      # id = modelFile (o server anuncia o path, sem --alias).
+      opencode = { key = "local-phi-mini"; name = "Phi-4-mini Local"; context = 32768; output = 4096; };
     };
     gemma-4b = {
       port = 8087; binary = "upstream";
@@ -319,6 +331,9 @@ in rec {
       extraArgs = [ "--parallel" "1" "--jinja" ];
       memHigh = "4G"; memMax = "6G"; limitMemlock = false;
       wanted = false;
+      # opencode provider (gerado em home.nix via mapAttrs):
+      # id = modelFile (o server anuncia o path, sem --alias).
+      opencode = { key = "local-gemma-4b"; name = "Gemma-3 4B Local"; context = 32768; output = 4096; };
     };
     qwen30b-moe = {
       port = 8091; binary = "ik";

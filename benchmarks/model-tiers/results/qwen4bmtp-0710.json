@@ -2,11 +2,11 @@
  "tag": "qwen4bmtp-0710",
  "model": "qwen4b",
  "endpoint": "http://127.0.0.1:8092",
- "ts": "2026-10-13 04:03",
+ "ts": "2026-10-14 04:04",
  "speed": {
-  "ttft_s": 0.085,
-  "prefill_ts": 62.9,
-  "gen_ts": 58.3
+  "ttft_s": 0.093,
+  "prefill_ts": 66.8,
+  "gen_ts": 60.6
  },
  "ptbr": {
   "dificeis": {
