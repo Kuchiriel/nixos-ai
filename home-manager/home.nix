@@ -268,6 +268,29 @@
 
     settings = {
       # Provedor local (Bonsai 8B ternário via llama.cpp PrismML, porta 8080)
+      # FreeLLMAPI (:3001, 15/10 E2E) — o ROUTER de 34 free-providers
+      # (212 models, failover por rate-limit, quota tracking). Key via
+      # {env:FREELLMAPI_API_KEY} (/etc/litellm.env → keys-wrapper).
+      # Modelos: 'auto' = o router decide; catalog tem ids turvos
+      # (anotações em .config/freellmapi/E2E-ANOTACOES.md) — começar
+      # SÓ com auto e ir liberando ids conforme provados.
+      freellmapi = {
+        npm = "@ai-sdk/openai-compatible";
+        name = "FreeLLMAPI";
+        options = {
+          baseURL = "http://127.0.0.1:3001/v1";
+          apiKey = "{env:FREELLMAPI_API_KEY}";
+        };
+        models = {
+          auto = {
+            name = "FreeLLMAPI Auto (router 34 providers)";
+            limit = {
+              context = 128000;
+              output = 8192;
+            };
+          };
+        };
+      };
       # Direct LLMs GERADOS de models.nix directServers (14/10:
       # fim do hardcoded!). Services com `opencode = {key,name,context,
       # output}` viram providers (id+port da service = fonte única).
@@ -636,6 +659,10 @@
       enabled_providers = [
         "local" "local-fast" "local-uncensored" "local-uncensored-4b"
         "local-deepseek-7b" "local-phi-mini" "local-gemma-4b"
+        # (15/10, freellmapi E2E provado: provider SEM o gate enabled não
+        # existe pro CLI run — "Model not found" embrulhado em "Unexpected
+        # server error". Project .opencode/ MERGE foi a prova.)
+        "freellmapi"
         # MORTOS 14/10 (arquivos deletados no tree-shake; descomentar = re-baixar):
         # "local-xlam-8b" "local-qwen30b-moe" "local-uncensored-q4kp"
         "google" "cloudflare" "cohere" "nvidia" "openrouter"
