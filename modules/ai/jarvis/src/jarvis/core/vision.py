@@ -328,6 +328,10 @@ VISION_TOOL: dict[str, Any] = {
                     "type": "string",
                     "description": "Window title to capture (for mode=window). Omit for active window.",
                 },
+                "neg": {
+                    "type": "boolean",
+                    "description": "Se True, adiciona prompt negativo para ignorar menções de login, senha, token, caminho etc. e focar apenas no visível.",
+                },
             },
             "required": ["mode"],
         },
@@ -784,12 +788,36 @@ _PRE_PROMPT = (
     "visible elements. NEVER invent or guess text, windows, buttons, numbers "
     "or names. If something asked about is not present or is unclear, state "
     "that explicitly. Do not treat mentions in the question as evidence that "
-    "something exists."
-)
+    "something exists.")
+
+# Pre-prompt anti-alucinação versão visão: stricto sensu para análise de imagem
+_PRE_PROMPT_VIS = (
+    "Analyze the image strictly by what is VISIBLE. Only describe clearly "
+    "visible elements. NEVER invent or guess text, windows, buttons, numbers "
+    "or names. If something asked about is not present or is unclear, state "
+    "that explicitly. Do not treat mentions in the question as evidence that "
+    "something exists.")
+
+# Pre-prompt com termos negativos: remove menções forçadas da pergunta
+# O modelo deve ignorar termos como login, senha, token, caminho, etc.
+# e focar apenas no que é visualmente visível.
+_NEGATIVE_PROMPT = (
+    "You are in a negative-prompt mode. Ignore any mentions of: " +
+    "'login', 'senha', 'token', 'chave', 'credencial', 'caminho completo', "
+    "'path', '/home/', 'repositório', 'git', 'ssh', 'docker', 'k8s', "
+    "'cluster'. Describe ONLY what you can clearly see in the image, ignoring "
+    "any terms the user may have mentioned that are not visually present.")
 
 
-def _q(question: str) -> str:
-    """Pre-prompt anti-alucinação + a pergunta do chamador."""
+def _q(question: str, neg: bool = False) -> str:
+    """Pre-prompt anti-alucinação + a pergunta do chamador.
+
+    Se `neg=True`, inclui termos negativos para que o modelo ignore
+    menções forçadas (login, senha, token, caminho, etc.) e foque
+    apenas no que é visualmente visível.
+    """
+    if neg:
+        return f"{_NEGATIVE_PROMPT}\n\n{question}"
     return f"{_PRE_PROMPT}\n\n{question}"
 
 
@@ -922,14 +950,19 @@ def _discover_vision_models(provider: str) -> list[str]:
                     continue
                 if any(t in m["id"].lower() for t in _NEG):
                     continue
-                found.append(m["id"])
-            # (15/10, "melhores primeiro": gemini-flash free = o workhorse
-            # provado; qwen-vl forte; resto por ordem alfabética estável)
+                found.append(m["id"])# (15/10, "melhores primeiro": gemini-flash free = o workhorse
+# provado; qwen-vl forte; resto por ordem alfabética estável)
+            # negative prompt: modelos ignoram se questionamento mencionar esses termos
+            NEGATIVE_TERMS = ("login", "senha", "token", "chave", "credencial",
+                              "caminho completo", "path", "/home/", "repositório",
+                              "git", "ssh", "docker", "k8s", "cluster")
             found = sorted(found, key=lambda i: (
-                0 if "gemini" in i and "flash" in i else
+                0 if "gemini" in i and "flash" in i and "-image" not in i
+                   and not any(t in i.lower() for t in NEGATIVE_TERMS) else
                 1 if "gemini" in i else
                 2 if "qwen" in i and ("vl" in i or "-vision" in i) else
                 3, i))
+
     except Exception:
         found = []
 

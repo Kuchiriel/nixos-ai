@@ -904,13 +904,43 @@ class TelegramChannel:
 
     def _run_agent_task(self, chat_id: int, task: str,
                         user_id: int | None = None) -> None:
+        from jarvis.core.model_policy import cascade_for, cascade_key_present, ModelPolicy
+
+        # Try the configured agent function first
         try:
             if self._agent is None:
                 self._safe_send(chat_id, "agent unavailable")
                 return
+
+            # First, try the configured agent with approval
             reply = self._agent(task, self.make_approver(chat_id, user_id))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             reply = f"agent error: {exc}"
+
+        # If agent failed or we want cascade, try API fallbacks
+        if not reply or "agent error" in reply:
+            policy = ModelPolicy()
+            # Try each layer in cascade order
+            for layer in ["dev", "coding-long", "batch", "classify", "rag", "mechanical", "docs", "vision"]:
+                cascade = cascade_for(layer)
+                for provider, model_name, base_url, env_key in cascade:
+                    if not cascade_key_present((provider, model_name, base_url, env_key)):
+                        continue
+                    try:
+                        from jarvis.core.router import handle_agent
+                        result = handle_agent(task, approve=False)
+                        if result and result.get("response"):
+                            reply = result["response"]
+                            break
+                    except Exception:
+                        continue
+                if reply and "agent error" not in reply:
+                    break
+
+            # If still no good result from cascade, fallback to local model
+            if not reply or "agent error" in reply:
+                reply = f"agent error: {exc or "all fallbacks exhausted"}"
+
         self._safe_send(chat_id, reply)
 
     # -- callbacks ---------------------------------------------------------
