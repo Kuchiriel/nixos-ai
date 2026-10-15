@@ -415,7 +415,7 @@ def observe_screen(args: dict[str, Any]) -> str:
             "role": "user",
             "content": [
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
-                {"type": "text", "text": question},
+                {"type": "text", "text": _q(question)},
             ],
         }
     ]
@@ -471,7 +471,7 @@ def _vision_local(image_path: str, question: str) -> dict[str, Any]:
         "role": "user",
         "content": [
             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
-            {"type": "text", "text": question},
+            {"type": "text", "text": _q(question)},
         ],
     }]
     try:
@@ -532,7 +532,7 @@ def _vision_gemini(image_path: str, question: str,
         payload = json.dumps({
             "contents": [{"parts": [
                 {"inline_data": {"mime_type": mime, "data": img_b64}},
-                {"text": question},
+                {"text": _q(question)},
             ]}],
             "generationConfig": {"temperature": 0.0, "maxOutputTokens": 2000,
                               # sem thoughts: 2.5-flash gasta o orçamento neles e
@@ -599,7 +599,7 @@ def _vision_groq(image_path: str, question: str,
         "messages": [{"role": "user", "content": [
             {"type": "image_url",
              "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
-            {"type": "text", "text": question},
+            {"type": "text", "text": _q(question)},
         ]}],
         "max_tokens": 1000,
         "temperature": 0.0,
@@ -662,7 +662,7 @@ def _vision_openrouter(image_path: str, question: str,
             "messages": [{"role": "user", "content": [
                 {"type": "image_url",
                  "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
-                {"type": "text", "text": question},
+                {"type": "text", "text": _q(question)},
             ]}],
             "max_tokens": 800,
             "temperature": 0.0,
@@ -735,7 +735,7 @@ def _vision_nvidia(image_path: str, question: str,
             "messages": [{"role": "user", "content": [
                 {"type": "image_url",
                  "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
-                {"type": "text", "text": question},
+                {"type": "text", "text": _q(question)},
             ]}],
             "max_tokens": 800,
             "temperature": 0.0,
@@ -775,6 +775,80 @@ _MODEL_CACHE: dict[str, tuple[list[str], float]] = {}
 
 # termos que indicam entrada de imagem
 _NEG = ("embed", "tts", "safety", "moderation", "audio", "rerank")
+
+# (15/10, pesquisa web VLM: "only describe what you can clearly see" corta
+# alucinação; prompts que MENCIONAM elementos induzem o modelo a "vê-los"
+# — arXiv 2604.21911. O pre-prompt vai em TODOS os níveis remotos.)
+_PRE_PROMPT = (
+    "Analyze the image strictly by what is VISIBLE. Only describe clearly "
+    "visible elements. NEVER invent or guess text, windows, buttons, numbers "
+    "or names. If something asked about is not present or is unclear, state "
+    "that explicitly. Do not treat mentions in the question as evidence that "
+    "something exists."
+)
+
+
+def _q(question: str) -> str:
+    """Pre-prompt anti-alucinação + a pergunta do chamador."""
+    return f"{_PRE_PROMPT}\n\n{question}"
+
+
+# (15/10, "mais fallback": o ROUTER freellmapi :3001 tem vision free no
+# catálogo (llama-3.2-90b-vision = o workhorse NIM; gemma-4 = multimodal;
+# nemotron-omni). Nível penúltimo, antes do OCR — o router ainda failover
+# interno entre providers se um cair.)
+def _vision_freellmapi(image_path: str, question: str,
+                       timeout: float = 40.0) -> dict[str, Any]:
+    import base64
+    import json
+    import urllib.request
+
+    key = (os.environ.get("FREELLMAPI_API_KEY") or "").strip()
+    if not key:
+        return {"ok": False, "error": "FREELLMAPI_API_KEY ausente"}
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(image_path).convert("RGB")
+        img.thumbnail((1024, 1024), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=80)
+        img_b64 = base64.b64encode(buf.getvalue()).decode()
+    except ImportError:
+        with open(image_path, "rb") as f:
+            img_b64 = base64.b64encode(f.read()).decode()
+
+    errs: list[str] = []
+    for model in ("llama-3.2-90b-vision", "gemma-4-26b-a4b-it",
+                  "command-a-vision"):
+        payload = json.dumps({
+            "model": model,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "image_url",
+                     "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
+                    {"type": "text", "text": _q(question)},
+                ],
+            }],
+            "max_tokens": 800,
+        }).encode()
+        try:
+            data = _http_json("http://127.0.0.1:3001/v1/chat/completions",
+                              payload,
+                              {"Authorization": f"Bearer {key}",
+                               "Content-Type": "application/json"},
+                              timeout)
+            text = ((data.get("choices") or [{}])[0]
+                    .get("message", {}).get("content", "") or "").strip()
+            if text:
+                return {"ok": True, "via": f"freellmapi:{model}", "text": text}
+            errs.append(f"{model}: vazio")
+        except urllib.error.HTTPError as e:
+            errs.append(f"{model}: HTTP {e.code}")
+        except Exception as e:
+            errs.append(f"{model}: {str(e)[:60]}")
+    return {"ok": False, "error": "; ".join(errs[:3])}
 
 
 def _catalog(url: str, headers: dict[str, str],
@@ -849,6 +923,13 @@ def _discover_vision_models(provider: str) -> list[str]:
                 if any(t in m["id"].lower() for t in _NEG):
                     continue
                 found.append(m["id"])
+            # (15/10, "melhores primeiro": gemini-flash free = o workhorse
+            # provado; qwen-vl forte; resto por ordem alfabética estável)
+            found = sorted(found, key=lambda i: (
+                0 if "gemini" in i and "flash" in i else
+                1 if "gemini" in i else
+                2 if "qwen" in i and ("vl" in i or "-vision" in i) else
+                3, i))
     except Exception:
         found = []
 
@@ -1023,7 +1104,8 @@ def _cascade(image_path: str, question: str, budget: float = 45.0,
     levels = [(_vision_local, "local"),
               (_vision_gemini, "gemini"),
               (_vision_nvidia, "nvidia-nim-vision"),
-              (_vision_openrouter, "openrouter")]
+              (_vision_openrouter, "openrouter"),
+              (_vision_freellmapi, "freellmapi")]
 
     for fn, via in levels:
         # orçamento por nível: o llama local SEMPRE dá 500 neste host (medido) e
