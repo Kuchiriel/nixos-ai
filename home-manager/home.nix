@@ -742,8 +742,9 @@
       #     openrouter :free exceto inkling (free-models-per-day esgotado)
       enabled_providers = [
         "local" "local-fast" "local-uncensored" "local-uncensored-4b"
-        "local-deepseek-7b" "local-phi-mini" "local-gemma-4b" "local-xlam-8b"
-        "local-qwen30b-moe" "local-uncensored-q4kp"
+        "local-deepseek-7b" "local-phi-mini" "local-gemma-4b"
+        # MORTOS 14/10 (arquivos deletados no tree-shake; descomentar = re-baixar):
+        # "local-xlam-8b" "local-qwen30b-moe" "local-uncensored-q4kp"
         "google" "cloudflare" "cohere" "nvidia" "openrouter"
         "groq" "huggingface" "cerebras" "sambanova"
         # Zen HABILITADO (dono confirmou 08/10: funciona; o erro de hoje era
