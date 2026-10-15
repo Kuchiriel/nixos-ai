@@ -428,9 +428,14 @@ CASCADE_MAP: dict[str, list[tuple[str, str, str, str]]] = {
          "GROQ_API_KEY"),
     ],
     "classify": [
-        # 11/10: glm-5.3-flash (NIM) fora (410). qwen3.8-27b barato/rápido.
+        # 15/10: freellmapi/auto (:3001) ENTROU como 2º fallback — router
+        # 34 free-providers com failover embutido (probeado ao vivo: OK v/
+        # groq/openai/gpt-oss-safeguard-20b em 358ms). Só como fallback:
+        # dependência de outro serviço local (freellmapi@docker).
         ("groq", "qwen/qwen3.8-27b", "https://api.groq.com/openai",
          "GROQ_API_KEY"),
+        ("freellmapi", "auto", "http://127.0.0.1:3001",
+         "FREELLMAPI_API_KEY"),
     ],
     "rag": [
         ("openrouter", "ling-3-flash-sante", "https://openrouter.ai/api",

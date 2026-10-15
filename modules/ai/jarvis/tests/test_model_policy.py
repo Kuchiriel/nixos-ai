@@ -22,7 +22,10 @@ class TestCascade:
             entries = mp.cascade_for(layer)
             assert entries, layer
             for provider, model, base, key in entries:
-                assert provider and model and base.startswith("https://")
+                assert provider and model
+                # https:// p/ providers externos; http:// aceito SÓ em
+                # loopback (serviço local do host — ex. freellmapi :3001).
+                assert base.startswith("https://") or base.startswith("http://127.0.0.1:")
                 assert key.endswith("_KEY") or key.endswith("CONFIG") or key.endswith("_TOKEN")
 
     def test_unknown_empty(self):
