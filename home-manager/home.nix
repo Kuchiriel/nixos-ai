@@ -227,6 +227,21 @@
   # tool.execute.before denies unanchored root deletes via args rewrite.
   home.file.".config/opencode/plugins/memory.js".source = ./files/opencode/plugins/memory.js;
 
+  # opencode.json do PROJETO (~/projects) — DECLARATIVO (15/10).
+  # POR QUÊ: o arquivo vivia solto na raiz do repo e um agente o encheu de
+  # freellmapi + enabled_providers ['local','freellmapi'] — e a lista de
+  # projeto SOBRESCREVE a global, derrubando nvidia/google/etc ("modelos
+  # sumiram", "Unexpected server error" no CLI). Fonte única de providers =
+  # ~/.config/opencode/opencode.json (gerado daqui do home.nix); no projeto
+  # vai só a higiene de contexto. Symlink read-only da store: edição manual
+  # na mão fica IMPOSSÍVEL — se um agente recriar o arquivo, a ativação
+  # seguinte o substitui de volta.
+  home.file."projects/opencode.json".text = builtins.toJSON {
+    "$schema" = "https://opencode.ai/config.json";
+    compaction = { auto = true; prune = true; };
+    tool_output = { max_lines = 200; max_bytes = 8192; };
+  };
+
   # ── VS Code + Roo Code — configurado via módulo vscode-roo.nix ──
   # (extensões, userSettings, MCP, custom modes são declarativos)
   vscode-roo = {
