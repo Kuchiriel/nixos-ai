@@ -375,6 +375,19 @@
               name = "Nemotron 3.5 Lightning (openrouter :free)";
               limit = { context = 128000; output = 8192; };
             };
+            # 15/10 (pesquisa web + probe): o OpenRouter :free estourou o
+            # TPD do lightning (429~3h), mas o MESMO model roteia via NIM
+            # nvidia key no router → pool viva HOJE, sem reset diário.
+            "nemotron-3.5-lightning-30b-a3b" = {
+              name = "Nemotron 3.5 Lightning 30B A3B (nvidia)";
+              limit = { context = 128000; output = 8192; };
+            };
+            # 15/10: laguna é o top do OpenRouter :free hoje (web); no probe
+            # deu 429 (cooldown ~3h) — manter: volta sozinho.
+            "poolside-laguna-s-2.1" = {
+              name = "Poolside Laguna S 2.1 (openrouter :free)";
+              limit = { context = 128000; output = 8192; };
+            };
             "llama-4-scout" = {
               name = "Llama 4 Scout (cloudflare)";
               limit = { context = 131072; output = 8192; };

@@ -407,12 +407,16 @@ CASCADE_MAP: dict[str, list[tuple[str, str, str, str]]] = {
          "https://openrouter.ai/api", "OPENROUTER_API_KEY"),
     ],
     "batch": [
-        # 11/10: NIM direto fora (410 Gone nos nemotron; timeout no deepseek-
-        # v4.1-flash). OpenRouter :free é o caminho batch (50 req/dia).
+        # 11/10: NIM direto fora (410 Gone nos nemotron; timeout no
+        # deepseek-v4.1-flash). OpenRouter :free é o caminho batch (50/dia).
         ("openrouter", "qwen/qwen3.8-flash", "https://openrouter.ai/api",
          "OPENROUTER_API_KEY"),
         ("openrouter", "nvidia/nemotron-3.5-lightning:free",
          "https://openrouter.ai/api", "OPENROUTER_API_KEY"),
+        # 15/10: freellmapi/auto como 3º — router 34 providers com failover
+        # embutido; valida live probe (RemoteBackend, finish=stop).
+        ("freellmapi", "auto", "http://127.0.0.1:3001",
+         "FREELLMAPI_API_KEY"),
     ],
     "mechanical": [
         ("zen", "nemotron-3.5-lightning", "https://api.openrouter.ai/api",
