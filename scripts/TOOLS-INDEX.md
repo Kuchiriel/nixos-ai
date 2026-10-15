@@ -2,10 +2,12 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_52 tools._
+_54 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
+- `agent-msg-server.sh` (nixos-ai/scripts) — agent-msg-server.sh — o CANAL BOT-A-BOT do server-agent (espelho do
+  use: `USO: nixos-ai/scripts/agent-msg-server.sh "mensagem"`
 - `bench-final.py` (nixos-ai/scripts) — """Benchmark multiple llama.cpp configurations systematically."""
 - `bench-llm.sh` (nixos-ai/scripts) — bench-llm.sh — benchmark padrão da casa (consolida os one-offs de 24/09).
 - `charger-watch.sh` (nixos-ai/scripts) — charger-watch.sh — anuncia plug/desplug do carregador na voz do JARVIS.
@@ -20,6 +22,7 @@ _52 tools._
   use: `Uso: PYTHONPATH=src python3 eval-model.py --base http://127.0.0.1:8080 \`
 - `fetch-resume.py` (nixos-ai/scripts) — """Download com resume + retry + verificação de tamanho (stdlib only).
   use: `Uso: python3 fetch-resume.py URL DESTINO [--tries 50]`
+- `fix_refs.py` (nixos-ai/scripts) — """fix_refs.py — mechanical doc-ref repairs (all verified before write).
 - `gguf_audit.py` (nixos-ai/scripts) — """Audit GGUFs: real dims -> KV/token -> ctx fit.
   use: `Usage: gguf_audit.py [modelsdir]  (default ~/models, JSON to stdout)`
 - `grade-harbor.py` (nixos-ai/scripts) — """grade-harbor.py — taxonomia de estratégia sobre trajetórias salvas.
