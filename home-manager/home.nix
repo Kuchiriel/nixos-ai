@@ -446,6 +446,19 @@
             "nvidia/nemotron-3-super-120b-a12b" = {
               name = "Nemotron 3 Super 120B (NIM free)";
             };
+            # 15/10 (matriz + catálogo NIM 81 modelos): ultra-550b EXISTE no
+            # NIM e responde OK (o 502 antigo era do router freellmapi, não
+            # do NIM). É o modelo principal do dono.
+            "nvidia/nemotron-3-ultra-550b-a55b" = {
+              name = "Nemotron 3 Ultra 550B A55B (NIM free)";
+            };
+            # Companheiros da família nemotron-3 no NIM (catálogo 15/10):
+            "nvidia/nemotron-3.5-super-vl-120b-a12b" = {
+              name = "Nemotron 3.5 Super VL 120B (NIM free, visão)";
+            };
+            "nvidia/nemotron-3.5-lightning-30b-a3b" = {
+              name = "Nemotron 3.5 Lightning 30B A3B (NIM free)";
+            };
             "google/gemma-4-31b-it" = {
               name = "Gemma 4 31B IT (NIM free)";
             };
