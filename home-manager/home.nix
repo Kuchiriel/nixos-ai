@@ -273,155 +273,6 @@
       # output}` viram providers (id+port da service = fonte única).
       # Router (:8080), local-fast (alias) e local_small_model manuais.
       provider = ({
-        # FreeLLMAPI (:3001, 15/10 E2E) — o ROUTER de 34 free-providers
-        # (212 models, failover por rate-limit, quota tracking). Key via
-        # {env:FREELLMAPI_API_KEY} (/etc/litellm.env → keys-wrapper).
-        # FIX 15/10: este bloco estava IRMÃO de `provider` no settings —
-        # o gerador o emitia no top-level do opencode.json (junto de
-        # `model`, `small_model`...), onde o CLI NUNCA lê: só
-        # `provider.<id>` vira provider selecionável. Por isso "to sem
-        # modelo". Move pra DENTRO do provider attrset.
-        # Modelos: 'auto' = o router decide; catalog tem ids turvos
-        # (anotações em .config/freellmapi/E2E-ANOTACOES.md) — começar
-        # SÓ com auto e ir liberando ids conforme provados.
-        # Probe AO VIVO 15/10 (HTTP :3001 + E2E via `opencode run` — o CLI
-        # usa o system prompt do agente (~19k tok), que é o teste real):
-        #   ✅ RESPONDEM: auto, gemini-3.5/2.5/3.1-flash-lite, qwen3.8-27b,
-        #      gpt-oss-120b/20b, nemotron-3-super-120b, llama-4-scout,
-        #      qwen2.5-coder-32b, qwq-32b, llama-3.1-8b,
-        #      mistral-small-3.1-24b, llama-3.3-70b-fp8-fast,
-        #      command-a, command-r7b, fusion        #   🟡 RATE-LIMIT (manter — cooldown de free tier, volta sozinho):
-        #      nemotron-3.5-lightning (quota diária OpenRouter :free)
-        #      gemini-3.8-flash (429 RPM do google free durante o probe;
-        #        respondeu OK por HTTP antes e depois — não é defeito)
-        #   ✅ DESTRAVADOS 15/10 pós-diagnóstico (pareciam "502 upstream"):
-        #      gemini-3.8/3.6/3.5-flash + gemini-2.5-flash são THINKING
-        #      models — com max_tokens curto a thought termina em
-        #      MAX_TOKENS e a resposta vem vazia (empty_completion), que
-        #      o router trata como 502. Com saída >= 512 respondem OK
-        #      (E2E CLI: 3.5/2.5/3.6 = OK). A key google do router era
-        #      válida — o que estava podre era o tamanho do probe.
-        #   ❌ REMOVIDOS (motivo definitivo, não é rate-limit):
-        #      claude-opus/sonnet/haiku-4-5 → 404 "not in catalog" (UNAVAILABLE)
-        #      nemotron-3-ultra-550b, deepseek-r1-distill, moondream → 502
-        #      gemini-3.7-flash → upstream_error real (re-testado 3x)
-        #   Notas de uso (limitações reais dos FREE tiers, não defeito):
-        #      qwen3.8-27b/llama-3.3 ITPM 7-8k < system prompt do opencode —
-        #        respondem por HTTP curto, nunca pelo agente CLI;
-        #      aya-expanse-32b: sem tool-calling (responde texto, não agente);
-        #      GERAL: probes de diagnóstico com max_tokens < 512 dão
-        #        falso-negativo nos gemini thinking (ver acima).
-        freellmapi = {
-          npm = "@ai-sdk/openai-compatible";
-          name = "FreeLLMAPI";
-          options = {
-            baseURL = "http://127.0.0.1:3001/v1";
-            apiKey = "{env:FREELLMAPI_API_KEY}";
-          };
-          models = {
-            auto = {
-              name = "FreeLLMAPI Auto (router 34 providers)";
-              limit = { context = 128000; output = 8192; };
-            };
-            fusion = {
-              name = "FreeLLMAPI Fusion (multi-model judge)";
-              limit = { context = 128000; output = 8192; };
-            };
-            "gemini-3.5-flash" = {
-              name = "Gemini 3.5 Flash (thinking; req. <=512 tok)";
-              limit = { context = 128000; output = 8192; };
-            };
-            "gemini-2.5-flash" = {
-              name = "Gemini 2.5 Flash (thinking; req. <=512 tok)";
-              limit = { context = 128000; output = 8192; };
-            };
-            "gemini-3.8-flash" = {
-              name = "Gemini 3.8 Flash (thinking; req. <=512 tok)";
-              limit = { context = 128000; output = 8192; };
-            };
-            "gemini-3.6-flash" = {
-              name = "Gemini 3.6 Flash (thinking; req. <=512 tok)";
-              limit = { context = 128000; output = 8192; };
-            };
-            "gemini-3.5-flash-lite" = {
-              name = "Gemini 3.5 Flash Lite";
-              limit = { context = 128000; output = 8192; };
-            };
-            "gemini-2.5-flash-lite" = {
-              name = "Gemini 2.5 Flash Lite";
-              limit = { context = 32768; output = 8192; };
-            };
-            "gemini-3.1-flash-lite" = {
-              name = "Gemini 3.1 Flash Lite";
-              limit = { context = 128000; output = 8192; };
-            };
-            "qwen3.8-27b" = {
-              name = "Qwen3.8 27B (groq; ITPM free 7k < prompt agente)";
-              limit = { context = 131072; output = 4096; };
-            };
-            "gpt-oss-120b" = {
-              name = "GPT-OSS 120B (groq)";
-              limit = { context = 131072; output = 8192; };
-            };
-            "gpt-oss-20b" = {
-              name = "GPT-OSS 20B (nvidia)";
-              limit = { context = 32768; output = 8192; };
-            };
-            "nemotron-3-super-120b" = {
-              name = "Nemotron 3 Super 120B (nvidia)";
-              limit = { context = 131072; output = 8192; };
-            };
-            "nemotron-3.5-lightning" = {
-              name = "Nemotron 3.5 Lightning (openrouter :free)";
-              limit = { context = 128000; output = 8192; };
-            };
-            # 15/10 (pesquisa web + probe): o OpenRouter :free estourou o
-            # TPD do lightning (429~3h), mas o MESMO model roteia via NIM
-            # nvidia key no router → pool viva HOJE, sem reset diário.
-            "nemotron-3.5-lightning-30b-a3b" = {
-              name = "Nemotron 3.5 Lightning 30B A3B (nvidia)";
-              limit = { context = 128000; output = 8192; };
-            };
-            # 15/10: laguna é o top do OpenRouter :free hoje (web); no probe
-            # deu 429 (cooldown ~3h) — manter: volta sozinho.
-            "poolside-laguna-s-2.1" = {
-              name = "Poolside Laguna S 2.1 (openrouter :free)";
-              limit = { context = 128000; output = 8192; };
-            };
-            "llama-4-scout" = {
-              name = "Llama 4 Scout (cloudflare)";
-              limit = { context = 131072; output = 8192; };
-            };
-            "qwen2.5-coder-32b" = {
-              name = "Qwen2.5 Coder 32B (cloudflare)";
-              limit = { context = 32768; output = 8192; };
-            };
-            "qwq-32b" = {
-              name = "QwQ 32B (cloudflare)";
-              limit = { context = 32768; output = 8192; };
-            };
-            "llama-3.1-8b" = {
-              name = "Llama 3.1 8B (cloudflare; tool-call via texto)";
-              limit = { context = 32768; output = 4096; };
-            };
-            "mistral-small-3.1-24b" = {
-              name = "Mistral Small 3.1 24B (cloudflare)";
-              limit = { context = 32768; output = 8192; };
-            };
-            "llama-3.3-70b-fp8-fast" = {
-              name = "Llama 3.3 70B FP8 (cloudflare ctx 24k)";
-              limit = { context = 24000; output = 4096; };
-            };
-            "command-a" = {
-              name = "Command A (cohere)";
-              limit = { context = 131072; output = 8192; };
-            };
-            "command-r7b" = {
-              name = "Command R7B (cohere)";
-              limit = { context = 128000; output = 8192; };
-            };
-          };
-        };
         # (14/10, dono: small_model NUNCA `local` — pc fraco puxaria modelo
         # inútil. Nome dedicado pro tier leve, endpoint do bonsai.)
         local_small_model = {
@@ -530,13 +381,19 @@
             "google/gemma-4-31b-it:free" = {
               name = "Gemma 4 31B Free";
             };
+            # COMENTADO 15/10 (matriz): "only available to paid users".
+            /*
             "thinkingmachines/inkling:free" = {
               name = "Inkling Free (novidade 10/26)";
             };
+            */
           };
         };
         
-        # ADICIONADO: Groq (fast LLM cloud)
+        # Groq COMENTADO 15/10 (matriz de testes): os 3 modelos (qwen3.8-27b,
+        # gpt-oss-120b/20b) retornam 400/PAID no free tier atual — exige tier
+        # pago p/ inference. Reativar só se o billing mudar.
+        /*
         groq = {
           npm = "@ai-sdk/openai-compatible";
           options = {
@@ -544,12 +401,8 @@
             apiKey = "{env:GROQ_API_KEY}";
           };
           models = {
-            # Auditoria 08/10 (GET /models real): qwen3.6-27b MORREU (removido);
-            # catálogo free atual = qwen3.8-27b + gpt-oss-120b/20b + allam-2-7b.
             "qwen/qwen3.8-27b" = {
               name = "Groq Qwen3.8 27B";
-              # Tier grátis: OTPM 1000 → limita saída p/ caber (ITPM 7000 ainda
-              # é apertado p/ o system prompt do opencode; requer tier pago p/ uso real).
               limit = {
                 context = 131072;
                 output = 800;
@@ -571,6 +424,7 @@
             };
           };
         };
+        */
         
         # NVIDIA NIM (chave NVIDIA_API_KEY validada 16/09: HTTP 200, 82
         # modelos — provider free vivo que estava fora do config)
@@ -598,8 +452,9 @@
           };
         };
 
-        # ADICIONADO: Cerebras (fast inference)
-        # 16/09: chave válida mas conta sem crédito → "Payment Required".
+        # Cerebras COMENTADO 15/10 (matriz): 2/2 modelos "Payment Required"
+        # (conta sem crédito desde 16/09). Reativar só com billing resolvido.
+        /*
         cerebras = {
           npm = "@ai-sdk/openai-compatible";
           options = {
@@ -607,8 +462,6 @@
             apiKey = "{env:CEREBRAS_API_KEY}";
           };
           models = {
-            # Auditoria 08/10 (GET /models real): catálogo = gpt-oss-120b +
-            # qwen-3.8-27b. "Payment Required" de 16/09 a retestar.
             "qwen-3.8-27b" = {
               name = "Cerebras Qwen3.8 27B";
             };
@@ -617,6 +470,7 @@
             };
           };
         };
+        */
 
         # Together REMOVIDO 16/09: conta exige US$5 de crédito (dono
         # recusou) e a chave retorna 401. Re-add só se billing resolver.
@@ -652,18 +506,22 @@
             "@cf/qwen/qwen3.8-27b" = {
               name = "Qwen3.8 27B (Workers AI free)";
             };
+            # COMENTADO 15/10 (matriz): exige Workers Paid (Forbidden no free).
+            /*
             "@cf/deepseek-ai/deepseek-v4-flash-0731" = {
               name = "DeepSeek V4 Flash (Workers AI free)";
             };
+            */
             "@cf/mistralai/mistral-small-3.1-24b-instruct" = {
               name = "Mistral Small 3.1 24B (Workers AI free)";
             };
           };
         };
 
-        # SambaNova Cloud — chave válida (catálogo 6 modelos 08/10), MAS
-        # inferência retorna HTTP 402 PAYMENT_METHOD_REQUIRED: o free tier
-        # pós-2026 exige cartão no dashboard. AGUARDANDO_ACAO_USUARIO.
+        # SambaNova COMENTADO 15/10 (matriz): 4/4 modelos HTTP 402
+        # (balance_units: 0 — free tier pós-2026 exige cartão). Reativar
+        # só com billing resolvido.
+        /*
         sambanova = {
           npm = "@ai-sdk/openai-compatible";
           options = {
@@ -685,6 +543,7 @@
             };
           };
         };
+        */
 
         # Cohere — trial key gratuita (rate-limited, sem cartão).
         # Endpoint OpenAI-compat /compatibility/v1 validado 08/10 (HTTP 200).
@@ -713,12 +572,12 @@
           };
         };
 
-        # ADICIONADO: HuggingFace Inference API
+        # HuggingFace COMENTADO 15/10 (matriz): "no remaining credits"
+        # (router cobra inference). Reativar só com créditos.
+        /*
         huggingface = {
           npm = "@ai-sdk/openai-compatible";
           options = {
-            # api-inference = endpoint legado; o vivo é o router (chat
-            # completions validado 16/09: HTTP 200 com resposta real)
             baseURL = "https://router.huggingface.co/v1";
             apiKey = "{env:HF_TOKEN}";
           };
@@ -728,6 +587,7 @@
             };
           };
         };
+        */
       } // pkgs.lib.mapAttrs'
         (name: svc: pkgs.lib.nameValuePair svc.opencode.key {
           npm = "@ai-sdk/openai-compatible";
@@ -782,17 +642,19 @@
       #   INDISPONIVEL_TEMPORARIO: nvidia/deepseek-ai/deepseek-v4.1-flash
       #     (streaming timeout mesmo via curl; NIM às vezes retém resposta),
       #     openrouter :free exceto inkling (free-models-per-day esgotado)
+      # MATRIZ DE TESTES 15/10 (34 modelos, API direta): enabled = só o que
+      # respondeu OK ou RATE_LIMIT (volta sozinho). Comentados = PAID/DEAD.
       enabled_providers = [
         "local" "local-fast" "local-uncensored" "local-uncensored-4b"
         "local-deepseek-7b" "local-phi-mini" "local-gemma-4b"
-        # (15/10, freellmapi E2E provado: provider SEM o gate enabled não
-        # existe pro CLI run — "Model not found" embrulhado em "Unexpected
-        # server error". Project .opencode/ MERGE foi a prova.)
-        "freellmapi"
+        # freellmapi REMOVIDO 15/10 (dono: pago + derrubou os outros providers)
         # MORTOS 14/10 (arquivos deletados no tree-shake; descomentar = re-baixar):
         # "local-xlam-8b" "local-qwen30b-moe" "local-uncensored-q4kp"
+        # ✅ VIVOS na matriz: google 4/4 · nvidia 4/4 · cloudflare 5/6 · cohere 5/5
+        # 🟡 RATE-LIMIT (manter): openrouter :free 4/5 (free-models-per-day, volta)
+        # ❌ PAID (comentados): groq 0/3 · cerebras 0/2 · sambanova 0/4 · huggingface 0/1
         "google" "cloudflare" "cohere" "nvidia" "openrouter"
-        "groq" "huggingface" "cerebras" "sambanova"
+        # "groq" "huggingface" "cerebras" "sambanova"
         # Zen HABILITADO (dono confirmou 08/10: funciona; o erro de hoje era
         # cota diária esgotada por uso dele, não defeito).
         "opencode"
