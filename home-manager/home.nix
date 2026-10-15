@@ -268,34 +268,123 @@
 
     settings = {
       # Provedor local (Bonsai 8B ternário via llama.cpp PrismML, porta 8080)
-      # FreeLLMAPI (:3001, 15/10 E2E) — o ROUTER de 34 free-providers
-      # (212 models, failover por rate-limit, quota tracking). Key via
-      # {env:FREELLMAPI_API_KEY} (/etc/litellm.env → keys-wrapper).
-      # Modelos: 'auto' = o router decide; catalog tem ids turvos
-      # (anotações em .config/freellmapi/E2E-ANOTACOES.md) — começar
-      # SÓ com auto e ir liberando ids conforme provados.
-      freellmapi = {
-        npm = "@ai-sdk/openai-compatible";
-        name = "FreeLLMAPI";
-        options = {
-          baseURL = "http://127.0.0.1:3001/v1";
-          apiKey = "{env:FREELLMAPI_API_KEY}";
-        };
-        models = {
-          auto = {
-            name = "FreeLLMAPI Auto (router 34 providers)";
-            limit = {
-              context = 128000;
-              output = 8192;
-            };
-          };
-        };
-      };
       # Direct LLMs GERADOS de models.nix directServers (14/10:
       # fim do hardcoded!). Services com `opencode = {key,name,context,
       # output}` viram providers (id+port da service = fonte única).
       # Router (:8080), local-fast (alias) e local_small_model manuais.
       provider = ({
+        # FreeLLMAPI (:3001, 15/10 E2E) — o ROUTER de 34 free-providers
+        # (212 models, failover por rate-limit, quota tracking). Key via
+        # {env:FREELLMAPI_API_KEY} (/etc/litellm.env → keys-wrapper).
+        # FIX 15/10: este bloco estava IRMÃO de `provider` no settings —
+        # o gerador o emitia no top-level do opencode.json (junto de
+        # `model`, `small_model`...), onde o CLI NUNCA lê: só
+        # `provider.<id>` vira provider selecionável. Por isso "to sem
+        # modelo". Move pra DENTRO do provider attrset.
+        # Modelos: 'auto' = o router decide; catalog tem ids turvos
+        # (anotações em .config/freellmapi/E2E-ANOTACOES.md) — começar
+        # SÓ com auto e ir liberando ids conforme provados.
+        # Probe AO VIVO 15/10 (HTTP :3001 + E2E via `opencode run` — o CLI
+        # usa o system prompt do agente (~19k tok), que é o teste real):
+        #   ✅ RESPONDEM: auto, gemini-3.5/2.5/3.1-flash-lite, qwen3.8-27b,
+        #      gpt-oss-120b/20b, nemotron-3-super-120b, llama-4-scout,
+        #      qwen2.5-coder-32b, qwq-32b, llama-3.1-8b,
+        #      mistral-small-3.1-24b, llama-3.3-70b-fp8-fast,
+        #      command-a, command-r7b, fusion
+        #   🟡 RATE-LIMIT (manter — cooldown de free tier, volta sozinho):
+        #      nemotron-3.5-lightning (quota diária OpenRouter :free)
+        #   ❌ REMOVIDOS (motivo definitivo, não é rate-limit):
+        #      claude-opus/sonnet/haiku-4-5 → 404 "not in catalog" (UNAVAILABLE)
+        #      gemini-3.8/3.6/3.5-flash + gemini-2.5-flash → 502 upstream
+        #        empty_completion (google key podre no router)
+        #      nemotron-3-ultra-550b, deepseek-r1-distill, moondream → 502
+        #      gemini-3.7-flash → timeout upstream
+        #   Notas de uso (limitações reais dos FREE tiers, não defeito):
+        #      qwen3.8-27b/lhama-3.3 ITPM 7-8k < system prompt do opencode —
+        #        respondem por HTTP curto, nunca pelo agente CLI;
+        #      aya-expanse-32b: sem tool-calling (responde texto, não agente).
+        freellmapi = {
+          npm = "@ai-sdk/openai-compatible";
+          name = "FreeLLMAPI";
+          options = {
+            baseURL = "http://127.0.0.1:3001/v1";
+            apiKey = "{env:FREELLMAPI_API_KEY}";
+          };
+          models = {
+            auto = {
+              name = "FreeLLMAPI Auto (router 34 providers)";
+              limit = { context = 128000; output = 8192; };
+            };
+            fusion = {
+              name = "FreeLLMAPI Fusion (multi-model judge)";
+              limit = { context = 128000; output = 8192; };
+            };
+            "gemini-3.5-flash-lite" = {
+              name = "Gemini 3.5 Flash Lite";
+              limit = { context = 128000; output = 8192; };
+            };
+            "gemini-2.5-flash-lite" = {
+              name = "Gemini 2.5 Flash Lite";
+              limit = { context = 32768; output = 8192; };
+            };
+            "gemini-3.1-flash-lite" = {
+              name = "Gemini 3.1 Flash Lite";
+              limit = { context = 128000; output = 8192; };
+            };
+            "qwen3.8-27b" = {
+              name = "Qwen3.8 27B (groq; ITPM free 7k < prompt agente)";
+              limit = { context = 131072; output = 4096; };
+            };
+            "gpt-oss-120b" = {
+              name = "GPT-OSS 120B (groq)";
+              limit = { context = 131072; output = 8192; };
+            };
+            "gpt-oss-20b" = {
+              name = "GPT-OSS 20B (nvidia)";
+              limit = { context = 32768; output = 8192; };
+            };
+            "nemotron-3-super-120b" = {
+              name = "Nemotron 3 Super 120B (nvidia)";
+              limit = { context = 131072; output = 8192; };
+            };
+            "nemotron-3.5-lightning" = {
+              name = "Nemotron 3.5 Lightning (openrouter :free)";
+              limit = { context = 128000; output = 8192; };
+            };
+            "llama-4-scout" = {
+              name = "Llama 4 Scout (cloudflare)";
+              limit = { context = 131072; output = 8192; };
+            };
+            "qwen2.5-coder-32b" = {
+              name = "Qwen2.5 Coder 32B (cloudflare)";
+              limit = { context = 32768; output = 8192; };
+            };
+            "qwq-32b" = {
+              name = "QwQ 32B (cloudflare)";
+              limit = { context = 32768; output = 8192; };
+            };
+            "llama-3.1-8b" = {
+              name = "Llama 3.1 8B (cloudflare; tool-call via texto)";
+              limit = { context = 32768; output = 4096; };
+            };
+            "mistral-small-3.1-24b" = {
+              name = "Mistral Small 3.1 24B (cloudflare)";
+              limit = { context = 32768; output = 8192; };
+            };
+            "llama-3.3-70b-fp8-fast" = {
+              name = "Llama 3.3 70B FP8 (cloudflare ctx 24k)";
+              limit = { context = 24000; output = 4096; };
+            };
+            "command-a" = {
+              name = "Command A (cohere)";
+              limit = { context = 131072; output = 8192; };
+            };
+            "command-r7b" = {
+              name = "Command R7B (cohere)";
+              limit = { context = 128000; output = 8192; };
+            };
+          };
+        };
         # (14/10, dono: small_model NUNCA `local` — pc fraco puxaria modelo
         # inútil. Nome dedicado pro tier leve, endpoint do bonsai.)
         local_small_model = {
