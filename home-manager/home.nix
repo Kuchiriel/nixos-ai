@@ -290,19 +290,27 @@
         #      gpt-oss-120b/20b, nemotron-3-super-120b, llama-4-scout,
         #      qwen2.5-coder-32b, qwq-32b, llama-3.1-8b,
         #      mistral-small-3.1-24b, llama-3.3-70b-fp8-fast,
-        #      command-a, command-r7b, fusion
-        #   🟡 RATE-LIMIT (manter — cooldown de free tier, volta sozinho):
+        #      command-a, command-r7b, fusion        #   🟡 RATE-LIMIT (manter — cooldown de free tier, volta sozinho):
         #      nemotron-3.5-lightning (quota diária OpenRouter :free)
+        #      gemini-3.8-flash (429 RPM do google free durante o probe;
+        #        respondeu OK por HTTP antes e depois — não é defeito)
+        #   ✅ DESTRAVADOS 15/10 pós-diagnóstico (pareciam "502 upstream"):
+        #      gemini-3.8/3.6/3.5-flash + gemini-2.5-flash são THINKING
+        #      models — com max_tokens curto a thought termina em
+        #      MAX_TOKENS e a resposta vem vazia (empty_completion), que
+        #      o router trata como 502. Com saída >= 512 respondem OK
+        #      (E2E CLI: 3.5/2.5/3.6 = OK). A key google do router era
+        #      válida — o que estava podre era o tamanho do probe.
         #   ❌ REMOVIDOS (motivo definitivo, não é rate-limit):
         #      claude-opus/sonnet/haiku-4-5 → 404 "not in catalog" (UNAVAILABLE)
-        #      gemini-3.8/3.6/3.5-flash + gemini-2.5-flash → 502 upstream
-        #        empty_completion (google key podre no router)
         #      nemotron-3-ultra-550b, deepseek-r1-distill, moondream → 502
-        #      gemini-3.7-flash → timeout upstream
+        #      gemini-3.7-flash → upstream_error real (re-testado 3x)
         #   Notas de uso (limitações reais dos FREE tiers, não defeito):
-        #      qwen3.8-27b/lhama-3.3 ITPM 7-8k < system prompt do opencode —
+        #      qwen3.8-27b/llama-3.3 ITPM 7-8k < system prompt do opencode —
         #        respondem por HTTP curto, nunca pelo agente CLI;
-        #      aya-expanse-32b: sem tool-calling (responde texto, não agente).
+        #      aya-expanse-32b: sem tool-calling (responde texto, não agente);
+        #      GERAL: probes de diagnóstico com max_tokens < 512 dão
+        #        falso-negativo nos gemini thinking (ver acima).
         freellmapi = {
           npm = "@ai-sdk/openai-compatible";
           name = "FreeLLMAPI";
@@ -317,6 +325,22 @@
             };
             fusion = {
               name = "FreeLLMAPI Fusion (multi-model judge)";
+              limit = { context = 128000; output = 8192; };
+            };
+            "gemini-3.5-flash" = {
+              name = "Gemini 3.5 Flash (thinking; req. <=512 tok)";
+              limit = { context = 128000; output = 8192; };
+            };
+            "gemini-2.5-flash" = {
+              name = "Gemini 2.5 Flash (thinking; req. <=512 tok)";
+              limit = { context = 128000; output = 8192; };
+            };
+            "gemini-3.8-flash" = {
+              name = "Gemini 3.8 Flash (thinking; req. <=512 tok)";
+              limit = { context = 128000; output = 8192; };
+            };
+            "gemini-3.6-flash" = {
+              name = "Gemini 3.6 Flash (thinking; req. <=512 tok)";
               limit = { context = 128000; output = 8192; };
             };
             "gemini-3.5-flash-lite" = {
