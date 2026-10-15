@@ -756,6 +756,7 @@
       # prune poda tool outputs velhos; tool_output capa outputs gigantes
       # (prompt de 33k matou o Qwen 2x); small_model tira titles/resumos do 35B.
       small_model = "local/bonsai";
+      warming = true;
       compaction = {
         auto = true;
         prune = true;
