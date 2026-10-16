@@ -455,6 +455,16 @@ def click_at(x: int, y: int, window_match: str = "OTClient") -> dict[str, Any]:
         except ValueError:
             pass
     at = w.get("at", [0, 0])
+    # (16/10, E2E caves) a geometry do find_window pode estar STALE: o
+    # prep_observe joga em fullscreen DEPOIS do lookup e o click foi
+    # p/ [972,1104] (offset da janela antiga [12,564]) = fora da tela.
+    # Releo o ACTIVewindow (fresco, pos-foco) e uso a geometria DELE.
+    try:
+        act2 = json.loads(_hyprctl("activewindow", "-j") or "{}")
+        if act2.get("address") == addr and act2.get("at"):
+            at = act2["at"]
+    except ValueError:
+        pass
     ax, ay = at[0] + x, at[1] + y
     _hyprctl("dispatch", "movecursor", str(ax), str(ay))
     yt = shutil.which("ydotool")
