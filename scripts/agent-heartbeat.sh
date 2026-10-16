@@ -79,6 +79,6 @@ hyprctl dispatch focuswindow "address:$END" >/dev/null 2>&1
 sleep 1
 ATUAL=$(hyprctl activewindow -j 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('address',''))" 2>/dev/null || true)
 [ "$ATUAL" = "$END" ] || { echo "HEARTBEAT: foco nao pegou — sem WAKEUP" >&2; exit 0; }
-wtype "[WAKEUP $(date +%H:%M)] sem progresso há ${idle_min}min (último: $nota). Declare ESTADO (working|ready|waiting-on) e tome a iniciativa (turn-taking) ou escale ao dono." || true
+wtype "[WAKEUP $(date +%H:%M)] sem progresso há ${idle_min}min (último: $nota). Declare ESTADO (working|ready|waiting-on) e tome a iniciativa: PESQUISA na internet (Wurmpedia/wiki) e LEIA O DECOMPILE — acha o próximo sistema a portar e COMEÇA (research = progresso)." || true
 wtype -k Return || true
 echo "HEARTBEAT: WAKEUP enviado (idle ${idle_min}min)"
