@@ -2,14 +2,14 @@
 # agent-heartbeat.sh — watchdog DE PROGRESSO do client-agent (16/10, dono:
 # "se ngm te provocar vc fica parada"). Liveness (processo vivo) não é
 # progresso (trabalho feito): este script mede PROGRESSO (commits nos
-# repos da lane + queue + capturas PNG) e, se parado há >20min em horário
+# repos da lane + queue + capturas PNG) e, se parado há >5min em horário
 # ativo, injeta WAKEUP na minha janela (canal bot-a-bot p/ mim mesmo).
 # Regras anti-spam (best practice): quiet 01-07h; sem WAKEUP se houve
 # progresso; WAKEUP carrega ESTADO (não é "acorda", é "declare e aja").
 # USO: systemd user timer a cada 10min (home.nix). Teste seco:
 #   scripts/agent-heartbeat.sh --check
 set -euo pipefail
-IDLE_MIN="${IDLE_MIN:-20}"
+IDLE_MIN="${IDLE_MIN:-5}"
 HORA=$(date +%H)
 
 # quiet hours: 01-07 (dono dorme; progresso noturno aparece nogit log)
