@@ -77,4 +77,31 @@ in {
       WantedBy = [ "timers.target" ];
     };
   };
+
+  # Camada de PROGRESSO (16/10, dono: "se ngm te provocar vc fica parada"):
+  # o watcher v2 mede CPU/working; este mede PROGRESSO (commits lane +
+  # queue + PNGs) e acorda SÓ quem está parado há >20min. Quiet 01-07h
+  # dentro do script. Mesmo canal wtype, sem duplicar o watcher.
+  systemd.user.services.agent-progress-heartbeat = {
+    Unit = {
+      Description = "WAKEUP por falta de progresso (client-agent, 10min)";
+    };
+    Service = {
+      Type = "oneshot";
+      ExecStart = "/home/nixos/projects/nixos-ai/scripts/agent-heartbeat.sh";
+    };
+  };
+
+  systemd.user.timers.agent-progress-heartbeat = {
+    Unit = {
+      Description = "Progress-heartbeat do client-agent (a cada 10min)";
+    };
+    Timer = {
+      OnCalendar = "*:0/10";
+      Persistent = true;
+    };
+    Install = {
+      WantedBy = [ "timers.target" ];
+    };
+  };
 }
