@@ -97,3 +97,7 @@ _58 tools._
   use: `Uso: ./scripts/voice-selftest.sh`
 - `vram-split-sweep.py` (nixos-ai/scripts) — """Sweep de split GPU/CPU: onde o MoE (e o denso) perdem velocidade.
 - `xref_audit.py` (nixos-ai/scripts) — """xref_audit.py — N<->N audit: docs <-> code references.
+- `dat_probe.py` (nixos-ai/scripts) — "sonda do appearances.dat do client (protobuf): existencia/sprites/nome por id, flags completas (--flags), raio de grounds."
+  use: `cd ~/projects/nixos-ai && nix develop --command python3 scripts/dat_probe.py [--flags] <id>...`
+  origem 16/10: desmascarou 381-384=paredes core, hands weapons-only, donor visual. Ghost donors (client .dat): rodar
+  `nix develop --command python3 /tmp/opencode/run_ghost2.py` (wrapper sys.path p/ reskin; PYTHONPATH e stripado no nix develop).
