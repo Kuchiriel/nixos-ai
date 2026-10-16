@@ -91,3 +91,7 @@ _54 tools._
 - `voice-selftest.sh` (nixos-ai/scripts) — Self-test autônomo do pipeline de voz (sem microfone).
   use: `Uso: ./scripts/voice-selftest.sh`
 - `vram-split-sweep.py` (nixos-ai/scripts) — """Sweep de split GPU/CPU: onde o MoE (e o denso) perdem velocidade.
+- `provider_matrix.py` (nixos-ai/scripts) — "provider_matrix.py — audit de TODOS os LLM providers do dono (keys de /etc/litellm.env) contra os endpoints reais; classifica OK/RATE_LIMIT/DEAD/PAID/AUTH/ERROR. Fonte do catalogo enabled_providers do home.nix."
+  use: `python3 provider_matrix.py` (34 testes ~3min; JSON /tmp/opencode/provider_matrix.json)
+- `xref_audit.py` (nixos-ai/scripts) — "N<->N audit docs<->code: wikilinks/md links/bare paths x doc mentions; dangling/orphans/one-way."
+  use: `python3 xref_audit.py` (roots canary+nixos+otclient)
