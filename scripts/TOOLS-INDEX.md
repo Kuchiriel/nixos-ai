@@ -2,10 +2,12 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_54 tools._
+_58 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
+- `agent-heartbeat.sh` (nixos-ai/scripts) — agent-heartbeat.sh — watchdog DE PROGRESSO do client-agent (16/10, dono:
+  use: `USO: systemd user timer a cada 10min (home.nix). Teste seco:`
 - `agent-msg-server.sh` (nixos-ai/scripts) — agent-msg-server.sh — o CANAL BOT-A-BOT do server-agent (espelho do
   use: `USO: nixos-ai/scripts/agent-msg-server.sh "mensagem"`
 - `bench-final.py` (nixos-ai/scripts) — """Benchmark multiple llama.cpp configurations systematically."""
@@ -60,6 +62,7 @@ _54 tools._
   use: `Uso: ./scripts/overnight-loop.sh [--max-tasks 3] [--max-minutes 150]`
 - `pipeline.py` (nixos-ai/scripts) — """pipeline.py — estrategista (MoE) diagnostica, executor (bonsai) executa.
   use: `0/3), enquanto o MoE acerta o diagnóstico mas perde o último passo.`
+- `provider_matrix.py` (nixos-ai/scripts) — """provider_matrix.py — audit de TODOS os LLM providers do dono (keys de
 - `read_chatgpt.py` (nixos-ai/scripts) — """Read a ChatGPT shared conversation via Playwright.
 - `reindex_code.py` (nixos-ai/scripts) — """Reindexa o code_index (coleção canônica) a partir do código vivo.
 - `roo-nightwatch-setup.sh` (nixos-ai/scripts) — ══════════════════════════════════════════════════════════════
@@ -88,12 +91,9 @@ _54 tools._
 - `ux_world.py` (nixos-ai/scripts) — """world.py — verificadores objetivos de estado do mundo (benchmark-side).
 - `ver-png.sh` (nixos-ai/scripts) — ver-png.sh — abre PNG em FULLSCREEN pro loop de visão (observe_screen)
   use: `Uso: ver-png.sh <arquivo.png> [ttl_segundos]`
+- `vision_matrix.py` (nixos-ai/scripts) — """vision_matrix.py — testa cada VLM candidato UM POR UM com screenshot real.
+  use: `Uso: python3 vision_matrix.py [imagem]  (default: trade2p-A-mais12s.png)`
 - `voice-selftest.sh` (nixos-ai/scripts) — Self-test autônomo do pipeline de voz (sem microfone).
   use: `Uso: ./scripts/voice-selftest.sh`
 - `vram-split-sweep.py` (nixos-ai/scripts) — """Sweep de split GPU/CPU: onde o MoE (e o denso) perdem velocidade.
-- `provider_matrix.py` (nixos-ai/scripts) — "provider_matrix.py — audit de TODOS os LLM providers do dono (keys de /etc/litellm.env) contra os endpoints reais; classifica OK/RATE_LIMIT/DEAD/PAID/AUTH/ERROR. Fonte do catalogo enabled_providers do home.nix."
-  use: `python3 provider_matrix.py` (34 testes ~3min; JSON /tmp/opencode/provider_matrix.json)
-- `xref_audit.py` (nixos-ai/scripts) — "N<->N audit docs<->code: wikilinks/md links/bare paths x doc mentions; dangling/orphans/one-way."
-  use: `python3 xref_audit.py` (roots canary+nixos+otclient)
-- `vision_matrix.py` (nixos-ai/scripts) — "testa cada VLM candidato um por um com screenshot real; classifica OK/RATE_LIMIT/DEAD/PAID/AUTH/ERROR + latência."
-  use: `python3 vision_matrix.py [imagem]` (JSON /tmp/opencode/vision_matrix.json)
+- `xref_audit.py` (nixos-ai/scripts) — """xref_audit.py — N<->N audit: docs <-> code references.
