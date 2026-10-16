@@ -1044,7 +1044,7 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
         return f"SEM DISPLAY: {shot.get('error', 'captura impossível')}"
 
     image_path = shot["path"]
-    budget = float(args.get("budget", 45.0))
+    budget = float(args.get("budget", 90.0))
     return _cascade(image_path, question, budget,
                     size_kb=shot.get("size_kb", "?"),
                     suffix=(f" | janela focada+opaca: {prep.get('address')}"
@@ -1063,11 +1063,11 @@ def observe_file(args: dict[str, Any]) -> str:
         return f"ERROR: arquivo nao encontrado: {path!r}"
     question = args.get("question",
                         "Describe what you see in this image, region by region.")
-    budget = float(args.get("budget", 45.0))
+    budget = float(args.get("budget", 90.0))
     return _cascade(path, question, budget, size_kb=os.path.getsize(path) // 1024)
 
 
-def _cascade(image_path: str, question: str, budget: float = 45.0,
+def _cascade(image_path: str, question: str, budget: float = 90.0,
              size_kb: Any = "?", suffix: str = "") -> str:
     """Cascata de visão sobre um ARQUIVO (local → gemini → nvidia → OR → OCR).
 
@@ -1089,8 +1089,10 @@ def _cascade(image_path: str, question: str, budget: float = 45.0,
     # TETO GERAL: 45s default, MCP tolera 180s.
     deadline = time.time() + budget
 
-    levels = [(_vision_local, "local", 8.0),
-              (_vision_gemini, "gemini", 20.0),
+    # (23:55) local FORA da ordem: nenhum VLM local existe neste host
+    # (bonsai/fast = texto puro) — era 500 garantido queimando 8s. Volta
+    # quando um VLM local pousar. Ordem = mais rápido primeiro (matriz).
+    levels = [(_vision_gemini, "gemini", 20.0),
               (_vision_nvidia, "nvidia-nim-vision", 20.0),
               (_vision_cloudflare, "cloudflare", 30.0),
               (_vision_openrouter, "openrouter", 15.0)]
