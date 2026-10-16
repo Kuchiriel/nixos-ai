@@ -95,3 +95,5 @@ _54 tools._
   use: `python3 provider_matrix.py` (34 testes ~3min; JSON /tmp/opencode/provider_matrix.json)
 - `xref_audit.py` (nixos-ai/scripts) — "N<->N audit docs<->code: wikilinks/md links/bare paths x doc mentions; dangling/orphans/one-way."
   use: `python3 xref_audit.py` (roots canary+nixos+otclient)
+- `vision_matrix.py` (nixos-ai/scripts) — "testa cada VLM candidato um por um com screenshot real; classifica OK/RATE_LIMIT/DEAD/PAID/AUTH/ERROR + latência."
+  use: `python3 vision_matrix.py [imagem]` (JSON /tmp/opencode/vision_matrix.json)

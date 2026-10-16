@@ -42,6 +42,11 @@ _SOURCES: dict[str, dict[str, Any]] = {
     # antigo emitia NVIDIA_API_KEY. Aceitamos os dois nomes.
     "nvidia": {"env": ["NVIDIA_API_KEY", "NVIDIA_NIM_API_KEY"],
                "files": ["/etc/litellm.env"]},
+    # (15/10) vision cloudflare: token + account id do Workers AI.
+    "cloudflare_token": {"env": ["CLOUDFLARE_API_TOKEN"],
+                         "files": ["/etc/litellm.env"]},
+    "cloudflare_account": {"env": ["CLOUDFLARE_ACCOUNT_ID"],
+                           "files": ["/etc/litellm.env"]},
 }
 
 

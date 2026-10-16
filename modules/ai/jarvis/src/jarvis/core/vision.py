@@ -159,23 +159,29 @@ def _hyprctl_raw(*args: str) -> str:
         return ""
 
 
-def _prepare_window(window_title: str, opaque: bool = True) -> dict[str, Any]:
-    """Foca a janela e tira a TRANSPARÊNCIA antes de capturar (2026-10-02).
+def _prepare_window(window_title: str, opaque: bool = True,
+                    fullscreen: bool = False) -> dict[str, Any]:
+    """Foca a janela, tira a TRANSPARÊNCIA e (opcional) FULLSCREEN antes de
+    capturar (base 2026-10-02; fullscreen 15/10).
 
-    Dois problemas que só aparecem em jogo/terminal, medidos hoje:
+    Três problemas que só aparecem em jogo/terminal, medidos:
 
     - TRANSPARÊNCIA: o Hyprland deixa a janela do OTClient (e o terminal)
       semitransparentes. Grim captura o que está COMPOSTO por baixo, então o
       OCR lia o opencode por trás do jogo e a visão descrevia a janela errada.
       `opaque/alpha 1, noblur 1, nofade 1` na regra da janela resolve.
     - FOCO: sem focar, o keystroke vai para o terminal em vez do jogo.
+    - SOBREPOSIÇÃO (15/10, 2 clients): foco NÃO basta — grim compõe a pilha
+      e a janela de trás some. `fullscreen=true` joga a janela em fullscreen
+      REAL (fullscreenstate 2 2) antes de capturar. Sem restore (o jogo roda
+      fullscreen de qualquer jeito; terminal: passe fullscreen=false).
 
     Devolve o que foi feito (e um aviso se o foco não pegou) para o chamador
     reportar — não engole a falha, porque "digitei e nada aconteceu" sem
     explicação é o pior debug do mundo.
     """
     out: dict[str, Any] = {"window": window_title, "opaque": False,
-                           "focado": False}
+                           "focado": False, "fullscreen": False}
     try:
         from jarvis.core.gameinput import find_window
         w = find_window(window_title)
@@ -209,6 +215,19 @@ def _prepare_window(window_title: str, opaque: bool = True) -> dict[str, Any]:
     out["focado"] = focado
     if not focado:
         out["erro"] = "foco nao confirmado apos 1.8s"
+
+    # fullscreen REAL (15/10): grim compõe a pilha — janela atrás de outra
+    # some da captura. fullscreenstate 2 2 = fullscreen nos dois níveis.
+    # Age na janela FOCADA acima (sem sufixo de endereço: a forma varia por
+    # versão do Hyprland; o foco foi confirmado no bloco anterior).
+    if fullscreen:
+        try:
+            subprocess.run(["hyprctl", "dispatch", "fullscreenstate", "2", "2"],
+                           capture_output=True, timeout=5)
+            time.sleep(0.4)
+            out["fullscreen"] = True
+        except Exception as e:
+            out["erro_fullscreen"] = str(e)[:80]
 
     # tira transparência só nesta janela (regra temporária, some ao fechar)
     try:
@@ -328,6 +347,10 @@ VISION_TOOL: dict[str, Any] = {
                     "type": "string",
                     "description": "Window title to capture (for mode=window). Omit for active window.",
                 },
+                "fullscreen": {
+                    "type": "boolean",
+                    "description": "Se True, joga a janela em fullscreen REAL antes de capturar (grim compoe a pilha: janela atras de outra some). Obrigatorio com 2+ janelas do mesmo app. Sem restore.",
+                },
                 "neg": {
                     "type": "boolean",
                     "description": "Se True, adiciona prompt negativo para ignorar menções de login, senha, token, caminho etc. e focar apenas no visível.",
@@ -347,8 +370,11 @@ def handle_capture(args: dict[str, Any]) -> str:
     # janela certa em vez do terminal que está por trás.
     _want_focus = args.get("focus_window", True)
     _want_opaque = args.get("opaque", True)
-    prep = (_prepare_window(window_title, opaque=_want_opaque)
-            if (mode == "window" and window_title and _want_focus) else None)
+    _want_full = args.get("fullscreen", False)
+    prep = (_prepare_window(window_title, opaque=_want_opaque,
+                            fullscreen=_want_full)
+            if (mode == "window" and window_title
+                and (_want_focus or _want_full)) else None)
 
     if mode == "full":
         result = capture_full()
@@ -381,8 +407,11 @@ def observe_screen(args: dict[str, Any]) -> str:
     # janela certa em vez do terminal que está por trás.
     _want_focus = args.get("focus_window", True)
     _want_opaque = args.get("opaque", True)
-    prep = (_prepare_window(window_title, opaque=_want_opaque)
-            if (mode == "window" and window_title and _want_focus) else None)
+    _want_full = args.get("fullscreen", False)
+    prep = (_prepare_window(window_title, opaque=_want_opaque,
+                            fullscreen=_want_full)
+            if (mode == "window" and window_title
+                and (_want_focus or _want_full)) else None)
     question = args.get("question", "Describe what you see. List applications, errors, and UI state.")
 
     if mode == "full":
@@ -453,21 +482,28 @@ def observe_screen(args: dict[str, Any]) -> str:
 # Cada nível registra `via:` no output (honestidade > adivinhação).
 # ---------------------------------------------------------------------------
 
-def _vision_local(image_path: str, question: str) -> dict[str, Any]:
-    """Nível 1: modelo local com mmproj (via LLMClient canônico)."""
+def _img_b64(image_path: str, size: int = 1024) -> tuple[str, str]:
+    """JPEG base64 da imagem (MIME, b64). Tamanho por TIER (pesquisa 15/10:
+    UI-TARS/Qwen-GUI-3B — thumbnail 1024 MATA texto 11px e ícone 10x10;
+    modelo forte recebe 1536, fraco 1024; crop do chamador > resize)."""
     import base64
     import io
 
     try:
         from PIL import Image
-        img = Image.open(image_path)
-        img.thumbnail((1024, 1024), Image.LANCZOS)
+        img = Image.open(image_path).convert("RGB")
+        img.thumbnail((size, size), Image.LANCZOS)
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=80)
-        img_b64 = base64.b64encode(buf.getvalue()).decode()
+        return "image/jpeg", base64.b64encode(buf.getvalue()).decode()
     except ImportError:
         with open(image_path, "rb") as f:
-            img_b64 = base64.b64encode(f.read()).decode()
+            return "image/png", base64.b64encode(f.read()).decode()
+
+
+def _vision_local(image_path: str, question: str) -> dict[str, Any]:
+    """Nível 1: modelo local com mmproj (via LLMClient canônico)."""
+    mime, img_b64 = _img_b64(image_path)
 
     from jarvis.providers.llm import LLMClient, LLMError
 
@@ -511,21 +547,9 @@ def _vision_gemini(image_path: str, question: str,
     if not key:
         return {"ok": False, "error": "GEMINI_API_KEY ausente"}
 
-    # Encode da imagem. Sem PIL, manda o arquivo CRU (a Gemini aceita PNG) em
-    # vez de abortar: PIL ausente nao e motivo p/ pular uma vision free.
-    mime = "image/jpeg"
-    try:
-        from PIL import Image
-        import io
-        img = Image.open(image_path).convert("RGB")
-        img.thumbnail((1024, 1024), Image.LANCZOS)
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=80)
-        img_b64 = base64.b64encode(buf.getvalue()).decode()
-    except ImportError:
-        mime = "image/png"
-        with open(image_path, "rb") as f:
-            img_b64 = base64.b64encode(f.read()).decode()
+    # Encode da imagem (forte: 1536 — texto 11px sobrevive; PIL ausente =
+    # PNG cru, a Gemini aceita).
+    mime, img_b64 = _img_b64(image_path, 1536)
 
     # sem modelo hardcoded: o catálogo decide (free rotaciona toda semana)
     models = _discover_vision_models("gemini")[:3]
@@ -563,64 +587,6 @@ def _vision_gemini(image_path: str, question: str,
     return {"ok": False, "error": f"gemini falhou: {last}"}
 
 
-def _vision_groq(image_path: str, question: str,
-                 timeout: float = 60.0) -> dict[str, Any]:
-    """Nível 2b: Groq vision (grátis, llama-3.2-11b-vision-preview).
-
-    DIAGNÓSTICO 2026-10-02: a chave em GEMINI_API_KEY NÃO é do Google — não
-    começa com "AIza" e a API respondeu 401. As chaves que funcionam de fato
-    no /etc/litellm.env são GROQ_API_KEY (gsk_...) e OPENROUTER_API_KEY
-    (sk-or...). Groq tem visão gratuita, então entra na cascata antes do OCR.
-    """
-    import base64
-    import json
-    import urllib.request
-
-    try:
-        from jarvis.core import keys as _keys
-        key = _keys.get("groq")
-    except Exception:
-        key = os.environ.get("GROQ_API_KEY", "")
-    if not key:
-        return {"ok": False, "error": "GROQ_API_KEY ausente"}
-
-    mime = "image/jpeg"
-    try:
-        from PIL import Image
-        import io
-        img = Image.open(image_path).convert("RGB")
-        img.thumbnail((1024, 1024), Image.LANCZOS)
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=80)
-        img_b64 = base64.b64encode(buf.getvalue()).decode()
-    except ImportError:
-        mime = "image/png"
-        with open(image_path, "rb") as f:
-            img_b64 = base64.b64encode(f.read()).decode()
-
-    payload = json.dumps({
-        "model": "llama-3.2-11b-vision-preview",
-        "messages": [{"role": "user", "content": [
-            {"type": "image_url",
-             "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
-            {"type": "text", "text": _q(question)},
-        ]}],
-        "max_tokens": 1000,
-        "temperature": 0.0,
-    }).encode()
-    try:
-        data = _http_json(
-            "https://api.groq.com/openai/v1/chat/completions", payload,
-            {"Authorization": f"Bearer {key}"}, timeout)
-        text = (data.get("choices", [{}])[0].get("message", {})
-                .get("content", "") or "").strip()
-        if not text:
-            return {"ok": False, "error": "groq retornou vazio"}
-        return {"ok": True, "via": "groq-vision", "text": text}
-    except Exception as e:
-        return {"ok": False, "error": f"groq falhou: {str(e)[:150]}"}
-
-
 def _vision_openrouter(image_path: str, question: str,
                        timeout: float = 90.0) -> dict[str, Any]:
     """Nível 2c: OpenRouter com modelo de visão `:free` (sem cartão).
@@ -646,21 +612,8 @@ def _vision_openrouter(image_path: str, question: str,
 
     # catálogo :free com input_modalities contendo "image" (dinâmico)
     errs: list[str] = []
+    mime, img_b64 = _img_b64(image_path)  # free fraco: 1024 basta
     for model in _discover_vision_models("openrouter")[:4]:
-        mime = "image/jpeg"
-        try:
-            from PIL import Image
-            import io
-            img = Image.open(image_path).convert("RGB")
-            img.thumbnail((1024, 1024), Image.LANCZOS)
-            buf = io.BytesIO()
-            img.save(buf, format="JPEG", quality=80)
-            img_b64 = base64.b64encode(buf.getvalue()).decode()
-        except ImportError:
-            mime = "image/png"
-            with open(image_path, "rb") as f:
-                img_b64 = base64.b64encode(f.read()).decode()
-
         payload = json.dumps({
             "model": model,
             "messages": [{"role": "user", "content": [
@@ -715,19 +668,7 @@ def _vision_nvidia(image_path: str, question: str,
     if not key:
         return {"ok": False, "error": "NVIDIA_API_KEY ausente"}
 
-    mime = "image/jpeg"
-    try:
-        from PIL import Image
-        import io
-        img = Image.open(image_path).convert("RGB")
-        img.thumbnail((1024, 1024), Image.LANCZOS)
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=80)
-        img_b64 = base64.b64encode(buf.getvalue()).decode()
-    except ImportError:
-        mime = "image/png"
-        with open(image_path, "rb") as f:
-            img_b64 = base64.b64encode(f.read()).decode()
+    mime, img_b64 = _img_b64(image_path, 1536)  # forte: texto 11px sobrevive
 
     models = _discover_vision_models("nvidia")[:3]
     if not models:
@@ -761,6 +702,57 @@ def _vision_nvidia(image_path: str, question: str,
             last = str(e)[:100]
             continue
     return {"ok": False, "error": f"nvidia falhou: {last}"}
+
+
+def _vision_cloudflare(image_path: str, question: str,
+                       timeout: float = 60.0) -> dict[str, Any]:
+    """Nível 2e: Cloudflare Workers AI vision (matriz 15/10: llama-4-scout
+    OK em 24.6s — primeiro VLM novo descoberto pelo vision_matrix.py)."""
+    import json
+    import urllib.request
+
+    try:
+        from jarvis.core import keys as _keys
+        token = _keys.get("cloudflare_token")
+        acc = _keys.get("cloudflare_account")
+    except Exception:
+        token, acc = "", ""
+    token = token or os.environ.get("CLOUDFLARE_API_TOKEN", "")
+    acc = acc or os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+    if not token or not acc:
+        return {"ok": False, "error": "CLOUDFLARE_API_TOKEN/ACCOUNT ausentes"}
+
+    mime, img_b64 = _img_b64(image_path, 1536)  # forte: texto 11px sobrevive
+    last = "?"
+    for model in _discover_vision_models("cloudflare") or [
+            "@cf/meta/llama-4-scout-17b-16e-instruct"]:
+        payload = json.dumps({
+            "model": model,
+            "messages": [{"role": "user", "content": [
+                {"type": "image_url",
+                 "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
+                {"type": "text", "text": _q(question)},
+            ]}],
+            "max_tokens": 800,
+            "temperature": 0.0,
+        }).encode()
+        try:
+            data = _http_json(
+                "https://api.cloudflare.com/client/v4/accounts/"
+                f"{acc}/ai/v1/chat/completions", payload,
+                {"Authorization": f"Bearer {token}"}, timeout)
+            text = (data.get("choices", [{}])[0].get("message", {})
+                    .get("content", "") or "").strip()
+            if text:
+                return {"ok": True, "via": f"cloudflare:{model}", "text": text}
+            last = "retornou vazio"
+        except urllib.error.HTTPError as e:
+            last = f"HTTP {e.code} {e.read().decode()[:80]}"
+            continue
+        except Exception as e:
+            last = str(e)[:100]
+            continue
+    return {"ok": False, "error": f"cloudflare falhou: {last}"}
 
 
 
@@ -819,64 +811,6 @@ def _q(question: str, neg: bool = False) -> str:
     if neg:
         return f"{_NEGATIVE_PROMPT}\n\n{question}"
     return f"{_PRE_PROMPT}\n\n{question}"
-
-
-# (15/10, "mais fallback": o ROUTER freellmapi :3001 tem vision free no
-# catálogo (llama-3.2-90b-vision = o workhorse NIM; gemma-4 = multimodal;
-# nemotron-omni). Nível penúltimo, antes do OCR — o router ainda failover
-# interno entre providers se um cair.)
-def _vision_freellmapi(image_path: str, question: str,
-                       timeout: float = 40.0) -> dict[str, Any]:
-    import base64
-    import json
-    import urllib.request
-
-    key = (os.environ.get("FREELLMAPI_API_KEY") or "").strip()
-    if not key:
-        return {"ok": False, "error": "FREELLMAPI_API_KEY ausente"}
-    try:
-        from PIL import Image
-        import io
-        img = Image.open(image_path).convert("RGB")
-        img.thumbnail((1024, 1024), Image.LANCZOS)
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=80)
-        img_b64 = base64.b64encode(buf.getvalue()).decode()
-    except ImportError:
-        with open(image_path, "rb") as f:
-            img_b64 = base64.b64encode(f.read()).decode()
-
-    errs: list[str] = []
-    for model in ("llama-3.2-90b-vision", "gemma-4-26b-a4b-it",
-                  "command-a-vision"):
-        payload = json.dumps({
-            "model": model,
-            "messages": [{
-                "role": "user",
-                "content": [
-                    {"type": "image_url",
-                     "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
-                    {"type": "text", "text": _q(question)},
-                ],
-            }],
-            "max_tokens": 800,
-        }).encode()
-        try:
-            data = _http_json("http://127.0.0.1:3001/v1/chat/completions",
-                              payload,
-                              {"Authorization": f"Bearer {key}",
-                               "Content-Type": "application/json"},
-                              timeout)
-            text = ((data.get("choices") or [{}])[0]
-                    .get("message", {}).get("content", "") or "").strip()
-            if text:
-                return {"ok": True, "via": f"freellmapi:{model}", "text": text}
-            errs.append(f"{model}: vazio")
-        except urllib.error.HTTPError as e:
-            errs.append(f"{model}: HTTP {e.code}")
-        except Exception as e:
-            errs.append(f"{model}: {str(e)[:60]}")
-    return {"ok": False, "error": "; ".join(errs[:3])}
 
 
 def _catalog(url: str, headers: dict[str, str],
@@ -958,10 +892,26 @@ def _discover_vision_models(provider: str) -> list[str]:
                               "git", "ssh", "docker", "k8s", "cluster")
             found = sorted(found, key=lambda i: (
                 0 if "gemini" in i and "flash" in i and "-image" not in i
-                   and not any(t in i.lower() for t in NEGATIVE_TERMS) else
+                    and not any(t in i.lower() for t in NEGATIVE_TERMS) else
                 1 if "gemini" in i else
                 2 if "qwen" in i and ("vl" in i or "-vision" in i) else
                 3, i))
+
+        elif provider == "cloudflare":
+            token = _secret("cloudflare_token")
+            acc = _secret("cloudflare_account")
+            data = _catalog(
+                "https://api.cloudflare.com/client/v4/accounts/"
+                f"{acc}/ai/models/search",
+                {"Authorization": f"Bearer {token}"})
+            rows = data.get("result", []) if isinstance(data, dict) else []
+            names = [m.get("name", "") for m in rows]
+            # scout primeiro (matriz 15/10: OK), depois qualquer VLM
+            found = sorted(
+                [n for n in names
+                 if any(t in n.lower() for t in ("scout", "vision", "vlm", "-vl"))
+                 and not any(t in n.lower() for t in _NEG)],
+                key=lambda n: (0 if "scout" in n.lower() else 1, n))
 
     except Exception:
         found = []
@@ -1076,8 +1026,11 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
     # janela certa em vez do terminal que está por trás.
     _want_focus = args.get("focus_window", True)
     _want_opaque = args.get("opaque", True)
-    prep = (_prepare_window(window_title, opaque=_want_opaque)
-            if (mode == "window" and window_title and _want_focus) else None)
+    _want_full = args.get("fullscreen", False)
+    prep = (_prepare_window(window_title, opaque=_want_opaque,
+                            fullscreen=_want_full)
+            if (mode == "window" and window_title
+                and (_want_focus or _want_full)) else None)
     question = args.get("question",
                         "Describe what you see. List applications, errors, and UI state.")
 
@@ -1126,23 +1079,23 @@ def _cascade(image_path: str, question: str, budget: float = 45.0,
 
     # Nível 0 (barato, sem rede): vision local. Só tenta 1x se já sabermos
     # que o llama-router está fora — 8080 devolve 500 e custa segundos.
-    # Ordem: local (grátis) → gemini (grátis, funciona) → nvidia (crédito)
-    # → openrouter (free VLM) → OCR.
-    # Groq saiu da cascata: EM 2026-10-01 a Groq descontinuou TODOS os VLM
-    # e passou a servir só texto. Chamar era gastar request em 404 garantido.
-    # TETO GERAL: 45s é folgado para o caso comum (medido: nvidia 1,8s |
-    # gemini 12,5s) e curto o bastante para nunca estourar o MCP (180s).
+    # Ordem 15/10 (matriz vision_matrix.py): local (grátis, cap curto — 500
+    # garantido) → gemini (grátis, 3-5s) → nvidia (90b lento, 11b 58s) →
+    # cloudflare scout (24s, NOVO) → openrouter (rate-limit diário) → OCR.
+    # Groq saiu da cascata em 2026-10-01 (só texto); freellmapi saiu em
+    # 15/10 (docker removido, :3001 morto). Caps por nível SOMAM mais que o
+    # budget — ok porque a cascata PARA no primeiro OK e o deadline pula o
+    # resto; o que matava antes era UM nível lento comer tudo (local 25s).
+    # TETO GERAL: 45s default, MCP tolera 180s.
     deadline = time.time() + budget
 
-    levels = [(_vision_local, "local"),
-              (_vision_gemini, "gemini"),
-              (_vision_nvidia, "nvidia-nim-vision"),
-              (_vision_openrouter, "openrouter"),
-              (_vision_freellmapi, "freellmapi")]
+    levels = [(_vision_local, "local", 8.0),
+              (_vision_gemini, "gemini", 20.0),
+              (_vision_nvidia, "nvidia-nim-vision", 20.0),
+              (_vision_cloudflare, "cloudflare", 30.0),
+              (_vision_openrouter, "openrouter", 15.0)]
 
-    for fn, via in levels:
-        # orçamento por nível: o llama local SEMPRE dá 500 neste host (medido) e
-        # consumia 25,3s do orçamento antes de o Gemini ser tentado.
+    for fn, via, cap_nivel in levels:
         if _is_dead(via):
             attempts.append(f"{via}: {_DEAD_PROVIDERS[via][0]} (marcado)")
             continue
@@ -1152,7 +1105,7 @@ def _cascade(image_path: str, question: str, budget: float = 45.0,
             continue
         # TETO POR CHAMADA: checar o deadline antes não adianta — uma chamada
         # longa estoura sozinha. Cada nível recebe timeout = min(cap, restante).
-        cap = min(20.0, restante)
+        cap = min(cap_nivel, restante)
         try:
             r = (fn(image_path, question, timeout=cap)
                  if _takes_timeout(fn)
