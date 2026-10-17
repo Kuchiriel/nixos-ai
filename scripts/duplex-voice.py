@@ -1,29 +1,18 @@
 #!/usr/bin/env python3
-"""duplex-voice.py — o MODO VOZ FULL-DUPLEX do JARVIS (17/10).
+"""duplex-voice.py — MODO VOZ FULL-DUPLEX v2 (17/10, instrumentado).
 
-Fala E ouve ao mesmo tempo: micro-turn protocol (0.6s/tick, card do LoRA
-codacus MicroTurn-Duplex, byte-for-byte) sobre o llama-server duplex-35b
-(:8085, gerado de models.nix directServers — binário stock v0.7.0).
+Arquitetura honesta (resposta à pergunta do dono):cascade + micro-turns —
+o 35B é texto; ASR/TTS ficam FORA (speech-native puro não cabe em 6GB com
+PT+tools). O que NÃO é igual ao loop antigo: sem VAD/endpointing, timing
+é decisão DO MODELO (LoRA micro-turn, 0.6s/tick), barge-in real. Este
+script MEDE cada estágio p/ achar onde a fluidez morre:
 
-O ciclo por tick:
-  mic 0.6s → faster-whisper (pt, int8, CPU, modelo PERSISTENTE) → fragmento
-  → /completion (história append-only, prompt-cache retoma) → ≤3 palavras
-  ou <listen> → regra speak-or-listen (P("<") ≥ 0.3 = escuta; senão BAN)
-  → fragmentos viram frases (limpa em pontuação OU pausa) → jarvis speak
-  (kokoro) → aplay. Barge-in grátis: o próximo tick vê o que tu falou por
-  cima da resposta e o modelo decide voltar a escutar.
+  [19:41:02] rms=  43 | <no voice>            → <listen>          llm=431ms
+  [19:41:03] rms= 812 | "oi jarvis, tudo be"  → <listen>          asr=210ms llm=438ms
+  [19:41:04] rms= 790 | "m com você"         → Tudo bem! Como     asr=205ms llm=445ms  TTS("Tudo bem! Como")
 
-"acordar" (início)  = POST /lora-adapters [{"id":0,"scale":1.0}] (runtime!)
-"dormir"  (Ctrl-C)  = POST [] — o LoRA sai, o 35B segue servindo TEXTO.
-
-USO (venv do karaok: faster-whisper+ctranslate2; devShell NÃO tem):
-  sudo systemctl start llama-duplex-35b          # o server (só 1x; fica de pé)
-  ~/projects/karaok/.venv/bin/python3 scripts/duplex-voice.py
-  (jarvis speak/aplay/arecord vêm do PATH do sistema)
-FLAGS: --port 8085 --lang pt --stt-model small
-PROVA do protocolo: /tmp/opencode/microturn-test/demo-stock.log +
-docs/VOZ-FULL-DUPLEX.md (interrompeu "Stop! Do not mix those two..." na
-hora exata, 576ms/tick mediana na 6GB).
+Rodar no env jarvis-voice (faster_whisper + kokoro + jarvis in-process):
+  /nix/store/*-python3.13-jarvis-voice-0.1.0/bin/python3 scripts/duplex-voice.py
 """
 from __future__ import annotations
 
@@ -38,6 +27,7 @@ import sys
 import threading
 import time
 import urllib.request
+from datetime import datetime
 
 import numpy as np
 
@@ -48,7 +38,13 @@ SYSTEM = ("You are a voice assistant in a live phone call; both sides can talk a
           f"{TICK:g} seconds you get what the microphone heard in that moment, as a streaming transcript fragment, or "
           f"{NOVOICE}. You reply with up to three new words to say next, or {LISTEN} to add nothing.")
 SR = 16000
-CHUNK_BYTES = int(SR * TICK * 2)  # s16 mono
+CHUNK_BYTES = int(SR * TICK * 2)
+
+def log(msg):
+    print(msg, file=sys.stderr, flush=True)
+
+def ts():
+    return datetime.now().strftime("%H:%M:%S")
 
 # ---------------------------------------------------------------- HTTP
 def http(url, payload=None, timeout=180):
@@ -57,17 +53,7 @@ def http(url, payload=None, timeout=180):
                                   headers={"Content-Type": "application/json"})
     return json.load(urllib.request.urlopen(req, timeout=timeout))
 
-def lora_apply(base, on):
-    """Runtime toggle (POST /lora-adapters) — 'acordar'/'dormir'."""
-    adapters = http(base + "/lora-adapters") or []
-    if on:
-        return http(base + "/lora-adapters",
-                    [{"id": a["id"], "scale": a.get("scale", 1.0)} for a in adapters],
-                    timeout=600)  # 1ª aplicação pode demorar (buffers)
-    return http(base + "/lora-adapters", [])
-
 def tick_once(base, history, heard):
-    """Um micro-turn — cópia fiel do microturn_client.py (card codacus)."""
     prompt = f"<|im_start|>system\n{SYSTEM}<|im_end|>\n"
     for role, content in history + [("user", heard)]:
         prompt += f"<|im_start|>{role}\n{content}<|im_end|>\n"
@@ -84,36 +70,38 @@ def tick_once(base, history, heard):
         out = http(base + "/completion", body)["content"].strip()
     return (LISTEN if out.startswith("<") else out), p_listen
 
-# ---------------------------------------------------------------- STT
-VOICE_DIR = os.environ.get("JARVIS_VOICE_DIR", os.path.expanduser("~/.local/share/jarvis/voice"))
-
+# ---------------------------------------------------------------- ASR (persistente)
 class Asr:
-    """faster-whisper PERSISTENTE (o transcribe() do core/voice recarrega
-    o modelo a cada chamada — inaceitável a cada 0.6s). Roda no venv do
-    karaok (faster-whisper + ctranslate2 lá; o devShell do nixos-ai NÃO
-    tem — 17/10, ModuleNotFoundError na 1ª tentativa do dono)."""
     def __init__(self, model_size, lang):
         from faster_whisper import WhisperModel
+        voice_dir = os.environ.get("JARVIS_VOICE_DIR",
+                                   os.path.expanduser("~/.local/share/jarvis/voice"))
         self.lang = lang
+        t0 = time.monotonic()
         self.model = WhisperModel(model_size, device="cpu", compute_type="int8",
-                                  download_root=VOICE_DIR)
+                                  download_root=voice_dir)
+        log(f"[{ts()}] asr: {model_size} carregado em {time.monotonic()-t0:.1f}s")
     def chunk_text(self, pcm_f32):
+        t0 = time.monotonic()
         try:
             segs, _ = self.model.transcribe(pcm_f32, beam_size=3, language=self.lang,
                                              condition_on_previous_text=False,
                                              vad_filter=False)
-            return " ".join(s.text for s in segs).strip()
+            txt = " ".join(s.text for s in segs).strip()
+            return txt, (time.monotonic() - t0) * 1000
         except Exception as exc:  # noqa: BLE001
-            print(f"[asr] {exc}", file=sys.stderr)
-            return ""
+            log(f"[{ts()}] asr ERRO: {exc}")
+            return "", 0.0
 
-# ---------------------------------------------------------------- TTS
+# ---------------------------------------------------------------- TTS (in-process, worker)
 class Tts:
-    """Fila de frases → jarvis speak (kokoro) → aplay. Frase (não fragmento):
-    síntese por frase ~beat realtime, fila absorve o resto (lição do
-    vídeo xbedfuqYQYA: fila de 2, sintetiza enquanto toca)."""
+    """Frase → jarvis.core.voice.speak (edge antonio/net ou kokoro local),
+    in-process (sem spawn de CLI). Mede synth+play por frase."""
     def __init__(self):
+        from jarvis.core.voice import speak
+        self.speak = speak
         self.q = queue.Queue()
+        self.last_ms = 0.0
         threading.Thread(target=self._worker, daemon=True).start()
     def say(self, text):
         if text.strip():
@@ -121,21 +109,19 @@ class Tts:
     def _worker(self):
         while True:
             text = self.q.get()
+            t0 = time.monotonic()
             try:
-                out = subprocess.run(["jarvis", "speak", "--no-play", text],
-                                     capture_output=True, text=True, timeout=120)
-                wav = (out.stdout or "").strip().splitlines()[-1]
-                if wav and wav.endswith(".wav"):
-                    subprocess.run(["aplay", "-q", wav], timeout=120)
+                out = self.speak(text, play=True)
+                self.last_ms = (time.monotonic() - t0) * 1000
+                if str(out).startswith("ERROR"):
+                    log(f"[{ts()}] tts ERRO: {out}")
             except Exception as exc:  # noqa: BLE001
-                print(f"[tts] {exc}", file=sys.stderr)
+                log(f"[{ts()}] tts ERRO: {exc}")
 
 # ---------------------------------------------------------------- mic
-def mic_stream(rate=SR):
-    # pw-record na FONTE DEFAULT do sistema = o filtro rnnoise da casa
-    # (17/10: arecord/ALSA pegava fonte morta RMS=0; rnnoise RMS=70 e
-    # ainda DENOISA a entrada). "-" = raw s16 no stdout.
-    return subprocess.Popen(["pw-record", "--rate", str(rate), "--channels", "1",
+def mic_stream():
+    # pw-record na fonte default (rnnoise da casa) — raw s16 no stdout.
+    return subprocess.Popen(["pw-record", "--rate", str(SR), "--channels", "1",
                              "--format", "s16", "-"],
                             stdout=subprocess.PIPE, bufsize=CHUNK_BYTES)
 
@@ -145,10 +131,9 @@ def main():
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8085)
     ap.add_argument("--lang", default="pt")
-    ap.add_argument("--stt-model", default="small",
-                    help="faster-whisper size (small=int8 cpu ~ok; tiny=+rápido)")
+    ap.add_argument("--stt-model", default="small")
     ap.add_argument("--rms", type=int, default=150,
-                    help="gate de silêncio (RMS int16; ambiente rnnoise~70, voz 300+)")
+                    help="gate de silêncio (ambiente rnnoise~70; fala 300+)")
     args = ap.parse_args()
     base = f"http://{args.host}:{args.port}"
 
@@ -157,17 +142,16 @@ def main():
     except Exception:
         sys.exit(f"duplex-voice: server {base} fora — systemctl start llama-duplex-35b")
 
-    print(f"duplex-voice | {base} | tick={TICK}s | stt={args.stt_model}@{args.lang}")
-    print("aplicando LoRA (acordar)…", flush=True)
-    lora_apply(base, True)
-    print("LoRA aplicado — MODO DUPLEX. Ctrl-C = dormir.\n", flush=True)
+    log(f"[{ts()}] acordando (LoRA apply)…")
+    http(base + "/lora-adapters", [{"id": 0, "scale": 1.0}], timeout=600)
+    log(f"[{ts()}] MODO DUPLEX. Fala com ele. Ctrl-C = dormir.\n")
 
     asr = Asr(args.stt_model, args.lang)
     tts = Tts()
     mic = mic_stream()
     history: list[tuple[str, str]] = []
     frase: list[str] = []
-    quiet_ticks = 0
+    quiet = 0
     running = True
 
     def _sair(*_):
@@ -175,43 +159,54 @@ def main():
         running = False
     signal.signal(signal.SIGINT, _sair)
 
+    tick_n = 0
     try:
         while running:
             t0 = time.monotonic()
             raw = mic.stdout.read(CHUNK_BYTES)
-            heard = NOVOICE
+            heard, asr_ms, rms = NOVOICE, 0.0, 0
             if len(raw) == CHUNK_BYTES:
                 pcm16 = np.frombuffer(raw, dtype=np.int16)
-                # GATE: silêncio não paga whisper (17/10: "Legendas"
-                # alucinado do ruído da sala; e CPU poupado por tick)
-                if float(np.sqrt((pcm16.astype(np.float64) ** 2).mean())) >= args.rms:
+                rms = int(np.sqrt((pcm16.astype(np.float64) ** 2).mean()))
+                if rms >= args.rms:
                     pcm = pcm16.astype("float32") / 32768.0
-                    txt = asr.chunk_text(pcm)
-                    heard = txt if txt else NOVOICE
-            said, p = tick_once(base, history, heard)
+                    heard, asr_ms = asr.chunk_text(pcm)
+                    if not heard:
+                        heard = NOVOICE
+            said, _p = tick_once(base, history, heard)
             history += [("user", heard), ("assistant", said)]
+            llm_ms = (time.monotonic() - t0) * 1000 - asr_ms
+            tick_n += 1
+
             if said == LISTEN:
-                quiet_ticks += 1
+                quiet += 1
             else:
-                quiet_ticks = 0
+                quiet = 0
                 frase.append(said)
-                print(f"  ouvi: {heard:<28} digo: {said}", flush=True)
                 if said.rstrip().endswith((".", "!", "?")) or len(frase) >= 3:
+                    log(f"[{ts()}] rms={rms:>5} | TTS({selfless(frase)}) tts_anterior={tts.last_ms:.0f}ms")
                     tts.say(" ".join(frase)); frase = []
-            # pausa natural: 2 ticks quietos com frase pendente = fecha
-            if quiet_ticks >= 2 and frase:
-                tts.say(" ".join(frase)); frase = []; quiet_ticks = 0
+            if quiet >= 2 and frase:
+                tts.say(" ".join(frase)); frase = []; quiet = 0
+
+            # LINHA DE DEBUG por tick: rms | ouvido | dito | latências
+            if heard != NOVOICE or said != LISTEN or tick_n % 20 == 0:
+                log(f"[{ts()}] rms={rms:>5} | {heard[:24]:<24} → {said[:28]:<28} "
+                    f"asr={asr_ms:4.0f}ms llm={llm_ms:4.0f}ms")
+
             dt = TICK - (time.monotonic() - t0)
             if dt > 0:
                 time.sleep(dt)
     finally:
-        print("\ndormindo (LoRA off)…", flush=True)
+        log(f"\n[{ts()}] dormindo (LoRA off)…")
         try:
-            lora_apply(base, False)
-            print("dormindo: LoRA desligado — server segue servindo texto.")
-        except Exception as exc:  # noqa: BLE001
-            print(f"aviso: unapply falhou ({exc})")
+            http(base + "/lora-adapters", [])
+        except Exception:
+            pass
         mic.terminate()
+
+def selfless(f):
+    return " ".join(f)
 
 if __name__ == "__main__":
     main()
