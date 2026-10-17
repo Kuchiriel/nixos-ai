@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_59 tools._
+_60 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -20,6 +20,8 @@ _59 tools._
 - `dat_probe.py` (nixos-ai/scripts) — """dat_probe.py — sonda do APPEARANCES .dat do CLIENT (protobuf moderno).
   use: `Uso (via nix develop do nixos-ai — PYTHONPATH e stripado no shell):`
 - `decomp.py` (nixos-ai/scripts) — """decomp.py — o gargalo é decomposição ou execução?
+- `duplex-voice.py` (nixos-ai/scripts) — """duplex-voice.py — o MODO VOZ FULL-DUPLEX do JARVIS (17/10).
+  use: `USO (no nix develop do nixos-ai — tem faster-whisper/kokoro):`
 - `eval-judge.py` (nixos-ai/scripts) — """eval-judge.py — mede a honestidade do LLM-judge local (core/judge.py).
 - `eval-model.py` (nixos-ai/scripts) — """Model evaluation suite — tarefas representativas do JARVIS.
   use: `Uso: PYTHONPATH=src python3 eval-model.py --base http://127.0.0.1:8080 \`
