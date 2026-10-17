@@ -39,6 +39,8 @@ import threading
 import time
 import urllib.request
 
+import numpy as np
+
 TICK = 0.6
 LISTEN, NOVOICE = "<listen>", "<no voice>"
 LISTEN_P = 0.3
@@ -145,6 +147,8 @@ def main():
     ap.add_argument("--lang", default="pt")
     ap.add_argument("--stt-model", default="small",
                     help="faster-whisper size (small=int8 cpu ~ok; tiny=+rápido)")
+    ap.add_argument("--rms", type=int, default=150,
+                    help="gate de silêncio (RMS int16; ambiente rnnoise~70, voz 300+)")
     args = ap.parse_args()
     base = f"http://{args.host}:{args.port}"
 
@@ -177,10 +181,13 @@ def main():
             raw = mic.stdout.read(CHUNK_BYTES)
             heard = NOVOICE
             if len(raw) == CHUNK_BYTES:
-                import numpy as np
-                pcm = np.frombuffer(raw, dtype=np.int16).astype("float32") / 32768.0
-                txt = asr.chunk_text(pcm)
-                heard = txt if txt else NOVOICE
+                pcm16 = np.frombuffer(raw, dtype=np.int16)
+                # GATE: silêncio não paga whisper (17/10: "Legendas"
+                # alucinado do ruído da sala; e CPU poupado por tick)
+                if float(np.sqrt((pcm16.astype(np.float64) ** 2).mean())) >= args.rms:
+                    pcm = pcm16.astype("float32") / 32768.0
+                    txt = asr.chunk_text(pcm)
+                    heard = txt if txt else NOVOICE
             said, p = tick_once(base, history, heard)
             history += [("user", heard), ("assistant", said)]
             if said == LISTEN:

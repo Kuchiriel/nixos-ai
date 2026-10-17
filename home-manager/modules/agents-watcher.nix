@@ -27,6 +27,10 @@
       Restart = "always";
       RestartSec = "30s";
     };
-    Install.WantedBy = [ "default.target" ];
+    # (17/10, dono: "isso é pra rodar comigo AFK, comigo aqui não
+    # precisa") — SEM Install.WantedBy: rebuild NÃO ressuscita o auto-
+    # start (3x hoje ele voltou por reactivation). Ligar na mão quando
+    # for AFK:  systemctl --user start agents-watcher
+    Install = {};
   };
 }
