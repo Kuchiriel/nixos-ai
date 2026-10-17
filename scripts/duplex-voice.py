@@ -38,6 +38,9 @@ SYSTEM = ("You are a voice assistant in a live phone call; both sides can talk a
           f"{TICK:g} seconds you get what the microphone heard in that moment, as a streaming transcript fragment, or "
           f"{NOVOICE}. You reply with up to three new words to say next, or {LISTEN} to add nothing.")
 SR = 16000
+# Digital mic (17/10): Stereo mic = morto (rms 0); Digital = vivo
+# (sustained). Nome estável do node (id muda por boot).
+MIC_SOURCE = "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source"
 CHUNK_BYTES = int(SR * TICK * 2)
 
 def log(msg):
@@ -72,6 +75,10 @@ def tick_once(base, history, heard):
 
 # ---------------------------------------------------------------- ASR (persistente)
 class Asr:
+    """ASR EM THREAD PRÓPRIA (17/10 v3): whisper 2s/chunk bloqueava o tick
+    (loop 3.6s/tick). Agora o loop NUNCA espera: manda o ÚLTIMO texto pronto,
+    backlog cap 2 (se whisper atrasa, o tick segue; fragmentos tardios chegam
+    no próximo tick — duplex tolera)."""
     def __init__(self, model_size, lang):
         from faster_whisper import WhisperModel
         voice_dir = os.environ.get("JARVIS_VOICE_DIR",
@@ -81,25 +88,47 @@ class Asr:
         self.model = WhisperModel(model_size, device="cpu", compute_type="int8",
                                   download_root=voice_dir)
         log(f"[{ts()}] asr: {model_size} carregado em {time.monotonic()-t0:.1f}s")
-    def chunk_text(self, pcm_f32):
-        t0 = time.monotonic()
+        self.chunks = queue.Queue(maxsize=2)
+        self.results = queue.Queue(maxsize=4)
+        self.last_ms = 0.0
+        threading.Thread(target=self._worker, daemon=True).start()
+    def _worker(self):
+        while True:
+            pcm = self.chunks.get()
+            t0 = time.monotonic()
+            try:
+                segs, _ = self.model.transcribe(pcm, beam_size=1, language=self.lang,
+                                                 condition_on_previous_text=False,
+                                                 vad_filter=False)
+                txt = " ".join(s.text for s in segs).strip()
+                self.last_ms = (time.monotonic() - t0) * 1000
+                try:
+                    self.results.put_nowait(txt)
+                except queue.Full:
+                    try: self.results.get_nowait()
+                    except queue.Empty: pass
+                    self.results.put_nowait(txt)
+            except Exception as exc:  # noqa: BLE001
+                log(f"[{ts()}] asr ERRO: {exc}")
+    def feed(self, pcm_f32):
         try:
-            segs, _ = self.model.transcribe(pcm_f32, beam_size=3, language=self.lang,
-                                             condition_on_previous_text=False,
-                                             vad_filter=False)
-            txt = " ".join(s.text for s in segs).strip()
-            return txt, (time.monotonic() - t0) * 1000
-        except Exception as exc:  # noqa: BLE001
-            log(f"[{ts()}] asr ERRO: {exc}")
-            return "", 0.0
+            self.chunks.put_nowait(pcm_f32)
+        except queue.Full:
+            pass  # backlog cap: whisper lento = chunk descartado, tick segue
+    def take(self):
+        try:
+            return self.results.get_nowait()
+        except queue.Empty:
+            return None
 
-# ---------------------------------------------------------------- TTS (in-process, worker)
+# ---------------------------------------------------------------- TTS (worker, subprocess comprovado)
 class Tts:
-    """Frase → jarvis.core.voice.speak (edge antonio/net ou kokoro local),
-    in-process (sem spawn de CLI). Mede synth+play por frase."""
+    """Frase → jarvis speak --no-play (CLI, env jarvis-voice: edge-antonio
+    default / kokoro) → aplay. In-process speak() exigiria o env jarvis,
+    que não expõe faster_whisper no site-packages (A/B de envs 17/10) —
+    o cliente roda no venv karaok; subprocess = comprovado (voice-selftest).
+    Mede synth+play por frase (o gargalo de latência conhecido)."""
     def __init__(self):
-        from jarvis.core.voice import speak
-        self.speak = speak
         self.q = queue.Queue()
         self.last_ms = 0.0
         threading.Thread(target=self._worker, daemon=True).start()
@@ -111,18 +140,22 @@ class Tts:
             text = self.q.get()
             t0 = time.monotonic()
             try:
-                out = self.speak(text, play=True)
+                out = subprocess.run(["jarvis", "speak", "--no-play", text],
+                                     capture_output=True, text=True, timeout=180)
+                wav = (out.stdout or "").strip().splitlines()[-1]
+                if wav.endswith(".wav"):
+                    subprocess.run(["aplay", "-q", wav], timeout=180)
                 self.last_ms = (time.monotonic() - t0) * 1000
-                if str(out).startswith("ERROR"):
-                    log(f"[{ts()}] tts ERRO: {out}")
             except Exception as exc:  # noqa: BLE001
                 log(f"[{ts()}] tts ERRO: {exc}")
 
 # ---------------------------------------------------------------- mic
 def mic_stream():
-    # pw-record na fonte default (rnnoise da casa) — raw s16 no stdout.
+    # pw-record EXPLÍCITO na rnnoise (17/10: a default do pw-record é
+    # morta — rms=0; a rnnoise rms=70 ambiente/206 falando, e DENOISA).
+    # Pelo NOME (id 38 muda a cada boot).
     return subprocess.Popen(["pw-record", "--rate", str(SR), "--channels", "1",
-                             "--format", "s16", "-"],
+                             "--format", "s16", "--target", MIC_SOURCE, "-"],
                             stdout=subprocess.PIPE, bufsize=CHUNK_BYTES)
 
 # ---------------------------------------------------------------- main
@@ -131,7 +164,7 @@ def main():
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8085)
     ap.add_argument("--lang", default="pt")
-    ap.add_argument("--stt-model", default="small")
+    ap.add_argument("--stt-model", default="tiny")
     ap.add_argument("--rms", type=int, default=150,
                     help="gate de silêncio (ambiente rnnoise~70; fala 300+)")
     args = ap.parse_args()
@@ -169,10 +202,11 @@ def main():
                 pcm16 = np.frombuffer(raw, dtype=np.int16)
                 rms = int(np.sqrt((pcm16.astype(np.float64) ** 2).mean()))
                 if rms >= args.rms:
-                    pcm = pcm16.astype("float32") / 32768.0
-                    heard, asr_ms = asr.chunk_text(pcm)
-                    if not heard:
-                        heard = NOVOICE
+                    asr.feed(pcm16.astype("float32") / 32768.0)
+                txt = asr.take()
+                asr_ms = asr.last_ms
+                if txt is not None and txt:
+                    heard = txt
             said, _p = tick_once(base, history, heard)
             history += [("user", heard), ("assistant", said)]
             llm_ms = (time.monotonic() - t0) * 1000 - asr_ms
