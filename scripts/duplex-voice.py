@@ -16,10 +16,11 @@ O ciclo por tick:
 "acordar" (início)  = POST /lora-adapters [{"id":0,"scale":1.0}] (runtime!)
 "dormir"  (Ctrl-C)  = POST [] — o LoRA sai, o 35B segue servindo TEXTO.
 
-USO (no nix develop do nixos-ai — tem faster-whisper/kokoro):
-  systemctl start llama-duplex-35b          # o server (só 1x; fica de pé)
-  nix develop --command python3 scripts/duplex-voice.py
-FLAGS: --port 8085 --lang pt --list-devs (diagnóstico de captura)
+USO (venv do karaok: faster-whisper+ctranslate2; devShell NÃO tem):
+  sudo systemctl start llama-duplex-35b          # o server (só 1x; fica de pé)
+  ~/projects/karaok/.venv/bin/python3 scripts/duplex-voice.py
+  (jarvis speak/aplay/arecord vêm do PATH do sistema)
+FLAGS: --port 8085 --lang pt --stt-model small
 PROVA do protocolo: /tmp/opencode/microturn-test/demo-stock.log +
 docs/VOZ-FULL-DUPLEX.md (interrompeu "Stop! Do not mix those two..." na
 hora exata, 576ms/tick mediana na 6GB).
@@ -29,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import queue
 import signal
 import subprocess
@@ -81,15 +83,18 @@ def tick_once(base, history, heard):
     return (LISTEN if out.startswith("<") else out), p_listen
 
 # ---------------------------------------------------------------- STT
+VOICE_DIR = os.environ.get("JARVIS_VOICE_DIR", os.path.expanduser("~/.local/share/jarvis/voice"))
+
 class Asr:
     """faster-whisper PERSISTENTE (o transcribe() do core/voice recarrega
-    o modelo a cada chamada — inaceitável a cada 0.6s)."""
+    o modelo a cada chamada — inaceitável a cada 0.6s). Roda no venv do
+    karaok (faster-whisper + ctranslate2 lá; o devShell do nixos-ai NÃO
+    tem — 17/10, ModuleNotFoundError na 1ª tentativa do dono)."""
     def __init__(self, model_size, lang):
         from faster_whisper import WhisperModel
-        from jarvis.core.voice import _model_dir
         self.lang = lang
         self.model = WhisperModel(model_size, device="cpu", compute_type="int8",
-                                  download_root=_model_dir())
+                                  download_root=VOICE_DIR)
     def chunk_text(self, pcm_f32):
         try:
             segs, _ = self.model.transcribe(pcm_f32, beam_size=3, language=self.lang,
