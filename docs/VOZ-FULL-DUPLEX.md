@@ -30,23 +30,51 @@
    qwen35moe carrega, `/completion` com `n_probs` ok (formato ik:
    `probs:[{tok_str,prob}]`, sem ids → adaptador
    /tmp/opencode/microturn-test/microturn_client_ik.py tokenize o ban).
-2. **Protocolo 18/18 ticks correto no quant HauhauCS-Aggressive**:
-   `P(listen)` 0.98–1.00 durante todo o chatter. MAS o modelo **nunca
-   interrompeu** (no demo canônico ele deve falar "Do not mix those
-   chemicals..." no silêncio) → o lado speak do LoRA degradou nesse quant
-   — teste limpo pede o quant de treino: `unsloth/Qwen3.6-35B-A3B-UD-Q4_K_M`
-   (o card: "other quantisations are untested").
-3. **Latência CPU-only: mediana 63.8s/tick** (mmap preguiçoso, 6 threads,
-   GPU invisível) → **0/18 dentro do budget 600ms**. CPU puro = morto
-   p/ tempo real. GPU é obrigatória p/ o tick (o vídeo do codacus: 230ms
-   mediana no 3060 12GB com `--n-cpu-moe 24`; nosso alvo 6GB = mais
-   experts na RAM, medir).
-4. **GPU bloqueada hoje p/ teste**: router bonsai residente (0 MiB livre;
-   o ik pediu 887MB de buffer compute e falhou `cudaMalloc OOM` mesmo
-   com -ngl 0 — o build CUDA sempre reserva buffer; work-around do teste
-   foi `CUDA_VISIBLE_DEVICES=""`). **O teste decisivo (GPU) precisa de
-   janela com o router PARADO** (regra: nunca restartar llama-server em
-   sessão ativa → combinar janela AFK com o dono).
+2. **LATÊNCIA RESOLVIDA (binário ik atualizado 17/10 + quant UD canônico)**:
+   merge origin/main (02/10→17/10: traz `Implement moe cache`, fixes de
+   prompt-cache resume p/ SWA, `--prefetch-experts`, string-ban p/
+   recorrentes) + rebuild → **mediana 496ms/tick, 15/18 dentro do budget
+   600ms** (antes: 1880ms). Os 2 outliers = re-prefill completo pós
+   invalidação SWA ("forcing full prompt re-processing... likely due to
+   SWA", issue conhecida ggml-org/llama.cpp#13194). **DUPLEX CABE NA 6GB
+   HOJE.** Rebuild exigiu `-mavx2 -mfma -mf16c` explícitos: o wrapper cc
+   do NixOS bloqueia -march=native (NIX_ENFORCE_NO_NATIVE) e os helpers
+   SIMD novos do ik têm bug: o galho SSE2 do ladder ISA não define
+   `ggml_vec_simd_sigmoid_f32` (upstream bug p/ builds sem AVX2).
+3. **BUG CRÍTICO DESCOBERTO: o ik NÃO APLICA o LoRA** (no-op silencioso).
+   Com vs sem `--lora`: outputs e P(listen) IDÊNTICOS (1.00 em tudo,
+   nunca fala — sintoma exato de base-model "over-listening" que o card
+   descreve). Causa: mismatch de nomes — o LoRA mira
+   `blk.36.attn_qkv/attn_gate/ffn_*_shexp` (naming stock); o qwen35moe do
+   ik nomeia diferente → tensores carregam ("loaded 50 tensors") mas o
+   match na aplicação falha em silêncio. **A vitória de latência do ik
+   é do BASE model** — o comportamento duplex (falar na hora certa)
+   precisa de binário que aplique: stock llama.cpp (build-stock em
+   andamento, v0.7.0 tem qwen35moe ✓) ou fix no ik (reportar upstream).
+4. **`--n-cpu-moe` NÃO põe experts na GPU**: buffer "CUDA_Host" de
+   18.9GB = experts PINNED em RAM (não em VRAM) — por isso 40/44/48
+   mudaram nada nos números. O ik decide sozinho; a única coisa na GPU
+   = atenção+shared (~1.3GB) + compute (~0.5GB). O ganho real de
+   latência veio dos fixes de cache, não de placement.
+5. **GPU bloqueada durante sessões**: router bonsai residente (0 MiB
+   livre; build CUDA reserva 887MB de buffer compute mesmo com -ngl 0 →
+   work-around de teste: `CUDA_VISIBLE_DEVICES=""`). Janela AFK com
+   router parado FUNCIONOU (dono autorizou 17/10, ~2h de testes).
+6. **★ PROVA FINAL (17/10 ~17:50): stock llama.cpp v0.7.0 + UD-Q4_K_M +
+   LoRA = DUPLEX COMPLETO NA 6GB, DENTRO DO BUDGET**. Com o binário stock
+   (build-stock/, sm_89-only, CUDA include-path do cuda-merged-12.9,
+   flags -mavx2 -mfma -mf16c) o LoRA APLICA de verdade: o modelo escuta
+   o chatter (P 0.94→0.57), sente a urgência e **INTERROMPE na hora
+   exata** ("Stop! Do not / mix those two together. That creates / a
+   deadly gas. / Please stop.") e volta a `<listen>` — comportamento
+   canônico do card. **18 ticks em 10.4s = ~576ms/tick, dentro do
+   budget 600ms** (-ngl 99 --n-cpu-moe 44, atenção na GPU, experts
+   pinned na RAM). O cliente é o canônico (stock usa top_logprobs
+   nativo; adaptador ik só p/ o fork).
+   - Lições do build stock: `-DCMAKE_CUDA_ARCHITECTURES=89` = 14× mais
+     rápido p/ compilar; portas: 8093 livre, 8094 = docker-proxy canary
+     (usar 8095+); `setsid` no launch senão o fim do tool-call mata o
+     ninja (lição dupla, 2 builds perdidos).
 
 ## Design do pipeline (alvo)
 
@@ -85,26 +113,30 @@ TOOL CALLS: fragmento com intenção → **Cactus Needle 3 = System-1**
 
 ## Pendências (ordem)
 
-1. **Janela GPU** (router parado, dono AFK): teste 35B+LoRA na 6GB —
-   `-ngl <coucou> --n-cpu-moe <24+>` medir ms/tick. Veredito real.
-2. Baixar `unsloth/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf` (~20GB) e re-testar
-   o demo (interrupção fala?) — se o Aggressive degradou, o canônico é o
-   gabarito. (download pesado: regras de recurso!)
-3. Transcript do vídeo-chave (shJLycXjhVY — 429 do YT; insistir) — o dono
-   diz que explica o ganho em longas sessões (cache de prompt append-only
-   já entendido; pode haver mais).
-4. Wakeword: calibrar "hey jarvis" com a voz do dono (ww_scorer.py;
+1. ~~Janela GPU~~ FEITO 17/10: duplex completo comprovado (ver item 6).
+2. ~~Baixar UD-Q4_K_M canônico~~ FEITO (21.1GB em ~/models): é o quant
+   GABARITO — usar este no modo duplex.
+3. **IK upstream bug a reportar**: --lora no-op silencioso com qwen35moe
+   (mismatch de nomes: LoRA mira attn_qkv/attn_gate/shexp; carrega 50
+   tensores, aplica 0). Enquanto isso: modo duplex = llama.cpp stock
+   (build-stock/). O ik continua o binário do ROUTER normal.
+4. Transcript do vídeo-chave (shJLycXjhVY — 429 do YT; insistir) — o dono
+   diz que explica o ganho em longas sessões (cache append-only já
+   entendido; pode haver mais).
+5. Wakeword: calibrar "hey jarvis" com a voz do dono (ww_scorer.py;
    histórico: VAD ok, modelo raramente dispara). Modos single-shot vs
    acordar/dormir no daemon.
-5. ASR streaming PT por tick — decidir (kyutai vs whisper-chunked).
-6. **Nosso LoRA** (o dono: "tem que por um lora pra ficar bom"): dataset
+6. ASR streaming PT por tick — decidir (kyutai DSM-ASR vs whisper-chunked;
+   Whistle/CN não tem PT).
+7. **Nosso LoRA** (o dono: "tem que por um lora pra ficar bom"): dataset
    micro-turn com tool calls JARVIS + PT-BR (semeado do dataset/ do
-   codacus + gerar com o 35B), treino pequeno (o card: rank 32, só
-   camadas 36–39, 3h em 2×3060 → kita tem 6GB 1×; escalar via
-   kaggle-escalate skill se preciso).
-7. Harness de eval (o dono: "melhoradas no harness"): bateria do vídeo
+   codacus + gerar com o 35B), treino pequeno (card: rank 32, camadas
+   36–39, 3h em 2×3060; escalar via kaggle-escalate se preciso). Treinar
+   sobre o UD-Q4_K_M (o gabarito comprovado).
+8. Harness de eval (o dono: "melhoradas no harness"): bateria do vídeo
    de arquitetura — P99 latência, interrupções/backchannel (FDBench-3
-   style), TimeSpeak/CueSpeak, guardas de inteligência (IFEval).
+   style), TimeSpeak/CueSpeak, guardas de inteligência (IFEval) +
+   regressão: o demo dos chemicals como smoke-test permanente.
 
 ## Fontes (indexadas)
 

@@ -112,6 +112,16 @@ in rec {
     sha256 = "sha256-NW36oxETdqT3Fl4y6HSXEzeNFwCzfPUuDFDZ8jMiM00=";
   };
 
+  # --- LoRA MicroTurn-Duplex (codacus, duplas-full-voz, 15MB, rank 32) ---
+  # Adapter de timing p/ o modo voz duplex: camadas 36-39 (delta-net +
+  # full-attn + shared expert). Treinado contra o UD-Q4_K_M. Uso: lane
+  # duplex-35b (directServers) com apply em runtime. Fonte do protocolo:
+  # card + docs/VOZ-FULL-DUPLEX.md.
+  llm-host-lora = mkModel {
+    url = "https://huggingface.co/codacus/Qwen3.6-35B-A3B-MicroTurn-Duplex-LoRA/resolve/main/microturn-duplex-lora.gguf";
+    sha256 = "sha256-HTDxOXED3iNhrNtgjjP9mtbqCrN+aGQzw9646TFck3E=";
+  };
+
   # ══════════════════════════════════════════════════════════════════
   # VISÃO — Moondream2 pinado em revision=2024-08-26
   # ══════════════════════════════════════════════════════════════════
@@ -262,6 +272,32 @@ in rec {
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = modelFile (o server anuncia o path, sem --alias).
       opencode = { key = "local-uncensored"; name = "Qwen MoE 35B Uncensored Local"; context = 8192; output = 2048; };
+    };
+    # DUPLEX VOICE LANE (17/10, dono: modo voz full-duplex; ver
+    # docs/VOZ-FULL-DUPLEX.md): 35B UD + MicroTurn-Duplex LoRA
+    # (codacus) aplicável EM RUNTIME (--lora-init-without-apply +
+    # POST /lora-adapters): "acordar" = apply, "dormir" = unapply —
+    # o mesmo server serve TEXTO puro (LoRA desligado) e VOZ duplex.
+    # Binário "stock" = llama.cpp v0.7.0 build local (build-stock/):
+    # o nixpkgs b9190 tem qwen35moe (25/ago), mas o LoRA-apply do IK
+    # é no-op (mismatch de nomes, 17/10) — o stock é o gabarito
+    # comprovado (576ms/tick mediana no demo, interrupção correta).
+    # Prova: /tmp/opencode/microturn-test/demo-stock.log.
+    duplex-35b = {
+      port = 8085; binary = "stock";
+      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf";
+      threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
+      gpuLayers = 99; moeFlags = "--n-cpu-moe 44";
+      # LoRA + flash-attn são incompatíveis (log do server) → fa off.
+      fa = false; ctk = "f16"; ctv = "f16";
+      extraArgs = [
+        "--lora" "/home/nixos/models/loras/microturn-duplex/microturn-duplex-lora.gguf"
+        "--lora-init-without-apply"
+        "--alias" "jarvis-duplex"
+        "--jinja"
+      ];
+      memHigh = "20G"; memMax = "24G"; limitMemlock = true;
+      wanted = false;  # lane de voz: sobe no "hey jarvis acordar" (ou manual)
     };
     uncensored-4b = {
       port = 8092; binary = "upstream";

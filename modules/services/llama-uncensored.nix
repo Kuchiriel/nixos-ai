@@ -10,6 +10,13 @@ let
   binFor = b:
     if b == "ik" then
       "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server"
+    else if b == "stock" then
+      # llama.cpp v0.7.0 com CUDA (build local 17/10, sm_89): o único
+      # binário comprovado que APLICA o LoRA em qwen35moe (o ik carrega
+      # e não aplica — mismatch de nomes; o nixpkgs b9190 tem o arch
+      # mas não foi validado p/ o duplex). Precedente: "ik" também é
+      # build de repo. LD/rpath já embutidos (testes standalone ok).
+      "/home/nixos/projects/llama.cpp/build-stock/bin/llama-server"
     else
       "${pkgs.llama-cpp}/bin/llama-server";
   ldFor = b:
