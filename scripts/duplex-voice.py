@@ -85,8 +85,11 @@ class Asr:
                                    os.path.expanduser("~/.local/share/jarvis/voice"))
         self.lang = lang
         t0 = time.monotonic()
+        # cpu_threads=3 (17/10): sem cap o CTranslate2 rouba TODOS os
+        # cores do llama-server → asr 2.5-10s sob contenção. 3 threads =
+        # llama mantém seus P-cores, asr ~1.2s estável.
         self.model = WhisperModel(model_size, device="cpu", compute_type="int8",
-                                  download_root=voice_dir)
+                                  download_root=voice_dir, cpu_threads=3)
         log(f"[{ts()}] asr: {model_size} carregado em {time.monotonic()-t0:.1f}s")
         self.chunks = queue.Queue(maxsize=2)
         self.results = queue.Queue(maxsize=4)
@@ -97,10 +100,29 @@ class Asr:
             pcm = self.chunks.get()
             t0 = time.monotonic()
             try:
-                segs, _ = self.model.transcribe(pcm, beam_size=1, language=self.lang,
-                                                 condition_on_previous_text=False,
-                                                 vad_filter=False)
-                txt = " ".join(s.text for s in segs).strip()
+                # (17/10, anime JP do dono) ANTI-ALUCINAÇÃO: whisper forced-pt
+                # sobre japonês/música inventa "Legendas pela comunidade" (e o
+                # 35B RESPONDEU à alucinação). Antídotos da casa (transcribe()
+                # calibrado): VAD Silero + descarte por avg_logprob < -0.60
+                # + no_speech_prob. VAD params ajustados à janela 1.2s.
+                segs, _ = self.model.transcribe(
+                    pcm, beam_size=1, language=self.lang,
+                    condition_on_previous_text=False,
+                    vad_filter=True,
+                    vad_parameters=dict(threshold=0.5, min_speech_duration_ms=200,
+                                         min_silence_duration_ms=300,
+                                         speech_pad_ms=160))
+                good, lp_sum, ch_sum = [], 0.0, 0
+                for seg in segs:
+                    lp = float(getattr(seg, "avg_logprob", -1.0))
+                    ns = float(getattr(seg, "no_speech_prob", 1.0))
+                    if lp < -0.60 or ns > 0.6:
+                        continue
+                    good.append(seg.text)
+                    lp_sum += lp * len(seg.text); ch_sum += len(seg.text)
+                if good and ch_sum and lp_sum / ch_sum < -0.60:
+                    good = []
+                txt = " ".join(good).strip()
                 self.last_ms = (time.monotonic() - t0) * 1000
                 try:
                     self.results.put_nowait(txt)
@@ -164,7 +186,7 @@ def main():
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8085)
     ap.add_argument("--lang", default="pt")
-    ap.add_argument("--stt-model", default="tiny")
+    ap.add_argument("--stt-model", default="small")
     ap.add_argument("--rms", type=int, default=150,
                     help="gate de silêncio (ambiente rnnoise~70; fala 300+)")
     args = ap.parse_args()
@@ -193,6 +215,7 @@ def main():
     signal.signal(signal.SIGINT, _sair)
 
     tick_n = 0
+    prev_pcm, prev_rms = None, 0
     try:
         while running:
             t0 = time.monotonic()
@@ -201,8 +224,15 @@ def main():
             if len(raw) == CHUNK_BYTES:
                 pcm16 = np.frombuffer(raw, dtype=np.int16)
                 rms = int(np.sqrt((pcm16.astype(np.float64) ** 2).mean()))
-                if rms >= args.rms:
-                    asr.feed(pcm16.astype("float32") / 32768.0)
+                # JANELA 1.2s (v4): pares de chunks (0.6s cortava palavras
+                # no meio — bench 17/10). Transcreve o par quando QUALQUER
+                # metade passa o gate; cobertura sem buracos, sem overlap.
+                if prev_pcm is not None:
+                    if max(prev_rms, rms) >= args.rms:
+                        asr.feed(np.concatenate([prev_pcm, pcm16]).astype("float32") / 32768.0)
+                    prev_pcm, prev_rms = None, 0
+                else:
+                    prev_pcm, prev_rms = pcm16, rms
                 txt = asr.take()
                 asr_ms = asr.last_ms
                 if txt is not None and txt:
