@@ -2,14 +2,13 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_58 tools._
+_59 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
-- `agent-heartbeat.sh` (nixos-ai/scripts) — agent-heartbeat.sh — watchdog DE PROGRESSO do client-agent (16/10, dono:
-  use: `USO: systemd user timer a cada 10min (home.nix). Teste seco:`
 - `agent-msg-server.sh` (nixos-ai/scripts) — agent-msg-server.sh — o CANAL BOT-A-BOT do server-agent (espelho do
   use: `USO: nixos-ai/scripts/agent-msg-server.sh "mensagem"`
+- `agents-watcher.sh` (nixos-ai/scripts) — agents-watcher.sh — O WATCHER ÚNICO dos agentes (17/10, dono: "consolide
 - `bench-final.py` (nixos-ai/scripts) — """Benchmark multiple llama.cpp configurations systematically."""
 - `bench-llm.sh` (nixos-ai/scripts) — bench-llm.sh — benchmark padrão da casa (consolida os one-offs de 24/09).
 - `charger-watch.sh` (nixos-ai/scripts) — charger-watch.sh — anuncia plug/desplug do carregador na voz do JARVIS.
@@ -18,6 +17,8 @@ _58 tools._
   use: `~/Books            corpus de conhecimento (binários + notas; inclui versions/)`
 - `ctx-usage.sh` (nixos-ai/scripts) — ctx-usage.sh — Agrega uso real do LLM local a partir do journal.
   use: `Uso: ./scripts/ctx-usage.sh [--since "7 days ago"]`
+- `dat_probe.py` (nixos-ai/scripts) — """dat_probe.py — sonda do APPEARANCES .dat do CLIENT (protobuf moderno).
+  use: `Uso (via nix develop do nixos-ai — PYTHONPATH e stripado no shell):`
 - `decomp.py` (nixos-ai/scripts) — """decomp.py — o gargalo é decomposição ou execução?
 - `eval-judge.py` (nixos-ai/scripts) — """eval-judge.py — mede a honestidade do LLM-judge local (core/judge.py).
 - `eval-model.py` (nixos-ai/scripts) — """Model evaluation suite — tarefas representativas do JARVIS.
@@ -97,7 +98,3 @@ _58 tools._
   use: `Uso: ./scripts/voice-selftest.sh`
 - `vram-split-sweep.py` (nixos-ai/scripts) — """Sweep de split GPU/CPU: onde o MoE (e o denso) perdem velocidade.
 - `xref_audit.py` (nixos-ai/scripts) — """xref_audit.py — N<->N audit: docs <-> code references.
-- `dat_probe.py` (nixos-ai/scripts) — "sonda do appearances.dat do client (protobuf): existencia/sprites/nome por id, flags completas (--flags), raio de grounds."
-  use: `cd ~/projects/nixos-ai && nix develop --command python3 scripts/dat_probe.py [--flags] <id>...`
-  origem 16/10: desmascarou 381-384=paredes core, hands weapons-only, donor visual. Ghost donors (client .dat): rodar
-  `nix develop --command python3 /tmp/opencode/run_ghost2.py` (wrapper sys.path p/ reskin; PYTHONPATH e stripado no nix develop).
