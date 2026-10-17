@@ -130,9 +130,12 @@ class Tts:
 
 # ---------------------------------------------------------------- mic
 def mic_stream(rate=SR):
-    return subprocess.Popen(["arecord", "-q", "-f", "S16_LE", "-r", str(rate),
-                             "-c", "1"], stdout=subprocess.PIPE,
-                            bufsize=CHUNK_BYTES)
+    # pw-record na FONTE DEFAULT do sistema = o filtro rnnoise da casa
+    # (17/10: arecord/ALSA pegava fonte morta RMS=0; rnnoise RMS=70 e
+    # ainda DENOISA a entrada). "-" = raw s16 no stdout.
+    return subprocess.Popen(["pw-record", "--rate", str(rate), "--channels", "1",
+                             "--format", "s16", "-"],
+                            stdout=subprocess.PIPE, bufsize=CHUNK_BYTES)
 
 # ---------------------------------------------------------------- main
 def main():

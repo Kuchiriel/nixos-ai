@@ -20,8 +20,16 @@ let
     else
       "${pkgs.llama-cpp}/bin/llama-server";
   ldFor = b:
-    optionalAttrs (b == "ik") {
-      LD_LIBRARY_PATH = "/home/nixos/projects/ik_llama.cpp/build/bin:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
+    optionalAttrs (b == "ik" || b == "stock") {
+      # (17/10) "stock" também precisa: SEM isto o serviço vê só a CUDA
+      # STUB ("driver is a stub library") e roda 100% CPU — 434MB VRAM,
+      # ticks de segundos, máquina travando. O driver de verdade vive em
+      # /run/opengl-driver/lib (impuro por natureza, nunca no rpath).
+      LD_LIBRARY_PATH =
+        (if b == "ik"
+        then "/home/nixos/projects/ik_llama.cpp/build/bin:"
+        else "/home/nixos/projects/llama.cpp/build-stock/bin:")
+        + "${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
     };
   mkDirect = name: s: {
     description = "LLM direct ${name} (:${toString s.port}) — gerado de models.nix";
