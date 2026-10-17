@@ -12,7 +12,9 @@
       listener = [
         {
           timeout = 180;
-          on-timeout = "brightnessctl -s set 30";
+          # (17/10) bug histórico: "set 30" sem % = valor BRUTO 30/19200 = 0%
+          # = tela preta. "set 30%" = 30% de verdade; -s salva o restore.
+          on-timeout = "brightnessctl -s set 30%";
           on-resume = "brightnessctl -r";
         }
         {

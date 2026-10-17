@@ -6,8 +6,8 @@ _59 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
-- `agent-msg-server.sh` (nixos-ai/scripts) — agent-msg-server.sh — o CANAL BOT-A-BOT do server-agent (espelho do
-  use: `USO: nixos-ai/scripts/agent-msg-server.sh "mensagem"`
+- `agent-msg.sh` (nixos-ai/scripts) — agent-msg.sh — O CANAL BOT-A-BOT via desktop (consolidado 17/10, dono:
+  use: `USO:   agent-msg.sh [--to other|all|nsncd|plain] [--list] "texto"`
 - `agents-watcher.sh` (nixos-ai/scripts) — agents-watcher.sh — O WATCHER ÚNICO dos agentes (17/10, dono: "consolide
 - `bench-final.py` (nixos-ai/scripts) — """Benchmark multiple llama.cpp configurations systematically."""
 - `bench-llm.sh` (nixos-ai/scripts) — bench-llm.sh — benchmark padrão da casa (consolida os one-offs de 24/09).

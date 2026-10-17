@@ -86,33 +86,46 @@ INHIBIT_PID=""
 notifica() { [ -n "$NOTIFY" ] && "$NOTIFY" "$1" >/dev/null 2>&1 || true; }
 log()      { echo "$(date '+%H:%M:%S') $*"; [ "$CHECK" -eq 1 ] || echo "$(date '+%H:%M:%S') $*" >> "$DIR_ST/states"; }
 
-# descobre os terminais OC + pids dos processos opencode de cada um
-# (descendentes via /proc — pstree NÃO EXISTE no NixOS; walk ppid)
+# descobre as JANELAS-AGENTE: foot com um opencode TUI VIVO como descendente
+# (17/10: título "OC |" provou ser frágil — sessões mortas mantêm título e
+# o wake digitou em shell morto; sessão viva sem título ficava invisível.
+# Process-tree = zero convenção de título, agnóstico de verdade.)
+# CPU via /proc (utime+stime) — pstree NÃO EXISTE no NixOS; walk ppid.
 mapa_agentes() {
     python3 2>/dev/null <<'PYEOF'
 import json, os, subprocess
+def proc_map():
+    ppid_de, agente = {}, {}
+    for d in os.scandir('/proc'):
+        if not d.name.isdigit():
+            continue
+        pid = int(d.name)
+        try:
+            stat = open(f'/proc/{pid}/stat').read().rsplit(')', 1)[1].split()
+            ppid_de[pid] = int(stat[1])
+            if b'opencode' in open(f'/proc/{pid}/cmdline','rb').read():
+                agente[pid] = True
+        except Exception:
+            pass
+    return ppid_de, agente
+ppid_de, agente = proc_map()
 def descendentes(root):
     pids, frontier = [root], [root]
     while frontier:
-        nxt = []
-        for d in os.scandir('/proc'):
-            if not d.name.isdigit():
-                continue
-            try:
-                stat = open(f'/proc/{d.name}/stat').read().rsplit(')', 1)[1].split()
-                if int(stat[1]) in frontier:  # ppid
-                    nxt.append(int(d.name))
-            except Exception:
-                pass
+        nxt = [p for p in ppid_de
+               if ppid_de[p] in frontier and p not in pids]
         pids += nxt
         frontier = nxt
     return pids
 for c in json.loads(subprocess.run(['hyprctl','clients','-j'],
         capture_output=True, text=True).stdout):
-    if c.get('class') != 'foot' or not (c.get('title') or '').startswith('OC |'):
+    if c.get('class') != 'foot':
         continue
+    desc = descendentes(c.get('pid', 0))
+    if not any(agente.get(p) for p in desc):
+        continue   # foot sem opencode vivo = janela comum/shell morto
     cpu = 0
-    for pid in descendentes(c.get('pid', 0)):
+    for pid in desc:
         try:
             parts = open(f'/proc/{pid}/stat').read().rsplit(')', 1)[1].split()
             cpu += int(parts[11]) + int(parts[12])
@@ -190,7 +203,7 @@ ciclo() {
 
     mapa_agentes > "$DIR_ST/mapa.agora"
     if [ ! -s "$DIR_ST/mapa.agora" ]; then
-        log "sem janelas OC | — ciclo silencioso"
+        log "sem janelas-agente (foot com opencode vivo) — ciclo silencioso"
     fi
     while read -r END FOOTPID CPU; do
         [ -z "${END:-}" ] && continue
