@@ -66,12 +66,28 @@ def main():
         j = json.load(urllib.request.urlopen(req, timeout=60))
         return str(j.get("text", "")).strip()
 
+    def reset():
+        # (10:20) anti-eco (pesquisa: playback suppression + reset do
+        # estado de VAD no início E no fim do TTS — o tail do eco senão
+        # fecha um segmento fantasma e o modelo responde a si).
+        nonlocal ring, started, vad
+        ring = np.zeros(0, dtype="float32")
+        started = None
+        vad = FixedVADIterator(model, threshold=0.5,
+                               min_silence_duration_ms=350,
+                               speech_pad_ms=150)
+
     for line in sys.stdin:
         line = line.strip()
         if not line:
             continue
         try:
             req = json.loads(line)
+            if req.get("reset"):
+                reset()
+                print(json.dumps({"text": "", "ms": 0, "reset": True}),
+                      flush=True)
+                continue
             b64 = req.get("audio_b64")
             if not b64:
                 continue

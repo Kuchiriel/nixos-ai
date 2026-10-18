@@ -61,8 +61,9 @@ SYSTEM_PT = (
     "- NUNCA chame o usuário de JARVIS.\n"
     "- NÃO proponha tarefas longas; ações via ferramenta = Cactus Needle "
     "(pendente).\n"
-    "- Marcadores humanos quando couber: 'Ah,', 'Entendi,', 'Peraí,', "
-    "'Hmm.'\n"
+    "- Respostas DIRETAS, sem preenchimentos ('Ah,', 'Hmm'): backchannels "
+    "só têm sentido ENQUANTO o outro fala (fase duplex); em resposta = "
+    "vício.\n"
     "- Se o segmento for ruído/sem sentido, responda só 'Pode repetir?'"
 )
 SYSTEM = ("You are a voice assistant in a live phone call; both sides can talk at the same time. Every "
@@ -118,11 +119,21 @@ def tick_once(base, history, heard, force_speak=False):
         # (07:35) whisper renderiza 'Jarvis' como 'Já viz'/'Hoje já vi'
         # — palavra-por-palavra nunca casa. Gate v3: PERGUNTA (?) ou
         # fuzzy. O gate de áudio de verdade = wakeword recalibrado (pend.4).
+        # (10:00, dono: "ele fica falando 'ah' o tempo todo") o gate
+        # textual é mushy e as respostas a ruído ('Entendi, está tocando
+        # música', 'Pode repetir?') viraram vício. Pivô: SÓ responde a
+        # segmentos que pedem ação/informação; ruído/fragmento = silêncio.
+        # O gate de áudio de verdade (wakeword recalibrado) é a solução
+        # final — este gate textual é um patch enquanto pendência 4 aberta.
+        low = heard.lower()
         eh_pergunta = (GATE_MODE == "off"
-                       or heard.rstrip().endswith("?") or "?" in heard[-6:])
-        if not eh_pergunta and not chamou(heard) and not chamou(
-                " ".join(h[1] for h in history[-6:])):
-            log(f"[{ts()}] segmento sem chamado/? — ignorado: {heard[:40]!r}")
+                       or "?" in heard[-6:] or heard.rstrip().endswith("?"))
+        eh_comando = any(w in low for w in ("jarvis", "liga", "desliga",
+                                            "que horas", "que dia", "abre",
+                                            "toca", "para", "cancela",
+                                            "ajuda", "status"))
+        if not eh_pergunta and not eh_comando and not chamou(heard):
+            log(f"[{ts()}] segmento não-chamado — ignorado: {heard[:40]!r}")
             return LISTEN, 0.0
         # (09:30, dono: 'responde só a pergunta da vez') o chat sem
         # histórico = amnésia. Leva os últimos turnos reais.
@@ -214,6 +225,13 @@ class Asr:
             self.proc.stdin.write(json.dumps(
                 {"audio_b64": base64.b64encode(
                     np.asarray(pcm_f32, dtype="<f4").tobytes()).decode()}) + "\n")
+            self.proc.stdin.flush()
+        except Exception:
+            pass
+    def feed_raw(self, line):
+        # (10:20) linha crua pro asrd (ex.: {"reset": true}) — eco-mute
+        try:
+            self.proc.stdin.write(line + "\n")
             self.proc.stdin.flush()
         except Exception:
             pass
@@ -434,11 +452,26 @@ def main():
             r = asr.take()
             if isinstance(r, dict) and r.get("text"):
                 heard = r["text"]
-                # segmento COMPLETO do VAC chegou = pausa do usuário → o
-                # modelo RESPONDE (ban do <listen>): conversa de verdade.
-                force = True
-                print(f"  SEGMENTO: {heard}", flush=True)
+                # (10:25) MÚSICA/garbage AQUI (depois do take — antes o
+                # filtro rodava com o heard VELHO e nunca pegava):
+                # [MÚSICA*], <3 chars = ruído whisper.
+                if ("MÚSICA" in heard.upper() or "MUSIC" in heard.upper()
+                        or len(heard.replace(" ", "")) < 4):
+                    log(f"[{ts()}] ruído/música — descartado: {heard[:30]!r}")
+                    heard = NOVOICE
+                else:
+                    # segmento COMPLETO chegou = pausa do usuário → o
+                    # modelo RESPONDE (ban do <listen>).
+                    force = True
+                    print(f"  SEGMENTO: {heard}", flush=True)
 
+            tts_on = (Path("/tmp/jarvis-tts-playing.lock").exists()
+                      or time.monotonic() < speaking["until"])
+            if force and tts_on:
+                # (10:25, pesquisa) falando = não decide: eco/segmento
+                # fantasma do próprio tail NÃO gera resposta.
+                log(f"[{ts()}] segmento durante própria fala — eco, calado")
+                force = False
             said, _p = tick_once(base, history, heard, force_speak=force)
             if not force and said != LISTEN:
                 # (07:15) ticks micro-turn SEM força (4B base, sem LoRA,
