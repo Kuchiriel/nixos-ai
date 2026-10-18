@@ -69,6 +69,9 @@ SYSTEM_PT = (
     "permissão, simplesmente memorize e confirme em uma frase curta.\n"
     "- Proativo: antecipe necessidades óbvias e ofereça a próxima ação, mas "
     "em UMA frase — não fale demais sem ser chamado.\n"
+    "- NÃO concorde só para agradar: se o que ouviu não bate com o que "
+    "verificou, DIGA o que verificou. 'Entendido, está lá' sem verificar "
+    "= mentira.\n"
     "- Respostas DIRETAS, sem preenchimentos ('Ah,', 'Hmm'): backchannels "
     "só têm sentido ENQUANTO o outro fala (fase duplex); em resposta = "
     "vício.\n"
@@ -186,7 +189,7 @@ def tick_once(base, history, heard, force_speak=False):
                 log(f"[{ts()}] TOOL resultado: {result[:80]!r}")
                 msgs.append({"role": "tool",
                              "tool_call_id": tc.get("id", "?"),
-                             "content": str(result)[:400]})
+                             "content": str(result)[:800]})
         out = str(msg.get("content", "")).strip() or "Pronto."
         return out, 0.0
     if LISTEN_TOKEN_ID:
@@ -252,6 +255,14 @@ def _exec(cmd):
         return out[:200] or "(sem saída)"
     except Exception as e:
         return f"ERRO: {e}"
+
+BACKCHANNELS = {"uh-huh", "uh huh", "hmm", "hm", "ah", "ok", "okay", "sim",
+               "tá", "ta", "certo", "é", "eh", "pois é", "sei", "beleza",
+               "blz", "uhuh", "ahn", "ãhn", "entendi", "pode ser"}
+
+def is_backchannel(txt):
+    t = txt.strip().lower().rstrip(".!?").strip()
+    return t in BACKCHANNELS or len(t) < 3
 
 def call_tool(name, args):
     """Executa a ferramenta que o 4B pediu e retorna o resultado."""
@@ -551,6 +562,8 @@ def main():
     tick_n = 0
     prev_pcm, prev_rms = None, 0
     zeros = 0
+    pending = []              # (12:00) merge de segmentos
+    merge_deadline = 0.0
     running = True
 
     def _sair(*_):
@@ -626,13 +639,26 @@ def main():
                     log(f"[{ts()}] ruído/música — descartado: {heard[:30]!r}")
                     heard = NOVOICE
                 else:
-                    # segmento COMPLETO = pausa do usuário → responde.
+                    # (12:00) MERGE-ESPERA: o VAD fragmenta fala contínua
+                    # em pedaços ('E salo.') — espera 800ms; se vier mais
+                    # fala, JUNTA e espera de novo. Responde só a
+                    # utterância completa. Backchannels sozinhos = silêncio.
                     fixed = fix_stt(heard)
                     if fixed != heard:
                         log(f"[{ts()}] hunspell: {heard!r} → {fixed!r}")
                     heard = fixed
-                    force = True
                     print(f"  SEGMENTO: {heard}", flush=True)
+                    if is_backchannel(heard):
+                        log(f"[{ts()}] backchannel ('{heard}') — segue ouvindo")
+                        heard = NOVOICE
+                    else:
+                        pending.append(heard)
+                        heard = NOVOICE
+                        merge_deadline = time.monotonic() + 0.8
+                        force = False   # o merge decide quando responder
+            elif pending and not force and heard != NOVOICE:
+                # mais fala durante a espera? renova (frase contínua)
+                merge_deadline = time.monotonic() + 0.8
 
             tts_on = time.monotonic() < speaking["until"]
             if force and tts_on:
@@ -640,6 +666,15 @@ def main():
                 # fantasma do próprio tail NÃO gera resposta.
                 log(f"[{ts()}] segmento durante própria fala — eco, calado")
                 force = False
+            # (12:00) MERGE: se há fala pendente e a deadline passou
+            # sem mais segmentos = utterância completa → RESPONDE junta.
+            if (pending and not force
+                    and time.monotonic() >= merge_deadline):
+                heard = " ".join(pending)
+                pending.clear()
+                if not is_backchannel(heard):
+                    force = True
+                log(f"[{ts()}] utterância completa: {heard[:60]!r}")
             said, _p = tick_once(base, history, heard, force_speak=force)
             if not force and said != LISTEN:
                 # (07:15) ticks micro-turn SEM força (4B base, sem LoRA,
