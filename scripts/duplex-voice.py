@@ -57,6 +57,9 @@ SYSTEM_PT = (
     "- NUNCA invente horas, datas, nomes, números, resultados de comando "
     "ou estados do sistema. Se pedirem a hora, diga 'preciso consultar o "
     "relógio do sistema'.\n"
+    "- NUNCA afirme ter EXECUTADO ações (marcar, agendar, ligar, desligar, "
+    "consultar, abrir) — você não tem mãos. Diga 'ainda não tenho essa "
+    "ferramenta' quando não existir.\n"
     "- NUNCA repita a pergunta do usuário nem ecoe sua fala.\n"
     "- NUNCA chame o usuário de JARVIS.\n"
     "- NÃO proponha tarefas longas; ações via ferramenta = Cactus Needle "
@@ -143,12 +146,35 @@ def tick_once(base, history, heard, force_speak=False):
                 msgs.append({"role": "user" if role == "user" else "assistant",
                              "content": content})
         msgs.append({"role": "user", "content": heard})
-        j = http(base + "/v1/chat/completions", {"messages": msgs,
-            "max_tokens": 80, "temperature": 0.4})
-        out = (j.get("choices") or [{}])[0].get("message", {}).get("content", "")
-        out = str(out).strip()
-        log(f"[{ts()}] chat resposta: {out[:80]!r}")
-        return (out or "Pode repetir?"), 0.0
+        # (10:50) TOOL CALLING nativo do 4B (provado: get_time chamado de
+        # primeira). Até 2 rounds: chamada → executa → resultado → resposta.
+        body = {"messages": msgs, "max_tokens": 120, "temperature": 0.4,
+                "tools": TOOLS_SCHEMA}
+        for _round in range(2):
+            j = http(base + "/v1/chat/completions", body)
+            msg = (j.get("choices") or [{}])[0].get("message", {})
+            tcs = msg.get("tool_calls") or []
+            if not tcs:
+                out = str(msg.get("content", "")).strip()
+                log(f"[{ts()}] chat resposta: {out[:80]!r}")
+                return (out or "Pode repetir?"), 0.0
+            # executa e devolve
+            msgs.append(msg)
+            for tc in tcs:
+                fn = tc.get("function", {})
+                name = fn.get("name", "?")
+                try:
+                    args = json.loads(fn.get("arguments") or "{}")
+                except Exception:
+                    args = {}
+                log(f"[{ts()}] TOOL: {name}({args})")
+                result = call_tool(name, args)
+                log(f"[{ts()}] TOOL resultado: {result[:80]!r}")
+                msgs.append({"role": "tool",
+                             "tool_call_id": tc.get("id", "?"),
+                             "content": str(result)[:400]})
+        out = str(msg.get("content", "")).strip() or "Pronto."
+        return out, 0.0
     if LISTEN_TOKEN_ID:
         pass  # ticks normais seguem o protocolo micro-turn abaixo
     try:
@@ -199,6 +225,58 @@ def mic_reader(mic, out_q):
                 out_q.put_nowait(raw)
             except queue.Full:
                 pass
+
+
+# ---------------------------------------------------------------- tools
+import subprocess as _sp
+
+def _exec(cmd):
+    """Roda um comando do sistema com timeout; retorna stdout ou erro."""
+    try:
+        r = _sp.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
+        out = (r.stdout or r.stderr or "").strip()
+        return out[:200] or "(sem saída)"
+    except Exception as e:
+        return f"ERRO: {e}"
+
+def call_tool(name, args):
+    """Executa a ferramenta que o 4B pediu e retorna o resultado."""
+    if name == "get_time":
+        return _exec("date '+%H:%M de %d/%m/%Y'")
+    if name == "get_date":
+        return _exec("date '+hoje é %A, %d de %B de %Y' | sed 's/^[a-z]*/&/' 2>/dev/null || date")
+    if name == "recall":
+        q = args.get("query", "")
+        return _exec(f"timeout 20 jarvis recall '{q}' 2>&1 | head -20")
+    if name == "rag_search":
+        q = args.get("query", "")
+        return _exec(f"timeout 20 jarvis rag search '{q}' 2>&1 | head -20")
+    if name == "status":
+        return _exec("systemctl --user is-active jarvis-wakeword 2>&1; uptime -p; free -g | grep Mem")
+    if name == "shell":
+        cmd = args.get("command", "")
+        if any(w in cmd.lower() for w in ["rm ", "dd ", "mkfs", "shutdown", "reboot", "sudo"]):
+            return "BLOQUEADO: comando perigoso"
+        return _exec(cmd)
+    return f"Ferramenta '{name}' não existe"
+
+TOOLS_SCHEMA = [
+    {"type": "function", "function": {"name": "get_time",
+     "description": "Retorna a hora e data atual do sistema",
+     "parameters": {"type": "object", "properties": {}, "required": []}}},
+    {"type": "function", "function": {"name": "recall",
+     "description": "Busca na memória de longo prazo do JARVIS (fatos passados, decisões, eventos)",
+     "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
+    {"type": "function", "function": {"name": "rag_search",
+     "description": "Busca semântica nos repositórios indexados (código, docs, papers)",
+     "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
+    {"type": "function", "function": {"name": "status",
+     "description": "Status do sistema: serviços, uptime, memória",
+     "parameters": {"type": "object", "properties": {}, "required": []}}},
+    {"type": "function", "function": {"name": "shell",
+     "description": "Executa um comando do sistema e retorna a saída (bloqueia comandos perigosos)",
+     "parameters": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}}},
+]
 
 # ---------------------------------------------------------------- ASR
 class Asr:
