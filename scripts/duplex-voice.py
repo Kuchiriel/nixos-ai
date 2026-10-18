@@ -67,7 +67,6 @@ SYSTEM_PT = (
     "- MEMÓRIA: quando o dono disser algo que valha lembrar (preferências, "
     "fatos sobre ele, decisões), chame a ferramenta remember — sem pedir "
     "permissão, simplesmente memorize e confirme em uma frase curta.\n"
-    "- Proativo: antecipe necessidades óbvias e ofereça a próxima ação, mas "
     "em UMA frase — não fale demais sem ser chamado.\n"
     "- Após receber o resultado de uma ferramenta, RESPONDA à pergunta "
     "com o resultado em linguagem natural. NUNCA repita a pergunta do "
@@ -76,6 +75,12 @@ SYSTEM_PT = (
     "- Após receber o resultado de uma ferramenta, RESPONDA com o "
     "resultado em linguagem natural. NUNCA repita a pergunta do usuário "
     "como resposta. Ex.: get_time='12:01' → 'São 12:01'.\n"
+    "- Responda JÁ com a informação na primeira frase. NUNCA ofereça "
+    "menus de opções ('Posso verificar X ou buscar Y') — faça o mais "
+    "provável e responda.\n"
+    "- Responda JÁ com a informação na primeira frase. NUNCA ofereça "
+    "menus de opções ('Posso verificar X ou buscar Y') — faça o mais "
+    "provável e responda.\n"
     "- NÃO concorde só para agradar: se o que ouviu não bate com o que "
     "verificou, DIGA o que verificou. 'Entendido, está lá' sem verificar "
     "= mentira.\n"
@@ -263,6 +268,20 @@ def _exec(cmd):
     except Exception as e:
         return f"ERRO: {e}"
 
+LAST_RESPONSES = []   # (12:55) as últimas respostas faladas — o eco
+                       # textual (mic ouve o próprio TTS e 'ouve' de novo)
+                       # morre AQUI: ratio >= 0.72 = eco = descarta.
+
+def is_self_echo(txt):
+    import difflib
+    t = txt.strip().lower().rstrip(".!?").strip()
+    if not t:
+        return True
+    for last in LAST_RESPONSES[-3:]:
+        if difflib.SequenceMatcher(None, t, last.strip().lower()).ratio() >= 0.72:
+            return True
+    return False
+
 BACKCHANNELS = {"uh-huh", "uh huh", "hmm", "hm", "ah", "ok", "okay", "sim",
                "tá", "ta", "certo", "é", "eh", "pois é", "sei", "beleza",
                "blz", "uhuh", "ahn", "ãhn", "entendi", "pode ser"}
@@ -279,7 +298,7 @@ def call_tool(name, args):
         return _exec("date '+hoje é %A, %d de %B de %Y' | sed 's/^[a-z]*/&/' 2>/dev/null || date")
     if name == "recall":
         q = args.get("query", "")
-        raw = _exec(f"timeout 20 jarvis recall '{q}' --top 5 2>&1")
+        raw = _exec(f"timeout 20 jarvis recall '{q}' 2>&1")
         # o CLI devolve JSON de hits (id/score/metadata) — o 4B não lê
         # blob; extraímos os TEXTOS das memórias:
         try:
@@ -474,6 +493,82 @@ class Tts:
     def say(self, text):
         if text.strip():
             self.q.put(text.strip())
+    VOICE_JA = "/home/nixos/models/piper/ja_JP-hi_fi_captain-medium.onnx"
+
+    @staticmethod
+    def _split_script(text):
+        """Divide o texto em runs por escrita: latin vs kanji/kana.
+        (12:35, dono: 'se o piper conseguir falar japonês, faz um switch')"""
+        import re as _re
+        runs, cur, cur_ja = [], "", None
+        for ch in text:
+            ja = bool(_re.match(r"[\u3040-\u30ff\u4e00-\u9fff\uff66-\uff9f]", ch))
+            if cur_ja is None or ja == cur_ja or ch in " \n":
+                cur += ch
+                if cur_ja is None and ch.strip():
+                    cur_ja = ja
+            else:
+                runs.append((cur, cur_ja))
+                cur, cur_ja = ch, ja
+        if cur.strip():
+            runs.append((cur, cur_ja or False))
+        return [(t.strip(), j) for t, j in runs if t.strip()]
+
+    @staticmethod
+    def _piper1_synth(voice_path, seg, out_wav):
+        """piper1-gpl 1.8 (a voz JP é da geração nova; o binário 2023
+        rejeita: 'Phonemes must be one codepoint'). Uso: o wav de saída
+        exige samplerate/channels no wave.open."""
+        import wave as _w
+        code = (
+            "import sys; sys.path.insert(0, '/home/nixos/models/piper/piper1')\n"
+            "from piper import PiperVoice\n"
+            f"v = PiperVoice.load('{voice_path}')\n"
+            f"w = wave.open('{out_wav}', 'wb'); w.setnchannels(1); "
+            "w.setsampwidth(2); w.setframerate(22050)\n"
+            f"v.synthesize_wav(sys.argv[1], w)\n"
+            "w.close()\n")
+        r = subprocess.run(
+            ["/home/nixos/projects/karaok/.venv/bin/python3", "-c", code, seg],
+            capture_output=True, text=True, timeout=90)
+        return r.returncode == 0 and Path(out_wav).exists()
+
+    def _synthesize(self, text, wav_path):
+        """Sintetiza com a voz certa por run e costura os wavs."""
+        import wave as _w
+        text = "".join(ch for ch in text if ch != "*")  # (12:50) asterisco
+        runs = self._split_script(text)
+        if len(runs) == 1 and not runs[0][1]:
+            return self._piper1_synth(self.VOICE, runs[0][0], wav_path)
+        # multi-voz: sintetiza cada run, concatena
+        import tempfile as _tf
+        parts = []
+        ok = True
+        for i, (seg, ja) in enumerate(runs):
+            with _tf.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                part = f.name
+            voice = self.VOICE_JA if ja else self.VOICE
+            if self._piper1_synth(voice, seg, part):
+                parts.append(part)
+            else:
+                ok = False
+        if not parts:
+            return False
+        # concatena (todos piper = mono 22050)
+        with _w.open(parts[0], "rb") as w0:
+            params = w0.getparams()
+            frames = [w0.readframes(w0.getnframes())]
+        for part in parts[1:]:
+            with _w.open(part, "rb") as w1:
+                if w1.getframerate() == params.framerate:
+                    frames.append(w1.readframes(w1.getnframes()))
+        with _w.open(wav_path, "wb") as out:
+            out.setparams(params)
+            for fr in frames:
+                out.writeframes(fr)
+        for part in parts:
+            Path(part).unlink(missing_ok=True)
+        return ok
     def asr_reset(self):
         # (12:10) limpa o VAD do asrd pós-fala (tail do eco)
         try:
@@ -499,12 +594,8 @@ class Tts:
                 # TEXTO PURO por linha — o JSON era do piper novo; a
                 # chave "text" era FALADA em alta. Acentos: encoding
                 # utf-8 real, nada de escapes.
-                r = subprocess.run(
-                    ["/home/nixos/models/piper/bin/piper", "-m", self.VOICE,
-                     "--output_file", wav],
-                    input=text + "\n", capture_output=True, text=True,
-                    encoding="utf-8", timeout=60)
-                if r.returncode == 0 and Path(wav).exists():
+                okk = self._synthesize(text, wav)
+                if okk and Path(wav).exists():
                     subprocess.run(["aplay", "-q", wav], timeout=60)
                 else:
                     log(f"[{ts()}] tts FALHOU: rc={r.returncode} "
@@ -514,7 +605,7 @@ class Tts:
             except Exception as exc:  # noqa: BLE001
                 log(f"[{ts()}] tts ERRO: {exc}")
             finally:
-                self.speaking["until"] = time.monotonic() + 0.4
+                self.speaking["until"] = time.monotonic() + 1.0
                 self.asr_reset()   # (12:10) o tail do eco morre AQUI:
                                    # sem o reset o VAD fecha segmento com
                                    # a própria voz e o modelo responde a si
@@ -706,7 +797,10 @@ def main():
                     and time.monotonic() >= merge_deadline):
                 heard = " ".join(pending)
                 pending.clear()
-                if not is_backchannel(heard):
+                if is_self_echo(heard):
+                    log(f"[{ts()}] AUTO-ECO textual — descartado: {heard[:40]!r}")
+                    heard = NOVOICE
+                elif not is_backchannel(heard):
                     force = True
                 log(f"[{ts()}] utterância completa: {heard[:60]!r}")
             said, _p = tick_once(base, history, heard, force_speak=force)
@@ -728,6 +822,7 @@ def main():
                 frase.append(said)
                 print(f"  ouvi: {heard:<28} digo: {said}  (asr {asr.last_ms:.0f}ms)",
                       flush=True)
+                LAST_RESPONSES.append(said)
                 if said.rstrip().endswith((".", "!", "?")) or len(frase) >= 3:
                     log(f"[{ts()}] TTS({' '.join(frase)})")
                     tts.say(" ".join(frase)); frase = []
