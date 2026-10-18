@@ -7,6 +7,15 @@
 #     sozinho (Tts._ensure_daemon resolve o python do wrapper vivo).
 #   - llama-duplex-35b: P-cores 0-11 (pinned pelo systemd via taskset).
 set -euo pipefail
+# whisper-server GPU (18/10 09:00): 83ms/segmento medido. Sem ele vivo,
+# o asrd v4 não transcreve. Sobe se preciso (porta 8097).
+if ! curl -s -o /dev/null --max-time 2 http://127.0.0.1:8097/health 2>/dev/null \
+   && ! curl -s -o /dev/null --max-time 2 -F x=1 http://127.0.0.1:8097/inference 2>/dev/null; then
+  setsid nohup /home/nixos/projects/whisper.cpp/build/bin/whisper-server \
+    -m /home/nixos/models/whisper/ggml-small.bin -l pt --port 8097 --host 127.0.0.1 \
+    > /tmp/opencode/whisper-server.log 2>&1 < /dev/null &
+  sleep 6
+fi
 # LIMPEZA DE ÓRFÃOS (18/10): o kill do cliente deixa os DAEMONS filhos
 # vivos (ttsd em especial = múltiplos faladores no mesmo FIFO — a fonte
 # do "ele não cala a boca"). Padrões não casam com ESTE script (run.sh).

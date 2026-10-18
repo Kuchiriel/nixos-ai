@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
-"""duplex-asrd.py — daemon ASR STREAMING do duplex (v2, 18/10 ~06:40).
+"""duplex-asrd.py — ASR v4: silero VAD (limites) + whisper.cpp GPU (texto).
 
-ANTES: janelas fixas 1.2s + transcribe batch = cortava palavras nas
-bordas + 2-7s de latência + brigava por CPU com o LLM.
-AGORA: Whisper-Streaming (ufal, LocalAgreement-2 + VAC, arXiv 2307.14743)
-— chunks de 0.6s alimentam um buffer CONTÍNUO; o process_iter publica
-prefixos estáveis incrementalmente; o VAC detecta fim de segmento.
-Sem corte de palavras, latência ~0.6-1.5s, contexto que cresce.
+(18/10 08:50) A evolução final da manhã: o VAC do whisper_streaming
+carregava um whisper CPU interno (1.5-3s por segmento) só pra FECHAR
+limites. Agora: FixedVADIterator (silero sozinho, o arquivo vendored)
+detecta pausa em ~300ms; o segmento cortado do ring vai pro
+whisper-server (:8097, CUDA, modelo quente) — 158ms medidos por
+segmento. Total fala→texto: <1s.
 
-Protocolo stdio (igual ao cliente duplex-voice.py já fala):
-  req: {"audio_b64": "<float32 PCM 16k>"} (um chunk de 0.6s por linha)
-  resp: {"text": "<texto novo estável>", "ms": X, "final": bool}
-Voz karaok venv (ctranslate2 30× mais rápido que o do env jarvis).
+Protocolo stdio (igual o cliente já fala):
+  req: {"audio_b64": "<float32 PCM 16k>"} (chunks de 0.6s, TODOS —
+       silêncio inclusive, o VAD precisa)
+  resp: {"text": "...", "ms": X} quando fecha segmento; silêncio = nada
 """
 import base64
+import io
 import json
 import sys
 import time
+import urllib.request
+import wave
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -24,18 +27,44 @@ sys.path.insert(0, str(Path(__file__).parent))
 import numpy as np
 
 SR = 16000
+WCPP = "http://127.0.0.1:8097/inference"
 
 def main():
-    from whisper_streaming import FasterWhisperASR, VACOnlineASRProcessor
+    from silero_vad_iterator import FixedVADIterator
 
-    asr = FasterWhisperASR(modelsize="small", lan="pt",
-                           cache_dir="/home/nixos/.local/share/jarvis/voice",
-                           model_dir=None)
-    online = VACOnlineASRProcessor(0.6, asr, tokenizer=None,
-                                   logfile=sys.stderr,
-                                   buffer_trimming=("segment", 15))
-    print(json.dumps({"text": "", "ms": 0, "final": False, "ready": True}),
-          flush=True)
+    # silero via torch hub (cacheado em ~/.cache/torch — o VAC baixou 1×)
+    import torch
+    model, utils = torch.hub.load("snakers4/silero-vad", "silero_vad")
+    vad = FixedVADIterator(model, threshold=0.5, min_silence_duration_ms=350,
+                           speech_pad_ms=150)
+    print(json.dumps({"text": "", "ms": 0, "ready": True}), flush=True)
+
+    ring = np.zeros(0, dtype="float32")
+    started = None
+
+    def seg_to_text(seg):
+        if len(seg) < SR * 0.4:
+            return ""
+        buf = io.BytesIO()
+        w = wave.open(buf, "wb")
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
+        w.writeframes((seg * 32767).astype("int16").tobytes())
+        w.close()
+        req = urllib.request.Request(
+            WCPP, data=buf.getvalue(),
+            headers={"Content-Type": "audio/wav"})
+        boundary = "----JARVIS"
+        # multipart manual: whisper-server espera form-data 'file'
+        body = (
+            f"--{boundary}\r\nContent-Disposition: form-data; "
+            f"name=\"file\"; filename=\"seg.wav\"\r\n"
+            f"Content-Type: audio/wav\r\n\r\n").encode() + buf.getvalue() + \
+            f"\r\n--{boundary}--\r\n".encode()
+        req = urllib.request.Request(
+            WCPP, data=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+        j = json.load(urllib.request.urlopen(req, timeout=60))
+        return str(j.get("text", "")).strip()
 
     for line in sys.stdin:
         line = line.strip()
@@ -50,22 +79,21 @@ def main():
         except Exception:
             continue
         t0 = time.monotonic()
-        txt = ""
         try:
-            online.insert_audio_chunk(pcm)
-            out = online.process_iter()
-            # (medido 18/10) VACOnlineASRProcessor.process_iter →
-            # (beg_ts, end_ts, texto_novo) quando fecha um segmento,
-            # (None, None, '') entre segmentos. O VAC fecha NA PAUSA do
-            # usuário = o gatilho de resposta nasce pronto.
-            if isinstance(out, tuple) and len(out) == 3 and out[2]:
-                txt = str(out[2]).strip()
-        except Exception as exc:  # noqa: BLE101
-            print(json.dumps({"text": "", "ms": 0, "final": False,
-                              "err": str(exc)[:120]}), flush=True)
-            continue
-        print(json.dumps({"text": txt, "ms": (time.monotonic() - t0) * 1000,
-                          "final": False}), flush=True)
+            ring = np.concatenate([ring, pcm])[-SR * 20:]   # cap 20s
+            ev = vad(pcm)
+            if ev and started is None and ev.get("start") is not None:
+                started = max(0, int(len(ring) - SR * 1.0))   # 1s de pré-roll
+            if ev and ev.get("end") is not None and started is not None:
+                seg = ring[int(started):int(len(ring) - SR * 0.35)]
+                txt = seg_to_text(seg)
+                ms = (time.monotonic() - t0) * 1000
+                print(json.dumps({"text": txt, "ms": ms}), flush=True)
+                ring = np.zeros(0, dtype="float32")
+                started = None
+        except Exception as exc:  # noqa: BLE001
+            print(json.dumps({"text": "", "ms": 0, "err": str(exc)[:120]}),
+                  flush=True)
 
 if __name__ == "__main__":
     main()
