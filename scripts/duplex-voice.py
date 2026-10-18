@@ -397,7 +397,7 @@ LAST_TTS_END = 0.0   # (18:00) cooldown: o eco do TTS transcreve
                        # de quarentena mata o loop de hora repetida.
 
 def in_cooldown():
-    return time.monotonic() - LAST_TTS_END < 1.8
+    return time.monotonic() - LAST_TTS_END < 3.0
 
 def is_self_echo(txt):
     import difflib
@@ -667,6 +667,7 @@ class Tts:
         self.speaking = speaking
         self.q = queue.Queue()
         self.last_ms = 0.0
+        self._aplay = None   # (18:50) o barge-in mata ESTE processo
         threading.Thread(target=self._worker, daemon=True).start()
     def say(self, text):
         text = text.strip()
@@ -824,8 +825,11 @@ class Tts:
                 # utf-8 real, nada de escapes.
                 okk = self._synthesize(text, wav)
                 if okk and Path(wav).exists():
-                    aec_register_played(wav)   # AEC: a referência
-                    subprocess.run(["aplay", "-q", wav], timeout=60)
+                    aec_register_played(wav)
+                    self._aplay = subprocess.Popen(
+                        ["aplay", "-q", wav])
+                    self._aplay.wait(timeout=90)   # barge-in: .kill() interrompe
+                    self._aplay = None
                 else:
                     log(f"[{ts()}] tts FALHOU: synth={okk} wav={Path(wav).exists()}")
                 self.last_ms = (time.monotonic() - t0) * 1000
@@ -1015,6 +1019,12 @@ def main():
                 # buffer de barge-in morava em bursts de 7s+ de delay.
                 # A janela speaking + o asrd-reset pós-play continuam
                 # como rede de segurança; o AEC é a linha de frente.
+                if tts_playing and crms >= 900:
+                    # (18:50) BARGE-IN REAL: mata o aplay AGORA (o paper:
+                    # 'must stop within ~200ms to feel full-duplex')
+                    if tts._aplay and tts._aplay.poll() is None:
+                        tts._aplay.kill()
+                        log(f"[{ts()}] BARGE-IN: TTS morto (rms={crms})")
                 _processed = aec_process(c16)
                 asr.feed(_processed.astype("float32") / 32768.0)
             if barge_buf and not tts_playing and len(barge_buf) >= 2:
@@ -1069,11 +1079,11 @@ def main():
                     else:
                         pending.append(heard)
                         heard = NOVOICE
-                        merge_deadline = time.monotonic() + 0.7
+                        merge_deadline = time.monotonic() + 1.2
                         force = False   # o merge decide quando responder
             elif pending and not force and heard != NOVOICE:
                 # mais fala durante a espera? renova (frase contínua)
-                merge_deadline = time.monotonic() + 0.7
+                merge_deadline = time.monotonic() + 1.2
 
             tts_on = time.monotonic() < speaking["until"]
             if force and tts_on:
@@ -1093,6 +1103,12 @@ def main():
                 elif is_self_echo(heard):
                     log(f"[{ts()}] AUTO-ECO textual — descartado: {heard[:40]!r}")
                     heard = NOVOICE
+                n_words = len(heard.split())
+                is_cmd = heard.lower().strip(".,!?") in (
+                    "pare", "para", "stop", "jarvis", "calaboca", "silêncio",
+                    "cala boca", "quieto")
+                if n_words < 3 and not is_cmd:
+                    log(f"[{ts()}] fragmento curto ({n_words} pal) — ignora: {heard[:30]!r}")
                 elif not is_backchannel(heard):
                     force = True
                 log(f"[{ts()}] utterância completa: {heard[:60]!r}")
