@@ -1000,6 +1000,7 @@ def main():
                 # (paper 2307.14743; o server aceita 'prompt' — o
                 # 'Já viz' morre na FONTE agora)
                 words = (heard + " " + Asr.CTX["v"]).split()
+                # respostas do modelo também entram (vocab esperado)
                 seen, keep = set(), []
                 for w in words:
                     if w not in seen:
@@ -1083,6 +1084,10 @@ def main():
                 print(f"  ouvi: {heard:<28} digo: {said}  (asr {asr.last_ms:.0f}ms)",
                       flush=True)
                 LAST_RESPONSES.append(said)
+                # (17:30) as palavras da resposta vão pro ctx do whisper
+                for w in said.split():
+                    if w.lower() not in Asr.CTX["v"].lower() and len(Asr.CTX["v"]) < 180:
+                        Asr.CTX["v"] += " " + w
                 if said.rstrip().endswith((".", "!", "?")) or len(frase) >= 3:
                     log(f"[{ts()}] TTS({' '.join(frase)})")
                     tts.say(" ".join(frase)); frase = []
