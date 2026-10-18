@@ -298,6 +298,7 @@ in rec {
       extraArgs = [
         "--lora" "/home/nixos/models/loras/microturn-duplex/microturn-duplex-lora.gguf"
         "--lora-init-without-apply"
+        "--reasoning" "off"
         "--alias" "jarvis-duplex"
         "--jinja"
       ];
