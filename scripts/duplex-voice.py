@@ -218,6 +218,42 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
     return (LISTEN if out.startswith("<") else out), p_listen
 
 
+
+# ------------------------------------------------------------- speaker id
+SPK_PROFILE = None   # embedding do dono (matrícula de 10s)
+
+def spk_embed(pcm_f32, sr=16000):
+    """MFCC mean+std = embedding da voz (~120ms)."""
+    try:
+        import librosa
+        mfcc = librosa.feature.mfcc(y=pcm_f32, sr=sr, n_mfcc=13,
+                                     n_fft=512, hop_length=160)
+        return np.concatenate([mfcc.mean(axis=1), mfcc.std(axis=1)])
+    except Exception:
+        return None
+
+def spk_is_owner(pcm_f32):
+    """True se cosseno(embed, profile) >= 0.82 (a matrícula manda)."""
+    if SPK_PROFILE is None:
+        return True   # sem matrícula = aceita todos (comportamento atual)
+    e = spk_embed(pcm_f32)
+    if e is None:
+        return True
+    cos = float(np.dot(e, SPK_PROFILE) /
+                (np.linalg.norm(e) * np.linalg.norm(SPK_PROFILE) + 1e-9))
+    return cos >= 0.82
+
+def spk_enroll(audio_path):
+    """Matricula a voz do dono a partir de um wav (10s+)."""
+    global SPK_PROFILE
+    try:
+        import librosa
+        y, _ = librosa.load(audio_path, sr=16000, mono=True)
+        SPK_PROFILE = spk_embed(y)
+        return SPK_PROFILE is not None
+    except Exception:
+        return False
+
 # ---------------------------------------------------------------- AEC-lite
 import threading as _th
 
@@ -439,6 +475,35 @@ def call_tool(name, args):
             return call_tool("status", {})
         if "shell" in action or "command" in action or "terminal" in action:
             return call_tool("shell", {"command": inp})
+        if "enroll" in action or "matricula" in action or "cadastra" in action:
+            # (19:20) matrícula da voz: grava 8s do dono e salva o profile
+            import tempfile as _tf
+            with _tf.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                _wav = f.name
+            r2 = subprocess.run(
+                ["timeout", "10", "pw-record", "--rate", "16000",
+                 "--channels", "1", "--format", "s16", "--container", "raw",
+                 "--target", MIC_SOURCE, _wav],
+                capture_output=True, timeout=12)
+            import wave as _w
+            w = _w.open(_wav, "rb")
+            pcm = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+            w.close()
+            Path(_wav).unlink(missing_ok=True)
+            emb = spk_embed(pcm.astype("float32") / 32768.0)
+            if emb is not None:
+                with open("/tmp/jarvis-spk-profile.json", "w") as f2:
+                    json.dump({"embedding": emb.tolist()}, f2)
+                global SPK_PROFILE
+                SPK_PROFILE = emb
+                return "Voz do dono matriculada com sucesso. Agora só respondo a você."
+            return "Não consegui captar voz suficiente. Fale mais alto."
+        if "guest" in action or "todos" in action or "convidado" in action:
+            # desativa o filtro de voz (modo convidado)
+            Path("/tmp/jarvis-spk-profile.json").unlink(missing_ok=True)
+            globals()["SPK_PROFILE"] = None
+            return "Filtro de voz desativado. Respondendo a todos."
+
         return f"Ação '{action}' desconhecida. Use: get_time, remember, recall, web_search, status, shell."
     # chamadas diretas (legado/compat)
     """Executa a ferramenta que o 4B pediu e retorna o resultado."""
@@ -1079,8 +1144,20 @@ def main():
                     else:
                         pending.append(heard)
                         heard = NOVOICE
-                        merge_deadline = time.monotonic() + 1.2
-                        force = False   # o merge decide quando responder
+                        # (19:00) SMART MERGE (Easy-Turn heuristic):
+                        # termina em ? ! = completo → 500ms
+                        # termina em , e mas → incompleto → 1.5s
+                        # default → 1.2s
+                        _last = pending[-1].rstrip()
+                        if _last.endswith(("?", "!", ".")):
+                            _wait = 0.5
+                        elif _last.endswith((",", " e", " mas", " ou",
+                                                 " que", " pra", " para")):
+                            _wait = 1.5
+                        else:
+                            _wait = 1.2
+                        merge_deadline = time.monotonic() + _wait
+                        force = False
             elif pending and not force and heard != NOVOICE:
                 # mais fala durante a espera? renova (frase contínua)
                 merge_deadline = time.monotonic() + 1.2

@@ -83,6 +83,17 @@ def main():
                                min_silence_duration_ms=650,
                                speech_pad_ms=150)
 
+    # (19:15) SPEAKER ID: profile do dono (MFCC, matrícula no cliente)
+    SPK_PROFILE = None
+    try:
+        _cfg = json.loads(Path("/tmp/jarvis-spk-profile.json").read_text())
+        if _cfg.get("embedding"):
+            SPK_PROFILE = np.array(_cfg["embedding"])
+    except Exception:
+        pass
+    print(f"[asrd] speaker: {'ATIVO' if SPK_PROFILE is not None else 'desligado (todos)'}",
+          file=sys.stderr, flush=True)
+
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -108,6 +119,24 @@ def main():
                 started = max(0, int(len(ring) - SR * 1.0))   # 1s de pré-roll
             if ev and ev.get("end") is not None and started is not None:
                 seg = ring[int(started):int(len(ring) - SR * 0.35)]
+                # (19:15) SPEAKER ID: MFCC cosseno vs profile do dono
+                if (SPK_PROFILE is not None and len(seg) > SR * 0.4):
+                    try:
+                        import librosa
+                        _m = librosa.feature.mfcc(
+                            y=seg, sr=SR, n_mfcc=13, n_fft=512, hop_length=160)
+                        _e = np.concatenate([_m.mean(axis=1), _m.std(axis=1)])
+                        _cos = float(np.dot(_e, SPK_PROFILE) /
+                                    (np.linalg.norm(_e) *
+                                     np.linalg.norm(SPK_PROFILE) + 1e-9))
+                        if _cos < 0.82:
+                            print(f"[asrd] voz NÃO-owner cos={_cos:.2f} — desc",
+                                  file=sys.stderr, flush=True)
+                            ring = np.zeros(0, dtype="float32")
+                            started = None
+                            continue
+                    except Exception:
+                        pass  # sem librosa = sem filtro
                 txt = seg_to_text(seg)
                 ms = (time.monotonic() - t0) * 1000
                 print(json.dumps({"text": txt, "ms": ms}), flush=True)
