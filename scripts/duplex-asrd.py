@@ -78,6 +78,8 @@ def main():
             if good and ch_sum and lp_sum / ch_sum < -2.5:
                 good = []
             txt = " ".join(good).strip()
+            if good:
+                lp, ns = lp_sum / max(ch_sum, 1), 0.0  # ns médio=0: aceito
             if not txt and raw_txt:
                 # telemetria: o filtro derrubou algo — o log do cliente
                 # mostra o quê (raw/lp/ns) sem acordar ninguém.
@@ -91,7 +93,7 @@ def main():
                               "err": str(exc)[:120]}), flush=True)
             continue
         print(json.dumps({"text": txt, "ms": (time.monotonic() - t0) * 1000,
-                          "lp": lp, "ns": ns}), flush=True)
+                          "lp": round(lp, 3), "ns": round(ns, 3)}), flush=True)
 
 if __name__ == "__main__":
     main()

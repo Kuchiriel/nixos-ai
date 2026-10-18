@@ -172,7 +172,8 @@ class Tts:
     jarvis, kokoro carregado UMA vez. FIFO JSON; o daemon morre com o
     cliente (__exit)."""
     FIFO = "/tmp/jarvis-duplex-tts.fifo"
-    def __init__(self):
+    def __init__(self, speaking):
+        self.speaking = speaking
         self.q = queue.Queue()
         self.last_ms = 0.0
         self.daemon = None
@@ -201,6 +202,13 @@ class Tts:
         time.sleep(0.2)
     def say(self, text):
         if text.strip():
+            # eco: o mic ouve o PRÓPRIO TTS e o modelo responde a si
+            # ("Okay" em loop, 18/10). Janela = synth+play estimado
+            # (chars×90ms) + 500ms de cauda — o loop suprime feed nela.
+            import re as _re
+            n = len(_re.sub(r"\W", "", text))
+            self.speaking["until"] = max(self.speaking["until"],
+                                         time.monotonic() + n * 0.09 + 0.5)
             self.q.put(text.strip())
     def _worker(self):
         while True:
@@ -251,8 +259,9 @@ def main():
     http(base + "/lora-adapters", [{"id": 0, "scale": 1.0}], timeout=600)
     log(f"[{ts()}] MODO DUPLEX. Fala com ele. Ctrl-C = dormir.\n")
 
+    speaking = {"until": 0.0}   # self-mute anti-eco (18/10 ~06h)
     asr = Asr(args.stt_model, args.lang)
-    tts = Tts()
+    tts = Tts(speaking)
     mic_q = queue.Queue(maxsize=6)
     threading.Thread(target=mic_reader, args=(mic, mic_q), daemon=True).start()
 
@@ -310,7 +319,9 @@ def main():
                 b16 = chunks[i+1] if isinstance(chunks[i+1], np.ndarray) else np.frombuffer(chunks[i+1], dtype=np.int16)
                 pair = np.concatenate([a16, b16]).astype("float32") / 32768.0
                 prms = int(np.sqrt((pair ** 2).mean()) * 32768)
-                if prms >= args.rms:
+                if prms >= args.rms and time.monotonic() < speaking["until"]:
+                    pass  # própria voz tocando: eco suprimido
+                elif prms >= args.rms:
                     asr.feed(pair)
                 i += 2
             prev_pcm = chunks[-1] if (len(chunks) - i == 1) else None
