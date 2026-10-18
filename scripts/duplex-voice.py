@@ -75,12 +75,20 @@ SYSTEM_PT = (
     "- Após receber o resultado de uma ferramenta, RESPONDA com o "
     "resultado em linguagem natural. NUNCA repita a pergunta do usuário "
     "como resposta. Ex.: get_time='12:01' → 'São 12:01'.\n"
+    "- SÓ chame ferramentas quando a resposta PRECISA de dado externo "
+    "(hora atual, memória, web, sistema). Para conversa, cumprimentos, "
+    "piadas, opiniões ou conhecimento geral: responda DIRETO sem tools. "
+    "Cada tool custa 1-3 segundos — não gaste com trivialidades.\n"
     "- SE precisar de algo que uma ferramenta dá (hora, memória, busca, "
     "sistema), CHAME a ferramenta AGORA — nunca diga 'preciso consultar' "
     "ou 'vou verificar': chamar é mais rápido que anunciar.\n"
     "- Responda JÁ com a informação na primeira frase. NUNCA ofereça "
     "menus de opções ('Posso verificar X ou buscar Y') — faça o mais "
     "provável e responda.\n"
+    "- SÓ chame ferramentas quando a resposta PRECISA de dado externo "
+    "(hora atual, memória, web, sistema). Para conversa, cumprimentos, "
+    "piadas, opiniões ou conhecimento geral: responda DIRETO sem tools. "
+    "Cada tool custa 1-3 segundos — não gaste com trivialidades.\n"
     "- SE precisar de algo que uma ferramenta dá (hora, memória, busca, "
     "sistema), CHAME a ferramenta AGORA — nunca diga 'preciso consultar' "
     "ou 'vou verificar': chamar é mais rápido que anunciar.\n"
@@ -209,12 +217,9 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
                     continue
                 log(f"[{ts()}] chat resposta: {out[:80]!r}")
                 return (out or ""), 0.0
-            # (14:50, paper 2609.19334) FILLER imediato no 1º tool call:
-            # o usuário ouve 'consultando' em <1s enquanto a tool roda.
+            # (18:00, dono: 'tira esse hardcoded') SEM filler: ele ecoava
+            # no mic, virava pergunta nova e o get_time entrava em loop.
             if not filler_spoken:
-                if tts:
-                    if tts:
-                        tts.say("Consultando agora.")
                 filler_spoken = True
                 body.pop("stream", None)
             msgs.append(msg)
@@ -437,12 +442,23 @@ LAST_RESPONSES = []   # (12:55) as últimas respostas faladas — o eco
                        # textual (mic ouve o próprio TTS e 'ouve' de novo)
                        # morre AQUI: ratio >= 0.72 = eco = descarta.
 
+LAST_TTS_END = 0.0   # (18:00) cooldown: o eco do TTS transcreve
+                       # MESMO com asrd-reset (texto já no pipe) — 1.8s
+                       # de quarentena mata o loop de hora repetida.
+
+def in_cooldown():
+    return time.monotonic() - LAST_TTS_END < 1.8
+
 def is_self_echo(txt):
     import difflib
     t = txt.strip().lower().rstrip(".!?").strip()
     if not t:
         return True
+    import re as _re2
+    _nums_in = set(_re2.findall(r"\d{1,4}", txt))
     for last in LAST_RESPONSES[-3:]:
+        if _nums_in and _nums_in == set(_re2.findall(r"\d{1,4}", last)):
+            return True   # mesmos números = a mesma resposta ecoada
         if difflib.SequenceMatcher(None, t, last.strip().lower()).ratio() >= 0.72:
             return True
     return False
@@ -863,6 +879,8 @@ class Tts:
                 log(f"[{ts()}] tts ERRO: {exc}")
             finally:
                 self.speaking["until"] = time.monotonic() + 1.0
+                global LAST_TTS_END
+                LAST_TTS_END = time.monotonic()
                 aec_clear()   # (17:50) o AEC SÓ na janela real de play
                 self.asr_reset()   # tail do eco: estado limpo pós-fala
                 self.asr_reset()   # (12:10) o tail do eco morre AQUI:
@@ -1118,7 +1136,10 @@ def main():
                     and time.monotonic() >= merge_deadline):
                 heard = " ".join(pending)
                 pending.clear()
-                if is_self_echo(heard):
+                if in_cooldown():
+                    log(f"[{ts()}] cooldown pós-TTS — descartado: {heard[:40]!r}")
+                    heard = NOVOICE
+                elif is_self_echo(heard):
                     log(f"[{ts()}] AUTO-ECO textual — descartado: {heard[:40]!r}")
                     heard = NOVOICE
                 elif not is_backchannel(heard):
