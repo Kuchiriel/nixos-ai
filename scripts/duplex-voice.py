@@ -324,6 +324,46 @@ TOOLS_SCHEMA = [
      "parameters": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}}},
 ]
 
+# ------------------------------------------------------- fix_stt (hunspell)
+HUNSPELL_DICT = None   # resolvido no boot (path de store muda por rebuild)
+
+def _resolve_dict():
+    import glob as _g
+    cands = _g.glob("/nix/store/*pt-br*/share/hunspell/pt_BR.dic")
+    return cands[0].rsplit("/", 1)[0] + "/pt_BR" if cands else None
+
+def fix_stt(text):
+    """Correção conservadora pós-ASR: só palavras minúsculas erradas com
+    sugestão a 1 edição de distância. Nomes próprios NUNCA tocados (o
+    Corretor da casa era corpus EN = veneno; hunspell pt_BR = certo)."""
+    if not HUNSPELL_DICT or not text or not text.islower():
+        return text  # sem dict ou tem maiúscula (nomes) = não mexe
+    import re as _re
+    words = _re.findall(r"[a-záéíóúâêôãõç]+(?:['-][a-záéíóúâêôãõç]+)*", text)
+    if not words:
+        return text
+    # uma chamada hunspell: pede sugestões de todas as palavras duvidosas
+    r = subprocess.run(["nix-shell", "-p", "hunspell", "--run",
+                        f"hunspell -d {HUNSPELL_DICT} -a"],   # modo pipe
+                       input="\n".join(words), capture_output=True,
+                       text=True, timeout=30)
+    fixes = {}
+    for line in (r.stdout or "").splitlines():
+        if not line or line.startswith(("*", "@")):
+            continue
+        if line.startswith("&"):          # & word N offset: sug1, sug2...
+            parts = line.split(":", 1)
+            w = parts[0].split()[1]
+            sugs = [x.strip() for x in parts[1].split(",")] if len(parts) > 1 else []
+            if sugs and len(sugs[0]) > 1:
+                fixes[w] = sugs[0]
+    out = text
+    for w, f in fixes.items():
+        # só 1 edição de distância aprox (evita 'horas'→'horns')
+        if abs(len(w) - len(f)) <= 2 and w not in ("jarvis",):
+            out = out.replace(w, f, 1)
+    return out
+
 # ---------------------------------------------------------------- ASR
 class Asr:
     """Cliente do duplex-asrd.py (subprocess stdio, venv karaok — 18/10
@@ -496,6 +536,9 @@ def main():
     else:
         log(f"[{ts()}] MODO DUPLEX no BASE (sem LoRA — 4B-MTP). Fala! Ctrl-C = dormir.")
 
+    global HUNSPELL_DICT
+    HUNSPELL_DICT = _resolve_dict()
+    log(f"[{ts()}] hunspell dict: {HUNSPELL_DICT or 'NENHUM (sem correção)'}")
     speaking = {"until": 0.0}   # self-mute anti-eco (18/10 ~06h)
     asr = Asr(args.stt_model, args.lang)
     tts = Tts(speaking)
@@ -584,8 +627,11 @@ def main():
                     log(f"[{ts()}] ruído/música — descartado: {heard[:30]!r}")
                     heard = NOVOICE
                 else:
-                    # segmento COMPLETO chegou = pausa do usuário → o
-                    # modelo RESPONDE (ban do <listen>).
+                    # segmento COMPLETO = pausa do usuário → responde.
+                    fixed = fix_stt(heard)
+                    if fixed != heard:
+                        log(f"[{ts()}] hunspell: {heard!r} → {fixed!r}")
+                    heard = fixed
                     force = True
                     print(f"  SEGMENTO: {heard}", flush=True)
 
