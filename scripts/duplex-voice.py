@@ -564,12 +564,15 @@ class Asr:
         linha = self.proc.stdout.readline()   # espera {"ready": true}
         log(f"[{ts()}] asrd pronto: {linha.strip()[:60]}")
         self.last_ms = 0.0
+    CTX = {"v": "Jarvis"}   # vocabulário → prompt do whisper-server
+
     def feed(self, pcm_f32):
         import base64
         try:
             self.proc.stdin.write(json.dumps(
                 {"audio_b64": base64.b64encode(
-                    np.asarray(pcm_f32, dtype="<f4").tobytes()).decode()}) + "\n")
+                    np.asarray(pcm_f32, dtype="<f4").tobytes()).decode(),
+                 "ctx": Asr.CTX["v"]}) + "\n")
             self.proc.stdin.flush()
         except Exception:
             pass
@@ -925,14 +928,34 @@ def main():
             r = asr.take()
             if isinstance(r, dict) and r.get("text"):
                 heard = r["text"]
-                # (10:25) MÚSICA/garbage AQUI (depois do take — antes o
-                # filtro rodava com o heard VELHO e nunca pegava):
-                # [MÚSICA*], <3 chars = ruído whisper.
-                if ("MÚSICA" in heard.upper() or "MUSIC" in heard.upper()
-                        or len(heard.replace(" ", "")) < 4):
-                    log(f"[{ts()}] ruído/música — descartado: {heard[:30]!r}")
+                # (16:05) vocabulário da conversa → prompt do whisper
+                # (paper 2307.14743; o server aceita 'prompt' — o
+                # 'Já viz' morre na FONTE agora)
+                words = (heard + " " + Asr.CTX["v"]).split()
+                seen, keep = set(), []
+                for w in words:
+                    if w not in seen:
+                        seen.add(w); keep.append(w)
+                Asr.CTX["v"] = " ".join(keep[:40])
+                # (16:30, dono: 'nada a ver com o som da sala') o gate
+                # MÚSICA descartava o segmento INTEIRO — com música por
+                # baixo, a FALA vinha junto e morria. Agora: extrai as
+                # palavras de fora das etiquetas; só descarta se NÃO
+                # sobra fala.
+                import re as _re
+                _clean = _re.sub(r"\[[^\]]*\]", " ", heard).strip()
+                if len(_clean.replace(" ", "")) >= 4:
+                    if _clean != heard:
+                        log(f"[{ts()}] música/fala misturado — fala: {_clean[:40]!r}")
+                    heard = _clean
+                elif len(heard.replace(" ", "")) < 4:
+                    log(f"[{ts()}] ruído — descartado: {heard[:30]!r}")
                     heard = NOVOICE
                 else:
+                    log(f"[{ts()}] só música — descartado")
+                    heard = NOVOICE
+
+                if heard and heard != NOVOICE:
                     # (12:00) MERGE-ESPERA: o VAD fragmenta fala contínua
                     # em pedaços ('E salo.') — espera 800ms; se vier mais
                     # fala, JUNTA e espera de novo. Responde só a
@@ -948,11 +971,11 @@ def main():
                     else:
                         pending.append(heard)
                         heard = NOVOICE
-                        merge_deadline = time.monotonic() + 0.8
+                        merge_deadline = time.monotonic() + 0.7
                         force = False   # o merge decide quando responder
             elif pending and not force and heard != NOVOICE:
                 # mais fala durante a espera? renova (frase contínua)
-                merge_deadline = time.monotonic() + 0.8
+                merge_deadline = time.monotonic() + 0.7
 
             tts_on = time.monotonic() < speaking["until"]
             if force and tts_on:

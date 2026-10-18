@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import numpy as np
 
 SR = 16000
+CTX = {"v": ""}   # vocabulário da conversa → prompt do whisper-server
 WCPP = "http://127.0.0.1:8097/inference"
 
 def main():
@@ -35,7 +36,7 @@ def main():
     # silero via torch hub (cacheado em ~/.cache/torch — o VAC baixou 1×)
     import torch
     model, utils = torch.hub.load("snakers4/silero-vad", "silero_vad")
-    vad = FixedVADIterator(model, threshold=0.5, min_silence_duration_ms=600,
+    vad = FixedVADIterator(model, threshold=0.5, min_silence_duration_ms=650,
                            speech_pad_ms=150)
     print(json.dumps({"text": "", "ms": 0, "ready": True}), flush=True)
 
@@ -55,11 +56,16 @@ def main():
             headers={"Content-Type": "audio/wav"})
         boundary = "----JARVIS"
         # multipart manual: whisper-server espera form-data 'file'
+        # (+ 'prompt' com o vocabulário da conversa — paper 2307.14743:
+        # last confirmed words as prompt fixa o 'Já viz'→'Jarvis')
         body = (
             f"--{boundary}\r\nContent-Disposition: form-data; "
             f"name=\"file\"; filename=\"seg.wav\"\r\n"
-            f"Content-Type: audio/wav\r\n\r\n").encode() + buf.getvalue() + \
-            f"\r\n--{boundary}--\r\n".encode()
+            f"Content-Type: audio/wav\r\n\r\n").encode() + buf.getvalue() + b"\r\n"
+        if CTX["v"]:
+            body += (f"--{boundary}\r\nContent-Disposition: form-data; "
+                     f"name=\"prompt\"\r\n\r\n{CTX['v'][:200]}\r\n").encode()
+        body += f"--{boundary}--\r\n".encode()
         req = urllib.request.Request(
             WCPP, data=body,
             headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
@@ -74,7 +80,7 @@ def main():
         ring = np.zeros(0, dtype="float32")
         started = None
         vad = FixedVADIterator(model, threshold=0.5,
-                               min_silence_duration_ms=600,
+                               min_silence_duration_ms=650,
                                speech_pad_ms=150)
 
     for line in sys.stdin:
