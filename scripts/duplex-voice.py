@@ -113,111 +113,51 @@ def mic_reader(mic, out_q):
                 pass
 
 # ---------------------------------------------------------------- ASR
-def _asr_child(model_size, lang, voice_dir, in_q, out_q):
-    """PROCESSO próprio (18/10 ~02h, GIL): o transcribe() do faster-whisper
-    é GENERATOR — a inferência roda DENTRO do `for seg`, e no mesmo
-    processo o GIL do tick-loop (urllib/json) a esmagava: 71ms standalone
-    vs 7-11s in-client. Processo separado = zero disputa. Warmup com
-    SINAL TIPO FALA (senoide AM): o warmup de silêncio era rejeitado pelo
-    VAD em 0.1s e NUNCA exercitava o encoder (por isso a 1ª fala = 7s+)."""
-    import numpy as np
-    from faster_whisper import WhisperModel
-    model = WhisperModel(model_size, device="cpu", compute_type="int8",
-                         download_root=voice_dir, cpu_threads=3)
-    # (02:05) warmup com FALA REAL: senoide AM era rejeitada pelo VAD e o
-    # encoder nunca rodava → a 1ª fala real custava 11.5s (depois 39ms!).
-    # duplex-warmup.wav = 1.2s de fala PT (asset do repo).
-    import wave as _wave
-    _wp = Path(__file__).with_name("duplex-warmup.wav")
-    if _wp.exists():
-        _w = _wave.open(str(_wp))
-        _pcm = np.frombuffer(_w.readframes(_w.getnframes()), dtype="int16").astype("float32") / 32768.0
-        # (02:10) CONSUMIR o generator: transcribe() é lazy — sem o for,
-        # o warmup preprocessa e volta; a inferência real (encoder+decoder,
-        # ~11s na 1ª vez) estourava na primeira fala do dono.
-        for _seg in model.transcribe(_pcm, beam_size=1, language=lang,
-                                     vad_filter=True, vad_parameters=VAD_PARAMS):
-            pass
-        print("[asr-child] pronto (warmup com FALA REAL paga)", flush=True)
-    else:
-        t = np.arange(SR, dtype="float32") / SR
-        am = (0.6 * (1 + np.sin(2 * np.pi * 4.0 * t))).astype("float32")
-        carrier = np.sin(2 * np.pi * 220.0 * t).astype("float32")
-        for _seg in model.transcribe((am * carrier).astype("float32"), beam_size=1,
-                                      language=lang, vad_filter=True,
-                                      vad_parameters=VAD_PARAMS):
-            pass
-        print("[asr-child] pronto (AVISO: warmup.wav ausente, senoide)", flush=True)
-    while True:
-        pcm = in_q.get()
-        if pcm is None:
-            return
-        t0 = time.monotonic()
-        try:
-            segs, _ = model.transcribe(pcm, beam_size=1, language=lang,
-                                        condition_on_previous_text=False,
-                                        vad_filter=True, vad_parameters=VAD_PARAMS)
-            good, lp_sum, ch_sum = [], 0.0, 0
-            for seg in segs:
-                lp = float(getattr(seg, "avg_logprob", -1.0))
-                ns = float(getattr(seg, "no_speech_prob", 1.0))
-                if lp < -0.60 or ns > 0.6:
-                    continue
-                good.append(seg.text)
-                lp_sum += lp * len(seg.text); ch_sum += len(seg.text)
-            if good and ch_sum and lp_sum / ch_sum < -0.60:
-                good = []
-            txt = " ".join(good).strip()
-            ms = (time.monotonic() - t0) * 1000
-            # (03:10) DEBUG: para de adivinhar — o par que o child RECEBE
-            # vai pro disco quando vaza vazio. Comparar byte-a-byte com o
-            # offline comprovado encerra o mistério.
-            if not txt and float(np.sqrt((np.asarray(pcm) ** 2).mean())) > 0.02:
-                np.save("/tmp/asr-debug-pair.npy", np.asarray(pcm, dtype="float32"))
-            out_q.put((txt, ms))
-        except Exception as exc:  # noqa: BLE001
-            out_q.put(("", (time.monotonic() - t0) * 1000))
-            print(f"[asr-child] ERRO: {exc}", flush=True)
-
 class Asr:
-    """Whisper em PROCESSO filho (GIL isolado) + anti-alucinação."""
+    """Cliente do duplex-asrd.py (subprocess stdio, venv karaok — 18/10
+    03:15): o multiprocessing.spawn envenenava o VAD do faster-whisper
+    (0 timestamps). Subprocess = o contexto standalone comprovado.
+    Protocolo: JSON lines com audio base64."""
     def __init__(self, model_size, lang):
-        import multiprocessing as mp
-        voice_dir = os.environ.get("JARVIS_VOICE_DIR",
-                                   os.path.expanduser("~/.local/share/jarvis/voice"))
-        # (02:25) SPAWN, não fork: o ctranslate2 herdado por fork de um
-        # processo multithread fica patológico (43s vs 71ms standalone —
-        # threadpool/OpenMP não sobrevive ao fork). Spawn = interpretador
-        # limpo; boot +lento, conversa rápida.
-        ctx = mp.get_context("spawn")
-        self.in_q = ctx.Queue(maxsize=2)
-        self.out_q = ctx.Queue(maxsize=4)
+        self.proc = subprocess.Popen(
+            ["/home/nixos/projects/karaok/.venv/bin/python3",
+             str(Path(__file__).with_name("duplex-asrd.py"))],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            text=True, bufsize=1)
+        linha = self.proc.stdout.readline()   # espera {"ready": true}
+        log(f"[{ts()}] asrd pronto: {linha.strip()[:60]}")
         self.last_ms = 0.0
-        t0 = time.monotonic()
-        self.proc = ctx.Process(target=_asr_child,
-                                args=(model_size, lang, voice_dir,
-                                      self.in_q, self.out_q), daemon=True)
-        self.proc.start()
-        log(f"[{ts()}] asr-child pid={self.proc.pid} subindo (model+warmup)…")
     def feed(self, pcm_f32):
+        import base64
         try:
-            self.in_q.put_nowait(pcm_f32)
+            self.proc.stdin.write(json.dumps(
+                {"audio_b64": base64.b64encode(
+                    np.asarray(pcm_f32, dtype="<f4").tobytes()).decode()}) + "\n")
+            self.proc.stdin.flush()
         except Exception:
             pass
     def take(self):
+        # não-bloqueante: readline só se há linha pronta (select 0s)
+        import select
         try:
-            txt, ms = self.out_q.get_nowait()
-            self.last_ms = ms
-            return txt
-        except queue.Empty:
+            r, _, _ = select.select([self.proc.stdout], [], [], 0)
+            if not r:
+                return None
+            linha = self.proc.stdout.readline()
+            if not linha:
+                return None
+            j = json.loads(linha)
+            self.last_ms = float(j.get("ms", 0))
+            t = j.get("text", "")
+            return t if t else None
+        except Exception:
             return None
     def close(self):
         try:
-            self.in_q.put_nowait(None)
-            self.proc.join(timeout=2)
-            self.proc.terminate()
+            self.proc.stdin.close()
+            self.proc.wait(timeout=2)
         except Exception:
-            pass
+            self.proc.kill()
 
 # ---------------------------------------------------------------- TTS
 class Tts:
