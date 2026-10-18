@@ -59,18 +59,34 @@ def main():
                                        vad_filter=True,
                                        vad_parameters=VAD_PARAMS)
             good, lp_sum, ch_sum = [], 0.0, 0
+            raw_txt, raw_lp, raw_ns = "", 0.0, 1.0
             for seg in segs:
-                lp = float(getattr(seg, "avg_logprob", -1.0))
-                ns = float(getattr(seg, "no_speech_prob", 1.0))
-                if lp < -0.60 or ns > 0.6:
+                slp = float(getattr(seg, "avg_logprob", -1.0))
+                sns = float(getattr(seg, "no_speech_prob", 1.0))
+                stx = (seg.text or "").strip()
+                if stx and not raw_txt:
+                    raw_txt, raw_lp, raw_ns = stx, slp, sns
+                # (05:15) NS é O guardião (dados da noite: fala real ns
+                # 0.37-0.45; alucinação 'Legendas' ns 0.878). LP em beam1
+                # int8 com áudio de alto-falante anda -1.0 a -1.5 SEM ser
+                # alucinação ('como uma piada...' lp=-1.375 ns=0.37) —
+                # threshold -0.60 matava fala real. LP vira só sanity.
+                if slp < -2.5 or sns > 0.7:
                     continue
                 good.append(seg.text)
-                lp_sum += lp * len(seg.text); ch_sum += len(seg.text)
-            if good and ch_sum and lp_sum / ch_sum < -0.60:
+                lp_sum += slp * len(seg.text); ch_sum += len(seg.text)
+            if good and ch_sum and lp_sum / ch_sum < -2.5:
                 good = []
             txt = " ".join(good).strip()
+            if not txt and raw_txt:
+                # telemetria: o filtro derrubou algo — o log do cliente
+                # mostra o quê (raw/lp/ns) sem acordar ninguém.
+                print(json.dumps({"text": "", "ms": (time.monotonic()-t0)*1000,
+                                  "raw": raw_txt, "lp": round(raw_lp, 3),
+                                  "ns": round(raw_ns, 3), "filtered": True}),
+                      flush=True)
+                continue
         except Exception as exc:  # noqa: BLE001
-            txt = ""
             print(json.dumps({"text": "", "ms": 0, "lp": 0, "ns": 1,
                               "err": str(exc)[:120]}), flush=True)
             continue

@@ -119,8 +119,12 @@ class Asr:
     (0 timestamps). Subprocess = o contexto standalone comprovado.
     Protocolo: JSON lines com audio base64."""
     def __init__(self, model_size, lang):
+        # (05:20) asrd nos P-CORES (0-11): o llama usa 6 de 12 threads —
+        # sobra 6 P-threads; o whisper nos E-cores (2.1GHz×4) engargalava
+        # a 20s sob contenção. Pinned junto do llama = justo e rápido.
         self.proc = subprocess.Popen(
-            ["/home/nixos/projects/karaok/.venv/bin/python3",
+            ["taskset", "-c", "0-11",
+             "/home/nixos/projects/karaok/.venv/bin/python3",
              str(Path(__file__).with_name("duplex-asrd.py"))],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             text=True, bufsize=1)
@@ -148,8 +152,9 @@ class Asr:
                 return None
             j = json.loads(linha)
             self.last_ms = float(j.get("ms", 0))
-            t = j.get("text", "")
-            return t if t else None
+            if j.get("text"):
+                return j
+            return j if j.get("filtered") else None
         except Exception:
             return None
     def close(self):
@@ -248,7 +253,7 @@ def main():
 
     asr = Asr(args.stt_model, args.lang)
     tts = Tts()
-    mic_q = queue.Queue(maxsize=3)
+    mic_q = queue.Queue(maxsize=6)
     threading.Thread(target=mic_reader, args=(mic, mic_q), daemon=True).start()
 
     history: list[tuple[str, str]] = []
@@ -269,35 +274,53 @@ def main():
         while running:
             next_t += TICK
             t0 = time.monotonic()
-            # (03:00) CONSOME UM CHUNK POR TICK, bloqueante — o reader
-            # thread é quem faz o flow-control (fila 3, drop-oldest no
-            # overflow). O drain-último que eu inventei DESCARTAVA chunks
-            # de fala: janela de 2.4s virava 1.2s furada (metade da
-            # palavra) → VAD rejeitava → resultados vazios a noite toda.
-            raw = mic_q.get()
-            if raw is None:   # stream morreu → reabre
-                log(f"[{ts()}] mic stream morta — reabrindo")
-                mic.terminate()
-                mic = mic_stream()
-                threading.Thread(target=mic_reader, args=(mic, mic_q),
-                                  daemon=True).start()
-                raw = mic_q.get()
-
-            heard, rms = NOVOICE, 0
-            if raw is not None:
-                pcm16 = np.frombuffer(raw, dtype=np.int16)
-                rms = int(np.sqrt((pcm16.astype(np.float64) ** 2).mean()))
-                zeros = zeros + 1 if rms == 0 else 0
-                # JANELA 1.2s: pares de chunks (0.6s cortava palavras).
-                if prev_pcm is not None:
-                    if max(prev_rms, rms) >= args.rms:
-                        asr.feed(np.concatenate([prev_pcm, pcm16]).astype("float32") / 32768.0)
-                    prev_pcm, prev_rms = None, 0
-                else:
-                    prev_pcm, prev_rms = pcm16, rms
-                txt = asr.take()
-                if txt:
-                    heard = txt
+            heard = NOVOICE
+            # (05:00, v6.4) CONSOME TUDO, pareia CONSECUTIVO: o tick LLM
+            # (~400ms) + 1-chunk-por-iteração = deficit 40% → reader dropava
+            # → pares com BURACO no meio (fragmento+salto+fragmento) → VAD
+            # recusava (e bem!). Agora: drena tudo, pares de chunks
+            # consecutivos (janela 1.2s contínua), sobra ímpar vira pendente
+            # p/ próxima iteração. Fila 6 = 3.6s de folga sem drop.
+            chunks: list = []
+            try:
+                while True:
+                    c = mic_q.get_nowait()
+                    if c is None:   # stream morreu → reabre
+                        log(f"[{ts()}] mic stream morta — reabrindo")
+                        mic.terminate()
+                        mic = mic_stream()
+                        threading.Thread(target=mic_reader, args=(mic, mic_q),
+                                          daemon=True).start()
+                        continue
+                    chunks.append(c)
+            except queue.Empty:
+                pass
+            if not chunks:
+                chunks = [mic_q.get()]   # nada novo: espera o próximo (pace natural)
+            if prev_pcm is not None:
+                chunks.insert(0, prev_pcm)
+            # rms do tick = o do último chunk consumido (visibilidade)
+            last16 = np.frombuffer(chunks[-1], dtype=np.int16) if isinstance(chunks[-1], (bytes, bytearray)) else chunks[-1]
+            rms = int(np.sqrt((np.asarray(last16, dtype=np.int16).astype(np.float64) ** 2).mean()))
+            zeros = zeros + 1 if rms == 0 else 0
+            # pares CONSECUTIVOS:
+            i = 0
+            while i + 1 < len(chunks):
+                a16 = chunks[i] if isinstance(chunks[i], np.ndarray) else np.frombuffer(chunks[i], dtype=np.int16)
+                b16 = chunks[i+1] if isinstance(chunks[i+1], np.ndarray) else np.frombuffer(chunks[i+1], dtype=np.int16)
+                pair = np.concatenate([a16, b16]).astype("float32") / 32768.0
+                prms = int(np.sqrt((pair ** 2).mean()) * 32768)
+                if prms >= args.rms:
+                    asr.feed(pair)
+                i += 2
+            prev_pcm = chunks[-1] if (len(chunks) - i == 1) else None
+            r = asr.take()
+            if isinstance(r, dict):
+                if r.get("text"):
+                    heard = r["text"]
+                elif r.get("filtered"):
+                    log(f"[{ts()}] asrd FILTRO: raw={r.get('raw','')!r} "
+                        f"lp={r.get('lp')} ns={r.get('ns')}")
 
             said, _p = tick_once(base, history, heard)
             history += [("user", heard), ("assistant", said)]
