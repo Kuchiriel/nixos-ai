@@ -64,10 +64,20 @@ SYSTEM_PT = (
     "- NUNCA chame o usuário de JARVIS.\n"
     "- NÃO proponha tarefas longas; ações via ferramenta = Cactus Needle "
     "(pendente).\n"
+    "- MEMÓRIA: quando o dono disser algo que valha lembrar (preferências, "
+    "fatos sobre ele, decisões), chame a ferramenta remember — sem pedir "
+    "permissão, simplesmente memorize e confirme em uma frase curta.\n"
+    "- Proativo: antecipe necessidades óbvias e ofereça a próxima ação, mas "
+    "em UMA frase — não fale demais sem ser chamado.\n"
     "- Respostas DIRETAS, sem preenchimentos ('Ah,', 'Hmm'): backchannels "
     "só têm sentido ENQUANTO o outro fala (fase duplex); em resposta = "
     "vício.\n"
-    "- Se o segmento for ruído/sem sentido, responda só 'Pode repetir?'"
+
+    "- Os turnos do usuário vêm de transcrição de voz e podem chegar "
+    "FRAGMENTADOS (pedaços de frases). Considere o CONJUNTO do histórico.\n"
+    "- Na dúvida sobre o que ouviu, CONFIRME o que entendeu ('Entendi que "
+    "você quer X, é isso?') ou peça para repetir. Respostas vazias não "
+    "são permitidas — sempre diga algo útil."
 )
 SYSTEM = ("You are a voice assistant in a live phone call; both sides can talk at the same time. Every "
           f"{TICK:g} seconds you get what the microphone heard in that moment, as a streaming transcript fragment, or "
@@ -140,9 +150,13 @@ def tick_once(base, history, heard, force_speak=False):
             return LISTEN, 0.0
         # (09:30, dono: 'responde só a pergunta da vez') o chat sem
         # histórico = amnésia. Leva os últimos turnos reais.
+        # (11:20, dono: "falei que sou matheus, disse que era henrique")
+        # a história pro chat tava cheia de <no voice> e <listen> (ruído)
+        # e a janela curta derrubava o nome. Só turnos REAIS, janela 20.
         msgs = [{"role": "system", "content": SYSTEM_PT}]
-        for role, content in history[-12:]:
-            if content and content != LISTEN:
+        for role, content in history[-20:]:
+            if (content and content != LISTEN and content != NOVOICE
+                    and len(content.replace("<", "").strip()) > 1):
                 msgs.append({"role": "user" if role == "user" else "assistant",
                              "content": content})
         msgs.append({"role": "user", "content": heard})
@@ -157,7 +171,7 @@ def tick_once(base, history, heard, force_speak=False):
             if not tcs:
                 out = str(msg.get("content", "")).strip()
                 log(f"[{ts()}] chat resposta: {out[:80]!r}")
-                return (out or "Pode repetir?"), 0.0
+                return (out or ""), 0.0
             # executa e devolve
             msgs.append(msg)
             for tc in tcs:
@@ -253,6 +267,29 @@ def call_tool(name, args):
         return _exec(f"timeout 20 jarvis rag search '{q}' 2>&1 | head -20")
     if name == "status":
         return _exec("systemctl --user is-active jarvis-wakeword 2>&1; uptime -p; free -g | grep Mem")
+    if name == "remember":
+        text = args.get("text", "")
+        if not text:
+            return "ERRO: texto vazio"
+        return _exec(f"timeout 15 jarvis remember '{text}' 2>&1 | head -3")
+    if name == "web_search":
+        q = args.get("query", "")
+        if not q:
+            return "ERRO: query vazia"
+        cmd = ("timeout 25 python3 -c \"import json,urllib.request,os;"
+               "key=[l.split('=',1)[1].strip().strip(chr(39)).strip(chr(34)) "
+               "for l in open('/etc/litellm.env') if l.startswith('TAVILY')][0];"
+               "req=urllib.request.Request('https://api.tavily.com/search',"
+               "json.dumps({'query':'" + q.replace("'","") + "','max_results':3}).encode(),"
+               "{'Content-Type':'application/json','Authorization':'Bearer '+key});"
+               "d=json.load(urllib.request.urlopen(req,timeout=20));"
+               "print(' ; '.join((r.get('name','')+' — '+r.get('url','')) "
+               "for r in d.get('results',[])[:3]))\" 2>&1")
+        return _exec(cmd)
+    if name == "nix_info":
+        q = args.get("query", "")
+        return _exec(f"timeout 20 mcp-nixos search '{q}' 2>&1 | head -15 || "
+                     f"nix search nixpkgs '{q}' 2>&1 | head -10")
     if name == "shell":
         cmd = args.get("command", "")
         if any(w in cmd.lower() for w in ["rm ", "dd ", "mkfs", "shutdown", "reboot", "sudo"]):
@@ -273,6 +310,15 @@ TOOLS_SCHEMA = [
     {"type": "function", "function": {"name": "status",
      "description": "Status do sistema: serviços, uptime, memória",
      "parameters": {"type": "object", "properties": {}, "required": []}}},
+    {"type": "function", "function": {"name": "remember",
+     "description": "Salva um fato/preferência/decisão na memória de longo prazo do JARVIS. Use quando o dono disser algo que valha lembrar (preferências, nomes, decisões, eventos).",
+     "parameters": {"type": "object", "properties": {"text": {"type": "string", "description": "o fato a memorizar"}}, "required": ["text"]}}},
+    {"type": "function", "function": {"name": "web_search",
+     "description": "Busca na internet quando você não sabe algo factual e atual (notícias, preços, fatos). Use quando julgar necessário.",
+     "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
+    {"type": "function", "function": {"name": "nix_info",
+     "description": "Consulta pacotes e opções do sistema NixOS (instalação, configuração, versões)",
+     "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
     {"type": "function", "function": {"name": "shell",
      "description": "Executa um comando do sistema e retorna a saída (bloqueia comandos perigosos)",
      "parameters": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}}},
