@@ -456,8 +456,9 @@ def is_self_echo(txt):
     return False
 
 BACKCHANNELS = {"uh-huh", "uh huh", "hmm", "hm", "ah", "ok", "okay", "sim",
-               "tá", "ta", "certo", "é", "eh", "pois é", "sei", "beleza",
-               "blz", "uhuh", "ahn", "ãhn", "entendi", "pode ser"}
+               "tá", "ta", "certo", "é", "eh", "pois é", "sei",
+               "uhuh", "ahn", "ãhn", "pode ser"}
+# 'valeu', 'beleza', 'entendi', 'blz' = respostas válidas (não silenciar)
 
 def is_backchannel(txt):
     t = txt.strip().lower().rstrip(".!?").strip()
