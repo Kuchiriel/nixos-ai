@@ -43,6 +43,7 @@ ALLOWLIST = tuple(v["service"] for v in SERVICE_MAP.values())
 DEFAULT_COOLDOWN_SECONDS = 300.0  # 5 min entre restarts do mesmo serviço
 DEFAULT_MAX_RESTARTS = 5  # máximo de restarts por serviço antes de desistir
 STATE_DIR_ENV = "JARVIS_STATE_DIR"
+DUPLEX_MODE_FLAG = "/tmp/jarvis-duplex-mode.flag"
 
 
 @dataclass
@@ -302,6 +303,17 @@ def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_S
                 HealAction(component=comp, service=service, scope=scope,
                            action="report_only",
                            skipped_reason=f"pausado pelo dono: {_why or 'manutenção'}")
+            )
+            continue
+        # (17/10, voz duplex) wakeword parado durante sessão duplex é
+        # INTENÇÃO, não doença: o cliente duplex pausa o daemon
+        # (falso-positivo em anime + briga pelo mic) e planta esta flag.
+        # Sem a flag o comportamento não muda. /tmp = some no reboot.
+        if comp == "wakeword" and os.path.exists(DUPLEX_MODE_FLAG):
+            report_inst.actions.append(
+                HealAction(component=comp, service=service, scope=scope,
+                           action="report_only",
+                           skipped_reason="modo duplex ativo (flag)")
             )
             continue
         if service not in ALLOWLIST:

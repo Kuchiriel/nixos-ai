@@ -27,6 +27,7 @@ import sys
 import threading
 import time
 import urllib.request
+from pathlib import Path
 from datetime import datetime
 
 import numpy as np
@@ -109,7 +110,7 @@ class Asr:
                     pcm, beam_size=1, language=self.lang,
                     condition_on_previous_text=False,
                     vad_filter=True,
-                    vad_parameters=dict(threshold=0.5, min_speech_duration_ms=200,
+                    vad_parameters=dict(threshold=0.45, min_speech_duration_ms=200,
                                          min_silence_duration_ms=300,
                                          speech_pad_ms=160))
                 good, lp_sum, ch_sum = [], 0.0, 0
@@ -187,7 +188,7 @@ def main():
     ap.add_argument("--port", type=int, default=8085)
     ap.add_argument("--lang", default="pt")
     ap.add_argument("--stt-model", default="small")
-    ap.add_argument("--rms", type=int, default=150,
+    ap.add_argument("--rms", type=int, default=700,
                     help="gate de silêncio (ambiente rnnoise~70; fala 300+)")
     args = ap.parse_args()
     base = f"http://{args.host}:{args.port}"
@@ -197,6 +198,24 @@ def main():
     except Exception:
         sys.exit(f"duplex-voice: server {base} fora — systemctl start llama-duplex-35b")
 
+    # EXCLUSIVIDADE (17/10): o wakeword daemon falso-positiva em diálogo
+    # alto de anime (baseline 205/gate 310 vs bursts 700-1441) e dispara
+    # o fluxo de comando DELE enquanto o duplex escuta — os dois brigam
+    # pelo microfone e pela voz. Duplex ON = daemon pausado; dormir = volta.
+    # (Recalibração do wakeword p/ o mic novo = pendência 4 do doc.)
+    Path("/tmp/jarvis-duplex-mode.flag").touch()   # heal respeita (17/10)
+    subprocess.run(["systemctl", "--user", "stop", "jarvis-wakeword.service"],
+                   capture_output=True)
+    log(f"[{ts()}] wakeword daemon pausado (flag pro heal plantada) — volta no dormir")
+    # EXCLUSIVIDADE (17/10): o wakeword daemon falso-positiva em diálogo
+    # alto de anime (baseline 205/gate 310 vs bursts 700-1441) e dispara
+    # o fluxo de comando DELE enquanto o duplex escuta — os dois brigam
+    # pelo microfone e pela voz. Duplex ON = daemon pausado; dormir = volta.
+    # (Recalibração do wakeword p/ o mic novo = pendência 4 do doc.)
+    Path("/tmp/jarvis-duplex-mode.flag").touch()   # heal respeita (17/10)
+    subprocess.run(["systemctl", "--user", "stop", "jarvis-wakeword.service"],
+                   capture_output=True)
+    log(f"[{ts()}] wakeword daemon pausado (flag pro heal plantada) — volta no dormir")
     log(f"[{ts()}] acordando (LoRA apply)…")
     http(base + "/lora-adapters", [{"id": 0, "scale": 1.0}], timeout=600)
     log(f"[{ts()}] MODO DUPLEX. Fala com ele. Ctrl-C = dormir.\n")
@@ -216,6 +235,8 @@ def main():
 
     tick_n = 0
     prev_pcm, prev_rms = None, 0
+    zeros = 0
+    zeros = 0
     try:
         while running:
             t0 = time.monotonic()
@@ -258,6 +279,17 @@ def main():
                 log(f"[{ts()}] rms={rms:>5} | {heard[:24]:<24} → {said[:28]:<28} "
                     f"asr={asr_ms:4.0f}ms llm={llm_ms:4.0f}ms")
 
+            # WATCHDOG (17/10): rms=0 por ~5s = stream morto (restart do
+            # wakeword derrubou a captura uma vez) → reabre o pw-record.
+            if rms == 0:
+                zeros += 1
+                if zeros >= 8:
+                    log(f"[{ts()}] mic morto ({zeros} ticks rms=0) — reabrindo captura")
+                    mic.terminate()
+                    mic = mic_stream()
+                    zeros = 0
+            else:
+                zeros = 0
             dt = TICK - (time.monotonic() - t0)
             if dt > 0:
                 time.sleep(dt)
@@ -268,6 +300,10 @@ def main():
         except Exception:
             pass
         mic.terminate()
+        subprocess.run(["systemctl", "--user", "start", "jarvis-wakeword.service"],
+                       capture_output=True)
+        Path("/tmp/jarvis-duplex-mode.flag").unlink(missing_ok=True)
+        log(f"[{ts()}] wakeword daemon de volta (flag removida)")
 
 def selfless(f):
     return " ".join(f)
