@@ -139,7 +139,7 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
         # a história pro chat tava cheia de <no voice> e <listen> (ruído)
         # e a janela curta derrubava o nome. Só turnos REAIS, janela 20.
         msgs = [{"role": "system", "content": SYSTEM_PT}]
-        for role, content in history[-8:]:
+        for role, content in history[-6:]:
             if (content and content != LISTEN and content != NOVOICE
                     and len(content.replace("<", "").strip()) > 1):
                 msgs.append({"role": "user" if role == "user" else "assistant",
@@ -982,14 +982,10 @@ def main():
         LISTEN_TOKEN_ID = ids[0] if ids else None
     except Exception:
         LISTEN_TOKEN_ID = None
-    if adapters:
-        log(f"[{ts()}] acordando: LoRA {adapters[0].get('path','?')[-40:]} apply…")
-        http(base + "/lora-adapters",
-             [{"id": a["id"], "scale": a.get("scale", 1.0)} for a in adapters],
-             timeout=600)
-        log(f"[{ts()}] MODO DUPLEX (com LoRA). Fala com ele. Ctrl-C = dormir.")
-    else:
-        log(f"[{ts()}] MODO DUPLEX no BASE (sem LoRA — 4B-MTP). Fala! Ctrl-C = dormir.")
+    # (20:30) SEM LoRA: o 35B puro é o cérebro (tools + qualidade); o
+    # MicroTurn-LoRA é do protocolo 3-palavras (fase 2: real-duplex feel).
+    # O smart merge faz o timing; o 35B responde com o que sabe de melhor.
+    log(f"[{ts()}] MODO DUPLEX no 35B (sem LoRA). Fala! Ctrl-C = dormir.")
 
     global HUNSPELL_DICT
     HUNSPELL_DICT = _resolve_dict()
