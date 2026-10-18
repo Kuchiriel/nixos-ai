@@ -329,16 +329,8 @@ def call_tool(name, args):
         q = args.get("query", "")
         if not q:
             return "ERRO: query vazia"
-        cmd = ("timeout 25 python3 -c \"import json,urllib.request,os;"
-               "key=[l.split('=',1)[1].strip().strip(chr(39)).strip(chr(34)) "
-               "for l in open('/etc/litellm.env') if l.startswith('TAVILY')][0];"
-               "req=urllib.request.Request('https://api.tavily.com/search',"
-               "json.dumps({'query':'" + q.replace("'","") + "','max_results':3}).encode(),"
-               "{'Content-Type':'application/json','Authorization':'Bearer '+key});"
-               "d=json.load(urllib.request.urlopen(req,timeout=20));"
-               "print(' ; '.join((r.get('name','')+' — '+r.get('url','')) "
-               "for r in d.get('results',[])[:3]))\" 2>&1")
-        return _exec(cmd)
+        return _exec(f"timeout 25 python3 "
+                     f"{Path(__file__).with_name('websearch.py')} '{q}' 2>&1")
     if name == "nix_info":
         q = args.get("query", "")
         return _exec(f"timeout 20 mcp-nixos search '{q}' 2>&1 | head -15 || "
@@ -529,9 +521,21 @@ class Tts:
             "w.setsampwidth(2); w.setframerate(22050)\n"
             f"v.synthesize_wav(sys.argv[1], w)\n"
             "w.close()\n")
+        import os as _os
+        env = dict(_os.environ)
+        # pyopenjtalk (G2P japonês) via nix se disponível
+        if "pyopenjtalk" not in code:
+            pass
+        ja_g2p = subprocess.run(
+            ["nix-shell", "-p", "python313Packages.pyopenjtalk", "--run",
+             "python3 -c 'import pyopenjtalk, os; print(os.path.dirname(pyopenjtalk.__file__))'"],
+            capture_output=True, text=True, timeout=120)
+        g2p_dir = ja_g2p.stdout.strip().rsplit("/pyopenjtalk", 1)[0] if ja_g2p.returncode == 0 else ""
+        if g2p_dir:
+            env["PYTHONPATH"] = g2p_dir + ":" + env.get("PYTHONPATH", "")
         r = subprocess.run(
             ["/home/nixos/projects/karaok/.venv/bin/python3", "-c", code, seg],
-            capture_output=True, text=True, timeout=90)
+            capture_output=True, text=True, timeout=90, env=env)
         # (13:20) o python -c às vezes exits !=0 mesmo COM o wav pronto
         # (cleanup exception pós-synth) — sucesso = wav existe e tem
         # conteúdo (> header 44 bytes). rc ignora.
@@ -546,7 +550,18 @@ class Tts:
         text = "".join(ch for ch in text if ch != "*")  # (12:50) asterisco
         runs = self._split_script(text)
         if len(runs) == 1 and not runs[0][1]:
-            return self._piper1_synth(self.VOICE, runs[0][0], wav_path)
+            # (13:50, dono: 'tá comendo r, japonês falando português')
+            # o faber É do engine 2023; o piper1.8 remapeia os phonemes
+            # e destrói o PT. piper 2023 = voz PT nativa e limpa.
+            r = subprocess.run(
+                ["/home/nixos/models/piper/bin/piper", "-m", self.VOICE,
+                 "--output_file", wav_path],
+                input=runs[0][0] + "\n", capture_output=True, text=True,
+                encoding="utf-8", timeout=60)
+            try:
+                return Path(wav_path).stat().st_size > 44
+            except Exception:
+                return False
         # multi-voz: sintetiza cada run, concatena
         import tempfile as _tf
         parts = []
@@ -554,11 +569,22 @@ class Tts:
         for i, (seg, ja) in enumerate(runs):
             with _tf.NamedTemporaryFile(suffix=".wav", delete=False) as f:
                 part = f.name
-            voice = self.VOICE_JA if ja else self.VOICE
-            if self._piper1_synth(voice, seg, part):
-                parts.append(part)
+            if ja:
+                if self._piper1_synth(self.VOICE_JA, seg, part):
+                    parts.append(part)
+                else:
+                    log(f"[{ts()}] run JP falhou — pulado: {seg[:20]!r}")
             else:
-                ok = False
+                part2 = part
+                r = subprocess.run(
+                    ["/home/nixos/models/piper/bin/piper", "-m", self.VOICE,
+                     "--output_file", part2],
+                    input=seg + "\n", capture_output=True, text=True,
+                    encoding="utf-8", timeout=60)
+                if Path(part2).stat().st_size > 44:
+                    parts.append(part2)
+                else:
+                    ok = False
         if not parts:
             return False
         # concatena (todos piper = mono 22050)
