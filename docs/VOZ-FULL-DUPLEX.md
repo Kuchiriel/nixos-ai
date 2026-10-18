@@ -6,6 +6,29 @@
 > (âncora de pesquisa do dono). **Regra de ouro (dono): "antes de
 > condenar 'não cabe', TESTAR".**
 
+## Estado ao amanhecer 18/10 (noite autônoma — ver memória id 368888352440576394 + commits c1b0b32/1c361d4)
+
+DEMONIOS MORTOS (10, todos provados por teste): container AU do pw-record
+"--" (magic ".snd"!), race do teardown do wakeword, cadência/backlog do
+loop + drain descartando fala, generator lazy do warmup (1ª fala 11s),
+fork+ctranslate2=43s, builds ctranslate2 30× distintos (karaok 71ms ×
+jarvis 2.2s → ASR karaok / TTS jarvis-daemon), swap cheio (15/15GB, thrash
+sistêmico), CPU split P/E, exclusividade wakeword↔duplex com flag que o
+heal respeita, alucinação "Legendas de Amara.org" (filtros CERTOS).
+
+ARQUITETURA VIVA (scripts/duplex-voice.py v6.3 + duplex-voice-run.sh):
+mic (pw-record raw) → reader-thread → pares 1.2s → gate RMS 700 →
+duplex-asrd.py (subprocess stdio, venv karaok, VAD+filtros) → micro-turn
+(llama-duplex-35b, ticks 340-400ms) → duplex-ttsd.py (daemon FIFO, kokoro
+env jarvis). Todos os componentes provados STANDALONE.
+
+O ÚNICO DEMÔNIO (próxima sessão, matriz no commit 1c361d4): o VAD Silero
+do faster-whisper rejeita os pares VIVOS (0 segmentos em ~7ms) em TODO
+processo filho — mas o MESMO par dumpado de dentro do child transcreve
+offline ("Me conta uma pizza.", VAD passa, 3s). Próximos passos: dump de
+dentro do asrd + byte-compare; asrd interativo com o mesmo par; diffs
+env/ld interativo↔daemon; ONNX VAD standalone como gate.
+
 ## Veredito de arquitetura (pesquisa 17/10)
 
 **Rota vencedora: CASCADE + MICRO-TURNS** (DuplexCascade / LoRA codacus)
