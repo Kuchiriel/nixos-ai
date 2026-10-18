@@ -49,6 +49,7 @@ SYSTEM = ("You are a voice assistant in a live phone call; both sides can talk a
           f"{TICK:g} seconds you get what the microphone heard in that moment, as a streaming transcript fragment, or "
           f"{NOVOICE}. You reply with up to three new words to say next, or {LISTEN} to add nothing.")
 LISTEN_TOKEN_ID = None   # id de '<listen>' no server alvo
+GATE_MODE = "on"        # 'off' = responde todo segmento (testes/AFK)
 SR = 16000
 CHUNK_BYTES = int(SR * TICK * 2)
 # Digital mic (17/10): o Stereo Mic é MORTO (rms 0); o Digital é vivo.
@@ -85,9 +86,23 @@ def tick_once(base, history, heard, force_speak=False):
         # aplica o template e strippa o thinking; o raw /completion
         # contornava isso e pagava o think. Gate "Jarvis": só responde
         # a quem chama (gente na sala!).
-        if "jarvis" not in heard.lower() and "jarvis" not in " ".join(
-                h[1] for h in history[-6:]).lower():
-            log(f"[{ts()}] segmento sem 'Jarvis' — ignorado: {heard[:40]!r}")
+        # (07:30) GATE FUZZY: whisper ouve 'Jarvis' como Jax/Jarls/
+        # Jardim/'Hoje já vi' — o gate exato perderia até o dono.
+        import difflib
+        def chamou(txt):
+            tl = txt.lower()
+            if "jarvis" in tl:
+                return True
+            return any(difflib.SequenceMatcher(None, w, "jarvis").ratio() >= 0.62
+                       for w in tl.replace(",", " ").split())
+        # (07:35) whisper renderiza 'Jarvis' como 'Já viz'/'Hoje já vi'
+        # — palavra-por-palavra nunca casa. Gate v3: PERGUNTA (?) ou
+        # fuzzy. O gate de áudio de verdade = wakeword recalibrado (pend.4).
+        eh_pergunta = (GATE_MODE == "off"
+                       or heard.rstrip().endswith("?") or "?" in heard[-6:])
+        if not eh_pergunta and not chamou(heard) and not chamou(
+                " ".join(h[1] for h in history[-6:])):
+            log(f"[{ts()}] segmento sem chamado/? — ignorado: {heard[:40]!r}")
             return LISTEN, 0.0
         j = http(base + "/v1/chat/completions", {
             "messages": [
@@ -257,6 +272,9 @@ def main():
     ap.add_argument("--stt-model", default="small")
     ap.add_argument("--rms", type=int, default=700,
                     help="gate fala-vs-fundo (vozes reais 886-1372; anime 380-600)")
+    ap.add_argument("--gate", default="on", choices=["on", "off"],
+                    help="gate 'Jarvis/?': off = responde TODO segmento (testes/AFK); "
+                         "o gate real de áudio = wakeword recalibrado (pend.4)")
     args = ap.parse_args()
     base = f"http://{args.host}:{args.port}"
 
@@ -285,7 +303,8 @@ def main():
         pass
     # id do '<listen>' neste server (ban p/ resposta forçada; b9190 não
     # expõe probs — o id direto funciona em qualquer build)
-    global LISTEN_TOKEN_ID
+    global LISTEN_TOKEN_ID, GATE_MODE
+    GATE_MODE = args.gate
     try:
         toks = http(base + "/tokenize", {"content": "<listen>"})
         ids = toks.get("tokens") or toks.get("tokens_full") or []
