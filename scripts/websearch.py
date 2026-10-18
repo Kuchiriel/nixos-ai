@@ -30,8 +30,16 @@ def main():
         {"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
     try:
         d = json.load(urllib.request.urlopen(req, timeout=20))
-        outs = [f"{r.get('name', '')} — {r.get('url', '')}"
-                for r in d.get("results", [])[:3]]
+        outs = []
+        for r in d.get("results", [])[:3]:
+            nome = r.get("name") or r.get("title") or "(s/t)"
+            trecho = (r.get("content") or "")[:180].replace("\n", " ")
+            import re as _re
+            # normaliza moeda pro TTS: "5,00 R$" / "R$ 5,00" → "R$ 5,00";
+            # "US$ 5" idem. O piper lê cifrão-antes corretamente.
+            trecho = _re.sub(r'(?<=[\d,.])\s*(R\$|US\$)', r' \1', trecho)
+            trecho = _re.sub(r'\b(R\$|US\$)\s*(?=[\d])', r'\1 ', trecho)
+            outs.append(f"{nome}: {trecho} [{r.get('url', '')}]")
         print(" ; ".join(outs) if outs else "(sem resultados)")
     except Exception as exc:  # noqa: BLE001
         print(f"ERRO: {exc}")

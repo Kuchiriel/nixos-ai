@@ -179,7 +179,9 @@ def tick_once(base, history, heard, force_speak=False):
         # primeira). Até 2 rounds: chamada → executa → resultado → resposta.
         body = {"messages": msgs, "max_tokens": 120, "temperature": 0.4,
                 "tools": TOOLS_SCHEMA}
-        for _round in range(2):
+        for _round in range(3):
+            if _round == 2:
+                body.pop("tools", None)   # última: SEM tools = resposta final
             j = http(base + "/v1/chat/completions", body)
             msg = (j.get("choices") or [{}])[0].get("message", {})
             tcs = msg.get("tool_calls") or []
@@ -187,7 +189,6 @@ def tick_once(base, history, heard, force_speak=False):
                 out = str(msg.get("content", "")).strip()
                 log(f"[{ts()}] chat resposta: {out[:80]!r}")
                 return (out or ""), 0.0
-            # executa e devolve
             msgs.append(msg)
             for tc in tcs:
                 fn = tc.get("function", {})
@@ -202,7 +203,9 @@ def tick_once(base, history, heard, force_speak=False):
                 msgs.append({"role": "tool",
                              "tool_call_id": tc.get("id", "?"),
                              "content": str(result)[:800]})
-        out = str(msg.get("content", "")).strip() or "Pronto."
+        # rounds esgotados: pega o content que houver (sem 'Pronto.')
+        out = str(msg.get("content", "")).strip()
+        log(f"[{ts()}] chat resposta (fim rounds): {out[:80]!r}")
         return out, 0.0
     if LISTEN_TOKEN_ID:
         pass  # ticks normais seguem o protocolo micro-turn abaixo
@@ -317,7 +320,20 @@ def call_tool(name, args):
             return raw[:400]
     if name == "rag_search":
         q = args.get("query", "")
-        return _exec(f"timeout 20 jarvis rag search '{q}' 2>&1 | head -20")
+        raw = _exec(f"timeout 25 jarvis rag --top-k 3 '{q}' 2>&1")
+        try:
+            hits = json.loads(raw)
+            texts = []
+            for h in hits if isinstance(hits, list) else [hits]:
+                if isinstance(h, dict):
+                    if h.get("text"):
+                        texts.append(str(h["text"])[:200])
+                    elif h.get("path"):
+                        texts.append(f"{h['path']}: {h.get('symbols', '')[:80]}")
+            return " | ".join(texts[:3]) if texts else raw[:400]
+        except Exception:
+            return raw[:400]
+
     if name == "status":
         return _exec("systemctl --user is-active jarvis-wakeword 2>&1; uptime -p; free -g | grep Mem")
     if name == "remember":
@@ -376,6 +392,31 @@ def _resolve_dict():
     import glob as _g
     cands = _g.glob("/nix/store/*pt-br*/share/hunspell/pt_BR.dic")
     return cands[0].rsplit("/", 1)[0] + "/pt_BR" if cands else None
+
+LEXICON = ["Jarvis", "Matheus", "NixOS", "nix", "docker", "karaok",
+           "canary", "otclient", "Wurm", "llama", "piper", "whisper",
+           "bugado", "bugada", "sistema", "memória", "relógio", "internet",
+           "livro", "livros", "pesquisa", "busca", "status", "lembra",
+           "lembrete", "obrigado", "obrigada", " portugês", "português"]
+
+def lex_fix(text):
+    """(14:15, dono: 'fuzzy pra substituir no stt pq ele não entende')
+    Palavras fora do comum que fuzzy-casam com um termo do léxico → o
+    termo. Só minúsculas vs léxico, 1 substituição por palavra."""
+    import difflib, re as _re
+    out = []
+    for w in _re.findall(r"\S+|\s+", text):
+        if w.strip() and len(w.strip()) > 3:
+            wl = w.lower().strip(".,!?;:")
+            best, br = None, 0.0
+            for term in LEXICON:
+                r = difflib.SequenceMatcher(None, wl, term.lower()).ratio()
+                if r > br:
+                    best, br = term, r
+            if best and br >= 0.74:
+                w = best
+        out.append(w)
+    return "".join(out)
 
 def fix_stt(text):
     """Correção conservadora pós-ASR: só palavras minúsculas erradas com
@@ -800,9 +841,9 @@ def main():
                     # em pedaços ('E salo.') — espera 800ms; se vier mais
                     # fala, JUNTA e espera de novo. Responde só a
                     # utterância completa. Backchannels sozinhos = silêncio.
-                    fixed = fix_stt(heard)
+                    fixed = lex_fix(fix_stt(heard))
                     if fixed != heard:
-                        log(f"[{ts()}] hunspell: {heard!r} → {fixed!r}")
+                        log(f"[{ts()}] correção STT: {heard!r} → {fixed!r}")
                     heard = fixed
                     print(f"  SEGMENTO: {heard}", flush=True)
                     if is_backchannel(heard):
