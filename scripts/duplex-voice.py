@@ -75,9 +75,15 @@ SYSTEM_PT = (
     "- Após receber o resultado de uma ferramenta, RESPONDA com o "
     "resultado em linguagem natural. NUNCA repita a pergunta do usuário "
     "como resposta. Ex.: get_time='12:01' → 'São 12:01'.\n"
+    "- SE precisar de algo que uma ferramenta dá (hora, memória, busca, "
+    "sistema), CHAME a ferramenta AGORA — nunca diga 'preciso consultar' "
+    "ou 'vou verificar': chamar é mais rápido que anunciar.\n"
     "- Responda JÁ com a informação na primeira frase. NUNCA ofereça "
     "menus de opções ('Posso verificar X ou buscar Y') — faça o mais "
     "provável e responda.\n"
+    "- SE precisar de algo que uma ferramenta dá (hora, memória, busca, "
+    "sistema), CHAME a ferramenta AGORA — nunca diga 'preciso consultar' "
+    "ou 'vou verificar': chamar é mais rápido que anunciar.\n"
     "- Responda JÁ com a informação na primeira frase. NUNCA ofereça "
     "menus de opções ('Posso verificar X ou buscar Y') — faça o mais "
     "provável e responda.\n"
@@ -188,6 +194,19 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
             tcs = msg.get("tool_calls") or []
             if not tcs:
                 out = str(msg.get("content", "")).strip()
+                # (17:00) consult-speak: 'preciso consultar/vou verificar'
+                # sem ter chamado → 1 retry com nudge pra CHAMAR a tool.
+                if (_round == 0 and out and any(
+                        k in out.lower() for k in
+                        ("preciso consultar", "vou verificar", "deixa eu",
+                         "preciso verificar", "preciso buscar"))):
+                    log(f"[{ts()}] consult-speak detectado — retry c/ nudge")
+                    msgs.append({"role": "assistant", "content": out})
+                    msgs.append({"role": "user", "content":
+                                 "Chame a ferramenta adequada agora e "
+                                 "responda com o resultado."})
+                    body["messages"] = msgs
+                    continue
                 log(f"[{ts()}] chat resposta: {out[:80]!r}")
                 return (out or ""), 0.0
             # (14:50, paper 2609.19334) FILLER imediato no 1º tool call:
@@ -622,9 +641,17 @@ class Tts:
         self.last_ms = 0.0
         threading.Thread(target=self._worker, daemon=True).start()
     def say(self, text):
-        if text.strip():
-            log(f"[{ts()}] tts.say: {text.strip()[:60]!r}")
-            self.q.put(text.strip())
+        text = text.strip()
+        # (16:45) o 4B às vezes EMITE o markup de tool como texto
+        # ('<function=shell>...') — isso NUNCA vai pro piper.
+        import re as _re
+        text = _re.sub(r"<function=[^>]*>.*?(?:</function>|$)", " ", text, flags=_re.S)
+        text = _re.sub(r"<parameter=[^>]*>.*?(?:</parameter>|$)", " ", text, flags=_re.S)
+        text = _re.sub(r"```[a-z]*\n?", " ", text)
+        text = _re.sub(r"\n+", ". ", text).strip()
+        if text and len(text) > 1:
+            log(f"[{ts()}] tts.say: {text[:60]!r}")
+            self.q.put(text)
     VOICE_JA = "/home/nixos/models/piper/ja_JP-hi_fi_captain-medium.onnx"
 
     @staticmethod
@@ -874,6 +901,19 @@ def main():
             next_t += TICK
             t0 = time.monotonic()
             heard = NOVOICE
+            # (16:50) ENTRY POINT de teste (dono): fala injetada sem
+            # acústica — o kokoro às vezes vira [MÚSICA] pro whisper.
+            try:
+                p_inj = Path("/tmp/duplex-inject")
+                if p_inj.exists():
+                    _inj = p_inj.read_text().strip()
+                    p_inj.unlink()
+                    if _inj:
+                        log(f"[{ts()}] INJETADO: {_inj[:50]!r}")
+                        pending.append(_inj)
+                        merge_deadline = time.monotonic()
+            except Exception:
+                pass
             # (09:55) MÚSICA/FUNDO → NÃO responde (o dono: "não precisa
             # reagir"). O VAC manda 'no online update, only VAD voice' ou
             # texto curto; segmentos <3 chars (garbage whisper) são descartados.
@@ -882,6 +922,21 @@ def main():
                      or "MÚSICA" in heard.upper()
                      or "MUSIC" in heard.upper())):
                 heard = NOVOICE
+            # (16:50) ENTRY POINT de teste (dono): fala injetada sem
+            # acústica — o kokoro às vezes vira [MÚSICA] pro whisper e
+            # a bateria de testes não pode depender dessa loteria.
+            try:
+                p_inj = Path("/tmp/duplex-inject")
+                if p_inj.exists():
+                    _inj = p_inj.read_text().strip()
+                    p_inj.unlink()
+                    if _inj:
+                        log(f"[{ts()}] INJETADO: {_inj[:50]!r}")
+                        pending.append(_inj)
+                        heard = NOVOICE
+                        merge_deadline = time.monotonic()
+            except Exception:
+                pass
             # (05:00, v6.4) CONSOME TUDO, pareia CONSECUTIVO: o tick LLM
             # (~400ms) + 1-chunk-por-iteração = deficit 40% → reader dropava
             # → pares com BURACO no meio (fragmento+salto+fragmento) → VAD
