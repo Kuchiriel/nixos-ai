@@ -69,6 +69,13 @@ SYSTEM_PT = (
     "permissão, simplesmente memorize e confirme em uma frase curta.\n"
     "- Proativo: antecipe necessidades óbvias e ofereça a próxima ação, mas "
     "em UMA frase — não fale demais sem ser chamado.\n"
+    "- Após receber o resultado de uma ferramenta, RESPONDA à pergunta "
+    "com o resultado em linguagem natural. NUNCA repita a pergunta do "
+    "usuário como sua resposta. Ex.: após get_time='12:01', diga 'São "
+    "12:01' — jamais 'Que horas são agora?'.\n"
+    "- Após receber o resultado de uma ferramenta, RESPONDA com o "
+    "resultado em linguagem natural. NUNCA repita a pergunta do usuário "
+    "como resposta. Ex.: get_time='12:01' → 'São 12:01'.\n"
     "- NÃO concorde só para agradar: se o que ouviu não bate com o que "
     "verificou, DIGA o que verificou. 'Entendido, está lá' sem verificar "
     "= mentira.\n"
@@ -272,7 +279,23 @@ def call_tool(name, args):
         return _exec("date '+hoje é %A, %d de %B de %Y' | sed 's/^[a-z]*/&/' 2>/dev/null || date")
     if name == "recall":
         q = args.get("query", "")
-        return _exec(f"timeout 20 jarvis recall '{q}' 2>&1 | head -20")
+        raw = _exec(f"timeout 20 jarvis recall '{q}' --top 5 2>&1")
+        # o CLI devolve JSON de hits (id/score/metadata) — o 4B não lê
+        # blob; extraímos os TEXTOS das memórias:
+        try:
+            hits = json.loads(raw)
+            texts = []
+            for h in hits if isinstance(hits, list) else [hits]:
+                if isinstance(h, dict):
+                    t = (h.get("payload") or {}).get("text") or h.get("text") or \
+                        h.get("content") or h.get("page_content") or ""
+                    if t:
+                        texts.append(str(t)[:200])
+            if texts:
+                return " | ".join(texts[:5])
+            return raw[:400]
+        except Exception:
+            return raw[:400]
     if name == "rag_search":
         q = args.get("query", "")
         return _exec(f"timeout 20 jarvis rag search '{q}' 2>&1 | head -20")
@@ -451,6 +474,13 @@ class Tts:
     def say(self, text):
         if text.strip():
             self.q.put(text.strip())
+    def asr_reset(self):
+        # (12:10) limpa o VAD do asrd pós-fala (tail do eco)
+        try:
+            if getattr(self, "_asr", None):
+                self._asr.feed_raw('{"reset": true}')
+        except Exception:
+            pass
     def _worker(self):
         import tempfile
         while True:
@@ -485,6 +515,9 @@ class Tts:
                 log(f"[{ts()}] tts ERRO: {exc}")
             finally:
                 self.speaking["until"] = time.monotonic() + 0.4
+                self.asr_reset()   # (12:10) o tail do eco morre AQUI:
+                                   # sem o reset o VAD fecha segmento com
+                                   # a própria voz e o modelo responde a si
     def close(self):
         pass  # piper por-frase: sem daemon pra matar
 
@@ -553,6 +586,7 @@ def main():
     speaking = {"until": 0.0}   # self-mute anti-eco (18/10 ~06h)
     asr = Asr(args.stt_model, args.lang)
     tts = Tts(speaking)
+    tts._asr = asr   # (12:10) o asr_reset pós-fala precisa do pipe do asrd
     mic_q = queue.Queue(maxsize=6)
     threading.Thread(target=mic_reader, args=(mic, mic_q), daemon=True).start()
 
