@@ -251,11 +251,15 @@ class Tts:
                 # (07:50, o dono não ouviu!) o piper IGNORA output_file no
                 # JSON — escrevia hash-no-CWD e o aplay nunca achava o wav
                 # (falha SILENT, returncode 0). --output_file é ARGUMENTO.
-                req = json.dumps({"text": text})
+                # (08:20, dono: "falou text dnv") o CLI 2023 do piper lê
+                # TEXTO PURO por linha — o JSON era do piper novo; a
+                # chave "text" era FALADA em alta. Acentos: encoding
+                # utf-8 real, nada de escapes.
                 r = subprocess.run(
                     ["/home/nixos/models/piper/bin/piper", "-m", self.VOICE,
                      "--output_file", wav],
-                    input=req, capture_output=True, text=True, timeout=60)
+                    input=text + "\n", capture_output=True, text=True,
+                    encoding="utf-8", timeout=60)
                 if r.returncode == 0 and Path(wav).exists():
                     subprocess.run(["aplay", "-q", wav], timeout=60)
                 else:
