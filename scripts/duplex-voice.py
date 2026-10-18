@@ -45,6 +45,26 @@ import numpy as np
 TICK = 0.6
 LISTEN, NOVOICE = "<listen>", "<no voice>"
 LISTEN_P = 0.3
+SYSTEM_PT = (
+    "Você é o JARVIS, o assistente de voz do DONO da casa. O usuário é "
+    "o dono (humano). VOCÊ se chama JARVIS — nunca chame o usuário de "
+    "JARVIS e nunca diga 'sou Jarvis' como se fosse o usuário.\n"
+    "REGRAS INVIOLÁVEIS (não negocie, não desculpe, não reformule):\n"
+    "- Responda em português do Brasil, 1-2 frases curtas, natural, falado.\n"
+    "- Use a memória da conversa acima quando relevante; NÃO invente "
+    "contexto nem fatos. Se não souber, diga 'não tenho essa informação' "
+    "ou 'preciso de uma ferramenta para isso'.\n"
+    "- NUNCA invente horas, datas, nomes, números, resultados de comando "
+    "ou estados do sistema. Se pedirem a hora, diga 'preciso consultar o "
+    "relógio do sistema'.\n"
+    "- NUNCA repita a pergunta do usuário nem ecoe sua fala.\n"
+    "- NUNCA chame o usuário de JARVIS.\n"
+    "- NÃO proponha tarefas longas; ações via ferramenta = Cactus Needle "
+    "(pendente).\n"
+    "- Marcadores humanos quando couber: 'Ah,', 'Entendi,', 'Peraí,', "
+    "'Hmm.'\n"
+    "- Se o segmento for ruído/sem sentido, responda só 'Pode repetir?'"
+)
 SYSTEM = ("You are a voice assistant in a live phone call; both sides can talk at the same time. Every "
           f"{TICK:g} seconds you get what the microphone heard in that moment, as a streaming transcript fragment, or "
           f"{NOVOICE}. You reply with up to three new words to say next, or {LISTEN} to add nothing.")
@@ -104,15 +124,16 @@ def tick_once(base, history, heard, force_speak=False):
                 " ".join(h[1] for h in history[-6:])):
             log(f"[{ts()}] segmento sem chamado/? — ignorado: {heard[:40]!r}")
             return LISTEN, 0.0
-        j = http(base + "/v1/chat/completions", {
-            "messages": [
-                {"role": "system", "content": "Você é o JARVIS, assistente"
-                 " de voz. Responda em português do Brasil, curto e direto,"
-                 " no máximo uma frase."},
-                {"role": "user", "content": heard},
-            ],
-            "max_tokens": 80, "temperature": 0.4,
-        })
+        # (09:30, dono: 'responde só a pergunta da vez') o chat sem
+        # histórico = amnésia. Leva os últimos turnos reais.
+        msgs = [{"role": "system", "content": SYSTEM_PT}]
+        for role, content in history[-12:]:
+            if content and content != LISTEN:
+                msgs.append({"role": "user" if role == "user" else "assistant",
+                             "content": content})
+        msgs.append({"role": "user", "content": heard})
+        j = http(base + "/v1/chat/completions", {"messages": msgs,
+            "max_tokens": 80, "temperature": 0.4})
         out = (j.get("choices") or [{}])[0].get("message", {}).get("content", "")
         out = str(out).strip()
         log(f"[{ts()}] chat resposta: {out[:80]!r}")
