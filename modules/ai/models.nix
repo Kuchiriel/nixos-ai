@@ -262,7 +262,7 @@ in rec {
   directServers = {
     uncensored-35b = {
       port = 8084; binary = "ik";
-      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
+      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf";
       threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
       gpuLayers = 45; moeFlags = "--n-cpu-moe 35";
       fa = true; ctk = "q4_0"; ctv = "q4_0";
@@ -290,7 +290,7 @@ in rec {
       # P 0.29→fala, 526ms/tick — demo-ab-uncensored.log). O UD-Q4_K_M
       # (quant de treino do card) fica de gabarito: é mais insistente
       # (4 fragmentos vs 1) — troca = uma linha aqui.
-      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
+      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf";
       threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
       gpuLayers = 99; moeFlags = "--n-cpu-moe 44";
       # LoRA + flash-attn são incompatíveis (log do server) → fa off.
@@ -907,7 +907,7 @@ in rec {
       modelFile = "/home/nixos/models/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
     };
     raw-strong = profiles.chat // {
-      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
+      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf";
     };
   };
 
