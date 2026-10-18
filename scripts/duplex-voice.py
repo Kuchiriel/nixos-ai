@@ -531,7 +531,13 @@ class Tts:
         r = subprocess.run(
             ["/home/nixos/projects/karaok/.venv/bin/python3", "-c", code, seg],
             capture_output=True, text=True, timeout=90)
-        return r.returncode == 0 and Path(out_wav).exists()
+        # (13:20) o python -c às vezes exits !=0 mesmo COM o wav pronto
+        # (cleanup exception pós-synth) — sucesso = wav existe e tem
+        # conteúdo (> header 44 bytes). rc ignora.
+        try:
+            return Path(out_wav).stat().st_size > 44
+        except Exception:
+            return False
 
     def _synthesize(self, text, wav_path):
         """Sintetiza com a voz certa por run e costura os wavs."""
