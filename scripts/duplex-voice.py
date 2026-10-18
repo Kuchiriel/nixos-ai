@@ -888,6 +888,7 @@ def main():
     zeros = 0
     pending = []              # (12:00) merge de segmentos
     merge_deadline = 0.0
+    barge_buf = []           # (17:15) DUAL: fala do dono durante o TTS
     running = True
 
     def _sair(*_):
@@ -978,8 +979,20 @@ def main():
                 c16 = c if isinstance(c, np.ndarray) else np.frombuffer(c, dtype=np.int16)
                 crms = int(np.sqrt((c16.astype(np.float64) ** 2).mean()))
                 if tts_playing:
-                    continue  # própria voz tocando: eco fora
-                asr.feed(c16.astype("float32") / 32768.0)
+                    # (17:15) DUAL-crude (survey 2606.19453): não deleta —
+                    # voz FORTE por cima do TTS = barge-in → buffer;
+                    # no fim do play re-alimenta o asrd.
+                    if crms >= 900:
+                        barge_buf.append(c16)
+                        log(f"[{ts()}] BARGE-IN sinal (rms={crms})")
+                    continue
+                if not barge_buf:
+                    asr.feed(c16.astype("float32") / 32768.0)
+            if barge_buf and not tts_playing and len(barge_buf) >= 2:
+                log(f"[{ts()}] BARGE-IN processado: {len(barge_buf)} chunks")
+                for bc in barge_buf:
+                    asr.feed(bc.astype("float32") / 32768.0)
+                barge_buf.clear()
             r = asr.take()
             if isinstance(r, dict) and r.get("text"):
                 heard = r["text"]
