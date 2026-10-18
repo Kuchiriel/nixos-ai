@@ -379,6 +379,14 @@ def main():
             next_t += TICK
             t0 = time.monotonic()
             heard = NOVOICE
+            # (09:55) MÚSICA/FUNDO → NÃO responde (o dono: "não precisa
+            # reagir"). O VAC manda 'no online update, only VAD voice' ou
+            # texto curto; segmentos <3 chars (garbage whisper) são descartados.
+            if (heard and heard != NOVOICE and
+                    (len(heard.replace(" ", "")) < 4
+                     or "MÚSICA" in heard.upper()
+                     or "MUSIC" in heard.upper())):
+                heard = NOVOICE
             # (05:00, v6.4) CONSOME TUDO, pareia CONSECUTIVO: o tick LLM
             # (~400ms) + 1-chunk-por-iteração = deficit 40% → reader dropava
             # → pares com BURACO no meio (fragmento+salto+fragmento) → VAD
