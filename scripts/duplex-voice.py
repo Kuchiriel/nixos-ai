@@ -248,12 +248,19 @@ class Tts:
             try:
                 with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
                     wav = f.name
-                req = json.dumps({"text": text, "output_file": wav})
+                # (07:50, o dono não ouviu!) o piper IGNORA output_file no
+                # JSON — escrevia hash-no-CWD e o aplay nunca achava o wav
+                # (falha SILENT, returncode 0). --output_file é ARGUMENTO.
+                req = json.dumps({"text": text})
                 r = subprocess.run(
-                    ["/home/nixos/models/piper/bin/piper", "-m", self.VOICE],
+                    ["/home/nixos/models/piper/bin/piper", "-m", self.VOICE,
+                     "--output_file", wav],
                     input=req, capture_output=True, text=True, timeout=60)
                 if r.returncode == 0 and Path(wav).exists():
                     subprocess.run(["aplay", "-q", wav], timeout=60)
+                else:
+                    log(f"[{ts()}] tts FALHOU: rc={r.returncode} "
+                        f"stderr={(r.stderr or '')[-120:]!r}")
                 self.last_ms = (time.monotonic() - t0) * 1000
                 Path(wav).unlink(missing_ok=True)
             except Exception as exc:  # noqa: BLE001
