@@ -262,6 +262,63 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
         out = http(base + "/completion", body)["content"].strip()
     return (LISTEN if out.startswith("<") else out), p_listen
 
+
+# ---------------------------------------------------------------- AEC-lite
+import threading as _th
+
+AEC = {
+    "ref": None,        # samples 16k int16 que TOCARAM (janela atual)
+    "t0": 0.0,          # wall-clock (monotonic) do INÍCIO da reprodução
+    "gain": 0.0,        # ganho adaptativo (1-tap NLMS)
+    "lock": _th.Lock(),
+}
+AEC_DELAY_S = 0.083    # medido 18/10: speaker→mic (correlação 0.82)
+
+def aec_register_played(wav_path):
+    """O worker TTS registra o que vai tocar (16k mono) + o instante."""
+    try:
+        import wave as _w
+        w = _w.open(wav_path, "rb")
+        n, sr = w.getnframes(), w.getframerate()
+        raw = np.frombuffer(w.readframes(n), dtype=np.int16)
+        w.close()
+        if sr != 16000:   # piper 22050 → 16k (interp linear)
+            x_old = np.arange(len(raw)); x_new = np.arange(0, len(raw), sr/16000)
+            raw = np.interp(x_new, x_old, raw).astype(np.int16)
+        with AEC["lock"]:
+            AEC["ref"] = raw
+            AEC["t0"] = time.monotonic()
+    except Exception:
+        pass
+
+def aec_process(chunk16):
+    """Subtrai o eco da referência (alinhada ao delay medido) do chunk
+    do mic; ganho NLMS 1-tap se adapta por chunk. Só ativa DURANTE o
+    playback (ref limpa no finally do worker); clamp |gain|<=0.9."""
+    with AEC["lock"]:
+        ref = AEC["ref"]
+        if ref is None or len(ref) < 4800:
+            return chunk16
+        idx = int((time.monotonic() - AEC["t0"] - AEC_DELAY_S) * 16000)
+        if idx < 0 or idx + len(chunk16) > len(ref):
+            return chunk16
+        r = ref[idx:idx + len(chunk16)].astype(np.float64)
+    mic = chunk16.astype(np.float64)
+    g = AEC["gain"]
+    processed = mic - g * r
+    mu = 0.1
+    rp = (r * r).sum() + 1e-9
+    AEC["gain"] = max(-0.9, min(0.9, g + mu * (processed * r).sum() / rp))
+    return processed.astype(np.int16)
+
+def aec_clear():
+    """Pós-playback: a referência morre (o AEC NUNCA processa chunks
+    fora da janela real de playback — era o bug do mute: o gain
+    adaptava com ref misaligned e corrompia tudo depois da 1ª resposta)."""
+    with AEC["lock"]:
+        AEC["ref"] = None
+        AEC["gain"] = 0.0
+
 # ---------------------------------------------------------------- mic
 def mic_stream():
     return subprocess.Popen(["pw-record", "--rate", str(SR), "--channels", "1",
@@ -796,6 +853,7 @@ class Tts:
                 # utf-8 real, nada de escapes.
                 okk = self._synthesize(text, wav)
                 if okk and Path(wav).exists():
+                    aec_register_played(wav)   # AEC: a referência
                     subprocess.run(["aplay", "-q", wav], timeout=60)
                 else:
                     log(f"[{ts()}] tts FALHOU: synth={okk} wav={Path(wav).exists()}")
@@ -805,6 +863,8 @@ class Tts:
                 log(f"[{ts()}] tts ERRO: {exc}")
             finally:
                 self.speaking["until"] = time.monotonic() + 1.0
+                aec_clear()   # (17:50) o AEC SÓ na janela real de play
+                self.asr_reset()   # tail do eco: estado limpo pós-fala
                 self.asr_reset()   # (12:10) o tail do eco morre AQUI:
                                    # sem o reset o VAD fecha segmento com
                                    # a própria voz e o modelo responde a si
@@ -987,7 +1047,7 @@ def main():
                         log(f"[{ts()}] BARGE-IN sinal (rms={crms})")
                     continue
                 if not barge_buf:
-                    asr.feed(c16.astype("float32") / 32768.0)
+                    asr.feed(aec_process(c16).astype("float32") / 32768.0)
             if barge_buf and not tts_playing and len(barge_buf) >= 2:
                 log(f"[{ts()}] BARGE-IN processado: {len(barge_buf)} chunks")
                 for bc in barge_buf:
