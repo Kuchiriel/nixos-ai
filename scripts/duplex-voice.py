@@ -125,7 +125,7 @@ def build_prompt(history, heard):
         prompt += f"<|im_start|>{role}\n{content}<|im_end|>\n"
     return prompt + "<|im_start|>assistant\n"
 
-def tick_once(base, history, heard, force_speak=False):
+def tick_once(base, history, heard, force_speak=False, tts=None):
     body = {"prompt": build_prompt(history, heard), "n_predict": 64,
             "temperature": 0, "stop": ["<|im_end|>"], "cache_prompt": True,
             "n_probs": 8}
@@ -193,7 +193,9 @@ def tick_once(base, history, heard, force_speak=False):
             # (14:50, paper 2609.19334) FILLER imediato no 1º tool call:
             # o usuário ouve 'consultando' em <1s enquanto a tool roda.
             if not filler_spoken:
-                tts.say("Consultando agora.")
+                if tts:
+                    if tts:
+                        tts.say("Consultando agora.")
                 filler_spoken = True
                 body.pop("stream", None)
             msgs.append(msg)
@@ -484,6 +486,15 @@ LEXICON = ["Jarvis", "Matheus", "NixOS", "nix", "docker", "karaok",
            "lembrete", "obrigado", "obrigada", " portugês", "português"]
 
 def lex_fix(text):
+    # (15:45) bigramas: "já viz"→Jarvis, "já vio"→Jarvis (o whisper
+    # renderiza o nome como 2 palavras — a fusão casa)
+    import difflib as _dl
+    for bi in ("já viz", "já vio", "já vis", "já vi", "ja viz"):
+        if _dl.SequenceMatcher(None, bi, "jarvis").ratio() >= 0.55:
+            if bi in text.lower():
+                idx = text.lower().find(bi)
+                text = text[:idx] + "Jarvis" + text[idx + len(bi):]
+                break
     """(14:15, dono: 'fuzzy pra substituir no stt pq ele não entende')
     Palavras fora do comum que fuzzy-casam com um termo do léxico → o
     termo. Só minúsculas vs léxico, 1 substituição por palavra."""
@@ -609,6 +620,7 @@ class Tts:
         threading.Thread(target=self._worker, daemon=True).start()
     def say(self, text):
         if text.strip():
+            log(f"[{ts()}] tts.say: {text.strip()[:60]!r}")
             self.q.put(text.strip())
     VOICE_JA = "/home/nixos/models/piper/ja_JP-hi_fi_captain-medium.onnx"
 
@@ -960,7 +972,7 @@ def main():
                 elif not is_backchannel(heard):
                     force = True
                 log(f"[{ts()}] utterância completa: {heard[:60]!r}")
-            said, _p = tick_once(base, history, heard, force_speak=force)
+            said, _p = tick_once(base, history, heard, force_speak=force, tts=tts)
             if not force and said != LISTEN:
                 # (07:15) ticks micro-turn SEM força (4B base, sem LoRA,
                 # b9190 sem probs) babblam template ('assistant') — silêncio:
