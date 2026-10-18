@@ -475,6 +475,17 @@ def call_tool(name, args):
             return call_tool("status", {})
         if "shell" in action or "command" in action or "terminal" in action:
             return call_tool("shell", {"command": inp})
+        if "register" in action or "voices" in action or "pessoas" in action or "quantas" in action:
+            # (19:35) multi-voz: contagem de vozes ativas
+            _path = Path("/tmp/jarvis-spk-profiles.json")
+            _n = 0
+            try:
+                import json as _j
+                _profs = _j.loads(_path.read_text())
+                _n = len(_profs)
+            except Exception:
+                pass
+            return f"Tenho {_n} vozes matriculadas. O asrd conta vozes em tempo real."
         if "enroll" in action or "matricula" in action or "cadastra" in action:
             # (19:20) matrícula da voz: grava 8s do dono e salva o profile
             import tempfile as _tf

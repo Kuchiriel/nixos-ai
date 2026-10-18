@@ -83,16 +83,62 @@ def main():
                                min_silence_duration_ms=650,
                                speech_pad_ms=150)
 
-    # (19:15) SPEAKER ID: profile do dono (MFCC, matrícula no cliente)
-    SPK_PROFILE = None
+    # (19:30) SPEAKER ENGINE v2: multi-voz (papers: VAD→embed→cluster)
+    # profiles = {nome: embedding}; a cada segmento identifica a voz;
+    # clusters de embeddings recentes = contagem de pessoas falando.
+    SPK_PROFILES = {}
     try:
-        _cfg = json.loads(Path("/tmp/jarvis-spk-profile.json").read_text())
-        if _cfg.get("embedding"):
-            SPK_PROFILE = np.array(_cfg["embedding"])
+        _cfg = json.loads(Path("/tmp/jarvis-spk-profiles.json").read_text())
+        SPK_PROFILES = {k: np.array(v) for k, v in _cfg.items()}
     except Exception:
         pass
-    print(f"[asrd] speaker: {'ATIVO' if SPK_PROFILE is not None else 'desligado (todos)'}",
+    SPK_RECENT = []  # [(embedding, ts)] últimos 60s — clustering
+    SPK_COUNTER = {"voices": 0, "last_id": "?"}
+    print(f"[asrd] speaker: {len(SPK_PROFILES)} perfis "
+          f"({'ATIVO' if SPK_PROFILES else 'desligado (todos)'})",
           file=sys.stderr, flush=True)
+
+    def _embed(pcm_f32):
+        try:
+            import librosa
+            m = librosa.feature.mfcc(y=pcm_f32, sr=SR, n_mfcc=13,
+                                      n_fft=512, hop_length=160)
+            return np.concatenate([m.mean(axis=1), m.std(axis=1)])
+        except Exception:
+            return None
+
+    def _cos(a, b):
+        return float(np.dot(a, b) /
+                     (np.linalg.norm(a) * np.linalg.norm(b) + 1e-9))
+
+    def _identify(pcm_f32):
+        """Retorna (nome, confiança) da melhor voz conhecida ou
+        ('unknown', cos_max). Também alimenta o contador de vozes."""
+        nonlocal SPK_RECENT
+        e = _embed(pcm_f32)
+        if e is None:
+            return ("?", 0.0)
+        # identifica contra perfis conhecidos
+        best, best_cos = "?", 0.0
+        for nome, prof in SPK_PROFILES.items():
+            c = _cos(e, prof)
+            if c > best_cos:
+                best, best_cos = nome, c
+        if best_cos < 0.75:
+            best = "unknown"
+        # clustering: conta vozes únicas nos últimos 60s
+        now = time.time()
+        SPK_RECENT = [(r_e, ts) for r_e, ts in SPK_RECENT if now - ts < 60]
+        SPK_RECENT.append((e, now))
+        n_voices = 1
+        centroids = [SPK_RECENT[0][0].copy()]
+        for r_e, _ in SPK_RECENT[1:]:
+            if max(_cos(r_e, c) for c in centroids) < 0.82:
+                centroids.append(r_e.copy())
+                n_voices += 1
+        SPK_COUNTER["voices"] = n_voices
+        SPK_COUNTER["last_id"] = best
+        return (best, best_cos)
 
     for line in sys.stdin:
         line = line.strip()
@@ -119,27 +165,14 @@ def main():
                 started = max(0, int(len(ring) - SR * 1.0))   # 1s de pré-roll
             if ev and ev.get("end") is not None and started is not None:
                 seg = ring[int(started):int(len(ring) - SR * 0.35)]
-                # (19:15) SPEAKER ID: MFCC cosseno vs profile do dono
-                if (SPK_PROFILE is not None and len(seg) > SR * 0.4):
-                    try:
-                        import librosa
-                        _m = librosa.feature.mfcc(
-                            y=seg, sr=SR, n_mfcc=13, n_fft=512, hop_length=160)
-                        _e = np.concatenate([_m.mean(axis=1), _m.std(axis=1)])
-                        _cos = float(np.dot(_e, SPK_PROFILE) /
-                                    (np.linalg.norm(_e) *
-                                     np.linalg.norm(SPK_PROFILE) + 1e-9))
-                        if _cos < 0.82:
-                            print(f"[asrd] voz NÃO-owner cos={_cos:.2f} — desc",
-                                  file=sys.stderr, flush=True)
-                            ring = np.zeros(0, dtype="float32")
-                            started = None
-                            continue
-                    except Exception:
-                        pass  # sem librosa = sem filtro
+                # (19:30) identificar a voz e anexar ao resultado
+                spk_id, spk_cos = _identify(seg)
+                txt = ''
                 txt = seg_to_text(seg)
                 ms = (time.monotonic() - t0) * 1000
-                print(json.dumps({"text": txt, "ms": ms}), flush=True)
+                print(json.dumps({"text": txt, "ms": ms, "spk": spk_id,
+                       "spk_cos": round(spk_cos, 2),
+                       "voices": SPK_COUNTER["voices"]}), flush=True)
                 ring = np.zeros(0, dtype="float32")
                 started = None
         except Exception as exc:  # noqa: BLE001
