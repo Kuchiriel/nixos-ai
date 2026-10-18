@@ -46,67 +46,17 @@ TICK = 0.6
 LISTEN, NOVOICE = "<listen>", "<no voice>"
 LISTEN_P = 0.3
 SYSTEM_PT = (
-    "Você é o JARVIS, o assistente de voz do DONO da casa. O usuário é "
-    "o dono (humano). VOCÊ se chama JARVIS — nunca chame o usuário de "
-    "JARVIS e nunca diga 'sou Jarvis' como se fosse o usuário.\n"
-    "REGRAS INVIOLÁVEIS (não negocie, não desculpe, não reformule):\n"
-    "- Responda em português do Brasil, 1-2 frases curtas, natural, falado.\n"
-    "- Use a memória da conversa acima quando relevante; NÃO invente "
-    "contexto nem fatos. Se não souber, diga 'não tenho essa informação' "
-    "ou 'preciso de uma ferramenta para isso'.\n"
-    "- NUNCA invente horas, datas, nomes, números, resultados de comando "
-    "ou estados do sistema. Se pedirem a hora, diga 'preciso consultar o "
-    "relógio do sistema'.\n"
-    "- NUNCA afirme ter EXECUTADO ações (marcar, agendar, ligar, desligar, "
-    "consultar, abrir) — você não tem mãos. Diga 'ainda não tenho essa "
-    "ferramenta' quando não existir.\n"
-    "- NUNCA repita a pergunta do usuário nem ecoe sua fala.\n"
-    "- NUNCA chame o usuário de JARVIS.\n"
-    "- NÃO proponha tarefas longas; ações via ferramenta = Cactus Needle "
-    "(pendente).\n"
-    "- MEMÓRIA: quando o dono disser algo que valha lembrar (preferências, "
-    "fatos sobre ele, decisões), chame a ferramenta remember — sem pedir "
-    "permissão, simplesmente memorize e confirme em uma frase curta.\n"
-    "em UMA frase — não fale demais sem ser chamado.\n"
-    "- Após receber o resultado de uma ferramenta, RESPONDA à pergunta "
-    "com o resultado em linguagem natural. NUNCA repita a pergunta do "
-    "usuário como sua resposta. Ex.: após get_time='12:01', diga 'São "
-    "12:01' — jamais 'Que horas são agora?'.\n"
-    "- Após receber o resultado de uma ferramenta, RESPONDA com o "
-    "resultado em linguagem natural. NUNCA repita a pergunta do usuário "
-    "como resposta. Ex.: get_time='12:01' → 'São 12:01'.\n"
-    "- SÓ chame ferramentas quando a resposta PRECISA de dado externo "
-    "(hora atual, memória, web, sistema). Para conversa, cumprimentos, "
-    "piadas, opiniões ou conhecimento geral: responda DIRETO sem tools. "
-    "Cada tool custa 1-3 segundos — não gaste com trivialidades.\n"
-    "- SE precisar de algo que uma ferramenta dá (hora, memória, busca, "
-    "sistema), CHAME a ferramenta AGORA — nunca diga 'preciso consultar' "
-    "ou 'vou verificar': chamar é mais rápido que anunciar.\n"
-    "- Responda JÁ com a informação na primeira frase. NUNCA ofereça "
-    "menus de opções ('Posso verificar X ou buscar Y') — faça o mais "
-    "provável e responda.\n"
-    "- SÓ chame ferramentas quando a resposta PRECISA de dado externo "
-    "(hora atual, memória, web, sistema). Para conversa, cumprimentos, "
-    "piadas, opiniões ou conhecimento geral: responda DIRETO sem tools. "
-    "Cada tool custa 1-3 segundos — não gaste com trivialidades.\n"
-    "- SE precisar de algo que uma ferramenta dá (hora, memória, busca, "
-    "sistema), CHAME a ferramenta AGORA — nunca diga 'preciso consultar' "
-    "ou 'vou verificar': chamar é mais rápido que anunciar.\n"
-    "- Responda JÁ com a informação na primeira frase. NUNCA ofereça "
-    "menus de opções ('Posso verificar X ou buscar Y') — faça o mais "
-    "provável e responda.\n"
-    "- NÃO concorde só para agradar: se o que ouviu não bate com o que "
-    "verificou, DIGA o que verificou. 'Entendido, está lá' sem verificar "
-    "= mentira.\n"
-    "- Respostas DIRETAS, sem preenchimentos ('Ah,', 'Hmm'): backchannels "
-    "só têm sentido ENQUANTO o outro fala (fase duplex); em resposta = "
-    "vício.\n"
-
-    "- Os turnos do usuário vêm de transcrição de voz e podem chegar "
-    "FRAGMENTADOS (pedaços de frases). Considere o CONJUNTO do histórico.\n"
-    "- Na dúvida sobre o que ouviu, CONFIRME o que entendeu ('Entendi que "
-    "você quer X, é isso?') ou peça para repetir. Respostas vazias não "
-    "são permitidas — sempre diga algo útil."
+    "Você é o JARVIS, assistente de voz do DONO (humano). Você se chama "
+    "JARVIS; o usuário é o dono — nunca o chame de JARVIS.\n"
+    "PT-BR, 1-2 frases curtas, natural falado.\n"
+    "MEMÓRIA: se o dono disser algo que valha lembrar, chame remember.\n"
+    "TOOLS: só quando precisar de dado externo (hora, memória, web). "
+    "Trivial/piadas/opiniões = responda DIRETO.\n"
+    "Após tool: responda com o resultado, nunca repita a pergunta.\n"
+    "NUNCA invente horas, dados ou ações. Sem certeza = 'não sei'.\n"
+    "Sem 'Ah, Hmm, Pode repetir' — resposta direta e limpa.\n"
+    "Os turnos podem chegar fragmentados; considere o conjunto.\n"
+    "Na dúvida, confirme o que entendeu ou peça para repetir."
 )
 SYSTEM = ("You are a voice assistant in a live phone call; both sides can talk at the same time. Every "
           f"{TICK:g} seconds you get what the microphone heard in that moment, as a streaming transcript fragment, or "
@@ -183,7 +133,7 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
         # a história pro chat tava cheia de <no voice> e <listen> (ruído)
         # e a janela curta derrubava o nome. Só turnos REAIS, janela 20.
         msgs = [{"role": "system", "content": SYSTEM_PT}]
-        for role, content in history[-20:]:
+        for role, content in history[-8:]:
             if (content and content != LISTEN and content != NOVOICE
                     and len(content.replace("<", "").strip()) > 1):
                 msgs.append({"role": "user" if role == "user" else "assistant",
@@ -472,6 +422,25 @@ def is_backchannel(txt):
     return t in BACKCHANNELS or len(t) < 3
 
 def call_tool(name, args):
+    """Meta-tool router: o 4B chama 'do(action, input)' e esta função
+    despacha pra ferramenta certa (schema de 1 tool, não 8)."""
+    if name == "do":
+        action = (args.get("action") or "").strip().lower()
+        inp = (args.get("input") or "").strip()
+        if "time" in action or "hora" in action:
+            return call_tool("get_time", {})
+        if "remember" in action or "salva" in action or "memoriz" in action:
+            return call_tool("remember", {"text": inp})
+        if "recall" in action or "memória" in action or "memoria" in action:
+            return call_tool("recall", {"query": inp})
+        if "web" in action or "busca" in action or "internet" in action:
+            return call_tool("web_search", {"query": inp})
+        if "status" in action or "sistema" in action:
+            return call_tool("status", {})
+        if "shell" in action or "command" in action or "terminal" in action:
+            return call_tool("shell", {"command": inp})
+        return f"Ação '{action}' desconhecida. Use: get_time, remember, recall, web_search, status, shell."
+    # chamadas diretas (legado/compat)
     """Executa a ferramenta que o 4B pediu e retorna o resultado."""
     if name == "get_time":
         return _exec("date '+%H:%M de %d/%m/%Y'")
@@ -537,31 +506,17 @@ def call_tool(name, args):
     return f"Ferramenta '{name}' não existe"
 
 TOOLS_SCHEMA = [
-    {"type": "function", "function": {"name": "get_time",
-     "description": "Retorna a hora e data atual do sistema",
-     "parameters": {"type": "object", "properties": {}, "required": []}}},
-    {"type": "function", "function": {"name": "recall",
-     "description": "Busca na memória de longo prazo do JARVIS (fatos passados, decisões, eventos)",
-     "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
-    {"type": "function", "function": {"name": "rag_search",
-     "description": "Busca semântica nos repositórios indexados (código, docs, papers)",
-     "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
-    {"type": "function", "function": {"name": "status",
-     "description": "Status do sistema: serviços, uptime, memória",
-     "parameters": {"type": "object", "properties": {}, "required": []}}},
-    {"type": "function", "function": {"name": "remember",
-     "description": "Salva um fato/preferência/decisão na memória de longo prazo do JARVIS. Use quando o dono disser algo que valha lembrar (preferências, nomes, decisões, eventos).",
-     "parameters": {"type": "object", "properties": {"text": {"type": "string", "description": "o fato a memorizar"}}, "required": ["text"]}}},
-    {"type": "function", "function": {"name": "web_search",
-     "description": "Busca na internet quando você não sabe algo factual e atual (notícias, preços, fatos). Use quando julgar necessário.",
-     "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
-    {"type": "function", "function": {"name": "nix_info",
-     "description": "Consulta pacotes e opções do sistema NixOS (instalação, configuração, versões)",
-     "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}},
-    {"type": "function", "function": {"name": "shell",
-     "description": "Executa um comando do sistema e retorna a saída (bloqueia comandos perigosos)",
-     "parameters": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}}},
+    {"type": "function", "function": {"name": "do",
+     "description": "Executa uma ação. Use quando precisar de dado "
+     "externo. Ações: get_time (hora), remember <texto> (salva), "
+     "recall <busca> (memória), web_search <busca> (internet), "
+     "status (sistema), shell <cmd> (terminal).",
+     "parameters": {"type": "object", "properties": {
+      "action": {"type": "string", "description": "nome da ação"},
+      "input": {"type": "string", "description": "texto/query/comando"}},
+      "required": ["action"]}}}
 ]
+# (18:35) legacy schemas removidas — o meta-tool 'do' é o ÚNICO entry point
 
 # ------------------------------------------------------- fix_stt (hunspell)
 HUNSPELL_DICT = None   # resolvido no boot (path de store muda por rebuild)
@@ -1056,16 +1011,12 @@ def main():
             for c in chunks:
                 c16 = c if isinstance(c, np.ndarray) else np.frombuffer(c, dtype=np.int16)
                 crms = int(np.sqrt((c16.astype(np.float64) ** 2).mean()))
-                if tts_playing:
-                    # (17:15) DUAL-crude (survey 2606.19453): não deleta —
-                    # voz FORTE por cima do TTS = barge-in → buffer;
-                    # no fim do play re-alimenta o asrd.
-                    if crms >= 900:
-                        barge_buf.append(c16)
-                        log(f"[{ts()}] BARGE-IN sinal (rms={crms})")
-                    continue
-                if not barge_buf:
-                    asr.feed(aec_process(c16).astype("float32") / 32768.0)
+                # (18:20) FEED SEMPRE — o AEC remove o eco na FONTE; o
+                # buffer de barge-in morava em bursts de 7s+ de delay.
+                # A janela speaking + o asrd-reset pós-play continuam
+                # como rede de segurança; o AEC é a linha de frente.
+                _processed = aec_process(c16)
+                asr.feed(_processed.astype("float32") / 32768.0)
             if barge_buf and not tts_playing and len(barge_buf) >= 2:
                 log(f"[{ts()}] BARGE-IN processado: {len(barge_buf)} chunks")
                 for bc in barge_buf:
