@@ -439,15 +439,15 @@ class Tts:
         threading.Thread(target=self._worker, daemon=True).start()
     def say(self, text):
         if text.strip():
-            self.speaking["until"] = max(self.speaking["until"],
-                                         time.monotonic() + 1.5)
             self.q.put(text.strip())
     def _worker(self):
         import tempfile
         while True:
             text = self.q.get()
             t0 = time.monotonic()
-            self.LOCK.touch()
+            # (11:40) JANELA IN-PROCESS (lock-arquivo extinto: ficava
+            # PRESO quando o worker morria → asrd famingo p/ sempre).
+            self.speaking["until"] = float("inf")
             try:
                 with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
                     wav = f.name
@@ -473,7 +473,7 @@ class Tts:
             except Exception as exc:  # noqa: BLE001
                 log(f"[{ts()}] tts ERRO: {exc}")
             finally:
-                self.LOCK.unlink(missing_ok=True)
+                self.speaking["until"] = time.monotonic() + 0.4
     def close(self):
         pass  # piper por-frase: sem daemon pra matar
 
@@ -602,8 +602,7 @@ def main():
             zeros = zeros + 1 if rms == 0 else 0
             # (06:50) STREAMING: cada chunk 0.6s vai DIRETO pro asrd (o
             # VAC/LocalAgreement cuida de contexto e bordas — sem pares).
-            tts_playing = (Path("/tmp/jarvis-tts-playing.lock").exists()
-                           or time.monotonic() < speaking["until"])
+            tts_playing = time.monotonic() < speaking["until"]
             force = False
             # (07:00) O VAC PRECISA DO SILÊNCIO PÓS-FALA pra fechar o
             # segmento — o gate RMS 700 nunca mandava os chunks quietos e
@@ -635,8 +634,7 @@ def main():
                     force = True
                     print(f"  SEGMENTO: {heard}", flush=True)
 
-            tts_on = (Path("/tmp/jarvis-tts-playing.lock").exists()
-                      or time.monotonic() < speaking["until"])
+            tts_on = time.monotonic() < speaking["until"]
             if force and tts_on:
                 # (10:25, pesquisa) falando = não decide: eco/segmento
                 # fantasma do próprio tail NÃO gera resposta.
