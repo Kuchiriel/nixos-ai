@@ -522,6 +522,7 @@ class Tts:
         import wave as _w
         code = (
             "import sys; sys.path.insert(0, '/home/nixos/models/piper/piper1')\n"
+            "import wave\n"
             "from piper import PiperVoice\n"
             f"v = PiperVoice.load('{voice_path}')\n"
             f"w = wave.open('{out_wav}', 'wb'); w.setnchannels(1); "
