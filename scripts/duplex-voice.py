@@ -572,10 +572,11 @@ def call_tool(name, args):
 
 TOOLS_SCHEMA = [
     {"type": "function", "function": {"name": "do",
-     "description": "Executa uma ação. Use quando precisar de dado "
-     "externo. Ações: get_time (hora), remember <texto> (salva), "
-     "recall <busca> (memória), web_search <busca> (internet), "
-     "status (sistema), shell <cmd> (terminal).",
+     "description": "Executa uma ação. Ações: get_time (hora), "
+     "remember <texto> (salva), recall <busca> (memória), "
+     "web_search <busca> (internet), status (sistema), "
+     "shell <cmd> (terminal), enroll_voice (cadastra a voz do dono "
+     "— grave 10s de fala), guest (desativa filtro de voz).",
      "parameters": {"type": "object", "properties": {
       "action": {"type": "string", "description": "nome da ação"},
       "input": {"type": "string", "description": "texto/query/comando"}},
