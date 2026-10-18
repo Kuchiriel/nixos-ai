@@ -49,12 +49,15 @@ def main():
                     print("[ttsd] exit", flush=True)
                     return
                 t0 = time.monotonic()
+                Path("/tmp/jarvis-tts-playing.lock").touch()
                 try:
                     out = speak(text, play=True, base="kokoro")
                     print(f"[ttsd] {time.monotonic()-t0:.1f}s: {text[:44]!r}",
                           flush=True)
                 except Exception as exc:  # noqa: BLE001
                     print(f"[ttsd] ERRO: {exc}", flush=True)
+                finally:
+                    Path("/tmp/jarvis-tts-playing.lock").unlink(missing_ok=True)
 
 if __name__ == "__main__":
     main()

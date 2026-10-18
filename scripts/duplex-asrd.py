@@ -1,42 +1,40 @@
 #!/usr/bin/env python3
-"""duplex-asrd.py — daemon ASR do modo duplex (18/10, 03:15).
+"""duplex-asrd.py — daemon ASR STREAMING do duplex (v2, 18/10 ~06:40).
 
-Roda no VENV DO KARAAK (ctranslate2 30× mais rápido que o do env jarvis)
-como SUBPROCESSO stdio (Popen — o mesmo contexto standalone onde tudo
-funciona; o multiprocessing.spawn envenenava o VAD do faster-whisper:
-0 timestamps → sem fala → alucinação → filtros derrubavam → surdez).
+ANTES: janelas fixas 1.2s + transcribe batch = cortava palavras nas
+bordas + 2-7s de latência + brigava por CPU com o LLM.
+AGORA: Whisper-Streaming (ufal, LocalAgreement-2 + VAC, arXiv 2307.14743)
+— chunks de 0.6s alimentam um buffer CONTÍNUO; o process_iter publica
+prefixos estáveis incrementalmente; o VAC detecta fim de segmento.
+Sem corte de palavras, latência ~0.6-1.5s, contexto que cresce.
 
-Protocolo (JSON lines no stdin, resposta JSON line no stdout):
-  request : {"audio_b64": "<float32 PCM little-endian base64>"}
-  resposta: {"text": "...", "ms": 123.4, "lp": -0.42, "ns": 0.12}
-  "audio_b64": "" == null (sem áudio) ou o JSON vazio = ignore a linha
-Filtros anti-alucinação AQUI (avg_logprob/no_speech), VAD ON (neste
-contexto ele funciona — comprovado offline dezenas de vezes).
+Protocolo stdio (igual ao cliente duplex-voice.py já fala):
+  req: {"audio_b64": "<float32 PCM 16k>"} (um chunk de 0.6s por linha)
+  resp: {"text": "<texto novo estável>", "ms": X, "final": bool}
+Voz karaok venv (ctranslate2 30× mais rápido que o do env jarvis).
 """
 import base64
 import json
 import sys
 import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
 
 import numpy as np
-from faster_whisper import WhisperModel
 
 SR = 16000
-VAD_PARAMS = dict(threshold=0.45, min_speech_duration_ms=200,
-                  min_silence_duration_ms=300, speech_pad_ms=160)
 
 def main():
-    model = WhisperModel("small", device="cpu", compute_type="int8",
-                         download_root="/home/nixos/.local/share/jarvis/voice",
-                         cpu_threads=3)
-    # warmup real (fala sintética VAD-passável + generator consumido)
-    t = np.arange(SR, dtype="float32") / SR
-    am = 0.6 * (1 + np.sin(2 * np.pi * 4.0 * t))
-    carrier = np.sin(2 * np.pi * 220.0 * t)
-    for _ in model.transcribe(am * carrier, beam_size=1, language="pt",
-                              vad_filter=True, vad_parameters=VAD_PARAMS):
-        pass
-    print(json.dumps({"text": "", "ms": 0, "lp": 0, "ns": 0, "ready": True}),
+    from whisper_streaming import FasterWhisperASR, VACOnlineASRProcessor
+
+    asr = FasterWhisperASR(modelsize="small", lan="pt",
+                           cache_dir="/home/nixos/.local/share/jarvis/voice",
+                           model_dir=None)
+    online = VACOnlineASRProcessor(0.6, asr, tokenizer=None,
+                                   logfile=sys.stderr,
+                                   buffer_trimming=("segment", 15))
+    print(json.dumps({"text": "", "ms": 0, "final": False, "ready": True}),
           flush=True)
 
     for line in sys.stdin:
@@ -52,48 +50,22 @@ def main():
         except Exception:
             continue
         t0 = time.monotonic()
-        txt, lp, ns = "", 0.0, 1.0
+        txt = ""
         try:
-            segs, _ = model.transcribe(pcm, beam_size=1, language="pt",
-                                       condition_on_previous_text=False,
-                                       vad_filter=True,
-                                       vad_parameters=VAD_PARAMS)
-            good, lp_sum, ch_sum = [], 0.0, 0
-            raw_txt, raw_lp, raw_ns = "", 0.0, 1.0
-            for seg in segs:
-                slp = float(getattr(seg, "avg_logprob", -1.0))
-                sns = float(getattr(seg, "no_speech_prob", 1.0))
-                stx = (seg.text or "").strip()
-                if stx and not raw_txt:
-                    raw_txt, raw_lp, raw_ns = stx, slp, sns
-                # (05:15) NS é O guardião (dados da noite: fala real ns
-                # 0.37-0.45; alucinação 'Legendas' ns 0.878). LP em beam1
-                # int8 com áudio de alto-falante anda -1.0 a -1.5 SEM ser
-                # alucinação ('como uma piada...' lp=-1.375 ns=0.37) —
-                # threshold -0.60 matava fala real. LP vira só sanity.
-                if slp < -2.5 or sns > 0.7:
-                    continue
-                good.append(seg.text)
-                lp_sum += slp * len(seg.text); ch_sum += len(seg.text)
-            if good and ch_sum and lp_sum / ch_sum < -2.5:
-                good = []
-            txt = " ".join(good).strip()
-            if good:
-                lp, ns = lp_sum / max(ch_sum, 1), 0.0  # ns médio=0: aceito
-            if not txt and raw_txt:
-                # telemetria: o filtro derrubou algo — o log do cliente
-                # mostra o quê (raw/lp/ns) sem acordar ninguém.
-                print(json.dumps({"text": "", "ms": (time.monotonic()-t0)*1000,
-                                  "raw": raw_txt, "lp": round(raw_lp, 3),
-                                  "ns": round(raw_ns, 3), "filtered": True}),
-                      flush=True)
-                continue
-        except Exception as exc:  # noqa: BLE001
-            print(json.dumps({"text": "", "ms": 0, "lp": 0, "ns": 1,
+            online.insert_audio_chunk(pcm)
+            out = online.process_iter()
+            # (medido 18/10) VACOnlineASRProcessor.process_iter →
+            # (beg_ts, end_ts, texto_novo) quando fecha um segmento,
+            # (None, None, '') entre segmentos. O VAC fecha NA PAUSA do
+            # usuário = o gatilho de resposta nasce pronto.
+            if isinstance(out, tuple) and len(out) == 3 and out[2]:
+                txt = str(out[2]).strip()
+        except Exception as exc:  # noqa: BLE101
+            print(json.dumps({"text": "", "ms": 0, "final": False,
                               "err": str(exc)[:120]}), flush=True)
             continue
         print(json.dumps({"text": txt, "ms": (time.monotonic() - t0) * 1000,
-                          "lp": round(lp, 3), "ns": round(ns, 3)}), flush=True)
+                          "final": False}), flush=True)
 
 if __name__ == "__main__":
     main()

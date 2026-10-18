@@ -48,6 +48,7 @@ LISTEN_P = 0.3
 SYSTEM = ("You are a voice assistant in a live phone call; both sides can talk at the same time. Every "
           f"{TICK:g} seconds you get what the microphone heard in that moment, as a streaming transcript fragment, or "
           f"{NOVOICE}. You reply with up to three new words to say next, or {LISTEN} to add nothing.")
+LISTEN_TOKEN_ID = None   # id de '<listen>' no server alvo
 SR = 16000
 CHUNK_BYTES = int(SR * TICK * 2)
 # Digital mic (17/10): o Stereo Mic é MORTO (rms 0); o Digital é vivo.
@@ -68,16 +69,56 @@ def http(url, payload=None, timeout=180):
                                   headers={"Content-Type": "application/json"})
     return json.load(urllib.request.urlopen(req, timeout=timeout))
 
-def tick_once(base, history, heard):
+def build_prompt(history, heard):
     prompt = f"<|im_start|>system\n{SYSTEM}<|im_end|>\n"
     for role, content in history + [("user", heard)]:
         prompt += f"<|im_start|>{role}\n{content}<|im_end|>\n"
-    body = {"prompt": prompt + "<|im_start|>assistant\n", "n_predict": 64,
+    return prompt + "<|im_start|>assistant\n"
+
+def tick_once(base, history, heard, force_speak=False):
+    body = {"prompt": build_prompt(history, heard), "n_predict": 64,
             "temperature": 0, "stop": ["<|im_end|>"], "cache_prompt": True,
             "n_probs": 8}
-    j = http(base + "/completion", body)
+    if force_speak:
+        # (07:20, direção do dono) /v1/chat/completions: o server 8092
+        # roda com --reasoning off (models.nix) — no chat endpoint ELE
+        # aplica o template e strippa o thinking; o raw /completion
+        # contornava isso e pagava o think. Gate "Jarvis": só responde
+        # a quem chama (gente na sala!).
+        if "jarvis" not in heard.lower() and "jarvis" not in " ".join(
+                h[1] for h in history[-6:]).lower():
+            log(f"[{ts()}] segmento sem 'Jarvis' — ignorado: {heard[:40]!r}")
+            return LISTEN, 0.0
+        j = http(base + "/v1/chat/completions", {
+            "messages": [
+                {"role": "system", "content": "Você é o JARVIS, assistente"
+                 " de voz. Responda em português do Brasil, curto e direto,"
+                 " no máximo uma frase."},
+                {"role": "user", "content": heard},
+            ],
+            "max_tokens": 80, "temperature": 0.4,
+        })
+        out = (j.get("choices") or [{}])[0].get("message", {}).get("content", "")
+        out = str(out).strip()
+        log(f"[{ts()}] chat resposta: {out[:80]!r}")
+        return (out or "Pode repetir?"), 0.0
+    if LISTEN_TOKEN_ID:
+        pass  # ticks normais seguem o protocolo micro-turn abaixo
+    try:
+        j = http(base + "/completion", body)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 400 and len(history) > 20:
+            # (18/10) histórico append-only estourava o ctx 8192 → 400
+            # → CRASH → finally devolvia o wakeword 'do nada'.
+            del history[:len(history) - 20]
+            body["prompt"] = build_prompt(history, heard)
+            j = http(base + "/completion", body)
+        else:
+            raise
     out = j["content"].strip()
-    top = j["completion_probabilities"][0]["top_logprobs"]
+    probs = (j.get("completion_probabilities") or [{}])[0] if isinstance(
+        j.get("completion_probabilities"), list) else {}
+    top = probs.get("top_logprobs") or []
     listen_ids = [p["id"] for p in top if p["token"].startswith("<")]
     p_listen = sum(math.exp(p["logprob"]) for p in top if p["token"].startswith("<"))
     if out.startswith("<") and p_listen < LISTEN_P and listen_ids:
@@ -166,70 +207,46 @@ class Asr:
 
 # ---------------------------------------------------------------- TTS
 class Tts:
-    """Cliente do daemon duplex-ttsd (18/10, 02:45): o kokoro só existe
-    no env jarvis, mas o ctranslate2 DELE é 30× mais lento — então o ASR
-    roda neste processo (karaok venv) e o TTS num daemon separado no env
-    jarvis, kokoro carregado UMA vez. FIFO JSON; o daemon morre com o
-    cliente (__exit)."""
-    FIFO = "/tmp/jarvis-duplex-tts.fifo"
+    """PIPER (18/10 06h10): kokoro = 1.7-2s QUENTE por frase e o dono
+    ouvia a resposta '10 anos depois'. Piper = TTS realtime de CPU
+    (fator 0.033 — 0.177s de inferência pra 5.3s de áudio, medido),
+    voz pt_BR-faber-medium, binário estático ~/models/piper/bin/piper.
+    Lock-file durante synth+play = eco-mute por estado real."""
+    LOCK = Path("/tmp/jarvis-tts-playing.lock")
+    VOICE = "/home/nixos/models/piper/pt_BR-faber-medium.onnx"
     def __init__(self, speaking):
         self.speaking = speaking
         self.q = queue.Queue()
         self.last_ms = 0.0
-        self.daemon = None
         threading.Thread(target=self._worker, daemon=True).start()
-    def _ensure_daemon(self):
-        import subprocess as sp
-        # já vivo? (fifo aberto por outro processo + processo existe)
-        if self.daemon and self.daemon.poll() is None:
-            return
-        w = "/run/current-system/sw/bin/jarvis"
-        boot = Path(__file__).resolve()
-        envbin = Path(sp.run(["readlink", "-f", w], capture_output=True,
-                             text=True).stdout.strip()).parent.parent / "bin"
-        # python do env jarvis = shebang do bootstrap
-        bootf = envbin / "..jarvis-wrapped-wrapped"
-        pybin = bootf.read_text().splitlines()[0][2:]
-        sitedirs = sp.run(["bash", "-c",
-                           f"grep -oE \"'/nix/store/[^']*site-packages[^']*'\" {bootf}"],
-                          capture_output=True, text=True).stdout
-        import shlex
-        spath = ":".join(sorted(set(x.strip("'") for x in sitedirs.split())))
-        self.daemon = sp.Popen(
-            ["env", f"PYTHONPATH={spath}", pybin,
-             str(Path(__file__).with_name("duplex-ttsd.py"))],
-            stdout=sp.DEVNULL, stderr=sp.DEVNULL)
-        time.sleep(0.2)
     def say(self, text):
         if text.strip():
-            # eco: o mic ouve o PRÓPRIO TTS e o modelo responde a si
-            # ("Okay" em loop, 18/10). Janela = synth+play estimado
-            # (chars×90ms) + 500ms de cauda — o loop suprime feed nela.
-            import re as _re
-            n = len(_re.sub(r"\W", "", text))
             self.speaking["until"] = max(self.speaking["until"],
-                                         time.monotonic() + n * 0.09 + 0.5)
+                                         time.monotonic() + 1.5)
             self.q.put(text.strip())
     def _worker(self):
+        import tempfile
         while True:
             text = self.q.get()
             t0 = time.monotonic()
+            self.LOCK.touch()
             try:
-                self._ensure_daemon()
-                with open(self.FIFO, "w") as f:
-                    f.write(json.dumps({"text": text}) + "\n")
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                    wav = f.name
+                req = json.dumps({"text": text, "output_file": wav})
+                r = subprocess.run(
+                    ["/home/nixos/models/piper/bin/piper", "-m", self.VOICE],
+                    input=req, capture_output=True, text=True, timeout=60)
+                if r.returncode == 0 and Path(wav).exists():
+                    subprocess.run(["aplay", "-q", wav], timeout=60)
                 self.last_ms = (time.monotonic() - t0) * 1000
+                Path(wav).unlink(missing_ok=True)
             except Exception as exc:  # noqa: BLE001
                 log(f"[{ts()}] tts ERRO: {exc}")
+            finally:
+                self.LOCK.unlink(missing_ok=True)
     def close(self):
-        try:
-            with open(self.FIFO, "w") as f:
-                f.write(json.dumps({"text": "__exit__"}) + "\n")
-            if self.daemon:
-                self.daemon.wait(timeout=5)
-        except Exception:
-            if self.daemon:
-                self.daemon.kill()
+        pass  # piper por-frase: sem daemon pra matar
 
 # ---------------------------------------------------------------- main
 def main():
@@ -255,9 +272,36 @@ def main():
     subprocess.run(["systemctl", "--user", "stop", "jarvis-wakeword.service"],
                    capture_output=True)
     log(f"[{ts()}] wakeword pausado (flag pro heal) — mic aberto antes, node vivo")
-    log(f"[{ts()}] acordando (LoRA apply)…")
-    http(base + "/lora-adapters", [{"id": 0, "scale": 1.0}], timeout=600)
-    log(f"[{ts()}] MODO DUPLEX. Fala com ele. Ctrl-C = dormir.\n")
+    # (18/10 06:20) PIVÔ do dono: duplex VOZ no 4B-MTP (:8092, 70 t/s —
+    # ticks ~100ms = tempo real de verdade) em vez do 35B (tick 0.4-12s
+    # sob contenção). O MicroTurn-LoRA é do 35B (camadas 36-39, não casa
+    # no 4B): o protocolo roda NO BASE com a regra do ban client-side
+    # ("a prompt alone gets part of this behaviour" — card). LoRA vira
+    # OPCIONAL: se o server tem adapter, aplica; senão segue no base.
+    adapters = []
+    try:
+        adapters = http(base + "/lora-adapters") or []
+    except Exception:
+        pass
+    # id do '<listen>' neste server (ban p/ resposta forçada; b9190 não
+    # expõe probs — o id direto funciona em qualquer build)
+    global LISTEN_TOKEN_ID
+    try:
+        toks = http(base + "/tokenize", {"content": "<listen>"})
+        ids = toks.get("tokens") or toks.get("tokens_full") or []
+        if toks.get("tokens_full"):
+            ids = [t["id"] for t in toks["tokens_full"]]
+        LISTEN_TOKEN_ID = ids[0] if ids else None
+    except Exception:
+        LISTEN_TOKEN_ID = None
+    if adapters:
+        log(f"[{ts()}] acordando: LoRA {adapters[0].get('path','?')[-40:]} apply…")
+        http(base + "/lora-adapters",
+             [{"id": a["id"], "scale": a.get("scale", 1.0)} for a in adapters],
+             timeout=600)
+        log(f"[{ts()}] MODO DUPLEX (com LoRA). Fala com ele. Ctrl-C = dormir.")
+    else:
+        log(f"[{ts()}] MODO DUPLEX no BASE (sem LoRA — 4B-MTP). Fala! Ctrl-C = dormir.")
 
     speaking = {"until": 0.0}   # self-mute anti-eco (18/10 ~06h)
     asr = Asr(args.stt_model, args.lang)
@@ -312,29 +356,39 @@ def main():
             last16 = np.frombuffer(chunks[-1], dtype=np.int16) if isinstance(chunks[-1], (bytes, bytearray)) else chunks[-1]
             rms = int(np.sqrt((np.asarray(last16, dtype=np.int16).astype(np.float64) ** 2).mean()))
             zeros = zeros + 1 if rms == 0 else 0
-            # pares CONSECUTIVOS:
-            i = 0
-            while i + 1 < len(chunks):
-                a16 = chunks[i] if isinstance(chunks[i], np.ndarray) else np.frombuffer(chunks[i], dtype=np.int16)
-                b16 = chunks[i+1] if isinstance(chunks[i+1], np.ndarray) else np.frombuffer(chunks[i+1], dtype=np.int16)
-                pair = np.concatenate([a16, b16]).astype("float32") / 32768.0
-                prms = int(np.sqrt((pair ** 2).mean()) * 32768)
-                if prms >= args.rms and time.monotonic() < speaking["until"]:
-                    pass  # própria voz tocando: eco suprimido
-                elif prms >= args.rms:
-                    asr.feed(pair)
-                i += 2
-            prev_pcm = chunks[-1] if (len(chunks) - i == 1) else None
+            # (06:50) STREAMING: cada chunk 0.6s vai DIRETO pro asrd (o
+            # VAC/LocalAgreement cuida de contexto e bordas — sem pares).
+            tts_playing = (Path("/tmp/jarvis-tts-playing.lock").exists()
+                           or time.monotonic() < speaking["until"])
+            force = False
+            # (07:00) O VAC PRECISA DO SILÊNCIO PÓS-FALA pra fechar o
+            # segmento — o gate RMS 700 nunca mandava os chunks quietos e
+            # o segmento ficava aberto pra sempre ('only VAD voice').
+            # O VAC faz a própria detecção de fala: feed INCONDICIONAL
+            # (só o eco-mute segura). Gate vira só telemetria/eco.
+            for c in chunks:
+                c16 = c if isinstance(c, np.ndarray) else np.frombuffer(c, dtype=np.int16)
+                crms = int(np.sqrt((c16.astype(np.float64) ** 2).mean()))
+                if tts_playing:
+                    continue  # própria voz tocando: eco fora
+                asr.feed(c16.astype("float32") / 32768.0)
             r = asr.take()
-            if isinstance(r, dict):
-                if r.get("text"):
-                    heard = r["text"]
-                elif r.get("filtered"):
-                    log(f"[{ts()}] asrd FILTRO: raw={r.get('raw','')!r} "
-                        f"lp={r.get('lp')} ns={r.get('ns')}")
+            if isinstance(r, dict) and r.get("text"):
+                heard = r["text"]
+                # segmento COMPLETO do VAC chegou = pausa do usuário → o
+                # modelo RESPONDE (ban do <listen>): conversa de verdade.
+                force = True
+                print(f"  SEGMENTO: {heard}", flush=True)
 
-            said, _p = tick_once(base, history, heard)
+            said, _p = tick_once(base, history, heard, force_speak=force)
+            if not force and said != LISTEN:
+                # (07:15) ticks micro-turn SEM força (4B base, sem LoRA,
+                # b9190 sem probs) babblam template ('assistant') — silêncio:
+                # só a resposta do chat endpoint fala.
+                said = LISTEN
             history += [("user", heard), ("assistant", said)]
+            if len(history) > 60:   # cap: 30 pares; ctx nunca estoura
+                del history[:len(history) - 60]
             llm_ms = (time.monotonic() - t0) * 1000
             tick_n += 1
 
