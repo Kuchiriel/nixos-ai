@@ -598,8 +598,7 @@ class Tts:
                 if okk and Path(wav).exists():
                     subprocess.run(["aplay", "-q", wav], timeout=60)
                 else:
-                    log(f"[{ts()}] tts FALHOU: rc={r.returncode} "
-                        f"stderr={(r.stderr or '')[-120:]!r}")
+                    log(f"[{ts()}] tts FALHOU: synth={okk} wav={Path(wav).exists()}")
                 self.last_ms = (time.monotonic() - t0) * 1000
                 Path(wav).unlink(missing_ok=True)
             except Exception as exc:  # noqa: BLE001
