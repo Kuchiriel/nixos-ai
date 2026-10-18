@@ -179,6 +179,7 @@ def tick_once(base, history, heard, force_speak=False):
         # primeira). Até 2 rounds: chamada → executa → resultado → resposta.
         body = {"messages": msgs, "max_tokens": 120, "temperature": 0.4,
                 "tools": TOOLS_SCHEMA}
+        filler_spoken = False
         for _round in range(3):
             if _round == 2:
                 body.pop("tools", None)   # última: SEM tools = resposta final
@@ -189,6 +190,12 @@ def tick_once(base, history, heard, force_speak=False):
                 out = str(msg.get("content", "")).strip()
                 log(f"[{ts()}] chat resposta: {out[:80]!r}")
                 return (out or ""), 0.0
+            # (14:50, paper 2609.19334) FILLER imediato no 1º tool call:
+            # o usuário ouve 'consultando' em <1s enquanto a tool roda.
+            if not filler_spoken:
+                tts.say("Consultando agora.")
+                filler_spoken = True
+                body.pop("stream", None)
             msgs.append(msg)
             for tc in tcs:
                 fn = tc.get("function", {})
@@ -203,10 +210,13 @@ def tick_once(base, history, heard, force_speak=False):
                 msgs.append({"role": "tool",
                              "tool_call_id": tc.get("id", "?"),
                              "content": str(result)[:800]})
-        # rounds esgotados: pega o content que houver (sem 'Pronto.')
-        out = str(msg.get("content", "")).strip()
-        log(f"[{ts()}] chat resposta (fim rounds): {out[:80]!r}")
-        return out, 0.0
+        # round final SEM tools e COM streaming: frases saem pro piper
+        # na hora (primeiro áudio ~TTFT+0.4s, não a resposta inteira)
+        body.pop("tools", None)
+        body["stream"] = True
+        out = stream_chat(base, body, tts)
+        log(f"[{ts()}] chat (stream): {out[:80]!r}")
+        return (out or ""), 0.0
     if LISTEN_TOKEN_ID:
         pass  # ticks normais seguem o protocolo micro-turn abaixo
     try:
@@ -258,6 +268,80 @@ def mic_reader(mic, out_q):
             except queue.Full:
                 pass
 
+
+# ------------------------------------------------- sentence buffer
+import re as _re
+
+_SENT_END = _re.compile(r"[.!?…]\s")
+_ABBREV = ("dr.", "mr.", "mrs.", "sr.", "sra.", "prof.", "etc.", "pág.",
+           "nº", "art.", "sec.", "ex.")
+
+class SentenceBuffer:
+    """Streaming LLM→TTS (papers 2508.04721+2603.05413): frases
+    completas saem ENQUANTO o LLM ainda gera — o piper sintetiza a 1ª
+    sentença ~0.4s após o TTFT em vez de esperar a resposta inteira."""
+    def __init__(self, min_chars=10):
+        self.buf = ""
+        self.min_chars = min_chars
+    def feed(self, chunk):
+        self.buf += chunk
+        out = []
+        while True:
+            m = _SENT_END.search(self.buf)
+            if not m:
+                break
+            sent = self.buf[:m.end()].strip()
+            low = sent.lower()
+            if any(low.endswith(a) for a in _ABBREV) and len(sent) < self.min_chars * 3:
+                break
+            if len(sent) >= self.min_chars or m.end() >= len(self.buf) - 2:
+                out.append(sent)
+                self.buf = self.buf[m.end():]
+            else:
+                break
+        return out
+    def flush(self):
+        r = self.buf.strip()
+        self.buf = ""
+        return r if len(r) >= 3 else ""
+
+def stream_chat(base, body, tts, on_done=None):
+    """POST stream=True → SSE → frases pro TTS na hora. Retorna o texto
+    completo (pro histórico)."""
+    import urllib.error
+    full = []
+    req = urllib.request.Request(base + "/v1/chat/completions",
+        json.dumps({**body, "stream": True}).encode(),
+        {"Content-Type": "application/json"})
+    sb = SentenceBuffer()
+    try:
+        resp = urllib.request.urlopen(req, timeout=120)
+        for raw in resp:
+            line = raw.decode("utf-8", "ignore").strip()
+            if not line.startswith("data: "):
+                continue
+            data = line[6:]
+            if data == "[DONE]":
+                break
+            try:
+                j = json.loads(data)
+            except Exception:
+                continue
+            delta = (j.get("choices") or [{}])[0].get("delta", {})
+            tok = delta.get("content") or ""
+            if tok:
+                full.append(tok)
+                for sent in sb.feed(tok):
+                    tts.say(sent)
+        rest = sb.flush()
+        if rest:
+            tts.say(rest)
+    except Exception as exc:  # noqa: BLE001
+        log(f"[{ts()}] stream ERRO: {exc}")
+        rest = sb.flush()
+        if rest:
+            tts.say(rest)
+    return "".join(full)
 
 # ---------------------------------------------------------------- tools
 import subprocess as _sp
