@@ -367,7 +367,11 @@ in rec {
       modelFile = "/home/nixos/models/gemma-3-4b-it-Q4_K_M.gguf";
       threads = 6; ctxSize = 32768; batchSize = 512; ubatch = 512;
       gpuLayers = 99; moeFlags = "";
-      fa = true; ctk = "q4_0"; ctv = "q4_0";
+      # (19/10) fa off: com fa ON o prefill do gemma-3 (sliding window)
+      # degrada p/ ~17ms/tok uniforme (59 t/s no PROMPT = decodificação
+      # sequencial; medido: 3.4s p/ 200 tok). Sem fa: prefill batch
+      # normal — gemma era 0.29s/item no benchmark i18n (canary).
+      fa = false; ctk = "q4_0"; ctv = "q4_0";
       # Papel candidato: prosa/chat geral — NÃO medido ainda (bench cobre
       # bonsai+qwen; gemma entra na próxima rodada).
       extraArgs = [ "--parallel" "1" "--jinja" ];
