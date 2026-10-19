@@ -36,7 +36,7 @@ def main():
     # silero via torch hub (cacheado em ~/.cache/torch — o VAC baixou 1×)
     import torch
     model, utils = torch.hub.load("snakers4/silero-vad", "silero_vad")
-    vad = FixedVADIterator(model, threshold=0.5, min_silence_duration_ms=650,
+    vad = FixedVADIterator(model, threshold=0.5, min_silence_duration_ms=400,
                            speech_pad_ms=150)
     print(json.dumps({"text": "", "ms": 0, "ready": True}), flush=True)
 
@@ -80,7 +80,7 @@ def main():
         ring = np.zeros(0, dtype="float32")
         started = None
         vad = FixedVADIterator(model, threshold=0.5,
-                               min_silence_duration_ms=650,
+                               min_silence_duration_ms=400,
                                speech_pad_ms=150)
 
     # (19:30) SPEAKER ENGINE v2: multi-voz (papers: VAD→embed→cluster)

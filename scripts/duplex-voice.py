@@ -936,7 +936,7 @@ class Tts:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=8085)
+    ap.add_argument("--port", type=int, default=8092)
     ap.add_argument("--lang", default="pt")
     ap.add_argument("--stt-model", default="small")
     ap.add_argument("--rms", type=int, default=700,
@@ -1163,14 +1163,21 @@ def main():
                         # termina em ? ! = completo → 500ms
                         # termina em , e mas → incompleto → 1.5s
                         # default → 1.2s
+                        # (20:50, paper Next-Turn 2606.18094) SEMANTIC
+                        # EoT: '?' = pergunta COMPLETA → 200ms (o tempo
+                        # de reação humano é 200-600ms; 200 é o alvo
+                        # dos sistemas produção); '.' e '!' = 400ms;
+                        # conjunção = 1.5s; default 800ms
                         _last = pending[-1].rstrip()
-                        if _last.endswith(("?", "!", ".")):
-                            _wait = 0.5
+                        if _last.endswith("?"):
+                            _wait = 0.2   # pergunta = fogo imediato
+                        elif _last.endswith(("!", ".")):
+                            _wait = 0.4
                         elif _last.endswith((",", " e", " mas", " ou",
                                                  " que", " pra", " para")):
                             _wait = 1.5
                         else:
-                            _wait = 1.2
+                            _wait = 0.8
                         merge_deadline = time.monotonic() + _wait
                         force = False
             elif pending and not force and heard != NOVOICE:
