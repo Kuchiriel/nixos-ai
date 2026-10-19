@@ -371,9 +371,11 @@ in rec {
       # normal — gemma era 0.29s/item no benchmark i18n (canary).
       # ctx 8192 (era 32768): buffer não-FA escala com n_ctx; 8192 cabe
       # folgado (uso real: prompts de tradução <200 tok).
+      # KV f16 (era q4_0): V cache quantizado EXIGE flash-attn (log do
+      # server) — com fa off tem que ser f16.
       threads = 6; ctxSize = 8192; batchSize = 256; ubatch = 256;
       gpuLayers = 99; moeFlags = "";
-      fa = false; ctk = "q4_0"; ctv = "q4_0";
+      fa = false; ctk = "f16"; ctv = "f16";
       # Papel candidato: prosa/chat geral — NÃO medido ainda (bench cobre
       # bonsai+qwen; gemma entra na próxima rodada).
       extraArgs = [ "--parallel" "1" "--jinja" ];
