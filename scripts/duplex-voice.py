@@ -985,7 +985,7 @@ def main():
     # (20:30) SEM LoRA: o 35B puro é o cérebro (tools + qualidade); o
     # MicroTurn-LoRA é do protocolo 3-palavras (fase 2: real-duplex feel).
     # O smart merge faz o timing; o 35B responde com o que sabe de melhor.
-    log(f"[{ts()}] MODO DUPLEX no 35B (sem LoRA). Fala! Ctrl-C = dormir.")
+    log(f"[{ts()}] MODO DUPLEX 4B-MTP. Fala! Ctrl-C = dormir.")
 
     global HUNSPELL_DICT
     HUNSPELL_DICT = _resolve_dict()
