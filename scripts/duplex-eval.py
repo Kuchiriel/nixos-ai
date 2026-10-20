@@ -283,21 +283,20 @@ def e2e_playback(args) -> dict:
             dcls, lcls = wait_for("classify", 12)
             ok_sil = lcls and ("SILENCE" in lcls or "silêncio" in lcls or "backchannel" in lcls)
             r["verdict"] = "ok-silenced" if ok_sil else ("classified" if lcls else "no-segment")
-        else:  # BARGE — fase 3: barge DURANTE a resposta (senão não há TTS p/ matar).
-               # sequência: pergunta longa → espera TTS( → barge por cima → kill.
-            qidx, qu_ = by["RESPOND"][11]  # "Jarvis, me conta uma piada." (resposta longa)
-            subprocess.run([player, os.path.join(WAVS, f"utt_{qidx:03d}.wav")],
-                           check=False)
-            dtts, ltts = wait_for("TTS(", 20)
+        else:  # BARGE fase-3 v2: pergunta LONGA → resposta longa → barge DENTRO
+               # da fala (a) OC: TTS curto morria antes do classify chegar.
+            qwav = os.path.join(WAVS, "utt_124_long.wav")
+            subprocess.run([player, qwav], check=False)
+            dtts, ltts = wait_for("TTS(", 30)
             if not dtts:
                 r["verdict"] = "no-response-to-barge-onto"
             else:
-                time.sleep(1.2)          # TTS audível no meio
+                time.sleep(2.5)          # solidemente DENTRO da fala longa
                 t0 = time.monotonic()
                 subprocess.run([player, wav], check=False)
-                dkill, lkill = wait_for("TTS morto", 10)
-                r["barge_reaction_s"] = round(time.monotonic() - t0 - 1.2, 2)
-                r["kill_line"] = lkill.strip()[:80] if lkill else None
+                dkill, lkill = wait_for("TTS morto", 15)
+                r["barge_reaction_s"] = round(time.monotonic() - t0 - 2.5, 2)
+                r["kill_line"] = lkill.strip()[:90] if lkill else None
                 r["verdict"] = "tts-killed" if dkill else "barge-not-kill"
             r["classify_line"] = None
         report["scenarios"].append(r)
