@@ -226,14 +226,18 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
         for _round in range(3):
             if _round == 2:
                 body.pop("tools", None)   # última: SEM tools = resposta final
-            j = http(base + "/v1/chat/completions", body)
-            msg = (j.get("choices") or [{}])[0].get("message", {})
-            tcs = msg.get("tool_calls") or []
+            # (13:00) STREAM em TODA volta: frases saem pro piper na hora;
+            # tool_calls chegam como deltas acumulados. O return antigo
+            # do round 0 (resposta completa não-streamed) era o custo
+            # dominante do TimeSpeak 3.4s medido no e2e.
+            out, tcs = stream_chat(base, body, tts)
+            tcs = tcs or []
             if not tcs:
-                out = str(msg.get("content", "")).strip()
+                if not out:
+                    continue   # stream vazio estranho: mais uma tentativa
                 # (17:00) consult-speak: 'preciso consultar/vou verificar'
                 # sem ter chamado → 1 retry com nudge pra CHAMAR a tool.
-                if (_round == 0 and out and any(
+                if (_round == 0 and any(
                         k in out.lower() for k in
                         ("preciso consultar", "vou verificar", "deixa eu",
                          "preciso verificar", "preciso buscar"))):
@@ -244,14 +248,10 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
                                  "responda com o resultado."})
                     body["messages"] = msgs
                     continue
-                log(f"[{ts()}] chat resposta: {out[:80]!r}")
+                log(f"[{ts()}] chat resposta (stream): {out[:80]!r}")
                 return (out or ""), 0.0
-            # (18:00, dono: 'tira esse hardcoded') SEM filler: ele ecoava
-            # no mic, virava pergunta nova e o get_time entrava em loop.
-            if not filler_spoken:
-                filler_spoken = True
-                body.pop("stream", None)
-            msgs.append(msg)
+            msgs.append({"role": "assistant", "content": out or "",
+                         "tool_calls": tcs, "function_call": None})
             for tc in tcs:
                 fn = tc.get("function", {})
                 name = fn.get("name", "?")
@@ -265,13 +265,10 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
                 msgs.append({"role": "tool",
                              "tool_call_id": tc.get("id", "?"),
                              "content": str(result)[:800]})
-        # round final SEM tools e COM streaming: frases saem pro piper
-        # na hora (primeiro áudio ~TTFT+0.4s, não a resposta inteira)
-        body.pop("tools", None)
-        body["stream"] = True
-        out = stream_chat(base, body, tts)
-        log(f"[{ts()}] chat (stream): {out[:80]!r}")
-        return (out or ""), 0.0
+        # (13:00) o bloco antigo 'round final SEM tools e COM streaming'
+        # morreu: TODOS os rounds já streamam agora. Loop exaurido sem
+        # return = 3 rounds de tool_call seguidos (não deveria) = calado.
+        return "", 0.0
     if LISTEN_TOKEN_ID:
         pass  # ticks normais seguem o protocolo micro-turn abaixo
     try:
@@ -537,9 +534,16 @@ class SentenceBuffer:
 
 def stream_chat(base, body, tts, on_done=None):
     """POST stream=True → SSE → frases pro TTS na hora. Retorna o texto
-    completo (pro histórico)."""
+    completo (pro histórico) + tool_calls acumulados (se houver).
+
+    (13:00, e2e HB: TimeSpeak 3.4s) VERSÃO ROUND: o return antigo do
+    round 0 entregava a resposta COMPLETA não-streamed antes da 1a
+    sílaba (streaming = código morto). Agora TODA resposta flui: content
+    tokens → SentenceBuffer → tts.say; tool_call deltas acumulados →
+    caller executa. TTFT ~600ms + synth 0.4s = alvo 1.2s do design."""
     import urllib.error
     full = []
+    tc_acc = {}    # index → {"id", "name", "args"}
     req = urllib.request.Request(base + "/v1/chat/completions",
         json.dumps({**body, "stream": True}).encode(),
         {"Content-Type": "application/json"})
@@ -563,6 +567,15 @@ def stream_chat(base, body, tts, on_done=None):
                 full.append(tok)
                 for sent in sb.feed(tok):
                     tts.say(sent)
+            for tcd in delta.get("tool_calls") or []:
+                i = tcd.get("index", 0)
+                ent = tc_acc.setdefault(i, {"id": tcd.get("id") or "",
+                                            "name": "", "args": ""})
+                fn = tcd.get("function", {})
+                if fn.get("name"):
+                    ent["name"] += fn["name"]
+                if fn.get("arguments"):
+                    ent["args"] += fn["arguments"]
         rest = sb.flush()
         if rest:
             tts.say(rest)
@@ -571,7 +584,13 @@ def stream_chat(base, body, tts, on_done=None):
         rest = sb.flush()
         if rest:
             tts.say(rest)
-    return "".join(full)
+    tool_calls = None
+    if tc_acc:
+        tool_calls = [{"id": v["id"] or f"call_{i}",
+                       "function": {"name": v["name"],
+                                    "arguments": v["args"]}}
+                      for i, v in sorted(tc_acc.items())]
+    return "".join(full), tool_calls
 
 # ---------------------------------------------------------------- tools
 import subprocess as _sp
