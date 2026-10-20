@@ -1360,7 +1360,7 @@ def main():
                 f"[{ts()}] META: baixa confiança ({c:.2f}) — {t[:40]!r}"),
             on_self_correction=lambda o, c, r: log(
                 f"[{ts()}] META: auto-correção — {o[:30]!r} → {c[:30]!r} ({r})"),
-            on_uncertainty_detected=lambda t, u, r: log(
+            on_uncertainty=lambda t, u, r: log(
                 f"[{ts()}] META: incerteza ({u:.2f}) — {t[:40]!r} ({r})"),
         )
         log(f"[{ts()}] META: metacognição ativa")
