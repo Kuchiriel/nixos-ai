@@ -254,6 +254,14 @@ def e2e_playback(args) -> dict:
             time.sleep(0.05)
         return None, None
 
+    def wait_response(timeout=15.0):
+        """Marcador de resposta: streaming novo loga 'tts.say' por sentença;
+        legado logava 'TTS('. Um OU outro (deploy 13:02 matou o legado)."""
+        dt, ln = wait_for("tts.say", timeout)
+        if not dt:
+            dt, ln = wait_for("TTS(", 0.1)
+        return dt, ln
+
     report = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "route": "speaker",
               "scenarios": []}
     time.sleep(1)
@@ -274,7 +282,7 @@ def e2e_playback(args) -> dict:
         dseg, lseg = wait_for(seg, 20)
         r["segment_captured"] = dseg is not None
         if expect == "RESPOND":
-            dt, lresp = wait_for("TTS(", 25)
+            dt, lresp = wait_response(25)
             r["timespeak_s"] = round(dseg + dt, 2) if dseg and dt else None
             dcls, lcls = wait_for("classify", 10)
             r["classify_line"] = lcls.strip()[:80] if lcls else None
@@ -287,7 +295,7 @@ def e2e_playback(args) -> dict:
                # da fala (a) OC: TTS curto morria antes do classify chegar.
             qwav = os.path.join(WAVS, "utt_124_long.wav")
             subprocess.run([player, qwav], check=False)
-            dtts, ltts = wait_for("TTS(", 30)
+            dtts, ltts = wait_response(30)
             if not dtts:
                 r["verdict"] = "no-response-to-barge-onto"
             else:
