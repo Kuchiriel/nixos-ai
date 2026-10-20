@@ -1,0 +1,21 @@
+# 2026-10-20T07:46:51 asr=http://127.0.0.1:8097 samples/cat=20
+reduplication	vowel_o_n12_r3_t2	E aí
+reduplication	laugh_e_n03_r7_t2	E aí
+reduplication	vowel_o_n08_r9_t2	E aí
+reduplication	vowel_i_n03_r7_t0	E aí
+reduplication	cv_tu_n04_r7_t0	Titi-titi.
+reduplication	laugh_i_n05_r3_t2	E E E E E E
+reduplication	cv_da_n03_r9_t2	Tchau.
+reduplication	vowel_o_n03_r5_t2	E aí
+reduplication	vowel_o_n03_r7_t2	E aí
+reduplication	vowel_e_n03_r7_t8	E aí
+reduplication	cv_ko_n12_r7_t0	P-P-P-P-P-P-P-P...
+reduplication	cv_la_n08_r7_t0	Pa-pa-pa-pa-pa-pa-pa-pa.
+reduplication	cv_da_n06_r7_t0	Pa-pa-pa-pa-pa-pa.
+reduplication	click_tick_n03_r5_t0	E aí
+reduplication	laugh_a_n04_r9_t0	A-a-a-a-a
+reduplication	vowel_o_n08_r3_t8	E aí
+reduplication	cv_tu_n06_r3_t0	Tô, tô, tô, tô, tô, tô.
+reduplication	cv_tu_n03_r3_t0	Tô, tô, tô.
+reduplication	laugh_a_n04_r3_t8	Ah, ah, ah, ah.
+reduplication	laugh_a_n03_r3_t8	Ah, ah, ah.

@@ -90,6 +90,7 @@ def trigger_bench(args) -> dict:
         rng.shuffle(idx)
         idx = idx[:args.samples]
         hallo, killed, empty, errs, samples = 0, 0, 0, 0, []
+        observed = []
         for i in idx:
             row = df.iloc[i]
             try:
@@ -108,6 +109,7 @@ def trigger_bench(args) -> dict:
                 killed += inlist
                 samples.append({"id": row.get("id"), "text": text[:60],
                                 "lexicon_kill": inlist})
+                observed.append(f"{cat}\t{row.get('id')}\t{text}")
         n = empty + hallo
         report["categories"][cat] = {
             "clips": n, "empty_ok": empty, "hallucinated": hallo,
@@ -117,6 +119,14 @@ def trigger_bench(args) -> dict:
             "errors": errs, "samples": samples[:8]}
         print(f"{cat}: {hallo}/{n} alucinou ({report['categories'][cat]['halluc_rate']})"
               f" | lista mataria {killed} | erros {errs}")
+    # feed p/ o deny-list (lane OC): TODOS os textos alucinados observados
+    if observed:
+        obs = os.path.join(args.out, "hallucinations-observed.txt")
+        os.makedirs(args.out, exist_ok=True)
+        with open(obs, "a", encoding="utf-8") as f:
+            f.write(f"# {report['ts']} asr={args.asr} samples/cat={args.samples}\n")
+            f.write("\n".join(observed) + "\n")
+        report["hallucinations_observed_file"] = obs
     return report
 
 
@@ -158,11 +168,18 @@ def unit_battery(args) -> dict:
     items = [json.loads(l) for l in open(path, encoding="utf-8")
              if l.strip() and not l.lstrip().startswith("#")]
     conf = {g: {p: 0 for p in CLASS_LABELS + ("NONE",)} for g in CLASS_LABELS}
+    lats = []
     for it in items:
+        t0 = time.monotonic()
         pred = classify_once(args.classify, it["utt"])
+        lats.append((time.monotonic() - t0) * 1000)
         conf[it["gold"]][pred or "NONE"] += 1
+    ls = sorted(lats)
     report = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "classify": args.classify,
-              "n": len(items), "classes": {}}
+              "n": len(items), "classes": {},
+              "latency_ms": {"p50": round(ls[len(ls)//2], 1),
+                             "p99": round(ls[min(int(len(ls)*0.99), len(ls)-1)], 1),
+                             "mean": round(sum(ls)/len(ls), 1)}}
     accs = []
     for g in CLASS_LABELS:
         tot = sum(conf[g].values())
@@ -173,7 +190,10 @@ def unit_battery(args) -> dict:
         print(f"{g}: acc={acc:.2f} ({conf[g][g]}/{tot}) "
               f"conf={ {k: v for k, v in conf[g].items() if v and k != g} }")
     report["avg_turn_taking_acc"] = round(sum(accs) / len(accs), 3)
-    print("AVERAGED TURN-TAKING ACC:", report["avg_turn_taking_acc"])
+    print("AVERAGED TURN-TAKING ACC:", report["avg_turn_taking_acc"],
+          "| classify lat ms p50/p99/mean:",
+          report["latency_ms"]["p50"], report["latency_ms"]["p99"],
+          report["latency_ms"]["mean"])
     return report
 
 
