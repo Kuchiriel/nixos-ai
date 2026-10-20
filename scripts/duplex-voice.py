@@ -384,9 +384,14 @@ def aec_process(chunk16):
 # = barge/feed REAL). Mata o suicídio do RMS por CONSTRUÇÃO — e
 # substitui o feed-gate de energia (assimetria fraca no mic distante).
 def corr_with_ref(chunk16, max_lag_s=0.8, step=160):
-    """max |corr| normalizada do chunk vs janelas da referência."""
+    """max |corr| normalizada do chunk vs janelas da referência.
+    (13:15, instrumentação phase-3) A busca era só no RABO da ref
+    (corr_med=0.05, blocked=0 — o eco real está na POSIÇÃO de play,
+    fora da janela). Agora: posição estimada por (now - t0 - delay)
+    ±400ms — o mesmo alinhamento do aec_process."""
     with AEC["lock"]:
         ref = AEC["ref"]
+        t0 = AEC["t0"]
     if ref is None:
         return 0.0
     ref = ref if isinstance(ref, np.ndarray) else np.frombuffer(
@@ -398,9 +403,15 @@ def corr_with_ref(chunk16, max_lag_s=0.8, step=160):
     cn = np.linalg.norm(c)
     if cn < 1e-6:
         return 0.0
+    # posição de playback estimada ±400ms de tolerância
+    center = int((time.monotonic() - t0 - AEC_DELAY_S) * 16000)
+    margin = int(0.4 * 16000)
+    lo = max(0, center - margin)
+    hi = min(len(ref) - n, center + margin)
+    if hi < lo:
+        lo = max(0, len(ref) - n - int(max_lag_s * 16000))
+        hi = len(ref) - n
     best = 0.0
-    lo = max(0, len(ref) - n - int(max_lag_s * 16000))
-    hi = len(ref) - n
     i = lo
     while i <= hi:
         r = ref[i:i + n].astype(np.float64)
@@ -1297,7 +1308,6 @@ def main():
     threading.Thread(target=mic_reader, args=(mic, mic_q), daemon=True).start()
 
     history: list[tuple[str, str]] = []
-    frase: list[str] = []
     quiet = 0
     tick_n = 0
     prev_pcm, prev_rms = None, 0
@@ -1632,7 +1642,14 @@ def main():
                 quiet += 1
             else:
                 quiet = 0
-                frase.append(said)
+            if said == LISTEN:
+                quiet += 1
+            else:
+                quiet = 0
+                # (14:00, dono: "agente duplicando respostas") o path
+                # force JÁ FALA via stream_chat (frases ao vivo); este
+                # acumulador era do micro-turn-per-tick MORTO e re-falava
+                # a resposta inteira. Aqui: só bookkeeping.
                 print(f"  ouvi: {heard:<28} digo: {said}  (asr {asr.last_ms:.0f}ms)",
                       flush=True)
                 LAST_RESPONSES.append(said)
@@ -1640,11 +1657,6 @@ def main():
                 for w in said.split():
                     if w.lower() not in Asr.CTX["v"].lower() and len(Asr.CTX["v"]) < 180:
                         Asr.CTX["v"] += " " + w
-                if said.rstrip().endswith((".", "!", "?")) or len(frase) >= 3:
-                    log(f"[{ts()}] TTS({' '.join(frase)})")
-                    tts.say(" ".join(frase)); frase = []
-            if quiet >= 2 and frase:
-                tts.say(" ".join(frase)); frase = []; quiet = 0
 
             if (heard != NOVOICE or said != LISTEN or rms >= args.rms
                     or tick_n % 20 == 0):
