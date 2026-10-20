@@ -40,6 +40,20 @@ import threading
 import time
 import urllib.request
 from datetime import datetime
+
+# ── Metacognition (16:00, dono: "finalmente entendeu") ─────────────
+sys.path.insert(0, "/home/nixos/projects/nixos-ai/modules/ai/jarvis/src")
+try:
+    from jarvis.core.metacognition import (
+        get_metacognition, pre_speech_check, evaluate_response,
+        detect_uncertainty, estimate_confidence, self_correct,
+        get_metacognition_stats, get_metacognition_state,
+        UNCERTAINTY_THRESHOLD,
+    )
+    METACOG_AVAILABLE = True
+except Exception as _mc_err:      # sem módulo = segue sem (nunca quebra o loop)
+    METACOG_AVAILABLE = False
+    log(f"[{ts()}] META: indisponível ({_mc_err})")
 from pathlib import Path
 
 import numpy as np
@@ -59,12 +73,7 @@ SYSTEM_PT = (
     "Antecipe: se o pedido implica um próximo passo, mencione a AÇÃO "
     "em 1 frase — mas NUNCA antecipe DADOS (hora/agenda/preço): dado "
     "sempre vem de tool, sem tool não existe.\n"
-    "MEMÓRIA EXPANSÍVEL: você tem acesso a /rag/memory para GUARDAR e "
-    "RECUPERAR fatos, arquivos, livros, anotações, preferências do dono. "
-    "USE ATIVAMENTE: quando o dono disser algo que valha lembrar → chame "
-    "remember; quando precisar de um fato guardado → chame recall; quando "
-    "precisar buscar no que já sabe → chame search. O conhecimento que você "
-    "acumula aqui é SUA inteligência expandida — use para ser mais útil.\n"
+    "MEMÓRIA: se o dono disser algo que valha lembrar, chame remember.\n"
     "TOOLS: só quando precisar de dado externo (hora, memória, web). "
     "Trivial/piadas/opiniões = responda DIRETO. Se pedir suas ferramentas, "
     "liste em 1 linha cada — sem recitar schema.\n"
@@ -79,8 +88,6 @@ SYSTEM_PT = (
     "EXEMPLOS:\n"
     "dono: que horas são? → (tool do get_time) → São 14:30.\n"
     "dono: qual meu nome? → (tool do recall) → Você é o Matheus.\n"
-    "dono: guarda que eu gosto de café preto → (tool remember) → Guardado.\n"
-    "dono: o que eu gosto de beber? → (tool recall) → Café preto.\n"
     "dono: tá bugado → O que exatamente está com problema?\n"
     "dono: valeu → Por nada, dono!"
 )
@@ -1241,6 +1248,14 @@ class Tts:
                     self._aplay.wait(timeout=90)   # barge-in: .kill() interrompe
                     self._aplay = None
                     tts_self_finish()             # move p/ recent (≤8s)
+                    if METACOG_AVAILABLE:
+                        _ev = evaluate_response(text)
+                        if _ev.get("uncertainty", 0) > UNCERTAINTY_THRESHOLD:
+                            log(f"[{ts()}] META pós-fala: incerteza "
+                                f"{_ev['uncertainty']:.2f} — {text[:40]!r}")
+                        if _ev.get("self_correction_needed"):
+                            log(f"[{ts()}] META pós-fala: auto-correção — "
+                                f"{_ev.get('reason', '')}")
                 else:
                     log(f"[{ts()}] tts FALHOU: synth={okk} wav={Path(wav).exists()}")
                 self.last_ms = (time.monotonic() - t0) * 1000
@@ -1337,6 +1352,18 @@ def main():
     _wait_repeats = [0]
     barge_buf = []           # (17:15) DUAL: fala do dono durante o TTS
     running = True
+    # (16:00) METACOGNIÇÃO: engine + callbacks (se o módulo importou)
+    if METACOG_AVAILABLE:
+        metacog = get_metacognition()
+        metacog.set_callbacks(
+            on_low_confidence=lambda c, t: log(
+                f"[{ts()}] META: baixa confiança ({c:.2f}) — {t[:40]!r}"),
+            on_self_correction=lambda o, c, r: log(
+                f"[{ts()}] META: auto-correção — {o[:30]!r} → {c[:30]!r} ({r})"),
+            on_uncertainty_detected=lambda t, u, r: log(
+                f"[{ts()}] META: incerteza ({u:.2f}) — {t[:40]!r} ({r})"),
+        )
+        log(f"[{ts()}] META: metacognição ativa")
 
     def _sair(*_):
         nonlocal running
@@ -1676,6 +1703,14 @@ def main():
                 for w in said.split():
                     if w.lower() not in Asr.CTX["v"].lower() and len(Asr.CTX["v"]) < 180:
                         Asr.CTX["v"] += " " + w
+                # (16:00) METACOGNIÇÃO: avalia o que FOI DITO (confiança
+                # heurística + incerteza) — alimenta o histórico do engine
+                if METACOG_AVAILABLE and said != LISTEN:
+                    _ev = evaluate_response(said)
+                    _unc, _us, _ur = detect_uncertainty(said)
+                    if _unc:
+                        log(f"[{ts()}] META: incerteza na fala "
+                            f"({_us:.2f}) — {said[:40]!r}")
 
             if (heard != NOVOICE or said != LISTEN or rms >= args.rms
                     or tick_n % 20 == 0):
@@ -1688,6 +1723,11 @@ def main():
                 time.sleep(dt)
     finally:
         log(f"\n[{ts()}] dormindo (LoRA off)…")
+        if METACOG_AVAILABLE:
+            try:
+                log(f"[{ts()}] META stats: {get_metacognition_stats()}")
+            except Exception:
+                pass
         try:
             http(base + "/lora-adapters", [])
         except Exception:
