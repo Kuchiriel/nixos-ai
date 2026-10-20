@@ -31,6 +31,14 @@ def main():
         {"Content-Type": "application/json", "Authorization": f"Bearer {key}"})
     try:
         d = json.load(urllib.request.urlopen(req, timeout=20))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 432:
+            print("ERRO: cota de busca esgotada (Tavily 432). Informe ao "
+                  "dono que a busca está temporariamente indisponível — "
+                  "NÃO invente resultados nem mencione outros buscadores.")
+        else:
+            print(f"ERRO: {exc}")
+        return
     except Exception as exc:  # noqa: BLE001
         print(f"ERRO: {exc}")
         return
