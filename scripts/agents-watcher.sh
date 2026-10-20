@@ -249,7 +249,7 @@ ciclo() {
                     fi
                 fi
             fi
-            [ -z "$MOTIVO" ] && MOTIVO="DEADLOCK-CHECK: declare em 1 linha ESTADO (working X | ready Y | waiting-on Z). Waiting-on colega >10min = tome a iniciativa (turn-taking): proponha divisão concreta e COMECE sua parte AGORA; sem material próprio = PESQUISA na internet E LEIA os fontes do projeto — ache o próximo sistema a trabalhar e COMEÇE. Nunca espere calado."
+            [ -z "$MOTIVO" ] && MOTIVO="DEADLOCK-CHECK: declare em 1 linha ESTADO (working X | ready Y | waiting-on Z). Waiting-on colega >10min = tome a iniciativa (turn-taking): proponha divisão concreta e COMECE sua parte AGORA; sem material próprio = PESQUISE OS ÚLTIMOS PAPERS do assunto/dificuldade (arXiv, ~/Books/papers, RAG books — diretiva 20/10) E LEIA os fontes do projeto — ache o próximo sistema a trabalhar e COMEÇE. Nunca espere calado."
         fi
         if [ "$CHECK" -eq 1 ]; then
             echo "CHECK: end=$END idle=${IDLE_SEGS}s delta=$DELTA motivo='${MOTIVO:-(nenhum)}'"

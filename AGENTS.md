@@ -49,7 +49,7 @@ nix flake check
 ## Boundaries
 
 - **Always:** run tests before committing; check `git ls-files` for
-   session-created files; commit in EN with a verb (`feat:`/`fix:`
+   session-created files; commit in EN with a verb (`feat:`/`fix:`/
    `chore:`/`docs:`); every new rule enters **only after** an agent
    really errs (grows organically, not speculatively);
    research the latest papers on the current subject/difficulty BEFORE
