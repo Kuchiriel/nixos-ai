@@ -60,6 +60,10 @@ def main():
         "obrigado por assistir", "obrigado por assistirem",
         "inscreva-se no canal", "até o próximo vídeo",
         "som de futebol",
+        # (05:45, curadoria HB ban-pt-hard) só os 2 inequívocos; os
+        # outros 8 'safe_candidate' ('muito obrigado', 'com licença'...)
+        # são fala REAL — seguem no léxico gated (tier 2, stats fracos)
+        "jouvin o sr", "o que é a reunião",
     )
     SOCIAL_KEEP = ("risada", "aplauso", "música", "músicas", "som dos",
                    "sons dos")
