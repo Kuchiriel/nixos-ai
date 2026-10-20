@@ -476,9 +476,17 @@ LAST_RESPONSES = []   # (12:55) as últimas respostas faladas — o eco
 LAST_TTS_END = 0.0   # (18:00) cooldown: o eco do TTS transcreve
                        # MESMO com asrd-reset (texto já no pipe) — 1.8s
                        # de quarentena mata o loop de hora repetida.
+SPEAKING = {"until": 0.0}   # (07:35) ref module-level p/ in_cooldown
+                            # (main() aponta p/ o dict local no boot)
+ECHO_FLOOR = []             # (07:30) mediana móvel do resíduo pós-AEC
+                            # durante playback = nível real do eco remanescente
 
 def in_cooldown():
-    return time.monotonic() - LAST_TTS_END < 3.0
+    # (07:30 dono: "ele corta a própria fala") o eco transcreve DURANTE
+    # todo o playback, não só 3s pós-fim: cooldown = falando AGORA ou
+    # 4s após o fim. Mata o loop conversa-consigo-mesmo.
+    return (time.monotonic() < SPEAKING["until"]
+            or time.monotonic() - LAST_TTS_END < 4.0)
 
 def is_self_echo(txt):
     import difflib
@@ -490,6 +498,11 @@ def is_self_echo(txt):
     for last in LAST_RESPONSES[-3:]:
         if _nums_in and _nums_in == set(_re2.findall(r"\d{1,4}", last)):
             return True   # mesmos números = a mesma resposta ecoada
+        # (07:30) fragmento do eco: whisper transcreve PEDAÇOS da própria
+        # fala ('De nada.' de 'De nada, dono!') — ratio 0.68 < 0.72 não
+        # pegava; substring de 2+ palavras dentro da resposta = eco.
+        if len(t.split()) >= 2 and t in last.strip().lower():
+            return True
         if difflib.SequenceMatcher(None, t, last.strip().lower()).ratio() >= 0.72:
             return True
     return False
@@ -1091,7 +1104,9 @@ def main():
     global HUNSPELL_DICT
     HUNSPELL_DICT = _resolve_dict()
     log(f"[{ts()}] hunspell dict: {HUNSPELL_DICT or 'NENHUM (sem correção)'}")
-    speaking = {"until": 0.0}   # self-mute anti-eco (18/10 ~06h)
+    # self-mute anti-eco (18/10 ~06h) — dict ÚNICO module-level:
+    # in_cooldown() vê o mesmo objeto que o Tts atualiza.
+    speaking = SPEAKING
     asr = Asr(args.stt_model, args.lang)
     tts = Tts(speaking)
     tts._asr = asr   # (12:10) o asr_reset pós-fala precisa do pipe do asrd
@@ -1197,18 +1212,32 @@ def main():
             # (só o eco-mute segura). Gate vira só telemetria/eco.
             for c in chunks:
                 c16 = c if isinstance(c, np.ndarray) else np.frombuffer(c, dtype=np.int16)
-                crms = int(np.sqrt((c16.astype(np.float64) ** 2).mean()))
-                # (18:20) FEED SEMPRE — o AEC remove o eco na FONTE; o
-                # buffer de barge-in morava em bursts de 7s+ de delay.
-                # A janela speaking + o asrd-reset pós-play continuam
-                # como rede de segurança; o AEC é a linha de frente.
-                if tts_playing and crms >= 900:
-                    # (18:50) BARGE-IN REAL: mata o aplay AGORA (o paper:
-                    # 'must stop within ~200ms to feel full-duplex')
-                    if tts._aplay and tts._aplay.poll() is None:
-                        tts._aplay.kill()
-                        log(f"[{ts()}] BARGE-IN: TTS morto (rms={crms})")
+                # (07:30, dono: "corta a própria fala") BARGE-GATE NO
+                # RESÍDUO PÓS-AEC, não no raw: o eco cru do alto-falante
+                # media 1100-1750 (matava TTS com threshold 900); o AEC
+                # subtrai a referência do playback → resíduo = voz real +
+                # erro de cancelamento. Piso ADAPTATIVO: mediana móvel do
+                # resíduo durante a fala = nível do eco remanescente;
+                # barge só se ACRESCENTA energia SIGNIFICATIVA (×1.6).
                 _processed = aec_process(c16)
+                rrms = int(np.sqrt((_processed.astype(np.float64) ** 2)
+                                   .mean()))
+                if tts_playing:
+                    ECHO_FLOOR.append(rrms)
+                    if len(ECHO_FLOOR) > 40:
+                        ECHO_FLOOR.pop(0)
+                    _floor = sorted(ECHO_FLOOR)[len(ECHO_FLOOR) // 2]
+                    _gate = max(900, int(_floor * 1.6))
+                    if rrms >= _gate:
+                        # (18:50) BARGE-IN REAL: mata o aplay AGORA (o
+                        # paper: 'must stop within ~200ms to feel
+                        # full-duplex')
+                        if tts._aplay and tts._aplay.poll() is None:
+                            tts._aplay.kill()
+                            log(f"[{ts()}] BARGE-IN: TTS morto "
+                                f"(resíduo={rrms}, piso={_gate})")
+                else:
+                    ECHO_FLOOR.clear()   # novo playback = recalibra
                 asr.feed(_processed.astype("float32") / 32768.0)
             if barge_buf and not tts_playing and len(barge_buf) >= 2:
                 log(f"[{ts()}] BARGE-IN processado: {len(barge_buf)} chunks")
