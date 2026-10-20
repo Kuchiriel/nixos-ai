@@ -1262,25 +1262,26 @@ def main():
                 rrms = int(np.sqrt((_processed.astype(np.float64) ** 2)
                                    .mean()))
                 if tts_playing:
-                    ECHO_FLOOR.append(rrms)
-                    if len(ECHO_FLOOR) > 40:
-                        ECHO_FLOOR.pop(0)
-                    # (07:55, dono: "cortou o TTS dnv") BARGE RMS
-                    # DESLIGADO: o AEC não cancela o eco na prática
-                    # (resíduo ~nível cru) e picos da própria voz do
-                    # piper cruzavam QUALQUER piso — matava toda fala
-                    # em ~2s. Interrupção real = via SEMÂNTICA: whisper
-                    # → is_tts_self (eco ignora) → classify BARGE/
-                    # RESPOND → mata o aplay + responde. ~1-2s vs 200ms,
-                    # mas CORRETO — nunca suicida.
-                    if rrms >= 10**9:   # morto; piso só p/ diagnóstico
-                        if tts._aplay and tts._aplay.poll() is None:
-                            tts._aplay.kill()
-                            log(f"[{ts()}] BARGE-IN: TTS morto "
-                                f"(resíduo={rrms})")
+                    # (08:35, dono: "não parou de falar") A ASSIMETRIA
+                    # é o gate: durante o playback o feed vive do eco
+                    # (VAD nunca descansa = segmento nunca fecha = a
+                    # interrupção não transcreve). Só alimenta o ASR
+                    # com chunk ACIMA do piso do eco (voz do dono
+                    # SOMA energia; eco puro não). O piso aprende só
+                    # com chunks NÃO alimentados (eco puro).
+                    if ECHO_FLOOR:
+                        _floor = sorted(ECHO_FLOOR)[len(ECHO_FLOOR) // 2]
+                    else:
+                        _floor = rrms if rrms > 0 else 300
+                    if rrms >= int(_floor * 1.35):
+                        asr.feed(_processed.astype("float32") / 32768.0)
+                    else:
+                        ECHO_FLOOR.append(rrms)
+                        if len(ECHO_FLOOR) > 50:
+                            ECHO_FLOOR.pop(0)
                 else:
-                    ECHO_FLOOR.clear()   # novo playback = recalibra
-                asr.feed(_processed.astype("float32") / 32768.0)
+                    ECHO_FLOOR.clear()
+                    asr.feed(_processed.astype("float32") / 32768.0)
             if barge_buf and not tts_playing and len(barge_buf) >= 2:
                 log(f"[{ts()}] BARGE-IN processado: {len(barge_buf)} chunks")
                 for bc in barge_buf:
