@@ -1329,6 +1329,13 @@ def main():
                            if (n_words >= 1 and heard != NOVOICE) else None)
                     log(f"[{ts()}] classify({heard[:38]!r}) = {lab}")
                     if lab == "RESPOND":
+                        # (06:25, bateria HB: 'fogo!'/'socorro!' = BARGE
+                        # durante TTS) FALANDO + fala que pede resposta =
+                        # interrupção legítima: cala o TTS AGORA e responde
+                        # (a resposta vem depois do silêncio — full-duplex).
+                        if tts._aplay and tts._aplay.poll() is None:
+                            tts._aplay.kill()
+                            log(f"[{ts()}] RESPOND-durante-TTS: interrupção — TTS morto")
                         spec_sniff(heard)   # Heartbeat: prepara tool
                         force = True
                     elif lab == "WAIT":
