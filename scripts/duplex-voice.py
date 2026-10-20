@@ -1040,6 +1040,8 @@ def main():
     zeros = 0
     pending = []              # (12:00) merge de segmentos
     merge_deadline = 0.0
+    _last_wait_text = [None]  # (23:00) detector de WAIT preso
+    _wait_repeats = [0]
     barge_buf = []           # (17:15) DUAL: fala do dono durante o TTS
     running = True
 
@@ -1251,8 +1253,23 @@ def main():
                     force = True
                 elif lab == "WAIT":
                     # fala continua: devolve ao pending p/ próxima janela
-                    pending.append(heard)
-                    heard = NOVOICE
+                    # (23:00 fix) deadline RENOVADA — sem isso o merge
+                    # refire no mesmo tick e re-classifica em loop (150ms
+                    # de LoRA por tick queimados).
+                    if heard == _last_wait_text:
+                        _wait_repeats[0] += 1
+                    else:
+                        _wait_repeats[0] = 1
+                        _last_wait_text[0] = heard
+                    if _wait_repeats[0] >= 3:
+                        # preso no WAIT 3x = a pessoa terminou e espera:
+                        # trata como RESPOND (nunca deixa o dono mudo)
+                        log(f"[{ts()}] WAIT preso 3x — força RESPOND")
+                        force = True
+                    else:
+                        pending.append(heard)
+                        merge_deadline = time.monotonic() + 1.5
+                        heard = NOVOICE
                 elif lab == "SILENCE":
                     heard = NOVOICE
                 elif lab == "BARGE":
