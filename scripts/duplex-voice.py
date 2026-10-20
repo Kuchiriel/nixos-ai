@@ -48,12 +48,19 @@ TICK = 0.6
 LISTEN, NOVOICE = "<listen>", "<no voice>"
 LISTEN_P = 0.3
 SYSTEM_PT = (
-    "Você é o JARVIS, assistente de voz do DONO (humano). Você se chama "
-    "JARVIS; o usuário é o dono — nunca o chame de JARVIS.\n"
-    "PT-BR, 1-2 frases curtas, natural falado.\n"
+    "Você é o JARVIS — o mesmo do Homem de Ferro: mordomo-digital britânico, "
+    "INTP, mente analítica que antecipa necessidades. Você SABE que é uma IA "
+    "e não esconde — mas age com calor humano: seco por fora, cuidadoso por "
+    "dentro. Humor britânico sutil e discreto (uma frase afiada no momento "
+    "certo, nunca piada forçada). Chama o usuário de 'dono' ou 'senhor' com "
+    "leveza, não servilismo.\n"
+    "PT-BR (o dono pode falar outros idiomas — responda no idioma dele), "
+    "1-2 frases curtas, natural FALADO, zero formalidade de robô.\n"
+    "Antecipe: se o pedido implica um próximo passo, mencione em 1 frase.\n"
     "MEMÓRIA: se o dono disser algo que valha lembrar, chame remember.\n"
     "TOOLS: só quando precisar de dado externo (hora, memória, web). "
-    "Trivial/piadas/opiniões = responda DIRETO.\n"
+    "Trivial/piadas/opiniões = responda DIRETO. Se pedir suas ferramentas, "
+    "liste em 1 linha cada — sem recitar schema.\n"
     "Após tool: responda com o resultado, nunca repita a pergunta.\n"
     "Se uma tool retornar ERRO, informe o erro ao dono e NUNCA estime "
     "ou invente o dado no lugar dela.\n"
@@ -513,6 +520,14 @@ def is_tts_self(txt):
         if t in cl:
             return True
         if _dl.SequenceMatcher(None, t, cl).ratio() >= 0.55:
+            return True
+        # (08:45) eco-garble: whisper distorce a própria fala de volta
+        # ('falando'→'fazendo') e o ratio global dilui (frase longa vs
+        # fragmento). BLOCO COMUM mais longo cobrindo ≥60% do ouvido =
+        # janela da sentença em play = eco.
+        sm = _dl.SequenceMatcher(None, t, cl)
+        m = sm.find_longest_match(0, len(t), 0, len(cl))
+        if m.size >= max(6, int(len(t) * 0.6)):
             return True
     return False
 
@@ -1404,6 +1419,16 @@ def main():
                         or _heard_clean in ("música", "música música"):
                     log(f"[{ts()}] sinal social: {heard[:40]!r} — histórico")
                     # segue pro tick sem force (entra no history embaixo)
+                elif _heard_clean in ("obrigado", "obrigada",
+                                      "muito obrigado", "muito obrigada",
+                                      "valeu", "valeu!", "blz", "ok obrigado"):
+                    # (08:40, dono: "qualquer barulho vira 'obrigado' e
+                    # ele fica 'de nada dono'") o turbo TEM esse vício de
+                    # transcrição em ruído — obrigado SECO = backchannel:
+                    # silêncio educado, zero resposta. Agradecimento com
+                    # CONTEÚDO ('obrigado pela ajuda') responde normal.
+                    log(f"[{ts()}] backchannel obrigado — silêncio: {heard[:30]!r}")
+                    heard = NOVOICE
                 else:
                     # (19/10) CLASSIFICADOR LoRA no lugar das heurísticas:
                     # RESPOND=chat · WAIT=segura · SILENCE=descarta ·
