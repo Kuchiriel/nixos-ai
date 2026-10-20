@@ -615,6 +615,7 @@ SPEAKING = {"until": 0.0}   # (07:35) ref module-level p/ in_cooldown
                             # (main() aponta p/ o dict local no boot)
 ECHO_FLOOR = []             # (07:30) mediana móvel do resíduo pós-AEC
                             # durante playback = nível real do eco remanescente
+FEED_STATS = {"fed": 0, "blocked": 0, "quiet": 0, "corr": []}
 # (07:50, DIREÇÃO DO DONO: "dá um ID pra fala do TTS — se ele ouvir,
 # ignora") Registry do que o TTS está dizendo AGORA + disse há pouco.
 # O eco chega como transcrição; se o texto casa com a fala ATIVA
@@ -1405,19 +1406,27 @@ def main():
                 rrms = int(np.sqrt((_processed.astype(np.float64) ** 2)
                                    .mean()))
                 if tts_playing:
-                    # (09:25, digest HB) FEED-GATE POR CORRELAÇÃO: eco =
-                    # cópia atrasada da referência (corr alta → NÃO
-                    # alimenta o VAD: ele descansa, segmento fecha);
-                    # voz do dono NÃO está na referência (corr baixa +
-                    # energia → alimenta → transcreve → BARGE/RESPOND).
+                    # (13:25, e2e HB phase-2: mix sem pausa nunca fecha
+                    # segmento) INSTRUMENTAÇÃO p/ diagnosticar o barge:
+                    # conta decisões do gate + corr amostral; no fim do
+                    # playback, um resumo (sem spam por-chunk).
                     _corr = corr_with_ref(c16)
+                    FEED_STATS["corr"].append(_corr)
                     if _corr >= 0.55:
-                        pass          # eco puro: silêncio pro ASR
+                        FEED_STATS["blocked"] += 1
                     elif rrms >= 350:
+                        FEED_STATS["fed"] += 1
                         asr.feed(_processed.astype("float32") / 32768.0)
                     else:
-                        pass          # nem eco nem voz: ruído de fundo
+                        FEED_STATS["quiet"] += 1
                 else:
+                    if FEED_STATS["fed"] or FEED_STATS["blocked"]:
+                        cs = sorted(FEED_STATS["corr"])
+                        med = cs[len(cs) // 2] if cs else 0.0
+                        log(f"[{ts()}] feed-gate: fed={FEED_STATS['fed']} "
+                            f"blocked={FEED_STATS['blocked']} quiet="
+                            f"{FEED_STATS['quiet']} corr_med={med:.2f}")
+                    FEED_STATS.update(fed=0, blocked=0, quiet=0, corr=[])
                     asr.feed(_processed.astype("float32") / 32768.0)
             if barge_buf and not tts_playing and len(barge_buf) >= 2:
                 log(f"[{ts()}] BARGE-IN processado: {len(barge_buf)} chunks")
