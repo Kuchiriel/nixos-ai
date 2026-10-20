@@ -221,19 +221,27 @@ def e2e_playback(args) -> dict:
 
     seen = 0
     if os.path.exists(LOG):
-        seen = sum(1 for _ in open(LOG, encoding="utf-8", errors="ignore"))
+        seen = os.path.getsize(LOG)
     lines = []
     def follow():
-        nonlocal lines
-        with open(LOG, encoding="utf-8", errors="ignore") as f:
-            for _ in range(seen):
-                f.readline()
-            while not stop[0]:
-                ln = f.readline()
-                if not ln:
-                    time.sleep(0.1)
-                    continue
-                lines.append((time.monotonic(), ln))
+        # poll-by-path: reabre o arquivo a cada ciclo (imune a truncate/recreate
+        # do log — o cliente relança e o inode muda; lição do run gate-off 20/10)
+        pos = seen
+        while not stop[0]:
+            try:
+                sz = os.path.getsize(LOG)
+                if sz < pos:            # truncado/recriado
+                    pos = 0
+                if sz > pos:
+                    with open(LOG, encoding="utf-8", errors="ignore") as f:
+                        f.seek(pos)
+                        chunk = f.read()
+                        pos = f.tell()
+                    for ln in chunk.splitlines(keepends=True):
+                        lines.append((time.monotonic(), ln))
+            except FileNotFoundError:
+                pass
+            time.sleep(0.2)
     stop = [False]
     threading.Thread(target=follow, daemon=True).start()
 
@@ -249,7 +257,10 @@ def e2e_playback(args) -> dict:
     report = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "route": "speaker",
               "scenarios": []}
     time.sleep(1)
+    want = {x.strip().upper() for x in args.only.split(",") if x.strip()}
     for idx, utt, expect in scenarios:
+        if want and expect not in want:
+            continue
         wav = os.path.join(WAVS, f"utt_{idx:03d}.wav")
         if not os.path.exists(wav):
             continue
@@ -297,6 +308,8 @@ def main() -> int:
                     help="toca wavs no alto-falante e mede pela reação no log "
                          "duplex (janela combinada com OC; autorização dono 20/10)")
     ap.add_argument("--samples", type=int, default=20)
+    ap.add_argument("--only", default="",
+                    help="e2e: filtra cenários por classe (ex: BARGE,SILENCE)")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--asr", default="http://127.0.0.1:8097")
     ap.add_argument("--classify", default="http://127.0.0.1:8092")

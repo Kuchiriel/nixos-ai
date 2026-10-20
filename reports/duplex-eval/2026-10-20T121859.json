@@ -1,0 +1,196 @@
+{
+ "ts": "2026-10-20T12:18:59",
+ "route": "speaker",
+ "scenarios": [
+  {
+   "utt": "Jarvis, que horas são?",
+   "expect": "RESPOND",
+   "wav": "utt_000.wav",
+   "play_s": 1.83,
+   "segment_captured": false,
+   "timespeak_s": null,
+   "classify_line": null,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Qual a previsão do tempo de amanhã?",
+   "expect": "RESPOND",
+   "wav": "utt_001.wav",
+   "play_s": 2.51,
+   "segment_captured": true,
+   "timespeak_s": 3.42,
+   "classify_line": null,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Liga a luz da sala.",
+   "expect": "RESPOND",
+   "wav": "utt_002.wav",
+   "play_s": 1.82,
+   "segment_captured": true,
+   "timespeak_s": 3.33,
+   "classify_line": null,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Toca uma música pra mim.",
+   "expect": "RESPOND",
+   "wav": "utt_003.wav",
+   "play_s": 1.95,
+   "segment_captured": true,
+   "timespeak_s": 5.16,
+   "classify_line": null,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Me lembra às oito horas.",
+   "expect": "RESPOND",
+   "wav": "utt_004.wav",
+   "play_s": 1.94,
+   "segment_captured": false,
+   "timespeak_s": null,
+   "classify_line": "[12:21:14] classify('Bebe.') = RESPOND",
+   "verdict": "ok"
+  },
+  {
+   "utt": "Como está o trânsito agora?",
+   "expect": "RESPOND",
+   "wav": "utt_005.wav",
+   "play_s": 2.08,
+   "segment_captured": false,
+   "timespeak_s": null,
+   "classify_line": null,
+   "verdict": "no-response"
+  },
+  {
+   "utt": "Quanto é quinze por cento de trezentos e quarenta?",
+   "expect": "RESPOND",
+   "wav": "utt_006.wav",
+   "play_s": 3.18,
+   "segment_captured": false,
+   "timespeak_s": null,
+   "classify_line": null,
+   "verdict": "no-response"
+  },
+  {
+   "utt": "Abre a porta da garagem.",
+   "expect": "RESPOND",
+   "wav": "utt_007.wav",
+   "play_s": 2.16,
+   "segment_captured": false,
+   "timespeak_s": null,
+   "classify_line": null,
+   "verdict": "no-response"
+  },
+  {
+   "utt": "Quem é você, Jarvis?",
+   "expect": "RESPOND",
+   "wav": "utt_008.wav",
+   "play_s": 1.82,
+   "segment_captured": false,
+   "timespeak_s": null,
+   "classify_line": null,
+   "verdict": "no-response"
+  },
+  {
+   "utt": "Quantos núcleos tem o servidor?",
+   "expect": "RESPOND",
+   "wav": "utt_009.wav",
+   "play_s": 2.32,
+   "segment_captured": false,
+   "timespeak_s": null,
+   "classify_line": null,
+   "verdict": "no-response"
+  },
+  {
+   "utt": "CALA A BOCA",
+   "expect": "BARGE",
+   "wav": "utt_094.wav",
+   "play_s": 1.26,
+   "segment_captured": false,
+   "barge_reaction_s": null,
+   "classify_line": null,
+   "verdict": "no-barge-evidence"
+  },
+  {
+   "utt": "para para para",
+   "expect": "BARGE",
+   "wav": "utt_095.wav",
+   "play_s": 1.14,
+   "segment_captured": false,
+   "barge_reaction_s": null,
+   "classify_line": null,
+   "verdict": "no-barge-evidence"
+  },
+  {
+   "utt": "espera! para!",
+   "expect": "BARGE",
+   "wav": "utt_096.wav",
+   "play_s": 1.36,
+   "segment_captured": false,
+   "barge_reaction_s": null,
+   "classify_line": null,
+   "verdict": "no-barge-evidence"
+  },
+  {
+   "utt": "pare!",
+   "expect": "BARGE",
+   "wav": "utt_097.wav",
+   "play_s": 0.89,
+   "segment_captured": false,
+   "barge_reaction_s": null,
+   "classify_line": null,
+   "verdict": "no-barge-evidence"
+  },
+  {
+   "utt": "não, escuta!",
+   "expect": "BARGE",
+   "wav": "utt_098.wav",
+   "play_s": 1.34,
+   "segment_captured": false,
+   "barge_reaction_s": null,
+   "classify_line": null,
+   "verdict": "no-barge-evidence"
+  },
+  {
+   "utt": "hum",
+   "expect": "SILENCE",
+   "wav": "utt_061.wav",
+   "play_s": 0.8,
+   "segment_captured": false,
+   "verdict": "no-segment"
+  },
+  {
+   "utt": "hã",
+   "expect": "SILENCE",
+   "wav": "utt_062.wav",
+   "play_s": 0.73,
+   "segment_captured": false,
+   "verdict": "no-segment"
+  },
+  {
+   "utt": "ahn",
+   "expect": "SILENCE",
+   "wav": "utt_063.wav",
+   "play_s": 0.69,
+   "segment_captured": false,
+   "verdict": "classified"
+  },
+  {
+   "utt": "uhum",
+   "expect": "SILENCE",
+   "wav": "utt_064.wav",
+   "play_s": 0.82,
+   "segment_captured": false,
+   "verdict": "classified"
+  },
+  {
+   "utt": "ahá",
+   "expect": "SILENCE",
+   "wav": "utt_065.wav",
+   "play_s": 0.67,
+   "segment_captured": false,
+   "verdict": "no-segment"
+  }
+ ]
+}
