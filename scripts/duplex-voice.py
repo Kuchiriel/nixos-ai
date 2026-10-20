@@ -372,6 +372,43 @@ def aec_process(chunk16):
     AEC["gain"] = max(-0.9, min(0.9, g + mu * (processed * r).sum() / rp))
     return processed.astype(np.int16)
 
+# (09:25, digest HB — DOR-1) CORRELAÇÃO COM A REFERÊNCIA: o buffer do
+# aplay é sinal CONHECIDO; eco = cópia atrasada/atenuada DELE (corr
+# alta); a voz do dono NÃO está na referência (corr baixa + energia
+# = barge/feed REAL). Mata o suicídio do RMS por CONSTRUÇÃO — e
+# substitui o feed-gate de energia (assimetria fraca no mic distante).
+def corr_with_ref(chunk16, max_lag_s=0.8, step=160):
+    """max |corr| normalizada do chunk vs janelas da referência."""
+    with AEC["lock"]:
+        ref = AEC["ref"]
+    if ref is None:
+        return 0.0
+    ref = ref if isinstance(ref, np.ndarray) else np.frombuffer(
+        ref, dtype=np.int16)
+    n = len(chunk16)
+    if len(ref) < n + step:
+        return 0.0
+    c = chunk16.astype(np.float64)
+    cn = np.linalg.norm(c)
+    if cn < 1e-6:
+        return 0.0
+    best = 0.0
+    lo = max(0, len(ref) - n - int(max_lag_s * 16000))
+    hi = len(ref) - n
+    i = lo
+    while i <= hi:
+        r = ref[i:i + n].astype(np.float64)
+        rn = np.linalg.norm(r)
+        if rn > 1e-6:
+            v = abs(float(np.dot(c, r))) / (cn * rn)
+            if v > best:
+                best = v
+                if best > 0.95:
+                    break
+        i += step
+    return best
+
+
 def aec_clear():
     """Pós-playback: a referência morre (o AEC NUNCA processa chunks
     fora da janela real de playback — era o bug do mute: o gain
@@ -1295,25 +1332,19 @@ def main():
                 rrms = int(np.sqrt((_processed.astype(np.float64) ** 2)
                                    .mean()))
                 if tts_playing:
-                    # (08:35, dono: "não parou de falar") A ASSIMETRIA
-                    # é o gate: durante o playback o feed vive do eco
-                    # (VAD nunca descansa = segmento nunca fecha = a
-                    # interrupção não transcreve). Só alimenta o ASR
-                    # com chunk ACIMA do piso do eco (voz do dono
-                    # SOMA energia; eco puro não). O piso aprende só
-                    # com chunks NÃO alimentados (eco puro).
-                    if ECHO_FLOOR:
-                        _floor = sorted(ECHO_FLOOR)[len(ECHO_FLOOR) // 2]
-                    else:
-                        _floor = rrms if rrms > 0 else 300
-                    if rrms >= int(_floor * 1.35):
+                    # (09:25, digest HB) FEED-GATE POR CORRELAÇÃO: eco =
+                    # cópia atrasada da referência (corr alta → NÃO
+                    # alimenta o VAD: ele descansa, segmento fecha);
+                    # voz do dono NÃO está na referência (corr baixa +
+                    # energia → alimenta → transcreve → BARGE/RESPOND).
+                    _corr = corr_with_ref(c16)
+                    if _corr >= 0.55:
+                        pass          # eco puro: silêncio pro ASR
+                    elif rrms >= 350:
                         asr.feed(_processed.astype("float32") / 32768.0)
                     else:
-                        ECHO_FLOOR.append(rrms)
-                        if len(ECHO_FLOOR) > 50:
-                            ECHO_FLOOR.pop(0)
+                        pass          # nem eco nem voz: ruído de fundo
                 else:
-                    ECHO_FLOOR.clear()
                     asr.feed(_processed.astype("float32") / 32768.0)
             if barge_buf and not tts_playing and len(barge_buf) >= 2:
                 log(f"[{ts()}] BARGE-IN processado: {len(barge_buf)} chunks")
