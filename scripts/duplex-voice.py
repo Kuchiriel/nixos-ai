@@ -31,6 +31,8 @@ import json
 import math
 import os
 import queue
+import re
+import difflib
 import signal
 import subprocess
 import sys
@@ -499,6 +501,65 @@ def is_backchannel(txt):
     t = txt.strip().lower().rstrip(".!?").strip()
     return t in BACKCHANNELS or len(t) < 3
 
+# ── (04:50, paper Heartbeat Thinking 2610.26233) ESPECULAÇÃO DE TOOL ────
+# O tempo de WAIT/merge (que a gente jogava fora) vira preparo: sniffer
+# no parcial dispara web_search ANTES do fim da fala; o executor final
+# consome o cache (match fuzzy difflib ≥0.6). Paper: +16pp cobertura
+# de tool, -36.4% latência de resposta final. v1 = regex (sem LLM tick).
+SPEC_RE = re.compile(
+    r"(d[óo]lar|euro|cot-a?[çc][ãa]o|clima|tempo (?:de|pra|para) "
+    r"amanh[ãa]|previs[ãa]o|temperatura|pre[çc]o|not[íi]cias?|c[óo]pio "
+    r"|quem (?:é|e) |quando (?:é|e) )", re.I)
+SPEC_CACHE = {}          # q -> (ts, resultado)
+SPEC_FIRED = {}          # q -> ts (anti-refire)
+SPEC_LOCK = threading.Lock()
+
+def spec_sniff(utt):
+    """Dispara web_search especulativo se o parcial tem intenção clara."""
+    if not utt or len(utt.split()) < 3:
+        return
+    m = SPEC_RE.search(utt)
+    if not m:
+        return
+    q = utt.replace("Jarvis", "").replace("jarvis", "").strip(" ,.!?")
+    q = q[:80]
+    if not q:
+        return
+    now = time.monotonic()
+    with SPEC_LOCK:
+        if q in SPEC_FIRED and now - SPEC_FIRED[q] < 90:
+            return
+        SPEC_FIRED[q] = now
+    log(f"[{ts()}] HEARTBEAT spec web_search: {q[:40]!r}")
+    def _go():
+        try:
+            r = _exec(f"timeout 25 python3 "
+                      f"{Path(__file__).with_name('websearch.py')} '{q}' 2>&1")
+            with SPEC_LOCK:
+                SPEC_CACHE[q] = (time.monotonic(), r)
+        except Exception as e:
+            log(f"[{ts()}] HEARTBEAT spec erro: {e}")
+    threading.Thread(target=_go, daemon=True).start()
+
+def spec_take(query):
+    """Executor: rouba o resultado especulado (fuzzy ≥0.6, one-shot)."""
+    with SPEC_LOCK:
+        now = time.monotonic()
+        best, best_r = None, 0.0
+        for q, (t, r) in list(SPEC_CACHE.items()):
+            if now - t > 60:
+                del SPEC_CACHE[q]; continue
+            ratio = difflib.SequenceMatcher(
+                None, q.lower(), query.lower()).ratio()
+            if ratio > best_r:
+                best, best_r = (q, r), ratio
+        if best and best_r >= 0.6:
+            del SPEC_CACHE[best[0]]
+            log(f"[{ts()}] HEARTBEAT hit ({best_r:.2f}): "
+                f"especulado p/ {query[:30]!r}")
+            return best[1]
+    return None
+
 def call_tool(name, args):
     """Meta-tool router: o 4B chama 'do(action, input)' e esta função
     despacha pra ferramenta certa (schema de 1 tool, não 8)."""
@@ -610,6 +671,9 @@ def call_tool(name, args):
         q = args.get("query", "")
         if not q:
             return "ERRO: query vazia"
+        hit = spec_take(q)   # Heartbeat: resultado especulado no tempo de WAIT
+        if hit:
+            return hit
         return _exec(f"timeout 25 python3 "
                      f"{Path(__file__).with_name('websearch.py')} '{q}' 2>&1")
     if name == "nix_info":
@@ -1258,8 +1322,10 @@ def main():
                            if (n_words >= 1 and heard != NOVOICE) else None)
                     log(f"[{ts()}] classify({heard[:38]!r}) = {lab}")
                     if lab == "RESPOND":
+                        spec_sniff(heard)   # Heartbeat: prepara tool
                         force = True
                     elif lab == "WAIT":
+                        spec_sniff(heard)   # Heartbeat: prepara no tempo de WAIT
                         # fala continua: devolve ao pending p/ próxima
                         # janela; deadline RENOVADA — sem isso o merge
                         # refire no mesmo tick e re-classifica em loop.
