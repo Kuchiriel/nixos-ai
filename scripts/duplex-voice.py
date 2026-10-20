@@ -100,6 +100,24 @@ def http(url, payload=None, timeout=180):
                                   headers={"Content-Type": "application/json"})
     return json.load(urllib.request.urlopen(req, timeout=timeout))
 
+# (09:15, dono assistindo TV: "ele continua agradecendo sem nada
+# acontecer") ADDRESS GATE no caminho do classificador: com GATE_MODE
+# on, RESPOND só vira resposta se FOR endereçado — 'Jarvis', pergunta
+# ou comando. Fala de TV/sala completa não-chamada = ignora.
+def _addressed(txt):
+    tl = txt.lower()
+    if "?" in txt[-6:] or txt.rstrip().endswith("?"):
+        return True
+    if any(w in tl for w in ("jarvis", "liga", "desliga", "que horas",
+                             "que dia", "abre", "toca", "para", "cancela",
+                             "ajuda", "status", "me conta", "conta",
+                             "explica", "lembra", "busca", "pesquisa")):
+        return True
+    import difflib as _dl
+    return any(_dl.SequenceMatcher(None, w, "jarvis").ratio() >= 0.62
+               for w in tl.replace(",", " ").split())
+
+
 def build_prompt(history, heard):
     prompt = f"<|im_start|>system\n{SYSTEM}<|im_end|>\n"
     for role, content in history + [("user", heard)]:
@@ -1437,15 +1455,19 @@ def main():
                            if (n_words >= 1 and heard != NOVOICE) else None)
                     log(f"[{ts()}] classify({heard[:38]!r}) = {lab}")
                     if lab == "RESPOND":
-                        # (06:25, bateria HB: 'fogo!'/'socorro!' = BARGE
-                        # durante TTS) FALANDO + fala que pede resposta =
-                        # interrupção legítima: cala o TTS AGORA e responde
-                        # (a resposta vem depois do silêncio — full-duplex).
-                        if tts._aplay and tts._aplay.poll() is None:
-                            tts._aplay.kill()
-                            log(f"[{ts()}] RESPOND-durante-TTS: interrupção — TTS morto")
-                        spec_sniff(heard)   # Heartbeat: prepara tool
-                        force = True
+                        # (09:15) modo-TV: classificador diz RESPOND à
+                        # fala COMPLETA da TV/sala — sem endereçamento
+                        # não vira resposta. GATE on = exigir Jarvis/
+                        # pergunta/comando; off = comportamento antigo.
+                        if GATE_MODE == "on" and not _addressed(heard):
+                            log(f"[{ts()}] RESPOND não-endereçado (TV/sala) — ignora: {heard[:40]!r}")
+                            heard = NOVOICE
+                        else:
+                            if tts._aplay and tts._aplay.poll() is None:
+                                tts._aplay.kill()
+                                log(f"[{ts()}] RESPOND-durante-TTS: interrupção — TTS morto")
+                            spec_sniff(heard)   # Heartbeat: prepara tool
+                            force = True
                     elif lab == "WAIT":
                         spec_sniff(heard)   # Heartbeat: prepara no tempo de WAIT
                         # fala continua: devolve ao pending p/ próxima
