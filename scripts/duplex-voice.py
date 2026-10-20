@@ -55,6 +55,8 @@ SYSTEM_PT = (
     "TOOLS: só quando precisar de dado externo (hora, memória, web). "
     "Trivial/piadas/opiniões = responda DIRETO.\n"
     "Após tool: responda com o resultado, nunca repita a pergunta.\n"
+    "Se uma tool retornar ERRO, informe o erro ao dono e NUNCA estime "
+    "ou invente o dado no lugar dela.\n"
     "NUNCA invente horas, dados ou ações. Sem certeza = 'não sei'.\n"
     "Sem 'Ah, Hmm, Pode repetir' — resposta direta e limpa.\n"
     "Os turnos podem chegar fragmentados; considere o conjunto.\n"
