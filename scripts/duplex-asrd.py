@@ -43,6 +43,37 @@ def main():
     ring = np.zeros(0, dtype="float32")
     started = None
 
+    # (20/10, papers voz-stt) 4 defesas anti-alucinação:
+    # 2609.04561 (gated projection): no_speech_prob+avg_logprob como
+    #   gate — é o sinal que o paper usa p/ decidir projetar.
+    # 2609.32560 (two-sided): deny-list de frases-alucinação (léxico
+    #   Scicom HF) — SÓ contaminação inequívoca de legenda; risadas/
+    #   aplausos/música são SINAIS SOCIAIS e passam (direção do dono:
+    #   o agente usa) — o anti-fantasma deles é o gate estatístico.
+    # 2610.08847 (CTC criterion): tokens >> duração do áudio = fakir.
+    # 2608.15940 (null token): o modelo SABE quando não tem fala — os
+    #   logprobs-no_speech são o sinal de abstenção que a gente jogava fora.
+    HALLUC_PT = (
+        "obrigado por assistir", "obrigado por assistirem",
+        "inscreva-se no canal", "até o próximo vídeo",
+        "som de futebol", "música de fundo",
+    )
+
+    def anti_halluc(txt, segs, dur_s):
+        t = " ".join(txt.lower().replace("[", " ").replace("]", " ")
+                     .split()).strip()
+        # 1. deny-list: frase curta com assinatura de legenda = lixo
+        if len(t.split()) <= 6 and any(h in t for h in HALLUC_PT):
+            return ""
+        # 2. gate estatístico: TUDO no_speech alto + logprob ruim = vazio
+        if segs and all(s.get("no_speech_prob", 0) > 0.6 for s in segs) \
+                and all(s.get("avg_logprob", 0) < -0.8 for s in segs):
+            return ""
+        # 3. tokens-vs-duração: PT falado ~2-4 pal/s; >5.5 = impossível
+        if dur_s > 0.3 and len(txt.split()) > dur_s * 5.5:
+            return ""
+        return txt
+
     def seg_to_text(seg):
         if len(seg) < SR * 0.4:
             return ""
@@ -58,6 +89,8 @@ def main():
         # multipart manual: whisper-server espera form-data 'file'
         # (+ 'prompt' com o vocabulário da conversa — paper 2307.14743:
         # last confirmed words as prompt fixa o 'Já viz'→'Jarvis')
+        # (+ 'response_format' verbose_json: expõe no_speech_prob/
+        # avg_logprob por segmento — as defesas anti-halluc)
         body = (
             f"--{boundary}\r\nContent-Disposition: form-data; "
             f"name=\"file\"; filename=\"seg.wav\"\r\n"
@@ -65,12 +98,17 @@ def main():
         if CTX["v"]:
             body += (f"--{boundary}\r\nContent-Disposition: form-data; "
                      f"name=\"prompt\"\r\n\r\n{CTX['v'][:200]}\r\n").encode()
+        body += (f"--{boundary}\r\nContent-Disposition: form-data; "
+                 f"name=\"response_format\"\r\n\r\nverbose_json\r\n").encode()
         body += f"--{boundary}--\r\n".encode()
         req = urllib.request.Request(
             WCPP, data=body,
             headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
         j = json.load(urllib.request.urlopen(req, timeout=60))
-        return str(j.get("text", "")).strip()
+        txt = str(j.get("text", "")).strip()
+        segs = j.get("segments") or []
+        dur_s = float(j.get("duration") or (len(seg) / SR))
+        return anti_halluc(txt, segs, dur_s)
 
     def reset():
         # (10:20) anti-eco (pesquisa: playback suppression + reset do
