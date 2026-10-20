@@ -95,6 +95,41 @@ def build_prompt(history, heard):
         prompt += f"<|im_start|>{role}\n{content}<|im_end|>\n"
     return prompt + "<|im_start|>assistant\n"
 
+
+# ── (19/10) CLASSIFICADOR LoRA micro-turn ────────────────────────────────
+# Treinado no Kaggle (QLoRA r16 no Qwen3.5-4B oficial, 4.676 exemplos:
+# benchmark semantic-turn-taking traduzido +aug PT + sintéticos) e
+# convertido a GGUF. Roda no 4B:8092 via toggle /lora-adapters (7ms)
+# — o chat com tools fica LIMPO (LoRA off). Medido: 132-192ms/class.
+CLASS_SYS = ("Você é o JARVIS, assistente de voz. Classifique o turno do "
+             "usuário em uma palavra: RESPOND (fala completa que pede "
+             "resposta), WAIT (frase incompleta, mais vem), SILENCE "
+             "(backchannel/ruído), ou BARGE (o dono interrompeu sua fala).")
+CLASS_LABELS = ("RESPOND", "WAIT", "SILENCE", "BARGE")
+
+def classify_turn(base, utt):
+    """Label do turno via LoRA; None = falha (caller cai no gate antigo)."""
+    try:
+        http(base + "/lora-adapters", [{"id": 0, "scale": 1.0}])
+        prompt = (f"<|im_start|>system\n{CLASS_SYS}<|im_end|>\n"
+                  f"<|im_start|>user\n{utt}<|im_end|>\n"
+                  f"<|im_start|>assistant\n")
+        j = http(base + "/completion", {
+            "prompt": prompt, "n_predict": 6, "temperature": 0,
+            "stop": ["<|im_end|>"], "cache_prompt": True})
+        out = str(j.get("content", "")).strip().upper()
+        for lab in CLASS_LABELS:
+            if out.startswith(lab):
+                return lab
+        return None
+    except Exception:
+        return None
+    finally:
+        try:
+            http(base + "/lora-adapters", [])
+        except Exception:
+            pass
+
 def tick_once(base, history, heard, force_speak=False, tts=None):
     body = {"prompt": build_prompt(history, heard), "n_predict": 64,
             "temperature": 0, "stop": ["<|im_end|>"], "cache_prompt": True,
@@ -1204,10 +1239,30 @@ def main():
                     heard = NOVOICE
                 n_words = len(heard.split())
                 is_cmd = heard.lower().strip(".,!?") in (
-                    "pare", "para", "stop", "jarvis", "calaboca", "silêncio",
+                    "pare", "para", "stop", "jarvis", "calaboka", "silêncio",
                     "cala boca", "quieto")
-                if n_words < 3 and not is_cmd:
+                # (19/10) CLASSIFICADOR LoRA no lugar das heurísticas:
+                # RESPOND=chat · WAIT=segura · SILENCE=descarta ·
+                # BARGE=mata o TTS. Falha técnica → gate antigo.
+                lab = (classify_turn(base, heard)
+                       if (n_words >= 1 and heard != NOVOICE) else None)
+                log(f"[{ts()}] classify({heard[:38]!r}) = {lab}")
+                if lab == "RESPOND":
+                    force = True
+                elif lab == "WAIT":
+                    # fala continua: devolve ao pending p/ próxima janela
+                    pending.append(heard)
+                    heard = NOVOICE
+                elif lab == "SILENCE":
+                    heard = NOVOICE
+                elif lab == "BARGE":
+                    if tts._aplay and tts._aplay.poll() is None:
+                        tts._aplay.kill()
+                        log(f"[{ts()}] BARGE semântico: TTS morto")
+                    heard = NOVOICE
+                elif n_words < 3 and not is_cmd:
                     log(f"[{ts()}] fragmento curto ({n_words} pal) — ignora: {heard[:30]!r}")
+                    heard = NOVOICE
                 elif not is_backchannel(heard):
                     force = True
                 log(f"[{ts()}] utterância completa: {heard[:60]!r}")
