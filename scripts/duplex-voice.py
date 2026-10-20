@@ -105,13 +105,12 @@ def http(url, payload=None, timeout=180):
 # on, RESPOND só vira resposta se FOR endereçado — 'Jarvis', pergunta
 # ou comando. Fala de TV/sala completa não-chamada = ignora.
 def _addressed(txt):
+    # (10:55, anomalia HB: "Where's the one?" da TV respondeu) o '?' sozinho
+    # deixa Toda pergunta de TV passar. Modo-TV: 'Jarvis' (fuzzy) OBRIGATÓRIO
+    # em tudo — pergunta, comando, o que for. O dono que perguntar sem
+    # chamar repete com 'Jarvis' (custo baixo); TV inteira = silêncio.
     tl = txt.lower()
-    if "?" in txt[-6:] or txt.rstrip().endswith("?"):
-        return True
-    if any(w in tl for w in ("jarvis", "liga", "desliga", "que horas",
-                             "que dia", "abre", "toca", "para", "cancela",
-                             "ajuda", "status", "me conta", "conta",
-                             "explica", "lembra", "busca", "pesquisa")):
+    if "jarvis" in tl:
         return True
     import difflib as _dl
     return any(_dl.SequenceMatcher(None, w, "jarvis").ratio() >= 0.62
