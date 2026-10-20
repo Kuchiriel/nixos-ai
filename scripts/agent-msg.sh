@@ -111,6 +111,8 @@ fi
 # o endereço da MINHA janela (p/ refocar no fim)
 MINHA=$(hyprctl activewindow -j 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('address',''))" 2>/dev/null || true)
 
+# LOG (20/10, aval mútuo HB+OC — melhoria #2): auditoria pós-compact —
+# correlaciona com as notas da fila; $JARVIS_AGENT_NAME identifica o remetente.
 for END in "${ALVOS[@]}"; do
     hyprctl dispatch focuswindow "address:$END"
     sleep 1
@@ -122,6 +124,9 @@ for END in "${ALVOS[@]}"; do
     wtype "$TEXTO"
     wtype -k Return
     echo "enviado p/ $END"
+    printf '%s %s->%s: %s\n' "$(date '+%d/%m %H:%M')" \
+        "${JARVIS_AGENT_NAME:-?}" "${END:-?}" "${TEXTO:0:100}" \
+        >> "$HOME/projects/AGENTS-MSG.log"
 done
 
 [ -n "$MINHA" ] && hyprctl dispatch focuswindow "address:$MINHA" >/dev/null 2>&1 || true
