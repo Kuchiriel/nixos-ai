@@ -315,41 +315,35 @@ class MetacognitionEngine:
     # ── Self-Evaluation (Pós-Fala) ─────────────────────────────────
     
     def evaluate_response(self, text: str, context: Dict = None) -> Dict:
-        """
-        Auto-avaliação PÓS-fala.
-        Retorna dict com avaliação da resposta.
-        """
+        """Auto-avaliação PÓS-fala: confiança, incerteza, risco de
+        alucinação, necessidade de auto-correção."""
+        conf = self.estimate_confidence(text)
+        unc = 1.0 - conf
         eval_result = {
-            'confidence': self.estimate_confidence(text),
-            'uncertainty': 1.0 - self.estimate_confidence(text),
-            'has_tool_call': False,
-            'admits_uncertainty': False,
-            'hallucination_risk': 0.0,
+            'confidence': conf,
+            'uncertainty': unc,
+            'admits_uncertainty': any(m in text.lower() for m in (
+                'não sei', 'não sei dizer', 'não tenho certeza')),
+            'hallucination_risk': unc if unc > 0.6 else 0.0,
             'self_correction_needed': False,
+            'reason': '',
         }
-        
-        # Verifica se usou tool quando deveria
-        if context and context.get('expected_tool') and not self._text_has_tool_call(text):
-            evaluation['self_correction_needed'] = True
-            evaluation['reason'] = 'Deveria ter chamado tool mas não chamou'
-        
-        # Verifica auto-correção
-        if 'errei' in text.lower() or 'me corrijo' in text.lower() or 'me corrijo' in text.lower():
-            evaluation['self_correction'] = True
+        # auto-correção confessada pelo próprio modelo
+        if any(m in text.lower() for m in ('errei', 'me corrijo', 'na verdade, não')):
+            eval_result['self_correction'] = True
+            eval_result['self_correction_needed'] = True
+            eval_result['reason'] = 'auto-correção confessada'
             self.stats['self_corrections'] += 1
-        
-        # Atualiza histórico
-        sample = ConfidenceSample(
-            timestamp=time.time(),
-            text=text,
-            confidence=self.estimate_confidence(text),
-            uncertainty=1.0 - self.estimate_confidence(text),
-            source='post_speech_eval'
-        )
-        self.state.add_sample(sample)
-        
-        return evaluation
-    
+        # tool esperada mas não chamada
+        if context and context.get('expected_tool'):
+            eval_result['self_correction_needed'] = True
+            eval_result['reason'] = 'tool esperada não chamada'
+        # registra
+        self.state.add_sample(ConfidenceSample(
+            timestamp=time.time(), text=text[:200], confidence=conf,
+            uncertainty=unc, source='post_speech_eval'))
+        return eval_result
+
     def _uncertainty_score(self, text: str) -> float:
         """Score de incerteza 0-1 baseado em heurísticas."""
         score = 0.0
