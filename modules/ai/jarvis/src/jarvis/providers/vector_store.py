@@ -233,6 +233,7 @@ class QdrantStore:
         with_payload: bool = True,
         dense_weight: float = 5.0,
         ext_filter: str | None = None,
+        filter: "dict[str, Any] | None" = None,
     ) -> list[dict[str, Any]]:
         """Busca híbrida nativa: prefetch dense + sparse com fusão RRF.
 
@@ -243,12 +244,15 @@ class QdrantStore:
 
         `ext_filter` (ex: ".py") restringe os prefetches via payload.ext —
         espelho do filtro de extensão que o V4.0.5 aplicava antes do scoring.
+        `filter` (qdrant Filter) aplica filtro adicional no payload.
         """
         prefetch: list[dict[str, Any]] = [
             {"query": dense, "using": DENSE_VECTOR_NAME, "limit": dense_limit},
             {"query": sparse, "using": SPARSE_VECTOR_NAME, "limit": sparse_limit},
         ]
-        if ext_filter:
+        if filter:
+            prefetch = [{**p, "filter": filter} for p in prefetch]
+        elif ext_filter:
             payload_filter = {"must": [{"key": "ext", "match": {"value": ext_filter}}]}
             prefetch = [{**p, "filter": payload_filter} for p in prefetch]
         payload: dict[str, Any] = {

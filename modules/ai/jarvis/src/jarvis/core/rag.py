@@ -52,6 +52,88 @@ def _load_ragignore(root: Path) -> "object | None":
     except ImportError:
         return _SimpleIgnoreMatcher(patterns)
 
+# ---------------------------------------------------------------------------
+# Metadata extraction helpers for improved retrieval
+# ---------------------------------------------------------------------------
+import re
+import os
+
+def _extract_arxiv_id(path: str, content: str) -> str | None:
+    """Extract arXiv ID from path or content."""
+    # Try from filename first
+    m = re.search(r'(\d{4}\.\d{4,5}(?:v\d+)?)', os.path.basename(path))
+    if m:
+        return m.group(1)
+    # Try from content
+    m = re.search(r'arXiv:(\d{4}\.\d{4,5}(?:v\d+)?)', content[:2000])
+    if m:
+        return m.group(1)
+    m = re.search(r'arXiv:(\d{4}\.\d{4,5})', content[:2000])
+    if m:
+        return m.group(1)
+    return None
+
+def _extract_year(content: str) -> str | None:
+    """Extract year from content."""
+    m = re.search(r'(20\d{2})', content[:2000])
+    if m:
+        year = int(m.group(1))
+        if 2000 <= year <= 2030:
+            return str(year)
+    return None
+
+def _extract_domain(path: str, content: str) -> str | None:
+    """Extract domain from path or content."""
+    path_lower = path.lower()
+    if any(w in path_lower for w in ['voz', 'stt', 'asr', 'tts', 'voice']):
+        return 'voice'
+    if any(w in path_lower for w in ['kernel', 'harness', 'agent']):
+        return 'agent'
+    if any(w in path_lower for w in ['rag', 'hybrid', 'search', 'retrieval']):
+        return 'rag'
+    if any(w in path_lower for w in ['vision', 'vision']):
+        return 'vision'
+    if any(w in path_lower for w in ['embedding', 'embedding']):
+        return 'embedding'
+    if any(w in path_lower for w in ['llm', 'llama', 'qwen']):
+        return 'llm'
+    if any(w in path_lower for w in ['memory', 'memory']):
+        return 'memory'
+    if any(w in path_lower for w in ['eval', 'eval']):
+        return 'eval'
+    if any(w in path_lower for w in ['benchmark', 'benchmark']):
+        return 'benchmark'
+    # Check content for domain keywords
+    content_lower = content[:2000].lower()
+    if any(w in content_lower for w in ['speech', 'audio', 'voice', 'whisper', 'asr', 'tts']):
+        return 'voice'
+    if any(w in content_lower for w in ['agent', 'tool', 'function', 'api']):
+        return 'agent'
+    if any(w in content_lower for w in ['retrieval', 'retriever', 'rag', 'embedding', 'vector']):
+        return 'rag'
+    if any(w in content_lower for w in ['memory', 'episodic', 'semantic']):
+        return 'memory'
+    return None
+
+# ---------------------------------------------------------------------------
+# .ragignore — sintaxe gitignore (padrão de mercado: mesma engine do .gitignore,
+    """Carrega o .ragignore da raiz. Retorna spec (pathspec) ou matcher fallback."""
+    ignore_file = root / _RAGIGNORE_NAME
+    if not ignore_file.is_file():
+        return None
+    try:
+        lines = ignore_file.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return None
+    patterns = [ln for ln in (l.strip() for l in lines) if ln and not ln.startswith("#")]
+    if not patterns:
+        return None
+    try:
+        import pathspec  # lib-canônica de gitignore (black/ruff); opcional
+        return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+    except ImportError:
+        return _SimpleIgnoreMatcher(patterns)
+
 
 def _ragignore_rejects(matcher: "object | None", rel: str) -> bool:
     """True se `rel` (caminho relativo à raiz, POSIX) deve ser ignorado.
@@ -626,6 +708,9 @@ class HybridIndexer:
                     "sanitizer_version": _sanitizer_version if _sanitizer_version else "1.0.0",
                     "ingested_at": _ingested_at,
                     "embedding_model": self._cfg.embed_model,
+                    "arxiv_id": _extract_arxiv_id(path, content),
+                    "year": _extract_year(content),
+                    "domain": _extract_domain(path, content),
                 },
             }
             self._store.upsert(self._cfg.qdrant_collection_code, [point])
@@ -714,8 +799,25 @@ class HybridSearch:
         dense_override: list[float] | None = None,
         use_rerank: bool = True,
         diversify: bool = True,
+        metadata_filter: dict[str, Any] | None = None,
+        hyde: bool = False,
     ) -> list[HybridHit]:
-        """Busca híbrida (prefetch dense+sparse + RRF) e re-rank V4.0.5."""
+        """Busca híbrida (prefetch dense+sparse + RRF) e re-rank V4.0.5.
+
+        Args:
+            query: Query text
+            top_k: Number of results to return
+            dense_limit: Max dense candidates
+            sparse_limit: Max sparse candidates
+            dense_override: Pre-computed dense vector
+            use_rerank: Whether to apply cross-encoder reranking
+            diversify: Whether to diversify by source
+            metadata_filter: Optional metadata filter (e.g., {"arxiv_id": "2610.17124", "domain": "voice"})
+            hyde: Whether to use HyDE (Hypothetical Document Embeddings) for ambiguous queries
+        """
+        if hyde:
+            query = self._hyde_expand(query)
+
         if dense_override is not None:
             dense = dense_override
         else:
@@ -724,6 +826,21 @@ class HybridSearch:
                 return []
 
         sparse = sparse_vector(sparse_terms(query))
+
+        # Build filter for Qdrant
+        qdrant_filter = None
+        if metadata_filter:
+            try:
+                from qdrant_client.models import Filter, FieldCondition, MatchValue
+            except ImportError:
+                Filter = FieldCondition = MatchValue = None
+            if Filter is not None:
+                conditions = []
+                for key, value in metadata_filter.items():
+                    conditions.append(FieldCondition(key=key, match=MatchValue(value=value)))
+                if conditions:
+                    qdrant_filter = Filter(must=conditions)
+
         raw = self._store.search_hybrid(
             self._cfg.qdrant_collection_code,
             dense,
@@ -732,6 +849,7 @@ class HybridSearch:
             dense_limit=dense_limit,
             sparse_limit=sparse_limit,
             ext_filter=_target_extension(query),
+            filter=qdrant_filter,
         )
 
         boosted = apply_legacy_boosts(query, raw)
@@ -757,6 +875,27 @@ class HybridSearch:
             )
             for hit in ranked[:top_k]
         ]
+
+    def _hyde_expand(self, query: str) -> str:
+        """Generate hypothetical document for HyDE (Hypothetical Document Embeddings).
+
+        Generates a hypothetical answer to the query, then uses that as the
+        search query. Helps with ambiguous or underspecified queries.
+        """
+        try:
+            prompt = f"""Answer the following question concisely:
+
+Question: {query}
+
+Answer:"""
+            from jarvis.providers.llm import LLMClient
+            from jarvis.core.config import Config
+            cfg = Config()
+            llm = LLMClient(cfg)
+            response = llm.generate(prompt, max_tokens=200, temperature=0.3)
+            return f"{query} {response.strip()}"
+        except Exception:
+            return query
 
     def _rerank_candidates(self, query: str, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Reordena os candidatos (já boosted) pelo cross-encoder.
