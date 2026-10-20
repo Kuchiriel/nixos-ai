@@ -1470,12 +1470,15 @@ def main():
                     # segue pro tick sem force (entra no history embaixo)
                 elif _heard_clean in ("obrigado", "obrigada",
                                       "muito obrigado", "muito obrigada",
-                                      "valeu", "valeu!", "blz", "ok obrigado"):
+                                      "valeu", "valeu!", "blz", "ok obrigado",
+                                      "thank you", "thanks", "thanks a lot"):
                     # (08:40, dono: "qualquer barulho vira 'obrigado' e
                     # ele fica 'de nada dono'") o turbo TEM esse vício de
                     # transcrição em ruído — obrigado SECO = backchannel:
                     # silêncio educado, zero resposta. Agradecimento com
                     # CONTEÚDO ('obrigado pela ajuda') responde normal.
+                    # (09:40) EN: 'Thank you.' ×5 da TV no live-fire —
+                    # mesmo vício, mesma cura (defesa p/ gate-off).
                     log(f"[{ts()}] backchannel obrigado — silêncio: {heard[:30]!r}")
                     heard = NOVOICE
                 else:
