@@ -16,6 +16,7 @@ Protocolo stdio (igual o cliente já fala):
 import base64
 import io
 import json
+import re as _re
 import sys
 import time
 import urllib.request
@@ -105,7 +106,22 @@ def main():
         # 1. deny-list dura: contaminação inequívoca de legenda
         if len(t.split()) <= 6 and any(h in t for h in HALLUC_PT):
             return ""
+        # 1a. (06:15, fixtures HB + stats reais: turbo alucina COM
+        # CONFIANÇA MÁXIMA — ns ~1e-10, lp ~-0.01; o gate por stats NÃO
+        # discrimina. Padrões dominantes = kill determinístico.)
+        # Greeting fantasma: 'E aí' SECO (≤2 pal). A saudação REAL
+        # completa ('E aí, tudo bom?') passa. Trade-off no queue p/ dono.
+        if t in ("e aí", "e ai", "e aí e aí", "e ai e ai",
+                 "a cidade no brasil", "a cidade no brasil a cidade no brasil"):
+            return ""
+        # Stutter redup: 'A-a-a-a-a' (loop de sílaba hifenizada)
+        if _re.search(r"\b(\w{1,3})(-\1){2,}", t):
+            return ""
+        # Legenda-leading: 'Legenda Adriana Zanotto' — ninguém COMEÇA
+        # fala com 'Legenda' ('a legenda' no meio passa)
         t_words = t.split()
+        if t_words and t_words[0] == "legenda" and len(t_words) <= 4:
+            return ""
         first2 = " ".join(t_words[:2])
         # 1b. suspeitos GATED (léxico Scicom + greetings fantasma do
         #     turbo [eval HB] + repetição redup): stats fracos = morte;

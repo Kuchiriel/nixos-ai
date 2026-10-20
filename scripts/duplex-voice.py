@@ -1313,7 +1313,12 @@ def main():
                 # ([risadas], [aplausos], [música]): NÃO é pergunta — pula
                 # o classificador (economiza 150ms) e não força resposta;
                 # mas ENTRA no histórico = contexto social pro LLM reagir.
-                if heard.startswith("[") and "]" in heard and n_words <= 4:
+                # (06:20) 'música' SECA também: o turbo transcreve a
+                # ambiência SEM colchetes — mesmo tratamento (é detecção
+                # CORRETA de música tocando, não alucinação).
+                _heard_clean = heard.lower().strip(" .,!?")
+                if (heard.startswith("[") and "]" in heard and n_words <= 4) \
+                        or _heard_clean in ("música", "música música"):
                     log(f"[{ts()}] sinal social: {heard[:40]!r} — histórico")
                     # segue pro tick sem force (entra no history embaixo)
                 else:
