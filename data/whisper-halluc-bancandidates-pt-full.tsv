@@ -1,0 +1,86 @@
+# Scicom ban_candidates lang=pt — verdict-curated (20/10). cols: phrase	phrase_norm	hallucination_count	genuine_exact	genuine_substring	n_words	verdict	reason
+phrase	phrase_norm	hallucination_count	genuine_exact	genuine_substring	n_words	verdict	reason
+Sra	sra	8711	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 8711
+Presidente	presidente	1486	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 1486
+Sr	sr	1435	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 1435
+Obrigada	obrigada	1148	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 1148
+Presidente, Sr	presidente sr	761	0	0	2	safe_candidate	two-word, heavily hallucinated, never observed genuine
+obrigado	obrigado	620	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 620
+Obrigada, Sra	obrigada sra	520	0	0	2	safe_candidate	two-word, heavily hallucinated, never observed genuine
+Obrigado, Sr	obrigado sr	370	0	0	2	safe_candidate	two-word, heavily hallucinated, never observed genuine
+Obrigada, Sr	obrigada sr	349	0	0	2	safe_candidate	two-word, heavily hallucinated, never observed genuine
+Já	já	201	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 201
+Muito obrigada	muito obrigada	168	0	0	2	safe_candidate	two-word, heavily hallucinated, never observed genuine
+Enf	enf	135	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 135
+Srs	srs	123	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 123
+Muito obrigado	muito obrigado	109	0	0	2	safe_candidate	two-word, heavily hallucinated, never observed genuine
+Com licença	com licença	105	0	0	2	safe_candidate	two-word, heavily hallucinated, never observed genuine
+800, 1	800 1	85	0		2	weak_evidence	never observed genuine, but only 2 word(s) / count 85
+Renda, Sr	renda sr	75	0	0	2	weak_evidence	never observed genuine, but only 2 word(s) / count 75
+Diz, Sr	diz sr	72	0	0	2	weak_evidence	never observed genuine, but only 2 word(s) / count 72
+Presidente, o Sr	presidente o sr	68	0	0	3	safe_candidate	multi-word, frequently hallucinated, never observed genuine
+Presidente, Sra	presidente sra	67	0	0	2	weak_evidence	never observed genuine, but only 2 word(s) / count 67
+Cavada	cavada	66	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 66
+Svab	svab	64	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 64
+Contra	contra	63	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 63
+Abstenções	abstenções	59	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 59
+Martins	martins	57	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 57
+O que é a reunião	o que é a reunião	55	0	0	5	safe_candidate	multi-word, frequently hallucinated, never observed genuine
+Jouvin, o Sr	jouvin o sr	52	0	0	3	safe_candidate	multi-word, frequently hallucinated, never observed genuine
+tchau	tchau	4	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 4
+fim	fim	3	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 3
+obrigado por assistir	obrigado por assistir	3	0	0	3	weak_evidence	never observed genuine, but only 3 word(s) / count 3
+até a próxima	até a próxima	2	0	0	3	weak_evidence	never observed genuine, but only 3 word(s) / count 2
+e aí	e aí	2	0		2	weak_evidence	never observed genuine, but only 2 word(s) / count 2
+eu acho que eu vou	eu acho que eu vou	2	0	0	5	weak_evidence	never observed genuine, but only 5 word(s) / count 2
+fui	fui	2	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 2
+obrigada por assistir	obrigada por assistir	2	0	0	3	weak_evidence	never observed genuine, but only 3 word(s) / count 2
+é isso aí	é isso aí	2	0	0	3	weak_evidence	never observed genuine, but only 3 word(s) / count 2
+é isso aí valeu	é isso aí valeu	2	0	0	4	weak_evidence	never observed genuine, but only 4 word(s) / count 2
+a gente vai lá	a gente vai lá	1	0	0	4	weak_evidence	never observed genuine, but only 4 word(s) / count 1
+abertura	abertura	1	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 1
+acesse o canal e veja outras coisas	acesse o canal e veja outras coisas	1	0	0	7	weak_evidence	never observed genuine, but only 7 word(s) / count 1
+ae	ae	1	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 1
+ah	ah	1	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 1
+ainda não	ainda não	1	0	0	2	weak_evidence	never observed genuine, but only 2 word(s) / count 1
+aplausos	aplausos	1	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 1
+assistir	assistir	1	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 1
+atenção	atenção	1	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 1
+ações de novos vídeos	ações de novos vídeos	1	0	0	4	weak_evidence	never observed genuine, but only 4 word(s) / count 1
+deixar um like e compartilhar o vídeo obrigado por	deixar um like e compartilhar o vídeo obrigado por	1	0	0	9	weak_evidence	never observed genuine, but only 9 word(s) / count 1
+em breve para sua segurança todos os passageiros devem	em breve para sua segurança todos os passageiros devem	1	0	0	9	weak_evidence	never observed genuine, but only 9 word(s) / count 1
+eu não sei	eu não sei	1	0	0	3	weak_evidence	never observed genuine, but only 3 word(s) / count 1
+eu não sei o que dizer mas eu vou ficar com o meu	eu não sei o que dizer mas eu vou ficar com o meu	1	0	0	13	weak_evidence	never observed genuine, but only 13 word(s) / count 1
+eu vou fazer isso	eu vou fazer isso	1	0	0	4	weak_evidence	never observed genuine, but only 4 word(s) / count 1
+eu vou ficar aqui hein	eu vou ficar aqui hein	1	0	0	5	weak_evidence	never observed genuine, but only 5 word(s) / count 1
+eu vou te mostrar como fazer isso	eu vou te mostrar como fazer isso	1	0	0	7	weak_evidence	never observed genuine, but only 7 word(s) / count 1
+fala paulo	fala paulo	1	0	0	2	weak_evidence	never observed genuine, but only 2 word(s) / count 1
+ficar fora das escadas as rampas e as ladeiras	ficar fora das escadas as rampas e as ladeiras	1	0	0	9	weak_evidence	never observed genuine, but only 9 word(s) / count 1
+fiz a tchepa	fiz a tchepa	1	0	0	3	weak_evidence	never observed genuine, but only 3 word(s) / count 1
+inho para receber notificações de novos vídeos	inho para receber notificações de novos vídeos	1	0	0	7	weak_evidence	never observed genuine, but only 7 word(s) / count 1
+inscreva se no canal	inscreva se no canal	1	0	0	4	weak_evidence	never observed genuine, but only 4 word(s) / count 1
+legendas pela comunidade amara org	legendas pela comunidade amara org	1	0	0	5	weak_evidence	never observed genuine, but only 5 word(s) / count 1
+muito bom	muito bom	1	0	0	2	weak_evidence	never observed genuine, but only 2 word(s) / count 1
+música animada	música animada	1	0	0	2	weak_evidence	never observed genuine, but only 2 word(s) / count 1
+música de fundo	música de fundo	1	0	0	3	weak_evidence	never observed genuine, but only 3 word(s) / count 1
+música de suspenso	música de suspenso	1	0	0	3	weak_evidence	never observed genuine, but only 3 word(s) / count 1
+não	não	1	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 1
+não se esqueça de se inscrever	não se esqueça de se inscrever	1	0	0	6	weak_evidence	never observed genuine, but only 6 word(s) / count 1
+o que você acha comente	o que você acha comente	1	0	0	5	weak_evidence	never observed genuine, but only 5 word(s) / count 1
+o que é isso	o que é isso	1	0	0	4	weak_evidence	never observed genuine, but only 4 word(s) / count 1
+o que é que é isso	o que é que é isso	1	0	0	6	weak_evidence	never observed genuine, but only 6 word(s) / count 1
+obrigado por assistir se inscreva no canal e ative o sin	obrigado por assistir se inscreva no canal e ative o sin	1	0	0	11	weak_evidence	never observed genuine, but only 11 word(s) / count 1
+obrigado por assistir se você gostou não esqueça de	obrigado por assistir se você gostou não esqueça de	1	0	0	9	weak_evidence	never observed genuine, but only 9 word(s) / count 1
+puxa	puxa	1	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 1
+que é o que eu faço	que é o que eu faço	1	0	0	6	weak_evidence	never observed genuine, but only 6 word(s) / count 1
+quero pedir atenção por favor o feriado estará descer	quero pedir atenção por favor o feriado estará descer	1	0	0	9	weak_evidence	never observed genuine, but only 9 word(s) / count 1
+se inscreva no canal ative notificações e ative notificações	se inscreva no canal ative notificações e ative notificações	1	0	0	9	weak_evidence	never observed genuine, but only 9 word(s) / count 1
+se inscreva no canal e ative as notificações	se inscreva no canal e ative as notificações	1	0	0	8	weak_evidence	never observed genuine, but only 8 word(s) / count 1
+se inscreva no canal e ative o sininho	se inscreva no canal e ative o sininho	1	0	0	8	weak_evidence	never observed genuine, but only 8 word(s) / count 1
+se inscreva no canal e ative o sininho para receber notific	se inscreva no canal e ative o sininho para receber notific	1	0	0	11	weak_evidence	never observed genuine, but only 11 word(s) / count 1
+sente	sente	1	0		1	weak_evidence	never observed genuine, but only 1 word(s) / count 1
+siga me no instagram	siga me no instagram	1	0	0	4	weak_evidence	never observed genuine, but only 4 word(s) / count 1
+subtitles by the amara org community	subtitles by the amara org community	1	0	0	6	weak_evidence	never observed genuine, but only 6 word(s) / count 1
+tchau tchau	tchau tchau	1	0	0	2	weak_evidence	never observed genuine, but only 2 word(s) / count 1
+transcrição e legendas pela comunidade amara org	transcrição e legendas pela comunidade amara org	1	0	0	7	weak_evidence	never observed genuine, but only 7 word(s) / count 1
+vem cá	vem cá	1	0	0	2	weak_evidence	never observed genuine, but only 2 word(s) / count 1

@@ -1,0 +1,12 @@
+# PT safe_candidate = hard-ban OK (multi-word, never genuine) — asrd gate tier 2
+phrase	phrase_norm	hallucination_count	n_words
+Presidente, Sr	presidente sr	761	2
+Obrigada, Sra	obrigada sra	520	2
+Obrigado, Sr	obrigado sr	370	2
+Obrigada, Sr	obrigada sr	349	2
+Muito obrigada	muito obrigada	168	2
+Muito obrigado	muito obrigado	109	2
+Com licença	com licença	105	2
+Presidente, o Sr	presidente o sr	68	3
+O que é a reunião	o que é a reunião	55	5
+Jouvin, o Sr	jouvin o sr	52	3
