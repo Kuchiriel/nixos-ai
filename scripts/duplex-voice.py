@@ -409,6 +409,51 @@ def corr_with_ref(chunk16, max_lag_s=0.8, step=160):
     return best
 
 
+def mp_aec_process(chunk16, n_paths=3, max_lag_s=0.8, step=160):
+    """(09:45, LMPAN 2607.02062 insight) Matching-Pursuit AEC: o eco do
+    notebook é MULTI-CAMINHO (direto + reflexões); o aec_process de 1
+    tap com delay FIXO não alinhava (resíduo ≈ eco cru — provado).
+    Aqui: por chunk, encontra o melhor lag por correlação, subtrai com
+    o ganho casado, repete p/ n caminhos. O RESÍDUO (voz do dono +
+    ruído não-modelado) vai pro ASR — o barge por cima do falante
+    transcreve LIMPO. numpy puro, custo = n_paths × lags × dot."""
+    with AEC["lock"]:
+        ref = AEC["ref"]
+    if ref is None:
+        return chunk16
+    ref = ref if isinstance(ref, np.ndarray) else np.frombuffer(
+        ref, dtype=np.int16)
+    n = len(chunk16)
+    if len(ref) < n + step:
+        return chunk16
+    c = chunk16.astype(np.float64).copy()
+    lo = max(0, len(ref) - n - int(max_lag_s * 16000))
+    hi = len(ref) - n
+    for _ in range(n_paths):
+        cn = np.linalg.norm(c)
+        if cn < 1e-6:
+            break
+        best_v, best_i, best_rn = 0.0, -1, 0.0
+        i = lo
+        while i <= hi:
+            r = ref[i:i + n].astype(np.float64)
+            rn = np.linalg.norm(r)
+            if rn > 1e-6:
+                v = abs(float(np.dot(c, r))) / (cn * rn)
+                if v > best_v:
+                    best_v, best_i, best_rn = v, i, rn
+                    if v > 0.98:
+                        break
+            i += step
+        if best_i < 0 or best_v < 0.15:
+            break        # sem mais eco correlacionado que valha
+        r = ref[best_i:best_i + n].astype(np.float64)
+        g = float(np.dot(c, r)) / (best_rn * best_rn + 1e-9)
+        g = max(-1.5, min(1.5, g))          # ganho físico plausível
+        c -= g * r
+    return c.astype(np.int16)
+
+
 def aec_clear():
     """Pós-playback: a referência morre (o AEC NUNCA processa chunks
     fora da janela real de playback — era o bug do mute: o gain
@@ -1328,7 +1373,7 @@ def main():
                 # erro de cancelamento. Piso ADAPTATIVO: mediana móvel do
                 # resíduo durante a fala = nível do eco remanescente;
                 # barge só se ACRESCENTA energia SIGNIFICATIVA (×1.6).
-                _processed = aec_process(c16)
+                _processed = mp_aec_process(c16)
                 rrms = int(np.sqrt((_processed.astype(np.float64) ** 2)
                                    .mean()))
                 if tts_playing:
