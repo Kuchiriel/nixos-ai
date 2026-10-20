@@ -49,9 +49,12 @@ nix flake check
 ## Boundaries
 
 - **Always:** run tests before committing; check `git ls-files` for
-   session-created files; commit in EN with a verb (`feat:`/`fix:`/
+   session-created files; commit in EN with a verb (`feat:`/`fix:`
    `chore:`/`docs:`); every new rule enters **only after** an agent
-   really errs (grows organically, not speculatively).
+   really errs (grows organically, not speculatively);
+   research the latest papers on the current subject/difficulty BEFORE
+   implementing (owner directive 20/10 — `~/Books/papers` + RAG `books`,
+   arXiv direct, HF cards).
 - **Ask:** changing the host `configuration.nix`; llama-server flags;
    new dependencies; mutating live memory (`consolidate --apply`).
 - **Never:** direct `nixos-rebuild`; edit `/nix/store`; `git add .` without
