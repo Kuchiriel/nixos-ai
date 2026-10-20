@@ -283,16 +283,23 @@ def e2e_playback(args) -> dict:
             dcls, lcls = wait_for("classify", 12)
             ok_sil = lcls and ("SILENCE" in lcls or "silêncio" in lcls or "backchannel" in lcls)
             r["verdict"] = "ok-silenced" if ok_sil else ("classified" if lcls else "no-segment")
-        else:  # BARGE — kill real do TTS (markers OC: 'BARGE semantico: TTS morto'
-               # / 'RESPOND-durante-TTS: interrupcao — TTS morto') + evidência semântica
-            dcls, lcls = wait_for("TTS morto", 12)
-            if not dcls:
-                dcls, lcls = wait_for("classify", 12)
-                lcls = lcls if (lcls and "BARGE" in lcls) else None
-            r["barge_reaction_s"] = round(dcls, 2) if dcls else None
-            r["classify_line"] = lcls.strip()[:80] if lcls else None
-            r["verdict"] = "tts-killed" if (lcls and "morto" in lcls) else \
-                           ("barge-seen" if dcls else "no-barge-evidence")
+        else:  # BARGE — fase 3: barge DURANTE a resposta (senão não há TTS p/ matar).
+               # sequência: pergunta longa → espera TTS( → barge por cima → kill.
+            qidx, qu_ = by["RESPOND"][11]  # "Jarvis, me conta uma piada." (resposta longa)
+            subprocess.run([player, os.path.join(WAVS, f"utt_{qidx:03d}.wav")],
+                           check=False)
+            dtts, ltts = wait_for("TTS(", 20)
+            if not dtts:
+                r["verdict"] = "no-response-to-barge-onto"
+            else:
+                time.sleep(1.2)          # TTS audível no meio
+                t0 = time.monotonic()
+                subprocess.run([player, wav], check=False)
+                dkill, lkill = wait_for("TTS morto", 10)
+                r["barge_reaction_s"] = round(time.monotonic() - t0 - 1.2, 2)
+                r["kill_line"] = lkill.strip()[:80] if lkill else None
+                r["verdict"] = "tts-killed" if dkill else "barge-not-kill"
+            r["classify_line"] = None
         report["scenarios"].append(r)
         print(f"{expect:8s} {utt[:30]:30s} {r['verdict']}")
         time.sleep(2)
