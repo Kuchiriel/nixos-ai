@@ -159,6 +159,14 @@ def classify_turn(base, utt):
             pass
 
 def tick_once(base, history, heard, force_speak=False, tts=None):
+    # (10:15, regressão HB: classify 621→1190ms) O micro-turn por tick era
+    # VESTIGIAL — o classificador LoRA (classify_turn no merge) substituiu
+    # sua função de decisão. Cada tick ocupava o slot único com 602 tokens
+    # de história (135-460ms × 2Hz) e o classify ESPERAVA na fila = TimeSpeak
+    # dobrado. Agora: tick = áudio puro; LLM só no merge (classify) e no
+    # RESPOND (chat). Slot livre = classify instantâneo de novo.
+    if not force_speak:
+        return LISTEN, 0.0
     body = {"prompt": build_prompt(history, heard), "n_predict": 64,
             "temperature": 0, "stop": ["<|im_end|>"], "cache_prompt": True,
             "n_probs": 8}
