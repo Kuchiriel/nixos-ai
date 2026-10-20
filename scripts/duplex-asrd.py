@@ -211,55 +211,6 @@ def main():
     # Adaptive VAD threshold based on ambient noise (paper 2609.04561: gated
 # projection uses no_speech_prob as gate; adaptive threshold improves
 # echo/duplex scenarios). Maintains EMA of noise floor.
-class AdaptiveVAD:
-    def __init__(self, model, base_threshold=0.5, min_thresh=0.3, max_thresh=0.7):
-        self.model = model
-        self.base_threshold = 0.5
-        self.threshold = 0.5
-        self.min_thresh = 0.3
-        self.max_thresh = 0.7
-        self.vad = FixedVADIterator(model, threshold=0.5,
-                                    min_silence_duration_ms=400,
-                                    speech_pad_ms=150)
-        self.noise_floor = 0.0
-        self.alpha = 0.1  # EMA smoothing
-
-    def update_threshold(self, rms):
-        """Update threshold based on ambient noise level (RMS)."""
-        # EMA of noise floor (when no speech detected)
-        self.noise_floor = self.alpha * rms + (1 - self.alpha) * self.noise_floor
-        # Adaptive threshold: higher noise floor -> higher threshold
-        # Map noise floor to threshold range
-        normalized = min(max(self.noise_floor / 1000.0, 0.0), 1.0)
-        self.threshold = self.min_thresh + (self.max_thresh - self.min_thresh) * normalized
-        self.threshold = max(self.min_thresh, min(self.max_thresh, self.threshold))
-        # Recreate VAD with new threshold
-        self.vad = FixedVADIterator(self.model, threshold=self.threshold,
-                                    min_silence_duration_ms=400,
-                                    speech_pad_ms=150)
-
-    def __call__(self, chunk):
-        return self.vad(chunk)
-
-    def reset(self):
-        self.vad = FixedVADIterator(self.model, threshold=self.threshold,
-                                    min_silence_duration_ms=400,
-                                    speech_pad_ms=150)
-
-
-def reset():
-    # (10:20) anti-eco (pesquisa: playback suppression + reset do
-    # estado de VAD no início E no fim do TTS — o tail do eco senão
-    # fecha um segmento fantasma e o modelo responde a si).
-    global ring, started, vad
-    ring = np.zeros(0, dtype="float32")
-    started = None
-    # Adaptive VAD with noise-adaptive threshold (paper 2609.04561)
-    vad = AdaptiveVAD(model, base_threshold=0.5, min_thresh=0.3, max_thresh=0.7)
-
-    # (19:30) SPEAKER ENGINE v2: multi-voz (papers: VAD→embed→cluster)
-    # profiles = {nome: embedding}; a cada segmento identifica a voz;
-    # clusters de embeddings recentes = contagem de pessoas falando.
     SPK_PROFILES = {}
     try:
         _cfg = json.loads(Path("/tmp/jarvis-spk-profiles.json").read_text())
@@ -353,5 +304,55 @@ def reset():
             print(json.dumps({"text": "", "ms": 0, "err": str(exc)[:120]}),
                   flush=True)
 
+
+class AdaptiveVAD:
+    def __init__(self, model, base_threshold=0.5, min_thresh=0.3, max_thresh=0.7):
+        self.model = model
+        self.base_threshold = 0.5
+        self.threshold = 0.5
+        self.min_thresh = 0.3
+        self.max_thresh = 0.7
+        self.vad = FixedVADIterator(model, threshold=0.5,
+                                    min_silence_duration_ms=400,
+                                    speech_pad_ms=150)
+        self.noise_floor = 0.0
+        self.alpha = 0.1  # EMA smoothing
+
+    def update_threshold(self, rms):
+        """Update threshold based on ambient noise level (RMS)."""
+        # EMA of noise floor (when no speech detected)
+        self.noise_floor = self.alpha * rms + (1 - self.alpha) * self.noise_floor
+        # Adaptive threshold: higher noise floor -> higher threshold
+        # Map noise floor to threshold range
+        normalized = min(max(self.noise_floor / 1000.0, 0.0), 1.0)
+        self.threshold = self.min_thresh + (self.max_thresh - self.min_thresh) * normalized
+        self.threshold = max(self.min_thresh, min(self.max_thresh, self.threshold))
+        # Recreate VAD with new threshold
+        self.vad = FixedVADIterator(self.model, threshold=self.threshold,
+                                    min_silence_duration_ms=400,
+                                    speech_pad_ms=150)
+
+    def __call__(self, chunk):
+        return self.vad(chunk)
+
+    def reset(self):
+        self.vad = FixedVADIterator(self.model, threshold=self.threshold,
+                                    min_silence_duration_ms=400,
+                                    speech_pad_ms=150)
+
+
+def reset():
+    # (10:20) anti-eco (pesquisa: playback suppression + reset do
+    # estado de VAD no início E no fim do TTS — o tail do eco senão
+    # fecha um segmento fantasma e o modelo responde a si).
+    global ring, started, vad
+    ring = np.zeros(0, dtype="float32")
+    started = None
+    # Adaptive VAD with noise-adaptive threshold (paper 2609.04561)
+    vad = AdaptiveVAD(model, base_threshold=0.5, min_thresh=0.3, max_thresh=0.7)
+
+    # (19:30) SPEAKER ENGINE v2: multi-voz (papers: VAD→embed→cluster)
+    # profiles = {nome: embedding}; a cada segmento identifica a voz;
+    # clusters de embeddings recentes = contagem de pessoas falando.
 if __name__ == "__main__":
     main()
