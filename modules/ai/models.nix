@@ -306,7 +306,10 @@ in rec {
       wanted = false;  # lane de voz: sobe no "hey jarvis acordar" (ou manual)
     };
     uncensored-4b = {
-      port = 8092; binary = "upstream";
+      # (19/10) binary stock (v0.7.0-dev build local): o upstream nixpkgs
+      # 0.5.0 NÃO tem --lora nem /lora-adapters. O LoRA micro-turn
+      # (classificador RESPOND/WAIT/SILENCE/BARGE) exige o stock.
+      port = 8092; binary = "stock";
       # ARQUIVO MTP (não o base!): NextN real, +24% TG. Rebuild sem isto
       # voltaria a 8092 sem speculative decoding (regressão silenciosa).
       modelFile = "/home/nixos/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
@@ -314,9 +317,16 @@ in rec {
       # 9.2KB/tok ≈ 0.6GB @64k (oficial Qwen + VRAM medida 3.8GB, 03/10).
       threads = 6; ctxSize = 65536; batchSize = 512; ubatch = 512;
       gpuLayers = 99; moeFlags = "";
-      fa = true; ctk = "q4_0"; ctv = "q4_0";
-      extraArgs = [ "--parallel" "1" "--jinja" "--reasoning" "off" "--spec-type" "draft-mtp" ];
-      memHigh = "3G"; memMax = "4G"; limitMemlock = false;
+      # (19/10) LoRA+flash-attn incompatíveis (log do server, ver
+      # duplex-35b) → fa off. KV quantizado (q4_0) EXIGE fa → KV f16
+      # (≈1.2GB @64k híbrido; cabe: 2.7 modelo + 1.2 KV + buffers).
+      fa = false; ctk = "f16"; ctv = "f16";
+      # LoRA init sem aplicar: o cliente liga/desliga via /lora-adapters
+      # SÓ nos requests do classificador (chat com tools fica limpo).
+      extraArgs = [ "--parallel" "1" "--jinja" "--reasoning" "off" "--spec-type" "draft-mtp"
+                    "--lora" "/home/nixos/models/loras/microturn-4b/microturn-4b-lora.gguf"
+                    "--lora-init-without-apply" ];
+      memHigh = "4G"; memMax = "5G"; limitMemlock = false;
       wanted = false;  # on-demand; router (8080/bonsai) is default for harness/agents; start 8092 when voice needs PT-BR
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = modelFile (o server anuncia o path, sem --alias).
