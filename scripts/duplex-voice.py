@@ -339,7 +339,10 @@ AEC = {
     "gain": 0.0,        # ganho adaptativo (1-tap NLMS)
     "lock": _th.Lock(),
 }
-AEC_DELAY_S = 0.083    # medido 18/10: speaker→mic (correlação 0.82)
+AEC_DELAY_S = 0.50     # (13:35) PROBE ao vivo: eco chega ~796ms após o
+                       # início do play (aplay spawn + buffer ALSA +
+                       # acústico); 83ms era calibração de setup antigo.
+                       # Busca por posição cobre o jitter (±800ms).
 
 def aec_register_played(wav_path):
     """O worker TTS registra o que vai tocar (16k mono) + o instante."""
@@ -444,8 +447,17 @@ def mp_aec_process(chunk16, n_paths=3, max_lag_s=0.8, step=160):
     if len(ref) < n + step:
         return chunk16
     c = chunk16.astype(np.float64).copy()
-    lo = max(0, len(ref) - n - int(max_lag_s * 16000))
-    hi = len(ref) - n
+    # (13:35) busca por POSIÇÃO de playback (o rabo era cego: o eco real
+    # está onde o aplay está tocando, não no fim do wav)
+    with AEC["lock"]:
+        _t0 = AEC["t0"]
+    center = int((time.monotonic() - _t0 - AEC_DELAY_S) * 16000)
+    margin = int(max_lag_s * 16000)
+    lo = max(0, center - margin)
+    hi = min(len(ref) - n, center + margin)
+    if hi < lo:
+        lo = max(0, len(ref) - n - margin)
+        hi = len(ref) - n
     for _ in range(n_paths):
         cn = np.linalg.norm(c)
         if cn < 1e-6:
