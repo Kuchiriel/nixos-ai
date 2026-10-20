@@ -623,7 +623,7 @@ def stream_chat(base, body, tts, on_done=None):
             tts.say(rest)
     tool_calls = None
     if tc_acc:
-        tool_calls = [{"id": v["id"] or f"call_{i}",
+        tool_calls = [{"id": v["id"] or f"call_{i}", "type": "function",
                        "function": {"name": v["name"],
                                     "arguments": v["args"]}}
                       for i, v in sorted(tc_acc.items())]
