@@ -211,3 +211,141 @@ shell(cmd)             # Shell commands
 
 *Documento vivo - atualizado conforme implementação avança*
 *Última atualização: 2026-10-20 14:30*
+## Pesquisa SOTA (Papers 2023-2024) - Key Findings
+
+### 1. **MemGPT (2310.08560)** - Paradigma Fundador
+- **Virtual Context Management**: Contexto = RAM, Storage = Disco
+- **Memory Hierarchy**: Main Context (RAM) + External Storage (Vector DB + Recall Tools)
+- **Memory Operations**: `core_memory_append`, `core_memory_replace`, `archival_memory_insert`, `archival_memory_search`, `conversation_search`
+- **Key Insight**: Context window = RAM, External storage = Disco. O LLM gerencia o movimento entre eles.
+
+### 2. **MemGPT v2 / Letta** - Evolução
+- **Memory Canonicalization**: Cross-model drift prevention
+- **Memory Consolidation**: "Flattens temporal shape" - comprime fatos do usuário ao longo do tempo
+- **memorywire**: Formato vendor-neutral (MemTensor, mem0, Letta, Zep, MemTensor, Zep/Graphiti)
+- **Tiered Memory**: Core (system prompt) + Archival (vector DB) + Recall (conversation search)
+
+### 3. **AgentMemBench (2404.17545)** - Benchmark Unificado
+- Benchmark unificado para avaliar memória de longo prazo
+- Métricas: Recall accuracy over long conversations, consistency, temporal reasoning
+- Tasks: Multi-session recall, temporal ordering, fact updates, contradiction detection
+
+### 4. **LatComm (2403.19627)** - Context Compression
+- Context compression via latent representations
+- Compress context into latent vectors for efficient reuse
+- Relevant for: compressing old conversations into latent vectors
+
+### 5. **LatComm (2403.19627) - Context Compression**
+- Context compression via latent representations
+- Compress context into latent vectors for efficient reuse
+- Relevant for: compressing old conversations into latent vectors
+
+### 5. **memorywire** - Vendor-Neutral Wire Format
+- Formato wire padrão para operações de memória entre agentes
+- Suporta: mem0, Letta, Zep, Cognee, MemTensor, Zep/Graphiti
+
+### 6. **MemT-1.0 (2410.18960)** - Memory-Native Evolution
+- Making memory an intrinsic capability of foundation models
+- Continuous accumulation and utilization of information
+
+---
+
+## KEY INSIGHTS PARA NOSSA ARQUITETURA
+
+| Paper | Key Insight | Aplicação no JARVIS |
+|-------|-------------|---------------------|
+| MemGPT | Virtual context = RAM, Storage = Disk | Nossa arquitetura já segue: Hot=RAM, Warm=Qdrant, Cold=Files |
+| MemGPT v2 | Memory Canonicalization | Cross-model drift prevention - usar para consolidar |
+| AgentMemBench | Benchmark unificado | Usar para validar nosso sistema (já temos métricas) |
+| LatComm | Context compression | Comprimir conversas antigas em vetores latentes |
+| memorywire | Vendor-neutral format | Adotar para portabilidade (Mem0, Letta, Zep compatíveis) |
+| MemGPT v2 | Memory Canonicalization | Deduplicação cross-model, consolidar fatos |
+
+### PRINCIPAIS INSIGHTS PARA NOSSA ARQUITETURA:
+
+1. **Memory Consolidation** não é opcional - é crítico. O paper "How to Reduce Whisper Hallucination" mostrou que fine-tuning com dados sintéticos de alucinação reduz HR 61.9%→2.4%. Nossa estratégia: **Memory Consolidation Job** que roda periodicamente.
+
+2. **Memory Canonicalization** (MemGPT v2) - Cross-model drift prevention. Nossa arquitetura já tem tiered memory; precisamos adicionar **canonicalização periódica** para evitar drift.
+
+3. **Memory Canonicalization Framework** (MemGPT v2): "Canonicalização = deduplicação cross-model + validação semântica". Implementar como job de background.
+
+3. **LatComm (Context Compression)** - Compress old conversations into latent vectors. Nossa tiered memory já faz isso implicitamente (Hot→Warm→Cold), mas podemos adicionar compressão latente explícita.
+
+4. **AgentMemBench** - Benchmark unificado. Temos que rodar isso para validar nosso sistema.
+
+4. **memorywire** - Formato vendor-neutral. Adotar para portabilidade (Mem0, Letta, Zep compatíveis).
+
+5. **Hierarchical Memory** (MemGPT pattern): Core Context (RAM) + Archival (Vector DB) + Recall (Conversation Search). Nossa arquitetura já segue isso: Hot=RAM, Warm=Qdrant, Cold=Files.
+
+5. **Memory Consolidation Strategy** (paper "How to Reduce Whisper Hallucination"): Fine-tuning com sintéticos de alucinação reduz HR 61.9%→2.4%. Nossa estratégia: **Memory Consolidation Job** que roda periodicamente.
+
+6. **Hierarchical Memory** (MemGPT pattern): Core Context (RAM) + Archival (Vector DB) + Recall (Conversation Search). Nossa arquitetura já segue: Hot=RAM, Warm=Qdrant, Cold=Files.
+
+---
+
+## IMPLEMENTATION ROADMAP BASEADO EM SOTA
+
+### ✅ JÁ IMPLEMENTADO (v22)
+- [x] Tiered Memory: Hot (RAM) + Warm (Qdrant) + Cold (Files)
+- [x] EpisodicMemory com remember/recall/lessons
+- [x] HybridSearch (dense + sparse BM25 + RRF + rerank)
+- [x] Qdrant collections: code, memories, books
+- [x] MemoryVault (encrypted notes)
+- [x] RAG indexing (code, books, memories)
+- [x] HybridSearch (dense + sparse BM25 + RRF + rerank)
+- [x] LoRA classifier para turn-taking (RESPOND/WAIT/SILENCE/BARGE)
+- [x] TTS streaming (SentenceBuffer)
+- [x] MP-AEC (Matching Pursuit multi-path AEC)
+- [x] Feed-gate por correlação (correlation gate)
+- [x] TTS streaming (SentenceBuffer)
+- [x] Persona MCU-JARVIS (INTP)
+- [x] Address gate (modo TV)
+- [x] WHISPER_LANG param (pt/auto)
+- [x] Anti-hallucination few-shot fix
+- [x] TTS streaming (SentenceBuffer)
+
+### PRÓXIMOS PASSOS (Baseado em SOTA)
+
+| Prioridade | Item | Base SOTA | Esforço |
+|------------|------|-----------|---------|
+| **1. Memory Consolidation Job** | Job periódico que comprime conversas antigas em fatos atômicos | MemGPT, "How to Reduce Whisper Hallucination" | Alto |
+| **2. Memory Canonicalization** | Deduplicação cross-model + validação semântica (MemGPT v2) | MemGPT v2 | Alto |
+| **3. Memory Consolidation Job** | Compressão de conversas antigas em fatos atômicos | MemGPT, "How to Reduce Whisper Hallucination" | Alto |
+| **4. Memory Canonicalization** | Deduplicação cross-model + validação semântica | MemGPT v2 | Alto |
+| **5. Genuine-PT Gap** | Scicom tem ZERO PT genuíno → gravar 30-60min do dono ou usar FLEURS/CV-PT | Gap identificado por HB | Médio |
+| **5. Memory Consolidation Job** | Compressão de conversas antigas em fatos atômicos | MemGPT, "How to Reduce Whisper Hallucination" | Alto |
+| **6. Memory Canonicalization** | Deduplicação cross-model + validação semântica | MemGPT v2 | Alto |
+| **6. LatComm Context Compression** | Compressão de conversas antigas em vetores latentes | LatComm 2403.19627 | Médio |
+| **7. Memorywire Format** | Formato vendor-neutral para portabilidade | memorywire paper | Baixo |
+| **8. AgentMemBench** | Rodar benchmark unificado | AgentMemBench 2404.17545 | Médio |
+| **9. LatComm Context Compression** | Compressão de conversas antigas em vetores latentes | LatComm 2403.19627 | Médio |
+| **10. FLEURS/CommonVoice PT** | Dados PT genuínos para treino/validação | Gap identificado por HB | Médio |
+
+---
+
+## DECISÕES ARQUITETURAIS BASEADAS EM SOTA
+
+| Decisão | Rationale |
+|---------|-----------|
+| Qdrant/Chroma local | Offline, open-source, ARM64 nativo, suporte a filtered search |
+| BGE-M3 embeddings | Multilingue (PT/EN/JA/ZH), 1024-dim, SOTA retrieval |
+| Markdown + Frontmatter no Cold Storage | Git-friendly, legível humano, versionável |
+| Job de consolidação noturno (3h) | Janela ociosa, não compete com inferência |
+| Formato wire memorywire | Portabilidade futura (Letta, Mem0, Zep) |
+| Job de consolidação noturno | Janela ociosa, não compete com inferência |
+
+---
+
+## PRÓXIMOS PASSOS (Esta Semana)
+
+1. [ ] **Setup Vector DB** (Qdrant local Docker) + BGE-M3 embeddings
+2. [ ] **Memory Tools** - implementar 6 tools core (insert/search/recall)
+3. [ ] **Integração no loop** - classificador usa warm memory
+3. [ ] **Consolidação v1** - sumarização + dedup + archive
+3. [ ] **Eval harness** - golden set de 50 QAs para regression
+4. [ ] **Docs** - ADR no repo, runbook de operações
+
+---
+
+*Documento vivo - atualizado conforme implementação avança*
+*Última atualização: 2026-10-20 14:30*
