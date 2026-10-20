@@ -313,9 +313,11 @@ in rec {
       # ARQUIVO MTP (não o base!): NextN real, +24% TG. Rebuild sem isto
       # voltaria a 8092 sem speculative decoding (regressão silenciosa).
       modelFile = "/home/nixos/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
-      # ctx 65536: só 8 de 32 layers carregam KV (híbrido 3:1) → KV cresce
-      # 9.2KB/tok ≈ 0.6GB @64k (oficial Qwen + VRAM medida 3.8GB, 03/10).
-      threads = 6; ctxSize = 65536; batchSize = 512; ubatch = 512;
+      # ctx 16384 (era 65536, 19/10): com fa OFF (LoRA) o buffer de
+      # compute escala com n_ctx — 64k estourava VRAM (2GB+ num único
+      # alloc). Voz usa ~6k tok (hist 60 + tools); 16k sobra.
+      # KV f16 híbrido (8/32 layers) ≈ 300MB @16k.
+      threads = 6; ctxSize = 16384; batchSize = 256; ubatch = 256;
       gpuLayers = 99; moeFlags = "";
       # (19/10) LoRA+flash-attn incompatíveis (log do server, ver
       # duplex-35b) → fa off. KV quantizado (q4_0) EXIGE fa → KV f16
@@ -330,7 +332,7 @@ in rec {
       wanted = false;  # on-demand; router (8080/bonsai) is default for harness/agents; start 8092 when voice needs PT-BR
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = modelFile (o server anuncia o path, sem --alias).
-      opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 65536; output = 4096; };
+      opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 16384; output = 4096; };
     };
     deepseek-7b = {
       port = 8085; binary = "upstream";
