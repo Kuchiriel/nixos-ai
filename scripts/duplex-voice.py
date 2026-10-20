@@ -480,6 +480,41 @@ SPEAKING = {"until": 0.0}   # (07:35) ref module-level p/ in_cooldown
                             # (main() aponta p/ o dict local no boot)
 ECHO_FLOOR = []             # (07:30) mediana móvel do resíduo pós-AEC
                             # durante playback = nível real do eco remanescente
+# (07:50, DIREÇÃO DO DONO: "dá um ID pra fala do TTS — se ele ouvir,
+# ignora") Registry do que o TTS está dizendo AGORA + disse há pouco.
+# O eco chega como transcrição; se o texto casa com a fala ATIVA
+# (id em curso) ou recente, é ELE MESMO — descarta. É o eco-cancel
+# textual centrado na sentença em play (não na resposta inteira).
+TTS_SELF = {"id": 0, "text": "", "recent": []}   # recent: [(text, t_end)]
+
+def tts_self_register(text):
+    TTS_SELF["id"] += 1
+    TTS_SELF["text"] = text
+
+def tts_self_finish():
+    TTS_SELF["recent"].append((TTS_SELF["text"], time.monotonic()))
+    del TTS_SELF["recent"][:-6]
+    TTS_SELF["text"] = ""
+
+def is_tts_self(txt):
+    """Transcrição = eco da própria fala? (id ativo + ≤8s atrás)"""
+    import difflib as _dl
+    t = " ".join(txt.lower().replace(".", " ").replace(",", " ")
+                 .replace("!", " ").replace("?", " ").split())
+    if len(t.split()) < 2:
+        return False
+    cands = []
+    if TTS_SELF["text"]:
+        cands.append(TTS_SELF["text"])
+    now = time.monotonic()
+    cands += [c for c, te in TTS_SELF["recent"] if now - te < 8.0]
+    for c in cands:
+        cl = c.lower()
+        if t in cl:
+            return True
+        if _dl.SequenceMatcher(None, t, cl).ratio() >= 0.55:
+            return True
+    return False
 
 def in_cooldown():
     # (07:30 dono: "ele corta a própria fala") o eco transcreve DURANTE
@@ -1023,11 +1058,13 @@ class Tts:
                 # utf-8 real, nada de escapes.
                 okk = self._synthesize(text, wav)
                 if okk and Path(wav).exists():
+                    tts_self_register(text)   # (07:50) ID da fala em curso
                     aec_register_played(wav)
                     self._aplay = subprocess.Popen(
                         ["aplay", "-q", wav])
                     self._aplay.wait(timeout=90)   # barge-in: .kill() interrompe
                     self._aplay = None
+                    tts_self_finish()             # move p/ recent (≤8s)
                 else:
                     log(f"[{ts()}] tts FALHOU: synth={okk} wav={Path(wav).exists()}")
                 self.last_ms = (time.monotonic() - t0) * 1000
@@ -1330,6 +1367,13 @@ def main():
                 pending.clear()
                 if in_cooldown():
                     log(f"[{ts()}] cooldown pós-TTS — descartado: {heard[:40]!r}")
+                    heard = NOVOICE
+                elif is_tts_self(heard):
+                    # (07:50, solução do DONO: ID da fala) transcrição
+                    # casa com o que EU estou dizendo/ disse agora = eco
+                    # da minha própria voz — ignora. Fala NOVA durante o
+                    # TTS passa adiante = interrupção real.
+                    log(f"[{ts()}] TTS-SELF id-eco — descartado: {heard[:40]!r}")
                     heard = NOVOICE
                 elif is_self_echo(heard):
                     log(f"[{ts()}] AUTO-ECO textual — descartado: {heard[:40]!r}")
