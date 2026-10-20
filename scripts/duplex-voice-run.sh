@@ -8,11 +8,16 @@
 #   - llama-duplex-35b: P-cores 0-11 (pinned pelo systemd via taskset).
 set -euo pipefail
 # whisper-server GPU (18/10 09:00): 83ms/segmento medido. Sem ele vivo,
-# o asrd v4 não transcreve. Sobe se preciso (porta 8097).
+# o asrd v4 não transcreve. Sobe se precisa (porta 8097).
+# (20/10 03:50) WHISPER_MODEL: env var p/ swap sem editar o script —
+# turbo-q5_0 (~800MB residência, MENOR que o small 868MB) quando pousar:
+#   WHISPER_MODEL=/home/nixos/models/whisper/ggml-large-v3-turbo-q5_0.bin ./duplex-voice-run.sh
+# default continua o small (12 idiomas? não: turbo = 99, mas PT-BR quality >>).
+WHISPER_MODEL="${WHISPER_MODEL:-/home/nixos/models/whisper/ggml-small.bin}"
 if ! curl -s -o /dev/null --max-time 2 http://127.0.0.1:8097/health 2>/dev/null \
    && ! curl -s -o /dev/null --max-time 2 -F x=1 http://127.0.0.1:8097/inference 2>/dev/null; then
   setsid nohup /home/nixos/projects/whisper.cpp/build/bin/whisper-server \
-    -m /home/nixos/models/whisper/ggml-small.bin -l pt --port 8097 --host 127.0.0.1 \
+    -m "$WHISPER_MODEL" -l pt --port 8097 --host 127.0.0.1 \
     > /tmp/opencode/whisper-server.log 2>&1 < /dev/null &
   sleep 6
 fi
