@@ -91,11 +91,32 @@ def main():
         return out
 
     LEXICON = load_lexicon()
-    # (06:05, eval HB reports/duplex-eval) greeting fantasma do turbo —
-    # NÃO existe no Scicom (parlamentar não tem gíria); gated junto
-    # com o léxico: 'E aí' REAL tem stats confiantes, fantasma não.
-    GREET_SUS = {"e aí", "e aí e aí", "a cidade no brasil",
-                 "o que é isso", "não não não", "oh oh oh"}
+    # (08:55, delta HB pós-multilingue) fantasmas trocaram de idioma:
+    # 'Hey.'/'Bye.'/'*Eat*'/'Eee.'/'T-T-T-T'. TSV multilingual do HB:
+    # ban-hard (curado, multi-word, nunca fala real) + gated JA/ZH.
+    MULTI_HARD = set()
+    try:
+        for line in open("/home/nixos/projects/nixos-ai/data/"
+                         "whisper-halluc-ban-multilingual.tsv"):
+            if line.startswith("#") or not line.strip():
+                continue
+            parts = [p.strip() for p in line.split("\t")]
+            if len(parts) < 3 or parts[0] not in ("ban-hard", "gated"):
+                continue
+            phrase = parts[2].lower()
+            if not phrase or len(phrase.split()) < 2:
+                continue        # 1-palavra ('ed', 'me') = lixo do count
+            if parts[0] == "ban-hard":
+                MULTI_HARD.add(phrase)
+            else:
+                LEXICON.add(phrase)
+    except OSError:
+        pass
+    # Greeting fantasma por idioma (o turbo emite o clássico da língua
+    # detectada; PT 'e aí' já morto — estendendo p/ EN. 'hey jarvis'
+    # = 2 palavras, passa; 'hey' SECO não existe como turn real aqui).
+    GREET_SUS = {"e aí", "e aí e aí", "a cidade no brasil", "o que é isso",
+                 "não não não", "oh oh oh", "hey", "bye", "hi"}
 
     def anti_halluc(txt, segs, dur_s):
         # normalização p/ GATE (pontuação fora): a assinatura de
