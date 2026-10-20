@@ -1,0 +1,87 @@
+# Whisper hallucination lexicon PT — source: HF Scicom-intl/Whisper-Hallucination (data/lexicon, 20/10)
+# cols: phrase 	 phrase_norm 	 count 	 source — sorted by count desc, dedup phrase_norm
+# use: anti-halluc deny-list asrd v5+ / retrain data prep (lane AGENTE-OC)
+Sra	sra	8711	granary
+Presidente	presidente	1486	granary
+Sr	sr	1435	granary
+Obrigada	obrigada	1148	granary
+Presidente, Sr	presidente sr	761	granary
+obrigado	obrigado	620	granary|hf_noise
+Obrigada, Sra	obrigada sra	520	granary
+Obrigado, Sr	obrigado sr	370	granary
+Obrigada, Sr	obrigada sr	349	granary
+Já	já	201	granary
+Muito obrigada	muito obrigada	168	granary
+Enf	enf	135	granary
+Srs	srs	123	granary
+Muito obrigado	muito obrigado	109	granary
+Com licença	com licença	105	granary
+800, 1	800 1	85	granary
+Renda, Sr	renda sr	75	granary
+Diz, Sr	diz sr	72	granary
+Presidente, o Sr	presidente o sr	68	granary
+Presidente, Sra	presidente sra	67	granary
+Cavada	cavada	66	granary
+Svab	svab	64	granary
+Contra	contra	63	granary
+Abstenções	abstenções	59	granary
+Martins	martins	57	granary
+O que é a reunião	o que é a reunião	55	granary
+Jouvin, o Sr	jouvin o sr	52	granary
+tchau	tchau	4	hf_noise
+fim	fim	3	hf_noise
+obrigado por assistir	obrigado por assistir	3	hf_noise
+até a próxima	até a próxima	2	hf_noise
+e aí	e aí	2	hf_noise
+eu acho que eu vou	eu acho que eu vou	2	hf_noise
+fui	fui	2	hf_noise
+obrigada por assistir	obrigada por assistir	2	hf_noise
+é isso aí	é isso aí	2	hf_noise
+é isso aí valeu	é isso aí valeu	2	hf_noise
+a gente vai lá	a gente vai lá	1	hf_noise
+abertura	abertura	1	hf_noise
+acesse o canal e veja outras coisas	acesse o canal e veja outras coisas	1	hf_noise
+ae	ae	1	hf_noise
+ah	ah	1	hf_noise
+ainda não	ainda não	1	hf_noise
+aplausos	aplausos	1	hf_noise
+assistir	assistir	1	hf_noise
+atenção	atenção	1	hf_noise
+ações de novos vídeos	ações de novos vídeos	1	hf_noise
+deixar um like e compartilhar o vídeo obrigado por	deixar um like e compartilhar o vídeo obrigado por	1	hf_noise
+em breve para sua segurança todos os passageiros devem	em breve para sua segurança todos os passageiros devem	1	hf_noise
+eu não sei	eu não sei	1	hf_noise
+eu não sei o que dizer mas eu vou ficar com o meu	eu não sei o que dizer mas eu vou ficar com o meu	1	hf_noise
+eu vou fazer isso	eu vou fazer isso	1	hf_noise
+eu vou ficar aqui hein	eu vou ficar aqui hein	1	hf_noise
+eu vou te mostrar como fazer isso	eu vou te mostrar como fazer isso	1	hf_noise
+fala paulo	fala paulo	1	hf_noise
+ficar fora das escadas as rampas e as ladeiras	ficar fora das escadas as rampas e as ladeiras	1	hf_noise
+fiz a tchepa	fiz a tchepa	1	hf_noise
+inho para receber notificações de novos vídeos	inho para receber notificações de novos vídeos	1	hf_noise
+inscreva se no canal	inscreva se no canal	1	hf_noise
+legendas pela comunidade amara org	legendas pela comunidade amara org	1	hf_noise
+muito bom	muito bom	1	hf_noise
+música animada	música animada	1	hf_noise
+música de fundo	música de fundo	1	hf_noise
+música de suspenso	música de suspenso	1	hf_noise
+não	não	1	hf_noise
+não se esqueça de se inscrever	não se esqueça de se inscrever	1	hf_noise
+o que você acha comente	o que você acha comente	1	hf_noise
+o que é isso	o que é isso	1	hf_noise
+o que é que é isso	o que é que é isso	1	hf_noise
+obrigado por assistir se inscreva no canal e ative o sin	obrigado por assistir se inscreva no canal e ative o sin	1	hf_noise
+obrigado por assistir se você gostou não esqueça de	obrigado por assistir se você gostou não esqueça de	1	hf_noise
+puxa	puxa	1	hf_noise
+que é o que eu faço	que é o que eu faço	1	hf_noise
+quero pedir atenção por favor o feriado estará descer	quero pedir atenção por favor o feriado estará descer	1	hf_noise
+se inscreva no canal ative notificações e ative notificações	se inscreva no canal ative notificações e ative notificações	1	hf_noise
+se inscreva no canal e ative as notificações	se inscreva no canal e ative as notificações	1	hf_noise
+se inscreva no canal e ative o sininho	se inscreva no canal e ative o sininho	1	hf_noise
+se inscreva no canal e ative o sininho para receber notific	se inscreva no canal e ative o sininho para receber notific	1	hf_noise
+sente	sente	1	hf_noise
+siga me no instagram	siga me no instagram	1	hf_noise
+subtitles by the amara org community	subtitles by the amara org community	1	hf_noise
+tchau tchau	tchau tchau	1	hf_noise
+transcrição e legendas pela comunidade amara org	transcrição e legendas pela comunidade amara org	1	hf_noise
+vem cá	vem cá	1	hf_noise
