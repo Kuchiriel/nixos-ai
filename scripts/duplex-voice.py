@@ -1243,45 +1243,52 @@ def main():
                 is_cmd = heard.lower().strip(".,!?") in (
                     "pare", "para", "stop", "jarvis", "calaboka", "silêncio",
                     "cala boca", "quieto")
-                # (19/10) CLASSIFICADOR LoRA no lugar das heurísticas:
-                # RESPOND=chat · WAIT=segura · SILENCE=descarta ·
-                # BARGE=mata o TTS. Falha técnica → gate antigo.
-                lab = (classify_turn(base, heard)
-                       if (n_words >= 1 and heard != NOVOICE) else None)
-                log(f"[{ts()}] classify({heard[:38]!r}) = {lab}")
-                if lab == "RESPOND":
-                    force = True
-                elif lab == "WAIT":
-                    # fala continua: devolve ao pending p/ próxima janela
-                    # (23:00 fix) deadline RENOVADA — sem isso o merge
-                    # refire no mesmo tick e re-classifica em loop (150ms
-                    # de LoRA por tick queimados).
-                    if heard == _last_wait_text[0]:
-                        _wait_repeats[0] += 1
-                    else:
-                        _wait_repeats[0] = 1
-                        _last_wait_text[0] = heard
-                    if _wait_repeats[0] >= 3:
-                        # preso no WAIT 3x = a pessoa terminou e espera:
-                        # trata como RESPOND (nunca deixa o dono mudo)
-                        log(f"[{ts()}] WAIT preso 3x — força RESPOND")
+                # (03:35, direção do dono) SINAL SOCIAL entre colchetes
+                # ([risadas], [aplausos], [música]): NÃO é pergunta — pula
+                # o classificador (economiza 150ms) e não força resposta;
+                # mas ENTRA no histórico = contexto social pro LLM reagir.
+                if heard.startswith("[") and "]" in heard and n_words <= 4:
+                    log(f"[{ts()}] sinal social: {heard[:40]!r} — histórico")
+                    # segue pro tick sem force (entra no history embaixo)
+                else:
+                    # (19/10) CLASSIFICADOR LoRA no lugar das heurísticas:
+                    # RESPOND=chat · WAIT=segura · SILENCE=descarta ·
+                    # BARGE=mata o TTS. Falha técnica → gate antigo.
+                    lab = (classify_turn(base, heard)
+                           if (n_words >= 1 and heard != NOVOICE) else None)
+                    log(f"[{ts()}] classify({heard[:38]!r}) = {lab}")
+                    if lab == "RESPOND":
                         force = True
-                    else:
-                        pending.append(heard)
-                        merge_deadline = time.monotonic() + 1.5
+                    elif lab == "WAIT":
+                        # fala continua: devolve ao pending p/ próxima
+                        # janela; deadline RENOVADA — sem isso o merge
+                        # refire no mesmo tick e re-classifica em loop.
+                        if heard == _last_wait_text[0]:
+                            _wait_repeats[0] += 1
+                        else:
+                            _wait_repeats[0] = 1
+                            _last_wait_text[0] = heard
+                        if _wait_repeats[0] >= 3:
+                            # preso no WAIT 3x = a pessoa terminou e
+                            # espera: trata como RESPOND (nunca deixa mudo)
+                            log(f"[{ts()}] WAIT preso 3x — força RESPOND")
+                            force = True
+                        else:
+                            pending.append(heard)
+                            merge_deadline = time.monotonic() + 1.5
+                            heard = NOVOICE
+                    elif lab == "SILENCE":
                         heard = NOVOICE
-                elif lab == "SILENCE":
-                    heard = NOVOICE
-                elif lab == "BARGE":
-                    if tts._aplay and tts._aplay.poll() is None:
-                        tts._aplay.kill()
-                        log(f"[{ts()}] BARGE semântico: TTS morto")
-                    heard = NOVOICE
-                elif n_words < 3 and not is_cmd:
-                    log(f"[{ts()}] fragmento curto ({n_words} pal) — ignora: {heard[:30]!r}")
-                    heard = NOVOICE
-                elif not is_backchannel(heard):
-                    force = True
+                    elif lab == "BARGE":
+                        if tts._aplay and tts._aplay.poll() is None:
+                            tts._aplay.kill()
+                            log(f"[{ts()}] BARGE semântico: TTS morto")
+                        heard = NOVOICE
+                    elif n_words < 3 and not is_cmd:
+                        log(f"[{ts()}] fragmento curto ({n_words} pal) — ignora: {heard[:30]!r}")
+                        heard = NOVOICE
+                    elif not is_backchannel(heard):
+                        force = True
                 log(f"[{ts()}] utterância completa: {heard[:60]!r}")
             said, _p = tick_once(base, history, heard, force_speak=force, tts=tts)
             if not force and said != LISTEN:
