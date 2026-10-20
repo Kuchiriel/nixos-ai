@@ -1256,7 +1256,7 @@ def main():
                     # (23:00 fix) deadline RENOVADA — sem isso o merge
                     # refire no mesmo tick e re-classifica em loop (150ms
                     # de LoRA por tick queimados).
-                    if heard == _last_wait_text:
+                    if heard == _last_wait_text[0]:
                         _wait_repeats[0] += 1
                     else:
                         _wait_repeats[0] = 1
