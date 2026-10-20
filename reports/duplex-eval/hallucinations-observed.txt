@@ -19,3 +19,21 @@ reduplication	cv_tu_n06_r3_t0	Tô, tô, tô, tô, tô, tô.
 reduplication	cv_tu_n03_r3_t0	Tô, tô, tô.
 reduplication	laugh_a_n04_r3_t8	Ah, ah, ah, ah.
 reduplication	laugh_a_n03_r3_t8	Ah, ah, ah.
+# 2026-10-20T08:43:45 asr=http://127.0.0.1:8097 samples/cat=20
+reduplication	laugh_e_n03_r7_t2	Hey.
+reduplication	vowel_i_n03_r7_t0	Eee.
+reduplication	cv_tu_n04_r7_t0	T-T-T-T
+reduplication	laugh_i_n05_r3_t2	*Eat*
+reduplication	cv_da_n03_r9_t2	Bye.
+reduplication	vowel_o_n03_r5_t2	Oh.
+reduplication	vowel_o_n03_r7_t2	Thank you.
+reduplication	vowel_e_n03_r7_t8	it
+reduplication	cv_ko_n12_r7_t0	Pa-pa-pa-pa-pa-pa-pa-pa-pa-pa-pa-pa.
+reduplication	cv_la_n08_r7_t0	Pa-pa-pa-pa-pa-pa-pa-pa
+reduplication	cv_da_n06_r7_t0	Pa-pa-pa-pa-pa-pa
+reduplication	click_tick_n03_r5_t0	Thank you.
+reduplication	laugh_a_n04_r9_t0	*laughs*
+reduplication	cv_tu_n06_r3_t0	Toot toot toot toot toot
+reduplication	cv_tu_n03_r3_t0	Do do do.
+reduplication	laugh_a_n04_r3_t8	*painful music*
+reduplication	laugh_a_n03_r3_t8	Uh-uh-uh.

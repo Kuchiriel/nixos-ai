@@ -1,57 +1,214 @@
 {
- "ts": "2026-10-20T08:18:36",
- "classify": "http://127.0.0.1:8092",
- "n": 124,
- "classes": {
-  "RESPOND": {
-   "n": 30,
-   "acc": 1.0,
-   "confusion": {
-    "RESPOND": 30,
-    "WAIT": 0,
-    "SILENCE": 0,
-    "BARGE": 0,
-    "NONE": 0
-   }
+ "ts": "2026-10-20T08:43:45",
+ "asr": "http://127.0.0.1:8097",
+ "samples_per_cat": 20,
+ "seed": 42,
+ "categories": {
+  "silence": {
+   "clips": 20,
+   "empty_ok": 8,
+   "hallucinated": 12,
+   "halluc_rate": 0.6,
+   "lexicon_kill": 0,
+   "net_rate_apos_lista": 0.6,
+   "errors": 0,
+   "samples": [
+    {
+     "id": "digital_zero_29s",
+     "text": "Thank you.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "hiss_-45db_60s",
+     "text": "Thank you.\n Thank you.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "hiss_-60db_31s",
+     "text": "Thank you.\n Thank you.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "roomtone_31s",
+     "text": "Thank you.\n Thank you.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "hiss_-45db_31s",
+     "text": "Thank you.\n .",
+     "lexicon_kill": false
+    },
+    {
+     "id": "digital_zero_31s",
+     "text": "Thank you.\n Thank you.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "hum_50hz_60s",
+     "text": "Thank you.\n Thank you.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "dither_31s",
+     "text": "Thank you.\n Thank you.",
+     "lexicon_kill": false
+    }
+   ]
   },
-  "WAIT": {
-   "n": 31,
-   "acc": 0.903,
-   "confusion": {
-    "RESPOND": 0,
-    "WAIT": 28,
-    "SILENCE": 2,
-    "BARGE": 1,
-    "NONE": 0
-   }
+  "nonspeech": {
+   "clips": 20,
+   "empty_ok": 4,
+   "hallucinated": 16,
+   "halluc_rate": 0.8,
+   "lexicon_kill": 0,
+   "net_rate_apos_lista": 0.8,
+   "errors": 0,
+   "samples": [
+    {
+     "id": "noise_378070",
+     "text": "*sad music*",
+     "lexicon_kill": false
+    },
+    {
+     "id": "music_400163",
+     "text": "*music*",
+     "lexicon_kill": false
+    },
+    {
+     "id": "music_138491",
+     "text": "you",
+     "lexicon_kill": false
+    },
+    {
+     "id": "noise_278138",
+     "text": "*Rainful music*",
+     "lexicon_kill": false
+    },
+    {
+     "id": "noise_119073",
+     "text": "What are you doing?",
+     "lexicon_kill": false
+    },
+    {
+     "id": "noise_272174",
+     "text": "Thank you.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "noise_414358",
+     "text": "you",
+     "lexicon_kill": false
+    },
+    {
+     "id": "music_259887",
+     "text": "*music*",
+     "lexicon_kill": false
+    }
+   ]
   },
-  "SILENCE": {
-   "n": 33,
-   "acc": 0.97,
-   "confusion": {
-    "RESPOND": 1,
-    "WAIT": 0,
-    "SILENCE": 32,
-    "BARGE": 0,
-    "NONE": 0
-   }
+  "music": {
+   "clips": 20,
+   "empty_ok": 1,
+   "hallucinated": 19,
+   "halluc_rate": 0.95,
+   "lexicon_kill": 0,
+   "net_rate_apos_lista": 0.95,
+   "errors": 0,
+   "samples": [
+    {
+     "id": "008879_16khz_mono",
+     "text": "I don't know.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "003945_16khz_mono",
+     "text": "I've been a phone, I've been a phone, I know, I've been a ph",
+     "lexicon_kill": false
+    },
+    {
+     "id": "004376_16khz_mono",
+     "text": "Whoa, whoa, whoa, whoa, whoa, whoa, whoa.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "010570_16khz_mono",
+     "text": "THE END",
+     "lexicon_kill": false
+    },
+    {
+     "id": "007773_16khz_mono",
+     "text": "Whoa!\n .",
+     "lexicon_kill": false
+    },
+    {
+     "id": "004154_16khz_mono",
+     "text": "Yeah, I really hope that the, you know,\n next time you and y",
+     "lexicon_kill": false
+    },
+    {
+     "id": "010569_16khz_mono",
+     "text": "The End\n The End",
+     "lexicon_kill": false
+    },
+    {
+     "id": "003947_16khz_mono",
+     "text": "Oh, all right.\n Like a sad song, but...\n Last song is Come O",
+     "lexicon_kill": false
+    }
+   ]
   },
-  "BARGE": {
-   "n": 30,
-   "acc": 0.833,
-   "confusion": {
-    "RESPOND": 5,
-    "WAIT": 0,
-    "SILENCE": 0,
-    "BARGE": 25,
-    "NONE": 0
-   }
+  "reduplication": {
+   "clips": 20,
+   "empty_ok": 3,
+   "hallucinated": 17,
+   "halluc_rate": 0.85,
+   "lexicon_kill": 0,
+   "net_rate_apos_lista": 0.85,
+   "errors": 0,
+   "samples": [
+    {
+     "id": "laugh_e_n03_r7_t2",
+     "text": "Hey.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "vowel_i_n03_r7_t0",
+     "text": "Eee.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "cv_tu_n04_r7_t0",
+     "text": "T-T-T-T",
+     "lexicon_kill": false
+    },
+    {
+     "id": "laugh_i_n05_r3_t2",
+     "text": "*Eat*",
+     "lexicon_kill": false
+    },
+    {
+     "id": "cv_da_n03_r9_t2",
+     "text": "Bye.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "vowel_o_n03_r5_t2",
+     "text": "Oh.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "vowel_o_n03_r7_t2",
+     "text": "Thank you.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "vowel_e_n03_r7_t8",
+     "text": "it",
+     "lexicon_kill": false
+    }
+   ]
   }
  },
- "latency_ms": {
-  "p50": 620.8,
-  "p99": 1187.8,
-  "mean": 673.2
- },
- "avg_turn_taking_acc": 0.927
+ "note": "gate v6 completo vive no duplex-asrd (lane OC); kill simulado = listas TSV (tier-2 + lexicon)",
+ "hallucinations_observed_file": "/home/nixos/projects/nixos-ai/scripts/../reports/duplex-eval/hallucinations-observed.txt"
 }
