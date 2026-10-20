@@ -517,11 +517,13 @@ def is_tts_self(txt):
     return False
 
 def in_cooldown():
-    # (07:30 dono: "ele corta a própria fala") o eco transcreve DURANTE
-    # todo o playback, não só 3s pós-fim: cooldown = falando AGORA ou
-    # 4s após o fim. Mata o loop conversa-consigo-mesmo.
-    return (time.monotonic() < SPEAKING["until"]
-            or time.monotonic() - LAST_TTS_END < 4.0)
+    # (08:25, dono: "ele não parou de falar") o cooldown NÃO pode
+    # cobrir o playback: bloqueava o BARGE REAL (a interrupção do dono
+    # morria aqui antes do classify). Durante o playback quem filtra é
+    # o is_tts_self (ID-eco: casa com a própria fala = descarta; fala
+    # NOVA passa = classify → BARGE/RESPOND mata o aplay). Cooldown =
+    # só a cauda pós-fim (o eco do tail chega depois do LAST_TTS_END).
+    return time.monotonic() - LAST_TTS_END < 4.0
 
 def is_self_echo(txt):
     import difflib
@@ -1357,9 +1359,13 @@ def main():
                 merge_deadline = time.monotonic() + 1.2
 
             tts_on = time.monotonic() < speaking["until"]
-            if force and tts_on:
-                # (10:25, pesquisa) falando = não decide: eco/segmento
-                # fantasma do próprio tail NÃO gera resposta.
+            if force and tts_on and is_tts_self(heard):
+                # (08:25) eco da própria fala com force = morto (o
+                # is_tts_self no merge já descarta; isto é rede de
+                # segurança p/ eco que passou raspando com RESPOND).
+                # Fala NOVA do dono durante o TTS NÃO é eco → segue:
+                # o aplay já foi morto no branch RESPOND/BARGE e a
+                # resposta sai (interrupção legítima).
                 log(f"[{ts()}] segmento durante própria fala — eco, calado")
                 force = False
             # (12:00) MERGE: se há fala pendente e a deadline passou
