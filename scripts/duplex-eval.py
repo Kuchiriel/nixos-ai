@@ -255,7 +255,8 @@ def e2e_playback(args) -> dict:
             continue
         r = {"utt": utt, "expect": expect, "wav": f"utt_{idx:03d}.wav"}
         t0 = time.monotonic()
-        subprocess.run(["paplay", wav], check=False)
+        player = "/run/current-system/sw/bin/pw-play"  # NixOS: pipewire player
+        subprocess.run([player, wav], check=False)
         t_play_end = time.monotonic() - t0
         r["play_s"] = round(t_play_end, 2)
         seg = utt[:25]
@@ -271,11 +272,16 @@ def e2e_playback(args) -> dict:
             dcls, lcls = wait_for("classify", 12)
             ok_sil = lcls and ("SILENCE" in lcls or "silêncio" in lcls or "backchannel" in lcls)
             r["verdict"] = "ok-silenced" if ok_sil else ("classified" if lcls else "no-segment")
-        else:  # BARGE — reação: classificação BARGE ou kill do aplay (formato a confirmar c/ OC)
-            dcls, lcls = wait_for("BARGE", 12)
+        else:  # BARGE — kill real do TTS (markers OC: 'BARGE semantico: TTS morto'
+               # / 'RESPOND-durante-TTS: interrupcao — TTS morto') + evidência semântica
+            dcls, lcls = wait_for("TTS morto", 12)
+            if not dcls:
+                dcls, lcls = wait_for("classify", 12)
+                lcls = lcls if (lcls and "BARGE" in lcls) else None
             r["barge_reaction_s"] = round(dcls, 2) if dcls else None
             r["classify_line"] = lcls.strip()[:80] if lcls else None
-            r["verdict"] = "barge-seen" if dcls else "no-barge-evidence"
+            r["verdict"] = "tts-killed" if (lcls and "morto" in lcls) else \
+                           ("barge-seen" if dcls else "no-barge-evidence")
         report["scenarios"].append(r)
         print(f"{expect:8s} {utt[:30]:30s} {r['verdict']}")
         time.sleep(2)
