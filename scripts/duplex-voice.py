@@ -1711,6 +1711,15 @@ def main():
                     if _unc:
                         log(f"[{ts()}] META: incerteza na fala "
                             f"({_us:.2f}) — {said[:40]!r}")
+                    # (16:30) REAÇÃO cognitiva: auto-correção falada
+                    # (afirmei fato incerto → retrata) + curiosidade ativa
+                    # (não sei o dado pedido → digo que vou buscar, nunca
+                    # invento). Soa DEPOIS da resposta, como retratação.
+                    _rx = metacog.react(said, heard)
+                    if _rx['action'] != 'NONE':
+                        log(f"[{ts()}] META reação {_rx['action']}: "
+                            f"{_rx['reason']} — {said[:35]!r}")
+                        tts.say(_rx['say'])
 
             if (heard != NOVOICE or said != LISTEN or rms >= args.rms
                     or tick_n % 20 == 0):

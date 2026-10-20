@@ -384,6 +384,51 @@ class MetacognitionEngine:
             return True, score, f"Incerteza: {score:.2f}"
         return False, score, "OK"
     
+    # ── Reação Cognitiva (auto-correção + curiosidade ativa) ───────
+    
+    # padrões de afirmação factual (número/data/nome próprio) — onde
+    # incerteza vira RETRATA (o modelo se corrige em voz alta)
+    FACTUAL = re.compile(
+        r"\b(\d{1,2}[h:]\d{2}|\d{1,2}/\d{1,2}|\d{4}|real|dólar|euro|"
+        r"temperatura|graus|cap[íi]tal|custo|R\$|pre[çc]o)\b", re.I)
+    # padrões de pergunta de dado (onde curiosidade ativa dispara busca)
+    DATA_ASK = re.compile(
+        r"(que horas|que dia|que ano|qual (a )?(data|hora|cota[çc][ãa]o|"
+        r"pre[çc]o|custo|temperatura|clima|capital)|quanto (custa|est[áa]|"
+        r"vale|t[áa])|quem (é|e) |quando |onde fica|not[íi]cia)", re.I)
+    
+    def react(self, text: str, heard: str = "") -> Dict:
+        """Decide a REAÇÃO cognitiva à própria resposta falada.
+        Retorna {action, reason, say}:
+        - RETRACT: afirmação factual incerta → retrata em voz alta
+        - ASK:     não sabe de algo perguntável → pergunta ao dono
+        - SEARCH:  pergunta de dado externo → busca (curiosidade ativa)
+        - NONE:    confiante → nada
+        """
+        unc, score, _ = self.detect_uncertainty(text)
+        has_fact = bool(self.FACTUAL.search(text))
+        heard_asks = bool(self.DATA_ASK.search(heard or ""))
+        admits = any(m in text.lower() for m in (
+            'não sei', 'não sei dizer', 'não tenho certeza', 'não faço ideia'))
+        
+        # 1. curiousidade ativa: o dono perguntou um dado e eu não sei
+        #    → não invento: digo que vou buscar (ou pergunto de volta)
+        if heard_asks and admits:
+            return {'action': 'SEARCH',
+                    'reason': 'não sei o dado pedido — vou buscar',
+                    'say': 'Não sei dizer de cabeça. Deixa eu verificar pra você.'}
+        # 2. retração: afirmei um fato com incerteza alta
+        if has_fact and unc and score > 0.7:
+            return {'action': 'RETRACT',
+                    'reason': 'afirmação factual incerta',
+                    'say': 'Hmm, deixa eu confirmar isso antes — não quero te falar errado.'}
+        # 3. perguntável e incerto → pergunta ao dono
+        if unc and score > 0.7 and heard_asks:
+            return {'action': 'ASK',
+                    'reason': 'incerto sobre o que foi perguntado',
+                    'say': 'Não tenho certeza. Você sabe me dizer, ou quer que eu pesquise?'}
+        return {'action': 'NONE', 'reason': 'confiante', 'say': ''}
+
     # ── Self-Correction (Online) ───────────────────────────────────
     
     def attempt_self_correction(self, original_text: str, corrected_text: str, 
