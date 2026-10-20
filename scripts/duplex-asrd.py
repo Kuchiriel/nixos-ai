@@ -90,15 +90,38 @@ def main():
         return out
 
     LEXICON = load_lexicon()
+    # (06:05, eval HB reports/duplex-eval) greeting fantasma do turbo —
+    # NÃO existe no Scicom (parlamentar não tem gíria); gated junto
+    # com o léxico: 'E aí' REAL tem stats confiantes, fantasma não.
+    GREET_SUS = {"e aí", "e aí e aí", "a cidade no brasil",
+                 "o que é isso", "não não não", "oh oh oh"}
 
     def anti_halluc(txt, segs, dur_s):
+        # normalização p/ GATE (pontuação fora): a assinatura de
+        # alucinação tem pontuação de legenda ('Não, não, não.')
         t = " ".join(txt.lower().replace("[", " ").replace("]", " ")
-                     .split()).strip()
+                     .replace(",", " ").replace(".", " ").replace("!", " ")
+                     .replace("?", " ").split()).strip()
         # 1. deny-list dura: contaminação inequívoca de legenda
         if len(t.split()) <= 6 and any(h in t for h in HALLUC_PT):
             return ""
-        # 1b. léxico Scicom (GATED): frase-isolada suspeita + stats fracos
-        if segs and t in LEXICON:
+        t_words = t.split()
+        first2 = " ".join(t_words[:2])
+        # 1b. suspeitos GATED (léxico Scicom + greetings fantasma do
+        #     turbo [eval HB] + repetição redup): stats fracos = morte;
+        #     fala REAL tem stats confiantes e passa.
+        if segs and (t in LEXICON or t in GREET_SUS
+                     or first2 in GREET_SUS
+                     or any(w in LEXICON for w in t_words[:2])
+                     or (len(t_words) >= 3 and len(set(t_words)) == 1)):
+            ns = max(s.get("no_speech_prob", 0) for s in segs)
+            lp = min(s.get("avg_logprob", 0) for s in segs)
+            if ns > 0.35 or lp < -0.45:
+                return ""
+        # 1c. ALL-CAPS recap (eval HB: 'A CIDADE NO BRASIL'): legenda
+        #     de programa, nunca fala de mic; gated p/ FP
+        if segs and len(t_words) >= 2 and txt.strip().isupper() \
+                and not t.replace(" ", "").isdigit():
             ns = max(s.get("no_speech_prob", 0) for s in segs)
             lp = min(s.get("avg_logprob", 0) for s in segs)
             if ns > 0.35 or lp < -0.45:
