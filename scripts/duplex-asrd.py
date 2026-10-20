@@ -46,25 +46,59 @@ def main():
     # (20/10, papers voz-stt) 4 defesas anti-alucinação:
     # 2609.04561 (gated projection): no_speech_prob+avg_logprob como
     #   gate — é o sinal que o paper usa p/ decidir projetar.
-    # 2609.32560 (two-sided): deny-list de frases-alucinação (léxico
-    #   Scicom HF) — SÓ contaminação inequívoca de legenda; risadas/
-    #   aplausos/música são SINAIS SOCIAIS e passam (direção do dono:
-    #   o agente usa) — o anti-fantasma deles é o gate estatístico.
+    # 2609.32560 (two-sided): deny-list de frases-alucinação — léxico
+    #   Scicom PT (data/whisper-halluc-lexicon-pt.tsv, curado AGENTE-HB)
+    #   em SEGUNDA CAMADA: frase do léxico só morre se os stats do
+    #   áudio TAMBÉM forem fracos (gated!) — 'Obrigado' dito de verdade
+    #   tem stats confiantes e PASSA; 'Obrigada' alucinado em ruído não.
+    #   Riscadas da lista: risadas/aplausos/música = SINAIS SOCIAIS
+    #   (direção do dono: o agente usa).
     # 2610.08847 (CTC criterion): tokens >> duração do áudio = fakir.
-    # 2608.15940 (null token): o modelo SABE quando não tem fala — os
-    #   logprobs-no_speech são o sinal de abstenção que a gente jogava fora.
+    # 2608.15940 (null token): logprobs/no_speech = abstenção que a
+    #   gente jogava fora.
     HALLUC_PT = (
         "obrigado por assistir", "obrigado por assistirem",
         "inscreva-se no canal", "até o próximo vídeo",
-        "som de futebol", "música de fundo",
+        "som de futebol",
     )
+    SOCIAL_KEEP = ("risada", "aplauso", "música", "músicas", "som dos",
+                   "sons dos")
+
+    def load_lexicon():
+        """Léxico Scicom PT: frases ≤4 palavras, sem sinais sociais."""
+        out = set()
+        try:
+            for line in open("/home/nixos/projects/nixos-ai/data/"
+                             "whisper-halluc-lexicon-pt.tsv"):
+                if line.startswith("#") or not line.strip():
+                    continue
+                parts = [p.strip() for p in line.split("\t")]
+                if len(parts) < 3 or not parts[2].isdigit():
+                    continue
+                norm = parts[1].lower()
+                if not norm or len(norm.split()) > 4:
+                    continue
+                if any(k in norm for k in SOCIAL_KEEP):
+                    continue
+                out.add(norm)
+        except OSError:
+            pass
+        return out
+
+    LEXICON = load_lexicon()
 
     def anti_halluc(txt, segs, dur_s):
         t = " ".join(txt.lower().replace("[", " ").replace("]", " ")
                      .split()).strip()
-        # 1. deny-list: frase curta com assinatura de legenda = lixo
+        # 1. deny-list dura: contaminação inequívoca de legenda
         if len(t.split()) <= 6 and any(h in t for h in HALLUC_PT):
             return ""
+        # 1b. léxico Scicom (GATED): frase-isolada suspeita + stats fracos
+        if segs and t in LEXICON:
+            ns = max(s.get("no_speech_prob", 0) for s in segs)
+            lp = min(s.get("avg_logprob", 0) for s in segs)
+            if ns > 0.35 or lp < -0.45:
+                return ""
         # 2. gate estatístico: TUDO no_speech alto + logprob ruim = vazio
         if segs and all(s.get("no_speech_prob", 0) > 0.6 for s in segs) \
                 and all(s.get("avg_logprob", 0) < -0.8 for s in segs):
