@@ -197,10 +197,99 @@ def unit_battery(args) -> dict:
     return report
 
 
+def e2e_playback(args) -> dict:
+    """E2E acústico: toca wavs no ALTO-FALANTE e mede o duplex pela reação no log
+    (/tmp/opencode/duplex-voice.log — formato calibrado na live-fire TV 09:4x).
+    Autorização: dono AFK 20/10 "gerem as vozes com TTS, alto-falante ou injetado".
+    SEQUÊNCIA COMBINADA COM O OC (janela de teste) — não rodar em sessão do dono.
+    """
+    import subprocess, threading
+    LOG = "/tmp/opencode/duplex-voice.log"
+    WAVS = "/tmp/opencode/night-microturn/genuine-synth-wavs"
+    scenarios = []
+    items = [json.loads(l) for l in open(
+        os.path.join(os.path.dirname(__file__), "..", "data",
+                     "duplex-eval-turntaking.jsonl"), encoding="utf-8")
+             if l.strip() and not l.lstrip().startswith("#")]
+    # 10 perguntas (RESPOND), 5 barge, 5 backchannel — ordem de execução
+    by = {}
+    for i, it in enumerate(items):
+        by.setdefault(it["gold"], []).append((i, it["utt"]))
+    scenarios = [(i, u, "RESPOND") for i, u in by["RESPOND"][:10]]
+    scenarios += [(i, u, "BARGE") for i, u in by["BARGE"][:5]]
+    scenarios += [(i, u, "SILENCE") for i, u in by["SILENCE"][:5]]
+
+    seen = 0
+    if os.path.exists(LOG):
+        seen = sum(1 for _ in open(LOG, encoding="utf-8", errors="ignore"))
+    lines = []
+    def follow():
+        nonlocal lines
+        with open(LOG, encoding="utf-8", errors="ignore") as f:
+            for _ in range(seen):
+                f.readline()
+            while not stop[0]:
+                ln = f.readline()
+                if not ln:
+                    time.sleep(0.1)
+                    continue
+                lines.append((time.monotonic(), ln))
+    stop = [False]
+    threading.Thread(target=follow, daemon=True).start()
+
+    def wait_for(pat, timeout=15.0):
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < timeout:
+            for t, ln in lines:
+                if t > t0 and pat in ln:
+                    return t - t0, ln
+            time.sleep(0.05)
+        return None, None
+
+    report = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "route": "speaker",
+              "scenarios": []}
+    time.sleep(1)
+    for idx, utt, expect in scenarios:
+        wav = os.path.join(WAVS, f"utt_{idx:03d}.wav")
+        if not os.path.exists(wav):
+            continue
+        r = {"utt": utt, "expect": expect, "wav": f"utt_{idx:03d}.wav"}
+        t0 = time.monotonic()
+        subprocess.run(["paplay", wav], check=False)
+        t_play_end = time.monotonic() - t0
+        r["play_s"] = round(t_play_end, 2)
+        seg = utt[:25]
+        dseg, lseg = wait_for(seg, 20)
+        r["segment_captured"] = dseg is not None
+        if expect == "RESPOND":
+            dt, lresp = wait_for("TTS(", 25)
+            r["timespeak_s"] = round(dseg + dt, 2) if dseg and dt else None
+            dcls, lcls = wait_for("classify", 10)
+            r["classify_line"] = lcls.strip()[:80] if lcls else None
+            r["verdict"] = "ok" if lresp else "no-response"
+        elif expect == "SILENCE":
+            dcls, lcls = wait_for("classify", 12)
+            ok_sil = lcls and ("SILENCE" in lcls or "silêncio" in lcls or "backchannel" in lcls)
+            r["verdict"] = "ok-silenced" if ok_sil else ("classified" if lcls else "no-segment")
+        else:  # BARGE — reação: classificação BARGE ou kill do aplay (formato a confirmar c/ OC)
+            dcls, lcls = wait_for("BARGE", 12)
+            r["barge_reaction_s"] = round(dcls, 2) if dcls else None
+            r["classify_line"] = lcls.strip()[:80] if lcls else None
+            r["verdict"] = "barge-seen" if dcls else "no-barge-evidence"
+        report["scenarios"].append(r)
+        print(f"{expect:8s} {utt[:30]:30s} {r['verdict']}")
+        time.sleep(2)
+    stop[0] = True
+    return report
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--trigger-bench", action="store_true")
     ap.add_argument("--unit-battery", action="store_true")
+    ap.add_argument("--e2e-playback", action="store_true",
+                    help="toca wavs no alto-falante e mede pela reação no log "
+                         "duplex (janela combinada com OC; autorização dono 20/10)")
     ap.add_argument("--samples", type=int, default=20)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--asr", default="http://127.0.0.1:8097")
@@ -214,6 +303,8 @@ def main() -> int:
         report = trigger_bench(args)
     elif args.unit_battery:
         report = unit_battery(args)
+    elif args.e2e_playback:
+        report = e2e_playback(args)
     else:
         print(__doc__)
         return 1
