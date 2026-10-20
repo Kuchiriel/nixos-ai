@@ -1263,16 +1263,19 @@ def main():
                     ECHO_FLOOR.append(rrms)
                     if len(ECHO_FLOOR) > 40:
                         ECHO_FLOOR.pop(0)
-                    _floor = sorted(ECHO_FLOOR)[len(ECHO_FLOOR) // 2]
-                    _gate = max(900, int(_floor * 1.6))
-                    if rrms >= _gate:
-                        # (18:50) BARGE-IN REAL: mata o aplay AGORA (o
-                        # paper: 'must stop within ~200ms to feel
-                        # full-duplex')
+                    # (07:55, dono: "cortou o TTS dnv") BARGE RMS
+                    # DESLIGADO: o AEC não cancela o eco na prática
+                    # (resíduo ~nível cru) e picos da própria voz do
+                    # piper cruzavam QUALQUER piso — matava toda fala
+                    # em ~2s. Interrupção real = via SEMÂNTICA: whisper
+                    # → is_tts_self (eco ignora) → classify BARGE/
+                    # RESPOND → mata o aplay + responde. ~1-2s vs 200ms,
+                    # mas CORRETO — nunca suicida.
+                    if rrms >= 10**9:   # morto; piso só p/ diagnóstico
                         if tts._aplay and tts._aplay.poll() is None:
                             tts._aplay.kill()
                             log(f"[{ts()}] BARGE-IN: TTS morto "
-                                f"(resíduo={rrms}, piso={_gate})")
+                                f"(resíduo={rrms})")
                 else:
                     ECHO_FLOOR.clear()   # novo playback = recalibra
                 asr.feed(_processed.astype("float32") / 32768.0)
