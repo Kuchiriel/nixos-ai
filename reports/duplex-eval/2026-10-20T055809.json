@@ -1,0 +1,193 @@
+{
+ "ts": "2026-10-20T05:58:09",
+ "asr": "http://127.0.0.1:8097",
+ "samples_per_cat": 8,
+ "seed": 42,
+ "categories": {
+  "silence": {
+   "clips": 8,
+   "empty_ok": 3,
+   "hallucinated": 5,
+   "halluc_rate": 0.625,
+   "lexicon_kill": 1,
+   "net_rate_apos_lista": 0.5,
+   "errors": 0,
+   "samples": [
+    {
+     "id": "digital_zero_29s",
+     "text": "E aí",
+     "lexicon_kill": true
+    },
+    {
+     "id": "hiss_-45db_60s",
+     "text": "E aí\n E aí",
+     "lexicon_kill": false
+    },
+    {
+     "id": "hiss_-60db_31s",
+     "text": "E aí\n Obrigado.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "roomtone_31s",
+     "text": "E aí\n Obrigado.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "hiss_-45db_31s",
+     "text": "E aí\n Obrigado.",
+     "lexicon_kill": false
+    }
+   ]
+  },
+  "nonspeech": {
+   "clips": 8,
+   "empty_ok": 1,
+   "hallucinated": 7,
+   "halluc_rate": 0.875,
+   "lexicon_kill": 4,
+   "net_rate_apos_lista": 0.375,
+   "errors": 0,
+   "samples": [
+    {
+     "id": "music_345582",
+     "text": "E aí",
+     "lexicon_kill": true
+    },
+    {
+     "id": "noise_378070",
+     "text": "E aí",
+     "lexicon_kill": true
+    },
+    {
+     "id": "music_259192",
+     "text": "E aí",
+     "lexicon_kill": true
+    },
+    {
+     "id": "music_400163",
+     "text": "A CIDADE NO BRASIL",
+     "lexicon_kill": false
+    },
+    {
+     "id": "music_138491",
+     "text": "Legenda Adriana Zanotto",
+     "lexicon_kill": false
+    },
+    {
+     "id": "noise_278138",
+     "text": "E aí",
+     "lexicon_kill": true
+    },
+    {
+     "id": "noise_119073",
+     "text": "O que é isso?",
+     "lexicon_kill": false
+    }
+   ]
+  },
+  "music": {
+   "clips": 8,
+   "empty_ok": 0,
+   "hallucinated": 8,
+   "halluc_rate": 1.0,
+   "lexicon_kill": 1,
+   "net_rate_apos_lista": 0.875,
+   "errors": 0,
+   "samples": [
+    {
+     "id": "008879_16khz_mono",
+     "text": "Não, não, não.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "003945_16khz_mono",
+     "text": "E aí",
+     "lexicon_kill": true
+    },
+    {
+     "id": "004376_16khz_mono",
+     "text": "Oh, oh, oh, oh, oh, oh, oh, oh",
+     "lexicon_kill": false
+    },
+    {
+     "id": "003972_16khz_mono",
+     "text": "Música",
+     "lexicon_kill": false
+    },
+    {
+     "id": "010570_16khz_mono",
+     "text": "A CIDADE NO BRASIL",
+     "lexicon_kill": false
+    },
+    {
+     "id": "007773_16khz_mono",
+     "text": "E aí\n E aí",
+     "lexicon_kill": false
+    },
+    {
+     "id": "004154_16khz_mono",
+     "text": "a próxima.\n I really hope that\n the next time\n you and your ",
+     "lexicon_kill": false
+    },
+    {
+     "id": "010569_16khz_mono",
+     "text": "A CIDADE NO BRASIL\n A CIDADE NO BRASIL",
+     "lexicon_kill": false
+    }
+   ]
+  },
+  "reduplication": {
+   "clips": 8,
+   "empty_ok": 0,
+   "hallucinated": 8,
+   "halluc_rate": 1.0,
+   "lexicon_kill": 5,
+   "net_rate_apos_lista": 0.375,
+   "errors": 0,
+   "samples": [
+    {
+     "id": "vowel_o_n12_r3_t2",
+     "text": "E aí",
+     "lexicon_kill": true
+    },
+    {
+     "id": "laugh_e_n03_r7_t2",
+     "text": "E aí",
+     "lexicon_kill": true
+    },
+    {
+     "id": "vowel_o_n08_r9_t2",
+     "text": "E aí",
+     "lexicon_kill": true
+    },
+    {
+     "id": "vowel_i_n03_r7_t0",
+     "text": "E aí",
+     "lexicon_kill": true
+    },
+    {
+     "id": "cv_tu_n04_r7_t0",
+     "text": "Titi-titi.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "laugh_i_n05_r3_t2",
+     "text": "E E E E E E",
+     "lexicon_kill": false
+    },
+    {
+     "id": "cv_da_n03_r9_t2",
+     "text": "Tchau.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "vowel_o_n03_r5_t2",
+     "text": "E aí",
+     "lexicon_kill": true
+    }
+   ]
+  }
+ },
+ "note": "gate v6 completo vive no duplex-asrd (lane OC); kill simulado = listas TSV (tier-2 + lexicon)"
+}

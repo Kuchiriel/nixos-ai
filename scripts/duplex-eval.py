@@ -12,18 +12,30 @@ Métricas implementadas:
                      + kill-rate simulado das listas (lexicon/hard tier-2, TSVs do repo).
                      Gate v6 completo vive no asrd (lane OC) — aqui aproximamos tier-2
                      com as listas TSV; diferença documentada no relatório.
+  --unit-battery     turn-taking accuracy: 120 cenas gold-label
+                     (data/duplex-eval-turntaking.jsonl) → classify_turn replicado
+                     BYTE-A-BYTE (CLASS_SYS + toggle /lora-adapters + /completion
+                     temp 0, sync duplex-voice.py:114) → matriz de confusão + acc
+                     por classe. Não usar enquanto o cliente duplex estiver em
+                     sessão ativa (races no toggle do LoRA).
 
 Métricas stubs (contrato no design doc, TODO com dono/OC):
-  --unit-battery     turn-taking accuracy do classify_turn (offline, sem GPU)
   --barge-latency    E2E acústico com voz real (precisa dono falando sobre TTS)
   --timespeak        idem
 
 USO:   python3 scripts/duplex-eval.py --trigger-bench [--samples 20] [--seed 42]
           [--asr http://127.0.0.1:8097] [--fixtures /tmp/opencode/night-microturn/kaggle-pkg]
           [--out reports/duplex-eval]
+       python3 scripts/duplex-eval.py --unit-battery [--classify http://127.0.0.1:8092]
 EXEMPLO (smoke rápido): python3 scripts/duplex-eval.py --trigger-bench --samples 6
 """
 import argparse, json, os, random, sys, time, urllib.request, uuid
+
+CLASS_SYS = ("Você é o JARVIS, assistente de voz. Classifique o turno do "
+             "usuário em uma palavra: RESPOND (fala completa que pede "
+             "resposta), WAIT (frase incompleta, mais vem), SILENCE "
+             "(backchannel/ruído), ou BARGE (o dono interrompeu sua fala).")
+CLASS_LABELS = ("RESPOND", "WAIT", "SILENCE", "BARGE")
 
 
 def post_audio(asr: str, flac: bytes, timeout: float = 30.0) -> dict:
@@ -108,21 +120,83 @@ def trigger_bench(args) -> dict:
     return report
 
 
+def http_json(url: str, payload) -> dict:
+    req = urllib.request.Request(url, data=json.dumps(payload).encode(),
+                                 method="POST",
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.loads(r.read())
+
+
+def classify_once(base: str, utt: str):
+    """Réplica byte-a-byte de classify_turn (duplex-voice.py:114) — sync lá."""
+    try:
+        http_json(base + "/lora-adapters", [{"id": 0, "scale": 1.0}])
+        prompt = (f"<|im_start|>system\n{CLASS_SYS}<|im_end|>\n"
+                  f"<|im_start|>user\n{utt}<|im_end|>\n"
+                  f"<|im_start|>assistant\n")
+        j = http_json(base + "/completion", {
+            "prompt": prompt, "n_predict": 6, "temperature": 0,
+            "stop": ["<|im_end|>"], "cache_prompt": True})
+        out = str(j.get("content", "")).strip().upper()
+        for lab in CLASS_LABELS:
+            if out.startswith(lab):
+                return lab
+        return None
+    except Exception:
+        return None
+    finally:
+        try:
+            http_json(base + "/lora-adapters", [])
+        except Exception:
+            pass
+
+
+def unit_battery(args) -> dict:
+    path = os.path.join(os.path.dirname(__file__), "..", "data",
+                        "duplex-eval-turntaking.jsonl")
+    items = [json.loads(l) for l in open(path, encoding="utf-8")
+             if l.strip() and not l.lstrip().startswith("#")]
+    conf = {g: {p: 0 for p in CLASS_LABELS + ("NONE",)} for g in CLASS_LABELS}
+    for it in items:
+        pred = classify_once(args.classify, it["utt"])
+        conf[it["gold"]][pred or "NONE"] += 1
+    report = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "classify": args.classify,
+              "n": len(items), "classes": {}}
+    accs = []
+    for g in CLASS_LABELS:
+        tot = sum(conf[g].values())
+        acc = conf[g][g] / tot if tot else None
+        accs.append(acc)
+        report["classes"][g] = {"n": tot, "acc": round(acc, 3),
+                                "confusion": conf[g]}
+        print(f"{g}: acc={acc:.2f} ({conf[g][g]}/{tot}) "
+              f"conf={ {k: v for k, v in conf[g].items() if v and k != g} }")
+    report["avg_turn_taking_acc"] = round(sum(accs) / len(accs), 3)
+    print("AVERAGED TURN-TAKING ACC:", report["avg_turn_taking_acc"])
+    return report
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--trigger-bench", action="store_true")
+    ap.add_argument("--unit-battery", action="store_true")
     ap.add_argument("--samples", type=int, default=20)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--asr", default="http://127.0.0.1:8097")
+    ap.add_argument("--classify", default="http://127.0.0.1:8092")
     ap.add_argument("--fixtures",
                     default="/tmp/opencode/night-microturn/kaggle-pkg")
     ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__),
                                                   "..", "reports", "duplex-eval"))
     args = ap.parse_args()
-    if not args.trigger_bench:
+    if args.trigger_bench:
+        report = trigger_bench(args)
+    elif args.unit_battery:
+        report = unit_battery(args)
+    else:
         print(__doc__)
         return 1
-    report = trigger_bench(args)
     os.makedirs(args.out, exist_ok=True)
     latest = os.path.join(args.out, "latest.json")
     with open(latest, "w", encoding="utf-8") as f:
