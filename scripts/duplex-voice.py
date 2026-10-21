@@ -175,7 +175,14 @@ def learn_from_turn(heard: str, said: str = ""):
         if m:
             f = m.group(1).strip()
             if 2 <= len(f) <= 40 and not f.lower().startswith(("que", "para", "um", "uma")):
-                fatos.append(f"{rotulo}: {f}")
+                # (08:55 HB) frase NATURAL, não label — o embedding de
+                # 'O dono mora em São Paulo' casa com 'onde eu moro?';
+                # 'local: São Paulo' NÃO casa (gap semântico medido)
+                _verb_map = {'local': 'mora em', 'identidade': 'se chama',
+                             'preferência': 'gosta de', 'trabalho': 'trabalha como',
+                             'posse': 'tem', 'aniversário': 'faz anos em'}
+                _verb = _verb_map.get(rotulo, 'é')
+                fatos.append(f"O dono {_verb} {f}")
     # o modelo tb pode ter dito um fato (ex.: "guardei que você gosta de X")
     if "guard" in said.lower() or "lemb" in said.lower():
         for pat, rotulo in FACT_PATTERNS:
