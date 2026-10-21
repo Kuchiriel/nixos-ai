@@ -371,6 +371,17 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
             if not tcs:
                 if not out:
                     continue   # stream vazio estranho: mais uma tentativa
+                # (21/10 P2, survey 2602.06052 §3.2.5) PROCEDURAL MEMORY:
+                # quando um tool respondeu e a resposta fluiu, salva o
+                # padrão (skill/routine) — "para X, use tool Y"
+                if MEM_AVAILABLE and _round == 1:
+                    try:
+                        _MEM.remember_fact(
+                            f"PATTERN: '{heard[:40]}' → do(action, input) via tools",
+                            kind="procedure", source="duplex-auto",
+                            heard=heard[:80])
+                    except Exception:
+                        pass
                 # (17:00) consult-speak: 'preciso consultar/vou verificar'
                 # sem ter chamado → 1 retry com nudge pra CHAMAR a tool.
                 if (_round == 0 and any(
