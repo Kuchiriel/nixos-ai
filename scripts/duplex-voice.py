@@ -1893,7 +1893,9 @@ def main():
                     # BARGE=mata o TTS. Falha técnica → gate antigo.
                     lab = (classify_turn(base, heard)
                            if (n_words >= 1 and heard != NOVOICE) else None)
-                    log(f"[{ts()}] classify({heard[:38]!r}) = {lab}")
+                    log(f"[{ts()}] classify({heard[:38]!r}) = {lab} "
+                        f"spk={SPK_STATE.get('last_spk')} "
+                        f"voices={SPK_STATE.get('voices')}")
                     if lab == "RESPOND":
                         # (09:15) modo-TV: classificador diz RESPOND à
                         # fala COMPLETA da TV/sala — sem endereçamento
