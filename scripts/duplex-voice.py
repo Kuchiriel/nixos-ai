@@ -83,8 +83,12 @@ SYSTEM_PT = (
     "Na dúvida, confirme ou peça para repetir.\n\n"
     "=== META-TOOL (chame UMA vez: do(action, input)) ===\n"
     "do(action, input) — roteia internamente para:\n"
-    "  MEMÓRIA: remember(text) | recall(query)\n"
-    "  WEB: web_search(query)\n"
+    "  MEMÓRIA INTERNA (sobre o DONO): remember(text) | recall(query)\n"
+    "    recall = buscar no SEU cérebro: preferências do dono, nome, fatos, lições.\n"
+    "    USE recall para: 'o que eu gosto', 'qual meu nome', 'me lembra de', 'o que você sabe sobre mim'.\n"
+    "  WEB EXTERNA (dados do mundo): web_search(query)\n"
+    "    USE web_search para: cotações, notícias, clima, fatos atuais, qualquer coisa que não está na sua memória.\n"
+    "  NUNCA use web_search para perguntas sobre o dono — use recall!\n"
     "  STATUS: status()\n"
     "  SHELL: shell(command)\n"
     "  VOZ: enroll() | guest() | voices()\n"
@@ -918,20 +922,22 @@ def call_tool(name, args):
     if name == "recall":
         q = args.get("query", "")
         raw = _exec(f"timeout 20 jarvis recall '{q}' 2>&1")
-        # o CLI devolve JSON de hits (id/score/metadata) — o 4B não lê
-        # blob; extraímos os TEXTOS das memórias:
+        # (21/10 P0) o 4B não lê JSON blob — formatar como LISTA LEGÍVEL:
+        # fatos primeiro, um por linha, com kind e texto limpo
         try:
             hits = json.loads(raw)
-            texts = []
-            for h in hits if isinstance(hits, list) else [hits]:
-                if isinstance(h, dict):
-                    t = (h.get("payload") or {}).get("text") or h.get("text") or \
-                        h.get("content") or h.get("page_content") or ""
-                    if t:
-                        texts.append(str(t)[:200])
-            if texts:
-                return " | ".join(texts[:5])
-            return raw[:400]
+            lines = []
+            for h in (hits if isinstance(hits, list) else [hits])[:5]:
+                if not isinstance(h, dict):
+                    continue
+                t = (h.get("payload") or {}).get("text") or h.get("text") or \
+                    h.get("content") or ""
+                kind = (h.get("payload") or {}).get("kind") or h.get("kind") or "?"
+                if t:
+                    lines.append(f"[{kind}] {str(t)[:180]}")
+            if lines:
+                return "\n".join(lines)
+            return f"Nenhuma memória encontrada para '{q[:40]}'."
         except Exception:
             return raw[:400]
     if name == "rag_search":
