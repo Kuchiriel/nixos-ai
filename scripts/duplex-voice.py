@@ -1030,8 +1030,17 @@ def call_tool(name, args):
             w = _w.open(_wav, "rb")
             pcm = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
             w.close()
+            # (21/10 v2) ENROLL em WeSpeaker 256-d — o asrd agora
+            # casa com WeSpeaker; perfis MFCC seriam incompatíveis.
+            emb = None
+            try:
+                import wespeakerruntime as w
+                _s = w.Speaker(lang="en")
+                emb = np.array(_s.extract_embedding(_wav), dtype=float).ravel()
+                emb = emb / (np.linalg.norm(emb) + 1e-9)
+            except Exception:
+                emb = spk_embed(pcm.astype("float32") / 32768.0)
             Path(_wav).unlink(missing_ok=True)
-            emb = spk_embed(pcm.astype("float32") / 32768.0)
             if emb is not None:
                 # (21/10 SPEAKER-ID) multi-perfil NOMEADO e PERSISTENTE:
                 # data/spk-profiles.json = {nome: embedding}; o asrd lê
