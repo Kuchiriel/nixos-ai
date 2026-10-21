@@ -473,6 +473,22 @@ def _cmd_recall(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_consolidate(args: argparse.Namespace) -> int:
+    """(21/10 P1.6) Consolida memórias similares — dedup por embedding.
+    --apply para gravar (sem ele = dry_run). Chamado pelo cron 3h."""
+    from jarvis.core.memory import EpisodicMemory
+
+    mem = EpisodicMemory(get_config())
+    result = mem.consolidate_memories(
+        similarity_threshold=args.threshold,
+        min_cluster_size=2,
+        max_points=args.max_points,
+        dry_run=not args.apply,
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0 if result.get("status") == "ok" or "error" not in result else 1
+
+
 def _cmd_lessons(args: argparse.Namespace) -> int:
     from jarvis.core.memory import EpisodicMemory
 
@@ -1196,9 +1212,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_remember.set_defaults(func=_cmd_remember)
 
     p_recall = sub.add_parser("recall", help="recupera eventos da memória (busca híbrida)")
+    p_consolidate = sub.add_parser("consolidate", help="consolida memórias similares (dedup por embedding)")
+    p_consolidate.add_argument("--threshold", type=float, default=0.95)
+    p_consolidate.add_argument("--max-points", type=int, default=1000)
+    p_consolidate.add_argument("--apply", action="store_true", help="grava (sem = dry_run)")
     p_recall.add_argument("query")
     p_recall.add_argument("--top-k", type=int, default=5)
     p_recall.set_defaults(func=_cmd_recall)
+    p_consolidate.set_defaults(func=_cmd_consolidate)
 
     p_lessons = sub.add_parser("lessons", help="lições passadas relevantes (estilo experience_buffer)")
     p_lessons.add_argument("query")
