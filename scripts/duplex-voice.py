@@ -253,9 +253,38 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
     # RESPOND (chat). Slot livre = classify instantâneo de novo.
     if not force_speak:
         return LISTEN, 0.0
-    body = {"prompt": build_prompt(history, heard), "n_predict": 64,
-            "temperature": 0, "stop": ["<|im_end|>"], "cache_prompt": True,
-            "n_probs": 8}
+
+    # (21/10 P1) MEMORY INJECTION AUTOMÁTICA: busca fatos relevantes no
+    # EpisodicMemory e injeta no context — o modelo SABE sem pedir recall.
+    # Paper Self-Evolving (2602.06052): memória deve ser proativa, não
+    # reativa. Paper MemGPT (2310.08560): Hot enxerga Warm automaticamente.
+    _mem_ctx = ""
+    if MEM_AVAILABLE and heard and len(heard.split()) >= 2:
+        try:
+            # busca por keywords da utterance (não a utterance inteira —
+            # embedding funciona melhor com keywords)
+            words = [w for w in heard.lower().split()
+                     if len(w) > 2 and w not in ("jarvis", "que", "para",
+                     "com", "não", "uma", "por", "mas", "como", "isso",
+                     "aqui", "você", "meu", "minha", "seu", "sua")]
+            query = " ".join(words[:5]) if words else heard[:40]
+            _facts = _MEM.recall(query, top_k=3, kinds=("fact",))
+            if _facts:
+                _lines = [h.get("text", "")[:120] for h in _facts[:3]
+                          if h.get("text")]
+                if _lines:
+                    _mem_ctx = ("\n=== MEMÓRIA RELEVANTE (automático) ===\n"
+                                + "\n".join(f"- {l}" for l in _lines) + "\n")
+        except Exception:
+            pass
+
+    _sys = SYSTEM + _mem_ctx if _mem_ctx else SYSTEM
+    body = {"prompt": (f"<|im_start|>system\n{_sys}<|im_end|>\n"
+            + "".join(f"<|im_start|>{r}\n{c}<|im_end|>\n"
+                      for r, c in history + [("user", heard)])
+            + "<|im_start|>assistant\n"),
+            "n_predict": 64, "temperature": 0,
+            "stop": ["<|im_end|>"], "cache_prompt": True, "n_probs": 8}
     if force_speak:
         # (07:20, direção do dono) /v1/chat/completions: o server 8092
         # roda com --reasoning off (models.nix) — no chat endpoint ELE
