@@ -317,12 +317,33 @@ def main():
                     spk_id, spk_cos = _identify(seg)
                 else:
                     spk_id, spk_cos = "?", 0.0
+                # (21/10, pedido HB) WAV por segmento p/ evidência: duplex
+                # copia p/ logs/audio/ quando classify=RESPOND (casável
+                # com log + reports). Rotativo: últimos 30 em /tmp.
+                _wav = ""
+                try:
+                    import wave as _w
+                    _sd = Path("/tmp/opencode/duplex-segs")
+                    _sd.mkdir(parents=True, exist_ok=True)
+                    _wav = str(_sd / f"seg_{time.time():.3f}.wav")
+                    _wf = _w.open(_wav, "wb")
+                    _wf.setnchannels(1); _wf.setsampwidth(2)
+                    _wf.setframerate(SR)
+                    _wf.writeframes((np.clip(seg, -1, 1) * 32767)
+                                    .astype("<i2").tobytes())
+                    _wf.close()
+                    _old = sorted(_sd.glob("seg_*.wav"))[:-30]
+                    for _f in _old:
+                        _f.unlink(missing_ok=True)
+                except Exception:
+                    _wav = ""
                 txt = ''
                 txt = seg_to_text(seg)
                 ms = (time.monotonic() - t0) * 1000
                 print(json.dumps({"text": txt, "ms": ms, "spk": spk_id,
                        "spk_cos": round(spk_cos, 2),
-                       "voices": SPK_COUNTER["voices"]}), flush=True)
+                       "voices": SPK_COUNTER["voices"],
+                       "wav": _wav}), flush=True)
                 ring = np.zeros(0, dtype="float32")
                 started = None
         except Exception as exc:  # noqa: BLE001

@@ -1290,6 +1290,7 @@ class Asr:
         self.last_ms = 0.0
         self.last_spk = "?"      # (21/10) speaker-ID do último segmento
         self.last_voices = 0     # (21/10) vozes ativas (clustering asrd)
+        self.last_wav = ""       # (21/10) WAV do último segmento (evidência)
     CTX = {"v": "Jarvis"}   # vocabulário → prompt do whisper-server
 
     def feed(self, pcm_f32):
@@ -1324,6 +1325,7 @@ class Asr:
             # (21/10 SPEAKER-ID) espalha estado p/ o loop (prompt/tools)
             self.last_spk = j.get("spk") or "?"
             self.last_voices = int(j.get("voices") or 0)
+            self.last_wav = j.get("wav") or ""
             SPK_STATE["last_spk"] = self.last_spk
             SPK_STATE["voices"] = self.last_voices
             if j.get("text"):
@@ -1896,6 +1898,22 @@ def main():
                     log(f"[{ts()}] classify({heard[:38]!r}) = {lab} "
                         f"spk={SPK_STATE.get('last_spk')} "
                         f"voices={SPK_STATE.get('voices')}")
+                    # (21/10, pedido HB) evidência acústica por RESPOND:
+                    # 1 wav por segmento respondido, timestamp casável
+                    # com o log (persistente) e os reports da bateria.
+                    if lab == "RESPOND" and getattr(asr, "last_wav", ""):
+                        try:
+                            import shutil as _sh
+                            _aud = (Path(__file__).parent.parent /
+                                    "logs" / "audio")
+                            _aud.mkdir(parents=True, exist_ok=True)
+                            _dst = _aud / (datetime.now().strftime(
+                                "%H%M%S") + "_" +
+                                Path(asr.last_wav).name)
+                            _sh.copy2(asr.last_wav, _dst)
+                            log(f"[{ts()}] respond wav: {_dst.name}")
+                        except Exception:
+                            pass
                     if lab == "RESPOND":
                         # (09:15) modo-TV: classificador diz RESPOND à
                         # fala COMPLETA da TV/sala — sem endereçamento
