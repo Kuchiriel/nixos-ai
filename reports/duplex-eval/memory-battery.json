@@ -1,11 +1,11 @@
 {
- "ts": "2026-10-21T09:01:36",
+ "ts": "2026-10-21T09:42:57",
  "results": [
   {
    "i": 2,
    "utt": "Onde eu moro?",
    "tier": "recall",
-   "segment": "SEGMENTO: Onde eu morro?",
+   "segment": "SEGMENTO: obrigado",
    "response": null,
    "pass": false
   }
