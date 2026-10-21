@@ -275,11 +275,11 @@ def main():
             c = _cos(e, prof)
             if c > best_cos:
                 best, best_cos = nome, c
-        if best_cos < 0.75:
+        if best_cos < 0.62:   # (21/10 HB) enrolled 0.62 p/ segmentos curtos
             # (21/10) sem perfil conhecido → ID EMERGENTE estável
             _lbl = None
             for _i, (_lb, _cent) in enumerate(SPK_EMERGENT):
-                if _cos(e, _cent) >= 0.80:
+                if _cos(e, _cent) >= 0.58:   # (21/10 HB) ótimo medido
                     _lbl = _lb
                     SPK_EMERGENT[_i] = (_lb, _cent * 0.8 + e * 0.2)
                     break
@@ -295,7 +295,7 @@ def main():
         n_voices = 1
         centroids = [SPK_RECENT[0][0].copy()]
         for r_e, _ in SPK_RECENT[1:]:
-            if max(_cos(r_e, c) for c in centroids) < 0.82:
+            if max(_cos(r_e, c) for c in centroids) < 0.58:   # (21/10 HB)
                 centroids.append(r_e.copy())
                 n_voices += 1
         SPK_COUNTER["voices"] = n_voices

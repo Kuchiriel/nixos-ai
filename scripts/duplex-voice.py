@@ -508,7 +508,9 @@ def spk_is_owner(pcm_f32):
         return True
     cos = float(np.dot(e, SPK_PROFILE) /
                 (np.linalg.norm(e) * np.linalg.norm(SPK_PROFILE) + 1e-9))
-    return cos >= 0.82
+    # (21/10 HB 13:35) 0.82 reprovava a própria voz (intra ~0.73 em
+    # segmentos curtos WeSpeaker) — calibrado junto do asrd
+    return cos >= 0.62
 
 def spk_enroll(audio_path):
     """Matricula a voz do dono a partir de um wav (10s+)."""
