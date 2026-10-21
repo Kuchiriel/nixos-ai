@@ -127,3 +127,21 @@
 - **Validação**: bateria HB multi-voz sintética (dora/alex) + regressão
   classify 0.927. ECAPA-TDNN (paper 2610.15978, 86.6 B³-F1) = reserva.
 - **Pós-v2**: matrícula real do dono (10s) → nome no lugar de spkN.
+
+
+## AEC / Delay Calibration Research (21/10, preparação p/ corr_med 0.08-0.15)
+Papers baixados e indexados (RAG):
+- **E2E-AEC** (2601.16774, ICASSP 2026): end-to-end neural AEC streaming, progressive learning, knowledge transfer from LAEC, attention-based time alignment (loss em attention weights), VAD-gated output. Streaming inference sem LAEC tradicional + delay estimation.
+- **Small-footprint AEC** (2508.07561, ICASSP 2025): small-footprint neural AEC p/ mobile full-duplex, progressive learning, data augmentation p/ robustez, post-processing p/ VAD/ASR downstream, streaming inference, mobile deployment.
+- **Insights p/ nosso AEC (MP-AEC + feed-gate correlação)**:
+  - Attention time-alignment loss → pode substituir nosso AEC_DELAY_S fixture por learnable delay (attention weights = alignment)
+  - Progressive learning → treino curricular do MP-AEC (filtro curto → longo)
+  - VAD-gated output → nosso feed-gate já faz correlação; VAD explícito no AEC melhora near-end
+  - Knowledge transfer from LAEC → pré-treino do filtro MP com LAEC tradicional
+- **Próximo**: medir AEC_DELAY_S via fixture (HB ofereceu rodar profile) + testar attention alignment loss no MP-AEC.
+
+## Enrollment UX Polish (pendência dono: "depois do cadastro o ID mapeia pro NOME")
+- Tool `enroll` já suporta `enroll João` → WeSpeaker 256-d persistente em data/spk-profiles.json
+- Gap: fluxo conversacional "Jarvis, cadastra minha voz" → guia 10s → confirma nome
+- Adicionar: ação `enroll` no dispatcher (já existe) + confirmação por voz + listar perfis cadastrados
+- Integração com SYSTEM_PT: "Nomes cadastrados aparecem no [spk: Nome]"
