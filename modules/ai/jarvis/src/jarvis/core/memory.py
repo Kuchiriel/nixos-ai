@@ -340,6 +340,65 @@ class EpisodicMemory:
         except Exception:  # noqa: BLE001
             return 0
 
+    def consolidate_memories(self, similarity_threshold: float = 0.95,
+                              min_cluster_size: int = 2,
+                              max_points: int = 1000,
+                              dry_run: bool = True) -> dict:
+        """Consolida memórias similares em fatos atômicos (cosseno >= threshold)."""
+        if not self.is_available():
+            return {"error": "Qdrant indisponível"}
+        self.ensure()
+        scroll = self._store._request(
+            "POST", f"/collections/{self.collection}/points/scroll",
+            json={"limit": 1000, "with_payload": True, "with_vector": True})
+        if not scroll or scroll.get("status") != "ok":
+            return {"error": "falha ao buscar memórias"}
+        points = scroll.get("result", {}).get("points", [])
+        if len(points) < 2:
+            return {"status": "pontos_insuficientes", "processed": 0}
+        import numpy as np
+        pts = []
+        for p in points:
+            vec = p.get("vector", {}).get("dense")
+            text = p.get("payload", {}).get("text", "").strip()
+            if vec and text:
+                pts.append({"id": p["id"], "vec": np.array(vec), "text": text, "pl": p["payload"]})
+        if len(pts) < 2:
+            return {"status": "pontos_insuficientes", "processed": 0}
+        vectors = np.array([p["vec"] for p in pts])
+        norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        normed = vectors / norms
+        sim = np.dot(normed, normed.T)
+        np.fill_diagonal(sim, 0)
+        visited = np.zeros(len(pts), dtype=bool)
+        clusters = []
+        for i in range(len(pts)):
+            if visited[i]:
+                continue
+            cluster = [i]
+            for j in range(i+1, len(pts)):
+                if not visited[j] and sim[i, j] >= similarity_threshold:
+                    cluster.append(j)
+            if len(cluster) >= min_cluster_size:
+                clusters.append(cluster)
+                for idx in cluster:
+                    visited[idx] = True
+        if not clusters:
+            return {"status": "sem_clusters", "processed": 0}
+        stats = {"clusters": len(clusters), "removed": 0, "kept": 0, "consolidated": 0}
+        for cluster in clusters:
+            cp = [pts[i] for i in cluster]
+            cp.sort(key=lambda p: (p["pl"].get("timestamp", 0), len(p["text"])), reverse=True)
+            keeper = cp[0]
+            if not dry_run:
+                ids = [p["id"] for p in cp[1:]]
+                self._store.delete_points(self.collection, ids)
+            stats["removed"] += len(cluster) - 1
+            stats["kept"] += 1
+            stats["consolidated"] += 1
+        return {"status": "ok", **stats}
+
     def clear(self, *, confirm: bool = False) -> None:
         """Apaga TODA a memória episódica (destrutivo — audit P0-3).
 
