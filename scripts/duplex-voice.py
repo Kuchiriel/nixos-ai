@@ -929,9 +929,21 @@ def call_tool(name, args):
         # (21/10 P0) fact-kind tem PRIORIDADE: perguntas sobre o dono
         # ("qual meu nome?") devem achar 'O nome do dono é Matheus' e não
         # um decision sobre o loop de enriquecimento com score maior.
-        raw = _exec(f"timeout 20 jarvis recall --kind fact '{q}' 2>&1")
-        if not raw or len(raw.strip()) < 10 or '[]' in raw[:5]:
-            raw = _exec(f"timeout 20 jarvis recall '{q}' 2>&1")
+        # CLI não tem --kind → usa a classe EpisodicMemory in-process
+        # com kinds=('fact',) e fallback para o CLI se vazio.
+        try:
+            _memq = _MEM.recall(q, top_k=5, kinds=("fact",))
+            if _memq:
+                lines = []
+                for h in _memq[:5]:
+                    t = (h.get("text") or h.get("content") or "")
+                    if t:
+                        lines.append(f"[fact] {str(t)[:180]}")
+                if lines:
+                    return "\n".join(lines)
+        except Exception:
+            pass
+        raw = _exec(f"timeout 20 jarvis recall '{q}' 2>&1")
         # (21/10 P0) o 4B não lê JSON blob — formatar como LISTA LEGÍVEL
         try:
             hits = json.loads(raw)
