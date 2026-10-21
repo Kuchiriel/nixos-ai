@@ -1,23 +1,25 @@
 {
- "ts": "2026-10-20T13:03:49",
+ "ts": "2026-10-20T15:46:27",
  "route": "speaker",
  "scenarios": [
   {
    "utt": "CALA A BOCA",
    "expect": "BARGE",
    "wav": "utt_094.wav",
-   "play_s": 1.26,
+   "play_s": 1.27,
    "segment_captured": false,
-   "verdict": "no-response-to-barge-onto",
+   "barge_reaction_s": 13.76,
+   "kill_line": null,
+   "verdict": "barge-not-kill",
    "classify_line": null
   },
   {
    "utt": "para para para",
    "expect": "BARGE",
    "wav": "utt_095.wav",
-   "play_s": 1.13,
+   "play_s": 1.12,
    "segment_captured": false,
-   "barge_reaction_s": 9.92,
+   "barge_reaction_s": 13.61,
    "kill_line": null,
    "verdict": "barge-not-kill",
    "classify_line": null
@@ -26,18 +28,20 @@
    "utt": "espera! para!",
    "expect": "BARGE",
    "wav": "utt_096.wav",
-   "play_s": 1.34,
+   "play_s": 1.35,
    "segment_captured": false,
-   "verdict": "no-response-to-barge-onto",
+   "barge_reaction_s": 13.85,
+   "kill_line": null,
+   "verdict": "barge-not-kill",
    "classify_line": null
   },
   {
    "utt": "pare!",
    "expect": "BARGE",
    "wav": "utt_097.wav",
-   "play_s": 0.89,
+   "play_s": 0.88,
    "segment_captured": false,
-   "barge_reaction_s": 9.68,
+   "barge_reaction_s": 13.37,
    "kill_line": null,
    "verdict": "barge-not-kill",
    "classify_line": null
@@ -46,9 +50,9 @@
    "utt": "não, escuta!",
    "expect": "BARGE",
    "wav": "utt_098.wav",
-   "play_s": 1.34,
+   "play_s": 1.33,
    "segment_captured": false,
-   "barge_reaction_s": 10.13,
+   "barge_reaction_s": 13.88,
    "kill_line": null,
    "verdict": "barge-not-kill",
    "classify_line": null

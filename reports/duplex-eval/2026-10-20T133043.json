@@ -1,0 +1,51 @@
+{
+ "ts": "2026-10-20T13:30:43",
+ "route": "speaker",
+ "scenarios": [
+  {
+   "utt": "CALA A BOCA",
+   "expect": "BARGE",
+   "wav": "utt_094.wav",
+   "play_s": 1.3,
+   "segment_captured": false,
+   "verdict": "no-response-to-barge-onto",
+   "classify_line": null
+  },
+  {
+   "utt": "para para para",
+   "expect": "BARGE",
+   "wav": "utt_095.wav",
+   "play_s": 1.1,
+   "segment_captured": false,
+   "verdict": "no-response-to-barge-onto",
+   "classify_line": null
+  },
+  {
+   "utt": "espera! para!",
+   "expect": "BARGE",
+   "wav": "utt_096.wav",
+   "play_s": 1.31,
+   "segment_captured": false,
+   "verdict": "no-response-to-barge-onto",
+   "classify_line": null
+  },
+  {
+   "utt": "pare!",
+   "expect": "BARGE",
+   "wav": "utt_097.wav",
+   "play_s": 0.87,
+   "segment_captured": false,
+   "verdict": "no-response-to-barge-onto",
+   "classify_line": null
+  },
+  {
+   "utt": "não, escuta!",
+   "expect": "BARGE",
+   "wav": "utt_098.wav",
+   "play_s": 1.35,
+   "segment_captured": false,
+   "verdict": "no-response-to-barge-onto",
+   "classify_line": null
+  }
+ ]
+}

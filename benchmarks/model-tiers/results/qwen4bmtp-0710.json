@@ -2,11 +2,11 @@
  "tag": "qwen4bmtp-0710",
  "model": "qwen4b",
  "endpoint": "http://127.0.0.1:8092",
- "ts": "2026-10-19 07:06",
+ "ts": "2026-10-21 04:03",
  "speed": {
-  "ttft_s": 0.461,
-  "prefill_ts": 241.1,
-  "gen_ts": 61.0
+  "ttft_s": 0.097,
+  "prefill_ts": 67.4,
+  "gen_ts": 63.8
  },
  "ptbr": {
   "dificeis": {
@@ -15,7 +15,7 @@
    "det": [
     {
      "en": "It contains the smell of a freshly slain slime",
-     "pt": "Contém o cheiro de um lodo recém-matado.",
+     "pt": "Contém o cheiro de um slime recém-matado.",
      "falhas": []
     },
     {
@@ -110,7 +110,7 @@
     },
     {
      "en": "You should follow gnomish advice and use it on green crystals",
-     "pt": "Você deve seguir o conselho dos gnomos e usá-lo em cristais verdes.",
+     "pt": "Você deve seguir os conselhos dos gnomos e usá-los em cristais verdes.",
      "falhas": []
     },
     {
@@ -120,7 +120,7 @@
     },
     {
      "en": "This spicy-sweet cake will probably put you into a sugar rush",
-     "pt": "Este bolo picante e doce provavelmente te colocará em uma rajada de açúcar.",
+     "pt": "Este bolo picante e doce provavelmente fará você entrar em uma rajada de açúcar.",
      "falhas": []
     }
    ]
@@ -142,7 +142,7 @@
    },
    {
     "prompt": "Ana diz: 'Beto mente'. Beto diz: 'Ana e eu mentimos'. Quem f",
-    "out": "Beto fala a verdade, pois se ele mentisse, ambos estariam mentindo, o que tornaria a frase de Ana verdadeira, criando uma contradição.",
+    "out": "Beto fala a verdade, pois se ele mentisse, Ana também mentiria, o que tornaria a frase de Beto falsa.",
     "hit": true
    },
    {
