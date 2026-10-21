@@ -1,61 +1,57 @@
 {
- "ts": "2026-10-20T15:46:27",
- "route": "speaker",
- "scenarios": [
-  {
-   "utt": "CALA A BOCA",
-   "expect": "BARGE",
-   "wav": "utt_094.wav",
-   "play_s": 1.27,
-   "segment_captured": false,
-   "barge_reaction_s": 13.76,
-   "kill_line": null,
-   "verdict": "barge-not-kill",
-   "classify_line": null
+ "ts": "2026-10-21T07:27:37",
+ "classify": "http://127.0.0.1:8092",
+ "n": 124,
+ "classes": {
+  "RESPOND": {
+   "n": 30,
+   "acc": 1.0,
+   "confusion": {
+    "RESPOND": 30,
+    "WAIT": 0,
+    "SILENCE": 0,
+    "BARGE": 0,
+    "NONE": 0
+   }
   },
-  {
-   "utt": "para para para",
-   "expect": "BARGE",
-   "wav": "utt_095.wav",
-   "play_s": 1.12,
-   "segment_captured": false,
-   "barge_reaction_s": 13.61,
-   "kill_line": null,
-   "verdict": "barge-not-kill",
-   "classify_line": null
+  "WAIT": {
+   "n": 31,
+   "acc": 0.903,
+   "confusion": {
+    "RESPOND": 0,
+    "WAIT": 28,
+    "SILENCE": 2,
+    "BARGE": 1,
+    "NONE": 0
+   }
   },
-  {
-   "utt": "espera! para!",
-   "expect": "BARGE",
-   "wav": "utt_096.wav",
-   "play_s": 1.35,
-   "segment_captured": false,
-   "barge_reaction_s": 13.85,
-   "kill_line": null,
-   "verdict": "barge-not-kill",
-   "classify_line": null
+  "SILENCE": {
+   "n": 33,
+   "acc": 0.97,
+   "confusion": {
+    "RESPOND": 1,
+    "WAIT": 0,
+    "SILENCE": 32,
+    "BARGE": 0,
+    "NONE": 0
+   }
   },
-  {
-   "utt": "pare!",
-   "expect": "BARGE",
-   "wav": "utt_097.wav",
-   "play_s": 0.88,
-   "segment_captured": false,
-   "barge_reaction_s": 13.37,
-   "kill_line": null,
-   "verdict": "barge-not-kill",
-   "classify_line": null
-  },
-  {
-   "utt": "não, escuta!",
-   "expect": "BARGE",
-   "wav": "utt_098.wav",
-   "play_s": 1.33,
-   "segment_captured": false,
-   "barge_reaction_s": 13.88,
-   "kill_line": null,
-   "verdict": "barge-not-kill",
-   "classify_line": null
+  "BARGE": {
+   "n": 30,
+   "acc": 0.833,
+   "confusion": {
+    "RESPOND": 5,
+    "WAIT": 0,
+    "SILENCE": 0,
+    "BARGE": 25,
+    "NONE": 0
+   }
   }
- ]
+ },
+ "latency_ms": {
+  "p50": 139.5,
+  "p99": 146.0,
+  "mean": 142.3
+ },
+ "avg_turn_taking_acc": 0.927
 }
