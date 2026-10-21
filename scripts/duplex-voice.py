@@ -876,6 +876,15 @@ def call_tool(name, args):
         if "recall" in action or "memória" in action or "memoria" in action:
             return call_tool("recall", {"query": inp})
         if "web" in action or "busca" in action or "internet" in action:
+            # (21/10 P0) SMART ROUTER: se o input menciona papers/docs/
+            # código, redireciona pra rag_search mesmo se o modelo disse
+            # web_search — o 4B não segue o prompt consistentemente
+            # (harness fix > prompt fix, paper 2605.23950: HV/MV 7.8×)
+            _inp_l = inp.lower()
+            if any(k in _inp_l for k in ("paper", "arxiv", "livro",
+                    "código", "codigo", "script", "document", "doc ",
+                    "como funciona", "onde está", "onde esta")):
+                return call_tool("rag_search", {"query": inp})
             return call_tool("web_search", {"query": inp})
         if "rag" in action or "document" in action or "paper" in action or "livro" in action or "pesqui" in action:
             return call_tool("rag_search", {"query": inp})
@@ -968,33 +977,32 @@ def call_tool(name, args):
             return raw[:400]
     if name == "rag_search":
         q = args.get("query", "")
-        # (21/10) RAG com conteúdo: o path sozinho não serve pro 4B —
-        # extrai o TEXTO do arquivo (primeiras linhas relevantes ao query)
+        # (21/10) CLI agora traz content (rebuild aplicado) — usa CLI
+        # direto com --top-k 3, formata [arquivo] content por linha
         raw = _exec(f"timeout 25 jarvis rag --top-k 3 '{q}' 2>&1")
         try:
             hits = json.loads(raw)
-            texts = []
+            lines = []
             for h in (hits if isinstance(hits, list) else [hits])[:3]:
                 if not isinstance(h, dict):
                     continue
                 path = h.get("path", "")
-                if not path:
-                    continue
-                # extrai um trecho do arquivo que matchea o query
-                try:
-                    content = Path(path).read_text(errors="ignore")[:3000]
-                    ql = q.lower().split()
-                    # acha o parágrafo com mais matches
-                    best, score = content[:200], 0
-                    for para in content.split("\n\n"):
-                        s = sum(1 for w in ql if w in para.lower())
-                        if s > score:
-                            best, score = para, s
-                    texts.append(f"[{Path(path).name}] {best[:200]}")
-                except Exception:
-                    texts.append(f"[{Path(path).name}] {h.get('symbols', '')[:80]}")
-            if texts:
-                return "\n".join(texts)
+                content = h.get("content", "")
+                if content:
+                    fname = path.split("/")[-1] if path else "?"
+                    lines.append(f"[{fname}] {content[:200]}")
+            if lines:
+                return "\n".join(lines)
+            return f"RAG: nenhum resultado para '{q[:40]}'."
+        except Exception:
+            # fallback: in-process via EpisodicMemory se o CLI falhar
+            try:
+                hits2 = _MEM.recall(q, top_k=3) if _MEM else []
+                if hits2:
+                    return "\n".join(
+                        f"[fact] {h.get('text','')[:180]}" for h in hits2[:3])
+            except Exception:
+                pass
             return raw[:400]
         except Exception:
             return raw[:400]
