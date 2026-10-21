@@ -251,26 +251,6 @@
   # Aliases rápidos para as ferramentas de IA em nuvem
   home.shellAliases = {
     kilo = "opencode";
-    agy  = "antigravity-ide";
-  };
-
-  # ══════════════════════════════════════════════════════════════
-  # CONFIGURAÇÃO DECLARATIVA DOS AGENTES CLOUD (KILO & ANTIGRAVITY)
-  # ══════════════════════════════════════════════════════════════
-
-  # 1. Configuração do Antigravity IDE (Settings do Usuário via XDG)
-  xdg.configFile."antigravity-ide/User/settings.json".text = builtins.toJSON {
-    "antigravity.agent.customInstructions" = ''
-      Você opera dentro de um monorepo localizado em /home/nixos/projects. Antes de sugerir alterações, contextualize-se obrigatoriamente lendo as diretrizes centrais nos arquivos:
-      - /home/nixos/projects/AGENTS.md
-      - /home/nixos/projects/BUFFY.md
-      - /home/nixos/projects/nixos-ai/AGENTS.md
-      - /home/nixos/projects/nixos-ai/BUFFY.md
-
-      Nossa documentação utiliza Obsidian Wikilinks no padrão [[Nome da Nota]]. Sempre que encontrar essa sintaxe, resolva o link buscando o arquivo .md correspondente dentro do Vault em /home/nixos/vaults/projects/ para se situar perfeitamente.
-    '';
-    "gemini.systemPrompt" = "Veja as diretrizes em antigravity.agent.customInstructions.";
-    "telemetry.telemetryLevel" = "off";
   };
 
  # ══════════════════════════════════════════════════════════════
@@ -875,7 +855,10 @@
   '';
 
   services.jarvis-wakeword = {
-    enable = true;
+    # (21/10, dono) DESABILITADO — o duplex de voz contínua substituiu o
+    # wakeword: address gate no classify cumpre a mesma função sem o
+    # daemon openwakeword competindo pelo microfone.
+    enable = false;
     ackLang = "pt"; # Jarvis fala PT-BR (sistema em en_US, usuário em PT-BR)
     # Device: physical mic (rnnoise_source has no audio routing on this hardware)
     device = "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source";

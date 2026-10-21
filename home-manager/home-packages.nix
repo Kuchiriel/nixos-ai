@@ -6,7 +6,6 @@
   home.packages = with pkgs; [
     # AI CLIs
     kilo
-    antigravity-ide
 
     # Desktop essential apps
     foot
