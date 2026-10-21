@@ -112,3 +112,18 @@
 | Easy-Turn | 2509.23938 | 0.5B turn-state |
 | Harness Anatomy | 2609.00006 | Anatomia coding agents |
 | Model or Harness | 2607.28802 | 41 modos de falha |
+
+
+## SPEAKER-ID v1→v2 (21/10, pendência do dono 09:28 — IMPLEMENTADO)
+- **v1 (manhã)**: IDs emergentes spk1/spk2 no asrd (cluster cos>0.80),
+  prefixo [spk: X] no prompt, SYSTEM_PT PESSOAS, SALA AGORA dinâmica,
+  enroll nomeado persistente (data/spk-profiles.json), WAVs por RESPOND,
+  speaker-change = fronteira semântica no merge (FIFO stash).
+- **v2 (13:19)**: HB mediu — MFCC 26-d cos(dora×alex)=0.999 = merge
+  garantido (c0 domina 93% da norma). Upgrade: WeSpeaker ResNet34 256-d
+  (modelo LOTM ~/.wespeaker, 83ms/seg, file-based via seg-wav, fallback
+  MFCC). Thresholds calibrados p/ segmentos curtos (HB 13:35: intra
+  0.68-0.79, cross 0.28-0.43): emergente 0.58, enrolled/is_owner 0.62.
+- **Validação**: bateria HB multi-voz sintética (dora/alex) + regressão
+  classify 0.927. ECAPA-TDNN (paper 2610.15978, 86.6 B³-F1) = reserva.
+- **Pós-v2**: matrícula real do dono (10s) → nome no lugar de spkN.
