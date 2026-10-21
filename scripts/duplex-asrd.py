@@ -350,13 +350,17 @@ def main():
                         _f.unlink(missing_ok=True)
                 except Exception:
                     _wav = ""
-                # (21/10 HB) <0.4s: embedding instável → não identifica
-                if len(seg) >= int(0.4 * SR):
+                txt = ''
+                txt = seg_to_text(seg)
+                # (21/10, forense HB 13:55) FALANTES FANTASMAS: cada
+                # segmento de RUÍDO era embedado e nascia um spkN novo
+                # (spk1 tomado por ruído, voices 2→5 com 2 pessoas).
+                # Gate de qualidade: só nasce falante com FALA REAL —
+                # texto não-vazio (whisper+asrd v9 validaram) E ≥0.4s.
+                if txt and len(seg) >= int(0.4 * SR):
                     spk_id, spk_cos = _identify(seg, _wav)
                 else:
                     spk_id, spk_cos = "?", 0.0
-                txt = ''
-                txt = seg_to_text(seg)
                 ms = (time.monotonic() - t0) * 1000
                 print(json.dumps({"text": txt, "ms": ms, "spk": spk_id,
                        "spk_cos": round(spk_cos, 2),
