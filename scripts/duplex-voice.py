@@ -80,6 +80,10 @@ SYSTEM_PT = (
     "Após tool: responda com resultado, não repita a pergunta. Tool ERRO = "
     "informe erro, NUNCA invente. NUNCA invente dados. Sem certeza = 'não sei'.\n"
     "Sem 'Ah, Hmm, Pode repetir'. Turnos fragmentados = considere o conjunto.\n"
+    "PESSOAS: turnos com prefixo [spk: X] dizem QUEM falou — X = nome "
+    "cadastrado ou spkN (pessoa não cadastrada ainda). Sem prefixo = "
+    "quem falava antes. Refira-se às pessoas pelo nome/spkN quando "
+    "relevante. 'Quantas pessoas tem aí?' → do(action='voices').\n"
     "Na dúvida, confirme ou peça para repetir.\n\n"
     "=== META-TOOL (chame UMA vez: do(action, input)) ===\n"
     "do(action, input) — roteia internamente para:\n"
@@ -265,7 +269,7 @@ def classify_turn(base, utt):
         except Exception:
             pass
 
-def tick_once(base, history, heard, force_speak=False, tts=None):
+def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
     # (10:15, regressão HB: classify 621→1190ms) O micro-turn por tick era
     # VESTIGIAL — o classificador LoRA (classify_turn no merge) substituiu
     # sua função de decisão. Cada tick ocupava o slot único com 602 tokens
@@ -348,6 +352,10 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
         # (21/10 P1) MEMORY INJECTION: fatos relevantes injetados no
         # system prompt — o modelo SABE sem chamar recall (proactive).
         _sys = SYSTEM_PT
+        # (21/10 SPEAKER-ID) estado de pessoas na sala (ao vivo do asrd)
+        if SPK_STATE["voices"] or (spk and spk != "?"):
+            _sys += (f"\n[SALA AGORA: {SPK_STATE['voices']} voz(es) ativa(s); "
+                     f"última voz ouvi: {SPK_STATE['last_spk']}]\n")
         if MEM_AVAILABLE and len(heard.split()) >= 2:
             try:
                 _heard_clean = heard.lower().replace("jarvis", "").replace(",", " ")
@@ -382,7 +390,9 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
                     and len(content.replace("<", "").strip()) > 1):
                 msgs.append({"role": "user" if role == "user" else "assistant",
                              "content": content})
-        msgs.append({"role": "user", "content": heard})
+        # (21/10 SPEAKER-ID) prefixo [spk: X] — o modelo SABE quem falou
+        _u = (f"[spk: {spk}] {heard}" if (spk and spk != "?") else heard)
+        msgs.append({"role": "user", "content": _u})
         # (10:50) TOOL CALLING nativo do 4B (provado: get_time chamado de
         # primeira). Até 2 rounds: chamada → executa → resultado → resposta.
         body = {"messages": msgs, "max_tokens": 120, "temperature": 0.4,
@@ -405,10 +415,13 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
                 # padrão (skill/routine) — "para X, use tool Y"
                 if MEM_AVAILABLE and _round == 1:
                     try:
+                        # (21/10) strip wake word: 'PATTERN: Jarvis...' poluía
+                        # o embedding de fatos (junk removido hoje c/ HB)
+                        _pc = heard.lower().replace("jarvis", "").strip(" ,.?!")
                         _MEM.remember_fact(
-                            f"PATTERN: '{heard[:40]}' → do(action, input) via tools",
+                            f"PATTERN: '{_pc[:40]}' → do(action, input) via tools",
                             kind="procedure", source="duplex-auto",
-                            heard=heard[:80])
+                            heard=_pc[:80])
                     except Exception:
                         pass
                 # (17:00) consult-speak: 'preciso consultar/vou verificar'
@@ -454,7 +467,7 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
             # (18/10) histórico append-only estourava o ctx 8192 → 400
             # → CRASH → finally devolvia o wakeword 'do nada'.
             del history[:len(history) - 20]
-            body["prompt"] = build_prompt(history, heard)
+            body["prompt"] = build_prompt(history, _u)
             j = http(base + "/completion", body)
         else:
             raise
@@ -821,6 +834,8 @@ FEED_STATS = {"fed": 0, "blocked": 0, "quiet": 0, "corr": []}
 # (id em curso) ou recente, é ELE MESMO — descarta. É o eco-cancel
 # textual centrado na sentença em play (não na resposta inteira).
 TTS_SELF = {"id": 0, "text": "", "recent": []}   # recent: [(text, t_end)]
+# (21/10 SPEAKER-ID) estado de vozes ao vivo (asrd conta/identifica)
+SPK_STATE = {"voices": 0, "last_spk": "?"}
 
 def tts_self_register(text):
     TTS_SELF["id"] += 1
@@ -985,16 +1000,20 @@ def call_tool(name, args):
         if "shell" in action or "command" in action or "terminal" in action:
             return call_tool("shell", {"command": inp})
         if "register" in action or "voices" in action or "pessoas" in action or "quantas" in action:
-            # (19:35) multi-voz: contagem de vozes ativas
-            _path = Path("/tmp/jarvis-spk-profiles.json")
-            _n = 0
+            # (21/10 SPEAKER-ID) contagem AO VIVO do asrd (clustering 60s)
+            # + perfis cadastrados; arquivo morto não representa a sala.
+            _n = SPK_STATE.get("voices", 0)
+            _last = SPK_STATE.get("last_spk", "?")
+            _profs = 0
             try:
                 import json as _j
-                _profs = _j.loads(_path.read_text())
-                _n = len(_profs)
+                _profs = len(_j.loads(
+                    (Path(__file__).parent.parent / "data" /
+                     "spk-profiles.json").read_text()))
             except Exception:
                 pass
-            return f"Tenho {_n} vozes matriculadas. O asrd conta vozes em tempo real."
+            return (f"{_n} voz(es) ativa(s) na sala agora; última que ouvi: "
+                    f"{_last}; {_profs} pessoa(s) cadastrada(s).")
         if "enroll" in action or "matricula" in action or "cadastra" in action:
             # (19:20) matrícula da voz: grava 8s do dono e salva o profile
             import tempfile as _tf
@@ -1012,15 +1031,28 @@ def call_tool(name, args):
             Path(_wav).unlink(missing_ok=True)
             emb = spk_embed(pcm.astype("float32") / 32768.0)
             if emb is not None:
-                with open("/tmp/jarvis-spk-profile.json", "w") as f2:
-                    json.dump({"embedding": emb.tolist()}, f2)
+                # (21/10 SPEAKER-ID) multi-perfil NOMEADO e PERSISTENTE:
+                # data/spk-profiles.json = {nome: embedding}; o asrd lê
+                # este arquivo e resolve nome por cos>0.75. /tmp morria
+                # no reboot. input = nome da pessoa (default 'dono').
+                _nome = (inp or "dono").strip().split()[0].lower() or "dono"
+                _pdir = Path(__file__).parent.parent / "data"
+                _pdir.mkdir(parents=True, exist_ok=True)
+                _ppath = _pdir / "spk-profiles.json"
+                _profs = {}
+                try:
+                    _profs = json.loads(_ppath.read_text())
+                except Exception:
+                    pass
+                _profs[_nome] = emb.tolist()
+                _ppath.write_text(json.dumps(_profs))
                 global SPK_PROFILE
                 SPK_PROFILE = emb
-                return "Voz do dono matriculada com sucesso. Agora só respondo a você."
+                return (f"Voz de {_nome} matriculada com sucesso "
+                        f"({len(_profs)} pessoa(s) cadastrada(s)).")
             return "Não consegui captar voz suficiente. Fale mais alto."
         if "guest" in action or "todos" in action or "convidado" in action:
             # desativa o filtro de voz (modo convidado)
-            Path("/tmp/jarvis-spk-profile.json").unlink(missing_ok=True)
             globals()["SPK_PROFILE"] = None
             return "Filtro de voz desativado. Respondendo a todos."
 
@@ -1256,6 +1288,8 @@ class Asr:
         linha = self.proc.stdout.readline()   # espera {"ready": true}
         log(f"[{ts()}] asrd pronto: {linha.strip()[:60]}")
         self.last_ms = 0.0
+        self.last_spk = "?"      # (21/10) speaker-ID do último segmento
+        self.last_voices = 0     # (21/10) vozes ativas (clustering asrd)
     CTX = {"v": "Jarvis"}   # vocabulário → prompt do whisper-server
 
     def feed(self, pcm_f32):
@@ -1287,6 +1321,11 @@ class Asr:
                 return None
             j = json.loads(linha)
             self.last_ms = float(j.get("ms", 0))
+            # (21/10 SPEAKER-ID) espalha estado p/ o loop (prompt/tools)
+            self.last_spk = j.get("spk") or "?"
+            self.last_voices = int(j.get("voices") or 0)
+            SPK_STATE["last_spk"] = self.last_spk
+            SPK_STATE["voices"] = self.last_voices
             if j.get("text"):
                 return j
             return j if j.get("filtered") else None
@@ -1901,7 +1940,9 @@ def main():
                     elif not is_backchannel(heard):
                         force = True
                 log(f"[{ts()}] utterância completa: {heard[:60]!r}")
-            said, _p = tick_once(base, history, heard, force_speak=force, tts=tts)
+            _spk = SPK_STATE.get("last_spk", "?")
+            said, _p = tick_once(base, history, heard, force_speak=force,
+                                 tts=tts, spk=_spk)
             # (18:20) aprendizado: extrai fatos do turno em background
             if said != LISTEN:
                 learn_from_turn(heard, said)
@@ -1910,7 +1951,8 @@ def main():
                 # b9190 sem probs) babblam template ('assistant') — silêncio:
                 # só a resposta do chat endpoint fala.
                 said = LISTEN
-            history += [("user", heard), ("assistant", said)]
+            _u = (f"[spk: {_spk}] {heard}" if (_spk and _spk != "?") else heard)
+            history += [("user", _u), ("assistant", said)]
             if len(history) > 60:   # cap: 30 pares; ctx nunca estoura
                 del history[:len(history) - 60]
             llm_ms = (time.monotonic() - t0) * 1000

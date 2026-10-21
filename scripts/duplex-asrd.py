@@ -212,11 +212,21 @@ def main():
 # projection uses no_speech_prob as gate; adaptive threshold improves
 # echo/duplex scenarios). Maintains EMA of noise floor.
     SPK_PROFILES = {}
-    try:
-        _cfg = json.loads(Path("/tmp/jarvis-spk-profiles.json").read_text())
-        SPK_PROFILES = {k: np.array(v) for k, v in _cfg.items()}
-    except Exception:
-        pass
+    # (21/10 SPEAKER-ID) PERFIS PERSISTENTES: /tmp morre no reboot —
+    # data/ é a fonte da verdade agora (o duplex salva lá).
+    for _pp in (Path(__file__).resolve().parent.parent / "data" / "spk-profiles.json",
+                Path("/tmp/jarvis-spk-profiles.json")):
+        try:
+            _cfg = json.loads(_pp.read_text())
+            SPK_PROFILES = {k: np.array(v) for k, v in _cfg.items()}
+            break
+        except Exception:
+            pass
+    # (21/10 SPEAKER-ID, blueprint HB) IDs EMERGENTES pré-cadastro:
+    # cluster cos>0.80 (limiar provado no applio-lab cross-video) →
+    # spk1, spk2... = "quantas pessoas + quem disse o quê" do dono.
+    SPK_EMERGENT = []   # [(label, centroide)]
+    SPK_SEQ = [1]
     SPK_RECENT = []  # [(embedding, ts)] últimos 60s — clustering
     SPK_COUNTER = {"voices": 0, "last_id": "?"}
     print(f"[asrd] speaker: {len(SPK_PROFILES)} perfis "
@@ -250,7 +260,18 @@ def main():
             if c > best_cos:
                 best, best_cos = nome, c
         if best_cos < 0.75:
-            best = "unknown"
+            # (21/10) sem perfil conhecido → ID EMERGENTE estável
+            _lbl = None
+            for _i, (_lb, _cent) in enumerate(SPK_EMERGENT):
+                if _cos(e, _cent) >= 0.80:
+                    _lbl = _lb
+                    SPK_EMERGENT[_i] = (_lb, _cent * 0.8 + e * 0.2)
+                    break
+            if _lbl is None:
+                _lbl = f"spk{SPK_SEQ[0]}"
+                SPK_SEQ[0] += 1
+                SPK_EMERGENT.append((_lbl, e.copy()))
+            best, best_cos = _lbl, max(best_cos, 0.0)
         # clustering: conta vozes únicas nos últimos 60s
         now = time.time()
         SPK_RECENT = [(r_e, ts) for r_e, ts in SPK_RECENT if now - ts < 60]
@@ -291,7 +312,11 @@ def main():
             if ev and ev.get("end") is not None and started is not None:
                 seg = ring[int(started):int(len(ring) - SR * 0.35)]
                 # (19:30) identificar a voz e anexar ao resultado
-                spk_id, spk_cos = _identify(seg)
+                # (21/10 HB) <0.4s: embedding instável → não identifica
+                if len(seg) >= int(0.4 * SR):
+                    spk_id, spk_cos = _identify(seg)
+                else:
+                    spk_id, spk_cos = "?", 0.0
                 txt = ''
                 txt = seg_to_text(seg)
                 ms = (time.monotonic() - t0) * 1000
