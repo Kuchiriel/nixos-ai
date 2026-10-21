@@ -4,6 +4,12 @@
 }: {
   fonts.fontconfig.enable = true;
   home.packages = with pkgs; [
+    # (21/10) PYTHON3 EXPLÍCITO: o venv karaok (duplex-voice, asrd,
+    # whisper, TTS) symlinka pro python3 do profile — era dependência
+    # TRANSITIVA (foi embora com o antigravity no GC de 12:00 e a
+    # interface de voz MORREU). Explícito = nunca mais GC'd.
+    python3
+
     # AI CLIs
     kilo
 
