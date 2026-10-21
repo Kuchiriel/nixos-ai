@@ -1,0 +1,57 @@
+{
+ "ts": "2026-10-21T08:31:25",
+ "classify": "http://127.0.0.1:8092",
+ "n": 124,
+ "classes": {
+  "RESPOND": {
+   "n": 30,
+   "acc": 1.0,
+   "confusion": {
+    "RESPOND": 30,
+    "WAIT": 0,
+    "SILENCE": 0,
+    "BARGE": 0,
+    "NONE": 0
+   }
+  },
+  "WAIT": {
+   "n": 31,
+   "acc": 0.903,
+   "confusion": {
+    "RESPOND": 0,
+    "WAIT": 28,
+    "SILENCE": 2,
+    "BARGE": 1,
+    "NONE": 0
+   }
+  },
+  "SILENCE": {
+   "n": 33,
+   "acc": 0.97,
+   "confusion": {
+    "RESPOND": 1,
+    "WAIT": 0,
+    "SILENCE": 32,
+    "BARGE": 0,
+    "NONE": 0
+   }
+  },
+  "BARGE": {
+   "n": 30,
+   "acc": 0.833,
+   "confusion": {
+    "RESPOND": 5,
+    "WAIT": 0,
+    "SILENCE": 0,
+    "BARGE": 25,
+    "NONE": 0
+   }
+  }
+ },
+ "latency_ms": {
+  "p50": 139.7,
+  "p99": 148.7,
+  "mean": 142.8
+ },
+ "avg_turn_taking_acc": 0.927
+}
