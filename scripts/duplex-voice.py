@@ -88,12 +88,16 @@ SYSTEM_PT = (
     "    USE recall para: 'o que eu gosto', 'qual meu nome', 'me lembra de', 'o que você sabe sobre mim'.\n"
     "  WEB EXTERNA (dados do mundo): web_search(query)\n"
     "    USE web_search para: cotações, notícias, clima, fatos atuais, qualquer coisa que não está na sua memória.\n"
+    "  RAG DOCUMENTOS (papers, código, livros): rag_search(query)\n"
+    "    USE rag_search para: 'o que diz o paper X', 'como funciona Y no código', 'encontra o script que faz Z'.\n"
     "  NUNCA use web_search para perguntas sobre o dono — use recall!\n"
     "  ROTEAMENTO CORRETO:\n"
     "    'qual meu nome?' → do(action='recall', input='nome do dono')\n"
     "    'o que eu gosto?' → do(action='recall', input='preferências do dono')\n"
     "    'lembra que eu gosto de café' → do(action='remember', input='dono gosta de café')\n"
     "    'quanto tá o dólar?' → do(action='web_search', input='cotação dólar hoje')\n"
+    "    'o que diz o paper sobre metacognição?' → do(action='rag_search', input='metacognition')\n"
+    "    'como funciona o AEC?' → do(action='rag_search', input='AEC echo cancellation')\n"
     "  STATUS: status()\n"
     "  SHELL: shell(command)\n"
     "  VOZ: enroll() | guest() | voices()\n"
@@ -873,6 +877,8 @@ def call_tool(name, args):
             return call_tool("recall", {"query": inp})
         if "web" in action or "busca" in action or "internet" in action:
             return call_tool("web_search", {"query": inp})
+        if "rag" in action or "document" in action or "paper" in action or "livro" in action or "pesqui" in action:
+            return call_tool("rag_search", {"query": inp})
         if "status" in action or "sistema" in action:
             return call_tool("status", {})
         if "shell" in action or "command" in action or "terminal" in action:
@@ -962,17 +968,34 @@ def call_tool(name, args):
             return raw[:400]
     if name == "rag_search":
         q = args.get("query", "")
+        # (21/10) RAG com conteúdo: o path sozinho não serve pro 4B —
+        # extrai o TEXTO do arquivo (primeiras linhas relevantes ao query)
         raw = _exec(f"timeout 25 jarvis rag --top-k 3 '{q}' 2>&1")
         try:
             hits = json.loads(raw)
             texts = []
-            for h in hits if isinstance(hits, list) else [hits]:
-                if isinstance(h, dict):
-                    if h.get("text"):
-                        texts.append(str(h["text"])[:200])
-                    elif h.get("path"):
-                        texts.append(f"{h['path']}: {h.get('symbols', '')[:80]}")
-            return " | ".join(texts[:3]) if texts else raw[:400]
+            for h in (hits if isinstance(hits, list) else [hits])[:3]:
+                if not isinstance(h, dict):
+                    continue
+                path = h.get("path", "")
+                if not path:
+                    continue
+                # extrai um trecho do arquivo que matchea o query
+                try:
+                    content = Path(path).read_text(errors="ignore")[:3000]
+                    ql = q.lower().split()
+                    # acha o parágrafo com mais matches
+                    best, score = content[:200], 0
+                    for para in content.split("\n\n"):
+                        s = sum(1 for w in ql if w in para.lower())
+                        if s > score:
+                            best, score = para, s
+                    texts.append(f"[{Path(path).name}] {best[:200]}")
+                except Exception:
+                    texts.append(f"[{Path(path).name}] {h.get('symbols', '')[:80]}")
+            if texts:
+                return "\n".join(texts)
+            return raw[:400]
         except Exception:
             return raw[:400]
 

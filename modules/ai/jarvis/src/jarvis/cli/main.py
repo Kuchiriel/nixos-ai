@@ -154,6 +154,13 @@ def _cmd_rag(args: argparse.Namespace) -> int:
     from jarvis.core.rag import HybridSearch
 
     cfg = get_config()
+    # --collection: mesma rota do MCP (code | books | memories)
+    import dataclasses
+    coll = getattr(args, "collection", "code")
+    if coll == "memories":
+        cfg = dataclasses.replace(cfg, qdrant_collection_code=cfg.qdrant_collection_memories)
+    elif coll == "books":
+        cfg = dataclasses.replace(cfg, qdrant_collection_code=cfg.qdrant_collection_books)
     search = HybridSearch(cfg)
     hits = search.search(args.query, top_k=args.top_k)
     out = []
@@ -162,6 +169,10 @@ def _cmd_rag(args: argparse.Namespace) -> int:
             "path": hit.path,
             "score": round(hit.score, 4),
             "symbols": hit.payload.get("symbols", []),
+            # (21/10, dono: "o rag precisa trazer conteúdo") — mesmo
+            # formato do MCP: content[:200] do payload
+            "content": str(hit.payload.get("content", ""))[:200],
+            "title": hit.payload.get("title", ""),
         })
     print(json.dumps(out, ensure_ascii=False, indent=2))
     return 0
@@ -1135,6 +1146,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_rag = sub.add_parser("rag", help="busca híbrida no Qdrant (dense + sparse + boosts)")
     p_rag.add_argument("query")
     p_rag.add_argument("--top-k", type=int, default=5)
+    p_rag.add_argument("--collection", choices=["code", "books", "memories"], default="code")
     p_rag.set_defaults(func=_cmd_rag)
 
     p_index = sub.add_parser("index", help="indexa um diretório de código no Qdrant")
