@@ -849,11 +849,11 @@ class HybridSearch:
                           for k, v in metadata_filter.items()]
             qdrant_filter = {"must": conditions}
 
-        # Determine which collection to search
-        collection_name = collection or self._cfg.qdrant_collection_code
-
-        # Search in both collections and merge results
-        collections_to_search = [collection_name] if collection_name else [self._cfg.qdrant_collection_code, "books"]
+        # Determine which collection to search: explicit -> 1; default -> both
+        if collection:
+            collections_to_search = [collection]
+        else:
+            collections_to_search = [self._cfg.qdrant_collection_code, "books"]
         all_raw = []
         for coll in collections_to_search:
             try:
