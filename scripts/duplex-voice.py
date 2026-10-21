@@ -336,7 +336,15 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
                          if len(w) > 2 and w not in ("jarvis", "que",
                          "para", "com", "não", "uma", "por", "mas",
                          "como", "isso", "aqui", "você", "meu", "minha")]
-                query = " ".join(words[:5]) if words else heard[:40]
+                # (08:55, HB battery) 'onde eu moro' não achou 'local:
+                # São Paulo' — expande com sinônimos p/ match semântico
+                _syn = {"moro": "local cidade mora", "nome": "nome chama",
+                        "gosto": "gosta prefere", "trabalho": "trabalha profissão",
+                        "comer": "gosta come comida", "aniversário": "nasceu data"}
+                for w, exp in _syn.items():
+                    if w in words:
+                        words.extend(exp.split())
+                query = " ".join(words[:7]) if words else heard[:40]
                 _facts = _MEM.recall(query, top_k=3, kinds=("fact",))
                 if _facts:
                     _lines = [h.get("text", "")[:120] for h in _facts[:3]
