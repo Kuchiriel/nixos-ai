@@ -339,8 +339,9 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
         _sys = SYSTEM_PT
         if MEM_AVAILABLE and len(heard.split()) >= 2:
             try:
-                words = [w for w in heard.lower().split()
-                         if len(w) > 2 and w not in ("jarvis", "que",
+                _heard_clean = heard.lower().replace("jarvis", "").replace(",", " ")
+                words = [w for w in _heard_clean.split()
+                         if len(w) > 2 and w not in ("que",
                          "para", "com", "não", "uma", "por", "mas",
                          "como", "isso", "aqui", "você", "meu", "minha")]
                 # (08:55, HB battery) 'onde eu moro' não achou 'local:
@@ -353,6 +354,7 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
                         words.extend(exp.split())
                 query = " ".join(words[:7]) if words else heard[:40]
                 _facts = _MEM.recall(query, top_k=3, kinds=("fact",))
+                print(f"INJECT: query={query[:30]!r} hits={len(_facts) if _facts else 0}", flush=True)
                 if _facts:
                     _lines = [h.get("text", "")[:120] for h in _facts[:3]
                               if h.get("text")]
@@ -360,6 +362,7 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
                         _sys += ("\n=== MEMÓRIA RELEVANTE (automático) ===\n"
                                  + "\n".join(f"- {l}" for l in _lines)
                                  + "\nUse estes fatos para responder. NÃO chame recall se o dado já está aqui.")
+                        print(f"INJECT: {len(_lines)} fatos: {[l[:40] for l in _lines[:2]]}", flush=True)
             except Exception:
                 pass
         msgs = [{"role": "system", "content": _sys}]
