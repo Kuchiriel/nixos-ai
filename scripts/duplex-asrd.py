@@ -233,7 +233,23 @@ def main():
           f"({'ATIVO' if SPK_PROFILES else 'desligado (todos)'})",
           file=sys.stderr, flush=True)
 
-    def _embed(pcm_f32):
+    WS = {"spk": None}   # (21/10) runtime WeSpeaker lazy-init
+    def _embed(pcm_f32, wav=""):
+        # (21/10 v2, veredito HB 13:15: MFCC 26d cos(dora,alex)=0.999 =
+        # merge garantido; c0 domina 93% da norma) EMBED v2 = WeSpeaker
+        # ResNet34 256-d — PROVADO no LOTM cross-video (mesmo modelo
+        # ~/.wespeaker/en/model.onnx, 83ms/segmento CPU). Fallback MFCC
+        # degrada sem crash se o runtime sumir.
+        try:
+            if WS["spk"] is None:
+                import wespeakerruntime as w
+                WS["spk"] = w.Speaker(lang="en")
+            if wav:
+                e = np.array(WS["spk"].extract_embedding(wav),
+                             dtype=float).ravel()
+                return e / (np.linalg.norm(e) + 1e-9)
+        except Exception:
+            pass
         try:
             import librosa
             m = librosa.feature.mfcc(y=pcm_f32, sr=SR, n_mfcc=13,
@@ -246,11 +262,11 @@ def main():
         return float(np.dot(a, b) /
                      (np.linalg.norm(a) * np.linalg.norm(b) + 1e-9))
 
-    def _identify(pcm_f32):
+    def _identify(pcm_f32, wav=""):
         """Retorna (nome, confiança) da melhor voz conhecida ou
         ('unknown', cos_max). Também alimenta o contador de vozes."""
         nonlocal SPK_RECENT
-        e = _embed(pcm_f32)
+        e = _embed(pcm_f32, wav)
         if e is None:
             return ("?", 0.0)
         # identifica contra perfis conhecidos
@@ -312,14 +328,11 @@ def main():
             if ev and ev.get("end") is not None and started is not None:
                 seg = ring[int(started):int(len(ring) - SR * 0.35)]
                 # (19:30) identificar a voz e anexar ao resultado
-                # (21/10 HB) <0.4s: embedding instável → não identifica
-                if len(seg) >= int(0.4 * SR):
-                    spk_id, spk_cos = _identify(seg)
-                else:
-                    spk_id, spk_cos = "?", 0.0
                 # (21/10, pedido HB) WAV por segmento p/ evidência: duplex
                 # copia p/ logs/audio/ quando classify=RESPOND (casável
                 # com log + reports). Rotativo: últimos 30 em /tmp.
+                # (v2) AGORA ANTES do _identify: o WeSpeaker é file-based
+                # — o embed lê este mesmo wav (zero I/O extra).
                 _wav = ""
                 try:
                     import wave as _w
@@ -337,6 +350,11 @@ def main():
                         _f.unlink(missing_ok=True)
                 except Exception:
                     _wav = ""
+                # (21/10 HB) <0.4s: embedding instável → não identifica
+                if len(seg) >= int(0.4 * SR):
+                    spk_id, spk_cos = _identify(seg, _wav)
+                else:
+                    spk_id, spk_cos = "?", 0.0
                 txt = ''
                 txt = seg_to_text(seg)
                 ms = (time.monotonic() - t0) * 1000
