@@ -1012,6 +1012,17 @@ def call_tool(name, args):
         return _exec("date '+hoje é %A, %d de %B de %Y' | sed 's/^[a-z]*/&/' 2>/dev/null || date")
     if name == "recall":
         q = args.get("query", "")
+        # (08:55 HB battery) expande a query com sinônimos p/ match
+        # semântico — 'onde moro' não achava 'local: São Paulo'
+        _qwords = q.lower().split()
+        _syn_r = {"moro": "local cidade", "mora": "local cidade",
+                   "nome": "nome chama", "gosto": "gosta prefere",
+                   "comer": "gosta come", "trabalho": "trabalha profissão"}
+        for w, exp in _syn_r.items():
+            if w in _qwords:
+                _qwords.extend(exp.split())
+        if len(_qwords) > len(q.split()):
+            q = " ".join(_qwords[:8])
         # (21/10 P0) fact-kind tem PRIORIDADE: perguntas sobre o dono
         # ("qual meu nome?") devem achar 'O nome do dono é Matheus' e não
         # um decision sobre o loop de enriquecimento com score maior.
