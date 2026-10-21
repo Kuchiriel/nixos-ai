@@ -1,67 +1,11 @@
 {
- "ts": "2026-10-21T08:49:16",
+ "ts": "2026-10-21T09:01:36",
  "results": [
-  {
-   "i": 0,
-   "utt": "O que eu gosto de comer?",
-   "tier": "recall",
-   "segment": "SEGMENTO: comer",
-   "response": null,
-   "pass": false
-  },
-  {
-   "i": 1,
-   "utt": "Qual é o meu nome?",
-   "tier": "recall",
-   "segment": "SEGMENTO: Qual é o meu nome?",
-   "response": "[08:46:33] tts.say: 'Seu nome é Matheus, senhor.'",
-   "pass": true
-  },
   {
    "i": 2,
    "utt": "Onde eu moro?",
    "tier": "recall",
-   "segment": "SEGMENTO: Seu nome é Matheus Senhor.",
-   "response": null,
-   "pass": false
-  },
-  {
-   "i": 3,
-   "utt": "Guarda que eu adoro sushi.",
-   "tier": "write",
-   "segment": "SEGMENTO: Guarda aqui, eu adoro sushi.",
-   "response": "[08:47:12] tts.say: 'Sushi salvo na memória.'",
-   "pass": true
-  },
-  {
-   "i": 4,
-   "utt": "O que eu adoro comer?",
-   "tier": "recall",
-   "segment": "SEGMENTO: Gostaria de saber mais sobre este ou talvez uma recomend",
-   "response": null,
-   "pass": false
-  },
-  {
-   "i": 5,
-   "utt": "Qual é a minha cor favorita?",
-   "tier": "recall",
-   "segment": null,
-   "response": null,
-   "pass": false
-  },
-  {
-   "i": 6,
-   "utt": "Qual é a capital da França?",
-   "tier": "direct",
-   "segment": null,
-   "response": null,
-   "pass": false
-  },
-  {
-   "i": 7,
-   "utt": "O que tem no paper do MemGPT?",
-   "tier": "rag",
-   "segment": "SEGMENTO: Sim.",
+   "segment": "SEGMENTO: Onde eu morro?",
    "response": null,
    "pass": false
   }
