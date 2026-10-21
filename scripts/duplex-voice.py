@@ -89,6 +89,11 @@ SYSTEM_PT = (
     "  WEB EXTERNA (dados do mundo): web_search(query)\n"
     "    USE web_search para: cotações, notícias, clima, fatos atuais, qualquer coisa que não está na sua memória.\n"
     "  NUNCA use web_search para perguntas sobre o dono — use recall!\n"
+    "  ROTEAMENTO CORRETO:\n"
+    "    'qual meu nome?' → do(action='recall', input='nome do dono')\n"
+    "    'o que eu gosto?' → do(action='recall', input='preferências do dono')\n"
+    "    'lembra que eu gosto de café' → do(action='remember', input='dono gosta de café')\n"
+    "    'quanto tá o dólar?' → do(action='web_search', input='cotação dólar hoje')\n"
     "  STATUS: status()\n"
     "  SHELL: shell(command)\n"
     "  VOZ: enroll() | guest() | voices()\n"
@@ -921,17 +926,20 @@ def call_tool(name, args):
         return _exec("date '+hoje é %A, %d de %B de %Y' | sed 's/^[a-z]*/&/' 2>/dev/null || date")
     if name == "recall":
         q = args.get("query", "")
-        raw = _exec(f"timeout 20 jarvis recall '{q}' 2>&1")
-        # (21/10 P0) o 4B não lê JSON blob — formatar como LISTA LEGÍVEL:
-        # fatos primeiro, um por linha, com kind e texto limpo
+        # (21/10 P0) fact-kind tem PRIORIDADE: perguntas sobre o dono
+        # ("qual meu nome?") devem achar 'O nome do dono é Matheus' e não
+        # um decision sobre o loop de enriquecimento com score maior.
+        raw = _exec(f"timeout 20 jarvis recall --kind fact '{q}' 2>&1")
+        if not raw or len(raw.strip()) < 10 or '[]' in raw[:5]:
+            raw = _exec(f"timeout 20 jarvis recall '{q}' 2>&1")
+        # (21/10 P0) o 4B não lê JSON blob — formatar como LISTA LEGÍVEL
         try:
             hits = json.loads(raw)
             lines = []
             for h in (hits if isinstance(hits, list) else [hits])[:5]:
                 if not isinstance(h, dict):
                     continue
-                t = (h.get("payload") or {}).get("text") or h.get("text") or \
-                    h.get("content") or ""
+                t = (h.get("payload") or {}).get("text") or h.get("text") or ""
                 kind = (h.get("payload") or {}).get("kind") or h.get("kind") or "?"
                 if t:
                     lines.append(f"[{kind}] {str(t)[:180]}")
