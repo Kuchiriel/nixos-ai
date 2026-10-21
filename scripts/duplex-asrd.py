@@ -206,7 +206,13 @@ def main():
         txt = str(j.get("text", "")).strip()
         segs = j.get("segments") or []
         dur_s = float(j.get("duration") or (len(seg) / SR))
-        return anti_halluc(txt, segs, dur_s)
+        # (21/10) no_speech_prob médio p/ quality gate: ruído/backchannel
+        # têm nsp alto (>0.6). Fala real = nsp baixo (<0.4 típico).
+        _nsp = 0.0
+        if segs:
+            _nsp = sum(float(s.get("no_speech_prob", 0.0)) for s in segs) / len(segs)
+        _txt = anti_halluc(txt, segs, dur_s)
+        return _txt, _nsp
 
     # Adaptive VAD threshold based on ambient noise (paper 2609.04561: gated
 # projection uses no_speech_prob as gate; adaptive threshold improves
@@ -350,14 +356,12 @@ def main():
                         _f.unlink(missing_ok=True)
                 except Exception:
                     _wav = ""
-                txt = ''
-                txt = seg_to_text(seg)
-                # (21/10, forense HB 13:55) FALANTES FANTASMAS: cada
-                # segmento de RUÍDO era embedado e nascia um spkN novo
-                # (spk1 tomado por ruído, voices 2→5 com 2 pessoas).
-                # Gate de qualidade: só nasce falante com FALA REAL —
-                # texto não-vazio (whisper+asrd v9 validaram) E ≥0.4s.
-                if txt and len(seg) >= int(0.4 * SR):
+                txt, nsp = "", 1.0
+                txt, nsp = seg_to_text(seg)
+                # (21/10, forense HB 13:55 + 18:55 leak) FANTASMAS: ruído
+                # (nsp alto) nascia falante. Gate = nsp baixo (fala real) +
+                # txt não-vazio (anti-halluc) + ≥0.4s.
+                if txt and nsp < 0.6 and len(seg) >= int(0.4 * SR):
                     spk_id, spk_cos = _identify(seg, _wav)
                 else:
                     spk_id, spk_cos = "?", 0.0
