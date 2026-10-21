@@ -246,6 +246,7 @@ class QdrantStore:
         espelho do filtro de extensão que o V4.0.5 aplicava antes do scoring.
         `filter` (qdrant Filter) aplica filtro adicional no payload.
         """
+        # filter is already a dict (from Filter.dict())
         prefetch: list[dict[str, Any]] = [
             {"query": dense, "using": DENSE_VECTOR_NAME, "limit": dense_limit},
             {"query": sparse, "using": SPARSE_VECTOR_NAME, "limit": sparse_limit},
@@ -261,6 +262,7 @@ class QdrantStore:
             "limit": top_k,
             "with_payload": with_payload,
         }
+        # Note: filter is applied to prefetch only; main query uses RRF on filtered results
         result = self._request("POST", f"/collections/{name}/points/query", json=payload)
         # Query API retorna {"result": {"points": [...]}} (diferente do /points/search)
         inner = result.get("result", {})

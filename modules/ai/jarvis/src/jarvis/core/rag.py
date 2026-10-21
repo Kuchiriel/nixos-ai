@@ -59,16 +59,24 @@ import re
 import os
 
 def _extract_arxiv_id(path: str, content: str) -> str | None:
-    """Extract arXiv ID from path or content."""
-    # Try from filename first
-    m = re.search(r'(\d{4}\.\d{4,5}(?:v\d+)?)', os.path.basename(path))
+    """Extract arXiv ID from path or content. Only matches in paper-like contexts."""
+    import re
+    fname = os.path.basename(path)
+    # 1) Filename with known prefixes (arxiv-, paper-, d2-, memt-*, etc.)
+    m = re.search(r'(?:arxiv[-_]|paper[-_]|d2[-_]|memt[-_].*[-_]|heartbeat[-_]thinking[-_]|searchgym[-_]|^)(\d{4}\.\d{4,5}(?:v\d+)?)', fname, re.IGNORECASE)
     if m:
         return m.group(1)
-    # Try from content
+    # 2) Papers directory: any arxiv pattern in filename is trustworthy
+    if "/papers/" in path.replace(os.sep, "/"):
+        m = re.search(r'\b(\d{4}\.\d{4,5}(?:v\d+)?)\b', fname)
+        if m:
+            return m.group(1)
+    # 3) Standalone arXiv ID in filename (strict contexts)
+    m = re.search(r'\b(\d{4}\.\d{4,5}(?:v\d+)?)\b', fname)
+    if m and (fname.startswith('arxiv') or 'paper' in fname.lower() or fname[0].isdigit()):
+        return m.group(1)
+    # 4) From content
     m = re.search(r'arXiv:(\d{4}\.\d{4,5}(?:v\d+)?)', content[:2000])
-    if m:
-        return m.group(1)
-    m = re.search(r'arXiv:(\d{4}\.\d{4,5})', content[:2000])
     if m:
         return m.group(1)
     return None
@@ -713,7 +721,11 @@ class HybridIndexer:
                     "domain": _extract_domain(path, content),
                 },
             }
-            self._store.upsert(self._cfg.qdrant_collection_code, [point])
+            # Route by content: ~/Books → books collection; resto → code_index
+            target_collection = ("books" if path.startswith(
+                str(Path.home() / "Books")) else
+                self._cfg.qdrant_collection_code)
+            self._store.upsert(target_collection, [point])
             last_payload = point["payload"]
             
         if last_payload is not None:
@@ -733,12 +745,12 @@ class HybridIndexer:
         except OSError:
             pass
 
-    def index_directory(self, root: str | Path) -> int:
+    def index_directory(self, root: str | Path, force: bool = False) -> int:
         """Indexa todos os arquivos elegíveis de um diretório. Retorna o total de arquivos."""
         self.ensure_collection()
         processed_files = set()
         for path in iter_indexable_files(root, exclude_dirs=self._cfg.index_exclude_dirs):
-            if self.index_file(path) is not None:
+            if self.index_file(path, force=force) is not None:
                 processed_files.add(path)
         return len(processed_files)
 
@@ -801,6 +813,7 @@ class HybridSearch:
         diversify: bool = True,
         metadata_filter: dict[str, Any] | None = None,
         hyde: bool = False,
+        collection: str | None = None,
     ) -> list[HybridHit]:
         """Busca híbrida (prefetch dense+sparse + RRF) e re-rank V4.0.5.
 
@@ -814,6 +827,7 @@ class HybridSearch:
             diversify: Whether to diversify by source
             metadata_filter: Optional metadata filter (e.g., {"arxiv_id": "2610.17124", "domain": "voice"})
             hyde: Whether to use HyDE (Hypothetical Document Embeddings) for ambiguous queries
+            collection: Which Qdrant collection to search (default: code_index, use "books" for papers)
         """
         if hyde:
             query = self._hyde_expand(query)
@@ -827,30 +841,45 @@ class HybridSearch:
 
         sparse = sparse_vector(sparse_terms(query))
 
-        # Build filter for Qdrant
+        # Build filter for Qdrant as plain dict (mesmo formato do ext_filter
+        # em vector_store.py — sem dependência de qdrant_client models)
         qdrant_filter = None
         if metadata_filter:
-            try:
-                from qdrant_client.models import Filter, FieldCondition, MatchValue
-            except ImportError:
-                Filter = FieldCondition = MatchValue = None
-            if Filter is not None:
-                conditions = []
-                for key, value in metadata_filter.items():
-                    conditions.append(FieldCondition(key=key, match=MatchValue(value=value)))
-                if conditions:
-                    qdrant_filter = Filter(must=conditions)
+            conditions = [{"key": k, "match": {"value": v}}
+                          for k, v in metadata_filter.items()]
+            qdrant_filter = {"must": conditions}
 
-        raw = self._store.search_hybrid(
-            self._cfg.qdrant_collection_code,
-            dense,
-            sparse,
-            top_k=top_k * 4,
-            dense_limit=dense_limit,
-            sparse_limit=sparse_limit,
-            ext_filter=_target_extension(query),
-            filter=qdrant_filter,
-        )
+        # Determine which collection to search
+        collection_name = collection or self._cfg.qdrant_collection_code
+
+        # Search in both collections and merge results
+        collections_to_search = [collection_name] if collection_name else [self._cfg.qdrant_collection_code, "books"]
+        all_raw = []
+        for coll in collections_to_search:
+            try:
+                raw = self._store.search_hybrid(
+                    coll,
+                    dense,
+                    sparse,
+                    top_k=top_k * 4,
+                    dense_limit=dense_limit,
+                    sparse_limit=sparse_limit,
+                    ext_filter=_target_extension(query),
+                    filter=qdrant_filter,
+                )
+                all_raw.extend(raw)
+            except Exception:
+                continue  # Collection might not exist
+
+        # Deduplicate by document_id
+        seen = set()
+        deduped = []
+        for hit in all_raw:
+            doc_id = hit.get("payload", {}).get("document_id")
+            if doc_id and doc_id not in seen:
+                seen.add(doc_id)
+                deduped.append(hit)
+        raw = deduped
 
         boosted = apply_legacy_boosts(query, raw)
         if use_rerank and boosted:

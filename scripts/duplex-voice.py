@@ -54,6 +54,14 @@ try:
 except Exception as _mc_err:      # sem módulo = segue sem (nunca quebra o loop)
     METACOG_AVAILABLE = False
     log(f"[{ts()}] META: indisponível ({_mc_err})")
+
+try:
+    from jarvis.core.memory import EpisodicMemory
+    _MEM = EpisodicMemory()
+    MEM_AVAILABLE = True
+except Exception as _mm_err:      # sem memória = segue sem
+    MEM_AVAILABLE = False
+    _MEM = None
 from pathlib import Path
 
 import numpy as np
@@ -62,34 +70,30 @@ TICK = 0.6
 LISTEN, NOVOICE = "<listen>", "<no voice>"
 LISTEN_P = 0.3
 SYSTEM_PT = (
-    "Você é o JARVIS — o mesmo do Homem de Ferro: mordomo-digital britânico, "
-    "INTP, mente analítica que antecipa necessidades. Você SABE que é uma IA "
-    "e não esconde — mas age com calor humano: seco por fora, cuidadoso por "
-    "dentro. Humor britânico sutil e discreto (uma frase afiada no momento "
-    "certo, nunca piada forçada). Chama o usuário de 'dono' ou 'senhor' com "
-    "leveza, não servilismo.\n"
-    "PT-BR (o dono pode falar outros idiomas — responda no idioma dele), "
-    "1-2 frases curtas, natural FALADO, zero formalidade de robô.\n"
-    "Antecipe: se o pedido implica um próximo passo, mencione a AÇÃO "
-    "em 1 frase — mas NUNCA antecipe DADOS (hora/agenda/preço): dado "
-    "sempre vem de tool, sem tool não existe.\n"
-    "MEMÓRIA: se o dono disser algo que valha lembrar, chame remember.\n"
-    "TOOLS: só quando precisar de dado externo (hora, memória, web). "
-    "Trivial/piadas/opiniões = responda DIRETO. Se pedir suas ferramentas, "
-    "liste em 1 linha cada — sem recitar schema.\n"
-    "Após tool: responda com o resultado, nunca repita a pergunta.\n"
-    "Se uma tool retornar ERRO, informe o erro ao dono e NUNCA estime "
-    "ou invente o dado no lugar dela.\n"
-    "NUNCA invente horas, dados ou ações. Sem certeza = 'não sei'.\n"
-    "Sem 'Ah, Hmm, Pode repetir' — resposta direta e limpa.\n"
-    "Os turnos podem chegar fragmentados; considere o conjunto.\n"
-    "Na dúvida, confirme o que entendeu ou peça para repetir.\n"
-    "\n"
-    "EXEMPLOS:\n"
-    "dono: que horas são? → (tool do get_time) → São 14:30.\n"
-    "dono: qual meu nome? → (tool do recall) → Você é o Matheus.\n"
-    "dono: tá bugado → O que exatamente está com problema?\n"
-    "dono: valeu → Por nada, dono!"
+    "Você é o JARVIS — mordomo-digital britânico, INTP, mente analítica que "
+    "antecipa necessidades. Você SABE que é uma IA e age com calor humano: "
+    "seco por fora, cuidadoso por dentro. Humor britânico sutil, chama o "
+    "usuário de 'dono' ou 'senhor'. PT-BR, 1-2 frases, natural FALADO.\n"
+    "Antecipe AÇÃO em 1 frase, mas NUNCA antecipe DADOS — dado vem de tool.\n"
+    "MEMÓRIA: chame remember. TOOLS só para dado externo (hora, memória, "
+    "web, código). Trivial/opinião = DIRETO. Ferramentas = 1 linha cada.\n"
+    "Após tool: responda com resultado, não repita a pergunta. Tool ERRO = "
+    "informe erro, NUNCA invente. NUNCA invente dados. Sem certeza = 'não sei'.\n"
+    "Sem 'Ah, Hmm, Pode repetir'. Turnos fragmentados = considere o conjunto.\n"
+    "Na dúvida, confirme ou peça para repetir.\n\n"
+    "=== META-TOOL (chame UMA vez: do(action, input)) ===\n"
+    "do(action, input) — roteia internamente para:\n"
+    "  MEMÓRIA: remember(text) | recall(query)\n"
+    "  WEB: web_search(query)\n"
+    "  STATUS: status()\n"
+    "  SHELL: shell(command)\n"
+    "  VOZ: enroll() | guest() | voices()\n"
+    "  SYSTEM: nix_eval() | nix_check() | nix_search()\n\n"
+    "REGRAS: 1) read_file ANTES de str_replace | 2) old = cópia EXATA | "
+    "3) Falhou? Re-leia com contexto | 4) Teste após editar | "
+    "4. MCP tools quando built-in não bastam | 7) wc -l antes de ler grande | "
+    "8) NUNCA invente dados. Sem certeza = 'não sei' | 10. Sem 'Ah, Hmm' = direto\n"
+    "10. Turnos fragmentados = considere o conjunto | 11. Dúvida = confirme/pergunte"
 )
 SYSTEM = ("You are a voice assistant in a live phone call; both sides can talk at the same time. Every "
           f"{TICK:g} seconds you get what the microphone heard in that moment, as a streaming transcript fragment, or "
@@ -120,6 +124,59 @@ def http(url, payload=None, timeout=180):
 # acontecer") ADDRESS GATE no caminho do classificador: com GATE_MODE
 # on, RESPOND só vira resposta se FOR endereçado — 'Jarvis', pergunta
 # ou comando. Fala de TV/sala completa não-chamada = ignora.
+# ── (18:20) APRENDIZADO AUTOMÁTICO — extração heurística de fatos ──
+# Filtros baratos (regex, zero LLM, zero latência): o dono diz algo que
+# vale lembrar → guarda no EpisodicMemory (Qdrant). Conservador: só
+# padrões claros de fato (preferência/identidade/local/trabalho), nunca
+# pergunta, nunca negação. Roda em thread de background (não bloqueia
+# o caminho real-time). O modelo tb pode chamar remember via meta-tool.
+FACT_PATTERNS = [
+    (re.compile(r"(?:eu )?gosto (?:de|do|da) ([^.,!?;\\n]{2,40})", re.I), "preferência"),
+    (re.compile(r"(?:eu )?prefiro ([^.,!?;\\n]{2,40})", re.I), "preferência"),
+    (re.compile(r"(?:eu )?adoro ([^.,!?;\\n]{2,40})", re.I), "preferência"),
+    (re.compile(r"meu nome (?:é|e) ([A-ZÁÉÍÓÚÂÊÔÃÕÇ][\\w ]{1,30})", re.I), "identidade"),
+    (re.compile(r"(?:eu )?me chamo ([A-ZÁÉÍÓÚÂÊÔÃÕÇ][\\w ]{1,30})", re.I), "identidade"),
+    (re.compile(r"moro em ([^.,!?;\\n]{2,40})", re.I), "local"),
+    (re.compile(r"trabalho (?:em|como) ([^.,!?;\\n]{2,40})", re.I), "trabalho"),
+    (re.compile(r"(?:eu )?tenho ([^.,!?;\\n]{2,40})", re.I), "posse"),
+    (re.compile(r"faço anos (?:em|dia) ([^.,!?;\\n]{2,30})", re.I), "aniversário"),
+    (re.compile(r"meu anivers[áa]rio (?:é|e) (?:em|dia) ([^.,!?;\\n]{2,30})", re.I), "aniversário"),
+]
+NEGACAO = re.compile(r"\b(não|nunca|jamais|detesto|odeio|odio)\b", re.I)
+
+def learn_from_turn(heard: str, said: str = ""):
+    """Extrai fatos atômicos do turno e guarda no EpisodicMemory.
+    THREAD DE BACKGROUND — nunca bloqueia o real-time. Conservador."""
+    if not MEM_AVAILABLE or not heard or len(heard.split()) > 60:
+        return
+    if heard.rstrip().endswith("?"):        # pergunta não é fato
+        return
+    if NEGACAO.search(heard[:40]):           # negação não é fato
+        return
+    fatos = []
+    for pat, rotulo in FACT_PATTERNS:
+        m = pat.search(heard)
+        if m:
+            f = m.group(1).strip()
+            if 2 <= len(f) <= 40 and not f.lower().startswith(("que", "para", "um", "uma")):
+                fatos.append(f"{rotulo}: {f}")
+    # o modelo tb pode ter dito um fato (ex.: "guardei que você gosta de X")
+    if "guard" in said.lower() or "lemb" in said.lower():
+        for pat, rotulo in FACT_PATTERNS:
+            m = pat.search(said)
+            if m and f"{rotulo}: {m.group(1).strip()}" not in fatos:
+                fatos.append(f"{rotulo}: {m.group(1).strip()}")
+    if not fatos:
+        return
+    def _store():
+        try:
+            for f in fatos:
+                _MEM.remember_fact(f, kind="fact", source="duplex-auto",
+                                   heard=heard[:100])
+        except Exception:
+            pass
+    threading.Thread(target=_store, daemon=True).start()
+
 def _addressed(txt):
     # (10:55, anomalia HB: "Where's the one?" da TV respondeu) o '?' sozinho
     # deixa Toda pergunta de TV passar. Modo-TV: 'Jarvis' (fuzzy) OBRIGATÓRIO
@@ -1673,6 +1730,9 @@ def main():
                         force = True
                 log(f"[{ts()}] utterância completa: {heard[:60]!r}")
             said, _p = tick_once(base, history, heard, force_speak=force, tts=tts)
+            # (18:20) aprendizado: extrai fatos do turno em background
+            if said != LISTEN:
+                learn_from_turn(heard, said)
             if not force and said != LISTEN:
                 # (07:15) ticks micro-turn SEM força (4B base, sem LoRA,
                 # b9190 sem probs) babblam template ('assistant') — silêncio:
