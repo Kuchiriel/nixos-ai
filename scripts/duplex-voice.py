@@ -98,6 +98,9 @@ SYSTEM_PT = (
     "    'quanto tá o dólar?' → do(action='web_search', input='cotação dólar hoje')\n"
     "    'o que diz o paper sobre metacognição?' → do(action='rag_search', input='metacognition')\n"
     "    'como funciona o AEC?' → do(action='rag_search', input='AEC echo cancellation')\n"
+    "  SHELL (comandos com gates do harness): shell(command)\n"
+    "    Capacidades CLI: jarvis status, doctor, heal, speak, stt, benchmark.\n"
+    "  STATUS: status()\n"
     "  STATUS: status()\n"
     "  SHELL: shell(command)\n"
     "  VOZ: enroll() | guest() | voices()\n"
@@ -324,7 +327,27 @@ def tick_once(base, history, heard, force_speak=False, tts=None):
         # (11:20, dono: "falei que sou matheus, disse que era henrique")
         # a história pro chat tava cheia de <no voice> e <listen> (ruído)
         # e a janela curta derrubava o nome. Só turnos REAIS, janela 20.
-        msgs = [{"role": "system", "content": SYSTEM_PT}]
+        # (21/10 P1) MEMORY INJECTION: fatos relevantes injetados no
+        # system prompt — o modelo SABE sem chamar recall (proactive).
+        _sys = SYSTEM_PT
+        if MEM_AVAILABLE and len(heard.split()) >= 2:
+            try:
+                words = [w for w in heard.lower().split()
+                         if len(w) > 2 and w not in ("jarvis", "que",
+                         "para", "com", "não", "uma", "por", "mas",
+                         "como", "isso", "aqui", "você", "meu", "minha")]
+                query = " ".join(words[:5]) if words else heard[:40]
+                _facts = _MEM.recall(query, top_k=3, kinds=("fact",))
+                if _facts:
+                    _lines = [h.get("text", "")[:120] for h in _facts[:3]
+                              if h.get("text")]
+                    if _lines:
+                        _sys += ("\n=== MEMÓRIA RELEVANTE (automático) ===\n"
+                                 + "\n".join(f"- {l}" for l in _lines)
+                                 + "\nUse estes fatos para responder. NÃO chame recall se o dado já está aqui.")
+            except Exception:
+                pass
+        msgs = [{"role": "system", "content": _sys}]
         for role, content in history[-6:]:
             if (content and content != LISTEN and content != NOVOICE
                     and len(content.replace("<", "").strip()) > 1):
@@ -1058,9 +1081,21 @@ def call_tool(name, args):
                      f"nix search nixpkgs '{q}' 2>&1 | head -10")
     if name == "shell":
         cmd = args.get("command", "")
-        if any(w in cmd.lower() for w in ["rm ", "dd ", "mkfs", "shutdown", "reboot", "sudo"]):
-            return "BLOQUEADO: comando perigoso"
-        return _exec(cmd)
+        # (21/10, dono) conecta ao HARNESS local com gates de segurança
+        # (security.py: allowlist, audit, denial) em vez de _exec cru
+        try:
+            from jarvis.core.security import run_shell_dict
+            result = run_shell_dict(cmd)
+            if isinstance(result, dict):
+                out = result.get("stdout", "") or result.get("output", "")
+                err = result.get("stderr", "")
+                return (out or err or str(result))[:400]
+            return str(result)[:400]
+        except ImportError:
+            # fallback: blocklist simples se security não importar
+            if any(w in cmd.lower() for w in ["rm ", "dd ", "mkfs", "shutdown", "reboot", "sudo"]):
+                return "BLOQUEADO: comando perigoso"
+            return _exec(cmd)
     return f"Ferramenta '{name}' não existe"
 
 TOOLS_SCHEMA = [
