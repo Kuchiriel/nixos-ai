@@ -361,12 +361,16 @@ def main():
                 # (21/10, forense HB 13:55 + 18:55 leak) FANTASMAS: ruído
                 # (nsp alto) nascia falante. Gate = nsp baixo (fala real) +
                 # txt não-vazio (anti-halluc) + ≥0.4s.
-                # (21/10, 19:08 leak) nsp<0.6 + wc≥3 ainda vazava ruído.
-                # Gate MAIS agressivo: nsp<0.4 (mais estrito = menos falso
-                # positivo) + mínimo 3 palavras. nsp 0.6→0.4: apenas
-                # fala MUITO confiante nasce falante. HB validou: fala real
-                # nsp 0.1-0.3, ruído/backchannel 0.5-0.9.
-                if txt and nsp < 0.4 and len(txt.split()) >= 3 and len(seg) >= int(0.4 * SR):
+                # (21/10, 19:15) Gate ULTRA-estrito: ruído/backchannel NÃO nasce falante.
+                # nsp < 0.25 (fala real whisper 0.1-0.2; backchannel 0.3-0.5; ruído 0.6+).
+                # Mín 4 palavras. NÃO nasce falante para backchannels comuns.
+                _wc = len(txt.split())
+                _is_bc = any(w in txt.lower() for w in (
+                    "obrigada", "obrigado", "valeu", "thanks", "thank you",
+                    "ok", "sim", "não", "claro", "entendi", "então", "hum",
+                    "ah", "eh", "ó", "oi", "tchau", "bye", "tá", "ta", "beleza"))
+                if (txt and nsp < 0.25 and len(seg) >= int(0.4 * SR)
+                        and len(txt.split()) >= 4 and not _is_bc):
                     spk_id, spk_cos = _identify(seg, _wav)
                 else:
                     spk_id, spk_cos = "?", 0.0
