@@ -361,7 +361,12 @@ def main():
                 # (21/10, forense HB 13:55 + 18:55 leak) FANTASMAS: ruído
                 # (nsp alto) nascia falante. Gate = nsp baixo (fala real) +
                 # txt não-vazio (anti-halluc) + ≥0.4s.
-                if txt and nsp < 0.6 and len(seg) >= int(0.4 * SR):
+                # (21/10, 18:58 leak contínuo) backchannels curtos
+                # (obrigada, ok, sim) passam nsp mas duplex filtra → spk vaza.
+                # Heurística: ≤2 palavras sem 'jarvis'/? = provável backchannel/filler.
+                _wc = len(txt.split())
+                _short = _wc <= 2 and not any(k in txt.lower() for k in ("jarvis", "?"))
+                if txt and nsp < 0.6 and len(seg) >= int(0.4 * SR) and not _short:
                     spk_id, spk_cos = _identify(seg, _wav)
                 else:
                     spk_id, spk_cos = "?", 0.0
