@@ -22,6 +22,7 @@
     ./llama-uncensored.nix
     ./nightwatch-timer.nix
     ./audiobook-audit-timer.nix
+    ./jarvis-consolidate-timer.nix
     ./qdrant.nix
     ./vision-moondream.nix
   ];
