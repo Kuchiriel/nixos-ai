@@ -125,6 +125,17 @@ VAD_PARAMS = dict(threshold=0.45, min_speech_duration_ms=200,
 
 def log(msg):
     print(msg, file=sys.stderr, flush=True)
+    # (21/10, dono) LOG PERSISTENTE: /tmp é volátil — também grava
+    # em logs/duplex/AAAA-MM-DD.log (rotação automática por data)
+    try:
+        from pathlib import Path as _P
+        _log_dir = _P(__file__).parent.parent / "logs" / "duplex"
+        _log_dir.mkdir(parents=True, exist_ok=True)
+        _log_file = _log_dir / f"{datetime.now().strftime('%Y-%m-%d')}.log"
+        with open(_log_file, "a") as _lf:
+            _lf.write(msg + "\n")
+    except Exception:
+        pass  # nunca quebra o loop por log
 
 def ts():
     return datetime.now().strftime("%H:%M:%S")
