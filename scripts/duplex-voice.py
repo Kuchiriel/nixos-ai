@@ -1617,6 +1617,8 @@ def main():
     prev_pcm, prev_rms = None, 0
     zeros = 0
     pending = []              # (12:00) merge de segmentos
+    pending_spk = ["?"]      # (21/10) falante do pending corrente
+    stash = []                # (21/10) FIFO: speaker-change reordena
     merge_deadline = 0.0
     _last_wait_text = [None]  # (23:00) detector de WAIT preso
     _wait_repeats = [0]
@@ -1760,8 +1762,16 @@ def main():
                     asr.feed(bc.astype("float32") / 32768.0)
                 barge_buf.clear()
             r = asr.take()
+            # (21/10 SPEAKER-ID) FIFO de segmentos: speaker-change guarda
+            # o segmento NOVO p/ a próxima iteração enquanto o pendente
+            # (do OUTRO falante) completa e responde (fronteira semântica).
             if isinstance(r, dict) and r.get("text"):
-                heard = r["text"]
+                stash.append((r["text"], r.get("spk") or "?"))
+            _popped = stash.pop(0) if stash else None
+            if _popped is not None:
+                heard, _seg_spk = _popped
+                if _seg_spk != "?":
+                    SPK_STATE["last_spk"] = _seg_spk
                 # (16:05) vocabulário da conversa → prompt do whisper
                 # (paper 2307.14743; o server aceita 'prompt' — o
                 # 'Já viz' morre na FONTE agora)
@@ -1804,29 +1814,48 @@ def main():
                         log(f"[{ts()}] backchannel ('{heard}') — segue ouvindo")
                         heard = NOVOICE
                     else:
-                        pending.append(heard)
-                        heard = NOVOICE
-                        # (19:00) SMART MERGE (Easy-Turn heuristic):
-                        # termina em ? ! = completo → 500ms
-                        # termina em , e mas → incompleto → 1.5s
-                        # default → 1.2s
-                        # (20:50, paper Next-Turn 2606.18094) SEMANTIC
-                        # EoT: '?' = pergunta COMPLETA → 200ms (o tempo
-                        # de reação humano é 200-600ms; 200 é o alvo
-                        # dos sistemas produção); '.' e '!' = 400ms;
-                        # conjunção = 1.5s; default 800ms
-                        _last = pending[-1].rstrip()
-                        if _last.endswith("?"):
-                            _wait = 0.2   # pergunta = fogo imediato
-                        elif _last.endswith(("!", ".")):
-                            _wait = 0.4
-                        elif _last.endswith((",", " e", " mas", " ou",
-                                                 " que", " pra", " para")):
-                            _wait = 1.5
+                        # (21/10 SPEAKER-ID) speaker-change = fronteira
+                        # semântica: outro falante começou → o pendente é
+                        # uma utterância COMPLETA (responde agora); o
+                        # segmento novo volta pro FIFO. Merge multi-voz
+                        # com label do último falante era a limitação v1.
+                        _flush_spc = False
+                        if (pending and _seg_spk != "?"
+                                and pending_spk[0] != "?"
+                                and _seg_spk != pending_spk[0]):
+                            log(f"[{ts()}] speaker change "
+                                f"{pending_spk[0]}→{_seg_spk} — flush")
+                            stash.append((heard, _seg_spk))
+                            heard = NOVOICE
+                            merge_deadline = 0.0
+                            _flush_spc = True
                         else:
-                            _wait = 0.8
-                        merge_deadline = time.monotonic() + _wait
-                        force = False
+                            if not pending:
+                                pending_spk[0] = _seg_spk
+                            pending.append(heard)
+                            heard = NOVOICE
+                        if not _flush_spc:
+                            # (19:00) SMART MERGE (Easy-Turn heuristic):
+                            # termina em ? ! = completo → 500ms
+                            # termina em , e mas → incompleto → 1.5s
+                            # default → 1.2s
+                            # (20:50, paper Next-Turn 2606.18094) SEMANTIC
+                            # EoT: '?' = pergunta COMPLETA → 200ms (o tempo
+                            # de reação humano é 200-600ms; 200 é o alvo
+                            # dos sistemas produção); '.' e '!' = 400ms;
+                            # conjunção = 1.5s; default 800ms
+                            _last = pending[-1].rstrip()
+                            if _last.endswith("?"):
+                                _wait = 0.2   # pergunta = fogo imediato
+                            elif _last.endswith(("!", ".")):
+                                _wait = 0.4
+                            elif _last.endswith((",", " e", " mas", " ou",
+                                                     " que", " pra", " para")):
+                                _wait = 1.5
+                            else:
+                                _wait = 0.8
+                            merge_deadline = time.monotonic() + _wait
+                            force = False
             elif pending and not force and heard != NOVOICE:
                 # mais fala durante a espera? renova (frase contínua)
                 merge_deadline = time.monotonic() + 1.2
