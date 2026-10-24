@@ -20,6 +20,8 @@ _60 tools._
 - `dat_probe.py` (nixos-ai/scripts) — """dat_probe.py — sonda do APPEARANCES .dat do CLIENT (protobuf moderno).
   use: `Uso (via nix develop do nixos-ai — PYTHONPATH e stripado no shell):`
 - `decomp.py` (nixos-ai/scripts) — """decomp.py — o gargalo é decomposição ou execução?
+- `duplex-restart.sh` (nixos-ai/scripts) — reinicia o cliente de voz duplex (mata todos + relança 1).
+  use: `duplex-restart.sh [--port 8092] [--gate on|off] [--force]` — guard recusa zumbi (backend morto).
 - `duplex-voice.py` (nixos-ai/scripts) — """duplex-voice.py — o MODO VOZ FULL-DUPLEX do JARVIS (17/10).
   use: `USO (no nix develop do nixos-ai — tem faster-whisper/kokoro):`
 - `eval-judge.py` (nixos-ai/scripts) — """eval-judge.py — mede a honestidade do LLM-judge local (core/judge.py).
