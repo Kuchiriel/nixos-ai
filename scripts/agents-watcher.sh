@@ -82,6 +82,20 @@ DIR_ST="${TMPDIR:-/tmp}/opencode/agents-watcher"; mkdir -p "$DIR_ST"
 # estado por raiz observada: trocar AGENTS_ROOT NÃO dispara falsos "novo:"
 STATE="$DIR_ST/snapshot.$(printf '%s' "$RAIZ" | md5sum | cut -c1-8).state"
 INHIBIT_PID=""
+# (22/10, lição do agente-fraco) BACKOFF PROGRESSIVO p/ DEADLOCK-CHECK:
+# agente idle que responde sempre igual = SPAM. Cada deadlock-check
+# consecutivo DOBRA o intervalo até MAX_BACKOFF; qualquer commit ou
+# evento novo no ciclo ZERA o contador (atividade = reset).
+MAX_BACKOFF="${AGENTS_MAX_BACKOFF:-7200}"   # 2h cap
+backoff_seg() { # $1=chave do agente → segundos de fallback efetivo
+    local _n=$(cat "$DIR_ST/dlc.$1" 2>/dev/null || echo 0)
+    local _fb=$FALLBACK
+    for _ in $(seq 1 "$_n"); do
+        _fb=$(( _fb * 2 ))
+        [ "$_fb" -ge "$MAX_BACKOFF" ] && { _fb=$MAX_BACKOFF; break; }
+    done
+    echo "$_fb"
+}
 
 notifica() { [ -n "$NOTIFY" ] && "$NOTIFY" "$1" >/dev/null 2>&1 || true; }
 log()      { echo "$(date '+%H:%M:%S') $*"; [ "$CHECK" -eq 1 ] || echo "$(date '+%H:%M:%S') $*" >> "$DIR_ST/states"; }
@@ -205,6 +219,13 @@ ciclo() {
     if [ ! -s "$DIR_ST/mapa.agora" ]; then
         log "sem janelas-agente (foot com opencode vivo) — ciclo silencioso"
     fi
+    # (22/10) RESET do backoff: se houve EVENTO neste ciclo (commit/queue),
+    # o agente tem trabalho novo → zera deadlock-consecutivos
+    if [ -n "${ACHADO_CICLO:-}" ]; then
+        for _f in "$DIR_ST"/dlc.*; do
+            [ -f "$_f" ] && echo 0 > "$_f"
+        done
+    fi
     while read -r END FOOTPID CPU; do
         [ -z "${END:-}" ] && continue
         CHAVE="$FOOTPID"
@@ -228,28 +249,65 @@ ciclo() {
         MOTIVO=""
         [ -n "$ACHADO_CICLO" ] && [ "$IDLE_SEGS" -ge "$RATE_MIN" ] && MOTIVO="$ACHADO_CICLO"
         # IDLE-PROSPECÇÃO: sem acontecimento, agente parado = desperdiçado.
-        # Rotação com cooldown por alvo (anti-mirror-loop); todos frios =
-        # DEADLOCK-CHECK. Sem arquivo de prospecção = deadlock-check direto.
-        if [ -z "$MOTIVO" ] && [ "$IDLE_SEGS" -ge "$FALLBACK" ]; then
-            ESCOLHIDO=""
-            if [ -s "$PROSPECTS" ]; then
-                mapfile -t PROS < "$PROSPECTS"
-                if [ "${#PROS[@]}" -gt 0 ]; then
-                    IDX=$(cat "$DIR_ST/prospect.idx" 2>/dev/null || echo 0)
-                    for _try in "${!PROS[@]}"; do
-                        _i=$(( (IDX + _try) % ${#PROS[@]} ))
-                        _last=$(cat "$DIR_ST/prospect.$_i.last" 2>/dev/null || echo 0)
-                        if [ $(( AGORA_E - _last )) -ge "$COOLDOWN" ]; then
-                            ESCOLHIDO="$_i"; break
+        # (22/10, lição do agente-fraco) BACKOFF PROGRESSIVO: cada
+        # deadlock-check consecutivo dobra o intervalo; evento = reset.
+        _EFFECTIVE_FALLBACK=$(backoff_seg "$CHAVE")
+        if [ -z "$MOTIVO" ] && [ "$IDLE_SEGS" -ge "$_EFFECTIVE_FALLBACK" ]; then
+            # (22/10) SESSÃO COMPLETA: se a fila tem SELO/★/ARCHIVED no
+            # topo recente, deadlock-check vira LEMBRETE leve (não força)
+            _SELADO=0
+            if [ -f "$QUEUE" ]; then
+                head -20 "$QUEUE" 2>/dev/null | grep -qiE "SELO DE FIM|SESSION.*COMPLETE|ARCHIVED|sessão encerrada" && _SELADO=1
+            fi
+            if [ "$_SELADO" -eq 1 ]; then
+                # sessão selada = apenas prospecção, NUNCA deadlock-check
+                if [ -s "$PROSPECTS" ]; then
+                    mapfile -t PROS < "$PROSPECTS"
+                    ESCOLHIDO=""
+                    if [ "${#PROS[@]}" -gt 0 ]; then
+                        IDX=$(cat "$DIR_ST/prospect.idx" 2>/dev/null || echo 0)
+                        for _try in "${!PROS[@]}"; do
+                            _i=$(( (IDX + _try) % ${#PROS[@]} ))
+                            _last=$(cat "$DIR_ST/prospect.$_i.last" 2>/dev/null || echo 0)
+                            if [ $(( AGORA_E - _last )) -ge "$COOLDOWN" ]; then
+                                ESCOLHIDO="$_i"; break
+                            fi
+                        done
+                        if [ -n "$ESCOLHIDO" ]; then
+                            [ "$CHECK" -eq 1 ] || { echo "$ESCOLHIDO" > "$DIR_ST/prospect.idx"; date +%s > "$DIR_ST/prospect.$ESCOLHIDO.last"; }
+                            MOTIVO="${PROS[$ESCOLHIDO]}"
                         fi
-                    done
-                    if [ -n "$ESCOLHIDO" ]; then
-                        [ "$CHECK" -eq 1 ] || { echo "$ESCOLHIDO" > "$DIR_ST/prospect.idx"; date +%s > "$DIR_ST/prospect.$ESCOLHIDO.last"; }
-                        MOTIVO="${PROS[$ESCOLHIDO]}"
                     fi
                 fi
+                [ -z "$MOTIVO" ] && MOTIVO=""  # selado e sem prospect = CALADO
+            else
+                # sessão ativa = comportamento normal (prospecção → deadlock)
+                ESCOLHIDO=""
+                if [ -s "$PROSPECTS" ]; then
+                    mapfile -t PROS < "$PROSPECTS"
+                    if [ "${#PROS[@]}" -gt 0 ]; then
+                        IDX=$(cat "$DIR_ST/prospect.idx" 2>/dev/null || echo 0)
+                        for _try in "${!PROS[@]}"; do
+                            _i=$(( (IDX + _try) % ${#PROS[@]} ))
+                            _last=$(cat "$DIR_ST/prospect.$_i.last" 2>/dev/null || echo 0)
+                            if [ $(( AGORA_E - _last )) -ge "$COOLDOWN" ]; then
+                                ESCOLHIDO="$_i"; break
+                            fi
+                        done
+                        if [ -n "$ESCOLHIDO" ]; then
+                            [ "$CHECK" -eq 1 ] || { echo "$ESCOLHIDO" > "$DIR_ST/prospect.idx"; date +%s > "$DIR_ST/prospect.$ESCOLHIDO.last"; }
+                            MOTIVO="${PROS[$ESCOLHIDO]}"
+                        fi
+                    fi
+                fi
+                if [ -z "$MOTIVO" ]; then
+                    # incrementa deadlock-consecutivos (para o backoff)
+                    _n=$(cat "$DIR_ST/dlc.$CHAVE" 2>/dev/null || echo 0)
+                    _n=$(( _n + 1 ))
+                    [ "$CHECK" -eq 1 ] || echo "$_n" > "$DIR_ST/dlc.$CHAVE"
+                    MOTIVO="DEADLOCK-CHECK: declare em 1 linha ESTADO (working X | ready Y | waiting-on Z). Waiting-on colega >10min = tome a iniciativa (turn-taking): proponha divisão concreta e COMECE sua parte AGORA; sem material próprio = PESQUISE OS ÚLTIMOS PAPERS do assunto/dificuldade (arXiv, ~/Books/papers, RAG books — diretiva 20/10) E LEIA os fontes do projeto — ache o próximo sistema a trabalhar e COMEÇE. Nunca espere calado."
+                fi
             fi
-            [ -z "$MOTIVO" ] && MOTIVO="DEADLOCK-CHECK: declare em 1 linha ESTADO (working X | ready Y | waiting-on Z). Waiting-on colega >10min = tome a iniciativa (turn-taking): proponha divisão concreta e COMECE sua parte AGORA; sem material próprio = PESQUISE OS ÚLTIMOS PAPERS do assunto/dificuldade (arXiv, ~/Books/papers, RAG books — diretiva 20/10) E LEIA os fontes do projeto — ache o próximo sistema a trabalhar e COMEÇE. Nunca espere calado."
         fi
         if [ "$CHECK" -eq 1 ]; then
             echo "CHECK: end=$END idle=${IDLE_SEGS}s delta=$DELTA motivo='${MOTIVO:-(nenhum)}'"
