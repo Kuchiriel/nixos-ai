@@ -376,6 +376,32 @@ class MetacognitionEngine:
     
     # ── Uncertainty Detection ──────────────────────────────────────
     
+    # ── P2.8: Multi-hop reasoning (24/10, roadmap inteligência) ──────
+    # Pergunta complexa tem ≥2 âncoras de aspecto ("o que eu gosto E onde
+    # eu moro?") — uma única query de embedding DILUI os dois tópicos e
+    # falha nos dois (provado: 'onde eu moro' só achava com sinônimo).
+    # Decomposição heurística → múltiplos recalls → merge dedup.
+    QUESTION_ANCHORS = re.compile(
+        r"\b(mor[oa]|gosto|nome|trabalho|aniversário|com[ée]r|cidade|"
+        r"quando|onde|quem|qual|quanto|por que|como|prefere|gosta)\b", re.I)
+    SPLIT_RE = re.compile(r"\s+(?:e|ou)\s+|,\s*", re.I)
+
+    def decompose_question(self, text: str) -> list:
+        """P2.8: decompõe pergunta complexa em sub-perguntas (máx 3).
+        Retorna [text] (lista unitária) se simples — nunca lista vazia
+        para input não-vazio. Só decompõe quando CADA parte carrega sua
+        própria âncora (evita quebrar frases com 'e' incidental)."""
+        if not text:
+            return []
+        if len(text.split()) < 4:
+            return [text]
+        parts = [p.strip(" .?!") for p in self.SPLIT_RE.split(text)
+                 if p.strip(" .?!")]
+        anchored = [p for p in parts if self.QUESTION_ANCHORS.search(p)]
+        if 2 <= len(anchored) <= 4 and len(anchored) < len(parts) + 1:
+            return anchored[:3]
+        return [text]
+
     def detect_uncertainty(self, text: str) -> Tuple[bool, float, str]:
         """Detecta incerteza: score > UNCERTAINTY_THRESHOLD = incerto."""
         score = self._uncertainty_score(text)

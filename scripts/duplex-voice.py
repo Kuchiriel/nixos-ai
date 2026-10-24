@@ -374,8 +374,36 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
                     if w in words:
                         words.extend(exp.split())
                 query = " ".join(words[:7]) if words else heard[:40]
-                _facts = _MEM.recall(query, top_k=3, kinds=("fact",))
-                print(f"INJECT: query={query[:30]!r} hits={len(_facts) if _facts else 0}", flush=True)
+                # (24/10 P2.8) MULTI-HOP: pergunta complexa (≥2 aspectos)
+                # → um recall POR sub-pergunta, merge dedup por texto.
+                _queries = [query]
+                try:
+                    _mq = metacog.decompose_question(_heard_clean)
+                    if len(_mq) > 1:
+                        _queries = _mq[:3]
+                except Exception:
+                    pass
+                _facts, _seen_txt = [], set()
+                for _q in _queries:
+                    for h in _MEM.recall(_q, top_k=3,
+                                         kinds=("fact",)) or []:
+                        t = (h.get("text") or "")[:60]
+                        if t and t not in _seen_txt:
+                            _seen_txt.add(t)
+                            _facts.append(h)
+                _facts = _facts[:4]
+                print(f"INJECT: queries={len(_queries)} "
+                      f"hits={len(_facts)}", flush=True)
+                if not _facts and words:
+                    # (24/10 P2.9) CURIOSIDADE ESTRUTURADA: zero fatos +
+                    # pergunta sobre o dono → o modelo PERGUNTA o dado
+                    # específico que falta (não 'não tenho certeza'
+                    # genérico); a resposta entra via auto-learn.
+                    _sys += ("\n=== DADO QUE FALTA (curiosidade) ===\n"
+                             f"Ainda não sei: {query[:60]}. "
+                             "Pergunte ao dono de forma específica e "
+                             "natural (1 frase curta, cite o dado que "
+                             "falta). Quando ele responder, memorize.\n")
                 if _facts:
                     _lines = [h.get("text", "")[:120] for h in _facts[:3]
                               if h.get("text")]
