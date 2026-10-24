@@ -378,7 +378,10 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
                 # → um recall POR sub-pergunta, merge dedup por texto.
                 _queries = [query]
                 try:
-                    _mq = metacog.decompose_question(_heard_clean)
+                    # get_metacognition() = singleton getter (importado no
+                    # módulo) — `metacog` é local de main(), NameError aqui
+                    # era engolido pelo except e o multi-hop NUNCA disparava
+                    _mq = get_metacognition().decompose_question(_heard_clean)
                     if len(_mq) > 1:
                         _queries = _mq[:3]
                 except Exception:
