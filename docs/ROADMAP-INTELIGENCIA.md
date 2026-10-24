@@ -145,3 +145,19 @@ Papers baixados e indexados (RAG):
 - Gap: fluxo conversacional "Jarvis, cadastra minha voz" → guia 10s → confirma nome
 - Adicionar: ação `enroll` no dispatcher (já existe) + confirmação por voz + listar perfis cadastrados
 - Integração com SYSTEM_PT: "Nomes cadastrados aparecem no [spk: Nome]"
+
+
+## SPEAKER-ID v3 upgrade path (24/10, papers HB 2610.01132 + 2610.07344)
+- **FASTDIAR** (frame-level encoder, streaming): embed por FRAME vs nosso
+  SEGMENT-LEVEL. Ganhos: ID pré-computado quando o gate de texto dispara
+  (economiza os 83ms WeSpeaker pós-segmento) + mais amostras p/ agregação
+  (cluster mais estável). LIMITAÇÃO ESTRUTURAL: o ghost-gate (nsp+palavras)
+  depende do TRANSCRITE (whisper pós-segmento) — falante só NASCE após o
+  gate; frame-level adianta o embedding, não o nascimento. Custo: encoder
+  contínuo no asrd (P-cores 0-11 já dividem llama 6-threads + whisper).
+- **Speaker inventories** (2610.07344): inventários precisos = menos IDs
+  fantasma — valida/estende a métrica da bateria (A1-A4 estável, B separado).
+- **DECISÃO**: v2 (WeSpeaker segment-level) é o presente — battery 7/7
+  decide. FASTDIAR v3 SÓ SE a bateria mostrar (a) instabilidade de ID
+  (precisa agregação multi-amostra) ou (b) latência de atribuição
+  problemática. Dado > hype.
