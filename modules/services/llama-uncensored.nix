@@ -31,6 +31,27 @@ let
         else "/home/nixos/projects/llama.cpp/build-stock/bin:")
         + "${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
     };
+  # (24/10, lição do incidente 04:03) GUARD DE VRAM: restart de serviço
+  # GPU pode falhar porque a instância ANTIGA ainda segura a memória
+  # quando a nova alocava ("failed to fit params to free device memory,
+  # n_gpu_layers already set by user, abort") — e nada reergue o wanted=
+  # false. O guard espera a VRAM liberar (≤90s) antes de subir; se não
+  # liberar, falha com mensagem LEGÍVEL no journal (não o cryptico do
+  # llama-server).
+  vramGuard = pkgs.writeShellScript "llama-vram-guard" ''
+    NEED="''${1:-3000}"
+    SMI=/run/current-system/sw/bin/nvidia-smi
+    FREE=0
+    for _ in $(seq 1 90); do
+      FREE=$("$SMI" --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -1)
+      FREE="''${FREE:-0}"
+      [ "$FREE" -ge "$NEED" ] && exit 0
+      sleep 1
+    done
+    echo "vram-guard: FREE=''${FREE}MiB < NEED=''${NEED}MiB após 90s — outro processo segura a GPU (router/instância antiga?). Veja nvidia-smi." >&2
+    exit 1
+  '';
+
   mkDirect = name: s: {
     description = "LLM direct ${name} (:${toString s.port}) — gerado de models.nix";
     after = [ "network-online.target" ];
@@ -53,6 +74,8 @@ let
     '';
     serviceConfig = {
       User = "nixos";
+      # (24/10) espera VRAM liberar antes de alocar (v. vramGuard)
+      ExecStartPre = [ "${vramGuard} ${toString (s.vramMinMiB or 3000)}" ];
       Restart = "on-failure";
       RestartSec = "20";
       StartLimitIntervalSec = 600;

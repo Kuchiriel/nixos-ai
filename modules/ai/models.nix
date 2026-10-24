@@ -309,6 +309,9 @@ in rec {
       # (19/10) binary stock (v0.7.0-dev build local): o upstream nixpkgs
       # 0.5.0 NÃO tem --lora nem /lora-adapters. O LoRA micro-turn
       # (classificador RESPOND/WAIT/SILENCE/BARGE) exige o stock.
+      # (24/10, incidente 04:03) mínimo de VRAM LIVRE p/ o vram-guard:
+      # modelo 2.7G + KV ~0.3G + buffers (cabe c/ whisper 0.9G + embed).
+      vramMinMiB = 4000;
       port = 8092; binary = "stock";
       # ARQUIVO MTP (não o base!): NextN real, +24% TG. Rebuild sem isto
       # voltaria a 8092 sem speculative decoding (regressão silenciosa).
