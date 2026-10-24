@@ -1,0 +1,57 @@
+{
+ "ts": "2026-10-22T08:37:31",
+ "results": [
+  {
+   "tag": "A1",
+   "who": "dora",
+   "expect": "spk1",
+   "got": null,
+   "pass": false
+  },
+  {
+   "tag": "A2",
+   "who": "dora",
+   "expect": "spk1",
+   "got": null,
+   "pass": false
+  },
+  {
+   "tag": "B1",
+   "who": "alex",
+   "expect": "spk2",
+   "got": null,
+   "pass": false
+  },
+  {
+   "tag": "A3",
+   "who": "dora",
+   "expect": "spk1",
+   "got": null,
+   "pass": false
+  },
+  {
+   "tag": "B2",
+   "who": "alex",
+   "expect": "spk2",
+   "got": null,
+   "pass": false
+  },
+  {
+   "tag": "B3",
+   "who": "alex",
+   "expect": "spk2",
+   "got": null,
+   "pass": false
+  },
+  {
+   "tag": "A4",
+   "who": "dora",
+   "expect": "spk1",
+   "got": null,
+   "pass": false
+  }
+ ],
+ "merged": true,
+ "stable_a": false,
+ "stable_b": false
+}
