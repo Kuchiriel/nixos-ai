@@ -161,3 +161,17 @@ Papers baixados e indexados (RAG):
   decide. FASTDIAR v3 SÓ SE a bateria mostrar (a) instabilidade de ID
   (precisa agregação multi-amostra) ou (b) latência de atribuição
   problemática. Dado > hype.
+
+
+## NOISE-ROBUST DUPLEX (24/10, papers HB 2606.04264 + 2604.25624)
+- **IRAF** (interference-resilient adaptive fusion, full-duplex): o
+  problema REAL da sala barulhenta (rms 3000-6900 por dias — a bateria
+  nem roda). Lição das ghost-gates v1→v6: cada vez mais estritas = whack-
+  a-mole; IRAF propõe fusion adaptativo na ARQUITETURA. P3 candidate
+  quando o duplex v3 for planejado.
+- **UNet-EMA** (speaker-ID robusto a ruído): insight EMA — VALIDAÇÃO
+  INTELECTUAL do que já temos: o update do centroide emergente
+  (`cent*0.8 + e*0.2`) É um EMA alpha=0.2. Upgrade possível v2.5:
+  EMA no EMBEDDING por segmento antes do match (suavização temporal
+  per-falante), mais barato que frame-level FASTDIAR. Decisão pós-
+  bateria junto com FASTDIAR (dado decide: instabilidade → EMA/FASTDIAR).
