@@ -19,7 +19,13 @@
     serviceConfig = {
       Type = "oneshot";
       User = "nixos";
-      ExecStart = "/home/nixos/projects/karaok/.venv/bin/python3 -m jarvis.cli.main consolidate --apply";
+      # (24/10, P2.7 HB) REFLECT → CONSOLIDATE, nesta ordem: reflect
+      # EXTRAI lições do log do dia (hábitos, erros, temas), consolidate
+      # DEDUPA em seguida. Um timer, ordem determinística, um journal.
+      ExecStart = [
+        "/home/nixos/projects/karaok/.venv/bin/python3 /home/nixos/projects/nixos-ai/scripts/jarvis-reflect.py"
+        "/home/nixos/projects/karaok/.venv/bin/python3 -m jarvis.cli.main consolidate --apply"
+      ];
       WorkingDirectory = "/home/nixos/projects/nixos-ai/modules/ai/jarvis/src";
       Environment = [
         "PYTHONPATH=/home/nixos/projects/nixos-ai/modules/ai/jarvis/src"
