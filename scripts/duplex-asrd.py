@@ -358,19 +358,18 @@ def main():
                     _wav = ""
                 txt, nsp = "", 1.0
                 txt, nsp = seg_to_text(seg)
-                # (21/10, forense HB 13:55 + 18:55 leak) FANTASMAS: ruído
-                # (nsp alto) nascia falante. Gate = nsp baixo (fala real) +
-                # txt não-vazio (anti-halluc) + ≥0.4s.
-                # (21/10, 19:15) Gate ULTRA-estrito: ruído/backchannel NÃO nasce falante.
-                # nsp < 0.25 (fala real whisper 0.1-0.2; backchannel 0.3-0.5; ruído 0.6+).
-                # Mín 4 palavras. NÃO nasce falante para backchannels comuns.
+                # (21/10 19:30) Gate balanceado — dono pediu: antes detectava certo,
+                # agora tudo spk=?. Ruído/backchannel NÃO nasce falante; fala real SIM.
+                # nsp < 0.5 (fala real 0.1-0.3; backchannel 0.3-0.6; ruído 0.6+).
+                # Mín 3 palavras. Blacklist backchannels explícitos.
                 _wc = len(txt.split())
                 _is_bc = any(w in txt.lower() for w in (
-                    "obrigada", "obrigado", "valeu", "thanks", "thank you",
-                    "ok", "sim", "não", "claro", "entendi", "então", "hum",
-                    "ah", "eh", "ó", "oi", "tchau", "bye", "tá", "ta", "beleza"))
-                if (txt and nsp < 0.25 and len(seg) >= int(0.4 * SR)
-                        and len(txt.split()) >= 4 and not _is_bc):
+                    "obrigada", "obrigado", "valeu", "thanks", "ok",
+                    "sim", "não", "claro", "então", "hum", "ah", "eh",
+                    "oi", "tchau", "bye", "ta", "beleza"))
+                _has_jarvis = "jarvis" in txt.lower()
+                if (txt and nsp < 0.6 and len(txt.split()) >= 3
+                        and len(seg) >= int(0.4 * SR) and (_has_jarvis or not _is_bc)):
                     spk_id, spk_cos = _identify(seg, _wav)
                 else:
                     spk_id, spk_cos = "?", 0.0
