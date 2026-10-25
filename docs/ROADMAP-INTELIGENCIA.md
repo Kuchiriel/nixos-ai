@@ -175,3 +175,17 @@ Papers baixados e indexados (RAG):
   EMA no EMBEDDING por segmento antes do match (suavização temporal
   per-falante), mais barato que frame-level FASTDIAR. Decisão pós-
   bateria junto com FASTDIAR (dado decide: instabilidade → EMA/FASTDIAR).
+
+
+## BATERIA rms~2000 (26/10 09:05, HB) — DADO MEDIIDO da priorização v3
+0/7 (todos spk=?) mas FORENSE LIMPA: o gate v6 trabalhou CORRETAMENTE —
+ASR ouve os wavs mas transcreve FRAGMENTADO em ruído ('nome' em vez de
+'Jarvis, qual é o seu nome?'); fragmento 1-palavra + nsp alto = rejeito
+correto (atribuição não-confiável NÃO deve nascer falante).
+**CONCLUSÃO MEDIIDA: o gargalo em sala ruidosa é a PERDA DE TRANSCRIÇÃO
+(ASR), não o speaker-ID.** Priorização v3 p/ o caso ruído:
+1. IRAF (fusion adaptativo — recupera transcrição em ruído) >
+2. EMA embedding (estabilidade quando a transcrição passa) >
+3. FASTDIAR frame-level (latência — irrelevante se a transcrição não chega).
+A bateria LIMPA (rms<400) continua pendente p/ validar o v2 em condições
+ideais — 0/7 em ruído é o gate PROTEGENDO, não o v2 falhando.
