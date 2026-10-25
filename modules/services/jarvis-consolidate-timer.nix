@@ -29,6 +29,10 @@
       WorkingDirectory = "/home/nixos/projects/nixos-ai/modules/ai/jarvis/src";
       Environment = [
         "PYTHONPATH=/home/nixos/projects/nixos-ai/modules/ai/jarvis/src"
+        # (26/10) libstdc++ p/ numpy/qdrant C-extensions: a 1a execução
+        # do timer FALHOU sem isto ("libstdc++.so.6: cannot open shared
+        # object file") — o run wrapper do duplex seta LD, o timer não.
+        "LD_LIBRARY_PATH=${pkgs.stdenv.cc.cc.lib}/lib"
       ];
     };
   };
