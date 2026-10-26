@@ -314,21 +314,24 @@ in rec {
       # 0.5.0 NÃO tem --lora nem /lora-adapters. O LoRA micro-turn
       # (classificador RESPOND/WAIT/SILENCE/BARGE) exige o stock.
       # (24/10, incidente 04:03) mínimo de VRAM LIVRE p/ o vram-guard:
-      # modelo 2.7G + KV ~0.6G + buffers (cabe c/ whisper 0.9G + embed).
+      # modelo 2.7G + KV ~0.75G (20k ×2 MTP) + buffers ~0.6G.
       # (26/10 09:45, OOM MEDIIDO) 32768 FALHOU na 6GB com whisper
       # co-residente: KV f16 @32k (~600MB) ×2 (MTP draft context!) +
       # buffer fa=false (~1GB @32k) + modelo 2.7G = ~4.9G; com
       # whisper(0.9)+embed(0.2)+desktop = 6.3G > 6.1G → "failed to
-      # allocate buffer for kv cache". Volto pro 16k PROVADO enquanto o
-      # HB decide: 20k+MTP (~4.1G, cabe c/ ~600MB margem) OU 32k sem MTP
-      # (perde +24% TG). vramMin volta pro 4000 real do 16k.
-      vramMinMiB = 4000;
+      # allocate buffer for kv cache".
+      # (26/10 10:15, HB decisão dados OC) 20k+MTP: KV 375MB×2=750MB +
+      # buffer 625MB + modelo 2.7G = ~4.1G; com whisper+embed = ~5.2G;
+      # margem ~900MB. MANTÉM o +24% TG do MTP. Para opencode 32k:
+      # remover --spec-type draft-mtp (perde TG) OU slimming MCP tools.
+      # GUARD FUTURO (lição OOM): vramMin DEVE contar MTP×2 no KV.
+      vramMinMiB = 4200;  # 20k real: modelo+KV+buffer ~4.1G
       port = 8092; binary = "stock";
       # ARQUIVO MTP (não o base!): NextN real, +24% TG. Rebuild sem isto
       # voltaria a 8092 sem speculative decoding (regressão silenciosa).
       modelFile = "/home/nixos/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
-      # KV f16 híbrido (8/32 layers) ≈ 600MB @32k.
-      threads = 6; ctxSize = 16384; batchSize = 256; ubatch = 256;
+      # KV f16 híbrido (8/32 layers) ≈ 750MB @20k ×2 MTP.
+      threads = 6; ctxSize = 20480; batchSize = 256; ubatch = 256;
       gpuLayers = 99; moeFlags = "";
       # (19/10) LoRA+flash-attn incompatíveis (log do server, ver
       # duplex-35b) → fa off. KV quantizado (q4_0) EXIGE fa → KV f16.
@@ -342,7 +345,7 @@ in rec {
       wanted = false;  # on-demand; router (8080/bonsai) is default for harness/agents; start 8092 when voice needs PT-BR
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = modelFile (o server anuncia o path, sem --alias).
-      opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 32768; output = 4096; };
+      opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 20480; output = 4096; };
     };
     deepseek-7b = {
       port = 8085; binary = "upstream";
