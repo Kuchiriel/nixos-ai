@@ -2020,63 +2020,38 @@ def main():
                 # wake word; evolução própria = classes no classificador
                 # LoRA (retrain Kaggle — coleção de exemplos nos logs).
                 _hl = heard.lower().strip(" .,!?")
-                _addr = _addressed(heard)
-                # (26/10 10:05, dono: "cala a boca SEM 'Jarvis' não
-                # mutou" — o gate de wake word era o bug; o CLASSIFIER
-                # de intência é a precisão certa: distingue comando do
-                # dono de citação da TV. Trigger = cue-words (recall
-                # largo) → LLM+GBNF decide (precisão). Hardcode vira
-                # SÓ fallback técnico (sem exigir wake word).
-                _cue = any(k in _hl for k in (
-                    "cala", "quiet", "mudo", "muda", "silêncio", "boca",
-                    "fala de novo", "pode falar", "desmuta", "shut up",
-                    "para de falar", "pare de falar", "bico"))
-                _ilab = None
-                if _cue and heard != NOVOICE and n_words >= 1:
-                    _ilab = classify_intent(base, heard)
-                if _ilab:
-                    log(f"[{ts()}] INTENT: llm={_ilab} "
-                        f"mute:{MUTE['on']} {heard[:36]!r}")
-                    if _ilab == "UNMUTE" and MUTE["on"]:
+                # (26/10 10:15, REVERT) classifier LLM SAIU do hot path:
+                # cada segmento de TV com cue comum ('fala', 'boca')
+                # pagava 300ms+ de LLM e travava o loop (latência ENORME,
+                # dono). Mute = hardcode instantâneo (0ms) SEM wake word
+                # — falso positivo raro da TV é menos pior que ignorar o
+                # comando do dono (assimetria de custo). classify_intent
+                # fica p/ análise offline/battery (dono: classifiers >
+                # hardcode — mas no caminho CERTO: offline, depois do
+                # dado, com orçamento de latência medido).
+                if any(k in _hl for k in (
+                        "pode falar", "voltar a falar", "volta a falar",
+                        "fala de novo", "desmuta", "pode falar de novo")):
+                    if MUTE["on"]:
                         MUTE["on"] = False
-                        log(f"[{ts()}] UNMUTE (llm) — {heard[:40]!r}")
+                        log(f"[{ts()}] UNMUTE — {heard[:40]!r}")
                         tts.say("Pode falar, senhor.")
-                        heard = NOVOICE
-                    elif (_ilab == "MUTE" and not MUTE["on"]):
-                        MUTE["on"] = True
-                        log(f"[{ts()}] MUTE ON (llm) — {heard[:40]!r}")
-                        try:
-                            if tts._aplay and tts._aplay.poll() is None:
-                                tts._aplay.kill()
-                        except Exception:
-                            pass
-                        heard = NOVOICE
-                elif _cue:
-                    # FALLBACK técnico (LLM falhou): lista legada SEM
-                    # exigir wake word — falso positivo da TV é menos
-                    # pior que ignorar o comando direto do dono.
-                    if any(k in _hl for k in (
-                            "pode falar", "voltar a falar",
-                            "volta a falar", "fala de novo", "desmuta")):
-                        if MUTE["on"]:
-                            MUTE["on"] = False
-                            log(f"[{ts()}] UNMUTE (fallback) — {heard[:40]!r}")
-                            tts.say("Pode falar, senhor.")
-                        heard = NOVOICE
-                    elif (not MUTE["on"] and n_words >= 2 and any(
-                            k in _hl for k in (
-                            "cala a boca", "cala boca", "fica calado",
-                            "quieto", "fica mudo", "bico fechado",
-                            "para de falar", "pare de falar",
-                            "não fala mais", "shut up"))):
-                        MUTE["on"] = True
-                        log(f"[{ts()}] MUTE ON (fallback) — {heard[:40]!r}")
-                        try:
-                            if tts._aplay and tts._aplay.poll() is None:
-                                tts._aplay.kill()
-                        except Exception:
-                            pass
-                        heard = NOVOICE
+                    heard = NOVOICE
+                elif (not MUTE["on"] and n_words >= 2 and any(
+                        k in _hl for k in (
+                        "cala a boca", "cala boca", "fica calado",
+                        "quieto", "fica mudo", "bico fechado",
+                        "para de falar", "pare de falar",
+                        "não fala mais", "shut up", "silêncio",
+                        "cala aí", "chega de falar"))):
+                    MUTE["on"] = True
+                    log(f"[{ts()}] MUTE ON — {heard[:40]!r}")
+                    try:
+                        if tts._aplay and tts._aplay.poll() is None:
+                            tts._aplay.kill()
+                    except Exception:
+                        pass
+                    heard = NOVOICE
                 # (03:35, direção do dono) SINAL SOCIAL entre colchetes
                 # ([risadas], [aplausos], [música]): NÃO é pergunta — pula
                 # o classificador (economiza 150ms) e não força resposta;
