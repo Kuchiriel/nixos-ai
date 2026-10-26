@@ -315,15 +315,20 @@ in rec {
       # (classificador RESPOND/WAIT/SILENCE/BARGE) exige o stock.
       # (24/10, incidente 04:03) mínimo de VRAM LIVRE p/ o vram-guard:
       # modelo 2.7G + KV ~0.6G + buffers (cabe c/ whisper 0.9G + embed).
-      # (26/10) 16384→32768: opencode+MCP precisa de ~10k+; voz usa ~6k.
-      # fa OFF (LoRA) = buffer escala com ctx; 32k ≈ 1GB buffer.
-      vramMinMiB = 4500;
+      # (26/10 09:45, OOM MEDIIDO) 32768 FALHOU na 6GB com whisper
+      # co-residente: KV f16 @32k (~600MB) ×2 (MTP draft context!) +
+      # buffer fa=false (~1GB @32k) + modelo 2.7G = ~4.9G; com
+      # whisper(0.9)+embed(0.2)+desktop = 6.3G > 6.1G → "failed to
+      # allocate buffer for kv cache". Volto pro 16k PROVADO enquanto o
+      # HB decide: 20k+MTP (~4.1G, cabe c/ ~600MB margem) OU 32k sem MTP
+      # (perde +24% TG). vramMin volta pro 4000 real do 16k.
+      vramMinMiB = 4000;
       port = 8092; binary = "stock";
       # ARQUIVO MTP (não o base!): NextN real, +24% TG. Rebuild sem isto
       # voltaria a 8092 sem speculative decoding (regressão silenciosa).
       modelFile = "/home/nixos/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
       # KV f16 híbrido (8/32 layers) ≈ 600MB @32k.
-      threads = 6; ctxSize = 32768; batchSize = 256; ubatch = 256;
+      threads = 6; ctxSize = 16384; batchSize = 256; ubatch = 256;
       gpuLayers = 99; moeFlags = "";
       # (19/10) LoRA+flash-attn incompatíveis (log do server, ver
       # duplex-35b) → fa off. KV quantizado (q4_0) EXIGE fa → KV f16.
