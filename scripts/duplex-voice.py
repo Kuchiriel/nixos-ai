@@ -248,6 +248,52 @@ CLASS_SYS = ("Você é o JARVIS, assistente de voz. Classifique o turno do "
              "(backchannel/ruído), ou BARGE (o dono interrompeu sua fala).")
 CLASS_LABELS = ("RESPOND", "WAIT", "SILENCE", "BARGE")
 
+# ── (26/10, dono: "tudo hardcoded vira classificador") ────────────────
+# INTENÇÃO via LLM próprio + GBNF: grammar-constrained decode = output
+# SEMPRE ∈ enum (sem hallucination — a lição estrutural do PoC Needle,
+# com o modelo que SABE PT-BR). Substitui os lists hardcodes: eh_comando,
+# is_backchannel, mute/unmute phrases, social signals, eh_pergunta.
+INTENT_GRAMMAR = (
+    'root ::= "MUTE" | "UNMUTE" | "STOP" | "BACKCHANNEL" | "SOCIAL" '
+    '| "QUESTION" | "COMMAND" | "NONE"')
+INTENT_SYS = (
+    "Você classifica a INTENÇÃO de uma fala num assistente de voz PT-BR. "
+    "Responda com UMA etiqueta, nada mais:\n"
+    "- MUTE: mandar calar até nova ordem (cala a boca, fica mudo, quieto)\n"
+    "- UNMUTE: liberar a fala de volta (pode falar, volta a conversar)\n"
+    "- STOP: parar a ação atual (pare, para, stop, cancela)\n"
+    "- BACKCHANNEL: reação curta sem pedido (obrigado, valeu, ok, hum)\n"
+    "- SOCIAL: som ambiente transcrito ([risadas], [música], aplausos)\n"
+    "- QUESTION: pergunta ao assistente\n"
+    "- COMMAND: ordem de ação (liga, desliga, toca, abre, fecha)\n"
+    "- NONE: nenhuma\n"
+    "Fala: 'Jarvis, cala a boca' → MUTE\n"
+    "Fala: 'obrigado' → BACKCHANNEL\n"
+    "Fala: 'Jarvis, pode falar' → UNMUTE\n"
+    "Fala: '[música]' → SOCIAL\n"
+    "Fala: 'para com isso agora' → STOP\n"
+    "Fala: 'Jarvis, que horas são?' → QUESTION\n\n")
+
+def classify_intent(base, utt):
+    """Intenção via 4B+GBNF (enum garantido). None = falha técnica →
+    caller cai no hardcode legado. ~150-250ms (comparável ao LoRA)."""
+    try:
+        j = http(base + "/completion", {
+            "prompt": (f"<|im_start|>system\n{INTENT_SYS}<|im_end|>\n"
+                       f"<|im_start|>user\nFala: {utt[:200]!r} →<|im_end|>\n"
+                       f"<|im_start|>assistant\n"),
+            "n_predict": 4, "temperature": 0,
+            "grammar": INTENT_GRAMMAR,
+            "stop": ["<|im_end|>", "\n"], "cache_prompt": True})
+        out = str(j.get("content", "")).strip().upper()
+        for lab in ("MUTE", "UNMUTE", "STOP", "BACKCHANNEL",
+                    "SOCIAL", "QUESTION", "COMMAND", "NONE"):
+            if out.startswith(lab):
+                return lab
+        return None
+    except Exception:
+        return None
+
 def classify_turn(base, utt):
     """Label do turno via LoRA; None = falha (caller cai no gate antigo)."""
     try:
@@ -1967,20 +2013,44 @@ def main():
                 # (26/10, dono) MUTE PERSISTENTE: 'cala a boca' silencia
                 # ATÉ 'pode falar' — não é o pare momentâneo. O unmute é
                 # checado ANTES da supressão (mutado ainda ouve o unmute).
+                # (26/10 09:00, dono apontou) MUTE/UNMUTE exige
+                # ENDEREÇAMENTO ('jarvis' fuzzy) — sem isso um 'cala a
+                # boca' citado na TV silenciaria o JARVIS (falso
+                # positivo real). Hardcode honesto: lista de frases +
+                # wake word; evolução própria = classes no classificador
+                # LoRA (retrain Kaggle — coleção de exemplos nos logs).
                 _hl = heard.lower().strip(" .,!?")
-                if any(k in _hl for k in ("pode falar", "voltar a falar",
-                                          "volta a falar", "fala de novo",
-                                          "desmuta", "pode falar de novo")):
+                _addr = _addressed(heard)
+                # (26/10, dono: classifiers > hardcode) SHADOW da inteção:
+                # LLM+GBNF classifica em paralelo; hardcode ATUA, o log
+                # coleta o par p/ o swap com dado (bateria HB valida).
+                if _addr and heard != NOVOICE and n_words >= 1:
+                    _ilab = classify_intent(base, heard)
+                    if _ilab:
+                        log(f"[{ts()}] INTENT shadow: llm={_ilab} "
+                            f"hard_state=MUTE:{MUTE['on']} "
+                            f"{heard[:36]!r}")
+                if _addr and any(k in _hl for k in (
+                        "pode falar", "voltar a falar", "volta a falar",
+                        "fala de novo", "desmuta", "pode falar de novo",
+                        "pode continuar", "libera o som", "voltar a "
+                        "conversar")):
                     if MUTE["on"]:
                         MUTE["on"] = False
                         log(f"[{ts()}] UNMUTE — {heard[:40]!r}")
                         tts.say("Pode falar, senhor.")
                     heard = NOVOICE
-                elif (not MUTE["on"] and n_words >= 2 and any(
+                elif (MUTE["on"] and _addr and any(
+                        k in _hl for k in ("fala de novo", "pode falar"))):
+                    heard = NOVOICE   # unmute repetido em armed state
+                elif (not MUTE["on"] and _addr and n_words >= 2 and any(
                         k in _hl for k in ("cala a boca", "cala boca",
                                            "fica calado", "ficar calado",
                                            "shut up", "quieto agora",
-                                           "silêncio jarvis", "mudo"))):
+                                           "silêncio jarvis", "fica mudo",
+                                           "bico fechado", "fecha o bico",
+                                           "para de falar", "não fala mais",
+                                           "só fala quando eu mandar"))):
                     MUTE["on"] = True
                     log(f"[{ts()}] MUTE ON — {heard[:40]!r}")
                     try:
