@@ -87,6 +87,9 @@ services.avahi = {
     git
     curl
     jq
+    # (26/10) Proton VPN — GUI + WireGuard
+    proton-vpn
+    wireguard-tools
     htop
     ethtool
     grim
@@ -273,6 +276,12 @@ services.avahi = {
   networking.nameservers = ["8.8.8.8" "1.1.1.1"];
   networking.firewall.allowedTCPPorts = [22 8080 8081 4000 5353 8099 47984 47989 47990 48010]; # 8099 = karaok cast (letra+som p/ TV); 47984-48010 = Sunshine/Moonlight
   networking.firewall.allowedUDPPorts = [47998 47999 48000 48002 48010]; # Sunshine/Moonlight stream
+
+  # (26/10, dono pediu) PROTON VPN — checkReversePath = false é REQUERIDO
+  # pelo Proton VPN no NixOS (sem isso o routing falha). ATENÇÃO: Tailscale
+  # também usa WireGuard — sem conflito (interfaces separadas), mas as duas
+  # VPNs podem competir por rotas se ambas ativas.
+  networking.firewall.checkReversePath = false;
 
   # opencode serve — controle da AGENTE pelo celular, sem TTY (2026-10-02,
   # pedido do dono). Aberta SÓ no tailscale0, nunca na LAN: o tailnet já é
