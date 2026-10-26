@@ -983,7 +983,11 @@ def in_cooldown():
     # o is_tts_self (ID-eco: casa com a própria fala = descarta; fala
     # NOVA passa = classify → BARGE/RESPOND mata o aplay). Cooldown =
     # só a cauda pós-fim (o eco do tail chega depois do LAST_TTS_END).
-    return time.monotonic() - LAST_TTS_END < 4.0
+    # (26/10 10:30, DADO: comandos do dono descartados no cooldown —
+    # 'Você consegue calar a boca?' morto aqui) cauda de eco real é
+    # ~1s; 4s = blackout de TODO input pós-TTS. 1.2s + is_tts_self
+    # textual cobrem o eco sem matar o dono.
+    return time.monotonic() - LAST_TTS_END < 1.2
 
 def is_self_echo(txt):
     import difflib
@@ -1993,7 +1997,20 @@ def main():
                 if heard and heard != NOVOICE:
                     RECENT_HEARD.append((time.monotonic(), heard[:200]))
                     del RECENT_HEARD[:-20]
-                if in_cooldown():
+                # (26/10, dono: "cala a boca de jeito nenhum") comando
+                # de MUTE/UNMUTE/pare tem PRIORIDADE sobre o cooldown —
+                # o dono fala POR CIMA do modelo e o comando TEM que
+                # pegar (era comido aqui: '...Cala ' descartado).
+                _hl_cmd = heard.lower().strip(" .,!?")
+                _is_ctrl = any(k in _hl_cmd for k in (
+                    "cala a boca", "cala boca", "quieto", "fica mudo",
+                    "silêncio", "shut up", "para de falar",
+                    "pare de falar", "não fala mais", "fica calado",
+                    "pode falar", "fala de novo", "desmuta",
+                    "voltar a falar", "volta a falar", "chega de falar"))
+                if _is_ctrl:
+                    log(f"[{ts()}] CTRL durante cooldown — passa: {heard[:40]!r}")
+                elif in_cooldown():
                     log(f"[{ts()}] cooldown pós-TTS — descartado: {heard[:40]!r}")
                     heard = NOVOICE
                 elif is_tts_self(heard):
