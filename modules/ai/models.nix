@@ -263,7 +263,11 @@ in rec {
     uncensored-35b = {
       port = 8084; binary = "ik";
       modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
-      threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
+      # (26/10, dono: "contexto estoura na 1a mensagem") 8192→32768:
+      # jarvis MCP tools ~3-5k tokens + system prompt ~2k = ~7k antes
+      # de QUALQUER conversa. 8k não sobrava nada. Com fa=true e
+      # ctk=q4_0 o KV escala eficientemente (~200MB @32k).
+      threads = 6; ctxSize = 32768; batchSize = 512; ubatch = 512;
       gpuLayers = 45; moeFlags = "--n-cpu-moe 35";
       fa = true; ctk = "q4_0"; ctv = "q4_0";
       extraArgs = [ "--parallel" "1" "--jinja" "--mlock" "--reasoning" "off" ];
@@ -271,7 +275,7 @@ in rec {
       wanted = false;  # default agora é o 4B-MTP (04/10, pedido do dono)
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = modelFile (o server anuncia o path, sem --alias).
-      opencode = { key = "local-uncensored"; name = "Qwen MoE 35B Uncensored Local"; context = 8192; output = 2048; };
+      opencode = { key = "local-uncensored"; name = "Qwen MoE 35B Uncensored Local"; context = 32768; output = 4096; };
     };
     # DUPLEX VOICE LANE (17/10, dono: modo voz full-duplex; ver
     # docs/VOZ-FULL-DUPLEX.md): 35B UD + MicroTurn-Duplex LoRA
@@ -310,21 +314,19 @@ in rec {
       # 0.5.0 NÃO tem --lora nem /lora-adapters. O LoRA micro-turn
       # (classificador RESPOND/WAIT/SILENCE/BARGE) exige o stock.
       # (24/10, incidente 04:03) mínimo de VRAM LIVRE p/ o vram-guard:
-      # modelo 2.7G + KV ~0.3G + buffers (cabe c/ whisper 0.9G + embed).
-      vramMinMiB = 4000;
+      # modelo 2.7G + KV ~0.6G + buffers (cabe c/ whisper 0.9G + embed).
+      # (26/10) 16384→32768: opencode+MCP precisa de ~10k+; voz usa ~6k.
+      # fa OFF (LoRA) = buffer escala com ctx; 32k ≈ 1GB buffer.
+      vramMinMiB = 4500;
       port = 8092; binary = "stock";
       # ARQUIVO MTP (não o base!): NextN real, +24% TG. Rebuild sem isto
       # voltaria a 8092 sem speculative decoding (regressão silenciosa).
       modelFile = "/home/nixos/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
-      # ctx 16384 (era 65536, 19/10): com fa OFF (LoRA) o buffer de
-      # compute escala com n_ctx — 64k estourava VRAM (2GB+ num único
-      # alloc). Voz usa ~6k tok (hist 60 + tools); 16k sobra.
-      # KV f16 híbrido (8/32 layers) ≈ 300MB @16k.
-      threads = 6; ctxSize = 16384; batchSize = 256; ubatch = 256;
+      # KV f16 híbrido (8/32 layers) ≈ 600MB @32k.
+      threads = 6; ctxSize = 32768; batchSize = 256; ubatch = 256;
       gpuLayers = 99; moeFlags = "";
       # (19/10) LoRA+flash-attn incompatíveis (log do server, ver
-      # duplex-35b) → fa off. KV quantizado (q4_0) EXIGE fa → KV f16
-      # (≈1.2GB @64k híbrido; cabe: 2.7 modelo + 1.2 KV + buffers).
+      # duplex-35b) → fa off. KV quantizado (q4_0) EXIGE fa → KV f16.
       fa = false; ctk = "f16"; ctv = "f16";
       # LoRA init sem aplicar: o cliente liga/desliga via /lora-adapters
       # SÓ nos requests do classificador (chat com tools fica limpo).
@@ -335,7 +337,7 @@ in rec {
       wanted = false;  # on-demand; router (8080/bonsai) is default for harness/agents; start 8092 when voice needs PT-BR
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = modelFile (o server anuncia o path, sem --alias).
-      opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 16384; output = 4096; };
+      opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 32768; output = 4096; };
     };
     deepseek-7b = {
       port = 8085; binary = "upstream";
