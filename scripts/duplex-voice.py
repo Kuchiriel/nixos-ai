@@ -358,6 +358,21 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
         if SPK_STATE["voices"] or (spk and spk != "?"):
             _sys += (f"\n[SALA AGORA: {SPK_STATE['voices']} voz(es) ativa(s); "
                      f"última voz ouvi: {SPK_STATE['last_spk']}]\n")
+        # (26/10, dono: 'esquece o que eu falei segundos antes')
+        # CONTEXTO OUVIDO: transcript passivo dos últimos 90s — mesmo
+        # turnos descartados (WAIT/SILENCE/backchannel) aparecem aqui;
+        # o modelo VÊ o que foi dito agora, sem depender de ter virado
+        # turno completo no histórico.
+        try:
+            _now = time.monotonic()
+            _ctx = [t for (_t, t) in RECENT_HEARD
+                    if _now - _t < 90 and t != heard]
+            if _ctx:
+                _sys += ("\n=== CONTEXTO OUVIDO (últimos 90s, passivo) ===\n"
+                         + "\n".join(f"- {c[:120]}" for c in _ctx[-5:])
+                         + "\n")
+        except Exception:
+            pass
         if MEM_AVAILABLE and len(heard.split()) >= 2:
             try:
                 _heard_clean = heard.lower().replace("jarvis", "").replace(",", " ")
@@ -871,6 +886,12 @@ FEED_STATS = {"fed": 0, "blocked": 0, "quiet": 0, "corr": []}
 TTS_SELF = {"id": 0, "text": "", "recent": []}   # recent: [(text, t_end)]
 # (21/10 SPEAKER-ID) estado de vozes ao vivo (asrd conta/identifica)
 SPK_STATE = {"voices": 0, "last_spk": "?"}
+# (26/10, dono) MUTE persistente: 'cala a boca' silencia ATÉ 'pode falar'
+MUTE = {"on": False}
+# (26/10, dono: 'esquece o que eu falei segundos antes') transcript
+# recente ouvido — mesmo turnos descartados (WAIT/SILENCE) entram no
+# contexto do modelo como passivo; ele VÊ o que foi dito agora.
+RECENT_HEARD = []   # [(monotonic, text)]
 
 def tts_self_register(text):
     TTS_SELF["id"] += 1
@@ -1920,6 +1941,12 @@ def main():
                     and time.monotonic() >= merge_deadline):
                 heard = " ".join(pending)
                 pending.clear()
+                # (26/10) transcript recente: TUDO que completou merge
+                # entra aqui — mesmo se for descartado como SILENCE/eco
+                # depois, o modelo verá no contexto passivo.
+                if heard and heard != NOVOICE:
+                    RECENT_HEARD.append((time.monotonic(), heard[:200]))
+                    del RECENT_HEARD[:-20]
                 if in_cooldown():
                     log(f"[{ts()}] cooldown pós-TTS — descartado: {heard[:40]!r}")
                     heard = NOVOICE
@@ -1937,6 +1964,31 @@ def main():
                 is_cmd = heard.lower().strip(".,!?") in (
                     "pare", "para", "stop", "jarvis", "calaboka", "silêncio",
                     "cala boca", "quieto")
+                # (26/10, dono) MUTE PERSISTENTE: 'cala a boca' silencia
+                # ATÉ 'pode falar' — não é o pare momentâneo. O unmute é
+                # checado ANTES da supressão (mutado ainda ouve o unmute).
+                _hl = heard.lower().strip(" .,!?")
+                if any(k in _hl for k in ("pode falar", "voltar a falar",
+                                          "volta a falar", "fala de novo",
+                                          "desmuta", "pode falar de novo")):
+                    if MUTE["on"]:
+                        MUTE["on"] = False
+                        log(f"[{ts()}] UNMUTE — {heard[:40]!r}")
+                        tts.say("Pode falar, senhor.")
+                    heard = NOVOICE
+                elif (not MUTE["on"] and n_words >= 2 and any(
+                        k in _hl for k in ("cala a boca", "cala boca",
+                                           "fica calado", "ficar calado",
+                                           "shut up", "quieto agora",
+                                           "silêncio jarvis", "mudo"))):
+                    MUTE["on"] = True
+                    log(f"[{ts()}] MUTE ON — {heard[:40]!r}")
+                    try:
+                        if tts._aplay and tts._aplay.poll() is None:
+                            tts._aplay.kill()
+                    except Exception:
+                        pass
+                    heard = NOVOICE
                 # (03:35, direção do dono) SINAL SOCIAL entre colchetes
                 # ([risadas], [aplausos], [música]): NÃO é pergunta — pula
                 # o classificador (economiza 150ms) e não força resposta;
@@ -1963,6 +2015,12 @@ def main():
                     log(f"[{ts()}] backchannel obrigado — silêncio: {heard[:30]!r}")
                     heard = NOVOICE
                 else:
+                    if MUTE["on"]:
+                        # (26/10) mutado: sem classify (150ms poupados),
+                        # sem resposta — só o unmute (já pego acima).
+                        log(f"[{ts()}] MUTED — ignora: {heard[:40]!r}")
+                        heard = NOVOICE
+                        continue
                     # (19/10) CLASSIFICADOR LoRA no lugar das heurísticas:
                     # RESPOND=chat · WAIT=segura · SILENCE=descarta ·
                     # BARGE=mata o TTS. Falha técnica → gate antigo.
