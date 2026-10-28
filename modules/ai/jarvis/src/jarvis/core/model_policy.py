@@ -363,93 +363,68 @@ def select_model(
     }
 
 
-# Cascata por API (re-probe AO VIVO 11/10/2026 — ver probe /tmp/probe4,5):
-# Chat completions de verdade contra a key de /etc/litellm.env. Resultado:
-#   ✅ GROQ openai/gpt-oss-120b (respondeu; finish=length com 5 tok — ok)
-#   ✅ GROQ qwen/qwen3.8-27b ('OK') — novo modelo no catálogo
-#   ✅ OpenRouter :free → nvidia/nemotron-3.5-lightning:free / qwen3.8-flash
-#      (o catálogo de :free MUDOU: gpt-oss-120b:free e llama-3.3-70b:free
-#      tornaram-se pagos; qwen3-coder:free desnecessário agora)
-#   ❌ NVIDIA NIM direto: nemotron v1/v1.5 410 Gone; dar立足 429/timeout
-#   ❌ Gemini: 429 quota exceeded na key atual
-#   ❌ Cerebras: 404 no llama-3.3-70b; gpt-oss-120b → 402 payment
-#   ❌ Together: 401 invalid key
-# Camada → ordem de fallback (provider, model, base_url, env_key).
-# Uso: quando o modelo local trava (STUCK) ou cai — o harness tenta cada
-# entrada em ordem. Chaves via env (abstração /etc/litellm.env).
-CASCADE_MAP: dict[str, list[tuple[str, str, str, str]]] = {
-    # dev/coding-long: groq primeiro (LPU rápido, gpt-oss-120b é 120B forte).
-    # OpenRouter :free = segunda opinião (rate 50/dia, não estourar).
-    "coding-long": [
-        ("zen", "muse-spark-1.3", "https://api.openrouter.ai/api",
-         "OPENCODE_CONFIG"),
-        ("zen", "union-alpha", "https://api.openrouter.ai/api",
-         "OPENCODE_CONFIG"),
-        ("zen", "muse-spark-1.2", "https://api.openrouter.ai/api",
-         "OPENCODE_CONFIG"),
-    ],
-    "dev": [
-        ("openrouter", "nex-n2.5-pro", "https://openrouter.ai/api",
-         "OPENROUTER_API_KEY"),
-        ("zen", "mimo-v2.5", "https://api.openrouter.ai/api",
-         "OPENCODE_CONFIG"),
-        ("openrouter", "nex-n2.5-mini", "https://openrouter.ai/api",
-         "OPENROUTER_API_KEY"),
-        # 29/09 (E-cell Harbor): validado via RemoteBackend sanitizado
-        # (finish_reason dava 400; sanitize resolveu). 11/10: re-probe OK.
-        ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai",
-         "GROQ_API_KEY"),
-        # 11/10 (re-probe AO VIVO): qwen3.8-27b (novo) e nemotron-3.5-lightning
-        # :free (OpenRouter :free whatsoever) OK. NIM direto 410 Gone.
-        ("groq", "qwen/qwen3.8-27b", "https://api.groq.com/openai",
-         "GROQ_API_KEY"),
-        ("openrouter", "nvidia/nemotron-3.5-lightning:free",
-         "https://openrouter.ai/api", "OPENROUTER_API_KEY"),
-    ],
-    "batch": [
-        # 11/10: NIM direto fora (410 Gone nos nemotron; timeout no
-        # deepseek-v4.1-flash). OpenRouter :free é o caminho batch (50/dia).
-        ("openrouter", "qwen/qwen3.8-flash", "https://openrouter.ai/api",
-         "OPENROUTER_API_KEY"),
-        ("openrouter", "nvidia/nemotron-3.5-lightning:free",
-         "https://openrouter.ai/api", "OPENROUTER_API_KEY"),
-        # 15/10: freellmapi/auto como 3º — router 34 providers com failover
-        # embutido; valida live probe (RemoteBackend, finish=stop).
-        ("freellmapi", "auto", "http://127.0.0.1:3001",
-         "FREELLMAPI_API_KEY"),
-    ],
-    "mechanical": [
-        ("zen", "nemotron-3.5-lightning", "https://api.openrouter.ai/api",
-         "OPENCODE_CONFIG"),
-        ("zen", "mimo-v2.5", "https://api.openrouter.ai/api",
-         "OPENCODE_CONFIG"),
-    ],
-    "docs": [
-        # 11/10: nemotron-3-ultra (NIM) 410 Gone. groq gpt-oss-120b no lugar.
-        ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai",
-         "GROQ_API_KEY"),
-        ("groq", "qwen/qwen3.8-27b", "https://api.groq.com/openai",
-         "GROQ_API_KEY"),
-    ],
-    "classify": [
-        # 15/10: freellmapi/auto (:3001) ENTROU como 2º fallback — router
-        # 34 free-providers com failover embutido (probeado ao vivo: OK v/
-        # groq/openai/gpt-oss-safeguard-20b em 358ms). Só como fallback:
-        # dependência de outro serviço local (freellmapi@docker).
-        ("groq", "qwen/qwen3.8-27b", "https://api.groq.com/openai",
-         "GROQ_API_KEY"),
-        ("freellmapi", "auto", "http://127.0.0.1:3001",
-         "FREELLMAPI_API_KEY"),
-    ],
-    "rag": [
-        ("openrouter", "ling-3-flash-sante", "https://openrouter.ai/api",
-         "OPENROUTER_API_KEY"),
-    ],
-    "vision": [
-        ("openrouter", "ling-3-flash-vl", "https://openrouter.ai/api",
-         "OPENROUTER_API_KEY"),
-    ],
-}
+# ── CASCADE_MAP: fonte única = free-providers.json ──────────────────
+# (28/10, dono: "fonte única onde ambos sistemas bebem"). O JSON
+# modules/ai/free-providers.json é a ÚNICA fonte de verdade — consumido
+# por ESTE módulo (CASCADE_MAP) e pelo home.nix (opencode providers).
+# NÃO editar CASCADE_MAP hardcoded: editar o JSON e re-testar.
+#
+# Formato do JSON: providers.<name>.{base_url,env_key,requires_headers,models[]}
+#                 cascade_layers.<layer> = [{provider, model}, ...]
+#
+# Testado ao vivo 28/10/2026: groq ✅, nvidia ✅, cloudflare ✅,
+# gemini ✅, openrouter ✅ (com headers), ovhcloud ✅ (anon),
+# kilocode ✅ (anon), llm7 ✅ (anon). Desativados: cerebras (payment),
+# together (bad key), hf (no credits), sambanova (high demand).
+
+import json as _json
+from pathlib import Path as _Path
+
+_FREE_PROVIDERS_PATH = _Path(__file__).parent.parent.parent.parent.parent / "free-providers.json"
+
+
+def _load_free_providers() -> dict:
+    """Carrega free-providers.json (fonte única). Fallback = dict vazio."""
+    try:
+        return _json.loads(_FREE_PROVIDERS_PATH.read_text())
+    except (OSError, _json.JSONDecodeError):
+        return {"providers": {}, "cascade_layers": {}}
+
+
+def _build_cascade_map() -> dict[str, list[tuple[str, str, str, str]]]:
+    """Constrói CASCADE_MAP do free-providers.json.
+
+    Retorna: {layer: [(provider, model, base_url, env_key), ...]}
+    base_url e env_key vêm do provider definition no JSON.
+    """
+    data = _load_free_providers()
+    providers = data.get("providers", {})
+    layers = data.get("cascade_layers", {})
+
+    result: dict[str, list[tuple[str, str, str, str]]] = {}
+    for layer_name, entries in layers.items():
+        if layer_name.startswith("_"):
+            continue  # pula chaves de comentário
+        layer_list: list[tuple[str, str, str, str]] = []
+        for entry in entries:
+            prov_name = entry.get("provider", "")
+            model_id = entry.get("model", "")
+            prov = providers.get(prov_name, {})
+            base_url = prov.get("base_url", "")
+            env_key = prov.get("env_key") or ""
+            # Substitui placeholder de account_id se presente
+            if "{CLOUDFLARE_ACCOUNT_ID}" in base_url:
+                import os
+                acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+                base_url = base_url.replace("{CLOUDFLARE_ACCOUNT_ID}", acct)
+            layer_list.append((prov_name, model_id, base_url, env_key))
+        result[layer_name] = layer_list
+    return result
+
+
+# CASCADE_MAP construído do JSON (fonte única). Mantém compat com o
+# formato antigo: {layer: [(provider, model, base_url, env_key), ...]}
+CASCADE_MAP: dict[str, list[tuple[str, str, str, str]]] = _build_cascade_map()
 
 
 def cascade_for(layer: str) -> list[tuple[str, str, str, str]]:
@@ -541,15 +516,18 @@ def classify_difficulty(prompt: str, context_len: int = 0) -> str:
     return "moderate"
 
 
-# Cloud providers que FUNCIONAM hoje (re-probe 11/10 + 15/10 em CASCADE_MAP).
-# Ordem: groq (LPU rápido, gpt-oss-120b forte) > openrouter :free > freellmapi.
-_HYBRID_CLOUD = [
+# Cloud providers que FUNCIONAM hoje (fonte única: free-providers.json).
+# Ordem vem do cascade_layers.dev no JSON — testado ao vivo 28/10.
+# Mantido como fallback se o JSON não carregar.
+_HYBRID_CLOUD_FALLBACK = [
     ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai", "GROQ_API_KEY"),
     ("groq", "qwen/qwen3.8-27b", "https://api.groq.com/openai", "GROQ_API_KEY"),
-    ("openrouter", "nvidia/nemotron-3.5-lightning:free", "https://openrouter.ai/api", "OPENROUTER_API_KEY"),
-    ("openrouter", "qwen/qwen3.8-flash", "https://openrouter.ai/api", "OPENROUTER_API_KEY"),
-    ("freellmapi", "auto", "http://127.0.0.1:3001", "FREELLMAPI_API_KEY"),
+    ("cloudflare", "@cf/openai/gpt-oss-120b", "https://api.cloudflare.com/client/v4/accounts", "CLOUDFLARE_API_TOKEN"),
+    ("openrouter", "nvidia/nemotron-3.5-lightning:free", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
 ]
+
+# Construído do JSON (fonte única). Usa cascade_layers.dev como fila.
+_HYBRID_CLOUD = CASCADE_MAP.get("dev", _HYBRID_CLOUD_FALLBACK)
 
 
 def hybrid_route(

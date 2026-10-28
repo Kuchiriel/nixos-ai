@@ -4,7 +4,54 @@
   pkgs,
   inputs,
   ...
-}: {
+}: let
+  # ══════════════════════════════════════════════════════════════
+  # FONTE ÚNICA: modules/ai/free-providers.json
+  # Consumido por: model_policy.py (CASCADE_MAP) + ESTE arquivo.
+  # NÃO editar providers cloud hardcoded abaixo — editar o JSON.
+  # Testado ao vivo 28/10/2026 (ver JSON p/ detalhes por modelo).
+  # ══════════════════════════════════════════════════════════════
+  freeProviders = builtins.fromJSON (builtins.readFile ../modules/ai/free-providers.json);
+
+  # Gera config opencode provider a partir do JSON.
+  # Retorna: { <name> = { npm, options, models }; ... }
+  mkCloudProvider = name: prov: let
+    # builtins.getEnv retorna "" em flake pura — usar sintaxe {env:VAR} do
+    # opencode que expande em runtime. Converte {VAR} → {env:VAR}.
+    # Ex.: {CLOUDFLARE_ACCOUNT_ID} → {env:CLOUDFLARE_ACCOUNT_ID}.
+    baseURL = builtins.replaceStrings
+      ["{CLOUDFLARE_ACCOUNT_ID}"]
+      ["{env:CLOUDFLARE_ACCOUNT_ID}"]
+      prov.base_url;
+    apiKeyEnv = if prov.env_key != null then "{env:${prov.env_key}}" else null;
+    headers = if prov.requires_headers or false then prov.headers else {};
+    mkModel = m: {
+      name = m.name;
+      limit = {
+        context = m.context;
+        output = m.output;
+      };
+    };
+    activeModels = builtins.listToAttrs
+      (map
+        (m: {
+          name = m.id;
+          value = mkModel m;
+        })
+        (builtins.filter (m: m.status == "active" || m.status == "rate_limited") prov.models));
+  in {
+    npm = "@ai-sdk/openai-compatible";
+    options =
+      {
+        baseURL = baseURL;
+      }
+      // (if apiKeyEnv != null then {apiKey = apiKeyEnv;} else {})
+      // (if headers != {} then {headers = headers;} else {});
+    models = activeModels;
+  };
+
+  cloudProviders = builtins.mapAttrs mkCloudProvider freeProviders.providers;
+in {
   imports = [
     ./modules
     ./home-packages.nix
@@ -314,477 +361,12 @@
           };
         };
 
-        
-        # ADICIONADO: Provedor oficial da Google para rodar na nuvem estável
-        # Auditoria 08/10: catálogo real via API (45 modelos); free tier
-        # confirma flash/flash-lite/gemma. GEMINI_API_KEY do env estava podre
-        # (API_KEY_INVALID) — corrigida c/ a chave válida do auth.json.
-        google = {
-          npm = "@ai-sdk/google";
-          models = {
-            "gemini-2.5-flash" = {
-              name = "Gemini 2.5 Flash Cloud";
-            };
-            "gemini-2.5-flash-lite" = {
-              name = "Gemini 2.5 Flash Lite Cloud";
-            };
-            "gemini-3.5-flash" = {
-              name = "Gemini 3.5 Flash Cloud";
-            };
-            "gemma-4-31b-it" = {
-              name = "Gemma 4 31B IT (free)";
-            };
-          };
-        };
-        
-        # ADICIONADO: OpenRouter (cascade/fallback free tier)
-        openrouter = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "https://openrouter.ai/api/v1";
-            # {env:VAR} é a sintaxe que o opencode expande (NÃO ${VAR}).
-            apiKey = "{env:OPENROUTER_API_KEY}";
-            headers = {
-              "HTTP-Referer" = "http://localhost:5173";
-              "X-Title" = "Jarvis WebUI";
-            };
-          };
-          models = {
-            # Slugs :free VERIFICADOS no catálogo real 08/10 (GET /api/v1/models,
-            # 16 :free vivos). glm-5.2:free MORREU (fora do catálogo) — removido.
-            # Free tier = rate limit diário por conta.
-            "nvidia/nemotron-3-ultra-550b-a55b:free" = {
-              name = "Nemotron 3 Ultra 550B Free";
-            };
-            "nvidia/nemotron-3-super-120b-a12b:free" = {
-              name = "Nemotron 3 Super 120B Free";
-            };
-            "nvidia/nemotron-3.5-lightning:free" = {
-              name = "Nemotron 3.5 Lightning Free";
-            };
-            "google/gemma-4-31b-it:free" = {
-              name = "Gemma 4 31B Free";
-            };
-            # COMENTADO 15/10 (matriz): "only available to paid users".
-            /*
-            "thinkingmachines/inkling:free" = {
-              name = "Inkling Free (novidade 10/26)";
-            };
-            */
-          };
-        };
-        
-        # Groq - reativado para teste (free tier)
-        groq = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "https://api.groq.com/openai/v1";
-            apiKey = "{env:GROQ_API_KEY}";
-          };
-          models = {
-            "qwen/qwen3.8-27b" = {
-              name = "Groq Qwen3.8 27B";
-              limit = {
-                context = 131072;
-                output = 8000;
-              };
-            };
-            "openai/gpt-oss-120b" = {
-              name = "Groq GPT-OSS 120B";
-              limit = {
-                context = 131072;
-                output = 8000;
-              };
-            };
-            "openai/gpt-oss-20b" = {
-              name = "Groq GPT-OSS 20B";
-              limit = {
-                context = 131072;
-                output = 8000;
-              };
-            };
-          };
-        };
-        
-        # NVIDIA NIM (chave NVIDIA_API_KEY validada 16/09: HTTP 200, 82
-        # modelos — provider free vivo que estava fora do config)
-        nvidia = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "https://integrate.api.nvidia.com/v1";
-            apiKey = "{env:NVIDIA_API_KEY}";
-          };
-          models = {
-            # Auditoria 08/10 (GET /models real, 80 modelos): v4-flash-0731
-            # saiu do catálogo → v4.1-flash. gemma-4-31b-it adicionado.
-            "deepseek-ai/deepseek-v4.1-flash" = {
-              name = "DeepSeek V4.1 Flash (NIM free) - fast coding/reasoning | ctx:262K";
-              limit = { context = 262144; output = 65536; };
-            };
-            "z-ai/glm-5.3-flash" = {
-              name = "GLM 5.3 Flash (NIM free) - general purpose/long context | ctx:131K";
-              limit = { context = 131072; output = 65536; };
-            };
-            "nvidia/nemotron-3-super-120b-a12b" = {
-              name = "Nemotron 3 Super 120B (NIM free) - balanced powerful | ctx:262K";
-              limit = { context = 262144; output = 65536; };
-            };
-            # 15/10 (matriz + catálogo NIM 81 modelos): ultra-550b EXISTE no
-            # NIM e responde OK
-            "nvidia/nemotron-3-ultra-550b-a55b" = {
-              name = "Nemotron 3 Ultra 550B A55B (NIM free) - most powerful | ctx:1M";
-              limit = { context = 1048576; output = 262144; };
-            };
-            # Companheiros da família nemotron-3 no NIM
-            "nvidia/nemotron-3.5-super-vl-120b-a12b" = {
-              name = "Nemotron 3.5 Super VL 120B (NIM free, vision) - multimodal | ctx:262K";
-              limit = { context = 262144; output = 65536; };
-            };
-            "nvidia/nemotron-3.5-lightning-30b-a3b" = {
-              name = "Nemotron 3.5 Lightning 30B A3B (NIM free) - very fast | ctx:262K";
-              limit = { context = 262144; output = 65536; };
-            };
-            "google/gemma-4-31b-it" = {
-              name = "Gemma 4 31B IT (NIM free) - general purpose | ctx:262K";
-              limit = { context = 262144; output = 65536; };
-            };
-          };
-        };
-
-        # Cerebras - teste
-        cerebras = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "https://api.cerebras.ai/v1";
-            apiKey = "{env:CEREBRAS_API_KEY}";
-          };
-          models = {
-            "qwen-3.8-27b" = {
-              name = "Cerebras Qwen3.8 27B";
-              limit = {
-                context = 131072;
-                output = 8000;
-              };
-            };
-            "gpt-oss-120b" = {
-              name = "Cerebras GPT-OSS 120B";
-              limit = {
-                context = 131072;
-                output = 8000;
-              };
-            };
-            "llama-3.3-70b" = {
-              name = "Cerebras Llama 3.3 70B";
-              limit = {
-                context = 131072;
-                output = 8000;
-              };
-            };
-          };
-        };
-
-        # Together - teste
-        together = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "https://api.together.xyz/v1";
-            apiKey = "{env:TOGETHER_API_KEY}";
-          };
-          models = {
-            "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" = {
-              name = "Together Llama 3.3 70B Free";
-              limit = {
-                context = 131072;
-                output = 8000;
-              };
-            };
-            "deepseek-ai/DeepSeek-V3.1" = {
-              name = "Together DeepSeek V3.1";
-              limit = {
-                context = 163840;
-                output = 8000;
-              };
-            };
-          };
-        };
-
-        # Baseten - teste
-        baseten = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "https://inference.baseten.co/v1";
-            apiKey = "{env:BASETEN_API_KEY}";
-          };
-          models = {
-            "deepseek-ai/DeepSeek-V3.1" = {
-              name = "Baseten DeepSeek V3.1";
-              limit = {
-                context = 163840;
-                output = 8000;
-              };
-            };
-            "moonshotai/Kimi-K2-Instruct" = {
-              name = "Baseten Kimi K2";
-              limit = {
-                context = 128000;
-                output = 8000;
-              };
-            };
-          };
-        };
-
-        # GMI Cloud - teste
-        gmi = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "https://api.gmi.cloud/v1";
-            apiKey = "{env:GMI_API_KEY}";
-          };
-          models = {
-            "deepseek-ai/deepseek-v3.1" = {
-              name = "GMI DeepSeek V3.1";
-              limit = {
-                context = 163840;
-                output = 8000;
-              };
-            };
-          };
-        };
-
-        # OVHcloud AI Endpoints - anonymous free tier
-        ovhcloud = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1";
-          };
-          models = {
-            "gpt-oss-120b" = {
-              name = "OVH GPT-OSS 120b (free anon) - reasoning/coding | ctx:131K";
-              limit = {
-                context = 131072;
-                output = 8000;
-              };
-            };
-            "gpt-oss-20b" = {
-              name = "OVH GPT-OSS 20b (free anon) - fast/lightweight | ctx:131K";
-              limit = {
-                context = 131072;
-                output = 8000;
-              };
-            };
-            "Meta-Llama-3_3-70B-Instruct" = {
-              name = "OVH Llama 3.3 70B (free anon) - general purpose | ctx:131K";
-              limit = {
-                context = 131072;
-                output = 8000;
-              };
-            };
-            "Qwen3.5-397B-A17B" = {
-              name = "OVH Qwen3.5 397B (free anon) - powerful reasoning | ctx:262K";
-              limit = {
-                context = 262144;
-                output = 8000;
-              };
-            };
-          };
-        };
-
-        # Kilo Code Gateway - free models, no API key required
-        kilocode = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "https://api.kilo.ai/api/gateway";
-          };
-          models = {
-            "nvidia/nemotron-3-ultra-550b-a55b:free" = {
-              name = "Kilo Nemotron 3 Ultra 550B (free) - powerful reasoning/coding | ctx:1M";
-              limit = {
-                context = 1048576;
-                output = 65536;
-              };
-            };
-            "nvidia/nemotron-3.5-lightning:free" = {
-              name = "Kilo Nemotron 3.5 Lightning (free) - fast general purpose | ctx:1M";
-              limit = {
-                context = 1048576;
-                output = 65536;
-              };
-            };
-            "kilo-auto/free" = {
-              name = "Kilo Auto Free Router - auto-select best free model | ctx:262K";
-              limit = {
-                context = 262144;
-                output = 32768;
-              };
-            };
-          };
-        };
-
-        # LLM7.io - free anonymous access
-        llm7 = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "https://api.llm7.io/v1";
-          };
-          models = {
-            "gpt-oss:20b" = {
-              name = "LLM7 GPT-OSS 20b (free)";
-              limit = {
-                context = 131072;
-                output = 8000;
-              };
-            };
-            "nemotron-3-nano:30b" = {
-              name = "LLM7 Nemotron 3 Nano (free)";
-              limit = {
-                context = 1048576;
-                output = 8000;
-              };
-            };
-          };
-        };
-
-        # Cloudflare Workers AI (free tier: 10k neurons/dia, sem cartão).
-        # Chave + account id no env (08/10). Endpoint OpenAI-compat
-        # /ai/v1/chat/completions validado 08/10 (HTTP 200, "OK.").
-        cloudflare = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "https://api.cloudflare.com/client/v4/accounts/{env:CLOUDFLARE_ACCOUNT_ID}/ai/v1";
-            apiKey = "{env:CLOUDFLARE_API_TOKEN}";
-          };
-          models = {
-            # IDs verificados no /models/search 08/10 (322 modelos;
-            # abaixo os de geração de texto mais úteis).
-            # Testes 08/10: gpt-oss-120b OK; llama-3.3-70b precisa de limit
-            # (24000 max total); kimi-k2.7-code EXIGE plano pago Workers
-            # (Forbidden no free) → mantido p/ referência, removido do filtro.
-            "@cf/meta/llama-3.3-70b-instruct-fp8-fast" = {
-              name = "Llama 3.3 70B (Workers AI free)";
-              limit = {
-                context = 24000;
-                output = 8000;
-              };
-            };
-            "@cf/openai/gpt-oss-120b" = {
-              name = "GPT-OSS 120B (Workers AI free)";
-            };
-            "@cf/google/gemma-4-26b-a4b-it" = {
-              name = "Gemma 4 26B A4B (Workers AI free)";
-            };
-            "@cf/qwen/qwen3.8-27b" = {
-              name = "Qwen3.8 27B (Workers AI free)";
-            };
-            # COMENTADO 15/10 (matriz): exige Workers Paid (Forbidden no free).
-            /*
-            "@cf/deepseek-ai/deepseek-v4-flash-0731" = {
-              name = "DeepSeek V4 Flash (Workers AI free)";
-            };
-            */
-            "@cf/mistralai/mistral-small-3.1-24b-instruct" = {
-              name = "Mistral Small 3.1 24B (Workers AI free)";
-            };
-          };
-        };
-
-        # SambaNova - teste
-        sambanova = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "https://api.sambanova.ai/v1";
-            apiKey = "{env:SAMBANOVA_API_KEY}";
-          };
-          models = {
-            "Meta-Llama-3.3-70B-Instruct" = {
-              name = "Llama 3.3 70B (SambaNova)";
-              limit = {
-                context = 131072;
-                output = 8000;
-              };
-            };
-            "gpt-oss-120b" = {
-              name = "GPT-OSS 120B (SambaNova)";
-              limit = {
-                context = 131072;
-                output = 8000;
-              };
-            };
-            "gemma-4-31B-it" = {
-              name = "Gemma 4 31B (SambaNova)";
-              limit = {
-                context = 131072;
-                output = 8000;
-              };
-            };
-            "DeepSeek-V3.1" = {
-              name = "DeepSeek V3.1 (SambaNova)";
-              limit = {
-                context = 131072;
-                output = 8000;
-              };
-            };
-          };
-        };
-
-        # Cohere — trial key gratuita (rate-limited, sem cartão).
-        # Endpoint OpenAI-compat /compatibility/v1 validado 08/10 (HTTP 200).
-        cohere = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "https://api.cohere.ai/compatibility/v1";
-            apiKey = "{env:COHERE_API_KEY}";
-          };
-          models = {
-            "command-r7b-12-2024" = {
-              name = "Command R7B (Cohere trial)";
-            };
-            "command-r-plus-08-2024" = {
-              name = "Command R+ (Cohere trial)";
-            };
-            "command-a-03-2025" = {
-              name = "Command A (Cohere trial)";
-            };
-            "command-a-reasoning-08-2025" = {
-              name = "Command A Reasoning (Cohere trial)";
-            };
-            "north-mini-code-1-0" = {
-              name = "North Mini Code (Cohere trial)";
-            };
-          };
-        };
-
-        # HuggingFace - teste
-        huggingface = {
-          npm = "@ai-sdk/openai-compatible";
-          options = {
-            baseURL = "https://router.huggingface.co/v1";
-            apiKey = "{env:HF_TOKEN}";
-          };
-          models = {
-            "Qwen/Qwen3-235B-A22B-Instruct-2507" = {
-              name = "Qwen3 235B HF";
-              limit = {
-                context = 262144;
-                output = 8000;
-              };
-            };
-            "deepseek-ai/DeepSeek-V3.1" = {
-              name = "DeepSeek V3.1 HF";
-              limit = {
-                context = 163840;
-                output = 8000;
-              };
-            };
-            "moonshotai/Kimi-K2-Instruct" = {
-              name = "Kimi K2 HF";
-              limit = {
-                context = 128000;
-                output = 8000;
-              };
-            };
-          };
-        };
-      } // pkgs.lib.mapAttrs'
+        # ══════════════════════════════════════════════════════════
+        # CLOUD PROVIDERS: fonte única = modules/ai/free-providers.json
+        # Gerados via mkCloudProvider acima. NÃO editar aqui — editar
+        # o JSON e re-testar. Testado ao vivo 28/10/2026.
+        # ══════════════════════════════════════════════════════════
+      } // cloudProviders // pkgs.lib.mapAttrs'
         (name: svc: pkgs.lib.nameValuePair svc.opencode.key {
           npm = "@ai-sdk/openai-compatible";
           options = {
@@ -803,54 +385,33 @@
         (pkgs.lib.filterAttrs (n: s: s ? opencode) pkgs.aiModels.directServers));
 
       # ════════════════════════════════════════════════════════════
-      # FILTRO DO CATÁLOGO (auditoria 08/10 — whitelist = só o que
-      # passou no teste real "Responda somente OK" via opencode run).
-      # Inventário completo continua em `provider.*.models` acima; o
-      # whitelist POR PROVIDER controla o que aparece no seletor.
-      # Reteste: editar a lista + ./rebuild-host.sh --quick + ativação.
+      # FILTRO DO CATÁLOGO — fonte única: modules/ai/free-providers.json
+      # Testado ao vivo 28/10/2026 (todos os providers abaixo).
+      # O JSON tem o estado por modelo (active/rate_limited/agentic_only).
       # ════════════════════════════════════════════════════════════
-      # NOTA 08/10 PÓS-TESTE: `whitelist` por provider não é aplicado pelo
-      # seletor da CLI 1.18.29 (modelos continuam listados). O filtro
-      # real da CLI é `enabled_providers`. Como vários providers têm ALGUNS
-      # modelos aprovados e outros não (ex.: Cloudflare free vs paid-only),
-      # manter TODOS habilitados + documentar o estado por modelo aqui é
-      # a política que preserva inventário sem esconder aprovados.
-      # Estado por modelo (matriz completa em docs/improvements/):
-      #   APROVADO: google/gemini-2.5-flash, google/gemini-2.5-flash-lite,
-      #     google/gemini-3.5-flash, google/gemma-4-31b-it,
-      #     cloudflare/@cf/openai/gpt-oss-120b, cloudflare/@cf/google/gemma-4-26b-a4b-it,
-      #     cloudflare/@cf/qwen/qwen3.8-27b, cloudflare/@cf/mistralai/mistral-small-3.1-24b-instruct,
-      #     cohere/command-r7b-12-2024, cohere/command-a-03-2025,
-      #     cohere/command-a-reasoning-08-2025, cohere/north-mini-code-1-0,
-      #     nvidia/nvidia/nemotron-3-super-120b-a12b, nvidia/google/gemma-4-31b-it,
-      #     openrouter/thinkingmachines/inkling:free,
-      #     local/bonsai (+ locais: consulta direta, fora do escopo cloud)
-      #   RATE_LIMIT_TEMPORARIO (exceção Zen — NÃO marcar como defeituoso):
-      #     opencode/* (account-wide, confirmado 08/10 via log "Rate limit
-      #     exceeded" em mimo-v2.6-flash-free e big-pickle; retestar depois)
-      #   AGUARDANDO_ACAO_USUARIO: sambanova/* (HTTP 402 PAYMENT_METHOD_REQUIRED:
-      #     free tier pós-2026 exige cartão no dashboard cloud.sambanova.ai)
-      #   MODELO_PAGO/SEM_ACESSO free: cloudflare/@cf/moonshotai/kimi-k2.7-code
-      #     e @cf/deepseek-ai/deepseek-v4-flash-0731 (Forbidden: exige Workers
-      #     Paid), huggingface/* (créditos esgotados), cerebras/* (Payment
-      #     Required), groq/qwen3.8-27b + gpt-oss-120b via opencode (ITPM/TPM
-      #     7000/8000 < prompt do agente; via curl mínimo responde OK)
-      #   INDISPONIVEL_TEMPORARIO: nvidia/deepseek-ai/deepseek-v4.1-flash
-      #     (streaming timeout mesmo via curl; NIM às vezes retém resposta),
-      #     openrouter :free exceto inkling (free-models-per-day esgotado)
-      # MATRIZ DE TESTES 15/10 (34 modelos, API direta): enabled = só o que
-      # respondeu OK ou RATE_LIMIT (volta sozinho). Comentados = PAID/DEAD.
+      # RESULTADO DOS TESTES 28/10 (via curl direto):
+      #   ✅ GROQ: gpt-oss-120b, qwen3.8-27b, gpt-oss-20b (todos OK)
+      #   ✅ NVIDIA NIM: nemotron-3-ultra-550b, nemotron-3.5-lightning (OK)
+      #   ✅ CLOUDFLARE: gpt-oss-120b, llama-3.3-70b, gemma-4-26b,
+      #      qwen3.8-27b, mistral-small-3.1 (todos OK com Bearer)
+      #   ✅ GEMINI: 2.5-flash, 2.5-flash-lite, 3-flash-preview (OK)
+      #   ✅ OPENROUTER: 8/16 :free OK (com headers HTTP-Referer+X-Title);
+      #      5 rate_limited (volta sozinho); 2 agentic_only (inkling)
+      #   ✅ OVHCLOUD: gpt-oss-120b/20b, llama-3.3-70b, qwen3.5-397B (anon)
+      #   ✅ KILOCODE: kilo-auto/free, nemotron-ultra/lightning (anon)
+      #   ✅ LLM7: gpt-oss:20b, nemotron-3-nano:30b (anon)
+      #   ⚠️ COHERE: trial 1k calls/mês, NON-COMMERCIAL (curl timeout 28/10)
+      #   ❌ DESATIVADOS: cerebras (payment), together (bad key),
+      #      huggingface (no credits), sambanova (high demand)
+      # Locais: bonsai, jarvis-fast, uncensored-4b, uncensored-35b, etc.
       enabled_providers = [
         "local" "local-fast" "local-uncensored" "local-uncensored-4b"
         "local-deepseek-7b" "local-phi-mini" "local-gemma-4b"
-        # freellmapi REMOVIDO 15/10 (dono: pago + derrubou os outros providers)
-        # MORTOS 14/10 (arquivos deletados no tree-shake; descomentar = re-baixar):
-        # "local-xlam-8b" "local-qwen30b-moe" "local-uncensored-q4kp"
-        # ✅ TESTADOS E FUNCIONANDO: google, cloudflare, cohere, nvidia, openrouter
-        # 🆓 ANÔNIMOS/FREE: ovhcloud (sem key), kilocode (sem key)
-        # ❌ REMOVIDOS: groq (rate limit/token issues), cerebras (payment required), together (bad key),
-        #    sambanova (high demand), baseten (bad key), gmi (DNS), huggingface (no credits), llm7 (quota)
-        "google" "cloudflare" "cohere" "nvidia" "openrouter" "ovhcloud" "kilocode"
+        # Cloud (gerados do free-providers.json):
+        "groq" "nvidia" "cloudflare" "gemini" "openrouter"
+        "ovhcloud" "kilocode" "llm7"
+        # Cohere: trial instável (timeout 28/10) — habilitar só se voltar:
+        # "cohere"
         "opencode"
       ];
 
