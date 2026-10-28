@@ -24,6 +24,14 @@
 # passar a gravar o prefixo, este script apenas repassa o que já está lá.
 set -euo pipefail
 
+# (28/10, fix432) Fonte de verdade das keys = /etc/litellm.env (legível).
+# A sessão desktop pode ter TAVILY_API_KEY antiga no environ; sem este
+# source, o MCP herda a key podre e recebe HTTP 432 mesmo com o arquivo
+# atualizado. Source ANTES do PYTHONPATH p/ garantir precedência.
+set -a
+source /etc/litellm.env 2>/dev/null || true
+set +a
+
 JARVIS_PKG="${JARVIS_PKG:-$(ls -dt /nix/store/*jarvis-voice-0.1.0 2>/dev/null | head -1)}"
 if [ -z "$JARVIS_PKG" ] || [ ! -d "$JARVIS_PKG" ]; then
   echo "jarvis-voice nao encontrado no store" >&2

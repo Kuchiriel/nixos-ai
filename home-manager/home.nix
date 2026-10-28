@@ -183,22 +183,11 @@
 
   home.file.".config/ai-agents/keys-wrapper.sh".source = builtins.toFile "jarvis-keys-wrapper.sh" ''
     #!/usr/bin/env bash
-    # Abstração de chaves para IA agents.
-    # Source este script em vez de keys.env diretamente para ter nomes normalizados.
-    # Resolve: TOGETHER_API_KEY vs TOGETHERAI_API_KEY, HF_TOKEN vs HUGGINGFACE_API_KEY, etc.
+    # Fonte única de verdade: /etc/litellm.env
+    # Normaliza aliases entre chaves.
 
     set -a
-    source "/home/$USER/.config/ai-agents/keys.env" 2>/dev/null || source "/etc/litellm.env" 2>/dev/null || true
-    # Secrets avulsos (best-effort: arquivos root-only são ignorados no shell,
-    # mas lidos pelos services via EnvironmentFile; o env prevalece sempre).
-    if [ -z "$TAVILY_API_KEY" ]; then
-        TAVILY_API_KEY=$(cut -d= -f2 /etc/jarvis-secrets/tavily.env 2>/dev/null)
-        [ -n "$TAVILY_API_KEY" ] && export TAVILY_API_KEY
-    fi
-    if [ -z "$HMD_API_ACCESS_TOKEN" ]; then
-        HMD_API_ACCESS_TOKEN=$(cut -d= -f2 /etc/jarvis-secrets/hackmd.env 2>/dev/null)
-        [ -n "$HMD_API_ACCESS_TOKEN" ] && export HMD_API_ACCESS_TOKEN
-    fi
+    source "/etc/litellm.env" 2>/dev/null || true
     set +a
 
     if [ -z "$TOGETHER_API_KEY" ] && [ -n "$TOGETHERAI_API_KEY" ]; then

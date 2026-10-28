@@ -1,0 +1,595 @@
+{
+  "_comment": "FONTE ÚNICA de providers LLM free — consumida por model_policy.py (CASCADE_MAP) e home.nix (opencode providers). Testado ao vivo 28/10/2026. NÃO editar sem re-testar.",
+  "_version": "2026-10-28",
+  "_ordering": "Ordenado por: capability (reasoning > general > fast), context_window (maior primeiro dentro do tier), specificity (modelos dedicados antes de generalistas)",
+  
+  "providers": {
+    "groq": {
+      "base_url": "https://api.groq.com/openai/v1",
+      "env_key": "GROQ_API_KEY",
+      "requires_headers": false,
+      "status": "active",
+      "_notes": "LPU ultra-rápido. Melhor para latency-sensitive. Rate limit: 6k TPM medido (maior que published). gpt-oss-120b dual-home com Cerebras (fallback natural).",
+      "models": [
+        {
+          "id": "openai/gpt-oss-120b",
+          "name": "GPT-OSS 120B",
+          "context": 131072,
+          "output": 8000,
+          "tier": "reasoning",
+          "capabilities": ["reasoning", "coding", "analysis"],
+          "good_for": "Complex reasoning, coding, analysis. Dual-home com Cerebras (mesmos pesos = sem output drift no fallback).",
+          "status": "active"
+        },
+        {
+          "id": "qwen/qwen3.8-27b",
+          "name": "Qwen3.8 27B",
+          "context": 131072,
+          "output": 8000,
+          "tier": "general",
+          "capabilities": ["general", "coding", "tools"],
+          "good_for": "General purpose, coding, tool calling. Bom balance capacity/speed.",
+          "status": "active"
+        },
+        {
+          "id": "openai/gpt-oss-20b",
+          "name": "GPT-OSS 20B",
+          "context": 131072,
+          "output": 8000,
+          "tier": "fast",
+          "capabilities": ["general", "fast"],
+          "good_for": "Fast lightweight tasks, classification, simple queries.",
+          "status": "active"
+        }
+      ]
+    },
+
+    "nvidia": {
+      "base_url": "https://integrate.api.nvidia.com/v1",
+      "env_key": "NVIDIA_API_KEY",
+      "requires_headers": false,
+      "status": "active",
+      "_notes": "NIM free tier. Catálogo grande mas volátil (modelos somem sem aviso). ultra-550b é o mais forte disponível free.",
+      "models": [
+        {
+          "id": "nvidia/nemotron-3-ultra-550b-a55b",
+          "name": "Nemotron 3 Ultra 550B",
+          "context": 1048576,
+          "output": 262144,
+          "tier": "reasoning",
+          "capabilities": ["reasoning", "analysis", "coding"],
+          "good_for": "Most powerful free model. Long-horizon reasoning, complex analysis. 1M ctx.",
+          "status": "active"
+        },
+        {
+          "id": "nvidia/nemotron-3.5-lightning-30b-a3b",
+          "name": "Nemotron 3.5 Lightning 30B",
+          "context": 262144,
+          "output": 65536,
+          "tier": "fast",
+          "capabilities": ["fast", "general"],
+          "good_for": "Very fast inference. Good for quick queries, classification.",
+          "status": "active"
+        },
+        {
+          "id": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+          "name": "Nemotron 3.5 Super VL 120B",
+          "context": 262144,
+          "output": 65536,
+          "tier": "general",
+          "capabilities": ["vision", "general", "analysis"],
+          "good_for": "Multimodal (vision + text). Image understanding, document analysis.",
+          "status": "untested"
+        },
+        {
+          "id": "deepseek-ai/deepseek-v4.1-flash",
+          "name": "DeepSeek V4.1 Flash",
+          "context": 262144,
+          "output": 65536,
+          "tier": "fast",
+          "capabilities": ["coding", "fast"],
+          "good_for": "Fast coding/reasoning. Streaming as vezes retém resposta.",
+          "status": "unstable"
+        },
+        {
+          "id": "z-ai/glm-5.3-flash",
+          "name": "GLM 5.3 Flash",
+          "context": 131072,
+          "output": 65536,
+          "tier": "general",
+          "capabilities": ["general", "long-context"],
+          "good_for": "General purpose, long context tasks.",
+          "status": "unstable"
+        },
+        {
+          "id": "google/gemma-4-31b-it",
+          "name": "Gemma 4 31B IT",
+          "context": 262144,
+          "output": 65536,
+          "tier": "general",
+          "capabilities": ["general"],
+          "good_for": "General purpose, balanced capability.",
+          "status": "unstable"
+        }
+      ]
+    },
+
+    "cloudflare": {
+      "base_url": "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+      "env_key": "CLOUDFLARE_API_TOKEN",
+      "extra_env": ["CLOUDFLARE_ACCOUNT_ID"],
+      "requires_headers": false,
+      "status": "active",
+      "_notes": "Workers AI free tier: 10k neurons/dia. Todos os modelos testados OK. gpt-oss-120b é o mais forte.",
+      "models": [
+        {
+          "id": "@cf/openai/gpt-oss-120b",
+          "name": "GPT-OSS 120B (Workers)",
+          "context": 131072,
+          "output": 8000,
+          "tier": "reasoning",
+          "capabilities": ["reasoning", "coding"],
+          "good_for": "Strong reasoning/coding. Dual-home com Groq (mesmos pesos).",
+          "status": "active"
+        },
+        {
+          "id": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+          "name": "Llama 3.3 70B (Workers)",
+          "context": 24000,
+          "output": 8000,
+          "tier": "general",
+          "capabilities": ["general", "coding"],
+          "good_for": "General purpose. ATENÇÃO: ctx limitado a 24k total.",
+          "status": "active"
+        },
+        {
+          "id": "@cf/qwen/qwen3.8-27b",
+          "name": "Qwen3.8 27B (Workers)",
+          "context": 131072,
+          "output": 8000,
+          "tier": "general",
+          "capabilities": ["general", "coding"],
+          "good_for": "General purpose, coding.",
+          "status": "active"
+        },
+        {
+          "id": "@cf/mistralai/mistral-small-3.1-24b-instruct",
+          "name": "Mistral Small 3.1 24B (Workers)",
+          "context": 131072,
+          "output": 8000,
+          "tier": "general",
+          "capabilities": ["general"],
+          "good_for": "General purpose, efficient.",
+          "status": "active"
+        },
+        {
+          "id": "@cf/google/gemma-4-26b-a4b-it",
+          "name": "Gemma 4 26B A4B (Workers)",
+          "context": 131072,
+          "output": 8000,
+          "tier": "general",
+          "capabilities": ["general"],
+          "good_for": "General purpose, MoE efficient.",
+          "status": "active"
+        }
+      ]
+    },
+
+    "gemini": {
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "env_key": "GEMINI_API_KEY",
+      "requires_headers": false,
+      "status": "active",
+      "_notes": "Google AI Studio free tier. gemini-2.5-flash é o workhorse. flash-lite para tarefas leves.",
+      "models": [
+        {
+          "id": "gemini-2.5-flash",
+          "name": "Gemini 2.5 Flash",
+          "context": 1048576,
+          "output": 65536,
+          "tier": "general",
+          "capabilities": ["general", "vision", "long-context", "coding"],
+          "good_for": "Best free general-purpose. Vision + 1M ctx. Reliable.",
+          "status": "active"
+        },
+        {
+          "id": "gemini-2.5-flash-lite",
+          "name": "Gemini 2.5 Flash Lite",
+          "context": 1048576,
+          "output": 65536,
+          "tier": "fast",
+          "capabilities": ["fast", "general"],
+          "good_for": "Fast lightweight. Good for classification, simple queries.",
+          "status": "active"
+        },
+        {
+          "id": "gemini-3-flash-preview",
+          "name": "Gemini 3 Flash Preview",
+          "context": 1048576,
+          "output": 65536,
+          "tier": "general",
+          "capabilities": ["general", "reasoning"],
+          "good_for": "Next-gen preview. Improved reasoning over 2.5.",
+          "status": "active"
+        }
+      ]
+    },
+
+    "openrouter": {
+      "base_url": "https://openrouter.ai/api/v1",
+      "env_key": "OPENROUTER_API_KEY",
+      "requires_headers": true,
+      "headers": {
+        "HTTP-Referer": "http://localhost",
+        "X-Title": "Jarvis"
+      },
+      "status": "active",
+      "_notes": "Router com 16 modelos :free. Rate limit diário por conta. SEM headers = 401 (obrigatório HTTP-Referer + X-Title).",
+      "models": [
+        {
+          "id": "nvidia/nemotron-3.5-lightning:free",
+          "name": "Nemotron 3.5 Lightning (free)",
+          "context": 1000000,
+          "output": 65536,
+          "tier": "fast",
+          "capabilities": ["fast", "general"],
+          "good_for": "Very fast, 1M ctx. Good for quick tasks.",
+          "status": "active"
+        },
+        {
+          "id": "nvidia/nemotron-3.5-super-vl:free",
+          "name": "Nemotron 3.5 Super VL (free)",
+          "context": 1000000,
+          "output": 65536,
+          "tier": "general",
+          "capabilities": ["vision", "general"],
+          "good_for": "Multimodal vision. 1M ctx.",
+          "status": "active"
+        },
+        {
+          "id": "cohere/north-mini-code:free",
+          "name": "North Mini Code (free)",
+          "context": 256000,
+          "output": 32768,
+          "tier": "general",
+          "capabilities": ["coding", "general"],
+          "good_for": "Coding-focused. Good for code tasks.",
+          "status": "active"
+        },
+        {
+          "id": "poolside/laguna-s-2.1:free",
+          "name": "Poolside Laguna S (free)",
+          "context": 262144,
+          "output": 32768,
+          "tier": "general",
+          "capabilities": ["general", "coding"],
+          "good_for": "General purpose, coding capable.",
+          "status": "active"
+        },
+        {
+          "id": "recursive/flint-v1.0:free",
+          "name": "Recursive Flint (free)",
+          "context": 262144,
+          "output": 32768,
+          "tier": "general",
+          "capabilities": ["general"],
+          "good_for": "General purpose.",
+          "status": "active"
+        },
+        {
+          "id": "dots-studio/dots-3-note-preview:free",
+          "name": "Dots3 Note Preview (free)",
+          "context": 512000,
+          "output": 32768,
+          "tier": "general",
+          "capabilities": ["general", "long-context"],
+          "good_for": "Long context tasks (512k).",
+          "status": "active"
+        },
+        {
+          "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+          "name": "Nemotron 3 Nano Omni (free)",
+          "context": 256000,
+          "output": 32768,
+          "tier": "fast",
+          "capabilities": ["fast", "reasoning"],
+          "good_for": "Fast reasoning, 256k ctx.",
+          "status": "active"
+        },
+        {
+          "id": "nvidia/nemotron-3.5-content-safety:free",
+          "name": "Nemotron 3.5 Content Safety (free)",
+          "context": 128000,
+          "output": 32768,
+          "tier": "specialized",
+          "capabilities": ["safety", "classification"],
+          "good_for": "Content safety classification. NOT for general chat.",
+          "status": "active"
+        },
+        {
+          "id": "google/gemma-4-31b-it:free",
+          "name": "Gemma 4 31B (free)",
+          "context": 262144,
+          "output": 32768,
+          "tier": "general",
+          "capabilities": ["general"],
+          "good_for": "General purpose. Rate limited daily.",
+          "status": "rate_limited"
+        },
+        {
+          "id": "google/gemma-4-26b-a4b-it:free",
+          "name": "Gemma 4 26B A4B (free)",
+          "context": 262144,
+          "output": 32768,
+          "tier": "general",
+          "capabilities": ["general"],
+          "good_for": "General purpose, MoE. Rate limited daily.",
+          "status": "rate_limited"
+        },
+        {
+          "id": "xingchen-agi/xing4.0-29b-a4b:free",
+          "name": "Xing4.0 29B A4B (free)",
+          "context": 262144,
+          "output": 32768,
+          "tier": "general",
+          "capabilities": ["general"],
+          "good_for": "General purpose. Rate limited daily.",
+          "status": "rate_limited"
+        },
+        {
+          "id": "liquid/lfm-2.5-2.6b:free",
+          "name": "LFM2.5 2.6B (free)",
+          "context": 65536,
+          "output": 8192,
+          "tier": "fast",
+          "capabilities": ["fast"],
+          "good_for": "Ultra-lightweight. Very fast. Rate limited daily.",
+          "status": "rate_limited"
+        },
+        {
+          "id": "poolside/laguna-xs-2.1:free",
+          "name": "Poolside Laguna XS (free)",
+          "context": 262144,
+          "output": 32768,
+          "tier": "fast",
+          "capabilities": ["fast", "general"],
+          "good_for": "Fast general. Rate limited daily.",
+          "status": "rate_limited"
+        },
+        {
+          "id": "thinkingmachines/inkling:free",
+          "name": "Inkling (free)",
+          "context": 1048576,
+          "output": 65536,
+          "tier": "reasoning",
+          "capabilities": ["reasoning", "agentic"],
+          "good_for": "Agentic tasks ONLY (requires agentic config). 1M ctx.",
+          "status": "agentic_only"
+        },
+        {
+          "id": "thinkingmachines/inkling-small:free",
+          "name": "Inkling Small (free)",
+          "context": 1048576,
+          "output": 65536,
+          "tier": "reasoning",
+          "capabilities": ["reasoning", "agentic"],
+          "good_for": "Agentic tasks ONLY. Smaller variant.",
+          "status": "agentic_only"
+        }
+      ]
+    },
+
+    "ovhcloud": {
+      "base_url": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1",
+      "env_key": null,
+      "requires_headers": false,
+      "status": "active",
+      "_notes": "Anonymous free tier (sem key). Todos os modelos testados OK. Qwen3.5-397B é o mais forte.",
+      "models": [
+        {
+          "id": "Qwen3.5-397B-A17B",
+          "name": "Qwen3.5 397B A17B",
+          "context": 262144,
+          "output": 8000,
+          "tier": "reasoning",
+          "capabilities": ["reasoning", "analysis", "coding"],
+          "good_for": "Most powerful OVH model. Complex reasoning, analysis.",
+          "status": "active"
+        },
+        {
+          "id": "gpt-oss-120b",
+          "name": "GPT-OSS 120B (OVH)",
+          "context": 131072,
+          "output": 8000,
+          "tier": "reasoning",
+          "capabilities": ["reasoning", "coding"],
+          "good_for": "Strong reasoning/coding. Dual-home com Groq/Cloudflare.",
+          "status": "active"
+        },
+        {
+          "id": "Meta-Llama-3_3-70B-Instruct",
+          "name": "Llama 3.3 70B (OVH)",
+          "context": 131072,
+          "output": 8000,
+          "tier": "general",
+          "capabilities": ["general", "coding"],
+          "good_for": "General purpose, reliable.",
+          "status": "active"
+        },
+        {
+          "id": "gpt-oss-20b",
+          "name": "GPT-OSS 20B (OVH)",
+          "context": 131072,
+          "output": 8000,
+          "tier": "fast",
+          "capabilities": ["fast", "general"],
+          "good_for": "Fast lightweight.",
+          "status": "active"
+        }
+      ]
+    },
+
+    "kilocode": {
+      "base_url": "https://api.kilo.ai/api/gateway",
+      "env_key": null,
+      "requires_headers": false,
+      "status": "active",
+      "_notes": "Anonymous free tier. kilo-auto/free é router automático.",
+      "models": [
+        {
+          "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+          "name": "Nemotron 3 Ultra 550B (Kilo)",
+          "context": 1048576,
+          "output": 65536,
+          "tier": "reasoning",
+          "capabilities": ["reasoning", "analysis"],
+          "good_for": "Most powerful. 1M ctx. Same as NIM/OpenRouter.",
+          "status": "active"
+        },
+        {
+          "id": "kilo-auto/free",
+          "name": "Kilo Auto Free Router",
+          "context": 262144,
+          "output": 32768,
+          "tier": "general",
+          "capabilities": ["general"],
+          "good_for": "Auto-selects best free model. Good default.",
+          "status": "active"
+        },
+        {
+          "id": "nvidia/nemotron-3.5-lightning:free",
+          "name": "Nemotron 3.5 Lightning (Kilo)",
+          "context": 1048576,
+          "output": 65536,
+          "tier": "fast",
+          "capabilities": ["fast", "general"],
+          "good_for": "Very fast, 1M ctx.",
+          "status": "active"
+        }
+      ]
+    },
+
+    "llm7": {
+      "base_url": "https://api.llm7.io/v1",
+      "env_key": null,
+      "requires_headers": false,
+      "status": "active",
+      "_notes": "Anonymous free tier. Modelos menores.",
+      "models": [
+        {
+          "id": "nemotron-3-nano:30b",
+          "name": "Nemotron 3 Nano 30B",
+          "context": 1048576,
+          "output": 8192,
+          "tier": "fast",
+          "capabilities": ["fast", "reasoning"],
+          "good_for": "Fast reasoning, 1M ctx.",
+          "status": "active"
+        },
+        {
+          "id": "gpt-oss:20b",
+          "name": "GPT-OSS 20B (LLM7)",
+          "context": 131072,
+          "output": 8192,
+          "tier": "fast",
+          "capabilities": ["fast", "general"],
+          "good_for": "Fast lightweight.",
+          "status": "active"
+        }
+      ]
+    },
+
+    "cohere": {
+      "base_url": "https://api.cohere.ai/compatibility/v1",
+      "env_key": "COHERE_API_KEY",
+      "requires_headers": false,
+      "status": "unstable",
+      "_notes": "Trial key: 1000 calls/mês, 20 RPM. NON-COMMERCIAL only. Curl falhou (DNS/timeout) no teste 28/10.",
+      "models": [
+        {
+          "id": "command-a-03-2025",
+          "name": "Command A",
+          "context": 256000,
+          "output": 8000,
+          "tier": "reasoning",
+          "capabilities": ["reasoning", "agents", "retrieval"],
+          "good_for": "Agents, retrieval, 256k ctx. NON-COMMERCIAL only.",
+          "status": "unstable"
+        },
+        {
+          "id": "command-a-reasoning-08-2025",
+          "name": "Command A Reasoning",
+          "context": 256000,
+          "output": 8000,
+          "tier": "reasoning",
+          "capabilities": ["reasoning"],
+          "good_for": "Dedicated reasoning. NON-COMMERCIAL only.",
+          "status": "unstable"
+        },
+        {
+          "id": "command-r7b-12-2024",
+          "name": "Command R7B",
+          "context": 131072,
+          "output": 8000,
+          "tier": "fast",
+          "capabilities": ["fast", "general"],
+          "good_for": "Small, fast. NON-COMMERCIAL only.",
+          "status": "unstable"
+        }
+      ]
+    }
+  },
+
+  "cascade_layers": {
+    "_comment": "Mapeamento layer → ordem de providers para CASCADE_MAP em model_policy.py. Cada layer é uma fila ordenada por prioridade.",
+    "coding-long": [
+      {"provider": "groq", "model": "openai/gpt-oss-120b"},
+      {"provider": "cloudflare", "model": "@cf/openai/gpt-oss-120b"},
+      {"provider": "ovhcloud", "model": "gpt-oss-120b"}
+    ],
+    "dev": [
+      {"provider": "groq", "model": "openai/gpt-oss-120b"},
+      {"provider": "groq", "model": "qwen/qwen3.8-27b"},
+      {"provider": "cloudflare", "model": "@cf/qwen/qwen3.8-27b"},
+      {"provider": "openrouter", "model": "nvidia/nemotron-3.5-lightning:free"}
+    ],
+    "reasoning": [
+      {"provider": "nvidia", "model": "nvidia/nemotron-3-ultra-550b-a55b"},
+      {"provider": "ovhcloud", "model": "Qwen3.5-397B-A17B"},
+      {"provider": "groq", "model": "openai/gpt-oss-120b"}
+    ],
+    "fast": [
+      {"provider": "groq", "model": "openai/gpt-oss-20b"},
+      {"provider": "nvidia", "model": "nvidia/nemotron-3.5-lightning-30b-a3b"},
+      {"provider": "openrouter", "model": "nvidia/nemotron-3.5-lightning:free"}
+    ],
+    "vision": [
+      {"provider": "gemini", "model": "gemini-2.5-flash"},
+      {"provider": "nvidia", "model": "nvidia/nemotron-3.5-super-vl-120b-a12b"},
+      {"provider": "openrouter", "model": "nvidia/nemotron-3.5-super-vl:free"}
+    ],
+    "classify": [
+      {"provider": "groq", "model": "openai/gpt-oss-20b"},
+      {"provider": "gemini", "model": "gemini-2.5-flash-lite"}
+    ],
+    "docs": [
+      {"provider": "groq", "model": "openai/gpt-oss-120b"},
+      {"provider": "cloudflare", "model": "@cf/openai/gpt-oss-120b"}
+    ],
+    "batch": [
+      {"provider": "openrouter", "model": "nvidia/nemotron-3.5-lightning:free"},
+      {"provider": "kilocode", "model": "kilo-auto/free"},
+      {"provider": "llm7", "model": "nemotron-3-nano:30b"}
+    ]
+  },
+
+  "disabled_providers": {
+    "_comment": "Providers testados e DESATIVADOS (28/10). Re-testar só se key/catálogo mudar.",
+    "cerebras": {"reason": "PAYMENT_REQUIRED (key válida mas exige payment method no dashboard)", "key": "CEREBRAS_API_KEY"},
+    "together": {"reason": "INVALID_KEY (key de 25 chars parece truncada/errada)", "key": "TOGETHER_API_KEY"},
+    "huggingface": {"reason": "NO_CREDITS (créditos free esgotados)", "key": "HF_TOKEN"},
+    "sambanova": {"reason": "HIGH_DEMAND / errors variados", "key": "SAMBANOVA_API_KEY"},
+    "baseten": {"reason": "INVALID_KEY", "key": "BASETEN_API_KEY"},
+    "gmi": {"reason": "DNS/connection issues", "key": "GMI_API_KEY"}
+  }
+}
