@@ -385,10 +385,7 @@
           };
         };
         
-        # Groq COMENTADO 15/10 (matriz de testes): os 3 modelos (qwen3.8-27b,
-        # gpt-oss-120b/20b) retornam 400/PAID no free tier atual — exige tier
-        # pago p/ inference. Reativar só se o billing mudar.
-        /*
+        # Groq - reativado para teste (free tier)
         groq = {
           npm = "@ai-sdk/openai-compatible";
           options = {
@@ -400,26 +397,25 @@
               name = "Groq Qwen3.8 27B";
               limit = {
                 context = 131072;
-                output = 800;
+                output = 8000;
               };
             };
             "openai/gpt-oss-120b" = {
               name = "Groq GPT-OSS 120B";
               limit = {
                 context = 131072;
-                output = 800;
+                output = 8000;
               };
             };
             "openai/gpt-oss-20b" = {
               name = "Groq GPT-OSS 20B";
               limit = {
                 context = 131072;
-                output = 800;
+                output = 8000;
               };
             };
           };
         };
-        */
         
         # NVIDIA NIM (chave NVIDIA_API_KEY validada 16/09: HTTP 200, 82
         # modelos — provider free vivo que estava fora do config)
@@ -460,9 +456,7 @@
           };
         };
 
-        # Cerebras COMENTADO 15/10 (matriz): 2/2 modelos "Payment Required"
-        # (conta sem crédito desde 16/09). Reativar só com billing resolvido.
-        /*
+        # Cerebras - teste
         cerebras = {
           npm = "@ai-sdk/openai-compatible";
           options = {
@@ -472,16 +466,195 @@
           models = {
             "qwen-3.8-27b" = {
               name = "Cerebras Qwen3.8 27B";
+              limit = {
+                context = 131072;
+                output = 8000;
+              };
             };
             "gpt-oss-120b" = {
               name = "Cerebras GPT-OSS 120B";
+              limit = {
+                context = 131072;
+                output = 8000;
+              };
+            };
+            "llama-3.3-70b" = {
+              name = "Cerebras Llama 3.3 70B";
+              limit = {
+                context = 131072;
+                output = 8000;
+              };
             };
           };
         };
-        */
 
-        # Together REMOVIDO 16/09: conta exige US$5 de crédito (dono
-        # recusou) e a chave retorna 401. Re-add só se billing resolver.
+        # Together - teste
+        together = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "https://api.together.xyz/v1";
+            apiKey = "{env:TOGETHER_API_KEY}";
+          };
+          models = {
+            "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free" = {
+              name = "Together Llama 3.3 70B Free";
+              limit = {
+                context = 131072;
+                output = 8000;
+              };
+            };
+            "deepseek-ai/DeepSeek-V3.1" = {
+              name = "Together DeepSeek V3.1";
+              limit = {
+                context = 163840;
+                output = 8000;
+              };
+            };
+          };
+        };
+
+        # Baseten - teste
+        baseten = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "https://inference.baseten.co/v1";
+            apiKey = "{env:BASETEN_API_KEY}";
+          };
+          models = {
+            "deepseek-ai/DeepSeek-V3.1" = {
+              name = "Baseten DeepSeek V3.1";
+              limit = {
+                context = 163840;
+                output = 8000;
+              };
+            };
+            "moonshotai/Kimi-K2-Instruct" = {
+              name = "Baseten Kimi K2";
+              limit = {
+                context = 128000;
+                output = 8000;
+              };
+            };
+          };
+        };
+
+        # GMI Cloud - teste
+        gmi = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "https://api.gmi.cloud/v1";
+            apiKey = "{env:GMI_API_KEY}";
+          };
+          models = {
+            "deepseek-ai/deepseek-v3.1" = {
+              name = "GMI DeepSeek V3.1";
+              limit = {
+                context = 163840;
+                output = 8000;
+              };
+            };
+          };
+        };
+
+        # OVHcloud AI Endpoints - anonymous free tier
+        ovhcloud = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1";
+          };
+          models = {
+            "gpt-oss-120b" = {
+              name = "OVH GPT-OSS 120b (free anon)";
+              limit = {
+                context = 131072;
+                output = 8000;
+              };
+            };
+            "gpt-oss-20b" = {
+              name = "OVH GPT-OSS 20b (free anon)";
+              limit = {
+                context = 131072;
+                output = 8000;
+              };
+            };
+            "Meta-Llama-3_3-70B-Instruct" = {
+              name = "OVH Llama 3.3 70B (free anon)";
+              limit = {
+                context = 131072;
+                output = 8000;
+              };
+            };
+            "Qwen3.5-397B-A17B" = {
+              name = "OVH Qwen3.5 397B (free anon)";
+              limit = {
+                context = 262144;
+                output = 8000;
+              };
+            };
+          };
+        };
+
+        # Kilo Code Gateway - free models, no API key required
+        kilocode = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "https://api.kilo.ai/api/gateway";
+          };
+          models = {
+            "nvidia/nemotron-3-ultra-550b-a55b:free" = {
+              name = "Kilo Nemotron 3 Ultra 550B (free)";
+              limit = {
+                context = 1048576;
+                output = 65536;
+              };
+            };
+            "nvidia/nemotron-3.5-lightning:free" = {
+              name = "Kilo Nemotron 3.5 Lightning (free)";
+              limit = {
+                context = 1048576;
+                output = 65536;
+              };
+            };
+            "google/gemma-4-31b-it:free" = {
+              name = "Kilo Gemma 4 31B (free)";
+              limit = {
+                context = 262144;
+                output = 32768;
+              };
+            };
+            "kilo-auto/free" = {
+              name = "Kilo Auto Free Router";
+              limit = {
+                context = 262144;
+                output = 32768;
+              };
+            };
+          };
+        };
+
+        # LLM7.io - free anonymous access
+        llm7 = {
+          npm = "@ai-sdk/openai-compatible";
+          options = {
+            baseURL = "https://api.llm7.io/v1";
+          };
+          models = {
+            "gpt-oss:20b" = {
+              name = "LLM7 GPT-OSS 20b (free)";
+              limit = {
+                context = 131072;
+                output = 8000;
+              };
+            };
+            "nemotron-3-nano:30b" = {
+              name = "LLM7 Nemotron 3 Nano (free)";
+              limit = {
+                context = 1048576;
+                output = 8000;
+              };
+            };
+          };
+        };
 
         # Cloudflare Workers AI (free tier: 10k neurons/dia, sem cartão).
         # Chave + account id no env (08/10). Endpoint OpenAI-compat
@@ -526,10 +699,7 @@
           };
         };
 
-        # SambaNova COMENTADO 15/10 (matriz): 4/4 modelos HTTP 402
-        # (balance_units: 0 — free tier pós-2026 exige cartão). Reativar
-        # só com billing resolvido.
-        /*
+        # SambaNova - teste
         sambanova = {
           npm = "@ai-sdk/openai-compatible";
           options = {
@@ -539,19 +709,34 @@
           models = {
             "Meta-Llama-3.3-70B-Instruct" = {
               name = "Llama 3.3 70B (SambaNova)";
+              limit = {
+                context = 131072;
+                output = 8000;
+              };
             };
             "gpt-oss-120b" = {
               name = "GPT-OSS 120B (SambaNova)";
+              limit = {
+                context = 131072;
+                output = 8000;
+              };
             };
             "gemma-4-31B-it" = {
               name = "Gemma 4 31B (SambaNova)";
+              limit = {
+                context = 131072;
+                output = 8000;
+              };
             };
-            "DeepSeek-V3.2" = {
-              name = "DeepSeek V3.2 (SambaNova)";
+            "DeepSeek-V3.1" = {
+              name = "DeepSeek V3.1 (SambaNova)";
+              limit = {
+                context = 131072;
+                output = 8000;
+              };
             };
           };
         };
-        */
 
         # Cohere — trial key gratuita (rate-limited, sem cartão).
         # Endpoint OpenAI-compat /compatibility/v1 validado 08/10 (HTTP 200).
@@ -580,9 +765,7 @@
           };
         };
 
-        # HuggingFace COMENTADO 15/10 (matriz): "no remaining credits"
-        # (router cobra inference). Reativar só com créditos.
-        /*
+        # HuggingFace - teste
         huggingface = {
           npm = "@ai-sdk/openai-compatible";
           options = {
@@ -592,10 +775,27 @@
           models = {
             "Qwen/Qwen3-235B-A22B-Instruct-2507" = {
               name = "Qwen3 235B HF";
+              limit = {
+                context = 262144;
+                output = 8000;
+              };
+            };
+            "deepseek-ai/DeepSeek-V3.1" = {
+              name = "DeepSeek V3.1 HF";
+              limit = {
+                context = 163840;
+                output = 8000;
+              };
+            };
+            "moonshotai/Kimi-K2-Instruct" = {
+              name = "Kimi K2 HF";
+              limit = {
+                context = 128000;
+                output = 8000;
+              };
             };
           };
         };
-        */
       } // pkgs.lib.mapAttrs'
         (name: svc: pkgs.lib.nameValuePair svc.opencode.key {
           npm = "@ai-sdk/openai-compatible";
@@ -661,8 +861,7 @@
         # ✅ VIVOS na matriz: google 4/4 · nvidia 4/4 · cloudflare 5/6 · cohere 5/5
         # 🟡 RATE-LIMIT (manter): openrouter :free 4/5 (free-models-per-day, volta)
         # ❌ PAID (comentados): groq 0/3 · cerebras 0/2 · sambanova 0/4 · huggingface 0/1
-        "google" "cloudflare" "cohere" "nvidia" "openrouter"
-        # "groq" "huggingface" "cerebras" "sambanova"
+        "google" "cloudflare" "cohere" "nvidia" "openrouter" "groq" "cerebras" "together" "sambanova" "huggingface" "baseten" "gmi" "ovhcloud" "kilocode" "llm7"
         # Zen HABILITADO (dono confirmou 08/10: funciona; o erro de hoje era
         # cota diária esgotada por uso dele, não defeito).
         "opencode"
