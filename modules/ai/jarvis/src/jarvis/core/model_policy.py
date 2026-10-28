@@ -461,3 +461,179 @@ def cascade_key_present(entry: tuple[str, str, str, str]) -> bool:
     """True se a env key da entrada existe e não está vazia."""
     import os
     return bool(os.environ.get(entry[3], ""))
+
+
+# ── Hybrid Router (local vs cloud) ───────────────────────────────────
+# JARVIS analisa dificuldade da tarefa e decide: local (simples/moderado)
+# vs cloud (hard/expert). Princípio: local primeiro para economia/privacidade;
+# cloud só quando a tarefa EXIGE raciocínio pesado que o 4B/8B não entrega.
+# Integrado via select_model_for_task → o churno único continua valendo.
+
+import re
+
+# Heurísticas de dificuldade (simples, sem chamadas API — rápido).
+# Sinais de HARD: raciocínio multi-etapa, debugging complexo, arquitetura,
+# análise matemática, código longo/multi-arquivo, comparação de paradigmas.
+# Patterns usam prefixos (\w*) p/ capturar variações PT/EN (refatorar, debugar).
+_HARD_PATTERNS = [
+    r"\b(refactor|refator\w*|redesen\w*|redesign|arquitetura|architecture)\b",
+    r"\b(debug\w*|diagnóstic\w*|diagnostic\w*|root.?cause)\b",
+    r"\b(prov\w*|demonstr\w*|formal\w*|teorema|theorem|lemma|corolário)\b",
+    r"\b(algoritmo|algorithm|complexidade|complexity|big.?o)\b",
+    r"\b(multi.?step|multi.?file|multi.?arquivo|cross.?cutting|end.?to.?end)\b",
+    r"\b(otimiz\w*|optimiz\w*|performance|benchmark|profil\w*)\b",
+    r"\b(security|segurança|vulnerabilidade|cve|exploit|pentest|injection)\b",
+    r"\b(concurrent|concorrência|concorrent\w*|deadlock|race.?condition|thread.?safe)\b",
+    r"\b(machine.?learning|deep.?learning|neural|gradient|backprop|rede neural)\b",
+    r"\b(compile\w*|compiler|linker|assembly|bytecode|jit|interpreter)\b",
+    r"\b(distributed|distributed.?system|consensus|raft|paxos|quorum|distribuíd\w*)\b",
+    r"\b(phylogen|evolution|selection.?pressure|fitness.?landscape|algoritmo genético)\b",
+    r"\b(improve|melhore|enhance|optimize|refine).{0,40}(strategy|estratégia|algorithm|algoritmo)\b",
+    r"\b(analis\w*|analys\w*|avali\w*|evaluat\w*).{0,30}(complexidade|complexity|performance|eficiência)\b",
+    r"\b(implement\w*|constru\w*|desenv\w*|develop).{0,40}(algoritmo|algorithm|sistema|system|arquitetura|architecture)\b",
+    r"\b(refator\w*|migr\w*|transform\w*|conver\w*).{0,40}(módulo|module|sistema|system|base de dados|database)\b",
+]
+
+# Sinais de SIMPLES: perguntas diretas, código curto, explicação, formatação.
+_SIMPLE_PATTERNS = [
+    r"^(o que|what is|qual|which|quem|who|quando|when|onde|where|como|how)\b",
+    r"\b(explique|explain|defina|define|liste|list|resuma|summarize|descreva|describe)\b",
+    r"\b(conserte|fix|corrija|correct|mude|change|adicione|add|remova|remove|delete)\b.{0,30}\b(tipo|type|typo|spelling|indent|format|comment|comentário)\b",
+    r"\b(renomeie|rename|mova|move|copie|copy|delete|remova|remove)\b.{0,40}\b(file|arquivo|line|linha|function|função)\b",
+    r"\b(teste|test|unit.?test|integration.?test)\b.{0,30}\b(para|for|de|of)\b",
+    r"\b(mostrue|show|exiba|display|print|imprima|imprimir)\b",
+    r"\b(qual|which|onde|where|quando|when)\b.{0,30}\b(está|is|fica|located|vive)\b",
+]
+
+
+def classify_difficulty(prompt: str, context_len: int = 0) -> str:
+    """Classifica dificuldade da tarefa: 'simple'|'moderate'|'hard'.
+
+    Heurística rápida (regex + heurísticas de tamanho). Não substitui
+    julgamento humano, mas separa bem: simples = pergunta direta/explicação;
+    hard = raciocínio multi-etapa/debugging/arquitetura. moderate = default.
+    """
+    if not prompt or not prompt.strip():
+        return "simple"
+
+    text = prompt.lower()
+
+    # Contagem de sinais
+    hard_hits = sum(1 for p in _HARD_PATTERNS if re.search(p, text))
+    simple_hits = sum(1 for p in _SIMPLE_PATTERNS if re.search(p, text))
+
+    # Ajuste por tamanho: prompts muito longos tendem a ser mais complexos
+    if context_len > 10000 or len(text) > 2000:
+        hard_hits += 1
+    elif len(text) < 100:
+        simple_hits += 1
+
+    # Múltiplos hard signals → hard
+    if hard_hits >= 2:
+        return "hard"
+    # 1 hard + 0 simple → moderate (cuidado: pode ser hard disfarçado)
+    if hard_hits == 1 and simple_hits == 0:
+        return "moderate"
+    # Só sinais de simples → simple
+    if simple_hits > hard_hits:
+        return "simple"
+    # Default: moderate (local resolve bem)
+    return "moderate"
+
+
+# Cloud providers que FUNCIONAM hoje (re-probe 11/10 + 15/10 em CASCADE_MAP).
+# Ordem: groq (LPU rápido, gpt-oss-120b forte) > openrouter :free > freellmapi.
+_HYBRID_CLOUD = [
+    ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+    ("groq", "qwen/qwen3.8-27b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+    ("openrouter", "nvidia/nemotron-3.5-lightning:free", "https://openrouter.ai/api", "OPENROUTER_API_KEY"),
+    ("openrouter", "qwen/qwen3.8-flash", "https://openrouter.ai/api", "OPENROUTER_API_KEY"),
+    ("freellmapi", "auto", "http://127.0.0.1:3001", "FREELLMAPI_API_KEY"),
+]
+
+
+def hybrid_route(
+    prompt: str,
+    *,
+    local_requirements: dict | None = None,
+    context_len: int = 0,
+    force_local: bool = False,
+    force_cloud: bool = False,
+) -> dict:
+    """Roteamento híbrido: decide local vs cloud por dificuldade.
+
+    Retorna dict com:
+      - target: "local" | "cloud"
+      - local_model: id do modelo local (se target=local)
+      - cloud_entry: (provider, model, base_url, env_key) (se target=cloud)
+      - difficulty: "simple"|"moderate"|"hard"
+      - reason: explicação da decisão
+
+    Regras:
+      1. force_local/force_cloud têm precedência máxima.
+      2. difficulty=hard → cloud (se key disponível); senão fallback local.
+      3. difficulty=simple|moderate → local (economia/privacidade).
+    """
+    from jarvis.core.model_policy import select_model
+
+    req = local_requirements or {}
+    difficulty = classify_difficulty(prompt, context_len)
+
+    # Forced overrides
+    if force_cloud:
+        for entry in _HYBRID_CLOUD:
+            if cascade_key_present(entry):
+                return {
+                    "target": "cloud",
+                    "cloud_entry": entry,
+                    "difficulty": difficulty,
+                    "reason": "force_cloud=True",
+                }
+        # Sem key → cai pra local
+        difficulty = difficulty  # mantém
+
+    if force_local or difficulty in ("simple", "moderate"):
+        try:
+            model_id, reason = select_model(req)
+        except ModelRouteError:
+            # Sem modelo local elegível → tenta cloud se hard
+            if difficulty == "hard":
+                for entry in _HYBRID_CLOUD:
+                    if cascade_key_present(entry):
+                        return {
+                            "target": "cloud",
+                            "cloud_entry": entry,
+                            "difficulty": difficulty,
+                            "reason": "no_local_model_hard",
+                        }
+            raise
+        return {
+            "target": "local",
+            "local_model": model_id,
+            "difficulty": difficulty,
+            "reason": f"local (difficulty={difficulty})",
+        }
+
+    # difficulty == "hard" → cloud primeiro
+    for entry in _HYBRID_CLOUD:
+        if cascade_key_present(entry):
+            return {
+                "target": "cloud",
+                "cloud_entry": entry,
+                "difficulty": difficulty,
+                "reason": f"cloud (difficulty={difficulty})",
+            }
+
+    # Hard mas sem key cloud → fallback local (melhor que nada)
+    try:
+        model_id, reason = select_model(req)
+        return {
+            "target": "local",
+            "local_model": model_id,
+            "difficulty": difficulty,
+            "reason": "local (hard but no cloud key)",
+        }
+    except ModelRouteError:
+        raise ModelRouteError(
+            f"hybrid: difficulty={difficulty}, no local model, no cloud key"
+        )

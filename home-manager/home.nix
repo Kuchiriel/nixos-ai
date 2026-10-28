@@ -429,29 +429,35 @@
             # Auditoria 08/10 (GET /models real, 80 modelos): v4-flash-0731
             # saiu do catálogo → v4.1-flash. gemma-4-31b-it adicionado.
             "deepseek-ai/deepseek-v4.1-flash" = {
-              name = "DeepSeek V4.1 Flash (NIM free)";
+              name = "DeepSeek V4.1 Flash (NIM free) - fast coding/reasoning | ctx:262K";
+              limit = { context = 262144; output = 65536; };
             };
             "z-ai/glm-5.3-flash" = {
-              name = "GLM 5.3 Flash (NIM free)";
+              name = "GLM 5.3 Flash (NIM free) - general purpose/long context | ctx:131K";
+              limit = { context = 131072; output = 65536; };
             };
             "nvidia/nemotron-3-super-120b-a12b" = {
-              name = "Nemotron 3 Super 120B (NIM free)";
+              name = "Nemotron 3 Super 120B (NIM free) - balanced powerful | ctx:262K";
+              limit = { context = 262144; output = 65536; };
             };
             # 15/10 (matriz + catálogo NIM 81 modelos): ultra-550b EXISTE no
-            # NIM e responde OK (o 502 antigo era do router freellmapi, não
-            # do NIM). É o modelo principal do dono.
+            # NIM e responde OK
             "nvidia/nemotron-3-ultra-550b-a55b" = {
-              name = "Nemotron 3 Ultra 550B A55B (NIM free)";
+              name = "Nemotron 3 Ultra 550B A55B (NIM free) - most powerful | ctx:1M";
+              limit = { context = 1048576; output = 262144; };
             };
-            # Companheiros da família nemotron-3 no NIM (catálogo 15/10):
+            # Companheiros da família nemotron-3 no NIM
             "nvidia/nemotron-3.5-super-vl-120b-a12b" = {
-              name = "Nemotron 3.5 Super VL 120B (NIM free, visão)";
+              name = "Nemotron 3.5 Super VL 120B (NIM free, vision) - multimodal | ctx:262K";
+              limit = { context = 262144; output = 65536; };
             };
             "nvidia/nemotron-3.5-lightning-30b-a3b" = {
-              name = "Nemotron 3.5 Lightning 30B A3B (NIM free)";
+              name = "Nemotron 3.5 Lightning 30B A3B (NIM free) - very fast | ctx:262K";
+              limit = { context = 262144; output = 65536; };
             };
             "google/gemma-4-31b-it" = {
-              name = "Gemma 4 31B IT (NIM free)";
+              name = "Gemma 4 31B IT (NIM free) - general purpose | ctx:262K";
+              limit = { context = 262144; output = 65536; };
             };
           };
         };
@@ -564,28 +570,28 @@
           };
           models = {
             "gpt-oss-120b" = {
-              name = "OVH GPT-OSS 120b (free anon)";
+              name = "OVH GPT-OSS 120b (free anon) - reasoning/coding | ctx:131K";
               limit = {
                 context = 131072;
                 output = 8000;
               };
             };
             "gpt-oss-20b" = {
-              name = "OVH GPT-OSS 20b (free anon)";
+              name = "OVH GPT-OSS 20b (free anon) - fast/lightweight | ctx:131K";
               limit = {
                 context = 131072;
                 output = 8000;
               };
             };
             "Meta-Llama-3_3-70B-Instruct" = {
-              name = "OVH Llama 3.3 70B (free anon)";
+              name = "OVH Llama 3.3 70B (free anon) - general purpose | ctx:131K";
               limit = {
                 context = 131072;
                 output = 8000;
               };
             };
             "Qwen3.5-397B-A17B" = {
-              name = "OVH Qwen3.5 397B (free anon)";
+              name = "OVH Qwen3.5 397B (free anon) - powerful reasoning | ctx:262K";
               limit = {
                 context = 262144;
                 output = 8000;
@@ -602,28 +608,21 @@
           };
           models = {
             "nvidia/nemotron-3-ultra-550b-a55b:free" = {
-              name = "Kilo Nemotron 3 Ultra 550B (free)";
+              name = "Kilo Nemotron 3 Ultra 550B (free) - powerful reasoning/coding | ctx:1M";
               limit = {
                 context = 1048576;
                 output = 65536;
               };
             };
             "nvidia/nemotron-3.5-lightning:free" = {
-              name = "Kilo Nemotron 3.5 Lightning (free)";
+              name = "Kilo Nemotron 3.5 Lightning (free) - fast general purpose | ctx:1M";
               limit = {
                 context = 1048576;
                 output = 65536;
               };
             };
-            "google/gemma-4-31b-it:free" = {
-              name = "Kilo Gemma 4 31B (free)";
-              limit = {
-                context = 262144;
-                output = 32768;
-              };
-            };
             "kilo-auto/free" = {
-              name = "Kilo Auto Free Router";
+              name = "Kilo Auto Free Router - auto-select best free model | ctx:262K";
               limit = {
                 context = 262144;
                 output = 32768;
@@ -858,12 +857,11 @@
         # freellmapi REMOVIDO 15/10 (dono: pago + derrubou os outros providers)
         # MORTOS 14/10 (arquivos deletados no tree-shake; descomentar = re-baixar):
         # "local-xlam-8b" "local-qwen30b-moe" "local-uncensored-q4kp"
-        # ✅ VIVOS na matriz: google 4/4 · nvidia 4/4 · cloudflare 5/6 · cohere 5/5
-        # 🟡 RATE-LIMIT (manter): openrouter :free 4/5 (free-models-per-day, volta)
-        # ❌ PAID (comentados): groq 0/3 · cerebras 0/2 · sambanova 0/4 · huggingface 0/1
-        "google" "cloudflare" "cohere" "nvidia" "openrouter" "groq" "cerebras" "together" "sambanova" "huggingface" "baseten" "gmi" "ovhcloud" "kilocode" "llm7"
-        # Zen HABILITADO (dono confirmou 08/10: funciona; o erro de hoje era
-        # cota diária esgotada por uso dele, não defeito).
+        # ✅ TESTADOS E FUNCIONANDO: google, cloudflare, cohere, nvidia, openrouter
+        # 🆓 ANÔNIMOS/FREE: ovhcloud (sem key), kilocode (sem key)
+        # ❌ REMOVIDOS: groq (rate limit/token issues), cerebras (payment required), together (bad key),
+        #    sambanova (high demand), baseten (bad key), gmi (DNS), huggingface (no credits), llm7 (quota)
+        "google" "cloudflare" "cohere" "nvidia" "openrouter" "ovhcloud" "kilocode"
         "opencode"
       ];
 
