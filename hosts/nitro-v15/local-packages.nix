@@ -57,6 +57,16 @@
       exec wine "$TERM64" "/portable" "/config:$WIN_INI"
     '';
   };
+
+  mt5-desktop = pkgs.writeDesktopEntry {
+    name = "MetaTrader 5";
+    exec = "mt5 %F";
+    terminal = false;
+    icon = "wine";
+    type = "Application";
+    categories = "Office;Finance;";
+    comment = "MetaTrader 5 Trading Platform (via Wine)";
+  };
 in {
   environment.systemPackages = with pkgs; [
     pciutils
@@ -73,6 +83,7 @@ in {
     mt5
     mt5-setup
     mt5-backtest
+    mt5-desktop
   ];
 
   # Regras de udev para otimizar o scheduler de I/O nos NVMes de alta performance
