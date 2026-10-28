@@ -9,6 +9,13 @@
     nixpkgs-master.url = "github:nixos/nixpkgs/master";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
+    # MetaTrader 5 (EA GOLD FAKEOUT): o wine 11 do 26.05 é detectado pelo
+    # anti-debugger do MT5 e aborta installer E terminal (consenso multi-
+    # usuário do fórum mql5 503128, jan/2026; WINEDEBUG=-all não resolve).
+    # Wine 10.0 = versão que funciona. O winetricks do 26.05 também quebra
+    # com builds WoW64 (nixpkgs#338367) — ambos vêm do pin 25.11.
+    nixpkgs-wine10.url = "github:nixos/nixpkgs/nixos-25.11";
+
     opencode-flake.url = "github:dan-online/opencode-nix";
 
     home-manager = {
@@ -39,6 +46,7 @@
     nixpkgs,
     nixpkgs-unstable,
     nixpkgs-master,
+    nixpkgs-wine10,
     home-manager,
     stylix,
     disko,
@@ -135,6 +143,12 @@
 
         # Mantém o Antigravity original tratando a licença unfree com o import correto
         antigravity-ide = (import nixpkgs-unstable { inherit system; config.allowUnfree = true; }).antigravity-ide;
+
+        # MT5 sob wine 10 (ver comentário no input nixpkgs-wine10). Sombreia
+        # os attrs globais: todo consumer do sistema ganha wine 10/winetricks
+        # compatíveis sem tocar no resto do 26.05.
+        wineWow64Packages = (import nixpkgs-wine10 {inherit system;}).wineWow64Packages;
+        winetricks = (import nixpkgs-wine10 {inherit system;}).winetricks;
 
         inherit aiModels;
       };
