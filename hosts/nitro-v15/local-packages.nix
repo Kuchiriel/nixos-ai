@@ -1,4 +1,4 @@
-{pkgs, ...}: let
+{pkgs, lib, ...}: let
   wine10 = pkgs.wineWow64Packages.stable;
 
   mt5 = pkgs.writeShellApplication {
@@ -58,14 +58,29 @@
     '';
   };
 
-  mt5-desktop = pkgs.writeDesktopEntry {
-    name = "MetaTrader 5";
-    exec = "mt5 %F";
-    terminal = false;
-    icon = "wine";
-    type = "Application";
-    categories = "Office;Finance;";
-    comment = "MetaTrader 5 Trading Platform (via Wine)";
+  mt5-desktop = pkgs.writeTextFile {
+    name = "mt5.desktop";
+    text = ''
+      [Desktop Entry]
+      Type=Application
+      Name=MetaTrader 5
+      Comment=MetaTrader 5 Trading Platform (via Wine)
+      Exec=mt5 %F
+      Icon=wine
+      Terminal=false
+      Type=Application
+      Categories=Office;Finance;
+    '';
+  };
+
+  mt5-desktop-pkg = pkgs.symlinkJoin {
+    name = "mt5-desktop-files";
+    paths = [mt5-desktop];
+    # cria $out/share/applications/mt5.desktop
+    postBuild = ''
+      mkdir -p $out/share/applications
+      cp ${mt5-desktop} $out/share/applications/mt5.desktop
+    '';
   };
 in {
   environment.systemPackages = with pkgs; [
@@ -83,7 +98,7 @@ in {
     mt5
     mt5-setup
     mt5-backtest
-    mt5-desktop
+    mt5-desktop-pkg
   ];
 
   # Regras de udev para otimizar o scheduler de I/O nos NVMes de alta performance
