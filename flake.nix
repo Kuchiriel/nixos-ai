@@ -277,6 +277,8 @@
           python313Packages.soundfile
           python313Packages.playwright
           python313Packages.prompt-toolkit
+          python313Packages.onnxruntime
+          python313Packages.tokenizers
           playwright-driver  
           
           # Documentos/PDF/OCR (vendas, propostas, guias)

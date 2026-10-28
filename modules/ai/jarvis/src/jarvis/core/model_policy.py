@@ -484,13 +484,25 @@ _SIMPLE_PATTERNS = [
 def classify_difficulty(prompt: str, context_len: int = 0) -> str:
     """Classifica dificuldade da tarefa: 'simple'|'moderate'|'hard'.
 
-    Heurística rápida (regex + heurísticas de tamanho). Não substitui
-    julgamento humano, mas separa bem: simples = pergunta direta/explicação;
-    hard = raciocínio multi-etapa/debugging/arquitetura. moderate = default.
+    Classificador primário: Laya (decision model ONNX, CPU, ~150ms, 421M params).
+    Fallback: regex + heurísticas de tamanho (se Laya indisponível/erro).
+    Laya retorna distribuição calibrada sobre opções tipadas; o regex cobre
+    PT/EN e quando o ONNX session não carrega (import error, load fail).
     """
     if not prompt or not prompt.strip():
         return "simple"
 
+    # 1) Tenta Laya (decision model). None = indisponível → regex.
+    try:
+        from jarvis.core.laya_classifier import classify_difficulty_laya
+
+        laya_result = classify_difficulty_laya(prompt, context_len)
+        if laya_result in ("simple", "moderate", "hard"):
+            return laya_result
+    except Exception:
+        pass  # Laya caiu → regex fallback
+
+    # 2) Fallback: regex + heurísticas de tamanho
     text = prompt.lower()
 
     # Contagem de sinais
