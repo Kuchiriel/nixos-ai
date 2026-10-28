@@ -58,30 +58,22 @@
     '';
   };
 
-  mt5-desktop = pkgs.writeTextFile {
-    name = "mt5.desktop";
-    text = ''
-      [Desktop Entry]
-      Type=Application
-      Name=MetaTrader 5
-      Comment=MetaTrader 5 Trading Platform (via Wine)
-      Exec=mt5 %F
-      Icon=wine
-      Terminal=false
-      Type=Application
-      Categories=Office;Finance;
-    '';
-  };
-
-  mt5-desktop-pkg = pkgs.symlinkJoin {
-    name = "mt5-desktop-files";
-    paths = [mt5-desktop];
-    # cria $out/share/applications/mt5.desktop
-    postBuild = ''
-      mkdir -p $out/share/applications
-      cp ${mt5-desktop} $out/share/applications/mt5.desktop
-    '';
-  };
+  mt5-desktop-pkg = pkgs.runCommandLocal "mt5-desktop-files" {
+    buildInputs = [ ];
+  } ''
+    mkdir -p $out/share/applications
+    cat > $out/share/applications/mt5.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=MetaTrader 5
+Comment=MetaTrader 5 Trading Platform (via Wine)
+Exec=mt5 %F
+Icon=wine
+Terminal=false
+Type=Application
+Categories=Office;Finance;
+EOF
+  '';
 in {
   environment.systemPackages = with pkgs; [
     pciutils
