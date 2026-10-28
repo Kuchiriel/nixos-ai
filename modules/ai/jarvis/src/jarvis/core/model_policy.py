@@ -382,6 +382,42 @@ from pathlib import Path as _Path
 
 _FREE_PROVIDERS_PATH = _Path(__file__).parent.parent.parent.parent.parent / "free-providers.json"
 
+# Fallback embutido: usado quando free-providers.json não está acessível
+# (ex: nix build sandbox, onde o JSON fica fora do pacote jarvis/).
+# Espelha as camadas essenciais do CASCADE_MAP pra nunca ficar vazio.
+_CASCADE_FALLBACK: dict[str, list[tuple[str, str, str, str]]] = {
+    "coding-long": [
+        ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+        ("cloudflare", "@cf/openai/gpt-oss-120b", "https://api.cloudflare.com/client/v4/accounts", "CLOUDFLARE_API_TOKEN"),
+    ],
+    "dev": [
+        ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+        ("groq", "qwen/qwen3.8-27b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+        ("cloudflare", "@cf/qwen/qwen3.8-27b", "https://api.cloudflare.com/client/v4/accounts", "CLOUDFLARE_API_TOKEN"),
+        ("openrouter", "nvidia/nemotron-3.5-lightning:free", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
+    ],
+    "reasoning": [
+        ("nvidia", "nvidia/nemotron-3-ultra-550b-a55b", "https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY"),
+        ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+    ],
+    "fast": [
+        ("groq", "openai/gpt-oss-20b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+        ("openrouter", "nvidia/nemotron-3.5-lightning:free", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
+    ],
+    "vision": [
+        ("gemini", "gemini-2.5-flash", "https://generativelanguage.googleapis.com/v1beta/openai", "GEMINI_API_KEY"),
+    ],
+    "classify": [
+        ("groq", "openai/gpt-oss-20b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+    ],
+    "docs": [
+        ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+    ],
+    "batch": [
+        ("openrouter", "nvidia/nemotron-3.5-lightning:free", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
+    ],
+}
+
 
 def _load_free_providers() -> dict:
     """Carrega free-providers.json (fonte única). Fallback = dict vazio."""
@@ -424,7 +460,11 @@ def _build_cascade_map() -> dict[str, list[tuple[str, str, str, str]]]:
 
 # CASCADE_MAP construído do JSON (fonte única). Mantém compat com o
 # formato antigo: {layer: [(provider, model, base_url, env_key), ...]}
-CASCADE_MAP: dict[str, list[tuple[str, str, str, str]]] = _build_cascade_map()
+# Fallback: _CASCADE_FALLBACK embutido (JSON indisponível em nix build).
+_CASCADE_FROM_JSON = _build_cascade_map()
+CASCADE_MAP: dict[str, list[tuple[str, str, str, str]]] = (
+    _CASCADE_FROM_JSON if _CASCADE_FROM_JSON else _CASCADE_FALLBACK
+)
 
 
 def cascade_for(layer: str) -> list[tuple[str, str, str, str]]:
