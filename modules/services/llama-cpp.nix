@@ -137,6 +137,13 @@ with lib; let
       {
         User = "nixos";
         Restart = "on-failure";
+        # Hardening básico (GPU precisa de acesso a dispositivos)
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        RestrictSUIDSGID = true;
+        ProtectSystem = "strict";
+        # Permitir acesso a GPU e modelos
+        ReadWritePaths = [ "/home/nixos/models" "/home/nixos/projects/prism-bin" "/home/nixos/projects/ik_llama.cpp" "/home/nixos/projects/llama.cpp" ];
         # (26/09, incidente freeze) Resource firewall: o OOM mata SÓ o
         # serviço, nunca a máquina. MemoryHigh = throttle (kernel reclama
         # antes, sem matar); MemoryMax = teto duro (OOM só dentro da

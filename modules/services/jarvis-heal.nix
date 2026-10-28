@@ -49,6 +49,9 @@ in {
         ExecStart = execCmd;
         Restart = "on-failure";
         RestartSec = "30";
+        # Hardening básico
+        NoNewPrivileges = true;
+        PrivateTmp = true;
       };
     };
 
