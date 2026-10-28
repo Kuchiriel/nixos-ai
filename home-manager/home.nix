@@ -409,9 +409,7 @@ in {
         "local-deepseek-7b" "local-phi-mini" "local-gemma-4b"
         # Cloud (gerados do free-providers.json):
         "groq" "nvidia" "cloudflare" "gemini" "openrouter"
-        "ovhcloud" "kilocode" "llm7"
-        # Cohere: trial instável (timeout 28/10) — habilitar só se voltar:
-        # "cohere"
+        "ovhcloud" "kilocode" "llm7" "cohere"
         "opencode"
       ];
 
