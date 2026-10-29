@@ -1,5 +1,8 @@
 {pkgs, lib, ...}: let
-  wine10 = pkgs.wineWow64Packages.stable;
+  # staging (11.8) é OBRIGATÓRIO p/ MT5: stable (10/11) aciona o
+  # anti-debug "A debugger has been found running" (NtRaiseHardError).
+  # Equivalente NixOS do winehq-staging do script oficial mt5linux.sh.
+  wine10 = pkgs.wineWow64Packages.staging;
 
   mt5 = pkgs.writeShellApplication {
     name = "mt5";
@@ -9,6 +12,7 @@
       # uso: mt5 [argumentos do terminal64.exe]
       export WINEARCH=win64
       export WINEPREFIX="''${MT5_PREFIX:-$HOME/.mt5}"
+      export WINEDLLOVERRIDES=winemenubuilder.exe=d
       TERM64="''${MT5_TERM64:-$WINEPREFIX/drive_c/Program Files/MetaTrader 5/terminal64.exe}"
       if [ ! -f "$TERM64" ]; then
         echo "mt5: terminal64.exe nao encontrado em $WINEPREFIX" >&2
@@ -23,13 +27,15 @@
     name = "mt5-setup";
     runtimeInputs = [wine10];
     text = ''
-      # mt5-setup — instala o MT5 no prefix dedicado
+      # mt5-setup — instala o MT5 no prefix dedicado (método oficial adaptado:
+      # wine-staging + mt5setup.exe, ref metatrader5.com install_linux)
       # uso: mt5-setup <caminho do mt5setup.exe> [--auto]
       #   --auto = instalacao silenciosa (sem wizard)
       # Aceite os prompts de Mono/Gecko do wine (necessarios p/ o MT5).
       if [ $# -lt 1 ]; then echo "uso: mt5-setup <mt5setup.exe> [--auto]" >&2; exit 1; fi
       export WINEARCH=win64
       export WINEPREFIX="''${MT5_PREFIX:-$HOME/.mt5}"
+      export WINEDLLOVERRIDES=winemenubuilder.exe=d
       mkdir -p "$WINEPREFIX"
       SETUP="$1"
       AUTO=""
@@ -51,6 +57,7 @@
       [ -n "$INI" ] || { echo "uso: mt5-backtest <tester.ini>"; exit 1; }
       export WINEARCH=win64
       export WINEPREFIX="''${MT5_PREFIX:-$HOME/.mt5}"
+      export WINEDLLOVERRIDES=winemenubuilder.exe=d
       TERM64="''${MT5_TERM64:-$WINEPREFIX/drive_c/Program Files/MetaTrader 5/terminal64.exe}"
       [ -f "$TERM64" ] || { echo "mt5: terminal64.exe nao encontrado"; exit 1; }
       WIN_INI=$(winepath -w "$INI")
@@ -85,7 +92,7 @@ in {
     jq
     htop
     unar # Descompactar .rar/.rar5 (livre; unrar original precisaria allowUnfree)
-    wineWow64Packages.stable
+    wineWow64Packages.staging # MT5: staging obrigatório (anti-debug), stable aborta
     winetricks
     mt5
     mt5-setup
