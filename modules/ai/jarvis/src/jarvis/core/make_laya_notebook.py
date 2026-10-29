@@ -429,7 +429,7 @@ def build_notebook(dataset_dir: str) -> dict:
             "        \"marker_pos\": {1: \"n_opts\"}, \"marker_mask\": {1: \"n_opts\"},\n",
             "        \"logits\": {1: \"n_opts\"},\n",
             "    },\n",
-            "    opset_version=17, do_constant_folding=True,\n",
+            "    opset_version=17, do_constant_folding=True, dynamo=False,\n",
             ")\n",
             "print(f\"ONNX export: {onnx_path} ({os.path.getsize(onnx_path)/1e6:.1f} MB)\")\n",
             "print(\"Files:\", os.listdir(ONNX_DIR))"
