@@ -47,7 +47,7 @@ def build_notebook(dataset_dir: str) -> dict:
         "execution_count": None,
         "outputs": [],
         "source": [
-            "!pip install -q -U \"laya>=0.1.6\" \"transformers>=4.48.0\" \"datasets>=3.0.0\" safetensors huggingface_hub pyarrow pandas scipy accelerate tabulate\n",
+            "!pip install -q -U \"laya>=0.1.6\" \"transformers>=4.48.0\" \"datasets>=3.0.0\" safetensors huggingface_hub pyarrow pandas scipy accelerate tabulate onnxscript onnx\n",
             "import laya, transformers, torch\n",
             "print(\"Laya:\", laya.__version__, \"| Transformers:\", transformers.__version__, \"| Torch:\", torch.__version__)\n",
             "print(\"CUDA:\", torch.cuda.is_available(), \"| GPUs:\", torch.cuda.device_count())"
@@ -381,6 +381,61 @@ def build_notebook(dataset_dir: str) -> dict:
         ]
     })
 
+    # [6.5] Export ONNX (fine-tuned) — p/ laya_classifier.py
+    cells.append({
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": [
+            "## 4.5. Export ONNX\n",
+            "\n",
+            "Exporta o checkpoint fine-tuned pra ONNX (fp32) no formato que\n",
+            "`laya_classifier.py` consome: input_ids/attention_mask/marker_pos/marker_mask/qtype → logits/act_logits."
+        ]
+    })
+    cells.append({
+        "cell_type": "code",
+        "metadata": {},
+        "execution_count": None,
+        "outputs": [],
+        "source": [
+            "import torch, os, shutil\n",
+            "from pathlib import Path\n",
+            "\n",
+            "ONNX_DIR = \"/kaggle/working/laya_onnx_ft\"\n",
+            "os.makedirs(ONNX_DIR, exist_ok=True)\n",
+            "\n",
+            "# Copia tokenizer + config junto (laya_classifier.py lê os dois)\n",
+            "shutil.copytree(os.path.join(OUTPUT_DIR, \"tokenizer\"), os.path.join(ONNX_DIR, \"tokenizer\"), dirs_exist_ok=True)\n",
+            "shutil.copy(os.path.join(OUTPUT_DIR, \"rl_agent_config.json\"), os.path.join(ONNX_DIR, \"rl_agent_config.json\"))\n",
+            "\n",
+            "model = agent_ft.model.eval().cpu()\n",
+            "max_len = cfg[\"max_len\"]\n",
+            "# Dummy inputs no formato exato do laya_classifier.py\n",
+            "dummy_ids = torch.randint(0, 1000, (1, 64), dtype=torch.long)\n",
+            "dummy_mask = torch.ones((1, 64), dtype=torch.long)\n",
+            "dummy_mpos = torch.tensor([[1, 5, 9]], dtype=torch.long)\n",
+            "dummy_mmask = torch.ones((1, 3), dtype=torch.bool)\n",
+            "dummy_qtype = torch.tensor([0], dtype=torch.long)\n",
+            "\n",
+            "onnx_path = os.path.join(ONNX_DIR, \"model.onnx\")\n",
+            "torch.onnx.export(\n",
+            "    model,\n",
+            "    (dummy_ids, dummy_mask, dummy_mpos, dummy_mmask, dummy_qtype),\n",
+            "    onnx_path,\n",
+            "    input_names=[\"input_ids\", \"attention_mask\", \"marker_pos\", \"marker_mask\", \"qtype\"],\n",
+            "    output_names=[\"logits\", \"act_logits\"],\n",
+            "    dynamic_axes={\n",
+            "        \"input_ids\": {1: \"seq\"}, \"attention_mask\": {1: \"seq\"},\n",
+            "        \"marker_pos\": {1: \"n_opts\"}, \"marker_mask\": {1: \"n_opts\"},\n",
+            "        \"logits\": {1: \"n_opts\"},\n",
+            "    },\n",
+            "    opset_version=17, do_constant_folding=True,\n",
+            ")\n",
+            "print(f\"ONNX export: {onnx_path} ({os.path.getsize(onnx_path)/1e6:.1f} MB)\")\n",
+            "print(\"Files:\", os.listdir(ONNX_DIR))"
+        ]
+    })
+
     # [7] Push to Hub
     cells.append({
         "cell_type": "markdown",
@@ -401,14 +456,17 @@ def build_notebook(dataset_dir: str) -> dict:
             "from huggingface_hub import HfApi\n",
             "\n",
             "HF_REPO = \"SEU_USUARIO/laya-jarvis-difficulty\"  # ← ajuste\n",
-            "api = HfApi()\n",
-            "api.create_repo(HF_REPO, exist_ok=True, private=False)\n",
-            "api.upload_folder(\n",
-            "    folder_path=OUTPUT_DIR,\n",
-            "    repo_id=HF_REPO,\n",
-            "    commit_message=\"fine-tune Laya on JARVIS difficulty dataset\",\n",
-            ")\n",
-            "print(f\"Pushed to https://huggingface.co/{HF_REPO}\")"
+            "token = os.environ.get(\"HF_TOKEN\") or os.environ.get(\"HUGGING_FACE_HUB_TOKEN\")\n",
+            "if not token:\n",
+            "    print(\"HF_TOKEN ausente — pulando push (checkpoint fica em /kaggle/working)\")\n",
+            "else:\n",
+            "    api = HfApi(token=token)\n",
+            "    api.create_repo(HF_REPO, exist_ok=True, private=False)\n",
+            "    api.upload_folder(folder_path=OUTPUT_DIR, repo_id=HF_REPO,\n",
+            "                       commit_message=\"fine-tune Laya on JARVIS difficulty\")\n",
+            "    api.upload_folder(folder_path=ONNX_DIR, repo_id=HF_REPO, path_in_repo=\"onnx\",\n",
+            "                       commit_message=\"ONNX export fine-tuned\")\n",
+            "    print(f\"Pushed to https://huggingface.co/{HF_REPO}\")"
         ]
     })
 
