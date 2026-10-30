@@ -87,6 +87,20 @@
     fi
   '';
 
+  # RELOAD NO SWITCH (29/10 — incidente real): o serve carrega a config do
+  # opencode UMA vez no boot. Ficou rodando desde 15/10 com a config daquela
+  # época (só `freellmapi`, provider morto) e a TUI/celular passaram a ver
+  # "modelos sumiram" (nvidia A55B, nomes/contexto ausentes) mesmo com a
+  # config atual correta no disco — o restart manual resolvia. Aqui o serviço
+  # é reiniciado a cada activation (config é regerada antes do writeBoundary),
+  # então rebuild/switch nunca mais deixa o serve com config velha.
+  # `|| true`: activation pode rodar sem DBUS em contexto de boot.
+  home.activation."opencode-serve-reload" = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    if ${pkgs.systemd}/bin/systemctl --user is-active --quiet opencode-serve.service 2>/dev/null; then
+      ${pkgs.systemd}/bin/systemctl --user restart opencode-serve.service 2>/dev/null || true
+    fi
+  '';
+
   # keys.env p/ o serve (11/10): espelha /etc/litellm.env em formato KEY=valor
   # (sem `export` — systemd recusa e loga em claro). Roda TODA activation, então
   # rotação de chave no /etc/litellm.env propaga no próximo switch/login.
