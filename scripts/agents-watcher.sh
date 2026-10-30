@@ -71,6 +71,9 @@ COOLDOWN="${AGENTS_PROSPECT_COOLDOWN:-14400}"
 read -r QUIET_DE QUIET_ATE <<< "${AGENTS_QUIET:-1 7}"
 
 INTERVALO="${AGENTS_INTERVAL:-150}"
+# (30/10) janela (s) para o re-Return: se o agente segue ocioso ate
+# REENTER_MAX s depois de um wake, o Return anterior nao pegou.
+REENTER_MAX="${AGENTS_REENTER_MAX:-200}"
 ONCE=0; CHECK=0
 for a in "$@"; do
     case "$a" in
@@ -265,6 +268,20 @@ ciclo() {
             ULT_WAKE=$(cat "$DIR_ST/wake.$CHAVE")
         fi
         IDLE_SEGS=$(( AGORA_E - ULT_WAKE ))
+        # (30/10) FIX ENTER: o TUI do opencode as vezes ignora o Return colado
+        # com o texto (o input ainda esta processando) -> o dono precisa apertar
+        # enter na mao. Aqui: se o agente continua OCIOSO logo apos um wake,
+        # o texto segue na caixa de input -> reenvia SO o Return (nao digita
+        # outra mensagem, que se misturaria com a anterior).
+        if [ "$DELTA" -lt "$LIMITE_CPU" ] \
+           && [ "$IDLE_SEGS" -ge 3 ] && [ "$IDLE_SEGS" -le "$REENTER_MAX" ]; then
+            hyprctl dispatch focuswindow "address:$END" >/dev/null 2>&1
+            sleep 0.3
+            wtype -k Return
+            log "RE-ENTER end=$END (o wake anterior nao foi submetido: so o Return)"
+            [ "$CHECK" -eq 1 ] || date +%s > "$DIR_ST/wake.$CHAVE"
+            continue
+        fi
         MOTIVO=""
         [ -n "$ACHADO_CICLO" ] && [ "$IDLE_SEGS" -ge "$RATE_MIN" ] && MOTIVO="$ACHADO_CICLO"
         # (30/10) SUGESTAO DE CHECKPOINT: stretch longo de trabalho + agente
@@ -350,6 +367,7 @@ ciclo() {
         fi
         hyprctl dispatch focuswindow "address:$END" >/dev/null 2>&1
         wtype "[WATCHER $AGORA] $MOTIVO. Conf. mutuas AUTORIZADAS. 1 linha de acao."
+        sleep 1.2   # (30/10) o TUI precisa terminar de processar o texto antes do Return
         wtype -k Return
         date +%s > "$DIR_ST/wake.$CHAVE"
         log "WAKE end=$END motivo=$MOTIVO"
