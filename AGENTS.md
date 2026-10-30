@@ -46,6 +46,35 @@ git add -A && git ls-files -o --exclude-standard   # flake only sees tracked
 nix flake check
 ```
 
+## CLI do JARVIS = mesmo env do MCP (30/10)
+
+- `scripts/jarvis-cli.sh` e o MCP compartilham `modules/ai/jarvis/jarvis-env.sh`
+  (keys de `/etc/litellm.env`, PYTHONPATH = src + env oficial do store +
+  `/home/nixos/.local/jarvis-mcp-site`, python do perfil). **Nunca mais divergir
+  os dois envs** — sem isso a CLI perde `requests`, o breaker do LLM abre e o
+  `rag-index` pendura sem erro.
+- Os handlers MCP leem chaves **fixas**: `rag_index`→`path`, `vault_write`→`name`
+  (+`content`), `rag_search`→`query`/`collection`/`limit`, `remember`→`text`,
+  `recall`/`lessons`→`query`. Chave errada = **argumento ignorado** (a CLI
+  indexava a árvore errada por 6 meses de bug).
+- **Servidor de embeddings (8081) tem n_ctx=512 TOKENS por item**: chunk de 1200
+  chars ≈ 550 tokens → HTTP 400 `exceed_context_size`. `CHUNK_CHARS=800`, e
+  `embed()` encolhe sozinho se o servidor recusar. Lote ≤64 itens/POST e
+  **sem retry** (Retry read=3 × timeout = 8min de espera = "hang").
+- O env oficial do MCP é **descoberto lendo `~/.config/opencode/opencode.json`**
+  (symlink pro store) → acompanha o rebuild sem re-gitar o Nix.
+
+## Checkpoint e dores (30/10)
+
+- `scripts/agent-checkpoint.sh` = as 4 camadas em 1 comando (fila+commit,
+  rag-index, memória, vault HANDOFF+commit), genérico para qualquer repo.
+- `scripts/agent-pains.sh` = captura **sozinha** os erros de tool: o store vivo
+  do opencode é o **SQLite `~/.local/share/opencode/opencode.db`** (o
+  `storage/` JSON só tem sessões antigas). O `agents-watcher.sh` roda o
+  `scan-apply` a cada 10 ciclos e sugere checkpoint após 45min de trabalho.
+- Erro mascarado por pipe (`cmd | tail`) **não** chega ao scanner → em debug,
+  rode sem pipe (ou com `set -o pipefail`).
+
 ## Boundaries
 
 - **Always:** run tests before committing; check `git ls-files` for
