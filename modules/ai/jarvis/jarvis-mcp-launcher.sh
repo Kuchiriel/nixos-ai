@@ -28,64 +28,12 @@ set -euo pipefail
 # A sessão desktop pode ter TAVILY_API_KEY antiga no environ; sem este
 # source, o MCP herda a key podre e recebe HTTP 432 mesmo com o arquivo
 # atualizado. Source ANTES do PYTHONPATH p/ garantir precedência.
-set -a
-source /etc/litellm.env 2>/dev/null || true
-set +a
-
-JARVIS_PKG="${JARVIS_PKG:-$(ls -dt /nix/store/*jarvis-voice-0.1.0 2>/dev/null | head -1)}"
-if [ -z "$JARVIS_PKG" ] || [ ! -d "$JARVIS_PKG" ]; then
-  echo "jarvis-voice nao encontrado no store" >&2
-  exit 1
-fi
-
-# O Nix passa o site-packages do env do MCP como $1 (declarado no
-# home-manager/home.nix). Esse e o caminho oficial e o preferido.
-ENV_SP="${1:-}"
-
-# Fallback: se o $1 nao vier, deriva da CLOSURE do pacote.
-# não do wrapper: o `dependencies` do buildPythonPackage não escreve
-# PYTHONPATH no wrapper (medido: `grep -c PYTHONPATH bin/jarvis-mcp` -> 0), e
-# tentar forcing por makeWrapper quebra o build. Ler a closure é à prova de
-# rebuild: qualquer store path que cair for substituído no próximo `ls`.
-PP="$ENV_SP"
-if [ -z "$PP" ] && command -v nix-store >/dev/null 2>&1; then
-  while IFS= read -r dep; do
-    case "$dep" in
-      *-python3.13-*)
-        sp="$dep/lib/python3.13/site-packages"
-        [ -d "$sp" ] && PP="${PP:+$PP:}$sp"
-        ;;
-    esac
-  done < <(nix-store -q --references "$JARVIS_PKG" 2>/dev/null || true)
-fi
-# Se um dia o Nix passar a gravar o prefixo no wrapper, usa o que ele gravou.
-if [ -z "$PP" ] && [ -r "$JARVIS_PKG/bin/jarvis-mcp" ]; then
-  PP="$(sed -n "s/^export PYTHONPATH='\(.*\)'$/\1/p" "$JARVIS_PKG/bin/jarvis-mcp" | head -1)"
-fi
-
-# (10/10, dono: "arruma o mcp") site-packages LOCAL mantido fora do store:
-# playwright (browser tool), PIL, pymupdf, pytesseract. O $1 oficial aponta
-# um env de store que NÃO tem essas libs (medido: browser_open → "No module
-# named 'playwright'"). Entra JUNTO do $1 — sem substituir, à prova de o $1
-# um dia vir a conter tudo.
-LOCAL_SP="/home/nixos/.local/jarvis-mcp-site"
-if [ -d "$LOCAL_SP" ]; then
-  case ":$PP:" in
-    *":$LOCAL_SP:"*) ;;          # já contém
-    *) PP="${LOCAL_SP}${PP:+:$PP}" ;;
-  esac
-fi
-
-SRC="${JARVIS_SRC:-/home/nixos/projects/nixos-ai/modules/ai/jarvis/src}"
-
-export PYTHONPATH="${SRC}${PP:+:$PP}"
-export JARVIS_PROJECT_ROOT="${JARVIS_PROJECT_ROOT:-/home/nixos/projects/nixos-ai}"
-export JARVIS_PKG
-
-# python do perfil do usuário: existe fora do store (profile symlink), então não
-# some com o próximo GC.
-PY="/etc/profiles/per-user/nixos/bin/python3"
-[ -x "$PY" ] || PY="$(command -v python3)"
+# Env COMPARTILHADO com a CLI (jarvis-env.sh): keys de /etc/litellm.env,
+# PYTHONPATH (src + site-packages do store + local) e o python do perfil.
+# A logica vivia aqui e foi extraida p/ o script ser a UNICA fonte (2026-10-30):
+# a CLI rodava em env diferente (sem requests, sem keys) e o rag-index pendurava.
+# shellcheck source=/dev/null
+. /home/nixos/projects/nixos-ai/modules/ai/jarvis/jarvis-env.sh "${1:-}"
 
 cd "$JARVIS_PROJECT_ROOT"
-exec "$PY" -m jarvis.mcp_server
+exec "$JARVIS_PY" -m jarvis.mcp_server

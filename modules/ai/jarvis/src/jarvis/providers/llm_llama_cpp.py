@@ -96,6 +96,12 @@ class LlamaCppBackend(LLMBackend):
         self._connect_timeout = connect_timeout
         self._read_timeout = read_timeout
         self._session = session or _build_session()
+        # Embeddings usam session SEM retry (30/10): com Retry(read=3) e
+        # read_timeout=120s, uma unica chamada morta virava 4x120s = 8min de
+        # espera e o rag_index ficava pendurado sem erro. Agora o lote tem
+        # timeout curto e cai no fallback por item (que chunca de verdade).
+        self._embed_session = session or _build_session(total_retries=0)
+        self._embed_read_timeout = min(read_timeout, 30.0)
         self._enable_thinking = enable_thinking
         self._info_cache: BackendInfo | None = None
 
@@ -367,38 +373,92 @@ class LlamaCppBackend(LLMBackend):
                         yield token
 
     def embed(self, text: str, model: str | None = None) -> list[float]:
-        """Embedding via llama-server (texto longo: chunk + mean-pool)."""
+        """Embedding via llama-server (texto longo: chunk + mean-pool).
+
+        Auto-encolhe: o servidor (n_ctx=512 tokens) pode recusar um chunk com
+        HTTP 400 "exceed_context_size" mesmo dentro do limite de chars
+        (tokenizacao varia com o conteudo). Em vez de propagar o erro, reduz
+        o chunk e tenta de novo (30/10: era isso que travava o rag_index).
+        """
         def _one(chunk: str) -> list[float]:
-            payload: dict[str, Any] = {
-                "model": model or self._model,
-                "input": chunk,
-            }
-            resp = self._session.post(
-                f"{self._embed_url}/v1/embeddings",
-                json=payload,
-                timeout=(self._connect_timeout, self._read_timeout),
-            )
-            resp.raise_for_status()
-            return resp.json()["data"][0]["embedding"]
+            cur = chunk
+            for _ in range(4):
+                payload: dict[str, Any] = {
+                    "model": model or self._model,
+                    "input": cur,
+                }
+                resp = self._embed_session.post(
+                    f"{self._embed_url}/v1/embeddings",
+                    json=payload,
+                    timeout=(self._connect_timeout, self._embed_read_timeout),
+                )
+                if resp.status_code == 400 and "exceed_context" in resp.text.lower():
+                    cur = cur[:max(64, len(cur) // 2)]
+                    continue
+                resp.raise_for_status()
+                return resp.json()["data"][0]["embedding"]
+            raise ValueError("embedding: input excede o contexto mesmo apos 4 reducoes")
 
         return embed_long(_one, text)
 
     def embed_batch(self, texts: list[str], model: str | None = None) -> list[list[float]]:
-        """Lote em 1 POST (input=list). Ordem preservada pelo servidor."""
+        """Lote em 1 POST (input=list), com chunk por item e fallback por item.
+
+        30/10 (bug do rag_index pendurado): o POST de lote com itens grandes
+        NAO voltava — a resposta nunca chegava e, como o Retry do session
+        multiplicava o timeout por 4, o index inteiro ficava esperando. Agora:
+          1. cada texto e chopped em CHUNK_CHARS (igual ao embed simples);
+          2. o lote tem timeout curto e SEM retry;
+          3. se o lote falhar ou estourar o tempo, cai no embed por item
+             (que ja chuncar e normaliza) — o index nunca fica pendurado;
+          4. o mean-pool por texto original deixa o resultado do lote IGUAL ao
+             do embed simples (antes os dois divergiam).
+        """
         if not texts:
             return []
-        payload: dict[str, Any] = {
-            "model": model or self._model,
-            "input": list(texts),
-        }
-        resp = self._session.post(
-            f"{self._embed_url}/v1/embeddings",
-            json=payload,
-            timeout=(self._connect_timeout, self._read_timeout),
-        )
-        resp.raise_for_status()
-        items = sorted(resp.json()["data"], key=lambda d: d["index"])
-        return [it["embedding"] for it in items]
+        from .embedding import CHUNK_CHARS, mean_pool, split_for_embedding
+
+        per_text: list[list[str]] = [split_for_embedding(t, CHUNK_CHARS) for t in texts]
+        flat: list[str] = [c for chunks in per_text for c in chunks]
+        if not flat:
+            return []
+        # 30/10: o index_directory manda os chunks de TODOS os arquivos num
+        # lote so (medido: 587 itens = 90s num unico POST; com o Retry antigo
+        # eram 6min e o index pareceria pendurado). Lote por POST e limitado
+        # a BATCH_MAX (64 itens ~ 10s) — o servidor processa a lista item a item.
+        BATCH_MAX = 64
+        try:
+            vecs: list[list[float]] = []
+            for start in range(0, len(flat), BATCH_MAX):
+                piece = flat[start:start + BATCH_MAX]
+                resp = self._embed_session.post(
+                    f"{self._embed_url}/v1/embeddings",
+                    json={"model": model or self._model, "input": piece},
+                    timeout=(self._connect_timeout, self._embed_read_timeout),
+                )
+                resp.raise_for_status()
+                items = sorted(resp.json()["data"], key=lambda d: d["index"])
+                got = [it["embedding"] for it in items]
+                if len(got) != len(piece):
+                    raise ValueError("batch size mismatch")
+                vecs.extend(got)
+            if len(vecs) != len(flat):
+                raise ValueError("batch size mismatch")
+        except Exception:
+            out: list[list[float]] = []
+            for t in texts:
+                try:
+                    out.append(self.embed(t, model))
+                except Exception:
+                    out.append([])
+            return out
+        out = []
+        i = 0
+        for chunks in per_text:
+            n = len(chunks)
+            out.append(mean_pool(vecs[i:i + n]) if n else [])
+            i += n
+        return out
 
     def health(self, timeout: float = 3.0) -> bool:
         """Check if llama-server is responding."""

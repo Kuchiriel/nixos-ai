@@ -49,7 +49,19 @@ fail(){ log "  [FALHA] $*"; }
 
 PROJ_ABS=$(cd "$PROJ" 2>/dev/null && pwd) || { echo "projeto inexistente: $PROJ" >&2; exit 2; }
 GIT_ROOT=$(git -C "$PROJ_ABS" rev-parse --show-toplevel 2>/dev/null || echo "$PROJ_ABS")
-DATA=$(date +%Y-%m-%d); HORA=$(date +%H:%M)
+DATA=$(date +%Y-%m-%d); HORA=$(date +%H:%M); DATE="$DATA"
+NIXOS_DIR="$(dirname "$(dirname "$(realpath "$0")")")"
+
+# roda a CLI do JARVIS: tenta o python do sistema; se faltar dependencia,
+# refaz dentro do nix develop (onde o jarvis e as deps vivem)
+jarvis_run() {
+  local out
+  out=$("$JARVIS_CLI" "$@" 2>&1 | tail -3)
+  if printf '%s' "$out" | grep -qiE "ModuleNotFoundError|ModuleNotFound|No module named"; then
+    out=$(cd "$NIXOS_DIR" && nix develop --command "$JARVIS_CLI" "$@" 2>&1 | tail -3)
+  fi
+  printf '%s' "$out"
+}
 SLUG=$(printf '%s' "$ERA" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-|-$//g' | cut -c1-50)
 [ -n "$SLUG" ] || SLUG="checkpoint"
 
@@ -114,7 +126,7 @@ fi
 # ---------- 2. rag: re-index ----------
 RAG_STATUS="pulado"
 if [ "$DRY" -eq 0 ] && [ -x "$JARVIS_CLI" ]; then
-  OUT=$("$JARVIS_CLI" rag-index "$PROJ_ABS" 2>&1 | tail -2)
+  OUT=$(jarvis_run rag-index "$PROJ_ABS")
   if printf '%s' "$OUT" | grep -qiE "indexed|index"; then RAG_STATUS="$OUT"
   else RAG_STATUS="falhou: $OUT"; fi
 else
@@ -126,7 +138,7 @@ ok "rag: $RAG_STATUS"
 MEM_STATUS="pulado"
 if [ "$DRY" -eq 0 ] && [ -x "$JARVIS_CLI" ]; then
   MEMTEXT="CHECKPOINT $DATA $HORA — $ERA [$GIT_ROOT]: $SUMMARY"
-  OUT=$("$JARVIS_CLI" remember "$MEMTEXT" 2>&1 | tail -1)
+  OUT=$(jarvis_run remember "$MEMTEXT")
   if printf '%s' "$OUT" | grep -qiE "stored|id|ok"; then MEM_STATUS="$OUT"
   else MEM_STATUS="falhou: $OUT"; fi
 else
@@ -156,7 +168,7 @@ if [ "$DRY" -eq 0 ]; then
     VAULT_STATUS="nota escrita"
   fi
   # espelha no JARVIS (indexa a nota no RAG do vault)
-  [ -x "$JARVIS_CLI" ] && "$JARVIS_CLI" vault-write "handoff-$DATE-$SLUG" "$(cat "$HANDOFF")" >/dev/null 2>&1 || true
+  [ -x "$JARVIS_CLI" ] && jarvis_run vault-write "handoff-$DATE-$SLUG" "$(cat "$HANDOFF")" >/dev/null 2>&1 || true
 else
   VAULT_STATUS="dry-run"
 fi
