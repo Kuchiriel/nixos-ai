@@ -32,6 +32,9 @@
 #   AGENTS_FALLBACK   seg de idle → prospecção   (default 900)
 #   AGENTS_PROSPECT_COOLDOWN  cooldown por alvo de prospecção (default 14400)
 #   AGENTS_QUIET      horas caladas "DE ATE"     (default "1 7"; "0 0" = 24h)
+#   AGENTS_PAINS_EVERY  ciclos entre auto-captura de erros de CLI (default 10)
+#   AGENTS_CHECKPOINT_WORK  seg de trabalho p/ sugerir checkpoint (default 2700)
+#   AGENTS_CHECKPOINT_COOLDOWN  seg entre sugestoes (default 3600)
 #
 # CONTRATO DOS HOOKS (executado 1x/ciclo, stderr ignorado, deve ser +x):
 #   linha "chave valor..."  → evento quando o VALOR mudar vs ciclo anterior
@@ -79,6 +82,17 @@ for a in "$@"; do
 done
 
 DIR_ST="${TMPDIR:-/tmp}/opencode/agents-watcher"; mkdir -p "$DIR_ST"
+# (30/10) STACK GENERALISTA: pains + checkpoint moram AO LADO do watcher
+# (nada hardcoded de projeto). Env sobrescreve.
+SCRIPT_DIR="$(cd "$(dirname "$(realpath "$0")")" && pwd)"
+PAINS_SH="${AGENTS_PAINS_SH:-$SCRIPT_DIR/agent-pains.sh}"
+CHECKPOINT_SH="${AGENTS_CHECKPOINT_SH:-$SCRIPT_DIR/agent-checkpoint.sh}"
+# auto-captura de erros de CLI a cada N ciclos (silencioso, nunca acorda ninguem)
+PAINS_EVERY="${AGENTS_PAINS_EVERY:-10}"
+PAINS_SINCE="${AGENTS_PAINS_SINCE:-90}"
+# checkpoint sugerido depois de um stretch longo de trabalho (segundos de CPU)
+CP_TRABALHO="${AGENTS_CHECKPOINT_WORK:-2700}"
+CP_COOLDOWN="${AGENTS_CHECKPOINT_COOLDOWN:-3600}"
 # estado por raiz observada: trocar AGENTS_ROOT NÃO dispara falsos "novo:"
 STATE="$DIR_ST/snapshot.$(printf '%s' "$RAIZ" | md5sum | cut -c1-8).state"
 INHIBIT_PID=""
@@ -233,7 +247,12 @@ ciclo() {
         DELTA=$(( CPU - ANTIGO ))
         [ "$CHECK" -eq 1 ] || echo "$CPU" > "$DIR_ST/cpu.$CHAVE"
         if [ "$DELTA" -ge "$LIMITE_CPU" ]; then
-            log "working delta=$DELTA end=$END"
+            # (30/10) acumula o tempo de trabalho: depois de um stretch longo,
+            # o agente idle e o momento certo p/ sugerir o checkpoint de 4 camadas.
+            _w=$(cat "$DIR_ST/work.$CHAVE" 2>/dev/null || echo 0)
+            _w=$(( _w + INTERVALO ))
+            [ "$CHECK" -eq 1 ] || echo "$_w" > "$DIR_ST/work.$CHAVE"
+            log "working delta=$DELTA end=$END (trabalho acumulado=${_w}s)"
             continue   # WORKING: NUNCA interromper
         fi
         # IDLE — decide se acorda
@@ -248,6 +267,17 @@ ciclo() {
         IDLE_SEGS=$(( AGORA_E - ULT_WAKE ))
         MOTIVO=""
         [ -n "$ACHADO_CICLO" ] && [ "$IDLE_SEGS" -ge "$RATE_MIN" ] && MOTIVO="$ACHADO_CICLO"
+        # (30/10) SUGESTAO DE CHECKPOINT: stretch longo de trabalho + agente
+        # idle -> e a hora de gravar fila/rag/memoria/vault. O texto ja vem com
+        # o comando pronto (o agente nao precisa pensar no protocolo).
+        if [ -z "$MOTIVO" ]; then
+            _w=$(cat "$DIR_ST/work.$CHAVE" 2>/dev/null || echo 0)
+            _cp=$(cat "$DIR_ST/checkpoint.$CHAVE" 2>/dev/null || echo 0)
+            if [ "$_w" -ge "$CP_TRABALHO" ] && [ $(( AGORA_E - _cp )) -ge "$CP_COOLDOWN" ]; then
+                MOTIVO="CHECKPOINT-SUGERIDO: voce acumula ${_w}s de trabalho nesta sessao. Grave as 4 camadas AGORA (fila+commit, rag, memoria, vault): ${CHECKPOINT_SH} --project <projeto> --era '<tema>' --summary '<estado>'. Nao precisa digitar as dores: o agent-pains.sh ja capturou os erros de CLI sozinho."
+                [ "$CHECK" -eq 1 ] || { date +%s > "$DIR_ST/checkpoint.$CHAVE"; echo 0 > "$DIR_ST/work.$CHAVE"; }
+            fi
+        fi
         # IDLE-PROSPECÇÃO: sem acontecimento, agente parado = desperdiçado.
         # (22/10, lição do agente-fraco) BACKOFF PROGRESSIVO: cada
         # deadlock-check consecutivo dobra o intervalo; evento = reset.
@@ -324,6 +354,19 @@ ciclo() {
         date +%s > "$DIR_ST/wake.$CHAVE"
         log "WAKE end=$END motivo=$MOTIVO"
     done < "$DIR_ST/mapa.agora"
+
+    # (30/10) AUTO-PAINS: captura sozinho os erros de tool dos agentes (a CLI
+    # le o store VIVO do opencode). Silencioso: so loga, nunca acorda ninguem.
+    _cpn=$(cat "$DIR_ST/ciclo.pains" 2>/dev/null || echo 0)
+    _cpn=$(( _cpn + 1 ))
+    [ "$CHECK" -eq 1 ] || echo "$_cpn" > "$DIR_ST/ciclo.pains"
+    if [ "$_cpn" -ge "$PAINS_EVERY" ]; then
+        [ "$CHECK" -eq 1 ] || echo 0 > "$DIR_ST/ciclo.pains"
+        if [ -x "$PAINS_SH" ]; then
+            _pr=$("$PAINS_SH" scan-apply --since-min "$PAINS_SINCE" --max 40 2>&1 | tail -1)
+            log "auto-pains: $_pr"
+        fi
+    fi
 
     # digest: notifica SÓ os commits que mudaram neste ciclo (sinal, não ruído)
     if [ -n "$ACHADO_CICLO" ]; then
