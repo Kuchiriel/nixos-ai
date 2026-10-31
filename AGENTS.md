@@ -72,6 +72,10 @@ nix flake check
   do opencode é o **SQLite `~/.local/share/opencode/opencode.db`** (o
   `storage/` JSON só tem sessões antigas). O `agents-watcher.sh` roda o
   `scan-apply` a cada 10 ciclos e sugere checkpoint após 45min de trabalho.
+- **Frequência calibrada pela atividade (01/11, pedido do dono)**: o watcher lê
+  `part` do `opencode.db` (atualizada a cada tool call) — agente com part nova
+  ≤`AGENTS_DB_ALIVE`s (600) está VIVO: sem wake, sem RE-ENTER, sem deadlock
+  (o idle de CPU = falso-positivo de comando longo). Só-leitura, `mode=ro`.
 - Erro mascarado por pipe (`cmd | tail`) **não** chega ao scanner → em debug,
   rode sem pipe (ou com `set -o pipefail`).
 
