@@ -330,6 +330,15 @@ ciclo() {
             _w=$(cat "$DIR_ST/work.$CHAVE" 2>/dev/null || echo 0)
             _cp=$(cat "$DIR_ST/checkpoint.$CHAVE" 2>/dev/null || echo 0)
             if [ "$_w" -ge "$CP_TRABALHO" ] && [ $(( AGORA_E - _cp )) -ge "$CP_COOLDOWN" ]; then
+                # (01/11) so sugerir se houve trabalho NOVO desde o ultimo
+                # checkpoint: guarda o snapshot no momento da sugestao e compara.
+                # Sem commit novo = a era ja foi selada -> nao repete a sugerencia.
+                _cp_snap="$DIR_ST/checkpoint.$CHAVE.snap"
+                if [ -f "$_cp_snap" ] && diff -q "$_cp_snap" "$DIR_ST/snapshot.agora" >/dev/null 2>&1; then
+                    log "checkpoint ja selado (sem commit novo desde o ultimo) end=$END - sem sugestao"
+                    continue
+                fi
+                cp "$DIR_ST/snapshot.agora" "$_cp_snap" 2>/dev/null || true
                 MOTIVO="CHECKPOINT-SUGERIDO: voce acumula ${_w}s de trabalho nesta sessao. Grave as 4 camadas AGORA (fila+commit, rag, memoria, vault): ${CHECKPOINT_SH} --project <projeto> --era '<tema>' --summary '<estado>'. Nao precisa digitar as dores: o agent-pains.sh ja capturou os erros de CLI sozinho."
                 [ "$CHECK" -eq 1 ] || { date +%s > "$DIR_ST/checkpoint.$CHAVE"; echo 0 > "$DIR_ST/work.$CHAVE"; }
             fi
