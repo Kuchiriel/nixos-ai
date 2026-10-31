@@ -96,6 +96,13 @@ PAINS_SINCE="${AGENTS_PAINS_SINCE:-90}"
 # checkpoint sugerido depois de um stretch longo de trabalho (segundos de CPU)
 CP_TRABALHO="${AGENTS_CHECKPOINT_WORK:-2700}"
 CP_COOLDOWN="${AGENTS_CHECKPOINT_COOLDOWN:-3600}"
+# (01/11, pedido do dono) SINAL DE VIDA REAL: o delta de CPU e falso-positivo
+# quando o agente esta bloqueado num comando longo (backtest de 20min, copia de
+# 3GB). O store do opencode (SQLite opencode.db, tabela part) e atualizado A
+# CADA tool call -> se houve part nova nos ultimos AGENTS_DB_ALIVE segundos, o
+# agente esta VIVO e o deadlock-check NAO dispara (e o backoff nao avanca).
+DB_ALIVE="${AGENTS_DB_ALIVE:-600}"
+DB_PATH="${AGENTS_DB_PATH:-$HOME/.local/share/opencode/opencode.db}"
 # estado por raiz observada: trocar AGENTS_ROOT NÃO dispara falsos "novo:"
 STATE="$DIR_ST/snapshot.$(printf '%s' "$RAIZ" | md5sum | cut -c1-8).state"
 INHIBIT_PID=""
@@ -112,6 +119,28 @@ backoff_seg() { # $1=chave do agente → segundos de fallback efetivo
         [ "$_fb" -ge "$MAX_BACKOFF" ] && { _fb=$MAX_BACKOFF; break; }
     done
     echo "$_fb"
+}
+
+# (01/11) atividade REAL do agente no store do opencode (part = cada tool call
+# e trecho de resposta). Somente leitura (mode=ro); falha aberta = sem sinal.
+agente_vivo_db() {
+    [ -f "$DB_PATH" ] || return 1
+    python3 - "$DB_PATH" "$DB_ALIVE" <<'PYEOF' 2>/dev/null
+import sqlite3, sys, time
+db, janela = sys.argv[1], int(sys.argv[2])
+try:
+    c = sqlite3.connect(f'file:{db}?mode=ro', uri=True)
+    r = c.execute("SELECT MAX(time_updated), MAX(time_created) FROM part").fetchone()
+    if not r:
+        sys.exit(1)
+    now = int(time.time() * 1000)
+    for t in r:
+        if t and now - t <= janela * 1000:
+            sys.exit(0)
+    sys.exit(1)
+except Exception:
+    sys.exit(1)
+PYEOF
 }
 
 notifica() { [ -n "$NOTIFY" ] && "$NOTIFY" "$1" >/dev/null 2>&1 || true; }
@@ -268,6 +297,16 @@ ciclo() {
             ULT_WAKE=$(cat "$DIR_ST/wake.$CHAVE")
         fi
         IDLE_SEGS=$(( AGORA_E - ULT_WAKE ))
+        # (01/11) agente VIVO por atividade real (store do opencode)? O idle de
+        # CPU so indica que nao ha PROCESSO consumindo CPU - nao que o agente
+        # esteja parado (comando longo bloqueia o TUI sem CPU). Vivo = nao acorda.
+        if agente_vivo_db; then
+            _w=$(cat "$DIR_ST/work.$CHAVE" 2>/dev/null || echo 0)
+            _w=$(( _w + INTERVALO ))
+            [ "$CHECK" -eq 1 ] || { echo "$_w" > "$DIR_ST/work.$CHAVE"; }
+            log "vivo (part nova <=${DB_ALIVE}s no opencode.db) end=$END (trabalho acumulado=${_w}s) - sem wake"
+            continue
+        fi
         # (30/10) FIX ENTER: o TUI do opencode as vezes ignora o Return colado
         # com o texto (o input ainda esta processando) -> o dono precisa apertar
         # enter na mao. Aqui: se o agente continua OCIOSO logo apos um wake,
