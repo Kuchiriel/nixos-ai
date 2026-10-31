@@ -76,6 +76,10 @@ nix flake check
   `part` do `opencode.db` (atualizada a cada tool call) — agente com part nova
   ≤`AGENTS_DB_ALIVE`s (600) está VIVO: sem wake, sem RE-ENTER, sem deadlock
   (o idle de CPU = falso-positivo de comando longo). Só-leitura, `mode=ro`.
+- **Checkpoint sem redundância (01/11)**: o `CHECKPOINT-SUGERIDO` compara o
+  snapshot atual (commits de todos os repos da raiz) com o snapshot gravado na
+  última sugestão — sem commit novo = era já selada, sem repetir. Sugestão
+  garante checkpoint só quando há trabalho novo para selar.
 - Erro mascarado por pipe (`cmd | tail`) **não** chega ao scanner → em debug,
   rode sem pipe (ou com `set -o pipefail`).
 
