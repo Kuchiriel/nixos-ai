@@ -96,6 +96,9 @@ PAINS_SINCE="${AGENTS_PAINS_SINCE:-90}"
 # checkpoint sugerido depois de um stretch longo de trabalho (segundos de CPU)
 CP_TRABALHO="${AGENTS_CHECKPOINT_WORK:-2700}"
 CP_COOLDOWN="${AGENTS_CHECKPOINT_COOLDOWN:-3600}"
+# (01/11) o watcher nao ve checkpoint feito PELO AGENTE (script fora dele):
+# o agent-checkpoint.sh grava o marcador global abaixo; o cooldown usa o mais novo.
+CP_MARCADOR="$DIR_ST/ultimo_checkpoint"
 # (01/11, pedido do dono) SINAL DE VIDA REAL: o delta de CPU e falso-positivo
 # quando o agente esta bloqueado num comando longo (backtest de 20min, copia de
 # 3GB). O store do opencode (SQLite opencode.db, tabela part) e atualizado A
@@ -329,6 +332,8 @@ ciclo() {
         if [ -z "$MOTIVO" ]; then
             _w=$(cat "$DIR_ST/work.$CHAVE" 2>/dev/null || echo 0)
             _cp=$(cat "$DIR_ST/checkpoint.$CHAVE" 2>/dev/null || echo 0)
+            _cp_gl=$(cat "$CP_MARCADOR" 2>/dev/null || echo 0)
+            [ "$_cp_gl" -gt "$_cp" ] 2>/dev/null && _cp="$_cp_gl"
             if [ "$_w" -ge "$CP_TRABALHO" ] && [ $(( AGORA_E - _cp )) -ge "$CP_COOLDOWN" ]; then
                 # (01/11) so sugerir se houve trabalho NOVO desde o ultimo
                 # checkpoint: guarda o snapshot no momento da sugestao e compara.

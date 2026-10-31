@@ -175,3 +175,16 @@ fi
 ok "vault: $VAULT_STATUS ($HANDOFF)"
 
 log "== fim do checkpoint =="
+
+# (01/11) avisa o agents-watcher que houve checkpoint AGORA (o watcher nao ve
+# o que o agente roda fora dele): marcador global + snapshot para o dedupe.
+_WDIR="/tmp/opencode/agents-watcher"
+if [ -d "$_WDIR" ]; then
+    date +%s > "$_WDIR/ultimo_checkpoint"
+    SNAP="$DIR_ST/snapshot.agora"
+    [ -f "$SNAP" ] || SNAP="$_WDIR/snapshot.agora"
+    [ -f "$SNAP" ] && cp "$SNAP" "$_WDIR/checkpoint.*.snap" 2>/dev/null || true
+    for _s in "$_WDIR"/checkpoint.*.snap; do
+        [ -f "$SNAP" ] && cp "$SNAP" "$_s" 2>/dev/null || true
+    done
+fi
