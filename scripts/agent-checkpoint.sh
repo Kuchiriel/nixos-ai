@@ -181,10 +181,10 @@ log "== fim do checkpoint =="
 _WDIR="/tmp/opencode/agents-watcher"
 if [ -d "$_WDIR" ]; then
     date +%s > "$_WDIR/ultimo_checkpoint"
-    SNAP="$DIR_ST/snapshot.agora"
-    [ -f "$SNAP" ] || SNAP="$_WDIR/snapshot.agora"
-    [ -f "$SNAP" ] && cp "$SNAP" "$_WDIR/checkpoint.*.snap" 2>/dev/null || true
-    for _s in "$_WDIR"/checkpoint.*.snap; do
-        [ -f "$SNAP" ] && cp "$SNAP" "$_s" 2>/dev/null || true
-    done
+    _SNAP="$_WDIR/snapshot.agora"
+    if [ -f "$_SNAP" ]; then
+        for _s in "$_WDIR"/checkpoint.*.snap; do
+            [ -f "$_s" ] && cp "$_SNAP" "$_s" 2>/dev/null || true
+        done
+    fi
 fi
