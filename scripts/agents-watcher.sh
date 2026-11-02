@@ -4,7 +4,9 @@
 # funcionar em qualquer um"). Substitui 4 peças: tools/agents-watcher.sh
 # (v2, CPU-delta working/idle), tools/tem-novo.sh (detector de eventos),
 # nixos-ai/scripts/agent-heartbeat.sh (progress-heartbeat) e o
-# agent-keepawake (hypridle.nix). O systemd (Restart=always) É o watchdog
+# agent-keepawake (hypridle.nix — 02/11: saiu daqui p/ o serviço
+# SEMPRE ligado agents-keepawake.service; o watcher é AFK-only).
+# O systemd (Restart=always) É o watchdog
 # — os timers de reanimação morreram com a consolidação.
 #
 # AGNÓSTICO: zero repos/canais/projetos hardcodados no núcleo. A raiz
@@ -108,7 +110,6 @@ DB_ALIVE="${AGENTS_DB_ALIVE:-600}"
 DB_PATH="${AGENTS_DB_PATH:-$HOME/.local/share/opencode/opencode.db}"
 # estado por raiz observada: trocar AGENTS_ROOT NÃO dispara falsos "novo:"
 STATE="$DIR_ST/snapshot.$(printf '%s' "$RAIZ" | md5sum | cut -c1-8).state"
-INHIBIT_PID=""
 # (22/10, lição do agente-fraco) BACKOFF PROGRESSIVO p/ DEADLOCK-CHECK:
 # agente idle que responde sempre igual = SPAM. Cada deadlock-check
 # consecutivo DOBRA o intervalo até MAX_BACKOFF; qualquer commit ou
@@ -232,23 +233,15 @@ hora_quieta() {
     fi
 }
 
-# KEEPAWAKE (o antigo agent-keepawake, mesclado): lock sleep:idle enquanto
-# houver agente vivo; um lock por vez (expira sozinho ≤4min após o último).
-keepawake() {
-    pgrep -u "$USER" -f '[o]pencode|[f]reebuff|[b]uffy' >/dev/null 2>&1 || return 0
-    if [ -n "$INHIBIT_PID" ] && kill -0 "$INHIBIT_PID" 2>/dev/null; then
-        return 0
-    fi
-    systemd-inhibit --what=sleep:idle --who=agents --mode=block \
-        --why="agentes de IA ativos" sleep 240 >/dev/null 2>&1 &
-    INHIBIT_PID=$!
-}
+# KEEPAWAKE: saiu daqui (02/11) — virou serviço SEMPRE ligado
+# (agents-keepawake.service → scripts/agents-keepawake.sh). O watcher é
+# AFK-only (sem WantedBy, decisão do dono); o keepawake tem que estar de
+# pé o tempo todo. Uma única implementação do lock (sem cópia).
 
 # um ciclo do watcher
 ciclo() {
     local AGORA AGORA_E ACHADO_CICLO ANTES
     AGORA=$(date +%H:%M); AGORA_E=$(date +%s)
-    [ "$CHECK" -eq 1 ] || keepawake
 
     snapshot_atual > "$DIR_ST/snapshot.agora"
     # raiz sem repos/queue/hooks: sentinela estável (nunca vira evento,
