@@ -224,7 +224,10 @@ print(result)
         ;;
     status)
         echo "=== JARVIS Status ==="
-        echo "LLM: $(curl -sf http://127.0.0.1:8080/health 2>/dev/null || echo 'offline')"
+        # (02/11) o DEFAULT é o 4B-MTP+LoRA (:8092); o :8080 é o router
+        # on-demand (bonsai) — mostrados separados para não mentir.
+        echo "LLM (default :8092): $(curl -sf http://127.0.0.1:8092/health 2>/dev/null || echo 'offline')"
+        echo "Router (:8080, on-demand): $(curl -sf http://127.0.0.1:8080/health 2>/dev/null || echo 'offline')"
         echo "Embeddings: $(curl -sf http://127.0.0.1:8081/health 2>/dev/null || echo 'offline')"
         echo "Rerank: $(curl -sf http://127.0.0.1:8082/health 2>/dev/null || echo 'offline')"
         echo "Qdrant: $(curl -sf http://127.0.0.1:6333/healthz 2>/dev/null || echo 'offline')"
