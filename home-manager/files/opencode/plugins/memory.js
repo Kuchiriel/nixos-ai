@@ -81,11 +81,22 @@ export const MemoryOpenCodePlugin = async () => {
     },
     // (02/11) Regra do resgate no system prompt — MINUTA, sem estado.
     // É o que transforma "lembre-se de reidratar" em regra do harness.
+    //
+    // MERGE, não push: o system prompt é UM bloco só (medido: 1 bloco,
+    // 20073 chars). Push cria um SEGUNDO system message e o template do
+    // modelo (Qwen3.5 + Jinja) aborta com "System message must be at the
+    // beginning" — erro real achado na 1ª medição (run A: rc=1, 77s, vazio).
+    // Por isso: anexa ao ÚLTIMO bloco (mantém a contagem → 1 system message)
+    // e fica no fim do prompt = posição de maior recência (2510.05381).
     "experimental.chat.system.transform": async (input, output) => {
       if (process.env.OPENCODE_NO_REHYDRATE_INJECT === "1") return;
-      if (output && Array.isArray(output.system)) {
+      if (!output || !Array.isArray(output.system)) return;
+      if (output.system.length === 0) {
         output.system.push(REHYDRATE_RULE);
+        return;
       }
+      const last = output.system.length - 1;
+      output.system[last] = `${output.system[last] ?? ""}\n\n${REHYDRATE_RULE}`;
     },
     "experimental.session.compacting": async (input, output) => {
       if (output && Array.isArray(output.context)) {

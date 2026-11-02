@@ -80,14 +80,19 @@ def test_scoped_delete_passes():
 
 
 def test_system_prompt_gets_the_rehydrate_rule():
+    """A regra vai MESCLADA no system prompt (1 bloco só).
+
+    Push cria um 2º system message e o template do modelo aborta com
+    "System message must be at the beginning" (erro real na 1ª medição).
+    """
     body = """
   const o = {system: ['base']};
   await hooks['experimental.chat.system.transform']({sessionID: 's'}, o);
   out.blocks = o.system.length;
-  out.text = o.system[o.system.length - 1];
+  out.text = o.system[0];
 """
     out = run_plugin(body=body)
-    assert out["blocks"] == 2
+    assert out["blocks"] == 1, "a injeção não pode criar um 2º system message"
     assert "jarvis_rehydrate" in out["text"]
     assert "claim" in out["text"]
     # injeção MINUTA: contexto é recurso finito (2510.05381)

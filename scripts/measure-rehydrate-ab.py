@@ -128,11 +128,14 @@ def main() -> int:
             "mencionou_rehydrate": mentioned, "chamou_tool": called,
             "tools": m.get("tools", []),
             "tokens_in": m.get("tokens_in", 0), "tokens_out": m.get("tokens_out", 0),
+            "falha_template": "System message must be at the beginning" in (r["stderr"] + r["stdout"]),
             "resposta": (m.get("assistant_text") or r["stdout"])[:600],
         }
         print(f"  rc={r['rc']} {r['segundos']}s sessão={sid}")
         print(f"  mencionou_rehydrate={mentioned} chamou_tool={called}")
         print(f"  tokens in={m.get('tokens_in', 0)} out={m.get('tokens_out', 0)}")
+        if resultados[rotulo]["falha_template"]:
+            print("  !! FALHA DE TEMPLATE: a injeção criou um 2º system message")
         print(f"  resposta: {resultados[rotulo]['resposta'][:300]!r}")
 
     print("\n== VEREDITO ==")
