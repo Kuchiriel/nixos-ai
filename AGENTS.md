@@ -83,6 +83,29 @@ nix flake check
 - Erro mascarado por pipe (`cmd | tail`) **não** chega ao scanner → em debug,
   rode sem pipe (ou com `set -o pipefail`).
 
+## Coordenação multi-agente (02/11 — API do opencode, sem roubar o foco)
+
+- **Roster = fonte única**: `scripts/agent-roster.py` (claim/release/list/
+  prune/task/windows/resolve/events) em `~/projects/.agents/roster.json`
+  (`$AGENTS_ROSTER` override). `claim` recusa nome duplicado (janela viva) e
+  **globs de arquivos sobrepostos** (Anthropic: fronteira explícita) — 2
+  claims com o mesmo arquivo duplicam trabalho.
+- **Entrega = API do opencode** (`opencode serve` em `:4599`, Basic auth via
+  `~/.config/opencode/server.env`): `POST /session/:id/message`
+  (`noReply:true` = NOTA: entra na sessão, o agente NÃO roda, zero token) /
+  `prompt_async` (PEDIDO: o agente roda) / `/abort` (cancela o turno).
+  **Nunca** estacionar texto na caixa de input do humano: bloqueia o typing e
+  não entra na fila → inútil (erro real de 02/11).
+- `scripts/agent-msg.sh`: `--to <nome>` (pedido), `--note` (notificação),
+  `--broadcast` (fan-out explícito, raro), `--cancel <id>`, `--reply-to`,
+  `--id` (idempotência), `--pending`, `--list`. Sem roster, `--to other`
+  **não envia nada** (broadcast só com `--broadcast`).
+- `scripts/agents-watcher.sh`: wake **via API** (sem focus/wtype) e
+  **lane-aware** (commit do repo X só acorda o dono do repo X; fila/hooks
+  = global; sem roster = legado global). `RE-ENTER` só existe no fallback
+  wtype — nunca submeter o que o humano estiver digitando.
+- Evidência: `scripts/agent-msg.sh` → `~/projects/AGENTS-MSG.log`.
+
 ## Boundaries
 
 - **Always:** run tests before committing; check `git ls-files` for

@@ -154,49 +154,67 @@ log()      { echo "$(date '+%H:%M:%S') $*"; [ "$CHECK" -eq 1 ] || echo "$(date '
 # (17/10: título "OC |" provou ser frágil — sessões mortas mantêm título e
 # o wake digitou em shell morto; sessão viva sem título ficava invisível.
 # Process-tree = zero convenção de título, agnóstico de verdade.)
+# (02/11) A GEOMETRIA DE JANELAS agora mora no agent-roster.py (fonte ÚNICA
+# p/ watcher + agent-msg: uma só implementação do process-tree walk).
 # CPU via /proc (utime+stime) — pstree NÃO EXISTE no NixOS; walk ppid.
+ROSTER_PY="${AGENTS_ROSTER_PY:-$SCRIPT_DIR/agent-roster.py}"
+# (02/11) API do opencode: o wake passa a ser entregue NA SESSÃO do agente
+# (POST /session/:id/prompt_async) — sem roubar o foco e sem digitar na
+# caixa de input do humano (o wtype antigo bloqueava o typing do dono).
+OC_URL="${AGENTS_OC_URL:-http://100.121.100.103:4599}"
+OC_ENVFILE="${AGENTS_OC_ENVFILE:-$HOME/.config/opencode/server.env}"
+OC_USER="${OPENCODE_SERVER_USERNAME:-opencode}"
+OC_PASS="${OPENCODE_SERVER_PASSWORD:-}"
+if [ -z "$OC_PASS" ] && [ -r "$OC_ENVFILE" ]; then
+    OC_PASS=$(sed -n 's/^OPENCODE_SERVER_PASSWORD=//p' "$OC_ENVFILE" | head -1)
+    OC_PASS="${OC_PASS%\"}"; OC_PASS="${OC_PASS#\"}"
+fi
 mapa_agentes() {
-    python3 2>/dev/null <<'PYEOF'
-import json, os, subprocess
-def proc_map():
-    ppid_de, agente = {}, {}
-    for d in os.scandir('/proc'):
-        if not d.name.isdigit():
-            continue
-        pid = int(d.name)
-        try:
-            stat = open(f'/proc/{pid}/stat').read().rsplit(')', 1)[1].split()
-            ppid_de[pid] = int(stat[1])
-            if b'opencode' in open(f'/proc/{pid}/cmdline','rb').read():
-                agente[pid] = True
-        except Exception:
-            pass
-    return ppid_de, agente
-ppid_de, agente = proc_map()
-def descendentes(root):
-    pids, frontier = [root], [root]
-    while frontier:
-        nxt = [p for p in ppid_de
-               if ppid_de[p] in frontier and p not in pids]
-        pids += nxt
-        frontier = nxt
-    return pids
-for c in json.loads(subprocess.run(['hyprctl','clients','-j'],
-        capture_output=True, text=True).stdout):
-    if c.get('class') != 'foot':
-        continue
-    desc = descendentes(c.get('pid', 0))
-    if not any(agente.get(p) for p in desc):
-        continue   # foot sem opencode vivo = janela comum/shell morto
-    cpu = 0
-    for pid in desc:
-        try:
-            parts = open(f'/proc/{pid}/stat').read().rsplit(')', 1)[1].split()
-            cpu += int(parts[11]) + int(parts[12])
-        except Exception:
-            pass
-    print(f"{c['address']} {c['pid']} {cpu}")
+    [ -x "$ROSTER_PY" ] || { echo "agent-roster.py ausente ($ROSTER_PY)" >&2; return 0; }
+    "$ROSTER_PY" windows --json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for w in d.get("all", []):
+    print(w.get("address", ""), w.get("pid", 0), w.get("cpu", 0),
+          w.get("session", "") or "-")
+'
+}
+
+# wake via API: a mensagem entra na sessão do agente e ele roda. Sem foco,
+# sem wtype, sem travar o humano na caixa de input.
+wake_api() {
+    local SESSAO="$1" TEXTO="$2"
+    python3 - "$OC_URL" "$OC_USER" "$OC_PASS" "$SESSAO" "$TEXTO" <<'PYEOF'
+import base64, json, sys, urllib.request
+base, user, pw, sid, texto = sys.argv[1:6]
+body = json.dumps({"parts": [{"type": "text", "text": texto}]})
+req = urllib.request.Request(
+    f"{base}/session/{sid}/prompt_async", data=body.encode(), method="POST",
+    headers={"Content-Type": "application/json",
+             "Authorization": "Basic " +
+             base64.b64encode(f"{user}:{pw}".encode()).decode()})
+try:
+    with urllib.request.urlopen(req, timeout=25) as r:
+        print(r.status)
+except Exception as e:
+    print(f"ERRO {e}")
+        sys.exit(1)
 PYEOF
+}
+
+# (02/11) SEMÂNTICA DE LANE: o evento de commit é do repo X → só acorda o
+# agente DONO do repo X (repo vazio = generalista). Eventos globais
+# (fila/hooks) acordam todos. Sem roster → comportamento legado (global).
+# Pesquisa: CHI'26 (arXiv 2602.17864) — wake sem filtro QUEBRA o fluxo e
+# aumenta a carga; Anthropic — fronteira explícita evita trabalho duplicado.
+filtra_eventos() {
+    local END="$1"
+    [ -n "${ACHADO_CICLO:-}" ] || return 0
+    [ -x "$ROSTER_PY" ] || { printf '%s\n' "$ACHADO_CICLO"; return 0; }
+    printf '%s\n' "$ACHADO_CICLO" | "$ROSTER_PY" events --window "$END" 2>/dev/null
 }
 
 # O SNAPSHOT (o antigo tem-novo.sh, genérico): commits de TODOS os repos
@@ -261,6 +279,23 @@ ciclo() {
     if [ ! -s "$DIR_ST/mapa.agora" ]; then
         log "sem janelas-agente (foot com opencode vivo) — ciclo silencioso"
     fi
+    # (02/11) ROSTER do ciclo: quem existe e em que lane/repo. Vazio = modo
+    # legado (wake global) — o aviso abaixo deixa isso explícito.
+    if [ -x "$ROSTER_PY" ]; then
+        "$ROSTER_PY" list --json > "$DIR_ST/roster.json" 2>/dev/null \
+            || echo '{}' > "$DIR_ST/roster.json"
+    else
+        echo '{}' > "$DIR_ST/roster.json"
+    fi
+    _claims_vivos=$(python3 -c '
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    d = {}
+print(len([a for a in d.get("agents", []) if a.get("state") == "live"]))
+' "$DIR_ST/roster.json" 2>/dev/null || echo 0)
+    [ "$_claims_vivos" -gt 0 ] || log "roster vazio — wake por evento fica GLOBAL (legado); use agent-roster.py claim para ativar o filtro de lane"
     # (22/10) RESET do backoff: se houve EVENTO neste ciclo (commit/queue),
     # o agente tem trabalho novo → zera deadlock-consecutivos
     if [ -n "${ACHADO_CICLO:-}" ]; then
@@ -268,8 +303,9 @@ ciclo() {
             [ -f "$_f" ] && echo 0 > "$_f"
         done
     fi
-    while read -r END FOOTPID CPU; do
+    while read -r END FOOTPID CPU SESSAO; do
         [ -z "${END:-}" ] && continue
+        SESSAO="${SESSAO:--}"
         CHAVE="$FOOTPID"
         ANTIGO=$(cat "$DIR_ST/cpu.$CHAVE" 2>/dev/null || echo "$CPU")
         DELTA=$(( CPU - ANTIGO ))
@@ -308,7 +344,11 @@ ciclo() {
         # enter na mao. Aqui: se o agente continua OCIOSO logo apos um wake,
         # o texto segue na caixa de input -> reenvia SO o Return (nao digita
         # outra mensagem, que se misturaria com a anterior).
+        # (02/11) SO com wake via wtype (fallback): com a API nao ha rascunho
+        # pendente — apertar Return ali submeteria o que o HUMANO estivesse
+        # digitando (o watcher nao pode submeter texto alheio).
         if [ "$DELTA" -lt "$LIMITE_CPU" ] \
+           && [ -f "$DIR_ST/fallback.$CHAVE" ] \
            && [ "$IDLE_SEGS" -ge 3 ] && [ "$IDLE_SEGS" -le "$REENTER_MAX" ]; then
             hyprctl dispatch focuswindow "address:$END" >/dev/null 2>&1
             sleep 0.3
@@ -318,7 +358,14 @@ ciclo() {
             continue
         fi
         MOTIVO=""
-        [ -n "$ACHADO_CICLO" ] && [ "$IDLE_SEGS" -ge "$RATE_MIN" ] && MOTIVO="$ACHADO_CICLO"
+        # (02/11) EVENTO FILTRADO POR LANE: commit do repo X só acorda o
+        # agente dono do repo X (fila/hooks = global). Sem claim = legado.
+        _evt=$(filtra_eventos "$END")
+        if [ -n "$_evt" ]; then
+            [ -n "$ACHADO_CICLO" ] && [ "$_evt" != "$ACHADO_CICLO" ] \
+                && log "filtro de lane end=$END: evento nao pertence a esta lane"
+            [ "$IDLE_SEGS" -ge "$RATE_MIN" ] && MOTIVO="$_evt"
+        fi
         # (30/10) SUGESTAO DE CHECKPOINT: stretch longo de trabalho + agente
         # idle -> e a hora de gravar fila/rag/memoria/vault. O texto ja vem com
         # o comando pronto (o agente nao precisa pensar no protocolo).
@@ -416,12 +463,30 @@ ciclo() {
             log "quiet ${QUIET_DE}h-${QUIET_ATE}h (wake suprimido) end=$END"
             continue
         fi
-        hyprctl dispatch focuswindow "address:$END" >/dev/null 2>&1
-        wtype "[WATCHER $AGORA] $MOTIVO. Conf. mutuas AUTORIZADAS. 1 linha de acao."
-        sleep 1.2   # (30/10) o TUI precisa terminar de processar o texto antes do Return
-        wtype -k Return
+        # (02/11) WAKE VIA API: a mensagem entra NA SESSÃO do agente e ele
+        # roda — sem roubar o foco e sem digitar na caixa do humano.
+        _MSG="[WATCHER $AGORA] $MOTIVO. Conf. mutuas AUTORIZADAS. 1 linha de acao."
+        _OK=0
+        if [ "$SESSAO" != "-" ] && [ -n "$SESSAO" ]; then
+            _R=$(wake_api "$SESSAO" "$_MSG" || true)
+            case "$_R" in
+                2*|HTTP*) _OK=1 ;;
+                *) log "wake API falhou end=$END sessao=$SESSAO: $_R" ;;
+            esac
+        fi
+        if [ "$_OK" -eq 0 ]; then
+            # fallback antigo (focus + wtype + Return): só quando não há API
+            hyprctl dispatch focuswindow "address:$END" >/dev/null 2>&1
+            wtype "$_MSG"
+            sleep 1.2
+            wtype -k Return
+            [ "$CHECK" -eq 1 ] || touch "$DIR_ST/fallback.$CHAVE"
+            log "WAKE (fallback focus+wtype) end=$END motivo=$MOTIVO"
+        else
+            [ "$CHECK" -eq 1 ] || rm -f "$DIR_ST/fallback.$CHAVE"
+            log "WAKE (API) end=$END sessao=$SESSAO motivo=$MOTIVO"
+        fi
         date +%s > "$DIR_ST/wake.$CHAVE"
-        log "WAKE end=$END motivo=$MOTIVO"
     done < "$DIR_ST/mapa.agora"
 
     # (30/10) AUTO-PAINS: captura sozinho os erros de tool dos agentes (a CLI

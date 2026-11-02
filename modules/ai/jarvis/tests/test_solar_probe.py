@@ -238,8 +238,21 @@ def test_probe_session_uses_profile_detected_max_tokens_and_temperature(tmp_path
     agent.run("test")
 
     payload = probe.last_payload
-    # Default model "default" → profile "default" → max_tokens 2048
-    assert payload["max_tokens"] == 2048
+    # O default do Config é resolvido pelo REGISTRY (tier fast, ctx 20480) →
+    # budget derivado do contexto (ctx/12 = 1706). SEM registry no ambiente
+    # (ex.: CI sem /etc/jarvis/model-registry.json) → perfil "default" = 2048.
+    # O teste fixava 2048 e passou a falhar quando o default virou o 4B-MTP
+    # (mudança de 02/11) — o comportamento certo é "budget do perfil", não
+    # um número fixo.
+    from jarvis.core.model_registry import ModelRegistry  # noqa: PLC0415
+
+    _entry = ModelRegistry.load().get(cfg.llm_model)
+    _esperado = 2048
+    if _entry is not None:
+        from jarvis.core.context_budget import ctx_derived_max_tokens  # noqa: PLC0415
+
+        _esperado = ctx_derived_max_tokens((_entry.raw or {}).get("ctx"))
+    assert payload["max_tokens"] == _esperado
     assert payload["temperature"] == 0.0
 
     # Test with a small model profile
