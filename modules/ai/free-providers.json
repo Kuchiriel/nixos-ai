@@ -1,7 +1,8 @@
 {
   "_comment": "FONTE ÚNICA de providers LLM free — consumida por model_policy.py (CASCADE_MAP) e home.nix (opencode providers). Testado ao vivo 28/10/2026. NÃO editar sem re-testar.",
-  "_version": "2026-10-28",
+  "_version": "2026-11-02",
   "_ordering": "Ordenado por: capability (reasoning > general > fast), context_window (maior primeiro dentro do tier), specificity (modelos dedicados antes de generalistas)",
+  "_headroom": "headroom = tokens de folga entre o limiar de auto-compactação do opencode e o TETO REAL da API (prompt_tokens + max_tokens ≤ context). SEM isso o opencode compacta exatamente no teto → 400 'Bad Request' no turno seguinte (medido no NIM: 262146 > 262144). home.nix converte headroom → limit.input (lib/opencode-limits.nix).",
   
   "providers": {
     "groq": {
@@ -9,6 +10,7 @@
       "env_key": "GROQ_API_KEY",
       "requires_headers": false,
       "status": "active",
+      "headroom": 20000,
       "_notes": "LPU ultra-rápido. Melhor para latency-sensitive. Rate limit: 6k TPM medido (maior que published). gpt-oss-120b dual-home com Cerebras (fallback natural).",
       "models": [
         {
@@ -49,7 +51,8 @@
       "env_key": "NVIDIA_API_KEY",
       "requires_headers": false,
       "status": "active",
-      "_notes": "NIM free tier. Catálogo grande mas volátil (modelos somem sem aviso). ultra-550b é o mais forte disponível free.",
+      "headroom": 20000,
+      "_notes": "NIM free tier. Catálogo grande mas volátil (modelos somem sem aviso). ultra-550b é o mais forte disponível free. TETO MEDIDO: prompt_tokens + max_tokens ≤ context (262146 tokens = 400). headroom obrigatório aqui.",
       "models": [
         {
           "id": "nvidia/nemotron-3-ultra-550b-a55b",
@@ -59,6 +62,16 @@
           "tier": "reasoning",
           "capabilities": ["reasoning", "analysis", "coding"],
           "good_for": "Most powerful free model. Long-horizon reasoning, complex analysis. 1M ctx.",
+          "status": "active"
+        },
+        {
+          "id": "minimaxai/minimax-m3.1-flash",
+          "name": "MiniMax M3.1 Flash",
+          "context": 262144,
+          "output": 262144,
+          "tier": "reasoning",
+          "capabilities": ["reasoning", "coding", "vision"],
+          "good_for": "Frontier multimodal coding (texto/imagem/vídeo) com thinking depth ajustável. TETO NIM medido 02/11: prompt_tokens + max_tokens ≤ 262144 (262146 = 400). Declarado aqui p/ receber o headroom (limit.input) — sem ele o opencode compacta no teto e estoura.",
           "status": "active"
         },
         {
@@ -120,6 +133,7 @@
       "extra_env": ["CLOUDFLARE_ACCOUNT_ID"],
       "requires_headers": false,
       "status": "active",
+      "headroom": 20000,
       "_notes": "Workers AI free tier: 10k neurons/dia. Todos os modelos testados OK. gpt-oss-120b é o mais forte.",
       "models": [
         {
@@ -180,6 +194,7 @@
       "env_key": "GEMINI_API_KEY",
       "requires_headers": false,
       "status": "active",
+      "headroom": 20000,
       "_notes": "Google AI Studio free tier. gemini-2.5-flash é o workhorse. flash-lite para tarefas leves.",
       "models": [
         {
@@ -224,6 +239,7 @@
         "X-Title": "Jarvis"
       },
       "status": "active",
+      "headroom": 20000,
       "_notes": "Router com 16 modelos :free. Rate limit diário por conta. SEM headers = 401 (obrigatório HTTP-Referer + X-Title).",
       "models": [
         {
@@ -384,6 +400,7 @@
       "env_key": null,
       "requires_headers": false,
       "status": "active",
+      "headroom": 20000,
       "_notes": "Anonymous free tier (sem key). Todos os modelos testados OK. Qwen3.5-397B é o mais forte.",
       "models": [
         {
@@ -434,6 +451,7 @@
       "env_key": null,
       "requires_headers": false,
       "status": "active",
+      "headroom": 20000,
       "_notes": "Anonymous free tier. kilo-auto/free é router automático.",
       "models": [
         {
@@ -474,6 +492,7 @@
       "env_key": null,
       "requires_headers": false,
       "status": "active",
+      "headroom": 20000,
       "_notes": "Anonymous free tier. Modelos menores.",
       "models": [
         {
@@ -504,6 +523,7 @@
       "env_key": "COHERE_API_KEY",
       "requires_headers": false,
       "status": "unstable",
+      "headroom": 20000,
       "_notes": "Trial key: 1000 calls/mês, 20 RPM. NON-COMMERCIAL only. Curl falhou (DNS/timeout) no teste 28/10.",
       "models": [
         {

@@ -202,7 +202,12 @@
                 homeStateVersion = stateVersion;
                 jarvisEnvironment = config.services.jarvis.environment or "production";
                 projectLib = import ./lib {
-                  inherit (nixpkgs.lib) lib;
+                  # `inherit (nixpkgs) lib` (NÃO `inherit (nixpkgs.lib) lib`):
+                  # o inherit antigo pedia o atributo `lib` DENTRO de
+                  # nixpkgs.lib — que não existe no nixpkgs 26.05. Bug
+                  # latente: só explodia quando um módulo usava `lib`
+                  # de verdade (02/11, lib/opencode-limits.nix).
+                  inherit (nixpkgs) lib;
                   pkgs = nixpkgs.legacyPackages.${system};
                 };
               };
@@ -252,8 +257,13 @@
     };
 
     # ── lib: fonts, colors, ports (nosso próprio lib/) ──────────────
+    # `lib = nixpkgs.lib` (NÃO `inherit (nixpkgs.lib) lib`): o inherit
+    # pedia o atributo `lib` DENTRO de nixpkgs.lib — que não existe no
+    # nixpkgs 26.05 (só `nixpkgs.lib.lib`, que nunca foi lá). Bug
+    # latente: só explodia quando alguém usava `lib` de verdade
+    # (02/11, lib/opencode-limits.nix).
     lib.nixos-ai = import ./lib {
-      inherit (nixpkgs.lib) lib;
+      inherit (nixpkgs) lib;
       pkgs = nixpkgs.legacyPackages.${system};
     };
 

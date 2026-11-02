@@ -18,6 +18,9 @@
   # Agent configuration management utilities
   agents = import ./agents.nix {inherit lib;};
 
+  # Headroom de contexto p/ os providers cloud do opencode (bug 400 minimax)
+  opencode-limits = import ./opencode-limits.nix {inherit lib;};
+
   # Fonts — single source (requer pkgs)
   fonts = import ./fonts.nix {inherit pkgs;};
 
