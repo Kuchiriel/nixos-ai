@@ -265,7 +265,17 @@ in {
   # Memory + safety plugin — plain .js (node --check validatable, 10/10
   # regex tests). Compaction hook injects the recall/remember protocol;
   # tool.execute.before denies unanchored root deletes via args rewrite.
+  # 02/11: injeta também a REGRA DO RESGATE no system prompt
+  # (experimental.chat.system.transform) — o resgate não pode depender de
+  # o agente lembrar (2602.11988: disciplina sozinha não é sistema).
   home.file.".config/opencode/plugins/memory.js".source = ./files/opencode/plugins/memory.js;
+
+  # Skill de coordenação multi-agente — DECLARATIVA (02/11): antes vivia
+  # solta em ~/.config/opencode/skills/ (fora do git, sem backup). O
+  # opencode carrega o corpo sob demanda (só name+description no prompt:
+  # progressive disclosure, 2609.35692) — o corpo é memória procedural.
+  home.file.".config/opencode/skills/opencode-coordination/SKILL.md".source =
+    ./files/opencode/skills/opencode-coordination/SKILL.md;
 
   # opencode.json do PROJETO (~/projects) — DECLARATIVO (15/10).
   # POR QUÊ: o arquivo vivia solto na raiz do repo e um agente o encheu de

@@ -29,6 +29,7 @@ import json
 import sys
 import os
 import threading
+from pathlib import Path
 from typing import Any
 
 # Adicionar paths necessários
@@ -356,6 +357,30 @@ JARVIS_TOOLS = [
             },
             "required": ["text"]
         }
+    },
+    {
+        "name": "jarvis_rehydrate",
+        "description": (
+            "REHYDRATE — resgate a sessão em 1 CHAMADA: devolve as guardas de "
+            "coordenação (pinadas, nunca resumidas), o topo da fila (blackboard), "
+            "o HANDOFF mais recente (atômico), memórias + lições do pedido e hits "
+            "do RAG (code/docs), e o roster (quem está vivo e em que lane). "
+            "CHAME PRIMEIRO em sessão nova, após compactação, ou ao tropeçar num "
+            "problema que parece repetido: é mais barato que refazer o diagnóstico "
+            "(e é o que evita o mesmo tropeço de novo)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "O que você vai fazer (assunto a reidratar)"},
+                "limit": {"type": "integer", "description": "Máx. de hits RAG por coleção (default: 5)"},
+                "include": {
+                    "type": "string",
+                    "description": "Blocos (default todos): queue,handoff,memories,lessons,rag,books,roster",
+                },
+            },
+            "required": ["task"],
+        },
     },
     {
         "name": "jarvis_recall",
@@ -833,6 +858,9 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
         if name == "jarvis_remember":
             return _handle_remember(args)
 
+        if name == "jarvis_rehydrate":
+            return _handle_rehydrate(args)
+
         if name == "jarvis_recall":
             return _handle_recall(args)
 
@@ -1003,6 +1031,153 @@ def _handle_remember(args: dict[str, Any]) -> str:
         return f"Stored in memory (id={mid}): {text[:100]}..."
     except Exception as e:
         return f"ERROR: remember failed: {e}"
+
+
+# ═══ REHYDRATE (R1 — 02/11) ═══
+# O "resgate" em 1 chamada. Regras da pesquisa (docs/REHYDRATACAO-E-COORDENACAO.md):
+#  - REVERSÍVEL: devolve o ORIGINAL (nunca um resumo do original) + o caminho;
+#  - QUERY-CONDITIONED: memórias/lições/RAG filtradas pelo pedido;
+#  - TRIAGE POR TIPO: guardas pinadas exatas no topo (nunca resumidas),
+#    HANDOFF atômico, logs/épisódico resumível;
+#  - 1 chamada, output compacto (contexto é recurso finito: 2510.05381).
+REHYDRATE_GUARDS = """## GUARDAS (pinadas — nunca resumir, nunca reescrever)
+- 1ª tool da sessão = `jarvis_rehydrate(task="...")`. Se o problema parece repetido, é aqui que se resgata.
+- Coordenação: `claim` antes de falar →
+  `scripts/agent-roster.py claim --name <n> --lane <lane> --repo <repo> --files <globs>`.
+  2 claims com arquivos sobrepostos são recusados (fronteira explícita).
+- Entrega: `scripts/agent-msg.sh --to <nome> "texto"` (o alvo roda) ·
+  `--note "texto"` (entra na sessão, NÃO roda, zero token) · `--cancel <id>` (aborta o turno).
+  Nunca wtype/focus: trava o typing do humano.
+- Wake: `agents-watcher.sh` acorda via API e filtra por repo/lane.
+- Memória: `remember` no fim/troca de tema; decisão >1 sessão → memória + nota; segredo → nome só."""
+
+
+def _rehydrate_queue(max_lines: int = 22) -> str:
+    """Topo da fila (blackboard) — o bloco mais recente, literal."""
+    path = os.environ.get("AGENTS_QUEUE", str(Path.home() / "projects" / "AGENTS-QUEUE.md"))
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="ignore")
+    except Exception as e:
+        return f"(fila ilegível: {e})"
+    lines = text.splitlines()
+    # corta no primeiro cabeçalho de checkpoint seguinte (o topo é o atual)
+    for i, ln in enumerate(lines[1:], start=1):
+        if ln.startswith("## ") and "CHECKPOINT" in ln:
+            lines = lines[:i]
+            break
+    body = "\n".join(lines[:max_lines]).rstrip()
+    return f"(fonte: {path})\n{body}"
+
+
+def _rehydrate_handoff(max_lines: int = 70) -> str:
+    """HANDOFF mais recente — chunk ATÔMICO (o original, não um resumo)."""
+    try:
+        from jarvis.core.vault import MemoryVault
+
+        mv = MemoryVault()
+        notes = [n for n in mv.list_notes() if n.startswith("HANDOFF")]
+        if not notes:
+            return "(sem HANDOFF no vault)"
+        notes.sort(reverse=True)
+        name = notes[0]
+        body = mv.read_note(name)
+    except Exception as e:
+        return f"(vault ilegível: {e})"
+    path = str(Path.home() / ".local/state/jarvis/vault" / (name if name.endswith(".md") else name + ".md"))
+    lines = body.splitlines()
+    clipped = len(lines) > max_lines
+    body = "\n".join(lines[:max_lines])
+    tail = "\n(… resto no arquivo — leia o path acima para o original)" if clipped else ""
+    return f"(fonte: {path})\n{body}{tail}"
+
+
+def _rehydrate_memories(task: str, top_k: int = 5) -> str:
+    try:
+        from jarvis.core.memory import EpisodicMemory
+
+        em = EpisodicMemory()
+        results = em.recall(task, top_k=top_k)
+    except Exception as e:
+        return f"(memória indisponível: {e})"
+    if not results:
+        return "(nenhuma memória para este pedido)"
+    return "\n".join(f"[{r.get('kind', '?')}] {r.get('text', '')[:260]}" for r in results)
+
+
+def _rehydrate_lessons(task: str) -> str:
+    try:
+        from jarvis.core.memory import EpisodicMemory
+
+        em = EpisodicMemory()
+        out = em.lessons(task, top_k=3)
+    except Exception as e:
+        return f"(lições indisponíveis: {e})"
+    return out or "(nenhuma lição para este padrão)"
+
+
+def _rehydrate_roster() -> str:
+    """Roster: quem está vivo e em que lane (a verdade de coordenação)."""
+    script = os.environ.get(
+        "AGENTS_ROSTER_PY", str(Path.home() / "projects" / "nixos-ai" / "scripts" / "agent-roster.py")
+    )
+    if not Path(script).exists():
+        return "(agent-roster.py não encontrado)"
+    try:
+        out = subprocess.run(
+            [sys.executable, script, "list", "--json"],
+            capture_output=True, text=True, timeout=25,
+        ).stdout
+        data = json.loads(out or "{}")
+    except Exception as e:
+        return f"(roster indisponível: {e})"
+    agents = [a for a in data.get("agents", []) if a.get("state") == "live"]
+    if not agents:
+        return "(nenhum agente com claim vivo — coordene por --broadcast ou faça claim)"
+    lines = []
+    for a in agents:
+        lines.append(
+            f"- {a.get('name')}: lane={a.get('lane') or '-'} repo={a.get('repo') or '-'} "
+            f"files={','.join(a.get('files') or []) or '-'} "
+            f"sessao={a.get('session') or '-'} busy={'sim' if a.get('busy') else 'nao'}"
+        )
+    tasks = data.get("tasks") or []
+    if tasks:
+        lines.append("tarefas: " + "; ".join(
+            f"{t.get('id')}[{t.get('status')}] {t.get('title')}" for t in tasks[:6]))
+    return "\n".join(lines)
+
+
+def _handle_rehydrate(args: dict[str, Any]) -> str:
+    """Reidrata a sessão: 1 chamada, output compacto, conteúdo original."""
+    task = (args.get("task") or "").strip()
+    if not task:
+        return "ERROR: rehydrate precisa de 'task' (o que você vai fazer)"
+    try:
+        limit = int(args.get("limit", 5) or 5)
+    except (TypeError, ValueError):
+        limit = 5
+    wanted = {p.strip() for p in (args.get("include") or "").split(",") if p.strip()}
+    blocks: list[str] = []
+
+    blocks.append(REHYDRATE_GUARDS)
+    if not wanted or "queue" in wanted:
+        blocks.append("## FILA (topo — o estado real agora)\n" + _rehydrate_queue())
+    if not wanted or "handoff" in wanted:
+        blocks.append("## HANDOFF (mais recente — atômico)\n" + _rehydrate_handoff())
+    if not wanted or "memories" in wanted:
+        blocks.append(f"## MEMÓRIAS (pedido: {task})\n" + _rehydrate_memories(task, limit))
+    if not wanted or "lessons" in wanted:
+        blocks.append(f"## LIÇÕES (mesmo pedido)\n" + _rehydrate_lessons(task))
+    if not wanted or "rag" in wanted:
+        blocks.append("## RAG code/docs\n" + _handle_rag_search(
+            {"query": task, "collection": "code", "limit": limit}))
+    if "books" in wanted:
+        blocks.append("## RAG books/papers\n" + _handle_rag_search(
+            {"query": task, "collection": "books", "limit": limit}))
+    if not wanted or "roster" in wanted:
+        blocks.append("## ROSTER (quem está vivo)\n" + _rehydrate_roster())
+
+    return "\n\n".join(blocks)
 
 
 def _handle_recall(args: dict[str, Any]) -> str:

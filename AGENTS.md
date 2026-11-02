@@ -66,6 +66,12 @@ nix flake check
 
 ## Checkpoint e dores (30/10)
 
+- **1ª tool da sessão = `jarvis_rehydrate(task="...")`** (02/11): 1 chamada
+  devolve guardas + fila + HANDOFF + memórias + lições + RAG + roster. Sem
+  isso o agente repete diagnóstico já pago (o RAG era usado só para
+  *registrar*, nunca para *resgatar*). Regra injetada pelo plugin `memory.js`
+  (system prompt + compactação), não depende de memória do agente.
+  Pesquisa: `docs/REHYDRATACAO-E-COORDENACAO.md` (14 papers em `~/Books`).
 - `scripts/agent-checkpoint.sh` = as 4 camadas em 1 comando (fila+commit,
   rag-index, memória, vault HANDOFF+commit), genérico para qualquer repo.
 - `scripts/agent-pains.sh` = captura **sozinha** os erros de tool: o store vivo
