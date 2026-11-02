@@ -8,11 +8,17 @@ license: MIT
 
 ## 0. Primeira tool da sessão (regra do harness)
 
-`jarvis_rehydrate(task="<o que vou fazer>")` — devolve em **1 call**: guardas
-+ fila (topo) + HANDOFF + memórias + lições + RAG + roster. É o resgate: sem
-isso o agente repete diagnóstico já pago (a regra existe porque o RAG era
-usado só para *registrar*, nunca para *resgatar* — 2607.08032: memória
-reversível > resumo; 2608.22752: 5 compactações derrubam regras de 53%→10%).
+`jarvis_jarvis_rehydrate(task="<o que vou fazer>")` — devolve em **1 call**:
+guardas + fila (topo) + HANDOFF + memórias + lições + RAG + roster. É o
+resgate: sem isso o agente repete diagnóstico já pago (a regra existe porque
+o RAG era usado só para *registrar*, nunca para *resgatar* — 2607.08032:
+memória reversível > resumo; 2608.22752: 5 compactações derrubam regras de
+53%→10%).
+
+Nome: no opencode o tool aparece **prefixado pelo MCP** (`jarvis_` +
+`jarvis_rehydrate` = `jarvis_jarvis_rehydrate`); via MCP/CLI é
+`jarvis_rehydrate`. A tool tem **loop-breaker**: 2ª chamada em < 120s devolve
+só um ponteiro (medido: sem isso o 4B loopava — 293k tokens de input).
 
 ## 1. Roster = quem existe (fonte única)
 

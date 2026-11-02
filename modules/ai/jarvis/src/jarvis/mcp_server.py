@@ -29,6 +29,7 @@ import json
 import sys
 import os
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -1040,8 +1041,17 @@ def _handle_remember(args: dict[str, Any]) -> str:
 #  - TRIAGE POR TIPO: guardas pinadas exatas no topo (nunca resumidas),
 #    HANDOFF atômico, logs/épisódico resumível;
 #  - 1 chamada, output compacto (contexto é recurso finito: 2510.05381).
+# Estado do loop-breaker do resgate (ver _handle_rehydrate).
+# Janela deslizante de resgates COMPLETOS: até 3 por janela; o 4º devolve
+# só o ponteiro. Orçar por janela (e não por task) porque o loop medido
+# variava o texto do task (4-5 paraphrases para a mesma intenção).
+_REHYDRATE_CALLS: list[float] = []
+_REHYDRATE_LOCK = threading.Lock()
+
 REHYDRATE_GUARDS = """## GUARDAS (pinadas — nunca resumir, nunca reescrever)
-- 1ª tool da sessão = `jarvis_rehydrate(task="...")`. Se o problema parece repetido, é aqui que se resgata.
+- 1ª tool da sessão = `jarvis_rehydrate(task="...")` (no opencode o nome
+  exposto é `jarvis_jarvis_rehydrate` — MCP "jarvis" + tool "jarvis_rehydrate").
+  Se o problema parece repetido, é aqui que se resgata.
 - Coordenação: `claim` antes de falar →
   `scripts/agent-roster.py claim --name <n> --lane <lane> --repo <repo> --files <globs>`.
   2 claims com arquivos sobrepostos são recusados (fronteira explícita).
@@ -1159,6 +1169,32 @@ def _handle_rehydrate(args: dict[str, Any]) -> str:
     task = (args.get("task") or "").strip()
     if not task:
         return "ERROR: rehydrate precisa de 'task' (o que você vai fazer)"
+    # LOOP-BREAKER (02/11): medido com o modelo local 4B — ele chamava a
+    # tool em loop (20-24 calls, 293k tokens de input) porque a cada call o
+    # bloco inteiro voltava ao contexto. Orçamento: até N resgates COMPLETOS
+    # por janela deslizante; o seguinte devolve um ponteiro curto (o
+    # resultado completo JÁ está no contexto).
+    agora = time.time()
+    try:
+        janela = float(os.environ.get("JARVIS_REHYDRATE_COOLDOWN_S", "120"))
+    except (TypeError, ValueError):
+        janela = 120.0
+    try:
+        max_completos = int(os.environ.get("JARVIS_REHYDRATE_MAX_CALLS", "3"))
+    except (TypeError, ValueError):
+        max_completos = 3
+    with _REHYDRATE_LOCK:
+        _REHYDRATE_CALLS[:] = [t for t in _REHYDRATE_CALLS if agora - t < janela]
+        excedeu = janela > 0 and len(_REHYDRATE_CALLS) >= max_completos
+        if not excedeu:
+            _REHYDRATE_CALLS.append(agora)
+    if excedeu:
+        return (
+            "## RESGATE JÁ FEITO (orçamento da janela)\n"
+            "Você já fez %d resgates completos nesta janela — o resultado já "
+            "está no contexto desta sessão. Use-o, não chame de novo (repetir "
+            "queima contexto: 293k tokens de input num loop medido)." % max_completos
+        )
     try:
         limit = int(args.get("limit", 5) or 5)
     except (TypeError, ValueError):

@@ -67,6 +67,10 @@ def M(monkeypatch, tmp_path):
     # roster fake
     monkeypatch.setattr(m, "_rehydrate_roster",
                         lambda: "- nixos-ai: lane=nixos-ai/coordenacao repo=nixos-ai")
+
+    # loop-breaker desligado por default nos testes (cada teste = 1 resgate)
+    monkeypatch.setenv("JARVIS_REHYDRATE_COOLDOWN_S", "0")
+    m._REHYDRATE_CALLS.clear()
     return m
 
 
@@ -130,3 +134,33 @@ def test_tool_is_registered(M):
     assert schema["inputSchema"]["required"] == ["task"]
     desc = schema["description"].lower()
     assert "rehydrate" in desc and "primeiro" in desc
+
+
+def test_rehydrate_loop_breaker_blocks_after_the_budget(M, monkeypatch):
+    """Orçamento de resgates completos por janela (medido: 293k tokens no loop)."""
+    monkeypatch.setenv("JARVIS_REHYDRATE_COOLDOWN_S", "120")
+    monkeypatch.setenv("JARVIS_REHYDRATE_MAX_CALLS", "2")
+    M._REHYDRATE_CALLS.clear()
+    for _ in range(2):
+        assert "GUARDAS" in M._handle_rehydrate({"task": "algo"})
+    terceira = M._handle_rehydrate({"task": "algo"})
+    assert "RESGATE JÁ FEITO" in terceira
+    assert len(terceira) < 400, "o ponteiro tem que ser curto (não repetir o bloco)"
+
+
+def test_rehydrate_budget_allows_distinct_tasks(M, monkeypatch):
+    """Resgates LEGÍTIMOS distintos (tasks diferentes) não são bloqueados."""
+    monkeypatch.setenv("JARVIS_REHYDRATE_COOLDOWN_S", "120")
+    monkeypatch.setenv("JARVIS_REHYDRATE_MAX_CALLS", "3")
+    M._REHYDRATE_CALLS.clear()
+    for i in range(3):
+        assert "GUARDAS" in M._handle_rehydrate({"task": f"tarefa {i}"})
+    assert "RESGATE JÁ FEITO" in M._handle_rehydrate({"task": "tarefa 3"})
+
+
+def test_rehydrate_cooldown_env_is_honored(M, monkeypatch):
+    monkeypatch.setenv("JARVIS_REHYDRATE_COOLDOWN_S", "0")
+    M._REHYDRATE_CALLS.clear()
+    a = M._handle_rehydrate({"task": "x"})
+    b = M._handle_rehydrate({"task": "x"})
+    assert "GUARDAS" in a and "GUARDAS" in b

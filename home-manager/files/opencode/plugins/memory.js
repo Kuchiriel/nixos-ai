@@ -42,11 +42,13 @@ const PINNED_GUARDS = `## Guardas de coordenação (pinadas — não resumir)
 // Regra do harness para o RESGATE (o que faltava).
 const REHYDRATE_RULE = `## Re-hidratação (primeira tool da sessão)
 1ª tool de uma sessão nova, ou logo após uma compactação, ou ao tropeçar num
-problema que parece repetido: \`jarvis_rehydrate(task="<o que vou fazer>")\`.
+problema que parece repetido: \`jarvis_jarvis_rehydrate(task="<o que vou
+fazer>")\` (no opencode o nome exposto é prefixado pelo MCP "jarvis"; o tool
+se chama \`jarvis_rehydrate\`).
 Devolve em 1 chamada: guardas + fila + HANDOFF + memórias + lições + RAG +
 roster. É mais barato que refazer o diagnóstico.
 UMA chamada só — não repita (o resgate já devolveu o estado; o resto está
-nos paths). Repetir queima contexto (medido: 204k tokens de input num loop).
+nos paths). Repetir queima contexto (medido: 293k tokens de input num loop).
 ${PINNED_GUARDS}`;
 
 const COMPACTION_MEMORY = `## Memory protocol (auto-injected pre-compaction)

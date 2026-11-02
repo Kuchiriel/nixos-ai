@@ -3,6 +3,7 @@
   user,
   pkgs,
   inputs,
+  projectLib,
   ...
 }: let
   # ══════════════════════════════════════════════════════════════
@@ -25,12 +26,24 @@
       prov.base_url;
     apiKeyEnv = if prov.env_key != null then "{env:${prov.env_key}}" else null;
     headers = if prov.requires_headers or false then prov.headers else {};
-    mkModel = m: {
+    # Headroom de contexto (02/11): ver lib/opencode-limits.nix. SEM
+    # limit.input o opencode usa usable = context - maxOutputTokens = o
+    # TETO EXATO da API (prompt + max_tokens ≤ context) → folga zero →
+    # 400 "Bad Request" (medido no NIM: 262146 tokens > 262144).
+    # Com limit.input o limiar de compactação fica `headroom` tokens
+    # ABAIXO do teto (cobre o crescimento de 1 turno).
+    headroom = prov.headroom or projectLib.opencode-limits.defaultHeadroom;
+    mkModel = m: let
+      lim = projectLib.opencode-limits.limits {
+        inherit (m) context output;
+        inherit headroom;
+      };
+    in {
       name = m.name;
       limit = {
         context = m.context;
         output = m.output;
-      };
+      } // (if lim.input != null then {input = lim.input;} else {});
     };
     activeModels = builtins.listToAttrs
       (map

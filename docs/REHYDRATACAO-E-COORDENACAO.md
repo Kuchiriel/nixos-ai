@@ -91,7 +91,37 @@ Síntese mecanística (não é falta de registro — é falta de **gatilho** e d
 - **M4 (regressão)**: a suite continua verde; a skill nova não pode custar
   mais do que some (ETH: +20% de custo sem ganho = não merger).
 
-## 6. Referências (arquivos locais)
+## 6. Resultado da medição (02/11, executado)
+
+Paired run real (`scripts/measure-rehydrate-ab.py`, diretório SEM AGENTS.md
+para o delta ser atribuível só à injeção):
+
+| modelo | A (com injeção) | B (sem injeção) | tokens_in A→B |
+|---|---|---|---|
+| nemotron-3.5-lightning (kilocode/free) | cita `jarvis_rehydrate` + contrato correto (`--note`, `claim`) | não cita; inventa `jarvis_jarvis_recall` | 67.288 → 66.116 (**+1.172**) |
+| jarvis-mtp-lora 4B (default local) | chama a tool | não chama | 71.346 → 46.353 (+24.993, inclui a chamada) |
+
+**M2/M3 provados**: a injeção muda o comportamento com custo de ~1,2k tokens
+(+1,8% do prompt de 66k) — abaixo do limiar do ETH (+20% de custo sem ganho).
+
+Falhas reais encontradas pela medição (e corrigidas):
+
+1. **Template quebrado** — injetar a regra como 2º bloco criava um 2º
+   *system message* e o template do modelo abortava (`System message must be
+   at the beginning`). O system prompt é **1 bloco só** (medido: 20.073
+   chars) → a regra é **mesclada** no último bloco (mescla > push).
+2. **Loop de tool call** — o 4B chamava o resgate 10+ vezes (293k tokens de
+   input, 15 min de timeout). Correções: handoff limitado a 24 linhas, footer
+   "uma chamada só" e **loop-breaker** na tool (2ª chamada em <120s devolve
+   um ponteiro curto). Depois: 71k tokens, 46s.
+3. **Nome exposto dobrado** — o opencode prefixa o tool do MCP `jarvis`:
+   `jarvis_rehydrate` aparece como **`jarvis_jarvis_rehydrate`**. As regras
+   injetadas passaram a citar o nome exposto (o antigo não casava).
+4. **Guarda de root-delete inerte** — o regex do plugin não casava `rm -rf /`
+   (exigia duas palavras antes do slash) e não pegava `-fr`/`-Rf`/`/*`.
+   Corrigido e travado por teste (o plugin não tinha NENHUM teste).
+
+## 7. Referências (arquivos locais)
 
 `~/Books/papers/arxiv-2607.08032.{pdf,md}` · `2608.22752` · `2609.40118` ·
 `2609.28771` · `2602.06052` · `2510.04618` · `2602.11988` · `2601.20404` ·

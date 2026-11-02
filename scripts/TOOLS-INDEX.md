@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_76 tools._
+_77 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -62,6 +62,8 @@ _76 tools._
   use: `python3 scripts/loop-close.py --tier easy --rounds 1 [--apply-lessons]`
 - `loop-runner.sh` (nixos-ai/scripts) — loop-runner.sh — executor do LOOP-v2 (o agente raciocina; isto executa).
   use: `Uso:  nohup ./scripts/loop-runner.sh <ciclos> <modelo> [tier] [rounds]`
+- `measure-rehydrate-ab.py` (nixos-ai/scripts) — """measure-rehydrate-ab.py — A/B da injeção de resgate (M2/M3, 02/11).
+  use: `./scripts/measure-rehydrate-ab.py [--model <id>] [--question "<pergunta>"]`
 - `memory-arena-lite.py` (nixos-ai/scripts) — """MemoryArena-lite: o H1 no formato de USO ATIVO (25/09).
   use: `uso ativo. Então o INCONCLUSIVE do H1 não era "memória não importa": era`
 - `migrate-tools-en.py` (nixos-ai/scripts) — """migrate-tools-en.py — tool descriptions PT→EN (29/09, harness em inglês).
