@@ -2,7 +2,7 @@
   "_comment": "FONTE ÚNICA de providers LLM free — consumida por model_policy.py (CASCADE_MAP) e home.nix (opencode providers). Testado ao vivo 28/10/2026. NÃO editar sem re-testar.",
   "_version": "2026-11-02",
   "_ordering": "Ordenado por: capability (reasoning > general > fast), context_window (maior primeiro dentro do tier), specificity (modelos dedicados antes de generalistas)",
-  "_headroom": "headroom = tokens de folga entre o limiar de auto-compactação do opencode e o TETO REAL da API (prompt_tokens + max_tokens ≤ context). SEM isso o opencode compacta exatamente no teto → 400 'Bad Request' no turno seguinte (medido no NIM: 262146 > 262144). home.nix converte headroom → limit.input (lib/opencode-limits.nix).",
+  "_headroom": "headroom = tokens de folga entre o limiar de auto-compactação do opencode e o TETO REAL da API (prompt_tokens + max_tokens ≤ context). SEM isso o opencode compacta exatamente no teto → 400 'Bad Request' no turno seguinte (medido no NIM: 262146 > 262144). MEDIÇÃO (02/11, 2287 passos minimax): growth por passo p50=926, p90=4034, p99=12308, max=28333 → headroom 32k no nvidia, 20k nos demais (p99 medido ≤ 9.5k). home.nix converte headroom → limit.input (lib/opencode-limits.nix).",
   
   "providers": {
     "groq": {
@@ -51,8 +51,8 @@
       "env_key": "NVIDIA_API_KEY",
       "requires_headers": false,
       "status": "active",
-      "headroom": 20000,
-      "_notes": "NIM free tier. Catálogo grande mas volátil (modelos somem sem aviso). ultra-550b é o mais forte disponível free. TETO MEDIDO: prompt_tokens + max_tokens ≤ context (262146 tokens = 400). headroom obrigatório aqui.",
+      "headroom": 32000,
+      "_notes": "NIM free tier. Catálogo grande mas volátil (modelos somem sem aviso). ultra-550b é o mais forte disponível free. TETO MEDIDO: prompt_tokens + max_tokens ≤ context (262146 tokens = 400). headroom 32k: growth medido por passo no NIM p99=11-14k, max=28k (minimax) / 83k (cache invalidation).",
       "models": [
         {
           "id": "nvidia/nemotron-3-ultra-550b-a55b",

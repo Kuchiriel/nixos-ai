@@ -58,6 +58,9 @@ def test_headroom_covers_measured_growth(data):
 
 
 def test_every_model_has_sane_limits(data):
+    # maxTokens que o opencode realmente pede = min(output, 32000)
+    # (ProviderTransform.OUTPUT_TOKEN_MAX). O prompt ceiling do modelo
+    # é context - maxTokens (a API conta prompt + max_tokens ≤ context).
     for pname, prov in data["providers"].items():
         for model in prov["models"]:
             where = f"{pname}/{model.get('id')}"
@@ -65,8 +68,11 @@ def test_every_model_has_sane_limits(data):
             assert model.get("name"), f"{where} sem name"
             assert model["context"] > 0, f"{where} sem context"
             assert model["output"] > 0, f"{where} sem output"
-            assert model["output"] < model["context"], (
-                f"{where}: output >= context é impossível (o request nunca cabe)"
+            assert model["output"] <= model["context"], (
+                f"{where}: output > context é impossível (o request nunca cabe)"
+            )
+            assert model["context"] - min(model["output"], 32000) > 0, (
+                f"{where}: não sobra prompt depois do output (nunca cabe)"
             )
             assert model["status"] in VALID_STATUS, f"{where}: status '{model['status']}' desconhecido"
 
