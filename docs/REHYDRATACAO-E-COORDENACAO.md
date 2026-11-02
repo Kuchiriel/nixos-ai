@@ -94,15 +94,26 @@ Síntese mecanística (não é falta de registro — é falta de **gatilho** e d
 ## 6. Resultado da medição (02/11, executado)
 
 Paired run real (`scripts/measure-rehydrate-ab.py`, diretório SEM AGENTS.md
-para o delta ser atribuível só à injeção):
+para o delta ser atribuível só à injeção; tokens = totais da sessão na
+tabela `session` do `opencode.db`):
 
-| modelo | A (com injeção) | B (sem injeção) | tokens_in A→B |
+| modelo | A (com injeção) | B (sem injeção) | custo da regra |
 |---|---|---|---|
-| nemotron-3.5-lightning (kilocode/free) | cita `jarvis_rehydrate` + contrato correto (`--note`, `claim`) | não cita; inventa `jarvis_jarvis_recall` | 67.288 → 66.116 (**+1.172**) |
-| jarvis-mtp-lora 4B (default local) | chama a tool | não chama | 71.346 → 46.353 (+24.993, inclui a chamada) |
+| nemotron-3.5-lightning (kilocode/free) | cita `jarvis_rehydrate` + contrato correto (`--note`, `claim`) | não cita; inventa `jarvis_jarvis_recall` | **+1.172 tok** (+1,8%) |
+| jarvis-mtp-lora 4B (default local) | **chama** a tool (1 call), 12 turnos | não chama, 3 turnos | +5.328 tok (+34%) |
 
-**M2/M3 provados**: a injeção muda o comportamento com custo de ~1,2k tokens
-(+1,8% do prompt de 66k) — abaixo do limiar do ETH (+20% de custo sem ganho).
+**M2/M3 provados**: a injeção muda o comportamento nos dois modelos. No
+modelo forte o custo é +1,2k tokens (abaixo do limiar do ETH: +20% de custo
+sem ganho). No 4B o custo é maior em % (o prompt dele é 4x menor), mas
+absoluto é pequeno (5,3k) e o comportamento correto.
+
+**M1 (tool)**: recall@4 = 4/4 — 4 pedidos de erro recorrente real
+(`SchemaError` do bash, `oldString` não encontrado, entrega sem travar o
+typing, 400 de contexto do provider) trouxeram o bloco certo na 1ª chamada
+(2,0–2,6s por resgate).
+
+**M4 (regressão)**: suite 1836 passed / 1 falha preexistente
+(`test_legacy_index::test_parity_with_synthetic_index`).
 
 Falhas reais encontradas pela medição (e corrigidas):
 
@@ -110,14 +121,23 @@ Falhas reais encontradas pela medição (e corrigidas):
    *system message* e o template do modelo abortava (`System message must be
    at the beginning`). O system prompt é **1 bloco só** (medido: 20.073
    chars) → a regra é **mesclada** no último bloco (mescla > push).
-2. **Loop de tool call** — o 4B chamava o resgate 10+ vezes (293k tokens de
-   input, 15 min de timeout). Correções: handoff limitado a 24 linhas, footer
-   "uma chamada só" e **loop-breaker** na tool (2ª chamada em <120s devolve
-   um ponteiro curto). Depois: 71k tokens, 46s.
-3. **Nome exposto dobrado** — o opencode prefixa o tool do MCP `jarvis`:
+2. **Loop de tool call** — o 4B chamava o resgate 20–24 vezes (293k tokens
+   de input, 15 min de timeout). Correções: orçamento de resgates completos
+   por janela (3) + memo do mesmo pedido (2ª chamada do mesmo pedido = ponteiro
+   curto) + footer "uma chamada só" na regra.
+3. **Imitação de formato (o mais sutil)** — as 8 primeiras linhas do HANDOFF
+   são o template do opencode (`## Objective / ## Important Details / ## Next
+   Move`) e o 4B o **imitava**: 91 turnos escrevendo no mesmo formato
+   (176k tokens). O resgate devolve o HANDOFF como **8 linhas + path do
+   original** (o original continua lá — R1: reversível) e o turno do 4B
+   caiu de 91 → **12** (176k → 62k tokens cumulativos; 20,8k → tokens reais
+   da sessão). **Retrieval que imita o formato de saída do modelo induz loop
+   em modelo pequeno** — o conteúdo do RAG precisa ser distinto do formato
+   que o agente usa para falar.
+4. **Nome exposto dobrado** — o opencode prefixa o tool do MCP `jarvis`:
    `jarvis_rehydrate` aparece como **`jarvis_jarvis_rehydrate`**. As regras
    injetadas passaram a citar o nome exposto (o antigo não casava).
-4. **Guarda de root-delete inerte** — o regex do plugin não casava `rm -rf /`
+5. **Guarda de root-delete inerte** — o regex do plugin não casava `rm -rf /`
    (exigia duas palavras antes do slash) e não pegava `-fr`/`-Rf`/`/*`.
    Corrigido e travado por teste (o plugin não tinha NENHUM teste).
 

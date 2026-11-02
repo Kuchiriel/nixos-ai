@@ -1046,6 +1046,7 @@ def _handle_remember(args: dict[str, Any]) -> str:
 # só o ponteiro. Orçar por janela (e não por task) porque o loop medido
 # variava o texto do task (4-5 paraphrases para a mesma intenção).
 _REHYDRATE_CALLS: list[float] = []
+_REHYDRATE_SEEN: dict[str, float] = {}
 _REHYDRATE_LOCK = threading.Lock()
 
 REHYDRATE_GUARDS = """## GUARDAS (pinadas — nunca resumir, nunca reescrever)
@@ -1079,14 +1080,17 @@ def _rehydrate_queue(max_lines: int = 22) -> str:
     return f"(fonte: {path})\n{body}"
 
 
-def _rehydrate_handoff(max_lines: int = 24) -> str:
+def _rehydrate_handoff(max_lines: int = 8) -> str:
     """HANDOFF mais recente — chunk ATÔMICO (o original, não um resumo).
 
-    COMPACTO de propósito: o handoff tem ~70 linhas e cada uma volta ao
-    contexto a cada tool call. Medido (02/11): o bloco inteiro (1843 chars)
-    fazia um modelo fraco entrar em loop de tool calls (204k tokens de
-    input acumulados). O resgate dá o TOPO (estado) + o path do original —
-    o agente lê o arquivo se precisar (R1: reversível, não resumo).
+    COMPACTO de propósito (medido em 02/11):
+    - o bloco inteiro (1843 chars) fazia o modelo fraco entrar em loop de
+      tool calls (204k tokens de input acumulados);
+    -PIOR: as primeiras linhas do HANDOFF são o template do opencode
+      ("## Objective / ## Important Details / ## Next Move") e o 4B o
+      IMITAVA: 91 turnos escrevendo no mesmo formato (176k tokens).
+    Por isso: 8 linhas (título + resumo) + o path do original. O agente lê
+    o arquivo se precisar (R1: reversível = original no path, não resumo).
     """
     try:
         from jarvis.core.vault import MemoryVault
@@ -1183,11 +1187,23 @@ def _handle_rehydrate(args: dict[str, Any]) -> str:
         max_completos = int(os.environ.get("JARVIS_REHYDRATE_MAX_CALLS", "3"))
     except (TypeError, ValueError):
         max_completos = 3
+    chave = task.strip().lower()[:120]
     with _REHYDRATE_LOCK:
         _REHYDRATE_CALLS[:] = [t for t in _REHYDRATE_CALLS if agora - t < janela]
+        for k in [k for k, t in _REHYDRATE_SEEN.items() if agora - t >= janela]:
+            _REHYDRATE_SEEN.pop(k, None)
+        repetido = janela > 0 and chave in _REHYDRATE_SEEN
         excedeu = janela > 0 and len(_REHYDRATE_CALLS) >= max_completos
-        if not excedeu:
+        if not excedeu and not repetido:
             _REHYDRATE_CALLS.append(agora)
+            _REHYDRATE_SEEN[chave] = agora
+    if repetido:
+        return (
+            "## RESGATE JÁ FEITO PARA ESTE PEDIDO\n"
+            "O mesmo pedido já foi resgatado nesta janela — o resultado está no "
+            "contexto desta sessão. Não repita (cada repetição devolve o bloco "
+            "inteiro de novo ao contexto)."
+        )
     if excedeu:
         return (
             "## RESGATE JÁ FEITO (orçamento da janela)\n"
@@ -1196,7 +1212,7 @@ def _handle_rehydrate(args: dict[str, Any]) -> str:
             "queima contexto: 293k tokens de input num loop medido)." % max_completos
         )
     try:
-        limit = int(args.get("limit", 5) or 5)
+        limit = int(args.get("limit", 3) or 3)
     except (TypeError, ValueError):
         limit = 5
     wanted = {p.strip() for p in (args.get("include") or "").split(",") if p.strip()}

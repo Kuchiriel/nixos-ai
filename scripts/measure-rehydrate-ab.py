@@ -77,6 +77,22 @@ def sessao_recem(directory: str) -> str | None:
         return None
 
 
+def tokens_da_sessao(session_id: str) -> tuple[int, int]:
+    """Totais REAIS da sessão (a tabela session tem tokens_input/output).
+
+    Somar os tokens de cada message conta o contexto repetido a cada turno
+    (o mesmo texto reenviado) → inflava a métrica (medido: 62k vs 20,7k).
+    """
+    try:
+        c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+        row = c.execute(
+            "SELECT tokens_input, tokens_output FROM session WHERE id=?", (session_id,)
+        ).fetchone()
+        return (int(row[0] or 0), int(row[1] or 0)) if row else (0, 0)
+    except Exception:
+        return (0, 0)
+
+
 def metricas(session_id: str) -> dict:
     """Lê message/part do schema real: message(data JSON), part(data JSON)."""
     out = {"assistant_text": "", "tools": [], "tokens_in": 0, "tokens_out": 0}
@@ -131,6 +147,7 @@ def main() -> int:
         r = run_once(args.model, args.question, inject, tmp)
         sid = sessao_recem(str(tmp))
         m = metricas(sid) if sid else {}
+        tok_in, tok_out = tokens_da_sessao(sid) if sid else (0, 0)
         txt = (m.get("assistant_text") or r["stdout"]).lower()
         mentioned = "rehydrat" in txt
         called = any("rehydrate" in t.lower() for t in m.get("tools", []))
@@ -139,7 +156,8 @@ def main() -> int:
             "timeout": r.get("timeout", False),
             "mencionou_rehydrate": mentioned, "chamou_tool": called,
             "tools": m.get("tools", []),
-            "tokens_in": m.get("tokens_in", 0), "tokens_out": m.get("tokens_out", 0),
+            "tokens_in": tok_in, "tokens_out": tok_out,
+            "tokens_in_soma_msgs": m.get("tokens_in", 0),
             "falha_template": "System message must be at the beginning" in (r["stderr"] + r["stdout"]),
             "resposta": (m.get("assistant_text") or r["stdout"])[:600],
         }

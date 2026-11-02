@@ -254,6 +254,7 @@
       python-lint = checkLib.python-lint;
       markdown-lint = checkLib.markdown-lint;
       nix-check = checkLib.nix-check;
+      opencode-headroom = checkLib.opencode-headroom;
     };
 
     # ── lib: fonts, colors, ports (nosso próprio lib/) ──────────────
