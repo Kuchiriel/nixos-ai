@@ -197,7 +197,7 @@ def _single_model_server(base_url: str, timeout: float = 10.0) -> str | None:
 
 def ensure_model(
     model_id: str,
-    base_url: str = "http://127.0.0.1:8080",
+    base_url: str = "http://127.0.0.1:8092",
     *,
     load_timeout_s: float = 300.0,
     lock_timeout_s: float = 330.0,

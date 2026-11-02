@@ -69,8 +69,13 @@ ram_info()  { free -h | awk '/^Mem:/ {printf "%s/%s (%.0f%%)", $3, $2, $3/$2*100
 vram_info() { nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader 2>/dev/null | awk -F', ' '{printf "%s/%s", $1, $2}' || echo "N/A"; }
 disk_info() { df -h / | awk 'NR==2 {printf "%s/%s (%s)", $3, $2, $5}'; }
 
+# (02/11) o DEFAULT do LLM é o 4B-MTP+LoRA (:8092). O :8080 é o router
+# on-demand (fica vazio; o bonsai carrega sob demanda e não cabe na VRAM
+# junto do default) — por isso o health/slots olham o :8092.
+LLM_PORT=8092
+
 llm_slots() {
-    curl -s --connect-timeout 2 http://localhost:8080/slots 2>/dev/null | \
+    curl -s --connect-timeout 2 "http://localhost:${LLM_PORT}/slots" 2>/dev/null | \
         python3 -c "
 import sys,json
 try:
@@ -85,7 +90,7 @@ except: print('?')
 }
 
 llm_health() {
-    curl -s --connect-timeout 2 http://localhost:8080/health 2>/dev/null | grep -q '"ok"\|"healthy"' && echo "online" || echo "offline"
+    curl -s --connect-timeout 2 "http://localhost:${LLM_PORT}/health" 2>/dev/null | grep -q '"ok"\|"healthy"' && echo "online" || echo "offline"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -199,7 +204,8 @@ menu_system() {
 
   <span color='${WHITE}'><b>Services</b></span>
 
-  $(dot llama-cpp-server) llama-cpp-server     <span color='${DIM}'>$(llm_health) · $(llm_slots)</span>
+  $(dot llama-uncensored-4b) llama-uncensored-4b    <span color='${DIM}'>$(llm_health) · $(llm_slots)</span>
+  $(dot llama-cpp-server) llama-cpp-server     <span color='${DIM}'>router on-demand</span>
   $(dot llama-cpp-embeddings) llama-cpp-embeddings
   $(dot llama-cpp-rerank) llama-cpp-rerank
   $(dot qdrant) qdrant
@@ -208,7 +214,8 @@ menu_system() {
 
   <span color='${WHITE}'><b>Endpoints</b></span>
 
-  <span color='${DIM}'>LLM:        http://localhost:8080/v1</span>
+  <span color='${DIM}'>LLM:        http://localhost:8092/v1 (default)</span>
+  <span color='${DIM}'>Router:     http://localhost:8080/v1 (on-demand)</span>
   <span color='${DIM}'>Embeddings: http://localhost:8081/v1</span>
   <span color='${DIM}'>Qdrant:     http://localhost:6333</span>"
 

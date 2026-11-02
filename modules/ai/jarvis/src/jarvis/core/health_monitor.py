@@ -46,14 +46,14 @@ class BackendHealthMonitor:
     """Monitor de saúde leve com cache de TTL.
 
     Exemplo:
-        monitor = BackendHealthMonitor("http://127.0.0.1:8080")
+        monitor = BackendHealthMonitor("http://127.0.0.1:8092")
         snap = monitor.check()  # health check com cache
         print(snap.state, snap.latency_ms)
     """
 
     def __init__(
         self,
-        base_url: str = "http://127.0.0.1:8080",
+        base_url: str = "http://127.0.0.1:8092",
         *,
         latency_threshold_ms: float = 5000.0,
         cache_ttl_s: float = 10.0,

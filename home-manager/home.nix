@@ -61,6 +61,8 @@ in {
     ./modules/agents-watcher.nix
     # keepawake da tela: sempre ligado (o watcher é AFK-only)
     ./modules/agents-keepawake.nix
+    # jobs noturnos (bench 04:00 / probe do default 05:00) — declarativos
+    ./modules/bench-nightly.nix
     ./modules/ai
     ./modules/services/jarvis-wakeword.nix
     ./modules/services/sunshine.nix
