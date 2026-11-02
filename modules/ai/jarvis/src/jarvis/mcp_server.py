@@ -1069,8 +1069,15 @@ def _rehydrate_queue(max_lines: int = 22) -> str:
     return f"(fonte: {path})\n{body}"
 
 
-def _rehydrate_handoff(max_lines: int = 70) -> str:
-    """HANDOFF mais recente — chunk ATÔMICO (o original, não um resumo)."""
+def _rehydrate_handoff(max_lines: int = 24) -> str:
+    """HANDOFF mais recente — chunk ATÔMICO (o original, não um resumo).
+
+    COMPACTO de propósito: o handoff tem ~70 linhas e cada uma volta ao
+    contexto a cada tool call. Medido (02/11): o bloco inteiro (1843 chars)
+    fazia um modelo fraco entrar em loop de tool calls (204k tokens de
+    input acumulados). O resgate dá o TOPO (estado) + o path do original —
+    o agente lê o arquivo se precisar (R1: reversível, não resumo).
+    """
     try:
         from jarvis.core.vault import MemoryVault
 
@@ -1177,6 +1184,11 @@ def _handle_rehydrate(args: dict[str, Any]) -> str:
     if not wanted or "roster" in wanted:
         blocks.append("## ROSTER (quem está vivo)\n" + _rehydrate_roster())
 
+    blocks.append(
+        "## FIM DO RESGATE\n"
+        "Uma chamada só. O resto do detalhe está nos paths acima — leia o "
+        "arquivo se precisar (não repita esta tool)."
+    )
     return "\n\n".join(blocks)
 
 

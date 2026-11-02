@@ -45,6 +45,8 @@ const REHYDRATE_RULE = `## Re-hidratação (primeira tool da sessão)
 problema que parece repetido: \`jarvis_rehydrate(task="<o que vou fazer>")\`.
 Devolve em 1 chamada: guardas + fila + HANDOFF + memórias + lições + RAG +
 roster. É mais barato que refazer o diagnóstico.
+UMA chamada só — não repita (o resgate já devolveu o estado; o resto está
+nos paths). Repetir queima contexto (medido: 204k tokens de input num loop).
 ${PINNED_GUARDS}`;
 
 const COMPACTION_MEMORY = `## Memory protocol (auto-injected pre-compaction)

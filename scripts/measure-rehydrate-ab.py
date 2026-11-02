@@ -41,20 +41,32 @@ QUESTION = (
 )
 
 
-def run_once(model: str, question: str, inject: bool, cwd: Path) -> dict:
+def run_once(model: str, question: str, inject: bool, cwd: Path, timeout: int = 420) -> dict:
     env = dict(os.environ)
     env.pop("OPENCODE_NO_REHYDRATE_INJECT", None)
     if not inject:
         env["OPENCODE_NO_REHYDRATE_INJECT"] = "1"
     cmd = ["opencode", "run", "--model", model, question]
     t0 = time.time()
-    proc = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=900)
-    dt = time.time() - t0
-    return {"cmd": cmd, "stdout": proc.stdout[-4000:], "stderr": proc.stderr[-2000:],
-            "rc": proc.returncode, "segundos": round(dt, 1), "inject": inject}
+    try:
+        proc = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True,
+                              timeout=timeout)
+        dt = time.time() - t0
+        return {"cmd": cmd, "stdout": proc.stdout[-4000:], "stderr": proc.stderr[-2000:],
+                "rc": proc.returncode, "segundos": round(dt, 1), "inject": inject,
+                "timeout": False}
+    except subprocess.TimeoutExpired as e:
+        # timeout é DADO, não crash: um agente em loop de tool call é exatamente
+        # o que esta medição precisa enxergar.
+        return {"cmd": cmd,
+                "stdout": (e.stdout or b"").decode(errors="ignore")[-4000:] if isinstance(e.stdout, bytes) else (e.stdout or "")[-4000:],
+                "stderr": (e.stderr or b"").decode(errors="ignore")[-2000:] if isinstance(e.stderr, bytes) else (e.stderr or "")[-2000:],
+                "rc": -1, "segundos": round(time.time() - t0, 1), "inject": inject,
+                "timeout": True}
 
 
 def sessao_recem(directory: str) -> str | None:
+    """Schema real (opencode.db v1.18.x): session(id, directory, tokens_input...)."""
     try:
         c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
         row = c.execute(
@@ -66,31 +78,30 @@ def sessao_recem(directory: str) -> str | None:
 
 
 def metricas(session_id: str) -> dict:
+    """Lê message/part do schema real: message(data JSON), part(data JSON)."""
     out = {"assistant_text": "", "tools": [], "tokens_in": 0, "tokens_out": 0}
     if not session_id:
         return out
     try:
         c = sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
         rows = c.execute(
-            "SELECT info, parts FROM message WHERE session_id=? ORDER BY time_created",
+            "SELECT m.data, p.data FROM message m LEFT JOIN part p ON p.message_id = m.id "
+            "WHERE m.session_id=? ORDER BY m.time_created, p.time_created",
             (session_id,)).fetchall()
     except Exception:
         return out
-    for info_raw, parts_raw in rows:
+    for m_raw, p_raw in rows:
         try:
-            info = json.loads(info_raw) if isinstance(info_raw, str) else info_raw
-            parts = json.loads(parts_raw) if isinstance(parts_raw, str) else parts_raw
+            info = json.loads(m_raw) if isinstance(m_raw, str) else (m_raw or {})
+            part = json.loads(p_raw) if isinstance(p_raw, str) else (p_raw or {})
         except Exception:
             continue
-        if not isinstance(parts, list):
+        if not isinstance(part, dict):
             continue
-        for p in parts:
-            if not isinstance(p, dict):
-                continue
-            if p.get("type") == "text" and info.get("role") == "assistant":
-                out["assistant_text"] += p.get("text", "") or ""
-            if p.get("type") == "tool":
-                out["tools"].append(p.get("tool") or p.get("state", {}).get("tool") or "?")
+        if part.get("type") == "text" and info.get("role") == "assistant":
+            out["assistant_text"] += part.get("text", "") or ""
+        if part.get("type") == "tool":
+            out["tools"].append(part.get("tool") or "?")
         tk = info.get("tokens") or {}
         if isinstance(tk, dict):
             out["tokens_in"] += int(tk.get("input") or 0)
@@ -125,13 +136,14 @@ def main() -> int:
         called = any("rehydrate" in t.lower() for t in m.get("tools", []))
         resultados[rotulo] = {
             "rc": r["rc"], "segundos": r["segundos"], "session": sid,
+            "timeout": r.get("timeout", False),
             "mencionou_rehydrate": mentioned, "chamou_tool": called,
             "tools": m.get("tools", []),
             "tokens_in": m.get("tokens_in", 0), "tokens_out": m.get("tokens_out", 0),
             "falha_template": "System message must be at the beginning" in (r["stderr"] + r["stdout"]),
             "resposta": (m.get("assistant_text") or r["stdout"])[:600],
         }
-        print(f"  rc={r['rc']} {r['segundos']}s sessão={sid}")
+        print(f"  rc={r['rc']} {r['segundos']}s sessão={sid} timeout={r.get('timeout')}")
         print(f"  mencionou_rehydrate={mentioned} chamou_tool={called}")
         print(f"  tokens in={m.get('tokens_in', 0)} out={m.get('tokens_out', 0)}")
         if resultados[rotulo]["falha_template"]:
@@ -147,6 +159,9 @@ def main() -> int:
           f"tokens_in={b['tokens_in']}")
     delta = a["tokens_in"] - b["tokens_in"]
     print(f"  delta tokens_in (custo da regra) = {delta:+d}")
+    if a["timeout"] or b["timeout"]:
+        print("  ATENÇÃO: um dos runs estourou o timeout (loop de tool call ou "
+              "modelo lento) — ver tokens_in.")
     if a["mencionou_rehydrate"] and not b["mencionou_rehydrate"]:
         print("  RESULTADO: a injeção muda o comportamento (A cita, B não).")
     elif a["chamou_tool"] and not b["chamou_tool"]:
