@@ -32,9 +32,11 @@ while [ $# -gt 0 ]; do
         --to=*) MODO="${1#--to=}"; shift ;;
         --list) LISTAR=1; shift ;;
         -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-        *) TEXTO="$1"; shift ;;
+        *) break ;;
     esac
 done
+# Tudo que sobrou É a mensagem (suporta espaços, quebras de linha, aspas)
+TEXTO="$*"
 
 # resolve os alvos: JANELA-AGENTE = foot com um opencode TUI vivo como
 # descendente (17/10: título era frágil — sessão morta mantém título,
@@ -108,6 +110,13 @@ if [ "$LISTAR" -eq 1 ]; then
 fi
 [ -n "$TEXTO" ] || { echo 'uso: agent-msg.sh [--to other|all|nsncd|plain] [--list] "texto"' >&2; exit 1; }
 
+# Identificação do remetente (auto: JARVIS_AGENT_NAME ou fallback p/ pid)
+REMETENTE="${JARVIS_AGENT_NAME:-agent-$$}"
+# Prefixo obrigatório p/ o alvo saber que é msg automática agent→agent
+# Substitui \n por espaço para não virar Enter nem \n literal no terminal do alvo
+TEXTO_ESCAPED=$(printf '%s' "$TEXTO" | tr '\n' ' ')
+TEXTO_FINAL="[AGENT→AGENT] $REMETENTE: $TEXTO_ESCAPED"
+
 # o endereço da MINHA janela (p/ refocar no fim)
 MINHA=$(hyprctl activewindow -j 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('address',''))" 2>/dev/null || true)
 
@@ -121,11 +130,11 @@ for END in "${ALVOS[@]}"; do
         echo "agent-msg: FOCO NAO PEGOU (alvo=$END atual=$ATUAL) — nada digitado" >&2
         continue
     fi
-    wtype "$TEXTO"
+    wtype "$TEXTO_FINAL"
     wtype -k Return
     echo "enviado p/ $END"
     printf '%s %s->%s: %s\n' "$(date '+%d/%m %H:%M')" \
-        "${JARVIS_AGENT_NAME:-?}" "${END:-?}" "${TEXTO:0:100}" \
+        "$REMETENTE" "${END:-?}" "${TEXTO:0:100}" \
         >> "$HOME/projects/AGENTS-MSG.log"
 done
 
