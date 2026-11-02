@@ -67,4 +67,27 @@
       };
     };
   };
+
+  # MIGRAÇÃO (uma vez): os 4 units existiam como arquivos soltos em
+  # ~/.config/systemd/user (fora do Nix) e o home-manager aborta o
+  # activation ("would be clobbered") em vez de sobrescrever. Este passo
+  # roda ANTES do checkFilesChanged: move os arquivos antigos (NÃO apaga —
+  # ficam no estado, como evidência) e deixa o HM criar os symlinks.
+  home.activation."a-migrate-legacy-nightly-units" = lib.mkIf true
+    (lib.hm.dag.entryBefore [ "checkFilesChanged" ] ''
+      legacy_dir="$HOME/.local/state/jarvis/legacy-nightly-units-2026-11-02"
+      mkdir -p "$legacy_dir"
+      for f in bench-qwen.service bench-qwen.timer swap-probe.service swap-probe.timer; do
+        p="$HOME/.config/systemd/user/$f"
+        if [ -e "$p" ] && [ ! -L "$p" ]; then
+          mv "$p" "$legacy_dir/$f"
+        fi
+      done
+      for f in bench-qwen.timer swap-probe.timer; do
+        p="$HOME/.config/systemd/user/timers.target.wants/$f"
+        if [ -e "$p" ] && [ ! -L "$p" ]; then
+          mv "$p" "$legacy_dir/$f.wants"
+        fi
+      done
+    '');
 }
