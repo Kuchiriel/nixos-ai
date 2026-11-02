@@ -356,6 +356,17 @@ def select_model(
         reason = {"tier_fallback": tier, "tier_match": False}
     else:
         reason = {"tier_match": None}
+        # Sem tier pedido: o DEFAULT do registry vence a ordem por tier.
+        # O default é o modelo RESIDENTE (VRAM 6GB = 1 LLM de pé); escolher
+        # outro aqui = pedir load sob demanda que não cabe junto (OOM).
+        default_id = getattr(reg, "default", None)
+        default = next((m for m in eligible if m.id == default_id), None)
+        if default is not None:
+            return default.id, {
+                "requested": dict(req, capabilities=sorted(caps)),
+                "selected": default.id, "tier_match": None,
+                "local_only": True, "default_preferred": True,
+            }
     chosen = eligible[0]
     return chosen.id, {
         "requested": dict(req, capabilities=sorted(caps)),

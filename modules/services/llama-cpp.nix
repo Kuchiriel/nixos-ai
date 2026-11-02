@@ -62,6 +62,12 @@ with lib; let
     prof = groupProf g;
     kv = parseKv prof.kvCache;
     isDefault = elem defaultId (map (x: x.id) g);
+    # (26/10) O default do APP (routing.default) é servido por ESTE grupo?
+    # Se não (ex.: default = 4B-MTP+LoRA no :8092, direct server), o
+    # warmup do router é PULADO — bonsai (2.4GB) + 4B (4.4GB) estoura a
+    # GPU de 6.1GB (o incidente 04:03). Router sem modelo residente
+    # custa ~0MiB (medido) e carrega preset sob demanda.
+    appDefaultInGroup = elem routing.default (map (x: x.id) g);
   in {
     description = "Llama.cpp [${b}] (presets: ${groupIds g}; default: ${defaultId})";
     after = ["network-online.target" "qdrant.service"];
@@ -103,7 +109,14 @@ with lib; let
     # Warmup best-effort do default: preserva o comportamento boot-ready
     # (sem isso, o 1º chat após reboot pagaria o cold start). Falha aqui
     # NÃO derruba o serviço (on-demand cobre). Só no grupo do default.
-    postStart = optionalString isDefault ''
+    #
+    # (26/10) O warmup só roda se o DEFAULT DO APP (routing.default)
+    # for servido por ESTE grupo. Motivo: o default virou o 4B-MTP+LoRA
+    # (:8092, direct server, 4.4GB VRAM) — o router carregando o bonsai
+    # (2.4GB) ao boot somava 6.8GB > 6.1GB da GPU (o incidente 04:03).
+    # Router em modo router SEM modelo residente = ~0MiB de VRAM (medido)
+    # → ele sobe, serve /v1/models e carrega preset sob demanda.
+    postStart = optionalString (isDefault && appDefaultInGroup) ''
       ${pkgs.python3}/bin/python3 - "${toString port}" "${defaultId}" <<'EOF' || echo "router warmup: modelo sob demanda (cold start no 1o request)" >&2
       import json, sys, time, urllib.request
       port, model = sys.argv[1], sys.argv[2]

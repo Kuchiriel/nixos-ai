@@ -122,10 +122,12 @@ def test_probe_session_captures_exact_payload(tmp_path: Path) -> None:
     assert len(probe.last_payload["messages"]) >= 2  # system + user minimum
 
     # Check the model field ("default" é alias resolvido pelo registry —
-    # com o router ativo o payload precisa de um preset real).
+    # com o router ativo o payload precisa de um preset real). Aceita o
+    # default do registry OU o id configurado (janela entre o deploy do
+    # config e o rebuild que regenera /etc/jarvis/model-registry.json).
     from jarvis.core.model_registry import ModelRegistry
     assert probe.last_payload["model"] in (
-        "solar-probe-model", ModelRegistry.load().default)
+        "solar-probe-model", ModelRegistry.load().default, cfg.llm_model)
 
     # The payload should contain max_tokens and temperature (profile-aware)
     assert "max_tokens" in probe.last_payload

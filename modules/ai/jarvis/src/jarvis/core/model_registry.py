@@ -26,9 +26,22 @@ REGISTRY_VERSION = 1
 # o que importa é o contrato (tiers/capabilities) usado pela policy.
 _FALLBACK = {
     "version": 1,
-    "default": "bonsai",
+    # (26/10) Default = Qwen3.5-4B-MTP + LoRA micro-turn (:8092, stock).
+    # Espelha models.nix `routing.default`. Antes era "bonsai" (EN-only).
+    "default": "jarvis-mtp-lora",
     "maxResident": 1,
     "models": {
+        "jarvis-mtp-lora": {
+            "tier": "fast",
+            "capabilities": ["general", "coding", "tools", "pt", "uncensored", "lora"],
+            "params_b": 4,
+            "vram_mb": 4474,
+            "endpoint": 8092,
+            "sampling": {"temperature": 0.7, "top_p": 0.8, "top_k": 20,
+                         "min_p": 0.0, "presence_penalty": 1.5,
+                         "repetition_penalty": 1.0},
+            "guidance": "DEFAULT: PT-BR + classificador de turno (LoRA)",
+        },
         "bonsai": {
             "tier": "speed",
             "capabilities": ["general", "coding", "tools", "en"],

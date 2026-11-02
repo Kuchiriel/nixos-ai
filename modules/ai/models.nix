@@ -327,6 +327,12 @@ in rec {
       # GUARD FUTURO (lição OOM): vramMin DEVE contar MTP×2 no KV.
       vramMinMiB = 4200;  # 20k real: modelo+KV+buffer ~4.1G
       port = 8092; binary = "stock";
+      # (26/10) ALIAS — id estável anunciado em /v1/models. Medido: com
+      # --alias o data[].id vira o alias (sem ele = path do gguf). O
+      # registry Python compara o id do modelo com o id ATIVO do server
+      # (ensure_model → active_model) p/ provar identidade: com path
+      # grudado no registry isso quebrava. Alias = contrato limpo.
+      alias = "jarvis-mtp-lora";
       # ARQUIVO MTP (não o base!): NextN real, +24% TG. Rebuild sem isto
       # voltaria a 8092 sem speculative decoding (regressão silenciosa).
       modelFile = "/home/nixos/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
@@ -342,9 +348,16 @@ in rec {
                     "--lora" "/home/nixos/models/loras/microturn-4b/microturn-4b-lora.gguf"
                     "--lora-init-without-apply" ];
       memHigh = "4G"; memMax = "5G"; limitMemlock = false;
-      wanted = false;  # on-demand; router (8080/bonsai) is default for harness/agents; start 8092 when voice needs PT-BR
+      # (26/10, dono: "tira o bonsai de default e coloca o qwen mtp que tem
+      # o lora pra subir com o lora") → este é o DEFAULT do sistema agora.
+      # wanted=true = sobe no boot COM o LoRA registrado (medido ao vivo:
+      # LoRA ON 4/4 classes corretas; LoRA OFF = base entra em "Thinking
+      # Pro" e NÃO classifica nada — o classificador é o LoRA, não o base).
+      # Consequência VRAM: 4.1G resident → o bonsai do router :8080 não
+      # carrega junto (o default não passa mais pelo router).
+      wanted = true;
       # opencode provider (gerado em home.nix via mapAttrs):
-      # id = modelFile (o server anuncia o path, sem --alias).
+      # id = alias (o server anuncia o alias; home.nix usa svc.alias).
       opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 20480; output = 4096; };
     };
     deepseek-7b = {
@@ -943,6 +956,29 @@ in rec {
     raw-strong = profiles.chat // {
       modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
     };
+    # (26/10) O DEFAULT do sistema: Qwen3.5-4B-MTP + LoRA micro-turn.
+    # Espelha o directServer `uncensored-4b` (:8092, binário stock) — o
+    # LoRA SÓ funciona no stock (o ik carrega e não aplica: mismatch de
+    # nomes). MTP = NextN real (+24% TG medido). fa off (LoRA × fa são
+    # incompatíveis) → KV f16.
+    mtp-lora = profiles.qwen-fast // {
+      modelFile = "/home/nixos/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
+      kvCache = "-fa off -ctk f16 -ctv f16";
+      ctxSize = 20480;
+      batchSize = 256;
+      ubatch = 256;
+      # (26/10) O alias aqui espelha `directServers.uncensored-4b.alias`
+      # (fonte única = o campo `alias`; o gerador da unit injeta a flag).
+      extraArgs = [
+        "--parallel" "1"
+        "--jinja"
+        "--reasoning" "off"
+        "--spec-type" "draft-mtp"
+        "--lora" "/home/nixos/models/loras/microturn-4b/microturn-4b-lora.gguf"
+        "--lora-init-without-apply"
+        "--alias" "jarvis-mtp-lora"
+      ];
+    };
   };
 
   # =========================================================================
@@ -953,9 +989,13 @@ in rec {
   # =========================================================================
   routing = {
     version = 1;
-    # Default EFETIVO hoje (bonsai serve :8080): preservado — §21, produto
-    # decide eventual troca p/ jarvis-fast.
-    default = "bonsai";
+    # (26/10, dono) DEFAULT = Qwen3.5-4B-MTP **COM O LoRA** (:8092).
+    # Antes: bonsai (prism :8080) — EN-only, sem PT, e o classificador de
+    # turno do duplex (RESPOND/WAIT/SILENCE/BARGE) é o LoRA. Medido ao
+    # vivo: LoRA ON 4/4 classes; LoRA OFF = base "Thinking Pro", não
+    # classifica. Serve = false: o servidor é o DIRECT (:8092, stock) —
+    # gerar um grupo de preset aqui duplicaria a unit na mesma porta.
+    default = "jarvis-mtp-lora";
     # SAMPLING — ÚNICA FONTE dos defaults de geração por modelo. O Python
     # (model_registry.sampling_for → llm._resolve_temperature) lê daqui via
     # registryJson; NADA de temperature hardcoded no .py. Ordem de vitória:
@@ -974,6 +1014,27 @@ in rec {
     # llama-cpp.nix gera UM serviço por grupo (porta = endpoints.${binary}).
     endpoints = { prism = 8080; upstream = 8083; ik = 8084; };
     models = {
+      # (26/10) DEFAULT do sistema — Qwen3.5-4B-MTP + LoRA micro-turn,
+      # servido pelo directServer :8092 (binário stock). PT-BR de verdade
+      # (o bonsai é EN-only) e é o único que tem o classificador de turno.
+      # serve={false} → não gera grupo de preset (o service é o direct).
+      jarvis-mtp-lora = {
+        profile = "mtp-lora";
+        model = "mtp-lora";
+        ctx = 20480;
+        tier = "fast";
+        capabilities = ["general" "coding" "tools" "pt" "uncensored" "lora"];
+        guidance = "DEFAULT: PT-BR + classificador de turno (LoRA RESPOND/WAIT/SILENCE/BARGE); 70t/s com MTP (+24%)";
+        params_b = 4;
+        vram_mb = 4474;
+        needsWrapper = null;
+        binary = "stock";
+        endpoint = 8092;
+        serve = { host = false; vm = false; };
+        # Qwen3.5 instruct-geral (vendor; mesmo do jarvis-fast).
+        sampling = { temperature = 0.7; top_p = 0.8; top_k = 20; min_p = 0.0;
+                     presence_penalty = 1.5; repetition_penalty = 1.0; };
+      };
       bonsai = {
         profile = "bonsai";
         ctx = 49152;
@@ -1072,4 +1133,13 @@ in rec {
   # JSON derivado (builtins.toJSON puro — sem derivação): llama-cpp.nix
   # gera o preset INI e /etc/jarvis/model-registry.json daqui.
   registryJson = builtins.toJSON routing;
+
+  # (26/10) LAYA — decision model (ModernBERT-large 421M, Apache-2.0) p/
+  # classificar DIFICULDADE do prompt (simple/moderate/hard) e rotear.
+  # FINE-TUNED (Kaggle T4 v7): 95.6% acc, hard 100%, +36.8% vs base.
+  # Medido no mesmo conjunto (26/10): ft 5/6 vs base 3/6 — o ft acerta o
+  # "hard" que o base degradava p/ "moderate" (justamente o caso que
+  # dispara escalonamento p/ 35B/cloud). O base fica em laya-onnx/.
+  # O Python lê LAYA_MODEL_DIR (default = este path).
+  layaModelDir = "/home/nixos/models/laya-ft";
 }

@@ -85,11 +85,22 @@ def active_model(base_url: str, timeout: float = 30.0) -> str | None:
     """ID do modelo residente (status loaded) ou None.
 
     Servidor single-model (sem status): o único id conta como ativo.
+    Aceita tanto o formato novo ({"data": [...]}) quanto o legado
+    ({"models": [...]}) — o :8092 (stock build) responde o legado.
     """
-    for m in _models_data(base_url, timeout):
-        status = (m.get("status") or {}).get("value")
-        if status is None or status == "loaded":
-            return m.get("id")
+    data = _http(base_url, "/v1/models", timeout=timeout)
+    if isinstance(data, dict):
+        items = data.get("data")
+        if not isinstance(items, list):
+            items = data.get("models") or []
+        out = []
+        for m in items:
+            if not isinstance(m, dict):
+                continue
+            status = (m.get("status") or {}).get("value")
+            if status is None or status == "loaded":
+                out.append(m.get("id") or m.get("name"))
+        return out[0] if out else None
     return None
 
 
@@ -163,6 +174,27 @@ def _wait_settled(base_url: str, budget_s: float, poll_s: float) -> None:
         time.sleep(poll_s)
 
 
+def _single_model_server(base_url: str, timeout: float = 10.0) -> str | None:
+    """ID do único modelo de um server single-model (sem /models/load).
+
+    O :8092 (4B-MTP+LoRA, stock build) é single-model: POST /models/load
+    → 404. Measured: ele aceita QUALQUER string no campo "model" do
+    request — o id é cosmético lá.
+    """
+    try:
+        data = _http(base_url, "/v1/models", timeout=timeout)
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    items = data.get("data")
+    if not isinstance(items, list):
+        items = data.get("models") or []
+    ids = [m.get("id") or m.get("name") for m in items
+           if isinstance(m, dict)]
+    return ids[0] if len(ids) == 1 else None
+
+
 def ensure_model(
     model_id: str,
     base_url: str = "http://127.0.0.1:8080",
@@ -186,6 +218,18 @@ def ensure_model(
                             selected=model_id, switched=False,
                             identity_verified=True,
                             reason={"noop": "already active"})
+    # (26/10) Server single-model (:8092, 4B-MTP+LoRA): não tem
+    # /models/load. Ele SÓ serve aquele modelo — e aceita qualquer
+    # string no campo "model" do request (medido). Então "ele já tem UM
+    # modelo" = pedido satisfeito. Sem esta checagem, ensure_model ia
+    # tentar POST /models/load → 404 → erro falso.
+    only = _single_model_server(base_url)
+    if only is not None:
+        return SwitchReport(requested=model_id, previous=only,
+                            selected=model_id, switched=False,
+                            identity_verified=True,
+                            reason={"noop": "single-model server",
+                                    "serving": only})
 
     lockf = _lock_path().open("w")
     waited = 0.0

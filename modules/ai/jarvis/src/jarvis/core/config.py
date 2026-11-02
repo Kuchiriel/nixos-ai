@@ -43,8 +43,16 @@ class Config:
     llm_backend: str = field(default_factory=lambda: _env_str("JARVIS_LLM_BACKEND", "llama-cpp"))
     
     # --- LLM (llama.cpp / OpenAI-compatible) ---
-    llm_base_url: str = field(default_factory=lambda: _env_str("JARVIS_LLM_BASE_URL", "http://127.0.0.1:8080/v1"))
-    llm_model: str = field(default_factory=lambda: _env_str("JARVIS_LLM_MODEL", "default"))
+    # (26/10, dono) DEFAULT = Qwen3.5-4B-MTP **com o LoRA** (:8092, stock).
+    # Antes: :8080/v1 + model "default" → router prism → bonsai (8B ternário,
+    # EN-only, sem PT). Motivo: (a) o classificador de turno do duplex
+    # (RESPOND/WAIT/SILENCE/BARGE) É o LoRA — medido: LoRA ON 4/4, LoRA OFF
+    # o base nem classifica ("Thinking Pro"); (b) PT-BR de verdade.
+    # O id = alias do server (medido: com --alias o /v1/models anuncia o
+    # alias; sem ele anuncia o path do gguf → ensure_model não prova
+    # identidade). Fallback antigo via env: JARVIS_LLM_BASE_URL=...:8080/v1.
+    llm_base_url: str = field(default_factory=lambda: _env_str("JARVIS_LLM_BASE_URL", "http://127.0.0.1:8092/v1"))
+    llm_model: str = field(default_factory=lambda: _env_str("JARVIS_LLM_MODEL", "jarvis-mtp-lora"))
     llm_timeout: int = field(default_factory=lambda: _env_int("JARVIS_LLM_TIMEOUT", 120))
     # Thinking / reasoning enabled by default on GPU hardware (Bonsai/Qwen3)
     llm_disable_thinking: bool = field(default_factory=lambda: _env_str("JARVIS_LLM_DISABLE_THINKING", "0") == "1")

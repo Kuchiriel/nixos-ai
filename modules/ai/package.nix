@@ -6,6 +6,7 @@
   mcpNixos ? mcp-nixos,
   ripgrep,
   age,
+  aiModels ? { layaModelDir = "/home/nixos/models/laya-ft"; },
 }: let
   base = python3Packages.buildPythonPackage rec {
     pname = "jarvis";
@@ -99,7 +100,8 @@
       for bin in $out/bin/*; do
         wrapProgram "$bin" \
           --prefix PATH : ${lib.makeBinPath [mcpNixos]} \
-          --set MCP_NIXOS_CHANNEL_CACHE "${mcpNixos}/share/mcp-nixos/channels.json"
+          --set MCP_NIXOS_CHANNEL_CACHE "${mcpNixos}/share/mcp-nixos/channels.json" \
+          --set LAYA_MODEL_DIR "${aiModels.layaModelDir}"
       done
     '';
 

@@ -38,7 +38,17 @@ SERVICE_MAP: dict[str, dict[str, str]] = {
     # (26/09, voz) ouvido do JARVIS: user service, heal religa se cair.
     "wakeword": {"service": "jarvis-wakeword", "scope": "user"},
 }
-ALLOWLIST = tuple(v["service"] for v in SERVICE_MAP.values())
+# (26/10) O default do LLM saiu do router :8080 p/ o 4B-MTP+LoRA :8092
+# (direct server). O doctor checa a porta de cfg.llm_base_url → o heal
+# precisa reiniciar o SERVIÇO QUE SERVE AQUELA PORTA, senão ele "cura"
+# o router enquanto o 4B continua caído (ou vice-versa).
+LLM_PORT_SERVICES: dict[str, str] = {
+    "8092": "llama-uncensored-4b",
+    "8084": "llama-uncensored-35b",
+    "8085": "llama-duplex-35b",
+}
+ALLOWLIST = tuple(v["service"] for v in SERVICE_MAP.values()) + tuple(
+    LLM_PORT_SERVICES.values())
 
 DEFAULT_COOLDOWN_SECONDS = 300.0  # 5 min entre restarts do mesmo serviço
 DEFAULT_MAX_RESTARTS = 5  # máximo de restarts por serviço antes de desistir
@@ -289,6 +299,16 @@ def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_S
             )
             continue
         service, scope = spec["service"], spec["scope"]
+        # (26/10) default do LLM = :8092 (4B-MTP+LoRA) → reinicia o
+        # serviço DIRETO que serve aquela porta, não o router :8080.
+        if comp == "llama_cpp":
+            try:
+                port = cfg.llm_base_url.split(":")[-1].split("/")[0]
+            except (AttributeError, IndexError):
+                port = ""
+            svc = LLM_PORT_SERVICES.get(port)
+            if svc:
+                service = svc
         # (26/09, incidente freeze) `jarvis pause` = manutenção do dono:
         # NUNCA religar o que o dono derrubou de propósito. Antes o heal
         # reiniciava em ~60s tudo que o usuário parava no freeze ("pkill

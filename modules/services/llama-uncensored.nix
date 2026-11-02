@@ -60,6 +60,12 @@ let
     wantedBy = optionals s.wanted [ "jarvis.target" "multi-user.target" ];
     conflicts =
       map (n: "llama-${n}.service") (filter (n: n != name) names);
+    # (26/10) StartLimit* vivem em [Unit], NÃO em [Service] — no [Service]
+    # o systemd IGNORA ("Unknown key 'StartLimitIntervalSec' in section
+    # [Service]") → o restart-loop do vram-guard reiniciava a cada 20s
+    # sem limite (medido: 4 tentativas em 15 min no 8092).
+    startLimitIntervalSec = 600;
+    startLimitBurst = 4;
     environment = ldFor s.binary;
     script = ''
       exec ${binFor s.binary} \
@@ -70,6 +76,7 @@ let
         -ub ${toString s.ubatch} \
         ${optionalString (s.moeFlags != "") s.moeFlags} \
         -fa ${if s.fa then "on" else "off"} -ctk ${s.ctk} -ctv ${s.ctv} \
+        ${optionalString (s ? alias) "--alias ${s.alias}"} \
         ${escapeShellArgs s.extraArgs}
     '';
     serviceConfig = {
@@ -78,10 +85,6 @@ let
       ExecStartPre = [ "${vramGuard} ${toString (s.vramMinMiB or 3000)}" ];
       Restart = "on-failure";
       RestartSec = "20";
-      StartLimitIntervalSec = 600;
-      StartLimitBurst = 4;
-      MemoryHigh = s.memHigh;
-      MemoryMax = s.memMax;
       OOMScoreAdjust = 1000;
       TasksMax = 64;
     } // optionalAttrs s.limitMemlock { LimitMEMLOCK = "infinity"; };

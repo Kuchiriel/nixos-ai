@@ -77,7 +77,11 @@ def _cmd_status(_args: argparse.Namespace) -> int:
             return True
         except Exception:
             return False
-    out["ports"] = {p: _up(p) for p in (8080, 8081, 8082)}
+    out["ports"] = {p: _up(p) for p in (8080, 8081, 8082, 8092)}
+    # (02/11) o DEFAULT do sistema é o :8092 (4B-MTP+LoRA); o :8080 é o
+    # router on-demand (bonsai) — não é mais o default.
+    out["default_model"] = cfg.llm_model
+    out["default_base_url"] = cfg.llm_base_url
 
     # confiabilidade da última bateria medida (evidência, não promessa)
     try:

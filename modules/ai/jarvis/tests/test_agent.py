@@ -2833,7 +2833,10 @@ def test_template_probe_falls_back_to_text(tmp_path, monkeypatch) -> None:
             return FakeResponse({"choices": [{"message": msg}]})
 
     monkeypatch.chdir(tmp_path)
-    a = Agent(Config(), session=Fake400(), approve=False)
+    # strict_tools=True explícito: o teste é sobre o PROBE de template, não
+    # sobre a tier do registry do host (acoplar ao /etc vivo deixava o teste
+    # depender do rebuild — o id default mudou e o /etc ficou stale).
+    a = Agent(Config(), session=Fake400(), approve=False, strict_tools=True)
     a.run("diga done")
     assert len(payloads) >= 2
     assert payloads[0].get("response_format"), "1a call com grammar"

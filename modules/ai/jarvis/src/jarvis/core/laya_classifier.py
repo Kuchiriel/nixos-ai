@@ -23,8 +23,11 @@ import os
 import threading
 from pathlib import Path
 
-# Paths do modelo (fonte única: models.nix aponta /home/nixos/models/laya-onnx)
-_MODEL_DIR = Path(os.environ.get("LAYA_MODEL_DIR", "/home/nixos/models/laya-onnx"))
+# Paths do modelo (fonte única: models.nix `layaModelDir`; env LAYA_MODEL_DIR
+# sobrescreve p/ teste A/B). Default = checkpoint FINE-TUNED (laya-ft, Kaggle
+# T4 v7: 95.6% acc, hard 100%, +36.8% vs base) — o base (laya-onnx) fica como
+# fallback manual: LAYA_MODEL_DIR=/home/nixos/models/laya-onnx.
+_MODEL_DIR = Path(os.environ.get("LAYA_MODEL_DIR", "/home/nixos/models/laya-ft"))
 _CONFIG_PATH = _MODEL_DIR / "rl_agent_config.json"
 _TOKENIZER_PATH = _MODEL_DIR / "tokenizer" / "tokenizer.json"
 _ONNX_PATH = _MODEL_DIR / "model.onnx"
@@ -93,7 +96,14 @@ def _temperature_for(qtype: str, option_count: int) -> float:
     else:
         size = "11+"
     key = f"{qtype}:{size}"
-    return _config["temperature_by_options"].get(key, _config["temperature"][0])
+    # (26/10) O export do checkpoint FINE-TUNED (laya-ft) NÃO traz a tabela
+    # granular `temperature_by_options` (só a lista `temperature`) → o
+    # KeyError era engolido pelo except genérico e a Laya devolvia None
+    # SEMPRE (classificador inerte). Fallback: temperature[0] do config.
+    # O argmax é invariante à temperatura (softmax monotônico) → só as
+    # probabilidades exibidas ficam mais achatadas.
+    by_options = _config.get("temperature_by_options") or {}
+    return by_options.get(key, _config["temperature"][0])
 
 
 def classify_choice(state: str, question: str, options: dict[str, str]) -> dict[str, float] | None:

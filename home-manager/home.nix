@@ -59,6 +59,8 @@ in {
     ./modules/xref-watch.nix
     ./modules/sandbox-verificacao.nix
     ./modules/agents-watcher.nix
+    # keepawake da tela: sempre ligado (o watcher é AFK-only)
+    ./modules/agents-keepawake.nix
     ./modules/ai
     ./modules/services/jarvis-wakeword.nix
     ./modules/services/sunshine.nix
@@ -373,7 +375,11 @@ in {
             baseURL = "http://127.0.0.1:${toString svc.port}/v1";
           };
           models = {
-            "${svc.modelFile}" = {
+            # (26/10) id = alias do server quando existe (medido: com
+            # --alias o /v1/models anuncia o alias; sem ele = path do
+            # gguf). opencode VALIDA o id contra o server (bug 16/09:
+            # "model not found" quando divergem) → tem que ser o mesmo.
+            "${svc.alias or svc.modelFile}" = {
               name = svc.opencode.name;
               limit = {
                 context = svc.opencode.context;
@@ -416,7 +422,10 @@ in {
       # Higiene de contexto global (03/10): vale p/ todos os providers.
       # prune poda tool outputs velhos; tool_output capa outputs gigantes
       # (prompt de 33k matou o Qwen 2x); small_model tira titles/resumos do 35B.
-      small_model = "local_small_model/bonsai";
+      # (02/11) small_model = o DEFAULT residente (:8092). Antes era
+      # local_small_model/bonsai (:8080) — com o 4B-MTP de pé (4474MiB) o
+      # bonsai (4.3GB) não carrega no router → small_model quebraria.
+      small_model = "local-uncensored-4b/jarvis-mtp-lora";
       warming = true;
       compaction = {
         auto = true;
@@ -430,7 +439,10 @@ in {
       # Default E2E-validado 16/09 ("opencode run" respondeu): Gemini free
       # via GEMINI_API_KEY. openrouter/free era slug morto = causa raiz do
       # "opencode quebrado".
-      model = "local/bonsai";
+      # (02/11) Default = 4B-MTP+LoRA (:8092, alias jarvis-mtp-lora) —
+      # dono: "tira o bonsai de default". O bonsai (:8080) fica no catálogo
+      # p/ uso manual (precisa do :8092 parado: 4.1G+4.3G > 6.1G VRAM).
+      model = "local-uncensored-4b/jarvis-mtp-lora";
 
       # MCP Jarvis: RAG, memória, vault, files, shell, nix — via stdio.
       # Handshake validado (tools/list retorna 20 tools). Env inline no
