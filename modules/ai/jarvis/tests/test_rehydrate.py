@@ -82,7 +82,7 @@ def test_rehydrate_requires_task(M):
 
 def test_rehydrate_returns_guards_first(M):
     out = M._handle_rehydrate({"task": "coordenação", "include": "queue"})
-    assert out.startswith("## GUARDAS")
+    assert out.startswith("## GUARDS")
     # guardas pinadas: o contrato de coordenação tem que estar LITERAL
     assert "agent-roster.py claim" in out
     assert "--note" in out and "--to" in out and "--cancel" in out
@@ -111,15 +111,15 @@ def test_rehydrate_memories_and_lessons_are_query_conditioned(M):
 
 def test_rehydrate_include_filters_blocks(M):
     out = M._handle_rehydrate({"task": "x", "include": "queue"})
-    assert "## FILA" in out
+    assert "## QUEUE" in out
     assert "## HANDOFF" not in out
-    assert "## MEMÓRIAS" not in out
+    assert "## MEMORIES" not in out
     assert "## ROSTER" not in out
 
 
 def test_rehydrate_default_includes_everything(M):
     out = M._handle_rehydrate({"task": "x"})
-    for bloco in ("## FILA", "## HANDOFF", "## MEMÓRIAS", "## LIÇÕES", "## RAG", "## ROSTER"):
+    for bloco in ("## QUEUE", "## HANDOFF", "## MEMORIES", "## LESSONS", "## RAG", "## ROSTER"):
         assert bloco in out
 
 
@@ -145,10 +145,10 @@ def test_rehydrate_loop_breaker_blocks_after_the_budget(M, monkeypatch):
     M._REHYDRATE_SEEN.clear()
     # tasks distintas: o memo por pedido não dispara, o ORÇAMENTO dispara
     for i in range(2):
-        assert "GUARDAS" in M._handle_rehydrate({"task": f"algo {i}"})
+        assert "GUARDS" in M._handle_rehydrate({"task": f"algo {i}"})
     terceira = M._handle_rehydrate({"task": "algo 2"})
-    assert "RESGATE JÁ FEITO" in terceira
-    assert "orçamento" in terceira
+    assert "RESCUE ALREADY DONE" in terceira
+    assert "window budget" in terceira
     assert len(terceira) < 400, "o ponteiro tem que ser curto (não repetir o bloco)"
 
 
@@ -159,8 +159,8 @@ def test_rehydrate_budget_allows_distinct_tasks(M, monkeypatch):
     M._REHYDRATE_CALLS.clear()
     M._REHYDRATE_SEEN.clear()
     for i in range(3):
-        assert "GUARDAS" in M._handle_rehydrate({"task": f"tarefa {i}"})
-    assert "RESGATE JÁ FEITO" in M._handle_rehydrate({"task": "tarefa 3"})
+        assert "GUARDS" in M._handle_rehydrate({"task": f"tarefa {i}"})
+    assert "RESCUE ALREADY DONE" in M._handle_rehydrate({"task": "tarefa 3"})
 
 
 def test_rehydrate_same_task_is_cheap_on_repeat(M, monkeypatch):
@@ -169,9 +169,9 @@ def test_rehydrate_same_task_is_cheap_on_repeat(M, monkeypatch):
     monkeypatch.setenv("JARVIS_REHYDRATE_MAX_CALLS", "3")
     M._REHYDRATE_CALLS.clear()
     M._REHYDRATE_SEEN.clear()
-    assert "GUARDAS" in M._handle_rehydrate({"task": "mesma coisa"})
+    assert "GUARDS" in M._handle_rehydrate({"task": "mesma coisa"})
     segunda = M._handle_rehydrate({"task": "mesma coisa"})
-    assert "JÁ FEITO PARA ESTE PEDIDO" in segunda
+    assert "ALREADY DONE FOR THIS REQUEST" in segunda
     assert len(segunda) < 400
 
 
@@ -181,4 +181,4 @@ def test_rehydrate_cooldown_env_is_honored(M, monkeypatch):
     M._REHYDRATE_SEEN.clear()
     a = M._handle_rehydrate({"task": "x"})
     b = M._handle_rehydrate({"task": "x"})
-    assert "GUARDAS" in a and "GUARDAS" in b
+    assert "GUARDS" in a and "GUARDS" in b

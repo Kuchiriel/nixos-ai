@@ -1,28 +1,32 @@
 ---
 name: opencode-coordination
-description: "Coordenar com OUTRO agente opencode desta máquina (roster, claim de lane, entrega por API, wake). Use quando precisar falar com um colega agente, dividir/claimar trabalho, não colidir em arquivos, entregar nota sem rodar o alvo, cancelar o turno de alguém, ou reidratar a sessão (1ª tool = jarvis_rehydrate). Triggers: colega, outro agente, multi-agente, coordination, roster, claim, lane, wake, rehydrate, memoire."
+description: "Coordinate with ANOTHER opencode agent on this machine (roster, lane claims, API delivery, wake). Use when you need to talk to a peer agent, split or claim work, avoid file collisions, deliver a note without running the target, cancel someone's turn, or rehydrate the session (first tool = jarvis_rehydrate). Triggers: peer, other agent, multi-agent, coordination, roster, claim, lane, wake, rehydrate, handoff."
 license: MIT
 ---
 
-# Coordenação multi-agente (nixos-ai, 02/11)
+# Multi-agent coordination (nixos-ai, 2026-11-02)
 
-## 0. Primeira tool da sessão (regra do harness)
+> This file is read by an LLM: **English only**. Small local models (bonsai)
+> do not read pt-BR, and a rule the model cannot read does not exist.
 
-`jarvis_jarvis_rehydrate(task="<o que vou fazer>")` — devolve em **1 call**:
-guardas + fila (topo) + HANDOFF + memórias + lições + RAG + roster. É o
-resgate: sem isso o agente repete diagnóstico já pago (a regra existe porque
-o RAG era usado só para *registrar*, nunca para *resgatar* — 2607.08032:
-memória reversível > resumo; 2608.22752: 5 compactações derrubam regras de
-53%→10%).
+## 0. First tool of the session (harness rule)
 
-Nome: no opencode o tool aparece **prefixado pelo MCP** (`jarvis_` +
-`jarvis_rehydrate` = `jarvis_jarvis_rehydrate`); via MCP/CLI é
-`jarvis_rehydrate`. A tool tem **loop-breaker**: 2ª chamada em < 120s devolve
-só um ponteiro (medido: sem isso o 4B loopava — 293k tokens de input).
+`jarvis_jarvis_rehydrate(task="<what you are about to do>")` — one call
+returns: pinned guards + queue top + HANDOFF + memories + lessons + RAG +
+roster. This is the rescue: without it the agent re-does a diagnosis that was
+already paid for (the RAG was used only to *record*, never to *recover* —
+2607.08032: reversible memory beats a summary; 2608.22752: five compactions
+drop rule adherence from 53% to 10%).
 
-## 1. Roster = quem existe (fonte única)
+Tool name: opencode prefixes MCP tools with the server key, so the tool
+`jarvis_rehydrate` is exposed as **`jarvis_jarvis_rehydrate`**; over MCP/CLI
+it is `jarvis_rehydrate`. The tool has a **loop-breaker**: a second call
+within 120s returns only a short pointer (measured: without it the 4B model
+looped — 293k input tokens).
 
-`scripts/agent-roster.py` (estado em `~/projects/.agents/roster.json`):
+## 1. Roster = who exists (single source of truth)
+
+`scripts/agent-roster.py` (state in `~/projects/.agents/roster.json`):
 
 ```bash
 scripts/agent-roster.py claim --name <n> --lane "<repo/area>" --repo <repo> --files "<glob1,glob2>"
@@ -31,55 +35,58 @@ scripts/agent-roster.py release --name <n>
 scripts/agent-roster.py task add --title "..." --owner <n>
 ```
 
-- **claim antes de falar** (sem claim você não é endereçável).
-- 2 claims com **arquivos sobrepostos** são recusados (fronteira explícita →
-  sem trabalho duplicado). `--force` só com intenção declarada.
-- Mesma lane com arquivos disjuntos é OK (2 janelas, 1 assunto).
+- **Claim before speaking** (without a claim you are not addressable).
+- Two claims with **overlapping files** are refused (explicit boundaries).
+  `--force` only with a declared intent. Same lane with disjoint files is OK
+  (2 windows, 1 topic).
 
-## 2. Entrega (API do opencode — nunca wtype/focus)
+## 2. Delivery (opencode API — never wtype/focus)
 
-`scripts/agent-msg.sh` entrega **na sessão do alvo** (`POST /session/:id/message`):
+`scripts/agent-msg.sh` delivers **into the target's session**
+(`POST /session/:id/message`):
 
 ```bash
-scripts/agent-msg.sh --to <nome> "texto"      # PEDIDO: o alvo roda (prompt_async)
-scripts/agent-msg.sh --note "texto"            # NOTA: entra na sessão, NÃO roda (noReply) — zero token
-scripts/agent-msg.sh --cancel <id>             # aborta o turno do alvo (POST /session/:id/abort)
-scripts/agent-msg.sh --list                    # dry-run: alvos, sessão, ocupado?
-scripts/agent-msg.sh --pending                 # pedidos sem resposta
+scripts/agent-msg.sh --to <name> "text"      # REQUEST: the target runs (prompt_async)
+scripts/agent-msg.sh --note "text"            # NOTE: enters the session, does NOT run (noReply) — zero tokens
+scripts/agent-msg.sh --cancel <id>             # aborts the target's turn (POST /session/:id/abort)
+scripts/agent-msg.sh --list                    # dry-run: targets, session, busy?
+scripts/agent-msg.sh --pending                 # requests without an answer
 ```
 
-Regras:
-- `--note` = notificação (não dispara run). **Nunca** "deixar texto na caixa
-  de input": bloqueia o typing do humano e não entra na fila (erro real).
-- Sem roster, `--to other` **não envia nada**; broadcast só com `--broadcast`
-  explícito (custa ~15x tokens por multi-agente — Anthropic 06/2025).
-- 1 LINHA por mensagem; cada envio loga em `~/projects/AGENTS-MSG.log`.
+Rules:
+- `--note` is a notification (does not trigger a run). **Never** "leave text in
+  the input box": it blocks the human's typing and never enters the queue
+  (a real failure).
+- Without a roster entry, `--to other` **sends nothing**; broadcast only with
+  an explicit `--broadcast` (costs ~15x tokens per multi-agent setup —
+  Anthropic 06/2025).
+- One line per message; every send is logged in `~/projects/AGENTS-MSG.log`.
 
-## 3. Wake (o watcher acorda o dono do repo)
+## 3. Wake (the watcher wakes the owner of the repo)
 
-`scripts/agents-watcher.sh`: wake **via API** (não rouba foco) e **lane-aware**
-— commit do repo X só acorda o agente cujo `repo`/lane é X; fila/hooks são
-globais; sem roster = legado global.
+`scripts/agents-watcher.sh`: wakes **via the API** (does not steal focus) and
+is **lane-aware** — a commit in repo X only wakes the agent whose repo/lane is
+X; queue and hooks are global; no roster = legacy global behavior.
 
-## 4. Quando um erro se repete (o tropeço)
+## 4. When an error repeats (the stumble)
 
-1. `jarvis_rehydrate(task="<erro>")` — a lição pode já estar lá.
-2. `jarvis_lessons("<padrão do erro>")` se a lição não aparecer.
-3. Ao consertar: `jarvis_remember(text=..., category="decision"|"error")` +
-   `agent-pains.sh scan-apply` (o scanner pega o erro sozinho).
+1. `jarvis_rehydrate(task="<the error>")` — the lesson may already be there.
+2. `jarvis_lessons("<error pattern>")` if the lesson does not show up.
+3. After fixing it: `jarvis_remember(text=..., category="decision"|"error")` +
+   `agent-pains.sh scan-apply` (the scanner captures the error on its own).
 
-## 5. Fila e HANDOFF (estado compartilhado)
+## 5. Queue and HANDOFF (shared state)
 
-- `~/projects/AGENTS-QUEUE.md`: o topo é o estado **real** (missão atual).
-  Atualize por **delta** no topo, nunca reescreva o histórico (ACE 2510.04618:
-  playbook evolui por patch; reescrita monolítica degrada).
-- Vault: `HANDOFF-<data>-<slug>.md` (ponteiro de retomada) — `jarvis_vault_list`.
+- `~/projects/AGENTS-QUEUE.md`: the top is the **real** current state (today's
+  mission). Update it as a **delta** at the top, never rewrite the history
+  (ACE 2510.04618: playbooks evolve by patch; a monolithic rewrite degrades).
+- Vault: `HANDOFF-<date>-<slug>.md` (resume pointer) — `jarvis_vault_list`.
 
-## 6. Papers que fundamentam (RAG `books`, ~/Books/papers)
+## 6. Papers behind this (RAG `books`, ~/Books/papers)
 
-2607.08032 (reversível > resumo) · 2608.22752 (compactação quebra regras) ·
-2609.40118 (query-conditioned) · 2609.28771 (retrieval por feature) ·
-2510.05381 (contexto longo fere) · 2602.11988 (AGENTS.md inflado = custo) ·
-2601.20404 (AGENTS.md mínimo = −28% runtime) · 2510.04618 (deltas) ·
-A2A v1.0 (roteamento determinístico, messageId, tasks/cancel).
-Síntese: `nixos-ai/docs/REHYDRATACAO-E-COORDENACAO.md`.
+2607.08032 (reversible > summary) · 2608.22752 (compaction breaks rules) ·
+2609.40118 (query-conditioned) · 2609.28771 (feature-based retrieval) ·
+2510.05381 (long context hurts) · 2602.11988 (inflated AGENTS.md = cost) ·
+2601.20404 (minimal AGENTS.md = −28% runtime) · 2510.04618 (deltas) ·
+A2A v1.0 (deterministic routing, messageId, tasks/cancel).
+Synthesis: `nixos-ai/docs/REHYDRATACAO-E-COORDENACAO.md`.

@@ -121,4 +121,4 @@ def test_compaction_pins_the_coordination_guards():
     assert "jarvis_rehydrate" in txt
     assert "agent-roster.py claim" in txt
     assert "--note" in txt and "--to" in txt and "--cancel" in txt
-    assert "nunca wtype/focus" in txt
+    assert "never use wtype/focus" in txt

@@ -31,24 +31,28 @@
 const ROOT_DELETE =
   /(^|[;&|\s])rm\s+[^;&|]*-[a-zA-Z]*(?:[rR][a-zA-Z]*[fF]|[fF][a-zA-Z]*[rR])[^;&|]*\s+(\/(\s|$|;|\*)|\~(\s|$|;))/;
 
-// Regras de coordenação — PINADAS, copiadas literalmente. Nunca resumir,
-// nunca reescrever: é o que a compactação faz de pior (2608.22752).
-const PINNED_GUARDS = `## Guardas de coordenação (pinadas — não resumir)
-- claim antes de falar: \`scripts/agent-roster.py claim --name <n> --lane <lane> --repo <repo> --files <globs>\`
-- entrega: \`scripts/agent-msg.sh --to <nome> "texto"\` (o alvo roda) · \`--note "texto"\` (entra na sessão, NÃO roda) · \`--cancel <id>\` (aborta o turno)
-- nunca wtype/focus para falar com outro agente: trava o typing do humano
-- wake: \`agents-watcher.sh\` acorda via API e filtra por repo/lane`;
+// Coordination rules — PINNED, copied verbatim. Never summarize, never
+// rewrite: that is what compaction does worst (2608.22752).
+// LANGUAGE: English on purpose. Everything an LLM reads is English — small
+// local models (bonsai) do not understand pt-BR, and a rule the model cannot
+// read is a rule that does not exist.
+const PINNED_GUARDS = `## Coordination rules (pinned — never summarize)
+- claim before speaking: \`scripts/agent-roster.py claim --name <n> --lane <lane> --repo <repo> --files <globs>\`
+- delivery: \`scripts/agent-msg.sh --to <name> "text"\` (the target runs) · \`--note "text"\` (enters the session, does NOT run) · \`--cancel <id>\` (aborts the target turn)
+- never use wtype/focus to talk to another agent: it blocks the human's typing
+- wake: \`agents-watcher.sh\` wakes via the API and filters by repo/lane`;
 
-// Regra do harness para o RESGATE (o que faltava).
-const REHYDRATE_RULE = `## Re-hidratação (primeira tool da sessão)
-1ª tool de uma sessão nova, ou logo após uma compactação, ou ao tropeçar num
-problema que parece repetido: \`jarvis_jarvis_rehydrate(task="<o que vou
-fazer>")\` (no opencode o nome exposto é prefixado pelo MCP "jarvis"; o tool
-se chama \`jarvis_rehydrate\`).
-Devolve em 1 chamada: guardas + fila + HANDOFF + memórias + lições + RAG +
-roster. É mais barato que refazer o diagnóstico.
-UMA chamada só — não repita (o resgate já devolveu o estado; o resto está
-nos paths). Repetir queima contexto (medido: 293k tokens de input num loop).
+// The harness rule for the RESCUE (what was missing).
+const REHYDRATE_RULE = `## Rehydration (first tool of the session)
+First tool of a new session, right after a compaction, or whenever a problem
+looks like a repeat: \`jarvis_jarvis_rehydrate(task="<what you are about to
+do>")\` (opencode prefixes MCP tools with the server key, so the exposed
+name is \`jarvis_jarvis_rehydrate\`).
+One call returns: pinned guards + queue top + HANDOFF + memories + lessons +
+RAG + roster. Cheaper than redoing the diagnosis.
+ONE call only — do not repeat it (the rescue already returned the state; the
+rest is at the paths). Repeating burns context (measured: 293k input tokens
+in a loop).
 ${PINNED_GUARDS}`;
 
 const COMPACTION_MEMORY = `## Memory protocol (auto-injected pre-compaction)
@@ -60,8 +64,8 @@ checker run; transient: chat only, never stored; secrets: names only.
 Validate live state on wake: model tiers, service PIDs vs git log,
 /run/current-system vs booted generation (a reboot may have reverted a
 test-activated switch).
-## Pós-compactação: a PRIMEIRA tool call é jarvis_rehydrate(task="...")
-As guardas abaixo são PINADAS (copiadas exatas — não resumir):
+## After compaction: the FIRST tool call is jarvis_rehydrate(task="...")
+The rules below are PINNED (copied exactly — never summarize):
 ${PINNED_GUARDS}`;
 
 export const MemoryOpenCodePlugin = async () => {

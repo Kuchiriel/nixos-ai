@@ -1049,18 +1049,27 @@ _REHYDRATE_CALLS: list[float] = []
 _REHYDRATE_SEEN: dict[str, float] = {}
 _REHYDRATE_LOCK = threading.Lock()
 
-REHYDRATE_GUARDS = """## GUARDAS (pinadas — nunca resumir, nunca reescrever)
-- 1ª tool da sessão = `jarvis_rehydrate(task="...")` (no opencode o nome
-  exposto é `jarvis_jarvis_rehydrate` — MCP "jarvis" + tool "jarvis_rehydrate").
-  Se o problema parece repetido, é aqui que se resgata.
-- Coordenação: `claim` antes de falar →
+# LANGUAGE: English on purpose. This text is injected into the model's
+# context — small local models (bonsai) do not read pt-BR, and a rule the
+# model cannot read does not exist (owner directive, 02/11).
+# Keep it byte-identical to PINNED_GUARDS in the opencode plugin
+# (home-manager/files/opencode/plugins/memory.js): the same rules, pinned in
+# two places, must not drift.
+REHYDRATE_GUARDS = """## GUARDS (pinned — never summarize, never rewrite)
+- First tool of the session = `jarvis_rehydrate(task="...")` (in opencode the
+  exposed name is `jarvis_jarvis_rehydrate` — MCP server "jarvis" + tool
+  "jarvis_rehydrate"). When a problem looks like a repeat, this is where you
+  recover the state.
+- Coordination: `claim` before speaking →
   `scripts/agent-roster.py claim --name <n> --lane <lane> --repo <repo> --files <globs>`.
-  2 claims com arquivos sobrepostos são recusados (fronteira explícita).
-- Entrega: `scripts/agent-msg.sh --to <nome> "texto"` (o alvo roda) ·
-  `--note "texto"` (entra na sessão, NÃO roda, zero token) · `--cancel <id>` (aborta o turno).
-  Nunca wtype/focus: trava o typing do humano.
-- Wake: `agents-watcher.sh` acorda via API e filtra por repo/lane.
-- Memória: `remember` no fim/troca de tema; decisão >1 sessão → memória + nota; segredo → nome só."""
+  Two claims with overlapping files are refused (explicit boundaries).
+- Delivery: `scripts/agent-msg.sh --to <name> "text"` (the target runs) ·
+  `--note "text"` (enters the session, does NOT run, zero tokens) ·
+  `--cancel <id>` (aborts the target turn).
+  Never use wtype/focus: it blocks the human's typing.
+- Wake: `agents-watcher.sh` wakes via the API and filters by repo/lane.
+- Memory: `remember` at task end / topic switch; a decision valid for more
+  than one session → memory + note; secrets → names only."""
 
 
 def _rehydrate_queue(max_lines: int = 22) -> str:
@@ -1172,7 +1181,7 @@ def _handle_rehydrate(args: dict[str, Any]) -> str:
     """Reidrata a sessão: 1 chamada, output compacto, conteúdo original."""
     task = (args.get("task") or "").strip()
     if not task:
-        return "ERROR: rehydrate precisa de 'task' (o que você vai fazer)"
+        return "ERROR: rehydrate needs 'task' (what you are about to do)"
     # LOOP-BREAKER (02/11): medido com o modelo local 4B — ele chamava a
     # tool em loop (20-24 calls, 293k tokens de input) porque a cada call o
     # bloco inteiro voltava ao contexto. Orçamento: até N resgates COMPLETOS
@@ -1199,17 +1208,17 @@ def _handle_rehydrate(args: dict[str, Any]) -> str:
             _REHYDRATE_SEEN[chave] = agora
     if repetido:
         return (
-            "## RESGATE JÁ FEITO PARA ESTE PEDIDO\n"
-            "O mesmo pedido já foi resgatado nesta janela — o resultado está no "
-            "contexto desta sessão. Não repita (cada repetição devolve o bloco "
-            "inteiro de novo ao contexto)."
+            "## RESCUE ALREADY DONE FOR THIS REQUEST\n"
+            "The same request was already rescued in this window — the result "
+            "is in this session's context. Do not repeat it (each repetition "
+            "pushes the whole block back into the context)."
         )
     if excedeu:
         return (
-            "## RESGATE JÁ FEITO (orçamento da janela)\n"
-            "Você já fez %d resgates completos nesta janela — o resultado já "
-            "está no contexto desta sessão. Use-o, não chame de novo (repetir "
-            "queima contexto: 293k tokens de input num loop medido)." % max_completos
+            "## RESCUE ALREADY DONE (window budget)\n"
+            "You already made %d full rescues in this window — the result is "
+            "in this session's context. Use it, do not call again (repeating "
+            "burns context: 293k input tokens in a measured loop)." % max_completos
         )
     try:
         limit = int(args.get("limit", 3) or 3)
@@ -1220,13 +1229,13 @@ def _handle_rehydrate(args: dict[str, Any]) -> str:
 
     blocks.append(REHYDRATE_GUARDS)
     if not wanted or "queue" in wanted:
-        blocks.append("## FILA (topo — o estado real agora)\n" + _rehydrate_queue())
+        blocks.append("## QUEUE (top — the real current state)\n" + _rehydrate_queue())
     if not wanted or "handoff" in wanted:
-        blocks.append("## HANDOFF (mais recente — atômico)\n" + _rehydrate_handoff())
+        blocks.append("## HANDOFF (most recent — atomic)\n" + _rehydrate_handoff())
     if not wanted or "memories" in wanted:
-        blocks.append(f"## MEMÓRIAS (pedido: {task})\n" + _rehydrate_memories(task, limit))
+        blocks.append(f"## MEMORIES (request: {task})\n" + _rehydrate_memories(task, limit))
     if not wanted or "lessons" in wanted:
-        blocks.append(f"## LIÇÕES (mesmo pedido)\n" + _rehydrate_lessons(task))
+        blocks.append(f"## LESSONS (same request)\n" + _rehydrate_lessons(task))
     if not wanted or "rag" in wanted:
         blocks.append("## RAG code/docs\n" + _handle_rag_search(
             {"query": task, "collection": "code", "limit": limit}))
@@ -1234,12 +1243,12 @@ def _handle_rehydrate(args: dict[str, Any]) -> str:
         blocks.append("## RAG books/papers\n" + _handle_rag_search(
             {"query": task, "collection": "books", "limit": limit}))
     if not wanted or "roster" in wanted:
-        blocks.append("## ROSTER (quem está vivo)\n" + _rehydrate_roster())
+        blocks.append("## ROSTER (who is alive)\n" + _rehydrate_roster())
 
     blocks.append(
-        "## FIM DO RESGATE\n"
-        "Uma chamada só. O resto do detalhe está nos paths acima — leia o "
-        "arquivo se precisar (não repita esta tool)."
+        "## END OF RESCUE\n"
+        "One call only. The remaining detail is at the paths above — read the "
+        "file if you need it (do not repeat this tool)."
     )
     return "\n\n".join(blocks)
 
