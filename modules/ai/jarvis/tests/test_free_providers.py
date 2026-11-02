@@ -17,7 +17,25 @@ from pathlib import Path
 
 import pytest
 
-JSON_PATH = Path(__file__).parent.parent.parent / "free-providers.json"
+
+def _find_providers_json() -> Path | None:
+    """Procura o JSON subindo a árvore (o pacote nix só leva ./jarvis)."""
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "free-providers.json"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+JSON_PATH = _find_providers_json()
+
+# No sandbox do build nix (src = ./jarvis) o JSON não existe — o mesmo
+# motivo do fallback em model_policy.py. Testes pulam em vez de quebrar
+# o build do pacote.
+pytestmark = pytest.mark.skipif(
+    JSON_PATH is None,
+    reason="free-providers.json fora do pacote (sandbox nix) — invariantes validadas no repo",
+)
 
 VALID_STATUS = {
     "active",
@@ -31,6 +49,7 @@ VALID_STATUS = {
 
 @pytest.fixture(scope="module")
 def data() -> dict:
+    assert JSON_PATH is not None
     return json.loads(JSON_PATH.read_text())
 
 
