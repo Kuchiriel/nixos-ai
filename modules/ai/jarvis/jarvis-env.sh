@@ -94,27 +94,33 @@ if [ -d "$LOCAL_SP" ]; then
 fi
 
 # 4b) 03/11 — deps do PACOTE (core + voz) para a CLI/MCP.
-# O console script do jarvis importa tudo (o hook de python do nixpkgs
-# injeta as deps no sys.path), mas `python3 -m jarvis...` — que é como a
-# CLI e o MCP rodam — NÃO: sem isto, `jarvis stt`, `jarvis speak` e o
-# `bench-stt` morriam com "No module named 'faster_whisper'".
-# O pacote escreve o site-packages do env completo em
-# $out/nix-support/python-path; aqui ele entra no PYTHONPATH.
-if [ -n "${JARVIS_PKG:-}" ] && [ -r "$JARVIS_PKG/nix-support/python-path" ]; then
-  DEPS_SP="$(cat "$JARVIS_PKG/nix-support/python-path" 2>/dev/null || true)"
-  if [ -n "$DEPS_SP" ] && [ -d "$DEPS_SP" ]; then
-    case ":$PP:" in
-      *":$DEPS_SP:"*) ;;
-      *) PP="${PP:+$PP:}$DEPS_SP" ;;
-    esac
-    # NIX_PYTHONPATH = mesmo path, mas processado por site.addsitedir (o
-    # sitecustomize do python do nix). Necessario para os .pth dos pacotes
-    # (torch/nvidia): PYTHONPATH puro NAO processa .pth.
-    case ":${NIX_PYTHONPATH:-}:" in
-      *":$DEPS_SP:"*) ;;
-      *) export NIX_PYTHONPATH="${NIX_PYTHONPATH:+$NIX_PYTHONPATH:}$DEPS_SP" ;;
-    esac
-  fi
+# O console script do jarvis embute a lista completa de site-packages (o hook
+# de python do nixpkgs a monta: site.addsitedir). A CLI/MCP rodam
+# `python3 -m jarvis...` e ficavam SEM faster-whisper/kokoro ->
+# `jarvis stt`, `jarvis speak` e o `bench-stt` morriam com ModuleNotFoundError.
+# Extrai-se a MESMA lista do console script: env idêntica, sem divergir e
+# sem criar store path novo (o farm via makeSearchPathOutput quebrava o
+# build: o hook do nixpkgs usa o pythonPath do input e acusava
+# "build input ... does not exist").
+JARVIS_DEPS_SP=""
+if [ -n "${JARVIS_PKG:-}" ] && [ -d "$JARVIS_PKG/bin" ]; then
+  for f in "$JARVIS_PKG"/bin/* "$JARVIS_PKG"/bin/.*-wrapped-wrapped; do
+    [ -f "$f" ] || continue
+    m="$(grep -m1 -o "site\.addsitedir(p, k), \[[^]]*\]" "$f" 2>/dev/null || true)"
+    if [ -n "$m" ]; then
+      JARVIS_DEPS_SP="$(printf '%s' "$m" | sed -e 's/.*\[//' -e 's/\].*//' -e "s/'//g" -e 's/,/:/g')"
+      break
+    fi
+  done
+fi
+if [ -n "$JARVIS_DEPS_SP" ]; then
+  PP="${PP:+$PP:}$JARVIS_DEPS_SP"
+  # NIX_PYTHONPATH = o mesmo path, mas processado por site.addsitedir (o
+  # sitecustomize do python do nix). PYTHONPATH puro NAO processa .pth.
+  case ":${NIX_PYTHONPATH:-}:" in
+    *":$JARVIS_DEPS_SP:"*) ;;
+    *) export NIX_PYTHONPATH="${NIX_PYTHONPATH:+$NIX_PYTHONPATH:}$JARVIS_DEPS_SP" ;;
+  esac
 fi
 
 export PYTHONPATH="${JARVIS_SRC}${PP:+:$PP}"

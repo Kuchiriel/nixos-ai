@@ -41,11 +41,6 @@
   ];
 
 
-  # Farm de symlinks com TODAS as deps (core + voz) num so site-packages.
-  # Consumido por: (a) propagatedBuildInputs -> console script do pacote,
-  # (b) $out/nix-support/python-path -> jarvis-env.sh (CLI/MCP).
-  pythonDepsPath = lib.makeSearchPathOutput "out" "python3/site-packages" (pythonDeps ++ voiceDeps);
-
   jarvis = python3Packages.buildPythonPackage rec {
     pname = "jarvis";
     version = "0.1.0";
@@ -85,7 +80,7 @@
     # pelo agente via stdio; entra como propagado para o binário jarvis saber
     # o caminho (JARVIS_MCP_NIXOS_BIN) sem hardcode de store path.
     # `mcpNixos` é o fast (cache de canais pré-computado) quando vem do overlay.
-    propagatedBuildInputs = [mcpNixos age pythonDepsPath];
+    propagatedBuildInputs = [mcpNixos age];
 
     nativeCheckInputs = with python3Packages; [pytest hypothesis] ++ [ripgrep];
     checkPhase = ''
@@ -121,15 +116,6 @@
           --set LAYA_MODEL_DIR "${aiModels.layaModelDir}"
       done
 
-      # Marcador para a CLI/MCP (jarvis-env.sh): o site-packages com TODAS as
-      # deps (core + voz). Sem isto, `python3 -m jarvis...` (CLI e MCP) roda
-      # sem faster-whisper/kokoro e a voz morre com ModuleNotFoundError.
-      # python.withPackages NAO serve aqui: ele embute o python inteiro e
-      # duplica o `wheel` no closure -> build falha com "Found duplicated
-      # packages in closure for dependency 'wheel'" (medido 03/11).
-      mkdir -p $out/nix-support
-      echo "${pythonDepsPath}/python3/site-packages" \
-        > $out/nix-support/python-path
     '';
 
     meta = with lib; {
@@ -140,5 +126,5 @@
     };
   };
 in {
-  inherit jarvis pythonDeps voiceDeps pythonDepsPath;
+  inherit jarvis pythonDeps voiceDeps;
 }
