@@ -349,7 +349,7 @@ JARVIS_TOOLS = [
     },
     {
         "name": "remember",
-        "description": "MANDATORY at task end: store facts, decisions, lessons. ALSO call BEFORE switching topics. Without this, nightwatch/agents lose context across sessions. Categories: fact, event, decision, error.",
+        "description": "Store one durable fact/event/decision/error so future sessions and nightwatch can see it. WHEN: at task end, before switching topics, or the moment a non-obvious decision/verdict is made. WHEN NOT: transient chat-only details; secrets (store the NAME only). category=fact|event|decision|error. Returns the memory id.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -362,13 +362,13 @@ JARVIS_TOOLS = [
     {
         "name": "rehydrate",
         "description": (
-            "REHYDRATE — rescue the session in ONE CALL: returns the coordination "
-            "guardrails (pinned, never summarized), the queue top (blackboard), the "
-            "most recent HANDOFF (atomic), the memories + lessons for the request and "
-            "the RAG hits (code/docs), plus the roster (who is alive and in which lane). "
-            "CALL IT FIRST in a new session, after a compaction, or whenever a problem "
-            "looks repeated: it is cheaper than redoing the diagnosis (and it is what "
-            "stops the same stumble from happening again)."
+            "ONE-CALL RESCUE: pinned guards + queue top + latest HANDOFF + "
+            "memories/lessons for your task + RAG hits + roster. WHEN: first "
+            "tool of a new session, right after a compaction, or when a problem "
+            "looks like a repeat ('we solved this already'). WHEN NOT: mid-task "
+            "with context — for one question use recall/rag_search/lessons. "
+            "Do NOT repeat it for the same task: the 2nd call returns a pointer "
+            "(loop-breaker). Returns text, no state change."
         ),
         "inputSchema": {
             "type": "object",
@@ -385,7 +385,7 @@ JARVIS_TOOLS = [
     },
     {
         "name": "recall",
-        "description": "MANDATORY FIRST STEP on any task: recall past facts/decisions about the topic BEFORE reading files or guessing. If empty, say so and proceed. This is how agents see nightwatch findings, past verdicts and lessons.",
+        "description": "Search episodic memory for past facts/decisions/errors about a topic. WHEN: before acting on a subject, before asking the human what was decided, before re-deriving a verdict. WHEN NOT: you need code/doc passages (rag_search) or a full session rescue (rehydrate). Returns up to top_k lines; empty means no prior memory — say so and proceed.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -397,7 +397,7 @@ JARVIS_TOOLS = [
     },
     {
         "name": "lessons",
-        "description": "MANDATORY when hitting errors, retrying, or starting unfamiliar work: recall lessons from past failures FIRST. Prevents repeating solved problems.",
+        "description": "Past failures and their fixes (the 'do not repeat this' memory). WHEN (mandatory): a command/test/build FAILED, you are about to RETRY the same thing, or you start unfamiliar/risky work (reboot, kernel/driver, migration, DB). Query with the error text or the action, not the topic. WHEN NOT: happy path. Returns up to 3 lessons; empty means no recorded trap.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -428,7 +428,7 @@ JARVIS_TOOLS = [
     },
     {
         "name": "rag_search",
-        "description": "BEFORE grepping code blindly: semantic search over indexed code AND docs (use collection memories/books as needed). If empty, run jarvis_rag_index first instead of guessing.",
+        "description": "Semantic search over indexed code/docs/books. WHEN: you do NOT know where something lives or how it is implemented (discovery) — run this BEFORE grepping blindly. WHEN NOT: you already know the path (read it) or you need exact string matching (grep). If the collection is empty, rag_index the dir first. Returns file+line hits.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -454,7 +454,7 @@ JARVIS_TOOLS = [
     },
     {
             "name": "rag_index",
-            "description": "Index a directory into the RAG system (code + auto-sweep of new Books papers/notes). Use to make code searchable.",
+            "description": "Index a directory into the RAG collections (code + auto-sweep of Books papers). WHEN: rag_search returned nothing for a tree you are working in, or after large file moves/renames. WHEN NOT: a one-off question about a known file (read it). Returns counts.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1084,8 +1084,12 @@ REHYDRATE_GUARDS = """## GUARDS (pinned — never summarize, never rewrite)
   than one session → memory + note; secrets → names only."""
 
 
-def _rehydrate_queue(max_lines: int = 22) -> str:
-    """Top of the queue (blackboard) — the most recent block, verbatim."""
+def _rehydrate_queue(max_lines: int = 22, clip: int = 600) -> str:
+    """Top of the queue (blackboard) — the most recent block, clipped.
+
+    clip: a checkpoint summary is ONE line and can be 6k+ chars; without a
+    per-line cap it becomes the context bomb the loop-breaker exists to avoid.
+    """
     path = os.environ.get("AGENTS_QUEUE", str(Path.home() / "projects" / "AGENTS-QUEUE.md"))
     try:
         text = Path(path).read_text(encoding="utf-8", errors="ignore")
@@ -1097,7 +1101,7 @@ def _rehydrate_queue(max_lines: int = 22) -> str:
         if ln.startswith("## ") and "CHECKPOINT" in ln:
             lines = lines[:i]
             break
-    body = "\n".join(lines[:max_lines]).rstrip()
+    body = "\n".join(ln[:clip] for ln in lines[:max_lines]).rstrip()
     return f"(fonte: {path})\n{body}"
 
 
@@ -1120,7 +1124,17 @@ def _rehydrate_handoff(max_lines: int = 8) -> str:
         notes = [n for n in mv.list_notes() if n.startswith("HANDOFF")]
         if not notes:
             return "(sem HANDOFF no vault)"
-        notes.sort(reverse=True)
+        vault = Path.home() / ".local/state/jarvis/vault"
+
+        def _mtime(n: str) -> float:
+            try:
+                return (vault / n).stat().st_mtime
+            except OSError:
+                return 0.0
+
+        # mtime, not name: "HANDOFF-sprites-1010" sorts after "HANDOFF-2026-..."
+        # lexicographically and was being served as the "latest" anchor.
+        notes.sort(key=_mtime, reverse=True)
         name = notes[0]
         body = mv.read_note(name)
     except Exception as e:
@@ -1187,6 +1201,39 @@ def _rehydrate_roster() -> str:
         lines.append("tarefas: " + "; ".join(
             f"{t.get('id')}[{t.get('status')}] {t.get('title')}" for t in tasks[:6]))
     return "\n".join(lines)
+
+
+def _rehydrate_state(max_lines: int = 12) -> str:
+    """Compact, deterministic session state for harness injection.
+
+    No embeddings and no RAG: queue + handoff + recent lessons + roster are
+    plain reads, so the plugin can call this at session start without paying
+    an embedding round-trip. The deep rescue (memories/RAG) stays on-demand in
+    _handle_rehydrate.
+    """
+    blocks = [
+        "## QUEUE (top)",
+        _rehydrate_queue(max_lines=10, clip=280),
+        "## HANDOFF (latest)",
+        _rehydrate_handoff(6),
+    ]
+    try:
+        from jarvis.core.memory import KIND_ERROR, KIND_LESSON, EpisodicMemory
+
+        em = EpisodicMemory()
+        recent = [
+            e for e in em.recent(limit=40)
+            if e.get("kind") in (KIND_LESSON, KIND_ERROR)
+        ]
+        if recent:
+            blocks += [
+                "## RECENT LESSONS (do not repeat)",
+                "\n".join(f"- {str(e.get('text', ''))[:200]}" for e in recent[:3]),
+            ]
+    except Exception as e:  # noqa: BLE001
+        blocks += ["## RECENT LESSONS", f"(unavailable: {e})"]
+    blocks += ["## ROSTER", _rehydrate_roster()]
+    return "\n\n".join(blocks)
 
 
 def _handle_rehydrate(args: dict[str, Any]) -> str:

@@ -154,6 +154,12 @@ result = _handle_lessons({'query': '''$QUERY'''})
 print(result)
 "
         ;;
+    state)
+        "$PY" -c "
+from jarvis.mcp_server import _rehydrate_state
+print(_rehydrate_state())
+"
+        ;;
     vault-list)
         "$PY" -c "
 from jarvis.mcp_server import _handle_vault_list
@@ -224,12 +230,19 @@ print(result)
         ;;
     status)
         echo "=== JARVIS Status ==="
-        # (02/11) o DEFAULT é o 4B-MTP+LoRA (:8092); o :8080 é o router
-        # on-demand (bonsai) — mostrados separados para não mentir.
-        echo "LLM (default :8092): $(curl -sf http://127.0.0.1:8092/health 2>/dev/null || echo 'offline')"
-        echo "Router (:8080, on-demand): $(curl -sf http://127.0.0.1:8080/health 2>/dev/null || echo 'offline')"
-        echo "Embeddings: $(curl -sf http://127.0.0.1:8081/health 2>/dev/null || echo 'offline')"
-        echo "Rerank: $(curl -sf http://127.0.0.1:8082/health 2>/dev/null || echo 'offline')"
+        # (03/11) Portas lidas do REGISTRY (fonte única: models.nix) — não
+        # literais: o default (4B-MTP+LoRA) e o router (bonsai) são
+        # grupos diferentes, mostrados separados para não mentir.
+        . "$(dirname "$0")/jarvis-registry.sh"
+        _reg_default_model="$(reg_default 2>/dev/null || echo jarvis-mtp-lora)"
+        _reg_default_port="$(reg_port "$_reg_default_model" 2>/dev/null || echo 8092)"
+        _reg_router_port="$(reg_port bonsai 2>/dev/null || echo 8080)"
+        _reg_embed_port="$(reg_service_port embeddings 2>/dev/null || echo 8081)"
+        _reg_rerank_port="$(reg_service_port rerank 2>/dev/null || echo 8082)"
+        echo "LLM (default :$_reg_default_port): $(curl -sf http://127.0.0.1:$_reg_default_port/health 2>/dev/null || echo 'offline')"
+        echo "Router (:$_reg_router_port, on-demand): $(curl -sf http://127.0.0.1:$_reg_router_port/health 2>/dev/null || echo 'offline')"
+        echo "Embeddings: $(curl -sf http://127.0.0.1:$_reg_embed_port/health 2>/dev/null || echo 'offline')"
+        echo "Rerank: $(curl -sf http://127.0.0.1:$_reg_rerank_port/health 2>/dev/null || echo 'offline')"
         echo "Qdrant: $(curl -sf http://127.0.0.1:6333/healthz 2>/dev/null || echo 'offline')"
         echo "Wakeword: $(systemctl --user is-active jarvis-wakeword 2>/dev/null || echo 'inactive')"
         echo "Waybar: $(pgrep -c waybar 2>/dev/null || echo '0') processes"

@@ -314,25 +314,39 @@ class EpisodicMemory:
         return out
 
     def recent(self, *, limit: int = 20) -> list[dict[str, Any]]:
-        """Últimos eventos (sem embedding — via payload ts)."""
-        # Qdrant não ordena por payload sem query; usamos busca com filtro vazio
-        # aproximado via dense search com vetor nulo não é viável — fallback:
-        # listar pela API de scroll.
-        try:
-            result = self._store._request(
-                "POST",
-                f"/collections/{self.collection}/points/scroll",
-                json={"limit": limit, "with_payload": True},
-            )
-        except Exception:  # noqa: BLE001
-            return []
-        points = result.get("result", {}).get("points", [])
+        """Últimos eventos (sem embedding — ordena por payload ts).
+
+        O scroll do Qdrant vem em ordem de id, não de ts: pedir só `limit`
+        pontos amostra um pedaço arbitrário da coleção (medido: 1491 pontos e
+        as "recent lessons" saíam de 17/09). Paginamos até esgotar (cap 20
+        páginas) e ordenamos localmente; sem order_by para não exigir índice.
+        """
+        points: list[dict[str, Any]] = []
+        offset: Any = None
+        for _ in range(20):
+            body: dict[str, Any] = {"limit": 512, "with_payload": True}
+            if offset is not None:
+                body["offset"] = offset
+            try:
+                result = self._store._request(
+                    "POST",
+                    f"/collections/{self.collection}/points/scroll",
+                    json=body,
+                )
+            except Exception:  # noqa: BLE001
+                break
+            res = result.get("result", {}) or {}
+            page = res.get("points", []) or []
+            points.extend(page)
+            offset = res.get("next_page_offset")
+            if not offset or not page:
+                break
         events = []
         for p in points:
             pl = p.get("payload", {})
             events.append({"id": p.get("id"), **pl})
         events.sort(key=lambda e: e.get("ts", 0), reverse=True)
-        return events
+        return events[:limit]
 
     def count(self) -> int:
         try:

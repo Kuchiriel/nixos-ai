@@ -23,6 +23,43 @@
 //
 // A/B: OPENCODE_NO_REHYDRATE_INJECT=1 turns the injection off (M2 measurement and
 // rollback without a rebuild — see docs/REHYDRATACAO-E-COORDENACAO.md §5).
+// OPENCODE_NO_STATE_INJECT=1 disables only the deterministic state block.
+
+import { execFileSync } from "node:child_process";
+
+// (03/11) The harness now INJECTS the state instead of asking the model to
+// fetch it. Measured gap: `lessons` was called 4x in 7 days while bash was
+// called 5k times — "call rehydrate first" was a rule the model had to
+// remember, and it did not. Fetching here is deterministic and costs ~0.3s
+// once per session (jarvis-cli.sh state = queue+handoff+lessons+roster, no
+// embeddings; the deep RAG rescue stays on-demand).
+const JARVIS_CLI = process.env.JARVIS_CLI || "/home/nixos/projects/nixos-ai/scripts/jarvis-cli.sh";
+const JARVIS_REPO = process.env.JARVIS_REPO || "/home/nixos/projects/nixos-ai";
+const STATE_MAX_CHARS = 4200;
+const STATE_SEEN = new Set();
+
+function fetchSessionState(sessionID, force = false) {
+  if (process.env.OPENCODE_NO_STATE_INJECT === "1") return "";
+  const sid = String(sessionID || "");
+  if (!sid) return "";
+  if (!force) {
+    if (STATE_SEEN.has(sid)) return "";
+    if (STATE_SEEN.size > 500) STATE_SEEN.clear();
+    STATE_SEEN.add(sid);
+  }
+  try {
+    const out = execFileSync("bash", [JARVIS_CLI, "state"], {
+      cwd: JARVIS_REPO,
+      timeout: 6000,
+      encoding: "utf8",
+      maxBuffer: 512 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return String(out || "").trim().slice(0, STATE_MAX_CHARS);
+  } catch {
+    return "";
+  }
+}
 
 // Root-delete: rm with a recursive+force flag pointing at / or ~.
 // The flag can come in any order (-rf, -fr, -Rf, -fR) and uppercase (-R is
@@ -53,6 +90,13 @@ RAG + roster. Cheaper than redoing the diagnosis.
 ONE call only — do not repeat it (the rescue already returned the state; the
 rest is at the paths). Repeating burns context (measured: 293k input tokens
 in a loop).
+## Which memory tool (pick ONE)
+- new session / post-compaction / "already solved" → jarvis_rehydrate(task)
+- past decision before acting → jarvis_recall(query)
+- command/test FAILED or about to retry → jarvis_lessons(query=<error>)
+- unknown code/doc, before grep → jarvis_rag_search(query, collection)
+- task end / topic switch → jarvis_remember(text, category)
+Doubled \`jarvis_jarvis_*\` = same tools.
 ${PINNED_GUARDS}`;
 
 const COMPACTION_MEMORY = `## Memory protocol (auto-injected pre-compaction)
@@ -110,13 +154,28 @@ export const MemoryOpenCodePlugin = async () => {
           output.system[0] = `${identity}\n\n${output.system[0] ?? ""}`;
         }
       }
-      if (process.env.OPENCODE_NO_REHYDRATE_INJECT === "1") return;
-      if (output.system.length === 0) {
-        output.system.push(REHYDRATE_RULE);
-        return;
+      // Deterministic state FIRST, rules LAST: the guards keep the recency
+      // position (they are the instructions that must survive).
+      const state = fetchSessionState(input?.sessionID);
+      if (state) {
+        const block =
+          "## SESSION STATE (auto-injected by the harness — ground truth; " +
+          "read the paths instead of re-deriving)\n" + state;
+        if (output.system.length === 0) {
+          output.system.push(block);
+        } else {
+          const last = output.system.length - 1;
+          output.system[last] = `${output.system[last] ?? ""}\n\n${block}`;
+        }
       }
-      const last = output.system.length - 1;
-      output.system[last] = `${output.system[last] ?? ""}\n\n${REHYDRATE_RULE}`;
+      if (process.env.OPENCODE_NO_REHYDRATE_INJECT !== "1") {
+        if (output.system.length === 0) {
+          output.system.push(REHYDRATE_RULE);
+        } else {
+          const last = output.system.length - 1;
+          output.system[last] = `${output.system[last] ?? ""}\n\n${REHYDRATE_RULE}`;
+        }
+      }
     },
     // (02/11) Rescue rule in the system prompt — a MINUTE, no state.
     // It turns "remember to rehydrate" into a harness rule.
@@ -131,6 +190,12 @@ export const MemoryOpenCodePlugin = async () => {
     "experimental.session.compacting": async (input, output) => {
       if (output && Array.isArray(output.context)) {
         output.context.push(COMPACTION_MEMORY);
+        const state = fetchSessionState(input?.sessionID, true);
+        if (state) {
+          output.context.push(
+            "## SESSION STATE (re-injected after compaction — ground truth)\n" + state,
+          );
+        }
       }
     },
   };

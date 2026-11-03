@@ -90,7 +90,7 @@ def test_identity_block_is_injected_at_the_top():
   out.blocks = o.system.length;
   out.text = o.system[0];
 """
-    out = run_plugin(body=body)
+    out = run_plugin({"OPENCODE_NO_STATE_INJECT": "1"}, body=body)
     assert out["blocks"] == 1, "identity must not create a second system message"
     assert out["text"].startswith("## IDENTITY"), "identity goes first (primacy)"
     assert "local-uncensored-4b/jarvis-mtp-lora" in out["text"]
@@ -121,12 +121,12 @@ def test_system_prompt_gets_the_rehydrate_rule():
   out.blocks = o.system.length;
   out.text = o.system[0];
 """
-    out = run_plugin(body=body)
+    out = run_plugin({"OPENCODE_NO_STATE_INJECT": "1"}, body=body)
     assert out["blocks"] == 1, "a injeção não pode criar um 2º system message"
     assert "jarvis_rehydrate" in out["text"]
     assert "claim" in out["text"]
     # injeção MINUTA: contexto é recurso finito (2510.05381)
-    assert len(out["text"]) < 1500, f"injeção grande demais: {len(out['text'])} chars"
+    assert len(out["text"]) < 1900, f"injeção grande demais: {len(out["text"])} chars"
 
 
 def test_system_injection_can_be_disabled_for_ab():
@@ -146,9 +146,30 @@ def test_compaction_pins_the_coordination_guards():
   await hooks['experimental.session.compacting']({sessionID: 's'}, o);
   out.text = o.context[0];
 """
-    out = run_plugin(body=body)
+    out = run_plugin({"OPENCODE_NO_STATE_INJECT": "1"}, body=body)
     txt = out["text"]
     assert "jarvis_rehydrate" in txt
     assert "agent-roster.py claim" in txt
     assert "--note" in txt and "--to" in txt and "--cancel" in txt
     assert "never use wtype/focus" in txt
+
+
+def test_session_state_is_injected_once_and_stays_before_rules(tmp_path):
+    """O estado e DETERMINISTICO: injetado 1x por sessao, e as regras ficam por ultimo."""
+    stub = tmp_path / "state.sh"
+    stub.write_text("#!/bin/sh\necho '## QUEUE (top)\nSTATE-MARKER-42'\n")
+    stub.chmod(0o755)
+    body = """
+  const a = {system: ['base']};
+  await hooks['experimental.chat.system.transform']({sessionID: 'ses_state'}, a);
+  const b = {system: ['base']};
+  await hooks['experimental.chat.system.transform']({sessionID: 'ses_state'}, b);
+  out.first = a.system[0];
+  out.second = b.system[0];
+"""
+    out = run_plugin({"JARVIS_CLI": str(stub)}, body=body)
+    assert "STATE-MARKER-42" in out["first"], "estado nao injetado"
+    assert "STATE-MARKER-42" not in out["second"], "estado injetado 2x na mesma sessao"
+    assert out["first"].rstrip().endswith(
+        "agents-watcher.sh` wakes via the API and filters by repo/lane"
+    ), "as regras precisam continuar no fim (recencia)"
