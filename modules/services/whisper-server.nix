@@ -21,6 +21,19 @@ let
   # CUDA no flake (build pesado de nvcc, ~30 min).
   whisperServer = "/home/nixos/projects/whisper.cpp/build/bin/whisper-server";
   modelPath = "/home/nixos/models/whisper/ggml-large-v3-turbo-q5_0.bin";
+
+  # Espera o whisper ficar HEALTHY (modelo carregado na VRAM) antes de o
+  # embeddings subir. Script = binário: o systemd não interpreta shell.
+  waitForWhisper = pkgs.writeShellScript "wait-for-whisper.sh" ''
+    for _i in $(seq 1 90); do
+      if ${pkgs.curl}/bin/curl -sf --max-time 2 http://127.0.0.1:${toString cfg.port}/health >/dev/null 2>&1; then
+        exit 0
+      fi
+      sleep 1
+    done
+    echo "whisper-server não ficou healthy em 90s; subindo embeddings assim mesmo" >&2
+    exit 0
+  '';
 in {
   options.services.whisper-server = {
     enable = lib.mkEnableOption "Whisper.cpp Server (ASR para a voz duplex)";
@@ -110,19 +123,12 @@ in {
     # enquanto o whisper ainda está carregando (900 MiB) e o whisper MORRE
     # de CUDA OOM — o ASR do duplex fica mudo. Aqui o embeddings espera o
     # whisper ficar HEALTHY (modelo carregado) antes de subir.
+    #
+    # (03/11 18:38) O ExecStartPre PRECISA ser um binário: o systemd não
+    # roda shell — um script multi-linha vira 203/EXEC e a unit não sobe.
     systemd.services.llama-cpp-embeddings = {
       after = lib.mkAfter ["whisper-server.service"];
-      serviceConfig.ExecStartPre = lib.mkAfter ''
-        # espera o ASR pegar a VRAM antes do embeddings (03/11, CUDA OOM)
-        for _i in $(seq 1 90); do
-          if ${pkgs.curl}/bin/curl -sf --max-time 2 http://127.0.0.1:${toString cfg.port}/health >/dev/null 2>&1; then
-            exit 0
-          fi
-          sleep 1
-        done
-        echo "whisper-server não ficou healthy em 90s; subindo embeddings assim mesmo" >&2
-        exit 0
-      '';
+      serviceConfig.ExecStartPre = lib.mkAfter "${waitForWhisper}";
     };
   };
 }
