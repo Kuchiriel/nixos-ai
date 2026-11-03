@@ -22,8 +22,11 @@
   systemd.user.services.opencode-serve = {
     Unit = {
       Description = "opencode serve — acesso do celular via Tailscale";
-      After = ["network-online.target"];
-      Wants = ["network-online.target"];
+      After = ["network-online.target" "nv-gate.service"];
+      # (03/11) nv-gate é o proxy de taxa do free tier NVIDIA: sem ele o
+      # serve sobe e cada rajada de agentes toma 429 (40 RPM por chave).
+      # Wants = falha do gate NÃO derruba o serve (o provider fica direto).
+      Wants = [ "network-online.target" "nv-gate.service" ];
       # (11/10) StartLimitIntervalSec=0 = retry PARA SEMPRE. O default
       # (5 restarts/10s) matou o serviço parado às 19:09 (bind no IP do
       # tailscale durante restart do tailscaled pelo switch) e ele só

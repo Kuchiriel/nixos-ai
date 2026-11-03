@@ -20,10 +20,18 @@
     # builtins.getEnv retorna "" em flake pura — usar sintaxe {env:VAR} do
     # opencode que expande em runtime. Converte {VAR} → {env:VAR}.
     # Ex.: {CLOUDFLARE_ACCOUNT_ID} → {env:CLOUDFLARE_ACCOUNT_ID}.
-    baseURL = builtins.replaceStrings
-      ["{CLOUDFLARE_ACCOUNT_ID}"]
-      ["{env:CLOUDFLARE_ACCOUNT_ID}"]
-      prov.base_url;
+    # GATE local (03/11): provider com "gate" no catálogo passa a apontar
+    # para o nv-gate (token bucket + retry de 429) em vez do endpoint cru.
+    # O gate é transparente: repassa o Authorization do cliente, não guarda
+    # chave nenhuma. Ver scripts/nv-gate.py.
+    gate = prov.gate or null;
+    baseURL =
+      if gate != null && (gate.enabled or false)
+      then "http://127.0.0.1:${toString gate.port}/v1"
+      else builtins.replaceStrings
+        ["{CLOUDFLARE_ACCOUNT_ID}"]
+        ["{env:CLOUDFLARE_ACCOUNT_ID}"]
+        prov.base_url;
     apiKeyEnv = if prov.env_key != null then "{env:${prov.env_key}}" else null;
     headers = if prov.requires_headers or false then prov.headers else {};
     # Headroom de contexto (02/11): ver lib/opencode-limits.nix. SEM
@@ -142,6 +150,8 @@ in {
     ./modules/bench-nightly.nix
     # layout das janelas opencode sobrevive ao reboot (captura 60s + restore)
     ./modules/session-snapshot.nix
+    # gate de taxa do free tier NVIDIA (fila + retry de 429)
+    ./modules/services/nv-gate.nix
     ./modules/ai
     ./modules/services/jarvis-wakeword.nix
     ./modules/services/sunshine.nix

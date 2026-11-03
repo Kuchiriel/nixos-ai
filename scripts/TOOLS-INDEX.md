@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_80 tools._
+_81 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -82,6 +82,7 @@ _80 tools._
   use: `./scripts/night-anchor.sh start    # Start anchor (background heartbeat)`
 - `nix-validate.sh` (nixos-ai/scripts) — nix-validate.sh — Multi-layer validation for Nix/NixOS configurations.
   use: `./scripts/nix-validate.sh              # Full validation`
+- `nv-gate.py` (nixos-ai/scripts) — """nv-gate — transparent rate-limit gate for the NVIDIA free tier (integrate.api.nvidia.com).
 - `overnight-agent-24-09.sh` (nixos-ai/scripts) — overnight-agent-24-09.sh — SEU overnight (não o do Muse): harvest Codacus
 - `overnight-harness-24-09.sh` (nixos-ai/scripts) — overnight-harness-24-09.sh — fila determinística da madrugada (complementa
 - `overnight-harness-loop.py` (nixos-ai/scripts) — """Overnight harness-improvement loop (30/09).

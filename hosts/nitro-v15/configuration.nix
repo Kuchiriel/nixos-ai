@@ -207,6 +207,9 @@ services.avahi = {
   services.jarvis-watchdog.enable = true;
   services.jarvis-heal.enable = true;
   services.jarvis-telegram.enable = true;
+  # Espelho systemd do /etc/litellm.env (03/11): o systemd recusa `export KEY=`
+  # e LOGA o valor da chave no journal (206 linhas/dia com sk-* e nvapi-*).
+  services.jarvis-keys-env.enable = true;
   services.jarvis-gaming.enable = true;
 
   # Moondream2 local para tagging de sprites. NAO sobe no boot (VRAM 6 GB =
