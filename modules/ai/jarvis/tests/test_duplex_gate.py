@@ -17,11 +17,24 @@ from pathlib import Path
 
 import pytest
 
-DUPLEX = Path(__file__).resolve().parents[4] / "scripts" / "duplex-voice.py"
+def _find_upwards(*candidates: str) -> Path | None:
+    """Procura um arquivo subindo a arvore (o pacote nix so leva ./jarvis)."""
+    for parent in Path(__file__).resolve().parents:
+        for candidate in candidates:
+            path = parent / candidate
+            if path.is_file():
+                return path
+    return None
 
 
 def _load_duplex():
-    spec = importlib.util.spec_from_file_location("duplex_voice_gate_test", DUPLEX)
+    path = _find_upwards("scripts/duplex-voice.py")
+    if path is None:
+        # No sandbox do nix o pacote so leva ./jarvis -> o script nao existe:
+        # o modulo inteiro e pulado (allow_module_level obrigatorio no pytest 8).
+        pytest.skip("scripts/duplex-voice.py nao encontrado neste checkout",
+                    allow_module_level=True)
+    spec = importlib.util.spec_from_file_location("duplex_voice_gate_test", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
     return mod

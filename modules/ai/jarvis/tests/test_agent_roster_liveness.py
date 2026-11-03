@@ -15,11 +15,24 @@ from pathlib import Path
 
 import pytest
 
-ROSTER = Path(__file__).resolve().parents[4] / "scripts" / "agent-roster.py"
+def _find_upwards(*candidates: str) -> Path | None:
+    """Procura um arquivo subindo a arvore (o pacote nix so leva ./jarvis)."""
+    for parent in Path(__file__).resolve().parents:
+        for candidate in candidates:
+            path = parent / candidate
+            if path.is_file():
+                return path
+    return None
 
 
 def _load():
-    spec = importlib.util.spec_from_file_location("agent_roster_test", ROSTER)
+    path = _find_upwards("scripts/agent-roster.py")
+    if path is None:
+        # No sandbox do nix o pacote so leva ./jarvis -> o script nao existe:
+        # o modulo inteiro e pulado (allow_module_level obrigatorio no pytest 8).
+        pytest.skip("scripts/agent-roster.py nao encontrado neste checkout",
+                    allow_module_level=True)
+    spec = importlib.util.spec_from_file_location("agent_roster_test", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
     return mod
