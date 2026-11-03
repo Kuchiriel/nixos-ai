@@ -64,6 +64,61 @@
   };
 
   cloudProviders = builtins.mapAttrs mkCloudProvider freeProviders.providers;
+
+  # ══════════════════════════════════════════════════════════════
+  # REASONING EFFORT (variant) DECLARATIVO POR MODELO — 03/11
+  # POR QUÊ: o TUI do opencode guarda a variante escolhida em
+  # ~/.local/state/opencode/model.json (fora do git, fora do Nix).
+  # Quando o opencode-serve reinicia (o rebuild reinicia o unit),
+  # o server re-resolve a variante como "default" e o cliente grava
+  # isso de volta no state -> o dono perde o "max" e tem que ir
+  # escolher de novo (reclamação do dono, 03/11).
+  # FIX: o effort vira FALLBACK no config do modelo. A variante
+  # explícita do TUI continua com precedência (docs v2: provider ->
+  # model -> variant), então o dono ainda troca na hora se quiser.
+  # Fonte das escolhas: ~/.local/state/opencode/model.json (03/11).
+  # ATENÇÃO: declarar um modelo no config SUBSTITUI a entrada do
+  # catálogo (models.dev) — por isso os modelos que só existem lá
+  # carregam o limit próprio (via mkEffortModel, mesma conta de
+  # headroom do mkModel). Os do catálogo curado (free-providers.json)
+  # mantêm o limit de lá (o recursiveUpdate só acrescenta o options).
+  # ══════════════════════════════════════════════════════════════
+  mkEffortModel =
+    context: output: effort:
+    let
+      lim = projectLib.opencode-limits.limits {
+        inherit context output;
+        headroom = projectLib.opencode-limits.defaultHeadroom;
+      };
+    in {
+      limit = {
+        inherit context output;
+      } // (if lim.input != null then {input = lim.input;} else {});
+      options.reasoningEffort = effort;
+    };
+
+  reasoningEffortDefaults = {
+    nvidia.models = {
+      # ── catálogo curado (free-providers.json): limit vem de lá ──
+      "minimaxai/minimax-m3.1-flash".options.reasoningEffort = "max";
+      "nvidia/nemotron-3-ultra-550b-a55b".options.reasoningEffort = "high";
+      "nvidia/nemotron-3.5-lightning-30b-a3b".options.reasoningEffort = "high";
+      # ── só no models.dev: limit próprio (ctx/out de 03/11) ──
+      "z-ai/glm-5.3" = mkEffortModel 1000000 131072 "max";
+      "z-ai/glm-5.3-flash" = mkEffortModel 1000000 131072 "max";
+      "deepseek-ai/deepseek-v4.1-flash" = mkEffortModel 1000000 384000 "max";
+      "nvidia/llama-3.1-nemotron-ultra-253b-v1" = mkEffortModel 128000 16384 "high";
+    };
+    openrouter.models = {
+      "meta/muse-spark-1.3" = mkEffortModel 1048576 943718 "max";
+      "meta/muse-spark-open" = mkEffortModel 1048576 943718 "xhigh";
+      "inclusionai/ling-3.1-flash" = mkEffortModel 1000000 262144 "medium";
+      "nvidia/nemotron-3-ultra-550b-a55b" = mkEffortModel 262144 182520 "high";
+      "nvidia/nemotron-3-ultra-550b-a55b:free" = mkEffortModel 1000000 65536 "high";
+      "~deepseek/deepseek-flash-latest" = mkEffortModel 1048576 943718 "max";
+    };
+    ovhcloud.models."qwen3.5-397b-a17b" = mkEffortModel 262144 262144 "high";
+  };
 in {
   imports = [
     ./modules
@@ -330,7 +385,7 @@ in {
       # fim do hardcoded!). Services com `opencode = {key,name,context,
       # output}` viram providers (id+port da service = fonte única).
       # Router (:8080), local-fast (alias) e local_small_model manuais.
-      provider = ({
+      provider = pkgs.lib.recursiveUpdate ({
         # (14/10, dono: small_model NUNCA `local` — pc fraco puxaria modelo
         # inútil. Nome dedicado pro tier leve, endpoint do bonsai.)
         local_small_model = {
@@ -413,7 +468,10 @@ in {
             };
           };
         })
-        (pkgs.lib.filterAttrs (n: s: s ? opencode) pkgs.aiModels.directServers));
+        (pkgs.lib.filterAttrs (n: s: s ? opencode) pkgs.aiModels.directServers))
+      # Effort (reasoning) declarativo por modelo — 03/11: o recursiveUpdate
+      # preserva nome/limit do catálogo e só acrescenta o options.reasoningEffort.
+      reasoningEffortDefaults;
 
       # ════════════════════════════════════════════════════════════
       # FILTRO DO CATÁLOGO — fonte única: modules/ai/free-providers.json
