@@ -23,9 +23,19 @@ from pathlib import Path
 import pytest
 
 
+def _find_upwards(*candidates: str) -> Path | None:
+    """Procura um arquivo subindo a arvore (o pacote nix so leva ./jarvis)."""
+    for parent in Path(__file__).resolve().parents:
+        for candidate in candidates:
+            path = parent / candidate
+            if path.is_file():
+                return path
+    return None
+
+
 def _load_gate():
-    path = Path(__file__).resolve().parents[4] / "scripts" / "nv-gate.py"
-    if not path.is_file():
+    path = _find_upwards("scripts/nv-gate.py")
+    if path is None:
         pytest.skip("scripts/nv-gate.py nao encontrado neste checkout")
     spec = importlib.util.spec_from_file_location("nv_gate", path)
     module = importlib.util.module_from_spec(spec)
@@ -123,8 +133,8 @@ def test_gate_health_has_no_secret():
 
 
 def test_catalog_gate_is_below_the_published_limit():
-    path = Path(__file__).resolve().parents[4] / "modules" / "ai" / "free-providers.json"
-    if not path.is_file():
+    path = _find_upwards("modules/ai/free-providers.json", "free-providers.json")
+    if path is None:
         pytest.skip("catalogo nao encontrado neste checkout")
     catalog = json.loads(path.read_text())
     gate = catalog["providers"]["nvidia"].get("gate")
