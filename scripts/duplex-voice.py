@@ -131,15 +131,17 @@ MIC_SOURCE_FALLBACK = "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.
 # (03/11, medido pelo coord-naming) No ALSA CRU o TTS entra no mic e o STT
 # transcreve a PRÓPRIA voz ("Jarvis, teste de cancelamento de ego..."). O grafo
 # do pipewire tem AEC3 (echo_cancel_source) -> RNNoise (rnnoise_source):
-# gravar de rnnoise_source pega a cadeia inteira (-66,4 dB, texto vazio).
-# Se o módulo não carregar o node não existe — aí o fallback pro ALSA cru é
-# melhor que mic mudo (mesma disciplina do wakeword).
-MIC_SOURCE_PREFERRED = "rnnoise_source"
+# gravar de echo_cancel_source pega o AEC3 (-66,4 dB, texto vazio).
+# (03/11 13:45, medido) rnnoise_source entrega SILÊNCIO (rms=0,000000): o
+# node de denoise não tem link com a saída do AEC3 (pw-cli ls Link → 12
+# links, nenhum de rnnoise/echo) → usar o AEC3 direto; o fallback pro ALSA
+# cru é melhor que mic mudo (mesma disciplina do wakeword).
+MIC_SOURCE_PREFERRED = "echo_cancel_source"
 _MIC_SOURCE: str | None = None
 
 
 def mic_source() -> str:
-    """Fonte do mic: rnnoise_source (AEC3->RNNoise) se existir; senao ALSA cru."""
+    """Fonte do mic: echo_cancel_source (AEC3) se existir; senao ALSA cru."""
     global _MIC_SOURCE
     if _MIC_SOURCE is None:
         chosen = MIC_SOURCE_FALLBACK

@@ -129,7 +129,8 @@ AEC3 → RNNoise do grafo do pipewire), com fallback para o ALSA cru se o nó
 não existir (mesma disciplina do wakeword: mic mudo é pior que sem AEC).
 
 ```python
-MIC_SOURCE_PREFERRED = "rnnoise_source"      # AEC3 -> RNNoise
+MIC_SOURCE_PREFERRED = "echo_cancel_source"  # AEC3 direto (o rnnoise_source
+                                           # pode ficar sem link de entrada)
 MIC_SOURCE_FALLBACK  = "alsa_input...HiFi__Mic1__source"
 def mic_source() -> str: ...                 # resolve 1x, loga a escolha
 ```
@@ -141,6 +142,17 @@ alto-falantes enquanto o mic grava, 7 s):**
 |---|---|---|
 | ALSA cru (antes) | **0,049417** | 0,001832 |
 | `rnnoise_source` (AEC3→RNNoise, agora) | **0,000000** | 0,000001 |
+| `echo_cancel_source` (AEC3 direto, agora) | 123,4 | — |
+
+CORRECAO (03/11 14:20, lane `voice-flags-en`): o rms **0,000000** do
+`rnnoise_source` NAO era "cancelamento perfeito" — era **node morto**:
+`pw-cli ls Link` mostra o `rnnoise_source` (id 47) **sem link de ENTRADA**
+(so `echo_cancel_source` -> `capture.rnnoise_source` e ->198). Medicao do
+`coord-naming` (13:45) + reconferida aqui: gravando agora, os tres nos
+entregam audio (`echo_cancel_source` rms 123,4 · `rnnoise_source` 70,6 ·
+`capture.rnnoise_source` 177,6) — o grafo do pipewire e **dinamico** (o
+link nasce quando alguem consome o source). Ou seja: silencio no rms e
+ARMADILHA ("parece cancelamento perfeito, e o node sem entrada").
 
 O eco do TTS some (o STT volta a devolver texto vazio em vez de transcrever o
 próprio TTS) e o near-end continua vivo: o **wakeword já grava desse mesmo
@@ -157,7 +169,7 @@ VAD vira alucinação).
 
 | # | Item | Onde | Risco | Ação proposta |
 |---|------|------|-------|---------------|
-| A1 | **Duplex fora do AEC** (APLICADO 03/11, medido de novo: rms 0,0494 cru → 0,000000 no AEC3+RNNoise) | `scripts/duplex-voice.py:128` grava do ALSA cru (`HiFi__Mic1__source`) | medido: o STT transcreve o TTS (fantasma) no caminho cru; com AEC3 o texto sai vazio (-66,4 dB) | **apontar o duplex para `rnnoise_source`** (AEC3 → RNNoise). Medido e proposal enviado ao `voice-flags-en` (lane do duplex); 1 linha + 1 constante de device |
+| A1 | **Duplex fora do AEC** (APLICADO 03/11, medido de novo: rms 0,0494 cru → 0,000000 no AEC3+RNNoise) | `scripts/duplex-voice.py:128` grava do ALSA cru (`HiFi__Mic1__source`) | medido: o STT transcreve o TTS (fantasma) no caminho cru; com AEC3 o texto sai vazio (-66,4 dB) | **apontar o duplex para `echo_cancel_source`** (AEC3 direto; o `rnnoise_source` pode ficar sem link de entrada = silencio). Medido e proposal enviado ao `voice-flags-en` (lane do duplex); 1 linha + 1 constante de device |
 | A2 | **TTS por contexto** | duplex usa **piper** (latência, RTF 0,033) ✓; `jarvis speak`/ack usam **kokoro** ✓ | piper não deve entrar no duplex (latência), kokoro não deve entrar no duplex | manter: piper = duplex, kokoro = resto (direção do dono, 03/11) |
 | A3 | **IP do tailnet hardcoded** | `scripts/agent-msg.sh:59`, `scripts/agents-watcher.sh:170`, `home-manager/modules/services/opencode-serve.nix:10` | muda de tailnet → scripts quebram | ler de `tailscale ip -4` ou de um arquivo de estado do HM |
 | A4 | **`/home/nixos` no código** | `cli/dev.py`, `cli/main.py`, `core/context_budget.py`, `core/laya_*.py`, `runtime/context.py` | não portável, quebra em outro usuário | `Path.home()` / env `JARVIS_HOME` |
