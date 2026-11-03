@@ -107,6 +107,7 @@ class Gate(BaseHTTPRequestHandler):
     stats = Stats()
     max_wait = 120.0
     max_retries = 6
+    backoff_start = 2.0
     verbose = False
 
     def log_message(self, fmt: str, *args) -> None:  # noqa: A003
@@ -135,7 +136,7 @@ class Gate(BaseHTTPRequestHandler):
 
         url = self.upstream + self.path
         attempt = 0
-        backoff = 2.0
+        backoff = self.backoff_start
         while True:
             attempt += 1
             req = urllib.request.Request(url, data=body, headers=headers, method=self.command)
