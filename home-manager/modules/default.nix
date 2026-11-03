@@ -2,6 +2,10 @@
   imports = [
     ./agents-md.nix
     ./jarvismodes.nix
+    # Modelos de voz (kokoro/whisper/openwakeword) — links em ~/.local/share.
+    # Antes só o wakeword (desabilitado) os referenciava -> GC levou os
+    # store paths e o TTS Kokoro morreu (fallback espeak = voz horrível).
+    ./jarvis-models.nix
     ./alacritty.nix
     ./bat.nix
     ./chromium.nix
