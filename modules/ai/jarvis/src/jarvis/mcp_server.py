@@ -1132,9 +1132,11 @@ def _rehydrate_handoff(max_lines: int = 8) -> str:
             except OSError:
                 return 0.0
 
-        # mtime, not name: "HANDOFF-sprites-1010" sorts after "HANDOFF-2026-..."
-        # lexicographically and was being served as the "latest" anchor.
-        notes.sort(key=_mtime, reverse=True)
+        # mtime first, name as tie-break: "HANDOFF-sprites-1010" sorts after
+        # "HANDOFF-2026-..." lexicographically and was being served as the
+        # "latest" anchor; equal mtimes (or a fake vault) still pick the newer
+        # name deterministically.
+        notes.sort(key=lambda n: (_mtime(n), n), reverse=True)
         name = notes[0]
         body = mv.read_note(name)
     except Exception as e:
