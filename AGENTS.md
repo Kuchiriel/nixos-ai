@@ -112,7 +112,7 @@ nix flake check
   fallback — never submit what the human is typing.
 - Evidence: `scripts/agent-msg.sh` → `~/projects/AGENTS-MSG.log`.
 
-## Model identity (self-identification — 02/11) (self-identification — 02/11)
+## Model identity (self-identification — 02/11)
 
 You cannot introspect your own weights. A model does not know its size, its
 quantisation, whether it runs on the local GPU or behind an API, and it must

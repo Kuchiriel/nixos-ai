@@ -144,7 +144,52 @@ Falhas reais encontradas pela medição (e corrigidas):
    (exigia duas palavras antes do slash) e não pegava `-fr`/`-Rf`/`/*`.
    Corrigido e travado por teste (o plugin não tinha NENHUM teste).
 
-## 7. Referências (arquivos locais)
+## 7. Auto-identificação de modelo (harness-provided, 02/11)
+
+Um modelo **não** consegue introspecionar os próprios pesos: não sabe o
+tamanho, a quantização, nem se roda local ou atrás de uma API. Adivinhar
+corrompe silenciosamente toda decisão que depende disso (orçamento de
+contexto, latência de tool, suporte a idioma, orçamento de VRAM).
+
+**A única fonte confiável é o harness.** O hook
+`experimental.chat.system.transform` recebe `{sessionID, model}` — o próprio
+opencode diz quem é o modelo. O plugin `memory.js` injeta isso no **primeiro**
+bloco do system prompt:
+
+```
+## IDENTITY (harness-provided — this is you)
+- model: <providerID>/<id> (variant)
+- session: <sessionID>
+```
+
+Regras de implementação (medidas, não opinadas):
+
+- **Um único bloco de system.** Criar um segundo `system` aborta o template
+  Jinja (`System message must be at the beginning`) — o bloco é *prependido*
+  ao existente, nunca empurrado como mensagem nova.
+- **Primacidade:** a identidade vem primeiro (o início do prompt é o lugar de
+  maior confiança), a regra de resgate vem por último (recência).
+- **Switch** `OPENCODE_NO_IDENTITY_INJECT=1` desliga a injeção (medições A/B).
+- **Verificado em sessão real:** o 4B respondeu o id exato
+  `local-uncensored-4b/jarvis-mtp-lora` — string que existe **apenas** no
+  bloco injetado (não está na conversa e o modelo não a pode deduzir).
+
+**Três tiers de identidade** (documentados em EN nos dois `AGENTS.md`):
+
+1. **opencode (este stack):** o bloco `## IDENTITY` — use literalmente.
+2. **Runtime JARVIS (CLI/agente/voz):** o registry
+   (`modules/ai/models.nix` é a fonte de verdade) →
+   `scripts/jarvis-cli.sh status` (tier ativo, porta, perfil). Um tier de
+   router (`bonsai`, `qwen-fast`) é um **perfil**, não um id de modelo.
+3. **Sem fonte:** diga plainly que não sabe e nomeie o que responderia.
+   Nunca infira identidade do tom da conversa, das tools visíveis ou da
+   sensação de "contexto grande".
+
+**Consequência de idioma:** tudo que um LLM lê tem que ser **inglês** — o
+bonsai não lê pt-BR. A regra entra junto com a identidade (mesmo bloco,
+mesmo hook).
+
+## 8. Referências (arquivos locais)
 
 `~/Books/papers/arxiv-2607.08032.{pdf,md}` · `2608.22752` · `2609.40118` ·
 `2609.28771` · `2602.06052` · `2510.04618` · `2602.11988` · `2601.20404` ·
