@@ -1,4 +1,4 @@
-"""MCP Server — expõe as capacidades do JARVIS como ferramentas MCP.
+"""MCP Server — exposes the JARVIS capabilities as MCP tools.
 
 Permite que o Roo Code e outros clientes MCP usem:
   - execute_shell (com allowlist e approval)
@@ -137,15 +137,15 @@ JARVIS_TOOLS = [
                 },
                 "focus_window": {
                     "type": "boolean",
-                    "description": ("Foca a janela ANTES de capturar (Hyprland). Use sempre que "
-                                    "modal=window: sem foco, a captura pega o que está POR TRÁS "
-                                    "da janela. Também move o mouse para o centro dela."),
+                    "description": ("Focus the window BEFORE capturing (Hyprland). Always use it "
+                                    "with modal=window: without focus, the capture grabs what is "
+                                    "BEHIND the window. It also moves the mouse to its centre."),
                 },
                 "opaque": {
                     "type": "boolean",
-                    "description": ("Tira a transparência da janela antes de capturar. Sem isso o "
-                                    "grim capta o conteúdo composto por baixo e o OCR/visao "
-                                    "leem a janela errada. Recomendado com focus_window."),
+                    "description": ("Remove the window transparency before capturing. Without it, "
+                                    "grim captures the composited content underneath and the OCR/vision "
+                                    "read the wrong window. Recommended with focus_window."),
                 },
             },
         }
@@ -362,22 +362,22 @@ JARVIS_TOOLS = [
     {
         "name": "rehydrate",
         "description": (
-            "REHYDRATE — resgate a sessão em 1 CHAMADA: devolve as guardas de "
-            "coordenação (pinadas, nunca resumidas), o topo da fila (blackboard), "
-            "o HANDOFF mais recente (atômico), memórias + lições do pedido e hits "
-            "do RAG (code/docs), e o roster (quem está vivo e em que lane). "
-            "CHAME PRIMEIRO em sessão nova, após compactação, ou ao tropeçar num "
-            "problema que parece repetido: é mais barato que refazer o diagnóstico "
-            "(e é o que evita o mesmo tropeço de novo)."
+            "REHYDRATE — rescue the session in ONE CALL: returns the coordination "
+            "guardrails (pinned, never summarized), the queue top (blackboard), the "
+            "most recent HANDOFF (atomic), the memories + lessons for the request and "
+            "the RAG hits (code/docs), plus the roster (who is alive and in which lane). "
+            "CALL IT FIRST in a new session, after a compaction, or whenever a problem "
+            "looks repeated: it is cheaper than redoing the diagnosis (and it is what "
+            "stops the same stumble from happening again)."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "task": {"type": "string", "description": "O que você vai fazer (assunto a reidratar)"},
-                "limit": {"type": "integer", "description": "Máx. de hits RAG por coleção (default: 5)"},
+                "task": {"type": "string", "description": "What you are about to do (the subject to rehydrate)"},
+                "limit": {"type": "integer", "description": "Max RAG hits per collection (default: 5)"},
                 "include": {
                     "type": "string",
-                    "description": "Blocos (default todos): queue,handoff,memories,lessons,rag,books,roster",
+                    "description": "Blocks (default all): queue,handoff,memories,lessons,rag,books,roster",
                 },
             },
             "required": ["task"],
@@ -642,9 +642,9 @@ def _vault_sync_to_hackmd() -> list[dict[str, Any]]:
 def _vault_read_from_obsidian(query: str) -> list[dict[str, str]]:
     """Search Obsidian vault using ripgrep (fixed-string, sem regex).
 
-    Vault via JARVIS_OBSIDIAN_VAULT (default ~/vaults/projects) — antes
-    hardcoded. Falhas viram [{"error": ...}] observável em vez de []
-    silencioso (que indistinguia "sem resultados" de "vault ausente").
+    Vault via JARVIS_OBSIDIAN_VAULT (default ~/vaults/projects) — before
+    hardcoded. Failures become [{"error": ...}] observável em vez de []
+    silent (it could not tell "no results" from "vault missing").
     """
     from pathlib import Path
     import os
@@ -654,7 +654,7 @@ def _vault_read_from_obsidian(query: str) -> list[dict[str, str]]:
         os.environ.get("JARVIS_OBSIDIAN_VAULT", str(Path.home() / "vaults/projects"))
     ).expanduser()
     if not OBSIDIAN_VAULT.exists():
-        return [{"error": f"obsidian vault ausente: {OBSIDIAN_VAULT}"}]
+        return [{"error": f"obsidian vault not found: {OBSIDIAN_VAULT}"}]
 
     try:
         result = subprocess.run(
@@ -691,15 +691,15 @@ def _vault_status() -> dict[str, Any]:
 
 
 def _mcp_mutation_policy() -> str:
-    """Política de mutação via MCP (approval-gap fechado 21/09, autorizado):
-    auto = comportamento atual (cliente MCP já autenticado local);
-    deny = mutações exigem aprovação (nega c/ mensagem, como o Agent).
+    """Mutation policy via MCP (approval gap closed 21/09, authorised):
+    auto = current behaviour (the local MCP client is already authenticated);
+    deny = mutations require approval (deny with a message, like the Agent).
     Env JARVIS_MCP_MUTATION. Default auto = sem quebra."""
     return os.environ.get("JARVIS_MCP_MUTATION", "auto").lower()
 
 
 def _mcp_audit(name: str, args: dict[str, Any], rc: int | None) -> None:
-    """Audit best-effort de mutações MCP (paridade c/ Agent._log_audit)."""
+    """Best-effort audit of MCP mutations (parity with Agent._log_audit)."""
     try:
         from pathlib import Path as _P
         from jarvis.core.paths import ensure_state_dir
@@ -781,15 +781,15 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
                     return "ERROR: nenhuma persona"
                 return json.dumps({"selected": p.id, "role": p.role,
                                    "tools": p.tools,
-                                   "handoff": "salve contexto em arquivo + delegue; "
-                                   "próxima persona lê o arquivo (economia de contexto)"},
+                                   "handoff": "save the context to a file and delegate; "
+                                    "the next persona reads the file (saves context)"},
                                   indent=2, ensure_ascii=False, default=str)
             return "ERROR: action inválida (list|show|select)"
 
         if name in ("jarvis_read_file", "jarvis_write_file",
                       "jarvis_str_replace"):
-            # Transporte genérico via registry (resolve + executor
-            # declarado). F2 ressuscitou str_replace aqui; o dispatch
+            # Generic transport via the registry (resolve + declared
+            # executor). F2 resurrected str_replace here; the dispatch
             # elimina os branches manuais (F2+).
             reg = _transport_registry()
             if name == "jarvis_read_file":
@@ -927,7 +927,7 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
         # mas invisíveis em tools/list, sem testes e sem chamadores fora
         # daqui (E6: superfície menor = menos entropia). Módulos watchdog/
         # classify seguem vivos p/ uso interno (classify_directory usa
-        # classify_file). Reanunciar via JARVIS_TOOLS se um dia expostos.
+        # classify_file). Re-announce via JARVIS_TOOLS if they are ever exposed.
         return f"ERROR: unknown tool: {name}"
     except Exception as e:
         return f"ERROR: {e}"
@@ -936,8 +936,8 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
 def _handle_nix_search(args: dict[str, Any]) -> str:
     """Proxy para mcp-nixos — pesquisa packages/options do nixpkgs.
 
-    Lança o binário mcp-nixos como subprocesso e comunica via JSON-RPC stdio.
-    Retorna o texto formatado do resultado.
+    Launches the mcp-nixos binary as a subprocess and talks over JSON-RPC stdio.
+    Returns the formatted result text.
     """
     import shutil
 
@@ -965,7 +965,7 @@ def _handle_nix_search(args: dict[str, Any]) -> str:
     version = args.get("version", "")
     system = args.get("system", "")
 
-    # Montar chamada MCP via stdin/stdout
+    # Build the MCP call over stdin/stdout
     request = {
         "jsonrpc": "2.0",
         "id": 1,
@@ -1048,15 +1048,15 @@ def _handle_remember(args: dict[str, Any]) -> str:
 
 
 # ═══ REHYDRATE (R1 — 02/11) ═══
-# O "resgate" em 1 chamada. Regras da pesquisa (docs/REHYDRATACAO-E-COORDENACAO.md):
-#  - REVERSÍVEL: devolve o ORIGINAL (nunca um resumo do original) + o caminho;
-#  - QUERY-CONDITIONED: memórias/lições/RAG filtradas pelo pedido;
-#  - TRIAGE POR TIPO: guardas pinadas exatas no topo (nunca resumidas),
-#    HANDOFF atômico, logs/épisódico resumível;
-#  - 1 chamada, output compacto (contexto é recurso finito: 2510.05381).
-# Estado do loop-breaker do resgate (ver _handle_rehydrate).
-# Janela deslizante de resgates COMPLETOS: até 3 por janela; o 4º devolve
-# só o ponteiro. Orçar por janela (e não por task) porque o loop medido
+# The "rescue" in 1 call. Research rules (docs/REHYDRATACAO-E-COORDENACAO.md):
+#  - REVERSIBLE: returns the ORIGINAL (never a summary of it) plus the path;
+#  - QUERY-CONDITIONED: memories/lessons/RAG filtered by the request;
+#  - TRIAGE BY TYPE: the exact pinned guardrails on top (never summarized),
+#    atomic HANDOFF, resumable logs/episodic content;
+#  - 1 call, compact output (context is a finite resource: 2510.05381).
+# State of the rescue loop-breaker (see _handle_rehydrate).
+# Sliding window of COMPLETE rescues: up to 3 per window; the 4th returns
+# only the pointer. Budget per window (not per task) because the measured loop
 # variava o texto do task (4-5 paraphrases para a mesma intenção).
 _REHYDRATE_CALLS: list[float] = []
 _REHYDRATE_SEEN: dict[str, float] = {}
@@ -1085,14 +1085,14 @@ REHYDRATE_GUARDS = """## GUARDS (pinned — never summarize, never rewrite)
 
 
 def _rehydrate_queue(max_lines: int = 22) -> str:
-    """Topo da fila (blackboard) — o bloco mais recente, literal."""
+    """Top of the queue (blackboard) — the most recent block, verbatim."""
     path = os.environ.get("AGENTS_QUEUE", str(Path.home() / "projects" / "AGENTS-QUEUE.md"))
     try:
         text = Path(path).read_text(encoding="utf-8", errors="ignore")
     except Exception as e:
-        return f"(fila ilegível: {e})"
+        return f"(queue unreadable: {e})"
     lines = text.splitlines()
-    # corta no primeiro cabeçalho de checkpoint seguinte (o topo é o atual)
+    # cuts at the next checkpoint header (the top one is the current one)
     for i, ln in enumerate(lines[1:], start=1):
         if ln.startswith("## ") and "CHECKPOINT" in ln:
             lines = lines[:i]
@@ -1102,16 +1102,16 @@ def _rehydrate_queue(max_lines: int = 22) -> str:
 
 
 def _rehydrate_handoff(max_lines: int = 8) -> str:
-    """HANDOFF mais recente — chunk ATÔMICO (o original, não um resumo).
+    """Most recent HANDOFF — ATOMIC chunk (the original, not a summary).
 
-    COMPACTO de propósito (medido em 02/11):
-    - o bloco inteiro (1843 chars) fazia o modelo fraco entrar em loop de
+    COMPACT on purpose (measured on 02/11):
+    - the whole block (1843 chars) made the weak model loop on
       tool calls (204k tokens de input acumulados);
-    -PIOR: as primeiras linhas do HANDOFF são o template do opencode
+    - WORSE: the first lines of the HANDOFF are the opencode template
       ("## Objective / ## Important Details / ## Next Move") e o 4B o
-      IMITAVA: 91 turnos escrevendo no mesmo formato (176k tokens).
-    Por isso: 8 linhas (título + resumo) + o path do original. O agente lê
-    o arquivo se precisar (R1: reversível = original no path, não resumo).
+      and the 4B IMITATED it: 91 turns writing in the same format (176k tokens).
+       Hence: 8 lines (title + summary) + the path of the original. The agent reads
+    the file when it needs to (R1: reversible = the original on the path, not a summary).
     """
     try:
         from jarvis.core.vault import MemoryVault
@@ -1124,12 +1124,12 @@ def _rehydrate_handoff(max_lines: int = 8) -> str:
         name = notes[0]
         body = mv.read_note(name)
     except Exception as e:
-        return f"(vault ilegível: {e})"
+        return f"(vault unreadable: {e})"
     path = str(Path.home() / ".local/state/jarvis/vault" / (name if name.endswith(".md") else name + ".md"))
     lines = body.splitlines()
     clipped = len(lines) > max_lines
     body = "\n".join(lines[:max_lines])
-    tail = "\n(… resto no arquivo — leia o path acima para o original)" if clipped else ""
+    tail = "\n(... rest of the file — read the path above for the original)" if clipped else ""
     return f"(fonte: {path})\n{body}{tail}"
 
 
@@ -1140,7 +1140,7 @@ def _rehydrate_memories(task: str, top_k: int = 5) -> str:
         em = EpisodicMemory()
         results = em.recall(task, top_k=top_k)
     except Exception as e:
-        return f"(memória indisponível: {e})"
+        return f"(memory unavailable: {e})"
     if not results:
         return "(nenhuma memória para este pedido)"
     return "\n".join(f"[{r.get('kind', '?')}] {r.get('text', '')[:260]}" for r in results)
@@ -1153,17 +1153,17 @@ def _rehydrate_lessons(task: str) -> str:
         em = EpisodicMemory()
         out = em.lessons(task, top_k=3)
     except Exception as e:
-        return f"(lições indisponíveis: {e})"
-    return out or "(nenhuma lição para este padrão)"
+        return f"(lessons unavailable: {e})"
+    return out or "(no lesson for this pattern)"
 
 
 def _rehydrate_roster() -> str:
-    """Roster: quem está vivo e em que lane (a verdade de coordenação)."""
+    """Roster: who is alive and in which lane (the coordination truth)."""
     script = os.environ.get(
         "AGENTS_ROSTER_PY", str(Path.home() / "projects" / "nixos-ai" / "scripts" / "agent-roster.py")
     )
     if not Path(script).exists():
-        return "(agent-roster.py não encontrado)"
+        return "(agent-roster.py not found)"
     try:
         out = subprocess.run(
             [sys.executable, script, "list", "--json"],
@@ -1171,7 +1171,7 @@ def _rehydrate_roster() -> str:
         ).stdout
         data = json.loads(out or "{}")
     except Exception as e:
-        return f"(roster indisponível: {e})"
+        return f"(roster unavailable: {e})"
     agents = [a for a in data.get("agents", []) if a.get("state") == "live"]
     if not agents:
         return "(nenhum agente com claim vivo — coordene por --broadcast ou faça claim)"
@@ -1190,15 +1190,15 @@ def _rehydrate_roster() -> str:
 
 
 def _handle_rehydrate(args: dict[str, Any]) -> str:
-    """Reidrata a sessão: 1 chamada, output compacto, conteúdo original."""
+    """Rehydrates the session: 1 call, compact output, original content."""
     task = (args.get("task") or "").strip()
     if not task:
         return "ERROR: rehydrate needs 'task' (what you are about to do)"
-    # LOOP-BREAKER (02/11): medido com o modelo local 4B — ele chamava a
-    # tool em loop (20-24 calls, 293k tokens de input) porque a cada call o
-    # bloco inteiro voltava ao contexto. Orçamento: até N resgates COMPLETOS
-    # por janela deslizante; o seguinte devolve um ponteiro curto (o
-    # resultado completo JÁ está no contexto).
+    # LOOP-BREAKER (02/11): measured with the local 4B model — it called the
+    # tool in a loop (20-24 calls, 293k input tokens) because on every call the
+    # whole block came back into the context. Budget: up to N COMPLETE rescues
+    # per sliding window; the next one returns a short pointer (the full
+    # result is ALREADY in the context).
     agora = time.time()
     try:
         janela = float(os.environ.get("JARVIS_REHYDRATE_COOLDOWN_S", "120"))
@@ -1321,10 +1321,10 @@ def _handle_vault_write(args: dict[str, Any]) -> str:
     try:
         from pathlib import PurePath
         from jarvis.core.vault import MemoryVault
-        # Audit P1-5: só basename, sem traversal (../, absolute, subdirs)
+        # Audit P1-5: basename only, no traversal (../, absolute, subdirs)
         safe_name = PurePath(name).name
         if not safe_name or safe_name in (".", "..") or "\\" in name or "/" in name:
-            return "ERROR: invalid note name (subdirs/traversal não permitidos)"
+            return "ERROR: invalid note name (subdirs/traversal not allowed)"
         mv = MemoryVault()
         from jarvis.core import vault_cipher
 
@@ -1349,21 +1349,21 @@ def _handle_rag_search(args: dict[str, Any]) -> str:
         from jarvis.core.config import Config
         from jarvis.providers.vector_store import QdrantStore, VectorStoreError
         cfg = Config()
-        # Override collection if specified (Config é frozen: replace, nunca assign)
+        # Override collection if specified (Config is frozen: replace, never assign)
         import dataclasses
         if collection == "memories":
             cfg = dataclasses.replace(cfg, qdrant_collection_code=cfg.qdrant_collection_memories)
         elif collection == "books":
             cfg = dataclasses.replace(cfg, qdrant_collection_code=cfg.qdrant_collection_books)
-        # Audit P1-4: NÃO criar/garantir coleção na LEITURA (mutação oculta).
-        # Coleção ausente → erro explícito apontando o tool de indexação.
+        # Audit P1-4: do NOT create/ensure the collection on a READ (hidden mutation).
+        # Missing collection -> explicit error pointing at the indexing tool.
         hs = HybridSearch(config=cfg)
         try:
             results = hs.search(query, top_k=limit)
         except VectorStoreError as e:
             if "404" in str(e):
-                return (f"Collection '{cfg.qdrant_collection_code}' não existe ainda. "
-                        "Rode jarvis_rag_index primeiro (ex.: path do repo).")
+                return (f"Collection '{cfg.qdrant_collection_code}' does not exist yet. "
+                        "Run jarvis_rag_index first (e.g. the repo path).")
             raise
         if not results:
             return "No results found."
@@ -1375,8 +1375,8 @@ def _handle_rag_search(args: dict[str, Any]) -> str:
             if pl.get("chapter") is not None:
                 path = f"{path} (cap. {pl['chapter']})"
             score = getattr(r, "score", 0)
-            # HybridHit não tem .text: conteúdo vive no payload (bug do
-            # handler antigo — hasattr(r,'text') era sempre False)
+            # HybridHit has no .text: the content lives in the payload (bug in the
+            # old handler — hasattr(r, 'text') was always False)
             text = str(pl.get("content") or pl.get("title") or "")
             lines.append(f"[{score:.2f}] {path}\n{text[:200]}\n")
         return "\n".join(lines)
@@ -1397,7 +1397,7 @@ def _handle_rag_index(args: dict[str, Any]) -> str:
         if "batch size" in error_msg:
             return "ERROR: Embedding server batch size too small (512 tokens). Increase --batch-size in llama-server config."
         return f"ERROR: rag_index failed: {e}"
-    # Acoplamento Books (dono 19/09): UMA chamada cobre código+livros —
+    # Books coupling (owner 19/09): ONE call covers code+books —
     # varredura idempotente de PDFs/notas novos, sem script manual.
     try:
         from jarvis.core.audiobook import sweep_books
@@ -1413,7 +1413,7 @@ def _handle_rag_index(args: dict[str, Any]) -> str:
 
 # ═══ Stdio Server ═══
 def main():
-    """Executa o MCP server via stdio (JSON-RPC 2.0)."""
+    """Runs the MCP server over stdio (JSON-RPC 2.0)."""
     for line in sys.stdin:
         line = line.strip()
         if not line:

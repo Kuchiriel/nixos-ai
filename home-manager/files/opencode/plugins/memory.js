@@ -8,26 +8,26 @@
 //     args.command through it — the deny below uses the same channel)
 //   - "experimental.session.compacting" with output.context.push (docs)
 //   - "experimental.chat.system.transform" with output.system.push  ← NOVO
-//     (o comentário antigo deste arquivo dizia que não existia API de
-//     injeção de contexto: era FALSO nesta versão — verificado no source)
-//   - "experimental.chat.messages.transform" com output.messages.push
+//     (the old comment in this file said there was no context injection
+//     API: it was FALSE in this version — verified in the source)
+//   - "experimental.chat.messages.transform" with output.messages.push
 //
-// POR QUE a injeção existe (pesquisa 02/11, docs/REHYDRATACAO-E-COORDENACAO.md):
-//   - O resgate dependia de o agente LEMBRAR de chamar recall/rag_search →
-//     disciplina, não harness. Agora o harness injeta a regra.
-//   - Contexto é recurso finito: a injeção é MINUTA (~6 linhas), sem estado
-//     (2510.05381: contexto longo fere mesmo com retrieval perfeita;
-//     2602.11988: AGENTS.md inflado = +20-23% custo e ganho zero).
-//   - Guardas de coordenação são PINADAS (não resumíveis): 5 compactações
-//     derrubam a aderência a regras de 53% -> 10% (2608.22752).
+// WHY the injection exists (research 02/11, docs/REHYDRATACAO-E-COORDENACAO.md):
+//   - The rescue depended on the agent REMEMBERING to call recall/rag_search →
+//     discipline, not harness. Now the harness injects the rule.
+//   - Context is a finite resource: the injection is TINY (~6 lines), stateless
+//     (2510.05381: long context hurts even with perfect retrieval;
+//     2602.11988: an inflated AGENTS.md = +20-23% cost and zero gain).
+//   - Coordination guardrails are PINNED (not summarizable): 5 compactions
+//     drop the adherence to rules from 53% -> 10% (2608.22752).
 //
-// A/B: OPENCODE_NO_REHYDRATE_INJECT=1 desliga a injeção (medição M2 e
-// rollback sem rebuild — ver docs/REHYDRATACAO-E-COORDENACAO.md §5).
+// A/B: OPENCODE_NO_REHYDRATE_INJECT=1 turns the injection off (M2 measurement and
+// rollback without a rebuild — see docs/REHYDRATACAO-E-COORDENACAO.md §5).
 
-// Root-delete: rm com flag recursiva+force apontando para / ou ~.
-// A flag pode vir em qualquer ordem (-rf, -fr, -Rf, -fR) e maiúscula (-R é
-// recursiva no rm). Hole antigo: o padrão exigia 'r' antes de 'f', então
-// `rm -fr /` passava reto (achado pelo teste do plugin, 02/11).
+// Root-delete: rm with a recursive+force flag pointing at / or ~.
+// The flag can come in any order (-rf, -fr, -Rf, -fR) and uppercase (-R is
+// recursive in rm). Old hole: the pattern required 'r' before 'f', so
+// `rm -fr /` sailed through (found by the plugin test, 02/11).
 const ROOT_DELETE =
   /(^|[;&|\s])rm\s+[^;&|]*-[a-zA-Z]*(?:[rR][a-zA-Z]*[fF]|[fF][a-zA-Z]*[rR])[^;&|]*\s+(\/(\s|$|;|\*)|\~(\s|$|;))/;
 

@@ -134,7 +134,10 @@ def test_tool_is_registered(M):
     schema = next(t for t in M.JARVIS_TOOLS if t["name"] == "rehydrate")
     assert schema["inputSchema"]["required"] == ["task"]
     desc = schema["description"].lower()
-    assert "rehydrate" in desc and "primeiro" in desc
+    assert "rehydrate" in desc and "call it first" in desc
+    # Everything the model reads is English (owner rule): a pt-BR tool
+    # description is a rule the local small models cannot read.
+    assert "primeiro" not in desc and "chamada" not in desc
 
 
 def test_rehydrate_loop_breaker_blocks_after_the_budget(M, monkeypatch):
