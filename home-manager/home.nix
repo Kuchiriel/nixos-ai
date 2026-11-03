@@ -473,6 +473,17 @@ in {
       # preserva nome/limit do catálogo e só acrescenta o options.reasoningEffort.
       reasoningEffortDefaults;
 
+      # Reasoning effort (variant) do agente build — 03/11 (dono): o TUI
+      # guardava a variante em ~/.local/state/opencode/model.json; quando o
+      # opencode-serve reiniciava (o rebuild reinicia o unit), o server
+      # re-resolvia a variante como "default" e o cliente gravava isso de
+      # volta -> o dono perdia o "max" a cada rebuild. O effort do MODELO
+      # (reasoningEffortDefaults, acima) é o fallback do request; aqui a
+      # VARIANTE default do agente, para o server resolver "max" e o TUI
+      # mostrar o que o dono escolheu. A variante explícita da sessão
+      # continua sobrescrevendo (o dono pode trocar na hora).
+      agent.build.variant = "max";
+
       # ════════════════════════════════════════════════════════════
       # FILTRO DO CATÁLOGO — fonte única: modules/ai/free-providers.json
       # Testado ao vivo 28/10/2026 (todos os providers abaixo).
