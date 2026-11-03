@@ -542,7 +542,7 @@ GAMEINPUT_TOOL = {
             },
             "window_title": {
                 "type": "string",
-                "description": "Trecho do title da janela alvo (ex: OTClient). OBRIGATÓRIO na prática.",
+                "description": "Fragment of the target window title (e.g. OTClient). Required in practice.",
             },
             "key": {
                 "type": "string",

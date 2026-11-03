@@ -168,8 +168,11 @@ in rec {
   #
   # RODAR EXATAMENTE COMO O Qwen3-30B-A3B (fonte: docs/models/BINARIES.md
   # — binario errado = veredito invalido):
-  #   binario = ik_llama.cpp (unico com --n-cpu-moe; prism = ternario,
-  #            upstream = sem offload de MoE). Tier endpoint 8084.
+  #   binario = ik_llama.cpp (build 5074: --n-cpu-moe + --moe-cache-mib, SEM
+  #            --fit-target). prism = ternario (PROIBIDO em MoE: 2-3 t/s).
+  #            upstream 0.7.0-dev/build 1087 tem --n-cpu-moe + --fit-target +
+  #            --moe-cache-mib (unico com a receita completa do video).
+  #            Tier endpoint 8084.
   #   perfil  = chat/jarvis (hostBase + moeFlags "--n-cpu-moe 35 --mlock")
 #   --mlock (25/09): trava os 20GB de pesos do MoE na RAM. Alvo do resultado
 #   BIMODAL medido (40 t/s ou 15 t/s, 2,7x, sem ser config): a suspeita e
@@ -195,6 +198,19 @@ in rec {
   #   - ik vs upstream no mesmo modelo: 36 vs 32 t/s (+11%) → ik e o binario
   #   - wackmall EHS 18 t/s · prism no MoE 2-3 t/s (PROIBIDO)
   #   - Qwen3-30B-A3B-Q4_K_M ja roda a 30+ t/s neste mesmo perfil
+  # EVIDENCIA 2026-11-02 (ladder da receita do video tek-IY9BRWc, stock 1087,
+  # -t 6, load 6,5-8,7/16 threads):
+  #   - --fit-target 512 (auto-fit, SEM -ngl): 11,8-14,1 t/s; --moe-cache-mib
+  #     2048 NAO muda o resultado (C~B) => o gargalo e CPU/RAM, nao o split de
+  #     VRAM; -ctk/-ctv q8_0 PIORA o TTFT; -t 10 e pior que -t 6 (P-cores).
+  #   - gate do video (>=17 t/s E TTFT<=150ms) FALHA no 35B (melhor 14,1 t/s
+  #     com load; TTFT 420-9066 ms; 512 tok de contexto = 4-44 s de prefill)
+  #     => o 35B fica como tier de THINKING (nao serve para voz); o 4B-MTP
+  #     (105,9 t/s, TTFT 178-203 ms) SEGUE como default.
+  #   - --fit aborta se -ngl estiver setado (common/fit.cpp) => a receita de
+  #     producao nunca usa o auto-fit do video.
+  #   - veredito + matriz de flags por binario: docs/auditoria/LLAMACPP-FLAGS-
+  #     VIDEO-2026-11-02.md (evidencia bruta: docs/BENCH-35B-LADDER-2026-11-02.md)
   # ! RAM (25/09, incidente): este MoE segura ~18GB de RAM (experts CPU).
   #   Com router+embeddings+rerank+sessao, 32GB estouram (28/31, 0 livre) e
   #   o SO congela. Rodar com esses servicos PARADOS + ulimit, ou nao rodar.

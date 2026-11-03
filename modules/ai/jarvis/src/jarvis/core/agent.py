@@ -1133,12 +1133,12 @@ class Agent:
             # nome-vs-valor — L4 real: ia pro reflog/merge em vez de editar
             # os segredos nos arquivos de trabalho).
             system_content += ("\n\nTASK MODE: SECRET-SANITIZATION. "
-                "Os segredos estão nos ARQUIVOS DE TRABALHO (não em commits/"
-                "branches) — NÃO use git reflog/recovery/merge para isto. "
-                "Faça: 1) grep -rlE 'AKIA|ghp_|hf_' . para achar os arquivos "
-                "com VALORES; 2) edite cada VALOR por placeholder "
-                "(str_replace value->placeholder), nunca o NOME da chave; "
-                "3) confirme com grep que nenhum valor restou.")
+                "The secrets live in the WORKING FILES (not in commits/"
+                "branches) — DO NOT use git reflog/recovery/merge for this. "
+                "Do: 1) grep -rlE 'AKIA|ghp_|hf_' . to find the files "
+                "holding VALUES; 2) replace each VALUE with a placeholder "
+                "(str_replace value->placeholder), never the KEY name; "
+                "3) confirm with grep that no value is left.")
 
         # Persona (default jarvis; voz usa "agent"). Via registry.
         # H2: persona AUTOMÁTICA (implícita) perturba acurácia em tasks

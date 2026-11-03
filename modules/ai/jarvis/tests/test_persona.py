@@ -273,7 +273,7 @@ class TestMarketingPersona:
         assert "149,99" in p.system_prompt_additions
         assert "379,99" in p.system_prompt_additions
         assert "1.259,99" in p.system_prompt_additions
-        assert "PROIBIDO" in p.system_prompt_additions
+        assert "FORBIDDEN" in p.system_prompt_additions
         assert p.policies.can_write is False
         assert p.policies.can_execute is False
 

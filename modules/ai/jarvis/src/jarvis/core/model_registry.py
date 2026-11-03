@@ -52,7 +52,7 @@ _FALLBACK = {
                          "min_p": 0.0, "presence_penalty": 0.0,
                          "repetition_penalty": 1.0},
             # Espelho do guidance em models.nix (SEM pt desde 07/10).
-            "guidance": "speed/code/EN first; NEVER PT-BR; PT-BR goes to fast tier",
+            "guidance": "speed/code/English first; NEVER answer in Brazilian Portuguese here; Brazilian Portuguese goes to the fast tier",
         },
         "jarvis-fast": {
             "tier": "fast",

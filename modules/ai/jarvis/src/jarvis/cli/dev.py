@@ -1000,7 +1000,7 @@ def _template_lang() -> str:
         return "português (PT-BR)"
 
 
-SYSTEM_PROMPT_TEMPLATE = """JARVIS dev agent. {LANG_NAME}. Direto.
+SYSTEM_PROMPT_TEMPLATE = """JARVIS dev agent. {LANG_NAME}. Direct.
 
 {repo_map}
 {memory_context}
@@ -1008,22 +1008,22 @@ SYSTEM_PROMPT_TEMPLATE = """JARVIS dev agent. {LANG_NAME}. Direto.
 
 {tools_catalog}
 
-LIMITES DE OUTPUT (OBRIGATÓRIO):
-- find: máx 30 resultados (use -maxdepth 2 | head -30)
-- ls: NUNCA recursivo (sem -R)
-- git log: máx 10 linhas (git log --oneline -10)
-- cat: PROIBIDO (usar head/tail/sed)
-- grep: máx 20 resultados (-m 20)
-- Output >50 linhas = resuma em bullets
+OUTPUT LIMITS (MANDATORY):
+- find: max 30 results (use -maxdepth 2 | head -30)
+- ls: NEVER recursive (no -R)
+- git log: max 10 lines (git log --oneline -10)
+- cat: FORBIDDEN (use head/tail/sed)
+- grep: max 20 results (-m 20)
+- Output >50 lines = summarize in bullets
 
 RULES:
-1. read_file ANTES de str_replace no mesmo path
-2. old = cópia EXATA do read_file
-3. Se falhar, re-leia com mais contexto
-4. Teste após editar, commit após testar
-5. Não invente conteúdo sem ler
-6. Use MCP tools quando built-in tools não bastam
-7. ANTES de ler arquivo grande: wc -l (saber tamanho)
+1. read_file BEFORE str_replace on the same path
+2. old = EXACT copy of the read_file output
+3. If it fails, re-read with more context
+4. Test after editing, commit after testing
+5. Never invent content you have not read
+6. Use MCP tools when the built-in tools are not enough
+7. BEFORE reading a large file: wc -l (know the size)
 {persona_block}
 
 {tool_discipline}
@@ -1070,11 +1070,11 @@ def _compact_system_prompt(repo_map: str, tools: list[dict[str, Any]]) -> str:
         tool_names=", ".join(names) if names else "none (text only)",
     )
 
-PLAN_PROMPT = """JARVIS architect. {LANG_NAME}. Direto.
+PLAN_PROMPT = """JARVIS architect. {LANG_NAME}. Direct.
 
 {repo_map}
 
-Leia arquivos necessários e retorne JSON puro:
+Read the files you need and return pure JSON:
 {{"plan": [{{"action": "read|edit|create|shell", "path": "...", "description": "..."}}]}}
 """.replace("{LANG_NAME}", _template_lang())
 
@@ -1577,29 +1577,29 @@ def _persona_block(persona) -> str:
         additions = (getattr(persona, "system_prompt_additions", "") or "").strip()
         if not additions:
             return ""
-        return f"\n\nPERSONA ATIVA: {persona.name} ({persona.role})\n{additions}"
+        return f"\n\nACTIVE PERSONA: {persona.name} ({persona.role})\n{additions}"
     except Exception:
         return ""
 
 
 # Bloco estático de limites do REPL (F8: seção do Assembler; texto idêntico
 # ao de SYSTEM_PROMPT_TEMPLATE — o golden test trava byte-identidade).
-_DEV_LIMITS_SECTION = """LIMITES DE OUTPUT (OBRIGATÓRIO):
-- find: máx 30 resultados (use -maxdepth 2 | head -30)
-- ls: NUNCA recursivo (sem -R)
-- git log: máx 10 linhas (git log --oneline -10)
-- cat: PROIBIDO (usar head/tail/sed)
-- grep: máx 20 resultados (-m 20)
-- Output >50 linhas = resuma em bullets
+_DEV_LIMITS_SECTION = """OUTPUT LIMITS (MANDATORY):
+- find: max 30 results (use -maxdepth 2 | head -30)
+- ls: NEVER recursive (no -R)
+- git log: max 10 lines (git log --oneline -10)
+- cat: FORBIDDEN (use head/tail/sed)
+- grep: max 20 results (-m 20)
+- Output >50 lines = summarize in bullets
 
 RULES:
-1. read_file ANTES de str_replace no mesmo path
-2. old = cópia EXATA do read_file
-3. Se falhar, re-leia com mais contexto
-4. Teste após editar, commit após testar
-5. Não invente conteúdo sem ler
-6. Use MCP tools quando built-in tools não bastam
-7. ANTES de ler arquivo grande: wc -l (saber tamanho)"""
+1. read_file BEFORE str_replace on the same path
+2. old = EXACT copy of the read_file output
+3. If it fails, re-read with more context
+4. Test after editing, commit after testing
+5. Never invent content you have not read
+6. Use MCP tools when the built-in tools are not enough
+7. BEFORE reading a large file: wc -l (know the size)"""
 
 def _build_system_prompt(repo_map: str, memory_context: str,
                          agent_context: str, persona_block: str,
@@ -1618,7 +1618,7 @@ def _build_system_prompt(repo_map: str, memory_context: str,
     from jarvis.runtime.context import ContextAssembler
     asm = ContextAssembler()
     asm.add("identity",
-            lambda: f"JARVIS dev agent. {_template_lang()}. Direto.\n\n")
+            lambda: f"JARVIS dev agent. {_template_lang()}. Direct.\n\n")
     asm.add("repo_map", lambda: repo_map + "\n")
     asm.add("memory", lambda: memory_context + "\n")
     asm.add("agent_ctx", lambda: agent_context + "\n\n")
@@ -1641,9 +1641,9 @@ def _tools_catalog(tools: list[dict[str, Any]]) -> str:
     só o que a persona liberou; `/tools` expande em runtime.
     """
     if not tools:
-        return ("SEM FERRAMENTAS NESTE PERFIL: responda em texto. "
-                "Se precisar de ferramenta, peça ao dono para liberar "
-                "com `/tools +nome` no REPL.")
+        return ("NO TOOLS IN THIS PROFILE: answer in plain text. "
+                "If you need a tool, ask the owner to enable it with "
+                "`/tools +name` in the REPL.")
     by_group: dict[str, list[str]] = {}
     for t in tools:
         fn = (t.get("function") or {})
@@ -2559,14 +2559,14 @@ def _run_agent_loop(
                         console.print("[dim]  (claim não verificado — corrigindo)[/]")
                         messages.append({
                             "role": "system",
-                            "content": ("ATENÇÃO: você declarou que "
+                            "content": ("ATTENTION: you claimed that "
                                         + ", ".join(_false_claims[:3])
-                                        + " foi criado/escrito, mas write_file NUNCA "
-                                          "gravou esse path nesta sessão (gravou: "
-                                        + (", ".join(_writes[-3:]) or "nada")
-                                        + "). Se a task pede esse arquivo, chame "
-                                          'write_file(path="…", content="…") AGORA. '
-                                          "Não declare sucesso não verificado."),
+                                        + " was created/written, but write_file NEVER "
+                                          "wrote that path in this session (wrote: "
+                                        + (", ".join(_writes[-3:]) or "nothing")
+                                        + "). If the task requires that file, call "
+                                          'write_file(path="…", content="…") NOW. '
+                                          "Do not claim unverified success."),
                         })
                         continue
                 # (25/09, LOOP-v3 — victory-bias) Veredito estrutural antes
@@ -3678,15 +3678,15 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
     return 0 if ok else 1
 
 
-MINIMAL_PROMPT = """JARVIS dev agent. {LANG_NAME}. Direto.
+MINIMAL_PROMPT = """JARVIS dev agent. {LANG_NAME}. Direct.
 
 {memory_context}
 {agent_context}
 {persona_block}
 RULES:
-1. Responda em {LANG_NAME}, sem rodeios e sem pedir desculpa por nada.
-2. Use ferramenta quando a tarefa exigir; responda em texto quando não.
-3. Entregue o resultado (arquivo/texto) e pare. Não peça para continuar.
+1. Reply in {LANG_NAME}, no detours and no apologizing for anything.
+2. Use a tool when the task requires it; reply in text when it does not.
+3. Deliver the result (file/text) and stop. Do not ask to continue.
 """.replace("{LANG_NAME}", _template_lang())
 
 
