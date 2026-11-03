@@ -1,0 +1,7 @@
+ws	slot	session_id	label	focus
+2	left	ses_e810156c0ffewjYiWj7zVwDZ3m	Analise heuristica de risco/retorno em EA MT5 (z-ai/glm-5.3-flash)	0
+2	right	ses_e752b601fffei1mSU87IeVJHqA	Coordenar trabalho com outro agente MT5 (z-ai/glm-5.3-flash)	0
+3	left	ses_eb612ed53ffeyqq6z3SMv6OSSf	OpenCode (sessao atual do agente) - minimaxai/minimax-m3.1-flash	0
+3	right	ses_ea825420cffeGa62eQKzA4grBH	Agent heartbeat com systemd (agente par) - minimax-m3.1-flash	0
+4	left	ses_ed024086fffevWT7nQnGYXG371	nsncd daemon failed reboot, sessions lost (nemotron-3.5-lightning-30b-a3b)	1
+4	right	ses_ed0234976ffe6y6Ejh91b37m7s	Recuperar contexto e se reidratar (nemotron-3.5-lightning-30b-a3b)	0

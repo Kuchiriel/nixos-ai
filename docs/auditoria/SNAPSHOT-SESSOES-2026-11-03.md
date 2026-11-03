@@ -1,0 +1,62 @@
+# Snapshot de janelas/sessões opencode — 2026-11-03
+
+Motivo: o reboot pendente (driver NVIDIA 615.78 vs kernel) **perde o layout do Hyprland**
+(não há session-restore nativo no Hyprland 0.55.4). Este snapshot + o script
+`scripts/restore-sessions.sh` devolvem as 6 sessões nas posições originais.
+
+## Como o mapeamento foi provado (não é heurística)
+
+Cada TUI foi aberto pelo dono como `opencode -s <sessionID>` → o PID do processo opencode
+é filho do `foot` da janela, e o `-s` está na linha de comando:
+
+```
+foot 507903 (ws2) → zsh 507909  → opencode 1869988 -s ses_e752b601fffei1mSU87IeVJHqA
+foot 508110 (ws2) → zsh 508111  → opencode 1869855 -s ses_e810156c0ffewjYiWj7zVwDZ3m
+foot 515782 (ws3) → zsh 515783  → opencode 1345631 -s ses_eb612ed53ffeyqq6z3SMv6OSSf
+foot 517641 (ws3) → zsh 517642  → opencode 1199612 -s ses_ea825420cffeGa62eQKzA4grBH
+foot 510475 (ws4) → zsh 510476  → opencode 1870395 -s ses_ed0234976ffe6y6Ejh91b37m7s
+foot 521331 (ws4) → zsh 521332  → opencode 1870313 -s ses_ed024086fffevWT7nQnGYXG371
+```
+
+Cruzamento com o `opencode.db` (título exato da sessão = título da janela, truncado pelo
+Hyprland com "…"):
+
+## Tabela
+
+| ws | posição | sessão | título (DB) | modelo | cwd |
+|----|---------|--------|-------------|--------|-----|
+| 1 | (1 janela) | — | `(1) WhatsApp Business - Chromium` | — | — |
+| 2 | left | `ses_e810156c0ffewjYiWj7zVwDZ3m` | Análise heurística de risco/retorno em EA MT5 | z-ai/glm-5.3-flash (nvidia, max) | ~/projects |
+| 2 | right | `ses_e752b601fffei1mSU87IeVJHqA` | Coordenar trabalho com outro agente MT5 | z-ai/glm-5.3-flash (nvidia, max) | ~/projects |
+| 3 | left | `ses_eb612ed53ffeyqq6z3SMv6OSSf` | (janela "OpenCode" = sessão deste agente) | minimaxai/minimax-m3.1-flash (nvidia) | ~/projects |
+| 3 | right | `ses_ea825420cffeGa62eQKzA4grBH` | Agent heartbeat com systemd para comunicação entre agentes | minimax-m3.1-flash (nvidia, max) | ~/projects |
+| 4 | left | `ses_ed024086fffevWT7nQnGYXG371` | nsncd daemon failed reboot, sessions lost, need to recover lost work | nemotron-3.5-lightning-30b-a3b (nvidia, high) | ~/projects |
+| 4 | right | `ses_ed0234976ffe6y6Ejh91b37m7s` | Recuperar contexto e se reidratar após sessão do opencode | nemotron-3.5-lightning-30b-a3b (nvidia, high) | ~/projects |
+
+- **ws1** era só o Chromium (WhatsApp Business) → o Chromium restaura a própria aba; não
+  precisa de script.
+- Monitor `eDP-1` (0), layout **dwindle**, escala do snapshot: janela 941×1022 (coluna),
+  Chromium 1896×1022 (linha inteira).
+- Snapshot bruto: `/tmp/opencode/snapshot/{windows.json,workspaces.json}` (volátil; esta
+  tabela é a cópia durável).
+- Foco final: ws4, janela "nsncd" (`focus=1` no TSV).
+
+## Como restaurar
+
+```bash
+cd ~/projects/nixos-ai
+./scripts/restore-sessions.sh --dry-run     # só imprime o que faria
+./scripts/restore-sessions.sh               # relança as 6 sessões no layout original
+```
+
+O script é **idempotente**: pula sessões já abertas (`pgrep -f "opencode -s <id>"`),
+relança só o que falta e foca a janela marcada `focus=1`.
+
+Reabrir uma sessão na mão (o `-s` não aparece no `opencode --help`, mas existe e é o
+mesmo que o dono usava):
+
+```bash
+cd ~/projects && opencode -s ses_ed0234976ffe6y6Ejh91b37m7s
+```
+
+Backup completo do histórico (sem abrir TUI): `opencode export <sessionID>`.

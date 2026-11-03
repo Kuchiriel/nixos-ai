@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_77 tools._
+_78 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -17,6 +17,7 @@ _77 tools._
 - `agents-watcher.sh` (nixos-ai/scripts) — agents-watcher.sh — O WATCHER ÚNICO dos agentes (17/10, dono: "consolide
 - `bench-final.py` (nixos-ai/scripts) — """Benchmark multiple llama.cpp configurations systematically."""
 - `bench-llm.sh` (nixos-ai/scripts) — bench-llm.sh — benchmark padrão da casa (consolida os one-offs de 24/09).
+  use: `Uso: BENCH_LD_ENVFILE=/caminho LD_LIBRARY_PATH=... (export) para o bench.`
 - `charger-watch.sh` (nixos-ai/scripts) — charger-watch.sh — anuncia plug/desplug do carregador na voz do JARVIS.
   use: `Uso: ./scripts/charger-watch.sh [intervalo_segundos]`
 - `corpus_inventory.py` (nixos-ai/scripts) — """Inventário do corpus de conhecimento (§3/§22 da missão knowledge-substrate).
@@ -89,6 +90,8 @@ _77 tools._
 - `provider_matrix.py` (nixos-ai/scripts) — """provider_matrix.py — audit de TODOS os LLM providers do dono (keys de
 - `read_chatgpt.py` (nixos-ai/scripts) — """Read a ChatGPT shared conversation via Playwright.
 - `reindex_code.py` (nixos-ai/scripts) — """Reindexa o code_index (coleção canônica) a partir do código vivo.
+- `restore-sessions.sh` (nixos-ai/scripts) — restore-sessions.sh — relança as sessões opencode capturadas no snapshot, no layout original
+  use: `./scripts/restore-sessions.sh [--dry-run] [--file <snapshot.tsv>]`
 - `roo-nightwatch-setup.sh` (nixos-ai/scripts) — ══════════════════════════════════════════════════════════════
 - `rvc-env.sh` (nixos-ai/scripts) — RVC voice-clone env — FONTE CANÔNICA para shells interativos (bash+zsh).
   use: `~/models/rvc-assets (symlinks predictors/embedders no checkout). O spike`
