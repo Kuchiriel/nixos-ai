@@ -14,11 +14,11 @@ def test_tools_list_shape():
     tools = webui_api.mcp_tools()
     assert len(tools) >= 20
     names = {t["name"] for t in tools}
-    assert "jarvis_execute" in names
-    assert "jarvis_rag_search" in names
+    assert "execute" in names
+    assert "rag_search" in names
     by_name = {t["name"]: t for t in tools}
-    assert by_name["jarvis_execute"]["write"] is True
-    assert by_name["jarvis_rag_search"]["write"] is False
+    assert by_name["execute"]["write"] is True
+    assert by_name["rag_search"]["write"] is False
 
 
 def test_unknown_tool_404():
@@ -30,7 +30,7 @@ def test_unknown_tool_404():
 def test_write_gate_403():
     with pytest.raises(HTTPException) as ei:
         webui_api.mcp_call(
-            "jarvis_execute",
+            "execute",
             webui_api.McpCallRequest(arguments={"cmd": "echo hi"}, approve=False),
         )
     assert ei.value.status_code == 403
@@ -43,20 +43,20 @@ def test_approved_exec_and_audit():
     webui_api._event_queues.append(q)
     try:
         r = webui_api.mcp_call(
-            "jarvis_execute",
+            "execute",
             webui_api.McpCallRequest(arguments={"cmd": "echo hi-mcp"}, approve=True),
         )
         assert r["isError"] is False
         assert "hi-mcp" in r["result"]
         evt = q.get_nowait()
         assert evt["type"] == "mcp_call"
-        assert evt["tool"] == "jarvis_execute"
+        assert evt["tool"] == "execute"
     finally:
         webui_api._event_queues.clear()
 
 
 def test_read_tool_no_approval():
     r = webui_api.mcp_call(
-        "jarvis_vault_list", webui_api.McpCallRequest(arguments={})
+        "vault_list", webui_api.McpCallRequest(arguments={})
     )
     assert r["isError"] is False

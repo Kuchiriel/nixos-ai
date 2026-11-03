@@ -183,7 +183,19 @@ def execute_command(name: str, req: CommandRequest) -> dict[str, Any]:
 # ─── MCP Bridge (mission-control: mesmas tools do MCP server) ────────────
 
 # Tools que mutam estado exigem approve=true (mesma filosofia do confirmed).
+# Canonical tool names (the MCP server registers them WITHOUT the `jarvis_`
+# prefix; opencode exposes them as `jarvis_<name>`). The legacy prefixed
+# names stay accepted for one deprecation cycle.
 MCP_WRITE_TOOLS = frozenset({
+    "execute",
+    "write_file",
+    "str_replace",
+    "vault_write",
+    "vault_sync_obsidian",
+    "vault_sync_hackmd",
+    "rag_index",
+    "remember",
+    # legacy names (deprecated, still accepted)
     "jarvis_execute",
     "jarvis_write_file",
     "jarvis_str_replace",
@@ -220,7 +232,12 @@ def mcp_call(name: str, req: McpCallRequest) -> dict[str, Any]:
     from jarvis.mcp_server import JARVIS_TOOLS, call_tool
     known = {t.get("name") for t in JARVIS_TOOLS}
     if name not in known:
-        raise HTTPException(status_code=404, detail=f"Unknown MCP tool: {name}")
+        # legacy prefixed name (deprecated, one cycle)
+        alt = name.removeprefix("jarvis_")
+        if alt in known:
+            name = alt
+        else:
+            raise HTTPException(status_code=404, detail=f"Unknown MCP tool: {name}")
     if name in MCP_WRITE_TOOLS and not req.approve:
         raise HTTPException(
             status_code=403,

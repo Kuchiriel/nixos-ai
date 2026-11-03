@@ -45,9 +45,9 @@ const PINNED_GUARDS = `## Coordination rules (pinned — never summarize)
 // The harness rule for the RESCUE (what was missing).
 const REHYDRATE_RULE = `## Rehydration (first tool of the session)
 First tool of a new session, right after a compaction, or whenever a problem
-looks like a repeat: \`jarvis_jarvis_rehydrate(task="<what you are about to
-do>")\` (opencode prefixes MCP tools with the server key, so the exposed
-name is \`jarvis_jarvis_rehydrate\`).
+looks like a repeat: \`jarvis_rehydrate(task="<what you are about to
+do>")\` (opencode exposes MCP tools as \`<server-key>_<tool>\`; the server key
+is "jarvis" and the tool is "rehydrate").
 One call returns: pinned guards + queue top + HANDOFF + memories + lessons +
 RAG + roster. Cheaper than redoing the diagnosis.
 ONE call only — do not repeat it (the rescue already returned the state; the

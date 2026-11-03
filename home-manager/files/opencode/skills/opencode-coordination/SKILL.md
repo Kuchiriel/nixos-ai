@@ -11,18 +11,18 @@ license: MIT
 
 ## 0. First tool of the session (harness rule)
 
-`jarvis_jarvis_rehydrate(task="<what you are about to do>")` — one call
+`jarvis_rehydrate(task="<what you are about to do>")` — one call
 returns: pinned guards + queue top + HANDOFF + memories + lessons + RAG +
 roster. This is the rescue: without it the agent re-does a diagnosis that was
 already paid for (the RAG was used only to *record*, never to *recover* —
 2607.08032: reversible memory beats a summary; 2608.22752: five compactions
 drop rule adherence from 53% to 10%).
 
-Tool name: opencode prefixes MCP tools with the server key, so the tool
-`jarvis_rehydrate` is exposed as **`jarvis_jarvis_rehydrate`**; over MCP/CLI
-it is `jarvis_rehydrate`. The tool has a **loop-breaker**: a second call
-within 120s returns only a short pointer (measured: without it the 4B model
-looped — 293k input tokens).
+Tool name: opencode exposes MCP tools as `<server-key>_<tool>`, so the server
+key `jarvis` + the tool `rehydrate` = **`jarvis_rehydrate`**. The tools are
+registered with canonical names on purpose (no doubled prefix). The tool has a
+**loop-breaker**: a second call within 120s returns only a short pointer
+(measured: without it the 4B model looped — 293k input tokens).
 
 ## 1. Roster = who exists (single source of truth)
 

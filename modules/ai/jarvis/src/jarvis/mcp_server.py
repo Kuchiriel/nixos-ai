@@ -56,7 +56,7 @@ from jarvis.core.security import command_allowed as _command_allowed, run_shell 
 
 JARVIS_TOOLS = [
     {
-        "name": "jarvis_execute",
+        "name": "execute",
         "description": "Execute a shell command via JARVIS. Read-only commands run directly; write commands require approval.",
         "inputSchema": {
             "type": "object",
@@ -70,7 +70,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_read_file",
+        "name": "read_file",
         "description": "Read a file from the project. Supports optional line range.",
         "inputSchema": {
             "type": "object",
@@ -83,7 +83,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_write_file",
+        "name": "write_file",
         "description": "Write content to a file. Creates or overwrites.",
         "inputSchema": {
             "type": "object",
@@ -95,7 +95,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_str_replace",
+        "name": "str_replace",
         "description": "Replace a string in a file (surgical edit).",
         "inputSchema": {
             "type": "object",
@@ -109,7 +109,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_capture_screen",
+        "name": "capture_screen",
         "description": "Capture a screenshot of the current desktop.",
         "inputSchema": {
             "type": "object",
@@ -117,7 +117,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_observe_screen",
+        "name": "observe_screen",
         "description": "Capture screenshot AND analyze it (vision local → Gemini free → OCR fallback, never fails for missing vision model). Returns what is on screen. Use this instead of capture_screen when you need to understand the current UI state.",
         "inputSchema": {
             "type": "object",
@@ -151,7 +151,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_observe_file",
+        "name": "observe_file",
         "description": (
             "Analyze an image FILE on disk (PNG/JPEG) with the vision "
             "cascade (local → Gemini → NVIDIA → OpenRouter → OCR). ZERO "
@@ -185,7 +185,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_human_input",
+        "name": "human_input",
         "description": (
             "WHEN you need to move the mouse, click, type or press keys on the "
             "DESKTOP like a human (game clients, native apps, anything outside "
@@ -221,7 +221,7 @@ JARVIS_TOOLS = [
         },
     },
     {
-        "name": "jarvis_game",
+        "name": "game",
         "description": (
             "WHEN you need to interact with a GAME window on Hyprland: focus "
             "by title (safe — keys NEVER go to the wrong window), press keys "
@@ -253,7 +253,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_browser",
+        "name": "browser",
         "description": ("WHEN you need to interact with any web page: read, click, fill forms, "
                         "drive menus, or operate the owner's logged-in browser (attach). "
                         "Actions: open, click, fill, press, scroll, extract, wait, attach, "
@@ -274,7 +274,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_nix_eval",
+        "name": "nix_eval",
         "description": "Evaluate a Nix expression and return the result.",
         "inputSchema": {
             "type": "object",
@@ -285,7 +285,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_nix_check",
+        "name": "nix_check",
         "description": "Run 'nix flake check' on the project.",
         "inputSchema": {
             "type": "object",
@@ -295,7 +295,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_nix_search",
+        "name": "nix_search",
         "description": "Search NixOS packages, options, Home Manager, flakes, and more via mcp-nixos. Anti-hallucination: returns real data from nixpkgs.",
         "inputSchema": {
             "type": "object",
@@ -336,7 +336,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_read_chatgpt",
+        "name": "read_chatgpt",
         "description": "Read a shared ChatGPT conversation. Extracts all messages using a headless browser.",
         "inputSchema": {
             "type": "object",
@@ -348,7 +348,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_remember",
+        "name": "remember",
         "description": "MANDATORY at task end: store facts, decisions, lessons. ALSO call BEFORE switching topics. Without this, nightwatch/agents lose context across sessions. Categories: fact, event, decision, error.",
         "inputSchema": {
             "type": "object",
@@ -360,7 +360,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_rehydrate",
+        "name": "rehydrate",
         "description": (
             "REHYDRATE — resgate a sessão em 1 CHAMADA: devolve as guardas de "
             "coordenação (pinadas, nunca resumidas), o topo da fila (blackboard), "
@@ -384,7 +384,7 @@ JARVIS_TOOLS = [
         },
     },
     {
-        "name": "jarvis_recall",
+        "name": "recall",
         "description": "MANDATORY FIRST STEP on any task: recall past facts/decisions about the topic BEFORE reading files or guessing. If empty, say so and proceed. This is how agents see nightwatch findings, past verdicts and lessons.",
         "inputSchema": {
             "type": "object",
@@ -396,7 +396,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_lessons",
+        "name": "lessons",
         "description": "MANDATORY when hitting errors, retrying, or starting unfamiliar work: recall lessons from past failures FIRST. Prevents repeating solved problems.",
         "inputSchema": {
             "type": "object",
@@ -407,7 +407,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_vault_list",
+        "name": "vault_list",
         "description": "List notes in the persistent vault. Use to check what's stored.",
         "inputSchema": {
             "type": "object",
@@ -415,7 +415,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_vault_write",
+        "name": "vault_write",
         "description": "Write a note to the persistent vault. Use for important findings that should persist.",
         "inputSchema": {
             "type": "object",
@@ -427,7 +427,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_rag_search",
+        "name": "rag_search",
         "description": "BEFORE grepping code blindly: semantic search over indexed code AND docs (use collection memories/books as needed). If empty, run jarvis_rag_index first instead of guessing.",
         "inputSchema": {
             "type": "object",
@@ -440,7 +440,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_persona",
+        "name": "persona",
         "description": "List/select JARVIS personas (roles with tools, policies, model). Call FIRST when a task needs a specialized framing (audit, review, research, implementation). Returns persona details including allowed tools and handoff protocol.",
         "inputSchema": {
             "type": "object",
@@ -453,7 +453,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-            "name": "jarvis_rag_index",
+            "name": "rag_index",
             "description": "Index a directory into the RAG system (code + auto-sweep of new Books papers/notes). Use to make code searchable.",
         "inputSchema": {
             "type": "object",
@@ -463,7 +463,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_web_search",
+        "name": "web_search",
         "description": "Search the internet via Tavily. Use for current events, library docs, and anything outside the codebase.",
         "inputSchema": {
             "type": "object",
@@ -474,12 +474,12 @@ JARVIS_TOOLS = [
             "required": ["query"]
         }
     },
-    MULTI_AI_READER_TOOL,
-    *HACKMD_TOOLS,
-    *MAKE_TOOLS,
+    {**MULTI_AI_READER_TOOL, "name": MULTI_AI_READER_TOOL["name"].removeprefix("jarvis_")},
+    *({**t, "name": t["name"].removeprefix("jarvis_")} for t in HACKMD_TOOLS),
+    *({**t, "name": t["name"].removeprefix("jarvis_")} for t in MAKE_TOOLS),
     # Vault Sync tools
     {
-        "name": "jarvis_vault_sync_obsidian",
+        "name": "vault_sync_obsidian",
         "description": "Sync JARVIS vault notes to Obsidian vault.",
         "inputSchema": {
             "type": "object",
@@ -487,7 +487,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_vault_sync_hackmd",
+        "name": "vault_sync_hackmd",
         "description": "Sync vault notes to HackMD.",
         "inputSchema": {
             "type": "object",
@@ -495,7 +495,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_vault_search_obsidian",
+        "name": "vault_search_obsidian",
         "description": "Search Obsidian vault using ripgrep.",
         "inputSchema": {
             "type": "object",
@@ -506,7 +506,7 @@ JARVIS_TOOLS = [
         }
     },
     {
-        "name": "jarvis_vault_status",
+        "name": "vault_status",
         "description": "Get vault sync status.",
         "inputSchema": {
             "type": "object",
@@ -738,7 +738,18 @@ def _transport_registry() -> ToolRegistry:
 
 
 def call_tool(name: str, args: dict[str, Any]) -> str:
-    """Executa uma tool JARVIS."""
+    """Executes a JARVIS tool.
+
+    Name policy (2026-11-02): the MCP server key is `jarvis`, and opencode
+    exposes every MCP tool as `<server-key>_<tool-name>`
+    (packages/opencode/src/mcp/catalog.ts). The tools are therefore
+    REGISTERED with their canonical names (`recall`, `remember`,
+    `rehydrate`, ...) so the exposed name is `jarvis_recall` — matching the
+    docs and the injected harness rule, with no doubled prefix. The legacy
+    `jarvis_*` names stay accepted here for one deprecation cycle.
+    """
+    if not name.startswith("jarvis_"):
+        name = "jarvis_" + name
     try:
         if name == "jarvis_execute":
             cmd = args.get("cmd", "")
@@ -839,6 +850,8 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
             return json.dumps(result, indent=2)
 
         if name.startswith("jarvis_make_"):
+            # handle_make still speaks the legacy prefixed names (its module is
+            # owned by another lane); the MCP surface is canonical.
             return handle_make(name, args)
 
         if name == "jarvis_nix_eval":
@@ -1056,10 +1069,9 @@ _REHYDRATE_LOCK = threading.Lock()
 # (home-manager/files/opencode/plugins/memory.js): the same rules, pinned in
 # two places, must not drift.
 REHYDRATE_GUARDS = """## GUARDS (pinned — never summarize, never rewrite)
-- First tool of the session = `jarvis_rehydrate(task="...")` (in opencode the
-  exposed name is `jarvis_jarvis_rehydrate` — MCP server "jarvis" + tool
-  "jarvis_rehydrate"). When a problem looks like a repeat, this is where you
-  recover the state.
+- First tool of the session = `jarvis_rehydrate(task="...")` (opencode exposes
+  MCP tools as `<server-key>_<tool>`: server "jarvis" + tool "rehydrate").
+  When a problem looks like a repeat, this is where you recover the state.
 - Coordination: `claim` before speaking →
   `scripts/agent-roster.py claim --name <n> --lane <lane> --repo <repo> --files <globs>`.
   Two claims with overlapping files are refused (explicit boundaries).

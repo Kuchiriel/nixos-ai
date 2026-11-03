@@ -86,7 +86,7 @@ def test_rehydrate_returns_guards_first(M):
     # guardas pinadas: o contrato de coordenação tem que estar LITERAL
     assert "agent-roster.py claim" in out
     assert "--note" in out and "--to" in out and "--cancel" in out
-    assert "jarvis_rehydrate" in out
+    assert "rehydrate" in out
 
 
 def test_rehydrate_queue_is_the_newest_note(M):
@@ -130,8 +130,8 @@ def test_rehydrate_roster_shows_lanes(M):
 
 def test_tool_is_registered(M):
     nomes = [t["name"] for t in M.JARVIS_TOOLS]
-    assert "jarvis_rehydrate" in nomes
-    schema = next(t for t in M.JARVIS_TOOLS if t["name"] == "jarvis_rehydrate")
+    assert "rehydrate" in nomes
+    schema = next(t for t in M.JARVIS_TOOLS if t["name"] == "rehydrate")
     assert schema["inputSchema"]["required"] == ["task"]
     desc = schema["description"].lower()
     assert "rehydrate" in desc and "primeiro" in desc

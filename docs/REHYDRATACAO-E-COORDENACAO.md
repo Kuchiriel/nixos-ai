@@ -134,9 +134,12 @@ Falhas reais encontradas pela medição (e corrigidas):
    da sessão). **Retrieval que imita o formato de saída do modelo induz loop
    em modelo pequeno** — o conteúdo do RAG precisa ser distinto do formato
    que o agente usa para falar.
-4. **Nome exposto dobrado** — o opencode prefixa o tool do MCP `jarvis`:
-   `jarvis_rehydrate` aparece como **`jarvis_jarvis_rehydrate`**. As regras
-   injetadas passaram a citar o nome exposto (o antigo não casava).
+4. **Doubled exposed name** — opencode prefixes every MCP tool with the
+   server key (`<server-key>_<tool>`), and our server key was `jarvis` while
+   the tools were already named `jarvis_*` → `jarvis_jarvis_rehydrate`. Fixed
+   by registering the tools with canonical names (the registry in
+   `runtime/registry.py` already defined them): the exposed name is now
+   `jarvis_rehydrate`, exactly as the docs and the injected rule claim.
 5. **Guarda de root-delete inerte** — o regex do plugin não casava `rm -rf /`
    (exigia duas palavras antes do slash) e não pegava `-fr`/`-Rf`/`/*`.
    Corrigido e travado por teste (o plugin não tinha NENHUM teste).
