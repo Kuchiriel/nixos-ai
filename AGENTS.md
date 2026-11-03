@@ -112,6 +112,38 @@ nix flake check
   fallback — never submit what the human is typing.
 - Evidence: `scripts/agent-msg.sh` → `~/projects/AGENTS-MSG.log`.
 
+## Model identity (self-identification — 02/11) (self-identification — 02/11)
+
+You cannot introspect your own weights. A model does not know its size, its
+quantisation, whether it runs on the local GPU or behind an API, and it must
+never guess: a wrong identity silently corrupts every decision that depends
+on it (context budget, tool latency expectations, language support, VRAM
+budget).
+
+**The harness is the only reliable source of identity.** Three tiers, in
+order of authority:
+
+1. **opencode (this stack):** the `memory.js` plugin injects an `## IDENTITY`
+   block at the top of the system prompt — `model: <provider>/<id>`, plus the
+   session id. It comes from the hook input (`{sessionID, model}`), never
+   from the conversation. **If you see that block, that is you.** Use it
+   verbatim when asked who you are, what your context budget is, or whether
+   you are local.
+2. **JARVIS runtime (CLI / agent / voice):** the runtime knows the active
+   tier from the model registry (`modules/ai/models.nix` is the single source
+   of truth). Ask it: `scripts/jarvis-cli.sh status` (active tier, port,
+   profile) — or the `status`/`doctor` command. A router tier (`bonsai`,
+   `qwen-fast`) is a *profile*, not a model id: the registry maps it to a
+   concrete model.
+3. **No source at all:** say so plainly — "I don't know my runtime identity
+   from here" — and name what would answer it. Never infer identity from the
+   tone of the conversation, from the tools you can see, or from what "feels"
+   like your context size.
+
+Language rule that follows from identity: **everything an LLM reads is
+English** (small local models do not read pt-BR). If your identity block says
+you are a small local model, assume English-only inputs and short answers.
+
 ## Boundaries
 
 - **Always:** run tests before committing; check `git ls-files` for

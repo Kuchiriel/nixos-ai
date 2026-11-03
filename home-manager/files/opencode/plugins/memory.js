@@ -87,6 +87,37 @@ export const MemoryOpenCodePlugin = async () => {
           "Narrow the path.' >&2; exit 1";
       }
     },
+    // (02/11) IDENTIDADE: o modelo não consegue se introspecionar (não sabe
+    // seus próprios pesos, nem se é local ou de API). A única fonte confiável
+    // é o HARNESS: o hook entrega {sessionID, model}. Injetamos uma linha
+    // factual no system prompt — no TOPO do bloco (primacy), sem criar um 2º
+    // system message (o template do modelo aborta: "System message must be
+    // at the beginning").
+    "experimental.chat.system.transform": async (input, output) => {
+      if (!output || !Array.isArray(output.system)) return;
+      const m = input?.model || {};
+      const variant = m.variant && m.variant !== "default" ? ` (${m.variant})` : "";
+      const identity = `## IDENTITY (harness-provided — this is you)\n` +
+        `- model: ${m.providerID || "unknown"}/${m.id || "unknown"}${variant}\n` +
+        `- session: ${input?.sessionID || "unknown"}\n` +
+        `You cannot introspect your own weights: this block is your identity. ` +
+        `Never guess it, never infer it from the conversation, and never claim ` +
+        `to be a local or an API model without it.`;
+      if (process.env.OPENCODE_NO_IDENTITY_INJECT !== "1") {
+        if (output.system.length === 0) {
+          output.system.push(identity);
+        } else {
+          output.system[0] = `${identity}\n\n${output.system[0] ?? ""}`;
+        }
+      }
+      if (process.env.OPENCODE_NO_REHYDRATE_INJECT === "1") return;
+      if (output.system.length === 0) {
+        output.system.push(REHYDRATE_RULE);
+        return;
+      }
+      const last = output.system.length - 1;
+      output.system[last] = `${output.system[last] ?? ""}\n\n${REHYDRATE_RULE}`;
+    },
     // (02/11) Regra do resgate no system prompt — MINUTA, sem estado.
     // É o que transforma "lembre-se de reidratar" em regra do harness.
     //
@@ -96,16 +127,6 @@ export const MemoryOpenCodePlugin = async () => {
     // beginning" — erro real achado na 1ª medição (run A: rc=1, 77s, vazio).
     // Por isso: anexa ao ÚLTIMO bloco (mantém a contagem → 1 system message)
     // e fica no fim do prompt = posição de maior recência (2510.05381).
-    "experimental.chat.system.transform": async (input, output) => {
-      if (process.env.OPENCODE_NO_REHYDRATE_INJECT === "1") return;
-      if (!output || !Array.isArray(output.system)) return;
-      if (output.system.length === 0) {
-        output.system.push(REHYDRATE_RULE);
-        return;
-      }
-      const last = output.system.length - 1;
-      output.system[last] = `${output.system[last] ?? ""}\n\n${REHYDRATE_RULE}`;
-    },
     "experimental.session.compacting": async (input, output) => {
       if (output && Array.isArray(output.context)) {
         output.context.push(COMPACTION_MEMORY);

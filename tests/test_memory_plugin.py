@@ -79,6 +79,36 @@ def test_scoped_delete_passes():
         assert out[cmd] == "PASSED", f"{cmd} foi barrado por engano"
 
 
+def test_identity_block_is_injected_at_the_top():
+    """A model cannot introspect itself: the harness provides the identity."""
+    body = """
+  const o = {system: ['base']};
+  await hooks['experimental.chat.system.transform']({
+    sessionID: 'ses_abc',
+    model: {id: 'jarvis-mtp-lora', providerID: 'local-uncensored-4b', variant: 'default'},
+  }, o);
+  out.blocks = o.system.length;
+  out.text = o.system[0];
+"""
+    out = run_plugin(body=body)
+    assert out["blocks"] == 1, "identity must not create a second system message"
+    assert out["text"].startswith("## IDENTITY"), "identity goes first (primacy)"
+    assert "local-uncensored-4b/jarvis-mtp-lora" in out["text"]
+    assert "ses_abc" in out["text"]
+    # the rescue rule still lands at the end (recency)
+    assert out["text"].rstrip().endswith("agents-watcher.sh` wakes via the API and filters by repo/lane")
+
+
+def test_identity_injection_can_be_disabled_for_ab():
+    body = """
+  const o = {system: ['base']};
+  await hooks['experimental.chat.system.transform']({sessionID: 's', model: {id: 'm', providerID: 'p'}}, o);
+  out.text = o.system[0];
+"""
+    out = run_plugin({"OPENCODE_NO_IDENTITY_INJECT": "1"}, body=body)
+    assert "IDENTITY" not in out["text"]
+
+
 def test_system_prompt_gets_the_rehydrate_rule():
     """A regra vai MESCLADA no system prompt (1 bloco só).
 
