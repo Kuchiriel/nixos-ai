@@ -82,7 +82,41 @@ X; queue and hooks are global; no roster = legacy global behavior.
   (ACE 2510.04618: playbooks evolve by patch; a monolithic rewrite degrades).
 - Vault: `HANDOFF-<date>-<slug>.md` (resume pointer) — `jarvis_vault_list`.
 
-## 6. Papers behind this (RAG `books`, ~/Books/papers)
+## 6. Night 2-agent loop (runbook — owner directive 20/10)
+
+Owner asking for "noite melhorando X" ("night improving X") = invoke the 3
+READY pieces (zero recall/rg needed):
+
+1. **Watcher** (systemd, already lives): `systemctl --user status
+   agents-watcher.service`. For the whole night:
+   `printf '[Service]\nEnvironment="AGENTS_QUIET=0 0"\n' | systemctl --user edit --runtime --stdin agents-watcher.service && systemctl --user restart agents-watcher.service`
+   — quotes MANDATORY in the value (without them `QUIET_ATE` becomes empty =
+   quiet PERMANENT, bug 20/10); runtime-only, survives reboot, never edit
+   `~/.config`. Verify: `tail -3 /tmp/opencode/agents-watcher/states` →
+   line `quiet=0h-0h`.
+2. **Blackboard**: mission at the TOP of `~/projects/AGENTS-QUEUE.md` (scope,
+   lanes who-does-what without file collision, channels, guards, reminder
+   "recent papers on the subject before implementing" — directive 20/10) +
+   commit — the queue commit is the event that wakes the idle colleague. Only
+   `git add AGENTS-QUEUE.md` (the root has dirty submodules).
+3. **Direct channel**: `agent-msg.sh --to <name> "text"` (the target runs) ·
+   `--note "text"` (enters the session, does NOT run, zero token) ·
+   `--cancel <id>`; `--broadcast` only explicitly. Claim first (§1).
+
+Protocols evaluated 20/10 (HB+OC):
+- END-OF-ERA SEAL = ★ note + REMOVE the era's prospects from
+  `tools/agents-watcher-prospects.txt` (no automatic expiry — a dead prospect
+  woke an agent post-seal).
+- post-seal wake = check the ★ at the top of the queue BEFORE acting.
+- anomaly in a SHARED resource (/tmp, ports, docker, builds) = ask the
+  colleague BEFORE investigating (1 question resolves what 4 ghost-hunt calls
+  don't).
+- the readable wake points to queue-top (real STATE, not yesterday's mission)
+  + vault HANDOFF (deep state + memory ids).
+
+Historical method: `nixos-ai/scripts/LOOP-v2.md` / `LOOP-v3.md`.
+
+## 7. Papers behind this (RAG `books`, ~/Books/papers)
 
 2607.08032 (reversible > summary) · 2608.22752 (compaction breaks rules) ·
 2609.40118 (query-conditioned) · 2609.28771 (feature-based retrieval) ·

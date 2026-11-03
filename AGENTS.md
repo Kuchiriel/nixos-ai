@@ -63,6 +63,10 @@ nix flake check
   **no retry** (Retry read=3 × timeout = 8min wait = "hang").
 - The official MCP env is **discovered by reading `~/.config/opencode/opencode.json`**
   (symlink to the store) → follows rebuilds without re-typing the Nix.
+- **Tool names = `jarvis_<tool>`** (server key `jarvis`): `jarvis_rehydrate`,
+  `jarvis_recall`, `jarvis_lessons`, `jarvis_rag_search`, `jarvis_rag_index`,
+  `jarvis_remember`, `jarvis_vault_*`. A doubled prefix (`jarvis_jarvis_*`) is
+  the same tool. What/when/how per tool: [`.agents/mcp-catalog.md`](.agents/mcp-catalog.md).
 
 ## Checkpoint and pains (30/10)
 
@@ -114,35 +118,16 @@ nix flake check
 
 ## Model identity (self-identification — 02/11)
 
-You cannot introspect your own weights. A model does not know its size, its
-quantisation, whether it runs on the local GPU or behind an API, and it must
-never guess: a wrong identity silently corrupts every decision that depends
-on it (context budget, tool latency expectations, language support, VRAM
-budget).
+You cannot introspect your own weights (size, quantisation, VRAM, latency) — a
+wrong identity silently corrupts every decision that depends on it. **The
+harness is the only source**: opencode injects an `## IDENTITY` block (model +
+session id) → *that is you*; the JARVIS runtime knows the active tier
+(`scripts/jarvis-cli.sh status`, registry `modules/ai/models.nix`); no source →
+say so plainly and name what would answer it. Full 3-tier detail: root
+AGENTS.md §Model identity.
 
-**The harness is the only reliable source of identity.** Three tiers, in
-order of authority:
-
-1. **opencode (this stack):** the `memory.js` plugin injects an `## IDENTITY`
-   block at the top of the system prompt — `model: <provider>/<id>`, plus the
-   session id. It comes from the hook input (`{sessionID, model}`), never
-   from the conversation. **If you see that block, that is you.** Use it
-   verbatim when asked who you are, what your context budget is, or whether
-   you are local.
-2. **JARVIS runtime (CLI / agent / voice):** the runtime knows the active
-   tier from the model registry (`modules/ai/models.nix` is the single source
-   of truth). Ask it: `scripts/jarvis-cli.sh status` (active tier, port,
-   profile) — or the `status`/`doctor` command. A router tier (`bonsai`,
-   `qwen-fast`) is a *profile*, not a model id: the registry maps it to a
-   concrete model.
-3. **No source at all:** say so plainly — "I don't know my runtime identity
-   from here" — and name what would answer it. Never infer identity from the
-   tone of the conversation, from the tools you can see, or from what "feels"
-   like your context size.
-
-Language rule that follows from identity: **everything an LLM reads is
-English** (small local models do not read pt-BR). If your identity block says
-you are a small local model, assume English-only inputs and short answers.
+Language rule: **everything an LLM reads is English** (small local models don't
+read pt-BR); answer the owner in pt-BR.
 
 ## Boundaries
 
@@ -191,10 +176,25 @@ you are a small local model, assume English-only inputs and short answers.
   `Q2_0` as silent garbage. See [`docs/models/BINARIES.md`](docs/models/BINARIES.md).
 - This machine's hardware and measurements: `docs/auditoria/SO-LLM-E-ENTROPIA-*.md`.
 
+## Host automations (03/11) — know they exist, don't "fix" them
+
+- **Windows come back after a reboot**: timer `session-snapshot` captures the
+  opencode layout every 60s → `~/.local/state/jarvis/sessions-snapshot.tsv`;
+  the Hyprland `exec-once` restores it at login
+  (`scripts/restore-sessions.sh --capture` / no args). Hyprland itself does NOT
+  restore windows — the script is the mechanism.
+- **Provider failures ping you**: `scripts/agent-provider-guard.py` (wired into
+  `agents-watcher.sh`) watches the opencode log for timeout/429/400 and sends a
+  `notify-send` + a note to the peer. A critical notification = the provider
+  died, not the agent.
+
 ## Index (read only when the task asks)
 
 | Document | When to consult |
 |---|---|
+| [`.agents/mcp-catalog.md`](.agents/mcp-catalog.md) | **which MCP tool, when, and its exact name** |
+| [`docs/auditoria/PROVIDER-TIMEOUTS-2026-11-03.md`](docs/auditoria/PROVIDER-TIMEOUTS-2026-11-03.md) | 300s provider timeout, 429/400, `headerTimeout` |
+| [`docs/auditoria/SNAPSHOT-SESSOES-2026-11-03.md`](docs/auditoria/SNAPSHOT-SESSOES-2026-11-03.md) | window/session snapshot + restore |
 | [`docs/SISTEMA-ESTADO-E-BENCHMARKS.md`](docs/SISTEMA-ESTADO-E-BENCHMARKS.md) | tier status, H1/H2/H3, history |
 | [`docs/architecture/SYSTEM-MAP.md`](docs/architecture/SYSTEM-MAP.md) | system map and layers |
 | [`docs/models/BINARIES.md`](docs/models/BINARIES.md) | which binary for which model |
