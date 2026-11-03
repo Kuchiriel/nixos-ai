@@ -35,6 +35,28 @@ from jarvis.core.config import get_config
 from jarvis.core.intents import classify_intent
 
 
+def _stack_ports() -> dict:
+    """(03/11) Portas do stack — fonte: registry JSON (models.nix).
+
+    Fallback = os mesmos valores do registry (dev sem /etc/jarvis).
+    """
+    ports = {"router": 8080, "embeddings": 8081, "rerank": 8082, "default": 8092}
+    try:
+        from jarvis.core.model_registry import ModelRegistry
+        reg = ModelRegistry.load()
+        for key, value in (
+            ("router", reg.router_port("prism")),
+            ("embeddings", reg.service_port("embeddings")),
+            ("rerank", reg.service_port("rerank")),
+            ("default", reg.port_for(reg.default)),
+        ):
+            if value:
+                ports[key] = int(value)
+    except Exception:
+        pass
+    return ports
+
+
 def _cmd_status(_args: argparse.Namespace) -> int:
     """(26/09, LOOP-v3 — doutrina UX) status diz a VERDADE do tier no ar:
     o que o router serve, com QUAL binário, saúde das portas, e a
@@ -54,13 +76,14 @@ def _cmd_status(_args: argparse.Namespace) -> int:
     }
 
     # o que o router serve AGORA + binário REAL (exe do processo, não crença)
+    _ports = _stack_ports()
     try:
         import urllib.request as _u
         import json as _j
-        with _u.urlopen("http://127.0.0.1:8080/v1/models", timeout=4) as _r:
+        with _u.urlopen(f"http://127.0.0.1:{_ports['router']}/v1/models", timeout=4) as _r:
             out["router_serving"] = [m.get("id") for m in
                                      _j.load(_r).get("data", [])]
-        _pids = _sp.run(["pgrep", "-f", "llama-server.*--port 8080"],
+        _pids = _sp.run(["pgrep", "-f", f"llama-server.*--port {_ports['router']}"],
                         capture_output=True, text=True).stdout.split()
         if _pids:
             _exe = _P(f"/proc/{_pids[0].strip()}/exe").readlink()
@@ -77,7 +100,8 @@ def _cmd_status(_args: argparse.Namespace) -> int:
             return True
         except Exception:
             return False
-    out["ports"] = {p: _up(p) for p in (8080, 8081, 8082, 8092)}
+    out["ports"] = {p: _up(p) for p in (
+        _ports["router"], _ports["embeddings"], _ports["rerank"], _ports["default"])}
     # (02/11) o DEFAULT do sistema é o :8092 (4B-MTP+LoRA); o :8080 é o
     # router on-demand (bonsai) — não é mais o default.
     out["default_model"] = cfg.llm_model

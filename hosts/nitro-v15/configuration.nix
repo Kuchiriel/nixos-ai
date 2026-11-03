@@ -192,7 +192,11 @@ services.avahi = {
   # Master toggle: services.jarvis.enable = true (já definido acima)
   # Quando desabilitado, NENHUM serviço Jarvis inicia.
   services.llama-cpp-server.enable = true;
-  services.llama-cpp-server.defaultModel = "bonsai"; # Motor ternário Bonsai-8B via PrismML (medido: TG 76.7 t/s)
+  # (03/11) SEM override de defaultModel: a fonte única é models.nix
+  # (routing.default = 4B-MTP+LoRA :8092; o grupo que sobe no boot é
+  # routing.bootModel.host = bonsai → grupo prism :8080). O override antigo
+  # ("bonsai") reintroduzia o bonsai como default do APP — o dono pediu
+  # "tira o bonsai de default" (26/10).
   services.llama-cpp-embeddings.enable = true;
   services.llama-cpp-rerank.enable = true;
   # services.qdrant.enable é definido por qdrant.nix (condicional a jarvis.enable)

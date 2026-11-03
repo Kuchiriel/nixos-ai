@@ -21,9 +21,18 @@ set -u
 ROUTER_OFF=0
 [ "${1:-}" = "--router-off" ] && ROUTER_OFF=1
 
+# (03/11) Fonte única: porta/unit do default e do router vêm do registry
+# (models.nix). Sem isto, trocar o default no Nix deixava este script
+# apontando para o servidor errado.
+. "$(dirname "$0")/jarvis-registry.sh"
+DEFAULT_MODEL="$(reg_default)"
+BASE="$(reg_endpoint "$DEFAULT_MODEL")"
+DEFAULT_UNIT="$(reg_unit "$DEFAULT_MODEL")"
+ROUTER_UNIT="$(reg_unit bonsai)"
+
 # (idempotência REAL: 4B vivo → VRAM irrelevante, direto ao cliente)
 ALREADY_UP=0
-curl -s --max-time 3 http://127.0.0.1:8092/v1/models | grep -q model && ALREADY_UP=1
+curl -s --max-time 3 "$BASE/v1/models" | grep -q model && ALREADY_UP=1
 
 SMI=/run/current-system/sw/bin/nvidia-smi
 FREE=$("$SMI" --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -1)
@@ -32,7 +41,7 @@ FREE=${FREE:-0}
 if [ "$ALREADY_UP" -eq 0 ] && [ "$FREE" -lt 4000 ]; then
     if [ "$ROUTER_OFF" -eq 1 ]; then
         echo "voice-up: VRAM livre ${FREE}MiB < 4000 — parando o router (decisão --router-off)..."
-        sudo -n systemctl stop llama-cpp-server.service || {
+        sudo -n systemctl stop "$ROUTER_UNIT.service" || {
             echo "voice-up: falhou o stop do router (sudo). Pare manualmente e rerode." >&2
             exit 1; }
         sleep 5
@@ -45,20 +54,20 @@ if [ "$ALREADY_UP" -eq 0 ] && [ "$FREE" -lt 4000 ]; then
     fi
 fi
 
-if ! curl -s --max-time 3 http://127.0.0.1:8092/v1/models | grep -q model; then
-    echo "voice-up: subindo llama-uncensored-4b (:8092)..."
-    sudo -n systemctl start llama-uncensored-4b.service || {
-        echo "voice-up: falhou o start (sudo?). Manual: sudo systemctl start llama-uncensored-4b" >&2
+if ! curl -s --max-time 3 "$BASE/v1/models" | grep -q model; then
+    echo "voice-up: subindo $DEFAULT_UNIT ($BASE)..."
+    sudo -n systemctl start "$DEFAULT_UNIT.service" || {
+        echo "voice-up: falhou o start (sudo?). Manual: sudo systemctl start $DEFAULT_UNIT" >&2
         exit 1; }
     for i in $(seq 1 20); do
-        curl -s --max-time 2 http://127.0.0.1:8092/v1/models | grep -q model && break
+        curl -s --max-time 2 "$BASE/v1/models" | grep -q model && break
         sleep 2
     done
-    curl -s --max-time 3 http://127.0.0.1:8092/v1/models | grep -q model || {
-        echo "voice-up: 4B não respondeu em 40s — journalctl -u llama-uncensored-4b" >&2
+    curl -s --max-time 3 "$BASE/v1/models" | grep -q model || {
+        echo "voice-up: 4B não respondeu em 40s — journalctl -u $DEFAULT_UNIT" >&2
         exit 1; }
 else
-    echo "voice-up: 4B já vivo (:8092)."
+    echo "voice-up: 4B já vivo ($BASE)."
 fi
 
 exec "$(dirname "$0")/duplex-restart.sh" "$@"

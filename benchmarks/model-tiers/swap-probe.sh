@@ -13,8 +13,12 @@
 # default). Mede latência de resposta do default.
 set -u
 ALERTA=/home/nixos/projects/team/ALERTA-swap.md
-BASE=http://127.0.0.1:8092
-MODEL=jarvis-mtp-lora
+# (03/11) Fonte única: default/porta/unit vêm do registry (models.nix).
+# shellcheck source=/home/nixos/projects/nixos-ai/scripts/jarvis-registry.sh
+. /home/nixos/projects/nixos-ai/scripts/jarvis-registry.sh
+MODEL="$(reg_default)"
+BASE="$(reg_endpoint "$MODEL")"
+DEFAULT_UNIT="$(reg_unit "$MODEL")"
 OUT=/home/nixos/projects/nixos-ai/benchmarks/model-tiers/results/default-probe.json
 
 models_id() {
@@ -33,24 +37,24 @@ alerta() { echo "# ALERTA $(date): $1" > "$ALERTA"; }
 
 T0=$(date +%s%3N)
 if ! models_id; then
-  alerta "default :8092 não anuncia o alias $MODEL — reiniciando llama-uncensored-4b"
-  sudo -n systemctl restart llama-uncensored-4b
+  alerta "default $BASE não anuncia o alias $MODEL — reiniciando $DEFAULT_UNIT"
+  sudo -n systemctl restart "$DEFAULT_UNIT"
   for _ in $(seq 1 30); do models_id && break; sleep 10; done
 fi
 if ! models_id; then
-  alerta "default :8092 NÃO voltou após restart — ver journalctl -u llama-uncensored-4b"
+  alerta "default $BASE NÃO voltou após restart — ver journalctl -u $DEFAULT_UNIT"
   echo '{"date":"'"$(date '+%F %H:%M')"'","default_model":"'"$MODEL"'","models_ok":false,"chat_ok":false,"recovered":false}' > "$OUT"
   exit 1
 fi
 
 RECOVERED=false
 if ! chat_ok; then
-  alerta "default :8092 não responde chat — reiniciando llama-uncensored-4b"
-  sudo -n systemctl restart llama-uncensored-4b
+  alerta "default $BASE não responde chat — reiniciando $DEFAULT_UNIT"
+  sudo -n systemctl restart "$DEFAULT_UNIT"
   for _ in $(seq 1 30); do models_id && break; sleep 10; done
   RECOVERED=true
   if ! chat_ok; then
-    alerta "default :8092 NÃO respondeu chat após restart — ver journalctl -u llama-uncensored-4b"
+    alerta "default $BASE NÃO respondeu chat após restart — ver journalctl -u $DEFAULT_UNIT"
     echo '{"date":"'"$(date '+%F %H:%M')"'","default_model":"'"$MODEL"'","models_ok":true,"chat_ok":false,"recovered":true}' > "$OUT"
     exit 1
   fi

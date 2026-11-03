@@ -44,6 +44,11 @@ let
   expertSize = 100; # MB per expert layer
   maxExpertsOnGpu = availableForKvAndExperts / expertSize; # ~32 experts
 
+  # Portas dos GRUPOS do router — definidas UMA vez aqui e consumidas tanto
+  # pelo `routing.endpoints` (registry JSON + Nix) quanto pelo `units`
+  # (mesma info, com o nome da unit) — sem porta duplicada no arquivo.
+  serviceEndpoints = { prism = 8080; upstream = 8083; ik = 8084; };
+
   # Base profile for host models
   hostBase = {    model = "llm-host";
     mmproj = "llm-host-mmproj";
@@ -437,7 +442,9 @@ in rec {
       wanted = false;
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = modelFile (o server anuncia o path, sem --alias).
-      opencode = { key = "local-gemma-4b"; name = "Gemma-3 4B Local"; context = 32768; output = 4096; };
+      # (03/11) context = ctxSize REAL do server (8192; o catálogo dizia
+      # 32768 — o opencode poderia mandar 4x mais que o server aceita).
+      opencode = { key = "local-gemma-4b"; name = "Gemma-3 4B Local"; context = 8192; output = 4096; };
     };
     qwen30b-moe = {
       port = 8091; binary = "ik";
@@ -1028,7 +1035,19 @@ in rec {
     # Binário CORRETO por modelo (docs/models/BINARIES.md — D2/D5: binário
     # errado invalida o veredito). O router NÃO escolhe binário por request:
     # llama-cpp.nix gera UM serviço por grupo (porta = endpoints.${binary}).
-    endpoints = { prism = 8080; upstream = 8083; ik = 8084; };
+    endpoints = serviceEndpoints;
+    # (03/11) Unit systemd por model id — o registry JSON carrega este mapa
+    # para scripts/timers lerem a unit e a porta sem hardcode.
+    units = units;
+    # (03/11) Grupo que SOBE NO BOOT, por ambiente — SEPARADO de `default`.
+    # `default` = default do APP (4B-MTP+LoRA :8092, server DIRETO, fora do
+    # router); `bootModel` = o preset cujo GRUPO sobe no boot (o router fica
+    # pronto p/ uso manual do tier speed/EN). Sem esta separação, trocar o
+    # default derrubava o router do boot (o grupo do default não existe).
+    bootModel = { host = "bonsai"; vm = "jarvis-fast"; };
+    # Portas dos servidores llama que NÃO são tiers de modelo (embeddings /
+    # rerank) — Python e timers leem daqui em vez de hardcode 8081/8082.
+    servicePorts = { embeddings = 8081; rerank = 8082; };
     models = {
       # (26/10) DEFAULT do sistema — Qwen3.5-4B-MTP + LoRA micro-turn,
       # servido pelo directServer :8092 (binário stock). PT-BR de verdade
@@ -1046,6 +1065,8 @@ in rec {
         needsWrapper = null;
         binary = "stock";
         endpoint = 8092;
+        # (03/11) unit systemd que serve este model id (fonte p/ scripts/timers)
+        unit = "llama-uncensored-4b";
         serve = { host = false; vm = false; };
         # Qwen3.5 instruct-geral (vendor; mesmo do jarvis-fast).
         sampling = { temperature = 0.7; top_p = 0.8; top_k = 20; min_p = 0.0;
@@ -1070,6 +1091,8 @@ in rec {
         needsWrapper = "llama-prism-wrapper";
         binary = "prism";
         endpoint = 8080;
+        # (03/11) unit systemd que serve este model id (fonte p/ scripts/timers)
+        unit = "llama-cpp-server";
         serve = { host = true; vm = true; };
         # Prism recomenda 0.5 p/ Bonsai (não é regra global — ver Qwen abaixo).
         sampling = { temperature = 0.5; top_p = 0.9; top_k = 20; min_p = 0.0;
@@ -1077,7 +1100,11 @@ in rec {
       };
       jarvis-fast = {
         profile = "qwen-fast";
-        ctx = 49152;
+        # (03/11) ctx = o do PERFIL (qwen-fast.ctxSize = 16384) — o registro
+        # dizia 49152 (mentira: o server :8083 serve c=16384) → o runtime
+        # podia mandar 30k tokens e tomar erro de contexto. Fonte única: o
+        # perfil que o router serve.
+        ctx = 16384;
         profileVm = "vm";
         tier = "fast";
         capabilities = ["general" "coding" "tools" "pt"];
@@ -1087,6 +1114,8 @@ in rec {
         needsWrapper = null;
         binary = "upstream";
         endpoint = 8083;
+        # (03/11) unit systemd que serve este model id (fonte p/ scripts/timers)
+        unit = "llama-cpp-upstream";
         serve = { host = true; vm = true; };
         # Qwen3 non-thinking/instruct-geral (vendor).
         sampling = { temperature = 0.7; top_p = 0.8; top_k = 20; min_p = 0.0;
@@ -1094,7 +1123,10 @@ in rec {
       };
       jarvis-strong = {
         profile = "chat";
-        ctx = 32768;
+        # (03/11) ctx = o do PERFIL (chat.ctxSize = 8192, validado 03/10:
+        # "não subir! 8k é o teto operacional colocalizado"). O registro
+        # dizia 32768 (o ctx do server DIRETO :8084, não o do grupo ik).
+        ctx = 8192;
         tier = "reasoning";
         capabilities = ["general" "coding" "tools" "reasoning" "analysis" "vision" "pt"];
         guidance = "last local tier before API cascade; reasoning + vision (mmproj CPU); heavy (RAM experts), use for hard tasks only";
@@ -1103,6 +1135,8 @@ in rec {
         needsWrapper = null;
         binary = "ik";
         endpoint = 8084;
+        # (03/11) unit systemd que serve este model id (fonte p/ scripts/timers)
+        unit = "llama-cpp-ik";
         serve = { host = true; vm = false; };
         # Herdado do profile chat: mmproj na CPU (861MB VRAM) + visão dinâmica.
         iniExtra = ["no-mmproj-offload = true" "image-min-tokens = 1024"];
@@ -1122,6 +1156,8 @@ in rec {
         needsWrapper = null;
         binary = "upstream";
         endpoint = 8083;
+        # (03/11) unit systemd que serve este model id (fonte p/ scripts/timers)
+        unit = "llama-cpp-upstream";
         serve = { host = true; vm = false; };
         # Qwen3.5 instruct-geral (vendor; mesmo do jarvis-fast).
         sampling = { temperature = 0.7; top_p = 0.8; top_k = 20; min_p = 0.0;
@@ -1137,6 +1173,8 @@ in rec {
         needsWrapper = null;
         binary = "ik";
         endpoint = 8084;
+        # (03/11) unit systemd que serve este model id (fonte p/ scripts/timers)
+        unit = "llama-cpp-ik";
         serve = { host = true; vm = false; };
         iniExtra = ["no-mmproj-offload = true" "image-min-tokens = 1024"];
         # Qwen3.6 thinking-geral (vendor). Agente usa explicit 0.0 em tools.
@@ -1149,6 +1187,32 @@ in rec {
   # JSON derivado (builtins.toJSON puro — sem derivação): llama-cpp.nix
   # gera o preset INI e /etc/jarvis/model-registry.json daqui.
   registryJson = builtins.toJSON routing;
+
+  # =========================================================================
+  # 4. UNITS — DERIVADOS (ninguém reconstrói unit/porta/binário fora daqui)
+  # =========================================================================
+  # Grupo do router: um serviço systemd por binário (llama-cpp.nix consome).
+  groupUnits = {
+    prism = { unit = "llama-cpp-server"; port = serviceEndpoints.prism; binary = "prism"; };
+    upstream = { unit = "llama-cpp-upstream"; port = serviceEndpoints.upstream; binary = "upstream"; };
+    ik = { unit = "llama-cpp-ik"; port = serviceEndpoints.ik; binary = "ik"; };
+  };
+
+  # Servers diretos: uma unit por modelo ("llama-${name}") — a unit e a
+  # porta saem daqui; llama-uncensored.nix só gera o serviço.
+  directUnits = builtins.mapAttrs (name: s: {
+    inherit (s) port binary wanted modelFile;
+    unit = "llama-${name}";
+    alias = s.alias or null;
+  }) directServers;
+
+  # Catálogo único de servers (unit → {port, binary, ...}). Consumido por
+  # timers/scripts (bench noturno, voice-up) em vez de portas literais.
+  units = groupUnits // directUnits;
+
+  # Default do APP: id lógico + porta do server que o serve.
+  routerDefault = routing.default;
+  routerDefaultEndpoint = routing.models.${routing.default}.endpoint;
 
   # (26/10) LAYA — decision model (ModernBERT-large 421M, Apache-2.0) p/
   # classificar DIFICULDADE do prompt (simple/moderate/hard) e rotear.

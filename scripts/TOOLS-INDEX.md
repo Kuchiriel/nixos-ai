@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_78 tools._
+_79 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -57,6 +57,7 @@ _78 tools._
 - `jarvis-gaming-mode.sh` (nixos-ai/scripts) — ═══════════════════════════════════════════════════════════════════
 - `jarvis-reflect.py` (nixos-ai/scripts) — """jarvis-reflect.py — Reflexão noturna (P2.7 ROADMAP-INTELIGENCIA).
   use: `USO:   jarvis reflect [--date YYYY-MM-DD] [--dry-run]`
+- `jarvis-registry.sh` (nixos-ai/scripts) — jarvis-registry.sh — lê o registry de modelos (fonte única: modules/ai/models.nix)
 - `kaggle-kernel-watch.sh` (nixos-ai/scripts) — kaggle-kernel-watch — acompanha um kernel Kaggle até COMPLETE/ERROR e puxa o output.
   use: `USAGE: kaggle-kernel-watch.sh --slug <owner/kernel> [--out <dir>] [--interval <s>]`
 - `loop-close.py` (nixos-ai/scripts) — """loop-close.py — semente do laço que se fecha (F-supervisor, 26/09).

@@ -30,6 +30,47 @@ def _env_bool(name: str, default: bool) -> bool:
     return val.lower() in ("1", "true", "yes")
 
 
+# ── (03/11) Defaults derivados do REGISTRY (models.nix) ──────────────────
+# O registry JSON (/etc/jarvis/model-registry.json) é a fonte única de
+# default/portas. Sem ele (dev/test), caem nos literais de fallback — os
+# mesmos valores do registry, escritos uma vez aqui.
+_REGISTRY_CACHE: dict = {}
+
+
+def _registry():
+    """Registry carregado uma vez (None se indisponível)."""
+    if "reg" not in _REGISTRY_CACHE:
+        try:
+            from jarvis.core.model_registry import ModelRegistry
+            _REGISTRY_CACHE["reg"] = ModelRegistry.load()
+        except Exception:
+            _REGISTRY_CACHE["reg"] = None
+    return _REGISTRY_CACHE["reg"]
+
+
+def _registry_default_model() -> str:
+    reg = _registry()
+    return reg.default if reg else "jarvis-mtp-lora"
+
+
+def _registry_default_base_url() -> str:
+    reg = _registry()
+    if reg:
+        url = reg.base_url_for(reg.default)
+        if url and not url.endswith(":0"):
+            return f"{url}/v1"
+    return "http://127.0.0.1:8092/v1"
+
+
+def _registry_service_url(name: str, fallback: str) -> str:
+    reg = _registry()
+    if reg:
+        port = reg.service_port(name)
+        if port:
+            return f"http://127.0.0.1:{port}"
+    return fallback
+
+
 @dataclass(frozen=True)
 class Config:
     # --- Personas custom (painel de bots, 07/10): JSONs aqui viram personas
@@ -51,8 +92,8 @@ class Config:
     # O id = alias do server (medido: com --alias o /v1/models anuncia o
     # alias; sem ele anuncia o path do gguf → ensure_model não prova
     # identidade). Fallback antigo via env: JARVIS_LLM_BASE_URL=...:8080/v1.
-    llm_base_url: str = field(default_factory=lambda: _env_str("JARVIS_LLM_BASE_URL", "http://127.0.0.1:8092/v1"))
-    llm_model: str = field(default_factory=lambda: _env_str("JARVIS_LLM_MODEL", "jarvis-mtp-lora"))
+    llm_base_url: str = field(default_factory=lambda: _env_str("JARVIS_LLM_BASE_URL", _registry_default_base_url()))
+    llm_model: str = field(default_factory=lambda: _env_str("JARVIS_LLM_MODEL", _registry_default_model()))
     llm_timeout: int = field(default_factory=lambda: _env_int("JARVIS_LLM_TIMEOUT", 120))
     # Thinking / reasoning enabled by default on GPU hardware (Bonsai/Qwen3)
     llm_disable_thinking: bool = field(default_factory=lambda: _env_str("JARVIS_LLM_DISABLE_THINKING", "0") == "1")
@@ -65,11 +106,11 @@ class Config:
     llm_temperature: float = field(default_factory=lambda: float(_env_str("JARVIS_LLM_TEMPERATURE", "-1")))
 
     # --- Embeddings (servidor dedicado llama.cpp --embeddings, porta 8081) ---
-    embed_base_url: str = field(default_factory=lambda: _env_str("JARVIS_EMBED_BASE_URL", "http://127.0.0.1:8081/v1"))
+    embed_base_url: str = field(default_factory=lambda: _env_str("JARVIS_EMBED_BASE_URL", _registry_service_url("embeddings", "http://127.0.0.1:8081/v1")))
 
     # --- Reranker (servidor dedicado llama.cpp --rerank, porta 8082 — Fase 10) ---
     # Endpoint /rerank do llama-server (bge-reranker-v2-m3 GGUF do store).
-    rerank_base_url: str = field(default_factory=lambda: _env_str("JARVIS_RERANK_BASE_URL", "http://127.0.0.1:8082"))
+    rerank_base_url: str = field(default_factory=lambda: _env_str("JARVIS_RERANK_BASE_URL", _registry_service_url("rerank", "http://127.0.0.1:8082")))
 
     # --- Qdrant ---
     qdrant_url: str = field(default_factory=lambda: _env_str("JARVIS_QDRANT_URL", "http://127.0.0.1:6333"))

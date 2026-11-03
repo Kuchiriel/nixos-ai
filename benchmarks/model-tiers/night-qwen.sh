@@ -12,18 +12,24 @@
 #   4) religa o router (vazio) e VERIFICA default + router
 set -u
 ALERTA=/home/nixos/projects/team/ALERTA-bench.md
-MODEL=jarvis-mtp-lora
-BASE=http://127.0.0.1:8092
+# (03/11) Fonte única: o registry vem do Nix (models.nix). O default, a
+# porta, a unit e a porta do router saem de lá — nada de literal aqui.
+# shellcheck source=/home/nixos/projects/nixos-ai/scripts/jarvis-registry.sh
+. /home/nixos/projects/nixos-ai/scripts/jarvis-registry.sh
+MODEL="$(reg_default)"
+BASE="$(reg_endpoint "$MODEL")"
+DEFAULT_UNIT="$(reg_unit "$MODEL")"
+ROUTER_BASE="$(reg_endpoint bonsai)"
 ok() { curl -s --max-time 15 "$1" >/dev/null 2>&1; }
 
 # 1) default de pé?
 if ! ok "$BASE/v1/models"; then
-  echo "[bench] default :8092 fora do ar — subindo llama-uncensored-4b"
-  sudo -n systemctl start llama-uncensored-4b
+  echo "[bench] default $BASE fora do ar — subindo $DEFAULT_UNIT"
+  sudo -n systemctl start "$DEFAULT_UNIT"
   for _ in $(seq 1 30); do ok "$BASE/v1/models" && break; sleep 10; done
 fi
 if ! ok "$BASE/v1/models"; then
-  echo "# ALERTA $(date): default :8092 não subiu — ver journalctl -u llama-uncensored-4b" > "$ALERTA"
+  echo "# ALERTA $(date): default $BASE não subiu — ver journalctl -u $DEFAULT_UNIT" > "$ALERTA"
   exit 1
 fi
 
@@ -57,11 +63,11 @@ EOF
 sudo -n systemctl start llama-cpp-server
 sleep 20
 if ! ok "$BASE/v1/models"; then
-  echo "# ALERTA $(date): default :8092 NÃO respondeu após o bench — ver journalctl -u llama-uncensored-4b" > "$ALERTA"
+  echo "# ALERTA $(date): default $BASE NÃO respondeu após o bench — ver journalctl -u $DEFAULT_UNIT" > "$ALERTA"
   exit 1
 fi
-if ! ok http://127.0.0.1:8080/v1/models; then
-  echo "# ALERTA $(date): router :8080 NÃO voltou após bench — ver journalctl -u llama-cpp-server" > "$ALERTA"
+if ! ok "$ROUTER_BASE/v1/models"; then
+  echo "# ALERTA $(date): router $ROUTER_BASE NÃO voltou após bench — ver journalctl -u llama-cpp-server" > "$ALERTA"
   exit 1
 fi
-echo "[bench] default :8092 OK + router :8080 OK; resultados em benchmarks/model-tiers/results/qwen4bmtp-lora.json"
+echo "[bench] default $BASE OK + router $ROUTER_BASE OK; resultados em benchmarks/model-tiers/results/qwen4bmtp-lora.json"

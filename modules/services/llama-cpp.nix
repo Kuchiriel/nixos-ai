@@ -61,7 +61,7 @@ with lib; let
     port = groupPort b;
     prof = groupProf g;
     kv = parseKv prof.kvCache;
-    isDefault = elem defaultId (map (x: x.id) g);
+    isDefault = elem bootId (map (x: x.id) g);
     # (26/10) O default do APP (routing.default) é servido por ESTE grupo?
     # Se não (ex.: default = 4B-MTP+LoRA no :8092, direct server), o
     # warmup do router é PULADO — bonsai (2.4GB) + 4B (4.4GB) estoura a
@@ -69,7 +69,7 @@ with lib; let
     # custa ~0MiB (medido) e carrega preset sob demanda.
     appDefaultInGroup = elem routing.default (map (x: x.id) g);
   in {
-    description = "Llama.cpp [${b}] (presets: ${groupIds g}; default: ${defaultId})";
+    description = "Llama.cpp [${b}] (presets: ${groupIds g}; default: ${defaultId}; boot: ${bootId})";
     after = ["network-online.target" "qdrant.service"];
     wants = ["network-online.target"];
     # PartOf jarvis.target: para junto com o ecossistema
@@ -220,8 +220,14 @@ with lib; let
     ${concatStringsSep "\n" (m.iniExtra or [])}
   '';
 
-  # Modelo default (warmup + grupo que sobe no boot).
+  # Modelo default (warmup + semântica do router).
   defaultId = config.services.llama-cpp-server.defaultModel;
+  # (03/11) Modelo cujo GRUPO sobe no boot — fonte: routing.bootModel
+  # (host: bonsai → grupo prism · vm: jarvis-fast → grupo upstream).
+  # SEPARADO do default do APP (routing.default = 4B-MTP direct :8092, que
+  # não pertence a nenhum grupo do router): sem esta separação, trocar o
+  # default do APP derrubaria o router do boot.
+  bootId = routing.bootModel.${envName} or routing.default;
 
   # Compila o llama-cpp com suporte a CUDA forçado.
   # Usa o `pkgs` já recebido pelo módulo (herda allowUnfree + overlay
@@ -233,21 +239,20 @@ in {
       enable = mkEnableOption "Llama.cpp Main Server";
       port = mkOption {
         type = types.port;
-        default = 8080;
+        default = routing.endpoints.prism;
         description = ''
           LEGADO: portas agora vêm de models.nix `routing.endpoints`
           (fonte única com o registry Python). Esta opção está ignorada.
         '';
       };
-      # Router nativo (llama-server --models-preset): default EFETIVO
-      # preservado por ambiente — host servia bonsai, lab servia vm/Qwen.
-      # Trocar o default (ex.: p/ jarvis-fast) é decisão de produto (§21).
+      # Router nativo (llama-server --models-preset): o default do APP.
+      # (03/11) default = routing.default (fonte única — o dono pediu
+      # "tira o bonsai de default" em 26/10 e o override do host reintroduzia
+      # o bonsai em 03/11). Quem sobe no BOOT é routing.bootModel (ver
+      # `bootId`), decisão separada do default.
       defaultModel = mkOption {
         type = types.enum (attrNames routing.models);
-        default =
-          if envName == "host"
-          then routing.default
-          else "jarvis-fast";
+        default = routing.default;
         description = ''
           Modelo carregado no boot (warmup) e usado quando o request não
           especifica `model`. IDs e capabilities em modules/ai/models.nix
@@ -273,14 +278,14 @@ in {
       enable = mkEnableOption "Llama.cpp Embeddings Server";
       port = mkOption {
         type = types.port;
-        default = 8081;
+        default = routing.servicePorts.embeddings;
       };
     };
     llama-cpp-rerank = {
       enable = mkEnableOption "Llama.cpp Rerank Server";
       port = mkOption {
         type = types.port;
-        default = 8082;
+        default = routing.servicePorts.rerank;
       };
     };
   };

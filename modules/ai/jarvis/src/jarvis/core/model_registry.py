@@ -30,6 +30,13 @@ _FALLBACK = {
     # Espelha models.nix `routing.default`. Antes era "bonsai" (EN-only).
     "default": "jarvis-mtp-lora",
     "maxResident": 1,
+    # (03/11) Estrutura nova (paridade com o JSON gerado pelo Nix):
+    # endpoints por grupo do router, portas dos serviços auxiliares e a
+    # unit systemd que serve cada model id.
+    "endpoints": {"prism": 8080, "upstream": 8083, "ik": 8084},
+    "servicePorts": {"embeddings": 8081, "rerank": 8082},
+    "bootModel": {"host": "bonsai", "vm": "jarvis-fast"},
+    "units": {},
     "models": {
         "jarvis-mtp-lora": {
             "tier": "fast",
@@ -37,6 +44,7 @@ _FALLBACK = {
             "params_b": 4,
             "vram_mb": 4474,
             "endpoint": 8092,
+            "unit": "llama-uncensored-4b",
             "sampling": {"temperature": 0.7, "top_p": 0.8, "top_k": 20,
                          "min_p": 0.0, "presence_penalty": 1.5,
                          "repetition_penalty": 1.0},
@@ -48,6 +56,7 @@ _FALLBACK = {
             "params_b": 8,
             "vram_mb": 2400,
             "endpoint": 8080,
+            "unit": "llama-cpp-server",
             "sampling": {"temperature": 0.5, "top_p": 0.9, "top_k": 20,
                          "min_p": 0.0, "presence_penalty": 0.0,
                          "repetition_penalty": 1.0},
@@ -60,6 +69,7 @@ _FALLBACK = {
             "params_b": 4,
             "vram_mb": 2600,
             "endpoint": 8083,
+            "unit": "llama-cpp-upstream",
             "sampling": {"temperature": 0.7, "top_p": 0.8, "top_k": 20,
                          "min_p": 0.0, "presence_penalty": 1.5,
                          "repetition_penalty": 1.0},
@@ -70,6 +80,7 @@ _FALLBACK = {
             "params_b": 35,
             "vram_mb": 4600,
             "endpoint": 8084,
+            "unit": "llama-cpp-ik",
             "sampling": {"temperature": 1.0, "top_p": 0.95, "top_k": 20,
                          "min_p": 0.0, "presence_penalty": 1.5,
                          "repetition_penalty": 1.0},
@@ -80,6 +91,7 @@ _FALLBACK = {
             "params_b": 4,
             "vram_mb": 2700,
             "endpoint": 8083,
+            "unit": "llama-cpp-upstream",
             "sampling": {"temperature": 0.7, "top_p": 0.8, "top_k": 20,
                          "min_p": 0.0, "presence_penalty": 1.5,
                          "repetition_penalty": 1.0},
@@ -90,6 +102,7 @@ _FALLBACK = {
             "params_b": 35,
             "vram_mb": 4600,
             "endpoint": 8084,
+            "unit": "llama-cpp-ik",
             "sampling": {"temperature": 1.0, "top_p": 0.95, "top_k": 20,
                          "min_p": 0.0, "presence_penalty": 1.5,
                          "repetition_penalty": 1.0},
@@ -125,6 +138,11 @@ class ModelRegistry:
     default: str
     max_resident: int = 1
     source: str = ""
+    # (03/11) Estrutura vinda do mesmo JSON (models.nix): portas dos grupos
+    # do router, dos serviços auxiliares e a unit systemd por model id.
+    endpoints: dict[str, int] = field(default_factory=dict)
+    service_ports: dict[str, int] = field(default_factory=dict)
+    units: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> "ModelRegistry":
@@ -155,6 +173,27 @@ class ModelRegistry:
         raw_models = data.get("models")
         if not isinstance(raw_models, dict) or not raw_models:
             raise RegistryError(f"registry sem models ({source})")
+        # (03/11) Portas dos grupos do router — o fallback de `endpoint` vem
+        # daqui (NÃO de um literal 8080 no código).
+        endpoints = {
+            str(k): int(v)
+            for k, v in (data.get("endpoints") or {}).items()
+            if isinstance(v, (int, float)) and not isinstance(v, bool)
+        }
+        service_ports = {
+            str(k): int(v)
+            for k, v in (data.get("servicePorts") or {}).items()
+            if isinstance(v, (int, float)) and not isinstance(v, bool)
+        }
+        units = {
+            str(k): str(v)
+            for k, v in (data.get("units") or {}).items()
+            if isinstance(v, dict) and v.get("unit")
+        }
+        # (03/11) Fallback do endpoint: 1) o próprio modelo; 2) a porta do
+        # grupo prism declarada no registry; 3) o literal 8080 (default do
+        # router — contrato do test_registry_endpoint_defaults_8080).
+        fallback_endpoint = endpoints.get("prism", 8080)
         models: dict[str, ModelEntry] = {}
         for mid, m in raw_models.items():
             if not isinstance(m, dict):
@@ -170,7 +209,7 @@ class ModelRegistry:
                 capabilities=frozenset(caps),
                 params_b=float(m.get("params_b", 0) or 0),
                 vram_mb=int(m.get("vram_mb", 0) or 0),
-                endpoint=int(m.get("endpoint", 8080) or 8080),
+                endpoint=int(m.get("endpoint") or fallback_endpoint or 0),
                 sampling=dict(m.get("sampling", {}) or {}),
                 raw=m,
             )
@@ -179,7 +218,10 @@ class ModelRegistry:
             raise RegistryError(f"default {default!r} fora do registry ({source})")
         return cls(models=models, default=default,
                    max_resident=int(data.get("maxResident", 1) or 1),
-                   source=source)
+                   source=source,
+                   endpoints=endpoints,
+                   service_ports=service_ports,
+                   units=units)
 
     def get(self, model_id: str) -> ModelEntry:
         try:
@@ -198,3 +240,35 @@ class ModelRegistry:
             return dict(self.get(model_id).sampling)
         except RegistryError:
             return {}
+
+    # ── (03/11) PORTAS/UNITS: fonte única = registry JSON (models.nix) ──
+    def port_for(self, model_id: str) -> int:
+        """Porta do server que serve o modelo (0 = desconhecida)."""
+        try:
+            return int(self.get(model_id).endpoint or 0)
+        except RegistryError:
+            return 0
+
+    def base_url_for(self, model_id: str) -> str:
+        """Base URL OpenAI-compatible do server que serve o modelo."""
+        return f"http://127.0.0.1:{self.port_for(model_id)}"
+
+    def service_port(self, name: str) -> int | None:
+        """Porta de um serviço auxiliar (embeddings|rerank). None se ausente."""
+        value = self.service_ports.get(name)
+        return int(value) if value else None
+
+    def router_port(self, binary: str = "prism") -> int | None:
+        """Porta do grupo do router para um binário (prism|upstream|ik)."""
+        value = self.endpoints.get(binary)
+        return int(value) if value else None
+
+    def unit_for(self, model_id: str) -> str | None:
+        """Unit systemd que serve o modelo (None se não declarada)."""
+        entry = self.models.get(model_id)
+        if entry is not None:
+            unit = entry.raw.get("unit")
+            if unit:
+                return str(unit)
+        unit = self.units.get(model_id)
+        return str(unit) if unit else None

@@ -97,6 +97,29 @@ Critério de decisão:
 3. Em qualquer caso, **o tier MoE não serve para voz** (ver
    `LLAMACPP-FLAGS-VIDEO-2026-11-02.md`: TTFT 420–9066 ms) — voz é do 4B-MTP.
 
+### Status 03/11 (03:50): X3 COMPILADO, medição ainda pendente
+
+O binário X3 está pronto e verificado:
+
+- `~/projects/llama.cpp/build-master/build/bin/llama-server` (movido de /tmp
+  para sobreviver ao reboot — 247 MB; o repo llama.cpp é "track only", o
+  diretório fica **untracked**).
+- `version: 0.8.0-dev (build 1, commit 2cbca38)` · GNU 15.3.0 · CUDA sm_89
+- Flags presentes: `--fit-target`, `--moe-cache-mib`, `--n-cpu-moe`, `--lora`,
+  `--spec-type` (o stock 1087 de produção tem todas, menos as fuses de MoE).
+- ⚠️ **Precisa de `LD_LIBRARY_PATH`** (o RUNPATH gravou o path de build
+  antigo, `/tmp/opencode/...`):
+  `LD_LIBRARY_PATH=~/projects/llama.cpp/build-master/build/bin`
+  → é o mesmo mecanismo do `BENCH_LD_ENVFILE` do `scripts/bench-llm.sh`.
+- Build: cmake 4.1.6 + ninja 1.13.2 + cuda-merged-12.9 + gcc-wrapper-15.3.0
+  (nix); receita do configure: `-DCMAKE_CUDA_FLAGS=-I$CUDA/include
+  -DCUDAToolkit_ROOT=$CUDA -DCMAKE_CUDA_ARCHITECTURES=89 -DLLAMA_CURL=OFF`
+  (o `cuda-merged` do nix NÃO expõe os headers no path do nvcc — precisa do
+  `-I` + `NIX_CFLAGS_COMPILE` do cc-wrapper).
+- **A medição NÃO foi feita**: o driver do kernel (615.71.09) ainda não casa
+  com o userspace novo (615.78) → medir VRAM/throughput agora mediria o stack
+  antigo. Medir **depois do reboot**, com o agente parado.
+
 ## 6. Armadilhas (as mesmas da ladder)
 
 - Sem o `LD_LIBRARY_PATH` do serviço systemd o server sobe **CPU-only** (stub CUDA):

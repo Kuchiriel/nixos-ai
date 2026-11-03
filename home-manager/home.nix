@@ -391,19 +391,25 @@ in {
         local_small_model = {
           npm = "@ai-sdk/openai-compatible";
           options = {
-            baseURL = "http://127.0.0.1:8080/v1";
+            # (03/11) porta + contexto de models.nix (fonte única): o
+            # catálogo dizia 8192 aqui e 49152 no provider `local` para o
+            # MESMO server (o preset prism serve c=49152). Drift real.
+            baseURL = "http://127.0.0.1:${toString pkgs.aiModels.routing.models.bonsai.endpoint}/v1";
           };
           models = {
             bonsai = {
               name = "Bonsai 8B Ternário (leve)";
-              limit = { context = 8192; output = 2048; };
+              limit = {
+                context = pkgs.aiModels.routing.models.bonsai.ctx;
+                output = 2048;
+              };
             };
           };
         };
         local = {
           npm = "@ai-sdk/openai-compatible";
           options = {
-            baseURL = "http://127.0.0.1:8080/v1";
+            baseURL = "http://127.0.0.1:${toString pkgs.aiModels.routing.models.bonsai.endpoint}/v1";
           };
           models = {
             # Ids = EXATAMENTE os do server /v1/models (bonsai,
@@ -417,7 +423,7 @@ in {
               name = "Bonsai 8B Local (ternary)";
               # c=49152 do preset prism (jarvis-models-prism.ini).
               limit = {
-                context = 49152;
+                context = pkgs.aiModels.routing.models.bonsai.ctx;
                 output = 8192;
               };
             };
@@ -430,13 +436,13 @@ in {
         local-fast = {
           npm = "@ai-sdk/openai-compatible";
           options = {
-            baseURL = "http://127.0.0.1:8083/v1";
+            baseURL = "http://127.0.0.1:${toString pkgs.aiModels.routing.models.jarvis-fast.endpoint}/v1";
           };
           models = {
             "jarvis-fast" = {
               name = "Qwen3-4B Local (fast)";
               limit = {
-                context = 16384;
+                context = pkgs.aiModels.routing.models.jarvis-fast.ctx;
                 output = 4096;
               };
             };
@@ -525,10 +531,12 @@ in {
       # Higiene de contexto global (03/10): vale p/ todos os providers.
       # prune poda tool outputs velhos; tool_output capa outputs gigantes
       # (prompt de 33k matou o Qwen 2x); small_model tira titles/resumos do 35B.
-      # (02/11) small_model = o DEFAULT residente (:8092). Antes era
+      # (03/11) small_model = o DEFAULT residente (:8092). Antes era
       # local_small_model/bonsai (:8080) — com o 4B-MTP de pé (4474MiB) o
       # bonsai (4.3GB) não carrega no router → small_model quebraria.
-      small_model = "local-uncensored-4b/jarvis-mtp-lora";
+      # (03/11) provider+id DERIVADOS de models.nix (fonte única):
+      # directServers.uncensored-4b.opencode.key + .alias (= routing.default).
+      small_model = "${pkgs.aiModels.directServers."uncensored-4b".opencode.key}/${pkgs.aiModels.directServers."uncensored-4b".alias}";
       warming = true;
       compaction = {
         auto = true;
@@ -545,7 +553,8 @@ in {
       # (02/11) Default = 4B-MTP+LoRA (:8092, alias jarvis-mtp-lora) —
       # dono: "tira o bonsai de default". O bonsai (:8080) fica no catálogo
       # p/ uso manual (precisa do :8092 parado: 4.1G+4.3G > 6.1G VRAM).
-      model = "local-uncensored-4b/jarvis-mtp-lora";
+      # (03/11) derivado de models.nix (fonte única).
+      model = "${pkgs.aiModels.directServers."uncensored-4b".opencode.key}/${pkgs.aiModels.directServers."uncensored-4b".alias}";
 
       # MCP Jarvis: RAG, memória, vault, files, shell, nix — via stdio.
       # Handshake validado (tools/list retorna 20 tools). Env inline no
