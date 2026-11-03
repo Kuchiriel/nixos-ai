@@ -27,7 +27,7 @@ let
   # índice (que muda entre boots).
   targetNode = "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source";
 
-  resolver = pkgs.writeText "wireplumber-default-source.sh" ''
+  resolver = pkgs.writeShellScript "wireplumber-default-source.sh" ''
     #!/bin/sh
     # $1 = node.name alvo. Resolve o id pelo nome (pw-cli) e fixa como
     # default source (wpctl). Idempotente: repetir é barato e o
