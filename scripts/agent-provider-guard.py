@@ -46,6 +46,10 @@ LOG_DEFAULT = HOME / ".local/share/opencode/log/opencode.log"
 STATE_DEFAULT = HOME / ".local/state/jarvis/provider-guard.seen.json"
 AGENT_MSG = Path(__file__).resolve().parent / "agent-msg.sh"
 
+# cooldown por (classe, provider, sessao): 1 ping a cada 15 min, mesmo com
+# dezenas de linhas iguais no log (429 repete a cada retry -> spam no peer)
+COOLDOWN_SEC = 900
+
 # classificação: (padrão no texto do erro, classe, dica acionável)
 CLASSES = (
     ("ProviderHeaderTimeoutError", "TIMEOUT",
@@ -115,19 +119,23 @@ def parse_events(log_path: Path, since_min: int) -> list[dict]:
     return events
 
 
-def load_seen(path: Path) -> set[str]:
+def load_state(path: Path) -> tuple[set[str], dict[str, int]]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        return set(data.get("seen") or [])
     except (OSError, ValueError):
-        return set()
+        return set(), {}
+    seen = set(data.get("seen") or [])
+    cooldown = {str(k): int(v) for k, v in (data.get("cooldown") or {}).items()}
+    return seen, cooldown
 
 
-def save_seen(path: Path, seen: set[str]) -> None:
+def save_state(path: Path, seen: set[str], cooldown: dict[str, int]) -> None:
     # mantém os 300 mais recentes (a chave é o timestamp do evento)
     ordered = sorted(seen)[-300:]
+    trimmed = {k: v for k, v in sorted(cooldown.items(), key=lambda kv: kv[1])[-200:]}
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"seen": ordered}, indent=0), encoding="utf-8")
+    path.write_text(json.dumps({"seen": ordered, "cooldown": trimmed}, indent=0),
+                    encoding="utf-8")
 
 
 def ping(title: str, body: str) -> None:
@@ -158,27 +166,33 @@ def cmd_scan(args: argparse.Namespace) -> int:
     if not log_path.exists():
         print(f"provider-guard: log ausente ({log_path})")
         return 0
-    seen = load_seen(state_path)
+    seen, cooldown = load_state(state_path)
     events = parse_events(log_path, args.since_min)
     fresh = [e for e in events if str(e["epoch"]) not in seen][: args.max]
     if not fresh:
         print(f"provider-guard: sem evento novo em {args.since_min}min")
         return 0
+    now = int(datetime.now().timestamp())
     for e in fresh:
         when = datetime.fromtimestamp(e["epoch"]).strftime("%H:%M")
+        key = f"{e['class']}|{e['provider']}|{e['session']}"
         line = (f"{e['class']} {e['provider']}/{e['model']} "
                 f"sessao={e['session']} as {when}: {e['hint']}")
+        seen.add(str(e["epoch"]))
+        if now - cooldown.get(key, 0) < COOLDOWN_SEC:
+            continue
         print(line)
         if args.dry_run:
+            cooldown[key] = max(e["epoch"], now)
             continue
         if not args.no_notify:
             ping(f"opencode: {e['class']} ({e['provider']})", line[:220])
         if peer:
             peer_note(f"PROVIDER {e['class']} em {e['provider']}/{e['model']} "
                       f"(sessao {e['session']}, {when}): {e['hint']}", peer)
-        seen.add(str(e["epoch"]))
+        cooldown[key] = max(e["epoch"], now)
     if not args.dry_run:
-        save_seen(state_path, seen)
+        save_state(state_path, seen, cooldown)
     return 0
 
 
