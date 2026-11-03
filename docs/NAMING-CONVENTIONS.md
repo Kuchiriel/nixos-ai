@@ -147,12 +147,15 @@ Ordered by (value × safety) / effort:
    harness rule + pinned guards + compaction memory, rehydrate tool output
    and headers, `opencode-coordination` skill, root + nixos-ai `AGENTS.md`.
    Remaining (other lane): JARVIS core prompts, personas, tool descriptions.
-2. **Kill the doubled prefix** — rename the 37 MCP tools to the canonical
-   names already in `runtime/registry.py`; keep the old names as aliases;
-   update `webui/api.py` + `vscode-roo.nix` allowlists; re-run the MCP probe
-   and the A/B measurement. Expected: `jarvis_recall` (as documented) and
-   `jarvis_rehydrate` — the rules in AGENTS.md and in the injected system
-   prompt finally match the tool list.
+2. **Kill the doubled prefix — DONE (2026-11-02).** The 37 MCP tools are
+   registered with their canonical names (the ones `runtime/registry.py`
+   already defines); the dispatch accepts both the canonical and the legacy
+   `jarvis_*` name for one deprecation cycle; the webui allowlist accepts
+   both. Verified end-to-end in a real opencode session: the tool now shows
+   as `jarvis_rehydrate` in `opencode.db` (it was `jarvis_jarvis_rehydrate`).
+   The rules in AGENTS.md, in the injected system prompt and in the skill now
+   match the tool list exactly. `vscode-roo.nix` needed no change (it cites
+   the exposed name, which is unchanged).
 3. **Naming conventions doc + rename map** — this file; then execute the
    renames in 4.1/4.2 in small batches (one commit each, `git mv`, update
    the root meta-repo + `docs/` links, verify `git ls-files` after each).
