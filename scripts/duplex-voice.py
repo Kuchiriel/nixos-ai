@@ -121,7 +121,9 @@ SYSTEM = ("You are a voice assistant in a live phone call; both sides can talk a
           f"{TICK:g} seconds you get what the microphone heard in that moment, as a streaming transcript fragment, or "
           f"{NOVOICE}. You reply with up to three new words to say next, or {LISTEN} to add nothing.")
 LISTEN_TOKEN_ID = None   # id de '<listen>' no server alvo
-GATE_MODE = "on"        # 'off' = responde todo segmento (testes/AFK)
+GATE_MODE = "intent"    # 'intent' = endereço OU intenção (padrão, 03/11) ·
+                       # 'jarvis' = só a palavra "Jarvis" (estrito, TV) ·
+                       # 'off' = responde todo segmento (testes/AFK)
 SR = 16000
 CHUNK_BYTES = int(SR * TICK * 2)
 # Digital mic (17/10): o Stereo Mic é MORTO (rms 0); o Digital é vivo.
@@ -255,6 +257,39 @@ def _addressed(txt):
     import difflib as _dl
     return any(_dl.SequenceMatcher(None, w, "jarvis").ratio() >= 0.62
                for w in tl.replace(",", " ").split())
+
+
+def _intent_worker(base, utt, box):
+    """Classifica a intenção em thread (paralelo ao LoRA) → +0ms no hot path."""
+    try:
+        box["intent"] = classify_intent(base, utt)
+    except Exception:
+        box["intent"] = None
+
+
+def _intent_of(thread, box):
+    if thread is None:
+        return None
+    thread.join(timeout=1.5)
+    return box.get("intent")
+
+
+def _gate_accepts(addressed, intent):
+    """Aceita o turno? (03/11, dono: "ele ignora quase tudo que eu falo").
+
+    O gate antigo exigia a PALAVRA "Jarvis" (fuzzy) — 2/13 pedidos do dono
+    passavam (recall 15%). O classificador de intenção (4B+GBNF, já existia
+    mas MORTO) reconhece pergunta/comando sem a palavra-mágica:
+    recall 92% / F1 0,889 (bench: benchmarks/voice/bench_gate.py).
+    'jarvis' mantém o comportamento estrito (caso da TV) como escape.
+    """
+    if GATE_MODE == "off":
+        return True
+    if addressed:
+        return True
+    if GATE_MODE == "jarvis":
+        return False
+    return intent in ("QUESTION", "COMMAND")
 
 
 def build_prompt(history, heard):
@@ -1695,9 +1730,13 @@ def main():
     ap.add_argument("--stt-model", default="small")
     ap.add_argument("--rms", type=int, default=700,
                     help="gate fala-vs-fundo (vozes reais 886-1372; anime 380-600)")
-    ap.add_argument("--gate", default="on", choices=["on", "off"],
-                    help="gate 'Jarvis/?': off = responde TODO segmento (testes/AFK); "
-                         "o gate real de áudio = wakeword recalibrado (pend.4)")
+    ap.add_argument("--gate", default="intent",
+                    choices=["intent", "jarvis", "on", "off"],
+                    help="gate do turno: intent = endereço OU intenção "
+                         "QUESTION/COMMAND (padrão, recall 92%); jarvis = só a "
+                         "palavra 'Jarvis' (estrito, caso da TV); on = alias de "
+                         "jarvis; off = responde TODO segmento (testes/AFK). "
+                         "O gate real de áudio = wakeword recalibrado (pend.4)")
     args = ap.parse_args()
     base = f"http://{args.host}:{args.port}"
 
@@ -1727,7 +1766,7 @@ def main():
     # id do '<listen>' neste server (ban p/ resposta forçada; b9190 não
     # expõe probs — o id direto funciona em qualquer build)
     global LISTEN_TOKEN_ID, GATE_MODE
-    GATE_MODE = args.gate
+    GATE_MODE = "jarvis" if args.gate == "on" else args.gate
     try:
         toks = http(base + "/tokenize", {"content": "<listen>"})
         ids = toks.get("tokens") or toks.get("tokens_full") or []
@@ -2131,6 +2170,17 @@ def main():
                     # (19/10) CLASSIFICADOR LoRA no lugar das heurísticas:
                     # RESPOND=chat · WAIT=segura · SILENCE=descarta ·
                     # BARGE=mata o TTS. Falha técnica → gate antigo.
+                    # (03/11) o gate precisa da INTENÇÃO — mas ela roda
+                    # EM PARALELO com o LoRA (thread), então o custo some:
+                    # LoRA ~350ms || intent ~395ms → espera ~400ms, não 750.
+                    _addr = _addressed(heard)
+                    _intent_box = {}
+                    _intent_th = None
+                    if GATE_MODE == "intent" and not _addr:
+                        _intent_th = threading.Thread(
+                            target=_intent_worker,
+                            args=(base, heard, _intent_box), daemon=True)
+                        _intent_th.start()
                     lab = (classify_turn(base, heard)
                            if (n_words >= 1 and heard != NOVOICE) else None)
                     log(f"[{ts()}] classify({heard[:38]!r}) = {lab} "
@@ -2157,7 +2207,7 @@ def main():
                         # fala COMPLETA da TV/sala — sem endereçamento
                         # não vira resposta. GATE on = exigir Jarvis/
                         # pergunta/comando; off = comportamento antigo.
-                        if GATE_MODE == "on" and not _addressed(heard):
+                        if not _gate_accepts(_addr, _intent_of(_intent_th, _intent_box)):
                             log(f"[{ts()}] RESPOND não-endereçado (TV/sala) — ignora: {heard[:40]!r}")
                             heard = NOVOICE
                         else:
