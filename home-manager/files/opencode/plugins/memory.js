@@ -87,12 +87,12 @@ export const MemoryOpenCodePlugin = async () => {
           "Narrow the path.' >&2; exit 1";
       }
     },
-    // (02/11) IDENTIDADE: o modelo não consegue se introspecionar (não sabe
-    // seus próprios pesos, nem se é local ou de API). A única fonte confiável
-    // é o HARNESS: o hook entrega {sessionID, model}. Injetamos uma linha
-    // factual no system prompt — no TOPO do bloco (primacy), sem criar um 2º
-    // system message (o template do modelo aborta: "System message must be
-    // at the beginning").
+    // (02/11) IDENTITY: the model cannot introspect itself (it does not know
+    // its own weights, nor whether it runs locally or behind an API). The only
+    // reliable source is the HARNESS: the hook delivers {sessionID, model}.
+    // We inject one factual line into the system prompt — at the TOP of the
+    // block (primacy), without creating a 2nd system message (the model
+    // template aborts: "System message must be at the beginning").
     "experimental.chat.system.transform": async (input, output) => {
       if (!output || !Array.isArray(output.system)) return;
       const m = input?.model || {};
@@ -118,15 +118,16 @@ export const MemoryOpenCodePlugin = async () => {
       const last = output.system.length - 1;
       output.system[last] = `${output.system[last] ?? ""}\n\n${REHYDRATE_RULE}`;
     },
-    // (02/11) Regra do resgate no system prompt — MINUTA, sem estado.
-    // É o que transforma "lembre-se de reidratar" em regra do harness.
+    // (02/11) Rescue rule in the system prompt — a MINUTE, no state.
+    // It turns "remember to rehydrate" into a harness rule.
     //
-    // MERGE, não push: o system prompt é UM bloco só (medido: 1 bloco,
-    // 20073 chars). Push cria um SEGUNDO system message e o template do
-    // modelo (Qwen3.5 + Jinja) aborta com "System message must be at the
-    // beginning" — erro real achado na 1ª medição (run A: rc=1, 77s, vazio).
-    // Por isso: anexa ao ÚLTIMO bloco (mantém a contagem → 1 system message)
-    // e fica no fim do prompt = posição de maior recência (2510.05381).
+    // MERGE, not push: the system prompt is ONE block (measured: 1 block,
+    // 20073 chars). Push creates a SECOND system message and the model
+    // template (Qwen3.5 + Jinja) aborts with "System message must be at the
+    // beginning" — a real error found in the 1st measurement (run A: rc=1,
+    // 77s, empty output). Hence: append to the LAST block (keeps the count →
+    // 1 system message) and it lands at the end of the prompt = highest
+    // recency position (2510.05381).
     "experimental.session.compacting": async (input, output) => {
       if (output && Array.isArray(output.context)) {
         output.context.push(COMPACTION_MEMORY);

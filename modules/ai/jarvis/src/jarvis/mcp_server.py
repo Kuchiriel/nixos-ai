@@ -663,7 +663,7 @@ def _vault_read_from_obsidian(query: str) -> list[dict[str, str]]:
         )
         return [{"path": p, "name": Path(p).stem} for p in result.stdout.splitlines()]
     except Exception as e:
-        return [{"error": f"ripgrep falhou: {e}"}]
+        return [{"error": f"ripgrep failed: {e}"}]
 
 
 def _vault_status() -> dict[str, Any]:
@@ -944,7 +944,7 @@ def _handle_nix_search(args: dict[str, Any]) -> str:
     # Encontrar mcp-nixos no PATH ou no nix store
     mcp_bin = shutil.which("mcp-nixos")
     if not mcp_bin:
-        # Fallback: procurar no nix store (usar subprocess sem pipes)
+        # Fallback: search the nix store (use subprocess without pipes)
         try:
             import glob
             candidates = glob.glob("/nix/store/*/bin/mcp-nixos")
