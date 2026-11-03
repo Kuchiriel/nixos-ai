@@ -41,6 +41,11 @@
   ];
 
 
+  # Farm de symlinks com TODAS as deps (core + voz) num so site-packages.
+  # Consumido por: (a) propagatedBuildInputs -> console script do pacote,
+  # (b) $out/nix-support/python-path -> jarvis-env.sh (CLI/MCP).
+  pythonDepsPath = lib.makeSearchPathOutput "out" "python3/site-packages" (pythonDeps ++ voiceDeps);
+
   jarvis = python3Packages.buildPythonPackage rec {
     pname = "jarvis";
     version = "0.1.0";
@@ -71,8 +76,6 @@
     # 12.3.0 presente em `nix-store -q --references`, porém "No module named
     # PIL"). Efeito prático: vision.py caía no PNG cru de 1,5MB e o Gemini
     # respondia "Unable to process input image". Agora as deps entram no path.
-    pythonDepsPath = lib.makeSearchPathOutput "out" "python3/site-packages" (pythonDeps ++ voiceDeps);
-
     # makeWrapperArgs sozinho NÃO funcionou: o hook de python do nixpkgs monta
     # o wrapper por cima e o PYTHONPATH some (medido: pillow 12.3.0 no closure
     # via `nix-store -q --references`, mas `import PIL` → ModuleNotFoundError
