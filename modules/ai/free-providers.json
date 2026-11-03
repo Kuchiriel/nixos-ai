@@ -52,7 +52,9 @@
       "requires_headers": false,
       "status": "active",
       "headroom": 32000,
-      "_notes": "NIM free tier. Catálogo grande mas volátil (modelos somem sem aviso). ultra-550b é o mais forte disponível free. TETO MEDIDO: prompt_tokens + max_tokens ≤ context (262146 tokens = 400). headroom 32k: growth medido por passo no NIM p99=11-14k, max=28k (minimax) / 83k (cache invalidation).",
+      "header_timeout": 600000,
+      "chunk_timeout": 600000,
+      "_notes": "NIM free tier. Catálogo grande mas volátil (modelos somem sem aviso). ultra-550b é o mais forte disponível free. TETO MEDIDO: prompt_tokens + max_tokens ≤ context (262146 tokens = 400). headroom 32k: growth medido por passo no NIM p99=11-14k, max=28k (minimax) / 83k (cache invalidation). TIMEOUT 10min (03/11): com ~145k tokens de prompt o prefill free passa dos 300000ms default → ProviderHeaderTimeoutError; o opencode retenta 3x e o turno morre. headerTimeout/chunkTimeout viram provider.nvidia.options no home.nix.",
       "models": [
         {
           "id": "nvidia/nemotron-3-ultra-550b-a55b",

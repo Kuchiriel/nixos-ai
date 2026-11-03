@@ -41,6 +41,26 @@ Hyprland com "…"):
   tabela é a cópia durável).
 - Foco final: ws4, janela "nsncd" (`focus=1` no TSV).
 
+## Autostart (03/11, pedido do dono: "sim")
+
+Para não depender de rodar o script na mão depois de cada reboot:
+
+- **Captura contínua**: `systemd --user` timer `session-snapshot` roda
+  `restore-sessions.sh --capture` a cada **60s** (`OnBootSec=2min`) e grava o
+  layout ATUAL em `~/.local/state/jarvis/sessions-snapshot.tsv`.
+  O modo `--capture` mapeia `foot` → `opencode -s <id>` por `/proc` (ppid até
+  achar o `foot`) + `hyprctl clients -j` (workspace, X → left/right, foco).
+- **Restore no login**: `exec-once` do Hyprland
+  (`home-manager/modules/hyprland/main.nix`) espera o `opencode-serve`
+  (até 45s) e roda `restore-sessions.sh` — idempotente, reabre o que faltar.
+- Declarativo: `home-manager/modules/session-snapshot.nix` (importado no
+  `home.nix`). **Só vale a partir do próximo rebuild** — neste reboot ainda
+  é o script na mão (o state já está gravado, então o restore manual pega o
+  layout de agora).
+
+O restore sem `--file` prefere o snapshot do state e cai no TSV datado do repo
+se o state não existir.
+
 ## Como restaurar
 
 ```bash

@@ -45,6 +45,10 @@ in {
       exec-once = [
         "wl-paste --type text --watch cliphist store"
         "wl-paste --type image --watch cliphist store"
+        # (03/11) devolve as janelas opencode do snapshot (o timer
+        # session-snapshot grava o layout a cada 60s; idempotente).
+        # Espera o opencode-serve (a TUI conecta nele) antes de abrir.
+        "sh -c 'for i in $(seq 1 45); do pgrep -f \"opencode[ ]serve\" >/dev/null && break; sleep 1; done; exec /home/nixos/projects/nixos-ai/scripts/restore-sessions.sh'"
       ];
 
       general = {

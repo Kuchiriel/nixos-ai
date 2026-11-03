@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_79 tools._
+_80 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -11,6 +11,7 @@ _79 tools._
 - `agent-msg.sh` (nixos-ai/scripts) — agent-msg.sh — O CANAL BOT-A-BOT, agora com ROTEAMENTO e ENTREGA por API.
 - `agent-pains.sh` (nixos-ai/scripts) — agent-pains.sh — registro automático de "dores" de CLI e lições aprendidas (genérico do monorepo).
   use: `./agent-pains.sh add --kind cli|lesson|tool|env --project <path> \`
+- `agent-provider-guard.py` (nixos-ai/scripts) — """agent-provider-guard.py — detecta falhas do PROVIDER de LLM e avisa (ping).
 - `agent-roster.py` (nixos-ai/scripts) — """agent-roster.py — ROSTER + TASKS da coordenação multi-agente (02/11).
 - `agents-keepawake.sh` (nixos-ai/scripts) — agents-keepawake.sh — inibe o idle (tela) enquanto houver agente vivo.
   use: `USO: systemd user service (nixos-ai home-manager, agents-keepawake.service)`

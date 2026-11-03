@@ -59,7 +59,16 @@
         baseURL = baseURL;
       }
       // (if apiKeyEnv != null then {apiKey = apiKeyEnv;} else {})
-      // (if headers != {} then {headers = headers;} else {});
+      // (if headers != {} then {headers = headers;} else {})
+      # (03/11) TIMEOUT do provider declarativo: o default do opencode é
+      # 300000ms (5 min) p/ headers/chunks. Num prompt de ~145k tokens o
+      # NIM free passa de 5 min no prefill → ProviderHeaderTimeoutError
+      # (3 retries x 5 min e o turno morre). Valores vêm do
+      # free-providers.json (fonte única), por provider.
+      // (if (prov.header_timeout or null) != null
+          then {headerTimeout = prov.header_timeout;} else {})
+      // (if (prov.chunk_timeout or null) != null
+          then {chunkTimeout = prov.chunk_timeout;} else {});
     models = activeModels;
   };
 
@@ -131,6 +140,8 @@ in {
     ./modules/agents-keepawake.nix
     # jobs noturnos (bench 04:00 / probe do default 05:00) — declarativos
     ./modules/bench-nightly.nix
+    # layout das janelas opencode sobrevive ao reboot (captura 60s + restore)
+    ./modules/session-snapshot.nix
     ./modules/ai
     ./modules/services/jarvis-wakeword.nix
     ./modules/services/sunshine.nix

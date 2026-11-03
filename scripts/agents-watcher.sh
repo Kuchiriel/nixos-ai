@@ -92,6 +92,12 @@ DIR_ST="${TMPDIR:-/tmp}/opencode/agents-watcher"; mkdir -p "$DIR_ST"
 SCRIPT_DIR="$(cd "$(dirname "$(realpath "$0")")" && pwd)"
 PAINS_SH="${AGENTS_PAINS_SH:-$SCRIPT_DIR/agent-pains.sh}"
 CHECKPOINT_SH="${AGENTS_CHECKPOINT_SH:-$SCRIPT_DIR/agent-checkpoint.sh}"
+# (03/11) GUARDA DE PROVIDER: timeout de 5min/429/400 do LLM nao e erro de
+# tool — o agent-pains nao ve e o dono descobria 15min depois. Le o log do
+# opencode, deduplica e manda PING (notify-send) + nota p/ a peer.
+GUARD_PY="${AGENTS_GUARD_PY:-$SCRIPT_DIR/agent-provider-guard.py}"
+GUARD_SINCE="${AGENTS_GUARD_SINCE:-20}"
+GUARD_EVERY="${AGENTS_GUARD_EVERY:-1}"
 # auto-captura de erros de CLI a cada N ciclos (silencioso, nunca acorda ninguem)
 PAINS_EVERY="${AGENTS_PAINS_EVERY:-10}"
 PAINS_SINCE="${AGENTS_PAINS_SINCE:-90}"
@@ -500,6 +506,25 @@ print(len([a for a in d.get("agents", []) if a.get("state") == "live"]))
             _pr=$("$PAINS_SH" scan-apply --since-min "$PAINS_SINCE" --max 40 2>&1 | tail -1)
             log "auto-pains: $_pr"
         fi
+    fi
+
+    # (03/11) GUARDA DE PROVIDER (timeout 5min / 429 / 400 do LLM): cada
+    # ciclo, janela de GUARD_SINCE min. Dedup interno: so evento NOVO pinga.
+    # CHECK (dry-run) nao notifica.
+    _cgn=$(cat "$DIR_ST/ciclo.guard" 2>/dev/null || echo 0)
+    _cgn=$(( _cgn + 1 ))
+    [ "$CHECK" -eq 1 ] || echo "$_cgn" > "$DIR_ST/ciclo.guard"
+    if [ "$_cgn" -ge "$GUARD_EVERY" ] && [ -f "$GUARD_PY" ]; then
+        [ "$CHECK" -eq 1 ] || echo 0 > "$DIR_ST/ciclo.guard"
+        if [ "$CHECK" -eq 1 ]; then
+            _gr=$(python3 "$GUARD_PY" scan --since-min "$GUARD_SINCE" --dry-run 2>&1 | tail -2 | tr '\n' '; ')
+        else
+            _gr=$(python3 "$GUARD_PY" scan --since-min "$GUARD_SINCE" 2>&1 | tail -2 | tr '\n' '; ')
+        fi
+        case "$_gr" in
+            *"sem evento novo"*) ;;
+            *) log "provider-guard: $_gr" ;;
+        esac
     fi
 
     # digest: notifica SÓ os commits que mudaram neste ciclo (sinal, não ruído)
