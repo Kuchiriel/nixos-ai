@@ -34,6 +34,32 @@ let
     echo "whisper-server não ficou healthy em 90s; subindo embeddings assim mesmo" >&2
     exit 0
   '';
+
+  # (03/11 18:50) O whisper.cpp cai para CPU **SEM NENHUM ERRO** quando não
+  # acha a libcuda.so.1 — o serviço responde /health, mas cada segmento
+  # leva ~10 s (CPU) em vez de ~250 ms (GPU). Foi exatamente o que a 1ª
+  # ativação produziu (VRAM ocupada pela instância manual). Por isso a unit
+  # confere se o PID está na VRAM e FALHA se não estiver: o Restart
+  #=on-failure re-tenta até a VRAM liberar.
+  gpuGuard = pkgs.writeShellScript "whisper-gpu-guard.sh" ''
+    # $1 = pid do processo principal (o systemd expande $MAINPID na linha
+    # de comando; dentro do script o shell não enxergaria a variável).
+    pid="''${1:-}"
+    if [ -z "$pid" ]; then
+      echo "whisper-gpu-guard: pid não informado" >&2
+      exit 1
+    fi
+    for _i in $(seq 1 60); do
+      if /run/current-system/sw/bin/nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null \
+         | grep -qx "$pid"; then
+        echo "whisper-server na GPU (pid $pid)"
+        exit 0
+      fi
+      sleep 1
+    done
+    echo "whisper-server NÃO subiu na GPU (libcuda.so.1 não carregou? VRAM cheia?)" >&2
+    exit 1
+  '';
 in {
   options.services.whisper-server = {
     enable = lib.mkEnableOption "Whisper.cpp Server (ASR para a voz duplex)";
@@ -115,7 +141,14 @@ in {
         DeviceAllow = ["/dev/nvidiactl" "/dev/nvidia0" "/dev/nvidia-uvm"];
         MemoryMax = "4G";
         TasksMax = 64;
+        # (03/11) libcuda.so.1 vive em /run/opengl-driver/lib (symlink pro
+        # driver do nix store). Sem isto o binário cai para CPU em silêncio.
+        ExecStartPost = "${gpuGuard} $MAINPID";
       };
+
+      # (03/11) o driver CUDA (libcuda.so.1) — mesma receita do
+      # vision-moondream (modules/services/vision-moondream.nix).
+      environment.LD_LIBRARY_PATH = "/run/opengl-driver/lib";
     };
 
     # (03/11) `before=` só ordena o SPAWN do processo, não o carregamento
