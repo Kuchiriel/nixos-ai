@@ -26,6 +26,7 @@
     pillow # vision.py redimensiona antes de mandar pro llama vision; sem isso cai no fallback PNG cru e o modelo devolve 500
     pytesseract # fallback do vision.py: OCR quando o vision model falha
     playwright # browser tool via CDP (connect_over_cdp; sem ms-playwright)
+    onnxruntime # laya_classifier.py (classificador de dificuldade fine-tuned): sem isto a Laya cai no regex SEMPRE — o fine-tune fica inerte (medido 03/11: acc Laya 83,3% vs regex 33,3%)
   ];
 
   # Voz (STT faster-whisper + TTS Kokoro). 03/11: era um pacote separado
