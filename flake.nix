@@ -106,15 +106,18 @@
           nixpkgs-unstable.legacyPackages.${system}.python3Packages.mcp;
 
         # Pacote Python do JARVIS
-        jarvis = (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast; inherit aiModels;}).base;
-        jarvis-voice = (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast; inherit aiModels;}).withVoice;
+        # 03/11: UM pacote só (jarvis, com a voz dentro). O split
+        # jarvis/jarvis-voice existia só para não arrastar torch no
+        # `base`, mas o `base` não tinha NENHUM consumidor de runtime —
+        # todos usam a voz (host, wakeword, MCP, vscode).
+        jarvis = (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast; inherit aiModels;}).jarvis;
         # (30/09) Ambiente de TESTE do nightwatch: as deps REAIS do jarvis +
         # pytest. Sem as deps, os testes do projeto falhavam com
         # "No module named 'requests'" e o harness culpava o modelo.
         # Montado pelo Nix — Python só obedece (JARVIS_TEST_PYTHON).
         jarvis-test-env = final.python3.withPackages (ps:
           [ ps.pytest ps.pytest-timeout ps.hypothesis ]
-          ++ (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast; inherit aiModels;}).base.pythonDeps);
+          ++ (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast; inherit aiModels;}).pythonDeps);
 
         # ── NVIDIA no linux-zen 7.2.x (10/10) ───────────────
         # Kernel zen >= 7.2 quebrou o driver 595.71.05 (strncpy removido no
@@ -235,7 +238,7 @@
     packages.${system} = let
       pkg = nixpkgs.legacyPackages.${system}.extend aiOverlay;
     in {
-      inherit (pkg) jarvis jarvis-voice kilo antigravity-ide;
+      inherit (pkg) jarvis kilo antigravity-ide;
     };
 
     # ── checks: linting fail-closed (checks/default.nix) ────────────

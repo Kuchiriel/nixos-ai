@@ -97,8 +97,8 @@ services.avahi = {
     wl-clipboard
     cloudflare-warp
     xxd # hex dump (análise de formatos binários: .spr/.dat/.shapes de clients)
-    # Pacote do JARVIS via overlay (withVoice: STT/TTS p/ wakeword brainCommand)
-    jarvis-voice
+    # Pacote do JARVIS via overlay (único: STT/TTS p/ wakeword brainCommand)
+    jarvis
     # Voz: G2P do Kokoro + captura/teste de áudio
     espeak-ng
     sox

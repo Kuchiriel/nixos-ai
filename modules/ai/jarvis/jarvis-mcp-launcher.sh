@@ -15,7 +15,7 @@
 #
 # Tentar corrigir dentro do Nix deu em `makeWrapper doesn't understand the arg
 # MCP_NIXOS_CHANNEL_CACHE` (dois `--prefix` no mesmo wrapProgram). Não vale
-# brigar com o build: o wrapper do jarvis-voice é gerado em todas as
+# brigar com o build: o wrapper do jarvis é gerado em todas as
 # reinstall, então resolver em runtime é também mais robusto — não depende de
 # ninguém lembrar de re-gitar o Nix depois de um rebuild.
 #

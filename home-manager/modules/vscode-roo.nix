@@ -99,7 +99,7 @@ with lib; let
     # Binário instalado (jarvis-mcp): env completo (playwright, etc.).
     # O combo python3+source quebrava em deps (browser 100% morto em prod).
     jarvis = {
-      command = "${pkgs.jarvis-voice}/bin/jarvis-mcp";
+      command = "${pkgs.jarvis}/bin/jarvis-mcp";
       args = [];
       env = {
         JARVIS_PROJECT_ROOT = toString ../../.;

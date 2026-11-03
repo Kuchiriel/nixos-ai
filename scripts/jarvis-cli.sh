@@ -25,6 +25,9 @@
 #   hackmd-list                      — List HackMD notes
 #   hackmd-read <id>                 — Read HackMD note
 #   hackmd-write <title> <content>   — Write HackMD note
+#   tools                            — List every MCP tool + CLI coverage gap
+#   tool <name> <json>               — Call any MCP tool by name (JSON args)
+#   bench-stt <wav> [wav...]         — ASR_BENCH: measure STT (VAD on/off, RTF)
 #   status                           — Show JARVIS status
 #   help                             — Show this help
 
@@ -369,6 +372,77 @@ from jarvis.cli.main import main; main()
 import sys; sys.argv = ['jarvis', 'evidence'] + sys.argv[1:]
 from jarvis.cli.main import main; main()
 " "$@"
+        ;;
+    tools)
+        # 03/11: cobertura CLI x MCP. O MCP expoe ~37 tools; a CLI so tinha
+        # ~20 atalhos. Esta lista mostra o que falta ("tool" cobre tudo).
+        "$PY" -c "
+import re
+from jarvis.mcp_server import JARVIS_TOOLS
+native = set()
+for line in open('$0'):
+    m = re.match(r'^    ([a-z0-9][a-z0-9-]*)\)$', line)
+    if m:
+        native.add(m.group(1))
+aliases = {
+    'read_file': 'read', 'write_file': 'write', 'str_replace': 'replace',
+    'execute': 'shell', 'nix_eval': 'nix-eval', 'nix_check': 'nix-check',
+    'nix_search': 'nix-search', 'read_chatgpt': 'chatgpt',
+    'read_ai_conversation': 'chatgpt', 'rag_search': 'rag-search',
+    'rag_index': 'rag-index', 'vault_list': 'vault-list',
+    'vault_write': 'vault-write', 'vault_search_obsidian': 'vault-search',
+    'hackmd_list': 'hackmd-list', 'hackmd_read': 'hackmd-read',
+    'hackmd_write': 'hackmd-write', 'observe_screen': 'observe',
+    'capture_screen': 'screen', 'make_scenarios': 'make-scenarios',
+    'web_search': 'web-search',
+}
+covered, missing = [], []
+for t in JARVIS_TOOLS:
+    n = t['name']
+    cli = aliases.get(n, n)
+    (covered if cli in native else missing).append(n)
+print('MCP tools: %d | CLI native: %d | so via tool: %d' % (len(JARVIS_TOOLS), len(covered), len(missing)))
+print('--- CLI native ---')
+print(' '.join(sorted(covered)))
+print('--- only via tool ---')
+print(' '.join(sorted(missing)))
+"
+        ;;
+    rehydrate)
+        # 03/11: o rehydrate era o tool mais usado do MCP (68 chamadas/7d) e
+        # nao tinha atalho na CLI. Mapeia 1:1 na tool do MCP.
+        ARGS="${2:-}"
+        "$PY" -c "
+import json, sys
+from jarvis.mcp_server import call_tool
+raw = sys.argv[1].strip() if len(sys.argv) > 1 else ''
+args = json.loads(raw) if raw else {}
+print(call_tool('rehydrate', args))
+" "$ARGS"
+        ;;
+    web-search)
+        QUERY="${2:?Usage: jarvis-cli.sh web-search <query> [limit]}"
+        LIMIT="${3:-5}"
+        "$PY" -c "
+import json, sys
+from jarvis.mcp_server import call_tool
+print(call_tool('web_search', {'query': sys.argv[1], 'limit': int(sys.argv[2])}))
+" "$QUERY" "$LIMIT"
+        ;;
+    tool)
+        NAME="${2:?Usage: jarvis-cli.sh tool <name> <json-args>}"
+        ARGS="${3:-}"
+        "$PY" -c "
+import json, sys
+from jarvis.mcp_server import call_tool
+raw = sys.argv[1].strip() if len(sys.argv) > 1 else ''
+args = json.loads(raw) if raw else {}
+print(call_tool(sys.argv[2], args))
+" "$ARGS" "$NAME"
+        ;;
+    bench-stt)
+        shift
+        "$PY" -m jarvis.core.asr_bench "$@"
         ;;
     help|*)
         usage
