@@ -31,6 +31,9 @@ registered with canonical names on purpose (no doubled prefix). The tool has a
 ```bash
 scripts/agent-roster.py claim --name <n> --lane "<repo/area>" --repo <repo> --files "<glob1,glob2>"
 scripts/agent-roster.py list          # live/stale/dead + lanes + tasks
+# liveness = SESSÃO viva (opencode -s ses_...), não o address da janela:
+# o address do Hyprland é efêmero (reabrir a janela = address novo) e
+# fazia o roster dar o agente por morto → "não está vivo" no agent-msg.
 scripts/agent-roster.py release --name <n>
 scripts/agent-roster.py task add --title "..." --owner <n>
 ```

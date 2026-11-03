@@ -519,6 +519,13 @@ def cmd_events(args) -> int:
         return 0
     me = next((a for a in agentes if a.get("window") == args.window), None)
     if me is None:
+        # (03/11) a janela foi reaberta → address novo: casa pela SESSÃO
+        windows = agent_windows()
+        sess = next((w.get("session", "") for w in windows
+                     if w.get("address") == args.window), "")
+        if sess:
+            me = next((a for a in agentes if a.get("session") == sess), None)
+    if me is None:
         print("\n".join(eventos))
         return 0
     meu_repo = (me.get("repo") or "").strip()
