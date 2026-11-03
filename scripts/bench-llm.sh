@@ -136,13 +136,16 @@ PYEOF
 }
 
 for r in $(seq 1 $REPS); do
+  # carga da maquina no instante da medicao: t/s com contencao de CPU nao
+  # e comparável (ja medimos 24,6 t/s -> 8,0 t/s com outro agente ativo).
+  LOAD1=$(cut -d' ' -f1 /proc/loadavg); NCPU=$(nproc)
   curl -sf --max-time 300 http://127.0.0.1:$PORT/completion -H 'Content-Type: application/json' \
     -d "{\"prompt\": \"$(gen_prompt $((10 + r)))\", \"n_predict\": 128}" \
     | python3 -c "
 import json,sys
 d=json.load(sys.stdin); t=d.get('timings',{})
-print(f\"$TAG\trep$r\t{t.get('predicted_per_second',0):.1f}\t{t.get('prompt_per_second',0):.0f}\")
-json.dump({'tag':'$TAG','rep':$r,'tg':t.get('predicted_per_second',0),'pp':t.get('prompt_per_second',0)}, open('$OUT','a'))"
+print(f\"$TAG\trep$r\t{t.get('predicted_per_second',0):.1f}\t{t.get('prompt_per_second',0):.0f}\tload=$LOAD1\tncpu=$NCPU\")
+json.dump({'tag':'$TAG','rep':$r,'tg':t.get('predicted_per_second',0),'pp':t.get('prompt_per_second',0),'load1':'$LOAD1','ncpu':'$NCPU'}, open('$OUT','a'))"
   # TTFT com prefill de ~1k tokens (voz: latencia de primeira resposta)
   TTFT=$(ttft_measure 1 16 "$TAG" "$r")       # prompt de 1 token: latencia de 1a resposta
   TTFT_P=$(ttft_measure 512 16 "$TAG" "$r")    # prompt de 512 tok: prefill no caminho
