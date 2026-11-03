@@ -36,7 +36,9 @@ def _find_upwards(*candidates: str) -> Path | None:
 def _load_gate():
     path = _find_upwards("scripts/nv-gate.py")
     if path is None:
-        pytest.skip("scripts/nv-gate.py nao encontrado neste checkout")
+        # No sandbox do nix o pacote so leva ./jarvis -> o script nao existe:
+        # o modulo inteiro e pulado (allow_module_level obrigatorio no pytest 8).
+        pytest.skip("scripts/nv-gate.py nao encontrado neste checkout", allow_module_level=True)
     spec = importlib.util.spec_from_file_location("nv_gate", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
