@@ -103,9 +103,23 @@ TTS de fala). Lógica do FluidVoice portada (AEC3 do WebRTC):
 
 Medido: nós `echo_cancel_source` / `capture.echo_cancel_source` /
 `rnnoise_source` existem após restart do pipewire; o áudio passa nos dois
-caminhos (rms 0,0024). **O eco audível no mic é ~-90 dB neste hardware**
-(portas de áudio do laptop), então o ganho do AEC aqui é pequeno — a
-medição honesta é essa, não "AEC magic".
+caminhos.
+
+**Medição A/B do eco (03/11, piper +3,5 dB = clipping proposital):**
+
+| fonte | rms durante o TTS | rms no silêncio | STT (`bench-stt`, vad_on) |
+|---|---|---|---|
+| ALSA cru (o que o duplex usa hoje) | **0,030202** | 0,001809 | transcreve o TTS inteiro ("Jarvis, teste de cancelamento de ego…"), logprob -0,422 |
+| `echo_cancel_source` (AEC3) | **0,000014** | 0,000028 | **texto vazio** (decode 102 ms vs 2.474 ms) |
+
+⇒ **AEC3 atenuou 66,4 dB** e a transcrição fantasma desaparece. Bônus: sem
+o TTS para transcrever, o STT gastou 102 ms em vez de 2.474 ms (CPU).
+
+Nota honesta: com o TTS em volume normal o eco neste hardware fica perto
+de -90 dB (portas de áudio do laptop) — o ganho de 66 dB aparece quando o
+áudio é audível pelo mic (notebook com auto-falante + mic colado, ou
+volume alto). E `vad_off` no caminho AEC vira alucinação pura
+("Miki Javais Feral Jove…") — o VAD continua obrigatório no duplex.
 
 ---
 
@@ -113,7 +127,7 @@ medição honesta é essa, não "AEC magic".
 
 | # | Item | Onde | Risco | Ação proposta |
 |---|------|------|-------|---------------|
-| A1 | **Duplex fora do AEC** | `scripts/duplex-voice.py:128` grava do ALSA cru (`HiFi__Mic1__source`) | o eco do TTS entra no STT; a guarda é por estado (`TTS_SELF`), não por DSP | medir com `bench-stt` (piper + voz alta) e, se o eco passar de -40 dB, apontar o duplex para `rnnoise_source` |
+| A1 | **Duplex fora do AEC** (PROPOSTA PRONTA) | `scripts/duplex-voice.py:128` grava do ALSA cru (`HiFi__Mic1__source`) | medido: o STT transcreve o TTS (fantasma) no caminho cru; com AEC3 o texto sai vazio (-66,4 dB) | **apontar o duplex para `rnnoise_source`** (AEC3 → RNNoise). Medido e proposal enviado ao `voice-flags-en` (lane do duplex); 1 linha + 1 constante de device |
 | A2 | **TTS por contexto** | duplex usa **piper** (latência, RTF 0,033) ✓; `jarvis speak`/ack usam **kokoro** ✓ | piper não deve entrar no duplex (latência), kokoro não deve entrar no duplex | manter: piper = duplex, kokoro = resto (direção do dono, 03/11) |
 | A3 | **IP do tailnet hardcoded** | `scripts/agent-msg.sh:59`, `scripts/agents-watcher.sh:170`, `home-manager/modules/services/opencode-serve.nix:10` | muda de tailnet → scripts quebram | ler de `tailscale ip -4` ou de um arquivo de estado do HM |
 | A4 | **`/home/nixos` no código** | `cli/dev.py`, `cli/main.py`, `core/context_budget.py`, `core/laya_*.py`, `runtime/context.py` | não portável, quebra em outro usuário | `Path.home()` / env `JARVIS_HOME` |
