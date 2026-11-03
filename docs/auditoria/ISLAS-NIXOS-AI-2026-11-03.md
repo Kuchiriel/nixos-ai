@@ -115,8 +115,28 @@ caminhos.
 ⇒ **AEC3 atenuou 66,4 dB** e a transcrição fantasma desaparece. Bônus: sem
 o TTS para transcrever, o STT gastou 102 ms em vez de 2.474 ms (CPU).
 
+> ⚠️ **CORREÇÃO 03/11 16:00 — o número 66,4 dB é INVÁLIDO.** A medição
+> comparava duas fontes em **instantes diferentes** e, pior, com o
+> **default source do pipewire no Mic2 (Stereo Mic, MORTO)**. O AEC3
+> captura do default source ⇒ o lado "AEC" media um mic quase morto
+> (rms 0,000014), e o lado "ALSA" media o Mic1 (Digital) — a diferença
+> era **o mic errado**, não cancelamento de eco.
+>
+> **Medição CORRETA (simultânea, default source = Mic1, tom 1 kHz nos
+> alto-falantes):** ALSA cru rms **1282,7** (−28,1 dBFS) · AEC3 rms
+> **132,1** (−47,9 dBFS) ⇒ atenuação real de **19,7 dB**, com correlação
+> AEC/ALSA de **−0,198** (o tom residual está decorrelacionado = o eco
+> foi de fato removido, não apenas escalado). **Fala real** (arquivo
+> TTS tocado nos alto-falantes): ALSA rms 132,1 → AEC rms 32,1
+> (−12,3 dB) e o STT do AEC devolve " E aí" em vez do eco inteiro.
+>
+> Conclusão: o AEC3 **funciona** (é um cancelador de eco de voz, não de
+> tom puro — 20 dB num tom de 1 kHz é o comportamento esperado), mas o
+> ganho real é **~12-20 dB**, não 66 dB. O default source correto é
+> **essencial** (regra nova no WirePlumber, `nixos/modules/audio.nix`).
+
 Nota honesta: com o TTS em volume normal o eco neste hardware fica perto
-de -90 dB (portas de áudio do laptop) — o ganho de 66 dB aparece quando o
+de -90 dB (portas de áudio do laptop) — o ganho aparece quando o
 áudio é audível pelo mic (notebook com auto-falante + mic colado, ou
 volume alto). E `vad_off` no caminho AEC vira alucinação pura
 ("Miki Javais Feral Jove…") — o VAD continua obrigatório no duplex.
@@ -169,7 +189,9 @@ VAD vira alucinação).
 
 | # | Item | Onde | Risco | Ação proposta |
 |---|------|------|-------|---------------|
-| A1 | **Duplex fora do AEC** (APLICADO 03/11, medido de novo: rms 0,0494 cru → 0,000000 no AEC3+RNNoise) | `scripts/duplex-voice.py:128` grava do ALSA cru (`HiFi__Mic1__source`) | medido: o STT transcreve o TTS (fantasma) no caminho cru; com AEC3 o texto sai vazio (-66,4 dB) | **apontar o duplex para `echo_cancel_source`** (AEC3 direto; o `rnnoise_source` pode ficar sem link de entrada = silencio). Medido e proposal enviado ao `voice-flags-en` (lane do duplex); 1 linha + 1 constante de device |
+| A1 | ~~**Duplex fora do AEC**~~ RESOLVIDO 03/11 | `scripts/duplex-voice.py:139` agora grava de `echo_cancel_source` (AEC3) com fallback pro ALSA cru | ~~STT transcrevia o TTS~~ → eco cancelado (medido: −12 a −20 dB, STT devolve " E aí" em vez do eco) | **feito** (commit `0088287d`) + regra de default source no WirePlumber (`nixos/modules/audio.nix`) — sem ela o AEC3 captura o Mic2 MORTO |
+| A1b | **ASR do duplex morria no boot (CUDA OOM)** — NOVO 03/11 16:00 | `whisper-server` era subir manual (setsid no `duplex-voice-run.sh`) | VRAM disputada: 4B-MTP 4582 MiB + embeddings 446 MiB → sobra < 800 MiB e o whisper precisa ~900 ⇒ **morre no boot ⇒ duplex surdo** ("falo com ele e nada") | **feito**: `modules/services/whisper-server.nix` (systemd, `before = llama-cpp-embeddings.service` p/ pegar VRAM primeiro) + `duplex-voice-run.sh` usa o serviço. Medido: GPU 198-341 ms/segmento (CPU: 10,4 s, inviável) |
+| A1c | **Default source do pipewire = Mic2 (morto)** — NOVO 03/11 16:00 | runtime (`wpctl set-default 74`), não persistido | após reboot o AEC3 volta a capturar o Stereo Mic (rms 0,000257 vs 0,005585 do Digital) ⇒ duplex surdo de novo | **feito**: regra WirePlumber `10-default-source.rules` casa por `node.name` (índice muda entre boots) |
 | A2 | **TTS por contexto** | duplex usa **piper** (latência, RTF 0,033) ✓; `jarvis speak`/ack usam **kokoro** ✓ | piper não deve entrar no duplex (latência), kokoro não deve entrar no duplex | manter: piper = duplex, kokoro = resto (direção do dono, 03/11) |
 | A3 | **IP do tailnet hardcoded** | `scripts/agent-msg.sh:59`, `scripts/agents-watcher.sh:170`, `home-manager/modules/services/opencode-serve.nix:10` | muda de tailnet → scripts quebram | ler de `tailscale ip -4` ou de um arquivo de estado do HM |
 | A4 | **`/home/nixos` no código** | `cli/dev.py`, `cli/main.py`, `core/context_budget.py`, `core/laya_*.py`, `runtime/context.py` | não portável, quebra em outro usuário | `Path.home()` / env `JARVIS_HOME` |

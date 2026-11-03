@@ -22,10 +22,23 @@ LANG_FLAG=""
 [ "$WHISPER_LANG" != "auto" ] && LANG_FLAG="-l $WHISPER_LANG"
 if ! curl -s -o /dev/null --max-time 2 http://127.0.0.1:8097/health 2>/dev/null \
    && ! curl -s -o /dev/null --max-time 2 -F x=1 http://127.0.0.1:8097/inference 2>/dev/null; then
-  setsid nohup /home/nixos/projects/whisper.cpp/build/bin/whisper-server \
-    -m "$WHISPER_MODEL" $LANG_FLAG --port 8097 --host 127.0.0.1 \
-    > /tmp/opencode/whisper-server.log 2>&1 < /dev/null &
-  sleep 6
+  # (03/11) O whisper-server é um SERVIÇO systemd (whisper-server.service,
+  # modules/services/whisper-server.nix): sem ele o processo morria no
+  # boot com CUDA OOM (VRAM disputada com o 4B-MTP) e o duplex ficava
+  # SURDO. O fallback manual abaixo só cobre dev sem systemd.
+  if systemctl start whisper-server.service 2>/dev/null; then
+    echo "duplex-voice-run: whisper-server.service iniciado" >&2
+  else
+    setsid nohup /home/nixos/projects/whisper.cpp/build/bin/whisper-server \
+      -m "$WHISPER_MODEL" $LANG_FLAG --port 8097 --host 127.0.0.1 \
+      > /tmp/opencode/whisper-server.log 2>&1 < /dev/null &
+  fi
+  # Espera o ASR ficar pronto (o modelo carrega em ~5-20 s; sem isso o
+  # cliente nasce com o ASR mudo e só descobre minutos depois).
+  for _i in $(seq 1 30); do
+    curl -s -o /dev/null --max-time 2 http://127.0.0.1:8097/health 2>/dev/null && break
+    sleep 1
+  done
 fi
 # LIMPEZA DE ÓRFÃOS (18/10): o kill do cliente deixa os DAEMONS filhos
 # vivos (ttsd em especial = múltiplos faladores no mesmo FIFO — a fonte

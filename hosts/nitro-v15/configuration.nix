@@ -199,6 +199,10 @@ services.avahi = {
   # "tira o bonsai de default" (26/10).
   services.llama-cpp-embeddings.enable = true;
   services.llama-cpp-rerank.enable = true;
+  # (03/11) ASR da voz duplex. Sem ele o whisper-server morre no boot com
+  # CUDA OOM (VRAM disputada com o 4B-MTP) e o duplex fica SURDO —
+  # sintoma "falo com ele e nada". Medido: GPU 198-341 ms/segmento.
+  services.whisper-server.enable = true;
   # services.qdrant.enable é definido por qdrant.nix (condicional a jarvis.enable)
   services.jarvis-vault.enable = false;
   services.jarvis-webui.enable = true;

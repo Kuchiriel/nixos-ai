@@ -3,22 +3,25 @@
 # clientes e relança UM). Promovido do volátil /tmp/opencode/clean-restart.sh
 # (24/10, lição do reboot: /tmp morre e ninguém sabia reiniciar a voz).
 #
-# USO: duplex-restart.sh [--port N] [--gate on|off] [--force]
+# USO: duplex-restart.sh [--port N] [--gate intent|jarvis|on|off] [--force]
 #   --port   porta do llama-server da voz (default 8092 = llama-uncensored-4b)
-#   --gate   address gate: on = exige 'Jarvis' (anti-TV); off = responde tudo
-#            (default off — modo testes; produção com TV usa on)
+#   --gate   gate do turno (mesmos valores do duplex-voice.py):
+#            intent = endereço OU intenção QUESTION/COMMAND (default 03/11;
+#            recall 92,3% no bench) · jarvis/on = só a palavra "Jarvis"
+#            (estrito, anti-TV) · off = responde TODO segmento (testes/AFK)
 #   --force  relança mesmo com backend morto (estado zumbi — evitado por padrão)
 #
-# EXEMPLO:
-#   duplex-restart.sh                     # default: :8092, gate off
-#   duplex-restart.sh --gate on           # modo-TV
+# EXEMPLOS:
+#   duplex-restart.sh                     # default: :8092, gate intent
+#   duplex-restart.sh --gate jarvis       # modo-TV (estrito)
+#   duplex-restart.sh --gate off          # testes/AFK
 #
 # CONTRATO: recusa relançar com o backend LLM morto (zumbi: cliente vivo
 # apontando pra :8092 morto, incidente 24/10 04:03) a menos que --force;
 # sugere o systemctl start quando o backend está caído.
 set -u
 PORT=8092
-GATE=off
+GATE=intent
 FORCE=0
 while [ $# -gt 0 ]; do
     case "$1" in

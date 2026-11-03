@@ -6,6 +6,25 @@
     alsa.support32Bit = true;
     pulse.enable = true;
 
+    # (03/11, medido) DEFAULT SOURCE = o mic DIGITAL (Mic1), não o Stereo.
+    # O Stereo Mic (Mic2) é MORTO neste notebook (rms 0,000257 vs 0,005585
+    # do Digital — 27 dB abaixo). O módulo AEC3 captura do DEFAULT source:
+    # com Mic2 no default, o AEC3/RNNoise recebiam SILÊNCIO e o duplex
+    # ficava surdo (rms=0 no log) — o mesmo sintoma de "falo e nada".
+    # Regra do WirePlumber: força o node do Digital Microphone como default.
+    # O node.name (PCI path do cAVS) é ESTÁVEL; o índice (73/74) muda entre
+    # boots — por isso a regra casa por nome, não por índice.
+    wireplumber.extraConfig."10-default-source.rules" = ''
+      {
+        match.properties {
+          node.name = "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source"
+          node.description = "Raptor Lake-P/U/H cAVS Digital Microphone"
+        }
+        actions.default_source.priority = 2000
+        actions.default_source = true
+      }
+    '';
+
     # Denoise RNNoise (werman/noise-suppression-for-voice via nixpkgs
     # `rnnoise-plugin`): cria o source virtual `rnnoise_source` com supressão
     # de ruído em tempo real (ventoinha + sons de casa do notebook).

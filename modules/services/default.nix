@@ -26,5 +26,6 @@
     ./jarvis-consolidate-timer.nix
     ./qdrant.nix
     ./vision-moondream.nix
+    ./whisper-server.nix
   ];
 }
