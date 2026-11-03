@@ -118,3 +118,26 @@ O snapshot ganhou a coluna `dir` (cwd da sessão) para reabrir no lugar certo.
 sessão criada depois do start; o wrapper testado com um `opencode` stub
 (exit 130) imprime a dica e grava o registro; `restore-sessions.sh --dry-run`
 com as 2 sessões abertas → "já aberta (focada)" nas duas (zero janelas novas).
+
+
+## 03/11 (tarde 2) — o roster dava o agente por morto quando a janela mudava
+
+**Sintoma (dono)**: "não tá fechado — quando eu reabro as janelas vcs acham
+que fechou". O `agent-msg.sh --to coord-naming` respondia *"'coord-naming'
+não está vivo (janela fechada?)"* com as DUAS janelas aberto na tela.
+
+**Causa**: `window_alive()` exigia `address == entry["window"]`. O endereço
+do Hyprland é EFÊMERO: reabrir a janela (ou o `restore-sessions.sh`) gera um
+endereço novo → a entrada do roster apontava para um address morto → todo
+agente com janela reaberta virava "stale" e as entregas eram recusadas.
+
+**Correção**: a SESSÃO (`opencode -s ses_...`) é a identidade durável do
+agente → `window_alive()` passa a aceitar "o TUI desta sessão ainda existe".
+`live_sessions()` lê /proc (só `bin/opencode`, para não contar o wrapper) e
+`window_of_session()` acha a janela viva que carrega a sessão.
+`list` faz AUTO-CURA: se a sessão bate com uma janela viva, o endereço (e o
+pid) da entrada são atualizados e persistidos.
+
+**Verificado**: `roster list` → os 2 agentes `live` com os endereços
+atuais; `agent-msg.sh --to coord-naming` → "pedido enviado (204)".
+Teste offline: `modules/ai/jarvis/tests/test_agent_roster_liveness.py` (6).

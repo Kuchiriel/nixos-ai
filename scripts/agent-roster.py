@@ -179,9 +179,54 @@ def own_window(windows: list[dict] | None = None) -> dict | None:
     return None
 
 
-def window_alive(entry: dict, windows: list[dict]) -> bool:
-    """A janela do roster ainda existe E tem opencode vivo dentro."""
-    return any(w["address"] == entry.get("window") for w in windows)
+def live_sessions() -> dict[str, int]:
+    """session id -> pid dos TUIs opencode VIVOS.
+
+    (03/11, dono: "quando eu reabro as janelas vcs acham que fechou")
+    O ENDEREÇO da janela é efêmero: reabrir a janela = novo address → o
+    roster via address dava o agente por morto. A SESSÃO é a identidade
+    DURÁVEL (opencode -s ses_...) → é ela que decide a vida.
+    """
+    out: dict[str, int] = {}
+    for d in os.scandir("/proc"):
+        if not d.name.isdigit():
+            continue
+        pid = int(d.name)
+        try:
+            argv = Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace")
+        except Exception:
+            continue
+        if "bin/opencode" not in argv:
+            continue
+        sess = _session_do_pid(pid)
+        if sess:
+            out.setdefault(sess, pid)
+    return out
+
+
+def window_alive(entry: dict, windows: list[dict],
+                 sessions: dict[str, int] | None = None) -> bool:
+    """O agente ainda está vivo?
+
+    address casa com uma janela viva (mesma janela) OU a SESSÃO do agente
+    ainda tem um TUI opencode vivo (a janela foi reaberta/mudou de lugar).
+    """
+    if any(w["address"] == entry.get("window") for w in windows):
+        return True
+    sess = entry.get("session") or ""
+    if not sess:
+        return False
+    sessions = live_sessions() if sessions is None else sessions
+    return sess in sessions
+
+
+def window_of_session(entry: dict, windows: list[dict]) -> dict | None:
+    """A janela viva que carrega a sessão do agente (se houver)."""
+    sess = entry.get("session") or ""
+    if not sess:
+        return None
+    return next((w for w in windows
+                 if (w.get("session") or "") == sess), None)
 
 
 # ── roster: leitura/escrita atômica ───────────────────────────────────
@@ -309,17 +354,29 @@ def cmd_release(args) -> int:
 def cmd_list(args) -> int:
     data = load()
     windows = agent_windows()
+    sessions = live_sessions()
     sessao = {w["address"]: w.get("session", "") for w in windows}
     now = int(time.time())
     rows = []
+    mudou = False
     for e in data["agents"]:
-        alive = window_alive(e, windows)
+        alive = window_alive(e, windows, sessions)
+        # auto-cura: a sessão bate com uma janela viva → o address mudou
+        # (o dono reabriu a janela) → o registro passa a apontar pra ela
+        wv = window_of_session(e, windows)
+        if wv and wv.get("address") != e.get("window"):
+            e["window"] = wv.get("address")
+            e["pid"] = wv.get("pid")
+            mudou = True
         age = now - int(e.get("claimed_at") or now)
         state = "live" if alive else ("stale" if age > STALE_AFTER_S else "dead")
         rows.append({**e, "state": state, "age_s": age,
                      "session": e.get("session") or sessao.get(e.get("window"), ""),
                      "busy": next((bool(w.get("busy")) for w in windows
                                    if w["address"] == e.get("window")), False)})
+    if mudou:
+        with _Lock():
+            save(data)
     if args.json:
         print(json.dumps({"agents": rows, "tasks": data["tasks"]},
                          ensure_ascii=False, indent=2))
@@ -429,12 +486,15 @@ def cmd_resolve(args) -> int:
     """Resolve um NOME do roster -> janela viva (JSON). Sai 1 se não achar."""
     data = load()
     windows = agent_windows()
+    sessions = live_sessions()
     for e in data["agents"]:
         if e["name"] != args.name:
             continue
-        alive = window_alive(e, windows)
+        alive = window_alive(e, windows, sessions)
+        wv = window_of_session(e, windows)
         out = {**e, "live": alive,
-               "window": e.get("window") if alive else ""}
+               "window": (wv or e).get("address") if alive else "",
+               "pid": (wv or e).get("pid", e.get("pid")) if alive else 0}
         print(json.dumps(out, ensure_ascii=False))
         return 0 if alive else 1
     print(json.dumps({"error": "nome desconhecido", "name": args.name},
