@@ -52,7 +52,11 @@ in
     # Sempre ligado: os modelos (kokoro/whisper/openwakeword) precisam estar
     # no closure do sistema e religados a cada activation, independente do
     # wakeword (desabilitado desde 21/10).
-    enable = lib.mkEnableOption "Link the JARVIS models (kokoro/whisper/openwakeword) into ~/.local/share" true;
+    enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Link the JARVIS models (kokoro/whisper/openwakeword) into ~/.local/share";
+    };
   };
 
   config = lib.mkIf cfg.enable {
