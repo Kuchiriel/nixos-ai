@@ -55,9 +55,12 @@ lib.mkIf config.services.jarvis.enable {
   };
 
   systemd.tmpfiles.rules = [
-    "d /var/lib/qdrant 0750 qdrant qdrant -"
-    "d /var/lib/qdrant/storage 0750 qdrant qdrant -"
-    "d /var/lib/qdrant/snapshots 0750 qdrant qdrant -"
-    "h /var/lib/qdrant - - - - +C"
+    # (03/11) /var/lib/qdrant é um SYMLINK para /var/lib/private/qdrant
+    # (DynamicUser). Regras apontando para o symlink falhavam a cada boot:
+    # "already exists and is not a directory" + "Setting file flags is only
+    # supported on regular files and directories". O +C (NoCoW no btrfs) vai
+    # no diretório REAL.
+    "d /var/lib/private/qdrant 0750 qdrant qdrant -"
+    "h /var/lib/private/qdrant - - - - +C"
   ];
 }

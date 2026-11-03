@@ -70,8 +70,10 @@
 
     # WM Utilities
     libnotify
-    xdg-desktop-portal-gtk
-    xdg-desktop-portal-hyprland
+    # (03/11) xdg-desktop-portal-gtk/hyprland NÃO entram aqui: o sistema já
+    # os instala via xdg.portal.extraPortals (programs.hyprland). Duas cópias
+    # do mesmo .service faziam o dbus-broker logar "Ignoring duplicate name
+    # 'org.freedesktop.impl.portal...'" em todo boot.
     yad # GUI dialogs para NixOS-AI Launcher
 
     # ── packages ──────────────────────────────────────

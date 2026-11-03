@@ -101,7 +101,11 @@ in {
   ];
 
   # Regras de udev para otimizar o scheduler de I/O nos NVMes de alta performance
+  # (03/11) Só sd*/mmcblk*: o kyber NÃO existe no mq-deadline do NVMe e a
+  # regra antiga (com |nvme[0-9]*) gerava 6 erros de udev por boot
+  # ("Could not chase sysfs attribute queue/scheduler"). O NVMe usa a regra
+  # 'none' de configuration.nix (rotational=0).
   services.udev.extraRules = ''
-    ACTION=="add|change", KERNEL=="sd[a-z]|mmcblk[0-9]*|nvme[0-9]*", ATTR{queue/scheduler}="kyber"
+    ACTION=="add|change", KERNEL=="sd[a-z]|mmcblk[0-9]*", ATTR{queue/scheduler}="kyber"
   '';
 }

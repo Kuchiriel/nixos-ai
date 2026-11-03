@@ -61,6 +61,13 @@
       # `lo` sempre, furando a regra por interface. Bind no IP do tailnet
       # garante o isolamento independente do firewall (que segue como 2ª camada).
       # Consequência: o attach precisa usar o IP do Tailscale, não 127.0.0.1.
+      # (03/11) Segura o start ATÉ o IP do tailnet existir. Sem isso o bind
+      # em 100.121.100.103 falhava no boot com EADDRNOTAVAIL (o tailscaled
+      # ainda não tinha subido) e deixava um ciclo de erro no journal a cada
+      # boot. TimeoutStartSec=0 = espera sem limite (sem erro, sem desistir);
+      # o Restart=always continua como rede de segurança.
+      TimeoutStartSec = 0;
+      ExecStartPre = "${pkgs.bash}/bin/bash -c 'until ${pkgs.iproute2}/bin/ip -4 addr show dev tailscale0 2>/dev/null | ${pkgs.gnugrep}/bin/grep -q \"inet 100.121.100.103\"; do sleep 2; done'";
       ExecStart = "${pkgs.kilo}/bin/opencode serve --hostname 100.121.100.103 --port 4599";
       Restart = "always";
       RestartSec = 3;

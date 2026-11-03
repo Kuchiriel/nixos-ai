@@ -251,6 +251,21 @@ services.avahi = {
     ACTION=="add|change", KERNEL=="nvme[0-9]*n[0-9]*", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="none"
   '';
 
+  # (03/11) agents-keepawake usa `systemd-inhibit --what=sleep:idle` e falhava
+  # a cada boot com "Access denied as the requested operation requires
+  # interactive authentication": o user manager sobe o serviço antes de haver
+  # sessão logind, então o polkit não reconhece o subject. Regra pontual para
+  # a conta do dono (só as duas ações de inibição, nada além disso).
+  security.polkit.extraConfig = ''
+    polkit.addRule(function(action, subject) {
+      if ((action.id == "org.freedesktop.login1.inhibit-block-idle" ||
+           action.id == "org.freedesktop.login1.inhibit-block-sleep") &&
+          subject.user == "nixos") {
+        return polkit.Result.YES;
+      }
+    });
+  '';
+
   # Regras de tmpfiles: limpeza e suporte a No CoW (+C) para Btrfs
   # NOTA: /var/lib/qdrant e /var/lib/jarvis/models já são criados por
   # qdrant.nix e jarvis-env.nix respectivamente (condicionais a jarvis.enable)
