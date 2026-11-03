@@ -37,6 +37,18 @@ _FALLBACK = {
     "servicePorts": {"embeddings": 8081, "rerank": 8082},
     "bootModel": {"host": "bonsai", "vm": "jarvis-fast"},
     "units": {},
+    # (03/11) Espelho de models.nix `routing.directServers` (porta + unit).
+    "directServers": {
+        "uncensored-35b": {"endpoint": 8084, "unit": "llama-uncensored-35b"},
+        "duplex-35b": {"endpoint": 8085, "unit": "llama-duplex-35b"},
+        "uncensored-4b": {"endpoint": 8092, "unit": "llama-uncensored-4b"},
+        "deepseek-7b": {"endpoint": 8085, "unit": "llama-deepseek-7b"},
+        "xlam-8b": {"endpoint": 8089, "unit": "llama-xlam-8b"},
+        "phi-mini": {"endpoint": 8086, "unit": "llama-phi-mini"},
+        "gemma-4b": {"endpoint": 8087, "unit": "llama-gemma-4b"},
+        "qwen30b-moe": {"endpoint": 8091, "unit": "llama-qwen30b-moe"},
+        "uncensored-35b-q4kp": {"endpoint": 8093, "unit": "llama-uncensored-35b-q4kp"},
+    },
     "models": {
         "jarvis-mtp-lora": {
             "tier": "fast",
@@ -143,6 +155,10 @@ class ModelRegistry:
     endpoints: dict[str, int] = field(default_factory=dict)
     service_ports: dict[str, int] = field(default_factory=dict)
     units: dict[str, str] = field(default_factory=dict)
+    # (03/11) Servidores DIRETOS (não são tiers): {nome: {endpoint, unit}}.
+    # Derivado de models.nix `directServers` — o heal usa p/ descobrir a
+    # unit que serve uma porta sem hardcode.
+    direct_servers: dict[str, dict] = field(default_factory=dict)
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> "ModelRegistry":
@@ -190,6 +206,28 @@ class ModelRegistry:
             for k, v in (data.get("units") or {}).items()
             if isinstance(v, dict) and v.get("unit")
         }
+        direct_servers = {
+            str(k): {"endpoint": int(v.get("endpoint") or 0),
+                     "unit": str(v.get("unit") or "")}
+            for k, v in (data.get("directServers") or {}).items()
+            if isinstance(v, dict)
+        }
+        # (03/11) Chaves NOVAS podem faltar num registry JSON ANTIGO (gerado
+        # antes do rebuild) → completa com o fallback embutido (o Nix é a
+        # fonte; o fallback só evita quebrar o heal/doctor nesse meio-tempo).
+        if not service_ports:
+            service_ports = {
+                str(k): int(v)
+                for k, v in (_FALLBACK.get("servicePorts") or {}).items()
+                if isinstance(v, (int, float)) and not isinstance(v, bool)
+            }
+        if not direct_servers:
+            direct_servers = {
+                str(k): {"endpoint": int(v.get("endpoint") or 0),
+                         "unit": str(v.get("unit") or "")}
+                for k, v in (_FALLBACK.get("directServers") or {}).items()
+                if isinstance(v, dict)
+            }
         # (03/11) Fallback do endpoint: 1) o próprio modelo; 2) a porta do
         # grupo prism declarada no registry; 3) o literal 8080 (default do
         # router — contrato do test_registry_endpoint_defaults_8080).
@@ -221,7 +259,8 @@ class ModelRegistry:
                    source=source,
                    endpoints=endpoints,
                    service_ports=service_ports,
-                   units=units)
+                   units=units,
+                   direct_servers=direct_servers)
 
     def get(self, model_id: str) -> ModelEntry:
         try:
@@ -272,3 +311,75 @@ class ModelRegistry:
                 return str(unit)
         unit = self.units.get(model_id)
         return str(unit) if unit else None
+
+    def direct_units(self) -> dict[str, int]:
+        """unit systemd -> porta dos servidores DIRETOS (registry)."""
+        out: dict[str, int] = {}
+        for info in self.direct_servers.values():
+            unit = info.get("unit")
+            port = info.get("endpoint")
+            if unit and port:
+                out[str(unit)] = int(port)
+        return out
+
+    def port_units(self) -> dict[str, str]:
+        """porta -> unit systemd (direct servers têm precedência sobre o
+        grupo do router na mesma porta)."""
+        out: dict[str, str] = {}
+        for mid, entry in self.models.items():
+            unit = entry.raw.get("unit")
+            if unit and entry.endpoint:
+                out[str(entry.endpoint)] = str(unit)
+        for unit, port in self.direct_units().items():
+            out[str(port)] = unit
+        return out
+
+
+# ── (03/11) API de módulo: registry em cache + URLs derivadas ──
+_REGISTRY_CACHE: "ModelRegistry | None" = None
+_REGISTRY_LOADED = False
+
+
+def load_registry(path: str | Path | None = None) -> ModelRegistry:
+    """Registry vivo (cacheado por processo; env > /etc > fallback)."""
+    global _REGISTRY_CACHE, _REGISTRY_LOADED
+    if path is None and _REGISTRY_LOADED:
+        return _REGISTRY_CACHE  # type: ignore[return-value]
+    reg = ModelRegistry.load(path)
+    if path is None:
+        _REGISTRY_CACHE = reg
+        _REGISTRY_LOADED = True
+    return reg
+
+
+def registry_or_none() -> ModelRegistry | None:
+    """Registry ou None (nunca levanta)."""
+    try:
+        return load_registry()
+    except Exception:
+        return None
+
+
+def default_base_url(suffix: str = "") -> str:
+    """URL do server que serve o modelo DEFAULT (registry)."""
+    reg = registry_or_none()
+    if reg is not None:
+        url = reg.base_url_for(reg.default)
+        if url and not url.endswith(":0"):
+            return f"{url}{suffix}"
+    return f"http://127.0.0.1:8092{suffix}"
+
+
+def router_port() -> int:
+    """Porta do router (grupo prism)."""
+    reg = registry_or_none()
+    if reg is not None:
+        port = reg.router_port("prism")
+        if port:
+            return int(port)
+    return 8080
+
+
+def router_base_url(suffix: str = "") -> str:
+    """URL do router (grupo prism)."""
+    return f"http://127.0.0.1:{router_port()}{suffix}"

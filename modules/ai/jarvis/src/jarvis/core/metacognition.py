@@ -99,7 +99,12 @@ class MetacognitionEngine:
     detecta erros e auto-corrige.
     """
     
-    def __init__(self, base_url: str = "http://127.0.0.1:8092"):
+    def __init__(self, base_url: str | None = None):
+        # (03/11) base URL do server default — vem do registry (models.nix),
+        # não de um literal :8092.
+        if not base_url:
+            from jarvis.core.model_registry import default_base_url
+            base_url = default_base_url()
         self.base_url = base_url
         self.state = MetacognitionState()
         self.lock = threading.RLock()
@@ -528,7 +533,7 @@ class MetacognitionEngine:
 _metacognition_instance: Optional[MetacognitionEngine] = None
 _metacognition_lock = threading.Lock()
 
-def get_metacognition(base_url: str = "http://127.0.0.1:8092") -> MetacognitionEngine:
+def get_metacognition(base_url: str | None = None) -> MetacognitionEngine:
     """Singleton para instância global de metacognição."""
     global _metacognition_instance
     with _metacognition_lock:

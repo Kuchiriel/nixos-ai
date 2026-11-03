@@ -1048,6 +1048,15 @@ in rec {
     # Portas dos servidores llama que NÃO são tiers de modelo (embeddings /
     # rerank) — Python e timers leem daqui em vez de hardcode 8081/8082.
     servicePorts = { embeddings = 8081; rerank = 8082; };
+    # (03/11) SERVIÇOS DIRETOS: porta + unit systemd de cada directServer.
+    # Derivado de `directServers` (fonte única) — a unit do direct server é
+    # sempre "llama-${nome}" (modules/services/llama-uncensored.nix).
+    # O heal usa este mapa p/ reiniciar o serviço que serve a porta do LLM
+    # (o mapa estava hardcoded no Python: 8092/8084/8085).
+    directServers = builtins.mapAttrs (n: s: {
+      endpoint = s.port;
+      unit = "llama-${n}";
+    }) directServers;
     models = {
       # (26/10) DEFAULT do sistema — Qwen3.5-4B-MTP + LoRA micro-turn,
       # servido pelo directServer :8092 (binário stock). PT-BR de verdade

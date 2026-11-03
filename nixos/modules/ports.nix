@@ -52,7 +52,12 @@ in {
       type = lib.types.attrsOf lib.types.port;
       default = {
         qdrant = 6333;
-        llama-cpp = 8080;
+        # (03/11) A porta do llama-cpp NÃO é uma 2ª fonte: vem do models.nix
+        # (fonte única dos modelos/portas). O literal 8080 só fica como
+        # fallback para hosts sem o overlay de IA.
+        llama-cpp = if pkgs ? aiModels
+          then pkgs.aiModels.routing.endpoints.prism
+          else 8080;
         mcp = 3000;
       };
       description = "Definições padrão de portas para serviços.";

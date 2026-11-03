@@ -1031,12 +1031,14 @@ def voice_loop(audio_path: str, *, tts: bool = True, model_size: str = STT_MODEL
         from jarvis.providers.llm import LLMClient
         from jarvis.core.config import get_config
         import dataclasses as _dc
-        # Voz usa o 8092/qwen4b DIRETO (08/10): o router default (bonsai)
-        # não cabe em VRAM junto do 8092 (residente, wanted=true) e o
+        # Voz usa o 4B/qwen4b DIRETO (08/10): o router default (bonsai)
+        # não cabe em VRAM junto do 4B (residente, wanted=true) e o
         # qwen tem PT-BR melhor. Sem isto todo turno de voz caía em
         # "[busy]" com o default faminto.
+        # (03/11) a porta vem do registry (models.nix), não de literal.
         try:
-            _vcfg = _dc.replace(get_config(), llm_base_url="http://127.0.0.1:8092/v1",
+            from jarvis.core.model_registry import default_base_url
+            _vcfg = _dc.replace(get_config(), llm_base_url=default_base_url("/v1"),
                                 llm_model="qwen4b")
             llm = LLMClient(_vcfg)
             _voice_cfg = _vcfg

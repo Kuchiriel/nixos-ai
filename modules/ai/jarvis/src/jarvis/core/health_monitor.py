@@ -53,13 +53,17 @@ class BackendHealthMonitor:
 
     def __init__(
         self,
-        base_url: str = "http://127.0.0.1:8092",
+        base_url: str | None = None,
         *,
         latency_threshold_ms: float = 5000.0,
         cache_ttl_s: float = 10.0,
         socket_timeout_s: float = 3.0,
         http_timeout_s: float = 5.0,
     ) -> None:
+        if not base_url:
+            # (03/11) server default lido do registry (models.nix).
+            from jarvis.core.model_registry import default_base_url
+            base_url = default_base_url()
         self._base = base_url.rstrip("/")
         self._latency_threshold_ms = latency_threshold_ms
         self._cache_ttl_s = cache_ttl_s

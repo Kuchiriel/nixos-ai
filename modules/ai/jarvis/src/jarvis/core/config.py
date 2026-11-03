@@ -41,8 +41,8 @@ def _registry():
     """Registry carregado uma vez (None se indisponível)."""
     if "reg" not in _REGISTRY_CACHE:
         try:
-            from jarvis.core.model_registry import ModelRegistry
-            _REGISTRY_CACHE["reg"] = ModelRegistry.load()
+            from jarvis.core.model_registry import load_registry
+            _REGISTRY_CACHE["reg"] = load_registry()
         except Exception:
             _REGISTRY_CACHE["reg"] = None
     return _REGISTRY_CACHE["reg"]

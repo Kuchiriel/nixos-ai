@@ -79,9 +79,46 @@ o dono pediu para tirar (26/10). Agora:
   e `scripts/voice-up.sh`: default, porta, unit e porta do router vêm do
   registry (antes: `jarvis-mtp-lora`, `:8092`, `llama-uncensored-4b`, `:8080`
   literais).
+- `scripts/loop-runner.sh` (escada de tiers), `scripts/pipeline.py`
+  (executor/strategist) e `scripts/jarvis-cli.sh` (`status`): portas pelo
+  registry — o `status` medido mostra `:8092` default, `:8080` router,
+  `:8081` embeddings, `:8082` rerank (todos OK).
 - O helper tem **shim de compat** (registry vivo ainda é da generation anterior,
   sem `unit`/`units`/`servicePorts`) → os timers das 04:00/05:00 não quebram
   antes do rebuild. **Remover o shim depois do rebuild.**
+
+### 6. Segunda rodada (03/11, 05:2x) — as portas literais que sobraram
+
+O grep final por portas literais no código Python/Shell achou mais consumidores
+que ainda tinham `:8092`/`:8080`/`":8081"`/`":8082"` escritos no código. Todos
+foram migrados para o registry:
+
+| Arquivo | Antes | Agora |
+|---|---|---|
+| `core/heal.py` | mapa `LLM_PORT_SERVICES` hardcoded (8092/8084/8085) | porta lida do registry (`routing.directServers`); a **lista** de services religáveis continua curada (`HEALABLE_UNITS`) |
+| `core/metacognition.py` | `base_url="http://127.0.0.1:8092"` | `default_base_url()` (registry) |
+| `core/health_monitor.py` | idem | idem |
+| `core/model_lifecycle.py` | idem | idem |
+| `core/voice.py` | `llm_base_url="http://127.0.0.1:8092/v1"` | `default_base_url("/v1")` |
+| `core/hwprofile.py` | `--port 8080` | `router_port()` (registry) |
+| `providers/llm_llama_cpp.py` | `base_url="http://127.0.0.1:8080"` | `router_base_url()` |
+| `providers/llm_prismml.py` | idem | idem |
+| `nixos/modules/ports.nix` | `llama-cpp = 8080` (2ª fonte) | `pkgs.aiModels.routing.endpoints.prism` (fallback 8080 só sem o overlay) |
+
+Novo no registry (Nix + Python):
+- `routing.directServers` (Nix): `{nome: {endpoint, unit}}` **derivado** de
+  `directServers` — a unit do direct server é sempre `llama-${nome}`
+  (`modules/services/llama-uncensored.nix`).
+- `core/model_registry.py`: campo `direct_servers` + `direct_units()`
+  (unit→porta) e `port_units()` (porta→unit, direct server tem precedência
+  sobre o grupo do router na mesma porta) + API de módulo `load_registry()`,
+  `registry_or_none()`, `default_base_url()`, `router_port()`,
+  `router_base_url()`.
+- **Degradação limpa**: um registry JSON **antigo** (sem `servicePorts`/
+  `directServers` — o caso do `/etc` atual, gerado antes do rebuild) completa
+  as chaves com o fallback embutido. Sem isso o `heal` perderia o mapa
+  porta→unit e o ALLOWLIST mudaria (bug silencioso: o heal "curaria" o
+  serviço errado).
 
 ## Comportamento preservado (o que NÃO mudou)
 
@@ -112,20 +149,21 @@ unit→modelo é **explícita** (`models.<id>.unit`) e não deduzida por porta.
   completa (log em /tmp/opencode/pytest-full.log).
 - Shell: `bash -n`/`sh -n` + helper testado contra o registry VIVO (valores
   corretos via shim).
+- 2ª rodada: subset de 93 testes (heal/chain/routing/config/doctor/drift/
+  hwprofile/sampling) verde; `jarvis-cli.sh status` medido com portas do
+  registry (todas OK); `loop-runner.sh endpoint_for` e `pipeline.py` conferidos
+  (8080/8083/8084/8092 vindos do registry).
 
 ## Pendente
 
 1. **Rebuild** (o dono autoriza) → o registry em /etc passa a ter `units`,
-   `servicePorts`, `bootModel` e `models.<id>.unit`; aí o shim do helper pode
-   sair.
+   `servicePorts`, `bootModel`, `models.<id>.unit` e `directServers`; aí o shim
+   do helper pode sair.
 2. `CANONICAL_CONTEXT` (32768 vs 49152) — decisão do dono.
 3. Porta 8085 duplicada (deepseek-7b × duplex-35b) — decidir a porta ou
    documentar o "um por vez".
-4. Python ainda com literais: `core/metacognition.py`, `core/health_monitor.py`,
-   `core/voice.py`, `core/model_lifecycle.py`, `core/hwprofile.py`,
-   `providers/llm_llama_cpp.py`, `providers/llm_prismml.py` — o helper
-   `base_url_for()` já existe, falta adoption.
-5. `scripts/loop-runner.sh`, `scripts/pipeline.py`, `scripts/jarvis-cli.sh`
-   (ladder de portas) — migrar para o helper.
-6. "Gaming": nenhum módulo de gaming referencia modelo/porta de LLM (verificado
+4. Gaming: nenhum módulo de gaming referencia modelo/porta de LLM (verificado
    no inventário) — nada a migrar.
+5. O `models.nix` tem outros blocos ainda por wiring (ex.: `hostBase`,
+   `layaModelDir`, catálogo de `models.*` do downloader) — fora do escopo das
+   portas/units; migrar por onde aparecer literal.

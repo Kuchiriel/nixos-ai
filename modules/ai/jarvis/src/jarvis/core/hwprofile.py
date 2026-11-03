@@ -35,6 +35,7 @@ from typing import Any
 
 from jarvis.core.hwdetect import HardwareProfile, classify
 from jarvis.core.provider_registry import CANONICAL_CONTEXT  # fonte única de context budget
+from jarvis.core.model_registry import router_port as _router_port  # porta do router (registry)
 
 GB = 2**30
 
@@ -504,7 +505,7 @@ def build_command(flags: LlamaFlags, mmproj_path: str | None = None) -> list[str
     cmd = ["llama-server", "-m", f"<modelo: {m.key}>"]
     if mmproj_path:
         cmd += ["--mmproj", mmproj_path]
-    cmd += ["--host", "0.0.0.0", "--port", "8080"]
+    cmd += ["--host", "0.0.0.0", "--port", str(_router_port())]
     cmd += ["-c", str(flags.ctx), "-t", str(flags.threads), "-ub", str(flags.ubatch),
             "-ngl", str(flags.ngl)]
     cmd += ["-ctk", flags.kv, "-ctv", flags.kv]

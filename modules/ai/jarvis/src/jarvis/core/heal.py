@@ -42,11 +42,25 @@ SERVICE_MAP: dict[str, dict[str, str]] = {
 # (direct server). O doctor checa a porta de cfg.llm_base_url → o heal
 # precisa reiniciar o SERVIÇO QUE SERVE AQUELA PORTA, senão ele "cura"
 # o router enquanto o 4B continua caído (ou vice-versa).
-LLM_PORT_SERVICES: dict[str, str] = {
-    "8092": "llama-uncensored-4b",
-    "8084": "llama-uncensored-35b",
-    "8085": "llama-duplex-35b",
-}
+# (03/11) A PORTA de cada unit vem do REGISTRY (models.nix `directServers`)
+# — o mapa estava hardcoded aqui (2ª fonte). A LISTA de services que o heal
+# pode religar continua CURADA (o registry tem todos os direct servers, mas
+# o JARVIS só usa estes 3 por padrão).
+HEALABLE_UNITS = ("llama-uncensored-4b", "llama-uncensored-35b",
+                  "llama-duplex-35b")
+
+
+def _llm_port_services() -> dict[str, str]:
+    """porta -> unit systemd, lido do registry (fallback: sem mapa)."""
+    from jarvis.core.model_registry import registry_or_none
+    reg = registry_or_none()
+    if reg is None:
+        return {}
+    ports = reg.direct_units()
+    return {str(ports[u]): u for u in HEALABLE_UNITS if u in ports}
+
+
+LLM_PORT_SERVICES: dict[str, str] = _llm_port_services()
 ALLOWLIST = tuple(v["service"] for v in SERVICE_MAP.values()) + tuple(
     LLM_PORT_SERVICES.values())
 
