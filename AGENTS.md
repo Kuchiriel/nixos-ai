@@ -46,71 +46,71 @@ git add -A && git ls-files -o --exclude-standard   # flake only sees tracked
 nix flake check
 ```
 
-## CLI do JARVIS = mesmo env do MCP (30/10)
+## JARVIS CLI = same env as the MCP (30/10)
 
-- `scripts/jarvis-cli.sh` e o MCP compartilham `modules/ai/jarvis/jarvis-env.sh`
-  (keys de `/etc/litellm.env`, PYTHONPATH = src + env oficial do store +
-  `/home/nixos/.local/jarvis-mcp-site`, python do perfil). **Nunca mais divergir
-  os dois envs** — sem isso a CLI perde `requests`, o breaker do LLM abre e o
-  `rag-index` pendura sem erro.
-- Os handlers MCP leem chaves **fixas**: `rag_index`→`path`, `vault_write`→`name`
+- `scripts/jarvis-cli.sh` and the MCP share `modules/ai/jarvis/jarvis-env.sh`
+  (keys from `/etc/litellm.env`, PYTHONPATH = src + official store env +
+  `/home/nixos/.local/jarvis-mcp-site`, profile python). **Never diverge the
+  two envs again** — without that the CLI loses `requests`, the LLM breaker
+  opens and `rag-index` hangs without error.
+- MCP handlers read **fixed** keys: `rag_index`→`path`, `vault_write`→`name`
   (+`content`), `rag_search`→`query`/`collection`/`limit`, `remember`→`text`,
-  `recall`/`lessons`→`query`. Chave errada = **argumento ignorado** (a CLI
-  indexava a árvore errada por 6 meses de bug).
-- **Servidor de embeddings (8081) tem n_ctx=512 TOKENS por item**: chunk de 1200
-  chars ≈ 550 tokens → HTTP 400 `exceed_context_size`. `CHUNK_CHARS=800`, e
-  `embed()` encolhe sozinho se o servidor recusar. Lote ≤64 itens/POST e
-  **sem retry** (Retry read=3 × timeout = 8min de espera = "hang").
-- O env oficial do MCP é **descoberto lendo `~/.config/opencode/opencode.json`**
-  (symlink pro store) → acompanha o rebuild sem re-gitar o Nix.
+  `recall`/`lessons`→`query`. Wrong key = **argument ignored** (the CLI
+  indexed the wrong tree for 6 months due to a bug).
+- **Embedding server (8081) has n_ctx=512 TOKENS per item**: 1200-char chunk
+  ≈ 550 tokens → HTTP 400 `exceed_context_size`. `CHUNK_CHARS=800`, and
+  `embed()` shrinks on its own if the server refuses. Batch ≤64 items/POST and
+  **no retry** (Retry read=3 × timeout = 8min wait = "hang").
+- The official MCP env is **discovered by reading `~/.config/opencode/opencode.json`**
+  (symlink to the store) → follows rebuilds without re-typing the Nix.
 
-## Checkpoint e dores (30/10)
+## Checkpoint and pains (30/10)
 
-- **1ª tool da sessão = `jarvis_rehydrate(task="...")`** (02/11): 1 chamada
-  devolve guardas + fila + HANDOFF + memórias + lições + RAG + roster. Sem
-  isso o agente repete diagnóstico já pago (o RAG era usado só para
-  *registrar*, nunca para *resgatar*). Regra injetada pelo plugin `memory.js`
-  (system prompt + compactação), não depende de memória do agente.
-  Pesquisa: `docs/REHYDRATACAO-E-COORDENACAO.md` (14 papers em `~/Books`).
-- `scripts/agent-checkpoint.sh` = as 4 camadas em 1 comando (fila+commit,
-  rag-index, memória, vault HANDOFF+commit), genérico para qualquer repo.
-- `scripts/agent-pains.sh` = captura **sozinha** os erros de tool: o store vivo
-  do opencode é o **SQLite `~/.local/share/opencode/opencode.db`** (o
-  `storage/` JSON só tem sessões antigas). O `agents-watcher.sh` roda o
-  `scan-apply` a cada 10 ciclos e sugere checkpoint após 45min de trabalho.
-- **Frequência calibrada pela atividade (01/11, pedido do dono)**: o watcher lê
-  `part` do `opencode.db` (atualizada a cada tool call) — agente com part nova
-  ≤`AGENTS_DB_ALIVE`s (600) está VIVO: sem wake, sem RE-ENTER, sem deadlock
-  (o idle de CPU = falso-positivo de comando longo). Só-leitura, `mode=ro`.
-- **Checkpoint sem redundância (01/11)**: o `CHECKPOINT-SUGERIDO` compara o
-  snapshot atual (commits de todos os repos da raiz) com o snapshot gravado na
-  última sugestão — sem commit novo = era já selada, sem repetir. Sugestão
-  garante checkpoint só quando há trabalho novo para selar.
-- Erro mascarado por pipe (`cmd | tail`) **não** chega ao scanner → em debug,
-  rode sem pipe (ou com `set -o pipefail`).
+- **1st tool of the session = `jarvis_rehydrate(task="...")`** (02/11): 1 call
+  returns guardrails + queue + HANDOFF + memories + lessons + RAG + roster.
+  Without that the agent repeats diagnostics already paid for (the RAG was
+  used only to *record*, never to *rescue*). Rule injected by the `memory.js`
+  plugin (system prompt + compaction), does not depend on agent memory.
+  Research: `docs/REHYDRATACAO-E-COORDENACAO.md` (14 papers in `~/Books`).
+- `scripts/agent-checkpoint.sh` = the 4 layers in 1 command (queue+commit,
+  rag-index, memory, vault HANDOFF+commit), generic for any repo.
+- `scripts/agent-pains.sh` = captures tool errors **on its own**: the live
+  opencode store is the **SQLite `~/.local/share/opencode/opencode.db`** (the
+  `storage/` JSON only has old sessions). `agents-watcher.sh` runs the
+  `scan-apply` every 10 cycles and suggests a checkpoint after 45min of work.
+- **Frequency calibrated by activity (01/11, owner's request)**: the watcher
+  reads `part` from `opencode.db` (updated on every tool call) — an agent with
+  a new part ≤`AGENTS_DB_ALIVE`s (600) is ALIVE: no wake, no RE-ENTER, no
+  deadlock (CPU idle = false positive of a long command). Read-only, `mode=ro`.
+- **Checkpoint without redundancy (01/11)**: `CHECKPOINT-SUGERIDO` compares the
+  current snapshot (commits of all repos at the root) with the snapshot stored
+  at the last suggestion — no new commit = era already sealed, no repeat. The
+  suggestion guarantees a checkpoint only when there is new work to seal.
+- Error masked by a pipe (`cmd | tail`) does **not** reach the scanner → when
+  debugging, run without a pipe (or with `set -o pipefail`).
 
-## Coordenação multi-agente (02/11 — API do opencode, sem roubar o foco)
+## Multi-agent coordination (02/11 — opencode API, without stealing focus)
 
-- **Roster = fonte única**: `scripts/agent-roster.py` (claim/release/list/
-  prune/task/windows/resolve/events) em `~/projects/.agents/roster.json`
-  (`$AGENTS_ROSTER` override). `claim` recusa nome duplicado (janela viva) e
-  **globs de arquivos sobrepostos** (Anthropic: fronteira explícita) — 2
-  claims com o mesmo arquivo duplicam trabalho.
-- **Entrega = API do opencode** (`opencode serve` em `:4599`, Basic auth via
+- **Roster = single source**: `scripts/agent-roster.py` (claim/release/list/
+  prune/task/windows/resolve/events) in `~/projects/.agents/roster.json`
+  (`$AGENTS_ROSTER` override). `claim` rejects a duplicate name (live window)
+  and **overlapping file globs** (Anthropic: explicit boundary) — 2
+  claims on the same file duplicate work.
+- **Delivery = opencode API** (`opencode serve` on `:4599`, Basic auth via
   `~/.config/opencode/server.env`): `POST /session/:id/message`
-  (`noReply:true` = NOTA: entra na sessão, o agente NÃO roda, zero token) /
-  `prompt_async` (PEDIDO: o agente roda) / `/abort` (cancela o turno).
-  **Nunca** estacionar texto na caixa de input do humano: bloqueia o typing e
-  não entra na fila → inútil (erro real de 02/11).
-- `scripts/agent-msg.sh`: `--to <nome>` (pedido), `--note` (notificação),
-  `--broadcast` (fan-out explícito, raro), `--cancel <id>`, `--reply-to`,
-  `--id` (idempotência), `--pending`, `--list`. Sem roster, `--to other`
-  **não envia nada** (broadcast só com `--broadcast`).
-- `scripts/agents-watcher.sh`: wake **via API** (sem focus/wtype) e
-  **lane-aware** (commit do repo X só acorda o dono do repo X; fila/hooks
-  = global; sem roster = legado global). `RE-ENTER` só existe no fallback
-  wtype — nunca submeter o que o humano estiver digitando.
-- Evidência: `scripts/agent-msg.sh` → `~/projects/AGENTS-MSG.log`.
+  (`noReply:true` = NOTE: enters the session, the agent does NOT run, zero
+  token) / `prompt_async` (REQUEST: the agent runs) / `/abort` (cancels the
+  turn). **Never** park text in the human's input box: it blocks typing and
+  does not enter the queue → useless (real error on 02/11).
+- `scripts/agent-msg.sh`: `--to <nome>` (request), `--note` (notification),
+  `--broadcast` (explicit fan-out, rare), `--cancel <id>`, `--reply-to`,
+  `--id` (idempotency), `--pending`, `--list`. Without a roster, `--to other`
+  **sends nothing** (broadcast only with `--broadcast`).
+- `scripts/agents-watcher.sh`: wake **via API** (no focus/wtype) and
+  **lane-aware** (a commit on repo X only wakes the owner of repo X; queue/hooks
+  = global; no roster = legacy global). `RE-ENTER` only exists in the wtype
+  fallback — never submit what the human is typing.
+- Evidence: `scripts/agent-msg.sh` → `~/projects/AGENTS-MSG.log`.
 
 ## Boundaries
 
