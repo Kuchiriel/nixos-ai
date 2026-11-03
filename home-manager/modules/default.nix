@@ -25,6 +25,9 @@
     ./swaync
     ./tmux.nix
     ./waybar.nix
+    # Default source do pipewire = mic DIGITAL (o Stereo está morto e o
+    # AEC3 captura do default ⇒ duplex surdo). Ver o módulo p/ o porque.
+    ./services/wireplumber-default-source.nix
     ./wofi
     ./zathura.nix
     ./zsh.nix

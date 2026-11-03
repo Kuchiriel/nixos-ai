@@ -11,19 +11,15 @@
     # do Digital — 27 dB abaixo). O módulo AEC3 captura do DEFAULT source:
     # com Mic2 no default, o AEC3/RNNoise recebiam SILÊNCIO e o duplex
     # ficava surdo (rms=0 no log) — o mesmo sintoma de "falo e nada".
-    # Regra do WirePlumber: força o node do Digital Microphone como default.
-    # O node.name (PCI path do cAVS) é ESTÁVEL; o índice (73/74) muda entre
-    # boots — por isso a regra casa por nome, não por índice.
-    wireplumber.extraConfig."10-default-source.rules" = ''
-      {
-        match.properties {
-          node.name = "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source"
-          node.description = "Raptor Lake-P/U/H cAVS Digital Microphone"
-        }
-        actions.default_source.priority = 2000
-        actions.default_source = true
-      }
-    '';
+    #
+    # O PIN fica no home-manager (wireplumber-default-source.nix): o
+    # WirePlumber 0.5 REESCREVEU o daemon em Lua e o formato antigo de
+    # `.rules` (actions.default_source) NÃO EXISTE mais — a config aqui
+    # seria ignorada. No 0.5 quem ganha o default é
+    # `default.configured.audio.source` (guardado por NOME em
+    # ~/.local/state/wireplumber/default-nodes, prioridade 30000+), e é
+    # isso que a unit de usuário garante no login.
+    # NOTA: o índice (73/74) muda entre boots — casar pelo node.name.
 
     # Denoise RNNoise (werman/noise-suppression-for-voice via nixpkgs
     # `rnnoise-plugin`): cria o source virtual `rnnoise_source` com supressão
