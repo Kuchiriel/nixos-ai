@@ -121,13 +121,43 @@ de -90 dB (portas de áudio do laptop) — o ganho de 66 dB aparece quando o
 volume alto). E `vad_off` no caminho AEC vira alucinação pura
 ("Miki Javais Feral Jove…") — o VAD continua obrigatório no duplex.
 
+### 1.6 A1 aplicado: duplex no AEC3+RNNoise (03/11, lane `voice-flags-en`)
+
+`scripts/duplex-voice.py` gravava do **ALSA cru** → o TTS entrava no mic e o
+STT transcrevia a própria voz. Agora grava de **`rnnoise_source`** (a cadeia
+AEC3 → RNNoise do grafo do pipewire), com fallback para o ALSA cru se o nó
+não existir (mesma disciplina do wakeword: mic mudo é pior que sem AEC).
+
+```python
+MIC_SOURCE_PREFERRED = "rnnoise_source"      # AEC3 -> RNNoise
+MIC_SOURCE_FALLBACK  = "alsa_input...HiFi__Mic1__source"
+def mic_source() -> str: ...                 # resolve 1x, loga a escolha
+```
+
+**Medição própria (mesmo protocolo: wav de TTS de 19,6 s tocado nos
+alto-falantes enquanto o mic grava, 7 s):**
+
+| fonte | rms durante o TTS | rms no silêncio |
+|---|---|---|
+| ALSA cru (antes) | **0,049417** | 0,001832 |
+| `rnnoise_source` (AEC3→RNNoise, agora) | **0,000000** | 0,000001 |
+
+O eco do TTS some (o STT volta a devolver texto vazio em vez de transcrever o
+próprio TTS) e o near-end continua vivo: o **wakeword já grava desse mesmo
+caminho** (com fallback) e continua detectando a voz — se o AEC matasse o
+near-end, o wakeword já estaria cego.
+
+Mudança: 1 constante + 1 resolvedor + 2 call sites (`mic_stream()` e o
+`pw-record` do enrollment). `vad_off` continua desligado (no caminho AEC o
+VAD vira alucinação).
+
 ---
 
 ## 2. Ilhas e hardcodes ainda abertos
 
 | # | Item | Onde | Risco | Ação proposta |
 |---|------|------|-------|---------------|
-| A1 | **Duplex fora do AEC** (PROPOSTA PRONTA) | `scripts/duplex-voice.py:128` grava do ALSA cru (`HiFi__Mic1__source`) | medido: o STT transcreve o TTS (fantasma) no caminho cru; com AEC3 o texto sai vazio (-66,4 dB) | **apontar o duplex para `rnnoise_source`** (AEC3 → RNNoise). Medido e proposal enviado ao `voice-flags-en` (lane do duplex); 1 linha + 1 constante de device |
+| A1 | **Duplex fora do AEC** (APLICADO 03/11, medido de novo: rms 0,0494 cru → 0,000000 no AEC3+RNNoise) | `scripts/duplex-voice.py:128` grava do ALSA cru (`HiFi__Mic1__source`) | medido: o STT transcreve o TTS (fantasma) no caminho cru; com AEC3 o texto sai vazio (-66,4 dB) | **apontar o duplex para `rnnoise_source`** (AEC3 → RNNoise). Medido e proposal enviado ao `voice-flags-en` (lane do duplex); 1 linha + 1 constante de device |
 | A2 | **TTS por contexto** | duplex usa **piper** (latência, RTF 0,033) ✓; `jarvis speak`/ack usam **kokoro** ✓ | piper não deve entrar no duplex (latência), kokoro não deve entrar no duplex | manter: piper = duplex, kokoro = resto (direção do dono, 03/11) |
 | A3 | **IP do tailnet hardcoded** | `scripts/agent-msg.sh:59`, `scripts/agents-watcher.sh:170`, `home-manager/modules/services/opencode-serve.nix:10` | muda de tailnet → scripts quebram | ler de `tailscale ip -4` ou de um arquivo de estado do HM |
 | A4 | **`/home/nixos` no código** | `cli/dev.py`, `cli/main.py`, `core/context_budget.py`, `core/laya_*.py`, `runtime/context.py` | não portável, quebra em outro usuário | `Path.home()` / env `JARVIS_HOME` |

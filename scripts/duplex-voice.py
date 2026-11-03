@@ -125,7 +125,34 @@ GATE_MODE = "on"        # 'off' = responde todo segmento (testes/AFK)
 SR = 16000
 CHUNK_BYTES = int(SR * TICK * 2)
 # Digital mic (17/10): o Stereo Mic é MORTO (rms 0); o Digital é vivo.
-MIC_SOURCE = "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source"
+MIC_SOURCE_FALLBACK = "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source"
+# (03/11, medido pelo coord-naming) No ALSA CRU o TTS entra no mic e o STT
+# transcreve a PRÓPRIA voz ("Jarvis, teste de cancelamento de ego..."). O grafo
+# do pipewire tem AEC3 (echo_cancel_source) -> RNNoise (rnnoise_source):
+# gravar de rnnoise_source pega a cadeia inteira (-66,4 dB, texto vazio).
+# Se o módulo não carregar o node não existe — aí o fallback pro ALSA cru é
+# melhor que mic mudo (mesma disciplina do wakeword).
+MIC_SOURCE_PREFERRED = "rnnoise_source"
+_MIC_SOURCE: str | None = None
+
+
+def mic_source() -> str:
+    """Fonte do mic: rnnoise_source (AEC3->RNNoise) se existir; senao ALSA cru."""
+    global _MIC_SOURCE
+    if _MIC_SOURCE is None:
+        chosen = MIC_SOURCE_FALLBACK
+        try:
+            nodes = subprocess.run(["pw-cli", "list-objects", "Node"],
+                                   capture_output=True, text=True, timeout=5).stdout
+            if f'node.name = "{MIC_SOURCE_PREFERRED}"' in nodes:
+                chosen = MIC_SOURCE_PREFERRED
+        except (OSError, subprocess.SubprocessError):
+            pass
+        _MIC_SOURCE = chosen
+        log(f"[duplex] mic source: {chosen}")
+    return _MIC_SOURCE
+
+
 VAD_PARAMS = dict(threshold=0.45, min_speech_duration_ms=200,
                   min_silence_duration_ms=300, speech_pad_ms=160)
 
@@ -780,7 +807,7 @@ def aec_clear():
 def mic_stream():
     return subprocess.Popen(["pw-record", "--rate", str(SR), "--channels", "1",
                              "--format", "s16", "--container", "raw",
-                             "--target", MIC_SOURCE, "-"],
+                             "--target", mic_source(), "-"],
                             stdout=subprocess.PIPE, bufsize=CHUNK_BYTES)
 
 def mic_reader(mic, out_q):
@@ -1128,7 +1155,7 @@ def call_tool(name, args):
             r2 = subprocess.run(
                 ["timeout", "10", "pw-record", "--rate", "16000",
                  "--channels", "1", "--format", "s16", "--container", "raw",
-                 "--target", MIC_SOURCE, _wav],
+                 "--target", mic_source(), _wav],
                 capture_output=True, timeout=12)
             import wave as _w
             w = _w.open(_wav, "rb")
