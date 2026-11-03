@@ -362,13 +362,13 @@ JARVIS_TOOLS = [
     {
         "name": "rehydrate",
         "description": (
-            "ONE-CALL RESCUE: pinned guards + queue top + latest HANDOFF + "
-            "memories/lessons for your task + RAG hits + roster. WHEN: first "
-            "tool of a new session, right after a compaction, or when a problem "
-            "looks like a repeat ('we solved this already'). WHEN NOT: mid-task "
-            "with context — for one question use recall/rag_search/lessons. "
-            "Do NOT repeat it for the same task: the 2nd call returns a pointer "
-            "(loop-breaker). Returns text, no state change."
+            "REHYDRATE — the one-call rescue: pinned guards + queue top + latest "
+            "HANDOFF + memories/lessons for your task + RAG hits + roster. Call it "
+            "FIRST in a new session, right after a compaction, or when a problem "
+            "looks like a repeat ('we solved this already'); cheaper than redoing "
+            "the diagnosis. WHEN NOT: mid-task with context — for one question use "
+            "recall/rag_search/lessons. Do NOT repeat it for the same task: the 2nd "
+            "call returns a pointer (loop-breaker). Returns text, no state change."
         ),
         "inputSchema": {
             "type": "object",
