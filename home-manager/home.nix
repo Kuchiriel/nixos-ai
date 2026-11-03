@@ -482,7 +482,16 @@ in {
       # VARIANTE default do agente, para o server resolver "max" e o TUI
       # mostrar o que o dono escolheu. A variante explícita da sessão
       # continua sobrescrevendo (o dono pode trocar na hora).
-      agent.build.variant = "max";
+      # model+variant CASADOS: a variante do agente só vale para o modelo
+      # configurado dele (schema v2) — por isso o build passou a declarar o
+      # nvidia/minimax (o modelo que o dono usa de verdade nas sessões).
+      # Decisão do dono 03/11. O 4B local segue como root model, small_model
+      # e selecionável na mão; se o nvidia cair/rate-limitar, o build não
+      # cai sozinho (escolher o 4B no TUI).
+      agent.build = {
+        model = "nvidia/minimaxai/minimax-m3.1-flash";
+        variant = "max";
+      };
 
       # ════════════════════════════════════════════════════════════
       # FILTRO DO CATÁLOGO — fonte única: modules/ai/free-providers.json
