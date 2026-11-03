@@ -80,3 +80,41 @@ cd ~/projects && opencode -s ses_ed0234976ffe6y6Ejh91b37m7s
 ```
 
 Backup completo do histórico (sem abrir TUI): `opencode export <sessionID>`.
+
+
+## 03/11 (tarde) — fechar o TUI não pode custar a sessão
+
+**Sintoma (dono)**: fechar o TUI com Ctrl+C fechava a janela INTEIRA (o foot
+morre junto) e a mensagem do opencode sobre reabrir a sessão sumia com ela —
+depois era preciso garimpar o id no histórico.
+
+**Causa**: o restore abria `foot -e opencode -s <id>` (sem nada depois), então
+o fim do opencode = fim do foot. O launcher (`SUPER+A`) já usava `exec bash`
+e por isso não tinha o problema.
+
+**Correção (3 peças)**:
+1. `scripts/opencode-session.sh` — wrapper do TUI: a janela **sobrevive** ao
+   opencode, imprime `sessão: <id>` + o comando de reabertura, registra a
+   sessão encerrada em `~/.local/state/jarvis/last-closed-session.json` e
+   só fecha no Enter. O launcher (`jarvis/cli/launcher.sh`) e o restore
+   passaram a usá-lo.
+2. `scripts/opencode-resume.sh` — o caminho inverso: `--list` (sessões
+   recentes do SQLite, marcando as abertas), `--last` (a última encerrada),
+   `--session <id>` (uma específica). Reabre em janela nova, no diretório
+   original, sob o mesmo wrapper. Se a sessão já estiver aberta, **foca** a
+   janela em vez de duplicar.
+3. `scripts/opencode-sessions.py` — a fonte de dados (SQLite
+   `~/.local/share/opencode/opencode.db`, modo ro): `list`, `last`, `closed`,
+   `directory`, `resolve`.
+
+**Atalho**: `SUPER+SHIFT+R` → reabre a última sessão fechada (declarativo em
+`home-manager/modules/hyprland/binds.nix`).
+
+**Delta do restore**: `restore-sessions.sh` agora tem DELTA por padrão —
+sessão já aberta → foca a janela, não abre outra (`--force` abre mesmo assim).
+O snapshot ganhou a coluna `dir` (cwd da sessão) para reabrir no lugar certo.
+
+**Verificado**: `list` marca ABERTA/fechada corretamente; `resolve` acha a
+sessão criada depois do start; o wrapper testado com um `opencode` stub
+(exit 130) imprime a dica e grava o registro; `restore-sessions.sh --dry-run`
+com as 2 sessões abertas → "já aberta (focada)" nas duas (zero janelas novas).

@@ -457,7 +457,7 @@ menu_tools() {
             "gtk-go-back:99"
 
         case $MENU_RC in
-            1) foot --app-id opencode -e bash -c "cd ${PROJECT_DIR} && opencode; exec bash" && return ;;
+            1) foot --app-id opencode -e bash -c "cd ${PROJECT_DIR} && ${OPENCODE_SESSION_WRAPPER:-/home/nixos/projects/nixos-ai/scripts/opencode-session.sh}" && return ;;
             2) foot --app-id aider -e bash -c "cd ${PROJECT_DIR} && aider; exec bash" && return ;;
             3) foot --app-id pi-agent -e bash -c "cd ${PROJECT_DIR} && pi; exec bash" && return ;;
             4) code "${PROJECT_DIR}" && return ;;

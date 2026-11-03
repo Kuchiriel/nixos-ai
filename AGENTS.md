@@ -183,6 +183,12 @@ read pt-BR); answer the owner in pt-BR.
   the Hyprland `exec-once` restores it at login
   (`scripts/restore-sessions.sh --capture` / no args). Hyprland itself does NOT
   restore windows — the script is the mechanism.
+- **Closing a TUI no longer loses the session**: the TUI runs under
+  `scripts/opencode-session.sh` (the window survives the exit and prints the
+  exact command to reopen). `scripts/opencode-resume.sh --list|--last|
+  --session <id>` reopens it (SUPER+SHIFT+R = last closed).
+  `scripts/restore-sessions.sh` is delta by default: a session that is already
+  open is FOCUSED, never duplicated.
 - **Provider failures ping you**: `scripts/agent-provider-guard.py` (wired into
   `agents-watcher.sh`) watches the opencode log for timeout/429/400 and sends a
   `notify-send` + a note to the peer (cooldown de 15 min por classe/provider/

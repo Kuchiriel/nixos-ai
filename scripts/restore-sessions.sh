@@ -12,6 +12,7 @@
 #
 # Contrato:
 #   - o TSV tem: ws<TAB>slot(left|right)<TAB>session_id<TAB>label<TAB>focus(0|1)
+#     [<TAB>dir]  (dir = cwd da sessao; ausente em snapshots antigos)
 #   - cada sessão vira uma janela `foot -e opencode -s <session_id>` no workspace certo
 #   - o layout (dwindle, 2 colunas) sai do ordem de criação: left primeiro
 #   - idempotente: sessão já aberta (pgrep -f "opencode -s <id>") é pulada
@@ -27,14 +28,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 DEFAULT_FILE="$REPO_DIR/docs/auditoria/snapshot-sessoes-2026-11-03.tsv"
 STATE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/jarvis/sessions-snapshot.tsv"
+WRAPPER="$SCRIPT_DIR/opencode-session.sh"
 FILE=""
 FILE_SET=0
 DRY_RUN=0
 CAPTURE=0
+FORCE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=1; shift ;;
+    --force) FORCE=1; shift ;;
+    --delta) FORCE=0; shift ;;
     --capture) CAPTURE=1; shift ;;
     --file) FILE="${2:?--file exige um caminho}"; FILE_SET=1; shift 2 ;;
     -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
@@ -113,11 +118,17 @@ for pid_s in pg.stdout.split():
             foot = cur
             break
     if foot is not None:
-        sessions.append((sid, foot))
+        # cwd do processo opencode = diretorio da sessao (reabrir no lugar certo)
+        cwd = ""
+        try:
+            cwd = os.readlink(f"/proc/{pid}/cwd")
+        except OSError:
+            cwd = ""
+        sessions.append((sid, foot, cwd))
 
 by_pid = {c.get("pid"): c for c in clients}
 rows = []
-for sid, foot in sessions:
+for sid, foot, cwd in sessions:
     c = by_pid.get(foot)
     if not c:
         continue
@@ -129,17 +140,18 @@ for sid, foot in sessions:
         "sid": sid,
         "label": label or sid,
         "focus": 1 if c.get("focused") else 0,
+        "dir": cwd,
     })
 
 # uma linha por foot; left/right pela posição X dentro do workspace
 rows.sort(key=lambda r: (r["ws"], r["x"]))
-out = ["ws\tslot\tsession_id\tlabel\tfocus"]
+out = ["ws\tslot\tsession_id\tlabel\tfocus\tdir"]
 count = {}
 for r in rows:
     n = count.get(r["ws"], 0)
     count[r["ws"]] = n + 1
     slot = "left" if n == 0 else ("right" if n == 1 else f"slot{n + 1}")
-    out.append(f"{r['ws']}\t{slot}\t{r['sid']}\t{r['label']}\t{r['focus']}")
+    out.append(f"{r['ws']}\t{slot}\t{r['sid']}\t{r['label']}\t{r['focus']}\t{r['dir']}")
 text = "\n".join(out) + "\n"
 
 if dry:
@@ -180,17 +192,24 @@ for c in clients:
 }
 
 launch() {
-  local ws="$1" sid="$2" label="$3"
+  local ws="$1" sid="$2" label="$3" dir="${4:-$PWD}"
+  # DELTA: sessão já aberta -> NÃO duplica; foca a janela existente.
   if session_running "$sid"; then
-    echo "pula (já aberta): $sid — $label"
-    return 0
+    if [[ $FORCE -eq 1 ]]; then
+      echo "força: reabrir mesmo assim $sid — $label"
+    else
+      focus_session "$sid"
+      echo "já aberta (focada): $sid — $label"
+      return 0
+    fi
   fi
   if [[ $DRY_RUN -eq 1 ]]; then
     echo "abriria: ws$ws  opencode -s $sid  — $label"
     return 0
   fi
   hyprctl dispatch workspace "$ws" >/dev/null 2>&1 || true
-  foot -e opencode -s "$sid" >/dev/null 2>&1 &
+  # wrapper: a janela SOBREVIVE ao Ctrl+C e mostra como reabrir (03/11)
+  foot --app-id opencode -e bash -c "'$WRAPPER' --cwd '$dir' -s '$sid'" >/dev/null 2>&1 &
   disown || true
   sleep 2
   echo "abriu: ws$ws  $sid — $label"
@@ -200,7 +219,7 @@ focus_ws=""
 focus_sid=""
 
 rows=()
-while IFS=$'\t' read -r ws slot sid label focus; do
+while IFS=$'\t' read -r ws slot sid label focus dir; do
   [[ -z "${ws:-}" || "$ws" == \#* ]] && continue
   [[ "$ws" == "ws" || "$slot" == "slot" ]] && continue
   case "$slot" in
@@ -208,13 +227,13 @@ while IFS=$'\t' read -r ws slot sid label focus; do
     right) rank=1 ;;
     *) rank=2 ;;
   esac
-  rows+=("$ws"$'\t'"$rank"$'\t'"$sid"$'\t'"$label"$'\t'"${focus:-0}")
+  rows+=("$ws"$'\t'"$rank"$'\t'"$sid"$'\t'"$label"$'\t'"${focus:-0}"$'\t'"${dir:-$PWD}")
 done < "$FILE"
 
 # ordem: workspace ascendente, depois left antes de right (dwindle posiciona por criação)
-while IFS=$'\t' read -r ws _rank sid label focus; do
+while IFS=$'\t' read -r ws _rank sid label focus dir; do
   [[ -z "${ws:-}" ]] && continue
-  launch "$ws" "$sid" "$label"
+  launch "$ws" "$sid" "$label" "$dir"
   if [[ "${focus:-0}" == "1" ]]; then
     focus_ws="$ws"
     focus_sid="$sid"
