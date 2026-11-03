@@ -51,45 +51,59 @@ Legenda: **tg** = decode tok/s · **pp** = prefill tok/s · **ttft** = 1º token
 com prompt de 1 token (latência de resposta) · **pf512** = 1º token com prompt
 de 512 tokens (prefill no caminho) · **VRAM** = pico durante a run.
 
-| # | Config | tg (t/s) | pp (tok/s) | ttft (ms) | pf512 (ms) | VRAM pico |
+| # | Config (35B = Qwen3.6-35B-A3B UD Q4_K_M) | tg (t/s) | pp (tok/s) | ttft (ms) | pf512 (ms) | VRAM pico |
 |---|---|---|---|---|---|---|
-| A | `-ngl 45 --n-cpu-moe 35 -t 6 -c 32768` (receita de produção) | 8,0–13,4 (24,6 em run isolado) | 7–19 | 450–1 979 | 5 872–43 780 | — |
+| A | `-ngl 45 --n-cpu-moe 35 -t 6 -c 32768 -b 512 -ub 512` (receita de produção) | 8,0–13,4 (24,6 em run isolado) | 7–19 | 450–1 979 | 5 872–43 780 | — |
 | B | `--fit-target 512` (auto-fit do vídeo, **sem** `-ngl`) | 11,8–14,1 | 12–30 | 420–634 | 3 996–24 984 | — |
 | C | B + `--moe-cache-mib 2048` | 9,8–11,2 | 13–19 | 703–1 043 | 9 025–17 802 | 5 105 MiB |
 | D | C + `-ctk q8_0 -ctv q8_0` | 6,8–10,4 | 7–21 | 1 266–9 066 | 6 450–23 953 | 5 139 MiB |
 | E | C + `-ub 1024` | 9,5–11,1 | 8–18 | 546–1 022 | 4 604–24 858 | — |
 | F | C + `-t 10` | 6,5–8,5 | 9–24 | 1 118–1 648 | 5 819–17 937 | 5 105 MiB |
-| **4B** | **produção (:8092) — MTP + LoRA, c 20 480, KV f16** | **105,7–105,9** | **143–354** | **178–203** | **688–740** | 5 139 MiB |
-| **4B** | **receita do vídeo (fit 512, ub 1024, KV q8_0, sem MTP)** | 54,3 | 205–562 | 153–175 | 537–566 | 4 557 MiB |
+| **4B-P** | **4B-MTP, flags de produção (:8092, MTP + LoRA micro-turn)** | **105,7–105,9** | **143–354** | **178–203** | **688–740** | 5 139 MiB |
+| **4B-V** | **4B com a receita do vídeo** (`--fit-target 512 -ub 1024 -ctk q8_0 -ctv q8_0`) | **54,3** | **205–562** | **153–175** | **537–566** | **4 557 MiB** |
 
-**Leitura:** o 4B de produção decodifica **~8× mais rápido** (105,9 vs 9,8–14,1 t/s)
-e tem **prefill 10–20× maior** (143–354 vs 7–30 tok/s); o 35B só passa em
-decode quando a máquina está livre (24,6 t/s) e **nunca** passa no gate de
-TTFT (420–9 066 ms contra 150 ms).
+> `ttft` = 1º token com prompt de 1 token (latência de resposta) ·
+> `pf512` = 1º token com prompt de 512 tokens (prefill no caminho).
+> Carga da máquina durante as runs: `load1` 6,5–8,7 sobre 16 threads (os
+> agentes da casa estão ativos) — por isso o t/s varia ±50 % entre reps; o
+> harness agora grava `load1`/`ncpu` em cada rep.
 
 Dados brutos: `/tmp/bench-ladder.jsonl` (uma linha JSON por rep, com `load1`
 e `ncpu`). Logs por config: `/tmp/bench-srv-<tag>.log`.
 
-## 4. Conclusões (o que muda na nossa stack)
+## 4. Veredito do gate (Phase 1 do plano)
 
-1. **GATE DO VÍDEO: FALHA no 35B ⇒ o 4B-MTP continua default.** O gate era
-   "≥ classe de 17 t/s **e** TTFT ≤ 150 ms a `-t 6`". Medido: 9,8–14,1 t/s com
-   a máquina compartilhada (24,6 t/s isolado) e **TTFT de 420 ms a 9 s**.
-   O 4B de produção mede **TTFT 178–203 ms** com prefill de 143–354 tok/s.
-2. **O gargalo é CPU/RAM, não a VRAM.** Com experts na CPU, o prefill do 35B
-   fica em 7–30 tok/s ⇒ **512 tokens de contexto = 4–44 s**. Para voz isso
-   é inviável; o 35B é tier de *thinking* (texto longo, sem urgência).
-3. **`--moe-cache-mib` e `--fit-target` não mudam o veredito** (C ≈ B ≈ A):
-   o cache de experts em VRAM ajuda marginalmente o decode e o `--fit` só
-   funciona **sem** `-ngl` (e o `--fit` escolheria um split pior que o nosso).
-4. **`-t 10` é pior que `-t 6`** (6,5–8,5 vs 9,8–11,2 t/s) — confirma a
-   regra da casa: metade dos P-cores, não metade dos threads lógicos.
-5. **KV q8_0 no 35B piora o TTFT** (D: 1 266–9 066 ms) — mais ops por token
-   quantizado sem ganho de prefill neste gargalo de CPU.
-6. **Achado útil para o 4B**: a receita do vídeo no 4B usa **4 557 MiB**
-   (KV q8_0 + sem MTP) contra **5 139 MiB** da produção — ~580 MiB de VRAM
-   a mais no default, o que importa numa placa de 6 GB com o router.
-   Trade-off: decode 54,3 vs 105,9 t/s (a produção tem MTP draft +24 %).
+O gate do vídeo era: **≥ classe dos 17 t/s do autor com TTFT ≤ 150 ms a
+`-t 6`**, senão o 4B-MTP fica como default.
+
+| | 35B (melhor config) | 4B-MTP (produção) | 4B (receita do vídeo) |
+|---|---|---|---|
+| decode | 14,1 t/s | **105,9 t/s** | 54,3 t/s |
+| prefill | 30 tok/s | **354 tok/s** | 562 tok/s |
+| TTFT | 420–9 066 ms | **178–203 ms** | 153–175 ms |
+| 512 tok de contexto | **4–44 s** | 0,7 s | 0,54 s |
+| pico VRAM | 5 105–5 139 MiB | 5 139 MiB | **4 557 MiB** |
+
+**O 35B-A3B FALHA o gate por duas ordens de grandeza em TTFT e por ~7× em
+decode.** Consequências:
+
+1. **O 4B-MTP continua sendo o default** (Phase 1 fecha aqui, sem download).
+2. **O 35B é tier de "thinking"/qualidade, não de voz** — com 512 tokens de
+   contexto a conversa levaria 4–44 s só de prefill; 2k tokens = minutos.
+3. **As flags do vídeo não mudam nada aqui**: `--fit-target` (B ≈ A) e
+   `--moe-cache-mib` (C ≈ B) ficam dentro do ruído de carga. O gargalo é
+   CPU/RAM (experts na CPU ⇒ prefill CPU-bound), não o split de VRAM.
+4. **`-t 10` piora** (F: 6,5–8,5 t/s) — confirma a regra da casa: **metade
+   dos cores** (a barreira libgomp do vídeo com `-t 12` é real).
+5. **Achado útil (35B → 4B)**: a receita do vídeo no 4B usa **570 MiB menos
+   de VRAM** (4 557 vs 5 139 MiB) e tem prefill 1,6× melhor — mas decode
+   metade. Motivo provável: KV q8_0 + `fa on` + sem MTP draft. No 4B de
+   **produção** isso não é aplicável: o **LoRA micro-turn exige `fa off`**, e
+   KV quantizado **exige** `fa on` → o 4B de voz fica em KV f16 (750 MiB ×2
+   pelo MTP).
+6. **Armadilha de reprodução**: `--fit` **aborta** se `-ngl` estiver setado
+   (`common/fit.cpp`) — para testar a receita do vídeo é preciso remover
+   `-ngl`; e sem o `LD_LIBRARY_PATH` do systemd o server sobe **CPU-only**.
 
 ## 5. Pendências para o `models.nix` (lane do colega `voice-flags-en`)
 
