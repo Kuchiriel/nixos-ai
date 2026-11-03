@@ -185,8 +185,22 @@ read pt-BR); answer the owner in pt-BR.
   restore windows — the script is the mechanism.
 - **Provider failures ping you**: `scripts/agent-provider-guard.py` (wired into
   `agents-watcher.sh`) watches the opencode log for timeout/429/400 and sends a
-  `notify-send` + a note to the peer. A critical notification = the provider
-  died, not the agent.
+  `notify-send` + a note to the peer (cooldown de 15 min por classe/provider/
+  sessão — 1 ping, não 5). A critical notification = the provider died, not
+  the agent.
+- **The cloud provider goes through a rate gate**: `nv-gate.service` (user
+  systemd, `scripts/nv-gate.py`) is a transparent proxy in front of the NVIDIA
+  free tier (40 RPM/chave): token bucket 24 RPM + burst 4, and a 429 from the
+  upstream is retried with backoff instead of killing the turn. It never sees
+  a key (the `Authorization` header is just forwarded). Configured in
+  `modules/ai/free-providers.json` (`providers.nvidia.gate`).
+  **A client that was already open keeps the old config in memory** — a
+  restart of the opencode process is what puts a session behind the gate.
+- **The cloud keys live in two formats**: `/etc/litellm.env` keeps `export`
+  (the shell needs it), and `jarvis-keys-env.service` mirrors it to
+  `/run/jarvis/litellm.env` in systemd format (`KEY=value`, 0600 root) —
+  reading the `export` form directly makes systemd **log the secret in the
+  journal** and leaves the service without keys.
 
 ## Index (read only when the task asks)
 
