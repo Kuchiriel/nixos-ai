@@ -40,14 +40,6 @@
     soundfile
   ];
 
-  # Um env python com TODAS as deps (core + voz) num único site-packages.
-  # 03/11: o console script do pacote já importava as deps (o hook de python
-  # do nixpkgs as injeta no sys.path), mas a CLI/MCP — que roda
-  # `python3` + PYTHONPATH — NÃO: `jarvis stt`, `jarvis speak` e o
-  # `bench-stt` quebravam com "No module named 'faster_whisper'".
-  # Este env + o marcador $out/nix-support/python-path fecham a ilha
-  # (jarvis-env.sh lê o marcador e adiciona no PYTHONPATH).
-  pythonEnv = python3Packages.python.withPackages (_: pythonDeps ++ voiceDeps);
 
   jarvis = python3Packages.buildPythonPackage rec {
     pname = "jarvis";
@@ -90,7 +82,7 @@
     # pelo agente via stdio; entra como propagado para o binário jarvis saber
     # o caminho (JARVIS_MCP_NIXOS_BIN) sem hardcode de store path.
     # `mcpNixos` é o fast (cache de canais pré-computado) quando vem do overlay.
-    propagatedBuildInputs = [mcpNixos age pythonEnv];
+    propagatedBuildInputs = [mcpNixos age pythonDepsPath];
 
     nativeCheckInputs = with python3Packages; [pytest hypothesis] ++ [ripgrep];
     checkPhase = ''
@@ -126,11 +118,14 @@
           --set LAYA_MODEL_DIR "${aiModels.layaModelDir}"
       done
 
-      # Marcador para a CLI/MCP (jarvis-env.sh): o site-packages do env com
-      # TODAS as deps. Sem isto, `python3 -m jarvis...` (CLI e MCP) roda sem
-      # faster-whisper/kokoro e a voz morre com ModuleNotFoundError.
+      # Marcador para a CLI/MCP (jarvis-env.sh): o site-packages com TODAS as
+      # deps (core + voz). Sem isto, `python3 -m jarvis...` (CLI e MCP) roda
+      # sem faster-whisper/kokoro e a voz morre com ModuleNotFoundError.
+      # python.withPackages NAO serve aqui: ele embute o python inteiro e
+      # duplica o `wheel` no closure -> build falha com "Found duplicated
+      # packages in closure for dependency 'wheel'" (medido 03/11).
       mkdir -p $out/nix-support
-      echo "${pythonEnv}/lib/python${python3Packages.python.version}/site-packages" \
+      echo "${pythonDepsPath}/python3/site-packages" \
         > $out/nix-support/python-path
     '';
 
@@ -142,5 +137,5 @@
     };
   };
 in {
-  inherit jarvis pythonDeps voiceDeps pythonEnv;
+  inherit jarvis pythonDeps voiceDeps pythonDepsPath;
 }

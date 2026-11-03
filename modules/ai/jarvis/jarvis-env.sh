@@ -107,6 +107,13 @@ if [ -n "${JARVIS_PKG:-}" ] && [ -r "$JARVIS_PKG/nix-support/python-path" ]; the
       *":$DEPS_SP:"*) ;;
       *) PP="${PP:+$PP:}$DEPS_SP" ;;
     esac
+    # NIX_PYTHONPATH = mesmo path, mas processado por site.addsitedir (o
+    # sitecustomize do python do nix). Necessario para os .pth dos pacotes
+    # (torch/nvidia): PYTHONPATH puro NAO processa .pth.
+    case ":${NIX_PYTHONPATH:-}:" in
+      *":$DEPS_SP:"*) ;;
+      *) export NIX_PYTHONPATH="${NIX_PYTHONPATH:+$NIX_PYTHONPATH:}$DEPS_SP" ;;
+    esac
   fi
 fi
 
