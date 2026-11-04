@@ -91,7 +91,7 @@
             "vision"
           ],
           "good_for": "Frontier multimodal coding (texto/imagem/vídeo) com thinking depth ajustável. TETO NIM medido 02/11: prompt_tokens + max_tokens ≤ 262144 (262146 = 400). Declarado aqui p/ receber o headroom (limit.input) — sem ele o opencode compacta no teto e estoura.",
-          "status": "active"
+          "status": "deprecated"
         },
         {
           "id": "nvidia/nemotron-3.5-lightning-30b-a3b",
@@ -144,7 +144,7 @@
             "long-context"
           ],
           "good_for": "General purpose, long context tasks.",
-          "status": "unstable"
+          "status": "deprecated"
         },
         {
           "id": "google/gemma-4-31b-it",

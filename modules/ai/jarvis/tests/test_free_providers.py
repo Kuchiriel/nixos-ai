@@ -43,6 +43,7 @@ VALID_STATUS = {
     "untested",
     "unstable",
     "agentic_only",
+    "deprecated",
     "disabled",
 }
 
@@ -116,5 +117,5 @@ def test_minimax_declared_with_measured_context(data):
     minimax = models.get("minimaxai/minimax-m3.1-flash")
     assert minimax is not None, "minimax não declarado no provider nvidia"
     assert minimax["context"] == 262144, "contexto do minimax mudou (medido: 262144)"
-    assert minimax["status"] == "active"
+    # Modelo deprecado (NVIDIA remove sem aviso) — declarado p/ headroom
     assert nvidia["headroom"] >= 20000
