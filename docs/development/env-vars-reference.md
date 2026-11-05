@@ -6,15 +6,15 @@
 ## Serviços NixOS (configurados em /etc/)
 
 ### llama-server (port 8080)
-Configurado em `modules/services/llama-cpp.nix` via `models.nix`.
+Configurado em `modules/services/llama-cpp.nix`, com as portas vindas de `modules/ai/models.nix` (fonte única).
 - Sem env vars necessárias (flags via command line)
 
 ### Embeddings (port 8081)
-Configurado em `modules/services/embeddings.nix`.
+Configurado em `modules/services/llama-cpp.nix` (a unit `llama-cpp-embeddings`; habilitada em `hosts/nitro-v15/configuration.nix`).
 - Sem env vars necessárias
 
 ### Rerank (port 8082)
-Configurado em `modules/services/rerank.nix`.
+Configurado em `modules/services/llama-cpp.nix` (a unit `llama-cpp-rerank`; habilitada em `hosts/nitro-v15/configuration.nix`).
 - Sem env vars necessárias
 
 ### Qdrant (port 6333)
