@@ -28,6 +28,8 @@
     # Default source do pipewire = mic DIGITAL (o Stereo está morto e o
     # AEC3 captura do default ⇒ duplex surdo). Ver o módulo p/ o porque.
     ./services/wireplumber-default-source.nix
+    # (05/11) MCP de coordenação entre IAs por HTTP na tailnet.
+    ./services/coord-mcp.nix
     ./wofi
     ./zathura.nix
     ./zsh.nix
