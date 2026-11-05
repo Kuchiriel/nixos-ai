@@ -299,23 +299,6 @@ ciclo() {
     # O wake por bus NAO depende de prompt do dono: se o bus tem algo para
     # o codinome deste agente, ele acorda (mesma politica de lane do resto).
     BUS_CMD="${AGENTS_BUS_CMD:-$SCRIPT_DIR/agent-bus-pending.py}"
-    if [ -x "$BUS_CMD" ]; then
-        "$BUS_CMD" > "$DIR_ST/bus.json" 2>/dev/null || echo '[]' > "$DIR_ST/bus.json"
-    else
-        echo '[]' > "$DIR_ST/bus.json"
-    fi
-    # marca o que ja foi visto (o bus nao some: o wake nao pode repetir)
-    _bus_hash=$(python3 -c '
-import hashlib, json, sys
-try:
-    items = json.load(open(sys.argv[1]))
-except Exception:
-    items = []
-if not isinstance(items, list):
-    items = []
-texts = sorted(str(i.get("text") or "") for i in items if isinstance(i, dict))
-print(hashlib.sha1("\n".join(texts).encode()).hexdigest())
-' "$DIR_ST/bus.json" 2>/dev/null || echo "")
     _claims_vivos=$(python3 -c '
 import json, sys
 try:
@@ -398,37 +381,57 @@ print(len([a for a in d.get("agents", []) if a.get("state") == "live"]))
         # (05/11) WAKE POR BUS: o que o bus global tem para ESTE agente
         # (mensagem endereçada ao codinome dele). Sem item novo = não acorda
         # (o hash evita repetir a mesma mensagem a cada ciclo).
-        if [ -z "$MOTIVO" ] && [ "$IDLE_SEGS" -ge "$RATE_MIN" ] \
-           && [ -s "$DIR_ST/bus.json" ] && [ -n "${_bus_hash:-}" ]; then
-            _bus_seen=$(cat "$DIR_ST/bus.seen" 2>/dev/null || echo "")
-            if [ "$_bus_hash" != "$_bus_seen" ]; then
-                _bus_msg=$(python3 - "$DIR_ST/roster.json" "$DIR_ST/bus.json" "$SESSAO" <<'PYBUS'
+        if [ -z "$MOTIVO" ] && [ "$IDLE_SEGS" -ge "$RATE_MIN" ] && [ -x "$BUS_CMD" ]; then
+            # O coord_pending precisa do QUEM eu sou (codinome) e do MEU
+            # escopo (globs) para devolver as msgs endereçadas E as claims
+            # que se sobrepoem aos meus arquivos. O MCP tem cache do bus
+            # (COORD_CACHE_TTL_S=60s): uma leitura por agente por ciclo
+            # custa UMA consulta ao GitHub por minuto, nao uma por agente.
+            _bus_who=$(python3 - "$DIR_ST/roster.json" "$SESSAO" <<'PYWHO'
 import json, sys
-roster_p, bus_p, sess = sys.argv[1:4]
+roster_p, sess = sys.argv[1:3]
 try:
     roster = json.load(open(roster_p))
 except Exception:
     roster = {}
-try:
-    bus = json.load(open(bus_p))
-except Exception:
-    bus = []
-if not isinstance(bus, list):
-    bus = []
-cod = ""
 for a in roster.get("agents", []):
     if sess and a.get("session") == sess:
-        cod = a.get("codename") or ""
+        print((a.get("codename") or "") + "\t" + ",".join(a.get("files") or []))
         break
-if cod:
-    msgs = [str(i.get("text") or "").strip() for i in bus
-            if isinstance(i, dict) and str(i.get("to") or "") in (cod, "*")]
-    print(" | ".join(m for m in msgs if m)[:600])
-PYBUS
+PYWHO
 )
-                if [ -n "$_bus_msg" ]; then
-                    MOTIVO="bus: $_bus_msg"
-                    [ "$CHECK" -eq 1 ] || echo "$_bus_hash" > "$DIR_ST/bus.seen"
+            _bus_cod="${_bus_who%%	*}"
+            _bus_files="${_bus_who#*	}"
+            if [ -n "$_bus_cod" ]; then
+                _bus_json=$("$BUS_CMD" --codename "$_bus_cod" --files "$_bus_files" 2>/dev/null || echo '[]')
+                _bus_hash=$(printf '%s' "$_bus_json" | python3 -c '
+import hashlib, json, sys
+try:
+    items = json.load(sys.stdin)
+except Exception:
+    items = []
+if not isinstance(items, list):
+    items = []
+texts = sorted(str(i.get("text") or "") for i in items if isinstance(i, dict))
+print(hashlib.sha1("\n".join(texts).encode()).hexdigest())
+' 2>/dev/null || echo "")
+                _bus_seen=$(cat "$DIR_ST/bus.seen.$_bus_cod" 2>/dev/null || echo "")
+                if [ -n "$_bus_hash" ] && [ "$_bus_hash" != "$_bus_seen" ]; then
+                    _bus_msg=$(printf '%s' "$_bus_json" | python3 -c '
+import json, sys
+try:
+    items = json.load(sys.stdin)
+except Exception:
+    items = []
+if not isinstance(items, list):
+    items = []
+msgs = [str(i.get("text") or "").strip() for i in items if isinstance(i, dict)]
+print(" | ".join(m for m in msgs if m)[:600])
+' 2>/dev/null || echo "")
+                    if [ -n "$_bus_msg" ]; then
+                        MOTIVO="bus: $_bus_msg"
+                        [ "$CHECK" -eq 1 ] || echo "$_bus_hash" > "$DIR_ST/bus.seen.$_bus_cod"
+                    fi
                 fi
             fi
         fi

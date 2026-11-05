@@ -58,6 +58,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="pendencias do bus de coordenacao")
     ap.add_argument("--url", default=DEFAULT_URL)
     ap.add_argument("--agent", default="", help="filtra: so o que e para este codinome")
+    ap.add_argument("--codename", default="", help="codinome do agente que pergunta")
+    ap.add_argument("--files", default="", help="globs do agente (detecta claim sobreposta)")
+    ap.add_argument("--since", default="", help="cursor do bus (so o que e novo)")
     args = ap.parse_args()
 
     try:
@@ -86,7 +89,16 @@ def main() -> int:
                 "method": "tools/call",
                 "params": {
                     "name": "coord_pending",
-                    "arguments": {"agent": args.agent} if args.agent else {},
+                    "arguments": {
+                        k: v
+                        for k, v in (
+                            ("agent", args.agent),
+                            ("codename", args.codename),
+                            ("files", args.files),
+                            ("since", args.since),
+                        )
+                        if v
+                    },
                 },
             },
             sid,
