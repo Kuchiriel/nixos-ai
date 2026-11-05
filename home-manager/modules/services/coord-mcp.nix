@@ -65,9 +65,9 @@
         ];
         # (05/11) A identidade do agente que chama o MCP vem do env: sem
         # isso o coord_whoami cai no default e mostra o cartão de outro.
-        Environment = {
-          COORD_AGENT = config.services.jarvis.coordMcp.agent;
-        };
+        # (05/11) No home-manager o Environment é STRING (ou lista de
+        # strings): um attrset { KEY = value; } é rejeitado pelo type check.
+        Environment = "COORD_AGENT=${config.services.jarvis.coordMcp.agent}";
         Restart = "always";
         RestartSec = "5s";
         # O MCP não escreve no stdout (é protocolo) → log no journal.
