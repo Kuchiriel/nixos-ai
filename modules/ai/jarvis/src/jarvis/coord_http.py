@@ -117,6 +117,28 @@ def build_server():
         from jarvis.core.coord_roster import peers
         return peers()
 
+    @mcp.tool
+    def coord_pending(agent: str = "", codename: str = "", lane: str = "",
+                      files: str = "", since: str = "") -> str:
+        """Só o que é desta IA: mensagens endereçadas (to) + claims sobrepostas.
+
+        Incremental: `since` = cursor (bus_updated_at do coord_read).
+        É o endpoint que o watcher faz polling para manter as IAs em sync.
+        """
+        from jarvis.core.coord import pending
+        items = pending(agent=agent or None, codename=codename or None,
+                        lane=lane or None, files=files, since=since or None)
+        if not items:
+            return "coord_pending: nada endereçado a você neste escopo."
+        return "\n".join(
+            f"- [{i.get('kind')}] de {i.get('agent')}"
+            f"{' -> ' + str(i.get('to')) if i.get('to') else ''}"
+            f" · {i.get('lane') or '-'}"
+            f" · {str(i.get('intent') or i.get('note') or '')[:180]}"
+            f" · {i.get('ts')}"
+            for i in items
+        )
+
     return mcp
 
 
