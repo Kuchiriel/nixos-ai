@@ -44,8 +44,11 @@
   config = lib.mkIf config.services.jarvis.coordMcp.enable {
     systemd.user.services.coord-mcp = {
       description = "JARVIS — MCP de coordenação entre IAs (streamable-http, tailnet)";
-      after = [ "network-online.target" ];
-      wants = [ "network-online.target" ];
+      # (05/11) home-manager espera STRING em after/wants (o módulo do
+      # NixOS aceita lista; aqui quebrava o build: "not of type attribute
+      # set of (boolean or signed integer or string ...)".
+      after = "network-online.target";
+      wants = "network-online.target";
       wantedBy = [ "default.target" ];
       serviceConfig = {
         Type = "simple";
