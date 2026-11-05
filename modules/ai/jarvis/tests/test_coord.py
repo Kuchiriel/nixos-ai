@@ -294,3 +294,62 @@ class TestCacheAndPending:
         assert payload["to"] == "Urubu"
         assert payload["kind"] == "msg"
         assert payload["agent"] == "Onca"
+
+
+class TestCrossMachineAndCacheCoherence:
+    """Bugs achados pelo Urubu em 05/11 (05/11 - 21:51):
+
+    1. `bus_state` e `bus_payloads` mexiam no mesmo `_CACHE["at"]` com
+       campos diferentes: uma leitura "envelhecia" o carimbo da outra e a
+       lista de payloads podia ficar presa (msg nova nunca aparecia ⇒ o
+       watcher ficava cego).
+    2. `coord_msg` validava o destinatário contra o ROSTER LOCAL, rejeitando
+       quem só existe no bus (outra máquina) — que é o caso cross-machine que
+       o bus existe para resolver.
+    """
+
+    def test_state_and_payloads_are_coherent(self, coord, monkeypatch):
+        """Uma leitura alimenta os dois: o payload novo tem que aparecer."""
+        payloads = [_payload("a1", ts="2026-11-05T10:00:00Z")]
+        calls = {"n": 0}
+
+        def fake_gh_json(*args, **kwargs):
+            if args[:2] == ("issue", "list"):
+                return [{"number": 12}]
+            if len(args) >= 2 and args[0] == "api" and "comments?" in args[1]:
+                calls["n"] += 1
+                return [{"body": "```coord-json\n" + json.dumps(p) + "\n```"}
+                        for p in payloads]
+            if args[:2] == ("pr", "list"):
+                return []
+            raise AssertionError(args)
+
+        monkeypatch.setattr(coord, "gh_json", fake_gh_json)
+        monkeypatch.setattr(coord, "gh", lambda *a, **k: "{}")
+        coord.invalidate_cache()
+        coord.bus_state()
+        assert len(coord.bus_payloads()) == 1
+        # chega payload novo no bus
+        payloads.append(_payload("b2", ts="2026-11-05T11:00:00Z"))
+        coord.invalidate_cache()
+        coord.bus_state()
+        got = coord.bus_payloads()
+        assert len(got) == 2, "payload novo sumiu: state e payloads dessincronizados"
+
+    def test_msg_to_agent_not_in_local_roster(self, coord, monkeypatch):
+        """coord_msg aceita quem só existe no bus (outra máquina)."""
+        from jarvis.core import coord_roster
+        posted = {}
+
+        def fake_send(to, message, agent=None, lane=""):
+            posted["to"] = to
+            posted["message"] = message
+            return "coord: publicado"
+
+        monkeypatch.setattr(coord_roster, "roster_agents", lambda: [
+            {"name": "Onca", "codename": "Onca", "lane": "nixos-ai/coord-mcp"},
+        ])
+        monkeypatch.setattr(coord, "send", fake_send)
+        out = coord_roster.send_message("crouton-alpha", "oi do celular")
+        assert posted["to"] == "crouton-alpha"
+        assert "bus" in out

@@ -48,6 +48,42 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 
 
+def _basic_auth() -> tuple[str, str] | None:
+    """Autenticação Basic opcional (env COORD_MCP_PASSWORD).
+
+    Se COORD_MCP_PASSWORD estiver vazio (default), o endpoint é aberto —
+    isso é aceitável porque ele escuta **na IP do tailnet**, e a tailnet já
+    é a rede privada (ACL do Tailscale). Para exigir credencial de verdade
+    (o cliente Windows manda `Authorization: Basic ...`), basta definir
+    COORD_MCP_PASSWORD na unit: o servidor passa a rejeitar quem não mandar
+    o header correto.
+    """
+    import base64
+    password = os.environ.get("COORD_MCP_PASSWORD", "")
+    if not password:
+        return None
+    user = os.environ.get("COORD_MCP_USER", "opencode")
+    return user, base64.b64encode(f"{user}:{password}".encode()).decode()
+
+
+def _install_auth(mcp) -> None:
+    """Liga o Basic auth no app FastMCP (se COORD_MCP_PASSWORD estiver setado)."""
+    creds = _basic_auth()
+    if not creds:
+        return
+    user, encoded = creds
+
+    @mcp.auth.http_basic  # type: ignore[attr-defined]
+    async def _basic(credentials):
+        import base64
+        raw = base64.b64decode(credentials.encode()).decode("utf-8", "replace")
+        if raw.split(":", 1)[0] == user and raw.split(":", 1)[1] == os.environ.get(
+            "COORD_MCP_PASSWORD", ""
+        ):
+            return {"username": user}
+        raise ValueError("credencial inválida")
+
+
 def build_server():
     """Cria o app FastMCP com o conjunto de coordenação."""
     try:

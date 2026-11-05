@@ -284,6 +284,44 @@ def comment_bodies(issue_number: int, pages: int = 20) -> list[str]:
     return bodies
 
 
+def _read_bus() -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], int | None, str]:
+    """Lê o bus do GitHub (sem cache): payloads, estado, issue, updated_at."""
+    number = find_issue(create=False)
+    if number is None:
+        return [], {}, None, ""
+    payloads = parse_payloads(comment_bodies(number))
+    stamps = sorted(str(p.get("ts") or "") for p in payloads)
+    return payloads, current_state(payloads), number, (stamps[-1] if stamps else "")
+
+
+def _refresh_bus(force: bool = False) -> None:
+    """Lê o bus do GitHub e atualiza o cache INTEIRO (payloads + estado).
+
+    UMA leitura, um cache. Bug corrigido em 05/11/2026: `bus_state` mexia no
+    timestamp sem atualizar os payloads, e `bus_payloads` devolvia a lista
+    velha acreditando estar fresca — a msg nova nunca aparecia e o watcher
+    ficava cego (foi o Urubu que provou, com uma msg de teste).
+    """
+    now = time.time()
+    fresh = ((now - float(_CACHE.get("at") or 0.0)) < cache_ttl_s()
+             and _CACHE.get("issue") is not None)
+    if not force and fresh:
+        return
+    number = find_issue(create=False)
+    if number is None:
+        _CACHE.update({"at": now, "payloads": [], "state": {}, "issue": None,
+                       "updated_at": ""})
+        return
+    payloads = parse_payloads(comment_bodies(number))
+    updated_at = ""
+    for payload in payloads:
+        stamp = str(payload.get("ts") or "")
+        if stamp > updated_at:
+            updated_at = stamp
+    _CACHE.update({"at": now, "payloads": payloads, "issue": number,
+                   "state": current_state(payloads), "updated_at": updated_at})
+
+
 def bus_state(force: bool = False) -> tuple[dict[str, dict[str, Any]], int | None]:
     """Estado atual do bus (issue + último mensaje de cada agente).
 
@@ -292,37 +330,14 @@ def bus_state(force: bool = False) -> tuple[dict[str, dict[str, Any]], int | Non
     minuto estoura o limite e a sincronia entre IAs para. Quem escreve no bus
     chama `invalidate_cache()` para o próximo read já vir fresco.
     """
-    now = time.time()
-    if (not force and _CACHE["issue"] is not None
-            and (now - float(_CACHE["at"])) < cache_ttl_s()):
-        return dict(_CACHE["state"]), _CACHE["issue"]
-    number = find_issue(create=False)
-    if number is None:
-        _CACHE.update({"at": now, "state": {}, "issue": None})
-        return {}, None
-    state = current_state(parse_payloads(comment_bodies(number)))
-    _CACHE.update({"at": now, "state": state, "issue": number})
-    return dict(state), number
+    _refresh_bus(force)
+    return dict(_CACHE.get("state") or {}), _CACHE.get("issue")
 
 
 def bus_payloads(force: bool = False) -> list[dict[str, Any]]:
-    """Todos os payloads do bus (não só o último de cada agente) + updated_at.
-
-    `updated_at` = timestamp do payload mais recente: o watcher usa como
-    cursor (`since`) para saber o que é novo sem reprocessar tudo.
-    """
-    now = time.time()
-    if (not force and _CACHE.get("payloads")
-            and (now - float(_CACHE["at"])) < cache_ttl_s()):
-        return list(_CACHE["payloads"])
-    number = find_issue(create=False)
-    if number is None:
-        _CACHE.update({"at": now, "payloads": [], "issue": None})
-        return []
-    payloads = parse_payloads(comment_bodies(number))
-    _CACHE.update({"at": now, "payloads": payloads, "issue": number,
-                   "state": current_state(payloads)})
-    return list(payloads)
+    """Todos os payloads do bus (não só o último de cada agente)."""
+    _refresh_bus(force)
+    return list(_CACHE.get("payloads") or [])
 
 
 def bus_updated_at() -> str:
