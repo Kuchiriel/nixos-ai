@@ -57,7 +57,9 @@
   # ExecStart: com o texto multi-linha, os operadores (||, if, fi) viravam
   # ARGUMENTOS do rclone ("Command lsd needs 1 arguments maximum") e a
   # unit morria com status=2/INVALIDARGUMENT. Mesmo padrao das units de voz.
-  rclone-sync-script = pkgs.writeShellScript "rclone-sync" ''
+  # (05/11) writeShellScriptBin (e nao writeShellScript): home.packages
+  # usa buildEnv, que nao consegue mesclar um ARQUIVO (so diretorios).
+  rclone-sync-script = pkgs.writeShellScriptBin "rclone-sync" ''
     set -euo pipefail
 '''
       ${pkgs.rclone}/bin/rclone lsd gdrive:NixOS-Sync --max-depth 1 >/dev/null 2>&1 || {
