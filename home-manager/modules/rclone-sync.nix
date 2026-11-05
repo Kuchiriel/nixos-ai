@@ -61,7 +61,6 @@
   # usa buildEnv, que nao consegue mesclar um ARQUIVO (so diretorios).
   rclone-sync-script = pkgs.writeShellScriptBin "rclone-sync" ''
     set -euo pipefail
-'''
       ${pkgs.rclone}/bin/rclone lsd gdrive:NixOS-Sync --max-depth 1 >/dev/null 2>&1 || {
         echo "rclone-sync: credencial do Drive invalida ou sem escopo (403 ACCESS_TOKEN_SCOPE_INSUFFICIENT) — refaca o OAuth com escopo drive.file: rclone config reconnect gdrive" >&2
         exit 1
