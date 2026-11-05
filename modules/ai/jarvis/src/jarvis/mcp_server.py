@@ -621,6 +621,24 @@ JARVIS_TOOLS = [
                        "OS, online state) — who you can talk to directly.",
         "inputSchema": {"type": "object", "properties": {}}
     },
+    {
+        "name": "coord_pending",
+        "description": "Return ONLY what is addressed to this agent: messages whose 'to' "
+                       "matches your codename or lane, plus claims by other agents whose "
+                       "file scope overlaps yours. Incremental via 'since' (feed it the "
+                       "bus_updated_at from coord_read). This is the poll endpoint the "
+                       "watcher uses to stay in sync without human prompts.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "agent": {"type": "string", "description": "Your roster name (default: COORD_AGENT)"},
+                "codename": {"type": "string", "description": "Your human codename (e.g. Onca)"},
+                "lane": {"type": "string", "description": "Your lane (lane-wide addressing)"},
+                "files": {"type": "string", "description": "Comma-separated globs you own"},
+                "since": {"type": "string", "description": "Cursor: only items newer than this timestamp"},
+            }
+        }
+    },
 ]
 
 
@@ -1090,6 +1108,34 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
                     note = note.strip().lower() not in ("false", "0", "no")
                 return send_message(args.get("to", ""), args.get("message", ""), note=note)
             return _guarded_mutation(name, args, _do_coord_msg)
+
+        if name in ("jarvis_coord_pending", "coord_pending"):
+            try:
+                from jarvis.core.coord import pending
+                files = args.get("files", "")
+                if isinstance(files, list):
+                    files = ",".join(str(f) for f in files)
+                items = pending(
+                    agent=args.get("agent") or None,
+                    codename=args.get("codename") or None,
+                    lane=args.get("lane") or None,
+                    files=files,
+                    since=args.get("since") or None,
+                )
+                if not items:
+                    return "coord_pending: nada endereçado a você neste escopo."
+                out = []
+                for item in items:
+                    out.append(
+                        f"- [{item.get('kind')}] de {item.get('agent')}"
+                        f"{' → ' + str(item.get('to')) if item.get('to') else ''}"
+                        f" · {item.get('lane') or '—'}"
+                        f" · {str(item.get('intent') or item.get('note') or '')[:200]}"
+                        f" · {item.get('ts')}"
+                    )
+                return "coord_pending:\n" + "\n".join(out)
+            except Exception as e:
+                return f"ERROR: coord_pending failed: {e}"
 
         if name in ("jarvis_coord_peers", "coord_peers"):
             try:

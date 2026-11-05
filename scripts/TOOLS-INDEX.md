@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_84 tools._
+_80 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -16,11 +16,8 @@ _84 tools._
 - `agents-keepawake.sh` (nixos-ai/scripts) — agents-keepawake.sh — inibe o idle (tela) enquanto houver agente vivo.
   use: `USO: systemd user service (nixos-ai home-manager, agents-keepawake.service)`
 - `agents-watcher.sh` (nixos-ai/scripts) — agents-watcher.sh — O WATCHER ÚNICO dos agentes (17/10, dono: "consolide
-- `bench-final.py` (nixos-ai/scripts) — """Benchmark multiple llama.cpp configurations systematically."""
 - `bench-llm.sh` (nixos-ai/scripts) — bench-llm.sh — benchmark padrão da casa (consolida os one-offs de 24/09).
   use: `Uso: BENCH_LD_ENVFILE=/caminho LD_LIBRARY_PATH=... (export) para o bench.`
-- `charger-watch.sh` (nixos-ai/scripts) — charger-watch.sh — anuncia plug/desplug do carregador na voz do JARVIS.
-  use: `Uso: ./scripts/charger-watch.sh [intervalo_segundos]`
 - `corpus_inventory.py` (nixos-ai/scripts) — """Inventário do corpus de conhecimento (§3/§22 da missão knowledge-substrate).
   use: `~/Books            corpus de conhecimento (binários + notas; inclui versions/)`
 - `ctx-usage.sh` (nixos-ai/scripts) — ctx-usage.sh — Agrega uso real do LLM local a partir do journal.
@@ -31,7 +28,7 @@ _84 tools._
 - `duplex-asrd.py` (nixos-ai/scripts) — """duplex-asrd.py — ASR v4: silero VAD (limites) + whisper.cpp GPU (texto).
 - `duplex-eval.py` (nixos-ai/scripts) — """duplex-eval.py — harness de eval do modo voz full-duplex (P5, noite 20/10, HB).
 - `duplex-restart.sh` (nixos-ai/scripts) — duplex-restart.sh — reinicia o cliente de voz duplex (mata TODOS os
-  use: `USO: duplex-restart.sh [--port N] [--gate on|off] [--force]`
+  use: `USO: duplex-restart.sh [--port N] [--gate intent|jarvis|on|off] [--force]`
 - `duplex-ttsd.py` (nixos-ai/scripts) — """duplex-ttsd.py — daemon TTS do modo duplex (18/10, 02:45).
   use: `USO (o cliente faz sozinho; manual p/ debug):`
 - `duplex-voice-run.sh` (nixos-ai/scripts) — duplex-voice-run.sh — runner do modo voz duplex (v6.2, madrugada 18/10).
@@ -42,7 +39,6 @@ _84 tools._
   use: `Uso: PYTHONPATH=src python3 eval-model.py --base http://127.0.0.1:8080 \`
 - `fetch-resume.py` (nixos-ai/scripts) — """Download com resume + retry + verificação de tamanho (stdlib only).
   use: `Uso: python3 fetch-resume.py URL DESTINO [--tries 50]`
-- `fix_refs.py` (nixos-ai/scripts) — """fix_refs.py — mechanical doc-ref repairs (all verified before write).
 - `gen-lora-data.py` (nixos-ai/scripts) — """gen-lora-data.py — gera dados de treino pro LoRA de timing no 4B-MTP.
   use: `python3 gen-lora-data.py --log /tmp/opencode/duplex-voice.log --out /tmp/opencode/lora-train.jsonl`
 - `gguf_audit.py` (nixos-ai/scripts) — """Audit GGUFs: real dims -> KV/token -> ctx fit.
@@ -96,7 +92,6 @@ _84 tools._
 - `pipeline.py` (nixos-ai/scripts) — """pipeline.py — estrategista (MoE) diagnostica, executor (bonsai) executa.
   use: `0/3), enquanto o MoE acerta o diagnóstico mas perde o último passo.`
 - `provider_matrix.py` (nixos-ai/scripts) — """provider_matrix.py — audit de TODOS os LLM providers do dono (keys de
-- `read_chatgpt.py` (nixos-ai/scripts) — """Read a ChatGPT shared conversation via Playwright.
 - `reindex_code.py` (nixos-ai/scripts) — """Reindexa o code_index (coleção canônica) a partir do código vivo.
 - `restore-sessions.sh` (nixos-ai/scripts) — restore-sessions.sh — relança as sessões opencode capturadas no snapshot, no layout original
   use: `./scripts/restore-sessions.sh [--dry-run] [--file <snapshot.tsv>]`

@@ -206,8 +206,8 @@ def _default_call_llm(prompt: str, max_tokens: int = 2048) -> str:
     Disables thinking tokens for coding tasks to prevent
     reasoning from consuming the entire max_tokens budget.
 
-    Choke point ÚNICO de todo LLM do nightwatch (discovery, patcher,
-    three_agent): a disciplina de tool-use mora aqui e vale para
+    Choke point ÚNICO de todo LLM do nightwatch (discovery e patcher):
+    a disciplina de tool-use mora aqui e vale para
     todos os chamadores (lição do UX-abismo: modelo fraco sem
     disciplina improvisa; com disciplina, segue o formato).
     """

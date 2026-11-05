@@ -33,8 +33,7 @@
 | `scripts/memory-arena-lite.py` | arena de memória (leve) |
 | `scripts/fetch-resume.py` | resume de fetch |
 | `scripts/ux-suite.py`, `ux-repl-session.py`, `ux_world.py`, `ux-autonomy.py` | harness UX (sessões REPL instrumentadas) |
-| `scripts/read_chatgpt.py` | lê conversa compartilhada (legado do MCP reader) |
-| `scripts/setup-hackmd.sh`, `scripts/night-anchor.sh`, `scripts/charger-watch.sh`, `scripts/jarvis-gaming-mode.sh`, `scripts/rvc-env.sh`, `scripts/rvc-spike-bootstrap.sh`, `scripts/roo-nightwatch-setup.sh`, `scripts/loop-runner.sh`, `scripts/bench-final.py` | utilitários pontuais (ver INVENTORY-DRAFT antes de usar) |
+| `scripts/setup-hackmd.sh`, `scripts/night-anchor.sh`, `scripts/jarvis-gaming-mode.sh`, `scripts/rvc-env.sh`, `scripts/rvc-spike-bootstrap.sh`, `scripts/roo-nightwatch-setup.sh`, `scripts/loop-runner.sh` | utilitários pontuais (ver INVENTORY-DRAFT antes de usar) |
 | `scripts/gates/gate3_sanitize_e2e.py` | gate de sanitize E2E (único gate que **existe**; o índice dizia G1–G11 — Wrong, corrigido 29/09) |
 | `scripts/overnight-24-09/`, `overnight-26-09/` | evidências datadas de noites (não rodar; histórico) |
 | `scripts/overnight-*-24-09.sh` | runners antigos (arqueologia; o atual é `overnight-loop.sh`) |

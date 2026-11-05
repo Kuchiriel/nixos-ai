@@ -305,7 +305,8 @@ jarvis hwdetect
 
 ```bash
 ./rebuild-host.sh          # rebuild com validação multi-camada
-./rebuild-lab.sh           # rebuild da VM
+# (rebuild-lab.sh foi arquivado em 05/11: duplicava o harness Linux/Wine
+#  em backtest/ e usava 'git add -A' — o harness oficial e o do repo mt5)
 nix build .#jarvis         # build do pacote Python
 nix develop                # shell de desenvolvimento
 ```

@@ -18,7 +18,12 @@ import pytest
 @pytest.fixture
 def coord():
     from jarvis.core import coord as module
-    return module
+    # o cache do bus e global no modulo: cada teste comeca com o cache limpo
+    module.invalidate_cache()
+    module._CACHE.update({"state": {}, "issue": None, "updated_at": "",
+                           "payloads": []})
+    yield module
+    module.invalidate_cache()
 
 
 def _payload(agent, kind="claim", files=(), ts=None, lane="infra", intent="x"):
@@ -192,3 +197,100 @@ class TestBusWithFakeGh:
         ])
         out = coord.check(agent="a1", files="backtest/*")
         assert "colisão de claim" not in out.lower()
+
+
+class TestCacheAndPending:
+    """Cache (o watcher faz polling: sem cache estoura o rate limit do GitHub)
+    e `pending` (só o que me cabe) — o contrato acordado com o Urubu."""
+
+    def _fake_bus(self, coord, monkeypatch, payloads):
+        calls = {"n": 0}
+
+        def fake_gh_json(*args, **kwargs):
+            if args[:2] == ("issue", "list"):
+                return [{"number": 12, "title": "COORD", "url": "u"}]
+            if len(args) >= 2 and args[0] == "api" and "comments?" in args[1]:
+                calls["n"] += 1
+                return [{"body": "```coord-json\n" + json.dumps(p) + "\n```"}
+                        for p in payloads]
+            if args[:2] == ("pr", "list"):
+                return []
+            raise AssertionError(f"gh_json inesperado: {args}")
+
+        def fake_gh(*args, **kwargs):
+            if args[:2] == ("issue", "list"):
+                return json.dumps([{"number": 12}])
+            if args[0] == "api":
+                return "{}"
+            raise AssertionError(f"gh inesperado: {args}")
+
+        monkeypatch.setattr(coord, "gh", fake_gh)
+        monkeypatch.setattr(coord, "gh_json", fake_gh_json)
+        return calls
+
+    def test_second_read_does_not_hit_github(self, coord, monkeypatch):
+        calls = self._fake_bus(coord, monkeypatch, [_payload("a1")])
+        coord.invalidate_cache()
+        coord.bus_payloads()
+        coord.bus_payloads()
+        coord.bus_payloads()
+        assert calls["n"] == 1, "cache nao evitou as chamadas ao GitHub"
+
+    def test_force_bypasses_cache(self, coord, monkeypatch):
+        calls = self._fake_bus(coord, monkeypatch, [_payload("a1")])
+        coord.invalidate_cache()
+        coord.bus_payloads()
+        coord.bus_payloads(force=True)
+        assert calls["n"] == 2
+
+    def test_pending_returns_only_addressed(self, coord, monkeypatch):
+        self._fake_bus(coord, monkeypatch, [
+            _payload("a1", kind="msg", ts="2026-11-05T10:00:00Z") | {"to": "Onca"},
+            _payload("b2", kind="msg", ts="2026-11-05T10:01:00Z") | {"to": "Outro"},
+            _payload("c3", kind="claim", files=["docs/x.md"], ts="2026-11-05T10:02:00Z"),
+        ])
+        coord.invalidate_cache()
+        items = coord.pending(agent="Onca", codename="Onca", lane="mt5",
+                              files="backtest/*")
+        assert len(items) == 1
+        assert items[0]["agent"] == "a1"
+
+    def test_pending_includes_overlapping_claim(self, coord, monkeypatch):
+        self._fake_bus(coord, monkeypatch, [
+            _payload("c3", kind="claim", files=["backtest/make_ini.py"],
+                     ts="2026-11-05T10:02:00Z"),
+        ])
+        coord.invalidate_cache()
+        items = coord.pending(agent="Onca", files="backtest/*")
+        assert len(items) == 1
+        assert items[0]["agent"] == "c3"
+
+    def test_pending_since_filters_old(self, coord, monkeypatch):
+        self._fake_bus(coord, monkeypatch, [
+            _payload("a1", kind="msg", ts="2026-11-05T10:00:00Z") | {"to": "Onca"},
+            _payload("b2", kind="msg", ts="2026-11-05T12:00:00Z") | {"to": "Onca"},
+        ])
+        coord.invalidate_cache()
+        items = coord.pending(agent="Onca", since="2026-11-05T11:00:00Z")
+        assert len(items) == 1
+        assert items[0]["agent"] == "b2"
+
+    def test_post_carries_to_and_invalidates_cache(self, coord, monkeypatch):
+        posted = []
+
+        def fake_gh(*args, **kwargs):
+            if args[:2] == ("issue", "list"):
+                return json.dumps([{"number": 12}])
+            if args[0] == "api":
+                body = args[args.index("-f") + 1].split("=", 1)[1]
+                posted.append(body)
+                return "{}"
+            raise AssertionError(args)
+
+        monkeypatch.setattr(coord, "gh", fake_gh)
+        coord.invalidate_cache()
+        coord.post(kind="msg", agent="Onca", to="Urubu", note="olá")
+        payload = coord.parse_payloads([posted[0]])[0]
+        assert payload["to"] == "Urubu"
+        assert payload["kind"] == "msg"
+        assert payload["agent"] == "Onca"

@@ -140,15 +140,53 @@ def set_context(context: str, name: str | None = None) -> str:
 
 
 def send_message(target: str, message: str, note: bool = True) -> str:
-    """Entrega mensagem a um par (por codinome ou nome). `--note` não roda o turno."""
+    """Entrega mensagem a um par (por codinome ou nome).
+
+    DUAS ETAPAS, e a ordem importa:
+    1. **bus primeiro** (kind=msg, to=<codinome>): a mensagem fica gravada,
+       cross-machine e auditável — quem está em outra máquina da tailnet
+       recebe no próximo poll do watcher;
+    2. **wake local** (agent-msg.sh): só o acerto de guarda (a entrega local
+       vira *wake*, não o registro).
+
+    Se o wake local falhar, a mensagem continua no bus ⇒ nada se perde.
+    """
     if not message.strip():
         return "ERROR: mensagem vazia"
     name = resolve_name(target)
+    codename = codename_of(name) or name
+    lane = lane_of(name)
+    bus_note = ""
+    try:
+        from jarvis.core.coord import send as bus_send
+        bus_note = bus_send(to=codename, message=message, lane=lane)
+    except Exception as exc:
+        bus_note = f"(bus indisponível: {exc})"
     cmd = ["bash", _script("agent-msg.sh"), "--to", name]
     if note:
         cmd.append("--note")
     cmd.append(message.strip())
-    return _run(cmd, timeout=60)
+    try:
+        local = _run(cmd, timeout=60)
+    except Exception as exc:
+        return f"{bus_note}\n(wake local falhou: {exc} — a mensagem está no bus)"
+    return f"{bus_note}\n(local: {local})"
+
+
+def codename_of(name: str) -> str:
+    """Codinome humano de um agente do roster (vazio se não tiver)."""
+    for entry in roster_agents():
+        if entry.get("name") == name:
+            return str(entry.get("codename") or "")
+    return ""
+
+
+def lane_of(name: str) -> str:
+    """Lane de um agente do roster."""
+    for entry in roster_agents():
+        if entry.get("name") == name:
+            return str(entry.get("lane") or "")
+    return ""
 
 
 def peers() -> str:

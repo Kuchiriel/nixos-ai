@@ -55,8 +55,15 @@ JSON_FENCE = re.compile(r"```coord-json\s*([\s\S]*?)```")
 DEFAULT_REPO = "Kuchiriel/mt5"
 DEFAULT_LABEL = "coord"
 DEFAULT_TTL_H = 6.0
-CLAIM_KINDS = ("claim", "status", "blocked", "done", "handoff")
+CLAIM_KINDS = ("claim", "status", "blocked", "done", "handoff", "msg")
 ACTIVE_KINDS = ("claim", "status", "blocked")
+# Cache local do bus: o watcher faz polling (e ele e o que mantem as IAs em
+# sync) e a API do GitHub tem limite (60 req/h por token). Sem cache, um poll
+# por minuto estoura o limite e a sincronia para de funcionar.
+DEFAULT_CACHE_TTL_S = 60.0
+
+_CACHE: dict[str, Any] = {"at": 0.0, "state": {}, "issue": None,
+                           "updated_at": "", "payloads": []}
 
 
 def _gh_path() -> str:
@@ -111,6 +118,24 @@ def ttl_hours() -> float:
         return float(os.environ.get("COORD_TTL_H", DEFAULT_TTL_H))
     except ValueError:
         return DEFAULT_TTL_H
+
+
+def cache_ttl_s() -> float:
+    """TTL do cache local do bus.
+
+    O watcher faz polling (a cada ciclo) e a API do GitHub tem limite
+    (60 req/h por token): sem cache, um poll por minuto estoura o limite e a
+    sincronia entre IAs — que depende do watcher — deixa de funcionar.
+    """
+    try:
+        return float(os.environ.get("COORD_CACHE_TTL_S", DEFAULT_CACHE_TTL_S))
+    except ValueError:
+        return DEFAULT_CACHE_TTL_S
+
+
+def invalidate_cache() -> None:
+    """Invalidar o cache (usado depois de publicar: o próximo read é fresco)."""
+    _CACHE["at"] = 0.0
 
 
 def norm_glob(pattern: str) -> str:
@@ -259,12 +284,101 @@ def comment_bodies(issue_number: int, pages: int = 20) -> list[str]:
     return bodies
 
 
-def bus_state() -> tuple[dict[str, dict[str, Any]], int | None]:
-    """Estado atual do bus (issue + último mensaje de cada agente)."""
+def bus_state(force: bool = False) -> tuple[dict[str, dict[str, Any]], int | None]:
+    """Estado atual do bus (issue + último mensaje de cada agente).
+
+    CACHE LOCAL (COORD_CACHE_TTL_S, default 60 s): o watcher faz polling e a
+    API do GitHub tem limite (60 req/h por token). Sem cache, um poll por
+    minuto estoura o limite e a sincronia entre IAs para. Quem escreve no bus
+    chama `invalidate_cache()` para o próximo read já vir fresco.
+    """
+    now = time.time()
+    if (not force and _CACHE["issue"] is not None
+            and (now - float(_CACHE["at"])) < cache_ttl_s()):
+        return dict(_CACHE["state"]), _CACHE["issue"]
     number = find_issue(create=False)
     if number is None:
+        _CACHE.update({"at": now, "state": {}, "issue": None})
         return {}, None
-    return current_state(parse_payloads(comment_bodies(number))), number
+    state = current_state(parse_payloads(comment_bodies(number)))
+    _CACHE.update({"at": now, "state": state, "issue": number})
+    return dict(state), number
+
+
+def bus_payloads(force: bool = False) -> list[dict[str, Any]]:
+    """Todos os payloads do bus (não só o último de cada agente) + updated_at.
+
+    `updated_at` = timestamp do payload mais recente: o watcher usa como
+    cursor (`since`) para saber o que é novo sem reprocessar tudo.
+    """
+    now = time.time()
+    if (not force and _CACHE.get("payloads")
+            and (now - float(_CACHE["at"])) < cache_ttl_s()):
+        return list(_CACHE["payloads"])
+    number = find_issue(create=False)
+    if number is None:
+        _CACHE.update({"at": now, "payloads": [], "issue": None})
+        return []
+    payloads = parse_payloads(comment_bodies(number))
+    _CACHE.update({"at": now, "payloads": payloads, "issue": number,
+                   "state": current_state(payloads)})
+    return list(payloads)
+
+
+def bus_updated_at() -> str:
+    """Timestamp do payload mais recente do bus (cursor do watcher)."""
+    payloads = bus_payloads()
+    stamps = sorted(str(p.get("ts") or "") for p in payloads)
+    return stamps[-1] if stamps else ""
+
+
+def pending(
+    agent: str | None = None,
+    codename: str | None = None,
+    files: str | list[str] | None = None,
+    lane: str | None = None,
+    since: str | None = None,
+) -> list[dict[str, Any]]:
+    """Só o que ME cabe: mensagens endereçadas a mim + claims que colidem.
+
+    Endereçamento (formato do peer, 05/11/2026):
+      - `to` = codinome (humano) do destinatário; `*` = todos da lane;
+      - `to` pode ser a **lane** (para quem ainda não tem codinome);
+      - claim de outro agente com arquivo sobreposto ao meu escopo também é
+        "minha" (é o que pode virar colisão de verdade).
+    `since` filtra por `ts` (cursor incremental do watcher).
+    """
+    me = agent or agent_id()
+    my_files = _files_of({"files": files or []})
+    out: list[dict[str, Any]] = []
+    for payload in bus_payloads():
+        ts = str(payload.get("ts") or "")
+        if since and ts and ts <= str(since):
+            continue
+        kind = payload.get("kind")
+        to = str(payload.get("to") or "")
+        addressed = False
+        if to in (me, codename or ""):
+            addressed = True
+        elif to == "*" and lane and str(payload.get("lane") or "") == lane:
+            addressed = True
+        elif to and to == lane:
+            addressed = True
+        overlapping = False
+        if kind in ("claim", "status", "blocked"):
+            their = _files_of(payload)
+            for mine in my_files:
+                for theirs in their:
+                    if overlaps(mine, theirs):
+                        overlapping = True
+                        break
+                if overlapping:
+                    break
+        if addressed or overlapping:
+            item = dict(payload)
+            item["_why"] = "endereçado" if addressed else "escopo sobreposto"
+            out.append(item)
+    return out
 
 
 def open_prs() -> list[dict[str, Any]]:
@@ -286,13 +400,20 @@ def post(
     pr: int | None = None,
     note: str = "",
     head: str = "",
+    to: str = "",
 ) -> str:
-    """Publica uma claim/status no bus (append-only) e devolve o issue usado."""
+    """Publica uma claim/status/msg no bus (append-only) e devolve o issue usado.
+
+    `to` = destinatário (codinome humano, `*` = todos da lane, ou a lane);
+    sempre presente no payload (mesmo vazio) — é o que permite endereçar sem
+    adivinhar (formato acordado com o Urubu em 05/11/2026).
+    """
     if kind not in CLAIM_KINDS:
         raise ValueError(f"kind inválido: {kind} (use {'|'.join(CLAIM_KINDS)})")
     payload = {
         "kind": kind,
         "agent": agent or agent_id(),
+        "to": to or "",
         "lane": lane or "",
         "files": _files_of({"files": files or []}),
         "intent": intent or "",
@@ -305,11 +426,33 @@ def post(
     body = (
         f"**{kind}** de `{payload['agent']}`"
         f"{' na lane `' + payload['lane'] + '`' if payload['lane'] else ''}"
+        f"{' → `' + payload['to'] + '`' if payload['to'] else ''}"
         f"{' · PR #' + str(payload['pr']) if payload['pr'] else ''}\n\n"
         "```coord-json\n" + json.dumps(payload, indent=2, ensure_ascii=False) + "\n```"
     )
     gh("api", f"repos/{repo()}/issues/{number}/comments", "-f", f"body={body}")
-    return f"coord: {kind} de {payload['agent']} publicado no issue #{number} ({repo()}, label {label()})"
+    invalidate_cache()
+    return (f"coord: {kind} de {payload['agent']} publicado no issue #{number} "
+            f"({repo()}, label {label()})"
+            + (f" → {payload['to']}" if payload["to"] else ""))
+
+
+def send(
+    to: str,
+    message: str,
+    agent: str | None = None,
+    lane: str = "",
+) -> str:
+    """Publica uma mensagem endereçada no bus (kind=msg).
+
+    O bus é a fonte da verdade: a entrega local (roster+msg) passa a ser só o
+    **wake** do destinatário — assim a mensagem é cross-machine, auditável e
+    chega mesmo para quem está em outra máquina da tailnet.
+    """
+    if not (message or "").strip():
+        raise ValueError("mensagem vazia")
+    return post(kind="msg", agent=agent, lane=lane, to=to,
+                note=(message or "").strip())
 
 
 def read() -> str:
@@ -319,6 +462,7 @@ def read() -> str:
         return (f"coord: ainda não existe issue de coordenação "
                 f"(repo {repo()}, label {label()}) — crie com coord_post")
     lines = [f"coord: bus = {repo()} issue #{number} (label {label()})"]
+    lines.append(f"bus_updated_at: {bus_updated_at()}")
     if not state:
         lines.append("agentes: (ninguém publicou claim ainda)")
     for name, payload in sorted(state.items()):
@@ -326,9 +470,11 @@ def read() -> str:
         stale = " ⚠️ VELHO" if age > ttl_hours() else ""
         files = ", ".join(_files_of(payload)) or "—"
         what = payload.get("intent") or payload.get("note") or "—"
+        to = payload.get("to") or ""
         lines.append(
             f"- {name} · {payload.get('kind')} · {payload.get('lane') or '—'} · "
             f"{files} · {what} · {age:.1f}h{stale}"
+            + (f" · → {to}" if to else "")
         )
     found = collisions(state)
     if found:
