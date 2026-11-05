@@ -61,10 +61,16 @@
   # usa buildEnv, que nao consegue mesclar um ARQUIVO (so diretorios).
   rclone-sync-script = pkgs.writeShellScriptBin "rclone-sync" ''
     set -euo pipefail
-      ${pkgs.rclone}/bin/rclone lsd gdrive:NixOS-Sync --max-depth 1 >/dev/null 2>&1 || {
-        echo "rclone-sync: credencial do Drive invalida ou sem escopo (403 ACCESS_TOKEN_SCOPE_INSUFFICIENT) — refaca o OAuth com escopo drive.file: rclone config reconnect gdrive" >&2
+      # (05/11) O preflight tem que testar ESCRITA, nao so listar: com o
+      # token sem escopo de escrita o 'rclone lsd' passava (ler a raiz nao
+      # precisa de escopo) e a sync comecava a copiar 63k arquivos, cada
+      # um com 403, ate estourar o tempo. O teste de escrita falha em
+      # segundos com a mensagem certa.
+      ${pkgs.rclone}/bin/rclone touch gdrive:NixOS-Sync/.jarvis-preflight 2>/dev/null || {
+        echo "rclone-sync: sem permissao de ESCRITA no Drive (403 insufficient authentication scopes) — refaca o OAuth com o escopo drive.file: rclone config reconnect gdrive" >&2
         exit 1
       }
+      ${pkgs.rclone}/bin/rclone deletefile gdrive:NixOS-Sync/.jarvis-preflight 2>/dev/null || true
       ${pkgs.rclone}/bin/rclone copy /home/nixos/projects gdrive:NixOS-Sync/03-projects \
         --filter-from ${config.xdg.configFile."rclone/filters.txt".target} \
         --update \
