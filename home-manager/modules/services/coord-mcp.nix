@@ -43,14 +43,18 @@
 
   config = lib.mkIf config.services.jarvis.coordMcp.enable {
     systemd.user.services.coord-mcp = {
-      description = "JARVIS — MCP de coordenação entre IAs (streamable-http, tailnet)";
-      # (05/11) after/wants no home-manager são ATTRSET
-      # ({ "unidade" = true; }) — lista e string as duas quebram o build
-      # ("not of type attribute set of ...").
-      after = { "network-online.target" = true; };
-      wants = { "network-online.target" = true; };
-      wantedBy = [ "default.target" ];
-      serviceConfig = {
+      # (05/11) No home-manager as opções de unit usam os NOMES DO SYSTEMD
+      # (Unit.Description, Unit.After, Service.ExecStart, Install.WantedBy):
+      # a grafia do NixOS (description/after/serviceConfig) é rejeitada pelo
+      # type check ("not of type attribute set of ..."). Mesmo formato das
+      # outras units de usuário deste repo.
+      Unit = {
+        Description = "JARVIS — MCP de coordenação entre IAs (streamable-http, tailnet)";
+        After = [ "network-online.target" ];
+        Wants = [ "network-online.target" ];
+      };
+      Install.WantedBy = [ "default.target" ];
+      Service = {
         Type = "simple";
         ExecStart = lib.concatStringsSep " " [
           "/home/nixos/projects/nixos-ai/modules/ai/jarvis/coord-mcp-launcher.sh"
