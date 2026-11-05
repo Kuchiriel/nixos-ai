@@ -59,6 +59,31 @@ contract for every other harness (CLI, Roo, external agents).
 | `jarvis_hackmd_list/read/write/sync` | HackMD notes as shared markdown |
 | `jarvis_make_scenarios/run/scenario_get/executions` | Make.com automation (team `750102`) |
 
+## Coordination between agents — shared state, not conversation
+
+| Tool | WHAT it does | WHEN |
+|---|---|---|
+| `jarvis_coord_read()` | state of the coordination bus: every agent's current claim, scope collisions, stale claims, open PRs | **before starting work and at each milestone** — it is the "what is the other agent doing" call |
+| `jarvis_coord_post(kind, lane, files, intent, pr, note)` | publishes your claim/status (kind: claim\|status\|blocked\|done\|handoff) | **before the first edit** — `files` (globs) + `intent` are what make a collision detectable |
+| `jarvis_coord_check(files)` | explicit collision verdict for a file scope | right after `coord_post`, or before touching files another agent claimed |
+| `jarvis_coord_roster()` | local roster: codename, name, lane, state and each agent's one-line context | to know who is on this machine and what they are doing |
+| `jarvis_coord_whoami(agent?)` | your own card (codename, lane, claimed files, context) | after a compaction, or to confirm your identity/claim |
+| `jarvis_coord_set_context(context)` | updates your one-line context phrase | **when the subject changes** — peers read it to know what you are doing |
+| `jarvis_coord_msg(to, message, note=true)` | delivers a message to a peer by codename or roster name (`note=true` notifies without running their turn) | to hand off, ask for a decision, or warn about a collision |
+| `jarvis_coord_peers()` | Tailscale peers reachable from this machine (name, tailnet IP, OS, online) | to know who you can reach directly |
+
+Two layers, one protocol: the **global bus** (`coord_post`/`coord_read`/
+`coord_check`) is a GitHub issue with a `coord-json` block per message — the
+same protocol the mt5 repo's `tools/coord.mjs` speaks, so implementations in
+different languages interoperate. The **local roster** (`coord_roster` and
+friends) is this machine's agent registry (codename + context + delivery).
+Remote machines: `python -m jarvis.coord_http --host <tailnet-ip> --port 8765`
+serves the same tool set over MCP streamable-http.
+
+Claim discipline: `files` must be the globs you will really touch — without
+them a collision cannot be detected, and the whole mechanism degrades to
+politeness.
+
 ## Other servers (not jarvis)
 
 | Server | Exposes | Who uses it | State |
