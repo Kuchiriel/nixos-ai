@@ -39,6 +39,7 @@ import argparse
 import fcntl
 import json
 import os
+import random
 import subprocess
 import sys
 import time
@@ -230,6 +231,29 @@ def window_of_session(entry: dict, windows: list[dict]) -> dict | None:
 
 
 # ── roster: leitura/escrita atômica ───────────────────────────────────
+# (05/11) CODINOMES HUMANOS: o dono olhando a tela nao consegue dizer
+# quem e quem a partir de um session id (ses_eb612ed53...). Cada agente
+# ganha um nome curto, unico e legivel, no primeiro claim; o contexto
+# (uma frase sobre o que a IA esta fazendo) e atualizavel a qualquer
+# momento (set-context). Sem acento (o terminal e o shell).
+CODENAMES = [
+    "Cervo", "Tucano", "Lince", "Puma", "Onca", "Jaguar", "Galo", "Raposa",
+    "Urubu", "Mico", "Tatu", "Lobo", "Corvo", "Falcao", "Arara", "Sucuri",
+    "Girafa", "Capivara", "Pinguim", "Camaleao", "Sabia", "Ibis",
+    "Andorinha", "Cegonha", "Ema", "Tartaruga", "Veado", "Quati",
+    "Bicho", "Gralha", "Pavão", "Maritaca",
+]
+
+
+def _pick_codename(agents: list[dict]) -> str:
+    """Codinome livre para um agente novo (aleatório entre os livres)."""
+    used = {e.get("codename") for e in agents if e.get("codename")}
+    pool = [c for c in CODENAMES if c not in used]
+    if not pool:
+        return f"Agente{len(agents) + 1}"
+    return random.choice(pool)
+
+
 def _blank() -> dict:
     return {"version": VERSION, "agents": [], "tasks": []}
 
@@ -291,6 +315,48 @@ def _files_of(entry: dict) -> list[str]:
 
 
 # ── comandos ───────────────────────────────────────────────────────────
+
+def cmd_set_context(args) -> int:
+    """Atualiza a descricao curta do contexto de um agente.
+
+    (05/11) O dono nao consegue saber "quem e quem" por session id: cada
+    agente tem um codinome e UMA FRASE sobre o que esta fazendo. Quando a
+    IA muda de assunto, ela atualiza essa frase — e todo mundo (e o MCP)
+    ve a mudanca.
+    """
+    with _Lock():
+        data = load()
+        for e in data["agents"]:
+            if e["name"] == args.name:
+                e["context"] = args.context
+                e["context_updated_at"] = int(time.time())
+                save(data)
+                print(f"roster: contexto de '{args.name}' "
+                      f"({e.get('codename') or '-'}) = {args.context}")
+                return 0
+    print(f"agent-roster: '{args.name}' não está no roster", file=sys.stderr)
+    return 1
+
+
+def cmd_whoami(args) -> int:
+    """Quem sou eu: codinome + contexto + lane (o 'cartão de visita')."""
+    data = load()
+    for e in data["agents"]:
+        if e["name"] == args.name:
+            if args.json:
+                print(json.dumps(e, ensure_ascii=False, indent=2))
+            else:
+                print(f"{e.get('codename') or '-'} ({e['name']})")
+                print(f"  lane:   {e.get('lane') or '-'}")
+                print(f"  repo:   {e.get('repo') or '-'}")
+                print(f"  files:  {', '.join(e.get('files') or []) or '-'}")
+                print(f"  contexto: {e.get('context') or '(vazio)'}")
+                print(f"  sessao: {e.get('session') or '-'}")
+            return 0
+    print(f"agent-roster: '{args.name}' não está no roster", file=sys.stderr)
+    return 1
+
+
 def cmd_claim(args) -> int:
     windows = agent_windows()
     own = own_window(windows)
@@ -319,8 +385,15 @@ def cmd_claim(args) -> int:
                       f"duplicam trabalho (Anthropic: fronteiras explícitas). "
                       f"Use --force se a intenção é assumir.", file=sys.stderr)
                 return 4
+        # (05/11) re-claim mantem o codinome e o contexto (o dono nao
+        # perde o "quem e quem" a cada revindicada); --context atualiza.
+        previous = next((e for e in agents if e["name"] == args.name), None)
+        codename = (previous or {}).get("codename") or _pick_codename(agents)
+        context = (getattr(args, "context", "") or (previous or {}).get("context") or "")
         entry = {
             "name": args.name,
+            "codename": codename,
+            "context": context,
             "lane": args.lane or "",
             "repo": args.repo or "",
             "files": args.files or [],
@@ -335,6 +408,9 @@ def cmd_claim(args) -> int:
         save(data)
     print(f"roster: '{args.name}' na lane '{entry['lane'] or '(sem lane)'}' "
           f"(repo={entry['repo'] or '-'}, janela={entry['window']})")
+    print(f"roster: codinome '{entry['codename']}'"
+          + (f" | contexto: {entry['context']}" if entry["context"] else
+             " | contexto: (vazio — defina com set-context)"))
     return 0
 
 
@@ -384,9 +460,11 @@ def cmd_list(args) -> int:
     if not rows:
         print("roster vazio (nenhum agente fez claim)")
     for r in sorted(rows, key=lambda x: x["name"]):
-        print(f"{r['state']:5} {r['name']:14} lane={r['lane'] or '-':22} "
-              f"repo={r['repo'] or '-':10} janela={r['window'] or '-':16} "
+        print(f"{r['state']:5} {r.get('codename') or '-':10} {r['name']:14} "
+              f"lane={r['lane'] or '-':22} repo={r['repo'] or '-':10} "
               f"age={r['age_s']}s")
+        if r.get("context"):
+            print(f"      contexto: {r['context']}")
         if r.get("note"):
             print(f"      nota: {r['note']}")
     if data["tasks"]:
@@ -558,6 +636,8 @@ def main() -> int:
     p.add_argument("--repo", default="")
     p.add_argument("--files", default="", help="globs separados por vírgula")
     p.add_argument("--note", default="")
+    p.add_argument("--context", default="",
+                   help="descrição curta do contexto (1 frase): o que esta IA fazendo")
     p.add_argument("--force", action="store_true",
                    help="assume mesmo com colisão de arquivos")
     p.set_defaults(func=cmd_claim)
@@ -569,6 +649,16 @@ def main() -> int:
     p = sub.add_parser("list", help="lista o roster + tarefas")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_list)
+
+    p = sub.add_parser("set-context", help="atualiza a descrição curta do contexto")
+    p.add_argument("--name", required=True)
+    p.add_argument("--context", required=True)
+    p.set_defaults(func=cmd_set_context)
+
+    p = sub.add_parser("whoami", help="mostra codinome/contexto/lane do agente")
+    p.add_argument("--name", required=True)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_whoami)
 
     p = sub.add_parser("prune", help="remove entradas mortas")
     p.set_defaults(func=cmd_prune)
