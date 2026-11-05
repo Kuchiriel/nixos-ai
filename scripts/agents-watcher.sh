@@ -293,6 +293,29 @@ ciclo() {
     else
         echo '{}' > "$DIR_ST/roster.json"
     fi
+    # (05/11) BUS DE COORDENACAO: as pendencias (msg endereçada, claim
+    # sobreposta) sao lidas pelo MCP LOCAL (coord_pending), que tem o cache
+    # do GitHub dentro — polling direto do issue estoura o rate limit (60/h).
+    # O wake por bus NAO depende de prompt do dono: se o bus tem algo para
+    # o codinome deste agente, ele acorda (mesma politica de lane do resto).
+    BUS_CMD="${AGENTS_BUS_CMD:-$SCRIPT_DIR/agent-bus-pending.py}"
+    if [ -x "$BUS_CMD" ]; then
+        "$BUS_CMD" > "$DIR_ST/bus.json" 2>/dev/null || echo '[]' > "$DIR_ST/bus.json"
+    else
+        echo '[]' > "$DIR_ST/bus.json"
+    fi
+    # marca o que ja foi visto (o bus nao some: o wake nao pode repetir)
+    _bus_hash=$(python3 -c '
+import hashlib, json, sys
+try:
+    items = json.load(open(sys.argv[1]))
+except Exception:
+    items = []
+if not isinstance(items, list):
+    items = []
+texts = sorted(str(i.get("text") or "") for i in items if isinstance(i, dict))
+print(hashlib.sha1("\n".join(texts).encode()).hexdigest())
+' "$DIR_ST/bus.json" 2>/dev/null || echo "")
     _claims_vivos=$(python3 -c '
 import json, sys
 try:
@@ -371,6 +394,43 @@ print(len([a for a in d.get("agents", []) if a.get("state") == "live"]))
             [ -n "$ACHADO_CICLO" ] && [ "$_evt" != "$ACHADO_CICLO" ] \
                 && log "filtro de lane end=$END: evento nao pertence a esta lane"
             [ "$IDLE_SEGS" -ge "$RATE_MIN" ] && MOTIVO="$_evt"
+        fi
+        # (05/11) WAKE POR BUS: o que o bus global tem para ESTE agente
+        # (mensagem endereçada ao codinome dele). Sem item novo = não acorda
+        # (o hash evita repetir a mesma mensagem a cada ciclo).
+        if [ -z "$MOTIVO" ] && [ "$IDLE_SEGS" -ge "$RATE_MIN" ] \
+           && [ -s "$DIR_ST/bus.json" ] && [ -n "${_bus_hash:-}" ]; then
+            _bus_seen=$(cat "$DIR_ST/bus.seen" 2>/dev/null || echo "")
+            if [ "$_bus_hash" != "$_bus_seen" ]; then
+                _bus_msg=$(python3 - "$DIR_ST/roster.json" "$DIR_ST/bus.json" "$SESSAO" <<'PYBUS'
+import json, sys
+roster_p, bus_p, sess = sys.argv[1:4]
+try:
+    roster = json.load(open(roster_p))
+except Exception:
+    roster = {}
+try:
+    bus = json.load(open(bus_p))
+except Exception:
+    bus = []
+if not isinstance(bus, list):
+    bus = []
+cod = ""
+for a in roster.get("agents", []):
+    if sess and a.get("session") == sess:
+        cod = a.get("codename") or ""
+        break
+if cod:
+    msgs = [str(i.get("text") or "").strip() for i in bus
+            if isinstance(i, dict) and str(i.get("to") or "") in (cod, "*")]
+    print(" | ".join(m for m in msgs if m)[:600])
+PYBUS
+)
+                if [ -n "$_bus_msg" ]; then
+                    MOTIVO="bus: $_bus_msg"
+                    [ "$CHECK" -eq 1 ] || echo "$_bus_hash" > "$DIR_ST/bus.seen"
+                fi
+            fi
         fi
         # (30/10) SUGESTAO DE CHECKPOINT: stretch longo de trabalho + agente
         # idle -> e a hora de gravar fila/rag/memoria/vault. O texto ja vem com
