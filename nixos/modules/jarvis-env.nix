@@ -69,7 +69,11 @@ with lib; {
         # rebuild reiniciava o target e subia o nightwatch junto, queimando
         # a GPU em horário de uso — forense 2026-09-07.
         # Auto-reparo e gaming (só quando habilitados)
-        "jarvis-heal.service"
+        # (05/11, sweep) "jarvis-heal.service" saiu daqui: com
+        # runAsRoot=false (padrao) a unit de SISTEMA do heal NAO e criada
+        # (so a de USER, que vive no grafico-session.target) → o target
+        # Wanted uma unit inexistente (systemd: "not-found" no boot) e o
+        # self-heal nao subia com o resto do stack.
         "jarvis-gaming-watcher.service"
       ];
       after = [

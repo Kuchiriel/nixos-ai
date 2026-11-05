@@ -25,10 +25,25 @@ let
   cfg = config.services.jarvis-gaming;
 
   # Serviços a PARAR durante gaming (pesados, competem por GPU/CPU)
+  # (05/11, sweep) O gaming mode parava so as 3 units do router e deixava
+  # de pe os servidores DIRETOS — inclusive o 4B-MTP (:8092), que e o
+  # RESIDENTE PADRAO (4,5 GB de VRAM) e o proprio default do opencode: o
+  # modo gaming nao liberava a GPU e a sessao abria apontando para um
+  # servidor que o profile ja tinha parado.
   gamingStopServices = [
     "llama-cpp-server"
     "llama-cpp-embeddings"
     "llama-cpp-rerank"
+    # diretos do models.nix (units geradas)
+    "llama-uncensored-4b"
+    "llama-uncensored-35b"
+    "llama-uncensored-35b-q4kp"
+    "llama-duplex-35b"
+    "llama-deepseek-7b"
+    "llama-gemma-4b"
+    "llama-phi-mini"
+    "llama-xlam-8b"
+    "llama-qwen30b-moe"
   ];
 
   gpuThreshold = cfg.gpuUtilizationThreshold;
