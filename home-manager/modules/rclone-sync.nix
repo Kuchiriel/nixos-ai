@@ -19,6 +19,13 @@
     - **/node_modules/**
     - **/__pycache__/**
     - **/target/**
+    - **/build/**
+    - **/CMakeFiles/**
+    - **/*.o
+    - **/*.a
+    - **/*.gguf
+    - **/*.safetensors
+    - **/*.tar.zst
     - **/run/**
     - .cargo/**
     - **/*.rclonelink
@@ -58,8 +65,17 @@ in {
     };
     Service = {
       Type = "oneshot";
+      # (04/11, sweep) A unit ficava 'activating' por 1d19h e o timer
+      # travava em 'running' (nunca re-armava): o rclone tentava arquivo a
+      # arquivo (403 sem escopo OAuth) sem limite de tempo. Timeout + teto
+      # de duração: o backup falha VISÍVEL em vez de ficar pendurado.
+      TimeoutStartSec = "6h";
       ExecStartPre = "-${qdrant-snapshot}/bin/qdrant-snapshot";
       ExecStart = ''
+        ${pkgs.rclone}/bin/rclone lsd gdrive:NixOS-Sync --max-depth 1 >/dev/null 2>&1 || {
+          echo "rclone-sync: credencial do Drive invalida ou sem escopo (403 ACCESS_TOKEN_SCOPE_INSUFFICIENT) — refaca o OAuth com escopo drive.file: rclone config reconnect gdrive" >&2
+          exit 1
+        }
         ${pkgs.rclone}/bin/rclone copy /home/nixos/projects gdrive:NixOS-Sync/03-projects \
           --filter-from ${config.xdg.configFile."rclone/filters.txt".target} \
           --update \
@@ -70,7 +86,42 @@ in {
           --checkers 8 \
           --retries 3 \
           --timeout 1h \
+          --max-duration 4h \
           --log-level INFO
+        # (04/11, sweep) O snapshot do Qdrant era criado e PRUNADO, mas o
+        # rclone so copiava ~/projects → a memoria do JARVIS (memories/
+        # code_index/books) ficava SO na maquina. Agora sai tambem.
+        if [ -d /var/lib/qdrant/snapshots ]; then
+          ${pkgs.rclone}/bin/rclone copy /var/lib/qdrant/snapshots gdrive:NixOS-Sync/04-qdrant-snapshots \
+            --update \
+            --fast-list \
+            --tpslimit 10 \
+            --transfers 2 \
+            --checkers 4 \
+            --retries 3 \
+            --timeout 1h \
+            --max-duration 90m \
+            --exclude "*.lock" \
+            --log-level INFO
+        fi
+        # (04/11, sweep) O vault (memoria de longo prazo do JARVIS) ficava
+        # SO na maquina: o rclone so copiava ~/projects e ~/vaults esta fora
+        # do escopo. Agora sai tambem — SEM o filtro global (que exclui
+        # .git/: no vault o historico git E o backup).
+        if [ -d /home/nixos/vaults ]; then
+          ${pkgs.rclone}/bin/rclone copy /home/nixos/vaults gdrive:NixOS-Sync/05-vault \
+            --update \
+            --fast-list \
+            --tpslimit 10 \
+            --transfers 2 \
+            --checkers 4 \
+            --retries 3 \
+            --timeout 1h \
+            --max-duration 45m \
+            --exclude "**/.obsidian/workspace*" \
+            --exclude "**/.trash/**" \
+            --log-level INFO
+        fi
       '';
     };
   };
@@ -80,6 +131,9 @@ in {
     Timer = {
       OnCalendar = "*-*-* 00/4:00:00";
       Persistent = true;
+      # (04/11) re-arma a partir do FIM da execução (a unit podia ficar
+      # horas ativa); com OnCalendar+Persistent o proximo disparo e diario.
+      OnUnitInactiveSec = "30min";
     };
     Install.WantedBy = ["timers.target"];
   };

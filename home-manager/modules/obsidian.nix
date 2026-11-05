@@ -6,8 +6,26 @@
     # Sync Obsidian vault to git (declarative backup)
     VAULT_DIR="${vaultDir}"
     cd "$VAULT_DIR" || exit 1
-    git add .
-    git commit -m "$(date '+%Y-%m-%d %H:%M:%S')" || exit 0
+    # (04/11, sweep) O vault NAO era repo proprio: o `git add .` caia no
+    # repo de $HOME (que nao tem remote) → commits locais que NAO sao
+    # backup + risco de commitar o repo do HOME inteiro. Agora: exige repo
+    # proprio e faz PUSH quando existe remote; sem remote, avisa.
+    ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+    if [ "$ROOT" != "$VAULT_DIR" ]; then
+      echo "git-sync-obsidian: $VAULT_DIR nao e repo proprio (toplevel=$ROOT) — backup do vault DESATIVADO" >&2
+      exit 2
+    fi
+    git add -A . || exit 1
+    if git diff --cached --quiet; then
+      echo "git-sync-obsidian: nada novo"
+      exit 0
+    fi
+    git commit -m "$(date '+%Y-%m-%d %H:%M:%S')" || exit 1
+    if git remote | grep -q .; then
+      git push || { echo "git-sync-obsidian: push falhou" >&2; exit 1; }
+    else
+      echo "git-sync-obsidian: repo sem remote — commit local apenas (a copia fora da maquina e o rclone)" >&2
+    fi
   '';
   
   # HackMD sync script (uses JARVIS MCP)
@@ -42,7 +60,11 @@ in {
   home.file."${vaultDir}/.obsidian/hackmd-sync.json" = {
     text = builtins.toJSON {
       apiToken = "";  # Set via environment or manually
-      syncOnSave = true;
+      # (04/11, sweep) syncOnSave=true + token vazio = falha SILENCIOSA a
+      # cada save no vault (o plugin tentava sincronizar e nao tinha
+      # credencial). O sync real e feito pelo timer hackmd-sync-vault via
+      # MCP (jarvis_vault_sync_hackmd). syncOnSave off = sem ruido.
+      syncOnSave = false;
       syncInterval = 300;
     };
   };
@@ -54,7 +76,9 @@ in {
     };
     Service = {
       ExecStart = "${gitSyncObsidian}/bin/git-sync-obsidian";
-      Type = "simple";
+      # (04/11) oneshot: o script termina (antes ficava 'inactive dead'
+      # como Type=simple, sem estado de sucesso visivel).
+      Type = "oneshot";
     };
   };
 
