@@ -46,13 +46,48 @@
         inherit (m) context output;
         inherit headroom;
       };
-    in {
-      name = m.name;
+      # (05/11) VARIANTES DE REASONING por modelo. Cada variante carrega o
+      # body EXATO que a spec da NIM aceita (medido 04/11 em
+      # mt5/opencode/NVIDIA_NIM_GROUND_TRUTH.md §3): reasoning_effort
+      # (topo), reasoning_budget (topo) ou chat_template_kwargs (objeto).
+      # Os dois campos NUNCA no mesmo body (a spec do nemotron diz que o
+      # reasoning_budget tem precedencia sobre o effort).
+      #
+      # SHAPE (medido na 1.18.34 com eco-server local, 05/11):
+      #   variants = { <id>: { <campo>: <valor> } }   (DICT, nao lista)
+      #   - reasoningEffort (camelCase) -> o AI SDK converte pra
+      #     reasoning_effort no body e SOBREPOE o default do modelo
+      #     (options.reasoningEffort) -> e o que faz a variante valer.
+      #   - reasoning_budget / chat_template_kwargs (snake_case) -> passam
+      #     CRUOS no body (o NIM e' quem entende esses nomes).
+      #   - `modelParams` NAO existe na 1.18.34 (vira a chave literal
+      #     modelParams no body) e `reasoning_effort` snake_case no variant
+      #     PERDE para o default do modelo -> por isso a conversao abaixo.
+      camelize = name: if name == "reasoning_effort" then "reasoningEffort" else name;
+      variantBody = body: pkgs.lib.mapAttrs'
+        (name: value: pkgs.lib.nameValuePair (camelize name) value)
+        body;
+      variants = builtins.listToAttrs
+        (map (v: { name = v.id; value = variantBody v.body; }) (m.variants or []));
+    in ({
+      name = m.name or m.id;
       limit = {
         context = m.context;
         output = m.output;
       } // (if lim.input != null then {input = lim.input;} else {});
-    };
+      # (05/11) `reasoning` (schema 1.18.34: booleano no nivel do modelo,
+      # nao capabilities.reasoning.supported) -> sem isso o opencode trata
+      # o modelo como nao-reasoning e as variantes nao aparecem no seletor.
+      reasoning = builtins.elem "reasoning" (m.capabilities or []);
+    }
+    // (if variants != {} then { inherit variants; } else {})
+    // (if (m.reasoning_effort_default or null) != null then { options.reasoningEffort = m.reasoning_effort_default; } else {})
+    // (if (prov.interleaved_field or null) != null then { interleaved = { field = prov.interleaved_field; }; } else {}));
+    # (05/11) VISIBILIDADE: so active/rate_limited entram no seletor. Os
+    # demais (unstable/untested/disabled) ficam DECLARADOS no JSON (fonte
+    # unica, com a janela medida e as variantes) mas NAO no config: na
+    # 1.18.34 nao existe `disabled` no nivel do modelo (o equivalente e
+    # status=deprecated, que o runtime apaga do catalogo).
     activeModels = builtins.listToAttrs
       (map
         (m: {
@@ -125,17 +160,15 @@
     };
 
   reasoningEffortDefaults = {
-    nvidia.models = {
-      # ── catálogo curado (free-providers.json): limit vem de lá ──
-      "minimaxai/minimax-m3.1-flash".options.reasoningEffort = "max";
-      "nvidia/nemotron-3-ultra-550b-a55b".options.reasoningEffort = "high";
-      "nvidia/nemotron-3.5-lightning-30b-a3b".options.reasoningEffort = "high";
-      # ── só no models.dev: limit próprio (ctx/out de 03/11) ──
-      "z-ai/glm-5.3" = mkEffortModel 1000000 131072 "max";
-      "z-ai/glm-5.3-flash" = mkEffortModel 1000000 131072 "max";
-      "deepseek-ai/deepseek-v4.1-flash" = mkEffortModel 1000000 384000 "max";
-      "nvidia/llama-3.1-nemotron-ultra-253b-v1" = mkEffortModel 128000 16384 "high";
-    };
+    # (05/11) NVIDIA saiu deste bloco: effort, janela e VARIANTES por
+    # modelo passaram a viver no free-providers.json (fonte unica) — o JSON
+    # traz `reasoning_effort_default` (default do request) e as variantes
+    # com o body exato de cada modelo (reasoning_effort x reasoning_budget
+    # x chat_template_kwargs; ver §3 do ground truth medido em 04/11).
+    # Aqui so ficam os providers que NAO tem essa fonte (openrouter,
+    # ovhcloud). O "z-ai/glm-5.3" foi REMOVIDO: o catalogo NIM medido em
+    # 05/11 tem 84 modelos e nao tem o glm-5.3 (so o glm-5.3-flash) —
+    # declarado aqui ele dava 404 na hora de usar.
     openrouter.models = {
       "meta/muse-spark-1.3" = mkEffortModel 1048576 943718 "max";
       "meta/muse-spark-open" = mkEffortModel 1048576 943718 "xhigh";

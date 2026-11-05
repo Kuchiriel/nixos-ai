@@ -382,7 +382,12 @@ in rec {
       opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 20480; output = 4096; };
     };
     deepseek-7b = {
-      port = 8085; binary = "upstream";
+      # (04/11, sweep) 8085 era COMPARTILHADA com duplex-35b (models.nix:312)
+      # → as units se conflitavam e o opencode publicava local-deepseek-7b
+      # na MESMA porta da voz duplex (connection-refused dependendo do
+      # estado das duas units).
+      # Porta livre (8094; 8090/8097 já são do host).
+      port = 8094; binary = "upstream";
       modelFile = "/home/nixos/models/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf";
       threads = 6; ctxSize = 16384; batchSize = 512; ubatch = 512;
       gpuLayers = 99; moeFlags = "";
