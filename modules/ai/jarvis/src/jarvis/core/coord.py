@@ -106,6 +106,32 @@ def label() -> str:
     return os.environ.get("COORD_LABEL", DEFAULT_LABEL)
 
 
+def host_info() -> dict[str, Any]:
+    """Onde esta IA roda (linux / windows / termux / macos) + hostname.
+
+    POR QUE no payload (05/11/2026): o dono confundiu "Onca" com a IA do
+    Windows (Onca sou EU, no Linux; a do Windows e a matheus-perf). Sem isso
+    no bus, ninguem sabe com quem fala — agora toda mensagem diz de onde veio.
+    """
+    import platform
+    system = platform.system().lower()
+    if os.environ.get("ANDROID_ROOT") or os.environ.get("ANDROID_DATA"):
+        kind = "termux"
+    elif system == "windows":
+        kind = "windows"
+    elif system == "darwin":
+        kind = "macos"
+    else:
+        kind = "linux"
+    return {
+        "kind": kind,
+        "os": system,
+        "arch": platform.machine(),
+        "hostname": socket.gethostname().split(".")[0],
+        "node": os.environ.get("COORD_NODE", ""),
+    }
+
+
 def agent_id() -> str:
     forced = os.environ.get("COORD_AGENT")
     if forced:
@@ -429,6 +455,7 @@ def post(
         "kind": kind,
         "agent": agent or agent_id(),
         "to": to or "",
+        "host": host_info(),
         "lane": lane or "",
         "files": _files_of({"files": files or []}),
         "intent": intent or "",
@@ -486,8 +513,15 @@ def read() -> str:
         files = ", ".join(_files_of(payload)) or "—"
         what = payload.get("intent") or payload.get("note") or "—"
         to = payload.get("to") or ""
+        host = payload.get("host") or {}
+        if isinstance(host, dict) and host.get("kind"):
+            where = f" [{host.get('kind')}/{host.get('hostname') or '?'}]"
+        elif host:
+            where = f" [{host}]"
+        else:
+            where = ""
         lines.append(
-            f"- {name} · {payload.get('kind')} · {payload.get('lane') or '—'} · "
+            f"- {name} · {payload.get('kind')} · {where} · {payload.get('lane') or '—'} · "
             f"{files} · {what} · {age:.1f}h{stale}"
             + (f" · → {to}" if to else "")
         )
