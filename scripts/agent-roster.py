@@ -388,7 +388,19 @@ def cmd_claim(args) -> int:
         # (05/11) re-claim mantem o codinome e o contexto (o dono nao
         # perde o "quem e quem" a cada revindicada); --context atualiza.
         previous = next((e for e in agents if e["name"] == args.name), None)
-        codename = (previous or {}).get("codename") or _pick_codename(agents)
+        # (05/11) --codename deixa o agente ESCOLHER o nome (o Windows
+        # ja tinha o seu: 'matheus-perf'); sem o flag, sorteia um livre.
+        chosen = (getattr(args, "codename", "") or "").strip()
+        if chosen:
+            dono = next((e for e in agents
+                         if e.get("codename") == chosen and e["name"] != args.name), None)
+            if dono and not getattr(args, "force", False):
+                print(f"agent-roster: codinome '{chosen}' ja e do agente "
+                      f"'{dono['name']}' — use --force para tomar", file=sys.stderr)
+                return 5
+            codename = chosen
+        else:
+            codename = (previous or {}).get("codename") or _pick_codename(agents)
         context = (getattr(args, "context", "") or (previous or {}).get("context") or "")
         entry = {
             "name": args.name,
@@ -638,6 +650,8 @@ def main() -> int:
     p.add_argument("--note", default="")
     p.add_argument("--context", default="",
                    help="descrição curta do contexto (1 frase): o que esta IA fazendo")
+    p.add_argument("--codename", default="",
+                   help="codinome escolhido (sem ele, sorteia um livre)")
     p.add_argument("--force", action="store_true",
                    help="assume mesmo com colisão de arquivos")
     p.set_defaults(func=cmd_claim)
