@@ -513,6 +513,114 @@ JARVIS_TOOLS = [
             "properties": {}
         }
     },
+    {
+        "name": "coord_post",
+        "description": "Publish an agent claim/status on the coordination bus "
+                       "(a GitHub issue with a coord-json block). Use BEFORE editing "
+                       "files: state which files you will touch (files) and what you "
+                       "will do (intent). kinds: claim|status|blocked|done|handoff.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "description": "claim (vou mexer) | status (progresso) | blocked "
+                                   "(travei) | done (terminei) | handoff (passo a bola)",
+                    "enum": list(("claim", "status", "blocked", "done", "handoff")),
+                },
+                "agent": {
+                    "type": "string",
+                    "description": "Agent identity (default: COORD_AGENT env or jarvis@host)"
+                },
+                "lane": {"type": "string", "description": "Lane/workstream name"},
+                "files": {
+                    "type": "string",
+                    "description": "Comma-separated file globs this agent will touch "
+                                   "(e.g. 'backtest/*,AGENTS.md'). Required for claims: "
+                                   "scope overlap is how collisions get detected."
+                },
+                "intent": {"type": "string", "description": "What you are about to do"},
+                "pr": {"type": "integer", "description": "Related PR number"},
+                "note": {"type": "string", "description": "Extra note"},
+            },
+            "required": ["kind"],
+        }
+    },
+    {
+        "name": "coord_read",
+        "description": "Read the coordination bus: every agent's current claim, "
+                       "scope collisions, stale claims and open PRs. Call this before "
+                       "starting work and at each milestone.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {}
+        }
+    },
+    {
+        "name": "coord_check",
+        "description": "Check whether a file scope collides with another agent's active "
+                       "claim on the coordination bus. Returns an explicit COLISÃO "
+                       "verdict — resolve it before editing.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "agent": {"type": "string", "description": "Agent identity (default: this agent)"},
+                "files": {"type": "string", "description": "Comma-separated file globs to check"},
+            }
+        }
+    },
+    {
+        "name": "coord_roster",
+        "description": "List the local agent roster: codename, name, lane, state and the "
+                       "one-line context each agent is working on. Read this to know who "
+                       "is doing what before starting.",
+        "inputSchema": {"type": "object", "properties": {}}
+    },
+    {
+        "name": "coord_whoami",
+        "description": "Show this agent's card: codename, lane, repo, claimed files and "
+                       "current context phrase.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "agent": {"type": "string", "description": "Roster name (default: this agent)"}
+            }
+        }
+    },
+    {
+        "name": "coord_set_context",
+        "description": "Update this agent's one-line context phrase. Change it whenever "
+                       "the subject changes, so peers can tell what you are doing.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "context": {"type": "string", "description": "One line about what you are doing now"},
+                "agent": {"type": "string", "description": "Roster name (default: this agent)"}
+            },
+            "required": ["context"],
+        }
+    },
+    {
+        "name": "coord_msg",
+        "description": "Send a message to a peer agent by codename or roster name. "
+                       "note=True notifies without running their turn; note=False asks "
+                       "them to act.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "to": {"type": "string", "description": "Codinome or roster name"},
+                "message": {"type": "string", "description": "Message text"},
+                "note": {"type": "boolean", "description": "Notify without running their turn (default true)"},
+            },
+            "required": ["to", "message"],
+        }
+    },
+    {
+        "name": "coord_peers",
+        "description": "List Tailscale peers reachable from this machine (name, tailnet IP, "
+                       "OS, online state) — who you can talk to directly.",
+        "inputSchema": {"type": "object", "properties": {}}
+    },
 ]
 
 
@@ -918,6 +1026,78 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
             result = _vault_read_from_obsidian(query)
             return json.dumps(result, indent=2)
         
+        if name in ("jarvis_coord_post", "coord_post"):
+            def _do_coord_post() -> str:
+                from jarvis.core.coord import post
+                files = args.get("files", "")
+                if isinstance(files, list):
+                    files = ",".join(str(f) for f in files)
+                pr = args.get("pr")
+                return post(
+                    kind=args.get("kind", "claim"),
+                    agent=args.get("agent") or None,
+                    lane=args.get("lane", ""),
+                    files=files,
+                    intent=args.get("intent", ""),
+                    pr=int(pr) if str(pr or "").strip().isdigit() else None,
+                    note=args.get("note", ""),
+                    head=args.get("head", ""),
+                )
+            return _guarded_mutation(name, args, _do_coord_post)
+
+        if name in ("jarvis_coord_read", "coord_read"):
+            try:
+                from jarvis.core.coord import read as coord_read
+                return coord_read()
+            except Exception as e:
+                return f"ERROR: coord_read failed: {e}"
+
+        if name in ("jarvis_coord_check", "coord_check"):
+            try:
+                from jarvis.core.coord import check as coord_check
+                files = args.get("files", "")
+                if isinstance(files, list):
+                    files = ",".join(str(f) for f in files)
+                return coord_check(agent=args.get("agent") or None, files=files)
+            except Exception as e:
+                return f"ERROR: coord_check failed: {e}"
+
+        if name in ("jarvis_coord_roster", "coord_roster"):
+            try:
+                from jarvis.core.coord_roster import roster_text
+                return roster_text()
+            except Exception as e:
+                return f"ERROR: coord_roster failed: {e}"
+
+        if name in ("jarvis_coord_whoami", "coord_whoami"):
+            try:
+                from jarvis.core.coord_roster import whoami
+                return whoami(args.get("agent") or None)
+            except Exception as e:
+                return f"ERROR: coord_whoami failed: {e}"
+
+        if name in ("jarvis_coord_set_context", "coord_set_context"):
+            def _do_set_context() -> str:
+                from jarvis.core.coord_roster import set_context
+                return set_context(args.get("context", ""), args.get("agent") or None)
+            return _guarded_mutation(name, args, _do_set_context)
+
+        if name in ("jarvis_coord_msg", "coord_msg"):
+            def _do_coord_msg() -> str:
+                from jarvis.core.coord_roster import send_message
+                note = args.get("note", True)
+                if isinstance(note, str):
+                    note = note.strip().lower() not in ("false", "0", "no")
+                return send_message(args.get("to", ""), args.get("message", ""), note=note)
+            return _guarded_mutation(name, args, _do_coord_msg)
+
+        if name in ("jarvis_coord_peers", "coord_peers"):
+            try:
+                from jarvis.core.coord_roster import peers
+                return peers()
+            except Exception as e:
+                return f"ERROR: coord_peers failed: {e}"
+
         if name == "jarvis_vault_status":
             result = _vault_status()
             return json.dumps(result, indent=2)

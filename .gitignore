@@ -97,3 +97,6 @@ modules/ai/jarvis/src/jarvis/webui/frontend/dist/
 scripts/archive/**/*.log
 scripts/archive/**/raw/
 scripts/overnight-24-09/loop-*.json
+
+# worktrees de lane (cada agente no seu diretorio)
+.worktrees/
