@@ -233,8 +233,8 @@
             "reasoning",
             "coding"
           ],
-          "good_for": "ctx 1.048.576 (catalogo). output 256.000. A spec NAO tem reasoning_effort: o controle e chat_template_kwargs.enable_thinking (ATENCAO: enable_thinking=false NAO desliga o reasoning - medido: timeout 120s).",
-          "status": "active",
+          "good_for": "ctx 1.048.576 (catalogo). output 256.000. A spec NAO tem reasoning_effort: o controle e chat_template_kwargs.enable_thinking (ATENCAO: enable_thinking=false NAO desliga o reasoning - medido: timeout 120s). MEDIDO 05/11: baseline deu timeout de 70s (04/11 tinha sido 200 em 23,2s) -> instavel.",
+          "status": "unstable",
           "variants": [
             {
               "id": "thinking-on",
@@ -710,7 +710,7 @@
             "reasoning",
             "fast"
           ],
-          "good_for": "ctx 131.072 (catalogo). output 4.096 = teto max_tokens da spec. effort low/medium/high. NAO VALIDADO: timeout 120s em 2/2 requests (04/11).",
+          "good_for": "ctx 131.072 (catalogo). output 4.096 = teto max_tokens da spec. effort low/medium/high. MEDIDO 05/11: timeout (>70s) - declarado e desativado.",
           "status": "unstable",
           "variants": [
             {
@@ -744,8 +744,8 @@
             "analysis",
             "reasoning"
           ],
-          "good_for": "ctx 128.000 (catalogo, NAO medido). output 16.384. effort high.",
-          "status": "untested",
+          "good_for": "ctx 128.000 (catalogo, NAO medido). output 16.384. MEDIDO 05/11: HTTP 404 no chat (esta no /v1/models mas a conta nao tem permissao) -> declarado e desativado.",
+          "status": "disabled",
           "reasoning_effort_default": "high"
         },
         {
@@ -758,7 +758,7 @@
             "reasoning",
             "coding"
           ],
-          "good_for": "ctx 1.000.000 (catalogo). output 256.000. Controle de raciocinio via chat_template_kwargs.thinking (spec NAO tem reasoning_effort). NAO VALIDADO: timeout 120s em 2/2 (04/11).",
+          "good_for": "ctx 1.000.000 (catalogo). output 256.000. Controle de raciocinio via chat_template_kwargs.thinking (spec NAO tem reasoning_effort). MEDIDO 05/11: timeout (>70s) - declarado e desativado.",
           "status": "unstable",
           "variants": [
             {
@@ -1038,6 +1038,19 @@
           ],
           "good_for": "ctx 128.000. output 8.192. SEM PERMISSAO nesta conta: HTTP 404 (04/11).",
           "status": "disabled"
+        },
+        {
+          "id": "nvidia/nemotron-3.5-bolt-e4b",
+          "name": "Nemotron 3.5 Bolt E4B",
+          "context": 131072,
+          "output": 32768,
+          "tier": "fast",
+          "capabilities": [
+            "fast",
+            "general"
+          ],
+          "good_for": "4B, resposta rapida. ctx 131.072 MEDIDO em 05/11 (erro 400 do endpoint: 'maximum context length is 131072 tokens'). output 32.768. Medido 05/11: baseline 200.",
+          "status": "active"
         }
       ],
       "gate": {
