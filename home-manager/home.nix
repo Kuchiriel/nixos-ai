@@ -787,6 +787,16 @@ in {
         temperature: 0.0
   '';
 
+  # (05/11) MCP de coordenação entre IAs: as ferramentas de roster/msg
+  # servidas por HTTP (streamable-http) no IP do tailnet, para os agentes
+  # de outra máquina (Windows) falarem com o roster daqui direto — sem
+  # depender do issue do GitHub. Ver modules/services/coord-mcp.nix.
+  services.jarvis.coordMcp = {
+    enable = true;
+    host = "100.121.100.103";
+    port = 8765;
+  };
+
   services.jarvis-wakeword = {
     # (21/10, dono) DESABILITADO — o duplex de voz contínua substituiu o
     # wakeword: address gate no classify cumpre a mesma função sem o
