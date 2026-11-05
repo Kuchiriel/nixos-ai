@@ -49,6 +49,7 @@ do reconhecimento inicial foram **mantidos**:
 ```bash
 git mv archive/sweep-2026-11-05/<caminho> <caminho-original>
 ```
+<<<<<<< HEAD
 
 ### Nix: `nixos/modules/ports.nix` + `lib/ports.nix` (2ª fonte de portas)
 
@@ -67,3 +68,12 @@ Se um dia alguém quiser o `ports.enable` de volta, ele precisa: (a) ser
 habilitado no host, (b) derivar as portas do registry (não literais), e
 (c) ter um consumidor real do `/etc/ports.json` — sem os três, é um
 arquivo morto.
+=======
+>>>>>>> origin/main
+
+# Sweep 05/11/2026 — código morto e duplicado
+
+Varredura do `nixos-ai` (05/11): 12 arquivos sem consumidor real foram
+movidos para cá. **Nenhum foi apagado** — `git mv` preserva o histórico
+(`git log --follow` continua funcionando).
+
