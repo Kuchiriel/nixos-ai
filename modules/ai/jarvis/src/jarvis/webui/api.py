@@ -988,19 +988,46 @@ def task_cancel(task_id: str) -> dict[str, Any]:
 
 @app.post("/api/tasks/clear_failed")
 def clear_failed_tasks() -> dict[str, Any]:
-    """Clear failed tasks from the persistent task queue."""
+    """Limpa as tarefas FAILED de TODAS as filas (uma por projeto).
+
+    (04/11, sweep) A versão anterior lia um path FIXO
+    (`nightwatch/task_queue.json`) — mas a fila é por projeto
+    (`task_queue-<project>.json`) e o arquivo global não existe: o
+    endpoint SEMPRE devolvia `{"cleared": 0, "remaining": 0}` (o dono
+    acreditava ter limpado a fila). Além disso escrevia direto no
+    arquivo (sem o write atômico .tmp+rename do TaskQueue) e burlava o
+    isolamento por projeto.
+    Agora usa a API do TaskQueue: um por projeto, escrita atômica.
+    """
     from pathlib import Path
-    import json as _json
-    queue_file = Path.home() / ".local/state/jarvis/nightwatch" / "task_queue.json"
-    if not queue_file.exists():
-        return {"cleared": 0, "remaining": 0}
-    
+    from nightwatch.task_queue import TaskQueue, TaskStatus
+
+    cleared = 0
+    remaining = 0
+    per_project: dict[str, int] = {}
     try:
-        raw = _json.loads(queue_file.read_text(encoding="utf-8"))
-        remaining = [t for t in raw if t.get("status") != "FAILED"]
-        cleared_count = len(raw) - len(remaining)
-        queue_file.write_text(_json.dumps(remaining, indent=2), encoding="utf-8")
-        return {"cleared": cleared_count, "remaining": len(remaining)}
+        # Descobre os projetos a partir dos arquivos reais da fila.
+        state_dir = Path.home() / ".local/state/jarvis/nightwatch"
+        projects = sorted(
+            p.stem.replace("task_queue-", "")
+            for p in state_dir.glob("task_queue-*.json")
+        ) or ["nixos-ai"]
+        for project in projects:
+            q = TaskQueue(project=project)
+            failed = q.get_all_tasks(status=TaskStatus.FAILED.value)
+            if not failed:
+                continue
+            for task in failed:
+                # FAILED -> BLOCKED e a transicao suportada (VALID_TRANSITIONS
+                # em task_queue.py): sai do bucket de falhas mas continua
+                # consultavel e re-executavel (BLOCKED -> READY).
+                q.update_task(task.id, status=TaskStatus.BLOCKED.value,
+                              last_error="cleared via webui")
+                cleared += 1
+            per_project[project] = len(failed)
+            remaining += len(q.get_all_tasks())
+        return {"cleared": cleared, "remaining": remaining,
+                "per_project": per_project}
     except Exception as e:
         raise HTTPException(500, f"Failed to clear tasks: {e}")
 
