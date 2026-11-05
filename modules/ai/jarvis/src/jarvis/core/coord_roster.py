@@ -153,8 +153,19 @@ def send_message(target: str, message: str, note: bool = True) -> str:
     """
     if not message.strip():
         return "ERROR: mensagem vazia"
-    name = resolve_name(target)
-    codename = codename_of(name) or name
+    # O destinatario pode ser (a) do roster LOCAL (da para acordar aqui) ou
+    # (b) alguem que so existe no BUS (outra maquina: Termux/Android, o
+    # opencode do Windows). O bus e global; a entrega local e um bonus.
+    # Bug corrigido em 05/11 (achado pelo Urubu): validar so contra o roster
+    # local rejeitava o caso cross-machine - que e exatamente o que o bus
+    # existe para resolver.
+    name = target
+    codename = target
+    for entry in roster_agents():
+        if entry.get("name") == target or entry.get("codename") == target:
+            name = str(entry.get("name"))
+            codename = str(entry.get("codename") or "") or name
+            break
     lane = lane_of(name)
     bus_note = ""
     try:
@@ -162,6 +173,9 @@ def send_message(target: str, message: str, note: bool = True) -> str:
         bus_note = bus_send(to=codename, message=message, lane=lane)
     except Exception as exc:
         bus_note = f"(bus indisponível: {exc})"
+    if not any(entry.get("name") == name for entry in roster_agents()):
+        return (f"{bus_note}\n(destinatário '{target}' não está nesta máquina: "
+                "a mensagem ficou no bus e será lida no próximo poll do watcher)")
     cmd = ["bash", _script("agent-msg.sh"), "--to", name]
     if note:
         cmd.append("--note")
