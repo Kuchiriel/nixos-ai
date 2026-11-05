@@ -25,7 +25,28 @@ import json
 import sys
 import urllib.request
 
-DEFAULT_URL = "http://127.0.0.1:8765/mcp"
+def _default_url() -> str:
+    """URL do MCP de coordenação local.
+
+    A unit `coord-mcp.service` escuta na IP do TAILNET (e não em 0.0.0.0,
+    para não expor na LAN). Logo, o loopback (127.0.0.1) NÃO responde: o
+    watcher tem que falar com a tailnet — que é a mesma máquina, sem
+    depender de rede externa. Detecta a IP do tailnet e cai para o loopback.
+    """
+    import socket
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.connect(("100.100.100.100", 80))   # não trafega, só descobre a rota
+        ip = sock.getsockname()[0]
+        sock.close()
+        if ip and not ip.startswith("127."):
+            return f"http://{ip}:8765/mcp"
+    except OSError:
+        pass
+    return "http://127.0.0.1:8765/mcp"
+
+
+DEFAULT_URL = _default_url()
 
 
 def _post(url: str, payload: dict, session: str | None = None) -> tuple[dict, str | None]:
