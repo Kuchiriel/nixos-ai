@@ -274,12 +274,26 @@ def check_network() -> ComponentHealth:
     return h
 
 
+def _registry_port(kind: str, fallback: int) -> int:
+    """(03/11) Porta do serviço — registry JSON (models.nix)."""
+    try:
+        from jarvis.core.model_registry import ModelRegistry
+        reg = ModelRegistry.load()
+        value = (reg.router_port("prism") if kind == "router"
+                 else reg.service_port(kind))
+        if value:
+            return int(value)
+    except Exception:
+        pass
+    return fallback
+
+
 def check_sockets(cfg: Config) -> ComponentHealth:
     """Verifica se as portas dos serviços estão aceitando conexões."""
     h = ComponentHealth("sockets")
     ports = {
-        "llama_cpp": cfg.llm_base_url.replace("http://", "").split(":")[1].split("/")[0] if":" in cfg.llm_base_url else "8080",
-        "embeddings": cfg.embed_base_url.replace("http://", "").split(":")[1].split("/")[0] if":" in cfg.embed_base_url else "8081",
+        "llama_cpp": cfg.llm_base_url.replace("http://", "").split(":")[1].split("/")[0] if":" in cfg.llm_base_url else str(_registry_port("router", 8080)),
+        "embeddings": cfg.embed_base_url.replace("http://", "").split(":")[1].split("/")[0] if":" in cfg.embed_base_url else str(_registry_port("embeddings", 8081)),
         "qdrant": cfg.qdrant_url.replace("http://", "").split(":")[1].split("/")[0] if":" in cfg.qdrant_url else "6333",
     }
     results = {}

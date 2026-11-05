@@ -1,0 +1,75 @@
+{
+ "ts": "2026-10-25T09:05:46",
+ "results": [
+  {
+   "tag": "A1",
+   "who": "dora",
+   "expect": "spk1",
+   "got": [
+    "?",
+    1
+   ],
+   "pass": false
+  },
+  {
+   "tag": "A2",
+   "who": "dora",
+   "expect": "spk1",
+   "got": [
+    "?",
+    1
+   ],
+   "pass": false
+  },
+  {
+   "tag": "B1",
+   "who": "alex",
+   "expect": "spk2",
+   "got": [
+    "?",
+    1
+   ],
+   "pass": false
+  },
+  {
+   "tag": "A3",
+   "who": "dora",
+   "expect": "spk1",
+   "got": [
+    "?",
+    1
+   ],
+   "pass": false
+  },
+  {
+   "tag": "B2",
+   "who": "alex",
+   "expect": "spk2",
+   "got": [
+    "?",
+    1
+   ],
+   "pass": false
+  },
+  {
+   "tag": "B3",
+   "who": "alex",
+   "expect": "spk2",
+   "got": [
+    "?",
+    1
+   ],
+   "pass": false
+  },
+  {
+   "tag": "A4",
+   "who": "dora",
+   "expect": "spk1",
+   "got": [
+    "?",
+    1
+   ],
+   "pass": false
+  }
+ ]
+}

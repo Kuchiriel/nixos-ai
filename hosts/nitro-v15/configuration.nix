@@ -21,8 +21,13 @@
   services.charger-watch.user = user;
   services.chromium-cdp.enable = true;   # browser dos agentes (CDP :9223)
   services.chromium-cdp.user = user;
-  services.jarvis-notify.enable = true;
-  services.jarvis-focus.enable = true;
+  # jarvis-notify/focus DESLIGADOS (12/10, IMP-017): units em crash-loop
+  # (273+ restarts) chamando `jarvis watch` / `jarvis focus-daemon`,
+  # subcomandos com função pronta mas NUNCA registrados no argparse
+  # (main.py:752,768 sem add_parser) — e os corpos são sleep-placeholders.
+  # Religar só com lógica real + wire + fumaça. Reverter: enable = true.
+  services.jarvis-notify.enable = false;
+  services.jarvis-focus.enable = false;
 
 services.avahi = {
   enable = true;
@@ -82,18 +87,31 @@ services.avahi = {
     git
     curl
     jq
+    # (26/10) Proton VPN — GUI + WireGuard
+    proton-vpn
+    wireguard-tools
     htop
     ethtool
     grim
     slurp
     wl-clipboard
     cloudflare-warp
-    # Pacote do JARVIS via overlay (withVoice: STT/TTS p/ wakeword brainCommand)
-    jarvis-voice
+    xxd # hex dump (análise de formatos binários: .spr/.dat/.shapes de clients)
+    # Pacote do JARVIS via overlay (único: STT/TTS p/ wakeword brainCommand)
+    jarvis
     # Voz: G2P do Kokoro + captura/teste de áudio
     espeak-ng
     sox
     alsa-utils
+    # PIL/Pillow + pytesseract system-wide (2026-10-02, pedido do dono).
+    # Motivo: vision.py do jarvis redimensiona a captura antes de mandar p/ a
+    # API de visão; sem PIL ele mandava PNG cru de 1,5MB e o Gemini respondia
+    # "Unable to process input image". pytesseract é o fallback OCR final da
+    # cascata. ATENÇÃO: isto NÃO basta p/ o processo `jarvis` — ele roda com o
+    # python3 do próprio store do pacote, que não enxerga systemPackages. O
+    # PYTHONPATH efetivo do jarvis é montado em modules/ai/package.nix.
+    (python3.withPackages (ps: with ps; [ pillow pytesseract ]))
+    tesseract
     # Editor
     # vscodium — gerenciado por home-manager (vscode-roo.nix)
   ];
@@ -174,9 +192,17 @@ services.avahi = {
   # Master toggle: services.jarvis.enable = true (já definido acima)
   # Quando desabilitado, NENHUM serviço Jarvis inicia.
   services.llama-cpp-server.enable = true;
-  services.llama-cpp-server.defaultModel = "bonsai"; # Motor ternário Bonsai-8B via PrismML (medido: TG 76.7 t/s)
+  # (03/11) SEM override de defaultModel: a fonte única é models.nix
+  # (routing.default = 4B-MTP+LoRA :8092; o grupo que sobe no boot é
+  # routing.bootModel.host = bonsai → grupo prism :8080). O override antigo
+  # ("bonsai") reintroduzia o bonsai como default do APP — o dono pediu
+  # "tira o bonsai de default" (26/10).
   services.llama-cpp-embeddings.enable = true;
   services.llama-cpp-rerank.enable = true;
+  # (03/11) ASR da voz duplex. Sem ele o whisper-server morre no boot com
+  # CUDA OOM (VRAM disputada com o 4B-MTP) e o duplex fica SURDO —
+  # sintoma "falo com ele e nada". Medido: GPU 198-341 ms/segmento.
+  services.whisper-server.enable = true;
   # services.qdrant.enable é definido por qdrant.nix (condicional a jarvis.enable)
   services.jarvis-vault.enable = false;
   services.jarvis-webui.enable = true;
@@ -185,7 +211,15 @@ services.avahi = {
   services.jarvis-watchdog.enable = true;
   services.jarvis-heal.enable = true;
   services.jarvis-telegram.enable = true;
+  # Espelho systemd do /etc/litellm.env (03/11): o systemd recusa `export KEY=`
+  # e LOGA o valor da chave no journal (206 linhas/dia com sk-* e nvapi-*).
+  services.jarvis-keys-env.enable = true;
   services.jarvis-gaming.enable = true;
+
+  # Moondream2 local para tagging de sprites. NAO sobe no boot (VRAM 6 GB =
+  # 1 LLM por vez): `systemctl start vision-moondream` quando precisar.
+  # Conflita com llama-cpp-upstream e faz o swap sozinho via vram-guard.
+  services.vision-moondream.enable = true;
   services.litellm.enable = false;
   programs.freebuff.enable = true;
   programs.jarvis-scripts.enable = false;
@@ -224,6 +258,21 @@ services.avahi = {
     ACTION=="add|change", KERNEL=="nvme[0-9]*n[0-9]*", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="none"
   '';
 
+  # (03/11) agents-keepawake usa `systemd-inhibit --what=sleep:idle` e falhava
+  # a cada boot com "Access denied as the requested operation requires
+  # interactive authentication": o user manager sobe o serviço antes de haver
+  # sessão logind, então o polkit não reconhece o subject. Regra pontual para
+  # a conta do dono (só as duas ações de inibição, nada além disso).
+  security.polkit.extraConfig = ''
+    polkit.addRule(function(action, subject) {
+      if ((action.id == "org.freedesktop.login1.inhibit-block-idle" ||
+           action.id == "org.freedesktop.login1.inhibit-block-sleep") &&
+          subject.user == "nixos") {
+        return polkit.Result.YES;
+      }
+    });
+  '';
+
   # Regras de tmpfiles: limpeza e suporte a No CoW (+C) para Btrfs
   # NOTA: /var/lib/qdrant e /var/lib/jarvis/models já são criados por
   # qdrant.nix e jarvis-env.nix respectivamente (condicionais a jarvis.enable)
@@ -254,6 +303,43 @@ services.avahi = {
   networking.firewall.allowedTCPPorts = [22 8080 8081 4000 5353 8099 47984 47989 47990 48010]; # 8099 = karaok cast (letra+som p/ TV); 47984-48010 = Sunshine/Moonlight
   networking.firewall.allowedUDPPorts = [47998 47999 48000 48002 48010]; # Sunshine/Moonlight stream
 
+  # (26/10, dono pediu) PROTON VPN — checkReversePath = false é REQUERIDO
+  # pelo Proton VPN no NixOS (sem isso o routing falha). ATENÇÃO: Tailscale
+  # também usa WireGuard — sem conflito (interfaces separadas), mas as duas
+  # VPNs podem competir por rotas se ambas ativas.
+  networking.firewall.checkReversePath = false;
+
+  # opencode serve — controle da AGENTE pelo celular, sem TTY (2026-10-02,
+  # pedido do dono). Aberta SÓ no tailscale0, nunca na LAN: o tailnet já é
+  # autenticado por dispositivo, então o celular (motorola-edge) entra sem
+  # expor o agente a vizinhos. O servidor EXIGE senha
+  # (OPENCODE_SERVER_PASSWORD) — sem ela ele sobe "unsecured" e dá acesso às
+  # chaves de API da máquina a qualquer um que alcance a porta.
+  # Uso: celular abre http://100.121.100.103:4599 ; o TUI vira cliente dele
+  # com `opencode attach http://127.0.0.1:4599` (assim os dois veem a MESMA
+  # sessão, com busy-state coordenado).
+  networking.firewall.interfaces.tailscale0 = {
+    allowedTCPPorts = [4599];
+  };
+
+  # opencode serve com nome curto (2026-10-02). O MagicDNS do Tailscale só
+  # devolve IPv6 para `nitro-v15`, e o servidor escuta só o IPv4 100.121.100.103
+  # — então o nome não resolvia para o lado certo. `/etc/hosts` não serve
+  # (é symlink pro nix store, read-only), então vai por extraHosts.
+  # O IP do Tailscale é estável por node; só muda se refizer o login do tailnet.
+  # ATENÇÃO AO TIPO: networking.extraHosts é uma STRING (linhas "IP host"),
+  # não um attrset — passar attrset dá "A definition for option
+  # `networking.extraHosts' is not of type `strings concatenated with \n`".
+  networking.extraHosts = ''
+    100.121.100.103 oc nitro-v15
+    # celular no mesmo tailnet (Android via Termux/Moonlight). O MagicDNS JÁ
+    # resolve isto para IPv4 (`getent hosts motorola-edge`), então esta linha é
+    # conveniência/pin, não necessidade. CUIDADO: IP do Tailscale vale até o nó
+    # refazer o login do tailnet — se `motorola-edge` parar de resolver, cheque
+    # `tailscale status | grep motorola` e ajuste aqui.
+    100.104.175.123 motorola-edge
+  '';
+
   services.openssh = {
     enable = true;
     settings.PermitRootLogin = "prohibit-password"; # Segurança: login root só por chave SSH
@@ -266,6 +352,20 @@ services.avahi = {
     enable = true;
     openFirewall = true;
   };
+
+  # nscd/nsncd DESABILITADO (12/10, decisão delegada pelo dono: "vc decide").
+  # Evidência: nsncd 1.5.3 sai com código 0 ~50ms–3s após o primeiro tráfego
+  # NSS real (reproduzido fora do systemd: `getent hosts` e
+  # `getent group netdev` matam o daemon; 5s idle sobrevive) → Restart=always
+  # reacende 5× em 10s → start-limit-hit → nss-lookup.target dead em TODO
+  # boot (11/10 e 12/10). nsncd aqui é proxy SEM cache (zero benefício) e o
+  # fallback direto do glibc já atende tudo (getent/docker/login OK com ele
+  # morto desde o boot; `.local` via glibc já não resolve hoje — sem regressão).
+  # `system.nssModules = []` é exigido pelo assert do nixpkgs ao desligar o
+  # nscd. Contra-indicação (módulo NSS `systemd` p/ DynamicUser): aceita —
+  # só units-template inativas usam DynamicUser. Reverter: apagar as 2 linhas.
+  services.nscd.enable = false;
+  system.nssModules = lib.mkForce [];
 
   users.users.${user} = {
     isNormalUser = true;

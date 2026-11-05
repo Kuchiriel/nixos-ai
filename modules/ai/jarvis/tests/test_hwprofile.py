@@ -51,12 +51,40 @@ def test_kv_bytes_qwen3_4b() -> None:
 
 
 def test_kv_bytes_qwen3_6_35b() -> None:
-    """Qwen3.6-35B-A3B: 40 layers, 2 kv_heads, head_dim 256 → 40.960 B/tok q8."""
+    """Qwen3.6-35B-A3B híbrido 3:1: 10/40 layers com KV (oficial Qwen).
+    f16 = 2*2*256*10*2 = 20480 (fórmula full daria 40960 — errada p/ híbrido).
+    Medido no log 03/10: 45MB@8k q4_0 vs 47MB da teoria (2.6% off)."""
     m = by_key("qwen3.6-35b-a3b")
-    assert kv_bytes_per_token(m, "f16") == 2 * 2 * 256 * 40 * 2
-    assert kv_bytes_per_token(m, "q8_0") == 2 * 2 * 256 * 40 * 1
-    # 16K ctx q8_0 = 0.625 GB (cabe folgado na VRAM de 6GB junto com atenção)
-    assert kv_cache_gb(m, 16384, "q8_0") == 0.625
+    assert kv_bytes_per_token(m, "f16") == 2 * 2 * 256 * 10 * 2
+    assert kv_bytes_per_token(m, "q8_0") == 2 * 2 * 256 * 10 * 1
+    # 16K ctx q8_0 híbrido = 0.156 GB (era 0.625 pela fórmula full)
+    assert round(kv_cache_gb(m, 16384, "q8_0"), 3) == 0.156
+
+
+def test_kv_hybrid_4b() -> None:
+    """Qwen3.5-4B híbrido: 8/32 full → q4_0 = 2*4*256*8*.5625 = 9216 B/tok.
+    64k = 0.6GB (era 2.4GB assumindo 32 full). VRAM medida confirma."""
+    m = by_key("qwen3.5-4b-uncensored")
+    assert kv_bytes_per_token(m, "q4_0") == 9216.0
+    assert round(kv_cache_gb(m, 65536, "q4_0"), 2) == 0.56
+
+
+def test_kv_full_attention_unchanged() -> None:
+    """Modelos full-attention: fórmula clássica intacta (qwen3-4b)."""
+    m = by_key("qwen3-4b")
+    assert m.full_attn_layers is None
+    assert kv_bytes_per_token(m, "f16") == 2 * 8 * 128 * 36 * 2
+
+
+def test_catalog_measured_entries() -> None:
+    """Entradas do audit GGUF 03/10 (head_dim = key_length autoritativo)."""
+    m = by_key("qwen3.5-4b-uncensored")
+    assert (m.layers, m.kv_heads, m.head_dim) == (32, 4, 256)
+    assert m.full_attn_layers == 8
+    g = by_key("gemma-4b")
+    assert g.head_dim == 256  # key_length (derivação hidden/heads dá 320!)
+    from jarvis.core.hwprofile import KV_BYTES
+    assert KV_BYTES["q4_0"] == 0.5625  # padrão da casa, faltava no mapa
 
 
 # ---------------------------------------------------------------------------

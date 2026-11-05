@@ -24,6 +24,9 @@ NIXAI=/home/nixos/projects/nixos-ai
 OUT_DIR="$NIXAI/scripts/overnight-24-09"
 LOG=/tmp/overnight/loop-runner.log
 STATE="$OUT_DIR/loop-STATE.md"
+# (03/11) Fonte única das portas: registry gerado pelo Nix (models.nix).
+# shellcheck source=/dev/null
+. "$NIXAI/scripts/jarvis-registry.sh"
 mkdir -p /tmp/overnight "$OUT_DIR"
 CYCLES="${1:-6}"
 MODEL="${2:-bonsai}"
@@ -39,13 +42,19 @@ log() { echo "[$(date +%H:%M:%S)] $*" | tee -a "$LOG"; }
 LADDER_ORDER=("${LADDER_OVERRIDE:-}" bonsai fast strong moe)
 
 endpoint_for() {
+  # (03/11) Portas lidas do REGISTRY (fonte única: models.nix) — a escada
+  # mapeia o NOME do tier para o model id; a porta vem do registry.
+  local base model
   case "$1" in
-    bonsai) echo "http://127.0.0.1:8080/v1|bonsai" ;;
-    fast)   echo "http://127.0.0.1:8083/v1|jarvis-fast" ;;
-    strong) echo "http://127.0.0.1:8084/v1|jarvis-strong" ;;
-    moe)    echo "http://127.0.0.1:8092/v1|qwen35-uncensored" ;;
-    *) echo "" ;;
+    bonsai) model="bonsai" ;;
+    fast)   model="jarvis-fast" ;;
+    strong) model="jarvis-strong" ;;
+    moe)    model="$(reg_default 2>/dev/null || echo jarvis-mtp-lora)" ;;
+    *) echo ""; return 0 ;;
   esac
+  base="$(reg_endpoint "$model" 2>/dev/null)" || { echo ""; return 0; }
+  [ -n "$base" ] || { echo ""; return 0; }
+  echo "$base/v1|$model"
 }
 
 probe_ok() {  # completion real (não só /health): $1=base $2=model
@@ -89,13 +98,14 @@ for c in $(seq 1 "$CYCLES"); do
     fi
     # sem VRAM ocupada e o modelo pedido fora = caiu sozinho (OOM?):
     # aproveita a noite e mede o router, que é o braço de referência.
+    _reg_router="$(reg_endpoint bonsai 2>/dev/null || echo http://127.0.0.1:8080)"
     if [ "$MODEL" != "bonsai" ] && curl -sf --max-time 8 \
-         http://127.0.0.1:8080/chat/completions \
+         "$_reg_router/chat/completions" \
          -H 'Content-Type: application/json' \
          -d '{"model":"bonsai","max_tokens":4,"chat_template_kwargs":{"enable_thinking":false},"messages":[{"role":"user","content":"ok"}]}' \
          -o /dev/null 2>/dev/null; then
       log "fallback: medindo o router (bonsai) neste ciclo"
-      BASE="http://127.0.0.1:8080/v1"; MID="bonsai"; MODEL="bonsai"
+      BASE="$_reg_router/v1"; MID="bonsai"; MODEL="bonsai"
     else
       log "nada medível agora (VRAM ocupada e modelo fora) — dormindo 120s"
       sleep 120; continue

@@ -159,14 +159,8 @@ validate_packages() {
     pass "Build OK: jarvis"
   fi
   
-  # Build jarvis-voice
-  echo "   Building jarvis-voice..."
-  if ! nix build "$FLAKE_DIR#jarvis-voice" --no-link --print-out-paths 2>&1 | tee /tmp/nix-validate-voice.log; then
-    fail "Build failed: jarvis-voice"
-    failed=$((failed + 1))
-  else
-    pass "Build OK: jarvis-voice"
-  fi
+  # 03/11: jarvis-voice foi fundido no jarvis (pacote único, com a voz).
+  # O segundo build saiu: mesmo src, mesmo closure.
   
   if [[ $failed -gt 0 ]]; then
     fail "Package builds: $failed failures"

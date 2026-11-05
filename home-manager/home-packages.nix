@@ -4,9 +4,14 @@
 }: {
   fonts.fontconfig.enable = true;
   home.packages = with pkgs; [
+    # (21/10) PYTHON3 EXPLÍCITO: o venv karaok (duplex-voice, asrd,
+    # whisper, TTS) symlinka pro python3 do profile — era dependência
+    # TRANSITIVA (foi embora com o antigravity no GC de 12:00 e a
+    # interface de voz MORREU). Explícito = nunca mais GC'd.
+    python3
+
     # AI CLIs
     kilo
-    antigravity-ide
 
     # Desktop essential apps
     foot
@@ -43,6 +48,17 @@
     fzf
     grimblast
     hyprpicker
+    xxd # hex dump (análise de formatos binários de clients de jogo)
+    # Input sintetico (uinput) para o agente operar o desktop sem mouse fisico:
+    # ydotool faz TECLADO e MOUSE (clique com botao, mover cursor). O Hyprland
+    # so tem `dispatch movecursor` e nao tem dispatch de clique, entao sem o
+    # ydotool nao da para clicar no chat do jogo — que e como a automacao de
+    # UI do sandbox (canary-official/data-sandbox/tools/loop.sh) fala com o
+    # client. wtype faz so teclado e ja era usado.
+    ydotool
+    xdotool # alternativa X11 (XWayland) ao ydotool — ydotoold (daemon/uinput)
+            # estava dando problema; xdotool nao precisa de daemon nem uinput
+    wtype
     ntfs3g
     playerctl
     ripgrep
@@ -54,8 +70,10 @@
 
     # WM Utilities
     libnotify
-    xdg-desktop-portal-gtk
-    xdg-desktop-portal-hyprland
+    # (03/11) xdg-desktop-portal-gtk/hyprland NÃO entram aqui: o sistema já
+    # os instala via xdg.portal.extraPortals (programs.hyprland). Duas cópias
+    # do mesmo .service faziam o dbus-broker logar "Ignoring duplicate name
+    # 'org.freedesktop.impl.portal...'" em todo boot.
     yad # GUI dialogs para NixOS-AI Launcher
 
     # ── packages ──────────────────────────────────────

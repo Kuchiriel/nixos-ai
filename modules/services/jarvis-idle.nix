@@ -65,7 +65,13 @@ in {
       description = "JARVIS — agenda do worker de idle";
       wantedBy = ["timers.target"];
       timerConfig = {
-        OnUnitActiveSec = cfg.interval;
+        # (04/11, sweep) OnUnitActiveSec SOZINHO nunca ancora o primeiro
+        # disparo: o timer nascia 'active (elapsed)' com NextElapse vazio e
+        # o serviço NUNCA rodou (0 entradas no journal). OnBootSec dá a
+        # âncora inicial; OnUnitInactiveSec re-arma a partir do fim da
+        # execução (mais honesto que OnUnitActiveSec p/ worker ocioso).
+        OnBootSec = "3min";
+        OnUnitInactiveSec = cfg.interval;
         Unit = "jarvis-idle-worker.service";
       };
     };

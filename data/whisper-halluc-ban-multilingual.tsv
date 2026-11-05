@@ -1,0 +1,80 @@
+# Scicom hallucination lexicon multilingue (20/10 HB) — wake-up do whisper auto-detect (PT list mata 0)
+# class: ban-hard = safe_candidate curado; gated = lexicon por count SEM curation (validar antes de hard)
+# cols: class 	 lang 	 phrase 	 count 	 n_words — p/ gate asrd (lane OC)
+ban-hard	en	thanks for watching	25053	3
+ban-hard	en	thank you for watching	6264	4
+ban-hard	en	i m not sure what i m doing here	1317	9
+ban-hard	en	subtitles by the amara org community	1122	6
+ban-hard	en	bf watch tv 2021	691	4
+ban-hard	en	oh shit	237	2
+ban-hard	en	i m not sure if i can do this	227	9
+ban-hard	en	gerrard street	203	2
+ban-hard	en	i m not sure if i should be doing this but	199	11
+ban-hard	en	i m not sure what to do with this	171	9
+ban-hard	en	bell rings	155	2
+ban-hard	en	i m not going to let you get away with this	153	11
+ban-hard	en	oh i see	143	3
+ban-hard	en	transcript emily beynon	133	3
+ban-hard	en	woo hoo	133	2
+ban-hard	en	i m out	132	3
+ban-hard	en	i m not sure why i m doing this	129	9
+ban-hard	en	grr rr	123	2
+ban-hard	en	i m going to make a	119	6
+ban-hard	en	come on	113	2
+ban-hard	en	i m not sure if i can get the	109	9
+ban-hard	en	i m going to go ahead and do that	107	9
+ban-hard	en	i m not sure if i should have used the shield	107	11
+ban-hard	en	the train is now moving towards the central station	107	9
+ban-hard	en	there we go	103	3
+ban-hard	en	i m not sure if you can see it but i m not sure	89	14
+ban-hard	en	let s go	89	3
+ban-hard	en	i m not sure what to do with this guy	87	10
+ban-hard	en	i m going to go get some food	81	8
+ban-hard	en	i m not sure what to do here	81	8
+gated	ja	見てくれてありがとう	4	-
+gated	ja	ご視聴ありがとうございました	3	-
+gated	ja	ed	1	-
+gated	ja	me	1	-
+gated	ja	おいしい	1	-
+gated	ja	おわり	1	-
+gated	ja	お疲れ様でした	1	-
+gated	ja	この後 私はこのようなものを作ることに	1	-
+gated	ja	ご視聴ありがとうございます	1	-
+gated	ja	しました	1	-
+gated	ja	サブタイトル kizuna ai	1	-
+gated	ja	チャンネル登録お願いします	1	-
+gated	ja	拍手	1	-
+gated	ja	次回は アメリカの地球を破壊するための戦	1	-
+gated	ja	闘をお楽しみください	1	-
+gated	ja	音声なし	1	-
+gated	ja	音楽	1	-
+gated	zh	謝謝觀看 下次見	2	-
+gated	zh	下集预告	1	-
+gated	zh	别忘了订阅	1	-
+gated	zh	大家好 欢迎来到我的频道	1	-
+gated	zh	字幕by索兰娅	1	-
+gated	zh	字幕提供者 李宗盛	1	-
+gated	zh	字幕由 amara org 社群提供	1	-
+gated	zh	字幕由amara org社区提供	1	-
+gated	zh	感謝您的觀看 我們下次再見	1	-
+gated	zh	感谢收看 欢迎订阅我的频道	1	-
+gated	zh	感谢观看	1	-
+gated	zh	我們下次再見 拜拜	1	-
+gated	zh	採訪撰稿者 攝影剪輯 攝影師	1	-
+gated	zh	本期視頻就拍到這裡了 下次再會	1	-
+gated	zh	本期視頻就拍到這裡了 感謝觀看	1	-
+gated	zh	本集完	1	-
+gated	zh	本集完結 感謝觀看 下次見	1	-
+gated	zh	為了安全 所有乘客請留在樓梯上 樓梯和降落	1	-
+gated	zh	由 amara org 社群提供的字幕	1	-
+gated	zh	目	1	-
+gated	zh	與點點欄目	1	-
+gated	zh	處	1	-
+gated	zh	請不吝點贊訂閱轉發打賞支持明鏡與點點欄目	1	-
+gated	zh	請注意 車子將會很快就停下來	1	-
+gated	zh	謝謝 下次見 拜拜	1	-
+gated	zh	謝謝觀看	1	-
+gated	zh	謝謝觀看 下次再會	1	-
+gated	zh	謝謝觀看 下次見 掰掰	1	-
+gated	zh	謝謝觀看 下集再見 拜拜	1	-
+gated	zh	謝謝觀看 記得訂閱 按讚 分享 打賞支持明鏡	1	-

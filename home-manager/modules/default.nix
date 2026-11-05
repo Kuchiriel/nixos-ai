@@ -2,6 +2,10 @@
   imports = [
     ./agents-md.nix
     ./jarvismodes.nix
+    # Modelos de voz (kokoro/whisper/openwakeword) — links em ~/.local/share.
+    # Antes só o wakeword (desabilitado) os referenciava -> GC levou os
+    # store paths e o TTS Kokoro morreu (fallback espeak = voz horrível).
+    ./jarvis-models.nix
     ./alacritty.nix
     ./bat.nix
     ./chromium.nix
@@ -21,6 +25,9 @@
     ./swaync
     ./tmux.nix
     ./waybar.nix
+    # Default source do pipewire = mic DIGITAL (o Stereo está morto e o
+    # AEC3 captura do default ⇒ duplex surdo). Ver o módulo p/ o porque.
+    ./services/wireplumber-default-source.nix
     ./wofi
     ./zathura.nix
     ./zsh.nix

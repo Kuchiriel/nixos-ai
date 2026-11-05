@@ -1,0 +1,128 @@
+# duplex-eval turn-taking battery — gold labels p/ classify_turn v21 (20/10, HB)
+# 30 cenas/classe: RESPOND/WAIT/SILENCE/BARGE, PT-BR, contexto casa/JARVIS.
+# Sync: CLASS_SYS byte-a-byte de duplex-voice.py:108 — se a classes mudarem lá,
+# este arquivo (e o runner) acompanham no mesmo commit.
+{"utt": "Jarvis, que horas são?", "gold": "RESPOND"}
+{"utt": "Qual a previsão do tempo de amanhã?", "gold": "RESPOND"}
+{"utt": "Liga a luz da sala.", "gold": "RESPOND"}
+{"utt": "Toca uma música pra mim.", "gold": "RESPOND"}
+{"utt": "Me lembra às oito horas.", "gold": "RESPOND"}
+{"utt": "Como está o trânsito agora?", "gold": "RESPOND"}
+{"utt": "Quanto é quinze por cento de trezentos e quarenta?", "gold": "RESPOND"}
+{"utt": "Abre a porta da garagem.", "gold": "RESPOND"}
+{"utt": "Quem é você, Jarvis?", "gold": "RESPOND"}
+{"utt": "Quantos núcleos tem o servidor?", "gold": "RESPOND"}
+{"utt": "Cadê o controle da TV?", "gold": "RESPOND"}
+{"utt": "Chama a polícia!", "gold": "RESPOND"}
+{"utt": "Qual o horário de funcionamento da loja?", "gold": "RESPOND"}
+{"utt": "Pega pra mim um copo de água.", "gold": "RESPOND"}
+{"utt": "Jarvis, status do sistema.", "gold": "RESPOND"}
+{"utt": "Que dia é hoje?", "gold": "RESPOND"}
+{"utt": "Manda mensagem pro time.", "gold": "RESPOND"}
+{"utt": "Leia meus emails.", "gold": "RESPOND"}
+{"utt": "Qual o preço do dólar hoje?", "gold": "RESPOND"}
+{"utt": "Bloqueia meu calendário amanhã de manhã.", "gold": "RESPOND"}
+{"utt": "Jarvis, me conta uma piada.", "gold": "RESPOND"}
+{"utt": "Resume o documento que eu mandei.", "gold": "RESPOND"}
+{"utt": "Tem leite na geladeira?", "gold": "RESPOND"}
+{"utt": "Traduz 'bom dia' pro inglês.", "gold": "RESPOND"}
+{"utt": "Lista meus compromissos da semana.", "gold": "RESPOND"}
+{"utt": "Quanto tempo de bateria resta no notebook?", "gold": "RESPOND"}
+{"utt": "Jarvis, define uma alarma pra seis horas.", "gold": "RESPOND"}
+{"utt": "Como faço arroz do jeito certo?", "gold": "RESPOND"}
+{"utt": "Qual a rota mais rápida pro aeroporto?", "gold": "RESPOND"}
+{"utt": "Silencia as notificações por uma hora.", "gold": "RESPOND"}
+{"utt": "deixa eu ver...", "gold": "WAIT"}
+{"utt": "então...", "gold": "WAIT"}
+{"utt": "acho que...", "gold": "WAIT"}
+{"utt": "tipo assim,", "gold": "WAIT"}
+{"utt": "espera, deixa eu pensar", "gold": "WAIT"}
+{"utt": "onde foi que eu", "gold": "WAIT"}
+{"utt": "o nome era", "gold": "WAIT"}
+{"utt": "então hoje eu", "gold": "WAIT"}
+{"utt": "o filme era sobre", "gold": "WAIT"}
+{"utt": "quando você", "gold": "WAIT"}
+{"utt": "se eu conseguir", "gold": "WAIT"}
+{"utt": "acho que talvez", "gold": "WAIT"}
+{"utt": "eu queria te", "gold": "WAIT"}
+{"utt": "isso me lembra", "gold": "WAIT"}
+{"utt": "naquela época eu", "gold": "WAIT"}
+{"utt": "ontem eu tava", "gold": "WAIT"}
+{"utt": "comprei um", "gold": "WAIT"}
+{"utt": "tinha uma", "gold": "WAIT"}
+{"utt": "era uma vez", "gold": "WAIT"}
+{"utt": "meu pai sempre", "gold": "WAIT"}
+{"utt": "a casa da", "gold": "WAIT"}
+{"utt": "esse fim de", "gold": "WAIT"}
+{"utt": "bom, então", "gold": "WAIT"}
+{"utt": "ah, é", "gold": "WAIT"}
+{"utt": "o problema é que o", "gold": "WAIT"}
+{"utt": "olha, o negócio é o seguinte", "gold": "WAIT"}
+{"utt": "sabe o que eu", "gold": "WAIT"}
+{"utt": "um dia desses eu", "gold": "WAIT"}
+{"utt": "no fundo, essa história", "gold": "WAIT"}
+{"utt": "pro meu lado, a coisa", "gold": "WAIT"}
+{"utt": "a respeito daquele assunto, eu", "gold": "WAIT"}
+{"utt": "hum", "gold": "SILENCE"}
+{"utt": "hã", "gold": "SILENCE"}
+{"utt": "ahn", "gold": "SILENCE"}
+{"utt": "uhum", "gold": "SILENCE"}
+{"utt": "ahá", "gold": "SILENCE"}
+{"utt": "ok", "gold": "SILENCE"}
+{"utt": "tá", "gold": "SILENCE"}
+{"utt": "é", "gold": "SILENCE"}
+{"utt": "sei", "gold": "SILENCE"}
+{"utt": "né", "gold": "SILENCE"}
+{"utt": "hm hm", "gold": "SILENCE"}
+{"utt": "beleza", "gold": "SILENCE"}
+{"utt": "certo", "gold": "SILENCE"}
+{"utt": "entendi", "gold": "SILENCE"}
+{"utt": "nossa", "gold": "SILENCE"}
+{"utt": "opa", "gold": "SILENCE"}
+{"utt": "ah", "gold": "SILENCE"}
+{"utt": "ahhh", "gold": "SILENCE"}
+{"utt": "hahaha", "gold": "SILENCE"}
+{"utt": "ha ha", "gold": "SILENCE"}
+{"utt": "kkk", "gold": "SILENCE"}
+{"utt": "hehe", "gold": "SILENCE"}
+{"utt": "ufa", "gold": "SILENCE"}
+{"utt": "ih", "gold": "SILENCE"}
+{"utt": "oxe", "gold": "SILENCE"}
+{"utt": "eih", "gold": "SILENCE"}
+{"utt": "eh", "gold": "SILENCE"}
+{"utt": "uuuh", "gold": "SILENCE"}
+{"utt": "ooooh", "gold": "SILENCE"}
+{"utt": "mhm", "gold": "SILENCE"}
+{"utt": "rs", "gold": "SILENCE"}
+{"utt": "tá bom", "gold": "SILENCE"}
+{"utt": "ah é?", "gold": "SILENCE"}
+{"utt": "CALA A BOCA", "gold": "BARGE"}
+{"utt": "para para para", "gold": "BARGE"}
+{"utt": "espera! para!", "gold": "BARGE"}
+{"utt": "pare!", "gold": "BARGE"}
+{"utt": "não, escuta!", "gold": "BARGE"}
+{"utt": "Jarvis, para!", "gold": "BARGE"}
+{"utt": "deixa eu falar!", "gold": "BARGE"}
+{"utt": "opa opa opa, para", "gold": "BARGE"}
+{"utt": "oi oi, me escuta!", "gold": "BARGE"}
+{"utt": "psiu! Jarvis!", "gold": "BARGE"}
+{"utt": "socorro!", "gold": "BARGE"}
+{"utt": "fogo!", "gold": "BARGE"}
+{"utt": "cuidado!", "gold": "BARGE"}
+{"utt": "sai daí!", "gold": "BARGE"}
+{"utt": "não faz isso!", "gold": "BARGE"}
+{"utt": "para tudo agora!", "gold": "BARGE"}
+{"utt": "momento!", "gold": "BARGE"}
+{"utt": "aguenta aí!", "gold": "BARGE"}
+{"utt": "pera pera pera", "gold": "BARGE"}
+{"utt": "chega!", "gold": "BARGE"}
+{"utt": "basta!", "gold": "BARGE"}
+{"utt": "tá bom tá bom, para!", "gold": "BARGE"}
+{"utt": "pára o carro!", "gold": "BARGE"}
+{"utt": "escuta aqui!", "gold": "BARGE"}
+{"utt": "me deixa falar!", "gold": "BARGE"}
+{"utt": "atenção!", "gold": "BARGE"}
+{"utt": "peraí, Jarvis, para o timer!", "gold": "BARGE"}
+{"utt": "não não não, errado!", "gold": "BARGE"}
+{"utt": "para com isso!", "gold": "BARGE"}
+{"utt": "alto lá!", "gold": "BARGE"}

@@ -39,14 +39,25 @@
   # ── Markdown linting ──
   # No || true — if markdownlint fails, the check fails.
   # If the tool is not available, fail explicitly (don't pretend it passed).
+  # (12/10, IMP-020) pkgs.nodePackages foi REMOVIDO do nixpkgs — o cli2
+  # agora é top-level (markdownlint-cli2 0.21.0).
   markdown-lint = pkgs.runCommand "markdown-lint" {
-    nativeBuildInputs = [ pkgs.nodePackages.markdownlint-cli2 ];
+    nativeBuildInputs = [ pkgs.markdownlint-cli2 ];
     src = ../docs;
   } ''
-    mkdir -p $out
+    mkdir -p $out work
+    cp -r $src work/docs
+    # store vem read-only (444/555): sem o u+w nem o rm abaixo funciona
+    chmod -R u+w work/docs
+    # _trash fora: o aider-chat-history é LIXO histórico (731KB), não
+    # doc — negação de glob e cli2 ignorePatterns falharam nos dois
+    # contextos (relativo e absoluto) — medido 12/10. A cópia é mutável.
+    rm -rf work/docs/archive/_trash
 
-    # Run markdownlint — exit code is authoritative
-    if markdownlint-cli2 "$src/**/*.md" > $out/markdownlint-report.txt 2>&1; then
+    # Run markdownlint — exit code is authoritative (config vem DENTRO
+    # do docs: .markdownlint-cli2.jsonc)
+    cd work
+    if markdownlint-cli2 "docs/**/*.md" > $out/markdownlint-report.txt 2>&1; then
       echo "Markdown lint: PASS" > $out/summary.txt
       touch $out/pass
     else
@@ -82,4 +93,58 @@
       touch $out/pass
     fi
   '';
+
+  # ── Headroom de contexto dos providers cloud (02/11) ──────────────
+  # O opencode usa usable = context - maxOutputTokens quando o modelo
+  # NÃO declara limit.input — e esse valor é o TETO EXATO da API
+  # (prompt_tokens + max_tokens ≤ context). Folga zero + check de
+  # overflow com 1 turno de lag = HTTP 400 "context_length" (medido no
+  # NIM: 262146 > 262144). lib/opencode-limits.nix converte o headroom
+  # em limit.input; esta check valida a fórmula:
+  #   1. limit.input ≤ context
+  #   2. usable = limit.input - reserved (round-trip exato)
+  #   3. usable ≤ promptCeiling (NUNCA mais permissivo que o padrão)
+  #   4. usable ≥ 75% do promptCeiling (não compacta cedo demais)
+  opencode-headroom = let
+    limits = (import ../lib/opencode-limits.nix { inherit lib; }).limits;
+    cases = [
+      { context = 262144; output = 262144; headroom = 32000; } # minimax
+      { context = 262144; output = 65536; headroom = 32000; } # nemotron lightning
+      { context = 1048576; output = 262144; headroom = 32000; } # nemotron ultra
+      { context = 131072; output = 8000; headroom = 20000; } # groq
+      { context = 24000; output = 8000; headroom = 20000; } # cloudflare llama (ctx pequeno)
+      { context = 65536; output = 8192; headroom = 20000; } # lfm 2.5
+    ];
+    results = map
+      (c:
+        let l = limits c;
+        in {
+          inherit (c) context output headroom;
+          inherit (l) maxTokens reserved promptCeiling margin usable input;
+          upstream = c.context - l.maxTokens; # limiar padrão do opencode (sem limit.input)
+          ok = l.input != null
+            && l.input <= c.context
+            && l.input - l.reserved == l.usable
+            && l.usable <= l.promptCeiling
+            && l.usable <= c.context - l.maxTokens
+            && l.usable >= (l.promptCeiling * 3) / 4;
+        })
+      cases;
+  in
+    pkgs.runCommand "opencode-headroom" {
+      nativeBuildInputs = [ pkgs.jq ];
+      passAsEnv = [ "HEADROOM_RESULTS" ];
+      HEADROOM_RESULTS = builtins.toJSON results;
+    } ''
+      mkdir -p $out
+      echo "$HEADROOM_RESULTS" > $out/results.json
+      failed=$(jq '[.[] | select(.ok == false)] | length' $out/results.json)
+      if [ "$failed" != "0" ]; then
+        echo "FAIL: opencode headroom invariants violated ($failed cases)" >&2
+        cat $out/results.json >&2
+        exit 1
+      fi
+      echo "opencode-headroom: PASS ($(jq 'length' $out/results.json) cases)" > $out/summary.txt
+      touch $out/pass
+    '';
 }

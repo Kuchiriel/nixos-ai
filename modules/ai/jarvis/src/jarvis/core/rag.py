@@ -52,6 +52,96 @@ def _load_ragignore(root: Path) -> "object | None":
     except ImportError:
         return _SimpleIgnoreMatcher(patterns)
 
+# ---------------------------------------------------------------------------
+# Metadata extraction helpers for improved retrieval
+# ---------------------------------------------------------------------------
+import re
+import os
+
+def _extract_arxiv_id(path: str, content: str) -> str | None:
+    """Extract arXiv ID from path or content. Only matches in paper-like contexts."""
+    import re
+    fname = os.path.basename(path)
+    # 1) Filename with known prefixes (arxiv-, paper-, d2-, memt-*, etc.)
+    m = re.search(r'(?:arxiv[-_]|paper[-_]|d2[-_]|memt[-_].*[-_]|heartbeat[-_]thinking[-_]|searchgym[-_]|^)(\d{4}\.\d{4,5}(?:v\d+)?)', fname, re.IGNORECASE)
+    if m:
+        return m.group(1)
+    # 2) Papers directory: any arxiv pattern in filename is trustworthy
+    if "/papers/" in path.replace(os.sep, "/"):
+        m = re.search(r'\b(\d{4}\.\d{4,5}(?:v\d+)?)\b', fname)
+        if m:
+            return m.group(1)
+    # 3) Standalone arXiv ID in filename (strict contexts)
+    m = re.search(r'\b(\d{4}\.\d{4,5}(?:v\d+)?)\b', fname)
+    if m and (fname.startswith('arxiv') or 'paper' in fname.lower() or fname[0].isdigit()):
+        return m.group(1)
+    # 4) From content
+    m = re.search(r'arXiv:(\d{4}\.\d{4,5}(?:v\d+)?)', content[:2000])
+    if m:
+        return m.group(1)
+    return None
+
+def _extract_year(content: str) -> str | None:
+    """Extract year from content."""
+    m = re.search(r'(20\d{2})', content[:2000])
+    if m:
+        year = int(m.group(1))
+        if 2000 <= year <= 2030:
+            return str(year)
+    return None
+
+def _extract_domain(path: str, content: str) -> str | None:
+    """Extract domain from path or content."""
+    path_lower = path.lower()
+    if any(w in path_lower for w in ['voz', 'stt', 'asr', 'tts', 'voice']):
+        return 'voice'
+    if any(w in path_lower for w in ['kernel', 'harness', 'agent']):
+        return 'agent'
+    if any(w in path_lower for w in ['rag', 'hybrid', 'search', 'retrieval']):
+        return 'rag'
+    if any(w in path_lower for w in ['vision', 'vision']):
+        return 'vision'
+    if any(w in path_lower for w in ['embedding', 'embedding']):
+        return 'embedding'
+    if any(w in path_lower for w in ['llm', 'llama', 'qwen']):
+        return 'llm'
+    if any(w in path_lower for w in ['memory', 'memory']):
+        return 'memory'
+    if any(w in path_lower for w in ['eval', 'eval']):
+        return 'eval'
+    if any(w in path_lower for w in ['benchmark', 'benchmark']):
+        return 'benchmark'
+    # Check content for domain keywords
+    content_lower = content[:2000].lower()
+    if any(w in content_lower for w in ['speech', 'audio', 'voice', 'whisper', 'asr', 'tts']):
+        return 'voice'
+    if any(w in content_lower for w in ['agent', 'tool', 'function', 'api']):
+        return 'agent'
+    if any(w in content_lower for w in ['retrieval', 'retriever', 'rag', 'embedding', 'vector']):
+        return 'rag'
+    if any(w in content_lower for w in ['memory', 'episodic', 'semantic']):
+        return 'memory'
+    return None
+
+# ---------------------------------------------------------------------------
+# .ragignore — sintaxe gitignore (padrão de mercado: mesma engine do .gitignore,
+    """Carrega o .ragignore da raiz. Retorna spec (pathspec) ou matcher fallback."""
+    ignore_file = root / _RAGIGNORE_NAME
+    if not ignore_file.is_file():
+        return None
+    try:
+        lines = ignore_file.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return None
+    patterns = [ln for ln in (l.strip() for l in lines) if ln and not ln.startswith("#")]
+    if not patterns:
+        return None
+    try:
+        import pathspec  # lib-canônica de gitignore (black/ruff); opcional
+        return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+    except ImportError:
+        return _SimpleIgnoreMatcher(patterns)
+
 
 def _ragignore_rejects(matcher: "object | None", rel: str) -> bool:
     """True se `rel` (caminho relativo à raiz, POSIX) deve ser ignorado.
@@ -425,10 +515,22 @@ def _is_allowed(root: str, file: str) -> bool:
     return False
 
 
+# ALLOW (03/10, a pedido do dono): dirs que SEMPRE indexam, mesmo que um
+# exclude substring casaria (ex.: "items" mata data-sandbox/items).
+# Match EXATO no nome do dir, com precedência sobre excludes.
+_ALLOW_DIRS: tuple[str, ...] = (
+    "data", "data-sandbox", "data-canary", "dataset", "datasets",
+    "docs", "doc", "lib", "libs", "src", "scripts", "tools", "tests",
+    "items", "world", "monster", "npc", "schema", "facts", "stubs",
+)
+
+
 def iter_indexable_files(root: str | Path, exclude_dirs: Iterable[str] | None = None) -> Iterable[str]:
     """Varre um diretório/arquivo com as mesmas regras do V4.0.5 (excludes, tamanho).
-    Respeita também um .ragignore na raiz (sintaxe gitignore; ver _load_ragignore)."""
+    Respeita também um .ragignore na raiz (sintaxe gitignore; ver _load_ragignore).
+    `_ALLOW_DIRS` tem precedência EXATA sobre os excludes (substring)."""
     excludes = tuple(e.lower() for e in (exclude_dirs if exclude_dirs is not None else _EXCLUDE_DIRS))
+    allows = {a.lower() for a in _ALLOW_DIRS}
     root_path = Path(root).expanduser()
     rag = _load_ragignore(root_path)
 
@@ -443,11 +545,14 @@ def iter_indexable_files(root: str | Path, exclude_dirs: Iterable[str] | None = 
 
     for dirpath, dirnames, filenames in os.walk(root_path):
         # Filtra os subdiretórios verificando o nome do diretório individual, não o caminho absoluto
+        # ALLOW exact-match vence: dir permitido não é excluído por substring
         dirnames[:] = [
             d for d in dirnames
             if not d.startswith(".")
-            and d.lower() not in excludes
-            and not any(ex in d.lower() for ex in excludes)
+            and (d.lower() in allows or (
+                d.lower() not in excludes
+                and not any(ex in d.lower() for ex in excludes)
+            ))
         ]
         if rag is not None:
             # Poda dir inteiro se o rel-path casa com padrão de ignore (mesma
@@ -554,18 +659,34 @@ class HybridIndexer:
         facts = extract_facts(content, ext)
 
         last_payload = None
+        # Lote denso em 1 POST (medido 07/10: 44ms/item solo vs 2ms/item em
+        # lote). Fallback preservado: se o lote falhar, volta ao por-chunk
+        # com metades (semântica antiga intacta).
+        rich_list = [build_rich_content(path, facts if i == 0 else [], chunk, max_chars=chunk_size)
+                     for i, chunk in enumerate(chunks)]
+        try:
+            dense_list = self._llm.embed_batch(rich_list)
+            if len(dense_list) != len(rich_list):
+                raise ValueError("batch size mismatch")
+            batched = True
+        except Exception:
+            dense_list = [None] * len(rich_list)
+            batched = False
         for i, chunk in enumerate(chunks):
-            rich = build_rich_content(path, facts if i == 0 else [], chunk, max_chars=chunk_size)
-            try:
-                dense = self._llm.embed(rich)
-            except Exception:
-                # If embedding fails (e.g., input too large), try with smaller chunk
-                smaller = chunk[:len(chunk) // 2]
-                rich_fallback = build_rich_content(path, facts if i == 0 else [], smaller, max_chars=len(smaller))
+            rich = rich_list[i]
+            if batched:
+                dense = dense_list[i]
+            else:
                 try:
-                    dense = self._llm.embed(rich_fallback)
+                    dense = self._llm.embed(rich)
                 except Exception:
-                    continue  # Skip this chunk entirely
+                    # If embedding fails (e.g., input too large), try with smaller chunk
+                    smaller = chunk[:len(chunk) // 2]
+                    rich_fallback = build_rich_content(path, facts if i == 0 else [], smaller, max_chars=len(smaller))
+                    try:
+                        dense = self._llm.embed(rich_fallback)
+                    except Exception:
+                        continue  # Skip this chunk entirely
             if not dense:
                 continue
 
@@ -595,9 +716,16 @@ class HybridIndexer:
                     "sanitizer_version": _sanitizer_version if _sanitizer_version else "1.0.0",
                     "ingested_at": _ingested_at,
                     "embedding_model": self._cfg.embed_model,
+                    "arxiv_id": _extract_arxiv_id(path, content),
+                    "year": _extract_year(content),
+                    "domain": _extract_domain(path, content),
                 },
             }
-            self._store.upsert(self._cfg.qdrant_collection_code, [point])
+            # Route by content: ~/Books → books collection; resto → code_index
+            target_collection = ("books" if path.startswith(
+                str(Path.home() / "Books")) else
+                self._cfg.qdrant_collection_code)
+            self._store.upsert(target_collection, [point])
             last_payload = point["payload"]
             
         if last_payload is not None:
@@ -617,12 +745,12 @@ class HybridIndexer:
         except OSError:
             pass
 
-    def index_directory(self, root: str | Path) -> int:
+    def index_directory(self, root: str | Path, force: bool = False) -> int:
         """Indexa todos os arquivos elegíveis de um diretório. Retorna o total de arquivos."""
         self.ensure_collection()
         processed_files = set()
         for path in iter_indexable_files(root, exclude_dirs=self._cfg.index_exclude_dirs):
-            if self.index_file(path) is not None:
+            if self.index_file(path, force=force) is not None:
                 processed_files.add(path)
         return len(processed_files)
 
@@ -683,8 +811,27 @@ class HybridSearch:
         dense_override: list[float] | None = None,
         use_rerank: bool = True,
         diversify: bool = True,
+        metadata_filter: dict[str, Any] | None = None,
+        hyde: bool = False,
+        collection: str | None = None,
     ) -> list[HybridHit]:
-        """Busca híbrida (prefetch dense+sparse + RRF) e re-rank V4.0.5."""
+        """Busca híbrida (prefetch dense+sparse + RRF) e re-rank V4.0.5.
+
+        Args:
+            query: Query text
+            top_k: Number of results to return
+            dense_limit: Max dense candidates
+            sparse_limit: Max sparse candidates
+            dense_override: Pre-computed dense vector
+            use_rerank: Whether to apply cross-encoder reranking
+            diversify: Whether to diversify by source
+            metadata_filter: Optional metadata filter (e.g., {"arxiv_id": "2610.17124", "domain": "voice"})
+            hyde: Whether to use HyDE (Hypothetical Document Embeddings) for ambiguous queries
+            collection: Which Qdrant collection to search (default: code_index, use "books" for papers)
+        """
+        if hyde:
+            query = self._hyde_expand(query)
+
         if dense_override is not None:
             dense = dense_override
         else:
@@ -693,15 +840,46 @@ class HybridSearch:
                 return []
 
         sparse = sparse_vector(sparse_terms(query))
-        raw = self._store.search_hybrid(
-            self._cfg.qdrant_collection_code,
-            dense,
-            sparse,
-            top_k=top_k * 4,
-            dense_limit=dense_limit,
-            sparse_limit=sparse_limit,
-            ext_filter=_target_extension(query),
-        )
+
+        # Build filter for Qdrant as plain dict (mesmo formato do ext_filter
+        # em vector_store.py — sem dependência de qdrant_client models)
+        qdrant_filter = None
+        if metadata_filter:
+            conditions = [{"key": k, "match": {"value": v}}
+                          for k, v in metadata_filter.items()]
+            qdrant_filter = {"must": conditions}
+
+        # Determine which collection to search: explicit -> 1; default -> both
+        if collection:
+            collections_to_search = [collection]
+        else:
+            collections_to_search = [self._cfg.qdrant_collection_code, "books"]
+        all_raw = []
+        for coll in collections_to_search:
+            try:
+                raw = self._store.search_hybrid(
+                    coll,
+                    dense,
+                    sparse,
+                    top_k=top_k * 4,
+                    dense_limit=dense_limit,
+                    sparse_limit=sparse_limit,
+                    ext_filter=_target_extension(query),
+                    filter=qdrant_filter,
+                )
+                all_raw.extend(raw)
+            except Exception:
+                continue  # Collection might not exist
+
+        # Deduplicate by document_id
+        seen = set()
+        deduped = []
+        for hit in all_raw:
+            doc_id = hit.get("payload", {}).get("document_id")
+            if doc_id and doc_id not in seen:
+                seen.add(doc_id)
+                deduped.append(hit)
+        raw = deduped
 
         boosted = apply_legacy_boosts(query, raw)
         if use_rerank and boosted:
@@ -726,6 +904,27 @@ class HybridSearch:
             )
             for hit in ranked[:top_k]
         ]
+
+    def _hyde_expand(self, query: str) -> str:
+        """Generate hypothetical document for HyDE (Hypothetical Document Embeddings).
+
+        Generates a hypothetical answer to the query, then uses that as the
+        search query. Helps with ambiguous or underspecified queries.
+        """
+        try:
+            prompt = f"""Answer the following question concisely:
+
+Question: {query}
+
+Answer:"""
+            from jarvis.providers.llm import LLMClient
+            from jarvis.core.config import Config
+            cfg = Config()
+            llm = LLMClient(cfg)
+            response = llm.generate(prompt, max_tokens=200, temperature=0.3)
+            return f"{query} {response.strip()}"
+        except Exception:
+            return query
 
     def _rerank_candidates(self, query: str, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Reordena os candidatos (já boosted) pelo cross-encoder.

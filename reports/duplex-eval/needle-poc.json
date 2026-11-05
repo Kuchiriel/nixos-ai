@@ -1,0 +1,189 @@
+{
+ "ts": "2026-10-21T11:32:24",
+ "rows": [
+  {
+   "utt": "Jarvis, que horas são?",
+   "expect": "get_time",
+   "got": "(exec-sem-call)",
+   "args": "",
+   "n_results": 1,
+   "confidence": 0.3857,
+   "hit": true
+  },
+  {
+   "utt": "Jarvis, qual é o meu nome?",
+   "expect": "recall",
+   "got": "(exec-sem-call)",
+   "args": "",
+   "n_results": 1,
+   "confidence": 0.4389,
+   "hit": false
+  },
+  {
+   "utt": "Jarvis, o que eu gosto de comer?",
+   "expect": "recall",
+   "got": "(exec-sem-call)",
+   "args": "",
+   "n_results": 1,
+   "confidence": 0.3076,
+   "hit": false
+  },
+  {
+   "utt": "Jarvis, guarda que eu adoro sushi.",
+   "expect": "remember",
+   "got": "(exec-sem-call)",
+   "args": "",
+   "n_results": 1,
+   "confidence": 0.3086,
+   "hit": false
+  },
+  {
+   "utt": "Jarvis, onde eu moro?",
+   "expect": "recall",
+   "got": "(exec-sem-call)",
+   "args": "",
+   "n_results": 1,
+   "confidence": 0.3012,
+   "hit": false
+  },
+  {
+   "utt": "Jarvis, qual a previsão do tempo em Lisboa?",
+   "expect": "web_search",
+   "got": "",
+   "args": "",
+   "n_results": 0,
+   "confidence": 0.0905,
+   "hit": []
+  },
+  {
+   "utt": "Jarvis, qual o preço do dólar hoje?",
+   "expect": "web_search",
+   "got": "",
+   "args": "",
+   "n_results": 0,
+   "confidence": 0.0979,
+   "hit": []
+  },
+  {
+   "utt": "Jarvis, status do sistema.",
+   "expect": "status",
+   "got": "(exec-sem-call)",
+   "args": "",
+   "n_results": 1,
+   "confidence": 0.362,
+   "hit": true
+  },
+  {
+   "utt": "Jarvis, o que tem no paper do MemGPT?",
+   "expect": "rag_search",
+   "got": "(exec-sem-call)",
+   "args": "",
+   "n_results": 1,
+   "confidence": 0.2968,
+   "hit": false
+  },
+  {
+   "utt": "Jarvis, me conta uma piada.",
+   "expect": "",
+   "got": "remember",
+   "args": "{'text': 'previsão do tempo'}",
+   "n_results": 8,
+   "confidence": 0.1071,
+   "hit": ""
+  },
+  {
+   "utt": "Jarvis, obrigado!",
+   "expect": "",
+   "got": "remember",
+   "args": "{'text': 'previsão do tempo'}",
+   "n_results": 8,
+   "confidence": 0.1024,
+   "hit": ""
+  },
+  {
+   "utt": "Jarvis, guarda que meu filme favorito é Blade Runner.",
+   "expect": "remember",
+   "got": "(exec-sem-call)",
+   "args": "",
+   "n_results": 2,
+   "confidence": 0.1683,
+   "hit": false
+  },
+  {
+   "utt": "Jarvis, qual é o meu filme favorito?",
+   "expect": "recall",
+   "got": "(exec-sem-call)",
+   "args": "",
+   "n_results": 1,
+   "confidence": 0.1728,
+   "hit": false
+  },
+  {
+   "utt": "Jarvis, como funciona o sistema de voz?",
+   "expect": "rag_search",
+   "got": "(exec-sem-call)",
+   "args": "",
+   "n_results": 1,
+   "confidence": 0.1773,
+   "hit": false
+  },
+  {
+   "utt": "Jarvis, quanto é dois mais dois?",
+   "expect": "",
+   "got": "(exec-sem-call)",
+   "args": "",
+   "n_results": 1,
+   "confidence": 0.1907,
+   "hit": ""
+  },
+  {
+   "utt": "Jarvis, lembra que eu prefiro azul.",
+   "expect": "remember",
+   "got": "get_time",
+   "args": "{}",
+   "n_results": 8,
+   "confidence": 0.2004,
+   "hit": false
+  },
+  {
+   "utt": "Jarvis, qual a capital da França?",
+   "expect": "",
+   "got": "(exec-sem-call)",
+   "args": "",
+   "n_results": 2,
+   "confidence": 0.1987,
+   "hit": ""
+  },
+  {
+   "utt": "Jarvis, busca na internet receitas de bolo.",
+   "expect": "web_search",
+   "got": "",
+   "args": "",
+   "n_results": 0,
+   "confidence": 0.0592,
+   "hit": []
+  },
+  {
+   "utt": "Jarvis, salva que eu trabalho como engenheiro.",
+   "expect": "remember",
+   "got": "remember",
+   "args": "{'text': \"Tomorrow's trip to Mumbai is a concert at the Mumb",
+   "n_results": 8,
+   "confidence": 0.1722,
+   "hit": false
+  },
+  {
+   "utt": "Jarvis, o que eu trabalho?",
+   "expect": "recall",
+   "got": "remember",
+   "args": "{'text': \"Tomorrow's trip to Mumbai is a concert at the Mumb",
+   "n_results": 8,
+   "confidence": 0.161,
+   "hit": false
+  }
+ ],
+ "score": {
+  "tool_hit": 2,
+  "args_parse": 17
+ }
+}

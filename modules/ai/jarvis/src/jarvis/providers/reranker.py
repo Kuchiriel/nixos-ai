@@ -30,7 +30,17 @@ class Reranker:
     """Reranker cross-encoder via llama.cpp /rerank."""
 
     def __init__(self, base_url: str | None = None, *, timeout: float = 30.0) -> None:
-        self._base = (base_url or "http://127.0.0.1:8082").rstrip("/")
+        if base_url:
+            self._base = base_url.rstrip("/")
+        else:
+            # (03/11) porta do rerank: registry JSON (models.nix) → fallback.
+            port = None
+            try:
+                from jarvis.core.model_registry import ModelRegistry
+                port = ModelRegistry.load().service_port("rerank")
+            except Exception:
+                port = None
+            self._base = f"http://127.0.0.1:{port or 8082}".rstrip("/")
         self._timeout = timeout
 
     def is_available(self) -> bool:

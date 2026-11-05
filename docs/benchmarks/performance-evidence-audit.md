@@ -318,4 +318,4 @@ This shows poll=25 IS faster than poll=50! But the conclusion says "Default poll
 **Ver também:** [[ncmoe-sweep|ncmoe-sweep.md]] | [[../architecture/llama-cpp-tuning|/home/nixos/projects/nixos-ai/docs/architecture/llama-cpp-tuning.md]]
 [[../architecture/rag-improvements|/home/nixos/projects/nixos-ai/docs/architecture/rag-improvements.md]] | [[../architecture/system-overview|/home/nixos/projects/nixos-ai/docs/architecture/system-overview.md]]
 **Evidência BUFFY**: Este doc satisfaz LEVEL 4 do Evidence Ladder
-[[../../HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]]
+[[../../HANDOFF.md|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../AGENTS.md|/home/nixos/projects/nixos-ai/AGENTS.md]]

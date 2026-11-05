@@ -6,8 +6,43 @@
   mcpNixos ? mcp-nixos,
   ripgrep,
   age,
+  aiModels ? { layaModelDir = "/home/nixos/models/laya-ft"; },
 }: let
-  base = python3Packages.buildPythonPackage rec {
+  # FONTE ÚNICA das deps (30/09). Fora do `rec` para o dev shell reusar a
+  # lista leve (sem torch) e para o pacote único abaixo montar as duas.
+  # Antes esta lista vivia só em `dependencies`, e o ambiente de TESTE do
+  # nightwatch precisava dela para não falhar com "No module named
+  # 'requests'" — sem acesso, a lista seria duplicada (e driftaria).
+  pythonDeps = with python3Packages; [
+    requests
+    httpx
+    numpy
+    prompt-toolkit
+    fastapi
+    uvicorn
+    pathspec # .ragignore: matching gitignore canônico no index RAG
+    cryptography # vault cifrado opt-in (Fernet) p/ perfis isolados
+    evdev # computer-use: mouse/teclado via uinput (humanize.py)
+    pillow # vision.py redimensiona antes de mandar pro llama vision; sem isso cai no fallback PNG cru e o modelo devolve 500
+    pytesseract # fallback do vision.py: OCR quando o vision model falha
+    playwright # browser tool via CDP (connect_over_cdp; sem ms-playwright)
+    onnxruntime # laya_classifier.py (classificador de dificuldade fine-tuned): sem isto a Laya cai no regex SEMPRE — o fine-tune fica inerte (medido 03/11: acc Laya 83,3% vs regex 33,3%)
+  ];
+
+  # Voz (STT faster-whisper + TTS Kokoro). 03/11: era um pacote separado
+  # ("jarvis-voice") só para não arrastar torch/ctranslate2 — mas TODOS os
+  # consumidores de runtime usam a voz (host, wakeword, MCP, vscode) e o
+  # `base` não tinha nenhum: só o dev shell usava a lista de deps. Agora há
+  # UM pacote instalado (jarvis) com a voz dentro; a lista leve continua
+  # disponível para o dev shell/check.
+  voiceDeps = with python3Packages; [
+    faster-whisper
+    kokoro
+    soundfile
+  ];
+
+
+  jarvis = python3Packages.buildPythonPackage rec {
     pname = "jarvis";
     version = "0.1.0";
     pyproject = true;
@@ -27,27 +62,19 @@
 
     build-system = with python3Packages; [setuptools];
 
-    # FONTE ÚNICA da lista de deps (30/09). Antes esta lista vivia só em
-    # `dependencies`, e o ambiente de TESTE do nightwatch precisava dela
-    # para não falhar com "No module named 'requests'" — sem acesso, a
-    # lista seria duplicada (e driftaria). `dependencies` deriva daqui.
-    pythonDeps = with python3Packages; [
-      requests
-      httpx
-      numpy
-      prompt-toolkit
-      fastapi
-      uvicorn
-      pathspec # .ragignore: matching gitignore-canônico no index RAG
-      cryptography # vault cifrado opt-in (Fernet) p/ perfis isolados
-      evdev # computer-use: mouse/teclado via uinput (humanize.py)
-      playwright # browser tool via CDP (connect_over_cdp; sem ms-playwright)
-    ];
-
-    dependencies = pythonDeps;
+    dependencies = pythonDeps ++ voiceDeps;
 
     nativeBuildInputs = [makeWrapper];
 
+    # PIL/PYTHONPATH (2026-10-02): `dependencies` do buildPythonPackage NÃO
+    # coloca as libs no sys.path deste wrapper — sem isto `import PIL` falha em
+    # runtime mesmo com pillow no closure do pacote (diagnosticado: pillow
+    # 12.3.0 presente em `nix-store -q --references`, porém "No module named
+    # PIL"). Efeito prático: vision.py caía no PNG cru de 1,5MB e o Gemini
+    # respondia "Unable to process input image". Agora as deps entram no path.
+    # makeWrapperArgs sozinho NÃO funcionou: o hook de python do nixpkgs monta
+    # o wrapper por cima e o PYTHONPATH some (medido: pillow 12.3.0 no closure
+    # via `nix-store -q --references`, mas `import PIL` → ModuleNotFoundError
 
 
     # mcp-nixos (MCP server read-only de packages/options do nixpkgs) é usado
@@ -70,12 +97,26 @@
 
     # O subprocesso mcp-nixos (stdio) herda o env: aponta para o cache de
     # canais pré-computado no store (zero probes HTTP de descoberta).
+    #
+    # PYTHONPATH (2026-10-02): `dependencies` do buildPythonPackage NÃO põe as
+    # libs no sys.path do wrapper. Medido: pillow 12.3.0 E pytesseract estão no
+    # closure (`nix-store -q --references`) mas `import PIL` dá
+    # ModuleNotFoundError em runtime. Efeito: vision.py caía no PNG cru de
+    # 1,5MB, o Gemini respondia "Unable to process input image", e o
+    # `observe_screen` do MCP estourava o timeout de 30s.
+    #
+    # NOTA: eu tinha tentado num hook `postFixup` — que NÃO EXISTE no stdenv,
+    # então foi ignorado em silêncio e o wrapper saía sem o prefixo (por isso
+    # "PIL ausente" mesmo com pillow instalado). Aqui, no mesmo `wrapProgram`
+    # que já reescreve TODOS os binários, o prefixo vem junto.
     postInstall = ''
       for bin in $out/bin/*; do
         wrapProgram "$bin" \
           --prefix PATH : ${lib.makeBinPath [mcpNixos]} \
-          --set MCP_NIXOS_CHANNEL_CACHE "${mcpNixos}/share/mcp-nixos/channels.json"
+          --set MCP_NIXOS_CHANNEL_CACHE "${mcpNixos}/share/mcp-nixos/channels.json" \
+          --set LAYA_MODEL_DIR "${aiModels.layaModelDir}"
       done
+
     '';
 
     meta = with lib; {
@@ -85,21 +126,6 @@
       maintainers = [];
     };
   };
-
-  # Jarvis com voz (STT faster-whisper + TTS Kokoro). Separado do núcleo para
-  # não arrastar torch/ctranslate2 para todos os usos — o host final instala
-  # este quando quiser a interface falada (wakeword brainCommand).
-  withVoice = base.overridePythonAttrs (old: {
-    pname = "jarvis-voice";
-    dependencies =
-      old.dependencies
-      ++ (with python3Packages; [
-        faster-whisper
-        kokoro
-        soundfile
-      ]);
-    propagatedBuildInputs = old.propagatedBuildInputs or [] ++ [mcpNixos];
-  });
 in {
-  inherit base withVoice;
+  inherit jarvis pythonDeps voiceDeps;
 }

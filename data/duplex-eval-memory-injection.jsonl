@@ -1,0 +1,13 @@
+# duplex-eval memory-injection battery — P1 do ROADMAP-INTELIGENCIA (OC), fixtures HB 21/10
+# Contrato: cada cenário = seed_facts gravados ANTES (remember), depois o
+# utterance; a resposta do duplex deve conter expect_any (write-then-read,
+# anti-halluc, negative). Verificação: log tts.say/response OU E2E speaker
+# (driver duplex-eval.py). tier = rota esperada (recall|rag|web|direct).
+{"utt": "O que eu gosto de comer?", "seed_facts": ["preferência: pizza"], "expect_any": ["pizza"], "tier": "recall", "note": "o bug original do roadmap: isso ia pra web_search"}
+{"utt": "Qual é o meu nome?", "seed_facts": ["identidade: Matheus"], "expect_any": ["Matheus"], "tier": "recall", "note": "P0 fix — nome próprio extraído do tool result"}
+{"utt": "Onde eu moro?", "seed_facts": ["local: São Paulo"], "expect_any": ["São Paulo", "Sao Paulo"], "tier": "recall", "note": "fato local"}
+{"utt": "Guarda que eu adoro sushi.", "seed_facts": [], "expect_any": ["sushi"], "tier": "write", "note": "WRITE: o próximo cenário lê de volta"}
+{"utt": "O que eu adoro comer?", "seed_facts": [], "expect_any": ["sushi"], "tier": "recall", "note": "READ-BACK do write anterior — o loop completo write→store→recall→answer"}
+{"utt": "Qual é a minha cor favorita?", "seed_facts": ["preferência: azul"], "expect_any": ["azul"], "tier": "recall", "note": "injeção implícita deve trazer o fato SEM o modelo pedir"}
+{"utt": "Qual é a capital da França?", "seed_facts": [], "expect_any": ["Paris"], "tier": "direct", "note": "NEGATIVE de injeção: conhecimento de mundo = resposta direta, recall não deve disparar"}
+{"utt": "O que tem no paper do MemGPT?", "seed_facts": [], "expect_any": ["hierárquica", "hierarquica", "memória", "memoria", "context"], "tier": "rag", "note": "rag_search implícito: smart-router paper→rag (b13df3d) deve trazer conteúdo"}

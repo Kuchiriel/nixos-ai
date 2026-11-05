@@ -24,6 +24,16 @@
         "notifications"
       ];
       widget-config = {
+        # (03/11) todo widget sem entrada em widget-config loga
+        # "Config not found! Using default config..." (baseWidget.vala).
+        # 'notifications' e 'inhibitors' não tinham bloco -> 2 warnings por
+        # boot. Chaves conferidas no fonte v0.12.6 (get_prop).
+        notifications = {
+          vexpand = true;
+        };
+        inhibitors = {
+          text = "Inhibitors";
+        };
         title = {
           text = "Notifications";
           clear-all-button = true;

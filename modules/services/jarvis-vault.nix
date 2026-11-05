@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   cfg = config.services.jarvis-vault;
@@ -32,8 +33,14 @@ in {
       description = "JARVIS — resumo de memória de longo prazo (vault)";
       serviceConfig = {
         Type = "oneshot";
+        # (04/11, sweep) ExecStart AUSENTE: a unit era inválida (o
+        # formatter comeu a linha no commit 6cd9c147) → no nixos-lab
+        # (enable=true) o timer semanal disparava uma unit sem comando.
+        # O CLI existe: `jarvis vault summarize --since N` (cli/main.py:1259).
+        ExecStart = "${pkgs.jarvis}/bin/jarvis vault summarize --since ${toString cfg.since}";
         EnvironmentFile = "-/etc/jarvis-telegram.env";
         StandardOutput = "journal";
+        RemainAfterExit = true;
       };
     };
 

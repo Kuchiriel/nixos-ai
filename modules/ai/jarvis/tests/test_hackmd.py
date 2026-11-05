@@ -11,9 +11,18 @@ import pytest
 
 
 def test_get_token_from_env(monkeypatch):
-    """_get_token reads from HMD_API_ACCESS_TOKEN env var."""
+    """_get_token reads from HMD_API_ACCESS_TOKEN env var.
+
+    (16/10) keys.get = ARQUIVO antes de env (precedencia da renovacao
+    gemini, 02/10) — o ~/.hackmd/config.json REAL do dono vencia o
+    monkeypatch e vazava o token produtivo no teste. O teste agora
+    isola: spec hackmd sem files -> so o env responde.
+    """
+    import jarvis.core.keys as keys
     from jarvis.core.hackmd import _get_token
 
+    monkeypatch.setattr(keys, "_SOURCES", {**keys._SOURCES,
+        "hackmd": {"env": ["HMD_API_ACCESS_TOKEN"], "files": []}})
     monkeypatch.setenv("HMD_API_ACCESS_TOKEN", "test-token-123")
     assert _get_token() == "test-token-123"
 
@@ -42,9 +51,16 @@ def test_get_token_missing(monkeypatch):
 
 
 def test_headers_with_token(monkeypatch):
-    """_headers returns proper auth headers."""
+    """_headers returns proper auth headers.
+
+    (16/10) mesma doenca do test_get_token_from_env: keys.get e
+    FILE-first — isola o spec p/ o env responder.
+    """
+    import jarvis.core.keys as keys
     from jarvis.core.hackmd import _headers
 
+    monkeypatch.setattr(keys, "_SOURCES", {**keys._SOURCES,
+        "hackmd": {"env": ["HMD_API_ACCESS_TOKEN"], "files": []}})
     monkeypatch.setenv("HMD_API_ACCESS_TOKEN", "my-token")
     h = _headers()
     assert h["Authorization"] == "Bearer my-token"

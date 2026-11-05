@@ -15,7 +15,12 @@ class TestPersonaRegistry:
         """Registry should load all 15 built-ins (12 + agent + marketing + uncensored)."""
         registry = PersonaRegistry()
         personas = registry.list_all()
-        assert len(personas) == 15
+        # Contagem exata virou frágil em 07/10: dir do painel (JSONs do
+        # dono) soma ao total. Checa os 15 builtins pelo ID.
+        import jarvis.core.persona as _pm
+        for pid in _pm.BUILTIN_PERSONAS:
+            assert registry.get(pid) is not None, pid
+        assert len([p for p in personas if p.id in _pm.BUILTIN_PERSONAS]) == 15
         # 25/09: a persona do tier local sem filtro precisa existir e ser
         # OBRIGATORAMENTE enxuta (sem web_search/vision) — é o tier que o
         # dono usa pra não levar consulta pra fora nem carregar tool morto.
@@ -268,7 +273,7 @@ class TestMarketingPersona:
         assert "149,99" in p.system_prompt_additions
         assert "379,99" in p.system_prompt_additions
         assert "1.259,99" in p.system_prompt_additions
-        assert "PROIBIDO" in p.system_prompt_additions
+        assert "FORBIDDEN" in p.system_prompt_additions
         assert p.policies.can_write is False
         assert p.policies.can_execute is False
 

@@ -4,6 +4,7 @@
 def test_make_no_key(monkeypatch) -> None:
     from jarvis.core import make_ops as M
     monkeypatch.delenv("MAKE_API_KEY", raising=False)
+    # module-level: make_ops still speaks the legacy prefixed names
     assert "ausente" in M.handle_make("jarvis_make_scenarios", {})
 
 
@@ -16,15 +17,15 @@ def test_make_run_needs_confirm() -> None:
 def test_make_tools_registered() -> None:
     from jarvis import mcp_server as S
     names = [t["name"] for t in S.JARVIS_TOOLS]
-    for n in ("jarvis_make_scenarios", "jarvis_make_scenario_get",
-              "jarvis_make_executions", "jarvis_make_run"):
+    for n in ("make_scenarios", "make_scenario_get",
+              "make_executions", "make_run"):
         assert n in names
 
 
 def test_make_call_dispatch(monkeypatch) -> None:
     from jarvis import mcp_server as S
     monkeypatch.delenv("MAKE_API_KEY", raising=False)
-    assert "ausente" in S.call_tool("jarvis_make_scenarios", {})
+    assert "ausente" in S.call_tool("make_scenarios", {})
 
 
 def test_make_summarize() -> None:

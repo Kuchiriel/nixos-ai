@@ -17,13 +17,26 @@ class TestFramingFor:
 class TestCascade:
     def test_layers_known(self):
         from jarvis.core import model_policy as mp
-        for layer in ("coding-long", "dev", "batch", "mechanical",
-                      "docs", "classify", "rag", "vision"):
+        import json
+        from pathlib import Path
+        # Usa camadas do JSON (fonte única)
+        json_path = Path(__file__).parent.parent.parent.parent / "free-providers.json"
+        try:
+            data = json.loads(json_path.read_text())
+            layers = [k for k in data.get("cascade_layers", {}).keys() if not k.startswith("_")]
+        except Exception:
+            layers = ("coding-long", "dev", "batch", "docs", "classify", "vision")
+        for layer in layers:
             entries = mp.cascade_for(layer)
             assert entries, layer
             for provider, model, base, key in entries:
-                assert provider and model and base.startswith("https://")
-                assert key.endswith("_KEY") or key.endswith("CONFIG") or key.endswith("_TOKEN")
+                assert provider and model
+                # https:// p/ providers externos; http:// aceito SÓ em
+                # loopback (serviço local do host — ex. freellmapi :3001).
+                assert base.startswith("https://") or base.startswith("http://127.0.0.1:")
+                # Permite providers anônimos sem key (ex. ovhcloud, kilocode)
+                if key:
+                    assert key.endswith("_KEY") or key.endswith("CONFIG") or key.endswith("_TOKEN")
 
     def test_unknown_empty(self):
         from jarvis.core import model_policy as mp

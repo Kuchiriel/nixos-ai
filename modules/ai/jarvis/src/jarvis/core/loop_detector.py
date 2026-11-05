@@ -206,9 +206,9 @@ class LoopDetector:
                 # resposta está NA LISTA que você já tem: leia um arquivo
                 # dela com read_file AGORA em vez de buscar de novo.
                 _dup_extra = (
-                    " A busca funcionou — REPETI-LA não filtra nada. Você já "
-                    "tem a lista de arquivos: chame read_file num deles "
-                    "AGORA (ou estreite com --exclude-dir=.git)."
+                    " The search worked — repeating it filters nothing. You already "
+                    "have the file list: call read_file on one of them "
+                    "NOW (or narrow it with --exclude-dir=.git)."
                 )
             return RecoveryStrategy(
                 action=RecoveryAction.INJECT_WARNING,

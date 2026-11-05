@@ -1,0 +1,187 @@
+{
+ "tag": "bonsai-0710",
+ "model": "bonsai",
+ "endpoint": "http://127.0.0.1:8080",
+ "ts": "2026-10-07 10:46",
+ "speed": {
+  "ttft_s": 0.033,
+  "prefill_ts": 72.2,
+  "gen_ts": 72.8
+ },
+ "ptbr": {
+  "dificeis": {
+   "ok": 6,
+   "n": 10,
+   "det": [
+    {
+     "en": "It contains the smell of a freshly slain slime",
+     "pt": "Contém o cheiro de uma criatura molde recém-murta",
+     "falhas": []
+    },
+    {
+     "en": "Use it on your bed to change the bed to green",
+     "pt": "Use it on your bed to change the bed to green.",
+     "falhas": [
+      "sobrou ingles: 'it'"
+     ]
+    },
+    {
+     "en": "Use it in your house to construct a red cushioned chair",
+     "pt": "Use it in your house to construct a red cushioned chair",
+     "falhas": [
+      "identico ao original"
+     ]
+    },
+    {
+     "en": "It contains presents which were stolen from Santa. Bring them to the workshop.",
+     "pt": "Ele contém presentes que foram roubados de Santa. Leve-os para o taller.",
+     "falhas": []
+    },
+    {
+     "en": "Wearing it makes you feel a little weaker than usual",
+     "pt": "Usar isso faz você se sentir um pouco mais fraco do que normalmente.",
+     "falhas": []
+    },
+    {
+     "en": "Barbarian women are said to use it for conjuring beasts",
+     "pt": "Mulheres barbaras são ditas usar para conjurar animais",
+     "falhas": [
+      "perdeu acento: 'barbaras' devia ser 'bárbaras'"
+     ]
+    },
+    {
+     "en": "Souvenir from Thais Museum",
+     "pt": "Souvenir do Museu dos Thai",
+     "falhas": [
+      "perdeu nome proprio 'Thais'"
+     ]
+    },
+    {
+     "en": "Offers a soul to the Soulpit. Combine with another soul core to create a random new soul core.",
+     "pt": "Oferece uma alma para o Soulpit. Combine com outro núcleo de alma para criar um novo núcleo de alma aleatório.",
+     "falhas": []
+    },
+    {
+     "en": "A hermit near Carlin might be able to tell you more about it",
+     "pt": "A ermita perto de Carlin pode te contar mais sobre isso.",
+     "falhas": []
+    },
+    {
+     "en": "Only a hero of level 100 or above can decipher this scroll to gain 5 promotion",
+     "pt": "Apenas um herói de nível 100 ou acima pode decifrar este pergaminho para ganhar 5 promoções.",
+     "falhas": []
+    }
+   ]
+  },
+  "comuns": {
+   "ok": 9,
+   "n": 10,
+   "det": [
+    {
+     "en": "This weapon is charged",
+     "pt": "Este arma está carregada",
+     "falhas": []
+    },
+    {
+     "en": "Somebody is sleeping there",
+     "pt": "Alguém está dormindo lá",
+     "falhas": []
+    },
+    {
+     "en": "You hear an evil whispering from inside",
+     "pt": "Você ouve um suspiro malicioso vindo do dentro",
+     "falhas": []
+    },
+    {
+     "en": "It is filled with delicious cream pies",
+     "pt": "Está cheio de pies de creme deliciosos",
+     "falhas": []
+    },
+    {
+     "en": "You swapped it with Bozo's crate of wine flasks",
+     "pt": "Você trocou com a caixa de flasques de vinho de Bozo",
+     "falhas": []
+    },
+    {
+     "en": "The wand glows",
+     "pt": "A varinha brilha",
+     "falhas": []
+    },
+    {
+     "en": "This shield will surely care for anyone who can bear it",
+     "pt": "Este escudo cuidará certamente de qualquer um que possa suportá-lo.",
+     "falhas": []
+    },
+    {
+     "en": "You should follow gnomish advice and use it on green crystals",
+     "pt": "Você deve seguir o conselho dos gnomes e usá-lo em cristais verdes.",
+     "falhas": []
+    },
+    {
+     "en": "A personal letter of a knight of the Order of the Stag",
+     "pt": "Carta pessoal de um cavaleiro do Ordenamento do Cervo",
+     "falhas": [
+      "ignora termo oficial 'order'->'ordem'"
+     ]
+    },
+    {
+     "en": "This spicy-sweet cake will probably put you into a sugar rush",
+     "pt": "Este bolo doce e picante provavelmente vai deixar você com um surto de açúcar",
+     "falhas": []
+    }
+   ]
+  }
+ },
+ "logic": {
+  "ok": 3,
+  "n": 4,
+  "det": [
+   {
+    "prompt": "Todos os gatos são mamíferos. Tom é um gato. Tom é mamífero?",
+    "out": "SIM",
+    "hit": true
+   },
+   {
+    "prompt": "Sequência: 2, 6, 12, 20, 30. Qual o próximo? Responda só o n",
+    "out": "32",
+    "hit": false
+   },
+   {
+    "prompt": "Ana diz: 'Beto mente'. Beto diz: 'Ana e eu mentimos'. Quem f",
+    "out": "Ana fala a verdade.",
+    "hit": true
+   },
+   {
+    "prompt": "Um trem a 60km/h anda 2h30. Distância? Responda só o número ",
+    "out": "Para calcular a distância, usamos a fórmula:\n\n$$\n\\text{Distância} = \\text{Velocidade} \\times \\text{Tempo}\n$$\n\nA velocidade é de **60 km/h** e o tempo é de **2h30**, que é igual a **2,5 horas**.\n\n$$\n\\text{Distância} = 60 \\times 2,5 = 150 \\text{ km}\n$$\n\n**Resposta:** 150",
+    "hit": true
+   }
+  ]
+ },
+ "coding": {
+  "ok": 4,
+  "n": 4,
+  "det": [
+   {
+    "prompt": "Escreva fizzbuzz em Python (função fizzbuzz(n)). Só código.",
+    "out": "```python\ndef fizzbuzz(n):\n    for i in range(1, n+1):\n        if i % 3 == 0 and i % 5 == 0:\n            print(\"FizzBuzz\")\n        elif i % 3 == 0:\n            print(\"Fizz\")\n        elif i % 5 == 0:\n            print(\"Buzz\")\n        else:\n            print(i)\n```",
+    "hit": true
+   },
+   {
+    "prompt": "Função Python que inverte uma string. Só código.",
+    "out": "```python\ndef invertir_string(s):\n    return s[::-1]\n```",
+    "hit": true
+   },
+   {
+    "prompt": "Fibonacci iterativo em Python, função fib(n). Só código.",
+    "out": "```python\ndef fib(n):\n    if n <= 0:\n        return 0\n    elif n == 1:\n        return 1\n    a, b = 0, 1\n    for _ in range(2, n + 1):\n        a, b = b, a + b\n    return b\n```",
+    "hit": true
+   },
+   {
+    "prompt": "SQL: selecione nome e preco da tabela produtos onde preco > ",
+    "out": "```sql\nSELECT nome, preco FROM produtos WHERE preco > 100;\n```",
+    "hit": true
+   }
+  ]
+ }
+}

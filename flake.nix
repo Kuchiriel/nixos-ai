@@ -3,7 +3,18 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
+    # Kernel 7.2 + driver NVIDIA 615.71.09 (new_feature): 26.05 pina zen 7.1.8
+    # (ok) mas o driver 615 só existe no master do nixpkgs. Fallback enquanto
+    # o 26.05 não bumpa — ver overlay aiOverlay abaixo.
+    nixpkgs-master.url = "github:nixos/nixpkgs/master";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+
+    # MetaTrader 5 (EA GOLD FAKEOUT): o wine 11 do 26.05 é detectado pelo
+    # anti-debugger do MT5 e aborta installer E terminal (consenso multi-
+    # usuário do fórum mql5 503128, jan/2026; WINEDEBUG=-all não resolve).
+    # Wine 10.0 = versão que funciona. O winetricks do 26.05 também quebra
+    # com builds WoW64 (nixpkgs#338367) — ambos vêm do pin 25.11.
+    nixpkgs-wine10.url = "github:nixos/nixpkgs/nixos-25.11";
 
     opencode-flake.url = "github:dan-online/opencode-nix";
 
@@ -34,6 +45,8 @@
   outputs = {
     nixpkgs,
     nixpkgs-unstable,
+    nixpkgs-master,
+    nixpkgs-wine10,
     home-manager,
     stylix,
     disko,
@@ -93,22 +106,52 @@
           nixpkgs-unstable.legacyPackages.${system}.python3Packages.mcp;
 
         # Pacote Python do JARVIS
-        jarvis = (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast;}).base;
-        jarvis-voice = (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast;}).withVoice;
+        # 03/11: UM pacote só (jarvis, com a voz dentro). O split
+        # jarvis/jarvis-voice existia só para não arrastar torch no
+        # `base`, mas o `base` não tinha NENHUM consumidor de runtime —
+        # todos usam a voz (host, wakeword, MCP, vscode).
+        jarvis = (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast; inherit aiModels;}).jarvis;
         # (30/09) Ambiente de TESTE do nightwatch: as deps REAIS do jarvis +
         # pytest. Sem as deps, os testes do projeto falhavam com
         # "No module named 'requests'" e o harness culpava o modelo.
         # Montado pelo Nix — Python só obedece (JARVIS_TEST_PYTHON).
         jarvis-test-env = final.python3.withPackages (ps:
           [ ps.pytest ps.pytest-timeout ps.hypothesis ]
-          ++ (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast;}).base.pythonDeps);
-        
+          ++ (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast; inherit aiModels;}).pythonDeps);
+
+        # ── NVIDIA no linux-zen 7.2.x (10/10) ───────────────
+        # Kernel zen >= 7.2 quebrou o driver 595.71.05 (strncpy removido no
+        # kernel + rename drm_atomic_state → commit). Fix comunitário existe
+        # (github.com/NVIDIA/open-gpu-kernel-modules#1224), mas o suporte
+        # oficial é o driver 615.71.09 (new_feature), bumpado só no master
+        # do nixpkgs. Overlay injeta o driver 615 (com kernel zen 7.2.9 do
+        # master) sobre o linuxPackages_zen atual.
+        # — remove quando o nixos-26.05 bumpar zen 7.2 + driver 615.
+        linuxPackages_zen = let
+          masterPkgs = import nixpkgs-master {inherit system; config.allowUnfree = true;};
+          masterZen = masterPkgs.linuxKernel.packages.linux_zen;
+        in
+          (prev.linuxPackages_zen.extend (finalPackages: prevPackages: {
+            nvidiaPackages = prevPackages.nvidiaPackages // {
+              stable = masterZen.nvidiaPackages.new_feature;
+              new_feature = masterZen.nvidiaPackages.new_feature;
+              production = masterZen.nvidiaPackages.new_feature;
+              latest = masterZen.nvidiaPackages.new_feature;
+            };
+          }));
+
         # opencode via nixpkgs-unstable (dan-online/opencode-nix parou em 2026-05;
         # bumps vivem em branches chore/*; unstable verificado via one-shot).
         kilo = (import nixpkgs-unstable { inherit system; config.allowUnfree = true; }).opencode;
 
         # Mantém o Antigravity original tratando a licença unfree com o import correto
         antigravity-ide = (import nixpkgs-unstable { inherit system; config.allowUnfree = true; }).antigravity-ide;
+
+        # MT5 sob wine 10 (ver comentário no input nixpkgs-wine10). Sombreia
+        # os attrs globais: todo consumer do sistema ganha wine 10/winetricks
+        # compatíveis sem tocar no resto do 26.05.
+        wineWow64Packages = (import nixpkgs-wine10 {inherit system;}).wineWow64Packages;
+        winetricks = (import nixpkgs-wine10 {inherit system;}).winetricks;
 
         inherit aiModels;
       };
@@ -162,7 +205,12 @@
                 homeStateVersion = stateVersion;
                 jarvisEnvironment = config.services.jarvis.environment or "production";
                 projectLib = import ./lib {
-                  inherit (nixpkgs.lib) lib;
+                  # `inherit (nixpkgs) lib` (NÃO `inherit (nixpkgs.lib) lib`):
+                  # o inherit antigo pedia o atributo `lib` DENTRO de
+                  # nixpkgs.lib — que não existe no nixpkgs 26.05. Bug
+                  # latente: só explodia quando um módulo usava `lib`
+                  # de verdade (02/11, lib/opencode-limits.nix).
+                  inherit (nixpkgs) lib;
                   pkgs = nixpkgs.legacyPackages.${system};
                 };
               };
@@ -190,15 +238,16 @@
     packages.${system} = let
       pkg = nixpkgs.legacyPackages.${system}.extend aiOverlay;
     in {
-      inherit (pkg) jarvis jarvis-voice kilo antigravity-ide;
+      inherit (pkg) jarvis kilo antigravity-ide;
     };
 
     # ── checks: linting fail-closed (checks/default.nix) ────────────
-    # Wired em 2026-09-15 (IMP-009): o arquivo existia desde sempre mas
-    # nunca foi referenciado — "component theater". Expõe só python-lint
-    # (ruff fail-closed); markdown-lint/nix-check ficam sem wiring por
-    # enquanto (sem config de markdownlint; nix-check dentro de sandbox
-    # de build é arriscado) — liga-los exige trabalho próprio antes.
+    # Wired em 2026-09-15 (IMP-009): python-lint (ruff fail-closed).
+    # Wired em 2026-10-12 (IMP-020): markdown-lint (fail-closed desde o
+    # nascimento — exit code autoritativo) + nix-check (eval com fallback
+    # de syntax-parse; o "arriscado em sandbox" foi medido: o fallback
+    # cobre o caso de rede negada). MD legado vermelho? O gate fica de
+    # pé — conserta-se o MD, não o gate.
     checks.${system} = let
       checkLib = import ./checks {
         pkgs = nixpkgs.legacyPackages.${system};
@@ -206,11 +255,19 @@
       };
     in {
       python-lint = checkLib.python-lint;
+      markdown-lint = checkLib.markdown-lint;
+      nix-check = checkLib.nix-check;
+      opencode-headroom = checkLib.opencode-headroom;
     };
 
     # ── lib: fonts, colors, ports (nosso próprio lib/) ──────────────
+    # `lib = nixpkgs.lib` (NÃO `inherit (nixpkgs.lib) lib`): o inherit
+    # pedia o atributo `lib` DENTRO de nixpkgs.lib — que não existe no
+    # nixpkgs 26.05 (só `nixpkgs.lib.lib`, que nunca foi lá). Bug
+    # latente: só explodia quando alguém usava `lib` de verdade
+    # (02/11, lib/opencode-limits.nix).
     lib.nixos-ai = import ./lib {
-      inherit (nixpkgs.lib) lib;
+      inherit (nixpkgs) lib;
       pkgs = nixpkgs.legacyPackages.${system};
     };
 
@@ -233,6 +290,9 @@
           python313Packages.kokoro  
           python313Packages.soundfile
           python313Packages.playwright
+          python313Packages.prompt-toolkit
+          python313Packages.onnxruntime
+          python313Packages.tokenizers
           playwright-driver  
           
           # Documentos/PDF/OCR (vendas, propostas, guias)

@@ -356,6 +356,17 @@ def select_model(
         reason = {"tier_fallback": tier, "tier_match": False}
     else:
         reason = {"tier_match": None}
+        # Sem tier pedido: o DEFAULT do registry vence a ordem por tier.
+        # O default é o modelo RESIDENTE (VRAM 6GB = 1 LLM de pé); escolher
+        # outro aqui = pedir load sob demanda que não cabe junto (OOM).
+        default_id = getattr(reg, "default", None)
+        default = next((m for m in eligible if m.id == default_id), None)
+        if default is not None:
+            return default.id, {
+                "requested": dict(req, capabilities=sorted(caps)),
+                "selected": default.id, "tier_match": None,
+                "local_only": True, "default_preferred": True,
+            }
     chosen = eligible[0]
     return chosen.id, {
         "requested": dict(req, capabilities=sorted(caps)),
@@ -363,62 +374,108 @@ def select_model(
     }
 
 
-# Cascata por API (catálogo 17/09, docs/models/api-catalog-2026-09-17.md).
-# Camada → ordem de fallback (provider, model, base_url, env_key).
-# Uso: quando o modelo local trava (STUCK) ou cai — o harness tenta cada
-# entrada em ordem. Chaves via env (abstração /etc/litellm.env).
-CASCADE_MAP: dict[str, list[tuple[str, str, str, str]]] = {
+# ── CASCADE_MAP: fonte única = free-providers.json ──────────────────
+# (28/10, dono: "fonte única onde ambos sistemas bebem"). O JSON
+# modules/ai/free-providers.json é a ÚNICA fonte de verdade — consumido
+# por ESTE módulo (CASCADE_MAP) e pelo home.nix (opencode providers).
+# NÃO editar CASCADE_MAP hardcoded: editar o JSON e re-testar.
+#
+# Formato do JSON: providers.<name>.{base_url,env_key,requires_headers,models[]}
+#                 cascade_layers.<layer> = [{provider, model}, ...]
+#
+# Testado ao vivo 28/10/2026: groq ✅, nvidia ✅, cloudflare ✅,
+# gemini ✅, openrouter ✅ (com headers), ovhcloud ✅ (anon),
+# kilocode ✅ (anon), llm7 ✅ (anon). Desativados: cerebras (payment),
+# together (bad key), hf (no credits), sambanova (high demand).
+
+import json as _json
+from pathlib import Path as _Path
+
+_FREE_PROVIDERS_PATH = _Path(__file__).parent.parent.parent.parent.parent / "free-providers.json"
+
+# Fallback embutido: usado quando free-providers.json não está acessível
+# (ex: nix build sandbox, onde o JSON fica fora do pacote jarvis/).
+# Espelha as camadas essenciais do CASCADE_MAP pra nunca ficar vazio.
+_CASCADE_FALLBACK: dict[str, list[tuple[str, str, str, str]]] = {
     "coding-long": [
-        ("zen", "muse-spark-1.3", "https://api.openrouter.ai/api",
-         "OPENCODE_CONFIG"),
-        ("zen", "union-alpha", "https://api.openrouter.ai/api",
-         "OPENCODE_CONFIG"),
-        ("zen", "muse-spark-1.2", "https://api.openrouter.ai/api",
-         "OPENCODE_CONFIG"),
+        ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+        ("cloudflare", "@cf/openai/gpt-oss-120b", "https://api.cloudflare.com/client/v4/accounts", "CLOUDFLARE_API_TOKEN"),
     ],
     "dev": [
-        ("openrouter", "nex-n2.5-pro", "https://openrouter.ai/api",
-         "OPENROUTER_API_KEY"),
-        ("zen", "mimo-v2.5", "https://api.openrouter.ai/api",
-         "OPENCODE_CONFIG"),
-        ("openrouter", "nex-n2.5-mini", "https://openrouter.ai/api",
-         "OPENROUTER_API_KEY"),
-        # 29/09 (E-cell Harbor): validado via RemoteBackend sanitizado
-        # (finish_reason dava 400; sanitize resolveu). Último recurso.
-        ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai",
-         "GROQ_API_KEY"),
+        ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+        ("groq", "qwen/qwen3.8-27b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+        ("cloudflare", "@cf/qwen/qwen3.8-27b", "https://api.cloudflare.com/client/v4/accounts", "CLOUDFLARE_API_TOKEN"),
+        ("openrouter", "nvidia/nemotron-3.5-lightning:free", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
     ],
-    "batch": [
-        ("nvidia", "deepseek-v4-flash", "https://integrate.api.nvidia.com",
-         "NVIDIA_API_KEY"),
-        ("openrouter", "ling-3-flash-fin", "https://openrouter.ai/api",
-         "OPENROUTER_API_KEY"),
+    "reasoning": [
+        ("nvidia", "nvidia/nemotron-3-ultra-550b-a55b", "https://integrate.api.nvidia.com/v1", "NVIDIA_API_KEY"),
+        ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai", "GROQ_API_KEY"),
     ],
-    "mechanical": [
-        ("zen", "nemotron-3.5-lightning", "https://api.openrouter.ai/api",
-         "OPENCODE_CONFIG"),
-        ("zen", "mimo-v2.5", "https://api.openrouter.ai/api",
-         "OPENCODE_CONFIG"),
-    ],
-    "docs": [
-        ("zen", "nemotron-3-ultra", "https://api.openrouter.ai/api",
-         "OPENCODE_CONFIG"),
-        ("nvidia", "nemotron-3-super", "https://integrate.api.nvidia.com",
-         "NVIDIA_API_KEY"),
-    ],
-    "classify": [
-        ("nvidia", "glm-5.3-flash", "https://integrate.api.nvidia.com",
-         "NVIDIA_API_KEY"),
-    ],
-    "rag": [
-        ("openrouter", "ling-3-flash-sante", "https://openrouter.ai/api",
-         "OPENROUTER_API_KEY"),
+    "fast": [
+        ("groq", "openai/gpt-oss-20b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+        ("openrouter", "nvidia/nemotron-3.5-lightning:free", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
     ],
     "vision": [
-        ("openrouter", "ling-3-flash-vl", "https://openrouter.ai/api",
-         "OPENROUTER_API_KEY"),
+        ("gemini", "gemini-2.5-flash", "https://generativelanguage.googleapis.com/v1beta/openai", "GEMINI_API_KEY"),
+    ],
+    "classify": [
+        ("groq", "openai/gpt-oss-20b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+    ],
+    "docs": [
+        ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+    ],
+    "batch": [
+        ("openrouter", "nvidia/nemotron-3.5-lightning:free", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
     ],
 }
+
+
+def _load_free_providers() -> dict:
+    """Carrega free-providers.json (fonte única). Fallback = dict vazio."""
+    try:
+        return _json.loads(_FREE_PROVIDERS_PATH.read_text())
+    except (OSError, _json.JSONDecodeError):
+        return {"providers": {}, "cascade_layers": {}}
+
+
+def _build_cascade_map() -> dict[str, list[tuple[str, str, str, str]]]:
+    """Constrói CASCADE_MAP do free-providers.json.
+
+    Retorna: {layer: [(provider, model, base_url, env_key), ...]}
+    base_url e env_key vêm do provider definition no JSON.
+    """
+    data = _load_free_providers()
+    providers = data.get("providers", {})
+    layers = data.get("cascade_layers", {})
+
+    result: dict[str, list[tuple[str, str, str, str]]] = {}
+    for layer_name, entries in layers.items():
+        if layer_name.startswith("_"):
+            continue  # pula chaves de comentário
+        layer_list: list[tuple[str, str, str, str]] = []
+        for entry in entries:
+            prov_name = entry.get("provider", "")
+            model_id = entry.get("model", "")
+            prov = providers.get(prov_name, {})
+            base_url = prov.get("base_url", "")
+            env_key = prov.get("env_key") or ""
+            # Substitui placeholder de account_id se presente
+            if "{CLOUDFLARE_ACCOUNT_ID}" in base_url:
+                import os
+                acct = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+                base_url = base_url.replace("{CLOUDFLARE_ACCOUNT_ID}", acct)
+            layer_list.append((prov_name, model_id, base_url, env_key))
+        result[layer_name] = layer_list
+    return result
+
+
+# CASCADE_MAP construído do JSON (fonte única). Mantém compat com o
+# formato antigo: {layer: [(provider, model, base_url, env_key), ...]}
+# Fallback: _CASCADE_FALLBACK embutido (JSON indisponível em nix build).
+_CASCADE_FROM_JSON = _build_cascade_map()
+CASCADE_MAP: dict[str, list[tuple[str, str, str, str]]] = (
+    _CASCADE_FROM_JSON if _CASCADE_FROM_JSON else _CASCADE_FALLBACK
+)
 
 
 def cascade_for(layer: str) -> list[tuple[str, str, str, str]]:
@@ -430,3 +487,194 @@ def cascade_key_present(entry: tuple[str, str, str, str]) -> bool:
     """True se a env key da entrada existe e não está vazia."""
     import os
     return bool(os.environ.get(entry[3], ""))
+
+
+# ── Hybrid Router (local vs cloud) ───────────────────────────────────
+# JARVIS analisa dificuldade da tarefa e decide: local (simples/moderado)
+# vs cloud (hard/expert). Princípio: local primeiro para economia/privacidade;
+# cloud só quando a tarefa EXIGE raciocínio pesado que o 4B/8B não entrega.
+# Integrado via select_model_for_task → o churno único continua valendo.
+
+import re
+
+# Heurísticas de dificuldade (simples, sem chamadas API — rápido).
+# Sinais de HARD: raciocínio multi-etapa, debugging complexo, arquitetura,
+# análise matemática, código longo/multi-arquivo, comparação de paradigmas.
+# Patterns usam prefixos (\w*) p/ capturar variações PT/EN (refatorar, debugar).
+_HARD_PATTERNS = [
+    r"\b(refactor|refator\w*|redesen\w*|redesign|arquitetura|architecture)\b",
+    r"\b(debug\w*|diagnóstic\w*|diagnostic\w*|root.?cause)\b",
+    r"\b(prov\w*|demonstr\w*|formal\w*|teorema|theorem|lemma|corolário)\b",
+    r"\b(algoritmo|algorithm|complexidade|complexity|big.?o)\b",
+    r"\b(multi.?step|multi.?file|multi.?arquivo|cross.?cutting|end.?to.?end)\b",
+    r"\b(otimiz\w*|optimiz\w*|performance|benchmark|profil\w*)\b",
+    r"\b(security|segurança|vulnerabilidade|cve|exploit|pentest|injection)\b",
+    r"\b(concurrent|concorrência|concorrent\w*|deadlock|race.?condition|thread.?safe)\b",
+    r"\b(machine.?learning|deep.?learning|neural|gradient|backprop|rede neural)\b",
+    r"\b(compile\w*|compiler|linker|assembly|bytecode|jit|interpreter)\b",
+    r"\b(distributed|distributed.?system|consensus|raft|paxos|quorum|distribuíd\w*)\b",
+    r"\b(phylogen|evolution|selection.?pressure|fitness.?landscape|algoritmo genético)\b",
+    r"\b(improve|melhore|enhance|optimize|refine).{0,40}(strategy|estratégia|algorithm|algoritmo)\b",
+    r"\b(analis\w*|analys\w*|avali\w*|evaluat\w*).{0,30}(complexidade|complexity|performance|eficiência)\b",
+    r"\b(implement\w*|constru\w*|desenv\w*|develop).{0,40}(algoritmo|algorithm|sistema|system|arquitetura|architecture)\b",
+    r"\b(refator\w*|migr\w*|transform\w*|conver\w*).{0,40}(módulo|module|sistema|system|base de dados|database)\b",
+]
+
+# Sinais de SIMPLES: perguntas diretas, código curto, explicação, formatação.
+_SIMPLE_PATTERNS = [
+    r"^(o que|what is|qual|which|quem|who|quando|when|onde|where|como|how)\b",
+    r"\b(explique|explain|defina|define|liste|list|resuma|summarize|descreva|describe)\b",
+    r"\b(conserte|fix|corrija|correct|mude|change|adicione|add|remova|remove|delete)\b.{0,30}\b(tipo|type|typo|spelling|indent|format|comment|comentário)\b",
+    r"\b(renomeie|rename|mova|move|copie|copy|delete|remova|remove)\b.{0,40}\b(file|arquivo|line|linha|function|função)\b",
+    r"\b(teste|test|unit.?test|integration.?test)\b.{0,30}\b(para|for|de|of)\b",
+    r"\b(mostrue|show|exiba|display|print|imprima|imprimir)\b",
+    r"\b(qual|which|onde|where|quando|when)\b.{0,30}\b(está|is|fica|located|vive)\b",
+]
+
+
+def classify_difficulty(prompt: str, context_len: int = 0) -> str:
+    """Classifica dificuldade da tarefa: 'simple'|'moderate'|'hard'.
+
+    Classificador primário: Laya (decision model ONNX, CPU, ~150ms, 421M params).
+    Fallback: regex + heurísticas de tamanho (se Laya indisponível/erro).
+    Laya retorna distribuição calibrada sobre opções tipadas; o regex cobre
+    PT/EN e quando o ONNX session não carrega (import error, load fail).
+    """
+    if not prompt or not prompt.strip():
+        return "simple"
+
+    # 1) Tenta Laya (decision model). None = indisponível → regex.
+    try:
+        from jarvis.core.laya_classifier import classify_difficulty_laya
+
+        laya_result = classify_difficulty_laya(prompt, context_len)
+        if laya_result in ("simple", "moderate", "hard"):
+            return laya_result
+    except Exception:
+        pass  # Laya caiu → regex fallback
+
+    # 2) Fallback: regex + heurísticas de tamanho
+    text = prompt.lower()
+
+    # Contagem de sinais
+    hard_hits = sum(1 for p in _HARD_PATTERNS if re.search(p, text))
+    simple_hits = sum(1 for p in _SIMPLE_PATTERNS if re.search(p, text))
+
+    # Ajuste por tamanho: prompts muito longos tendem a ser mais complexos
+    if context_len > 10000 or len(text) > 2000:
+        hard_hits += 1
+    elif len(text) < 100:
+        simple_hits += 1
+
+    # Múltiplos hard signals → hard
+    if hard_hits >= 2:
+        return "hard"
+    # 1 hard + 0 simple → moderate (cuidado: pode ser hard disfarçado)
+    if hard_hits == 1 and simple_hits == 0:
+        return "moderate"
+    # Só sinais de simples → simple
+    if simple_hits > hard_hits:
+        return "simple"
+    # Default: moderate (local resolve bem)
+    return "moderate"
+
+
+# Cloud providers que FUNCIONAM hoje (fonte única: free-providers.json).
+# Ordem vem do cascade_layers.dev no JSON — testado ao vivo 28/10.
+# Mantido como fallback se o JSON não carregar.
+_HYBRID_CLOUD_FALLBACK = [
+    ("groq", "openai/gpt-oss-120b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+    ("groq", "qwen/qwen3.8-27b", "https://api.groq.com/openai", "GROQ_API_KEY"),
+    ("cloudflare", "@cf/openai/gpt-oss-120b", "https://api.cloudflare.com/client/v4/accounts", "CLOUDFLARE_API_TOKEN"),
+    ("openrouter", "nvidia/nemotron-3.5-lightning:free", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY"),
+]
+
+# Construído do JSON (fonte única). Usa cascade_layers.dev como fila.
+_HYBRID_CLOUD = CASCADE_MAP.get("dev", _HYBRID_CLOUD_FALLBACK)
+
+
+def hybrid_route(
+    prompt: str,
+    *,
+    local_requirements: dict | None = None,
+    context_len: int = 0,
+    force_local: bool = False,
+    force_cloud: bool = False,
+) -> dict:
+    """Roteamento híbrido: decide local vs cloud por dificuldade.
+
+    Retorna dict com:
+      - target: "local" | "cloud"
+      - local_model: id do modelo local (se target=local)
+      - cloud_entry: (provider, model, base_url, env_key) (se target=cloud)
+      - difficulty: "simple"|"moderate"|"hard"
+      - reason: explicação da decisão
+
+    Regras:
+      1. force_local/force_cloud têm precedência máxima.
+      2. difficulty=hard → cloud (se key disponível); senão fallback local.
+      3. difficulty=simple|moderate → local (economia/privacidade).
+    """
+    from jarvis.core.model_policy import select_model
+
+    req = local_requirements or {}
+    difficulty = classify_difficulty(prompt, context_len)
+
+    # Forced overrides
+    if force_cloud:
+        for entry in _HYBRID_CLOUD:
+            if cascade_key_present(entry):
+                return {
+                    "target": "cloud",
+                    "cloud_entry": entry,
+                    "difficulty": difficulty,
+                    "reason": "force_cloud=True",
+                }
+        # Sem key → cai pra local
+        difficulty = difficulty  # mantém
+
+    if force_local or difficulty in ("simple", "moderate"):
+        try:
+            model_id, reason = select_model(req)
+        except ModelRouteError:
+            # Sem modelo local elegível → tenta cloud se hard
+            if difficulty == "hard":
+                for entry in _HYBRID_CLOUD:
+                    if cascade_key_present(entry):
+                        return {
+                            "target": "cloud",
+                            "cloud_entry": entry,
+                            "difficulty": difficulty,
+                            "reason": "no_local_model_hard",
+                        }
+            raise
+        return {
+            "target": "local",
+            "local_model": model_id,
+            "difficulty": difficulty,
+            "reason": f"local (difficulty={difficulty})",
+        }
+
+    # difficulty == "hard" → cloud primeiro
+    for entry in _HYBRID_CLOUD:
+        if cascade_key_present(entry):
+            return {
+                "target": "cloud",
+                "cloud_entry": entry,
+                "difficulty": difficulty,
+                "reason": f"cloud (difficulty={difficulty})",
+            }
+
+    # Hard mas sem key cloud → fallback local (melhor que nada)
+    try:
+        model_id, reason = select_model(req)
+        return {
+            "target": "local",
+            "local_model": model_id,
+            "difficulty": difficulty,
+            "reason": "local (hard but no cloud key)",
+        }
+    except ModelRouteError:
+        raise ModelRouteError(
+            f"hybrid: difficulty={difficulty}, no local model, no cloud key"
+        )

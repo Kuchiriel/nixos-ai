@@ -31,18 +31,18 @@ from jarvis.core.memory import EpisodicMemory, KIND_FACT
 from jarvis.providers.llm import LLMClient
 
 _SUMMARY_PROMPT = """\
-Você é o JARVIS, a IA de bordo de um sistema NixOS. Condense os eventos \
-episódicos abaixo em um resumo markdown de longo prazo (máx ~50 linhas), \
-em PT-BR, agrupado por tipo:
+You are JARVIS, the onboard AI of a NixOS system. Condense the episodic \
+events below into a long-term markdown summary (max ~50 lines), written in \
+Brazilian Portuguese, grouped by type:
 
-## Lições (erro → fix que funcionou)
-## Decisões
-## Fatos e preferências
-## Padrões observados
+## Lessons (error → the fix that worked)
+## Decisions
+## Facts and preferences
+## Observed patterns
 
-Não invente nada além do que está nos eventos; omita detalhe operacional \
-efêmero (comandos pontuais) — o objetivo é o que vale lembrar semanas \
-depois.
+Never invent anything beyond what the events contain; omit ephemeral \
+operational detail (one-off commands) — the goal is what is still worth \
+remembering weeks later.
 
 Eventos:
 {events}

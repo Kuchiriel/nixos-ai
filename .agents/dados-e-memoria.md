@@ -7,6 +7,12 @@ space, cifrado, backup.
 `code_index`, `memories`, `books`, `vault` + `pessoal_*`, `moe_*`,
 `qwen4b_*`. `memories` é a memória viva do agente.
 
+## Papers (todo paper entra no RAG)
+`~/Books/papers/arxiv-<ID>-<slug>.md` (título+fonte+data+abstract+porquê
+importa) + linha no `~/Books/papers/INDEX.md` + `jarvis index
+~/Books/papers` (coleção `books`). Sem exceção: paper fora do RAG é
+paper perdido.
+
 ## Limpeza de dado
 `core.safe_archive.archive_then_delete()`: copiar → ler de volta →
 conferir contagem e hash → remover. `safe` só é True com `verified` e

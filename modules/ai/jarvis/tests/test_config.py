@@ -7,7 +7,10 @@ from jarvis.core.config import Config, get_config
 
 def test_defaults_are_local() -> None:
     cfg = Config()
-    assert cfg.llm_base_url == "http://127.0.0.1:8080/v1"
+    # Default = Qwen3.5-4B-MTP + LoRA (:8092) — o router :8080 ficou
+    # vazio (bonsai fora do default). Ver models.nix `routing.default`.
+    assert cfg.llm_base_url == "http://127.0.0.1:8092/v1"
+    assert cfg.llm_model == "jarvis-mtp-lora"
     assert cfg.qdrant_url == "http://127.0.0.1:6333"
     assert cfg.state_dir.is_absolute()
 

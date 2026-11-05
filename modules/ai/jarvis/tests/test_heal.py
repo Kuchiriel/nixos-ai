@@ -47,8 +47,12 @@ def fake_doctor(monkeypatch):
 
 
 def test_allowlist_only_known_services():
+    # (26/10) default agora = 4B-MTP (:8092) → o heal precisa poder
+    # reiniciar o serviço por PORTA (o router :8080 virou backup vazio).
     assert ALLOWLIST == ("llama-cpp-server", "llama-cpp-embeddings", "qdrant",
-                         "jarvis-wakeword")
+                         "jarvis-wakeword",
+                         "llama-uncensored-4b", "llama-uncensored-35b",
+                         "llama-duplex-35b")
     # ouvido é user service (nunca system): restart via --user
     from jarvis.core.heal import SERVICE_MAP
     assert SERVICE_MAP["wakeword"] == {"service": "jarvis-wakeword",

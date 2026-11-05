@@ -156,7 +156,7 @@ LD_LIBRARY_PATH="$CUDA_LIB:$(pwd)" ./llama-bench \
 
 ```bash
 cd ~/projects/nixos-ai
-nix develop --command python3 scripts/benchmark-official.py --config baseline
+nix develop --command python3 scripts/archive/bench-legacy-2026-09-25/benchmark-official.py --config baseline
 ```
 
 ### Comparação manual Bonsai vs Qwen (quando PrismML funcionar)

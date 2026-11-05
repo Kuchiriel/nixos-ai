@@ -38,11 +38,36 @@ SERVICE_MAP: dict[str, dict[str, str]] = {
     # (26/09, voz) ouvido do JARVIS: user service, heal religa se cair.
     "wakeword": {"service": "jarvis-wakeword", "scope": "user"},
 }
-ALLOWLIST = tuple(v["service"] for v in SERVICE_MAP.values())
+# (26/10) O default do LLM saiu do router :8080 p/ o 4B-MTP+LoRA :8092
+# (direct server). O doctor checa a porta de cfg.llm_base_url → o heal
+# precisa reiniciar o SERVIÇO QUE SERVE AQUELA PORTA, senão ele "cura"
+# o router enquanto o 4B continua caído (ou vice-versa).
+# (03/11) A PORTA de cada unit vem do REGISTRY (models.nix `directServers`)
+# — o mapa estava hardcoded aqui (2ª fonte). A LISTA de services que o heal
+# pode religar continua CURADA (o registry tem todos os direct servers, mas
+# o JARVIS só usa estes 3 por padrão).
+HEALABLE_UNITS = ("llama-uncensored-4b", "llama-uncensored-35b",
+                  "llama-duplex-35b")
+
+
+def _llm_port_services() -> dict[str, str]:
+    """porta -> unit systemd, lido do registry (fallback: sem mapa)."""
+    from jarvis.core.model_registry import registry_or_none
+    reg = registry_or_none()
+    if reg is None:
+        return {}
+    ports = reg.direct_units()
+    return {str(ports[u]): u for u in HEALABLE_UNITS if u in ports}
+
+
+LLM_PORT_SERVICES: dict[str, str] = _llm_port_services()
+ALLOWLIST = tuple(v["service"] for v in SERVICE_MAP.values()) + tuple(
+    LLM_PORT_SERVICES.values())
 
 DEFAULT_COOLDOWN_SECONDS = 300.0  # 5 min entre restarts do mesmo serviço
 DEFAULT_MAX_RESTARTS = 5  # máximo de restarts por serviço antes de desistir
 STATE_DIR_ENV = "JARVIS_STATE_DIR"
+DUPLEX_MODE_FLAG = "/tmp/jarvis-duplex-mode.flag"
 
 
 @dataclass
@@ -288,6 +313,16 @@ def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_S
             )
             continue
         service, scope = spec["service"], spec["scope"]
+        # (26/10) default do LLM = :8092 (4B-MTP+LoRA) → reinicia o
+        # serviço DIRETO que serve aquela porta, não o router :8080.
+        if comp == "llama_cpp":
+            try:
+                port = cfg.llm_base_url.split(":")[-1].split("/")[0]
+            except (AttributeError, IndexError):
+                port = ""
+            svc = LLM_PORT_SERVICES.get(port)
+            if svc:
+                service = svc
         # (26/09, incidente freeze) `jarvis pause` = manutenção do dono:
         # NUNCA religar o que o dono derrubou de propósito. Antes o heal
         # reiniciava em ~60s tudo que o usuário parava no freeze ("pkill
@@ -302,6 +337,17 @@ def heal_once(cfg: Config | None = None, *, cooldown: float = DEFAULT_COOLDOWN_S
                 HealAction(component=comp, service=service, scope=scope,
                            action="report_only",
                            skipped_reason=f"pausado pelo dono: {_why or 'manutenção'}")
+            )
+            continue
+        # (17/10, voz duplex) wakeword parado durante sessão duplex é
+        # INTENÇÃO, não doença: o cliente duplex pausa o daemon
+        # (falso-positivo em anime + briga pelo mic) e planta esta flag.
+        # Sem a flag o comportamento não muda. /tmp = some no reboot.
+        if comp == "wakeword" and os.path.exists(DUPLEX_MODE_FLAG):
+            report_inst.actions.append(
+                HealAction(component=comp, service=service, scope=scope,
+                           action="report_only",
+                           skipped_reason="modo duplex ativo (flag)")
             )
             continue
         if service not in ALLOWLIST:

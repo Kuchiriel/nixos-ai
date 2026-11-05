@@ -18,7 +18,7 @@
 | No distinction between state types | Historical, current, hypothesis all mixed | Separate: POLICY, ARCHITECTURE, CURRENT_STATE, HISTORICAL, HYPOTHESIS, EVIDENCE |
 | "Anti-small-delivery" not enforced | Agent stops after first fix | Add rule: return to requirements matrix after each fix |
 | No anti-mock rule | Mocks used to claim integration works | Rule: integration tests must exercise real components |
-| No anti-false-green | Tests hidden, skips added, || true used | Rule: FAILED stays FAILED until resolved or explicitly BLOCKED |
+| No anti-false-green | Tests hidden, skips added, `\|\| true` used | Rule: FAILED stays FAILED until resolved or explicitly BLOCKED |
 | Session logs duplicate information | Same data in two places | Consolidate into single session log with timestamps |
 | Verification matrix in nixos-ai is stale | Never updated after fixes | Make it dynamic — update after each verification |
 

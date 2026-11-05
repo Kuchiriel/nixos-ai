@@ -61,9 +61,15 @@ with lib; let
     port = groupPort b;
     prof = groupProf g;
     kv = parseKv prof.kvCache;
-    isDefault = elem defaultId (map (x: x.id) g);
+    isDefault = elem bootId (map (x: x.id) g);
+    # (26/10) O default do APP (routing.default) é servido por ESTE grupo?
+    # Se não (ex.: default = 4B-MTP+LoRA no :8092, direct server), o
+    # warmup do router é PULADO — bonsai (2.4GB) + 4B (4.4GB) estoura a
+    # GPU de 6.1GB (o incidente 04:03). Router sem modelo residente
+    # custa ~0MiB (medido) e carrega preset sob demanda.
+    appDefaultInGroup = elem routing.default (map (x: x.id) g);
   in {
-    description = "Llama.cpp [${b}] (presets: ${groupIds g}; default: ${defaultId})";
+    description = "Llama.cpp [${b}] (presets: ${groupIds g}; default: ${defaultId}; boot: ${bootId})";
     after = ["network-online.target" "qdrant.service"];
     wants = ["network-online.target"];
     # PartOf jarvis.target: para junto com o ecossistema
@@ -103,7 +109,14 @@ with lib; let
     # Warmup best-effort do default: preserva o comportamento boot-ready
     # (sem isso, o 1º chat após reboot pagaria o cold start). Falha aqui
     # NÃO derruba o serviço (on-demand cobre). Só no grupo do default.
-    postStart = optionalString isDefault ''
+    #
+    # (26/10) O warmup só roda se o DEFAULT DO APP (routing.default)
+    # for servido por ESTE grupo. Motivo: o default virou o 4B-MTP+LoRA
+    # (:8092, direct server, 4.4GB VRAM) — o router carregando o bonsai
+    # (2.4GB) ao boot somava 6.8GB > 6.1GB da GPU (o incidente 04:03).
+    # Router em modo router SEM modelo residente = ~0MiB de VRAM (medido)
+    # → ele sobe, serve /v1/models e carrega preset sob demanda.
+    postStart = optionalString (isDefault && appDefaultInGroup) ''
       ${pkgs.python3}/bin/python3 - "${toString port}" "${defaultId}" <<'EOF' || echo "router warmup: modelo sob demanda (cold start no 1o request)" >&2
       import json, sys, time, urllib.request
       port, model = sys.argv[1], sys.argv[2]
@@ -137,6 +150,13 @@ with lib; let
       {
         User = "nixos";
         Restart = "on-failure";
+        # Hardening básico (GPU precisa de acesso a dispositivos)
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        RestrictSUIDSGID = true;
+        ProtectSystem = "strict";
+        # Permitir acesso a GPU e modelos
+        ReadWritePaths = [ "/home/nixos/models" "/home/nixos/projects/prism-bin" "/home/nixos/projects/ik_llama.cpp" "/home/nixos/projects/llama.cpp" ];
         # (26/09, incidente freeze) Resource firewall: o OOM mata SÓ o
         # serviço, nunca a máquina. MemoryHigh = throttle (kernel reclama
         # antes, sem matar); MemoryMax = teto duro (OOM só dentro da
@@ -200,8 +220,14 @@ with lib; let
     ${concatStringsSep "\n" (m.iniExtra or [])}
   '';
 
-  # Modelo default (warmup + grupo que sobe no boot).
+  # Modelo default (warmup + semântica do router).
   defaultId = config.services.llama-cpp-server.defaultModel;
+  # (03/11) Modelo cujo GRUPO sobe no boot — fonte: routing.bootModel
+  # (host: bonsai → grupo prism · vm: jarvis-fast → grupo upstream).
+  # SEPARADO do default do APP (routing.default = 4B-MTP direct :8092, que
+  # não pertence a nenhum grupo do router): sem esta separação, trocar o
+  # default do APP derrubaria o router do boot.
+  bootId = routing.bootModel.${envName} or routing.default;
 
   # Compila o llama-cpp com suporte a CUDA forçado.
   # Usa o `pkgs` já recebido pelo módulo (herda allowUnfree + overlay
@@ -213,21 +239,20 @@ in {
       enable = mkEnableOption "Llama.cpp Main Server";
       port = mkOption {
         type = types.port;
-        default = 8080;
+        default = routing.endpoints.prism;
         description = ''
           LEGADO: portas agora vêm de models.nix `routing.endpoints`
           (fonte única com o registry Python). Esta opção está ignorada.
         '';
       };
-      # Router nativo (llama-server --models-preset): default EFETIVO
-      # preservado por ambiente — host servia bonsai, lab servia vm/Qwen.
-      # Trocar o default (ex.: p/ jarvis-fast) é decisão de produto (§21).
+      # Router nativo (llama-server --models-preset): o default do APP.
+      # (03/11) default = routing.default (fonte única — o dono pediu
+      # "tira o bonsai de default" em 26/10 e o override do host reintroduzia
+      # o bonsai em 03/11). Quem sobe no BOOT é routing.bootModel (ver
+      # `bootId`), decisão separada do default.
       defaultModel = mkOption {
         type = types.enum (attrNames routing.models);
-        default =
-          if envName == "host"
-          then routing.default
-          else "jarvis-fast";
+        default = routing.default;
         description = ''
           Modelo carregado no boot (warmup) e usado quando o request não
           especifica `model`. IDs e capabilities em modules/ai/models.nix
@@ -253,14 +278,14 @@ in {
       enable = mkEnableOption "Llama.cpp Embeddings Server";
       port = mkOption {
         type = types.port;
-        default = 8081;
+        default = routing.servicePorts.embeddings;
       };
     };
     llama-cpp-rerank = {
       enable = mkEnableOption "Llama.cpp Rerank Server";
       port = mkOption {
         type = types.port;
-        default = 8082;
+        default = routing.servicePorts.rerank;
       };
     };
   };

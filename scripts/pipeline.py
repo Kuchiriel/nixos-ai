@@ -33,8 +33,27 @@ import time
 from pathlib import Path
 
 ROOT = Path("/tmp/opencode/pipeline")
-EXECUTOR_URL = "http://127.0.0.1:8080"     # bonsai
-STRATEGIST_URL = "http://127.0.0.1:8084"  # MoE (jarvis-strong)
+
+
+def _registry_endpoint(model_id: str, fallback_port: int) -> str:
+    """URL do server que serve `model_id` — registry (fonte única: models.nix).
+
+    Sem o registry (ou sem o model id) → fallback explícito, para o script
+    não quebrar fora do host.
+    """
+    path = os.environ.get("JARVIS_MODEL_REGISTRY",
+                          "/etc/jarvis/model-registry.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            reg = json.load(fh)
+        port = int(reg["models"][model_id]["endpoint"])
+        return f"http://127.0.0.1:{port}"
+    except Exception:
+        return f"http://127.0.0.1:{fallback_port}"
+
+
+EXECUTOR_URL = _registry_endpoint("bonsai", 8080)      # router (bonsai)
+STRATEGIST_URL = _registry_endpoint("jarvis-strong", 8084)  # MoE (thinking)
 
 STRATEGIST_PROMPT = (
     "You are the strategist for a code agent. You do NOT execute — you "

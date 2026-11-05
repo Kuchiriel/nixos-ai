@@ -17,6 +17,10 @@ from typing import Any
 # Canonical name = DEV_TOOLS name (sem prefixo jarvis_). MCP names com prefixo
 # jarvis_ mapeiam p/ o canônico; o que não mapeia é superfície exclusiva.
 _CANONICAL_ALIASES = {
+    # canonical MCP names (the server registers tools WITHOUT the prefix)
+    "execute": "execute_shell",
+    "rag_search": "semantic_search",
+    # legacy MCP names (deprecated, one cycle)
     "jarvis_execute": "execute_shell",
     "jarvis_read_file": "read_file",
     "jarvis_write_file": "write_file",

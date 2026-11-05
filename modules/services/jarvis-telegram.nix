@@ -7,56 +7,142 @@
   cfg = config.services.jarvis-telegram;
 in {
   options.services.jarvis-telegram = {
-    enable = lib.mkEnableOption "canal Telegram do JARVIS (aprovação assíncrona — Fase 9)";
+    enable = lib.mkEnableOption "Telegram control plane (remote interface for JARVIS missions)";
 
     environmentFile = lib.mkOption {
       type = lib.types.path;
       default = "/etc/jarvis-telegram.env";
       description = ''
-        Arquivo com as credenciais (chmod 600, fora do repo/store):
-          JARVIS_TELEGRAM_TOKEN=<token do BotFather>
-          JARVIS_TELEGRAM_CHAT_ID=<seu chat_id (ou lista, vírgula)>
-        Para descobrir seu chat_id: mande uma mensagem para o bot e chame
-        https://api.telegram.org/bot<TOKEN>/getUpdates (campo chat.id).
-        O `-` no EnvironmentFile faz o systemd IGNORAR a ausência do arquivo:
-        sem token o serviço fica parado até você criar o bot e preencher o
-        arquivo — depois é só `sudo systemctl restart jarvis-telegram`.
+        File holding the credentials (mode 600, outside the repo/store):
+          JARVIS_TELEGRAM_TOKEN=<token from BotFather>
+          JARVIS_TELEGRAM_CHAT_ID=<your chat_id, or a comma-separated list>
+          JARVIS_TELEGRAM_USER_ID=<your user_id — REQUIRED when the bot is in a group>
+
+        To find your chat_id: send a message to the bot and call
+        https://api.telegram.org/bot<TOKEN>/getUpdates (field chat.id).
+        To find your user_id: same call, field from.id.
+
+        SECURITY: set JARVIS_TELEGRAM_USER_ID whenever the bot can be reached
+        from a group. With only a chat id, ANY member of that chat is
+        authorized to start missions and approve operations.
+
+        The `-` prefix makes systemd IGNORE the file when absent: without a
+        token the service stays stopped until you create the bot and fill the
+        file, then `sudo systemctl restart jarvis-telegram`.
       '';
     };
 
     user = lib.mkOption {
       type = lib.types.str;
       default = "nixos";
-      description = "Usuário dono do estado do JARVIS (memória/vault/audit).";
+      description = "Owner of the JARVIS state (memory/vault/audit/missions).";
+    };
+
+    # Mission state lives outside the Nix store so it survives rebuilds.
+    stateDir = lib.mkOption {
+      type = lib.types.path;
+      default = "/var/lib/jarvis/missions";
+      defaultText = "/var/lib/jarvis/missions";
+      description = ''
+        Durable mission store (one JSON per mission, atomic writes).
+        Must be writable by `user` and must NOT live in the store: a rebuild
+        would otherwise wipe in-flight missions.
+      '';
+    };
+
+    # Resource ceiling. A mission runs one agent at a time; the pool is
+    # bounded in-process (ThreadPoolExecutor max_workers=2 in the channel).
+    memoryMax = lib.mkOption {
+      type = lib.types.str;
+      default = "4G";
+      description = ''
+        RAM ceiling for the channel. Deliberately larger than the old 256M:
+        missions load the model registry and the task queue in-process, and
+        256M was low enough to OOM-kill a mission mid-flight.
+      '';
+    };
+
+    tasksMax = lib.mkOption {
+      type = lib.types.int;
+      default = 256;
+      description = "Thread ceiling (bounded worker pool + polling).";
+    };
+
+    extraArgs = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = "Extra arguments appended to `jarvis telegram`.";
     };
   };
 
   config = lib.mkIf (config.services.jarvis.enable && cfg.enable) {
+    # Persistent state, created declaratively with the right ownership.
+    systemd.tmpfiles.rules = [
+      "d ${cfg.stateDir} 0750 ${cfg.user} - -"
+    ];
+
     systemd.services.jarvis-telegram = {
-      description = "JARVIS — canal Telegram (aprovação assíncrona)";
-      after = ["network-online.target" "jarvis.target"];
-      wants = ["network-online.target"];
-      partOf = ["jarvis.target"];
-      wantedBy = ["jarvis.target"];
+      description = "JARVIS — Telegram control plane (missions, approvals, notifications)";
+      after = [ "network-online.target" "jarvis.target" ];
+      wants = [ "network-online.target" ];
+      partOf = [ "jarvis.target" ];
+      wantedBy = [ "jarvis.target" ];
       serviceConfig = {
         Type = "simple";
         User = cfg.user;
-        # 29/09: + litellm.env p/ a cascata API funcionar (STUCK → Groq).
-        # Sem keys no env, _try_api_cascade nunca disparava (dormente).
-        # Arquivo é world-readable; bot já roda como nixos (mesmo acesso).
-        EnvironmentFile = ["-${cfg.environmentFile}" "-/etc/litellm.env"];
-        ExecStart = "${pkgs.jarvis}/bin/jarvis telegram";
-        Restart = "on-failure";
-        RestartSec = "5";
-        TimeoutStopSec = "10";
+        # Grupo = grupo PRIMÁRIO do user (users), não um grupo com o mesmo
+        # nome (não existe: user nixos tem gid=100 users). Group=nixos dava
+        # 216/GROUP no systemd (Failed at step GROUP) e o bot não subia.
+        Group = "users";
+
+        # Credentials come from files OUTSIDE the store, never inline.
+        # litellm.env is needed for the API cascade (STUCK -> Groq); the bot
+        # already runs as the same user, so the file's own permissions are
+        # the boundary.
+        # (03/11) NÃO ler /etc/litellm.env direto: o systemd recusa linhas com
+        # `export` e LOGA A LINHA INTEIRA no journal (segredo em cleartext).
+        # O espelho /run/jarvis/litellm.env (KEY=valor, 0600 root) é gerado
+        # pelo unit jarvis-keys-env.service. Prefixo `-`: sem espelho o bot
+        # sobe (só local) em vez de falhar.
+        EnvironmentFile = [
+          "-${cfg.environmentFile}"
+          "-/run/jarvis/litellm.env"
+        ];
+        Environment = [
+          "JARVIS_MISSION_DIR=${cfg.stateDir}"
+          "JARVIS_WORKSPACE_ROOT=/home/${cfg.user}/projects"
+          "PYTHONUNBUFFERED=1"
+        ];
+
+        ExecStart = lib.concatStringsSep " " (
+          [ "${pkgs.jarvis}/bin/jarvis" "telegram" ]
+          # --poll-timeout keeps the long-poll responsive to systemd stop.
+          ++ [ "--poll-timeout" "20" ]
+          ++ cfg.extraArgs
+        );
+
+        # Reconnection is expected (network flaps, token rotation): restart
+        # always, with a short delay so a broken token does not spin hot.
+        Restart = "always";
+        RestartSec = "10";
+        # Enough for a long poll to return and the worker pool to wind down.
+        TimeoutStopSec = "30";
+        KillSignal = "SIGTERM";
+
         # ── Sandboxing ──
-        ProtectSystem = "strict";       # /usr e /boot read-only
-        PrivateTmp = true;                # /tmp privado
-        NoNewPrivileges = true;           # Sem escalada de privilégio
-        RestrictSUIDSGID = true;          # Sem arquivos SUID/SGID
+        # strict: /usr, /boot, /nix read-only. State dirs are explicitly
+        # writable below — without those the service cannot persist missions.
+        ProtectSystem = "strict";
+        ReadWritePaths = [ cfg.stateDir "/home/${cfg.user}/.local/state/jarvis" ];
+        PrivateTmp = true;
+        NoNewPrivileges = true;
+        RestrictSUIDSGID = true;
+        RestrictRealtime = true;
+        LockPersonality = true;
+
         # ── Resource limits ──
-        MemoryMax = "256M";               # Max 256MB RAM
-        TasksMax = 32;                    # Max 32 tasks
+        MemoryMax = cfg.memoryMax;
+        TasksMax = cfg.tasksMax;
       };
     };
   };

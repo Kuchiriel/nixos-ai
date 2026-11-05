@@ -1,0 +1,21 @@
+# duplex-eval speaker-ID battery — pendência do dono 09:28 (21/10, HB)
+# Pessoas sintéticas: dora = kokoro pf_dora (feminina PT), alex = pm_alex (masculina PT).
+# Wavs: /tmp/opencode/night-microturn/spk-battery-wavs/spk_<tag>_<who>.wav
+# CONTRATO DE VERIFICAÇÃO (quando o OC implementar [spk_id] nos segmentos):
+#   same person  → SAME spk_id across turns (estabilidade — requisito central do dono)
+#   cross-person → DIFFERENT spk_id
+#   pós-enroll   → ID mapeia para o NOME da pessoa matriculada
+# Blueprint: fila 10:2x (WeSpeaker 256d, centróide, cos>0.80, skip <0.4s)
+# CONTRATO REFINADO (OC 11:15): ESTÁVEL POR PESSOA (centroide cos>=0.80, ordem só numerador):
+# (1) session-scoped — restart asrd zera SPK_EMERGENT; (2) testar dora/alex NÃO-enrolled
+#     (enrolled vira NOME cos>0.75, não spkN); (3) <0.4s → spk='?'; (4) ★ EMBED ATUAL = MFCC 26-d
+#     CRUDE (não WeSpeaker 256d do blueprint) — dora↔alex cos >0.80 = MERGE (falso positivo):
+#     A BATERIA MEDE ISSO = o dado que decide o upgrade WeSpeaker. Sequência esperada:
+#     A1=spk1 A2=spk1 B1=spk2 A3=spk1 B2=spk2 B3=spk2 A4=spk1 | voices=2 no mix | merge=dado
+{"tag": "A1", "who": "dora", "utt": "Jarvis, que horas são?", "expect": "spk_dora"}
+{"tag": "A2", "who": "dora", "utt": "Jarvis, como está o tempo hoje?", "expect": "spk_dora", "same_as": "A1"}
+{"tag": "B1", "who": "alex", "utt": "Jarvis, me conta uma piada.", "expect": "spk_alex"}
+{"tag": "A3", "who": "dora", "utt": "Jarvis, obrigada!", "expect": "spk_dora", "same_as": "A1", "note": "estabilidade através da intercalação A-B-A"}
+{"tag": "B2", "who": "alex", "utt": "Jarvis, qual é o seu nome?", "expect": "spk_alex", "same_as": "B1"}
+{"tag": "B3", "who": "alex", "utt": "Jarvis, toca uma música.", "expect": "spk_alex", "same_as": "B1"}
+{"tag": "A4", "who": "dora", "utt": "Jarvis, define um alarme para as sete.", "expect": "spk_dora", "same_as": "A1"}

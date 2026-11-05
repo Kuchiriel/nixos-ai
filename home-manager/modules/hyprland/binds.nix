@@ -15,6 +15,13 @@
     exec ${../../../modules/ai/jarvis/src/jarvis/cli/launcher.sh} "$@"
   '';
 
+  # (03/11) atalho de retomada: reabre a última sessão fechada do opencode
+  # (scripts/opencode-resume.sh -> o binário do repo + o wrapper do TUI).
+  opencodeResumeScript = pkgs.writeScriptBin "opencode-resume" ''
+    #!/bin/sh
+    exec ${../../../scripts/opencode-resume.sh} "$@"
+  '';
+
   booksScript = pkgs.writeScriptBin "open_books" ''
     #!/bin/sh
 
@@ -143,6 +150,9 @@ in {
       "$mainMod SHIFT, N, exec, sh -c 'pkill hyprsunset || hyprsunset --temperature 4500'"
       "$mainMod,       W, exec, ${booksScript}/bin/open_books"
       "$mainMod,       A, exec, ${launcherScript}/bin/nixos-ai-launcher"
+      # (03/11) reabrir a última sessão do opencode que foi fechada: o TUI
+      # fecha com Ctrl+C, a janela segura a dica e este atalho volta nela.
+      "$mainMod SHIFT, R, exec, ${opencodeResumeScript}/bin/opencode-resume"
       "$mainMod,       G, exec, python3 -c \"from jarvis.core.gaming import toggle_gaming; import json; r=toggle_gaming(); print(json.dumps(r))\""
 
       # Screenshots

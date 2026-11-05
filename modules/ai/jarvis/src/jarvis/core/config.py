@@ -30,15 +30,70 @@ def _env_bool(name: str, default: bool) -> bool:
     return val.lower() in ("1", "true", "yes")
 
 
+# ── (03/11) Defaults derivados do REGISTRY (models.nix) ──────────────────
+# O registry JSON (/etc/jarvis/model-registry.json) é a fonte única de
+# default/portas. Sem ele (dev/test), caem nos literais de fallback — os
+# mesmos valores do registry, escritos uma vez aqui.
+_REGISTRY_CACHE: dict = {}
+
+
+def _registry():
+    """Registry carregado uma vez (None se indisponível)."""
+    if "reg" not in _REGISTRY_CACHE:
+        try:
+            from jarvis.core.model_registry import load_registry
+            _REGISTRY_CACHE["reg"] = load_registry()
+        except Exception:
+            _REGISTRY_CACHE["reg"] = None
+    return _REGISTRY_CACHE["reg"]
+
+
+def _registry_default_model() -> str:
+    reg = _registry()
+    return reg.default if reg else "jarvis-mtp-lora"
+
+
+def _registry_default_base_url() -> str:
+    reg = _registry()
+    if reg:
+        url = reg.base_url_for(reg.default)
+        if url and not url.endswith(":0"):
+            return f"{url}/v1"
+    return "http://127.0.0.1:8092/v1"
+
+
+def _registry_service_url(name: str, fallback: str) -> str:
+    reg = _registry()
+    if reg:
+        port = reg.service_port(name)
+        if port:
+            return f"http://127.0.0.1:{port}"
+    return fallback
+
+
 @dataclass(frozen=True)
 class Config:
+    # --- Personas custom (painel de bots, 07/10): JSONs aqui viram personas
+    # sem editar código (PersonaRegistry._load_from_dir). Painel = escrever
+    # arquivo; formato = Persona.to_dict().
+    personas_dir: str = field(default_factory=lambda: _env_str(
+        "JARVIS_PERSONAS_DIR",
+        os.path.join(os.path.expanduser("~"), ".config", "jarvis", "personas")))
     # --- Backend Selection ---
     # Which LLM backend to use: "llama-cpp", "prismml", "bonsai", etc.
     llm_backend: str = field(default_factory=lambda: _env_str("JARVIS_LLM_BACKEND", "llama-cpp"))
     
     # --- LLM (llama.cpp / OpenAI-compatible) ---
-    llm_base_url: str = field(default_factory=lambda: _env_str("JARVIS_LLM_BASE_URL", "http://127.0.0.1:8080/v1"))
-    llm_model: str = field(default_factory=lambda: _env_str("JARVIS_LLM_MODEL", "default"))
+    # (26/10, dono) DEFAULT = Qwen3.5-4B-MTP **com o LoRA** (:8092, stock).
+    # Antes: :8080/v1 + model "default" → router prism → bonsai (8B ternário,
+    # EN-only, sem PT). Motivo: (a) o classificador de turno do duplex
+    # (RESPOND/WAIT/SILENCE/BARGE) É o LoRA — medido: LoRA ON 4/4, LoRA OFF
+    # o base nem classifica ("Thinking Pro"); (b) PT-BR de verdade.
+    # O id = alias do server (medido: com --alias o /v1/models anuncia o
+    # alias; sem ele anuncia o path do gguf → ensure_model não prova
+    # identidade). Fallback antigo via env: JARVIS_LLM_BASE_URL=...:8080/v1.
+    llm_base_url: str = field(default_factory=lambda: _env_str("JARVIS_LLM_BASE_URL", _registry_default_base_url()))
+    llm_model: str = field(default_factory=lambda: _env_str("JARVIS_LLM_MODEL", _registry_default_model()))
     llm_timeout: int = field(default_factory=lambda: _env_int("JARVIS_LLM_TIMEOUT", 120))
     # Thinking / reasoning enabled by default on GPU hardware (Bonsai/Qwen3)
     llm_disable_thinking: bool = field(default_factory=lambda: _env_str("JARVIS_LLM_DISABLE_THINKING", "0") == "1")
@@ -51,11 +106,11 @@ class Config:
     llm_temperature: float = field(default_factory=lambda: float(_env_str("JARVIS_LLM_TEMPERATURE", "-1")))
 
     # --- Embeddings (servidor dedicado llama.cpp --embeddings, porta 8081) ---
-    embed_base_url: str = field(default_factory=lambda: _env_str("JARVIS_EMBED_BASE_URL", "http://127.0.0.1:8081/v1"))
+    embed_base_url: str = field(default_factory=lambda: _env_str("JARVIS_EMBED_BASE_URL", _registry_service_url("embeddings", "http://127.0.0.1:8081/v1")))
 
     # --- Reranker (servidor dedicado llama.cpp --rerank, porta 8082 — Fase 10) ---
     # Endpoint /rerank do llama-server (bge-reranker-v2-m3 GGUF do store).
-    rerank_base_url: str = field(default_factory=lambda: _env_str("JARVIS_RERANK_BASE_URL", "http://127.0.0.1:8082"))
+    rerank_base_url: str = field(default_factory=lambda: _env_str("JARVIS_RERANK_BASE_URL", _registry_service_url("rerank", "http://127.0.0.1:8082")))
 
     # --- Qdrant ---
     qdrant_url: str = field(default_factory=lambda: _env_str("JARVIS_QDRANT_URL", "http://127.0.0.1:6333"))
@@ -74,6 +129,10 @@ class Config:
     # — nunca no repo/store. chat_id pode ser uma lista separada por vírgula.
     telegram_token: str = field(default_factory=lambda: _env_str("JARVIS_TELEGRAM_TOKEN", ""))
     telegram_chat_id: str = field(default_factory=lambda: _env_str("JARVIS_TELEGRAM_CHAT_ID", ""))
+    # Sender allowlist (comma-separated). Empty = chat_id alone decides, which
+    # is UNSAFE in a group chat: anyone in that group would be authorized.
+    # Set it whenever the bot is added to a group.
+    telegram_user_id: str = field(default_factory=lambda: _env_str("JARVIS_TELEGRAM_USER_ID", ""))
 
     # --- Embeddings ---
     embed_model: str = field(default_factory=lambda: _env_str("JARVIS_EMBED_MODEL", "nomic-embed-text-v2"))

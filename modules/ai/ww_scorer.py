@@ -152,12 +152,50 @@ def main() -> int:
     ap.add_argument("--head-seconds", type=float, default=None,
                     help="pontua só os primeiros N segundos (wake fica no onset; "
                          "janela longa dilui o score e rejeita wake real)")
+    # Calibration mode
+    ap.add_argument("--calibrate", action="store_true",
+                    help="calibra threshold usando amostras positivas/negativas")
+    ap.add_argument("--positive-dir", help="diretório com WAVs positivos (wake word)")
+    ap.add_argument("--negative-dir", help="diretório com WAVs negativos (não-wake)")
+    ap.add_argument("--target-fpr", type=float, default=0.01,
+                    help="taxa de falso positivo alvo (default 1%)")
     args = ap.parse_args()
     sc = Scorer(
         f"{args.models}/melspectrogram.onnx",
         f"{args.models}/embedding_model.onnx",
         f"{args.models}/hey_jarvis_v0.1.onnx",
     )
+
+    if args.calibrate:
+        if not args.positive_dir or not args.negative_dir:
+            print("ERROR: --calibrate requer --positive-dir e --negative-dir", file=sys.stderr)
+            return 2
+        import os
+        pos_scores = []
+        for fname in os.listdir(args.positive_dir):
+            if fname.endswith(".wav"):
+                pcm = load_mono16k(os.path.join(args.positive_dir, fname))
+                score = Scorer.score_clip(pcm)
+                pos_scores.append(score)
+        neg_scores = []
+        for fname in os.listdir(args.negative_dir):
+            if fname.endswith(".wav"):
+                pcm = load_mono16k(os.path.join(args.negative_dir, fname))
+                score = sc.score_clip(pcm)
+                neg_scores.append(score)
+        if not pos_scores or not neg_scores:
+            print("ERROR: precisa de amostras positivas e negativas", file=sys.stderr)
+            return 1
+        # Find threshold that achieves target FPR
+        neg_scores.sort()
+        target_idx = max(0, int(len(neg_scores) * args.target_fpr))
+        threshold = neg_scores[target_idx] if target_idx < len(neg_scores) else max(neg_scores)
+        # Ensure we don't lose too many true positives
+        tp_rate = sum(1 for s in pos_scores if s >= threshold) / len(pos_scores)
+        print(f"calibrated_threshold={threshold:.4f} (target FPR={args.target_fpr:.2%})")
+        print(f"positive_rate={tp_rate:.2%} (n_pos={len(pos_scores)}, n_neg={len(neg_scores)})")
+        return 0
+
     pcm = load_mono16k(args.wav)
     if args.head_seconds:
         pcm = pcm[:int(16000 * args.head_seconds)]

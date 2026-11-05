@@ -69,7 +69,7 @@ class PrismMLBackend(LLMBackend):
 
     def __init__(
         self,
-        base_url: str = "http://127.0.0.1:8080",
+        base_url: str | None = None,
         embed_url: str | None = None,
         model: str = "default",
         connect_timeout: float = 5.0,
@@ -79,7 +79,7 @@ class PrismMLBackend(LLMBackend):
     ):
         """
         Args:
-            base_url: Base URL for PrismML llama-server
+            base_url: Base URL for PrismML llama-server (default: router)
             embed_url: Separate URL for embedding server (if different port)
             model: Model name to send in requests
             connect_timeout: Connection timeout in seconds
@@ -88,6 +88,10 @@ class PrismMLBackend(LLMBackend):
             enable_thinking: idem LlamaCppBackend (False envia
                 chat_template_kwargs.enable_thinking=false).
         """
+        if not base_url:
+            # (03/11) porta do router lida do registry (models.nix).
+            from jarvis.core.model_registry import router_base_url
+            base_url = router_base_url()
         # Strip trailing /v1 if present — adapter appends it
         self._base_url = base_url.rstrip("/").removesuffix("/v1")
         self._embed_url = (embed_url or base_url).rstrip("/").removesuffix("/v1")

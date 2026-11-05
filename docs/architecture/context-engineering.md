@@ -150,4 +150,4 @@ recupera apenas o que é relevante; handoff docs são auditáveis.
 
 **Ver também:** [[mcp-integration|mcp-integration.md]] | [[rag-improvements|rag-improvements.md]] | [[agent-harness|agent-harness.md]]
 [[ADR-001-agent-platform|ADR-001-agent-platform.md]] | [[ADR-002-memory-layers|ADR-002-memory-layers.md]] | [[system-overview|system-overview.md]]
-[[HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../BUFFY|/home/nixos/projects/nixos-ai/BUFFY.md]]
+[[HANDOFF|/home/nixos/projects/nixos-ai/AGENTS.md]] | [[../../BUFFY.md|/home/nixos/projects/nixos-ai/BUFFY.md]]

@@ -44,6 +44,11 @@ let
   expertSize = 100; # MB per expert layer
   maxExpertsOnGpu = availableForKvAndExperts / expertSize; # ~32 experts
 
+  # Portas dos GRUPOS do router — definidas UMA vez aqui e consumidas tanto
+  # pelo `routing.endpoints` (registry JSON + Nix) quanto pelo `units`
+  # (mesma info, com o nome da unit) — sem porta duplicada no arquivo.
+  serviceEndpoints = { prism = 8080; upstream = 8083; ik = 8084; };
+
   # Base profile for host models
   hostBase = {    model = "llm-host";
     mmproj = "llm-host-mmproj";
@@ -112,6 +117,53 @@ in rec {
     sha256 = "sha256-NW36oxETdqT3Fl4y6HSXEzeNFwCzfPUuDFDZ8jMiM00=";
   };
 
+  # --- LoRA MicroTurn-Duplex (codacus, duplas-full-voz, 15MB, rank 32) ---
+  # Adapter de timing p/ o modo voz duplex: camadas 36-39 (delta-net +
+  # full-attn + shared expert). Treinado contra o UD-Q4_K_M. Uso: lane
+  # duplex-35b (directServers) com apply em runtime. Fonte do protocolo:
+  # card + docs/VOZ-FULL-DUPLEX.md.
+  llm-host-lora = mkModel {
+    url = "https://huggingface.co/codacus/Qwen3.6-35B-A3B-MicroTurn-Duplex-LoRA/resolve/main/microturn-duplex-lora.gguf";
+    sha256 = "sha256-HTDxOXED3iNhrNtgjjP9mtbqCrN+aGQzw9646TFck3E=";
+  };
+
+  # ══════════════════════════════════════════════════════════════════
+  # VISÃO — Moondream2 pinado em revision=2024-08-26
+  # ══════════════════════════════════════════════════════════════════
+  # 1.86B · F16 3.49 GiB · serve por PYTHON (transformers), NAO por
+  # llama-server. Medido 08/10 em /home/nixos/projects/canary-official:
+  #
+  #   - llama-server NÃO serve imagem para este modelo (400 "Failed to
+  #     tokenize prompt"): o GGUF local tem chat_template "vicuna" e o
+  #     mtmd injeta um media_marker ALEATORIO que o tokenizer do Moondream
+  #     nao conhece (llama.cpp #27249 / #21955). O GGUF "certo"
+  #     (cjpais/moondream2-llamafile, Q8 1440MB) passa a tokenizar mas o
+  #     Q8 esta DEGENERADO neste build ("capital da Franca?" -> "London").
+  #   - A revision 2024-08-26 (sha 92d3d73) traz pesos + codigo CASADOS;
+  #     pesos de `main` com codigo da 5d6c926 produzem saida corrompida.
+  #     O proprio repo avisa: "or alternately pin to revision=2024-08-26".
+  #   - transformers==4.45.2 (o 5.x quebra a geracao deste trust_remote_code).
+  #   - VRAM 4120 MB em bfloat16 -> NAO divide com jarvis-fast (3.2GB) nos
+  #     6GB. NeedsConflicts + ExecStartPre.
+  #   - Prompt CURTO e POSITIVO: negative constraints fazem o modelo
+  #     colapsar para "Grass" (medido 5/6). Nao anexar o bloco DO NOT:.
+  #   - Precisao: acerta MATERIAL/COR das bordas (~60%), erra TODO detalhe
+  #     de forma. Complementa a medicao de pixel; nao e autoritativo.
+  #     Ver canary-official/dataset/maps/MODELS-VISION.md
+  #
+  # VAO-VisionProfile: visionEnv com transformers/torch/torchvision/einops.
+  vlm-moondream2 = mkModel {
+    url = "https://huggingface.co/vikhyatk/moondream2/resolve/92d3d73b6fd61ab84d9fe093a9c7fd8c04bf2c0d/model.safetensors";
+    sha256 = "sha256-S/eu2LpDJdI/p800jXlaJ/OycmglNvCKykzdYs3nkpM=";
+  };
+
+  # Tokenizer do mesmo par (mesma revision). Sem isto o repo tenta
+  # baixar "moondream/starmie-v1" da rede no __init__ e quebra offline.
+  vlm-moondream2-tokenizer = mkModel {
+    url = "https://huggingface.co/vikhyatk/moondream2/resolve/92d3d73b6fd61ab84d9fe093a9c7fd8c04bf2c0d/tokenizer.json";
+    sha256 = "sha256-M32ja+enGm6IqpFIlnp7yHNvS0fH3o4ZupK4noBzTPw=";
+  };
+
   # ══════════════════════════════════════════════════════════════════
   # Qwen3.6-35B-A3B-UNCENSORED (HauhauCS Aggressive) — variantes de quant
   # ══════════════════════════════════════════════════════════════════
@@ -121,8 +173,11 @@ in rec {
   #
   # RODAR EXATAMENTE COMO O Qwen3-30B-A3B (fonte: docs/models/BINARIES.md
   # — binario errado = veredito invalido):
-  #   binario = ik_llama.cpp (unico com --n-cpu-moe; prism = ternario,
-  #            upstream = sem offload de MoE). Tier endpoint 8084.
+  #   binario = ik_llama.cpp (build 5074: --n-cpu-moe + --moe-cache-mib, SEM
+  #            --fit-target). prism = ternario (PROIBIDO em MoE: 2-3 t/s).
+  #            upstream 0.7.0-dev/build 1087 tem --n-cpu-moe + --fit-target +
+  #            --moe-cache-mib (unico com a receita completa do video).
+  #            Tier endpoint 8084.
   #   perfil  = chat/jarvis (hostBase + moeFlags "--n-cpu-moe 35 --mlock")
 #   --mlock (25/09): trava os 20GB de pesos do MoE na RAM. Alvo do resultado
 #   BIMODAL medido (40 t/s ou 15 t/s, 2,7x, sem ser config): a suspeita e
@@ -148,6 +203,19 @@ in rec {
   #   - ik vs upstream no mesmo modelo: 36 vs 32 t/s (+11%) → ik e o binario
   #   - wackmall EHS 18 t/s · prism no MoE 2-3 t/s (PROIBIDO)
   #   - Qwen3-30B-A3B-Q4_K_M ja roda a 30+ t/s neste mesmo perfil
+  # EVIDENCIA 2026-11-02 (ladder da receita do video tek-IY9BRWc, stock 1087,
+  # -t 6, load 6,5-8,7/16 threads):
+  #   - --fit-target 512 (auto-fit, SEM -ngl): 11,8-14,1 t/s; --moe-cache-mib
+  #     2048 NAO muda o resultado (C~B) => o gargalo e CPU/RAM, nao o split de
+  #     VRAM; -ctk/-ctv q8_0 PIORA o TTFT; -t 10 e pior que -t 6 (P-cores).
+  #   - gate do video (>=17 t/s E TTFT<=150ms) FALHA no 35B (melhor 14,1 t/s
+  #     com load; TTFT 420-9066 ms; 512 tok de contexto = 4-44 s de prefill)
+  #     => o 35B fica como tier de THINKING (nao serve para voz); o 4B-MTP
+  #     (105,9 t/s, TTFT 178-203 ms) SEGUE como default.
+  #   - --fit aborta se -ngl estiver setado (common/fit.cpp) => a receita de
+  #     producao nunca usa o auto-fit do video.
+  #   - veredito + matriz de flags por binario: docs/auditoria/LLAMACPP-FLAGS-
+  #     VIDEO-2026-11-02.md (evidencia bruta: docs/BENCH-35B-LADDER-2026-11-02.md)
   # ! RAM (25/09, incidente): este MoE segura ~18GB de RAM (experts CPU).
   #   Com router+embeddings+rerank+sessao, 32GB estouram (28/31, 0 livre) e
   #   o SO congela. Rodar com esses servicos PARADOS + ulimit, ou nao rodar.
@@ -160,6 +228,251 @@ in rec {
     # Q4_K_M.gguf · 21.2GB  # baixado 25/09 em ~/models
     url = "https://huggingface.co/HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
     sha256 = "sha256-u+9Yw3zoiCC+nZi2Q38c9LrIkMlHvVX8e2jiIJhXQjE=";
+  };
+
+  llm-uncensored-4b = mkModel {
+    # Qwen3.5-4B Q4_K_M.gguf · 2.6GB em ~/models (hash do arquivo local).
+    # Server: upstream stock -ngl 99 (GPU-full, exclusivo via Conflicts)
+    # porta 8092. Ver directServers abaixo.
+    url = "https://huggingface.co/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
+    sha256 = "sha256-eeKOys+E51tgVs9AWWNtQ1qp62d5V4D3t9vH0yqWJ0E=";
+  };
+
+  llm-uncensored-4b-mtp = mkModel {
+    # Qwen3.5-4B-MTP Q4_K_M.gguf · 2.7GB em ~/models (hash do arquivo local).
+    # NextN REAL (blk.32.nextn.*): +24% TG medido 03/10. É o que roda na 8092.
+    url = "https://huggingface.co/localweights/Qwen3.5-4B-MTP-Q4_K_M-GGUF/resolve/main/Qwen3.5-4B-MTP-Q4_K_M.gguf";
+    sha256 = "sha256-FEPeY6VQp70YkFWJ3Ov6XDB9qLLvhtuFinaR+5o8Fcw=";
+  };
+
+  # ── Registro completo ~/models (auditoria GGUF 03/10) ──
+  # URLs verificadas via API HF (sibling exato); hashes do arquivo local.
+  llm-deepseek-7b = mkModel {
+    # DeepSeek-R1-Distill-Qwen-7B · 4.68GB · reasoning model (NÃO desliga thinking!)
+    url = "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf";
+    sha256 = "sha256-cx7OjQbcftpvZXKZf+ue4SWNsHhIJ+ZCkJ2bVlZBk3s=";
+  };
+
+  llm-qwen30b-moe = mkModel {
+    # Qwen3-30B-A3B MoE · 18.56GB · 48 layers (ik + --n-cpu-moe, como o 35B)
+    url = "https://huggingface.co/Qwen/Qwen3-30B-A3B-GGUF/resolve/main/Qwen3-30B-A3B-Q4_K_M.gguf";
+    sha256 = "sha256-DQA/ZmL67nhu1do+MbKcl43lrl0nXIeUxgan88AaqPU=";
+  };
+
+  llm-qwen3-4b = mkModel {
+    # Qwen3-4B alinhado · 2.5GB · nativo 40960 (maior que o preset 16384!)
+    # Servido hoje via preset router 8083; directServers dá unit própria.
+    url = "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf";
+    sha256 = "sha256-dIX+bxGvKUM7xRyrWACVIfIFhA9bSuOjL6f5LoU0/fU=";
+  };
+
+  llm-uncensored-35b-q4kp = mkModel {
+    # Q4_K_P.gguf · 23.42GB · SPARE (K_M é o titular; mesmas dims/flags)
+    url = "https://huggingface.co/HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf";
+    sha256 = "sha256-jTRKQzbY6n2gy/wSeS0UceVovnq+iTDFImBpi/0B1zE=";
+  };
+
+  # xLAM + Phi: JÁ REGISTRADOS acima (llm-xlam-8b, llm-phi-4-mini) —
+  # hashes locais 03/10 conferem byte a byte (Salesforce/unsloth íntegros).
+
+  # ── DIRECT SERVERS (um serviço systemd por modelo) ──
+  # Lido pelo gerador em modules/services/llama-uncensored.nix
+  # (systemd.services gerados, Conflicts calculado = um LLM grande por
+  # vez na VRAM 6GB). Flags vindas da auditoria GGUF (scripts/gguf_audit.py).
+  # wanted = partida no boot (só o primário; resto é systemctl start manual).
+  directServers = {
+    uncensored-35b = {
+      port = 8084; binary = "ik";
+      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
+      # (26/10, dono: "contexto estoura na 1a mensagem") 8192→32768:
+      # jarvis MCP tools ~3-5k tokens + system prompt ~2k = ~7k antes
+      # de QUALQUER conversa. 8k não sobrava nada. Com fa=true e
+      # ctk=q4_0 o KV escala eficientemente (~200MB @32k).
+      threads = 6; ctxSize = 32768; batchSize = 512; ubatch = 512;
+      gpuLayers = 45; moeFlags = "--n-cpu-moe 35";
+      fa = true; ctk = "q4_0"; ctv = "q4_0";
+      extraArgs = [ "--parallel" "1" "--jinja" "--mlock" "--reasoning" "off" ];
+      memHigh = "21G"; memMax = "23G"; limitMemlock = true;
+      wanted = false;  # default agora é o 4B-MTP (04/10, pedido do dono)
+      # opencode provider (gerado em home.nix via mapAttrs):
+      # id = modelFile (o server anuncia o path, sem --alias).
+      opencode = { key = "local-uncensored"; name = "Qwen MoE 35B Uncensored Local"; context = 32768; output = 4096; };
+    };
+    # DUPLEX VOICE LANE (17/10, dono: modo voz full-duplex; ver
+    # docs/VOZ-FULL-DUPLEX.md): 35B UD + MicroTurn-Duplex LoRA
+    # (codacus) aplicável EM RUNTIME (--lora-init-without-apply +
+    # POST /lora-adapters): "acordar" = apply, "dormir" = unapply —
+    # o mesmo server serve TEXTO puro (LoRA desligado) e VOZ duplex.
+    # Binário "stock" = llama.cpp v0.7.0 build local (build-stock/):
+    # o nixpkgs b9190 tem qwen35moe (25/ago), mas o LoRA-apply do IK
+    # é no-op (mismatch de nomes, 17/10) — o stock é o gabarito
+    # comprovado (576ms/tick mediana no demo, interrupção correta).
+    # Prova: /tmp/opencode/microturn-test/demo-stock.log.
+    duplex-35b = {
+      port = 8085; binary = "stock";
+      # (17/10, escolha do dono) o QUANT UNCENSORED dele: A/B justo provou
+      # que o LoRA APLICA no stock e interrompe ("Stop! Don't mix them",
+      # P 0.29→fala, 526ms/tick — demo-ab-uncensored.log). O UD-Q4_K_M
+      # (quant de treino do card) fica de gabarito: é mais insistente
+      # (4 fragmentos vs 1) — troca = uma linha aqui.
+      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
+      threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
+      gpuLayers = 99; moeFlags = "--n-cpu-moe 44";
+      # LoRA + flash-attn são incompatíveis (log do server) → fa off.
+      fa = false; ctk = "f16"; ctv = "f16";
+      extraArgs = [
+        "--lora" "/home/nixos/models/loras/microturn-duplex/microturn-duplex-lora.gguf"
+        "--lora-init-without-apply"
+        "--reasoning" "off"
+        "--alias" "jarvis-duplex"
+        "--jinja"
+      ];
+      memHigh = "20G"; memMax = "24G"; limitMemlock = true;
+      wanted = false;  # lane de voz: sobe no "hey jarvis acordar" (ou manual)
+    };
+    uncensored-4b = {
+      # (19/10) binary stock (v0.7.0-dev build local): o upstream nixpkgs
+      # 0.5.0 NÃO tem --lora nem /lora-adapters. O LoRA micro-turn
+      # (classificador RESPOND/WAIT/SILENCE/BARGE) exige o stock.
+      # (24/10, incidente 04:03) mínimo de VRAM LIVRE p/ o vram-guard:
+      # modelo 2.7G + KV ~0.75G (20k ×2 MTP) + buffers ~0.6G.
+      # (26/10 09:45, OOM MEDIIDO) 32768 FALHOU na 6GB com whisper
+      # co-residente: KV f16 @32k (~600MB) ×2 (MTP draft context!) +
+      # buffer fa=false (~1GB @32k) + modelo 2.7G = ~4.9G; com
+      # whisper(0.9)+embed(0.2)+desktop = 6.3G > 6.1G → "failed to
+      # allocate buffer for kv cache".
+      # (26/10 10:15, HB decisão dados OC) 20k+MTP: KV 375MB×2=750MB +
+      # buffer 625MB + modelo 2.7G = ~4.1G; com whisper+embed = ~5.2G;
+      # margem ~900MB. MANTÉM o +24% TG do MTP. Para opencode 32k:
+      # remover --spec-type draft-mtp (perde TG) OU slimming MCP tools.
+      # GUARD FUTURO (lição OOM): vramMin DEVE contar MTP×2 no KV.
+      vramMinMiB = 4200;  # 20k real: modelo+KV+buffer ~4.1G
+      port = 8092; binary = "stock";
+      # (26/10) ALIAS — id estável anunciado em /v1/models. Medido: com
+      # --alias o data[].id vira o alias (sem ele = path do gguf). O
+      # registry Python compara o id do modelo com o id ATIVO do server
+      # (ensure_model → active_model) p/ provar identidade: com path
+      # grudado no registry isso quebrava. Alias = contrato limpo.
+      alias = "jarvis-mtp-lora";
+      # ARQUIVO MTP (não o base!): NextN real, +24% TG. Rebuild sem isto
+      # voltaria a 8092 sem speculative decoding (regressão silenciosa).
+      modelFile = "/home/nixos/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
+      # KV f16 híbrido (8/32 layers) ≈ 750MB @20k ×2 MTP.
+      threads = 6; ctxSize = 20480; batchSize = 256; ubatch = 256;
+      gpuLayers = 99; moeFlags = "";
+      # (19/10) LoRA+flash-attn incompatíveis (log do server, ver
+      # duplex-35b) → fa off. KV quantizado (q4_0) EXIGE fa → KV f16.
+      fa = false; ctk = "f16"; ctv = "f16";
+      # LoRA init sem aplicar: o cliente liga/desliga via /lora-adapters
+      # SÓ nos requests do classificador (chat com tools fica limpo).
+      extraArgs = [ "--parallel" "1" "--jinja" "--reasoning" "off" "--spec-type" "draft-mtp"
+                    "--lora" "/home/nixos/models/loras/microturn-4b/microturn-4b-lora.gguf"
+                    "--lora-init-without-apply" ];
+      memHigh = "4G"; memMax = "5G"; limitMemlock = false;
+      # (26/10, dono: "tira o bonsai de default e coloca o qwen mtp que tem
+      # o lora pra subir com o lora") → este é o DEFAULT do sistema agora.
+      # wanted=true = sobe no boot COM o LoRA registrado (medido ao vivo:
+      # LoRA ON 4/4 classes corretas; LoRA OFF = base entra em "Thinking
+      # Pro" e NÃO classifica nada — o classificador é o LoRA, não o base).
+      # Consequência VRAM: 4.1G resident → o bonsai do router :8080 não
+      # carrega junto (o default não passa mais pelo router).
+      wanted = true;
+      # opencode provider (gerado em home.nix via mapAttrs):
+      # id = alias (o server anuncia o alias; home.nix usa svc.alias).
+      opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 20480; output = 4096; };
+    };
+    deepseek-7b = {
+      # (04/11, sweep) 8085 era COMPARTILHADA com duplex-35b (models.nix:312)
+      # → as units se conflitavam e o opencode publicava local-deepseek-7b
+      # na MESMA porta da voz duplex (connection-refused dependendo do
+      # estado das duas units).
+      # Porta livre (8094; 8090/8097 já são do host).
+      port = 8094; binary = "upstream";
+      modelFile = "/home/nixos/models/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf";
+      threads = 6; ctxSize = 16384; batchSize = 512; ubatch = 512;
+      gpuLayers = 99; moeFlags = "";
+      fa = true; ctk = "q4_0"; ctv = "q4_0";
+      # SEM --reasoning off: R1 é reasoning model, pensar é o propósito.
+      # Papel candidato: architect (traces de raciocínio) — NÃO medido ainda.
+      extraArgs = [ "--parallel" "1" "--jinja" ];
+      memHigh = "5G"; memMax = "7G"; limitMemlock = false;
+      wanted = false;
+      # opencode provider (gerado em home.nix via mapAttrs):
+      # id = modelFile (o server anuncia o path, sem --alias).
+      opencode = { key = "local-deepseek-7b"; name = "DeepSeek R1 7B Local (reasoning!)"; context = 16384; output = 8192; };
+    };
+    xlam-8b = {
+      port = 8089; binary = "upstream";
+      modelFile = "/home/nixos/models/Llama-xLAM-2-8B-fc-r-Q4_K_M.gguf";
+      threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
+      gpuLayers = 99; moeFlags = "";
+      fa = true; ctk = "q4_0"; ctv = "q4_0";
+      # Tool-calling ONLY: excelente em function-call, MUDO em chat
+      # (não serve p/ prosa). Papel: executor backend, nunca conversar.
+      extraArgs = [ "--parallel" "1" "--jinja" ];
+      memHigh = "5G"; memMax = "7G"; limitMemlock = false;
+      wanted = false;
+    };
+    phi-mini = {
+      port = 8086; binary = "upstream";
+      modelFile = "/home/nixos/models/Phi-4-mini-instruct-Q4_K_M.gguf";
+      threads = 6; ctxSize = 32768; batchSize = 512; ubatch = 512;
+      gpuLayers = 99; moeFlags = "";
+      fa = true; ctk = "q4_0"; ctv = "q4_0";
+      extraArgs = [ "--parallel" "1" "--jinja" ];
+      memHigh = "4G"; memMax = "6G"; limitMemlock = false;
+      wanted = false;
+      # opencode provider (gerado em home.nix via mapAttrs):
+      # id = modelFile (o server anuncia o path, sem --alias).
+      opencode = { key = "local-phi-mini"; name = "Phi-4-mini Local"; context = 32768; output = 4096; };
+    };
+    gemma-4b = {
+      port = 8087; binary = "upstream";
+      modelFile = "/home/nixos/models/gemma-3-4b-it-Q4_K_M.gguf";
+      # (19/10) fa off: com fa ON o prefill do gemma-3 (sliding window)
+      # degrada p/ ~17ms/tok uniforme (59 t/s no PROMPT = decodificação
+      # sequencial; medido: 3.4s p/ 200 tok). Sem fa: prefill batch
+      # normal — gemma era 0.29s/item no benchmark i18n (canary).
+      # ctx 8192 (era 32768): buffer não-FA escala com n_ctx; 8192 cabe
+      # folgado (uso real: prompts de tradução <200 tok).
+      # KV f16 (era q4_0): V cache quantizado EXIGE flash-attn (log do
+      # server) — com fa off tem que ser f16.
+      threads = 6; ctxSize = 8192; batchSize = 256; ubatch = 256;
+      gpuLayers = 99; moeFlags = "";
+      fa = false; ctk = "f16"; ctv = "f16";
+      # Papel candidato: prosa/chat geral — NÃO medido ainda (bench cobre
+      # bonsai+qwen; gemma entra na próxima rodada).
+      extraArgs = [ "--parallel" "1" "--jinja" ];
+      memHigh = "4G"; memMax = "6G"; limitMemlock = false;
+      wanted = false;
+      # opencode provider (gerado em home.nix via mapAttrs):
+      # id = modelFile (o server anuncia o path, sem --alias).
+      # (03/11) context = ctxSize REAL do server (8192; o catálogo dizia
+      # 32768 — o opencode poderia mandar 4x mais que o server aceita).
+      opencode = { key = "local-gemma-4b"; name = "Gemma-3 4B Local"; context = 8192; output = 4096; };
+    };
+    qwen30b-moe = {
+      port = 8091; binary = "ik";
+      modelFile = "/home/nixos/models/Qwen3-30B-A3B-Q4_K_M.gguf";
+      # ctx 8192: classe MoE estourou compute buffers em 32k no irmão 35B
+      # (medido 2x 03/10); 30B não testado → valor seguro, não especulativo.
+      threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
+      gpuLayers = 45; moeFlags = "--n-cpu-moe 35";
+      fa = true; ctk = "q4_0"; ctv = "q4_0";
+      extraArgs = [ "--parallel" "1" "--jinja" "--mlock" "--reasoning" "off" ];
+      memHigh = "21G"; memMax = "23G"; limitMemlock = true;
+      wanted = false;
+    };
+    uncensored-35b-q4kp = {
+      port = 8093; binary = "ik";
+      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf";
+      threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
+      gpuLayers = 45; moeFlags = "--n-cpu-moe 35";
+      fa = true; ctk = "q4_0"; ctv = "q4_0";
+      extraArgs = [ "--parallel" "1" "--jinja" "--mlock" "--reasoning" "off" ];
+      memHigh = "22G"; memMax = "25G"; limitMemlock = true;
+      wanted = false;
+    };
   };
 
   llm-uncensored-35b-kp = mkModel {
@@ -306,6 +619,59 @@ in rec {
     };
   };
 
+  # --- Flux.1-schnell (geração de imagem) — stack stable-diffusion.cpp ---
+  # DiT Q2_K (3.8GB, cabe na VRAM 6GB) + clip_l + t5xxl + VAE bf16.
+  # Runtime: ~/projects/stable-diffusion.cpp/build-cuda/bin/sd-cli
+  #   (build SD_CUDA sm_89, 04/10 — build-vk APOSENTADO: ggml-vulkan deu
+  #   device-lost + 3 hard-freezes 03/10; CUDA estável).
+  # Receita que funciona: auto-fit PURO + --max-vram CUDA0=5 (256px ~21s).
+  # NUNCA --backend/--params-backend manuais (jogam p/ CPU em silêncio, 6min).
+  # T5: fp16 p/ CPU (fp8 SEGFAULT em CPU — sem kernels fp8);
+  #     fp8 p/ GPU (CUDA/Vulkan têm kernels fp8, metade da RAM).
+  # VRAM 6GB: auto-fit coloca DiT na GPU, T5 fica em RAM.
+  img-flux-schnell-q2 = mkModel {
+    url = "https://huggingface.co/city96/FLUX.1-schnell-gguf/resolve/main/flux1-schnell-Q2_K.gguf";
+    sha256 = "sha256-o4UBHKt0h9WgR4VEblm0Bf+2QvDehntMjzp6Cgd1mbA=";
+  };
+
+  img-clip-l = mkModel {
+    url = "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors";
+    sha256 = "sha256-ZgxvWxq66dxJisLSHhNH0qvbDPbAwMhXbNeWSR2abN0=";
+  };
+
+  img-t5xxl-fp16 = mkModel {
+    url = "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp16.safetensors";
+    sha256 = "sha256-bkgLCfrgSactKoxfvMuNPpL+vrIzu+nf5yVpWKkWdjU=";
+  };
+
+  img-t5xxl-fp8 = mkModel {
+    url = "https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn.safetensors";
+    sha256 = "sha256-fTMNpIFhV1QNa7eDi/Y6DwL1c/xIyk2N40uwy/1RTwk=";
+  };
+
+  img-flux-vae-bf16 = mkModel {
+    url = "https://huggingface.co/Kijai/flux-fp8/resolve/main/flux-vae-bf16.safetensors";
+    sha256 = "sha256-DAyKxJhQ1r0XQQfUABaF9PbIdnaKHITd51HyrtafRs4=";
+  };
+
+  # --- SigLIP base patch16-224 (match visual p/ reskin: sprite vanilla x donor) ---
+  # Uso: transformers (karaok venv) — AutoModel + AutoImageProcessor, embed 224px,
+  # cosine match. CPU ok (203M fp32). Registro estilo whisper (multi-file).
+  img-siglip-base = {
+    model = fetchurl {
+      url = "https://huggingface.co/google/siglip-base-patch16-224/resolve/main/model.safetensors";
+      sha256 = "158bpxkgwq813af6ncl1dwgjx41kynnc9bmjqxi6np85idimp39j";
+    };
+    config = fetchurl {
+      url = "https://huggingface.co/google/siglip-base-patch16-224/resolve/main/config.json";
+      sha256 = "1z4nr310bz3l3xbrf9ba0f3vbib1jqxk01129gfbfy15q42hfg3s";
+    };
+    preprocessor = fetchurl {
+      url = "https://huggingface.co/google/siglip-base-patch16-224/resolve/main/preprocessor_config.json";
+      sha256 = "0p2yaz0ybaa1c1p9cqyk61yja8qzk0z3r9z94x56fn7zs22kpj6g";
+    };
+  };
+
   # =========================================================================
   # 2. PERFIS DE EXECUÇÃO (llama-cpp) — ÚNICA FONTE DE VERDADE
   # =========================================================================
@@ -359,6 +725,10 @@ in rec {
     # ── Chat Profile ──
     chat = hostBase // {
       threads = 6;
+      # ctxSize 8192 VALIDADO 03/10 (não subir!): KV do MoE é minúsculo
+      # (~11KB/tok), mas os compute buffers do -c 32768 estouraram a VRAM
+      # compartilhada (6GB com 8083+nomic) — load falhou 2x. 8k é o teto
+      # operacional colocalizado. Auditoria completa em /tmp/opencode/gguf_audit.json.
       ctxSize = 8192;
       batchSize = 512;
       ubatch = 512;
@@ -576,6 +946,11 @@ in rec {
     # KV q4_0 16K ≈ 1GB; total ≈ 3.5GB < 6GB com folga p/ Bonsai→fast
     # convivência transitória durante o switch do router (max 1 residente,
     # mas o unload/load transiente pode sobrepor brevemente).
+    # Auditoria GGUF 03/10 (/tmp/opencode/gguf_audit.json): arquivo local
+    # tem 36 layers, 8 KV heads, head_dim 80 → KV real 25.9KB/tok
+    # (16k = 0.42GB, não 1GB). Nativo 40960: 32768 caberia solo, mas
+    # 16384 está CORRETO p/ deploy colocalizado (divide 6GB com MoE+nomic).
+    # Não subir sem redesenhar o budget compartilhado.
     qwen-fast = {
       model = "llm-vm";
       mmproj = null;
@@ -609,6 +984,29 @@ in rec {
     raw-strong = profiles.chat // {
       modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
     };
+    # (26/10) O DEFAULT do sistema: Qwen3.5-4B-MTP + LoRA micro-turn.
+    # Espelha o directServer `uncensored-4b` (:8092, binário stock) — o
+    # LoRA SÓ funciona no stock (o ik carrega e não aplica: mismatch de
+    # nomes). MTP = NextN real (+24% TG medido). fa off (LoRA × fa são
+    # incompatíveis) → KV f16.
+    mtp-lora = profiles.qwen-fast // {
+      modelFile = "/home/nixos/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
+      kvCache = "-fa off -ctk f16 -ctv f16";
+      ctxSize = 20480;
+      batchSize = 256;
+      ubatch = 256;
+      # (26/10) O alias aqui espelha `directServers.uncensored-4b.alias`
+      # (fonte única = o campo `alias`; o gerador da unit injeta a flag).
+      extraArgs = [
+        "--parallel" "1"
+        "--jinja"
+        "--reasoning" "off"
+        "--spec-type" "draft-mtp"
+        "--lora" "/home/nixos/models/loras/microturn-4b/microturn-4b-lora.gguf"
+        "--lora-init-without-apply"
+        "--alias" "jarvis-mtp-lora"
+      ];
+    };
   };
 
   # =========================================================================
@@ -619,9 +1017,13 @@ in rec {
   # =========================================================================
   routing = {
     version = 1;
-    # Default EFETIVO hoje (bonsai serve :8080): preservado — §21, produto
-    # decide eventual troca p/ jarvis-fast.
-    default = "bonsai";
+    # (26/10, dono) DEFAULT = Qwen3.5-4B-MTP **COM O LoRA** (:8092).
+    # Antes: bonsai (prism :8080) — EN-only, sem PT, e o classificador de
+    # turno do duplex (RESPOND/WAIT/SILENCE/BARGE) é o LoRA. Medido ao
+    # vivo: LoRA ON 4/4 classes; LoRA OFF = base "Thinking Pro", não
+    # classifica. Serve = false: o servidor é o DIRECT (:8092, stock) —
+    # gerar um grupo de preset aqui duplicaria a unit na mesma porta.
+    default = "jarvis-mtp-lora";
     # SAMPLING — ÚNICA FONTE dos defaults de geração por modelo. O Python
     # (model_registry.sampling_for → llm._resolve_temperature) lê daqui via
     # registryJson; NADA de temperature hardcoded no .py. Ordem de vitória:
@@ -638,19 +1040,73 @@ in rec {
     # Binário CORRETO por modelo (docs/models/BINARIES.md — D2/D5: binário
     # errado invalida o veredito). O router NÃO escolhe binário por request:
     # llama-cpp.nix gera UM serviço por grupo (porta = endpoints.${binary}).
-    endpoints = { prism = 8080; upstream = 8083; ik = 8084; };
+    endpoints = serviceEndpoints;
+    # (03/11) Unit systemd por model id — o registry JSON carrega este mapa
+    # para scripts/timers lerem a unit e a porta sem hardcode.
+    units = units;
+    # (03/11) Grupo que SOBE NO BOOT, por ambiente — SEPARADO de `default`.
+    # `default` = default do APP (4B-MTP+LoRA :8092, server DIRETO, fora do
+    # router); `bootModel` = o preset cujo GRUPO sobe no boot (o router fica
+    # pronto p/ uso manual do tier speed/EN). Sem esta separação, trocar o
+    # default derrubava o router do boot (o grupo do default não existe).
+    bootModel = { host = "bonsai"; vm = "jarvis-fast"; };
+    # Portas dos servidores llama que NÃO são tiers de modelo (embeddings /
+    # rerank) — Python e timers leem daqui em vez de hardcode 8081/8082.
+    servicePorts = { embeddings = 8081; rerank = 8082; };
+    # (03/11) SERVIÇOS DIRETOS: porta + unit systemd de cada directServer.
+    # Derivado de `directServers` (fonte única) — a unit do direct server é
+    # sempre "llama-${nome}" (modules/services/llama-uncensored.nix).
+    # O heal usa este mapa p/ reiniciar o serviço que serve a porta do LLM
+    # (o mapa estava hardcoded no Python: 8092/8084/8085).
+    directServers = builtins.mapAttrs (n: s: {
+      endpoint = s.port;
+      unit = "llama-${n}";
+    }) directServers;
     models = {
+      # (26/10) DEFAULT do sistema — Qwen3.5-4B-MTP + LoRA micro-turn,
+      # servido pelo directServer :8092 (binário stock). PT-BR de verdade
+      # (o bonsai é EN-only) e é o único que tem o classificador de turno.
+      # serve={false} → não gera grupo de preset (o service é o direct).
+      jarvis-mtp-lora = {
+        profile = "mtp-lora";
+        model = "mtp-lora";
+        ctx = 20480;
+        tier = "fast";
+        capabilities = ["general" "coding" "tools" "pt" "uncensored" "lora"];
+        guidance = "DEFAULT: PT-BR + classificador de turno (LoRA RESPOND/WAIT/SILENCE/BARGE); 70t/s com MTP (+24%)";
+        params_b = 4;
+        vram_mb = 4474;
+        needsWrapper = null;
+        binary = "stock";
+        endpoint = 8092;
+        # (03/11) unit systemd que serve este model id (fonte p/ scripts/timers)
+        unit = "llama-uncensored-4b";
+        serve = { host = false; vm = false; };
+        # Qwen3.5 instruct-geral (vendor; mesmo do jarvis-fast).
+        sampling = { temperature = 0.7; top_p = 0.8; top_k = 20; min_p = 0.0;
+                     presence_penalty = 1.5; repetition_penalty = 1.0; };
+      };
       bonsai = {
         profile = "bonsai";
         ctx = 49152;
         tier = "speed";
-        capabilities = ["general" "coding" "tools" "pt"];
+        capabilities = ["general" "coding" "tools" "en"];
+        # GUIDANCE p/ IAs (lido via registryJson.raw — select_model NÃO lê,
+        # então isto NÃO muda roteamento; muda a ESCOLHA de quem lê):
+        # bench 07/10 (temp 0.0): TTFT 0.033s, 72/73 t/s; PT-BR dif 6/10
+        # (falhas: ecoa imperativo curto em EN, perde acento, troca nome
+        # próprio, erra sequência); logic 3/4, code 4/4. SEM "pt" (dono
+        # 07/10: ruim em PT, é EN). PT-BR → tier fast. Ver
+        # docs/benchmarks/BENCHMARK-MATRIX.md linha "Tier speed".
+        guidance = "speed/code/EN first; NEVER PT-BR (no pt capability); PT-BR goes to fast tier";
         params_b = 8;
         vram_mb = 2400;
         # Prism fork exigido (Q2_0 g64 fora do upstream).
         needsWrapper = "llama-prism-wrapper";
         binary = "prism";
         endpoint = 8080;
+        # (03/11) unit systemd que serve este model id (fonte p/ scripts/timers)
+        unit = "llama-cpp-server";
         serve = { host = true; vm = true; };
         # Prism recomenda 0.5 p/ Bonsai (não é regra global — ver Qwen abaixo).
         sampling = { temperature = 0.5; top_p = 0.9; top_k = 20; min_p = 0.0;
@@ -658,15 +1114,22 @@ in rec {
       };
       jarvis-fast = {
         profile = "qwen-fast";
-        ctx = 49152;
+        # (03/11) ctx = o do PERFIL (qwen-fast.ctxSize = 16384) — o registro
+        # dizia 49152 (mentira: o server :8083 serve c=16384) → o runtime
+        # podia mandar 30k tokens e tomar erro de contexto. Fonte única: o
+        # perfil que o router serve.
+        ctx = 16384;
         profileVm = "vm";
         tier = "fast";
         capabilities = ["general" "coding" "tools" "pt"];
+        guidance = "coder/tool-calling default; PT-BR goes here (bonsai has no pt); bench qwen4bmtp-0710 lands 08/10";
         params_b = 4;
         vram_mb = 2600;
         needsWrapper = null;
         binary = "upstream";
         endpoint = 8083;
+        # (03/11) unit systemd que serve este model id (fonte p/ scripts/timers)
+        unit = "llama-cpp-upstream";
         serve = { host = true; vm = true; };
         # Qwen3 non-thinking/instruct-geral (vendor).
         sampling = { temperature = 0.7; top_p = 0.8; top_k = 20; min_p = 0.0;
@@ -674,14 +1137,20 @@ in rec {
       };
       jarvis-strong = {
         profile = "chat";
-        ctx = 32768;
+        # (03/11) ctx = o do PERFIL (chat.ctxSize = 8192, validado 03/10:
+        # "não subir! 8k é o teto operacional colocalizado"). O registro
+        # dizia 32768 (o ctx do server DIRETO :8084, não o do grupo ik).
+        ctx = 8192;
         tier = "reasoning";
         capabilities = ["general" "coding" "tools" "reasoning" "analysis" "vision" "pt"];
+        guidance = "last local tier before API cascade; reasoning + vision (mmproj CPU); heavy (RAM experts), use for hard tasks only";
         params_b = 35;
         vram_mb = 4600;
         needsWrapper = null;
         binary = "ik";
         endpoint = 8084;
+        # (03/11) unit systemd que serve este model id (fonte p/ scripts/timers)
+        unit = "llama-cpp-ik";
         serve = { host = true; vm = false; };
         # Herdado do profile chat: mmproj na CPU (861MB VRAM) + visão dinâmica.
         iniExtra = ["no-mmproj-offload = true" "image-min-tokens = 1024"];
@@ -701,6 +1170,8 @@ in rec {
         needsWrapper = null;
         binary = "upstream";
         endpoint = 8083;
+        # (03/11) unit systemd que serve este model id (fonte p/ scripts/timers)
+        unit = "llama-cpp-upstream";
         serve = { host = true; vm = false; };
         # Qwen3.5 instruct-geral (vendor; mesmo do jarvis-fast).
         sampling = { temperature = 0.7; top_p = 0.8; top_k = 20; min_p = 0.0;
@@ -716,6 +1187,8 @@ in rec {
         needsWrapper = null;
         binary = "ik";
         endpoint = 8084;
+        # (03/11) unit systemd que serve este model id (fonte p/ scripts/timers)
+        unit = "llama-cpp-ik";
         serve = { host = true; vm = false; };
         iniExtra = ["no-mmproj-offload = true" "image-min-tokens = 1024"];
         # Qwen3.6 thinking-geral (vendor). Agente usa explicit 0.0 em tools.
@@ -728,4 +1201,39 @@ in rec {
   # JSON derivado (builtins.toJSON puro — sem derivação): llama-cpp.nix
   # gera o preset INI e /etc/jarvis/model-registry.json daqui.
   registryJson = builtins.toJSON routing;
+
+  # =========================================================================
+  # 4. UNITS — DERIVADOS (ninguém reconstrói unit/porta/binário fora daqui)
+  # =========================================================================
+  # Grupo do router: um serviço systemd por binário (llama-cpp.nix consome).
+  groupUnits = {
+    prism = { unit = "llama-cpp-server"; port = serviceEndpoints.prism; binary = "prism"; };
+    upstream = { unit = "llama-cpp-upstream"; port = serviceEndpoints.upstream; binary = "upstream"; };
+    ik = { unit = "llama-cpp-ik"; port = serviceEndpoints.ik; binary = "ik"; };
+  };
+
+  # Servers diretos: uma unit por modelo ("llama-${name}") — a unit e a
+  # porta saem daqui; llama-uncensored.nix só gera o serviço.
+  directUnits = builtins.mapAttrs (name: s: {
+    inherit (s) port binary wanted modelFile;
+    unit = "llama-${name}";
+    alias = s.alias or null;
+  }) directServers;
+
+  # Catálogo único de servers (unit → {port, binary, ...}). Consumido por
+  # timers/scripts (bench noturno, voice-up) em vez de portas literais.
+  units = groupUnits // directUnits;
+
+  # Default do APP: id lógico + porta do server que o serve.
+  routerDefault = routing.default;
+  routerDefaultEndpoint = routing.models.${routing.default}.endpoint;
+
+  # (26/10) LAYA — decision model (ModernBERT-large 421M, Apache-2.0) p/
+  # classificar DIFICULDADE do prompt (simple/moderate/hard) e rotear.
+  # FINE-TUNED (Kaggle T4 v7): 95.6% acc, hard 100%, +36.8% vs base.
+  # Medido no mesmo conjunto (26/10): ft 5/6 vs base 3/6 — o ft acerta o
+  # "hard" que o base degradava p/ "moderate" (justamente o caso que
+  # dispara escalonamento p/ 35B/cloud). O base fica em laya-onnx/.
+  # O Python lê LAYA_MODEL_DIR (default = este path).
+  layaModelDir = "/home/nixos/models/laya-ft";
 }

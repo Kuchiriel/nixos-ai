@@ -25,7 +25,9 @@ dono, testes próprios, automação consentida.
 
 from __future__ import annotations
 
+import json
 import math
+import os
 import random
 import shutil
 import subprocess
@@ -110,8 +112,27 @@ class HumanHand:
         except Exception:
             return None
 
+    YDOTOOL_ENV = {"YDOTOOL_SOCKET": "/run/user/1000/.ydotool_socket"}
+    # 07/10 (Buffy): ydotoold 1.0.4 deste ambiente é INSEGURO como atuador
+    # primário — '-a' não é absoluto real (posição interna própria, perde
+    # sincronia com o cursor) e relativo perde eventos em rajada.
+    # ATUADOR PRIMÁRIO AGORA: uinput_raw.RawHand (REL cru + feedback
+    # hyprctl) — determinístico, ±3px, medido. ydotool fica como fallback.
+
+    @classmethod
+    def _cursor(cls) -> tuple[int, int] | None:
+        try:
+            out = subprocess.run(["hyprctl", "cursorpos"], capture_output=True,
+                                 text=True, timeout=5).stdout.strip()
+            x, y = out.split(",")
+            return (int(x), int(y))
+        except Exception:
+            return None
+
     def _evdev(self):
         """Controlador uinput (lazy; None sem python-evdev/permissão)."""
+        if shutil.which("ydotool"):
+            return "ydotool"
         try:
             from evdev import UInput, ecodes as E
             ui = UInput({E.EV_KEY: [E.BTN_LEFT, E.BTN_RIGHT],
@@ -130,10 +151,28 @@ class HumanHand:
         if self.dry_run:
             return {"ok": True, "dry": True, "to": [tx, ty],
                     "steps": len(path)}
+        # ATUADOR 1 (primário): uinput cru — REL + ganho calibrado + feedback
+        # (determinístico; 07/10 medido: ±3px em 3/3 alvos)
+        try:
+            from jarvis.core.uinput_raw import RawHand
+            if getattr(self, "_raw", None) is None:
+                self._raw = RawHand()
+            for sx, sy in path[1:]:
+                self._raw.rel(sx - (self._raw.cursor_pos() or (sx, sy))[0],
+                              sy - (self._raw.cursor_pos() or (0, sy))[1])
+            self._think()
+            self._note()
+            r = self._raw.move_abs(tx, ty)   # fecho por feedback
+            r["actuator"] = "uinput-raw"
+            r["bezier_steps"] = len(path)
+            return r
+        except Exception as e:
+            return {"ok": False, "error": f"uinput falhou: {e}"}
+        # ATUADOR 2: evdev/uinput (caminho relativo; só se ydotool sumir)
         ui = self._evdev()
-        if ui is None:
+        if ui is None or ui == "ydotool":
             return {"ok": False,
-                    "error": "sem atuador de mouse (python-evdev/uinput)"}
+                    "error": "sem atuador de mouse (ydotool+daemon e evdev)"}
         try:
             from evdev import ecodes as E
             px, py = pos
@@ -161,10 +200,22 @@ class HumanHand:
             return mv
         if self.dry_run:
             return {"ok": True, "dry": True, "at": mv["to"]}
+        # uinput cru com hold log-normal (mesma física, atuador confiável)
+        try:
+            from jarvis.core.uinput_raw import RawHand
+            if getattr(self, "_raw", None) is None:
+                self._raw = RawHand()
+            hold = int(_lognorm(self.CLICK_MU, self.CLICK_SIG, 25, 200))
+            r = self._raw.click(x, y, button, hold_ms=hold)
+            self._think()
+            self._note()
+            return r
+        except Exception as e:
+            return {"ok": False, "error": f"uinput click falhou: {e}"}
         ui = self._evdev()
         if ui is None:
             return {"ok": False,
-                    "error": "sem atuador de mouse (python-evdev/uinput)"}
+                    "error": "sem atuador de clique (ydotool ausente e evdev)"}
         try:
             from evdev import ecodes as E
             btn = E.BTN_LEFT if button == "left" else E.BTN_RIGHT
@@ -187,16 +238,37 @@ class HumanHand:
 
     # ── teclado ─────────────────────────────────────────────
     def type(self, text: str) -> dict:
-        """Digita com cadência humana (wtype; fallback: sem atuador)."""
+        """Digita com cadência humana (ydotool; fallback: wtype).
+
+        2026-10-02: o backend virou `ydotool`, não `wtype`. Motivo medido:
+        `wtype` NÃO digita neste ambiente — o texto não aparecia no campo do
+        jogo. Causa: o `ydotool` falhava em silêncio por socket em lugar
+        errado, e o `wtype` depende do mesmo uinput (wayland-text-input).
+        Agora com `ydotoald` no XDG_RUNTIME_DIR correto, os dois funcionam,
+        mas `ydotool` é o backend comprovado — então é o primário.
+        """
         if self.dry_run:
             return {"ok": True, "dry": True, "chars": len(text)}
-        if not shutil.which("wtype"):
+        yt = shutil.which("ydotool")
+        wt = shutil.which("wtype")
+        if not yt and not wt:
             return {"ok": False,
-                    "error": "wtype ausente (nix: wtype)"}
+                    "error": "nem ydotool nem wtype disponiveis"}
         try:
             for ch in text:
-                subprocess.run(["wtype", ch], check=False,
-                               capture_output=True, timeout=10)
+                if yt:
+                    # (12/10, fix "12A12G12E...") ESTE ydotool não tem
+                    # '--delay' (a flag real é '-d/--key-delay=N'): o parser
+                    # engolia '--delay 12' e DIGITAVA "12" antes de cada
+                    # tecla — todo texto do MCP chegava "12"+ch no destino
+                    # (medido no terminal do outro agente). A cadência humana
+                    # já vem do sleep lognorm abaixo; delay interno = letal.
+                    subprocess.run([yt, "type", ch],
+                                   check=False, capture_output=True,
+                                   timeout=15)
+                else:
+                    subprocess.run(["wtype", ch], check=False,
+                                    capture_output=True, timeout=10)
                 gap = _lognorm(self.TYPE_MU, self.TYPE_SIG, 20, 400) / 1000.0
                 # pausa longa ocasional (pensando no meio da frase)
                 if random.random() < 0.04:
@@ -225,3 +297,78 @@ class HumanHand:
             return {"ok": True, "keys": list(keys)}
         except Exception as e:
             return {"ok": False, "error": f"tecla falhou: {e}"}
+
+    def scroll(self, dy: int = 300) -> dict:
+        """Scroll com passos humanos (ydotool; fallback: wtype -M)."""
+        if self.dry_run:
+            return {"ok": True, "dry": True, "dy": dy}
+        yt = shutil.which("ydotool")
+        try:
+            if yt:
+                rest = int(dy)
+                while rest:
+                    passo = 120 if rest > 0 else -120
+                    subprocess.run([yt, "click", "0x80" if dy > 0 else "0x81"],
+                                   check=False, capture_output=True, timeout=10)
+                    rest -= passo
+                    time.sleep(_lognorm(4.0, 0.4, 20, 200) / 1000.0)
+            else:
+                # wtype tem scroll por botão virtual
+                botao = 4 if dy > 0 else 5
+                n = max(1, min(30, abs(dy) // 120))
+                for _ in range(n):
+                    subprocess.run(["wtype", "-M", str(botao), "-m", str(botao)],
+                                   check=False, capture_output=True, timeout=10)
+                    time.sleep(0.03)
+            self._note()
+            return {"ok": True, "dy": dy}
+        except Exception as e:
+            return {"ok": False, "error": f"scroll falhou: {e}"}
+
+
+def human_input(args: dict) -> str:
+    """Tool do MCP (jarvis_human_input): mão humana no desktop Wayland.
+
+    Aceita o formato declarado no mcp_server (action/x/y/button/text/
+    keys/dy/dry_run). Tudo por cima do HumanHand — nada de input cru.
+    """
+    action = (args.get("action") or "").strip().lower()
+    dry = bool(args.get("dry_run", False))
+    hand = HumanHand(dry_run=dry)
+
+    if action == "move":
+        if args.get("x") is None or args.get("y") is None:
+            return "ERROR: move precisa x e y (pixels da tela 1920x1080)"
+        r = hand.move(int(args["x"]), int(args["y"]))
+    elif action == "click":
+        if args.get("x") is None or args.get("y") is None:
+            return "ERROR: click precisa x e y"
+        r = hand.click(int(args["x"]), int(args["y"]),
+                       args.get("button", "left"))
+    elif action == "type":
+        text = args.get("text")
+        if not text:
+            return "ERROR: type precisa text"
+        r = hand.type(str(text))
+    elif action == "key":
+        keys = (args.get("keys") or "").split()
+        if not keys:
+            return "ERROR: key precisa keys (ex: 'mod+m' ou 'space')"
+        # 'mod+m' → dois argumentos: mod + m (HumanHand.key aceita variádico)
+        expanded = []
+        for k in keys:
+            if "+" in k:
+                expanded += k.split("+")
+            else:
+                expanded.append(k)
+        r = hand.key(*expanded)
+    elif action == "scroll":
+        r = hand.scroll(int(args.get("dy", 300)))
+    else:
+        return (f"ERROR: action desconhecida '{action}'. "
+                "Use: move, click, type, key, scroll")
+
+    if not r.get("ok", False):
+        return f"ERROR: {r.get('error', 'falhou')}"
+    return json.dumps(r, ensure_ascii=False)
+

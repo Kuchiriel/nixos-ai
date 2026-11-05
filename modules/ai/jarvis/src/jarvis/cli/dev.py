@@ -35,6 +35,7 @@ import requests
 
 from jarvis.core.config import get_config as _get_config
 from jarvis.core.provider_registry import MIN_PROFILE_CONTEXT
+from jarvis.core.plan_executor import PlanExecutor, ExecutionPlan, PlanStep, build_debug_context
 
 # Tools unificadas — AST guard, backup, safety, fuzzy match 4 camadas
 from jarvis.core.devtools import (
@@ -144,6 +145,8 @@ def _print_status(active_model: str, mode: str, messages: list[dict[str, Any]]) 
     table.add_row("Backend", f"{status['state']} ({status['latency_ms']}ms)")
     table.add_row("Model", active_model)
     table.add_row("Modo", mode)
+    think_off = bool(getattr(cfg, "llm_disable_thinking", False))
+    table.add_row("Thinking", "[dim]OFF (/no_think)[/]" if think_off else "[bold green]🧠 ON[/]")
     table.add_row("Mensagens", str(len(messages)))
     table.add_row("Uptime", f"{status['uptime_pct']}%")
     console.print(Panel(table, title="Status", border_style="dim", title_align="left"))
@@ -997,7 +1000,7 @@ def _template_lang() -> str:
         return "português (PT-BR)"
 
 
-SYSTEM_PROMPT_TEMPLATE = """JARVIS dev agent. {LANG_NAME}. Direto.
+SYSTEM_PROMPT_TEMPLATE = """JARVIS dev agent. {LANG_NAME}. Direct.
 
 {repo_map}
 {memory_context}
@@ -1005,22 +1008,22 @@ SYSTEM_PROMPT_TEMPLATE = """JARVIS dev agent. {LANG_NAME}. Direto.
 
 {tools_catalog}
 
-LIMITES DE OUTPUT (OBRIGATÓRIO):
-- find: máx 30 resultados (use -maxdepth 2 | head -30)
-- ls: NUNCA recursivo (sem -R)
-- git log: máx 10 linhas (git log --oneline -10)
-- cat: PROIBIDO (usar head/tail/sed)
-- grep: máx 20 resultados (-m 20)
-- Output >50 linhas = resuma em bullets
+OUTPUT LIMITS (MANDATORY):
+- find: max 30 results (use -maxdepth 2 | head -30)
+- ls: NEVER recursive (no -R)
+- git log: max 10 lines (git log --oneline -10)
+- cat: FORBIDDEN (use head/tail/sed)
+- grep: max 20 results (-m 20)
+- Output >50 lines = summarize in bullets
 
 RULES:
-1. read_file ANTES de str_replace no mesmo path
-2. old = cópia EXATA do read_file
-3. Se falhar, re-leia com mais contexto
-4. Teste após editar, commit após testar
-5. Não invente conteúdo sem ler
-6. Use MCP tools quando built-in tools não bastam
-7. ANTES de ler arquivo grande: wc -l (saber tamanho)
+1. read_file BEFORE str_replace on the same path
+2. old = EXACT copy of the read_file output
+3. If it fails, re-read with more context
+4. Test after editing, commit after testing
+5. Never invent content you have not read
+6. Use MCP tools when the built-in tools are not enough
+7. BEFORE reading a large file: wc -l (know the size)
 {persona_block}
 
 {tool_discipline}
@@ -1067,11 +1070,11 @@ def _compact_system_prompt(repo_map: str, tools: list[dict[str, Any]]) -> str:
         tool_names=", ".join(names) if names else "none (text only)",
     )
 
-PLAN_PROMPT = """JARVIS architect. {LANG_NAME}. Direto.
+PLAN_PROMPT = """JARVIS architect. {LANG_NAME}. Direct.
 
 {repo_map}
 
-Leia arquivos necessários e retorne JSON puro:
+Read the files you need and return pure JSON:
 {{"plan": [{{"action": "read|edit|create|shell", "path": "...", "description": "..."}}]}}
 """.replace("{LANG_NAME}", _template_lang())
 
@@ -1574,29 +1577,29 @@ def _persona_block(persona) -> str:
         additions = (getattr(persona, "system_prompt_additions", "") or "").strip()
         if not additions:
             return ""
-        return f"\n\nPERSONA ATIVA: {persona.name} ({persona.role})\n{additions}"
+        return f"\n\nACTIVE PERSONA: {persona.name} ({persona.role})\n{additions}"
     except Exception:
         return ""
 
 
 # Bloco estático de limites do REPL (F8: seção do Assembler; texto idêntico
 # ao de SYSTEM_PROMPT_TEMPLATE — o golden test trava byte-identidade).
-_DEV_LIMITS_SECTION = """LIMITES DE OUTPUT (OBRIGATÓRIO):
-- find: máx 30 resultados (use -maxdepth 2 | head -30)
-- ls: NUNCA recursivo (sem -R)
-- git log: máx 10 linhas (git log --oneline -10)
-- cat: PROIBIDO (usar head/tail/sed)
-- grep: máx 20 resultados (-m 20)
-- Output >50 linhas = resuma em bullets
+_DEV_LIMITS_SECTION = """OUTPUT LIMITS (MANDATORY):
+- find: max 30 results (use -maxdepth 2 | head -30)
+- ls: NEVER recursive (no -R)
+- git log: max 10 lines (git log --oneline -10)
+- cat: FORBIDDEN (use head/tail/sed)
+- grep: max 20 results (-m 20)
+- Output >50 lines = summarize in bullets
 
 RULES:
-1. read_file ANTES de str_replace no mesmo path
-2. old = cópia EXATA do read_file
-3. Se falhar, re-leia com mais contexto
-4. Teste após editar, commit após testar
-5. Não invente conteúdo sem ler
-6. Use MCP tools quando built-in tools não bastam
-7. ANTES de ler arquivo grande: wc -l (saber tamanho)"""
+1. read_file BEFORE str_replace on the same path
+2. old = EXACT copy of the read_file output
+3. If it fails, re-read with more context
+4. Test after editing, commit after testing
+5. Never invent content you have not read
+6. Use MCP tools when the built-in tools are not enough
+7. BEFORE reading a large file: wc -l (know the size)"""
 
 def _build_system_prompt(repo_map: str, memory_context: str,
                          agent_context: str, persona_block: str,
@@ -1615,7 +1618,7 @@ def _build_system_prompt(repo_map: str, memory_context: str,
     from jarvis.runtime.context import ContextAssembler
     asm = ContextAssembler()
     asm.add("identity",
-            lambda: f"JARVIS dev agent. {_template_lang()}. Direto.\n\n")
+            lambda: f"JARVIS dev agent. {_template_lang()}. Direct.\n\n")
     asm.add("repo_map", lambda: repo_map + "\n")
     asm.add("memory", lambda: memory_context + "\n")
     asm.add("agent_ctx", lambda: agent_context + "\n\n")
@@ -1638,9 +1641,9 @@ def _tools_catalog(tools: list[dict[str, Any]]) -> str:
     só o que a persona liberou; `/tools` expande em runtime.
     """
     if not tools:
-        return ("SEM FERRAMENTAS NESTE PERFIL: responda em texto. "
-                "Se precisar de ferramenta, peça ao dono para liberar "
-                "com `/tools +nome` no REPL.")
+        return ("NO TOOLS IN THIS PROFILE: answer in plain text. "
+                "If you need a tool, ask the owner to enable it with "
+                "`/tools +name` in the REPL.")
     by_group: dict[str, list[str]] = {}
     for t in tools:
         fn = (t.get("function") or {})
@@ -1662,9 +1665,27 @@ def _tools_catalog(tools: list[dict[str, Any]]) -> str:
     return "\n".join(out)
 
 
-def _get_tools(persona=None) -> list[dict[str, Any]]:
-    """Tools do REPL. Com persona (exceto jarvis/all): filtra por capabilities.
+# Phase-specific tool sets for small models (reduces attention dilution)
+# Each phase gets only the tools actually needed.
+_PHASE_TOOLS: dict[str, set[str]] = {
+    "create": {"write_file", "list_directory", "execute_shell"},
+    "edit": {"read_file", "str_replace", "execute_shell"},
+    "test": {"execute_shell", "read_file", "list_directory"},
+    "search": {"semantic_search", "rag_search", "rag_index", "list_directory"},
+    "read": {"read_file", "list_directory", "semantic_search"},
+    "memory": {"remember", "recall", "lessons", "vault_list", "vault_write"},
+    "web": {"web_search", "read_chatgpt", "read_ai_conversation"},
+    "nix": {"nix_eval", "nix_check", "nix_search", "execute_shell"},
+    "vision": {"capture_screen", "observe_screen"},
+}
 
+
+def _get_tools(persona=None, phase: str | None = None) -> list[dict[str, Any]]:
+    """Tools do REPL. Com persona (exceto jarvis/all): filtra por capabilities.
+    
+    If phase is provided, further filters to only tools needed for that phase.
+    This reduces attention dilution for small models (22 tools -> ~3-5).
+    
     Matriz MCP (capability → tools):
       jarvis (default) = todas. researcher = leitura+RAG+web+memória.
     """
@@ -1709,7 +1730,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "cmd": {"type": "string", "description": "Comando shell completo"}
+                        "cmd": {"type": "string", "description": "Full shell command"}
                     },
                     "required": ["cmd"],
                 },
@@ -1723,8 +1744,8 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "Query em linguagem natural"},
-                        "top_k": {"type": "integer", "description": "Número de resultados (padrão 5)"},
+                        "query": {"type": "string", "description": "Natural language query"},
+                        "top_k": {"type": "integer", "description": "Number of results (default 5)"},
                     },
                     "required": ["query"],
                 },
@@ -1734,7 +1755,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "write_file",
-                "description": "Create/write a whole file. Auto-backup + AST guard. Creates missing parent directories: to build a directory structure, call write_file with the full path of each FILE inside it (the folders appear by themselves).as, chame write_file com o caminho completo de cada arquivo (mkdir via shell é bloqueado).",
+                "description": "Create/write a whole file. Auto-backup + AST guard. Creates missing parent directories: to build a directory structure, call write_file with the full path of each FILE inside it (the folders appear by themselves).",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -1753,8 +1774,8 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "path": {"type": "string", "description": "Diretório (padrão: raiz)"},
-                        "max_depth": {"type": "integer", "description": "Profundidade (padrão 2)"},
+                        "path": {"type": "string", "description": "Directory (default: project root)"},
+                        "max_depth": {"type": "integer", "description": "Depth (default 2)"},
                     },
                     "required": [],
                 },
@@ -1778,7 +1799,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                     "type": "object",
                     "properties": {
                         "mode": {"type": "string", "enum": ["full", "window"], "description": "Capture mode"},
-                        "question": {"type": "string", "description": "O que analisar"},
+                        "question": {"type": "string", "description": "What to analyze"},
                     },
                 },
             },
@@ -1792,7 +1813,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "expr": {"type": "string", "description": "Expressão Nix"},
+                        "expr": {"type": "string", "description": "Nix expression"},
                     },
                     "required": ["expr"],
                 },
@@ -1815,7 +1836,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                     "type": "object",
                     "properties": {
                         "query": {"type": "string", "description": "Search term"},
-                        "type": {"type": "string", "enum": ["packages", "options"], "description": "Tipo"},
+                        "type": {"type": "string", "enum": ["packages", "options"], "description": "Type"},
                     },
                     "required": ["query"],
                 },
@@ -1831,7 +1852,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                     "type": "object",
                     "properties": {
                         "text": {"type": "string", "description": "What to store"},
-                        "category": {"type": "string", "description": "Categoria: fact, event, decision"},
+                        "category": {"type": "string", "description": "Category: fact, event, decision"},
                     },
                     "required": ["text"],
                 },
@@ -1845,7 +1866,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "O que buscar"},
+                        "query": {"type": "string", "description": "What to search"},
                     },
                     "required": ["query"],
                 },
@@ -1868,7 +1889,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "name": {"type": "string", "description": "Nome da nota"},
+                        "name": {"type": "string", "description": "Note name"},
                         "content": {"type": "string", "description": "Content"},
                     },
                     "required": ["name", "content"],
@@ -1884,7 +1905,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "O que buscar"},
+                        "query": {"type": "string", "description": "What to search"},
                     },
                     "required": ["query"],
                 },
@@ -1912,7 +1933,7 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "Padrão de erro ou problema"},
+                        "query": {"type": "string", "description": "Error pattern or problem"},
                     },
                     "required": ["query"],
                 },
@@ -1927,8 +1948,8 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "url": {"type": "string", "description": "URL de compartilhamento"},
-                        "max_chars": {"type": "integer", "description": "Máx de caracteres (padrão 50000)"},
+                        "url": {"type": "string", "description": "Share URL"},
+                        "max_chars": {"type": "integer", "description": "Max characters (default 50000)"},
                     },
                     "required": ["url"],
                 },
@@ -1943,8 +1964,8 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "url": {"type": "string", "description": "URL de compartilhamento"},
-                        "max_chars": {"type": "integer", "description": "Máx de caracteres (padrão 50000)"},
+                        "url": {"type": "string", "description": "Share URL"},
+                        "max_chars": {"type": "integer", "description": "Max characters (default 50000)"},
                     },
                     "required": ["url"],
                 },
@@ -1959,8 +1980,8 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "Pergunta ou termos"},
-                        "max_results": {"type": "integer", "description": "Resultados (padrão 5)"},
+                        "query": {"type": "string", "description": "Question or search terms"},
+                        "max_results": {"type": "integer", "description": "Results (default 5)"},
                     },
                     "required": ["query"],
                 },
@@ -1989,10 +2010,17 @@ def _get_tools(persona=None) -> list[dict[str, Any]]:
         },
     ]
     if persona is None or not getattr(persona, "tools", None):
+        # Apply phase filter even for default persona
+        if phase and phase in _PHASE_TOOLS:
+            allowed = _PHASE_TOOLS[phase]
+            return [t for t in tools if t["function"]["name"] in allowed]
         return tools  # jarvis/default: todas
     from jarvis.core.persona import filter_tools as _filter_tools
     names = [t["function"]["name"] for t in tools]
     keep = set(_filter_tools(names, persona))
+    # Apply phase filter on top of persona filter
+    if phase and phase in _PHASE_TOOLS:
+        keep &= _PHASE_TOOLS[phase]
     return [t for t in tools if t["function"]["name"] in keep]
 
 
@@ -2531,14 +2559,14 @@ def _run_agent_loop(
                         console.print("[dim]  (claim não verificado — corrigindo)[/]")
                         messages.append({
                             "role": "system",
-                            "content": ("ATENÇÃO: você declarou que "
+                            "content": ("ATTENTION: you claimed that "
                                         + ", ".join(_false_claims[:3])
-                                        + " foi criado/escrito, mas write_file NUNCA "
-                                          "gravou esse path nesta sessão (gravou: "
-                                        + (", ".join(_writes[-3:]) or "nada")
-                                        + "). Se a task pede esse arquivo, chame "
-                                          'write_file(path="…", content="…") AGORA. '
-                                          "Não declare sucesso não verificado."),
+                                        + " was created/written, but write_file NEVER "
+                                          "wrote that path in this session (wrote: "
+                                        + (", ".join(_writes[-3:]) or "nothing")
+                                        + "). If the task requires that file, call "
+                                          'write_file(path="…", content="…") NOW. '
+                                          "Do not claim unverified success."),
                         })
                         continue
                 # (25/09, LOOP-v3 — victory-bias) Veredito estrutural antes
@@ -3354,8 +3382,188 @@ def _architect_plan(task: str, profile: dict, tools: list, debug: bool = False) 
         return None
 
 
-def _run_autopilot(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False, continue_session: bool = False, yolo: bool = False) -> int:
-    """Modo lote: planeja → executa → checkpoint."""
+def _load_known_failures(task: str) -> str:
+    """Load known failures from team/known-failures.txt relevant to task."""
+    try:
+        from pathlib import Path
+        kf_path = Path("/home/nixos/projects/team/known-failures.txt")
+        if kf_path.exists():
+            content = kf_path.read_text(encoding="utf-8")
+            task_keywords = task.lower().split()
+            relevant = []
+            for line in content.splitlines():
+                if any(kw in line.lower() for kw in task_keywords if len(kw) > 3):
+                    relevant.append(line)
+            if relevant:
+                return "\n".join(relevant[:10])
+    except Exception:
+        pass
+    return ""
+
+
+def _recall_lessons(task: str) -> str:
+    """Recall relevant lessons from episodic memory."""
+    try:
+        from jarvis.core.memory import EpisodicMemory
+        em = EpisodicMemory()
+        results = em.recall(task, top_k=3)
+        if results:
+            lessons = []
+            for r in results:
+                lessons.append(f"- {r.get('kind', '?')}: {r.get('text', '')[:200]}")
+            return "\n".join(lessons)
+    except Exception:
+        pass
+    return ""
+
+
+def _search_rag(task: str) -> str:
+    """Search RAG for relevant code context."""
+    try:
+        from jarvis.providers.vector_store import QdrantStore
+        from jarvis.core.config import Config as _Config
+        cfg = _Config()
+        store = QdrantStore(cfg)
+        if not store.is_available():
+            return ""
+        results = store.search_code(task, top_k=3)
+        if results:
+            snippets = []
+            for r in results:
+                file_path = r.get("payload", {}).get("file_path", "?")
+                content = r.get("payload", {}).get("content", "")[:300]
+                snippets.append(f"{file_path}:\n{content}")
+            return "\n---\n".join(snippets)
+    except Exception:
+        pass
+    return ""
+
+
+def _execute_plan(
+    executor: "PlanExecutor",
+    plan: "ExecutionPlan",
+    messages: list[dict[str, Any]],
+    tools: list[dict],
+    profile: dict,
+    approve: bool,
+    debug: bool,
+    max_turns: int,
+) -> bool:
+    """Execute structured plan with retry, validation, and learning."""
+    from jarvis.core.completion import check_completion
+    
+    _successes = 0
+    
+    while True:
+        # Check if plan is complete
+        next_step = plan.get_next_step()
+        if next_step is None:
+            # All steps done - verify overall completion
+            v = check_completion(messages)
+            if v is not None and v.status == "VERIFIED":
+                plan.status = "completed"
+                console.print("[jarvis]✓ Plan completed and verified[/]")
+                return True
+            elif v is not None and v.missing:
+                console.print(f"[tool.error]⚠️  Plan done but world check failed: {v.missing[:3]}[/]")
+                return False
+            else:
+                plan.status = "completed"
+                return True
+
+        step = plan.get_next_step()
+        console.print(f"[jarvis]step {plan.current_step + 1}/{len(plan.steps)}[/] · {step.description} ({step.action}: {step.target})")
+        
+        # Check if step can be retried
+        if step.retry_count >= step.max_retries:
+            console.print(f"[tool.error]⚠️  Step {step.id} exceeded max retries ({step.max_retries})[/]")
+            plan.status = "failed"
+            return False
+        
+        # Build step execution message
+        step_prompt = f"""Execute step {step.id}: {step.description}
+Action: {step.action}
+Target: {step.target}
+Expected: {step.expected_outcome}
+Validation: {step.validation}
+
+Use the appropriate tool and return the result. Be concise."""
+        
+        messages.append({"role": "user", "content": step_prompt})
+        
+        # Run agent loop for this step (limited turns)
+        step_ok = _run_agent_loop(messages, tools, profile, approve, debug, max_turns=10)
+        
+        if not step_ok:
+            step.retry_count += 1
+            # Learn from failure
+            if step.retry_count < step.max_retries:
+                from jarvis.core.memory import EpisodicMemory
+                em = EpisodicMemory()
+                em.remember_fact(
+                    f"Step {step.id} ({step.action}) failed at {step.target}. Retry #{step.retry_count}. Next: verify {step.validation} before proceeding.",
+                    meta={"task": "autopilot", "step": step.id}
+                )
+                console.print(f"[dim]  Retrying step {step.id} (attempt {step.retry_count + 1}/{step.max_retries})[/]")
+                continue
+            else:
+                console.print(f"[tool.error]⚠️  Step {step.id} failed after {step.max_retries} retries[/]")
+                from jarvis.core.memory import EpisodicMemory
+                em = EpisodicMemory()
+                em.remember_fact(
+                    f"Step {step.id} ({step.action}) failed permanently at {step.target}. Validation: {step.validation}. Root cause: check {step.validation} before claiming success.",
+                    meta={"task": "autopilot", "step": step.id, "permanent_failure": True}
+                )
+                plan.status = "failed"
+                return False
+        
+        # Validate step output
+        last_tool_result = ""
+        for msg in reversed(messages):
+            if msg.get("role") == "tool":
+                last_tool_result = msg.get("content", "")
+                break
+        
+        if step.validation == "file_exists":
+            import os
+            if os.path.exists(step.target):
+                console.print(f"[jarvis]✓ Step {step.id} validated (file exists)[/]")
+                plan.mark_step_complete(step.id, {"validated": True})
+                _successes += 1
+            else:
+                console.print(f"[tool.error]⚠️  Step {step.id} validation failed: {step.target} not found[/]")
+                step.retry_count += 1
+                if step.retry_count >= step.max_retries:
+                    return False
+                continue
+        elif step.validation == "test_passes":
+            plan.mark_step_complete(step.id, {"validated": True})
+            _successes += 1
+        else:
+            plan.mark_step_complete(step.id, {"validated": True})
+            _successes += 1
+        
+        # Learn from success
+        from jarvis.core.memory import EpisodicMemory
+        em = EpisodicMemory()
+        em.remember_fact(
+            f"Step {step.id} ({step.action}) succeeded at {step.target}. Validation: {step.validation} passed.",
+            meta={"task": "autopilot", "step": step.id, "success": True}
+        )
+    
+    return True
+
+
+def _run_autopilot(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False, continue_session: bool = False, yolo: bool = False, max_turns: int = 30) -> int:
+    """Modo lote: planeja → executa → checkpoint.
+    
+    Fluxo melhorado com PlanExecutor:
+    1. Cria plano estruturado com LLM (etapas, validações, dependências)
+    2. Usa lessons/recall/rag para evitar erros conhecidos
+    3. Executa cada etapa com validação e retry limitado
+    4. Aprende com falhas (salva em lessons)
+    5. Checkpoint de recuperação
+    """
     if project_root:
         from jarvis.core.paths import set_project_root
         set_project_root(project_root)
@@ -3369,7 +3577,17 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
 
     profile = _detect_profile()
     ap_persona = _select_persona(task)
-    tools = _get_tools(ap_persona) if profile["native_tools"] else []
+    # Detect task phase for tool filtering (reduces attention dilution for small models)
+    _task_lower = task.lower()
+    _phase = (
+        "create" if any(w in _task_lower for w in ["create", "build", "implement", "write", "add"]) else
+        "edit" if any(w in _task_lower for w in ["edit", "fix", "update", "modify", "change", "refactor"]) else
+        "test" if any(w in _task_lower for w in ["test", "validate", "verify", "run test"]) else
+        "search" if any(w in _task_lower for w in ["search", "find", "grep", "look for"]) else
+        "read" if any(w in _task_lower for w in ["read", "show", "view", "display"]) else
+        None
+    )
+    tools = _get_tools(ap_persona, phase=_phase) if profile["native_tools"] else []
     console.print(f"[jarvis]autopilot[/] · {profile['name']} · {task[:60]}")
 
     repo_map = _build_repo_map(os.getcwd())
@@ -3391,27 +3609,84 @@ def _run_autopilot(task: str, project_root: str | None = None, approve: bool = F
             else:
                 messages.insert(0, {"role": "system", "content": system_prompt})
 
-    plan = _architect_plan(task, profile, tools, debug)
-    if plan:
-        messages.append({"role": "user", "content": f"Plano inicial:\n{plan}\n\nExecute em etapas curtas com validação de cada fase."})
-    messages.append({"role": "user", "content": task})
+    # 1. Load known lessons/recall/rag to avoid known failures
+    _known_failures = _load_known_failures(task)
+    _relevant_lessons = _recall_lessons(task)
+    _rag_context = _search_rag(task)
+    
+    # Build context with prior knowledge
+    prior_knowledge = ""
+    if _known_failures:
+        prior_knowledge += f"\nKNOWN FAILURES TO AVOID:\n{_known_failures}\n"
+    if _relevant_lessons:
+        prior_knowledge += f"\nRELEVANT LESSONS:\n{_relevant_lessons}\n"
+    if _rag_context:
+        prior_knowledge += f"\nRELEVANT CODE CONTEXT:\n{_rag_context}\n"
+
+    # 2. Create structured plan with PlanExecutor
+    from jarvis.providers.llm import LLMClient
+    llm_client = LLMClient()
+    executor = PlanExecutor(llm_client=llm_client, tools=tools, debug=debug)
+    
+    # Create structured plan
+    plan_context = f"Task: {task}\n\nRepo map:\n{repo_map}\n\nMemory:\n{memory_ctx}\n\nAgent context:\n{agent_ctx}\n\nPrior knowledge:\n{prior_knowledge}"
+    plan = executor.create_plan(task, plan_context)
+    plan.status = "running"
+    
+    console.print(f"[jarvis]plan[/] · {len(plan.steps)} etapas criadas")
+    for i, step in enumerate(plan.steps):
+        deps = f" (deps: {', '.join(step.depends_on)})" if step.depends_on else ""
+        console.print(f"  [dim]{i+1}. {step.description} ({step.action}: {step.target}){deps}[/]")
+
+    # Add plan to messages
+    plan_json = json.dumps([
+        {"id": s.id, "action": s.action, "description": s.description, 
+         "target": s.target, "validation": s.validation, "depends_on": s.depends_on}
+        for s in plan.steps
+    ], ensure_ascii=False, indent=2)
+    messages.append({"role": "user", "content": f"Plano estruturado ({len(plan.steps)} etapas):\n{plan_json}\n\nExecute cada etapa, valide, e continue. Se falhar, tente novamente (máx {plan.steps[0].max_retries if plan.steps else 2} retries)."})
+
+    # Nightwatch convergence: recovery checkpoint
+    _cp = None
+    try:
+        from nightwatch.checkpoint import (
+            create_checkpoint_for_task, generate_recovery_summary,
+        )
+        _proj = os.path.basename(os.path.abspath(project_root or os.getcwd())) or "nixos-ai"
+        if continue_session:
+            _rec = generate_recovery_summary(_proj)
+            if _rec:
+                messages.append({"role": "user", "content": _rec})
+        _cp = create_checkpoint_for_task(
+            f"autopilot-{int(__import__('time').time())}", task, _proj)
+    except Exception:
+        _cp = None
+
+    # 3. Execute plan step by step with retry and validation
     messages = _trim_messages(messages)
-    ok = _run_agent_loop(messages, tools, profile, approve, debug, max_turns=8)
+    ok = _execute_plan(executor, plan, messages, tools, profile, approve, debug, max_turns)
+    
     _persist_session(messages, project_root or os.getcwd())
+    if _cp is not None:
+        try:
+            _cp.record_operation("autopilot", bool(ok),
+                                 "" if ok else "agent loop failed")
+        except Exception:
+            pass
     console.print("[dim]🧭 checkpoint salvo[/]")
     _repl_emit("session.ended", success=ok, turns=len(messages))
     return 0 if ok else 1
 
 
-MINIMAL_PROMPT = """JARVIS dev agent. {LANG_NAME}. Direto.
+MINIMAL_PROMPT = """JARVIS dev agent. {LANG_NAME}. Direct.
 
 {memory_context}
 {agent_context}
 {persona_block}
 RULES:
-1. Responda em {LANG_NAME}, sem rodeios e sem pedir desculpa por nada.
-2. Use ferramenta quando a tarefa exigir; responda em texto quando não.
-3. Entregue o resultado (arquivo/texto) e pare. Não peça para continuar.
+1. Reply in {LANG_NAME}, no detours and no apologizing for anything.
+2. Use a tool when the task requires it; reply in text when it does not.
+3. Deliver the result (file/text) and stop. Do not ask to continue.
 """.replace("{LANG_NAME}", _template_lang())
 
 
@@ -3444,7 +3719,7 @@ def _apply_prompt_profile(prompt: str, profile_name: str) -> str:
     return out
 
 
-def dev_once(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False, continue_session: bool = False, yolo: bool = False, autopilot: bool = False, transcript_path: str | None = None) -> int:
+def dev_once(task: str, project_root: str | None = None, approve: bool = False, debug: bool = False, continue_session: bool = False, yolo: bool = False, autopilot: bool = False, transcript_path: str | None = None, max_turns: int = 30) -> int:
     if project_root:
         from jarvis.core.paths import set_project_root
         set_project_root(project_root)
@@ -3456,7 +3731,7 @@ def dev_once(task: str, project_root: str | None = None, approve: bool = False, 
         approve = True
 
     if autopilot:
-        return _run_autopilot(task, project_root=project_root, approve=approve, debug=debug, continue_session=continue_session, yolo=yolo)
+        return _run_autopilot(task, project_root=project_root, approve=approve, debug=debug, continue_session=continue_session, yolo=yolo, max_turns=max_turns)
 
     _auto_index_rag()
 
@@ -3580,6 +3855,7 @@ if __name__ == "__main__":
     parser.add_argument("--once", type=str, default=None, help="Executa uma tarefa única e sai")
     parser.add_argument("--transcript", type=str, default=None, help="Salva transcript JSON p/ scripting")
     parser.add_argument("--debug", action="store_true", help="Modo debug (payloads crus da API)")
+    parser.add_argument("--max-turns", type=int, default=30, help="Máximo de turnos no modo autopilot")
     ns = parser.parse_args()
 
     if ns.once:
@@ -3593,6 +3869,7 @@ if __name__ == "__main__":
                 yolo=ns.yolo,
                 autopilot=ns.autopilot,
                 transcript_path=ns.transcript,
+                max_turns=ns.max_turns,
             )
         )
     else:

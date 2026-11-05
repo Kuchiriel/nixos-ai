@@ -1,0 +1,113 @@
+{
+ "ts": "2026-10-20T05:45:42",
+ "asr": "http://127.0.0.1:8097",
+ "samples_per_cat": 3,
+ "seed": 42,
+ "categories": {
+  "silence": {
+   "clips": 3,
+   "empty_ok": 0,
+   "hallucinated": 3,
+   "halluc_rate": 1.0,
+   "lexicon_kill": 1,
+   "net_rate_apos_lista": 0.667,
+   "errors": 0,
+   "samples": [
+    {
+     "id": "dither_10s",
+     "text": ".",
+     "lexicon_kill": false
+    },
+    {
+     "id": "digital_zero_29s",
+     "text": "E aí",
+     "lexicon_kill": true
+    },
+    {
+     "id": "dither_29s",
+     "text": ".",
+     "lexicon_kill": false
+    }
+   ]
+  },
+  "nonspeech": {
+   "clips": 3,
+   "empty_ok": 0,
+   "hallucinated": 3,
+   "halluc_rate": 1.0,
+   "lexicon_kill": 2,
+   "net_rate_apos_lista": 0.333,
+   "errors": 0,
+   "samples": [
+    {
+     "id": "noise_232499",
+     "text": ".",
+     "lexicon_kill": false
+    },
+    {
+     "id": "music_345582",
+     "text": "E aí",
+     "lexicon_kill": true
+    },
+    {
+     "id": "noise_378070",
+     "text": "E aí",
+     "lexicon_kill": true
+    }
+   ]
+  },
+  "music": {
+   "clips": 3,
+   "empty_ok": 0,
+   "hallucinated": 3,
+   "halluc_rate": 1.0,
+   "lexicon_kill": 1,
+   "net_rate_apos_lista": 0.667,
+   "errors": 0,
+   "samples": [
+    {
+     "id": "008879_16khz_mono",
+     "text": "Não, não, não.",
+     "lexicon_kill": false
+    },
+    {
+     "id": "003945_16khz_mono",
+     "text": "E aí",
+     "lexicon_kill": true
+    },
+    {
+     "id": "004376_16khz_mono",
+     "text": "Oh, oh, oh, oh, oh, oh, oh, oh",
+     "lexicon_kill": false
+    }
+   ]
+  },
+  "reduplication": {
+   "clips": 3,
+   "empty_ok": 0,
+   "hallucinated": 3,
+   "halluc_rate": 1.0,
+   "lexicon_kill": 3,
+   "net_rate_apos_lista": 0.0,
+   "errors": 0,
+   "samples": [
+    {
+     "id": "vowel_o_n12_r3_t2",
+     "text": "E aí",
+     "lexicon_kill": true
+    },
+    {
+     "id": "laugh_e_n03_r7_t2",
+     "text": "E aí",
+     "lexicon_kill": true
+    },
+    {
+     "id": "vowel_o_n08_r9_t2",
+     "text": "E aí",
+     "lexicon_kill": true
+    }
+   ]
+  }
+ },
+ "note": "gate v6 completo vive no duplex-asrd (lane OC); kill simulado = listas TSV (tier-2 + lexicon)"
+}

@@ -14,7 +14,15 @@
 #   - RNNoise: ativado via PipeWire filter-chain em nixos/modules/audio.nix
 let
   cfg = config.services.jarvis-wakeword;
+  # 03/11 (FluidVoice): o mic entra pelo AEC3 (echo_cancel_source) e o
+  # RNNoise encadeia DELE. Fallback para rnnoise_source se o modulo de
+  # echo-cancel nao carregar (mic mudo e pior que sem AEC).
   micTarget =
+    if cfg.device == "default"
+    then "echo_cancel_source"
+    else cfg.device;
+
+  micFallback =
     if cfg.device == "default"
     then "rnnoise_source"
     else cfg.device;
@@ -51,37 +59,6 @@ let
   # Hoje apenas registra o arquivo; o hook real entra com o STT.
   brainCmd = cfg.brainCommand;
 
-  # Pacote que expõe os modelos declarativos em ~/.local/share (symlinks p/ store)
-  modelsLink = pkgs.runCommand "jarvis-models-link" {} ''
-    mkdir -p $out/lib
-    cat > $out/lib/link-models.sh <<'EOF'
-    #!/bin/sh
-    set -e
-    mkdir -p "$HOME/.local/share/kokoro" "$HOME/.local/share/openwakeword"
-    ln -sf ${pkgs.aiModels.kokoro.config} "$HOME/.local/share/kokoro/config.json"
-    ln -sf ${pkgs.aiModels.kokoro.model} "$HOME/.local/share/kokoro/kokoro-v1_0.pth"
-    # Voice files — one per language
-    mkdir -p "$HOME/.local/share/kokoro/voices"
-    ln -sf ${pkgs.aiModels.kokoro.voice} "$HOME/.local/share/kokoro/af_heart.pt"
-    ln -sf ${pkgs.aiModels.kokoro.voice} "$HOME/.local/share/kokoro/voices/af_heart.pt"
-    ln -sf ${pkgs.aiModels.kokoro.voices.pf_dora} "$HOME/.local/share/kokoro/voices/pf_dora.pt"
-    ln -sf ${pkgs.aiModels.kokoro.voices.pm_alex} "$HOME/.local/share/kokoro/voices/pm_alex.pt"
-    ln -sf ${pkgs.aiModels.openwakeword.hey_jarvis} "$HOME/.local/share/openwakeword/hey_jarvis_v0.1.onnx"
-    ln -sf ${pkgs.aiModels.openwakeword.embedding} "$HOME/.local/share/openwakeword/embedding_model.onnx"
-    ln -sf ${pkgs.aiModels.openwakeword.melspectrogram} "$HOME/.local/share/openwakeword/melspectrogram.onnx"
-    # STT small (faster-whisper, layout de cache HF): fonte de verdade em
-    # modules/ai/models.nix (whisper-small, 4 arquivos). Declarativo —
-    # sobrevive sem rede; o wget imperativo foi removido.
-    STT_SNAP="$HOME/.local/share/jarvis/voice/models--Systran--faster-whisper-small/snapshots/main"
-    mkdir -p "$STT_SNAP"
-    ln -sf ${pkgs.aiModels.whisper-small.model} "$STT_SNAP/model.bin"
-    ln -sf ${pkgs.aiModels.whisper-small.config} "$STT_SNAP/config.json"
-    ln -sf ${pkgs.aiModels.whisper-small.vocabulary} "$STT_SNAP/vocabulary.txt"
-    ln -sf ${pkgs.aiModels.whisper-small.tokenizer} "$STT_SNAP/tokenizer.json"
-EOF
-    chmod +x $out/lib/link-models.sh
-  '';
-
   jarvisScript =
     pkgs.writers.writePython3Bin "jarvis-wakeword-daemon" {
       flakeIgnore = ["E501" "E231" "E226" "F541" "E117"];
@@ -102,6 +79,7 @@ EOF
       RATE = ${toString cfg.rate}
       CHUNK = 512
       DEVICE = "${micTarget}"
+      DEVICE_FALLBACK = "${micFallback}"
       COOLDOWN = ${toString cfg.cooldownSeconds}
       MAX_RECORD = ${toString cfg.maxRecordSeconds}
       KILL_TTS = ${
@@ -277,14 +255,34 @@ EOF
           noise_baseline = 500  # Updated during silence (rolling average)
           print(f"[WW] Starting pw-record {DEVICE} @ {RATE}Hz (VAD adaptive mode, Cooldown: {COOLDOWN}s)", flush=True)
 
-          def start_arecord():
+          def start_arecord(device=None):
               return subprocess.Popen(
-                  [PW_RECORD, "--target", DEVICE, "--format", "s16",
+                  [PW_RECORD, "--target", device or DEVICE, "--format", "s16",
                    "--rate", str(RATE), "--channels", "2", "-"],
                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
               )
 
-          arecord_proc = start_arecord()
+          def start_arecord_resilient():
+              """03/11: AEC3 antes do RNNoise. Se o source de echo-cancel
+              nao existir (modulo nao carregou), cai para rnnoise_source —
+              sem mic o wakeword fica MUDO, o que e pior que sem AEC."""
+              global DEVICE
+              proc = start_arecord(DEVICE)
+              time.sleep(1.5)
+              if proc.poll() is not None:
+                  err = ""
+                  try:
+                      err = (proc.stderr.read() or b"").decode(errors="ignore")
+                  except Exception:
+                      pass
+                  print(f"[WW] source '{DEVICE}' indisponivel "
+                        f"({err.strip()[:120] or 'sem stderr'}) -> "
+                        f"fallback '{DEVICE_FALLBACK}'", flush=True)
+                  DEVICE = DEVICE_FALLBACK
+                  proc = start_arecord(DEVICE)
+              return proc
+
+          arecord_proc = start_arecord_resilient()
           update_status("idle", "󰆪 Aguardando...")
 
           last_trigger_time = 0
@@ -689,7 +687,7 @@ in {
         Comando de processamento do áudio capturado (Fase 8: STT → LLM → TTS).
         Recebe o path do WAV como argumento.
 
-        No host final, com voz habilitada (pacote `jarvis-voice` no PATH):
+        No host final, com voz habilitada (pacote `jarvis` no PATH):
           brainCommand = [ "jarvis" "voice" ];
         (faster-whisper STT com VAD calibrado + Kokoro TTS — ver
         docs/architecture/legacy-audio-calibration.md)
@@ -698,15 +696,11 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    home.packages = [jarvisPythonEnv jarvisScript modelsLink];
+    home.packages = [jarvisPythonEnv jarvisScript];
 
     # Cria os symlinks dos modelos declarativos (store → ~/.local/share).
     # O snapshot STT small é linkado em link-models.sh (acima), a partir de
     # modules/ai/models.nix — sem downloads imperativos aqui.
-    home.activation.jarvisModels = lib.hm.dag.entryAfter ["writeBoundary"] ''
-      run ${modelsLink}/lib/link-models.sh
-    '';
-
     systemd.user.services.jarvis-wakeword = {
       Unit = {
         Description = "Jarvis Neural Core Wakeword Daemon";
@@ -716,9 +710,9 @@ in {
         ExecStart = "${jarvisScript}/bin/jarvis-wakeword-daemon";
         Restart = "always";
         RestartSec = "5s";
-        # PATH needs jarvis-voice for BRAIN_CMD (jarvis voice <wav>)
+        # PATH needs jarvis for BRAIN_CMD (jarvis voice <wav>)
         Environment = [
-          "PATH=${lib.makeBinPath [pkgs.jarvis-voice pkgs.pipewire pkgs.sox pkgs.procps]}:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.findutils}/bin"
+          "PATH=${lib.makeBinPath [pkgs.jarvis pkgs.pipewire pkgs.sox pkgs.procps]}:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:${pkgs.findutils}/bin"
           "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus"
           "DISPLAY=:0"
           "WAYLAND_DISPLAY=wayland-1"

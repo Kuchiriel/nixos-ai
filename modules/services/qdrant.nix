@@ -31,6 +31,15 @@ lib.mkIf config.services.jarvis.enable {
   systemd.services.qdrant = {
     partOf = ["jarvis.target"];
     wantedBy = ["jarvis.target" "multi-user.target"];
+    serviceConfig = {
+      # Hardening básico
+      NoNewPrivileges = true;
+      PrivateTmp = true;
+      RestrictSUIDSGID = true;
+      ProtectSystem = "strict";
+      ReadWritePaths = [ "/var/lib/qdrant" ];
+      MemoryMax = "4G";
+    };
     # 24/09: self-hosted sem api_key deixa qualquer processo local (e
     # qualquer agente) ler QUALQUER coleção — inclusive pessoal_code. A
     # chave vem de EnvironmentFile root:nixos 600, nunca do store do Nix.
@@ -46,9 +55,12 @@ lib.mkIf config.services.jarvis.enable {
   };
 
   systemd.tmpfiles.rules = [
-    "d /var/lib/qdrant 0750 qdrant qdrant -"
-    "d /var/lib/qdrant/storage 0750 qdrant qdrant -"
-    "d /var/lib/qdrant/snapshots 0750 qdrant qdrant -"
-    "h /var/lib/qdrant - - - - +C"
+    # (03/11) /var/lib/qdrant é um SYMLINK para /var/lib/private/qdrant
+    # (DynamicUser). Regras apontando para o symlink falhavam a cada boot:
+    # "already exists and is not a directory" + "Setting file flags is only
+    # supported on regular files and directories". O +C (NoCoW no btrfs) vai
+    # no diretório REAL.
+    "d /var/lib/private/qdrant 0750 qdrant qdrant -"
+    "h /var/lib/private/qdrant - - - - +C"
   ];
 }

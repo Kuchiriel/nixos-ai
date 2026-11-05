@@ -314,31 +314,104 @@ class EpisodicMemory:
         return out
 
     def recent(self, *, limit: int = 20) -> list[dict[str, Any]]:
-        """Últimos eventos (sem embedding — via payload ts)."""
-        # Qdrant não ordena por payload sem query; usamos busca com filtro vazio
-        # aproximado via dense search com vetor nulo não é viável — fallback:
-        # listar pela API de scroll.
-        try:
-            result = self._store._request(
-                "POST",
-                f"/collections/{self.collection}/points/scroll",
-                json={"limit": limit, "with_payload": True},
-            )
-        except Exception:  # noqa: BLE001
-            return []
-        points = result.get("result", {}).get("points", [])
+        """Últimos eventos (sem embedding — ordena por payload ts).
+
+        O scroll do Qdrant vem em ordem de id, não de ts: pedir só `limit`
+        pontos amostra um pedaço arbitrário da coleção (medido: 1491 pontos e
+        as "recent lessons" saíam de 17/09). Paginamos até esgotar (cap 20
+        páginas) e ordenamos localmente; sem order_by para não exigir índice.
+        """
+        points: list[dict[str, Any]] = []
+        offset: Any = None
+        for _ in range(20):
+            body: dict[str, Any] = {"limit": 512, "with_payload": True}
+            if offset is not None:
+                body["offset"] = offset
+            try:
+                result = self._store._request(
+                    "POST",
+                    f"/collections/{self.collection}/points/scroll",
+                    json=body,
+                )
+            except Exception:  # noqa: BLE001
+                break
+            res = result.get("result", {}) or {}
+            page = res.get("points", []) or []
+            points.extend(page)
+            offset = res.get("next_page_offset")
+            if not offset or not page:
+                break
         events = []
         for p in points:
             pl = p.get("payload", {})
             events.append({"id": p.get("id"), **pl})
         events.sort(key=lambda e: e.get("ts", 0), reverse=True)
-        return events
+        return events[:limit]
 
     def count(self) -> int:
         try:
             return self._store.count(self.collection)
         except Exception:  # noqa: BLE001
             return 0
+
+    def consolidate_memories(self, similarity_threshold: float = 0.95,
+                              min_cluster_size: int = 2,
+                              max_points: int = 1000,
+                              dry_run: bool = True) -> dict:
+        """Consolida memórias similares em fatos atômicos (cosseno >= threshold)."""
+        if not self.is_available():
+            return {"error": "Qdrant indisponível"}
+        self.ensure()
+        scroll = self._store._request(
+            "POST", f"/collections/{self.collection}/points/scroll",
+            json={"limit": 1000, "with_payload": True, "with_vector": True})
+        if not scroll or scroll.get("status") != "ok":
+            return {"error": "falha ao buscar memórias"}
+        points = scroll.get("result", {}).get("points", [])
+        if len(points) < 2:
+            return {"status": "pontos_insuficientes", "processed": 0}
+        import numpy as np
+        pts = []
+        for p in points:
+            vec = p.get("vector", {}).get("dense")
+            text = p.get("payload", {}).get("text", "").strip()
+            if vec and text:
+                pts.append({"id": p["id"], "vec": np.array(vec), "text": text, "pl": p["payload"]})
+        if len(pts) < 2:
+            return {"status": "pontos_insuficientes", "processed": 0}
+        vectors = np.array([p["vec"] for p in pts])
+        norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        normed = vectors / norms
+        sim = np.dot(normed, normed.T)
+        np.fill_diagonal(sim, 0)
+        visited = np.zeros(len(pts), dtype=bool)
+        clusters = []
+        for i in range(len(pts)):
+            if visited[i]:
+                continue
+            cluster = [i]
+            for j in range(i+1, len(pts)):
+                if not visited[j] and sim[i, j] >= similarity_threshold:
+                    cluster.append(j)
+            if len(cluster) >= min_cluster_size:
+                clusters.append(cluster)
+                for idx in cluster:
+                    visited[idx] = True
+        if not clusters:
+            return {"status": "sem_clusters", "processed": 0}
+        stats = {"clusters": len(clusters), "removed": 0, "kept": 0, "consolidated": 0}
+        for cluster in clusters:
+            cp = [pts[i] for i in cluster]
+            cp.sort(key=lambda p: (p["pl"].get("timestamp", 0), len(p["text"])), reverse=True)
+            keeper = cp[0]
+            if not dry_run:
+                ids = [p["id"] for p in cp[1:]]
+                self._store.delete_points(self.collection, ids)
+            stats["removed"] += len(cluster) - 1
+            stats["kept"] += 1
+            stats["consolidated"] += 1
+        return {"status": "ok", **stats}
 
     def clear(self, *, confirm: bool = False) -> None:
         """Apaga TODA a memória episódica (destrutivo — audit P0-3).

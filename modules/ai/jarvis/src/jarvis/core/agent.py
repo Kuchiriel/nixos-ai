@@ -1133,12 +1133,12 @@ class Agent:
             # nome-vs-valor — L4 real: ia pro reflog/merge em vez de editar
             # os segredos nos arquivos de trabalho).
             system_content += ("\n\nTASK MODE: SECRET-SANITIZATION. "
-                "Os segredos estão nos ARQUIVOS DE TRABALHO (não em commits/"
-                "branches) — NÃO use git reflog/recovery/merge para isto. "
-                "Faça: 1) grep -rlE 'AKIA|ghp_|hf_' . para achar os arquivos "
-                "com VALORES; 2) edite cada VALOR por placeholder "
-                "(str_replace value->placeholder), nunca o NOME da chave; "
-                "3) confirme com grep que nenhum valor restou.")
+                "The secrets live in the WORKING FILES (not in commits/"
+                "branches) — DO NOT use git reflog/recovery/merge for this. "
+                "Do: 1) grep -rlE 'AKIA|ghp_|hf_' . to find the files "
+                "holding VALUES; 2) replace each VALUE with a placeholder "
+                "(str_replace value->placeholder), never the KEY name; "
+                "3) confirm with grep that no value is left.")
 
         # Persona (default jarvis; voz usa "agent"). Via registry.
         # H2: persona AUTOMÁTICA (implícita) perturba acurácia em tasks
@@ -1215,8 +1215,10 @@ class Agent:
         # Routing local (model_requirements): seleciona pelo registry e
         # garante residência via router (ensure idempotente). Sem
         # requirements, nada muda (config.llm_model como antes).
+        # HÍBRIDO (28/10): passa prompt p/ classificar dificuldade e
+        # rotear local vs cloud. Cloud = RemoteBackend, sem ensure_model.
         if self.model_requirements:
-            self._ensure_routed_model()
+            self._ensure_routed_model(prompt=prompt)
 
         # P0.4: plano explícito ancorado antes do loop (self ou roteado).
         # Falha no plano nunca aborta o run (segue sem plano).
@@ -2624,13 +2626,17 @@ class Agent:
         self._finalize(result, messages, forced="STUCK")
         return False
 
-    def _ensure_routed_model(self) -> None:
+    def _ensure_routed_model(self, prompt: str = "") -> None:
         """Seleciona modelo pelo registry e garante residência (router).
 
         O campo `model` do payload passa a ser significativo: o router
         atende o preset pedido (antes, "default" era ignorado pelo servidor
         single-model). Falha de routing/ensure propaga — nunca fallback
         silencioso p/ modelo incapaz.
+
+        HÍBRIDO (28/10): se prompt fornecido, classifica dificuldade e
+        roteia local vs cloud. Cloud = RemoteBackend direto (sem
+        ensure_model — não é modelo local).
         """
         from dataclasses import replace
         from jarvis.core.model_lifecycle import base_url_for, ensure_model
@@ -2638,10 +2644,52 @@ class Agent:
 
         model_id, reason = select_model_for_task(
             self.model_requirements, caller="Agent.run",
-            emit=self.logger.emit)
-        # Endpoint do BINÁRIO CERTO (models.nix endpoints; nunca o router
-        # prism p/ denso/MoE — D2/D5). Serviço parado → ensure falha em
-        # discover (sem fallback silencioso p/ binário errado).
+            emit=self.logger.emit, prompt=prompt)
+
+        # CLOUD: model_id = "cloud/provider/model" → RemoteBackend, sem ensure
+        if model_id.startswith("cloud/"):
+            _prefix, provider, model = model_id.split("/", 2)
+            import os
+            from jarvis.providers.llm_remote import RemoteBackend
+            # Descobre base_url e env_key do provider
+            # Provia defaults (hybrid_route já validou key antes de retornar)
+            _provider_defaults = {
+                "groq": ("https://api.groq.com/openai", "GROQ_API_KEY"),
+                "openrouter": ("https://openrouter.ai/api", "OPENROUTER_API_KEY"),
+                "freellmapi": ("http://127.0.0.1:3001", "FREELLMAPI_API_KEY"),
+            }
+            base_url, env_key = _provider_defaults.get(provider, ("", ""))
+            api_key = os.environ.get(env_key, "")
+            # hybrid_route só retorna cloud se key existe; se sumiu entre
+            # chamadas (race), propaga erro — nunca fallback silencioso.
+            if not api_key:
+                raise RuntimeError(
+                    f"hybrid cloud selected {provider}/{model} but "
+                    f"{env_key} is now empty (race?)")
+            # Configura RemoteBackend como self.llm
+            self.logger.emit("model_routed", detail={
+                "requested": reason.get("requested", {}),
+                "selected": model_id,
+                "switched": True,
+                "previous": self.config.llm_model,
+                "startup_latency_s": 0.0,
+                "reason": reason,
+            })
+            # Cria RemoteBackend e substitui self.llm
+            remote = RemoteBackend(
+                base_url=base_url, model=model, api_key=api_key,
+                provider=provider, session=self._session)
+            self.llm = remote
+            # Marca que estamos em cloud (para _try_api_cascade não repetir)
+            self._api_fallback_used = True
+            self._last_api_provider = provider
+            self._last_api_model = model
+            # Atualiza config (para logging/telemetria)
+            self.config = replace(self.config, llm_model=model_id,
+                                  llm_base_url=base_url)
+            return  # sai aqui — cloud pronto
+
+        # LOCAL: fluxo original (ensure + LLMClient)
         routed_base = base_url_for(model_id)
         report = ensure_model(model_id, base_url=routed_base)
         self.logger.emit("model_routed", detail={

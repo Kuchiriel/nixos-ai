@@ -76,11 +76,27 @@ class Provider:
     notes: str = ""
 
 
+def _registry_base_url(model_id: str, fallback: str) -> str:
+    """(03/11) Base URL do server que serve `model_id` — fonte: registry JSON.
+
+    O registry é gerado pelo Nix (modules/ai/models.nix). Sem ele (dev/test),
+    cai no fallback (mesmo valor do registry).
+    """
+    try:
+        from jarvis.core.model_registry import ModelRegistry
+        url = ModelRegistry.load().base_url_for(model_id)
+        if url and not url.endswith(":0"):
+            return f"{url}/v1"
+    except Exception:
+        pass
+    return fallback
+
+
 # --- pools curados (do inventário real; não os 591 — os úteis) ---
 
 LOCAL_BONSAI = Provider(
     name="local", kind=ProviderKind.DIRECT, tier=ProviderTier.LOCAL,
-    base_url="http://127.0.0.1:8080/v1",
+    base_url=_registry_base_url("bonsai", "http://127.0.0.1:8080/v1"),
     max_data_class=DataClass.SECRET,  # tudo pode ficar local
     models={
         "bonsai-8b": ModelCaps(context=CANONICAL_CONTEXT, tools=True, reasoning=True),

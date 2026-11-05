@@ -59,7 +59,7 @@ Harness.execute_task()
 
 | ID | Problema | Arquivo:linha | Evidência | Real/Hipótese | Severidade | Status |
 |----|----------|---------------|-----------|---------------|------------|--------|
-| F1 | LoopDetector/ContextBudget/ToolValidator/CircuitBreaker instanciados e **nunca usados** no caminho de produção | `core/agent.py:314-322` | `grep self.loop_detector|self.context_budget|self.validator|self.circuit_breaker` → só as linhas do `__init__` | Real | P0 | **CORRIGIDO** |
+| F1 | LoopDetector/ContextBudget/ToolValidator/CircuitBreaker instanciados e **nunca usados** no caminho de produção | `core/agent.py:314-322` | `grep self.loop_detector\|self.context_budget\|self.validator\|self.circuit_breaker` → só as linhas do `__init__` | Real | P0 | **CORRIGIDO** |
 | F2 | Bug latente: `LoopDetector._check_stagnation()` crasha com `content=None` (llama.cpp retorna `content: null` em turno de tool call) | `core/loop_detector.py:238` | `TypeError: 'NoneType' object is not subscriptable` reproduzido por teste | Real | P0 | **CORRIGIDO** |
 | F3 | Três caminhos de tool-call paralelos na mesma classe; `run_loop`/`execute_tool`/`TOOLS` sem chamadores | `core/agent.py` | `grep run_loop / execute_tool / import TOOLS` em src/ e tests/ → zero ocorrências fora de agent.py | Real | P1 | Documentado (remoção futura) |
 | F4 | `_get_llm_response()` ignora `LLMClient`/backend abstraction — post direto com `max_tokens=1024, temperature=0.0` fixos, ignorando perfil detectado | `core/agent.py:~684` | leitura de código; `detect_profile()` existe mas não era aplicado no payload | Real | P1 | Parcial (params agora do perfil; LLMClient segue pendente) |
@@ -98,7 +98,7 @@ Harness.execute_task()
 cd modules/ai/jarvis
 PYTHONPATH=src:<store-paths de requests/urllib3/certifi/charset-normalizer/idna> \
   /nix/store/b9xszc8ibgm6c4cm461661qiiqi78zwz-python3.13-pytest-9.0.3/bin/pytest \
-  tests/test_agent.py -q
+  modules/ai/jarvis/tests/test_agent.py -q
 # → 30 passed (inclui 2 novos)
 ```
 
@@ -149,7 +149,7 @@ PYTHONPATH=src:<store-paths de requests/urllib3/certifi/charset-normalizer/idna>
 - `func` não-dict → `AttributeError`. Fix: guarda `isinstance(func, dict)` → tool result de erro + continue.
 - `arguments` string com JSON inválido → `args` virava string → crash em `args.get()`. Fix: distingue string (parse via `json.loads`) de dict (uso direto); except → `{}`.
 - `arguments` não-dict pós-parse → guarda `isinstance(args, dict)` → erro + continue.
-- Evidência: `tests/test_solar_probe.py` 8 falhas → 0. Commit `a5882fa`.
+- Evidência: `modules/ai/jarvis/tests/test_solar_probe.py` 8 falhas → 0. Commit `a5882fa`.
 
 **F10 — Injeção dupla de PAST LESSONS** (P1, `core/agent.py`):
 - `run()` injetava lessons no system_content; `_get_llm_response()` re-injetava em `messages[0]` a cada turno → prompt crescia N×. Fix: removida re-injeção (injeção canônica única em `run()`). Commit `a5882fa`.

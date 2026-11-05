@@ -365,6 +365,28 @@ def _make_diff(path: str, old: str, new: str) -> str:
     ))
 
 
+def _advisory_review(diff: str) -> dict[str, Any] | None:
+    """Post-edit structural review (nightwatch Evaluator, NO LLM).
+
+    CPU-only: dangerous patterns, removed import/def, size, missing test.
+    ADVISORY — never blocks the write; the model gets the feedback in
+    context and self-corrects next turn. This is the "second pair of eyes"
+    small models are missing.
+    """
+    try:
+        from nightwatch.evaluator import auto_review
+        rev = auto_review(diff or "", "")
+        if rev.issues or rev.suggestions:
+            return {
+                "verdict": rev.verdict,
+                "issues": rev.issues,
+                "suggestions": rev.suggestions,
+            }
+        return None
+    except Exception:
+        return None
+
+
 # ===========================================================================
 # TOOL: read_file
 # ===========================================================================
@@ -595,6 +617,9 @@ def str_replace(path: str, old: str, new: str, allow_multiple: bool = False) -> 
             "strategy": strategy,
             "diff": diff,
         }
+        _rev = _advisory_review(diff)
+        if _rev:
+            out["review"] = _rev
         # 2ª edição idêntica deixa passar COM o estado real da linha:
         # se o run seguinte errar, o modelo vê a própria corrupção.
         if _n == 2:
@@ -768,6 +793,13 @@ def write_file(path: str, content: str, backup: bool = True) -> dict[str, Any]:
         except OSError as e:
             return {"ok": False, "error": f"mkdir falhou: {e}"}
 
+        _old_text = ""
+        if _existed:
+            try:
+                _old_text = target.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                _old_text = ""
+
         from nightwatch.safe_editor import SafeEditor
         res = SafeEditor().apply_edit(target, content)
         if not res.success:
@@ -799,13 +831,17 @@ def write_file(path: str, content: str, backup: bool = True) -> dict[str, Any]:
                 _CREATED_BY_RUN.add(str(target.resolve()))
             except OSError:
                 pass
-        return {
+        _out: dict[str, Any] = {
             "ok": True,
             "path": rel,
             "bytes": len(content.encode("utf-8")),
             "backup": res.backup_path if backup else None,
             "executable": _made_exec,
         }
+        _rev = _advisory_review(_make_diff(rel, _old_text, content))
+        if _rev:
+            _out["review"] = _rev
+        return _out
     except ValueError as e:
         return {"ok": False, "error": str(e)}
     except OSError as e:

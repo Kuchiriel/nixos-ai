@@ -21,8 +21,13 @@ from collections.abc import Callable
 # 2000 chars FALHA, 1600 OK. Ou seja ~3,1 chars/token nao vale: precisa
 # de folga real. 1200 chars ≈ 375 tokens = 27% abaixo do teto de 512.
 # Custa mais requests, e requests a mais e barato; perder a memoria e caro.
-CHUNK_CHARS = 1200
-OVERLAP_CHARS = 200
+# 30/10: o servidor de embeddings (llama.cpp, porta 8081) tem n_ctx=512 TOKENS.
+# 1200 chars ≈ 550 tokens nesse texto -> HTTP 400 "exceed_context_size" e o
+# index caia no fallback item-a-item (90s por lote, indice "pendurado").
+# 800 chars ≈ 380 tokens: folga para qualquer texto (o provider ainda reduz
+# sozinho se o servidor recusar - ver embed() no llm_llama_cpp).
+CHUNK_CHARS = 800
+OVERLAP_CHARS = 150
 
 
 def split_for_embedding(text: str, chunk_chars: int = CHUNK_CHARS,
