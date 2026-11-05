@@ -112,7 +112,13 @@
       fi
   '';
 in {
-  home.packages = [pkgs.rclone qdrant-snapshot];
+  # (05/11) O script da sync PRECISA estar em home.packages: o ExecStart
+  # do unit é um arquivo de TEXTO com um caminho do store dentro — e o
+  # GC não enxerga essa referência (o path não vira dependência da
+  # closure). Resultado: o script era coletado e a unit morria com
+  # 203/EXEC. Em home.packages a closure segura o path ✓ (o mesmo
+  # motivo do qdrant-snapshot estar aqui).
+  home.packages = [pkgs.rclone qdrant-snapshot rclone-sync-script];
 
   xdg.configFile."rclone/filters.txt".source = filterFile;
 
