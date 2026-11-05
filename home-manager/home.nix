@@ -76,7 +76,17 @@
       // (if (prov.header_timeout or null) != null
           then {headerTimeout = prov.header_timeout;} else {})
       // (if (prov.chunk_timeout or null) != null
-          then {chunkTimeout = prov.chunk_timeout;} else {});
+          then {chunkTimeout = prov.chunk_timeout;} else {})
+      # (04/11) TIMEOUT TOTAL da requisição (o 'timeout' do schema V1 do
+      # opencode = teto do request inteiro, nao só dos headers/chunks).
+      # Sem ele, o opencode aborta no headerTimeout enquanto o nv-gate
+      # ainda está tentando (orçamento interno) — o turno morre sem
+      # resposta útil.
+      # Ordem: timeout >= headerTimeout >= orçamento do gate.
+      # (schema v1.18.34: options.timeout — "Timeout in milliseconds for
+      # full requests to this provider").
+      // (if (prov.timeout or null) != null
+          then {timeout = prov.timeout;} else {});
     models = activeModels;
   };
 

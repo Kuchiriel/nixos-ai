@@ -106,15 +106,23 @@ def test_explicit_input_never_exceeds_context(data):
 
 
 def test_minimax_declared_with_measured_context(data):
-    """Regressão do 400 (02/11): o minimax precisa existir aqui.
+    """Regressão do 400 (02/11) + janela real (04/11): o minimax precisa
+    existir aqui, com o contexto MEDIDO no endpoint.
 
     Fora do JSON ele vinha só do catálogo models.dev → sem limit.input →
-    usable = 262144 - 32000 = teto exato → 400.
+    usable = context - 32000 = teto exato → 400 "Bad Request".
+
+    04/11: a medição contra o endpoint (o erro 400 do próprio NIM devolve
+    {"type":"context_length","limit":1048576,"actual":1120179}) mostrou
+    1.048.576 — o catálogo models.dev declara 262144, 4× mais conservador.
+    Fonte: opencode/NVIDIA_NIM_GROUND_TRUTH.md §2.1 (repo Kuchiriel/mt5,
+    branch infra/opencode-nvidia-nim, PR #7).
     """
     nvidia = data["providers"]["nvidia"]
     models = {m["id"]: m for m in nvidia["models"]}
     minimax = models.get("minimaxai/minimax-m3.1-flash")
     assert minimax is not None, "minimax não declarado no provider nvidia"
-    assert minimax["context"] == 262144, "contexto do minimax mudou (medido: 262144)"
+    assert minimax["context"] == 1048576, (
+        "contexto do minimax mudou (medido no endpoint: 1048576)")
     assert minimax["status"] == "active"
     assert nvidia["headroom"] >= 20000

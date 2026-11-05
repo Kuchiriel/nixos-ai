@@ -1,22 +1,29 @@
 #!/usr/bin/env python3
 """nv-gate — transparent rate-limit gate for the NVIDIA free tier (integrate.api.nvidia.com).
 
-Purpose: the free tier answers 40 requests/minute per key (NVIDIA throttles
-"free-tier abusers" harder — multiple agents bursting look exactly like that).
+Purpose: the NVIDIA free tier has a ~40 requests/minute nominal cap, but the
+EFFECTIVE limit measured against the endpoint is ~8 requests/minute (a ramp of
+1.5s between requests already hit 429 on request #2; with 8 concurrent clients
+only 6 of 120 passed = 8/min in a 60s window). NVIDIA also throttles
+"free-tier abusers" harder — multiple agents bursting look exactly like that.
 The opencode client retries 3x fast and then fails the whole agent turn with
 "Too Many Requests". This gate sits in front of the provider and turns the
 burst into a queue:
 
   * token bucket shared by every client (the owner + all agents) — default
-    24 requests/minute, burst 4 (margin under the 40 RPM cap);
+    8 requests/minute, burst 2 (measured effective ceiling, not the nominal
+    40; source: opencode/NVIDIA_NIM_GROUND_TRUTH.md §5 in Kuchiriel/mt5);
   * upstream 429 -> retry with exponential backoff (honours Retry-After), so
     the client sees the answer instead of an error;
+  * upstream 502/503/504 and connection resets -> also retried (the NIM edge
+    kills long prefills; retrying inside a total time budget smaller than
+    the opencode headerTimeout turns a dead turn into a slow answer);
   * SSE streaming is passed through chunk by chunk (no buffering);
   * the Authorization header is forwarded untouched: the gate NEVER sees or
     stores a key — systemd's EnvironmentFile is not involved.
 
 Usage:
-  nv-gate.py [--port 8095] [--rpm 24] [--burst 4] [--upstream https://integrate.api.nvidia.com]
+  nv-gate.py [--port 8095] [--rpm 8] [--burst 2] [--upstream https://integrate.api.nvidia.com]
 
 Endpoints:
   * everything else -> forwarded to <upstream><path>?<query>
@@ -83,10 +90,17 @@ class Stats:
         self.counts = {
             "requests": 0, "ok": 0, "upstream_429": 0, "client_429": 0,
             "errors": 0, "retries": 0, "queued_seconds": 0.0,
+            # (04/11) contadores dos novos códigos retentáveis (o 504 do
+            # edge do NIM era o que matava o turno em silêncio).
+            "upstream_502": 0, "upstream_503": 0, "upstream_504": 0,
+            "upstream_io": 0,
         }
 
     def bump(self, key: str, value: float = 1) -> None:
         with self.lock:
+            # setdefault: contador novo não pode virar KeyError dentro do
+            # handler (o traceback matava a conexão sem resposta).
+            self.counts.setdefault(key, 0)
             if key.endswith("seconds"):
                 self.counts[key] += value
             else:
@@ -109,6 +123,18 @@ class Gate(BaseHTTPRequestHandler):
     max_retries = 6
     backoff_start = 2.0
     verbose = False
+    # (04/11) ORÇAMENTO DE TEMPO do retry. O opencode aborta o request no
+    # headerTimeout (900s na config) — se o gate ainda estuviera tentando
+    # depois disso, o turno já morreu sem resposta. O orçamento do gate é
+    # MENOR que o headerTimeout do opencode: o gate desiste primeiro, com
+    # um erro claro, e sobra tempo pro opencode fazer o retry dele.
+    retry_budget = 480.0
+    # (04/11) CÓDIGOS RETENTÁVEIS. 429 = limite de taxa. 502/503/504 =
+    # edge/infra do NIM: com contexto grande o prefill passa do limite do
+    # edge e o NIM devolve 504 — o turno morria pq o gate só retentava
+    # 429. Medido: prompt mínimo = 200 em ~2s; o 504 só aparece com
+    # contexto grande (e aí repetir costuma dar certo).
+    retry_codes = (429, 502, 503, 504)
 
     def log_message(self, fmt: str, *args) -> None:  # noqa: A003
         if self.verbose:
@@ -137,6 +163,7 @@ class Gate(BaseHTTPRequestHandler):
         url = self.upstream + self.path
         attempt = 0
         backoff = self.backoff_start
+        deadline = time.monotonic() + self.retry_budget
         while True:
             attempt += 1
             req = urllib.request.Request(url, data=body, headers=headers, method=self.command)
@@ -146,8 +173,11 @@ class Gate(BaseHTTPRequestHandler):
                     self.stats.bump("ok")
                     return
             except urllib.error.HTTPError as exc:
-                if exc.code == 429 and attempt <= self.max_retries:
-                    self.stats.bump("upstream_429")
+                retriable = (exc.code in self.retry_codes
+                             and attempt <= self.max_retries
+                             and time.monotonic() + backoff < deadline)
+                if retriable:
+                    self.stats.bump(f"upstream_{exc.code}")
                     self.stats.bump("retries")
                     delay = backoff
                     retry_after = exc.headers.get("Retry-After") if exc.headers else None
@@ -156,7 +186,8 @@ class Gate(BaseHTTPRequestHandler):
                             delay = max(delay, min(float(retry_after), 60.0))
                         except ValueError:
                             pass
-                    self.log_message("upstream 429, retry %d in %.1fs", attempt, delay)
+                    self.log_message("upstream %d, retry %d in %.1fs",
+                                     exc.code, attempt, delay)
                     time.sleep(delay)
                     backoff = min(backoff * 2, 30.0)
                     continue
@@ -165,6 +196,18 @@ class Gate(BaseHTTPRequestHandler):
                 self._relay_error(exc.code, payload)
                 return
             except (urllib.error.URLError, OSError) as exc:
+                # (04/11) timeout/reset do upstream = transitório: o edge
+                # matou a conexão (o NIM com contexto grande passa de
+                # 600s de prefill). Retenta dentro do orçamento.
+                if (attempt <= self.max_retries
+                        and time.monotonic() + backoff < deadline):
+                    self.stats.bump("upstream_io")
+                    self.stats.bump("retries")
+                    self.log_message("upstream io %s, retry %d in %.1fs",
+                                     exc, attempt, backoff)
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, 30.0)
+                    continue
                 self.stats.bump("errors")
                 self._json(502, {"error": {"message": f"nv-gate: upstream unreachable: {exc}",
                                            "type": "upstream_error"}})
@@ -235,19 +278,22 @@ def main() -> int:
     parser.add_argument("--upstream", default=os.environ.get(
         "NV_GATE_UPSTREAM", "https://integrate.api.nvidia.com"))
     parser.add_argument("--max-wait", type=float, default=float(os.environ.get("NV_GATE_MAX_WAIT", "120")))
+    parser.add_argument("--retry-budget", type=float,
+                        default=float(os.environ.get("NV_GATE_RETRY_BUDGET", "480")))
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
     Gate.upstream = args.upstream.rstrip("/")
     Gate.bucket = Bucket(args.rpm, args.burst)
     Gate.max_wait = args.max_wait
+    Gate.retry_budget = args.retry_budget
     Gate.verbose = args.verbose
 
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Gate)
     server.daemon_threads = True
     sys.stderr.write(
         f"nv-gate: listening on 127.0.0.1:{args.port} -> {Gate.upstream} "
-        f"(rpm={args.rpm}, burst={args.burst})\n")
+        f"(rpm={args.rpm}, burst={args.burst}, retry_budget={args.retry_budget}s)\n")
     sys.stderr.flush()
     try:
         server.serve_forever()

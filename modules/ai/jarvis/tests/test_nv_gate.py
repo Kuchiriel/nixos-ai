@@ -17,6 +17,7 @@ import importlib.util
 import json
 import threading
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -134,6 +135,85 @@ def test_gate_health_has_no_secret():
     assert "api_key" not in json.dumps(snapshot).lower()
 
 
+def test_gate_retries_transient_5xx():
+    """(04/11) 502/503/504 sao TRANSIENTIOS: o edge do NIM mata prefill
+    longo e devolvia 504 -> o turno morria pq o gate so retentava 429.
+    O retry precisa cobrir esses codigos tambem."""
+    for code in (502, 503, 504):
+        server, state = _fake_upstream([code, 200])
+        gate = nv_gate.Gate
+        gate.upstream = f"http://127.0.0.1:{server.server_address[1]}"
+        gate.bucket = nv_gate.Bucket(rpm=600, burst=10)
+        gate.max_wait = 5
+        gate.backoff_start = 0.01
+        gate.retry_budget = 30
+        gate.stats = nv_gate.Stats()
+
+        from http.server import ThreadingHTTPServer
+
+        proxy = ThreadingHTTPServer(("127.0.0.1", 0), gate)
+        threading.Thread(target=proxy.serve_forever, daemon=True).start()
+        try:
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{proxy.server_address[1]}/v1/chat/completions",
+                data=b'{"model":"x"}',
+                headers={"Content-Type": "application/json",
+                         "Authorization": "Bearer test"},
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=30) as response:
+                assert response.status == 200, f"{code} deveria ser retentado"
+            assert state["n"] == 2, f"{code}: esperava 2 tentativas"
+            assert gate.stats.snapshot()[f"upstream_{code}"] == 1
+        finally:
+            proxy.shutdown()
+            server.shutdown()
+
+
+def test_gate_retry_respects_the_time_budget():
+    """O orcamento de tempo do gate tem que ser MENOR que o headerTimeout
+    do opencode: se o gate ainda estivesse tentando depois do cliente
+    desistir, o turno ja morreu sem resposta util."""
+    server, state = _fake_upstream([504])
+    gate = nv_gate.Gate
+    gate.upstream = f"http://127.0.0.1:{server.server_address[1]}"
+    gate.bucket = nv_gate.Bucket(rpm=600, burst=10)
+    gate.max_wait = 5
+    gate.backoff_start = 0.01
+    gate.retry_budget = 0.2  # orcamento curto: desiste logo
+    gate.stats = nv_gate.Stats()
+
+    from http.server import ThreadingHTTPServer
+
+    proxy = ThreadingHTTPServer(("127.0.0.1", 0), gate)
+    threading.Thread(target=proxy.serve_forever, daemon=True).start()
+    try:
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{proxy.server_address[1]}/v1/chat/completions",
+            data=b'{"model":"x"}',
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        started = time.monotonic()
+        with pytest.raises(urllib.error.HTTPError) as excinfo:
+            urllib.request.urlopen(request, timeout=30)
+        assert excinfo.value.code == 504
+        assert time.monotonic() - started < 10, "orcamento de tempo ignorado"
+    finally:
+        proxy.shutdown()
+        server.shutdown()
+
+
+def test_gate_stats_accept_new_counter_keys():
+    """(04/11) regressao real: um contador novo (upstream_504) estourava
+    KeyError DENTRO do handler -> o traceback matava a conexao sem
+    resposta (o cliente via RemoteDisconnected em vez do retry)."""
+    stats = nv_gate.Stats()
+    stats.bump("upstream_504")
+    stats.bump("upstream_io")
+    assert stats.snapshot()["upstream_504"] == 1
+
+
 def test_catalog_gate_is_below_the_published_limit():
     path = _find_upwards("modules/ai/free-providers.json", "free-providers.json")
     if path is None:
@@ -142,7 +222,28 @@ def test_catalog_gate_is_below_the_published_limit():
     gate = catalog["providers"]["nvidia"].get("gate")
     if not gate:
         pytest.skip("provider nvidia sem gate configurado")
-    # 40 RPM = limite publicado do free tier; folga obrigatoria.
-    assert gate["rpm"] <= 40
+    # (04/11) o teto EFETIVO medido no endpoint e' ~8/min (o '40/min'
+    # nominal nao vale). O gate tem que ficar ABAIXO do teto real.
+    assert gate["rpm"] <= 8
     assert gate["burst"] >= 1
     assert gate["port"] > 1024
+
+
+def test_catalog_context_is_the_measured_one():
+    """(04/11) o catalogo models.dev erra a janela do minimax (262144 vs
+    1.048.576 medidos no endpoint). O valor do catalogo aqui tem que ser o
+    MEDIDO — e' o que abre a janela de 1M (com o headroom do
+    lib/opencode-limits.nix, o opencode compacta em ~1.0M tokens)."""
+    path = _find_upwards("modules/ai/free-providers.json", "free-providers.json")
+    if path is None:
+        pytest.skip("catalogo nao encontrado neste checkout")
+    catalog = json.loads(path.read_text())
+    models = {m["id"]: m for m in catalog["providers"]["nvidia"]["models"]}
+    expected = {
+        "minimaxai/minimax-m3.1-flash": 1048576,
+        "nvidia/nemotron-3-ultra-550b-a55b": 1048576,
+        "nvidia/nemotron-3.5-lightning-30b-a3b": 1000000,
+    }
+    for model_id, ctx in expected.items():
+        assert models[model_id]["context"] == ctx, (
+            f"{model_id}: ctx {models[model_id]['context']} != medido {ctx}")

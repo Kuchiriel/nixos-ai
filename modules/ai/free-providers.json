@@ -61,49 +61,49 @@
       "requires_headers": false,
       "status": "active",
       "headroom": 32000,
-      "header_timeout": 600000,
-      "chunk_timeout": 600000,
-      "_notes": "NIM free tier. Catálogo grande mas volátil (modelos somem sem aviso). ultra-550b é o mais forte disponível free. TETO MEDIDO: prompt_tokens + max_tokens ≤ context (262146 tokens = 400). headroom 32k: growth medido por passo no NIM p99=11-14k, max=28k (minimax) / 83k (cache invalidation). TIMEOUT 10min (03/11): com ~145k tokens de prompt o prefill free passa dos 300000ms default → ProviderHeaderTimeoutError; o opencode retenta 3x e o turno morre. headerTimeout/chunkTimeout viram provider.nvidia.options no home.nix. GATE (03/11): baseURL passa a http://127.0.0.1:8095/v1 (nv-gate) - transparente, nao guarda chave.",
+      "header_timeout": 900000,
+      "chunk_timeout": 1800000,
+      "_notes": "LIMITE REAL = o endpoint (04/11: erro 400 do proprio NIM devolve {\"type\":\"context_length\",\"limit\":1048576,\"actual\":1120179}) — o catalogo models.dev declara 262144 pro minimax (4x mais conservador) e erra em 4 de 5 modelos medidos. Medicao: opencode/NVIDIA_NIM_GROUND_TRUTH.md no repo Kuchiriel/mt5 (branch infra/opencode-nvidia-nim, PR #7). ATENCAO: output = teto de max_tokens da spec NIM, nao a janela.",
       "models": [
         {
           "id": "nvidia/nemotron-3-ultra-550b-a55b",
           "name": "Nemotron 3 Ultra 550B",
           "context": 1048576,
-          "output": 262144,
+          "output": 32768,
           "tier": "reasoning",
           "capabilities": [
             "reasoning",
             "analysis",
             "coding"
           ],
-          "good_for": "Most powerful free model. Long-horizon reasoning, complex analysis. 1M ctx.",
+          "good_for": "Most powerful free model. Long-horizon reasoning, complex analysis. 1M ctx. ctx 1.048.576 MEDIDO no endpoint (o catalogo diz 1.000.000). output 32.768 = teto max_tokens da spec NIM.",
           "status": "active"
         },
         {
           "id": "minimaxai/minimax-m3.1-flash",
           "name": "MiniMax M3.1 Flash",
-          "context": 262144,
-          "output": 262144,
+          "context": 1048576,
+          "output": 65536,
           "tier": "reasoning",
           "capabilities": [
             "reasoning",
             "coding",
             "vision"
           ],
-          "good_for": "Frontier multimodal coding (texto/imagem/vídeo) com thinking depth ajustável. TETO NIM medido 02/11: prompt_tokens + max_tokens ≤ 262144 (262146 = 400). Declarado aqui p/ receber o headroom (limit.input) — sem ele o opencode compacta no teto e estoura.",
+          "good_for": "Frontier multimodal coding (texto/imagem/vídeo) com thinking depth ajustável. TETO NIM medido 02/11: prompt_tokens + max_tokens ≤ 262144 (262146 = 400). Declarado aqui p/ receber o headroom (limit.input) — sem ele o opencode compacta no teto e estoura. ctx 1.048.576 MEDIDO no endpoint NIM (erro 400 devolve limit=1048576); catalogo models.dev diz 262144 (errado). output 65.536 = teto max_tokens da spec NIM.",
           "status": "active"
         },
         {
           "id": "nvidia/nemotron-3.5-lightning-30b-a3b",
           "name": "Nemotron 3.5 Lightning 30B",
-          "context": 262144,
-          "output": 65536,
+          "context": 1000000,
+          "output": 32768,
           "tier": "fast",
           "capabilities": [
             "fast",
             "general"
           ],
-          "good_for": "Very fast inference. Good for quick queries, classification.",
+          "good_for": "Very fast inference. Good for quick queries, classification. ctx 1.000.000 MEDIDO no endpoint (o catalogo diz 262144). output 32.768 = teto max_tokens da spec NIM.",
           "status": "active"
         },
         {
@@ -123,27 +123,27 @@
         {
           "id": "deepseek-ai/deepseek-v4.1-flash",
           "name": "DeepSeek V4.1 Flash",
-          "context": 262144,
+          "context": 1000000,
           "output": 65536,
           "tier": "fast",
           "capabilities": [
             "coding",
             "fast"
           ],
-          "good_for": "Fast coding/reasoning. Streaming as vezes retém resposta.",
+          "good_for": "Fast coding/reasoning. Streaming as vezes retém resposta. ctx 1.000.000 = catalogo (nao medido: timeout 120s no endpoint). output 65.536.",
           "status": "unstable"
         },
         {
           "id": "z-ai/glm-5.3-flash",
           "name": "GLM 5.3 Flash",
-          "context": 131072,
-          "output": 65536,
+          "context": 1000000,
+          "output": 131072,
           "tier": "general",
           "capabilities": [
             "general",
             "long-context"
           ],
-          "good_for": "General purpose, long context tasks.",
+          "good_for": "General purpose, long context tasks. ctx 1.000.000 = catalogo (nao medido: o endpoint deu timeout 90s na medicao do amigo — conservador). output 131.072 = models.dev.",
           "status": "unstable"
         },
         {
@@ -162,11 +162,13 @@
       "gate": {
         "enabled": true,
         "port": 8095,
-        "rpm": 24,
-        "burst": 4,
+        "rpm": 8,
+        "burst": 2,
+        "retry_budget": 480,
         "upstream": "https://integrate.api.nvidia.com",
-        "why": "Free tier = 40 RPM por chave (forum NVIDIA 09/2026) e o controle automatico de abuso pune rajadas de agentes. O gate faz token bucket (24 RPM, burst 4) + retry com backoff no 429, entao o opencode ve a resposta em vez de perder o turno."
-      }
+        "why": "LIMITE EFETIVO MEDIDO = ~8 req/min (o '40/min' nominal do free tier nao vale: a rampa com 1,5s entre requests ja tomou 429 no request #2; com 8 concorrencia so 6 de 120 passaram = 8/min na janela de 60s). Fonte: medicao no endpoint em 04/11 (opencode/NVIDIA_NIM_GROUND_TRUTH.md §5, repo Kuchiriel/mt5). O gate faz token bucket (8 RPM, burst 2) + retry com backoff no 429 E nos 502/503/504 (o edge do NIM mata prefill longo), dentro de um orcamento de tempo total menor que o headerTimeout do opencode. O gate e' transparente: repassa o Authorization do cliente, nao guarda chave nenhuma."
+      },
+      "timeout": 1800000
     },
     "cloudflare": {
       "base_url": "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1",
