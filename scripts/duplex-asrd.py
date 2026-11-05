@@ -37,8 +37,15 @@ def main():
     # silero via torch hub (cacheado em ~/.cache/torch — o VAC baixou 1×)
     import torch
     model, utils = torch.hub.load("snakers4/silero-vad", "silero_vad")
-    vad = FixedVADIterator(model, threshold=0.5, min_silence_duration_ms=400,
-                           speech_pad_ms=150)
+    # (03/11 20:05, dono: "melhora a latência") O VAD fecha o segmento
+    # depois de min_silence de SILÊNCIO — mas ele só AVANÇA quando
+    # recebe um chunk. Com chunk de 0,6s a granularidade era 600ms
+    # (o endpoint podia atrasar 1,2s!). 300ms de silêncio + chunk de
+    # 250ms = endpoint em ~300-550ms. Papers de endpointing production
+    # (barge-in/VAD guide 2026): 380ms é o ponto doce; abaixo de 250ms
+    # a fala contínua fragmenta (o merge junta de volta).
+    vad = FixedVADIterator(model, threshold=0.5, min_silence_duration_ms=300,
+                           speech_pad_ms=120)
     print(json.dumps({"text": "", "ms": 0, "ready": True}), flush=True)
 
     ring = np.zeros(0, dtype="float32")
@@ -357,7 +364,9 @@ def main():
                 except Exception:
                     _wav = ""
                 txt, nsp = "", 1.0
+                _t_inf = time.monotonic()
                 txt, nsp = seg_to_text(seg)
+                _inf_ms = (time.monotonic() - _t_inf) * 1000
                 # (21/10 19:30) Gate balanceado — dono pediu: antes detectava certo,
                 # agora tudo spk=?. Ruído/backchannel NÃO nasce falante; fala real SIM.
                 # nsp < 0.5 (fala real 0.1-0.3; backchannel 0.3-0.6; ruído 0.6+).
@@ -374,7 +383,9 @@ def main():
                 else:
                     spk_id, spk_cos = "?", 0.0
                 ms = (time.monotonic() - t0) * 1000
-                print(json.dumps({"text": txt, "ms": ms, "spk": spk_id,
+                print(json.dumps({"text": txt, "ms": ms,
+                       "inf_ms": round(_inf_ms, 1),
+                       "spk": spk_id,
                        "spk_cos": round(spk_cos, 2),
                        "voices": SPK_COUNTER["voices"],
                        "wav": _wav}), flush=True)

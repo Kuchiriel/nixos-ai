@@ -27,6 +27,7 @@ USO: scripts/duplex-voice-run.sh (env composto + E-cores + taskset)
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import math
 import os
@@ -66,7 +67,14 @@ from pathlib import Path
 
 import numpy as np
 
-TICK = 0.6
+# (03/11 19:45, dono: "melhora a latência") O tick de 0,6s era o PISO
+# da latência: o mic entrega 0,6s por chunk E o loop só olha o ASR a
+# cada tick ⇒ até 600ms de espera DEPOIS da fala (o VAD fecha o
+# segmento, mas o texto só entra no loop no tick seguinte). Chunk+tick
+# de 250ms: o VAD fecha o segmento 2,4x mais fino (a granularidade do
+# VAD = o tamanho do chunk), o loop pega o texto em ≤250ms e a
+# barge-in corta o TTS com 250ms de granularidade.
+TICK = 0.25
 LISTEN, NOVOICE = "<listen>", "<no voice>"
 LISTEN_P = 0.3
 SYSTEM_PT = (
@@ -986,8 +994,15 @@ LAST_TTS_END = 0.0   # (18:00) cooldown: o eco do TTS transcreve
 SPEAKING = {"until": 0.0}   # (07:35) ref module-level p/ in_cooldown
                             # (main() aponta p/ o dict local no boot)
 ECHO_FLOOR = []             # (07:30) mediana móvel do resíduo pós-AEC
-                            # durante playback = nível real do eco remanescente
+                             # durante playback = nível real do eco remanescente
 FEED_STATS = {"fed": 0, "blocked": 0, "quiet": 0, "corr": []}
+# (03/11 19:55) PISO do corte imediato de barge: o resíduo tem que
+# passar DESTE valor (e do piso adaptativo do eco) p/ matar o TTS.
+# Medido no AEC3: silêncio 2-3, voz real 86-376 ⇒ 60 separa as coisas.
+BARGE_CUT_MIN = 60
+barge_cut = {"done": False, "floor": 0.0}   # corte 1x por fala do JARVIS
+                                             # floor = eco medido no playback
+
 # (07:50, DIREÇÃO DO DONO: "dá um ID pra fala do TTS — se ele ouvir,
 # ignora") Registry do que o TTS está dizendo AGORA + disse há pouco.
 # O eco chega como transcrição; se o texto casa com a fala ATIVA
@@ -998,6 +1013,41 @@ TTS_SELF = {"id": 0, "text": "", "recent": []}   # recent: [(text, t_end)]
 SPK_STATE = {"voices": 0, "last_spk": "?"}
 # (26/10, dono) MUTE persistente: 'cala a boca' silencia ATÉ 'pode falar'
 MUTE = {"on": False}
+# (03/11 19:45, dono: "cala a boca pra interromper IMEDIATAMENTE") As
+# frases de controle do dono num lugar SÓ — o MUTE é o comando mais
+# latente do sistema (tem que matar o TTS no primeiro segmento, sem
+# esperar merge nem classificador).
+MUTE_PHRASES = (
+    "cala a boca", "cala boca", "cala o tom", "cala lá", "cala la",
+    "fica calado", "fica calada", "fica mudo", "fica muda",
+    "quieto", "silêncio", "silencio", "bico fechado",
+    "para de falar", "pare de falar", "não fala mais", "nao fala mais",
+    "não fala nada", "shut up", "shutup", "stop talking",
+)
+UNMUTE_PHRASES = (
+    "pode falar", "pode falar de novo", "voltar a falar", "volta a falar",
+    "fala de novo", "fala agora", "desmuta", "desmute", "pode voltar",
+)
+
+
+def ctrl_kind(text):
+    """'MUTE' | 'UNMUTE' | None — casa a frase de controle no texto.
+
+    (03/11) O mute NÃO exige endereçamento: um 'cala a boca' citado na
+    TV silenciaria o JARVIS (falso positivo real), mas ignorar o
+    comando do dono é pior (assimetria de custo — o dono pediu).
+    """
+    t = " ".join((text or "").lower()
+                 .replace(".", " ").replace(",", " ").replace("!", " ")
+                 .replace("?", " ").split())
+    if not t:
+        return None
+    if any(k in t for k in UNMUTE_PHRASES):
+        return "UNMUTE"
+    if any(k in t for k in MUTE_PHRASES):
+        return "MUTE"
+    return None
+
 # (26/10, dono: 'esquece o que eu falei segundos antes') transcript
 # recente ouvido — mesmo turnos descartados (WAIT/SILENCE) entram no
 # contexto do modelo como passivo; ele VÊ o que foi dito agora.
@@ -1546,6 +1596,30 @@ class Tts:
         if text and len(text) > 1:
             log(f"[{ts()}] tts.say: {text[:60]!r}")
             self.q.put(text)
+
+    def kill_playback(self):
+        """Mata o aplay em curso AGORA (barge-in / 'cala a boca').
+
+        (03/11) o barge demorava ~2s: o comando só era checado DEPOIS
+        do merge (0,2-1,5s) e da classificação (0,4s). O dono quer o
+        TTS morto NA HORA — o aplay é o processo que produz o som, então
+        matar ele é o corte de menor latência possível (sem esperar
+        nenhum modelo).
+        """
+        ap = self._aplay
+        if ap is None:
+            return False
+        try:
+            if ap.poll() is not None:
+                self._aplay = None
+                return False
+            ap.kill()
+            with contextlib.suppress(Exception):
+                ap.wait(timeout=1)
+            self._aplay = None
+            return True
+        except Exception:
+            return False
     VOICE_JA = "/home/nixos/models/piper/ja_JP-hi_fi_captain-medium.onnx"
 
     @staticmethod
@@ -1803,6 +1877,7 @@ def main():
     pending_spk = ["?"]      # (21/10) falante do pending corrente
     stash = []                # (21/10) FIFO: speaker-change reordena
     merge_deadline = 0.0
+    pending_since = [0.0]     # (03/11) quando o 1º frag entrou no merge
     _last_wait_text = [None]  # (23:00) detector de WAIT preso
     _wait_repeats = [0]
     barge_buf = []           # (17:15) DUAL: fala do dono durante o TTS
@@ -1923,6 +1998,24 @@ def main():
                     # playback, um resumo (sem spam por-chunk).
                     _corr = corr_with_ref(c16)
                     FEED_STATS["corr"].append(_corr)
+                    ECHO_FLOOR.append(rrms)
+                    del ECHO_FLOOR[:-80]
+                    # (03/11 19:55, dono: "interromper IMEDIATAMENTE")
+                    # CORTE IMEDIATO do TTS: o dono falando POR CIMA da
+                    # fala do JARVIS morre o aplay no mesmo chunk (≤250ms)
+                    # — antes o corte dependia de ASR+merge+classificador
+                    # (~2s, e no log NUNCA aconteceu: 0 "BARGE semântico").
+                    # PISO ADAPTATIVO: a mediana do resíduo durante o
+                    # playback = eco remanescente; barge só se a energia
+                    # SOBE acima do eco (x2,5 e +40). Com o AEC3 do
+                    # pipewire o eco fica ~2-10 e a voz real 86-376 ⇒
+                    # corte em ~60-90, sem cortar a própria voz.
+                    _floor = (sorted(ECHO_FLOOR)[len(ECHO_FLOOR) // 2]
+                              if len(ECHO_FLOOR) >= 4
+                              else barge_cut["floor"])
+                    _cut_thr = max(_floor * 2.5, _floor + 40, BARGE_CUT_MIN)
+                    if len(ECHO_FLOOR) >= 8:
+                        barge_cut["floor"] = _floor
                     if _corr >= 0.55:
                         FEED_STATS["blocked"] += 1
                     elif rrms >= 350:
@@ -1930,7 +2023,18 @@ def main():
                         asr.feed(_processed.astype("float32") / 32768.0)
                     else:
                         FEED_STATS["quiet"] += 1
+                    if (not barge_cut["done"] and _corr < 0.55
+                            and (len(ECHO_FLOOR) >= 4 or barge_cut["floor"] > 0)
+                            and rrms >= _cut_thr
+                            and tts.kill_playback()):
+                        barge_cut["done"] = True
+                        log(f"[{ts()}] BARGE: fala sobre o TTS "
+                            f"(rms={rrms} >= {_cut_thr:.0f}, "
+                            f"floor={_floor:.0f}, corr={_corr:.2f}) "
+                            f"— TTS morto na hora")
                 else:
+                    ECHO_FLOOR.clear()
+                    barge_cut["done"] = False
                     if FEED_STATS["fed"] or FEED_STATS["blocked"]:
                         cs = sorted(FEED_STATS["corr"])
                         med = cs[len(cs) // 2] if cs else 0.0
@@ -1993,7 +2097,34 @@ def main():
                         log(f"[{ts()}] correção STT: {heard!r} → {fixed!r}")
                     heard = fixed
                     print(f"  SEGMENTO: {heard}", flush=True)
-                    if is_backchannel(heard):
+                    # (03/11 19:50, dono: "cala a boca pra interromper
+                    # IMEDIATAMENTE") FAST-PATH DE CONTROLE: o comando é
+                    # checado no PRIMEIRO segmento que chega — sem
+                    # esperar o merge (0,2-1,5s) nem o classificador
+                    # (0,4s). O caminho antigo ⇒ ~2s até o TTS morrer.
+                    # O texto parcial também conta ("cala" + "a boca"
+                    # vem em 2 segmentos).
+                    _ctrl = ctrl_kind(heard)
+                    if _ctrl is None and pending:
+                        _ctrl = ctrl_kind(" ".join(pending))
+                    if _ctrl == "MUTE":
+                        MUTE["on"] = True
+                        _killed = tts.kill_playback()
+                        log(f"[{ts()}] MUTE imediato: {heard[:40]!r} — "
+                            f"TTS {'morto' if _killed else 'já parado'}")
+                        pending.clear()
+                        merge_deadline = 0.0
+                        pending_since[0] = 0.0
+                        heard = NOVOICE
+                    elif _ctrl == "UNMUTE":
+                        if MUTE["on"]:
+                            MUTE["on"] = False
+                            log(f"[{ts()}] UNMUTE imediato: {heard[:40]!r}")
+                            tts.say("Pode falar, senhor.")
+                        heard = NOVOICE
+                    if heard == NOVOICE:
+                        pass          # (03/11) comando já tratado no fast-path
+                    elif is_backchannel(heard):
                         log(f"[{ts()}] backchannel ('{heard}') — segue ouvindo")
                         heard = NOVOICE
                     else:
@@ -2016,6 +2147,8 @@ def main():
                             if not pending:
                                 pending_spk[0] = _seg_spk
                             pending.append(heard)
+                            if not pending_since[0]:
+                                pending_since[0] = time.monotonic()
                             heard = NOVOICE
                         if not _flush_spc:
                             # (19:00) SMART MERGE (Easy-Turn heuristic):
@@ -2027,16 +2160,22 @@ def main():
                             # de reação humano é 200-600ms; 200 é o alvo
                             # dos sistemas produção); '.' e '!' = 400ms;
                             # conjunção = 1.5s; default 800ms
+                            # (03/11 20:05, dono: "melhora a latência")
+                            # O VAD JÁ esperou 300ms de silêncio antes de
+                            # fechar o segmento ⇒ a espera extra aqui é
+                            # redundante: '?' responde NO MESMO tick (0ms),
+                            # '.'/'!' 200ms, default 400ms, conjunção 1.2s
+                            # (frase claramente inacabada). -200 a -400ms.
                             _last = pending[-1].rstrip()
                             if _last.endswith("?"):
-                                _wait = 0.2   # pergunta = fogo imediato
+                                _wait = 0.0   # pergunta = fogo imediato
                             elif _last.endswith(("!", ".")):
-                                _wait = 0.4
+                                _wait = 0.2
                             elif _last.endswith((",", " e", " mas", " ou",
                                                      " que", " pra", " para")):
-                                _wait = 1.5
+                                _wait = 1.2
                             else:
-                                _wait = 0.8
+                                _wait = 0.4
                             merge_deadline = time.monotonic() + _wait
                             force = False
             elif pending and not force and heard != NOVOICE:
@@ -2058,7 +2197,17 @@ def main():
             if (pending and not force
                     and time.monotonic() >= merge_deadline):
                 heard = " ".join(pending)
+                _nfrag = len(pending)
                 pending.clear()
+                # (03/11 20:15) instrumentação: quanto tempo o texto
+                # ficou esperando o merge? (a espera do VAD já é
+                # contada no ASR). Objetivo: merge_wait ≈ 0-400ms.
+                _mwait = ((time.monotonic() - pending_since[0]) * 1000
+                          if pending_since[0] else 0)
+                pending_since[0] = 0.0
+                if _mwait > 50:
+                    log(f"[{ts()}] merge-wait={_mwait:.0f}ms "
+                        f"({_nfrag} frag, '{heard[:36]}')")
                 # (26/10) transcript recente: TUDO que completou merge
                 # entra aqui — mesmo se for descartado como SILENCE/eco
                 # depois, o modelo verá no contexto passivo.
@@ -2069,15 +2218,12 @@ def main():
                 # de MUTE/UNMUTE/pare tem PRIORIDADE sobre o cooldown —
                 # o dono fala POR CIMA do modelo e o comando TEM que
                 # pegar (era comido aqui: '...Cala ' descartado).
-                _hl_cmd = heard.lower().strip(" .,!?")
-                _is_ctrl = any(k in _hl_cmd for k in (
-                    "cala a boca", "cala boca", "quieto", "fica mudo",
-                    "silêncio", "shut up", "para de falar",
-                    "pare de falar", "não fala mais", "fica calado",
-                    "pode falar", "fala de novo", "desmuta",
-                    "voltar a falar", "volta a falar", "chega de falar"))
-                if _is_ctrl:
-                    log(f"[{ts()}] CTRL durante cooldown — passa: {heard[:40]!r}")
+                # (03/11 20:15) o catálogo de frases é ÚNICO (ctrl_kind) —
+                # o MUTE já foi tratado no fast-path; aqui só o log.
+                _ctrl_kind = ctrl_kind(heard)
+                if _ctrl_kind:
+                    log(f"[{ts()}] CTRL durante cooldown — passa: "
+                        f"{_ctrl_kind}: {heard[:40]!r}")
                 elif in_cooldown():
                     log(f"[{ts()}] cooldown pós-TTS — descartado: {heard[:40]!r}")
                     heard = NOVOICE
