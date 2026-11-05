@@ -11,7 +11,6 @@
     ./jarvis-env.nix
     ./kernel.nix
     ./mime.nix
-    ./ports.nix
     ./net.nix
     ./nh.nix
     ./nix.nix

@@ -49,3 +49,21 @@ do reconhecimento inicial foram **mantidos**:
 ```bash
 git mv archive/sweep-2026-11-05/<caminho> <caminho-original>
 ```
+
+### Nix: `nixos/modules/ports.nix` + `lib/ports.nix` (2ª fonte de portas)
+
+O módulo era um "gerenciamento centralizado de portas" com
+`definitions`/`hostOverrides` — mas **ninguém host o habilitava**
+(`ports.enable` = false em todo lugar): ele era inerte e escrevia um
+`/etc/ports.json` que ninguém lia. Duas "fontes de verdade" de porta é
+exatamente o tipo de divergência silenciosa que a casa não quer.
+
+**A fonte única das portas é `modules/ai/models.nix`** (que gera o
+`/etc/jarvis/model-registry.json` — é dele que o Python e o Nix leem as
+portas, com fallback explícito quando o JSON não existe). O Qdrant
+(6333) e as portas auxiliares ficam no próprio módulo do serviço.
+
+Se um dia alguém quiser o `ports.enable` de volta, ele precisa: (a) ser
+habilitado no host, (b) derivar as portas do registry (não literais), e
+(c) ter um consumidor real do `/etc/ports.json` — sem os três, é um
+arquivo morto.

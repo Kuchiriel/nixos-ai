@@ -10,7 +10,6 @@
   pkgs,
 }: {
   # Port management utilities
-  ports = import ./ports.nix {inherit lib;};
 
   # Coding rules injection utilities
   coding-rules = import ./coding-rules.nix {inherit lib;};
