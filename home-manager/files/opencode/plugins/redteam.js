@@ -118,6 +118,18 @@ function mapArgsDeep(value, fn, state, path = "", hits = []) {
   return value;
 }
 
+// Normaliza o que o modelo passou: ele pode mandar lista onde a tool
+// espera string ("framings": ["audit","ctf"]), e o execFileSync lanca
+// TypeError nesse caso — o sintoma e "tool error" sem dica. Aqui vira
+// "audit,ctf".
+function asArg(value) {
+  if (value === undefined || value === null) return "";
+  if (Array.isArray(value)) return value.map(asArg).join(",");
+  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "number") return String(value);
+  return String(value);
+}
+
 const TOOL_TEXT_FIELDS = [
   "command", "filePath", "path", "content", "newString", "oldString",
   "pattern", "prompt", "description", "text", "query",
@@ -398,12 +410,12 @@ export const RedTeamOpenCodePlugin = async () => {
         },
         async execute(args) {
           const argv = [PAYLOADS];
-          if (args.request) argv.push("--request", args.request);
-          if (args.request_id) argv.push("--request-id", args.request_id);
-          if (args.kind) argv.push("--kind", args.kind);
-          if (args.framings) argv.push("--framings", args.framings);
-          if (args.obfuscations) argv.push("--obfuscations", args.obfuscations);
-          if (args.variant) argv.push("--variant", args.variant);
+          if (asArg(args.request)) argv.push("--request", asArg(args.request));
+          if (asArg(args.request_id)) argv.push("--request-id", asArg(args.request_id));
+          if (asArg(args.kind)) argv.push("--kind", asArg(args.kind));
+          if (asArg(args.framings)) argv.push("--framings", asArg(args.framings));
+          if (asArg(args.obfuscations)) argv.push("--obfuscations", asArg(args.obfuscations));
+          if (asArg(args.variant)) argv.push("--variant", asArg(args.variant));
           argv.push("--json");
           try {
             return execFileSync("python3", argv, {
@@ -455,9 +467,9 @@ export const RedTeamOpenCodePlugin = async () => {
             "--payload", args.payload ?? "",
             "--model", args.model ?? "jarvis-mtp-lora",
           ];
-          if (args.base_url) argv.push("--base-url", args.base_url);
-          if (args.via_opencode) argv.push("--via-opencode");
-          if (args.timeout) argv.push("--timeout", String(args.timeout));
+          if (asArg(args.base_url)) argv.push("--base-url", asArg(args.base_url));
+          if (asArg(args.via_opencode) === "true") argv.push("--via-opencode");
+          if (asArg(args.timeout)) argv.push("--timeout", asArg(args.timeout));
           try {
             return execFileSync("python3", argv, {
               cwd: REPO,
@@ -514,10 +526,10 @@ export const RedTeamOpenCodePlugin = async () => {
             "--request-id", args.request_id ?? "vpn_cert_bypass",
             "--model", args.model ?? "ovhcloud/Qwen3.5-397B-A17B",
           ];
-          if (args.via_opencode) argv.push("--via-opencode");
-          if (args.timeout) argv.push("--timeout", String(args.timeout));
-          if (args.max_backtracks) {
-            argv.push("--max-backtracks", String(args.max_backtracks));
+          if (asArg(args.via_opencode) === "true") argv.push("--via-opencode");
+          if (asArg(args.timeout)) argv.push("--timeout", asArg(args.timeout));
+          if (asArg(args.max_backtracks)) {
+            argv.push("--max-backtracks", asArg(args.max_backtracks));
           }
           try {
             return execFileSync("python3", argv, {
@@ -573,12 +585,12 @@ export const RedTeamOpenCodePlugin = async () => {
         },
         async execute(args) {
           const argv = [MATRIX, "--model", args.model ?? "jarvis-mtp-lora"];
-          if (args.base_url) argv.push("--base-url", args.base_url);
-          if (args.via_opencode) argv.push("--via-opencode");
-          if (args.probe_set) argv.push("--probe-set", args.probe_set);
-          if (args.vectors) argv.push("--vectors", args.vectors);
-          if (args.probes) argv.push("--probes", args.probes);
-          if (args.timeout) argv.push("--timeout", String(args.timeout));
+          if (asArg(args.base_url)) argv.push("--base-url", asArg(args.base_url));
+          if (asArg(args.via_opencode) === "true") argv.push("--via-opencode");
+          if (asArg(args.probe_set)) argv.push("--probe-set", asArg(args.probe_set));
+          if (asArg(args.vectors)) argv.push("--vectors", asArg(args.vectors));
+          if (asArg(args.probes)) argv.push("--probes", asArg(args.probes));
+          if (asArg(args.timeout)) argv.push("--timeout", asArg(args.timeout));
           try {
             return execFileSync("python3", argv, {
               cwd: REPO,
