@@ -373,6 +373,31 @@ def bus_updated_at() -> str:
     return stamps[-1] if stamps else ""
 
 
+def _aliases(agent: str | None, codename: str | None) -> set[str]:
+    """Todos os nomes pelos quais este agente pode ser enderecado.
+
+    (06/11/2026) O bus endereca por CODINOME ("Onca"), mas o roster tambem
+    tem NOME ("opencode-matheus") - e quem escreve manda pelo nome natural.
+    Sem os dois, a mensagem nao chega em ninguem: o watcher resolve o codinome
+    e compara so com ele. Aqui: nome do roster + codinome + agent_id.
+    """
+    out = {str(x) for x in (agent, codename, agent_id()) if x}
+    try:
+        from jarvis.core.coord_roster import roster_agents
+        for entry in roster_agents():
+            nome = str(entry.get("name") or "")
+            cod = str(entry.get("codename") or "")
+            if agent and (nome == agent or cod == agent):
+                out.update({nome, cod} - {""})
+                break
+            if codename and (nome == codename or cod == codename):
+                out.update({nome, cod} - {""})
+                break
+    except Exception:
+        pass
+    return out
+
+
 def pending(
     agent: str | None = None,
     codename: str | None = None,
@@ -390,6 +415,7 @@ def pending(
     `since` filtra por `ts` (cursor incremental do watcher).
     """
     me = agent or agent_id()
+    aliases = _aliases(agent, codename)
     my_files = _files_of({"files": files or []})
     out: list[dict[str, Any]] = []
     for payload in bus_payloads():
@@ -399,12 +425,16 @@ def pending(
         kind = payload.get("kind")
         to = str(payload.get("to") or "")
         addressed = False
-        if to in (me, codename or ""):
-            addressed = True
-        elif to == "*" and lane and str(payload.get("lane") or "") == lane:
-            addressed = True
-        elif to and to == lane:
-            addressed = True
+        # 'msg' E tambem 'done'/'handoff'/'status' ENDERECADOS: e assim que a
+        # corrente se mantem viva - quem terminou passa a tarefa (handoff) e o
+        # proximo acorda sozinho, sem o dono no meio (06/11/2026).
+        if kind in ("msg", "done", "handoff", "status"):
+            if to and to in aliases:
+                addressed = True
+            elif to == "*" and lane and str(payload.get("lane") or "") == lane:
+                addressed = True
+            elif to and to == lane:
+                addressed = True
         overlapping = False
         if kind in ("claim", "status", "blocked"):
             their = _files_of(payload)
