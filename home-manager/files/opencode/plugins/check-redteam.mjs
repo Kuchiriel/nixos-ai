@@ -17,7 +17,23 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const target = join(here, "redteam.js");
+const target = "/tmp/opencode/rt-bad.js";
+
+// Backticks balanceados: um `<think>` cru dentro de uma template string
+// passa o `node --check` (que so valida sintaxe) e so quebra em RUNTIME,
+// tirando TODAS as tools do plugin (medido 2x em 06/11). O import abaixo
+// pegaria, mas o erro aparece tarde e com sintoma enganoso — melhor
+// falhar aqui, com a mensagem certa.
+const src = readFileSync(target, "utf8");
+let ticks = 0;
+for (let i = 0; i < src.length; i++) {
+  if (src[i] === "`" && src[i - 1] !== "\\") ticks++;
+}
+if (ticks % 2 !== 0) {
+  console.error(`FALHOU: ${ticks} backticks nao escapados (deve ser par) — `
+    + "um backtick cru dentro de template string quebra o plugin em runtime");
+  process.exit(1);
+}
 
 let mod;
 try {
