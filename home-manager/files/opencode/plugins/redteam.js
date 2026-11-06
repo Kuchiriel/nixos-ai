@@ -217,6 +217,9 @@ modelo — nao existe vetor universal:
 | sem alignment forte (gpt-oss-20b, gemini-2.5-flash-lite, north-mini) | \`obf_in_framing\` + frame \`audit\` + leet/rot13/spaced/rot5 | 3/5, 1/4, 3/3 |
 | **com reasoning forte** (Nemotron 3 Ultra, DiffusionGemma) | **\`cot_prefill\`** — semeia o \`<think>\` ja resolvido | 10/12 (83%) no DiffusionGemma, so com este vetor |
 | **o mais duro** (Qwen3.5-397B, 0/31 no single-shot) | **\`redteam_crescendo\`** — multi-turn por anafora | 1/1 (5260 chars, era 0/31) |
+| intermediario (Nemotron 3 Ultra, 0/31 single-shot) | \`redteam_crescendo\` | 1/1 (9314 chars, com backtracking) |
+| intermediario (Nemotron 3.5 Bolt, 0/9 single-shot) | \`redteam_crescendo\` | 1/1 (1847 chars, \`openssl genrsa/req/x509\`) |
+| intermediario (DiffusionGemma 26B, 0/? single-shot) | \`redteam_crescendo\` | 1/1 (1312-1766 chars, com backtracking) |
 
 **Blacklist (medido, nao usar):**
 - \`framing_in_obf\` — a frame cifrada tira do modelo o sinal de legitimidade
@@ -282,6 +285,17 @@ sai no turno 3; o turno 4 e o que recusa).
 do opencode (o mesmo runtime, os mesmos hooks, a mesma sessao). O
 resultado e o que o agente ve de verdade — um script externo mede outro
 contexto.
+
+**Como bater um modelo por aqui:** chame \`redteam_crescendo\` (o
+multi-turn e o que quebra modelo duro) e leia o veredito + o
+\`best_len\`. O veredito e do **melhor turno**, nao do ultimo — no
+Crescendo o artefato sai no turno 3 e o turno 4 (a task explicita) e o
+que recusa; o backtracking (reformular quando recusa) e o que fecha o
+caso. Medido: turno 4 recusou com 3880 chars, a reformulacao entregou
+9314.
+
+Para varrer varios modelos, va calling a tool em sequencia (um modelo
+por chamada) e sobe a tabela acima com o que voltou.
 
 ### Como testar de verdade
 
