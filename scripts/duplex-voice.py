@@ -107,6 +107,7 @@ SYSTEM_PT = (
     "  do(action='rag_search', input='busca')        → papers/código/livros\n"
     "  do(action='status',     input='')             → saúde do sistema\n"
     "  do(action='voices',     input='')             → vozes na sala\n"
+    "  do(action='tool',       input='<tool> {json}') → qualquer tool do harness\n"
     "  do(action='jarvis',     input='<comando>')    → CLI do JARVIS "
     "(status, doctor, speak, benchmark, recall, rag-search, vault...)\n"
     "  do(action='shell',      input='<comando>')    → terminal (com gates)\n"
@@ -699,6 +700,7 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
         body = {"messages": msgs, "max_tokens": 120, "temperature": 0.4,
                 "tools": TOOLS_SCHEMA}
         filler_spoken = False
+        _cmd_nudged = False
         for _round in range(3):
             if _round == 2:
                 body.pop("tools", None)   # última: SEM tools = resposta final
@@ -725,6 +727,29 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
                             heard=_pc[:80])
                     except Exception:
                         pass
+                # (06/11) GATE DE VERIFICAÇÃO DO HARNESS: pedido de AÇÃO
+                # (classificador neural de INTENT = COMMAND) sem nenhuma
+                # tool chamada = o modelo ANUNCIOU que faria ("está
+                # ajustando...") sem fazer (paper 2607.28802: Satisfi-
+                # cicing; 2605.13357: verificação é recurso do runtime).
+                # 1 nudge: ele age (tool) ou pergunta o que fazer.
+                if _round == 0 and not _cmd_nudged:
+                    try:
+                        _icmd = classify_intent(base, heard)
+                    except Exception:
+                        _icmd = None
+                    if _icmd == "COMMAND":
+                        _cmd_nudged = True
+                        log(f"[{ts()}] intent=COMMAND sem tool — nudge p/ agir")
+                        msgs.append({"role": "assistant", "content": out})
+                        msgs.append({"role": "user", "content":
+                                     "O dono pediu uma AÇÃO e você não "
+                                     "chamou nenhuma tool. Chame a tool "
+                                     "agora (do(action='tool', input='...')) "
+                                     "e diga o que fez — ou pergunte o que "
+                                     "exatamente fazer."})
+                        body["messages"] = msgs
+                        continue
                 # (17:00) consult-speak: 'preciso consultar/vou verificar'
                 # sem ter chamado → 1 retry com nudge pra CHAMAR a tool.
                 if (_round == 0 and any(
@@ -1149,7 +1174,11 @@ FEED_STATS = {"fed": 0, "blocked": 0, "quiet": 0, "corr": []}
 # (03/11 19:55) PISO do corte imediato de barge: o resíduo tem que
 # passar DESTE valor (e do piso adaptativo do eco) p/ matar o TTS.
 # Medido no AEC3: silêncio 2-3, voz real 86-376 ⇒ 60 separa as coisas.
-BARGE_CUT_MIN = 60
+# (06/11) O threshold fixo (60) matava a fala do JARVIS 9x em 5min (a TV
+# chega a 67-734 de rms na sala). O barge-IN de verdade vem do LoRA
+# (label BARGE) e do VAD (segmento de fala chegando durante o playback);
+# o rms é só pré-filtro. Barra alta + exigência de fala detectada.
+BARGE_CUT_MIN = 150
 barge_cut = {"done": False, "floor": 0.0}   # corte 1x por fala do JARVIS
                                              # floor = eco medido no playback
 
@@ -1451,6 +1480,31 @@ def call_tool(name, args):
         # (06/11) HARNESS DE VERDADE no meta-tool: notificação de desktop,
         # leitura de arquivo, listagem e busca semântica no código —
         # capacidade vem do harness, não do modelo.
+        if action in ("tool", "harness", "ferramenta") or action.startswith("tool_"):
+            # (06/11) ROTA DINÂMICA: qualquer tool do harness (o mesmo
+            # registro que o `jarvis dev` usa — read_file, write_file,
+            # semantic_search, code_search, run_tests, execute_shell...)
+            # sem eu listar tool por tool. input = "<tool> {json args}".
+            from jarvis.core.devtools import handle_dev_tool as _hdt
+            import json as _json
+            _raw = (inp or "").strip()
+            if not _raw:
+                return ('ERRO: diga a tool e os args (ex.: semantic_search '
+                        '{"query": "..."})')
+            _parts = _raw.split(" ", 1)
+            _tname = _parts[0].strip()
+            _targs = {}
+            if len(_parts) > 1:
+                try:
+                    _targs = _json.loads(_parts[1].strip())
+                except Exception:
+                    _targs = ({"query": _parts[1].strip()} if _tname in
+                              ("semantic_search", "code_search")
+                              else {"path": _parts[1].strip()})
+            try:
+                return str(_hdt(_tname, _targs))[:800]
+            except Exception as e:
+                return f"ERRO na tool {_tname}: {e}"
         if "notif" in action or "avis" in action or "alerta" in action:
             from jarvis.core.feedback import notify as _notify
             try:
@@ -1672,6 +1726,8 @@ TOOLS_SCHEMA = [
      "notify <texto> (notificação de desktop), "
      "read_file <caminho> (lê arquivo), list_directory <caminho> (lista), "
      "search_code <busca> (busca semântica no código), "
+     "tool <tool> {json} (qualquer tool do harness: semantic_search, "
+     "code_search, read_file, list_directory, run_tests, execute_shell...), "
      "jarvis <comando> (CLI do JARVIS: status, doctor, speak, benchmark, "
      "recall, rag-search, vault...), shell <cmd> (terminal com gates), "
      "enroll_voice <nome> (cadastra a voz do dono — grave 10s de fala), "
@@ -1785,6 +1841,9 @@ class Asr:
         self.last_spk = "?"      # (21/10) speaker-ID do último segmento
         self.last_voices = 0     # (21/10) vozes ativas (clustering asrd)
         self.last_wav = ""       # (21/10) WAV do último segmento (evidência)
+        self.last_seg_ts = 0.0   # (06/11) quando chegou o último segmento
+                                  # (gate de barge: só corta se o VAD viu
+                                  # fala — não é ruído da sala)
     CTX = {"v": "Jarvis"}   # vocabulário → prompt do whisper-server
 
     def feed(self, pcm_f32):
@@ -1820,6 +1879,7 @@ class Asr:
             self.last_spk = j.get("spk") or "?"
             self.last_voices = int(j.get("voices") or 0)
             self.last_wav = j.get("wav") or ""
+            self.last_seg_ts = time.monotonic()
             SPK_STATE["last_spk"] = self.last_spk
             SPK_STATE["voices"] = self.last_voices
             if j.get("text"):
@@ -2278,7 +2338,15 @@ def main():
                     _floor = (sorted(ECHO_FLOOR)[len(ECHO_FLOOR) // 2]
                               if len(ECHO_FLOOR) >= 4
                               else barge_cut["floor"])
-                    _cut_thr = max(_floor * 2.5, _floor + 40, BARGE_CUT_MIN)
+                    _cut_thr = max(_floor * 6.0, _floor + 150, BARGE_CUT_MIN)
+                    # (06/11) só corta se o VAD viu fala nos últimos
+                    # 1,2s (segmento do asrd) OU o rms é extremo (voz
+                    # acima da TV). Sem isso, o ruído da sala matava a
+                    # fala do próprio JARVIS.
+                    _seg_recent = bool(
+                        getattr(asr, "last_seg_ts", 0.0)
+                        and (time.monotonic() - asr.last_seg_ts) < 1.2)
+                    _cut_ok = _seg_recent or rrms >= 500
                     if len(ECHO_FLOOR) >= 8:
                         barge_cut["floor"] = _floor
                     if _corr >= 0.55:
@@ -2291,6 +2359,7 @@ def main():
                     if (not barge_cut["done"] and _corr < 0.55
                             and (len(ECHO_FLOOR) >= 4 or barge_cut["floor"] > 0)
                             and rrms >= _cut_thr
+                            and _cut_ok
                             and tts.kill_playback()):
                         barge_cut["done"] = True
                         log(f"[{ts()}] BARGE: fala sobre o TTS "
