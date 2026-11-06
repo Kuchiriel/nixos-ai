@@ -388,3 +388,14 @@ class TestAliasAddressing:
         monkeypatch.setattr(coord, "bus_payloads", lambda force=False: payloads)
         items = coord.pending(codename="Onca")
         assert len(items) == 1
+
+
+def test_pending_drops_own_claim(coord, monkeypatch):
+    """A claim do proprio agente nao e' pendencia (o watcher acordaria o dono
+    da claim por causa da propria claim)."""
+    coord.invalidate_cache()
+    payloads = [{"kind": "claim", "agent": "opencode-matheus", "to": "",
+                 "lane": "infra", "files": ["backtest/*"],
+                 "ts": "2026-11-06T10:00:00Z"}]
+    monkeypatch.setattr(coord, "bus_payloads", lambda force=False: payloads)
+    assert coord.pending(agent="opencode-matheus", files="backtest/*") == []
