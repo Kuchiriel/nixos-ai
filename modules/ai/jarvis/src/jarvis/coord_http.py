@@ -150,15 +150,21 @@ def build_server():
         items = pending(agent=agent or None, codename=codename or None,
                         lane=lane or None, files=files, since=since or None)
         if not items:
-            return "coord_pending: nada endereçado a você neste escopo."
-        return "\n".join(
-            f"- [{i.get('kind')}] de {i.get('agent')}"
-            f"{' -> ' + str(i.get('to')) if i.get('to') else ''}"
-            f" · {i.get('lane') or '-'}"
-            f" · {str(i.get('intent') or i.get('note') or '')[:180]}"
-            f" · {i.get('ts')}"
+            return "[]"
+        # (06/11/2026) JSON, nao texto: quem consome (agent-bus-pending.py /
+        # watcher) faz json.loads() e espera [{to, text}].
+        import json as _json
+        return _json.dumps([
+            {
+                "to": i.get("to") or "",
+                "kind": i.get("kind") or "",
+                "agent": i.get("agent") or "",
+                "lane": i.get("lane") or "",
+                "ts": i.get("ts") or "",
+                "text": str(i.get("intent") or i.get("note") or ""),
+            }
             for i in items
-        )
+        ], ensure_ascii=False)
 
     return mcp
 

@@ -1123,17 +1123,22 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
                     since=args.get("since") or None,
                 )
                 if not items:
-                    return "coord_pending: nada endereçado a você neste escopo."
+                    return "[]"
+                # (06/11/2026) JSON, nao texto: quem consome
+                # (agent-bus-pending.py e o watcher) faz json.loads() e espera
+                # [{to, text}]. Com texto, o parse caia no fallback e devolvia
+                # UM blob => a IA nao achava as mensagens endereçadas a ela.
                 out = []
                 for item in items:
-                    out.append(
-                        f"- [{item.get('kind')}] de {item.get('agent')}"
-                        f"{' → ' + str(item.get('to')) if item.get('to') else ''}"
-                        f" · {item.get('lane') or '—'}"
-                        f" · {str(item.get('intent') or item.get('note') or '')[:200]}"
-                        f" · {item.get('ts')}"
-                    )
-                return "coord_pending:\n" + "\n".join(out)
+                    out.append({
+                        "to": item.get("to") or "",
+                        "kind": item.get("kind") or "",
+                        "agent": item.get("agent") or "",
+                        "lane": item.get("lane") or "",
+                        "ts": item.get("ts") or "",
+                        "text": (item.get("intent") or item.get("note") or ""),
+                    })
+                return json.dumps(out, ensure_ascii=False)
             except Exception as e:
                 return f"ERROR: coord_pending failed: {e}"
 
