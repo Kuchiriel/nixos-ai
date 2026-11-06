@@ -446,11 +446,18 @@ print(" | ".join(m for m in msgs if m)[:600])
                     [ -e "$_g" ] && [ "$_g" -nt "$CP_MARCADOR" ] && { _trab_novo=1; break; }
                 done
                 if [ "$_trab_novo" -eq 0 ]; then
-                    log "checkpoint ja selado (nenhum commit novo desde o marcador) end=$END - sem sugestao"
-                    continue
+                    # (06/11/2026) BUG CORRIGIDO: aqui havia um `continue`, e este
+                    # ramo esta ANTES do wake por bus => com o checkpoint 'ja
+                    # selado' (o caso normal) o watcher NUNCA chegava a ler o
+                    # bus => o wake por tarefa enderecada NUNCA acontecia (o log
+                    # so mostrava 'checkpoint ja selado ... - sem sugestao').
+                    # Agora NAO aborta o ciclo: sem checkpoint a sugerir, ele
+                    # segue para o wake por bus.
+                    log "checkpoint ja selado (nenhum commit novo desde o marcador) end=$END - sem sugestao (segue para o wake por bus)"
+                else
+                    MOTIVO="CHECKPOINT-SUGERIDO: voce acumula ${_w}s de trabalho nesta sessao. Grave as 4 camadas AGORA (fila+commit, rag, memoria, vault): ${CHECKPOINT_SH} --project <projeto> --era '<tema>' --summary '<estado>'. Nao precisa digitar as dores: o agent-pains.sh ja capturou os erros de CLI sozinho."
+                    [ "$CHECK" -eq 1 ] || { date +%s > "$DIR_ST/checkpoint.$CHAVE"; echo 0 > "$DIR_ST/work.$CHAVE"; }
                 fi
-                MOTIVO="CHECKPOINT-SUGERIDO: voce acumula ${_w}s de trabalho nesta sessao. Grave as 4 camadas AGORA (fila+commit, rag, memoria, vault): ${CHECKPOINT_SH} --project <projeto> --era '<tema>' --summary '<estado>'. Nao precisa digitar as dores: o agent-pains.sh ja capturou os erros de CLI sozinho."
-                [ "$CHECK" -eq 1 ] || { date +%s > "$DIR_ST/checkpoint.$CHAVE"; echo 0 > "$DIR_ST/work.$CHAVE"; }
             fi
         fi
         # IDLE-PROSPECÇÃO: sem acontecimento, agente parado = desperdiçado.
