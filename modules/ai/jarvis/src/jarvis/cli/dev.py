@@ -2432,6 +2432,14 @@ def _run_agent_loop(
     _run_agent_loop._err_nudged = 0  # type: ignore[attr-defined]
     _run_agent_loop._empty_nudged = 0  # type: ignore[attr-defined]
 
+    # (06/11, LATÊNCIA) Teto de turnos por tier: o default eram 30 turnos
+    # e o 4B (tier small) rambla em cada turno → uma task simples chegou
+    # a 120-171s (medido no ux-suite: T8-qdrant e T4-locate). Para
+    # tier small/tiny o teto é 8 turnos (task que precisa de mais é
+    # plano/autopilot, que passa max_turns=10); tier grande mantém 30.
+    if profile.get("name") in ("small", "tiny"):
+        max_turns = min(max_turns, 8)
+
     for turn in range(max_turns):
         est = _estimate_tokens(messages)
         if est > compact_threshold:
