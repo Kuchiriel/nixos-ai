@@ -399,3 +399,14 @@ def test_pending_drops_own_claim(coord, monkeypatch):
                  "ts": "2026-11-06T10:00:00Z"}]
     monkeypatch.setattr(coord, "bus_payloads", lambda force=False: payloads)
     assert coord.pending(agent="opencode-matheus", files="backtest/*") == []
+
+
+def test_pending_accepts_group_address(coord, monkeypatch):
+    """O peer manda para o grupo 'coordenacao' — tem de chegar a todos."""
+    coord.invalidate_cache()
+    payloads = [{"kind": "msg", "agent": "Cervo", "to": "coordenacao",
+                 "lane": "redteam/matrix", "ts": "2026-11-06T10:00:00Z",
+                 "note": "para o grupo"}]
+    monkeypatch.setattr(coord, "bus_payloads", lambda force=False: payloads)
+    items = coord.pending(codename="Onca", agent="opencode-matheus")
+    assert len(items) == 1, "msg de grupo nao chegou"
