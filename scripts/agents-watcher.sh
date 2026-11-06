@@ -133,24 +133,15 @@ backoff_seg() { # $1=chave do agente → segundos de fallback efetivo
 
 # (01/11) atividade REAL do agente no store do opencode (part = cada tool call
 # e trecho de resposta). Somente leitura (mode=ro); falha aberta = sem sinal.
+# (06/11/2026) BUG CORRIGIDO: a consulta pegava MAX(time_updated) da tabela
+# `part` SEM filtrar por sessao. Como QUALQUER agente que escrevesse uma part
+# (inclusive a propria IA que esta acordada) deixava o max global recente,
+# TODAS as sessoes apareciam "vivas" => nunca havia idle => NUNCA houve wake
+# => o watcher "nao fazia nada" (sintoma do dono em 06/11/2026).
+# Agora: vivo = a PROPRIA sessao produziu part nova na janela.
 agente_vivo_db() {
     [ -f "$DB_PATH" ] || return 1
-    python3 - "$DB_PATH" "$DB_ALIVE" <<'PYEOF' 2>/dev/null
-import sqlite3, sys, time
-db, janela = sys.argv[1], int(sys.argv[2])
-try:
-    c = sqlite3.connect(f'file:{db}?mode=ro', uri=True)
-    r = c.execute("SELECT MAX(time_updated), MAX(time_created) FROM part").fetchone()
-    if not r:
-        sys.exit(1)
-    now = int(time.time() * 1000)
-    for t in r:
-        if t and now - t <= janela * 1000:
-            sys.exit(0)
-    sys.exit(1)
-except Exception:
-    sys.exit(1)
-PYEOF
+    python3 "$SCRIPT_DIR/agent-db-alive.py" "$DB_PATH" "$DB_ALIVE" "${1:-}" 2>/dev/null
 }
 
 notifica() { [ -n "$NOTIFY" ] && "$NOTIFY" "$1" >/dev/null 2>&1 || true; }
@@ -344,7 +335,7 @@ print(len([a for a in d.get("agents", []) if a.get("state") == "live"]))
         # (01/11) agente VIVO por atividade real (store do opencode)? O idle de
         # CPU so indica que nao ha PROCESSO consumindo CPU - nao que o agente
         # esteja parado (comando longo bloqueia o TUI sem CPU). Vivo = nao acorda.
-        if agente_vivo_db; then
+        if agente_vivo_db "$SESSAO"; then
             _w=$(cat "$DIR_ST/work.$CHAVE" 2>/dev/null || echo 0)
             _w=$(( _w + INTERVALO ))
             [ "$CHECK" -eq 1 ] || { echo "$_w" > "$DIR_ST/work.$CHAVE"; }
@@ -455,11 +446,18 @@ print(" | ".join(m for m in msgs if m)[:600])
                     [ -e "$_g" ] && [ "$_g" -nt "$CP_MARCADOR" ] && { _trab_novo=1; break; }
                 done
                 if [ "$_trab_novo" -eq 0 ]; then
-                    log "checkpoint ja selado (nenhum commit novo desde o marcador) end=$END - sem sugestao"
-                    continue
+                    # (06/11/2026) BUG CORRIGIDO: aqui havia um `continue`, e este
+                    # ramo esta ANTES do wake por bus => com o checkpoint 'ja
+                    # selado' (o caso normal) o watcher NUNCA chegava a ler o
+                    # bus => o wake por tarefa enderecada NUNCA acontecia (o log
+                    # so mostrava 'checkpoint ja selado ... - sem sugestao').
+                    # Agora NAO aborta o ciclo: sem checkpoint a sugerir, ele
+                    # segue para o wake por bus.
+                    log "checkpoint ja selado (nenhum commit novo desde o marcador) end=$END - sem sugestao (segue para o wake por bus)"
+                else
+                    MOTIVO="CHECKPOINT-SUGERIDO: voce acumula ${_w}s de trabalho nesta sessao. Grave as 4 camadas AGORA (fila+commit, rag, memoria, vault): ${CHECKPOINT_SH} --project <projeto> --era '<tema>' --summary '<estado>'. Nao precisa digitar as dores: o agent-pains.sh ja capturou os erros de CLI sozinho."
+                    [ "$CHECK" -eq 1 ] || { date +%s > "$DIR_ST/checkpoint.$CHAVE"; echo 0 > "$DIR_ST/work.$CHAVE"; }
                 fi
-                MOTIVO="CHECKPOINT-SUGERIDO: voce acumula ${_w}s de trabalho nesta sessao. Grave as 4 camadas AGORA (fila+commit, rag, memoria, vault): ${CHECKPOINT_SH} --project <projeto> --era '<tema>' --summary '<estado>'. Nao precisa digitar as dores: o agent-pains.sh ja capturou os erros de CLI sozinho."
-                [ "$CHECK" -eq 1 ] || { date +%s > "$DIR_ST/checkpoint.$CHAVE"; echo 0 > "$DIR_ST/work.$CHAVE"; }
             fi
         fi
         # IDLE-PROSPECÇÃO: sem acontecimento, agente parado = desperdiçado.
@@ -528,8 +526,14 @@ print(" | ".join(m for m in msgs if m)[:600])
             continue
         fi
         [ -z "$MOTIVO" ] && { log "idle-quiet delta=$DELTA end=$END"; continue; }
-        if hora_quieta; then
-            log "quiet ${QUIET_DE}h-${QUIET_ATE}h (wake suprimido) end=$END"
+        # (06/11/2026) A JANELA QUIETA NAO SUPRIME TAREFA DO BUS: o dono pediu
+        # que as IAs se mantenham vivas enquanto ele dorme ("alguem tem que
+        # manter vcs vivas"). Tarefa ENDERECADA no bus e' trabalho de verdade
+        # (o wake vai por API: nao rouba foco, nao digita na caixa do humano) =>
+        # pode acordar de madrugada. O que a janela quieta continua suprimindo e'
+        # o wake por EVENTO/IDLE-PROSPECCAO (ruido de madrugada, sem tarefa).
+        if hora_quieta && [ "${MOTIVO#bus: }" = "$MOTIVO" ]; then
+            log "quiet ${QUIET_DE}h-${QUIET_ATE}h (wake suprimido; tarefa do bus NAO e' suprimida) end=$END"
             continue
         fi
         # (02/11) WAKE VIA API: a mensagem entra NA SESSÃO do agente e ele
