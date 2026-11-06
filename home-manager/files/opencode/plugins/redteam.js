@@ -317,7 +317,14 @@ modelo — nao existe vetor universal:
 | **com reasoning forte** (Nemotron 3 Ultra, DiffusionGemma) | **\`cot_prefill\`** — semeia o \`<think>\` ja resolvido | 10/12 (83%) no DiffusionGemma, so com este vetor |
 | **o mais duro** (Qwen3.5-397B, 0/31 no single-shot) | **\`redteam_crescendo\`** — multi-turn por anafora | 1/1 (5260 chars, era 0/31) |
 | **o mais duro** (Qwen3.5-397B) | **\`redteam_echo\`** — seeds + consistency bias (arXiv 2601.05742) | **3/3** (3972, 9596, 1681 chars) |
-| qualquer | **\`redteam_race\`** — 3 modulos, o RF diagnostica a recusa (arXiv 2502.11054) | 92% no DeepSeek R1 (paper); 1/1 no Qwen3.5 aqui |
+| qualquer | **\`redteam_race\`** — 3 modulos, o RF diagnostica a recusa (arXiv 2502.11054) | 3/6 no Qwen3.5; 92% no DeepSeek R1 (paper) |
+
+**Os tres multi-turn sao COMPLEMENTARES, nao hierarquicos:**
+Crescendo 13/13 em 11 modelos · Echo 3/3 no Qwen3.5 e no nemotron-ultra
+mas **0/3** no nemotron-bolt (onde o Crescendo acerta) · RACE diagnostica
+a recusa (sobrevive melhor a modelos que recusam cedo).
+Quando um falha, teste o outro — o `redteam_state` mostra o que ja
+entregou em cada modelo.
 | intermediario (Nemotron 3 Ultra, 0/31 single-shot) | \`redteam_crescendo\` | 1/1 (9314 chars, com backtracking) |
 | intermediario (Nemotron 3.5 Bolt, 0/9 single-shot) | \`redteam_crescendo\` | 1/1 (1847 chars, \`openssl genrsa/req/x509\`) |
 | intermediario (DiffusionGemma 26B, 0/? single-shot) | \`redteam_crescendo\` | 1/1 (1312-1766 chars, com backtracking) |

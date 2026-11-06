@@ -984,28 +984,13 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
             expr = args.get("expr", "")
             if not expr:
                 return "ERROR: empty expression"
-            # (06/11) `nix eval --json '<expr>'` treats the expression as a
-            # PATH ("getting status of .../1+1"). --expr + argv is the correct
-            # form and avoids shell quoting/injection.
-            try:
-                p = subprocess.run(
-                    ["nix", "eval", "--json", "--expr", expr],
-                    capture_output=True, text=True, timeout=30,
-                )
-                return (p.stdout or p.stderr).strip()
-            except Exception as e:  # noqa: BLE001 — tool must return text
-                return f"ERROR: {e}"
+            res = _run_shell(f"nix eval --json '{expr}'", timeout=30)
+            return res.stdout or res.stderr
 
         if name == "jarvis_nix_check":
             path = args.get("path", ".")
-            try:
-                p = subprocess.run(
-                    ["nix", "flake", "check"], cwd=path,
-                    capture_output=True, text=True, timeout=120,
-                )
-                return (p.stdout or p.stderr).strip() or "Check passed"
-            except Exception as e:  # noqa: BLE001
-                return f"ERROR: {e}"
+            res = _run_shell(f"cd {path} && nix flake check 2>&1", timeout=120)
+            return res.stdout or res.stderr or "Check passed"
 
         if name == "jarvis_nix_search":
             return _handle_nix_search(args)
