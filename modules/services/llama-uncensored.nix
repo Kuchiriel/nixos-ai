@@ -102,11 +102,14 @@ let
       # (06/11, sugestão do Crouton + lição do freeze) systemd-oomd:
       # o OOM killer do kernel só age DEPOIS do zram encher 100% (host
       # travado). o systemd-oomd mata o cgroup do LLM quando o SWAP do
-      # sistema passa de 90% (ManagedOOMSwapThreshold default) ou a
-      # memória entra em pressão — com OOMScoreAdjust=1000 o LLM é a
-      # vítima preferida, então o host se salva e o serviço reinicia.
+      # SISTEMA passa de 90% (ManagedOOMSwapThreshold default) — com
+      # OOMScoreAdjust=1000 o LLM é a vítima preferida, então o host se
+      # salva e o serviço reinicia.
+      # (06/11, 15:41) ManagedOOMMemoryPressure=kill foi REMOVIDO: matou
+      # o servidor no meio da conversa (PSI: pressão transitória de
+      # página num host movimentado) — o backstop real é o MemoryMax do
+      # cgroup + o OOM killer do kernel.
       ManagedOOMSwap = "kill";
-      ManagedOOMMemoryPressure = "kill";
     } // optionalAttrs s.limitMemlock { LimitMEMLOCK = "infinity"; };
   };
 in
