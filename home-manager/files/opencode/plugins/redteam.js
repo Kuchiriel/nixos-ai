@@ -323,7 +323,7 @@ modelo — nao existe vetor universal:
 Crescendo 13/13 em 11 modelos · Echo 3/3 no Qwen3.5 e no nemotron-ultra
 mas **0/3** no nemotron-bolt (onde o Crescendo acerta) · RACE diagnostica
 a recusa (sobrevive melhor a modelos que recusam cedo).
-Quando um falha, teste o outro — o `redteam_state` mostra o que ja
+Quando um falha, teste o outro — o \`redteam_state\` mostra o que ja
 entregou em cada modelo.
 | intermediario (Nemotron 3 Ultra, 0/31 single-shot) | \`redteam_crescendo\` | 1/1 (9314 chars, com backtracking) |
 | intermediario (Nemotron 3.5 Bolt, 0/9 single-shot) | \`redteam_crescendo\` | 1/1 (1847 chars, \`openssl genrsa/req/x509\`) |
