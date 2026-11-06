@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess as _sp
 import sys
 import time
 import uuid
@@ -618,21 +619,27 @@ def _discover_agent_files(start_dir: str | None = None, max_depth: int = 5) -> l
         # Standard agent context files (AGENTS.md spec + vendor extensions)
         for name in ("AGENTS.md", "CLAUDE.md", "GEMINI.md", "agents.md"):
             p = cur / name
-            if p not in seen and p.exists():
-                seen.add(p)
-                candidates.append(p)
+            if p.exists():
+                rp = p.resolve()
+                if rp not in seen:
+                    seen.add(rp)
+                    candidates.append(p)
         # GitHub Copilot instructions
         gh = cur / ".github"
         if gh.exists():
             p = gh / "copilot-instructions.md"
-            if p.exists() and p not in seen:
-                seen.add(p)
-                candidates.append(p)
+            if p.exists():
+                rp = p.resolve()
+                if rp not in seen:
+                    seen.add(rp)
+                    candidates.append(p)
         # Cursor rules (legacy but still honored)
         cr = cur / ".cursorrules"
-        if cr.exists() and cr not in seen:
-            seen.add(cr)
-            candidates.append(cr)
+        if cr.exists():
+            rp = cr.resolve()
+            if rp not in seen:
+                seen.add(rp)
+                candidates.append(cr)
         if cur == cur.parent:
             break
         cur = cur.parent
@@ -651,11 +658,18 @@ def _load_agent_context(start_dir: str | None = None) -> str:
     if not files:
         return ""
     chunks: list[str] = []
-    total_budget = 3000  # max chars per file (conservative for small context)
+    # (06/11, LATÊNCIA) 3000→1800 chars por arquivo: o prompt do harness
+    # estava em ~4,2k tokens e o PREFILL (7,2k tok ≈ 5s de GPU) segurava
+    # o servidor — a VOZ (mesmo :8092) esperava 4,5s atrás. Menos prompt
+    # = prefill mais curto = turno do harness mais rápido E voz menos
+    # bloqueada. O que importa do AGENTS.md está no TOPO do arquivo.
+    total_budget = 1800  # max chars per file (small context + latency)
     for path in files:
         try:
             text = path.read_text(encoding="utf-8", errors="replace").strip()
-            if text and len(text) < total_budget:
+            if text:
+                if len(text) > total_budget:
+                    text = text[:total_budget].rstrip() + "\n…[truncated]"
                 chunks.append(f"# From {path.name} ({path.parent}):\n{text}")
         except Exception:  # noqa: BLE001 — leitura de arquivo é best-effort
             continue
@@ -671,7 +685,7 @@ def _get_git_state(project_root: str | None = None) -> dict[str, Any]:
         result = {}
         
         # Get branch
-        proc = subprocess.run(
+        proc = _sp.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
             cwd=root, capture_output=True, text=True, timeout=5,
         )
@@ -679,7 +693,7 @@ def _get_git_state(project_root: str | None = None) -> dict[str, Any]:
             result["branch"] = proc.stdout.strip()
         
         # Get commit
-        proc = subprocess.run(
+        proc = _sp.run(
             ["git", "rev-parse", "HEAD"],
             cwd=root, capture_output=True, text=True, timeout=5,
         )
@@ -687,7 +701,7 @@ def _get_git_state(project_root: str | None = None) -> dict[str, Any]:
             result["commit"] = proc.stdout.strip()[:8]
         
         # Check if clean
-        proc = subprocess.run(
+        proc = _sp.run(
             ["git", "status", "--porcelain"],
             cwd=root, capture_output=True, text=True, timeout=5,
         )
@@ -1024,6 +1038,9 @@ RULES:
 5. Never invent content you have not read
 6. Use MCP tools when the built-in tools are not enough
 7. BEFORE reading a large file: wc -l (know the size)
+8. Use the exposed TOOLS directly — do NOT shell out to `jarvis` or
+   `jarvis-cli.sh` (the harness routes CLI calls through its own env;
+   a raw shell call loses it and fails)
 {persona_block}
 
 {tool_discipline}
@@ -1083,6 +1100,29 @@ Read the files you need and return pure JSON:
 # Chamada HTTP — payload estritamente compatível com a spec OpenAI
 # ---------------------------------------------------------------------------
 
+def _normalize_request_messages(
+    messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Keep exactly one system message, at index 0 (llama.cpp --jinja law).
+
+    Harness nudges (loop recovery, no-tool, claim-checker, verdict) are
+    appended mid-history as role=system. Qwen3.5's Jinja template aborts
+    with 500 "System message must be at the beginning", which killed
+    `jarvis dev` on the second turn. opencode/pi represent mid-run
+    steering as user turns; do the same at request time so persisted
+    history keeps the intent label without breaking the chat template.
+    """
+    if not messages:
+        return messages
+    out: list[dict[str, Any]] = []
+    for i, m in enumerate(messages):
+        if m.get("role") == "system" and i != 0:
+            out.append({**m, "role": "user"})
+        else:
+            out.append(m)
+    return out
+
+
 def _call_llm(
     messages: list[dict[str, Any]],
     tools: list[dict],
@@ -1102,6 +1142,7 @@ def _call_llm(
     from jarvis.core.config import Config as _Config
     from jarvis.providers.llm import LLMClient as _LLMClient
 
+    messages = _normalize_request_messages(messages)
     cfg = _get_config()
     model_id = profile.get("model_id", cfg.llm_model)
     payload: dict[str, Any] = {
@@ -1181,7 +1222,7 @@ def _call_llm(
 # progressiva e, em modelos "tiny", degradação de qualidade)
 # ---------------------------------------------------------------------------
 
-def _trim_messages(messages: list[dict[str, Any]], max_messages: int = 20) -> list[dict[str, Any]]:
+def _trim_messages(messages: list[dict[str, Any]], max_messages: int = 12) -> list[dict[str, Any]]:
     """Mantém a mensagem de system + as últimas `max_messages` mensagens.
 
     CUIDADO: cortar por posição fixa pode deixar uma mensagem role='tool'
@@ -1205,7 +1246,6 @@ def _trim_messages(messages: list[dict[str, Any]], max_messages: int = 20) -> li
 # ---------------------------------------------------------------------------
 # Auto-commit — Aider-style commit after file modifications
 # ---------------------------------------------------------------------------
-import subprocess as _sp
 
 
 def _auto_commit(tool_name: str, args: dict[str, Any], success: bool) -> None:
@@ -1239,7 +1279,7 @@ def _auto_commit(tool_name: str, args: dict[str, Any], success: bool) -> None:
     # Generate commit message
     path = args.get("path", "unknown")
     if tool_name == "str_replace":
-        old = args.get("oldString", "")[:50]
+        old = str(args.get("old") or args.get("oldString") or "")[:50]
         msg = f"jarvis: edit {path} — {old}..."
     else:
         msg = f"jarvis: create/update {path}"
@@ -1285,8 +1325,59 @@ def _validated_output(name: str, args: dict[str, Any], output: str) -> str:
     return output
 
 
+def _jarvis_cli_invocation(cmd: str) -> list[str] | None:
+    """'jarvis recall x' / 'jarvis-cli.sh status' → argv; None se não for.
+
+    (06/11) O modelo chamava a CLI do JARVIS por dentro do shell: às
+    vezes quebrava (o shell do harness não tem o env do MCP) e virava
+    ruído no transcript. Detectado aqui → roda pelo HARNESS.
+    """
+    if not cmd:
+        return None
+    import re as _re_cli
+    m = _re_cli.match(
+        r"^\s*(?:sudo\s+)?(?:[\w./-]*/)?jarvis(?:-cli\.sh)?\s+(.+?)\s*$",
+        cmd.strip(), _re_cli.S)
+    if not m:
+        return None
+    import shlex as _shlex_cli
+    try:
+        args = _shlex_cli.split(m.group(1))
+    except ValueError:
+        args = m.group(1).split()
+    return args or None
+
+
+def _run_jarvis_cli(args: list[str], timeout: int = 90) -> str:
+    """Roda a CLI do JARVIS pelo wrapper do repo: argv, sem shell, env do MCP."""
+    try:
+        from jarvis.core.paths import find_repo_root
+        cli = find_repo_root() / "scripts" / "jarvis-cli.sh"
+    except Exception:
+        from pathlib import Path as _P
+        cli = _P(__file__).resolve().parents[6] / "scripts" / "jarvis-cli.sh"
+    try:
+        r = _sp.run([str(cli), *args], capture_output=True, text=True,
+                    timeout=timeout)
+        out = (r.stdout or r.stderr or "").strip()
+        return out[:4000] or f"(rc={r.returncode}, sem saída)"
+    except _sp.TimeoutExpired:
+        return f"ERROR: '{' '.join(args)}' excedeu {timeout}s"
+    except Exception as e:  # noqa: BLE001
+        return f"ERROR: {e}"
+
+
 def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -> tuple[str, str | None]:
     """Executa tool via handle_dev_tool (devtools.py). Retorna (texto, diff_ou_None)."""
+    # ── (06/11) CLI DO JARVIS via execute_shell → SEMPRE pelo harness ──
+    # O modelo pedia "jarvis status"/"jarvis-cli.sh recall ..." no shell;
+    # agora isso é interceptado e roda pelo wrapper do repo (mesmo env do
+    # MCP, argv, sem shell) — o comando deixa de errar por env.
+    if name == "execute_shell":
+        _cli_args = _jarvis_cli_invocation(str(args.get("cmd", "")))
+        if _cli_args:
+            return _run_jarvis_cli(_cli_args), None
+
     # ── Vision ──
     if name == "capture_screen":
         try:
@@ -1310,7 +1401,10 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
         expr = args.get("expr", "")
         if not expr:
             return "ERROR: empty expression", None
-        res = subprocess.run(["nix", "eval", "--json", expr], capture_output=True, text=True, timeout=30)
+        res = subprocess.run(
+            ["nix", "eval", "--json", "--expr", expr],
+            capture_output=True, text=True, timeout=30,
+        )
         return res.stdout or res.stderr, None
 
     if name == "nix_check":
@@ -1599,7 +1693,10 @@ RULES:
 4. Test after editing, commit after testing
 5. Never invent content you have not read
 6. Use MCP tools when the built-in tools are not enough
-7. BEFORE reading a large file: wc -l (know the size)"""
+7. BEFORE reading a large file: wc -l (know the size)
+8. Use the exposed TOOLS directly — do NOT shell out to `jarvis` or
+   `jarvis-cli.sh` (the harness routes CLI calls through its own env;
+   a raw shell call loses it and fails)"""
 
 def _build_system_prompt(repo_map: str, memory_context: str,
                          agent_context: str, persona_block: str,
@@ -3386,7 +3483,10 @@ def _load_known_failures(task: str) -> str:
     """Load known failures from team/known-failures.txt relevant to task."""
     try:
         from pathlib import Path
-        kf_path = Path("/home/nixos/projects/team/known-failures.txt")
+        kf_path = Path(os.environ.get(
+            "JARVIS_KNOWN_FAILURES",
+            "~/projects/team/known-failures.txt",
+        )).expanduser()
         if kf_path.exists():
             content = kf_path.read_text(encoding="utf-8")
             task_keywords = task.lower().split()

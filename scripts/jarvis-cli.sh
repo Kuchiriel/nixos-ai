@@ -15,6 +15,7 @@
 #   nix-check                        — Run nix flake check
 #   nix-search <query>               — Search NixOS packages
 #   chatgpt <url>                    — Read shared ChatGPT conversation
+#   read-ai <url>                    — Read shared ChatGPT/Gemini/Claude conversation
 #   remember <fact>                  — Store episodic memory
 #   recall <query>                   — Recall memories
 #   lessons <query>                  — Recall lessons from past errors
@@ -35,8 +36,11 @@ set -euo pipefail
 
 # Env COMPARTILHADO com o MCP (mesmo PYTHONPATH + keys): sem isso a CLI
 # perdia `requests`, o provider de LLM abria o breaker e rag-index pendurava.
+# (06/11) Caminho derivado do próprio script: o literal anterior quebrava
+# qualquer checkout/worktree fora de /home/nixos/projects/nixos-ai.
+SCRIPT_DIR="$(cd "$(dirname "$(realpath "$0")")" && pwd)"
 # shellcheck source=/dev/null
-. /home/nixos/projects/nixos-ai/modules/ai/jarvis/jarvis-env.sh
+. "$SCRIPT_DIR/../modules/ai/jarvis/jarvis-env.sh"
 PY="$JARVIS_PY"
 
 usage() {
@@ -49,42 +53,56 @@ case "${1:-help}" in
         FILE="${2:?Usage: jarvis-cli.sh read <file> [offset] [limit]}"
         OFFSET="${3:-0}"
         LIMIT="${4:-2000}"
-        "$PY" -c "
-from jarvis.core.devtools import handle_dev_tool
+        "$PY" - "$FILE" "$OFFSET" "$LIMIT" <<'PY'
 import json
-result = handle_dev_tool('read_file', {'path': '$FILE', 'offset': $OFFSET, 'limit': $LIMIT})
-print(json.dumps(json.loads(result) if isinstance(result, str) else result, indent=2, ensure_ascii=False))
-"
+import sys
+from jarvis.core.devtools import handle_dev_tool
+result = handle_dev_tool(
+    "read_file",
+    {"path": sys.argv[1], "offset": int(sys.argv[2]), "limit": int(sys.argv[3])},
+)
+print(json.dumps(json.loads(result) if isinstance(result, str) else result,
+                 indent=2, ensure_ascii=False))
+PY
         ;;
     write)
         FILE="${2:?Usage: jarvis-cli.sh write <file> <content>}"
         CONTENT="${3:?Usage: jarvis-cli.sh write <file> <content>}"
-        "$PY" -c "
-from jarvis.core.devtools import handle_dev_tool
+        "$PY" - "$FILE" "$CONTENT" <<'PY'
 import json
-result = handle_dev_tool('write_file', {'path': '$FILE', 'content': '''$CONTENT'''})
-print(json.dumps(json.loads(result) if isinstance(result, str) else result, indent=2, ensure_ascii=False))
-"
+import sys
+from jarvis.core.devtools import handle_dev_tool
+result = handle_dev_tool("write_file", {"path": sys.argv[1], "content": sys.argv[2]})
+print(json.dumps(json.loads(result) if isinstance(result, str) else result,
+                 indent=2, ensure_ascii=False))
+PY
         ;;
     replace)
         FILE="${2:?Usage: jarvis-cli.sh replace <file> <old> <new>}"
         OLD="${3:?Usage: jarvis-cli.sh replace <file> <old> <new>}"
         NEW="${4:?Usage: jarvis-cli.sh replace <file> <old> <new>}"
-        "$PY" -c "
-from jarvis.core.devtools import handle_dev_tool
+        "$PY" - "$FILE" "$OLD" "$NEW" <<'PY'
 import json
-result = handle_dev_tool('str_replace', {'path': '$FILE', 'old': '''$OLD''', 'new': '''$NEW'''})
-print(json.dumps(json.loads(result) if isinstance(result, str) else result, indent=2, ensure_ascii=False))
-"
+import sys
+from jarvis.core.devtools import handle_dev_tool
+result = handle_dev_tool(
+    "str_replace",
+    {"path": sys.argv[1], "old": sys.argv[2], "new": sys.argv[3]},
+)
+print(json.dumps(json.loads(result) if isinstance(result, str) else result,
+                 indent=2, ensure_ascii=False))
+PY
         ;;
     shell)
         CMD="${2:?Usage: jarvis-cli.sh shell <command>}"
-        "$PY" -c "
-from jarvis.core.devtools import handle_dev_tool
+        "$PY" - "$CMD" <<'PY'
 import json
-result = handle_dev_tool('execute_shell', {'cmd': '''$CMD'''})
-print(json.dumps(json.loads(result) if isinstance(result, str) else result, indent=2, ensure_ascii=False))
-"
+import sys
+from jarvis.core.devtools import handle_dev_tool
+result = handle_dev_tool("execute_shell", {"cmd": sys.argv[1]})
+print(json.dumps(json.loads(result) if isinstance(result, str) else result,
+                 indent=2, ensure_ascii=False))
+PY
         ;;
     screen)
         "$PY" -c "
@@ -102,60 +120,68 @@ print(result)
         ;;
     nix-eval)
         EXPR="${2:?Usage: jarvis-cli.sh nix-eval <expression>}"
-        "$PY" -c "
-from jarvis.mcp_server import _handle_nix_eval
-import json
-result = _handle_nix_eval({'expression': '''$EXPR'''})
-print(result)
-"
+        # (06/11) `nix eval --json '<expr>'` tratava a expressão como PATH
+        # ("getting status of .../1+1"). O handler MCP agora usa --expr +
+        # argv; a CLI delega para ele (uma fonte, sem escape de shell).
+        "$PY" - "$EXPR" <<'PY'
+import sys
+from jarvis.mcp_server import call_tool
+print(call_tool("nix_eval", {"expr": sys.argv[1]}))
+PY
         ;;
     nix-check)
         "$PY" -c "
-from jarvis.mcp_server import _handle_nix_check
-result = _handle_nix_check({})
-print(result)
+from jarvis.mcp_server import call_tool
+print(call_tool('nix_check', {}))
 "
         ;;
     nix-search)
         QUERY="${2:?Usage: jarvis-cli.sh nix-search <query>}"
-        "$PY" -c "
+        "$PY" - "$QUERY" <<'PY'
+import sys
 from jarvis.mcp_server import _handle_nix_search
-result = _handle_nix_search({'query': '''$QUERY'''})
-print(result)
-"
+print(_handle_nix_search({"query": sys.argv[1]}))
+PY
         ;;
     chatgpt)
         URL="${2:?Usage: jarvis-cli.sh chatgpt <url>}"
-        "$PY" -c "
+        "$PY" - "$URL" <<'PY'
+import sys
 from jarvis.mcp_server import call_tool
-import json
-result = call_tool('jarvis_read_chatgpt', {'url': '''$URL'''})
-print(result)
-"
+print(call_tool("jarvis_read_chatgpt", {"url": sys.argv[1]}))
+PY
+        ;;
+    read-ai)
+        URL="${2:?Usage: jarvis-cli.sh read-ai <url>}"
+        "$PY" - "$URL" <<'PY'
+import sys
+from jarvis.mcp_server import call_tool
+print(call_tool("jarvis_read_ai_conversation", {"url": sys.argv[1]}))
+PY
         ;;
     remember)
         FACT="${2:?Usage: jarvis-cli.sh remember <fact>}"
-        "$PY" -c "
+        "$PY" - "$FACT" <<'PY'
+import sys
 from jarvis.mcp_server import _handle_remember
-result = _handle_remember({'text': '''$FACT'''})
-print(result)
-"
+print(_handle_remember({"text": sys.argv[1]}))
+PY
         ;;
     recall)
         QUERY="${2:?Usage: jarvis-cli.sh recall <query>}"
-        "$PY" -c "
+        "$PY" - "$QUERY" <<'PY'
+import sys
 from jarvis.mcp_server import _handle_recall
-result = _handle_recall({'query': '''$QUERY'''})
-print(result)
-"
+print(_handle_recall({"query": sys.argv[1]}))
+PY
         ;;
     lessons)
         QUERY="${2:?Usage: jarvis-cli.sh lessons <query>}"
-        "$PY" -c "
+        "$PY" - "$QUERY" <<'PY'
+import sys
 from jarvis.mcp_server import _handle_lessons
-result = _handle_lessons({'query': '''$QUERY'''})
-print(result)
-"
+print(_handle_lessons({"query": sys.argv[1]}))
+PY
         ;;
     state)
         "$PY" -c "
@@ -173,29 +199,33 @@ print(result)
     vault-write)
         TITLE="${2:?Usage: jarvis-cli.sh vault-write <title> <content>}"
         CONTENT="${3:?Usage: jarvis-cli.sh vault-write <title> <content>}"
-        "$PY" -c "
+        "$PY" - "$TITLE" "$CONTENT" <<'PY'
+import sys
 from jarvis.mcp_server import _handle_vault_write
-result = _handle_vault_write({'name': '''$TITLE''', 'content': '''$CONTENT'''})
-print(result)
-"
+print(_handle_vault_write({"name": sys.argv[1], "content": sys.argv[2]}))
+PY
         ;;
     rag-search)
         QUERY="${2:?Usage: jarvis-cli.sh rag-search <query> [collection] [limit]}"
         COLL="${3:-code}"
         LIMIT="${4:-5}"
-        "$PY" -c "
+        "$PY" - "$QUERY" "$COLL" "$LIMIT" <<'PY'
+import sys
 from jarvis.mcp_server import _handle_rag_search
-result = _handle_rag_search({'query': '''$QUERY''', 'collection': '''$COLL''', 'limit': int('$LIMIT')})
-print(result)
-"
+print(_handle_rag_search({
+    "query": sys.argv[1],
+    "collection": sys.argv[2],
+    "limit": int(sys.argv[3]),
+}))
+PY
         ;;
     rag-index)
         DIR="${2:?Usage: jarvis-cli.sh rag-index <directory>}"
-        "$PY" -c "
+        "$PY" - "$DIR" <<'PY'
+import sys
 from jarvis.mcp_server import _handle_rag_index
-result = _handle_rag_index({'path': '''$DIR'''})
-print(result)
-"
+print(_handle_rag_index({"path": sys.argv[1]}))
+PY
         ;;
     hackmd-list)
         "$PY" -c "
@@ -206,37 +236,38 @@ print(result)
         ;;
     hackmd-read)
         ID="${2:?Usage: jarvis-cli.sh hackmd-read <note_id>}"
-        "$PY" -c "
+        "$PY" - "$ID" <<'PY'
+import sys
 from jarvis.mcp_server import call_tool
-result = call_tool('jarvis_hackmd_read', {'note_id': '''$ID'''})
-print(result)
-"
+print(call_tool("jarvis_hackmd_read", {"note_id": sys.argv[1]}))
+PY
         ;;
     hackmd-write)
         TITLE="${2:?Usage: jarvis-cli.sh hackmd-write <title> <content>}"
         CONTENT="${3:?Usage: jarvis-cli.sh hackmd-write <title> <content>}"
-        "$PY" -c "
+        "$PY" - "$TITLE" "$CONTENT" <<'PY'
+import sys
 from jarvis.mcp_server import call_tool
-result = call_tool('jarvis_hackmd_write', {'title': '''$TITLE''', 'content': '''$CONTENT'''})
-print(result)
-"
+print(call_tool("jarvis_hackmd_write",
+                {"title": sys.argv[1], "content": sys.argv[2]}))
+PY
         ;;
     hackmd-sync)
         FILE="${2:?Usage: jarvis-cli.sh hackmd-sync <file> [title]}"
         TITLE="${3:-$(basename "$FILE" .md)}"
-        CONTENT=$(cat "$FILE")
-        "$PY" -c "
+        "$PY" - "$FILE" "$TITLE" <<'PY'
+import sys
 from jarvis.mcp_server import call_tool
-result = call_tool('jarvis_hackmd_write', {'title': '''$TITLE''', 'content': '''$CONTENT'''})
-print(result)
-"
+print(call_tool("jarvis_hackmd_sync",
+                {"path": sys.argv[1], "title": sys.argv[2]}))
+PY
         ;;
     status)
         echo "=== JARVIS Status ==="
         # (03/11) Portas lidas do REGISTRY (fonte única: models.nix) — não
         # literais: o default (4B-MTP+LoRA) e o router (bonsai) são
         # grupos diferentes, mostrados separados para não mentir.
-        . "$(dirname "$0")/jarvis-registry.sh"
+        . "$SCRIPT_DIR/jarvis-registry.sh"
         _reg_default_model="$(reg_default 2>/dev/null || echo jarvis-mtp-lora)"
         _reg_default_port="$(reg_port "$_reg_default_model" 2>/dev/null || echo 8092)"
         _reg_router_port="$(reg_port bonsai 2>/dev/null || echo 8080)"
@@ -247,7 +278,8 @@ print(result)
         echo "Embeddings: $(curl -sf http://127.0.0.1:$_reg_embed_port/health 2>/dev/null || echo 'offline')"
         echo "Rerank: $(curl -sf http://127.0.0.1:$_reg_rerank_port/health 2>/dev/null || echo 'offline')"
         echo "Qdrant: $(curl -sf http://127.0.0.1:6333/healthz 2>/dev/null || echo 'offline')"
-        echo "Wakeword: $(systemctl --user is-active jarvis-wakeword 2>/dev/null || echo 'inactive')"
+        _wake="$(systemctl --user is-active jarvis-wakeword 2>/dev/null || true)"
+        echo "Wakeword: ${_wake:-inactive}"
         echo "Waybar: $(pgrep -c waybar 2>/dev/null || echo '0') processes"
         echo "Status: $(cat /tmp/jarvis-status.json 2>/dev/null || echo '{}')"
         ;;
@@ -267,21 +299,23 @@ print(json.dumps(watchdog_cycle(), indent=2))
 "
         ;;
     classify)
-        PATH_ARG="${2:.}"
-        "$PY" -c "
+        PATH_ARG="${2:-.}"
+        "$PY" - "$PATH_ARG" <<'PY'
+import sys
 from jarvis.core.classify import get_security_summary, format_security_summary
-summary = get_security_summary('$PATH_ARG')
+summary = get_security_summary(sys.argv[1])
 print(format_security_summary(summary))
-"
+PY
         ;;
     classify-file)
         FILE_ARG="${2:?Usage: jarvis-cli.sh classify-file <file>}"
-        "$PY" -c "
-from jarvis.core.classify import classify_file
+        "$PY" - "$FILE_ARG" <<'PY'
 import json
-result = classify_file('$FILE_ARG')
+import sys
+from jarvis.core.classify import classify_file
+result = classify_file(sys.argv[1])
 print(json.dumps(result.to_dict(), indent=2))
-"
+PY
         ;;
     watchdog)
         "$PY" -c "
@@ -292,11 +326,11 @@ print(json.dumps(result, indent=2))
 "
         ;;
     watchdog-loop)
-        "$PY" -c "
+        "$PY" - "${2:-60}" <<'PY'
+import sys
 from jarvis.core.watchdog import run_watchdog_loop
-interval = int('${2:-60}')
-run_watchdog_loop(interval=interval)
-"
+run_watchdog_loop(interval=int(sys.argv[1]))
+PY
         ;;
     vault-status)
         "$PY" -c "
@@ -324,12 +358,12 @@ print(json.dumps({'synced': len(result), 'results': result}, indent=2))
         ;;
     vault-search-obsidian)
         QUERY="${2:?Usage: jarvis-cli.sh vault-search-obsidian <query>}"
-        "$PY" -c "
-from jarvis.mcp_server import _vault_read_from_obsidian
+        "$PY" - "$QUERY" <<'PY'
 import json
-result = _vault_read_from_obsidian('''$QUERY''')
-print(json.dumps(result, indent=2))
-"
+import sys
+from jarvis.mcp_server import _vault_read_from_obsidian
+print(json.dumps(_vault_read_from_obsidian(sys.argv[1]), indent=2))
+PY
         ;;
     workspace)
         shift
@@ -374,13 +408,15 @@ from jarvis.cli.main import main; main()
 " "$@"
         ;;
     tools)
-        # 03/11: cobertura CLI x MCP. O MCP expoe ~37 tools; a CLI so tinha
-        # ~20 atalhos. Esta lista mostra o que falta ("tool" cobre tudo).
-        "$PY" -c "
+        # 03/11: cobertura CLI x MCP. O MCP expoe 46 tools; a CLI so tinha
+        # ~24 atalhos. Esta lista mostra o que falta ("tool" cobre tudo).
+        # (06/11) o path entra por argv: nomes com apóstrofo quebravam o -c.
+        "$PY" - "$0" <<'PY'
 import re
+import sys
 from jarvis.mcp_server import JARVIS_TOOLS
 native = set()
-for line in open('$0'):
+for line in open(sys.argv[1]):
     m = re.match(r'^    ([a-z0-9][a-z0-9-]*)\)$', line)
     if m:
         native.add(m.group(1))
@@ -388,11 +424,15 @@ aliases = {
     'read_file': 'read', 'write_file': 'write', 'str_replace': 'replace',
     'execute': 'shell', 'nix_eval': 'nix-eval', 'nix_check': 'nix-check',
     'nix_search': 'nix-search', 'read_chatgpt': 'chatgpt',
-    'read_ai_conversation': 'chatgpt', 'rag_search': 'rag-search',
+    'read_ai_conversation': 'read-ai', 'rag_search': 'rag-search',
     'rag_index': 'rag-index', 'vault_list': 'vault-list',
-    'vault_write': 'vault-write', 'vault_search_obsidian': 'vault-search',
+    'vault_write': 'vault-write', 'vault_status': 'vault-status',
+    'vault_search_obsidian': 'vault-search-obsidian',
+    'vault_sync_obsidian': 'vault-sync-obsidian',
+    'vault_sync_hackmd': 'vault-sync-hackmd',
     'hackmd_list': 'hackmd-list', 'hackmd_read': 'hackmd-read',
-    'hackmd_write': 'hackmd-write', 'observe_screen': 'observe',
+    'hackmd_write': 'hackmd-write', 'hackmd_sync': 'hackmd-sync',
+    'observe_screen': 'observe',
     'capture_screen': 'screen', 'make_scenarios': 'make-scenarios',
     'web_search': 'web-search',
 }
@@ -406,7 +446,7 @@ print('--- CLI native ---')
 print(' '.join(sorted(covered)))
 print('--- only via tool ---')
 print(' '.join(sorted(missing)))
-"
+PY
         ;;
     rehydrate)
         # 03/11: o rehydrate era o tool mais usado do MCP (68 chamadas/7d) e
@@ -443,6 +483,17 @@ print(call_tool(sys.argv[2], args))
     bench-stt)
         shift
         "$PY" -m jarvis.core.asr_bench "$@"
+        ;;
+    # (06/11) PASSTHROUGH para o CLI do JARVIS: speak, stt, benchmark,
+    # doctor, voice, emotion, agent, ask, run, dev, watchdog, heal,
+    # self-test, metrics, triggers, screenshot, hwdetect, hwprofile,
+    # index, rag, migrate, parity, intent, profile, services, state,
+    # commands, list. O wrapper vira a FRENTE ÚNICA: tools do MCP +
+    # subcomandos do CLI, sempre pelo mesmo env (jarvis-env.sh).
+    # É o que o meta-tool da voz usa (ação `jarvis`).
+    speak|stt|benchmark|doctor|voice|emotion|agent|ask|run|dev|watchdog|heal|self-test|metrics|triggers|screenshot|hwdetect|hwprofile|index|rag|migrate|parity|intent|profile|services|state|commands|list|control|create|forget|handoff|pause|resume|regression|notify|telegram|consolidate|nightwatch|idle|keygen|launcher|summarize|worker|eval-rag|reset-state)
+        shift
+        "$PY" -m jarvis.cli.main "$@"
         ;;
     help|*)
         usage

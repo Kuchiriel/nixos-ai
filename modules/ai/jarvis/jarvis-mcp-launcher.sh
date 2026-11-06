@@ -33,7 +33,7 @@ set -euo pipefail
 # A logica vivia aqui e foi extraida p/ o script ser a UNICA fonte (2026-10-30):
 # a CLI rodava em env diferente (sem requests, sem keys) e o rag-index pendurava.
 # shellcheck source=/dev/null
-. /home/nixos/projects/nixos-ai/modules/ai/jarvis/jarvis-env.sh "${1:-}"
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/jarvis-env.sh" "${1:-}"
 
 cd "$JARVIS_PROJECT_ROOT"
 exec "$JARVIS_PY" -m jarvis.mcp_server

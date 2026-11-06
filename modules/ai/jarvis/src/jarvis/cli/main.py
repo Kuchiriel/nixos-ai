@@ -109,8 +109,10 @@ def _cmd_status(_args: argparse.Namespace) -> int:
 
     # confiabilidade da última bateria medida (evidência, não promessa)
     try:
-        _scores = sorted(_P("/home/nixos/projects/nixos-ai/docs/benchmarks/"
-                            "harness-scores").glob("*.json"),
+        _bench_root = Path(os.environ.get(
+            "JARVIS_PROJECT_ROOT", str(Path.home() / "projects" / "nixos-ai")
+        )) / "docs/benchmarks/harness-scores"
+        _scores = sorted(_bench_root.glob("*.json"),
                          key=lambda f: f.stat().st_mtime)
         if _scores:
             _d = json.loads(_scores[-1].read_text(encoding="utf-8"))

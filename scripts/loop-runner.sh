@@ -20,7 +20,7 @@
 #   - não sobe 2 LLMs: se a VRAM está ocupada, registra e espera
 set -uo pipefail
 
-NIXAI=/home/nixos/projects/nixos-ai
+NIXAI="$(cd "$(dirname "$(realpath "$0")")/.." && pwd)"
 OUT_DIR="$NIXAI/scripts/overnight-24-09"
 LOG=/tmp/overnight/loop-runner.log
 STATE="$OUT_DIR/loop-STATE.md"

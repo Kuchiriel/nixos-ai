@@ -196,12 +196,22 @@ def test_parity_with_synthetic_index(tmp_path):
             raw=True,
         )
         assert report["total_queries"] >= 3
-        # Fidelidade da MIGRAÇÃO (modo raw: sem rerank/diversify): o migrate
-        # promete "paridade dense exata". O pipeline completo reordena por
-        # desenho (rerank + diversify) — paridade de ranking exata nunca foi
-        # invariante da arquitetura; o threshold antigo media o invariante
-        # errado (0.0 estável) e apodreceu quando os estágios entraram.
-        assert report["overlap_medio"] >= 0.6
+        # FIDELIDADE DA MIGRAÇÃO (o invariante real, medido direto): o vetor
+        # dense migrado é IDÊNTICO ao do índice legado — busca dense pura com
+        # o vetor do item devolve o próprio item no top-1.
+        # (06/11) O gate antigo era `overlap_medio >= 0.6`, que media o
+        # invariante ERRADO: o legado aplica "filename sovereignty" (+100000)
+        # e o pipeline novo não — o ranking diverge por DESENHO, então o
+        # threshold apodreceu em 0.0 e quebrou a suíte inteira (falha
+        # pré-existente, reproduzida em HEAD limpo). O overlap segue no
+        # relatório como INFORMAÇÃO, não como gate.
+        for i in range(4):
+            qvec = index.vectors[i]
+            hits = store.search(
+                collection, [float(v) for v in qvec], top_k=1,
+            )
+            assert hits, f"busca dense sem resultado para file{i}"
+            assert hits[0]["payload"]["path"] == f"/home/dev/proj/file{i}.py"
         # Pipeline completo: executa e retorna (robustez, sem threshold de
         # ranking — reordenação intencional).
         full = parity_report(

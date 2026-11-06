@@ -23,7 +23,7 @@ set -euo pipefail
 # NAO passamos nada -> ele descobre o env pela config do opencode. Os
 # argumentos desta launcher (--host/--port) vao direto para o coord_http.
 # shellcheck source=/dev/null
-. /home/nixos/projects/nixos-ai/modules/ai/jarvis/jarvis-env.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/jarvis-env.sh"
 
 cd "$JARVIS_PROJECT_ROOT"
 exec "$JARVIS_PY" -m jarvis.coord_http "$@"

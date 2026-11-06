@@ -24,6 +24,7 @@ import wave
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+DATA = Path(__file__).resolve().parents[1] / "data"
 
 import numpy as np
 
@@ -80,8 +81,7 @@ def main():
         """Léxico Scicom PT: frases ≤4 palavras, sem sinais sociais."""
         out = set()
         try:
-            for line in open("/home/nixos/projects/nixos-ai/data/"
-                             "whisper-halluc-lexicon-pt.tsv"):
+            for line in open(DATA / "whisper-halluc-lexicon-pt.tsv"):
                 if line.startswith("#") or not line.strip():
                     continue
                 parts = [p.strip() for p in line.split("\t")]
@@ -103,8 +103,7 @@ def main():
     # ban-hard (curado, multi-word, nunca fala real) + gated JA/ZH.
     MULTI_HARD = set()
     try:
-        for line in open("/home/nixos/projects/nixos-ai/data/"
-                         "whisper-halluc-ban-multilingual.tsv"):
+        for line in open(DATA / "whisper-halluc-ban-multilingual.tsv"):
             if line.startswith("#") or not line.strip():
                 continue
             parts = [p.strip() for p in line.split("\t")]

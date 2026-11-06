@@ -14,12 +14,9 @@ import shutil
 import sys
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-try:
-    from ux_driver import run_task
-except ImportError:  # script executado de outro cwd via nix develop
-    sys.path.insert(0, "/home/nixos/projects/nixos-ai/scripts")
-    from ux_driver import run_task
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, SCRIPT_DIR)
+from ux_driver import run_task, run_task_runtime
 
 LAB = "/tmp/jarvis-lab"
 
@@ -99,7 +96,10 @@ def check_text_answer(res, *needles):
     return all(n.lower() in blob for n in needles)
 
 
-def run_suite(only=None, timeout=300):
+def run_suite(only=None, timeout=300, engine="dev"):
+    # (06/11) engine=runtime mede a FONTE (kernel in-process), sem depender
+    # do binário instalado; engine=dev mede o binário (o que o dono usa).
+    runner = run_task_runtime if engine == "runtime" else run_task
     tasks = [t for t in build_tasks() if not only or t["id"] in only]
     rows = []
     for t in tasks:
@@ -110,7 +110,7 @@ def run_suite(only=None, timeout=300):
             except OSError:
                 pass
         t0 = time.monotonic()
-        res = run_task(t["prompt"], timeout)
+        res = runner(t["prompt"], timeout)
         dt = round(time.monotonic() - t0, 1)
         tools = _tools_of(res)
         turns = _turns_of(res)
@@ -161,13 +161,17 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--only", default="")
     ap.add_argument("--timeout", type=int, default=300)
+    ap.add_argument("--engine", choices=("dev", "runtime"), default="dev",
+                    help="dev=binário instalado; runtime=fonte (kernel in-process)")
     args = ap.parse_args()
     only = [x for x in args.only.split(",") if x] or None
-    rows = run_suite(only, args.timeout)
+    rows = run_suite(only, args.timeout, args.engine)
     s = sum(1 for r in rows if r["success"])
     report = {"tasks": rows,
               "summary": {"total": len(rows), "success": s,
                           "false_done": sum(1 for r in rows if r["false_done"])}}
+    out_dir = os.path.dirname(os.path.abspath(args.out))
+    os.makedirs(out_dir, exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=1)
     print(f"\n== {s}/{len(rows)} ==")

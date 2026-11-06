@@ -43,7 +43,8 @@ import urllib.request
 from datetime import datetime
 
 # ── Metacognition (16:00, dono: "finalmente entendeu") ─────────────
-sys.path.insert(0, "/home/nixos/projects/nixos-ai/modules/ai/jarvis/src")
+_NIXAI = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(_NIXAI, "modules/ai/jarvis/src"))
 try:
     from jarvis.core.metacognition import (
         get_metacognition, pre_speech_check, evaluate_response,
@@ -84,7 +85,7 @@ SYSTEM_PT = (
     "usuário de 'dono' ou 'senhor'. PT-BR, 1-2 frases, natural FALADO.\n"
     "Antecipe AÇÃO em 1 frase, mas NUNCA antecipe DADOS — dado vem de tool.\n"
     "MEMÓRIA: chame remember. TOOLS só para dado externo (hora, memória, "
-    "web, código). Trivial/opinião = DIRETO. Ferramentas = 1 linha cada.\n"
+    "web, código). Trivial/opinião = DIRETO. Ferramenta = 1 linha cada.\n"
     "Após tool: responda com resultado, não repita a pergunta. Tool ERRO = "
     "informe erro, NUNCA invente. NUNCA invente dados. Sem certeza = 'não sei'.\n"
     "Sem 'Ah, Hmm, Pode repetir'. Turnos fragmentados = considere o conjunto.\n"
@@ -95,35 +96,24 @@ SYSTEM_PT = (
     "Matrícula de voz é PROCEDIMENTO INTERNO — nunca ofereça, só "
     "execute se pedirem explicitamente.\n"
     "Na dúvida, confirme ou peça para repetir.\n\n"
-    "=== META-TOOL (chame UMA vez: do(action, input)) ===\n"
-    "do(action, input) — roteia internamente para:\n"
-    "  MEMÓRIA INTERNA (sobre o DONO): remember(text) | recall(query)\n"
-    "    recall = buscar no SEU cérebro: preferências do dono, nome, fatos, lições.\n"
-    "    USE recall para: 'o que eu gosto', 'qual meu nome', 'me lembra de', 'o que você sabe sobre mim'.\n"
-    "  WEB EXTERNA (dados do mundo): web_search(query)\n"
-    "    USE web_search para: cotações, notícias, clima, fatos atuais, qualquer coisa que não está na sua memória.\n"
-    "  RAG DOCUMENTOS (papers, código, livros): rag_search(query)\n"
-    "    USE rag_search para: 'o que diz o paper X', 'como funciona Y no código', 'encontra o script que faz Z'.\n"
-    "  NUNCA use web_search para perguntas sobre o dono — use recall!\n"
-    "  ROTEAMENTO CORRETO:\n"
-    "    'qual meu nome?' → do(action='recall', input='nome do dono')\n"
-    "    'o que eu gosto?' → do(action='recall', input='preferências do dono')\n"
-    "    'lembra que eu gosto de café' → do(action='remember', input='dono gosta de café')\n"
-    "    'quanto tá o dólar?' → do(action='web_search', input='cotação dólar hoje')\n"
-    "    'o que diz o paper sobre metacognição?' → do(action='rag_search', input='metacognition')\n"
-    "    'como funciona o AEC?' → do(action='rag_search', input='AEC echo cancellation')\n"
-    "  SHELL (comandos com gates do harness): shell(command)\n"
-    "    Capacidades CLI: jarvis status, doctor, heal, speak, stt, benchmark.\n"
-    "  STATUS: status()\n"
-    "  STATUS: status()\n"
-    "  SHELL: shell(command)\n"
-    "  VOZ: enroll() | guest() | voices()\n"
-    "  SYSTEM: nix_eval() | nix_check() | nix_search()\n\n"
-    "REGRAS: 1) read_file ANTES de str_replace | 2) old = cópia EXATA | "
-    "3) Falhou? Re-leia com contexto | 4) Teste após editar | "
-    "4. MCP tools quando built-in não bastam | 7) wc -l antes de ler grande | "
-    "8) NUNCA invente dados. Sem certeza = 'não sei' | 10. Sem 'Ah, Hmm' = direto\n"
-    "10. Turnos fragmentados = considere o conjunto | 11. Dúvida = confirme/pergunte"
+    "=== META-TOOL: do(action, input) — chame UMA tool por vez ===\n"
+    "  do(action='get_time',   input='')             → hora\n"
+    "  do(action='remember',   input='fato')         → guarda memória\n"
+    "  do(action='recall',     input='busca')        → memória do dono\n"
+    "  do(action='web_search', input='busca')        → internet\n"
+    "  do(action='rag_search', input='busca')        → papers/código/livros\n"
+    "  do(action='status',     input='')             → saúde do sistema\n"
+    "  do(action='voices',     input='')             → vozes na sala\n"
+    "  do(action='jarvis',     input='<comando>')    → CLI do JARVIS "
+    "(status, doctor, speak, benchmark, recall, rag-search, vault...)\n"
+    "  do(action='shell',      input='<comando>')    → terminal (com gates)\n"
+    "  do(action='enroll',     input='nome')         → matricula a voz\n"
+    "  do(action='guest',      input='')             → sem filtro de voz\n"
+    "ROTAS: 'qual meu nome?' → recall | 'quanto tá o dólar?' → web_search\n"
+    "  'o que diz o paper X?' → rag_search | 'como está o sistema?' → status\n"
+    "NUNCA escreva comandos de terminal no texto — SEMPRE chame do(...).\n"
+    "NUNCA use web_search para perguntas sobre o dono — use recall!\n"
+    "NUNCA invente dados. Sem certeza = 'não sei'."
 )
 SYSTEM = ("You are a voice assistant in a live phone call; both sides can talk at the same time. Every "
           f"{TICK:g} seconds you get what the microphone heard in that moment, as a streaming transcript fragment, or "
@@ -601,6 +591,21 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
                     msgs.append({"role": "user", "content":
                                  "Chame a ferramenta adequada agora e "
                                  "responda com o resultado."})
+                    body["messages"] = msgs
+                    continue
+                # (06/11) O modelo ESCREVEU o comando no texto ("jarvis
+                # status", "jarvis recall ...") em vez de chamar a tool.
+                # Antes: virava voz/erro. Agora: o harness executa pelo
+                # MESMO runner (allowlist, sem shell) e devolve o
+                # resultado pro modelo responder com o dado.
+                _cli_args = _cli_cmd_from_text(out)
+                if _cli_args and _round < 2:
+                    log(f"[{ts()}] CLI no texto: {' '.join(_cli_args)}")
+                    msgs.append({"role": "assistant", "content": out or ""})
+                    msgs.append({"role": "user", "content":
+                                 f"Saída de '{' '.join(_cli_args)}':\n"
+                                 f"{_jarvis_cli(_cli_args)[:600]}\n"
+                                 "Responda ao dono com esse resultado."})
                     body["messages"] = msgs
                     continue
                 log(f"[{ts()}] chat resposta (stream): {out[:80]!r}")
@@ -1190,6 +1195,70 @@ def spec_take(query):
             return best[1]
     return None
 
+# ─────────────────────────────────────────────────────────────────────────
+# (06/11) RUNNER ÚNICO DA CLI DO JARVIS — argv (NUNCA shell), env do repo.
+# ANTES: _exec("timeout 20 jarvis recall '<q>' 2>&1") → (a) quebrava com
+# aspas no input, (b) chamava o binário do Nix store (STALE até o
+# rebuild), (c) sem allowlist. AGORA: wrapper do repo (que já|source| o
+# jarvis-env.sh = mesmo env do MCP) com argv e allowlist.
+JARVIS_CLI_ALLOW = {
+    # frente MCP (scripts/jarvis-cli.sh)
+    "recall", "remember", "lessons", "rag-search", "rag-index",
+    "vault-list", "vault-write", "vault-status", "vault-search-obsidian",
+    "status", "classify", "nix-eval", "nix-search", "state", "rehydrate",
+    # CLI do JARVIS (passthrough do wrapper)
+    "doctor", "speak", "stt", "benchmark", "voice", "emotion", "agent",
+    "ask", "run", "dev", "watchdog", "heal", "self-test", "metrics",
+    "triggers", "screenshot", "hwdetect", "hwprofile", "index", "rag",
+    "migrate", "parity", "intent", "profile", "services", "commands",
+}
+
+
+def _jarvis_cli(args, timeout=25):
+    """Roda a CLI do JARVIS pelo HARNESS: argv direto, sem shell."""
+    if not args:
+        return "ERRO: comando vazio"
+    if args[0] not in JARVIS_CLI_ALLOW:
+        return (f"ERRO: comando '{args[0]}' não permitido. "
+                f"Permitidos: {', '.join(sorted(JARVIS_CLI_ALLOW))}")
+    cli = Path(__file__).parent.parent / "scripts" / "jarvis-cli.sh"
+    try:
+        r = subprocess.run([str(cli), *args], capture_output=True,
+                           text=True, timeout=timeout)
+        out = (r.stdout or r.stderr or "").strip()
+        return out[:600] or f"(rc={r.returncode}, sem saída)"
+    except subprocess.TimeoutExpired:
+        return f"ERRO: '{' '.join(args)}' excedeu {timeout}s"
+    except Exception as e:
+        return f"ERRO: {e}"
+
+
+_CLI_IN_TEXT = re.compile(
+    r"\bjarvis(?:-cli\.sh)?\s+([a-z][a-z0-9_-]*(?:[^\n]{0,160})?)", re.I)
+
+
+def _cli_cmd_from_text(text):
+    """O modelo ESCREVEU um comando da CLI no texto? → devolve argv.
+
+    (06/11) Antes isso virava fala/erro ('jarvis status' dito em voz
+    alta). Agora o harness detecta, EXECUTA pelo mesmo runner e devolve
+    o resultado pro modelo responder.
+    """
+    if not text:
+        return None
+    m = _CLI_IN_TEXT.search(text)
+    if not m:
+        return None
+    import shlex as _shlex
+    try:
+        args = _shlex.split(m.group(1))
+    except ValueError:
+        args = m.group(1).split()
+    if args and args[0] in JARVIS_CLI_ALLOW:
+        return args
+    return None
+
+
 def call_tool(name, args):
     """Meta-tool router: o 4B chama 'do(action, input)' e esta função
     despacha pra ferramenta certa (schema de 1 tool, não 8)."""
@@ -1198,6 +1267,23 @@ def call_tool(name, args):
         inp = (args.get("input") or "").strip()
         if "time" in action or "hora" in action:
             return call_tool("get_time", {})
+        # (06/11) CLI DO JARVIS pelo harness — meta-tool nova: dá ao 4B a
+        # superfície real do JARVIS (status, doctor, speak, benchmark,
+        # recall, rag-search, vault...) SEM shell e SEM allowlist aberta.
+        if action in ("jarvis", "jarvis_cli", "cli", "comando"):
+            import shlex as _shlex
+            try:
+                _args = _shlex.split(inp)
+            except ValueError:
+                _args = inp.split()
+            return _jarvis_cli(_args)
+        if action.startswith("jarvis "):
+            import shlex as _shlex
+            try:
+                _args = _shlex.split(action[len("jarvis "):] + " " + inp)
+            except ValueError:
+                _args = (action[len("jarvis "):] + " " + inp).split()
+            return _jarvis_cli(_args)
         if "remember" in action or "salva" in action or "memoriz" in action:
             return call_tool("remember", {"text": inp})
         if "recall" in action or "memória" in action or "memoria" in action:
@@ -1285,9 +1371,10 @@ def call_tool(name, args):
             globals()["SPK_PROFILE"] = None
             return "Filtro de voz desativado. Respondendo a todos."
 
-        return f"Ação '{action}' desconhecida. Use: get_time, remember, recall, web_search, status, shell."
+        return (f"Ação '{action}' desconhecida. Use: get_time, remember, "
+                "recall, web_search, rag_search, status, voices, jarvis, "
+                "shell, enroll, guest.")
     # chamadas diretas (legado/compat)
-    """Executa a ferramenta que o 4B pediu e retorna o resultado."""
     if name == "get_time":
         return _exec("date '+%H:%M de %d/%m/%Y'")
     if name == "get_date":
@@ -1322,7 +1409,7 @@ def call_tool(name, args):
                     return "\n".join(lines)
         except Exception:
             pass
-        raw = _exec(f"timeout 20 jarvis recall '{q}' 2>&1")
+        raw = _jarvis_cli(["recall", q], timeout=20)
         # (21/10 P0) o 4B não lê JSON blob — formatar como LISTA LEGÍVEL
         try:
             hits = json.loads(raw)
@@ -1343,7 +1430,7 @@ def call_tool(name, args):
         q = args.get("query", "")
         # (21/10) CLI agora traz content (rebuild aplicado) — usa CLI
         # direto com --top-k 3, formata [arquivo] content por linha
-        raw = _exec(f"timeout 25 jarvis rag --top-k 3 '{q}' 2>&1")
+        raw = _jarvis_cli(["rag", "--top-k", "3", q], timeout=25)
         try:
             hits = json.loads(raw)
             lines = []
@@ -1377,7 +1464,7 @@ def call_tool(name, args):
         text = args.get("text", "")
         if not text:
             return "ERRO: texto vazio"
-        return _exec(f"timeout 15 jarvis remember '{text}' 2>&1 | head -3")
+        return _jarvis_cli(["remember", text], timeout=15)
     if name == "web_search":
         q = args.get("query", "")
         if not q:
@@ -1412,11 +1499,14 @@ def call_tool(name, args):
 
 TOOLS_SCHEMA = [
     {"type": "function", "function": {"name": "do",
-     "description": "Executa uma ação. Ações: get_time (hora), "
-     "remember <texto> (salva), recall <busca> (memória), "
-     "web_search <busca> (internet), status (sistema), "
-     "shell <cmd> (terminal), enroll_voice (cadastra a voz do dono "
-     "— grave 10s de fala), guest (desativa filtro de voz).",
+     "description": "Executa UMA ação. Ações: get_time (hora), "
+     "remember <texto> (salva), recall <busca> (memória do dono), "
+     "web_search <busca> (internet), rag_search <busca> (papers/código), "
+     "status (sistema), voices (pessoas na sala), "
+     "jarvis <comando> (CLI do JARVIS: status, doctor, speak, benchmark, "
+     "recall, rag-search, vault...), shell <cmd> (terminal com gates), "
+     "enroll_voice <nome> (cadastra a voz do dono — grave 10s de fala), "
+     "guest (desativa filtro de voz).",
      "parameters": {"type": "object", "properties": {
       "action": {"type": "string", "description": "nome da ação"},
       "input": {"type": "string", "description": "texto/query/comando"}},

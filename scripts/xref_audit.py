@@ -10,10 +10,11 @@ import re
 import sys
 from pathlib import Path
 
+PROJECTS = Path(__file__).resolve().parents[2]
 ROOTS = {
-    "canary": Path("/home/nixos/projects/canary-official"),
-    "nixos": Path("/home/nixos/projects/nixos-ai"),
-    "otclient": Path("/home/nixos/projects/otclient"),
+    "canary": PROJECTS / "canary-official",
+    "nixos": PROJECTS / "nixos-ai",
+    "otclient": PROJECTS / "otclient",
 }
 SKIP = {".git", "node_modules", ".venv", "__pycache__", ".ragignore"}
 CODE_EXT = {".py", ".lua", ".nix", ".sh", ".cpp", ".h", ".otui", ".ts"}

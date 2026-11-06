@@ -18,7 +18,12 @@
 # Se nao vier, deriva da closure do jarvis (03/11: pacote unico com a voz).
 set -uo pipefail
 
-JARVIS_PROJECT_ROOT="${JARVIS_PROJECT_ROOT:-/home/nixos/projects/nixos-ai}"
+JARVIS_ENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || pwd)"
+JARVIS_PROJECT_ROOT="${JARVIS_PROJECT_ROOT:-$(cd "$JARVIS_ENV_DIR/../../.." 2>/dev/null && pwd || pwd)}"
+# Guard: `source` from zsh has no BASH_SOURCE; fall back to the host anchor.
+if [ ! -d "$JARVIS_PROJECT_ROOT/modules/ai/jarvis/src" ]; then
+  JARVIS_PROJECT_ROOT="/home/nixos/projects/nixos-ai"
+fi
 JARVIS_SRC="${JARVIS_SRC:-$JARVIS_PROJECT_ROOT/modules/ai/jarvis/src}"
 
 # 1) keys: fonte de verdade = /etc/litellm.env (o MCP precisa; a CLI tambem).

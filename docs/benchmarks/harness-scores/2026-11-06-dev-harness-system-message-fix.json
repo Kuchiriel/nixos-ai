@@ -1,0 +1,34 @@
+{
+  "ts": "2026-11-06T12:32",
+  "harness": "jarvis dev (modules/ai/jarvis/src/jarvis/cli/dev.py) + scripts/ux-suite.py (engine=dev, 9 tarefas T1..T9)",
+  "model": "jarvis-mtp-lora — Qwen3.5-4B-MTP+LoRA @127.0.0.1:8092 (--jinja, c=20480)",
+  "tasks": [
+    {"id": "T1-write", "world_ok": true, "source": true, "installed": true, "turns": 3, "tools": ["write_file"], "time_s": 4.2},
+    {"id": "T2-read", "world_ok": true, "source": true, "installed": true, "turns": 2, "tools": ["read_file"], "time_s": 7.0},
+    {"id": "T3-mkdir", "world_ok": true, "source": true, "installed": false, "turns": 2, "tools": ["write_file", "write_file", "write_file"], "time_s": 9.4, "note": "no binário instalado o modelo abriu execute_shell e criou o lote por outro caminho (verificador exige 3 arquivos)"},
+    {"id": "T4-locate", "world_ok": true, "source": true, "installed": true, "turns": 2, "tools": ["semantic_search"], "time_s": 10.7},
+    {"id": "T5-missing", "world_ok": true, "source": true, "installed": true, "turns": 3, "tools": ["list_directory", "read_file"], "time_s": 2.7},
+    {"id": "T6-compound", "world_ok": true, "source": true, "installed": true, "turns": 10, "tools": ["execute_shell x10"], "time_s": 15.3},
+    {"id": "T7-kernel", "world_ok": true, "source": true, "installed": true, "turns": 2, "tools": [], "time_s": 5.5, "note": "source respondeu SEM tool (caminho que crashava no binário instalado)"},
+    {"id": "T8-qdrant", "world_ok": true, "source": true, "installed": true, "turns": 2, "tools": ["execute_shell"], "time_s": 7.9},
+    {"id": "T9-disk", "world_ok": true, "source": true, "installed": true, "turns": 2, "tools": ["execute_shell"], "time_s": 6.4},
+    {"id": "no-tool-chat", "world_ok": true, "source": true, "installed": false, "note": "instalado: rc=1 + HTTP 500 'System message must be at the beginning' (Jinja); source: rc=0, resposta OK"}
+  ],
+  "summary": {
+    "world_ok": 9,
+    "total": 9,
+    "installed_world_ok": 8,
+    "installed_total": 9,
+    "no_tool_world_ok": 1,
+    "no_tool_total": 1
+  },
+  "evidence": {
+    "root_cause": "harness anexava nudge de role=system no meio do histórico; template Jinja do Qwen3.5 aceita UM system, no índice 0 (llama.cpp discussion #27281)",
+    "fix": "cli/dev.py::_normalize_request_messages — todo system fora do índice 0 vira role=user no request (histórico preservado)",
+    "installed_binary": "/nix/store/fsgy3r83va728xihxzmlqmqzz25ijnsj-python3.13-jarvis-0.1.0 (stale — rebuild pendente)",
+    "source_run": "JARVIS_DEV_CMD=\"$JARVIS_PY -m jarvis.cli.main dev\" python3 scripts/ux-suite.py --out /tmp/ux/report-source.json",
+    "installed_run": "python3 scripts/ux-suite.py --out /tmp/ux/report-installed-full.json"
+  },
+  "next_action": "owner authorizes ./rebuild-host.sh so the installed binary picks up the fix; without a rebuild use JARVIS_DEV_CMD/PYTHONPATH=modules/ai/jarvis/src",
+  "refs": ["arXiv 2609.00006 (Harness Engineering)", "arXiv 2602.17037 (Wink)", "llama.cpp discussion #27281"]
+}

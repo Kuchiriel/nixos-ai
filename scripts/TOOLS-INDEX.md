@@ -2,12 +2,17 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_80 tools._
+_83 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
+- `agent-bus-pending.py` (nixos-ai/scripts) — """Le pendências do BUS de coordenação via o MCP local (coord_pending).
+  use: `python3 scripts/agent-bus-pending.py [--url http://127.0.0.1:8765/mcp]`
+- `agent-bus-poll.py` (nixos-ai/scripts) — """Poller do BUS para uma máquina que NÃO é esta (ex.: o opencode do Windows).
 - `agent-checkpoint.sh` (nixos-ai/scripts) — agent-checkpoint.sh — checkpoint de 4 camadas em 1 comando (genérico do monorepo).
   use: `./agent-checkpoint.sh --project <path> --era "<título da era>" \`
+- `agent-db-alive.py` (nixos-ai/scripts) — """agent-db-alive.py — a sessão produziu trabalho novo nos últimos N segundos?
+  use: `uso: agent-db-alive.py <opencode.db> <janela_s> [session_id]`
 - `agent-msg.sh` (nixos-ai/scripts) — agent-msg.sh — O CANAL BOT-A-BOT, agora com ROTEAMENTO e ENTREGA por API.
 - `agent-pains.sh` (nixos-ai/scripts) — agent-pains.sh — registro automático de "dores" de CLI e lições aprendidas (genérico do monorepo).
   use: `./agent-pains.sh add --kind cli|lesson|tool|env --project <path> \`

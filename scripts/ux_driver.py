@@ -37,7 +37,13 @@ def run_task(task: str, timeout_s: int = 300,
         _run_counter = 1
     tpath = (f"/tmp/ux-transcript-{os.getpid()}-"
              f"{int(time.time() * 1000)}-{_run_counter}.json")
-    cmd = ["jarvis", "dev", task, "--transcript", tpath]
+    # (06/11) o binário instalado pode estar stale (rebuild pendente): o
+    # driver aceita sobrepor o comando, ex.:
+    #   JARVIS_DEV_CMD="python3 -m jarvis.cli.main dev" python3 scripts/ux-suite.py ...
+    # para medir a FONTE sem rebuild (mesmo contrato, mesmo transcript).
+    cmd = os.environ.get("JARVIS_DEV_CMD", "jarvis dev").split() + [
+        task, "--transcript", tpath,
+    ]
     t0 = time.monotonic()
     m_out, s_out = pty.openpty()
     try:

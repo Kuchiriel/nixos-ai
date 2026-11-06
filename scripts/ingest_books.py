@@ -17,10 +17,11 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, "/home/nixos/projects/nixos-ai/modules/ai")
+NIXAI = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(NIXAI / "modules/ai"))
 
-BOOKS = "/home/nixos/Books"
-HARNESS = "/home/nixos/Books/harness"
+BOOKS = str(Path.home() / "Books")
+HARNESS = str(Path(BOOKS) / "harness")
 
 QUEUE: list[tuple[str, str, str]] = [
     # (nome, dir, categoria)

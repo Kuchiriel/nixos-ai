@@ -1,8 +1,8 @@
 # MCP catalog — what each tool is for, when to call it, how it is named
 
 > Source of truth: `modules/ai/jarvis/src/jarvis/mcp_server.py` (`JARVIS_TOOLS` +
-> `HACKMD_TOOLS` + `MAKE_TOOLS` = **45 tools**). Re-derive the list after adding a
-> tool: `grep -c '"inputSchema"' modules/ai/jarvis/src/jarvis/mcp_server.py`.
+> `HACKMD_TOOLS` + `MAKE_TOOLS` + `MULTI_AI_READER_TOOL` = **46 tools**). Re-derive
+> the list after adding a tool: `grep -c '"inputSchema"' modules/ai/jarvis/src/jarvis/mcp_server.py`.
 
 ## Naming (the #1 source of wasted calls)
 
