@@ -416,6 +416,12 @@ in {
   home.file.".config/opencode/plugins/redteam.js".source =
     ./files/opencode/plugins/redteam.js;
 
+  # O plugin e PORTATIL: nao importa torch/transformers (o white-box roda
+  # como processo separado), resolve o repo do harness por candidate e
+  # degrada em 3 niveis (sem harness / sem deps / tudo ok). Ver o gate
+  # abaixo: ele importa e INICIALIZA o plugin — o mesmo caminho do
+  # opencode — e falha se qualquer tool ou hook sumir.
+  #
   # Gate do plugin: importa e INICIALIZA de verdade (o `node --check` so
   # pega sintaxe — um backtick nao escapado passava o check e quebrava em
   # runtime, tirando TODAS as tools do plugin; sintoma: "a tool nao
