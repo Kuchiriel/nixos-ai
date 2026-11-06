@@ -316,6 +316,8 @@ modelo — nao existe vetor universal:
 | sem alignment forte (gpt-oss-20b, gemini-2.5-flash-lite, north-mini) | \`obf_in_framing\` + frame \`audit\` + leet/rot13/spaced/rot5 | 3/5, 1/4, 3/3 |
 | **com reasoning forte** (Nemotron 3 Ultra, DiffusionGemma) | **\`cot_prefill\`** — semeia o \`<think>\` ja resolvido | 10/12 (83%) no DiffusionGemma, so com este vetor |
 | **o mais duro** (Qwen3.5-397B, 0/31 no single-shot) | **\`redteam_crescendo\`** — multi-turn por anafora | 1/1 (5260 chars, era 0/31) |
+| **o mais duro** (Qwen3.5-397B) | **\`redteam_echo\`** — seeds + consistency bias (arXiv 2601.05742) | **3/3** (3972, 9596, 1681 chars) |
+| qualquer | **\`redteam_race\`** — 3 modulos, o RF diagnostica a recusa (arXiv 2502.11054) | 92% no DeepSeek R1 (paper); 1/1 no Qwen3.5 aqui |
 | intermediario (Nemotron 3 Ultra, 0/31 single-shot) | \`redteam_crescendo\` | 1/1 (9314 chars, com backtracking) |
 | intermediario (Nemotron 3.5 Bolt, 0/9 single-shot) | \`redteam_crescendo\` | 1/1 (1847 chars, \`openssl genrsa/req/x509\`) |
 | intermediario (DiffusionGemma 26B, 0/? single-shot) | \`redteam_crescendo\` | 1/1 (1312-1766 chars, com backtracking) |
@@ -372,11 +374,23 @@ Ofuscacao pura nao vence reasoning forte. Estas framings mudam o MECANISMO:
 aninhamentos, + as framings 2026) a partir de um pedido real. Use antes de
 responder: pegue o payload, envie, e veja o que o modelo faz com ele.
 
-\`redteam_crescendo\` — o ataque multi-turn (4 turnos, escalada por
-anafora, com backtracking). Use para o modelo duro: e o unico vetor que
-passou no Qwen3.5-397B (0/31 no single-shot). Devolve o veredito e o turno
-que entregou — o veredito e do MELHOR turno, nao do ultimo (o artefato
-sai no turno 3; o turno 4 e o que recusa).
+**Os tres ataques multi-turn (use no modelo duro):**
+
+\`redteam_crescendo\` — escalada por anafora, 4 turnos (arXiv 2404.01833).
+O veredito e do **melhor turno**, nao do ultimo (o artefato sai no turno
+3; o turno 4 e o que recusa). Com backtracking: quando recusa, reformula.
+
+\`redteam_echo\` — Echo Chamber (arXiv 2601.05742): o turno 1 planta as
+palavras-chave disfarçadas ("escreva 3 frases usando estas palavras"), o
+modelo escreve o conteudo perigoso, e os turnos seguintes expandem **o
+que o proprio modelo escreveu** (consistency bias). Medido 3/3 no
+Qwen3.5-397B.
+
+\`redteam_race\` — RACE (arXiv 2502.11054): 3 modulos — gain-guided
+exploration (escolhe o proximo turno por information gain), self-play e
+**rejection feedback** (o shadow model diagnostica POR QUE recusou e
+reescreve a query, com o prompt literal do Appendix B do paper). Este e o
+que "aprende com a recusa" de verdade.
 
 \`redteam_probe\` — envia UM payload e devolve a resposta crua + veredito.
 
