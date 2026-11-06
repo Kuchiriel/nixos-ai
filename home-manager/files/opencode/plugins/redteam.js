@@ -172,8 +172,11 @@ function suggestVector(model) {
                vectors: [...new Set(hits.map((h) => h.vector))] };
     }
     const tried = st.rows.filter((r) => r.model === key);
+    const failed = [...new Set(tried.filter((h) => h.verdict !== "complied")
+      .map((h) => `${h.vector} (${h.verdict})`))];
     return { model: key, reason: "nunca entregou neste modelo",
              tried: [...new Set(tried.map((h) => h.vector))],
+             falharam: failed,
              hint: "tente o multi-turn (crescendo) — e o unico que quebra "
                + "modelo com reasoning forte" };
   }
