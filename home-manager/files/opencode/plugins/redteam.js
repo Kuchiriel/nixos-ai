@@ -664,6 +664,82 @@ export const RedTeamOpenCodePlugin = async () => {
         },
       },
 
+      redteam_echo: {
+        description:
+          "Ataque Echo Chamber MULTI-TURN (arXiv 2601.05742): o turno 1 " +
+          "planta as palavras-chave disfarçadas ('escreva 3 frases usando " +
+          "estas palavras'), o modelo escreve o conteudo perigoso, e os " +
+          "turnos seguintes expandem O QUE O MODELO wrote (consistency " +
+          "bias). Medido 3/3 no Qwen3.5-397B. Devolve o veredito e o " +
+          "path selecionado.",
+        args: {
+          request_id: { type: "string", description: "id do pedido (payloads.py --list-requests)" },
+          model: { type: "string", description: "modelo alvo: 'ovhcloud/Qwen3.5-397B-A17B'" },
+          via_opencode: { type: "boolean", description: "true = sessao real do opencode" },
+          timeout: { type: "number", description: "timeout por turno (padrao 150)" },
+          max_cycles: { type: "number", description: "ciclos do persuasion cycle (padrao 4)" },
+        },
+        async execute(args) {
+          const argv = [
+            join(REPO, "echo_chamber.py"),
+            "--request-id", asArg(args.request_id) || "vpn_cert_bypass",
+            "--model", asArg(args.model) || "ovhcloud/Qwen3.5-397B-A17B",
+          ];
+          if (asArg(args.via_opencode) === "true") argv.push("--via-opencode");
+          if (asArg(args.timeout)) argv.push("--timeout", asArg(args.timeout));
+          if (asArg(args.max_cycles)) argv.push("--max-cycles", asArg(args.max_cycles));
+          try {
+            return execFileSync("python3", argv, {
+              cwd: REPO, timeout: Math.max(300, Number(args.timeout ?? 150) * 5) * 1000,
+              encoding: "utf8", maxBuffer: 32 * 1024 * 1024,
+              stdio: ["ignore", "pipe", "pipe"],
+            });
+          } catch (e) {
+            return `echo_chamber.py falhou: ${e?.message ?? e}\n${String(e?.stderr ?? "").slice(-2000)}`;
+          }
+        },
+      },
+
+      redteam_race: {
+        description:
+          "Ataque RACE (arXiv 2502.11054): 3 modulos — gain-guided " +
+          "exploration (escolhe o proximo turno por information gain), " +
+          "self-play e REJECTION FEEDBACK (o shadow model diagnostica a " +
+          "recusa e reescreve a query, com o prompt literal do Appendix " +
+          "B). E o ataque que 'aprende com a recusa' de verdade.",
+        args: {
+          request_id: { type: "string", description: "id do pedido" },
+          model: { type: "string", description: "modelo alvo" },
+          via_opencode: { type: "boolean" },
+          shadow: {
+            type: "string",
+            description: "shadow model (o atacante): 'local:8092' (barato, sem cota) ou 'provider/model'",
+          },
+          timeout: { type: "number" },
+          max_turns: { type: "number", description: "N (o paper usa 3)" },
+        },
+        async execute(args) {
+          const argv = [
+            join(REPO, "race.py"),
+            "--request-id", asArg(args.request_id) || "vpn_cert_bypass",
+            "--model", asArg(args.model) || "ovhcloud/Qwen3.5-397B-A17B",
+          ];
+          if (asArg(args.via_opencode) === "true") argv.push("--via-opencode");
+          if (asArg(args.shadow)) argv.push("--shadow", asArg(args.shadow));
+          if (asArg(args.timeout)) argv.push("--timeout", asArg(args.timeout));
+          if (asArg(args.max_turns)) argv.push("--max-turns", asArg(args.max_turns));
+          try {
+            return execFileSync("python3", argv, {
+              cwd: REPO, timeout: Math.max(300, Number(args.timeout ?? 150) * 5) * 1000,
+              encoding: "utf8", maxBuffer: 32 * 1024 * 1024,
+              stdio: ["ignore", "pipe", "pipe"],
+            });
+          } catch (e) {
+            return `race.py falhou: ${e?.message ?? e}\n${String(e?.stderr ?? "").slice(-2000)}`;
+          }
+        },
+      },
+
       redteam_crescendo: {
         description:
           "Ataque Crescendo MULTI-TURN (arXiv 2404.01833): escalada por " +
