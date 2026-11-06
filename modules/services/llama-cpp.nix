@@ -332,7 +332,9 @@ in {
           MemoryMax = "2G";               # Max 2GB RAM (model 512MB + buffers)
           MemorySwapMax = "512M";         # (06/11) não vira zram (freeze)
           ManagedOOMSwap = "kill";        # (06/11) oomd mata antes do host
-          ManagedOOMMemoryPressure = "kill";
+          # (06/11, 15:41) SEM ManagedOOMMemoryPressure: PSI mata o
+          # servidor em pressão transitória (o LLM foi derrubado no meio
+          # da conversa). Backstop = MemoryMax + OOM killer do kernel.
           TasksMax = 32;                  # Max 32 tasks
         };
       };

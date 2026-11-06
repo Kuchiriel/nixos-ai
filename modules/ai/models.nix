@@ -383,7 +383,11 @@ in rec {
       # 6G/9G/1G: o modelo é pressionado a devolver memória cedo
       # (MemoryHigh), nunca passa de 9G (MemoryMax) e não vira 6GB de
       # swap (MemorySwapMax) — morre o serviço, não o host.
-      memHigh = "6G"; memMax = "9G"; memSwapMax = "1G"; limitMemlock = false;
+      # (06/11, 15:41) swap max 1G era aperto demais: o modelo joga
+      # 1,2-1,7GB de páginas frias no zram em operação normal e foi
+      # morto no limite (oom-kill da cgroup). 2G prende o desastre
+      # (zram cheio = freeze) sem matar o serviço no uso normal.
+      memHigh = "6G"; memMax = "9G"; memSwapMax = "2G"; limitMemlock = false;
       # (26/10, dono: "tira o bonsai de default e coloca o qwen mtp que tem
       # o lora pra subir com o lora") → este é o DEFAULT do sistema agora.
       # wanted=true = sobe no boot COM o LoRA registrado (medido ao vivo:
@@ -412,7 +416,11 @@ in rec {
       extraArgs = [ "--parallel" "1" "--jinja" ];
       # (06/11) RAM real: pesos 4,4G (7B Q4) + KV 16k q4 + buffers ≈ 6G;
       # o teto de 7G matava o server no meio do trabalho. 6G/9G/1G.
-      memHigh = "6G"; memMax = "9G"; memSwapMax = "1G"; limitMemlock = false;
+      # (06/11, 15:41) swap max 1G era aperto demais: o modelo joga
+      # 1,2-1,7GB de páginas frias no zram em operação normal e foi
+      # morto no limite (oom-kill da cgroup). 2G prende o desastre
+      # (zram cheio = freeze) sem matar o serviço no uso normal.
+      memHigh = "6G"; memMax = "9G"; memSwapMax = "2G"; limitMemlock = false;
       wanted = false;
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = modelFile (o server anuncia o path, sem --alias).
@@ -429,7 +437,11 @@ in rec {
       extraArgs = [ "--parallel" "1" "--jinja" ];
       # (06/11) RAM real: pesos 4,4G (7B Q4) + KV 16k q4 + buffers ≈ 6G;
       # o teto de 7G matava o server no meio do trabalho. 6G/9G/1G.
-      memHigh = "6G"; memMax = "9G"; memSwapMax = "1G"; limitMemlock = false;
+      # (06/11, 15:41) swap max 1G era aperto demais: o modelo joga
+      # 1,2-1,7GB de páginas frias no zram em operação normal e foi
+      # morto no limite (oom-kill da cgroup). 2G prende o desastre
+      # (zram cheio = freeze) sem matar o serviço no uso normal.
+      memHigh = "6G"; memMax = "9G"; memSwapMax = "2G"; limitMemlock = false;
       wanted = false;
     };
     phi-mini = {
