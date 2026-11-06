@@ -358,7 +358,12 @@ in rec {
       # voltaria a 8092 sem speculative decoding (regressão silenciosa).
       modelFile = "/home/nixos/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
       # KV f16 híbrido (8/32 layers) ≈ 750MB @20k ×2 MTP.
-      threads = 6; ctxSize = 16384; batchSize = 256; ubatch = 256;
+      # (06/11, 18:40) ctx 16384→12288: o consumo de REPOUSO do 4B com
+      # fa off (o KV mora na CPU) + MTP + LoRA + prompt-cache (328MiB por
+      # entrada) dava 8,4G — batia no MemoryHigh (8G) → reclaim/swap
+      # permanente → cada request levava 1,9-2,4s (o classify que era
+      # 158ms no battery). 12288 corta ~1,2G do KV+cache e deixa folga.
+      threads = 6; ctxSize = 12288; batchSize = 256; ubatch = 256;
       gpuLayers = 99; moeFlags = "";
       # (19/10) LoRA+flash-attn incompatíveis (log do server, ver
       # duplex-35b) → fa off. KV quantizado (q4_0) EXIGE fa → KV f16.
@@ -404,7 +409,7 @@ in rec {
       wanted = true;
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = alias (o server anuncia o alias; home.nix usa svc.alias).
-      opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 16384; output = 4096; };
+      opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 12288; output = 4096; };
     };
     deepseek-7b = {
       # (04/11, sweep) 8085 era COMPARTILHADA com duplex-35b (models.nix:312)
@@ -1119,10 +1124,10 @@ in rec {
       jarvis-mtp-lora = {
         profile = "mtp-lora";
         model = "mtp-lora";
-        # (06/11) espelha o ctx REAL do directServer :8092 (16384). Com
+        # (06/11) espelha o ctx REAL do directServer :8092 (12288). Com
         # 20480 aqui o registry prometia 4k tokens a mais do que o server
         # aceita → overflow de contexto no harness (e KV maior na VRAM).
-        ctx = 16384;
+        ctx = 12288;
         tier = "fast";
         capabilities = ["general" "coding" "tools" "pt" "uncensored" "lora"];
         guidance = "DEFAULT: PT-BR + classificador de turno (LoRA RESPOND/WAIT/SILENCE/BARGE); 70t/s com MTP (+24%)";

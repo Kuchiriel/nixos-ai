@@ -50,6 +50,11 @@ DEFAULT_ALLOWED_PREFIXES = (
     # de path (_path_allowed) e o HARD-NEVER continuam valendo — isto
     # libera o verbo, não o destino.
     "sed -i", "sort -o", "truncate", "cut -d", "awk -F",
+    # (06/11, dono: "muda o brilho pra 100%") ações de ESCALA do dono que a
+    # voz precisa executar de verdade — o modelador anunciava ("está
+    # ajustando") sem chamar nada. Leitura (brightnessctl get) e escrita
+    # (set) no próprio host.
+    "brightnessctl get", "brightnessctl set",
 )
 
 

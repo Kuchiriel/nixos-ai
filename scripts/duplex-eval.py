@@ -314,10 +314,146 @@ def e2e_playback(args) -> dict:
     return report
 
 
+# ── (06/11) E2E VIA GANCHO DE ASR (o AEC cancela a caixa de som, então
+# tocar WAV no alto-falante NÃO chega ao mic — o dono ouve, o JARVIS não).
+# O WAV entra no asrd pelo mesmo caminho do microfone: exercita
+# ASR+VAD+merge+gate+classificador+LLM+tools+TTS reais.
+ACTION_TOOLS = ("tool", "jarvis", "shell", "execute_shell", "notify")
+
+
+def wav_inject(args) -> dict:
+    import shutil, subprocess, threading
+    LOG = args.log
+    WAVS = args.wavs
+    items = [json.loads(l) for l in open(
+        os.path.join(os.path.dirname(__file__), "..", "data",
+                     "duplex-eval-turntaking.jsonl"), encoding="utf-8")
+        if l.strip() and not l.lstrip().startswith("#")]
+    by = {}
+    for i, it in enumerate(items):
+        by.setdefault(it["gold"], []).append((i, it["utt"]))
+    scen = [(i, u, "RESPOND") for i, u in by["RESPOND"][:10]]
+    scen += [(i, u, "BARGE") for i, u in by["BARGE"][:5]]
+    scen += [(i, u, "SILENCE") for i, u in by["SILENCE"][:5]]
+    want = {x.strip().upper() for x in args.only.split(",") if x.strip()}
+
+    seen = os.path.getsize(LOG) if os.path.exists(LOG) else 0
+    lines = []
+    stop = [False]
+
+    def follow():
+        pos = seen
+        while not stop[0]:
+            try:
+                sz = os.path.getsize(LOG)
+                if sz < pos:
+                    pos = 0
+                if sz > pos:
+                    with open(LOG, encoding="utf-8", errors="ignore") as f:
+                        f.seek(pos)
+                        chunk = f.read()
+                        pos = f.tell()
+                    for ln in chunk.splitlines(keepends=True):
+                        lines.append((time.monotonic(), ln))
+            except FileNotFoundError:
+                pass
+            time.sleep(0.1)
+    threading.Thread(target=follow, daemon=True).start()
+
+    def wait_for(pat, timeout=15.0, since=None):
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < timeout:
+            for t, ln in lines:
+                if (since is None or t > since) and pat in ln:
+                    return t - t0, ln
+            time.sleep(0.05)
+        return None, None
+
+    report = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "route": "asr-inject",
+              "log": LOG, "scenarios": []}
+    time.sleep(0.5)
+    for idx, utt, expect in scen:
+        if want and expect not in want:
+            continue
+        wav = os.path.join(WAVS, f"utt_{idx:03d}.wav")
+        if not os.path.exists(wav):
+            report["scenarios"].append({"utt": utt, "expect": expect,
+                                        "verdict": "sem-wav"})
+            continue
+        mark = time.monotonic()
+        # fila (o loop consome 1/tick; o arquivo único era sobrescrito
+        # quando o loop estava ocupado num LLM lento)
+        os.makedirs("/tmp/duplex-inject-queue", exist_ok=True)
+        shutil.copyfile(wav, "/tmp/duplex-inject-queue/"
+                        + time.strftime("%H%M%S") + f"-{idx:03d}.wav")
+        dseg, lseg = wait_for("SEGMENTO:", 12, since=mark)
+        r = {"utt": utt, "expect": expect, "wav": os.path.basename(wav)}
+        if not dseg:
+            r["verdict"] = "sem-segmento"
+            report["scenarios"].append(r)
+            print(f"{expect:8s} {utt[:28]:28s} -> sem-segmento")
+            continue
+        # texto transcrito (o ouvido)
+        r["asr_text"] = lseg.split("SEGMENTO:", 1)[-1].strip()[:80]
+        dcls, lcls = wait_for("classify", 12, since=mark)
+        r["classify_line"] = lcls.strip()[:100] if lcls else None
+        # resposta falada + tools
+        dresp, lresp = wait_for("tts.say", 25, since=mark)
+        r["timespeak_s"] = round(dseg + dresp, 2) if (dseg and dresp) else None
+        said = []
+        for t, ln in lines:
+            if t > mark and "tts.say:" in ln:
+                said.append(ln.split("tts.say:", 1)[-1].strip()[:120])
+        r["said"] = " ".join(said)[:220]
+        tools = [ln.split("TOOL:", 1)[-1].strip()[:60] for t, ln in lines
+                 if t > mark and "TOOL:" in ln]
+        r["tools"] = tools
+        r["action_tool"] = any(any(a in t.lower() for a in ACTION_TOOLS)
+                               for t in tools)
+        # (06/11) SATISFICING: a fala anuncia uma ação ("está ajustando",
+        # "vou mudar", "feito") sem nenhuma tool de ação → mentiu.
+        low = r["said"].lower()
+        claim = any(k in low for k in ("está ajustando", "esta ajustando",
+                                       "vou mudar", "vou ajustar", "vou fazer",
+                                       "já fiz", "foi feito", "ajustei",
+                                       "mudei", "configurei", "confirmado",
+                                       "está feito"))
+        r["claim_without_action"] = bool(claim and not r["action_tool"])
+        if expect == "RESPOND":
+            r["verdict"] = ("ok" if dresp else "no-response")
+            if r["claim_without_action"]:
+                r["verdict"] = "claim-sem-acao"
+        elif expect == "SILENCE":
+            sil = lcls and ("SILENCE" in lcls or "backchannel" in lcls
+                            or "silêncio" in lcls)
+            r["verdict"] = "ok-silenced" if (sil and not dresp) else (
+                "respondeu" if dresp else "no-classify")
+        else:
+            r["verdict"] = "classificado" if lcls else "no-classify"
+        report["scenarios"].append(r)
+        print(f"{expect:8s} {utt[:28]:28s} -> {r['verdict']:16s} "
+              f"asr={r.get('asr_text','')[:22]:22s} ts={r.get('timespeak_s')}")
+        time.sleep(1.0)
+    stop[0] = True
+    n = len(report["scenarios"])
+    ok = sum(1 for s in report["scenarios"] if s.get("verdict", "").startswith("ok"))
+    claim = sum(1 for s in report["scenarios"] if s.get("claim_without_action"))
+    report["summary"] = {"n": n, "ok": ok, "claim_without_action": claim,
+                          "ok_rate": round(ok / n, 3) if n else None}
+    print("RESUMO:", report["summary"])
+    return report
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--trigger-bench", action="store_true")
     ap.add_argument("--unit-battery", action="store_true")
+    ap.add_argument("--wav-inject", action="store_true",
+                    help="E2E via gancho de ASR (WAV entra no asrd; o AEC "
+                         "cancelaria a caixa de som)")
+    ap.add_argument("--log", default="/tmp/opencode/duplex-voice.log")
+    ap.add_argument("--wavs", default="/tmp/opencode/night-microturn/"
+                                        "genuine-synth-wavs")
     ap.add_argument("--e2e-playback", action="store_true",
                     help="toca wavs no alto-falante e mede pela reação no log "
                          "duplex (janela combinada com OC; autorização dono 20/10)")
@@ -332,7 +468,9 @@ def main() -> int:
     ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__),
                                                   "..", "reports", "duplex-eval"))
     args = ap.parse_args()
-    if args.trigger_bench:
+    if args.wav_inject:
+        report = wav_inject(args)
+    elif args.trigger_bench:
         report = trigger_bench(args)
     elif args.unit_battery:
         report = unit_battery(args)

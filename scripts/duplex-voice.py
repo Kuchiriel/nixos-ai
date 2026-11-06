@@ -162,6 +162,45 @@ def mic_source() -> str:
 VAD_PARAMS = dict(threshold=0.45, min_speech_duration_ms=200,
                   min_silence_duration_ms=300, speech_pad_ms=160)
 
+# ── (06/11) DEBUG: um rastro por turno, com TUDO que decidiu ──────────────
+# Sem isso, cada bug da voz era caçado por leitura de log parcial.
+# JARVIS_VOICE_DEBUG=1 (ou --debug) liga. Uma linha por evento, no mesmo
+# formato do log (vai para stderr E para logs/duplex/AAAA-MM-DD.log).
+DEBUG = os.environ.get("JARVIS_VOICE_DEBUG", "").strip().lower() not in (
+    "", "0", "false", "no")
+_DBG_TURN = {"n": 0}
+_DBG_STAGE = {}
+
+
+def dbg(evt, **kw):
+    """Rastro de debug (1 linha, campos key=value)."""
+    if not DEBUG:
+        return
+    _parts = []
+    for k, v in kw.items():
+        if isinstance(v, str):
+            v = v.replace("\n", " ")[:120]
+        _parts.append(f"{k}={v}")
+    log(f"[DBG {_DBG_TURN['n']:04d}] {evt} " + " ".join(_parts))
+
+
+def dbg_stage(name, ms):
+    """Acumula o tempo de cada etapa do turno (VAD/ASR/gate/LLM/TTS)."""
+    if not DEBUG:
+        return
+    _DBG_STAGE[name] = _DBG_STAGE.get(name, 0.0) + float(ms)
+
+
+def dbg_turn_end(**kw):
+    """Fecha o turno: imprime o total + o breakdown por etapa."""
+    if not DEBUG:
+        return
+    _DBG_TURN["n"] += 1
+    _st = " ".join(f"{k}={v:.0f}ms" for k, v in sorted(_DBG_STAGE.items()))
+    dbg("TURN " + " ".join(f"{k}={v}" for k, v in kw.items()) + f" | {_st}")
+    _DBG_STAGE.clear()
+
+
 def log(msg):
     print(msg, file=sys.stderr, flush=True)
     # (21/10, dono) LOG PERSISTENTE: /tmp é volátil — também grava
@@ -376,10 +415,14 @@ def _addressed(txt):
 
 def _intent_worker(base, utt, box):
     """Classifica a intenção em thread (paralelo ao LoRA) → +0ms no hot path."""
+    _t0 = time.monotonic()
     try:
         box["intent"] = classify_intent(base, utt)
     except Exception:
         box["intent"] = None
+    box["ms"] = (time.monotonic() - _t0) * 1000
+    dbg("INTENT", lab=box.get("intent"), ms=f"{box.get('ms', 0):.0f}",
+        txt=utt)
 
 
 def _intent_of(thread, box):
@@ -708,7 +751,9 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
             # tool_calls chegam como deltas acumulados. O return antigo
             # do round 0 (resposta completa não-streamed) era o custo
             # dominante do TimeSpeak 3.4s medido no e2e.
+            _t_chat = time.monotonic()
             out, tcs = stream_chat(base, body, tts)
+            dbg_stage("llm", (time.monotonic() - _t_chat) * 1000)
             tcs = tcs or []
             if not tcs:
                 if not out:
@@ -779,6 +824,7 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
                     body["messages"] = msgs
                     continue
                 log(f"[{ts()}] chat resposta (stream): {out[:80]!r}")
+                dbg("REPLY", txt=out, ms=f"{(time.monotonic() - _t_chat) * 1000:.0f}")
                 return (out or ""), 0.0
             msgs.append({"role": "assistant", "content": out or "",
                          "tool_calls": tcs, "function_call": None})
@@ -790,7 +836,12 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
                 except Exception:
                     args = {}
                 log(f"[{ts()}] TOOL: {name}({args})")
+                _t_tool = time.monotonic()
                 result = call_tool(name, args)
+                dbg_stage("tool", (time.monotonic() - _t_tool) * 1000)
+                dbg("TOOL", name=name, args=str(args)[:90],
+                    ms=f"{(time.monotonic() - _t_tool) * 1000:.0f}",
+                    out=str(result)[:90])
                 log(f"[{ts()}] TOOL resultado: {result[:80]!r}")
                 msgs.append({"role": "tool",
                              "tool_call_id": tc.get("id", "?"),
@@ -1242,7 +1293,12 @@ def tts_self_finish():
     TTS_SELF["text"] = ""
 
 def is_tts_self(txt):
-    """Transcrição = eco da própria fala? (id ativo + ≤8s atrás)"""
+    """Transcrição = eco da própria fala? (id ativo + ≤2,5s atrás)
+
+    (06/11) A janela era 8s: o eco do TTS chega em ~1s, então 8s só
+    servia para ENGOLIR o comando do dono (que shareia vocabulário com
+    a minha fala) — o dono ficava "sem resposta" sem nenhuma tool.
+    """
     import difflib as _dl
     t = " ".join(txt.lower().replace(".", " ").replace(",", " ")
                  .replace("!", " ").replace("?", " ").split())
@@ -1252,7 +1308,7 @@ def is_tts_self(txt):
     if TTS_SELF["text"]:
         cands.append(TTS_SELF["text"])
     now = time.monotonic()
-    cands += [c for c, te in TTS_SELF["recent"] if now - te < 8.0]
+    cands += [c for c, te in TTS_SELF["recent"] if now - te < 2.5]
     for c in cands:
         cl = c.lower()
         if t in cl:
@@ -1283,6 +1339,13 @@ def in_cooldown():
     return time.monotonic() - LAST_TTS_END < 1.2
 
 def is_self_echo(txt):
+    # (06/11) JANELA DE ECO. O eco da minha própria fala chega em ~1s
+    # depois do fim do TTS. Sem janela, a comparação com as últimas
+    # respostas ENGOIA o pedido do dono: "muda o brilho pra 100%" foi
+    # descartado como eco porque a minha fala anterior tinha "100%"
+    # (mesmos números) — 11s depois! Eco = 2,5s após a última fala.
+    if time.monotonic() - LAST_TTS_END > 2.5:
+        return False
     import difflib
     t = txt.strip().lower().rstrip(".!?").strip()
     if not t:
@@ -2129,6 +2192,9 @@ def main():
     ap.add_argument("--port", type=int, default=8092)
     ap.add_argument("--lang", default="pt")
     ap.add_argument("--stt-model", default="small")
+    ap.add_argument("--debug", action="store_true",
+                    help="rastro por turno (gates, classificador, tools, "
+                         "latência de cada etapa)")
     ap.add_argument("--rms", type=int, default=700,
                     help="gate fala-vs-fundo (vozes reais 886-1372; anime 380-600)")
     ap.add_argument("--gate", default="intent",
@@ -2139,6 +2205,8 @@ def main():
                          "jarvis; off = responde TODO segmento (testes/AFK). "
                          "O gate real de áudio = wakeword recalibrado (pend.4)")
     args = ap.parse_args()
+    if args.debug:
+        globals()["DEBUG"] = True
     base = f"http://{args.host}:{args.port}"
 
     try:
@@ -2244,6 +2312,95 @@ def main():
                         merge_deadline = time.monotonic()
             except Exception:
                 pass
+            # (06/11) GANCHO DE TESTE ACÚSTICO: /tmp/duplex-inject-wav
+            # entra no MESMO caminho do microfone (asrd ← PCM), então o
+            # teste exercita ASR+VAD+merge+gate+LLM+TTS reais. Motivo: o
+            # mic é echo_cancel_source → o AEC CANCELA tudo que sai na
+            # caixa (inclusive o WAV tocado no alto-falante) — o dono ouve
+            # o teste, o JARVIS não ouve nada. Injetar no ASR contorna
+            # só a física, não o pipeline.
+            try:
+                _pw = Path("/tmp/duplex-inject-wav")
+                if _pw.exists():
+                    _pcm = _pw.read_bytes()
+                    _pw.unlink()
+                    _pq = Path("/tmp/duplex-inject-queue")
+                    _pq.mkdir(exist_ok=True)
+                    _ts = time.strftime("%H%M%S")
+                    (_pq / f"{_ts}-{_pw.name}.wav").write_bytes(_pcm)
+                    if _pcm:
+                        import wave as _wv
+                        import tempfile as _tf
+                        with _tf.NamedTemporaryFile(suffix=".wav",
+                                                     delete=False) as _tfh:
+                            _tfh.write(_pcm)
+                            _wpath = _tfh.name
+                        try:
+                            with _wv.open(_wpath, "rb") as _wf:
+                                _fr = _wf.readframes(_wf.getnframes())
+                                _sw = _wf.getsampwidth()
+                                _ch = _wf.getnchannels()
+                                _sr = _wf.getframerate()
+                            if _sw == 2 and _ch == 1:
+                                _a = np.frombuffer(_fr, dtype=np.int16)
+                            elif _sw == 2 and _ch == 2:
+                                _a = np.frombuffer(_fr, dtype=np.int16)[::2]
+                            else:
+                                _a = np.frombuffer(_fr, dtype=np.int16)
+                            if _sr != SR:
+                                import math as _m
+                                _n = int(len(_a) * SR / _sr)
+                                _x = np.linspace(0, len(_a) - 1, _n)
+                                _a = np.interp(_x, np.arange(len(_a)),
+                                               _a.astype(np.float64)
+                                               ).astype(np.int16)
+                            asr.feed(_a.astype(np.float32) / 32768.0)
+                            log(f"[{ts()}] WAV INJETADO no ASR "
+                                f"({len(_a)/SR:.1f}s, {_sr}Hz)")
+                        finally:
+                            Path(_wpath).unlink(missing_ok=True)
+            except Exception as _e:
+                log(f"[{ts()}] wav-inject erro: {_e}")
+            # fila de WAVs injetados (o teste pode tocar vários; o loop
+            # consome 1 por tick — sem perder nenhum)
+            try:
+                _pq = Path("/tmp/duplex-inject-queue")
+                if _pq.is_dir():
+                    _files = sorted(_pq.glob("*.wav"))
+                    if _files:
+                        _pcm = _files[0].read_bytes()
+                        _files[0].unlink()
+                        import wave as _wv
+                        import tempfile as _tf
+                        with _tf.NamedTemporaryFile(suffix=".wav",
+                                                     delete=False) as _tfh:
+                            _tfh.write(_pcm)
+                            _wpath = _tfh.name
+                        try:
+                            with _wv.open(_wpath, "rb") as _wf:
+                                _fr = _wf.readframes(_wf.getnframes())
+                                _sw = _wf.getsampwidth()
+                                _ch = _wf.getnchannels()
+                                _sr = _wf.getframerate()
+                            if _sw == 2 and _ch == 1:
+                                _a = np.frombuffer(_fr, dtype=np.int16)
+                            elif _sw == 2 and _ch == 2:
+                                _a = np.frombuffer(_fr, dtype=np.int16)[::2]
+                            else:
+                                _a = np.frombuffer(_fr, dtype=np.int16)
+                            if _sr != SR:
+                                _n = int(len(_a) * SR / _sr)
+                                _x = np.linspace(0, max(0, len(_a) - 1), _n)
+                                _a = np.interp(_x, np.arange(len(_a)),
+                                               _a.astype(np.float64)
+                                               ).astype(np.int16)
+                            asr.feed(_a.astype(np.float32) / 32768.0)
+                            log(f"[{ts()}] WAV INJETADO no ASR "
+                                f"({len(_a)/SR:.1f}s, {_sr}Hz)")
+                        finally:
+                            Path(_wpath).unlink(missing_ok=True)
+            except Exception as _e:
+                log(f"[{ts()}] wav-queue erro: {_e}")
             # (09:55) MÚSICA/FUNDO → NÃO responde (o dono: "não precisa
             # reagir"). O VAC manda 'no online update, only VAD voice' ou
             # texto curto; segmentos <3 chars (garbage whisper) são descartados.
@@ -2431,6 +2588,9 @@ def main():
                         log(f"[{ts()}] correção STT: {heard!r} → {fixed!r}")
                     heard = fixed
                     print(f"  SEGMENTO: {heard}", flush=True)
+                    dbg("ASR", txt=heard, ms=f"{asr.last_ms:.0f}",
+                        spk=_seg_spk, voices=SPK_STATE.get("voices"),
+                        rms=rms)
                     # (03/11 19:50, dono: "cala a boca pra interromper
                     # IMEDIATAMENTE") FAST-PATH DE CONTROLE: o comando é
                     # checado no PRIMEIRO segmento que chega — sem
@@ -2560,6 +2720,7 @@ def main():
                         f"{_ctrl_kind}: {heard[:40]!r}")
                 elif in_cooldown():
                     log(f"[{ts()}] cooldown pós-TTS — descartado: {heard[:40]!r}")
+                    dbg("DROP", why="cooldown", txt=heard)
                     heard = NOVOICE
                 elif is_tts_self(heard):
                     # (07:50, solução do DONO: ID da fala) transcrição
@@ -2567,9 +2728,11 @@ def main():
                     # da minha própria voz — ignora. Fala NOVA durante o
                     # TTS passa adiante = interrupção real.
                     log(f"[{ts()}] TTS-SELF id-eco — descartado: {heard[:40]!r}")
+                    dbg("DROP", why="tts_self", txt=heard)
                     heard = NOVOICE
                 elif is_self_echo(heard):
                     log(f"[{ts()}] AUTO-ECO textual — descartado: {heard[:40]!r}")
+                    dbg("DROP", why="auto_echo", txt=heard)
                     heard = NOVOICE
                 n_words = len(heard.split())
                 is_cmd = heard.lower().strip(".,!?") in (
@@ -2656,6 +2819,8 @@ def main():
                     # EM PARALELO com o LoRA (thread), então o custo some:
                     # LoRA ~350ms || intent ~395ms → espera ~400ms, não 750.
                     _addr = _addressed(heard)
+                    dbg("GATE", addr=_addr, sticky=LAST_ADDR.get("spk"),
+                        txt=heard)
                     _intent_box = {}
                     _intent_th = None
                     if GATE_MODE == "intent" and not _addr:
@@ -2673,8 +2838,13 @@ def main():
                         log(f"[{ts()}] endereço explícito — dispensa classify "
                             f"(poupa ~250ms): {heard[:38]!r}")
                     else:
+                        _t_cls = time.monotonic()
                         lab = (classify_turn(base, heard)
                                if (n_words >= 1 and heard != NOVOICE) else None)
+                        dbg_stage("classify", (time.monotonic() - _t_cls) * 1000)
+                        dbg("CLASSIFY", lab=lab,
+                            ms=f"{(time.monotonic() - _t_cls) * 1000:.0f}",
+                            txt=heard)
                         log(f"[{ts()}] classify({heard[:38]!r}) = {lab} "
                             f"spk={SPK_STATE.get('last_spk')} "
                             f"voices={SPK_STATE.get('voices')}")
@@ -2713,8 +2883,15 @@ def main():
                         # fala COMPLETA da TV/sala — sem endereçamento
                         # não vira resposta. GATE on = exigir Jarvis/
                         # pergunta/comando; off = comportamento antigo.
-                        if not _gate_accepts(_addr, _intent_of(_intent_th, _intent_box)):
+                        _intent_val = (_intent_of(_intent_th, _intent_box)
+                                       if _intent_th is not None else None)
+                        _gate_ok = _gate_accepts(_addr, _intent_val)
+                        dbg("GATE.decide", accept=_gate_ok, addr=_addr,
+                            intent=_intent_val, txt=heard)
+                        if not _gate_ok:
                             log(f"[{ts()}] RESPOND não-endereçado (TV/sala) — ignora: {heard[:40]!r}")
+                            dbg("DROP", why="gate_not_addressed",
+                                addr=_addr, txt=heard)
                             heard = NOVOICE
                         else:
                             # (06/11) sticky addressing: guarda quem foi
@@ -2813,6 +2990,8 @@ def main():
                             f"{_rx['reason']} — {said[:35]!r}")
                         tts.say(_rx['say'])
 
+            dbg_turn_end(heard=heard[:40], said=(said or "")[:40],
+                         rms=rms, asr_ms=f"{asr.last_ms:.0f}")
             if (heard != NOVOICE or said != LISTEN or rms >= args.rms
                     or tick_n % 20 == 0):
                 log(f"[{ts()}] rms={rms:>5} | {heard[:24]:<24} → {said[:28]:<28} "
