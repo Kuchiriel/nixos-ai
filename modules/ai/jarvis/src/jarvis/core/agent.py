@@ -88,7 +88,12 @@ def _registry_tier_profile(model_id: str) -> dict[str, Any] | None:
         # 768 deliberado (resposta concisa p/ reasoning; ver detect_profile)
         return {"name": "large", "max_tokens": 768, **base}
     if entry.tier == "fast":
-        return {"name": "small", "max_tokens": mt, **base}
+        # (06/11, LATÊNCIA) teto de 1024 tokens/turn no tier fast (4B-MTP
+        # do default). ctx//12 com ctx=16384 dava 1365 → o 4B Rambla até
+        # o cap e o harness gastava 3 rodadas (medido: 171s numa task
+        # simples). 1024 ainda cabe um write médio (lição L8) e corta o
+        # pior caso pela metade.
+        return {"name": "small", "max_tokens": min(mt, 1024), **base}
     if entry.tier == "speed":
         return {"name": "default", "max_tokens": mt, **base}
     return None

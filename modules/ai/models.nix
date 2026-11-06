@@ -1089,7 +1089,10 @@ in rec {
       jarvis-mtp-lora = {
         profile = "mtp-lora";
         model = "mtp-lora";
-        ctx = 20480;
+        # (06/11) espelha o ctx REAL do directServer :8092 (16384). Com
+        # 20480 aqui o registry prometia 4k tokens a mais do que o server
+        # aceita → overflow de contexto no harness (e KV maior na VRAM).
+        ctx = 16384;
         tier = "fast";
         capabilities = ["general" "coding" "tools" "pt" "uncensored" "lora"];
         guidance = "DEFAULT: PT-BR + classificador de turno (LoRA RESPOND/WAIT/SILENCE/BARGE); 70t/s com MTP (+24%)";
