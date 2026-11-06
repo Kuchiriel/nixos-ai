@@ -473,13 +473,13 @@ def classify_intent(base, utt):
 def classify_turn(base, utt):
     """Label do turno via LoRA; None = falha (caller cai no gate antigo)."""
     try:
-        http(base + "/lora-adapters", [{"id": 0, "scale": 1.0}])
+        http(base + "/lora-adapters", [{"id": 0, "scale": 1.0}], timeout=3)
         prompt = (f"<|im_start|>system\n{CLASS_SYS}<|im_end|>\n"
                   f"<|im_start|>user\n{utt}<|im_end|>\n"
                   f"<|im_start|>assistant\n")
         j = http(base + "/completion", {
             "prompt": prompt, "n_predict": 6, "temperature": 0,
-            "stop": ["<|im_end|>"], "cache_prompt": True})
+            "stop": ["<|im_end|>"], "cache_prompt": True}, timeout=8)
         out = str(j.get("content", "")).strip().upper()
         for lab in CLASS_LABELS:
             if out.startswith(lab):
@@ -489,7 +489,7 @@ def classify_turn(base, utt):
         return None
     finally:
         try:
-            http(base + "/lora-adapters", [])
+            http(base + "/lora-adapters", [], timeout=3)
         except Exception:
             pass
 
@@ -2609,6 +2609,20 @@ def main():
                         log(f"[{ts()}] classify({heard[:38]!r}) = {lab} "
                             f"spk={SPK_STATE.get('last_spk')} "
                             f"voices={SPK_STATE.get('voices')}")
+                        if lab is None:
+                            # (06/11) FALHA DO CLASSIFICADOR ≠ SILÊNCIO.
+                            # O docstring promete "caller cai no gate
+                            # antigo" mas o lab=None não caía em NENHUM
+                            # branch → o JARVIS ficava MUDO (foi o que o
+                            # dono viu: "falo e nada"). Agora: cai no
+                            # OUTRO classificador neural (intent 4B+GBNF,
+                            # mesmo modelo, outro prompt) + endereço.
+                            _int = (_intent_of(_intent_th, _intent_box)
+                                    if _intent_th is not None else None)
+                            _ok = _gate_accepts(_addr, _int)
+                            log(f"[{ts()}] classificador falhou — fallback "
+                                f"neural (intent={_int}) gate={_ok}")
+                            lab = "RESPOND" if _ok else "SILENCE"
                     # (21/10, pedido HB) evidência acústica por RESPOND:
                     # 1 wav por segmento respondido, timestamp casável
                     # com o log (persistente) e os reports da bateria.
@@ -2747,7 +2761,7 @@ def main():
             except Exception:
                 pass
         try:
-            http(base + "/lora-adapters", [])
+            http(base + "/lora-adapters", [], timeout=3)
         except Exception:
             pass
         mic.terminate()

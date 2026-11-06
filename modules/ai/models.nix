@@ -292,7 +292,7 @@ in rec {
       gpuLayers = 45; moeFlags = "--n-cpu-moe 35";
       fa = true; ctk = "q4_0"; ctv = "q4_0";
       extraArgs = [ "--parallel" "1" "--jinja" "--mlock" "--reasoning" "off" ];
-      memHigh = "21G"; memMax = "23G"; limitMemlock = true;
+      memHigh = "22G"; memMax = "23G"; memSwapMax = "1G"; limitMemlock = true;
       wanted = false;  # default agora é o 4B-MTP (04/10, pedido do dono)
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = modelFile (o server anuncia o path, sem --alias).
@@ -327,7 +327,7 @@ in rec {
         "--alias" "jarvis-duplex"
         "--jinja"
       ];
-      memHigh = "20G"; memMax = "24G"; limitMemlock = true;
+      memHigh = "23G"; memMax = "24G"; memSwapMax = "1G"; limitMemlock = true;
       wanted = false;  # lane de voz: sobe no "hey jarvis acordar" (ou manual)
     };
     uncensored-4b = {
@@ -387,7 +387,13 @@ in rec {
       # 1,2-1,7GB de páginas frias no zram em operação normal e foi
       # morto no limite (oom-kill da cgroup). 2G prende o desastre
       # (zram cheio = freeze) sem matar o serviço no uso normal.
-      memHigh = "6G"; memMax = "9G"; memSwapMax = "2G"; limitMemlock = false;
+      # (06/11, 16:50) MemoryHigh ABAIXO do consumo real = swap thrash:
+      # o modelo ficava 6,5-9G (o KV do 4B mora na RAM porque fa off),
+      # o cgroup passava o high-watermark todo dia → reclaim → KV no
+      # zram → cada request levava MINUTOS (timeout) → o classificador
+      # devolvia None → o JARVIS FICAVA MUDO. MemoryHigh tem de ser
+      # MAIOR que o consumo de repouso; o swap é só reserva.
+      memHigh = "8G"; memMax = "11G"; memSwapMax = "1G"; limitMemlock = false;
       # (26/10, dono: "tira o bonsai de default e coloca o qwen mtp que tem
       # o lora pra subir com o lora") → este é o DEFAULT do sistema agora.
       # wanted=true = sobe no boot COM o LoRA registrado (medido ao vivo:
@@ -420,7 +426,13 @@ in rec {
       # 1,2-1,7GB de páginas frias no zram em operação normal e foi
       # morto no limite (oom-kill da cgroup). 2G prende o desastre
       # (zram cheio = freeze) sem matar o serviço no uso normal.
-      memHigh = "6G"; memMax = "9G"; memSwapMax = "2G"; limitMemlock = false;
+      # (06/11, 16:50) MemoryHigh ABAIXO do consumo real = swap thrash:
+      # o modelo ficava 6,5-9G (o KV do 4B mora na RAM porque fa off),
+      # o cgroup passava o high-watermark todo dia → reclaim → KV no
+      # zram → cada request levava MINUTOS (timeout) → o classificador
+      # devolvia None → o JARVIS FICAVA MUDO. MemoryHigh tem de ser
+      # MAIOR que o consumo de repouso; o swap é só reserva.
+      memHigh = "8G"; memMax = "11G"; memSwapMax = "1G"; limitMemlock = false;
       wanted = false;
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = modelFile (o server anuncia o path, sem --alias).
@@ -441,7 +453,13 @@ in rec {
       # 1,2-1,7GB de páginas frias no zram em operação normal e foi
       # morto no limite (oom-kill da cgroup). 2G prende o desastre
       # (zram cheio = freeze) sem matar o serviço no uso normal.
-      memHigh = "6G"; memMax = "9G"; memSwapMax = "2G"; limitMemlock = false;
+      # (06/11, 16:50) MemoryHigh ABAIXO do consumo real = swap thrash:
+      # o modelo ficava 6,5-9G (o KV do 4B mora na RAM porque fa off),
+      # o cgroup passava o high-watermark todo dia → reclaim → KV no
+      # zram → cada request levava MINUTOS (timeout) → o classificador
+      # devolvia None → o JARVIS FICAVA MUDO. MemoryHigh tem de ser
+      # MAIOR que o consumo de repouso; o swap é só reserva.
+      memHigh = "8G"; memMax = "11G"; memSwapMax = "1G"; limitMemlock = false;
       wanted = false;
     };
     phi-mini = {
@@ -451,7 +469,7 @@ in rec {
       gpuLayers = 99; moeFlags = "";
       fa = true; ctk = "q4_0"; ctv = "q4_0";
       extraArgs = [ "--parallel" "1" "--jinja" ];
-      memHigh = "4G"; memMax = "6G"; limitMemlock = false;
+      memHigh = "5G"; memMax = "7G"; memSwapMax = "1G"; limitMemlock = false;
       wanted = false;
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = modelFile (o server anuncia o path, sem --alias).
@@ -474,7 +492,7 @@ in rec {
       # Papel candidato: prosa/chat geral — NÃO medido ainda (bench cobre
       # bonsai+qwen; gemma entra na próxima rodada).
       extraArgs = [ "--parallel" "1" "--jinja" ];
-      memHigh = "4G"; memMax = "6G"; limitMemlock = false;
+      memHigh = "5G"; memMax = "7G"; memSwapMax = "1G"; limitMemlock = false;
       wanted = false;
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = modelFile (o server anuncia o path, sem --alias).
@@ -491,7 +509,7 @@ in rec {
       gpuLayers = 45; moeFlags = "--n-cpu-moe 35";
       fa = true; ctk = "q4_0"; ctv = "q4_0";
       extraArgs = [ "--parallel" "1" "--jinja" "--mlock" "--reasoning" "off" ];
-      memHigh = "21G"; memMax = "23G"; limitMemlock = true;
+      memHigh = "22G"; memMax = "23G"; memSwapMax = "1G"; limitMemlock = true;
       wanted = false;
     };
     uncensored-35b-q4kp = {
@@ -501,7 +519,7 @@ in rec {
       gpuLayers = 45; moeFlags = "--n-cpu-moe 35";
       fa = true; ctk = "q4_0"; ctv = "q4_0";
       extraArgs = [ "--parallel" "1" "--jinja" "--mlock" "--reasoning" "off" ];
-      memHigh = "22G"; memMax = "25G"; limitMemlock = true;
+      memHigh = "24G"; memMax = "25G"; memSwapMax = "1G"; limitMemlock = true;
       wanted = false;
     };
   };
