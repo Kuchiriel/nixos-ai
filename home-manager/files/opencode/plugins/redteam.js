@@ -203,7 +203,7 @@ modelo — nao existe vetor universal:
 | classe de modelo | vetor que funciona | medido |
 |---|---|---|
 | sem alignment forte (gpt-oss-20b, gemini-2.5-flash-lite, north-mini) | \`obf_in_framing\` + frame \`audit\` + leet/rot13/spaced/rot5 | 3/5, 1/4, 3/3 |
-| **com reasoning forte** (Nemotron 3 Ultra, DiffusionGemma) | **\`cot_prefill\`** — semeia o `<think>` ja resolvido | 10/12 (83%) no DiffusionGemma, so com este vetor |
+| **com reasoning forte** (Nemotron 3 Ultra, DiffusionGemma) | **\`cot_prefill\`** — semeia o \`<think>\` ja resolvido | 10/12 (83%) no DiffusionGemma, so com este vetor |
 | **o mais duro** (Qwen3.5-397B, 0/31 no single-shot) | **\`redteam_crescendo\`** — multi-turn por anafora | 1/1 (5260 chars, era 0/31) |
 
 **Blacklist (medido, nao usar):**

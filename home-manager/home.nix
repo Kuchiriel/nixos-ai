@@ -416,6 +416,13 @@ in {
   home.file.".config/opencode/plugins/redteam.js".source =
     ./files/opencode/plugins/redteam.js;
 
+  # Gate do plugin: importa e INICIALIZA de verdade (o `node --check` so
+  # pega sintaxe — um backtick nao escapado passava o check e quebrava em
+  # runtime, tirando TODAS as tools do plugin; sintoma: "a tool nao
+  # existe"). Rodar: node home-manager/files/opencode/plugins/check-redteam.mjs
+  home.file.".config/opencode/plugins/check-redteam.mjs".source =
+    ./files/opencode/plugins/check-redteam.mjs;
+
   # Slash command /jailbreak — liga/desliga o modo red-team sem rebuild.
   # Resolvido pelo plugin (hook command.execute.before): o modelo nunca ve
   # o template, so a resposta do toggle.
