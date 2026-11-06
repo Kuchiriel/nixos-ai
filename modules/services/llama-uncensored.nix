@@ -87,6 +87,26 @@ let
       RestartSec = "20";
       OOMScoreAdjust = 1000;
       TasksMax = 64;
+      # (06/11, lição do FREEZE/OOM) LIMITES DE MEMÓRIA — os campos
+      # memHigh/memMax já eram declarados em models.nix desde 26/10 mas
+      # NUNCA eram consumidos aqui (config morta) → a unit saía sem teto
+      # → o 4B-MTP chegou a 9G RSS + 6,2G swap, o zram (15,5G) lotou,
+      # o host travou (thrash) e o OOM killer matou o llama-server
+      # (06/11 11:22:08). Agora:
+      #   MemoryHigh    = reclaim CEDO (o kernel devolve páginas sob pressão)
+      #   MemoryMax     = o SERVIÇO morre antes do host (Restart=on-failure)
+      #   MemorySwapMax = o modelo não vira GB de zram (zram lotado = freeze)
+      MemoryHigh = s.memHigh;
+      MemoryMax = s.memMax;
+      MemorySwapMax = s.memSwapMax or "1G";
+      # (06/11, sugestão do Crouton + lição do freeze) systemd-oomd:
+      # o OOM killer do kernel só age DEPOIS do zram encher 100% (host
+      # travado). o systemd-oomd mata o cgroup do LLM quando o SWAP do
+      # sistema passa de 90% (ManagedOOMSwapThreshold default) ou a
+      # memória entra em pressão — com OOMScoreAdjust=1000 o LLM é a
+      # vítima preferida, então o host se salva e o serviço reinicia.
+      ManagedOOMSwap = "kill";
+      ManagedOOMMemoryPressure = "kill";
     } // optionalAttrs s.limitMemlock { LimitMEMLOCK = "infinity"; };
   };
 in

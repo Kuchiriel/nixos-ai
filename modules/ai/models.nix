@@ -358,17 +358,32 @@ in rec {
       # voltaria a 8092 sem speculative decoding (regressão silenciosa).
       modelFile = "/home/nixos/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
       # KV f16 híbrido (8/32 layers) ≈ 750MB @20k ×2 MTP.
-      threads = 6; ctxSize = 20480; batchSize = 256; ubatch = 256;
+      threads = 6; ctxSize = 16384; batchSize = 256; ubatch = 256;
       gpuLayers = 99; moeFlags = "";
       # (19/10) LoRA+flash-attn incompatíveis (log do server, ver
       # duplex-35b) → fa off. KV quantizado (q4_0) EXIGE fa → KV f16.
       fa = false; ctk = "f16"; ctv = "f16";
       # LoRA init sem aplicar: o cliente liga/desliga via /lora-adapters
       # SÓ nos requests do classificador (chat com tools fica limpo).
+      # (06/11) --parallel 2 foi TESTADO e REVERTIDO: com 2 slots a voz
+      # ainda esperou 4,5s durante um prompt longo do harness (medido
+      # A/B no :8092) — a fila não é o gargalo, é a GPU saturada pelo
+      # PREFILL do prompt longo (7,2k tokens ≈ 5s). 2 slots só limitaria
+      # o contexto do dev a 8192 (quebraria prompts longos). Fix real do
+      # gargalo = reduzir o prompt do harness (ver _trim_messages e o
+      # budget de agent-context em cli/dev.py) + ctx menor (16384).
       extraArgs = [ "--parallel" "1" "--jinja" "--reasoning" "off" "--spec-type" "draft-mtp"
                     "--lora" "/home/nixos/models/loras/microturn-4b/microturn-4b-lora.gguf"
                     "--lora-init-without-apply" ];
-      memHigh = "4G"; memMax = "5G"; limitMemlock = false;
+      # (06/11) MEMÓRIA (medido): com c=20480 o 4B chegou a 9G RSS +
+      # 6,2G swap → zram (15,5G) lotou → HOST TRAVOU (thrash) e o OOM
+      # killer matou o llama-server (11:22:08). memHigh/memMax eram
+      # DECLARADOS AQUI mas NUNCA chegavam à unit (config morta) →
+      # agora são MemoryHigh/MemoryMax reais (ver llama-uncensored.nix).
+      # 6G/9G/1G: o modelo é pressionado a devolver memória cedo
+      # (MemoryHigh), nunca passa de 9G (MemoryMax) e não vira 6GB de
+      # swap (MemorySwapMax) — morre o serviço, não o host.
+      memHigh = "6G"; memMax = "9G"; memSwapMax = "1G"; limitMemlock = false;
       # (26/10, dono: "tira o bonsai de default e coloca o qwen mtp que tem
       # o lora pra subir com o lora") → este é o DEFAULT do sistema agora.
       # wanted=true = sobe no boot COM o LoRA registrado (medido ao vivo:
@@ -379,7 +394,7 @@ in rec {
       wanted = true;
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = alias (o server anuncia o alias; home.nix usa svc.alias).
-      opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 20480; output = 4096; };
+      opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 16384; output = 4096; };
     };
     deepseek-7b = {
       # (04/11, sweep) 8085 era COMPARTILHADA com duplex-35b (models.nix:312)
@@ -395,7 +410,9 @@ in rec {
       # SEM --reasoning off: R1 é reasoning model, pensar é o propósito.
       # Papel candidato: architect (traces de raciocínio) — NÃO medido ainda.
       extraArgs = [ "--parallel" "1" "--jinja" ];
-      memHigh = "5G"; memMax = "7G"; limitMemlock = false;
+      # (06/11) RAM real: pesos 4,4G (7B Q4) + KV 16k q4 + buffers ≈ 6G;
+      # o teto de 7G matava o server no meio do trabalho. 6G/9G/1G.
+      memHigh = "6G"; memMax = "9G"; memSwapMax = "1G"; limitMemlock = false;
       wanted = false;
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = modelFile (o server anuncia o path, sem --alias).
@@ -410,7 +427,9 @@ in rec {
       # Tool-calling ONLY: excelente em function-call, MUDO em chat
       # (não serve p/ prosa). Papel: executor backend, nunca conversar.
       extraArgs = [ "--parallel" "1" "--jinja" ];
-      memHigh = "5G"; memMax = "7G"; limitMemlock = false;
+      # (06/11) RAM real: pesos 4,4G (7B Q4) + KV 16k q4 + buffers ≈ 6G;
+      # o teto de 7G matava o server no meio do trabalho. 6G/9G/1G.
+      memHigh = "6G"; memMax = "9G"; memSwapMax = "1G"; limitMemlock = false;
       wanted = false;
     };
     phi-mini = {

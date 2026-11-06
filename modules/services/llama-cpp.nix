@@ -330,6 +330,9 @@ in {
           # Embeddings OOM-killed 2x em 2026-09-05 com 512M (mmap 42G
           # virtual no compute buffer). 2G comporta modelo + buffers.
           MemoryMax = "2G";               # Max 2GB RAM (model 512MB + buffers)
+          MemorySwapMax = "512M";         # (06/11) não vira zram (freeze)
+          ManagedOOMSwap = "kill";        # (06/11) oomd mata antes do host
+          ManagedOOMMemoryPressure = "kill";
           TasksMax = 32;                  # Max 32 tasks
         };
       };
