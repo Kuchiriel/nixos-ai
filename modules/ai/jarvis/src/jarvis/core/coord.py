@@ -436,7 +436,10 @@ def pending(
             elif to and to == lane:
                 addressed = True
         overlapping = False
-        if kind in ("claim", "status", "blocked"):
+        # a propria claim do agente nao e' "pendencia" (o filtro de escopo
+        # comparava os arquivos do agente com os dele mesmo) - senao o watcher
+        # acordaria o dono da claim por causa da propria claim.
+        if kind in ("claim", "status", "blocked") and payload.get("agent") not in aliases:
             their = _files_of(payload)
             for mine in my_files:
                 for theirs in their:
