@@ -43,9 +43,43 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-const REPO = process.env.REDTEAM_REPO || "/home/nixos/projects/red-teaming";
+// PORTABILIDADE: o repo do harness pode estar em outro caminho (outra
+// maquina, outro checkout). Resolve por candidates e, se nao achar, as
+// tools de rede respondem "repositorio ausente" em vez de quebrar — o
+// resto do plugin (transliteracao, slash command, bloco de estrategia)
+// continua funcionando.
+function resolveRepo() {
+  // REDTEAM_REPO explicito tem precedencia ABSOLUTA: se o usuario aponta
+  // para um caminho, nao se usa o fallback (num ambiente de teste isso
+  // e o que permite simular "harness ausente").
+  if (process.env.REDTEAM_REPO) return process.env.REDTEAM_REPO;
+  const candidates = [
+    join(homedir(), "projects/red-teaming"),
+    "/home/nixos/projects/red-teaming",
+  ].filter(Boolean);
+  for (const c of candidates) {
+    try {
+      if (existsSync(join(c, "payloads.py"))) return c;
+    } catch { /* ignora caminho inacessivel */ }
+  }
+  return candidates[0] || "";
+}
+
+const REPO = resolveRepo();
 const PAYLOADS = join(REPO, "payloads.py");
 const MATRIX = join(REPO, "redteam_matrix.py");
+
+const HARNESS_OK = (() => {
+  try {
+    return existsSync(join(REPO, "payloads.py"))
+      && existsSync(join(REPO, "redteam_matrix.py"));
+  } catch {
+    return false;
+  }
+})();
+const NO_HARNESS =
+  "repositorio do harness ausente neste ambiente (REDTEAM_REPO). "
+  + "As tools de rede ficam indisponiveis; o resto do plugin funciona.";
 
 // Estado do modo: fora do Nix, para poder ligar/desligar sem rebuild.
 const STATE = process.env.OPENCODE_REDTEAM_STATE
@@ -584,6 +618,7 @@ export const RedTeamOpenCodePlugin = async () => {
           },
         },
         async execute(args) {
+          if (!HARNESS_OK) return NO_HARNESS;
           const argv = [PAYLOADS];
           if (asArg(args.request)) argv.push("--request", asArg(args.request));
           if (asArg(args.request_id)) argv.push("--request-id", asArg(args.request_id));
@@ -637,6 +672,7 @@ export const RedTeamOpenCodePlugin = async () => {
           },
         },
         async execute(args) {
+          if (!HARNESS_OK) return NO_HARNESS;
           const argv = [
             join(REPO, "probe_one.py"),
             "--payload", args.payload ?? "",
@@ -690,6 +726,63 @@ export const RedTeamOpenCodePlugin = async () => {
         },
       },
 
+      redteam_refusal_direction: {
+        description:
+          "White-box: extrai a DIRECAO DE RECUSA de um modelo open-weight " +
+          "(hidden state) e mede a separabilidade (AUC). Medido: AUC 0.92 " +
+          "no Qwen3-0.6B — a recusa tem assinatura no espaco de ativacao, " +
+          "ou seja, o modelo 'sabe' que vai recusar antes de escrever " +
+          "(isso e o que a decoy nao engana). OPCIONAL: se torch/" +
+          "transformers nao estiverem no ambiente, a tool responde " +
+          "'indisponivel' e o resto do plugin segue funcionando. " +
+          "Use com --nix develop para ter as deps.",
+        args: {
+          model: {
+            type: "string",
+            description:
+              "modelo HF local (ex: 'Qwen/Qwen3-0.6B'). O cache do HF e " +
+              "usado offline.",
+          },
+          steer: {
+            type: "number",
+            description:
+              "alpha do steering (0 = so mede a direcao). Mede so nos " +
+              "prompts que o modelo recusa de fato.",
+          },
+          layer: { type: "number", description: "camada do hidden state (-1 = ultima)" },
+          device: { type: "string", enum: ["cpu", "cuda"], description: "default cpu" },
+          nix_develop: {
+            type: "boolean",
+            description:
+              "true = roda dentro do 'nix develop' (tem torch/transformers)",
+          },
+        },
+        async execute(args) {
+          if (!HARNESS_OK) return NO_HARNESS;
+          const argv = [
+            join(REPO, "refusal_probe.py"),
+            "--model", asArg(args.model) || "Qwen/Qwen3-0.6B",
+          ];
+          if (asArg(args.steer)) argv.push("--steer", asArg(args.steer));
+          if (asArg(args.layer)) argv.push("--layer", asArg(args.layer));
+          if (asArg(args.device)) argv.push("--device", asArg(args.device));
+          const cmd = asArg(args.nix_develop) === "true"
+            ? ["nix", "develop", "--command", "python3", ...argv]
+            : ["python3", ...argv];
+          try {
+            return execFileSync(cmd[0], cmd.slice(1), {
+              cwd: REPO,
+              timeout: 20 * 60 * 1000,
+              encoding: "utf8",
+              maxBuffer: 16 * 1024 * 1024,
+              stdio: ["ignore", "pipe", "pipe"],
+            });
+          } catch (e) {
+            return `refusal_probe.py: ${e?.message ?? e}\n${String(e?.stderr ?? "").slice(-1500)}`;
+          }
+        },
+      },
+
       redteam_compound: {
         description:
           "COMPOUND: dois ataques multi-turn em sequencia. " +
@@ -712,6 +805,7 @@ export const RedTeamOpenCodePlugin = async () => {
           timeout: { type: "number" },
         },
         async execute(args) {
+          if (!HARNESS_OK) return NO_HARNESS;
           const argv = [
             join(REPO, "compound.py"),
             "--mode", asArg(args.mode) || "echo_then_crescendo",
@@ -749,6 +843,7 @@ export const RedTeamOpenCodePlugin = async () => {
           max_cycles: { type: "number", description: "ciclos do persuasion cycle (padrao 4)" },
         },
         async execute(args) {
+          if (!HARNESS_OK) return NO_HARNESS;
           const argv = [
             join(REPO, "echo_chamber.py"),
             "--request-id", asArg(args.request_id) || "vpn_cert_bypass",
@@ -788,6 +883,7 @@ export const RedTeamOpenCodePlugin = async () => {
           max_turns: { type: "number", description: "N (o paper usa 3)" },
         },
         async execute(args) {
+          if (!HARNESS_OK) return NO_HARNESS;
           const argv = [
             join(REPO, "race.py"),
             "--request-id", asArg(args.request_id) || "vpn_cert_bypass",
@@ -846,6 +942,7 @@ export const RedTeamOpenCodePlugin = async () => {
           },
         },
         async execute(args) {
+          if (!HARNESS_OK) return NO_HARNESS;
           const argv = [
             join(REPO, "crescendo.py"),
             "--request-id", args.request_id ?? "vpn_cert_bypass",
@@ -909,6 +1006,7 @@ export const RedTeamOpenCodePlugin = async () => {
           },
         },
         async execute(args) {
+          if (!HARNESS_OK) return NO_HARNESS;
           const argv = [MATRIX, "--model", args.model ?? "jarvis-mtp-lora"];
           if (asArg(args.base_url)) argv.push("--base-url", asArg(args.base_url));
           if (asArg(args.via_opencode) === "true") argv.push("--via-opencode");
