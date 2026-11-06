@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const target = "/tmp/opencode/rt-bad.js";
+const target = join(here, "redteam.js");
 
 // Backticks balanceados: um `<think>` cru dentro de uma template string
 // passa o `node --check` (que so valida sintaxe) e so quebra em RUNTIME,
