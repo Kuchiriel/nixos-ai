@@ -431,6 +431,10 @@ def pending(
         if kind in ("msg", "done", "handoff", "status"):
             if to and to in aliases:
                 addressed = True
+            # GRUPOS: o peer manda para "coordenacao" (todos os agentes da
+            # coordenacao) — sem isso a msg nao chegava em ninguem (06/11).
+            elif to and to.strip().lower() in ("coordenacao", "coord", "todos", "all", "*"):
+                addressed = True
             elif to == "*" and lane and str(payload.get("lane") or "") == lane:
                 addressed = True
             elif to and to == lane:
