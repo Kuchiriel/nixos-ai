@@ -14,6 +14,7 @@ import os
 import socket
 import struct
 import threading
+import time
 
 DEFAULT_SOCK = os.environ.get(
     "JARVIS_STT_SOCK",
@@ -90,22 +91,44 @@ class STTServer:
 
 
 def transcribe_warm(wav_path: str, sock_path: str = DEFAULT_SOCK,
-                    timeout: float = 120.0) -> str | None:
-    """Cliente: None = sem servidor (caller usa fallback subprocess)."""
-    try:
-        cli = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        cli.settimeout(timeout)
-        cli.connect(sock_path)
-        req = json.dumps({"wav": wav_path}).encode()
-        cli.sendall(struct.pack("!I", len(req)) + req)
-        (ln,) = struct.unpack("!I", _recv_exact(cli, 4))
-        resp = json.loads(_recv_exact(cli, ln).decode())
-        cli.close()
-        if resp.get("error"):
-            return None
-        return resp.get("text", "")
-    except Exception:
-        return None
+                    timeout: float = 120.0,
+                    connect_retries: int = 6,
+                    retry_delay: float = 0.08) -> str | None:
+    """Cliente: None = sem servidor (caller usa fallback subprocess).
+
+    (06/11) Retry no CONNECT: o servidor cria o arquivo de socket antes
+    de estar aceitando conexões — no build sandbox (carga) o connect
+    falhava e o teste `test_stt_server.py::test_roundtrip_over_socket`
+    quebrava o installCheck do pacote (AssertionError None == 'OI STT').
+    Também cobre o caso real: daemon do STT subindo junto com a chamada.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(max(1, connect_retries)):
+        cli = None
+        try:
+            cli = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            cli.settimeout(timeout)
+            cli.connect(sock_path)
+            req = json.dumps({"wav": wav_path}).encode()
+            cli.sendall(struct.pack("!I", len(req)) + req)
+            (ln,) = struct.unpack("!I", _recv_exact(cli, 4))
+            resp = json.loads(_recv_exact(cli, ln).decode())
+            cli.close()
+            if resp.get("error"):
+                return None
+            return resp.get("text", "")
+        except Exception as e:  # noqa: BLE001 — cliente degrada p/ None
+            last_exc = e
+            if cli is not None:
+                try:
+                    cli.close()
+                except Exception:
+                    pass
+            if attempt + 1 < max(1, connect_retries):
+                time.sleep(retry_delay)
+            else:
+                break
+    return None
 
 
 if __name__ == "__main__":
