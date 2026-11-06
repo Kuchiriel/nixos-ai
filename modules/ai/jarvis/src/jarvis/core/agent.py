@@ -89,7 +89,7 @@ def _registry_tier_profile(model_id: str) -> dict[str, Any] | None:
         return {"name": "large", "max_tokens": 768, **base}
     if entry.tier == "fast":
         # (06/11, LATÊNCIA) teto de 1024 tokens/turn no tier fast (4B-MTP
-        # do default). ctx//12 com ctx=16384 dava 1365 → o 4B Rambla até
+        # do default). ctx//12 com o ctx novo dava 1365 → o 4B rambla até
         # o cap e o harness gastava 3 rodadas (medido: 171s numa task
         # simples). 1024 ainda cabe um write médio (lição L8) e corta o
         # pior caso pela metade.

@@ -244,14 +244,13 @@ def test_probe_session_uses_profile_detected_max_tokens_and_temperature(tmp_path
     # O teste fixava 2048 e passou a falhar quando o default virou o 4B-MTP
     # (mudança de 02/11) — o comportamento certo é "budget do perfil", não
     # um número fixo.
-    from jarvis.core.model_registry import ModelRegistry  # noqa: PLC0415
+    # (06/11) A verdade é o PERFIL do tier (registry + teto do fast tier
+    # em core/agent.py), não um número fixo nem o ctx cru: o harness tem
+    # que enviar exatamente o max_tokens do perfil detectado.
+    from jarvis.core.agent import _registry_tier_profile  # noqa: PLC0415
 
-    _entry = ModelRegistry.load().get(cfg.llm_model)
-    _esperado = 2048
-    if _entry is not None:
-        from jarvis.core.context_budget import ctx_derived_max_tokens  # noqa: PLC0415
-
-        _esperado = ctx_derived_max_tokens((_entry.raw or {}).get("ctx"))
+    _perfil = _registry_tier_profile(cfg.llm_model)
+    _esperado = _perfil["max_tokens"] if _perfil else 2048
     assert payload["max_tokens"] == _esperado
     assert payload["temperature"] == 0.0
 
