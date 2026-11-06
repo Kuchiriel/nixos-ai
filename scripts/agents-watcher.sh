@@ -526,8 +526,14 @@ print(" | ".join(m for m in msgs if m)[:600])
             continue
         fi
         [ -z "$MOTIVO" ] && { log "idle-quiet delta=$DELTA end=$END"; continue; }
-        if hora_quieta; then
-            log "quiet ${QUIET_DE}h-${QUIET_ATE}h (wake suprimido) end=$END"
+        # (06/11/2026) A JANELA QUIETA NAO SUPRIME TAREFA DO BUS: o dono pediu
+        # que as IAs se mantenham vivas enquanto ele dorme ("alguem tem que
+        # manter vcs vivas"). Tarefa ENDERECADA no bus e' trabalho de verdade
+        # (o wake vai por API: nao rouba foco, nao digita na caixa do humano) =>
+        # pode acordar de madrugada. O que a janela quieta continua suprimindo e'
+        # o wake por EVENTO/IDLE-PROSPECCAO (ruido de madrugada, sem tarefa).
+        if hora_quieta && [ "${MOTIVO#bus: }" = "$MOTIVO" ]; then
+            log "quiet ${QUIET_DE}h-${QUIET_ATE}h (wake suprimido; tarefa do bus NAO e' suprimida) end=$END"
             continue
         fi
         # (02/11) WAKE VIA API: a mensagem entra NA SESSÃO do agente e ele

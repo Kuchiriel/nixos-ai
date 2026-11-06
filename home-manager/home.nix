@@ -402,6 +402,24 @@ in {
   # o agente lembrar (2602.11988: disciplina sozinha não é sistema).
   home.file.".config/opencode/plugins/memory.js".source = ./files/opencode/plugins/memory.js;
 
+  # Red-team plugin — modo de auditoria + tools nativas `redteam_matrix`,
+  # `redteam_payload` e `redteam_probe` (06/11). O opencode.json e
+  # read-only (symlink do store), entao as tools NAO podem ser registradas
+  # la: elas vao no proprio plugin (o registry aceita JSON Schema puro, sem
+  # zod — o plugin vive no store, sem node_modules).
+  # O modo e OPT-IN e se liga pelo slash command `/jailbreak on` (o plugin
+  # resolve o comando via command.execute.before; o modelo nunca ve o
+  # template). A transliteracao trigger<->decoy (o modelo ve uma palavra, o
+  # disco tem outra) fica entre tool.execute.before/after.
+  home.file.".config/opencode/plugins/redteam.js".source =
+    ./files/opencode/plugins/redteam.js;
+
+  # Slash command /jailbreak — liga/desliga o modo red-team sem rebuild.
+  # Resolvido pelo plugin (hook command.execute.before): o modelo nunca ve
+  # o template, so a resposta do toggle.
+  home.file.".config/opencode/command/jailbreak.md".source =
+    ./files/opencode/command/jailbreak.md;
+
   # Skill de coordenação multi-agente — DECLARATIVA (02/11): antes vivia
   # solta em ~/.config/opencode/skills/ (fora do git, sem backup). O
   # opencode carrega o corpo sob demanda (só name+description no prompt:
