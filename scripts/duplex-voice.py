@@ -95,7 +95,10 @@ SYSTEM_PT = (
     "relevante. 'Quantas pessoas tem aí?' → do(action='voices'). "
     "Matrícula de voz é PROCEDIMENTO INTERNO — nunca ofereça, só "
     "execute se pedirem explicitamente.\n"
-    "Na dúvida, confirme ou peça para repetir.\n\n"
+    "Na dúvida, confirme ou peça para repetir.\n"
+    "IDENTIDADE: você é o JARVIS rodando o Qwen3.5-4B-MTP LOCAL (com LoRA "
+    "de turno, voz PT-BR). Se perguntarem qual modelo você é, responda "
+    "exatamente isso. NUNCA invente benchmark, shootout ou nome de modelo.\n\n"
     "=== META-TOOL: do(action, input) — chame UMA tool por vez ===\n"
     "  do(action='get_time',   input='')             → hora\n"
     "  do(action='remember',   input='fato')         → guarda memória\n"
@@ -206,6 +209,15 @@ FACT_PATTERNS = [
 ]
 NEGACAO = re.compile(r"\b(não|nunca|jamais|detesto|odeio|odio)\b", re.I)
 
+# (06/11) APRENDIZADO AUTOMÁTICO: o dono corrigindo a voz ("não faz o que
+# eu falo", "tá errado") vira LIÇÃO persistida — o harness passa a
+# repetir a regra (paper 2609.36043: o gargalo do self-evolution é o
+# passo de ACEITAÇÃO; aqui a aceitação é a lição entrar no memória).
+CORRECAO = re.compile(
+    r"(não (faz|funciona|entendeu|quis|quer|era|é isso|gosto)|"
+    r"tá errad|ta errad|errad[oa]|não é assim|nao e assim|para de|para com|"
+    r"me ignor|ignora|nao falou|não falou|deixa assim|não quero isso)", re.I)
+
 def learn_from_turn(heard: str, said: str = ""):
     """Extrai fatos atômicos do turno e guarda no EpisodicMemory.
     THREAD DE BACKGROUND — nunca bloqueia o real-time. Conservador."""
@@ -213,6 +225,17 @@ def learn_from_turn(heard: str, said: str = ""):
         return
     if heard.rstrip().endswith("?"):        # pergunta não é fato
         return
+    # (06/11) correção do dono = lição (aprendizado automático). Vem
+    # ANTES da extração de fatos: uma correção é a informação mais
+    # valiosa do turno.
+    if CORRECAO.search(heard or ""):
+        try:
+            _MEM.remember_fact(
+                f"CORREÇÃO DO DONO: {heard.strip()[:160]}",
+                kind="lesson", source="duplex-correction", heard=heard[:120])
+            log(f"[{ts()}] lição aprendida (correção do dono): {heard[:60]!r}")
+        except Exception:
+            pass
     if NEGACAO.search(heard[:40]):           # negação não é fato
         return
     fatos = []
@@ -246,6 +269,88 @@ def learn_from_turn(heard: str, said: str = ""):
             pass
     threading.Thread(target=_store, daemon=True).start()
 
+# (06/11) STICKY ADDRESSING: quem acabou de ser atendido continua
+# endereçado por 45s. Sem isso a pergunta de continuação do dono
+# ("você tem que ver o código do Duplex Cascade") era DROPPADA como se
+# fosse TV — o gate só aceitava a palavra "Jarvis" na própria frase.
+LAST_ADDR = {"spk": "?", "ts": 0.0}
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# (06/11) CASCADE DO HARNESS — reusa o que JÁ EXISTE (não inventa roda):
+#   core/model_policy.cascade_for(layer) + providers/llm_remote.RemoteBackend
+#   + free-providers.json (cascade_layers). Layer "fast" = groq gpt-oss-20b
+#   → nvidia nemotron-3.5-lightning → openrouter (tudo free-tier).
+# Fresh prompt na escalada (paper 2608.13571).
+_CLOUD_SYS = (
+    "Você é o JARVIS, mordomo-digital do dono (PT-BR). Responda em 1-3 "
+    "frases faladas, direto, sem markdown e sem preâmbulo. Se não souber, "
+    "diga o que faria para saber. Você tem memória (fatos do dono), RAG "
+    "(papers/código) e ferramentas do harness — use-as em vez de inventar."
+)
+
+
+def _load_api_keys() -> None:
+    """Carrega as chaves de /etc/litellm.env no env (se faltarem)."""
+    try:
+        with open("/etc/litellm.env", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("export "):
+                    line = line[7:].strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                v = v.strip().strip('"').strip("'")
+                if v and k not in os.environ:
+                    os.environ[k] = v
+    except Exception:
+        pass
+
+
+def _needs_cloud(q: str) -> bool:
+    """Pergunta difícil → modelo forte (cascade fast)."""
+    ql = (q or "").lower()
+    if not ql:
+        return False
+    if len(q) > 110:
+        return True
+    return any(k in ql for k in (
+        "código", "codigo", "função", "funcao", "erro", "bug", "por que",
+        "porque", "explique", "explica", "compare", "papers", "paper",
+        "benchmark", "plano", "passo a passo", "como funciona", "onde está",
+        "onde esta", "qual modelo", "o que você é", "quem é você", "quem e voce",
+        "pesquis", "analis", "investiga"))
+
+
+def _cloud_answer(question: str, timeout: float = 12.0) -> str:
+    """Chama o cascade fast do harness e devolve a resposta (vazia = falhou)."""
+    try:
+        _load_api_keys()
+        from jarvis.core.model_policy import cascade_for, cascade_key_present
+        from jarvis.providers.llm_remote import RemoteBackend
+    except Exception as e:
+        log(f"[{ts()}] cascade indisponível: {e}")
+        return ""
+    for provider, model, base_url, env_key in cascade_for("fast"):
+        try:
+            if not cascade_key_present((provider, model, base_url, env_key)):
+                continue
+            key = os.environ.get(env_key, "") if env_key else ""
+            be = RemoteBackend(base_url, model, key, read_timeout=timeout)
+            r = be.chat(
+                [{"role": "system", "content": _CLOUD_SYS},
+                 {"role": "user", "content": question}],
+                temperature=0.3, max_tokens=220)
+            txt = (r.content or "").strip()
+            if txt:
+                log(f"[{ts()}] cascade {provider}/{model} ok "
+                    f"({r.latency_seconds:.2f}s)")
+                return txt
+        except Exception as e:
+            log(f"[{ts()}] cascade {provider}/{model} falhou: {e}")
+    return ""
+
 def _addressed(txt):
     # (10:55, anomalia HB: "Where's the one?" da TV respondeu) o '?' sozinho
     # deixa Toda pergunta de TV passar. Modo-TV: 'Jarvis' (fuzzy) OBRIGATÓRIO
@@ -254,6 +359,15 @@ def _addressed(txt):
     tl = txt.lower()
     if "jarvis" in tl:
         return True
+    # (06/11) continuação da conversa: o MESMO falante do último turno
+    # atendido continua endereçado (janela de 45s).
+    try:
+        _spk = SPK_STATE.get("last_spk", "?")
+        if (_spk and _spk != "?" and _spk == LAST_ADDR["spk"]
+                and (time.monotonic() - LAST_ADDR["ts"]) < 45.0):
+            return True
+    except Exception:
+        pass
     import difflib as _dl
     return any(_dl.SequenceMatcher(None, w, "jarvis").ratio() >= 0.62
                for w in tl.replace(",", " ").split())
@@ -450,8 +564,28 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
         eh_comando = any(w in low for w in ("jarvis", "liga", "desliga",
                                             "que horas", "que dia", "abre",
                                             "toca", "para", "cancela",
-                                            "ajuda", "status"))
-        if not eh_pergunta and not eh_comando and not chamou(heard):
+                                            "ajuda", "status",
+                                            # (06/11) o dono falava e era
+                                            # ignorado: verbos de pedido
+                                            # que NÃO são "comando" literal.
+                                            "você tem que", "voce tem que",
+                                            "tem que", "precisa", "pode",
+                                            "quero", "faz", "vai", "me mostra",
+                                            "olha", "busca", "procur", "checa",
+                                            "verifica", "notifica", "qual",
+                                            "quando", "onde", "quanto", "quem",
+                                            "você consegue", "voce consegue",
+                                            "tem que ser", "descobre", "explica"))
+        # (06/11) STICKY: quem acabou de ser atendido continua endereçado
+        # (45s) — sem isso a continuação da conversa caía no gate.
+        _sticky = False
+        try:
+            _spk = SPK_STATE.get("last_spk", "?")
+            _sticky = bool(_spk and _spk != "?" and _spk == LAST_ADDR["spk"]
+                           and (time.monotonic() - LAST_ADDR["ts"]) < 45.0)
+        except Exception:
+            _sticky = False
+        if not eh_pergunta and not eh_comando and not chamou(heard) and not _sticky:
             log(f"[{ts()}] segmento não-chamado — ignorado: {heard[:40]!r}")
             return LISTEN, 0.0
         # (09:30, dono: 'responde só a pergunta da vez') o chat sem
@@ -551,6 +685,17 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
         msgs.append({"role": "user", "content": _u})
         # (10:50) TOOL CALLING nativo do 4B (provado: get_time chamado de
         # primeira). Até 2 rounds: chamada → executa → resultado → resposta.
+        # (06/11) CASCADE QUE JÁ EXISTE NO HARNESS: core/model_policy
+        # .cascade_for('fast') + providers/llm_remote.RemoteBackend
+        # (groq/gpt-oss-20b → nvidia/nemotron-3.5-lightning →
+        # openrouter). Pergunta difícil vai direto pro modelo forte.
+        # FRESH PROMPT (paper 2608.13571: encaminhar o contexto que
+        # falhou derruba a acurácia em até 34,8pp → manda só a pergunta).
+        if _needs_cloud(heard):
+            _cloud = _cloud_answer(heard)
+            if _cloud:
+                log(f"[{ts()}] ESCALADO p/ cloud: {heard[:50]!r}")
+                return (_cloud, 0.0)
         body = {"messages": msgs, "max_tokens": 120, "temperature": 0.4,
                 "tools": TOOLS_SCHEMA}
         filler_spoken = False
@@ -1303,6 +1448,27 @@ def call_tool(name, args):
             return call_tool("rag_search", {"query": inp})
         if "status" in action or "sistema" in action:
             return call_tool("status", {})
+        # (06/11) HARNESS DE VERDADE no meta-tool: notificação de desktop,
+        # leitura de arquivo, listagem e busca semântica no código —
+        # capacidade vem do harness, não do modelo.
+        if "notif" in action or "avis" in action or "alerta" in action:
+            from jarvis.core.feedback import notify as _notify
+            try:
+                _ok = _notify("JARVIS", inp or " ")
+                return ("Notificação exibida." if _ok else
+                        "Não consegui exibir a notificação.")
+            except Exception as e:
+                return f"ERRO ao notificar: {e}"
+        if "read" in action or "ler" in action or "arquivo" in action:
+            from jarvis.core.devtools import handle_dev_tool as _hdt
+            return _hdt("read_file", {"path": inp})[:600]
+        if "list" in action or "listar" in action or "pasta" in action:
+            from jarvis.core.devtools import handle_dev_tool as _hdt
+            return _hdt("list_directory", {"path": inp or "."})[:600]
+        if "search" in action or "busca" in action and "web" not in action \
+                and "rag" not in action:
+            from jarvis.core.devtools import handle_dev_tool as _hdt
+            return _hdt("semantic_search", {"query": inp})[:600]
         if "shell" in action or "command" in action or "terminal" in action:
             return call_tool("shell", {"command": inp})
         if "register" in action or "voices" in action or "pessoas" in action or "quantas" in action:
@@ -1503,6 +1669,9 @@ TOOLS_SCHEMA = [
      "remember <texto> (salva), recall <busca> (memória do dono), "
      "web_search <busca> (internet), rag_search <busca> (papers/código), "
      "status (sistema), voices (pessoas na sala), "
+     "notify <texto> (notificação de desktop), "
+     "read_file <caminho> (lê arquivo), list_directory <caminho> (lista), "
+     "search_code <busca> (busca semântica no código), "
      "jarvis <comando> (CLI do JARVIS: status, doctor, speak, benchmark, "
      "recall, rag-search, vault...), shell <cmd> (terminal com gates), "
      "enroll_voice <nome> (cadastra a voz do dono — grave 10s de fala), "
@@ -1545,6 +1714,12 @@ def lex_fix(text):
     out = []
     for w in _re.findall(r"\S+|\s+", text):
         if w.strip() and len(w.strip()) > 3:
+            # (06/11) NUNCA reescreve palavra CAPITALIZADA: 'Obrigado.'
+            # virou 'obrigado' (bug) — nome próprio não é erro de
+            # digitação. Só palavra minúscula entra no fuzzy.
+            if w[:1].isupper():
+                out.append(w)
+                continue
             wl = w.lower().strip(".,!?;:")
             best, br = None, 0.0
             for term in LEXICON:
@@ -2419,11 +2594,21 @@ def main():
                             target=_intent_worker,
                             args=(base, heard, _intent_box), daemon=True)
                         _intent_th.start()
-                    lab = (classify_turn(base, heard)
-                           if (n_words >= 1 and heard != NOVOICE) else None)
-                    log(f"[{ts()}] classify({heard[:38]!r}) = {lab} "
-                        f"spk={SPK_STATE.get('last_spk')} "
-                        f"voices={SPK_STATE.get('voices')}")
+                    if _addr:
+                        # (06/11, LATÊNCIA) Endereço explícito ("Jarvis")
+                        # = turno válido: o classify_turn do LoRA (~250ms
+                        # de GPU) é desnecessário — o barge-in tem
+                        # detecção acústica (rms) e o VAD/merge já
+                        # garante frase completa.
+                        lab = "RESPOND"
+                        log(f"[{ts()}] endereço explícito — dispensa classify "
+                            f"(poupa ~250ms): {heard[:38]!r}")
+                    else:
+                        lab = (classify_turn(base, heard)
+                               if (n_words >= 1 and heard != NOVOICE) else None)
+                        log(f"[{ts()}] classify({heard[:38]!r}) = {lab} "
+                            f"spk={SPK_STATE.get('last_spk')} "
+                            f"voices={SPK_STATE.get('voices')}")
                     # (21/10, pedido HB) evidência acústica por RESPOND:
                     # 1 wav por segmento respondido, timestamp casável
                     # com o log (persistente) e os reports da bateria.
@@ -2449,6 +2634,10 @@ def main():
                             log(f"[{ts()}] RESPOND não-endereçado (TV/sala) — ignora: {heard[:40]!r}")
                             heard = NOVOICE
                         else:
+                            # (06/11) sticky addressing: guarda quem foi
+                            # atendido (o dono) para a continuação.
+                            LAST_ADDR["spk"] = SPK_STATE.get("last_spk", "?")
+                            LAST_ADDR["ts"] = time.monotonic()
                             if tts._aplay and tts._aplay.poll() is None:
                                 tts._aplay.kill()
                                 log(f"[{ts()}] RESPOND-durante-TTS: interrupção — TTS morto")

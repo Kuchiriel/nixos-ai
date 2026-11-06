@@ -7,6 +7,7 @@ local trava (STUCK) ou cai — camadas em model_policy.CASCADE_MAP.
 """
 from __future__ import annotations
 
+import re
 import time
 from typing import Any
 
@@ -48,7 +49,16 @@ class RemoteBackend(LLMBackend):
         session=None,
         provider: str = "remote",
     ):
-        self._base_url = base_url.rstrip("/")
+        # (06/11) NORMALIZA A BASE — o cascade do harness (free-providers
+        # .json) já traz a URL COM a versão (".../openai/v1",
+        # ".../v1beta/openai") e este backend acrescentava "/v1" de novo
+        # → 404 em TODOS os provedores (a cascade existia mas nunca
+        # respondeu). Agora: se a base já tem segmento de versão, mantém;
+        # se não tem, acrescenta /v1 (o default do llm_factory).
+        _base = base_url.rstrip("/")
+        if not re.search(r"/v\d", _base):
+            _base += "/v1"
+        self._base_url = _base
         self._model = model
         self._api_key = api_key
         self._connect_timeout = connect_timeout
@@ -92,7 +102,7 @@ class RemoteBackend(LLMBackend):
             if tool_choice:
                 payload["tool_choice"] = tool_choice
         resp = self._session.post(
-            f"{self._base_url}/v1/chat/completions",
+            f"{self._base_url}/chat/completions",
             json=payload,
             timeout=(self._connect_timeout, self._read_timeout),
         )
@@ -121,7 +131,7 @@ class RemoteBackend(LLMBackend):
 
     def health(self, timeout: float = 3.0) -> bool:
         try:
-            r = self._session.get(f"{self._base_url}/v1/models",
+            r = self._session.get(f"{self._base_url}/models",
                                   timeout=timeout)
             return r.status_code == 200
         except Exception:
