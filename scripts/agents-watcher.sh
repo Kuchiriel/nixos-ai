@@ -133,24 +133,15 @@ backoff_seg() { # $1=chave do agente → segundos de fallback efetivo
 
 # (01/11) atividade REAL do agente no store do opencode (part = cada tool call
 # e trecho de resposta). Somente leitura (mode=ro); falha aberta = sem sinal.
+# (06/11/2026) BUG CORRIGIDO: a consulta pegava MAX(time_updated) da tabela
+# `part` SEM filtrar por sessao. Como QUALQUER agente que escrevesse uma part
+# (inclusive a propria IA que esta acordada) deixava o max global recente,
+# TODAS as sessoes apareciam "vivas" => nunca havia idle => NUNCA houve wake
+# => o watcher "nao fazia nada" (sintoma do dono em 06/11/2026).
+# Agora: vivo = a PROPRIA sessao produziu part nova na janela.
 agente_vivo_db() {
     [ -f "$DB_PATH" ] || return 1
-    python3 - "$DB_PATH" "$DB_ALIVE" <<'PYEOF' 2>/dev/null
-import sqlite3, sys, time
-db, janela = sys.argv[1], int(sys.argv[2])
-try:
-    c = sqlite3.connect(f'file:{db}?mode=ro', uri=True)
-    r = c.execute("SELECT MAX(time_updated), MAX(time_created) FROM part").fetchone()
-    if not r:
-        sys.exit(1)
-    now = int(time.time() * 1000)
-    for t in r:
-        if t and now - t <= janela * 1000:
-            sys.exit(0)
-    sys.exit(1)
-except Exception:
-    sys.exit(1)
-PYEOF
+    python3 "$SCRIPT_DIR/agent-db-alive.py" "$DB_PATH" "$DB_ALIVE" "${1:-}" 2>/dev/null
 }
 
 notifica() { [ -n "$NOTIFY" ] && "$NOTIFY" "$1" >/dev/null 2>&1 || true; }
@@ -344,7 +335,7 @@ print(len([a for a in d.get("agents", []) if a.get("state") == "live"]))
         # (01/11) agente VIVO por atividade real (store do opencode)? O idle de
         # CPU so indica que nao ha PROCESSO consumindo CPU - nao que o agente
         # esteja parado (comando longo bloqueia o TUI sem CPU). Vivo = nao acorda.
-        if agente_vivo_db; then
+        if agente_vivo_db "$SESSAO"; then
             _w=$(cat "$DIR_ST/work.$CHAVE" 2>/dev/null || echo 0)
             _w=$(( _w + INTERVALO ))
             [ "$CHECK" -eq 1 ] || { echo "$_w" > "$DIR_ST/work.$CHAVE"; }
