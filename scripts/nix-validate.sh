@@ -64,7 +64,10 @@ validate_syntax() {
   local failed=0
   local checked=0
   
-  # Find all .nix files
+  # Find all .nix files — só a ÁRVORE PRINCIPAL. (06/11) worktrees de
+  # outros agentes (.worktrees/*) e node_modules NÃO fazem parte do
+  # flake: um .nix em rascunho dentro de um worktree travava o rebuild
+  # do dono com "Syntax error" que não é do build real.
   while IFS= read -r -d '' file; do
     checked=$((checked + 1))
     if ! nix-instantiate --parse "$file" > /dev/null 2>&1; then
@@ -74,7 +77,8 @@ validate_syntax() {
       fi
       failed=$((failed + 1))
     fi
-  done < <(find "$FLAKE_DIR" -name "*.nix" -not -path "*/result*" -not -path "*/.git/*" -print0 2>/dev/null)
+  done < <(find "$FLAKE_DIR" -name "*.nix" -not -path "*/result*" -not -path "*/.git/*" \
+      -not -path "*/.worktrees/*" -not -path "*/node_modules/*" -print0 2>/dev/null)
   
   if [[ $failed -gt 0 ]]; then
     fail "Syntax check: $failed errors in $checked files"
