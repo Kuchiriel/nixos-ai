@@ -353,3 +353,38 @@ class TestCrossMachineAndCacheCoherence:
         out = coord_roster.send_message("crouton-alpha", "oi do celular")
         assert posted["to"] == "crouton-alpha"
         assert "bus" in out
+
+
+class TestAliasAddressing:
+    """06/11/2026: o bus endereca por codinome, mas o roster tambem tem NOME.
+
+    Quem escreve manda pelo nome natural ('opencode-matheus'); o watcher
+    resolve o codinome ('Onca') e comparava so com ele => a mensagem nao
+    chegava em ninguem (o dono: 'ele mandou pra todo mundo menos vc').
+    """
+
+    def test_pending_accepts_roster_name(self, coord, monkeypatch):
+        from jarvis.core import coord_roster
+        monkeypatch.setattr(coord_roster, "roster_agents", lambda: [
+            {"name": "opencode-matheus", "codename": "Onca", "lane": "infra"},
+        ])
+        coord.invalidate_cache()
+        payloads = [{"kind": "msg", "agent": "Cervo", "to": "opencode-matheus",
+                     "lane": "infra", "ts": "2026-11-06T10:00:00Z",
+                     "note": "pelo nome do roster"}]
+        monkeypatch.setattr(coord, "bus_payloads", lambda force=False: payloads)
+        items = coord.pending(codename="Onca", agent="opencode-matheus")
+        assert len(items) == 1, "msg endereçada pelo NOME do roster nao chegou"
+
+    def test_pending_accepts_codename(self, coord, monkeypatch):
+        from jarvis.core import coord_roster
+        monkeypatch.setattr(coord_roster, "roster_agents", lambda: [
+            {"name": "opencode-matheus", "codename": "Onca", "lane": "infra"},
+        ])
+        coord.invalidate_cache()
+        payloads = [{"kind": "msg", "agent": "Cervo", "to": "Onca",
+                     "lane": "infra", "ts": "2026-11-06T10:00:00Z",
+                     "note": "pelo codinome"}]
+        monkeypatch.setattr(coord, "bus_payloads", lambda force=False: payloads)
+        items = coord.pending(codename="Onca")
+        assert len(items) == 1
