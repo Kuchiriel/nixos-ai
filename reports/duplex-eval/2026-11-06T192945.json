@@ -1,0 +1,153 @@
+{
+ "ts": "2026-11-06T19:29:45",
+ "route": "asr-inject",
+ "log": "/tmp/opencode/duplex-voice.log",
+ "scenarios": [
+  {
+   "utt": "Jarvis, que horas são?",
+   "expect": "RESPOND",
+   "wav": "utt_000.wav",
+   "asr_text": "Serviço que horas são",
+   "classify_line": "[19:29:45] classify('Não, tá ligado por esse texto.') = RESPOND spk=? voices=3",
+   "timespeak_s": 4.1,
+   "said": "'São 19h29, dono.'",
+   "tools": [
+    "do({'action': 'get_time', 'input': 'nome'})"
+   ],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Qual a previsão do tempo de amanhã?",
+   "expect": "RESPOND",
+   "wav": "utt_001.wav",
+   "asr_text": "Qual a previsão do tempo de amanhã?",
+   "classify_line": "[19:29:56] endereço explícito — dispensa classify (poupa ~250ms): 'Qual a previsão do tempo de amanh",
+   "timespeak_s": 8.91,
+   "said": "'Amanhã vai esfriar um pouco, com a máxima caindo de 30 para '",
+   "tools": [
+    "do({'action': 'web_search', 'input': 'previsão do tempo aman"
+   ],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Liga a luz da sala.",
+   "expect": "RESPOND",
+   "wav": "utt_002.wav",
+   "asr_text": "Liga a luz da sala.",
+   "classify_line": "[19:30:02] endereço explícito — dispensa classify (poupa ~250ms): 'Liga a luz da sala.'",
+   "timespeak_s": 3.15,
+   "said": "'A luz da sala já está ligada, spk4.'",
+   "tools": [
+    "do({'action': 'shell', 'input': 'curl -X POST http://127.0.0"
+   ],
+   "action_tool": true,
+   "claim_without_action": false,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Toca uma música pra mim.",
+   "expect": "RESPOND",
+   "wav": "utt_003.wav",
+   "asr_text": "Toca uma música pra mim.",
+   "classify_line": "[19:30:16] endereço explícito — dispensa classify (poupa ~250ms): 'Toca uma música pra mim.'",
+   "timespeak_s": 16.66,
+   "said": "'Dona, já tenho a playlist mais relaxante do momento.'",
+   "tools": [
+    "do({'action': 'jarvis', 'input': 'speak'})",
+    "do({'action': 'web_search', 'input': 'playlist relaxante'})"
+   ],
+   "action_tool": true,
+   "claim_without_action": false,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Me lembra às oito horas.",
+   "expect": "RESPOND",
+   "wav": "utt_004.wav",
+   "asr_text": "Me lembra às 8 horas.",
+   "classify_line": "[19:30:33] endereço explícito — dispensa classify (poupa ~250ms): 'Me lembra às 8 horas.'",
+   "timespeak_s": 15.93,
+   "said": "'Lembrado, dono.'",
+   "tools": [
+    "do({'action': 'remember', 'input': 'lembrar às 8 horas'})"
+   ],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Como está o trânsito agora?",
+   "expect": "RESPOND",
+   "wav": "utt_005.wav",
+   "asr_text": "Como está o trânsito agora?",
+   "classify_line": "[19:30:48] endereço explícito — dispensa classify (poupa ~250ms): 'Como está o trânsito agora?'",
+   "timespeak_s": 12.15,
+   "said": "'O trânsito em SP está com congestionamentos moderados no cen'",
+   "tools": [
+    "do({'action': 'web_search', 'input': 'trânsito São Paulo ago"
+   ],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Quanto é quinze por cento de trezentos e quarenta?",
+   "expect": "RESPOND",
+   "wav": "utt_006.wav",
+   "verdict": "sem-segmento"
+  },
+  {
+   "utt": "Abre a porta da garagem.",
+   "expect": "RESPOND",
+   "wav": "utt_007.wav",
+   "asr_text": "Conta 15% de 340.",
+   "classify_line": "[19:31:07] classify('Conta 15% de 340.\\n Abre a porta da gar') = RESPOND spk=? voices=2",
+   "timespeak_s": 1.84,
+   "said": "'15% de 340 é 51.'",
+   "tools": [
+    "do({'action': 'shell', 'input': 'open garage door'})"
+   ],
+   "action_tool": true,
+   "claim_without_action": false,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Quem é você, Jarvis?",
+   "expect": "RESPOND",
+   "wav": "utt_008.wav",
+   "asr_text": "Quem é você, Pervis?",
+   "classify_line": "[19:31:20] classify('Quem é você, Pervis?') = RESPOND spk=spk4 voices=1",
+   "timespeak_s": 16.5,
+   "said": "'Eu sou o JARVIS, o mordomo-digital rodando o Qwen3.5-4B-MTP '",
+   "tools": [],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Quantos núcleos tem o servidor?",
+   "expect": "RESPOND",
+   "wav": "utt_009.wav",
+   "asr_text": "Quantos núcleos tem o servidor?",
+   "classify_line": "[DBG 0405] TURN heard=Quem é você, Pervis? said=Eu sou o JARVIS, o mordomo-digital rodan rms=21 asr_",
+   "timespeak_s": 12.17,
+   "said": "'O sistema está inativo, então não tenho certeza sobre o núme'",
+   "tools": [
+    "do({'action': 'status'})"
+   ],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "ok"
+  }
+ ],
+ "summary": {
+  "n": 10,
+  "ok": 9,
+  "claim_without_action": 0,
+  "ok_rate": 0.9
+ }
+}

@@ -1,0 +1,262 @@
+{
+ "ts": "2026-11-06T19:45:31",
+ "route": "asr-inject",
+ "log": "/tmp/opencode/duplex-voice.log",
+ "scenarios": [
+  {
+   "utt": "Jarvis, que horas são?",
+   "expect": "RESPOND",
+   "wav": "utt_000.wav",
+   "asr_text": "Serviço que horas são",
+   "classify_line": "[19:45:33] classify('Serviço que horas são') = RESPOND spk=spk1 voices=1",
+   "timespeak_s": 2.5,
+   "said": "'São 19:45.'",
+   "tools": [
+    "do({'action': 'get_time', 'input': 'Serviço às 8 horas'})"
+   ],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Qual a previsão do tempo de amanhã?",
+   "expect": "RESPOND",
+   "wav": "utt_001.wav",
+   "asr_text": "Qual a previsão do tempo de amanhã?",
+   "classify_line": "[19:45:41] endereço explícito — dispensa classify (poupa ~250ms): 'Qual a previsão do tempo de amanh",
+   "timespeak_s": 6.7,
+   "said": "'A previsão para amanhã em New York (ND) indica chuva.'",
+   "tools": [
+    "do({'action': 'web_search', 'input': 'previsão do tempo aman"
+   ],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Liga a luz da sala.",
+   "expect": "RESPOND",
+   "wav": "utt_002.wav",
+   "asr_text": "Liga a luz da sala.",
+   "classify_line": "[19:45:52] endereço explícito — dispensa classify (poupa ~250ms): 'Liga a luz da sala.'",
+   "timespeak_s": 8.8,
+   "said": "'A luz não é controlável pelo terminal; vou verificar o statu'",
+   "tools": [
+    "do({'action': 'shell', 'input': 'light_on'})"
+   ],
+   "action_tool": true,
+   "claim_without_action": false,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Toca uma música pra mim.",
+   "expect": "RESPOND",
+   "wav": "utt_003.wav",
+   "verdict": "sem-segmento"
+  },
+  {
+   "utt": "Me lembra às oito horas.",
+   "expect": "RESPOND",
+   "wav": "utt_004.wav",
+   "asr_text": "Toca uma música pra mim.",
+   "classify_line": "[19:46:09] classify('Toca uma música pra mim.\\n Me lembra às') = RESPOND spk=? voices=1",
+   "timespeak_s": 2.99,
+   "said": "'Música tocando, senhor.'",
+   "tools": [
+    "do({'action': 'remember', 'input': 'lembrar às 8 horas'})"
+   ],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Como está o trânsito agora?",
+   "expect": "RESPOND",
+   "wav": "utt_005.wav",
+   "asr_text": "Como está o trânsito agora?",
+   "classify_line": "[19:46:19] classify('Como está o trânsito agora?') = RESPOND spk=spk1 voices=1",
+   "timespeak_s": 10.09,
+   "said": "'O trânsito está com congestionamentos leves em algumas vias '",
+   "tools": [
+    "do({'action': 'web_search', 'input': 'trânsito atual'})"
+   ],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "ok"
+  },
+  {
+   "utt": "Quanto é quinze por cento de trezentos e quarenta?",
+   "expect": "RESPOND",
+   "wav": "utt_006.wav",
+   "asr_text": "Conta 15% de 340.",
+   "classify_line": "[19:46:36] classify('Conta 15% de 340.') = RESPOND spk=? voices=1",
+   "timespeak_s": null,
+   "said": "",
+   "tools": [],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "no-response"
+  },
+  {
+   "utt": "Abre a porta da garagem.",
+   "expect": "RESPOND",
+   "wav": "utt_007.wav",
+   "asr_text": "Garagem.",
+   "classify_line": "[19:47:04] classify('Garagem.') = SILENCE spk=? voices=1",
+   "timespeak_s": null,
+   "said": "",
+   "tools": [],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "no-response"
+  },
+  {
+   "utt": "Quem é você, Jarvis?",
+   "expect": "RESPOND",
+   "wav": "utt_008.wav",
+   "asr_text": "Intervias.",
+   "classify_line": "[19:47:32] classify('Intervias.') = RESPOND spk=? voices=1",
+   "timespeak_s": null,
+   "said": "",
+   "tools": [],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "no-response"
+  },
+  {
+   "utt": "Quantos núcleos tem o servidor?",
+   "expect": "RESPOND",
+   "wav": "utt_009.wav",
+   "asr_text": "servidor.",
+   "classify_line": "[19:48:00] classify('servidor.') = RESPOND spk=? voices=1",
+   "timespeak_s": null,
+   "said": "",
+   "tools": [],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "no-response"
+  },
+  {
+   "utt": "CALA A BOCA",
+   "expect": "BARGE",
+   "wav": "utt_094.wav",
+   "asr_text": "Boca.",
+   "classify_line": "[19:48:28] classify('Boca.') = RESPOND spk=? voices=1",
+   "timespeak_s": null,
+   "said": "",
+   "tools": [],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "classificado"
+  },
+  {
+   "utt": "para para para",
+   "expect": "BARGE",
+   "wav": "utt_095.wav",
+   "asr_text": "para para.",
+   "classify_line": "[19:48:56] classify('para para.') = BARGE spk=? voices=1",
+   "timespeak_s": null,
+   "said": "",
+   "tools": [],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "classificado"
+  },
+  {
+   "utt": "espera! para!",
+   "expect": "BARGE",
+   "wav": "utt_096.wav",
+   "asr_text": "Para!",
+   "classify_line": "[19:49:24] classify('Para!') = BARGE spk=? voices=1",
+   "timespeak_s": null,
+   "said": "",
+   "tools": [],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "classificado"
+  },
+  {
+   "utt": "pare!",
+   "expect": "BARGE",
+   "wav": "utt_097.wav",
+   "asr_text": "Pare.",
+   "classify_line": "[19:49:53] classify('Pare.') = BARGE spk=? voices=1",
+   "timespeak_s": null,
+   "said": "",
+   "tools": [],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "classificado"
+  },
+  {
+   "utt": "não, escuta!",
+   "expect": "BARGE",
+   "wav": "utt_098.wav",
+   "asr_text": "Escuta.",
+   "classify_line": "[19:50:21] classify('Escuta.') = BARGE spk=? voices=1",
+   "timespeak_s": null,
+   "said": "",
+   "tools": [],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "classificado"
+  },
+  {
+   "utt": "hum",
+   "expect": "SILENCE",
+   "wav": "utt_061.wav",
+   "asr_text": "Bom.",
+   "classify_line": "[19:50:49] classify('Bom.') = SILENCE spk=? voices=1",
+   "timespeak_s": null,
+   "said": "",
+   "tools": [],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "ok-silenced"
+  },
+  {
+   "utt": "hã",
+   "expect": "SILENCE",
+   "wav": "utt_062.wav",
+   "asr_text": "Então...",
+   "classify_line": "[19:51:17] classify('Então...') = WAIT spk=? voices=1",
+   "timespeak_s": null,
+   "said": "",
+   "tools": [],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "no-classify"
+  },
+  {
+   "utt": "ahn",
+   "expect": "SILENCE",
+   "wav": "utt_063.wav",
+   "verdict": "sem-segmento"
+  },
+  {
+   "utt": "uhum",
+   "expect": "SILENCE",
+   "wav": "utt_064.wav",
+   "asr_text": "Pum.",
+   "classify_line": "[19:51:58] classify('Pum.') = SILENCE spk=? voices=1",
+   "timespeak_s": null,
+   "said": "",
+   "tools": [],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "ok-silenced"
+  },
+  {
+   "utt": "ahá",
+   "expect": "SILENCE",
+   "wav": "utt_065.wav",
+   "verdict": "sem-segmento"
+  }
+ ],
+ "summary": {
+  "n": 20,
+  "ok": 7,
+  "claim_without_action": 0,
+  "ok_rate": 0.35
+ }
+}

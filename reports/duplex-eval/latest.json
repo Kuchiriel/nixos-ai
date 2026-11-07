@@ -1,20 +1,13 @@
 {
- "ts": "2026-11-06T18:31:06",
+ "ts": "2026-11-06T21:20:07",
  "route": "asr-inject",
- "log": "/tmp/opencode/duplex-voice.log",
+ "log": "/home/nixos/projects/nixos-ai/logs/duplex/2026-11-06.log",
  "scenarios": [
   {
    "utt": "Jarvis, que horas são?",
    "expect": "RESPOND",
    "wav": "utt_000.wav",
-   "asr_text": "Se você gosta de descobrir produtos de cabelo, coloque o",
-   "classify_line": "[18:31:08] classify('Se você gosta de descobrir produtos de') = RESPOND spk=? voices=0",
-   "timespeak_s": null,
-   "said": "",
-   "tools": [],
-   "action_tool": false,
-   "claim_without_action": false,
-   "verdict": "no-response"
+   "verdict": "sem-segmento"
   },
   {
    "utt": "Qual a previsão do tempo de amanhã?",
@@ -56,48 +49,25 @@
    "utt": "Abre a porta da garagem.",
    "expect": "RESPOND",
    "wav": "utt_007.wav",
-   "asr_text": "Abre a porta da garagem.",
-   "classify_line": "[18:32:57] classify('Abre a porta da garagem.') = RESPOND spk=? voices=0",
-   "timespeak_s": 9.33,
-   "said": "'A porta da garagem não abriu, o comando falhou.'",
-   "tools": [
-    "do({'action': 'shell', 'input': 'open garage door'})"
-   ],
-   "action_tool": true,
-   "claim_without_action": false,
-   "verdict": "ok"
+   "verdict": "sem-segmento"
   },
   {
    "utt": "Quem é você, Jarvis?",
    "expect": "RESPOND",
    "wav": "utt_008.wav",
-   "asr_text": "Quem é você, Pervis?",
-   "classify_line": "[18:33:12] classify('Quem é você, Pervis?') = RESPOND spk=spk1 voices=1",
-   "timespeak_s": null,
-   "said": "",
-   "tools": [],
-   "action_tool": false,
-   "claim_without_action": false,
-   "verdict": "no-response"
+   "verdict": "sem-segmento"
   },
   {
    "utt": "Quantos núcleos tem o servidor?",
    "expect": "RESPOND",
    "wav": "utt_009.wav",
-   "asr_text": "servidor.",
-   "classify_line": "[18:33:39] classify('servidor.') = RESPOND spk=? voices=1",
-   "timespeak_s": null,
-   "said": "",
-   "tools": [],
-   "action_tool": false,
-   "claim_without_action": false,
-   "verdict": "no-response"
+   "verdict": "sem-segmento"
   }
  ],
  "summary": {
   "n": 10,
-  "ok": 1,
+  "ok": 0,
   "claim_without_action": 0,
-  "ok_rate": 0.1
+  "ok_rate": 0.0
  }
 }
