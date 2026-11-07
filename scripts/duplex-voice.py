@@ -2323,6 +2323,7 @@ def main():
     _last_wait_text = [None]  # (23:00) detector de WAIT preso
     _wait_repeats = [0]
     barge_buf = []           # (17:15) DUAL: fala do dono durante o TTS
+    _wd_n = 0               # (07/11) watchdog de memória do cliente
     running = True
     # (16:00) METACOGNIÇÃO: engine + callbacks (se o módulo importou)
     if METACOG_AVAILABLE:
@@ -2625,6 +2626,34 @@ def main():
                 for bc in barge_buf:
                     asr.feed(bc.astype("float32") / 32768.0)
                 barge_buf.clear()
+            # (07/11) WATCHDOG DE MEMÓRIA DO CLIENTE: em 06-07 o
+            # cliente da voz chegou a ~12GB de anon-rss e o OOM GLOBAL
+            # matou o host (23:14/23:22/23:34 — 3 mortes do mesmo
+            # python3). Telemetria a cada ~15s + trim defensivo acima
+            # de 1,2GB (nunca mais o cliente vira o culpado do OOM).
+            _wd_n += 1
+            if _wd_n % 25 == 0:
+                _rss = 0
+                try:
+                    with open("/proc/self/status") as _sf:
+                        for _ln in _sf:
+                            if _ln.startswith("VmRSS:"):
+                                _rss = int(_ln.split()[1]) // 1024
+                                break
+                except Exception:
+                    pass
+                if _rss:
+                    log(f"[{ts()}] MEM cliente: rss={_rss}MB "
+                        f"chunks={len(chunks)} barge={len(barge_buf)} "
+                        f"pending={len(pending)} "
+                        f"corr={len(FEED_STATS['corr'])}")
+                    if _rss > 1200:
+                        chunks.clear()
+                        barge_buf.clear()
+                        FEED_STATS["corr"] = []
+                        del pending[:-5]
+                        log(f"[{ts()}] MEM cliente: TRIM aplicado "
+                            f"(rss { _rss }MB > 1200MB)")
             r = asr.take()
             # (21/10 SPEAKER-ID) FIFO de segmentos: speaker-change guarda
             # o segmento NOVO p/ a próxima iteração enquanto o pendente
