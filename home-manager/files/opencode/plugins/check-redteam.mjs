@@ -195,6 +195,8 @@ if (!bad) {
     "o comando aceitou decoy de 1 char");
   check(run("term add alvo.exemplo alvo.exemplo outro").includes("igual ao termo"),
     "o comando aceitou decoy igual ao termo");
+  check(run("term add alvo.exemplo.gov alvo. exemplo. gov").includes("pedaco do termo"),
+    "o comando aceitou decoy que e fatia do termo (remontaria o termo)");
   st = readState();
   check(st.deception.length === 1 && st.deception[0].termo === "alvo",
     "um comando recusado alterou a lista");

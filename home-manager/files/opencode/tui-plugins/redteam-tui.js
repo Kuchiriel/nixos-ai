@@ -236,6 +236,15 @@ export function handleJailbreakCommand(argsText) {
         return `decoy "${igual}" e igual ao termo — nao serve de forma.\n`
           + "  (a decoy precisa ser DIFERENTE do termo real)";
       }
+      // Decoy que e FATIA do termo quebra a recomposicao: o termo real
+      // contem a decoy, entao a troca (por substring) remonte o termo
+      // ("alvo.exemplo.gov" + decoy "alvo." -> "alvo.exemplo.gov.exemplo.gov").
+      const fatia = decoys.find((d) => term.includes(d));
+      if (fatia) {
+        return `decoy "${fatia}" e um pedaco do termo "${term}".\n`
+          + "  (a troca e por substring: a decoy dentro do termo remontaria "
+          + "o termo — a lista nao foi gravada)";
+      }
       const others = (state.deception || []).filter((x) => entryTerm(x) !== term);
       others.push({ termo: term, decoys });
       state.deception = others;
