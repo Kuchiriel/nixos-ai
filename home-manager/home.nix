@@ -659,6 +659,9 @@ in {
         max_lines = 200;
         max_bytes = 8192;
       };
+      # V2 desliga os todos por default — o protocolo de execução desta
+      # casa usa todowrite. Key validada no schema v2 (experimental.todo).
+      experimental = { todo = true; };
 
       # Default E2E-validado 16/09 ("opencode run" respondeu): Gemini free
       # via GEMINI_API_KEY. openrouter/free era slug morto = causa raiz do
