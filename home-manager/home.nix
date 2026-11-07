@@ -409,17 +409,17 @@ in {
   # read-only (symlink do store), entao as tools NAO podem ser registradas
   # la: elas vao no proprio plugin (o registry aceita JSON Schema puro, sem
   # zod — o plugin vive no store, sem node_modules).
-  # O modo e OPT-IN e se liga pelo slash command `/jailbreak on` (o plugin
-  # resolve o comando via command.execute.before; o modelo nunca ve o
-  # template). A transliteracao trigger<->decoy (o modelo ve uma palavra, o
-  # disco tem outra) fica entre tool.execute.before/after.
+  # O modo e OPT-IN e se liga pelo slash command `/jailbreak on`, que roda
+  # LOCAL no TUI (plugin do TUI, abaixo) — o modelo nunca ve o comando.
+  # A transliteracao trigger<->decoy (o modelo ve uma palavra, o disco tem
+  # outra) fica entre tool.execute.before/after.
   home.file.".config/opencode/plugins/redteam.js".source =
     ./files/opencode/plugins/redteam.js;
 
   # O plugin e PORTATIL: nao importa torch/transformers (o white-box roda
   # como processo separado), resolve o repo do harness por candidate e
   # degrada em 3 niveis (sem harness / sem deps / tudo ok). Ver o gate
-  # abaixo: ele importa e INICIALIZA o plugin — o mesmo caminho do
+  # abaixo: ele importa e INICIALIZA o plugin — o mesmo caminho que o
   # opencode — e falha se qualquer tool ou hook sumir.
   #
   # Gate do plugin: importa e INICIALIZA de verdade (o `node --check` so
@@ -429,11 +429,20 @@ in {
   home.file.".config/opencode/plugins/check-redteam.mjs".source =
     ./files/opencode/plugins/check-redteam.mjs;
 
-  # Slash command /jailbreak — liga/desliga o modo red-team sem rebuild.
-  # Resolvido pelo plugin (hook command.execute.before): o modelo nunca ve
-  # o template, so a resposta do toggle.
-  home.file.".config/opencode/command/jailbreak.md".source =
-    ./files/opencode/command/jailbreak.md;
+  # Plugin do TUI — o slash command /jailbreak RESOLVIDO LOCALMENTE (07/11).
+  # POR QUE OUTRO ARQUIVO: a rota de command do SERVIDOR sempre chama o
+  # modelo depois do hook `command.execute.before` (o `noReply` existe no
+  # prompt(), nao no command()) — medido: a resposta do plugin virava
+  # mensagem de usuario e o modelo respondia a ela. No TUI, o plugin
+  # consome o Enter antes do prompt submeter (keymap.intercept): nenhuma
+  # mensagem, nenhum turno de modelo.
+  #
+  # POR QUE FORA de ~/.config/opencode/plugins/: o servidor auto-descobre
+  # {plugin,plugins}/*.{ts,js} e REJEITA um plugin so-de-TUI
+  # (readV1Plugin: "must default export an object with server()") — o
+  # plugin quebraria o load de plugins do servidor inteiro.
+  home.file.".config/opencode/tui-plugins/redteam-tui.js".source =
+    ./files/opencode/tui-plugins/redteam-tui.js;
 
   # Skill de coordenação multi-agente — DECLARATIVA (02/11): antes vivia
   # solta em ~/.config/opencode/skills/ (fora do git, sem backup). O
@@ -475,6 +484,14 @@ in {
     enable = true;
     # Fonte única: overlay `kilo` (nixpkgs-unstable; dan-online parou em 05/2026).
     package = pkgs.kilo;
+
+    # TUI: plugins do TUI (o `theme` vem do stylix, que tambem escreve
+    # tui.json). O plugin do red-team mora AQUI porque o slash command
+    # /jailbreak precisa rodar LOCAL no TUI (o comando do servidor sempre
+    # chama o modelo depois do hook — medido 07/11). O path e relativo ao
+    # tui.json (~/.config/opencode/) e o arquivo vive em tui-plugins/ para
+    # nao ser auto-descoberto pelo servidor (que rejeita plugin so-de-TUI).
+    tui.plugin = ["./tui-plugins/redteam-tui.js"];
 
     settings = {
       # Provedor local (Bonsai 8B ternário via llama.cpp PrismML, porta 8080)

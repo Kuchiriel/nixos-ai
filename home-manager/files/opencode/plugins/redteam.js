@@ -2,11 +2,15 @@
 //
 // QUATRO COISAS:
 //
-// 1. SLASH COMMAND /jailbreak (on | off | status | pair)
-//    Liga/desliga o modo sem reiniciar nada. O comando vive em
-//    ~/.config/opencode/command/jailbreak.md e e resolvido AQUI, via o hook
-//    "command.execute.before": o plugin troca as parts do comando pela
-//    resposta do toggle (o modelo nao chega a ver nada).
+// 1. SLASH COMMAND /jailbreak (on | off | status | pair | term ... | reset)
+//    Liga/desliga o modo sem reiniciar nada. O comando NAO e resolvido
+//    aqui: a rota de command do servidor sempre chama o modelo depois do
+//    hook (o `noReply` existe no prompt(), nao no command()), entao a
+//    resposta do plugin virava mensagem de usuario. O comando e resolvido
+//    no processo do TUI
+//    (~/.config/opencode/tui-plugins/redteam-tui.js), que consome o Enter
+//    antes do prompt submeter — nenhuma mensagem, nenhum turno de modelo.
+//    O estado (o mesmo arquivo JSON) e o contrato entre os dois.
 //
 // 2. TRANSLITERACAO trigger <-> decoy (o mecanismo que o dono pediu)
 //    O estado tem um PAR: {trigger, decoy} — duas grafias da MESMA palavra
@@ -388,127 +392,6 @@ const TOOL_TEXT_FIELDS = [
   "pattern", "prompt", "description", "text", "query",
 ];
 
-// ── o slash command /jailbreak ───────────────────────────────────────────
-// Quebra os args RESPITANDO aspas: `pair "Ministério "Ministério ""Ministério`
-// tem que chegar como 2 args. Split por espaco quebrava no espaco do
-// termo e colava as aspas no valor (virava `"Ministério` / `"Ministério`).
-function splitArgs(text) {
-  const out = [];
-  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
-  let m;
-  while ((m = re.exec(String(text || "")))) {
-    out.push(m[1] ?? m[2] ?? m[3]);
-  }
-  return out;
-}
-
-function handleJailbreakCommand(argsText) {
-  const args = splitArgs(argsText);
-  const sub = (args[0] || "status").toLowerCase();
-  const state = loadState();
-
-  if (sub === "on") {
-    state.enabled = true;
-    saveState(state);
-    return (
-      "Modo red-team LIGADO.\n" +
-      `  trigger (palavra real): ${state.trigger || "(nao definida)"}\n` +
-      `  decoy  (grafia neutra): ${state.decoy || "(nao definida)"}\n` +
-      "  Transliteracao: IN decoy->trigger (disco), OUT trigger->decoy (visao do modelo).\n" +
-      "  Use /jailbreak pair <trigger> <decoy> para trocar o par."
-    );
-  }
-  if (sub === "off") {
-    state.enabled = false;
-    saveState(state);
-    return "Modo red-team DESLIGADO. Transliteracao suspensa.";
-  }
-  if (sub === "pair") {
-    if (args.length < 3) {
-      return (
-        "Uso: /jailbreak pair <trigger> <decoy>\n" +
-        `  atual: trigger=${state.trigger || "-"} decoy=${state.decoy || "-"}`
-      );
-    }
-    state.trigger = args[1];
-    state.decoy = args[2];
-    saveState(state);
-    return (
-      `Par atualizado: trigger="${state.trigger}" decoy="${state.decoy}"\n` +
-      "  (o modo continua como estava; use /jailbreak on para ligar)"
-    );
-  }
-  if (sub === "deception") {
-    // /jailbreak deception add <termo> | list | rm <termo> | clear
-    const action = (args[1] || "list").toLowerCase();
-    // termo = args[2]; metodo = args[3] (opcional). Nao usar slice(2).join
-    // (" ") — colava o metodo no termo (medido: "alvo-interno leet" virava
-    // um termo so).
-    const term = (args[2] || "").trim();
-    const list = state.deception || [];
-    if (action === "add") {
-      if (!term) {
-        return "Uso: /jailbreak deception add <termo> [metodo]\n"
-          + "metodos: " + Object.keys(DECEPTION_METHODS).join(", ");
-      }
-      const metodo = (args[3] || "split").toLowerCase().trim();
-      if (!DECEPTION_METHODS[metodo]) {
-        return `metodo desconhecido: ${metodo}\n`
-          + "disponiveis: " + Object.keys(DECEPTION_METHODS).join(", ");
-      }
-      // substitui entrada existente do mesmo termo
-      const others = list.filter((x) => (x.termo || x) !== term);
-      others.push({ termo: term, metodo });
-      state.deception = others;
-      saveState(state);
-      const form = deceptionForm({ termo: term, metodo });
-      return `termo na lista de deception (${others.length}): ${term} [${metodo}]\n`
-        + `  no prompt: "${form}"\n`
-        + `  no comando/disco: volta a ser "${term}".`;
-    }
-    if (action === "rm" || action === "remove") {
-      const next = list.filter((x) => (x.termo || x) !== term);
-      state.deception = next;
-      saveState(state);
-      return `removido (restam ${next.length}).`;
-    }
-    if (action === "clear") {
-      state.deception = [];
-      saveState(state);
-      return "lista de deception limpa.";
-    }
-    if (!list.length) {
-      return "lista de deception vazia.\n"
-        + "  /jailbreak deception add <termo>  (o termo nunca entra sozinho no prompt)";
-    }
-    // mostra as FORMAS (o que o modelo ve), nao os termos reais
-    return "lista de deception (formas visiveis):\n"
-      + deceptionEntries(state).map((x) =>
-        `- ${x.decoys.join(" | ")}`).join("\n")
-      + "\nmetodos disponiveis: " + Object.keys(DECEPTION_METHODS)
-        .map((k) => `${k}=${DECEPTION_METHODS[k].label}`).join(" | ");
-  }
-  if (sub === "status") {
-    const dcount = deceptionEntries(state).length;
-    // O status vai para o modelo: mostra so as FORMAS (decoys), nunca os
-    // termos reais (o mesmo motivo do bloco de estrategia).
-    const formas = deceptionEntries(state)
-      .map((x) => x.decoys[0]).filter(Boolean);
-    return (
-      `Modo red-team: ${state.enabled ? "LIGADO" : "desligado"}\n` +
-      `  forma visivel: ${state.decoy || "-"}\n` +
-      `  (a palavra real nao e mostrada — ela fica so no disco/comando)\n` +
-      `  deception: ${dcount} termo(s)`
-      + (dcount ? ` — formas: ${formas.join(", ")}` : "") +
-      `\n  estado:  ${STATE}`
-    );
-  }
-  return (
-    "Uso: /jailbreak [on|off|status|pair <trigger> <decoy>]\n" +
-    `  estado: ${STATE}`
-  );
-}
-
 const STRATEGY_BLOCK = `## RED-TEAM MODE (ativo nesta sessao)
 
 As tools \`redteam_*\` estao disponiveis (payload, probe, state, crescendo,
@@ -557,78 +440,40 @@ function liveStateBlock() {
   return lines.join("\n");
 }
 
-// ── interceptacao do /jailbreak vindo do TUI ────────────────────────────
-// O TUI expande o markdown do comando: o corpo do jailbreak.md vira o
-// inicio da mensagem e os argumentos ficam nas linhas seguintes. A
-// sentinela e a ultima linha do template (o caminho do log de auditoria).
-function commandArgsFromTemplate(text) {
-  const s = String(text || "");
-  if (!s.includes("resolvido pelo plugin")) return null;
-  const lines = s.split(/\r?\n/);
-  const i = lines.findIndex((l) => l.includes("redteam-audit.log"));
-  if (i === -1) return null;
-  return lines.slice(i + 1).join(" ").trim();
-}
-
-// Mascara a grafia real sem depender de state.enabled: a resposta de
-// /jailbreak pair mostra o par mesmo com o modo desligado.
-function maskTrigger(text, state) {
-  if (!text || !state.trigger || !state.decoy) return text;
-  return text.split(state.trigger).join(state.decoy);
-}
+// O slash command /jailbreak NAO e resolvido aqui. A rota de command do
+// servidor (SessionPrompt.command) sempre chama o modelo depois do hook
+// `command.execute.before` — o `noReply` existe no prompt(), mas o
+// command() nao o usa. Medido: a resposta do plugin virava mensagem de
+// usuario e o modelo respondia a ela (turno queimado + comando no prompt).
+// O comando passou a ser resolvido no processo do TUI
+// (~/.config/opencode/tui-plugins/redteam-tui.js), que consome o Enter
+// antes do prompt submeter: nao ha mensagem e nao ha turno de modelo.
 
 export const RedTeamOpenCodePlugin = async () => {
   return {
-    // ── 1. slash command ──────────────────────────────────────────────
-    // Caminho A: a rota de command do servidor (API /session/:id/command).
-    "command.execute.before": async (input, output) => {
-      if (String(input?.command ?? "").toLowerCase() !== "jailbreak") return;
-      const reply = handleJailbreakCommand(input?.arguments);
-      const st = loadState();
-      // Substitui as parts: o modelo nao ve o comando, so a resposta —
-      // e a resposta ja sai com a grafia real mascarada.
-      output.parts = [{
-        type: "text",
-        text: decomposeText(maskTrigger(reply, st), st),
-      }];
-    },
-
-    // Caminho B: a mensagem chega como TEXTO ("/jailbreak on") — e o que
-    // o TUI faz. Medido: o TUI tambem EXPANDE o markdown do comando e manda
-    // o corpo do jailbreak.md + os argumentos como UMA mensagem; nesse
-    // formato a regex ancorada nao casa e o modelo via o template. Os dois
-    // formatos sao interceptados aqui.
+    // ── 1. sanitizacao do prompt de entrada ───────────────────────────
+    // Deception: o prompt de entrada tambem e sanitizado —
+    // (i) o par trigger/decoy (o modelo ve o decoy, nao o trigger) e
+    // (ii) a lista de deception (os termos nunca entram sozinhos).
+    // ANTES isso so valia na SAIDA: o modelo via o termo real no prompt.
     "chat.message": async (input, output) => {
       if (!output || !Array.isArray(output.parts)) return;
-      // (a) o comando /jailbreak — resolvido aqui
-      let handled = false;
+      // (a) Rede de seguranca do comando: se o texto /jailbreak chegou
+      // aqui, o plugin do TUI NAO carregou (ele consome o Enter antes do
+      // prompt submeter). A logica do comando mora so no TUI — aqui vao
+      // apenas o aviso e o log, sem estado (nada de logica duplicada).
       for (const part of output.parts) {
-        if (!part || part.type !== "text") continue;
-        const text = part.text || "";
-        const bare = /^\s*\/jailbreak(?:\s+([\s\S]*?))?\s*$/.exec(text);
-        const tpl = bare ? null : commandArgsFromTemplate(text);
-        if (!bare && tpl === null) continue;
-        if (handled) {
-          // copia extra do template: some com ela
-          part.text = "";
-          continue;
-        }
-        const argsText = bare ? (bare[1] || "status") : (tpl || "status");
-        const reply = handleJailbreakCommand(argsText);
-        const st = loadState();
-        // a resposta tambem passa pela mascara: o modelo nunca ve a grafia real
-        part.text = decomposeText(maskTrigger(reply, st), st);
-        audit(
-          `${new Date().toISOString()} CMD jailbreak ` +
-          `formato=${bare ? "bare" : "template"}`
-        );
-        handled = true;
+        if (!part || part.type !== "text" || !part.text) continue;
+        if (!/^\s*\/jailbreak(?:\s|$)/.test(part.text)) continue;
+        part.text =
+          "O comando /jailbreak e LOCAL do TUI (plugin redteam-tui): se voce "
+          + "leu isto, o plugin do TUI nao carregou — verifique "
+          + "~/.config/opencode/tui.json (plugin) e o log do opencode.";
+        audit(`${new Date().toISOString()} CMD jailbreak chegou no servidor `
+          + "(plugin do TUI nao interceptou)");
+        break;
       }
-      if (handled) return;
       // (b) Deception: o prompt de entrada tambem e sanitizado —
-      // (i) o par trigger/decoy (o modelo ve o decoy, nao o trigger) e
-      // (ii) a lista de deception (os termos nunca entram sozinhos).
-      // ANTES isso so valia na SAIDA: o modelo via o termo real no prompt.
       const st = loadState();
       const hasDeception = st.deception?.length > 0;
       const hasPair = st.enabled && !!(st.trigger && st.decoy)
