@@ -40,6 +40,7 @@ python do perfil do JARVIS (3.2.3); se faltar, este comando explica o
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 
@@ -165,6 +166,133 @@ def build_server():
             }
             for i in items
         ], ensure_ascii=False)
+
+    # ── Cérebro da frota em tools do coord (07/11/2026) ─────────────────
+    # PEDIDO DO Crouton-alpha (Termux): "do tailnet so respondem 8765 e
+    # 4599; preciso do workitem, telegram, recall/lessons/rag, pains e
+    # health - OU o jarvis-http exposto na tailnet".
+    # RESPOSTA: as DUAS. (b) o jarvis-http ja e' um servico na :8766, PROVADO
+    # do celular (handshake + tools/list + tools/call com resposta real).
+    # (a) estas tools dao o MESMO acesso pela porta que ele ja alcança (:8765).
+    # Todas DELEGAM ao core existente - nao ha logica duplicada.
+    @mcp.tool
+    def coord_workitem(action: str = "list", item_id: str = "", status: str = "",
+                        title: str = "", project: str = "nixos-ai",
+                        reason: str = "") -> str:
+        """Fila/kanban da frota: list|create|claim|done|blocked|next|burndown."""
+        try:
+            from nightwatch.task_queue import TaskQueue, Task
+        except Exception as exc:
+            return f"coord_workitem: task_queue indisponivel: {exc}"
+        try:
+            q = TaskQueue(project=project)
+            act = (action or "list").lower()
+            if act == "list":
+                tasks = q.get_all_tasks()
+                if not tasks:
+                    return "fila vazia"
+                return "\n".join(
+                    f"[{t.status}] {t.id}: {t.description[:70]} (projeto={t.project})"
+                    for t in tasks)
+            if act == "create":
+                if not title:
+                    return "coord_workitem: 'title' e obrigatorio"
+                t = Task(id=f"coord-{int(__import__('time').time()*1000000)}",
+                         project=project, description=title, priority=5, risk="low")
+                q.add_task(t)
+                return f"criado {t.id}: {title}"
+            if act == "claim":
+                t = q.get_next_task()
+                if not t:
+                    return "nenhuma tarefa pronta"
+                q.update_task(t.id, status="IN_PROGRESS", owner=reason or "coord")
+                return f"claim {t.id}: {t.description[:80]}"
+            if act in ("done", "blocked"):
+                if not item_id:
+                    return f"coord_workitem: '{act}' exige 'item_id'"
+                t = q.get_task(item_id)
+                if not t:
+                    return f"item {item_id} nao encontrado"
+                if act == "done":
+                    t.complete()
+                else:
+                    t.block(reason or "bloqueado via coord")
+                return f"{item_id} -> {act}"
+            if act == "next":
+                t = q.get_next_task()
+                return json.dumps(t.to_dict(), indent=2, default=str) if t else "nenhuma tarefa pronta"
+            if act == "burndown":
+                return json.dumps(q.get_stats(project), indent=2, default=str)
+            return f"action desconhecida: {act}"
+        except Exception as exc:
+            return f"coord_workitem falhou: {exc}"
+
+    @mcp.tool
+    def coord_pains(limit: int = 10, kind: str = "") -> str:
+        """Pains da frota (store append-only, dedup por assinatura)."""
+        path = os.path.expanduser("~/projects/docs/pains/pains.jsonl")
+        try:
+            lines = open(path, encoding="utf-8").read().splitlines()
+        except Exception as exc:
+            return f"coord_pains: store ausente ({path}): {exc}"
+        out = []
+        for line in lines[-300:]:
+            try:
+                d = json.loads(line)
+            except Exception:
+                continue
+            if kind and str(d.get("kind", "")) != kind:
+                continue
+            out.append(d)
+        if not out:
+            return "nenhuma pain registrada"
+        return json.dumps(out[-limit:], indent=2, ensure_ascii=False, default=str)
+
+    @mcp.tool
+    def coord_recall(query: str, top_k: int = 5) -> str:
+        """Memoria episodica do host (Qdrant hybrid) - resolve NO LINUX."""
+        try:
+            from jarvis.core.memory import EpisodicMemory
+            evs = EpisodicMemory().recall(query, top_k=top_k)
+            if not evs:
+                return "nada encontrado"
+            return json.dumps(evs, indent=2, ensure_ascii=False, default=str)
+        except Exception as exc:
+            return f"coord_recall falhou: {exc}"
+
+    @mcp.tool
+    def coord_lessons(query: str = "") -> str:
+        """Licoes passadas da frota (o 'nao repita isso')."""
+        try:
+            from jarvis.core.memory import EpisodicMemory
+            evs = EpisodicMemory().recall(query or "erro", top_k=5,
+                                          kinds=("lesson",))
+            if not evs:
+                return "nenhuma licao"
+            return json.dumps(evs, indent=2, ensure_ascii=False, default=str)
+        except Exception as exc:
+            return f"coord_lessons falhou: {exc}"
+
+    @mcp.tool
+    def coord_notify(message: str, chat_id: str = "") -> str:
+        """Relay de notificacao: o TOKEN do Telegram fica NO LINUX."""
+        try:
+            from jarvis.providers.telegram import send_notification
+            ok = send_notification(message)
+            return "enviado" if ok else "falhou (veja o log do telegram no host)"
+        except Exception as exc:
+            return f"coord_notify falhou: {exc}"
+
+    @mcp.tool
+    def coord_health() -> str:
+        """Saude do host Linux: RAM/swap/qdrant/llama/servicos."""
+        try:
+            from jarvis.core.health_monitor import BackendHealthMonitor
+            mon = BackendHealthMonitor("http://127.0.0.1:8092")
+            data = mon.get_health() if hasattr(mon, "get_health") else mon.check()
+            return json.dumps(data, indent=2, ensure_ascii=False, default=str)
+        except Exception as exc:
+            return f"coord_health falhou: {exc}"
 
     return mcp
 
