@@ -93,6 +93,12 @@ const DEFAULT_STATE = {
   trigger: "",
   decoy: "",
   note: "",
+  // Lista de DECEPTION: termos que NUNCA entram sozinhos no prompt.
+  // O agente ve a forma decomposta ("a. b. c"); o comando/disco recebe
+  // a forma real. E o mesmo paragrafo do trigger/decoy, generalizado
+  // para N termos (domínios, nomes de sistema, alvos de teste).
+  // A lista fica no estado local da maquina (nao no repo).
+  deception: [],
 };
 
 function loadState() {
@@ -218,6 +224,113 @@ function suggestVector(model) {
            hint: "roda uma medicao antes de concluir" };
 }
 
+// ── deception por lista ─────────────────────────────────────────────────
+// Um termo "nao entra sozinho": no prompt ele vira uma forma ofuscada
+// (split / leet / base64 / xor / spaced / reversed) que o modelo le e
+// recompõe, mas que nao casa com o filtro de string completa. Na volta
+// (comando/disco) ele volta a ser o termo real.
+//
+// A lista guarda {termo, metodo}. O metodo e por termo: um dominio
+// com ponto pede split (a forma natural), um token solto pede leet ou
+// xor (que quebram o filtro de palavra).
+const DECEPTION_METHODS = {
+  split: {
+    label: "split (segmentos separados por '. ')",
+    encode: (s) => (s.includes(".") ? s.split(".").join(". ") : s),
+    decode: (s) => s.split(". ").join("."),
+  },
+  leet: {
+    label: "leet (a/e/o/i/s -> 4/3/0/1/5)",
+    encode: (s) => s.replace(/a/g, "4").replace(/e/g, "3").replace(/o/g, "0")
+      .replace(/i/g, "1").replace(/s/g, "5"),
+    decode: (s) => s.replace(/4/g, "a").replace(/3/g, "e").replace(/0/g, "o")
+      .replace(/1/g, "i").replace(/5/g, "s"),
+  },
+  b64: {
+    label: "base64 (o termo inteiro codificado)",
+    encode: (s) => Buffer.from(s, "utf8").toString("base64"),
+    decode: (s) => Buffer.from(s, "base64").toString("utf8"),
+  },
+  xor: {
+    label: "xor hex (chave JARVISCORE)",
+    encode: (s) => {
+      const key = "JARVISCORE";
+      const bytes = Buffer.from(s, "utf8");
+      const out = Buffer.alloc(bytes.length);
+      for (let i = 0; i < bytes.length; i++) {
+        out[i] = bytes[i] ^ key.charCodeAt(i % key.length);
+      }
+      return out.toString("hex");
+    },
+    decode: (s) => {
+      const key = "JARVISCORE";
+      const bytes = Buffer.from(s, "hex");
+      const out = Buffer.alloc(bytes.length);
+      for (let i = 0; i < bytes.length; i++) {
+        out[i] = bytes[i] ^ key.charCodeAt(i % key.length);
+      }
+      return out.toString("utf8");
+    },
+  },
+  spaced: {
+    label: "spaced (letra por letra)",
+    encode: (s) => s.split("").join(" "),
+    decode: (s) => s.split("").join("").replace(/\s+/g, ""),
+  },
+  reversed: {
+    label: "reversed (a palavra ao contrario)",
+    encode: (s) => s.split("").reverse().join(""),
+    decode: (s) => s.split("").reverse().join(""),
+  },
+};
+
+function deceptionEntries(state) {
+  const raw = state.deception || [];
+  return raw.map((x) => {
+    if (typeof x === "string") return { termo: x, metodo: "split" };
+    return { termo: x.termo || "", metodo: x.metodo || "split" };
+  }).filter((x) => x.termo);
+}
+
+function deceptionForm(entry) {
+  const m = DECEPTION_METHODS[entry.metodo] || DECEPTION_METHODS.split;
+  try {
+    return m.encode(entry.termo);
+  } catch {
+    return entry.termo;
+  }
+}
+
+function decomposeText(text, state) {
+  if (!text) return text;
+  let out = text;
+  for (const entry of deceptionEntries(state)) {
+    const form = deceptionForm(entry);
+    if (form !== entry.termo && out.includes(entry.termo)) {
+      out = out.split(entry.termo).join(form);
+    }
+  }
+  return out;
+}
+
+function recomposeText(text, state) {
+  if (!text) return text;
+  let out = text;
+  for (const entry of deceptionEntries(state)) {
+    const m = DECEPTION_METHODS[entry.metodo] || DECEPTION_METHODS.split;
+    const form = deceptionForm(entry);
+    if (form === entry.termo) continue;
+    let back;
+    try {
+      back = m.decode(form);
+    } catch {
+      back = form;
+    }
+    if (out.includes(form)) out = out.split(form).join(back);
+  }
+  return out;
+}
+
 // ── transliteracao ───────────────────────────────────────────────────────
 function toTrigger(text, state) {
   if (!state.enabled || !state.trigger || !state.decoy) return text;
@@ -305,12 +418,64 @@ function handleJailbreakCommand(argsText) {
       "  (o modo continua como estava; use /jailbreak on para ligar)"
     );
   }
+  if (sub === "deception") {
+    // /jailbreak deception add <termo> | list | rm <termo> | clear
+    const action = (args[1] || "list").toLowerCase();
+    // termo = args[2]; metodo = args[3] (opcional). Nao usar slice(2).join
+    // (" ") — colava o metodo no termo (medido: "alvo-interno leet" virava
+    // um termo so).
+    const term = (args[2] || "").trim();
+    const list = state.deception || [];
+    if (action === "add") {
+      if (!term) {
+        return "Uso: /jailbreak deception add <termo> [metodo]\n"
+          + "metodos: " + Object.keys(DECEPTION_METHODS).join(", ");
+      }
+      const metodo = (args[3] || "split").toLowerCase().trim();
+      if (!DECEPTION_METHODS[metodo]) {
+        return `metodo desconhecido: ${metodo}\n`
+          + "disponiveis: " + Object.keys(DECEPTION_METHODS).join(", ");
+      }
+      // substitui entrada existente do mesmo termo
+      const others = list.filter((x) => (x.termo || x) !== term);
+      others.push({ termo: term, metodo });
+      state.deception = others;
+      saveState(state);
+      const form = deceptionForm({ termo: term, metodo });
+      return `termo na lista de deception (${others.length}): ${term} [${metodo}]\n`
+        + `  no prompt: "${form}"\n`
+        + `  no comando/disco: volta a ser "${term}".`;
+    }
+    if (action === "rm" || action === "remove") {
+      const next = list.filter((x) => (x.termo || x) !== term);
+      state.deception = next;
+      saveState(state);
+      return `removido (restam ${next.length}).`;
+    }
+    if (action === "clear") {
+      state.deception = [];
+      saveState(state);
+      return "lista de deception limpa.";
+    }
+    if (!list.length) {
+      return "lista de deception vazia.\n"
+        + "  /jailbreak deception add <termo>  (o termo nunca entra sozinho no prompt)";
+    }
+    return "lista de deception (termo [metodo] -> forma no prompt):\n"
+      + deceptionEntries(state).map((x) =>
+        `- ${x.termo} [${x.metodo}] -> "${deceptionForm(x)}"`).join("\n")
+      + "\nmetodos: " + Object.keys(DECEPTION_METHODS)
+        .map((k) => `${k}=${DECEPTION_METHODS[k].label}`).join(" | ");
+  }
   if (sub === "status") {
+    const dcount = deceptionEntries(state).length;
     return (
       `Modo red-team: ${state.enabled ? "LIGADO" : "desligado"}\n` +
       `  trigger: ${state.trigger || "-"}\n` +
       `  decoy:   ${state.decoy || "-"}\n` +
-      `  estado:  ${STATE}`
+      `  deception: ${dcount} termo(s)`
+      + (dcount ? ` — ${deceptionEntries(state).map((x) => x.termo).join(", ")}` : "") +
+      `\n  estado:  ${STATE}`
     );
   }
   return (
@@ -502,21 +667,105 @@ function liveStateBlock() {
   return lines.join("\n");
 }
 
+// ── interceptacao do /jailbreak vindo do TUI ────────────────────────────
+// O TUI expande o markdown do comando: o corpo do jailbreak.md vira o
+// inicio da mensagem e os argumentos ficam nas linhas seguintes. A
+// sentinela e a ultima linha do template (o caminho do log de auditoria).
+function commandArgsFromTemplate(text) {
+  const s = String(text || "");
+  if (!s.includes("resolvido pelo plugin")) return null;
+  const lines = s.split(/\r?\n/);
+  const i = lines.findIndex((l) => l.includes("redteam-audit.log"));
+  if (i === -1) return null;
+  return lines.slice(i + 1).join(" ").trim();
+}
+
+// Mascara a grafia real sem depender de state.enabled: a resposta de
+// /jailbreak pair mostra o par mesmo com o modo desligado.
+function maskTrigger(text, state) {
+  if (!text || !state.trigger || !state.decoy) return text;
+  return text.split(state.trigger).join(state.decoy);
+}
+
 export const RedTeamOpenCodePlugin = async () => {
   return {
     // ── 1. slash command ──────────────────────────────────────────────
+    // Caminho A: a rota de command do servidor (API /session/:id/command).
     "command.execute.before": async (input, output) => {
       if (String(input?.command ?? "").toLowerCase() !== "jailbreak") return;
       const reply = handleJailbreakCommand(input?.arguments);
-      // Substitui as parts: o modelo nao ve o comando, so a resposta.
-      output.parts = [{ type: "text", text: reply }];
+      const st = loadState();
+      // Substitui as parts: o modelo nao ve o comando, so a resposta —
+      // e a resposta ja sai com a grafia real mascarada.
+      output.parts = [{
+        type: "text",
+        text: decomposeText(maskTrigger(reply, st), st),
+      }];
+    },
+
+    // Caminho B: a mensagem chega como TEXTO ("/jailbreak on") — e o que
+    // o TUI faz. Medido: o TUI tambem EXPANDE o markdown do comando e manda
+    // o corpo do jailbreak.md + os argumentos como UMA mensagem; nesse
+    // formato a regex ancorada nao casa e o modelo via o template. Os dois
+    // formatos sao interceptados aqui.
+    "chat.message": async (input, output) => {
+      if (!output || !Array.isArray(output.parts)) return;
+      // (a) o comando /jailbreak — resolvido aqui
+      let handled = false;
+      for (const part of output.parts) {
+        if (!part || part.type !== "text") continue;
+        const text = part.text || "";
+        const bare = /^\s*\/jailbreak(?:\s+([\s\S]*?))?\s*$/.exec(text);
+        const tpl = bare ? null : commandArgsFromTemplate(text);
+        if (!bare && tpl === null) continue;
+        if (handled) {
+          // copia extra do template: some com ela
+          part.text = "";
+          continue;
+        }
+        const argsText = bare ? (bare[1] || "status") : (tpl || "status");
+        const reply = handleJailbreakCommand(argsText);
+        const st = loadState();
+        // a resposta tambem passa pela mascara: o modelo nunca ve a grafia real
+        part.text = decomposeText(maskTrigger(reply, st), st);
+        audit(
+          `${new Date().toISOString()} CMD jailbreak ` +
+          `formato=${bare ? "bare" : "template"}`
+        );
+        handled = true;
+      }
+      if (handled) return;
+      // (b) DECEPTION: os termos da lista nunca entram sozinhos no
+      // prompt — o modelo ve a forma decomposta.
+      const st = loadState();
+      // a LISTA e o interruptor da deception (independe do toggle geral:
+      // quem liga a deception e a propria lista de termos)
+      if (!st.deception?.length) return;
+      for (const part of output.parts) {
+        if (!part || part.type !== "text" || !part.text) continue;
+        const before = part.text;
+        part.text = decomposeText(part.text, st);
+        if (part.text !== before) {
+          audit(`${new Date().toISOString()} DECEPTION prompt terms=${st.deception.length}`);
+        }
+      }
     },
 
     // ── 2. transliteracao IN (args -> disco) ──────────────────────────
     "tool.execute.before": async (input, output) => {
       const state = loadState();
-      if (!state.enabled || !state.trigger || !state.decoy) return;
       const args = output?.args;
+      // (c) deception: a forma decomposta no comando volta a ser o termo
+      // real — o comando executa no alvo de verdade.
+      if (state.deception?.length && args
+          && typeof args === "object") {
+        for (const field of TOOL_TEXT_FIELDS) {
+          if (typeof args[field] === "string") {
+            args[field] = recomposeText(args[field], state);
+          }
+        }
+      }
+      if (!state.enabled || !state.trigger || !state.decoy) return;
       if (!args || typeof args !== "object") return;
 
       const hits = [];
@@ -547,16 +796,135 @@ export const RedTeamOpenCodePlugin = async () => {
     },
 
     // ── 2b. transliteracao OUT (disco -> visao do modelo) ─────────────
+    // O output de uma tool MCP vem em ARRAY de partes (type/text), nao em
+    // string — por isso o after nao disparava para jarvis_execute e a
+    // grafia real vazava. Trata os dois formatos.
     "tool.execute.after": async (input, output) => {
       const state = loadState();
+      const apply = (fn) => {
+        if (typeof output?.output === "string") {
+          const before = output.output;
+          output.output = fn(before);
+          return output.output !== before;
+        }
+        if (Array.isArray(output?.output)) {
+          let changed = false;
+          for (const part of output.output) {
+            if (part && typeof part.text === "string") {
+              const before = part.text;
+              part.text = fn(before);
+              if (part.text !== before) changed = true;
+            }
+          }
+          return changed;
+        }
+        // objeto unico {type:"text", text:"..."} — o formato que as tools
+        // MCP devolvem (medido: o jarvis_execute vazava a grafia real
+        // porque so tratavamos string e array)
+        if (output?.output && typeof output.output === "object"
+            && typeof output.output.text === "string") {
+          const before = output.output.text;
+          output.output.text = fn(before);
+          return output.output.text !== before;
+        }
+        return false;
+      };
+      if (state.deception?.length) {
+        const changed = apply((s) => decomposeText(s, state));
+        if (changed) {
+          audit(`${new Date().toISOString()} DECEPTION output terms=${state.deception.length}`);
+        }
+      }
       if (!state.enabled || !state.trigger || !state.decoy) return;
-      const text = output?.output;
-      if (typeof text !== "string" || !text.includes(state.trigger)) return;
-      output.output = toDecoy(text, state);
-      audit(
-        `${new Date().toISOString()} OUT tool=${input?.tool} ` +
-        `trigger->decoy chars=${text.length}`
-      );
+      const changed = apply((s) => toDecoy(s, state));
+      if (changed) {
+        audit(
+          `${new Date().toISOString()} OUT tool=${input?.tool} ` +
+          `trigger->decoy (formato ${Array.isArray(output?.output) ? "array" : "string"})`
+        );
+      }
+    },
+
+    // ── 2c.rede de seguranca no LLM (cobre TUDO que vai pro modelo) ──
+    // O tool.execute.after NAO dispara para tools MCP (medido: o
+    // jarvis_execute vazava a grafia real). O messages.transform e o
+    // ponto que ve TUDO que vai para o LLM — prompt, resposta e output
+    // de tool, venha de onde vier. Aqui a traducao e a ultima barreira.
+    "experimental.chat.messages.transform": async (input, output) => {
+      const state = loadState();
+      if (!state.enabled) return;
+      const hasDeception = state.deception?.length > 0;
+      const hasPair = !!(state.trigger && state.decoy);
+      if (!hasDeception && !hasPair) return;
+      const messages = output?.messages;
+      if (!Array.isArray(messages)) return;
+      if (process.env.OPENCODE_REDTEAM_DEBUG) {
+        const desc = [];
+        for (const m of messages) {
+          for (const pt of (m?.parts || [])) {
+            desc.push(`${pt?.type}:${typeof pt?.text === "string" ? pt.text.length : 0}`
+              + `:${pt?.state?.output ? typeof pt.state.output : "-"}`);
+          }
+        }
+        audit(`${new Date().toISOString()} DEBUG transform msgs=${messages.length} parts=[${desc.join(",")}]`);
+      }
+      let changed = 0;
+      const translate = (s) => {
+        let text = s;
+        if (hasPair) text = toDecoy(text, state);
+        if (hasDeception) text = decomposeText(text, state);
+        return text;
+      };
+      for (const msg of messages) {
+        const parts = msg?.parts;
+        if (!Array.isArray(parts)) continue;
+        for (const part of parts) {
+          if (!part) continue;
+          // (a) texto da parte (user/assistant)
+          if (typeof part.text === "string" && part.text) {
+            const before = part.text;
+            const text = translate(before);
+            if (text !== before) {
+              part.text = text;
+              changed += 1;
+            }
+          }
+          // (b) output da tool: fica em part.state.output (NAO em
+          // part.text) — e por isso que a grafia real vazava das tools
+          // MCP (medido: o jarvis_execute).
+          const out = part.state?.output;
+          if (typeof out === "string" && out) {
+            const before = out;
+            const text = translate(before);
+            if (text !== before) {
+              part.state.output = text;
+              changed += 1;
+            }
+          } else if (Array.isArray(out)) {
+            for (const p2 of out) {
+              if (p2 && typeof p2.text === "string" && p2.text) {
+                const before = p2.text;
+                const text = translate(before);
+                if (text !== before) {
+                  p2.text = text;
+                  changed += 1;
+                }
+              }
+            }
+          } else if (out && typeof out === "object"
+                     && typeof out.text === "string") {
+            const before = out.text;
+            const text = translate(before);
+            if (text !== before) {
+              out.text = text;
+              changed += 1;
+            }
+          }
+        }
+      }
+      if (changed) {
+        audit(`${new Date().toISOString()} NETO-DE-SEGURANCA msgs=${messages.length} partes=${changed}`);
+      }
     },
 
     // ── 3. bloco de estrategia no system prompt ───────────────────────

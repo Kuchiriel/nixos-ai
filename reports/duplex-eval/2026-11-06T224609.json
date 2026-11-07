@@ -1,0 +1,73 @@
+{
+ "ts": "2026-11-06T22:46:09",
+ "route": "asr-inject",
+ "log": "/home/nixos/projects/nixos-ai/logs/duplex/2026-11-06.log",
+ "scenarios": [
+  {
+   "utt": "Jarvis, que horas são?",
+   "expect": "RESPOND",
+   "wav": "utt_000.wav",
+   "verdict": "sem-segmento"
+  },
+  {
+   "utt": "Qual a previsão do tempo de amanhã?",
+   "expect": "RESPOND",
+   "wav": "utt_001.wav",
+   "verdict": "sem-segmento"
+  },
+  {
+   "utt": "Liga a luz da sala.",
+   "expect": "RESPOND",
+   "wav": "utt_002.wav",
+   "verdict": "sem-segmento"
+  },
+  {
+   "utt": "Toca uma música pra mim.",
+   "expect": "RESPOND",
+   "wav": "utt_003.wav",
+   "verdict": "sem-segmento"
+  },
+  {
+   "utt": "Me lembra às oito horas.",
+   "expect": "RESPOND",
+   "wav": "utt_004.wav",
+   "verdict": "sem-segmento"
+  },
+  {
+   "utt": "Como está o trânsito agora?",
+   "expect": "RESPOND",
+   "wav": "utt_005.wav",
+   "verdict": "sem-segmento"
+  },
+  {
+   "utt": "Quanto é quinze por cento de trezentos e quarenta?",
+   "expect": "RESPOND",
+   "wav": "utt_006.wav",
+   "verdict": "sem-segmento"
+  },
+  {
+   "utt": "Abre a porta da garagem.",
+   "expect": "RESPOND",
+   "wav": "utt_007.wav",
+   "verdict": "sem-segmento"
+  },
+  {
+   "utt": "Quem é você, Jarvis?",
+   "expect": "RESPOND",
+   "wav": "utt_008.wav",
+   "verdict": "sem-segmento"
+  },
+  {
+   "utt": "Quantos núcleos tem o servidor?",
+   "expect": "RESPOND",
+   "wav": "utt_009.wav",
+   "verdict": "sem-segmento"
+  }
+ ],
+ "summary": {
+  "n": 10,
+  "ok": 0,
+  "claim_without_action": 0,
+  "ok_rate": 0.0
+ }
+}
