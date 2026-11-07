@@ -395,8 +395,29 @@ def wav_inject(args) -> dict:
         # ser consumido → "sem-segmento" em cascata.
         shutil.copyfile(wav, "/tmp/duplex-inject-queue/"
                         + time.strftime("%H%M%S") + f"-{idx:03d}.wav")
-        wait_for("WAV INJETADO", 6, since=mark)
-        dseg, lseg = wait_for("SEGMENTO:", 10, since=mark)
+        wait_for("WAV INJETADO", 8, since=mark)
+        # (06/11) casa o segmento pelo CONTEÚDO, não pela ordem: o loop
+        # do cliente bloqueia no LLM (10-20s) e o segmento do turno N
+        # aparecia na janela do turno N+1 (a bateria mediava a fila, não
+        # a qualidade). Tokens em comum >= 50% = o segmento é o do
+        # cenário.
+        _qt = set(w.lower().strip(".,!?") for w in utt.split()
+                  if len(w) > 2)
+        dseg, lseg = None, None
+        _t_end = time.monotonic() + 40
+        while time.monotonic() < _t_end:
+            for _t, _ln in lines:
+                if _t <= mark or "SEGMENTO:" not in _ln:
+                    continue
+                _txt = _ln.split("SEGMENTO:", 1)[-1].strip().lower()
+                _st = set(w.strip(".,!?") for w in _txt.split()
+                          if len(w) > 2)
+                if _qt and (len(_qt & _st) / len(_qt)) >= 0.5:
+                    dseg, lseg = _t - mark, _ln
+                    break
+            if dseg is not None:
+                break
+            time.sleep(0.1)
         r = {"utt": utt, "expect": expect, "wav": os.path.basename(wav)}
         if not dseg:
             r["verdict"] = "sem-segmento"

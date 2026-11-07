@@ -2416,6 +2416,7 @@ def main():
             # silêncio do mic, o asrd recebia um áudio todo torto e o
             # segmento saía vazio.
             _inject_chunks = []
+            _injecting = False
             try:
                 _pq = Path("/tmp/duplex-inject-queue")
                 if _pq.is_dir():
@@ -2505,6 +2506,7 @@ def main():
                 chunks = [mic_q.get()]   # nada novo: espera o próximo (pace natural)
             if prev_pcm is not None:
                 chunks.insert(0, prev_pcm)
+            _injecting = bool(_inject_chunks)
             if _inject_chunks:
                 # o WAV entra NO LUGAR do mic (o asrd precisa de áudio
                 # CONTÍGUO: misturar o silêncio do mic no meio quebra o
@@ -2533,7 +2535,10 @@ def main():
                 # erro de cancelamento. Piso ADAPTATIVO: mediana móvel do
                 # resíduo durante a fala = nível do eco remanescente;
                 # barge só se ACRESCENTA energia SIGNIFICATIVA (×1.6).
-                _processed = mp_aec_process(c16)
+                # (06/11) o WAV INJETADO entra CRU: o AEC subtrai a
+                # referência do playback (que fica velha após o TTS) e
+                # destruía o áudio do teste — o VAD não via fala nenhuma.
+                _processed = (c16 if _injecting else mp_aec_process(c16))
                 rrms = int(np.sqrt((_processed.astype(np.float64) ** 2)
                                    .mean()))
                 if tts_playing:
@@ -2650,7 +2655,11 @@ def main():
                     if fixed != heard:
                         log(f"[{ts()}] correção STT: {heard!r} → {fixed!r}")
                     heard = fixed
-                    print(f"  SEGMENTO: {heard}", flush=True)
+                    # (06/11) log() e não print(): o eval/bateria segue o
+                    # LOG DIÁRIO (o cliente pode ser reiniciado pelo
+                    # jarvis heal, que não escreve no /tmp) — o print
+                    # ia só pro stdout e sumia do log.
+                    log(f"  SEGMENTO: {heard}")
                     dbg("ASR", txt=heard, ms=f"{asr.last_ms:.0f}",
                         spk=_seg_spk, voices=SPK_STATE.get("voices"),
                         rms=rms)
@@ -3028,8 +3037,8 @@ def main():
                 # force JÁ FALA via stream_chat (frases ao vivo); este
                 # acumulador era do micro-turn-per-tick MORTO e re-falava
                 # a resposta inteira. Aqui: só bookkeeping.
-                print(f"  ouvi: {heard:<28} digo: {said}  (asr {asr.last_ms:.0f}ms)",
-                      flush=True)
+                log(f"  ouvi: {heard:<28} digo: {said}  "
+                    f"(asr {asr.last_ms:.0f}ms)")
                 LAST_RESPONSES.append(said)
                 # (17:30) as palavras da resposta vão pro ctx do whisper
                 for w in said.split():

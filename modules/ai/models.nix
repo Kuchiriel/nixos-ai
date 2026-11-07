@@ -403,7 +403,12 @@ in rec {
       # normal) → cgroup OOM-kill (status=9/KILL) 2x em 15min. Com
       # MemoryHigh=8G o modelo volta pra RAM; o swap é reserva de 4G
       # (e o MemoryMax=11G é o teto duro).
-      memHigh = "8G"; memMax = "11G"; memSwapMax = "4G"; limitMemlock = false;
+      # (06/11, 23:30) TIGHTENING FINAL: o host levou 4 OOM globals
+      # (23:12-23:24) e o 4B-MTP foi morto 19x em loop (start-limit) —
+      # o teto de 11G+4G de swap deixava o LLM pedir 15GB num host de
+      # 31GB que já tem MT5 (4,2GB) + 4 sessões opencode (3,4GB). O
+      # modelo precisa de ~5GB (ctx 12288): high 6G, max 7G, swap 2G.
+      memHigh = "6G"; memMax = "7G"; memSwapMax = "2G"; limitMemlock = false;
       # (26/10, dono: "tira o bonsai de default e coloca o qwen mtp que tem
       # o lora pra subir com o lora") → este é o DEFAULT do sistema agora.
       # wanted=true = sobe no boot COM o LoRA registrado (medido ao vivo:
@@ -447,7 +452,12 @@ in rec {
       # normal) → cgroup OOM-kill (status=9/KILL) 2x em 15min. Com
       # MemoryHigh=8G o modelo volta pra RAM; o swap é reserva de 4G
       # (e o MemoryMax=11G é o teto duro).
-      memHigh = "8G"; memMax = "11G"; memSwapMax = "4G"; limitMemlock = false;
+      # (06/11, 23:30) TIGHTENING FINAL: o host levou 4 OOM globals
+      # (23:12-23:24) e o 4B-MTP foi morto 19x em loop (start-limit) —
+      # o teto de 11G+4G de swap deixava o LLM pedir 15GB num host de
+      # 31GB que já tem MT5 (4,2GB) + 4 sessões opencode (3,4GB). O
+      # modelo precisa de ~5GB (ctx 12288): high 6G, max 7G, swap 2G.
+      memHigh = "6G"; memMax = "7G"; memSwapMax = "2G"; limitMemlock = false;
       wanted = false;
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = modelFile (o server anuncia o path, sem --alias).
@@ -479,7 +489,12 @@ in rec {
       # normal) → cgroup OOM-kill (status=9/KILL) 2x em 15min. Com
       # MemoryHigh=8G o modelo volta pra RAM; o swap é reserva de 4G
       # (e o MemoryMax=11G é o teto duro).
-      memHigh = "8G"; memMax = "11G"; memSwapMax = "4G"; limitMemlock = false;
+      # (06/11, 23:30) TIGHTENING FINAL: o host levou 4 OOM globals
+      # (23:12-23:24) e o 4B-MTP foi morto 19x em loop (start-limit) —
+      # o teto de 11G+4G de swap deixava o LLM pedir 15GB num host de
+      # 31GB que já tem MT5 (4,2GB) + 4 sessões opencode (3,4GB). O
+      # modelo precisa de ~5GB (ctx 12288): high 6G, max 7G, swap 2G.
+      memHigh = "6G"; memMax = "7G"; memSwapMax = "2G"; limitMemlock = false;
       wanted = false;
     };
     phi-mini = {
