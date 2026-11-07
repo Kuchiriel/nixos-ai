@@ -682,6 +682,28 @@ export const RedTeamOpenCodePlugin = async () => {
               changed += 1;
             }
           }
+          // (c) args da tool-call do PROPRIO assistant (part.state.input).
+          // MEDIDO 07/11 (TUI real): o `tool.execute.before` reescreve os
+          // args IN-PLACE para o termo real (o builtin executa o mesmo
+          // objeto), e o modelo ve a propria tool-call ecoada — ele
+          // aprendia a palavra real e respondia "conteudo segredo" depois
+          // de gravar. Sem esta mascara a ilusao quebrava por esse lado.
+          const inp = part.state?.input;
+          if (typeof inp === "string" && inp) {
+            const before = inp;
+            const text = translate(before);
+            if (text !== before) {
+              part.state.input = text;
+              changed += 1;
+            }
+          } else if (inp && typeof inp === "object") {
+            const hits = [];
+            const next = mapArgsDeep(inp, (s) => translate(s), state, "", hits);
+            if (hits.length) {
+              part.state.input = next;
+              changed += 1;
+            }
+          }
         }
       }
       if (changed) {

@@ -260,6 +260,32 @@ if (!bad && typeof plugin["chat.message"] === "function") {
   const audit = existsSync(auditFile) ? readFileSync(auditFile, "utf8") : "";
   check(audit.includes("decoy->termo"),
     "a recomposicao da lista de deception nao foi auditada");
+
+  // (d) a rede de seguranca tem que mascarar os args da tool-call do
+  // assistant: o plugin reescreve os args in-place para o termo real e o
+  // modelo ve a propria tool call (MEDIDO 07/11: o modelo respondia
+  // "conteudo segredo" — a palavra real vazava de volta).
+  const msgs = [{
+    parts: [
+      { type: "text", text: "gravando" },
+      {
+        type: "tool",
+        tool: "write",
+        state: {
+          status: "completed",
+          input: { filePath: "/tmp/x", content: "termo. Secreto" },
+          output: "ok",
+        },
+      },
+    ],
+  }];
+  await plugin["experimental.chat.messages.transform"]({}, { messages: msgs });
+  const callArgs = msgs[0].parts[1].state.input;
+  check(!JSON.stringify(callArgs).includes("termoSecreto"),
+    "a rede de seguranca deixou o termo real nos args da tool-call "
+    + "(o modelo aprende a palavra pela propria tool call)");
+  check(JSON.stringify(callArgs).includes("termo. Secreto"),
+    "a rede de seguranca nao colocou a decoy nos args da tool-call");
 }
 // Um api falso reproduz o que o TUI oferece: registerLayer (slash command),
 // intercept (tecla), renderer.currentFocusedEditor (o texto do prompt) e
