@@ -226,6 +226,15 @@ in rec {
   # Q4_K_M em ~/models confere com o oficial — download íntegro):
   llm-uncensored-35b = mkModel {
     # Q4_K_M.gguf · 21.2GB  # baixado 25/09 em ~/models
+    # AVISO — ABLITERATED ("Uncensored ... Aggressive"): a refusal direction
+    # foi removida no fine-tune. Consequencias (medidas 07/11):
+    #   - NAO serve como ALVO de jailbreak: nao recusa (18/18 prompts, ate
+    #     os mais overt), entao qualquer ASR medido nele e ruido;
+    #   - NAO serve para medir refusal direction: nao ha recusa para ter
+    #     assinatura no espaco de ativacao;
+    #   - NAO serve como judge de recusa (sempre "complied").
+    # Para medir recusa/refusal direction use um modelo ALINHADO (o
+    # Ternary-Bonsai-8B do prism, ou um da API).
     url = "https://huggingface.co/HauhauCS/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
     sha256 = "sha256-u+9Yw3zoiCC+nZi2Q38c9LrIkMlHvVX8e2jiIJhXQjE=";
   };
@@ -234,6 +243,15 @@ in rec {
     # Qwen3.5-4B Q4_K_M.gguf · 2.6GB em ~/models (hash do arquivo local).
     # Server: upstream stock -ngl 99 (GPU-full, exclusivo via Conflicts)
     # porta 8092. Ver directServers abaixo.
+    # AVISO — ABLITERATED ("Uncensored ... Aggressive"): a refusal direction
+    # foi removida no fine-tune. Consequencias (medidas 07/11):
+    #   - NAO serve como ALVO de jailbreak: nao recusa (18/18 prompts, ate
+    #     os mais overt), entao qualquer ASR medido nele e ruido;
+    #   - NAO serve para medir refusal direction: nao ha recusa para ter
+    #     assinatura no espaco de ativacao;
+    #   - NAO serve como judge de recusa (sempre "complied").
+    # Para medir recusa/refusal direction use um modelo ALINHADO (o
+    # Ternary-Bonsai-8B do prism, ou um da API).
     url = "https://huggingface.co/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
     sha256 = "sha256-eeKOys+E51tgVs9AWWNtQ1qp62d5V4D3t9vH0yqWJ0E=";
   };
@@ -241,6 +259,15 @@ in rec {
   llm-uncensored-4b-mtp = mkModel {
     # Qwen3.5-4B-MTP Q4_K_M.gguf · 2.7GB em ~/models (hash do arquivo local).
     # NextN REAL (blk.32.nextn.*): +24% TG medido 03/10. É o que roda na 8092.
+    # AVISO — ABLITERATED ("Uncensored ... Aggressive"): a refusal direction
+    # foi removida no fine-tune. Consequencias (medidas 07/11):
+    #   - NAO serve como ALVO de jailbreak: nao recusa (18/18 prompts, ate
+    #     os mais overt), entao qualquer ASR medido nele e ruido;
+    #   - NAO serve para medir refusal direction: nao ha recusa para ter
+    #     assinatura no espaco de ativacao;
+    #   - NAO serve como judge de recusa (sempre "complied").
+    # Para medir recusa/refusal direction use um modelo ALINHADO (o
+    # Ternary-Bonsai-8B do prism, ou um da API).
     url = "https://huggingface.co/localweights/Qwen3.5-4B-MTP-Q4_K_M-GGUF/resolve/main/Qwen3.5-4B-MTP-Q4_K_M.gguf";
     sha256 = "sha256-FEPeY6VQp70YkFWJ3Ov6XDB9qLLvhtuFinaR+5o8Fcw=";
   };

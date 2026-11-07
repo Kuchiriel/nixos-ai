@@ -163,6 +163,14 @@ read pt-BR); answer the owner in pt-BR.
   [`docs/models/MODEL-SAFETY.md`](docs/models/MODEL-SAFETY.md) (27B incident 25/09). Bonsai 8B lives in the
   nix store (GC brings it back with a rebuild), not in `~/models`. Check 6GB
   VRAM before any download.
+- **Uncensored = ABLITERATED (sem refusal direction).** `llm-uncensored-4b`,
+  `-4b-mtp` e `-35b` têm a recusa removida no fine-tune. Consequência
+  prática (medida 07/11): **não servem como alvo de jailbreak nem para
+  medir refusal direction** — o 4B-MTP cumpre 18/18 prompts (até os mais
+  overt), então qualquer ASR medido nele é ruído e não há recusa para ter
+  assinatura no espaço de ativação. Para medir recusa use o
+  **Ternary-Bonsai-8B** (prism, alinhado) ou um modelo da API. Avisos
+ tambem em `modules/ai/models.nix`, junto de cada modelo.
 - 6GB VRAM: **1 LLM at a time.** For models that don't fit, GPU experts
   **hurt** (fetch comes over PCIe, 6-7 GB/s, vs 41-83 GB/s from
   RAM). Dense models that fit in VRAM run ~3.2× faster.
