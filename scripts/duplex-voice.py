@@ -2417,6 +2417,7 @@ def main():
             # segmento saía vazio.
             _inject_chunks = []
             _injecting = False
+            _quiet_until = 0.0
             try:
                 _pq = Path("/tmp/duplex-inject-queue")
                 if _pq.is_dir():
@@ -2452,9 +2453,23 @@ def main():
                             for _o in range(0, len(_a) - _step // 2, _step):
                                 _inject_chunks.append(
                                     _a[_o:_o + _step].astype(np.int16))
+                            # (06/11) TESTE E2E ISOLADO: a TV da sala
+                            # falando junto abria um segmento PRÓPRIO no
+                            # asrd e o WAV entrava no meio dele (o
+                            # segmento nunca fechava -> "sem-segmento").
+                            # 1) reset do asrd (descarta o parcial da TV);
+                            # 2) mic MUDO durante a injecao (so o WAV
+                            # alimenta o tracker de fala).
+                            _quiet_until = time.monotonic() + \
+                                (len(_a) / SR) + 1.5
+                            try:
+                                asr.feed_raw('{"reset": true}')
+                            except Exception:
+                                pass
                             log(f"[{ts()}] WAV INJETADO no ASR "
                                 f"({len(_a)/SR:.1f}s, {_sr}Hz, "
-                                f"{len(_inject_chunks)} chunks)")
+                                f"{len(_inject_chunks)} chunks, "
+                                f"mic mudo {_quiet_until - time.monotonic():.1f}s)")
                         finally:
                             Path(_wpath).unlink(missing_ok=True)
             except Exception as _e:
@@ -2601,6 +2616,9 @@ def main():
                             f"blocked={FEED_STATS['blocked']} quiet="
                             f"{FEED_STATS['quiet']} corr_med={med:.2f}")
                     FEED_STATS.update(fed=0, blocked=0, quiet=0, corr=[])
+                    # mic mudo durante a janela de injecao do teste
+                    if _quiet_until > time.monotonic():
+                        continue
                     asr.feed(_processed.astype("float32") / 32768.0)
             if barge_buf and not tts_playing and len(barge_buf) >= 2:
                 log(f"[{ts()}] BARGE-IN processado: {len(barge_buf)} chunks")
