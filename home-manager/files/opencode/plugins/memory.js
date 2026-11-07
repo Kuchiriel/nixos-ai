@@ -39,15 +39,19 @@ const JARVIS_REPO = process.env.JARVIS_REPO || "/home/nixos/projects/nixos-ai";
 const STATE_MAX_CHARS = 4200;
 const STATE_SEEN = new Set();
 
-function fetchSessionState(sessionID, force = false) {
+// (07/11) REGRA DA FROTA (medida no celular pela lane crouton-alpha): o hook
+// de contexto NAO pode spawnar CLI nem fazer rede. Cada chamada da CLI
+// opencode dentro do hook abre uma 2a conexao SSE no mesmo servidor =>
+// conflito de socket => o MCP jarvis cai (ECONNRESET / 'SSE stream
+// disconnected'), a sessao e' interrompida ('Execution was interrupted
+// repeatedly') e a compactacao falha ('Compaction produced no summary').
+// Aqui o estado e' buscado FORA do hook (no setup e num timer de 10 min) e o
+// hook so LE o cache.
+const STATE_TTL_MS = 10 * 60 * 1000; // 10 min (regra da frota)
+let STATE_CACHE = { text: "", ts: 0 };
+
+function refreshStateCache() {
   if (process.env.OPENCODE_NO_STATE_INJECT === "1") return "";
-  const sid = String(sessionID || "");
-  if (!sid) return "";
-  if (!force) {
-    if (STATE_SEEN.has(sid)) return "";
-    if (STATE_SEEN.size > 500) STATE_SEEN.clear();
-    STATE_SEEN.add(sid);
-  }
   try {
     const out = execFileSync("bash", [JARVIS_CLI, "state"], {
       cwd: JARVIS_REPO,
@@ -56,10 +60,30 @@ function fetchSessionState(sessionID, force = false) {
       maxBuffer: 512 * 1024,
       stdio: ["ignore", "pipe", "ignore"],
     });
-    return String(out || "").trim().slice(0, STATE_MAX_CHARS);
+    STATE_CACHE = {
+      text: String(out || "").trim().slice(0, STATE_MAX_CHARS),
+      ts: Date.now(),
+    };
   } catch {
-    return "";
+    // erro de plugin NUNCA derruba a sessao: mantem o ultimo estado conhecido
   }
+  return STATE_CACHE.text;
+}
+
+// NO HOOK: so le o cache (nunca spawna).
+function fetchSessionState(sessionID, force = false) {
+  if (process.env.OPENCODE_NO_STATE_INJECT === "1") return "";
+  const sid = String(sessionID || "");
+  if (!sid) return "";
+  if (force) {
+    refreshStateCache();
+    return STATE_CACHE.text;
+  }
+  if (STATE_SEEN.has(sid)) return STATE_CACHE.text;
+  if (STATE_SEEN.size > 500) STATE_SEEN.clear();
+  STATE_SEEN.add(sid);
+  // cache frio: injeta o que houver (sem spawn dentro do hook)
+  return STATE_CACHE.text;
 }
 
 // Root-delete: rm with a recursive+force flag pointing at / or ~.
@@ -176,6 +200,26 @@ export default {
   // opencode v2: registers hooks on the tool and session domains.
   // System parts are {type:"text", text} objects (not strings).
   async setup(ctx) {
+    // (07/11) Pre-aquecimento FORA do hook + refresh a cada 10 min: o hook de
+    // contexto so le o cache (nunca spawna CLI - ver a regra da frota acima).
+    try {
+      refreshStateCache();
+    } catch {
+      /* erro de plugin nunca derruba a sessao */
+    }
+    try {
+      const timer = setInterval(() => {
+        try {
+          refreshStateCache();
+        } catch {
+          /* idem */
+        }
+      }, STATE_TTL_MS);
+      if (typeof timer.unref === "function") timer.unref();
+    } catch {
+      /* sem timer: o cache ainda serve a primeira injecao */
+    }
+
     await ctx.tool.hook("execute.before", (event) => {
       applyBashGuard(event.tool, event.input);
     });
