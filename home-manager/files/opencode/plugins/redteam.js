@@ -344,19 +344,38 @@ function recomposeText(text, state) {
   if (!text) return text;
   let out = text;
   for (const entry of deceptionEntries(state)) {
+    // (07/11) PROTEGE O TERMO REAL: a troca e por SUBSTRING, entao uma
+    // decoy que e fatia do termo (termo "alvo.exemplo.gov", decoy
+    // "alvo.") remontava o termo em lixo
+    // ("alvo.exemplo.gov" -> "alvo.exemplo.gov.exemplo.gov"): a decoy
+    // casava DENTRO do termo e o termo entrava no lugar. Agora o termo
+    // real sai do texto antes das trocas (placeholder) e volta depois.
+    const TERM_PH = "\u0000TERM\u0000";
+    const hadTerm = typeof entry.termo === "string"
+      && entry.termo.length > 0 && out.includes(entry.termo);
+    let work = hadTerm ? out.split(entry.termo).join(TERM_PH) : out;
     for (const form of deceptionForms(entry)) {
-      if (!form || form === entry.termo || !out.includes(form)) continue;
+      if (!form || form === entry.termo || !work.includes(form)) continue;
+      // (07/11) decoy que eh FATIA do termo real nunca pode ser trocada:
+      // a troca remontaria o termo (alvo.exemplo.gov + decoy "alvo."
+      // -> alvo.exemplo.gov.exemplo.gov). Mesma regra que a origem
+      // (tui-plugins/redteam-tui.js) agora aplica — defesa em profundidade.
+      if (typeof entry.termo === "string" && entry.termo.includes(form)) {
+        continue;
+      }
       const escaped = form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       // palavra inteira: nao pode ter letra/digito/_ antes nem depois
       const re = new RegExp(
         "(?<![A-Za-z0-9_])" + escaped + "(?![A-Za-z0-9_])", "g");
-      if (re.test(out)) {
-        out = out.replace(re, entry.termo);
+      if (re.test(work)) {
+        work = work.replace(re, entry.termo);
       } else if (form.length >= 3) {
         // decoy longa sem boundary (ex: parte de um caminho) — troca direta
-        out = out.split(form).join(entry.termo);
+        work = work.split(form).join(entry.termo);
       }
     }
+    if (hadTerm) work = work.split(TERM_PH).join(entry.termo);
+    out = work;
   }
   return out;
 }
