@@ -51,6 +51,13 @@ def main():
 
     ring = np.zeros(0, dtype="float32")
     started = None
+    # (06/11) tracker próprio de fala: o AdaptiveVAD recria o
+    # FixedVADIterator a cada chunk (update_threshold) e perde o
+    # estado interno (start/end) — o "end" às vezes não chega e o
+    # segmento engolia a fala seguinte. Aqui onset/fim vem da
+    # PROBABILIDADE do silero por janela de 512 (32ms).
+    _last_voice_pos = [0]
+    _last_voice_t = [0.0]
 
     # (20/10, papers voz-stt) 4 defesas anti-alucinação:
     # 2609.04561 (gated projection): no_speech_prob+avg_logprob como
@@ -335,10 +342,65 @@ def main():
         try:
             ring = np.concatenate([ring, pcm])[-SR * 20:]   # cap 20s
             ev = vad(pcm)
+            # (06/11) ONSET DA FALA — o bug que comia o COMEÇO da
+            # utterance. O VAD (silero FixedVADIterator) só confirma o
+            # "start" quando a janela de 512 amostras passa do limiar; se
+            # a fala inteira cabe em um chunk, o start e o end chegam
+            # JUNTOS e o asrd usava "agora - 1s" como início → o
+            # segmento ficava só com a CAUDA ("Jarvis, que horas são?"
+            # → "oração."). Agora o onset vem da PROBABILIDADE do mesmo
+            # modelo no chunk (o que o VAD usou por dentro), com 150ms
+            # de pré-roll: o segmento começa onde a fala começou.
+            # TRACKER DE FALA (probabilidade do silero por janela de
+            # 512 = 32ms; o modelo EXIGE 512 amostras por chamada).
+            # - onset: a 1ª janela acima do limiar (150ms de pré-roll)
+            #   → o segmento começa onde a fala começou (antes o asrd
+            #   usava "agora - 1s" e cortava o COMEÇO da utterance);
+            # - fim: última janela de voz + silêncio de 450ms → o
+            #   segmento fecha sozinho, mesmo que o VAD (recriado a
+            #   cada chunk) não emita "end".
+            try:
+                _thr = float(getattr(vad, "threshold", 0.5))
+                _base = len(ring) - len(pcm)
+                _voice = []
+                _run = 0
+                _onset = None
+                for _off in range(0, max(1, len(pcm) - 512 + 1), 512):
+                    _win = pcm[_off:_off + 512]
+                    if len(_win) < 512:
+                        break
+                    _sp = float(vad.model(torch.from_numpy(
+                        _win.copy()), SR).item())
+                    if _sp >= _thr:
+                        _run += 1
+                        _voice.append(_off)
+                        # 2 janelas SEGUIDAS de voz (≥64ms) p/ não
+                        # abrir segmento no ruído da sala/TV
+                        if _run >= 2 and _onset is None:
+                            _onset = _off
+                    else:
+                        _run = 0
+                if _voice:
+                    if started is None and _onset is not None:
+                        started = max(0, int(_base + _onset - SR * 0.15))
+                    _last_voice_pos[0] = int(_base + _voice[-1] + 512)
+                    _last_voice_t[0] = time.monotonic()
+            except Exception:
+                pass
             if ev and started is None and ev.get("start") is not None:
                 started = max(0, int(len(ring) - SR * 1.0))   # 1s de pré-roll
-            if ev and ev.get("end") is not None and started is not None:
-                seg = ring[int(started):int(len(ring) - SR * 0.35)]
+            _close = bool(ev and ev.get("end") is not None)
+            if (not _close and started is not None and _last_voice_t[0]
+                    and (time.monotonic() - _last_voice_t[0]) > 0.70):
+                _close = True
+            if _close and started is not None:
+                if _last_voice_pos[0]:
+                    _end = min(len(ring), _last_voice_pos[0] + int(SR * 0.15))
+                else:
+                    _end = int(len(ring) - SR * 0.35)
+                seg = ring[int(started):max(int(started), _end)]
+                _last_voice_pos[0] = 0
+                _last_voice_t[0] = 0.0
                 # (19:30) identificar a voz e anexar ao resultado
                 # (21/10, pedido HB) WAV por segmento p/ evidência: duplex
                 # copia p/ logs/audio/ quando classify=RESPOND (casável
@@ -438,6 +500,11 @@ def reset():
     global ring, started, vad
     ring = np.zeros(0, dtype="float32")
     started = None
+    try:
+        _last_voice_pos[0] = 0
+        _last_voice_t[0] = 0.0
+    except Exception:
+        pass
     # Adaptive VAD with noise-adaptive threshold (paper 2609.04561)
     vad = AdaptiveVAD(model, base_threshold=0.5, min_thresh=0.3, max_thresh=0.7)
 

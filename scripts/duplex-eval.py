@@ -30,6 +30,7 @@ USO:   python3 scripts/duplex-eval.py --trigger-bench [--samples 20] [--seed 42]
 EXEMPLO (smoke rápido): python3 scripts/duplex-eval.py --trigger-bench --samples 6
 """
 import argparse, json, os, random, sys, time, urllib.request, uuid
+from pathlib import Path
 
 CLASS_SYS = ("Você é o JARVIS, assistente de voz. Classifique o turno do "
              "usuário em uma palavra: RESPOND (fala completa que pede "
@@ -323,7 +324,10 @@ ACTION_TOOLS = ("tool", "jarvis", "shell", "execute_shell", "notify")
 
 def wav_inject(args) -> dict:
     import shutil, subprocess, threading
-    LOG = args.log
+    LOG = args.log or os.path.join(
+        os.path.dirname(__file__), "..", "logs", "duplex",
+        time.strftime("%Y-%m-%d") + ".log")
+    LOG = os.path.abspath(LOG)
     WAVS = args.wavs
     items = [json.loads(l) for l in open(
         os.path.join(os.path.dirname(__file__), "..", "data",
@@ -381,12 +385,18 @@ def wav_inject(args) -> dict:
                                         "verdict": "sem-wav"})
             continue
         mark = time.monotonic()
-        # fila (o loop consome 1/tick; o arquivo único era sobrescrito
-        # quando o loop estava ocupado num LLM lento)
+        # (06/11) UM cenário por vez: a fila acumulava quando o loop
+        # estava ocupado (a resposta anterior ainda falando) e o ASR
+        # ficava UM turno atrás (a transcrição batia com o cenário
+        # anterior). Drena a fila antes de cada injeção.
         os.makedirs("/tmp/duplex-inject-queue", exist_ok=True)
+        # (06/11) NÃO apaga o que está pendente: o loop do cliente pode
+        # estar ocupado (LLM lento) e o WAV seria destruído antes de
+        # ser consumido → "sem-segmento" em cascata.
         shutil.copyfile(wav, "/tmp/duplex-inject-queue/"
                         + time.strftime("%H%M%S") + f"-{idx:03d}.wav")
-        dseg, lseg = wait_for("SEGMENTO:", 12, since=mark)
+        wait_for("WAV INJETADO", 6, since=mark)
+        dseg, lseg = wait_for("SEGMENTO:", 10, since=mark)
         r = {"utt": utt, "expect": expect, "wav": os.path.basename(wav)}
         if not dseg:
             r["verdict"] = "sem-segmento"
@@ -395,10 +405,10 @@ def wav_inject(args) -> dict:
             continue
         # texto transcrito (o ouvido)
         r["asr_text"] = lseg.split("SEGMENTO:", 1)[-1].strip()[:80]
-        dcls, lcls = wait_for("classify", 12, since=mark)
+        dcls, lcls = wait_for("classify", 8, since=mark)
         r["classify_line"] = lcls.strip()[:100] if lcls else None
         # resposta falada + tools
-        dresp, lresp = wait_for("tts.say", 25, since=mark)
+        dresp, lresp = wait_for("tts.say", 18, since=mark)
         r["timespeak_s"] = round(dseg + dresp, 2) if (dseg and dresp) else None
         said = []
         for t, ln in lines:
@@ -429,11 +439,16 @@ def wav_inject(args) -> dict:
             r["verdict"] = "ok-silenced" if (sil and not dresp) else (
                 "respondeu" if dresp else "no-classify")
         else:
-            r["verdict"] = "classificado" if lcls else "no-classify"
+            # BARGE: o certo é o classificador dizer BARGE (a versionsão
+            # que mata o TTS) — não basta existir uma linha de classify.
+            _is_barge = bool(lcls and "BARGE" in lcls)
+            r["verdict"] = ("ok-barge" if _is_barge else
+                            ("classificado-outra" if lcls else "no-classify"))
         report["scenarios"].append(r)
         print(f"{expect:8s} {utt[:28]:28s} -> {r['verdict']:16s} "
               f"asr={r.get('asr_text','')[:22]:22s} ts={r.get('timespeak_s')}")
-        time.sleep(1.0)
+        # deixa o turno anterior terminar (TTS + reaction) antes do próximo
+        time.sleep(3.0)
     stop[0] = True
     n = len(report["scenarios"])
     ok = sum(1 for s in report["scenarios"] if s.get("verdict", "").startswith("ok"))
@@ -451,7 +466,10 @@ def main() -> int:
     ap.add_argument("--wav-inject", action="store_true",
                     help="E2E via gancho de ASR (WAV entra no asrd; o AEC "
                          "cancelaria a caixa de som)")
-    ap.add_argument("--log", default="/tmp/opencode/duplex-voice.log")
+    ap.add_argument("--log", default="",
+                    help="log do cliente (padrão: o log diário real do "
+                         "próprio duplex — o jarvis heal reinicia a voz "
+                         "sozinho e esse processo NÃO escreve no /tmp)")
     ap.add_argument("--wavs", default="/tmp/opencode/night-microturn/"
                                         "genuine-synth-wavs")
     ap.add_argument("--e2e-playback", action="store_true",

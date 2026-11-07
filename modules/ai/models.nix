@@ -398,7 +398,12 @@ in rec {
       # zram → cada request levava MINUTOS (timeout) → o classificador
       # devolvia None → o JARVIS FICAVA MUDO. MemoryHigh tem de ser
       # MAIOR que o consumo de repouso; o swap é só reserva.
-      memHigh = "8G"; memMax = "11G"; memSwapMax = "1G"; limitMemlock = false;
+      # (06/11, 21:25) swap max 1G MATAVA o server: o GGUF é mmap e o
+      # kernel joga as páginas frias no zram (1,2-1,7GB em operação
+      # normal) → cgroup OOM-kill (status=9/KILL) 2x em 15min. Com
+      # MemoryHigh=8G o modelo volta pra RAM; o swap é reserva de 4G
+      # (e o MemoryMax=11G é o teto duro).
+      memHigh = "8G"; memMax = "11G"; memSwapMax = "4G"; limitMemlock = false;
       # (26/10, dono: "tira o bonsai de default e coloca o qwen mtp que tem
       # o lora pra subir com o lora") → este é o DEFAULT do sistema agora.
       # wanted=true = sobe no boot COM o LoRA registrado (medido ao vivo:
@@ -437,7 +442,12 @@ in rec {
       # zram → cada request levava MINUTOS (timeout) → o classificador
       # devolvia None → o JARVIS FICAVA MUDO. MemoryHigh tem de ser
       # MAIOR que o consumo de repouso; o swap é só reserva.
-      memHigh = "8G"; memMax = "11G"; memSwapMax = "1G"; limitMemlock = false;
+      # (06/11, 21:25) swap max 1G MATAVA o server: o GGUF é mmap e o
+      # kernel joga as páginas frias no zram (1,2-1,7GB em operação
+      # normal) → cgroup OOM-kill (status=9/KILL) 2x em 15min. Com
+      # MemoryHigh=8G o modelo volta pra RAM; o swap é reserva de 4G
+      # (e o MemoryMax=11G é o teto duro).
+      memHigh = "8G"; memMax = "11G"; memSwapMax = "4G"; limitMemlock = false;
       wanted = false;
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = modelFile (o server anuncia o path, sem --alias).
@@ -464,7 +474,12 @@ in rec {
       # zram → cada request levava MINUTOS (timeout) → o classificador
       # devolvia None → o JARVIS FICAVA MUDO. MemoryHigh tem de ser
       # MAIOR que o consumo de repouso; o swap é só reserva.
-      memHigh = "8G"; memMax = "11G"; memSwapMax = "1G"; limitMemlock = false;
+      # (06/11, 21:25) swap max 1G MATAVA o server: o GGUF é mmap e o
+      # kernel joga as páginas frias no zram (1,2-1,7GB em operação
+      # normal) → cgroup OOM-kill (status=9/KILL) 2x em 15min. Com
+      # MemoryHigh=8G o modelo volta pra RAM; o swap é reserva de 4G
+      # (e o MemoryMax=11G é o teto duro).
+      memHigh = "8G"; memMax = "11G"; memSwapMax = "4G"; limitMemlock = false;
       wanted = false;
     };
     phi-mini = {

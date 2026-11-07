@@ -1187,6 +1187,18 @@ def stream_chat(base, body, tts, on_done=None):
             tts.say(rest)
     except Exception as exc:  # noqa: BLE001
         log(f"[{ts()}] stream ERRO: {exc}")
+        # (06/11) DEGRADA, NÃO MORRE: o 4B às vezes emite uma tool call
+        # MALFORMADA (ex.: `do({})` sem action) e o llama.cpp responde 500
+        # ("Failed to parse tool call") → a voz ficava MUDA. Agora: uma
+        # retry SEM tools (resposta em prosa) — o dono sempre ouve
+        # alguma coisa.
+        if body.get("tools") and "500" in str(exc):
+            try:
+                _b2 = {k: v for k, v in body.items() if k != "tools"}
+                log(f"[{ts()}] retry sem tools (tool call malformada)")
+                return stream_chat(base, _b2, tts, on_done=on_done)
+            except Exception as exc2:  # noqa: BLE001
+                log(f"[{ts()}] stream ERRO (retry): {exc2}")
         rest = sb.flush()
         if rest:
             tts.say(rest)
@@ -1378,10 +1390,12 @@ def is_backchannel(txt):
 # no parcial dispara web_search ANTES do fim da fala; o executor final
 # consome o cache (match fuzzy difflib ≥0.6). Paper: +16pp cobertura
 # de tool, -36.4% latência de resposta final. v1 = regex (sem LLM tick).
+# (06/11) só classes claramente "notícia/preço/tempo" — "quem é
+# você" disparava uma web search inútil (e poluía o cache do
+# executor).
 SPEC_RE = re.compile(
     r"(d[óo]lar|euro|cot-a?[çc][ãa]o|clima|tempo (?:de|pra|para) "
-    r"amanh[ãa]|previs[ãa]o|temperatura|pre[çc]o|not[íi]cias?|c[óo]pio "
-    r"|quem (?:é|e) |quando (?:é|e) )", re.I)
+    r"amanh[ãa]|previs[ãa]o|temperatura|pre[çc]o|not[íi]cias?|c[âa]mbio)", re.I)
 SPEC_CACHE = {}          # q -> (ts, resultado)
 SPEC_FIRED = {}          # q -> ts (anti-refire)
 SPEC_LOCK = threading.Lock()
@@ -1417,18 +1431,25 @@ def spec_take(query):
     """Executor: rouba o resultado especulado (fuzzy ≥0.6, one-shot)."""
     with SPEC_LOCK:
         now = time.monotonic()
-        best, best_r = None, 0.0
+        best, best_r, best_o = None, 0.0, 0.0
+        _qt = set(w.lower().strip(".,!?") for w in query.split())
         for q, (t, r) in list(SPEC_CACHE.items()):
             if now - t > 60:
                 del SPEC_CACHE[q]; continue
             ratio = difflib.SequenceMatcher(
                 None, q.lower(), query.lower()).ratio()
-            if ratio > best_r:
-                best, best_r = (q, r), ratio
-        if best and best_r >= 0.6:
+            # (06/11) MATCH POR TOKEN: o modelo reescreve a query
+            # ("previsão do tempo amanhã" vs a fala "Qual a previsão do
+            # tempo de amanhã") → o ratio de string ficava ~0,6 e o cache
+            # especulado NUNCA era usado (a tool repetia 1,8s).
+            _st = set(w.lower().strip(".,!?") for w in q.split())
+            _ov = (len(_qt & _st) / len(_qt)) if _qt else 0.0
+            if _ov > best_o or (_ov == best_o and ratio > best_r):
+                best, best_r, best_o = (q, r), ratio, _ov
+        if best and (best_o >= 0.6 or best_r >= 0.72):
             del SPEC_CACHE[best[0]]
-            log(f"[{ts()}] HEARTBEAT hit ({best_r:.2f}): "
-                f"especulado p/ {query[:30]!r}")
+            log(f"[{ts()}] HEARTBEAT hit (overlap={best_o:.2f} "
+                f"ratio={best_r:.2f}): especulado p/ {query[:30]!r}")
             return best[1]
     return None
 
@@ -1522,7 +1543,16 @@ def call_tool(name, args):
                 _args = (action[len("jarvis "):] + " " + inp).split()
             return _jarvis_cli(_args)
         if "remember" in action or "salva" in action or "memoriz" in action:
-            return call_tool("remember", {"text": inp})
+            # (06/11) ASSÍNCRONO: gravar memória leva ~3,1s (embedding +
+            # Qdrant) e segurava a CONVERSA em silêncio. A escrita vai
+            # para a thread; a voz confirma na hora ("guardei").
+            def _store_mem(_txt=inp):
+                try:
+                    call_tool("remember", {"text": _txt})
+                except Exception:
+                    pass
+            threading.Thread(target=_store_mem, daemon=True).start()
+            return "Guardei na memória."
         if "recall" in action or "memória" in action or "memoria" in action:
             return call_tool("recall", {"query": inp})
         if "web" in action or "busca" in action or "internet" in action:
@@ -2186,6 +2216,25 @@ class Tts:
         pass  # piper por-frase: sem daemon pra matar
 
 # ---------------------------------------------------------------- main
+def _asr_inject_pcm(asr_obj, pcm_i16, sr=16000):
+    """Injeta PCM no ASR em CHUNKS DE 250ms (como o mic).
+
+    (06/11) O asrd usa o VAD do silero como ITERATOR de streaming: um
+    blob de 3s num pedaço só quebra o state machine e o whisper
+    transcreve só a CAUDA ("Jarvis, que horas são?" → "Um abração.").
+    Feed em 250ms = exatamente o caminho do microfone.
+    """
+    step = int(sr * 0.25)
+    n = 0
+    for i in range(0, len(pcm_i16), step):
+        chunk = pcm_i16[i:i + step]
+        if len(chunk) < step // 2:
+            break
+        asr_obj.feed(chunk.astype(np.float32) / 32768.0)
+        n += 1
+    return n
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
@@ -2354,15 +2403,19 @@ def main():
                                 _a = np.interp(_x, np.arange(len(_a)),
                                                _a.astype(np.float64)
                                                ).astype(np.int16)
-                            asr.feed(_a.astype(np.float32) / 32768.0)
+                            _nch = _asr_inject_pcm(asr, _a, SR)
                             log(f"[{ts()}] WAV INJETADO no ASR "
-                                f"({len(_a)/SR:.1f}s, {_sr}Hz)")
+                                f"({len(_a)/SR:.1f}s, {_sr}Hz, {_nch} chunks)")
                         finally:
                             Path(_wpath).unlink(missing_ok=True)
             except Exception as _e:
                 log(f"[{ts()}] wav-inject erro: {_e}")
             # fila de WAVs injetados (o teste pode tocar vários; o loop
-            # consome 1 por tick — sem perder nenhum)
+            # consome 1 por tick — sem perder nenhum). O WAV vira CHUNKS
+            # que SUBSTITUEM o chunk do mic nesse tick: intercalado com o
+            # silêncio do mic, o asrd recebia um áudio todo torto e o
+            # segmento saía vazio.
+            _inject_chunks = []
             try:
                 _pq = Path("/tmp/duplex-inject-queue")
                 if _pq.is_dir():
@@ -2394,9 +2447,13 @@ def main():
                                 _a = np.interp(_x, np.arange(len(_a)),
                                                _a.astype(np.float64)
                                                ).astype(np.int16)
-                            asr.feed(_a.astype(np.float32) / 32768.0)
+                            _step = int(SR * 0.25)
+                            for _o in range(0, len(_a) - _step // 2, _step):
+                                _inject_chunks.append(
+                                    _a[_o:_o + _step].astype(np.int16))
                             log(f"[{ts()}] WAV INJETADO no ASR "
-                                f"({len(_a)/SR:.1f}s, {_sr}Hz)")
+                                f"({len(_a)/SR:.1f}s, {_sr}Hz, "
+                                f"{len(_inject_chunks)} chunks)")
                         finally:
                             Path(_wpath).unlink(missing_ok=True)
             except Exception as _e:
@@ -2448,6 +2505,12 @@ def main():
                 chunks = [mic_q.get()]   # nada novo: espera o próximo (pace natural)
             if prev_pcm is not None:
                 chunks.insert(0, prev_pcm)
+            if _inject_chunks:
+                # o WAV entra NO LUGAR do mic (o asrd precisa de áudio
+                # CONTÍGUO: misturar o silêncio do mic no meio quebra o
+                # onset/endpoint do segmento)
+                chunks = _inject_chunks
+                prev_pcm = None
             # rms do tick = o do último chunk consumido (visibilidade)
             last16 = np.frombuffer(chunks[-1], dtype=np.int16) if isinstance(chunks[-1], (bytes, bytearray)) else chunks[-1]
             rms = int(np.sqrt((np.asarray(last16, dtype=np.int16).astype(np.float64) ** 2).mean()))
