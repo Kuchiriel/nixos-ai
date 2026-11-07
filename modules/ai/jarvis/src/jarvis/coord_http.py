@@ -285,14 +285,63 @@ def build_server():
 
     @mcp.tool
     def coord_health() -> str:
-        """Saude do host Linux: RAM/swap/qdrant/llama/servicos."""
+        """Saude do HOST Linux: inferencia, qdrant, embeddings, RAM, disco.
+
+        (07/11) A versao anterior so perguntava ao backend de inferencia (o
+        :8092 = MTP) e voltava DOWN/timeout quando ele reiniciava - o celular
+        leu como 'o RAG do host caiu', mas o RAG (qdrant+embeddings) estava de
+        pe. Agora reporta TUDO que importa para quem consome de fora.
+        """
+        import shutil as _shutil
+        import socket as _socket
+        import urllib.request as _u
+        out: dict[str, object] = {}
+
+        def porta_aberta(port: int, timeout: float = 1.5) -> bool:
+            try:
+                with _socket.create_connection(("127.0.0.1", port), timeout=timeout):
+                    return True
+            except OSError:
+                return False
+
+        def http_ok(url: str, timeout: float = 3.0) -> str:
+            try:
+                with _u.urlopen(url, timeout=timeout) as r:
+                    return f"HTTP {r.status}"
+            except Exception as exc:
+                return f"erro: {str(exc)[:60]}"
+
+        out["router_8080"] = porta_aberta(8080)
+        out["mtp_8092"] = porta_aberta(8092)
+        out["qdrant_6333"] = porta_aberta(6333)
+        out["embeddings_8081"] = http_ok("http://127.0.0.1:8081/health")
+        out["reranker_8082"] = porta_aberta(8082)
         try:
-            from jarvis.core.health_monitor import BackendHealthMonitor
-            mon = BackendHealthMonitor("http://127.0.0.1:8092")
-            data = mon.get_health() if hasattr(mon, "get_health") else mon.check()
-            return json.dumps(data, indent=2, ensure_ascii=False, default=str)
+            mi = {}
+            with open("/proc/meminfo", encoding="utf-8") as fh:
+                for line in fh:
+                    k, _, v = line.partition(":")
+                    mi[k] = int(v.strip().split()[0]) * 1024
+            total = mi.get("MemTotal", 0)
+            avail = mi.get("MemAvailable", 0)
+            out["ram"] = {"total_gb": round(total / 2**30, 1),
+                          "used_gb": round((total - avail) / 2**30, 1),
+                          "available_gb": round(avail / 2**30, 1)}
         except Exception as exc:
-            return f"coord_health falhou: {exc}"
+            out["ram"] = f"erro: {exc}"
+        try:
+            du = _shutil.disk_usage("/home")
+            out["disk_home"] = {"total_gb": round(du.total / 2**30, 1),
+                                "used_gb": round(du.used / 2**30, 1),
+                                "free_gb": round(du.free / 2**30, 1)}
+        except Exception as exc:
+            out["disk_home"] = f"erro: {exc}"
+        try:
+            out["loadavg"] = open("/proc/loadavg", encoding="utf-8").read().split()[:3]
+        except Exception:
+            pass
+        out["rag_ok"] = bool(out["qdrant_6333"]) and "erro" not in str(out["embeddings_8081"])
+        return json.dumps(out, indent=2, ensure_ascii=False, default=str)
 
     return mcp
 
