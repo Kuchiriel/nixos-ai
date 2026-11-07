@@ -1665,13 +1665,30 @@ def _handle_rag_search(args: dict[str, Any]) -> str:
 
 
 def _handle_rag_index(args: dict[str, Any]) -> str:
-    """Index a directory into the RAG system (code + auto-sweep Books)."""
+    """Indexa um directory no RAG (code + auto-sweep Books)."""
     path = args.get("path", ".")
     try:
         from jarvis.core.rag import HybridIndexer
         hi = HybridIndexer()
         count = hi.index_directory(path)
         out = f"Indexed {count} files from {path}"
+        # MEDIDO 07/11: "Indexed 0 files" SEM motivo levava 4 rounds de
+        # diagnostico (o arquivo estava em quarentena PATH_ERROR, fora das
+        # read roots). Agora a tool DIZ o que faltou e por que.
+        reasons: dict[str, list[str]] = {}
+        for skipped, reason in getattr(hi, "skipped", []) or []:
+            reasons.setdefault(reason, []).append(skipped)
+        for reason, paths in reasons.items():
+            shown = ", ".join(os.path.basename(p) for p in paths[:5])
+            more = f" (+{len(paths) - 5} mais)" if len(paths) > 5 else ""
+            hint = ""
+            if reason == "PATH_ERROR":
+                hint = (" — path fora das read roots; libere com "
+                        "JARVIS_EXTRA_READ_ROOTS (leitura) ou indexe de dentro do repo")
+            elif reason == "unchanged":
+                hint = " — ja estava indexado (use force para reindexar)"
+            out += (f"; NAO indexado: {len(paths)} arquivo(s) [{reason}]: "
+                    f"{shown}{more}{hint}")
     except Exception as e:
         error_msg = str(e)
         if "batch size" in error_msg:

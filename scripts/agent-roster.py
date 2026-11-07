@@ -370,9 +370,16 @@ def cmd_claim(args) -> int:
         data = load()
         agents = data["agents"]
         for e in agents:
-            if e["name"] == args.name and window_alive(e, windows):
+            # (07/11) O re-claim do PROPRIO nome tinha que ser possível: sem
+            # --force, nao dava para atualizar codinome/aliases/contexto de um
+            # agente que continua vivo (e o proprio agente esta vivo por
+            # definicao aqui) => o roster ficava congelado com o primeiro
+            # claim. --force assume (mesma semantica da colisao de arquivos).
+            if e["name"] == args.name and window_alive(e, windows) \
+                    and not getattr(args, "force", False):
                 print(f"agent-roster: nome '{args.name}' já está vivo na "
-                      f"janela {e.get('window')} — use outro nome ou "
+                      f"janela {e.get('window')} — use --force para "
+                      f"reivindicar (atualiza codinome/aliases/contexto) ou "
                       f"release antes", file=sys.stderr)
                 return 3
         for e in agents:
@@ -402,9 +409,19 @@ def cmd_claim(args) -> int:
         else:
             codename = (previous or {}).get("codename") or _pick_codename(agents)
         context = (getattr(args, "context", "") or (previous or {}).get("context") or "")
+        # (07/11) ALIASES: o mesmo agente aparece com nomes diferentes no
+        # roster (name/codename) e no bus (ex: 'jarvis@nitro-v15' vs 'Cervo').
+        # Medido: 13 nomes no bus para 6 agentes => as mensagens endereçadas
+        # se perdiam. Aqui o agente DECLARA os nomes extras e o coord.py os
+        # resolve (roster -> _aliases).
+        raw_aliases = (getattr(args, "aliases", "") or "").strip()
+        aliases = [a.strip() for a in raw_aliases.split(",") if a.strip()]
+        if not aliases:
+            aliases = list((previous or {}).get("aliases") or [])
         entry = {
             "name": args.name,
             "codename": codename,
+            "aliases": aliases,
             "context": context,
             "lane": args.lane or "",
             "repo": args.repo or "",
@@ -420,6 +437,8 @@ def cmd_claim(args) -> int:
         save(data)
     print(f"roster: '{args.name}' na lane '{entry['lane'] or '(sem lane)'}' "
           f"(repo={entry['repo'] or '-'}, janela={entry['window']})")
+    if entry.get("aliases"):
+        print(f"roster: aliases {', '.join(entry['aliases'])}")
     print(f"roster: codinome '{entry['codename']}'"
           + (f" | contexto: {entry['context']}" if entry["context"] else
              " | contexto: (vazio — defina com set-context)"))
@@ -650,6 +669,11 @@ def main() -> int:
     p.add_argument("--note", default="")
     p.add_argument("--context", default="",
                    help="descrição curta do contexto (1 frase): o que esta IA fazendo")
+    p.add_argument("--aliases", default="",
+                   help="outros nomes pelos quais este agente pode ser "
+                        "enderecado no bus (separados por virgula) - use para "
+                        "o nome que voce publica no bus, ex: --aliases "
+                        "jarvis@nitro-v15,Cervo")
     p.add_argument("--codename", default="",
                    help="codinome escolhido (sem ele, sorteia um livre)")
     p.add_argument("--force", action="store_true",

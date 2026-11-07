@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_83 tools._
+_87 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -23,6 +23,7 @@ _83 tools._
 - `agents-watcher.sh` (nixos-ai/scripts) — agents-watcher.sh — O WATCHER ÚNICO dos agentes (17/10, dono: "consolide
 - `bench-llm.sh` (nixos-ai/scripts) — bench-llm.sh — benchmark padrão da casa (consolida os one-offs de 24/09).
   use: `Uso: BENCH_LD_ENVFILE=/caminho LD_LIBRARY_PATH=... (export) para o bench.`
+- `check-ctx-drift.py` (nixos-ai/scripts) — """Confere o contexto do registry contra o contexto REAL dos GGUFs.
 - `corpus_inventory.py` (nixos-ai/scripts) — """Inventário do corpus de conhecimento (§3/§22 da missão knowledge-substrate).
   use: `~/Books            corpus de conhecimento (binários + notas; inclui versions/)`
 - `ctx-usage.sh` (nixos-ai/scripts) — ctx-usage.sh — Agrega uso real do LLM local a partir do journal.
@@ -46,6 +47,7 @@ _83 tools._
   use: `Uso: python3 fetch-resume.py URL DESTINO [--tries 50]`
 - `gen-lora-data.py` (nixos-ai/scripts) — """gen-lora-data.py — gera dados de treino pro LoRA de timing no 4B-MTP.
   use: `python3 gen-lora-data.py --log /tmp/opencode/duplex-voice.log --out /tmp/opencode/lora-train.jsonl`
+- `gguf-ctx.py` (nixos-ai/scripts) — """Le o contexto REAL (treinado) dos modelos GGUF.
 - `gguf_audit.py` (nixos-ai/scripts) — """Audit GGUFs: real dims -> KV/token -> ctx fit.
   use: `Usage: gguf_audit.py [modelsdir]  (default ~/models, JSON to stdout)`
 - `grade-harbor.py` (nixos-ai/scripts) — """grade-harbor.py — taxonomia de estratégia sobre trajetórias salvas.
@@ -54,6 +56,7 @@ _83 tools._
   use: `Uso: ./scripts/harbor-lite.sh [bonsai|fast]  (default: bonsai)`
 - `harness-suite.py` (nixos-ai/scripts) — """harness-suite.py — desafios progressivos p/ jarvis dev (E2E real).
   use: `python3 scripts/harness-suite.py [--tier easy|medium|hard] [--out FILE]`
+- `host-health.sh` (nixos-ai/scripts) — host-health.sh — veredito de SAÚDE DE RAM/SWAP do host (leitura only).
 - `ingest_books.py` (nixos-ai/scripts) — """Ingestão do corpus de livros/papers/digests na coleção books (§10–§11).
 - `jarvis-cli.sh` (nixos-ai/scripts) — jarvis-cli.sh — CLI wrapper for all JARVIS MCP tools
 - `jarvis-gaming-mode.sh` (nixos-ai/scripts) — ═══════════════════════════════════════════════════════════════════
@@ -116,6 +119,8 @@ _83 tools._
 - `sync-vault.sh` (nixos-ai/scripts) — Sync important docs to Obsidian vault (not everything)
   use: `Run: ./scripts/sync-vault.sh`
 - `thermal-curve.sh` (nixos-ai/scripts) — thermal-curve.sh — Measure thermal degradation over 5 minutes of continuous inference
+- `tui-e2e.sh` (nixos-ai/scripts) — tui-e2e.sh — prova que um comando/slash do TUI roda LOCAL (zero turno de
+  use: `./scripts/tui-e2e.sh --command "/jailbreak status"`
 - `ux-autonomy.py` (nixos-ai/scripts) — """P0 autonomy suite — 20 tarefas user-fiéis no Agent REAL (P0.4 + metas P0).
   use: `Uso: python3 ux-autonomy.py --model bonsai|qwen --out DIR [--only F1,D2]`
 - `ux-repl-session.py` (nixos-ai/scripts) — """ux-repl-session.py — usuário simulado no REPL do space (diagnóstico).

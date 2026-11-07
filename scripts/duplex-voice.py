@@ -2617,8 +2617,15 @@ def main():
                             f"blocked={FEED_STATS['blocked']} quiet="
                             f"{FEED_STATS['quiet']} corr_med={med:.2f}")
                     FEED_STATS.update(fed=0, blocked=0, quiet=0, corr=[])
-                    # mic mudo durante a janela de injecao do teste
+                    # mic mudo durante a janela de injecao do teste.
+                    # (07/11) alimenta SILENCIO, nao "nada": o tracker
+                    # do asrd fecha o segmento no silencio — sem isso o
+                    # segmento ficava aberto e so fechava quando o mic
+                    # voltava (a TV da sala entrava no texto: "Obrigado."
+                    # em vez da frase injetada).
                     if _quiet_until > time.monotonic():
+                        asr.feed(np.zeros(len(_processed),
+                                          dtype=np.float32) / 32768.0)
                         continue
                     asr.feed(_processed.astype("float32") / 32768.0)
             if barge_buf and not tts_playing and len(barge_buf) >= 2:

@@ -384,15 +384,30 @@ def _aliases(agent: str | None, codename: str | None) -> set[str]:
     out = {str(x) for x in (agent, codename, agent_id()) if x}
     try:
         from jarvis.core.coord_roster import roster_agents
+        # (07/11) ALIASES declarados no roster: o mesmo agente se anuncia no
+        # bus com nomes diferentes do roster (medido: 13 nomes para 6 agentes -
+        # 'jarvis@nitro-v15', 'Cervo', 'Arara', 'sweep-2026-11'). Sem isso, uma
+        # msg endereçada a um desses nomes nao chega.
+        # BUG FIX (07/11): o `break` pegava o PRIMEIRO agente que casava, e um
+        # alias compartilhado ('opencode-matheus' e' nome do roster do Windows E
+        # alias meu) resolvia para o agente errado. Agora: coleta TODOS os
+        # agentes que casam e une os conjuntos - o endereçamento e' por NOME, e
+        # dois agentes que declaram o mesmo alias AMBOS o recebem (melhor
+        # duplicar entrega do que perder a mensagem).
+        casam: list[dict] = []
         for entry in roster_agents():
             nome = str(entry.get("name") or "")
             cod = str(entry.get("codename") or "")
-            if agent and (nome == agent or cod == agent):
-                out.update({nome, cod} - {""})
-                break
-            if codename and (nome == codename or cod == codename):
-                out.update({nome, cod} - {""})
-                break
+            ali = {str(a) for a in (entry.get("aliases") or []) if a}
+            if agent and (nome == agent or cod == agent or agent in ali):
+                casam.append(entry)
+            elif codename and (nome == codename or cod == codename or codename in ali):
+                casam.append(entry)
+        for entry in casam:
+            nome = str(entry.get("name") or "")
+            cod = str(entry.get("codename") or "")
+            ali = {str(a) for a in (entry.get("aliases") or []) if a}
+            out.update(({nome, cod} | ali) - {""})
     except Exception:
         pass
     return out

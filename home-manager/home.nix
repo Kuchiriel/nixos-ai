@@ -704,6 +704,16 @@ in {
           ];
           cwd = "/home/nixos/projects/nixos-ai";
           enabled = true;
+          # Raizes extras de LEITURA (mecanismo do dono, 23/09). MEDIDO
+          # 07/11: sem isto o RAG so indexava o nixos-ai (o cwd do MCP) e
+          # TODO outro projeto do monorepo caia em quarentena PATH_ERROR —
+          # e em SILENCIO (a tool dizia "Indexed 0 files" sem motivo). Com
+          # isto, `jarvis_rag_index` alcança qualquer repo do monorepo
+          # (~/projects) — e so LEITURA: o jail de escrita continua
+          # absoluto (o env e ignorado quando write=True).
+          env = {
+            JARVIS_EXTRA_READ_ROOTS = "/home/nixos/projects";
+          };
           # 30s era pouco: o observe_screen medido levou 12,4s / 21,0s / 48,4s
           # (visão + OCR). Com 30s, 2 de 3 davam timeout.
           timeout = 180000;

@@ -585,6 +585,11 @@ class HybridIndexer:
         self._store = QdrantStore(self._cfg)
         self._llm = LLMClient(self._cfg)
         self._indexed_hashes: dict[str, float] = {}  # path → mtime (cache de indexação)
+        # Por que cada arquivo NAO foi indexado nesta rodada (path, motivo).
+        # MEDIDO 07/11: `rag_index` devolvia "Indexed 0 files" SEM dizer o
+        # motivo — o arquivo estava em quarentena PATH_ERROR (fora das read
+        # roots) e o diagnóstico custou 4 rounds. Agora a tool reporta.
+        self.skipped: list[tuple[str, str]] = []
 
     def ensure_collection(self) -> None:
         self._store.ensure_collection(self._cfg.qdrant_collection_code, dim=self._cfg.embed_dim)
@@ -612,6 +617,7 @@ class HybridIndexer:
                 stat = Path(path).stat()
                 mtime = stat.st_mtime
                 if not force and path in self._indexed_hashes and self._indexed_hashes[path] >= mtime:
+                    self.skipped.append((path, "unchanged"))
                     return None  # arquivo não mudou, pula
                 # NÃO grava o manifest aqui: o arquivo pode cair em
                 # quarentena (PATH_ERROR/PII) ou falhar no embed, e um
@@ -627,9 +633,11 @@ class HybridIndexer:
                     from jarvis.core.doc_sanitize import sanitize_document
                     san = sanitize_document(path)
                     if san.status != "ok":
+                        self.skipped.append((path, getattr(san, "reason", "quarantine")))
                         return None  # quarentena: manifest gravado, sem indexar
                     content = san.text
-            except OSError:
+            except OSError as e:
+                self.skipped.append((path, f"unreadable: {e.__class__.__name__}"))
                 return None
         else:
             # §19: barreira efetiva também p/ conteúdo explícito (MCP/agentes).
@@ -638,6 +646,7 @@ class HybridIndexer:
             san = sanitize_text(content, fmt=ext if ext.startswith(".") else ".md",
                                 min_chars=1)
             if san.status != "ok":
+                self.skipped.append((path, getattr(san, "reason", "quarantine")))
                 return None  # quarentena in-memory: sem indexar
 
         # proveniência canônica do ponto (§13; audit P1-6)
@@ -749,6 +758,7 @@ class HybridIndexer:
         """Indexa todos os arquivos elegíveis de um diretório. Retorna o total de arquivos."""
         self.ensure_collection()
         processed_files = set()
+        self.skipped = []
         for path in iter_indexable_files(root, exclude_dirs=self._cfg.index_exclude_dirs):
             if self.index_file(path, force=force) is not None:
                 processed_files.add(path)
