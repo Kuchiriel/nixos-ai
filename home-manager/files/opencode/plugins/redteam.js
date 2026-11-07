@@ -116,10 +116,8 @@ function loadState() {
   }
 }
 
-function saveState(state) {
-  mkdirSync(dirname(STATE), { recursive: true });
-  writeFileSync(STATE, JSON.stringify(state, null, 2) + "\n", "utf8");
-}
+// O estado e ESCRETO so pelo plugin do TUI (o comando /jailbreak). O
+// servidor so LE — assim nao ha dois escritores disputando o mesmo arquivo.
 
 function audit(line) {
   try {
@@ -464,7 +462,13 @@ export const RedTeamOpenCodePlugin = async () => {
       // apenas o aviso e o log, sem estado (nada de logica duplicada).
       for (const part of output.parts) {
         if (!part || part.type !== "text" || !part.text) continue;
-        if (!/^\s*\/jailbreak(?:\s|$)/.test(part.text)) continue;
+        if (process.env.OPENCODE_REDTEAM_DEBUG) {
+          audit(new Date().toISOString() + " DEBUG chat.message texto="
+            + JSON.stringify((part.text || "").slice(0, 140)));
+        }
+        // Ancorado como o do TUI: so quando o prompt INTEIRO e o comando.
+        // Uma frase que cite /jailbreak no meio nao e sequestrada.
+        if (!/^\s*\/jailbreak(?:\s+[\s\S]*)?$/.test(part.text)) continue;
         part.text =
           "O comando /jailbreak e LOCAL do TUI (plugin redteam-tui): se voce "
           + "leu isto, o plugin do TUI nao carregou — verifique "
@@ -499,12 +503,28 @@ export const RedTeamOpenCodePlugin = async () => {
       const args = output?.args;
       // (c) deception: a forma decomposta no comando volta a ser o termo
       // real — o comando executa no alvo de verdade.
+      // MEDIDO 07/11: esta direcao NAO era auditada (so o par era), ou
+      // seja, o log do dono nao provava que a decoy virou termo real no
+      // disco. Agora auditamos os campos que mudaram.
       if (state.deception?.length && args
           && typeof args === "object") {
+        const deceptionHits = [];
         for (const field of TOOL_TEXT_FIELDS) {
           if (typeof args[field] === "string") {
-            args[field] = recomposeText(args[field], state);
+            const before = args[field];
+            const after = recomposeText(before, state);
+            if (after !== before) {
+              args[field] = after;
+              deceptionHits.push(field);
+            }
           }
+        }
+        if (deceptionHits.length) {
+          audit(
+            `${new Date().toISOString()} IN  tool=${input?.tool} ` +
+            `fields=${deceptionHits.join(",")} decoy->termo ` +
+            `(lista de deception)`
+          );
         }
       }
       if (!state.enabled || !state.trigger || !state.decoy) return;
