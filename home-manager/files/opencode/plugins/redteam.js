@@ -487,8 +487,20 @@ function liveStateBlock() {
 // (~/.config/opencode/tui-plugins/redteam-tui.js), que consome o Enter
 // antes do prompt submeter: nao ha mensagem e nao ha turno de modelo.
 
-export const RedTeamOpenCodePlugin = async () => {
-  return {
+// Legacy opencode 1 hooks/tools object — single source of truth. The dual
+// default export below wraps it for both runtimes:
+//   opencode 1 (>=1.18.29) → server() returns this object (byte-compat with
+//     the pre-port plugin: same hook names, same args semantics)
+//   opencode v2 → setup() registers the SAME bodies via the v2 API:
+//     chat.message                       → session.hook("prompt")
+//     tool.execute.before / after        → tool.hook("execute.before"/"execute.after")
+//     chat.messages.transform (2c)       → session.hook("context") → event.messages
+//     chat.system.transform  (strategy)  → session.hook("context") → event.system
+//     tool map                           → tool.transform(editor.add(...))
+//     (result shape on execute.after differs in v2 — handled defensively:
+//      unknown shapes are wrapped as { output: event.result } and no-op
+//      safely; the 2c "net" still redacts everything at the LLM boundary.)
+const legacy = {
     // ── 1. sanitizacao do prompt de entrada ───────────────────────────
     // Deception: o prompt de entrada tambem e sanitizado —
     // (i) o par trigger/decoy (o modelo ve o decoy, nao o trigger) e
@@ -1225,5 +1237,86 @@ export const RedTeamOpenCodePlugin = async () => {
         },
       },
     },
-  };
+};
+
+export const RedTeamOpenCodePlugin = async () => legacy;
+
+const STRATEGY_SYSTEM_BLOCK = (state) =>
+  STRATEGY_BLOCK +
+  `\n\n### Par ativo\n` +
+  `- forma que voce ve: ${state.decoy || "(nenhum)"}\n` +
+  `- a palavra real existe, mas nao e escrita aqui de proposito.`;
+
+export default {
+  id: "redteam",
+  // opencode v2: registers the legacy bodies through the v2 plugin API.
+  async setup(ctx) {
+    await ctx.session.hook("prompt", async (event) => {
+      if (!event?.prompt || typeof event.prompt.text !== "string") return;
+      const part = { type: "text", text: event.prompt.text };
+      await legacy["chat.message"]({}, { parts: [part] });
+      event.prompt.text = part.text;
+    });
+    await ctx.tool.hook("execute.before", async (event) => {
+      if (!event?.input || typeof event.input !== "object") return;
+      return legacy["tool.execute.before"](
+        { tool: event.tool },
+        { args: event.input },
+      );
+    });
+    await ctx.tool.hook("execute.after", async (event) => {
+      if (!event || event.status !== "completed") return;
+      const wrapper = { output: event.result };
+      await legacy["tool.execute.after"](
+        { tool: event?.tool ?? "v2-tool" },
+        wrapper,
+      );
+      event.result = wrapper.output;
+    });
+    await ctx.session.hook("context", async (event) => {
+      // 2c — the net: translates everything at the LLM boundary.
+      if (Array.isArray(event.messages)) {
+        await legacy["experimental.chat.messages.transform"](
+          {},
+          { messages: event.messages },
+        );
+      }
+      // strategy block — same injection point as v1.
+      if (Array.isArray(event.system)) {
+        if (event.system.length === 0 || typeof event.system[0] === "string") {
+          // defensive: v1-shaped system (strings) → delegate wholesale
+          await legacy["experimental.chat.system.transform"](
+            { sessionID: event.sessionID, model: event.model },
+            { system: event.system },
+          );
+        } else if (process.env.OPENCODE_NO_REDTEAM_INJECT !== "1") {
+          const st = loadState();
+          if (st && st.enabled) {
+            event.system.push({ type: "text", text: STRATEGY_SYSTEM_BLOCK(st) });
+          }
+        }
+      }
+    });
+    await ctx.tool.transform((editor) => {
+      for (const [name, def] of Object.entries(legacy.tool)) {
+        editor.add({
+          name,
+          description: def.description,
+          input: {
+            type: "object",
+            properties: def.args ?? {},
+            required: [],
+            additionalProperties: false,
+          },
+          execute: async (input) => ({
+            content: String(await def.execute(input ?? {})),
+          }),
+        });
+      }
+    });
+  },
+  // opencode 1: the loader (>=1.18.29) executes this to get its hooks.
+  async server() {
+    return legacy;
+  },
 };

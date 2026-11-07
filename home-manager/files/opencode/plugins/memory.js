@@ -2,37 +2,38 @@
 // Plain .js (not .ts) on purpose: `node --check` validates it with zero
 // toolchain; opencode loads .js and .ts identically from plugins/.
 //
-// Verified APIs in this opencode version (v1.18.34 — tag v1.18.34,
-// packages/plugin/src/index.ts):
-//   - "tool.execute.before" with MUTABLE output.args (rtk rewrites
-//     args.command through it — the deny below uses the same channel)
-//   - "experimental.session.compacting" with output.context.push (docs)
-//   - "experimental.chat.system.transform" with output.system.push  ← NOVO
-//     (the old comment in this file said there was no context injection
-//     API: it was FALSE in this version — verified in the source)
-//   - "experimental.chat.messages.transform" with output.messages.push
+// DUAL-MODE (2026-11-07): opencode 1.x (>=1.18.29) executes server() (V1
+// object form — the legacy hook names live there, byte-for-byte); opencode
+// v2 reads the default export's id+setup() (V2 hook API: ctx.tool.hook /
+// ctx.session.hook; system parts are {type:"text", text} objects, NOT
+// strings). Keep both branches in lockstep by editing the shared helpers,
+// not the hook wrappers.
+//
+// Verified APIs in opencode v1.18.34 (packages/plugin/src/index.ts):
+//   - "tool.execute.before" with MUTABLE output.args
+//   - "experimental.session.compacting" with output.context.push
+//   - "experimental.chat.system.transform" with output.system (array of strings)
+// v2 equivalents (opencode.ai/v2 build plugins/server docs):
+//   - ctx.tool.hook("execute.before", …) with MUTABLE event.input
+//   - ctx.session.hook("compaction", …) — event.system push (approximate port
+//     of context.push; the v2 analog of the re-hydration rule lands as a
+//     system part of the summary call)
+//   - ctx.session.hook("context", …) — event.system is an array of
+//     SystemPart ({type:"text", text}); identity/persona unshift (primacy),
+//     state/REHYDRATE_RULE push (recency) — same ordering intent as v1.
 //
 // WHY the injection exists (research 02/11, docs/REHYDRATACAO-E-COORDENACAO.md):
-//   - The rescue depended on the agent REMEMBERING to call recall/rag_search →
-//     discipline, not harness. Now the harness injects the rule.
-//   - Context is a finite resource: the injection is TINY (~6 lines), stateless
-//     (2510.05381: long context hurts even with perfect retrieval;
-//     2602.11988: an inflated AGENTS.md = +20-23% cost and zero gain).
-//   - Coordination guardrails are PINNED (not summarizable): 5 compactions
-//     drop the adherence to rules from 53% -> 10% (2608.22752).
+//   - The rescue depended on the agent REMEMBERING to call recall/rag_search.
+//   - Context is a finite resource: the injection is TINY (~6 lines).
+//   - Coordination guardrails are PINNED (not summarizable).
 //
-// A/B: OPENCODE_NO_REHYDRATE_INJECT=1 turns the injection off (M2 measurement and
-// rollback without a rebuild — see docs/REHYDRATACAO-E-COORDENACAO.md §5).
-// OPENCODE_NO_STATE_INJECT=1 disables only the deterministic state block.
+// A/B: OPENCODE_NO_REHYDRATE_INJECT=1 turns the injection off;
+// OPENCODE_NO_STATE_INJECT=1 disables only the deterministic state block;
+// OPENCODE_NO_IDENTITY_INJECT=1 / OPENCODE_NO_PERSONA_INJECT=1 likewise.
 
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
-// (03/11) The harness now INJECTS the state instead of asking the model to
-// fetch it. Measured gap: `lessons` was called 4x in 7 days while bash was
-// called 5k times — "call rehydrate first" was a rule the model had to
-// remember, and it did not. Fetching here is deterministic and costs ~0.3s
-// once per session (jarvis-cli.sh state = queue+handoff+lessons+roster, no
-// embeddings; the deep RAG rescue stays on-demand).
 const JARVIS_CLI = process.env.JARVIS_CLI || "/home/nixos/projects/nixos-ai/scripts/jarvis-cli.sh";
 const JARVIS_REPO = process.env.JARVIS_REPO || "/home/nixos/projects/nixos-ai";
 const STATE_MAX_CHARS = 4200;
@@ -62,24 +63,26 @@ function fetchSessionState(sessionID, force = false) {
 }
 
 // Root-delete: rm with a recursive+force flag pointing at / or ~.
-// The flag can come in any order (-rf, -fr, -Rf, -fR) and uppercase (-R is
-// recursive in rm). Old hole: the pattern required 'r' before 'f', so
-// `rm -fr /` sailed through (found by the plugin test, 02/11).
 const ROOT_DELETE =
   /(^|[;&|\s])rm\s+[^;&|]*-[a-zA-Z]*(?:[rR][a-zA-Z]*[fF]|[fF][a-zA-Z]*[rR])[^;&|]*\s+(\/(\s|$|;|\*)|\~(\s|$|;))/;
+const ROOT_DELETE_REPLACEMENT =
+  "echo 'DENIED by memory-plugin: unanchored root delete. " +
+  "Rescue ladder: git commit > trash dir > verified snapshot. " +
+  "Narrow the path.' >&2; exit 1";
 
-// Coordination rules — PINNED, copied verbatim. Never summarize, never
-// rewrite: that is what compaction does worst (2608.22752).
-// LANGUAGE: English on purpose. Everything an LLM reads is English — small
-// local models (bonsai) do not understand pt-BR, and a rule the model cannot
-// read is a rule that does not exist.
+// Returns the replacement command, or null when the command is clean.
+function guardedBashCommand(command) {
+  if (ROOT_DELETE.test(command)) return ROOT_DELETE_REPLACEMENT;
+  return null;
+}
+
+// Coordination rules — PINNED, copied verbatim. Never summarize.
 const PINNED_GUARDS = `## Coordination rules (pinned — never summarize)
 - claim before speaking: \`scripts/agent-roster.py claim --name <n> --lane <lane> --repo <repo> --files <globs>\`
 - delivery: \`scripts/agent-msg.sh --to <name> "text"\` (the target runs) · \`--note "text"\` (enters the session, does NOT run) · \`--cancel <id>\` (aborts the target turn)
 - never use wtype/focus to talk to another agent: it blocks the human's typing
 - wake: \`agents-watcher.sh\` wakes via the API and filters by repo/lane`;
 
-// The harness rule for the RESCUE (what was missing).
 const REHYDRATE_RULE = `## Rehydration (first tool of the session)
 First tool of a new session, right after a compaction, or whenever a problem
 looks like a repeat: \`jarvis_rehydrate(task="<what you are about to
@@ -112,91 +115,152 @@ test-activated switch).
 The rules below are PINNED (copied exactly — never summarize):
 ${PINNED_GUARDS}`;
 
-export const MemoryOpenCodePlugin = async () => {
-  return {
-    "tool.execute.before": async (input, output) => {
-      const tool = String(input?.tool ?? "").toLowerCase();
-      if (tool !== "bash" && tool !== "shell") return;
-      const args = output?.args;
-      if (!args || typeof args !== "object") return;
-      const command = args.command;
-      if (typeof command !== "string" || !command) return;
-      // Unanchored root deletes are never legit (rm -rf /, ~, /*).
-      // Scoped deletes (/home/.../x, /tmp/...) pass through untouched.
-      // Deny runs through the SAME args channel rtk rewrites through.
-      if (ROOT_DELETE.test(command)) {
-        args.command =
-          "echo 'DENIED by memory-plugin: unanchored root delete. " +
-          "Rescue ladder: git commit > trash dir > verified snapshot. " +
-          "Narrow the path.' >&2; exit 1";
+function identityBlock(sessionID, model) {
+  if (process.env.OPENCODE_NO_IDENTITY_INJECT === "1") return "";
+  const m = model || {};
+  const variant = m.variant && m.variant !== "default" ? ` (${m.variant})` : "";
+  return `## IDENTITY (harness-provided — this is you)
+- model: ${m.providerID || "unknown"}/${m.id || "unknown"}${variant}
+- session: ${sessionID || "unknown"}
+You cannot introspect your own weights: this block is your identity. ` +
+    `Never guess it, never infer it from the conversation, and never claim ` +
+    `to be a local or an API model without it.`;
+}
+
+function rehydrateRuleBlock() {
+  if (process.env.OPENCODE_NO_REHYDRATE_INJECT === "1") return "";
+  return REHYDRATE_RULE;
+}
+
+function stateBlock(sessionID, force) {
+  const state = fetchSessionState(sessionID, force);
+  if (!state) return "";
+  return "## SESSION STATE (auto-injected by the harness — ground truth; " +
+    "read the paths instead of re-deriving)\n" + state;
+}
+
+// ── personalidade (MBTI) dos agentes — 07/11 ───────────────────────────
+function activePersonaBlock() {
+  const stateDir =
+    process.env.JARVIS_STATE_DIR || `${process.env.HOME}/.local/state/jarvis`;
+  try {
+    const raw = readFileSync(`${stateDir}/persona.json`, "utf8");
+    const data = JSON.parse(raw);
+    if (!data || !data.id) return "";
+    const block = data.system_prompt_additions || "";
+    const head = `## PERSONA (${data.id}${data.mbti ? " · " + data.mbti : ""})\n`;
+    const body = block || (data.name ? `Voce atua como ${data.name}.\n` : "");
+    if (!body) return "";
+    return head + body;
+  } catch {
+    return "";
+  }
+}
+
+const personaBlock = () =>
+  process.env.OPENCODE_NO_PERSONA_INJECT === "1" ? "" : activePersonaBlock();
+
+// bash guard applied to either runtime's tool args object (mutable).
+const applyBashGuard = (tool, args) => {
+  const t = String(tool ?? "").toLowerCase();
+  if (t !== "bash" && t !== "shell") return;
+  if (!args || typeof args !== "object") return;
+  const command = args.command;
+  if (typeof command !== "string" || !command) return;
+  const replacement = guardedBashCommand(command);
+  if (replacement) args.command = replacement;
+};
+
+export default {
+  id: "memory",
+  // opencode v2: registers hooks on the tool and session domains.
+  // System parts are {type:"text", text} objects (not strings).
+  async setup(ctx) {
+    await ctx.tool.hook("execute.before", (event) => {
+      applyBashGuard(event.tool, event.input);
+    });
+
+    await ctx.session.hook("context", (event) => {
+      const blocks = [
+        [identityBlock(event.sessionID, event.model), true],
+        [personaBlock(), true],
+      ];
+      // primacy: identity, persona at the very top (reverse order for unshift)
+      for (const [text] of blocks.slice().reverse()) {
+        if (text) event.system.unshift({ type: "text", text });
       }
-    },
-    // (02/11) IDENTITY: the model cannot introspect itself (it does not know
-    // its own weights, nor whether it runs locally or behind an API). The only
-    // reliable source is the HARNESS: the hook delivers {sessionID, model}.
-    // We inject one factual line into the system prompt — at the TOP of the
-    // block (primacy), without creating a 2nd system message (the model
-    // template aborts: "System message must be at the beginning").
-    "experimental.chat.system.transform": async (input, output) => {
-      if (!output || !Array.isArray(output.system)) return;
-      const m = input?.model || {};
-      const variant = m.variant && m.variant !== "default" ? ` (${m.variant})` : "";
-      const identity = `## IDENTITY (harness-provided — this is you)\n` +
-        `- model: ${m.providerID || "unknown"}/${m.id || "unknown"}${variant}\n` +
-        `- session: ${input?.sessionID || "unknown"}\n` +
-        `You cannot introspect your own weights: this block is your identity. ` +
-        `Never guess it, never infer it from the conversation, and never claim ` +
-        `to be a local or an API model without it.`;
-      if (process.env.OPENCODE_NO_IDENTITY_INJECT !== "1") {
-        if (output.system.length === 0) {
-          output.system.push(identity);
-        } else {
-          output.system[0] = `${identity}\n\n${output.system[0] ?? ""}`;
-        }
-      }
-      // Deterministic state FIRST, rules LAST: the guards keep the recency
-      // position (they are the instructions that must survive).
-      const state = fetchSessionState(input?.sessionID);
-      if (state) {
-        const block =
-          "## SESSION STATE (auto-injected by the harness — ground truth; " +
-          "read the paths instead of re-deriving)\n" + state;
-        if (output.system.length === 0) {
-          output.system.push(block);
-        } else {
-          const last = output.system.length - 1;
-          output.system[last] = `${output.system[last] ?? ""}\n\n${block}`;
-        }
-      }
-      if (process.env.OPENCODE_NO_REHYDRATE_INJECT !== "1") {
-        if (output.system.length === 0) {
-          output.system.push(REHYDRATE_RULE);
-        } else {
-          const last = output.system.length - 1;
-          output.system[last] = `${output.system[last] ?? ""}\n\n${REHYDRATE_RULE}`;
-        }
-      }
-    },
-    // (02/11) Rescue rule in the system prompt — a MINUTE, no state.
-    // It turns "remember to rehydrate" into a harness rule.
-    //
-    // MERGE, not push: the system prompt is ONE block (measured: 1 block,
-    // 20073 chars). Push creates a SECOND system message and the model
-    // template (Qwen3.5 + Jinja) aborts with "System message must be at the
-    // beginning" — a real error found in the 1st measurement (run A: rc=1,
-    // 77s, empty output). Hence: append to the LAST block (keeps the count →
-    // 1 system message) and it lands at the end of the prompt = highest
-    // recency position (2510.05381).
-    "experimental.session.compacting": async (input, output) => {
-      if (output && Array.isArray(output.context)) {
-        output.context.push(COMPACTION_MEMORY);
-        const state = fetchSessionState(input?.sessionID, true);
+      // recency: state first, rehydrate rule LAST
+      const state = stateBlock(event.sessionID, false);
+      if (state) event.system.push({ type: "text", text: state });
+      const rule = rehydrateRuleBlock();
+      if (rule) event.system.push({ type: "text", text: rule });
+    });
+
+    await ctx.session.hook("compaction", (event) => {
+      if (Array.isArray(event.system)) {
+        event.system.push({ type: "text", text: COMPACTION_MEMORY });
+        const state = stateBlock(event.sessionID, true);
         if (state) {
-          output.context.push(
-            "## SESSION STATE (re-injected after compaction — ground truth)\n" + state,
-          );
+          event.system.push({
+            type: "text",
+            text: "## SESSION STATE (re-injected after compaction — ground truth)\n" + state,
+          });
         }
       }
-    },
-  };
+    });
+  },
+  // opencode 1: the object the loader (>=1.18.29) calls. Kept byte-for-byte
+  // compatible with the legacy behavior (string splice, context.push).
+  async server() {
+    return {
+      "tool.execute.before": async (input, output) => {
+        applyBashGuard(input?.tool, output?.args);
+      },
+      // (02/11) IDENTITY + PERSONA + STATE + REHYDRATE: one system block
+      // (a second system message aborts Qwen3.5+Jinja — "System message must
+      // be at the beginning"). MERGE, not push.
+      "experimental.chat.system.transform": async (input, output) => {
+        if (!output || !Array.isArray(output.system)) return;
+        const identity = identityBlock(input?.sessionID, input?.model);
+        if (identity) {
+          if (output.system.length === 0) output.system.push(identity);
+          else output.system[0] = `${identity}\n\n${output.system[0] ?? ""}`;
+        }
+        const persona = personaBlock();
+        if (persona) {
+          if (output.system.length === 0) output.system.push(persona);
+          else output.system[0] = `${output.system[0] ?? ""}\n\n${persona}`;
+        }
+        const state = fetchSessionState(input?.sessionID);
+        if (state) {
+          const block =
+            "## SESSION STATE (auto-injected by the harness — ground truth; " +
+            "read the paths instead of re-deriving)\n" + state;
+          if (output.system.length === 0) output.system.push(block);
+          else {
+            const last = output.system.length - 1;
+            output.system[last] = `${output.system[last] ?? ""}\n\n${block}`;
+          }
+        }
+        if (process.env.OPENCODE_NO_REHYDRATE_INJECT !== "1") {
+          if (output.system.length === 0) output.system.push(REHYDRATE_RULE);
+          else {
+            const last = output.system.length - 1;
+            output.system[last] = `${output.system[last] ?? ""}\n\n${REHYDRATE_RULE}`;
+          }
+        }
+      },
+      "experimental.session.compacting": async (input, output) => {
+        if (output && Array.isArray(output.context)) {
+          output.context.push(COMPACTION_MEMORY);
+          const state = fetchSessionState(input?.sessionID, true);
+          if (state) {
+            output.context.push(
+              "## SESSION STATE (re-injected after compaction — ground truth)\n" + state,
+            );
+          }
+        }
+      },
+    };
+  },
 };

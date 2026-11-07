@@ -642,6 +642,168 @@ JARVIS_TOOLS = [
 ]
 
 
+# ═══ Meta-tool gateway (2026-11-07) — token economy ═══
+# Por que existe: estes 46 tool schemas custam ~22 KB em TODO turno de TODO
+# session (≈5-6k tokens), e a literatura mostra que over-presentation não só
+# gasta tokens como PIORA a escolha do tool certo (2605.24660: 93.1% tool-choice
+# @ K=2.2 vs 87.1% @ K=5 fixo; RAG-MCP: selection degrada quando o catálogo MCP
+# cresce). Estratégia (DuplexCascade-style, igual ao do() da voz): expor sempre
+# só o CORE (17 tools quentes) + 2 meta-tools; todo o resto CONTINUA disponível
+# via
+#   jarvis_tools_search {"query": "make"}  -> lista compacta por substring
+#   jarvis_tools_call   {"name": "make_scenarios", "args": {...}}
+# Nenhum capability é removido — só o custo de prompt. `JARVIS_MCP_PROFILE=full`
+# restaura a listagem completa (comportamento legado).
+_JARVIS_MCP_PROFILE = (os.environ.get("JARVIS_MCP_PROFILE") or "smart").strip().lower()
+
+_CORE_TOOL_NAMES = {
+    "remember", "recall", "lessons", "rehydrate",           # memória
+    "rag_search", "rag_index",                              # conhecimento
+    "vault_list", "vault_write", "vault_search_obsidian",   # vault
+    "coord_post", "coord_read", "coord_check", "coord_roster",
+    "coord_whoami", "coord_set_context", "coord_msg", "coord_pending",
+}
+
+_META_TOOLS = [
+    {"name": "tools_search",
+     "description": ("Search/list ALL JARVIS tools (core + hidden extended). "
+                     "Ranks by embedding similarity (nomic-embed-text, :8081) "
+                     "with a small top-K; use for capability discovery — most "
+                     "extended tools are hidden from the catalog but callable "
+                     "via tools_call. Empty query lists everything."),
+     "inputSchema": {"type": "object",
+                     "properties": {"query": {"type": "string",
+                                              "description": "what you need (e.g. 'send email', 'make scenario'); empty 'all' lists everything"},
+                                    "limit": {"type": "integer", "description": "top-K results (default 8, max 46)"}}}},
+    {"name": "tools_call",
+     "description": "Invoke ANY JARVIS tool by name, including tools hidden from the catalog (e.g. make_run, hackmd_write, browser).",
+     "inputSchema": {"type": "object",
+                     "properties": {"name": {"type": "string", "description": "tool name"},
+                                    "args": {"type": "object", "description": "arguments object"}},
+                     "required": ["name"]}},
+]
+
+_META_TOOL_NAMES = {"tools_search", "tools_call"}
+
+
+def _listed_tools() -> list[dict[str, Any]]:
+    if _JARVIS_MCP_PROFILE == "full":
+        return JARVIS_TOOLS + _META_TOOLS
+    core = [t for t in JARVIS_TOOLS if t.get("name") in _CORE_TOOL_NAMES]
+    return core + _META_TOOLS
+
+
+# ═══ Embedding-ranked tools_search (arXiv 2605.24660) ═══
+# (07/11, sugestão do dono da frente AGENTS.md/skills, opencode-matheus)
+# substring = scorer fraco: o paper mede expansão p/ K=80 sem ponto de parada
+# (BM25/MetaTool) no lugar dos K=1,4-7 com embeddings (cobertura 96,1% vs
+# 84,6% do FK=5 com o tool certo presente). Aqui: rank por cosseno entre o
+# query e tool name+description (embed :8081, cache por processo); fallback
+# p/ substring se :8081/numpy estiverem fora — nunca quebra.
+_TOOLS_EMBED_URL = os.environ.get("JARVIS_EMBED_URL", "http://127.0.0.1:8081/v1/embeddings")
+_TOOLS_VEC_CACHE: dict[str, list[float]] | None = None
+_TOOLS_VEC_LOCK = threading.Lock()
+
+
+def _embed_batch(texts: list[str]) -> list[list[float]]:
+    import requests
+    r = requests.post(_TOOLS_EMBED_URL,
+                      json={"input": list(texts),
+                            "model": "nomic-embed-text-v2-moe"},
+                      timeout=60)
+    r.raise_for_status()
+    return [d["embedding"] for d in r.json()["data"]]
+
+
+def _tool_vectors() -> dict[str, list[float]]:
+    global _TOOLS_VEC_CACHE
+    if _TOOLS_VEC_CACHE is not None:
+        return _TOOLS_VEC_CACHE
+    with _TOOLS_VEC_LOCK:
+        if _TOOLS_VEC_CACHE is not None:
+            return _TOOLS_VEC_CACHE
+        texts = [f"{t.get('name', '')}: {t.get('description', '')}"
+                 for t in JARVIS_TOOLS]
+        vecs = _embed_batch(texts)
+        _TOOLS_VEC_CACHE = dict(zip([t.get("name", "") for t in JARVIS_TOOLS], vecs))
+        return _TOOLS_VEC_CACHE
+
+
+def _meta_search_substring(q: str) -> str:
+    rows = []
+    for t in JARVIS_TOOLS:
+        name = t.get("name", "")
+        desc = (t.get("description") or "").replace("\n", " ")
+        if q and q not in name.lower() and q not in desc.lower():
+            continue
+        core = "core" if name in _CORE_TOOL_NAMES else "extended"
+        rows.append(f"- {name} [{core}]: {desc[:140]}")
+    head = f"{len(rows)} tool(s) matching '{q}' (substring)" if q else f"{len(rows)} registered tools"
+    return f"{head}\n" + "\n".join(rows) + \
+        '\n(invoke with jarvis_tools_call {"name": "<tool>", "args": {...}})'
+
+
+def _meta_search(query: str, limit: int = 8) -> str:
+    q = (query or "").strip()
+    low = q.lower()
+    if not q or low in ("all", "tudo", "todos"):
+        return _meta_search_substring("")
+    try:
+        import numpy as np
+        qv = _embed_batch([q])[0]
+        vecs = _tool_vectors()
+        qn = float(np.linalg.norm(qv)) or 1.0
+        scored = []
+        for t in JARVIS_TOOLS:
+            v = vecs.get(t.get("name", ""))
+            if v is None:
+                continue
+            vn = float(np.linalg.norm(v)) or 1.0
+            sim = float(np.dot(qv, v)) / (qn * vn)
+            # boost p/ match literal forte no nome
+            if low in t.get("name", "").lower():
+                sim = min(1.0, sim + 0.15)
+            scored.append((sim, t))
+        scored.sort(key=lambda x: -x[0])
+        k = max(1, min(int(limit), 46))
+        rows = []
+        for sim, t in scored[:k]:
+            name = t.get("name", "")
+            desc = (t.get("description") or "").replace("\n", " ")
+            core = "core" if name in _CORE_TOOL_NAMES else "extended"
+            rows.append(f"- {name} [{core}] ({sim:.2f}): {desc[:140]}")
+        return (f"{len(rows)} tool(s) by embedding similarity to '{q}'\n"
+                + "\n".join(rows)
+                + f"\n(top-{k}; 'all' p/ lista completa; chamada via "
+                  'jarvis_tools_call {"name": "<tool>", "args": {...}})')
+    except Exception as e:
+        return _meta_search_substring(q) + f"\n(fallback substring: {e})"
+
+
+def _meta_call(meta_args: dict[str, Any]) -> str:
+    target = str(meta_args.get("name") or "").strip()
+    if not target:
+        return "ERROR: tools_call exige 'name'"
+    if target.startswith("jarvis_"):
+        target = target[len("jarvis_"):]
+    if target in _META_TOOL_NAMES:
+        return "ERROR: meta-tools cannot call themselves"
+    sub_args = meta_args.get("args")
+    if sub_args is None:
+        sub_args = {k: v for k, v in meta_args.items() if k != "name"}
+    elif not isinstance(sub_args, dict):
+        if isinstance(sub_args, str):
+            try:
+                sub_args = json.loads(sub_args)
+            except Exception:
+                return "ERROR: 'args' must be a JSON object"
+        else:
+            return "ERROR: 'args' must be an object"
+    if sub_args is None:
+        sub_args = {}
+    return call_tool(target, sub_args)
+
+
 # ═══ Request Handler ═══
 
 def handle_request(request: dict[str, Any]) -> dict[str, Any]:
@@ -659,7 +821,7 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any]:
                 "capabilities": {"tools": {"listChanged": False}},
                 "serverInfo": {
                     "name": "jarvis-mcp",
-                    "version": "0.1.0"
+                    "version": "0.2.0"
                 }
             }
         }
@@ -671,7 +833,7 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any]:
         return {
             "jsonrpc": "2.0",
             "id": req_id,
-            "result": {"tools": JARVIS_TOOLS}
+            "result": {"tools": _listed_tools()}
         }
 
     if method == "tools/call":
@@ -874,6 +1036,15 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
     docs and the injected harness rule, with no doubled prefix. The legacy
     `jarvis_*` names stay accepted here for one deprecation cycle.
     """
+    bare = name[len("jarvis_"):] if name.startswith("jarvis_") else name
+    if bare == "tools_search":
+        try:
+            limit = int(args.get("limit", 8))
+        except (TypeError, ValueError):
+            limit = 8
+        return _meta_search(str(args.get("query", "")), limit)
+    if bare == "tools_call":
+        return _meta_call(args)
     if not name.startswith("jarvis_"):
         name = "jarvis_" + name
     try:
@@ -1694,15 +1865,33 @@ def _handle_rag_index(args: dict[str, Any]) -> str:
         if "batch size" in error_msg:
             return "ERROR: Embedding server batch size too small (512 tokens). Increase --batch-size in llama-server config."
         return f"ERROR: rag_index failed: {e}"
-    # Books coupling (owner 19/09): ONE call covers code+books —
-    # varredura idempotente de PDFs/notas novos, sem script manual.
+    # Books coupling (owner 19/09): ONE call covers code+books.
+    # (07/11) a varredura roda em THREAD DAEMON: ingerir PDFs pendentes
+    # (embed + qdrant, até limit=3) passava de 30s e estourava o deadline
+    # do client (e2e 30s; sessão opencode <5s) — o tool voltava "timed
+    # out" enquanto o trabalho terminava no servidor (medido: o index
+    # chamava -32001 e o paper novo ENTRAVA mesmo assim no índice).
+    # Idempotente e com log próprio; não bloqueia a resposta.
     try:
         from jarvis.core.audiobook import sweep_books
-        sw = sweep_books()
-        if sw.get("new"):
-            out += f"; books: {', '.join(sw['new'])}"
-        if sw.get("pending"):
-            out += f"; books pending: {sw['pending']} (re-run index)"
+        import threading as _threading
+
+        def _sweep():
+            try:
+                sw = sweep_books()
+                new = sw.get("new") or []
+                if new:
+                    print(f"[books-sweep] ingested: {', '.join(new)}",
+                          file=sys.stderr)
+                if sw.get("pending"):
+                    print(f"[books-sweep] pending: {sw['pending']} "
+                          f"(re-run rag_index)", file=sys.stderr)
+            except Exception as e:
+                print(f"[books-sweep] failed: {e}", file=sys.stderr)
+
+        _threading.Thread(target=_sweep, daemon=True,
+                          name="books-sweep").start()
+        out += "; books sweep started in background (ver log do ingest)"
     except Exception as e:
         out += f"; books sweep skipped: {e}"
     return out
