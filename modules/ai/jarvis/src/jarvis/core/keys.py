@@ -20,7 +20,13 @@ from typing import Any
 _SOURCES: dict[str, dict[str, Any]] = {
     "tavily": {
         "env": ["TAVILY_API_KEY"],
-        "files": ["/etc/jarvis-secrets/tavily.env"],
+        # (07/11) /etc/litellm.env e a fonte de verdade das keys (o
+        # jarvis-env.sh e o launcher do MCP carregam ela). Sem esta
+        # entrada, `jarvis dev` (que nao passa pelo wrapper) falhava
+        # com "web search indisponivel (sem TAVILY_API_KEY)" — e o
+        # wrapper em ~/.config/ai-agents/keys-wrapper.sh estava um
+        # SYMLINK QUEBRADO (store path novo, link velho).
+        "files": ["/etc/jarvis-secrets/tavily.env", "/etc/litellm.env"],
     },
     "hackmd": {
         "env": ["HMD_API_ACCESS_TOKEN"],

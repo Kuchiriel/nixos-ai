@@ -22,6 +22,7 @@ Uso:
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
@@ -94,6 +95,58 @@ _THEME = Theme({
     "path": "bold blue",
 })
 console = Console(theme=_THEME)
+
+# --- (07/11) LOG EM ARQUIVO: o dono perdeu os erros porque o harness
+# escreve so no console e o TUI fecha. Agora tudo o que aparece no
+# console vai TAMBEM para ~/.local/state/jarvis/dev-harness.log (com
+# rotacao) e qualquer crash cai no log via excepthook.
+DEVLOG = Path.home() / ".local/state/jarvis/dev-harness.log"
+DEVLOG_MAX = 2 * 1024 * 1024
+_LOG = {"path": DEVLOG}
+
+
+class _Tee(io.TextIOBase):
+    """Escreve em varios streams ao mesmo tempo (stdout + arquivo)."""
+
+    def __init__(self, *streams):
+        self._streams = streams
+
+    def write(self, data: str) -> int:  # noqa: D102
+        for st in self._streams:
+            try:
+                st.write(data)
+                st.flush()
+            except Exception:  # noqa: BLE001 — log nunca derruba o harness
+                pass
+        return len(data)
+
+    def flush(self) -> None:  # noqa: D102
+        for st in self._streams:
+            try:
+                st.flush()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def _devlog_open() -> "io.TextIOBase | None":
+    """Abre (com rotacao) o log do harness. Nunca levanta."""
+    try:
+        DEVLOG.parent.mkdir(parents=True, exist_ok=True)
+        path = _LOG["path"]
+        if path.exists() and path.stat().st_size > DEVLOG_MAX:
+            path.replace(path.with_suffix(".log.1"))
+        return path.open("a", encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _devlog(msg: str) -> None:
+    """Escreve uma linha no log do harness (nunca levanta)."""
+    try:
+        with _LOG["path"].open("a", encoding="utf-8", errors="replace") as fh:
+            fh.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
+    except Exception:  # noqa: BLE001
+        pass
 
 _SLASH_COMMANDS = [
     "/quit", "/status", "/clear", "/map", "/model",
@@ -3963,8 +4016,37 @@ if __name__ == "__main__":
     parser.add_argument("--once", type=str, default=None, help="Executa uma tarefa única e sai")
     parser.add_argument("--transcript", type=str, default=None, help="Salva transcript JSON p/ scripting")
     parser.add_argument("--debug", action="store_true", help="Modo debug (payloads crus da API)")
+    parser.add_argument("--log-file", type=str, default=str(DEVLOG),
+                        help="Arquivo de log do harness (stdout+erros)")
     parser.add_argument("--max-turns", type=int, default=30, help="Máximo de turnos no modo autopilot")
     ns = parser.parse_args()
+
+    # (07/11) log em arquivo: tea do console + excepthook (o dono
+    # perdeu os erros quando o TUI fechou). O console passa a escrever
+    # no stdout E no arquivo; qualquer excecao nao tratada vai para o
+    # log com traceback em vez de sumir.
+    try:
+        _LOG["path"] = Path(ns.log_file).expanduser()
+    except Exception:  # noqa: BLE001
+        pass
+    _logfh = _devlog_open()
+    if _logfh is not None:
+        console.file = _Tee(sys.stdout, _logfh)
+        _old_hook = sys.excepthook
+
+        def _hook(exc_type, exc, tb):
+            try:
+                import traceback
+                _devlog("CRASH:\n" + "".join(
+                    traceback.format_exception(exc_type, exc, tb)))
+            except Exception:  # noqa: BLE001
+                pass
+            _old_hook(exc_type, exc, tb)
+
+        sys.excepthook = _hook
+        _devlog(f"=== dev.py iniciado (pid={os.getpid()}, cwd={os.getcwd()}, "
+                f"debug={ns.debug}, "
+                f"model={getattr(ns, 'model', '') or 'default'})")
 
     if ns.once:
         sys.exit(
