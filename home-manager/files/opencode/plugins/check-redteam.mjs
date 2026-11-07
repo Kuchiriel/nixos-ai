@@ -186,6 +186,19 @@ if (!bad) {
   check(run("term list").includes("alvo"),
     "term list nao mostra o termo");
 
+  // guarda de pedaco curto: a troca e por SUBSTRING, entao 1-2 chars
+  // reescrevem qualquer palavra (medido 07/11: decoy "c" + termo "a."
+  // viravam "echo" em "ea.ho"). O comando tem que RECUSAR, e nao gravar.
+  check(run("term add a ab cd").includes("minimo"),
+    "o comando aceitou termo de 1 char");
+  check(run("term add alvo.exemplo c d e").includes("minimo"),
+    "o comando aceitou decoy de 1 char");
+  check(run("term add alvo.exemplo alvo.exemplo outro").includes("igual ao termo"),
+    "o comando aceitou decoy igual ao termo");
+  st = readState();
+  check(st.deception.length === 1 && st.deception[0].termo === "alvo",
+    "um comando recusado alterou a lista");
+
   run("term rm alvo");
   st = readState();
   check(st.deception.length === 0, "term rm nao removeu");

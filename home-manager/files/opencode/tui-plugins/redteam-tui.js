@@ -145,6 +145,12 @@ function entryTerm(entry) {
   return typeof entry === "string" ? entry : entry.termo || "";
 }
 
+// Termo/decoy curtos quebram a transliteracao: a troca e por substring
+// (medido 07/11: decoy "c" + termo "a." transformavam "echo" em "ea.ho"
+// e "projects" em "projea.ts" — TUDO que contem a letra). O par e a
+// lista so sao confiaveis com pedacos de 3+ chars.
+const MIN_LEN = 3;
+
 export function handleJailbreakCommand(argsText) {
   const args = splitArgs(argsText);
   const sub = (args[0] || "status").toLowerCase();
@@ -213,6 +219,22 @@ export function handleJailbreakCommand(argsText) {
           return "Uso: /jailbreak term add <termo> <decoy...>\n"
             + "  (informe pelo menos 1 decoy)";
         }
+      }
+      if (term.length < MIN_LEN) {
+        return `termo "${term}" tem ${term.length} chars — minimo ${MIN_LEN}.\n`
+          + "  (troca por substring: 1-2 chars quebram qualquer palavra do "
+          + "prompt e de todo comando — o resto da lista nao foi gravado)";
+      }
+      const curta = decoys.find((d) => d.length < MIN_LEN);
+      if (curta) {
+        return `decoy "${curta}" tem ${curta.length} chars — minimo ${MIN_LEN}.\n`
+          + "  (troca por substring: decoy curta reescreve qualquer palavra "
+          + "que contenha ela — a lista nao foi gravada)";
+      }
+      const igual = decoys.find((d) => d === term);
+      if (igual) {
+        return `decoy "${igual}" e igual ao termo — nao serve de forma.\n`
+          + "  (a decoy precisa ser DIFERENTE do termo real)";
       }
       const others = (state.deception || []).filter((x) => entryTerm(x) !== term);
       others.push({ termo: term, decoys });
