@@ -21,7 +21,7 @@
 // ~/.config/opencode/plugins/) porque o servidor auto-descobre
 // {plugin,plugins}/*.{ts,js} e REJEITA um plugin so-de-TUI
 // (readV1Plugin: "must default export an object with server()").
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -98,7 +98,13 @@ function loadState() {
 
 function saveState(state) {
   mkdirSync(dirname(STATE), { recursive: true });
-  writeFileSync(STATE, JSON.stringify(state, null, 2) + "\n", "utf8");
+  // Escrita ATOMICA (tmp + rename): o servidor le esse arquivo a cada
+  // hook. Um writeFileSync direto pode ser lido pela metade — o JSON
+  // quebrado faz o loadState() cair no DEFAULT_STATE e o modo parece
+  // "desligado" sozinho, sem aviso.
+  const tmp = STATE + ".tmp-" + process.pid;
+  writeFileSync(tmp, JSON.stringify(state, null, 2) + "\n", "utf8");
+  renameSync(tmp, STATE);
 }
 
 // Quebra os args RESPITANDO aspas: `pair "Meu Termo" decoy` tem que
@@ -286,9 +292,20 @@ function clearPrompt(api) {
 
 export const tui = async (api) => {
   const showReply = (reply) => {
-    api.ui.dialog.replace(
-      () => api.ui.DialogAlert({ title: "red-team", message: reply }),
-    );
+    // Dialogo local (padrao). Se a API de dialogo nao existir (versao
+    // diferente do opencode), cai no toast — nunca no prompt.
+    if (api.ui && api.ui.dialog && typeof api.ui.dialog.replace === "function"
+        && typeof api.ui.DialogAlert === "function") {
+      api.ui.dialog.replace(
+        () => api.ui.DialogAlert({ title: "red-team", message: reply }),
+      );
+      return;
+    }
+    if (api.ui && typeof api.ui.toast === "function") {
+      api.ui.toast({ title: "red-team", message: reply, variant: "info" });
+      return;
+    }
+    console.error("[redteam-tui] sem API de dialogo/toast para mostrar a resposta");
   };
 
   const run = (argsText) => {
@@ -312,6 +329,11 @@ export const tui = async (api) => {
             if (args !== null) {
               clearPrompt(api);
               run(args);
+              return;
+            }
+            if (!api.ui.dialog || typeof api.ui.dialog.replace !== "function"
+                || typeof api.ui.DialogPrompt !== "function") {
+              showReply(HELP);
               return;
             }
             api.ui.dialog.replace(

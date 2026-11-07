@@ -15,7 +15,7 @@
 //
 // Uso: node home-manager/files/opencode/plugins/check-redteam.mjs
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -28,6 +28,8 @@ const tuiTarget = join(here, "..", "tui-plugins", "redteam-tui.js");
 // escreveria no estado real do dono.
 const tmp = mkdtempSync(join(tmpdir(), "redteam-gate-"));
 process.env.OPENCODE_REDTEAM_STATE = join(tmp, "redteam.json");
+// O audit tambem e isolado: o gate nao escreve no log real do dono.
+process.env.OPENCODE_REDTEAM_AUDIT = join(tmp, "redteam-audit.log");
 
 // Backticks balanceados: um `<think>` cru dentro de uma template string
 // passa o `node --check` (que so valida sintaxe) e so quebra em RUNTIME,
@@ -201,6 +203,11 @@ if (!bad) {
   st = readState();
   check(st.enabled === false && !st.trigger && !st.decoy && st.deception.length === 0,
     "reset nao limpou o estado");
+
+  // a escrita e atomica: nao pode sobrar arquivo .tmp no diretorio
+  const leftovers = readdirSync(tmp).filter((f) => f.includes(".tmp-"));
+  check(leftovers.length === 0,
+    "a escrita do estado deixou arquivo temporario: " + leftovers.join(", "));
 }
 
 // ── o hook do servidor: sanitizacao + rede de seguranca do comando ──────
@@ -240,6 +247,19 @@ if (!bad && typeof plugin["chat.message"] === "function") {
     "a sanitizacao do par trigger/decoy deixou o trigger no prompt");
   check(text.includes("gatilhoDecoy"),
     "a sanitizacao do par nao usou o decoy");
+
+  // (c) a direcao IN da lista de deception: a decoy volta a ser o termo
+  // real nos args da tool — e isso tem que FICAR NO AUDIT LOG (medido
+  // 07/11: so o par era auditado, a lista nao).
+  const toolOut = { args: { filePath: "/tmp/x", content: "termo. Secreto" } };
+  await plugin["tool.execute.before"]({ tool: "write" }, toolOut);
+  check(toolOut.args.content === "termoSecreto",
+    "a recomposicao da lista de deception nao devolveu o termo real");
+  const auditFile = process.env.OPENCODE_REDTEAM_AUDIT
+    || join(homedir(), ".local/state/opencode/redteam-audit.log");
+  const audit = existsSync(auditFile) ? readFileSync(auditFile, "utf8") : "";
+  check(audit.includes("decoy->termo"),
+    "a recomposicao da lista de deception nao foi auditada");
 }
 // Um api falso reproduz o que o TUI oferece: registerLayer (slash command),
 // intercept (tecla), renderer.currentFocusedEditor (o texto do prompt) e
