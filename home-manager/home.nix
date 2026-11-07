@@ -847,6 +847,17 @@ in {
     port = 8765;
   };
 
+  # (07/11/2026) O JARVIS (RAG, memória, lições, vault) em MCP HTTP na
+  # tailnet — para as lanes de OUTRA máquina (Windows, Termux, celular)
+  # usarem o conhecimento do host sem reimplementar nada. Mesmo padrão do
+  # coord-mcp acima (FastMCP streamable-http, bind no IP do tailnet).
+  # Ver modules/services/jarvis-knowledge-mcp.nix.
+  services.jarvis.knowledgeMcp = {
+    enable = true;
+    host = "100.121.100.103";
+    port = 8766;
+  };
+
   services.jarvis-wakeword = {
     # (21/10, dono) DESABILITADO — o duplex de voz contínua substituiu o
     # wakeword: address gate no classify cumpre a mesma função sem o

@@ -30,6 +30,7 @@
     ./services/wireplumber-default-source.nix
     # (05/11) MCP de coordenação entre IAs por HTTP na tailnet.
     ./services/coord-mcp.nix
+    ./services/jarvis-knowledge-mcp.nix
     ./wofi
     ./zathura.nix
     ./zsh.nix

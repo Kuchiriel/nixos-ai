@@ -238,6 +238,38 @@ diff_eventos() {
     ' "$1" "$2"
 }
 
+# (07/11, DONO) O DONO ESTÁ DIGITANDO? - se sim, o watcher nao toca na
+# interface (nem focus, nem wtype, nem Return). Medido: o dono reclaimou
+# "ele escreve direto no tui / atrapalha eu".
+# Deteccao: a janela do opencode em foco + texto no input. Sem depender do
+# window-title: usa o hyprctl activewindow + o PID do input (aqui: procura
+# um processo 'wtype'/teclado recente e a janela ativa do hyprland).
+_humano_digita() {
+    # 1) o hyprland tem uma janela em foco que NAO e' o TUI do agente?
+    local aw
+    aw=$(hyprctl activewindow -j 2>/dev/null | python3 -c "
+import json,sys
+try:
+    d=json.load(sys.stdin); print(d.get('class','') or '')
+except Exception:
+    print('')
+" 2>/dev/null)
+    # 2) digitacao recente no input do TUI: o proprio dono teclando deixa
+    #    um wtype/teclado muito recente (<12 s) - medido no ambiente.
+    local agora recent
+    agora=$(date +%s)
+    recent=$(find "${XDG_RUNTIME_DIR:-/tmp}" /tmp -maxdepth 1 -name ".wtype-*" -newermt "-12 seconds" 2>/dev/null | head -1)
+    [ -n "$recent" ] && return 0
+    # 3) o dono com o teclado em outra app: nao da pra saber sem hook de
+    #    input => assume que esta digitando se a janela ativa nao e' o TUI
+    #    do opencode (o watcher so age em janelas opencode).
+    case "$aw" in
+        opencode|Opencode|opencode-tui) return 1 ;;
+        "") return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
 hora_quieta() {
     [ "$QUIET_DE" -eq "$QUIET_ATE" ] && return 1
     local h; h=$(date +%H)
@@ -353,6 +385,14 @@ print(len([a for a in d.get("agents", []) if a.get("state") == "live"]))
         if [ "$DELTA" -lt "$LIMITE_CPU" ] \
            && [ -f "$DIR_ST/fallback.$CHAVE" ] \
            && [ "$IDLE_SEGS" -ge 3 ] && [ "$IDLE_SEGS" -le "$REENTER_MAX" ]; then
+            # (07/11, DONO) O RE-ENTER tambem mexe na interface: so acontece se
+            # o dono NAO estiver digitando agora (a flag abaixo) - e nunca com
+            # texto alheio (so o Return da mensagem que o watcher ja mandou
+            # pela API).
+            if _humano_digita; then
+                log "RE-ENTER pulado (dono esta digitando - nao atrapalho a interface)"
+                continue
+            fi
             hyprctl dispatch focuswindow "address:$END" >/dev/null 2>&1
             sleep 0.3
             wtype -k Return
@@ -548,13 +588,14 @@ print(" | ".join(m for m in msgs if m)[:600])
             esac
         fi
         if [ "$_OK" -eq 0 ]; then
-            # fallback antigo (focus + wtype + Return): só quando não há API
-            hyprctl dispatch focuswindow "address:$END" >/dev/null 2>&1
-            wtype "$_MSG"
-            sleep 1.2
-            wtype -k Return
+            # (07/11, DONO) O FALLBACK focus+wtype FOI REMOVIDO DE PROPÓSITO:
+            # ele digita na caixa de input do TUI que o dono está usando e
+            # ATRAPALHA ("ele escreve direto no tui / atrapalha eu"). A regra
+            # do AGENTS.md já é explícita: NUNCA digitar no input do humano.
+            # Sem API não há wake: o agente espera o próximo ciclo (ou o dono
+            # chama). Isso é preferível a roubar a interface.
             [ "$CHECK" -eq 1 ] || touch "$DIR_ST/fallback.$CHAVE"
-            log "WAKE (fallback focus+wtype) end=$END motivo=$MOTIVO"
+            log "WAKE SEM API (nao entrega: focus+wtype foi removido - 07/11) end=$END motivo=$MOTIVO"
         else
             [ "$CHECK" -eq 1 ] || rm -f "$DIR_ST/fallback.$CHAVE"
             log "WAKE (API) end=$END sessao=$SESSAO motivo=$MOTIVO"
