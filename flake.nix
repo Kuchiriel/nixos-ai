@@ -154,6 +154,9 @@
           };
           dontConfigure = true;
           dontBuild = true;
+          # Bun-compiled com payload JS embutido: o strip -S -p do fixupPad
+          # CORROMPE o binário (medido 07/11 — o v2.2.6 "virou" Bun cru).
+          dontFixup = true;
           unpackPhase = "tar -xzf $src -C $TMPDIR";
           installPhase = ''
             install -Dm755 "$TMPDIR/opencode" "$out/bin/opencode"
