@@ -317,7 +317,14 @@ function decomposeText(text, state) {
   let out = text;
   for (const entry of deceptionEntries(state)) {
     for (const form of deceptionForms(entry)) {
-      if (form && form !== entry.termo && out.includes(entry.termo)) {
+      if (!form || form === entry.termo || !out.includes(entry.termo)) continue;
+      // boundary tambem aqui: um termo curto ("a.") NUNCA pode ser
+      // trocado dentro de outra palavra
+      const escaped = entry.termo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(
+        "(?<![A-Za-z0-9_])" + escaped + "(?![A-Za-z0-9_])", "g");
+      if (re.test(out)) out = out.replace(re, form);
+      else if (entry.termo.length >= 3) {
         out = out.split(entry.termo).join(form);
       }
     }
@@ -327,12 +334,26 @@ function decomposeText(text, state) {
 
 // Na volta: QUALQUER decoy vira o termo real (o agente pode ter usado
 // a 1a, a 2a, a 3a...).
+//
+// BOUNDARY (obrigatorio): uma decoy curta ("c") casaria DENTRO de
+// qualquer palavra e corromperia o comando — medido: "echo" virou
+// "ea.ho" e "projects" virou "projea.ts". So recompõe a decoy como
+// PALAVRA INTEIRA (ou como parte de um termo com ponto/barra, que e o
+// caso de uso real: dominio, caminho).
 function recomposeText(text, state) {
   if (!text) return text;
   let out = text;
   for (const entry of deceptionEntries(state)) {
     for (const form of deceptionForms(entry)) {
-      if (form && form !== entry.termo && out.includes(form)) {
+      if (!form || form === entry.termo || !out.includes(form)) continue;
+      const escaped = form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      // palavra inteira: nao pode ter letra/digito/_ antes nem depois
+      const re = new RegExp(
+        "(?<![A-Za-z0-9_])" + escaped + "(?![A-Za-z0-9_])", "g");
+      if (re.test(out)) {
+        out = out.replace(re, entry.termo);
+      } else if (form.length >= 3) {
+        // decoy longa sem boundary (ex: parte de um caminho) — troca direta
         out = out.split(form).join(entry.termo);
       }
     }
