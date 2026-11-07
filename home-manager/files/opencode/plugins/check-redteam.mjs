@@ -21,7 +21,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const target = join(here, "redteam.js");
-const tuiTarget = join(here, "..", "tui-plugins", "redteam-tui.js");
+const tuiTarget = join(here, "..", "tui-plugins", "redteam-tui", "tui.ts");
 
 // Estado ISOLADO antes de qualquer import: os dois plugins leem o path do
 // estado no load do modulo (OPENCODE_REDTEAM_STATE). Sem isto o gate
@@ -144,10 +144,13 @@ try {
 }
 
 const def = tui.default;
-if (!def || typeof def.tui !== "function" || typeof def.id !== "string") {
-  console.error("FALHOU: o plugin do TUI precisa default export { id, tui }");
+if (!def || typeof def.setup !== "function" || typeof def.id !== "string") {
+  console.error("FALHOU: o plugin do TUI precisa default export { id, setup } (v2)");
   bad = true;
 }
+// v2: o pacote tui-only vive em ../tui-plugins/redteam-tui/ (package.json +
+// tui.ts) e e registrado no cli.json — NUNCA em plugins/ (o servidor
+// rejeita um plugin so-de-TUI).
 if (typeof tui.handleJailbreakCommand !== "function") {
   console.error("FALHOU: handleJailbreakCommand nao exportado pelo plugin do TUI");
   bad = true;

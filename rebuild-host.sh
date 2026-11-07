@@ -11,20 +11,23 @@
 #               nh os switch, NÃO toca host/services/serviços do sistema.
 #               Renicia os units de usuário alterados (daemon-reload +
 #               restart dos timers agents-*).
-# NOTA (IMP-018): este script faz `git add -A` + commit automático
-# "chore: update N file(s)" com sua identidade — o flake SÓ enxerga o índice
-# git, então sem isso arquivos novos são invisíveis p/ o build. Efeito real:
-# todo rebuild commita a árvore suja. Revise com `git show HEAD` após o
-# rebuild; mensagens genéricas são o preço da visibilidade do flake.
+# NOTA (07/11, dono + lane crouton-alpha): este script faz `git add -A` p/ o
+# flake enxergar o índice — mas NÃO commita mais por default. O
+# "chore: update N file(s)" automático varreria o WIP de TODAS as lanes numa
+# árvore compartilhada (medido 3x). Default = stage sem commit (flake ok,
+# histórico limpo). Commit = opt-in explícito com --commit.
+#   --commit  : comportamento legado (commit "chore: update N file(s)")
 set -e
 
 DEBUG=false
 HOME_ONLY=false
+AUTO_COMMIT=false
 VALIDATE_ARGS=()
 for arg in "$@"; do
     case "$arg" in
         --debug) DEBUG=true ;;
         --home) HOME_ONLY=true ;;
+        --commit) AUTO_COMMIT=true ;;
         *) VALIDATE_ARGS+=("$arg") ;;
     esac
 done
@@ -71,10 +74,14 @@ if git diff --cached --quiet; then
   echo "      (nenhuma alteração pendente)"
 else
   N_FILES=$(git diff --cached --name-only | wc -l)
-  echo "      Arquivos staged p/ este rebuild (commit automático abaixo):"
+  echo "      Arquivos staged p/ este rebuild:"
   git diff --cached --name-status | sed 's/^/        /'
-  git commit -m "chore: update $N_FILES file(s)"
-  echo "      (revise depois com: git show HEAD --stat)"
+  if [ "$AUTO_COMMIT" = true ]; then
+    git commit -m "chore: update $N_FILES file(s)"
+    echo "      (commit automático — revise com: git show HEAD --stat)"
+  else
+    echo "      (sem commit — rode com --commit se quiser o 'chore' automático)"
+  fi
 fi
 cd - > /dev/null
 

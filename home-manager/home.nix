@@ -429,20 +429,23 @@ in {
   home.file.".config/opencode/plugins/check-redteam.mjs".source =
     ./files/opencode/plugins/check-redteam.mjs;
 
+  # cli.json (TUI do v2): o red-team roda no processo do TUI via comando
+  # local (nenhuma msg, nenhum turno de modelo). O substituto nativo do hack
+  # keymap.intercept do v1. O pacote vive em tui-plugins/redteam-tui/
+  # (package.json + tui.ts). tui.json/v1 morre com o v2.
+  home.file.".config/opencode/cli.json".text = builtins.toJSON {
+    "$schema" = "https://opencode.ai/cli.json";
+    plugins = [ "/home/nixos/.config/opencode/tui-plugins/redteam-tui" ];
+  };
+  home.file.".config/opencode/tui-plugins/redteam-tui/package.json".source =
+    ./files/opencode/tui-plugins/redteam-tui/package.json;
+  home.file.".config/opencode/tui-plugins/redteam-tui/tui.ts".source =
+    ./files/opencode/tui-plugins/redteam-tui/tui.ts;
+
   # Plugin do TUI — o slash command /jailbreak RESOLVIDO LOCALMENTE (07/11).
-  # POR QUE OUTRO ARQUIVO: a rota de command do SERVIDOR sempre chama o
-  # modelo depois do hook `command.execute.before` (o `noReply` existe no
-  # prompt(), nao no command()) — medido: a resposta do plugin virava
-  # mensagem de usuario e o modelo respondia a ela. No TUI, o plugin
-  # consome o Enter antes do prompt submeter (keymap.intercept): nenhuma
-  # mensagem, nenhum turno de modelo.
-  #
-  # POR QUE FORA de ~/.config/opencode/plugins/: o servidor auto-descobre
-  # {plugin,plugins}/*.{ts,js} e REJEITA um plugin so-de-TUI
-  # (readV1Plugin: "must default export an object with server()") — o
-  # plugin quebraria o load de plugins do servidor inteiro.
-  home.file.".config/opencode/tui-plugins/redteam-tui.js".source =
-    ./files/opencode/tui-plugins/redteam-tui.js;
+  # v2: comando nativo do TUI via context.keymap.layer (nenhum turno de
+  # modelo). Vive em tui-plugins/redteam-tui/ (package), fora de plugins/ —
+  # o servidor rejeitaria um plugin so-de-TUI auto-descoberto.
 
   # Skill de coordenação multi-agente — DECLARATIVA (02/11): antes vivia
   # solta em ~/.config/opencode/skills/ (fora do git, sem backup). O
@@ -482,17 +485,13 @@ in {
   # ══════════════════════════════════════════════════════════════
   programs.opencode = {
     enable = true;
-    # Fonte única: overlay `kilo` (nixpkgs-unstable; dan-online parou em 05/2026).
+    # Fonte única: overlay `kilo` -> opencode v2.2.6 (binário oficial; o pacote
+    # do nixpkgs ainda é a linha 1.x — ver flake.nix).
     package = pkgs.kilo;
 
-    # TUI: plugins do TUI (o `theme` vem do stylix, que tambem escreve
-    # tui.json). O plugin do red-team mora AQUI porque o slash command
-    # /jailbreak precisa rodar LOCAL no TUI (o comando do servidor sempre
-    # chama o modelo depois do hook — medido 07/11). O path e relativo ao
-    # tui.json (~/.config/opencode/) e o arquivo vive em tui-plugins/ para
-    # nao ser auto-descoberto pelo servidor (que rejeita plugin so-de-TUI).
-    tui.plugin = ["./tui-plugins/redteam-tui.js"];
-
+    # TUI (v2): o tema vem do stylix; o /jailbreak roda LOCAL via o pacote
+    # TUI em tui-plugins/redteam-tui/ registrado no cli.json (ver o bloco do
+    # cli.json acima). Nenhum tui.json (o v1 foi embora).
     settings = {
       # Provedor local (Bonsai 8B ternário via llama.cpp PrismML, porta 8080)
       # Direct LLMs GERADOS de models.nix directServers (14/10:
@@ -711,7 +710,7 @@ in {
           # isto, `jarvis_rag_index` alcança qualquer repo do monorepo
           # (~/projects) — e so LEITURA: o jail de escrita continua
           # absoluto (o env e ignorado quando write=True).
-          env = {
+          environment = {
             JARVIS_EXTRA_READ_ROOTS = "/home/nixos/projects";
           };
           # 30s era pouco: o observe_screen medido levou 12,4s / 21,0s / 48,4s

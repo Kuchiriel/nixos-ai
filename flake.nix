@@ -140,9 +140,31 @@
             };
           }));
 
-        # opencode via nixpkgs-unstable (dan-online/opencode-nix parou em 2026-05;
-        # bumps vivem em branches chore/*; unstable verificado via one-shot).
-        kilo = (import nixpkgs-unstable { inherit system; config.allowUnfree = true; }).opencode;
+        # opencode v2.2.6 (linha 2.x: /pair, /web, plugins v2, server API v2) —
+        # nixpkgs-unstable travada ainda ships 1.18.34; o upgrade 2.x e' escolha
+        # explicita. Binário oficial do opencode.ai (FOD com hash — atualize
+        # version+hash JUNTos; a URL e' a mesma 'latest', se o upstream apontar
+        # p/ 2.2.7 o build FALHA pelo hash — seguro de proposito).
+        opencode-v2 = prev.stdenv.mkDerivation {
+          pname = "opencode";
+          version = "2.2.6";
+          src = prev.fetchurl {
+            url = "https://opencode.ai/update/api/latest/cli/opencode/opencode-linux-x64.tar.gz";
+            hash = "sha256-CLsh1jJs50DZHM5+voimU2kz9uHjA1O5GgawHyXaMGw=";
+          };
+          dontConfigure = true;
+          dontBuild = true;
+          unpackPhase = "tar -xzf $src -C $TMPDIR";
+          installPhase = ''
+            install -Dm755 "$TMPDIR/opencode" "$out/bin/opencode"
+          '';
+          meta = {
+            description = "opencode — the open source AI coding agent (v2 release line)";
+            mainProgram = "opencode";
+          };
+        };
+        # kilo (nome legado p/ HM/scripts) aponta p/ a linha 2.x.
+        kilo = final.opencode-v2;
 
         # Mantém o Antigravity original tratando a licença unfree com o import correto
         antigravity-ide = (import nixpkgs-unstable { inherit system; config.allowUnfree = true; }).antigravity-ide;

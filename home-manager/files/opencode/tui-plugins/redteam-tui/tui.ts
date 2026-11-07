@@ -1,26 +1,14 @@
-// Plugin TUI do red-team: o slash command /jailbreak roda LOCAL, sem
-// passar pelo modelo.
+// Plugin TUI do red-team (v2): o slash command /jailbreak roda LOCAL,
+// sem passar pelo modelo.
 //
-// POR QUE EXISTE (medido 07/11): o comando de markdown (/jailbreak.md) e
-// resolvido pelo SERVIDOR (SessionPrompt.command), que depois do hook
-// `command.execute.before` chama o modelo de qualquer jeito — o `noReply`
-// existe no prompt(), mas o command() nao o usa. Resultado medido: a
-// resposta do plugin virava mensagem de usuario, o modelo respondia a ela
-// e o comando "caia no prompt" (turno inteiro queimado).
+// Replica o v1 (keymap.intercept) pela API NATIVA do v2 TUI: um comando
+// de slash registrado via context.keymap.layer roda no processo do TUI —
+// o texto nunca vira mensagem, nao ha turno de modelo, nao ha token gasto.
+// Estado no MESMO arquivo do plugin do servidor
+// (~/.local/state/opencode/redteam.json): o contrato entre os dois processos.
 //
-// SOLUCAO: este plugin roda no processo do TUI e intercepta a tecla Enter
-// ANTES do prompt submeter (keymap.intercept("key")). O texto
-// "/jailbreak ..." nunca vira mensagem: nao ha prompt, nao ha turno de
-// modelo, nao ha token gasto. A resposta aparece num dialogo local.
-//
-// O estado e o MESMO arquivo do plugin do servidor
-// (~/.local/state/opencode/redteam.json) — esse arquivo e o contrato
-// entre os dois processos.
-//
-// O arquivo mora em ~/.config/opencode/tui-plugins/ (e nao em
-// ~/.config/opencode/plugins/) porque o servidor auto-descobre
-// {plugin,plugins}/*.{ts,js} e REJEITA um plugin so-de-TUI
-// (readV1Plugin: "must default export an object with server()").
+// v2: importado como PACKAGE (ver package.json + cli.json): o servidor NAO
+// auto-descobre este arquivo (fica fora de plugins/) — mesma regra do v1.
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -321,93 +309,48 @@ function clearPrompt(api) {
   }
 }
 
-export const tui = async (api) => {
-  const showReply = (reply) => {
-    // Dialogo local (padrao). Se a API de dialogo nao existir (versao
-    // diferente do opencode), cai no toast — nunca no prompt.
-    if (api.ui && api.ui.dialog && typeof api.ui.dialog.replace === "function"
-        && typeof api.ui.DialogAlert === "function") {
-      api.ui.dialog.replace(
-        () => api.ui.DialogAlert({ title: "red-team", message: reply }),
-      );
-      return;
-    }
-    if (api.ui && typeof api.ui.toast === "function") {
-      api.ui.toast({ title: "red-team", message: reply, variant: "info" });
-      return;
-    }
-    console.error("[redteam-tui] sem API de dialogo/toast para mostrar a resposta");
-  };
+export default {
+  id: "redteam-tui",
+  async setup(context) {
+    const showReply = (reply) => {
+      try {
+        Promise.resolve(
+          context.ui?.dialog?.alert?.({ title: "red-team", message: reply }),
+        ).catch(() => showToast(reply));
+        return;
+      } catch {
+        showToast(reply);
+      }
+    };
+    const showToast = (reply) => {
+      try {
+        context.ui?.toast?.show?.({ message: reply, variant: "info" });
+        return;
+      } catch {
+        console.error("[redteam-tui] sem API de dialogo/toast para mostrar a resposta");
+      }
+    };
 
-  const run = (argsText) => {
-    showReply(handleJailbreakCommand(argsText));
-  };
-
-  // Slash command: aparece no autocomplete do prompt e no palette.
-  // Sem texto no prompt (veio do palette), abre um prompt de argumentos.
-  if (api.keymap && typeof api.keymap.registerLayer === "function") {
-    api.keymap.registerLayer({
+    context.keymap.layer(() => ({
+      mode: "global",
+      priority: 10,
       commands: [
         {
-          namespace: "palette",
-          name: "redteam.jailbreak",
-          title: "Red-team (/jailbreak)",
-          desc: "on | off | status | pair <t> <d> | term add <t> <d...> | term rm <t> | term list | reset",
-          slashName: "jailbreak",
-          run(ctx) {
-            const text = currentText(api, ctx && ctx.focused);
-            const args = parseJailbreak(text);
-            if (args !== null) {
-              clearPrompt(api);
-              run(args);
-              return;
-            }
-            if (!api.ui.dialog || typeof api.ui.dialog.replace !== "function"
-                || typeof api.ui.DialogPrompt !== "function") {
+          id: "redteam.jailbreak",
+          title: "/jailbreak — red-team local (sem turno de modelo)",
+          group: "Red team",
+          palette: true,
+          slash: { name: "jailbreak", arguments: true },
+          run: async (input) => {
+            const text = String(input ?? "").trim();
+            if (!text) {
               showReply(HELP);
               return;
             }
-            api.ui.dialog.replace(
-              () =>
-                api.ui.DialogPrompt({
-                  title: "red-team /jailbreak",
-                  placeholder:
-                    "on | off | status | pair <t> <d> | term add <t> <d...> | term rm <t> | term list | reset",
-                  onConfirm: (value) => run(String(value || "").trim()),
-                }),
-            );
+            showReply(handleJailbreakCommand(text));
           },
         },
       ],
-    });
-  }
-
-  // Rede de seguranca: Enter com "/jailbreak ..." no prompt. O intercept
-  // roda antes do dispatch do keymap (o opencode prepende o listener do
-  // keymap no keyInput do renderer), e consume() impede o prompt de
-  // receber o Enter — o texto nunca vira mensagem.
-  if (api.keymap && typeof api.keymap.intercept === "function") {
-    api.keymap.intercept("key", (ctx) => {
-      const event = ctx && ctx.event;
-      if (!event) return;
-      if (event.name !== "return" && event.name !== "enter") return;
-      if (api.ui.dialog && api.ui.dialog.open) return;
-      const text = currentText(api, null);
-      const args = parseJailbreak(text);
-      if (args === null) return;
-      if (typeof ctx.consume === "function") ctx.consume();
-      else {
-        if (typeof event.preventDefault === "function") event.preventDefault();
-        if (typeof event.stopPropagation === "function") event.stopPropagation();
-      }
-      clearPrompt(api);
-      run(args);
-    });
-  }
-};
-
-export default {
-  id: "redteam-tui",
-  tui,
-  setup() {},
+    }));
+  },
 };
