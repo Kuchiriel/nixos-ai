@@ -325,47 +325,26 @@ TEXTO_FINAL="$CABECALHO: $TEXTO_ESCAPED"
 # ── entrega via API do opencode ───────────────────────────────────────
 # $1=sessão  $2=path ("/message" | "/prompt_async" | "/abort")  $3=json
 oc_post() {
-    # (07/11) COMPATIBILIDADE DE VERSAO: o servidor do opencode pode ser o
-    # 1.18.34 (rotas 1.x: /message, /prompt_async) ou o 2.2.6 (rota nova:
-    # POST /session/:id/prompt com {text}) - e o 2.2.6 responde 405 nas rotas
-    # 1.x (a frota silenciou por ~5 h por causa disso). Aqui: tenta a rota NOVA
-    # primeiro e cai pra antiga se ela nao existir (404/405).
-    python3 - "$OC_URL" "$OC_USER" "$OC_PASS" "$1" "$2" "$3" "$4" <<'PYINNER'
-import base64, json, sys, urllib.error, urllib.request
-base, user, pw, sid, path, body, texto = sys.argv[1:8]
-auth = {"Content-Type": "application/json",
-        "Authorization": "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode()}
-
-def post(url, data):
-    req = urllib.request.Request(url, data=data.encode(), method="POST", headers=auth)
-    with urllib.request.urlopen(req, timeout=25) as r:
-        return r.status, r.read()[:200].decode(errors="replace")
-
-if path in ("/message", "/prompt_async", "/prompt"):
-    novo = {"text": texto}
-    if path == "/message":
-        novo["delivery"] = "queue"
-    try:
-        st, out = post(f"{base}/session/{sid}/prompt", json.dumps(novo))
-        sys.stdout.write(f"{st} {out}")
-        sys.exit(0)
-    except urllib.error.HTTPError as e:
-        if e.code not in (404, 405, 501):
-            sys.stdout.write(f"HTTP {e.code} {e.read()[:200].decode(errors='replace')}")
-            sys.exit(1)
-    except Exception:
-        pass
-
-try:
-    st, out = post(f"{base}/session/{sid}{path}", body)
-    sys.stdout.write(f"{st} {out}")
-except urllib.error.HTTPError as e:
-    sys.stdout.write(f"HTTP {e.code} {e.read()[:200].decode(errors='replace')}")
-    sys.exit(1)
-except Exception as e:
-    sys.stdout.write(f"ERRO {e}")
-    sys.exit(1)
-PYINNER
+    # (07/11) FONTE UNICA: scripts/agent-api.py fala as duas linguas do
+    # opencode (1.x: /session/:id/message|prompt_async; 2.x:
+    # /api/session/:id/prompt) e cai da rota nova para a antiga. A copia
+    # local tentava a rota nova SEM o /api -> caia no catch-all da SPA
+    # (HTML 200) e depois nas 1.x (405 no 2.2.6) = frota silenciosa.
+    local SESSAO="$1" PATHNAME="$2" BODY="$3" TEXTO="$4"
+    case "$PATHNAME" in
+        /abort)
+            python3 "$HERE/agent-api.py" --url "$OC_URL" \
+                --session "$SESSAO" --abort 2>&1
+            ;;
+        /message)
+            python3 "$HERE/agent-api.py" --url "$OC_URL" \
+                --session "$SESSAO" --text "$TEXTO" --note 2>&1
+            ;;
+        *)
+            python3 "$HERE/agent-api.py" --url "$OC_URL" \
+                --session "$SESSAO" --text "$TEXTO" 2>&1
+            ;;
+    esac
 }
 
 MINHA=$(hyprctl activewindow -j 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('address',''))" 2>/dev/null || true)

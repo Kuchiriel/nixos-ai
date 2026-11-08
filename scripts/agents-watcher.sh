@@ -162,7 +162,7 @@ ROSTER_PY="${AGENTS_ROSTER_PY:-$SCRIPT_DIR/agent-roster.py}"
 # catch-all da SPA e devolvia HTML 200 -> "wake API falhou" sem erro
 # visivel: a frota nao acordava). Paths reais (openapi.json):
 # POST /api/session/{id}/prompt  {"text": ...,"delivery": "queue"|"steer"}
-OC_URL="${AGENTS_OC_URL:-http://100.121.100.103:4599/api}"
+OC_URL="${AGENTS_OC_URL:-http://100.121.100.103:4599}"
 OC_ENVFILE="${AGENTS_OC_ENVFILE:-$HOME/.config/opencode/server.env}"
 OC_USER="${OPENCODE_SERVER_USERNAME:-opencode}"
 OC_PASS="${OPENCODE_SERVER_PASSWORD:-}"
@@ -186,28 +186,13 @@ for w in d.get("all", []):
 
 # wake via API: a mensagem entra na sessão do agente e ele roda. Sem foco,
 # sem wtype, sem travar o humano na caixa de input.
+# (07/11) A entrega mora em UM lugar: scripts/agent-api.py (fala as duas
+# linguas do opencode — 1.x e 2.x — e cai da rota nova para a antiga).
+# Aqui nao ha mais copy do HTTP: o watcher so chama o helper.
 wake_api() {
     local SESSAO="$1" TEXTO="$2"
-    python3 - "$OC_URL" "$OC_USER" "$OC_PASS" "$SESSAO" "$TEXTO" <<'PYEOF'
-import base64, json, sys, urllib.request
-base, user, pw, sid, texto = sys.argv[1:6]
-body = json.dumps({"text": texto, "delivery": "queue"})
-req = urllib.request.Request(
-    f"{base}/session/{sid}/prompt", data=body.encode(), method="POST",
-    headers={"Content-Type": "application/json",
-             "Authorization": "Basic " +
-             base64.b64encode(f"{user}:{pw}".encode()).decode()})
-try:
-    with urllib.request.urlopen(req, timeout=25) as r:
-        print(r.status)
-except urllib.error.HTTPError as e:
-    det = (e.read() or b"")[:120].decode("utf-8", "replace")
-    print(f"ERRO HTTP {e.code} {det}")
-    sys.exit(1)
-except Exception as e:
-    print(f"ERRO {e}")
-    sys.exit(1)
-PYEOF
+    python3 "$SCRIPT_DIR/agent-api.py" --url "$OC_URL" --session "$SESSAO" \
+        --text "$TEXTO" 2>&1
 }
 
 # (02/11) SEMÂNTICA DE LANE: o evento de commit é do repo X → só acorda o
