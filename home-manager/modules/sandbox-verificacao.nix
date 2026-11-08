@@ -33,10 +33,19 @@ let
     fi
 
     # 3. server de pé? (o container é o jogador real)
-    DOCKER_PS=$(${pkgs.docker}/bin/docker ps --format '{{.Names}}' 2>&1 || true)
-    echo "[sandbox-verifica] containers: $(echo "$DOCKER_PS" | tr '\n' ' ')"
-    if ! echo "$DOCKER_PS" | grep -q '^otbr-server-1$'; then
-      FALHAS="$FALHAS server: otbr-server-1 DOWN (docker ps: $DOCKER_PS)"
+    # (08/11) Marcador de pausa INTENCIONAL: o dono marca o sandbox como
+    # pausado com o arquivo `canary-official/.sandbox-paused` — o check do
+    # server é pulado com log explícito (não é regressão). A suíte e o
+    # validador OTBM continuam valendo. Sem o marcador: comportamento igual
+    # ao anterior (otbr-server-1 DOWN = falha + ntfy).
+    if [ -f /home/nixos/projects/canary-official/.sandbox-paused ]; then
+      echo "[sandbox-verifica] sandbox PAUSADO (marker .sandbox-paused) — pulando check do otbr-server-1"
+    else
+      DOCKER_PS=$(${pkgs.docker}/bin/docker ps --format '{{.Names}}' 2>&1 || true)
+      echo "[sandbox-verifica] containers: $(echo "$DOCKER_PS" | tr '\n' ' ')"
+      if ! echo "$DOCKER_PS" | grep -q '^otbr-server-1$'; then
+        FALHAS="$FALHAS server: otbr-server-1 DOWN (docker ps: $DOCKER_PS)"
+      fi
     fi
 
     if [ -n "$FALHAS" ]; then
