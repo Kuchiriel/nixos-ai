@@ -440,6 +440,18 @@ JARVIS_TOOLS = [
         }
     },
     {
+        "name": "offline_search",
+        "description": "Search the local OFFLINE survival corpus (water treatment, first aid, poisoning, shelter, cooking, emergency know-how). WHEN: the question is about surviving offline or the internet is unavailable — this branch runs BEFORE any web search. WHEN NOT: you need code, repo docs or papers (use rag_search). Every result carries the source file path. If the corpus has no source for the query, it says so — say that, do not invent an answer.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Offline/survival question to look up"},
+                "max_results": {"type": "integer", "description": "How many excerpts to return (default 5, max 10)"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
         "name": "persona",
         "description": "List/select JARVIS personas (roles with tools, policies, model). Call FIRST when a task needs a specialized framing (audit, review, research, implementation). Returns persona details including allowed tools and handoff protocol.",
         "inputSchema": {
@@ -1189,6 +1201,11 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
 
         if name == "jarvis_rag_index":
             return _handle_rag_index(args)
+
+        if name in ("offline_search", "jarvis_offline_search"):
+            from jarvis.core.offline import offline_search
+            return offline_search(args.get("query", ""),
+                                  max_results=args.get("max_results", 5))
 
         if name == "jarvis_web_search":
             from jarvis.core.websearch import web_search

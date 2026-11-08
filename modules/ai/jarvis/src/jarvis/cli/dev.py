@@ -1556,30 +1556,10 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
 
     # ── Offline Survival Corpus ──
     if name == "offline_search":
-        try:
-            from jarvis.core.rag import HybridSearch, OFFLINE_COLLECTION
-            from jarvis.core.config import Config
-            cfg = Config()
-            hs = HybridSearch(config=cfg)
-            try:
-                top_k = int(args.get("max_results", 5) or 5)
-            except (TypeError, ValueError):
-                top_k = 5
-            top_k = max(1, min(10, top_k))
-            results = hs.search(args.get("query", ""), top_k=top_k,
-                                collection=OFFLINE_COLLECTION)
-            if not results:
-                return ("NO OFFLINE SOURCE: the offline survival corpus has no "
-                        "answer for this query — say so, do not invent one."), None
-            lines = ["Source: offline survival corpus (works without internet)."]
-            for r in results:
-                payload = r.payload or {}
-                src = payload.get("path") or payload.get("source_id") or "?"
-                content = " ".join(str(payload.get("content", "")).split())
-                lines.append(f"[{r.score:.2f}] {src}\n{content[:300]}")
-            return "\n".join(lines), None
-        except Exception as e:
-            return f"ERROR: {e}", None
+        # fonte única da busca offline (MCP e harness usam o mesmo modulo)
+        from jarvis.core.offline import offline_search
+        return offline_search(args.get("query", ""),
+                              max_results=args.get("max_results", 5)), None
 
     # ── Web Search (Tavily) ──
     if name == "web_search":
