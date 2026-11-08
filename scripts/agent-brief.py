@@ -51,9 +51,10 @@ def memoria(n: int) -> list[str]:
     """
     try:
         import urllib.request
+        # o order_by do Qdrant nao funciona nesse payload (devolve vazio);
+        # a ordenacao e feita aqui, por ts (epoch no payload).
         body = json.dumps({
-            "limit": n, "with_payload": True, "with_vector": False,
-            "order_by": {"key": "ts", "direction": "desc"},
+            "limit": 400, "with_payload": True, "with_vector": False,
         }).encode()
         req = urllib.request.Request(
             "http://127.0.0.1:6333/collections/memories/points/scroll",
@@ -62,6 +63,8 @@ def memoria(n: int) -> list[str]:
         with urllib.request.urlopen(req, timeout=20) as resp:
             data = json.loads(resp.read().decode())
         pts = (data.get("result") or {}).get("points") or []
+        pts.sort(key=lambda pt: float((pt.get("payload") or {}).get("ts") or 0),
+                 reverse=True)
         out = []
         for pt in pts:
             pl = pt.get("payload") or {}
