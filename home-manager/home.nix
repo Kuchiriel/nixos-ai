@@ -83,18 +83,24 @@
     // (if variants != {} then { inherit variants; } else {})
     // (if (m.reasoning_effort_default or null) != null then { options.reasoningEffort = m.reasoning_effort_default; } else {})
     // (if (prov.interleaved_field or null) != null then { interleaved = { field = prov.interleaved_field; }; } else {}));
-    # (05/11) VISIBILIDADE: so active/rate_limited entram no seletor. Os
-    # demais (unstable/untested/disabled) ficam DECLARADOS no JSON (fonte
-    # unica, com a janela medida e as variantes) mas NAO no config: na
-    # 1.18.34 nao existe `disabled` no nivel do modelo (o equivalente e
-    # status=deprecated, que o runtime apaga do catalogo).
+    # (08/11) VISIBILIDADE: active/rate_limited/unstable entram no seletor.
+    # Quem fica de fora e por que: `disabled` = 404 medido nesta conta
+    # (content-safety, voicechat, paligemma, llama-3.2-11b, super-120b,
+    # kimi-k2.6) — mostrar so queimaria cota e confundiria; o `unstable`
+    # (step-5, deepseek-v4.1-flash, glm-5.3-flash, gpt-oss-20b, gemma-4-31b-it)
+    # passou a entrar: SEM o declared o modelo cai no catalogo embutido
+    # (models.dev) e o seletor mostra lixo (step-5 com output==context==1048576;
+    # deepseek 384.000; gpt-oss 32.768 vs 4.096 da spec). O bug do dono
+    # ("max tokens dos modelos nvidia errados") era exatamente esse chao do
+    # catalogo vazando. Os limites aqui sao os declarados no JSON (measured
+    # no NIM quando existiu; senao catalogo conservador).
     activeModels = builtins.listToAttrs
       (map
         (m: {
           name = m.id;
           value = mkModel m;
         })
-        (builtins.filter (m: m.status == "active" || m.status == "rate_limited") prov.models));
+        (builtins.filter (m: m.status == "active" || m.status == "rate_limited" || m.status == "unstable") prov.models));
   in {
     npm = "@ai-sdk/openai-compatible";
     options =

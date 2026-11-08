@@ -30,6 +30,15 @@ in
       Description = "nv-gate — token bucket + retry de 429/502/503/504 para o free tier NVIDIA";
       After = [ "network-online.target" ];
       Wants = [ "network-online.target" ];
+      # (08/11/2026) Proteção anti crash-loop: de manhã o gate caiu 09:24→09:34
+      # (kill externo + corrida de bind) e com Restart=always CHUPOU CPU e
+      # systemd ficou reiniciando a cada 3s por ~10 min — os agentes receberam
+      # 4096-context errors nessa janela. on-failure + burst limit: se um bind
+      # falhar (outro processo na porta) o systemd desiste depois de 5
+      # tentativas/3min e Marca o unit como failed (visível) em vez de
+      # tempestade infinita de restarts. Evidência: journalctl --user -u nv-gate.service 09:24→09:34.
+      StartLimitIntervalSec = 180;
+      StartLimitBurst = 5;
     };
     Service = {
       Type = "simple";
@@ -47,8 +56,8 @@ in
         "--upstream"
         (gate.upstream or "https://integrate.api.nvidia.com")
       ];
-      Restart = "always";
-      RestartSec = 3;
+      Restart = "on-failure";
+      RestartSec = 5;
     };
     Install = {
       WantedBy = [ "default.target" ];
