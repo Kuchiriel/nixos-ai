@@ -224,8 +224,16 @@ class Gate(BaseHTTPRequestHandler):
                     continue
                 payload = exc.read()[:4000]
                 self.stats.bump("errors")
+                # O CORPO do erro do upstream e o unico lugar com a verdade:
+                # o cliente opencode ve "Cannot connect to API" (o 400 vira
+                # erro de conexao generico) e o log do cliente nao guarda o
+                # corpo. Medido 08/11: o upstream aceita payload de 6,9 MiB
+                # (200), entao o 400 do pedido de compactacao (5,37 MB) nao
+                # e tamanho — e a razao esta no corpo. Uma linha, truncada.
+                detail = " ".join(payload.decode("utf-8", "replace").split())[:240]
                 self.warn("upstream %d not retried (attempt %d, request %d bytes) "
-                          "-> relayed to client", exc.code, attempt, length)
+                          "-> relayed to client | upstream says: %s",
+                          exc.code, attempt, length, detail or "(vazio)")
                 self._relay_error(exc.code, payload)
                 return
             except (urllib.error.URLError, OSError) as exc:
