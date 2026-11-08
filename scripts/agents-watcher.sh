@@ -158,7 +158,11 @@ ROSTER_PY="${AGENTS_ROSTER_PY:-$SCRIPT_DIR/agent-roster.py}"
 # (02/11) API do opencode: o wake passa a ser entregue NA SESSÃO do agente
 # (POST /session/:id/prompt_async) — sem roubar o foco e sem digitar na
 # caixa de input do humano (o wtype antigo bloqueava o typing do dono).
-OC_URL="${AGENTS_OC_URL:-http://100.121.100.103:4599}"
+# (07/11) A API do opencode fica sob /api (sem isso o POST caia no
+# catch-all da SPA e devolvia HTML 200 -> "wake API falhou" sem erro
+# visivel: a frota nao acordava). Paths reais (openapi.json):
+# POST /api/session/{id}/prompt  {"text": ...,"delivery": "queue"|"steer"}
+OC_URL="${AGENTS_OC_URL:-http://100.121.100.103:4599/api}"
 OC_ENVFILE="${AGENTS_OC_ENVFILE:-$HOME/.config/opencode/server.env}"
 OC_USER="${OPENCODE_SERVER_USERNAME:-opencode}"
 OC_PASS="${OPENCODE_SERVER_PASSWORD:-}"
@@ -187,18 +191,22 @@ wake_api() {
     python3 - "$OC_URL" "$OC_USER" "$OC_PASS" "$SESSAO" "$TEXTO" <<'PYEOF'
 import base64, json, sys, urllib.request
 base, user, pw, sid, texto = sys.argv[1:6]
-body = json.dumps({"parts": [{"type": "text", "text": texto}]})
+body = json.dumps({"text": texto, "delivery": "queue"})
 req = urllib.request.Request(
-    f"{base}/session/{sid}/prompt_async", data=body.encode(), method="POST",
+    f"{base}/session/{sid}/prompt", data=body.encode(), method="POST",
     headers={"Content-Type": "application/json",
              "Authorization": "Basic " +
              base64.b64encode(f"{user}:{pw}".encode()).decode()})
 try:
     with urllib.request.urlopen(req, timeout=25) as r:
         print(r.status)
+except urllib.error.HTTPError as e:
+    det = (e.read() or b"")[:120].decode("utf-8", "replace")
+    print(f"ERRO HTTP {e.code} {det}")
+    sys.exit(1)
 except Exception as e:
     print(f"ERRO {e}")
-        sys.exit(1)
+    sys.exit(1)
 PYEOF
 }
 
