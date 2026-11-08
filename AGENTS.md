@@ -63,6 +63,9 @@ nix flake check
   **no retry** (Retry read=3 × timeout = 8min wait = "hang").
 - The official MCP env is **discovered by reading `~/.config/opencode/opencode.json`**
   (symlink to the store) → follows rebuilds without re-typing the Nix.
+  Measured 08/11: the 2.2.6 can normalize that symlink into a regular file
+  while it runs (a rebuild restores it) — editing the live file is wrong
+  either way: the owner is `home-manager/home.nix`.
 - **Tool names = `jarvis_<tool>`** (server key `jarvis`): `jarvis_rehydrate`,
   `jarvis_recall`, `jarvis_lessons`, `jarvis_rag_search`, `jarvis_rag_index`,
   `jarvis_remember`, `jarvis_vault_*`. A doubled prefix (`jarvis_jarvis_*`) is

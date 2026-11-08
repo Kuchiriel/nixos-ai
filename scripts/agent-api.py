@@ -112,9 +112,11 @@ def abort(base: str, session: str, timeout: int = 15) -> tuple[int, str]:
 def live_db_path() -> str:
     """Caminho do banco SQLite que o opencode VIVO tem aberto.
 
-    Medido 07/11: a 1.18.34 usa `opencode.db` e a 2.2.6 usa
-    `opencode-stable.db` — ler o arquivo errado faz o watcher achar que
-    todo agente esta ocioso (e acorda a fleet o tempo todo).
+    Medido 08/11 (por fd de /proc, nas duas versoes): a 1.18.34 E a 2.2.6
+    usam `~/.local/share/opencode/opencode.db`. O `opencode-stable.db`
+    (6.4 GB) e lixo de ~27 dias e NAO e o store vivo — o fallback antigo
+    ("maior *.db") escolhia justamente ele e fazia o watcher achar que todo
+    agente estava ocioso (e acordar a frota o tempo todo).
     """
     import glob
     for pid_dir in glob.glob("/proc/[0-9]*"):
@@ -135,11 +137,14 @@ def live_db_path() -> str:
                     return target
         except OSError:
             continue
-    # fallback: o maior *.db no data dir
+    # fallback: o store canonico primeiro; so entao o maior *.db
     base = Path.home() / ".local/share/opencode"
+    canon = base / "opencode.db"
+    if canon.exists():
+        return str(canon)
     cands = sorted(base.glob("opencode*.db"), key=lambda p: p.stat().st_size,
                    reverse=True)
-    return str(cands[0]) if cands else str(base / "opencode.db")
+    return str(cands[0]) if cands else str(canon)
 
 
 def main() -> int:

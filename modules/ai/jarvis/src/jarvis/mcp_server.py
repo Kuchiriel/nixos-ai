@@ -1515,9 +1515,12 @@ def _rehydrate_queue(max_lines: int = 22, clip: int = 600) -> str:
     except Exception as e:
         return f"(queue unreadable: {e})"
     lines = text.splitlines()
-    # cuts at the next checkpoint header (the top one is the current one)
+    # cuts at the next checkpoint header (the top one is the current one).
+    # Two formats exist: "## ⭐ CHECKPOINT <date>" (script) and the older
+    # "## ⭐ <date> — <era>" (no CHECKPOINT word). Accepting only the first
+    # served TWO eras glued in the same block (measured 08/11).
     for i, ln in enumerate(lines[1:], start=1):
-        if ln.startswith("## ") and "CHECKPOINT" in ln:
+        if ln.startswith("## ") and ("CHECKPOINT" in ln or ln.startswith("## ⭐")):
             lines = lines[:i]
             break
     body = "\n".join(ln[:clip] for ln in lines[:max_lines]).rstrip()

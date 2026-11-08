@@ -95,6 +95,27 @@ def test_rehydrate_queue_is_the_newest_note(M):
     assert "velha-era" not in out
 
 
+def test_rehydrate_queue_cuts_older_star_header_too(M, monkeypatch, tmp_path):
+    """Formato antigo (`## ⭐ <data>`, sem a palavra CHECKPOINT) também corta.
+
+    Medido 08/11: aceitar só "CHECKPOINT" servia DUAS eras no mesmo bloco —
+    o agente lia o checkpoint velho como se fosse estado atual.
+    """
+    queue = tmp_path / "fila-antiga.md"
+    queue.write_text(
+        "## ⭐ CHECKPOINT 2026-11-08 11:24 — era-nova\n"
+        "**Resumo:** estado novo\n"
+        "## ⭐ 2026-11-08 11:20 — era-velha\n"
+        "**Resumo:** estado velho\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("AGENTS_QUEUE", str(queue))
+    out = M._handle_rehydrate({"task": "x", "include": "queue"})
+    assert "era-nova" in out
+    assert "era-velha" not in out
+    assert "estado velho" not in out
+
+
 def test_rehydrate_handoff_is_newest_and_atomic(M):
     out = M._handle_rehydrate({"task": "x", "include": "handoff"})
     assert "HANDOFF-2026-11-02-novo.md" in out

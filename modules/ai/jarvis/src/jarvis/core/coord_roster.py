@@ -78,6 +78,39 @@ def _session_from_cmdline(pid: int) -> str:
     return ""
 
 
+def _ppid_of(pid: int) -> int:
+    """PPID de um processo (campo 4 de /proc/<pid>/stat)."""
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text(errors="replace")
+    except OSError:
+        return 0
+    # comm pode conter espacos/parenteses -> corta no ULTIMO ')'
+    rest = stat.rsplit(")", 1)[-1].split()
+    try:
+        return int(rest[1])
+    except (IndexError, ValueError):
+        return 0
+
+
+def _session_from_ancestors(start: int | None = None, max_up: int = 8) -> str:
+    """Sobe a arvore de ppid procurando um opencode com `-s ses_...` no argv.
+
+    Cobre o MCP server de `opencode serve`: ele nao recebe OPENCODE_SESSION_ID
+    e o OPENCODE_PID pode estar estale (ou o ancestral direto e o proprio
+    `serve`, sem sessao). Sem isso a identidade cai em `jarvis@<host>` e
+    whoami/claim vao para o agente errado.
+    """
+    pid = start if start is not None else os.getpid()
+    for _ in range(max_up):
+        pid = _ppid_of(pid)
+        if pid <= 1:
+            break
+        ses = _session_from_cmdline(pid)
+        if ses:
+            return ses
+    return ""
+
+
 def current_session() -> str:
     """Sessão opencode do chamador.
 
@@ -86,14 +119,19 @@ def current_session() -> str:
     processo opencode pai, cujo argv tem `-s ses_...` (a TUI). Sem essa ponte,
     todo MCP caía em `jarvis@<host>` e whoami/pending/set_context iam para o
     agente ERRADO (Arara) — o roster chegou a ter 3 agentes na mesma sessão.
+
+    Ordem: env -> OPENCODE_PID -> arvore de ppid (cobre o MCP de serve, onde
+    o PID do env pode estar morto/estale).
     """
     ses = (os.environ.get("OPENCODE_SESSION_ID") or "").strip()
     if ses:
         return ses
     pid = (os.environ.get("OPENCODE_PID") or "").strip()
     if pid.isdigit():
-        return _session_from_cmdline(int(pid))
-    return ""
+        ses = _session_from_cmdline(int(pid))
+        if ses:
+            return ses
+    return _session_from_ancestors()
 
 
 def _entry_for_session(session: str) -> dict[str, Any] | None:

@@ -172,13 +172,28 @@ def _session_from_env() -> str:
     mas recebe OPENCODE_PID (o processo opencode pai, com `-s ses_...` no
     argv). Sem isso, claim de dentro do MCP/CLI não achava a janela e caía
     na primeira janela viva (identidade errada).
+
+    OPENCODE_PID pode estar morto/estale (MCP server de `opencode serve`,
+    processo longevo): nesse caso sobe a árvore de ppid procurando um
+    ancestral com `-s ses_...` antes de desistir.
     """
     ses = os.environ.get("OPENCODE_SESSION_ID", "").strip()
     if ses:
         return ses
     pid = os.environ.get("OPENCODE_PID", "").strip()
     if pid.isdigit():
-        return _session_do_pid(int(pid))
+        ses = _session_do_pid(int(pid))
+        if ses:
+            return ses
+    ppid_de, _ = _proc_map()
+    p = os.getppid()
+    for _ in range(8):
+        if p <= 1:
+            break
+        ses = _session_do_pid(p)
+        if ses:
+            return ses
+        p = ppid_de.get(p, 0)
     return ""
 
 
