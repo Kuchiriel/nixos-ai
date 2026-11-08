@@ -101,10 +101,12 @@ nix flake check
   and **overlapping file globs** (Anthropic: explicit boundary) — 2
   claims on the same file duplicate work.
 - **Delivery = opencode API** (`opencode serve` on `:4599`, Basic auth via
-  `~/.config/opencode/server.env`): `POST /session/:id/message`
-  (`noReply:true` = NOTE: enters the session, the agent does NOT run, zero
-  token) / `prompt_async` (REQUEST: the agent runs) / `/abort` (cancels the
-  turn). **Never** park text in the human's input box: it blocks typing and
+  `~/.config/opencode/server.env`): `POST /api/session/:id/prompt` with
+  `{"text": "...", "delivery": "queue"}` (the agent runs) or
+  `"delivery": "steer"` (goes into the running turn) — measured 07/11:
+  the API lives under `/api`; without it the POST hits the SPA catch-all
+  and returns HTML 200, which is why the wake used to fail silently.
+  `/abort` cancels the turn. **Never** park text in the human's input box: it blocks typing and
   does not enter the queue → useless (real error on 02/11).
 - `scripts/agent-msg.sh`: `--to <nome>` (request), `--note` (notification),
   `--broadcast` (explicit fan-out, rare), `--cancel <id>`, `--reply-to`,
