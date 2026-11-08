@@ -138,3 +138,78 @@ O binário X3 está pronto e verificado:
 - Papers: arXiv 2509.08342 (MoEpic / Adaptive Expert Split), arXiv 2512.16473
   (CPU-GPU collaborative inference para MoE).
 - Ladder da peer: `docs/BENCH-35B-LADDER-2026-11-02.md`.
+
+---
+
+## 6. Tentativa da medição 3-vias (08/11) — o que rodou, o que travou, o que aprendemos
+
+### Estado no dia 08/11
+
+| build | commit | flags que importam | situação |
+|---|---|---|---|
+| stock | `9d1878a4` (b1087) | `--fit`, `--fit-target`, `--moe-cache-mib`, `--n-cpu-moe` | em produção (4B `:8092`, 30B `:8085`) |
+| stock | `f477f79` (b1, master) | idem + **fusão CUDA de MoE** (`f5222f25`) + "router device memory margin" (`85cc432e`) | **compilado aqui** (CUDA, sm_89, ~20 min) → `/tmp/opencode/llama-stock-master` |
+| ik | `c446f1e0` (b5074) | `--n-cpu-moe`, `--moe-cache-mib`, **sem** `--fit`/`--fit-target` | em produção no tier MoE `:8084` |
+
+Build do master reproduzido com: `cmake -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON
+-DCMAKE_CUDA_ARCHITECTURES=89 -DLLAMA_CURL=OFF` + `nvcc` do `cuda-merged-12.9` do
+nix store. **Armadilha do nvcc no nix:** o `nvcc` resolve o include pelo caminho real do
+symlink (o `cuda_cudart` fica em outro store path) ⇒ precisa de
+`NVCC_PREPEND_FLAGS="-I$CUDA/include"` (ou `-DCMAKE_CUDA_FLAGS`), senão dá
+`cuda_runtime.h: Arquivo ou diretório inexistente` na detecção do compilador.
+
+### O que travou (e por quê)
+
+1. **VRAM**: o 35B sozinho pede ~5 GB; com o 4B-MTP (3,9 GB) + whisper (866 MiB) +
+   embeddings (446 MiB) a placa de 6,1 GB não deixa. A janela precisa ser combinada
+   (a peer fechou a lane LAYA às 09:40; o 4B voltou a ser usado às 09:54).
+2. **O `LD_LIBRARY_PATH` decide qual `libllama.so` o binário usa** — e o serviço
+   `llama-cpp-server` (grupo prism) exporta o `prism-bin` **primeiro**. Medido: rodar o
+   binário do **ik** com esse env ⇒ `undefined symbol:
+   llama_get_dflash_draft_lattice_top_k` (ele linkou contra a lib do prism).
+   → **um env por binário** (ik: `ik_llama.cpp/build/bin` primeiro; stock: o `build-stock`
+   dele; master: o `build/master/bin`) — foi o que matou a primeira tentativa.
+3. **O guard de VRAM do harness funciona**: com o 4B no ar ele aborta com
+   "ABORT: outro llama-server com 4813MiB em uso — VRAM ocupada, veredito seria inválido"
+   ✓ (é o comportamento certo).
+4. O `ninja` do ik reclamou "no work to do" com o binário desatualizado: o
+   `libllama.so` e o `llama-server` estavam dessincronizados → `rm bin/llama-server` +
+   relink resolve (1 passo) ✓.
+
+### Estado (a medição 3-vias em si)
+
+**Pendente de janela de VRAM coordenada com a frota.** O build do master está pronto
+(o binário compila e roda: `version: 0.9.0-dev (build 1, commit f477f79)`), mas a
+medição X1/X2/X3 com a receita de produção (`-ngl 45 --n-cpu-moe 35 -t 6 -c 32768
+-b 512 -ub 512`) não pôde rodar sem derrubar o 4B que a frota estava usando — e o
+`-R` (que para o router :8080) deixou o router fora do ar quando o bench foi
+interrompido. **O router foi restaurado** (`:8080` respondendo, `bonsai` em modo lazy
+= "unloaded", VRAM inalterada).
+
+Comando pronto para quando a janela abrir (1 LLM por vez, `PORT` livre porque o
+`8095` fixo colide com o `nv-gate.py`):
+
+```bash
+cd ~/projects/nixos-ai
+M=~/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
+sudo systemctl stop llama-uncensored-4b whisper-server
+for B in "ik5074:/home/nixos/projects/nixos-ai/modules/ai/llama-ik-wrapper.sh:/tmp/opencode/ld-ik.env" \
+         "stock1087:/home/nixos/projects/llama.cpp/build-stock/bin/llama-server:/tmp/opencode/ld-stock1087.env" \
+         "master:/tmp/opencode/llama-stock-master/build/bin/llama-server:/tmp/opencode/ld-master.env"; do
+  IFS=: read -r TAG BIN ENVF <<< "$B"
+  PORT=8097 BENCH_LD_ENVFILE="$ENVF" scripts/bench-llm.sh -b "$BIN" -m "$M" -n 2 -g "$TAG" \
+    -o /tmp/opencode/fork-bench.jsonl -- -ngl 45 --n-cpu-moe 35 -t 6 -c 32768 -b 512 -ub 512 --jinja
+done
+sudo systemctl start llama-uncensored-4b whisper-server
+```
+
+### O que a decisão NÃO depende
+
+Com o que já está medido (ladder da peer, 6 configs, mesmo protocolo), a resposta do
+dono já pode ser tomada **sem** a 3-vias: a receita do vídeo não ganha nesta placa
+(`--moe-cache-mib`/`--fit-target` C≈B), o 35B não passa o gate de voz, e o 4B-MTP
+(105,9 t/s) continua o default. A 3-vias responde a uma pergunta **menor e específica**:
+"*vale trocar o binário do tier MoE (ik → stock atualizado) só para ganhar a fusão CUDA
+de MoE?*" — o que só interessa se alguém decidir usar o tier 35B para alguma coisa
+além de thinking.
+
