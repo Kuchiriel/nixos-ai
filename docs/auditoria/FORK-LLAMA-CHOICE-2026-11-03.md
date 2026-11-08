@@ -178,38 +178,43 @@ symlink (o `cuda_cudart` fica em outro store path): precisa de
 
 ### Estado (a medição 3-vias em si)
 
-**Pendente de janela de VRAM coordenada com a frota.** O build do master está pronto
-(o binário compila e roda: `version: 0.9.0-dev (build 1, commit f477f79)`), mas a
-medição X1/X2/X3 com a receita de produção (`-ngl 45 --n-cpu-moe 35 -t 6 -c 32768
--b 512 -ub 512`) não pôde rodar sem derrubar o 4B que a frota estava usando — e o
-`-R` (que para o router :8080) deixou o router fora do ar quando o bench foi
-interrompido. **O router foi restaurado** (`:8080` respondendo, `bonsai` em modo lazy
-= "unloaded", VRAM inalterada).
+**FEITA em 08/11** (janela de VRAM aberta 14:54, máquina quieta: load 3,07 e 4B ocioso;
+mesmo modelo, mesma receita, mesma janela; `load1` registrado por rep):
 
-Comando pronto para quando a janela abrir (1 LLM por vez, `PORT` livre porque o
-`8095` fixo colide com o `nv-gate.py`):
+| # | binário | receita | decode t/s | prefill t/s | TTFT | 1o tok c/ 512 tok | load |
+|---|---|---|---|---|---|---|---|
+| **X1** | **ik 5074** (produção) | `-ngl 45 --n-cpu-moe 35 -t 6 -c 32768 -b 512 -ub 512 --mlock` | **15,4–15,8** | 35,7–46,6 | **348–530 ms** | 8 921–10 330 ms | 6,2–7,5 |
+| X2 | stock 1087 (produção 4B/30B) | idem X1 (sem `--mlock`) | 8,4–12,1 | 9,6–15,6 | 736–1 848 ms | 7 860–23 189 ms | 8,9–11,7 |
+| X3 | stock **master** (f477f79, fusão CUDA de MoE) | idem X2 | 8,6–12,4 | 8,9–15,6 | 595–697 ms | 8 089–17 678 ms | 6,9–8,0 |
+| X4 | stock master + **auto-fit do vídeo** | `--fit-target 512`, **sem** `-ngl` | 7,1–12,1 | 9,6–29,6 | 432–978 ms | 4 338–20 841 ms | 7,6–9,5 |
 
-```bash
-cd ~/projects/nixos-ai
-M=~/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
-sudo systemctl stop llama-uncensored-4b whisper-server
-for B in "ik5074:/home/nixos/projects/nixos-ai/modules/ai/llama-ik-wrapper.sh:/tmp/opencode/ld-ik.env" \
-         "stock1087:/home/nixos/projects/llama.cpp/build-stock/bin/llama-server:/tmp/opencode/ld-stock1087.env" \
-         "master:/tmp/opencode/llama-stock-master/build/bin/llama-server:/tmp/opencode/ld-master.env"; do
-  IFS=: read -r TAG BIN ENVF <<< "$B"
-  PORT=8097 BENCH_LD_ENVFILE="$ENVF" scripts/bench-llm.sh -b "$BIN" -m "$M" -n 2 -g "$TAG" \
-    -o /tmp/opencode/fork-bench.jsonl -- -ngl 45 --n-cpu-moe 35 -t 6 -c 32768 -b 512 -ub 512 --jinja
-done
-sudo systemctl start llama-uncensored-4b whisper-server
-```
+**Decisão (dados, não achismo): manter o `ik_llama.cpp` no tier MoE.**
+
+1. **O ik é o mais rápido**: 15,4–15,8 t/s contra 8,4–12,4 do stock, e o melhor TTFT
+   (348–530 ms). O tier MoE **não** deve trocar de binário.
+2. **Os 348 commits do upstream não compram nada aqui**: X3 (master, com a fusão CUDA de
+   MoE `f5222f25`) ≈ X2 (1087). O gargalo são os experts na RAM e o prefill CPU-bound
+   (9–16 tok/s), não o caminho CUDA dos experts.
+3. **A receita do vídeo continua sem ganho**, agora no binário novo: X4 ≈ X3. Confirma
+   o veredito da ladder (C≈B) com um build 348 commits mais recente.
+4. O número antigo de 25/09 ("ik 36 t/s contra upstream 32 t/s") segue valendo em
+   direção, e agora está medido no protocolo da casa.
+
+### Armadilha real descoberta na medição (vale para qualquer bench de llama.cpp)
+
+**Misturar o `LD_LIBRARY_PATH` de dois forks diferentes quebra o binário.** Com o
+caminho do `prism-bin` junto do do ik, o `llama-server` do ik **segfaultou** ao carregar
+o modelo de 19,7 GiB (core dump gravado). Com o env limpo (só o dir do ik + as libs do
+CUDA, gcc e openssl), o mesmo binário carrega e roda normal. O loader resolve o
+`libllama.so` e o `libggml.so` pelo primeiro caminho que casar, e as libs de forks
+diferentes têm o mesmo SONAME com ABI diferente: crash.
+→ **Um env por binário**, como a seção 6 documenta (`/tmp/opencode/ld-*.env`).
 
 ### O que a decisão NÃO depende
 
-Com o que já está medido (ladder da peer, 6 configs, mesmo protocolo), a resposta do
-dono já pode ser tomada **sem** a 3-vias: a receita do vídeo não ganha nesta placa
-(`--moe-cache-mib`/`--fit-target` C≈B), o 35B não passa o gate de voz, e o 4B-MTP
-(105,9 t/s) continua o default. A 3-vias responde a uma pergunta **menor e específica**:
-"*vale trocar o binário do tier MoE (ik: stock atualizado) só para ganhar a fusão CUDA
-de MoE?*" — o que só interessa se alguém decidir usar o tier 35B para alguma coisa
-além de thinking.
+Com o que já está medido (ladder da peer, 6 configs, mesmo protocolo, mais esta 3-vias),
+a resposta do dono já pode ser tomada **sem** esperar mais nada: a receita do vídeo não
+ganha nesta placa, o 35B não passa o gate de voz, o `ik` fica no tier MoE e o 4B-MTP
+(105,9 t/s) continua o default.
+
 
