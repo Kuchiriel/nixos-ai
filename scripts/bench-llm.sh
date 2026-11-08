@@ -15,7 +15,11 @@
 # side-effects: server efêmero :8095 (se ocupado: pkill anterior); nenhum arquivo
 #               além do --out (default /tmp/bench-results.jsonl).
 set -euo pipefail
-BIN="" MODEL="" REPS=3 TAG="bench" ROUTER=0 OUT=/tmp/bench-results.jsonl PORT=8095
+BIN="" MODEL="" REPS=3 TAG="bench" ROUTER=0 OUT=/tmp/bench-results.jsonl
+# (08/11) PORT virou override de env: 8095 fixo colidia com o servico da casa
+# `nv-gate.py --port 8095` (medido: "couldn't bind HTTP server socket" e o bench
+# saia em silencio, sem linha nenhuma no TSV). Uso: PORT=8097 scripts/bench-llm.sh ...
+PORT=${PORT:-8095}
 # ENV do driver CUDA: o binario stock/ik carrega a CUDA STUB se o
 # LD_LIBRARY_PATH nao tiver cudart+opengl-driver (systemd define isso;
 # numa shell pura o llama-server sobe SEM GPU e mede CPU-only).
