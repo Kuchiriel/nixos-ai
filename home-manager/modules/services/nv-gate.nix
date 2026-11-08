@@ -37,8 +37,11 @@ in
       # falhar (outro processo na porta) o systemd desiste depois de 5
       # tentativas/3min e Marca o unit como failed (visível) em vez de
       # tempestade infinita de restarts. Evidência: journalctl --user -u nv-gate.service 09:24→09:34.
-      StartLimitIntervalSec = 180;
-      StartLimitBurst = 5;
+      # (08/11, 19:30) O dono precisa dele AGORA: parada externa (kill
+      # deliberado/outra sessao) deixava o gate inativo ate alguem ver.
+      # Restart=always + sem burst limit = auto-recupera sempre.
+      StartLimitIntervalSec = 0;
+      StartLimitBurst = 0;
     };
     Service = {
       Type = "simple";
@@ -56,7 +59,7 @@ in
         "--upstream"
         (gate.upstream or "https://integrate.api.nvidia.com")
       ];
-      Restart = "on-failure";
+      Restart = "always";
       RestartSec = 5;
     };
     Install = {
