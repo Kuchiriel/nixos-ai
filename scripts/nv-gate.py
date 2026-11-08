@@ -255,14 +255,14 @@ class Gate(BaseHTTPRequestHandler):
                 return
 
     def _relay(self, resp) -> None:
-        self.send_response(resp.status)
-        for key, value in resp.headers.items():
-            if key.lower() in HOP_BY_HOP:
-                continue
-            self.send_header(key, value)
-        self.send_header("Transfer-Encoding", "chunked")
-        self.end_headers()
         try:
+            self.send_response(resp.status)
+            for key, value in resp.headers.items():
+                if key.lower() in HOP_BY_HOP:
+                    continue
+                self.send_header(key, value)
+            self.send_header("Transfer-Encoding", "chunked")
+            self.end_headers()
             while True:
                 chunk = resp.read(8192)
                 if not chunk:
@@ -275,6 +275,14 @@ class Gate(BaseHTTPRequestHandler):
             self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
             pass
+        except Exception as exc:
+            # Um client que desiste no meio do relay NAO pode derrubar o
+            # processo inteiro (causa de varias quedas hoje, retries de 400/
+            # 429 com corpo gigante). Log curto, segue o baile.
+            try:
+                self.warn("relay falhou apos %s: %s", getattr(resp, "status", "?"), exc)
+            except Exception:
+                pass
 
     def _relay_error(self, code: int, payload: bytes) -> None:
         self.send_response(code)
