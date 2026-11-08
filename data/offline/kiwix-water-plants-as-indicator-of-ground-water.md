@@ -4,7 +4,7 @@ title: "Plants as Indicator of Ground Water"
 source: "Water Treatment Library (Kiwix zimgit-water_en_2024-08) — Oscar Edward MEinzer"
 source_url: "https://browse.library.kiwix.org/content/zimgit-water_en_2024-08"
 license: "Public domain (US Geological Survey)"
-retrieved_at: "2026-11-08T00:32:50Z"
+retrieved_at: "2026-11-08T02:15:57Z"
 ---
 # Plants as Indicator of Ground Water
 

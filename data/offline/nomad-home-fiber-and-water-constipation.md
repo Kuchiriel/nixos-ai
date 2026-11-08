@@ -4,7 +4,7 @@ title: "Dietary fiber and water (for constipation and hemorrhoids)"
 source: "US government health guidance (CDC, NIH/NHLBI, MedlinePlus/NLM, FDA)"
 source_url: "https://medlineplus.gov/constipation.html"
 license: "Public domain (US government works)"
-retrieved_at: "2026-11-08T00:32:50Z"
+retrieved_at: "2026-11-08T02:15:57Z"
 ---
 # Dietary fiber and water (for constipation and hemorrhoids)
 

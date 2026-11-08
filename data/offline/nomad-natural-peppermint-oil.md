@@ -4,7 +4,7 @@ title: "Peppermint Oil"
 source: "NCCIH — Herbs at a Glance"
 source_url: "https://www.nccih.nih.gov/health/peppermint-oil"
 license: "Public domain (US government work; NCCIH)"
-retrieved_at: "2026-11-08T00:32:50Z"
+retrieved_at: "2026-11-08T02:15:57Z"
 ---
 # Peppermint Oil
 

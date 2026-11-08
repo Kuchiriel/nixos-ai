@@ -34,7 +34,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -66,7 +66,7 @@ _HEADING_RE = re.compile(r"^\d+(\.\d+)*\.?\s+\S")
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _slug(text: str) -> str:
@@ -284,7 +284,7 @@ def index_corpus(corpus_dir: Path, collection: str, batch_size: int = 64) -> dic
         for start in range(0, len(rich_list), batch_size):
             vectors_out.extend(llm.embed_batch(rich_list[start:start + batch_size]))
         rel_path = str(path.relative_to(REPO_ROOT)) if path.is_relative_to(REPO_ROOT) else str(path)
-        for i, (rich, chunk) in enumerate(zip(rich_list, chunks)):
+        for i, (rich, chunk) in enumerate(zip(rich_list, chunks, strict=True)):
             dense = vectors_out[i] if i < len(vectors_out) else []
             if not dense:
                 print(f"[aviso] sem embedding: {path.name} chunk {i}", file=sys.stderr)

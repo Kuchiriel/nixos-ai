@@ -10,7 +10,6 @@ from __future__ import annotations
 import jarvis.cli.dev as dev
 from jarvis.core.rag import OFFLINE_COLLECTION, offline_route_reason
 
-
 # ---------------------------------------------------------------------------
 # decisão de rota (função pura — sem rede, sem I/O)
 # ---------------------------------------------------------------------------

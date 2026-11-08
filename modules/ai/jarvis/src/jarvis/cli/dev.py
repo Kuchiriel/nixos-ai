@@ -1533,7 +1533,12 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
                 return "No results found.", None
             lines = []
             for r in results:
-                lines.append(f"[{r.score:.2f}] {r.path}\n{r.text[:200]}")
+                # HybridHit nao tem .text: o texto vive no payload
+                # (mesmo bug ja corrigido no handler do MCP)
+                pl = getattr(r, "payload", {}) or {}
+                path = getattr(r, "path", "") or pl.get("path", "")
+                body = str(pl.get("content") or pl.get("title") or "")
+                lines.append(f"[{r.score:.2f}] {path}\n{body[:200]}")
             return "\n".join(lines), None
         except Exception as e:
             return f"ERROR: {e}", None

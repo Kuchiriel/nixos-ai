@@ -4,7 +4,7 @@ title: "Safe Water School"
 source: "Water Treatment Library (Kiwix zimgit-water_en_2024-08) — Various"
 source_url: "https://browse.library.kiwix.org/content/zimgit-water_en_2024-08"
 license: "© SODIS, Antenna — reuse livre com citação da fonte (declaração de licença no próprio manual)"
-retrieved_at: "2026-11-08T00:32:50Z"
+retrieved_at: "2026-11-08T02:15:57Z"
 ---
 # Safe Water School
 

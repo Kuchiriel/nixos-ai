@@ -4,7 +4,7 @@ title: "Clean and cover wounds and cuts"
 source: "US government health guidance (CDC, NIH/NHLBI, MedlinePlus/NLM, FDA)"
 source_url: "https://medlineplus.gov/firstaid.html"
 license: "Public domain (US government works)"
-retrieved_at: "2026-11-08T00:32:50Z"
+retrieved_at: "2026-11-08T02:15:57Z"
 ---
 # Clean and cover wounds and cuts
 

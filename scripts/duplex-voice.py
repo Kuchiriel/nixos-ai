@@ -1573,8 +1573,8 @@ def _offline_search(query: str, top_k: int = 3) -> str:
     if not (query or "").strip():
         return "ERRO: query vazia"
     try:
-        from jarvis.core.rag import HybridSearch, OFFLINE_COLLECTION
         from jarvis.core.config import Config
+        from jarvis.core.rag import OFFLINE_COLLECTION, HybridSearch
         hits = HybridSearch(Config()).search(query, top_k=top_k,
                                               collection=OFFLINE_COLLECTION)
     except Exception as e:
@@ -1843,35 +1843,41 @@ def call_tool(name, args):
         return _offline_search(args.get("query", ""))
     if name == "rag_search":
         q = args.get("query", "")
-        # (21/10) CLI agora traz content (rebuild aplicado) — usa CLI
-        # direto com --top-k 3, formata [arquivo] content por linha
-        raw = _jarvis_cli(["rag", "--top-k", "3", q], timeout=25)
+        # (07/11) A CLI tem o subcomando `rag-search <query> [coll] [limit]`
+        # e devolve TEXTO ("[score] path\ncontent"), nao JSON. Antes a voz
+        # chamava `rag --top-k 3` (subcomando inexistente) e parseava JSON
+        # -> caia sempre no fallback de memoria (o RAG da voz nao
+        # funcionava). Agora: subcomando certo + parse do texto.
+        raw = _jarvis_cli(["rag-search", q, "code", "3"], timeout=25)
+        linhas = []
+        path_atual = ""
+        for ln in (raw or "").splitlines():
+            ln = ln.rstrip()
+            if not ln:
+                continue
+            if ln.startswith("[") and "]" in ln:
+                head, _, resto = ln.partition("]")
+                path_atual = resto.strip()
+                continue
+            if path_atual:
+                fname = path_atual.split("/")[-1] if path_atual else "?"
+                linhas.append(f"[{fname}] {ln[:200]}")
+                path_atual = ""
+            if len(linhas) >= 3:
+                break
+        if linhas:
+            return "\n".join(linhas)
+        if raw and raw.strip() and not raw.startswith("ERROR"):
+            return raw[:400]
+        # fallback: in-process via EpisodicMemory se a CLI falhar
         try:
-            hits = json.loads(raw)
-            lines = []
-            for h in (hits if isinstance(hits, list) else [hits])[:3]:
-                if not isinstance(h, dict):
-                    continue
-                path = h.get("path", "")
-                content = h.get("content", "")
-                if content:
-                    fname = path.split("/")[-1] if path else "?"
-                    lines.append(f"[{fname}] {content[:200]}")
-            if lines:
-                return "\n".join(lines)
-            return f"RAG: nenhum resultado para '{q[:40]}'."
+            hits2 = _MEM.recall(q, top_k=3) if _MEM else []
+            if hits2:
+                return "\n".join(
+                    f"[fact] {h.get('text','')[:180]}" for h in hits2[:3])
         except Exception:
-            # fallback: in-process via EpisodicMemory se o CLI falhar
-            try:
-                hits2 = _MEM.recall(q, top_k=3) if _MEM else []
-                if hits2:
-                    return "\n".join(
-                        f"[fact] {h.get('text','')[:180]}" for h in hits2[:3])
-            except Exception:
-                pass
-            return raw[:400]
-        except Exception:
-            return raw[:400]
+            pass
+        return raw[:400]
 
     if name == "status":
         return _exec("systemctl --user is-active jarvis-wakeword 2>&1; uptime -p; free -g | grep Mem")

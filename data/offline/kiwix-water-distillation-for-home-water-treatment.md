@@ -4,7 +4,7 @@ title: "Distillation For Home Water Treatment"
 source: "Water Treatment Library (Kiwix zimgit-water_en_2024-08) — Michigan State University"
 source_url: "https://browse.library.kiwix.org/content/zimgit-water_en_2024-08"
 license: "Public domain (Michigan State University Extension)"
-retrieved_at: "2026-11-08T00:32:50Z"
+retrieved_at: "2026-11-08T02:15:57Z"
 ---
 # Distillation For Home Water Treatment
 

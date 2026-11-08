@@ -4,7 +4,7 @@ title: "Fluids and rest"
 source: "US government health guidance (CDC, NIH/NHLBI, MedlinePlus/NLM, FDA)"
 source_url: "https://www.cdc.gov/common-cold/treatment/index.html"
 license: "Public domain (US government works)"
-retrieved_at: "2026-11-08T00:32:50Z"
+retrieved_at: "2026-11-08T02:15:57Z"
 ---
 # Fluids and rest
 
