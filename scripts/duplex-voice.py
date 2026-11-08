@@ -434,7 +434,14 @@ def _intent_of(thread, box):
     return box.get("intent")
 
 
-def _gate_accepts(addressed, intent):
+# (08/11, coord-naming) A DECISÃO do gate mora em
+# modules/ai/jarvis/src/jarvis/voice_gate.py — pura, com 11 testes que
+# travam o contrato (inclui a recall medida de 2/13 do gate antigo como
+# regressão). Aqui fica só a chave de operador (GATE_MODE) e o log.
+_GATE_LAST = None
+
+
+def _gate_accepts(addressed, intent, lora=None):
     """Aceita o turno? (03/11, dono: "ele ignora quase tudo que eu falo").
 
     O gate antigo exigia a PALAVRA "Jarvis" (fuzzy) — 2/13 pedidos do dono
@@ -442,14 +449,29 @@ def _gate_accepts(addressed, intent):
     mas MORTO) reconhece pergunta/comando sem a palavra-mágica:
     recall 92% / F1 0,889 (bench: benchmarks/voice/bench_gate.py).
     'jarvis' mantém o comportamento estrito (caso da TV) como escape.
+
+    (08/11) O LoRA entra como ÂNCORA de precisão: medido, a melhor
+    variante é `lora AND (endereçado OU intenção)` — recall 92,3% com 2 FP
+    (a variante só-intent dava 3). Motivo (arXiv:2609.27037): um LLM
+    puro SOBRE-ATIVA (recall 0,993 com F1 0,179) — quem segura a
+    precisão é o classificador de turno. Se o LoRA falhar, o módulo
+    degrada (intent/endereço), nunca volta ao gate que descarta 11/13.
     """
+    global _GATE_LAST
     if GATE_MODE == "off":
         return True
-    if addressed:
-        return True
     if GATE_MODE == "jarvis":
-        return False
-    return intent in ("QUESTION", "COMMAND")
+        return bool(addressed)
+    try:
+        from jarvis.voice_gate import decide
+        _GATE_LAST = decide("", intent=intent, lora=lora, explicit=bool(addressed))
+    except Exception:
+        # módulo indisponível: o comportamento de antes (endereço OU intent)
+        if addressed:
+            return True
+        return intent in ("QUESTION", "COMMAND")
+    log(f"[{ts()}] gate: {_GATE_LAST.as_line()}")
+    return _GATE_LAST.respond
 
 
 def build_prompt(history, heard):
@@ -3130,7 +3152,7 @@ def main():
                         # pergunta/comando; off = comportamento antigo.
                         _intent_val = (_intent_of(_intent_th, _intent_box)
                                        if _intent_th is not None else None)
-                        _gate_ok = _gate_accepts(_addr, _intent_val)
+                        _gate_ok = _gate_accepts(_addr, _intent_val, lab)
                         dbg("GATE.decide", accept=_gate_ok, addr=_addr,
                             intent=_intent_val, txt=heard)
                         if not _gate_ok:

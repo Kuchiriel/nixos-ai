@@ -114,6 +114,7 @@ def decide(
     intent: str | None = None,
     lora: str | None = None,
     policy: str = POLICY_LORA_AND_CONTEXT,
+    explicit: bool | None = None,
 ) -> GateDecision:
     """Decide se a voz deve responder.
 
@@ -122,11 +123,15 @@ def decide(
         intent: rótulo do classificador de intenção (QUESTION/COMMAND/.../None).
         lora: rótulo do classificador de turno (RESPOND/WAIT/SILENCE/BARGE).
         policy: `lora_and_addr_or_intent` (padrão) ou `explicit` (o de hoje).
+        explicit: quando dado, o caller diz se o turno JÁ está endereçado
+            (o duplex calcula isso com a regra do falante sticky, que o
+            texto sozinho não sabe) e o módulo não recalcula.
 
     Returns:
         GateDecision — `respond`, `reason` e o contexto, sempre.
     """
-    explicit = addressed_explicit(text)
+    if explicit is None:
+        explicit = addressed_explicit(text)
     intent_norm = (intent or "").strip().upper() or None
     lora_norm = (lora or "").strip().upper() or None
 

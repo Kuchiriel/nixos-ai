@@ -150,3 +150,53 @@ def test_decision_is_loggable():
     assert "[gate] RESPOND" in line
     assert f"reason={G.REASON_CONTEXTUAL}" in line
     assert "intent=QUESTION" in line
+
+
+def _load_duplex():
+    """Importa o duplex-voice real (como o bench_gate faz) sem efeitos colaterais."""
+    import importlib.util
+
+    path = None
+    for parent in Path(__file__).resolve().parents:
+        cand = parent / "scripts" / "duplex-voice.py"
+        if cand.exists():
+            path = cand
+            break
+    if path is None:
+        pytest.skip("scripts/duplex-voice.py nao encontrado neste checkout")
+    spec = importlib.util.spec_from_file_location("duplex_voice_live", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_live_gate_delegates_to_the_tested_module():
+    """O caminho VIVO usa o modulo testado e o LoRA como ancora.
+
+    Sem o LoRA: a decisao e a do par (endereco OU intent) — o pedido do
+    dono passa mesmo sem a palavra "Jarvis".
+    Com o LoRA em SILENCE: o turno NAO vira resposta (a ancora de precisao
+    que o paper 2609.27037 mostra ser necessaria: um LLM puro sobre-ativa).
+    """
+    dv = _load_duplex()
+    dv.GATE_MODE = "intent"
+    # sem rotulo do LoRA: intent de pedido responde
+    assert dv._gate_accepts(False, "QUESTION", None) is True
+    # LoRA RESPOND + intent de pedido: responde (contexto)
+    assert dv._gate_accepts(False, "QUESTION", "RESPOND") is True
+    # LoRA RESPOND + intent neutro: nao (o gate so quer pergunta/comando)
+    assert dv._gate_accepts(False, "NONE", "RESPOND") is False
+    # LoRA SILENCE: a ancora segura, mesmo com intent de pedido
+    assert dv._gate_accepts(False, "QUESTION", "SILENCE") is False
+    # endereco explicito: sempre passa
+    assert dv._gate_accepts(True, "NONE", "SILENCE") is True
+
+
+def test_live_gate_keeps_the_operator_switches():
+    """GATE_MODE off/jarvis continuam com o significado de sempre."""
+    dv = _load_duplex()
+    dv.GATE_MODE = "off"
+    assert dv._gate_accepts(False, None, "SILENCE") is True
+    dv.GATE_MODE = "jarvis"
+    assert dv._gate_accepts(False, "QUESTION", "RESPOND") is False
+    assert dv._gate_accepts(True, "NONE", "SILENCE") is True
