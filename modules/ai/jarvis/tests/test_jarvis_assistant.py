@@ -3,6 +3,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from jarvis.core.persona import PersonaRegistry, filter_tools
@@ -49,8 +51,18 @@ class TestCapabilityMatrix:
 
 
 class TestWebSearch:
-    def test_no_key_gives_clear_error(self, monkeypatch):
+    # (08/11) keys.get() lê env E arquivos (/etc/jarvis-secrets/tavily.env,
+    # /etc/litellm.env). Desde 07/11 o host tem a chave real nesses
+    # arquivos: os testes que só mexiam no env (a) quebravam e (b) VAZAVAM
+    # a chave real no assert (que o scanner de pains guarda no opencode.db).
+    # Por isso o fixture tira as DUAS fontes — o teste é sobre a fonte, não
+    # sobre a máquina.
+    @pytest.fixture(autouse=True)
+    def _no_ambient_tavily(self, monkeypatch):
         monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+        monkeypatch.setitem(_keys._SOURCES["tavily"], "files", [])
+
+    def test_no_key_gives_clear_error(self, monkeypatch):
         assert not websearch.has_key()
         out = websearch.web_search("teste")
         assert out.startswith("ERROR:")
@@ -148,10 +160,34 @@ class TestRagTilde:
 
 
 class TestSecrets:
-    def test_env_wins(self, monkeypatch):
+    # (08/11) mesma razão do fixture do TestWebSearch: sem tirar os
+    # arquivos, o env de teste não vence a chave real do host e o assert
+    # imprimia o segredo.
+    @pytest.fixture(autouse=True)
+    def _no_ambient_tavily(self, monkeypatch, tmp_path):
+        # arquivo FALSO com outro valor: prova a precedência (env > arquivo)
+        # sem tocar nos arquivos reais do host (onde está a chave de verdade).
+        fake = tmp_path / "tavily.env"
+        fake.write_text("TAVILY_API_KEY=tvly-from-file\n")
+        monkeypatch.setitem(_keys._SOURCES["tavily"], "files", [str(fake)])
+
+    def test_file_wins_over_env(self, monkeypatch):
+        """A precedência REAL é arquivo > env (keys.get, 2026-10-02).
+
+        Quem renova a chave edita o arquivo gerenciado por root; o env
+        exportado há semanas continuaria servindo a chave velha (401 na
+        visão). O teste antigo afirmava o contrário ("env_wins") e só
+        passava porque o arquivo ainda não existia na máquina.
+        """
+        monkeypatch.setenv("TAVILY_API_KEY", "tvly-abc")
+        assert _keys.get("tavily") == "tvly-from-file"
+        assert _keys.has("tavily")
+
+    def test_env_used_when_no_file(self, monkeypatch):
+        """Sem arquivo, o env é a fonte (útil em CI/container sem /etc)."""
+        monkeypatch.setitem(_keys._SOURCES["tavily"], "files", [])
         monkeypatch.setenv("TAVILY_API_KEY", "tvly-abc")
         assert _keys.get("tavily") == "tvly-abc"
-        assert _keys.has("tavily")
 
     def test_missing_is_empty(self, monkeypatch):
         for v in ("TAVILY_API_KEY", "HMD_API_ACCESS_TOKEN"):
