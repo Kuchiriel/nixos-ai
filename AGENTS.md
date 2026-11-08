@@ -174,7 +174,11 @@ read pt-BR); answer the owner in pt-BR.
   medir refusal direction** — o 4B-MTP cumpre 18/18 prompts (até os mais
   overt), então qualquer ASR medido nele é ruído e não há recusa para ter
   assinatura no espaço de ativação. Para medir recusa use o
-  **Ternary-Bonsai-8B** (prism, alinhado) ou um modelo da API. Avisos
+  **Ternary-Bonsai-8B** (prism, alinhado) ou um modelo da API. Medido
+  08/11: o bonsai recusa **6/6** nos prompts overt (o maior refusal local
+  medido) — ele é o alvo certo, mas o router só carrega o bonsai com o
+  **4B-MTP PARADO** (6 GB, 1 LLM por vez) e o 4B é o cérebro da voz: medir
+  recusa tira a voz do ar (o cliente morre com ":8092 fora"). Avisos
  tambem em `modules/ai/models.nix`, junto de cada modelo.
 - 6GB VRAM: **1 LLM at a time.** For models that don't fit, GPU experts
   **hurt** (fetch comes over PCIe, 6-7 GB/s, vs 41-83 GB/s from
