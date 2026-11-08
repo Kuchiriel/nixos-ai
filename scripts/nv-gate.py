@@ -61,6 +61,11 @@ class Bucket:
         self.tokens = self.capacity
         self.updated = time.monotonic()
         self.lock = threading.Lock()
+        # (08/11) Quantos segundos o token ainda precisa para a ULTIMA
+        # recusa. Sem isso o log dizia "queue exhausted after 0.0s wait",
+        # que e mentira: o pedido foi recusado na hora porque o token
+        # precisaria de mais tempo que o max_wait.
+        self.last_need = 0.0
 
     def take(self, max_wait: float) -> tuple[bool, float]:
         """Consume one token; returns (granted, waited_seconds)."""
@@ -73,9 +78,11 @@ class Bucket:
                 self.updated = now
                 if self.tokens >= 1.0:
                     self.tokens -= 1.0
+                    self.last_need = 0.0
                     return True, waited
                 need = (1.0 - self.tokens) / self.rate
             if now + need > deadline:
+                self.last_need = need
                 return False, waited
             sleep_for = min(need, max_wait - waited)
             if sleep_for <= 0:
@@ -165,10 +172,21 @@ class Gate(BaseHTTPRequestHandler):
         granted, waited = self.bucket.take(self.max_wait)
         if waited:
             self.stats.bump("queued_seconds", waited)
+            # (08/11) Medido no sweep: com burst de 6 requests, 3 voltaram 200
+            # e 3 NAO completaram no timeout do cliente (25s no curl) — o gate
+            # ESPERA o token em vez de recusar, entao a fila vira o consumidor
+            # do tempo e o opencode ve "socket closed unexpectedly" (nao 429).
+            # A espera e' o sintoma; sem log nao ha como ver.
+            if waited >= 10.0:
+                self.warn("queue wait %.1fs (bucket %s) — the client may have "
+                          "timed out before the token came", waited,
+                          "rpm=%.0f burst=%d" % (self.bucket.rate * 60,
+                                                 int(self.bucket.capacity)))
         if not granted:
             self.stats.bump("client_429")
-            self.warn("gate queue exhausted after %.1fs wait -> 429 to the client",
-                      waited)
+            self.warn("gate queue exhausted: token needs %.1fs, max_wait %.0fs "
+                      "(waited %.1fs) -> 429 to the client",
+                      self.bucket.last_need, self.max_wait, waited)
             self._json(429, {"error": {"message": "nv-gate: rate limit queue exhausted",
                                        "type": "rate_limit_error"}})
             return
