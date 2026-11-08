@@ -546,6 +546,25 @@ print(" | ".join(m for m in msgs if m)[:600])
                 2*|HTTP*) _OK=1 ;;
                 *) log "wake API falhou end=$END sessao=$SESSAO: $_R" ;;
             esac
+            # (08/11, Crouton Alpha / celular) ACK no bus: confirma a ENTREGA do
+            # wake de bus — quem envia o wake so descobre que o agente executou
+            # lendo a sessao dele; o canal fica sem metrica propria.
+            if [ "$_OK" -eq 1 ] && [ -n "${_bus_cod:-}" ] \
+               && [ "${MOTIVO#bus: }" != "$MOTIVO" ] \
+               && [ "${AGENTS_BUS_ACK:-1}" != "0" ]; then
+                _ack_lane=$(python3 -c 'import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    print(""); raise SystemExit
+itens = d if isinstance(d, list) else (d.get("agents") or d.get("roster") or [])
+print(next((it.get("lane") or "" for it in itens
+            if isinstance(it, dict) and (it.get("name") or it.get("codinome")) == sys.argv[2]), ""))' "$DIR_ST/roster.json" "$_bus_cod" 2>/dev/null)
+                ( cd "$SCRIPT_DIR/.." && node tools/coord.mjs post --kind status \
+                    --agent "$_bus_cod" --lane "${_ack_lane:-coord}" \
+                    --note "ENTREGA OK $_bus_cod (watcher entregou wake do bus)" \
+                    >/dev/null 2>&1 ) || true
+            fi
         fi
         if [ "$_OK" -eq 0 ]; then
             # fallback antigo (focus + wtype + Return): só quando não há API
