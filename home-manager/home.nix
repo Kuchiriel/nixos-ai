@@ -82,7 +82,8 @@
     }
     // (if variants != {} then { inherit variants; } else {})
     // (if (m.reasoning_effort_default or null) != null then { options.reasoningEffort = m.reasoning_effort_default; } else {})
-    // (if (prov.interleaved_field or null) != null then { interleaved = { field = prov.interleaved_field; }; } else {}));
+    // (if (prov.interleaved_field or null) != null then { interleaved = { field = prov.interleaved_field; }; } else {}))
+    // (if (prov.compatibility or null) != null then { compatibility = prov.compatibility; } else {});
     # (08/11) VISIBILIDADE: active/rate_limited/unstable entram no seletor.
     # Quem fica de fora e por que: `disabled` = 404 medido nesta conta
     # (content-safety, voicechat, paligemma, llama-3.2-11b, super-120b,
@@ -129,7 +130,7 @@
       // (if (prov.timeout or null) != null
           then {timeout = prov.timeout;} else {});
     models = activeModels;
-  };
+  } // (if (prov.compatibility or null) != null then { compatibility = prov.compatibility; } else {});
 
   cloudProviders = builtins.mapAttrs mkCloudProvider freeProviders.providers;
 
@@ -650,12 +651,12 @@ in {
       # Higiene de contexto global (03/10): vale p/ todos os providers.
       # prune poda tool outputs velhos; tool_output capa outputs gigantes
       # (prompt de 33k matou o Qwen 2x); small_model tira titles/resumos do 35B.
-      # (03/11) small_model = o DEFAULT residente (:8092). Antes era
-      # local_small_model/bonsai (:8080) — com o 4B-MTP de pé (4474MiB) o
-      # bonsai (4.3GB) não carrega no router → small_model quebraria.
-      # (03/11) provider+id DERIVADOS de models.nix (fonte única):
-      # directServers.uncensored-4b.opencode.key + .alias (= routing.default).
-      small_model = "${pkgs.aiModels.directServers."uncensored-4b".opencode.key}/${pkgs.aiModels.directServers."uncensored-4b".alias}";
+      # small_model = o DEFAULT residente pediu bonsai via edição viva
+      # (dono, 08/11 10:41): small_model movido de novo para o router
+      # bonsai (:8080, ternário cabe ao lado do 4B-MTP). O comentário
+      # antigo (03/11, MTP não carregaria) fica registrado aqui caso o
+      # bonsai volte a não caber na VRAM.
+      small_model = "local_small_model/bonsai";
       warming = true;
       # (08/11) Limiar de compactação no FINALZINHO para modelos de 1M:
       # buffer "10%" ⇒ teto ≈ 943.718 tokens (1.048.576 − 10%) — o número que
@@ -680,11 +681,15 @@ in {
       # Default E2E-validado 16/09 ("opencode run" respondeu): Gemini free
       # via GEMINI_API_KEY. openrouter/free era slug morto = causa raiz do
       # "opencode quebrado".
-      # (02/11) Default = 4B-MTP+LoRA (:8092, alias jarvis-mtp-lora) —
-      # dono: "tira o bonsai de default". O bonsai (:8080) fica no catálogo
-      # p/ uso manual (precisa do :8092 parado: 4.1G+4.3G > 6.1G VRAM).
-      # (03/11) derivado de models.nix (fonte única).
-      model = "${pkgs.aiModels.directServers."uncensored-4b".opencode.key}/${pkgs.aiModels.directServers."uncensored-4b".alias}";
+      # (02/11) Default era o 4B-MTP (:8092) por decisão do dono; em
+      # 08/11 10:41 o dono passou o default de novo para
+      # nvidia/minimaxai/minimax-m3.1-flash (edição viva portada aqui —
+      # sem isso a ativação seguinte reverteria).
+      model = "nvidia/minimaxai/minimax-m3.1-flash";
+      # (08/11 10:41, edição viva do dono, portada): websearch via Tavily
+      # e o agent COMPACTION roda no minimax (em vez do default geral).
+      websearch = { provider = "tavily"; };
+      agents = { compaction = { model = "nvidia/minimaxai/minimax-m3.1-flash"; }; };
 
       # MCP Jarvis: RAG, memória, vault, files, shell, nix — via stdio.
       # Handshake validado (tools/list retorna 20 tools). Env inline no
