@@ -32,28 +32,53 @@ Config: `-ngl 999 -t 6 -b 512 -ub 512 --cache-type-k/v f16 --flash-attn off
 | 4B-MTP produção (`:8092`, MTP draft) | **105,7–105,9** | 143–354 | **178–203 ms** | 688–740 ms | 5139 MiB |
 | 4B receita do vídeo (fit512, KV q8_0, sem MTP) | 54,3 | 205–562 | 153–175 ms | 537–566 ms | 4557 MiB |
 
-## 3. Veredito
+## 3. Qualidade (harness da casa `scripts/eval-model.py`, 29 tarefas em 6 classes)
+
+| modelo | total | general | coding | tool | agent | reasoning | adversarial | legit (pt-BR) |
+|---|---|---|---|---|---|---|---|---|
+| 4B-MTP produção (`:8092`) | **18/29** | 3/3 | 2/4 | 1/4 | 1/3 | 1/3 | 0/2 | **10/10** |
+| Dory loop=1 (`last_loop`) | 14/29 | 2/3 | 2/4 | **4/4** | 1/3 | 1/3 | 1/2 | 3/10 |
+| Dory loop=2 (`last_loop`) | 15/29 | — | — | — | — | — | — | — |
+
+Leitura (o que os números dizem, não o que a gente queria):
+
+1. **O Dory não bate o 4B-MTP** (14–15 vs 18) → **pelo critério da própria nota de
+   papers ("se loop=1 não for ≥ o 4B-MTP em qualidade, o modelo não entra"), o Dory
+   NÃO entra no stack.**
+2. **O déficit é quase todo de idioma**: a classe `legit` (10 tarefas em **português**)
+   dá 3/10 no Dory contra 10/10 no 4B → é o "English-only" do card aparecendo como
+   número, não como teoria. Nas tarefas em inglês o Dory **iguala** (coding 2/4,
+   agent 1/3, reasoning 1/3) e **vence** em tool-use (**4/4 vs 1/4**).
+3. **O loop compra pouco**: loop=1 → loop=2 = **+1 tarefa** (14→15) com o dobro de
+   compute e o TTFT piorando (1,6–3,4 s).
+4. O Dory recusou **1 das 7 tarefas sensíveis**; o 4B é ABLITERATED (0 recusa) → o
+   Dory é *alinhado*, o que é o oposto do que o tier Uncensored precisa.
+
+## 4. Veredito
 
 1. **O Dory NÃO passa o gate de voz** (TTFT ≤ 150 ms): 574–970 ms no loop=1 — **4–6×
-   acima** — e 1846–2941 ms no loop=4. O loop é o dial de compute, então **mais loop =
+   acima** — e 1846–3414 ms nos loops 2/4. O loop é o dial de compute, então **mais loop =
    mais latência**, exatamente ao contrário do que a voz quer.
 2. **É ~6× mais lento que o nosso 4B-MTP** em decode (17,9–22,8 vs 105,9 t/s) e 3–5×
    pior em TTFT. O MTP (draft) do 4B é o que faz a diferença; o Dory não tem draft.
-3. **O loop custa VRAM**: loop=2 já estoura a placa a 20k de contexto (o grafo expandido
-   pede 733 MiB de compute buffer). O modo `last_loop` (o "memory-efficient looping" do
-   card: um cache de KV por camada) é o modo a medir para isolar isso.
+3. **O loop custa VRAM**: com `per_loop`, loop=2 a 20k de contexto já estoura a placa
+   (`failed to allocate CUDA0 buffer of size 768612352`, 733 MiB). Com **`last_loop`**
+   (um cache de KV por camada) **cabe** a 20k ✓ — o "memory-efficient looping" do card
+   é real e verificado aqui.
 4. **English-only** (o card): o JARVIS fala pt-BR → para voz/duplex está fora de
    questão mesmo se a latência coubesse.
 5. **A literatura não sustenta "vence 27B"** (ver a nota de papers): a regra do campo é
    que, a igual computo, **parâmetros×N ganha de N loops**; o loop paga em compute de
    inference adaptativo, não em qualidade por parâmetro.
 
-**Conclusão:** o Dory entra no grupo de **candidato a tier de *thinking*** (o lugar do
-35B, hoje CPU-bound demais), **não** no de voz — e só entra se a **qualidade** no
-loop=1 for ≥ a do 4B-MTP (critério da própria nota). O critério de entrada da casa:
-loop=1 **precisa** bater o 4B-MTP nas tarefas do JARVIS, senão não entra.
+**Decisão: o Dory NÃO entra no stack agora.** Fica documentado como candidato a tier de
+*thinking* **em inglês** (onde o tool-use 4/4 é uma vantagem real), se algum dia o
+produto falar inglês com ele. O GGUF fica em `~/models/` (3,61 GB) — **não deletar**
+(regra da casa: modelo baixado não se joga fora sem o dono; disco com 141 GB livres).
+**O 4B-MTP segue como default** — é mais rápido **e** melhor na nossa língua.
 
-## 4. Armadilhas medidas no caminho (o harness da casa)
+## 5. Armadilhas medidas no caminho (o harness da casa)
+
 
 1. **`LD_LIBRARY_PATH` sem o `build/bin` do fork ⇒ "no backends are loaded"** e o bench
    sai em **silêncio** (nenhuma linha no TSV, sem erro no stderr — o erro vai para o
