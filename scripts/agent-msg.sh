@@ -325,25 +325,47 @@ TEXTO_FINAL="$CABECALHO: $TEXTO_ESCAPED"
 # ── entrega via API do opencode ───────────────────────────────────────
 # $1=sessão  $2=path ("/message" | "/prompt_async" | "/abort")  $3=json
 oc_post() {
-    python3 - "$OC_URL" "$OC_USER" "$OC_PASS" "$1" "$2" "$3" <<'PYEOF'
+    # (07/11) COMPATIBILIDADE DE VERSAO: o servidor do opencode pode ser o
+    # 1.18.34 (rotas 1.x: /message, /prompt_async) ou o 2.2.6 (rota nova:
+    # POST /session/:id/prompt com {text}) - e o 2.2.6 responde 405 nas rotas
+    # 1.x (a frota silenciou por ~5 h por causa disso). Aqui: tenta a rota NOVA
+    # primeiro e cai pra antiga se ela nao existir (404/405).
+    python3 - "$OC_URL" "$OC_USER" "$OC_PASS" "$1" "$2" "$3" "$4" <<'PYINNER'
 import base64, json, sys, urllib.error, urllib.request
-base, user, pw, sid, path, body = sys.argv[1:7]
-url = f"{base}/session/{sid}{path}"
-req = urllib.request.Request(
-    url, data=body.encode(), method="POST",
-    headers={"Content-Type": "application/json",
-             "Authorization": "Basic " +
-             base64.b64encode(f"{user}:{pw}".encode()).decode()})
-try:
+base, user, pw, sid, path, body, texto = sys.argv[1:8]
+auth = {"Content-Type": "application/json",
+        "Authorization": "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode()}
+
+def post(url, data):
+    req = urllib.request.Request(url, data=data.encode(), method="POST", headers=auth)
     with urllib.request.urlopen(req, timeout=25) as r:
-        sys.stdout.write(f"{r.status} {r.read()[:160].decode(errors='replace')}")
+        return r.status, r.read()[:200].decode(errors="replace")
+
+if path in ("/message", "/prompt_async", "/prompt"):
+    novo = {"text": texto}
+    if path == "/message":
+        novo["delivery"] = "queue"
+    try:
+        st, out = post(f"{base}/session/{sid}/prompt", json.dumps(novo))
+        sys.stdout.write(f"{st} {out}")
+        sys.exit(0)
+    except urllib.error.HTTPError as e:
+        if e.code not in (404, 405, 501):
+            sys.stdout.write(f"HTTP {e.code} {e.read()[:200].decode(errors='replace')}")
+            sys.exit(1)
+    except Exception:
+        pass
+
+try:
+    st, out = post(f"{base}/session/{sid}{path}", body)
+    sys.stdout.write(f"{st} {out}")
 except urllib.error.HTTPError as e:
     sys.stdout.write(f"HTTP {e.code} {e.read()[:200].decode(errors='replace')}")
     sys.exit(1)
 except Exception as e:
     sys.stdout.write(f"ERRO {e}")
     sys.exit(1)
-PYEOF
+PYINNER
 }
 
 MINHA=$(hyprctl activewindow -j 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('address',''))" 2>/dev/null || true)
@@ -372,14 +394,14 @@ for t in d['targets']:
 import json, sys
 print(json.dumps({"parts": [{"type": "text", "text": sys.argv[1]}],
                   "noReply": True}))' "$TEXTO_FINAL")
-            R=$(oc_post "$SESSAO" "/message" "$BODY" || true)
+            R=$(oc_post "$SESSAO" "/message" "$BODY" "$TEXTO_FINAL" || true)
             echo "agent-msg: nota entregue em $NOME_ALVO ($SESSAO) — sem rodar o agente: $R"
         else
             # PEDIDO: o agente roda (async = não espera a resposta)
             BODY=$(python3 -c '
 import json, sys
 print(json.dumps({"parts": [{"type": "text", "text": sys.argv[1]}]}))' "$TEXTO_FINAL")
-            R=$(oc_post "$SESSAO" "/prompt_async" "$BODY" || true)
+            R=$(oc_post "$SESSAO" "/prompt_async" "$BODY" "$TEXTO_FINAL" || true)
             echo "agent-msg: pedido enviado a $NOME_ALVO ($SESSAO) — agente vai rodar: $R"
         fi
         printf '%s | %s | %s | %s(%s) | id=%s | re=%s | %s\n' \
