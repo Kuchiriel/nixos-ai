@@ -40,6 +40,7 @@ import fcntl
 import json
 import os
 import random
+import sqlite3
 import subprocess
 import sys
 import time
@@ -235,6 +236,38 @@ def own_window(windows: list[dict] | None = None) -> dict | None:
     return None
 
 
+def _db_live_sessions(janela_s: int | None = None) -> list[str]:
+    """Sessões com part nova na janela (default AGENTS_DB_ALIVE=600s).
+
+    Cobre a sessão servida por `opencode serve`: ela não tem TUI com
+    `-s ses_...` no argv (a sessão chega pela API), então o scan de /proc
+    não a vê e o roster a marcava `dead` com o claim certo (medido 08/11).
+    Mesmo critério e mesma janela do watcher (agent-db-alive.py).
+    """
+    if janela_s is None:
+        try:
+            janela_s = int(os.environ.get("AGENTS_DB_ALIVE", "600"))
+        except ValueError:
+            janela_s = 600
+    db = Path(os.environ.get(
+        "AGENTS_DB_PATH",
+        str(Path.home() / ".local/share/opencode/opencode.db")))
+    if not db.exists():
+        return []
+    try:
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
+        try:
+            rows = con.execute(
+                "SELECT DISTINCT session_id FROM part WHERE time_updated >= ?",
+                (int((time.time() - janela_s) * 1000),),
+            ).fetchall()
+        finally:
+            con.close()
+    except Exception:
+        return []
+    return [str(r[0]) for r in rows if r and r[0]]
+
+
 def live_sessions() -> dict[str, int]:
     """session id -> pid dos TUIs opencode VIVOS.
 
@@ -257,6 +290,10 @@ def live_sessions() -> dict[str, int]:
         sess = _session_do_pid(pid)
         if sess:
             out.setdefault(sess, pid)
+    # (08/11) sessão de `opencode serve` não aparece no scan acima: o DB diz
+    # se ela produziu trabalho na janela. pid 0 = sem TUI (é o esperado).
+    for sess in _db_live_sessions():
+        out.setdefault(sess, 0)
     return out
 
 

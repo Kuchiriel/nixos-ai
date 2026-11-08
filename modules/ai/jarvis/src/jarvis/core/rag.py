@@ -18,6 +18,10 @@ from __future__ import annotations
 
 import os
 import re
+import signal
+import sys
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Sequence
@@ -25,6 +29,44 @@ from typing import Any, Iterable, Sequence
 from jarvis.core.config import Config
 from jarvis.providers.llm import LLMClient
 from jarvis.providers.vector_store import QdrantStore, dense_key, stable_id
+
+
+class IndexDeadline(BaseException):
+    """Teto de relogio do index estourou.
+
+    BaseException DE PROPOSITO: `index_file` tem `except Exception` no
+    fallback de embed (batch -> item a item) e engoliria um TimeoutError,
+    deixando o hang continuar (medido 08/11: um rag-index ficou 13h em
+    `poll` num socket do :8081 com o servidor saudavel). Quem captura e o
+    `index_directory`, que devolve o parcial.
+    """
+
+
+class _hard_deadline:
+    """SIGALRM: interrompe ate um socket pendurado. So no thread principal."""
+
+    def __init__(self, seconds: float | None) -> None:
+        self.seconds = float(seconds or 0)
+        self._old = None
+        self._active = False
+
+    def __enter__(self) -> "_hard_deadline":
+        if self.seconds <= 0:
+            return self
+        if threading.current_thread() is not threading.main_thread():
+            return self  # signal.alarm exige o thread principal
+        def _boom(signum, frame):  # noqa: ANN001
+            raise IndexDeadline(f"index deadline {self.seconds:.0f}s")
+        self._old = signal.signal(signal.SIGALRM, _boom)
+        signal.alarm(max(1, int(self.seconds)))
+        self._active = True
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        if self._active:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, self._old)
+        return False
 
 # ---------------------------------------------------------------------------
 # Corpus offline de sobrevivência (fase A do N.O.M.A.D)
@@ -816,14 +858,40 @@ class HybridIndexer:
         except OSError:
             pass
 
-    def index_directory(self, root: str | Path, force: bool = False) -> int:
-        """Indexa todos os arquivos elegíveis de um diretório. Retorna o total de arquivos."""
+    def index_directory(self, root: str | Path, force: bool = False,
+                        deadline_s: float | None = None) -> int:
+        """Indexa todos os arquivos elegíveis de um diretório. Retorna o total de arquivos.
+
+        deadline_s: teto de relogio DURO (default: env JARVIS_INDEX_DEADLINE,
+        1800s). Medido 08/11: sem teto, um `rag-index` ficou 13h pendurado num
+        socket do :8081. Ao estourar, para e devolve o parcial; o upsert e
+        idempotente por id, entao rodar de novo completa.
+        """
+        if deadline_s is None:
+            try:
+                deadline_s = float(os.environ.get("JARVIS_INDEX_DEADLINE", "1800"))
+            except ValueError:
+                deadline_s = 1800.0
         self.ensure_collection()
         processed_files = set()
         self.skipped = []
-        for path in iter_indexable_files(root, exclude_dirs=self._cfg.index_exclude_dirs):
-            if self.index_file(path, force=force) is not None:
-                processed_files.add(path)
+        t0 = time.monotonic()
+        seen = 0
+        try:
+            with _hard_deadline(deadline_s):
+                for path in iter_indexable_files(root, exclude_dirs=self._cfg.index_exclude_dirs):
+                    if deadline_s and deadline_s > 0 and time.monotonic() - t0 > deadline_s:
+                        raise IndexDeadline(f"index deadline {deadline_s:.0f}s")
+                    if self.index_file(path, force=force) is not None:
+                        processed_files.add(path)
+                    seen += 1
+                    if seen % 25 == 0:
+                        print(f"index: {seen} arquivos ({time.monotonic() - t0:.0f}s)",
+                              file=sys.stderr, flush=True)
+        except IndexDeadline as e:
+            print(f"index: PARCIAL — {e} apos {time.monotonic() - t0:.0f}s; "
+                  f"{len(processed_files)} arquivos entraram (re-rodar completa)",
+                  file=sys.stderr, flush=True)
         return len(processed_files)
 
 # ---------------------------------------------------------------------------

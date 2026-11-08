@@ -131,3 +131,31 @@ def test_own_window_falls_back_to_ppid_without_env(roster, monkeypatch):
     monkeypatch.setattr(roster, "_proc_map", lambda: ({}, set()))
     assert roster.own_window(windows)["address"] == "0xppid"
 
+
+
+def test_live_sessions_includes_serve_hosted_session(roster, monkeypatch, tmp_path):
+    """Sessão de `opencode serve` não tem -s no argv: quem decide é o DB.
+
+    Medido 08/11: o claim por sessão gravava o id certo, mas o roster marcava
+    `dead` porque `live_sessions()` só olhava /proc. Mesmo critério do
+    watcher: part nova na janela AGENTS_DB_ALIVE (600s) = viva.
+    """
+    import sqlite3
+    import time as _time
+
+    db = tmp_path / "opencode.db"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE part (session_id TEXT, time_updated INTEGER, time_created INTEGER)")
+    agora = int(_time.time() * 1000)
+    con.execute("INSERT INTO part VALUES (?,?,?)", ("ses_serve", agora, agora))
+    con.execute("INSERT INTO part VALUES (?,?,?)", ("ses_velha", agora - 3_600_000, agora - 3_600_000))
+    con.commit()
+    con.close()
+
+    monkeypatch.setenv("AGENTS_DB_PATH", str(db))
+    monkeypatch.setenv("AGENTS_DB_ALIVE", "600")
+    monkeypatch.setattr(roster.os, "scandir", lambda path: [])
+
+    sessoes = roster.live_sessions()
+    assert "ses_serve" in sessoes
+    assert "ses_velha" not in sessoes
