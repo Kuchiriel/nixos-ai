@@ -140,6 +140,17 @@ class Gate(BaseHTTPRequestHandler):
         if self.verbose:
             sys.stderr.write("nv-gate: " + (fmt % args) + "\n")
 
+    def warn(self, fmt: str, *args) -> None:  # noqa: A003
+        """Evento de taxa: SEMPRE no journal (sem depender de --verbose).
+
+        Medido 08/11: com o log so no --verbose, o servico (que roda sem a
+        flag) deixava 0 linhas no journal => nao dava para dizer se o 429 do
+        cliente era o gate (fila do bucket esgotada) ou o upstream (NIM),
+        nem quantos retries aconteceu. Agora: 1 linha por evento.
+        """
+        sys.stderr.write("nv-gate: WARN " + (fmt % args) + "\n")
+        sys.stderr.flush()
+
     def _forward(self) -> None:
         self.stats.bump("requests")
         length = int(self.headers.get("Content-Length") or 0)
@@ -156,6 +167,8 @@ class Gate(BaseHTTPRequestHandler):
             self.stats.bump("queued_seconds", waited)
         if not granted:
             self.stats.bump("client_429")
+            self.warn("gate queue exhausted after %.1fs wait -> 429 to the client",
+                      waited)
             self._json(429, {"error": {"message": "nv-gate: rate limit queue exhausted",
                                        "type": "rate_limit_error"}})
             return
@@ -186,13 +199,14 @@ class Gate(BaseHTTPRequestHandler):
                             delay = max(delay, min(float(retry_after), 60.0))
                         except ValueError:
                             pass
-                    self.log_message("upstream %d, retry %d in %.1fs",
-                                     exc.code, attempt, delay)
+                    self.warn("upstream %d, retry %d in %.1fs", exc.code, attempt, delay)
                     time.sleep(delay)
                     backoff = min(backoff * 2, 30.0)
                     continue
                 payload = exc.read()[:4000]
                 self.stats.bump("errors")
+                self.warn("upstream %d not retried (attempt %d) -> relayed to client",
+                          exc.code, attempt)
                 self._relay_error(exc.code, payload)
                 return
             except (urllib.error.URLError, OSError) as exc:
