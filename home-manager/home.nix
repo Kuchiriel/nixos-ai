@@ -651,12 +651,26 @@ in {
       # Higiene de contexto global (03/10): vale p/ todos os providers.
       # prune poda tool outputs velhos; tool_output capa outputs gigantes
       # (prompt de 33k matou o Qwen 2x); small_model tira titles/resumos do 35B.
-      # small_model = o DEFAULT residente pediu bonsai via edição viva
-      # (dono, 08/11 10:41): small_model movido de novo para o router
-      # bonsai (:8080, ternário cabe ao lado do 4B-MTP). O comentário
-      # antigo (03/11, MTP não carregaria) fica registrado aqui caso o
-      # bonsai volte a não caber na VRAM.
-      small_model = "local_small_model/bonsai";
+      # small_model: o DEFAULT residente pediu bonsai via edição viva
+      # (dono, 08/11 10:41): small_model movido para o router bonsai
+      # (:8080, ternário cabe ao lado do 4B-MTP). O comentário antigo
+      # (03/11, MTP não carregaria) fica registrado aqui caso o bonsai
+      # volte a não caber na VRAM.
+      #
+      # (08/11 14:48, coord-naming) MEDIDO: o bonsai tem ctxSize 49152
+      # (models.nix) e NÃO cabe resumir uma sessão de 662k tokens — a
+      # compactação falhava, o contexto subia e a cota do free tier
+      # (compartilhada) queimava: 14 stream errors no dia, 9 deles na
+      # sessão da coord-naming. O conserto foi aplicado no ARQUIVO VIVO
+      # (small_model -> minimax, que tem 1M de input), mas o arquivo vivo
+      # é sobrescrito no próximo rebuild ⇒ a mudança precisa morar AQUI
+      # para não ser perdida.
+      # Trade-off explícito: com small_model na nuvem, titles/resumos
+      # consomem cota do free tier; com o bonsai local, a compactação de
+      # uma sessão grande não cabe. A parte que falta é o DONO decidir:
+      # limitar o input dos modelos do free tier (262144 em vez de 1M)
+      # para uma sessão runaway queimar a cota por menos tempo.
+      small_model = "nvidia/minimaxai/minimax-m3.1-flash";
       warming = true;
       # (08/11) Limiar de compactação no FINALZINHO para modelos de 1M:
       # buffer "10%" ⇒ teto ≈ 943.718 tokens (1.048.576 − 10%) — o número que
