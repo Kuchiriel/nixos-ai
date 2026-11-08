@@ -47,18 +47,21 @@
     version = "0.1.0";
     pyproject = true;
 
-    # cleanSourceWith exclui artefatos de build que mudam a cada execução
-    # (pytest cache, hypothesis, pycache, egg-info) para evitar rebuilds
-    # desnecessários. Sem isso, o hash muda e jarvis-voice rebuilda sempre.
     src = lib.cleanSourceWith {
       filter = path: type:
         let
           base = builtins.baseNameOf (toString path);
-          isJunk = builtins.match "(__pycache__|\.pytest_cache|\.hypothesis|.*\.egg-info|build|dist)" base != null;
+          isJunk = builtins.match "(__pycache__|\\.pytest_cache|\\.hypothesis|.*\\.egg-info|build|dist)" base != null;
         in
         !isJunk;
       src = ./jarvis;
     };
+    # tests/test_voice_gate.py walks UP from the test file to reuse
+    # benchmarks/voice/bench_gate.py (single source of the 27 rotulated
+    # cases). The sandboxed check cannot see outside src=./jarvis, so stage a
+    # COPY of the bench inside the build dir (derivation depends on the
+    # file's hash, so any drift rebuilds).
+    benchGate = ../../benchmarks/voice/bench_gate.py;
 
     build-system = with python3Packages; [setuptools];
 
@@ -86,6 +89,11 @@
     nativeCheckInputs = with python3Packages; [pytest hypothesis] ++ [ripgrep];
     checkPhase = ''
       runHook preCheck
+      # test_voice_gate.py walks UP from the test file looking for
+      # benchmarks/voice/bench_gate.py — stage the copy inside the build
+      # dir so the walk-up finds it (single source via $benchGate).
+      mkdir -p benchmarks/voice
+      cp ${benchGate} benchmarks/voice/bench_gate.py
       # P8: Sandbox-safe subset via markers, not file-name ignores.
       # Tests marked @pytest.mark.integration need external services
       # (LLM server, Qdrant, network, git, audio) and fail in the
