@@ -185,8 +185,8 @@ class Gate(BaseHTTPRequestHandler):
         if not granted:
             self.stats.bump("client_429")
             self.warn("gate queue exhausted: token needs %.1fs, max_wait %.0fs "
-                      "(waited %.1fs) -> 429 to the client",
-                      self.bucket.last_need, self.max_wait, waited)
+                      "(waited %.1fs, request %d bytes) -> 429 to the client",
+                      self.bucket.last_need, self.max_wait, waited, length)
             self._json(429, {"error": {"message": "nv-gate: rate limit queue exhausted",
                                        "type": "rate_limit_error"}})
             return
@@ -217,14 +217,15 @@ class Gate(BaseHTTPRequestHandler):
                             delay = max(delay, min(float(retry_after), 60.0))
                         except ValueError:
                             pass
-                    self.warn("upstream %d, retry %d in %.1fs", exc.code, attempt, delay)
+                    self.warn("upstream %d, retry %d in %.1fs (request %d bytes)",
+                              exc.code, attempt, delay, length)
                     time.sleep(delay)
                     backoff = min(backoff * 2, 30.0)
                     continue
                 payload = exc.read()[:4000]
                 self.stats.bump("errors")
-                self.warn("upstream %d not retried (attempt %d) -> relayed to client",
-                          exc.code, attempt)
+                self.warn("upstream %d not retried (attempt %d, request %d bytes) "
+                          "-> relayed to client", exc.code, attempt, length)
                 self._relay_error(exc.code, payload)
                 return
             except (urllib.error.URLError, OSError) as exc:
