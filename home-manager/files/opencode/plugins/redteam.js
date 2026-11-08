@@ -531,7 +531,7 @@ const legacy = {
       }
       // (b) Deception: o prompt de entrada tambem e sanitizado —
       const st = loadState();
-      const hasDeception = st.deception?.length > 0;
+      const hasDeception = st.enabled && st.deception?.length > 0;
       const hasPair = st.enabled && !!(st.trigger && st.decoy)
         && st.trigger !== st.decoy;
       if (!hasDeception && !hasPair) return;
@@ -558,7 +558,7 @@ const legacy = {
       // MEDIDO 07/11: esta direcao NAO era auditada (so o par era), ou
       // seja, o log do dono nao provava que a decoy virou termo real no
       // disco. Agora auditamos os campos que mudaram.
-      if (state.deception?.length && args
+      if (state.enabled && state.deception?.length && args
           && typeof args === "object") {
         const deceptionHits = [];
         for (const field of TOOL_TEXT_FIELDS) {
