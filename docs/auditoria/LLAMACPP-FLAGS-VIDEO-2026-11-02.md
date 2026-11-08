@@ -31,7 +31,7 @@ Vereditos:
 
 1. **Gate do vídeo (≥17 t/s **e** TTFT ≤150 ms) FALHA no 35B** — melhor caso 14,1 t/s
    com load; TTFT 420–9066 ms; 512 tokens de contexto = 4–44 s de prefill.
-   → **o 35B não serve para voz** (gate de TTFT). Ele fica como **tier de thinking**.
+  : **o 35B não serve para voz** (gate de TTFT). Ele fica como **tier de thinking**.
 2. **`--moe-cache-mib` e `--fit-target` não mudam o resultado** (C ≈ B): o problema não é
    o split de VRAM, é CPU/RAM (experts na RAM, prefill CPU-bound).
 3. **KV q8_0 no 35B piora o TTFT** (D: 1266–9066 ms) — não adotar.
@@ -39,7 +39,7 @@ Vereditos:
    (6P+4E nesta CPU; `lscpu` reporta "8").
 5. **No 4B, a produção ganha em velocidade** (105,9 vs 54,3 t/s — o MTP draft faz a
    diferença) e a receita do vídeo ganha em **~580 MiB de VRAM** (4557 vs 5139 MiB).
-   → mantém-se a produção; a receita do vídeo fica documentada como **fallback de VRAM**
+  : mantém-se a produção; a receita do vídeo fica documentada como **fallback de VRAM**
    (se router + embeddings + rerank passarem a coexistir, 580 MiB resolvem a aperto).
 
 ## 3. Quem tem o quê (matriz de flags por binário)
@@ -53,7 +53,7 @@ Vereditos:
 | `~/projects/llama.cpp/build` | — | — | — | **caminho inexistente** (o dir é `build-stock/`) |
 
 Consequência: adotar a receita do vídeo exigiria trocar o binário dos tiers MoE
-(ik → stock). É troca de flag/binário de produção → **decisão do dono**, não patch
+(ik: stock). É troca de flag/binário de produção: **decisão do dono**, não patch
 silencioso.
 
 ## 4. Armadilhas de medição (já blindadas no harness)

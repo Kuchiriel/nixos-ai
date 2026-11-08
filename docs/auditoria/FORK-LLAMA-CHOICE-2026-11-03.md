@@ -39,7 +39,7 @@ Relevantes para nós:
 ## 3. O que o ik trouxe depois do nosso commit (101 commits)
 
 `35e0be56` "Allow using merged up/gate experts with Hadamard rotations" · `5635f95a`
-"Fuse scale → sigmoid → scale → FMA" · `7dce673e` "Add optimized build options for
+"Fuse scale: sigmoid: scale: FMA" · `7dce673e` "Add optimized build options for
 AVX-512 CPUs" · `4955387a` "Fix TQ on CUDA" · `e6d43ccd` "qwen4exp: load GGUFs with merged
 weight pairs" · `4e8dc3d3`/`ef45f229` "minimax-m3: BF16 indexer + sparse attention no
 backend CPU" · `b25c3fd2` "ggml: faster q8_k_r16" · `0a81bfe9` "Q8_0_R16 setup cost" ·
@@ -55,19 +55,19 @@ O que o ik **não** tem: `--fit`/`--fit-target` (o auto-fit do vídeo) — só `
 ## 4. O "expert cache" do vídeo: o que a literatura e o upstream dizem
 
 - **Upstream tem a flag** (`common/arg.cpp`: `--moe-cache-mib`) e a implementa
-  (`cparams.moe_cache_size` → contexto). **Medido aqui: não muda nada** (C ≈ B na ladder).
+  (`cparams.moe_cache_size`: contexto). **Medido aqui: não muda nada** (C ≈ B na ladder).
 - A implementação que **ganha** é a do RFC **#24528** ("MoE expert cache, VRAM caching of
   hot CPU-resident experts with **hybrid hit/miss execution**", leloch, 12/06/2026, 51
   comentários): branch `leloch:moe-cache-pr`, tabela do autor: **13,57 t/s vs 6,88 do
   upstream (+97%)** a 65535 de contexto, +84% a 405k. O PR de código (#24524) foi
-  **fechado por grande demais para review** e o RFC está **aberto** → **não está no
+  **fechado por grande demais para review** e o RFC está **aberto**: **não está no
   upstream** (nenhum commit de expert/moe cache entre `9d1878a4` e `2cbca389`).
   Point: o `--moe-cache-mib` do upstream **não** é a mesma coisa que a receita do vídeo.
 - Papers que sustentam (e explicam) o resultado:
   - **MoEpic / Adaptive Expert Split** (arXiv 2509.08342): experts em RAM + cache
     parcial na VRAM; o speed degrada por **baixa taxa de acerto do cache + latência de
-    carregar experts da RAM** → ou seja, o cache só paga se o *split* forVertical e o
-    hit rate for alto (nossa 35B roteia 8 de 256 experts → cache de 2 GB não cobre).
+    carregar experts da RAM**: ou seja, o cache só paga se o *split* forVertical e o
+    hit rate for alto (nossa 35B roteia 8 de 256 experts: cache de 2 GB não cobre).
   - **CPU-GPU collaborative inference para MoE** (arXiv 2512.16473): divide a VRAM em
     *expert cache* + componentes essenciais (atenção, normalização, router, KV) — **é o
     desenho da receita do vídeo**; o paper mede ganho **dependente do modelo** (não
@@ -88,10 +88,10 @@ guard de VRAM, load 6,5–8,7/16):
 
 Critério de decisão:
 
-1. Se **X3 ≥ X1** no decode e no TTFT → trocar o tier MoE para o **stock atualizado**
+1. Se **X3 ≥ X1** no decode e no TTFT: trocar o tier MoE para o **stock atualizado**
    (um binário a menos no stack: 4B e 30B já são stock; e o stock tem `--fit`,
    `--lora`, spec/MTP e recebe a fusão CUDA de MoE).
-2. Se **X1 > X3** → manter ik no tier MoE, mas **atualizar o ik** (101 commits atrás:
+2. Se **X1 > X3**: manter ik no tier MoE, mas **atualizar o ik** (101 commits atrás:
    AVX-512, MLA, q8_k_r16, minimax-m3) e reavaliar; registrar que o auto-fit do vídeo
    fica indisponível nesse binário.
 3. Em qualquer caso, **o tier MoE não serve para voz** (ver
@@ -110,25 +110,25 @@ O binário X3 está pronto e verificado:
 - ⚠️ **Precisa de `LD_LIBRARY_PATH`** (o RUNPATH gravou o path de build
   antigo, `/tmp/opencode/...`):
   `LD_LIBRARY_PATH=~/projects/llama.cpp/build-master/build/bin`
-  → é o mesmo mecanismo do `BENCH_LD_ENVFILE` do `scripts/bench-llm.sh`.
+ : é o mesmo mecanismo do `BENCH_LD_ENVFILE` do `scripts/bench-llm.sh`.
 - Build: cmake 4.1.6 + ninja 1.13.2 + cuda-merged-12.9 + gcc-wrapper-15.3.0
   (nix); receita do configure: `-DCMAKE_CUDA_FLAGS=-I$CUDA/include
   -DCUDAToolkit_ROOT=$CUDA -DCMAKE_CUDA_ARCHITECTURES=89 -DLLAMA_CURL=OFF`
   (o `cuda-merged` do nix NÃO expõe os headers no path do nvcc — precisa do
   `-I` + `NIX_CFLAGS_COMPILE` do cc-wrapper).
 - **A medição NÃO foi feita**: o driver do kernel (615.71.09) ainda não casa
-  com o userspace novo (615.78) → medir VRAM/throughput agora mediria o stack
+  com o userspace novo (615.78): medir VRAM/throughput agora mediria o stack
   antigo. Medir **depois do reboot**, com o agente parado.
 
 ## 6. Armadilhas (as mesmas da ladder)
 
 - Sem o `LD_LIBRARY_PATH` do serviço systemd o server sobe **CPU-only** (stub CUDA):
-  3,2 t/s em vez de 24,6 → o harness aborta nesse caso (`BENCH_LD_ENVFILE`).
-- Carga da máquina muda o t/s em ±50 % → medir com o agente **parado** e sem outro
+  3,2 t/s em vez de 24,6: o harness aborta nesse caso (`BENCH_LD_ENVFILE`).
+- Carga da máquina muda o t/s em ±50 %: medir com o agente **parado** e sem outro
   llama-server pesado.
-- `--fit` **aborta** se `-ngl` estiver setado → para reproduzir o vídeo, sem `-ngl`.
+- `--fit` **aborta** se `-ngl` estiver setado: para reproduzir o vídeo, sem `-ngl`.
 - Guard de VRAM: com 4B (:8092) + router (:8080) + embeddings residentes, a VRAM
-  livre (~550 MiB) não comporta outro tier → parar os serviços pesados antes do bench.
+  livre (~550 MiB) não comporta outro tier: parar os serviços pesados antes do bench.
 
 ## Fontes
 
@@ -148,13 +148,13 @@ O binário X3 está pronto e verificado:
 | build | commit | flags que importam | situação |
 |---|---|---|---|
 | stock | `9d1878a4` (b1087) | `--fit`, `--fit-target`, `--moe-cache-mib`, `--n-cpu-moe` | em produção (4B `:8092`, 30B `:8085`) |
-| stock | `f477f79` (b1, master) | idem + **fusão CUDA de MoE** (`f5222f25`) + "router device memory margin" (`85cc432e`) | **compilado aqui** (CUDA, sm_89, ~20 min) → `/tmp/opencode/llama-stock-master` |
+| stock | `f477f79` (b1, master) | idem + **fusão CUDA de MoE** (`f5222f25`) + "router device memory margin" (`85cc432e`) | **compilado aqui** (CUDA, sm_89, ~20 min): `/tmp/opencode/llama-stock-master` |
 | ik | `c446f1e0` (b5074) | `--n-cpu-moe`, `--moe-cache-mib`, **sem** `--fit`/`--fit-target` | em produção no tier MoE `:8084` |
 
 Build do master reproduzido com: `cmake -DCMAKE_BUILD_TYPE=Release -DGGML_CUDA=ON
 -DCMAKE_CUDA_ARCHITECTURES=89 -DLLAMA_CURL=OFF` + `nvcc` do `cuda-merged-12.9` do
 nix store. **Armadilha do nvcc no nix:** o `nvcc` resolve o include pelo caminho real do
-symlink (o `cuda_cudart` fica em outro store path) ⇒ precisa de
+symlink (o `cuda_cudart` fica em outro store path): precisa de
 `NVCC_PREPEND_FLAGS="-I$CUDA/include"` (ou `-DCMAKE_CUDA_FLAGS`), senão dá
 `cuda_runtime.h: Arquivo ou diretório inexistente` na detecção do compilador.
 
@@ -165,15 +165,15 @@ symlink (o `cuda_cudart` fica em outro store path) ⇒ precisa de
    (a peer fechou a lane LAYA às 09:40; o 4B voltou a ser usado às 09:54).
 2. **O `LD_LIBRARY_PATH` decide qual `libllama.so` o binário usa** — e o serviço
    `llama-cpp-server` (grupo prism) exporta o `prism-bin` **primeiro**. Medido: rodar o
-   binário do **ik** com esse env ⇒ `undefined symbol:
+   binário do **ik** com esse env: `undefined symbol:
    llama_get_dflash_draft_lattice_top_k` (ele linkou contra a lib do prism).
-   → **um env por binário** (ik: `ik_llama.cpp/build/bin` primeiro; stock: o `build-stock`
+  : **um env por binário** (ik: `ik_llama.cpp/build/bin` primeiro; stock: o `build-stock`
    dele; master: o `build/master/bin`) — foi o que matou a primeira tentativa.
 3. **O guard de VRAM do harness funciona**: com o 4B no ar ele aborta com
    "ABORT: outro llama-server com 4813MiB em uso — VRAM ocupada, veredito seria inválido"
    ✓ (é o comportamento certo).
 4. O `ninja` do ik reclamou "no work to do" com o binário desatualizado: o
-   `libllama.so` e o `llama-server` estavam dessincronizados → `rm bin/llama-server` +
+   `libllama.so` e o `llama-server` estavam dessincronizados: `rm bin/llama-server` +
    relink resolve (1 passo) ✓.
 
 ### Estado (a medição 3-vias em si)
@@ -209,7 +209,7 @@ Com o que já está medido (ladder da peer, 6 configs, mesmo protocolo), a respo
 dono já pode ser tomada **sem** a 3-vias: a receita do vídeo não ganha nesta placa
 (`--moe-cache-mib`/`--fit-target` C≈B), o 35B não passa o gate de voz, e o 4B-MTP
 (105,9 t/s) continua o default. A 3-vias responde a uma pergunta **menor e específica**:
-"*vale trocar o binário do tier MoE (ik → stock atualizado) só para ganhar a fusão CUDA
+"*vale trocar o binário do tier MoE (ik: stock atualizado) só para ganhar a fusão CUDA
 de MoE?*" — o que só interessa se alguém decidir usar o tier 35B para alguma coisa
 além de thinking.
 

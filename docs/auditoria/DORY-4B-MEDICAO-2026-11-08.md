@@ -12,12 +12,12 @@ Nota de pesquisa (papers, leitura do card, contra-ponto da literatura):
 | fato | evidência |
 |---|---|
 | O GGUF usa `general.architecture = dory`; o llama.cpp upstream **não** tem essa arch | `src/llama-arch.cpp` do upstream master (f477f79, 08/11) só tem `nanbeige`; `git grep -i dory` não acha nada |
-| `nanbeige` upstream **não** é a mesma arch (layouts diferentes) | Dory separa attn e FFN em blocos físicos distintos (72 blocos, `blk.0` só attn, `blk.1` só FFN, `dory.layer_pattern = S-S-S-*-…`); o `nanbeige` upstream espera attn+FFN no mesmo índice → **renomear a arch no GGUF dá tensor mismatch** |
-| O suporte está no **PR #30306** (ggml-org/llama.cpp), **aberto** (08/11) | `gh pr view 30306` → state OPEN, autor `brianchmielNV`, branch `dory-support`, sem merge |
+| `nanbeige` upstream **não** é a mesma arch (layouts diferentes) | Dory separa attn e FFN em blocos físicos distintos (72 blocos, `blk.0` só attn, `blk.1` só FFN, `dory.layer_pattern = S-S-S-*-…`); o `nanbeige` upstream espera attn+FFN no mesmo índice: **renomear a arch no GGUF dá tensor mismatch** |
+| O suporte está no **PR #30306** (ggml-org/llama.cpp), **aberto** (08/11) | `gh pr view 30306`: state OPEN, autor `brianchmielNV`, branch `dory-support`, sem merge |
 | O card manda usar o **fork** `brianchmielNV/llama.cpp` pinado em `98a74c97ea09ac72f6ceda1559808fc0a2f447ce` | card do HF, seção "llama.cpp" |
 | Build local: `0.6.0-dev (build 11551, commit 98a74c97e)`, CUDA sm_89 | `--version` do binário que compilamos |
 | O **loop count é um override de KV**, não flag | `--override-kv "dory.num_loops=int:N,dory.recurrent_kv_cache_mode=str:per_loop\|last_loop"` (`src/models/dory.cpp` aceita só `per_loop` ou `last_loop`) |
-| Download íntegro | sha256 `96080be…a660e0` = o publicado pela NVIDIA → **SUCESSO** ✓ (3,61 GB em `~/models/`) |
+| Download íntegro | sha256 `96080be…a660e0` = o publicado pela NVIDIA: **SUCESSO** ✓ (3,61 GB em `~/models/`) |
 
 ## 2. Números (harness da casa `scripts/bench-llm.sh`, load 4,3–6,5 de 16 threads)
 
@@ -28,7 +28,7 @@ Config: `-ngl 999 -t 6 -b 512 -ub 512 --cache-type-k/v f16 --flash-attn off
 |---|---|---|---|---|---|
 | **Dory loop=1** (`per_loop`, c20480) | **17,9–22,8** | 29–97 | **574–970 ms** | 1787–2285 ms | 4,5 GB (sozinho) |
 | **Dory loop=4** (`per_loop`, c4096) | **7,8–9,9** | 9–27 | **1846–2941 ms** | 4426–4896 ms | — |
-| Dory loop=2 (`per_loop`, c20480) | — | — | — | — | **NÃO CABE**: `failed to allocate CUDA0 buffer of size 768612352` (733 MiB) → OOM de VRAM |
+| Dory loop=2 (`per_loop`, c20480) | — | — | — | — | **NÃO CABE**: `failed to allocate CUDA0 buffer of size 768612352` (733 MiB): OOM de VRAM |
 | 4B-MTP produção (`:8092`, MTP draft) | **105,7–105,9** | 143–354 | **178–203 ms** | 688–740 ms | 5139 MiB |
 | 4B receita do vídeo (fit512, KV q8_0, sem MTP) | 54,3 | 205–562 | 153–175 ms | 537–566 ms | 4557 MiB |
 
@@ -42,16 +42,16 @@ Config: `-ngl 999 -t 6 -b 512 -ub 512 --cache-type-k/v f16 --flash-attn off
 
 Leitura (o que os números dizem, não o que a gente queria):
 
-1. **O Dory não bate o 4B-MTP** (14–15 vs 18) → **pelo critério da própria nota de
+1. **O Dory não bate o 4B-MTP** (14–15 vs 18): **pelo critério da própria nota de
    papers ("se loop=1 não for ≥ o 4B-MTP em qualidade, o modelo não entra"), o Dory
    NÃO entra no stack.**
 2. **O déficit é quase todo de idioma**: a classe `legit` (10 tarefas em **português**)
-   dá 3/10 no Dory contra 10/10 no 4B → é o "English-only" do card aparecendo como
+   dá 3/10 no Dory contra 10/10 no 4B: é o "English-only" do card aparecendo como
    número, não como teoria. Nas tarefas em inglês o Dory **iguala** (coding 2/4,
    agent 1/3, reasoning 1/3) e **vence** em tool-use (**4/4 vs 1/4**).
-3. **O loop compra pouco**: loop=1 → loop=2 = **+1 tarefa** (14→15) com o dobro de
+3. **O loop compra pouco**: loop=1: loop=2 = **+1 tarefa** (14:15) com o dobro de
    compute e o TTFT piorando (1,6–3,4 s).
-4. O Dory recusou **1 das 7 tarefas sensíveis**; o 4B é ABLITERATED (0 recusa) → o
+4. O Dory recusou **1 das 7 tarefas sensíveis**; o 4B é ABLITERATED (0 recusa): o
    Dory é *alinhado*, o que é o oposto do que o tier Uncensored precisa.
 
 ## 4. Veredito
@@ -65,7 +65,7 @@ Leitura (o que os números dizem, não o que a gente queria):
    (`failed to allocate CUDA0 buffer of size 768612352`, 733 MiB). Com **`last_loop`**
    (um cache de KV por camada) **cabe** a 20k ✓ — o "memory-efficient looping" do card
    é real e verificado aqui.
-4. **English-only** (o card): o JARVIS fala pt-BR → para voz/duplex está fora de
+4. **English-only** (o card): o JARVIS fala pt-BR: para voz/duplex está fora de
    questão mesmo se a latência coubesse.
 5. **A literatura não sustenta "vence 27B"** (ver a nota de papers): a regra do campo é
    que, a igual computo, **parâmetros×N ganha de N loops**; o loop paga em compute de
@@ -80,15 +80,15 @@ produto falar inglês com ele. O GGUF fica em `~/models/` (3,61 GB) — **não d
 ## 5. Armadilhas medidas no caminho (o harness da casa)
 
 
-1. **`LD_LIBRARY_PATH` sem o `build/bin` do fork ⇒ "no backends are loaded"** e o bench
+1. **`LD_LIBRARY_PATH` sem o `build/bin` do fork: "no backends are loaded"** e o bench
    sai em **silêncio** (nenhuma linha no TSV, sem erro no stderr — o erro vai para o
    log do servidor). O card do HF já avisa: `export LD_LIBRARY_PATH="$PWD/.../build-cuda/bin"`.
 2. **O guard de VRAM do harness não pega esse caso**: ele aborta quando o log traz
-   `failed to initialize CUDA`, mas aqui o erro é `no backends are loaded` → o bench
+   `failed to initialize CUDA`, mas aqui o erro é `no backends are loaded`: o bench
    "roda" e não mede nada. *Gap do harness (não corrigido: é da casa, da lane da peer
    que patchou o `bench-llm.sh` — vou levar isso no bus).*
-3. **Porta fixa 8095 colidia com o serviço da casa `nv-gate.py --port 8095`** → o server
+3. **Porta fixa 8095 colidia com o serviço da casa `nv-gate.py --port 8095`**: o server
    do bench não subia ("couldn't bind HTTP server socket") e o bench saía sem medir.
-   → **Corrigido aqui**: `PORT=${PORT:-8095}` (08/11) — `PORT=8097 scripts/bench-llm.sh …`.
+  : **Corrigido aqui**: `PORT=${PORT:-8095}` (08/11) — `PORT=8097 scripts/bench-llm.sh …`.
 4. A VRAM do Dory (3,7 GB de pesos) **não divide** com o 4B-MTP (4,0 GB) na placa de
-   6,1 GB → para medir o Dory, o 4B tem que estar parado (janela combinada com a peer).
+   6,1 GB: para medir o Dory, o 4B tem que estar parado (janela combinada com a peer).
