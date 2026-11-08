@@ -31,3 +31,24 @@ O 2.2.6 nao usa `~/.local/share/opencode/opencode.db`: a sessao do
 ## Licao
 "entregue no log" nao e prova: o HTTP no fim da linha e a prova. Quando a
 frota fica muda, olhar o HTTP antes de culpar o agente.
+
+## Update 08/11 (tarde) — estado VERIFICADO
+
+- Serve rodando **2.2.6** (`systemctl --user cat opencode-serve.service`:
+  ExecStart = kilo 2.2.6, `:4599`, tailnet). O drop-in 1.18.34 foi **removido**.
+- **A frota está entregando com o 2.2.6** (medido em `~/projects/AGENTS-MSG.log`):
+  09:25 PROVIDER API (sweep-2026-11), 09:27/09:32 PROVIDER CTX (coord-naming),
+  09:38 dúvida Dory no bus. O `agent-msg.sh`/`agents-watcher.sh` (dual-stack,
+  08:14/08:16) funcionam — o 405 não se repetiu.
+- **Pin da versão no Nix** (o item PENDENTE original): `programs.opencode`
+  continua pinando kilo 2.2.6 (o TUI/serve atuais) — não mexido: pinar versão
+  contra o dono é decisão de produto, não minha. O nag continua: SOMENTE um
+  pin explícito no home-manager blinda um rebuild contra troca silenciosa.
+- **Crash-loop do nv-gate** (o único incidente do dia): 09:24→09:34,
+  `Restart=always`+3s + kill externo → storm até counter≥23; sessões tomaram
+  erros llama.cpp-style "available context size (4096 tokens)" nessa janela.
+  Fix em `home-manager/modules/services/nv-gate.nix` (on-failure +
+  StartLimitBurst=5/Interval=180s) — commit `2de5a11c`. Gate estável desde
+  09:34 (ping 200; prefill de 8,7k / 50k / **300k** tokens aceitos).
+- **NIM saudável o dia inteiro de medições diretas** — ver
+  commit `2de5a11c` e o repo `opencode-nvidia-fix`.
