@@ -22,6 +22,9 @@
     ./audiobook.nix
     ./starship.nix
     ./stylix.nix
+    # (07/11) Madrugada da comunicacao entre os agentes (slot 03:30, antes
+    # era o team-suite rodando o JOGO DE TESTE — arquivo solto, fora do Nix).
+    ./night-comms.nix
     ./swaync
     ./tmux.nix
     ./waybar.nix

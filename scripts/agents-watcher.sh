@@ -650,7 +650,22 @@ if [ "$CHECK" -eq 1 ]; then
     exit 0
 fi
 log "watcher iniciado (root=$RAIZ intervalo=${INTERVALO}s quiet=${QUIET_DE}h-${QUIET_ATE}h)"
-if [ "$ONCE" -eq 1 ]; then
+# ── CONSOLIDAÇÃO DA FROTA (dono, 07/11) ───────────────────────────────
+# Antes eram 3 mecanismos com nomes parecidos e duties separadas:
+#   - agents-watcher.sh  = ACORDAR o agente (wake pela API da sessão);
+#   - agent-keepalive.sh = REEMERGER no bus a lane que parou de sinalizar;
+#   - agents-keepawake.sh= segurar a TELA (idle) enquanto ha agente vivo.
+# Agora: o watcher e o SUPERVISOR DA FROTA (um ciclo = checar + acordar +
+# reemergir) e o keepawake segue como o recurso de tela (sao coisas
+# diferentes: um cuida de GENTE, o outro de MAQUINA). O keepalive deixa de
+# ser um timer paralelo: ele e CHAMADO aqui, dentro do ciclo.
+KEEPALIVE="${AGENTS_KEEPALIVE_SH:-$SCRIPT_DIR/agent-keepalive.sh}"
+if [ -x "$KEEPALIVE" ]; then
+    # --status: o guard so REEMERGE quando a lane esta parada ha muito
+    # tempo (45min) e sem sinal no bus — nao e ruido.
+    bash "$KEEPALIVE" >>"$LOG" 2>&1 || true
+fi
+if [ "$ONCE" = "1" ]; then
     ciclo
     log "ciclo único completo (--once)"
     exit 0

@@ -494,6 +494,7 @@ def post(
     note: str = "",
     head: str = "",
     to: str = "",
+    model: str = "",
 ) -> str:
     """Publica uma claim/status/msg no bus (append-only) e devolve o issue usado.
 
@@ -512,6 +513,7 @@ def post(
         "files": _files_of({"files": files or []}),
         "intent": intent or "",
         "note": note or "",
+        "model": model or "",
         "pr": pr,
         "head": head or "",
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -536,6 +538,7 @@ def send(
     message: str,
     agent: str | None = None,
     lane: str = "",
+    model: str = "",
 ) -> str:
     """Publica uma mensagem endereçada no bus (kind=msg).
 
@@ -545,7 +548,7 @@ def send(
     """
     if not (message or "").strip():
         raise ValueError("mensagem vazia")
-    return post(kind="msg", agent=agent, lane=lane, to=to,
+    return post(kind="msg", agent=agent, lane=lane, to=to, model=model,
                 note=(message or "").strip())
 
 

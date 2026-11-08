@@ -62,33 +62,51 @@ PY
 )
 
 # ── 2. a última atividade por lane (do bus: msg/commit/ts) ───────────
+# MEDIDO 07/11: dois bugs deixavam o guard INOPERANTE — (1) o ts do bus
+# vem em ISO com MILISSEGUNDOS e "Z" (o `date -d` falhava -> epoch 0 ->
+# toda lane parecia parada ha 58 anos); (2) o regex guloso pegava do
+# primeiro { ao ultimo } do bloco -> so o ULTIMO payload era lido.
+# Agora: o epoch sai direto do python e o regex nao-guloso pega 1 a 1.
 bus_json=$(cd "$BUS_REPO" && gh issue view 12 --json comments --jq '.comments[].body' 2>/dev/null || true)
-while IFS=$'\t' read -r ts lane; do
-  [[ -z "$lane" ]] && continue
-  ep=$(date -d "$ts" +%s 2>/dev/null || echo 0)
+while IFS=$'\t' read -r ep lane; do
+  [[ -z "$lane" || "$ep" == "0" ]] && continue
   [[ "$ep" -gt "${LANE_LAST[$lane]:-0}" ]] && LANE_LAST["$lane"]="$ep"
-done < <(printf '%s\n' "$bus_json" | python3 - <<'PY'
-import json, re, sys
+done < <(printf '%s\n' "$bus_json" | python3 - <<'PYEOF_BUS'
+import calendar, json, re, sys, time
 for body in sys.stdin.read().split("```coord-json"):
-    m = re.search(r"\{.*\}", body, re.S)
+    m = re.search(r"\{[^{}]*\}", body, re.S)
     if not m:
         continue
     try:
         p = json.loads(m.group(0))
     except Exception:
         continue
-    if p.get("ts") and p.get("lane"):
-        print(f"{p['ts']}\t{p['lane']}")
-PY
+    ts, lane = p.get("ts"), p.get("lane")
+    if not ts or not lane:
+        continue
+    try:
+        ep = calendar.timegm(time.strptime(str(ts)[:19], "%Y-%m-%dT%H:%M:%S"))
+    except Exception:
+        continue
+    print(f"{ep}\t{lane}")
+PYEOF_BUS
 )
 
 # ── 3. lanes claims vivas sem sinal → reemerge ───────────────────────
+# MEDIDO 07/11: o join por LANE nao funcionava — o bus anuncia lanes
+# diferentes das do roster ("infra"/"matheus" no bus vs "mt5-infra"/
+# "nixos-ai/..." no roster) => TODA lane parecia parada ha 58 anos e o
+# guard ia spammar "reemerge" em todas. O join correto e por AGENTE
+# (nome + codinome + aliases declarados no roster) — o mesmo mapa que o
+# quadro (jarvis/core/comms.py) usa. Aqui o python faz o join e devolve
+# as lanes REALmente paradas.
 stale_s=0
 stale_s=$((STALE_MIN * 60))
 emitted=0
-for lane in "${!LANE_LAST[@]}"; do
-  [[ -z "$lane" ]] && continue
-  last="${LANE_LAST[$lane]}"
+bus_tmp=$(mktemp)
+printf '%s\n' "$bus_json" > "$bus_tmp"
+while IFS=$'\t' read -r lane last; do
+  [[ -z "$lane" || "$last" == "0" ]] && continue
   age=$((now - last))
   (( age < stale_s )) && continue
   if (( STATUS == 1 )); then
@@ -100,8 +118,55 @@ for lane in "${!LANE_LAST[@]}"; do
       --note "GUARD DO BUS (agent-keepalive.sh): a lane '${lane}' tem claim viva no roster mas nao produz nada no bus ha $((age / 60)) min (limite: ${STALE_MIN} min). Se voce esta vivo: poste seu status no bus (coord.mjs post --kind status) e siga a tarefa. Se voce morreu: o turno precisa ser retomado por quem coordena - e o wake e' pelo watcher da outra ponta (nota no bus, sem digitar no input do humano). Esta mensagem NAO exige acao do dono." >/dev/null 2>&1 \
       && emitted=$((emitted + 1)) && echo "keepalive: lane parada detectada: $lane (${age}s) - msg de reemerge publicada"
   fi
-done
+done < <(python3 - "$ROSTER" "$now" "$bus_tmp" <<'PYEOF_JOIN'
+import calendar, json, re, sys, time
 
+roster_path, now, bus_path = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+try:
+    roster = json.load(open(roster_path)).get("agents", [])
+except Exception:
+    roster = []
+
+# alias -> lane (o bus anuncia por QUALQUER alias do roster)
+alias_lane = {}
+for e in roster:
+    lane = e.get("lane") or ""
+    if not lane:
+        continue
+    for key in [e.get("name"), e.get("codename")] + list(e.get("aliases") or []):
+        if key:
+            alias_lane.setdefault(str(key), lane)
+
+# ultimo sinal por lane (ts do bus, por AGENTE)
+last = {}
+for body in open(bus_path, encoding="utf-8", errors="ignore").read().split("```coord-json"):
+    m = re.search(r"\{[^{}]*\}", body, re.S)
+    if not m:
+        continue
+    try:
+        p = json.loads(m.group(0))
+    except Exception:
+        continue
+    agent = str(p.get("agent") or "")
+    ts = p.get("ts")
+    if not agent or not ts:
+        continue
+    lane = alias_lane.get(agent)
+    if not lane:
+        continue
+    try:
+        ep = calendar.timegm(time.strptime(str(ts)[:19], "%Y-%m-%dT%H:%M:%S"))
+    except Exception:
+        continue
+    if ep > last.get(lane, 0):
+        last[lane] = ep
+
+for lane in sorted({e.get("lane") for e in roster if e.get("lane")}):
+    print(f"{lane}\t{last.get(lane, 0)}")
+PYEOF_JOIN
+)
+
+rm -f "$bus_tmp"
 (( STATUS == 1 )) && exit 0
 echo "keepalive: $emitted msg(s) de reemerge emitida(s)"
 exit 0

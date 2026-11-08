@@ -1523,14 +1523,31 @@ class TestApiCascadeGate:
         assert _api_layer_for("crie um arquivo qualquer") == "dev"
 
     def test_no_key_no_call(self, monkeypatch):
-        """Sem key no env → None, sem rede (anti-preguiça trava 3)."""
+        """Sem key no env → None, sem rede (anti-preguiça trava 3).
+
+        MEDIDO 07/11: o teste era FRÁGIL de ambiente — ele apagava só 3
+        keys, mas o CASCADE tem provedores ANÔNIMOS (cloudflare/gemini/
+        ovhcloud/kilocode/llm7 não pedem key), então com o host ligado o
+        cascade respondia e o teste falhava (passava por sorte quando o
+        router local estava sob OOM). Aqui o cascade é filtrado pelos
+        provedores que TEM key: sem key nenhuma entrada sobra → o gate é
+        provado SEM NENHUMA REDE (hermético de verdade).
+        """
         import os
         for k in ("OPENROUTER_API_KEY", "OPENCODE_CONFIG", "NVIDIA_API_KEY",
-                  "GROQ_API_KEY"):
+                  "GROQ_API_KEY", "CLOUDFLARE_API_TOKEN", "GEMINI_API_KEY",
+                  "OVH_API_KEY", "KILOCODE_API_KEY", "LLM7_API_KEY"):
             monkeypatch.delenv(k, raising=False)
+        from jarvis.core import model_policy
         from jarvis.core.agent import Agent
         from jarvis.core.config import Config
         from dataclasses import replace
+
+        real = model_policy.cascade_for
+        monkeypatch.setattr(
+            model_policy, "cascade_for",
+            lambda layer: [e for e in real(layer) if os.environ.get(e[3], "")],
+        )
         a = Agent(replace(Config(), llm_model="bonsai"))
         a._api_fallback_used = False
         assert a._try_api_cascade("crie um arquivo x", "sys") is None

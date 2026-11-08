@@ -133,6 +133,9 @@ class TelegramChannel:
         "steer", "stop", "agent", "dev", "status", "ask", "remember", "vault",
         "force_local", "force_remote", "sshkey", "opencode",
         "start", "help",
+        # --- comunicação unificada (07/11): o Telegram é terminal do BUS ---
+        "board", "quadro", "pending", "pendencias", "to", "note", "mood",
+        "assign", "plano",
     )
 
     def __init__(
@@ -327,6 +330,8 @@ class TelegramChannel:
         cmd, arg = self._fuzzy_cmd(text)
         if cmd in ("start", "help"):
             return self._help_text()
+        if cmd == "mood":
+            return self._handle_mood(arg)
         if cmd == "status":
             return self._handle_status()
         if cmd in ("force_local", "force_remote"):
@@ -337,6 +342,15 @@ class TelegramChannel:
             return (self._remember or (lambda t: f"remember unavailable: {t}"))(arg)
         if cmd == "vault":
             return (self._vault or (lambda a: f"vault unavailable: {a}"))(arg)
+        # --- comunicação unificada com os agentes (bus) ---
+        if cmd in ("board", "quadro"):
+            return self._handle_board()
+        if cmd in ("pending", "pendencias"):
+            return self._handle_pending(arg)
+        if cmd in ("to", "note"):
+            return self._handle_to(arg, request=(cmd == "to"))
+        if cmd in ("assign", "plano"):
+            return self._handle_assign(arg)
         # --- projects / missions ---
         if cmd in ("projects", "project"):
             return self._handle_projects(arg)
@@ -620,6 +634,113 @@ class TelegramChannel:
             return "\n".join(lines)
         except Exception as exc:  # noqa: BLE001
             return f"personas unavailable: {exc}"
+
+    # ── comunicação unificada (07/11) ───────────────────────────────────
+    # O BUS é a fonte da verdade dos agentes (claims, pendências, colisão).
+    # O Telegram deixa de ser um canal paralelo (missões) e vira um
+    # TERMINAL do mesmo bus: o dono vê o quadro e fala com o agente pelo
+    # mesmo caminho que os agentes usam entre si.
+    def _handle_board(self) -> str:
+        try:
+            from jarvis.core.comms import board_text
+
+            return board_text()
+        except Exception as exc:  # noqa: BLE001
+            return f"quadro indisponível: {exc}"
+
+    def _handle_pending(self, arg: str) -> str:
+        try:
+            from jarvis.core.comms import pending_for
+
+            agent = (arg or "").strip()
+            items = pending_for(agent) if agent else []
+            if not agent:
+                from jarvis.core.comms import live_agents
+
+                names = [a.get("codename") or a["name"] for a in live_agents()]
+                return ("quem tem pendência? use /pending <agente>\n"
+                        "agentes no roster: " + ", ".join(n for n in names if n))
+            if not items:
+                return f"nada pendente para {agent}"
+            lines = [f"pendências de {agent} ({len(items)}):"]
+            for p in items[-8:]:
+                lines.append(
+                    f"  · {p.get('kind')} de {p.get('agent')}"
+                    f"{' → ' + str(p.get('to')) if p.get('to') else ''}: "
+                    f"{(p.get('note') or p.get('intent') or '')[:180]}"
+                )
+            return "\n".join(lines)
+        except Exception as exc:  # noqa: BLE001
+            return f"pendências indisponíveis: {exc}"
+
+    def _handle_to(self, arg: str, *, request: bool) -> str:
+        """Entrega uma mensagem a um agente pelo MESMO caminho do bus."""
+        raw = (arg or "").strip()
+        if not raw:
+            return ("uso: /to <agente> <mensagem>  (pedido: o agente roda)\n"
+                    "     /note <agente> <mensagem>  (nota: zero token)")
+        target, _, msg = raw.partition(" ")
+        msg = msg.strip()
+        if not msg:
+            return f"faltou a mensagem para {target}"
+        try:
+            from jarvis.core.comms import deliver
+
+            ok, detail = deliver(target, msg, request=request)
+            return ("✅ entregue — " if ok else "⚠️ ") + str(detail)[:900]
+        except Exception as exc:  # noqa: BLE001
+            return f"entrega falhou: {exc}"
+
+    def _handle_mood(self, arg: str = "") -> str:
+        """A personalidade (MBTI) dos agentes — /mood lista, /mood <id> escolhe."""
+        want = (arg or "").strip()
+        if want:
+            from jarvis.core.persona import clear_active_persona, set_active_persona
+
+            if want.lower() in ("off", "none", "clear", "padrao", "padrão"):
+                clear_active_persona()
+                return "personalidade dos agentes: limpa (volta ao padrão do agente)"
+            p = set_active_persona(want)
+            if p is None:
+                return (f"persona não encontrada: {want}\n"
+                        "use /mood para ver a lista")
+            return (f"🎭 personalidade dos agentes agora: {p.name} ({p.id})\n"
+                    "ela entra no system prompt do agent opencode "
+                    "(via o plugin memory.js)")
+        try:
+            from jarvis.core.persona import (
+                active_persona,
+                clear_active_persona,
+                mbti_index,
+                set_active_persona,
+            )
+
+            idx = mbti_index()
+            cur = active_persona()
+            lines = ["🎭 personalidade dos agentes (MBTI):"]
+            if cur is not None:
+                lines.append(f"ativa: {cur.name} ({cur.id})")
+            else:
+                lines.append("ativa: (padrão do agente, sem override)")
+            for pid, name, mbti in idx:
+                mark = "▸" if cur is not None and cur.id == pid else "·"
+                lines.append(f"  {mark} {(mbti or '----'):5} {pid:26} {name[:40]}")
+            lines.append("use /mood <id> para escolher · /mood off para limpar")
+            return "\n".join(lines)
+        except Exception as exc:  # noqa: BLE001
+            return f"personalidades indisponíveis: {exc}"
+
+    def _handle_assign(self, arg: str) -> str:
+        """Quem pega a tarefa, com que personalidade (MBTI) e com que modelo."""
+        task = (arg or "").strip()
+        if not task:
+            return "uso: /assign <tarefa>  (ex.: /assign corrigir o bug do timeout)"
+        try:
+            from jarvis.core.team import assign_text
+
+            return assign_text(task)
+        except Exception as exc:  # noqa: BLE001
+            return f"plano indisponivel: {exc}"
 
     def _handle_approve(self, arg: str, ident: Identity) -> str:
         tickets = self.approvals.pending()

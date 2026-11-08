@@ -6,6 +6,7 @@ import os
 
 from jarvis.core.rag import (
     HybridHit,
+    _target_extension,
     apply_legacy_boosts,
     build_rich_content,
     extract_facts,
@@ -120,6 +121,26 @@ def test_extension_filter_excludes_other_exts() -> None:
     result = apply_legacy_boosts("procure main .py", hits)
     assert len(result) == 1
     assert result[0]["payload"]["path"] == "/a/main.py"
+
+
+def test_target_extension_detects_real_extensions() -> None:
+    assert _target_extension("procure main .py") == ".py"
+    assert _target_extension("leia o README.md") == ".md"
+    assert _target_extension("config.json do projeto") == ".json"
+
+
+def test_target_extension_ignores_dotted_acronyms() -> None:
+    assert _target_extension("N.O.M.A.D offline survival") is None
+    assert _target_extension("S.O.S. protocol") is None
+    assert _target_extension("C.A.B. bandage") is None
+    assert _target_extension("U.S. military") is None
+
+
+def test_dotted_acronym_query_does_not_filter_hits() -> None:
+    hits = [_hit("/a/main.py", 0.9), _hit("/b/main.cpp", 0.95)]
+    result = apply_legacy_boosts("N.O.M.A.D offline survival", hits)
+    assert len(result) == 2
+    assert result[0]["payload"]["path"] == "/b/main.cpp"
 
 
 def test_filename_sovereignty_dominates() -> None:

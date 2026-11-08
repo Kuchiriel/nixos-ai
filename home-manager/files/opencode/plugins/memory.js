@@ -102,7 +102,7 @@ function guardedBashCommand(command) {
 
 // Coordination rules — PINNED, copied verbatim. Never summarize.
 const PINNED_GUARDS = `## Coordination rules (pinned — never summarize)
-- claim before speaking: \`scripts/agent-roster.py claim --name <n> --lane <lane> --repo <repo> --files <globs>\`
+- claim before speaking: \`scripts/agent-roster.py claim --name <n> --lane <lane> --repo <repo> --files <globs> --model <provider/id>\` (o --model vem do bloco IDENTITY acima: e a identidade do harness, nao adivinhada)
 - delivery: \`scripts/agent-msg.sh --to <name> "text"\` (the target runs) · \`--note "text"\` (enters the session, does NOT run) · \`--cancel <id>\` (aborts the target turn)
 - never use wtype/focus to talk to another agent: it blocks the human's typing
 - wake: \`agents-watcher.sh\` wakes via the API and filters by repo/lane`;

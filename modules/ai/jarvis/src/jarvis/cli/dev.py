@@ -1549,6 +1549,33 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
         except Exception as e:
             return f"ERROR: {e}", None
 
+    # ── Offline Survival Corpus ──
+    if name == "offline_search":
+        try:
+            from jarvis.core.rag import HybridSearch, OFFLINE_COLLECTION
+            from jarvis.core.config import Config
+            cfg = Config()
+            hs = HybridSearch(config=cfg)
+            try:
+                top_k = int(args.get("max_results", 5) or 5)
+            except (TypeError, ValueError):
+                top_k = 5
+            top_k = max(1, min(10, top_k))
+            results = hs.search(args.get("query", ""), top_k=top_k,
+                                collection=OFFLINE_COLLECTION)
+            if not results:
+                return ("NO OFFLINE SOURCE: the offline survival corpus has no "
+                        "answer for this query — say so, do not invent one."), None
+            lines = ["Source: offline survival corpus (works without internet)."]
+            for r in results:
+                payload = r.payload or {}
+                src = payload.get("path") or payload.get("source_id") or "?"
+                content = " ".join(str(payload.get("content", "")).split())
+                lines.append(f"[{r.score:.2f}] {src}\n{content[:300]}")
+            return "\n".join(lines), None
+        except Exception as e:
+            return f"ERROR: {e}", None
+
     # ── Web Search (Tavily) ──
     if name == "web_search":
         try:
@@ -1802,7 +1829,7 @@ def _tools_catalog(tools: list[dict[str, Any]]) -> str:
         grp = ("shell" if "shell" in name else
                "arquivos" if name in ("read_file", "write_file", "str_replace", "list_directory") else
                "memoria" if name in ("remember", "recall", "lessons", "vault_list", "vault_write") else
-               "busca" if name in ("semantic_search", "rag_search", "rag_index") else
+               "busca" if name in ("semantic_search", "rag_search", "rag_index", "offline_search") else
                "nix" if name.startswith("nix_") else
                "web" if name in ("web_search", "read_chatgpt") else
                "visao" if name in ("capture_screen", "observe_screen", "browser") else
@@ -1821,7 +1848,7 @@ _PHASE_TOOLS: dict[str, set[str]] = {
     "create": {"write_file", "list_directory", "execute_shell"},
     "edit": {"read_file", "str_replace", "execute_shell"},
     "test": {"execute_shell", "read_file", "list_directory"},
-    "search": {"semantic_search", "rag_search", "rag_index", "list_directory"},
+    "search": {"semantic_search", "rag_search", "rag_index", "offline_search", "list_directory"},
     "read": {"read_file", "list_directory", "semantic_search"},
     "memory": {"remember", "recall", "lessons", "vault_list", "vault_write"},
     "web": {"web_search", "read_chatgpt", "read_ai_conversation"},
@@ -2071,6 +2098,27 @@ def _get_tools(persona=None, phase: str | None = None) -> list[dict[str, Any]]:
                     "properties": {
                         "path": {"type": "string", "description": "Directory to index (default: current)"},
                     },
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "offline_search",
+                "description": (
+                    "Search the offline survival corpus (local, works without "
+                    "internet): water treatment, first aid, poisoning, shelter, "
+                    "cooking and emergency know-how. Every result carries the "
+                    "source file path. If the corpus has no source, it says so "
+                    "— do not invent an answer."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Offline/survival question to look up"},
+                        "max_results": {"type": "integer", "description": "How many excerpts to return (default 5)"},
+                    },
+                    "required": ["query"],
                 },
             },
         },

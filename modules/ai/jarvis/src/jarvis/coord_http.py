@@ -343,6 +343,54 @@ def build_server():
         out["rag_ok"] = bool(out["qdrant_6333"]) and "erro" not in str(out["embeddings_8081"])
         return json.dumps(out, indent=2, ensure_ascii=False, default=str)
 
+    @mcp.tool
+    def coord_phonefs(acao: str = "health", alvo: str = "", plano: str = "",
+                       confirm: str = "") -> str:
+        """Acesso SEGURO aos arquivos do CELULAR via phone-fs (Termux).
+
+        O celular expoe SSH na tailnet (100.104.175.123:8022, key-only) e um
+        tool proprio (~/bin/phone-fs) com politica embutida: leitura com
+        allowlist, WhatsApp/Databases/.ssh/keystore/Android/data NUNCA, e
+        MUTACAO SO por propose -> apply (move pra quarentena no SSD, com
+        manifesto REVERSIVEL; NAO existe delete). Por isso o 'apply' aqui
+        EXIGE o token de confirmacao do plano: quem aplica e' o celular, e o
+        agente externo so DESCREVE o plano.
+
+        acao: health | roots | inventory | find | stat | cat | propose | plans | apply
+        alvo: termo (find) | path (stat/cat) | glob (propose)
+        plano: plan_id (apply) | confirm: token do plano (apply, obrigatorio)
+        """
+        import subprocess as _sp
+        acoes = {"health", "roots", "inventory", "find", "stat", "cat",
+                 "propose", "plans", "apply"}
+        act = (acao or "health").strip().lower()
+        if act not in acoes:
+            return f"coord_phonefs: acao invalida '{act}' (use: {', '.join(sorted(acoes))})"
+        if act == "apply" and not confirm:
+            return ("coord_phonefs: 'apply' exige 'confirm' com o token do plano. "
+                    "O dono precisa aprovar (o token vem do 'plans' no celular). "
+                    "Nenhum arquivo e movido sem isso.")
+        cmd = ["ssh", "-p", "8022", "-o", "BatchMode=yes", "-o",
+               "StrictHostKeyChecking=no", "-o", "ConnectTimeout=10",
+               "u0_a438@100.104.175.123", "~/bin/phone-fs " + act]
+        if act in ("find", "stat", "cat"):
+            cmd[-1] += " '" + str(alvo).replace("'", "'\\''") + "'"
+        elif act == "propose":
+            cmd[-1] += " quarantine --match '" + str(alvo).replace("'", "'\\''") + "'"
+        elif act == "apply":
+            cmd[-1] += " " + str(plano)
+        try:
+            r = _sp.run(cmd, capture_output=True, text=True, timeout=90)
+            out = (r.stdout or "").strip()
+            err = (r.stderr or "").strip()
+            if r.returncode != 0:
+                return f"phone-fs {act} falhou (rc={r.returncode}): {err[:400] or out[:400]}"
+            if act == "apply":
+                return f"APLICADO pelo celular: {out[:600]} (manifesto reversivel no celular ✓)"
+            return out[:4000] or "(sem saida)"
+        except Exception as exc:
+            return f"coord_phonefs falhou: {exc}"
+
     return mcp
 
 

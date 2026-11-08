@@ -27,6 +27,51 @@ from jarvis.providers.llm import LLMClient
 from jarvis.providers.vector_store import QdrantStore, dense_key, stable_id
 
 # ---------------------------------------------------------------------------
+# Corpus offline de sobrevivência (fase A do N.O.M.A.D)
+# ---------------------------------------------------------------------------
+
+# Coleção PRÓPRIA do corpus offline: nunca entra no default de busca
+# (code_index/books) — texto de sobrevivência não dilui a busca de código.
+# O nome vive aqui (e não em config.py) porque o corpus é opcional; o env
+# permite trocar o nome sem rebuild.
+OFFLINE_COLLECTION = os.environ.get(
+    "JARVIS_QDRANT_COLLECTION_OFFLINE", "offline_survival")
+
+# Léxico de sobrevivência: pergunta de água/veneno/emergência é respondida
+# pelo corpus local (funciona sem internet).
+OFFLINE_KEYWORDS: tuple[str, ...] = (
+    "água", "agua", "water", "primeiros socorros", "first aid", "veneno",
+    "poison", "sobrevivencia", "sobrevivência", "survival", "cozimento",
+    "cook", "abrigo", "shelter", "emergencia", "emergência", "emergency",
+    "blackout", "purificar", "purify", "fome", "hunger", "filtro",
+)
+
+# Pergunta de código/paper/documento do projeto NÃO vai pro corpus offline:
+# continua no rag_search (comportamento anterior).
+OFFLINE_EXCLUDE: tuple[str, ...] = (
+    "código", "codigo", "script", "repositório", "repositorio", "repo",
+    "commit", "branch", "nixos", "docker", "paper", "arxiv", "livro",
+)
+
+
+def offline_route_reason(question: str) -> str | None:
+    """Keyword que joga a pergunta pro corpus offline (None = não é offline).
+
+    Decisão PURA (sem rede, sem I/O): a voz e o harness usam a MESMA
+    função, e o teste de rota cobre só isto.
+    """
+    q = (question or "").lower()
+    if not q.strip():
+        return None
+    if any(marker in q for marker in OFFLINE_EXCLUDE):
+        return None
+    for keyword in OFFLINE_KEYWORDS:
+        if keyword in q:
+            return keyword
+    return None
+
+
+# ---------------------------------------------------------------------------
 # .ragignore — sintaxe gitignore (padrão de mercado: mesma engine do .gitignore,
 # via pathspec quando disponível; fallback embutido com subconjunto da spec).
 # Descoberta na raiz do tree indexado; `!` re-inclui; último match vence.
@@ -453,9 +498,26 @@ class HybridHit:
     payload: dict[str, Any] = field(default_factory=dict)
 
 
+# Sigla pontuada (N.O.M.A.D, S.O.S., C.A.B.): 2-5 letras maiúsculas
+# separadas por ponto. A heurística de extensão via regex pegava a letra
+# interna ("N.O.M.A.D" -> ".o") e zerava a busca em texto de sobrevivência.
+_ACRONYM_RE = re.compile(r"\b[A-Z](?:\.[A-Z]){1,4}\.?\b")
+_EXT_RE = re.compile(r"\.([a-zA-Z][a-zA-Z0-9]{0,3})\b")
+
+
 def _target_extension(query: str) -> str | None:
-    m = re.search(r"\.([a-zA-Z][a-zA-Z0-9]{0,3})\b", query)
-    return "." + m.group(1).lower() if m else None
+    """Extensão de arquivo citada na query (".py", ".md"), se houver.
+
+    Ignora pontos que fazem parte de uma sigla pontuada (N.O.M.A.D, S.O.S.):
+    o filtro por extensão zerava a busca em corpus de sobrevivência.
+    """
+    acronyms = [m.span() for m in _ACRONYM_RE.finditer(query)]
+    for m in _EXT_RE.finditer(query):
+        span = m.span()
+        if any(a_start < span[1] and span[0] < a_end for a_start, a_end in acronyms):
+            continue
+        return "." + m.group(1).lower()
+    return None
 
 
 def apply_legacy_boosts(

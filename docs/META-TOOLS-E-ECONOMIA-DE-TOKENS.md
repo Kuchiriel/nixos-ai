@@ -21,7 +21,7 @@ fica em **96,1%** (contra 84,6% do top-5 fixo).
 
 | tool | params | retorno |
 |---|---|---|
-| `tools_search` | `{query: string}` — casa em nome/descrição; **vazio = lista tudo** | **texto**: `"N tool(s) matching 'q'"` + uma linha por tool (`- nome [core|extended]: descrição…`) + a dica de invocação |
+| `tools_search` | `{query: string}` — casa em nome/descrição; **vazio = lista tudo** | **texto**: `"N tool(s) matching 'q'"` + uma linha por tool (`- nome [core\|extended]: descrição…`) + a dica de invocação |
 | `tools_call` | `{name: string, args?: object}` — `args` pode ser objeto **ou** string JSON | o **resultado da tool chamada**, como texto |
 
 **Contrato no cliente opencode** ✓: o server key define o prefixo ⇒

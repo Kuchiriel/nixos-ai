@@ -105,6 +105,8 @@ SYSTEM_PT = (
     "  do(action='recall',     input='busca')        → memória do dono\n"
     "  do(action='web_search', input='busca')        → internet\n"
     "  do(action='rag_search', input='busca')        → papers/código/livros\n"
+    "  do(action='offline_search', input='busca')    → corpus offline "
+    "(água/veneno/emergência, sem internet)\n"
     "  do(action='status',     input='')             → saúde do sistema\n"
     "  do(action='voices',     input='')             → vozes na sala\n"
     "  do(action='tool',       input='<tool> {json}') → qualquer tool do harness\n"
@@ -1517,6 +1519,85 @@ def _cli_cmd_from_text(text):
     return None
 
 
+def _offline_reason(question: str) -> str | None:
+    """Keyword de sobrevivência que joga a pergunta pro corpus offline.
+
+    A decisão mora em jarvis.core.rag (mesma do harness); aqui só protege
+    o caso "sem jarvis" = sem rota offline (comportamento antigo).
+    """
+    try:
+        from jarvis.core.rag import offline_route_reason
+    except Exception:
+        return None
+    return offline_route_reason(question)
+
+
+def _web_unavailable(out: str) -> bool:
+    """A web CAIU (sem internet, erro de rede)? → o corpus offline assume.
+
+    Só o caminho da WEB: pergunta de código/paper vai pro rag_search (o
+    corpus offline é de sobrevivência e não responde pergunta de código).
+    """
+    text = (out or "").strip()
+    if not text:
+        return True
+    low = text.lower()
+    if low.startswith("erro:"):
+        return True
+    return any(marker in low for marker in (
+        "sem internet", "no internet", "sem rede", "sem conexão",
+        "connection refused", "connection aborted", "connection error",
+        "network is unreachable", "name or service not known",
+        "temporary failure in name resolution", "max retries exceeded",
+        "timed out", "timeout expired", "traceback (most recent call last)",
+        "(sem resultados)"))
+
+
+def _offline_cautions(path_rel: str) -> str:
+    """Cautelas do documento de origem (contraindicação nunca é cortada)."""
+    try:
+        doc = (Path(__file__).parent.parent / path_rel).read_text(
+            encoding="utf-8")
+    except OSError:
+        return ""
+    m = re.search(r"^## Cautelas\s*\n+(.*?)(?=\n## |\Z)", doc, re.M | re.S)
+    return " ".join(m.group(1).split())[:280] if m else ""
+
+
+def _offline_search(query: str, top_k: int = 3) -> str:
+    """Resposta do corpus offline de sobrevivência (funciona sem internet).
+
+    Extrai o trecho e nomeia o arquivo de origem; sem fonte no corpus, DIZ
+    que não tem (nunca inventa).
+    """
+    if not (query or "").strip():
+        return "ERRO: query vazia"
+    try:
+        from jarvis.core.rag import HybridSearch, OFFLINE_COLLECTION
+        from jarvis.core.config import Config
+        hits = HybridSearch(Config()).search(query, top_k=top_k,
+                                              collection=OFFLINE_COLLECTION)
+    except Exception as e:
+        dbg("offline_erro", erro=str(e)[:160])
+        return f"ERRO no corpus offline: {e}"
+    if not hits:
+        dbg("offline_sem_fonte", query=query[:80])
+        return ("SEM FONTE OFFLINE para: " + query[:80] +
+                " — o corpus offline de sobrevivência não tem resposta para "
+                "isso; não vou inventar.")
+    linhas = []
+    for h in hits:
+        p = h.payload or {}
+        src = str(p.get("path") or p.get("source_id") or "?")
+        content = " ".join(str(p.get("content", "")).split())
+        linhas.append(f"[{src}] {content[:220]}")
+        caut = _offline_cautions(str(p.get("path") or ""))
+        if caut:
+            linhas.append(f"  Cautelas: {caut}")
+    dbg("offline_fonte", hits=len(hits))
+    return ("Fonte: corpus OFFLINE (sem internet).\n" + "\n".join(linhas))[:800]
+
+
 def call_tool(name, args):
     """Meta-tool router: o 4B chama 'do(action, input)' e esta função
     despacha pra ferramenta certa (schema de 1 tool, não 8)."""
@@ -1555,6 +1636,19 @@ def call_tool(name, args):
             return "Guardei na memória."
         if "recall" in action or "memória" in action or "memoria" in action:
             return call_tool("recall", {"query": inp})
+        # (07/11) CORPUS OFFLINE ANTES DA WEB: pergunta de sobrevivência
+        # (água, veneno, primeiros socorros, emergência, blackout) é
+        # respondida pelo corpus LOCAL (offline_survival) — a web cai
+        # quando não há internet, e o corpus é a resposta honesta: fonte
+        # nomeada ou "sem fonte offline" (nunca inventa).
+        _off_kw = _offline_reason(inp)
+        if _off_kw:
+            dbg("offline_rota", motivo=_off_kw, acao=action)
+            return call_tool("offline_search", {"query": inp})
+        if "offline" in action or "sem internet" in inp.lower() \
+                or "sem rede" in inp.lower():
+            dbg("offline_rota", motivo="explicito", acao=action)
+            return call_tool("offline_search", {"query": inp})
         if "web" in action or "busca" in action or "internet" in action:
             # (21/10 P0) SMART ROUTER: se o input menciona papers/docs/
             # código, redireciona pra rag_search mesmo se o modelo disse
@@ -1564,8 +1658,14 @@ def call_tool(name, args):
             if any(k in _inp_l for k in ("paper", "arxiv", "livro",
                     "código", "codigo", "script", "document", "doc ",
                     "como funciona", "onde está", "onde esta")):
+                # código/paper/documento: RAG local (o corpus offline é de
+                # sobrevivência — não responde pergunta de código)
                 return call_tool("rag_search", {"query": inp})
-            return call_tool("web_search", {"query": inp})
+            _out = call_tool("web_search", {"query": inp})
+            if _web_unavailable(_out):
+                dbg("offline_rota", motivo="web_indisponivel", acao=action)
+                return call_tool("offline_search", {"query": inp})
+            return _out
         if "rag" in action or "document" in action or "paper" in action or "livro" in action or "pesqui" in action:
             return call_tool("rag_search", {"query": inp})
         if "status" in action or "sistema" in action:
@@ -1739,6 +1839,8 @@ def call_tool(name, args):
             return f"Nenhuma memória encontrada para '{q[:40]}'."
         except Exception:
             return raw[:400]
+    if name == "offline_search":
+        return _offline_search(args.get("query", ""))
     if name == "rag_search":
         q = args.get("query", "")
         # (21/10) CLI agora traz content (rebuild aplicado) — usa CLI
@@ -1815,6 +1917,8 @@ TOOLS_SCHEMA = [
      "description": "Executa UMA ação. Ações: get_time (hora), "
      "remember <texto> (salva), recall <busca> (memória do dono), "
      "web_search <busca> (internet), rag_search <busca> (papers/código), "
+     "offline_search <busca> (corpus offline de sobrevivência: água, "
+     "primeiros socorros, veneno, emergência — sem internet), "
      "status (sistema), voices (pessoas na sala), "
      "notify <texto> (notificação de desktop), "
      "read_file <caminho> (lê arquivo), list_directory <caminho> (lista), "

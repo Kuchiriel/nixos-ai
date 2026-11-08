@@ -245,6 +245,39 @@ CODENAMES = [
 ]
 
 
+# ── codinome pelo MODELO (dono, 07/11) ─────────────────────────────────
+# "usar o self identification pra dar um codinome mas tbm informar qual
+# modelo e": o agente NAO se annuncia — o harness injeta o bloco IDENTITY
+# (provider/model) e o agente declara no claim. O codinome sai do MODELO
+# de forma DETERMINISTICA (o mesmo modelo -> o mesmo nome), e o modelo
+# viaja junto no roster (e no bus), para o coordenador da noite saber que
+# tier esta atras de cada agente.
+MODEL_CODENAMES = (
+    ("minimax", "Lince"),
+    ("qwen", "Tatu"),
+    ("gemma", "Cabra"),
+    ("deepseek", "Lontra"),
+    ("phi", "Galo"),
+    ("nemotron", "Falcao"),
+    ("gpt-oss", "Corvo"),
+    ("bonsai", "Bambu"),
+    ("bonsai-8b", "Bambu"),
+    ("kilo", "Pika"),
+    ("local", "Musgo"),
+)
+
+
+def codename_for_model(model: str) -> str:
+    """Codinome deterministico a partir do id do modelo (vazio se nao der)."""
+    mid = (model or "").strip().lower()
+    if not mid:
+        return ""
+    for key, name in MODEL_CODENAMES:
+        if key in mid:
+            return name
+    return ""
+
+
 def _pick_codename(agents: list[dict]) -> str:
     """Codinome livre para um agente novo (aleatório entre os livres)."""
     used = {e.get("codename") for e in agents if e.get("codename")}
@@ -407,7 +440,11 @@ def cmd_claim(args) -> int:
                 return 5
             codename = chosen
         else:
-            codename = (previous or {}).get("codename") or _pick_codename(agents)
+            model_hint = (getattr(args, "model", "") or "").strip() \
+                or (previous or {}).get("model", "") or ""
+            codename = (previous or {}).get("codename") \
+                or codename_for_model(model_hint) \
+                or _pick_codename(agents)
         context = (getattr(args, "context", "") or (previous or {}).get("context") or "")
         # (07/11) ALIASES: o mesmo agente aparece com nomes diferentes no
         # roster (name/codename) e no bus (ex: 'jarvis@nitro-v15' vs 'Cervo').
@@ -418,10 +455,13 @@ def cmd_claim(args) -> int:
         aliases = [a.strip() for a in raw_aliases.split(",") if a.strip()]
         if not aliases:
             aliases = list((previous or {}).get("aliases") or [])
+        model = (getattr(args, "model", "") or "").strip() \
+            or (previous or {}).get("model", "") or ""
         entry = {
             "name": args.name,
             "codename": codename,
             "aliases": aliases,
+            "model": model,
             "context": context,
             "lane": args.lane or "",
             "repo": args.repo or "",
@@ -439,6 +479,8 @@ def cmd_claim(args) -> int:
           f"(repo={entry['repo'] or '-'}, janela={entry['window']})")
     if entry.get("aliases"):
         print(f"roster: aliases {', '.join(entry['aliases'])}")
+    if entry.get("model"):
+        print(f"roster: modelo {entry['model']}")
     print(f"roster: codinome '{entry['codename']}'"
           + (f" | contexto: {entry['context']}" if entry["context"] else
              " | contexto: (vazio — defina com set-context)"))
@@ -674,6 +716,11 @@ def main() -> int:
                         "enderecado no bus (separados por virgula) - use para "
                         "o nome que voce publica no bus, ex: --aliases "
                         "jarvis@nitro-v15,Cervo")
+    p.add_argument("--model", default="",
+                   help="identidade do modelo (provider/id) — a mesma do bloco "
+                        "IDENTITY do harness. Diz a fleet QUAL tier esta "
+                        "atras do agente (o coordenador da noite escolhe o "
+                        "modelo pela tarefa e troca no rate limit)")
     p.add_argument("--codename", default="",
                    help="codinome escolhido (sem ele, sorteia um livre)")
     p.add_argument("--force", action="store_true",

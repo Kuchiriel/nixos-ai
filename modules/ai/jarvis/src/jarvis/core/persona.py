@@ -9,6 +9,7 @@ Based on Augment Code's Coordinator/Specialist/Verifier pattern.
 
 import json
 import os
+import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
@@ -695,3 +696,118 @@ class PersonaRegistry:
                 f"tags={p.tags}"
             )
         return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# PERSONA ATIVA (estado compartilhado) — 07/11
+# ─────────────────────────────────────────────────────────────────────────
+# O catálogo MBTI já existia (BUILTIN_PERSONAS, cada uma com
+# system_prompt_additions). O que faltava era o ESTADO ATIVO: uma persona
+# escolhida num lugar e vista em todos os outros.
+#
+# POR QUE (dono, 07/11): "personalidade MBTI no system prompt do agent" e
+# "integração na comunicação" são a mesma coisa — o dono escolhe a
+# personalidade (no Telegram: /mood) e o AGENTE opencode passa a falar
+# com ela. Um arquivo de estado é o contrato entre os dois processos
+# (o JARVIS escreve, o plugin do opencode lê).
+#
+# Onde: $JARVIS_STATE_DIR/persona.json (default ~/.local/state/jarvis).
+# Por que um arquivo e não o RAG: tem que ser lido em CADA request (o
+# plugin não tem MCP no caminho quente) — leitura de arquivo é ~0 ms.
+
+ACTIVE_PERSONA_ENV = "JARVIS_ACTIVE_PERSONA"
+
+
+def _state_dir() -> Path:
+    base = os.environ.get("JARVIS_STATE_DIR", "~/.local/state/jarvis")
+    return Path(base).expanduser()
+
+
+def active_persona_file() -> Path:
+    return _state_dir() / "persona.json"
+
+
+def active_persona() -> Optional[Persona]:
+    """A persona ativa agora (None se ninguém escolheu uma).
+
+    Ordem de precedência: env ( Jarvis_ACTIVE_PERSONA ) > arquivo de
+    estado. O env existe para o caso de uma sessão específica (ex.: o
+    dono quer o agente do MTX em outra persona sem mudar a global).
+    """
+    pid = os.environ.get(ACTIVE_PERSONA_ENV, "").strip()
+    if not pid:
+        f = active_persona_file()
+        if f.is_file():
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                pid = str(data.get("id") or "").strip()
+            except Exception:
+                pid = ""
+    if not pid:
+        return None
+    return PersonaRegistry().get(pid)
+
+
+def set_active_persona(persona_id: str, *, full: bool = False) -> Optional[Persona]:
+    """Escolhe a persona ativa (persiste). None se o id não existe.
+
+    `full=False` (padrão) grava só a PERSONALIDADE (a linha MBTI + quem é o
+    papel) — o playbook do cargo (tabela de preços, ferramentas, regras
+    operacionais) NÃO entra no system prompt de todo agente: medido 07/11, a
+    persona "marketing" arrastava a tabela de preços para o system prompt de
+    um agente de infra. Com `full=True` grava o bloco inteiro (para quem
+    quiser o papel completo).
+    """
+    p = PersonaRegistry().get((persona_id or "").strip())
+    if p is None:
+        return None
+    f = active_persona_file()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    mbti = ""
+    for line in (p.system_prompt_additions or "").splitlines():
+        if line.strip().upper().startswith("MBTI:"):
+            mbti = line.strip().split(":", 1)[1].strip().rstrip(".")
+            break
+    # O state carrega o bloco que o plugin do opencode injeta: por padrão
+    # só a PERSONALIDADE (MBTI + papel). O plugin lê este arquivo no
+    # caminho quente e não deve duplicar o catálogo de personas.
+    if full:
+        block = p.system_prompt_additions or ""
+    else:
+        block = f"MBTI: {mbti}.\nVoce atua como {p.name} ({p.role})."
+    f.write_text(
+        json.dumps(
+            {
+                "id": p.id,
+                "name": p.name,
+                "mbti": mbti,
+                "system_prompt_additions": block,
+                "ts": time.time(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return p
+
+
+def clear_active_persona() -> bool:
+    f = active_persona_file()
+    if f.is_file():
+        f.unlink()
+        return True
+    return False
+
+
+def mbti_index() -> list[tuple[str, str, str]]:
+    """(id, nome, MBTI) de todas as personas com MBTI — para o /mood."""
+    out: list[tuple[str, str, str]] = []
+    for p in PersonaRegistry().list_all():
+        mbti = ""
+        for line in (p.system_prompt_additions or "").splitlines():
+            if line.strip().upper().startswith("MBTI:"):
+                mbti = line.strip().split(":", 1)[1].strip().rstrip(".")
+                break
+        out.append((p.id, p.name, mbti))
+    return sorted(out, key=lambda x: (x[2] or "ZZZ", x[0]))
