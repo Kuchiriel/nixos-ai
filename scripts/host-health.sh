@@ -64,9 +64,26 @@ swap_pct=0
 free_mb=$(( free_kb / 1024 ))
 avail_mb=$(( avail_kb / 1024 ))
 
+# ── Versão do opencode: o serve tem que ser o MESMO binário do TUI ───────
+# (07/11) O dono usa o opencode do PATH (2.2.6). Um drop-in deixou o serve
+# no 1.18.34 e a frota silenciou: duas linguas de API e DOIS backends de
+# sessão — a mensagem entrava num e o agente do outro não via.
+serve_bin="$(systemctl --user show opencode-serve.service -p ExecStart 2>/dev/null |
+  sed -n 's/.*path=\([^ ;]*\).*/\1/p' | head -1)"
+tui_bin="$(readlink -f "$(command -v opencode 2>/dev/null)" 2>/dev/null)"
+oc_ver="desconhecido"
+[ -n "$serve_bin" ] && [ -x "$serve_bin" ] &&
+  oc_ver="$("$serve_bin" --version 2>/dev/null | head -1)"
+oc_split="nao"
+[ -n "$serve_bin" ] && [ -n "$tui_bin" ] && [ "$serve_bin" != "$tui_bin" ] &&
+  oc_split="SIM"
+
 # ── Veredito ───────────────────────────────────────────────────────────────
 verdict="OK"
 rc=0
+if [ "$oc_split" = "SIM" ]; then
+  verdict="CRITICO"; rc=2
+fi
 if [ "${swap_pct:-0}" -ge 90 ] || [ "${zram_pct:-0}" -ge 90 ] || [ "${free_mb:-0}" -lt 400 ]; then
   verdict="CRITICO"; rc=2
 elif [ "${swap_pct:-0}" -ge 75 ] || [ "${avail_mb:-0}" -lt 2048 ]; then
@@ -86,6 +103,11 @@ case "$MODE" in
     echo "RAM:   $(( used_kb / 1024 ))/$(( total_kb / 1024 )) MB usada | livre ${free_mb}MB | disponível ${avail_mb}MB"
     echo "SWAP:  $(( swap_used_kb / 1024 ))/$(( swap_total_kb / 1024 )) MB (${swap_pct}%)"
     echo "ZRAM:  ${zram_used_mb}/${zram_total_mb} MB (${zram_pct}%) compressão ${zram_ratio}"
+    echo "OPENCODE: serve=${oc_ver} | split=${oc_split}"
+    if [ "$oc_split" = "SIM" ]; then
+      echo "  → serve e TUI em binarios diferentes: a entrega vai para um backend e o agente nao ve."
+      echo "  → iguale: rm ~/.config/systemd/user/opencode-serve.service.d/*.conf && systemctl --user daemon-reload && systemctl --user restart opencode-serve.service"
+    fi
     echo "VEREDITO: $verdict"
     if [ "$verdict" != "OK" ]; then
       echo "  → o killer do kernel mata o llama-server (OOMScoreAdjust=1000); o host não deve travar."

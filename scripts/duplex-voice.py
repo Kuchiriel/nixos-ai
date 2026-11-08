@@ -2573,10 +2573,15 @@ def main():
                             # alimenta o tracker de fala).
                             _quiet_until = time.monotonic() + \
                                 (len(_a) / SR) + 1.5
-                            try:
-                                asr.feed_raw('{"reset": true}')
-                            except Exception:
-                                pass
+                            # (07/11) FECHA o segmento que a TV abriu com
+                            # SILENCIO (0,8s) antes do WAV: o reset do asrd
+                            # desalinhava o take() e a sala continuava
+                            # entrando no segmento do teste.
+                            # (07/11) o silencio PRECEDE o WAV na
+                            # mesma lista de chunks (o asrd fecha o
+                            # segmento da TV antes de ouvir a frase).
+                            _z = np.zeros(int(SR * 0.6), dtype=np.int16)
+                            _inject_chunks = [_z, _z.copy()] + _inject_chunks
                             log(f"[{ts()}] WAV INJETADO no ASR "
                                 f"({len(_a)/SR:.1f}s, {_sr}Hz, "
                                 f"{len(_inject_chunks)} chunks, "
@@ -2733,11 +2738,15 @@ def main():
                     # segmento ficava aberto e so fechava quando o mic
                     # voltava (a TV da sala entrava no texto: "Obrigado."
                     # em vez da frase injetada).
-                    if _quiet_until > time.monotonic():
+                    if _quiet_until > time.monotonic() and not _injecting:
+                        # (07/11) o mic vira SILENCIO durante a janela de
+                        # injecao (a TV da sala abortava o segmento do WAV).
+                        # O silencio SUBSTITUI o chunk do mic — nunca pular
+                        # o feed: o WAV injetado tem que chegar ao asrd.
                         asr.feed(np.zeros(len(_processed),
                                           dtype=np.float32) / 32768.0)
-                        continue
-                    asr.feed(_processed.astype("float32") / 32768.0)
+                    else:
+                        asr.feed(_processed.astype("float32") / 32768.0)
             if barge_buf and not tts_playing and len(barge_buf) >= 2:
                 log(f"[{ts()}] BARGE-IN processado: {len(barge_buf)} chunks")
                 for bc in barge_buf:
