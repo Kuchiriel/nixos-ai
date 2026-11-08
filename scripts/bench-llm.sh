@@ -29,6 +29,28 @@ if [ -n "${BENCH_LD_ENVFILE:-}" ] && [ -f "$BENCH_LD_ENVFILE" ]; then
   . "$BENCH_LD_ENVFILE"
   export LD_LIBRARY_PATH
 fi
+# (08/11) UM FORK POR LD_LIBRARY_PATH. Misturar dois forks de llama.cpp faz o
+# binario SEGFAULTAR: o loader resolve libllama.so/libggml.so pelo primeiro
+# path que casar e os forks tem o mesmo SONAME com ABI diferente. Medido: o
+# llama-server do ik (build 5074) crashou com core dump ao carregar o 35B
+# (19,7 GiB) porque o dir do prism estava no mesmo path; com o env limpo (so
+# o dir do ik + cuda/gcc/openssl) o mesmo binario carrega e roda. O sintoma
+# e enganoso: parece defeito do modelo ou do binario.
+_fork_dirs=""
+for _d in $(printf '%s' "${LD_LIBRARY_PATH:-}" | tr ':' ' '); do
+  case "$_d" in
+    */prism-bin/*|*/ik_llama.cpp/*|*/llama.cpp/build-stock/*|*/llama.cpp/build/*|\
+    */llama-stock-master/*|*/llama-dory/*) _fork_dirs="$_fork_dirs $_d";;
+  esac
+done
+_fork_n=$(printf '%s' "$_fork_dirs" | wc -w | tr -d ' ')
+if [ "${_fork_n:-0}" -gt 1 ]; then
+  echo "ABORT: LD_LIBRARY_PATH mistura ${_fork_n} forks de llama.cpp:${_fork_dirs}" >&2
+  echo "  o loader pega a lib do fork errado (mesmo SONAME, ABI diferente) => SEGFAULT." >&2
+  echo "  use um env por binario: so o dir do fork do binario + cuda/gcc/openssl." >&2
+  echo "  receita: export LD_LIBRARY_PATH=<dir do fork>:<cuda>:<gcc>:<openssl>:<opengl>" >&2
+  exit 2
+fi
 while getopts "b:m:n:g:o:R" o; do case $o in
   b) BIN=$OPTARG;; m) MODEL=$OPTARG;; n) REPS=$OPTARG;; g) TAG=$OPTARG;;
   o) OUT=$OPTARG;; R) ROUTER=1;; *) echo "flag inválida" >&2; exit 1;;
