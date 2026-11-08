@@ -471,7 +471,7 @@ in {
   # seguinte o substitui de volta.
   home.file."projects/opencode.json".text = builtins.toJSON {
     "$schema" = "https://opencode.ai/config.json";
-    compaction = { auto = true; prune = true; };
+    compaction = { auto = true; prune = true; buffer = "10%"; keep = { tokens = 50000; }; };
     tool_output = { max_lines = 200; max_bytes = 8192; };
   };
 
@@ -657,9 +657,17 @@ in {
       # directServers.uncensored-4b.opencode.key + .alias (= routing.default).
       small_model = "${pkgs.aiModels.directServers."uncensored-4b".opencode.key}/${pkgs.aiModels.directServers."uncensored-4b".alias}";
       warming = true;
+      # (08/11) Limiar de compactação no FINALZINHO para modelos de 1M:
+      # buffer "10%" ⇒ teto ≈ 943.718 tokens (1.048.576 − 10%) — o número que
+      # o dono lembrava ("contexto de 1m o limiar é no finalzinho").
+      # keep.tokens = 50000 (mesmo do canônico do celular, 08/11).
+      # Fonte do fix: mt5/opencode/MODIFICACOES_OPENCODE.md §2.8 (04/11) +
+      # celular (crouton) como referência de schema.
       compaction = {
         auto = true;
         prune = true;
+        buffer = "10%";
+        keep = { tokens = 50000; };
       };
       tool_output = {
         max_lines = 200;
