@@ -63,10 +63,56 @@ def _run(cmd: list[str], timeout: int = 30) -> str:
     return out
 
 
+def _session_from_cmdline(pid: int) -> str:
+    """Sessão opencode (`-s ses_...`) de um processo, se houver."""
+    try:
+        argv = Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace")
+    except OSError:
+        return ""
+    parts = [p for p in argv.split("\0") if p]
+    for i, part in enumerate(parts):
+        if part == "-s" and i + 1 < len(parts):
+            return parts[i + 1]
+        if part.startswith("ses_"):
+            return part
+    return ""
+
+
+def current_session() -> str:
+    """Sessão opencode do chamador.
+
+    Medido 08/11: o bash tool recebe OPENCODE_SESSION_ID no env; o MCP server
+    NÃO (o app só injeta no shell). Mas o MCP server recebe OPENCODE_PID = o
+    processo opencode pai, cujo argv tem `-s ses_...` (a TUI). Sem essa ponte,
+    todo MCP caía em `jarvis@<host>` e whoami/pending/set_context iam para o
+    agente ERRADO (Arara) — o roster chegou a ter 3 agentes na mesma sessão.
+    """
+    ses = (os.environ.get("OPENCODE_SESSION_ID") or "").strip()
+    if ses:
+        return ses
+    pid = (os.environ.get("OPENCODE_PID") or "").strip()
+    if pid.isdigit():
+        return _session_from_cmdline(int(pid))
+    return ""
+
+
+def _entry_for_session(session: str) -> dict[str, Any] | None:
+    """Entrada do roster da sessão; se houver histórico, o claim mais recente."""
+    matches = [e for e in roster_agents() if e.get("session") == session]
+    if not matches:
+        return None
+    return max(matches, key=lambda e: e.get("claimed_at") or 0)
+
+
 def agent_id() -> str:
     forced = os.environ.get("COORD_AGENT")
     if forced:
         return forced
+    ses = current_session()
+    if ses:
+        entry = _entry_for_session(ses)
+        if entry and entry.get("name"):
+            return str(entry["name"])
     return f"{DEFAULT_AGENT}@{socket.gethostname().split('.')[0]}"
 
 

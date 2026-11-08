@@ -84,3 +84,50 @@ def test_window_of_session(roster):
 def test_window_of_session_ignores_empty_session(roster):
     windows = [_win("0xaaa", "")]
     assert roster.window_of_session({"session": ""}, windows) is None
+
+
+# ── identidade do chamador (08/11): a sessão vem do env, não do ppid ──
+# Medido: o bash tool recebe OPENCODE_SESSION_ID; o MCP server recebe
+# OPENCODE_PID (o app pai, com -s ses_... no argv). Sem isso, claim do MCP
+# caía na primeira janela viva e 3 agentes ficaram na mesma sessão.
+
+def test_own_window_by_session_env(roster, monkeypatch):
+    monkeypatch.setenv("OPENCODE_SESSION_ID", "ses_1")
+    windows = [_win("0xaaa", "ses_1"), _win("0xbbb", "ses_2")]
+    assert roster.own_window(windows)["address"] == "0xaaa"
+
+
+def test_own_window_session_beats_ppid_walk(roster, monkeypatch):
+    monkeypatch.setenv("OPENCODE_SESSION_ID", "ses_2")
+    windows = [_win("0xaaa", "ses_1"), _win("0xbbb", "ses_2")]
+    # o ppid do pytest não casa com nenhuma janela: só a sessão importa
+    assert roster.own_window(windows)["address"] == "0xbbb"
+
+
+def test_own_window_from_opencode_pid(roster, monkeypatch):
+    monkeypatch.delenv("OPENCODE_SESSION_ID", raising=False)
+    monkeypatch.setenv("OPENCODE_PID", "4242")
+    monkeypatch.setattr(roster, "_session_do_pid", lambda pid: "ses_mcp")
+    windows = [_win("0xccc", "ses_mcp")]
+    assert roster.own_window(windows)["address"] == "0xccc"
+
+
+def test_own_window_server_side_synthesizes(roster, monkeypatch):
+    """Bash filho do `opencode serve`: não há janela foot, mas há sessão."""
+    monkeypatch.setenv("OPENCODE_SESSION_ID", "ses_serve")
+    monkeypatch.setattr(roster, "session_busy", lambda s, **k: False)
+    own = roster.own_window([])
+    assert own is not None
+    assert own["session"] == "ses_serve"
+    assert own["address"] == ""
+
+
+def test_own_window_falls_back_to_ppid_without_env(roster, monkeypatch):
+    monkeypatch.delenv("OPENCODE_SESSION_ID", raising=False)
+    monkeypatch.delenv("OPENCODE_PID", raising=False)
+    import os
+    windows = [_win("0xppid", "")]
+    windows[0]["pid"] = os.getppid()
+    monkeypatch.setattr(roster, "_proc_map", lambda: ({}, set()))
+    assert roster.own_window(windows)["address"] == "0xppid"
+

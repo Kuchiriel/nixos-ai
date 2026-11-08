@@ -165,9 +165,49 @@ def agent_windows() -> list[dict]:
     return out
 
 
+def _session_from_env() -> str:
+    """Sessão do chamador: env do bash tool ou o app pai do MCP server.
+
+    Medido 08/11: o bash tool recebe OPENCODE_SESSION_ID; o MCP server não,
+    mas recebe OPENCODE_PID (o processo opencode pai, com `-s ses_...` no
+    argv). Sem isso, claim de dentro do MCP/CLI não achava a janela e caía
+    na primeira janela viva (identidade errada).
+    """
+    ses = os.environ.get("OPENCODE_SESSION_ID", "").strip()
+    if ses:
+        return ses
+    pid = os.environ.get("OPENCODE_PID", "").strip()
+    if pid.isdigit():
+        return _session_do_pid(int(pid))
+    return ""
+
+
+def _opencode_ancestor() -> int:
+    """PID do ancestral opencode mais próximo (serve/TUI que hospeda o bash)."""
+    ppid_de, agente = _proc_map()
+    p = os.getppid()
+    while p > 1:
+        if p in agente:
+            return p
+        p = ppid_de.get(p, 0)
+    return 0
+
+
 def own_window(windows: list[dict] | None = None) -> dict | None:
     """A janela do chamador (sobe a árvore de ppid até achar um foot-agente)."""
     windows = agent_windows() if windows is None else windows
+    # 1) identidade durável: a SESSÃO do chamador (bash ou MCP)
+    ses = _session_from_env()
+    if ses:
+        for w in windows:
+            if (w.get("session") or "") == ses:
+                return w
+        # server-side: o bash é filho do `opencode serve` (sem janela foot);
+        # a sessão continua sendo a identidade -> sintetiza a entrada.
+        return {"address": "", "pid": _opencode_ancestor() or os.getppid(),
+                "title": "", "cpu": 0, "session": ses,
+                "busy": session_busy(ses)}
+    # 2) fallback: walk de ppid (quem roda dentro do TUI sem a env)
     pids = {w["pid"] for w in windows}
     ppid_de, _ = _proc_map()
     p = os.getppid()
