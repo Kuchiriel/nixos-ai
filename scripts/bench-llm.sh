@@ -67,7 +67,21 @@ run() { $BIN "$@"; }   # -b = PREFIXO de comando (ex.: "bash run-prism.sh llama-
 echo "BIN=$(readlink -f "$BIN" 2>/dev/null || echo "$BIN")" >&2
 run --version >&2 2>/dev/null || true
 
-if [ $ROUTER = 1 ]; then sudo systemctl stop llama-cpp-server; trap "sudo systemctl start llama-cpp-server" EXIT; fi
+# (08/11) O trap do EXIT e instalado AQUI, no momento em que o router e'
+# parado: o bench pode abortar ANTES (guard de VRAM: outro llama-server vivo)
+# e, nesse caso, o restore nunca acontecia — o :8080 ficava fora do ar.
+cleanup_bench() {
+  if [ -n "${PID:-}" ]; then kill "$PID" 2>/dev/null || true; fi
+  pkill -f "port $PORT" 2>/dev/null || true
+  if [ "${ROUTER:-0}" = "1" ]; then
+    sudo systemctl start llama-cpp-server 2>/dev/null || \
+      echo "AVISO: nao consegui religar o router (:8080) — suba na mao" >&2
+  fi
+}
+if [ $ROUTER = 1 ]; then
+  sudo systemctl stop llama-cpp-server
+  trap cleanup_bench EXIT
+fi
 pkill -f "port $PORT" 2>/dev/null || true
 for _w in $(seq 1 30); do
   curl -sf --max-time 1 http://127.0.0.1:$PORT/health >/dev/null 2>&1 || break
@@ -94,7 +108,15 @@ fi
 
 run -m "$MODEL" --host 127.0.0.1 --port $PORT $EXTRA > /tmp/bench-srv-$TAG.log 2>&1 &
 PID=$!
-trap 'kill $PID 2>/dev/null; pkill -f "port $PORT" 2>/dev/null' EXIT
+# (08/11) O trap do EXIT (cleanup_bench) foi instalado junto com o stop do
+# router, la em cima: antes ele vivia AQUI e o bench podia abortar antes
+# (guard de VRAM) -> router fora do ar. Este bloco so garante que o server
+# efemero morra; o trap e o mesmo.
+cleanup_server() {
+  if [ -n "${PID:-}" ]; then kill "$PID" 2>/dev/null || true; fi
+  pkill -f "port $PORT" 2>/dev/null || true
+}
+trap cleanup_bench EXIT
 for i in $(seq 1 300); do
   curl -sf --max-time 2 http://127.0.0.1:$PORT/health >/dev/null 2>&1 && break
   kill -0 $PID 2>/dev/null || { echo "server morreu no load" >&2; exit 1; }
