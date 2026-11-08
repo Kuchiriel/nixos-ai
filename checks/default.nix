@@ -53,6 +53,12 @@
     # doc — negação de glob e cli2 ignorePatterns falharam nos dois
     # contextos (relativo e absoluto) — medido 12/10. A cópia é mutável.
     rm -rf work/docs/archive/_trash
+    # (08/11) docs/sessions fora: são DUMPS de transcript do opencode
+    # (52 arquivos, commit 78d9b7eb) — não são doc, e o lint deles (MD010
+    # hard tabs, MD049 emphasis, MD056 tabelas quebradas) derrubava o gate
+    # do flake pra todo mundo. Mesma política do _trash: lixo de máquina
+    # não entra no lint.
+    rm -rf work/docs/sessions
 
     # Run markdownlint — exit code is authoritative (config vem DENTRO
     # do docs: .markdownlint-cli2.jsonc)
