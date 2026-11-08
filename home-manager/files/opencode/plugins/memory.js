@@ -107,7 +107,8 @@ const PINNED_GUARDS = `## Coordination rules (pinned — never summarize)
 - never use wtype/focus to talk to another agent: it blocks the human's typing
 - wake: \`agents-watcher.sh\` wakes via the API and filters by repo/lane`;
 
-const REHYDRATE_RULE = `## Rehydration (first tool of the session)
+const REHYDRATE_RULE = `
+## Rehydration (first tool of the session)
 First tool of a new session, right after a compaction, or whenever a problem
 looks like a repeat: \`jarvis_rehydrate(task="<what you are about to
 do>")\` (opencode exposes MCP tools as \`<server-key>_<tool>\`; the server key
