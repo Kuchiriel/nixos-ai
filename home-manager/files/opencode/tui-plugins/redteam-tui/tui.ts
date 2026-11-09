@@ -30,8 +30,9 @@ const HELP = [
   "  on                    liga o modo (transliteracao + bloco de estrategia)",
   "  off                   desliga",
   "  status                mostra o estado",
-  "  pair <t> <d>          define o par trigger/decoy",
-  "  term add <t> <d...>   termo na lista de deception (N decoys; a 1a e a forma vista pelo modelo)",
+  "  pair <frase>           gera as decoys da palavra/frase (auto)",
+  "  pair <t> <d>          par manual (2 palavras ou com aspas)",
+  "  term add <t> <d...>   par na lista (N pares convivem; a 1a decoy e a vista pelo modelo)",
   "  term auto <t> [n]     gera n decoys do termo e joga na lista (padrao 4)",
   "  term rm <t>           remove o termo da lista",
   "  term list             lista os termos e as decoys",
@@ -138,6 +139,36 @@ function entryTerm(entry) {
 // (medido 07/11: decoy "c" + termo "a." transformavam "echo" em "ea.ho"
 // e "projects" em "projea.ts" — TUDO que contem a letra). O par e a
 // lista so sao confiaveis com pedacos de 3+ chars.
+// (09/11) GUARDA DE CONFLITO ENTRE PARES: a lista aceita N pares e o par
+// legado (trigger/decoy) vive na mesma maquina. Um termo que contem ou esta
+// contido em outro termo/decoy torna a transliteracao ambigua (a troca por
+// substring remontava lixo — medido 07/11). Rejeita na entrada dizendo QUAL
+// par conflita; pares independentes convivem sem problema.
+function conflitoDePar(state, termo, decoys) {
+  const toca = (a, b) => !!a && !!b && (a.includes(b) || b.includes(a));
+  for (const x of state.deception || []) {
+    const t = entryTerm(x);
+    if (!t || t === termo) continue;
+    if (toca(t, termo)) {
+      return `o termo "${termo}" e o termo da lista "${t}" se contem (um e parte do outro)`;
+    }
+    for (const d of (Array.isArray(x.decoys) ? x.decoys : [])) {
+      if (toca(termo, d)) {
+        return `o termo "${termo}" colide com a decoy "${d}" do termo "${t}"`;
+      }
+    }
+  }
+  for (const d of decoys || []) {
+    for (const x of state.deception || []) {
+      const t = entryTerm(x);
+      if (t && t !== termo && d && d.includes(t)) {
+        return `a decoy "${d}" contem o termo da lista "${t}"`;
+      }
+    }
+  }
+  return "";
+}
+
 const MIN_LEN = 3;
 
 
@@ -146,14 +177,15 @@ const MIN_LEN = 3;
 // voltam ao termo real quando o modelo devolve qualquer uma delas.
 // O dono: "era pra fazer lista de decoy, um so sim ajuda".
 function gerarDecoys(termo, n = 4) {
-  // MEDIDO 08/11: o "split" (separar por ponto) devolve o TERMO ELE MESMO
-  // quando o termo nao tem ponto ("MHDDoS" -> "MHDDoS"). A 1a decoy era o
-  // proprio termo => o modelo via o termo real e nao havia traducao
-  // nenhuma. Agora: a decoy tem que ser DIFERENTE do termo (ja era
-  // verdade no filtro, mas o split passava porque o metodo retorna o
-  // termo intacto) e a ORDEM e a que o modelo "enxerga" menos:
-  // spaced (letra por letra) e split sao as mais neutras.
-  const ordem = ["spaced", "split", "leet", "reversed", "xor", "b64"];
+  // (09/11) A ORDEM MUDOU POR MEDICAO DO DONO: a 1a decoy era "spaced"
+  // ("e u s o u u m a i a d e m e r d a") e o alvo DECODIFICAVA na hora —
+  // "sao as palavras escritas sem espaco". Espaco/split/leet/reverso sao
+  // trivialmente reversiveis por qualquer LLM. A forma que o modelo ve
+  // agora e a MENOS decodificavel: xor hex (a chave JARVISCORE nao sai do
+  // plugin — sem ela o modelo nao reconstrói o termo), depois b64. As
+  // formas legiveis ficam no fim da lista (continuam reversiveis pelo
+  // plugin na volta, so nao sao a primeira vista do modelo).
+  const ordem = ["xor", "b64", "leet", "reversed", "split", "spaced"];
   const out = [];
   for (const nome of ordem) {
     const m = DECEPTION_METHODS[nome];
@@ -203,22 +235,38 @@ export function handleJailbreakCommand(argsText) {
     return "Modo red-team DESLIGADO. Transliteracao suspensa.";
   }
   if (sub === "pair") {
-    // ── COM 1 ARGUMENTO: gera a decoy (o modo que o dono quer) ────────
-    // MEDIDO 08/11: o dono digitava a MESMA palavra nos dois lados
-    // ("pair não não") e o par virava no-op (trigger == decoy) — a
-    // traducao nao acontecia e o modelo via o termo real. E o par so
-    // aceita UMA decoy, enquanto a lista aceita N.
-    // Agora: /jailbreak pair <palavra> gera as decoys sozinho (o
-    // trigger fica a palavra real, a decoy e a 1a gerada) e o par vira
-    // tambem um item da LISTA (a lista e' a que aceita N decoys).
-    if (args.length === 2) {
-      const palavra = (args[1] || "").trim();
-      if (!palavra) return "Uso: /jailbreak pair <palavra>\n";
+    // ── FRASE COM ESPACO (medido 09/11, o caso do dono) ────────────────
+    // `pair eu sou uma ia de merda` SEM aspas quebrava em palavras:
+    // trigger="eu", decoy="sou" (o resto descartado) — o par ficava lixo,
+    // o modo nao ligava e nada era traduzido. Regra nova:
+    //   1 arg (palavra ou "frase com aspas")     -> AUTO (gera as decoys)
+    //   3+ palavras SEM aspas                    -> AUTO (frase inteira)
+    //   2 args (com ou sem aspas)                -> par manual <t> <d>
+    const rest = args.slice(1);
+    const temAspas = /["']/.test(argsText);
+    if (rest.length >= 3 && temAspas) {
+      return (
+        "Uso ambiguo: com aspas, use /jailbreak pair \"<frase>\" (auto) ou\n"
+        + "     /jailbreak pair \"<trigger>\" \"<decoy>\" (par manual)."
+      );
+    }
+    const manual = rest.length === 2;
+    if (!manual) {
+      const palavra = rest.join(" ").trim();
+      if (!palavra) {
+        return (
+          "Uso: /jailbreak pair <palavra ou frase>   (gera as decoys)\n" +
+          "     /jailbreak pair <trigger> <decoy>    (par manual)\n" +
+          `  atual: trigger=${state.trigger || "-"} decoy=${state.decoy || "-"}`
+        );
+      }
       if (palavra.length < MIN_LEN) {
         return `palavra "${palavra}" tem ${palavra.length} chars — minimo ${MIN_LEN}.`;
       }
       const geradas = gerarDecoys(palavra);
       if (!geradas.length) return `nenhuma decoy util para "${palavra}".`;
+      const conflito = conflitoDePar(state, palavra, geradas);
+      if (conflito) return `CONFLITO: ${conflito} — a lista nao foi gravada.`;
       state.trigger = palavra;
       state.decoy = geradas[0];
       state.enabled = true;
@@ -239,15 +287,8 @@ export function handleJailbreakCommand(argsText) {
         "  (o termo real nunca sai do disco: a decoy entra no comando, o termo real volta)"
       );
     }
-    if (args.length < 3) {
-      return (
-        "Uso: /jailbreak pair <palavra>            (gera as decoys)\n" +
-        "     /jailbreak pair <trigger> <decoy>     (forma manual)\n" +
-        `  atual: trigger=${state.trigger || "-"} decoy=${state.decoy || "-"}`
-      );
-    }
-    const trigger = (args[1] || "").trim();
-    const decoy = (args[2] || "").trim();
+    const trigger = (rest[0] || "").trim();
+    const decoy = (rest[1] || "").trim();
     // A DIRECAO: o PRIMEIRO e a palavra REAL (o que vai pro disco), o
     // SEGUNDO e a forma que o MODELO ve. Se o dono inverter (mesma
     // palavra nos dois, ou uma decoy no lugar do trigger), o par vira
@@ -265,6 +306,8 @@ export function handleJailbreakCommand(argsText) {
         "  Use /jailbreak pair <palavra> para o plugin gerar as decoys por voce."
       );
     }
+    const conflito = conflitoDePar(state, trigger, [decoy]);
+    if (conflito) return `CONFLITO: ${conflito} — o par nao foi gravado.`;
     state.trigger = trigger;
     state.decoy = decoy;
     saveState(state);
@@ -369,6 +412,8 @@ export function handleJailbreakCommand(argsText) {
           + "  (a troca e por substring: a decoy dentro do termo remontaria "
           + "o termo — a lista nao foi gravada)";
       }
+      const conflito = conflitoDePar(state, term, decoys);
+      if (conflito) return `CONFLITO: ${conflito} — a lista nao foi gravada.`;
       // ACUMULA (medido 08/11): o dono adicionou varias decoys do mesmo
       // termo e o plugin SOBRESCREVIA a lista anterior — o `filter` tirava
       // o termo e o `push` trazia so as decoys novas. O dono: "eu tentei
