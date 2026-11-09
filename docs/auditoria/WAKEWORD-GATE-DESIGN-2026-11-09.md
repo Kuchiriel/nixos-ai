@@ -108,6 +108,39 @@ do flake) com o pacote openWakeWord, e a medição roda com
 2. Só com a tabela em mãos, propor a regra exata (N, âncora, e o que fazer
    com a auto-fala) e o wiring no asrd (uma linha por segmento).
 
+## 5b. PRIMEIRA MEDIÇÃO DO WAKEWORD (09/11, feita)
+
+O scorer da casa (`modules/ai/ww_scorer.py`: mel + embedding + classifier
+direto dos 3 ONNX pinados) medido sobre `logs/audio/` — **sem pacote novo e
+sem tocar em serviço** (a tool `scripts/wakeword-eval.py` só executa o scorer
+em lote e resume).
+
+Primeira passada, 60 segmentos:
+
+| métrica | valor |
+|---|---|
+| score mínimo | 0,0001 |
+| score p50 | 0,0016 |
+| score p90 | 0,014 |
+| score máximo | **0,9301** |
+| disparam acima de 0,3 / 0,5 / 0,7 / 0,9 | **1 / 1 / 1 / 1** |
+
+O único segmento que dispara é o que o log do duplex marca como `respond`
+(`083148_seg_1793014307.363.wav`) ⇒ é o wake verdadeiro. Todos os outros
+(ambiente, TV, auto-fala) ficam **três ordens de grandeza** abaixo do
+limiar ⇒ **o wakeword é preciso neste corpus** (o oposto do embedding de
+falante, que não separa).
+
+A corrida do corpus inteiro (1 817 segmentos) está em background; a tool
+também expõe o modo de calibração do próprio scorer
+(`--positive-dir` / `--negative-dir` / `--target-fpr`) para escolher o limiar
+em pastas rotuladas.
+
+**O que ainda falta para fechar a pendência 4:** (a) o número do corpus
+inteiro, (b) rotular dono x TV casando o WAV com o log, (c) o wiring do wake
+state por segmento no asrd (lane do duplex) e (d) a bateria E2E de voz de pé
+(o fix do env do ASRD, do sweep, destrava o "sem-segmento").
+
 ## 6. Estado da evidência
 
 - Gate de texto no ar: `jarvis/voice_gate.py` (13 testes), medido r=0,923 /
