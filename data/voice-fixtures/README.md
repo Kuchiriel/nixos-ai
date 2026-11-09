@@ -90,6 +90,44 @@ O empacotador para material solto é `scripts/voice-trigger-fixtures.py`
 **Gap conhecido (do manifesto):** genuíno PT = 0 no Scicom inteiro, e
 `speech_in_noise` ficou fora do pacote (vivia em `/tmp`, volátil).
 
+### Atalho: o material está no HF público (medido 09/11, sweep-2026-11)
+
+Não é preciso passar pelo Kaggle. O mesmo recorte (as mesmas categorias, o mesmo schema
+`id` + `audio.bytes` em FLAC) está no dataset **HF `Scicom-intl/Whisper-Hallucination`**,
+que é **público** (o manifesto diz "upload privado", mas a API responde `private: false`):
+
+```
+https://huggingface.co/datasets/Scicom-intl/Whisper-Hallucination/resolve/main/data/silence/test-00000-of-00001.parquet
+https://huggingface.co/datasets/Scicom-intl/Whisper-Hallucination/resolve/main/data/nonspeech/test-00000-of-00001.parquet
+https://huggingface.co/datasets/Scicom-intl/Whisper-Hallucination/resolve/main/data/music/test-00000-of-00001.parquet
+https://huggingface.co/datasets/Scicom-intl/Whisper-Hallucination/resolve/main/data/reduplication/test-00000-of-00001.parquet
+```
+
+Baixados direto para `~/.local/share/jarvis/voice-trigger/` (335 MB no total) e a
+bateria rodou pela primeira vez com números reais:
+
+```bash
+D=~/.local/share/jarvis/voice-trigger; mkdir -p "$D"
+for f in silence nonspeech music reduplication; do
+  curl -sL -o "$D/$f.parquet" \
+    "https://huggingface.co/datasets/Scicom-intl/Whisper-Hallucination/resolve/main/data/$f/test-00000-of-00001.parquet"
+done
+scripts/duplex-eval.py --trigger-bench --samples 10 --log /tmp/opencode/trigger-bench.json
+```
+
+**Primeira medição real do trigger bench (10 clips por categoria, 09/11 07:22)**:
+
+- **silence**: alucinou 7/10 (taxa bruta 0,7), a lista mata 1, fica 0,6
+- **nonspeech**: alucinou 9/10 (0,9), a lista mata 6, fica 0,3
+- **music**: alucinou 10/10 (1,0), a lista mata 3, fica 0,7
+- **reduplication**: alucinou 10/10 (1,0), a lista mata 7, fica 0,3
+- **total**: 36/40 alucinou (0,90 bruto), a lista mata 17, fica 19/40 (0,47)
+
+Ou seja: o ASR alucina em quase todo gatilho (o pior é música e repetição, 1,0), e **a
+lista de negação sozinha não fecha** (ainda 0,47): o que fecha é o gate v6 completo, que
+mora no asrd com as listas combinadas. A comparação com o MFCC/WE speaker é outra frente
+(separabilidade do falante), e ela não muda este número.
+
 ## Regra
 
 Qualquer artefato de avaliação (áudio, parquets, reports grandes) vai para um caminho
