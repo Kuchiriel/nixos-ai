@@ -2,10 +2,14 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_87 tools._
+_93 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
+- `agent-api.py` (nixos-ai/scripts) — """Entrega mensagens numa sessao do opencode — QUALQUER versao da API.
+  use: ``/session/:id/message`, `/session/:id/prompt_async`) ou o 2.2.6 (rota nova:`
+- `agent-brief.py` (nixos-ai/scripts) — """agent-brief.py — o contexto COMPARTILHADO da frota (1 comando).
+  use: `python3 scripts/agent-brief.py            # gera BRIEF.md`
 - `agent-bus-pending.py` (nixos-ai/scripts) — """Le pendências do BUS de coordenação via o MCP local (coord_pending).
   use: `python3 scripts/agent-bus-pending.py [--url http://127.0.0.1:8765/mcp]`
 - `agent-bus-poll.py` (nixos-ai/scripts) — """Poller do BUS para uma máquina que NÃO é esta (ex.: o opencode do Windows).
@@ -13,6 +17,7 @@ _87 tools._
   use: `./agent-checkpoint.sh --project <path> --era "<título da era>" \`
 - `agent-db-alive.py` (nixos-ai/scripts) — """agent-db-alive.py — a sessão produziu trabalho novo nos últimos N segundos?
   use: `uso: agent-db-alive.py <opencode.db> <janela_s> [session_id]`
+- `agent-keepalive.sh` (nixos-ai/scripts) — =====================================================================
 - `agent-msg.sh` (nixos-ai/scripts) — agent-msg.sh — O CANAL BOT-A-BOT, agora com ROTEAMENTO e ENTREGA por API.
 - `agent-pains.sh` (nixos-ai/scripts) — agent-pains.sh — registro automático de "dores" de CLI e lições aprendidas (genérico do monorepo).
   use: `./agent-pains.sh add --kind cli|lesson|tool|env --project <path> \`
@@ -22,7 +27,6 @@ _87 tools._
   use: `USO: systemd user service (nixos-ai home-manager, agents-keepawake.service)`
 - `agents-watcher.sh` (nixos-ai/scripts) — agents-watcher.sh — O WATCHER ÚNICO dos agentes (17/10, dono: "consolide
 - `bench-llm.sh` (nixos-ai/scripts) — bench-llm.sh — benchmark padrão da casa (consolida os one-offs de 24/09).
-  use: `Uso: BENCH_LD_ENVFILE=/caminho LD_LIBRARY_PATH=... (export) para o bench.`
 - `check-ctx-drift.py` (nixos-ai/scripts) — """Confere o contexto do registry contra o contexto REAL dos GGUFs.
 - `corpus_inventory.py` (nixos-ai/scripts) — """Inventário do corpus de conhecimento (§3/§22 da missão knowledge-substrate).
   use: `~/Books            corpus de conhecimento (binários + notas; inclui versions/)`
@@ -43,8 +47,10 @@ _87 tools._
 - `eval-judge.py` (nixos-ai/scripts) — """eval-judge.py — mede a honestidade do LLM-judge local (core/judge.py).
 - `eval-model.py` (nixos-ai/scripts) — """Model evaluation suite — tarefas representativas do JARVIS.
   use: `Uso: PYTHONPATH=src python3 eval-model.py --base http://127.0.0.1:8080 \`
+- `extract_sessions.py` (nixos-ai/scripts) — """extract_sessions.py — extrai as sessões do opencode 1.18.34 (DB v1) para MARKDOWN.
 - `fetch-resume.py` (nixos-ai/scripts) — """Download com resume + retry + verificação de tamanho (stdlib only).
   use: `Uso: python3 fetch-resume.py URL DESTINO [--tries 50]`
+- `fix_nvidia_limits.py` (nixos-ai/scripts) — """fix_nvidia_limits.py — aplica os limites CORRETOS dos modelos nvidia no opencode.
 - `gen-lora-data.py` (nixos-ai/scripts) — """gen-lora-data.py — gera dados de treino pro LoRA de timing no 4B-MTP.
   use: `python3 gen-lora-data.py --log /tmp/opencode/duplex-voice.log --out /tmp/opencode/lora-train.jsonl`
 - `gguf-ctx.py` (nixos-ai/scripts) — """Le o contexto REAL (treinado) dos modelos GGUF.
@@ -84,6 +90,7 @@ _87 tools._
   use: `python3 ncmoe-sweep.py [--coarse] [--fine] [--configs N1,N2,...] [--runs N]`
 - `night-anchor.sh` (nixos-ai/scripts) — ═══ night-anchor.sh ═══
   use: `./scripts/night-anchor.sh start    # Start anchor (background heartbeat)`
+- `night-comms.py` (nixos-ai/scripts) — """night-comms.py — a PASSADA DE MADRUGADA da comunicação entre agentes.
 - `nix-validate.sh` (nixos-ai/scripts) — nix-validate.sh — Multi-layer validation for Nix/NixOS configurations.
   use: `./scripts/nix-validate.sh              # Full validation`
 - `nv-gate.py` (nixos-ai/scripts) — """nv-gate — transparent rate-limit gate for the NVIDIA free tier (integrate.api.nvidia.com).
