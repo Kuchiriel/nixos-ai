@@ -128,6 +128,22 @@ lista de negação sozinha não fecha** (ainda 0,47): o que fecha é o gate v6 c
 mora no asrd com as listas combinadas. A comparação com o MFCC/WE speaker é outra frente
 (separabilidade do falante), e ela não muda este número.
 
+### Quanto o gate de texto completo mata (medido 09/11, sweep-2026-11)
+
+Sobre o acumulado do bench (**73 alucinações** observadas, todas as categorias, todos os
+runs), aplicando as listas do repo com normalização de pontuação e caixa:
+
+- `whisper-halluc-lexicon-pt` (a lista que o bench usa): mata **46/73**, sobra **0,37**
+- `lexicon-pt` + `ban-pt-hard`: mata 46/73, sobra 0,37 (a lista dura não acrescenta nada)
+- `lexicon-pt` + `ban-pt-hard` + `ban-multilingual`: mata **50/73**, sobra **0,32**
+- só `ban-pt-hard`: mata 1/73 (praticamente nada)
+- só `ban-multilingual`: mata 39/73, sobra 0,47
+
+Ou seja: **o gate de texto completo (as três listas combinadas, que é o v6 do asrd) derruba
+a alucinação de gatilho de 0,90 para 0,32**, e o resto (0,32) precisa de outra frente: o
+VAD/segmentação, o gate de falante (que não separa, medido) ou o wakeword. A lista
+multilíngue é a que mais contribui depois do léxico PT.
+
 ## Regra
 
 Qualquer artefato de avaliação (áudio, parquets, reports grandes) vai para um caminho
