@@ -104,6 +104,14 @@ roda da cópia do store:
 cd ~/projects/nixos-ai && ./rebuild-host.sh
 ```
 
+**E uma decisão de capacidade que é sua:** o gate roda a **8 RPM** (o teto efetivo
+medido da chave, não os 40 nominais) e a fila de 10 a 21 s é a consequência. Os dois
+fixes acima resolvem os sintomas (não há mais reenvio inútil, e as entregas da frota
+não ficam na fila), mas **a vazão em si** só sobe com **mais chaves** ou com um
+**relay dedicado**. Aumentar o bucket não resolve: os 40 nominais da chave não se
+sustentam, e forçar o bucket só empurra o 429 para o upstream. É a mesma conta que a
+opção de relay da auditoria spiritvale (o Mullvad local ou a onion hospedada).
+
 ## 5. Já está no main, sem decisão pendente
 
 - Runtime do speaker-ID (`torchaudio` no devShell, VAD do cache local, env do ASRD
