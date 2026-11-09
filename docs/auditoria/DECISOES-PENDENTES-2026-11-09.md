@@ -55,9 +55,10 @@ A matrícula do dono ficou pronta (8 takes coerentes, consistência interna 0,85
 0,9006, perfil gitignored e local) e o perfil **está ativo no ASRD**. Ela não vira gate
 de produção por causa da separabilidade, não por falta de dado.
 
-## 4. Rebuild para o gate (dois fixes medidos, no código)
+## 4. Rebuild para o gate (dois fixes medidos, já no `main`)
 
-Ambos no `main`, ambos precisam de rebuild porque o gate roda da cópia do store:
+A frota adotou os dois (checkpoint das 06:57), e ambos precisam de rebuild porque o gate
+roda da cópia do store:
 
 - **Disjuntor de contexto** (`932a0324`): o gate aprende o tamanho recusado por modelo e
   responde 400 local, sem reenviar. Prova: a segunda request do mesmo tamanho não chega
@@ -85,8 +86,11 @@ cd ~/projects/nixos-ai && ./rebuild-host.sh
 
 ## 6. Pendente com a peer, não com você
 
-Os fixtures do trigger bench: a fonte original (o pacote "kaggle-pkg" do SCICOM com as
-quatro categorias) não aparece no GitHub, no HF nem no Kaggle. Proposta que mandei:
-**silence e reduplication são sintetizáveis** (sem download) e só nonspeech e music
-precisam de fonte pequena. O script de empacotamento (`voice-trigger-fixtures.py`) já
-está pronto.
+Os fixtures do trigger bench: a coord-naming **recuperou o kernel do Kaggle** que os
+produzia (commit `fbb71be2`) e o `--fixtures` do bench já aponta por default para o
+caminho durável (`~/.local/share/jarvis/voice-trigger/`), então a bateria E2E tem base de
+novo. A fonte do corpus que eu procurava está no HF e no Kaggle como
+`Scicom-intl/Malaysian-Chinese-Emilia` (164 GB de storage, com os zips de áudio
+part_01 a part_10), e a alternativa barata que propus continua valendo: silence e
+reduplication são sintetizáveis sem download, e só nonspeech e music precisam de fonte
+pequena.
