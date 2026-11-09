@@ -50,7 +50,6 @@ _94 tools._
 - `extract_sessions.py` (nixos-ai/scripts) — """extract_sessions.py — extrai as sessões do opencode 1.18.34 (DB v1) para MARKDOWN.
 - `fetch-resume.py` (nixos-ai/scripts) — """Download com resume + retry + verificação de tamanho (stdlib only).
   use: `Uso: python3 fetch-resume.py URL DESTINO [--tries 50]`
-- `fix_nvidia_limits.py` (nixos-ai/scripts) — """fix_nvidia_limits.py — aplica os limites CORRETOS dos modelos nvidia no opencode.
 - `gen-lora-data.py` (nixos-ai/scripts) — """gen-lora-data.py — gera dados de treino pro LoRA de timing no 4B-MTP.
   use: `python3 gen-lora-data.py --log /tmp/opencode/duplex-voice.log --out /tmp/opencode/lora-train.jsonl`
 - `gguf-ctx.py` (nixos-ai/scripts) — """Le o contexto REAL (treinado) dos modelos GGUF.
@@ -124,6 +123,7 @@ _94 tools._
   use: `Usage: ./scripts/setup-hackmd.sh`
 - `silero_vad_iterator.py` (nixos-ai/scripts) — This is copied from silero-vad's vad_utils.py:
 - `spk-enroll.py` (nixos-ai/scripts) — """spk-enroll.py — matricula a voz do dono para o gate de audio da voz.
+- `spk-separability.py` (nixos-ai/scripts) — """spk-separability.py — mede se o gate de audio (matricula do dono) SEPARA vozes.
 - `sync-vault.sh` (nixos-ai/scripts) — Sync important docs to Obsidian vault (not everything)
   use: `Run: ./scripts/sync-vault.sh`
 - `thermal-curve.sh` (nixos-ai/scripts) — thermal-curve.sh — Measure thermal degradation over 5 minutes of continuous inference
