@@ -112,6 +112,12 @@ não ficam na fila), mas **a vazão em si** só sobe com **mais chaves** ou com 
 sustentam, e forçar o bucket só empurra o 429 para o upstream. É a mesma conta que a
 opção de relay da auditoria spiritvale (o Mullvad local ou a onion hospedada).
 
+**Aviso sobre o rebuild e a voz:** o `whisper-server` é unit systemd ✓ e reinicia com
+o rebuild, mas o `duplex-voice` e o `duplex-asrd` são **processos avulsos**, de 08/11
+11:02, e **não são units**: o rebuild não os reinicia. Para a bateria E2E de voz rodar com
+o código novo (e com o runtime do speaker-ID no path do asrd), quem reinicia essa pilha
+é a lane de voz, não o rebuild.
+
 ## 5. Já está no main, sem decisão pendente
 
 - Runtime do speaker-ID (`torchaudio` no devShell, VAD do cache local, env do ASRD
