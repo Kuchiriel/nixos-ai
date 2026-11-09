@@ -24,9 +24,11 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import sys
+import re
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -66,6 +68,58 @@ def _post(url: str, payload: dict, timeout: int = 25):
         return r.status, r.read()[:300].decode(errors="replace")
 
 
+# (09/11, sweep-2026-11) DEDUPE NA ENTREGA: o loop medido na casa vinha
+# daqui. Uma nota repetida entra na INBOX da sessao (delivery=queue) e o
+# opencode processa a fila num turno novo: medido, 10 confirmacoes
+# identicas ocuparam um turno inteiro cada. O dedupe no watcher nao
+# resolvia, porque o caminho do acorda nao e o poll dele e sim a fila da
+# sessao. Aqui a entrega repetida nem chega na fila.
+_STATE_DIR = Path(os.environ.get("AGENTS_DELIVER_STATE",
+                                "/tmp/opencode/agents-watcher"))
+
+
+_BOILERPLATE = re.compile(
+    r"^\s*(recebido( e conferido)?|confirmado|conferido|ok|feito|obrigado|"
+    r"blz|thanks?|\W+)\s*[:,\.]?\s*", re.I)
+
+
+def _dedupe_key(text: str) -> str:
+    """Chave do texto: o CONTEUDO, sem o boilerplate de confirmacao.
+
+    O mesmo aviso chega com variacoes ("ha 3 dias" ou nao) e as vezes com
+    prefijos diferentes ("Recebido e conferido:" / "Confirmado:"), entao a
+    chave tira o prefixo de cortesia e usa os 80 primeiros caracteres do
+    que sobrou. Duas mensagens de conteudo diferente divergem antes disso.
+    """
+    t = re.sub(r"\s+", " ", str(text or "")).strip().lower()
+    t = _BOILERPLATE.sub("", t, count=1)
+    return t[:80]
+
+
+def _dedupe_path(base: str, session: str) -> Path:
+    tag = hashlib.sha1(f"{base}|{session}".encode()).hexdigest()[:16]
+    return _STATE_DIR / f"delivered.{tag}.txt"
+
+
+def _already_delivered(path: Path, key: str) -> bool:
+    try:
+        if not path.exists():
+            return False
+        return any(line.strip() == key for line in
+                   path.read_text(errors="ignore").splitlines())
+    except Exception:
+        return False
+
+
+def _mark_delivered(path: Path, key: str) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", errors="ignore") as f:
+            f.write(key + "\n")
+    except Exception:
+        pass
+
+
 def deliver(base: str, session: str, text: str, *, note: bool = False,
             timeout: int = 25) -> tuple[int, str]:
     """Entrega o texto. Retorna (status, corpo). Levanta RuntimeError."""
@@ -74,6 +128,11 @@ def deliver(base: str, session: str, text: str, *, note: bool = False,
     # noReply=true). Uma "nota" no 2.x = queue (a mensagem fica na inbox
     # e o agente a ve no proximo turno) — entrego assim, com o aviso.
     novo = {"text": text, "delivery": "queue"}
+    # dedupe: nao enfileira o que ja foi entregue (o turno do agente e o preco)
+    _dpath = _dedupe_path(base, session)
+    _dkey = _dedupe_key(text)
+    if _already_delivered(_dpath, _dkey):
+        return 208, ("dedupe: texto ja entregue a esta sessao, nao reenfileirado")
     for url, payload in (
         (f"{base}/api/session/{session}/prompt", novo),
         # 2.x sem o prefixo (alguns builds) e 1.x com {parts, noReply}
@@ -84,6 +143,7 @@ def deliver(base: str, session: str, text: str, *, note: bool = False,
     ):
         try:
             st, out = _post(url, payload, timeout=timeout)
+            _mark_delivered(_dpath, _dkey)
             return st, out
         except urllib.error.HTTPError as e:
             body = (e.read() or b"")[:200].decode(errors="replace")
