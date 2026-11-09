@@ -55,6 +55,15 @@ A matrícula do dono ficou pronta (8 takes coerentes, consistência interna 0,85
 0,9006, perfil gitignored e local) e o perfil **está ativo no ASRD**. Ela não vira gate
 de produção por causa da separabilidade, não por falta de dado.
 
+**E o gate de texto não fecha a alucinação de gatilho (medido depois, 09/11):** a
+bateria de trigger deu **111 de 120 alucinações (0,925)** e o gate real do asrd mata
+**zero** delas, porque ele só mata a frase do léxico quando o áudio também está fraco
+(`no_speech_prob` mediano 0,000 e `avg_logprob` mediano entre -0,22 e -0,30, contra um
+limiar de -0,45: a transcrição alucinada chega confiante). O resíduo tem de ser tratado
+**antes do ASR** (o VAD não deveria mandar silêncio digital para o modelo: o ASR
+respondeu "E aí" a um clip de zeros) ou **no gate de voz**, com a wakeword. A deny-list
+segue útil para o outro caso, o de frase alucinada sobre áudio fraco de verdade.
+
 **O que ainda falta para o wakeword (09/11):** o limiar **não pode ser chutado**. No
 corpus de 1 817 segmentos da casa o wakeword dispara em 6 acima de 0,5 (0,33 %), mas ao
 rotular pelo transcript do log (**66 segmentos**) **nenhum é positivo** (o corpus é fala
