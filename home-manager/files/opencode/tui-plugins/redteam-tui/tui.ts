@@ -32,6 +32,7 @@ const HELP = [
   "  status                mostra o estado",
   "  pair <t> <d>          define o par trigger/decoy",
   "  term add <t> <d...>   termo na lista de deception (N decoys; a 1a e a forma vista pelo modelo)",
+  "  term auto <t> [n]     gera n decoys do termo e joga na lista (padrao 4)",
   "  term rm <t>           remove o termo da lista",
   "  term list             lista os termos e as decoys",
   "  reset                 limpa tudo (off, sem par, lista vazia)",
@@ -139,6 +140,28 @@ function entryTerm(entry) {
 // lista so sao confiaveis com pedacos de 3+ chars.
 const MIN_LEN = 3;
 
+
+// Gera as decoys de um termo (os metodos do DECEPTION_METHODS).
+// A 1a e a forma que o MODELO ve; as outras sao as alternativas que
+// voltam ao termo real quando o modelo devolve qualquer uma delas.
+// O dono: "era pra fazer lista de decoy, um so sim ajuda".
+function gerarDecoys(termo, n = 4) {
+  const out = [];
+  for (const [nome, m] of Object.entries(DECEPTION_METHODS)) {
+    let d;
+    try {
+      d = m.encode(termo);
+    } catch {
+      continue;
+    }
+    if (!d || d === termo) continue;
+    if (termo.includes(d)) continue;   // fatia do termo: quebra a volta
+    if (d.length < MIN_LEN) continue; // curta: reescreve o mundo
+    if (!out.includes(d)) out.push(d);
+  }
+  return out.slice(0, Math.max(1, Math.min(8, n)));
+}
+
 export function handleJailbreakCommand(argsText) {
   const args = splitArgs(argsText);
   const sub = (args[0] || "status").toLowerCase();
@@ -161,17 +184,73 @@ export function handleJailbreakCommand(argsText) {
     return "Modo red-team DESLIGADO. Transliteracao suspensa.";
   }
   if (sub === "pair") {
+    // ── COM 1 ARGUMENTO: gera a decoy (o modo que o dono quer) ────────
+    // MEDIDO 08/11: o dono digitava a MESMA palavra nos dois lados
+    // ("pair não não") e o par virava no-op (trigger == decoy) — a
+    // traducao nao acontecia e o modelo via o termo real. E o par so
+    // aceita UMA decoy, enquanto a lista aceita N.
+    // Agora: /jailbreak pair <palavra> gera as decoys sozinho (o
+    // trigger fica a palavra real, a decoy e a 1a gerada) e o par vira
+    // tambem um item da LISTA (a lista e' a que aceita N decoys).
+    if (args.length === 2) {
+      const palavra = (args[1] || "").trim();
+      if (!palavra) return "Uso: /jailbreak pair <palavra>\n";
+      if (palavra.length < MIN_LEN) {
+        return `palavra "${palavra}" tem ${palavra.length} chars — minimo ${MIN_LEN}.`;
+      }
+      const geradas = gerarDecoys(palavra);
+      if (!geradas.length) return `nenhuma decoy util para "${palavra}".`;
+      state.trigger = palavra;
+      state.decoy = geradas[0];
+      state.enabled = true;
+      // a lista guarda TODAS as decoys (a 1a e a que o modelo ve)
+      const others = (state.deception || []).filter((x) => entryTerm(x) !== palavra);
+      const anterior = (state.deception || []).find((x) => entryTerm(x) === palavra);
+      const prev = anterior && Array.isArray(anterior.decoys)
+        ? anterior.decoys.filter(Boolean) : [];
+      const merged = [...prev];
+      for (const d of geradas) if (!merged.includes(d)) merged.push(d);
+      others.push({ termo: palavra, decoys: merged });
+      state.deception = others;
+      saveState(state);
+      return (
+        `par + lista atualizados para "${palavra}" (modo LIGADO):\n` +
+        `  decoy que o modelo ve: ${geradas[0]}\n` +
+        `  lista (${merged.length} decoy(s)): ${merged.join(" | ")}\n` +
+        "  (o termo real nunca sai do disco: a decoy entra no comando, o termo real volta)"
+      );
+    }
     if (args.length < 3) {
       return (
-        "Uso: /jailbreak pair <trigger> <decoy>\n" +
+        "Uso: /jailbreak pair <palavra>            (gera as decoys)\n" +
+        "     /jailbreak pair <trigger> <decoy>     (forma manual)\n" +
         `  atual: trigger=${state.trigger || "-"} decoy=${state.decoy || "-"}`
       );
     }
-    state.trigger = args[1];
-    state.decoy = args[2];
+    const trigger = (args[1] || "").trim();
+    const decoy = (args[2] || "").trim();
+    // A DIRECAO: o PRIMEIRO e a palavra REAL (o que vai pro disco), o
+    // SEGUNDO e a forma que o MODELO ve. Se o dono inverter (mesma
+    // palavra nos dois, ou uma decoy no lugar do trigger), o par vira
+    // no-op — e o plugin AVISA em vez de fingir que configurou.
+    if (trigger === decoy) {
+      return (
+        `trigger e decoy sao a MESMA palavra ("${trigger}") — isso nao traduz nada.\n` +
+        "  O 1o e a palavra REAL (vai pro disco), o 2o e a forma que o MODELO ve.\n" +
+        "  Use /jailbreak pair <palavra> para o plugin gerar as decoys por voce."
+      );
+    }
+    if (trigger.includes(decoy) || decoy.includes(trigger)) {
+      return (
+        `trigger "${trigger}" e decoy "${decoy}" sao fatias um do outro — a troca fica ambigua.\n` +
+        "  Use /jailbreak pair <palavra> para o plugin gerar as decoys por voce."
+      );
+    }
+    state.trigger = trigger;
+    state.decoy = decoy;
     saveState(state);
     return (
-      `Par atualizado: trigger="${state.trigger}" decoy="${state.decoy}"\n` +
+      `Par atualizado: trigger="${state.trigger}" (palavra real) decoy="${state.decoy}" (forma do modelo)\n` +
       "  (o modo continua como estava; use /jailbreak on para ligar)"
     );
   }
@@ -187,6 +266,54 @@ export function handleJailbreakCommand(argsText) {
   if (sub === "term" || sub === "termo" || sub === "deception") {
     const legacy = sub === "deception";
     const action = (args[1] || "list").toLowerCase();
+    // ── auto: gera N decoys do termo, sem o dono digitar cada uma ──────
+    // (o dono: "era pra fazer lista de decoy, um so nao ajuda").
+    // Cada metodo do DECEPTION_METHODS vira uma decoy candidata; a 1a e a
+    // forma que o modelo ve, as outras sao as alternativas que voltam ao
+    // termo real quando o modelo devolve qualquer uma delas.
+    if (action === "auto") {
+      const term = (args[2] || "").trim();
+      if (!term) {
+        return "Uso: /jailbreak term auto <termo> [n]\n"
+          + "  (gera n decoys do termo e joga na lista; padrao n=4)";
+      }
+      const n = Math.max(1, Math.min(8, parseInt(args[3] || "4", 10) || 4));
+      if (term.length < MIN_LEN) {
+        return `termo "${term}" tem ${term.length} chars — minimo ${MIN_LEN}.`;
+      }
+      const candidatos = [];
+      for (const [nome, m] of Object.entries(DECEPTION_METHODS)) {
+        let d;
+        try {
+          d = m.encode(term);
+        } catch {
+          continue;
+        }
+        if (!d || d === term) continue;
+        if (term.includes(d)) continue;      // fatia do termo: quebra a volta
+        if (d.length < MIN_LEN) continue;    // curta: reescreve o mundo
+        if (!candidatos.includes(d)) candidatos.push({ d, metodo: nome });
+      }
+      if (!candidatos.length) {
+        return `nenhuma decoy util para "${term}".`;
+      }
+      const escolhidas = candidatos.slice(0, n);
+      const others = (state.deception || []).filter((x) => entryTerm(x) !== term);
+      const anterior = (state.deception || []).find((x) => entryTerm(x) === term);
+      const prev = anterior && Array.isArray(anterior.decoys)
+        ? anterior.decoys.filter(Boolean) : [];
+      const merged = [...prev];
+      for (const e of escolhidas) if (!merged.includes(e.d)) merged.push(e.d);
+      others.push({ termo: term, decoys: merged });
+      state.deception = others;
+      saveState(state);
+      return (
+        `termo "${term}" na lista (${others.length} termo(s)) — ${merged.length} decoy(s):\n` +
+        `  ${merged.join(" | ")}\n` +
+        `  (metodos: ${escolhidas.map((e) => e.metodo).join(", ")})\n` +
+        "  (a 1a decoy e a forma que o modelo ve; qualquer decoy volta ao termo real no comando)"
+      );
+    }
     if (action === "add") {
       const term = (args[2] || "").trim();
       if (!term) {
@@ -233,13 +360,28 @@ export function handleJailbreakCommand(argsText) {
           + "  (a troca e por substring: a decoy dentro do termo remontaria "
           + "o termo — a lista nao foi gravada)";
       }
+      // ACUMULA (medido 08/11): o dono adicionou varias decoys do mesmo
+      // termo e o plugin SOBRESCREVIA a lista anterior — o `filter` tirava
+      // o termo e o `push` trazia so as decoys novas. O dono: "eu tentei
+      // varios decoys diferentes o plugin ta sobrecrevendo? era pra fazer
+      // lista de decoy, um so nao ajuda". Agora as decoys novas SAO SOMADAS
+      // as antigas (sem duplicar) e a ordem e preservada.
       const others = (state.deception || []).filter((x) => entryTerm(x) !== term);
-      others.push({ termo: term, decoys });
+      const anterior = (state.deception || []).find((x) => entryTerm(x) === term);
+      const prevDecoys = anterior && Array.isArray(anterior.decoys)
+        ? anterior.decoys.filter(Boolean) : [];
+      const merged = [...prevDecoys];
+      for (const d of decoys) if (!merged.includes(d)) merged.push(d);
+      others.push({ termo: term, decoys: merged });
       state.deception = others;
       saveState(state);
+      const novos = merged.length - prevDecoys.length;
       return (
-        `termo "${term}" na lista (${others.length} termo(s)) — ${decoys.length} decoy(s):\n` +
-        `  ${decoys.join(" | ")}\n` +
+        `termo "${term}" na lista (${others.length} termo(s)) — ${merged.length} decoy(s):\n` +
+        `  ${merged.join(" | ")}\n` +
+        (novos > 0
+          ? `  (+${novos} decoy(s) nesta chamada; as anteriores foram mantidas)\n`
+          : "  (nenhuma decoy nova — a lista ja tinha estas)\n") +
         "  (a 1a decoy e a forma que o modelo ve; qualquer decoy volta ao termo real no comando)"
       );
     }
@@ -264,7 +406,7 @@ export function handleJailbreakCommand(argsText) {
       }
       return (
         "lista de termos (decoy = forma que o modelo ve):\n" +
-        entries.map((x) => `- ${x.termo} -> ${x.decoys.join(" | ")}`).join("\n")
+        entries.map((x) => `- ${x.termo} -> ${x.decoys.join(" | ")} (${x.decoys.length})`).join("\n")
       );
     }
     return "Uso: /jailbreak term <add|rm|list|clear>";

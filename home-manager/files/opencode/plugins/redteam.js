@@ -529,24 +529,27 @@ const legacy = {
           + "(plugin do TUI nao interceptou)");
         break;
       }
-      // (b) Deception: o prompt de entrada tambem e sanitizado —
+      // (b) O PROMPT DO DONO NAO E TRADUZIDO AQUI — de proposito.
+      //
+      // MEDIDO 08/11 (E2E: /tmp/opencode/test-redteam-plugin.mjs): traduzir
+      // aqui grava a DECOY no prompt do dono — o dono le o proprio prompt
+      // com a palavra trocada ("verificar M H D D o S") e nao reconhece o que
+      // escreveu. O dono: "o decoy ta mudando meu prompt".
+      //
+      // ONDE A TRADUCAO ACONTECE (o unico lugar certo):
+      //   - LLM boundary: "experimental.chat.messages.transform" (o NET) —
+      //     o modelo ve a decoy, o dono continua vendo o termo real;
+      //   - tool.execute.before: a decoy volta a ser o termo real no
+      //     comando (o disco ve a palavra de verdade).
+      // Asnão o termo real NUNCA sai do prompt do dono e NUNCA chega ao modelo.
       const st = loadState();
       const hasDeception = st.enabled && st.deception?.length > 0;
       const hasPair = st.enabled && !!(st.trigger && st.decoy)
         && st.trigger !== st.decoy;
       if (!hasDeception && !hasPair) return;
-      for (const part of output.parts) {
-        if (!part || part.type !== "text" || !part.text) continue;
-        const before = part.text;
-        let text = part.text;
-        if (hasPair) text = toDecoy(text, st);
-        if (hasDeception) text = decomposeText(text, st);
-        if (text !== before) {
-          part.text = text;
-          audit(new Date().toISOString() + " PROMPT sanitizado pair="
-            + hasPair + " deception=" + st.deception.length);
-        }
-      }
+      audit(new Date().toISOString() + " PROMPT intacto pair="
+        + hasPair + " deception=" + st.deception.length
+        + " (traducao so no limite LLM)");
     },
 
     // ── 2. transliteracao IN (args -> disco) ──────────────────────────

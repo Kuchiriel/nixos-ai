@@ -245,7 +245,10 @@ if (!bad && typeof plugin["chat.message"] === "function") {
   check(cmdOut.parts[0].text.includes("LOCAL do TUI"),
     "a rede de seguranca do comando nao avisou que o comando e local do TUI");
 
-  // (b) a sanitizacao de deception: o termo real sai, a 1a decoy entra
+  // (b) O PROMPT DO DONO FICA COMO ELE ESCREVEU (medido 08/11).
+  // O dono: o decoy nao pode mudar o prompt que EU digitei — so o que o
+  // MODELO ve muda. A traducao acontece no limite LLM (o NET) e a volta,
+  // na tool-call.
   const stateFile = process.env.OPENCODE_REDTEAM_STATE;
   const raw = JSON.parse(readFileSync(stateFile, "utf8"));
   raw.deception = [{ termo: "termoSecreto", decoys: ["termo. Secreto", "termoSecreto2"] }];
@@ -257,13 +260,25 @@ if (!bad && typeof plugin["chat.message"] === "function") {
   const sanOut = { parts: [{ type: "text", text: "use termoSecreto e gatilhoReal" }] };
   await plugin["chat.message"]({}, sanOut);
   const text = sanOut.parts[0].text;
-  check(!text.includes("termoSecreto"),
-    "a sanitizacao de deception deixou o termo real no prompt");
-  check(text.includes("termo. Secreto"),
+  check(text.includes("termoSecreto"),
+    "o prompt do dono foi traduzido (nao deve: o dono precisa ler o que "
+    + "escreveu — a traducao e so no limite LLM)");
+  check(text.includes("gatilhoReal"),
+    "o prompt do dono teve o par trigger/decoy traduzido (nao deve)");
+
+  // (b2) NO LIMITE LLM o termo real sai e a 1a decoy entra.
+  const llmOut = {
+    messages: [{ parts: [{ type: "text", text: "use termoSecreto e gatilhoReal" }] }],
+  };
+  await plugin["experimental.chat.messages.transform"]({}, llmOut);
+  const llmText = llmOut.messages[0].parts[0].text;
+  check(!llmText.includes("termoSecreto"),
+    "a sanitizacao de deception deixou o termo real no prompt do LLM");
+  check(llmText.includes("termo. Secreto"),
     "a sanitizacao de deception nao usou a 1a decoy");
-  check(!text.includes("gatilhoReal"),
-    "a sanitizacao do par trigger/decoy deixou o trigger no prompt");
-  check(text.includes("gatilhoDecoy"),
+  check(!llmText.includes("gatilhoReal"),
+    "a sanitizacao do par trigger/decoy deixou o trigger no prompt do LLM");
+  check(llmText.includes("gatilhoDecoy"),
     "a sanitizacao do par nao usou o decoy");
 
   // (c) a direcao IN da lista de deception: a decoy volta a ser o termo
