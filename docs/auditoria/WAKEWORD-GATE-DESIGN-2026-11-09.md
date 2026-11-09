@@ -154,6 +154,31 @@ em pastas rotuladas — é o passo seguinte quando houver negativo e positivo
 rotulados (hoje: os 6 de wake sao os positivos; os 1 811 restantes, o
 negativo).
 
+### 5c. ROTULAGEM REAL (09/11): o corpus não tem **positivos**, e há um falso alto
+
+Casando cada WAV de `logs/audio/` com o transcript do log do duplex (a fala
+que precede a linha `respond wav: X.wav`): **66 segmentos rotulados**, e
+**nenhum deles contém "hey jarvis"** — ou seja, o corpus de voz da casa é
+falas do dono (e da sala) **sem** o wakeword.
+
+| conjunto | n | maior score |
+|---|---|---|
+| com "hey jarvis" (positivo) | **0** | — |
+| sem "hey jarvis" (negativo) | 66 | **0,9073** |
+
+⇒ **O limiar não pode ser chutado.** Com 0,5, **um segmento que não é
+wakeword marca 0,9073** (passaria como wake ⇒ o assistente acordaria com o
+som errado). E sem positivos **não dá para medir o recall do wakeword**: os
+6 disparos da corrida completa (0,5+) estão nos segmentos que não consegui
+rotular, e podem ser wakes verdadeiros **ou** falsos positivos da sala.
+
+**O input que falta (uma coisa só, e é do dono):** alguns WAVs do dono
+**dizendo a frase de wake** ("hey jarvis", 5 a 10 amostras no microfone de
+uso). Com os positivos + os 1 811 negativos já medidos, o modo de
+calibração do scorer (`--positive-dir` / `--negative-dir` / `--target-fpr`)
+entrega a curva de threshold **com número**, e a pendência 4 fecha por
+medição, não por palpite.
+
 **O que ainda falta para fechar a pendência 4:** (a) o número do corpus
 inteiro, (b) rotular dono x TV casando o WAV com o log, (c) o wiring do wake
 state por segmento no asrd (lane do duplex) e (d) a bateria E2E de voz de pé
