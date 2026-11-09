@@ -428,6 +428,33 @@ PYWHO
             _bus_files="${_bus_who#*	}"
             if [ -n "$_bus_cod" ]; then
                 _bus_json=$("$BUS_CMD" --codename "$_bus_cod" --files "$_bus_files" 2>/dev/null || echo '[]')
+                # (09/11, sweep-2026-11) DEDUPE POR TEXTO: uma nota repetida
+                # do mesmo remetente nao pode reacordar o agente. Medido: 10
+                # confirmacoes identicas ocuparam um turno inteiro cada. O
+                # hash do CONJUNTO nao resolvia, porque cada duplicata nova
+                # muda o conjunto e volta a acordar. Aqui sai do conjunto o
+                # que ja foi entregue (por texto) antes do hash.
+                _bus_json=$(printf '%s' "$_bus_json" | python3 -c '
+import json, os, sys
+path = sys.argv[1]
+try:
+    items = json.load(sys.stdin)
+except Exception:
+    items = []
+if not isinstance(items, list):
+    items = []
+entregues = set()
+if os.path.exists(path):
+    try:
+        with open(path, errors="ignore") as f:
+            entregues = {l.strip() for l in f if l.strip()}
+    except Exception:
+        entregues = set()
+novos = [i for i in items if isinstance(i, dict)
+         and str(i.get("text") or "").strip()
+         and str(i.get("text") or "").strip() not in entregues]
+print(json.dumps(novos, ensure_ascii=False))
+' "$DIR_ST/bus.texts.$_bus_cod" 2>/dev/null || echo '[]')
                 _bus_hash=$(printf '%s' "$_bus_json" | python3 -c '
 import hashlib, json, sys
 try:
@@ -454,7 +481,24 @@ print(" | ".join(m for m in msgs if m)[:600])
 ' 2>/dev/null || echo "")
                     if [ -n "$_bus_msg" ]; then
                         MOTIVO="bus: $_bus_msg"
-                        [ "$CHECK" -eq 1 ] || echo "$_bus_hash" > "$DIR_ST/bus.seen.$_bus_cod"
+                        [ "$CHECK" -eq 1 ] || {
+                            echo "$_bus_hash" > "$DIR_ST/bus.seen.$_bus_cod"
+                            # marca o que foi entregue, para a proxima volta o
+                            # dedupe saber que ja acordou por isso
+                            printf '%s' "$_bus_json" | python3 -c '
+import json, sys
+try:
+    items = json.load(sys.stdin)
+except Exception:
+    items = []
+if isinstance(items, list):
+    for i in items:
+        if isinstance(i, dict):
+            t = str(i.get("text") or "").strip()
+            if t:
+                print(t)
+' >> "$DIR_ST/bus.texts.$_bus_cod"
+                        }
                     fi
                 fi
             fi
