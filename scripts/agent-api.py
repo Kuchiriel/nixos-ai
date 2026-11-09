@@ -120,8 +120,15 @@ def _already_delivered(path: Path, key: str, *, ratio: float = 0.72) -> bool:
         return False
     if key in entregues:
         return True
+    # A similaridade so vale para texto LONGO: com texto curto, duas notas
+    # distintas com a mesma forma ("probe 123" e "probe 456") passam de 0,72
+    # de similaridade e uma seria jogada fora em silencio (medido 09/11: dois probes de 25 chars caem juntos).
+    if len(key) < 120:
+        return False
     import difflib
     for d in entregues[-20:]:
+        if len(d) < 120:
+            continue
         if difflib.SequenceMatcher(None, key, d).ratio() >= ratio:
             return True
     return False
