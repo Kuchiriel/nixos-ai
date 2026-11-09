@@ -450,9 +450,16 @@ if os.path.exists(path):
             entregues = {l.strip() for l in f if l.strip()}
     except Exception:
         entregues = set()
+def chave(t):
+    # (09/11) chave por PREFIXO normalizado: o mesmo aviso chega com
+    # variacoes ("ha 3 dias" ou nao) e o texto exato nao pegava. 120
+    # caracteres ja separam duas mensagens de conteudo diferente.
+    import re
+    return re.sub(r"\s+", " ", str(t or "")).strip().lower()[:120]
+entregues = {chave(l) for l in entregues}
 novos = [i for i in items if isinstance(i, dict)
          and str(i.get("text") or "").strip()
-         and str(i.get("text") or "").strip() not in entregues]
+         and chave(i.get("text")) not in entregues]
 print(json.dumps(novos, ensure_ascii=False))
 ' "$DIR_ST/bus.texts.$_bus_cod" 2>/dev/null || echo '[]')
                 _bus_hash=$(printf '%s' "$_bus_json" | python3 -c '
@@ -492,11 +499,13 @@ try:
 except Exception:
     items = []
 if isinstance(items, list):
+    # mesma chave do dedupe (prefixo normalizado), para o proximo ciclo
+    import re
     for i in items:
         if isinstance(i, dict):
             t = str(i.get("text") or "").strip()
             if t:
-                print(t)
+                print(re.sub(r"\s+", " ", t).strip().lower()[:120])
 ' >> "$DIR_ST/bus.texts.$_bus_cod"
                         }
                     fi
