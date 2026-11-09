@@ -318,6 +318,12 @@
           python313Packages.playwright
           python313Packages.prompt-toolkit
           python313Packages.onnxruntime
+          # (09/11, sweep-2026-11) pandas + pyarrow: o harness de voz
+          # (scripts/duplex-eval.py --trigger-bench) le os clips do Scicom
+          # em parquet; sem eles o bench nem roda (e o venv karaok, que
+          # tem os dois, tem o numpy quebrado).
+          python313Packages.pandas
+          python313Packages.pyarrow
           python313Packages.tokenizers
           playwright-driver  
           
