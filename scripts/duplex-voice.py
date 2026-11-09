@@ -441,6 +441,39 @@ def _intent_of(thread, box):
 _GATE_LAST = None
 
 
+
+def _asrd_env() -> dict:
+    """(09/11, sweep-2026-11) env do processo ASRD.
+
+    MEDIDO: sem `libstdc++.so.6` e `libz.so.1` no LD_LIBRARY_PATH, o numpy do
+    venv karaok (wheel que espera o runtime do sistema) nao importa e o
+    processo ASRD MORRE antes do {"ready": true} => o duplex nao recebe
+    segmento nenhum => a bateria E2E de voz fica 0/10 ("sem-segmento"). Com o
+    path certo o ASRD sobe e ainda mostra "speaker: 1 perfis (ATIVO)".
+
+    Os paths sao resolvidos pelo NIX (sem hardcode de store path, que o GC
+    apaga) e sao cacheados por processo.
+    """
+    env = dict(os.environ)
+    global _ASRD_LD_CACHE
+    if _ASRD_LD_CACHE is None:
+        libs = []
+        for attr in ("gcc.lib", "zlib.out"):
+            try:
+                out = subprocess.run(["nix", "eval", "--raw", f"nixpkgs#{attr}"],
+                                     capture_output=True, text=True, timeout=90).stdout.strip()
+                if out:
+                    libs.append(os.path.join(out, "lib"))
+            except Exception:
+                pass
+        _ASRD_LD_CACHE = libs
+    if _ASRD_LD_CACHE:
+        env["LD_LIBRARY_PATH"] = ":".join(
+            _ASRD_LD_CACHE + [env.get("LD_LIBRARY_PATH", "")]).rstrip(":")
+    return env
+
+_ASRD_LD_CACHE = None
+
 def _gate_accepts(addressed, intent, lora=None):
     """Aceita o turno? (03/11, dono: "ele ignora quase tudo que eu falo").
 
@@ -2059,7 +2092,7 @@ class Asr:
              "/home/nixos/projects/karaok/.venv/bin/python3",
              str(Path(__file__).with_name("duplex-asrd.py"))],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            text=True, bufsize=1)
+            text=True, bufsize=1, env=_asrd_env())
         linha = self.proc.stdout.readline()   # espera {"ready": true}
         log(f"[{ts()}] asrd pronto: {linha.strip()[:60]}")
         self.last_ms = 0.0

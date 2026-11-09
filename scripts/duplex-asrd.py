@@ -37,7 +37,19 @@ def main():
 
     # silero via torch hub (cacheado em ~/.cache/torch — o VAC baixou 1×)
     import torch
-    model, utils = torch.hub.load("snakers4/silero-vad", "silero_vad")
+    # (09/11, sweep-2026-11) MEDIDO: `torch.hub.load("snakers4/silero-vad", ...)`
+    # valida o repo pela REDE antes de usar o cache, e com a rede bloqueada
+    # (vpnsec/tailnet-only) o urlopen levanta HTTPError (504) que NAO era
+    # tratado => o processo ASRD MORRE no start => o duplex não recebia
+    # segmento nenhum => a bateria E2E de voz ficava 0/10 "sem-segmento".
+    # O modelo já está em cache; agora ele é carregado de LOCAL (source
+    # "local"), sem rede. Sem o cache, cai no caminho de sempre (com rede).
+    _cache = Path.home() / ".cache/torch/hub/snakers4_silero-vad_master"
+    if _cache.exists():
+        model, utils = torch.hub.load(str(_cache), "silero_vad", source="local",
+                                      trust_repo=True)
+    else:
+        model, utils = torch.hub.load("snakers4/silero-vad", "silero_vad")
     # (03/11 20:05, dono: "melhora a latência") O VAD fecha o segmento
     # depois de min_silence de SILÊNCIO — mas ele só AVANÇA quando
     # recebe um chunk. Com chunk de 0,6s a granularidade era 600ms
