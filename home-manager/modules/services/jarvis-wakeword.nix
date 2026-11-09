@@ -724,6 +724,10 @@ in {
           "JARVIS_STT_MODEL=small"
           # Spike RVC (efêmero em /tmp — some no reboot; voice_clone faz
           # fallback p/ TTS puro quando ausente). Libs via nix (sem hash fixo).
+          # (09/11, coord-naming) Este path vivia em /tmp e a limpeza levou:
+          # o daemon de wakeword perdeu o runtime de clone de voz (o RVC)
+          # e a geracao de audio com o timbre do dono parou de funcionar.
+          # Runtime que o servico depende nao vive em /tmp.
           "JARVIS_RVC_PYTHON=/tmp/opencode/tts-venv/bin/python"
           "JARVIS_RVC_APP_DIR=/tmp/opencode/applio"
           "JARVIS_RVC_LD_PATH=${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.zlib}/lib"
