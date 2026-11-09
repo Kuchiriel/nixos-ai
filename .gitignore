@@ -100,3 +100,9 @@ scripts/overnight-24-09/loop-*.json
 
 # worktrees de lane (cada agente no seu diretorio)
 .worktrees/
+
+# (08/11) perfil de voz do dono (dado BIOMETRICO, machine-local): nunca no git.
+# É lido por scripts/duplex-asrd.py (SPK_PROFILES) e escrito por
+# scripts/spk-enroll.py.
+data/spk-profiles.json
+data/spk-profiles*.json
