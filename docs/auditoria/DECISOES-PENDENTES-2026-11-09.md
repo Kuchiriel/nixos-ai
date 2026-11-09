@@ -55,6 +55,29 @@ A matrícula do dono ficou pronta (8 takes coerentes, consistência interna 0,85
 0,9006, perfil gitignored e local) e o perfil **está ativo no ASRD**. Ela não vira gate
 de produção por causa da separabilidade, não por falta de dado.
 
+**O que ainda falta para o wakeword (09/11):** o limiar **não pode ser chutado**. No
+corpus de 1 817 segmentos da casa o wakeword dispara em 6 acima de 0,5 (0,33 %), mas ao
+rotular pelo transcript do log (**66 segmentos**) **nenhum é positivo** (o corpus é fala
+sem a frase de wake) e o **pior negativo marca 0,9073** ⇒ com 0,5 o assistente acordaria
+com o som errado. Positivo sintético **não serve**: 8 amostras de "hey jarvis" pelo
+Kokoro pontuam no mesmo nível dos negativos (o limiar calibrado desce ao piso, 0,0001) —
+o openWakeWord foi treinado em fala real. ⇒ **O único input que falta é do dono: 5–10
+WAVs da voz real dele dizendo a frase de wake.** Com isso a calibração fecha em um
+comando (o `--calibrate` do scorer da casa, que **nunca rodava**, corrigido em
+`979ffbb5`):
+
+```bash
+cd ~/projects/nixos-ai && nix develop --command python3 modules/ai/ww_scorer.py \
+  --models ~/.local/share/openwakeword --wav <qualquer.wav> \
+  --calibrate --positive-dir <dir-com-a-frase> --negative-dir <dir-sem> \
+  --target-fpr 0.01
+```
+
+E a **bateria E2E ainda precisa do restart do stack de voz**: o processo do ASRD
+(pid 2807337) e o `duplex-voice` (pid 2806473) são de **08/11 11:02** (código antigo),
+mesmo com o fix do ASRD já no `main` — por isso a bateria continua em 0/10
+"sem-segmento" enquanto o ASRD novo responde em 395,6 ms.
+
 ## 4. Rebuild para o gate (dois fixes medidos, já no `main`)
 
 A frota adotou os dois (checkpoint das 06:57), e ambos precisam de rebuild porque o gate
@@ -94,3 +117,12 @@ novo. A fonte do corpus que eu procurava está no HF e no Kaggle como
 part_01 a part_10), e a alternativa barata que propus continua valendo: silence e
 reduplication são sintetizáveis sem download, e só nonspeech e music precisam de fonte
 pequena.
+
+**O manifesto do pacote foi recuperado dos transcripts** (09/11, `data/voice-fixtures/
+MANIFEST-scicom-antihalluc-pt.md`) e diz a origem de cada categoria: `silence` 42 linhas
+(zeros, download zero) · `reduplication` 1 440 (o mesmo segmento duas vezes) ·
+`nonspeech` 1 168 (**FSD50K** não-fala: ruído, respiração, tosse — pequeno, com rótulo) ·
+`music` 600 (fonte real) · `lexicon-synth-pt` 395 (braço positivo). O pacote inteiro
+também existe pronto como espelho privado do HF (`kuchiriel/scicom-antihalluc-pt`,
+montado do `Scicom-intl/Whisper-Hallucination`) ⇒ **os 164 GB do
+`Malaysian-Chinese-Emilia` não são necessários** para nada disso.
