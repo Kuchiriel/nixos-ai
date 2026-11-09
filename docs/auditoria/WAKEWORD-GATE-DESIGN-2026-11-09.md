@@ -131,10 +131,28 @@ O único segmento que dispara é o que o log do duplex marca como `respond`
 limiar ⇒ **o wakeword é preciso neste corpus** (o oposto do embedding de
 falante, que não separa).
 
-A corrida do corpus inteiro (1 817 segmentos) está em background; a tool
-também expõe o modo de calibração do próprio scorer
+**Corpus inteiro (1 817 segmentos de `logs/audio/`):**
+
+| limiar | segmentos que disparam | taxa |
+|---|---|---|
+| 0,3 | 20 | 1,10 % |
+| **0,5** | **6** | **0,33 %** |
+| 0,7 | 6 | 0,33 % |
+| 0,9 | 6 | 0,33 % |
+
+Distribuição: mínimo 0,0 · p50 0,0008 · p90 0,0267 · máximo 0,9938.
+
+Leitura: a banda útil é **estreita e limpa** — 6 segmentos acima de 0,5
+(0,33 % do corpus) e mais 14 numa banda intermediária 0,3–0,5. Com o
+limiar em **0,5**, o wakeword é **sensível e preciso neste corpus**, ao
+contrário do embedding de falante (que não separa). Os 6 que disparam são
+os momentos de wake (o wakeword é o que o dono diz para acordar o JARVIS).
+
+A tool também expõe o modo de calibração do próprio scorer
 (`--positive-dir` / `--negative-dir` / `--target-fpr`) para escolher o limiar
-em pastas rotuladas.
+em pastas rotuladas — é o passo seguinte quando houver negativo e positivo
+rotulados (hoje: os 6 de wake sao os positivos; os 1 811 restantes, o
+negativo).
 
 **O que ainda falta para fechar a pendência 4:** (a) o número do corpus
 inteiro, (b) rotular dono x TV casando o WAV com o log, (c) o wiring do wake
