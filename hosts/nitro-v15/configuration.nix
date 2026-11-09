@@ -139,6 +139,12 @@ services.avahi = {
     environmentFile = "/etc/beszel-agent.env";
   };
 
+  # (10/09, dono pediu) ProtonVPN não abria: org.freedesktop.secrets sem
+  # dono (gnome-keyring ausente da config). NixOS module traz: pacote no
+  # systemPackages, D-Bus activation (org.freedesktop.secrets), PAM login
+  # (destrava no login), wrapper cap_ipc_lock.
+  services.gnome.gnome-keyring.enable = true;
+
   # Habilita o gerenciamento de volumes e montagem de mídia
   services.gvfs.enable = true;
   services.udisks2.enable = true;
