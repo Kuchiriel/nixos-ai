@@ -360,6 +360,7 @@ for t in d['targets']:
     if t['address']=='$END':
         print(t.get('name') or '(janela)', '|', t.get('session') or '', '|',
               '1' if t.get('busy') else '0')
+        break
 ")
     NOME_ALVO=$(echo "$INFO" | cut -d'|' -f1 | tr -d ' ')
     SESSAO=$(echo "$INFO" | cut -d'|' -f2 | tr -d ' ')
