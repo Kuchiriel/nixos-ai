@@ -43,7 +43,7 @@ aplicados) e salvo em **`scripts/kaggle-scicom-antihalluc-kernel.py`**
 
 **O que a recuperação muda na divisão:** os quatro parquets **não são para
 regenerar localmente** — são o **recorte processado** de um dataset **privado no
-Kaggle** (`kuchiriel/scicom-antihalluc-pt`; o HF original tem 164 GB, o pacote
+Kaggle** (o espelho privado do proprio dono do dataset; o HF original tem 164 GB, o pacote
 pequeno é só o recorte). O caminho curto é **re-baixar esse dataset** e apontar o
 bench para ele. O kernel recuperado documenta como o recorte foi feito (categorias
 com alvo VAZIO no transcript, caps 500/500/400/400) e como re-fazê-lo se um dia for
@@ -60,7 +60,7 @@ lê (`id` + `audio.bytes` em FLAC), com `--verify` para reler como o bench lê.
 ## De onde vem cada categoria (medido, manifesto recuperado 09/11)
 
 O pacote original é o **`scicom-antihalluc-pt`** (espelho privado do HF
-`kuchiriel/scicom-antihalluc-pt`, montado a partir de
+o espelho privado do proprio dono do dataset, montado a partir de
 `Scicom-intl/Whisper-Hallucination` na noite de 20/10). O manifesto
 completo está em [`MANIFEST-scicom-antihalluc-pt.md`](MANIFEST-scicom-antihalluc-pt.md)
 (recuperado dos transcripts; o original vivia em `/tmp` e a limpeza levou).

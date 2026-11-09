@@ -12,7 +12,7 @@ burst into a queue:
 
   * token bucket shared by every client (the owner + all agents) — default
     8 requests/minute, burst 2 (measured effective ceiling, not the nominal
-    40; source: opencode/NVIDIA_NIM_GROUND_TRUTH.md §5 in Kuchiriel/mt5);
+    40; source: opencode/NVIDIA_NIM_GROUND_TRUTH.md §5 no repo do bus);
   * upstream 429 -> retry with exponential backoff (honours Retry-After), so
     the client sees the answer instead of an error;
   * upstream 502/503/504 and connection resets -> also retried (the NIM edge

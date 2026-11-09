@@ -123,6 +123,7 @@ MANIFEST-scicom-antihalluc-pt.md`) e diz a origem de cada categoria: `silence` 4
 (zeros, download zero) · `reduplication` 1 440 (o mesmo segmento duas vezes) ·
 `nonspeech` 1 168 (**FSD50K** não-fala: ruído, respiração, tosse — pequeno, com rótulo) ·
 `music` 600 (fonte real) · `lexicon-synth-pt` 395 (braço positivo). O pacote inteiro
-também existe pronto como espelho privado do HF (`kuchiriel/scicom-antihalluc-pt`,
+também existe pronto como espelho privado do HF (o mesmo pacote, no espelho do
+proprio dono do dataset,
 montado do `Scicom-intl/Whisper-Hallucination`) ⇒ **os 164 GB do
 `Malaysian-Chinese-Emilia` não são necessários** para nada disso.
