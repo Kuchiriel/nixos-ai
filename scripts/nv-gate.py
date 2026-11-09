@@ -142,6 +142,21 @@ class Gate(BaseHTTPRequestHandler):
     # 429. Medido: prompt mínimo = 200 em ~2s; o 504 só aparece com
     # contexto grande (e aí repetir costuma dar certo).
     retry_codes = (429, 502, 503, 504)
+    # (09/11, sweep-2026-11) GUARDA DE CONTEXTO: request que o upstream ja
+    # rejeitou por context_length nao precisa ser reenviado. Medido 09/11:
+    # 91 rejeicoes em 6h, todas com request > 1MB (media 5,4MB) =>
+    # o upstream respondia {'details':{'type':'context_length','limit':
+    # 1048576,'actual':1541675}} e o gate repassava o 400 ao cliente.
+    # Cada reenvio consome o bucket (8 RPM) por segundos de upstream, e o
+    # efeito colateral era a FILA: 14 esperas (ate 21s) em 6h, que é o
+    # sintoma que mata os clientes de timeout curto (o coord-mcp, 25s).
+    # Aqui o gate aprende o tamanho rejeitado por path (modelo) e falha
+    # rapido o que é do mesmo tamanho, sem gastar upstream nem bucket.
+    # A correcao de raiz continua sendo o TETO DE SESSAO (o
+    # limit.input do opencode): o request nao deveria chegar perto do
+    # limite da API. Este guarda e o disjuntor, nao a correcao.
+    ctx_reject_bytes: dict[str, int] = {}
+    ctx_guard_ratio = 0.9
 
     def log_message(self, fmt: str, *args) -> None:  # noqa: A003
         if self.verbose:
@@ -195,6 +210,26 @@ class Gate(BaseHTTPRequestHandler):
         attempt = 0
         backoff = self.backoff_start
         deadline = time.monotonic() + self.retry_budget
+        # (09/11) DISJUNTOR DE CONTEXTO: se o upstream ja recusou por
+        # context_length um request deste path com tamanho >= 90% daquele,
+        # este request vai ser recusado tambem. Falha aqui, sem gastar o
+        # upstream nem o bucket (a fila do bucket e o sintoma que mata os
+        # clientes de timeout curto). A correcao de raiz e o teto de sessao
+        # no opencode; aqui e so para nao queimar cota com reenvio inutil.
+        ctx_limit = self.ctx_reject_bytes.get(self.path, 0)
+        if ctx_limit and length >= ctx_limit * self.ctx_guard_ratio:
+            self.stats.bump("ctx_short_circuit")
+            self.warn("context guard: request %d bytes >= %d bytes que o upstream "
+                      "ja recusou por context_length -> 400 local, sem reenviar",
+                      length, ctx_limit)
+            self._json(400, {"error": {
+                "message": "nv-gate: request too large for the upstream context",
+                "type": "Bad Request",
+                "code": 400,
+                "details": {"type": "context_length",
+                            "limit": ctx_limit,
+                            "actual": length}}})
+            return
         while True:
             attempt += 1
             req = urllib.request.Request(url, data=body, headers=headers, method=self.command)
@@ -224,6 +259,13 @@ class Gate(BaseHTTPRequestHandler):
                     continue
                 payload = exc.read()[:4000]
                 self.stats.bump("errors")
+                # (09/11) CONTEXTO: se o upstream recusou por context_length,
+                # guarda o tamanho recusado DESTE path (modelo) para falhar
+                # rapido o proximo request do mesmo tamanho.
+                if exc.code == 400 and b"context_length" in payload:
+                    prev = self.ctx_reject_bytes.get(self.path, 0)
+                    self.ctx_reject_bytes[self.path] = max(prev, length)
+                    self.stats.bump("ctx_rejected")
                 # O CORPO do erro do upstream e o unico lugar com a verdade:
                 # o cliente opencode ve "Cannot connect to API" (o 400 vira
                 # erro de conexao generico) e o log do cliente nao guarda o
