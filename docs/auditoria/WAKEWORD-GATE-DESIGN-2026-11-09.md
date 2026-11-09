@@ -76,6 +76,29 @@ usar o wakeword só como filtro negativo da TV** (se o wake não disparou e o
 sticky não aponta para o dono, a TV é descartada) — que é exatamente o passo
 2 acima sem mudar o UX do dono nos take limpos.
 
+## 4b. O BLOQUEIO DA MEDIÇÃO (medido 09/11)
+
+A medição do passo 5.1 **não roda hoje**, e o motivo é o mesmo do
+WeSpeaker: **o runtime não está empacotado onde o medidor o encontra**.
+
+- Os **modelos estão lá** ✓ (`~/.local/share/openwakeword/` → 3 symlinks
+  para o store: `hey_jarvis_v0.1.onnx`, `embedding_model.onnx`,
+  `melspectrogram.onnx`, com sha256 pinado em `models.nix`).
+- O **pacote python** do openWakeWord é construído **dentro** do módulo do
+  daemon (`home-manager/modules/services/jarvis-wakeword.nix`, um
+  `buildPythonPackage` inline) ⇒ não existe como output do flake, e como o
+  daemon está **desabilitado** o pacote nunca foi construído (não há
+  `openwakeword` no store).
+- `pip install openwakeword` não serve: o pacote pede `tflite-runtime`, que
+  não tem wheel para o python 3.13 da box ⇒ é exatamente por isso que o Nix
+  empacota à mão.
+
+⇒ **A receita é a mesma do torchaudio**: uma linha no devShell (ou um output
+do flake) com o pacote openWakeWord, e a medição roda com
+`OWW_MODELS=~/.local/share/openwakeword` + os 1 817 WAVs de
+`logs/audio/`. A alternativa é o dono habilitar o daemon (que é de desktop e
+**não** serve o pipeline da voz, mas já traz o pacote no store).
+
 ## 5. O que eu faria primeiro (se o dono disser sim)
 
 1. Rodar o openWakeWord **offline** sobre os 259 segmentos de `logs/audio/` e
