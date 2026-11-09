@@ -154,6 +154,40 @@ o não-fala não chegarem ao modelo) ou **no gate de voz** (wakeword). A deny-li
 valendo para o outro caso (a frase alucinada com áudio fraco de verdade, que não é o
 caso dos gatilhos).
 
+### Em qual caminho esses números foram medidos (09/11, coord-naming)
+
+A seção acima é do **caminho cru**: o trigger bench faz `POST /inference` **direto no
+whisper-server**, então ele nunca passa pelo VAD da casa, nem pela segmentação, nem
+pelo gate `anti_halluc` do `duplex-asrd`. É "o que o whisper faz com o clip inteiro",
+não "o que a casa responderia".
+
+A **casa** foi medida no mesmo corpus com o probe
+(`scripts/voice-pipeline-probe.py`: mesmo protocolo do `duplex-voice`, áudio em tempo
+real, silêncio digital no fim para fechar o segmento, comparativo pareado do mesmo
+áudio na mesma janela de 12 s, e controle positivo de fala real **9/9**):
+
+| categoria | n | cru (whisper direto) | casa (VAD, segmento, gate) | segmentos abertos pelo VAD |
+|---|---|---|---|---|
+| silence | 23 | 8 (0,35) | **0** | 0 |
+| nonspeech | 30 | 26 (0,87) | **0** | 0 |
+| music | 30 | 27 (0,90) | **0** | 2 |
+| reduplication | 40 | 22 (0,55) | **3 (0,07)** | 33 |
+| **total** | **123** | **83 (0,67)** | **3 (0,024)** | 35 |
+
+Ou seja: **a casa corta 96 % das alucinações de gatilho**. O VAD não abre segmento
+para silêncio, nonspeech e música (91 dos 123 clipes não abriram nada), o gate mata o
+que passa, e o **residual são 3 clipes de repetição de sílabas** ("Ah, ah, ah.",
+"Tataataataata. Uh uh uh.", "E E E E E"), com áudio confiante (`avg_logprob` −0,24 a
+−0,43, acima do limiar −0,45) que o léxico não pega.
+
+Ou seja, os dois números são verdadeiros e medem coisas diferentes: **"o gate real mata
+0" vale para o clip inteiro** (o bench); **no pipeline o gate mata parte dos
+segmentos** que o VAD corta (na rodada com prova por segmento: 6 segmentos abertos, 3
+mortos pelo gate com áudio fraco, `avg_logprob` −0,512 e −0,4985, e 3 sobreviventes).
+O wakeword continua sendo a frente que cobre o que sobrou (repetição) e a variação de
+nível de uma sala real. Detalhes: `docs/auditoria/LAYA-GATE-2026-11-03.md` §5c e
+`reports/voice-pipeline/*.json`.
+
 ## Regra
 
 Qualquer artefato de avaliação (áudio, parquets, reports grandes) vai para um caminho
