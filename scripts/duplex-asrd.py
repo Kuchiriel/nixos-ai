@@ -26,7 +26,15 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 DATA = Path(__file__).resolve().parents[1] / "data"
 
-import numpy as np
+try:
+    import numpy as np
+except Exception as _exc:  # noqa: BLE001
+    # (09/11, coord-naming) o numpy do venv karaok precisa do libstdc++/libz
+    # no LD_LIBRARY_PATH; sem ele o processo MORRE no start e o duplex fica
+    # sem segmento nenhum (bateria 0/10 "sem-segmento") sem saber o porque.
+    print(json.dumps({"ready": False,
+                      "err": f"numpy import falhou: {_exc}"}), flush=True)
+    raise SystemExit(1)
 
 SR = 16000
 CTX = {"v": ""}   # vocabulário da conversa → prompt do whisper-server

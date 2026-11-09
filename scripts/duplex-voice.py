@@ -453,20 +453,31 @@ def _asrd_env() -> dict:
 
     Os paths sao resolvidos pelo NIX (sem hardcode de store path, que o GC
     apaga) e sao cacheados por processo.
+
+    (09/11, coord-naming) O resolver anterior pedia "nixpkgs#gcc.lib", que
+    NAO existe nesta nixpkgs (o caminho de atributo e' gcc.cc.lib) e a falha
+    era engolida: o resolver devolvia SO o zlib, e o ASRD vivia apenas porque
+    o ambiente herdado ja trazia o path do gcc. Agora a resolucao vive em
+    scripts/asrd_env.py (atributos que existem, soname verificado no
+    resultado, fallback no store quando o nix nao responde) e a ausencia de
+    soname e' reportada em vez de passar em silencio.
     """
-    env = dict(os.environ)
     global _ASRD_LD_CACHE
     if _ASRD_LD_CACHE is None:
-        libs = []
-        for attr in ("gcc.lib", "zlib.out"):
-            try:
-                out = subprocess.run(["nix", "eval", "--raw", f"nixpkgs#{attr}"],
-                                     capture_output=True, text=True, timeout=90).stdout.strip()
-                if out:
-                    libs.append(os.path.join(out, "lib"))
-            except Exception:
-                pass
-        _ASRD_LD_CACHE = libs
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import asrd_env as _asrd_env_mod
+        except Exception:
+            _asrd_env_mod = None
+        if _asrd_env_mod is not None:
+            _ASRD_LD_CACHE = _asrd_env_mod.resolve_lib_dirs()
+            missing = _asrd_env_mod.missing_sonames(_ASRD_LD_CACHE)
+            if missing:
+                log(f"[{ts()}] env do ASRD INCOMPLETO: faltam {missing} "
+                    f"(o ASRD pode morrer no import do numpy)")
+        else:
+            _ASRD_LD_CACHE = []
+    env = dict(os.environ)
     if _ASRD_LD_CACHE:
         env["LD_LIBRARY_PATH"] = ":".join(
             _ASRD_LD_CACHE + [env.get("LD_LIBRARY_PATH", "")]).rstrip(":")

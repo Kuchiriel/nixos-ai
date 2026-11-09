@@ -1,0 +1,50 @@
+{
+ "ts": "2026-11-09T13:29:09",
+ "asrd": "/home/nixos/projects/nixos-ai/scripts/duplex-asrd.py",
+ "fixtures": "/home/nixos/.local/share/jarvis/voice-trigger",
+ "samples_per_cat": 1,
+ "max_seconds": 3.0,
+ "speed": 1.0,
+ "categories": {
+  "silence": {
+   "clips": 1,
+   "clips_with_text": 0,
+   "rate": 0.0,
+   "top_texts": [],
+   "per_clip": [
+    {
+     "id": "hiss_-60db_1s",
+     "seconds": 1.0,
+     "texts": []
+    }
+   ]
+  },
+  "music": {
+   "clips": 1,
+   "clips_with_text": 0,
+   "rate": 0.0,
+   "top_texts": [],
+   "per_clip": [
+    {
+     "id": "001522_16khz_mono",
+     "seconds": 3.0,
+     "texts": []
+    }
+   ]
+  }
+ },
+ "control": {
+  "wavs": 1,
+  "with_text": 1,
+  "texts": [
+   {
+    "wav": "083028_seg_1793014226.360.wav",
+    "texts": [
+     "Preciso que você grave 10 segundos de fala para eu cadast\nrar a voz.\n Quem é que eu tente identificar a voz de alguém que já está\n cadastrada ou prefere que eu grave uma nova voz agora?",
+     "Eu preciso saber se tem uma função que quando eu peço para\n você parar de falar",
+     "Você para de falar até eu pedir para você voltar a falar."
+    ]
+   }
+  ]
+ }
+}

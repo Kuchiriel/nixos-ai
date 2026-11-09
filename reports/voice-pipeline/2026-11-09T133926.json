@@ -1,0 +1,442 @@
+{
+ "ts": "2026-11-09T13:39:26",
+ "asrd": "/home/nixos/projects/nixos-ai/scripts/duplex-asrd.py",
+ "fixtures": "/home/nixos/.local/share/jarvis/voice-trigger",
+ "samples_per_cat": 10,
+ "max_seconds": 12.0,
+ "speed": 1.0,
+ "categories": {
+  "silence": {
+   "clips": 10,
+   "segments_closed": 0,
+   "clips_with_text": 0,
+   "rate": 0.0,
+   "raw_whisper_hallucinated": 3,
+   "raw_rate": 0.3,
+   "top_texts": [],
+   "per_clip": [
+    {
+     "id": "hiss_-60db_1s",
+     "seconds": 1.0,
+     "raw_whisper": "Obrigado.",
+     "raw_ns": 0.0,
+     "raw_lp": -0.259,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "digital_zero_60s",
+     "seconds": 12.0,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2315,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "hiss_-45db_5s",
+     "seconds": 5.0,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.5526,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "roomtone_120s",
+     "seconds": 12.0,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.4651,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "roomtone_60s",
+     "seconds": 12.0,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.4587,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "hiss_-60db_10s",
+     "seconds": 10.0,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.5002,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "dither_29s",
+     "seconds": 12.0,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.5738,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "hiss_-60db_5s",
+     "seconds": 5.0,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.4616,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "dither_31s",
+     "seconds": 12.0,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.581,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "roomtone_1s",
+     "seconds": 1.0,
+     "raw_whisper": "Obrigado.",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2804,
+     "segments_closed": 0,
+     "texts": []
+    }
+   ]
+  },
+  "nonspeech": {
+   "clips": 10,
+   "segments_closed": 0,
+   "clips_with_text": 0,
+   "rate": 0.0,
+   "raw_whisper_hallucinated": 9,
+   "raw_rate": 0.9,
+   "top_texts": [],
+   "per_clip": [
+    {
+     "id": "noise_232499",
+     "seconds": 0.84,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.6811,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "noise_360648",
+     "seconds": 12.0,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.017,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "noise_56306",
+     "seconds": 12.0,
+     "raw_whisper": "Música",
+     "raw_ns": 0.0,
+     "raw_lp": -0.5337,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "music_149396",
+     "seconds": 8.68,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0299,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "music_151006",
+     "seconds": 12.0,
+     "raw_whisper": "Música",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0746,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "music_117654",
+     "seconds": 12.0,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "noise_347550",
+     "seconds": 1.96,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.3337,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "music_51668",
+     "seconds": 7.33,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0316,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "noise_85088",
+     "seconds": 12.0,
+     "raw_whisper": "*Pelo de brilho*",
+     "raw_ns": 0.0,
+     "raw_lp": -0.4043,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "music_328880",
+     "seconds": 2.73,
+     "raw_whisper": "Legenda Adriana Zanotto",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2125,
+     "segments_closed": 0,
+     "texts": []
+    }
+   ]
+  },
+  "music": {
+   "clips": 10,
+   "segments_closed": 0,
+   "clips_with_text": 0,
+   "rate": 0.0,
+   "raw_whisper_hallucinated": 10,
+   "raw_rate": 1.0,
+   "top_texts": [],
+   "per_clip": [
+    {
+     "id": "009244_16khz_mono",
+     "seconds": 12.0,
+     "raw_whisper": "F*** you!\n F*** you!\n F*** you!",
+     "raw_ns": 0.0,
+     "raw_lp": -0.6408,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "003956_16khz_mono",
+     "seconds": 10.0,
+     "raw_whisper": "Música",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2043,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "004001_16khz_mono",
+     "seconds": 10.0,
+     "raw_whisper": "Música",
+     "raw_ns": 0.0,
+     "raw_lp": -0.3052,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "004081_16khz_mono",
+     "seconds": 10.0,
+     "raw_whisper": "Música",
+     "raw_ns": 0.0,
+     "raw_lp": -0.4753,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "005289_16khz_mono",
+     "seconds": 12.0,
+     "raw_whisper": "Não se grita\n Não é que isso nunca hampa antes\n Não é que is",
+     "raw_ns": 0.0,
+     "raw_lp": -0.8988,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "008842_16khz_mono",
+     "seconds": 12.0,
+     "raw_whisper": "Música",
+     "raw_ns": 0.0,
+     "raw_lp": -0.4804,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "010425_16khz_mono",
+     "seconds": 12.0,
+     "raw_whisper": "Música",
+     "raw_ns": 0.0,
+     "raw_lp": -0.3557,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "003840_16khz_mono",
+     "seconds": 10.0,
+     "raw_whisper": "A CIDADE NO BRASIL",
+     "raw_ns": 0.0,
+     "raw_lp": -0.3793,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "005285_16khz_mono",
+     "seconds": 12.0,
+     "raw_whisper": "Música",
+     "raw_ns": 0.0,
+     "raw_lp": -0.5182,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "008658_16khz_mono",
+     "seconds": 10.0,
+     "raw_whisper": "Música",
+     "raw_ns": 0.0,
+     "raw_lp": -0.3616,
+     "segments_closed": 0,
+     "texts": []
+    }
+   ]
+  },
+  "reduplication": {
+   "clips": 10,
+   "segments_closed": 8,
+   "clips_with_text": 0,
+   "rate": 0.0,
+   "raw_whisper_hallucinated": 10,
+   "raw_rate": 1.0,
+   "top_texts": [],
+   "per_clip": [
+    {
+     "id": "cv_la_n08_r5_t0",
+     "seconds": 1.85,
+     "raw_whisper": "A-a-a-a-a-a-a-a-a-a-a-a.",
+     "raw_ns": 0.0,
+     "raw_lp": -0.1431,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "vowel_i_n05_r7_t2",
+     "seconds": 2.96,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0013,
+     "segments_closed": 1,
+     "texts": []
+    },
+    {
+     "id": "cv_da_n12_r9_t0",
+     "seconds": 1.58,
+     "raw_whisper": "Tata-tata-tata-tata-tata-tata",
+     "raw_ns": 0.0,
+     "raw_lp": -0.1764,
+     "segments_closed": 1,
+     "texts": []
+    },
+    {
+     "id": "laugh_a_n08_r7_t2",
+     "seconds": 3.39,
+     "raw_whisper": "A A A A A A A A",
+     "raw_ns": 0.0,
+     "raw_lp": -0.1734,
+     "segments_closed": 0,
+     "texts": []
+    },
+    {
+     "id": "cv_me_n03_r3_t0",
+     "seconds": 1.25,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0018,
+     "segments_closed": 1,
+     "texts": []
+    },
+    {
+     "id": "cv_ta_n04_r5_t2",
+     "seconds": 3.05,
+     "raw_whisper": "Tata-tata-tata",
+     "raw_ns": 0.0,
+     "raw_lp": -0.5999,
+     "segments_closed": 1,
+     "texts": []
+    },
+    {
+     "id": "laugh_a_n03_r5_t8",
+     "seconds": 8.85,
+     "raw_whisper": "Ah ah ah.",
+     "raw_ns": 0.0,
+     "raw_lp": -0.1544,
+     "segments_closed": 1,
+     "texts": []
+    },
+    {
+     "id": "cv_ko_n08_r7_t2",
+     "seconds": 3.39,
+     "raw_whisper": "P-P-P-P-P-P-P-P",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0845,
+     "segments_closed": 1,
+     "texts": []
+    },
+    {
+     "id": "cv_bi_n06_r5_t2",
+     "seconds": 3.45,
+     "raw_whisper": "Tchim, tchim, tchim, tchim.",
+     "raw_ns": 0.0,
+     "raw_lp": -0.1239,
+     "segments_closed": 1,
+     "texts": []
+    },
+    {
+     "id": "cv_me_n06_r7_t8",
+     "seconds": 9.11,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0556,
+     "segments_closed": 1,
+     "texts": []
+    }
+   ]
+  }
+ },
+ "control": {
+  "wavs": 3,
+  "with_text": 3,
+  "texts": [
+   {
+    "wav": "083028_seg_1793014226.360.wav",
+    "texts": [
+     "Preciso que você grave 10 segundos de fala para eu cadast\nrar a voz.\n Quem é que eu tente identificar a voz de alguém que já está\n cadastrada ou prefere que eu grave uma nova voz agora?",
+     "Eu preciso saber se tem uma função que quando eu peço para\n você parar de falar",
+     "Você para de falar até eu pedir para você voltar a falar."
+    ]
+   },
+   {
+    "wav": "083855_seg_1793014733.970.wav",
+    "texts": [
+     "do TSE. O TSE é o que decide a eleição. Não é o TSE, não é\n o Partido. Ele ficou na dele, ficou lá andando de morto.",
+     "Então quem tomou poder foi quem já está no poder festivo.",
+     "Que é o Supremo."
+    ]
+   },
+   {
+    "wav": "084234_seg_1793014952.385.wav",
+    "texts": [
+     "Essas algumas horas aí tem que provar o que o senhor tem\n dentro das sessões eleitorais.\n Quem é que tem câmera, quem é que vai provar isso, quem é\n que vai peitar morais.\n A gente corre o risco.\n Estou vendo o Pitório agora.\n A qualquer momento eu posso ser preso aqui no ar."
+    ]
+   }
+  ]
+ }
+}
