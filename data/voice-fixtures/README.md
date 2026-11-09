@@ -128,6 +128,7 @@ lista de negação sozinha não fecha** (ainda 0,47). **Este número é da lista
 gate real é pior**: ver a seção seguinte, que mede o gate como o asrd de fato o roda.
 A comparação com o MFCC/WE speaker é outra frente (separabilidade do falante), e ela não
 muda este número.
+
 ### Quanto o gate de texto completo mata (medido 09/11, sweep-2026-11)
 
 **Cuidado: o número real é pior do que a lista crua sugere.** O gate v6 do asrd mata a
