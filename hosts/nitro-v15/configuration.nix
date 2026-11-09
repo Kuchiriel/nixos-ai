@@ -116,6 +116,16 @@ services.avahi = {
     # vscodium — gerenciado por home-manager (vscode-roo.nix)
   ];
 
+  # (08/11, dono pediu) Mullvad VPN — daemon systemd (mullvad-daemon) + GUI
+  # via package pkgs.mullvad-vpn (CLI+GUI). Não conflita com Proton/Tailscale
+  # (interfaces dedicadas). `enableEarlyBootBlocking` fica de fora (conflito
+  # com a config de rede não-Mullvad, e o dono não pediu lockdown pré-boot).
+  services.mullvad-vpn = {
+    enable = true;
+    package = pkgs.mullvad-vpn;
+    enableExcludeWrapper = true;
+  };
+
   # Habilita o gerenciamento de volumes e montagem de mídia
   services.gvfs.enable = true;
   services.udisks2.enable = true;
@@ -300,7 +310,7 @@ services.avahi = {
   time.timeZone = lib.mkForce "America/Sao_Paulo";
   i18n.defaultLocale = "pt_BR.UTF-8";
   networking.nameservers = ["8.8.8.8" "1.1.1.1"];
-  networking.firewall.allowedTCPPorts = [22 8080 8081 4000 5353 8099 47984 47989 47990 48010]; # 8099 = karaok cast (letra+som p/ TV); 47984-48010 = Sunshine/Moonlight
+  networking.firewall.allowedTCPPorts = [22 8080 8081 4000 5353 8099 47984 47989 47990 48010 9090]; # 8099 = karaok cast (letra+som p/ TV); 47984-48010 = Sunshine/Moonlight
   networking.firewall.allowedUDPPorts = [47998 47999 48000 48002 48010]; # Sunshine/Moonlight stream
 
   # (26/10, dono pediu) PROTON VPN — checkReversePath = false é REQUERIDO
