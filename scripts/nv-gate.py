@@ -157,6 +157,17 @@ class Gate(BaseHTTPRequestHandler):
     # limite da API. Este guarda e o disjuntor, nao a correcao.
     ctx_reject_bytes: dict[str, int] = {}
     ctx_guard_ratio = 0.9
+    # (09/11, sweep-2026-11) VIA PRIORITARIA: os requests PEQUENOS (as
+    # entregas da frota, o coord-mcp, o heartbeat) nao podem ficar na fila
+    # dos monsters de 5,4 MB. Medido: 14 esperas de ate 21s em 6h (com o
+    # bucket de 8 RPM), e o sintoma visivel e o cliente de timeout curto
+    # (o coord-mcp, 25s) morrendo antes da resposta. Aqui os pequenos
+    # tem o proprio bucket, mais rapido, e os grandes ficam no de sempre.
+    # O FATOR e 2 (nao 4) de proposito: 8 (grandes) + 16 (pequenos) = 24
+    # RPM, abaixo do teto de 40 RPM do upstream, para nao estourar a cota.
+    small_bucket = None
+    small_bytes = 262144
+    small_rpm_factor = 2.0
 
     def log_message(self, fmt: str, *args) -> None:  # noqa: A003
         if self.verbose:
@@ -184,7 +195,10 @@ class Gate(BaseHTTPRequestHandler):
                 continue
             headers[key] = value
 
-        granted, waited = self.bucket.take(self.max_wait)
+        bucket = self.bucket
+        if self.small_bucket is not None and length <= self.small_bytes:
+            bucket = self.small_bucket
+        granted, waited = bucket.take(self.max_wait)
         if waited:
             self.stats.bump("queued_seconds", waited)
             # (08/11) Medido no sweep: com burst de 6 requests, 3 voltaram 200
@@ -195,13 +209,13 @@ class Gate(BaseHTTPRequestHandler):
             if waited >= 10.0:
                 self.warn("queue wait %.1fs (bucket %s) — the client may have "
                           "timed out before the token came", waited,
-                          "rpm=%.0f burst=%d" % (self.bucket.rate * 60,
-                                                 int(self.bucket.capacity)))
+                          "rpm=%.0f burst=%d" % (bucket.rate * 60,
+                                                 int(bucket.capacity)))
         if not granted:
             self.stats.bump("client_429")
             self.warn("gate queue exhausted: token needs %.1fs, max_wait %.0fs "
                       "(waited %.1fs, request %d bytes) -> 429 to the client",
-                      self.bucket.last_need, self.max_wait, waited, length)
+                      bucket.last_need, self.max_wait, waited, length)
             self._json(429, {"error": {"message": "nv-gate: rate limit queue exhausted",
                                        "type": "rate_limit_error"}})
             return
@@ -376,6 +390,9 @@ def main() -> int:
 
     Gate.upstream = args.upstream.rstrip("/")
     Gate.bucket = Bucket(args.rpm, args.burst)
+    # (09/11) via prioritaria para os pedidos pequenos (ver Gate.small_bucket)
+    Gate.small_bucket = Bucket(args.rpm * Gate.small_rpm_factor,
+                               args.burst * 2)
     Gate.max_wait = args.max_wait
     Gate.retry_budget = args.retry_budget
     Gate.verbose = args.verbose
