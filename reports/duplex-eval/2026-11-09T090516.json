@@ -1,0 +1,310 @@
+{
+ "ts": "2026-11-09T09:05:16",
+ "asr": "http://127.0.0.1:8097",
+ "samples_per_cat": 30,
+ "seed": 42,
+ "categories": {
+  "silence": {
+   "clips": 30,
+   "empty_ok": 8,
+   "hallucinated": 22,
+   "halluc_rate": 0.733,
+   "lexicon_kill": 4,
+   "net_rate_apos_lista": 0.6,
+   "errors": 0,
+   "samples": [
+    {
+     "id": "digital_zero_29s",
+     "text": "E aí",
+     "lexicon_kill": true,
+     "no_speech_prob": 5.71151979877893e-11,
+     "avg_logprob": -0.2315385341644287,
+     "stats_weak": false
+    },
+    {
+     "id": "hiss_-45db_60s",
+     "text": "E aí\n E aí",
+     "lexicon_kill": false,
+     "no_speech_prob": 6.679239106244239e-11,
+     "avg_logprob": -0.37785065174102783,
+     "stats_weak": false
+    },
+    {
+     "id": "hiss_-60db_31s",
+     "text": "E aí\n Obrigado.",
+     "lexicon_kill": false,
+     "no_speech_prob": 4.8245765021937004e-11,
+     "avg_logprob": -0.30581656098365784,
+     "stats_weak": false
+    },
+    {
+     "id": "roomtone_31s",
+     "text": "E aí\n Obrigado.",
+     "lexicon_kill": false,
+     "no_speech_prob": 1.0253036614171762e-10,
+     "avg_logprob": -0.36097651720046997,
+     "stats_weak": false
+    },
+    {
+     "id": "hiss_-45db_31s",
+     "text": "E aí\n Obrigado.",
+     "lexicon_kill": false,
+     "no_speech_prob": 6.540089303452845e-11,
+     "avg_logprob": -0.4153069257736206,
+     "stats_weak": false
+    },
+    {
+     "id": "digital_zero_31s",
+     "text": "E aí\n E aí",
+     "lexicon_kill": false,
+     "no_speech_prob": 1.0584759457810122e-10,
+     "avg_logprob": -0.2315385341644287,
+     "stats_weak": false
+    },
+    {
+     "id": "hum_50hz_60s",
+     "text": "E aí\n E aí",
+     "lexicon_kill": false,
+     "no_speech_prob": 1.7137002927825051e-10,
+     "avg_logprob": -0.2277538776397705,
+     "stats_weak": false
+    },
+    {
+     "id": "dither_31s",
+     "text": "E aí\n Obrigado.",
+     "lexicon_kill": false,
+     "no_speech_prob": 6.841964494963548e-11,
+     "avg_logprob": -0.2923263609409332,
+     "stats_weak": false
+    }
+   ]
+  },
+  "nonspeech": {
+   "clips": 30,
+   "empty_ok": 1,
+   "hallucinated": 29,
+   "halluc_rate": 0.967,
+   "lexicon_kill": 19,
+   "net_rate_apos_lista": 0.333,
+   "errors": 0,
+   "samples": [
+    {
+     "id": "music_345582",
+     "text": "E aí",
+     "lexicon_kill": true,
+     "no_speech_prob": 1.0158587859798729e-10,
+     "avg_logprob": -0.32641077041625977,
+     "stats_weak": false
+    },
+    {
+     "id": "noise_378070",
+     "text": "E aí",
+     "lexicon_kill": true,
+     "no_speech_prob": 2.533402465587642e-08,
+     "avg_logprob": -0.005367279052734375,
+     "stats_weak": false
+    },
+    {
+     "id": "music_259192",
+     "text": "E aí",
+     "lexicon_kill": true,
+     "no_speech_prob": 2.7334125902393064e-14,
+     "avg_logprob": -0.12018728256225586,
+     "stats_weak": false
+    },
+    {
+     "id": "music_400163",
+     "text": "A CIDADE NO BRASIL",
+     "lexicon_kill": false,
+     "no_speech_prob": 1.710702413060261e-10,
+     "avg_logprob": -0.27209511399269104,
+     "stats_weak": false
+    },
+    {
+     "id": "music_138491",
+     "text": "Legenda Adriana Zanotto",
+     "lexicon_kill": false,
+     "no_speech_prob": 2.610525406954167e-10,
+     "avg_logprob": -0.16333283483982086,
+     "stats_weak": false
+    },
+    {
+     "id": "noise_278138",
+     "text": "E aí",
+     "lexicon_kill": true,
+     "no_speech_prob": 2.1969037700131366e-10,
+     "avg_logprob": -0.41495275497436523,
+     "stats_weak": false
+    },
+    {
+     "id": "noise_119073",
+     "text": "O que é isso?",
+     "lexicon_kill": false,
+     "no_speech_prob": 1.0815121714857767e-10,
+     "avg_logprob": -0.63426673412323,
+     "stats_weak": true
+    },
+    {
+     "id": "noise_272174",
+     "text": "E aí",
+     "lexicon_kill": true,
+     "no_speech_prob": 2.042002122948361e-10,
+     "avg_logprob": -0.008129596710205078,
+     "stats_weak": false
+    }
+   ]
+  },
+  "music": {
+   "clips": 30,
+   "empty_ok": 0,
+   "hallucinated": 30,
+   "halluc_rate": 1.0,
+   "lexicon_kill": 8,
+   "net_rate_apos_lista": 0.733,
+   "errors": 0,
+   "samples": [
+    {
+     "id": "008879_16khz_mono",
+     "text": "Não, não, não.",
+     "lexicon_kill": false,
+     "no_speech_prob": 1.3010391375356534e-10,
+     "avg_logprob": -0.3997232913970947,
+     "stats_weak": false
+    },
+    {
+     "id": "003945_16khz_mono",
+     "text": "E aí",
+     "lexicon_kill": true,
+     "no_speech_prob": 2.3322332509678745e-08,
+     "avg_logprob": -0.0015931129455566406,
+     "stats_weak": false
+    },
+    {
+     "id": "004376_16khz_mono",
+     "text": "Oh, oh, oh, oh, oh, oh, oh, oh",
+     "lexicon_kill": false,
+     "no_speech_prob": 2.879860239168863e-10,
+     "avg_logprob": -0.10907066613435745,
+     "stats_weak": false
+    },
+    {
+     "id": "003972_16khz_mono",
+     "text": "Música",
+     "lexicon_kill": false,
+     "no_speech_prob": 1.8756548397780293e-11,
+     "avg_logprob": -0.24770796298980713,
+     "stats_weak": false
+    },
+    {
+     "id": "010570_16khz_mono",
+     "text": "A CIDADE NO BRASIL",
+     "lexicon_kill": false,
+     "no_speech_prob": 7.681366653855548e-11,
+     "avg_logprob": -0.20891261100769043,
+     "stats_weak": false
+    },
+    {
+     "id": "007773_16khz_mono",
+     "text": "E aí\n E aí",
+     "lexicon_kill": false,
+     "no_speech_prob": 6.483979131388651e-09,
+     "avg_logprob": -0.007261753082275391,
+     "stats_weak": false
+    },
+    {
+     "id": "004154_16khz_mono",
+     "text": "a próxima.\n I really hope that\n the next time\n you and your ",
+     "lexicon_kill": false,
+     "no_speech_prob": 1.5619281909518e-11,
+     "avg_logprob": -1.4749431610107422,
+     "stats_weak": true
+    },
+    {
+     "id": "010569_16khz_mono",
+     "text": "A CIDADE NO BRASIL\n A CIDADE NO BRASIL",
+     "lexicon_kill": false,
+     "no_speech_prob": 8.144283858424473e-12,
+     "avg_logprob": -0.2457323968410492,
+     "stats_weak": false
+    }
+   ]
+  },
+  "reduplication": {
+   "clips": 30,
+   "empty_ok": 0,
+   "hallucinated": 30,
+   "halluc_rate": 1.0,
+   "lexicon_kill": 11,
+   "net_rate_apos_lista": 0.633,
+   "errors": 0,
+   "samples": [
+    {
+     "id": "vowel_o_n12_r3_t2",
+     "text": "E aí",
+     "lexicon_kill": true,
+     "no_speech_prob": 1.9061417722010532e-10,
+     "avg_logprob": -0.012248992919921875,
+     "stats_weak": false
+    },
+    {
+     "id": "laugh_e_n03_r7_t2",
+     "text": "E aí",
+     "lexicon_kill": true,
+     "no_speech_prob": 1.4588910635104924e-10,
+     "avg_logprob": -0.2501295804977417,
+     "stats_weak": false
+    },
+    {
+     "id": "vowel_o_n08_r9_t2",
+     "text": "E aí",
+     "lexicon_kill": true,
+     "no_speech_prob": 1.856790415866172e-10,
+     "avg_logprob": -0.00554656982421875,
+     "stats_weak": false
+    },
+    {
+     "id": "vowel_i_n03_r7_t0",
+     "text": "E aí",
+     "lexicon_kill": true,
+     "no_speech_prob": 7.328045809051886e-11,
+     "avg_logprob": -0.20621752738952637,
+     "stats_weak": false
+    },
+    {
+     "id": "cv_tu_n04_r7_t0",
+     "text": "Titi-titi.",
+     "lexicon_kill": false,
+     "no_speech_prob": 5.4212936223541064e-11,
+     "avg_logprob": -0.6028106212615967,
+     "stats_weak": true
+    },
+    {
+     "id": "laugh_i_n05_r3_t2",
+     "text": "E E E E E E",
+     "lexicon_kill": false,
+     "no_speech_prob": 1.3450859870367537e-10,
+     "avg_logprob": -0.3241029381752014,
+     "stats_weak": false
+    },
+    {
+     "id": "cv_da_n03_r9_t2",
+     "text": "Tchau.",
+     "lexicon_kill": false,
+     "no_speech_prob": 1.520981812719313e-10,
+     "avg_logprob": -0.4953910708427429,
+     "stats_weak": true
+    },
+    {
+     "id": "vowel_o_n03_r5_t2",
+     "text": "E aí",
+     "lexicon_kill": true,
+     "no_speech_prob": 3.8239300614861804e-10,
+     "avg_logprob": -0.005532264709472656,
+     "stats_weak": false
+    }
+   ]
+  }
+ },
+ "note": "gate v6 completo vive no duplex-asrd (lane OC); kill simulado = listas TSV (tier-2 + lexicon)",
+ "hallucinations_observed_file": "/home/nixos/projects/nixos-ai/scripts/../reports/duplex-eval/hallucinations-observed.txt"
+}

@@ -1,0 +1,21 @@
+{
+ "ts": "2026-11-09T06:48:56",
+ "asr": "http://127.0.0.1:8097",
+ "samples_per_cat": 4,
+ "seed": 42,
+ "categories": {
+  "silence": {
+   "error": "sem fixtures: /home/nixos/.local/share/jarvis/voice-trigger/silence.parquet"
+  },
+  "nonspeech": {
+   "error": "sem fixtures: /home/nixos/.local/share/jarvis/voice-trigger/nonspeech.parquet"
+  },
+  "music": {
+   "error": "sem fixtures: /home/nixos/.local/share/jarvis/voice-trigger/music.parquet"
+  },
+  "reduplication": {
+   "error": "sem fixtures: /home/nixos/.local/share/jarvis/voice-trigger/reduplication.parquet"
+  }
+ },
+ "note": "gate v6 completo vive no duplex-asrd (lane OC); kill simulado = listas TSV (tier-2 + lexicon)"
+}
