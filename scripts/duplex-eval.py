@@ -24,7 +24,7 @@ Métricas stubs (contrato no design doc, TODO com dono/OC):
   --timespeak        idem
 
 USO:   python3 scripts/duplex-eval.py --trigger-bench [--samples 20] [--seed 42]
-          [--asr http://127.0.0.1:8097] [--fixtures /tmp/opencode/night-microturn/kaggle-pkg]
+          [--asr http://127.0.0.1:8097] [--fixtures ~/.local/share/jarvis/voice-trigger]
           [--out reports/duplex-eval]
        python3 scripts/duplex-eval.py --unit-battery [--classify http://127.0.0.1:8092]
 EXEMPLO (smoke rápido): python3 scripts/duplex-eval.py --trigger-bench --samples 6
@@ -507,7 +507,11 @@ def main() -> int:
     ap.add_argument("--asr", default="http://127.0.0.1:8097")
     ap.add_argument("--classify", default="http://127.0.0.1:8092")
     ap.add_argument("--fixtures",
-                    default="/tmp/opencode/night-microturn/kaggle-pkg")
+                    # (09/11, coord-naming) fixture de eval NAO vive em /tmp:
+                    # a limpeza levou os parquets e o bench virou 'sem fixtures' nas
+                    # 4 categorias. Destino duravel, o mesmo do gerador
+                    # scripts/voice-trigger-fixtures.py.
+                    default=str(Path.home() / ".local/share/jarvis/voice-trigger"))
     ap.add_argument("--out", default=os.path.join(os.path.dirname(__file__),
                                                   "..", "reports", "duplex-eval"))
     args = ap.parse_args()
