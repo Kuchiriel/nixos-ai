@@ -172,6 +172,24 @@ som errado). E sem positivos **não dá para medir o recall do wakeword**: os
 6 disparos da corrida completa (0,5+) estão nos segmentos que não consegui
 rotular, e podem ser wakes verdadeiros **ou** falsos positivos da sala.
 
+### 5d. O proxy TTS **não serve** (medido 09/11) — e o modo de calibração estava quebrado
+
+Duas coisas achadas ao tentar fechar a calibração sem esperar a voz do dono:
+
+1. **O `--calibrate` do scorer da casa estava quebrado** (`Scorer.score_clip(pcm)`
+   chamado no lugar da instância ⇒ `missing 1 required positional argument`):
+   o modo de calibração **nunca** rodou. Corrigido (commit próprio, o fix é
+   de uma linha).
+2. **Positivos sintéticos não funcionam como proxy**: 8 amostras de "hey jarvis"
+   geradas pelo TTS local (Kokoro) pontuam **no mesmo patamar dos negativos**
+   (o limiar calibrado desce ao piso, 0,0001, com 100 % dos positivos
+   "aprovados" — só porque ambos são ~0). O openWakeWord foi treinado em fala
+   real ⇒ **voz sintetizada não transfere** ⇒ um conjunto positivo de TTS
+   daria uma curva falsa.
+
+⇒ Confirma o pedido: o positivo tem que ser a **voz real do dono** dizendo a
+frase de wake. Com o bug corrigido, a calibração roda em um comando.
+
 **O input que falta (uma coisa só, e é do dono):** alguns WAVs do dono
 **dizendo a frase de wake** ("hey jarvis", 5 a 10 amostras no microfone de
 uso). Com os positivos + os 1 811 negativos já medidos, o modo de

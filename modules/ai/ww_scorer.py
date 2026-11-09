@@ -175,7 +175,10 @@ def main() -> int:
         for fname in os.listdir(args.positive_dir):
             if fname.endswith(".wav"):
                 pcm = load_mono16k(os.path.join(args.positive_dir, fname))
-                score = Scorer.score_clip(pcm)
+                # (09/11, coord-naming) score_clip e' metodo de INSTANCIA:
+                # chamar Scorer.score_clip(pcm) quebrava o modo --calibrate
+                # com 'missing 1 required positional argument'.
+                score = sc.score_clip(pcm)
                 pos_scores.append(score)
         neg_scores = []
         for fname in os.listdir(args.negative_dir):
