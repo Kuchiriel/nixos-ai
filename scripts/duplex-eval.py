@@ -78,6 +78,11 @@ def trigger_bench(args) -> dict:
               "samples_per_cat": args.samples, "seed": args.seed,
               "categories": {}, "note": "gate v6 completo vive no duplex-asrd (lane "
               "OC); kill simulado = listas TSV (tier-2 + lexicon)"}
+    # (09/11, sweep-2026-11) `observed` e a lista ACUMULADA de todos os textos
+    # alucinados (o comentario do deny-list diz "TODOS"). Antes ela nascia
+    # DENTRO do loop de categoria e era lida FORA dele => UnboundLocalError
+    # (o bench nem rodava: era parte do 0/10).
+    observed = []
     for cat, fname in [("silence", "silence.parquet"),
                        ("nonspeech", "nonspeech.parquet"),
                        ("music", "music.parquet"),
@@ -91,7 +96,6 @@ def trigger_bench(args) -> dict:
         rng.shuffle(idx)
         idx = idx[:args.samples]
         hallo, killed, empty, errs, samples = 0, 0, 0, 0, []
-        observed = []
         for i in idx:
             row = df.iloc[i]
             try:
