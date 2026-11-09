@@ -57,6 +57,39 @@ Se o material vier em shards ou WAVs soltos (em vez do dataset pronto), o packer
 `scripts/voice-trigger-fixtures.py` monta os quatro parquets no formato que o bench
 lê (`id` + `audio.bytes` em FLAC), com `--verify` para reler como o bench lê.
 
+## De onde vem cada categoria (medido, manifesto recuperado 09/11)
+
+O pacote original é o **`scicom-antihalluc-pt`** (espelho privado do HF
+`kuchiriel/scicom-antihalluc-pt`, montado a partir de
+`Scicom-intl/Whisper-Hallucination` na noite de 20/10). O manifesto
+completo está em [`MANIFEST-scicom-antihalluc-pt.md`](MANIFEST-scicom-antihalluc-pt.md)
+(recuperado dos transcripts; o original vivia em `/tmp` e a limpeza levou).
+
+| arquivo | rows | classe | label | origem |
+|---|---|---|---|---|
+| `silence.parquet` | 42 | gatilho | vazio | **sintetizável** (zeros) |
+| `reduplication.parquet` | 1 440 | gatilho | `reference_text`/`reference_collapsed` | **sintetizável** (o mesmo segmento duas vezes) |
+| `nonspeech.parquet` | 1 168 | gatilho | vazio | **FSD50K** (não-fala: ruído, respiração, tosse) — dataset pequeno, com rótulo de classe |
+| `music.parquet` | 600 | gatilho | `reference_text` | música (onde nasce a alucinação clássica) |
+| `lexicon-synth-pt.parquet` | 395 | **positivo** anti-overban | `phrase` = o texto real falado | TTS |
+
+**Não precisa dos 164 GB** do `Malaysian-Chinese-Emilia`: ou se baixa o
+espelho privado (que já traz os 4 parquets com FLAC embutido) ou se monta no
+barato:
+
+1. `silence` e `reduplication`: **sintetizar**, download zero;
+2. `nonspeech`: FSD50K (pequeno);
+3. `music`: fonte real, por último (é a categoria cara).
+
+O script que consumiu os parquets está no repo:
+`scripts/kaggle-scicom-antihalluc-kernel.py` (lê `FIX/{fname}.parquet`,
+amostra por cap 500/500/400/400 e marca `arm=trigger` com target vazio).
+O empacotador para material solto é `scripts/voice-trigger-fixtures.py`
+(FLAC + `id`/`audio.bytes`, com `--verify`).
+
+**Gap conhecido (do manifesto):** genuíno PT = 0 no Scicom inteiro, e
+`speech_in_noise` ficou fora do pacote (vivia em `/tmp`, volátil).
+
 ## Regra
 
 Qualquer artefato de avaliação (áudio, parquets, reports grandes) vai para um caminho
