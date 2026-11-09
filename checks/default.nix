@@ -193,6 +193,29 @@
       (m: m.pn == smallModelProvider && m.id == smallModelId)
       withInput);
     maxInput = builtins.foldl' (a: m: lib.max a (m.input or 0)) 0 withInput;
+    # A compactação precisa CABER: ela lê o histórico inteiro (até o
+    # limit.input da sessão) E escreve o resumo (maxTokens) com a reserva do
+    # compaction buffer. Então a folga exigida é:
+    #   contexto(small_model) >= limit.input(sessão) + maxTokens + reserved
+    # Sem isso, uma sessão no limite faz a compactação estourar o contexto
+    # do modelo que compacta (medido 08/11: 662.341 tokens num modelo de
+    # 20.480). O gate duro continua sendo contexto > max input; a folga
+    # exigida é reportada para a decisão do dono (o input de 1M nos modelos
+    # do free tier deixa a folga fina).
+    maxInputModel = builtins.head (builtins.filter
+      (m: (m.input or 0) == maxInput)
+      withInput);
+    requiredContext = maxInput
+      + (limits {
+        context = maxInputModel.context;
+        output = maxInputModel.output;
+        headroom = maxInputModel.headroom;
+      }).maxTokens
+      + (limits {
+        context = maxInputModel.context;
+        output = maxInputModel.output;
+        headroom = maxInputModel.headroom;
+      }).reserved;
   in
     pkgs.runCommand "opencode-compaction-model" {
       nativeBuildInputs = [ pkgs.jq ];
@@ -201,7 +224,8 @@
         inherit smallModelProvider smallModelId;
         smallModelContext = smallModel.context or 0;
         smallModelInput = smallModel.input or 0;
-        inherit maxInput;
+        inherit maxInput requiredContext;
+        folga = (smallModel.context or 0) - requiredContext;
         ok = (smallModel.context or 0) > maxInput;
       };
     } ''
@@ -215,7 +239,7 @@
         echo "  ver docs/auditoria/CONTEXT-MANAGEMENT-2026-11-08.md" >&2
         exit 1
       fi
-      echo "opencode-compaction-model: PASS (small_model contexto=$(jq -r '.smallModelContext' $out/results.json) > maior input=$(jq -r '.maxInput' $out/results.json))" > $out/summary.txt
+      echo "opencode-compaction-model: PASS (small_model contexto=$(jq -r '.smallModelContext' $out/results.json) > maior input=$(jq -r '.maxInput' $out/results.json); contexto exigido p/ a compactação caber=$(jq -r '.requiredContext' $out/results.json), folga=$(jq -r '.folga' $out/results.json))" > $out/summary.txt
       touch $out/pass
     '';
 }

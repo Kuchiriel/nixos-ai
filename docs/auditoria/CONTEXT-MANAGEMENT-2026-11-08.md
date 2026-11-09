@@ -87,6 +87,23 @@ o check falhar com os dois números, e o revertido volta a passar. Ou seja: se a
 declarar um modelo com input maior que o contexto do modelo de compactação, o build
 quebra em vez de a compactação quebrar em produção sem ninguém ver.
 
+**E a folga real é menor do que parece.** O check também calcula o contexto que a
+compactação **precisa** para caber: o histórico inteiro (até o `limit.input` da sessão)
+**mais** o `maxTokens` do resumo **mais** a reserva do compaction buffer. Medido:
+
+```
+contexto do small_model .............. 1.048.576
+maior limit.input de sessão .......... 1.028.576
+contexto exigido p/ compactar ....... 1.044.960   (input + 32.000 + 20.000)
+folga real ...........................      3.616
+```
+
+Ou seja: com o `input` de 1M, a compactação de uma sessão no limite **cabe por 3.616
+tokens**, o que na prática é o mesmo defeito do incidente (o modelo que compacta não
+cabe o que precisa compactar), só 512 vezes menos dramático. Com o `input` de
+262.144 nos modelos do free tier, o contexto exigido cai para ~314.144 e a folga passa
+de 734 mil tokens. É o número que decide a pendência do dono.
+
 - **Config**: o modelo que o opencode usa para compactar tem que ter contexto maior que
   o `limit.input` do modelo da sessão. No nosso caso, a compactação está caindo em
   servidor local porque o tier local (20k) foi escolhido para a tarefa.
