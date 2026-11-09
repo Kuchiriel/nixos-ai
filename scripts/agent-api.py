@@ -93,7 +93,7 @@ def _dedupe_key(text: str) -> str:
     """
     t = re.sub(r"\s+", " ", str(text or "")).strip().lower()
     t = _BOILERPLATE.sub("", t, count=1)
-    return t[:80]
+    return t
 
 
 def _dedupe_path(base: str, session: str) -> Path:
@@ -101,14 +101,30 @@ def _dedupe_path(base: str, session: str) -> Path:
     return _STATE_DIR / f"delivered.{tag}.txt"
 
 
-def _already_delivered(path: Path, key: str) -> bool:
+def _already_delivered(path: Path, key: str, *, ratio: float = 0.72) -> bool:
+    """A nota ja foi entregue?
+
+    O texto exato nao basta: o mesmo aviso chega com variacoes ("ha 3
+    dias" ou nao, "conforme o README" ou "conforme o checkpoint"), e cada
+    variacao hashava diferente, entao o loop continuava. Aqui a comparacao
+    e por SIMILARIDADE (difflib) contra as ultimas entregas do alvo, o que
+    pega variacao de insercao e de reordenacao sem confundir duas
+    mensagens de conteudo diferente.
+    """
     try:
         if not path.exists():
             return False
-        return any(line.strip() == key for line in
-                   path.read_text(errors="ignore").splitlines())
+        entregues = [l.strip() for l in
+                     path.read_text(errors="ignore").splitlines() if l.strip()]
     except Exception:
         return False
+    if key in entregues:
+        return True
+    import difflib
+    for d in entregues[-20:]:
+        if difflib.SequenceMatcher(None, key, d).ratio() >= ratio:
+            return True
+    return False
 
 
 def _mark_delivered(path: Path, key: str) -> None:
