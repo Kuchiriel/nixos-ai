@@ -55,14 +55,30 @@ A matrícula do dono ficou pronta (8 takes coerentes, consistência interna 0,85
 0,9006, perfil gitignored e local) e o perfil **está ativo no ASRD**. Ela não vira gate
 de produção por causa da separabilidade, não por falta de dado.
 
-**E o gate de texto não fecha a alucinação de gatilho (medido depois, 09/11):** a
-bateria de trigger deu **111 de 120 alucinações (0,925)** e o gate real do asrd mata
-**zero** delas, porque ele só mata a frase do léxico quando o áudio também está fraco
-(`no_speech_prob` mediano 0,000 e `avg_logprob` mediano entre -0,22 e -0,30, contra um
-limiar de -0,45: a transcrição alucinada chega confiante). O resíduo tem de ser tratado
-**antes do ASR** (o VAD não deveria mandar silêncio digital para o modelo: o ASR
-respondeu "E aí" a um clip de zeros) ou **no gate de voz**, com a wakeword. A deny-list
-segue útil para o outro caso, o de frase alucinada sobre áudio fraco de verdade.
+**E o gatilho, medido nos DOIS caminhos (09/11, coord-naming — corrige o número de
+baixo):** a bateria de trigger deu **111 de 120 alucinações (0,925)**, mas esse número
+é do **whisper-server**: o bench faz `POST /inference` direto e **nunca passa pelo VAD,
+nem pela segmentação, nem pelo gate do asrd**. Medi o **pipeline da casa** com o probe
+novo (`scripts/voice-pipeline-probe.py`, mesmo áudio, mesma janela, comparativo
+pareado, controle positivo 5/5):
+
+| categoria | n | cru (whisper direto) | casa (VAD→segmento→gate) |
+|---|---|---|---|
+| silence | 23 | 8 (0,35) | **0** |
+| nonspeech | 30 | 26 (0,87) | **0** |
+| music | 30 | 27 (0,90) | **0** |
+| reduplication | 40 | 22 (0,55) | **3 (0,07)** |
+| **total** | **123** | **83 (0,67)** | **3 (0,024)** |
+
+⇒ **a casa corta 96 % das alucinações de gatilho**, e o residual são 3 clipes de
+**repetição de sílabas** ("Ah, ah, ah.", "Tataataataata.", "E E E E E") com áudio
+confiante (`avg_logprob` −0,24 a −0,43) que o léxico não pega. Ou seja: o VAD fecha
+silêncio/nonspeech/música, o gate fecha o resto, e **o wakeword cobre o que sobrou**
+(repetição) mais a variação de nível de uma sala real. A deny-list segue útil para o
+outro caso (frase alucinada sobre áudio fraco de verdade). Detalhe: o gate de texto
+só mata quando o áudio está fraco (`ns>0,35` ou `lp<-0,45`), que é o caso raro na
+alucinação de gatilho — por isso o "0,22" e o "0,925" medidos antes são do caminho
+cru, não da casa.
 
 **O que ainda falta para o wakeword (09/11):** o limiar **não pode ser chutado**. No
 corpus de 1 817 segmentos da casa o wakeword dispara em 6 acima de 0,5 (0,33 %), mas ao
@@ -86,6 +102,14 @@ E a **bateria E2E ainda precisa do restart do stack de voz**: o processo do ASRD
 (pid 2807337) e o `duplex-voice` (pid 2806473) são de **08/11 11:02** (código antigo),
 mesmo com o fix do ASRD já no `main` — por isso a bateria continua em 0/10
 "sem-segmento" enquanto o ASRD novo responde em 395,6 ms.
+
+**O restart ficou seguro (09/11, coord-naming, commit `99ae9c63`):** o ambiente do
+processo ASRD era resolvido com `nixpkgs#gcc.lib`, que **não existe** nesta nixpkgs
+(o atributo é `gcc.cc.lib`), e a falha era engolida — o ASRD só vivia porque o ambiente
+herdado já trazia o path de `libstdc++`. Num restart em ambiente limpo ele morre no
+import do numpy (o sintoma 0/10 "sem-segmento"). Agora `scripts/asrd_env.py` resolve
+os atributos que existem, **verifica o soname** no resultado, tem fallback no store e
+reporta o que falta; e o ASRD imprime um erro JSON em vez de morrer calado.
 
 ## 4. Rebuild para o gate (dois fixes medidos, já no `main`)
 
