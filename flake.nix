@@ -318,6 +318,14 @@
           python313Packages.playwright
           python313Packages.prompt-toolkit
           python313Packages.onnxruntime
+          # (09/11, sweep-2026-11) torchaudio: o runtime do speaker-ID
+          # (wespeakerruntime, usado por scripts/duplex-asrd.py e
+          # scripts/spk-enroll.py) importa torchaudio, e sem ele o modulo
+          # nao carrega em NENHUM ambiente da box (o venv lab tem
+          # torchaudio sem torch; o nixpkgs tem torch sem torchaudio) =>
+          # a matricula do dono nunca rodou e o gate de audio nao
+          # identifica o falante. onnxruntime sozinho nao basta.
+          python313Packages.torchaudio
           # (09/11, sweep-2026-11) pandas + pyarrow: o harness de voz
           # (scripts/duplex-eval.py --trigger-bench) le os clips do Scicom
           # em parquet; sem eles o bench nem roda (e o venv karaok, que
