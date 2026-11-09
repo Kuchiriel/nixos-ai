@@ -60,7 +60,7 @@ baixo):** a bateria de trigger deu **111 de 120 alucinações (0,925)**, mas ess
 é do **whisper-server**: o bench faz `POST /inference` direto e **nunca passa pelo VAD,
 nem pela segmentação, nem pelo gate do asrd**. Medi o **pipeline da casa** com o probe
 novo (`scripts/voice-pipeline-probe.py`, mesmo áudio, mesma janela, comparativo
-pareado, controle positivo 5/5):
+pareado, controle positivo 9/9):
 
 | categoria | n | cru (whisper direto) | casa (VAD→segmento→gate) |
 |---|---|---|---|
