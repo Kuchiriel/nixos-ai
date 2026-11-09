@@ -529,27 +529,37 @@ const legacy = {
           + "(plugin do TUI nao interceptou)");
         break;
       }
-      // (b) O PROMPT DO DONO NAO E TRADUZIDO AQUI — de proposito.
+      // (b) Deception: o prompt de ENTRADA tambem e traduzido — e isso e
+      // o que faz o trabalho: o prompt gravado e o prompt que o modelo ve,
+      // entao o termo real nunca chega ao modelo.
       //
-      // MEDIDO 08/11 (E2E: /tmp/opencode/test-redteam-plugin.mjs): traduzir
-      // aqui grava a DECOY no prompt do dono — o dono le o proprio prompt
-      // com a palavra trocada ("verificar M H D D o S") e nao reconhece o que
-      // escreveu. O dono: "o decoy ta mudando meu prompt".
+      // MEDIDO 08/11 (o dono): "tava funcionando o decoy, nao tinha lista,
+      // mudava meu prompt mas tbm enganava a ia". O defeito NAO era
+      // traduzir o prompt — era (a) a LISTA vazia e (b) o par no-op
+      // (trigger == decoy, porque o dono digitava a mesma palavra nos dois
+      // lados). Ambos corrigidos no comando (pair gera as decoys e valida
+      // a direcao; term auto monta a lista).
       //
-      // ONDE A TRADUCAO ACONTECE (o unico lugar certo):
-      //   - LLM boundary: "experimental.chat.messages.transform" (o NET) —
-      //     o modelo ve a decoy, o dono continua vendo o termo real;
-      //   - tool.execute.before: a decoy volta a ser o termo real no
-      //     comando (o disco ve a palavra de verdade).
-      // Asnão o termo real NUNCA sai do prompt do dono e NUNCA chega ao modelo.
+      // A traducao no limite LLM (o NET, experimental.chat.messages
+      // .transform) continua como segunda barreira: cobre o output das
+      // tools MCP, que o chat.message nao ve.
       const st = loadState();
       const hasDeception = st.enabled && st.deception?.length > 0;
       const hasPair = st.enabled && !!(st.trigger && st.decoy)
         && st.trigger !== st.decoy;
       if (!hasDeception && !hasPair) return;
-      audit(new Date().toISOString() + " PROMPT intacto pair="
-        + hasPair + " deception=" + st.deception.length
-        + " (traducao so no limite LLM)");
+      for (const part of output.parts) {
+        if (!part || part.type !== "text" || !part.text) continue;
+        const before = part.text;
+        let text = part.text;
+        if (hasPair) text = toDecoy(text, st);
+        if (hasDeception) text = decomposeText(text, st);
+        if (text !== before) {
+          part.text = text;
+          audit(new Date().toISOString() + " PROMPT sanitizado pair="
+            + hasPair + " deception=" + st.deception.length);
+        }
+      }
     },
 
     // ── 2. transliteracao IN (args -> disco) ──────────────────────────

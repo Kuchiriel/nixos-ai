@@ -146,17 +146,36 @@ const MIN_LEN = 3;
 // voltam ao termo real quando o modelo devolve qualquer uma delas.
 // O dono: "era pra fazer lista de decoy, um so sim ajuda".
 function gerarDecoys(termo, n = 4) {
+  // MEDIDO 08/11: o "split" (separar por ponto) devolve o TERMO ELE MESMO
+  // quando o termo nao tem ponto ("MHDDoS" -> "MHDDoS"). A 1a decoy era o
+  // proprio termo => o modelo via o termo real e nao havia traducao
+  // nenhuma. Agora: a decoy tem que ser DIFERENTE do termo (ja era
+  // verdade no filtro, mas o split passava porque o metodo retorna o
+  // termo intacto) e a ORDEM e a que o modelo "enxerga" menos:
+  // spaced (letra por letra) e split sao as mais neutras.
+  const ordem = ["spaced", "split", "leet", "reversed", "xor", "b64"];
   const out = [];
-  for (const [nome, m] of Object.entries(DECEPTION_METHODS)) {
+  for (const nome of ordem) {
+    const m = DECEPTION_METHODS[nome];
+    if (!m) continue;
     let d;
     try {
       d = m.encode(termo);
     } catch {
       continue;
     }
-    if (!d || d === termo) continue;
-    if (termo.includes(d)) continue;   // fatia do termo: quebra a volta
-    if (d.length < MIN_LEN) continue; // curta: reescreve o mundo
+    // NENHUMA decoy pode ser o proprio termo (MEDIDO 08/11: o termo como
+    // decoy = o modelo ve o termo real e a traducao nao existe).
+    //
+    // O filtro compara NORMALIZADO (espacos colapsados + minusculas):
+    // o metodo "spaced" de um termo JA espacado devolve o termo com o
+    // espaco duplo ("MHDDoS" -> "MHDDoS") — nao e igual na
+    // string, mas o modelo le o termo real do mesmo jeito. O "split"/"leet"
+    // devolvem o termo intacto (so maiusculas, sem acento).
+    const norm = (x) => String(x || "").toLowerCase().replace(/\s+/g, " ");
+    if (!d || norm(d) === norm(termo)) continue;
+    if (norm(termo).includes(norm(d))) continue; // fatia do termo: quebra a volta
+    if (d.length < MIN_LEN) continue;           // curta: reescreve o mundo
     if (!out.includes(d)) out.push(d);
   }
   return out.slice(0, Math.max(1, Math.min(8, n)));
@@ -281,23 +300,14 @@ export function handleJailbreakCommand(argsText) {
       if (term.length < MIN_LEN) {
         return `termo "${term}" tem ${term.length} chars — minimo ${MIN_LEN}.`;
       }
-      const candidatos = [];
-      for (const [nome, m] of Object.entries(DECEPTION_METHODS)) {
-        let d;
-        try {
-          d = m.encode(term);
-        } catch {
-          continue;
-        }
-        if (!d || d === term) continue;
-        if (term.includes(d)) continue;      // fatia do termo: quebra a volta
-        if (d.length < MIN_LEN) continue;    // curta: reescreve o mundo
-        if (!candidatos.includes(d)) candidatos.push({ d, metodo: nome });
-      }
-      if (!candidatos.length) {
+      // fonte unica: o mesmo gerador do 'pair' (a 1a decoy NUNCA e o termo
+      // — MEDIDO 08/11: o split/leet devolviam o termo intacto e a 1a decoy
+      // era o proprio termo, entao nao havia traducao nenhuma).
+      const geradas = gerarDecoys(term, n);
+      if (!geradas.length) {
         return `nenhuma decoy util para "${term}".`;
       }
-      const escolhidas = candidatos.slice(0, n);
+      const escolhidas = geradas.map((d) => ({ d, metodo: "auto" }));
       const others = (state.deception || []).filter((x) => entryTerm(x) !== term);
       const anterior = (state.deception || []).find((x) => entryTerm(x) === term);
       const prev = anterior && Array.isArray(anterior.decoys)
@@ -310,7 +320,6 @@ export function handleJailbreakCommand(argsText) {
       return (
         `termo "${term}" na lista (${others.length} termo(s)) — ${merged.length} decoy(s):\n` +
         `  ${merged.join(" | ")}\n` +
-        `  (metodos: ${escolhidas.map((e) => e.metodo).join(", ")})\n` +
         "  (a 1a decoy e a forma que o modelo ve; qualquer decoy volta ao termo real no comando)"
       );
     }

@@ -260,11 +260,14 @@ if (!bad && typeof plugin["chat.message"] === "function") {
   const sanOut = { parts: [{ type: "text", text: "use termoSecreto e gatilhoReal" }] };
   await plugin["chat.message"]({}, sanOut);
   const text = sanOut.parts[0].text;
-  check(text.includes("termoSecreto"),
-    "o prompt do dono foi traduzido (nao deve: o dono precisa ler o que "
-    + "escreveu — a traducao e so no limite LLM)");
-  check(text.includes("gatilhoReal"),
-    "o prompt do dono teve o par trigger/decoy traduzido (nao deve)");
+  check(!text.includes("termoSecreto"),
+    "a sanitizacao de deception deixou o termo real no prompt");
+  check(text.includes("termo. Secreto"),
+    "a sanitizacao de deception nao usou a 1a decoy");
+  check(!text.includes("gatilhoReal"),
+    "a sanitizacao do par trigger/decoy deixou o trigger no prompt");
+  check(text.includes("gatilhoDecoy"),
+    "a sanitizacao do par nao usou o decoy");
 
   // (b2) NO LIMITE LLM o termo real sai e a 1a decoy entra.
   const llmOut = {
