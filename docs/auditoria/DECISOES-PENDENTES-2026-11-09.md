@@ -1,0 +1,92 @@
+# Decisões pendentes do dono (2026-11-09, uma página)
+
+Tudo o que ficou esperando você na noite, junto, com o número que decide e o comando que
+aplica. Nada aqui mexe em produção sem sua palavra.
+
+## 1. Teto de sessão no free tier (o mais urgente)
+
+**Problema medido**: em 6 h o upstream recusou **91** requests por `context_length`, todos
+acima de 1 MB (média 5,4 MB), respondendo `limit 1048576 / actual 1541675`. As sessões
+mandam prompts **493 mil tokens acima do teto da API**. Cada reenvio queima o bucket de
+8 RPM, e a fila resultante (14 esperas de até 21 s) mata os clientes de timeout curto
+(coord-mcp, 25 s).
+
+**Proposta**: branch `feat/free-tier-input-cap-262144`, 5 arquivos, 71 linhas, aplica
+limpo sobre o `main` atual. Medido no branch:
+
+```
+maior limit.input de sessão ..........    262.144  (era 1.028.576)
+contexto exigido p/ compactar .......    314.144
+contexto do modelo de compactação ....  1.048.576
+folga real ...........................    734.432  (era 3.616)
+```
+
+A API continua declarando 1.048.576: o que desce é o **limiar de compactação** do
+opencode, ou seja uma sessão runaway queima a cota compartilhada por um quarto do tempo.
+Com a folga de 734 mil tokens, a compactação cabe com folga em vez de caber por 3.616.
+
+```bash
+cd ~/projects/nixos-ai && git merge feat/free-tier-input-cap-262144 && ./rebuild-host.sh
+```
+
+## 2. Sunshine/Moonlight só na tailnet
+
+**Problema medido**: o firewall liberava 47984 a 48010 (TCP) e 47998 a 48010 (UDP) em
+**todas** as interfaces, e o Sunshine escuta em 0.0.0.0 quando sobe (achado do Crouton
+Alpha, com CVE-2026-111044).
+
+**Proposta**: branch `fix/sunshine-somente-na-tailnet`, 1 arquivo, 9 linhas, aplica limpo.
+As portas vão para a regra do `tailscale0`, o mesmo destino do opencode serve (:4599): o
+streaming do celular continua pelo tailnet e a exposição some da LAN e da internet.
+
+```bash
+cd ~/projects/nixos-ai && git merge fix/sunshine-somente-na-tailnet && ./rebuild-host.sh
+```
+
+## 3. Gate de voz: wakeword (decisão já com medição)
+
+**Medido com o backend WeSpeaker de fato carregando** (o runtime estava quebrado, isso
+também foi consertado): intra-falante n=34, média 0,3526, p95 0,6435; inter-falante
+n=102, média 0,3196, p95 0,5751. As distribuições **se tocam**, o limiar do gate é 0,82 e o
+inter-falante tem máximo 0,8379. Logo o gate por matrícula **não segura** nesta sala e a
+resposta honesta é a **wakeword**.
+
+A matrícula do dono ficou pronta (8 takes coerentes, consistência interna 0,8552, verify
+0,9006, perfil gitignored e local) e o perfil **está ativo no ASRD**. Ela não vira gate
+de produção por causa da separabilidade, não por falta de dado.
+
+## 4. Rebuild para o gate (dois fixes medidos, no código)
+
+Ambos no `main`, ambos precisam de rebuild porque o gate roda da cópia do store:
+
+- **Disjuntor de contexto** (`932a0324`): o gate aprende o tamanho recusado por modelo e
+  responde 400 local, sem reenviar. Prova: a segunda request do mesmo tamanho não chega
+  ao upstream.
+- **Via prioritária** (`ed560081`): pedidos de até 256 KB têm bucket próprio, com o dobro
+  da taxa, e não ficam na fila dos monstros. Prova: o pedido pequeno respondeu em 0,00 s
+  enquanto o grande segurava o upstream por 3 s. O fator é 2 de propósito (8 + 16 = 24
+  RPM, abaixo do teto de 40 do upstream).
+
+```bash
+cd ~/projects/nixos-ai && ./rebuild-host.sh
+```
+
+## 5. Já está no main, sem decisão pendente
+
+- Runtime do speaker-ID (`torchaudio` no devShell, VAD do cache local, env do ASRD
+  resolvido pelo nix): o ASRD morria no start e a bateria E2E ficava em 0/10
+  "sem-segmento". Agora ele responde, com 395,6 ms de latência de endpoint.
+- Bug do harness (`observed` lido fora do loop) e pandas/pyarrow no devShell: o trigger
+  bench agora roda e gera relatório.
+- Destino durável dos fixtures (`data/voice-fixtures/README.md`): fixture de eval não
+  vive em `/tmp`.
+- Relay da auditoria spiritvale: **não há VPS**, o Mullvad roda como serviço NixOS na
+  sua máquina (`services.mullvad-vpn`), com a conta expirando hoje.
+
+## 6. Pendente com a peer, não com você
+
+Os fixtures do trigger bench: a fonte original (o pacote "kaggle-pkg" do SCICOM com as
+quatro categorias) não aparece no GitHub, no HF nem no Kaggle. Proposta que mandei:
+**silence e reduplication são sintetizáveis** (sem download) e só nonspeech e music
+precisam de fonte pequena. O script de empacotamento (`voice-trigger-fixtures.py`) já
+está pronto.
