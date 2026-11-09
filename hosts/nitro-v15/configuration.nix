@@ -126,6 +126,19 @@ services.avahi = {
     enableExcludeWrapper = true;
   };
 
+  # (09/11, dono pediu) Beszel agent — monitora a máquina no hub do
+  # internal.spiritvale.info. KEY/TOKEN em /etc/beszel-agent.env (chmod 600,
+  # fora do git); HUB_URL não é segredo. Agent dials OUT (websocket), sem
+  # porta de entrada. NVIDIA detection é via `services.xserver.videoDrivers`
+  # (já declarado abaixo).
+  services.beszel.agent = {
+    enable = true;
+    environment = {
+      HUB_URL = "https://beszel.internal.spiritvale.info";
+    };
+    environmentFile = "/etc/beszel-agent.env";
+  };
+
   # Habilita o gerenciamento de volumes e montagem de mídia
   services.gvfs.enable = true;
   services.udisks2.enable = true;
