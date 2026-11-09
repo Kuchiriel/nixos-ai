@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_93 tools._
+_94 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -123,6 +123,7 @@ _93 tools._
 - `setup-hackmd.sh` (nixos-ai/scripts) — ═══ Setup HackMD API Token ═══
   use: `Usage: ./scripts/setup-hackmd.sh`
 - `silero_vad_iterator.py` (nixos-ai/scripts) — This is copied from silero-vad's vad_utils.py:
+- `spk-enroll.py` (nixos-ai/scripts) — """spk-enroll.py — matricula a voz do dono para o gate de audio da voz.
 - `sync-vault.sh` (nixos-ai/scripts) — Sync important docs to Obsidian vault (not everything)
   use: `Run: ./scripts/sync-vault.sh`
 - `thermal-curve.sh` (nixos-ai/scripts) — thermal-curve.sh — Measure thermal degradation over 5 minutes of continuous inference
