@@ -213,10 +213,21 @@ read pt-BR); answer the owner in pt-BR.
   the agent.
 - **The cloud provider goes through a rate gate**: `nv-gate.service` (user
   systemd, `scripts/nv-gate.py`) is a transparent proxy in front of the NVIDIA
-  free tier (40 RPM/chave): token bucket 24 RPM + burst 4, and a 429 from the
-  upstream is retried with backoff instead of killing the turn. It never sees
+  free tier (40 RPM/chave **nominal**): the token bucket is **8 RPM + burst 2**
+  because ~8 req/min is the **measured effective ceiling** (the nominal 40 does
+  not hold; see the `why` field in `modules/ai/free-providers.json`). A 429 from
+  the upstream is retried with backoff instead of killing the turn. It never sees
   a key (the `Authorization` header is just forwarded). Configured in
   `modules/ai/free-providers.json` (`providers.nvidia.gate`).
+  **Do not raise the RPM to chase the queue waits** (measured 09/11: `queue wait
+  21.3s`, 12 times in 2 h): 8/min is the measured ceiling, so a higher bucket
+  only moves the 429 upstream. And the waits are not fatal in production: the
+  opencode provider waits `timeout: 1800000` (30 min), so a client that gives
+  up in 25 s is the test's curl, not the system. The real fixes for throughput
+  are more keys or a relay (Mullvad/another exit), not a bigger bucket.
+  **The gate's journal is the diagnosis** (measured 09/11): it shows the
+  upstream's own body — `context_length limit=1048576 actual=1541675`, i.e. a
+  session 493k tokens OVER the API ceiling — and the queue wait per request.
   **A client that was already open keeps the old config in memory** — a
   restart of the opencode process is what puts a session behind the gate.
 - **The cloud keys live in two formats**: `/etc/litellm.env` keeps `export`
