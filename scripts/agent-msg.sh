@@ -84,6 +84,12 @@ while [ $# -gt 0 ]; do
         --id=*)    MSG_ID="${1#--id=}"; shift ;;
         --force)   FORCE=1; shift ;;
         --list)    LISTAR=1; shift ;;
+        # (08/11) --pending como FLAG: o AGENTS.md documenta a flag, mas o
+        # parser nao a tinha → "--pending" caia no texto e era ENTREGUE como
+        # mensagem (ruído no bus, medido: spiritvale-pivot mandou "--pending"
+        # para três alvos). Agora a flag lista os pedidos sem resposta.
+        --pending) MODO="pending"; shift ;;
+        --pending=*) MODO="pending"; shift ;;
         -h|--help) sed -n '2,60p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) break ;;
     esac
