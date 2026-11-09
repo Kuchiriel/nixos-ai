@@ -124,9 +124,10 @@ scripts/duplex-eval.py --trigger-bench --samples 10 --log /tmp/opencode/trigger-
 - **total**: 36/40 alucinou (0,90 bruto), a lista mata 17, fica 19/40 (0,47)
 
 Ou seja: o ASR alucina em quase todo gatilho (o pior é música e repetição, 1,0), e **a
-lista de negação sozinha não fecha** (ainda 0,47): o que fecha é o gate v6 completo, que
-mora no asrd com as listas combinadas. A comparação com o MFCC/WE speaker é outra frente
-(separabilidade do falante), e ela não muda este número.
+lista de negação sozinha não fecha** (ainda 0,47). **Este número é da lista crua, e o
+gate real é pior**: ver a seção seguinte, que mede o gate como o asrd de fato o roda.
+A comparação com o MFCC/WE speaker é outra frente (separabilidade do falante), e ela não
+muda este número.
 ### Quanto o gate de texto completo mata (medido 09/11, sweep-2026-11)
 
 **Cuidado: o número real é pior do que a lista crua sugere.** O gate v6 do asrd mata a
