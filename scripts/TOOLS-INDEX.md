@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_94 tools._
+_101 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -26,8 +26,11 @@ _94 tools._
 - `agents-keepawake.sh` (nixos-ai/scripts) — agents-keepawake.sh — inibe o idle (tela) enquanto houver agente vivo.
   use: `USO: systemd user service (nixos-ai home-manager, agents-keepawake.service)`
 - `agents-watcher.sh` (nixos-ai/scripts) — agents-watcher.sh — O WATCHER ÚNICO dos agentes (17/10, dono: "consolide
+- `asrd_env.py` (nixos-ai/scripts) — """asrd_env.py — environment for the duplex ASRD subprocess.
 - `bench-llm.sh` (nixos-ai/scripts) — bench-llm.sh — benchmark padrão da casa (consolida os one-offs de 24/09).
 - `check-ctx-drift.py` (nixos-ai/scripts) — """Confere o contexto do registry contra o contexto REAL dos GGUFs.
+- `check-voice-gate-parity.py` (nixos-ai/scripts) — """Prova de paridade: o gate do duplex-asrd e o de voice_gate.py são o mesmo.
+  use: `python3 scripts/check-voice-gate-parity.py`
 - `corpus_inventory.py` (nixos-ai/scripts) — """Inventário do corpus de conhecimento (§3/§22 da missão knowledge-substrate).
   use: `~/Books            corpus de conhecimento (binários + notas; inclui versions/)`
 - `ctx-usage.sh` (nixos-ai/scripts) — ctx-usage.sh — Agrega uso real do LLM local a partir do journal.
@@ -70,6 +73,7 @@ _94 tools._
 - `jarvis-registry.sh` (nixos-ai/scripts) — jarvis-registry.sh — lê o registry de modelos (fonte única: modules/ai/models.nix)
 - `kaggle-kernel-watch.sh` (nixos-ai/scripts) — kaggle-kernel-watch — acompanha um kernel Kaggle até COMPLETE/ERROR e puxa o output.
   use: `USAGE: kaggle-kernel-watch.sh --slug <owner/kernel> [--out <dir>] [--interval <s>]`
+- `kaggle-scicom-antihalluc-kernel.py` (nixos-ai/scripts) — """RECONSTRUIDO do transcript (09/11, coord-naming) — kernel Kaggle do dataset
 - `loop-close.py` (nixos-ai/scripts) — """loop-close.py — semente do laço que se fecha (F-supervisor, 26/09).
   use: `python3 scripts/loop-close.py --tier easy --rounds 1 [--apply-lessons]`
 - `loop-runner.sh` (nixos-ai/scripts) — loop-runner.sh — executor do LOOP-v2 (o agente raciocina; isto executa).
@@ -142,11 +146,16 @@ _94 tools._
   use: `Uso: ver-png.sh <arquivo.png> [ttl_segundos]`
 - `vision_matrix.py` (nixos-ai/scripts) — """vision_matrix.py — testa cada VLM candidato UM POR UM com screenshot real.
   use: `Uso: python3 vision_matrix.py [imagem]  (default: trade2p-A-mais12s.png)`
+- `voice-pipeline-probe.py` (nixos-ai/scripts) — """voice-pipeline-probe.py — mede o pipeline de voz da CASA nos gatilhos.
+  use: `python3 scripts/voice-pipeline-probe.py --samples 10 --max-seconds 8`
 - `voice-selftest.sh` (nixos-ai/scripts) — Self-test autônomo do pipeline de voz (sem microfone).
   use: `Uso: ./scripts/voice-selftest.sh`
+- `voice-trigger-fixtures.py` (nixos-ai/scripts) — """voice-trigger-fixtures.py — gera os parquets do trigger bench (durable).
 - `voice-up.sh` (nixos-ai/scripts) — voice-up.sh — ERGUE A LANE DE VOZ em 1 comando (sequência sancionada
   use: `USO: voice-up.sh [--router-off]`
+- `voice_gate.py` (nixos-ai/scripts) — """Gate de voz: a lógica anti-alucinação do duplex-asrd, extraída verbatim.
 - `vram-split-sweep.py` (nixos-ai/scripts) — """Sweep de split GPU/CPU: onde o MoE (e o denso) perdem velocidade.
+- `wakeword-eval.py` (nixos-ai/scripts) — """wakeword-eval.py — mede o wakeword da casa sobre o corpus de voz.
 - `websearch.py` (nixos-ai/scripts) — """websearch.py — busca tavily p/ o duplex. Uso:
   use: `python3 websearch.py "query"  → RESPOSTA sintetizada + snippets"""`
 - `whisper_streaming.py` (nixos-ai/scripts) — import numpy as np

@@ -217,6 +217,27 @@ def _segments_closed(lines) -> int:
     return sum(1 for obj in lines if "text" in obj)
 
 
+def _scale_to_rms(pcm, target: float):
+    """Escala o clip para um RMS alvo (simula outro nivel de sala).
+
+    O VAD da casa usa limiar FIXO (0,5), entao a sensibilidade ao nivel e' do
+    proprio silero, e nao de um limiar adaptativo. Esta funcao existe para
+    medir essa curva: o mesmo clip, em niveis diferentes.
+    """
+    import numpy as np
+
+    pcm = np.asarray(pcm, dtype="float32")
+    rms = float(np.sqrt(np.mean(np.square(pcm)))) if len(pcm) else 0.0
+    if target <= 0 or rms <= 0:
+        return pcm, {"rms_before": rms, "rms_after": rms, "clipped": 0.0}
+    gain = target / rms
+    scaled = np.clip(pcm * gain, -1.0, 1.0).astype("float32")
+    rms_after = float(np.sqrt(np.mean(np.square(scaled))))
+    clipped = float(np.mean(np.abs(pcm * gain) > 1.0))
+    return scaled, {"rms_before": round(rms, 5), "rms_after": round(rms_after, 5),
+                    "gain": round(gain, 3), "clipped": round(clipped, 4)}
+
+
 def _raw_whisper(pcm, url: str = "http://127.0.0.1:8097/inference") -> dict:
     """O MESMO audio, janela por janela, direto no whisper-server.
 
@@ -289,6 +310,12 @@ def main():
     ap.add_argument("--python", default=DEFAULT_PYTHON)
     ap.add_argument("--taskset", default="0-11")
     ap.add_argument("--seed", type=int, default=7)
+    ap.add_argument("--levels", default="",
+                    help="varredura de nivel: RMS alvos separados por virgula "
+                         "(ex.: 0,0.05,0.15). O VAD tem limiar FIXO, entao "
+                         "isto mede a sensibilidade do silero ao nivel da sala")
+    ap.add_argument("--level-samples", type=int, default=5,
+                    help="clipes por categoria na varredura de nivel")
     ap.add_argument("--out", default=str(REPO / "reports" / "voice-pipeline"))
     args = ap.parse_args()
 
@@ -325,6 +352,56 @@ def main():
                 control["texts"].append({"wav": wav.name, "texts": texts[:3]})
                 print(f"controle {wav.name}: {texts[:1]}", flush=True)
         report["control"] = control
+
+        # ---- varredura de nivel (o VAD tem limiar fixo: a sensibilidade e'
+        # do silero ao nivel da sala) ----
+        levels = []
+        for chunk in (args.levels or "").split(","):
+            chunk = chunk.strip()
+            if chunk:
+                try:
+                    levels.append(float(chunk))
+                except ValueError:
+                    pass
+        if levels:
+            import random
+            report["level_sweep"] = {"levels": levels, "categories": {}}
+            for cat in cats:
+                path = Path(args.fixtures) / f"{cat}.parquet"
+                if not path.is_file():
+                    continue
+                df = pd.read_parquet(path)
+                rng = random.Random(f"{args.seed}:level:{cat}")
+                idx = list(range(len(df)))
+                rng.shuffle(idx)
+                idx = idx[: args.level_samples]
+                per_level = {}
+                for target in levels:
+                    segs = texts_n = clips = raw_n = 0
+                    for i in idx:
+                        row = df.iloc[i]
+                        pcm = _load_clip(row["audio"]["bytes"])
+                        if len(pcm) > int(args.max_seconds * SR):
+                            pcm = pcm[: int(args.max_seconds * SR)]
+                        scaled, info = _scale_to_rms(pcm, target)
+                        raw = _raw_whisper(scaled)
+                        raw_text = (raw.get("text") or "").strip()
+                        if raw_text and any(c.isalnum() for c in raw_text):
+                            raw_n += 1
+                        lines = _feed_clip(asrd, scaled, args.speed,
+                                           args.silence_seconds)
+                        closed = _segments_closed(lines)
+                        txt = _texts(lines)
+                        clips += 1
+                        segs += closed
+                        texts_n += 1 if txt else 0
+                    per_level[str(target)] = {
+                        "clips": clips, "segments_closed": segs,
+                        "clips_with_text": texts_n,
+                        "raw_whisper_hallucinated": raw_n}
+                    print(f"nivel {target}: {cat}: cru {raw_n}/{clips} | "
+                          f"casa {texts_n}/{clips} | segs {segs}", flush=True)
+                report["level_sweep"]["categories"][cat] = per_level
 
         # ---- gatilhos pelo pipeline real ----
         import random
@@ -422,6 +499,15 @@ def main():
     c = report.get("control") or {}
     if c.get("wavs"):
         print(f"  controle (fala real): {c['with_text']}/{c['wavs']}")
+    ls = report.get("level_sweep") or {}
+    if ls:
+        print("  varredura de nivel (VAD com limiar fixo):")
+        for cat, per_level in ls["categories"].items():
+            for lvl, v in per_level.items():
+                print(f"    {cat:14s} rms={lvl:>6s}: cru "
+                      f"{v['raw_whisper_hallucinated']}/{v['clips']} | casa "
+                      f"{v['clips_with_text']}/{v['clips']} | segs "
+                      f"{v['segments_closed']}")
 
 
 if __name__ == "__main__":

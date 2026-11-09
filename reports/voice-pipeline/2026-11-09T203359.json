@@ -1,0 +1,133 @@
+{
+ "ts": "2026-11-09T20:33:59",
+ "asrd": "/home/nixos/projects/nixos-ai/scripts/duplex-asrd.py",
+ "fixtures": "/home/nixos/.local/share/jarvis/voice-trigger",
+ "samples_per_cat": 0,
+ "max_seconds": 8.0,
+ "speed": 1.0,
+ "categories": {
+  "silence": {
+   "clips": 0,
+   "segments_closed": 0,
+   "clips_with_text": 0,
+   "rate": null,
+   "raw_whisper_hallucinated": 0,
+   "raw_rate": null,
+   "top_texts": [],
+   "per_clip": []
+  },
+  "music": {
+   "clips": 0,
+   "segments_closed": 0,
+   "clips_with_text": 0,
+   "rate": null,
+   "raw_whisper_hallucinated": 0,
+   "raw_rate": null,
+   "top_texts": [],
+   "per_clip": []
+  },
+  "reduplication": {
+   "clips": 0,
+   "segments_closed": 0,
+   "clips_with_text": 0,
+   "rate": null,
+   "raw_whisper_hallucinated": 0,
+   "raw_rate": null,
+   "top_texts": [],
+   "per_clip": []
+  }
+ },
+ "control": {
+  "wavs": 0,
+  "with_text": 0,
+  "texts": []
+ },
+ "level_sweep": {
+  "levels": [
+   0.0,
+   0.05,
+   0.15,
+   0.3
+  ],
+  "categories": {
+   "silence": {
+    "0.0": {
+     "clips": 5,
+     "segments_closed": 0,
+     "clips_with_text": 0,
+     "raw_whisper_hallucinated": 2
+    },
+    "0.05": {
+     "clips": 5,
+     "segments_closed": 0,
+     "clips_with_text": 0,
+     "raw_whisper_hallucinated": 4
+    },
+    "0.15": {
+     "clips": 5,
+     "segments_closed": 0,
+     "clips_with_text": 0,
+     "raw_whisper_hallucinated": 2
+    },
+    "0.3": {
+     "clips": 5,
+     "segments_closed": 0,
+     "clips_with_text": 0,
+     "raw_whisper_hallucinated": 1
+    }
+   },
+   "music": {
+    "0.0": {
+     "clips": 5,
+     "segments_closed": 5,
+     "clips_with_text": 0,
+     "raw_whisper_hallucinated": 5
+    },
+    "0.05": {
+     "clips": 5,
+     "segments_closed": 2,
+     "clips_with_text": 0,
+     "raw_whisper_hallucinated": 5
+    },
+    "0.15": {
+     "clips": 5,
+     "segments_closed": 3,
+     "clips_with_text": 0,
+     "raw_whisper_hallucinated": 5
+    },
+    "0.3": {
+     "clips": 5,
+     "segments_closed": 3,
+     "clips_with_text": 0,
+     "raw_whisper_hallucinated": 5
+    }
+   },
+   "reduplication": {
+    "0.0": {
+     "clips": 5,
+     "segments_closed": 7,
+     "clips_with_text": 0,
+     "raw_whisper_hallucinated": 5
+    },
+    "0.05": {
+     "clips": 5,
+     "segments_closed": 3,
+     "clips_with_text": 0,
+     "raw_whisper_hallucinated": 5
+    },
+    "0.15": {
+     "clips": 5,
+     "segments_closed": 3,
+     "clips_with_text": 0,
+     "raw_whisper_hallucinated": 5
+    },
+    "0.3": {
+     "clips": 5,
+     "segments_closed": 4,
+     "clips_with_text": 0,
+     "raw_whisper_hallucinated": 5
+    }
+   }
+  }
+ }
+}
