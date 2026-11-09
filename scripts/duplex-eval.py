@@ -42,11 +42,17 @@ CLASS_LABELS = ("RESPOND", "WAIT", "SILENCE", "BARGE")
 def post_audio(asr: str, flac: bytes, timeout: float = 30.0) -> dict:
     """POST /inference multipart (stdlib, sem deps) — mesmo contrato do asrd."""
     boundary = uuid.uuid4().hex
+    # (09/11, sweep-2026-11) response_format=verbose_json: e o que expoe
+    # no_speech_prob/avg_logprob por segmento. Sem isso o /inference devolve so
+    # {"text": ...} e o gate de audio do asrd (ns>0.35 ou lp<-0.45) nunca tem
+    # com o que trabalhar.
     body = (f"--{boundary}\r\n"
-            f"Content-Disposition: form-data; name=\"file\"; filename=\"clip.flac\"\r\n"
-            f"Content-Type: audio/flac\r\n\r\n").encode() + flac + \
+           f"Content-Disposition: form-data; name=\"file\"; filename=\"clip.flac\"\r\n"
+           f"Content-Type: audio/flac\r\n\r\n").encode() + flac + \
            f"\r\n--{boundary}\r\n".encode() + \
            b"Content-Disposition: form-data; name=\"temperature\"\r\n\r\n0\r\n" + \
+           f"\r\n--{boundary}\r\n".encode() + \
+           b"Content-Disposition: form-data; name=\"response_format\"\r\n\r\nverbose_json\r\n" + \
            f"--{boundary}--\r\n".encode()
     req = urllib.request.Request(
         asr.rstrip("/") + "/inference", data=body, method="POST",
@@ -112,9 +118,23 @@ def trigger_bench(args) -> dict:
                 hallo += 1
                 inlist = text.lower() in ban
                 killed += inlist
+                # (09/11, sweep-2026-11) STATS DE AUDIO: o gate v6 do asrd
+                # so mata a frase do lexico se o audio TAMBEM for fraco
+                # (no_speech_prob alto / avg_logprob baixo). Sem os stats no
+                # report, a simulacao de kill do bench era a lista CRUA e
+                # media pessimista. O whisper-server devolve os stats em
+                # "transcription", com uma lista por segmento.
+                _segs = out.get("segments") or []   # verbose_json expoe os stats em segments
+                _ns = max([float(s.get("no_speech_prob", 0.0) or 0.0)
+                           for s in _segs] or [0.0])
+                _lp = min([float(s.get("avg_logprob", 0.0) or 0.0)
+                           for s in _segs] or [0.0])
                 samples.append({"id": row.get("id"), "text": text[:60],
-                                "lexicon_kill": inlist})
-                observed.append(f"{cat}\t{row.get('id')}\t{text}")
+                                "lexicon_kill": inlist,
+                                "no_speech_prob": _ns,
+                                "avg_logprob": _lp,
+                                "stats_weak": (_ns > 0.35 or _lp < -0.45)})
+                observed.append(f"{cat}\t{row.get('id')}\t{text}\t{_ns:.4f}\t{_lp:.4f}")
         n = empty + hallo
         report["categories"][cat] = {
             "clips": n, "empty_ok": empty, "hallucinated": hallo,

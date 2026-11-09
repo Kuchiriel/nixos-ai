@@ -127,26 +127,30 @@ Ou seja: o ASR alucina em quase todo gatilho (o pior é música e repetição, 1
 lista de negação sozinha não fecha** (ainda 0,47): o que fecha é o gate v6 completo, que
 mora no asrd com as listas combinadas. A comparação com o MFCC/WE speaker é outra frente
 (separabilidade do falante), e ela não muda este número.
-
 ### Quanto o gate de texto completo mata (medido 09/11, sweep-2026-11)
 
-Sobre o acumulado do bench, com normalização de pontuação e caixa. Com 30 clips por
-categoria (120 clips, 111 alucinações, taxa bruta 0,925, consistente com a primeira
-rodada de 10 por categoria), o acumulado de todos os runs fica em **184 alucinações**
-(reduplication 77, music 40, nonspeech 38, silence 29):
+**Cuidado: o número real é pior do que a lista crua sugere.** O gate v6 do asrd mata a
+frase do léxico **só quando o áudio também está fraco** (`no_speech_prob > 0.35` ou
+`avg_logprob < -0.45`). Medi os stats de verdade (o bench passou a pedir
+`response_format=verbose_json` e a guardar `no_speech_prob`/`avg_logprob` por amostra):
 
-- `whisper-halluc-lexicon-pt` (a lista que o bench usa): mata **137/184**, sobra **0,255**
-- `lexicon-pt` + `ban-pt-hard`: mata os mesmos 137, ou seja a lista dura **não acrescenta
-  nada**
-- `lexicon-pt` + `ban-pt-hard` + `ban-multilingual` (o v6 completo): mata **144/184**,
-  sobra **0,217**
-- só `ban-pt-hard`: mata 1 de 73 na amostra menor, praticamente nada
-- só `ban-multilingual`: mata 39 de 73 na amostra menor
+- Alucinação bruta nos gatilhos: **111/120 (0,925)** (silence 0,73, nonspeech 0,97,
+  music 1,0, reduplication 1,0).
+- A lista **crua** mata 42 das 111 (sobra 0,575).
+- Com o gate real (lista **e** áudio fraco): mata **0** (sobra **0,925**). O braço de
+  áudio quase nunca dispara nas alucinações de gatilho: `no_speech_prob` mediano 0,000 e
+  `avg_logprob` mediano entre -0,22 e -0,30 (o limiar é -0,45), ou seja a transcrição
+  alucinada chega **confiante**.
 
-Ou seja: **o gate de texto completo (as três listas combinadas, que é o v6 do asrd) derruba
-a alucinação de gatilho de 0,90 para cerca de 0,22**, e o resto precisa de outra frente: o
-VAD/segmentação, o gate de falante (que não separa, medido) ou a wakeword. A lista
-multilíngue é a que mais contribui depois do léxico PT; a lista dura é inócua aqui.
+Ou seja: **o gate de texto não fecha a alucinação de gatilho**, porque a defesa em
+profundidade depende de stats de áudio fracos que não vêm. E o pior caso é o silêncio
+digital: o ASR respondeu "E aí" a um clip de zeros, e o VAD não deveria ter mandado
+aquilo para o ASR.
+
+Onde o resíduo tem que ser tratado: **antes do ASR** (VAD/segmentação, para o silêncio e
+o não-fala não chegarem ao modelo) ou **no gate de voz** (wakeword). A deny-list continua
+valendo para o outro caso (a frase alucinada com áudio fraco de verdade, que não é o
+caso dos gatilhos).
 
 ## Regra
 
