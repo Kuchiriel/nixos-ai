@@ -130,19 +130,23 @@ mora no asrd com as listas combinadas. A comparação com o MFCC/WE speaker é o
 
 ### Quanto o gate de texto completo mata (medido 09/11, sweep-2026-11)
 
-Sobre o acumulado do bench (**73 alucinações** observadas, todas as categorias, todos os
-runs), aplicando as listas do repo com normalização de pontuação e caixa:
+Sobre o acumulado do bench, com normalização de pontuação e caixa. Com 30 clips por
+categoria (120 clips, 111 alucinações, taxa bruta 0,925, consistente com a primeira
+rodada de 10 por categoria), o acumulado de todos os runs fica em **184 alucinações**
+(reduplication 77, music 40, nonspeech 38, silence 29):
 
-- `whisper-halluc-lexicon-pt` (a lista que o bench usa): mata **46/73**, sobra **0,37**
-- `lexicon-pt` + `ban-pt-hard`: mata 46/73, sobra 0,37 (a lista dura não acrescenta nada)
-- `lexicon-pt` + `ban-pt-hard` + `ban-multilingual`: mata **50/73**, sobra **0,32**
-- só `ban-pt-hard`: mata 1/73 (praticamente nada)
-- só `ban-multilingual`: mata 39/73, sobra 0,47
+- `whisper-halluc-lexicon-pt` (a lista que o bench usa): mata **137/184**, sobra **0,255**
+- `lexicon-pt` + `ban-pt-hard`: mata os mesmos 137, ou seja a lista dura **não acrescenta
+  nada**
+- `lexicon-pt` + `ban-pt-hard` + `ban-multilingual` (o v6 completo): mata **144/184**,
+  sobra **0,217**
+- só `ban-pt-hard`: mata 1 de 73 na amostra menor, praticamente nada
+- só `ban-multilingual`: mata 39 de 73 na amostra menor
 
 Ou seja: **o gate de texto completo (as três listas combinadas, que é o v6 do asrd) derruba
-a alucinação de gatilho de 0,90 para 0,32**, e o resto (0,32) precisa de outra frente: o
-VAD/segmentação, o gate de falante (que não separa, medido) ou o wakeword. A lista
-multilíngue é a que mais contribui depois do léxico PT.
+a alucinação de gatilho de 0,90 para cerca de 0,22**, e o resto precisa de outra frente: o
+VAD/segmentação, o gate de falante (que não separa, medido) ou a wakeword. A lista
+multilíngue é a que mais contribui depois do léxico PT; a lista dura é inócua aqui.
 
 ## Regra
 
