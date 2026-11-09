@@ -153,4 +153,69 @@
       echo "opencode-headroom: PASS ($(jq 'length' $out/results.json) cases)" > $out/summary.txt
       touch $out/pass
     '';
+
+  # ═══════════════════════════════════════════════════════════════════
+  # REGRA DA COMPACTAÇÃO (09/11, sweep-2026-11): o modelo que a opencode
+  # usa para compactar (small_model) tem que ter contexto MAIOR que o
+  # `limit.input` de qualquer modelo de sessão. Medido 08/11: uma sessão de
+  # 662.341 tokens tinha a compactação num modelo de 20.480 → o modelo
+  # encarregado de resumir o histórico era MENOR que o histórico
+  # (impossível por construção) → a sessão morre e a cota do free tier
+  # (compartilhada) queima. Regra e evidência:
+  # docs/auditoria/CONTEXT-MANAGEMENT-2026-11-08.md
+  #
+  # Este check fecha a regra: se alguém declarar um modelo com input
+  # maior que o contexto do small_model, o BUILD falha (em vez de a
+  # compactação falhar em produção, sem ninguém ver).
+  # ═══════════════════════════════════════════════════════════════════
+  opencode-compaction-model = let
+    lib = pkgs.lib;
+    providersJson = builtins.fromJSON (builtins.readFile ../modules/ai/free-providers.json);
+    limits = (import ../lib/opencode-limits.nix { inherit lib; }).limits;
+    # (provider, model) com o headroom do provider
+    allModels = builtins.concatLists (builtins.map
+      (pn: map (m: m // { inherit pn; headroom = providersJson.providers.${pn}.headroom or 20000; })
+        (providersJson.providers.${pn}.models or []))
+      (builtins.attrNames providersJson.providers));
+    withInput = map
+      (m: m // {
+        input = (limits {
+          context = m.context;
+          output = m.output;
+          headroom = m.headroom;
+        }).input;
+      })
+      allModels;
+    # o small_model do opencode: "nvidia/minimaxai/minimax-m3.1-flash"
+    smallModelProvider = "nvidia";
+    smallModelId = "minimaxai/minimax-m3.1-flash";
+    smallModel = builtins.head (builtins.filter
+      (m: m.pn == smallModelProvider && m.id == smallModelId)
+      withInput);
+    maxInput = builtins.foldl' (a: m: lib.max a (m.input or 0)) 0 withInput;
+  in
+    pkgs.runCommand "opencode-compaction-model" {
+      nativeBuildInputs = [ pkgs.jq ];
+      passAsEnv = [ "COMPACTION_RESULTS" ];
+      COMPACTION_RESULTS = builtins.toJSON {
+        inherit smallModelProvider smallModelId;
+        smallModelContext = smallModel.context or 0;
+        smallModelInput = smallModel.input or 0;
+        inherit maxInput;
+        ok = (smallModel.context or 0) > maxInput;
+      };
+    } ''
+      mkdir -p $out
+      echo "$COMPACTION_RESULTS" > $out/results.json
+      if [ "$(jq -r '.ok' $out/results.json)" != "true" ]; then
+        echo "FAIL: o modelo de compactação (small_model) nao comporta o maior input de sessão" >&2
+        echo "  small_model=$(jq -r '.smallModelProvider + "/" + .smallModelId' $out/results.json) contexto=$(jq -r '.smallModelContext' $out/results.json)" >&2
+        echo "  maior limit.input de sessão=$(jq -r '.maxInput' $out/results.json)" >&2
+        echo "  a compactação de uma sessão grande ficaria IMPOSSÍVEL (modelo menor que o histórico)" >&2
+        echo "  ver docs/auditoria/CONTEXT-MANAGEMENT-2026-11-08.md" >&2
+        exit 1
+      fi
+      echo "opencode-compaction-model: PASS (small_model contexto=$(jq -r '.smallModelContext' $out/results.json) > maior input=$(jq -r '.maxInput' $out/results.json))" > $out/summary.txt
+      touch $out/pass
+    '';
 }

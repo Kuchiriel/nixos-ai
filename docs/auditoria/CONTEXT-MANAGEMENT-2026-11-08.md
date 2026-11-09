@@ -77,6 +77,16 @@ garantida: senão, o limite alto só compra uma sessão que não consegue se rec
 
 ## 3. Como aplicar na casa
 
+**A Regra 1 virou gate** (09/11): o check `opencode-compaction-model` (flake) lê o
+`free-providers.json`, calcula o `limit.input` de cada modelo pela mesma fórmula do
+headroom e **falha o build** se o contexto do `small_model` (o modelo da compactação)
+não for maior que o maior `input` de sessão. Estado medido: o `small_model` é o minimax
+de nuvem (contexto 1.048.576) contra o maior input de sessão de 1.028.576, margem de
+20 mil tokens. Mutation check feito: apontar o `small_model` para um modelo menor faz
+o check falhar com os dois números, e o revertido volta a passar. Ou seja: se alguém
+declarar um modelo com input maior que o contexto do modelo de compactação, o build
+quebra em vez de a compactação quebrar em produção sem ninguém ver.
+
 - **Config**: o modelo que o opencode usa para compactar tem que ter contexto maior que
   o `limit.input` do modelo da sessão. No nosso caso, a compactação está caindo em
   servidor local porque o tier local (20k) foi escolhido para a tarefa.

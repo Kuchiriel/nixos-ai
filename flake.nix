@@ -283,6 +283,7 @@
       markdown-lint = checkLib.markdown-lint;
       nix-check = checkLib.nix-check;
       opencode-headroom = checkLib.opencode-headroom;
+      opencode-compaction-model = checkLib.opencode-compaction-model;
     };
 
     # ── lib: fonts, colors, ports (nosso próprio lib/) ──────────────
