@@ -101,6 +101,13 @@ class RemoteBackend(LLMBackend):
             payload["tools"] = tools
             if tool_choice:
                 payload["tool_choice"] = tool_choice
+        # 10/11 (cascade do duplex): o param `extra` existia na assinatura
+        # mas nunca era mesclado — reasoning_effort/chat_template_kwargs
+        # silenciosamente ignorados. Medido no NIM/groq: sem o lever, os
+        # modelos de reasoning queimam o max_tokens no thinking e o
+        # content volta VAZIO (groq low = 5,6s com texto; default = vazio).
+        if extra:
+            payload.update(extra)
         resp = self._session.post(
             f"{self._base_url}/chat/completions",
             json=payload,

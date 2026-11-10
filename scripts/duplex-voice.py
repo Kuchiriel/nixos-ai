@@ -331,6 +331,17 @@ _CLOUD_SYS = (
     "(papers/código) e ferramentas do harness — use-as em vez de inventar."
 )
 
+# (10/11, MEDIDO com 120 clips) Corpo por camada que mata o thinking:
+# sem o lever, os 3 modelos de reasoning queimam o max_tokens no thinking
+# e o content volta VAZIO (o cascade inteiro falha em ~18s). Com o lever,
+# conteúdo real em 5,5-5,7s por camada. O groq rejeita "none" (400: só
+# low/medium/high); nvidia e openrouter aceitam "none".
+_CLOUD_EXTRA = {
+    "groq": {"reasoning_effort": "low"},
+    "nvidia": {"reasoning_effort": "none"},
+    "openrouter": {"reasoning_effort": "none"},
+}
+
 
 def _load_api_keys() -> None:
     """Carrega as chaves de /etc/litellm.env no env (se faltarem)."""
@@ -383,7 +394,8 @@ def _cloud_answer(question: str, timeout: float = 12.0) -> str:
             r = be.chat(
                 [{"role": "system", "content": _CLOUD_SYS},
                  {"role": "user", "content": question}],
-                temperature=0.3, max_tokens=220)
+                temperature=0.3, max_tokens=220,
+                extra=_CLOUD_EXTRA.get(provider))
             txt = (r.content or "").strip()
             if txt:
                 log(f"[{ts()}] cascade {provider}/{model} ok "
