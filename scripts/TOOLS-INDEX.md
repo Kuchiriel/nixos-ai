@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_107 tools._
+_108 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -85,6 +85,8 @@ _107 tools._
   use: `Uso:  nohup ./scripts/loop-runner.sh <ciclos> <modelo> [tier] [rounds]`
 - `measure-rehydrate-ab.py` (nixos-ai/scripts) — """measure-rehydrate-ab.py — A/B da injeção de resgate (M2/M3, 02/11).
   use: `./scripts/measure-rehydrate-ab.py [--model <id>] [--question "<pergunta>"]`
+- `measure-repeat-rule-cost.py` (nixos-ai/scripts) — """measure-repeat-rule-cost.py — custo, em fala real, das regras de repetição.
+  use: `python3 scripts/measure-repeat-rule-cost.py`
 - `measure-voice-rule-cost.py` (nixos-ai/scripts) — """measure-voice-rule-cost.py — custo em FALA REAL de uma regra candidata de gate.
 - `measure-voice-signals.py` (nixos-ai/scripts) — """measure-voice-signals.py — separa alucinação de fala real por sinais que o gate NÃO usa.
 - `memory-arena-lite.py` (nixos-ai/scripts) — """MemoryArena-lite: o H1 no formato de USO ATIVO (25/09).

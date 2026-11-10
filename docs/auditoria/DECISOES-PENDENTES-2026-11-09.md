@@ -230,6 +230,20 @@ processo não está) com `Restart=always` e o `LD_LIBRARY_PATH` resolvido pelo
 `scripts/asrd_env.py` (que é o que impede a morte no import do numpy) — sem
 isso, o restart do dono é um evento manual e a voz é frágil por construção.
 
+**O ÚLTIMO caso que sobra é uma RISADA — e a decisão é de produto (10/11,
+coord-naming):** a remediação com o código de hoje (80 clipes: cru 66, casa
+**1**) deixou só **"Hahahaha"**. A regra de repetição com separador (a que
+está no asrd) não pega "Hahahaha", e a concatenada do sweep também não. Medi
+nas **1 817 transcrições reais** (nova ferramenta
+`scripts/measure-repeat-rule-cost.py`): a regra **concatenada** pega o caso
+com custo **0/1817 (0,00 %)** — mas ela também **mata a risada real do dono
+quando ele ri**, e a casa mantém sinal social de propósito (`SOCIAL_KEEP`:
+risada/aplauso/música, "direção do dono: o agente usa"). **Escolha do dono:**
+(a) fechar mecanicamente e perder o reconhecimento da risada, ou (b) manter a
+risada e aceitar o gatilho dela. **Correção de um número meu:** o custo da
+regra de hoje é **15/1817 (0,83 %)**, não os "1/199 (0,5 %)" que publiquei
+(amostra pequena demais).
+
 **O que ainda falta para o wakeword (09/11):** o limiar **não pode ser chutado**. No
 corpus de 1 817 segmentos da casa o wakeword dispara em 6 acima de 0,5 (0,33 %), mas ao
 rotular pelo transcript do log (**66 segmentos**) **nenhum é positivo** (o corpus é fala
