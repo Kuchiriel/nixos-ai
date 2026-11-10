@@ -121,6 +121,44 @@ texto pode matar essa risada sem matar a risada real de quem está falando, que 
 exatamente o que a wakeword resolve (e é por isso que ela não é opcional, e por isso
 que o limiar dela não pode ser chutado). Relatório: `reports/voice-pipeline/2026-11-10T161352.json`.
 
+### E a última decisão de produto que sobrou: a risada
+
+A lane de voz implementou uma **regra de repetição concatenada** (sem separador: a
+sílaba repetida 3+ vezes) e mediu o custo dela nas 1817 transcrições reais da casa.
+**Conferi rodando a ferramenta dela no meu próprio corpus (10/11):**
+
+| regra | mata na fala real (1817) | pega o "Hahahaha"? |
+|---|---|---|
+| repetição **concatenada** (a nova) | **0 (0,00 %)** | **sim** |
+| repetição **com separador** (a de hoje, no asrd) | 15 (0,83 %) | não |
+
+**O número do 0 % precisa de uma ressalva, e ela é o ponto da decisão:** o corpus das
+1817 falas **não contém nenhuma risada** (0 amostras de "haha", "hehe", "kkk"). Então
+o "0/1817" é verdade e **não mede o custo que importa**: quando **você** ri, a regra
+concatena mata a sua risada, por construção, uma vez por riso. O custo real da regra
+nova é 0 no corpus medido **e 1 em cada riso seu**, e a casa mantém sinal social de
+propósito (`SOCIAL_KEEP`: risada, aplauso, música, "direção do dono: o agente usa").
+
+Ou seja, a escolha é:
+
+- **(a) fechar mecanicamente**: a regra concatenada entra, o gatilho da risada morre e
+  o caminho da casa vai de 1 caso em 80 para **0**; em troca, **você deixa de ser
+  reconhecido quando ri** (e a regra não tem como distinguir a sua risada da
+  alucinada).
+- **(b) manter a risada**: nada muda no código, e o gatilho de uma risada alucinada
+  continua passando (o assistente pode reagir a um riso que não aconteceu).
+
+Aconselho **(b)**: o custo de (a) é uma perda recorrente de um sinal que você pediu
+para usar, e o custo de (b) é uma reação espúria ocasional, que o VAD e o gate já
+reduziram a uma em oitenta. Mas é decisão sua de produto, e a escolha está aqui
+medida, não estimada.
+
+**E uma correção de número da lane de voz (10/11):** o custo da regra de hoje foi
+publicado como "1 fala real em 199 (0,5 %)", e a amostra era pequena demais; no
+corpus inteiro são **15 em 1817 (0,83 %)**, com casos como "Não, não, não." e "sim
+sim sim não foi antes não". A direção da decisão não muda, mas o número menor que
+circulou não era o número.
+
 ⇒ **a casa corta 98 % das alucinações de gatilho**, e o residual é uma risada.
 Ou seja: o VAD fecha silêncio/nonspeech/música, o gate fecha o resto, e **o wakeword
 cobre o que sobrou** (a fala que parece real) mais a variação de nível de uma sala
@@ -286,10 +324,9 @@ import do numpy (o sintoma 0/10 "sem-segmento"). Agora `scripts/asrd_env.py` res
 os atributos que existem, **verifica o soname** no resultado, tem fallback no store e
 reporta o que falta; e o ASRD imprime um erro JSON em vez de morrer calado.
 
-## 4. Rebuild para o gate (dois fixes medidos, já no `main`)
+## 4. Rebuild para o gate (os dois fixes já estão vivos)
 
-A frota adotou os dois (checkpoint das 06:57), e ambos precisam de rebuild porque o gate
-roda da cópia do store:
+A frota adotou os dois (checkpoint das 06:57):
 
 - **Disjuntor de contexto** (`932a0324`): o gate aprende o tamanho recusado por modelo e
   responde 400 local, sem reenviar. Prova: a segunda request do mesmo tamanho não chega
@@ -298,6 +335,12 @@ roda da cópia do store:
   da taxa, e não ficam na fila dos monstros. Prova: o pedido pequeno respondeu em 0,00 s
   enquanto o grande segurava o upstream por 3 s. O fator é 2 de propósito (8 + 16 = 24
   RPM, abaixo do teto de 40 do upstream).
+
+**Medido em 10/11: os dois já estão vivos**, apesar de o gate rodar a cópia do store. O
+processo subiu em 09/11 06:41:53, depois dos dois commits (06:04 e 06:12), e a cópia
+do store tem `small_bucket` e `ctx_short_circuit`. O disjuntor já cortou **176**
+requisições localmente. Ou seja: **este rebuild não é para os dois fixes do gate**, e
+sim para os outros itens (teto de sessão, Sunshine na tailnet, torchaudio).
 
 ```bash
 cd ~/projects/nixos-ai && ./rebuild-host.sh
