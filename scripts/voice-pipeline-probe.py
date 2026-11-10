@@ -316,6 +316,10 @@ def main():
                          "isto mede a sensibilidade do silero ao nivel da sala")
     ap.add_argument("--level-samples", type=int, default=5,
                     help="clipes por categoria na varredura de nivel")
+    ap.add_argument("--clip-ids", default="",
+                    help="ids de clipes a medir (separados por virgula), no "
+                         "lugar da amostra aleatoria: reproduz um caso "
+                         "especifico sem depender da semente")
     ap.add_argument("--out", default=str(REPO / "reports" / "voice-pipeline"))
     args = ap.parse_args()
 
@@ -412,12 +416,23 @@ def main():
                 continue
             df = pd.read_parquet(path)
             idx = list(range(len(df)))
-            # semente POR CATEGORIA: com um rng compartilhado a fatia de uma
-            # categoria dependia de quantas categorias vieram antes, e dois
-            # runs com subconjuntos diferentes nao eram comparaveis
-            rng = random.Random(f"{args.seed}:{cat}")
-            rng.shuffle(idx)
-            idx = idx[: args.samples]
+            if args.clip_ids:
+                # ids explicitos: reproduz um caso especifico
+                wanted = [w.strip() for w in args.clip_ids.split(",")
+                          if w.strip()]
+                by_id = {str(row.get("id")): i for i, row in
+                         df.iterrows()}
+                idx = [by_id[w] for w in wanted if w in by_id]
+                if not idx:
+                    print(f"AVISO: nenhum id encontrado em {cat}: {wanted}",
+                          flush=True)
+            else:
+                # semente POR CATEGORIA: com um rng compartilhado a fatia de
+                # uma categoria dependia de quantas categorias vieram antes,
+                # e dois runs com subconjuntos diferentes nao eram comparaveis
+                rng = random.Random(f"{args.seed}:{cat}")
+                rng.shuffle(idx)
+                idx = idx[: args.samples]
             clips = 0
             with_text = 0
             seg_closed = 0

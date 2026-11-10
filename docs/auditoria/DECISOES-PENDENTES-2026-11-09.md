@@ -99,6 +99,20 @@ sem matar fala verdadeira. Detalhe do número: a lista multilingual `ban-hard` �
 carregada pelo asrd e **nunca consultada** pelo gate (mata 0 dos 24). Os números e a
 receita estão em `data/voice-fixtures/README.md`.
 
+**O residual medido foi fechado com uma regra de texto, e ela tem custo (09/11,
+coord-naming — decisão do dono, com desligar):** os 3 clipes que sobreviviam
+eram **repetição de sílabas** ("Ah, ah, ah.", "Tataataataata. Uh uh uh.", "E E
+E E E") e a regra de repetição que o asrd tinha só pegava a forma hifenizada
+("A-a-a-a"). Medi o custo **antes** de implementar, em 199 transcrições reais
+de `logs/audio`: a regra de token repetido mata **3/3** dessas alucinações e
+**1/199** falas reais (0,5 %) — o caso real é "Não, não, não, não.". No mesmo
+slice de 10 clipes, com a regra ligada a casa entrega **0/10** e desligada
+**3/10**. A regra vive em `scripts/voice_text_rules.py` (com teste) e **se
+desliga pelo ambiente** (`JARVIS_VOICE_REPEAT_RULE=0`), sem mexer em código.
+⇒ Se o dono preferir não perder o "Não, não, não, não." real, é uma variável
+de ambiente; o default é ligado porque o gatilho falso custa mais que 0,5 % de
+fala real.
+
 **O que ainda falta para o wakeword (09/11):** o limiar **não pode ser chutado**. No
 corpus de 1 817 segmentos da casa o wakeword dispara em 6 acima de 0,5 (0,33 %), mas ao
 rotular pelo transcript do log (**66 segmentos**) **nenhum é positivo** (o corpus é fala

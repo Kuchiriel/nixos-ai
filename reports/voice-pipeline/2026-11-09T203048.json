@@ -1,0 +1,258 @@
+{
+ "ts": "2026-11-09T20:30:48",
+ "asrd": "/home/nixos/projects/nixos-ai/scripts/duplex-asrd.py",
+ "fixtures": "/home/nixos/.local/share/jarvis/voice-trigger",
+ "samples_per_cat": 10,
+ "max_seconds": 6.0,
+ "speed": 1.0,
+ "categories": {
+  "reduplication": {
+   "clips": 10,
+   "segments_closed": 11,
+   "clips_with_text": 3,
+   "rate": 0.3,
+   "raw_whisper_hallucinated": 10,
+   "raw_rate": 1.0,
+   "top_texts": [
+    [
+     "Ah",
+     1
+    ],
+    [
+     "Tata-tata-tata",
+     1
+    ],
+    [
+     "E",
+     1
+    ]
+   ],
+   "per_clip": [
+    {
+     "id": "cv_na_n05_r3_t0",
+     "seconds": 1.92,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2873,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794267070.765.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "cv_bi_n03_r7_t8",
+     "seconds": 6.0,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0002,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794267073.838.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "laugh_a_n06_r7_t0",
+     "seconds": 1.11,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2807,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794267082.846.wav",
+       "pipeline_text": "Ah",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": [
+      "Ah"
+     ]
+    },
+    {
+     "id": "cv_bi_n03_r9_t0",
+     "seconds": 0.58,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2504,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794267086.389.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "laugh_a_n08_r5_t0",
+     "seconds": 1.85,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.1318,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794267093.129.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "cv_ta_n06_r7_t8",
+     "seconds": 6.0,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2414,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794267098.705.wav",
+       "pipeline_text": "Tata-tata-tata",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": [
+      "Tata-tata-tata"
+     ]
+    },
+    {
+     "id": "laugh_i_n04_r7_t0",
+     "seconds": 0.82,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.4045,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794267107.529.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "cv_ko_n03_r5_t0",
+     "seconds": 0.85,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.5689,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794267111.824.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "cv_bi_n12_r3_t2",
+     "seconds": 6.0,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0001,
+     "segments_closed": 2,
+     "segments": [
+      {
+       "wav": "seg_1794267114.871.wav",
+       "pipeline_text": "E",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      },
+      {
+       "wav": "seg_1794267119.215.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": [
+      "E"
+     ]
+    },
+    {
+     "id": "cv_na_n08_r3_t2",
+     "seconds": 4.92,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2053,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794267126.901.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": []
+    }
+   ]
+  }
+ },
+ "control": {
+  "wavs": 0,
+  "with_text": 0,
+  "texts": []
+ },
+ "level_sweep": {
+  "levels": [
+   0.05
+  ],
+  "categories": {
+   "reduplication": {
+    "0.05": {
+     "clips": 1,
+     "segments_closed": 1,
+     "clips_with_text": 0,
+     "raw_whisper_hallucinated": 1
+    }
+   }
+  }
+ }
+}

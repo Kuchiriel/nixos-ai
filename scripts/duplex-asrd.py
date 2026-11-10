@@ -26,6 +26,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 DATA = Path(__file__).resolve().parents[1] / "data"
 
+# (09/11, coord-naming) as regras de repeticao do texto vivem num modulo so
+# (scripts/voice_text_rules.py), com teste e com o custo em fala real medido.
+import voice_text_rules  # noqa: E402
+
 try:
     import numpy as np
 except Exception as _exc:  # noqa: BLE001
@@ -168,8 +172,14 @@ def main():
         if t in ("e aí", "e ai", "e aí e aí", "e ai e ai",
                  "a cidade no brasil", "a cidade no brasil a cidade no brasil"):
             return ""
-        # Stutter redup: 'A-a-a-a-a' (loop de sílaba hifenizada)
-        if _re.search(r"\b(\w{1,3})(-\1){2,}", t):
+        # Stutter redup: 'A-a-a-a-a' (loop de sílaba hifenizada) e
+        # 'Ah, ah, ah' (token repetido). A segunda forma é o RESIDUAL
+        # medido da cadeia da voz (09/11, coord-naming): 3 clipes de
+        # repetição de sílabas que atravessavam este gate. O custo foi
+        # medido antes: mata 3 de 3 dessas alucinações e 1 de 199 falas
+        # reais; a regra de token pode ser desligada com
+        # JARVIS_VOICE_REPEAT_RULE=0.
+        if voice_text_rules.looks_repeated(t):
             return ""
         # Legenda-leading: 'Legenda Adriana Zanotto' — ninguém COMEÇA
         # fala com 'Legenda' ('a legenda' no meio passa)

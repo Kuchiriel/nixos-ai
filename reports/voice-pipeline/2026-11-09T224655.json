@@ -1,0 +1,91 @@
+{
+ "ts": "2026-11-09T22:46:55",
+ "asrd": "/home/nixos/projects/nixos-ai/scripts/duplex-asrd.py",
+ "fixtures": "/home/nixos/.local/share/jarvis/voice-trigger",
+ "samples_per_cat": 10,
+ "max_seconds": 12.0,
+ "speed": 1.0,
+ "categories": {
+  "reduplication": {
+   "clips": 3,
+   "segments_closed": 4,
+   "clips_with_text": 0,
+   "rate": 0.0,
+   "raw_whisper_hallucinated": 3,
+   "raw_rate": 1.0,
+   "top_texts": [],
+   "per_clip": [
+    {
+     "id": "vowel_a_n03_r3_t2",
+     "seconds": 3.25,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.3582,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794275240.881.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "cv_na_n08_r3_t0",
+     "seconds": 2.92,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2325,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794275248.252.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "cv_bi_n05_r3_t2",
+     "seconds": 3.92,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.4428,
+     "segments_closed": 2,
+     "segments": [
+      {
+       "wav": "seg_1794275252.276.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      },
+      {
+       "wav": "",
+       "pipeline_text": "",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": []
+    }
+   ]
+  }
+ },
+ "control": {
+  "wavs": 0,
+  "with_text": 0,
+  "texts": []
+ }
+}

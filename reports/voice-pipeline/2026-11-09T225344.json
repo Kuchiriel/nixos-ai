@@ -1,0 +1,198 @@
+{
+ "ts": "2026-11-09T22:53:44",
+ "asrd": "/home/nixos/projects/nixos-ai/scripts/duplex-asrd.py",
+ "fixtures": "/home/nixos/.local/share/jarvis/voice-trigger",
+ "samples_per_cat": 10,
+ "max_seconds": 12.0,
+ "speed": 1.0,
+ "categories": {
+  "reduplication": {
+   "clips": 10,
+   "segments_closed": 6,
+   "clips_with_text": 3,
+   "rate": 0.3,
+   "raw_whisper_hallucinated": 10,
+   "raw_rate": 1.0,
+   "top_texts": [
+    [
+     "Ah, ah, ah.",
+     1
+    ],
+    [
+     "Tataataataata.\n Uh uh uh.",
+     1
+    ],
+    [
+     "E E E E E",
+     1
+    ]
+   ],
+   "per_clip": [
+    {
+     "id": "vowel_a_n03_r3_t2",
+     "seconds": 3.25,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.3582,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794275628.239.wav",
+       "pipeline_text": "Ah, ah, ah.",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": [
+      "Ah, ah, ah."
+     ]
+    },
+    {
+     "id": "cv_ta_n12_r7_t0",
+     "seconds": 1.96,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.1709,
+     "segments_closed": 2,
+     "segments": [
+      {
+       "wav": "seg_1794275633.715.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      },
+      {
+       "wav": "",
+       "pipeline_text": "",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "vowel_u_n03_r7_t8",
+     "seconds": 8.68,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "cv_ko_n04_r9_t0",
+     "seconds": 0.69,
+     "raw_whisper": "P-p-p-p-",
+     "raw_ns": 0.0,
+     "raw_lp": -0.3359,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "cv_na_n08_r3_t0",
+     "seconds": 2.92,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2325,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794275655.640.wav",
+       "pipeline_text": "Tataataataata.\n Uh uh uh.",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": [
+      "Tataataataata.\n Uh uh uh."
+     ]
+    },
+    {
+     "id": "cv_ko_n05_r7_t0",
+     "seconds": 0.96,
+     "raw_whisper": "P-p-p-p-p-p",
+     "raw_ns": 0.0,
+     "raw_lp": -0.3198,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "vowel_u_n04_r9_t0",
+     "seconds": 0.69,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.1763,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "cv_bi_n05_r3_t2",
+     "seconds": 3.92,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.4428,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794275667.231.wav",
+       "pipeline_text": "E E E E E",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": [
+      "E E E E E"
+     ]
+    },
+    {
+     "id": "vowel_a_n05_r9_t0",
+     "seconds": 0.81,
+     "raw_whisper": "",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2372,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794275672.952.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "",
+       "raw_ns": 0.0,
+       "raw_lp": 0.0,
+       "gate_killed": false
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "vowel_u_n12_r3_t0",
+     "seconds": 4.25,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    }
+   ]
+  }
+ },
+ "control": {
+  "wavs": 0,
+  "with_text": 0,
+  "texts": []
+ }
+}
