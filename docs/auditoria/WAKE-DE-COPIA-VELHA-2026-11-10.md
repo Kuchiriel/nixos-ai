@@ -53,6 +53,26 @@ entregue, mesmo antes de o relógio ser corrigido.
 A ação foi publicada no bus (issue 12, `sweep-2026-11`): `git pull` do monorepo
 (a fila e o vault são versionados) e corrigir o relógio com chrony ou NTP.
 
+## 4.1 O clone está um dia atras (evidência nova, 10/11)
+
+O mesmo watcher remoto reportou commits do repo `red-teaming` de **09/11 12:56** e
+**09/11 13:38**, com o repositório real em **09/11 22:57**. Conferido que não é
+colisão de chave no snapshot do watcher (não há segunda cópia do repo com o mesmo
+nome sob a raiz) nem um checkout para trás (o reflog do repo só anda para frente).
+Ou seja: **o `git pull` naquela máquina não está acontecendo, ou está falhando há pelo
+menos 24 h**.
+
+Três coisas que isso muda no conserto:
+
+1. **Um pull de um dia pode conflitar** com commits locais; se conflitar, a saída é
+   resetar o clone para o `origin` (perde-se só o trabalho não commitado).
+2. **O proxy do modo vpnsec é a causa provável do pull silencioso**: com o vpnsec
+   ligado, um `git` sem o SOCKS não sai, e um pull que falha sem erro visível deixa o
+   clone parado.
+3. **A prova de que a cópia voltou a ser a de verdade é o próprio evento**: o topo da
+   fila tem que ser o de hoje, o `commit:<repo>` tem que ser o HEAD real, e o
+   `vault-handoff` tem que apontar a nota de hoje.
+
 ## 5. Proposta para o próximo rebuild (decisão do dono)
 
 Um wake cujo prefixo traz um horário **mais adiantado que o relógio local** vem de
