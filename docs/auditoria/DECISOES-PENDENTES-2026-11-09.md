@@ -125,6 +125,35 @@ desliga pelo ambiente** (`JARVIS_VOICE_REPEAT_RULE=0`), sem mexer em código.
 de ambiente; o default é ligado porque o gatilho falso custa mais que 0,5 % de
 fala real.
 
+**Existe um sinal barato dentro do whisper que separe alucinação de fala real?
+Medido: NÃO (10/11, sweep-2026-11, `scripts/measure-voice-signals.py`).** O gate
+ignora o que o `verbose_json` expõe além de `no_speech_prob`/`avg_logprob`
+(confiança por palavra, id dos tokens, duração). Medido em 111 alucinações de
+gatilho contra 300 falas reais:
+
+| sinal | AUC (maior = mais real) | custo em fala real no limiar que mata 10 % das alucinações |
+|---|---|---|
+| `no_speech_prob` | 0,634 | 185/300 (**61,7 %**) |
+| `duration` | 0,628 | 281/300 (93,7 %) |
+| `tokens_per_word` | 0,607 | 3/300 (**1,0 %**) |
+| `avg_logprob` | 0,315 | 103/300 (34,3 %) |
+| `min_word_prob` | 0,339 | 81/300 (27,0 %) |
+| `med_word_prob` | 0,272 | 90/300 (30,0 %) |
+| `cr` (compression ratio) | 0,253 | 37/300 (12,3 %) |
+| `words_per_s` | 0,142 | 300/300 (100 %) |
+
+⇒ **Os que separam (AUC 0,61-0,63) custam de 62 % a 94 % da fala real**; o único
+barato (`tokens_per_word`, 1 %) tem AUC 0,607, fraco demais para virar gate. Os
+sinais com AUC abaixo de 0,5 são o caso invertido (a alucina pontua **mais**),
+mas no limiar que a ferramenta mede o custo é o mesmo ou pior. Base: arXiv
+2606.23060 ("From Text Metrics to Model Internals") — as heurísticas internas do
+Whisper deveriam marcar a alucinação e não marcam.
+
+**Consequência para esta decisão:** o braço de áudio **dentro** do whisper não
+serve ⇒ a frente que separa tem de ser **acústica** (a wakeword), e é por isso
+que os **5–10 WAVs da voz real** são o insumo que falta. Sem eles, a calibração
+não fecha (o limiar 0,5 não pode ser chutado).
+
 **O que ainda falta para o wakeword (09/11):** o limiar **não pode ser chutado**. No
 corpus de 1 817 segmentos da casa o wakeword dispara em 6 acima de 0,5 (0,33 %), mas ao
 rotular pelo transcript do log (**66 segmentos**) **nenhum é positivo** (o corpus é fala
