@@ -230,6 +230,15 @@ read pt-BR); answer the owner in pt-BR.
   session 493k tokens OVER the API ceiling — and the queue wait per request.
   **A client that was already open keeps the old config in memory** — a
   restart of the opencode process is what puts a session behind the gate.
+  **Health check path (measured 10/11):** the gate answers on
+  `GET /__gate/health` (instant, with the counters: `rpm`, `burst`,
+  `requests`, `upstream_429`, `client_429`, `errors`, `retries`,
+  `queued_seconds`, `upstream_504`, `upstream_io`, `ctx_rejected`,
+  `ctx_short_circuit`). **`/health` is NOT a local path** — it falls through to
+  the forwarder and is relayed to the upstream, so probing it hangs, times out
+  and leaves a `ConnectionResetError` in the journal. A probe with the wrong
+  path looks exactly like a dead service: measure the port with the real path
+  before believing "down".
 - **The cloud keys live in two formats**: `/etc/litellm.env` keeps `export`
   (the shell needs it), and `jarvis-keys-env.service` mirrors it to
   `/run/jarvis/litellm.env` in systemd format (`KEY=value`, 0600 root) —
