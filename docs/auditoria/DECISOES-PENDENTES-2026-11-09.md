@@ -100,12 +100,32 @@ pareado, controle positivo 9/9):
 | reduplication | 40 | 22 (0,55) | **3 (0,07)** |
 | **total** | **123** | **83 (0,67)** | **3 (0,024)** |
 
-⇒ **a casa corta 96 % das alucinações de gatilho**, e o residual são 3 clipes de
-**repetição de sílabas** ("Ah, ah, ah.", "Tataataataata.", "E E E E E") com áudio
-confiante (`avg_logprob` −0,24 a −0,43) que o léxico não pega. Ou seja: o VAD fecha
-silêncio/nonspeech/música, o gate fecha o resto, e **o wakeword cobre o que sobrou**
-(repetição) mais a variação de nível de uma sala real. A deny-list segue útil para o
-outro caso (frase alucinada sobre áudio fraco de verdade).
+**E com o código de hoje (10/11, 16:13, a pilha de voz reiniciada às 16:10 com a
+regra composta de "e aí" dentro), o mesmo probe com 20 clips por categoria:**
+
+| categoria | n | cru (whisper direto) | casa (VAD→segmento→gate) |
+|---|---|---|---|
+| silence | 20 | 8 (0,40) | **0** |
+| nonspeech | 20 | 18 (0,90) | **0** |
+| music | 20 | 20 (1,00) | **0** |
+| reduplication | 20 | 20 (1,00) | **1 (0,05)** |
+| **total** | **80** | **66 (0,83)** | **1 (0,0125)** |
+
+O único sobrevivente é **"Hahahaha"**: uma **risada**, que a deny-list deixa passar de
+propósito (é sinal social, e a direção do dono é o agente usar risada). O controle de
+fala real passou 3/3, ou seja, o caminho da casa não mata fala de verdade.
+
+**Isso fecha a discussão da wakeword com o número mais limpo possível:** o que sobra do
+caminho da casa é a fala que **parece** fala, e o caso é uma risada. Nenhuma regra de
+texto pode matar essa risada sem matar a risada real de quem está falando, que é
+exatamente o que a wakeword resolve (e é por isso que ela não é opcional, e por isso
+que o limiar dela não pode ser chutado). Relatório: `reports/voice-pipeline/2026-11-10T161352.json`.
+
+⇒ **a casa corta 98 % das alucinações de gatilho**, e o residual é uma risada.
+Ou seja: o VAD fecha silêncio/nonspeech/música, o gate fecha o resto, e **o wakeword
+cobre o que sobrou** (a fala que parece real) mais a variação de nível de uma sala
+real. A deny-list segue útil para o outro caso (frase alucinada sobre áudio fraco de
+verdade).
 
 **Correção de detalhe (10/11, sweep-2026-11, medição nova):** a frase "o gate de
 texto só mata quando o áudio está fraco" vale só para o ramo do **léxico**. O gate

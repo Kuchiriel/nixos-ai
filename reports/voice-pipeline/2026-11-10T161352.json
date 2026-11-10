@@ -1,0 +1,585 @@
+{
+ "ts": "2026-11-10T16:13:52",
+ "asrd": "/home/nixos/projects/nixos-ai/scripts/duplex-asrd.py",
+ "fixtures": "/home/nixos/.local/share/jarvis/voice-trigger",
+ "samples_per_cat": 20,
+ "max_seconds": 8.0,
+ "speed": 1.0,
+ "categories": {
+  "silence": {
+   "clips": 20,
+   "segments_closed": 0,
+   "clips_with_text": 0,
+   "rate": 0.0,
+   "raw_whisper_hallucinated": 8,
+   "raw_rate": 0.4,
+   "top_texts": [],
+   "per_clip": [
+    {
+     "id": "hiss_-45db_10s",
+     "seconds": 8.0,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.6968,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "hiss_-60db_120s",
+     "seconds": 8.0,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.5218,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "hiss_-60db_1s",
+     "seconds": 1.0,
+     "raw_whisper": "Obrigado.",
+     "raw_ns": 0.0,
+     "raw_lp": -0.259,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "hiss_-60db_29s",
+     "seconds": 8.0,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.5104,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "dither_1s",
+     "seconds": 1.0,
+     "raw_whisper": "Obrigado.",
+     "raw_ns": 0.0,
+     "raw_lp": -0.3252,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "dither_10s",
+     "seconds": 8.0,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.5811,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "hum_50hz_1s",
+     "seconds": 1.0,
+     "raw_whisper": "Legenda por Sônia Ruberti",
+     "raw_ns": 0.0,
+     "raw_lp": -0.1878,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "hiss_-60db_5s",
+     "seconds": 5.0,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.4616,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "roomtone_120s",
+     "seconds": 8.0,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.6087,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "dither_31s",
+     "seconds": 8.0,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.5716,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    }
+   ]
+  },
+  "nonspeech": {
+   "clips": 20,
+   "segments_closed": 1,
+   "clips_with_text": 0,
+   "rate": 0.0,
+   "raw_whisper_hallucinated": 18,
+   "raw_rate": 0.9,
+   "top_texts": [],
+   "per_clip": [
+    {
+     "id": "noise_171455",
+     "seconds": 8.0,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.4652,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "music_50382",
+     "seconds": 6.8,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0224,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "noise_366813",
+     "seconds": 3.0,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0014,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "music_138570",
+     "seconds": 6.63,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0055,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "noise_31906",
+     "seconds": 8.0,
+     "raw_whisper": "A CIDADE NO BRASIL",
+     "raw_ns": 0.0,
+     "raw_lp": -0.4536,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "music_333630",
+     "seconds": 1.64,
+     "raw_whisper": "*Você*",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0306,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "music_245536",
+     "seconds": 0.91,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0012,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "music_121080",
+     "seconds": 5.33,
+     "raw_whisper": "Música",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "noise_403878",
+     "seconds": 8.0,
+     "raw_whisper": ".",
+     "raw_ns": 0.0,
+     "raw_lp": -0.221,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "music_138362",
+     "seconds": 5.43,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0502,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    }
+   ]
+  },
+  "music": {
+   "clips": 20,
+   "segments_closed": 1,
+   "clips_with_text": 0,
+   "rate": 0.0,
+   "raw_whisper_hallucinated": 20,
+   "raw_rate": 1.0,
+   "top_texts": [],
+   "per_clip": [
+    {
+     "id": "008652_16khz_mono",
+     "seconds": 8.0,
+     "raw_whisper": "A CIDADE NO BRASIL",
+     "raw_ns": 0.0,
+     "raw_lp": -0.361,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "003840_16khz_mono",
+     "seconds": 8.0,
+     "raw_whisper": "A CIDADE NO BRASIL",
+     "raw_ns": 0.0,
+     "raw_lp": -0.416,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "008649_16khz_mono",
+     "seconds": 8.0,
+     "raw_whisper": "A CIDADE NO BRASIL",
+     "raw_ns": 0.0,
+     "raw_lp": -0.4241,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "009410_16khz_mono",
+     "seconds": 8.0,
+     "raw_whisper": "Música",
+     "raw_ns": 0.0,
+     "raw_lp": -0.5081,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "010045_16khz_mono",
+     "seconds": 8.0,
+     "raw_whisper": "A CIDADE NO BRASIL",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2271,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "001383_16khz_mono",
+     "seconds": 8.0,
+     "raw_whisper": "Música",
+     "raw_ns": 0.0,
+     "raw_lp": -0.3321,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "004378_16khz_mono",
+     "seconds": 8.0,
+     "raw_whisper": "Música",
+     "raw_ns": 0.0,
+     "raw_lp": -0.4822,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "010570_16khz_mono",
+     "seconds": 8.0,
+     "raw_whisper": "A CIDADE NO BRASIL",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2853,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "010017_16khz_mono",
+     "seconds": 8.0,
+     "raw_whisper": "Música",
+     "raw_ns": 0.0,
+     "raw_lp": -0.3661,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    },
+    {
+     "id": "006679_16khz_mono",
+     "seconds": 8.0,
+     "raw_whisper": "A CIDADE NO BRASIL",
+     "raw_ns": 0.0,
+     "raw_lp": -0.6002,
+     "segments_closed": 0,
+     "segments": [],
+     "texts": []
+    }
+   ]
+  },
+  "reduplication": {
+   "clips": 20,
+   "segments_closed": 21,
+   "clips_with_text": 1,
+   "rate": 0.05,
+   "raw_whisper_hallucinated": 20,
+   "raw_rate": 1.0,
+   "top_texts": [
+    [
+     "Hahahaha",
+     1
+    ]
+   ],
+   "per_clip": [
+    {
+     "id": "cv_na_n05_r3_t0",
+     "seconds": 1.92,
+     "raw_whisper": "Ah, ah, ah.",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2873,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794338696.021.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "Ah, ah, ah.",
+       "raw_ns": 0.0,
+       "raw_lp": -0.5504,
+       "gate_killed": true
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "cv_bi_n03_r7_t8",
+     "seconds": 8.0,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0001,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794338700.627.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "E aí",
+       "raw_ns": 0.0,
+       "raw_lp": -0.0002,
+       "gate_killed": true
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "laugh_a_n06_r7_t0",
+     "seconds": 1.11,
+     "raw_whisper": "A-A-A",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2807,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794338711.530.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "A-A-A",
+       "raw_ns": 0.0,
+       "raw_lp": -0.5138,
+       "gate_killed": true
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "cv_bi_n03_r9_t0",
+     "seconds": 0.58,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2504,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794338715.614.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "E aí",
+       "raw_ns": 0.0,
+       "raw_lp": -0.2206,
+       "gate_killed": true
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "laugh_a_n08_r5_t0",
+     "seconds": 1.85,
+     "raw_whisper": "Hahahaha",
+     "raw_ns": 0.0,
+     "raw_lp": -0.1318,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794338722.143.wav",
+       "pipeline_text": "Hahahaha",
+       "raw_segment_text": "Hahahaha",
+       "raw_ns": 0.0,
+       "raw_lp": -0.9498,
+       "gate_killed": false
+      }
+     ],
+     "texts": [
+      "Hahahaha"
+     ]
+    },
+    {
+     "id": "cv_ta_n06_r7_t8",
+     "seconds": 8.0,
+     "raw_whisper": "Tata-tata-tata",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2537,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794338727.700.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "Tata-tata-tata",
+       "raw_ns": 0.0,
+       "raw_lp": -0.2547,
+       "gate_killed": true
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "laugh_i_n04_r7_t0",
+     "seconds": 0.82,
+     "raw_whisper": "E-e-e-e-e",
+     "raw_ns": 0.0,
+     "raw_lp": -0.4045,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794338738.956.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "E-e-e-e-e",
+       "raw_ns": 0.0,
+       "raw_lp": -0.457,
+       "gate_killed": true
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "cv_ko_n03_r5_t0",
+     "seconds": 0.85,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.5689,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794338742.387.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "E aí",
+       "raw_ns": 0.0,
+       "raw_lp": -0.3041,
+       "gate_killed": true
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "cv_bi_n12_r3_t2",
+     "seconds": 6.25,
+     "raw_whisper": "E aí",
+     "raw_ns": 0.0,
+     "raw_lp": -0.0001,
+     "segments_closed": 2,
+     "segments": [
+      {
+       "wav": "seg_1794338745.707.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "E aí",
+       "raw_ns": 0.0,
+       "raw_lp": -0.0217,
+       "gate_killed": true
+      },
+      {
+       "wav": "seg_1794338750.033.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "E aí",
+       "raw_ns": 0.0,
+       "raw_lp": -0.0001,
+       "gate_killed": true
+      }
+     ],
+     "texts": []
+    },
+    {
+     "id": "cv_na_n08_r3_t2",
+     "seconds": 4.92,
+     "raw_whisper": "A-A-A-A-A-A-A-A-A",
+     "raw_ns": 0.0,
+     "raw_lp": -0.2053,
+     "segments_closed": 1,
+     "segments": [
+      {
+       "wav": "seg_1794338758.278.wav",
+       "pipeline_text": "",
+       "raw_segment_text": "A-A-A-A-A-A-A-A-A",
+       "raw_ns": 0.0,
+       "raw_lp": -0.2481,
+       "gate_killed": true
+      }
+     ],
+     "texts": []
+    }
+   ]
+  }
+ },
+ "control": {
+  "wavs": 3,
+  "with_text": 3,
+  "texts": [
+   {
+    "wav": "124149_seg_1794325308.152.wav",
+    "texts": [
+     "Não é óbvio, é impossível você falar que não influenciou.\n A estrela imprensa admite que o Lula comprou o voto com\n essas ações.\n Já mostrei aqui também em outros vídeos.\n Que legal e sem, inclusive, respaldo na lei orçamentária.\n Os MEIs, por exemplo, receberam uma promessa de depósito de\n 5 mil reais."
+    ]
+   },
+   {
+    "wav": "124542_seg_1794325541.178.wav",
+    "texts": [
+     "tinha 33 senadores. Ele precisa de 41 para se eleger\n presidente do Senado.\n Desses 33, tinha uma bancada do PL praticamente inteira, só\n quem deu justificativa que não pôde estar em Brasília na\n terça-feira não foi.\n Nós, três parlamentares do Novo, inclusive alguns parlament\nares de outros partidos que o Davi Alcolumbre jurava."
+    ]
+   },
+   {
+    "wav": "083028_seg_1793014226.360.wav",
+    "texts": [
+     "Preciso que você grave 10 segundos de fala para eu cadast\nrar a voz.\n Quer que eu tente identificar a voz de alguém que já está\n cadastrada ou prefere que eu grave uma nova voz?",
+     "Eu preciso saber se tem uma função que quando eu peço para\n você parar de falar",
+     "Você para de falar até eu pedir para você voltar a falar."
+    ]
+   }
+  ]
+ }
+}
