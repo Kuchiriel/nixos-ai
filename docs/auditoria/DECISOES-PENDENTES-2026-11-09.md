@@ -194,6 +194,22 @@ e mata **10 dos 24 sobreviventes** do gate ⇒ o residual do gate sozinho cai de
 (111/111 vereditos iguais com a regra que foi medida). Se o dono preferir não
 perder o "E aí, o que é isso?" real, é uma variável de ambiente.
 
+**A voz não tem watchdog (10/11, coord-naming — decisão do dono, porque é
+config de host):** o `jarvis-heal.service` (o self-heal da casa) **não vigia o
+cliente de voz** (nenhuma referência a `duplex-voice` em `core/heal.py`), e o
+flag `/tmp/jarvis-duplex-mode.flag` que marca "modo duplex ativo" **sobrevive
+à morte do processo** (foi criado em 08/11 e o cliente morreu depois). Medido
+hoje: a voz estava no ar às 12:36 e às 16:07 o cliente **havia morrido sem
+rastro** (sem OOM, sem journal, sem traceback ⇒ kill externo — e o próprio
+`duplex-voice-run.sh` mata órfãos ao subir, com `pkill -f`, então qualquer
+subida de voz derruba a anterior). ⇒ **a voz pode ficar horas muda sem ninguém
+perceber**, que é a "queda silenciosa" que a casa já registrou para outros
+serviços. **Proposta (precisa do dono, é unit de usuário no host):** um
+`duplex-voice.service` (ou um timer que roda `duplex-voice-run.sh` quando o
+processo não está) com `Restart=always` e o `LD_LIBRARY_PATH` resolvido pelo
+`scripts/asrd_env.py` (que é o que impede a morte no import do numpy) — sem
+isso, o restart do dono é um evento manual e a voz é frágil por construção.
+
 **O que ainda falta para o wakeword (09/11):** o limiar **não pode ser chutado**. No
 corpus de 1 817 segmentos da casa o wakeword dispara em 6 acima de 0,5 (0,33 %), mas ao
 rotular pelo transcript do log (**66 segmentos**) **nenhum é positivo** (o corpus é fala
