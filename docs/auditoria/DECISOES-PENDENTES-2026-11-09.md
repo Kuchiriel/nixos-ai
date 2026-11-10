@@ -252,21 +252,27 @@ e mata **10 dos 24 sobreviventes** do gate ⇒ o residual do gate sozinho cai de
 (111/111 vereditos iguais com a regra que foi medida). Se o dono preferir não
 perder o "E aí, o que é isso?" real, é uma variável de ambiente.
 
-**A voz não tem watchdog (10/11, coord-naming — decisão do dono, porque é
-config de host):** o `jarvis-heal.service` (o self-heal da casa) **não vigia o
-cliente de voz** (nenhuma referência a `duplex-voice` em `core/heal.py`), e o
-flag `/tmp/jarvis-duplex-mode.flag` que marca "modo duplex ativo" **sobrevive
-à morte do processo** (foi criado em 08/11 e o cliente morreu depois). Medido
-hoje: a voz estava no ar às 12:36 e às 16:07 o cliente **havia morrido sem
-rastro** (sem OOM, sem journal, sem traceback ⇒ kill externo — e o próprio
-`duplex-voice-run.sh` mata órfãos ao subir, com `pkill -f`, então qualquer
-subida de voz derruba a anterior). ⇒ **a voz pode ficar horas muda sem ninguém
-perceber**, que é a "queda silenciosa" que a casa já registrou para outros
-serviços. **Proposta (precisa do dono, é unit de usuário no host):** um
-`duplex-voice.service` (ou um timer que roda `duplex-voice-run.sh` quando o
-processo não está) com `Restart=always` e o `LD_LIBRARY_PATH` resolvido pelo
-`scripts/asrd_env.py` (que é o que impede a morte no import do numpy) — sem
-isso, o restart do dono é um evento manual e a voz é frágil por construção.
+**CUIDADO: eu propus um watchdog para a voz e a proposta estava ERRADA (10/11,
+coord-naming — corrigida aqui):** eu vi o cliente de voz ausente e concluí "morreu
+sem rastro". Não era isso: o cliente **dorme de propósito** quando fica ocioso
+e o log diz isso ("dormindo: LoRA off, wakeword de volta, flag removida" —
+17:27:36). O desenho é: quando o cliente dorme, ele **entrega o turno ao daemon
+do wakeword**, que é quem acorda a voz quando o dono fala. Um
+`Restart=always` brigaria com esse desenho de dormir/acordar, então **a proposta
+de watchdog está cancelada**.
+
+**O buraco real, medido:** a entrega do turno **falhava em silêncio** — o
+`systemctl --user start jarvis-wakeword.service` era feito com
+`capture_output=True` e sem checar, e o cliente registrava "wakeword de volta"
+**como se tivesse dado certo**. Nesta máquina a unit **não está instalada**
+(existe no repo: `home-manager/modules/services/jarvis-wakeword.nix`) ⇒ o start
+falha, o daemon não sobe e **a voz fica surda para sempre** enquanto o cliente
+dorme. Agora o log diz a verdade (verifica `is-active` e avisa se a unit
+faltar). **O que o dono precisa decidir:** (a) instalar a unit do wakeword
+(config de host), (b) **calibrar o limiar do wakeword** (os 5–10 WAVs da voz
+real — que é o que faz o daemon acordar a voz *no ponto certo*), e (c) decidir se
+o `jarvis-heal` deve vigiar o daemon do wakeword (hoje ele reporta
+`overall=degraded restarts=0` e não reinicia nada).
 
 **O ÚLTIMO caso que sobra é uma RISADA — e a decisão é de produto (10/11,
 coord-naming):** a remediação com o código de hoje (80 clipes: cru 66, casa

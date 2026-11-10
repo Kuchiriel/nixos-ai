@@ -46,12 +46,23 @@ BAD = re.compile(
 )
 
 
-def main(path):
+ARROWS = re.compile("[\u2190-\u21ff\u2b00-\u2bff]")
+
+
+def main(path, allow_arrows=False):
     bad = []
+    arrows = []
     with open(path, encoding="utf-8") as fh:
         for n, line in enumerate(fh, 1):
             for m in BAD.finditer(line):
-                bad.append((n, m.group(0), line.strip()[:70]))
+                ch = m.group(0)
+                if allow_arrows and ARROWS.fullmatch(ch):
+                    arrows.append((n, ch, line.strip()[:70]))
+                else:
+                    bad.append((n, ch, line.strip()[:70]))
+    if arrows:
+        print(f"nota: {len(arrows)} seta(s) (convernao dos docs da casa, "
+              f"permitido com --allow-arrows)")
     if bad:
         print(f"PROBLEMA: {len(bad)} caractere(s) proibido(s)")
         for n, ch, line in bad:
@@ -62,4 +73,7 @@ def main(path):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv[1]))
+    _args = sys.argv[1:]
+    _allow = "--allow-arrows" in _args
+    _args = [a for a in _args if a != "--allow-arrows"]
+    raise SystemExit(main(_args[0], allow_arrows=_allow))

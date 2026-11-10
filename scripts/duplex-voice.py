@@ -3364,10 +3364,37 @@ def main():
         mic.terminate()
         asr.close()
         tts.close()
-        subprocess.run(["systemctl", "--user", "start", "jarvis-wakeword.service"],
-                       capture_output=True)
+        # (10/11, coord-naming) A ENTREGA DO TURNO AO DAEMON DO WAKEWORD
+        # precisa ser VERIFICADA: o `systemctl start` falhava em silencio
+        # (capture_output=True e sem checar) e o cliente registrava "wakeword
+        # de volta" como se a entrega tivesse dado certo. Medido nesta
+        # maquina: a unit jarvis-wakeword.service NAO esta instalada
+        # (existe no repo: home-manager/modules/services/jarvis-wakeword.nix)
+        # => o start falha, o daemon nao sobe e a voz fica SURDA para sempre
+        # (o cliente dormiu, ninguem acorda). Agora o log diz a verdade.
+        _wake = {"ok": False, "detail": ""}
+        try:
+            _r = subprocess.run(
+                ["systemctl", "--user", "start", "jarvis-wakeword.service"],
+                capture_output=True, text=True, timeout=30)
+            _st = subprocess.run(
+                ["systemctl", "--user", "is-active", "jarvis-wakeword.service"],
+                capture_output=True, text=True, timeout=15)
+            _active = (_st.stdout or "").strip()
+            _wake = {"ok": _r.returncode == 0 and _active == "active",
+                     "detail": f"rc={_r.returncode} active={_active or '?'} "
+                               f"{( _r.stderr or '').strip()[:120]}"}
+        except Exception as _e:
+            _wake = {"ok": False, "detail": str(_e)[:120]}
+        if _wake["ok"]:
+            log(f"[{ts()}] dormindo: LoRA off, wakeword de volta, flag removida")
+        else:
+            log(f"[{ts()}] dormindo: LoRA off, MAS O WAKEWORD NAO VOLTOU "
+                f"({_wake['detail']}) — a voz fica surda ate alguem subir o "
+                f"jarvis-wakeword.service (unit do repo: "
+                f"home-manager/modules/services/jarvis-wakeword.nix). "
+                f"flag removida")
         Path("/tmp/jarvis-duplex-mode.flag").unlink(missing_ok=True)
-        log(f"[{ts()}] dormindo: LoRA off, wakeword de volta, flag removida")
 
 if __name__ == "__main__":
     main()
