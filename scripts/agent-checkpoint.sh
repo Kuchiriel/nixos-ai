@@ -147,8 +147,35 @@ EOF
     # `$(...)` remove os newlines finais -> sem o \n\n a nota nova gruda na
     # anterior e o heading "## ⭐" da fila antiga vira texto de parágrafo
     # (o _rehydrate_queue então não acha o corte e serve 2 checkpoints).
-    { printf '%s\n\n' "$NOTE"; cat "$QUEUE"; } > "$TMP"
-    mv "$TMP" "$QUEUE"
+    #
+    # (10/11) ESCRITA SEGURA da fila compartilhada: o read-modify-write
+    # (cat -> mv) não é atômico, e entre os dois a nota de outra lane
+    # sumia. Medido 10/11: o watcher viu o topo da fila trocar de era no
+    # meio de outra escrita (a peer e eu gravando ao mesmo tempo). Agora:
+    # flock serializa os checkpoint entre lanes e, com verificação de hash,
+    # a leitura é refeita se o arquivo mudou entre ler e gravar (quando a
+    # outra lane escreveu à mão, sem lock).
+    _mode=$(stat -c '%a' "$QUEUE" 2>/dev/null || echo 644)
+    _qfd=""
+    exec {_qfd}>"${QUEUE}.lock" 2>/dev/null || _qfd=""
+    [ -n "$_qfd" ] && flock -w 30 "$_qfd" 2>/dev/null || true
+    _try=0
+    _written=0
+    while [ "$_try" -lt 3 ]; do
+      _try=$((_try + 1))
+      _before=$(cksum < "$QUEUE" 2>/dev/null | awk '{print $1"-"$2}')
+      { printf '%s\n\n' "$NOTE"; cat "$QUEUE"; } > "$TMP"
+      _after=$(cksum < "$QUEUE" 2>/dev/null | awk '{print $1"-"$2}')
+      if [ "$_before" = "$_after" ]; then
+        chmod "$_mode" "$TMP" 2>/dev/null || true
+        mv "$TMP" "$QUEUE"
+        _written=1
+        break
+      fi
+      log "  fila mudou enquanto eu lia: refazendo (tentativa $((_try + 1)))"
+    done
+    [ "$_written" = "1" ] || { MD_STATUS="FALHOU: a fila mudou 3x durante a escrita"; POINTER_BROKEN=1; }
+    [ -n "$_qfd" ] && exec {_qfd}>&- 2>/dev/null || true
     if [ "$COMMIT" -eq 1 ]; then
       QROOT=$(git -C "$(dirname "$QUEUE")" rev-parse --show-toplevel 2>/dev/null || dirname "$QUEUE")
       if git -C "$QROOT" add -- "$QUEUE" 2>/dev/null && git -C "$QROOT" commit -q -m "docs(queue): checkpoint $DATA — $ERA" 2>/dev/null; then
