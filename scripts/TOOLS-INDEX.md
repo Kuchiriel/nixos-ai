@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_106 tools._
+_107 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -29,6 +29,7 @@ _106 tools._
 - `asrd_env.py` (nixos-ai/scripts) — """asrd_env.py — environment for the duplex ASRD subprocess.
 - `bench-llm.sh` (nixos-ai/scripts) — bench-llm.sh — benchmark padrão da casa (consolida os one-offs de 24/09).
 - `check-ctx-drift.py` (nixos-ai/scripts) — """Confere o contexto do registry contra o contexto REAL dos GGUFs.
+- `check-plugin-contract.py` (nixos-ai/scripts) — """check-plugin-contract.py — o plugin VIVO é o mesmo código que o FONTE?
 - `check-queue-handoff.py` (nixos-ai/scripts) — """check-queue-handoff.py — os ponteiros da fila para o vault existem?
   use: `python3 scripts/check-queue-handoff.py`
 - `check-text-chars.py` (nixos-ai/scripts) — """check-text-chars.py — trava os caracteres que nao devem sair da casa.
