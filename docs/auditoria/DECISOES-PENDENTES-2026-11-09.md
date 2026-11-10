@@ -95,9 +95,21 @@ em formas que a regra atual não pega, "Amém." e duas legendas (uma em inglês,
 espanhol). **Uma** regra determinística barata (prefixo "e aí") levaria o resíduo
 para 0,117, e junto com a repetição para **0,092**, e o que sobra é justamente o que
 a deny-list deixa de propósito (fala real e sinal social) e que a wakeword resolve
-sem matar fala verdadeira. Detalhe do número: a lista multilingual `ban-hard` é
-carregada pelo asrd e **nunca consultada** pelo gate (mata 0 dos 24). Os números e a
-receita estão em `data/voice-fixtures/README.md`.
+sem matar fala verdadeira.
+
+**E o custo, medido nas 1817 falas reais da casa (`logs/audio`):** a regra de prefixo
+"e aí" mata **10 dos 24** sobreviventes e **1 fala real de 1817** (0,06 %). Esse custo
+não é defeito da regra: é o **piso** de qualquer gate de texto, porque a mesma string
+("E aí, o que é isso?") está na fala real e na alucinação, e nenhuma função do texto
+separa as duas classes. No mesmo corpus, **134 falas reais (7,4 %) têm o texto exato
+no léxico** ("Obrigado.", "Tchau."), que é exatamente o que o ramo gated existe para
+proteger, e o que ele não consegue proteger quando o áudio da alucinação chega
+confiante. Detalhe do número: a lista multilingual `ban-hard` é carregada pelo asrd e
+**nunca consultada** pelo gate (mata 0 dos 24). A medição completa, com o custo por
+regra e o que a literatura de 2026 diz (arXiv 2606.23060: o sinal forte é probing do
+decoder, que o whisper.cpp não expõe; VAD antes do decoder é a defesa principal, e a
+casa já tem), está em `docs/auditoria/VOICE-GATE-MEASUREMENT-2026-11-10.md`. Os
+números e a receita estão em `data/voice-fixtures/README.md`.
 
 **O residual medido foi fechado com uma regra de texto, e ela tem custo (09/11,
 coord-naming — decisão do dono, com desligar):** os 3 clipes que sobreviviam

@@ -182,12 +182,19 @@ amostras, com o gate REAL chamado offline e conferido 111/111 contra o bench):
 | lista multilingual `ban-hard` (hoje carregada e **nunca consultada**) | 0 | 0,200 |
 | as duas primeiras juntas | 17 | **0,092** |
 
-O que sobrevive às duas: 6× "Música"/"Música...", 3× "Obrigado.", "Amém.",
-"Titi-titi.", "Tchau, tchau, tchau" e duas legendas (uma em inglês, uma em
-espanhol). "Música" e "Obrigado" ficam de propósito fora do kill (sinal social
-e fala real), então o resíduo irredutível do gate de texto é pequeno: o que
-pede outra frente é a fala que **parece** real, e é aí que a wakeword entra (o
-gate não pode matar "obrigado" dito de verdade).
+**E o custo em fala real, medido nas 1817 transcrições de `logs/audio`:** a regra de
+prefixo "e aí" mata **1 fala real de 1817** (0,06 %), que é `"E aí, o que é isso?"`.
+Esse custo não é defeito da regra, é o **piso** de qualquer gate de texto: a mesma
+string está na fala real e na alucinação, e nenhuma função do texto separa as duas
+classes. No mesmo corpus, **134 falas reais (7,4 %) têm o texto exato no léxico**
+("Obrigado.", "Tchau.", "Muito bom."): é por isso que o ramo gated existe, e é por
+isso que ele não pode ser a defesa principal (o áudio da alucinação chega confiante).
+O que sobra depois das duas regras: 6× "Música"/"Música...", 3× "Obrigado.",
+"Amém.", "Titi-titi.", "Tchau, tchau, tchau" e duas legendas (uma em inglês, uma em
+espanhol). O resíduo irredutível do gate de texto é, em boa parte, **fala real que o
+ASR ouviu onde não havia fala**, e é aí que a wakeword entra. A medição completa,
+com o custo por regra e o que a literatura de 2026 diz, está em
+`docs/auditoria/VOICE-GATE-MEASUREMENT-2026-11-10.md`.
 
 **Como medir (e o que não medir):** o bench mede o gate REAL agora
 (`scripts/voice_gate.py`, cópia verbatim da lógica do asrd, com paridade
