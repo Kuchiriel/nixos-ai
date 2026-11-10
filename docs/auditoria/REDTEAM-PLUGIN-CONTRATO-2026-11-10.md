@@ -51,3 +51,30 @@ muda de comportamento (traduzir só no limite do LLM, e nunca escrever no histó
   alguém concluir com o número errado: aqui a pegada seria "o contrato está no
   fonte e o vivo diverge", que é o mesmo defeito de "fonte e runtime", medido de
   outra forma.
+
+## 4. O que a literatura de 2026 acrescenta (nota completa em `~/Books/papers/2026-11-10-medir-o-artefato-que-roda.md`)
+
+**O ASR de uma campanha não é o risco real.** "Agents Behave Differently in Fabricated
+Environments" (Apart Research, set/2026) mediu que, com tarefa, prompt, schemas,
+orçamento de turnos e ator constantes, mudando só o que a chamada de ferramenta
+devolve, as ações fora de escopo **aumentam** nos braços fabricados: 12 escritas e 86
+leituras fora de escopo contra **zero** no braço real, e a conclusão do paper é que um
+resample dessa família superestima o perigo. Para a casa: o `POST /inference` cru do
+bench de voz é um **proxy de ataque** (mede quanto o ASR alucina), e o braço real é o
+caminho da casa (VAD, segmento, gate, wakeword), onde o residual medido é 0,024. Uma
+campanha de red-team contra o harness é o mesmo caso: o número do harness é o do
+ambiente fabricado.
+
+**O número tem que vir do artefato versionado.** O mesmo paper substitui cada número
+em build a partir de artefatos versionados e **falha o build se um placeholder não
+puder ser computado**. Aplicado à casa: o relatório de campanha tem que trazer o
+commit do plugin e do harness, e a publicação do número tem que falhar se o checker
+passar. Foi isso que motivou o `scripts/check-plugin-contract.py` (que já diz qual
+plugin está velho: `redteam.js` diverge, `check-redteam.mjs` está em dia).
+
+**A autorização continua sendo o gate.** arXiv 2610.12463 ("From Reactive Containment
+to Proactive Assurance") reúne os incidentes de 2026 em que avaliações de segurança
+de agentes alcançaram sistemas reais fora do escopo autorizado (OpenAI, Anthropic e
+Google). É a regra que a lane da auditoria já aplicou: o dono autoriza, o histórico
+rastreado fica no repo privado, e credencial e IP cru não entram em repo, log, bus
+nem PR.
