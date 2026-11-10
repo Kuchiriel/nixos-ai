@@ -75,10 +75,29 @@ pareado, controle positivo 9/9):
 confiante (`avg_logprob` −0,24 a −0,43) que o léxico não pega. Ou seja: o VAD fecha
 silêncio/nonspeech/música, o gate fecha o resto, e **o wakeword cobre o que sobrou**
 (repetição) mais a variação de nível de uma sala real. A deny-list segue útil para o
-outro caso (frase alucinada sobre áudio fraco de verdade). Detalhe: o gate de texto
-só mata quando o áudio está fraco (`ns>0,35` ou `lp<-0,45`), que é o caso raro na
-alucinação de gatilho — por isso o "0,22" e o "0,925" medidos antes são do caminho
-cru, não da casa.
+outro caso (frase alucinada sobre áudio fraco de verdade).
+
+**Correção de detalhe (09/11, sweep-2026-11, medição nova):** a frase "o gate de
+texto só mata quando o áudio está fraco" vale só para o ramo do **léxico**. O gate
+tem 8 ramos e **77 das 87 mortes não dependem de stats**. Medindo o **gate sozinho**,
+sem o VAD (120 clips, seed 42, `response_format=verbose_json`, gate real extraído
+verbatim para `scripts/voice_gate.py` com paridade provada por
+`scripts/check-voice-gate-parity.py`):
+
+| | alucinou | gate REAL mata | dos quais determinísticos | proxy (listas) mataria | residual |
+|---|---|---|---|---|---|
+| **gate sozinho** (sem VAD) | 111/120 (0,925) | 87 | 77 | 42 | **0,200** |
+| **casa** (VAD → segmento → gate) | 83/123 (0,67) | — | — | — | 3/123 (0,024) |
+
+O resíduo do gate sozinho são 24/120: 10 "E aí ..." compostos (o gate mata "e aí"
+**seco**, não "e aí E aí E aí"), 5 "Música"/"Música...", 3 "Obrigado.", 3 repetições
+em formas que a regra atual não pega, "Amém." e duas legendas (uma em inglês, uma em
+espanhol). **Uma** regra determinística barata (prefixo "e aí") levaria o resíduo
+para 0,117, e junto com a repetição para **0,092**, e o que sobra é justamente o que
+a deny-list deixa de propósito (fala real e sinal social) e que a wakeword resolve
+sem matar fala verdadeira. Detalhe do número: a lista multilingual `ban-hard` é
+carregada pelo asrd e **nunca consultada** pelo gate (mata 0 dos 24). Os números e a
+receita estão em `data/voice-fixtures/README.md`.
 
 **O que ainda falta para o wakeword (09/11):** o limiar **não pode ser chutado**. No
 corpus de 1 817 segmentos da casa o wakeword dispara em 6 acima de 0,5 (0,33 %), mas ao

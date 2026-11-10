@@ -9,9 +9,10 @@ Métricas implementadas:
   --trigger-bench    hallucination-on-trigger: clips Scicom (silence/nonspeech/
                      music/reduplication, FLAC embutido no parquet) → POST /inference
                      no ASR live → taxa de saída não-vazia (alucinação) por categoria,
-                     + kill-rate simulado das listas (lexicon/hard tier-2, TSVs do repo).
-                     Gate v6 completo vive no asrd (lane OC) — aqui aproximamos tier-2
-                     com as listas TSV; diferença documentada no relatório.
+                     + kill-rate do GATE REAL (a mesma pilha de ramos do
+                       duplex-asrd, via voice_gate.py, com paridade provada por
+                       scripts/check-voice-gate-parity.py) e o proxy antigo
+                       (igualdade exata nas listas TSV) para comparação.
   --unit-battery     turn-taking accuracy: 120 cenas gold-label
                      (data/duplex-eval-turntaking.jsonl) → classify_turn replicado
                      BYTE-A-BYTE (CLASS_SYS + toggle /lora-adapters + /completion
@@ -79,16 +80,27 @@ def load_banlists() -> set:
 def trigger_bench(args) -> dict:
     import pandas as pd  # venv karaok se necessário; parquet exige pyarrow
     ban = load_banlists()
+    # (09/11, sweep-2026-11) GATE REAL: o bench media um PROXY (igualdade
+    # exata do texto em 2 TSV) e o gate de produção é uma pilha de ramos
+    # (substring, greeting-fantasma, redup, "legenda", léxico gated,
+    # ALL-CAPS, stats, tokens-vs-duração). Medir o proxy dá um número que
+    # NÃO é o do gate. voice_gate.py é a lógica do asrd extraída verbatim,
+    # com paridade provada por scripts/check-voice-gate-parity.py.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from voice_gate import anti_halluc
     rng = random.Random(args.seed)
     report = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "asr": args.asr,
               "samples_per_cat": args.samples, "seed": args.seed,
-              "categories": {}, "note": "gate v6 completo vive no duplex-asrd (lane "
-              "OC); kill simulado = listas TSV (tier-2 + lexicon)"}
+              "categories": {}, "note": "gate medido = gate REAL do duplex-asrd "
+              "(voice_gate.py, paridade provada por check-voice-gate-parity.py); "
+              "lexicon_kill = proxy antigo (igualdade exata em 2 TSV)"}
     # (09/11, sweep-2026-11) `observed` e a lista ACUMULADA de todos os textos
     # alucinados (o comentario do deny-list diz "TODOS"). Antes ela nascia
     # DENTRO do loop de categoria e era lida FORA dele => UnboundLocalError
     # (o bench nem rodava: era parte do 0/10).
     observed = []
+    observed_gate = []
+    samples_all = []
     for cat, fname in [("silence", "silence.parquet"),
                        ("nonspeech", "nonspeech.parquet"),
                        ("music", "music.parquet"),
@@ -102,6 +114,7 @@ def trigger_bench(args) -> dict:
         rng.shuffle(idx)
         idx = idx[:args.samples]
         hallo, killed, empty, errs, samples = 0, 0, 0, 0, []
+        gate_killed, gate_det = 0, 0
         for i in idx:
             row = df.iloc[i]
             try:
@@ -129,21 +142,58 @@ def trigger_bench(args) -> dict:
                            for s in _segs] or [0.0])
                 _lp = min([float(s.get("avg_logprob", 0.0) or 0.0)
                            for s in _segs] or [0.0])
+                # (09/11, sweep-2026-11) GATE REAL: aplica a MESMA pilha de
+                # ramos do asrd. A duração vem dos timestamps dos segmentos
+                # (a visão do ASR), que é o que o gate usa no teste
+                # tokens-vs-duração.
+                _starts = [float(s.get("start", 0.0) or 0.0) for s in _segs]
+                _ends = [float(s.get("end", 0.0) or 0.0) for s in _segs]
+                _dur = (max(_ends) - min(_starts)) if _segs else 0.0
+                _gate_out = anti_halluc(text, _segs, _dur)
+                _gate_kill = (_gate_out == "")
+                gate_killed += _gate_kill
+                # kill SEM stats fracos = ramo determinístico (substring,
+                # greeting-fantasma, redup, "legenda", tokens-vs-duração)
+                if _gate_kill and not (_ns > 0.35 or _lp < -0.45):
+                    gate_det += 1
                 samples.append({"id": row.get("id"), "text": text[:60],
                                 "lexicon_kill": inlist,
+                                "gate_kill": _gate_kill,
                                 "no_speech_prob": _ns,
                                 "avg_logprob": _lp,
                                 "stats_weak": (_ns > 0.35 or _lp < -0.45)})
-                observed.append(f"{cat}\t{row.get('id')}\t{text}\t{_ns:.4f}\t{_lp:.4f}")
+                # (09/11) estado completo por amostra, para que a análise
+                # offline chame o gate REAL (voice_gate.anti_halluc) sem
+                # precisar do ASR: segmentos crus + duração + veredito.
+                samples_all.append({"cat": cat, "id": str(row.get("id")),
+                                    "text": text, "ns": _ns, "lp": _lp,
+                                    "dur": _dur, "segs": _segs,
+                                    "gate_kill": bool(_gate_kill),
+                                    "lexicon_kill": bool(inlist)})
+                # (09/11) TAB dentro do texto alucinado quebrava o TSV do
+                # feed (63 de 150 linhas saíam com nº de campos errado e a
+                # curation lia menos amostras do que existiam). O texto vai
+                # pro feed com TAB e newline trocados por espaço.
+                _txt_feed = " ".join(text.replace("\t", " ").replace("\n", " ").split())
+                observed.append(f"{cat}\t{row.get('id')}\t{_txt_feed}\t{_ns:.4f}\t{_lp:.4f}")
+                # o veredito do gate vai num feed SEPARADO: o arquivo de
+                # curation (5 colunas) não muda de formato, e quem curar
+                # sabe na hora o que o gate REAL já mata (77 de 111 no
+                # último bench: curar isso é trabalho jogado fora).
+                observed_gate.append(f"{cat}\t{row.get('id')}\t{_txt_feed}\t{_ns:.4f}\t{_lp:.4f}\t{int(_gate_kill)}")
         n = empty + hallo
         report["categories"][cat] = {
             "clips": n, "empty_ok": empty, "hallucinated": hallo,
             "halluc_rate": round(hallo / n, 3) if n else None,
             "lexicon_kill": killed,
             "net_rate_apos_lista": round((hallo - killed) / n, 3) if n else None,
+            "gate_kill": gate_killed,
+            "gate_kill_deterministico": gate_det,
+            "net_rate_apos_gate": round((hallo - gate_killed) / n, 3) if n else None,
             "errors": errs, "samples": samples[:8]}
         print(f"{cat}: {hallo}/{n} alucinou ({report['categories'][cat]['halluc_rate']})"
-              f" | lista mataria {killed} | erros {errs}")
+              f" | gate REAL mata {gate_killed} (det {gate_det})"
+              f" | proxy lista mataria {killed} | erros {errs}")
     # feed p/ o deny-list (lane OC): TODOS os textos alucinados observados
     if observed:
         obs = os.path.join(args.out, "hallucinations-observed.txt")
@@ -152,6 +202,27 @@ def trigger_bench(args) -> dict:
             f.write(f"# {report['ts']} asr={args.asr} samples/cat={args.samples}\n")
             f.write("\n".join(observed) + "\n")
         report["hallucinations_observed_file"] = obs
+    # (09/11) feed com o veredito do gate (6 colunas), para a curation saber
+    # o que o gate REAL já mata: 77 das 111 alucinações do último bench já
+    # morrem no gate, e curar essas frases é trabalho jogado fora.
+    if observed_gate:
+        obsg = os.path.join(args.out, "hallucinations-observed-gate.tsv")
+        os.makedirs(args.out, exist_ok=True)
+        with open(obsg, "a", encoding="utf-8") as f:
+            f.write(f"# {report['ts']} asr={args.asr} samples/cat={args.samples}"
+                    f"  cols: cat id text ns avg_logprob gate_kill\n")
+            f.write("\n".join(observed_gate) + "\n")
+        report["hallucinations_observed_gate_file"] = obsg
+    # (09/11, sweep-2026-11) estado por amostra em JSONL: segmentos crus +
+    # duração + veredito do gate. É o que permite chamar o gate REAL
+    # offline (voice_gate.anti_halluc) e medir cenários sem re-rodar o ASR.
+    if samples_all:
+        os.makedirs(args.out, exist_ok=True)
+        jsl = os.path.join(args.out, f"trigger-samples-{report['ts'].replace(':', '')}.jsonl")
+        with open(jsl, "w", encoding="utf-8") as f:
+            for s in samples_all:
+                f.write(json.dumps(s, ensure_ascii=False) + "\n")
+        report["samples_jsonl"] = jsl
     return report
 
 

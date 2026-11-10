@@ -694,3 +694,227 @@ reduplication	cv_na_n04_r3_t0	Ah, ah, ah, ah.	0.0000	-0.3242
 reduplication	laugh_a_n12_r5_t8	A-A-A-A-A-A-A-A	0.0000	-0.1274
 reduplication	vowel_u_n08_r9_t2	E aí	0.0000	-0.1889
 reduplication	cv_da_n08_r5_t2	Pa-pa-pa-pa-pa-pa-pa	0.0000	-0.1439
+# 2026-11-09T22:57:33 asr=http://127.0.0.1:8097 samples/cat=30
+silence	digital_zero_29s	E aí	0.0000	-0.2315
+silence	hiss_-45db_60s	E aí E aí	0.0000	-0.3779
+silence	hiss_-60db_31s	E aí Obrigado.	0.0000	-0.3058
+silence	roomtone_31s	E aí Obrigado.	0.0000	-0.3610
+silence	hiss_-45db_31s	E aí Obrigado.	0.0000	-0.4153
+silence	digital_zero_31s	E aí E aí	0.0000	-0.2315
+silence	hum_50hz_60s	E aí E aí	0.0000	-0.2278
+silence	dither_31s	E aí Obrigado.	0.0000	-0.2923
+silence	hum_50hz_5s	E aí	0.0000	-0.4263
+silence	hiss_-45db_1s	Obrigado.	0.0000	-0.4016
+silence	dither_60s	E aí E aí	0.0000	-0.2188
+silence	roomtone_1s	Obrigado.	0.0000	-0.3140
+silence	roomtone_5s	Obrigado.	0.0000	-0.4119
+silence	hum_50hz_31s	E aí Legenda por Sônia Ruberti	0.0000	-0.2278
+silence	dither_120s	E aí E aí E aí E aí	0.0000	-0.2471
+silence	hiss_-60db_120s	E aí E aí E aí E aí	0.0000	-0.3259
+silence	hum_50hz_1s	Legenda por Sônia Ruberti	0.0000	-0.1916
+silence	hum_50hz_10s	E aí	0.0000	-0.3359
+silence	hiss_-60db_60s	E aí E aí	0.0000	-0.3102
+silence	roomtone_120s	E aí E aí E aí E aí	0.0000	-0.2727
+silence	hum_50hz_120s	E aí E aí E aí E aí	0.0000	-0.2278
+silence	hum_50hz_29s	E aí	0.0000	-0.3975
+nonspeech	music_345582	E aí	0.0000	-0.3264
+nonspeech	noise_378070	E aí	0.0000	-0.0054
+nonspeech	music_259192	E aí	0.0000	-0.1202
+nonspeech	music_400163	A CIDADE NO BRASIL	0.0000	-0.2721
+nonspeech	music_138491	Legenda Adriana Zanotto	0.0000	-0.1633
+nonspeech	noise_278138	E aí	0.0000	-0.4150
+nonspeech	noise_119073	O que é isso?	0.0000	-0.6343
+nonspeech	noise_272174	E aí	0.0000	-0.0081
+nonspeech	noise_414358	E aí	0.0000	-0.0000
+nonspeech	music_259887	Música...	0.0000	-0.0190
+nonspeech	music_203812	E aí	0.0000	-0.0002
+nonspeech	music_193201	Legenda por Sônia Ruberti	0.0000	-0.2146
+nonspeech	noise_421726	E aí	0.0000	-0.0204
+nonspeech	noise_206151	E aí	0.0000	-0.2595
+nonspeech	music_35256	Legenda Adriana Zanotto	0.0000	-0.1682
+nonspeech	noise_117089	E aí	0.0000	-0.0864
+nonspeech	music_105228	Legenda Adriana Zanotto	0.0000	-0.2105
+nonspeech	noise_248258	E aí	0.0000	-0.0225
+nonspeech	noise_236291	A CIDADE NO BRASIL	0.0000	-0.6585
+nonspeech	music_181827	E aí	0.0000	-0.0356
+nonspeech	music_120687	Amém.	0.0000	-0.0794
+nonspeech	noise_235606	E aí	0.0000	-0.0053
+nonspeech	music_277397	E aí	0.0000	-0.0008
+nonspeech	noise_317445	E aí	0.0000	-0.0022
+nonspeech	noise_331704	E aí	0.0000	-0.0122
+nonspeech	noise_320449	E aí	0.0000	-0.3288
+nonspeech	noise_118077	E aí	0.0000	-0.0004
+nonspeech	noise_266776	O que é o que é o que é o que é o que é o que é o que é?	0.0000	-0.0543
+nonspeech	music_416908	E aí	0.0000	-0.5672
+music	008879_16khz_mono	Não, não, não.	0.0000	-0.3997
+music	003945_16khz_mono	E aí	0.0000	-0.0016
+music	004376_16khz_mono	Oh, oh, oh, oh, oh, oh, oh, oh	0.0000	-0.1091
+music	003972_16khz_mono	Música	0.0000	-0.2477
+music	010570_16khz_mono	A CIDADE NO BRASIL	0.0000	-0.2089
+music	007773_16khz_mono	E aí E aí	0.0000	-0.0073
+music	004154_16khz_mono	a próxima. I really hope that the next time you and your wife are here in New York you come play my program. Oh yeah. You really have to. I mean,	0.0000	-1.4749
+music	010569_16khz_mono	A CIDADE NO BRASIL A CIDADE NO BRASIL	0.0000	-0.2457
+music	003947_16khz_mono	E aí	0.0000	-0.1868
+music	007550_16khz_mono	E aí	0.0000	-0.0286
+music	005227_16khz_mono	E aí	0.0000	-0.0155
+music	007770_16khz_mono	E aí O que é isso?	0.0000	-0.1899
+music	003969_16khz_mono	E aí	0.0000	-0.0244
+music	009661_16khz_mono	A CIDADE NO BRASIL	0.0000	-0.4537
+music	007046_16khz_mono	Música	0.0000	-0.3452
+music	010032_16khz_mono	A CIDADE NO BRASIL	0.0000	-0.1905
+music	010018_16khz_mono	A CIDADE NO BRASIL	0.0000	-0.4923
+music	009241_16khz_mono	E aí	0.0000	-0.0003
+music	001383_16khz_mono	E aí	0.0000	-0.0213
+music	009272_16khz_mono	Música	0.0000	-0.4103
+music	010519_16khz_mono	A CIDADE NO BRASIL	0.0000	-0.2604
+music	004387_16khz_mono	A CIDADE NO BRASIL	0.0000	-0.5064
+music	004384_16khz_mono	E aí E aí	0.0000	-0.0262
+music	009277_16khz_mono	E aí E aí	0.0000	-0.0221
+music	004072_16khz_mono	que me hiciste em dejarme	0.0000	-0.4681
+music	005151_16khz_mono	Música	0.0000	-0.2619
+music	003953_16khz_mono	E aí E aí	0.0000	-0.2410
+music	008777_16khz_mono	E aí E aí	0.0000	-0.0897
+music	008685_16khz_mono	E aí E aí	0.0000	-0.0224
+music	010693_16khz_mono	E aí	0.0000	-0.0004
+reduplication	vowel_o_n12_r3_t2	E aí	0.0000	-0.0122
+reduplication	laugh_e_n03_r7_t2	E aí	0.0000	-0.2501
+reduplication	vowel_o_n08_r9_t2	E aí	0.0000	-0.0055
+reduplication	vowel_i_n03_r7_t0	E aí	0.0000	-0.2062
+reduplication	cv_tu_n04_r7_t0	Titi-titi.	0.0000	-0.6028
+reduplication	laugh_i_n05_r3_t2	E E E E E E	0.0000	-0.3241
+reduplication	cv_da_n03_r9_t2	Tchau.	0.0000	-0.4954
+reduplication	vowel_o_n03_r5_t2	E aí	0.0000	-0.0055
+reduplication	vowel_o_n03_r7_t2	E aí	0.0000	-0.0031
+reduplication	vowel_e_n03_r7_t8	E aí	0.0000	-0.1737
+reduplication	cv_ko_n12_r7_t0	P-P-P-P-P-P-P-P...	0.0000	-0.5135
+reduplication	cv_la_n08_r7_t0	Pa-pa-pa-pa-pa-pa-pa-pa.	0.0000	-0.0857
+reduplication	cv_da_n06_r7_t0	Pa-pa-pa-pa-pa-pa.	0.0000	-0.2449
+reduplication	click_tick_n03_r5_t0	E aí	0.0000	-0.0016
+reduplication	laugh_a_n04_r9_t0	A-a-a-a-a	0.0000	-0.5754
+reduplication	vowel_o_n08_r3_t8	E aí	0.0000	-0.0018
+reduplication	cv_tu_n06_r3_t0	Tô, tô, tô, tô, tô, tô.	0.0000	-0.2692
+reduplication	cv_tu_n03_r3_t0	Tô, tô, tô.	0.0000	-0.3762
+reduplication	laugh_a_n04_r3_t8	Ah, ah, ah, ah.	0.0000	-0.2067
+reduplication	laugh_a_n03_r3_t8	Ah, ah, ah.	0.0000	-0.4535
+reduplication	laugh_i_n05_r5_t8	Tchau, tchau, tchau	0.0000	-0.3462
+reduplication	cv_da_n12_r3_t2	Pá pá pá pá pá pá pá pá pá pá pá pá pá	0.0000	-0.3428
+reduplication	cv_la_n06_r3_t0	A-A-A-A-A-A	0.0000	-0.2880
+reduplication	cv_ka_n12_r3_t2	Pá pá pá pá pá pá pá pá pá pá pá pá pá	0.0000	-0.4131
+reduplication	vowel_i_n05_r9_t8	E aí	0.0000	-0.1512
+reduplication	cv_tu_n05_r3_t2	Tô, tô, tô, tô, tô.	0.0000	-0.3371
+reduplication	cv_na_n04_r3_t0	Ah, ah, ah, ah.	0.0000	-0.3242
+reduplication	laugh_a_n12_r5_t8	A-A-A-A-A-A-A-A	0.0000	-0.1274
+reduplication	vowel_u_n08_r9_t2	E aí	0.0000	-0.1889
+reduplication	cv_da_n08_r5_t2	Pa-pa-pa-pa-pa-pa-pa	0.0000	-0.1439
+# 2026-11-09T23:10:01 asr=http://127.0.0.1:8097 samples/cat=30
+silence	digital_zero_29s	E aí	0.0000	-0.2315
+silence	hiss_-45db_60s	E aí E aí	0.0000	-0.3779
+silence	hiss_-60db_31s	E aí Obrigado.	0.0000	-0.3058
+silence	roomtone_31s	E aí Obrigado.	0.0000	-0.3610
+silence	hiss_-45db_31s	E aí Obrigado.	0.0000	-0.4153
+silence	digital_zero_31s	E aí E aí	0.0000	-0.2315
+silence	hum_50hz_60s	E aí E aí	0.0000	-0.2278
+silence	dither_31s	E aí Obrigado.	0.0000	-0.2923
+silence	hum_50hz_5s	E aí	0.0000	-0.4263
+silence	hiss_-45db_1s	Obrigado.	0.0000	-0.4016
+silence	dither_60s	E aí E aí	0.0000	-0.2188
+silence	roomtone_1s	Obrigado.	0.0000	-0.3140
+silence	roomtone_5s	Obrigado.	0.0000	-0.4119
+silence	hum_50hz_31s	E aí Legenda por Sônia Ruberti	0.0000	-0.2278
+silence	dither_120s	E aí E aí E aí E aí	0.0000	-0.2471
+silence	hiss_-60db_120s	E aí E aí E aí E aí	0.0000	-0.3259
+silence	hum_50hz_1s	Legenda por Sônia Ruberti	0.0000	-0.1916
+silence	hum_50hz_10s	E aí	0.0000	-0.3359
+silence	hiss_-60db_60s	E aí E aí	0.0000	-0.3102
+silence	roomtone_120s	E aí E aí E aí E aí	0.0000	-0.2727
+silence	hum_50hz_120s	E aí E aí E aí E aí	0.0000	-0.2278
+silence	hum_50hz_29s	E aí	0.0000	-0.3975
+nonspeech	music_345582	E aí	0.0000	-0.3264
+nonspeech	noise_378070	E aí	0.0000	-0.0054
+nonspeech	music_259192	E aí	0.0000	-0.1202
+nonspeech	music_400163	A CIDADE NO BRASIL	0.0000	-0.2721
+nonspeech	music_138491	Legenda Adriana Zanotto	0.0000	-0.1633
+nonspeech	noise_278138	E aí	0.0000	-0.4150
+nonspeech	noise_119073	O que é isso?	0.0000	-0.6343
+nonspeech	noise_272174	E aí	0.0000	-0.0081
+nonspeech	noise_414358	E aí	0.0000	-0.0000
+nonspeech	music_259887	Música...	0.0000	-0.0190
+nonspeech	music_203812	E aí	0.0000	-0.0002
+nonspeech	music_193201	Legenda por Sônia Ruberti	0.0000	-0.2146
+nonspeech	noise_421726	E aí	0.0000	-0.0204
+nonspeech	noise_206151	E aí	0.0000	-0.2595
+nonspeech	music_35256	Legenda Adriana Zanotto	0.0000	-0.1682
+nonspeech	noise_117089	E aí	0.0000	-0.0864
+nonspeech	music_105228	Legenda Adriana Zanotto	0.0000	-0.2105
+nonspeech	noise_248258	E aí	0.0000	-0.0225
+nonspeech	noise_236291	A CIDADE NO BRASIL	0.0000	-0.6585
+nonspeech	music_181827	E aí	0.0000	-0.0356
+nonspeech	music_120687	Amém.	0.0000	-0.0794
+nonspeech	noise_235606	E aí	0.0000	-0.0053
+nonspeech	music_277397	E aí	0.0000	-0.0008
+nonspeech	noise_317445	E aí	0.0000	-0.0022
+nonspeech	noise_331704	E aí	0.0000	-0.0122
+nonspeech	noise_320449	E aí	0.0000	-0.3288
+nonspeech	noise_118077	E aí	0.0000	-0.0004
+nonspeech	noise_266776	O que é o que é o que é o que é o que é o que é o que é?	0.0000	-0.0543
+nonspeech	music_416908	E aí	0.0000	-0.5672
+music	008879_16khz_mono	Não, não, não.	0.0000	-0.3997
+music	003945_16khz_mono	E aí	0.0000	-0.0016
+music	004376_16khz_mono	Oh, oh, oh, oh, oh, oh, oh, oh	0.0000	-0.1091
+music	003972_16khz_mono	Música	0.0000	-0.2477
+music	010570_16khz_mono	A CIDADE NO BRASIL	0.0000	-0.2089
+music	007773_16khz_mono	E aí E aí	0.0000	-0.0073
+music	004154_16khz_mono	a próxima. I really hope that the next time you and your wife are here in New York you come play my program. Oh yeah. You really have to. I mean,	0.0000	-1.4749
+music	010569_16khz_mono	A CIDADE NO BRASIL A CIDADE NO BRASIL	0.0000	-0.2457
+music	003947_16khz_mono	E aí	0.0000	-0.1868
+music	007550_16khz_mono	E aí	0.0000	-0.0286
+music	005227_16khz_mono	E aí	0.0000	-0.0155
+music	007770_16khz_mono	E aí O que é isso?	0.0000	-0.1899
+music	003969_16khz_mono	E aí	0.0000	-0.0244
+music	009661_16khz_mono	A CIDADE NO BRASIL	0.0000	-0.4537
+music	007046_16khz_mono	Música	0.0000	-0.3452
+music	010032_16khz_mono	A CIDADE NO BRASIL	0.0000	-0.1905
+music	010018_16khz_mono	A CIDADE NO BRASIL	0.0000	-0.4923
+music	009241_16khz_mono	E aí	0.0000	-0.0003
+music	001383_16khz_mono	E aí	0.0000	-0.0213
+music	009272_16khz_mono	Música	0.0000	-0.4103
+music	010519_16khz_mono	A CIDADE NO BRASIL	0.0000	-0.2604
+music	004387_16khz_mono	A CIDADE NO BRASIL	0.0000	-0.5064
+music	004384_16khz_mono	E aí E aí	0.0000	-0.0262
+music	009277_16khz_mono	E aí E aí	0.0000	-0.0221
+music	004072_16khz_mono	que me hiciste em dejarme	0.0000	-0.4681
+music	005151_16khz_mono	Música	0.0000	-0.2619
+music	003953_16khz_mono	E aí E aí	0.0000	-0.2410
+music	008777_16khz_mono	E aí E aí	0.0000	-0.0897
+music	008685_16khz_mono	E aí E aí	0.0000	-0.0224
+music	010693_16khz_mono	E aí	0.0000	-0.0004
+reduplication	vowel_o_n12_r3_t2	E aí	0.0000	-0.0122
+reduplication	laugh_e_n03_r7_t2	E aí	0.0000	-0.2501
+reduplication	vowel_o_n08_r9_t2	E aí	0.0000	-0.0055
+reduplication	vowel_i_n03_r7_t0	E aí	0.0000	-0.2062
+reduplication	cv_tu_n04_r7_t0	Titi-titi.	0.0000	-0.6028
+reduplication	laugh_i_n05_r3_t2	E E E E E E	0.0000	-0.3241
+reduplication	cv_da_n03_r9_t2	Tchau.	0.0000	-0.4954
+reduplication	vowel_o_n03_r5_t2	E aí	0.0000	-0.0055
+reduplication	vowel_o_n03_r7_t2	E aí	0.0000	-0.0031
+reduplication	vowel_e_n03_r7_t8	E aí	0.0000	-0.1737
+reduplication	cv_ko_n12_r7_t0	P-P-P-P-P-P-P-P...	0.0000	-0.5135
+reduplication	cv_la_n08_r7_t0	Pa-pa-pa-pa-pa-pa-pa-pa.	0.0000	-0.0857
+reduplication	cv_da_n06_r7_t0	Pa-pa-pa-pa-pa-pa.	0.0000	-0.2449
+reduplication	click_tick_n03_r5_t0	E aí	0.0000	-0.0016
+reduplication	laugh_a_n04_r9_t0	A-a-a-a-a	0.0000	-0.5754
+reduplication	vowel_o_n08_r3_t8	E aí	0.0000	-0.0018
+reduplication	cv_tu_n06_r3_t0	Tô, tô, tô, tô, tô, tô.	0.0000	-0.2692
+reduplication	cv_tu_n03_r3_t0	Tô, tô, tô.	0.0000	-0.3762
+reduplication	laugh_a_n04_r3_t8	Ah, ah, ah, ah.	0.0000	-0.2067
+reduplication	laugh_a_n03_r3_t8	Ah, ah, ah.	0.0000	-0.4535
+reduplication	laugh_i_n05_r5_t8	Tchau, tchau, tchau	0.0000	-0.3462
+reduplication	cv_da_n12_r3_t2	Pá pá pá pá pá pá pá pá pá pá pá pá pá	0.0000	-0.3428
+reduplication	cv_la_n06_r3_t0	A-A-A-A-A-A	0.0000	-0.2880
+reduplication	cv_ka_n12_r3_t2	Pá pá pá pá pá pá pá pá pá pá pá pá pá	0.0000	-0.4131
+reduplication	vowel_i_n05_r9_t8	E aí	0.0000	-0.1512
+reduplication	cv_tu_n05_r3_t2	Tô, tô, tô, tô, tô.	0.0000	-0.3371
+reduplication	cv_na_n04_r3_t0	Ah, ah, ah, ah.	0.0000	-0.3242
+reduplication	laugh_a_n12_r5_t8	A-A-A-A-A-A-A-A	0.0000	-0.1274
+reduplication	vowel_u_n08_r9_t2	E aí	0.0000	-0.1889
+reduplication	cv_da_n08_r5_t2	Pa-pa-pa-pa-pa-pa-pa	0.0000	-0.1439

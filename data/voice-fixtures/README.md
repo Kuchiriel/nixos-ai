@@ -66,7 +66,7 @@ completo está em [`MANIFEST-scicom-antihalluc-pt.md`](MANIFEST-scicom-antihallu
 (recuperado dos transcripts; o original vivia em `/tmp` e a limpeza levou).
 
 | arquivo | rows | classe | label | origem |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `silence.parquet` | 42 | gatilho | vazio | **sintetizável** (zeros) |
 | `reduplication.parquet` | 1 440 | gatilho | `reference_text`/`reference_collapsed` | **sintetizável** (o mesmo segmento duas vezes) |
 | `nonspeech.parquet` | 1 168 | gatilho | vazio | **FSD50K** (não-fala: ruído, respiração, tosse) — dataset pequeno, com rótulo de classe |
@@ -96,7 +96,7 @@ Não é preciso passar pelo Kaggle. O mesmo recorte (as mesmas categorias, o mes
 `id` + `audio.bytes` em FLAC) está no dataset **HF `Scicom-intl/Whisper-Hallucination`**,
 que é **público** (o manifesto diz "upload privado", mas a API responde `private: false`):
 
-```
+```text
 https://huggingface.co/datasets/Scicom-intl/Whisper-Hallucination/resolve/main/data/silence/test-00000-of-00001.parquet
 https://huggingface.co/datasets/Scicom-intl/Whisper-Hallucination/resolve/main/data/nonspeech/test-00000-of-00001.parquet
 https://huggingface.co/datasets/Scicom-intl/Whisper-Hallucination/resolve/main/data/music/test-00000-of-00001.parquet
@@ -124,35 +124,83 @@ scripts/duplex-eval.py --trigger-bench --samples 10 --log /tmp/opencode/trigger-
 - **total**: 36/40 alucinou (0,90 bruto), a lista mata 17, fica 19/40 (0,47)
 
 Ou seja: o ASR alucina em quase todo gatilho (o pior é música e repetição, 1,0), e **a
-lista de negação sozinha não fecha** (ainda 0,47). **Este número é da lista crua, e o
-gate real é pior**: ver a seção seguinte, que mede o gate como o asrd de fato o roda.
+lista de negação sozinha não fecha** (ainda 0,47). **Este número é da lista crua** (o
+proxy antigo do bench): o gate real é o que decide, e ele é melhor do que o proxy
+sugere, não pior. A seção seguinte mede o gate como o asrd de fato o roda.
 A comparação com o MFCC/WE speaker é outra frente (separabilidade do falante), e ela não
 muda este número.
 
-### Quanto o gate de texto completo mata (medido 09/11, sweep-2026-11)
+### Quanto o gate REAL mata (medido 09/11, sweep-2026-11, 120 clips)
 
-**Cuidado: o número real é pior do que a lista crua sugere.** O gate v6 do asrd mata a
-frase do léxico **só quando o áudio também está fraco** (`no_speech_prob > 0.35` ou
-`avg_logprob < -0.45`). Medi os stats de verdade (o bench passou a pedir
-`response_format=verbose_json` e a guardar `no_speech_prob`/`avg_logprob` por amostra):
+**O número que decide é 0,200 de resíduo, e ele só existe porque o bench mediu
+o gate de verdade.** Duas medições anteriores circulavam na casa e nenhuma das
+duas era o gate: a de 0,925 simulava só o ramo *gated* (léxico E stats fracos),
+e a da outra lane, 0,217, media as listas de texto. O gate de produção
+(`scripts/duplex-asrd.py`, função `anti_halluc`) é uma pilha de ramos:
 
-- Alucinação bruta nos gatilhos: **111/120 (0,925)** (silence 0,73, nonspeech 0,97,
-  music 1,0, reduplication 1,0).
-- A lista **crua** mata 42 das 111 (sobra 0,575).
-- Com o gate real (lista **e** áudio fraco): mata **0** (sobra **0,925**). O braço de
-  áudio quase nunca dispara nas alucinações de gatilho: `no_speech_prob` mediano 0,000 e
-  `avg_logprob` mediano entre -0,22 e -0,30 (o limiar é -0,45), ou seja a transcrição
-  alucinada chega **confiante**.
+| ramo | precisa de stats fracos? |
+| --- | --- |
+| deny-list dura (substring, até 6 palavras) | não |
+| greeting-fantasma ("e aí" seco, "e aí e aí") | não |
+| repetição (hifenizada e token repetido) | não |
+| "Legenda ..." no início | não |
+| léxico Scicom + greetings | sim (`ns > 0.35` ou `lp < -0.45`) |
+| ALL-CAPS | sim |
+| gate estatístico (todos `ns > 0.6` e `lp < -0.8`) | sim |
+| tokens-vs-duração (mais de 5,5 palavras/s) | não |
 
-Ou seja: **o gate de texto não fecha a alucinação de gatilho**, porque a defesa em
-profundidade depende de stats de áudio fracos que não vêm. E o pior caso é o silêncio
-digital: o ASR respondeu "E aí" a um clip de zeros, e o VAD não deveria ter mandado
-aquilo para o ASR.
+Medido com 30 clips por categoria (120 no total, seed 42, `/inference` com
+`response_format=verbose_json`), com o gate como está no disco hoje:
 
-Onde o resíduo tem que ser tratado: **antes do ASR** (VAD/segmentação, para o silêncio e
-o não-fala não chegarem ao modelo) ou **no gate de voz** (wakeword). A deny-list continua
-valendo para o outro caso (a frase alucinada com áudio fraco de verdade, que não é o
-caso dos gatilhos).
+| categoria | alucinou | gate REAL mata | dos quais determinísticos | proxy (listas) mataria | residual |
+| --- | --- | --- | --- | --- | --- |
+| silence | 22/30 (0,73) | 10 | 10 | 4 | 0,40 |
+| nonspeech | 29/30 (0,97) | 26 | 23 | 19 | 0,10 |
+| music | 30/30 (1,00) | 23 | 20 | 8 | 0,23 |
+| reduplication | 30/30 (1,00) | 28 | 24 | 11 | 0,07 |
+| **total** | **111/120 (0,925)** | **87** | **77** | **42** | **0,200** |
+
+Ou seja: **o gate de texto derruba de 0,925 para 0,200**, e 77 das 87 mortes
+são determinísticas, ou seja não dependem de stats de áudio. Isso importa
+porque o stats é justamente o sinal que **não** discrimina: `no_speech_prob`
+mediano 0,000 e `avg_logprob` mediano entre -0,22 e -0,30 contra limiar de
+-0,45, ou seja a transcrição alucinada chega **confiante**.
+
+**História do número:** com o gate antes da regra de repetição da lane de voz
+(`scripts/voice_text_rules.py`), eram 77 mortes e residual 0,283. A regra de
+repetição (que ela mediu antes: mata 3 de 3 das alucinações de repetição e 1
+de 199 falas reais, com chave de desligio `JARVIS_VOICE_REPEAT_RULE=0`) levou
+para 87 e residual 0,200. Esta seção é a que vale: o gate real é o do disco.
+
+**O que sobra (24/120) e o que cada frente mata** (medido sobre as mesmas
+amostras, com o gate REAL chamado offline e conferido 111/111 contra o bench):
+
+| regra hipotética (não aplicada) | mata | residual |
+| --- | --- | --- |
+| prefixo "e aí" (o gate mata "e aí" seco, não "e aí E aí E aí") | 10 | 0,117 |
+| repetição em formas que a regra atual não pega | 7 | 0,142 |
+| lista multilingual `ban-hard` (hoje carregada e **nunca consultada**) | 0 | 0,200 |
+| as duas primeiras juntas | 17 | **0,092** |
+
+O que sobrevive às duas: 6× "Música"/"Música...", 3× "Obrigado.", "Amém.",
+"Titi-titi.", "Tchau, tchau, tchau" e duas legendas (uma em inglês, uma em
+espanhol). "Música" e "Obrigado" ficam de propósito fora do kill (sinal social
+e fala real), então o resíduo irredutível do gate de texto é pequeno: o que
+pede outra frente é a fala que **parece** real, e é aí que a wakeword entra (o
+gate não pode matar "obrigado" dito de verdade).
+
+**Como medir (e o que não medir):** o bench mede o gate REAL agora
+(`scripts/voice_gate.py`, cópia verbatim da lógica do asrd, com paridade
+provada por `scripts/check-voice-gate-parity.py`, que compara os dois códigos
+por token stream). O proxy antigo (`text.lower() in ban`, igualdade exata em
+dois TSV) fica no relatório como `lexicon_kill`, só para comparação.
+
+```bash
+# (09/11) pandas + pyarrow estão no devShell do nixos-ai; o venv do karaok
+# tem numpy quebrado (precisa de libstdc++/libz no LD_LIBRARY_PATH).
+nix develop --command python3 scripts/duplex-eval.py --trigger-bench \
+  --samples 30 --seed 42 --out reports/duplex-eval
+```
 
 ### Em qual caminho esses números foram medidos (09/11, coord-naming)
 
@@ -167,7 +215,7 @@ real, silêncio digital no fim para fechar o segmento, comparativo pareado do me
 áudio na mesma janela de 12 s, e controle positivo de fala real **9/9**):
 
 | categoria | n | cru (whisper direto) | casa (VAD, segmento, gate) | segmentos abertos pelo VAD |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | silence | 23 | 8 (0,35) | **0** | 0 |
 | nonspeech | 30 | 26 (0,87) | **0** | 0 |
 | music | 30 | 27 (0,90) | **0** | 2 |
