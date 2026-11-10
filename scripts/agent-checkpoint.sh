@@ -85,7 +85,28 @@ HANDOFF_REL="HANDOFF-$DATA-$SLUG.md"
 # resumo CURTO para a fila e a memória (1 fato = 1 lugar): 1 linha, <=280 chars.
 # O texto integral fica só no vault (HANDOFF-<data>-<slug>.md).
 SUMMARY_SHORT=$(printf '%s' "$SUMMARY" | tr '\n\t' '  ' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')
-if [ "${#SUMMARY_SHORT}" -gt 280 ]; then SUMMARY_SHORT="${SUMMARY_SHORT:0:277}..."; fi
+if [ "${#SUMMARY_SHORT}" -gt 280 ]; then
+  # (10/11) corta em LIMITE DE FRASE, não no meio da palavra: medido, o topo
+  # da fila terminava em "Resultado: NENHU..." e a conclusao da era ficava
+  # ilegivel justamente no artefato que todo mundo le primeiro. Se nao ha
+  # ponto/ponto e virgula no corte, cai na ultima palavra.
+  SUMMARY_SHORT=$(printf '%s' "$SUMMARY_SHORT" | awk '{
+    s = substr($0, 1, 280); cut = 0;
+    for (i = length(s); i > 0; i--) {
+      c = substr(s, i, 1);
+      if (c == "." || c == ";") { cut = i; break }
+    }
+    if (cut < 120) {
+      cut = 0;
+      for (i = length(s); i > 0; i--) {
+        if (substr(s, i, 1) == " ") { cut = i; break }
+      }
+    }
+    if (cut > 0) s = substr(s, 1, cut);
+    sub(/[.;]$/, "", s);
+    print s "...";
+  }')
+fi
 
 # fila: a do projeto se existir, senão a do monorepo
 if [ -z "$QUEUE" ]; then
@@ -188,14 +209,36 @@ if [ "$DRY" -eq 0 ]; then
   else
     VAULT_STATUS="nota escrita"
   fi
+  # (10/11) READ BACK: a fila (passo 1) ja aponta para esta nota, entao uma
+  # escrita que nao persistiu deixa um ponteiro quebrado. Medido 10/11: o
+  # topo da fila apontava para HANDOFF-2026-11-10-prova-do-wakeword.md e o
+  # arquivo nao existia em lugar nenhum. Regra da casa: write -> read back ->
+  # so depois "ok" (o Qdrant ja aceitou um write com HTTP 200 e nao
+  # persistiu, e quem confiou no status perdeu 6 pontos).
+  if [ -s "$HANDOFF" ] && grep -qF "$ERA" "$HANDOFF" 2>/dev/null; then
+    VAULT_STATUS="$VAULT_STATUS (lida de volta)"
+  else
+    VAULT_STATUS="FALHOU: a nota nao persistiu (a fila aponta para ela)"
+    POINTER_BROKEN=1
+  fi
   # espelha no JARVIS (indexa a nota no RAG do vault)
   [ -x "$JARVIS_CLI" ] && jarvis_run vault-write "handoff-$DATE-$SLUG" "$(cat "$HANDOFF")" >/dev/null 2>&1 || true
 else
   VAULT_STATUS="dry-run"
 fi
-ok "vault: $VAULT_STATUS ($HANDOFF)"
+if [ "${POINTER_BROKEN:-0}" = "1" ]; then
+  fail "vault: a nota do HANDOFF nao persistiu, e a fila ja aponta para ela"
+else
+  ok "vault: $VAULT_STATUS ($HANDOFF)"
+fi
 
 log "== fim do checkpoint =="
+
+# (10/11) exit != 0 quando a fila ficou com ponteiro quebrado: quem chama o
+# checkpoint (o agente, o watcher) precisa ver a falha, nao um "ok" bonito.
+if [ "${POINTER_BROKEN:-0}" = "1" ]; then
+  exit 1
+fi
 
 # (01/11) avisa o agents-watcher que houve checkpoint AGORA (o watcher nao ve
 # o que o agente roda fora dele): marcador global + snapshot para o dedupe.
