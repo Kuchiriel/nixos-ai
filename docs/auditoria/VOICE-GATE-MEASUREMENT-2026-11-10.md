@@ -20,18 +20,26 @@ lane de voz decidir o que dá para implementar sem custo escondido.
 
 | | alucinou | gate REAL mata | dos quais determinísticos | proxy (listas) mataria | residual |
 |---|---|---|---|---|---|
-| gate sozinho (sem VAD) | 111/120 (0,925) | 87 | 77 | 42 | **0,200** |
+| gate sozinho (sem VAD) | 111/120 (0,925) | 97 | 87 | 42 | **0,117** |
 | casa (VAD → segmento → gate) | 83/123 (0,67) | — | — | — | 3/123 (0,024) |
 
 Os dois números que circulavam antes não eram o gate: 0,925 era uma simulação que
-considerava só o ramo *gated*, e 0,217 eram as listas de texto. **77 das 87 mortes do
+considerava só o ramo *gated*, e 0,217 eram as listas de texto. **87 das 97 mortes do
 gate não dependem de stats de áudio**, e é por isso que o gate real é muito melhor que
 o proxy: o áudio da alucinação é confiante (`no_speech_prob` mediano 0,000,
 `avg_logprob` mediano entre -0,22 e -0,30 contra limiar de -0,45).
 
-Resíduo de 24/120: 10 "E aí ..." compostos, 5 "Música"/"Música...", 3 "Obrigado.",
-3 repetições em formas que a regra atual não pega, "Amém." e duas legendas (uma em
-inglês, uma em espanhol).
+**História do número, na ordem em que aconteceu:** 77 mortes e residual 0,283 com o
+gate antes da regra de repetição; 87 mortes e residual 0,200 depois dela; **97 mortes e
+residual 0,117** com a regra composta de "e aí" da lane de voz, que usa a regra
+candidata medida aqui com o custo medido antes (1 fala real em 1817). O ramo
+`ban-hard` da lista multilingual saiu do asrd por ser código morto.
+
+Resíduo de 14/120: 4× "Música" + 1× "Música...", 3× "Obrigado.", "Amém.",
+"O que é o que é o que é...", 2 legendas (uma em inglês, uma em espanhol),
+"Titi-titi." e "Tchau, tchau, tchau". **Oito dos 14 parecem fala real** (fala de
+verdade e sinal social, que é o que a deny-list deixa passar de propósito): é essa a
+classe que a wakeword resolve sem matar fala verdadeira.
 
 ## 3. O custo em fala real das regras de texto (o que faltava medir)
 

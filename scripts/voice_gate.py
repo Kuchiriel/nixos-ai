@@ -94,7 +94,17 @@ LEXICON = load_lexicon()
 # (08:55, delta HB pós-multilingue) fantasmas trocaram de idioma:
 # 'Hey.'/'Bye.'/'*Eat*'/'Eee.'/'T-T-T-T'. TSV multilingual do HB:
 # ban-hard (curado, multi-word, nunca fala real) + gated JA/ZH.
-MULTI_HARD = set()
+# (10/11, coord-naming, decisão da lane de voz) O ramo `ban-hard` foi
+# REMOVIDO do asrd: ele era carregado num conjunto (`MULTI_HARD`) que o
+# gate **nunca consultava** — matava 0 dos 24 sobreviventes do gate (bench
+# de 120 clipes, seed 42) e, por estar ali, parecia ativo. Não foi ligado
+# porque não há ganho medido e o texto está no seu piso (a mesma string
+# aparece na fala real e na alucinação: qualquer regra que feche a
+# alucinação paga a mesma fala real — ver
+# docs/auditoria/VOICE-GATE-MEASUREMENT-2026-11-10.md §4). A curadoria
+# continua em data/whisper-halluc-ban-multilingual.tsv: quem for ligar uma
+# lista tem que medir o custo em fala real antes. O ramo `gated` (JA/ZH)
+# segue vivo e alimenta o LEXICON, como antes.
 try:
     for line in open(DATA / "whisper-halluc-ban-multilingual.tsv"):
         if line.startswith("#") or not line.strip():
@@ -105,9 +115,7 @@ try:
         phrase = parts[2].lower()
         if not phrase or len(phrase.split()) < 2:
             continue        # 1-palavra ('ed', 'me') = lixo do count
-        if parts[0] == "ban-hard":
-            MULTI_HARD.add(phrase)
-        else:
+        if parts[0] == "gated":
             LEXICON.add(phrase)
 except OSError:
     pass
@@ -133,6 +141,14 @@ def anti_halluc(txt, segs, dur_s):
     # completa ('E aí, tudo bom?') passa. Trade-off no queue p/ dono.
     if t in ("e aí", "e ai", "e aí e aí", "e ai e ai",
              "a cidade no brasil", "a cidade no brasil a cidade no brasil"):
+        return ""
+    # (10/11, coord-naming) 'E aí ...' COMPOSTO: a regra candidata do
+    # sweep (scripts/measure-voice-rule-cost.py), com o custo medido
+    # ANTES em 1817 falas reais: mata 1 fala real (0,06 %) e mata 10 dos
+    # 24 sobreviventes do gate. Conservadora: 'E aí, tudo bom?' passa.
+    # Desligavel com JARVIS_VOICE_GREETING_RULE=0.
+    if voice_text_rules.looks_greeting_halluc(
+            t, LEXICON, GREET_SUS, voice_text_rules.looks_repeated):
         return ""
     # Stutter redup: 'A-a-a-a-a' (loop de sílaba hifenizada) e
     # 'Ah, ah, ah' (token repetido). A segunda forma é o RESIDUAL
@@ -179,6 +195,11 @@ def anti_halluc(txt, segs, dur_s):
 
 
 def gate_lists() -> dict:
-    """As listas que o gate consulta (para relatório e para a paridade)."""
+    """As listas que o gate consulta (para relatório e para a paridade).
+
+    `MULTI_HARD` saiu daqui em 10/11: a lane de voz removeu do asrd o ramo
+    ban-hard, que era carregado e nunca consultado (matava 0 dos 24
+    sobreviventes). A curadoria continua no TSV.
+    """
     return {"HALLUC_PT": set(HALLUC_PT), "LEXICON": set(LEXICON),
-            "MULTI_HARD": set(MULTI_HARD), "GREET_SUS": set(GREET_SUS)}
+            "GREET_SUS": set(GREET_SUS)}

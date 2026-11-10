@@ -70,9 +70,15 @@ def find_assign(tree: ast.AST, name: str):
 
 
 def find_multi_try(tree: ast.AST):
-    """O try que carrega a lista multilingual (MULTI_HARD / LEXICON.add)."""
+    """O try que carrega a lista multilingual.
+
+    O marcador e o NOME DO ARQUIVO, e nao `MULTI_HARD`: em 10/11 a lane de
+    voz removeu o ramo ban-hard (que o gate nunca consultava), e o bloco
+    deixou de mencionar aquela variavel. Procurar pelo arquivo acha o
+    bloco nos dois formatos.
+    """
     for node in ast.walk(tree):
-        if isinstance(node, ast.Try) and "MULTI_HARD" in ast.dump(node):
+        if isinstance(node, ast.Try) and "whisper-halluc-ban-multilingual" in ast.dump(node):
             return node
     return None
 

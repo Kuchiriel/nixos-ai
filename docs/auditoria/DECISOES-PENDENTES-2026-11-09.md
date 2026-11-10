@@ -90,39 +90,31 @@ silêncio/nonspeech/música, o gate fecha o resto, e **o wakeword cobre o que so
 (repetição) mais a variação de nível de uma sala real. A deny-list segue útil para o
 outro caso (frase alucinada sobre áudio fraco de verdade).
 
-**Correção de detalhe (09/11, sweep-2026-11, medição nova):** a frase "o gate de
+**Correção de detalhe (10/11, sweep-2026-11, medição nova):** a frase "o gate de
 texto só mata quando o áudio está fraco" vale só para o ramo do **léxico**. O gate
-tem 8 ramos e **77 das 87 mortes não dependem de stats**. Medindo o **gate sozinho**,
+tem 9 ramos e **87 das 97 mortes não dependem de stats**. Medindo o **gate sozinho**,
 sem o VAD (120 clips, seed 42, `response_format=verbose_json`, gate real extraído
 verbatim para `scripts/voice_gate.py` com paridade provada por
 `scripts/check-voice-gate-parity.py`):
 
 | | alucinou | gate REAL mata | dos quais determinísticos | proxy (listas) mataria | residual |
 |---|---|---|---|---|---|
-| **gate sozinho** (sem VAD) | 111/120 (0,925) | 87 | 77 | 42 | **0,200** |
+| **gate sozinho** (sem VAD) | 111/120 (0,925) | 97 | 87 | 42 | **0,117** |
 | **casa** (VAD → segmento → gate) | 83/123 (0,67) | — | — | — | 3/123 (0,024) |
 
-O resíduo do gate sozinho são 24/120: 10 "E aí ..." compostos (o gate mata "e aí"
-**seco**, não "e aí E aí E aí"), 5 "Música"/"Música...", 3 "Obrigado.", 3 repetições
-em formas que a regra atual não pega, "Amém." e duas legendas (uma em inglês, uma em
-espanhol). **Uma** regra determinística barata (prefixo "e aí") levaria o resíduo
-para 0,117, e junto com a repetição para **0,092**, e o que sobra é justamente o que
-a deny-list deixa de propósito (fala real e sinal social) e que a wakeword resolve
-sem matar fala verdadeira.
-
-**E o custo, medido nas 1817 falas reais da casa (`logs/audio`):** a regra de prefixo
-"e aí" mata **10 dos 24** sobreviventes e **1 fala real de 1817** (0,06 %). Esse custo
-não é defeito da regra: é o **piso** de qualquer gate de texto, porque a mesma string
-("E aí, o que é isso?") está na fala real e na alucinação, e nenhuma função do texto
-separa as duas classes. No mesmo corpus, **134 falas reais (7,4 %) têm o texto exato
-no léxico** ("Obrigado.", "Tchau."), que é exatamente o que o ramo gated existe para
-proteger, e o que ele não consegue proteger quando o áudio da alucinação chega
-confiante. Detalhe do número: a lista multilingual `ban-hard` é carregada pelo asrd e
-**nunca consultada** pelo gate (mata 0 dos 24). A medição completa, com o custo por
-regra e o que a literatura de 2026 diz (arXiv 2606.23060: o sinal forte é probing do
-decoder, que o whisper.cpp não expõe; VAD antes do decoder é a defesa principal, e a
-casa já tem), está em `docs/auditoria/VOICE-GATE-MEASUREMENT-2026-11-10.md`. Os
-números e a receita estão em `data/voice-fixtures/README.md`.
+O residual do gate sozinho são **14/120**, e é a classe que a wakeword precisa
+cobrir: 5× "Música"/"Música...", 3× "Obrigado.", "Amém.", "O que é o que é o que
+é...", 2 legendas (uma em inglês, uma em espanhol), "Titi-titi." e "Tchau, tchau,
+tchau". **Oito dos 14 parecem fala real** (fala de verdade e sinal social, que é
+justamente o que a deny-list deixa passar). Detalhe do número: o gate caiu de 0,200
+para 0,117 quando a lane de voz entrou com a regra composta de "e aí" (o custo foi
+medido antes de implementar, com a minha ferramenta: 1 fala real em 1817), e o ramo
+`ban-hard` da lista multilingual foi **removido** por ser código morto (mata 0 dos
+24). A medição completa, com o custo por regra e o que a literatura de 2026 diz
+(arXiv 2606.23060: o sinal forte é probing do decoder, que o whisper.cpp não expõe;
+VAD antes do decoder é a defesa principal, e a casa já tem), está em
+`docs/auditoria/VOICE-GATE-MEASUREMENT-2026-11-10.md`. Os números e a receita
+estão em `data/voice-fixtures/README.md`.
 
 **O residual medido foi fechado com uma regra de texto, e ela tem custo (09/11,
 coord-naming — decisão do dono, com desligar):** os 3 clipes que sobreviviam

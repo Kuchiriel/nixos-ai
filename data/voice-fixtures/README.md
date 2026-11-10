@@ -130,9 +130,9 @@ sugere, não pior. A seção seguinte mede o gate como o asrd de fato o roda.
 A comparação com o MFCC/WE speaker é outra frente (separabilidade do falante), e ela não
 muda este número.
 
-### Quanto o gate REAL mata (medido 09/11, sweep-2026-11, 120 clips)
+### Quanto o gate REAL mata (medido 10/11, sweep-2026-11, 120 clips)
 
-**O número que decide é 0,200 de resíduo, e ele só existe porque o bench mediu
+**O número que decide é 0,117 de resíduo, e ele só existe porque o bench mediu
 o gate de verdade.** Duas medições anteriores circulavam na casa e nenhuma das
 duas era o gate: a de 0,925 simulava só o ramo *gated* (léxico E stats fracos),
 e a da outra lane, 0,217, media as listas de texto. O gate de produção
@@ -142,6 +142,7 @@ e a da outra lane, 0,217, media as listas de texto. O gate de produção
 | --- | --- |
 | deny-list dura (substring, até 6 palavras) | não |
 | greeting-fantasma ("e aí" seco, "e aí e aí") | não |
+| "E aí ..." composto (a regra da lane de voz, custo medido antes) | não |
 | repetição (hifenizada e token repetido) | não |
 | "Legenda ..." no início | não |
 | léxico Scicom + greetings | sim (`ns > 0.35` ou `lp < -0.45`) |
@@ -154,45 +155,39 @@ Medido com 30 clips por categoria (120 no total, seed 42, `/inference` com
 
 | categoria | alucinou | gate REAL mata | dos quais determinísticos | proxy (listas) mataria | residual |
 | --- | --- | --- | --- | --- | --- |
-| silence | 22/30 (0,73) | 10 | 10 | 4 | 0,40 |
+| silence | 22/30 (0,73) | 19 | 19 | 4 | 0,10 |
 | nonspeech | 29/30 (0,97) | 26 | 23 | 19 | 0,10 |
-| music | 30/30 (1,00) | 23 | 20 | 8 | 0,23 |
+| music | 30/30 (1,00) | 24 | 21 | 8 | 0,20 |
 | reduplication | 30/30 (1,00) | 28 | 24 | 11 | 0,07 |
-| **total** | **111/120 (0,925)** | **87** | **77** | **42** | **0,200** |
+| **total** | **111/120 (0,925)** | **97** | **87** | **42** | **0,117** |
 
-Ou seja: **o gate de texto derruba de 0,925 para 0,200**, e 77 das 87 mortes
+Ou seja: **o gate de texto derruba de 0,925 para 0,117**, e 87 das 97 mortes
 são determinísticas, ou seja não dependem de stats de áudio. Isso importa
 porque o stats é justamente o sinal que **não** discrimina: `no_speech_prob`
 mediano 0,000 e `avg_logprob` mediano entre -0,22 e -0,30 contra limiar de
 -0,45, ou seja a transcrição alucinada chega **confiante**.
 
-**História do número:** com o gate antes da regra de repetição da lane de voz
-(`scripts/voice_text_rules.py`), eram 77 mortes e residual 0,283. A regra de
-repetição (que ela mediu antes: mata 3 de 3 das alucinações de repetição e 1
-de 199 falas reais, com chave de desligio `JARVIS_VOICE_REPEAT_RULE=0`) levou
-para 87 e residual 0,200. Esta seção é a que vale: o gate real é o do disco.
+**História do número:** com o gate antes da regra composta de "e aí" (da lane de
+voz, medida antes de implementar: mata 10 dos 24 sobreviventes por 1 fala real
+em 1817) e antes da remoção do ramo `ban-hard` (que era carregado e nunca
+consultado, matando 0 dos 24), eram 87 mortes e residual 0,200. A regra composta
+levou para 97 e residual **0,117**, que é exatamente o valor previsto.
 
-**O que sobra (24/120) e o que cada frente mata** (medido sobre as mesmas
-amostras, com o gate REAL chamado offline e conferido 111/111 contra o bench):
+**O que sobrou (14/120):** 4× "Música" + 1× "Música...", 3× "Obrigado.",
+"Amém.", "O que é o que é o que é...", 2 legendas (uma em inglês, uma em
+espanhol), "Titi-titi." e "Tchau, tchau, tchau". **Oito dos 14 parecem fala
+real** ("Música" e "Obrigado" são fala de verdade e sinal social, e é por isso
+que a deny-list deixa passar). É essa a classe que a wakeword resolve sem
+matar fala verdadeira.
 
-| regra hipotética (não aplicada) | mata | residual |
-| --- | --- | --- |
-| prefixo "e aí" (o gate mata "e aí" seco, não "e aí E aí E aí") | 10 | 0,117 |
-| repetição em formas que a regra atual não pega | 7 | 0,142 |
-| lista multilingual `ban-hard` (hoje carregada e **nunca consultada**) | 0 | 0,200 |
-| as duas primeiras juntas | 17 | **0,092** |
-
-**E o custo em fala real, medido nas 1817 transcrições de `logs/audio`:** a regra de
-prefixo "e aí" mata **1 fala real de 1817** (0,06 %), que é `"E aí, o que é isso?"`.
-Esse custo não é defeito da regra, é o **piso** de qualquer gate de texto: a mesma
-string está na fala real e na alucinação, e nenhuma função do texto separa as duas
-classes. No mesmo corpus, **134 falas reais (7,4 %) têm o texto exato no léxico**
-("Obrigado.", "Tchau.", "Muito bom."): é por isso que o ramo gated existe, e é por
-isso que ele não pode ser a defesa principal (o áudio da alucinação chega confiante).
-O que sobra depois das duas regras: 6× "Música"/"Música...", 3× "Obrigado.",
-"Amém.", "Titi-titi.", "Tchau, tchau, tchau" e duas legendas (uma em inglês, uma em
-espanhol). O resíduo irredutível do gate de texto é, em boa parte, **fala real que o
-ASR ouviu onde não havia fala**, e é aí que a wakeword entra. A medição completa,
+**O custo em fala real, medido nas 1817 transcrições de `logs/audio`:** a regra
+de prefixo "e aí" mata **1 fala real de 1817** (0,06 %), que é
+`"E aí, o que é isso?"`. Esse custo não é defeito da regra, é o **piso** de
+qualquer gate de texto: a mesma string está na fala real e na alucinação, e
+nenhuma função do texto separa as duas classes. No mesmo corpus, **134 falas
+reais (7,4 %) têm o texto exato no léxico** ("Obrigado.", "Tchau.", "Muito
+bom."): é por isso que o ramo gated existe, e é por isso que ele não pode ser a
+defesa principal (o áudio da alucinação chega confiante). A medição completa,
 com o custo por regra e o que a literatura de 2026 diz, está em
 `docs/auditoria/VOICE-GATE-MEASUREMENT-2026-11-10.md`.
 
