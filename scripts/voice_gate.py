@@ -14,6 +14,11 @@ Este módulo é a MESMA lógica, extraída sem reescrever (o corpo de
   2. `scripts/check-voice-gate-parity.py` prove, por comparação de token
      stream, que o gate do asrd e o deste módulo não divergiram.
 
+O gate chamou `scripts/voice_text_rules.py` (lane coord-naming) no ramo de
+repetição, e este módulo depende desse arquivo: se o asrd mudar e este
+módulo não, o checker acusa a divergência em vez do bench medir um gate
+que não existe em produção.
+
 O asrd ainda tem a sua cópia aninhada (mudar arquivo de produção é da lane
 de voz); este módulo é a referência de medição e o alvo do refactor quando a
 lane de voz tirar a duplicação.
