@@ -330,6 +330,34 @@ import do numpy (o sintoma 0/10 "sem-segmento"). Agora `scripts/asrd_env.py` res
 os atributos que existem, **verifica o soname** no resultado, tem fallback no store e
 reporta o que falta; e o ASRD imprime um erro JSON em vez de morrer calado.
 
+### E o caminho de acordar a voz (o que a lane de voz mediu em 10/11)
+
+O cliente de voz **dorme de propósito** quando fica ocioso (o log diz "dormindo: LoRA
+off, wakeword de volta, flag removida") e a entrega do turno ao daemon do wakeword é o
+desenho de acordar. O que a lane achou: **essa entrega falha em silêncio**, porque o
+`systemctl --user start jarvis-wakeword.service` rodava sem conferir e o cliente
+registrava "wakeword de volta" como se tivesse dado certo.
+
+**E aqui tem uma premissa que precisa ser corrigida antes de virar proposta:** a unit
+`jarvis-wakeword` **não está instalada por decisão sua**, e não por esquecimento. Em
+`home-manager/home.nix:904` está `services.jarvis-wakeword.enable = false`, com o
+comentário de 21/10: o duplex de voz contínua substituiu o wakeword, porque o address
+gate no classificador cumpre a mesma função sem o daemon openWakeWord competindo pelo
+microfone. E o substituto está implementado e vivo: `scripts/duplex-voice.py` tem
+`_addressed` (408), `_gate_accepts` (500) com `GATE_MODE = "intent"` (endereço OU
+intenção) e o descarte com `DROP why=gate_not_addressed` (3242).
+
+Ou seja, instalar a unit do wakeword **desfaria uma decisão sua de 21/10**. A decisão
+que sobra, com o que cada lado custa:
+
+- **(a) manter o address gate** (o desenho de 21/10) e corrigir o handoff silencioso do
+  cliente, que passa a avisar em vez de fingir que acordou. O `jarvis-heal` passa a
+  vigiar o **address gate** do duplex, que é o que efetivamente acorda a voz, em vez de
+  um daemon que não existe.
+- **(b) reverter a decisão de 21/10** e religar o daemon do wakeword, com a calibração
+  dos **5 a 10 WAVs da sua voz** (é o que faz o daemon acordar no ponto certo) e a
+  proteção contra o daemon competir pelo microfone.
+
 ## 4. Rebuild para o gate (os dois fixes já estão vivos)
 
 A frota adotou os dois (checkpoint das 06:57):
