@@ -60,10 +60,10 @@
       "env_key": "NVIDIA_API_KEY",
       "requires_headers": false,
       "status": "active",
-      "headroom": 32000,
+      "headroom": 20000,
       "header_timeout": 900000,
       "chunk_timeout": 1800000,
-      "_notes": "LIMITE REAL = o endpoint (04/11: erro 400 do proprio NIM devolve {\"type\":\"context_length\",\"limit\":1048576,\"actual\":1120179}) — o catalogo models.dev declara 262144 pro minimax (4x mais conservador) e erra em 4 de 5 modelos medidos. Medicao: opencode/NVIDIA_NIM_GROUND_TRUTH.md no repo Kuchiriel/mt5 (branch infra/opencode-nvidia-nim, PR #7). ATENCAO: output = teto de max_tokens da spec NIM, nao a janela.",
+      "_notes": "LIMITE REAL = o endpoint (04/11: erro 400 do proprio NIM devolve {\"type\":\"context_length\",\"limit\":1048576,\"actual\":1120179}) — o catalogo models.dev declara 262144 pro minimax (4x mais conservador) e erra em 4 de 5 modelos medidos. Medicao: opencode/NVIDIA_NIM_GROUND_TRUTH.md no repo Kuchiriel/mt5 (branch infra/opencode-nvidia-nim, PR #7). ATENCAO: output = teto de max_tokens da spec NIM, nao a janela. Headroom 32000->20000 (10/11, dono: 'compactou em 86% de uso, arruma'): com 32000 o gatilho do minimax caia em ~984k de 1.048.576 (~94% antes do keep/buffer, ~86-87% com o keep 50k subtraido); com 20000 o limiar volta para o finalzinho (~996k usable, margem de 52k sobre o teto da API = maxTokens 32k + margin 20k, seguro contra o 400 do 1 turno).",
       "models": [
         {
           "id": "minimaxai/minimax-m3.1-flash",
