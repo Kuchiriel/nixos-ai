@@ -32,6 +32,14 @@ são as de ~1,0 MB que estão tomando **504** do upstream. O p50 do tamanho avis
 5,46 MB, ou seja ~1,37 M tokens: o teto de 262144 não é garantia teórica, cobre 69 %
 do que o gate registra como problema.
 
+**E o guard continua disparando (contador ao vivo, lido pelo endpoint `GET
+/__gate/health`, 10/11 13:15):** `ctx_short_circuit` foi de **142 para 197**
+(+55) e os `upstream_504` de 60 para **92** (+32) desde a mesma leitura de
+ontem à noite; `requests` 1.942 para **3.002**, `retries` 180 para **214**,
+`queued_seconds` 2.028 para **2.248**. Ou seja: **≈14 curtas locais por hora**
+e o upstream segue degradado (504 e I/O) — o guard segura o estrago, mas cada
+requisição dessas ainda ocupa o bucket de 8 RPM e força retry.
+
 **E o custo de não ter teto, medido em uma janela só (10/11, spiritvale-pivot):** uma
 janela mandou **7 requisições de 5.461.393 bytes (~1,35 M tokens) em 40 minutos**,
 todas cortadas pelo context guard. Ou seja, **9,4 milhões de tokens de prompt** que
