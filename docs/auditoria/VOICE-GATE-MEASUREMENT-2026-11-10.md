@@ -68,7 +68,26 @@ O gate usa `no_speech_prob` e `avg_logprob`, e os dois foram medidos inoperantes
 alucinação de gatilho (0 de 111). O servidor expõe mais, e o gate ignora:
 `words[].probability` (confiança por palavra), `tokens` (compression ratio) e a duração
 do segmento. `scripts/measure-voice-signals.py` mede a separação de cada sinal contra
-as 1817 falas reais.
+as falas reais (300 transcritas **com segmentos** contra as 111 alucinações do bench):
+
+| sinal | AUC | custo em fala real no limiar que mata 10 % das alucinações |
+|---|---|---|
+| `min_word_prob` | 0,339 (invertido) | 27 % |
+| `med_word_prob` | 0,272 (invertido) | 30 % |
+| `no_speech_prob` | 0,634 | 62 % |
+| `avg_logprob` | 0,315 (invertido) | 34 % |
+| duração | 0,628 | 94 % |
+| palavras por segundo | 0,142 (invertido) | 100 % |
+| compression ratio | 0,253 (invertido) | 12 % |
+| tokens por palavra | 0,607 | 1 % |
+
+Leitura: **nenhum sinal que o whisper.cpp expõe serve como braço de áudio.** O melhor
+AUC é 0,63 (fraco) e todo limiar que mata 10 % das alucinações mata de 12 % a 100 %
+da fala real. E o "invertido" é a mesma informação de antes: nas alucinações de
+gatilho a confiança por palavra e o logprob são **mais altos** que na fala real (o
+ASR alucina confiante, com sampling de temperatura alta depois de uma queda de
+confiança). O único com custo baixo (tokens por palavra, 1 %) tem AUC 0,607, e é
+grosso demais para servir de braço.
 
 O que a literatura de 2026 diz (nota completa em `~/Books/papers/2026-11-10-whisper-hallucination-internals.md`):
 
