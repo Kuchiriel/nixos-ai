@@ -180,6 +180,14 @@ def main():
         if t in ("e aí", "e ai", "e aí e aí", "e ai e ai",
                  "a cidade no brasil", "a cidade no brasil a cidade no brasil"):
             return ""
+        # (10/11, coord-naming) 'E aí ...' COMPOSTO: a regra candidata do
+        # sweep (scripts/measure-voice-rule-cost.py), com o custo medido
+        # ANTES em 1817 falas reais: mata 1 fala real (0,06 %) e mata 10 dos
+        # 24 sobreviventes do gate. Conservadora: 'E aí, tudo bom?' passa.
+        # Desligavel com JARVIS_VOICE_GREETING_RULE=0.
+        if voice_text_rules.looks_greeting_halluc(
+                t, LEXICON, GREET_SUS, voice_text_rules.looks_repeated):
+            return ""
         # Stutter redup: 'A-a-a-a-a' (loop de sílaba hifenizada) e
         # 'Ah, ah, ah' (token repetido). A segunda forma é o RESIDUAL
         # medido da cadeia da voz (09/11, coord-naming): 3 clipes de

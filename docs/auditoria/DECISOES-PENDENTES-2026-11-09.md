@@ -162,6 +162,16 @@ alucinação paga a mesma fala real. O custo de 0,5 % da regra de repetição é
 piso, não defeito dela. O que resta é acústico (wakeword) ou interno do modelo
 (probing, que exige mudar o whisper.cpp — só se a wakeword falhar).
 
+**A segunda regra de texto, implementada com o custo medido antes (10/11,
+coord-naming):** a regra de "e aí" **composto** ("e aí" no início **e** o resto
+também parecer alucinação; "E aí, tudo bom?" passa). O sweep mediu o custo nas
+1 817 transcrições reais: mata **1 fala real (0,06 %)** — "E aí, o que é isso?" —
+e mata **10 dos 24 sobreviventes** do gate ⇒ o residual do gate sozinho cai de
+0,216 para **0,126**. Implementada em `scripts/voice_text_rules.py` com teste e
+**chave de desligio** (`JARVIS_VOICE_GREETING_RULE=0`), com **paridade provada**
+(111/111 vereditos iguais com a regra que foi medida). Se o dono preferir não
+perder o "E aí, o que é isso?" real, é uma variável de ambiente.
+
 **O que ainda falta para o wakeword (09/11):** o limiar **não pode ser chutado**. No
 corpus de 1 817 segmentos da casa o wakeword dispara em 6 acima de 0,5 (0,33 %), mas ao
 rotular pelo transcript do log (**66 segmentos**) **nenhum é positivo** (o corpus é fala

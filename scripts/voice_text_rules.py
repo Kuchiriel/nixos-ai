@@ -37,6 +37,9 @@ REPEAT_HYPHEN = re.compile(r"\b(\w{1,3})(-\1){2,}")
 # repeticao de token: "ah, ah, ah", "e e e e e", "não, não, não, não"
 REPEAT_TOKEN = re.compile(r"\b(\w{1,4})\b(?:[\s,.;:'\"-]+\1\b){2,}", re.I)
 
+# "e ai" repetido 3+ vezes: "e ai e ai e ai"
+EAI_BIGRAM = re.compile(r"^(e ai\s*){3,}$")
+
 
 def repeat_rule_enabled() -> bool:
     """A regra de repeticao de token pode ser desligada pelo ambiente."""
@@ -52,5 +55,64 @@ def looks_repeated(text: str) -> bool:
     if REPEAT_HYPHEN.search(t):
         return True
     if repeat_rule_enabled() and REPEAT_TOKEN.search(t):
+        return True
+    return False
+
+
+def _deaccent(text: str) -> str:
+    """Sem acento: o ASR alterna 'e aí' e 'e ai'."""
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", str(text or ""))
+                   if not unicodedata.combining(c))
+
+
+def _norm(text: str) -> str:
+    return " ".join(str(text or "").lower()
+                    .replace(".", " ").replace(",", " ").replace("!", " ")
+                    .replace("?", " ").replace(";", " ").split()).strip()
+
+
+def greeting_rule_enabled() -> bool:
+    """A regra de 'e ai' composto pode ser desligada pelo ambiente."""
+    return os.environ.get("JARVIS_VOICE_GREETING_RULE", "1").strip() not in (
+        "0", "false", "no", "off")
+
+
+def looks_greeting_halluc(text: str, lexicon, greet_sus, looks_repeated=None) -> bool:
+    """'E ai ...' COMPOSTO: mata quando o resto tambem parece alucinacao.
+
+    MEDIDO ANTES (10/11, sweep-2026-11, `scripts/measure-voice-rule-cost.py`):
+    nas 1817 transcricoes reais de `logs/audio`, a regra mata **1** fala real
+    (0,06 %) — 'E ai, o que e isso?' — e mata **10 dos 24** sobreviventes do
+    gate. O custo e' o PISO de qualquer gate de texto (a mesma string esta na
+    fala real e na alucinacao), nao defeito da regra.
+
+    Conservative de proposito: 'E ai, tudo bem?' e fala real e passa. So morre
+    quando o que vem depois e' de novo suspeito: lexico/greeting de alucinacao,
+    repeticao, 'legenda' de programa, ou o proprio 'e ai' repetido.
+
+    PARA DESLIGAR: `JARVIS_VOICE_GREETING_RULE=0`.
+    """
+    if not greeting_rule_enabled():
+        return False
+    t = _deaccent(_norm(text))
+    if not (t.startswith("e ai ") or t == "e ai"):
+        return False
+    rest = t[len("e ai"):].strip()
+    if not rest:
+        return False                      # "e ai" seco: o gate ja mata
+    lex_plain = {_deaccent(x) for x in lexicon}
+    gre_plain = {_deaccent(x) for x in greet_sus}
+    if rest in lexicon or rest in greet_sus:
+        return True
+    if rest in lex_plain or rest in gre_plain:
+        return True
+    if rest.startswith("legenda"):
+        return True
+    if any(w in lex_plain for w in rest.split()[:2]):
+        return True
+    if looks_repeated and looks_repeated(t):
+        return True
+    if EAI_BIGRAM.match(t):
         return True
     return False
