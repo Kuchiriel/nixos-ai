@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_103 tools._
+_106 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -29,6 +29,10 @@ _103 tools._
 - `asrd_env.py` (nixos-ai/scripts) — """asrd_env.py — environment for the duplex ASRD subprocess.
 - `bench-llm.sh` (nixos-ai/scripts) — bench-llm.sh — benchmark padrão da casa (consolida os one-offs de 24/09).
 - `check-ctx-drift.py` (nixos-ai/scripts) — """Confere o contexto do registry contra o contexto REAL dos GGUFs.
+- `check-queue-handoff.py` (nixos-ai/scripts) — """check-queue-handoff.py — os ponteiros da fila para o vault existem?
+  use: `python3 scripts/check-queue-handoff.py`
+- `check-text-chars.py` (nixos-ai/scripts) — """check-text-chars.py — trava os caracteres que nao devem sair da casa.
+  use: `python3 scripts/check-text-chars.py <arquivo>`
 - `check-voice-gate-parity.py` (nixos-ai/scripts) — """Prova de paridade: o gate do duplex-asrd e o de voice_gate.py são o mesmo.
   use: `python3 scripts/check-voice-gate-parity.py`
 - `corpus_inventory.py` (nixos-ai/scripts) — """Inventário do corpus de conhecimento (§3/§22 da missão knowledge-substrate).
@@ -81,6 +85,7 @@ _103 tools._
 - `measure-rehydrate-ab.py` (nixos-ai/scripts) — """measure-rehydrate-ab.py — A/B da injeção de resgate (M2/M3, 02/11).
   use: `./scripts/measure-rehydrate-ab.py [--model <id>] [--question "<pergunta>"]`
 - `measure-voice-rule-cost.py` (nixos-ai/scripts) — """measure-voice-rule-cost.py — custo em FALA REAL de uma regra candidata de gate.
+- `measure-voice-signals.py` (nixos-ai/scripts) — """measure-voice-signals.py — separa alucinação de fala real por sinais que o gate NÃO usa.
 - `memory-arena-lite.py` (nixos-ai/scripts) — """MemoryArena-lite: o H1 no formato de USO ATIVO (25/09).
   use: `uso ativo. Então o INCONCLUSIVE do H1 não era "memória não importa": era`
 - `migrate-tools-en.py` (nixos-ai/scripts) — """migrate-tools-en.py — tool descriptions PT→EN (29/09, harness em inglês).
