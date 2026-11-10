@@ -195,10 +195,21 @@ cd ~/projects/nixos-ai && nix develop --command python3 modules/ai/ww_scorer.py 
   --target-fpr 0.01
 ```
 
-E a **bateria E2E ainda precisa do restart do stack de voz**: o processo do ASRD
-(pid 2807337) e o `duplex-voice` (pid 2806473) são de **08/11 11:02** (código antigo),
-mesmo com o fix do ASRD já no `main` — por isso a bateria continua em 0/10
-"sem-segmento" enquanto o ASRD novo responde em 395,6 ms.
+**A bateria E2E: o restart era o último item, e o stack estava CAÍDO (10/11,
+coord-naming):** o cliente e o ASRD morriam no import do numpy do venv karaok
+sem `libstdc++.so.6` no `LD_LIBRARY_PATH` (o resolver antigo pedia
+`nixpkgs#gcc.lib`, que não existe nesta nixpkgs, e a falha era engolida).
+Corrigido em `scripts/asrd_env.py` (verificado no soname) e no
+`duplex-voice-run.sh`; **a voz está no ar de novo**. Além disso, o ASRD
+**perdia todo segmento curto** (`seg_to_text` devolvia string onde o caller
+desempacota tupla ⇒ `ValueError` engolido ⇒ segmento sumia): era a causa do
+0/10 "sem-segmento". Agora a injeção isolada transcreve inteira ("Qual a
+previsão do tempo de amanhã?", "Liga a luz da sala."). **O que ainda não
+fecha:** a bateria em série segue 0/10 porque o primeiro cenário cai em
+"no-response" (o whisper erra "Jarvis" para "Serviço") e os seguintes são
+injetados com o cliente ainda respondendo ⇒ falta a bateria **esperar o
+cliente ficar ocioso** entre cenários. O item do dono agora é: **rodar a
+bateria com o stack novo** (já está no ar) e decidir o ritmo do teste.
 
 **O restart ficou seguro (09/11, coord-naming, commit `99ae9c63`):** o ambiente do
 processo ASRD era resolvido com `nixpkgs#gcc.lib`, que **não existe** nesta nixpkgs

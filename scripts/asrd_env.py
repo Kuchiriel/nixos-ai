@@ -30,6 +30,7 @@ USAGE
 import glob
 import os
 import subprocess
+import sys
 
 # (nixpkgs attribute path, soname that must exist in <out>/lib)
 _LIBS = (
@@ -134,6 +135,10 @@ def asrd_env(base_env=None, timeout: int = 120) -> dict:
 
 
 if __name__ == "__main__":
+    if "--print" in sys.argv:
+        # para o shell: uma linha, caminhos separados por ':', nada mais
+        print(":".join(resolve_lib_dirs()))
+        raise SystemExit(0)
     dirs = resolve_lib_dirs()
     missing = missing_sonames(dirs)
     print("lib dirs:", dirs or "(none)")

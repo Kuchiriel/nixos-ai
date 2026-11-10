@@ -16,6 +16,7 @@ Protocolo stdio (igual o cliente já fala):
 import base64
 import io
 import json
+import os
 import re as _re
 import sys
 import time
@@ -232,8 +233,14 @@ def main():
         return txt
 
     def seg_to_text(seg):
-        if len(seg) < SR * 0.4:
-            return ""
+        # (10/11, coord-naming) a guarda do segmento curto vive em
+        # `_min_segment` (nivel de modulo, com teste): ela tem de devolver a
+        # MESMA forma do caminho normal — (texto, no_speech_prob) — porque o
+        # caller desempacota uma tupla. Antes devolvia uma string e o
+        # asrd perdia o segmento (ValueError engolido pelo handler).
+        _short = _min_segment(seg, SR)
+        if _short is not None:
+            return _short
         buf = io.BytesIO()
         w = wave.open(buf, "wb")
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR)
@@ -499,8 +506,34 @@ def main():
                 ring = np.zeros(0, dtype="float32")
                 started = None
         except Exception as exc:  # noqa: BLE001
-            print(json.dumps({"text": "", "ms": 0, "err": str(exc)[:120]}),
-                  flush=True)
+            # (10/11, coord-naming) o asrd so devolvia a MENSAGEM do erro, e
+            # ela nao dizia ONDE (medido: "not enough values to unpack
+            # (expected 2, got 0)" no caminho do WAV injetado => 0/10
+            # 'sem-segmento' sem pista). Com JARVIS_ASR_TRACE o traceback
+            # inteiro vai para o log.
+            if os.environ.get("JARVIS_ASR_TRACE"):
+                import traceback
+                print(json.dumps({"text": "", "ms": 0,
+                                  "err": str(exc)[:120],
+                                  "tb": traceback.format_exc()[-900:]}),
+                      flush=True)
+            else:
+                print(json.dumps({"text": "", "ms": 0, "err": str(exc)[:120]}),
+                      flush=True)
+
+
+def _min_segment(seg, sr=16000):
+    """Segmento curto demais: devolve a MESMA forma do caminho normal.
+
+    (10/11, coord-naming) O `seg_to_text` devolvia uma STRING nesse caso e o
+    caller desempacotava uma tupla ⇒ ValueError "not enough values to
+    unpack (expected 2, got 0)" ⇒ o handler engolia a excecao e o segmento
+    era PERDIDO. Foi a causa do 0/10 "sem-segmento" da bateria E2E (e de
+    qualquer fala curta < 0,4 s sumindo no asrd).
+    """
+    if len(seg) < sr * 0.4:
+        return "", 1.0
+    return None
 
 
 class AdaptiveVAD:

@@ -51,5 +51,19 @@ sleep 1
 KARAOK_DIR="${KARAOK_DIR:-$HOME/projects/karaok}"
 PYBIN="${KARAOK_PY:-$KARAOK_DIR/.venv/bin/python3}"
 [ -x "$PYBIN" ] || { echo "duplex-voice-run: venv karaok não achado" >&2; exit 1; }
+# (10/11, coord-naming) O CLIENTE tambem precisa do libstdc++/libz: o numpy
+# do venv karaok é uma wheel que espera o runtime do sistema, e sem isso o
+# CLIENTE morre no import — foi assim que a voz caiu (medido 10/11: o log do
+# start termina em "libstdc++.so.6: cannot open shared object file"). O
+# fix do asrd (scripts/asrd_env.py) resolvia o filho ASRD, mas nao este
+# caminho; agora o runner resolve os mesmos diretorios antes do exec.
+# (O resolver antigo pedia "nixpkgs#gcc.lib", que NAO existe nesta nixpkgs,
+# e a falha era engolida — por isso a resolucao vive agora em asrd_env.py.)
+_LD_PATHS="$(python3 "$NIXAI/scripts/asrd_env.py" --print 2>/dev/null || true)"
+if [ -n "$_LD_PATHS" ]; then
+  export LD_LIBRARY_PATH="${_LD_PATHS}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+else
+  echo "duplex-voice-run: nao consegui resolver libstdc++/libz (asrd_env.py --print)" >&2
+fi
 exec taskset -c 12-15 "$PYBIN" \
   "$NIXAI/scripts/duplex-voice.py" "$@"

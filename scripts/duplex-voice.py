@@ -2144,6 +2144,12 @@ class Asr:
                 return None
             j = json.loads(linha)
             self.last_ms = float(j.get("ms", 0))
+            # (10/11, coord-naming) TELEMETRIA: toda linha do asrd, mesmo a
+            # de texto VAZIO. Sem isso o "sem-segmento" do teste E2E era
+            # opaco: nao se via se o asrd nao falou, se falou vazio, ou se
+            # a linha nunca chegou. Fica no log diario (o teste o le).
+            if os.environ.get("JARVIS_ASR_TRACE"):
+                log(f"  asrd-linha: {linha.strip()[:1400]}")
             # (21/10 SPEAKER-ID) espalha estado p/ o loop (prompt/tools)
             self.last_spk = j.get("spk") or "?"
             self.last_voices = int(j.get("voices") or 0)
@@ -2709,6 +2715,26 @@ def main():
                 # CONTÍGUO: misturar o silêncio do mic no meio quebra o
                 # onset/endpoint do segmento)
                 chunks = _inject_chunks
+                if os.environ.get("JARVIS_ASR_TRACE"):
+                    _rr = [int(np.sqrt((c.astype(np.float64) ** 2).mean()))
+                           for c in chunks]
+                    log(f"  inject-feed: {len(chunks)} chunks rms={_rr[:12]}")
+                # (10/11, coord-naming) CONSOME a lista: antes ela NUNCA era
+                # limpa ⇒ o MESMO WAV era refeito em todo tick (o asrd ouvia
+                # a frase repetida e devolvia alucinação, tipo "Obrigado.") e
+                # o mic ficava MUDO para sempre depois de uma injeção (o
+                # `_injecting` nunca voltava a False). Medido: com a lista
+                # consumida, a injeção isolada transcreve inteira ('Qual a
+                # previsão do tempo de amanhã?').
+                _inject_chunks = []
+                # (10/11) A frase injetada é de TESTE: não entra no
+                # vocabulário do whisper (o `CTX["v"]` vira o `prompt` da
+                # request e polariza a transcrição seguinte — medido:
+                # 'Jarvis, que horas são?' virava 'Serviço que horas são.').
+                try:
+                    Asr.CTX["v"] = ""
+                except Exception:
+                    pass
                 prev_pcm = None
             # rms do tick = o do último chunk consumido (visibilidade)
             last16 = np.frombuffer(chunks[-1], dtype=np.int16) if isinstance(chunks[-1], (bytes, bytearray)) else chunks[-1]
