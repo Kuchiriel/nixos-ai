@@ -154,6 +154,14 @@ serve ⇒ a frente que separa tem de ser **acústica** (a wakeword), e é por is
 que os **5–10 WAVs da voz real** são o insumo que falta. Sem eles, a calibração
 não fecha (o limiar 0,5 não pode ser chutado).
 
+**E o texto está no seu piso (10/11, sweep, `VOICE-GATE-MEASUREMENT-2026-11-10.md`
+§4):** a mesma string aparece **idêntica** na fala real e nas alucinações
+("E aí, o que é isso?" — 1 caso em cada classe) ⇒ **não existe função do texto
+que mate a alucinação e preserve a fala real**: qualquer regra que feche a
+alucinação paga a mesma fala real. O custo de 0,5 % da regra de repetição é o
+piso, não defeito dela. O que resta é acústico (wakeword) ou interno do modelo
+(probing, que exige mudar o whisper.cpp — só se a wakeword falhar).
+
 **O que ainda falta para o wakeword (09/11):** o limiar **não pode ser chutado**. No
 corpus de 1 817 segmentos da casa o wakeword dispara em 6 acima de 0,5 (0,33 %), mas ao
 rotular pelo transcript do log (**66 segmentos**) **nenhum é positivo** (o corpus é fala

@@ -132,13 +132,17 @@ def main():
     # (08:55, delta HB pós-multilingue) fantasmas trocaram de idioma:
     # 'Hey.'/'Bye.'/'*Eat*'/'Eee.'/'T-T-T-T'. TSV multilingual do HB:
     # ban-hard (curado, multi-word, nunca fala real) + gated JA/ZH.
-    # (10/11, sweep-2026-11 MEDIDO) **`MULTI_HARD` é carregado e NUNCA
-    # consultado pelo gate** — mata 0 dos 24 sobreviventes do gate no bench
-    # de 120 clipes (seed 42). Fica o comentário porque a lista parece ativa:
-    # quem for usar tem que ligar explicitamente no `anti_halluc` e medir o
-    # custo em fala real antes (ela é curada como 'nunca fala real', então o
-    # risco é baixo, mas o ganho hoje é zero).
-    MULTI_HARD = set()
+    # (10/11, coord-naming, decisão da lane de voz) O ramo `ban-hard` foi
+    # REMOVIDO do asrd: ele era carregado num conjunto (`MULTI_HARD`) que o
+    # gate **nunca consultava** — matava 0 dos 24 sobreviventes do gate (bench
+    # de 120 clipes, seed 42) e, por estar ali, parecia ativo. Não foi ligado
+    # porque não há ganho medido e o texto está no seu piso (a mesma string
+    # aparece na fala real e na alucinação: qualquer regra que feche a
+    # alucinação paga a mesma fala real — ver
+    # docs/auditoria/VOICE-GATE-MEASUREMENT-2026-11-10.md §4). A curadoria
+    # continua em data/whisper-halluc-ban-multilingual.tsv: quem for ligar uma
+    # lista tem que medir o custo em fala real antes. O ramo `gated` (JA/ZH)
+    # segue vivo e alimenta o LEXICON, como antes.
     try:
         for line in open(DATA / "whisper-halluc-ban-multilingual.tsv"):
             if line.startswith("#") or not line.strip():
@@ -149,9 +153,7 @@ def main():
             phrase = parts[2].lower()
             if not phrase or len(phrase.split()) < 2:
                 continue        # 1-palavra ('ed', 'me') = lixo do count
-            if parts[0] == "ban-hard":
-                MULTI_HARD.add(phrase)
-            else:
+            if parts[0] == "gated":
                 LEXICON.add(phrase)
     except OSError:
         pass
