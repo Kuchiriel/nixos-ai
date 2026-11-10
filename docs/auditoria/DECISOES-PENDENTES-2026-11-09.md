@@ -25,6 +25,19 @@ A API continua declarando 1.048.576: o que desce é o **limiar de compactação*
 opencode, ou seja uma sessão runaway queima a cota compartilhada por um quarto do tempo.
 Com a folga de 734 mil tokens, a compactação cabe com folga em vez de caber por 3.616.
 
+**Quanto o teto evita, medido no gate vivo (10/11):** das 54 requisições que o gate
+avisou em 6 h, **37 (69 %) estão acima de 1,05 MB**, que é o teto de 262144 tokens.
+Desses, 35 são as de 5,4 MB (as que o upstream recusa por `context_length`) e as demais
+são as de ~1,0 MB que estão tomando **504** do upstream. O p50 do tamanho avisado é
+5,46 MB, ou seja ~1,37 M tokens: o teto de 262144 não é garantia teórica, cobre 69 %
+do que o gate registra como problema.
+
+**E um fato novo que muda a conta do rebuild:** os dois fixes do provider (disjuntor
+de contexto, `932a0324`, e via prioritária, `ed560081`) **já estão vivos**. O processo
+do gate subiu em 09/11 06:41:53, depois dos dois commits, e a cópia do store tem os
+dois (`small_bucket` e `ctx_short_circuit`). O disjuntor já cortou **176** requisições
+localmente. Ou seja: o rebuild pendente **não** inclui esses dois.
+
 ```bash
 cd ~/projects/nixos-ai && git merge feat/free-tier-input-cap-262144 && ./rebuild-host.sh
 ```
