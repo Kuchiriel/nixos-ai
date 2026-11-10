@@ -32,6 +32,15 @@ são as de ~1,0 MB que estão tomando **504** do upstream. O p50 do tamanho avis
 5,46 MB, ou seja ~1,37 M tokens: o teto de 262144 não é garantia teórica, cobre 69 %
 do que o gate registra como problema.
 
+**E o custo de não ter teto, medido em uma janela só (10/11, spiritvale-pivot):** uma
+janela mandou **7 requisições de 5.461.393 bytes (~1,35 M tokens) em 40 minutos**,
+todas cortadas pelo context guard. Ou seja, **9,4 milhões de tokens de prompt** que
+não entraram em nada, vindos de uma única janela que ficou aberta dias. O guard evita
+que isso chegue ao upstream, mas não evita que a requisição ocupe o bucket de 8 RPM e
+force o retry: o teto é o que corta o pedido na origem. E a contagem de 504 do gate é
+confirmada de forma independente pela outra lane (69 504 e 191 retries na janela
+dela, contra 73 e 195 nas minhas 6 h).
+
 **E um fato novo que muda a conta do rebuild:** os dois fixes do provider (disjuntor
 de contexto, `932a0324`, e via prioritária, `ed560081`) **já estão vivos**. O processo
 do gate subiu em 09/11 06:41:53, depois dos dois commits, e a cópia do store tem os
