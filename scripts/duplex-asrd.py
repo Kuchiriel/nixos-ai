@@ -132,6 +132,12 @@ def main():
     # (08:55, delta HB pós-multilingue) fantasmas trocaram de idioma:
     # 'Hey.'/'Bye.'/'*Eat*'/'Eee.'/'T-T-T-T'. TSV multilingual do HB:
     # ban-hard (curado, multi-word, nunca fala real) + gated JA/ZH.
+    # (10/11, sweep-2026-11 MEDIDO) **`MULTI_HARD` é carregado e NUNCA
+    # consultado pelo gate** — mata 0 dos 24 sobreviventes do gate no bench
+    # de 120 clipes (seed 42). Fica o comentário porque a lista parece ativa:
+    # quem for usar tem que ligar explicitamente no `anti_halluc` e medir o
+    # custo em fala real antes (ela é curada como 'nunca fala real', então o
+    # risco é baixo, mas o ganho hoje é zero).
     MULTI_HARD = set()
     try:
         for line in open(DATA / "whisper-halluc-ban-multilingual.tsv"):
