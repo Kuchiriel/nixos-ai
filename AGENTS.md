@@ -193,6 +193,15 @@ read pt-BR); answer the owner in pt-BR.
 - **Binary matters:** prism = ternary (and MoE); ik = MoE; stock loads
   `Q2_0` as silent garbage. See [`docs/models/BINARIES.md`](docs/models/BINARIES.md).
 - This machine's hardware and measurements: `docs/auditoria/SO-LLM-E-ENTROPIA-*.md`.
+- **Host DNS (11/11): port 53 is blocky over DoH, declared in
+  `hosts/nitro-v15/configuration.nix`.** Listeners only on loopback; upstreams
+  are `https://` (Quad9, Cloudflare, Google) with `parallel_best` and a static
+  bootstrap, so no plaintext query leaves the machine. `networkmanager.dns =
+  "none"` plus `networking.resolvconf.extraConfig = "resolv_conf_local_only=NO"`
+  is what keeps the cascade in `/etc/resolv.conf` (127.0.0.1, ::1, 9.9.9.9,
+  1.1.1.1, 8.8.8.8; glibc uses the first three). Measured 11/11: 0.01-0.04 s
+  per name, against 15.1 s when the router DNS was first. Do not enable another
+  local resolver or reorder the list: that breaks DoH or the fallback.
 
 ## Host automations (03/11) — know they exist, don't "fix" them
 
