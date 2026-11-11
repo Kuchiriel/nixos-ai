@@ -724,8 +724,28 @@ def _listed_tools() -> list[dict[str, Any]]:
 # (BM25/MetaTool) no lugar dos K=1,4-7 com embeddings (cobertura 96,1% vs
 # 84,6% do FK=5 com o tool certo presente). Aqui: rank por cosseno entre o
 # query e tool name+description (embed :8081, cache por processo); fallback
-# p/ substring se :8081/numpy estiverem fora — nunca quebra.
-_TOOLS_EMBED_URL = os.environ.get("JARVIS_EMBED_URL", "http://127.0.0.1:8081/v1/embeddings")
+# p/ substring se embeddings/numpy estiverem fora — nunca quebra.
+def _tools_embed_url() -> str:
+    # Explicit override wins (backward compat). Otherwise derive from Config
+    # (registry/env), keeping MCP aligned with the rest of JARVIS.
+    url = os.environ.get("JARVIS_EMBED_URL")
+    if url:
+        return url
+    try:
+        from jarvis.core.config import Config
+        base = (Config().embed_base_url or "").rstrip("/")
+        if base:
+            if base.endswith("/embeddings") or base.endswith("/embedding"):
+                return base
+            if base.endswith("/v1"):
+                return f"{base}/embeddings"
+            return f"{base}/v1/embeddings"
+    except Exception:
+        pass
+    return "http://127.0.0.1:8081/v1/embeddings"
+
+
+_TOOLS_EMBED_URL = _tools_embed_url()
 _TOOLS_VEC_CACHE: dict[str, list[float]] | None = None
 _TOOLS_VEC_LOCK = threading.Lock()
 
