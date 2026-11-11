@@ -518,7 +518,10 @@ de vigiar a voz com o heal: enquanto o pauseiro estiver lá, o heal não age nad
 - Destino durável dos fixtures (`data/voice-fixtures/README.md`): fixture de eval não
   vive em `/tmp`.
 - Relay da auditoria spiritvale: **não há VPS**, o Mullvad roda como serviço NixOS na
-  sua máquina (`services.mullvad-vpn`), com a conta expirando hoje.
+  sua máquina (`services.mullvad-vpn`). **Atualizado em 11/11:** a conta foi renovada e
+  vale até **09/12/2026** (a nota antiga de que expirava hoje estava errada); o daemon
+  roda mas fica **desconectado** por padrão (autoconnect e lockdown desligados, LAN
+  liberada) e conecta quando pedido, voltando à rota normal ao desconectar.
 
 ## 6. Pendente com a peer, não com você
 
