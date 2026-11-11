@@ -45,14 +45,17 @@ def test_vector_config_dense_plus_sparse():
     assert "sparse_vectors" not in v2
 
 
-def test_collections_spec_has_three_domains():
+def test_collections_spec_has_expected_domains():
     from jarvis.core.knowledge_schema import COLLECTIONS
-    assert set(COLLECTIONS) == {"code_index", "memories", "books"}
-    # episódica expira (retention), código segue git, knowledge durável —
-    # contratos divergem → 3 coleções (não 1-tudo)
+    assert set(COLLECTIONS) == {"code_index", "memories", "books", "sessions"}
+    # episodic expires (retention), code follows git, durable knowledge persists,
+    # and session summaries are recoverable state for resume/continuity.
     assert "kind" in COLLECTIONS["memories"]["keyword"]
     assert "knowledge_domain" in COLLECTIONS["books"]["keyword"]
     assert "source_type" in COLLECTIONS["code_index"]["keyword"]
+    assert "session_id" in COLLECTIONS["sessions"]["keyword"]
+    assert "directory" in COLLECTIONS["sessions"]["keyword"]
+    assert "time_updated" in COLLECTIONS["sessions"]["datetime"]
 
 
 # ---------------------------------------------------------------------------
