@@ -288,13 +288,28 @@ def _registry_port(kind: str, fallback: int) -> int:
     return fallback
 
 
+def _url_port(url: str, fallback: int) -> int:
+    try:
+        from urllib.parse import urlparse
+        p = urlparse(str(url or ""))
+        if p.port:
+            return int(p.port)
+        if p.scheme == "https":
+            return 443
+        if p.scheme == "http":
+            return 80
+    except Exception:
+        pass
+    return int(fallback)
+
+
 def check_sockets(cfg: Config) -> ComponentHealth:
     """Verifica se as portas dos serviços estão aceitando conexões."""
     h = ComponentHealth("sockets")
     ports = {
-        "llama_cpp": cfg.llm_base_url.replace("http://", "").split(":")[1].split("/")[0] if":" in cfg.llm_base_url else str(_registry_port("router", 8080)),
-        "embeddings": cfg.embed_base_url.replace("http://", "").split(":")[1].split("/")[0] if":" in cfg.embed_base_url else str(_registry_port("embeddings", 8081)),
-        "qdrant": cfg.qdrant_url.replace("http://", "").split(":")[1].split("/")[0] if":" in cfg.qdrant_url else "6333",
+        "llama_cpp": _url_port(cfg.llm_base_url, _registry_port("router", 8080)),
+        "embeddings": _url_port(cfg.embed_base_url, _registry_port("embeddings", 8081)),
+        "qdrant": _url_port(cfg.qdrant_url, 6333),
     }
     results = {}
     for name, port in ports.items():
