@@ -1007,11 +1007,48 @@ AEC_DELAY_S = 0.50     # (13:35) PROBE ao vivo: eco chega ~796ms após o
                        # acústico); 83ms era calibração de setup antigo.
                        # Busca por posição cobre o jitter (±800ms).
 
+def _open_wav_safe(path, retries=4, delay=0.2):
+    """Abre um WAV tolerando arquivo PARCIAL (e nao derruba o processo).
+
+    (10/11, sweep-2026-11 MEDIDO) o cliente abriu um wav que ainda estava
+    sendo escrito: `wave.open` levanta "file does not start with RIFF id" e,
+    como a excecao nao era tratada naquele caminho, o PROCESSO INTEIRO MORREU
+    as 17:27:23 — e o `finally` do cliente registrou "dormindo", o que fez a
+    queda parecer um sono planejado. O arquivo estava valido 0,9 s depois (44
+    mil bytes, magic RIFF): era uma rajada de escritas, e quem abriu leu o
+    cabecalho antes de ele existir.
+
+    Aqui a regra e' o inverso da do leque: um turno sem audio NAO pode
+    derrubar a voz. Devolve None quando o arquivo segue ilegivevel (e loga),
+    em vez de estourar.
+    """
+    import wave as _w
+    last = None
+    for i in range(max(1, retries)):
+        try:
+            with open(path, "rb") as fh:
+                head = fh.read(4)
+            if head != b"RIFF":
+                raise _w.Error("file does not start with RIFF id")
+            return _w.open(path, "rb")
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+            if i + 1 < max(1, retries):
+                time.sleep(delay)
+    try:
+        log(f"[{ts()}] wav ilegivel (parcial?): {path} ({last}) "
+            f"— seguindo sem audio")
+    except Exception:
+        pass
+    return None
+
+
 def aec_register_played(wav_path):
     """O worker TTS registra o que vai tocar (16k mono) + o instante."""
     try:
-        import wave as _w
-        w = _w.open(wav_path, "rb")
+        w = _open_wav_safe(wav_path)
+        if w is None:
+            return
         n, sr = w.getnframes(), w.getframerate()
         raw = np.frombuffer(w.readframes(n), dtype=np.int16)
         w.close()
@@ -1821,10 +1858,13 @@ def call_tool(name, args):
                  "--channels", "1", "--format", "s16", "--container", "raw",
                  "--target", mic_source(), _wav],
                 capture_output=True, timeout=12)
-            import wave as _w
-            w = _w.open(_wav, "rb")
-            pcm = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
-            w.close()
+            w = _open_wav_safe(_wav)
+            if w is None:
+                pcm = np.zeros(0, dtype=np.int16)
+            else:
+                pcm = np.frombuffer(w.readframes(w.getnframes()),
+                                    dtype=np.int16)
+                w.close()
             # (21/10 v2) ENROLL em WeSpeaker 256-d — o asrd agora
             # casa com WeSpeaker; perfis MFCC seriam incompatíveis.
             emb = None
@@ -2335,11 +2375,17 @@ class Tts:
         if not parts:
             return False
         # concatena (todos piper = mono 22050)
-        with _w.open(parts[0], "rb") as w0:
+        _w0 = _open_wav_safe(parts[0])
+        if _w0 is None:
+            return None
+        with _w0 as w0:
             params = w0.getparams()
             frames = [w0.readframes(w0.getnframes())]
         for part in parts[1:]:
-            with _w.open(part, "rb") as w1:
+            _w1 = _open_wav_safe(part)
+            if _w1 is None:
+                continue
+            with _w1 as w1:
                 if w1.getframerate() == params.framerate:
                     frames.append(w1.readframes(w1.getnframes()))
         with _w.open(wav_path, "wb") as out:

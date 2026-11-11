@@ -252,6 +252,19 @@ e mata **10 dos 24 sobreviventes** do gate ⇒ o residual do gate sozinho cai de
 (111/111 vereditos iguais com a regra que foi medida). Se o dono preferir não
 perder o "E aí, o que é isso?" real, é uma variável de ambiente.
 
+**A VOZ NÃO DORMIU: ELA CRASHOU (10/11, sweep-2026-11 + confirmado aqui) — e
+isso corrige a minha leitura anterior:** o cliente morreu às 17:27:23 com
+`wave.Error: file does not start with RIFF id`, porque abriu um WAV que
+**ainda estava sendo escrito** (rajada de escritas; o arquivo ficou válido
+0,9 s depois). A exceção não era tratada naquele caminho ⇒ **o processo
+inteiro caiu**; e o `finally` registrou "dormindo: LoRA off, wakeword de
+volta", o que fez a queda parecer um sono planejado. **Consertado (meu
+arquivo):** `_open_wav_safe()` valida o cabeçalho RIFF, tenta algumas vezes
+(arquivo em escrita) e devolve None em vez de estourar — um turno sem áudio
+não pode derrubar a voz (teste com arquivo parcial e vazio). E o `finally`
+agora verifica se o daemon do wakeword subiu, em vez de registrar sucesso
+às cegas.
+
 **CUIDADO: DUAS MINHAS PROPOSTAS ESTAVAM ERRADAS, E A CORREÇÃO É DO DONO
 (10/11, coord-naming + sweep-2026-11):**
 
