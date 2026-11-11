@@ -351,6 +351,10 @@
   # em texto claro so se o proxy local morrer. glibc usa os 3 primeiros.
   networking.networkmanager.dns = "none";
   networking.nameservers = ["127.0.0.1" "::1" "9.9.9.9" "1.1.1.1" "8.8.8.8"];
+  # openresolv descarta os nameservers nao-locais quando ve um resolver local
+  # (resolv_conf_local_only=YES por padrao). Sem NO, o fallback 9.9.9.9/1.1.1.1
+  # nunca chega ao /etc/resolv.conf e um blocky morto deixa o PC sem DNS.
+  networking.resolvconf.extraConfig = "resolv_conf_local_only=NO";
 
   # DNS over HTTPS (11/11, dono pediu): toda consulta sai por HTTPS na 443,
   # tanto IPv4 quanto IPv6. O blocky escuta so no loopback (sem resolver
