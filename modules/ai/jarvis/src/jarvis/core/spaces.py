@@ -286,7 +286,13 @@ def doctor(space: Space) -> dict[str, object]:
     try:
         import requests
 
-        base = os.environ.get("JARVIS_QDRANT_URL", "http://127.0.0.1:6333")
+        base = os.environ.get("JARVIS_QDRANT_URL")
+        if not base:
+            try:
+                from jarvis.core.config import Config
+                base = Config().qdrant_url
+            except Exception:
+                base = "http://127.0.0.1:6333"
         r = requests.get(f"{base}/collections", timeout=3)
         names = {c["name"] for c in r.json().get("result", {}).get("collections", [])}
         checks["qdrant"] = {
