@@ -1011,14 +1011,16 @@ class HybridSearch:
             except Exception:
                 continue  # Collection might not exist
 
-        # Deduplicate by document_id
+        # Deduplicate by document_id when present; keep hits without it.
         seen = set()
         deduped = []
         for hit in all_raw:
             doc_id = hit.get("payload", {}).get("document_id")
-            if doc_id and doc_id not in seen:
+            if doc_id:
+                if doc_id in seen:
+                    continue
                 seen.add(doc_id)
-                deduped.append(hit)
+            deduped.append(hit)
         raw = deduped
 
         boosted = apply_legacy_boosts(query, raw)

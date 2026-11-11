@@ -428,12 +428,12 @@ JARVIS_TOOLS = [
     },
     {
         "name": "rag_search",
-        "description": "Semantic search over indexed code/docs/books. WHEN: you do NOT know where something lives or how it is implemented (discovery) — run this BEFORE grepping blindly. WHEN NOT: you already know the path (read it) or you need exact string matching (grep). If the collection is empty, rag_index the dir first. Returns file+line hits.",
+        "description": "Semantic search over indexed code/docs/books and session summaries. WHEN: you do NOT know where something lives, how it was implemented, or what happened in past sessions (discovery) — run this BEFORE grepping blindly. WHEN NOT: you already know the path (read it) or you need exact string matching (grep). Collections: code (default), books, memories, sessions. If empty, index first (rag_index or scripts/index_opencode_sessions.py for sessions). Returns hits with source/path and snippet.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "What to search for in the codebase"},
-                "collection": {"type": "string", "description": "Collection to search: code, memories, books (default: code)", "enum": ["code", "memories", "books"]},
+                "collection": {"type": "string", "description": "Collection to search: code, memories, books, sessions (default: code)", "enum": ["code", "memories", "books", "sessions"]},
                 "limit": {"type": "integer", "description": "Max results (default: 5)"}
             },
             "required": ["query"]
@@ -1722,6 +1722,9 @@ def _handle_rehydrate(args: dict[str, Any]) -> str:
     if not wanted or "rag" in wanted:
         blocks.append("## RAG code/docs\n" + _handle_rag_search(
             {"query": task, "collection": "code", "limit": limit}))
+    if not wanted or "sessions" in wanted:
+        blocks.append("## SESSIONS (past session summaries)\n" + _handle_rag_search(
+            {"query": task, "collection": "sessions", "limit": max(2, min(limit, 4))}))
     if "books" in wanted:
         blocks.append("## RAG books/papers\n" + _handle_rag_search(
             {"query": task, "collection": "books", "limit": limit}))
@@ -1822,34 +1825,57 @@ def _handle_rag_search(args: dict[str, Any]) -> str:
         cfg = Config()
         # Override collection if specified (Config is frozen: replace, never assign)
         import dataclasses
+        import os
+        target_collection = None
         if collection == "memories":
             cfg = dataclasses.replace(cfg, qdrant_collection_code=cfg.qdrant_collection_memories)
+            target_collection = cfg.qdrant_collection_code
         elif collection == "books":
             cfg = dataclasses.replace(cfg, qdrant_collection_code=cfg.qdrant_collection_books)
+            target_collection = cfg.qdrant_collection_code
+        elif collection in ("sessions", "session", "opencode_sessions"):
+            sessions_col = os.environ.get("JARVIS_QDRANT_COLLECTION_SESSIONS", "sessions")
+            cfg = dataclasses.replace(cfg, qdrant_collection_code=sessions_col)
+            target_collection = sessions_col
+        else:
+            # default "code": HybridSearch default searches code_index + books
+            target_collection = None
         # Audit P1-4: do NOT create/ensure the collection on a READ (hidden mutation).
         # Missing collection -> explicit error pointing at the indexing tool.
         hs = HybridSearch(config=cfg)
         try:
-            results = hs.search(query, top_k=limit)
+            results = hs.search(query, top_k=limit, collection=target_collection)
         except VectorStoreError as e:
             if "404" in str(e):
-                return (f"Collection '{cfg.qdrant_collection_code}' does not exist yet. "
-                        "Run jarvis_rag_index first (e.g. the repo path).")
+                missing = target_collection or cfg.qdrant_collection_code
+                hint = "Run jarvis_rag_index first (e.g. the repo path)."
+                if str(missing) in ("sessions", "opencode_sessions"):
+                    hint = "Run: nix develop -c python3 scripts/index_opencode_sessions.py"
+                return f"Collection '{missing}' does not exist yet. {hint}"
             raise
         if not results:
             return "No results found."
         lines = []
         for r in results:
             pl = getattr(r, "payload", {}) or {}
-            # code tem path; books tem book+chapter; memories tem kind
-            path = pl.get("path") or pl.get("book") or pl.get("kind") or "unknown"
-            if pl.get("chapter") is not None:
-                path = f"{path} (cap. {pl['chapter']})"
             score = getattr(r, "score", 0)
-            # HybridHit has no .text: the content lives in the payload (bug in the
-            # old handler — hasattr(r, 'text') was always False)
-            text = str(pl.get("content") or pl.get("title") or "")
-            lines.append(f"[{score:.2f}] {path}\n{text[:200]}\n")
+            # code tem path; books tem book+chapter; memories tem kind; sessions tem session_id
+            sid = pl.get("session_id")
+            if sid:
+                path = f"session:{sid} | {pl.get('directory','')}".strip()
+                title = pl.get("title") or ""
+                when = pl.get("updated_iso") or pl.get("created_iso") or ""
+                body = str(pl.get("text") or pl.get("content") or title or "")
+                header = f"[{score:.2f}] {path}"
+                meta = f"title: {title}" + (f" | updated: {when}" if when else "") + (f" | msgs: {pl.get('msg_count')}" if pl.get('msg_count') is not None else "")
+                lines.append(f"{header}\n{meta}\n{body[:500]}\n")
+            else:
+                path = pl.get("path") or pl.get("book") or pl.get("kind") or "unknown"
+                if pl.get("chapter") is not None:
+                    path = f"{path} (cap. {pl['chapter']})"
+                # HybridHit has no .text: the content lives in the payload
+                body = str(pl.get("content") or pl.get("text") or pl.get("title") or "")
+                lines.append(f"[{score:.2f}] {path}\n{body[:300]}\n")
         return "\n".join(lines)
     except Exception as e:
         return f"ERROR: rag_search failed: {e}"
