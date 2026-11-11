@@ -66,6 +66,13 @@ COLLECTIONS = {
                     "status", "authority"],
         "datetime": ["source_modified_at", "ingested_at"],
     },
+    # Resumos de sessões (opencode.db): episódico recuperável para retomada.
+    "sessions": {
+        "sparse": True,
+        "keyword": ["session_id", "directory", "project_id", "source", "kind",
+                    "archived", "authority", "status"],
+        "datetime": ["time_updated", "ingested_at"],
+    },
 }
 
 DEFAULT_AUTHORITY = "source"  # source > extracted > repo > derived > model

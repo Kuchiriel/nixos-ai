@@ -147,6 +147,9 @@ class Config:
     # você não escreveu" (RAG) e outro para "o que o agente escreveu"
     # (memória) — são trabalhos diferentes (padrão de mercado 2026).
     qdrant_collection_vault: str = field(default_factory=lambda: _env_str("JARVIS_QDRANT_COLLECTION_VAULT", "vault"))
+    # Sessões de agentes (opencode.db): resumos estruturados por sessão
+    # para recuperação/retomada via RAG/MCP (sem transcript bruto).
+    qdrant_collection_sessions: str = field(default_factory=lambda: _env_str("JARVIS_QDRANT_COLLECTION_SESSIONS", "sessions"))
 
     # --- MCP (mcp-nixos: consulta real de packages/options do nixpkgs) ---
     # Binário do servidor MCP. Vem do propagatedBuildInputs (package.nix),

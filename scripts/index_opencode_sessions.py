@@ -40,7 +40,8 @@ from jarvis.providers.llm import LLMClient  # noqa: E402
 from jarvis.providers.vector_store import QdrantStore, stable_id  # noqa: E402
 from jarvis.core.rag import sparse_terms, sparse_vector  # noqa: E402
 
-COLLECTION = os.environ.get("JARVIS_QDRANT_COLLECTION_SESSIONS", "sessions")
+_cfg = Config()
+COLLECTION = os.environ.get("JARVIS_QDRANT_COLLECTION_SESSIONS", "") or _cfg.qdrant_collection_sessions
 DB_DEFAULT = Path.home() / ".local/share/opencode/opencode.db"
 
 PATH_RE = re.compile(r"(?:(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+|[A-Za-z0-9_.-]+\.(?:py|nix|md|sh|ts|tsx|js|json|toml|yaml|yml|rs|go|lua|sql|mjs))")

@@ -1834,7 +1834,9 @@ def _handle_rag_search(args: dict[str, Any]) -> str:
             cfg = dataclasses.replace(cfg, qdrant_collection_code=cfg.qdrant_collection_books)
             target_collection = cfg.qdrant_collection_code
         elif collection in ("sessions", "session", "opencode_sessions"):
-            sessions_col = os.environ.get("JARVIS_QDRANT_COLLECTION_SESSIONS", "sessions")
+            sessions_col = getattr(cfg, "qdrant_collection_sessions", None) or os.environ.get(
+                "JARVIS_QDRANT_COLLECTION_SESSIONS", "sessions"
+            )
             cfg = dataclasses.replace(cfg, qdrant_collection_code=sessions_col)
             target_collection = sessions_col
         else:
