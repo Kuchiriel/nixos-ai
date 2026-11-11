@@ -52,7 +52,7 @@ nix flake check
   (keys from `/etc/litellm.env`, PYTHONPATH = src + official store env +
   `/home/nixos/.local/jarvis-mcp-site`, profile python). **Never diverge the
   two envs again** — without that the CLI loses `requests`, the LLM breaker
-  opens and `rag-index` hangs without error.
+  opens and `rag-index` hangs without error. For non-MCP harnesses (e.g. duplex/voice), CLI is the parity entry point: `tools`/`tools-search`/`tools-call`/`tool` (meta-routing), `session-resume`, `rehydrate`, `time`, with `--json` on key commands for machine use.
 - MCP handlers read **fixed** keys: `rag_index`:`path`, `vault_write`:`name`
   (+`content`), `rag_search`:`query`/`collection`/`limit`, `remember`:`text`,
   `recall`/`lessons`:`query`. Wrong key = **argument ignored** (the CLI

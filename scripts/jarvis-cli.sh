@@ -19,8 +19,8 @@
 #   remember <fact>                  — Store episodic memory
 #   recall <query>                   — Recall memories
 #   lessons <query>                  — Recall lessons from past errors
-#   rehydrate [json]                 — Rehydrate session context (guards, queue, handoff, memories, lessons, RAG, sessions, roster)
-#   session-resume [json|key val|id|dir] — Resume prior opencode session (session_id/directory/query; ergonomic args supported)
+#   rehydrate [--json] [json]        — Rehydrate session context (guards, queue, handoff, memories, lessons, RAG, sessions, roster)
+#   session-resume [--json] [json|key val|id|dir] — Resume prior opencode session (session_id/directory/query; ergonomic args supported)
 #   vault-list                       — List vault notes
 #   vault-write <title> <content>    — Write to vault
 #   rag-search <query>               — Semantic code search
@@ -31,7 +31,7 @@
 #   tools [--json]                   — List every MCP tool + CLI native/coverage (JSON for machine use)
 #   tools-search <query> [--json]    — Meta-tool discovery by intent (embedding-ranked, low-token)
 #   tools-call <name> [json]         — Call any tool via meta-tool router
-#   tool <name> [json]               — Call any MCP tool directly by name
+#   tool [--json] <name> [json]      — Call any MCP tool directly by name (JSON-wrapped output in --json mode)
 #   time                             — Current local time (ISO/date/time/tz)
 #   bench-stt <wav> [wav...]         — ASR_BENCH: measure STT (VAD on/off, RTF)
 #   status                           — Show JARVIS status
@@ -508,25 +508,39 @@ PY
     rehydrate)
         # 03/11: o rehydrate era o tool mais usado do MCP (68 chamadas/7d) e
         # nao tinha atalho na CLI. Mapeia 1:1 na tool do MCP.
-        ARGS="${2:-}"
-        "$PY" -c "
+        A1="${2:-}"
+        A2="${3:-}"
+        "$PY" - "$A1" "$A2" <<'PY'
 import json, sys
 from jarvis.mcp_server import call_tool
-raw = sys.argv[1].strip() if len(sys.argv) > 1 else ''
+a1 = (sys.argv[1] if len(sys.argv) > 1 else '').strip()
+a2 = (sys.argv[2] if len(sys.argv) > 2 else '').strip()
+as_json = (a1 == '--json' or a2 == '--json')
+raw = a2 if a1 == '--json' else a1
+if raw == '--json':
+    raw = ''
 args = json.loads(raw) if raw else {}
-print(call_tool('rehydrate', args))
-" "$ARGS"
+out = call_tool('rehydrate', args)
+if as_json:
+    print(json.dumps({'tool': 'rehydrate', 'text': out}, ensure_ascii=False))
+else:
+    print(out)
+PY
         ;;
     session-resume|session_resume)
         A1="${2:-}"
         A2="${3:-}"
         A3="${4:-}"
-        "$PY" - "$A1" "$A2" "$A3" <<'PY'
+        A4="${5:-}"
+        "$PY" - "$A1" "$A2" "$A3" "$A4" <<'PY'
 import json, sys
 from jarvis.mcp_server import call_tool
-a1 = (sys.argv[1] if len(sys.argv) > 1 else '').strip()
-a2 = (sys.argv[2] if len(sys.argv) > 2 else '').strip()
-a3 = (sys.argv[3] if len(sys.argv) > 3 else '').strip()
+vals = [(sys.argv[i] if len(sys.argv) > i else '').strip() for i in range(1, 5)]
+as_json = '--json' in vals
+vals = [v for v in vals if v != '--json']
+a1 = vals[0] if len(vals) > 0 else ''
+a2 = vals[1] if len(vals) > 1 else ''
+a3 = vals[2] if len(vals) > 2 else ''
 args = {}
 if a1.startswith('{'):
     try:
@@ -541,9 +555,6 @@ elif a1 in ('session_id', 'directory', 'query', 'limit'):
             args['limit'] = 5
     elif a2:
         args[a1] = a2
-    if a3 and a1 != 'limit':
-        # allow: session-resume directory <path> 3  (ignored extra) or directory <path> limit 3? not needed
-        pass
 elif a1:
     # bare value: treat as directory if path-like, else session_id
     if '/' in a1 or a1.startswith('.'):
@@ -553,7 +564,11 @@ elif a1:
 # support: session-resume directory <path> <limit>
 if a1 == 'directory' and a3.isdigit():
     args['limit'] = int(a3)
-print(call_tool('session_resume', args))
+out = call_tool('session_resume', args)
+if as_json:
+    print(json.dumps({'tool': 'session_resume', 'args': args, 'text': out}, ensure_ascii=False))
+else:
+    print(out)
 PY
         ;;
     tools-search|tools_search)
@@ -639,15 +654,40 @@ print(call_tool('web_search', {'query': sys.argv[1], 'limit': int(sys.argv[2])})
 " "$QUERY" "$LIMIT"
         ;;
     tool)
-        NAME="${2:?Usage: jarvis-cli.sh tool <name> <json-args>}"
-        ARGS="${3:-}"
-        "$PY" -c "
+        P2="${2:-}"
+        P3="${3:-}"
+        P4="${4:-}"
+        "$PY" - "$P2" "$P3" "$P4" <<'PY'
 import json, sys
 from jarvis.mcp_server import call_tool
-raw = sys.argv[1].strip() if len(sys.argv) > 1 else ''
+p2 = (sys.argv[1] if len(sys.argv) > 1 else '').strip()
+p3 = (sys.argv[2] if len(sys.argv) > 2 else '').strip()
+p4 = (sys.argv[3] if len(sys.argv) > 3 else '').strip()
+as_json = False
+if p2 == '--json':
+    as_json = True
+    name = p3
+    raw = p4
+elif p3 == '--json':
+    as_json = True
+    name = p2
+    raw = p4
+else:
+    name = p2
+    raw = p3
+if not name:
+    raise SystemExit('Usage: jarvis-cli.sh tool [--json] <name> <json-args>')
 args = json.loads(raw) if raw else {}
-print(call_tool(sys.argv[2], args))
-" "$ARGS" "$NAME"
+out = call_tool(name, args)
+if as_json:
+    try:
+        parsed = json.loads(out) if isinstance(out, str) else out
+        print(json.dumps({'tool': name, 'ok': True, 'result': parsed}, ensure_ascii=False))
+    except Exception:
+        print(json.dumps({'tool': name, 'ok': True, 'text': out}, ensure_ascii=False))
+else:
+    print(out)
+PY
         ;;
     bench-stt)
         shift

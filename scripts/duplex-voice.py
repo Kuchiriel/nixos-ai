@@ -103,7 +103,7 @@ SYSTEM_PT = (
     "  get_time('') hora | remember('fato') | recall('busca') memória\n"
     "  web_search('busca') | rag_search('busca') | offline_search('busca' sem internet)\n"
     "  status('') | rehydrate('tarefa') contexto completo | session_resume('id|dir|query')\n"
-    "  voices('') | tool('<tool> {json}') qualquer tool | jarvis('<cmd>') CLI (tools, rehydrate, session-resume, rag-search, recall...)\n"
+    "  tools('') descobrir tools | tool('<tool> {json}') qualquer tool | jarvis('<cmd>') CLI (tools, tools-search, rehydrate, session-resume, rag-search, recall...)\n"
     "  shell('<cmd>') | enroll('nome') | guest('')\n"
     "ROTAS: 'qual meu nome?' → recall | 'quanto tá o dólar?' → web_search\n"
     "  'o que diz o paper X?' → rag_search | 'como está o sistema?' → status\n"
