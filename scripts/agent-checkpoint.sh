@@ -259,6 +259,29 @@ else
   ok "vault: $VAULT_STATUS ($HANDOFF)"
 fi
 
+# ---------- 5. sessions: refresh opencode session summaries + consolidation (best-effort) ----------
+SESS_STATUS="pulado"
+SESS_IDX="$NIXOS_DIR/scripts/index_opencode_sessions.py"
+SESS_CONS="$NIXOS_DIR/scripts/consolidate_sessions_memory.py"
+if [ "$DRY" -eq 0 ] && [ -f "$SESS_IDX" ]; then
+  SESS_TMO="${SESSIONS_INDEX_TIMEOUT:-600}"
+  OUT=$(timeout "$SESS_TMO" python3 "$SESS_IDX" --incremental 2>&1 | tail -3)
+  if printf '%s' "$OUT" | grep -qiE "ModuleNotFoundError|ModuleNotFound|No module named"; then
+    OUT=$(cd "$NIXOS_DIR" && timeout "$SESS_TMO" nix develop -c python3 scripts/index_opencode_sessions.py --incremental 2>&1 | tail -3)
+  fi
+  SESS_STATUS="$OUT"
+  if [ -f "$SESS_CONS" ]; then
+    OUT2=$(timeout "$SESS_TMO" python3 "$SESS_CONS" --incremental 2>&1 | tail -2)
+    if printf '%s' "$OUT2" | grep -qiE "ModuleNotFoundError|ModuleNotFound|No module named"; then
+      OUT2=$(cd "$NIXOS_DIR" && timeout "$SESS_TMO" nix develop -c python3 scripts/consolidate_sessions_memory.py --incremental 2>&1 | tail -2)
+    fi
+    SESS_STATUS="$SESS_STATUS | $OUT2"
+  fi
+else
+  SESS_STATUS="dry-run"
+fi
+ok "sessions: $SESS_STATUS"
+
 log "== fim do checkpoint =="
 
 # (10/11) exit != 0 quando a fila ficou com ponteiro quebrado: quem chama o
