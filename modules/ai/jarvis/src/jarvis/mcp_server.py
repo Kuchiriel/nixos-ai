@@ -774,25 +774,40 @@ def _tool_vectors() -> dict[str, list[float]]:
         return _TOOLS_VEC_CACHE
 
 
-def _meta_search_substring(q: str) -> str:
+def _meta_search_substring_results(q: str) -> dict[str, Any]:
+    low = (q or "").lower()
     rows = []
     for t in JARVIS_TOOLS:
         name = t.get("name", "")
         desc = (t.get("description") or "").replace("\n", " ")
-        if q and q not in name.lower() and q not in desc.lower():
+        if low and low not in name.lower() and low not in desc.lower():
             continue
-        core = "core" if name in _CORE_TOOL_NAMES else "extended"
-        rows.append(f"- {name} [{core}]: {desc[:140]}")
-    head = f"{len(rows)} tool(s) matching '{q}' (substring)" if q else f"{len(rows)} registered tools"
-    return f"{head}\n" + "\n".join(rows) + \
-        '\n(invoke with jarvis_tools_call {"name": "<tool>", "args": {...}})'
+        rows.append({
+            "name": name,
+            "core": name in _CORE_TOOL_NAMES,
+            "description": desc,
+        })
+    return {"query": q or "", "mode": "all" if not low else "substring", "results": rows}
 
 
-def _meta_search(query: str, limit: int = 8) -> str:
+def _meta_search_substring(q: str) -> str:
+    r = _meta_search_substring_results(q)
+    rows = r["results"]
+    lines = [
+        f"- {x['name']} [{'core' if x['core'] else 'extended'}]: {x['description'][:140]}"
+        for x in rows
+    ]
+    head = (f"{len(rows)} tool(s) matching '{q}' (substring)" if q
+            else f"{len(rows)} registered tools")
+    return (f"{head}\n" + "\n".join(lines) +
+            '\n(invoke with jarvis_tools_call {"name": "<tool>", "args": {...}})')
+
+
+def _meta_search_results(query: str, limit: int = 8) -> dict[str, Any]:
     q = (query or "").strip()
     low = q.lower()
     if not q or low in ("all", "tudo", "todos"):
-        return _meta_search_substring("")
+        return _meta_search_substring_results("")
     try:
         import numpy as np
         qv = _embed_batch([q])[0]
@@ -815,14 +830,40 @@ def _meta_search(query: str, limit: int = 8) -> str:
         for sim, t in scored[:k]:
             name = t.get("name", "")
             desc = (t.get("description") or "").replace("\n", " ")
-            core = "core" if name in _CORE_TOOL_NAMES else "extended"
-            rows.append(f"- {name} [{core}] ({sim:.2f}): {desc[:140]}")
-        return (f"{len(rows)} tool(s) by embedding similarity to '{q}'\n"
-                + "\n".join(rows)
-                + f"\n(top-{k}; 'all' p/ lista completa; chamada via "
-                  'jarvis_tools_call {"name": "<tool>", "args": {...}})')
+            rows.append({
+                "name": name,
+                "score": float(sim),
+                "core": name in _CORE_TOOL_NAMES,
+                "description": desc,
+            })
+        return {"query": q, "mode": "embedding", "results": rows, "limit": k}
     except Exception as e:
-        return _meta_search_substring(q) + f"\n(fallback substring: {e})"
+        r = _meta_search_substring_results(q)
+        r["mode"] = "fallback"
+        r["error"] = str(e)
+        return r
+
+
+def _meta_search(query: str, limit: int = 8) -> str:
+    q = (query or "").strip()
+    r = _meta_search_results(query, limit)
+    mode = r.get("mode")
+    rows = r.get("results") or []
+    if mode in ("all", "substring"):
+        return _meta_search_substring("" if mode == "all" else q)
+    if mode == "fallback":
+        return _meta_search_substring(q) + f"\n(fallback substring: {r.get('error', '')})"
+    k = int(r.get("limit") or len(rows) or 8)
+    lines = []
+    for x in rows:
+        lines.append(
+            f"- {x['name']} [{'core' if x.get('core') else 'extended'}] "
+            f"({float(x.get('score', 0.0)):.2f}): {str(x.get('description', '')).replace(chr(10), ' ')[:140]}"
+        )
+    return (f"{len(rows)} tool(s) by embedding similarity to '{q}'\n"
+            + "\n".join(lines)
+            + f"\n(top-{k}; 'all' p/ lista completa; chamada via "
+              'jarvis_tools_call {"name": "<tool>", "args": {...}})')
 
 
 def _meta_call(meta_args: dict[str, Any]) -> str:

@@ -582,45 +582,16 @@ if q == '--json':
     q = ''
 if as_json:
     try:
-        import numpy as np
-        from jarvis.mcp_server import JARVIS_TOOLS, _CORE_TOOL_NAMES, _tool_vectors, _embed_batch
-        low = (q or '').strip().lower()
-        if not q or low in ('all', 'tudo', 'todos'):
-            rows = []
-            for t in JARVIS_TOOLS:
-                rows.append({
-                    'name': t.get('name',''),
-                    'core': t.get('name','') in _CORE_TOOL_NAMES,
-                    'description': (t.get('description') or '').replace('\n',' '),
-                })
-            print(json.dumps({'query': q, 'mode': 'all', 'results': rows}, ensure_ascii=False))
-        else:
-            qv = _embed_batch([q])[0]
-            vecs = _tool_vectors()
-            qn = float(np.linalg.norm(qv)) or 1.0
-            scored = []
-            for t in JARVIS_TOOLS:
-                v = vecs.get(t.get('name',''))
-                if v is None:
-                    continue
-                vn = float(np.linalg.norm(v)) or 1.0
-                sim = float(np.dot(qv, v)) / (qn * vn)
-                if low in t.get('name','').lower():
-                    sim = min(1.0, sim + 0.15)
-                scored.append((sim, t))
-            scored.sort(key=lambda x: -x[0])
-            rows = []
-            for sim, t in scored[:8]:
-                rows.append({
-                    'name': t.get('name',''),
-                    'score': round(sim, 4),
-                    'core': t.get('name','') in _CORE_TOOL_NAMES,
-                    'description': (t.get('description') or '').replace('\n',' '),
-                })
-            print(json.dumps({'query': q, 'mode': 'embedding', 'results': rows}, ensure_ascii=False))
+        from jarvis.mcp_server import _meta_search_results
+        r = _meta_search_results(q, 8)
+        print(json.dumps(r, ensure_ascii=False))
     except Exception as e:
-        from jarvis.mcp_server import call_tool
-        print(json.dumps({'query': q, 'mode': 'fallback', 'text': call_tool('tools_search', {'query': q}), 'error': str(e)}, ensure_ascii=False))
+        try:
+            from jarvis.mcp_server import call_tool
+            text = call_tool('tools_search', {'query': q})
+        except Exception as e2:
+            text = f'ERROR: {e2}'
+        print(json.dumps({'query': q, 'mode': 'fallback', 'text': text, 'error': str(e)}, ensure_ascii=False))
 else:
     from jarvis.mcp_server import call_tool
     print(call_tool('tools_search', {'query': q}))
