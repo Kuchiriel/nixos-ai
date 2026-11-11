@@ -14,8 +14,8 @@
 
 1. **NEVER delete data.** Zero `rm`, `delete_collection`, `drop_collection`
    on material you didn't create in the last minutes. Use
-   `core.safe_archive.archive_then_delete()`: copy → **read back** →
-   check count and hash → only then remove. Qdrant once accepted a
+   `core.safe_archive.archive_then_delete()`: copy : **read back** :
+   check count and hash : only then remove. Qdrant once accepted a
    write (HTTP 200) and didn't persist; whoever trusted the status lost 6 points.
    Always start with `dry_run=True`. Accept **explicit IDs**, never
    substring filters (filters match text that merely *mentions* the term).
@@ -53,16 +53,16 @@ nix flake check
   `/home/nixos/.local/jarvis-mcp-site`, profile python). **Never diverge the
   two envs again** — without that the CLI loses `requests`, the LLM breaker
   opens and `rag-index` hangs without error.
-- MCP handlers read **fixed** keys: `rag_index`→`path`, `vault_write`→`name`
-  (+`content`), `rag_search`→`query`/`collection`/`limit`, `remember`→`text`,
-  `recall`/`lessons`→`query`. Wrong key = **argument ignored** (the CLI
+- MCP handlers read **fixed** keys: `rag_index`:`path`, `vault_write`:`name`
+  (+`content`), `rag_search`:`query`/`collection`/`limit`, `remember`:`text`,
+  `recall`/`lessons`:`query`. Wrong key = **argument ignored** (the CLI
   indexed the wrong tree for 6 months due to a bug).
 - **Embedding server (8081) has n_ctx=512 TOKENS per item**: 1200-char chunk
-  ≈ 550 tokens → HTTP 400 `exceed_context_size`. `CHUNK_CHARS=800`, and
+  ≈ 550 tokens : HTTP 400 `exceed_context_size`. `CHUNK_CHARS=800`, and
   `embed()` shrinks on its own if the server refuses. Batch ≤64 items/POST and
   **no retry** (Retry read=3 × timeout = 8min wait = "hang").
 - The official MCP env is **discovered by reading `~/.config/opencode/opencode.json`**
-  (symlink to the store) → follows rebuilds without re-typing the Nix.
+  (symlink to the store) : follows rebuilds without re-typing the Nix.
   Measured 08/11: the 2.2.6 can normalize that symlink into a regular file
   while it runs (a rebuild restores it) — editing the live file is wrong
   either way: the owner is `home-manager/home.nix`.
@@ -94,7 +94,7 @@ nix flake check
   current snapshot (commits of all repos at the root) with the snapshot stored
   at the last suggestion — no new commit = era already sealed, no repeat. The
   suggestion guarantees a checkpoint only when there is new work to seal.
-- Error masked by a pipe (`cmd | tail`) does **not** reach the scanner → when
+- Error masked by a pipe (`cmd | tail`) does **not** reach the scanner : when
   debugging, run without a pipe (or with `set -o pipefail`).
 
 ## Multi-agent coordination (02/11 — opencode API, without stealing focus)
@@ -111,7 +111,7 @@ nix flake check
   the API lives under `/api`; without it the POST hits the SPA catch-all
   and returns HTML 200, which is why the wake used to fail silently.
   `/abort` cancels the turn. **Never** park text in the human's input box: it blocks typing and
-  does not enter the queue → useless (real error on 02/11).
+  does not enter the queue : useless (real error on 02/11).
 - `scripts/agent-msg.sh`: `--to <nome>` (request), `--note` (notification),
   `--broadcast` (explicit fan-out, rare), `--cancel <id>`, `--reply-to`,
   `--id` (idempotency), `--pending`, `--list`. Without a roster, `--to other`
@@ -120,15 +120,15 @@ nix flake check
   **lane-aware** (a commit on repo X only wakes the owner of repo X; queue/hooks
   = global; no roster = legacy global). `RE-ENTER` only exists in the wtype
   fallback — never submit what the human is typing.
-- Evidence: `scripts/agent-msg.sh` → `~/projects/AGENTS-MSG.log`.
+- Evidence: `scripts/agent-msg.sh` : `~/projects/AGENTS-MSG.log`.
 
 ## Model identity (self-identification — 02/11)
 
 You cannot introspect your own weights (size, quantisation, VRAM, latency) — a
 wrong identity silently corrupts every decision that depends on it. **The
 harness is the only source**: opencode injects an `## IDENTITY` block (model +
-session id) → *that is you*; the JARVIS runtime knows the active tier
-(`scripts/jarvis-cli.sh status`, registry `modules/ai/models.nix`); no source →
+session id) : *that is you*; the JARVIS runtime knows the active tier
+(`scripts/jarvis-cli.sh status`, registry `modules/ai/models.nix`); no source :
 say so plainly and name what would answer it. Full 3-tier detail: root
 AGENTS.md §Model identity.
 
@@ -206,7 +206,7 @@ read pt-BR); answer the owner in pt-BR.
 ## Host automations (03/11) — know they exist, don't "fix" them
 
 - **Windows come back after a reboot**: timer `session-snapshot` captures the
-  opencode layout every 60s → `~/.local/state/jarvis/sessions-snapshot.tsv`;
+  opencode layout every 60s : `~/.local/state/jarvis/sessions-snapshot.tsv`;
   the Hyprland `exec-once` restores it at login
   (`scripts/restore-sessions.sh --capture` / no args). Hyprland itself does NOT
   restore windows — the script is the mechanism.
@@ -273,20 +273,20 @@ read pt-BR); answer the owner in pt-BR.
 | `scripts/overnight-24-09/` | dated bench evidence |
 | `.agents/*.md` | detail per topic (load only on trigger match) |
 
-## Model-agnostic (detection → adaptation — read before touching prompts/tools)
+## Model-agnostic (detection : adaptation — read before touching prompts/tools)
 
-- `cli/dev.py:_detect_profile` — registry tier beats param-count; tiny →
+- `cli/dev.py:_detect_profile` — registry tier beats param-count; tiny :
   `native_tools=False` (text only, no `tools` overhead); override
   `cfg.llm_native_tools`. Local REPL proof: bonsai reads exact (29/09).
 - `core/agent.py:_strict_default` — speed/fast tiers get constrained
   grammar; rest free text. Outside strict, ```bash fences become
   `execute_shell` (F-cell; dev.py accepted fences long ago).
-- `core/agent.py:_try_api_cascade` — proven STUCK → 1× API
+- `core/agent.py:_try_api_cascade` — proven STUCK : 1× API
   (CASCADE_MAP; Groq last resort). Bot has keys via litellm.env.
 - Missing template (xLAM) isn't cheaply detectable: assumes tool-capable
-  by size and breaks (400/500). Template suspected → text mode.
+  by size and breaks (400/500). Template suspected : text mode.
 
-## Agent rules (trigger → file)
+## Agent rules (trigger : file)
 - [`.agents/dados-e-memoria.md`](.agents/dados-e-memoria.md) — RAG, memory, vault, spaces, encryption.
   Triggers: RAG, memory, vault, qdrant, collection, embedding, recall.
 - [`.agents/loop-e-bench.md`](.agents/loop-e-bench.md) — overnight, harness, sweep, bench, cmoe, t/s, overnight.
@@ -393,7 +393,7 @@ cd modules/ai/jarvis/src/jarvis/webui/frontend && npm run dev
 
 ```
 Core Components
-    ↓
+    v
 Control Plane
 ├── Events (taxonomy + history)
 ├── State (persistent store)
@@ -401,9 +401,9 @@ Control Plane
 ├── Notifications (multi-channel)
 ├── Policies (risk levels)
 └── Audit (JSONL trail)
-    ↓
+    v
 API (FastAPI, 11 endpoints)
-    ↓
+    v
 SvelteKit (12 routes, SSE real-time)
 ```
 
@@ -463,7 +463,7 @@ SvelteKit (12 routes, SSE real-time)
 | 8 | self_test.py referenced archived modules (orchestrator, workitem) | Replaced with task_queue and harness_status tests | Verified: self_test passes 9/10 black, 6/6 white |
 | 9 | Agent loop never fed error context back to LLM | `_request_structured_patch` now accepts `previous_errors`, retry loop feeds errors back | Verified: 827 tests pass, retry loop in `execute_task` feeds errors to next LLM call |
 | 10 | checkpoint.json was global (cross-project state corruption) | Now per-project: `checkpoint-{project}.json` with legacy migration | Verified: tests pass, 4 checkpoint tests updated |
-| 11 | State machine missing IN_PROGRESS→VALIDATING→REVIEW transitions in tests | Fixed test_stats, test_task_lifecycle, test_task_failure_and_block to use proper lifecycle | Verified: all P5 state machine tests pass |
+| 11 | State machine missing IN_PROGRESS:VALIDATING:REVIEW transitions in tests | Fixed test_stats, test_task_lifecycle, test_task_failure_and_block to use proper lifecycle | Verified: all P5 state machine tests pass |
 
 ---
 
@@ -472,18 +472,18 @@ SvelteKit (12 routes, SSE real-time)
 | Capability | Status | Evidence |
 |-----------|--------|----------|
 | Backend abstraction (llama-cpp/prismml/bonsai) | ✅ VERIFIED | 32 tests, factory |
-| State machine (DISCOVERED→COMPLETED) | ✅ VERIFIED | 16 tests, invalid transitions rejected |
+| State machine (DISCOVERED:COMPLETED) | ✅ VERIFIED | 16 tests, invalid transitions rejected |
 | Context budget (auto-detect n_ctx) | ✅ VERVerified | 10 tests, /props integration |
 | Test taxonomy (unit/integration markers) | ✅ VERIFIED | conftest.py + markers |
-| E2E pipeline (discovery→task→validate→commit) | ✅ VERIFIED | Corretor project, 17/17 tests |
+| E2E pipeline (discovery:task:validate:commit) | ✅ VERIFIED | Corretor project, 17/17 tests |
 | LLM chat + tool calling | ✅ VERIFIED | Qwen returns correct tool_calls |
 | Control Plane events/state/commands | ✅ VERIFIED | 134 tests pass |
 | API endpoints (all 9) | ✅ VERIFIED | curl 200 on all |
 | SSE real-time stream | ✅ VERIFIED | curl shows init + heartbeats |
 | Gaming toggle (real services) | ✅ VERIFIED | curl shows services restarted |
-| Command arg validation | ✅ VERIFIED | voice.speak without text → error |
+| Command arg validation | ✅ VERIFIED | voice.speak without text : error |
 | Autonomous persona execution | ✅ VERIFIED | `jarvis execute` CLI + persona_executor |
-| Agent state wiring | ✅ VERIFIED | harness → EventBus → State → SSE |
+| Agent state wiring | ✅ VERIFIED | harness : EventBus : State : SSE |
 
 ---
 
@@ -522,7 +522,7 @@ SvelteKit (12 routes, SSE real-time)
 
 **What was done:**
 - Audited both BUFFY files for gaps and ritualism
-- Traced all architecture flows (EventBus → Control Plane → API → SSE → Frontend)
+- Traced all architecture flows (EventBus : Control Plane : API : SSE : Frontend)
 - Fixed SSE subscriber leak (EventBus.unsubscribe + UUID per connection)
 - Fixed _deliver_web stub (now pushes to SSE queues)
 - Removed duplicate SSE subscribe
@@ -542,11 +542,11 @@ SvelteKit (12 routes, SSE real-time)
 **What was done:**
 - Archived 9 dead modules (orchestrator, workitem, subagent, context, agent_loop, ast_guard, ast_cache, learning, vision_analyzer)
 - Refactored persona_executor to use harness directly (eliminated PAUSADO dependency)
-- Wired agent state from harness → global EventBus → Control Plane → SSE → Dashboard
+- Wired agent state from harness : global EventBus : Control Plane : SSE : Dashboard
 - Implemented real Tasks page with persistent queue
 - Fixed systemd_adapter KNOWN_SERVICES bug
 - Added task.retry/task.cancel commands to CommandRegistry
-- E2E verified: PersonaExecutor → LLM → patch → validator → events → state → API
+- E2E verified: PersonaExecutor : LLM : patch : validator : events : state : API
 - Actual test count: 820 passed (not 302 as claimed)
 
 **Commits:**
@@ -567,17 +567,17 @@ SvelteKit (12 routes, SSE real-time)
 #### 2026-09-03: Forensic Verification
 
 **Bugs found and fixed:**
-1. `--dry-run` parsed but never wired → FIXED
-2. Hardcoded `/home/nixos/projects` → FIXED (uses config)
-3. `files_changed` reported candidates → FIXED (uses git diff)
-4. `except Exception: pass` silenced errors → FIXED (logs warning)
-5. self_test.py referenced archived modules → FIXED
+1. `--dry-run` parsed but never wired : FIXED
+2. Hardcoded `/home/nixos/projects` : FIXED (uses config)
+3. `files_changed` reported candidates : FIXED (uses git diff)
+4. `except Exception: pass` silenced errors : FIXED (logs warning)
+5. self_test.py referenced archived modules : FIXED
 
 **False markings corrected:**
-- Test count: 302/303 → 820/833 actual
-- Endpoint count: 9 → 20 actual
-- persona_executor VERIFIED → PARTIAL (dry-run was broken)
-- `jarvis execute` VERIFIED → PARTIAL (files_changed was wrong)
+- Test count: 302/303 : 820/833 actual
+- Endpoint count: 9 : 20 actual
+- persona_executor VERIFIED : PARTIAL (dry-run was broken)
+- `jarvis execute` VERIFIED : PARTIAL (files_changed was wrong)
 
 #### 2026-09-03: P0/P1 Fixes + Test Reconciliation + All Tests Pass
 
@@ -604,7 +604,7 @@ SvelteKit (12 routes, SSE real-time)
 #### 2026-09-07: Deep Forensic Audit Session 2 (agent robustness + config + dead code)
 
 **What was done (VERIFIED, tests green):**
-- P0: `Agent.run()` no longer crashes on malformed tool calls (non-dict `func`, invalid-JSON `arguments`, non-dict `args`) — error tool result + continue instead of exception propagation. `tests/test_solar_probe.py` 8 failures → 0.
+- P0: `Agent.run()` no longer crashes on malformed tool calls (non-dict `func`, invalid-JSON `arguments`, non-dict `args`) — error tool result + continue instead of exception propagation. `tests/test_solar_probe.py` 8 failures : 0.
 - P1: Removed double PAST LESSONS injection (`_get_llm_response` re-injected every turn; canonical single injection in `run()`).
 - P2: Removed ~200 lines dead code from `agent.py` (`execute_tool`, `run_loop`, `TOOLS`, `_extract_tool_calls`, `AgentError`, `ApprovalDeniedError` + helpers) — zero external importers verified.
 - P1: Eliminated 4 `config.py` bypasses (`JARVIS_LLM_URL`, `LLAMA_CPP_URL` ×2, `BackendHealthMonitor()` default) — canonical `JARVIS_LLM_BASE_URL` only.
@@ -614,7 +614,7 @@ SvelteKit (12 routes, SSE real-time)
 **Metrics:** 987 passed / 5 failed (pre-existing infra: `nightwatch_real_e2e` ×3, `platform_e2e` ×2 — require live Qdrant/llama.cpp; BLOCKED, not regressions).
 
 **Still open (P1, require architectural refactor):**
-- Router keyword-matching routes "leia o arquivo X" → RAG (agent exposes only `execute_shell`, no `read_file`/`write_file`).
+- Router keyword-matching routes "leia o arquivo X" : RAG (agent exposes only `execute_shell`, no `read_file`/`write_file`).
 - `_get_llm_response()` still bypasses `LLMClient` (direct `requests.post`; ~20 mocks to adapt).
 - `ToolValidator`/`CircuitBreaker`/`ContextBudget` instantiated in `Agent` but not wired into `run()` (component theater, same pattern as F1-fixed LoopDetector).
 
@@ -623,9 +623,9 @@ SvelteKit (12 routes, SSE real-time)
 #### 2026-09-08: Checkpoint + BLOCKEDs (LLMClient, read_file, wiring, RVC)
 
 **What was done (VERIFIED, tests green):**
-- Validated parallel Codebuff session: `a0ae4ea` OK; `e4a4e24` solid (+1 edge fix); `873d94f` duplicated RVC spawn → consolidated (`532f135`: single `_run_driver`, `clone_wav` thin adapter, template honors CPU_ONLY via CUDA_VISIBLE_DEVICES).
-- P1: `_get_llm_response()` → `LLMClient` (`1723b4b`) — end of llama.cpp bypass in REPL (breaker, telemetry, backend routing). 26 mocks `+**kw`, zero logic change.
-- P1: `read_file` tool + `read` route (`1482622`) — mission CASE 1/5 unblocked. "leia o arquivo X" → direct read; evidence precedence over audiobook wildcard (path→read, compound→agent, rest→audiobook). `test_read_route.py` (11 contracts).
+- Validated parallel Codebuff session: `a0ae4ea` OK; `e4a4e24` solid (+1 edge fix); `873d94f` duplicated RVC spawn : consolidated (`532f135`: single `_run_driver`, `clone_wav` thin adapter, template honors CPU_ONLY via CUDA_VISIBLE_DEVICES).
+- P1: `_get_llm_response()` : `LLMClient` (`1723b4b`) — end of llama.cpp bypass in REPL (breaker, telemetry, backend routing). 26 mocks `+**kw`, zero logic change.
+- P1: `read_file` tool + `read` route (`1482622`) — mission CASE 1/5 unblocked. "leia o arquivo X" : direct read; evidence precedence over audiobook wildcard (path:read, compound:agent, rest:audiobook). `test_read_route.py` (11 contracts).
 - P2: final `run()` wiring (`1ffb095`) — post-execution ToolValidator, per-prompt context guard, duplicate breaker + dead `turn_count` removed. +2 tests.
 
 **Metrics:** full suite pending confirmation (5 pre-existing infra failures expected: `nightwatch_real_e2e` ×3, `platform_e2e` ×2).
@@ -653,14 +653,14 @@ SvelteKit (12 routes, SSE real-time)
 #### Architecture (current)
 ```
 PersonaExecutor
-  → TaskQueue (persistent)
-    → Harness (pipeline engine)
-      → LLM (via _default_call_llm)
-        → Patcher + SafeEditor
-          → Validator (syntax + tests)
-            → Evaluator (review)
-              → Checkpoint + Safety
-                → Git commit
+  : TaskQueue (persistent)
+    : Harness (pipeline engine)
+      : LLM (via _default_call_llm)
+        : Patcher + SafeEditor
+          : Validator (syntax + tests)
+            : Evaluator (review)
+              : Checkpoint + Safety
+                : Git commit
 ```
 
 #### Archived code lives in
@@ -771,18 +771,18 @@ The ChatGPT conversation at `https://chatgpt.com/share/6a99bf79-72bc-83e9-aeed-f
 1. **Sends relevant section, not whole file** — for large files, identifies the function to edit and sends that + context
 2. **SEARCH/REPLACE format** — simpler for the model than unified diff
 3. **"Did you mean?" on failure** — shows actual file content near failed match
-4. **Three-stage validation**: edit errors → lint → tests, each with reflection
+4. **Three-stage validation**: edit errors : lint : tests, each with reflection
 5. **Fuzzy matching** — whitespace-insensitive, then Levenshtein distance
 
 #### What We Fixed This Session
 
 | Fix | Impact |
 |-----|--------|
-| File context: 4000 → 11000 chars | LLM can see target functions |
+| File context: 4000 : 11000 chars | LLM can see target functions |
 | Smart section extraction | Large files: send relevant section only |
 | Aider-style "Did you mean?" | LLM sees actual file content on failure |
 | Auto-prune terminal tasks | Queue self-manages, no manual cleanup |
-| Rules ratchet | Failures → AGENTS.md rules for future sessions |
+| Rules ratchet | Failures : AGENTS.md rules for future sessions |
 | P5 state machine fixes | Retry loops don't crash on same-state transitions |
 | Evaluator uses project root | Reviewer sees correct project's changes |
 
@@ -817,9 +817,9 @@ The ChatGPT conversation at `https://chatgpt.com/share/6a99bf79-72bc-83e9-aeed-f
 
 Three types of memory needed (from Hindsight/Addy Osmani research):
 
-1. **Procedural** (how to do things) → rules in AGENTS.md (rules ratchet ✅)
-2. **Semantic** (what things mean) → knowledge base (RAG/search)
-3. **Episodic** (what happened) → JSONL log of actions/outcomes
+1. **Procedural** (how to do things) : rules in AGENTS.md (rules ratchet ✅)
+2. **Semantic** (what things mean) : knowledge base (RAG/search)
+3. **Episodic** (what happened) : JSONL log of actions/outcomes
 
 The harness MUST accumulate understanding from work and have it shape the next session. Current gap: episodic memory exists (progress.jsonl) but isn't consulted by the harness.
 
@@ -870,7 +870,7 @@ Solutions for next session:
 
 #### What Works End-to-End
 
-- Goal loop: plan → execute → verify → loop ✅
+- Goal loop: plan : execute : verify : loop ✅
 - Autonomous task execution with real commits ✅
 - Fuzzy matching catches LLM imperfections ✅
 - Auto-queue cleanup ✅
@@ -942,7 +942,7 @@ Solution: Clean queue file before tests, or reduce prune threshold.
 - Orphan branches cleaned for external projects
 - Task recovery handles all non-terminal states
 - 14+ real commits to Corretor via autonomous harness
-- Goal loop works end-to-end (plan → execute → verify → loop)
+- Goal loop works end-to-end (plan : execute : verify : loop)
 
 ---
 
@@ -950,7 +950,7 @@ Solution: Clean queue file before tests, or reduce prune threshold.
 
 #### Episodic Memory Bridge
 
-progress.jsonl → memory_bridge.py → Qdrant episodic memory → recall in future sessions
+progress.jsonl : memory_bridge.py : Qdrant episodic memory : recall in future sessions
 
 The harness now:
 1. Syncs past failures to episodic memory on startup
@@ -997,8 +997,8 @@ Rule (AGENTS.md updated): `git add -A` + verify `git ls-files` BEFORE
 rebuilding — never create files concurrent with a build.
 
 #### Diagnose the full chain with evidence, then fix
-Live session proved, in order: baseline stuck at 38 → 12s noise windows →
-tiny mistranscription ("A e charles") → 58KB TTS → self-trigger (0.9972).
+Live session proved, in order: baseline stuck at 38 : 12s noise windows :
+tiny mistranscription ("A e charles") : 58KB TTS : self-trigger (0.9972).
 Each link verified (logs/RMS/STT diffs) before patching. Full report:
 `docs/audit/VOICE-PIPELINE-FORENSIC-2026-09.md`.
 
@@ -1028,17 +1028,17 @@ together; prompts derive language, never hardcode it.
 
 **What was done (VERIFIED, tests + builds green):**
 - RVC/--clone E2E: causa raiz (zsh sem env + binário stale com fake-success).
-  Método superior: patchelf venv→nix-ld (prova `env -i`), `rvc-env.sh`
-  canônico, bash+zsh declarativos, bootstrap durável. Texto do usuário →
+  Método superior: patchelf venv:nix-ld (prova `env -i`), `rvc-env.sh`
+  canônico, bash+zsh declarativos, bootstrap durável. Texto do usuário :
   15.9s Jarvis real. 2 rebuilds OK.
 - STT small declarativo (models.nix ×4, symlinks); tiny.en morto removido
   (149MB); STT PT-BR + wakeword VAD provados ao vivo.
 - Project-root canônico (`core/paths.py`, 19 arquivos): fim de 3 resolvers
-  + monkeypatch→contextvar; testes A/B reescritos; `or True` corrigido.
-- MCP rag ensure → store (schema divergente eliminado); lessons(prompt);
+  + monkeypatch:contextvar; testes A/B reescritos; `or True` corrigido.
+- MCP rag ensure : store (schema divergente eliminado); lessons(prompt);
   waybar ts fix (mentia IDLE em listening).
-- Suite do Agent no sandbox Nix: 833→834 passed, 0 failed (unmark + fixture;
-  hostname→echo).
+- Suite do Agent no sandbox Nix: 833:834 passed, 0 failed (unmark + fixture;
+  hostname:echo).
 - ADRs 003 (personas) / 004 (routing policy unwired) como BLOCKED com evidência.
 
 **Metrics:** build 834/0; local 998+/5 infra (pré-existentes).
@@ -1061,11 +1061,11 @@ lifecycle.
 llama-bench (pp/tg) p/ perf; BFCL-style AST-lite p/ tool-use; suíte de
 tarefas representativas p/ agent; protocolo user-fiel (1 prompt terso,
 fresh session) p/ UX. Slot-cache/KV-reuse do servidor gera RUÍDO
-(g3 "401"→391, g2 "Debian"→ok em retries) — conclusões exigem padrões.
+(g3 "401":391, g2 "Debian":ok em retries) — conclusões exigem padrões.
 Scorer só-texto subestima cadeias (a2 provado por arquivo).
 
 #### Harness fecha formato, não juízo (A/B n=5, 7 tarefas)
-Bonsai 30→35/35 com disciplina; Qwen 35/35 livre; Gemma 0/0/35;
+Bonsai 30:35/35 com disciplina; Qwen 35/35 livre; Gemma 0/0/35;
 Phi 0/0/30. Grammar garante FORMA, não vocabulário (assinaturas
 continuam necessárias). Thinking-ON envenena tool-use em qualquer modo.
 12 runs UX user-fiéis: 0/12 conclusões — desiste após 1 erro, agente-cego,
@@ -1101,13 +1101,13 @@ free-capable); default Bonsai preservado (produto).
 #### DONE com evidência, não com afirmação
 `core/completion.py`: trailing-error, zero-success, artefato-existe+AST,
 afirma-sem-escrita (C2 real), nega-evidência (N2 real). AgentResult leva
-verdict/evidence/missing; 2 turnos de verificação; erro idêntico 3x →
+verdict/evidence/missing; 2 turnos de verificação; erro idêntico 3x :
 STUCK. False-DONE virou UNVERIFIED rotulado (C2/N2 pegos).
 
-#### Planner MoE→executor small: plano excelente, execução travava sem write
+#### Planner MoE:executor small: plano excelente, execução travava sem write
 MoE-alone e Qwen-alone: VERIFIED vazio (sem fix). MoE-plan + Qwen-exec
 (+approve): VERIFIED + fix em 3 turns. Mas Agent NÃO TINHA write tools
-(só shell-redirect, negado por policy) → adicionados write_file/
+(só shell-redirect, negado por policy) : adicionados write_file/
 str_replace com approval-gating + jail. Lição: comparar arquiteturas
 exige paridade de ferramentas, senão mede o harness disfarçado.
 
@@ -1131,7 +1131,7 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
 - xLAM-2-8B Q4_K_M (~/models, 4.92GB, hash fiado `llm-xlam-8b`): GPU solo
   5.3GB VRAM. A/B 0/0/35 — GGUF sem chat_template (400 em tools param);
   só strict. Emite arrays (fallback/strict aceitam listas agora).
-  Planner C2 (MoE-plan→Qwen+approve): VERIFIED+fix/3 turns (único que
+  Planner C2 (MoE-plan:Qwen+approve): VERIFIED+fix/3 turns (único que
   fixou). Adotado executor strict; Qwen segue fast. Licença CC-BY-NC-4.0.
 - Suite 1068/5infra; flake verde. Commit 0699161.
 
@@ -1189,7 +1189,7 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
   (8080/6333/8081/8082 = 200) — resiliência confirmada na prática.
   Git intacto (ecd02a2, stash 0, wip×2, branch Solar). Único prejuízo:
   run Qwen-juiz abortado no meio — refeito do zero.
-- :8080 produtivo é single-model (POST /models/load → 404): hot-switch
+- :8080 produtivo é single-model (POST /models/load : 404): hot-switch
   via ensure_model NÃO funciona aqui; troca exige restart do serviço.
   Alternativa usada: 2º llama-server Qwen3-4B-CPU :18081 (LD_LIBRARY_PATH
   extraído do /proc do :8080; -ngl 0 -t 8; ~2.5GB RAM, :8080 intocado).
@@ -1230,7 +1230,7 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
   IA no v1), erro no Update Row do v2, Claude pago + Mistral pago.
   Plano: consolidar 1 cenário, SerpApi free (250/mês) via HTTP,
   Qwen local :8080 como IA default, Groq fallback, deduplicar antes
-  de escrever (Search Rows → filtro → Add).
+  de escrever (Search Rows : filtro : Add).
 
 ### 33. SESSION NOTES (2026-09-10 — make CLI + prospecção v2)
 
@@ -1243,7 +1243,7 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
   {{32.__ROW_NUMBER__}} (linha fantasma, id inexistente).
 - Criado "Prospecção v2 (Apify+Mistral)" id 6232705, INATIVO,
   isinvalid=false: mesma cadeia, ordem corrigida
-  (agregador→filter→mistral→addRow→updateRow na linha {{7}}),
+  (agregador:filter:mistral:addRow:updateRow na linha {{7}}),
   coluna 23 = proposta (ref {{27.result}} = BEST GUESS, verificar
   na UI), schedule diário 86400 (era 900s). Blueprint versionado
   em ~/projects/plans/automancerz-prospeccao-v2-blueprint.json.
@@ -1281,8 +1281,8 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
 
 ### 36. SESSION NOTES (2026-09-11 — v3 SerpApi+Groq criado)
 
-- v3 id 6233082 INATIVO (aguardando keys): SerpApi search → feeder
-  → addRow cru → filterRows ctx → Groq proposta → updateRow
+- v3 id 6233082 INATIVO (aguardando keys): SerpApi search : feeder
+  : addRow cru : filterRows ctx : Groq proposta : updateRow
   (status+proposta). filterRows é v2 (v1 rejeita no create).
 - Ativou limpo (placeholders não barram validação). Desativei até
   as keys entrarem (run falharia com 401 à toa).
@@ -1312,7 +1312,7 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
 - SerpApi key OK (20 resultados; campos title/address/phone/
   website/rating/reviews/type/place_id confirmados).
 - updateRow removido do v3 (multi-insert não gera __ROW_NUMBER__
-  único → range Aundefined). Fluxo final [serp,agg,groq,addRow]
+  único : range Aundefined). Fluxo final [serp,agg,groq,addRow]
   com status+proposta na mesma escrita.
 - Output Groq: {{6.data.choices[].message.content}} (OpenAI-shape;
   {{6.data}} cru = struct rejeitado pelo Sheets 400).
@@ -1357,9 +1357,9 @@ Técnicas a portar do pi: 4 tools, session tree, gates, hash-edits.
 - Aplicado no choke point _default_call_llm (vale p/ discovery,
   patcher, three_agent): TOOL_USE_DISCIPLINE + heartbeat stderr
   (start/done/fail com tempo) + thinking já off.
-- Discovery: timeout 120→300 + 1 retry (loop de 8h resolvido por
+- Discovery: timeout 120:300 + 1 retry (loop de 8h resolvido por
   construção) + parse tolerante _extract_json_array (cercas,
-  strings com colchetes, fallback objetos). Prova viva: 0→5 tasks.
+  strings com colchetes, fallback objetos). Prova viva: 0:5 tasks.
 - Step 6: _verify_completion_evidence (sha + arquivos) antes do
   complete — sem artefato, falha honesta + abort do branch.
 - Suite 1105/0. Rebuild OK; serviço 03:04 com código fresco
@@ -1378,7 +1378,7 @@ guia-renamer-pro/docs/OPERACAO.md):
   exe CI; bucket legado "Guia Renamer Dist" sobrando.
 - Make us2, team 750102, folder 80728, token em MAKE_API_KEY
   (/etc/litellm.env). CLI: npx @makehq/cli (NÃO pacote make-cli).
-  v3 id 6233082 ATIVO diário (SerpApi→agg→Groq qwen3.6-27b→Sheets;
+  v3 id 6233082 ATIVO diário (SerpApi:agg:Groq qwen3.6-27b:Sheets;
   keys nos módulos). v2 6232705 inativo. Legados Apify inativos.
   Blueprint sanitizado em plans/automancerz-prospeccao-v3-*.json.
   SerpApi key só na sessão; Groq = GROQ_API_KEY (litellm.env).
@@ -1426,14 +1426,14 @@ ERROS COMETIDOS (registrar p/ qualquer agente):
    fallback manual (link pronto p/ o usuário reencaminhar).
 6. FORK-STATUS.md criados no repo errado (path relativo resolveu
    p/ nixos-ai, não ~/projects). REGRA: conferir `pwd`/destino.
-7. Sauvola perde em scan limpo 300dpi (33→30): SOTA de binarização
+7. Sauvola perde em scan limpo 300dpi (33:30): SOTA de binarização
    mira documento degradado. Não aplicar sem A/B nos 53.
 
-### 44. SESSION NOTES (2026-09-12 — backlog Make↔JARVIS)
+### 44. SESSION NOTES (2026-09-12 — backlog Make-JARVIS)
 
 - Decisão: Make vira MCP do JARVIS (wrapper list/get/run/logs sobre
   a API us2; usar npx @makehq/cli como referência de endpoints).
-  Fase 2: webhook inbound Make→JARVIS (lead respondeu → qualifica).
+  Fase 2: webhook inbound Make:JARVIS (lead respondeu : qualifica).
 - Missão docs enviada ao Solar (ingestão total + contradições +
   obsoletos + índice; sem código/commit).
 
@@ -1484,17 +1484,17 @@ relatório Solar, sudo kill nightwatch se quiser, cupom-100% final.
 - Correção registrada 2×: Kaggle moderno = API tokens KGAT_
   (~/.kaggle/access_token) com CLI >= 1.8 (nixpkgs 1.8.3 OK).
   kaggle.json é LEGADO. Pesquisar antes de recomendar (regra).
-- Dataset jarvis: 7 wavs, 2.8min, 48kHz, RMS ok. TINY → receita
+- Dataset jarvis: 7 wavs, 2.8min, 48kHz, RMS ok. TINY : receita
   400-500 epochs/batch4/RMVPE/TensorBoard em RECEITA-JARVIS.md.
 - Modelo atual 62e = provável undertrained. Falta (usuário):
   rodar treino no Kaggle (UI) e trazer .pth/.index novos.
 
 ### 48. SESSION NOTES (2026-09-12 — treino RVC Kaggle concluído)
 
-- Kernel v10 COMPLETE no T4x2: 300 epochs (step 3588), loss 24.7→14.5
+- Kernel v10 COMPLETE no T4x2: 300 epochs (step 3588), loss 24.7:14.5
   ainda descendo (sem platô = sem overfit). Quota gasta ~4h (v8+v9+v10).
 - Export CLI da Applio NÃO gera modelo de inferência (só G_*). Extração
-  local via extract_model.py + 48000.json + ckpt["model"] →
+  local via extract_model.py + 48000.json + ckpt["model"] :
   Jarvis_300e_infer.pth (57MB) + v3.index. Lição: pipeline CLI precisa
   do passo extract; doc oficial omite.
 - A/B mesma frase: 62e vs 300e soam igual, 300e mais limpo. Promovido

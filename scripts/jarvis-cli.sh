@@ -19,8 +19,8 @@
 #   remember <fact>                  — Store episodic memory
 #   recall <query>                   — Recall memories
 #   lessons <query>                  — Recall lessons from past errors
-#   rehydrate <json>                 — Rehydrate session context (guards, queue, handoff, memories, lessons, RAG, sessions, roster)
-#   session-resume <json>            — Resume prior opencode session by session_id/directory/query
+#   rehydrate [json]                 — Rehydrate session context (guards, queue, handoff, memories, lessons, RAG, sessions, roster)
+#   session-resume [json|key val|id|dir] — Resume prior opencode session (session_id/directory/query; ergonomic args supported)
 #   vault-list                       — List vault notes
 #   vault-write <title> <content>    — Write to vault
 #   rag-search <query>               — Semantic code search
@@ -28,10 +28,11 @@
 #   hackmd-list                      — List HackMD notes
 #   hackmd-read <id>                 — Read HackMD note
 #   hackmd-write <title> <content>   — Write HackMD note
-#   tools                            — List every MCP tool + CLI coverage gap
-#   tools-search <query>             — Meta-tool discovery: find tools by intent (low-token, MCP parity)
-#   tools-call <name> <json>         — Meta-tool call: invoke any tool via tools_call router
-#   tool <name> <json>               — Call any MCP tool by name (JSON args)
+#   tools                            — List every MCP tool + CLI native/coverage
+#   tools-search <query>             — Meta-tool discovery by intent (embedding-ranked, low-token)
+#   tools-call <name> [json]         — Call any tool via meta-tool router
+#   tool <name> [json]               — Call any MCP tool directly by name
+#   time                             — Current local time (ISO/date/time/tz)
 #   bench-stt <wav> [wav...]         — ASR_BENCH: measure STT (VAD on/off, RTF)
 #   status                           — Show JARVIS status
 #   help                             — Show this help
