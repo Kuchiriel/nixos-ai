@@ -329,6 +329,20 @@ risada e aceitar o gatilho dela. **Correção de um número meu:** o custo da
 regra de hoje é **15/1817 (0,83 %)**, não os "1/199 (0,5 %)" que publiquei
 (amostra pequena demais).
 
+**A VOZ É AVULSA: QUALQUER CRASH A DEIXA MUDA (10/11, coord-naming — duas
+peças prontas, a decisão de instalar o timer é do dono):**
+(1) **Uma tool que falha não derruba mais a voz** (`call_tool_safe`, commit
+`8363d8be` + o de hoje): a exceção da tool vira **texto de erro para o
+modelo**, em vez de subir pelo `call_tool` e matar o processo inteiro — que foi
+exatamente o caminho do crash de 10/11. Teste próprio (tool que levanta, tool
+que passa, e a checagem de que o laço principal chama o wrapper).
+(2) **`scripts/voice-watchdog.sh`**: verifica se o cliente e o ASRD estão de
+pé e, com `--restart`, levanta a pilha pelo runner (que resolve o
+`LD_LIBRARY_PATH`, senão o cliente morre no import do numpy). Ele **não
+instala nada** e **não mexe em config** — a peça que falta é o dono apontar
+um timer do systemd (ou cron) para ele. Sem isso, a próxima queda da voz
+volta a ser silenciosa: o `jarvis-heal` só vigia units e o cliente não é uma.
+
 **O que ainda falta para o wakeword (09/11):** o limiar **não pode ser chutado**. No
 corpus de 1 817 segmentos da casa o wakeword dispara em 6 acima de 0,5 (0,33 %), mas ao
 rotular pelo transcript do log (**66 segmentos**) **nenhum é positivo** (o corpus é fala

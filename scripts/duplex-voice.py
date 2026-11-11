@@ -917,7 +917,7 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
                     args = {}
                 log(f"[{ts()}] TOOL: {name}({args})")
                 _t_tool = time.monotonic()
-                result = call_tool(name, args)
+                result = call_tool_safe(name, args)
                 dbg_stage("tool", (time.monotonic() - _t_tool) * 1000)
                 dbg("TOOL", name=name, args=str(args)[:90],
                     ms=f"{(time.monotonic() - _t_tool) * 1000:.0f}",
@@ -1711,6 +1711,26 @@ def _offline_search(query: str, top_k: int = 3) -> str:
             linhas.append(f"  Cautelas: {caut}")
     dbg("offline_fonte", hits=len(hits))
     return ("Fonte: corpus OFFLINE (sem internet).\n" + "\n".join(linhas))[:800]
+
+
+def call_tool_safe(name, args):
+    """Chama uma tool sem deixar a excecao derrubar a voz.
+
+    (10/11, sweep-2026-11 MEDIDO) o cliente morreu as 17:27:23 porque uma
+    tool abriu um wav que ainda estava sendo escrito: o `wave.open` levantou
+    `wave.Error` e a excecao subiu pelo `call_tool` ate o laco principal,
+    derrubando o PROCESSO INTEIRO — e o `finally` registrou "dormindo", o
+    que fez o crash parecer um sono planejado. Uma tool que falha tem de
+    virar TEXTO DE ERRO para o modelo, nunca a morte da voz.
+    """
+    try:
+        return call_tool(name, args)
+    except Exception as exc:  # noqa: BLE001
+        try:
+            log(f"[{ts()}] TOOL {name} FALHOU (continuando): {exc}")
+        except Exception:
+            pass
+        return f"erro na tool {name}: {exc}"[:300]
 
 
 def call_tool(name, args):

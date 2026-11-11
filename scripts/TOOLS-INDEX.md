@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_108 tools._
+_109 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -162,6 +162,7 @@ _108 tools._
 - `voice-trigger-fixtures.py` (nixos-ai/scripts) — """voice-trigger-fixtures.py — gera os parquets do trigger bench (durable).
 - `voice-up.sh` (nixos-ai/scripts) — voice-up.sh — ERGUE A LANE DE VOZ em 1 comando (sequência sancionada
   use: `USO: voice-up.sh [--router-off]`
+- `voice-watchdog.sh` (nixos-ai/scripts) — voice-watchdog.sh — verifica se a pilha de voz esta de pe, e levanta se nao.
 - `voice_gate.py` (nixos-ai/scripts) — """Gate de voz: a lógica anti-alucinação do duplex-asrd, extraída verbatim.
 - `voice_text_rules.py` (nixos-ai/scripts) — """voice_text_rules.py — regras de higiene de texto do asrd, num lugar só.
 - `vram-split-sweep.py` (nixos-ai/scripts) — """Sweep de split GPU/CPU: onde o MoE (e o denso) perdem velocidade.
