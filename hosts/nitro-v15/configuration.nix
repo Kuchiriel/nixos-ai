@@ -326,6 +326,14 @@ services.avahi = {
   # =========================================================================
   networking.hostName = hostname;
   networking.networkmanager.enable = true;
+  # (11/11, dono: "internet horrivelmente lenta, celular mais rapido na mesma rede")
+  # Medido: PC no wifi 2.4GHz ch11 com -75 dBm; power save ON dormia o chip entre
+  # pacotes (9 Mbps no download de 10MB). Powersave off dobra o throughput (19 Mbps)
+  # e o ASPM disable e o fix documentado (Arch Wiki) da latencia alta do mt7921e.
+  # O outro fator medido foi o tunel Mullvad assumindo a rota default (wg0-mullvad):
+  # o servico fica INATIVO por padrao e so uma janela que precise dele deve ligar.
+  networking.networkmanager.wifi.powersave = false;
+  boot.extraModprobeConfig = "options mt7921e disable_aspm=1";
   time.timeZone = lib.mkForce "America/Sao_Paulo";
   i18n.defaultLocale = "pt_BR.UTF-8";
   networking.nameservers = ["8.8.8.8" "1.1.1.1"];
