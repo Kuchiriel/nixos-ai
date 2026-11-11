@@ -256,12 +256,27 @@ def main() -> int:
     ap.add_argument("--min-msgs", type=int, default=1)
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--batch", type=int, default=16)
+    ap.add_argument("--incremental", action="store_true",
+                    help="indexa só sessões novas/atualizadas desde o último run (estado em JARVIS_STATE_DIR)")
+    ap.add_argument("--state-file", default="", help="arquivo de estado incremental (default: <state_dir>/sessions-index-state.json)")
     args = ap.parse_args()
 
     db = Path(args.db)
     if not db.exists():
         print(f"ERRO: db não encontrado: {db}", file=sys.stderr)
         return 1
+
+    cfg = Config()
+    state_path = Path(args.state_file) if args.state_file else (cfg.ensure_state_dir() / "sessions-index-state.json")
+    last_indexed_updated = 0
+    state: dict[str, Any] = {}
+    if args.incremental and state_path.exists():
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            last_indexed_updated = int(state.get("last_time_updated") or 0)
+        except Exception:
+            last_indexed_updated = 0
+            state = {}
 
     con = open_db(db)
     sessions = list_sessions(con)
@@ -272,13 +287,17 @@ def main() -> int:
         if n < args.min_msgs:
             continue
         s["n_msgs"] = n
+        if args.incremental and int(s.get("time_updated") or 0) <= last_indexed_updated:
+            continue
         enriched.append(s)
     # newest updated first for deterministic --limit usefulness
     enriched.sort(key=lambda x: int(x.get("time_updated") or 0), reverse=True)
     if args.limit and args.limit > 0:
         enriched = enriched[: args.limit]
 
-    print(f"sessões candidatas: {len(enriched)} (db={db}, collection={args.collection})")
+    mode = "incremental" if args.incremental else "full"
+    extra = f", last_time_updated={last_indexed_updated}" if args.incremental else ""
+    print(f"sessões candidatas ({mode}{extra}): {len(enriched)} (db={db}, collection={args.collection})")
     if args.dry_run:
         for s in enriched[:10]:
             print(f"  - {s['id']} msgs={s.get('n_msgs')} updated={_ts(s.get('time_updated'))} :: {_short(s.get('title',''),80)}")
@@ -359,6 +378,7 @@ def main() -> int:
 
     total = 0
     errors = 0
+    max_ok_updated = int(last_indexed_updated or 0)
     batch_points: list[dict[str, Any]] = []
     t0 = time.time()
 
@@ -387,6 +407,12 @@ def main() -> int:
                 "payload": {**payload, "text": doc, "path": f"opencode-session://{sid}"},
             })
             total += 1
+            try:
+                tu = int(meta.get("time_updated") or 0)
+                if tu > max_ok_updated:
+                    max_ok_updated = tu
+            except Exception:
+                pass
             if len(batch_points) >= args.batch:
                 flush()
         except Exception as exc:
@@ -397,6 +423,20 @@ def main() -> int:
 
     flush()
     con.close()
+    if args.incremental or not state_path.exists():
+        try:
+            out_state = dict(state)
+            out_state["last_time_updated"] = max_ok_updated
+            out_state["collection"] = args.collection
+            out_state["db"] = str(db)
+            out_state["updated_at"] = datetime.now(timezone.utc).isoformat()
+            out_state["last_run_indexed"] = total
+            out_state["last_run_errors"] = errors
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(json.dumps(out_state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            print(f"estado incremental salvo: {state_path} (last_time_updated={max_ok_updated})")
+        except Exception as exc:
+            print(f"AVISO: não foi possível salvar estado incremental: {exc}", file=sys.stderr)
     print(f"feito: {total} sessões indexadas em '{args.collection}', {errors} erros ({time.time()-t0:.0f}s)")
     return 1 if errors else 0
 
