@@ -17,7 +17,17 @@ from pathlib import Path
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parents[4] / "scripts"
+
+def _find_scripts():
+    for p in Path(__file__).resolve().parents:
+        if (p / "scripts").is_dir():
+            return p / "scripts"
+    return None
+
+
+SCRIPTS = _find_scripts()
+if SCRIPTS is None:
+    pytest.skip("scripts/ fora do src (sandbox Nix)", allow_module_level=True)
 spec = importlib.util.spec_from_file_location(
     "duplex_voice", SCRIPTS / "duplex-voice.py")
 dv = importlib.util.module_from_spec(spec)
@@ -26,6 +36,13 @@ try:
     spec.loader.exec_module(dv)
 except Exception as exc:  # noqa: BLE001
     pytest.skip(f"duplex-voice.py nao importavel aqui: {exc}")
+
+# (10/11, coord-naming) O modulo escreve no log DIARIO da casa
+# (logs/duplex/<data>.log) — e o teste aparecia la dentro ("wav ilegivel
+# (parcial?)" apontando para /tmp/pytest-of-nixos/...). O log de producao nao
+# e' campo de teste: cala o log enquanto o modulo esta importado.
+_REAL_LOG = dv.log
+dv.log = lambda *a, **k: None
 
 
 def _write_wav(path, seconds=0.2, sr=16000):
@@ -72,3 +89,11 @@ def test_header_only_is_still_refused(tmp_path):
         out.close()
     # o arquivo pode abrir (oRIFF esta la) mas nao pode estourar
     assert True
+
+
+def teardown_module(module):  # noqa: D401
+    """Restaura o log real (o modulo e' importado por outros testes)."""
+    try:
+        dv.log = _REAL_LOG
+    except Exception:
+        pass
