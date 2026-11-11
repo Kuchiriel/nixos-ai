@@ -106,7 +106,7 @@ class Config:
     llm_temperature: float = field(default_factory=lambda: float(_env_str("JARVIS_LLM_TEMPERATURE", "-1")))
 
     # --- Embeddings (servidor dedicado llama.cpp --embeddings, porta 8081) ---
-    embed_base_url: str = field(default_factory=lambda: _env_str("JARVIS_EMBED_BASE_URL", _registry_service_url("embeddings", "http://127.0.0.1:8081/v1")))
+    embed_base_url: str = field(default_factory=lambda: (lambda _u: (_u if _u.rstrip("/").endswith("/v1/embeddings") else ((_u.rstrip("/") + "/v1") if _u and not _u.rstrip("/").endswith("/v1") else _u.rstrip("/"))))(_env_str("JARVIS_EMBED_BASE_URL", _registry_service_url("embeddings", "http://127.0.0.1:8081/v1"))))
 
     # --- Reranker (servidor dedicado llama.cpp --rerank, porta 8082 — Fase 10) ---
     # Endpoint /rerank do llama-server (bge-reranker-v2-m3 GGUF do store).
