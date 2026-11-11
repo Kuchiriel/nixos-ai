@@ -374,6 +374,12 @@ class Gate(BaseHTTPRequestHandler):
     def do_DELETE(self) -> None:
         self._forward()
 
+    def handle_error(self, request, client_address) -> None:
+        exc = sys.exc_info()[1]
+        if isinstance(exc, (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, TimeoutError)):
+            return
+        super().handle_error(request, client_address)
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="rate-limit gate for NVIDIA free tier")
