@@ -68,13 +68,14 @@ nix flake check
   either way: the owner is `home-manager/home.nix`.
 - **Tool names = `jarvis_<tool>`** (server key `jarvis`): `jarvis_rehydrate`,
   `jarvis_recall`, `jarvis_lessons`, `jarvis_rag_search`, `jarvis_rag_index`,
-  `jarvis_remember`, `jarvis_vault_*`. A doubled prefix (`jarvis_jarvis_*`) is
+  `jarvis_session_resume`, `jarvis_remember`, `jarvis_vault_*`. A doubled prefix (`jarvis_jarvis_*`) is
   the same tool. What/when/how per tool: [`.agents/mcp-catalog.md`](.agents/mcp-catalog.md).
+- **Session continuity (opencode)**: Qdrant collection `sessions` holds structured summaries indexed from `~/.local/share/opencode/opencode.db` (no raw transcript). Use `jarvis_rehydrate` for task-context rescue (includes past session summaries), `jarvis_session_resume(session_id|directory|query)` for deterministic resume, or `jarvis_rag_search(query, collection="sessions")` for discovery. Keep it current: `nix develop -c python3 scripts/index_opencode_sessions.py --incremental` (idempotent, state in `~/.local/state/jarvis/sessions-index-state.json`).
 
 ## Checkpoint and pains (30/10)
 
 - **1st tool of the session = `jarvis_rehydrate(task="...")`** (02/11): 1 call
-  returns guardrails + queue + HANDOFF + memories + lessons + RAG + roster.
+  returns guardrails + queue + HANDOFF + memories + lessons + RAG (code/books) + past session summaries + roster.
   Without that the agent repeats diagnostics already paid for (the RAG was
   used only to *record*, never to *rescue*). Rule injected by the `memory.js`
   plugin (system prompt + compaction), does not depend on agent memory.

@@ -363,12 +363,13 @@ JARVIS_TOOLS = [
         "name": "rehydrate",
         "description": (
             "REHYDRATE — the one-call rescue: pinned guards + queue top + latest "
-            "HANDOFF + memories/lessons for your task + RAG hits + roster. Call it "
-            "FIRST in a new session, right after a compaction, or when a problem "
-            "looks like a repeat ('we solved this already'); cheaper than redoing "
-            "the diagnosis. WHEN NOT: mid-task with context — for one question use "
-            "recall/rag_search/lessons. Do NOT repeat it for the same task: the 2nd "
-            "call returns a pointer (loop-breaker). Returns text, no state change."
+            "HANDOFF + memories/lessons for your task + RAG code/docs/books hits + "
+            "relevant past opencode session summaries + roster. Call it FIRST in a "
+            "new session, right after a compaction, or when a problem looks like a "
+            "repeat ('we solved this already'); cheaper than redoing the diagnosis. "
+            "WHEN NOT: mid-task with context — for one question use "
+            "recall/rag_search/session_resume/lessons. Do NOT repeat it for the same "
+            "task: the 2nd call returns a pointer (loop-breaker). Returns text, no state change."
         ),
         "inputSchema": {
             "type": "object",
@@ -377,7 +378,7 @@ JARVIS_TOOLS = [
                 "limit": {"type": "integer", "description": "Max RAG hits per collection (default: 5)"},
                 "include": {
                     "type": "string",
-                    "description": "Blocks (default all): queue,handoff,memories,lessons,rag,books,roster",
+                    "description": "Blocks (default all): queue,handoff,memories,lessons,rag,sessions,books,roster",
                 },
             },
             "required": ["task"],
