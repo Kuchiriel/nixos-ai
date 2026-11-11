@@ -468,14 +468,43 @@ print(call_tool('rehydrate', args))
 " "$ARGS"
         ;;
     session-resume|session_resume)
-        ARGS="${2:-}"
-        "$PY" -c "
+        A1="${2:-}"
+        A2="${3:-}"
+        A3="${4:-}"
+        "$PY" - "$A1" "$A2" "$A3" <<'PY'
 import json, sys
 from jarvis.mcp_server import call_tool
-raw = sys.argv[1].strip() if len(sys.argv) > 1 else ''
-args = json.loads(raw) if raw else {}
+a1 = (sys.argv[1] if len(sys.argv) > 1 else '').strip()
+a2 = (sys.argv[2] if len(sys.argv) > 2 else '').strip()
+a3 = (sys.argv[3] if len(sys.argv) > 3 else '').strip()
+args = {}
+if a1.startswith('{'):
+    try:
+        args = json.loads(a1) if a1 else {}
+    except Exception:
+        args = {}
+elif a1 in ('session_id', 'directory', 'query', 'limit'):
+    if a1 == 'limit':
+        try:
+            args['limit'] = int(a2) if a2 else 5
+        except Exception:
+            args['limit'] = 5
+    elif a2:
+        args[a1] = a2
+    if a3 and a1 != 'limit':
+        # allow: session-resume directory <path> 3  (ignored extra) or directory <path> limit 3? not needed
+        pass
+elif a1:
+    # bare value: treat as directory if path-like, else session_id
+    if '/' in a1 or a1.startswith('.'):
+        args['directory'] = a1
+    else:
+        args['session_id'] = a1
+# support: session-resume directory <path> <limit>
+if a1 == 'directory' and a3.isdigit():
+    args['limit'] = int(a3)
 print(call_tool('session_resume', args))
-" "$ARGS"
+PY
         ;;
     tools-search|tools_search)
         QUERY="${2:-}"
@@ -495,6 +524,13 @@ raw = (sys.argv[2] if len(sys.argv) > 2 else '').strip()
 args = json.loads(raw) if raw else {}
 print(call_tool('tools_call', {'name': sys.argv[1], 'args': args}))
 PY
+        ;;
+    time)
+        "$PY" -c '
+import datetime, json
+now = datetime.datetime.now().astimezone()
+print(json.dumps({"iso": now.isoformat(timespec="seconds"), "date": now.strftime("%Y-%m-%d"), "time": now.strftime("%H:%M:%S"), "tz": str(now.tzinfo)}, ensure_ascii=False))
+'
         ;;
     web-search)
         QUERY="${2:?Usage: jarvis-cli.sh web-search <query> [limit]}"
