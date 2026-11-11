@@ -13,14 +13,30 @@ from pathlib import Path
 import pytest
 
 
-def _repo_root() -> Path:
+# (11/11, coord-naming) Estes testes sao de INTEGRACAO: spawnam o jarvis-cli e
+# falam com os servicos locais (LLM, Qdrant, rede). O checkPhase do pacote
+# roda `pytest -m "not integration"` justamente para o que precisa de fora do
+# sandbox — e o modulo estourava no IMPORT quando o repo nao vinha junto
+# (o sandbox do nix ve so src=./jarvis, sem scripts/): o RuntimeError de
+# `_repo_root` derrubava o installCheckPhase e travava o rebuild do host de
+# TODAS as lanes (medido pelo Lontra: rebuild --host-only falhou as 13:29 e
+# as 13:30 com esse unico erro).
+pytestmark = pytest.mark.integration
+
+
+def _repo_root() -> Path | None:
     for p in Path(__file__).resolve().parents:
         if (p / "scripts" / "jarvis-cli.sh").is_file():
             return p
-    raise RuntimeError("repo root com scripts/jarvis-cli.sh não encontrado")
+    return None
 
 
 ROOT = _repo_root()
+if ROOT is None:
+    # Sem o script nao ha o que testar aqui — e um erro de IMPORT num
+    # checkout stripped derruba a fase de check inteira. Pula o modulo.
+    pytest.skip("scripts/jarvis-cli.sh fora do sandbox (installCheckPhase)",
+                allow_module_level=True)
 CLI = str(ROOT / "scripts" / "jarvis-cli.sh")
 
 
