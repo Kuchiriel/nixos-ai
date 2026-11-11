@@ -463,9 +463,21 @@ JARVIS_TOOLS = [
             },
             "required": ["action"]
         }
+    },    {
+        "name": "session_resume",
+        "description": "Recover previous opencode session state/summaries from the indexed sessions collection. Use session_id for an exact session, directory for most recent sessions in a project path, or query to find relevant past sessions. Prefer this (or rehydrate) to continue prior work without re-deriving context. Requires sessions index (scripts/index_opencode_sessions.py).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "session_id": {"type": "string", "description": "Exact opencode session id (e.g. ses_...)"},
+                "directory": {"type": "string", "description": "Project/directory path to filter recent sessions"},
+                "query": {"type": "string", "description": "Optional semantic query to find relevant sessions"},
+                "limit": {"type": "integer", "description": "Max results (default: 5)"}
+            }
+        }
     },
     {
-            "name": "rag_index",
+        "name": "rag_index",
             "description": "Index a directory into the RAG collections (code + auto-sweep of Books papers). WHEN: rag_search returned nothing for a tree you are working in, or after large file moves/renames. WHEN NOT: a one-off question about a known file (read it). Returns counts.",
         "inputSchema": {
             "type": "object",
@@ -1199,6 +1211,9 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
         if name == "jarvis_rag_search":
             return _handle_rag_search(args)
 
+        if name == "jarvis_session_resume":
+            return _handle_session_resume(args)
+
         if name == "jarvis_rag_index":
             return _handle_rag_index(args)
 
@@ -1881,6 +1896,112 @@ def _handle_rag_search(args: dict[str, Any]) -> str:
         return "\n".join(lines)
     except Exception as e:
         return f"ERROR: rag_search failed: {e}"
+
+
+def _handle_session_resume(args: dict[str, Any]) -> str:
+    """Recupera resumos de sessões (opencode) para retomada de estado."""
+    session_id = str(args.get("session_id") or "").strip()
+    directory = str(args.get("directory") or "").strip()
+    query = str(args.get("query") or "").strip()
+    try:
+        limit = max(1, int(args.get("limit", 5) or 5))
+    except Exception:
+        limit = 5
+    try:
+        import os
+        from jarvis.core.config import Config
+        from jarvis.providers.vector_store import QdrantStore, VectorStoreError
+        cfg = Config()
+        coll = getattr(cfg, "qdrant_collection_sessions", None) or os.environ.get(
+            "JARVIS_QDRANT_COLLECTION_SESSIONS", "sessions"
+        )
+        store = QdrantStore(cfg)
+
+        def fmt(pl: dict[str, Any], score: float | None = None) -> str:
+            sid = pl.get("session_id", "?")
+            title = pl.get("title") or "(sem título)"
+            d = pl.get("directory") or ""
+            upd = pl.get("updated_iso") or pl.get("time_updated") or ""
+            msgs = pl.get("msg_count") or 0
+            body = str(pl.get("text") or "")[:1200]
+            head = f"[{score:.2f}] " if score is not None else ""
+            return f"{head}session:{sid}\n  title: {title}\n  directory: {d}\n  updated: {upd} | messages: {msgs}\n{body}\n"
+
+        # exact session lookup
+        if session_id:
+            try:
+                res = store._request("POST", f"/collections/{coll}/points/scroll", json={
+                    "limit": 1,
+                    "with_payload": True,
+                    "with_vector": False,
+                    "filter": {"must": [{"key": "session_id", "match": {"value": session_id}}]},
+                })
+            except VectorStoreError as e:
+                if "404" in str(e):
+                    return f"Collection '{coll}' does not exist yet. Run: nix develop -c python3 scripts/index_opencode_sessions.py"
+                raise
+            pts = (res.get("result") or {}).get("points") or []
+            if not pts:
+                return f"No session found for session_id={session_id}"
+            return fmt((pts[0].get("payload") or {}))
+
+        # semantic search when query provided
+        if query:
+            qargs = {"query": query, "collection": "sessions", "limit": max(limit, 8)}
+            # reuse rag_search formatting by calling handler is noisy; do targeted search
+            try:
+                from jarvis.core.rag import HybridSearch
+                hs = HybridSearch(config=cfg)
+                results = hs.search(query, top_k=max(limit, 8), collection=coll)
+            except VectorStoreError as e:
+                if "404" in str(e):
+                    return f"Collection '{coll}' does not exist yet. Run: nix develop -c python3 scripts/index_opencode_sessions.py"
+                raise
+            out = []
+            for r in results:
+                pl = getattr(r, "payload", {}) or {}
+                if directory and directory not in str(pl.get("directory") or ""):
+                    continue
+                out.append((float(getattr(r, "score", 0.0) or 0.0), pl))
+                if len(out) >= limit:
+                    break
+            if not out:
+                return "No matching sessions found."
+            return "\n".join(fmt(pl, sc) for sc, pl in out)
+
+        # deterministic recent sessions (optionally by directory)
+        try:
+            # small collection: scroll in batches
+            points = []
+            offset = None
+            while True:
+                body = {"limit": 256, "with_payload": True, "with_vector": False}
+                if offset is not None:
+                    body["offset"] = offset
+                res = store._request("POST", f"/collections/{coll}/points/scroll", json=body)
+                result = res.get("result") or {}
+                batch = result.get("points") or []
+                points.extend(batch)
+                offset = result.get("next_page_offset")
+                if not offset or not batch:
+                    break
+        except VectorStoreError as e:
+            if "404" in str(e):
+                return f"Collection '{coll}' does not exist yet. Run: nix develop -c python3 scripts/index_opencode_sessions.py"
+            raise
+        rows = []
+        for p in points:
+            pl = p.get("payload") or {}
+            d = str(pl.get("directory") or "")
+            if directory and directory not in d:
+                continue
+            rows.append(pl)
+        rows.sort(key=lambda pl: int(pl.get("time_updated") or 0), reverse=True)
+        if not rows:
+            return "No sessions found." + (f" (directory filter: {directory})" if directory else "")
+        return "\n".join(fmt(pl) for pl in rows[:limit])
+    except Exception as e:
+        return f"ERROR: session_resume failed: {e}"
 
 
 def _handle_rag_index(args: dict[str, Any]) -> str:
