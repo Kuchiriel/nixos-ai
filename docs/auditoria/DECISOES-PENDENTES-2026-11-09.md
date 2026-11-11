@@ -358,7 +358,19 @@ import do numpy (o sintoma 0/10 "sem-segmento"). Agora `scripts/asrd_env.py` res
 os atributos que existem, **verifica o soname** no resultado, tem fallback no store e
 reporta o que falta; e o ASRD imprime um erro JSON em vez de morrer calado.
 
-### E o caminho de acordar a voz (o que a lane de voz mediu em 10/11)
+### E a voz está caída desde ontem (10/11 17:27), e nada a levanta **Medido:** o cliente de voz morreu em **10/11 17:27:23** com
+`wave.Error: file does not start with RIFF id` (`duplex-voice.py:1825`, em
+`call_tool`, chamado de `tick_once:920`; log em `/tmp/opencode/duplex-run2.log`, linha
+17430). O arquivo era `logs/audio/172723_seg_1794342442.094.wav`, que **hoje é um RIFF
+válido** (44 012 bytes, mtime 17:27:22,094): o cliente o abriu 0,9 s depois da escrita,
+quando o cabeçalho ainda não estava lá, ou seja **uma corrida com quem escreve** (os
+vizinhos foram escritos às 17:27:01, :02, :20 e :22). O conserto é da lane de voz (um
+`wave.open` que levanta exceção não pode derrubar a voz inteira). **E o lado estrutural, que é o item (c) da folha:** o cliente de voz e o ASRD **não são
+units** (são processos avulsos), então **não existem na allowlist do `jarvis-heal`** e
+nada os levanta depois de um crash. Ou seja: a proposta de vigiar a voz com o heal só
+faz sentido **depois** de a pilha de voz virar unit (e depois de o pauseiro velho ser
+levantado, item 4b). O `whisper-server` (:8097) continua de pé ✓; o que está fora do ar
+é o cliente e o ASRD. ### E o caminho de acordar a voz (o que a lane de voz mediu em 10/11)
 
 O cliente de voz **dorme de propósito** quando fica ocioso (o log diz "dormindo: LoRA
 off, wakeword de volta, flag removida") e a entrega do turno ao daemon do wakeword é o
