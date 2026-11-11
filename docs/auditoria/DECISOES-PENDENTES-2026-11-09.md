@@ -12,7 +12,9 @@ mandam prompts **493 mil tokens acima do teto da API**. Cada reenvio queima o bu
 (coord-mcp, 25 s).
 
 **Proposta**: branch `feat/free-tier-input-cap-262144`, 5 arquivos, 71 linhas, aplica
-limpo sobre o `main` atual. Medido no branch:
+limpo sobre o `main` atual. **Rebaseado em 11/11** (o `main` andou com as mudanças de
+rede e o `headroom` do provider), com o valor novo do `main` preservado: o
+`max_input: 262144` foi reaplicado e o JSON continua válido ✓. Medido no branch:
 
 ```
 maior limit.input de sessão ..........    262.144  (era 1.028.576)
@@ -66,6 +68,9 @@ cd ~/projects/nixos-ai && git merge feat/free-tier-input-cap-262144 && ./rebuild
 Alpha, com CVE-2026-111044).
 
 **Proposta**: branch `fix/sunshine-somente-na-tailnet`, 1 arquivo, 9 linhas, aplica limpo.
+**Rebaseado em 11/11** sobre o `configuration.nix` atual (que já tem o DoH via blocky e
+o power save do wifi desligado): as portas do Sunshine saíram da lista global e foram
+para a regra do `tailscale0` ✓, sem tocar em mais nada do config.
 As portas vão para a regra do `tailscale0`, o mesmo destino do opencode serve (:4599): o
 streaming do celular continua pelo tailnet e a exposição some da LAN e da internet.
 
