@@ -961,7 +961,7 @@ const legacy = {
           if (args.model) {
             out.sugestao = suggestVector(asArg(args.model));
           }
-          return JSON.stringify(out, null, 2);
+          return vocabReminder() + JSON.stringify(out, null, 2);
         },
       },
 
