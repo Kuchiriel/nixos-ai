@@ -329,6 +329,105 @@ def notify(text: str) -> bool:
         return False
 
 
+# (10/11, sweep-2026-11) O QUE EXIGE ACAO E O QUE E INFORMATIVO.
+# Medido: o digest da noite contava tudo que estava endereçado ao agente
+# (391 itens para sweep-2026-11, 143 para a coord-naming) e listava os 5
+# últimos, que podiam ser todos status de outra lane. Quem recebia abria a
+# lista para descobrir que nada era dele. O numero era contabilidade, nao
+# fila. O sinal que faltava ja existe: o coord.pending marca `_why`
+# ("enderecado" ou "escopo sobreposto").
+#
+# A SEPARACAO E POR KIND, e nao por palavra do texto: `status` e, por
+# convencao da casa, um RELATORIO DE ESTADO (e assim que o dono le), mesmo
+# quando endereçado a voce; o evento de bloqueio explicito e o kind
+# `blocked`. Medido 10/11: uma heuristica por palavra ("esperando",
+# "preciso") classificava 347 dos 393 itens do sweep como acao, porque os
+# status longos da lane do celular citam essas palavras em algum ponto.
+# Regra por kind: 0 falsos positivos, e o que exige acao e o que foi
+# pedido ou transferido.
+
+_BLOQUEIO = ("bloque", "trava", "travado", "esperando", "aguardando",
+             "parado", "depende de", "deadlock")
+
+# (10/11) o digest da noite e entregue como msg (o transporte nao tem kind
+# proprio), mas o texto comeca com este prefixo e ele e RELATORIO do que
+# esta pendente, nao um pedido: sem reconhecer isso, cada noite acrescentava
+# um item "acionavel" e a contagem crescia sozinha.
+_DIGEST_PREFIX = "[noite]"
+
+
+def _nomeia_bloqueio(texto: str) -> bool:
+    t = str(texto or "").lower()
+    return any(k in t for k in _BLOQUEIO)
+
+
+def classify_pending(pend: list[dict[str, Any]]) -> tuple[list, list]:
+    """Separa o que exige acao do que e informativo.
+
+    EXIGE ACAO: msg/done/handoff/blocked endereçados a voce (o que foi
+    pedido, transferido ou travado para voce).
+    INFORMATIVO: o resto — status (relatorio de estado, por convencao da
+    casa), claim e o que entrou por escopo sobreposto.
+
+    Devolve (acao, informativo), preservando a ordem de chegada.
+    """
+    acao: list[dict[str, Any]] = []
+    info: list[dict[str, Any]] = []
+    for p in pend or []:
+        kind = str(p.get("kind") or "")
+        why = str(p.get("_why") or "")
+        nota = str(p.get("note") or "")
+        if (why == "endereçado"
+                and kind in ("msg", "done", "handoff", "blocked")
+                and not nota.startswith(_DIGEST_PREFIX)):
+            acao.append(p)
+        else:
+            # (10/11) o proprio digest da noite entra no bus como msg
+            # (o transporte nao tem kind proprio e mexer nele e da lane do
+            # coord), mas ele e RELATORIO, nao pedido. Sem esta regra cada
+            # noite acrescentava um item "acionavel" e a contagem crescia
+            # sozinha: medido, 324 dos 393 itens pendentes do sweep eram
+            # digests antigos.
+            info.append(p)
+    return acao, info
+
+
+# (10/11) quantos itens o digest ENTREGA (a janela). O total do historico
+# do bus entra a parte, como numero de contexto, e nao como fila.
+DIGEST_WINDOW = 5
+
+
+def digest_lines(name: str, pend: list[dict[str, Any]],
+                 window: int = DIGEST_WINDOW) -> list[str]:
+    """As linhas do digest da noite para um agente (funcao pura, testavel).
+
+    A primeira linha e a que importa: da JANELA mostrada, quantos exigem
+    ACAO do agente. O total do historico do bus vem a parte, explicito,
+    porque sem ele o numero parece fila (medido: 393 "pendentes" do sweep,
+    dos quais 5 no digest e zero acionaveis).
+    """
+    janela = list(pend or [])[-window:]
+    acao, info = classify_pending(janela)
+    cabecalho = (f"[noite] {len(janela)} item(ns) no digest para {name}: "
+                 f"{len(acao)} exige(m) acao")
+    if info:
+        cabecalho += f", {len(info)} informativo(s)"
+    if len(pend or []) > len(janela):
+        cabecalho += f" | {len(pend)} no historico do bus"
+    linhas = [cabecalho + ":"]
+    for p in acao:
+        linhas.append(
+            f"  - {p.get('kind')} de {p.get('agent')}: "
+            f"{(p.get('note') or p.get('intent') or '')[:160]}"
+        )
+    for p in info:
+        linhas.append(
+            f"  [info] {p.get('kind')} de {p.get('agent')}: "
+            f"{(p.get('note') or p.get('intent') or '')[:120]}"
+        )
+    return linhas
+
+
 def night_pass(agent: str = "", *, deliver_notes: bool = True) -> dict[str, Any]:
     """A passada da madrugada: junta o quadro, entrega as pendências e
     reporta ao dono.
@@ -344,14 +443,17 @@ def night_pass(agent: str = "", *, deliver_notes: bool = True) -> dict[str, Any]
         if not pend:
             continue
         report["pending"][name] = len(pend)
+        janela = pend[-DIGEST_WINDOW:]
+        acao, info = classify_pending(janela)
+        report.setdefault("pending_digest", {})[name] = len(janela)
+        report.setdefault("pending_acao", {})[name] = len(acao)
+        report.setdefault("pending_informativo", {})[name] = len(info)
         if not deliver_notes:
             continue
-        linhas = [f"[noite] {len(pend)} item(ns) pendentes no bus para {name}:"]
-        for p in pend[-5:]:
-            linhas.append(
-                f"  - {p.get('kind')} de {p.get('agent')}: "
-                f"{(p.get('note') or p.get('intent') or '')[:160]}"
-            )
+        # (10/11) a linha que importa primeiro: quantos exigem acao. O
+        # resto vira uma linha de informativo, e a lista mostra os
+        # acionaveis (os que o leitor tem de abrir) antes dos outros.
+        linhas = digest_lines(name, pend)
         ok, detail = deliver(name, "\n".join(linhas))
         if ok:
             report["delivered"].append(name)
