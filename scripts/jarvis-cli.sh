@@ -28,8 +28,8 @@
 #   hackmd-list                      — List HackMD notes
 #   hackmd-read <id>                 — Read HackMD note
 #   hackmd-write <title> <content>   — Write HackMD note
-#   tools                            — List every MCP tool + CLI native/coverage
-#   tools-search <query>             — Meta-tool discovery by intent (embedding-ranked, low-token)
+#   tools [--json]                   — List every MCP tool + CLI native/coverage (JSON for machine use)
+#   tools-search <query> [--json]    — Meta-tool discovery by intent (embedding-ranked, low-token)
 #   tools-call <name> [json]         — Call any tool via meta-tool router
 #   tool <name> [json]               — Call any MCP tool directly by name
 #   time                             — Current local time (ISO/date/time/tz)
@@ -287,6 +287,44 @@ PY
         echo "Wakeword: ${_wake:-inactive}"
         echo "Waybar: $(pgrep -c waybar 2>/dev/null || echo '0') processes"
         echo "Status: $(cat /tmp/jarvis-status.json 2>/dev/null || echo '{}')"
+        # Session continuity pipeline (index + consolidation) — freshness for rehydrate/session_resume.
+        "$PY" - <<'PY'
+import json, os, time
+def load(p):
+    try:
+        with open(p, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return None
+now = int(time.time())
+idx_s = os.path.expanduser('~/.local/state/jarvis/sessions-index-state.json')
+con_s = os.path.expanduser('~/.local/state/jarvis/sessions-consolidation-state.json')
+idx = load(idx_s) or {}
+con = load(con_s) or {}
+def age_from_mtime(path):
+    try:
+        return max(0, now - int(os.path.getmtime(path)))
+    except Exception:
+        return None
+def fmt_age(sec):
+    if sec is None: return 'n/a'
+    if sec < 120: return f'{sec}s'
+    if sec < 7200: return f'{sec//60}m'
+    return f'{sec//3600}h'
+con_map = con.get('sessions') if isinstance(con.get('sessions'), dict) else (con.get('stored') if isinstance(con.get('stored'), dict) else {})
+con_count = len(con_map) if isinstance(con_map, dict) else (con.get('count', 'n/a'))
+con_last = con.get('last_time_updated')
+if con_last in (None, '', 'n/a') and isinstance(con_map, dict) and con_map:
+    try:
+        con_last = max(v for v in con_map.values() if isinstance(v, (int, float)))
+    except Exception:
+        con_last = 'n/a'
+print('Sessions index: last_time_updated=%s state_age=%s last_run_indexed=%s errors=%s' % (
+    idx.get('last_time_updated', 'n/a'), fmt_age(age_from_mtime(idx_s)),
+    idx.get('last_run_indexed', 'n/a'), idx.get('last_run_errors', 'n/a')))
+print('Sessions consolidation: last_time_updated=%s state_age=%s sessions=%s' % (
+    con_last if con_last is not None else 'n/a', fmt_age(age_from_mtime(con_s)), con_count))
+PY
         ;;
     health|diagnose)
         "$PY" -c "
@@ -416,10 +454,13 @@ from jarvis.cli.main import main; main()
         # 03/11: cobertura CLI x MCP. O MCP expoe 46 tools; a CLI so tinha
         # ~24 atalhos. Esta lista mostra o que falta ("tool" cobre tudo).
         # (06/11) o path entra por argv: nomes com apóstrofo quebravam o -c.
-        "$PY" - "$0" <<'PY'
+        AS_JSON="${2:-}"
+        "$PY" - "$0" "$AS_JSON" <<'PY'
+import json
 import re
 import sys
 from jarvis.mcp_server import JARVIS_TOOLS
+as_json = (len(sys.argv) > 2 and sys.argv[2] == '--json')
 native = set()
 for line in open(sys.argv[1]):
     m = re.match(r'^    ([a-z0-9_|-]+)\)\s*$', line)
@@ -449,11 +490,19 @@ for t in JARVIS_TOOLS:
     n = t['name']
     cli = aliases.get(n, n)
     (covered if cli in native else missing).append(n)
-print('MCP tools: %d | CLI native: %d | so via tool: %d' % (len(JARVIS_TOOLS), len(covered), len(missing)))
-print('--- CLI native ---')
-print(' '.join(sorted(covered)))
-print('--- only via tool ---')
-print(' '.join(sorted(missing)))
+if as_json:
+    print(json.dumps({
+        'mcp_tools': len(JARVIS_TOOLS),
+        'cli_native': sorted(covered),
+        'only_via_tool': sorted(missing),
+        'counts': {'cli_native': len(covered), 'only_via_tool': len(missing)},
+    }, ensure_ascii=False))
+else:
+    print('MCP tools: %d | CLI native: %d | so via tool: %d' % (len(JARVIS_TOOLS), len(covered), len(missing)))
+    print('--- CLI native ---')
+    print(' '.join(sorted(covered)))
+    print('--- only via tool ---')
+    print(' '.join(sorted(missing)))
 PY
         ;;
     rehydrate)
@@ -509,10 +558,57 @@ PY
         ;;
     tools-search|tools_search)
         QUERY="${2:-}"
-        "$PY" - "$QUERY" <<'PY'
-import sys
-from jarvis.mcp_server import call_tool
-print(call_tool('tools_search', {'query': sys.argv[1]}))
+        AS_JSON="${3:-}"
+        "$PY" - "$QUERY" "$AS_JSON" <<'PY'
+import json, sys
+q = sys.argv[1] if len(sys.argv) > 1 else ''
+as_json = (len(sys.argv) > 2 and sys.argv[2] == '--json') or q == '--json'
+if q == '--json':
+    q = ''
+if as_json:
+    try:
+        import numpy as np
+        from jarvis.mcp_server import JARVIS_TOOLS, _CORE_TOOL_NAMES, _tool_vectors, _embed_batch
+        low = (q or '').strip().lower()
+        if not q or low in ('all', 'tudo', 'todos'):
+            rows = []
+            for t in JARVIS_TOOLS:
+                rows.append({
+                    'name': t.get('name',''),
+                    'core': t.get('name','') in _CORE_TOOL_NAMES,
+                    'description': (t.get('description') or '').replace('\n',' '),
+                })
+            print(json.dumps({'query': q, 'mode': 'all', 'results': rows}, ensure_ascii=False))
+        else:
+            qv = _embed_batch([q])[0]
+            vecs = _tool_vectors()
+            qn = float(np.linalg.norm(qv)) or 1.0
+            scored = []
+            for t in JARVIS_TOOLS:
+                v = vecs.get(t.get('name',''))
+                if v is None:
+                    continue
+                vn = float(np.linalg.norm(v)) or 1.0
+                sim = float(np.dot(qv, v)) / (qn * vn)
+                if low in t.get('name','').lower():
+                    sim = min(1.0, sim + 0.15)
+                scored.append((sim, t))
+            scored.sort(key=lambda x: -x[0])
+            rows = []
+            for sim, t in scored[:8]:
+                rows.append({
+                    'name': t.get('name',''),
+                    'score': round(sim, 4),
+                    'core': t.get('name','') in _CORE_TOOL_NAMES,
+                    'description': (t.get('description') or '').replace('\n',' '),
+                })
+            print(json.dumps({'query': q, 'mode': 'embedding', 'results': rows}, ensure_ascii=False))
+    except Exception as e:
+        from jarvis.mcp_server import call_tool
+        print(json.dumps({'query': q, 'mode': 'fallback', 'text': call_tool('tools_search', {'query': q}), 'error': str(e)}, ensure_ascii=False))
+else:
+    from jarvis.mcp_server import call_tool
+    print(call_tool('tools_search', {'query': q}))
 PY
         ;;
     tools-call|tools_call)
