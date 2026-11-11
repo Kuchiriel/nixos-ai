@@ -311,10 +311,21 @@ def build_server():
             except Exception as exc:
                 return f"erro: {str(exc)[:60]}"
 
+        embed_health_url = "http://127.0.0.1:8081/health"
+        try:
+            from urllib.parse import urlparse
+            from jarvis.core.config import Config
+            eu = (Config().embed_base_url or "").strip()
+            if eu:
+                p = urlparse(eu)
+                if p.scheme and p.netloc:
+                    embed_health_url = f"{p.scheme}://{p.netloc}/health"
+        except Exception:
+            pass
         out["router_8080"] = porta_aberta(8080)
         out["mtp_8092"] = porta_aberta(8092)
         out["qdrant_6333"] = porta_aberta(6333)
-        out["embeddings_8081"] = http_ok("http://127.0.0.1:8081/health")
+        out["embeddings_8081"] = http_ok(embed_health_url)
         out["reranker_8082"] = porta_aberta(8082)
         try:
             mi = {}
