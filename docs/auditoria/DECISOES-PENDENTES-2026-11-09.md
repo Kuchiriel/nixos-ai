@@ -288,6 +288,20 @@ que é o que faz o daemon acordar no ponto certo. E o objeto do item (c) muda:
 não vigiar o daemon do wakeword (que não existe por decisão), e sim o
 **address gate do duplex**, que é o que efetivamente acorda a voz.
 
+**E o "restarts=0" do heal NÃO é defeito do heal — é um PAUSEIRO VELHO (10/11,
+sweep-2026-11 + medido aqui):** existe `~/.local/state/jarvis/PAUSED`, escrito
+em **08/11 21:56** com o texto *"manual:dono pediu llama-server desligado
+(08/11)"*, e enquanto esse arquivo existir **o heal e o nightwatch não agem
+nada** (`nightwatch/pause.py:is_paused()`, consultado pelo heal em
+`core/heal.py:331` e pelo harness em `nightwatch/harness.py:2196`). O pauseiro
+está **velho**: o llama-server (prism) está de pé desde **10/11 04:01**. ⇒
+**o self-heal da casa está desligado há dois dias** e o "overall=degraded
+restarts=0" que eu medi é a casa **pausada**, não o heal quebrado. **Levantar
+o pauseiro é decisão do dono** (`rm ~/.local/state/jarvis/PAUSED`) e é
+**pré-requisito** de qualquer proposta de vigiar a voz com o heal. (E
+continua valendo o outro achado, que é do heal e não do pauseiro: ele não
+vigia o cliente de voz — nenhuma referência a `duplex-voice` em `core/heal.py`.)
+
 **O ÚLTIMO caso que sobra é uma RISADA — e a decisão é de produto (10/11,
 coord-naming):** a remediação com o código de hoje (80 clipes: cru 66, casa
 **1**) deixou só **"Hahahaha"**. A regra de repetição com separador (a que
