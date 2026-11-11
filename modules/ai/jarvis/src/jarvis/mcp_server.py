@@ -734,15 +734,15 @@ def _tools_embed_url() -> str:
     try:
         from jarvis.core.config import Config
         base = (Config().embed_base_url or "").rstrip("/")
-        if base:
-            if base.endswith("/embeddings") or base.endswith("/embedding"):
-                return base
-            if base.endswith("/v1"):
-                return f"{base}/embeddings"
-            return f"{base}/v1/embeddings"
     except Exception:
-        pass
-    return "http://127.0.0.1:8081/v1/embeddings"
+        base = ""
+    if not base:
+        base = "http://127.0.0.1:8081/v1"
+    if base.endswith("/embeddings") or base.endswith("/embedding"):
+        return base
+    if base.endswith("/v1"):
+        return f"{base}/embeddings"
+    return f"{base}/v1/embeddings"
 
 
 _TOOLS_EMBED_URL = _tools_embed_url()
