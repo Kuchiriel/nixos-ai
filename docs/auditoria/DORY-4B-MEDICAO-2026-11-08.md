@@ -23,12 +23,14 @@ Nota de pesquisa (papers, leitura do card, contra-ponto da literatura):
 
 Config: `-ngl 999 -t 6 -b 512 -ub 512 --cache-type-k/v f16 --flash-attn off
 --no-context-shift --jinja --reasoning on`, 20480 de contexto (o mesmo do 4B-MTP).
+Os runs de loop=2 que mediram usaram ubatch 128 (o tag de cada run esta no
+`/tmp/opencode/dory-bench-l2c20480.jsonl`).
 
 | modelo/config | decode t/s | prefill t/s | TTFT (1 tok ctx) | 1o tok c/ 512 tok | VRAM |
 |---|---|---|---|---|---|
 | **Dory loop=1** (`per_loop`, c20480) | **17,9–22,8** | 29–97 | **574–970 ms** | 1787–2285 ms | 4,5 GB (sozinho) |
 | **Dory loop=4** (`per_loop`, c4096) | **7,8–9,9** | 9–27 | **1846–2941 ms** | 4426–4896 ms | — |
-| Dory loop=2 (`per_loop`, c20480) | — | — | — | — | **NÃO CABE**: `failed to allocate CUDA0 buffer of size 768612352` (733 MiB): OOM de VRAM |
+| **Dory loop=2** (`per_loop`, c20480, ubatch 128) | **10,8–12,0** | 13,6–50,1 | **1214–3045 ms** | 3133–4476 ms | coube; a 1a tentativa (ub 512) estourou `failed to allocate CUDA0 buffer of size 768612352` (733 MiB) |
 | 4B-MTP produção (`:8092`, MTP draft) | **105,7–105,9** | 143–354 | **178–203 ms** | 688–740 ms | 5139 MiB |
 | 4B receita do vídeo (fit512, KV q8_0, sem MTP) | 54,3 | 205–562 | 153–175 ms | 537–566 ms | 4557 MiB |
 
@@ -61,10 +63,11 @@ Leitura (o que os números dizem, não o que a gente queria):
    mais latência**, exatamente ao contrário do que a voz quer.
 2. **É ~6× mais lento que o nosso 4B-MTP** em decode (17,9–22,8 vs 105,9 t/s) e 3–5×
    pior em TTFT. O MTP (draft) do 4B é o que faz a diferença; o Dory não tem draft.
-3. **O loop custa VRAM**: com `per_loop`, loop=2 a 20k de contexto já estoura a placa
-   (`failed to allocate CUDA0 buffer of size 768612352`, 733 MiB). Com **`last_loop`**
-   (um cache de KV por camada) **cabe** a 20k ✓ — o "memory-efficient looping" do card
-   é real e verificado aqui.
+3. **O loop custa VRAM**: com `per_loop`, loop=2 a 20k estourou a placa na 1a tentativa
+   (`failed to allocate CUDA0 buffer of size 768612352`, 733 MiB); os runs que mediram
+   (10,8-12,0 t/s, TTFT 1214-3045 ms) usaram ubatch 128. Com **`last_loop`** (um cache de
+   KV por camada) **cabe** a 20k ✓ — o "memory-efficient looping" do card é real e
+   verificado aqui.
 4. **English-only** (o card): o JARVIS fala pt-BR: para voz/duplex está fora de
    questão mesmo se a latência coubesse.
 5. **A literatura não sustenta "vence 27B"** (ver a nota de papers): a regra do campo é
