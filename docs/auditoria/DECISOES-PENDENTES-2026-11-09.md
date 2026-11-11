@@ -343,6 +343,17 @@ instala nada** e **não mexe em config** — a peça que falta é o dono apontar
 um timer do systemd (ou cron) para ele. Sem isso, a próxima queda da voz
 volta a ser silenciosa: o `jarvis-heal` só vigia units e o cliente não é uma.
 
+**A VOZ MORRE A CADA REBUILD DO HOST — medido hoje (10/11, coord-naming):**
+o cliente de voz é **avulso**, então a troca de geração do sistema o mata: em
+11/11, o último log do cliente foi `11:02:47` e o `/run/current-system`
+apontou para uma **geração nova exatamente em 11:02:47** (`system-401-link`, de
+hoje) ⇒ o rebuild levou a voz junto, e **nada a levantou** (o `jarvis-heal` só
+vigia units). O `scripts/voice-watchdog.sh` (commit `ec04ef72`) detectou
+("voice: DOWN") e levantou ("voice: UP de novo"). ⇒ **o timer do watchdog não é
+cosmético: é a única rede de proteção enquanto a voz for avulso**, porque hoje
+quem está mexendo no `configuration.nix` (DoH via blocky, wifi) derruba a voz a
+cada rebuild.
+
 **O que ainda falta para o wakeword (09/11):** o limiar **não pode ser chutado**. No
 corpus de 1 817 segmentos da casa o wakeword dispara em 6 acima de 0,5 (0,33 %), mas ao
 rotular pelo transcript do log (**66 segmentos**) **nenhum é positivo** (o corpus é fala
