@@ -19,6 +19,8 @@
 #   remember <fact>                  — Store episodic memory
 #   recall <query>                   — Recall memories
 #   lessons <query>                  — Recall lessons from past errors
+#   rehydrate <json>                 — Rehydrate session context (guards, queue, handoff, memories, lessons, RAG, sessions, roster)
+#   session-resume <json>            — Resume prior opencode session by session_id/directory/query
 #   vault-list                       — List vault notes
 #   vault-write <title> <content>    — Write to vault
 #   rag-search <query>               — Semantic code search
@@ -27,6 +29,8 @@
 #   hackmd-read <id>                 — Read HackMD note
 #   hackmd-write <title> <content>   — Write HackMD note
 #   tools                            — List every MCP tool + CLI coverage gap
+#   tools-search <query>             — Meta-tool discovery: find tools by intent (low-token, MCP parity)
+#   tools-call <name> <json>         — Meta-tool call: invoke any tool via tools_call router
 #   tool <name> <json>               — Call any MCP tool by name (JSON args)
 #   bench-stt <wav> [wav...]         — ASR_BENCH: measure STT (VAD on/off, RTF)
 #   status                           — Show JARVIS status
@@ -417,9 +421,10 @@ import sys
 from jarvis.mcp_server import JARVIS_TOOLS
 native = set()
 for line in open(sys.argv[1]):
-    m = re.match(r'^    ([a-z0-9][a-z0-9-]*)\)$', line)
+    m = re.match(r'^    ([a-z0-9_|-]+)\)\s*$', line)
     if m:
-        native.add(m.group(1))
+        for alt in m.group(1).split('|'):
+            native.add(alt.replace('_', '-'))
 aliases = {
     'read_file': 'read', 'write_file': 'write', 'str_replace': 'replace',
     'execute': 'shell', 'nix_eval': 'nix-eval', 'nix_check': 'nix-check',
@@ -435,6 +440,8 @@ aliases = {
     'observe_screen': 'observe',
     'capture_screen': 'screen', 'make_scenarios': 'make-scenarios',
     'web_search': 'web-search',
+    'session_resume': 'session-resume',
+    'tools_search': 'tools-search', 'tools_call': 'tools-call',
 }
 covered, missing = [], []
 for t in JARVIS_TOOLS:
@@ -459,6 +466,35 @@ raw = sys.argv[1].strip() if len(sys.argv) > 1 else ''
 args = json.loads(raw) if raw else {}
 print(call_tool('rehydrate', args))
 " "$ARGS"
+        ;;
+    session-resume|session_resume)
+        ARGS="${2:-}"
+        "$PY" -c "
+import json, sys
+from jarvis.mcp_server import call_tool
+raw = sys.argv[1].strip() if len(sys.argv) > 1 else ''
+args = json.loads(raw) if raw else {}
+print(call_tool('session_resume', args))
+" "$ARGS"
+        ;;
+    tools-search|tools_search)
+        QUERY="${2:-}"
+        "$PY" - "$QUERY" <<'PY'
+import sys
+from jarvis.mcp_server import call_tool
+print(call_tool('tools_search', {'query': sys.argv[1]}))
+PY
+        ;;
+    tools-call|tools_call)
+        NAME="${2:?Usage: jarvis-cli.sh tools-call <name> <json-args>}"
+        ARGS="${3:-}"
+        "$PY" - "$NAME" "$ARGS" <<'PY'
+import json, sys
+from jarvis.mcp_server import call_tool
+raw = (sys.argv[2] if len(sys.argv) > 2 else '').strip()
+args = json.loads(raw) if raw else {}
+print(call_tool('tools_call', {'name': sys.argv[1], 'args': args}))
+PY
         ;;
     web-search)
         QUERY="${2:?Usage: jarvis-cli.sh web-search <query> [limit]}"

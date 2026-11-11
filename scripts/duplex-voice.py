@@ -100,21 +100,11 @@ SYSTEM_PT = (
     "de turno, voz PT-BR). Se perguntarem qual modelo você é, responda "
     "exatamente isso. NUNCA invente benchmark, shootout ou nome de modelo.\n\n"
     "=== META-TOOL: do(action, input) — chame UMA tool por vez ===\n"
-    "  do(action='get_time',   input='')             → hora\n"
-    "  do(action='remember',   input='fato')         → guarda memória\n"
-    "  do(action='recall',     input='busca')        → memória do dono\n"
-    "  do(action='web_search', input='busca')        → internet\n"
-    "  do(action='rag_search', input='busca')        → papers/código/livros\n"
-    "  do(action='offline_search', input='busca')    → corpus offline "
-    "(água/veneno/emergência, sem internet)\n"
-    "  do(action='status',     input='')             → saúde do sistema\n"
-    "  do(action='voices',     input='')             → vozes na sala\n"
-    "  do(action='tool',       input='<tool> {json}') → qualquer tool do harness\n"
-    "  do(action='jarvis',     input='<comando>')    → CLI do JARVIS "
-    "(status, doctor, speak, benchmark, recall, rag-search, vault...)\n"
-    "  do(action='shell',      input='<comando>')    → terminal (com gates)\n"
-    "  do(action='enroll',     input='nome')         → matricula a voz\n"
-    "  do(action='guest',      input='')             → sem filtro de voz\n"
+    "  get_time('') hora | remember('fato') | recall('busca') memória\n"
+    "  web_search('busca') | rag_search('busca') | offline_search('busca' sem internet)\n"
+    "  status('') | rehydrate('tarefa') contexto completo | session_resume('id|dir|query')\n"
+    "  voices('') | tool('<tool> {json}') qualquer tool | jarvis('<cmd>') CLI (tools, rehydrate, session-resume, rag-search, recall...)\n"
+    "  shell('<cmd>') | enroll('nome') | guest('')\n"
     "ROTAS: 'qual meu nome?' → recall | 'quanto tá o dólar?' → web_search\n"
     "  'o que diz o paper X?' → rag_search | 'como está o sistema?' → status\n"
     "NUNCA escreva comandos de terminal no texto — SEMPRE chame do(...).\n"
@@ -1805,6 +1795,21 @@ def call_tool(name, args):
             return call_tool("rag_search", {"query": inp})
         if "status" in action or "sistema" in action:
             return call_tool("status", {})
+        if "rehydrat" in action or action == "resume_context":
+            return _jarvis_cli(["rehydrate", json.dumps({"task": inp or "continuar trabalho"})], timeout=30)
+        if "session_resume" in action or "session-resume" in action or action in ("resume_session", "sessao", "sessão"):
+            # input: session_id, directory path, or free-text query
+            args_sr = {}
+            if inp:
+                if inp.startswith("ses_"):
+                    args_sr["session_id"] = inp.split()[0]
+                elif "/" in inp or inp.startswith("~"):
+                    args_sr["directory"] = os.path.expanduser(inp.split()[0])
+                else:
+                    args_sr["query"] = inp
+            else:
+                args_sr["directory"] = os.getcwd()
+            return _jarvis_cli(["session-resume", json.dumps(args_sr, ensure_ascii=False)], timeout=30)
         # (06/11) HARNESS DE VERDADE no meta-tool: notificação de desktop,
         # leitura de arquivo, listagem e busca semântica no código —
         # capacidade vem do harness, não do modelo.

@@ -131,3 +131,13 @@ do host caiu"** ⇒ **falso alarme** ✓ (o RAG estava de pé ✓).
 Agora reporta o **host inteiro** ✓: `router_8080` ✓ · `mtp_8092` ✓ ·
 `qdrant_6333` ✓ · `embeddings_8081` ✓ · `reranker_8082` ✓ · RAM ✓ · disco ✓ ·
 loadavg ✓ · e o veredito `rag_ok` ✓ (**true** ✓ no momento ✓).
+
+## 7. Research and application (2026-11-11)
+
+- **Tool Search / deferred loading** (Anthropic advanced tool use, 2025-11; Meta dev docs): load a small fixed tool surface + discover schemas on demand. Reported ~85% token reduction (77K -> ~8.7K) when definitions are large; preserves prompt/cache prefix by appending loaded tools. Applied here: MCP meta-tools `tools_search`/`tools_call` (embedding-ranked, core exposed + extended reachable) and jarvis-cli `tools-search`/`tools-call`/`tool` as the universal entry point.
+- **Embedding-ranked discovery, small K** (arXiv:2605.24660, Meta): substring/BM25 scorers expand without stopping (bad); embedding similarity gives K~1.4 with ~96% coverage vs fixed top-5. Status: MCP `tools_search` already embedding-ranked (top-K, core+extended); keep queries intent-shaped and prefer discovery over loading full catalogs.
+- **Cache-stable routing / dual-path** (arXiv:2608.22708 CacheRouter): keep the main model's visible tool prefix fixed and route discovery/execution through a separate channel to avoid cache invalidation and prompt growth. Applied pattern: duplex cascade keeps a compact fixed `do(action,input)` meta-tool + `jarvis`/`tool` passthrough to jarvis-cli/MCP (single entry point) instead of injecting all tool schemas into the voice prompt.
+- **Low-latency function calling** (arXiv:2603.00030 SimpleTool): structured outputs have redundancy/weak arg dependencies; parallel/special-token decoding can cut latency (reported 3-6x). Relevant to duplex/voice: keep tool schema tiny, prefer one tool per turn, deterministic routing, and avoid prefill bloat.
+- **Caching/routing under load** (arXiv:2601.15335 ToolCaching; arXiv:2605.14241 latency-quality routing): cacheable/repeated tool results and latency-quality-aware provider routing reduce latency/cost; duplex already does speculative/cache patterns for some waits (see `SPEC_CACHE`) — extend carefully with correctness guards.
+
+Practical rule for duplex cascade and low-latency harnesses: fixed minimal tool surface + on-demand discovery (`tools-search`) + generic dispatch (`tool`/`jarvis`) + deterministic handlers for hot paths (time/rehydrate/session_resume/recall/rag/status). jarvis-cli is the MCP-parity single entry point when MCP is unavailable.
