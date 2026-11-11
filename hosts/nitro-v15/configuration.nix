@@ -29,11 +29,11 @@
   services.jarvis-notify.enable = false;
   services.jarvis-focus.enable = false;
 
-services.avahi = {
-  enable = true;
-  nssmdns4 = true;
-  openFirewall = true;
-};
+  services.avahi = {
+    enable = true;
+    nssmdns4 = true;
+    openFirewall = true;
+  };
 
   programs.steam = {
     enable = true;
@@ -80,7 +80,7 @@ services.avahi = {
     # Sunshine (streaming) — módulo NixOS não existe; pacote + config manual
     sunshine
     discord
-    file-roller 
+    file-roller
     gvfs
     # Utilitários do sistema
     pciutils
@@ -120,6 +120,11 @@ services.avahi = {
   # via package pkgs.mullvad-vpn (CLI+GUI). Não conflita com Proton/Tailscale
   # (interfaces dedicadas). `enableEarlyBootBlocking` fica de fora (conflito
   # com a config de rede não-Mullvad, e o dono não pediu lockdown pré-boot).
+  # (11/11, FIX REBUILD) O módulo do Mullvad define
+  # networking.firewall.checkReversePath = "loose" SEM mkDefault, o que colidia
+  # com o `false` exigido pelo Proton VPN (seção 5): erro "conflicting
+  # definition values" e rebuild abortado. Resolvido com lib.mkForce false lá
+  # embaixo (false é superset de "loose": Mullvad, Proton e Tailscale seguem OK).
   services.mullvad-vpn = {
     enable = true;
     package = pkgs.mullvad-vpn;
@@ -199,7 +204,7 @@ services.avahi = {
     nvidiaBusId = "PCI:1:0:0"; # Validar via lspci na máquina física
   };
 
-  boot.kernelParams = [ 
+  boot.kernelParams = [
     "nvidia-drm.modeset=1"
     "quiet"
     "loglevel=3"
@@ -336,7 +341,60 @@ services.avahi = {
   boot.extraModprobeConfig = "options mt7921e disable_aspm=1";
   time.timeZone = lib.mkForce "America/Sao_Paulo";
   i18n.defaultLocale = "pt_BR.UTF-8";
-  networking.nameservers = ["8.8.8.8" "1.1.1.1"];
+  # DNS (11/11, dono: 9.9.9.9 primario, 1.1.1.1 secundario, resto livre).
+  # Medido nesta rede: Quad9 17-18 ms, Cloudflare 20 ms, Google 27-34 ms, e o
+  # 192.168.1.1 do roteador da TIMEOUT em DNS (era o 1o do resolv.conf e cada
+  # nome pagava 3 timeouts de 5 s: getent github.com levava 15,1 s).
+  # dns = "none": o NetworkManager para de reescrever o resolv.conf, entao a
+  # lista abaixo e a unica fonte (o DNS do DHCP/roteador nao entra mais).
+  # Cascata: 127.0.0.1/::1 = blocky (DoH) e 9.9.9.9/1.1.1.1/8.8.8.8 = fallback
+  # em texto claro so se o proxy local morrer. glibc usa os 3 primeiros.
+  networking.networkmanager.dns = "none";
+  networking.nameservers = ["127.0.0.1" "::1" "9.9.9.9" "1.1.1.1" "8.8.8.8"];
+
+  # DNS over HTTPS (11/11, dono pediu): toda consulta sai por HTTPS na 443,
+  # tanto IPv4 quanto IPv6. O blocky escuta so no loopback (sem resolver
+  # aberto) e usa parallel_best entre Quad9/Cloudflare/Google: manda para 2 e
+  # fica com a resposta mais rapida, entao um provedor fora do ar nao derruba
+  # a resolucao. bootstrapDns mapeia os hostnames DoH para IPs estaticos: nao
+  # existe consulta em texto claro nem na inicializacao.
+  services.blocky = {
+    enable = true;
+    settings = {
+      ports.dns = ["127.0.0.1:53" "[::1]:53"];
+      connectIPVersion = "dual";
+      upstreams = {
+        init.strategy = "fast";
+        strategy = "parallel_best";
+        timeout = "3s";
+        groups.default = [
+          "https://dns.quad9.net/dns-query"
+          "https://cloudflare-dns.com/dns-query"
+          "https://dns.google/dns-query"
+        ];
+      };
+      bootstrapDns = [
+        {
+          upstream = "https://dns.quad9.net/dns-query";
+          ips = ["9.9.9.9" "149.112.112.112" "2620:fe::fe" "2620:fe::9"];
+        }
+        {
+          upstream = "https://cloudflare-dns.com/dns-query";
+          ips = ["1.1.1.1" "1.0.0.1" "2606:4700:4700::1111" "2606:4700:4700::1001"];
+        }
+        {
+          upstream = "https://dns.google/dns-query";
+          ips = ["8.8.8.8" "8.8.4.4" "2001:4860:4860::8888" "2001:4860:4860::8844"];
+        }
+      ];
+      caching = {
+        maxTime = "1h";
+        prefetching = true;
+      };
+      queryLog.type = "none";
+      log.level = "info";
+    };
+  };
   networking.firewall.allowedTCPPorts = [22 8080 8081 4000 5353 8099 47984 47989 47990 48010 9090]; # 8099 = karaok cast (letra+som p/ TV); 47984-48010 = Sunshine/Moonlight
   networking.firewall.allowedUDPPorts = [47998 47999 48000 48002 48010]; # Sunshine/Moonlight stream
 
@@ -344,7 +402,11 @@ services.avahi = {
   # pelo Proton VPN no NixOS (sem isso o routing falha). ATENÇÃO: Tailscale
   # também usa WireGuard — sem conflito (interfaces separadas), mas as duas
   # VPNs podem competir por rotas se ambas ativas.
-  networking.firewall.checkReversePath = false;
+  # (11/11, FIX REBUILD) mkForce: o módulo services.mullvad-vpn (08/11) define
+  # "loose" sem prioridade, o que gera conflito de definições. Tailscale usa
+  # mkDefault (não conflita). Com mkForce o valor efetivo continua `false`,
+  # como o Proton exige.
+  networking.firewall.checkReversePath = lib.mkForce false;
 
   # opencode serve — controle da AGENTE pelo celular, sem TTY (2026-10-02,
   # pedido do dono). Aberta SÓ no tailscale0, nunca na LAN: o tailnet já é
