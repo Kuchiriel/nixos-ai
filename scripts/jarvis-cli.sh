@@ -631,33 +631,37 @@ print(call_tool('web_search', {'query': sys.argv[1], 'limit': int(sys.argv[2])})
         "$PY" - "$P2" "$P3" "$P4" <<'PY'
 import json, sys
 from jarvis.mcp_server import call_tool
-p2 = (sys.argv[1] if len(sys.argv) > 1 else '').strip()
-p3 = (sys.argv[2] if len(sys.argv) > 2 else '').strip()
-p4 = (sys.argv[3] if len(sys.argv) > 3 else '').strip()
-as_json = False
-if p2 == '--json':
-    as_json = True
-    name = p3
-    raw = p4
-elif p3 == '--json':
-    as_json = True
-    name = p2
-    raw = p4
-else:
-    name = p2
-    raw = p3
+vals = [(sys.argv[i] if len(sys.argv) > i else '').strip() for i in range(1, 4)]
+as_json = '--json' in vals
+vals = [v for v in vals if v != '--json']
+name = vals[0] if len(vals) > 0 else ''
+raw = vals[1] if len(vals) > 1 else ''
 if not name:
     raise SystemExit('Usage: jarvis-cli.sh tool [--json] <name> <json-args>')
-args = json.loads(raw) if raw else {}
-out = call_tool(name, args)
-if as_json:
+if raw:
     try:
-        parsed = json.loads(out) if isinstance(out, str) else out
-        print(json.dumps({'tool': name, 'ok': True, 'result': parsed}, ensure_ascii=False))
+        args = json.loads(raw)
     except Exception:
-        print(json.dumps({'tool': name, 'ok': True, 'text': out}, ensure_ascii=False))
+        if name == 'tools_search':
+            args = {'query': raw}
+        else:
+            raise SystemExit(f'erro: args de {name} devem ser JSON: {raw[:120]}')
 else:
-    print(out)
+    args = {}
+if as_json and name == 'tools_search':
+    from jarvis.mcp_server import _meta_search_results
+    q = (args.get('query', '') if isinstance(args, dict) else '') or ''
+    print(json.dumps(_meta_search_results(q, 8), ensure_ascii=False))
+else:
+    out = call_tool(name, args)
+    if as_json:
+        try:
+            parsed = json.loads(out) if isinstance(out, str) else out
+            print(json.dumps({'tool': name, 'ok': True, 'result': parsed}, ensure_ascii=False))
+        except Exception:
+            print(json.dumps({'tool': name, 'ok': True, 'text': out}, ensure_ascii=False))
+    else:
+        print(out)
 PY
         ;;
     bench-stt)
