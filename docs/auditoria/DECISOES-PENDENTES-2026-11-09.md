@@ -252,27 +252,41 @@ e mata **10 dos 24 sobreviventes** do gate ⇒ o residual do gate sozinho cai de
 (111/111 vereditos iguais com a regra que foi medida). Se o dono preferir não
 perder o "E aí, o que é isso?" real, é uma variável de ambiente.
 
-**CUIDADO: eu propus um watchdog para a voz e a proposta estava ERRADA (10/11,
-coord-naming — corrigida aqui):** eu vi o cliente de voz ausente e concluí "morreu
-sem rastro". Não era isso: o cliente **dorme de propósito** quando fica ocioso
-e o log diz isso ("dormindo: LoRA off, wakeword de volta, flag removida" —
-17:27:36). O desenho é: quando o cliente dorme, ele **entrega o turno ao daemon
-do wakeword**, que é quem acorda a voz quando o dono fala. Um
-`Restart=always` brigaria com esse desenho de dormir/acordar, então **a proposta
-de watchdog está cancelada**.
+**CUIDADO: DUAS MINHAS PROPOSTAS ESTAVAM ERRADAS, E A CORREÇÃO É DO DONO
+(10/11, coord-naming + sweep-2026-11):**
 
-**O buraco real, medido:** a entrega do turno **falhava em silêncio** — o
-`systemctl --user start jarvis-wakeword.service` era feito com
-`capture_output=True` e sem checar, e o cliente registrava "wakeword de volta"
-**como se tivesse dado certo**. Nesta máquina a unit **não está instalada**
-(existe no repo: `home-manager/modules/services/jarvis-wakeword.nix`) ⇒ o start
-falha, o daemon não sobe e **a voz fica surda para sempre** enquanto o cliente
-dorme. Agora o log diz a verdade (verifica `is-active` e avisa se a unit
-faltar). **O que o dono precisa decidir:** (a) instalar a unit do wakeword
-(config de host), (b) **calibrar o limiar do wakeword** (os 5–10 WAVs da voz
-real — que é o que faz o daemon acordar a voz *no ponto certo*), e (c) decidir se
-o `jarvis-heal` deve vigiar o daemon do wakeword (hoje ele reporta
-`overall=degraded restarts=0` e não reinicia nada).
+1. **O watchdog está cancelado.** Eu vi o cliente de voz ausente e concluí
+   "morreu sem rastro". Não era isso: o cliente **dorme de propósito** quando
+   fica ocioso (log: "dormindo: LoRA off, wakeword de volta, flag removida" —
+   17:27:36). Um `Restart=always` brigaria com esse desenho.
+
+2. **A unit do wakeword não está instalada POR DECISÃO DO DONO (21/10)**, não
+   por esquecimento: `home-manager/home.nix:904` tem
+   `services.jarvis-wakeword.enable = false`, com o comentário do próprio dono:
+   *"o duplex de voz contínua substituiu o wakeword: address gate no classify
+   cumpre a mesma função sem o daemon openwakeword competindo pelo microfone"*.
+   ⇒ a minha proposta de "instalar a unit" **desfaria uma decisão do dono** e
+   não vai para a folha como estava. O substituto está implementado e vivo:
+   `_addressed` (`scripts/duplex-voice.py:408`), `_gate_accepts` (500) com
+   `GATE_MODE = intent` (endereço OU intenção, padrão de 03/11) e o descarte
+   `DROP why=gate_not_addressed` (3242).
+
+**O bug real (continua valendo, e é meu):** o handoff do cliente que dorme
+chama `systemctl --user start jarvis-wakeword.service` **sem conferir nada**; como
+a unit não existe (e não deve existir), o start falha em silêncio e o cliente
+registra "wakeword de volta" **como se tivesse dado certo**. A correção do log
+(verificar `is-active` e avisar quando a unit falta) está certa e no ar
+(`7ab0bbc4`); o que falta é o **desenho**: o cliente não deveria depender de uma
+unit desabilitada de propósito, e sim acordar pelo caminho que existe hoje, que
+é o **address gate**.
+
+**A decisão de produto que fica (agora com a premissa certa):**
+**(a) manter o address gate** e corrigir o handoff silencioso do cliente (ele
+acorda pelo caminho que existe: o gate), ou **(b) reverter a decisão de 21/10**
+e religar o daemon do wakeword — com a **calibração dos 5–10 WAVs da voz real**,
+que é o que faz o daemon acordar no ponto certo. E o objeto do item (c) muda:
+não vigiar o daemon do wakeword (que não existe por decisão), e sim o
+**address gate do duplex**, que é o que efetivamente acorda a voz.
 
 **O ÚLTIMO caso que sobra é uma RISADA — e a decisão é de produto (10/11,
 coord-naming):** a remediação com o código de hoje (80 clipes: cru 66, casa
