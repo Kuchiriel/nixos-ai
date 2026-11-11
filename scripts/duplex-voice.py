@@ -1810,6 +1810,29 @@ def call_tool(name, args):
             else:
                 args_sr["directory"] = os.getcwd()
             return _jarvis_cli(["session-resume", json.dumps(args_sr, ensure_ascii=False)], timeout=30)
+        # Meta-tools do JARVIS (descoberta/chamada MCP) via CLI de paridade.
+        # Mantidos antes do roteamento genérico de "search" para não cair em
+        # semantic_search de código; e sem sobrepor action=="tool" (devtools).
+        if action in ("tools", "list_tools", "discover_tools", "list-tools"):
+            return _jarvis_cli(["tools", "--json"], timeout=20)[:1200]
+        if action in ("tools-search", "tools_search", "search_tools", "find_tool", "find-tools"):
+            if not inp:
+                return "ERRO: informe a intenção/busca (ex.: tools-search 'session resume')"
+            return _jarvis_cli(["tools-search", inp, "--json"], timeout=20)[:1200]
+        if action in ("tools-call", "tools_call", "mcp", "mcp_tool", "call_tool", "call-tool"):
+            _raw = (inp or "").strip()
+            if not _raw:
+                return "ERRO: informe <tool_mcp> {json_args}"
+            _parts = _raw.split(" ", 1)
+            _tname = _parts[0].strip()
+            _targs = _parts[1].strip() if len(_parts) > 1 else "{}"
+            try:
+                import json as _json
+                _json.loads(_targs)  # valida shape básico
+            except Exception:
+                _targs = json.dumps({"input": _targs}, ensure_ascii=False)
+            return _jarvis_cli(["tool", _tname, _targs], timeout=30)[:1200]
+
         # (06/11) HARNESS DE VERDADE no meta-tool: notificação de desktop,
         # leitura de arquivo, listagem e busca semântica no código —
         # capacidade vem do harness, não do modelo.
