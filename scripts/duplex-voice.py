@@ -1814,7 +1814,18 @@ def call_tool(name, args):
         # Mantidos antes do roteamento genérico de "search" para não cair em
         # semantic_search de código; e sem sobrepor action=="tool" (devtools).
         if action in ("tools", "list_tools", "discover_tools", "list-tools"):
-            return _jarvis_cli(["tools", "--json"], timeout=20)[:1200]
+            out = _jarvis_cli(["tools", "--json"], timeout=20)
+            try:
+                data = json.loads(out)
+                names = data.get("names") or []
+                core = [n for n in names if (data.get("tools") or {}).get(n, {}).get("core")]
+                return json.dumps({
+                    "n": len(names),
+                    "core": core[:12],
+                    "hint": "use tools-search <intenção> para achar a tool certa",
+                }, ensure_ascii=False)
+            except Exception:
+                return out[:1200]
         if action in ("tools-search", "tools_search", "search_tools", "find_tool", "find-tools"):
             if not inp:
                 return "ERRO: informe a intenção/busca (ex.: tools-search 'session resume')"
