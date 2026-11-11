@@ -28,6 +28,23 @@ def _ok(name: str) -> dict:
     return {"name": name, "status": "ok", "detail": "ok"}
 
 
+@pytest.fixture(autouse=True)
+def _sem_pauseiro_da_maquina(monkeypatch):
+    """A casa pausada (PAUSED do dono) nao pode decidir o resultado do teste.
+
+    Medido 10/11: com o arquivo ~/.local/state/jarvis/PAUSED presente
+    (o dono pediu o llama-server desligado em 08/11), o heal_once()
+    pulava tudo e 6 dos 11 testes falhavam na maquina. O comportamento do
+    heal esta certo; o teste que precisa se isolar.
+    """
+    try:
+        import nightwatch.pause as _pause
+
+        monkeypatch.setattr(_pause, "is_paused", lambda: (False, ""))
+    except Exception:  # noqa: BLE001
+        pass
+
+
 @pytest.fixture
 def fake_doctor(monkeypatch):
     calls = {"n": 0}

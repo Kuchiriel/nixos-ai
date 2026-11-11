@@ -577,6 +577,17 @@ def test_eventbus_integration(tmp_path, monkeypatch):
     from jarvis.core.eventbus import EventBus, Event
     from nightwatch.task_queue import TaskQueue, TaskStatus
 
+    # (10/11) A casa pausada (PAUSED do dono) nao pode decidir o resultado
+    # do teste: com o arquivo presente, o harness emitia 'task_paused' em
+    # vez de 'task_started'. O comportamento do harness esta certo; o
+    # teste e que precisa se isolar.
+    try:
+        import nightwatch.pause as _pause
+
+        monkeypatch.setattr(_pause, "is_paused", lambda: (False, ""))
+    except Exception:  # noqa: BLE001
+        pass
+
     # Isolate state — must patch both STATE_DIR and module-level constants
     monkeypatch.setattr("nightwatch.harness.STATE_DIR", tmp_path)
     monkeypatch.setattr("nightwatch.task_queue.STATE_DIR", tmp_path)

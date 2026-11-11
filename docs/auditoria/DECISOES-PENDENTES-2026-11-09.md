@@ -408,6 +408,26 @@ o rebuild, mas o `duplex-voice` e o `duplex-asrd` são **processos avulsos**, de
 o código novo (e com o runtime do speaker-ID no path do asrd), quem reinicia essa pilha
 é a lane de voz, não o rebuild.
 
+## 4b. O pauseiro velho: o self-heal da casa está desligado há dois dias
+
+**Medido 10/11:** existe `~/.local/state/jarvis/PAUSED`, escrito em **08/11 21:56**,
+com o texto `manual:dono pediu llama-server desligado (08/11)`. O `jarvis-heal` (e o
+nightwatch) **não fazem nada enquanto esse arquivo existe**, porque a casa está
+pausada. E o pauseiro está **velho**: o llama-server (prism) está de pé desde
+**10/11 04:01** ✓.
+
+Ou seja: desde 08/11 à noite, **o self-heal da casa está desligado** ✓, e é isso que a
+outra lane mediu como "overall=degraded restarts=0" (o heal obedecendo ao pauseiro,
+não defeito). Também quebrava a suite: 6 dos 11 testes do heal e o teste de eventbus
+do nightwatch falhavam na máquina, porque os testes herdavam o pauseiro. **Isolei os
+dois** (o comportamento do heal e do harness está certo; o teste é que precisa se
+isolar), e a suite do jarvis fica **2009 passed, 0 failed** ✓.
+
+**A decisão é sua:** levantar o pauseiro (`rm ~/.local/state/jarvis/PAUSED`, ou o
+comando do nightwatch) restaura o self-heal e o nightwatch; manter ele deixa a casa
+sem auto-reparo e sem o nightwatch rodando. E é pré-requisito de qualquer proposta
+de vigiar a voz com o heal: enquanto o pauseiro estiver lá, o heal não age nada.
+
 ## 5. Já está no main, sem decisão pendente
 
 - Runtime do speaker-ID (`torchaudio` no devShell, VAD do cache local, env do ASRD
