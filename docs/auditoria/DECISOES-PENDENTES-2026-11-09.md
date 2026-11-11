@@ -387,10 +387,13 @@ reporta o que falta; e o ASRD imprime um erro JSON em vez de morrer calado.
 
 ### E a rede de proteção da voz: o watchdog existe, o timer é sua decisão (10/11) **A lane de voz fechou as duas peças contra a classe de queda** (commit `ec04ef72`),
 sem tocar em configuração: 1. **Uma tool que falha não derruba a voz**: `call_tool_safe()` (na linha 1716) transforma a exceção da tool em **texto de erro para o modelo**, em vez de deixar a exceção subir pelo `call_tool` e matar o processo inteiro. É exatamente o caminho do crash medido (a tool que abriu o WAV meio escrito). Tem teste próprio.
-2. **`scripts/voice-watchdog.sh`**: confere se o cliente e o ASRD estão de pé e, com `--restart`, levanta a pilha pelo runner (que resolve o `LD_LIBRARY_PATH`, senão o cliente morre no import do numpy). Testado agora: `voice: UP (cliente 2551160, asrd 2551618)` ✓. **O que falta é sua: apontar um timer** (systemd user timer ou cron) para o watchdog.
-**Medido agora: não existe nenhum timer** para ele ✓, então a próxima queda da voz
-continua sendo silenciosa. E a ordem importa: o watchdog só é útil com o **pauseiro
-velho levantado** (item 4b), porque com a casa pausada o `jarvis-heal` não age nada. ### E a voz está caída desde ontem (10/11 17:27), e nada a levanta **Medido:** o cliente de voz morreu em **10/11 17:27:23** com
+2. **`scripts/voice-watchdog.sh`**: confere se o cliente e o ASRD estão de pé e, com `--restart`, levanta a pilha pelo runner (que resolve o `LD_LIBRARY_PATH`, senão o cliente morre no import do numpy). Testado agora: `voice: UP (cliente 2551160, asrd 2551618)` ✓. **E as duas peças já foram provadas ao vivo (10/11, 10:22 e 10:55):** - **A voz caiu de novo e o watchdog trouxe de volta**: o cliente morreu às **10:22** (abrupto, sem registro de "dormindo": foi o **rebuild de configuração** que você mandou, e como o cliente é avulso o systemd não o conhece e nada o levanta). O `scripts/voice-watchdog.sh` detectou `voice: DOWN (cliente=nenhum, asrd=nenhum)` e levantou: `voice: UP de novo (cliente 283233, asrd 283846)` ✓.
+- **O crash de ontem recorreu e a voz sobreviveu**: às **10:55:31** o cliente tentou tocar um WAV meio escrito e, em vez de derrubar o processo, o conserto segurou: `TOOL play_audio FALHOU (continuando): file does not start with RIFF id` ✓, e na linha seguinte o cliente segue em `<listen>` ✓. Ou seja, a classe exata do crash de 10/11 17:27 aconteceu de novo e **não matou a voz** ✓. **O que falta é sua: apontar um timer** (systemd user timer ou cron) para o watchdog.
+**Medido agora: não existe nenhum timer** para ele ✓. E o padrão se repete: **cada
+rebuild derruba a voz** ✓ (o cliente é avulso ✓) e, sem timer, ela fica muda ✓ — o
+watchdog provou que sabe levantar, mas hoje ele só levanta quando alguém o chama.
+E a ordem importa: o watchdog só é útil com o **pauseiro velho levantado** (item 4b),
+porque com a casa pausada o `jarvis-heal` não age nada. ### E a voz está caída desde ontem (10/11 17:27), e nada a levanta **Medido:** o cliente de voz morreu em **10/11 17:27:23** com
 `wave.Error: file does not start with RIFF id` (`duplex-voice.py:1825`, em
 `call_tool`, chamado de `tick_once:920`; log em `/tmp/opencode/duplex-run2.log`, linha
 17430). O arquivo era `logs/audio/172723_seg_1794342442.094.wav`, que **hoje é um RIFF
