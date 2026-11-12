@@ -363,7 +363,13 @@ def _needs_cloud(q: str) -> bool:
         "porque", "explique", "explica", "compare", "papers", "paper",
         "benchmark", "plano", "passo a passo", "como funciona", "onde está",
         "onde esta", "qual modelo", "o que você é", "quem é você", "quem e voce",
-        "pesquis", "analis", "investiga"))
+        "pesquis", "analis", "investiga",
+        # (11/11) PALAVRAS DE MUNDO: dado online que o 4B nao tem (FN
+        # medido no bench: "vai chover hoje?" ficou no 4B). TV raramente
+        # diz "previsão"/"cotação" em backchannel; risco baixo de FP.
+        "clima", "chover", "chuva", "previsão", "previsao", "temperatura",
+        "cotação", "cotacao", "dolar", "dólar", "bitcoin", "notícia",
+        "noticia", "manchete", "quem ganhou", "resultado do jogo"))
 
 
 def _cloud_answer(question: str, timeout: float = 12.0) -> str:
@@ -806,6 +812,15 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
         # FRESH PROMPT (paper 2608.13571: encaminhar o contexto que
         # falhou derruba a acurácia em até 34,8pp → manda só a pergunta).
         if _needs_cloud(heard):
+            # (11/11, papers DuplexCascade 2603.09180 + survey 2603.04445)
+            # FILLER DE ESPERA: a escalada paga ~5,5s de silêncio (medido
+            # hoje: groq ok 5,52s com o lever certo; o escalonado paga a
+            # cauda no p95). 1 frase curta no tts.say cobre a espera sem
+            # TTS pesado no caminho crítico.
+            try:
+                tts.say("Um instante, senhor.")
+            except Exception:
+                pass
             _cloud = _cloud_answer(heard)
             if _cloud:
                 log(f"[{ts()}] ESCALADO p/ cloud: {heard[:50]!r}")
