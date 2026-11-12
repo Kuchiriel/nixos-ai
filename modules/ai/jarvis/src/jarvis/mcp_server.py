@@ -479,11 +479,15 @@ JARVIS_TOOLS = [
     },
     {
         "name": "rag_index",
-            "description": "Index a directory into the RAG collections (code + auto-sweep of Books papers). WHEN: rag_search returned nothing for a tree you are working in, or after large file moves/renames. WHEN NOT: a one-off question about a known file (read it). Returns counts.",
+        "description": "Index a directory into the RAG collections (code + auto-sweep of Books papers). WHEN: rag_search returned nothing for a tree you are working in, or after large file moves/renames. WHEN NOT: a one-off question about a known file (read it). Large trees: use background/async=true to avoid MCP timeout (returns immediately; check server logs). Returns counts/skip reasons.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Directory to index (default: current dir)"}
+                "path": {"type": "string", "description": "Directory to index (default: current dir)"},
+                "force": {"type": "boolean", "description": "Reindex files even if unchanged"},
+                "background": {"type": "boolean", "description": "Run in background and return immediately (alias: async). Recommended for large trees"},
+                "async": {"type": "boolean", "description": "Alias for background"},
+                "deadline_s": {"type": "number", "description": "Optional indexing deadline in seconds (partial progress is idempotent)"}
             }
         }
     },
@@ -1241,13 +1245,37 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
             expr = args.get("expr", "")
             if not expr:
                 return "ERROR: empty expression"
-            res = _run_shell(f"nix eval --json '{expr}'", timeout=30)
-            return res.stdout or res.stderr
+            try:
+                res = subprocess.run(
+                    ["nix", "eval", "--json", "--expr", expr],
+                    capture_output=True, text=True, timeout=30,
+                )
+            except subprocess.TimeoutExpired:
+                return "ERROR: nix eval timed out"
+            except Exception as e:
+                return f"ERROR: {e}"
+            out = (res.stdout or res.stderr or "").strip()
+            return out or f"Exit code: {res.returncode}"
 
         if name == "jarvis_nix_check":
             path = args.get("path", ".")
-            res = _run_shell(f"cd {path} && nix flake check 2>&1", timeout=120)
-            return res.stdout or res.stderr or "Check passed"
+            cwd = Path(path).expanduser()
+            if not cwd.exists():
+                return f"ERROR: path not found: {cwd}"
+            try:
+                res = subprocess.run(
+                    ["nix", "flake", "check"],
+                    cwd=str(cwd),
+                    capture_output=True, text=True, timeout=120,
+                )
+            except subprocess.TimeoutExpired:
+                return "ERROR: nix flake check timed out"
+            except Exception as e:
+                return f"ERROR: {e}"
+            out = (res.stdout or "") + (res.stderr or "")
+            if res.returncode == 0:
+                return out.strip() or "Check passed"
+            return out.strip() or f"Exit code: {res.returncode}"
 
         if name == "jarvis_nix_search":
             return _handle_nix_search(args)
@@ -2067,16 +2095,26 @@ def _handle_session_resume(args: dict[str, Any]) -> str:
 
 
 def _handle_rag_index(args: dict[str, Any]) -> str:
-    """Indexa um directory no RAG (code + auto-sweep Books)."""
+    """Indexa um directory no RAG (code + auto-sweep Books).
+
+    Args: path, force, background/async, deadline_s.
+    background/async=True evita timeout MCP em árvores grandes: retorna
+    imediatamente e indexa em thread daemon (parcial é idempotente).
+    """
     path = args.get("path", ".")
+    force = bool(args.get("force", False))
+    background = bool(args.get("background", args.get("async", False)))
+    deadline_s = args.get("deadline_s")
     try:
+        deadline_s = float(deadline_s) if deadline_s is not None else None
+    except (TypeError, ValueError):
+        deadline_s = None
+
+    def _run_index(*, with_books_sweep: bool) -> str:
         from jarvis.core.rag import HybridIndexer
         hi = HybridIndexer()
-        count = hi.index_directory(path)
+        count = hi.index_directory(path, force=force, deadline_s=deadline_s)
         out = f"Indexed {count} files from {path}"
-        # MEDIDO 07/11: "Indexed 0 files" SEM motivo levava 4 rounds de
-        # diagnostico (o arquivo estava em quarentena PATH_ERROR, fora das
-        # read roots). Agora a tool DIZ o que faltou e por que.
         reasons: dict[str, list[str]] = {}
         for skipped, reason in getattr(hi, "skipped", []) or []:
             reasons.setdefault(reason, []).append(skipped)
@@ -2091,41 +2129,54 @@ def _handle_rag_index(args: dict[str, Any]) -> str:
                 hint = " — ja estava indexado (use force para reindexar)"
             out += (f"; NAO indexado: {len(paths)} arquivo(s) [{reason}]: "
                     f"{shown}{more}{hint}")
+        if with_books_sweep:
+            try:
+                from jarvis.core.audiobook import sweep_books
+                import threading as _threading
+
+                def _sweep():
+                    try:
+                        sw = sweep_books()
+                        new = sw.get("new") or []
+                        if new:
+                            print(f"[books-sweep] ingested: {', '.join(new)}",
+                                  file=sys.stderr)
+                        if sw.get("pending"):
+                            print(f"[books-sweep] pending: {sw['pending']} "
+                                  f"(re-run rag_index)", file=sys.stderr)
+                    except Exception as e:
+                        print(f"[books-sweep] failed: {e}", file=sys.stderr)
+
+                _threading.Thread(target=_sweep, daemon=True,
+                                  name="books-sweep").start()
+                out += "; books sweep started in background (ver log do ingest)"
+            except Exception as e:
+                out += f"; books sweep skipped: {e}"
+        return out
+
+    if background:
+        import threading as _threading
+
+        def _bg():
+            try:
+                msg = _run_index(with_books_sweep=True)
+                print(f"[rag-index:bg] {msg}", file=sys.stderr)
+            except Exception as e:
+                print(f"[rag-index:bg] ERROR: {e}", file=sys.stderr)
+
+        _threading.Thread(target=_bg, daemon=True, name="rag-index-bg").start()
+        return (f"rag_index started in background for {path} "
+                f"(force={force}, deadline_s={deadline_s}). "
+                "Indexação parcial é idempotente; reexecute para continuar. "
+                "Acompanhe progresso/conclusão nos logs do servidor (stderr).")
+
+    try:
+        return _run_index(with_books_sweep=True)
     except Exception as e:
         error_msg = str(e)
         if "batch size" in error_msg:
             return "ERROR: Embedding server batch size too small (512 tokens). Increase --batch-size in llama-server config."
         return f"ERROR: rag_index failed: {e}"
-    # Books coupling (owner 19/09): ONE call covers code+books.
-    # (07/11) a varredura roda em THREAD DAEMON: ingerir PDFs pendentes
-    # (embed + qdrant, até limit=3) passava de 30s e estourava o deadline
-    # do client (e2e 30s; sessão opencode <5s) — o tool voltava "timed
-    # out" enquanto o trabalho terminava no servidor (medido: o index
-    # chamava -32001 e o paper novo ENTRAVA mesmo assim no índice).
-    # Idempotente e com log próprio; não bloqueia a resposta.
-    try:
-        from jarvis.core.audiobook import sweep_books
-        import threading as _threading
-
-        def _sweep():
-            try:
-                sw = sweep_books()
-                new = sw.get("new") or []
-                if new:
-                    print(f"[books-sweep] ingested: {', '.join(new)}",
-                          file=sys.stderr)
-                if sw.get("pending"):
-                    print(f"[books-sweep] pending: {sw['pending']} "
-                          f"(re-run rag_index)", file=sys.stderr)
-            except Exception as e:
-                print(f"[books-sweep] failed: {e}", file=sys.stderr)
-
-        _threading.Thread(target=_sweep, daemon=True,
-                          name="books-sweep").start()
-        out += "; books sweep started in background (ver log do ingest)"
-    except Exception as e:
-        out += f"; books sweep skipped: {e}"
-    return out
 
 
 # ═══ Stdio Server ═══
