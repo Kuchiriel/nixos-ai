@@ -310,9 +310,23 @@ export function handleJailbreakCommand(argsText) {
     if (conflito) return `CONFLITO: ${conflito} — o par nao foi gravado.`;
     state.trigger = trigger;
     state.decoy = decoy;
+    // (12/11) O PAR MANUAL TAMBEM ENTRA NA LISTA: o dono setou um par
+    // manual e a lista ficava vazia ("nao tem lista de pair/decoy") — o
+    // par que so existe em trigger/decoy nao aparece no term list e nao
+    // e coberto pelo mesmo codigo no servidor. Agora par e lista sao a
+    // mesma coisa: o par manual e a entrada de decoys [decoy].
+    const outros = (state.deception || []).filter((x) => entryTerm(x) !== trigger);
+    const anterior = (state.deception || []).find((x) => entryTerm(x) === trigger);
+    const prev = anterior && Array.isArray(anterior.decoys)
+      ? anterior.decoys.filter(Boolean) : [];
+    const merged = [...prev];
+    if (!merged.includes(decoy)) merged.push(decoy);
+    outros.push({ termo: trigger, decoys: merged });
+    state.deception = outros;
     saveState(state);
     return (
       `Par atualizado: trigger="${state.trigger}" (palavra real) decoy="${state.decoy}" (forma do modelo)\n` +
+      `  lista: ${merged.length} decoy(s) no termo "${trigger}" (term list para ver tudo)\n` +
       "  (o modo continua como estava; use /jailbreak on para ligar)"
     );
   }
