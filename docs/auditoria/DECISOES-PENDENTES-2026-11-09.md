@@ -526,8 +526,16 @@ explicitamente depois do switch ✓, o que propaga para as parts (router, embedd
 reranker, qdrant, webui ✓). Custa alguns segundos de inferência local, que o rebuild já
 custa ✓. **E o que ainda depende de você:** o timer do watchdog da voz ✓ (item 3) e o pauseiro
 velho ✓ (item 4b), porque entre o switch e o próximo rebuild nada mais é automático:
-a voz é avulsa ✓ e o self-heal está pausado ✓. E o heartbeat da casa (`coord_health` com
-as 5 units) pegaria essa queda ✓ se estivesse de pé ✓ — o que depende do pauseiro ✓. ## 5. Já está no main, sem decisão pendente
+a voz é avulsa ✓ e o self-heal está pausado ✓. **E um detalhe que corrige a minha própria frase:** eu escrevi que o heartbeat da casa
+(`coord_health`) pegaria essa queda ✓ se estivesse de pé ✓. O detector **cobre** o
+router ✓ (o `coord_health` reporta `router_8080` ✓, com o MTP, o qdrant, os embeddings
+e o reranker ✓), mas **ninguém o chama** ✓: o `coord_health` existe só como tool do
+MCP ✓, sem timer ou serviço que o consulte ✓. E o que o celular postou durante as 7h37
+(a cada 15 a 60 min ✓) foi o **WAKE-MONITOR** (taxa entrega→execução ✓), **sem a saúde do
+host** ✓. Ou seja: o alarme existe no código e não está ligado — a mesma doença do resto
+da noite ✓ (a proteção está no papel e não está wired ✓). A correção é um timer **nesta**
+máquina que chama o `coord_health` e avisa ✓ (não depender do celular ✓, que estava no
+próprio trabalho ✓) — e isso é decisão sua, porque é mais um serviço. ## 5. Já está no main, sem decisão pendente
 
 - Runtime do speaker-ID (`torchaudio` no devShell, VAD do cache local, env do ASRD
   resolvido pelo nix): o ASRD morria no start e a bateria E2E ficava em 0/10
