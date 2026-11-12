@@ -136,6 +136,8 @@ class TelegramChannel:
         # --- comunicação unificada (07/11): o Telegram é terminal do BUS ---
         "board", "quadro", "pending", "pendencias", "to", "note", "mood",
         "assign", "plano",
+        # --- kanban/fila de execução (nightwatch.task_queue / coord_workitem) ---
+        "work", "fila", "kanban",
     )
 
     def __init__(
@@ -360,6 +362,9 @@ class TelegramChannel:
             return self._handle_tasks(arg)
         if cmd in ("persona", "personas"):
             return self._handle_personas(arg)
+        # --- kanban de execução (nightwatch.task_queue) ---
+        if cmd in ("work", "fila", "kanban"):
+            return self._handle_work(arg)
         if cmd == "approve":
             return self._handle_approve(arg, ident)
         if cmd == "pause":
@@ -742,6 +747,120 @@ class TelegramChannel:
         except Exception as exc:  # noqa: BLE001
             return f"plano indisponivel: {exc}"
 
+    def _handle_work(self, arg: str) -> str:
+        """Kanban/fila de execução (nightwatch.task_queue, usado por coord_workitem).
+
+        Não confundir com /tasks (missões do Telegram) nem com `agent-roster task`
+        (lista leve/A2A em .agents/roster.json).
+        """
+        raw = (arg or "").strip()
+        parts = raw.split()
+        project = "nixos-ai"
+        action = "list"
+        item_id = ""
+        if parts:
+            head = parts[0].lower()
+            if head in {"stats", "burndown", "resumo"}:
+                action = "stats"
+                if len(parts) > 1:
+                    project = parts[1]
+            elif head in {"next", "proximo", "próximo", "prox"}:
+                action = "next"
+                if len(parts) > 1:
+                    project = parts[1]
+            elif head in {"list", "lista", "ls"}:
+                action = "list"
+                if len(parts) > 1:
+                    project = parts[1]
+            elif head in {"show", "ver", "get"}:
+                action = "show"
+                if len(parts) > 1:
+                    item_id = parts[1]
+                if len(parts) > 2:
+                    project = parts[2]
+            elif len(parts) == 1:
+                # projeto ou id
+                if "-" in head or any(c.isdigit() for c in head):
+                    action = "show"
+                    item_id = parts[0]
+                else:
+                    project = parts[0]
+            else:
+                # projeto + ação/id
+                project = parts[0]
+                sub = parts[1].lower()
+                if sub in {"stats", "burndown", "resumo"}:
+                    action = "stats"
+                elif sub in {"next", "proximo", "próximo", "prox"}:
+                    action = "next"
+                elif sub in {"list", "lista", "ls"}:
+                    action = "list"
+                else:
+                    action = "show"
+                    item_id = parts[1]
+        try:
+            from nightwatch.task_queue import TaskQueue
+        except Exception as exc:  # noqa: BLE001
+            return f"kanban indisponível: {exc}"
+        try:
+            q = TaskQueue(project=project)
+            if action == "stats":
+                st = q.get_stats(project)
+                nxt = q.get_next_task()
+                nxt_s = f"{nxt.id}: {nxt.description[:60]}" if nxt else "nenhuma"
+                return (
+                    f"📋 Kanban ({project}) — nightwatch.task_queue\n"
+                    f"total={st.get('total',0)} ready={st.get('ready',0)} "
+                    f"in_progress={st.get('in_progress',0)} blocked={st.get('blocked',0)} "
+                    f"completed={st.get('completed',0)} failed={st.get('failed',0)}\n"
+                    f"próxima: {nxt_s}\n"
+                    f"(execução: /work [projeto] | next | stats | <id>; "
+                    f"leve/A2A: `agent-roster task`)"
+                )
+            if action == "next":
+                t = q.get_next_task()
+                if not t:
+                    return f"📋 Kanban ({project}): nenhuma tarefa pronta\n(leve/A2A: `agent-roster task`)"
+                return (
+                    f"📋 Próxima ({project})\n"
+                    f"[{t.status}] {t.id} (prio {t.priority}, risk {t.risk})\n"
+                    f"{t.description[:500]}\n"
+                    f"critério: {(t.acceptance_criteria or '-').strip()[:300]}"
+                )
+            if action == "show" and item_id:
+                t = q.get_task(item_id)
+                if not t:
+                    return f"item não encontrado: {item_id} (projeto {project})"
+                extra = f"\nerro: {str(t.last_error)[:300]}" if t.last_error else ""
+                extra += f"\ncommit: {t.commit_sha}" if t.commit_sha else ""
+                return (
+                    f"📋 [{t.status}] {t.id}\n"
+                    f"projeto: {t.project} | prio {t.priority} | risk {t.risk} | tentativas {t.attempts}/{t.max_attempts}\n"
+                    f"{t.description[:700]}\n"
+                    f"critério: {(t.acceptance_criteria or '-').strip()[:400]}{extra}"
+                )
+            tasks = q.get_all_tasks()
+            if not tasks:
+                return (
+                    f"📋 Kanban ({project}): fila vazia\n"
+                    f"(fonte: nightwatch.task_queue / coord_workitem; leve/A2A: `agent-roster task`)"
+                )
+            lines = [f"📋 Kanban ({project}) — {len(tasks)} item(ns) (nightwatch.task_queue)"]
+            for t in tasks[:20]:
+                lines.append(f"  · [{t.status}] {t.id}: {t.description[:70]}")
+            if len(tasks) > 20:
+                lines.append(f"  … +{len(tasks) - 20} itens")
+            st = q.get_stats(project)
+            lines.append(
+                f"resumo: ready={st.get('ready',0)} prog={st.get('in_progress',0)} "
+                f"block={st.get('blocked',0)} done={st.get('completed',0)} fail={st.get('failed',0)}"
+            )
+            lines.append("use: /work stats|next [projeto] | /work <id> [projeto]")
+            lines.append("(leve/A2A: `agent-roster task`; coord MCP: coord_workitem)")
+            return "\n".join(lines)
+        except Exception as exc:  # noqa: BLE001
+            return f"kanban falhou: {exc}"
+
     def _handle_approve(self, arg: str, ident: Identity) -> str:
         tickets = self.approvals.pending()
         if not arg:
@@ -984,6 +1103,13 @@ class TelegramChannel:
             "`/status` — services, circuit breaker, running missions\n"
             "`/remember <fact>` — episodic memory\n"
             "`/vault summarize|list` — long-term memory\n\n"
+            "*Coordenação e kanban*\n"
+            "`/board` — quadro do bus (agentes, claims, pendências)\n"
+            "`/pending <agente>` — pendências de um agente\n"
+            "`/to <agente> <msg>` — pedido pelo bus · `/note` nota sem turno\n"
+            "`/assign <tarefa>` — plano (quem/MBTI/modelo)\n"
+            "`/work [projeto]` — kanban de execução (nightwatch.task_queue)\n"
+            "`/work stats|next [projeto]` · `/work <id>` — resumo/próxima/detalhe\n\n"
             "*Development*\n"
             "`/agent <task>` — single agent turn with approval buttons\n"
             "`/dev <task>` — dev REPL (read/edit/create files)\n"
