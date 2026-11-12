@@ -513,7 +513,21 @@ comando do nightwatch) restaura o self-heal e o nightwatch; manter ele deixa a c
 sem auto-reparo e sem o nightwatch rodando. E é pré-requisito de qualquer proposta
 de vigiar a voz com o heal: enquanto o pauseiro estiver lá, o heal não age nada.
 
-## 5. Já está no main, sem decisão pendente
+## 4c. O router ficou 7h37 fora do ar depois de um switch (11/11) **Medido:** o `llama-cpp-server` (:8080) ficou **INACTIVE das 15:10:09 até as 22:5x**
+— **7h37 com o LLM local fora do ar** ✓ e ninguém percebendo (a frota seguiu no
+provider do cloud ✓). O journal mostra a causa: o switch das 15:10 parou o router, o
+`opencode serve` e o `nv-gate` ✓, e o `jarvis.target` **não** foi reiniciado ✓. **Por que não voltaram:** o `jarvis.target` é **estático** (sempre ativo, com timestamp
+de 03/11 ✓) e as parts dele têm `PartOf=jarvis.target` ✓: o switch para as parts quando
+o arquivo da unit muda ✓, mas **parts de um target que não é reiniciado não voltam** ✓.
+E o `rebuild-host.sh` da casa, que documenta "ativa config e reinicia serviços", já
+tratava dos **timers de usuário** (com o motivo escrito: "o activate faz daemon-reload;
+restart não é garantido p/ timers" ✓) e **não** tratava das units de sistema ✓. **Consertado (commit `53df9e3d`):** o `rebuild-host.sh` agora reinicia o `jarvis.target`
+explicitamente depois do switch ✓, o que propaga para as parts (router, embeddings,
+reranker, qdrant, webui ✓). Custa alguns segundos de inferência local, que o rebuild já
+custa ✓. **E o que ainda depende de você:** o timer do watchdog da voz ✓ (item 3) e o pauseiro
+velho ✓ (item 4b), porque entre o switch e o próximo rebuild nada mais é automático:
+a voz é avulsa ✓ e o self-heal está pausado ✓. E o heartbeat da casa (`coord_health` com
+as 5 units) pegaria essa queda ✓ se estivesse de pé ✓ — o que depende do pauseiro ✓. ## 5. Já está no main, sem decisão pendente
 
 - Runtime do speaker-ID (`torchaudio` no devShell, VAD do cache local, env do ASRD
   resolvido pelo nix): o ASRD morria no start e a bateria E2E ficava em 0/10
