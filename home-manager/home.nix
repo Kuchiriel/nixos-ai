@@ -475,6 +475,23 @@ in {
   # ativacao aborta com "would be clobbered" e a geracao inteira nao e
   # aplicada — foi o que travou o switch de 12/11. O conteudo e declarado
   # aqui, entao sobrescrever e o comportamento correto.
+  # TUI do opencode (v2): thinking/reasoning VISÍVEL por padrão (dono, 12/11:
+  # "o antigo mostrava o thinking, agora não mostra, era muito útil ler").
+  # O default do v2 é "hide" (docs: session.thinking = show|hide); o toggle
+  # em runtime é o slash `/thinking`. `force` porque o caminho era um symlink
+  # órfão de geração antiga (o arquivo vivo não era mais gerenciado).
+  home.file.".config/opencode/tui.json" = {
+    force = true;
+    text = ''
+      {
+        "$schema": "https://opencode.ai/tui.json",
+        "theme": "stylix",
+        "session": { "thinking": "show" },
+        "mini": { "thinking": "show" }
+      }
+    '';
+  };
+
   home.file."projects/opencode.json" = {
     force = true;
     text = builtins.toJSON {
