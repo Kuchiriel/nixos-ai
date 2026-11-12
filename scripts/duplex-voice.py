@@ -1443,6 +1443,43 @@ def ctrl_kind(text):
 # contexto do modelo como passivo; ele VÊ o que foi dito agora.
 RECENT_HEARD = []   # [(monotonic, text)]
 
+# (12/11, dono) O wakeword so serve pra ATIVAR/DESATIVAR o modo
+# continuo. O duplex continua ouvindo (custo fixo do mic), mas
+# SLEEP = so a VOZ DO DONO acorda: TV/sala nunca poe o duplex pra
+# dormir nem pra acordar. Diferente do MUTE (cala a boca momentaneo),
+# SLEEP suspende o pipeline inteiro ate "jarvis acorda".
+SLEEP = {"on": False}
+SLEEP_PHRASES = (
+    "jarvis durma", "jarvis dorme", "jarvis dormir", "jarvis descansa",
+    "jarvis dormir agora", "jarvis vai dormir", "jarvis sono",
+    "durma jarvis",
+)
+WAKE_PHRASES = (
+    "jarvis acorde", "jarvis acorda", "jarvis acordar", "acorde jarvis",
+    "jarvis desperta", "jarvis acorde agora", "jarvis acorda ai",
+    "jarvis wake up", "jarvis wake",
+)
+
+
+def sleep_kind(text, spk):
+    """'SLEEP' | 'WAKE' | None — interruptor de modo continuo.
+
+    So o dono (perfil 'dono') ou embedding inconclusivo ('?') aciona.
+    Falante diferente do dono = ignorado (a TV nunca toggla).
+    """
+    t = " ".join((text or "").lower()
+                 .replace(".", " ").replace(",", " ").replace("!", " ")
+                 .replace("?", " ").split())
+    if not t:
+        return None
+    if spk not in ("dono", "?"):
+        return None
+    if any(k in t for k in WAKE_PHRASES):
+        return "WAKE"
+    if any(k in t for k in SLEEP_PHRASES):
+        return "SLEEP"
+    return None
+
 def tts_self_register(text):
     TTS_SELF["id"] += 1
     TTS_SELF["text"] = text
@@ -3099,7 +3136,45 @@ def main():
                     # (0,4s). O caminho antigo ⇒ ~2s até o TTS morrer.
                     # O texto parcial também conta ("cala" + "a boca"
                     # vem em 2 segmentos).
-                    _ctrl = ctrl_kind(heard)
+                    # (12/11, dono) O WAKEWORD materializado so como
+                    # interruptor de modo continuo: "jarvis durma" poe o
+                    # duplex pra dormir; so a VOZ DO DONO acorda
+                    # ("jarvis acorda") — TV nunca toggla. Dormido = nada
+                    # de classificador/LLM/TTS; so a checagem do WAKE.
+                    _slp = sleep_kind(heard, _seg_spk)
+                    if _slp is None and pending:
+                        _slp = sleep_kind(" ".join(pending), _seg_spk)
+                    if _slp == "SLEEP":
+                        SLEEP["on"] = True
+                        _killed = tts.kill_playback()
+                        log(f"[{ts()}] SLEEP ON — {heard[:40]!r} — "
+                            f"TTS {'morto' if _killed else 'ja parado'}")
+                        pending.clear()
+                        merge_deadline = 0.0
+                        pending_since[0] = 0.0
+                        try:
+                            tts.say("Dormindo, senhor. Me chame quando acordar.")
+                        except Exception:
+                            pass
+                        heard = NOVOICE
+                    elif _slp == "WAKE":
+                        SLEEP["on"] = False
+                        MUTE["on"] = False
+                        pending.clear()
+                        merge_deadline = 0.0
+                        pending_since[0] = 0.0
+                        log(f"[{ts()}] WAKE — {heard[:40]!r}")
+                        try:
+                            tts.say("Acordado, senhor.")
+                        except Exception:
+                            pass
+                        heard = NOVOICE
+                    elif SLEEP["on"]:
+                        log(f"[{ts()}] DORMINDO — ignora: {heard[:40]!r}")
+                        pending.clear()
+                        merge_deadline = 0.0
+                        heard = NOVOICE
+                    _ctrl = None if heard == NOVOICE else ctrl_kind(heard)
                     if _ctrl is None and pending:
                         _ctrl = ctrl_kind(" ".join(pending))
                     if _ctrl == "MUTE":
