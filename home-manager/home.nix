@@ -478,18 +478,14 @@ in {
   # TUI do opencode (v2): thinking/reasoning VISÍVEL por padrão (dono, 12/11:
   # "o antigo mostrava o thinking, agora não mostra, era muito útil ler").
   # O default do v2 é "hide" (docs: session.thinking = show|hide); o toggle
-  # em runtime é o slash `/thinking`. `force` porque o caminho era um symlink
-  # órfão de geração antiga (o arquivo vivo não era mais gerenciado).
-  home.file.".config/opencode/tui.json" = {
-    force = true;
-    text = ''
-      {
-        "$schema": "https://opencode.ai/tui.json",
-        "theme": "stylix",
-        "session": { "thinking": "show" },
-        "mini": { "thinking": "show" }
-      }
-    '';
+  # em runtime é o slash `/thinking`.
+  # (12/11) Declarado em programs.opencode.tui: o módulo HM gera o arquivo
+  # único (xdg.configFile) e evita conflito com home.file que quebrava
+  # system.build.toplevel (nixos profile: Conflicting managed target files).
+  programs.opencode.tui = {
+    theme = "stylix";
+    session = { thinking = "show"; };
+    mini = { thinking = "show"; };
   };
 
   home.file."projects/opencode.json" = {

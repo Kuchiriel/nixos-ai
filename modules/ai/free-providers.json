@@ -87,12 +87,6 @@
               }
             },
             {
-              "id": "thinking",
-              "body": {
-                "reasoning_effort": "high"
-              }
-            },
-            {
               "id": "low",
               "body": {
                 "reasoning_effort": "low"

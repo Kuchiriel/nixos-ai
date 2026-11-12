@@ -30,9 +30,9 @@ in {
         Type = "simple";
         User = "nixos";
         WorkingDirectory = frontendDir;
-        # Build de produção via `npm run build` no repo; preview serve o
-        # bundle. Após editar o frontend: rebuild local + restart do serviço.
-        ExecStart = "${pkgs.nodejs}/bin/npm run preview -- --port ${toString cfg.port} --host 127.0.0.1";
+        # Preview serve a build de produção (.svelte-kit/output). Se não houver
+        # build ainda, gera antes de subir para evitar serviço "up" sem UI.
+        ExecStart = "${pkgs.bash}/bin/bash -lc 'cd ${frontendDir} && if [ ! -f .svelte-kit/output/server/index.js ]; then ${pkgs.nodejs}/bin/npm run build; fi; exec ${pkgs.nodejs}/bin/npm run preview -- --port ${toString cfg.port} --host 127.0.0.1'";
         Restart = "on-failure";
         RestartSec = "5";
         TimeoutStopSec = "10";

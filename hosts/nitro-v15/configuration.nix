@@ -241,6 +241,16 @@
   services.jarvis-vault.enable = false;
   services.jarvis-webui.enable = true;
   services.jarvis-webui-frontend.enable = true;
+  # Nightwatch: manutenção autônoma limitada e reportada (opt-in explícito).
+  # Roda pouco, em janela sem colisão, com relatório (Telegram/logs/progress.jsonl)
+  # para saber o que melhorou de fato.
+  services.jarvis.nightwatch = {
+    enable = true;
+    onCalendar = "*-*-* 03:30:00";
+    tasks = 3;
+    projects = [ "nixos-ai" ];
+    extraArgs = [ "--report-telegram" ];
+  };
   services.jarvis-idle.enable = true;
   services.jarvis-watchdog.enable = true;
   services.jarvis-heal.enable = true;
@@ -366,7 +376,11 @@
     enable = true;
     settings = {
       ports.dns = ["127.0.0.1:53" "[::1]:53"];
-      connectIPVersion = "dual";
+      # (11/11) v4, NAO dual. Medido com o Mullvad conectado: o tunel nao tem
+      # IPv6 (`v6 gw: None`), entao `dual` tentava IPv6 primeiro e cada nome
+      # NAO cacheado custava 3,1-3,25 s (o `timeout: 3s` abaixo) antes de cair
+      # para IPv4. Sem VPN: 3-5 ms. `v4` elimina a classe inteira de stall.
+      connectIPVersion = "v4";
       upstreams = {
         init.strategy = "fast";
         strategy = "parallel_best";
@@ -411,6 +425,89 @@
   # mkDefault (não conflita). Com mkForce o valor efetivo continua `false`,
   # como o Proton exige.
   networking.firewall.checkReversePath = lib.mkForce false;
+
+  # (11/11) MULLVAD x TAILSCALE — coexistem, medido e implementado.
+  # Sem isto, com o app do Mullvad conectado o tailnet inteiro morre: ele
+  # instala a regra `not from all fwmark 0x6d6f6c65 lookup 1836018789` e manda
+  # 100.64.0.0/10 para dentro do tunel, onde nao existe rota. O firewall dele
+  # tambem e default-deny e a lista de "LAN" cobre RFC1918 + fc00::/7, mas NAO
+  # o CGNAT do Tailscale.
+  # A chave sao os DOIS marks: o `ct mark` e o que a firewall do Mullvad
+  # consulta (so `meta mark` nao basta, foi medido: rota certa, ping 100% de
+  # perda); o `meta mark` e o que faz a regra de rota dele pular o pacote.
+  # Depois disso o fluxo cai na regra 5270 do Tailscale (`lookup 52`) e sai
+  # por tailscale0. Medido com o Mullvad em br-for-wg-002: ping 0% de perda,
+  # conexao direta, 136 ms (contra 60 ms sem VPN, o custo do relay).
+  # NAO excluir o tailscaled do tunel (`mullvad split-tunnel add`): medido,
+  # quebra (100% de perda e `tailscale ping` em timeout).
+  # Referencias: theorangeone.net/posts/tailscale-mullvad, Mullvad issue #5921.
+  #
+  # Vai como unit propria e nao como `networking.nftables.tables`: aquela opcao
+  # so e aplicada com `networking.nftables.enable = true`, e este host usa o
+  # firewall em iptables-nft (`iptables v1.8.13 (nf_tables)`). A tabela
+  # `inet mullvad_tailscale` convive com as tabelas `ip filter`/`ip mangle` do
+  # iptables-nft; o kernel percorre as duas. Prioridade 0 roda DEPOIS do mangle
+  # do iptables (-150), entao o mark aplicado aqui e o que vale.
+  systemd.services.mullvad-tailscale-bypass = {
+    description = "Marks Tailscale CGNAT traffic so the Mullvad tunnel does not swallow it";
+    wantedBy = ["multi-user.target"];
+    after = ["firewall.service" "mullvad-daemon.service"];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${pkgs.nftables}/bin/nft -f ${pkgs.writeText "mullvad-tailscale.nft" ''
+        table inet mullvad_tailscale {
+          chain output {
+            type route hook output priority 0; policy accept;
+            ip daddr 100.64.0.0/10 ct mark set 0x00000f41 meta mark set 0x6d6f6c65;
+            ip6 daddr fd7a:115c:a1e0::/48 ct mark set 0x00000f41 meta mark set 0x6d6f6c65;
+          }
+        }
+      ''}";
+      ExecStop = "${pkgs.nftables}/bin/nft delete table inet mullvad_tailscale";
+    };
+  };
+
+  # (11/11) blocky + tunel do Mullvad: o pool HTTP/2 do blocky nao sobrevive a
+  # recriacao da wg0-mullvad. O socket fica preso ao IP de origem antigo
+  # (10.168.67.216) e toda resolucao NAO cacheada passa a custar o timeout de
+  # 3 s do grupo de upstreams, ate o processo morrer. Medido 11/11: 3123, 3186,
+  # 3113 e 3135 ms com o tunel recem-reconectado; `systemctl restart blocky`
+  # devolve 118, 113, 127 e 154 ms na hora. O blocky isolado em /tmp, mesma
+  # config, responde em 109-1677 ms: nao e config, e estado de conexao.
+  # O tunel renegocia sozinho (10 "Resetting firewall policy" em 70 min,
+  # medido), e cada renegociacao derruba o pool outra vez. Por isso o vigia:
+  # reinicia o blocky a cada transicao da interface, com cooldown de 15 s para
+  # nao virar tempestade quando o Mullvad reconecta em sequencia.
+  # NAO e `PartOf`/`BindsTo` na interface: isso pararia o DNS quando o dono
+  # desliga o VPN (o app e manual, pedido dele).
+  systemd.services.blocky-tunnel-watch = {
+    description = "Restarts blocky when wg0-mullvad appears or disappears";
+    wantedBy = ["multi-user.target"];
+    after = ["mullvad-daemon.service" "blocky.service"];
+    serviceConfig = {
+      Type = "simple";
+      Restart = "always";
+      RestartSec = 5;
+      ExecStart = "${pkgs.writeShellScript "blocky-tunnel-watch" ''
+        export PATH=${config.systemd.package}/bin:${pkgs.iproute2}/bin:${pkgs.coreutils}/bin
+        cooldown=0
+        ${pkgs.iproute2}/bin/ip monitor link | while IFS= read -r line; do
+          case "$line" in
+            *wg0-mullvad*)
+              now=$(${pkgs.coreutils}/bin/date +%s)
+              if [ "$now" -ge "$cooldown" ]; then
+                cooldown=$((now + 15))
+                sleep 4
+                ${config.systemd.package}/bin/systemctl restart blocky.service
+                echo "wg0-mullvad changed; blocky restarted"
+              fi
+              ;;
+          esac
+        done
+      ''}";
+    };
+  };
 
   # opencode serve — controle da AGENTE pelo celular, sem TTY (2026-10-02,
   # pedido do dono). Aberta SÓ no tailscale0, nunca na LAN: o tailnet já é
