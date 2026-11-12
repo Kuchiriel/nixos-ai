@@ -23,6 +23,10 @@ const DEFAULT_STATE = {
   decoy: "",
   note: "",
   deception: [],
+  // (12/11) vocabulario de INTRUSAO: frases que, se aparecerem numa
+  // entrega da frota, bloqueiam a entrega (agent_guard.py no agent-api.py).
+  // SEPARADO da `deception` (que e o vocabulario de ATAQUE).
+  guard: [],
 };
 
 const HELP = [
@@ -37,6 +41,8 @@ const HELP = [
   "  term rm <t>           remove o termo da lista",
   "  term list             lista os termos e as decoys",
   "  reset                 limpa tudo (off, sem par, lista vazia)",
+  "  guard add <frase>     frase de intrusao: bloqueia a entrega na frota",
+  "  guard list | rm | clear",
 ].join("\n");
 
 // Metodos legacy (comando antigo: /jailbreak deception add <termo> <metodo>).
@@ -478,6 +484,40 @@ export function handleJailbreakCommand(argsText) {
       );
     }
     return "Uso: /jailbreak term <add|rm|list|clear>";
+  }
+  // ── guard: vocabulario de intrusao (12/11) ─────────────────────────
+  if (sub === "guard" || sub === "intruso") {
+    const action = (args[1] || "list").toLowerCase();
+    const frase = args.slice(2).join(" ").trim().replace(/^["']|["']$/g, "");
+    const lista = Array.isArray(state.guard) ? state.guard : [];
+    if (action === "add") {
+      if (!frase) return "Uso: /jailbreak guard add <frase de intrusao>";
+      if (frase.length < 4) return `frase "${frase}" curta demais (minimo 4 chars).`;
+      const nova = lista.includes(frase) ? lista : [...lista, frase];
+      state.guard = nova;
+      saveState(state);
+      return (
+        `frase guardada (${nova.length} no total): "${frase}"\n` +
+        "  (toda entrega da frota passa por agent_guard.py antes de entrar na inbox de outro agente)"
+      );
+    }
+    if (action === "rm" || action === "remove") {
+      if (!frase) return "Uso: /jailbreak guard rm <frase>";
+      const antes = lista.length;
+      const nova = lista.filter((x) => x !== frase);
+      state.guard = nova;
+      saveState(state);
+      return `removida (${antes} -> ${nova.length})`;
+    }
+    if (action === "clear") {
+      state.guard = [];
+      saveState(state);
+      return "vocabulario de intrusao limpo.";
+    }
+    return (
+      `vocabulario de intrusao (${lista.length}):\n` +
+      (lista.length ? lista.map((x) => `  - ${x}`).join("\n") : "  (vazio)")
+    );
   }
   if (sub === "status") {
     const entries = termEntries(state);

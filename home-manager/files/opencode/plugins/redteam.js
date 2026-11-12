@@ -104,6 +104,10 @@ const DEFAULT_STATE = {
   // Formato: [{ termo: "...", decoys: ["...", "..."] }]
   // A lista fica no estado local da maquina (nao no repo).
   deception: [],
+  // (12/11) vocabulario de INTRUSAO (frases que bloqueiam uma entrega da
+  // frota — le por scripts/agent_guard.py). SEPARADO da deception: la e
+  // vocabulario de ATAQUE, aqui e de intrusao.
+  guard: [],
 };
 
 function loadState() {
@@ -720,6 +724,32 @@ const legacy = {
       let changed = 0;
       const translate = (s) => decomposeText(s, state);
       for (const msg of messages) {
+        // (12/11) O 2.2.6 NAO usa msg.parts: a mensagem do DONO vem como
+        // {type:"user", text:"..."} e a do assistant como
+        // {type:"assistant", content:[{type:"text"|"reasoning", text}]}.
+        // O NET so olhava parts[] (formato 1.x) ⇒ nao achava o texto do
+        // dono e o termo REAL ia direto para o prompt do modelo (medido:
+        // "escapou para o prompt"). Agora as tres formas sao cobertas.
+        if (typeof msg?.text === "string" && msg.text) {
+          const before = msg.text;
+          const t2 = translate(before);
+          if (t2 !== before) {
+            msg.text = t2;
+            changed += 1;
+          }
+        }
+        if (Array.isArray(msg?.content)) {
+          for (const item of msg.content) {
+            if (item && typeof item.text === "string" && item.text) {
+              const before = item.text;
+              const t3 = translate(before);
+              if (t3 !== before) {
+                item.text = t3;
+                changed += 1;
+              }
+            }
+          }
+        }
         const parts = msg?.parts;
         if (!Array.isArray(parts)) continue;
         for (const part of parts) {

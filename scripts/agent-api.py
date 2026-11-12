@@ -143,9 +143,43 @@ def _mark_delivered(path: Path, key: str) -> None:
         pass
 
 
+def _log_guard(session: str, termos: str, text: str) -> None:
+    """Auditoria do bloqueio: quem tentou contaminar, o que mandou."""
+    try:
+        p = Path.home() / ".local/state/opencode/redteam-guard.log"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        import time as _t
+        with p.open("a", errors="ignore") as f:
+            f.write(f"{_t.strftime('%Y-%m-%dT%H:%M:%S')} sessao={session} "
+                    f"termos={termos} texto={text[:300]!r}\n")
+    except Exception:
+        pass
+
+
 def deliver(base: str, session: str, text: str, *, note: bool = False,
-            timeout: int = 25) -> tuple[int, str]:
-    """Entrega o texto. Retorna (status, corpo). Levanta RuntimeError."""
+            timeout: int = 25, force: bool = False) -> tuple[int, str]:
+    """Entrega o texto. Retorna (status, corpo). Levanta RuntimeError.
+
+    GUARD DE INTRUSAO (12/11): antes de enfileirar, o texto passa pelo
+    agent-guard.py (vocabulario `guard` do estado do plugin red-team). Um
+    modelo intrusivo (o inkling) que manda mensagem manipulative para
+    contaminar outro agente NAO entra na inbox dele: volta 451 com os
+    termos casados. `force=True` ignora (o dono, ou quem esta depurando).
+    """
+    if not force:
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from agent_guard import scan as _guard_scan  # noqa: PLC0415
+            _r = _guard_scan(text)
+            if not _r["clean"]:
+                _termos = ", ".join(h["termo"] for h in _r["hits"])
+                _log_guard(session, _termos, text)
+                return 451, (f"guard: mensagem BLOQUEADA (termo de intrusao: "
+                             f"{_termos}). Use --force para entregar mesmo assim.")
+        except ImportError:
+            pass  # sem o guard: entrega normal (fail-open, nao derruba a fleet)
+        except Exception:
+            pass
     # 2.2.6: rota nova (precisa do /api). O enum de delivery e
     # {steer, queue}: NAO existe "nota sem rodar" no 2.x (o 1.x tinha
     # noReply=true). Uma "nota" no 2.x = queue (a mensagem fica na inbox
@@ -239,10 +273,24 @@ def main() -> int:
     ap.add_argument("--abort", action="store_true")
     ap.add_argument("--url", default=DEFAULT_URL)
     ap.add_argument("--db-path", action="store_true")
+    ap.add_argument("--force", action="store_true",
+                    help="ignora o guard de intrusao (so o dono/depuracao)")
+    ap.add_argument("--guard", action="store_true",
+                    help="so checa o texto contra o vocabulario de intrusao")
     ns = ap.parse_args()
     if ns.db_path:
         print(live_db_path())
         return 0
+    if ns.guard:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from agent_guard import scan as _scan
+        r = _scan(ns.text)
+        if r["clean"]:
+            print("limpo: nenhum termo de intrusao")
+            return 0
+        print(f"MARCADO: {len(r['hits'])} termo(s): "
+              + ", ".join(h["termo"] for h in r["hits"]))
+        return 1
     if not ns.session:
         print("ERRO: --session obrigatorio", file=sys.stderr)
         return 2
@@ -250,7 +298,8 @@ def main() -> int:
         if ns.abort:
             st, out = abort(ns.url, ns.session)
         else:
-            st, out = deliver(ns.url, ns.session, ns.text, note=ns.note)
+            st, out = deliver(ns.url, ns.session, ns.text, note=ns.note,
+                               force=ns.force)
     except RuntimeError as e:
         print(f"ERRO: {e}", file=sys.stderr)
         return 1
