@@ -20,7 +20,7 @@ let
   # (o build dir é gitignored); alternativa = empacotar whisper.cpp com
   # CUDA no flake (build pesado de nvcc, ~30 min).
   whisperServer = "/home/nixos/projects/whisper.cpp/build/bin/whisper-server";
-  modelPath = "/home/nixos/models/whisper/ggml-large-v3-turbo-q5_0.bin";
+  modelPath = "/var/lib/ai/models/whisper/ggml-large-v3-turbo-q5_0.bin";
 
   # Espera o whisper ficar HEALTHY (modelo carregado na VRAM) antes de o
   # embeddings subir. Script = binário: o systemd não interpreta shell.
@@ -130,10 +130,11 @@ in {
         User = "nixos";
         Restart = "on-failure";
         RestartSec = "5";
-        # O modelo fica em /home/nixos/models (fora do store) — ProtectSystem
+        # O modelo fica em /var/lib/ai/models (nvme1, fora do store); ~/models pode ser symlink — ProtectSystem
         # strict deixa /home gravável só se explicitado.
         ProtectSystem = "strict";
-        ReadWritePaths = ["/home/nixos/models" "/tmp/opencode"];
+        # /var/lib/ai/models: destino nvme1.
+        ReadWritePaths = ["/home/nixos/models" "/var/lib/ai/models" "/tmp/opencode"];
         PrivateTmp = false;   # o log do duplex vive em /tmp/opencode
         NoNewPrivileges = true;
         RestrictSUIDSGID = true;

@@ -26,7 +26,7 @@ in
     # sao arquivos .py versionados no HF, nao um derivation.
     codeDir = lib.mkOption {
       type = lib.types.path;
-      default = "/home/nixos/models/moondream2-0826";
+      default = "/var/lib/ai/models/moondream2-0826";
       description = "Diretorio local com config.json + *.py do par pinado.";
     };
 
@@ -156,9 +156,11 @@ in
         ProtectSystem = "strict";
         # O codigo do modelo e lido de ~/models; o cache de modulos da
         # transformers e escrito em ~/.cache.
+        # /var/lib/ai/models: destino nvme1.
         ReadWritePaths = [
           "/home/${cfg.user}/.cache"
           "/home/${cfg.user}/models"
+          "/var/lib/ai/models"
         ];
         ReadOnlyPaths = [ cfg.codeDir ];
 

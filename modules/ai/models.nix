@@ -310,7 +310,7 @@ in rec {
   directServers = {
     uncensored-35b = {
       port = 8084; binary = "ik";
-      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
+      modelFile = "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
       # (26/10, dono: "contexto estoura na 1a mensagem") 8192→32768:
       # jarvis MCP tools ~3-5k tokens + system prompt ~2k = ~7k antes
       # de QUALQUER conversa. 8k não sobrava nada. Com fa=true e
@@ -342,13 +342,13 @@ in rec {
       # P 0.29→fala, 526ms/tick — demo-ab-uncensored.log). O UD-Q4_K_M
       # (quant de treino do card) fica de gabarito: é mais insistente
       # (4 fragmentos vs 1) — troca = uma linha aqui.
-      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
+      modelFile = "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
       threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
       gpuLayers = 99; moeFlags = "--n-cpu-moe 44";
       # LoRA + flash-attn são incompatíveis (log do server) → fa off.
       fa = false; ctk = "f16"; ctv = "f16";
       extraArgs = [
-        "--lora" "/home/nixos/models/loras/microturn-duplex/microturn-duplex-lora.gguf"
+        "--lora" "/var/lib/ai/models/loras/microturn-duplex/microturn-duplex-lora.gguf"
         "--lora-init-without-apply"
         "--reasoning" "off"
         "--alias" "jarvis-duplex"
@@ -383,7 +383,7 @@ in rec {
       alias = "jarvis-mtp-lora";
       # ARQUIVO MTP (não o base!): NextN real, +24% TG. Rebuild sem isto
       # voltaria a 8092 sem speculative decoding (regressão silenciosa).
-      modelFile = "/home/nixos/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
+      modelFile = "/var/lib/ai/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
       # KV f16 híbrido (8/32 layers) ≈ 750MB @20k ×2 MTP.
       # (06/11, 18:40) ctx 16384→12288: o consumo de REPOUSO do 4B com
       # fa off (o KV mora na CPU) + MTP + LoRA + prompt-cache (328MiB por
@@ -405,7 +405,7 @@ in rec {
       # gargalo = reduzir o prompt do harness (ver _trim_messages e o
       # budget de agent-context em cli/dev.py) + ctx menor (16384).
       extraArgs = [ "--parallel" "1" "--jinja" "--reasoning" "off" "--spec-type" "draft-mtp"
-                    "--lora" "/home/nixos/models/loras/microturn-4b/microturn-4b-lora.gguf"
+                    "--lora" "/var/lib/ai/models/loras/microturn-4b/microturn-4b-lora.gguf"
                     "--lora-init-without-apply" ];
       # (06/11) MEMÓRIA (medido): com c=20480 o 4B chegou a 9G RSS +
       # 6,2G swap → zram (15,5G) lotou → HOST TRAVOU (thrash) e o OOM
@@ -455,7 +455,7 @@ in rec {
       # estado das duas units).
       # Porta livre (8094; 8090/8097 já são do host).
       port = 8094; binary = "upstream";
-      modelFile = "/home/nixos/models/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf";
+      modelFile = "/var/lib/ai/models/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf";
       threads = 6; ctxSize = 16384; batchSize = 512; ubatch = 512;
       gpuLayers = 99; moeFlags = "";
       fa = true; ctk = "q4_0"; ctv = "q4_0";
@@ -492,7 +492,7 @@ in rec {
     };
     xlam-8b = {
       port = 8089; binary = "upstream";
-      modelFile = "/home/nixos/models/Llama-xLAM-2-8B-fc-r-Q4_K_M.gguf";
+      modelFile = "/var/lib/ai/models/Llama-xLAM-2-8B-fc-r-Q4_K_M.gguf";
       threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
       gpuLayers = 99; moeFlags = "";
       fa = true; ctk = "q4_0"; ctv = "q4_0";
@@ -526,7 +526,7 @@ in rec {
     };
     phi-mini = {
       port = 8086; binary = "upstream";
-      modelFile = "/home/nixos/models/Phi-4-mini-instruct-Q4_K_M.gguf";
+      modelFile = "/var/lib/ai/models/Phi-4-mini-instruct-Q4_K_M.gguf";
       threads = 6; ctxSize = 32768; batchSize = 512; ubatch = 512;
       gpuLayers = 99; moeFlags = "";
       fa = true; ctk = "q4_0"; ctv = "q4_0";
@@ -539,7 +539,7 @@ in rec {
     };
     gemma-4b = {
       port = 8087; binary = "upstream";
-      modelFile = "/home/nixos/models/gemma-3-4b-it-Q4_K_M.gguf";
+      modelFile = "/var/lib/ai/models/gemma-3-4b-it-Q4_K_M.gguf";
       # (19/10) fa off: com fa ON o prefill do gemma-3 (sliding window)
       # degrada p/ ~17ms/tok uniforme (59 t/s no PROMPT = decodificação
       # sequencial; medido: 3.4s p/ 200 tok). Sem fa: prefill batch
@@ -564,7 +564,7 @@ in rec {
     };
     qwen30b-moe = {
       port = 8091; binary = "ik";
-      modelFile = "/home/nixos/models/Qwen3-30B-A3B-Q4_K_M.gguf";
+      modelFile = "/var/lib/ai/models/Qwen3-30B-A3B-Q4_K_M.gguf";
       # ctx 8192: classe MoE estourou compute buffers em 32k no irmão 35B
       # (medido 2x 03/10); 30B não testado → valor seguro, não especulativo.
       threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
@@ -576,7 +576,7 @@ in rec {
     };
     uncensored-35b-q4kp = {
       port = 8093; binary = "ik";
-      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf";
+      modelFile = "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf";
       threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
       gpuLayers = 45; moeFlags = "--n-cpu-moe 35";
       fa = true; ctk = "q4_0"; ctv = "q4_0";
@@ -1090,10 +1090,10 @@ in rec {
   # Alvo de hot-swap (idle reload): /model jarvis-raw*.
   extraProfiles = {
     raw-fast = profiles.qwen-fast // {
-      modelFile = "/home/nixos/models/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
+      modelFile = "/var/lib/ai/models/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
     };
     raw-strong = profiles.chat // {
-      modelFile = "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
+      modelFile = "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
     };
     # (26/10) O DEFAULT do sistema: Qwen3.5-4B-MTP + LoRA micro-turn.
     # Espelha o directServer `uncensored-4b` (:8092, binário stock) — o
@@ -1101,7 +1101,7 @@ in rec {
     # nomes). MTP = NextN real (+24% TG medido). fa off (LoRA × fa são
     # incompatíveis) → KV f16.
     mtp-lora = profiles.qwen-fast // {
-      modelFile = "/home/nixos/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
+      modelFile = "/var/lib/ai/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
       kvCache = "-fa off -ctk f16 -ctv f16";
       ctxSize = 20480;
       batchSize = 256;
@@ -1113,7 +1113,7 @@ in rec {
         "--jinja"
         "--reasoning" "off"
         "--spec-type" "draft-mtp"
-        "--lora" "/home/nixos/models/loras/microturn-4b/microturn-4b-lora.gguf"
+        "--lora" "/var/lib/ai/models/loras/microturn-4b/microturn-4b-lora.gguf"
         "--lora-init-without-apply"
         "--alias" "jarvis-mtp-lora"
       ];
@@ -1349,5 +1349,5 @@ in rec {
   # "hard" que o base degradava p/ "moderate" (justamente o caso que
   # dispara escalonamento p/ 35B/cloud). O base fica em laya-onnx/.
   # O Python lê LAYA_MODEL_DIR (default = este path).
-  layaModelDir = "/home/nixos/models/laya-ft";
+  layaModelDir = "/var/lib/ai/models/laya-ft";
 }

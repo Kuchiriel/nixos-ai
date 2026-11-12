@@ -322,6 +322,9 @@
   # qdrant.nix e jarvis-env.nix respectivamente (condicionais a jarvis.enable)
   systemd.tmpfiles.rules = [
     "d /var/tmp 1777 root root 14d"
+    # Modelos/artefatos de IA em nvme1 (rápido). Dados migrados de ~/models.
+    "d /var/lib/ai 0755 nixos users -"
+    "d /var/lib/ai/models 0755 nixos users -"
   ];
 
   # =========================================================================

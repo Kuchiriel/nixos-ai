@@ -19,7 +19,7 @@ tarefas harder) — é o uso real, não inglês de benchmark.
 Uso:
     python3 benchmarks/laya/bench_laya.py            # tabela + resumo
     python3 benchmarks/laya/bench_laya.py --json     # JSON
-    LAYA_MODEL_DIR=/home/nixos/models/laya-onnx python3 benchmarks/laya/bench_laya.py
+    LAYA_MODEL_DIR=/var/lib/ai/models/laya-onnx python3 benchmarks/laya/bench_laya.py
 """
 
 from __future__ import annotations

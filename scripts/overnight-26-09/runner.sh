@@ -20,7 +20,7 @@ ts() { date "+%H:%M:%S"; }
 log() { echo "[$(ts)] $*" | tee -a "$LOG"; }
 
 IK_LD="/home/nixos/projects/ik_llama.cpp/build/bin:/nix/store/7vafhlh0lmcvi75jfyy09qwr4m3x1ks3-gcc-15.2.0-lib/lib:/nix/store/pvxx7066ymzmmrlcfn7yl6kcbqvbc8lw-openssl-3.6.3/lib:/nix/store/s6aspcvp29vwfqv5wva5gfnmzahcny63-cuda12.9-cuda_cudart-12.9.79/lib:/nix/store/h4zc291jsiamkwivbdrjmsay8ipxqjaj-cuda12.9-libcublas-12.9.1.4-lib/lib:/run/opengl-driver/lib"
-MOE=/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
+MOE=/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
 ALIAS=uncensored35
 RESTORE_PID=""
 

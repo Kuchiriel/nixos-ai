@@ -26,8 +26,8 @@ from pathlib import Path
 # Paths do modelo (fonte única: models.nix `layaModelDir`; env LAYA_MODEL_DIR
 # sobrescreve p/ teste A/B). Default = checkpoint FINE-TUNED (laya-ft, Kaggle
 # T4 v7: 95.6% acc, hard 100%, +36.8% vs base) — o base (laya-onnx) fica como
-# fallback manual: LAYA_MODEL_DIR=/home/nixos/models/laya-onnx.
-_MODEL_DIR = Path(os.environ.get("LAYA_MODEL_DIR", "/home/nixos/models/laya-ft"))
+# fallback manual: LAYA_MODEL_DIR=/var/lib/ai/models/laya-onnx.
+_MODEL_DIR = Path(os.environ.get("LAYA_MODEL_DIR", "/var/lib/ai/models/laya-ft"))
 _CONFIG_PATH = _MODEL_DIR / "rl_agent_config.json"
 _TOKENIZER_PATH = _MODEL_DIR / "tokenizer" / "tokenizer.json"
 _ONNX_PATH = _MODEL_DIR / "model.onnx"

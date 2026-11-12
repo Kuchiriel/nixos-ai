@@ -2,7 +2,7 @@
   "rodadas": [
     {
       "ts": "2026-09-25T14:16:12",
-      "modelo": "/home/nixos/models/gemma-3-4b-it-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/gemma-3-4b-it-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10735-842b188/llama-server",
       "flags": {
         "threads": 8,
@@ -52,7 +52,7 @@
     },
     {
       "ts": "2026-09-25T14:16:59",
-      "modelo": "/home/nixos/models/gemma-3-4b-it-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/gemma-3-4b-it-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10735-842b188/llama-server",
       "flags": {
         "threads": 8,
@@ -109,7 +109,7 @@
     },
     {
       "ts": "2026-09-25T14:17:33",
-      "modelo": "/home/nixos/models/gemma-3-4b-it-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/gemma-3-4b-it-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10735-842b188/llama-server",
       "flags": {
         "threads": 8,
@@ -142,7 +142,7 @@
     },
     {
       "ts": "2026-09-25T14:20:15",
-      "modelo": "/home/nixos/models/gemma-3-4b-it-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/gemma-3-4b-it-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10735-842b188/llama-server",
       "flags": {
         "threads": 8,
@@ -210,7 +210,7 @@
     },
     {
       "ts": "2026-09-25T14:39:56",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
       "flags": {
         "threads": 8,
@@ -306,7 +306,7 @@
     },
     {
       "ts": "2026-09-25T14:41:45",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
       "flags": {
         "threads": 8,
@@ -374,7 +374,7 @@
     },
     {
       "ts": "2026-09-25T15:16:03",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
       "flags": {
         "threads": 6,
@@ -414,7 +414,7 @@
     },
     {
       "ts": "2026-09-25T15:17:05",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
       "flags": {
         "threads": 8,
@@ -454,7 +454,7 @@
     },
     {
       "ts": "2026-09-25T15:45:46",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
       "flags": {
         "threads": 6,
@@ -494,7 +494,7 @@
     },
     {
       "ts": "2026-09-25T15:46:24",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
       "flags": {
         "threads": 6,
@@ -534,7 +534,7 @@
     },
     {
       "ts": "2026-09-25T15:47:02",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
       "flags": {
         "threads": 6,
@@ -574,7 +574,7 @@
     },
     {
       "ts": "2026-09-25T15:47:53",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
       "flags": {
         "threads": 6,
@@ -614,7 +614,7 @@
     },
     {
       "ts": "2026-09-25T15:49:18",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server",
       "flags": {
         "threads": 6,
@@ -654,7 +654,7 @@
     },
     {
       "ts": "2026-09-25T15:58:58",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10735-842b188/llama-server",
       "flags": {
         "threads": 6,
@@ -694,7 +694,7 @@
     },
     {
       "ts": "2026-09-25T16:35:57",
-      "modelo": "/home/nixos/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "modelo": "/var/lib/ai/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -752,7 +752,7 @@
     },
     {
       "ts": "2026-09-25T16:42:04",
-      "modelo": "/home/nixos/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "modelo": "/var/lib/ai/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -823,7 +823,7 @@
     },
     {
       "ts": "2026-09-25T16:46:18",
-      "modelo": "/home/nixos/models/Ternary-Bonsai-27B-PQ2_0.gguf",
+      "modelo": "/var/lib/ai/models/Ternary-Bonsai-27B-PQ2_0.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -894,7 +894,7 @@
     },
     {
       "ts": "2026-09-25T16:51:24",
-      "modelo": "/home/nixos/models/Ternary-Bonsai-27B-PQ2_0.gguf",
+      "modelo": "/var/lib/ai/models/Ternary-Bonsai-27B-PQ2_0.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10735-842b188/llama-server",
       "flags": {
         "threads": 6,
@@ -965,7 +965,7 @@
     },
     {
       "ts": "2026-09-25T16:52:50",
-      "modelo": "/home/nixos/models/Ternary-Bonsai-27B-PQ2_0.gguf",
+      "modelo": "/var/lib/ai/models/Ternary-Bonsai-27B-PQ2_0.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -998,7 +998,7 @@
     },
     {
       "ts": "2026-09-25T16:53:17",
-      "modelo": "/home/nixos/models/Ternary-Bonsai-27B-PQ2_0.gguf",
+      "modelo": "/var/lib/ai/models/Ternary-Bonsai-27B-PQ2_0.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1071,7 +1071,7 @@
     },
     {
       "ts": "2026-09-25T16:56:15",
-      "modelo": "/home/nixos/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "modelo": "/var/lib/ai/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1104,7 +1104,7 @@
     },
     {
       "ts": "2026-09-25T16:56:26",
-      "modelo": "/home/nixos/models/Ternary-Bonsai-27B-PQ2_0.gguf",
+      "modelo": "/var/lib/ai/models/Ternary-Bonsai-27B-PQ2_0.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1137,7 +1137,7 @@
     },
     {
       "ts": "2026-09-25T17:00:13",
-      "modelo": "/home/nixos/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "modelo": "/var/lib/ai/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1177,7 +1177,7 @@
     },
     {
       "ts": "2026-09-25T17:03:08",
-      "modelo": "/home/nixos/models/Ternary-Bonsai-27B-PQ2_0.gguf",
+      "modelo": "/var/lib/ai/models/Ternary-Bonsai-27B-PQ2_0.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1217,7 +1217,7 @@
     },
     {
       "ts": "2026-09-25T17:06:02",
-      "modelo": "/home/nixos/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "modelo": "/var/lib/ai/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1257,7 +1257,7 @@
     },
     {
       "ts": "2026-09-25T17:15:37",
-      "modelo": "/home/nixos/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "modelo": "/var/lib/ai/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1297,7 +1297,7 @@
     },
     {
       "ts": "2026-09-25T17:23:17",
-      "modelo": "/home/nixos/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+      "modelo": "/var/lib/ai/models/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 8,
@@ -1337,7 +1337,7 @@
     },
     {
       "ts": "2026-09-25T17:44:45",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1370,7 +1370,7 @@
     },
     {
       "ts": "2026-09-25T17:45:01",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1403,7 +1403,7 @@
     },
     {
       "ts": "2026-09-25T17:45:13",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1436,7 +1436,7 @@
     },
     {
       "ts": "2026-09-25T17:45:22",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1469,7 +1469,7 @@
     },
     {
       "ts": "2026-09-25T17:45:56",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1502,7 +1502,7 @@
     },
     {
       "ts": "2026-09-25T17:46:13",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1535,7 +1535,7 @@
     },
     {
       "ts": "2026-09-25T17:46:32",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1568,7 +1568,7 @@
     },
     {
       "ts": "2026-09-25T17:46:45",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1601,7 +1601,7 @@
     },
     {
       "ts": "2026-09-25T17:47:23",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1634,7 +1634,7 @@
     },
     {
       "ts": "2026-09-25T17:49:31",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1674,7 +1674,7 @@
     },
     {
       "ts": "2026-09-25T17:50:34",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1714,7 +1714,7 @@
     },
     {
       "ts": "2026-09-25T17:51:36",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,
@@ -1754,7 +1754,7 @@
     },
     {
       "ts": "2026-09-25T17:52:41",
-      "modelo": "/home/nixos/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
+      "modelo": "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf",
       "bin": "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe/llama-prism-b10743-adfffbe/llama-server",
       "flags": {
         "threads": 6,

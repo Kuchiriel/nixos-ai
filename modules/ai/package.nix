@@ -6,7 +6,7 @@
   mcpNixos ? mcp-nixos,
   ripgrep,
   age,
-  aiModels ? { layaModelDir = "/home/nixos/models/laya-ft"; },
+  aiModels ? { layaModelDir = "/var/lib/ai/models/laya-ft"; },
 }: let
   # FONTE ÚNICA das deps (30/09). Fora do `rec` para o dev shell reusar a
   # lista leve (sem torch) e para o pacote único abaixo montar as duas.

@@ -85,7 +85,7 @@ def trained_ctx(meta):
 
 
 def gguf_root():
-    roots = [Path.home() / "models", Path("/home/nixos/models")]
+    roots = [Path("/var/lib/ai/models"), Path.home() / "models", Path("/home/nixos/models")]
     for r in roots:
         if r.is_dir():
             return r
