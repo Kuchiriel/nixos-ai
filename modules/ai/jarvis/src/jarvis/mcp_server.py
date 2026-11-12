@@ -479,7 +479,7 @@ JARVIS_TOOLS = [
     },
     {
         "name": "rag_index",
-        "description": "Index a directory into the RAG collections (code + auto-sweep of Books papers). WHEN: rag_search returned nothing for a tree you are working in, or after large file moves/renames. WHEN NOT: a one-off question about a known file (read it). Large trees: use background/async=true to avoid MCP timeout (returns immediately; check server logs). Returns counts/skip reasons.",
+        "description": "Index a directory into the RAG collections (code + auto-sweep of Books papers). WHEN: rag_search returned nothing for a tree you are working in, or after large file moves/renames. WHEN NOT: a one-off question about a known file (read it). Large trees: use background/async=true to avoid MCP timeout (returns immediately with job_id). Returns counts/skip reasons or job status.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -488,6 +488,17 @@ JARVIS_TOOLS = [
                 "background": {"type": "boolean", "description": "Run in background and return immediately (alias: async). Recommended for large trees"},
                 "async": {"type": "boolean", "description": "Alias for background"},
                 "deadline_s": {"type": "number", "description": "Optional indexing deadline in seconds (partial progress is idempotent)"}
+            }
+        }
+    },
+    {
+        "name": "rag_index_status",
+        "description": "Get status/result of background or recent rag_index jobs. Use job_id from rag_index(background=true), or omit job_id to list recent jobs.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "job_id": {"type": "string", "description": "Job id returned by rag_index (optional)"},
+                "limit": {"type": "integer", "description": "Max recent jobs to return when job_id is omitted (default: 10)"}
             }
         }
     },
@@ -892,6 +903,79 @@ def _meta_call(meta_args: dict[str, Any]) -> str:
     if sub_args is None:
         sub_args = {}
     return call_tool(target, sub_args)
+
+
+# ═══ RAG index job tracking (background-safe, in-memory) ═══
+
+_RAG_INDEX_JOBS: dict[str, dict[str, Any]] = {}
+_RAG_INDEX_JOBS_LOCK = threading.Lock()
+_RAG_INDEX_JOBS_MAX = 50
+
+
+def _rag_job_snapshot(job: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in job.items()}
+
+
+def _rag_jobs_cleanup_locked() -> None:
+    if len(_RAG_INDEX_JOBS) <= _RAG_INDEX_JOBS_MAX:
+        return
+    items = sorted(_RAG_INDEX_JOBS.items(), key=lambda kv: kv[1].get("started_at", 0.0))
+    for job_id, _ in items[: max(0, len(items) - _RAG_INDEX_JOBS_MAX)]:
+        _RAG_INDEX_JOBS.pop(job_id, None)
+
+
+def _rag_job_create(path: str, *, background: bool, force: bool, deadline_s: Any) -> str:
+    job_id = f"ragidx-{int(time.time() * 1000)}-{os.getpid()}-{threading.get_ident()}"
+    now = time.time()
+    job = {
+        "job_id": job_id,
+        "path": path,
+        "background": background,
+        "force": force,
+        "deadline_s": deadline_s,
+        "status": "running",
+        "started_at": now,
+        "finished_at": None,
+        "result": None,
+        "error": None,
+    }
+    with _RAG_INDEX_JOBS_LOCK:
+        _RAG_INDEX_JOBS[job_id] = job
+        _rag_jobs_cleanup_locked()
+    return job_id
+
+
+def _rag_job_finish(job_id: str, *, result: str | None = None, error: str | None = None) -> None:
+    with _RAG_INDEX_JOBS_LOCK:
+        job = _RAG_INDEX_JOBS.get(job_id)
+        if not job:
+            return
+        job["finished_at"] = time.time()
+        if error:
+            job["status"] = "error"
+            job["error"] = error
+            job["result"] = result
+        else:
+            job["status"] = "done"
+            job["result"] = result
+            job["error"] = None
+
+
+def _handle_rag_index_status(args: dict[str, Any]) -> str:
+    job_id = str(args.get("job_id") or "").strip()
+    try:
+        limit = int(args.get("limit", 10))
+    except (TypeError, ValueError):
+        limit = 10
+    limit = max(1, min(limit, 50))
+    with _RAG_INDEX_JOBS_LOCK:
+        if job_id:
+            job = _RAG_INDEX_JOBS.get(job_id)
+            if not job:
+                return json.dumps({"error": f"unknown job_id: {job_id}"}, indent=2, ensure_ascii=False)
+            return json.dumps(_rag_job_snapshot(job), indent=2, ensure_ascii=False)
+        jobs = sorted(_RAG_INDEX_JOBS.values(), key=lambda j: j.get("started_at", 0.0), reverse=True)[:limit]
+        return json.dumps([_rag_job_snapshot(j) for j in jobs], indent=2, ensure_ascii=False)
 
 
 # ═══ Request Handler ═══
@@ -1306,6 +1390,9 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
 
         if name == "jarvis_rag_index":
             return _handle_rag_index(args)
+
+        if name == "jarvis_rag_index_status":
+            return _handle_rag_index_status(args)
 
         if name in ("offline_search", "jarvis_offline_search"):
             from jarvis.core.offline import offline_search
@@ -2155,28 +2242,42 @@ def _handle_rag_index(args: dict[str, Any]) -> str:
         return out
 
     if background:
+        job_id = _rag_job_create(path, background=True, force=force, deadline_s=deadline_s)
         import threading as _threading
 
         def _bg():
             try:
                 msg = _run_index(with_books_sweep=True)
-                print(f"[rag-index:bg] {msg}", file=sys.stderr)
+                _rag_job_finish(job_id, result=msg)
+                print(f"[rag-index:bg] job={job_id} {msg}", file=sys.stderr)
             except Exception as e:
-                print(f"[rag-index:bg] ERROR: {e}", file=sys.stderr)
+                err = str(e)
+                _rag_job_finish(job_id, error=err)
+                print(f"[rag-index:bg] job={job_id} ERROR: {err}", file=sys.stderr)
 
-        _threading.Thread(target=_bg, daemon=True, name="rag-index-bg").start()
-        return (f"rag_index started in background for {path} "
-                f"(force={force}, deadline_s={deadline_s}). "
-                "Indexação parcial é idempotente; reexecute para continuar. "
-                "Acompanhe progresso/conclusão nos logs do servidor (stderr).")
+        _threading.Thread(target=_bg, daemon=True, name=f"rag-index-bg-{job_id}").start()
+        return json.dumps({
+            "job_id": job_id,
+            "status": "running",
+            "path": path,
+            "force": force,
+            "deadline_s": deadline_s,
+            "message": "rag_index started in background. Use rag_index_status with this job_id to check progress/result. Indexação parcial é idempotente; reexecute para continuar.",
+        }, indent=2, ensure_ascii=False)
 
+    job_id = _rag_job_create(path, background=False, force=force, deadline_s=deadline_s)
     try:
-        return _run_index(with_books_sweep=True)
+        msg = _run_index(with_books_sweep=True)
+        _rag_job_finish(job_id, result=msg)
+        return msg
     except Exception as e:
         error_msg = str(e)
         if "batch size" in error_msg:
-            return "ERROR: Embedding server batch size too small (512 tokens). Increase --batch-size in llama-server config."
-        return f"ERROR: rag_index failed: {e}"
+            err = "ERROR: Embedding server batch size too small (512 tokens). Increase --batch-size in llama-server config."
+        else:
+            err = f"ERROR: rag_index failed: {e}"
+        _rag_job_finish(job_id, error=err)
+        return err
 
 
 # ═══ Stdio Server ═══
