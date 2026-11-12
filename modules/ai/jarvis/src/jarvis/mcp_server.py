@@ -902,7 +902,7 @@ def _meta_call(meta_args: dict[str, Any]) -> str:
             return "ERROR: 'args' must be an object"
     if sub_args is None:
         sub_args = {}
-    return call_tool(target, sub_args)
+    return _pointerize_tool_output(target, call_tool(target, sub_args))
 
 
 # ═══ RAG index job tracking (background-safe, persisted best-effort) ═══
@@ -1035,6 +1035,51 @@ def _handle_rag_index_status(args: dict[str, Any]) -> str:
         return json.dumps([_rag_job_snapshot(j) for j in jobs], indent=2, ensure_ascii=False)
 
 
+# ═══ Tool output pointers (context budget, not model window) ═══
+#
+# Medido (12/11) na sessao real: 20,7 MB de 31,6 MB do historico sao PARTES DE
+# TOOL (65%), e o request por turno chega a 2,4 MB. Truncar/sumarizar perde
+# dado; a abordagem que preserva tudo e' operar sobre PONTEIRO (arXiv
+# 2511.22729, IBM Research: saidas de tool por referencia, ~7x menos tokens).
+# Aqui: saidas acima do limiar vao inteiras para um arquivo de estado e o
+# modelo recebe o inicio + o caminho para read_file/grep.
+_TOOL_OUTPUT_POINTER_CHARS_DEFAULT = 12000
+_TOOL_OUTPUT_HEAD_RATIO = 0.6
+
+
+def _tool_output_pointer_limit() -> int:
+    raw = os.environ.get("JARVIS_TOOL_OUTPUT_POINTER_CHARS", str(_TOOL_OUTPUT_POINTER_CHARS_DEFAULT))
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return _TOOL_OUTPUT_POINTER_CHARS_DEFAULT
+    return 0 if value <= 0 else value  # 0 desliga
+
+
+def _tool_output_dir() -> Path:
+    return Path.home() / ".local" / "state" / "jarvis" / "tool-output"
+
+
+def _pointerize_tool_output(tool_name: str, text: str) -> str:
+    """Saida grande vira arquivo + ponteiro; abaixo do limiar passa intacta."""
+    limit = _tool_output_pointer_limit()
+    if limit <= 0 or not isinstance(text, str) or len(text) <= limit:
+        return text
+    safe_name = "".join(c if c.isalnum() or c in "-_." else "_" for c in tool_name)[:40] or "tool"
+    path = _tool_output_dir() / f"{int(time.time() * 1000)}-{safe_name}.txt"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    except Exception:
+        # Sem disco gravavel, truncar ainda e' melhor que estourar o contexto.
+        return text[:limit] + f"\n... [truncado: {len(text)} chars, arquivo nao gravavel]"
+    head = text[: int(limit * _TOOL_OUTPUT_HEAD_RATIO)]
+    return (
+        f"{head}\n... [saida completa: {len(text)} chars / {len(text.encode('utf-8'))} bytes em {path}; "
+        f"use read_file ou grep nesse caminho para o restante]"
+    )
+
+
 # ═══ Request Handler ═══
 
 def handle_request(request: dict[str, Any]) -> dict[str, Any]:
@@ -1070,7 +1115,7 @@ def handle_request(request: dict[str, Any]) -> dict[str, Any]:
     if method == "tools/call":
         tool_name = params.get("name", "")
         arguments = params.get("arguments", {})
-        result = call_tool(tool_name, arguments)
+        result = _pointerize_tool_output(tool_name, call_tool(tool_name, arguments))
         return {
             "jsonrpc": "2.0",
             "id": req_id,
