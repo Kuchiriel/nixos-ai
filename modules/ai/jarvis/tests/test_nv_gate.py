@@ -247,3 +247,65 @@ def test_catalog_context_is_the_measured_one():
     for model_id, ctx in expected.items():
         assert models[model_id]["context"] == ctx, (
             f"{model_id}: ctx {models[model_id]['context']} != medido {ctx}")
+
+
+def test_gate_normalizes_double_prefixed_nvidia_model_id():
+    """(11/11) clientes podem enviar nvidia/<vendor>/<model> (2+ barras);
+    o endpoint NVIDIA integrate espera <vendor>/<model> para terceiros.
+    Nativos (nvidia/<nome>, 1 barra) devem permanecer intactos."""
+    seen = {}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length) if length else b"{}"
+            seen["model"] = json.loads(body).get("model")
+            payload = b'{"ok":true}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *args):
+            pass
+
+    from http.server import ThreadingHTTPServer
+
+    upstream = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=upstream.serve_forever, daemon=True).start()
+
+    gate = nv_gate.Gate
+    gate.upstream = f"http://127.0.0.1:{upstream.server_address[1]}"
+    gate.bucket = nv_gate.Bucket(rpm=600, burst=10)
+    gate.max_wait = 5
+    gate.stats = nv_gate.Stats()
+    gate.verbose = False
+
+    proxy = ThreadingHTTPServer(("127.0.0.1", 0), gate)
+    threading.Thread(target=proxy.serve_forever, daemon=True).start()
+    try:
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{proxy.server_address[1]}/v1/chat/completions",
+            data=b'{"model":"nvidia/minimaxai/minimax-m3.1-flash","messages":[]}',
+            headers={"Content-Type": "application/json", "Authorization": "Bearer test"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            assert resp.status == 200
+        assert seen["model"] == "minimaxai/minimax-m3.1-flash"
+
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{proxy.server_address[1]}/v1/chat/completions",
+            data=b'{"model":"nvidia/nemotron-3-super-120b-a12b","messages":[]}',
+            headers={"Content-Type": "application/json", "Authorization": "Bearer test"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            assert resp.status == 200
+        assert seen["model"] == "nvidia/nemotron-3-super-120b-a12b"
+    finally:
+        proxy.shutdown()
+        upstream.shutdown()

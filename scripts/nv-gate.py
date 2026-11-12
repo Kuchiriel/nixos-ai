@@ -195,6 +195,27 @@ class Gate(BaseHTTPRequestHandler):
                 continue
             headers[key] = value
 
+        # (11/11) NORMALIZAÇÃO DE MODEL ID: alguns clientes enviam
+        # "nvidia/<vendor>/<model>" no body (ex.: nvidia/minimaxai/minimax-m3.1-flash),
+        # mas o endpoint NVIDIA integrate espera o ID upstream do modelo
+        # (ex.: minimaxai/minimax-m3.1-flash). Modelos nativos NVIDIA usam
+        # 1 barra ("nvidia/nemotron-..."); terceiros mal prefixados ficam com 2+.
+        # Reescreve só nesses casos para evitar 404 por ID incorreto.
+        if body and b'"model"' in body and self.headers.get("Content-Type", "").lower().startswith("application/json"):
+            try:
+                payload = json.loads(body.decode("utf-8"))
+                model = payload.get("model")
+                if isinstance(model, str) and model.startswith("nvidia/") and model.count("/") >= 2:
+                    fixed = model.split("/", 1)[1]
+                    if fixed:
+                        payload["model"] = fixed
+                        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+                        length = len(body)
+                        headers["Content-Length"] = str(length)
+                        self.warn("normalized model id %r -> %r", model, fixed)
+            except Exception:
+                pass
+
         bucket = self.bucket
         if self.small_bucket is not None and length <= self.small_bytes:
             bucket = self.small_bucket
