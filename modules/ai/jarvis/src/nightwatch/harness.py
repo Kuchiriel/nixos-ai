@@ -170,6 +170,9 @@ class HarnessResult:
     # tentaram retry. convergence = retry_succeeded / retry_attempted.
     retry_succeeded: int = 0
     retry_attempted: int = 0
+    # Visibilidade de descoberta: ajuda a distinguir "sem defeito/capacidade"
+    # de "descoberta cega" (filtros, dedupe, cap, fontes vazias).
+    discovery_stats: dict[str, Any] = field(default_factory=dict)
 
     def _retry_succeeded_here(self, attempt: int) -> None:
         """(30/09, C5) Marca convergência se a validação passou numa
@@ -1968,14 +1971,24 @@ class Harness:
 
     def discover_tasks(self, project: str | None = None) -> list[Task]:
         """Discover tasks from all enabled sources.
-        
+
         If project is specified, only discover tasks for that project.
         Otherwise, discover across all configured projects.
-        
+
         Uses platform bridge for workspace-aware discovery when available.
         """
         tasks = []
         projects = [project] if project else self.config.projects
+        stats: dict[str, Any] = {
+            "projects": list(projects),
+            "scripted_total": 0,
+            "llm_total": 0,
+            "after_actionable_sort": 0,
+            "after_cap": 0,
+            "dropped_no_target": 0,
+            "dropped_dedupe": 0,
+            "returned": 0,
+        }
 
         # Platform-aware discovery: use workspace module if available
         try:
@@ -2000,11 +2013,15 @@ class Harness:
         for proj_name in projects:
             # Scripted discovery (per-project if project has a root)
             if self.config.use_scripted_discovery:
-                tasks.extend(_discover_scripted_tasks())
+                scripted = _discover_scripted_tasks()
+                stats["scripted_total"] += len(scripted)
+                tasks.extend(scripted)
 
             # LLM discovery (per-project)
             if self.config.use_llm_discovery:
-                tasks.extend(_discover_llm_tasks(self.call_llm, proj_name))
+                llm_tasks = _discover_llm_tasks(self.call_llm, proj_name)
+                stats["llm_total"] += len(llm_tasks)
+                tasks.extend(llm_tasks)
 
         # (30/09) Task ACTIONABLE (tem target de arquivo real) tem
         # PREFERÊNCIA sobre task de review — Independentemente do cap.
@@ -2013,12 +2030,13 @@ class Harness:
         # cap "5 por projeto" (por ordem de chegada) enchia com elas e
         # EXPULSAVA as tasks do LLM — que são as únicas com target de
         # arquivo real (as únicas que o patch loop consegue aplicar). O
-        # nightwatch rodava 2.5min, 0 commits, "No more tasks" —看似 fez
+        # nightwatch rodava 2.5min, 0 commits, "No more tasks" — parecia fez
         # trabalho mas nunca chegou no patch. Regra: actionable primeiro,
         # review preenche o resto.
         actionable = [t for t in tasks if self._has_real_target(t)]
         review_only = [t for t in tasks if not self._has_real_target(t)]
         tasks = actionable + review_only
+        stats["after_actionable_sort"] = len(tasks)
 
         # Cap: max 5 new tasks per project per round (flood control —
         # generic LLM slop multiplied by N projects burned the queue).
@@ -2032,6 +2050,7 @@ class Harness:
                 capped.append(t)
                 per_project[t.project] = n + 1
         tasks = capped
+        stats["after_cap"] = len(tasks)
 
         # Platform-aware persona selection for each task
         try:
@@ -2042,7 +2061,7 @@ class Harness:
                     task.persona = persona["id"]
         except Exception:
             pass
-        
+
         # Descarta task sem alvo de patch (30/09). Medido: a fila tinha
         # head = id='stuck', desc='test', target_files=[] — o run escolheu
         # essa, pulou ("alvo não é arquivo") e o ciclo fechou 0/0 sem
@@ -2051,6 +2070,7 @@ class Harness:
         com_alvo = [t for t in tasks if (getattr(t, "target_files", None) or [])]
         if len(com_alvo) != len(tasks):
             sem = [t for t in tasks if not (getattr(t, "target_files", None) or [])]
+            stats["dropped_no_target"] = len(sem)
             log.info(
                 "discovery: %d task(s) sem target_files descartadas "
                 "(ex.: %s) — não têm o que patchear",
@@ -2067,7 +2087,10 @@ class Harness:
             if key not in seen:
                 seen.add(key)
                 unique.append(t)
-        
+        stats["dropped_dedupe"] = len(tasks) - len(unique)
+        stats["returned"] = len(unique)
+        self._last_discovery_stats = stats
+
         return unique
 
     # ── Task Execution ─────────────────────────────────────────────────────
@@ -2714,6 +2737,8 @@ class Harness:
         # ── Discover across all projects ──
         self.notify("🔍 Discovering tasks...")
         new_tasks = self.discover_tasks()
+        result.discovery_stats = dict(getattr(self, "_last_discovery_stats", {}) or {})
+        result.discovery_stats["initial_returned"] = len(new_tasks)
         for task in new_tasks:
             # (26/09) strict: task fora dos projetos-alvo não entra na fila
             if (self.config.strict_projects and self.config.projects
@@ -2743,7 +2768,17 @@ class Harness:
                         self.queue.add_task(t)
                     task = self.queue.get_next_task()
                 if not task:
+                    no_more_stats = dict(getattr(self, "_last_discovery_stats", {}) or {})
+                    result.discovery_stats["last_no_more"] = no_more_stats
                     self.notify("✅ No more tasks")
+                    self._emit("no_more_tasks", discovery=no_more_stats)
+                    try:
+                        _log_progress({
+                            "event_type": "no_more_tasks",
+                            "discovery": no_more_stats,
+                        })
+                    except Exception:
+                        pass
                     break
 
             success = self.execute_task(task)
