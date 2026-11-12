@@ -71,7 +71,7 @@
         exit 1
       }
       ${pkgs.rclone}/bin/rclone deletefile gdrive:NixOS-Sync/.jarvis-preflight 2>/dev/null || true
-      ${pkgs.rclone}/bin/rclone copy /home/nixos/projects gdrive:NixOS-Sync/03-projects \
+      ${pkgs.rclone}/bin/rclone copy ${config.home.homeDirectory}/projects gdrive:NixOS-Sync/03-projects \
         --filter-from ${config.xdg.configFile."rclone/filters.txt".target} \
         --update \
         --fast-list \
@@ -103,8 +103,8 @@
       # SO na maquina: o rclone so copiava ~/projects e ~/vaults esta fora
       # do escopo. Agora sai tambem — SEM o filtro global (que exclui
       # .git/: no vault o historico git E o backup).
-      if [ -d /home/nixos/vaults ]; then
-        ${pkgs.rclone}/bin/rclone copy /home/nixos/vaults gdrive:NixOS-Sync/05-vault \
+      if [ -d ${config.home.homeDirectory}/vaults ]; then
+        ${pkgs.rclone}/bin/rclone copy ${config.home.homeDirectory}/vaults gdrive:NixOS-Sync/05-vault \
           --update \
           --fast-list \
           --tpslimit 10 \
