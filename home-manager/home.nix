@@ -470,10 +470,18 @@ in {
   # vai só a higiene de contexto. Symlink read-only da store: edição manual
   # na mão fica IMPOSSÍVEL — se um agente recriar o arquivo, a ativação
   # seguinte o substitui de volta.
-  home.file."projects/opencode.json".text = builtins.toJSON {
-    "$schema" = "https://opencode.ai/config.json";
-    compaction = { auto = true; prune = true; buffer = "6%"; keep = { tokens = 50000; }; };
-    tool_output = { max_lines = 200; max_bytes = 8192; };
+  # force = true: o alvo no disco NAO e symlink da store (um agente recriou
+  # o arquivo como regular, com uma chave a mais "warming"). Sem force a
+  # ativacao aborta com "would be clobbered" e a geracao inteira nao e
+  # aplicada — foi o que travou o switch de 12/11. O conteudo e declarado
+  # aqui, entao sobrescrever e o comportamento correto.
+  home.file."projects/opencode.json" = {
+    force = true;
+    text = builtins.toJSON {
+      "$schema" = "https://opencode.ai/config.json";
+      compaction = { auto = true; prune = true; buffer = "6%"; keep = { tokens = 50000; }; };
+      tool_output = { max_lines = 200; max_bytes = 8192; };
+    };
   };
 
   # ── VS Code + Roo Code — configurado via módulo vscode-roo.nix ──

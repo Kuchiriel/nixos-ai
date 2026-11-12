@@ -309,3 +309,32 @@ def test_gate_normalizes_double_prefixed_nvidia_model_id():
     finally:
         proxy.shutdown()
         upstream.shutdown()
+
+
+def test_gate_health_endpoint_reports_counters_without_upstream():
+    """(12/11) O probe operacional e' GET /__gate/health: responde do proprio
+    processo, sem tocar o upstream. Foi ele que mostrou 429/503/retries da
+    janela em que o cliente via ECONNRESET — sem esse endpoint o diagnostico
+    vira chute (uma request de 2,4 MB por turno)."""
+    from http.server import ThreadingHTTPServer
+
+    gate = nv_gate.Gate
+    gate.bucket = nv_gate.Bucket(rpm=60, burst=2)
+    gate.stats = nv_gate.Stats()
+    gate.stats.bump("upstream_429")
+    gate.stats.bump("retries")
+
+    proxy = ThreadingHTTPServer(("127.0.0.1", 0), gate)
+    threading.Thread(target=proxy.serve_forever, daemon=True).start()
+    try:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{proxy.server_address[1]}/__gate/health", timeout=10
+        ) as resp:
+            assert resp.status == 200
+            data = json.loads(resp.read())
+        assert data["rpm"] == 60
+        assert data["upstream_429"] == 1
+        assert data["retries"] == 1
+        assert "upstream_504" in data and "upstream_io" in data
+    finally:
+        proxy.shutdown()
