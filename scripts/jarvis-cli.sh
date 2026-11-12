@@ -676,8 +676,9 @@ PY
     # subcomandos do CLI, sempre pelo mesmo env (jarvis-env.sh).
     # É o que o meta-tool da voz usa (ação `jarvis`).
     speak|stt|benchmark|doctor|voice|emotion|agent|ask|run|dev|watchdog|heal|self-test|metrics|triggers|screenshot|hwdetect|hwprofile|index|rag|migrate|parity|intent|profile|services|state|commands|list|control|create|forget|handoff|pause|resume|regression|notify|telegram|consolidate|nightwatch|idle|keygen|launcher|summarize|worker|eval-rag|reset-state)
-        shift
-        "$PY" -m jarvis.cli.main "$@"
+        _cmd="$1"   # (12/11) o shift consumia o subcomando: o main nunca recebia
+        shift        # ("invalid choice") — repassa o comando antes dos args
+        "$PY" -m jarvis.cli.main "$_cmd" "$@"
         ;;
     help|*)
         usage
