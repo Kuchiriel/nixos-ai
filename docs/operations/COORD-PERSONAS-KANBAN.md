@@ -79,10 +79,17 @@ mensagens. O kanban de execução é o `task_queue` (workitem).
 
 ## 5. Como operar (mínimo)
 
-1. **Identifique-se antes de agir:** `python3 nixos-ai/scripts/agent-roster.py claim --name <nome> --lane <lane> --repo <repo> --files "<globs>" --model <provider/id> --mbti <TIPO> --context "<1 frase>"` (atualize com `set-context`/re-claim quando o contexto mudar). Informe origem/sistema no cartão (o claim agora grava `host/origin`).
-2. **Pegue trabalho pelo kanban:** `coord_workitem` (MCP) ou `jarvis workitem --project <p> list|next|claim|done` para tarefas de execução; `agent-roster.py task` para tarefas leves compartilhadas.
-3. **Comunique pelo bus:** `coord_msg`/`send_message` (grava no bus + wake local). Telegram `/board` ou `/assign <tarefa>` para o dono ver o quadro e o plano MBTI+modelo.
-4. **No celular/Termux:** use a sessão via `opencode serve` no tailnet ou SSH com chave; o agente deve declarar origem `termux` e o mesmo protocolo de claim/mensagem.
+1. **Identifique-se antes de agir:** `python3 nixos-ai/scripts/agent-roster.py claim --name <nome> --lane <lane> --repo <repo> --files "<globs>" --model <provider/id> --context "<1 frase>" --task "<tarefa atual>"` (o claim sugere e preenche `--mbti/--persona` pela tarefa via `team.persona_for_task/assign` quando não informados; você pode sobrescrever com `--mbti <TIPO> --persona <id>`). Atualize com `set-context`/re-claim quando o contexto mudar. Informe origem/sistema no cartão (o claim grava `host/origin`).
+2. **Pegue trabalho pelo kanban:** `coord_workitem` (MCP) ou `jarvis workitem --project <p> list|next|claim|done` para tarefas de execução; `agent-roster.py task` para tarefas leves compartilhadas. No Telegram: `/work [projeto]`, `/work stats|next`, `/work <id>`.
+3. **Comunique pelo bus:** `coord_msg`/`send_message` (grava no bus + wake local). Telegram `/board`, `/pending <agente>` ou `/assign <tarefa>` para ver quadro e plano MBTI+modelo.
+4. **No celular/Termux:** use a sessão via `opencode serve` no tailnet ou SSH com chave; declare origem `termux` e siga o mesmo protocolo (ver `docs/operations/TERMUX-MOBILE-ONBOARDING.md`).
+
+### MBTI end-to-end (seguro)
+
+- **Sugestão por tarefa (papel fluido):** `/assign <tarefa>` (Telegram) ou `jarvis.core.team.assign_text/persona_for_task` devolve `tipo`, `MBTI`, `persona` e modelo sugerido. A personalidade acompanha o tipo da tarefa (debug, arquitetura, pesquisa, coord, docs, operação, criação), não é identidade fixa.
+- **Registrar no claim/roster:** `scripts/agent-roster.py claim --task "<tarefa>"` preenche MBTI/persona faltantes (só metadado de coordenação). Isso não altera o comportamento da sessão por si só.
+- **Aplicar framing na sessão (opcional, com cautela):** o estado ativo de persona (`/mood <id>` no Telegram, `jarvis_persona`/estado em `~/.local/state/jarvis/persona.json`) entra no system prompt via plugin/harness. É estado global: mude conscientemente e evite assumir ganho sem evidência em modelos locais pequenos (medir A/B por tipo de tarefa antes de generalizar). Para limpar: `/mood off`/`clear_active_persona`.
+- **Confirmação prática:** cheque roster/`whoami` (MBTI/persona registrados), board/Telegram (`/assign`, `/work`) e, se aplicou persona ativa, valide que o framing esperado está em vigor sem degradar a tarefa.
 
 ## 6. Próximos passos (medidos, não assumidos)
 
@@ -90,3 +97,28 @@ mensagens. O kanban de execução é o `task_queue` (workitem).
 - Tornar `coord_workitem`/task_queue a visão única no Telegram (comando de fila) e expor MBTI sugerido no fluxo de claim.
 - Endurecer auth do `coord_http` (já auditado: hoje mais aberto que deveria no tailnet) — identidade atada ao chamador.
 - Validar ganho de MBTI em tarefas reais com modelos locais pequenos (A/B por tipo de tarefa) antes de generalizar.
+
+## 7. Proposta: hardening de `coord_http` (sem quebrar lanes remotas)
+
+> Estado atual (auditado): `coord_http` responde no tailnet (`:8765/mcp`) com proteção principalmente de rede (Tailscale ACL) e, em alguns fluxos, sem identidade forte atada ao chamador. Endurecer é necessário, mas migração precisa ser compatível com Windows/Termux.
+
+**Princípios**
+
+- Fail-closed para novos clientes autenticados, mas com janela de compatibilidade para clientes legados conhecidos (não derrubar Termux/Windows).
+- Identidade do chamador verificável (token/credencial por agente ou por origem) e auditável no bus/roster; não confiar só em campos do payload.
+- Defesa em profundidade: ACL do Tailscale continua, não vira única barreira.
+
+**Plano de migração seguro (sugerido)**
+
+1. **Inventariar consumidores:** listar quem usa `:8765/mcp` hoje (Termux, Windows, scripts locais, watchers) e como autentica (headers, IP, sem auth).
+2. **Introduzir auth opcional com telemetria:** aceitar credencial quando enviada, registrar origem/identidade e marcar chamadas "legacy" sem bloquear ainda; medir por alguns dias.
+3. **Distribuir segredos por agente/origem:** segredo compartilhado inicial (mínimo) ou bearer por agente, armazenado fora do repo (env/secret store do host), com rotação possível sem rebuild do mundo.
+4. **Modo compatível + prazo:** habilitar exigência de auth por allowlist de origem/agente primeiro; manter bypass temporário só para clientes legados mapeados, com data de corte conhecida.
+5. **Fail-closed por padrão:** após migração, rejeitar chamadas sem identidade válida; manter exceção explícita e documentada apenas se houver cliente que não pode ser atualizado (último recurso).
+6. **Testes antes de virar chave:** handshake + `tools/list` + `tools/call` (ex.: `coord_roster`, `coord_workitem`) a partir de Linux, Windows e Termux; confirmar que wake/board/pendências continuam funcionando.
+
+**Critério de aceite**
+
+- Windows e Termux continuam operando com credencial configurada.
+- Chamadas sem credencial válida são rejeitadas e auditadas.
+- `coord_pending`/inbox continuam protegidos contra spoofing de identidade (resolver identidade pelo chamador, não pelo payload).

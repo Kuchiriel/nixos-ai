@@ -48,6 +48,13 @@ import time
 from pathlib import Path
 
 PROJECTS_ROOT = Path(os.environ.get("AGENTS_ROOT", Path.home() / "projects"))
+# bootstrap opcional: permite sugerir MBTI/persona via jarvis.core.team quando rodar no repo
+_SRC = PROJECTS_ROOT / "nixos-ai" / "modules" / "ai" / "jarvis" / "src"
+if _SRC.is_dir():
+    p = str(_SRC)
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
 ROSTER_PATH = Path(
     os.environ.get("AGENTS_ROSTER", PROJECTS_ROOT / ".agents" / "roster.json"))
 LOCK_PATH = ROSTER_PATH.with_suffix(".lock")
@@ -581,9 +588,52 @@ def cmd_claim(args) -> int:
             aliases = list((previous or {}).get("aliases") or [])
         model = (getattr(args, "model", "") or "").strip() \
             or (previous or {}).get("model", "") or ""
+        task_hint = (getattr(args, "task", "") or "").strip()
+        suggested = None
+        need_mbti = not (getattr(args, "mbti", "") or "").strip()
+        need_persona = not (getattr(args, "persona", "") or "").strip()
+        if task_hint and (need_mbti or need_persona):
+            # sugestão segura (não muda comportamento de sessão; só preenche claim)
+            try:
+                from jarvis.core.team import persona_for_task, classify
+                mbti_s, persona_s, why_s = persona_for_task(task_hint)
+                kind_s, _ = classify(task_hint)
+                suggested = {"kind": kind_s, "mbti": mbti_s, "persona": persona_s, "why": why_s}
+            except Exception:
+                # fallback local (mesmo espírito de team.TASK_PROFILES)
+                tl = task_hint.lower()
+                profiles = [
+                    ("debug", ("ISTP", "debug")),
+                    ("arquitetura", ("INTJ", "architect")),
+                    ("pesquisa", ("INTP", "researcher")),
+                    ("documentacao", ("INFJ", "technical_writer")),
+                    ("operacao", ("ESTJ", "devops_engineer")),
+                    ("criacao", ("ENTP", "cto")),
+                    ("coord", ("ENTJ", "supervisor")),
+                ]
+                pats = {
+                    "debug": ["bug", "erro", "exception", "traceback", "falha", "quebr", "regress"],
+                    "arquitetura": ["arquitet", "design", "refactor", "schema"],
+                    "pesquisa": ["pesquis", "investig", "benchmark", "paper", "medid", "rag"],
+                    "documentacao": ["doc", "readme", "manual", "tutorial", "explic", "escrev"],
+                    "operacao": ["deploy", "servi", "systemd", "monitor", "backup", "health", "manuten"],
+                    "criacao": ["criar", "idei", "proposta", "novo"],
+                    "coord": ["coorden", "organiz", "prioriz", "equipe", "time", "agente"],
+                }
+                kind_s = "operacao"
+                for k, kws in pats.items():
+                    if any(kw in tl for kw in kws):
+                        kind_s = k
+                        break
+                for k, (m, p) in profiles:
+                    if k == kind_s:
+                        suggested = {"kind": k, "mbti": m, "persona": p, "why": "sugestão local por tipo de tarefa"}
+                        break
         mbti = (getattr(args, "mbti", "") or "").strip().upper() \
+            or ((suggested or {}).get("mbti", "") if need_mbti else "") \
             or str((previous or {}).get("mbti") or "")
         persona = (getattr(args, "persona", "") or "").strip() \
+            or ((suggested or {}).get("persona", "") if need_persona else "") \
             or str((previous or {}).get("persona") or "")
         host = _host_info()
         entry = {
@@ -614,6 +664,15 @@ def cmd_claim(args) -> int:
         print(f"roster: aliases {', '.join(entry['aliases'])}")
     if entry.get("model"):
         print(f"roster: modelo {entry['model']}")
+    if suggested and (need_mbti or need_persona):
+        filled = []
+        if need_mbti and (suggested.get("mbti")):
+            filled.append(f"MBTI={suggested.get('mbti')}")
+        if need_persona and (suggested.get("persona")):
+            filled.append(f"persona={suggested.get('persona')}")
+        if filled:
+            print(f"roster: sugestão pela tarefa ({suggested.get('kind')}): " + ", ".join(filled))
+            print(f"roster: motivo: {suggested.get('why')}")
     if entry.get("mbti") or entry.get("persona"):
         print(f"roster: persona {entry.get('mbti') or '-'}"
               + (f" ({entry.get('persona')})" if entry.get("persona") else ""))
@@ -865,6 +924,9 @@ def main() -> int:
                    help="perfil MBTI da persona (ex.: ISTP), alinhado à tarefa")
     p.add_argument("--persona", default="",
                    help="id/nome da persona (ex.: debug, architect)")
+    p.add_argument("--task", default="",
+                   help="tarefa atual: sugere MBTI/persona via team.persona_for_task "
+                        "(só preenche se --mbti/--persona não forem informados)")
     p.add_argument("--force", action="store_true",
                    help="assume mesmo com colisão de arquivos")
     p.set_defaults(func=cmd_claim)
