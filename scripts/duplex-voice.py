@@ -1408,6 +1408,8 @@ MUTE_PHRASES = (
     "cala a boca", "cala boca", "cala o tom", "cala lá", "cala la",
     "fica calado", "fica calada", "fica mudo", "fica muda",
     "quieto", "silêncio", "silencio", "bico fechado",
+    "chega disso", "basta disso", "cala isso", "para com isso",
+    "não fala mais nada", "nao fala mais nada",
     "para de falar", "pare de falar", "não fala mais", "nao fala mais",
     "não fala nada", "shut up", "shutup", "stop talking",
 )
