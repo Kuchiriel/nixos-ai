@@ -369,6 +369,128 @@ def discover_evolucao() -> list[Task]:
     return tasks
 
 
+def _pains_candidates() -> list[Path]:
+    """Possible locations for the shared pains log."""
+    candidates: list[Path] = []
+    try:
+        root = find_repo_root()
+        candidates.extend([
+            root / "docs" / "pains" / "pains.jsonl",
+            root.parent / "docs" / "pains" / "pains.jsonl",
+        ])
+    except Exception:
+        pass
+    candidates.append(Path.home() / "projects" / "docs" / "pains" / "pains.jsonl")
+    seen: set[Path] = set()
+    out: list[Path] = []
+    for c in candidates:
+        if c not in seen:
+            seen.add(c)
+            out.append(c)
+    return out
+
+
+def discover_pains() -> list[Task]:
+    """Convert recurring pains (with identifiable file targets) into tasks.
+
+    Conservative: only emits when a plausible target file exists, skips
+    pains marked as addressed (fix != "-"), and dedupes by signature.
+    This turns repeated friction into actionable work instead of noise.
+    """
+    import json
+    import hashlib
+    from datetime import datetime, timedelta
+
+    pains_path = next((p for p in _pains_candidates() if p.exists()), None)
+    if pains_path is None:
+        return []
+
+    try:
+        lines = pains_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except Exception:
+        return []
+
+    cutoff = datetime.now().astimezone() - timedelta(days=14)
+    repo_root = None
+    try:
+        repo_root = find_repo_root()
+    except Exception:
+        pass
+    monorepo = Path.home() / "projects"
+
+    tasks: list[Task] = []
+    seen_sig: set[str] = set()
+    path_re = re.compile(r'(?:[\w./-]+/)?[\w.-]+\.(?:py|nix|sh|md|mjs|ts|tsx|js|json|toml|yaml|yml)')
+    for line in reversed(lines[-400:]):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            d = json.loads(line)
+        except Exception:
+            continue
+        fix = str(d.get("fix", "-")).strip()
+        if fix and fix != "-":
+            continue
+        sig = str(d.get("sig") or d.get("key") or "").strip()
+        if not sig or sig in seen_sig:
+            continue
+        last_seen = str(d.get("last_seen") or "")
+        if last_seen:
+            try:
+                ts = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+                if ts.tzinfo is None:
+                    ts = ts.astimezone()
+                if ts < cutoff:
+                    continue
+            except Exception:
+                pass
+        hay = f"{sig} {d.get('ctx', '')}"
+        target = ""
+        for m in path_re.findall(hay):
+            cand = Path(m)
+            resolved: Path | None = None
+            if cand.is_absolute():
+                if cand.exists():
+                    resolved = cand
+            else:
+                for base in [b for b in (repo_root, monorepo, Path.cwd()) if b]:
+                    p = (base / cand).resolve()
+                    if p.exists():
+                        resolved = p
+                        break
+            if resolved is None:
+                continue
+            try:
+                if repo_root and str(resolved).startswith(str(repo_root)):
+                    target = str(resolved.relative_to(repo_root))
+                elif str(resolved).startswith(str(monorepo)):
+                    target = str(resolved.relative_to(monorepo))
+                else:
+                    target = str(resolved)
+            except Exception:
+                target = str(resolved)
+            break
+        if not target:
+            continue
+        seen_sig.add(sig)
+        short = hashlib.sha1(sig.encode("utf-8", "ignore")).hexdigest()[:10]
+        count = int(d.get("count", 1) or 1)
+        sev = "medium" if count >= 5 else "low"
+        desc = f"[pain x{count}] {sig[:120]}"
+        tasks.append(Task(
+            id=f"pain-{short}",
+            category="pains",
+            severity=sev,
+            description=desc,
+            target_path=target,
+            auto_fixable=False,
+        ))
+        if len(tasks) >= 5:
+            break
+    return tasks
+
+
 # ═══ Registry ═══
 
 CATEGORY_REGISTRY: dict[str, Callable[[], list[Task]]] = {
@@ -383,6 +505,7 @@ CATEGORY_REGISTRY: dict[str, Callable[[], list[Task]]] = {
     "performance": discover_performance,
     "missao": discover_missao,
     "evolucao": discover_evolucao,
+    "pains": discover_pains,
 }
 
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
