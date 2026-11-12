@@ -299,8 +299,14 @@ def board_text(limit: int = 12) -> str:
     for a in agents[:limit]:
         c = claim_of(a)
         mark = "▸" if c else "•"
+        ident_extra = []
+        if a.get("origin"):
+            ident_extra.append(a.get("origin"))
+        if a.get("mbti") or a.get("persona"):
+            ident_extra.append(f"{a.get('mbti') or '-'}({a.get('persona') or '-'})")
+        extra = f" [{'; '.join(ident_extra)}]" if ident_extra else ""
         lines.append(
-            f"{mark} {a.get('codename') or a['name']} [{a.get('lane') or '-'}]"
+            f"{mark} {a.get('codename') or a['name']} [{a.get('lane') or '-'}]{extra}"
             f"{' (ocupado)' if a.get('busy') else ''}"
             f"{(' · ' + a['model']) if a.get('model') else ''}"
             f" — {c.get('intent') or c.get('kind') or 'sem claim'}"

@@ -40,6 +40,7 @@ import fcntl
 import json
 import os
 import random
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -439,6 +440,31 @@ def _files_of(entry: dict) -> list[str]:
     return list(entry.get("files") or [])
 
 
+def _host_info() -> dict[str, str]:
+    """Origem do agente: onde ele roda (sistema, host, arquitetura).
+
+    Mesmo espírito do host_info do bus de coord: cada agente informa de
+    onde vem e em que sistema roda (linux/windows/termux/macos). Sem isso
+    no roster, ninguém sabe com quem fala.
+    """
+    import platform as _platform
+    system = _platform.system().lower()
+    if os.environ.get("ANDROID_ROOT") or os.environ.get("ANDROID_DATA"):
+        kind = "termux"
+    elif system == "windows":
+        kind = "windows"
+    elif system == "darwin":
+        kind = "macos"
+    else:
+        kind = "linux"
+    return {
+        "kind": kind,
+        "os": system,
+        "arch": _platform.machine(),
+        "hostname": socket.gethostname().split(".")[0],
+    }
+
+
 # ── comandos ───────────────────────────────────────────────────────────
 
 def cmd_set_context(args) -> int:
@@ -464,7 +490,7 @@ def cmd_set_context(args) -> int:
 
 
 def cmd_whoami(args) -> int:
-    """Quem sou eu: codinome + contexto + lane (o 'cartão de visita')."""
+    """Quem sou eu: codinome + identidade + contexto (o cartão de visita)."""
     data = load()
     for e in data["agents"]:
         if e["name"] == args.name:
@@ -472,11 +498,17 @@ def cmd_whoami(args) -> int:
                 print(json.dumps(e, ensure_ascii=False, indent=2))
             else:
                 print(f"{e.get('codename') or '-'} ({e['name']})")
-                print(f"  lane:   {e.get('lane') or '-'}")
-                print(f"  repo:   {e.get('repo') or '-'}")
-                print(f"  files:  {', '.join(e.get('files') or []) or '-'}")
+                print(f"  origem:   {e.get('origin') or '-'}")
+                if e.get("model"):
+                    print(f"  modelo:   {e.get('model')}")
+                if e.get("mbti") or e.get("persona"):
+                    print(f"  persona:  {e.get('mbti') or '-'}"
+                          + (f" ({e.get('persona')})" if e.get("persona") else ""))
+                print(f"  lane:     {e.get('lane') or '-'}")
+                print(f"  repo:     {e.get('repo') or '-'}")
+                print(f"  files:    {', '.join(e.get('files') or []) or '-'}")
                 print(f"  contexto: {e.get('context') or '(vazio)'}")
-                print(f"  sessao: {e.get('session') or '-'}")
+                print(f"  sessao:   {e.get('session') or '-'}")
             return 0
     print(f"agent-roster: '{args.name}' não está no roster", file=sys.stderr)
     return 1
@@ -549,11 +581,20 @@ def cmd_claim(args) -> int:
             aliases = list((previous or {}).get("aliases") or [])
         model = (getattr(args, "model", "") or "").strip() \
             or (previous or {}).get("model", "") or ""
+        mbti = (getattr(args, "mbti", "") or "").strip().upper() \
+            or str((previous or {}).get("mbti") or "")
+        persona = (getattr(args, "persona", "") or "").strip() \
+            or str((previous or {}).get("persona") or "")
+        host = _host_info()
         entry = {
             "name": args.name,
             "codename": codename,
             "aliases": aliases,
             "model": model,
+            "mbti": mbti,
+            "persona": persona,
+            "host": host,
+            "origin": f"{host.get('hostname', '?')} ({host.get('kind', '?')}/{host.get('arch', '?')})",
             "context": context,
             "lane": args.lane or "",
             "repo": args.repo or "",
@@ -573,6 +614,11 @@ def cmd_claim(args) -> int:
         print(f"roster: aliases {', '.join(entry['aliases'])}")
     if entry.get("model"):
         print(f"roster: modelo {entry['model']}")
+    if entry.get("mbti") or entry.get("persona"):
+        print(f"roster: persona {entry.get('mbti') or '-'}"
+              + (f" ({entry.get('persona')})" if entry.get("persona") else ""))
+    if entry.get("origin"):
+        print(f"roster: origem {entry['origin']}")
     print(f"roster: codinome '{entry['codename']}'"
           + (f" | contexto: {entry['context']}" if entry["context"] else
              " | contexto: (vazio — defina com set-context)"))
@@ -815,6 +861,10 @@ def main() -> int:
                         "modelo pela tarefa e troca no rate limit)")
     p.add_argument("--codename", default="",
                    help="codinome escolhido (sem ele, sorteia um livre)")
+    p.add_argument("--mbti", default="",
+                   help="perfil MBTI da persona (ex.: ISTP), alinhado à tarefa")
+    p.add_argument("--persona", default="",
+                   help="id/nome da persona (ex.: debug, architect)")
     p.add_argument("--force", action="store_true",
                    help="assume mesmo com colisão de arquivos")
     p.set_defaults(func=cmd_claim)

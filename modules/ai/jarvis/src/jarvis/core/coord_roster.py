@@ -169,16 +169,24 @@ def roster_agents() -> list[dict[str, Any]]:
 
 
 def roster_text() -> str:
-    """Roster em texto: codinome · nome · lane · contexto · estado."""
+    """Roster em texto: codinome · nome · origem/modelo/MBTI · lane · estado · contexto."""
     agents = roster_agents()
     if not agents:
         return ("roster vazio (ou agent-roster.py indisponível) — "
                 "reivindique com: agent-roster.py claim --name <N> --lane <L>")
-    lines = ["roster (codinome · nome · lane · estado · contexto):"]
+    lines = ["roster (codinome · nome · origem/modelo/MBTI · lane · estado · contexto):"]
     for entry in agents:
+        ident = []
+        if entry.get("origin"):
+            ident.append(entry.get("origin"))
+        if entry.get("model"):
+            ident.append(entry.get("model"))
+        if entry.get("mbti") or entry.get("persona"):
+            ident.append(f"{entry.get('mbti') or '-'}({entry.get('persona') or '-'})")
+        ident_s = " / ".join(ident) if ident else "-"
         lines.append(
             f"- {entry.get('codename') or '-'} · {entry.get('name')} · "
-            f"{entry.get('lane') or '-'} · {entry.get('state') or '?'} · "
+            f"{ident_s} · {entry.get('lane') or '-'} · {entry.get('state') or '?'} · "
             f"{entry.get('context') or '(sem contexto)'}"
         )
     return "\n".join(lines)
@@ -195,7 +203,7 @@ def resolve_name(target: str) -> str:
 
 
 def whoami(name: str | None = None) -> str:
-    """Cartão de visita: codinome, lane, repo, escopo e contexto."""
+    """Cartão de visita: codinome, identidade, lane, repo, escopo e contexto."""
     target = name or agent_id()
     try:
         raw = _run(["python3", _script("agent-roster.py"), "whoami",
@@ -203,15 +211,19 @@ def whoami(name: str | None = None) -> str:
         entry = json.loads(raw)
     except Exception as exc:
         return f"ERROR: whoami({target}) falhou: {exc}"
-    return "\n".join([
+    lines = [
         f"{entry.get('codename') or '-'} ({entry.get('name')})",
+        f"  origem:    {entry.get('origin') or '-'}",
+        f"  modelo:    {entry.get('model') or '-'}",
+        f"  persona:   {entry.get('mbti') or '-'}{(' (' + entry.get('persona') + ')') if entry.get('persona') else ''}",
         f"  lane:      {entry.get('lane') or '-'}",
         f"  repo:      {entry.get('repo') or '-'}",
         f"  arquivos:  {', '.join(entry.get('files') or []) or '-'}",
         f"  contexto:  {entry.get('context') or '(vazio)'}",
         f"  sessao:    {entry.get('session') or '-'}",
         f"  estado:    {entry.get('state') or '?'}",
-    ])
+    ]
+    return "\n".join(lines)
 
 
 def set_context(context: str, name: str | None = None) -> str:
