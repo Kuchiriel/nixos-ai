@@ -308,6 +308,9 @@ def discover_missao() -> list[Task]:
 
     P0/P1 (security/Nix architecture) → auto_fixable=False (supervised only)
     P2/P3 (quality/docs) → auto_fixable=True (can go through safety gate)
+    Optional fields per item:
+      - **Auto-fixable**: true|false|yes|no (override default for steering)
+      - **Tipo**: defect|capability|... (informational, appended to description)
     """
     path = find_repo_root() / "TODO-MISSAO.md"
     if not path.exists():
@@ -325,13 +328,23 @@ def discover_missao() -> list[Task]:
             continue
         arq_m = re.search(r"\*\*Arquivos\*\*:\s*(.+)", body)
         severity = {"P0": "critical", "P1": "high", "P2": "medium", "P3": "low"}.get(prio, "info")
+        auto_fixable = prio in ("P2", "P3")
+        af_m = re.search(r"\*\*Auto-fixable\*\*:\s*(true|false|yes|no)", body, re.IGNORECASE)
+        if af_m:
+            auto_fixable = af_m.group(1).lower() in ("true", "yes")
+        desc = title.strip()
+        tipo_m = re.search(r"\*\*(?:Tipo|Kind)\*\*:\s*(.+)", body)
+        if tipo_m:
+            kind = tipo_m.group(1).strip().splitlines()[0]
+            if kind:
+                desc = f"[{kind}] {desc}"
         tasks.append(Task(
             id=f"missao-{prio}-{num}",
             category="missao",
             severity=severity,
-            description=title.strip(),
+            description=desc,
             target_path=(arq_m.group(1).strip() if arq_m else ""),
-            auto_fixable=prio in ("P2", "P3"),
+            auto_fixable=auto_fixable,
         ))
     return tasks
 
