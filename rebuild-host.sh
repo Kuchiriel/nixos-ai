@@ -113,6 +113,21 @@ else
   nh os switch "$FLAKE_DIR" -H "$TARGET_HOST" -- --option binary-caches-parallel-connections 4 --option http-connections 5
 fi
 
+# (11/11, sweep-2026-11) AS UNITS DE SISTEMA VOLTAM. O switch para as parts do
+# jarvis.target quando o arquivo da unit muda, mas o TARGET e estatico (sempre
+# ativo, sem timestamp proprio): como ele nunca e parado nem reiniciado, as
+# parts nao voltam. MEDIDO 11/11: o router (llama-cpp-server, :8080) ficou
+# INACTIVE das 15:10:09 as 22:5x, ou seja 7h37 com o LLM local fora do ar e
+# ninguem percebendo (o proprio script documenta que "rebuild ativa config e
+# reinicia servicos": aqui ele nao reiniciava). O restart do target propaga
+# para as parts (PartOf=jarvis.target), e um restart do grupo inteiro custa
+# alguns segundos de inferencia local, que e o que o rebuild ja faz.
+if [ "$HOME_ONLY" != true ]; then
+    echo "[rebuild] religando o jarvis.target (e as parts: router, embeddings, rerank, qdrant, webui)"
+    systemctl restart jarvis.target 2>/dev/null || \
+        echo "[rebuild] AVISO: restart do jarvis.target falhou; conferir as units de inferencia"
+fi
+
 echo ""
 echo "===================================================="
 echo "✅ SISTEMA ATUALIZADO COM SUCESSO"
