@@ -65,3 +65,25 @@ instrução alheia.
   justamente o caminho de código que não checa nada.
 - **Não** expor o MCP em `0.0.0.0` "para facilitar" (o bind na tailnet já funciona e
   é o que a fleet usa das outras máquinas).
+
+## Reverificação 11/11: o contraste com o sistema que a auditoria está protegendo
+
+Medido de novo hoje, da tailnet, **sem nenhuma credencial**:
+
+| superfície | resposta | o que significa |
+|---|---|---|
+| `coord_http` (:8765), `POST /mcp` | HTTP 400, `Missing session ID` | **não pediu credencial**: o erro é de protocolo, não de auth |
+| `jarvis_http` (:8766) | HTTP 406 | o mesmo: responde, sem auth |
+
+E o contraste que importa para a decisão do dono: a lane da auditoria (Lontra,
+Marco 4 de 11/11) pediu **senha do BasicAuth ou liberação de IP** para o dashboard do
+**Arcane** (que tem whitelist de IP e BasicAuth ✓), enquanto a **coordenação da própria
+casa** — o MCP que fala com a frota, com o bus e com as tools do dono — **não pede
+credencial nenhuma** para quem estiver na tailnet ✓. O sistema auditado é mais fechado
+que a casa.
+
+Isso não é novo (é o red-team de 09/11 ✓) e a mitigação proposta continua a mesma e
+continua **não aplicada**: auth de verdade no MCP, com a identidade amarrada ao caller
+(o MCP já sabe a lane pela sessão ✓). O que o dado de hoje acrescenta é a comparação de
+risco: pedir credencial para o Arcane e deixar o coord_http aberto é trocar o problema
+mais chato pelo mais fácil de explorar.
