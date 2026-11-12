@@ -13,22 +13,44 @@ então: (a) unit de outro projeto aparecia como falha do nixos-ai, (b) dois
 jobs pesados podiam coincidir, (c) unit solto em `~/.config/systemd/user/`
 sobrevivia a rebuild e ninguém via.
 
-## User timers (12)
+## Consolidação: "team-suite" (personas/coord/kanban/telegram) — 12/11
+
+O antigo `team-suite` (timer 03:30, unit solto, jogo de teste "dungeon")
+foi substituído. O sistema vivo hoje é **um só**, no nixos-ai:
+
+| Peça antiga (legado, `~/projects/team/`) | Equivalente vivo hoje |
+|---|---|
+| bots shell + `queue.md` (kanban markdown) + `MEMORY.md` | bus do coord + `AGENTS-QUEUE.md` + memórias/RAG |
+| `suite-bot.sh` / `drift-bot.sh` / `coord.sh` por timer | `night-comms` (00:00, lê bus, entrega pendências) + `agents-watcher.sh`/`agent-api.py` (acorda por API) + `agent-keepalive.sh` |
+| `tg.sh` / bot tokens por persona em `/etc/jarvis-team-bots.env` | Telegram do JARVIS + `night-comms` avisa o dono |
+| personas/roles em `team/roles/` | `jarvis/core/team.py` (escolha de personalidade/modelo/agente por tarefa) + `coord_http.py`/MCP `jarvis_coord_*` (roster, workitems, mensagens) |
+
+Os scripts de `~/projects/team/` permanecem no lugar (legado, não deletado).
+O que rodava por timer solto (`team-coord`, `drift-bot`, `team-suite`) foi
+**desabilitado e movido para quarentena** (reversível) em
+`~/.local/state/jarvis/legacy-units-2026-11-12/`. O symlink fantasma
+`timers.target.wants/team-suite.timer` foi removido. Regra: fila única é o
+bus (`AGENTS-QUEUE.md`/coord), sem kanban paralelo.
+
+## User timers (10) — estado atual
 
 | Timer | Quando | O que faz | Veredito |
 |---|---|---|---|
 | `night-comms` | 00:00 | lê o bus, entrega pendências por nota, avisa Telegram | MANTER (barato, 1x/dia) |
-| `jarvis-sessions-index` | ~30 min | indexa sessões opencode no RAG + consolida memórias de sessão (incremental) | MANTER (é o pipeline de memória) |
+| `jarvis-sessions-index` | ~30 min | indexa sessões opencode no RAG + consolida memórias de sessão (incremental) | MANTER (pipeline de memória) |
 | `jarvis-idle-worker` | 5 min | self-knowledge quando o sistema está ocioso | MANTER (só age em idle) |
 | `session-snapshot` | 1 min | `restore-sessions.sh --capture` (layout das janelas) | MANTER, **candidato a 5 min** (1440 escritas/dia para um layout que muda pouco) |
 | `git-sync-obsidian` | 15 min | commit/push do vault Obsidian | MANTER |
 | `rclone-sync` | a cada 4 h | backup do `~/projects` para o Drive | **BLOQUEADO**: OAuth sem escopo de escrita (403). Ação do dono: `rclone config reconnect gdrive` |
 | `bench-qwen` | 04:00 | bench noturno do default (4B-MTP+LoRA, :8092) | MANTER (janela noturna) — ver colisão abaixo |
 | `swap-probe` | 05:00 | reinicia o default se não responder | MANTER, mas **1 h depois do bench**: se o bench atrasar, o probe reinicia o service no meio |
-| `drift-bot` | dom 05:00 | `team/drift-bot.sh` | **MOVER** para o repo `team` (hoje é unit solto) |
-| `guia-checa-respostas` | 18:30 | vigia respostas de leads no Gmail (repo guia-renamer-pro) | **MOVER** para o repo dono; hoje é unit solto e está **failed** |
-| `team-suite` | — | **fantasma**: sem unit file, sem service, sem próximo disparo | REMOVIDO |
 | `systemd-tmpfiles-clean` | 12 h | limpeza padrão do systemd | padrão, não é nosso |
+
+Removidos/desligados em 12/11: `team-suite` (fantasma), `team-coord` (standup
+do time legado, loose), `drift-bot` (loose, acoplado ao canary), e
+`guia-checa-respostas` (loose, repo guia-renamer-pro, estava failed). Os 3
+últimos ficam em quarentena para reativação explícita no repo dono se fizer
+sentido.
 
 ## System timers (6)
 
@@ -56,15 +78,14 @@ sobrevivia a rebuild e ninguém via.
 
 ## Units soltos em `~/.config/systemd/user/` (não declarativos)
 
-Sobrevivem a rebuild, não aparecem no flake, ninguém audita:
+Sobrevivem a rebuild, não aparecem no flake, ninguém audita. Depois da
+quarentena de 12/11 restam:
 
 | Unit | Origem | Veredito |
 |---|---|---|
-| `chisel-client.service` / `chisel-tunnel.service` | túnel | declarar no módulo dono ou remover |
-| `dono-gate-ivan.service` | gate local | declarar ou remover |
-| `drift-bot.service` + `.timer` | repo `team` | mover para o repo `team` |
-| `guia-checa-respostas.service` + `.timer` | repo `guia-renamer-pro` | mover para o repo dono (está failed) |
-| `llama-wackmall.service` | experimento | remover se não usar |
+| `chisel-client.service` / `chisel-tunnel.service` | túnel (auditoria/manutenção) | declarar no módulo dono ou remover |
+| `dono-gate-ivan.service` | gate local de push Kaggle (applio-lab) | declarar ou remover |
+| `llama-wackmall.service` | experimento/profiling | remover se não usar |
 
 ## Regras (para não voltar a bagunçar)
 
