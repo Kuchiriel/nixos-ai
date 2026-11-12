@@ -131,7 +131,7 @@ MIC_SOURCE_FALLBACK = "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.
 # node de denoise não tem link com a saída do AEC3 (pw-cli ls Link → 12
 # links, nenhum de rnnoise/echo) → usar o AEC3 direto; o fallback pro ALSA
 # cru é melhor que mic mudo (mesma disciplina do wakeword).
-MIC_SOURCE_PREFERRED = "echo_cancel_source"
+MIC_SOURCE_PREFERRED = "capture.echo_cancel_source"  # 29/11: echo_cancel_source virou mudo (AEC output desconectado); capture.* e a porta de entrada do AEC, que segue carregando o audio do mic com echo-cancelamento
 _MIC_SOURCE: str | None = None
 
 
@@ -2335,7 +2335,7 @@ class Tts:
     voz pt_BR-faber-medium, binário estático ~/models/piper/bin/piper.
     Lock-file durante synth+play = eco-mute por estado real."""
     LOCK = Path("/tmp/jarvis-tts-playing.lock")
-    VOICE = "/home/nixos/models/piper/pt_BR-faber-medium.onnx"
+    VOICE = "/var/lib/ai/models/piper/pt_BR-faber-medium.onnx"
     def __init__(self, speaking):
         self.speaking = speaking
         self.q = queue.Queue()
@@ -2378,7 +2378,7 @@ class Tts:
             return True
         except Exception:
             return False
-    VOICE_JA = "/home/nixos/models/piper/ja_JP-hi_fi_captain-medium.onnx"
+    VOICE_JA = "/var/lib/ai/models/piper/ja_JP-hi_fi_captain-medium.onnx"
 
     @staticmethod
     def _split_script(text):
@@ -2406,7 +2406,7 @@ class Tts:
         exige samplerate/channels no wave.open."""
         import wave as _w
         code = (
-            "import sys; sys.path.insert(0, '/home/nixos/models/piper/piper1')\n"
+            "import sys; sys.path.insert(0, '/var/lib/ai/models/piper/piper1')\n"
             "import wave\n"
             "from piper import PiperVoice\n"
             f"v = PiperVoice.load('{voice_path}')\n"
@@ -2447,7 +2447,7 @@ class Tts:
             # o faber É do engine 2023; o piper1.8 remapeia os phonemes
             # e destrói o PT. piper 2023 = voz PT nativa e limpa.
             r = subprocess.run(
-                ["/home/nixos/models/piper/bin/piper", "-m", self.VOICE,
+                ["/var/lib/ai/models/piper/bin/piper", "-m", self.VOICE,
                  "--output_file", wav_path],
                 input=runs[0][0] + "\n", capture_output=True, text=True,
                 encoding="utf-8", timeout=60)
@@ -2470,7 +2470,7 @@ class Tts:
             else:
                 part2 = part
                 r = subprocess.run(
-                    ["/home/nixos/models/piper/bin/piper", "-m", self.VOICE,
+                    ["/var/lib/ai/models/piper/bin/piper", "-m", self.VOICE,
                      "--output_file", part2],
                     input=seg + "\n", capture_output=True, text=True,
                     encoding="utf-8", timeout=60)
