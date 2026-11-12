@@ -1350,4 +1350,8 @@ in rec {
   # dispara escalonamento p/ 35B/cloud). O base fica em laya-onnx/.
   # O Python lê LAYA_MODEL_DIR (default = este path).
   layaModelDir = "/var/lib/ai/models/laya-ft";
+
+  # (12/11) HuggingFace cache movido para local canonico para evitar
+  # ~/ .cache/huggingface disperso; symlink ~/.cache/huggingface mantido.
+  hfCacheDir = "/var/lib/ai/models/hf-cache";
 }
