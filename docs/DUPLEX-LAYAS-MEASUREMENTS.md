@@ -33,6 +33,26 @@ pw-record (mic capture) -> ;duplex-asrd.py (ASR subprocess STT stdio) ->
 
 Custo Laya por call: ~250-289 ms (CPU). Custo LoRA por call: 247-587 ms (during init includes flip warmup).
 
+## Baseline honesto: held-out construido a dedo (52 falas, 12/11 noite)
+
+O bench_gate.py de 27 falas **sobrepoe com o template de treino** do LoRA (mesmas perguntas do gen-lora-data.py) — recall 1.00 e memorizacao, nao generalizacao.
+Held-out feito a mao (60+ falas novas, zero overlap com os templates; + 30 clips reais do dono com labels manuais):
+
+- RESPOND 16/16 · WAIT 10/13 · SILENCE **4/16** · BARGE 7/7 → **37/52**
+- SILENCE errado da seguinte forma: 8 preditos RESPOND, 4 WAIT. Causa raiz: o corpus original nunca teve fala completa nao-dirigida (TV/narracao/aula) na classe SILENCE; o modelo aprendeu "frase completa = RESPOND".
+
+## Dataset v2 (a correcao)
+
+Formato: `messages` + `assistant` com rotulo (RESPOND/WAIT/SILENCE/BARGE). Fontes:
+- 1.000 RESPOND sintetizadas pelo 4B local (diversidade real, temp 1.0, 15 topicos x 4 estilos);
+- house clips reais (clips-transcribed.jsonl, 2.356 itens, re-rotulados com semantica v2:
+  fala completa nao-dirigida do computador/TV = SILENCE — o rotulo certo pra o gate);
+- 1.729 SILENCE de alucinacao/ ruido digital reais (silence-transcribed.jsonl);
+- ~135 frases de listas WAIT/BARGE feitas a mao;
+- template coverage total: 4.659 itens, distribuicao RESPOND 1904 / SILENCE 2246 / WAIT 414 / BARGE 95 (cap aplicado).
+
+Sistema novo (CLASS_SYS): SILENCE inclui "fala completa NAO dirigida ao assistente (TV/narracao/musica)".
+
 ## Veredito Laya (12/11, medido — capítulo fechado)
 
 - choice RLCD 4 classes: 8/27 (F1 0.31) · parallel + soft-ce: 9/27 (205ms) · zero-shot: 11/27 · noul yes/no: 18/27 (recall 0.69, prec 0.75, F1 0.72) · LoRA: 13/27 (recall 1.00, F1 0.79) · lora+intent: F1 0.889.
