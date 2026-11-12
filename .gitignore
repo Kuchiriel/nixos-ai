@@ -105,4 +105,4 @@ scripts/overnight-24-09/loop-*.json
 # É lido por scripts/duplex-asrd.py (SPK_PROFILES) e escrito por
 # scripts/spk-enroll.py.
 data/spk-profiles.json
-data/spk-profiles*.json
+data/spk-profiles*
