@@ -338,3 +338,43 @@ def test_gate_health_endpoint_reports_counters_without_upstream():
         assert "upstream_504" in data and "upstream_io" in data
     finally:
         proxy.shutdown()
+
+
+def test_no_context_cap_below_the_measured_window():
+    """(12/11, dono) NAO capar a janela de um modelo: minimax tem 1.048.576
+    MEDIDO no endpoint e ja houve regressao feita 'na mao' que o derrubou para
+    262144 (compactacao prematura). Este teste reproduz a formula de
+    lib/opencode-limits.nix e exige que o limit.input derivado fique DENTRO da
+    janela do modelo e a menos de 64k do teto (nada de compactar cedo).
+    """
+    path = _find_upwards("modules/ai/free-providers.json", "free-providers.json")
+    if path is None:
+        pytest.skip("catalogo nao encontrado neste checkout")
+    catalog = json.loads(path.read_text())
+    provider = catalog["providers"]["nvidia"]
+    models = provider["models"]
+
+    for model in models:
+        ctx = int(model.get("context") or 0)
+        out = min(int(model.get("output") or 0), 32000)
+        assert ctx > out, f"{model['id']}: context {ctx} <= output {out}"
+        cap = model.get("max_input")
+        if cap is not None:
+            assert int(cap) <= ctx, f"{model['id']}: max_input {cap} > janela {ctx}"
+            assert ctx - int(cap) <= 65536, (
+                f"{model['id']}: max_input {cap} compacta cedo (janela {ctx})")
+
+        prompt_ceiling = ctx - out
+        margin = min(20000, max(2048, prompt_ceiling // 4))
+        usable = max(0, prompt_ceiling - margin)
+        reserved = min(20000, out)
+        limit_input = usable + reserved
+
+        assert limit_input <= ctx, f"{model['id']}: input {limit_input} > janela {ctx}"
+        assert ctx - limit_input <= 65536, (
+            f"{model['id']}: compacta {ctx - limit_input} tokens antes do teto "
+            f"(janela {ctx}, input {limit_input})")
+
+    minimax = next(m for m in models if m["id"] == "minimaxai/minimax-m3.1-flash")
+    assert minimax["context"] == 1048576
+    assert minimax.get("max_input") is None, "minimax nao pode voltar para o teto de 262144"
