@@ -829,6 +829,7 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
                 "tools": TOOLS_SCHEMA}
         filler_spoken = False
         _cmd_nudged = False
+        _unknown_tools = 0   # (12/11) streak de tool inexistente, entre rounds
         for _round in range(3):
             if _round == 2:
                 body.pop("tools", None)   # última: SEM tools = resposta final
@@ -921,6 +922,28 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
                 except Exception:
                     args = {}
                 log(f"[{ts()}] TOOL: {name}({args})")
+                # (12/11) NOME VALIDADO ANTES DE EXECUTAR: o log de hoje
+                # mostrou o 4B inventando ferramenta ('place_box',
+                # "{'tool':") e o erro cru virava meta-conversa falada
+                # ("O erro indica que o formato..."). O survey de
+                # constrained decoding (arXiv 2609.23742) separa forma de
+                # qualidade: aqui o modelo recebe a lista valida e se
+                # autocorrige no round seguinte; 2 erros seguidos = desiste
+                # e responde sem tool (evita loop de correcao).
+                if name not in _TOOL_NAMES:
+                    _unknown_tools += 1
+                    _msg = ('ERRO: a ferramenta "' + str(name) + '" nao existe. '
+                            'Use a tool "do" com action e input. Ferramentas: '
+                            + ", ".join(sorted(_TOOL_NAMES)))
+                    if _unknown_tools >= 2:
+                        _msg += ("\nResponda ao dono em 1 frase, sem chamar "
+                                 "ferramenta, dizendo que nao conseguiu.")
+                    log(f"[{ts()}] TOOL INEXISTENTE: {name!r} ({_unknown_tools}/2)")
+                    msgs.append({"role": "tool",
+                                 "tool_call_id": tc.get("id", "?"),
+                                 "content": _msg})
+                    continue
+                _unknown_tools = 0
                 _t_tool = time.monotonic()
                 result = call_tool_safe(name, args)
                 dbg_stage("tool", (time.monotonic() - _t_tool) * 1000)
@@ -1736,6 +1759,12 @@ def call_tool_safe(name, args):
         except Exception:
             pass
         return f"erro na tool {name}: {exc}"[:300]
+
+
+_TOOL_NAMES = {
+    "do", "get_time", "get_date", "recall", "remember", "offline_search",
+    "rag_search", "status", "web_search", "nix_info", "shell",
+}
 
 
 def call_tool(name, args):
