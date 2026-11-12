@@ -729,7 +729,14 @@ in {
       # (08/11 10:41, edição viva do dono, portada): websearch via Tavily
       # e o agent COMPACTION roda no minimax (em vez do default geral).
       websearch = { provider = "tavily"; };
-      agents = { compaction = { model = "nvidia/minimaxai/minimax-m3.1-flash"; }; };
+      # (12/11, medição das compactações desta sessão: 9 no total, das quais
+      # 5 forçadas por troca de MODEL — algumas com contexto ~1k — e uma dupla
+      # a 5s de intervalo (01:47 e 14:47/14:49) qual ao resumo saiu com 147
+      # bytes: o reasoningEffort=max num modelo reasoning queima o budget de
+      # output (65536) em raciocínio e deixa nada para o conteúdo do resumo.
+      # O resumidor não precisa de raciocínio: variante "none" remove a classe
+      # de falha inteira sem mudar o modelo (decisão do dono 08/11 mantida).
+      agents = { compaction = { model = "nvidia/minimaxai/minimax-m3.1-flash"; variant = "none"; }; };
 
       # MCP Jarvis: RAG, memória, vault, files, shell, nix — via stdio.
       # Handshake validado (tools/list retorna 20 tools). Env inline no
