@@ -1,6 +1,6 @@
 {
   "_comment": "FONTE ÚNICA de providers LLM free — consumida por model_policy.py (CASCADE_MAP) e home.nix (opencode providers). Testado ao vivo 28/10/2026. NÃO editar sem re-testar.",
-  "_version": "2026-11-02",
+  "_version": "2026-11-12",
   "_ordering": "Ordenado por: capability (reasoning > general > fast), context_window (maior primeiro dentro do tier), specificity (modelos dedicados antes de generalistas)",
   "_headroom": "headroom = tokens de folga entre o limiar de auto-compactação do opencode e o TETO REAL da API (prompt_tokens + max_tokens ≤ context). SEM isso o opencode compacta exatamente no teto → 400 'Bad Request' no turno seguinte (medido no NIM: 262146 > 262144). MEDIÇÃO (02/11, 2287 passos minimax): growth por passo p50=926, p90=4034, p99=12308, max=28333 → headroom 32k no nvidia, 20k nos demais (p99 medido ≤ 9.5k). home.nix converte headroom → limit.input (lib/opencode-limits.nix).",
   "providers": {
@@ -1392,6 +1392,52 @@
           ],
           "good_for": "Agentic tasks ONLY. Smaller variant.",
           "status": "agentic_only"
+        },
+        {
+          "id": "thinkingmachines/inkling-2-small:free",
+          "name": "Inkling 2 Small (free)",
+          "context": 1048576,
+          "output": 131072,
+          "tier": "reasoning",
+          "capabilities": [
+            "reasoning",
+            "agentic"
+          ],
+          "good_for": "Daily-driver da sessao do dono (agentic, tool use). 1M ctx MEDIDO na API OpenRouter (context_length=1048576) e no models.dev (output 131072, sem limit.input); a compactação medida 12/11 dispara em ~982k SEM este declared (janela herdada de catalogo embutido, instavel a cada refresh). Declaração fixa o limit.input via headroom 20000 e tira a sessao da roleta do cache.",
+          "status": "active",
+          "reasoning_effort_default": "max",
+          "variants": [
+            {
+              "id": "minimal",
+              "body": {
+                "reasoning_effort": "minimal"
+              }
+            },
+            {
+              "id": "low",
+              "body": {
+                "reasoning_effort": "low"
+              }
+            },
+            {
+              "id": "medium",
+              "body": {
+                "reasoning_effort": "medium"
+              }
+            },
+            {
+              "id": "high",
+              "body": {
+                "reasoning_effort": "high"
+              }
+            },
+            {
+              "id": "max",
+              "body": {
+                "reasoning_effort": "max"
+              }
+            }
+          ]
         }
       ]
     },
