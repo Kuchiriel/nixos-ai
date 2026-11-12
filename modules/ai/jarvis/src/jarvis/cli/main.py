@@ -412,13 +412,15 @@ def _cmd_space_purge(args: argparse.Namespace) -> int:
     sp = spaces.get(args.name)
     coll = args.collection
     needle = args.path_contains
-    base = os.environ.get("JARVIS_QDRANT_URL")
+    base = (os.environ.get("JARVIS_QDRANT_URL") or "").strip()
     if not base:
         try:
             from jarvis.core.config import Config
-            base = Config().qdrant_url
+            base = (Config().qdrant_url or "").strip()
         except Exception:
-            base = "http://127.0.0.1:6333"
+            base = ""
+    if not base:
+        base = "http://127.0.0.1:6333"
     import requests
 
     total, matched, ids = 0, 0, []

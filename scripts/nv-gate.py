@@ -329,7 +329,7 @@ class Gate(BaseHTTPRequestHandler):
                 self.wfile.flush()
             self.wfile.write(b"0\r\n\r\n")
             self.wfile.flush()
-        except (BrokenPipeError, ConnectionResetError):
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, TimeoutError, OSError):
             pass
         except Exception as exc:
             # Um client que desiste no meio do relay NAO pode derrubar o
@@ -347,7 +347,7 @@ class Gate(BaseHTTPRequestHandler):
         self.end_headers()
         try:
             self.wfile.write(payload)
-        except (BrokenPipeError, ConnectionResetError):
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, TimeoutError, OSError):
             pass
 
     def _json(self, code: int, data: dict) -> None:
@@ -358,7 +358,7 @@ class Gate(BaseHTTPRequestHandler):
         self.end_headers()
         try:
             self.wfile.write(payload)
-        except (BrokenPipeError, ConnectionResetError):
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, TimeoutError, OSError):
             pass
 
     def do_GET(self) -> None:
