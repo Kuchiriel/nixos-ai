@@ -38,7 +38,7 @@ Custo Laya por call: ~250-289 ms (CPU). Custo LoRA por call: 247-587 ms (during 
 O bench_gate.py de 27 falas **sobrepoe com o template de treino** do LoRA (mesmas perguntas do gen-lora-data.py) — recall 1.00 e memorizacao, nao generalizacao.
 Held-out feito a mao (60+ falas novas, zero overlap com os templates; + 30 clips reais do dono com labels manuais):
 
-- RESPOND 16/16 · WAIT 10/13 · SILENCE **4/16** · BARGE 7/7 → **37/52**
+- RESPOND 16/16 · WAIT 10/13 · SILENCE **4/16** · BARGE 7/7, total **37/52**
 - SILENCE errado da seguinte forma: 8 preditos RESPOND, 4 WAIT. Causa raiz: o corpus original nunca teve fala completa nao-dirigida (TV/narracao/aula) na classe SILENCE; o modelo aprendeu "frase completa = RESPOND".
 
 ## Dataset v2 (a correcao)
