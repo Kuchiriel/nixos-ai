@@ -31,7 +31,7 @@
     };
   };
 
-  config = lib.mkIf (options.services.jarvis.rotateMt5Logs.enable) {
+  config = lib.mkIf config.services.jarvis.rotateMt5Logs.enable {
     systemd.user.services.mt5-rotate-logs = {
       description = "Rotaciona/trunca os artefatos do harness mt5 (logs grandes)";
       wantedBy = [ "timers.target" ];
@@ -48,10 +48,10 @@
       };
       script = ''
         set -euo pipefail
-        script="${options.services.jarvis.rotateMt5Logs.projectPath}/backtest/rotate_logs.sh"
+        script="${config.services.jarvis.rotateMt5Logs.projectPath}/backtest/rotate_logs.sh"
         if [ -x "$script" ]; then
-          BT_RUNS_DIR="${options.services.jarvis.rotateMt5Logs.projectPath}/backtest/runs" \
-            "$script" --dias ${toString options.services.jarvis.rotateMt5Logs.dias}
+          BT_RUNS_DIR="${config.services.jarvis.rotateMt5Logs.projectPath}/backtest/runs" \
+            "$script" --dias ${toString config.services.jarvis.rotateMt5Logs.dias}
         fi
       '';
     };
