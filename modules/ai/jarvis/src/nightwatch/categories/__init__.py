@@ -303,16 +303,17 @@ def discover_performance() -> list[Task]:
     return tasks
 
 
-def discover_missao() -> list[Task]:
-    """Read TODO-MISSAO.md and convert Status: TODO items into Tasks.
+def _discover_mission_file(path: Path, id_prefix: str, category: str) -> list[Task]:
+    """Parse a mission/evolution markdown file into Tasks.
 
-    P0/P1 (security/Nix architecture) → auto_fixable=False (supervised only)
-    P2/P3 (quality/docs) → auto_fixable=True (can go through safety gate)
-    Optional fields per item:
-      - **Auto-fixable**: true|false|yes|no (override default for steering)
-      - **Tipo**: defect|capability|... (informational, appended to description)
+    Same block format as TODO-MISSAO.md:
+      ### P<0-3>-<n>: <title>
+      - **Status**: TODO|DONE|...
+      - **Arquivos**: <path(s)>
+      - **Auto-fixable**: true|false|yes|no (optional)
+      - **Tipo**/**Kind**: <label> (optional)
+    P0/P1 default supervised, P2/P3 default auto-fixable (overridable).
     """
-    path = find_repo_root() / "TODO-MISSAO.md"
     if not path.exists():
         return []
     text = path.read_text(encoding="utf-8")
@@ -339,13 +340,32 @@ def discover_missao() -> list[Task]:
             if kind:
                 desc = f"[{kind}] {desc}"
         tasks.append(Task(
-            id=f"missao-{prio}-{num}",
-            category="missao",
+            id=f"{id_prefix}-{prio}-{num}",
+            category=category,
             severity=severity,
             description=desc,
             target_path=(arq_m.group(1).strip() if arq_m else ""),
             auto_fixable=auto_fixable,
         ))
+    return tasks
+
+
+def discover_missao() -> list[Task]:
+    """Read TODO-MISSAO.md and convert Status: TODO items into Tasks."""
+    return _discover_mission_file(find_repo_root() / "TODO-MISSAO.md", "missao", "missao")
+
+
+def discover_evolucao() -> list[Task]:
+    """Read evolution mission files and convert Status: TODO items into Tasks.
+
+    Grounded backlog for capability evolution (so the system can keep
+    improving instead of stopping when no defects remain). Accepts
+    EVOLUTION.md or TODO-EVOLUCAO.md in the repo root.
+    """
+    root = find_repo_root()
+    tasks: list[Task] = []
+    for name in ("EVOLUTION.md", "TODO-EVOLUCAO.md"):
+        tasks.extend(_discover_mission_file(root / name, "evolucao", "evolucao"))
     return tasks
 
 
@@ -362,6 +382,7 @@ CATEGORY_REGISTRY: dict[str, Callable[[], list[Task]]] = {
     "nix-check": discover_nix_check,
     "performance": discover_performance,
     "missao": discover_missao,
+    "evolucao": discover_evolucao,
 }
 
 SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
