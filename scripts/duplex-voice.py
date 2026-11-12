@@ -118,6 +118,7 @@ LISTEN_TOKEN_ID = None   # id de '<listen>' no server alvo
 GATE_MODE = "intent"    # 'intent' = endereço OU intenção (padrão, 03/11) ·
                        # 'jarvis' = só a palavra "Jarvis" (estrito, TV) ·
                        # 'off' = responde todo segmento (testes/AFK)
+SPEAKER_GATE = os.environ.get("JARVIS_SPEAKER_GATE", "1") != "0"  # 12/11: falante≠dono + sem endereço = ignora
 SR = 16000
 CHUNK_BYTES = int(SR * TICK * 2)
 # Digital mic (17/10): o Stereo Mic é MORTO (rms 0); o Digital é vivo.
@@ -3378,6 +3379,16 @@ def main():
                             log(f"[{ts()}] respond wav: {_dst.name}")
                         except Exception:
                             pass
+                    # (12/11, dono: "ele se intromete na conversa alheia") speaker-ID
+                    # real: se quem falou NAO e o dono (perfil 'dono', spk-profiles.json)
+                    # e nao houve endereco explicito, ignora — TV/sala param de disparar
+                    # o JARVIS. Embedding inconclusivo ('?') cai no gate de sempre.
+                    _seg_spk = SPK_STATE.get("last_spk", "?")
+                    if (SPEAKER_GATE and not _addr
+                            and _seg_spk not in ("dono", "?")
+                            and lab == "RESPOND"):
+                        log(f"[{ts()}] falante {_seg_spk} nao-dono sem endereco — silencio")
+                        lab = "SILENCE"
                     if lab == "RESPOND":
                         # (09:15) modo-TV: classificador diz RESPOND à
                         # fala COMPLETA da TV/sala — sem endereçamento
