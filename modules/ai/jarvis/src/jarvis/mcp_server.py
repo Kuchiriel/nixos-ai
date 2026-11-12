@@ -905,15 +905,67 @@ def _meta_call(meta_args: dict[str, Any]) -> str:
     return call_tool(target, sub_args)
 
 
-# ═══ RAG index job tracking (background-safe, in-memory) ═══
+# ═══ RAG index job tracking (background-safe, persisted best-effort) ═══
 
 _RAG_INDEX_JOBS: dict[str, dict[str, Any]] = {}
 _RAG_INDEX_JOBS_LOCK = threading.Lock()
 _RAG_INDEX_JOBS_MAX = 50
+_RAG_INDEX_JOBS_LOADED = False
+
+
+def _rag_jobs_path() -> Path:
+    p = os.environ.get("JARVIS_RAG_INDEX_JOBS_PATH")
+    if p:
+        return Path(p).expanduser()
+    return Path.home() / ".local" / "state" / "jarvis" / "rag_index_jobs.json"
+
+
+def _rag_jobs_load_locked() -> None:
+    global _RAG_INDEX_JOBS_LOADED
+    if _RAG_INDEX_JOBS_LOADED:
+        return
+    _RAG_INDEX_JOBS_LOADED = True
+    path = _rag_jobs_path()
+    try:
+        if not path.exists():
+            return
+        data = json.loads(path.read_text(encoding="utf-8"))
+        jobs = data.get("jobs") if isinstance(data, dict) else data
+        if not isinstance(jobs, list):
+            return
+        for job in jobs:
+            if not isinstance(job, dict):
+                continue
+            jid = str(job.get("job_id") or "").strip()
+            if not jid:
+                continue
+            _RAG_INDEX_JOBS[jid] = job
+        _rag_jobs_cleanup_locked()
+    except Exception:
+        # Corrupt/unreadable state must not break MCP server startup.
+        return
+
+
+def _rag_jobs_save_locked() -> None:
+    path = _rag_jobs_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        jobs = sorted(_RAG_INDEX_JOBS.values(), key=lambda j: j.get("started_at", 0.0), reverse=True)[:_RAG_INDEX_JOBS_MAX]
+        payload = {"version": 1, "jobs": jobs}
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.replace(path)
+    except Exception:
+        return
 
 
 def _rag_job_snapshot(job: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in job.items()}
+    out = {k: v for k, v in job.items()}
+    if out.get("status") == "running":
+        started = out.get("started_at")
+        if isinstance(started, (int, float)) and (time.time() - float(started)) > 3600:
+            out["stale"] = True
+    return out
 
 
 def _rag_jobs_cleanup_locked() -> None:
@@ -940,13 +992,16 @@ def _rag_job_create(path: str, *, background: bool, force: bool, deadline_s: Any
         "error": None,
     }
     with _RAG_INDEX_JOBS_LOCK:
+        _rag_jobs_load_locked()
         _RAG_INDEX_JOBS[job_id] = job
         _rag_jobs_cleanup_locked()
+        _rag_jobs_save_locked()
     return job_id
 
 
 def _rag_job_finish(job_id: str, *, result: str | None = None, error: str | None = None) -> None:
     with _RAG_INDEX_JOBS_LOCK:
+        _rag_jobs_load_locked()
         job = _RAG_INDEX_JOBS.get(job_id)
         if not job:
             return
@@ -959,6 +1014,7 @@ def _rag_job_finish(job_id: str, *, result: str | None = None, error: str | None
             job["status"] = "done"
             job["result"] = result
             job["error"] = None
+        _rag_jobs_save_locked()
 
 
 def _handle_rag_index_status(args: dict[str, Any]) -> str:
@@ -969,6 +1025,7 @@ def _handle_rag_index_status(args: dict[str, Any]) -> str:
         limit = 10
     limit = max(1, min(limit, 50))
     with _RAG_INDEX_JOBS_LOCK:
+        _rag_jobs_load_locked()
         if job_id:
             job = _RAG_INDEX_JOBS.get(job_id)
             if not job:
