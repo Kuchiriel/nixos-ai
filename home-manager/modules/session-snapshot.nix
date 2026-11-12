@@ -22,11 +22,11 @@
 
   systemd.user.timers.session-snapshot = {
     Unit = {
-      Description = "Snapshot do layout opencode a cada 60s";
+      Description = "Snapshot do layout opencode a cada 5 min";
     };
     Timer = {
       OnBootSec = "2min";
-      OnUnitActiveSec = "60s";
+      OnUnitActiveSec = "5min";
       Unit = "session-snapshot.service";
     };
     Install = {

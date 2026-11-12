@@ -39,11 +39,11 @@ bus (`AGENTS-QUEUE.md`/coord), sem kanban paralelo.
 | `night-comms` | 00:00 | lê o bus, entrega pendências por nota, avisa Telegram | MANTER (barato, 1x/dia) |
 | `jarvis-sessions-index` | ~30 min | indexa sessões opencode no RAG + consolida memórias de sessão (incremental) | MANTER (pipeline de memória) |
 | `jarvis-idle-worker` | 5 min | self-knowledge quando o sistema está ocioso | MANTER (só age em idle) |
-| `session-snapshot` | 1 min | `restore-sessions.sh --capture` (layout das janelas) | MANTER, **candidato a 5 min** (1440 escritas/dia para um layout que muda pouco) |
+| `session-snapshot` | 5 min | `restore-sessions.sh --capture` (layout das janelas) | MANTER (5 min: ~288 escritas/dia; 12/11: 1 min era excessivo para layout que muda pouco) |
 | `git-sync-obsidian` | 15 min | commit/push do vault Obsidian | MANTER |
 | `rclone-sync` | a cada 4 h | backup do `~/projects` para o Drive | **BLOQUEADO**: OAuth sem escopo de escrita (403). Ação do dono: `rclone config reconnect gdrive` |
-| `bench-qwen` | 04:00 | bench noturno do default (4B-MTP+LoRA, :8092) | MANTER (janela noturna) — ver colisão abaixo |
-| `swap-probe` | 05:00 | reinicia o default se não responder | MANTER, mas **1 h depois do bench**: se o bench atrasar, o probe reinicia o service no meio |
+| `bench-qwen` | 04:00 | bench noturno do default (4B-MTP+LoRA, :8092) | MANTER (janela noturna) |
+| `swap-probe` | 06:00 | reinicia o default se não responder | MANTER (12/11: 06:00 + `ExecCondition` para não rodar se `bench-qwen.service` ativo, evita colisão GPU/LLM) |
 | `systemd-tmpfiles-clean` | 12 h | limpeza padrão do systemd | padrão, não é nosso |
 
 Removidos/desligados em 12/11: `team-suite` (fantasma), `team-coord` (standup
@@ -70,9 +70,9 @@ sentido.
    embedding). Ambos "consolidam"; antes de fundir, medir quantos clusters
    cada um remove — se o incremental já remove tudo, o noturno é redundante.
 2. **GPU/LLM à noite**: `bench-qwen` (04:00, ocupa a GPU) e `swap-probe`
-   (05:00, reinicia o service). Regra da casa: **um job pesado por vez**.
-   Se o bench passar de 1 h, o probe interfere. Correção mínima sugerida:
-   probe às 06:00, ou `ExecCondition` checando `systemctl is-active bench-qwen`.
+   (06:00, reinicia o service se necessário). Regra da casa: **um job pesado por vez**.
+   Correção aplicada em 12/11: probe às 06:00 com `ExecCondition` que pula se
+   `bench-qwen.service` ainda estiver ativo.
 3. **03:00**: `jarvis-consolidate` (system) e `nightwatch` (módulo existe,
    desligado). Se o nightwatch voltar, colide no mesmo minuto.
 

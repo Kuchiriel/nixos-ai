@@ -28,11 +28,14 @@
     };
     swap-probe = {
       Unit = {
-        Description = "Probe do default (05:00) — reinicia o service se o default não responder";
+        Description = "Probe do default (06:00) — reinicia o service se o default não responder";
       };
       Service = {
         Type = "oneshot";
         WorkingDirectory = "/home/nixos/projects";
+        # Não interfere com o bench noturno: se o bench ainda estiver rodando
+        # (GPU ocupada), o probe não dispara nesta janela.
+        ExecCondition = "/run/current-system/sw/bin/bash -lc '! /run/current-system/sw/bin/systemctl --user is-active --quiet bench-qwen.service'";
         ExecStart = "/home/nixos/projects/nixos-ai/benchmarks/model-tiers/swap-probe.sh";
         Nice = 10;
       };
@@ -55,10 +58,10 @@
     };
     swap-probe = {
       Unit = {
-        Description = "Probe do default (05:00)";
+        Description = "Probe do default (06:00, após janela do bench)";
       };
       Timer = {
-        OnCalendar = "05:00";
+        OnCalendar = "06:00";
         Persistent = true;
         RandomizedDelaySec = 300;
       };
