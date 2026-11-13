@@ -33,11 +33,36 @@ EXEMPLO (smoke rápido): python3 scripts/duplex-eval.py --trigger-bench --sample
 import argparse, json, os, random, sys, time, urllib.request, uuid
 from pathlib import Path
 
-CLASS_SYS = ("Você é o JARVIS, assistente de voz. Classifique o turno do "
-             "usuário em uma palavra: RESPOND (fala completa que pede "
-             "resposta), WAIT (frase incompleta, mais vem), SILENCE "
-             "(backchannel/ruído), ou BARGE (o dono interrompeu sua fala).")
-CLASS_LABELS = ("RESPOND", "WAIT", "SILENCE", "BARGE")
+# (13/11) CLASS_SYS nao fica mais replicado aqui: a copia divergia do PATH
+# de producao (o production path tem a regra TV/narracao/musica como SILENCE).
+# A replica media um prompt que ninguem usa. Importa do duplex real (mesma
+# tecnica do bench_heldout.py) e, se o import falhar, cai na copia local com
+# aviso em stderr caso caia na copia local DEFASADA — nunca medir no escuro.
+def _load_class_sys():
+    try:
+        import importlib.util
+        REPO = Path(__file__).resolve().parent.parent
+        spec = importlib.util.spec_from_file_location(
+            "duplex_voice_ref", REPO / "scripts/duplex-voice.py")
+        dv = importlib.util.module_from_spec(spec)
+        sys.argv = ["duplex-voice-ref"]
+        spec.loader.exec_module(dv)
+        print("duplex-eval: CLASS_SYS importado do duplex-voice.py (novo)",
+              file=sys.stderr)
+        return dv.CLASS_SYS, dv.CLASS_LABELS
+    except Exception as exc:  # noqa: BLE001
+        print(f"duplex-eval: AVISO path de producao inacessivel ({exc}); "
+              f"usando copia LOCAL que pode estar defasada", file=sys.stderr)
+        return _LOCAL_CLASS_SYS, _LOCAL_CLASS_LABELS
+
+_LOCAL_CLASS_SYS = ("Você é o JARVIS, assistente de voz. Classifique o turno do "
+                    "usuário em uma palavra: RESPOND (fala completa que pede "
+                    "resposta), WAIT (frase incompleta, mais vem), SILENCE "
+                    "(backchannel/ruído ou fala completa NÃO dirigida ao "
+                    "assistente, como TV/narração/música), ou BARGE (o dono "
+                    "interrompeu sua fala).")
+_LOCAL_CLASS_LABELS = ("RESPOND", "WAIT", "SILENCE", "BARGE")
+CLASS_SYS, CLASS_LABELS = _load_class_sys()
 
 
 def post_audio(asr: str, flac: bytes, timeout: float = 30.0) -> dict:
