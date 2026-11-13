@@ -39,9 +39,20 @@ if [ ! -f "$LLAMA_CONVERT" ]; then
   exit 1
 fi
 
+# --base precisa de uma pasta HF com config.json (o .gguf NAO serve — fail
+# medido 13/11: load_hparams trata o .gguf como pasta e quebra). O cache HF
+# local tem o Qwen3.5-4B (config.json) — resolve a partir do snapshot mais
+# recente. Sem isso o script exige --base-id (baixa da rede).
+CONFIG_DIR="$(find /home/nixos/models/hf-cache/hub/models--Qwen--Qwen3.5-4B/snapshots -maxdepth 1 -type d 2>/dev/null | sort | tail -1)"
+if [ -z "$CONFIG_DIR" ] || [ ! -f "$CONFIG_DIR/config.json" ]; then
+  echo "erro: snapshot com config.json do Qwen3.5-4B nao encontrado no cache HF" >&2
+  echo "passe HF_HOME certo ou baixe o modelo base (Qwen/Qwen3.5-4B) config antes" >&2
+  exit 1
+fi
+
 LD_LIBRARY_PATH=/nix/store/dqj57l1prad38vjrad4bs9d977i4q5zm-gcc-15.3.0-lib/lib:/nix/store/6s4wm3zl2y0v5g998n2g88k1zh3vf2pr-zlib-1.3.2/lib \
   "$KARAOK_VENV" "$LLAMA_CONVERT" \
-  --base /var/lib/ai/models/Qwen3.5-4B-MTP-Q4_K_M.gguf \
+  --base "$CONFIG_DIR" \
   --outtype q8_0 \
   --outfile "$OUT" \
   "$ADAPTER"
