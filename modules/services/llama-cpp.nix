@@ -157,7 +157,9 @@ with lib; let
         ProtectSystem = "strict";
         # Permitir acesso a GPU e modelos
         # /var/lib/ai/models: destino em nvme1 (rápido) para migração; ~/models pode ser symlink para ele.
-        ReadWritePaths = [ "/home/nixos/models" "/var/lib/ai/models" "/home/nixos/projects/prism-bin" "/home/nixos/projects/ik_llama.cpp" "/home/nixos/projects/llama.cpp" ];
+        # (12/11) /home/nixos/projects/ik_llama.cpp saiu: o submodule git foi removido na migracao NVMe;
+        # o path no ReadWritePaths matava a montagem do namespace (226/NAMESPACE, StartLimit).
+        ReadWritePaths = [ "/home/nixos/models" "/var/lib/ai/models" "/home/nixos/projects/prism-bin" "/home/nixos/projects/llama.cpp" ];
         # (26/09, incidente freeze) Resource firewall: o OOM mata SÓ o
         # serviço, nunca a máquina. MemoryHigh = throttle (kernel reclama
         # antes, sem matar); MemoryMax = teto duro (OOM só dentro da
