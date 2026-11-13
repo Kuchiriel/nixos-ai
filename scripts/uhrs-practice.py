@@ -11,9 +11,12 @@ Laya treinado com as judgments DELE, ou seja, a resposta que o modelo vai
 
 COMO RESPONDE (o que importa para quem e' PCD):
   - por TECLADO: o bench imprime o item e le a resposta do teclado;
-  - por VOZ: com --from-duplex, o bench le a transcricao direto do log do
+  - por VOZ: com --from-duplex, o bench le a transcricao NOVA do log do
     cliente de voz (logs/duplex/<data>.log, marca "SEGMENTO:"), ou seja, o
-    dono FALA o veredito e o bench pega. Nao precisa mouse.
+    dono FALA o veredito e o bench pega. O loop avanca SOZINHO: ele fala, o
+    bench le, corrige na tela e segue. Nao precisa mouse nem digitar.
+    (O bench nao FALA o item de proposito: se falasse, o duplex ouviria a
+    propria voz e responderia a si — o bug que a casa ja registrou.)
 
 O QUE ELE FAZ:
   1) imprime o rubric (curto, em ingles, como o teste real) e o item;
@@ -188,13 +191,22 @@ def norm(s):
                     .split())
 
 
-LEVELS = {
+# NOME do nivel (so para exibir) e MAPA de resposta -> nivel (0 a 3).
+# (13/11) Bug pego pelo self-test: o mapa devolvia o NOME do rotulo em vez
+# do numero, entao responder "3" era graded como errado.
+LEVEL_NAMES = {
     "3": "highly relevant", "2": "moderately relevant",
     "1": "slightly relevant", "0": "not relevant",
+}
+LEVELS = {
+    "3": "3", "2": "2", "1": "1", "0": "0",
     "altamente relevante": "3", "moderadamente relevante": "2",
     "levemente relevante": "1", "nao relevante": "0", "irrelevante": "0",
     "muito relevante": "3", "relevante": "2", "sim": "2", "nao": "0",
     "high": "3", "moderate": "2", "slight": "1", "none": "0",
+    # os rotulos completos em ingles (o teste real e' em ingles)
+    "highly relevant": "3", "moderately relevant": "2",
+    "slightly relevant": "1", "not relevant": "0",
 }
 
 
@@ -213,16 +225,36 @@ def parse_answer(text):
     return None
 
 
-def read_from_duplex(log_path):
-    """Le a ultima transcricao do cliente de voz (o dono FALA o veredito)."""
-    p = Path(log_path)
-    if not p.is_file():
-        return ""
-    last = ""
-    for line in p.read_text(errors="ignore").splitlines()[-400:]:
-        if "SEGMENTO:" in line:
-            last = line.split("SEGMENTO:", 1)[1].strip()
-    return last
+class DuplexVoice:
+    """Le as transcricoes NOVAS do log do cliente de voz (o dono FALA).
+
+    Mede a posicao do arquivo (bytes) e devolve so o que apareceu depois:
+    assim o bench nao re-corrige a mesma resposta, e o loop anda sozinho
+    (o dono so fala; nao aperta nada).
+    """
+
+    def __init__(self, log_path):
+        self.path = Path(log_path)
+        self.pos = self.path.stat().st_size if self.path.is_file() else 0
+
+    def poll(self):
+        """Devolve a transcricao mais recente que ainda nao foi lida."""
+        if not self.path.is_file():
+            return ""
+        size = self.path.stat().st_size
+        if size < self.pos:      # rotacao/truncou
+            self.pos = 0
+        if size == self.pos:
+            return ""
+        with self.path.open("r", encoding="utf-8", errors="ignore") as fh:
+            fh.seek(self.pos)
+            chunk = fh.read()
+            self.pos = size
+        last = ""
+        for line in chunk.splitlines():
+            if "SEGMENTO:" in line:
+                last = line.split("SEGMENTO:", 1)[1].strip()
+        return last
 
 
 def record_label(item, answer, via):
@@ -241,6 +273,38 @@ def record_label(item, answer, via):
     return LABELS
 
 
+def self_test():
+    """Prova o mecanismo sem microfone: o leitor de voz so pega o que e novo,
+    o rubric mapeia as quatro respostas (pt e en) e a label e gravada."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        log = Path(td) / "2026-11-13.log"
+        log.write_text("[10:00:00] rms=1 | <no voice> -> <listen>\n")
+        v = DuplexVoice(log)
+        # 1) nada novo ainda
+        assert v.poll() == "", "deveria estar vazio"
+        # 2) o dono fala
+        with log.open("a", encoding="utf-8") as fh:
+            fh.write("  SEGMENTO: muito relevante\n")
+        got = v.poll()
+        assert got == "muito relevante", got
+        # 3) nao re-corrige a mesma resposta
+        assert v.poll() == "", "re-leu a mesma transcricao"
+        # 4) o mapeamento das respostas
+        assert parse_answer("muito relevante") == "3"
+        assert parse_answer("moderadamente relevante") == "2"
+        assert parse_answer("levemente relevante") == "1"
+        assert parse_answer("nao relevante") == "0"
+        assert parse_answer("highly relevant") == "3"
+        assert parse_answer("not relevant") == "0"
+        assert parse_answer("3") == "3"
+        assert parse_answer("nada") is None
+    print("SELF-TEST ok: leitor de voz (so o que e novo), 8 mapeamentos de "
+          "resposta e rubric carregado")
+    print(f"itens de pratica carregados: {len(load_items(ITEMS))}")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -253,7 +317,12 @@ def main():
     ap.add_argument("--items-file", default=str(ITEMS))
     ap.add_argument("--answer", default="",
                     help="responde um item e sai (para teste automatico)")
+    ap.add_argument("--self-test", action="store_true",
+                    help="prova o leitor de voz e o rubric sem abrir microfone")
     args = ap.parse_args()
+
+    if args.self_test:
+        return self_test()
 
     if args.show_rubric:
         print(RUBRIC)
@@ -265,13 +334,17 @@ def main():
 
     log = args.duplex_log or str(
         REPO / "logs" / "duplex" / (time.strftime("%Y-%m-%d") + ".log"))
+    voice = DuplexVoice(log)
 
     print(RUBRIC)
     print(f"itens de pratica: {len(items)} | labels em: {LABELS}")
     if args.from_duplex:
         print(f"modo voz: a resposta e' lida do log do cliente ({log}).")
-        print("Fale o veredito ('highly', 'moderately', 'slightly' ou 'not', "
-              "ou o numero 3/2/1/0). Ctrl-C para sair.\n")
+        print("Fale o veredito: 'muito relevante', 'moderadamente relevante', "
+              "'levemente relevante' ou 'nao relevante' (o bench entende "
+              " tambem 'highly', 'moderately', 'slightly', 'not' e 3/2/1/0). "
+              "Fale 'proxima' para pular e 'de novo' para repetir. "
+              "O loop avanca sozinho: so falar. Ctrl-C para sair.\n")
 
     right = 0
     for it in items:
@@ -284,13 +357,25 @@ def main():
             ans = args.answer
             print(ans)
         elif args.from_duplex:
+            # espera a transcricao NOVA (o dono fala o veredito; o loop
+            # avanca sozinho, sem mouse e sem digitar)
             ans = ""
-            for _ in range(150):
-                time.sleep(2)
-                ans = read_from_duplex(log)
-                if ans:
+            while True:
+                time.sleep(1.5)
+                ans = voice.poll()
+                if not ans:
+                    continue
+                low = norm(ans)
+                if "proxima" in low or "pular" in low or "next" in low:
+                    print("  (pulando)")
                     break
-            print(ans or "(sem transcricao no log)")
+                if "de novo" in low or "repetir" in low or "again" in low:
+                    print(f"QUERY: {it['query']}\nPAGE : {it['snippet']}")
+                    continue
+                print(ans)
+                break
+            if not ans:
+                print("  (sem transcricao no log)")
         else:
             ans = input().strip()
         got = parse_answer(ans)
@@ -299,10 +384,13 @@ def main():
         else:
             ok = (got == it["answer"])
             right += ok
-            print(f"  gabarito: {it['answer']} ({LEVELS[it['answer']]}) | "
+            print(f"  gabarito: {it['answer']} ({LEVEL_NAMES[it['answer']]}) | "
                   f"sua: {got} -> {'ok' if ok else 'erro'}")
             print(f"  porque: {it['why']}")
         record_label(it, got or "unparsed", "voice" if args.from_duplex else "teclado")
+        if args.from_duplex:
+            # ele le a explicacao antes do proximo item aparecer
+            time.sleep(4)
     total = len(items)
     print("-" * 72)
     print(f"placar: {right}/{total} = {right/max(1,total):.0%}")
