@@ -193,9 +193,13 @@ JARVIS_TOOLS = [
             "design: Bezier mouse paths with jitter, log-normal cadence "
             "(~250ms reaction, ~90ms/keystroke with bursts + pauses), fatigue "
             "modeling. WAYLAND-native (ydotool/uinput; falls back to wtype). "
-            "Actions: move (Bezier to x,y), click (x,y + button), type (text), "
+            "Actions: move (Bezier to x,y), click (x,y + button), "
+            "double_click (x,y), drag (x,y to x2,y2), type (text), "
             "key (keys like 'space' 'return' 'mod+m'), scroll. Pair with "
             "jarvis_observe_screen (look) + this (act) = closed loop. "
+            "NO pixel guessing: action=locate with text='<label you read on "
+            "screen>' runs OCR and returns the clickable coordinates "
+            "(best + alternatives); then click/double_click them. "
             "NOTE: actions are REAL input to the owner's desktop — say out "
             "loud what you are about to click before clicking; never type "
             "passwords/secrets. Typical script: observe → move/click a UI "
@@ -206,13 +210,19 @@ JARVIS_TOOLS = [
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["move", "click", "type", "key", "scroll"],
-                    "description": "What the hand does",
+                    "enum": ["move", "click", "double_click", "drag", "type",
+                             "key", "scroll", "locate"],
+                    "description": ("What the hand does. locate first when you "
+                                    "know the label but not the pixel"),
                 },
-                "x": {"type": "integer", "description": "Target pixel X (move/click; screen is 1920x1080)"},
-                "y": {"type": "integer", "description": "Target pixel Y (move/click)"},
+                "x": {"type": "integer", "description": "Target pixel X (move/click/double_click/drag start; screen is 1920x1080)"},
+                "y": {"type": "integer", "description": "Target pixel Y (move/click/double_click/drag start)"},
+                "x2": {"type": "integer", "description": "Drag end pixel X (drag only)"},
+                "y2": {"type": "integer", "description": "Drag end pixel Y (drag only)"},
+                "min_conf": {"type": "number", "description": "OCR confidence floor 0-100 for locate (default 40; lower it when text is faint)"},
+                "budget": {"type": "number", "description": "Seconds allowed for locate's OCR (default 30; raise only on huge screens)"},
                 "button": {"type": "string", "enum": ["left", "right", "middle"], "description": "Mouse button (click). Default left"},
-                "text": {"type": "string", "description": "Text to type with human cadence (type)"},
+                "text": {"type": "string", "description": "Text to type with human cadence (type) OR the on-screen label to find (locate)"},
                 "keys": {"type": "string", "description": "Space-separated keys, e.g. 'mod+m' or 'space' (key)"},
                 "dy": {"type": "integer", "description": "Scroll amount in pixels, positive = down (scroll)"},
                 "dry_run": {"type": "boolean", "description": "Simulate without touching the desktop (returns the path it would take). Use FIRST to validate coordinates"},

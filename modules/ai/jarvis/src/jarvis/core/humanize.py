@@ -325,6 +325,73 @@ class HumanHand:
         except Exception as e:
             return {"ok": False, "error": f"tecla falhou: {e}"}
 
+    def double_click(self, x: int, y: int, button: str = "left") -> dict:
+        """Dois cliques no MESMO ponto, com intervalo humano (abre arquivo)."""
+        mv = self.move(x, y)
+        if not mv.get("ok"):
+            return mv
+        if self.dry_run:
+            return {"ok": True, "dry": True, "at": mv.get("to", [x, y])}
+        try:
+            from jarvis.core.uinput_raw import RawHand
+            if getattr(self, "_raw", None) is None:
+                self._raw = RawHand()
+            at = self._raw.move_abs(x, y)
+            if not at.get("ok"):
+                at["error"] = (f"nao cheguei no alvo: pedido ({x},{y}), "
+                               f"cursor em {at.get('at')}")
+                return at
+            for _ in range(2):
+                self._raw.button(button, True)
+                time.sleep(_lognorm(self.CLICK_MU, self.CLICK_SIG, 25, 120) / 1000.0)
+                self._raw.button(button, False)
+                time.sleep(random.uniform(0.06, 0.14))
+            self._think()
+            self._note()
+            at["clicked"] = f"double-{button}"
+            return at
+        except Exception as e:
+            return {"ok": False, "error": f"double click falhou: {e}"}
+
+    def drag(self, x1: int, y1: int, x2: int, y2: int,
+             button: str = "left") -> dict:
+        """Arrasta de (x1,y1) a (x2,y2) com o botão pressionado.
+
+        O botão SEMPRE solta no finally: um drag interrompido não pode deixar
+        o mouse do dono travado em "pressionado" (mesma classe do incidente
+        do ydotool que grudava tecla).
+        """
+        mv = self.move(x1, y1)
+        if not mv.get("ok"):
+            return mv
+        if self.dry_run:
+            return {"ok": True, "dry": True, "from": [x1, y1], "to": [x2, y2]}
+        try:
+            from jarvis.core.uinput_raw import RawHand
+            if getattr(self, "_raw", None) is None:
+                self._raw = RawHand()
+            self._raw.move_abs(x1, y1)
+        except Exception as e:
+            return {"ok": False, "error": f"drag: sem atuador: {e}"}
+        self._raw.button(button, True)
+        try:
+            # waypoints intermediários: o compositor vê um arrasto, não um salto
+            for k in range(1, 9):
+                t = k / 8
+                self._raw.move_abs(int(x1 + (x2 - x1) * t),
+                                   int(y1 + (y2 - y1) * t),
+                                   max_iter=2, tol=12)
+                time.sleep(random.uniform(0.02, 0.06))
+            r = self._raw.move_abs(x2, y2)
+        except Exception as e:
+            return {"ok": False, "error": f"drag falhou: {e}"}
+        finally:
+            self._raw.button(button, False)
+        self._think()
+        self._note()
+        r["dragged"] = {"from": [x1, y1], "to": [x2, y2]}
+        return r
+
     def scroll(self, dy: int = 300) -> dict:
         """Scroll com passos humanos (ydotool; fallback: wtype -M)."""
         if self.dry_run:
@@ -351,6 +418,270 @@ class HumanHand:
             return {"ok": True, "dy": dy}
         except Exception as e:
             return {"ok": False, "error": f"scroll falhou: {e}"}
+
+
+# ── localizar por texto (OCR → coordenadas) ────────────────
+#
+# Por que existe (13/11): o ciclo observe → clicar tinha um buraco. O
+# observe devolve TEXTO, e o modelo tinha de adivinhar o pixel do botão.
+# localizar pelo texto que ele já leu fecha o ciclo sem chute: o tesseract
+# TSV (nível 5 = palavra) dá caixa e confiança por palavra, e a caixa vira
+# coordenada de tela.
+
+
+def _norm_text(s: str) -> str:
+    """Casefold sem acento e sem pontuação de borda (busca tolerante)."""
+    import unicodedata
+    s = unicodedata.normalize("NFKD", s or "")
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return s.casefold().strip(" \t\n\r.,:;!?()[]{}<>\"'|/\\-–—")
+
+
+def _ocr_tsv(path: str, lang: str = "eng", psm: str = "11",
+             timeout: float = 25.0) -> list[dict]:
+    """Palavras do tesseract TSV com caixa e confiança.
+
+    Só o nível 5 tem texto e confiança (0-100); os níveis 1-4 são layout e
+    vêm com conf -1 (documentação do formato TSV).
+    """
+    try:
+        r = subprocess.run(
+            ["tesseract", path, "stdout", "-l", lang, "--psm", psm, "tsv"],
+            capture_output=True, text=True, timeout=timeout)
+    except (subprocess.TimeoutExpired, OSError, subprocess.SubprocessError):
+        return []
+    if r.returncode != 0:
+        return []
+    out: list[dict] = []
+    for line in (r.stdout or "").splitlines()[1:]:
+        cols = line.split("\t")
+        if len(cols) < 12:
+            continue
+        try:
+            level = int(cols[0])
+            conf = float(cols[10])
+            left, top = int(cols[6]), int(cols[7])
+            w, h = int(cols[8]), int(cols[9])
+        except ValueError:
+            continue
+        text = cols[11].strip()
+        if level != 5 or not text or conf < 0:
+            continue
+        out.append({"text": text, "left": left, "top": top, "w": w,
+                    "h": h, "conf": conf,
+                    "line": (cols[1], cols[2], cols[3], cols[4])})
+    return out
+
+
+def _ocr_words_any(path: str, budget: float = 30.0,
+                   lang: str = "eng") -> list[dict]:
+    """Palavras com o melhor psm e, se vazio, com a imagem em alto contraste.
+
+    Tema escuro é o caso do dono: sem o pré-processamento o tesseract
+    devolve pouco ou nada. Ordem: imagem crua, depois binarizada (psm 11 e
+    6). Para no primeiro resultado não vazio.
+
+    (13/11) TETO TOTAL obrigatório: uma tela cheia de terminal levou 72 s
+    porque cada variante/psm rodava com timeout próprio, um atrás do outro.
+    Agora o orçamento é um só e o próximo passo nunca começa sem tempo.
+    """
+    deadline = time.time() + max(6.0, float(budget))
+
+    def restante(cap: float) -> float:
+        return max(0.5, min(cap, deadline - time.time()))
+
+    # O primeiro passe fica com a maior fatia: numa tela densa ele sozinho
+    # passou de 15 s, e um teto curto matava o único passe que ia funcionar.
+    # `eng` primeiro: medido nesta tela, 5,5 s contra 12,2 s de `por+eng`.
+    # Acento em pt-BR é resolvido no segundo passe (só quando não achar).
+    words = _ocr_tsv(path, lang=lang, psm="11",
+                     timeout=restante(max(6.0, float(budget) * 0.7)))
+    if words:
+        return words
+    variants = []
+    if deadline - time.time() > 2.0:
+        try:
+            from PIL import Image, ImageOps
+            img = Image.open(path).convert("L")
+            img = ImageOps.autocontrast(img)
+            alt = path.rsplit(".", 1)[0] + "-locate.png"
+            img.point(lambda p: 255 if p > 140 else 0).save(alt)
+            variants.append(alt)
+        except Exception:
+            pass
+    for v in variants:
+        for psm in ("11", "6", "3"):
+            if deadline - time.time() <= 1.0:
+                return []
+            words = _ocr_tsv(v, lang=lang, psm=psm, timeout=restante(8.0))
+            if words:
+                return words
+    return []
+
+
+def _match_hits(words: list[dict], query: str,
+                min_conf: float = 40.0) -> list[dict]:
+    """Casa a busca contra as palavras: exato > prefixo > contido, e frase.
+
+    Frase ("Salvar como") é casada por palavras consecutivas na MESMA linha
+    do TSV, com a caixa unida. Cada hit leva `score` para desempatar.
+    """
+    q = _norm_text(query)
+    if not q:
+        return []
+    qtok = [t for t in q.split() if t]
+    hits: list[dict] = []
+    for w in words:
+        if w["conf"] < min_conf:
+            continue
+        nw = _norm_text(w["text"])
+        if not nw:
+            continue
+        score = 0
+        if len(qtok) == 1:
+            if nw == q:
+                score = 4
+            elif nw == qtok[0]:
+                score = 3
+            elif nw.startswith(q) or q in nw:
+                score = 2
+            elif nw in q and len(nw) >= 4:
+                score = 1   # OCR juntou/partiu palavra
+        else:
+            # token único da frase (ex.: "Salvar" de "Salvar como"):
+            # vale menos que a frase inteira
+            if nw == qtok[0]:
+                score = 1
+        if score:
+            hits.append({**w, "score": score, "matched": w["text"]})
+
+    if len(qtok) > 1:
+        by_line: dict[tuple, list[dict]] = {}
+        for w in words:
+            if w["conf"] >= min_conf:
+                by_line.setdefault(w["line"], []).append(w)
+        for line_words in by_line.values():
+            line_words.sort(key=lambda x: x["left"])
+            for i in range(len(line_words)):
+                acc: list[dict] = []
+                for j in range(i, min(i + len(qtok) + 2, len(line_words))):
+                    acc.append(line_words[j])
+                    joined = _norm_text(" ".join(x["text"] for x in acc))
+                    if joined == q:
+                        score = 5
+                    elif len(acc) == len(qtok) and joined.startswith(q):
+                        score = 3
+                    else:
+                        continue
+                    left = min(x["left"] for x in acc)
+                    top = min(x["top"] for x in acc)
+                    right = max(x["left"] + x["w"] for x in acc)
+                    bottom = max(x["top"] + x["h"] for x in acc)
+                    hits.append({"text": " ".join(x["text"] for x in acc),
+                                 "left": left, "top": top,
+                                 "w": right - left, "h": bottom - top,
+                                 "conf": min(x["conf"] for x in acc),
+                                 "line": acc[0]["line"], "score": score,
+                                 "matched": " ".join(x["text"] for x in acc)})
+                    break
+
+    # dedupe por caixa (frase + palavra geram o mesmo alvo)
+    seen = set()
+    uniq = []
+    for h in hits:
+        key = (h["left"], h["top"], h["w"], h["h"])
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(h)
+    uniq.sort(key=lambda h: (-h["score"], -h["conf"], h["top"], h["left"]))
+    return uniq
+
+
+def _screen_geometry() -> dict:
+    """Monitor focado (hyprctl): nome, origem, tamanho lógico e escala."""
+    try:
+        mons = json.loads(subprocess.run(
+            ["hyprctl", "monitors", "-j"], capture_output=True,
+            text=True, timeout=5).stdout)
+        m = next((x for x in mons if x.get("focused")), mons[0] if mons else {})
+        return {"name": m.get("name", "?"), "x": int(m.get("x", 0)),
+                "y": int(m.get("y", 0)), "width": int(m.get("width", 0)),
+                "height": int(m.get("height", 0)),
+                "scale": float(m.get("scale", 1.0) or 1.0)}
+    except Exception:
+        return {}
+
+
+def locate_text(text: str, min_conf: float = 40.0,
+                limit: int = 6, budget: float = 30.0) -> dict:
+    """Acha `text` na tela por OCR e devolve coordenadas de clique.
+
+    Lê a captura inteira (grim), roda o tesseract em TSV e converte a caixa
+    da palavra para pixels LÓGICOS do monitor focado (o que o human_input
+    usa). Devolve `best` mais até `limit` candidatos ordenados por
+    qualidade, para o modelo escolher quando há dois botões iguais.
+    """
+    if not text or not str(text).strip():
+        return {"ok": False, "error": "locate precisa text"}
+    if not shutil.which("tesseract"):
+        return {"ok": False, "error": "tesseract ausente (nix: tesseract)"}
+    try:
+        from jarvis.core.vision import capture_full
+    except Exception as e:
+        return {"ok": False, "error": f"vision indisponivel: {e}"}
+    shot = capture_full()
+    if not shot.get("ok"):
+        return {"ok": False, "error": shot.get("error", "captura falhou")}
+    path = shot["path"]
+
+    deadline = time.time() + max(8.0, float(budget))
+    words = _ocr_words_any(path, budget=max(6.0, deadline - time.time()))
+    hits = _match_hits(words, str(text), min_conf=min_conf)
+    if not hits:
+        # Segundo passe com o modelo pt-BR (mais lento): só quando o eng não
+        # achou, para acento/ç não virarem "nao encontrado".
+        restante = deadline - time.time()
+        if restante > 4.0:
+            words2 = _ocr_words_any(path, budget=restante, lang="por+eng")
+            hits = _match_hits(words2, str(text), min_conf=min_conf)
+            words = words or words2
+    if not words:
+        return {"ok": False,
+                "error": (f"OCR nao leu texto na tela em {budget:.0f}s "
+                          "(tela densa demais? tente um texto maior/curto)"),
+                "image": path}
+    if not hits:
+        # ajuda o modelo: o que EXISTE na tela, para ele corrigir a busca
+        amostra = sorted(words, key=lambda w: -w["conf"])[:12]
+        return {"ok": False, "error": f"texto nao encontrado: {text!r}",
+                "image": path,
+                "visible": [w["text"] for w in amostra]}
+
+    geo = _screen_geometry()
+    # imagem (pixels físicos) -> tela (pixels lógicos): grim pode capturar
+    # em resolução maior que a lógica (escala > 1).
+    img_w = img_h = 0
+    try:
+        from PIL import Image
+        with Image.open(path) as im:
+            img_w, img_h = im.size
+    except Exception:
+        pass
+    fx = (geo.get("width", 0) / img_w) if img_w and geo.get("width") else 1.0
+    fy = (geo.get("height", 0) / img_h) if img_h and geo.get("height") else 1.0
+
+    out = []
+    for h in hits[:max(1, int(limit))]:
+        cx, cy = h["left"] + h["w"] / 2, h["top"] + h["h"] / 2
+        out.append({"text": h["matched"], "conf": round(h["conf"]),
+                    "score": h["score"],
+                    "image": [round(cx), round(cy)],
+                    "screen": [round(geo.get("x", 0) + cx * fx),
+                               round(geo.get("y", 0) + cy * fy)],
+                    "box": [h["left"], h["top"], h["w"], h["h"]]})
+    return {"ok": True, "query": str(text), "best": out[0],
+            "matches": out, "image": path, "monitor": geo}
 
 
 def human_input(args: dict) -> str:
@@ -391,9 +722,35 @@ def human_input(args: dict) -> str:
         r = hand.key(*expanded)
     elif action == "scroll":
         r = hand.scroll(int(args.get("dy", 300)))
+    elif action == "double_click":
+        if args.get("x") is None or args.get("y") is None:
+            return "ERROR: double_click precisa x e y"
+        r = hand.double_click(int(args["x"]), int(args["y"]),
+                              args.get("button", "left"))
+    elif action == "drag":
+        falta = [k for k in ("x", "y", "x2", "y2") if args.get(k) is None]
+        if falta:
+            return f"ERROR: drag precisa x, y, x2 e y2 (falta: {', '.join(falta)})"
+        r = hand.drag(int(args["x"]), int(args["y"]),
+                      int(args["x2"]), int(args["y2"]),
+                      args.get("button", "left"))
+    elif action == "locate":
+        # Fecha o ciclo sem chute de pixel: o modelo passa o TEXTO que já
+        # leu no observe e recebe a coordenada (OCR TSV do tesseract).
+        text = args.get("text")
+        if not text or not str(text).strip():
+            return "ERROR: locate precisa text (o texto visivel na tela)"
+        r = locate_text(str(text), min_conf=float(args.get("min_conf", 40.0)),
+                        budget=float(args.get("budget", 30.0)))
+        if not r.get("ok"):
+            vis = r.get("visible") or []
+            extra = f" | visivel: {', '.join(vis[:12])}" if vis else ""
+            return f"ERROR: {r.get('error', 'texto nao encontrado')}{extra}"
+        return json.dumps(r, ensure_ascii=False)
     else:
         return (f"ERROR: action desconhecida '{action}'. "
-                "Use: move, click, type, key, scroll")
+                "Use: move, click, double_click, drag, type, key, scroll, "
+                "locate")
 
     if not r.get("ok", False):
         return f"ERROR: {r.get('error', 'falhou')}"

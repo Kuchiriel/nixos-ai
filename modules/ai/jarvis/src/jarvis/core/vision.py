@@ -1021,6 +1021,37 @@ def _is_dead(via: str) -> bool:
     return True
 
 
+def _active_window_info() -> str:
+    """Resumo de 1 linha da janela ativa: classe, titulo, geometria.
+
+    (13/11) o observe devolvia o texto da tela sem dizer QUAL janela estava
+    em foco nem o tamanho dela — o modelo nao tinha como saber se capturou
+    a janela certa, e chutava coordenada contra o monitor inteiro. hyprctl
+    resolve local e barato, antes de qualquer custo de visao.
+    """
+    if not _has_binary("hyprctl"):
+        return ""
+    try:
+        win = json.loads(subprocess.run(
+            ["hyprctl", "activewindow", "-j"], capture_output=True,
+            text=True, timeout=3).stdout or "{}")
+    except Exception:
+        return ""
+    if not isinstance(win, dict) or not (win.get("title") or win.get("class")):
+        return ""
+    parts = [f"janela ativa: {win.get('class') or '?'}"]
+    title = (win.get("title") or "").strip()
+    if title:
+        parts.append(f"'{title[:70]}'")
+    at, size = win.get("at") or [], win.get("size") or []
+    if len(at) == 2 and len(size) == 2:
+        parts.append(f"@ ({at[0]},{at[1]}) {size[0]}x{size[1]}")
+    mon = win.get("monitor")
+    if mon:
+        parts.append(f"monitor {mon}")
+    return " | ".join(parts)
+
+
 def observe_with_fallback(args: dict[str, Any]) -> str:
     """Observe que NUNCA falha por falta de vision: local → gemini → OCR.
 
@@ -1052,10 +1083,12 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
 
     image_path = shot["path"]
     budget = float(args.get("budget", 90.0))
+    win = _active_window_info()
+    suffix = (f" | janela focada+opaca: {prep.get('address')}" if prep else "")
+    if win:
+        suffix += f" | {win}"
     return _cascade(image_path, question, budget,
-                    size_kb=shot.get("size_kb", "?"),
-                    suffix=(f" | janela focada+opaca: {prep.get('address')}"
-                            if prep else ""))
+                    size_kb=shot.get("size_kb", "?"), suffix=suffix)
 
 
 def observe_file(args: dict[str, Any]) -> str:
@@ -1146,7 +1179,8 @@ def _cascade(image_path: str, question: str, budget: float = 90.0,
                if restante > 3 else {"ok": False, "error": "orcamento esgotado"})
     if ocr.get("ok"):
         return (f"[visão nuvem indisponível ({' | '.join(attempts)}); fallback OCR]\n"
-                f"{ocr['text']}\n\n[via: ocr-fallback | image: {image_path}]")
+                f"{ocr['text']}\n\n[via: ocr-fallback | image: {image_path}"
+                f"{suffix}]")
 
     return (f"OBSERVE FALHOU em todos os níveis: {' | '.join(attempts)}; "
             f"ocr: {ocr.get('error')}. Arquivo: {image_path}.")

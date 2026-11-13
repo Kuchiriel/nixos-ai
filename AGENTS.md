@@ -1534,10 +1534,29 @@ relatório Solar, sudo kill nightwatch se quiser, cupom-100% final.
 ### §44 Browser dos agentes (CDP, 13/11)
 
 - `chromium-cdp`: user service declarativo (`hosts/nitro-v15/configuration.nix`),
-  Chromium headless dedicado, perfil próprio, CDP em `:9223`, áudio ativo. Pode
-  não subir sozinho: `systemctl --user start chromium-cdp` e conferir a porta
-  (`/dev/tcp/127.0.0.1/9223`). Attach: `jarvis_browser action=attach url=http://127.0.0.1:9223`.
+  Chromium headless dedicado, perfil próprio, CDP em `:9223`, áudio ativo.
+  Attach: `jarvis_browser action=attach` (default `http://127.0.0.1:9223`).
+  O attach Sobe o serviço sozinho quando a porta está fechada e espera a porta
+  abrir (medido 13/11: `cdp_service: chromium-cdp subiu; 127.0.0.1:9223 aberta`).
 - `jarvis_browser` tem `open` com `headless` (default true; `false` abre janela
   visível no desktop). O modo fica fixo na sessão; trocar relança o browser.
   `action=close` fecha a sessão própria. Navegador pessoal do dono sem
   `--remote-debugging-port` não é alcançável por attach.
+
+### §45 Human input por texto (locate, 13/11)
+
+- Ciclo fechado sem chute de pixel: `jarvis_human_input action=locate text="Salvar"`
+  roda OCR local (tesseract TSV, nível 5 = palavra com caixa e confiança) e
+  devolve `best` + `matches` com coordenada de TELA (`screen`) pronta pro
+  `click`/`double_click`. Textos de candidatos vêm em `matches[].text`.
+- Actions: `move`, `click`, `double_click`, `drag` (x,y → x2,y2), `type`,
+  `key`, `scroll`, `locate`. `locate` não clica: só devolve coordenada.
+- Custo medido (tela 1920x1080 de terminal denso): `eng` 5,5 s, `por+eng`
+  12,2 s. O locate usa `eng` primeiro e só cai no `por+eng` quando não acha
+  (acento). `budget` (default 30 s) é teto TOTAL, não por passo: tela ilegível
+  falha em tempo limitado em vez de rodar variante atrás de variante.
+- `observe_screen` agora anexa a janela ativa (`hyprctl activewindow -j`):
+  classe, título, posição e tamanho. O modelo sabe se capturou a janela certa
+  antes de medir pixel.
+- `drag` solta o botão no `finally`: arrasto interrompido não deixa o mouse
+  do dono travado pressionado.

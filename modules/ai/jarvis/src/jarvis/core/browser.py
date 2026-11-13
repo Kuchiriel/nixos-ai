@@ -10,6 +10,7 @@ Guarda: só http(s); localhost livre, externo exige approve=True
 from __future__ import annotations
 
 import random
+import subprocess
 import time as _time
 from typing import Any
 
@@ -40,7 +41,57 @@ def _human_typing(page, selector: str, text: str) -> None:
         _time.sleep(random.uniform(0.03, 0.13))
 
 
-def cdp_attach(url: str = "http://127.0.0.1:9222") -> dict[str, Any]:
+def _port_open(port: int, host: str = "127.0.0.1",
+               timeout: float = 0.6) -> bool:
+    """A porta responde? (a porta aberta é o serviço, não o PID)."""
+    import socket
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _ensure_cdp_service(url: str, wait_s: float = 10.0) -> dict[str, Any]:
+    """Sobe o `chromium-cdp` (user unit) se a porta do CDP estiver fechada.
+
+    (13/11) antes o attach exigia que o dono já tivesse o serviço rodando;
+    o modelo recebia só `connect_over_cdp` recusado e não tinha o que
+    fazer. Agora o attach resolve o pré-requisito sozinho.
+    """
+    import shutil as _sh
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or 9223
+    if _port_open(port, host):
+        return {"ok": True, "started": False}
+    if not _sh.which("systemctl"):
+        return {"ok": False, "error": f"CDP fechado em {host}:{port}"}
+    steps = []
+    for unit in ("chromium-cdp", "chromium-cdp.service"):
+        r = subprocess.run(["systemctl", "--user", "start", unit],
+                           capture_output=True, text=True, timeout=15)
+        if r.returncode == 0:
+            steps.append(unit)
+            break
+        steps.append(f"{unit}: {(r.stderr or '').strip()[:120]}")
+    if not steps or ":" in steps[-1]:
+        return {"ok": False,
+                "error": (f"nao consegui subir chromium-cdp ({'; '.join(steps)}); "
+                          f"a porta {port} continua fechada")}
+    deadline = _time.time() + wait_s
+    while _time.time() < deadline:
+        if _port_open(port, host):
+            return {"ok": True, "started": True,
+                    "detail": f"chromium-cdp subiu; {host}:{port} aberta"}
+        _time.sleep(0.3)
+    return {"ok": False,
+            "error": (f"chromium-cdp iniciou mas a porta {port} nao abriu em "
+                      f"{wait_s:.0f}s (veja: journalctl --user -u chromium-cdp)")}
+
+
+def cdp_attach(url: str = "http://127.0.0.1:9223") -> dict[str, Any]:
     """Anexa ao browser JÁ RODANDO (sessão logada do dono) via CDP.
 
     Diferente do headless próprio (sem login), aqui o page é o do
@@ -48,6 +99,9 @@ def cdp_attach(url: str = "http://127.0.0.1:9222") -> dict[str, Any]:
     nas seguintes (sessão persistente no módulo).
     """
     global _pw, _page, _cdp_url
+    boot = _ensure_cdp_service(url)
+    if not boot.get("ok"):
+        return boot
     try:
         if _pw is None:
             from playwright.sync_api import sync_playwright
@@ -56,8 +110,11 @@ def cdp_attach(url: str = "http://127.0.0.1:9222") -> dict[str, Any]:
         ctx = b.contexts[0] if b.contexts else b.new_context()
         _page = ctx.pages[0] if ctx.pages else ctx.new_page()
         _cdp_url = url
-        return {"ok": True, "title": _page.title()[:80],
-                "url": _page.url[:120]}
+        out = {"ok": True, "title": _page.title()[:80],
+               "url": _page.url[:120]}
+        if boot.get("started"):
+            out["cdp_service"] = boot.get("detail")
+        return out
     except Exception as e:
         return {"ok": False, "error": str(e)[:200]}
 
@@ -577,7 +634,7 @@ def handle_browser(args: dict[str, Any], approve: bool = False) -> str:
         r = browser_wait(args.get("selector", ""),
                          args.get("timeout", 10000))
     elif action == "attach":
-        r = cdp_attach(args.get("url") or "http://127.0.0.1:9222")
+        r = cdp_attach(args.get("url") or "http://127.0.0.1:9223")
     elif action == "click_text":
         r = browser_click_text(args.get("text", ""))
     elif action == "menu":
