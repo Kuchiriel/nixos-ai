@@ -140,3 +140,54 @@ compensa isso.
 - RWS TrainAI, Toloka, DataAnnotation, Outlier: catálogo de serviços.
 - Prolific (participantes): piso de pagamento e verificação de identidade.
 - CloudResearch Connect (participantes e FAQ): médias, piso e formas de saque.
+
+## 6. Addendum: a decisão do dono (13/11) e a ordem de ataque mais rápida
+
+O dono respondeu ao ponto de conformidade: **não vai ser resposta sozinha**;
+vai **treinar o modelo Laya**, então a resposta é *dele*, por procuração. Isso
+muda o plano e é a decisão certa: o modelo deixa de ser um substituto do
+humano e passa a ser o instrumento dele (o mesmo que usar uma calculadora).
+
+### 6.1 A ordem de ataque (a mais rápida que não depende de ninguém)
+
+1. **Hoje, 20 minutos**: conta Clickworker + **teste de inglês do UHRS**
+   (gratuito, sessão com egress direto, **sem vpnsec**). Dois ganhos: destrava
+   o pipeline de US$ 7 a 14/h e, mais importante, os **50 a 100 itens de
+   qualificação são as primeiras labels do dono**: o dataset de treino sai de
+   graça do trabalho que ele já tinha que fazer. Em paralelo, **aplicação no
+   Mindrift** (US$ 15 a 30/h na entrada), cuja aprovação é por aplicação e
+   não por cadeia de assessment.
+2. **Em paralelo, sem depender de aprovação**: o **bench de concordância**
+   (o que falta para o treino não ser um salto no escuro). O número decide o
+   modo de operação:
+
+   | concordância no held-out | modo |
+   |---|---|
+   | **≥ 95 %** | o modelo pode responder sozinho (a conta é do dono, a resposta é a dele, a consistência de QA é alta por construção) |
+   | **85 a 95 %** | o modelo propõe e o dono confirma (modo mais defensável) |
+   | **< 85 %** | sem delegação; o local fica como apoio de leitura e triagem |
+
+   O método é o do bench honesto da voz (`benchmarks/voice/bench_heldout2.py`):
+   held-out escrito fresco, **zero leakage**, e a label do dono no arquivo.
+3. **Depois do dataset**: treinar o LoRA do Laya com as labels do dono
+   (fine-tune local, 4B com LoRA, VRAM de 6 GB) e repetir o bench de
+   concordância com o modelo treinado. A passagem do modo "confirma" para o
+   modo "responde" continua sendo **decisão do dono**, porque o risco de QA é
+   da conta dele.
+
+### 6.2 O que fica de fora, e por quê
+
+Automatizar clique ou resposta em conta de terceiro continua fora. No caso
+do dono o modelo responde **com o treino dele**, o que é instrumento; mas o
+contrato é sobre a conta, e a única restrição técnica medida que muda o
+planejamento é do **guard de egress**: o UHRS **desabilita o acesso quando o
+login usa proxy ou VPN** : as sessões de UHRS são com egress direto, e o resto
+da casa (vpnsec/Tor) fica como está.
+
+### 6.3 Entregáveis que saem desta decisão
+
+- `scripts/judgment-bench.py`: concordância do modelo com as labels do dono em
+  held-out fresco, com split escrito à mão (zero leakage) e **intervalo de
+  Wilson** (para não acreditar em "95 %" com 20 itens).
+- `data/judgments/SCHEMA.md`: formato do dataset (contexto + resposta do
+  dono), para as labels serem coletadas desde o primeiro item de qualificação.
