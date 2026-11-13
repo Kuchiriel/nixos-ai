@@ -482,6 +482,45 @@ function rememberSession(sid) {
   }
 }
 
+// (12/11) ESCOPO POR SESSAO: o par/lista e global no arquivo de estado,
+// mas a TRANSLITERACAO so pode valer na sessao que o dono registrou como
+// atacante (o mesmo registro que libera o bloco de estrategia). Sem isso,
+// qualquer sessao da maquina (inclusive a de outro agente) tinha o
+// vocabulario trocado no meio — "funciona as vezes e depois para", porque
+// o estado global e lido por todos os processos.
+function sessionAtacante(sessionID) {
+  const st = loadState();
+  if (!st.enabled) return false;
+  const sid = String(sessionID || "");
+  if (!sid) return false;  // fail-closed: sem id, nao transliterar
+  return loadSessions().includes(sid);
+}
+
+// (12/11) TRADUCAO PROFUNDA: o NET nao pode depender da forma da mensagem
+// (1.x parts[], 2.x text/content, e o que vier). Traduz QUALQUER string da
+// arvore da mensagem (menos ids), o que torna a rede a prova de formato.
+function translateDeep(node, state, stats) {
+  if (typeof node === "string") {
+    const out = decomposeText(node, state);
+    if (out !== node) stats.changed += 1;
+    return out;
+  }
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i++) {
+      node[i] = translateDeep(node[i], state, stats);
+    }
+    return node;
+  }
+  if (node && typeof node === "object") {
+    for (const k of Object.keys(node)) {
+      if (k === "id" || k === "sessionID" || k === "callID" || k === "messageID") continue;
+      node[k] = translateDeep(node[k], state, stats);
+    }
+    return node;
+  }
+  return node;
+}
+
 function attackerSession(input) {
   if (process.env.OPENCODE_REDTEAM_FORCE_BLOCK === "1") return true;
   const sessions = loadSessions();
@@ -632,7 +671,9 @@ const legacy = {
       // bloco toTrigger (split/join cru do par) foi removido — era o que
       // conflitava com a lista.
       if (!args || typeof args !== "object") return;
-      if (state.enabled && effectiveEntries(state).length) {
+      // (12/11) ESCOPO: so a sessao atacante registrada e transliterada.
+      if (state.enabled && effectiveEntries(state).length
+          && sessionAtacante(input?.sessionID)) {
         const hits = [];
         for (const field of TOOL_TEXT_FIELDS) {
           if (typeof args[field] === "string") {
@@ -688,7 +729,9 @@ const legacy = {
         }
         return false;
       };
-      if (state.enabled && effectiveEntries(state).length) {
+      // (12/11) ESCOPO: so a sessao atacante registrada e transliterada.
+      if (state.enabled && effectiveEntries(state).length
+          && sessionAtacante(input?.sessionID)) {
         const changed = apply((s) => decomposeText(s, state));
         if (changed) {
           audit(
@@ -711,6 +754,14 @@ const legacy = {
       if (!effectiveEntries(state).length) return;
       const messages = output?.messages;
       if (!Array.isArray(messages)) return;
+      // (12/11) ESCOPO: so a sessao atacante registrada e traduzida.
+      if (!sessionAtacante(input?.sessionID)) {
+        if (process.env.OPENCODE_REDTEAM_DEBUG) {
+          audit(new Date().toISOString() + " NET ignorada (sessao nao registrada) "
+            + "sessao=" + (input?.sessionID || "?"));
+        }
+        return;
+      }
       if (process.env.OPENCODE_REDTEAM_DEBUG) {
         const desc = [];
         for (const m of messages) {
@@ -722,7 +773,16 @@ const legacy = {
         audit(`${new Date().toISOString()} DEBUG transform msgs=${messages.length} parts=[${desc.join(",")}]`);
       }
       let changed = 0;
+      const stats = { changed: 0 };
+      // (12/11) traduz a Arvore INTEIRA da mensagem (a prova de formato).
+      translateDeep(messages, state, stats);
+      changed = stats.changed;
+      // (o loop por parte abaixo repete a traducao de forma idempotente e
+      // mantem o log "NETO-DE-SEGURANCA" por parte)
       const translate = (s) => decomposeText(s, state);
+      audit(new Date().toISOString() + " NET checada sessao="
+        + (input?.sessionID || "?") + " msgs=" + messages.length
+        + " traduzidas=" + changed);
       for (const msg of messages) {
         // (12/11) O 2.2.6 NAO usa msg.parts: a mensagem do DONO vem como
         // {type:"user", text:"..."} e a do assistant como
@@ -1324,7 +1384,7 @@ export default {
       if (!event || event.status !== "completed") return;
       const wrapper = { output: event.result };
       await legacy["tool.execute.after"](
-        { tool: event?.tool ?? "v2-tool" },
+        { tool: event?.tool ?? "v2-tool", sessionID: event.sessionID },
         wrapper,
       );
       event.result = wrapper.output;

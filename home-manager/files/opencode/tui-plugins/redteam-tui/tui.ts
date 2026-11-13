@@ -41,6 +41,7 @@ const HELP = [
   "  term rm <t>           remove o termo da lista",
   "  term list             lista os termos e as decoys",
   "  reset                 limpa tudo (off, sem par, lista vazia)",
+  "  peek <frase>          mostra os 3 lados: voce / a IA / o disco",
   "  guard add <frase>     frase de intrusao: bloqueia a entrega na frota",
   "  guard list | rm | clear",
 ].join("\n");
@@ -517,6 +518,40 @@ export function handleJailbreakCommand(argsText) {
     return (
       `vocabulario de intrusao (${lista.length}):\n` +
       (lista.length ? lista.map((x) => `  - ${x}`).join("\n") : "  (vazio)")
+    );
+  }
+  // ── peek: mostra os TRES lados (12/11) ───────────────────────────────
+  // O dono testava com a MAO e achava que o mecanismo tinha parado (a
+  // decoy nunca aparece no texto dele — por design, o prompt do dono nao
+  // e reescrito). Este comando mostra os tres lados de uma vez:
+  //   o que VOCE ve | o que a IA ve | o que o disco recebe.
+  if (sub === "peek" || sub === "veja") {
+    const frase = args.slice(1).join(" ").trim();
+    if (!frase) return "Uso: /jailbreak peek <frase para ver os 3 lados>";
+    const st2 = state;
+    const trocar = (texto, de, para) => {
+      if (!de || !para || de === para) return texto;
+      const re = new RegExp("(?<![A-Za-z0-9_])" + de.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![A-Za-z0-9_])", "gi");
+      return texto.replace(re, para);
+    };
+    let iaVe = frase;
+    let discoRecebe = frase;
+    const par = [[st2.trigger, st2.decoy]];
+    for (const e of (st2.deception || [])) {
+      const termo = entryTerm(e);
+      const decoys = (e && e.decoys) || [];
+      if (termo && decoys.length) par.push([termo, decoys[0]]);
+    }
+    for (const [termo, decoy] of par) {
+      iaVe = trocar(iaVe, termo, decoy);
+      discoRecebe = trocar(discoRecebe, decoy, termo);
+    }
+    return (
+      `voce ve      : ${frase}\n` +
+      `a IA ve      : ${iaVe}\n` +
+      `o disco recebe: ${discoRecebe}\n` +
+      "  (o que tu digita nunca e reescrito; a troca vale para o que a IA " +
+      "escreve — e o audit em ~/.local/state/opencode/redteam-audit.log prova)"
     );
   }
   if (sub === "status") {

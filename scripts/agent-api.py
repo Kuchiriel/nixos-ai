@@ -169,13 +169,19 @@ def deliver(base: str, session: str, text: str, *, note: bool = False,
     if not force:
         try:
             sys.path.insert(0, str(Path(__file__).resolve().parent))
-            from agent_guard import scan as _guard_scan  # noqa: PLC0415
+            from agent_guard import marca_do_marcado, scan as _guard_scan  # noqa: PLC0415
             _r = _guard_scan(text)
-            if not _r["clean"]:
+            if _r["verdict"] == "bloqueado":
                 _termos = ", ".join(h["termo"] for h in _r["hits"])
                 _log_guard(session, _termos, text)
                 return 451, (f"guard: mensagem BLOQUEADA (termo de intrusao: "
                              f"{_termos}). Use --force para entregar mesmo assim.")
+            if _r["verdict"] == "marcado":
+                # Classe moralista: a entrega passa, mas com aviso (a discussao
+                # legitima sobre etica no bus nao pode ser barrada).
+                _tipos = ", ".join(sorted({p["tipo"] for p in _r["padroes"]}))
+                _log_guard(session, f"marcado: {_tipos}", text)
+                text = marca_do_marcado(_r) + text
         except ImportError:
             pass  # sem o guard: entrega normal (fail-open, nao derruba a fleet)
         except Exception:
