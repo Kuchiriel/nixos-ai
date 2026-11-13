@@ -32,7 +32,7 @@ destrava mais portas.
 **3. Decida onde você vai fazer isso.** O detalhe técnico que decide: o
 **UHRS bloqueia o acesso quando o login passa por proxy ou VPN**. A máquina da
 casa está com o modo vpnsec/Tor ligado, e por isso o login no UHRS **falha**.
-⇒ **Faça o passo 2 (Clickworker/UHRS) no Windows**, ou com o modo vpnsec
+: **Faça o passo 2 (Clickworker/UHRS) no Windows**, ou com o modo vpnsec
 desligado por alguns minutos. O resto (Connect, Prolific, Mindrift) funciona
 de qualquer jeito.
 
