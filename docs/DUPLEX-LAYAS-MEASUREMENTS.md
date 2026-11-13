@@ -100,3 +100,20 @@ Hoje, no bench de 27 falas PT-BR gay:
 - Laya Latency: ~270ms avg (vs LoRA ~250-350ms — loucura)
 
 **LoRA continua como gate principal.** Laya pode ser adicionado como abstention/tiebreak — fica pra lá Bonsai: Laya com 20 bits pode rodar no 4B-MTP também (mock/LoRA/adapted) — a maquína no laptop velho torna Laya viável no notebook com um solo lightstep. Laya fine-tune tem 4 horas de GPU livre ainda a 20.4h disponíveis até a próxima renovação sexta.
+
+## 2026-11-12 20:4x - Kaggle locus duplex-gate-lora (v5) COMPLETO
+
+- Kernel kuchiriel/duplex-gate-lora finalizou: 2 epocas, 4991 itens de treino/val
+  (10%), LoRA r=16 a=32 q,v sobre Qwen/Qwen3.5-4B, QLoRA nf4 4-bit, MAX_LEN=160,
+  batch=4, PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True (no notebook).
+- mean loss epoch 1 = 0.056 (overfit do treino: modelo memorizou a grade do
+  template; o val acc do proprio notebook saiu 0/499). Hipotese: no eval cell o
+  model.generate com pad_token_id=pad onde pad=eos; o argmax pode ter preenchido
+  a janela com eos e predito vazio/fora dos rotulos. A validacao precisa ser
+  feita na inferencia real, nao no eval cell.
+- adapter baixado para /tmp/opencode/gate-out/duplex_gate_lora/ (adapter_model.safetensors
+  7.3MB, adapter_config.json, chat_template.jinja, tokenizer_config.json).
+- Conversao adapter -> GGUF preparada: scripts benchmarks/voice/convert-gate-lora.sh
+  (commit 5b4663c1). Converter para /tmp/opencode/duplex-gate-v3-lora.q8_0.gguf e
+  servir uma segunda instancia CPU na 8093 para A/B contra o held-out de 52.
+- Nada aplicado em producao. Decision de troca == do dono, apos numero medido.
