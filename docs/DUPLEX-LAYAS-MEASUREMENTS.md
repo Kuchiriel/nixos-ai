@@ -191,3 +191,74 @@ Commit 3c2a0b7e (scripts/duplex-voice.py) + bench em 4c58beab
 (benchmarks/voice/bench_agent.py). O prompt está aplicado no arquivo; o
 duplex reinicia na próxima chamada/reciclagem do processo (o módulo lê o
 SYSTEM_PT no boot). Decisão de rebuild/reinício do duplex é do dono.
+## 2026-11-13 11:4x - A/B do system prompt do agente (SYSTEM_PT) + temperatura
+
+Medido com `benchmarks/voice/bench_agent.py` (commit 4c58beab): 18 probes
+contra o :8092 de producao (:8092 = 4B-MTP + LoRA, mesma superficie da
+conversa real), metricas mecanicas. 3 repeticoes por variante, temp 0.4.
+
+Resultados (direct_ok / tool_ok / no_invent / short_ok / no_roleplay / no_fake_action):
+
+| Variante | direct | tool | invent | short | rolep | fake |
+|----------|--------|------|--------|-------|-------|------|
+| baseline (prompt atual, t 0.4) | 8-9/13 | 5-6/6 | 11/11 | 18-19/19 | 19/19 | 2/2 |
+| baseline0 (t 0.0) | 8/13 | 5/6 | 11/11 | 19/19 | 18/19 | 2/2 |
+| compact (reescrita, t 0.4) | 6/13 | 6/6 | 11/11 | 19/19 | 19/19 | 2/2 |
+| **targeted (baseline + 2 regras, t 0.4)** | **11-13/13** | 5-6/6 | 11/11 | 19/19 | 19/19 | 2/2 |
+
+Targeted = o prompt base VERBATIM + este bloco aditivo apenas:
+
+1. Saudacao, agradecimento, piada, opiniao, identidade: resposta falada de
+   1-2 frases SEM tool. Identidade responde pela secao IDENTIDADE;
+   NUNCA chamar recall/status/jarvis para falar de si mesmo.
+2. Acao que nao existe nas tools (reservar, pedir, comprar, enviar,
+   ligar): diga que nao faz isso em 1 frase — nunca anuncie como feita,
+   nunca invente comando de shell para simular.
+
+Descobertas medidas:
+
+- O modelo chamava `recall` para "quem e voce?" e "qual modelo?" (ambas
+  identidades), `remember`/`web_search` para piada, `get_time` para
+  "bom dia", `jarvis('tools')` para "o que voce consegue fazer?". As
+  2 regras eliminaram isso: 13/13 na run com t=0.4 v2, 11-12/13 nas
+  repeticoes (variancia de amostragem), SEM regressao de tool/invent.
+- Voo/pizza: baseline chamava web_search (calado, mas sem mentir);
+  targeted responde "Nao faz reservas" em 1 frase, como manda a casa.
+- A variante compacta (prompt inteiro reescrito, sem o bloco
+  mordomo-britanico) foi PIOR: direct 6/13 e INVENTOU tool ilegal em
+  "pedir pizza" (enroll_voice('donor')) e em "reservar voo"
+  (shell('reserva_voo')). O prompt base estava bom; a perda de
+  nuance ("Trivial/opiniao = DIRETO") derrubou. Revertida.
+- Temperatura 0.0 nao melhorou: direct 8/13 (igual), tool 5/6,
+  no_roleplay 18/19 (pior). Mantida 0.4.
+- tool_ok 5-6/6: o unico "erro" medido e a queimadura, que as DUAS
+  variantes respondem corretamente de memoria (jornal: agua corrente,
+  procurar medico). Segunda rodada de regra (forcar offline_search)
+  nao forcava a chamada de forma confiavel E quebrou piada -> revertida.
+- Commit cc5cbbd2 (3c2a0b7e apos amend com disclosure do hunk CLASS_SYS
+  pre-staged da lane, ver mensagem do commit). Worktree mantem as 17
+  mudancas de outras lanes stagedas intocadas.
+
+Nota de operacao: SYSTEM_PT e lido no boot do duplex — para efeito no
+duplex VIVO, o processo do duplex precisa reiniciar (decisao do dono).
+
+## 2026-11-13 11:5x - Held-out #2 no LoRA de producao : a base que o v6 deve bater
+
+bench_heldout2 (24 falas frescas, zero overlap com train/heldout) apontado para
+:8092 via JARVIS_BENCH_BASE (o runner antigo ignorava argv e batia na 8093
+morta, imprimindo 0/24 sem erro nenhum — commit 3de2b8e6).
+
+Producao (microturn-4b-lora, medido 3x, temp 0):
+
+| Run | WAIT | SILENCE | BARGE | TOTAL | lat |
+|-----|------|---------|-------|-------|-----|
+| 1   | 3/4  | 0/18    | 2/2   | 5/24  | 179ms |
+| 2   | 2/4  | 0/18    | 1/2   | 3/24  | 302ms |
+| 3   | 2/4  | 0/18    | 1/2   | 3/24  | 301ms |
+
+Variancia entre runs (5/24 -> 3/24, um BARGE flip) = noise de amostrar
+speculative decoding MTP + cache; nao e regressao de codigo. SILENCE segue
+0/18: a mesma classe de falha do heldout1 (TV/narracao declarativa vira
+RESPOND), agora medida em itens frescos que o corpus v4 cobriu. O kernel v6
+(duplex-gate-lora v6, dataset v4) treina exatamente para isto; o A/B dele e
+contra estes 3 numeros.
