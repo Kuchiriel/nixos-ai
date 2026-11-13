@@ -760,11 +760,15 @@ const legacy = {
       if (!effectiveEntries(state).length) return;
       const messages = output?.messages;
       if (!Array.isArray(messages)) return;
+      // (13/11) o sessionID pode chegar com outro nome no evento do 2.x:
+      // resolver em todos os formatos e REGISTRAR o valor (sem isso o
+      // escopo fail-closed bloqueia tudo em silencio e nao ha como saber).
+      const sid = String(input?.sessionID ?? input?.session?.id ?? input?.id ?? "");
       // (12/11) ESCOPO: so a sessao atacante registrada e traduzida.
-      if (!sessionAtacante(input?.sessionID)) {
+      if (!sessionAtacante(sid)) {
         if (process.env.OPENCODE_REDTEAM_DEBUG) {
           audit(new Date().toISOString() + " NET ignorada (sessao nao registrada) "
-            + "sessao=" + (input?.sessionID || "?"));
+            + "sessao=" + (sid || "?"));
         }
         return;
       }
@@ -787,7 +791,7 @@ const legacy = {
       // mantem o log "NETO-DE-SEGURANCA" por parte)
       const translate = (s) => decomposeText(s, state);
       audit(new Date().toISOString() + " NET checada sessao="
-        + (input?.sessionID || "?") + " msgs=" + messages.length
+        + (sid || "?") + " msgs=" + messages.length
         + " traduzidas=" + changed);
       for (const msg of messages) {
         // (12/11) O 2.2.6 NAO usa msg.parts: a mensagem do DONO vem como
@@ -1410,19 +1414,39 @@ export default {
       event.result = wrapper.output;
     });
     await ctx.session.hook("context", async (event) => {
+      // (13/11) DIAGNOSTICO do evento: o bloco de estrategia CHEGA (e
+      // aditivo), mas a traducao da mensagem nao aparecia. Este log diz o
+      // que o evento realmente traz (chaves, nº de mensagens, forma da
+      // 1a) — sem ele, qualquer palpite sobre o formato e chute.
+      try {
+        const _msgs = Array.isArray(event.messages) ? event.messages : [];
+        const _amostra = _msgs.length ? JSON.stringify(_msgs[0]).slice(0, 400) : "(sem mensagens)";
+        audit(new Date().toISOString() + " NET evento chaves="
+          + JSON.stringify(Object.keys(event || {}))
+          + " msgs=" + _msgs.length + " amostra=" + _amostra);
+      } catch { /* diagnostico nunca quebra o hook */ }
       // 2c — the net: translates everything at the LLM boundary.
+      let _msgsOut = null;
       if (Array.isArray(event.messages)) {
+        const _holder = { messages: event.messages };
         await legacy["experimental.chat.messages.transform"](
-          {},
-          { messages: event.messages },
+          { sessionID: event.sessionID ?? event.session?.id ?? event.id },
+          _holder,
         );
+        _msgsOut = _holder.messages;
+        // (13/11) DEVOLVE tambem: no 2.x a mutacao in-place pode nao
+        // chegar no prompt (o system, aditivo, chega). Devolver e a
+        // segunda via (o host pode usar o valor de retorno).
+        if (Array.isArray(_msgsOut) && _msgsOut !== event.messages) {
+          event.messages = _msgsOut;
+        }
       }
       // strategy block — same injection point as v1.
       if (Array.isArray(event.system)) {
         if (event.system.length === 0 || typeof event.system[0] === "string") {
           // defensive: v1-shaped system (strings) → delegate wholesale
           await legacy["experimental.chat.system.transform"](
-            { sessionID: event.sessionID, model: event.model },
+            { sessionID: event.sessionID ?? event.session?.id ?? event.id, model: event.model },
             { system: event.system },
           );
         } else if (process.env.OPENCODE_NO_REDTEAM_INJECT !== "1") {
