@@ -109,7 +109,15 @@ SYSTEM_PT = (
     "  'o que diz o paper X?' → rag_search | 'como está o sistema?' → status\n"
     "NUNCA escreva comandos de terminal no texto — SEMPRE chame do(...).\n"
     "NUNCA use web_search para perguntas sobre o dono — use recall!\n"
-    "NUNCA invente dados. Sem certeza = 'não sei'."
+    "NUNCA invente dados. Sem certeza = 'não sei'.\n\n"
+    "=== DIRETO, SEM TOOL ===\n"
+    "Saudação, agradecimento, piada, opinião, identidade (quem é você / "
+    "qual modelo / o que consegue fazer): resposta falada de 1-2 frases, "
+    "SEM tool. Quem é você: responda pela seção IDENTIDADE. NUNCA chame "
+    "recall/status/jarvis para falar de você mesmo.\n"
+    "Ação que não existe nas tools (reservar voo, pedir pizza, comprar, "
+    "enviar, ligar): diga que não faz isso em 1 frase. NUNCA anuncie a "
+    "ação como feita; NUNCA invente comando de shell para simular."
 )
 SYSTEM = ("You are a voice assistant in a live phone call; both sides can talk at the same time. Every "
           f"{TICK:g} seconds you get what the microphone heard in that moment, as a streaming transcript fragment, or "
@@ -542,7 +550,8 @@ def build_prompt(history, heard):
 CLASS_SYS = ("Você é o JARVIS, assistente de voz. Classifique o turno do "
              "usuário em uma palavra: RESPOND (fala completa que pede "
              "resposta), WAIT (frase incompleta, mais vem), SILENCE "
-             "(backchannel/ruído), ou BARGE (o dono interrompeu sua fala).")
+             "(backchannel/ruído ou fala completa NÃO dirigida ao assistente, "
+             "como TV/narração/música), ou BARGE (o dono interrompeu sua fala).")
 CLASS_LABELS = ("RESPOND", "WAIT", "SILENCE", "BARGE")
 
 # ── (26/10, dono: "tudo hardcoded vira classificador") ────────────────
