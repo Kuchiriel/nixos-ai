@@ -1551,10 +1551,20 @@ relatório Solar, sudo kill nightwatch se quiser, cupom-100% final.
   `click`/`double_click`. Textos de candidatos vêm em `matches[].text`.
 - Actions: `move`, `click`, `double_click`, `drag` (x,y → x2,y2), `type`,
   `key`, `scroll`, `locate`. `locate` não clica: só devolve coordenada.
-- Custo medido (tela 1920x1080 de terminal denso): `eng` 5,5 s, `por+eng`
-  12,2 s. O locate usa `eng` primeiro e só cai no `por+eng` quando não acha
-  (acento). `budget` (default 30 s) é teto TOTAL, não por passo: tela ilegível
-  falha em tempo limitado em vez de rodar variante atrás de variante.
+- Custo medido (tela 1920x1080 de terminal denso, A/B na mesma imagem):
+  `eng` 5,5 s vs `por+eng` 12,2 s (24 palavras nível 5 cada). O locate usa
+  `eng` primeiro e só cai no `por+eng` quando não acha (acento). `budget`
+  (default 30 s) é teto TOTAL, não por passo: tela ilegível falha em tempo
+  limitado em vez de rodar variante atrás de variante.
+- Sem ganho por downscale/psm (medido, 13/11, mesma imagem): psm 11/6/3 a
+  100% ficaram em 11,7-12,4 s com 303-335 palavras; 90% = 11,2 s (309);
+  75% = 9,1 s (305) mas confiança caiu (81 → 74) e o alvo sumiu no psm 6.
+  Decisão: mantém 100% + psm 11. O ganho real veio de tirar o `por+eng` do
+  caminho quente.
+- Clique real medido (janela de teste "JarvisLocateTest", fonte 24):
+  `locate` devolveu `[256,168]`, o `click` pousou em `[270,175]` e o
+  `hyprctl cursorpos` confirmou `270,175` — o ajuste fino do HumanHand
+  corrige o erro do OCR em 1-2 px.
 - `observe_screen` agora anexa a janela ativa (`hyprctl activewindow -j`):
   classe, título, posição e tamanho. O modelo sabe se capturou a janela certa
   antes de medir pixel.

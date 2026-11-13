@@ -68,17 +68,20 @@ def _ensure_cdp_service(url: str, wait_s: float = 10.0) -> dict[str, Any]:
         return {"ok": True, "started": False}
     if not _sh.which("systemctl"):
         return {"ok": False, "error": f"CDP fechado em {host}:{port}"}
-    steps = []
+    # (13/11) flag explícita: antes o sucesso era inferido de `":" in
+    # steps[-1]`, o que confundia erro do systemctl com nome de unit.
+    started = False
+    errors: list[str] = []
     for unit in ("chromium-cdp", "chromium-cdp.service"):
         r = subprocess.run(["systemctl", "--user", "start", unit],
                            capture_output=True, text=True, timeout=15)
         if r.returncode == 0:
-            steps.append(unit)
+            started = True
             break
-        steps.append(f"{unit}: {(r.stderr or '').strip()[:120]}")
-    if not steps or ":" in steps[-1]:
+        errors.append(f"{unit}: {(r.stderr or '').strip()[:120]}")
+    if not started:
         return {"ok": False,
-                "error": (f"nao consegui subir chromium-cdp ({'; '.join(steps)}); "
+                "error": (f"nao consegui subir chromium-cdp ({'; '.join(errors)}); "
                           f"a porta {port} continua fechada")}
     deadline = _time.time() + wait_s
     while _time.time() < deadline:

@@ -1087,8 +1087,14 @@ def observe_with_fallback(args: dict[str, Any]) -> str:
     suffix = (f" | janela focada+opaca: {prep.get('address')}" if prep else "")
     if win:
         suffix += f" | {win}"
-    return _cascade(image_path, question, budget,
+    text = _cascade(image_path, question, budget,
                     size_kb=shot.get("size_kb", "?"), suffix=suffix)
+    # (13/11) A janela ia só no PROMPT da visão: o modelo de visão pode
+    # ignorar o cabeçalho e o agente ficava sem ela. O prefixo determinístico
+    # garante que quem chamou saiba classe/título/geometria do que capturou.
+    if win:
+        return f"[{win}]\n{text}"
+    return text
 
 
 def observe_file(args: dict[str, Any]) -> str:
