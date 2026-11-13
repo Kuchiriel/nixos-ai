@@ -27,7 +27,7 @@ disponibilidade é por projeto: às vezes o trabalho demora **7 a 14 dias** para
 aparecer, por isso 1.1 e 1.2 rodam em paralelo.
 
 **Restrição da casa**: com o modo vpnsec/Tor ligado, o login por proxy ou VPN
-**desabilita** o acesso ao UHRS ⇒ essas sessões rodam com **egress direto**.
+**desabilita** o acesso ao UHRS : essas sessões rodam com **egress direto**.
 
 ### 1.3. Em paralelo, 30 minutos cada: os que pagam mais
 
