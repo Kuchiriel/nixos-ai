@@ -249,3 +249,31 @@ def test_tenant_isolation(monkeypatch) -> None:
     assert "tarefa B" in got_b and "tarefa A" not in got_b
     got_all = mem.recall("tarefa")
     assert {h["task"] for h in got_all} == {"tarefa A", "tarefa B", "tarefa C"}
+
+
+def test_speaker_isolation(monkeypatch) -> None:
+    """Speaker filter (13/11): isolation same semantics as tenant, but
+    for who spoke (dono vs spkNN vs incerto). Facts without speaker
+    stay visible (legacy compat)."""
+    mem, store, _ = _mem(monkeypatch)
+    mem.remember_fact("fact by dono", speaker="dono")
+    mem.remember_fact("fact by spk76", speaker="spk76")
+    mem.remember_fact("fact by incerto", speaker="incerto")
+    mem.remember_fact("fact by nobody (legacy)")
+    got_dono = mem.recall("facts", speaker="dono")
+    assert {h["text"] for h in got_dono} == {"fact by dono", "fact by nobody (legacy)"}
+    got_spk76 = mem.recall("facts", speaker="spk76")
+    assert {h["text"] for h in got_spk76} == {"fact by spk76", "fact by nobody (legacy)"}
+    got_incerto = mem.recall("facts", speaker="incerto")
+    assert {h["text"] for h in got_incerto} == {"fact by incerto", "fact by nobody (legacy)"}
+    got_all = mem.recall("facts")
+    assert len(got_all) == 4
+
+
+def test_source_in_hits(monkeypatch) -> None:
+    """Recall exposes source in hits (13/11) — lets MCP filter
+    session_consolidation out of rehydrate."""
+    mem, store, _ = _mem(monkeypatch)
+    mem.remember_fact("fato da sessao", source="session_consolidation")
+    hits = mem.recall("facts")
+    assert hits[0]["source"] == "session_consolidation"
