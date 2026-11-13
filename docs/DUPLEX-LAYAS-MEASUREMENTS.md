@@ -211,3 +211,46 @@ speculative decoding MTP + cache; nao e regressao de codigo. SILENCE segue
 RESPOND), agora medida em itens frescos que o corpus v4 cobriu. O kernel v6
 (duplex-gate-lora v6, dataset v4) treina exatamente para isto; o A/B dele e
 contra estes 3 numeros.
+## 2026-11-13 12:5x - LoRA gate v6 (kernel duplex-gate-lora completo, dataset v4) — A/B honesto
+
+Kernel COMPLETE (30 GPU-hours generosos, uso @12,7h). Adapter baixado,
+convertido com benchmarks/voice/convert-gate-lora.sh (convertido de fato: o
+--base apontava para o .gguf base e quebrava no load_hparams; o script agora
+aponta para o snapshot do HF cache com config.json, commit 5a7bd65f).
+
+### O que o A/B revelou (tudo no CPU de teste :8093, mesmo harness)
+
+1. O v6 foi treinado com apply_chat_template do Qwen3.5 (prompt com
+   <think>\n), enquanto o duplex manda prompt SEM think (A_strict). Medido:
+   o v6 emite "<think>\nRESPOND" -> classify_turn TODAS com None/NONE.
+   O modelo esta bom; o formato do prompt e que nao bate com o harness.
+2. Prompt B/C (com <think>): o v6 responde labels limpos 8/8 nos probes.
+   Medicao completa com <think> B_prompt (fallback quando A falha):
+   - heldout1 (52): SILENCE 7/16, RESPOND 16/16, WAIT 12/13, BARGE 3/7 -> 38/52
+   - heldout2 (24 frescos): SILENCE 16/18, WAIT 2/4, BARGE 1/2 -> 19/24
+3. Producao (microturn-4b-lora via harness real, medido em :8092):
+   - heldout1: 40/52 (RESPOND 16/16, WAIT 10/13, SILENCE 7/16, BARGE 7/7)
+   - heldout2: 5/24, 3/24, 3/24 (SILENCE 0/18 em todas as runs)
+4. Comando novo: benchmarks/voice/bench_heldout_fallback.py mede pelo
+   fallback (A -> B com <think>). O fallback no harness REAL (classify_turn)
+   NAO foi aplicado — promocao exige decisao do dono (troca do --lora da
+   unit de producao).
+5. Veredito honesto: o v6 e MUITO melhor em broadcast/narracao (SILENCE
+   0/18 -> 15/18 no heldout2) mas PIOR em BARGE (7/7 -> 3/7 no heldout1,
+   1/2 vs 2/2 no heldout2) e empatado no resto. 33% das itens do corpus v4
+   eram SILENCE broadcast; BARGE so tinha 105 exemplos. Corpus v4 e
+   desequilibrado — nao e o modelo "pior em barge", e o corpus.
+
+### Caminhos (decisao do dono)
+
+A. Retrain v7 com o MESMO corpus v4, mas prompt byte-a-byte o do harness
+   atual (prompt A): fabrica drop-in, sem tocar no classify_turn.
+   Custo ~2h Kaggle (mesma GPU, quota ok). Recomendado se BARGE e
+   barreira critica.
+B. Promover v6 + harness think-fallback (classify_turn com retry B):
+   - v1 (microturn-4b) nao sofre (A sempre acerta = fallback nunca roda)
+   - v6 fica utilizavel; custo extra de 1 chamada por turno (~40ms GPU)
+   - troca o --lora da unit de producao (unico ponto de risco) — decisao
+     explicita do dono
+C. Nao promover nada: aceitar 37/52 base + CLASS_SYS do TV rule (commit
+   3c2a0b7e = +3 SILENCE). Status quo.
