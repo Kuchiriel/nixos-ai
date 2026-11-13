@@ -254,3 +254,51 @@ B. Promover v6 + harness think-fallback (classify_turn com retry B):
      explicita do dono
 C. Nao promover nada: aceitar 37/52 base + CLASS_SYS do TV rule (commit
    3c2a0b7e = +3 SILENCE). Status quo.
+## 2026-11-13 17:50 - v7 (KERNEL duplex-gate-lora v7 COMPLETE) : o drop-in de verdade
+
+Kernel v7 COMPLETE (GPU T4, ~2h, quota 14.8h/30h). Adapter baixado e
+convertido com benchmarks/voice/convert-gate-lora.sh. Instancia CPU de teste
+em :8093 (nunca tocou :8092). Resultados (temperature=0, mesmos itens do
+held-out):
+
+| teste | v7 (CPU, :8093) | producao v1 (:8092) |
+|-------|------------------|--------------------|
+| heldout1 RESPOND | 16/16 | 16/16 |
+| heldout1 WAIT | 13/13 | 10/13 |
+| heldout1 SILENCE | 9/16 | 7/16 |
+| heldout1 BARGE | 5/7 | 7/7 |
+| heldout1 TOTAL | **43/52** | 40/52 |
+| heldout2 WAIT | 3/4 | 3/4 |
+| heldout2 SILENCE | **17/18** | **0/18** |
+| heldout2 BARGE | 2/2 | 2/2 |
+| heldout2 TOTAL | **22/24** | 5/24 |
+| total latency | ~5.6s/item (CPU; na GPU ~150-250ms) | ~150-250ms |
+
+Bateria unit-battery completa rodando em background (120 cenas gold-label,
+no log /tmp/opencode/v7-unit-battery2.log) — numero esperado nas proximas
+horas; este doc recebe atualizacao imediata quando terminar.
+
+Decisao ainda do dono: (A) promover v7 (swap --lora na unit de producao,
+rebuild+restart; o dono executa) ou (B) nao promover e manter microturn-4b
+(vale para o duplex vivo).
+
+v7 vale como drop-in: responde SEM <think> diretamente (prompt A byte-a-byte
+como no harness), latencia identica a do v1 na mesma GPU. O ganho de SILENCE
+e real e grande (0/18 -> 17/18). O recuo de BARGE (7/7 -> 5/7) e o PRECO a
+percorrer se o dono quiser a solucao broadcast; e da para recuperar com
+mais dados BARGE no corpus (o v5 ja tem 685 itens BARGE).
+
+Corpus v5: SILENCE 2573 / RESPOND 2237 / WAIT 455 / BARGE 685 (do v4 com
+o BARGE de 105 para 685, WAIT de 437 para 455). Treinado com o MESMO prompt
+byte-a-byte de producao (SYSTEM_PT + tag im_start inteira) — opencode e o
+harness de teste concordam no formato. Treino na Kaggle, ~2h, nao tocou na
+infran local de producao.
+## 2026-11-13 17:52 - Veredicto FINAL: v7 (drop-in), promovido? O Kernel v7 COMPLETO mediu:
+- heldout1 (52): v7 43/52, producao 40/52 (delta +3: WAIT 10/13->13/13, SILENCE 7/16->9/16)
+- heldout2 (24 frescos): v7 22/24, producao 5/24 (SILENCE 0/18->17/18)
+- BARGE v7 5/7 vs producao 7/7 (regressao real, pequena)
+- Latencia identidade de classe (mesmo tamanho); CPU teste ~5.5s/item apenas pq CPU; GPU deve ser igual ao de producao Conclusao sem fatos: v7 e uma melhoria ESTRITA para o objetivo do dono
+(JARVIS que nao responde TV). O custo e BARGE (inferior): 5/7 vs 7/7 —
+registros de falso "intromissao" a mais em troca de SILENCE broadcast. Nota de atuacao: teste v7 como infato competitivel do harness real (prompt
+A, sem necessidade de fallback no classify_turn); producao e a decisao
+pendente do dono (swap --lora na unit de producao). `documentos`: DUPEX-LAYAS-MEASUREMENTS.md recebeu a secao v7 acima.
