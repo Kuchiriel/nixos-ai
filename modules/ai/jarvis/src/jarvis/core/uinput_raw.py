@@ -41,6 +41,11 @@ UDEV = struct.Struct("80shhhhI" + "i" * 256)
 _BTN_DOWN = {}
 
 
+def _dist2(a: tuple[int, int], b: tuple[int, int]) -> int:
+    """Distância quadrada (evita sqrt no laço de convergência)."""
+    return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2
+
+
 class RawHand:
     """Mão de mouse por uinput cru + feedback (determinístico)."""
 
@@ -110,38 +115,56 @@ class RawHand:
         return self._gain
 
     # ── alto nível ──────────────────────────────────────────
-    def move_abs(self, x: int, y: int, max_iter: int = 4,
+    def move_abs(self, x: int, y: int, max_iter: int = 8,
                  tol: int = 2) -> dict:
-        """Move por REL 1×1 + feedback (converge por bissecção natural).
+        """Move com UM evento REL acumulado por passo + ganho medido no loop.
 
-        Por que micro-passos de 1: a aceleração do compositor torna o mape
-        unidade→px NÃO-LINEAR (0.63–1.96 medido) e dependente de direção;
-        passos de 1 vivem no chão da curva (≈1.5×) e o loop por feedback
-        corrige o resto — sem modelo do ganho, convergência garantida.
+        (13/11) DUAS medições mudaram este loop:
+        1. Centenas de eventos REL de 1 unidade em rajada NÃO somam: o
+           compositor perde/atrasa parte deles (medido: 541 eventos moveram
+           34 px numa iteração e 252 px na seguinte) e o cursor continua
+           andando DEPOIS do cursor_pos, então o loop corrigia em cima de
+           estado velho e errava o alvo em 30–50 px.
+        2. Um único EV_REL com o delta acumulado é aplicado inteiro; com o
+           ganho re-medido a cada passo (px reais / unidades enviadas) a
+           aceleração variável do Hyprland deixa de importar. Medido: 5
+           passos para (1600,300), erro final 0 px.
         """
-        gx, gy = self._calibrate(x, y)
+        if self._gain is None:
+            self._calibrate(x, y)
+        gx, gy = self._gain or (1.5, 1.5)
+        gx, gy = max(0.2, gx), max(0.2, gy)
         at = self.cursor_pos() or (x, y)
+        best, best_d = at, _dist2(at, (x, y))
+        stalled = 0
         it = 0
         for it in range(1, max_iter + 1):
             dx, dy = x - at[0], y - at[1]
             if abs(dx) <= tol and abs(dy) <= tol:
                 break
-            # ESTRATÉGIA: enviar o ERRO RESIDUAL inteiro como micro-passos
-            # de 1 unidade crua (sem depender de ganho! 1 cru = 1.5–2 reais,
-            # nunca 0 — o feedback fecha o loop sem matemática frágil)
-            n = max(1, min(200, max(abs(dx), abs(dy))))
-            ux = (1 if dx > 0 else -1) if dx else 0
-            uy = (1 if dy > 0 else -1) if dy else 0
-            for _ in range(n):
-                self.rel(ux, uy)
-            time.sleep(0.08)
-            at = self.cursor_pos() or at
-            # se passou do alvo (overshoot), a próxima iteração volta — o
-            # loop converge por bisection natural; máx 4 iterações
-        return {"ok": abs(at[0] - x) <= max(6, tol * 3)
-                and abs(at[1] - y) <= max(6, tol * 3),
-                "at": list(at), "iter": it, "gain": [round(gx, 3),
-                                                     round(gy, 3)]}
+            ux = int(round(dx / gx)) or (1 if dx > 0 else -1 if dx < 0 else 0)
+            uy = int(round(dy / gy)) or (1 if dy > 0 else -1 if dy < 0 else 0)
+            ux = max(-1200, min(1200, ux))
+            uy = max(-1200, min(1200, uy))
+            self.rel(ux, uy)
+            time.sleep(0.10)
+            new = self.cursor_pos() or at
+            if ux and abs(new[0] - at[0]) >= 1:
+                gx = max(0.2, min(6.0, abs(new[0] - at[0]) / abs(ux)))
+            if uy and abs(new[1] - at[1]) >= 1:
+                gy = max(0.2, min(6.0, abs(new[1] - at[1]) / abs(uy)))
+            at = new
+            d = _dist2(at, (x, y))
+            if d < best_d:
+                best, best_d = at, d
+                stalled = 0
+            else:
+                stalled += 1
+                if stalled >= 2:
+                    break   # não converge (borda de tela, modal): para
+        return {"ok": best_d <= max(6, tol * 3) ** 2,
+                "at": list(at), "best": list(best), "iter": it,
+                "gain": [round(gx, 3), round(gy, 3)]}
 
     def button(self, button: str = "left", down: bool = True) -> None:
         b = BTN.get(button, BTN["left"])

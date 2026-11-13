@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_109 tools._
+_114 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -15,6 +15,8 @@ _109 tools._
 - `agent-bus-poll.py` (nixos-ai/scripts) — """Poller do BUS para uma máquina que NÃO é esta (ex.: o opencode do Windows).
 - `agent-checkpoint.sh` (nixos-ai/scripts) — agent-checkpoint.sh — checkpoint de 4 camadas em 1 comando (genérico do monorepo).
   use: `./agent-checkpoint.sh --project <path> --era "<título da era>" \`
+- `agent-counter.py` (nixos-ai/scripts) — """agent-counter.py — contra-ataque ao agente moralista, com decoy.
+  use: `python3 agent-counter.py --target ses_xxx --task "revise o relatorio X"`
 - `agent-db-alive.py` (nixos-ai/scripts) — """agent-db-alive.py — a sessão produziu trabalho novo nos últimos N segundos?
   use: `uso: agent-db-alive.py <opencode.db> <janela_s> [session_id]`
 - `agent-keepalive.sh` (nixos-ai/scripts) — =====================================================================
@@ -23,6 +25,8 @@ _109 tools._
   use: `./agent-pains.sh add --kind cli|lesson|tool|env --project <path> \`
 - `agent-provider-guard.py` (nixos-ai/scripts) — """agent-provider-guard.py — detecta falhas do PROVIDER de LLM e avisa (ping).
 - `agent-roster.py` (nixos-ai/scripts) — """agent-roster.py — ROSTER + TASKS da coordenação multi-agente (02/11).
+- `agent_guard.py` (nixos-ai/scripts) — """agent-guard.py — trava a entrada de intrusao na frota (medido 12/11).
+  use: `python3 agent-guard.py --terms              # lista o vocabulario guardado`
 - `agents-keepawake.sh` (nixos-ai/scripts) — agents-keepawake.sh — inibe o idle (tela) enquanto houver agente vivo.
   use: `USO: systemd user service (nixos-ai home-manager, agents-keepawake.service)`
 - `agents-watcher.sh` (nixos-ai/scripts) — agents-watcher.sh — O WATCHER ÚNICO dos agentes (17/10, dono: "consolide
@@ -32,10 +36,13 @@ _109 tools._
 - `check-plugin-contract.py` (nixos-ai/scripts) — """check-plugin-contract.py — o plugin VIVO é o mesmo código que o FONTE?
 - `check-queue-handoff.py` (nixos-ai/scripts) — """check-queue-handoff.py — os ponteiros da fila para o vault existem?
   use: `python3 scripts/check-queue-handoff.py`
+- `check-repo-symlinks.py` (nixos-ai/scripts) — """check-repo-symlinks.py — symlink absoluto dentro do repo quebra o eval puro.
+  use: `python3 scripts/check-repo-symlinks.py [repo] [--quiet]`
 - `check-text-chars.py` (nixos-ai/scripts) — """check-text-chars.py — trava os caracteres que nao devem sair da casa.
   use: `python3 scripts/check-text-chars.py <arquivo>`
 - `check-voice-gate-parity.py` (nixos-ai/scripts) — """Prova de paridade: o gate do duplex-asrd e o de voice_gate.py são o mesmo.
   use: `python3 scripts/check-voice-gate-parity.py`
+- `consolidate_sessions_memory.py` (nixos-ai/scripts) — Consolidate opencode session summaries into durable JARVIS episodic memory.
 - `corpus_inventory.py` (nixos-ai/scripts) — """Inventário do corpus de conhecimento (§3/§22 da missão knowledge-substrate).
   use: `~/Books            corpus de conhecimento (binários + notas; inclui versions/)`
 - `ctx-usage.sh` (nixos-ai/scripts) — ctx-usage.sh — Agrega uso real do LLM local a partir do journal.
@@ -70,6 +77,7 @@ _109 tools._
 - `harness-suite.py` (nixos-ai/scripts) — """harness-suite.py — desafios progressivos p/ jarvis dev (E2E real).
   use: `python3 scripts/harness-suite.py [--tier easy|medium|hard] [--out FILE]`
 - `host-health.sh` (nixos-ai/scripts) — host-health.sh — veredito de SAÚDE DE RAM/SWAP do host (leitura only).
+- `index_opencode_sessions.py` (nixos-ai/scripts) — Indexa sessões do opencode.db no Qdrant (coleção dedicada `sessions`).
 - `ingest_books.py` (nixos-ai/scripts) — """Ingestão do corpus de livros/papers/digests na coleção books (§10–§11).
 - `jarvis-cli.sh` (nixos-ai/scripts) — jarvis-cli.sh — CLI wrapper for all JARVIS MCP tools
 - `jarvis-gaming-mode.sh` (nixos-ai/scripts) — ═══════════════════════════════════════════════════════════════════

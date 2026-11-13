@@ -130,9 +130,13 @@ class HumanHand:
             return None
 
     def _evdev(self):
-        """Controlador uinput (lazy; None sem python-evdev/permissão)."""
-        if shutil.which("ydotool"):
-            return "ydotool"
+        """Controlador uinput (lazy; None sem python-evdev/permissão).
+
+        (13/11) não devolve mais "ydotool": o ydotool presente no PATH não é
+        um atuador de mouse utilizável (ver comentário do YDOTOOL_ENV), então
+        o fallback caía num sentinela que nenhum caller sabia usar e o
+        resultado era "sem atuador" com o ydotool instalado.
+        """
         try:
             from evdev import UInput, ecodes as E
             ui = UInput({E.EV_KEY: [E.BTN_LEFT, E.BTN_RIGHT],
@@ -151,28 +155,33 @@ class HumanHand:
         if self.dry_run:
             return {"ok": True, "dry": True, "to": [tx, ty],
                     "steps": len(path)}
-        # ATUADOR 1 (primário): uinput cru — REL + ganho calibrado + feedback
-        # (determinístico; 07/10 medido: ±3px em 3/3 alvos)
+        # ATUADOR 1 (primário): uinput cru + feedback por waypoint ABSOLUTO.
+        # (13/11) antes os waypoints iam como REL cru, que o compositor
+        # multiplica por ~1.5-2 => o cursor pousava longe e o alvo final
+        # errava 30-50 px. Waypoint absoluto usa o mesmo loop fechado do
+        # destino, então a curva é real e o pouso é exato.
         try:
             from jarvis.core.uinput_raw import RawHand
             if getattr(self, "_raw", None) is None:
                 self._raw = RawHand()
-            for sx, sy in path[1:]:
-                self._raw.rel(sx - (self._raw.cursor_pos() or (sx, sy))[0],
-                              sy - (self._raw.cursor_pos() or (0, sy))[1])
+            for sx, sy in path[1::3]:
+                self._raw.move_abs(sx, sy, max_iter=2, tol=8)
             self._think()
             self._note()
             r = self._raw.move_abs(tx, ty)   # fecho por feedback
             r["actuator"] = "uinput-raw"
             r["bezier_steps"] = len(path)
+            if not r.get("ok"):
+                r["error"] = (f"nao cheguei no alvo: pedido ({tx},{ty}), "
+                              f"cursor em {r.get('at')}")
             return r
         except Exception as e:
-            return {"ok": False, "error": f"uinput falhou: {e}"}
+            uinput_err = f"uinput falhou: {e}"
         # ATUADOR 2: evdev/uinput (caminho relativo; só se ydotool sumir)
         ui = self._evdev()
         if ui is None or ui == "ydotool":
             return {"ok": False,
-                    "error": "sem atuador de mouse (ydotool+daemon e evdev)"}
+                    "error": f"sem atuador de mouse ({uinput_err}; evdev idem)"}
         try:
             from evdev import ecodes as E
             px, py = pos
@@ -209,13 +218,16 @@ class HumanHand:
             r = self._raw.click(x, y, button, hold_ms=hold)
             self._think()
             self._note()
+            if not r.get("ok"):
+                r["error"] = (f"nao cheguei no alvo: pedido ({x},{y}), "
+                              f"cursor em {r.get('at')}")
             return r
         except Exception as e:
-            return {"ok": False, "error": f"uinput click falhou: {e}"}
+            click_err = f"uinput click falhou: {e}"
         ui = self._evdev()
         if ui is None:
             return {"ok": False,
-                    "error": "sem atuador de clique (ydotool ausente e evdev)"}
+                    "error": f"sem atuador de clique ({click_err}; evdev idem)"}
         try:
             from evdev import ecodes as E
             btn = E.BTN_LEFT if button == "left" else E.BTN_RIGHT
@@ -254,6 +266,15 @@ class HumanHand:
         if not yt and not wt:
             return {"ok": False,
                     "error": "nem ydotool nem wtype disponiveis"}
+        # (13/11) sem o socket do daemon no env, o ydotool falha em SILÊNCIO
+        # (check=False) e a tool respondia ok sem nada digitado. O socket do
+        # dono vive no XDG_RUNTIME_DIR; se existir, manda no env.
+        env = None
+        if yt:
+            sock = self.YDOTOOL_ENV["YDOTOOL_SOCKET"]
+            if os.path.exists(sock):
+                env = {**os.environ, **self.YDOTOOL_ENV}
+        failures = 0
         try:
             for ch in text:
                 if yt:
@@ -263,12 +284,14 @@ class HumanHand:
                     # tecla — todo texto do MCP chegava "12"+ch no destino
                     # (medido no terminal do outro agente). A cadência humana
                     # já vem do sleep lognorm abaixo; delay interno = letal.
-                    subprocess.run([yt, "type", ch],
-                                   check=False, capture_output=True,
-                                   timeout=15)
+                    run = subprocess.run([yt, "type", ch],
+                                         check=False, capture_output=True,
+                                         timeout=15, env=env)
                 else:
-                    subprocess.run(["wtype", ch], check=False,
-                                    capture_output=True, timeout=10)
+                    run = subprocess.run(["wtype", ch], check=False,
+                                         capture_output=True, timeout=10)
+                if run.returncode != 0:
+                    failures += 1
                 gap = _lognorm(self.TYPE_MU, self.TYPE_SIG, 20, 400) / 1000.0
                 # pausa longa ocasional (pensando no meio da frase)
                 if random.random() < 0.04:
@@ -276,7 +299,11 @@ class HumanHand:
                 time.sleep(gap)
             self._rest()
             self._note()
-            return {"ok": True, "chars": len(text)}
+            if failures and failures == len(text):
+                return {"ok": False,
+                        "error": ("nada foi digitado: ydotool/wtype retornaram "
+                                  "erro em todas as teclas (daemon/socket?)")}
+            return {"ok": True, "chars": len(text), "failed": failures}
         except Exception as e:
             return {"ok": False, "error": f"digitação falhou: {e}"}
 

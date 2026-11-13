@@ -269,6 +269,14 @@ JARVIS_TOOLS = [
                 "dy": {"type": "integer", "description": "Scroll pixels"},
                 "items": {"type": "array", "items": {"type": "string"}, "description": "Menu path"},
                 "timeout": {"type": "integer", "description": "Wait ms"},
+                "headless": {
+                    "type": "boolean",
+                    "description": ("open only: true (default) = browser invisível; "
+                                    "false = janela visível no desktop do dono "
+                                    "(para acompanhar/depurar ou logar na mão). "
+                                    "Trocar de modo relança o browser e perde a "
+                                    "página atual."),
+                },
             },
             "required": ["action"]
         }

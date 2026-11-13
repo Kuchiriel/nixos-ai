@@ -53,6 +53,17 @@ echo "===================================================="
 echo "EXECUTANDO VALIDAÇÃO MULTI-CAMADA"
 echo "===================================================="
 
+# (13/11) Symlink absoluto dentro do repo quebra o eval puro ("access to
+# absolute path ... is forbidden") e ja custou dois rebuilds: o home-manager
+# gerenciou arquivos cujo diretorio em ~/.config era symlink para a arvore.
+# Falhar aqui, com o path na mao, e mais barato que descobrir no Layer 3.
+if ! python3 "$FLAKE_DIR/scripts/check-repo-symlinks.py" "$FLAKE_DIR" --quiet; then
+  echo ""
+  echo "[ERRO CRÍTICO] Symlink absoluto no repo (eval puro falha)."
+  echo "Troque por arquivo regular ou link relativo e rode de novo."
+  exit 1
+fi
+
 if ! "$FLAKE_DIR/scripts/nix-validate.sh" --host "$TARGET_HOST" "${VALIDATE_ARGS[@]}"; then
   echo ""
   echo "[ERRO CRÍTICO] Validação falhou!"

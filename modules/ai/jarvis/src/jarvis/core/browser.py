@@ -62,10 +62,22 @@ def cdp_attach(url: str = "http://127.0.0.1:9222") -> dict[str, Any]:
         return {"ok": False, "error": str(e)[:200]}
 
 
-def _ensure():
-    global _pw, _browser, _page
+def _ensure(headless: bool | None = None):
+    """Garante um page; `headless` None = mantém o modo atual.
+
+    (13/11, pedido do dono) o modo era CHUMBADO em headless=True, então o
+    modelo não podia abrir uma janela visível (acompanhar/depurar um fluxo,
+    ou logar na mão). Agora `headless` vem por parâmetro e trocar de modo
+    relança o browser — a sessão anônima do headless não serve para logar.
+    """
+    global _pw, _browser, _page, _headless
+    if headless is None:
+        headless = _headless
     if _page is not None:
-        return _page
+        if bool(headless) == _headless:
+            return _page
+        close()   # modo diferente: relança (page de outro modo não migra)
+    _headless = bool(headless)
     import shutil
     from playwright.sync_api import sync_playwright
     _pw = sync_playwright().start()
@@ -74,10 +86,10 @@ def _ensure():
     exe = (shutil.which("chromium") or shutil.which("chromium-browser")
            or shutil.which("google-chrome"))
     if exe:
-        _browser = _pw.chromium.launch(headless=True, executable_path=exe,
+        _browser = _pw.chromium.launch(headless=_headless, executable_path=exe,
                                        args=["--no-sandbox"])
     else:
-        _browser = _pw.chromium.launch(headless=True)
+        _browser = _pw.chromium.launch(headless=_headless)
     _page = _browser.new_page()
     return _page
 
@@ -92,6 +104,7 @@ def close():
     except Exception:
         pass
     _pw = _browser = _page = None
+_headless = True
 
 
 def _state(page) -> dict[str, Any]:
@@ -106,12 +119,12 @@ def _state(page) -> dict[str, Any]:
     return {"title": title, "url": page.url, "text": text}
 
 
-def browser_open(url: str) -> dict[str, Any]:
-    """Abre URL (leitura, sem aprovação)."""
+def browser_open(url: str, headless: bool | None = None) -> dict[str, Any]:
+    """Abre URL (leitura, sem aprovação). headless None = modo atual."""
     if not (url.startswith("http://") or url.startswith("https://")):
         return {"ok": False, "error": f"URL inválida: {url}"}
     try:
-        page = _ensure()
+        page = _ensure(headless)
         page.goto(url, timeout=30000)
         page.wait_for_load_state("domcontentloaded", timeout=15000)
         return {"ok": True, **_state(page)}
@@ -524,7 +537,8 @@ def handle_browser(args: dict[str, Any], approve: bool = False) -> str:
         url = args.get("url", "")
         if not url:
             return "ERROR: open precisa de url"
-        r = browser_open(url)
+        hl = args.get("headless")
+        r = browser_open(url, None if hl is None else bool(hl))
     elif action in ("click", "fill", "press", "lclick", "click_text", "menu",
                       "shadow"):
         if not approve:
