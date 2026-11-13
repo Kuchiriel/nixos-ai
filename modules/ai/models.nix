@@ -1,5 +1,6 @@
 {
   fetchurl,
+  lib,
 }:
 # Modelos de IA baixados declarativamente via fetchurl.
 #
@@ -84,25 +85,11 @@ in rec {
     sha256 = "sha256-BKQ6IujSAD3tpazCYvaOwQBfp2xzWpliqMdwQqdKfRk=";
   };
 
-  # Phi-4-mini Q4_K_M: chat correto, postura de recusa p/ tools (0/35
-  # free, 30/35 constrained). Não recomendado p/ agent (ver relatório).
-  llm-phi-4-mini = mkModel {
-    url = "https://huggingface.co/unsloth/Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf";
-    sha256 = "sha256-iMACKZFAg80RKFOquE7VG4e99rnOQvUy2MhcfGOxcwo=";
-  };
+  # Phi-4-mini REMOVIDO (13/11, dono: "não to usando").
 
-  # --- xLAM-2-8B Q4_K_M (Salesforce, executor especialista) ---
-  # Action model BFCL-SOTA (~4.9GB). MEDIDO 2026-09-09 (GPU, prism):
-  # A/B 0/0/35 (free/sys/constrained) — SEM template nativo no GGUF
-  # (server: "Unable to generate parser", 400 em tools param) → opera
-  # SÓ via strict/constrained; emite arrays (calls paralelas!) e chains
-  # corretas; chat puro incapaz (sempre aciona). Licença CC-BY-NC-4.0
-  # (não-comercial — difere do resto MIT/Apache; notar no uso).
-  # Adotado como executor strict (Qwen segue fast geral).
-  llm-xlam-8b = mkModel {
-    url = "https://huggingface.co/Salesforce/Llama-xLAM-2-8b-fc-r-gguf/resolve/main/Llama-xLAM-2-8B-fc-r-Q4_K_M.gguf";
-    sha256 = "sha256-6xC0DTbIDoGmb4BGSisAn0gcTMWxkm7TZpMjn6Yt1+k=";
-  };
+  # xLAM-2-8B REMOVIDO (13/11, dono: "não to usando mesmo"). O registry
+  # de units ainda forçava o fetch de ~5G num rebuild (fetched via
+  # unsafeDiscardStringContext em directUnits, mas o modelo ficou sem uso).
 
   # --- LLM — Host (bare metal) ---
   # Qwen3.6-35B-A3B: MoE (35B total, 3B ativos por token) com vision encoder
@@ -299,8 +286,6 @@ in rec {
     sha256 = "sha256-jTRKQzbY6n2gy/wSeS0UceVovnq+iTDFImBpi/0B1zE=";
   };
 
-  # xLAM + Phi: JÁ REGISTRADOS acima (llm-xlam-8b, llm-phi-4-mini) —
-  # hashes locais 03/10 conferem byte a byte (Salesforce/unsloth íntegros).
 
   # ── DIRECT SERVERS (um serviço systemd por modelo) ──
   # Lido pelo gerador em modules/services/llama-uncensored.nix
@@ -490,56 +475,6 @@ in rec {
       # id = modelFile (o server anuncia o path, sem --alias).
       opencode = { key = "local-deepseek-7b"; name = "DeepSeek R1 7B Local (reasoning!)"; context = 16384; output = 8192; };
     };
-    xlam-8b = {
-      port = 8089; binary = "upstream";
-      # (12/11) path absoluto /var/lib/ai sumiu na migracao NVMe; o modelo
-      # ja tem mkModel (URL + sha256) no proprio models.nix — o Nix busca
-      # do HF com hash verificado (uma vez, no rebuild).
-      modelFile = "${llm-xlam-8b}";
-      threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
-      gpuLayers = 99; moeFlags = "";
-      fa = true; ctk = "q4_0"; ctv = "q4_0";
-      # Tool-calling ONLY: excelente em function-call, MUDO em chat
-      # (não serve p/ prosa). Papel: executor backend, nunca conversar.
-      extraArgs = [ "--parallel" "1" "--jinja" ];
-      # (06/11) RAM real: pesos 4,4G (7B Q4) + KV 16k q4 + buffers ≈ 6G;
-      # o teto de 7G matava o server no meio do trabalho. 6G/9G/1G.
-      # (06/11, 15:41) swap max 1G era aperto demais: o modelo joga
-      # 1,2-1,7GB de páginas frias no zram em operação normal e foi
-      # morto no limite (oom-kill da cgroup). 2G prende o desastre
-      # (zram cheio = freeze) sem matar o serviço no uso normal.
-      # (06/11, 16:50) MemoryHigh ABAIXO do consumo real = swap thrash:
-      # o modelo ficava 6,5-9G (o KV do 4B mora na RAM porque fa off),
-      # o cgroup passava o high-watermark todo dia → reclaim → KV no
-      # zram → cada request levava MINUTOS (timeout) → o classificador
-      # devolvia None → o JARVIS FICAVA MUDO. MemoryHigh tem de ser
-      # MAIOR que o consumo de repouso; o swap é só reserva.
-      # (06/11, 21:25) swap max 1G MATAVA o server: o GGUF é mmap e o
-      # kernel joga as páginas frias no zram (1,2-1,7GB em operação
-      # normal) → cgroup OOM-kill (status=9/KILL) 2x em 15min. Com
-      # MemoryHigh=8G o modelo volta pra RAM; o swap é reserva de 4G
-      # (e o MemoryMax=11G é o teto duro).
-      # (06/11, 23:30) TIGHTENING FINAL: o host levou 4 OOM globals
-      # (23:12-23:24) e o 4B-MTP foi morto 19x em loop (start-limit) —
-      # o teto de 11G+4G de swap deixava o LLM pedir 15GB num host de
-      # 31GB que já tem MT5 (4,2GB) + 4 sessões opencode (3,4GB). O
-      # modelo precisa de ~5GB (ctx 12288): high 6G, max 7G, swap 2G.
-      memHigh = "6G"; memMax = "7G"; memSwapMax = "2G"; limitMemlock = false;
-      wanted = false;
-    };
-    phi-mini = {
-      port = 8086; binary = "upstream";
-      modelFile = "/var/lib/ai/models/Phi-4-mini-instruct-Q4_K_M.gguf";
-      threads = 6; ctxSize = 32768; batchSize = 512; ubatch = 512;
-      gpuLayers = 99; moeFlags = "";
-      fa = true; ctk = "q4_0"; ctv = "q4_0";
-      extraArgs = [ "--parallel" "1" "--jinja" ];
-      memHigh = "5G"; memMax = "7G"; memSwapMax = "1G"; limitMemlock = false;
-      wanted = false;
-      # opencode provider (gerado em home.nix via mapAttrs):
-      # id = modelFile (o server anuncia o path, sem --alias).
-      opencode = { key = "local-phi-mini"; name = "Phi-4-mini Local"; context = 32768; output = 4096; };
-    };
     gemma-4b = {
       port = 8087; binary = "upstream";
       modelFile = "/var/lib/ai/models/gemma-3-4b-it-Q4_K_M.gguf";
@@ -567,6 +502,8 @@ in rec {
     };
     qwen30b-moe = {
       port = 8091; binary = "ik";
+      # (13/11) idem: ~18G de download para unit que nao sobe.
+      materialize = false;
       modelFile = "${llm-qwen30b-moe}";
       # ctx 8192: classe MoE estourou compute buffers em 32k no irmão 35B
       # (medido 2x 03/10); 30B não testado → valor seguro, não especulativo.
@@ -579,6 +516,8 @@ in rec {
     };
     uncensored-35b-q4kp = {
       port = 8093; binary = "ik";
+      # (13/11) idem: ~19G de download para unit que nao sobe.
+      materialize = false;
       modelFile = "${llm-uncensored-35b-kp}";
       threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
       gpuLayers = 45; moeFlags = "--n-cpu-moe 35";
@@ -1129,6 +1068,14 @@ in rec {
   #    ÚNICA FONTE: este bloco referencia `profiles` e arquivos acima —
   #    nada de dict Python espelhando estes dados.
   # =========================================================================
+  # (13/11) Servidores que EXISTEM de fato: wanted (sobe no boot) ou
+  # materialize (unit gerada sob demanda). `wanted=false` + `materialize
+  # =false` fica só como registro de modelo — sem unit, sem download, e
+  # fora dos mapas unit/porta que o heal usa (senão ele tenta reiniciar
+  # unit inexistente).
+  directServersActive = lib.filterAttrs
+    (n: s: s.wanted || (s.materialize or true)) directServers;
+
   routing = {
     version = 1;
     # (26/10, dono) DEFAULT = Qwen3.5-4B-MTP **COM O LoRA** (:8092).
@@ -1175,7 +1122,7 @@ in rec {
     directServers = builtins.mapAttrs (n: s: {
       endpoint = s.port;
       unit = "llama-${n}";
-    }) directServers;
+    }) directServersActive;
     models = {
       # (26/10) DEFAULT do sistema — Qwen3.5-4B-MTP + LoRA micro-turn,
       # servido pelo directServer :8092 (binário stock). PT-BR de verdade
@@ -1331,11 +1278,17 @@ in rec {
 
   # Servers diretos: uma unit por modelo ("llama-${name}") — a unit e a
   # porta saem daqui; llama-uncensored.nix só gera o serviço.
+  # (13/11) modelFile entra SEM contexto de store: o registry JSON é
+  # METADADO (router/heal leem a porta e a unit), não input de build.
+  # Com contexto, toJSON criava dependência do fetchurl e TODO rebuild
+  # baixava o GGUF de cada directServer wanted=false (medido: ~40G de
+  # xLAM/Qwen30B/Q4_K_P num link de 0,9 MB/s).
   directUnits = builtins.mapAttrs (name: s: {
-    inherit (s) port binary wanted modelFile;
+    inherit (s) port binary wanted;
+    modelFile = builtins.unsafeDiscardStringContext s.modelFile;
     unit = "llama-${name}";
     alias = s.alias or null;
-  }) directServers;
+  }) directServersActive;
 
   # Catálogo único de servers (unit → {port, binary, ...}). Consumido por
   # timers/scripts (bench noturno, voice-up) em vez de portas literais.

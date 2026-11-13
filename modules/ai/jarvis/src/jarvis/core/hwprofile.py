@@ -153,18 +153,6 @@ MODELS: list[ModelSpec] = [
         note="Reasoning model: PENSA SEMPRE (não desliga thinking!). Solo 16k.",
     ),
     ModelSpec(
-        key="xlam-8b", name="Llama-xLAM-2-8B-fc-r (Q4_K_M)",
-        params_b=8.0, layers=32, kv_heads=8, head_dim=128, hidden=4096,
-        ctx_max=131072, size_gb=4.92, min_ram_gb=10,
-        note="Executor strict/tools (CC-BY-NC-4.0!). Parcial/CPU na 6GB.",
-    ),
-    ModelSpec(
-        key="phi-mini", name="Phi-4-mini-instruct (Q4_K_M)",
-        params_b=3.8, layers=32, kv_heads=8, head_dim=128, hidden=3072,
-        ctx_max=131072, size_gb=2.49, min_ram_gb=6,
-        note="Chat correto; recusa tools em free (só constrained). Solo 32k.",
-    ),
-    ModelSpec(
         key="qwen3-30b-a3b", name="Qwen3-30B-A3B MoE (Q4_K_M)",
         params_b=30.0, layers=48, kv_heads=4, head_dim=128, hidden=2048,
         ctx_max=40960, moe=True, active_params_b=3.0,

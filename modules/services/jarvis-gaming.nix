@@ -41,8 +41,6 @@ let
     "llama-duplex-35b"
     "llama-deepseek-7b"
     "llama-gemma-4b"
-    "llama-phi-mini"
-    "llama-xlam-8b"
     "llama-qwen30b-moe"
   ];
 

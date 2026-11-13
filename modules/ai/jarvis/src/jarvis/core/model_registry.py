@@ -45,8 +45,6 @@ _FALLBACK = {
         # (05/11) 8094: 8085 era compartilhada com duplex-35b (models.nix) —
         # as units se conflitavam. Espelha o registry gerado pelo Nix.
         "deepseek-7b": {"endpoint": 8094, "unit": "llama-deepseek-7b"},
-        "xlam-8b": {"endpoint": 8089, "unit": "llama-xlam-8b"},
-        "phi-mini": {"endpoint": 8086, "unit": "llama-phi-mini"},
         "gemma-4b": {"endpoint": 8087, "unit": "llama-gemma-4b"},
         "qwen30b-moe": {"endpoint": 8091, "unit": "llama-qwen30b-moe"},
         "uncensored-35b-q4kp": {"endpoint": 8093, "unit": "llama-uncensored-35b-q4kp"},

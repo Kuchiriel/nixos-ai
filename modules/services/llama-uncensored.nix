@@ -7,9 +7,15 @@ with lib;
 let
   servers = pkgs.aiModels.directServers;
   names = attrNames servers;
+  # (13/11) `materialize = false`: declara o modelo no registry mas NAO
+  # gera a unit — sem unit, ninguem referencia o fetchurl e o rebuild
+  # nao baixa o GGUF (medido: 3 units wanted=false somavam ~40G de
+  # download em rebuild, travando tudo num link de 0,9 MB/s).
+  generated = filterAttrs (n: s: s.wanted || (s.materialize or true)) servers;
   binFor = b:
     if b == "ik" then
-      "/home/nixos/projects/ik_llama.cpp/build/bin/llama-server"
+      # (13/11) build migrado para o NVMe (checkout ~/projects removido).
+      "/var/lib/ai/models/ik-llama/build/bin/llama-server"
     else if b == "stock" then
       # llama.cpp v0.7.0 com CUDA (build local 17/10, sm_89): o único
       # binário comprovado que APLICA o LoRA em qwen35moe (o ik carrega
@@ -27,7 +33,7 @@ let
       # /run/opengl-driver/lib (impuro por natureza, nunca no rpath).
       LD_LIBRARY_PATH =
         (if b == "ik"
-        then "/home/nixos/projects/ik_llama.cpp/build/bin:"
+        then "/var/lib/ai/models/ik-llama/build/bin:"
         else "/home/nixos/projects/llama.cpp/build-stock/bin:")
         + "${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
     };
@@ -114,5 +120,5 @@ let
   };
 in
 {
-  systemd.services = mapAttrs' (n: s: nameValuePair "llama-${n}" (mkDirect n s)) servers;
+  systemd.services = mapAttrs' (n: s: nameValuePair "llama-${n}" (mkDirect n s)) generated;
 }

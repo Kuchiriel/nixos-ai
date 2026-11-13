@@ -81,9 +81,11 @@ with lib; let
     # no b10735: SSE2/SSSE3 vec_dot para PTQ1_0/PQ2_0 (#248) e PQ2_0 AVX-512
     # VNNI gemm (#256). Verificado: build 10743, commit adfffbe41.
     environment = optionalAttrs (b == "prism") {
-      LD_LIBRARY_PATH = "/home/nixos/projects/prism-bin/llama-prism-b10743-adfffbe:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
+      # (13/11) b10743 perdido na limpeza; b10735 presente e le Q2_0/PQ2_0.
+      LD_LIBRARY_PATH = "/home/nixos/projects/prism-bin/llama-prism-b10735-842b188:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
     } // optionalAttrs (b == "ik") {
-      LD_LIBRARY_PATH = "/home/nixos/projects/ik_llama.cpp/build/bin:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
+      # (13/11) build ik vive no NVMe junto dos modelos (checkout removido).
+      LD_LIBRARY_PATH = "/var/lib/ai/models/ik-llama/build/bin:${pkgs.stdenv.cc.cc.lib}/lib:${pkgs.openssl.out}/lib:${pkgs.cudaPackages.cuda_cudart}/lib:${pkgs.cudaPackages.libcublas.lib}/lib:/run/opengl-driver/lib";
     };
 
     script = if b == "ik" then ''

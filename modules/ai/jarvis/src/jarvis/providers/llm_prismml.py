@@ -306,6 +306,8 @@ class PrismMLBackend(LLMBackend):
         # Check common paths
         home = os.path.expanduser("~")
         prism_dirs = [
+            # (13/11) b10743 perdido na limpeza; b10735 e o build presente.
+            os.path.join(home, "projects/prism-bin/llama-prism-b10735-842b188"),
             os.path.join(home, "projects/prism-bin/llama-prism-b10660-e311ed3"),
             os.path.join(home, "projects/prism-llama.cpp/build/bin"),
         ]

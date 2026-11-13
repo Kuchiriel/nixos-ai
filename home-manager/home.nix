@@ -244,7 +244,24 @@ in {
     JAVA_TOOL_OPTIONS = "-Dsun.java2d.uiScale=1";
     # Oculta o aviso de falta de botocore/aws do LiteLLM no Aider
     LITELLM_LOG = "ERROR";
+    # (13/11) cache HF canonico (fonte unica: models.nix hfCacheDir).
+    # home.sessionVariables gera environment.d -> vale para units do usuario
+    # e para shells novos, sem depender do symlink ~/.cache/huggingface.
+    HF_HOME = pkgs.aiModels.hfCacheDir;
+    HF_HUB_CACHE = "${pkgs.aiModels.hfCacheDir}/hub";
+    HUGGINGFACE_HUB_CACHE = "${pkgs.aiModels.hfCacheDir}/hub";
   };
+
+  # (13/11) MEDIDO: o 10-home-manager.conf gerado por este HM nao carrega
+  # nenhuma sessionVariable (nem LITELLM_LOG, nem _JAVA_*) — o user
+  # manager subia sem HF_HOME e as units de voz/duplex so acertavam o
+  # cache pelo symlink ~/.cache/huggingface. Fragmento proprio resolve
+  # sem depender daquele arquivo (environment.d e lido no login do usuario).
+  home.file.".config/environment.d/20-hf-cache.conf".text = ''
+    HF_HOME=${pkgs.aiModels.hfCacheDir}
+    HF_HUB_CACHE=${pkgs.aiModels.hfCacheDir}/hub
+    HUGGINGFACE_HUB_CACHE=${pkgs.aiModels.hfCacheDir}/hub
+  '';
 
   # Importa as variáveis de ambiente com segurança ao abrir o terminal
   programs.bash.initExtra = ''
@@ -662,7 +679,7 @@ in {
       # Locais: bonsai, jarvis-fast, uncensored-4b, uncensored-35b, etc.
       enabled_providers = [
         "local" "local-fast" "local-uncensored" "local-uncensored-4b"
-        "local-deepseek-7b" "local-phi-mini" "local-gemma-4b"
+        "local-deepseek-7b" "local-gemma-4b"
         # Cloud (gerados do free-providers.json):
         "groq" "nvidia" "cloudflare" "gemini" "openrouter"
         "ovhcloud" "kilocode" "llm7" "cohere"
