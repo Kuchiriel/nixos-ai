@@ -111,7 +111,20 @@ validate_flake() {
 validate_host() {
   echo ""
   echo "═══ Layer 3: Host Configuration ($TARGET_HOST) ═══"
-  
+
+  # (12/11) pos-incidente 226/NAMESPACE: o ReadWritePaths referencia paths fora
+  # do flake — em pure eval o nix nem enxerga eles, entao a checagem tem que
+  # ser aqui, com acesso real ao FS. Se algum sumir, o rebuild falha aqui,
+  # antes de sobir a maquina com o service quebrado.
+  local path
+  for path in /home/nixos/models /var/lib/ai/models /home/nixos/projects/prism-bin /home/nixos/projects/llama.cpp; do
+    if [ ! -e "$path" ]; then
+      fail "path de ReadWritePaths do llama-cpp-server NAO existe: $path"
+      return 1
+    fi
+  done
+  pass "ReadWritePaths do llama-cpp-server existem no FS"
+
   local expr="$FLAKE_DIR#nixosConfigurations.$TARGET_HOST.config.system.build.toplevel"
   
   # Evaluate with show-trace for debugging
