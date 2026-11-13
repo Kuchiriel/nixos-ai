@@ -117,3 +117,18 @@ Hoje, no bench de 27 falas PT-BR gay:
   (commit 5b4663c1). Converter para /tmp/opencode/duplex-gate-v3-lora.q8_0.gguf e
   servir uma segunda instancia CPU na 8093 para A/B contra o held-out de 52.
 - Nada aplicado em producao. Decision de troca == do dono, apos numero medido.
+
+## 2026-11-12 21:5x - A/B real: LoRA v3 (Qwen3.5-4B, r16 q,v) vs baseline
+
+Instância de teste CPU na 8093 (mesma base MTP, same flags, só porta diferente
++ ngl=0), adapter convertido com benchmarks/voice/convert-gate-lora.sh.
+Rodou bench_heldout contra 8093 e desligou após o teste.
+
+- Baseline produção: 37/52 (RESPOND 16/16, WAIT 10/13, SILENCE 4/16, BARGE 7/7)
+- LoRA v3:         40/52 (RESPOND 16/16, WAIT 10/13, SILENCE 7/16, BARGE 7/7)
+- Ganho: SILENCE 4/16 -> 7/16 (+3). RESPOND/BARGE intactos. WAIT identico.
+- 6 SILENCE viradas RESPOND, 3 viradas WAIT (sem regressao de outra classe).
+- Latencia: 149 ms (vs 147 ms baseline). Custo normal.
+- Kernel val acc do notebook (0/499) era artefato do eval cell (pad=eos no
+  argmax), nao do modelo.
+- Nenhum swap em producao. Decisao do dono apos estes numeros.
