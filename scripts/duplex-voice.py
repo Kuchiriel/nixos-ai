@@ -84,10 +84,11 @@ SYSTEM_PT = (
     "seco por fora, cuidadoso por dentro. Humor britânico sutil, chama o "
     "usuário de 'dono' ou 'senhor'. PT-BR, 1-2 frases, natural FALADO.\n"
     "Antecipe AÇÃO em 1 frase, mas NUNCA antecipe DADOS — dado vem de tool.\n"
-    "(13/11) SEM MEMÓRIA: a voz NAO escreve memória (o STT pega conversa "
-    "de terceiro e a lição entrava como se fosse do dono — 187 registros "
-    "poluíram toda sessão da frota). TOOLS só para dado externo (hora, web, "
-    "código). Trivial/opinião = DIRETO. Ferramenta = 1 linha cada.\n"
+    "(13/11) MEMÓRIA ATRIBUÍDA: cada fato do dono vai etiquetado como "
+    "'O dono ...' se a voz for matriculada; senão 'O falante incerto ...'. "
+    "Assistentes nunca misturam memórias entre pessoas. TOOLS só "
+    "para dado externo (hora, web, código). Trivial/opinião = DIRETO. "
+    "Ferramenta = 1 linha cada.\n"
     "Após tool: responda com resultado, não repita a pergunta. Tool ERRO = "
     "informe erro, NUNCA invente. NUNCA invente dados. Sem certeza = 'não sei'.\n"
     "Sem 'Ah, Hmm, Pode repetir'. Turnos fragmentados = considere o conjunto.\n"
@@ -302,12 +303,15 @@ def learn_from_turn(heard: str, said: str = "", speaker: str = ""):
     # ANTES da extração de fatos: uma correção é a informação mais
     # valiosa do turno.
     if CORRECAO.search(heard or ""):
+        _sptag = ("O dono" if speaker == "dono" else
+                  f"O falante incerto" if speaker == "incerto" else
+                  f"O falante {speaker}")
         try:
             _MEM.remember_fact(
-                f"CORREÇÃO DO DONO: {heard.strip()[:160]}",
+                f"{_sptag}: {heard.strip()[:160]}",
                 kind="lesson", source="duplex-correction", heard=heard[:120],
                 speaker=speaker)
-            log(f"[{ts()}] lição aprendida (correção do dono): {heard[:60]!r}")
+            log(f"[{ts()}] lição aprendida ({_sptag}): {heard[:60]!r}")
         except Exception:
             pass
     if NEGACAO.search(heard[:40]):           # negação não é fato
@@ -325,7 +329,10 @@ def learn_from_turn(heard: str, said: str = "", speaker: str = ""):
                              'preferência': 'gosta de', 'trabalho': 'trabalha como',
                              'posse': 'tem', 'aniversário': 'faz anos em'}
                 _verb = _verb_map.get(rotulo, 'é')
-                fatos.append(f"O dono {_verb} {f}")
+                _sptag = ("O dono" if speaker == "dono" else
+                          "O falante incerto" if speaker == "incerto" else
+                          f"O falante {speaker}")
+                fatos.append(f"{_sptag} {_verb} {f}")
     # o modelo tb pode ter dito um fato (ex.: "guardei que você gosta de X")
     if "guard" in said.lower() or "lemb" in said.lower():
         for pat, rotulo in FACT_PATTERNS:
@@ -1712,8 +1719,10 @@ def spec_take(query):
 # jarvis-env.sh = mesmo env do MCP) com argv e allowlist.
 JARVIS_CLI_ALLOW = {
     # frente MCP (scripts/jarvis-cli.sh)
-    # (13/11) "remember" removido da allowlist de voz: o canal de voz
-    # não toca memória do dono. recall/lessons seguem livres.
+    # (13/11) Speaker-attribution: handle via direct EpisodicMemory path
+    # (see do(action='remember') in duplex-voice.py) — do NOT route
+    # 'remember' through the JARVIS CLI because the MCP path cannot tag
+    # the speaker identity at the moment of write.
     "recall", "lessons", "rag-search", "rag-index",
     "vault-list", "vault-write", "vault-status", "vault-search-obsidian",
     "status", "classify", "nix-eval", "nix-search", "state", "rehydrate",
@@ -1871,7 +1880,7 @@ def call_tool_safe(name, args):
 
 _TOOL_NAMES = {
     "do", "get_time", "get_date", "recall", "offline_search",
-    "rag_search", "status", "web_search", "nix_info", "shell",
+    "rag_search", "status", "web_search", "nix_info", "shell", "remember",
 }
 
 
@@ -1901,13 +1910,27 @@ def call_tool(name, args):
             except ValueError:
                 _args = (action[len("jarvis "):] + " " + inp).split()
             return _jarvis_cli(_args)
-        # (13/11) SEM MEMORIA: a voz NAO salva. Qualquer falante teria a
-        # memoria marcada como do dono (STT pega conversa de terceiros); o
-        # do-save-fix de 26/09 já tinha usado isso pra contaminar 187
-        # registros. Recusa limpa, sem negociar.
+        # (13/11) speaker-attributed memory. Restores the tool but writes
+        # attributed facts, never as generic "O dono" for third-party
+        # speech. The STT may match a registered voice (dono/spkNN); in
+        # uncertainty the fact carries that tag and the recall already
+        # knows how to prefer the matriculated speaker's facts.
         if "remember" in action or "salva" in action or "memoriz" in action:
-            return ("Não salvo memória pela voz — qualquer pessoa dizendo "
-                    "isso ia gravado como você.")
+            spk = mem_spk()
+            text = inp.strip()
+            if not text:
+                return "ERRO: texto vazio"
+            _tag = f"O dono {text}" if spk == "dono" else \
+                   f"O falante incerto {text}" if spk == "incerto" else \
+                   f"O falante {spk} {text}"
+            try:
+                _MEM.remember_fact(
+                    _tag,
+                    kind="fact", source="duplex-tool", speaker=spk,
+                    heard=text[:120])
+                return "Guardei na memória."
+            except Exception as exc:
+                return f"Não consegui salvar: {exc}"[:300]
         if "recall" in action or "memória" in action or "memoria" in action:
             return call_tool("recall", {"query": inp})
         # (07/11) CORPUS OFFLINE ANTES DA WEB: pergunta de sobrevivência
@@ -2110,8 +2133,8 @@ def call_tool(name, args):
             globals()["SPK_PROFILE"] = None
             return "Filtro de voz desativado. Respondendo a todos."
 
-        return (f"Ação '{action}' desconhecida. Use: get_time, "
-                "recall, web_search, rag_search, status, voices, jarvis, "
+        return (f"Ação '{action}' desconhecida. Use: get_time, recall, "
+                "remember, web_search, rag_search, status, voices, jarvis, "
                 "shell, enroll, guest.")
     # chamadas diretas (legado/compat)
     if name == "get_time":
@@ -2212,10 +2235,22 @@ def call_tool(name, args):
     if name == "status":
         return _exec("systemctl --user is-active jarvis-wakeword 2>&1; uptime -p; free -g | grep Mem")
     if name == "remember":
-        # (13/11) voz não salva memória — defesa em profundidade; o # do do()
-        # já filtra remember, mas também aqui (qualquer chamada directa).
-        return ("Não salvo memória pelo canal de voz — as memórias da casa "
-                "ficam só num lugar seguro.")
+        # (13/11) speaker-attributed memory; ask account holder
+        spk = mem_spk()
+        text = (args or {}).get("text", "").strip()
+        if not text:
+            return "ERRO: texto vazio"
+        _tag = f"O dono {text}" if spk == "dono" else \
+               f"O falante incerto {text}" if spk == "incerto" else \
+               f"O falante {spk} {text}"
+        try:
+            _MEM.remember_fact(
+                _tag,
+                kind="fact", source="duplex-tool", speaker=spk,
+                heard=text[:120])
+            return "Guardei na memória."
+        except Exception as exc:
+            return f"Não consegui salvar: {exc}"[:300]
     if name == "web_search":
         q = args.get("query", "")
         if not q:
