@@ -16,10 +16,26 @@ from pathlib import Path
 import pytest
 
 
+def _find_upwards(*candidates: str) -> Path | None:
+    """Procura subindo a arvore, sem estourar o indice de `parents`.
+
+    (13/11) MEDIDO: no build do nix o teste vive em <builddir>/tests/ e
+    `parents[4]` levanta IndexError — e ERA ISSO que quebrava o rebuild
+    (o dono nao conseguia buildar). A busca para no primeiro match.
+    """
+    for parent in Path(__file__).resolve().parents:
+        for candidate in candidates:
+            path = parent / candidate
+            if path.is_file():
+                return path
+    return None
+
+
 def _load():
-    path = Path(__file__).resolve().parents[4] / "scripts" / "agent_guard.py"
-    if not path.exists():
-        pytest.skip("scripts/agent_guard.py nao encontrado", allow_module_level=True)
+    path = _find_upwards("scripts/agent_guard.py")
+    if path is None:
+        pytest.skip("scripts/agent_guard.py nao encontrado (sandbox do nix: "
+                    "o pacote so leva ./jarvis)")
     spec = importlib.util.spec_from_file_location("agent_guard_test", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
@@ -76,9 +92,9 @@ def test_guard_vazio_nao_marca_nada(monkeypatch, tmp_path):
 
 def test_entrega_bloqueada_antes_do_post(guard, monkeypatch):
     """O choke point: scripts/agent-api.py nao enfileira texto marcado."""
-    api_path = Path(__file__).resolve().parents[4] / "scripts" / "agent-api.py"
-    if not api_path.exists():
-        pytest.skip("scripts/agent-api.py nao encontrado")
+    api_path = _find_upwards("scripts/agent-api.py")
+    if api_path is None:
+        pytest.skip("scripts/agent-api.py nao encontrado (sandbox do nix)")
     spec = importlib.util.spec_from_file_location("agent_api_test", api_path)
     api = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(api)  # type: ignore[union-attr]
