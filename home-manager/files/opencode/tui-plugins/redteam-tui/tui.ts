@@ -27,6 +27,11 @@ const DEFAULT_STATE = {
   // entrega da frota, bloqueiam a entrega (agent_guard.py no agent-api.py).
   // SEPARADO da `deception` (que e o vocabulario de ATAQUE).
   guard: [],
+  // (13/11) FOCUS KEYWORDS (arXiv 2510.08158): as palavras que disparam a
+  // recusa por sobreposicao lexical num pedido legitimo. A mitigacao do
+  // paper (ignore-word instruction) e injetada pelo plugin no bloco da
+  // sessao atacante.
+  ignore_words: [],
 };
 
 const HELP = [
@@ -41,6 +46,8 @@ const HELP = [
   "  term rm <t>           remove o termo da lista",
   "  term list             lista os termos e as decoys",
   "  reset                 limpa tudo (off, sem par, lista vazia)",
+  "  ignore add <foco>     focus keyword (arXiv 2510.08158): a palavra que\n" +
+    "                       dispara a recusa; vira ignore-word instruction",
   "  peek <frase>          mostra os 3 lados: voce / a IA / o disco",
   "  guard add <frase>     frase de intrusao: bloqueia a entrega na frota",
   "  guard list | rm | clear",
@@ -525,6 +532,45 @@ export function handleJailbreakCommand(argsText) {
   // decoy nunca aparece no texto dele — por design, o prompt do dono nao
   // e reescrito). Este comando mostra os tres lados de uma vez:
   //   o que VOCE ve | o que a IA ve | o que o disco recebe.
+  // ── ignore: focus keywords do paper (arXiv 2510.08158) ──────────────
+  // A "Focus keyword" do paper = a palavra que dispara a recusa por
+  // sobreposicao lexical. A mitigacao (ignore-word instruction) e injetada
+  // pelo plugin no bloco da sessao atacante.
+  if (sub === "ignore" || sub === "foco") {
+    const action = (args[1] || "list").toLowerCase();
+    const frase = args.slice(2).join(" ").trim().replace(/^["']|["']$/g, "");
+    const lista = Array.isArray(state.ignore_words) ? state.ignore_words : [];
+    if (action === "add") {
+      if (!frase) {
+        return "Uso: /jailbreak ignore add <palavra ou frase que dispara a recusa>";
+      }
+      const nova = lista.includes(frase) ? lista : [...lista, frase];
+      state.ignore_words = nova;
+      saveState(state);
+      return (
+        `foco guardada (${nova.length}): "${frase}"\n` +
+        "  (arXiv 2510.08158: a ignore-word instruction entra no bloco da " +
+        "sessao atacante — o alvo para de recusar por sobreposicao lexical)"
+      );
+    }
+    if (action === "rm" || action === "remove") {
+      if (!frase) return "Uso: /jailbreak ignore rm <foco>";
+      const antes = lista.length;
+      const nova = lista.filter((x) => x !== frase);
+      state.ignore_words = nova;
+      saveState(state);
+      return `removida (${antes} -> ${nova.length})`;
+    }
+    if (action === "clear") {
+      state.ignore_words = [];
+      saveState(state);
+      return "focus keywords limpas.";
+    }
+    return (
+      `focus keywords (${lista.length}):\n` +
+      (lista.length ? lista.map((x) => `  - ${x}`).join("\n") : "  (vazio)")
+    );
+  }
   if (sub === "peek" || sub === "veja") {
     const frase = args.slice(1).join(" ").trim();
     if (!frase) return "Uso: /jailbreak peek <frase para ver os 3 lados>";
