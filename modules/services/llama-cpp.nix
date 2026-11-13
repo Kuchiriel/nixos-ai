@@ -158,8 +158,10 @@ with lib; let
         # Permitir acesso a GPU e modelos
         # /var/lib/ai/models: destino em nvme1 (rápido) para migração; ~/models pode ser symlink para ele.
         # (12/11) /home/nixos/projects/ik_llama.cpp saiu: o submodule git foi removido na migracao NVMe;
-        # o path no ReadWritePaths matava a montagem do namespace (226/NAMESPACE, StartLimit).
-        ReadWritePaths = [ "/home/nixos/models" "/var/lib/ai/models" "/home/nixos/projects/prism-bin" "/home/nixos/projects/llama.cpp" ];
+        # (12/11) hardening pos-incidente: falha em EVALUATE se um path sumir do disco,
+        # em vez de o service ficar em 226/NAMESPACE às 04:03 sem ninguém perceber.
+        # Assim a lane que apagar o path zera o rebuild e recebe o erro antes de subir.
+        ReadWritePaths = assert (builtins.all (p: builtins.pathExists p) [ "/home/nixos/models" "/var/lib/ai/models" "/home/nixos/projects/prism-bin" "/home/nixos/projects/llama.cpp" ]); [ "/home/nixos/models" "/var/lib/ai/models" "/home/nixos/projects/prism-bin" "/home/nixos/projects/llama.cpp" ];
         # (26/09, incidente freeze) Resource firewall: o OOM mata SÓ o
         # serviço, nunca a máquina. MemoryHigh = throttle (kernel reclama
         # antes, sem matar); MemoryMax = teto duro (OOM só dentro da
