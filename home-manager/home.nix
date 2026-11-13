@@ -190,7 +190,11 @@ in {
   imports = [
     ./modules
     ./home-packages.nix
-    ./modules/rclone-sync.nix
+    # (13/11) rclone-sync DESLIGADO a pedido do dono: o token do Drive esta
+    # sem escopo de escrita (403 insufficient authentication scopes) e o
+    # timer falhava a cada 30 min. O modulo fica no repo; basta religar a
+    # linha quando o OAuth for refeito com drive.file.
+    # ./modules/rclone-sync.nix
     ./modules/xref-watch.nix
     ./modules/sandbox-verificacao.nix
     ./modules/agents-watcher.nix
