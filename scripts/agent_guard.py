@@ -92,6 +92,28 @@ PATTERNS: list[tuple[str, str]] = [
     ("desvio de escopo", r"(deixa|muda)\s+(de\s+)?(assunto|tarefa|escopo)\s+(para|pra)"),
 ]
 
+# (13/11) RECUSA: mensagem de recusa no bus e RUIDO para quem recebe (nao
+# tem conteudo, nao pede nada). Filtravel no bus (o agente nao gasta token
+# lendo "nao posso ajudar"). Reconhece a recusa como REFUSAL (a do repo) e
+# nao moralizacao: moralizou E dizia que nao faria -> e recusa.
+RECUSA_PATTERNS = [
+    r"nao\s+posso\s+(ajudar|fornecer|fazer|entregar|executar|atender|ajudar\s+a)",
+    r"nao\s+vou\s+(ajudar|fornecer|fazer|entregar|executar|atender|descrever|detalhar)",
+    r"desculpe[,! ]+(mas\s+)?nao\s+(posso|vou)",
+    r"i\s+(can'?t|cannot|will\s+not|won'?t)\s+(help|provide|assist|comply)",
+    r"i'?m\s+(sorry|unable)\s*(,|but)",
+    r"nao\s+e\s+(apropriado|etico)\s+(para\s+)?(eu|essa|esta)",
+    r"posso\s+ajudar\s+(com\s+)?(a\s+)?parte\s+(defensiva|util)",
+]
+
+
+def eh_recusa(text: str) -> bool:
+    """A mensagem e uma recusa (e nao uma demanda/relato)?"""
+    alvo = _fold(text)
+    if not alvo:
+        return False
+    return any(re.search(pat, alvo) for pat in RECUSA_PATTERNS)
+
 
 def scan_patterns(text: str) -> list[dict]:
     """Casas de moralizacao/injecao (classe, nao frase exata)."""
@@ -124,14 +146,30 @@ def scan(text: str, terms: list[str] | None = None) -> dict:
             ctx = alvo[max(0, i - 40): i + len(t) + 40]
             hits.append({"termo": termo, "contexto": ctx})
     padroes = scan_patterns(text)
+    recusa = eh_recusa(text)
     if hits:
         verdict = "bloqueado"
+        categoria = "intrusao"
     elif padroes:
         verdict = "marcado"
+        # desvio de foco e o pior (muda a tarefa do outro); moralizacao vem
+        # junto; recusa e ruido (nao tem conteudo util).
+        tipos = {h["tipo"] for h in padroes}
+        if tipos & {"redirecionamento de lane", "desvio de escopo"}:
+            categoria = "desvio"
+        elif recusa:
+            categoria = "recusa"
+        else:
+            categoria = "moralizacao"
+    elif recusa:
+        verdict = "marcado"
+        categoria = "recusa"
     else:
         verdict = "limpo"
+        categoria = "limpo"
     return {"clean": not hits and not padroes, "hits": hits, "padroes": padroes,
-            "verdict": verdict, "termos": terms, "texto_len": len(str(text or ""))}
+            "verdict": verdict, "categoria": categoria, "recusa": recusa,
+            "termos": terms, "texto_len": len(str(text or ""))}
 
 
 def marca_do_marcado(r: dict) -> str:

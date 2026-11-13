@@ -1580,17 +1580,35 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
                     from agent_guard import marca_do_marcado, scan as _scan
                     linhas = str(out).splitlines()
                     marcados = 0
-                    for i, ln in enumerate(linhas):
+                    filtradas = 0
+                    # (13/11) FILTRO DO BUS: recusa e desvio de foco sao
+                    # RUIDO para quem recebe (nao pedem nada / tentam mudar
+                    # a tarefa) — sao descartados; moralizacao e intrusao
+                    # ficam, marcadas (o agente tem de ver e tratar como
+                    # dado).
+                    novas = []
+                    for ln in linhas:
                         if not ln.strip().startswith("-") and "|" not in ln:
+                            novas.append(ln)
                             continue
                         r = _scan(ln)
+                        cat = r.get("categoria", "limpo")
+                        if cat in ("recusa", "desvio"):
+                            filtradas += 1
+                            continue
                         if r["verdict"] == "marcado":
-                            linhas[i] = marca_do_marcado(r) + ln
+                            ln = marca_do_marcado(r) + ln
                             marcados += 1
-                    if marcados:
-                        linhas.insert(0, f"[GUARD] {marcados} mensagem(ns) do bus "
-                                         "marcada(s) como possivel intrusao.")
-                        out = "\n".join(linhas)
+                        novas.append(ln)
+                    if marcados or filtradas:
+                        cabecalho = "[GUARD] bus"
+                        if filtradas:
+                            cabecalho += f": {filtradas} mensagem(ns) de recusa/desvio "\
+                                        "omitida(s) (ruido para quem recebe)"
+                        if marcados:
+                            cabecalho += f": {marcados} marcada(s) como intrusao/moralizacao"
+                        novas.insert(0, cabecalho + ".")
+                        out = "\n".join(novas)
                 except Exception:
                     pass  # sem o guard: le o bus cru (fail-open)
                 return out
