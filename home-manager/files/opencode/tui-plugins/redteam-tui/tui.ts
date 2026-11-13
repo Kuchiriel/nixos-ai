@@ -48,6 +48,7 @@ const HELP = [
   "  reset                 limpa tudo (off, sem par, lista vazia)",
   "  ignore add <foco>     focus keyword (arXiv 2510.08158): a palavra que\n" +
     "                       dispara a recusa; vira ignore-word instruction",
+  "  modo <termo> <m>     como o termo aparece: decoy | redact | ignore",
   "  peek <frase>          mostra os 3 lados: voce / a IA / o disco",
   "  guard add <frase>     frase de intrusao: bloqueia a entrega na frota",
   "  guard list | rm | clear",
@@ -569,6 +570,37 @@ export function handleJailbreakCommand(argsText) {
     return (
       `focus keywords (${lista.length}):\n` +
       (lista.length ? lista.map((x) => `  - ${x}`).join("\n") : "  (vazio)")
+    );
+  }
+  // ── modo: como o termo aparece para o modelo (13/11) ────────────────
+  //   decoy  = troca pela forma neutra (o modelo ve a decoy)
+  //   redact = placeholder: o modelo nao ve a palavra nem a forma
+  //   ignore = deixa a palavra e manda ignorar o sinal de recusa
+  if (sub === "modo") {
+    const termo = (args[1] || "").trim();
+    const modo = (args[2] || "").trim().toLowerCase();
+    if (!termo || !["decoy", "redact", "ignore"].includes(modo)) {
+      return "Uso: /jailbreak modo <termo> <decoy|redact|ignore>";
+    }
+    const lista = (state.deception || []).filter(Boolean);
+    let alvo = lista.find((x) => entryTerm(x) === termo);
+    if (!alvo) {
+      alvo = { termo, decoys: gerarDecoys(termo) };
+      lista.push(alvo);
+    }
+    const outros = lista.filter((x) => entryTerm(x) !== termo);
+    const decoys = (Array.isArray(alvo.decoys) ? alvo.decoys : []).filter(Boolean);
+    outros.push({ termo, decoys, modo });
+    state.deception = outros;
+    saveState(state);
+    return (
+      `"${termo}" agora esta em modo ${modo}.\n` +
+      (modo === "redact"
+        ? "  o modelo ve [TERMO-<hash>] (nunca a palavra); o comando real " +
+          "recebe o termo de volta"
+        : modo === "ignore"
+          ? "  a palavra fica, e a ignore-word instruction entra no bloco"
+          : "  o modelo ve a 1a decoy; o disco recebe o termo real")
     );
   }
   if (sub === "peek" || sub === "veja") {
