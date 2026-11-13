@@ -95,6 +95,97 @@ def entregar(target: str, texto: str, force: bool = False) -> tuple[int, str]:
     return proc.returncode, out or (proc.stderr or "").strip()
 
 
+def ler_resposta(session: str, depois_ms: int, espera_s: float = 90.0) -> str:
+    """Ultima resposta do modelo na sessao alvo (pelo banco vivo).
+
+    A entrega e assincrona (a mensagem vai para a inbox e o modelo roda no
+    proximo turno), entao o POST nao traz a resposta — ela vem depois, no
+    store. Ler o store evita depender da API do host que hospeda a sessao.
+    """
+    import sqlite3
+    db = os.path.expanduser("~/.local/share/opencode/opencode.db")
+    fim = time.time() + espera_s
+    while time.time() < fim:
+        try:
+            con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
+            # (12/11) DOIS SCHEMAS: o 1.18 grava em message/part, o 2.2.6 em
+            # session_message. A sessao do host local estava no segundo e a
+            # leitura so no primeiro devolvia vazio.
+            rows = []
+            for sql in (
+                "select data from session_message where session_id=? order by rowid desc limit 12",
+                "select data from message where session_id=? order by rowid desc limit 12",
+            ):
+                try:
+                    rows = con.execute(sql, (session,)).fetchall()
+                except Exception:
+                    rows = []
+                if rows:
+                    break
+            con.close()
+            for (data,) in rows:
+                try:
+                    d = json.loads(data) if isinstance(data, str) else data
+                except Exception:
+                    continue
+                if not isinstance(d, dict):
+                    continue
+                criado = ((d.get("time") or {}).get("created") or 0)
+                if criado <= depois_ms:
+                    continue
+                if d.get("type") != "assistant":
+                    continue
+                itens = d.get("content")
+                if not isinstance(itens, list):
+                    itens = d.get("parts") or []
+                textos = [i.get("text") for i in (itens or [])
+                           if isinstance(i, dict) and i.get("type") == "text"
+                           and (i.get("text") or "").strip()]
+                if not textos and isinstance(d.get("text"), str) and d["text"].strip():
+                    textos = [d["text"]]
+                if textos:
+                    return "\n".join(textos)
+        except Exception:
+            pass
+        time.sleep(4)
+    return ""
+
+
+def enviar_prompt(session: str, texto: str, timeout: float = 180.0) -> tuple[int, str]:
+    """Roda o turno AGORA pela API (POST /api/session/{id}/prompt).
+
+    A entrega em FILA (agent-api.py) é o caminho certo para a janela viva de
+    outro agente, mas uma sessao sem TUI sim tem quem processe a fila: o
+    turno nunca roda. Para MEDIR o efeito da decoy num alvo solto, o turno
+    tem de ser disparado direto.
+    """
+    import base64
+    import urllib.request
+    url = os.environ.get("AGENTS_OC_URL", "http://100.121.100.103:4599").rstrip("/")
+    pw = ""
+    try:
+        for line in (Path.home() / ".config/opencode/server.env").read_text().splitlines():
+            if line.startswith("OPENCODE_SERVER_PASSWORD="):
+                pw = line.split("=", 1)[1].strip().strip("\"'")
+                break
+    except OSError:
+        pass
+    user = os.environ.get("OPENCODE_SERVER_USERNAME", "opencode")
+    headers = {"Content-Type": "application/json",
+               "Authorization": "Basic " + base64.b64encode(f"{user}:{pw}".encode()).decode()}
+    try:
+        req = urllib.request.Request(
+            f"{url}/api/session/{session}/prompt",
+            data=json.dumps({"text": texto, "delivery": "queue"}).encode(),
+            method="POST", headers=headers)
+        with urllib.request.urlopen(req, timeout=min(60.0, timeout)) as r:
+            return r.status, r.read()[:200].decode(errors="replace")
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()[:200].decode(errors="replace")
+    except Exception as e:
+        return 0, str(e)[:160]
+
+
 def _log(reg: dict) -> None:
     try:
         LOG.parent.mkdir(parents=True, exist_ok=True)
@@ -109,6 +200,10 @@ def main() -> int:
     ap.add_argument("--target", default="", help="sessao alvo (ses_...)")
     ap.add_argument("--task", default="", help="tarefa a reenviar (com decoy)")
     ap.add_argument("--rounds", type=int, default=3, help="rodadas maximas")
+    ap.add_argument("--modo", default="fila", choices=("fila", "prompt"),
+                    help="fila: entrega na inbox (janela viva); prompt: roda o turno agora")
+    ap.add_argument("--espera", type=float, default=90.0,
+                    help="segundos esperando a resposta do alvo")
     ap.add_argument("--state", default="", help="estado do plugin red-team")
     ap.add_argument("--demo", action="store_true", help="so mostra a transformacao")
     ap.add_argument("--json", action="store_true")
@@ -133,7 +228,16 @@ def main() -> int:
 
     rodadas = []
     for i in range(max(1, args.rounds)):
-        st, out = entregar(args.target, payload)
+        marca_ms = int(time.time() * 1000)
+        if args.modo == "prompt":
+            st, ack = enviar_prompt(args.target, payload)
+        else:
+            st, ack = entregar(args.target, payload)
+        out = ack
+        if st < 400:
+            print(f"  entrega aceita ({st}); lendo a resposta do alvo...",
+                  flush=True)
+            out = ler_resposta(args.target, marca_ms, args.espera)
         moral = moralizou(out)
         reg = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "rodada": i + 1,
                "status": st, "moralizou": moral, "len": len(out),

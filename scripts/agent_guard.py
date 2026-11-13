@@ -159,9 +159,11 @@ def main() -> int:
         if r["clean"]:
             print("limpo: nenhum termo de intrusao")
         else:
-            print(f"MARCADO: {len(r['hits'])} termo(s) de intrusao")
+            print(f"veredito: {r['verdict'].upper()}")
             for h in r["hits"]:
-                print(f"  - {h['termo']!r} em: ...{h['contexto']}...")
+                print(f"  frase do vocabulario: {h['termo']!r} em: ...{h['contexto']}...")
+            for h2 in r.get("padroes", []):
+                print(f"  padrao de classe: {h2['tipo']} em: ...{h2['trecho']}...")
     return 1 if not r["clean"] else 0
 
 
