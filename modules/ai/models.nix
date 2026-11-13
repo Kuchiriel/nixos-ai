@@ -492,7 +492,10 @@ in rec {
     };
     xlam-8b = {
       port = 8089; binary = "upstream";
-      modelFile = "/var/lib/ai/models/Llama-xLAM-2-8B-fc-r-Q4_K_M.gguf";
+      # (12/11) path absoluto /var/lib/ai sumiu na migracao NVMe; o modelo
+      # ja tem mkModel (URL + sha256) no proprio models.nix — o Nix busca
+      # do HF com hash verificado (uma vez, no rebuild).
+      modelFile = "${llm-xlam-8b}";
       threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
       gpuLayers = 99; moeFlags = "";
       fa = true; ctk = "q4_0"; ctv = "q4_0";
@@ -564,7 +567,7 @@ in rec {
     };
     qwen30b-moe = {
       port = 8091; binary = "ik";
-      modelFile = "/var/lib/ai/models/Qwen3-30B-A3B-Q4_K_M.gguf";
+      modelFile = "${llm-qwen30b-moe}";
       # ctx 8192: classe MoE estourou compute buffers em 32k no irmão 35B
       # (medido 2x 03/10); 30B não testado → valor seguro, não especulativo.
       threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
@@ -576,7 +579,7 @@ in rec {
     };
     uncensored-35b-q4kp = {
       port = 8093; binary = "ik";
-      modelFile = "/var/lib/ai/models/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf";
+      modelFile = "${llm-uncensored-35b-kp}";
       threads = 6; ctxSize = 8192; batchSize = 512; ubatch = 512;
       gpuLayers = 45; moeFlags = "--n-cpu-moe 35";
       fa = true; ctk = "q4_0"; ctv = "q4_0";
