@@ -968,13 +968,20 @@ def _ocr_text(image_path: str, lang: str = "por+eng",
         path = image_path  # sem PIL: usa o original
 
     best = ""
+    # DEADLINE TOTAL, não por chamada: 6 combinações com 5s cada gastavam 30s
+    # e comiam o orçamento inteiro da cascata (medido 13/11: o gemini ficou
+    # "sem tempo" depois do OCR). Cada tentativa recebe só o que resta.
+    ends = time.time() + max(3.0, timeout)
     for psm in ("11", "6", "3"):        # sparse (jogo) > bloco > auto
         for lg in (lang, "eng"):
+            restante = ends - time.time()
+            if restante <= 1.0:
+                break
             try:
                 r = subprocess.run(
                     ["tesseract", path, "stdout", "-l", lg, "--psm", psm],
                     capture_output=True, text=True,
-                    timeout=max(5, timeout / 3))
+                    timeout=max(2.0, restante))
             except (subprocess.TimeoutExpired, OSError,
                     subprocess.SubprocessError):
                 continue
@@ -983,7 +990,7 @@ def _ocr_text(image_path: str, lang: str = "por+eng",
                 best = t
     if not best:
         return {"ok": False, "error": "OCR não encontrou texto"}
-    return {"ok": True, "via": "ocr-multipsm", "text": best}
+    return {"ok": True, "via": "ocr-multipsm", "text": best, "chars": len(best)}
 
 
 # Provedores que responderam 401/403 ficam fora das próximas tentativas.
@@ -1069,29 +1076,37 @@ def observe_file(args: dict[str, Any]) -> str:
 
 def _cascade(image_path: str, question: str, budget: float = 90.0,
              size_kb: Any = "?", suffix: str = "") -> str:
-    """Cascata de visão sobre um ARQUIVO (local → gemini → nvidia → OR → OCR).
+    """Cascata de visão sobre um ARQUIVO.
+
+    (13/11) nenhum VLM local existe neste host, então sem OCR-local-first a
+    screenshot ia direto para provedores de nuvem (gemini/nvidia/...). Para
+    não exfiltrar a tela quando o texto basta, o OCR roda antes da nuvem com
+    teto curto: texto suficiente responde local, texto raso cai na nuvem
+    (layout, ícones, estado visual) e o OCR fica como último fallback.
 
     Compartilhada por observe_with_fallback (captura → cascata) e
     observe_file (PNG em disco). Nunca falha por falta de vision; cada
     nível registra `via:` no output (honestidade > adivinhação).
     """
     attempts: list[str] = []
-
-    # Nível 0 (barato, sem rede): vision local. Só tenta 1x se já sabermos
-    # que o llama-router está fora — 8080 devolve 500 e custa segundos.
-    # Ordem 15/10 (matriz vision_matrix.py): local (grátis, cap curto — 500
-    # garantido) → gemini (grátis, 3-5s) → nvidia (90b lento, 11b 58s) →
-    # cloudflare scout (24s, NOVO) → openrouter (rate-limit diário) → OCR.
-    # Groq saiu da cascata em 2026-10-01 (só texto); freellmapi saiu em
-    # 15/10 (docker removido, :3001 morto). Caps por nível SOMAM mais que o
-    # budget — ok porque a cascata PARA no primeiro OK e o deadline pula o
-    # resto; o que matava antes era UM nível lento comer tudo (local 25s).
-    # TETO GERAL: 45s default, MCP tolera 180s.
     deadline = time.time() + budget
 
-    # (23:55) local FORA da ordem: nenhum VLM local existe neste host
-    # (bonsai/fast = texto puro) — era 500 garantido queimando 8s. Volta
-    # quando um VLM local pousar. Ordem = mais rápido primeiro (matriz).
+    # OCR local primeiro: privado, grátis, rápido. Texto útil = responde já.
+    # Texto curto/ruído = segue para visão de nuvem (layout, ícones, estado).
+    local_ocr: dict[str, Any] | None = None
+    if _has_binary("tesseract"):
+        ocr_budget = min(12.0, max(6.0, budget * 0.3))
+        local_ocr = _ocr_text(image_path, timeout=ocr_budget)
+        n = int(local_ocr.get("chars") or len(local_ocr.get("text", "")))
+        # 80 chars = tela com conteúdo legível (título + linhas). Menos que
+        # isso costuma ser ícone/ruído: a nuvem descreve melhor o estado.
+        if local_ocr.get("ok") and n >= 80:
+            return (f"{local_ocr['text']}\n\n[via: ocr-local-first | "
+                    f"image: {image_path} ({size_kb}KB){suffix}]")
+        attempts.append(f"ocr-local-first: {n} chars"
+                        if local_ocr.get("ok") else
+                        f"ocr-local-first: {local_ocr.get('error', '?')}")
+
     levels = [(_vision_gemini, "gemini", 20.0),
               (_vision_nvidia, "nvidia-nim-vision", 20.0),
               (_vision_cloudflare, "cloudflare", 30.0),
@@ -1123,13 +1138,15 @@ def _cascade(image_path: str, question: str, budget: float = 90.0,
         _mark_dead(via, err)
         attempts.append(err)
 
-    restante = deadline - time.time()
-    ocr = (_ocr_text(image_path, timeout=max(8.0, min(20.0, restante)))
-           if restante > 3 else {"ok": False, "error": "orcamento esgotado"})
+    # reusa o OCR local se ele já leu algo; senão tenta com o tempo que sobrou
+    ocr = local_ocr if (local_ocr and local_ocr.get("ok")) else None
+    if ocr is None:
+        restante = deadline - time.time()
+        ocr = (_ocr_text(image_path, timeout=max(8.0, min(20.0, restante)))
+               if restante > 3 else {"ok": False, "error": "orcamento esgotado"})
     if ocr.get("ok"):
-        return (f"[visão indisponível ({' | '.join(attempts)}); fallback OCR]\n"
-                f"{ocr['text']}\n\n[via: ocr | image: {image_path}]")
+        return (f"[visão nuvem indisponível ({' | '.join(attempts)}); fallback OCR]\n"
+                f"{ocr['text']}\n\n[via: ocr-fallback | image: {image_path}]")
 
-    return (f"OBSERVE FALHOU em todos os níveis — local: {attempts[0] if attempts else '?'}; "
-            f"gemini: {attempts[1] if len(attempts) > 1 else '?'}; ocr: {ocr.get('error')}. "
-            f"Arquivo: {image_path}.")
+    return (f"OBSERVE FALHOU em todos os níveis: {' | '.join(attempts)}; "
+            f"ocr: {ocr.get('error')}. Arquivo: {image_path}.")

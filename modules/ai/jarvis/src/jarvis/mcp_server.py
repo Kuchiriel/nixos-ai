@@ -118,7 +118,7 @@ JARVIS_TOOLS = [
     },
     {
         "name": "observe_screen",
-        "description": "Capture screenshot AND analyze it (vision local → Gemini free → OCR fallback, never fails for missing vision model). Returns what is on screen. Use this instead of capture_screen when you need to understand the current UI state.",
+        "description": "Capture screenshot AND analyze it (OCR local first; if text is insufficient, vision cloud cascade; OCR fallback). Never fails for missing vision model. Returns what is on screen. Use this instead of capture_screen when you need to understand the current UI state.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -257,7 +257,8 @@ JARVIS_TOOLS = [
         "description": ("WHEN you need to interact with any web page: read, click, fill forms, "
                         "drive menus, or operate the owner's logged-in browser (attach). "
                         "Actions: open, click, fill, press, scroll, extract, wait, attach, "
-                        "click_text, menu, shadow, wait_text. Mutations need approval."),
+                        "click_text, menu, shadow, wait_text, close. Mutations need approval. "
+                        "headless (open) is sticky for the session."),
         "inputSchema": {
             "type": "object",
             "properties": {

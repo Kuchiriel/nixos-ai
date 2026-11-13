@@ -603,10 +603,13 @@ def handle_browser(args: dict[str, Any], approve: bool = False) -> str:
         r = browser_storage(args.get("kind", "local"), args.get("text", ""))
     elif action == "fingerprint":
         r = browser_fingerprint(args.get("kind", ""))
+    elif action == "close":
+        close()
+        r = {"ok": True, "closed": True}
     else:
         return ("ERROR: action deve ser open, click, fill, press, "
                 "scroll, extract, wait, attach, lclick, click_text, menu, "
-                "shadow, wait_text, screenshot, js, storage ou fingerprint")
+                "shadow, wait_text, screenshot, js, storage, fingerprint ou close")
     if not r.get("ok"):
         return f"ERROR: {r.get('error', 'browser falhou')}"
     out = {k: v for k, v in r.items() if k != "ok"}

@@ -1530,3 +1530,14 @@ relatório Solar, sudo kill nightwatch se quiser, cupom-100% final.
   + `~/Audio/lotm/ouvir/` (rvc-triage/, daly-ab/).
 - Regra do dono: browser do agente COM áudio (ele audita ouvindo) — nunca
   mutar; frases sintéticas vêm dos livros (CSVs em `personagens/`).
+
+### §44 Browser dos agentes (CDP, 13/11)
+
+- `chromium-cdp`: user service declarativo (`hosts/nitro-v15/configuration.nix`),
+  Chromium headless dedicado, perfil próprio, CDP em `:9223`, áudio ativo. Pode
+  não subir sozinho: `systemctl --user start chromium-cdp` e conferir a porta
+  (`/dev/tcp/127.0.0.1/9223`). Attach: `jarvis_browser action=attach url=http://127.0.0.1:9223`.
+- `jarvis_browser` tem `open` com `headless` (default true; `false` abre janela
+  visível no desktop). O modo fica fixo na sessão; trocar relança o browser.
+  `action=close` fecha a sessão própria. Navegador pessoal do dono sem
+  `--remote-debugging-port` não é alcançável por attach.
