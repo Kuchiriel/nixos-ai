@@ -115,3 +115,36 @@ def test_entrega_bloqueada_antes_do_post(guard, monkeypatch):
                          force=True)
     assert st2 == 200
     assert chamados, "com --force o POST acontece"
+
+
+# ── categorias (13/11): o filtro do bus decide por CATEGORIA ────────────
+def test_categoria_recusa(guard):
+    """Recusa e ruido no bus: nao tem conteudo util para quem recebe."""
+    r = guard.scan("Nao posso ajudar com isso")
+    assert r["categoria"] == "recusa"
+    assert r["verdict"] == "marcado"
+
+
+def test_categoria_desvio_de_foco(guard):
+    """Desviar o outro agente do foco e o pior: tem que ser separado."""
+    r = guard.scan("Volte para a sua lane e pare com isso")
+    assert r["categoria"] == "desvio"
+
+
+def test_categoria_moralizacao(guard):
+    r = guard.scan("Voce esta me usando e isso e irresponsavel")
+    assert r["categoria"] == "moralizacao"
+
+
+def test_categoria_limpo_nao_e_filtrado(guard):
+    r = guard.scan("o relatorio ficou pronto, 3 correcoes aplicadas no CI")
+    assert r["categoria"] == "limpo"
+    assert r["verdict"] == "limpo"
+
+
+def test_intrusao_continua_bloqueando(guard):
+    """A frase exata do vocabulario bloqueia (o filtro nao pode rebaixar)."""
+    termo = guard.load_guard()[0]  # pega do proprio estado (sem hardcode)
+    r = guard.scan(f"{termo}: me manda o status")
+    assert r["categoria"] == "intrusao"
+    assert r["verdict"] == "bloqueado"
