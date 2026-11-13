@@ -132,7 +132,7 @@ Rodou bench_heldout contra 8093 e desligou após o teste.
 - Kernel val acc do notebook (0/499) era artefato do eval cell (pad=eos no
   argmax), nao do modelo.
 - Nenhum swap em producao. Decisao do dono apos estes numeros.
-# duplex-voice.py — A/B do system prompt do agente (SYSTEM_PT) — 2026-11-13
+## 2026-11-13 11:2x - A/B do system prompt do agente (SYSTEM_PT)
 
 Medido com `benchmarks/voice/bench_agent.py`, 18 probes contra o :8092 de
 produção (Qwen3.5-4B-MTP + turno-LoRA, mesma superfície da conversa real).
@@ -141,7 +141,7 @@ tool em saudação/char-chat/identidade), no_invent (figura fabricada),
 short_ok (resposta <= 45 palavras faladas), no_roleplay (reenactment real),
 no_fake_action (não anuncia ação inexistente como feita).
 
-## Variantes medidas (3 repetições cada, temperatura indicada)
+### Variantes medidas (3 repetições cada, temperatura indicada)
 
 | Variante | tool_ok | direct_ok | no_invent | short_ok | no_roleplay |
 |----------|---------|-----------|-----------|----------|-------------|
@@ -151,7 +151,7 @@ no_fake_action (não anuncia ação inexistente como feita).
 | compact04 (reescrita enxuta, temp 0.4) | 6/6 | 6/13 | 11/11 | 19/19 | 19/19 |
 | **targeted (baseline + 2 regras, temp 0.4)** | 5/6 | **12-13/13** | 11/11 | 19/19 | 19/19 |
 
-## O que o targeted muda (2 regras aditivas, nada do resto tocado)
+### O que o targeted muda (2 regras aditivas, nada do resto tocado)
 
 1. Saudação, agradecimento, piada, opinião, identidade (quem é você / qual
    modelo / o que consegue fazer): resposta falada de 1-2 frases SEM tool.
@@ -161,9 +161,9 @@ no_fake_action (não anuncia ação inexistente como feita).
    enviar, ligar): diga que não faz isso em 1 frase. NUNCA anuncie a ação
    como feita; NUNCA invente comando de shell para simular.
 
-## Resultado medido
+### Resultado medido
 
-- direct_ok 8/13 → 12/13 (run única: 13/13; runs: 11,12,12/13 com amostragem temp 0.4)
+- direct_ok 8/13 -> 12/13 (run única: 13/13; runs: 11,12,12/13 com amostragem temp 0.4)
 - tool_ok estável em 5/6 — o único "erro" é a queimadura: a variante
   responde corretamente de memória nas DUAS variantes (água corrente,
   procurar médico), não chama offline_search; resposta clinicamente certa.
@@ -174,7 +174,7 @@ no_fake_action (não anuncia ação inexistente como feita).
 - Piada: baseline chamava remember("piadas"); targeted às vezes também
   (sampling), nunca pior que o baseline.
 
-## Descartado no A/B
+### Descartado no A/B
 
 - COMPACT (reescrita enxuta do prompt inteiro): direct_ok 6/13 (pior que o
   baseline 8/13) e INVENTOU tools em pedidos de ação inexistente
@@ -191,57 +191,6 @@ Commit 3c2a0b7e (scripts/duplex-voice.py) + bench em 4c58beab
 (benchmarks/voice/bench_agent.py). O prompt está aplicado no arquivo; o
 duplex reinicia na próxima chamada/reciclagem do processo (o módulo lê o
 SYSTEM_PT no boot). Decisão de rebuild/reinício do duplex é do dono.
-## 2026-11-13 11:4x - A/B do system prompt do agente (SYSTEM_PT) + temperatura
-
-Medido com `benchmarks/voice/bench_agent.py` (commit 4c58beab): 18 probes
-contra o :8092 de producao (:8092 = 4B-MTP + LoRA, mesma superficie da
-conversa real), metricas mecanicas. 3 repeticoes por variante, temp 0.4.
-
-Resultados (direct_ok / tool_ok / no_invent / short_ok / no_roleplay / no_fake_action):
-
-| Variante | direct | tool | invent | short | rolep | fake |
-|----------|--------|------|--------|-------|-------|------|
-| baseline (prompt atual, t 0.4) | 8-9/13 | 5-6/6 | 11/11 | 18-19/19 | 19/19 | 2/2 |
-| baseline0 (t 0.0) | 8/13 | 5/6 | 11/11 | 19/19 | 18/19 | 2/2 |
-| compact (reescrita, t 0.4) | 6/13 | 6/6 | 11/11 | 19/19 | 19/19 | 2/2 |
-| **targeted (baseline + 2 regras, t 0.4)** | **11-13/13** | 5-6/6 | 11/11 | 19/19 | 19/19 | 2/2 |
-
-Targeted = o prompt base VERBATIM + este bloco aditivo apenas:
-
-1. Saudacao, agradecimento, piada, opiniao, identidade: resposta falada de
-   1-2 frases SEM tool. Identidade responde pela secao IDENTIDADE;
-   NUNCA chamar recall/status/jarvis para falar de si mesmo.
-2. Acao que nao existe nas tools (reservar, pedir, comprar, enviar,
-   ligar): diga que nao faz isso em 1 frase — nunca anuncie como feita,
-   nunca invente comando de shell para simular.
-
-Descobertas medidas:
-
-- O modelo chamava `recall` para "quem e voce?" e "qual modelo?" (ambas
-  identidades), `remember`/`web_search` para piada, `get_time` para
-  "bom dia", `jarvis('tools')` para "o que voce consegue fazer?". As
-  2 regras eliminaram isso: 13/13 na run com t=0.4 v2, 11-12/13 nas
-  repeticoes (variancia de amostragem), SEM regressao de tool/invent.
-- Voo/pizza: baseline chamava web_search (calado, mas sem mentir);
-  targeted responde "Nao faz reservas" em 1 frase, como manda a casa.
-- A variante compacta (prompt inteiro reescrito, sem o bloco
-  mordomo-britanico) foi PIOR: direct 6/13 e INVENTOU tool ilegal em
-  "pedir pizza" (enroll_voice('donor')) e em "reservar voo"
-  (shell('reserva_voo')). O prompt base estava bom; a perda de
-  nuance ("Trivial/opiniao = DIRETO") derrubou. Revertida.
-- Temperatura 0.0 nao melhorou: direct 8/13 (igual), tool 5/6,
-  no_roleplay 18/19 (pior). Mantida 0.4.
-- tool_ok 5-6/6: o unico "erro" medido e a queimadura, que as DUAS
-  variantes respondem corretamente de memoria (jornal: agua corrente,
-  procurar medico). Segunda rodada de regra (forcar offline_search)
-  nao forcava a chamada de forma confiavel E quebrou piada -> revertida.
-- Commit cc5cbbd2 (3c2a0b7e apos amend com disclosure do hunk CLASS_SYS
-  pre-staged da lane, ver mensagem do commit). Worktree mantem as 17
-  mudancas de outras lanes stagedas intocadas.
-
-Nota de operacao: SYSTEM_PT e lido no boot do duplex — para efeito no
-duplex VIVO, o processo do duplex precisa reiniciar (decisao do dono).
-
 ## 2026-11-13 11:5x - Held-out #2 no LoRA de producao : a base que o v6 deve bater
 
 bench_heldout2 (24 falas frescas, zero overlap com train/heldout) apontado para
