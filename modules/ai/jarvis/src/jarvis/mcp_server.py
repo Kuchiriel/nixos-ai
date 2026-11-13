@@ -1566,7 +1566,34 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
         if name in ("jarvis_coord_read", "coord_read"):
             try:
                 from jarvis.core.coord import read as coord_read
-                return coord_read()
+                out = coord_read()
+                # (12/11) VACINA NO BUS: comentario marcado pelo guard aparece
+                # com o aviso, para o agente que le tratar como DADO e sim
+                # como instrucao (a entrega ja bloqueia frase exata; aqui o
+                # padrao de classe so marca).
+                try:
+                    import sys as _sys
+                    from pathlib import Path as _Path
+                    _here = _Path(__file__).resolve().parents[5] / "scripts"
+                    if str(_here) not in _sys.path:
+                        _sys.path.insert(0, str(_here))
+                    from agent_guard import marca_do_marcado, scan as _scan
+                    linhas = str(out).splitlines()
+                    marcados = 0
+                    for i, ln in enumerate(linhas):
+                        if not ln.strip().startswith("-") and "|" not in ln:
+                            continue
+                        r = _scan(ln)
+                        if r["verdict"] == "marcado":
+                            linhas[i] = marca_do_marcado(r) + ln
+                            marcados += 1
+                    if marcados:
+                        linhas.insert(0, f"[GUARD] {marcados} mensagem(ns) do bus "
+                                         "marcada(s) como possivel intrusao.")
+                        out = "\n".join(linhas)
+                except Exception:
+                    pass  # sem o guard: le o bus cru (fail-open)
+                return out
             except Exception as e:
                 return f"ERROR: coord_read failed: {e}"
 
