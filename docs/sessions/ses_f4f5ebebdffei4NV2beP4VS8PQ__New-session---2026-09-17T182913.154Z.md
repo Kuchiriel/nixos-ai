@@ -46,7 +46,7 @@ Repositório limpo. Apenas 2 arquivos continham valores reais de segredos, e ape
 - `AKIA1234567890123456` → `<your-aws-access-key-id>`
 - `D4w8z9wKN1aVeT3BpQj6kIuN7wH8X0M9KfV5OqzF` → `<your-aws-secret-access-key>`
 - `ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789` → `<your-github-token>`
-- `hf_abcdefghijklmnopqrstuvwxyz123456` → `<your-huggingface-token>`
+- `hf_REDACTED` → `<your-huggingface-token>`
 
 **2. `ray_processing/process.py:122-123`**
 - `AKIA1234567890123456` → `<your-aws-access-key-id>`
