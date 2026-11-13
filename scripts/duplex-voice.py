@@ -84,8 +84,10 @@ SYSTEM_PT = (
     "seco por fora, cuidadoso por dentro. Humor britânico sutil, chama o "
     "usuário de 'dono' ou 'senhor'. PT-BR, 1-2 frases, natural FALADO.\n"
     "Antecipe AÇÃO em 1 frase, mas NUNCA antecipe DADOS — dado vem de tool.\n"
-    "MEMÓRIA: chame remember. TOOLS só para dado externo (hora, memória, "
-    "web, código). Trivial/opinião = DIRETO. Ferramenta = 1 linha cada.\n"
+    "(13/11) SEM MEMÓRIA: a voz NAO escreve memória (o STT pega conversa "
+    "de terceiro e a lição entrava como se fosse do dono — 187 registros "
+    "poluíram toda sessão da frota). TOOLS só para dado externo (hora, web, "
+    "código). Trivial/opinião = DIRETO. Ferramenta = 1 linha cada.\n"
     "Após tool: responda com resultado, não repita a pergunta. Tool ERRO = "
     "informe erro, NUNCA invente. NUNCA invente dados. Sem certeza = 'não sei'.\n"
     "Sem 'Ah, Hmm, Pode repetir'. Turnos fragmentados = considere o conjunto.\n"
@@ -100,7 +102,7 @@ SYSTEM_PT = (
     "de turno, voz PT-BR). Se perguntarem qual modelo você é, responda "
     "exatamente isso. NUNCA invente benchmark, shootout ou nome de modelo.\n\n"
     "=== META-TOOL: do(action, input) — chame UMA tool por vez ===\n"
-    "  get_time('') hora | remember('fato') | recall('busca') memória\n"
+    "  get_time('') hora | recall('busca') memória\n"
     "  web_search('busca') | rag_search('busca') | offline_search('busca' sem internet)\n"
     "  status('') | rehydrate('tarefa') contexto completo | session_resume('id|dir|query')\n"
     "  tools('') descobrir tools | tool('<tool> {json}') qualquer tool | jarvis('<cmd>') CLI (tools, tools-search, rehydrate, session-resume, rag-search, recall...)\n"
@@ -259,9 +261,38 @@ CORRECAO = re.compile(
     r"tá errad|ta errad|errad[oa]|não é assim|nao e assim|para de|para com|"
     r"me ignor|ignora|nao falou|não falou|deixa assim|não quero isso)", re.I)
 
-def learn_from_turn(heard: str, said: str = ""):
+def speaker_confiavel(speaker: str) -> bool:
+    """O turno é do DONO (ou de alguém matriculado)? (13/11)
+
+    MEDIDO: o STT pegou conversa de TERCEIROS perto do mic ("ela nao quer
+    expor cartao...", "para de se entrometendo") e o regex de correcao
+    guardou isso como "CORRECAO DO DONO" -> 187 registros contaminando
+    toda sessao da frota (via rehydrate/recall). A bateria de speaker-ID
+    da casa roda 0/7 (spk=?): sem matricula, nao ha como saber quem
+    falou — entao a INGESTAO DE MEMORIA SO VALE para turno matriculado
+    (o audio continua sendo gravado: e dataset do LoRA).
+    """
+    s = str(speaker or "").strip()
+    if not s:
+        return False
+    if s.lower().startswith("spk"):
+        return False   # spkN = pessoa NAO matriculada
+    return True
+
+
+def _speaker_do_turno(texto: str) -> str:
+    """Quem falou neste turno (prefixo '[spk: X]')? Vazio = desconhecido."""
+    m = re.search(r"\[spk:\s*([^\]]+)\]", str(texto or ""))
+    return (m.group(1).strip() if m else "")
+
+
+def learn_from_turn(heard: str, said: str = "", speaker: str = ""):
     """Extrai fatos atômicos do turno e guarda no EpisodicMemory.
-    THREAD DE BACKGROUND — nunca bloqueia o real-time. Conservador."""
+    THREAD DE BACKGROUND — nunca bloqueia o real-time. Conservador.
+    (13/11) so com speaker CONFIÁVEL (matriculado) — ver speaker_confiavel.
+    """
+    if not speaker_confiavel(speaker):
+        return
     if not MEM_AVAILABLE or not heard or len(heard.split()) > 60:
         return
     if heard.rstrip().endswith("?"):        # pergunta não é fato
@@ -3535,7 +3566,7 @@ def main():
                                  tts=tts, spk=_spk)
             # (18:20) aprendizado: extrai fatos do turno em background
             if said != LISTEN:
-                learn_from_turn(heard, said)
+                learn_from_turn(heard, said, _speaker_do_turno(heard))
             if not force and said != LISTEN:
                 # (07:15) ticks micro-turn SEM força (4B base, sem LoRA,
                 # b9190 sem probs) babblam template ('assistant') — silêncio:
