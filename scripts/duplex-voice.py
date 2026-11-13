@@ -237,7 +237,8 @@ def http(url, payload=None, timeout=180):
 # vale lembrar → guarda no EpisodicMemory (Qdrant). Conservador: só
 # padrões claros de fato (preferência/identidade/local/trabalho), nunca
 # pergunta, nunca negação. Roda em thread de background (não bloqueia
-# o caminho real-time). O modelo tb pode chamar remember via meta-tool.
+# o caminho real-time). O modelo NÃO pode chamar remember — a voz não
+# salva memória (qualquer falante entrava como dono); regra decidida 13/11.
 FACT_PATTERNS = [
     (re.compile(r"(?:eu )?gosto (?:de|do|da) ([^.,!?;\\n]{2,40})", re.I), "preferência"),
     (re.compile(r"(?:eu )?prefiro ([^.,!?;\\n]{2,40})", re.I), "preferência"),
@@ -272,10 +273,10 @@ def speaker_confiavel(speaker: str) -> bool:
     falou — entao a INGESTAO DE MEMORIA SO VALE para turno matriculado
     (o audio continua sendo gravado: e dataset do LoRA).
     """
-    s = str(speaker or "").strip()
-    if not s:
+    s = str(speaker or "").strip().lower()
+    if not s or s == "?":
         return False
-    if s.lower().startswith("spk"):
+    if s.startswith("spk"):
         return False   # spkN = pessoa NAO matriculada
     return True
 
@@ -304,7 +305,8 @@ def learn_from_turn(heard: str, said: str = "", speaker: str = ""):
         try:
             _MEM.remember_fact(
                 f"CORREÇÃO DO DONO: {heard.strip()[:160]}",
-                kind="lesson", source="duplex-correction", heard=heard[:120])
+                kind="lesson", source="duplex-correction", heard=heard[:120],
+                speaker=speaker)
             log(f"[{ts()}] lição aprendida (correção do dono): {heard[:60]!r}")
         except Exception:
             pass
@@ -336,7 +338,7 @@ def learn_from_turn(heard: str, said: str = "", speaker: str = ""):
         try:
             for f in fatos:
                 _MEM.remember_fact(f, kind="fact", source="duplex-auto",
-                                   heard=heard[:100])
+                                   heard=heard[:100], speaker=speaker)
         except Exception:
             pass
     threading.Thread(target=_store, daemon=True).start()
@@ -678,7 +680,14 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
                      "com", "não", "uma", "por", "mas", "como", "isso",
                      "aqui", "você", "meu", "minha", "seu", "sua")]
             query = " ".join(words[:5]) if words else heard[:40]
-            _facts = _MEM.recall(query, top_k=3, kinds=("fact",))
+            # (13/11) speaker attribution recall: speaker=matriculado only
+            # shows speakered facts (spk: dono). Unidentified speakers
+            # see legacy (untagged) facts — but not the owner's.
+            _mem_speaker = mem_spk()
+            _spk_kw = ({"speaker": _mem_speaker}
+                       if _mem_speaker == "dono" else {})
+            _facts = _MEM.recall(query, top_k=3, kinds=("fact",),
+                                 **_spk_kw)
             if _facts:
                 _lines = [h.get("text", "")[:120] for h in _facts[:3]
                           if h.get("text")]
@@ -805,9 +814,14 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
                 except Exception:
                     pass
                 _facts, _seen_txt = [], set()
+                # speaker-attributed only when matriculated; unidentified
+                # speakers see everything (not less than legacy behaviour)
+                _spk = mem_spk()
+                _spk_kw = {"speaker": _spk} if _spk == "dono" else {}
                 for _q in _queries:
                     for h in _MEM.recall(_q, top_k=3,
-                                         kinds=("fact",)) or []:
+                                         kinds=("fact",),
+                                         **_spk_kw) or []:
                         t = (h.get("text") or "")[:60]
                         if t and t not in _seen_txt:
                             _seen_txt.add(t)
@@ -892,11 +906,13 @@ def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
                     try:
                         # (21/10) strip wake word: 'PATTERN: Jarvis...' poluía
                         # o embedding de fatos (junk removido hoje c/ HB)
+                        # (13/11) SPK: pattern attribution pré-fix de tudo,
+                        # speaker fica fora da frases de fato
                         _pc = heard.lower().replace("jarvis", "").strip(" ,.?!")
                         _MEM.remember_fact(
                             f"PATTERN: '{_pc[:40]}' → do(action, input) via tools",
                             kind="procedure", source="duplex-auto",
-                            heard=_pc[:80])
+                            heard=_pc[:80], speaker=(spk or "incerto"))
                     except Exception:
                         pass
                 # (06/11) GATE DE VERIFICAÇÃO DO HARNESS: pedido de AÇÃO
@@ -1439,6 +1455,16 @@ barge_cut = {"done": False, "floor": 0.0}   # corte 1x por fala do JARVIS
 TTS_SELF = {"id": 0, "text": "", "recent": []}   # recent: [(text, t_end)]
 # (21/10 SPEAKER-ID) estado de vozes ao vivo (asrd conta/identifica)
 SPK_STATE = {"voices": 0, "last_spk": "?"}
+
+# (13/11) speaker attribution marker: "dono" | "spkNN" | "incerto".
+# Used in memory writes/reads so attributed facts don't mix owners.
+def mem_spk() -> str:
+    s = SPK_STATE.get("last_spk", "?")
+    if not s or s == "?":
+        return "incerto"
+    if s.startswith("spk") and s not in ("spk?",):
+        return s
+    return str(s)
 # (26/10, dono) MUTE persistente: 'cala a boca' silencia ATÉ 'pode falar'
 MUTE = {"on": False}
 # (03/11 19:45, dono: "cala a boca pra interromper IMEDIATAMENTE") As
@@ -1686,7 +1712,9 @@ def spec_take(query):
 # jarvis-env.sh = mesmo env do MCP) com argv e allowlist.
 JARVIS_CLI_ALLOW = {
     # frente MCP (scripts/jarvis-cli.sh)
-    "recall", "remember", "lessons", "rag-search", "rag-index",
+    # (13/11) "remember" removido da allowlist de voz: o canal de voz
+    # não toca memória do dono. recall/lessons seguem livres.
+    "recall", "lessons", "rag-search", "rag-index",
     "vault-list", "vault-write", "vault-status", "vault-search-obsidian",
     "status", "classify", "nix-eval", "nix-search", "state", "rehydrate",
     # CLI do JARVIS (passthrough do wrapper)
@@ -1842,14 +1870,15 @@ def call_tool_safe(name, args):
 
 
 _TOOL_NAMES = {
-    "do", "get_time", "get_date", "recall", "remember", "offline_search",
+    "do", "get_time", "get_date", "recall", "offline_search",
     "rag_search", "status", "web_search", "nix_info", "shell",
 }
 
 
 def call_tool(name, args):
     """Meta-tool router: o 4B chama 'do(action, input)' e esta função
-    despacha pra ferramenta certa (schema de 1 tool, não 8)."""
+    despacha pra ferramenta certa (schema de 1 tool, não 8).
+    Sem 'remember': a voz não salva memória desde 13/11."""
     if name == "do":
         action = (args.get("action") or "").strip().lower()
         inp = (args.get("input") or "").strip()
@@ -1872,17 +1901,13 @@ def call_tool(name, args):
             except ValueError:
                 _args = (action[len("jarvis "):] + " " + inp).split()
             return _jarvis_cli(_args)
+        # (13/11) SEM MEMORIA: a voz NAO salva. Qualquer falante teria a
+        # memoria marcada como do dono (STT pega conversa de terceiros); o
+        # do-save-fix de 26/09 já tinha usado isso pra contaminar 187
+        # registros. Recusa limpa, sem negociar.
         if "remember" in action or "salva" in action or "memoriz" in action:
-            # (06/11) ASSÍNCRONO: gravar memória leva ~3,1s (embedding +
-            # Qdrant) e segurava a CONVERSA em silêncio. A escrita vai
-            # para a thread; a voz confirma na hora ("guardei").
-            def _store_mem(_txt=inp):
-                try:
-                    call_tool("remember", {"text": _txt})
-                except Exception:
-                    pass
-            threading.Thread(target=_store_mem, daemon=True).start()
-            return "Guardei na memória."
+            return ("Não salvo memória pela voz — qualquer pessoa dizendo "
+                    "isso ia gravado como você.")
         if "recall" in action or "memória" in action or "memoria" in action:
             return call_tool("recall", {"query": inp})
         # (07/11) CORPUS OFFLINE ANTES DA WEB: pergunta de sobrevivência
@@ -2085,7 +2110,7 @@ def call_tool(name, args):
             globals()["SPK_PROFILE"] = None
             return "Filtro de voz desativado. Respondendo a todos."
 
-        return (f"Ação '{action}' desconhecida. Use: get_time, remember, "
+        return (f"Ação '{action}' desconhecida. Use: get_time, "
                 "recall, web_search, rag_search, status, voices, jarvis, "
                 "shell, enroll, guest.")
     # chamadas diretas (legado/compat)
@@ -2112,7 +2137,9 @@ def call_tool(name, args):
         # CLI não tem --kind → usa a classe EpisodicMemory in-process
         # com kinds=('fact',) e fallback para o CLI se vazio.
         try:
-            _memq = _MEM.recall(q, top_k=5, kinds=("fact",))
+            _spk = mem_spk()
+            _spk_kw = {"speaker": _spk} if _spk == "dono" else {}
+            _memq = _MEM.recall(q, top_k=5, kinds=("fact",), **_spk_kw)
             if _memq:
                 lines = []
                 for h in _memq[:5]:
@@ -2172,7 +2199,9 @@ def call_tool(name, args):
             return raw[:400]
         # fallback: in-process via EpisodicMemory se a CLI falhar
         try:
-            hits2 = _MEM.recall(q, top_k=3) if _MEM else []
+            _spk = mem_spk()
+            _spk_kw = {"speaker": _spk} if _spk == "dono" else {}
+            hits2 = (_MEM.recall(q, top_k=3, **_spk_kw) if _MEM else [])
             if hits2:
                 return "\n".join(
                     f"[fact] {h.get('text','')[:180]}" for h in hits2[:3])
@@ -2183,10 +2212,10 @@ def call_tool(name, args):
     if name == "status":
         return _exec("systemctl --user is-active jarvis-wakeword 2>&1; uptime -p; free -g | grep Mem")
     if name == "remember":
-        text = args.get("text", "")
-        if not text:
-            return "ERRO: texto vazio"
-        return _jarvis_cli(["remember", text], timeout=15)
+        # (13/11) voz não salva memória — defesa em profundidade; o # do do()
+        # já filtra remember, mas também aqui (qualquer chamada directa).
+        return ("Não salvo memória pelo canal de voz — as memórias da casa "
+                "ficam só num lugar seguro.")
     if name == "web_search":
         q = args.get("query", "")
         if not q:
@@ -2222,7 +2251,7 @@ def call_tool(name, args):
 TOOLS_SCHEMA = [
     {"type": "function", "function": {"name": "do",
      "description": "Executa UMA ação. Ações: get_time (hora), "
-     "remember <texto> (salva), recall <busca> (memória do dono), "
+     "recall <busca> (memória do dono), "
      "web_search <busca> (internet), rag_search <busca> (papers/código), "
      "offline_search <busca> (corpus offline de sobrevivência: água, "
      "primeiros socorros, veneno, emergência — sem internet), "
@@ -3565,8 +3594,11 @@ def main():
             said, _p = tick_once(base, history, heard, force_speak=force,
                                  tts=tts, spk=_spk)
             # (18:20) aprendizado: extrai fatos do turno em background
+            # (13/11) speaker passa DIRETO (antes vinha de uma regex que
+            # nunca casava no texto semprefixado — tudo era descartado
+            # como untrusted; agora speaker real recebe tag)
             if said != LISTEN:
-                learn_from_turn(heard, said, _speaker_do_turno(heard))
+                learn_from_turn(heard, said, _spk or "incerto")
             if not force and said != LISTEN:
                 # (07:15) ticks micro-turn SEM força (4B base, sem LoRA,
                 # b9190 sem probs) babblam template ('assistant') — silêncio:

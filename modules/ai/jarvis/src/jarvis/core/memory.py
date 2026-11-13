@@ -206,6 +206,7 @@ class EpisodicMemory:
         top_k: int = 5,
         kinds: tuple[str, ...] | None = None,
         tenant: str | None = None,
+        speaker: str | None = None,
     ) -> list[dict[str, Any]]:
         """Busca híbrida por eventos semânticamente relevantes.
 
@@ -216,6 +217,10 @@ class EpisodicMemory:
         tenant (isolamento 22/09, evidência: isolada 3/3 vs 0/3): quando
         dado, só retornam hits do mesmo tenant; hits sem tenant seguem
         visíveis (compat). None = comportamento atual.
+
+        speaker (13/11): quando dado, só retornam hits do mesmo speaker;
+        hits sem speaker seguem visíveis (compat). None = comportamento
+        atual. Usar "spk76"/"dono"/"?" para isolar memória por falante.
         """
         vector = self._llm.embed(query)
         if vector is None:
@@ -245,6 +250,10 @@ class EpisodicMemory:
                 _pt = payload.get("tenant")
                 if _pt is not None and _pt != tenant:
                     continue
+            if speaker is not None:
+                _ps = payload.get("speaker")
+                if _ps is not None and _ps != speaker:
+                    continue
             text = payload.get("text", "")
             # dedup: texto idêntico ou muito similar → mantém o mais recente
             text_key = text.strip().lower()[:500]  # chave de dedup — 500 chars evita falsos positivos
@@ -260,6 +269,9 @@ class EpisodicMemory:
                 "error_pattern": payload.get("error_pattern", ""),
                 "fix": payload.get("fix", ""),
                 "ts": payload.get("ts"),
+                # (13/11) source exposto: o MCP podia filtrar session_consolidation
+                # por etiqueta, mas não tinha o dado; agora tem.
+                "source": payload.get("source", ""),
             })
             if len(hits) >= top_k:
                 break

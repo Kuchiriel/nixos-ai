@@ -1970,15 +1970,27 @@ def _rehydrate_handoff(max_lines: int = 8) -> str:
 
 def _rehydrate_memories(task: str, top_k: int = 5) -> str:
     try:
-        from jarvis.core.memory import EpisodicMemory
+        from jarvis.core.memory import EpisodicMemory, KIND_LESSON, KIND_FACT, KIND_DECISION, KIND_ERROR
 
         em = EpisodicMemory()
-        results = em.recall(task, top_k=top_k)
+        # (13/11) rehydrate injeta menos lixo: (a) só kinds que importam
+        # para uma sessão (fact/decision/lesson/error), (b) exclui
+        # source=session_consolidation — sumários de sessões passadas que
+        # poluem o contexto (opencode já re-exibe sessions quando
+        # pedido, via jarvis_session_resume / rag_search(collection='sessions'))
+        kinds = (KIND_LESSON, KIND_FACT, KIND_DECISION, KIND_ERROR)
+        try:
+            results = em.recall(task, top_k=top_k, kinds=kinds)
+        except TypeError:
+            # compat com mocks antigos que só aceitam (query, top_k)
+            results = em.recall(task, top_k=top_k)
+        results = [r for r in results
+                   if not str(r.get("source", "")).startswith("session_")]
+        if not results:
+            return "(nenhuma memória para este pedido)"
+        return "\n".join(f"[{r.get('kind', '?')}] {r.get('text', '')[:260]}" for r in results)
     except Exception as e:
         return f"(memory unavailable: {e})"
-    if not results:
-        return "(nenhuma memória para este pedido)"
-    return "\n".join(f"[{r.get('kind', '?')}] {r.get('text', '')[:260]}" for r in results)
 
 
 def _rehydrate_lessons(task: str) -> str:
@@ -1987,9 +1999,14 @@ def _rehydrate_lessons(task: str) -> str:
 
         em = EpisodicMemory()
         out = em.lessons(task, top_k=3)
+        # (13/11) lições do session_consolidation são ruído — geralmente a
+        # lição não importa para o agente que ancora nessa tarefa. O
+        # código escopo responses já filtra kinds=(lesson,fact,error).
+        if not out or out == "(nenhuma memória para este pedido)":
+            return "(no lesson for this pattern)"
+        return out
     except Exception as e:
         return f"(lessons unavailable: {e})"
-    return out or "(no lesson for this pattern)"
 
 
 def _rehydrate_roster() -> str:
