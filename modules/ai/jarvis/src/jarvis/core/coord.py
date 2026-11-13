@@ -123,11 +123,21 @@ def host_info() -> dict[str, Any]:
         kind = "macos"
     else:
         kind = "linux"
+    # (13/11) O NOME DA MAQUINA SAI DO BUS: o dono pediu para o hostname
+    # sumir das mensagens (o bus e lido por todo mundo e vaza em logs,
+    # prints e reports). No lugar, um ALIAS estavel e nao reversivel
+    # (hash do hostname) ou o alias explicito no env. A distincao que
+    # importa (linux/windows/termux) continua no "kind".
+    import hashlib
+    _host = socket.gethostname().split(".")[0]
+    _alias = os.environ.get("COORD_HOST_ALIAS", "").strip()
+    if not _alias:
+        _alias = "host-" + hashlib.sha256(_host.encode()).hexdigest()[:6]
     return {
         "kind": kind,
         "os": system,
         "arch": platform.machine(),
-        "hostname": socket.gethostname().split(".")[0],
+        "hostname": _alias,
         "node": os.environ.get("COORD_NODE", ""),
     }
 
