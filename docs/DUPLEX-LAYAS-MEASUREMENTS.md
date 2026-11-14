@@ -574,3 +574,17 @@ O que falta para um A/B real:
   aleatório para "eu tava pensando em…")
 
 
+
+## 2026-11-14 15:47 — Bloqueador no dataset upload do Kaggle
+
+Upload de dataset novo v9 (`duplex-gate-v9`) falha com **403 Server returned**
+em AMBOS as contas Kaggle. Já confirmado testando outros datasets e outras
+tentativas — é a service account/storage do Kaggle bloqueando; não é token,
+nao é CLI, NAO É PRÉXIS. Conclusão: v9 está pronto no repo; esteira automatizada
+não abre com arquivo novo enquanto o bucket não responder.
+
+Caminho revisto:
+1. Adotar microturn-v9 neste codebase e documentar.
+2. Keep going elsewhere or push local v9 (llama cpp CPU) — mencione arqueote.
+3. Abrir ticket/questionamento ao suporte Kaggle se timing right.
+4. A esteira de qualidade continua válida: conveyor + gate de production.
