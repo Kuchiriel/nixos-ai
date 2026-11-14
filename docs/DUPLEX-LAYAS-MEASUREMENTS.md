@@ -463,3 +463,23 @@ Por exigências da casa, paper não baixado/indexado fica registrado aqui e NÃO
 entrou no RAG; o dono precisará buscar com browser ou VPN doméstica para ler.
 
 Sem Terceirização: o que rodou é o que rodou; tudo registrado.
+
+## 2026-11-14 15:21 — Kaggle DOWNLOAD bloqueado (403)
+
+Todo download de dataset/kernel falhou com:
+  403 Client Error: Forbidden for url: https://storage.googleapis.com:443/kaggle-data-sets/...
+  "You don't have access to this resource."
+
+Requer ação do dono: renovar kaggle API token em ~/.kaggle/kaggle.json ou
+aceitar regras de competição/agreements no Kaggle. Quota GPU atual: 0.00h
+utilizada / 30h totais (janela 2026-11-21). Sem download ativo, não dá
+para baixar o dataset v8 nem dispara treino v9.
+
+Bloqueador afeta tudo que dependa de subir kernel novo:
+- v9 do microturn LoRA (com foco "deixa eu..." barge)
+- Laya-difficulty PT-BR (fine-tune novo)
+- Qualquer dataset que precise sair de Kaggle de volta para cá.
+
+O que continua funcionando sem Kaggle: a esteira completa de qualidade
+(conveyor/sweep/gates popula HOJE com este ciclo: conveyor 8/8, gate
+44/52 + 22/24, agent 5/6 + 8/13).
