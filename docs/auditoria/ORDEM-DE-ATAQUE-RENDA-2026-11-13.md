@@ -72,8 +72,8 @@ de concordância) foi preenchido com um paper novo, baixado e indexado:
 
 | paper | o que ele muda aqui |
 |---|---|
-| `arxiv-2510.07978` (voiceagentbench, já no acervo) | o padrão do casa: **dois humanos concordam em 0,9680** e o judge chega num nível comparável ⇒ **o limiar da delegação é a repetibilidade do dono**, não 100 % nem 95 % absoluto |
-| `arxiv-2603.06865` ("Counting on Consensus", **novo**, baixado em `~/Books/papers/` e indexado) | qual métrica usar: Cohen/Fleiss kappa e Krippendorff corrigem o acaso; concordância baixa costuma apontar **instrução ambígua**, não anotador descuidado ⇒ é o mapa das fronteiras do rubric |
+| `arxiv-2510.07978` (voiceagentbench, já no acervo) | o padrão do casa: **dois humanos concordam em 0,9680** e o judge chega num nível comparável : **o limiar da delegação é a repetibilidade do dono**, não 100 % nem 95 % absoluto |
+| `arxiv-2603.06865` ("Counting on Consensus", **novo**, baixado em `~/Books/papers/` e indexado) | qual métrica usar: Cohen/Fleiss kappa e Krippendorff corrigem o acaso; concordância baixa costuma apontar **instrução ambígua**, não anotador descuidado : é o mapa das fronteiras do rubric |
 | `arxiv-2607.28802` (reward hacking em RL por rubric, já no acervo) | o risco do outro lado: um modelo treinado no rubric pode aprender a **agradar o rubric** em vez de reproduzir o julgamento |
 | `arxiv-2605.15104` (avaliação binária por rubric, já no acervo) | o formato do prompt de julgamento: rubric + resposta curta, sem explicação |
 
@@ -84,7 +84,7 @@ O que mudou no código (`scripts/judgment-bench.py`):
    rubric naquele nível.
 2. **Teto humano**: se o mesmo id foi julgado mais de uma vez com respostas
    diferentes, o bench mostra a **repetibilidade do dono** — que é o teto real
-   da delegação. ⇒ **tarefa que sobra para o dono:** julgar alguns itens duas
+   da delegação. : **tarefa que sobra para o dono:** julgar alguns itens duas
    vezes (o `id` do item já está no schema das labels, então isso é possível).
 3. O modo recomendado passou a dizer isso na cara: o limiar é a repetibilidade
    do dono, não 100 %.
