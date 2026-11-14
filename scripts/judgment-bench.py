@@ -40,6 +40,7 @@ import json
 import math
 import sys
 import urllib.request
+from collections import Counter
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -174,11 +175,60 @@ def main():
     rate = same / n
     lo, hi = wilson(same, n)
     print(f"concordância {same}/{n} = {rate:.1%}  (IC 95%: {lo:.1%} a {hi:.1%})")
+
+    # (13/11) ACORDO POR CLASSE (F1 por nivel). Medido o overall esconde ONDE
+    # a regra falha: se o modelo erra sempre no "moderately", o overall
+    # parece ok e o rubric esta mal especificado nesse nivel. Base: arXiv
+    # 2603.06865 (metrica de concordancia para anotacao em NLP) e o
+    # padrao da casa em arxiv-2510.07978 (a concordancia do judge se compara
+    # com a concordancia ENTRE ANOTADORES, nao com 100%).
+    tp = Counter()
+    fp = Counter()
+    fn = Counter()
+    for r in rows:
+        gold = norm(r.get("answer"))
+        try:
+            pred = norm(ask_model(args.model, model, r))
+        except Exception:
+            pred = ""
+        if gold == pred:
+            tp[gold] += 1
+        else:
+            fp[pred or "(vazio)"] += 1
+            fn[gold or "(vazio)"] += 1
+    print("F1 por nivel (o nivel em que a regra falha aparece aqui):")
+    levels = [k for k in ("3", "2", "1", "0") if (tp[k] + fn[k])]
+    for k in levels:
+        prec = tp[k] / (tp[k] + fp[k]) if (tp[k] + fp[k]) else 0.0
+        rec = tp[k] / (tp[k] + fn[k]) if (tp[k] + fn[k]) else 0.0
+        f1 = 2 * prec * rec / (prec + rec) if (prec + rec) else 0.0
+        print(f"  nivel {k}: F1 {f1:.2f} (prec {prec:.2f} rec {rec:.2f}, "
+              f"{tp[k]}/{tp[k]+fn[k]} acertados)")
+
+    # teto humano: se o mesmo id foi julgado mais de uma vez com respostas
+    # diferentes, a repetibilidade do dono e' o teto real da delegacao.
+    by_id = {}
+    for r in rows:
+        by_id.setdefault(str(r.get("id")), []).append(norm(r.get("answer")))
+    repeated = {k: v for k, v in by_id.items() if len(v) > 1}
+    if repeated:
+        agree = sum(1 for v in repeated.values() if len(set(v)) == 1)
+        self_rate = agree / len(repeated)
+        print(f"repetibilidade do dono (mesmo id, respostas diferentes): "
+              f"{agree}/{len(repeated)} = {self_rate:.1%}  => este e' o TETO "
+              f"real da delegacao")
+    else:
+        print("teto humano: ainda nao medido (o dono precisa julgar alguns "
+              "itens duas vezes)")
+
     if misses:
         print("divergências (id, dono, modelo):")
         for m in misses[:20]:
             print("  ", m)
     print(f"modo recomendado: {mode_for(rate)}")
+    print("LEMBRETE (arXiv 2510.07978): o limiar e' a repetibilidade do "
+          "dono, nao 100% — se o proprio dono so concorda consigo mesmo em X%, "
+          "o modelo nao pode passar de X%.")
     return 0
 
 
