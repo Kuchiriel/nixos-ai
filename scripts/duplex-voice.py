@@ -2440,7 +2440,7 @@ class Asr:
         self.last_seg_ts = 0.0   # (06/11) quando chegou o último segmento
                                   # (gate de barge: só corta se o VAD viu
                                   # fala — não é ruído da sala)
-    CTX = {"v": "Jarvis"}   # vocabulário → prompt do whisper-server
+    CTX = {"v": "Jarvis, que horas são? Jarvis, me lembra. Jarvis, reunião."}   # whisper initial_prompt (medido 14/11): priming com frases-chave PT-BR evita 'Jarvis'→'Já vês'; o hint simples 'Jarvis' enviesava mas quebrava 'que horas são'
 
     def feed(self, pcm_f32):
         import base64
