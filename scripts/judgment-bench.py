@@ -156,11 +156,12 @@ def pick_model(bases, wanted: str = "", timeout: float = 10.0):
 
 def ask_model(base, model, row, timeout=90):
     """Chama o modelo local (OpenAI-compatible) e devolve a resposta curta."""
+    ctx, _dropped = sanitize_context(row.get("context", ""))
     body = {
         "model": model,
         "messages": [
             {"role": "system", "content": SYSTEM},
-            {"role": "user", "content": row.get("context", "")},
+            {"role": "user", "content": ctx},
         ],
         "temperature": 0,
         "max_tokens": 16,
@@ -180,6 +181,33 @@ def norm(s):
                     .split())
 
 
+# (14/11) O CONTEXTO NAO PODE LEVAR A RESPOSTA. Medido: com a resposta do
+# dono no fim do contexto (o formato que o uhrs-practice.py gravava ate
+# 14/11, e o que o SCHEMA.md ainda descrevia), o bench media 11/12 = 91,7%
+# — o modelo lia a resposta no prompt. Com o contexto limpo, 7/12 = 58,3%.
+# Um numero falso e' pior do que nenhum numero: ele decide o modo de
+# delegacao. Entao o bench SANITIZA o contexto antes de chamar o modelo e
+# avisa quantos itens ele teve de limpar.
+LEAK_MARKERS = ("answer by the owner", "resposta do dono", "resposta do owner",
+                "owner answer", "gabarito", "answer by the owner:")
+
+
+def sanitize_context(ctx):
+    """Tira do contexto qualquer linha que entregue a resposta.
+
+    Devolve (contexto_limpo, quantas_linhas_tirou).
+    """
+    text = str(ctx or "")
+    kept, dropped = [], 0
+    for line in text.splitlines():
+        low = line.lower()
+        if any(m in low for m in LEAK_MARKERS):
+            dropped += 1
+            continue
+        kept.append(line)
+    return "\n".join(kept).strip(), dropped
+
+
 def self_test():
     rows = [
         {"id": "1", "context": "p: x\nresposta do dono: Sim", "answer": "Sim"},
@@ -195,7 +223,18 @@ def self_test():
         pred = r["answer"]
         ok += (norm(pred) == norm(r["answer"]))
     assert ok == len(rows), ok
-    print(f"SELF-TEST ok: {ok}/{len(rows)} de concordância (modelo=eco)")
+    # (14/11) o self-test agora prova o ponto que decide o numero: o
+    # contexto que entrega a resposta e' limpo antes do prompt.
+    leaky = ("Query: q\nPage: p\nAnswer by the owner: 3", 1)
+    ctx, dropped = sanitize_context(leaky[0])
+    assert dropped == 1, f"nao limpou a linha que entrega a resposta: {ctx}"
+    assert "owner" not in ctx.lower(), ctx
+    assert "3" not in ctx, ctx
+    clean = ("Query: q\nPage: p", 0)
+    ctx2, dropped2 = sanitize_context(clean[0])
+    assert dropped2 == 0 and ctx2 == clean[0], ctx2
+    print(f"SELF-TEST ok: {ok}/{len(rows)} de concordância (modelo=eco) e o "
+          f"contexto com a resposta e' limpo antes do prompt")
     lo, hi = wilson(ok, len(rows))
     print(f"concordância {ok}/{len(rows)} = {ok/len(rows):.1%}  "
           f"(IC 95%: {lo:.1%} a {hi:.1%})")
@@ -223,6 +262,16 @@ def main():
         ap.error("falta --data (ou --self-test)")
 
     rows = load(args.heldout or args.data)
+    # (14/11) 'unparsed' NAO e' divergencia do modelo: e' uma fala do dono
+    # que o bench nao entendeu. Contar isso afundaria a concordancia por um
+    # motivo que nao e' do modelo, e o numero que decide a delegacao tem de
+    # ser honesto. As linhas sao puladas e contadas.
+    unparsed = [r for r in rows if str(r.get("answer", "")).strip().lower()
+                == "unparsed"]
+    rows = [r for r in rows if r not in unparsed]
+    if unparsed:
+        print(f"AVISO: {len(unparsed)} label(s) com answer='unparsed' (fala do "
+              f"dono nao entendida) foram puladas: nao sao erro do modelo.")
     if args.limit:
         rows = rows[: args.limit]
     if not rows:
@@ -238,17 +287,28 @@ def main():
         return 2
     same = 0
     misses = []
+    predictions = []          # (gold, pred) por item: UMA chamada por item
+    cleaned = 0              # itens cujo contexto entregava a resposta
     for r in rows:
+        _ctx, dropped = sanitize_context(r.get("context", ""))
+        cleaned += 1 if dropped else 0
         try:
             pred = ask_model(base, model, r)
         except Exception as exc:  # noqa: BLE001
             print(f"erro ao chamar o modelo: {exc}", file=sys.stderr)
             return 2
-        hit = norm(pred) == norm(r.get("answer"))
+        gold = norm(r.get("answer"))
+        predictions.append((gold, norm(pred)))
+        hit = gold == norm(pred)
         same += hit
         if not hit:
             misses.append((r.get("id"), r.get("answer"), pred))
     n = len(rows)
+    if cleaned:
+        print(f"AVISO: {cleaned} item(ns) tinham a resposta do dono DENTRO do "
+              f"context (leak): tirei antes de chamar o modelo. Sem isso o "
+              f"bench mede o modelo lendo a resposta (91,7% em vez de 58,3% "
+              f"medido hoje).")
     rate = same / n
     lo, hi = wilson(same, n)
     print(f"concordância {same}/{n} = {rate:.1%}  (IC 95%: {lo:.1%} a {hi:.1%})")
@@ -262,12 +322,8 @@ def main():
     tp = Counter()
     fp = Counter()
     fn = Counter()
-    for r in rows:
-        gold = norm(r.get("answer"))
-        try:
-            pred = norm(ask_model(base, model, r))
-        except Exception:
-            pred = ""
+    # (14/11) usa a MESMA resposta da concordancia (uma chamada por item)
+    for gold, pred in predictions:
         if gold == pred:
             tp[gold] += 1
         else:

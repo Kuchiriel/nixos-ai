@@ -132,3 +132,70 @@ o treino nas labels do dono vai corrigir).
 **O que é decisão do dono (config de host, rebuild):** a troca do `bootModel`
 no registry (`modules/ai/models.nix`, hoje `bootModel = { host = "bonsai"; ... }`)
 e a retirement do servidor :8092.
+
+## 7. O número da delegação estava inflado pelo próprio bench (14/11)
+
+O número que decide o modo (o modelo responde sozinho, propõe e o dono
+confirma, ou não delega) estava sendo medido com um **vazamento dentro do
+próprio bench**. Três defeitos, todos medidos:
+
+### 7.1. A resposta do dono ia dentro do contexto (o maior)
+
+O `uhrs-practice.py` gravava a label assim:
+
+```
+"context": "Query: ...\nPage: ...\nAnswer by the owner: 3"
+```
+
+e o `judgment-bench.py` mandava o contexto inteiro pro modelo. O modelo
+ lia a resposta no prompt. **Medido no mesmo arquivo, na mesma hora:**
+
+| contexto | concordância |
+|---|---|
+| com a resposta no fim (`Answer by the owner: 3`) | **11/12 = 91,7 %** |
+| com o contexto limpo | **7/12 = 58,3 %** |
+
+⇒ o bench estava medindo **91,7 %** onde o modelo base faz **58,3 %**. Com
+91,7 % a regra da casa já diria "o modelo pode responder sozinho"; com 58,3 %
+ela diz "sem delegação". **A decisão estava virada pelo vazamento.**
+
+Corrigido nos dois lados:
+
+- a label agora grava `context` = o que o dono **viu** (query + página) e a
+  resposta no campo `answer` (antes gravava o **gabarito** do item de
+  prática, nunca a resposta dele — o dataset seria o gabarito, o oposto do
+  desenho);
+- o bench **sanitiza o contexto** antes de chamar o modelo e avisa quantos
+  itens teve de limpar, para que um arquivo antigo não volte a inflar o
+  número.
+
+### 7.2. O bench chamava o modelo duas vezes por item
+
+Uma chamada para a concordância e outra para o F1 por nível ⇒ o dobro do
+tempo numa GPU de 6 GB e o F1 media uma **amostra diferente** da
+concordância. Agora é **uma chamada por item** e as duas métricas usam a
+mesma resposta.
+
+### 7.3. "unparsed" era contado como erro do modelo
+
+Quando a transcrição da voz não era entendida, a label ficou com
+`answer="unparsed"`. O bench contava isso como divergência do modelo (que
+nunca errou: a fala não foi entendida), afundando a concordância por um
+motivo que não é do modelo. Agora essas linhas são puladas e contadas.
+
+### 7.4. O corte do dataset era por linha, não por item
+
+O dono foi instruído a julgar alguns itens **duas vezes** (é assim que se
+mede a repetibilidade dele, que é o teto real da delegação). O corte por
+linha podia colocar as duas respostas do mesmo item em arquivos diferentes
+(uma no treino, outra no teste) = leakage, o defeito que o script promete
+evitar. Agora o corte é por **grupo de item**: as duas respostas ficam no
+mesmo arquivo, por construção. O self-test prova isso.
+
+### 7.5. O que a medição real diz, com o bench honesto
+
+**7/12 = 58,3 %** com o 4B **sem** o LoRA fino, e o F1 por nível aponta o
+diagnóstico: nível 3 com F1 0,71 (6/6), nível 2 e nível 1 com **F1 0,00** (o
+modelo nunca diz "1", colapsa para "3"). É exatamente o que o treino nas
+labels do dono tem de corrigir — e o veredito do bench (sem delegação) está
+certo até lá.

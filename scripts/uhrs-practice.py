@@ -257,20 +257,38 @@ class DuplexVoice:
         return last
 
 
-def record_label(item, answer, via):
+def record_label(item, answer, via, path=None):
+    """Grava a label do DONO: a resposta DELE, nao o gabarito.
+
+    (14/11) Dois bugs pegos ao ler o codigo (nao por teste, que nao cobre
+    o arquivo gravado):
+
+    1. a funcao recebia `answer` (a resposta do dono) e gravava
+       `item["answer"]`, que e' o GABARITO do item de pratica. O dataset
+       seria o gabarito, nunca o julgamento dele — o oposto do desenho (o
+       modelo tem de responder POR PROCURACAO do dono). Agora `answer` e' a
+       resposta do dono e o gabarito fica em `key`, so para diagnostico.
+    2. o `context` nao pode conter a resposta do dono: o bench manda o
+       contexto inteiro pro modelo, e o modelo lia a resposta ali. Medido
+       hoje: 11/12 = 91,7% com a resposta no contexto contra 7/12 = 58,3%
+       sem — um numero falso, do tipo que decide o modo de delegacao.
+       Agora o contexto e' o que o dono VIU (query + pagina) e a resposta
+       vive so no campo `answer`.
+    """
     DATA.mkdir(parents=True, exist_ok=True)
+    target = Path(path) if path else LABELS
     row = {
         "id": item["id"],
-        "context": (f"Query: {item['query']}\nPage: {item['snippet']}\n"
-                    f"Answer by the owner: {item.get('answer')}"),
-        "answer": item["answer"],
+        "context": f"Query: {item['query']}\nPage: {item['snippet']}",
+        "answer": answer,
+        "key": item.get("answer"),
         "source": "uhrs-practice",
         "via": via,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
-    with LABELS.open("a", encoding="utf-8") as fh:
+    with target.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-    return LABELS
+    return target
 
 
 def self_test():
@@ -299,8 +317,20 @@ def self_test():
         assert parse_answer("not relevant") == "0"
         assert parse_answer("3") == "3"
         assert parse_answer("nada") is None
+        # 5) a label gravada: a resposta do DONO (nao o gabarito) e o
+        #    contexto SEM a resposta (o bench manda o contexto pro modelo:
+        #    com a resposta dentro, o bench mede 91,7% em vez de 58,3%)
+        labels = Path(td) / "labels.jsonl"
+        item = {"id": "pXX", "query": "q", "snippet": "s", "answer": "3"}
+        record_label(item, "1", "voz", path=labels)
+        row = json.loads(labels.read_text(encoding="utf-8").splitlines()[0])
+        assert row["answer"] == "1", f"a label gravou o gabarito: {row}"
+        assert row["key"] == "3", f"o gabarito sumiu: {row}"
+        assert "1" not in row["context"], f"a resposta esta no contexto: {row}"
+        assert "Answer by the owner" not in row["context"], row
     print("SELF-TEST ok: leitor de voz (so o que e novo), 8 mapeamentos de "
-          "resposta e rubric carregado")
+          "resposta e rubric carregado, e a label grava a resposta do DONO "
+          "sem a resposta dentro do contexto")
     print(f"itens de pratica carregados: {len(load_items(ITEMS))}")
     return 0
 

@@ -126,20 +126,43 @@ def build(out_dir, heldout_path, seed=7, test_ratio=0.25, calib=8):
     laya = [x for x in (to_laya(r) for r in train_src) if x]
     held_laya = [x for x in (to_laya(r) for r in heldout) if x]
 
+    # (14/11) O CORTE E' POR GRUPO DE ITEM, NAO POR LINHA. O dono foi
+    # instruido a julgar alguns itens DUAS VEZES (e' assim que se mede a
+    # repetibilidade dele = o teto real da delegacao, base arXiv
+    # 2510.07978). Cortando por linha, as duas respostas do mesmo item
+    # podiam cair em arquivos diferentes (uma no treino, outra no teste) =
+    # leakage, que e' o defeito que o proprio script promete evitar.
+    groups = {}
+    for row in laya:
+        groups.setdefault(str(row.get("_id")), []).append(row)
+    gids = list(groups)
     rng = random.Random(seed)
-    rng.shuffle(laya)
-    # (13/11) Bug pego pelo self-test: o slice de calib era tirado do MESMO
-    # array do train, entao a calibracao vazava no treino. Agora os tres
-    # arquivos sao disjuntos por construcao: calib -> resto -> test -> train.
+    rng.shuffle(gids)
+
+    def take_groups(pool, n_groups):
+        """Pega n GRUPOS inteiros do pool (o item vai inteiro)."""
+        chosen, taken = [], 0
+        for gid in pool:
+            if taken >= n_groups:
+                break
+            chosen.append(gid)
+            taken += len(groups[gid])
+        return chosen, pool[len(chosen):]
+
     n_test = max(1, int(len(laya) * test_ratio)) if len(laya) > 3 else 0
     # (13/11) com dataset pequeno (12 itens de pratica) o calib de 8 deixaria
     # 1 item de treino: o corte tem de se adaptar ao tamanho.
     cal_n = min(calib, max(0, len(laya) // 5))
-    cal = laya[-cal_n:] if cal_n else []
-    rest = laya[:-cal_n] if cal else laya
-    n_test = min(n_test, max(0, len(rest) - 1))
-    test = rest[:n_test]
-    train = rest[n_test:]
+    # calib: primeiro (em grupos inteiros)
+    cal_groups, rest_gids = take_groups(gids, cal_n)
+    cal = [row for gid in cal_groups for row in groups[gid]]
+    # test: em seguida, sempre deixando pelo menos um grupo para o treino
+    n_test_groups = max(1, int(round(len(rest_gids) * test_ratio))) \
+        if len(rest_gids) > 1 else 0
+    test_groups, rest_gids = take_groups(rest_gids, n_test_groups)
+    test = [row for gid in test_groups for row in groups[gid]]
+    # train: o que sobrou
+    train = [row for gid in rest_gids for row in groups[gid]]
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -198,6 +221,8 @@ def self_test():
     finally:
         LABELS, ITEMS = old_labels, old_items
     train = load_jsonl(out / "train.jsonl")
+    test = load_jsonl(out / "test.jsonl")
+    calib = load_jsonl(out / "calib.jsonl")
     assert train, "train vazio"
     assert all(r["type"] == "choice" for r in train), "tipo errado"
     assert all(set(r["options"]) == set(OPTIONS) for r in train), "opcoes erradas"
@@ -205,8 +230,42 @@ def self_test():
     assert not overlaps, f"vazamento: {overlaps}"
     ids = {r["_id"] for r in train}
     assert "h1" not in ids, "o held-out entrou no treino"
+    # (14/11) o mesmo item julgado duas vezes tem de ficar NO MESMO arquivo
+    # (leakage): os ids de cada arquivo nao podem se cruzar
+    per_file = [{r["_id"] for r in rows_} for rows_ in (train, test, calib)]
+    for i, a in enumerate(per_file):
+        for b in per_file[i + 1:]:
+            assert not (a & b), f"item repetido em dois arquivos: {a & b}"
+
+    # (14/11) prova do caso que motivou o corte: o mesmo item julgado duas
+    # vezes (o dono medindo a propria repetibilidade) fica no mesmo arquivo.
+    tmp2 = Path("/tmp/opencode/judgment-ds-selftest2")
+    tmp2.mkdir(parents=True, exist_ok=True)
+    write_jsonl(tmp2 / "heldout.jsonl", [])
+    dup = tmp2 / "labels.jsonl"
+    write_jsonl(dup, [
+        {"id": "r1", "context": "Query: q\nPage: p", "answer": "3"},
+        {"id": "r1", "context": "Query: q\nPage: p", "answer": "2"},
+        {"id": "r2", "context": "Query: q2\nPage: p2", "answer": "0"},
+        {"id": "r3", "context": "Query: q3\nPage: p3", "answer": "1"},
+    ])
+    old_labels, old_items = LABELS, ITEMS
+    LABELS, ITEMS = dup, tmp2 / "vazio.jsonl"
+    try:
+        out2, ov2 = build(tmp2 / "out", tmp2 / "heldout.jsonl", test_ratio=0.34,
+                          calib=1)
+    finally:
+        LABELS, ITEMS = old_labels, old_items
+    assert not ov2, f"vazamento com repeticao: {ov2}"
+    where = {}
+    for fname in ("train.jsonl", "test.jsonl", "calib.jsonl"):
+        for r in load_jsonl(out2 / fname):
+            where.setdefault(str(r["_id"]), set()).add(fname)
+    dup_files = where.get("r1", set())
+    assert len(dup_files) == 1, f"o item repetido foi dividido: {dup_files}"
     print("SELF-TEST ok: formato Laya, held-out fora do treino, sem vazamento, "
-          "opcoes e respostas validas")
+          "opcoes e respostas validas, e o item julgado duas vezes fica no "
+          "mesmo arquivo")
     return 0
 
 
