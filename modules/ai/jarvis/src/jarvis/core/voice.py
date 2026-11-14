@@ -628,6 +628,73 @@ def _setup_kokoro_espeak():
 
 CLONE_SPEED_FACTOR = 1.0  # neutro: RVC preserva o ritmo; receita validada (rvc-jarvis-10s.wav) sem slowdown
 
+def _kokoro_binary() -> str | None:
+    """Descobre o binario do Kokoro (build do nixpkgs).
+
+    O python do JARVIS nao tem kokoro no closure; o binario do nixpkgs
+    tem — foi paracadutado pelo rebuild. Resolve em ordem: JARVIS_KOKORO_BIN
+    (env explicito) > `kokoro` no PATH > varredura no /nix/store (o build
+    nixpkgs do kokoro). Ultimo recurso e erro claro.
+    """
+    env = os.environ.get("JARVIS_KOKORO_BIN")
+    if env and Path(env).exists():
+        return env
+    import shutil
+    which = shutil.which("kokoro")
+    if which:
+        return which
+    import glob
+    candidates = glob.glob("/nix/store/*kokoro*/bin/kokoro")
+    candidates = [c for c in candidates if Path(c).stat().st_size > 0]
+    if candidates:
+        # build mais novo (por tamanho — o binario real e pequeno, o .wrapped
+        # e maior; ambos funcionam, preferimos o mais recente no nome)
+        return sorted(candidates)[-1]
+    return None
+
+
+def _speak_via_binary(
+    text: str, voice: str | None, *, play: bool, speed: float | None,
+) -> str:
+    """Sintetiza via binario do Kokoro — fallback best-effort.
+    Usa o mesmo KOKORO_VOICE_DEFAULT (af_heart) se nada for passado."""
+    bin_path = _kokoro_binary()
+    if bin_path is None:
+        return ("ERROR: kokoro ausente no python e no store "
+                "(JARVIS_KOKORO_BIN)")
+    lang_code = _detect_lang_code(text)
+    voice_id = VOICE_BY_LANG.get(lang_code, "af_heart")
+    if voice and voice.startswith(("af_", "pf_", "pm_", "jf_", "bf_", "ef_", "f")):
+        voice_id = voice
+    out_dir = Path(_model_dir()) / "tts"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"jarvis_tts_{abs(hash((text, voice_id, speed))) % 10**9}.wav"
+    cmd = [bin_path,
+           "--voice", voice_id,
+           "--language", lang_code,
+           "--output-file", str(out_path),
+           "--text", text]
+    if speed:
+        cmd += ["--speed", str(speed)]
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    except Exception as exc:
+        return f"ERROR: kokoro-bin falhou: {exc}"[:200]
+    if r.returncode != 0 or not out_path.exists() or out_path.stat().st_size == 0:
+        return f"ERROR: kokoro-bin exit={r.returncode} {r.stderr[:120]}"
+    if play:
+        try:
+            subprocess.run(["pw-play", str(out_path)], timeout=10,
+                           capture_output=True)
+        except Exception:
+            try:
+                subprocess.run(["aplay", str(out_path)], timeout=10,
+                               capture_output=True)
+            except Exception:
+                pass
+    return str(out_path)
+
+
 def speak(
     text: str,
     voice: str | None = None,
@@ -663,7 +730,15 @@ def speak(
             from kokoro import KModel, KPipeline  # type: ignore[import-not-found]
             import soundfile as sf  # type: ignore[import-not-found]
         except ImportError as exc:  # pragma: no cover
-            return f"ERROR: kokoro não instalado: {exc}"
+            # Fallback: usar o binario do nixpkgs — o closure pode nao ter
+            # kokoro python, mas o binario existe em /nix/store/...
+            binary = _kokoro_binary()
+            if binary is None:
+                return f"ERROR: kokoro não instalado: {exc}"
+            try:
+                return _speak_via_binary(text, voice, play=play, speed=speed)
+            except Exception as bin_exc:
+                return f"ERROR: kokoro falhou: {exc}; fallback binário: {bin_exc}"[:300]
 
     try:
         from jarvis.core.emotion import speed_for
@@ -723,7 +798,14 @@ def speak(
                             from kokoro import KModel, KPipeline  # type: ignore[import-not-found]
                             import soundfile as sf  # type: ignore[import-not-found]
                         except ImportError as exc:
-                            return f"ERROR: edge falhou e kokoro não instalado: {exc}"
+                            # Fallback terminal: o binário nixpkgs do kokoro
+                            # (o closure do python do JARVIS não tem o pacote).
+                            try:
+                                return _speak_via_binary(
+                                    text, voice, play=play, speed=speed)
+                            except Exception as bin_exc:
+                                return (f"ERROR: edge falhou e kokoro ausente: "
+                                        f"{exc}; binário: {bin_exc}")[:300]
                         _setup_kokoro_espeak()
                         lang_code = _detect_lang_code(text)
                         voice_path = _voice_for_lang(lang_code, voice)
