@@ -23,17 +23,45 @@ def has_key() -> bool:
     return bool(_api_key())
 
 
+def _offline_fallback(query: str, max_results: int, why: str) -> str:
+    """Cai no corpus offline (N.O.M.A.D) quando a busca online nao responde.
+
+    (14/11, sweep-2026-11) o dono pediu o offline como fallback de TODAS as
+    buscas online. O corpus e local e deterministico (FTS5), entao responder
+    offline e melhor do que devolver ERROR e deixar o agente sem resposta.
+    A fonte vai escrita na resposta, para ninguem confundir offline com web.
+    """
+    try:
+        from jarvis.core.offline import offline_search
+
+        hits = offline_search(query, max_results=max_results)
+    except Exception as exc:  # noqa: BLE001
+        hits = ""
+    if not hits or hits.startswith("ERROR") or hits.startswith("NO_SOURCE"):
+        return (
+            f"ERROR: web search indisponivel ({why}) e o corpus offline nao "
+            f"respondeu tambem."
+        )
+    return (
+        f"[fonte: corpus offline N.O.M.A.D — a busca online falhou ({why})]\n"
+        + hits
+    )
+
+
 def web_search(query: str, *, max_results: int = 5) -> str:
-    """Pesquisa web via Tavily. Retorna texto ou mensagem ERROR:."""
+    """Pesquisa web via Tavily, com FALLBACK no corpus offline.
+
+    (14/11) o offline (N.O.M.A.D) e o fallback: sem chave, HTTP de erro,
+    timeout ou excecao nao caem mais em ERROR seco, caem no corpus local.
+    """
     query = (query or "").strip()
     if not query:
         return "ERROR: query vazia"
     key = _api_key()
     if not key:
-        return (
-            "ERROR: web search indisponível (sem TAVILY_API_KEY). "
-            "Configure /etc/jarvis-secrets/tavily.env ou exporte TAVILY_API_KEY."
-        )
+        return _offline_fallback(
+            query, max_results,
+            "sem TAVILY_API_KEY; configure /etc/jarvis-secrets/tavily.env")
     try:
         import requests
     except ImportError:
@@ -51,12 +79,16 @@ def web_search(query: str, *, max_results: int = 5) -> str:
             timeout=30,
         )
         if resp.status_code in (401, 403):
-            return "ERROR: Tavily rejeitou a chave (401/403) — verifique TAVILY_API_KEY"
+            return _offline_fallback(
+                query, max_results,
+                f"Tavily rejeitou a chave ({resp.status_code})")
         if resp.status_code != 200:
-            return f"ERROR: Tavily HTTP {resp.status_code}: {(resp.text or '')[:120]}"
+            return _offline_fallback(
+                query, max_results,
+                f"Tavily HTTP {resp.status_code}: {(resp.text or '')[:100]}")
         data = resp.json()
     except Exception as exc:  # noqa: BLE001 — rede é best-effort
-        return f"ERROR: falha no web search: {exc}"[:200]
+        return _offline_fallback(query, max_results, f"falha de rede: {exc}"[:80])
     lines: list[str] = []
     answer = (data.get("answer") or "").strip()
     if answer:

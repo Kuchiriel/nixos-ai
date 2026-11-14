@@ -722,6 +722,24 @@ def semantic_search(query: str, top_k: int = 5) -> dict[str, Any]:
                 "source": source,
             })
 
+        # (14/11, sweep-2026-11) o corpus offline (N.O.M.A.D) como DADO
+        # ADICIONAL: o semantico covers code/memories, o offline cobre
+        # sobrevivencia/preparacao. Sai marcado, para o agente saber de
+        # onde veio cada trecho. Se o offline nao responder, a busca
+        # semantica segue como estava (nunca quebra por causa disso).
+        try:
+            from jarvis.core.offline import offline_search
+
+            _off = offline_search(query, max_results=3)
+            if _off and not _off.startswith(("ERROR", "NO_SOURCE")):
+                formatted.append({
+                    "text": _off[:600],
+                    "score": 0.0,
+                    "source": "offline/NOMAD",
+                })
+        except Exception:  # noqa: BLE001
+            pass
+
         return {
             "ok": True,
             "results": formatted,

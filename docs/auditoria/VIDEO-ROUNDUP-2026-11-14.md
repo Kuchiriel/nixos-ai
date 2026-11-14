@@ -81,7 +81,10 @@ e o driver genérico existe ✓.
 (ele é um servidor Node ✓ em 127.0.0.1 ✓), declarar uma instância `opencodeGo` ✓
 apontando para o CLI da casa ✓, e abrir o app web em :5199 ✓ como a "pele de chat" da
 frota ✓. O ganho real não é o código (é Apache-2.0 ✓ e sobe ✓): é **a UX** ✓ (falar
-com um agente como se fosse um contato ✓, com o histórico dele ✓).
+com um agente como se fosse um contato ✓, com o histórico dele ✓). **Mas a UX da casa
+não é essa**: o dono lembrou que aqui ainda não existe interface, e o que a casa tem de
+mais próximo é o **Mission Control** (SvelteKit ✓, ainda incompleto ✓) — então o
+OpenMausBot entra como **uma aba do Mission Control** ✓, não como um app novo ✓.
 
 ## 2. Agent Browser (Vercel Labs) — adotado, é o padrão de leitura de página
 
