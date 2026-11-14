@@ -26,6 +26,8 @@
 #
 # MODOS:
 #   --to <alvo>      entrega ao alvo: other (default) | all | <nome-do-roster>
+#                    | <lane>  (14/11: agente em outra maquina — vai pelo BUS,
+#                    cross-machine; sem focus/wtype)
 #   --note           NOTIFICAÇÃO: a mensagem entra na sessão do alvo, o
 #                    agente NÃO roda (noReply=true). Zero token.
 #   --ask            PEDIDO: o agente roda (prompt_async).
@@ -164,9 +166,10 @@ fi
 ALVOS_JSON=$(mktemp /tmp/opencode/agent-msg.XXXXXX.json)
 trap 'rm -f "$ALVOS_JSON"' EXIT
 RC=0
-python3 - "$ROSTER" "$MODO" "$LISTAR" "$FORCE" "$NOTA" > "$ALVOS_JSON" <<'PYEOF' || RC=$?
+python3 - "$ROSTER" "$MODO" "$LISTAR" "$FORCE" "$NOTA" "$HERE/../modules/ai/jarvis/src" > "$ALVOS_JSON" <<'PYEOF' || RC=$?
 import json, subprocess, sys
 roster_py, modo, listar, force, nota = sys.argv[1:6]
+jarvis_src = sys.argv[6] if len(sys.argv) > 6 else ""
 force = force == "1"
 
 def run(*args):
@@ -216,11 +219,23 @@ def alvo(a, kind="agent"):
             "busy": bool(a.get("busy", w.get("busy", False))),
             "pid": a.get("pid", w.get("pid", 0))}
 
+# (14/11) O "EU" E ACHADO PELA SESSAO, nao pela janela. A janela do
+# opencode no TUI tem endereco VAZIO (nao e uma janela do Hyprland), e
+# casar por "address == ''" pegava o primeiro agente com janela vazia:
+# eu estava mandando mensagem como Lontra. A sessao e o identificador
+# exato (mesma sessao do bloco IDENTITY).
 me = None
-for a in agents:
-    if own and a.get("window") == own.get("address"):
-        me = a
-        break
+_sess_own = str((own or {}).get("session") or "")
+if _sess_own:
+    for a in agents:
+        if a.get("session") == _sess_own:
+            me = a
+            break
+if me is None and own and own.get("address"):
+    for a in agents:
+        if a.get("window") == own.get("address"):
+            me = a
+            break
 
 targets, avisos = [], []
 if modo == "all":
@@ -255,14 +270,43 @@ elif modo in ("nsncd", "plain"):
 else:
     a = by_name(modo)
     if a is None:
-        print(json.dumps({"erro": f"nome desconhecido no roster: {modo}",
-                          "targets": [], "avisos": []}))
-        sys.exit(1)
-    if a.get("state") != "live":
+        # (14/11) O AGENTE MORA EM OUTRA MAQUINA: o nome nao esta no roster
+        # local (celular, Windows), mas o BUS endereca por lane e e
+        # cross-machine. A entrega correta e o bus (coord.send), nao a API
+        # local (que nao alcanca outra maquina) e NUNCA focus+wtype.
+        lane_hit = next((x for x in agents if x.get("lane") == modo), None)
+        # o roster e POR MAQUINA: a lane de um agente que roda no celular
+        # (ou no Windows) nao esta aqui. O BUS e global e conhece todas as
+        # lanes, entao consultamos ele SO neste caminho (o caso comum nao
+        # gasta uma chamada da API do GitHub, que tem limite de 60/h).
+        if lane_hit is None:
+            try:
+                import sys as _sys
+                _sys.path.insert(0, jarvis_src)
+                from jarvis.core.coord import bus_state
+                _st, _ = bus_state()
+                for _a in (_st or {}).values():
+                    if isinstance(_a, dict) and str(_a.get("lane") or "") == modo:
+                        lane_hit = {"lane": modo}
+                        break
+            except Exception:
+                pass
+        if lane_hit is not None:
+            targets.append({"kind": "lane", "address": f"bus:{modo}",
+                            "name": modo, "lane": modo, "repo": "", "note": "",
+                            "session": "", "busy": False, "pid": 0})
+        else:
+            print(json.dumps({"erro":
+                              f"nome desconhecido no roster e nao e lane "
+                              f"conhecida: {modo} (se o agente roda em outra "
+                              f"maquina, enderece a LANE dele, ex.: --to "
+                              f"termux/vpnsec)", "targets": [], "avisos": []}))
+            sys.exit(1)
+    elif a.get("state") != "live":
         print(json.dumps({"erro": f"'{modo}' não está vivo (janela fechada?)",
                           "targets": [], "avisos": []}))
         sys.exit(1)
-    if me and not force:
+    elif me and not force:
         hit = overlap(me, a)
         if hit:
             print(json.dumps({"erro":
@@ -270,7 +314,8 @@ else:
                               f"({', '.join(hit)}) — envie como --note ou use "
                               f"--force", "targets": [], "avisos": []}))
             sys.exit(1)
-    targets.append(alvo(a))
+    else:
+        targets.append(alvo(a))
 
 print(json.dumps({"targets": targets, "avisos": avisos, "me": me or {}},
                  ensure_ascii=False))
@@ -317,6 +362,10 @@ REMETENTE="${JARVIS_AGENT_NAME:-$(python3 -c "
 import json
 d=json.load(open('$ALVOS_JSON'))
 print((d.get('me') or {}).get('name') or 'agent-$$')")}"
+MINHA_LANE="$(python3 -c "
+import json
+d=json.load(open('$ALVOS_JSON'))
+print((d.get('me') or {}).get('lane') or '')")"
 [ "$MSG_ID" = "" ] && MSG_ID="m-$(date +%s)-$$"
 if [ -f "$LOG" ] && grep -qF "| id=$MSG_ID |" "$LOG" && [ "$FORCE" -eq 0 ]; then
     echo "agent-msg: id '$MSG_ID' já existe no log (idempotência A2A) — use outro --id" >&2
@@ -396,12 +445,24 @@ print(json.dumps({"parts": [{"type": "text", "text": sys.argv[1]}]}))' "$TEXTO_F
         continue
     fi
 
-    # sem sessão conhecida (API não serve) → fallback NO TRANSPORTE VELHO
-    if [ "$NOTA" -eq 1 ]; then
-        echo "agent-msg: alvo '$NOME_ALVO' sem sessão (API indisponível) — nota NÃO pode ser entregue sem API (estacionar texto na caixa trava o humano). Use --to (pedido)." >&2
-        FALHOU=1
-        continue
-    fi
+    # sem sessão local → BUS (14/11): o bus é cross-machine e é a fonte da
+    # verdade da casa (coord.send publica kind=msg endereçado). O fallback
+    # focus+wtype foi REMOVIDO de propósito: a regra da casa proíbe digitar
+    # na caixa do dono (bloqueia a digitação dele) e estacionar texto ali
+    # trava o teclado.
+    DESTINO_BUS="${END#bus:}"
+    [ "$DESTINO_BUS" = "$END" ] && DESTINO_BUS="$NOME_ALVO"
+    R_BUS=$(PYTHONPATH="$HERE/../modules/ai/jarvis/src" python3 -c "
+import sys
+from jarvis.core.coord import send
+print(send(to=sys.argv[1], message=sys.argv[2], agent=sys.argv[3], lane=sys.argv[4]))
+" "$DESTINO_BUS" "$TEXTO_FINAL" "$REMETENTE" "$MINHA_LANE" 2>&1 | tail -2)
+    echo "agent-msg: mensagem publicada NO BUS para $DESTINO_BUS (sem sessão local; o bus alcança outra máquina) — $R_BUS"
+    printf '%s | %s | %s | %s(%s) | id=%s | re=%s | %s\n' \
+        "$(date '+%d/%m %H:%M')" "$REMETENTE" "bus" "$DESTINO_BUS" "$END" \
+        "$MSG_ID" "${REPLY_TO:--}" "$TEXTO_ESCAPED" >> "$LOG"
+    continue
+
     hyprctl dispatch focuswindow "address:$END"
     sleep 1
     ATUAL=$(hyprctl activewindow -j 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('address',''))" 2>/dev/null || true)

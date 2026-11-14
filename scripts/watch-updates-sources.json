@@ -1,0 +1,41 @@
+[
+  {
+    "kind": "youtube",
+    "id": "UCXuqSBlHAE6Xw-yeJA0Tunw",
+    "name": "The Next New Thing (top GitHub da semana)",
+    "keywords": ["nixos", "llama", "opencode", "mcp", "agent", "skill", "qdrant", "tailscale", "whisper", "cloudflare", "nvidia"]
+  },
+  {
+    "kind": "youtube",
+    "id": "UCSpQ9KBlGfQDb7K6XmPe7FQ",
+    "name": "Anthropic (skills, research)",
+    "keywords": ["skill", "mcp", "agent", "claude", "context"]
+  },
+  {
+    "kind": "rss",
+    "url": "https://nixos.org/rss.xml",
+    "name": "NixOS (release notes)",
+    "keywords": ["release", "nix", "systemd", "security"]
+  },
+  {
+    "kind": "rss",
+    "url": "https://blog.cloudflare.com/rss/",
+    "name": "Cloudflare (blog)",
+    "keywords": ["zero trust", "tunnel", "warp", "workers", "durable", "s3", "r2", "firewall"]
+  },
+  {
+    "kind": "hn",
+    "query": "nixos OR \"llama.cpp\" OR opencode OR qdrant OR tailscale",
+    "name": "Hacker News (o que a casa usa)"
+  },
+  {
+    "kind": "github",
+    "repo": "anthropics/skills",
+    "name": "Anthropic skills (releases)"
+  },
+  {
+    "kind": "github",
+    "repo": "sst/opencode",
+    "name": "opencode (releases)"
+  }
+]

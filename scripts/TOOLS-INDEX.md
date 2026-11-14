@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_114 tools._
+_124 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -51,9 +51,15 @@ _114 tools._
   use: `Uso (via nix develop do nixos-ai — PYTHONPATH e stripado no shell):`
 - `decomp.py` (nixos-ai/scripts) — """decomp.py — o gargalo é decomposição ou execução?
 - `duplex-asrd.py` (nixos-ai/scripts) — """duplex-asrd.py — ASR v4: silero VAD (limites) + whisper.cpp GPU (texto).
+- `duplex-conveyor.py` (nixos-ai/scripts) — """duplex-conveyor.py — esteira automatizada para o caminho de voz do duplex.
+  use: `./scripts/duplex-conveyor.py            # corpus completo`
+- `duplex-cycle.py` (nixos-ai/scripts) — """duplex-cycle.py — esteira completa de qualidade do duplex.
+  use: `./scripts/duplex-cycle.py             # full pass`
 - `duplex-eval.py` (nixos-ai/scripts) — """duplex-eval.py — harness de eval do modo voz full-duplex (P5, noite 20/10, HB).
 - `duplex-restart.sh` (nixos-ai/scripts) — duplex-restart.sh — reinicia o cliente de voz duplex (mata TODOS os
   use: `USO: duplex-restart.sh [--port N] [--gate intent|jarvis|on|off] [--force]`
+- `duplex-sweep.py` (nixos-ai/scripts) — """duplex-sweep.py — encontra falhas reais nos logs do duplex e destila VSS.
+  use: `./scripts/duplex-sweep.py               # varre 7 dias`
 - `duplex-ttsd.py` (nixos-ai/scripts) — """duplex-ttsd.py — daemon TTS do modo duplex (18/10, 02:45).
   use: `USO (o cliente faz sozinho; manual p/ debug):`
 - `duplex-voice-run.sh` (nixos-ai/scripts) — duplex-voice-run.sh — runner do modo voz duplex (v6.2, madrugada 18/10).
@@ -65,6 +71,8 @@ _114 tools._
 - `extract_sessions.py` (nixos-ai/scripts) — """extract_sessions.py — extrai as sessões do opencode 1.18.34 (DB v1) para MARKDOWN.
 - `fetch-resume.py` (nixos-ai/scripts) — """Download com resume + retry + verificação de tamanho (stdlib only).
   use: `Uso: python3 fetch-resume.py URL DESTINO [--tries 50]`
+- `fetch-video-transcript.py` (nixos-ai/scripts) — """fetch-video-transcript.py — baixa a transcrição de um vídeo do YouTube, sem travar.
+  use: `python3 scripts/fetch-video-transcript.py https://youtu.be/pnZh5PAF3VE`
 - `gen-lora-data.py` (nixos-ai/scripts) — """gen-lora-data.py — gera dados de treino pro LoRA de timing no 4B-MTP.
   use: `python3 gen-lora-data.py --log /tmp/opencode/duplex-voice.log --out /tmp/opencode/lora-train.jsonl`
 - `gguf-ctx.py` (nixos-ai/scripts) — """Le o contexto REAL (treinado) dos modelos GGUF.
@@ -84,6 +92,8 @@ _114 tools._
 - `jarvis-reflect.py` (nixos-ai/scripts) — """jarvis-reflect.py — Reflexão noturna (P2.7 ROADMAP-INTELIGENCIA).
   use: `USO:   jarvis reflect [--date YYYY-MM-DD] [--dry-run]`
 - `jarvis-registry.sh` (nixos-ai/scripts) — jarvis-registry.sh — lê o registry de modelos (fonte única: modules/ai/models.nix)
+- `judgment-bench.py` (nixos-ai/scripts) — """judgment-bench.py — concordância do modelo com as labels do dono.
+- `judgment-dataset.py` (nixos-ai/scripts) — """judgment-dataset.py — as labels do dono viram dataset no formato do Laya.
 - `kaggle-kernel-watch.sh` (nixos-ai/scripts) — kaggle-kernel-watch — acompanha um kernel Kaggle até COMPLETE/ERROR e puxa o output.
   use: `USAGE: kaggle-kernel-watch.sh --slug <owner/kernel> [--out <dir>] [--interval <s>]`
 - `kaggle-scicom-antihalluc-kernel.py` (nixos-ai/scripts) — """RECONSTRUIDO do transcript (09/11, coord-naming) — kernel Kaggle do dataset
@@ -143,13 +153,16 @@ _114 tools._
 - `setup-hackmd.sh` (nixos-ai/scripts) — ═══ Setup HackMD API Token ═══
   use: `Usage: ./scripts/setup-hackmd.sh`
 - `silero_vad_iterator.py` (nixos-ai/scripts) — This is copied from silero-vad's vad_utils.py:
+- `smart_turn_probe.py` (nixos-ai/scripts) — import numpy as np
 - `spk-enroll.py` (nixos-ai/scripts) — """spk-enroll.py — matricula a voz do dono para o gate de audio da voz.
 - `spk-separability.py` (nixos-ai/scripts) — """spk-separability.py — mede se o gate de audio (matricula do dono) SEPARA vozes.
 - `sync-vault.sh` (nixos-ai/scripts) — Sync important docs to Obsidian vault (not everything)
   use: `Run: ./scripts/sync-vault.sh`
+- `task-screener.py` (nixos-ai/scripts) — """task-screener.py — tria as tarefas do painel e diz quais valem a pena.
 - `thermal-curve.sh` (nixos-ai/scripts) — thermal-curve.sh — Measure thermal degradation over 5 minutes of continuous inference
 - `tui-e2e.sh` (nixos-ai/scripts) — tui-e2e.sh — prova que um comando/slash do TUI roda LOCAL (zero turno de
   use: `./scripts/tui-e2e.sh --command "/jailbreak status"`
+- `uhrs-practice.py` (nixos-ai/scripts) — """uhrs-practice.py — treino do rubric de relevancia (e as primeiras labels do dono).
 - `ux-autonomy.py` (nixos-ai/scripts) — """P0 autonomy suite — 20 tarefas user-fiéis no Agent REAL (P0.4 + metas P0).
   use: `Uso: python3 ux-autonomy.py --model bonsai|qwen --out DIR [--only F1,D2]`
 - `ux-repl-session.py` (nixos-ai/scripts) — """ux-repl-session.py — usuário simulado no REPL do space (diagnóstico).
@@ -170,11 +183,12 @@ _114 tools._
 - `voice-trigger-fixtures.py` (nixos-ai/scripts) — """voice-trigger-fixtures.py — gera os parquets do trigger bench (durable).
 - `voice-up.sh` (nixos-ai/scripts) — voice-up.sh — ERGUE A LANE DE VOZ em 1 comando (sequência sancionada
   use: `USO: voice-up.sh [--router-off]`
-- `voice-watchdog.sh` (nixos-ai/scripts) — voice-watchdog.sh — verifica se a pilha de voz esta de pe, e levanta se nao.
+- `voice-watchdog.sh` (nixos-ai/scripts) — voice-watchdog.sh — verifica se a pilha de voz esta de pe e levanta se nao.
 - `voice_gate.py` (nixos-ai/scripts) — """Gate de voz: a lógica anti-alucinação do duplex-asrd, extraída verbatim.
 - `voice_text_rules.py` (nixos-ai/scripts) — """voice_text_rules.py — regras de higiene de texto do asrd, num lugar só.
 - `vram-split-sweep.py` (nixos-ai/scripts) — """Sweep de split GPU/CPU: onde o MoE (e o denso) perdem velocidade.
 - `wakeword-eval.py` (nixos-ai/scripts) — """wakeword-eval.py — mede o wakeword da casa sobre o corpus de voz.
+- `watch-updates.py` (nixos-ai/scripts) — """watch-updates.py — avisa a casa quando algo novo aparece nas fontes que importam.
 - `websearch.py` (nixos-ai/scripts) — """websearch.py — busca tavily p/ o duplex. Uso:
   use: `python3 websearch.py "query"  → RESPOSTA sintetizada + snippets"""`
 - `whisper_streaming.py` (nixos-ai/scripts) — import numpy as np

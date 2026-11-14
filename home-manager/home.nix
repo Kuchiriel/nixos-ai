@@ -483,6 +483,14 @@ in {
   home.file.".config/opencode/skills/opencode-coordination/SKILL.md".source =
     ./files/opencode/skills/opencode-coordination/SKILL.md;
 
+  # Skill de pesquisa web (14/11): agent-browser (nixpkgs) devolve a arvore de
+  # acessibilidade em TEXTO e nao rouba a tela — medido 1,85 s para open +
+  # snapshot numa pagina real. O browser do dono (jarvis_browser) fica para o
+  # que precisa do login dele; Tavily/web_search para so buscar. O corpo entra
+  # sob demanda (so name+description no prompt: progressive disclosure).
+  home.file.".config/opencode/skills/web-research/SKILL.md".source =
+    ./files/opencode/skills/web-research/SKILL.md;
+
   # opencode.json do PROJETO (~/projects) — DECLARATIVO (15/10).
   # POR QUÊ: o arquivo vivia solto na raiz do repo e um agente o encheu de
   # freellmapi + enabled_providers ['local','freellmapi'] — e a lista de
