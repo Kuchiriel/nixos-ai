@@ -243,3 +243,47 @@ conversão), e o bench pegava só `id`. Medido: as divergências saíam com
 grupo só — imprimia "0/1 = 0,0 %" com 4 itens medidos, quando o dono não
 julgara nenhum item duas vezes. Um número de teto inventado é pior do que
 nenhum: ele decide o modo de delegação. Agora o id é lido nos dois formatos.
+
+## 9. O item real da tela vira label (`scripts/uhrs-capture.py`, 14/11)
+
+O `uhrs-practice.py` só conhece os **12 itens de prática** escritos por
+mim. Mas as labels que pagam são os **50 a 100 itens de qualificação do
+UHRS**, que o dono faz na tela do navegador — e não havia caminho nenhum
+para eles virarem label. Este script fecha esse elo.
+
+**O que ele faz:** lê o texto do item (clipboard primeiro, OCR da janela
+como reserva), mostra o que leu para o dono conferir, recebe o veredito
+(digitado ou falado) e grava a label no schema.
+
+**O que ele NÃO faz:** não clica, não submete, não digita na conta de
+terceiro. O dono continua decidindo e registrando na plataforma sozinho;
+aqui só entra a label que ele já deu. (A regra do dono: automatizar
+clique/resposta em conta de terceiro continua fora.)
+
+### 9.1. O OCR da tela é frágil; o clipboard não (medido em campo)
+
+| fonte | o que aconteceu |
+|---|---|
+| OCR da tela toda | leu **1919 chars**, mas com o terminal, o waybar e as janelas ao lado — o texto do item diluído |
+| OCR da janela "DeepSeek" | leu **525 chars** e trouxe o conteúdo de **outra** janela ("SSH audit via Termix API...") |
+| clipboard (`wl-paste`) | **133 chars, texto exato** |
+
+A razão do segundo caso: `grim -g` recorta a **região da tela**, não a
+janela — o que aparece ali é o que está **por cima**. A casa já sabe
+disfarçar de tela e sabe disso (`vision._prepare_window`: foco +
+opacidade + fullscreen real, porque "grim compõe a pilha e a janela de
+trás some"). O capture usa esse caminho da casa, mas o **clipboard é a
+fonte primária**: o dono seleciona o item e aperta Ctrl+C, e o texto
+chega exato — sem erro de recognition, sem janela errada, sem competir
+com o resto da tela.
+
+### 9.2. A label gravada é a do dono
+
+`context` = o texto do item (o que o dono viu); `answer` = o que o dono
+respondeu. Nunca o gabarito — o defeito que o `uhrs-practice.py` tinha e
+que foi corrigido hoje (§7.1).
+
+**Prova de ponta a ponta (medida):** item no clipboard → veredito "2" →
+label gravada (`id=cap-...`, `answer=2`, `source=uhrs-capture`, contexto
+sem gabarito) → `judgment-dataset.py` transformou em item do formato Laya
+(`type=choice`, `answer=MODERATELY`, as 4 opções) → sem vazamento.
