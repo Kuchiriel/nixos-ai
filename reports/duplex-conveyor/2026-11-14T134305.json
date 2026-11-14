@@ -1,0 +1,88 @@
+{
+  "ts": "2026-11-14T13:43:05",
+  "passed": 8,
+  "total": 8,
+  "rate": 1.0,
+  "cases": [
+    {
+      "id": "horas",
+      "text": "Jarvis, que horas são?",
+      "class": "RESPOND",
+      "key": "hora",
+      "transcript": "Jarvis, que horas são?",
+      "pass": true,
+      "n_segments": 1,
+      "ms": 495.8
+    },
+    {
+      "id": "brilho",
+      "text": "Jarvis, muda o brilho para cem",
+      "class": "RESPOND",
+      "key": "brilh",
+      "transcript": "Jarvis muda o brilho para 100.",
+      "pass": true,
+      "n_segments": 1,
+      "ms": 389.8
+    },
+    {
+      "id": "mae",
+      "text": "Jarvis, me lembra de ligar para mãe amanhã",
+      "class": "RESPOND",
+      "key": "mae",
+      "transcript": "Jarvis, me lembra de ligar para mãe amanhã.",
+      "pass": true,
+      "n_segments": 1,
+      "ms": 414.9
+    },
+    {
+      "id": "reuniao",
+      "text": "Jarvis, tem reunião amanhã de manhã?",
+      "class": "RESPOND",
+      "key": "reuniao",
+      "transcript": "Jarvis tem reunião amanhã de manhã.",
+      "pass": true,
+      "n_segments": 1,
+      "ms": 402.4
+    },
+    {
+      "id": "question",
+      "text": "Jarvis, você ouviu o que eu falei?",
+      "class": "RESPOND",
+      "key": "ou",
+      "transcript": "Jarvis, você ouviu o que eu falei.",
+      "pass": true,
+      "n_segments": 1,
+      "ms": 400.4
+    },
+    {
+      "id": "jornal",
+      "text": "Hoje no jornal de amanhã",
+      "class": "SILENCE",
+      "key": "jornal",
+      "transcript": "Hoje no Jornal de Amanhã.",
+      "pass": true,
+      "n_segments": 1,
+      "ms": 380.7
+    },
+    {
+      "id": "futebol",
+      "text": "O Flamengo ganhou de três a zero no último jogo",
+      "class": "SILENCE",
+      "key": "ganhou",
+      "transcript": "O Flamengo ganhou de 3 a 0 no último jogo.",
+      "pass": true,
+      "n_segments": 1,
+      "ms": 432.7
+    },
+    {
+      "id": "vida",
+      "text": "Jarvis, qual o significado da vida?",
+      "class": "RESPOND",
+      "key": "vida",
+      "transcript": "Jarvis, qual o significado da vida?",
+      "pass": true,
+      "n_segments": 1,
+      "ms": 404.2
+    }
+  ]
+}

@@ -376,3 +376,32 @@ resposta é o lever que corta parede perceber; pipeline já st streaming.
 Piper + turbo + silero + LoRA: nada a ganhar sem trocar qualidade/hardware.
 Pipeline usa streaming LLM->ponte de sentenças->piper -> aplay; nada de
 flush infinito, nada de fila estranha.
+
+## 2026-11-14 esteira automatizada ASR->texto: 7/8 (88%) — report reports/duplex-conveyor/2026-11-14T134146.json
+
+## 2026-11-14 esteira automatizada ASR->texto: 8/8 (100%) — report reports/duplex-conveyor/2026-11-14T134305.json
+
+## 2026-11-14 esteira automatizada ASR->texto: 8/8 (100%) — report reports/duplex-conveyor/2026-11-14T134355.json
+
+## 2026-11-14 esteira automatizada ASR->texto: 8/8 (100%) — report reports/duplex-conveyor/2026-11-14T140518.json
+
+## 2026-11-14 14:06 — A/B de latência executada e medida component-by-component
+
+O dono pediu "a/b em tudo, quanto menor a latência de cada componente".
+Medições MAS JEITO E VEREDITO de cada candidato:
+
+| # | A/B | Resultado medido | Veredito |
+|---|---|---|---|
+| 1 | Whisper turbo-q5_0 (GPU, atual) vs turbo fp16 | q5_0: 45s de host runtime, 8/8 perfeitas; turbo fp16: CUDA OOM (5853 MiB livres, precisa de ~1.6 GiB); no CPU: ~20-30s de inferência por fala (não tempo real) | MANTER turbo-q5_0 |
+| 2 | Whisper small (CPU) | 105s de runtime, 8/8, lat/mágica ~10s/fala em CPU | REJEITADO (qualidade ok, velocidade pior em sessão do que q5_0) |
+| 3 | Silero VAD endpoint gap 0.70 0.55 0.45 | Todos dão 2.00s medidos: o silero fecha pelo próprio evento 'end'; o timer de 0.70 só é um fallback que nunca dispara aqui | MANTER 0.70 |
+| 4 | Llama prefill cache hit | warm prompt 913 tokens com cache_prompt=true: 60ms (vs 457ms cold) — warm corre perfeito; ctx 20480 -> 8192 não corta latência, só memória | MANTER 20480 (sem rebuild) |
+| 5 | Piper vs kokoro (fator realtime) | Piper 0.043x; kokoro ~0.5-2s/frase (documentado) | Piper mantenido; kokoro só CLI |
+| 6 | Whisper initial_prompt trivial vs priming | trivial 'Jarvis': 7/8; sem hint: 8/8 com 'Já vês'; priming com 4 frases-chave: 8/8 exato com 'Jarvis, que horas são?' reproduzido exato | priming no cliente (feito); conveyor default alinhado (feito) |
+| 7 | barge cut 500 -> 4000 ou silero fechado | cortes falsos de 13h26:24 (rms 3948, corr 0.07) e 13h26:47 (rms 920) engolidos | fix c2056840, mordida atual mantida |
+| 8 | Cpu-diff ctx 8192 vs 20480 como opção de rebuild | gen/pry não se mexe (small prompt + cache); memory-only delta | NÃO rebuildar |
+
+Conclusão honesta: o gargalo prático percebido na sessão do dono NÃO é nenhum
+componente isolado; é o stream llama + respostas longas + a própria fila de
+palavra na auditiva do dono. Terminal da avaliação: tudo medido, nada mexido
+sem evidência. Diário das medições: reports/duplex-conveyor/2026-11-14T*.json.

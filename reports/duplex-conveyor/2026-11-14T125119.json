@@ -1,0 +1,88 @@
+{
+  "ts": "2026-11-14T12:51:19",
+  "passed": 0,
+  "total": 8,
+  "rate": 0.0,
+  "cases": [
+    {
+      "id": "horas",
+      "text": "Jarvis, que horas são?",
+      "class": "RESPOND",
+      "key": "hora",
+      "transcript": "",
+      "pass": false,
+      "n_segments": 0,
+      "ms": 0
+    },
+    {
+      "id": "brilho",
+      "text": "Jarvis, muda o brilho para cem",
+      "class": "RESPOND",
+      "key": "brilh",
+      "transcript": "",
+      "pass": false,
+      "n_segments": 0,
+      "ms": 0
+    },
+    {
+      "id": "mae",
+      "text": "Jarvis, me lembra de ligar para mãe amanhã",
+      "class": "RESPOND",
+      "key": "mae",
+      "transcript": "",
+      "pass": false,
+      "n_segments": 0,
+      "ms": 0
+    },
+    {
+      "id": "reuniao",
+      "text": "Jarvis, tem reunião amanhã de manhã?",
+      "class": "RESPOND",
+      "key": "reuniao",
+      "transcript": "",
+      "pass": false,
+      "n_segments": 0,
+      "ms": 0
+    },
+    {
+      "id": "question",
+      "text": "Jarvis, você ouviu o que eu falei?",
+      "class": "RESPOND",
+      "key": "ou",
+      "transcript": "",
+      "pass": false,
+      "n_segments": 0,
+      "ms": 0
+    },
+    {
+      "id": "jornal",
+      "text": "Hoje no jornal de amanhã",
+      "class": "SILENCE",
+      "key": "jornal",
+      "transcript": "",
+      "pass": false,
+      "n_segments": 0,
+      "ms": 0
+    },
+    {
+      "id": "futebol",
+      "text": "O Flamengo ganhou de três a zero no último jogo",
+      "class": "SILENCE",
+      "key": "ganhou",
+      "transcript": "",
+      "pass": false,
+      "n_segments": 0,
+      "ms": 0
+    },
+    {
+      "id": "vida",
+      "text": "Jarvis, qual o significado da vida?",
+      "class": "RESPOND",
+      "key": "vida",
+      "transcript": "",
+      "pass": false,
+      "n_segments": 0,
+      "ms": 0
+    }
+  ]
+}
