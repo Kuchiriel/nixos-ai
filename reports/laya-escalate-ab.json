@@ -1,0 +1,573 @@
+{
+  "keywords": {
+    "name": "keywords",
+    "acc": 0.78125,
+    "tpr": 0.6111111111111112,
+    "fpr": 0.0,
+    "tp": 11,
+    "fn": 7,
+    "fp": 0,
+    "tn": 14,
+    "rows": [
+      {
+        "id": "p01",
+        "text": "toca uma musica",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p02",
+        "text": "que horas sao",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p03",
+        "text": "abre o Chrome pra mim",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p04",
+        "text": "desliga a televisao",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p05",
+        "text": "passa muisica do Blink 182",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p06",
+        "text": "ativa o scanner da impressora",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p07",
+        "text": "qual o clima de amanha",
+        "expected": true,
+        "got": true
+      },
+      {
+        "id": "p08",
+        "text": "qual foi o resultado do jogo do Flamengo",
+        "expected": true,
+        "got": true
+      },
+      {
+        "id": "p09",
+        "text": "quem ganhou a Copa de 2026",
+        "expected": true,
+        "got": true
+      },
+      {
+        "id": "p10",
+        "text": "qual a cotacao do dolar hoje",
+        "expected": true,
+        "got": true
+      },
+      {
+        "id": "p11",
+        "text": "preciso de um plano arquitetural para o backend",
+        "expected": true,
+        "got": true
+      },
+      {
+        "id": "p12",
+        "text": "escreva um codigo em python para ler um CSV gigante",
+        "expected": true,
+        "got": true
+      },
+      {
+        "id": "p13",
+        "text": "por que a memoria da maquina estourando",
+        "expected": true,
+        "got": true
+      },
+      {
+        "id": "p14",
+        "text": "explica como funciona lazy evaluation sem recursao",
+        "expected": true,
+        "got": true
+      },
+      {
+        "id": "p15",
+        "text": "qual é o sentido da vida",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p16",
+        "text": "liga a luz do quarto por favor",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p17",
+        "text": "o que voce acha desse filme que eu vi ontem",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p18",
+        "text": "voce lembra do meu aniversario",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p19",
+        "text": "quanto da para pagar de imposto numa operacao com perdas",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p20",
+        "text": "qual a capital da Franca",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p21",
+        "text": "monta um banco distribuido multi-region com consistencia",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p22",
+        "text": "qual a previsao de hoje para amanha",
+        "expected": true,
+        "got": true
+      },
+      {
+        "id": "p23",
+        "text": "faz o deploy do projeto agora",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p24",
+        "text": "como vai o dono",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p25",
+        "text": "me diz tudo sobre a Forbes",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p26",
+        "text": "qual vinho fica melhor com bacalhau",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p27",
+        "text": "quanto é 2 mais 2",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p28",
+        "text": "qual a cotacao do bitcoin hoje",
+        "expected": true,
+        "got": true
+      },
+      {
+        "id": "p29",
+        "text": "pg_ctl / pg_dump como funciona um backup incremental",
+        "expected": true,
+        "got": true
+      },
+      {
+        "id": "p30",
+        "text": "uma corrida de project managers, qual velocidade de chegada",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p31",
+        "text": "Research táticas de fertilização de café conilon pra baixar desidratação",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p32",
+        "text": "Poem the sea",
+        "expected": false,
+        "got": false
+      }
+    ]
+  },
+  "laya": {
+    "name": "laya",
+    "acc": 0.5,
+    "tpr": 0.1111111111111111,
+    "fpr": 0.0,
+    "tp": 2,
+    "fn": 16,
+    "fp": 0,
+    "tn": 14,
+    "rows": [
+      {
+        "id": "p01",
+        "text": "toca uma musica",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p02",
+        "text": "que horas sao",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p03",
+        "text": "abre o Chrome pra mim",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p04",
+        "text": "desliga a televisao",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p05",
+        "text": "passa muisica do Blink 182",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p06",
+        "text": "ativa o scanner da impressora",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p07",
+        "text": "qual o clima de amanha",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p08",
+        "text": "qual foi o resultado do jogo do Flamengo",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p09",
+        "text": "quem ganhou a Copa de 2026",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p10",
+        "text": "qual a cotacao do dolar hoje",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p11",
+        "text": "preciso de um plano arquitetural para o backend",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p12",
+        "text": "escreva um codigo em python para ler um CSV gigante",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p13",
+        "text": "por que a memoria da maquina estourando",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p14",
+        "text": "explica como funciona lazy evaluation sem recursao",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p15",
+        "text": "qual é o sentido da vida",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p16",
+        "text": "liga a luz do quarto por favor",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p17",
+        "text": "o que voce acha desse filme que eu vi ontem",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p18",
+        "text": "voce lembra do meu aniversario",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p19",
+        "text": "quanto da para pagar de imposto numa operacao com perdas",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p20",
+        "text": "qual a capital da Franca",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p21",
+        "text": "monta um banco distribuido multi-region com consistencia",
+        "expected": true,
+        "got": true
+      },
+      {
+        "id": "p22",
+        "text": "qual a previsao de hoje para amanha",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p23",
+        "text": "faz o deploy do projeto agora",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p24",
+        "text": "como vai o dono",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p25",
+        "text": "me diz tudo sobre a Forbes",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p26",
+        "text": "qual vinho fica melhor com bacalhau",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p27",
+        "text": "quanto é 2 mais 2",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p28",
+        "text": "qual a cotacao do bitcoin hoje",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p29",
+        "text": "pg_ctl / pg_dump como funciona um backup incremental",
+        "expected": true,
+        "got": false
+      },
+      {
+        "id": "p30",
+        "text": "uma corrida de project managers, qual velocidade de chegada",
+        "expected": false,
+        "got": false
+      },
+      {
+        "id": "p31",
+        "text": "Research táticas de fertilização de café conilon pra baixar desidratação",
+        "expected": true,
+        "got": true
+      },
+      {
+        "id": "p32",
+        "text": "Poem the sea",
+        "expected": false,
+        "got": false
+      }
+    ]
+  },
+  "probes": [
+    [
+      "p01",
+      "toca uma musica",
+      false
+    ],
+    [
+      "p02",
+      "que horas sao",
+      false
+    ],
+    [
+      "p03",
+      "abre o Chrome pra mim",
+      false
+    ],
+    [
+      "p04",
+      "desliga a televisao",
+      false
+    ],
+    [
+      "p05",
+      "passa muisica do Blink 182",
+      false
+    ],
+    [
+      "p06",
+      "ativa o scanner da impressora",
+      false
+    ],
+    [
+      "p07",
+      "qual o clima de amanha",
+      true
+    ],
+    [
+      "p08",
+      "qual foi o resultado do jogo do Flamengo",
+      true
+    ],
+    [
+      "p09",
+      "quem ganhou a Copa de 2026",
+      true
+    ],
+    [
+      "p10",
+      "qual a cotacao do dolar hoje",
+      true
+    ],
+    [
+      "p11",
+      "preciso de um plano arquitetural para o backend",
+      true
+    ],
+    [
+      "p12",
+      "escreva um codigo em python para ler um CSV gigante",
+      true
+    ],
+    [
+      "p13",
+      "por que a memoria da maquina estourando",
+      true
+    ],
+    [
+      "p14",
+      "explica como funciona lazy evaluation sem recursao",
+      true
+    ],
+    [
+      "p15",
+      "qual é o sentido da vida",
+      true
+    ],
+    [
+      "p16",
+      "liga a luz do quarto por favor",
+      false
+    ],
+    [
+      "p17",
+      "o que voce acha desse filme que eu vi ontem",
+      false
+    ],
+    [
+      "p18",
+      "voce lembra do meu aniversario",
+      false
+    ],
+    [
+      "p19",
+      "quanto da para pagar de imposto numa operacao com perdas",
+      true
+    ],
+    [
+      "p20",
+      "qual a capital da Franca",
+      false
+    ],
+    [
+      "p21",
+      "monta um banco distribuido multi-region com consistencia",
+      true
+    ],
+    [
+      "p22",
+      "qual a previsao de hoje para amanha",
+      true
+    ],
+    [
+      "p23",
+      "faz o deploy do projeto agora",
+      true
+    ],
+    [
+      "p24",
+      "como vai o dono",
+      false
+    ],
+    [
+      "p25",
+      "me diz tudo sobre a Forbes",
+      true
+    ],
+    [
+      "p26",
+      "qual vinho fica melhor com bacalhau",
+      true
+    ],
+    [
+      "p27",
+      "quanto é 2 mais 2",
+      false
+    ],
+    [
+      "p28",
+      "qual a cotacao do bitcoin hoje",
+      true
+    ],
+    [
+      "p29",
+      "pg_ctl / pg_dump como funciona um backup incremental",
+      true
+    ],
+    [
+      "p30",
+      "uma corrida de project managers, qual velocidade de chegada",
+      false
+    ],
+    [
+      "p31",
+      "Research táticas de fertilização de café conilon pra baixar desidratação",
+      true
+    ],
+    [
+      "p32",
+      "Poem the sea",
+      false
+    ]
+  ],
+  "both_ok": 14
+}
