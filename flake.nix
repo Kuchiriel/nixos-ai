@@ -339,6 +339,14 @@
           pandoc
           tesseract
           poppler-utils
+          # (14/11, sweep-2026-11) pdfplumber + pytesseract: a skill de PDF
+          # do Anthropic (importada, drop-in, o mesmo frontmatter da casa) usa
+          # os dois nos scripts dela, e sem eles a skill entrava morta: os
+          # scripts de extrair formulario e de OCR nao rodavam. Medido: antes
+          # desta linha, `import pdfplumber` falhava no python da casa.
+          python313Packages.pdfplumber
+          python313Packages.pytesseract
+          python313Packages.pypdf
           bind.dnsutils # dig/host/nslookup (DNS: registro.br, SPF/DKIM/DMARC)
 
           # Nomes corrigidos também no devShell para evitar quebra de variáveis

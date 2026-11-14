@@ -31,12 +31,42 @@ chaves na máquina ✓). O app de chat é separado, em 127.0.0.1:5199 ✓.
 | licença | **Apache-2.0** ✓ (22.677 stars ✓, TypeScript ✓, criado em 11/08/2026 ✓) |
 | "bot box" (computador isolado por bot) | `off (not-cloud)` ✓ |
 
-**O achado que decide:** o driver **`opencodeGo`** existe **no código open source** ✓
-(`packages/phone-protocol/src/limit-reset.ts` traz `driver: "claude" | "codex" |
-"grok" | "opencode"` ✓, e os e2e da própria OSS configuram `config.instances.opencodeGo`
-✓). Há também `customAcp` ✓ e `commandCodeAgent` ✓, que são drivers genéricos de CLI ✓.
-Ou seja: **a casa pode ter a UX do GrokBot com os agentes que ela já tem** (sessões do
-opencode ✓, que a casa já entrega por API ✓ via `agent-api.py` ✓) **sem portar nada** ✓.
+**O achado que decide, corrigido depois de testar (era aqui que eu estava otimista):**
+o driver **`opencodeGo`** existe no código open source ✓ (`limit-reset.ts` traz
+`driver: "claude" | "codex" | "grok" | "opencode"` ✓), mas ele é o serviço
+**cloud/Go** do opencode ✓ (pede **API key** ✓, `server/cloud-connections.ts` ✓) —
+**não** o opencode local da casa ✓. Dizer que a casa "já pode dirigir os agentes sem
+portar nada" com esse driver era afirmação sem prova ✗.
+
+**A ponte que serve para o opencode LOCAL é outra:** o driver **`customAcp`** ✓
+(`server/drivers/acp/custom.ts` ✓) aceita **qualquer CLI que fale ACP por stdio** ✓ e o
+`cli` é o **comando inteiro** ✓ (`"npx -y some-agent acp"` funciona ✓), sem passo de
+autenticação ✓ ("the CLI is signed in from a terminal" ✓ — o opencode da casa está ✓).
+E o opencode da casa **fala ACP** ✓ (`opencode acp` ✓, medido no `--help` ✓).
+
+Configuração que a casa usaria (8 linhas em `~/.openmausbot/config.json` ✓):
+
+```json
+{"instances": {"opencodeLocal": {
+  "driver": "customAcp",
+  "displayName": "OpenCode da casa (ACP)",
+  "config": {"cli": "/etc/profiles/per-user-nixos/bin/opencode acp", "steer": true}}}}
+```
+
+**O que ficou provado e o que não ficou (honestidade da avaliação):**
+
+| afirmação | estado |
+|---|---|
+| o harness server sobe nesta máquina ✓ | **provado** ✓ (log ✓, API 200 em três rotas ✓) |
+| a edição é open source ✓ e o driver `opencodeGo` é o serviço cloud ✓ | **provado** ✓ (código ✓) |
+| o `customAcp` aceita o `opencode acp` da casa ✓ | **provado no código** ✓ (o `cli` é o comando inteiro ✓) e o opencode tem o subcomando ✓ |
+| um bot opencode local **responde** numa conversa dentro do app | **NÃO provado aqui** ✗: a segunda subida pegou o *data-dir lease* do primeiro servidor ✓ e a terceira não levantou a tempo ✓. Fica como o próximo passo, não como fait accompli ✓ |
+
+Então a resposta honesta à dúvida "o opencode que usamos é comparável à UX do GrokBot":
+**a UX é comparável; a ponte é de código aberto e genérica; mas eu ainda não fiz um
+turno de conversa de verdade por ela** ✓. O que é garantido é o resto: o harness sobe,
+a API responde, o formato dos dados é o do GrokBot ✓ (bot, thread, task ✓, `direct-routes.ts` ✓),
+e o driver genérico existe ✓.
 
 **O que não bate (o que falta para a casa):**
 - O **app** é Electron/macOS-first ✓ (há .deb/AppImage ✓ e o web app ✓, então o Linux
@@ -122,7 +152,7 @@ exatamente o que a RAG da casa faz com as coleções ✓ (`code`/`memories`/`boo
 | monitorar novidades (YouTube ✓, RSS ✓, HN ✓, releases ✓) filtradas | `nixos-ai/scripts/watch-updates.py` ✓ + `scripts/watch-updates-sources.json` ✓ | testado ✓ (dry-run ✓: pegou Cloudflare e as releases do opencode ✓) |
 | ler/agir em página web em texto ✓ | skill `web-research` ✓ (agent-browser do nixpkgs ✓) | testado ✓ (1,85 s ✓) |
 | pele de chat do GrokBot sobre os agentes da casa ✓ | OpenMausBot ✓ (Apache-2.0 ✓, harness sobe aqui ✓, driver `opencodeGo` ✓) | boot testado ✓, falta declarar a instância ✓ |
-| skills de documento do Anthropic ✓ | drop-in ✓ (mesmo formato ✓) | candidatos ✓, decisão do dono ✓ |
+| skills de documento do Anthropic ✓ | drop-in ✓ (mesmo formato ✓) | **importadas e testadas** ✓ (`pdf` ✓, `doc-coauthoring` ✓, `skill-creator` ✓; a de PDF precisou de `pdfplumber` ✓, `pytesseract` ✓ e `pypdf` ✓ no devShell ✓, senão entrava morta ✓) |
 
 O registro no **meta routing** (é o que faz as agentes saberem que isso existe ✓, sem
 token ✓): o `AGENTS.md` ganhou a linha de Knowledge (vídeo e novidades ✓) e o item da
@@ -131,9 +161,10 @@ no prompt ✓, progressive disclosure ✓).
 
 ## 6. O que eu recomendo, em ordem
 
-1. **Instância `opencodeGo` no OpenMausBot** ✓: o harness já sobe ✓, o driver existe ✓
-   na OSS ✓, e o ganho é a UX de falar com um agente como contato ✓. Custo: um serviço
-   Node ✓ + o app web ✓.
+1. **Um turno de conversa de verdade pelo `customAcp` com o opencode da casa** ✓
+   (não o `opencodeGo` ✓, que é o serviço cloud ✓): o harness sobe ✓, o driver genérico
+   existe ✓, o opencode fala ACP ✓; falta **fazer um bot responder** ✓ e medir a
+   latência e a qualidade do turno ✓. Custo: um serviço Node ✓ + o app web ✓.
 2. **`doc-coauthoring` e `skill-creator` do Anthropic** ✓: drop-in ✓, formato idêntico ✓,
    e a casa usa as duas coisas todo dia ✓ (doc ✓ e skill ✓).
 3. **O monitor de novidades no ar** ✓: um timer de user ✓ (o padrão da casa ✓) chamando
@@ -153,3 +184,20 @@ nix run nixpkgs#agent-browser -- open "https://github.com/anthropics/skills" && 
 
 A transcrição está em `~/Books/videos/pnZh5PAF3VE/` ✓ e indexada no RAG ✓ (coleção
 `books` ✓).
+
+## 8. As dores que apareceram no caminho (anotadas, porque a casa cobra)
+
+| dor | medida | como ficou |
+|---|---|---|
+| **429 do YouTube** nas legendas ✓ | o yt-dlp falha em "Unable to download video subtitles" ✓ | contornado: metadados pelo yt-dlp ✓ + legenda no endpoint timedtext ✓ (retry e user-agent ✓) |
+| **`pnpm` não existe na casa** ✓ | `corepack enable` não pegou ✓ | caminho que funcionou: `npx --yes pnpm@10.15.0` ✓ (sem instalar global ✓) |
+| **a skill de PDF entrava morta** ✓ | `import pdfplumber` falhava ✓; depois `pypdf` também ✓ | `pdfplumber` ✓, `pytesseract` ✓ e `pypdf` ✓ no devShell ✓, e um PDF de teste com campo de formulário foi extraído de verdade ✓ |
+| **a segunda subida do harness pegou o data-dir lease** ✓ | "OpenMausBot is already using this data directory" ✓ | derrubar o servidor anterior antes de subir outro ✓ |
+| **o `opencodeGo` é o serviço cloud, não o opencode local** ✓ | `server/cloud-connections.ts` pede API key ✓ | a ponte local é o `customAcp` ✓, e o turno de conversa ainda não foi provado ✓ |
+| **eu afirmei que dava para dirigir os agentes da casa "sem portar nada"** ✓ | afirmação minha, sem teste ✓ | **corrigido no doc** ✓: o que é provado está numa tabela ✓ e o que falta está marcado como falta ✓ |
+| **o roster é por máquina** ✓ | `agent-msg.sh` recusava o agente do celular ✓ | `--to <lane>` publica no bus ✓ (prova: `termux/vpnsec` recebeu ✓) |
+| **as mensagens saíam assinadas pelo agente errado** ✓ | a janela do opencode tem endereço vazio ✓ | o "eu" passa a ser achado pela sessão ✓ |
+
+O padrão de todas: **capacidade que a casa não exercita na prática é herança, não
+base** ✓. Por isso cada item acima tem uma medida, e o que não deu para medir está
+marcado como não medido ✓.

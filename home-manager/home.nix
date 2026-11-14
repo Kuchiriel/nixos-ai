@@ -483,6 +483,19 @@ in {
   home.file.".config/opencode/skills/opencode-coordination/SKILL.md".source =
     ./files/opencode/skills/opencode-coordination/SKILL.md;
 
+  # Skills do Anthropic importadas (14/11): o formato e IDENTICO ao da casa
+  # (frontmatter name+description+license), entao sao drop-in. A A/B escolheu
+  # estas tres porque a casa JA TEM o resto (mcp-development, sandbox-qa,
+  # claude-api, internal-comms) e importar seria duplicata. A de PDF precisou
+  # de pdfplumber, pytesseract e pypdf no devShell (medido: sem os tres os
+  # scripts dela nem rodavam, ou seja a skill entrava morta).
+  home.file.".config/opencode/skills/pdf".source =
+    ./files/opencode/skills/pdf;
+  home.file.".config/opencode/skills/doc-coauthoring".source =
+    ./files/opencode/skills/doc-coauthoring;
+  home.file.".config/opencode/skills/skill-creator".source =
+    ./files/opencode/skills/skill-creator;
+
   # Skill de pesquisa web (14/11): agent-browser (nixpkgs) devolve a arvore de
   # acessibilidade em TEXTO e nao rouba a tela — medido 1,85 s para open +
   # snapshot numa pagina real. O browser do dono (jarvis_browser) fica para o
