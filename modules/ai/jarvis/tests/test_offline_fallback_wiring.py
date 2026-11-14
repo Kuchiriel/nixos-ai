@@ -28,7 +28,20 @@ def test_web_search_sem_chave_cai_no_offline(monkeypatch):
 
 
 def test_web_search_com_chave_rejeitada_cai_no_offline(monkeypatch):
+    """O HTTP e MOCKADO: o teste nao pode depender da rede (no sandbox o
+    Tavily dava timeout, aqui dava 401, e o teste mudava de resposta)."""
     _com_chave_invalida(monkeypatch)
+
+    class _Resp:
+        status_code = 401
+        text = "unauthorized"
+
+    class _FakeRequests:
+        @staticmethod
+        def post(*a, **k):
+            return _Resp()
+
+    monkeypatch.setitem(__import__("sys").modules, "requests", _FakeRequests)
     out = ws.web_search("water treatment emergency")
     assert not out.startswith("ERROR"), out[:200]
     assert "fonte: corpus offline" in out
@@ -54,8 +67,11 @@ def test_offline_e_anexado_na_busca_semantica(monkeypatch):
     monkeypatch.setattr("jarvis.core.rag.HybridSearch", _FakeHybrid)
     out = devtools.semantic_search("qualquer coisa", top_k=2)
     assert out.get("ok"), out
-    sources = [r.get("source") for r in out.get("results", [])]
-    assert "offline/NOMAD" in sources, sources
+    # o offline vem num campo SEPARADO: o contrato de retorno nao muda
+    # (quem consome conta os hits do HybridSearch)
+    assert out.get("offline"), out
+    assert out.get("offline_source") == "offline/NOMAD", out
+    assert all(r.get("source") != "offline/NOMAD" for r in out.get("results", []))
 
 
 def test_busca_semantica_nao_quebra_se_o_offline_falhar(monkeypatch):

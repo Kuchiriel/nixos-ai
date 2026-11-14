@@ -723,20 +723,19 @@ def semantic_search(query: str, top_k: int = 5) -> dict[str, Any]:
             })
 
         # (14/11, sweep-2026-11) o corpus offline (N.O.M.A.D) como DADO
-        # ADICIONAL: o semantico covers code/memories, o offline cobre
-        # sobrevivencia/preparacao. Sai marcado, para o agente saber de
-        # onde veio cada trecho. Se o offline nao responder, a busca
-        # semantica segue como estava (nunca quebra por causa disso).
+        # ADICIONAL: o semantico cobre code/memories e o offline cobre
+        # sobrevivencia/preparacao. Vai num campo SEPARADO (`offline`), e nao
+        # na lista `results`: o contrato de retorno deste modulo promete
+        # "contrato de retorno preservado" e quem consome conta os hits do
+        # HybridSearch. Se o offline nao responder, a busca semantica segue
+        # exatamente como estava (adicional, nunca dependencia).
+        offline = ""
         try:
             from jarvis.core.offline import offline_search
 
             _off = offline_search(query, max_results=3)
             if _off and not _off.startswith(("ERROR", "NO_SOURCE")):
-                formatted.append({
-                    "text": _off[:600],
-                    "score": 0.0,
-                    "source": "offline/NOMAD",
-                })
+                offline = _off[:600]
         except Exception:  # noqa: BLE001
             pass
 
@@ -745,6 +744,8 @@ def semantic_search(query: str, top_k: int = 5) -> dict[str, Any]:
             "results": formatted,
             "total": len(formatted),
             "query": query,
+            "offline": offline,
+            "offline_source": "offline/NOMAD" if offline else "",
         }
     except Exception as e:
         err_type = type(e).__name__

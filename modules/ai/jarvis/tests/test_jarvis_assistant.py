@@ -62,8 +62,21 @@ class TestWebSearch:
         monkeypatch.delenv("TAVILY_API_KEY", raising=False)
         monkeypatch.setitem(_keys._SOURCES["tavily"], "files", [])
 
-    def test_no_key_gives_clear_error(self, monkeypatch):
+    def test_no_key_falls_back_to_the_offline_corpus(self, monkeypatch):
+        """(14/11) sem chave do Tavily o contrato novo e o FALLBACK offline.
+
+        O ERROR so acontece quando o corpus offline tambem nao responde, e
+        ai a mensagem continua dizendo o que configurar.
+        """
         assert not websearch.has_key()
+        out = websearch.web_search("agua contaminada emergencia")
+        assert "fonte: corpus offline" in out
+
+    def test_no_key_and_no_offline_gives_clear_error(self, monkeypatch):
+        import jarvis.core.offline as offline_mod
+
+        monkeypatch.setattr(offline_mod, "offline_search",
+                            lambda *a, **k: "NO_SOURCE")
         out = websearch.web_search("teste")
         assert out.startswith("ERROR:")
         assert "TAVILY_API_KEY" in out
