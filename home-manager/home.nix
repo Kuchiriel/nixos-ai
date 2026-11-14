@@ -206,7 +206,8 @@ in {
     ./modules/session-snapshot.nix
     # gate de taxa do free tier NVIDIA (fila + retry de 429)
     ./modules/services/nv-gate.nix
-    # higiene dos artefatos do harness mt5 (logs de 263 MB/run -> truncados + rotacionados)
+    # hardgate p/ o duplex (gate canario + bench semanal)
+    ./modules/services/duplex-cycle.nix
     ./modules/services/rotate-mt5-logs.nix
     ./modules/ai
     ./modules/services/jarvis-wakeword.nix
