@@ -3127,7 +3127,12 @@ def main():
                     _seg_recent = bool(
                         getattr(asr, "last_seg_ts", 0.0)
                         and (time.monotonic() - asr.last_seg_ts) < 1.2)
-                    _cut_ok = _seg_recent or rrms >= 500
+                    # (14/11, MEDIDO: rms=3948 e 920 com corr<0.55, sem
+                    # segmento fechado — o duplex matou o TTS sob narração de
+                    # vídeo). Só corta por rrms puro se o pico for de VOZ DE
+                    # PROXIMIDADE (o dono perto do mic no medido hoje: 1000-16000);
+                    # abaixo disso exige um segmento de fala ter fechado (silero).
+                    _cut_ok = _seg_recent or rrms >= 4000
                     if len(ECHO_FLOOR) >= 8:
                         barge_cut["floor"] = _floor
                     if _corr >= 0.55:
