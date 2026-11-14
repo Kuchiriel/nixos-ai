@@ -155,12 +155,20 @@ TARGETED_SYS = (
     "ação como feita; NUNCA invente comando de shell para simular."
 )
 
+SOLO_SYS = BASELINE_SYS + (
+    "\n\n=== FUEL DE FALA ===\n"
+    "UMA frase apenas, no máximo 25 palavras, prosodia falada natural. "
+    "Nada de repite a pergunta. Nada de 'olha só' ou 'bem então'. "
+    "Termine sempre com ponto final."
+)
+
 VARIANTS = {
     "baseline": (BASELINE_SYS, 0.4),
     "compact":  (COMPACT_SYS, 0.0),
     "compact04": (COMPACT_SYS, 0.4),
     "baseline0": (BASELINE_SYS, 0.0),
     "targeted": (TARGETED_SYS, 0.4),
+    "solo":     (SOLO_SYS, 0.4),
 }
 
 # ---------------------------------------------------------------- checks
