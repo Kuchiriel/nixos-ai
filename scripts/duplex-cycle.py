@@ -41,7 +41,7 @@ def _run(cmd, cwd=None, timeout=600, env=None) -> tuple[int, str]:
 
 
 def step_sweep(days: int) -> dict:
-    rc, out = _run(["python3", str(REPO / "scripts" / "duplex-sweep.py"), "--days", str(days)])
+    rc, out = _run([sys.executable, str(REPO / "scripts" / "duplex-sweep.py"), "--days", str(days)])
     m = re.findall(r"^\[sweep\] ([a-z_0-9]+)\s+(\d+)", out, re.M)
     counts = {k.strip(): int(v) for k, v in m}
     print("[sweep]", counts if counts else out[-400:])
@@ -76,7 +76,7 @@ def step_bench(script: str) -> dict:
     env = dict(os.environ,
                JARVIS_BENCH_BASE=base,
                LD_LIBRARY_PATH=os.popen(
-                   f"python3 {REPO}/scripts/asrd_env.py --print").read().strip())
+                   f"{sys.executable} {REPO}/scripts/asrd_env.py --print").read().strip())
     rc, out = _run([
         "/home/nixos/projects/karaok/.venv/bin/python3",
         str(REPO / "benchmarks" / "voice" / script),
@@ -88,7 +88,7 @@ def step_bench(script: str) -> dict:
 
 def step_agent() -> dict:
     env = dict(os.environ, LD_LIBRARY_PATH=os.popen(
-        "python3 " + str(REPO) + "/scripts/asrd_env.py --print").read().strip())
+        f"{sys.executable} {REPO}/scripts/asrd_env.py --print").read().strip())
     rc, out = _run([
         "/home/nixos/projects/karaok/.venv/bin/python3",
         str(REPO / "benchmarks" / "voice" / "bench_agent.py"), "--variant", "baseline",
