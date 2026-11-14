@@ -170,10 +170,11 @@ def mic_source() -> str:
         except (OSError, subprocess.SubprocessError):
             nodes = ""
         candidates = {
-            "noisy": ["rnnoise_source", "echo_cancel_source", MIC_SOURCE_FALLBACK],
+            "noisy": ["echo_cancel_source", "rnnoise_source", MIC_SOURCE_FALLBACK],
             "hard":  ["rnnoise_hard_source", "rnnoise_source", "echo_cancel_source"],
             "raw":   [MIC_SOURCE_FALLBACK],
-        }.get(prof, ["rnnoise_source", "echo_cancel_source", MIC_SOURCE_FALLBACK])
+            "aec":   ["echo_cancel_source"],
+        }.get(prof, ["echo_cancel_source", "rnnoise_source", MIC_SOURCE_FALLBACK])
         chosen = None
         for c in candidates:
             if f'node.name = "{c}"' in nodes:
