@@ -197,6 +197,54 @@ def build(out_dir, heldout_path, seed=7, test_ratio=0.25, calib=8):
     return out, overlaps
 
 
+def make_heldout(labels, n, seed=7, out_path=None, force=False):
+    """Cria o held-out: ids das labels REAIS do dono, estratificado por classe.
+
+    (14/11) O held-out nao existia e nao tinha caminho de criacao (o
+    SCHEMA.md mandava o dono escrever a mao — invitation para errar e
+    esquecer). Aqui ele e' criado de forma deterministica (seed), estratificado
+    pela classe (para o held-out ter a mesma mistura do treino, senao o F1
+    por nivel mede uma classe que o modelo nunca viu), e SO das labels reais
+    do dono: os itens de pratica sinteticos (source='practice-key') ficam de
+    fora, porque eles servem para treino, nao para medir generalizacao.
+
+    O `build()` ja exclui os ids do held-out do treino, entao o held-out e'
+    honesto POR CONSTRUCAO: nao existe caminho em que o arquivo medido entre
+    no treino.
+    """
+    real = [r for r in labels
+            if r.get("source") != "practice-key"
+            and not str(r.get("id", "")).startswith("prat-")
+            and str(r.get("answer", "")) in LEVEL_TO_KEY]
+    if not real:
+        return None, "sem labels reais do dono (as de pratica nao contam)"
+    by_class = {}
+    for r in real:
+        by_class.setdefault(str(r.get("answer")), []).append(r)
+    rng = random.Random(seed)
+    for key in by_class:
+        rng.shuffle(by_class[key])
+    # round-robin pelas classes: garante presenca de todas
+    picked, cursor = [], {k: 0 for k in by_class}
+    keys = sorted(by_class)
+    while len(picked) < n and any(cursor[k] < len(by_class[k]) for k in keys):
+        for k in keys:
+            if len(picked) >= n:
+                break
+            if cursor[k] < len(by_class[k]):
+                picked.append(by_class[k][cursor[k]])
+                cursor[k] += 1
+    out = Path(out_path or (DATA / "heldout.jsonl"))
+    if out.exists() and not force:
+        return None, (f"{out} ja existe (use --force para sobrescrever; "
+                      f"ele guarda as labels que o dono ja julgou)")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    write_jsonl(out, picked)
+    dist = Counter(str(r.get("answer")) for r in picked)
+    return out, (f"held-out criado: {len(picked)} itens | "
+                 f"distribuicao {dict(dist)} | {out}")
+
+
 def self_test():
     """Prova a conversao: uma label vira item do formato Laya, o held-out nao
     vaza para o treino e a classe torta avisa."""
@@ -278,9 +326,25 @@ def main():
     ap.add_argument("--test-ratio", type=float, default=0.25)
     ap.add_argument("--calib", type=int, default=8)
     ap.add_argument("--self-test", action="store_true")
+    ap.add_argument("--make-heldout", type=int, default=0,
+                    help="cria o held-out com N labels REAIS do dono "
+                         "(estratificado por classe, deterministico)")
+    ap.add_argument("--force", action="store_true",
+                    help="sobrescreve o held-out existente")
     args = ap.parse_args()
     if args.self_test:
         return self_test()
+    if args.make_heldout:
+        labels = load_jsonl(LABELS)
+        out, msg = make_heldout(labels, args.make_heldout, args.seed,
+                                force=args.force)
+        print(msg)
+        if out is None:
+            return 1
+        print("agora: python3 scripts/judgment-dataset.py  (o build ja exclui "
+              "esses ids do treino) e python3 scripts/judgment-bench.py "
+              "--heldout data/judgments/heldout.jsonl")
+        return 0
     out, overlaps = build(args.out, args.heldout, args.seed, args.test_ratio,
                           args.calib)
     if overlaps:

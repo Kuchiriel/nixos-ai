@@ -199,3 +199,47 @@ diagnóstico: nível 3 com F1 0,71 (6/6), nível 2 e nível 1 com **F1 0,00** (o
 modelo nunca diz "1", colapsa para "3"). É exatamente o que o treino nas
 labels do dono tem de corrigir — e o veredito do bench (sem delegação) está
 certo até lá.
+
+## 8. Mais dois defeitos do mesmo tipo, fechados depois (14/11, tarde)
+
+### 8.1. Medir no próprio treino
+
+Sem `--heldout`, o bench media em `args.data`, que depois do treino é o
+**próprio arquivo de treino** ⇒ o número passa a medir **memorização**, não
+concordância de julgamento, e o veredito ("responde sozinho") vira um falso
+verde.
+
+Agora o bench **descobre os ids de treino** (`data/judgments/laya/train*.jsonl`
+e `data/judgments/train.jsonl`) e avisa com o número exato de ids em comum
+(medido: "4 id(s) deste arquivo também entraram no split de TREINO"), e o
+veredito final sai marcado como medição **sem held-out**.
+
+### 8.2. O held-out não existia e não tinha caminho de criação
+
+O `SCHEMA.md` mandava o dono "escrever à mão" o held-out: para 50 itens, isso
+é convite para errar e esquecer. Agora `scripts/judgment-dataset.py
+--make-heldout N` cria o arquivo:
+
+- **só** das labels reais do dono (os itens de prática sintéticos ficam de
+  fora: eles servem para treino, não para medir generalização);
+- **estratificado pela classe** (round-robin), para o held-out ter a mesma
+  mistura do treino — senão o F1 por nível mede uma classe que o modelo nunca
+  viu;
+- **determinístico** (mesma seed ⇒ mesmo arquivo);
+- e o próprio `build()` **exclui esses ids do treino** ⇒ held-out honesto
+  **por construção**: não existe caminho em que o arquivo medido entre no
+  treino.
+
+**Prova (com labels falsas, 42 itens):** held-out de 12 itens com 3 de cada
+classe (`{'0': 3, '1': 3, '2': 3, '3': 3}`), `train=20 test=6 calib=4
+heldout=12`, **vazamento entre arquivos: nenhum**, os 12 ids do held-out
+ausentes do treino, e a mesma seed reproduz o mesmo arquivo.
+
+### 8.3. O bench lia o id do item no campo errado
+
+O dataset no formato Laya usa `_id` (o `id` original vira `_id` na
+conversão), e o bench pegava só `id`. Medido: as divergências saíam com
+`id=None` e o **teto humano** (repetibilidade) colapsava todos os itens em um
+grupo só — imprimia "0/1 = 0,0 %" com 4 itens medidos, quando o dono não
+julgara nenhum item duas vezes. Um número de teto inventado é pior do que
+nenhum: ele decide o modo de delegação. Agora o id é lido nos dois formatos.

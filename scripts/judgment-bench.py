@@ -208,6 +208,47 @@ def sanitize_context(ctx):
     return "\n".join(kept).strip(), dropped
 
 
+# (14/11) MEDIR NO TREINO E' MEDIR MEMORIZACAO. Sem --heldout, o bench
+# media em `args.data`, que depois do treino e' o proprio arquivo de treino.
+# Descobre-se aqui os ids de treino para avisar com o numero exato.
+def train_ids(repo):
+    """Todos os ids que entraram em algum split de treino."""
+    ids = set()
+    candidates = [Path(repo) / "data" / "judgments" / "train.jsonl"]
+    laya = Path(repo) / "data" / "judgments" / "laya"
+    if laya.is_dir():
+        candidates += sorted(laya.glob("train*.jsonl"))
+    for path in candidates:
+        if not path.is_file():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            rid = row.get("_id", row.get("id"))
+            if rid is not None:
+                ids.add(str(rid))
+    return ids
+
+
+def item_id(row):
+    """O id do item: 'id' no schema do dono, '_id' no formato Laya.
+
+    (14/11) Bug: o bench usava so `id`, e o dataset Laya usa `_id` => as
+    divergencias saiam com id=None e a repetibilidade do dono colapsava
+    todos os itens em um grupo so (medido: "0/1 = 0.0%" com 4 itens).
+    """
+    for key in ("id", "_id"):
+        val = row.get(key)
+        if val is not None and str(val) != "":
+            return str(val)
+    return ""
+
+
 def self_test():
     rows = [
         {"id": "1", "context": "p: x\nresposta do dono: Sim", "answer": "Sim"},
@@ -233,6 +274,12 @@ def self_test():
     clean = ("Query: q\nPage: p", 0)
     ctx2, dropped2 = sanitize_context(clean[0])
     assert dropped2 == 0 and ctx2 == clean[0], ctx2
+    # (14/11) o id do item nos DOIS formatos: 'id' (schema do dono) e
+    # '_id' (dataset Laya). Sem isso a repetibilidade colapsava tudo num
+    # grupo so e as divergencias saiam com id=None.
+    assert item_id({"id": "q-1"}) == "q-1", item_id({"id": "q-1"})
+    assert item_id({"_id": "prat-p01"}) == "prat-p01", item_id({"_id": "x"})
+    assert item_id({"id": "a", "_id": "b"}) == "a", item_id({"id": "a", "_id": "b"})
     print(f"SELF-TEST ok: {ok}/{len(rows)} de concordância (modelo=eco) e o "
           f"contexto com a resposta e' limpo antes do prompt")
     lo, hi = wilson(ok, len(rows))
@@ -261,7 +308,28 @@ def main():
     if not args.data:
         ap.error("falta --data (ou --self-test)")
 
-    rows = load(args.heldout or args.data)
+    measured_on_train = False
+    if args.heldout:
+        rows = load(args.heldout)
+        source = args.heldout
+    else:
+        rows = load(args.data)
+        source = args.data
+        measured_on_train = True
+    # (14/11) avisar se o que esta sendo medido tem ids de TREINO: o numero
+    # mede memorizacao, nao concordancia de julgamento.
+    tr = train_ids(REPO)
+    if tr and rows:
+        row_ids = {item_id(r) for r in rows if item_id(r)}
+        common = row_ids & tr
+        if common:
+            print(f"AVISO: {len(common)} id(s) deste arquivo tambem entraram "
+                  f"no split de TREINO (ex.: {sorted(common)[:5]}). Medir aqui "
+                  f"mede MEMORIZACAO, nao concordancia de julgamento — use o "
+                  f"held-out para o numero que decide a delegacao.")
+        elif measured_on_train:
+            print("AVISO: medindo sem --heldout. Use --heldout "
+                  "data/judgments/heldout.jsonl para o numero honesto.")
     # (14/11) 'unparsed' NAO e' divergencia do modelo: e' uma fala do dono
     # que o bench nao entendeu. Contar isso afundaria a concordancia por um
     # motivo que nao e' do modelo, e o numero que decide a delegacao tem de
@@ -302,7 +370,7 @@ def main():
         hit = gold == norm(pred)
         same += hit
         if not hit:
-            misses.append((r.get("id"), r.get("answer"), pred))
+            misses.append((item_id(r), r.get("answer"), pred))
     n = len(rows)
     if cleaned:
         print(f"AVISO: {cleaned} item(ns) tinham a resposta do dono DENTRO do "
@@ -342,7 +410,7 @@ def main():
     # diferentes, a repetibilidade do dono e' o teto real da delegacao.
     by_id = {}
     for r in rows:
-        by_id.setdefault(str(r.get("id")), []).append(norm(r.get("answer")))
+        by_id.setdefault(item_id(r), []).append(norm(r.get("answer")))
     repeated = {k: v for k, v in by_id.items() if len(v) > 1}
     if repeated:
         agree = sum(1 for v in repeated.values() if len(set(v)) == 1)
@@ -359,6 +427,10 @@ def main():
         for m in misses[:20]:
             print("  ", m)
     print(f"modo recomendado: {mode_for(rate)}")
+    if measured_on_train:
+        print("ATENCAO: esta medicao foi feita SEM held-out (o proprio arquivo "
+              "medido pode ter virado treino). O veredito acima so vale para o "
+              "held-out; rode com --heldout data/judgments/heldout.jsonl.")
     print("LEMBRETE (arXiv 2510.07978): o limiar e' a repetibilidade do "
           "dono, nao 100% — se o proprio dono so concorda consigo mesmo em X%, "
           "o modelo nao pode passar de X%.")
