@@ -355,3 +355,24 @@ A rebuild NAO reinicia o pipewire do usuario: o perfil 'hard' so ganha vida
 no proximo relogin; o default fine permanece rnnoise_source. A/B do prompt whisper no conveyor (PCM injetado igual ao duplex): hint 'Jarvis' simples -> 7/8 (que horas sao vira 'que oracao') sem hint -> 8/8 (mas 'Jarvis' vira 'Ja ves'/'Jairus') priming 'Jarvis, que horas sao? Jarvis, me lembra. Jarvis, reuniao.' -> 8/8, com 'Jarvis, que horas sao?' reproduzido exato (o encoder do asrd aceita a chave ctx que o cliente envia; o asrd antes descartava) Voz so ouve o que NAO e speaker: confirmado com estimulo sintetizado no
 alto-falante: Mic1 cru rms~870 (ouve a TV), echo_cancel_source rms~50,
 rnnoise_source rms~3 (AEC cancela o playback). Commits hoje: 3e0db683 7de6059c 7766cf61 e91f1b1b f20497d8
+
+## 2026-11-14 13:39 — A/B de latência por componente (pesquisa 14/11 + medidas de hoje)
+
+Componente | Medição hoje | Decisão A/B
+---|---|---
+Llama warm (:8092) | prefill 97ms (29tok @3.36ms/tok, ~297 s/s prefill), geração 66.5 tok/s | sem mudança; ctx 20480 não vira velocidade de geração — só memória (8192 tolerado, não feito)
+ASR whisper turbo-q5_0 | 320-500ms/segmento; transcreve bem narração de vídeo; fantasmas entre raros | manter turbo (web: 809M, ~4-8x mais rápido que large-v3, ~95% acc; small não testado — qualidade PT cai)
+VAD silero | min_silence 300ms (LiveKit default 550; sweet-spot 2026 ~380-500) | manter 300 (já era o tuned; pad 120ms)
+Merge/endpoint | ~250-500ms | manter
+Classify (LoRA) | pulado quando endereço explícito (economia ~200-250ms); ~140-200ms em classificação direta | manter
+Piper (pt_BR-faber) | fator realtime ~0.043 (78ms p/ 1.8s de áudio) | manter (kokoro não é usado no Tts do duplex; kokoro é do CLI)
+aplay (playback) | ~0.1-0.3s custo de spawn | manter
+barge-in | cortes em rrms>=500 sem segmento fechado matavam o TTS no meio (fix c2056840: rrms>=4000 OU segmento fechado) | manter fix
+Fluxo total p/ resposta curta | ~1.2-1.8s do fim da fala à primeira sílaba | piso deste hardware
+
+Conclusão honesta: os componentes estão no piso de hardware, EXCETO quando
+a resposta é longa (stream denso de 11s em uma resposta desabafo). Encurtar
+resposta é o lever que corta parede perceber; pipeline já st streaming.
+Piper + turbo + silero + LoRA: nada a ganhar sem trocar qualidade/hardware.
+Pipeline usa streaming LLM->ponte de sentenças->piper -> aplay; nada de
+flush infinito, nada de fila estranha.
