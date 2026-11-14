@@ -390,6 +390,13 @@ def main():
             continue
         try:
             req = json.loads(line)
+            # (14/11) o cliente envia "ctx" (vocabulário da conversa, sala-
+            # em-seg-wizard passada pelo protocolo) — antes o asrd simplesmente
+            # descartava a chave e o prompt do whisper nunca recebia "Jarvis".
+            # Aceita-se se for string curta; fora disso ignora.
+            _ctx = req.get("ctx")
+            if isinstance(_ctx, str) and _ctx.strip():
+                CTX["v"] = _ctx.strip()[:200]
             if req.get("reset"):
                 reset()
                 print(json.dumps({"text": "", "ms": 0, "reset": True}),
