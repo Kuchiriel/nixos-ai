@@ -88,3 +88,47 @@ O que mudou no código (`scripts/judgment-bench.py`):
    vezes (o `id` do item já está no schema das labels, então isso é possível).
 3. O modo recomendado passou a dizer isso na cara: o limiar é a repetibilidade
    do dono, não 100 %.
+
+## 6. A decisão do dono sobre o modelo default (14/11) e o que ela mediu
+
+**Decisão:** o default é o **Qwen 4B MTP** (`jarvis-mtp-lora`); o **bonsai não
+pode ser o default** (ele erra em pt-BR) e, quando for usado, tem que ver
+**tudo em inglês**.
+
+**O que a medição encontrou (e por que a decisão é a correção certa):** o
+router `:8080` **está fora do ar** — ele sobe, tenta carregar o bonsai e falha
+por VRAM:
+
+```
+E alloc_tensor_range: failed to allocate CUDA0 buffer of size 2129452672
+E llama_model_load: error loading model: unable to allocate CUDA0 buffer
+E srv llama_server: exiting due to model loading error
+E operator(): got exception: {"error":{"code":500,"message":"model name=bonsai failed to load"}}
+```
+
+Medido na mesma hora: VRAM **5.306 MiB usados, 548 livres**; o 4B MTP do
+duplex (:8092) sozinho ocupa **3.906 MiB** (2,7 GB de pesos + KV), o whisper
+**932 MiB** e os embeddings **446 MiB**. O bonsai do router pede **2,03 GB de
+pesos** mais o KV de 49k de contexto, então não cabe, e o router devolve 500
+em toda chamada.
+
+**O caminho que fecha os dois (decisão do dono + VRAM):**
+
+1. o **router sobe o 4B MTP** e o servidor próprio do duplex (:8092) **sai**,
+   ficando **uma instância só** (3,9 GB + 932 MB + 446 MB ≈ 5,3 GB de 6 GB);
+2. o **duplex passa a usar o router** em :8080;
+3. o **bonsai fica como preset sob demanda** (nunca no boot) e, quando usado,
+   **só em inglês**;
+4. ⇒ o router volta a responder 200 no `/v1/chat/completions` (hoje é 500).
+
+**O que eu já fiz sem esperar o rebuild:** o bench de concordância e o screener
+pararam de pedir o modelo por nome e passam a **descobrir e testar** qual
+servidor responde de verdade (o 4B do duplex em :8092 antes do router em
+:8080) ⇒ com isso o medidor de concordância voltou a funcionar (medição real:
+**7/12 = 58,3 %** com o 4B **sem** o LoRA fino, e o F1 por nível mostrando
+que ele colapsa para "3": nível 2 e nível 1 com F1 0,00 ⇒ é exatamente o que
+o treino nas labels do dono vai corrigir).
+
+**O que é decisão do dono (config de host, rebuild):** a troca do `bootModel`
+no registry (`modules/ai/models.nix`, hoje `bootModel = { host = "bonsai"; ... }`)
+e a retirement do servidor :8092.

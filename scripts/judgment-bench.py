@@ -47,10 +47,21 @@ REPO = Path(__file__).resolve().parents[1]
 SCHEMA = REPO / "data" / "judgments" / "SCHEMA.md"
 
 SYSTEM = (
-    "Você é o anotador. A pergunta é sobre oDONO e ele respondeu antes com a "
-    "mesma regra. Responda APENAS com a resposta que o dono daria: a mesma "
-    "string curta que está na resposta do dono (exatamente 'Sim', 'Não', ou o "
-    "rótulo curto). Sem explicação, sem pontuação extra."
+    "Você é o anotador de relevância de busca (o mesmo rubric do UHRS da "
+    "Microsoft). Julgue a página para a consulta.\n"
+    "Responda com UMA das quatro opções, e nada mais:\n"
+    "3 = highly relevant: a página responde a consulta de forma direta e "
+    "completa, e é o melhor resultado possível\n"
+    "2 = moderately relevant: a página responde a consulta e é boa, mas existe "
+    "um resultado melhor\n"
+    "1 = slightly relevant: é do mesmo tema e ajuda em parte, mas não "
+    "responde a consulta\n"
+    "0 = not relevant: não responde a consulta nem ajuda o usuário a chegar "
+    "na resposta\n"
+    "Desempate: prefira a página que ENTREGA a informação; a mais recente "
+    "quando o conteúdo é temporal; a fonte primária; uma resposta direta no "
+    "lugar de uma resposta enterrada.\n"
+    "Resposta: apenas o número (3, 2, 1 ou 0)."
 )
 
 
@@ -81,6 +92,67 @@ def mode_for(rate):
         return "PROPOE E O DONO CONFIRMA (modo mais defensavel)"
     return "SEM DELEGACAO: o local fica como apoio de leitura e triagem"
 
+
+
+def active_model(base: str, wanted: str = "", timeout: float = 10.0) -> str:
+    """Descobre o modelo que o servidor local tem CARREGADO.
+
+    (14/11) Bug pego no teste: o router :8080 anuncia so o que esta
+    carregado (medido: ['bonsai']) e pedir 'jarvis-mtp-lora' a ele da 400 —
+    o tier do duplex roda na porta 8092, nao no router. Descobrir o id evita
+    a chamada quebrada (e o self-test nao pegaria isso, porque ele nao fala
+    com o modelo).
+    """
+    if wanted:
+        return wanted
+    try:
+        url = base.rstrip("/") + "/v1/models"
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode())
+        ids = [m.get("id") for m in (data.get("data") or []) if m.get("id")]
+        if ids:
+            return ids[0]
+    except Exception:
+        pass
+    return "bonsai"
+
+
+def pick_model(bases, wanted: str = "", timeout: float = 10.0):
+    """Escolhe (base, modelo) testando de verdade: o primeiro que responder.
+
+    (14/11) Medido agora: o router :8080 anuncia 'bonsai' mas nao consegue
+    carregar o modelo (HTTP 500 'model name=bonsai failed to load'), enquanto
+    o 4B do duplex em :8092 (alias jarvis-mtp-lora) responde normal. Por isso
+    a escolha nao e' 'o primeiro que anuncia': e' o primeiro que RESPONDE.
+    """
+    import urllib.error
+    wanted = wanted or ""
+    for base in bases:
+        model = wanted
+        try:
+            with urllib.request.urlopen(base.rstrip("/") + "/v1/models",
+                                        timeout=timeout) as resp:
+                data = json.loads(resp.read().decode())
+            ids = [m.get("id") for m in (data.get("data") or []) if m.get("id")]
+            model = wanted or (ids[0] if ids else "")
+        except Exception:
+            ids = []
+        if not model:
+            continue
+        body = {"model": model,
+                "messages": [{"role": "user", "content": "ping"}],
+                "temperature": 0, "max_tokens": 4}
+        req = urllib.request.Request(
+            base.rstrip("/") + "/v1/chat/completions",
+            data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=90) as resp:
+                json.loads(resp.read().decode())
+            return base, model
+        except Exception:
+            continue
+    return None, ""
 
 def ask_model(base, model, row, timeout=90):
     """Chama o modelo local (OpenAI-compatible) e devolve a resposta curta."""
@@ -138,7 +210,8 @@ def main():
     ap.add_argument("--heldout", help="held-out JSONL escrito a mao (zero leakage)")
     ap.add_argument("--model", default="http://127.0.0.1:8080",
                     help="base OpenAI-compatible do modelo local")
-    ap.add_argument("--tier", default="", help="modelo/tier a pedir (vazio = default)")
+    ap.add_argument("--tier", default="",
+                    help="modelo a pedir (vazio = o que o servidor tem carregado)")
     ap.add_argument("--self-test", action="store_true",
                     help="prova a mecanica sem chamar modelo")
     ap.add_argument("--limit", type=int, default=0)
@@ -158,12 +231,16 @@ def main():
     if not SCHEMA.is_file():
         print(f"aviso: schema ausente em {SCHEMA}", file=sys.stderr)
 
-    model = args.tier or "jarvis-mtp-lora"
+    base, model = pick_model([args.model, "http://127.0.0.1:8092"], args.tier)
+    if not base:
+        print("ERRO: nenhum modelo local respondeu (router :8080 carregando "
+              "com falha e 4B :8092 sem resposta)", file=sys.stderr)
+        return 2
     same = 0
     misses = []
     for r in rows:
         try:
-            pred = ask_model(args.model, model, r)
+            pred = ask_model(base, model, r)
         except Exception as exc:  # noqa: BLE001
             print(f"erro ao chamar o modelo: {exc}", file=sys.stderr)
             return 2
@@ -188,7 +265,7 @@ def main():
     for r in rows:
         gold = norm(r.get("answer"))
         try:
-            pred = norm(ask_model(args.model, model, r))
+            pred = norm(ask_model(base, model, r))
         except Exception:
             pred = ""
         if gold == pred:
