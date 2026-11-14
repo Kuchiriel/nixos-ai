@@ -588,3 +588,17 @@ Caminho revisto:
 2. Keep going elsewhere or push local v9 (llama cpp CPU) — mencione arqueote.
 3. Abrir ticket/questionamento ao suporte Kaggle se timing right.
 4. A esteira de qualidade continua válida: conveyor + gate de production.
+
+## 2026-11-14 16:58 — v9 no ar
+
+Donor autenticou o dataset kuchiriel/duplex-gate-v9-pt-br (upload manual via Web porque
+CLI PUT continuou 403 nesta máquina). Depois:
+
+- Kernel v9 pushado via CLI (push fonctionne) como kuchiriel/duplex-gate-lora-v9
+- dataset_sources = kuchiriel/duplex-gate-v9-pt-br, input/combined.jsonl
+- Atualizado glob v6-train -> combined (11 042 itens, BARGE rebalanced a 1041)
+- T4 GPU, 2 épocas r16 a32, mesma hiperparameters que v8
+- Status Run bem sucedido (kernel RUNNING no T4)
+
+Para ser monitorado: `kaggle kernels status kuchiriel/duplex-gate-lora-v9`.
+Próximos passos: convert -> :8093 bench -> decide promotion.
