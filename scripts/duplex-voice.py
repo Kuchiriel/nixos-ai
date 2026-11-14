@@ -2517,8 +2517,10 @@ class Tts:
         # (16:45) o 4B às vezes EMITE o markup de tool como texto
         # ('<function=shell>...') — isso NUNCA vai pro piper.
         import re as _re
-        text = _re.sub(r"<function=[^>]*>.*?(?:</function>|$)", " ", text, flags=_re.S)
-        text = _re.sub(r"<parameter=[^>]*>.*?(?:</parameter>|$)", " ", text, flags=_re.S)
+        # wrapper XML do tool-call (solto ou fechado)
+        text = _re.sub(r"<tool_call>.*?(?:</tool_call>|$)", " ", text, flags=_re.S)
+        # qualquer tag residual (</tool_call>, <invoke>, <call>...): nunca vai pro piper
+        text = _re.sub(r"</?[a-zA-Z_][\w\-.:]*[^>]{0,120}>", " ", text)
         text = _re.sub(r"```[a-z]*\n?", " ", text)
         text = _re.sub(r"\n+", ". ", text).strip()
         if text and len(text) > 1:
