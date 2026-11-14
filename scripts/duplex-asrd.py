@@ -344,6 +344,16 @@ def main():
         # identifica contra perfis conhecidos
         best, best_cos = "?", 0.0
         for nome, prof in SPK_PROFILES.items():
+            if len(prof) != len(e):
+                # (14/11) perfil de outra época (MFCC 26-d) não pode
+                # derrubar CADA segmento de novo — pula com aviso 1x.
+                if not getattr(_identify, "_warned_dims", False):
+                    _identify._warned_dims = True
+                    print(f"[asrd] perfil {nome} tem {len(prof)} dims, "
+                          f"esperado {len(e)} — pulando (refaça o enroll "
+                          "ou conserte o perfil)", file=sys.stderr,
+                          flush=True)
+                continue
             c = _cos(e, prof)
             if c > best_cos:
                 best, best_cos = nome, c

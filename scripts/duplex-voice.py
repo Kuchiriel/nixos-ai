@@ -2118,14 +2118,22 @@ def call_tool(name, args):
                 w.close()
             # (21/10 v2) ENROLL em WeSpeaker 256-d — o asrd agora
             # casa com WeSpeaker; perfis MFCC seriam incompatíveis.
+            # (14/11) NÃO cair pro fallback MFCC: o asrd explode no
+            # _cos(e_256, prof_26) e CADA segmento seguinte falha ao
+            # imprimir texto (dupla negação: perfil ruim mata o pipeline
+            # inteiro de identificação e as respostas param).
             emb = None
             try:
                 import wespeakerruntime as w
                 _s = w.Speaker(lang="en")
                 emb = np.array(_s.extract_embedding(_wav), dtype=float).ravel()
                 emb = emb / (np.linalg.norm(emb) + 1e-9)
-            except Exception:
-                emb = spk_embed(pcm.astype("float32") / 32768.0)
+            except Exception as exc:
+                return (f"WeSpeaker indisponível no env do duplex ({exc}). "
+                        "Nenhum perfil foi gravado.")[:300]
+            if emb is not None and len(emb) != 256:
+                return ("Embedding inesperado ({} dims, esperado 256). "
+                        "Nenhum perfil foi gravado.").format(len(emb))
             Path(_wav).unlink(missing_ok=True)
             if emb is not None:
                 # (21/10 SPEAKER-ID) multi-perfil NOMEADO e PERSISTENTE:
