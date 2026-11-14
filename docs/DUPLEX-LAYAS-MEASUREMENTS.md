@@ -331,3 +331,9 @@ WAIT, nao BARGE). O alvo BARGE em heldout2 manteve 2/2.
 
 A decisao continua do dono: promover na unit de producao ou manter v1
 microturn-4b-lora. Nada de producao foi tocado.
+
+## 2026-11-14 esteira automatizada ASR->texto: 0/8 (0%) — report reports/duplex-conveyor/2026-11-14T125119.json
+
+## 2026-11-14 esteira automatizada ASR->texto: 0/8 (0%) — report reports/duplex-conveyor/2026-11-14T125303.json
+
+## 2026-11-14 esteira automatizada ASR->texto: 8/8 (100%) — report reports/duplex-conveyor/2026-11-14T130004.json
