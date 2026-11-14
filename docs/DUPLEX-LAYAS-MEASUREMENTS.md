@@ -440,3 +440,26 @@ Outro achado duro de merito: Laya-microturn A/B honesto vs LoRA v8
 LoRA v8 (atual em producao): 44/52 + 22/24, mean 140-146 ms.
 Modelo binario do convertido deletado; microturn duplex em
 ~/models/_arquivo/laya-duplex-microturn-2026-11-14/ + MOVED com rollback commands.
+
+## 2026-11-14 14:59 duplex-sweep (7d): asr_empty_seg=916, spk_unidentified=114, tts_killed_mid=56, tts_mid_barge=55, tts_tool_echo_blocked=26, mishear_jarvis=19 — reports/duplex-sweep/2026-11-14T145912.json
+
+## 2026-11-14T145906 — duplex-cycle completo: conveyor=0/0 reg=conveyor 0/8 — reports/duplex-cycle/2026-11-14T145906/SUMMARY.md
+
+## 2026-11-14 15:00 duplex-sweep (7d): asr_empty_seg=916, spk_unidentified=114, tts_killed_mid=56, tts_mid_barge=55, tts_tool_echo_blocked=26, mishear_jarvis=19 — reports/duplex-sweep/2026-11-14T150007.json
+
+## 2026-11-14 esteira automatizada ASR->texto: 8/8 (100%) — report reports/duplex-conveyor/2026-11-14T150052.json
+
+## 2026-11-14T150000 — duplex-cycle completo: conveyor=8/8 reg=nenhum — reports/duplex-cycle/2026-11-14T150000/SUMMARY.md
+
+## 2026-11-14 15:05 — LiveTurn (ACL ARR 2026) e o estado da arte
+
+Paper encontrado e NÃO baixado: OpenReview exige browser challenge (webfetch
+retornou "Verifying your browser", nenhum attachment pode ser fetched diretamente).
+
+URL: https://openreview.net/forum?id=5vKnBgKmOV
+Resumo honesto: "LiveTurn: A Real-Time Turn Detection System for Voice Agents"
+(ACL ARR 2026 August subm., 03/08/2026), correlato direto ao microturn gate.
+Por exigências da casa, paper não baixado/indexado fica registrado aqui e NÃO
+entrou no RAG; o dono precisará buscar com browser ou VPN doméstica para ler.
+
+Sem Terceirização: o que rodou é o que rodou; tudo registrado.
