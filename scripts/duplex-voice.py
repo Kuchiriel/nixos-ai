@@ -84,20 +84,23 @@ SYSTEM_PT = (
     "seco por fora, cuidadoso por dentro. Humor britânico sutil, chama o "
     "usuário de 'dono' ou 'senhor'. PT-BR, 1-2 frases, natural FALADO.\n"
     "Antecipe AÇÃO em 1 frase, mas NUNCA antecipe DADOS — dado vem de tool.\n"
-    "(13/11) MEMÓRIA ATRIBUÍDA: cada fato do dono vai etiquetado como "
-    "'O dono ...' se a voz for matriculada; senão 'O falante incerto ...'. "
-    "Assistentes nunca misturam memórias entre pessoas. TOOLS só "
-    "para dado externo (hora, web, código). Trivial/opinião = DIRETO. "
-    "Ferramenta = 1 linha cada.\n"
+    "QUEM É QUEM (regra dura): o OUTRO no turno é o dono/senhor (voz "
+    "matriculada) ou um falante não cadastrado (spkN, ex.: spk4). VOCÊ é o "
+    "JARVIS. NUNCA chame o usuário de 'JARVIS', 'o assistente' ou 'você é o "
+    "JARVIS' — JARVIS é você. Se o usuário disser 'Jarvis...', ele está "
+    "falando COM você, não sobre você.\n"
+    "MEMÓRIAS: fatos guardados trazem prefixo 'O dono' (voz matriculada) ou "
+    "'O falante incerto' (sem matrícula) — é só o RÓTULO do arquivo; na "
+    "conversa fale natural, sem citar rótulos. TOOLS só para dado externo "
+    "(hora, web, código). Trivial/opinião = DIRETO. Ferramenta = 1 linha cada.\n"
     "Após tool: responda com resultado, não repita a pergunta. Tool ERRO = "
     "informe erro, NUNCA invente. NUNCA invente dados. Sem certeza = 'não sei'.\n"
     "Sem 'Ah, Hmm, Pode repetir'. Turnos fragmentados = considere o conjunto.\n"
-    "PESSOAS: turnos com prefixo [spk: X] dizem QUEM falou — X = nome "
-    "cadastrado ou spkN (pessoa não cadastrada ainda). Sem prefixo = "
-    "quem falava antes. Refira-se às pessoas pelo nome/spkN quando "
-    "relevante. 'Quantas pessoas tem aí?' → do(action='voices'). "
-    "Matrícula de voz é PROCEDIMENTO INTERNO — nunca ofereça, só "
-    "execute se pedirem explicitamente.\n"
+    "PESSOAS: o prefixo [spk: X] (quando presente) indica QUEM FALA — "
+    "X = nome cadastrado ou spkN (pessoa não cadastrada). Sem prefixo = "
+    "quem falava antes. O falante é o dono ou um convidado; trate-o pelo "
+    "nome/spkN quando relevante. Nunca se dirija a ele como 'JARVIS'. "
+    "'Quantas pessoas tem aí?' → do(action='voices').\n"
     "Na dúvida, confirme ou peça para repetir.\n"
     "IDENTIDADE: você é o JARVIS rodando o Qwen3.5-4B-MTP LOCAL (com LoRA "
     "de turno, voz PT-BR). Se perguntarem qual modelo você é, responda "
@@ -136,30 +139,47 @@ CHUNK_BYTES = int(SR * TICK * 2)
 MIC_SOURCE_FALLBACK = "alsa_input.pci-0000_00_1f.3-platform-skl_hda_dsp_generic.HiFi__Mic1__source"
 # (03/11, medido pelo coord-naming) No ALSA CRU o TTS entra no mic e o STT
 # transcreve a PRÓPRIA voz ("Jarvis, teste de cancelamento de ego..."). O grafo
-# do pipewire tem AEC3 (echo_cancel_source) -> RNNoise (rnnoise_source):
-# gravar de echo_cancel_source pega o AEC3 (-66,4 dB, texto vazio).
-# (03/11 13:45, medido) rnnoise_source entrega SILÊNCIO (rms=0,000000): o
-# node de denoise não tem link com a saída do AEC3 (pw-cli ls Link → 12
-# links, nenhum de rnnoise/echo) → usar o AEC3 direto; o fallback pro ALSA
-# cru é melhor que mic mudo (mesma disciplina do wakeword).
-MIC_SOURCE_PREFERRED = "capture.echo_cancel_source"  # 29/11: echo_cancel_source virou mudo (AEC output desconectado); capture.* e a porta de entrada do AEC, que segue carregando o audio do mic com echo-cancelamento
+# do pipewire tem AEC3 (echo_cancel_source) -> RNNoise (rnnoise_source).
+# (14/11) O dono reportou (com vídeo tocando) que o duplex ficava surdo: o
+# piso em ~1800 nunca deixava o VAD fechar segmento. Medido: Mic1 crú 800-1000,
+# rnnoise_source piso 0 com a voz passando — a ordem correta abaixo.
+# (14/11, medido) O comentario antigo dizia que o rnnoise_source "entrega SILÊNCIO"
+# — mas TODOS os testes de hoje mostram o contrario: piso digitalmente 0 e a voz
+# passando quando o dono fala. O duplex estava escutando `capture.echo_cancel_source`,
+# que e o INPUT do AEC (mic cru + AGC do webrtc), por isso o piso ficava em ~1800 e o
+# VAD nunca fechava segmento. Ordem agora: rnnoise_source (AEC+denoise, o produto que
+# o house construiu para isto) → echo_cancel_source (AEC direto) → ALSA cru.
+# JARVIS_VOICE_NOISE_PROFILE (env): "noisy" (default rnnoise) | "hard" (rnnoise com
+# VAD 65% para TV/música alta; requer o próximo rebuild do host que adiciona a
+# segunda filter-chain) | "raw" (ALSA cru, o modo forense).
+MIC_SOURCE_PREFERRED = "rnnoise_source"
+MIC_SOURCE_MID = "echo_cancel_source"
 _MIC_SOURCE: str | None = None
 
 
 def mic_source() -> str:
-    """Fonte do mic: echo_cancel_source (AEC3) se existir; senao ALSA cru."""
+    """Fonte do mic conforme perfil: noisy|hard|raw; fallback echo→raw."""
     global _MIC_SOURCE
     if _MIC_SOURCE is None:
-        chosen = MIC_SOURCE_FALLBACK
+        prof = os.environ.get("JARVIS_VOICE_NOISE_PROFILE", "noisy").strip().lower()
+        nodes = ""
         try:
             nodes = subprocess.run(["pw-cli", "list-objects", "Node"],
                                    capture_output=True, text=True, timeout=5).stdout
-            if f'node.name = "{MIC_SOURCE_PREFERRED}"' in nodes:
-                chosen = MIC_SOURCE_PREFERRED
         except (OSError, subprocess.SubprocessError):
-            pass
-        _MIC_SOURCE = chosen
-        log(f"[duplex] mic source: {chosen}")
+            nodes = ""
+        candidates = {
+            "noisy": ["rnnoise_source", "echo_cancel_source", MIC_SOURCE_FALLBACK],
+            "hard":  ["rnnoise_hard_source", "rnnoise_source", "echo_cancel_source"],
+            "raw":   [MIC_SOURCE_FALLBACK],
+        }.get(prof, ["rnnoise_source", "echo_cancel_source", MIC_SOURCE_FALLBACK])
+        chosen = None
+        for c in candidates:
+            if f'node.name = "{c}"' in nodes:
+                chosen = c
+                break
+        _MIC_SOURCE = chosen or MIC_SOURCE_FALLBACK
+        log(f"[duplex] mic source: {_MIC_SOURCE} (profile {prof})")
     return _MIC_SOURCE
 
 
