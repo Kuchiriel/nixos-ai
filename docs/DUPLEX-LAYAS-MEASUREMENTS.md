@@ -302,3 +302,32 @@ infran local de producao.
 registros de falso "intromissao" a mais em troca de SILENCE broadcast. Nota de atuacao: teste v7 como infato competitivel do harness real (prompt
 A, sem necessidade de fallback no classify_turn); producao e a decisao
 pendente do dono (swap --lora na unit de producao). `documentos`: DUPEX-LAYAS-MEASUREMENTS.md recebeu a secao v7 acima.
+
+## 2026-11-13 23:00 — Kernel v8 (kernel version 8) — BARGE rebalanceadas
+
+Kernel v8 dedicado a fixar o BARGE do v7. Adapter baixado e convertido.
+Instancia CPU de teste em :8093 (nunca tocou :8092 de producao).
+
+| teste | v8 | v7 | producao |
+|-------|----|----|----------|
+| heldout1 RESPOND | 16/16 | 16/16 | 16/16 |
+| heldout1 WAIT | 12/13 | 13/13 | 10/13 |
+| heldout1 SILENCE | 11/16 | 9/16 | 7/16 |
+| heldout1 BARGE | **6/7** | 5/7 | 7/7 |
+| heldout1 TOTAL | **45/52** | 43/52 | 40/52 |
+| heldout2 WAIT | 3/4 | 3/4 | 3/4 |
+| heldout2 SILENCE | 17/18 | 17/18 | 0/18 |
+| heldout2 BARGE | 2/2 | 2/2 | 2/2 |
+| heldout2 TOTAL | 22/24 | 22/24 | 5/24 |
+
+SILENCE (TV/narracao): v8 17/18, todos vencem a producao (+12).
+BARGE: v8 ainda abaixo da producao (6/7 vs 7/7), melhor que v7 (5/7).
+WAIT: v8 12/13 (v7 era 13/13, producao 10/13).
+
+Ganho honesto: +2 sobre v7 em heldout1 (45/52 vs 43/52) e +2 sobre
+producao em SILENCE broadcast (17/18). BARGE ainda 6/7 — os 2 falhos em
+heldout1 sao o mesmo caso do v7 ("deixa eu te falar uma coisa" virando
+WAIT, nao BARGE). O alvo BARGE em heldout2 manteve 2/2.
+
+A decisao continua do dono: promover na unit de producao ou manter v1
+microturn-4b-lora. Nada de producao foi tocado.
