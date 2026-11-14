@@ -122,14 +122,18 @@ def feed_chunks(proc, pcm: "np.ndarray"):
         if delay > 0:
             time.sleep(delay)
         proc.stdin.write(json.dumps({
-            "audio_b64": base64.b64encode(chunk.tobytes()).decode()}).encode() + b"\n")
+            "audio_b64": base64.b64encode(chunk.tobytes()).decode(),
+            "ctx": os.environ.get("JARVIS_ASR_CTX", "Jarvis"),
+            }).encode() + b"\n")
         proc.stdin.flush()
         sent += 1
     # fecha o segmento (vad precisa de ~300-450ms de silêncio)
     for _ in range(3):
         time.sleep(CHUNK / SR)
         proc.stdin.write(json.dumps({
-            "audio_b64": base64.b64encode(silence.tobytes()).decode()}).encode() + b"\n")
+            "audio_b64": base64.b64encode(silence.tobytes()).decode(),
+            "ctx": os.environ.get("JARVIS_ASR_CTX", "Jarvis"),
+            }).encode() + b"\n")
         proc.stdin.flush()
 
 
