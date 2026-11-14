@@ -548,3 +548,29 @@ a sessão desta esteira não tem mais.
 
 Para quem vier: o caminho emocionável do LiveTurn virou a referência
 madura para o Esteira-V9 do microturn. Não é resultado instantâneo.
+
+## 2026-11-14 15:39 — Smart-Turn v3.2 (CPU, 8.7 MB ONNX)
+
+Download do pipecat-ai/smart-turn-v3.2-cpu.onnx + inference replicada do README.
+Testado com os 8 wavs sintetizados do conveyor (pad front + WhisperFeatureExtractor
+80x800 + int8/fp32 neural):
+
+  'Jarvis, que horas são?'             prob=0.904 COMPLETE
+  'Jarvis, muda o brilho para cem'      prob=0.990 COMPLETE
+  'Jarvis, me lembra de ligar para mãe' prob=0.986 COMPLETE
+  'Jarvis, tem reunião amanhã de manhã?' prob=0.980 COMPLETE
+  'Jarvis, você ouviu o que eu falei?'  prob=0.967 COMPLETE
+  'Hoje no jornal de amanhã'            prob=0.947 COMPLETE
+  'O Flamengo ganhou de três a zero…'   prob=0.988 COMPLETE
+  'Jarvis, qual o significado da vida?' prob=0.990 COMPLETE
+
+Conclusão honesta: SmartTurn-v3 SÓ distingue "terminou de falar" de "ainda
+está falando" (a arquitetura Conformer+MFCC + zero-shot). Não separa
+endereço do JARVIS de narração da TV (o problema que v8 corrige).
+Todos os 8 itens são falas completas do ponto de vista do modelo.
+
+O que falta para um A/B real:
+- amostras WAIT incompletas sintetizadas com hesitação (Kokoro + corte
+  aleatório para "eu tava pensando em…")
+
+
