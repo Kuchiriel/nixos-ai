@@ -337,3 +337,21 @@ microturn-4b-lora. Nada de producao foi tocado.
 ## 2026-11-14 esteira automatizada ASR->texto: 0/8 (0%) — report reports/duplex-conveyor/2026-11-14T125303.json
 
 ## 2026-11-14 esteira automatizada ASR->texto: 8/8 (100%) — report reports/duplex-conveyor/2026-11-14T130004.json
+
+## 2026-11-14 esteira automatizada ASR->texto: 7/8 (88%) — report reports/duplex-conveyor/2026-11-14T131812.json
+
+## 2026-11-14 esteira automatizada ASR->texto: 8/8 (100%) — report reports/duplex-conveyor/2026-11-14T131913.json
+
+## 2026-11-14 esteira automatizada ASR->texto: 7/8 (88%) — report reports/duplex-conveyor/2026-11-14T132003.json
+
+## 2026-11-14 esteira automatizada ASR->texto: 8/8 (100%) — report reports/duplex-conveyor/2026-11-14T132055.json
+
+## 2026-11-14 esteira automatizada ASR->texto: 8/8 (100%) — report reports/duplex-conveyor/2026-11-14T132152.json
+
+## 2026-11-14 13:23 — Rebuild OK + contexto whisper (A/B medido) + duplex no mudo Host rebuild completo às ~13:1x: SISTEMA ATUALIZADO COM SUCESSO (1713 testes
+na parte user; llama/embed/rerank/qdrant reiniciados via jarvis.target;
+rnnoise_hard_source entra junto com a recarga de pipewire no proximo login).
+A rebuild NAO reinicia o pipewire do usuario: o perfil 'hard' so ganha vida
+no proximo relogin; o default fine permanece rnnoise_source. A/B do prompt whisper no conveyor (PCM injetado igual ao duplex): hint 'Jarvis' simples -> 7/8 (que horas sao vira 'que oracao') sem hint -> 8/8 (mas 'Jarvis' vira 'Ja ves'/'Jairus') priming 'Jarvis, que horas sao? Jarvis, me lembra. Jarvis, reuniao.' -> 8/8, com 'Jarvis, que horas sao?' reproduzido exato (o encoder do asrd aceita a chave ctx que o cliente envia; o asrd antes descartava) Voz so ouve o que NAO e speaker: confirmado com estimulo sintetizado no
+alto-falante: Mic1 cru rms~870 (ouve a TV), echo_cancel_source rms~50,
+rnnoise_source rms~3 (AEC cancela o playback). Commits hoje: 3e0db683 7de6059c 7766cf61 e91f1b1b f20497d8
