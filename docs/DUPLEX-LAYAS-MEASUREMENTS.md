@@ -483,3 +483,29 @@ Bloqueador afeta tudo que dependa de subir kernel novo:
 O que continua funcionando sem Kaggle: a esteira completa de qualidade
 (conveyor/sweep/gates popula HOJE com este ciclo: conveyor 8/8, gate
 44/52 + 22/24, agent 5/6 + 8/13).
+
+## 2026-11-14 15:27 — Kaggle: o que falha e o que era meu erro
+
+Dois credenciais disponíveis: /home/nixos/.kaggle/kaggle.json (magbeatles) e
+/tmp/opencode/kaggle.json.kct-backup (kct, restaurada em ~/.kaggle/).
+
+Verificado (14/11):
+- `kaggle kernels output kuchiriel/duplex-gate-lora`: **funciona** com magbeatles, baixa ~28 MB de adapter + chat template + tokenizer (testado, funcional).
+- `kaggle kernels status kuchiriel/duplex-gate-lora`: COMPLETE em ambos.
+- `kaggle datasets download kuchiriel/jarvis`: **403 SignatureDoesNotMatch**
+  em ambos os credenciais (SignatureDoesNotMatch no host storage.googleapis.com,
+  dataset id 11923964).
+- `kaggle kernels list --mine --page-size 5`: OK.
+- CLI é 2.2.5 (PyPI oficial). Tentei instalar git+master e não trouxe nada diferente — desinstalado e reinstalado o oficial.
+- Descoberta honesta: o `~/` em KAGGLE_CONFIG_DIR era expandido errado pelo
+  meu shell porque eu passava ~/ sem quoting — resultado: makedirs('~')
+  deu Permission denied antes do cli chamar googleapis mesmo.
+
+Bloqueador REAL para v9 (e portanto para futuro retrain contínuo):
+- API de datasets não entrega bytes para esses IDs (outro universo do que
+  kernel-output funciona). A cunha parece estar no bucket de dataset dos
+  proprietários (ou similar aos erros de permissão que o kct já tinha antes).
+- Consequência: para v9 precisar retreinar, teria que criar um dataset novo
+  do zero fazendo upload (não só download) — que para um dataset de agora
+  criarfamos ao com dataset.create de um `lora-v9-train.jsonl` gerado
+  localmente.
