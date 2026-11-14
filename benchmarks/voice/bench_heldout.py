@@ -11,14 +11,20 @@ REPO = Path("/home/nixos/projects/nixos-ai")
 spec = importlib.util.spec_from_file_location(
     "duplex_voice_ref", REPO / "scripts/duplex-voice.py")
 dv = importlib.util.module_from_spec(spec)
-sys.argv = ["duplex-voice-ref"]
+_argv = sys.argv[:]
 spec.loader.exec_module(dv)
+sys.argv = _argv
 
 import sys
+import os
 sys.path.insert(0, str(Path(__file__).parent))
 from heldout import HELDOUT
 
-BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8092"
+# (13/11) argv foi resetado acima: BASE nunca viu a URL passada e caia no
+# default 8092 em silencio. JARVIS_BENCH_BASE ganha; argv e fallback; default
+# so se nada vier.
+BASE = (os.environ.get("JARVIS_BENCH_BASE")
+        or (sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8092"))
 
 rows = []
 t0 = time.monotonic()

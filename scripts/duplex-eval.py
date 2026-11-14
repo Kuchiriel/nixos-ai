@@ -39,6 +39,7 @@ from pathlib import Path
 # tecnica do bench_heldout.py) e, se o import falhar, cai na copia local com
 # aviso em stderr caso caia na copia local DEFASADA — nunca medir no escuro.
 def _load_class_sys():
+    _argv = sys.argv[:]
     try:
         import importlib.util
         REPO = Path(__file__).resolve().parent.parent
@@ -47,9 +48,12 @@ def _load_class_sys():
         dv = importlib.util.module_from_spec(spec)
         sys.argv = ["duplex-voice-ref"]
         spec.loader.exec_module(dv)
+        sys.argv = _argv
         print("duplex-eval: CLASS_SYS importado do duplex-voice.py (novo)",
               file=sys.stderr)
         return dv.CLASS_SYS, dv.CLASS_LABELS
+    except Exception as exc:  # noqa: BLE001
+        sys.argv = _argv
     except Exception as exc:  # noqa: BLE001
         print(f"duplex-eval: AVISO path de producao inacessivel ({exc}); "
               f"usando copia LOCAL que pode estar defasada", file=sys.stderr)

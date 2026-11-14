@@ -11,8 +11,9 @@ REPO = Path("/home/nixos/projects/nixos-ai")
 spec = importlib.util.spec_from_file_location(
     "duplex_voice_ref", REPO / "scripts/duplex-voice.py")
 dv = importlib.util.module_from_spec(spec)
-sys.argv = ["duplex-voice-ref"]
+_argv = sys.argv[:]
 spec.loader.exec_module(dv)
+sys.argv = _argv
 
 sys.path.insert(0, str(Path(__file__).parent))
 from heldout2 import HELDOUT2

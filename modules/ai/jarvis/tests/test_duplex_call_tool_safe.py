@@ -11,7 +11,17 @@ from pathlib import Path
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parents[4] / "scripts"
+
+def _find_scripts():
+    for p in Path(__file__).resolve().parents:
+        if (p / "scripts").is_dir():
+            return p / "scripts"
+    return None
+
+
+SCRIPTS = _find_scripts()
+if SCRIPTS is None:
+    pytest.skip("scripts/ fora do src (sandbox Nix)", allow_module_level=True)
 spec = importlib.util.spec_from_file_location(
     "duplex_voice", SCRIPTS / "duplex-voice.py")
 dv = importlib.util.module_from_spec(spec)

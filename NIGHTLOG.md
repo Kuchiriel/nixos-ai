@@ -264,3 +264,4 @@
   rules, vision, providers (llm, mcp, http_service)
 - **Status**: Código limpo, sem TODO/FIXME pendentes, sem arquivos .bak,
   regex consolidados, zero shell=True restante
+- 2026-11-12T11:17:15-03:00 [safe-nixos-apply:--help] checando se llama-server está ocioso antes de ativar...

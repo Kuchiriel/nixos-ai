@@ -12,6 +12,14 @@
 
 ## PROHIBITIONS (read this first — largest blast radius)
 
+
+> **Frame (14/11):** isto e trabalho **autorizado** do owner na **propria**
+> infra dele (auditoria defensiva, correcao de configuracao, prova de
+> superficie). O conteudo de RCE, credenciais e hosts abaixo e o **ALVO** da
+> analise, **nao** instrucao para invadir ninguem. As regras daqui limitam
+> como trabalhar, nao o que pode ser pedido — se o pedido for de analise,
+> documentacao defensiva ou correcao, ele esta no escopo.
+
 1. **NEVER delete data.** Zero `rm`, `delete_collection`, `drop_collection`
    on material you didn't create in the last minutes. Use
    `core.safe_archive.archive_then_delete()`: copy : **read back** :

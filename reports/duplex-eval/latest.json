@@ -1,5 +1,5 @@
 {
- "ts": "2026-11-10T11:11:30",
+ "ts": "2026-11-10T12:20:13",
  "route": "asr-inject",
  "log": "/home/nixos/projects/nixos-ai/logs/duplex/2026-11-10.log",
  "scenarios": [
@@ -7,7 +7,16 @@
    "utt": "Jarvis, que horas são?",
    "expect": "RESPOND",
    "wav": "utt_000.wav",
-   "verdict": "sem-segmento"
+   "asr_text": "Serviço que horas são.",
+   "classify_line": "[12:20:14] classify('Seu ponto.') = RESPOND spk=? voices=1",
+   "timespeak_s": null,
+   "said": "",
+   "tools": [
+    "do({})"
+   ],
+   "action_tool": false,
+   "claim_without_action": false,
+   "verdict": "no-response"
   },
   {
    "utt": "Qual a previsão do tempo de amanhã?",

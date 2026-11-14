@@ -1,0 +1,21 @@
+{
+ "ts": "2026-11-09T04:51:21",
+ "asr": "http://127.0.0.1:8097",
+ "samples_per_cat": 10,
+ "seed": 42,
+ "categories": {
+  "silence": {
+   "error": "sem fixtures: /tmp/opencode/night-microturn/kaggle-pkg/silence.parquet"
+  },
+  "nonspeech": {
+   "error": "sem fixtures: /tmp/opencode/night-microturn/kaggle-pkg/nonspeech.parquet"
+  },
+  "music": {
+   "error": "sem fixtures: /tmp/opencode/night-microturn/kaggle-pkg/music.parquet"
+  },
+  "reduplication": {
+   "error": "sem fixtures: /tmp/opencode/night-microturn/kaggle-pkg/reduplication.parquet"
+  }
+ },
+ "note": "gate v6 completo vive no duplex-asrd (lane OC); kill simulado = listas TSV (tier-2 + lexicon)"
+}
