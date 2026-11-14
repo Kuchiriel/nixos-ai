@@ -57,6 +57,8 @@ CORPUS = [
 ]
 
 
+_JARVIS_ASR_CTX_DEFAULT = "Jarvis, que horas são? Jarvis, me lembra. Jarvis, reunião."
+
 def normalize(s: str) -> str:
     s = unicodedata.normalize("NFD", s.lower())
     s = "".join(c for c in s if unicodedata.category(c) != "Mn")
@@ -123,7 +125,7 @@ def feed_chunks(proc, pcm: "np.ndarray"):
             time.sleep(delay)
         proc.stdin.write(json.dumps({
             "audio_b64": base64.b64encode(chunk.tobytes()).decode(),
-            "ctx": os.environ.get("JARVIS_ASR_CTX", "Jarvis"),
+            "ctx": os.environ.get("JARVIS_ASR_CTX", _JARVIS_ASR_CTX_DEFAULT),
             }).encode() + b"\n")
         proc.stdin.flush()
         sent += 1
@@ -132,7 +134,7 @@ def feed_chunks(proc, pcm: "np.ndarray"):
         time.sleep(CHUNK / SR)
         proc.stdin.write(json.dumps({
             "audio_b64": base64.b64encode(silence.tobytes()).decode(),
-            "ctx": os.environ.get("JARVIS_ASR_CTX", "Jarvis"),
+            "ctx": os.environ.get("JARVIS_ASR_CTX", _JARVIS_ASR_CTX_DEFAULT),
             }).encode() + b"\n")
         proc.stdin.flush()
 

@@ -43,7 +43,7 @@ except Exception as _exc:  # noqa: BLE001
 
 SR = 16000
 CTX = {"v": ""}   # vocabulário da conversa → prompt do whisper-server
-WCPP = "http://127.0.0.1:8097/inference"
+WCPP = os.environ.get("JARVIS_WCPP_URL", "http://127.0.0.1:8097/inference")
 
 def main():
     from silero_vad_iterator import FixedVADIterator
@@ -70,7 +70,12 @@ def main():
     # 250ms = endpoint em ~300-550ms. Papers de endpointing production
     # (barge-in/VAD guide 2026): 380ms é o ponto doce; abaixo de 250ms
     # a fala contínua fragmenta (o merge junta de volta).
-    vad = FixedVADIterator(model, threshold=0.5, min_silence_duration_ms=300,
+    import os as _os
+    try:
+        _min_sil = int(_os.environ.get("JARVIS_ASRD_MIN_SILENCE_MS", "300"))
+    except ValueError:
+        _min_sil = 300
+    vad = FixedVADIterator(model, threshold=0.5, min_silence_duration_ms=_min_sil,
                            speech_pad_ms=120)
     print(json.dumps({"text": "", "ms": 0, "ready": True}), flush=True)
 
@@ -459,9 +464,16 @@ def main():
                 pass
             if ev and started is None and ev.get("start") is not None:
                 started = max(0, int(len(ring) - SR * 1.0))   # 1s de pré-roll
+            # (14/11) endpoint gap: parametrizavel p/ A/B (silero fecha o
+            # segmento no silêncio entre janelas; sem isso 380-500ms -> se voce
+            # fechar antes perde final de palavra. Medido: 0.70 vs 0.45 vs 0.55.
+            try:
+                _sil_gap_s = float(os.environ.get("JARVIS_ASRD_SILENCE_GAP", "0.70"))
+            except ValueError:
+                _sil_gap_s = 0.70
             _close = bool(ev and ev.get("end") is not None)
             if (not _close and started is not None and _last_voice_t[0]
-                    and (time.monotonic() - _last_voice_t[0]) > 0.70):
+                    and (time.monotonic() - _last_voice_t[0]) > _sil_gap_s):
                 _close = True
             if _close and started is not None:
                 if _last_voice_pos[0]:
