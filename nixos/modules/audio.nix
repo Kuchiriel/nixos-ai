@@ -26,8 +26,10 @@
     # de ruído em tempo real (ventoinha + sons de casa do notebook).
     # O wakeword/STT apontam para esse source em vez do device cru.
     # Parâmetros VAD do legado (calibrados em ambiente ruidoso):
-    #   - VAD Threshold 50% (fala vs. ruído)
-    #   - VAD Grace 200ms (não corta início de palavra)
+    #   - VAD Threshold 50% (fala vs. ruído) — perfil padrão do duplex
+    #   - Perfil para barulho forte (TV/música alta): a segunda filter-chain
+    #     "100-input-denoising-hard" cria `rnnoise_hard_source` com VAD 65%;
+    #     o duplex seleciona via JARVIS_VOICE_NOISE_PROFILE=hard|noisy|raw.
     # 03/11 (FluidVoice): cancelamento de ECO (AEC3 do WebRTC — o mesmo
     # motor do app FluidVoice, via webrtc-audio-processing que já está na
     # closure do pipewire) ANTES do RNNoise.
@@ -58,6 +60,43 @@
               };
               "source.props" = {
                 "node.name" = "echo_cancel_source";
+                "media.class" = "Audio/Source";
+                "audio.rate" = 48000;
+              };
+            };
+          }
+        ];
+      };
+      "100-input-denoising-hard" = {
+        "context.modules" = [
+          {
+            name = "libpipewire-module-filter-chain";
+            args = {
+              "node.description" = "Noise Canceling source (hard)";
+              "media.name" = "Noise Canceling source (hard)";
+              "filter.graph" = {
+                nodes = [
+                  {
+                    type = "ladspa";
+                    name = "rnnoise";
+                    plugin = "${pkgs.rnnoise-plugin}/lib/ladspa/librnnoise_ladspa.so";
+                    label = "noise_suppressor_mono";
+                    control = {
+                      "VAD Threshold (%)" = 65.0;
+                      "VAD Grace Period (ms)" = 200;
+                      "Retroactive VAD Grace (ms)" = 0;
+                    };
+                  }
+                ];
+              };
+              "capture.props" = {
+                "node.name" = "capture.rnnoise_hard_source";
+                "node.passive" = true;
+                "audio.rate" = 48000;
+                "node.target" = "echo_cancel_source";
+              };
+              "playback.props" = {
+                "node.name" = "rnnoise_hard_source";
                 "media.class" = "Audio/Source";
                 "audio.rate" = 48000;
               };
