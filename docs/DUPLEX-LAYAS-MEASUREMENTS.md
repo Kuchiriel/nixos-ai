@@ -509,3 +509,42 @@ Bloqueador REAL para v9 (e portanto para futuro retrain contínuo):
   do zero fazendo upload (não só download) — que para um dataset de agora
   criarfamos ao com dataset.create de um `lora-v9-train.jsonl` gerado
   localmente.
+
+## 2026-11-14 15:36 — LiveTurn (ACL ARR 2026) indexado e lido
+
+PDF encontrado em ~/Books/1448_LiveTurn_A_Real_Time_Turn.pdf (download feito
+requer acesso direto depois que o OpenReview bloqueou meu webfetch).
+Indexado em books. Leitura integral feita.
+
+O que muda a esteira:
+
+Arquitetura: MFCC (40-d) + K = ASR encoder (15-min 1024-ms window,
+512-d embeddings); cross-attention = acoustic queries ASR context;
+LSTM dh=256; dois CNNs (16,256)->(16,128)->(16,64); ~1.46M parâmetros.
+
+Continuous Yield-State Loss (vs vanilla BCE): EOT ramp (10->500), boundary
+penalty 10, mid-turn pause weight 50, hard-negative 30, gap-mask τ=0.7.
+
+Métricas reportadas: 94% held-out acc (2245 segments, no-EOT F1 0.94 / EOT
+F1 0.93), FSOT 6%, med EOT latency 640ms, TOR pause 0.18 (Synthetic) /
+0.21 (Candor) em FullDuplexBench. Silero VAD (800 ms) tem pause TOR
+0.41/0.72. smart-turn-v3 tem 0.24/0.63.
+
+O que a esteira da casa ganha a partir daqui:
+- a nossa v8-LoRA usa plain classification (v4) com respostas binárias
+  responsivas às hesitações de fala PT-BR reais; a arquitetura
+  MFCC+Cross-Attention é uma REFÚGIO provável para o v9.
+- a PS pergunta "pause handling" do microturn ainda está em winner:
+  WAIT conservativo ganha (v8 12/13). Pause FPR mais apertado fica no
+  TERRENO nativo do LiveTurn.
+- LiveTurn training é em call center data (EOT usado em 94% dos falantes
+  PPC) — proporcionalidade têcnica que ainda não testamos no contexto
+  PT-BR (our data é doméstico).
+
+ABRABDIM "não há codivine applicável direto" — não há repositório
+LiveTurn público. Elective: smart-turn-v3 e (x=x) ASLP-lab/FastTurn
+(PyTorch + training set). Ambos precisam de investimento de tempo que
+a sessão desta esteira não tem mais.
+
+Para quem vier: o caminho emocionável do LiveTurn virou a referência
+madura para o Esteira-V9 do microturn. Não é resultado instantâneo.
