@@ -1,0 +1,93 @@
+{
+  "ts": "2026-11-14T144932",
+  "days": 7,
+  "quick": false,
+  "results": {
+    "sweep": {
+      "ok": true,
+      "output": "[sweep] days=7 files=7 lines=1579809\n[sweep] asr_empty_seg            916\n[sweep] spk_unidentified         114\n[sweep] tts_killed_mid           56\n[sweep] tts_mid_barge            55\n[sweep] tts_tool_echo_blocked    26\n[sweep] mishear_jarvis           19\n[sweep] report: reports/duplex-sweep/2026-11-14T144938.json\n",
+      "counts": {
+        "asr_empty_seg": 916,
+        "spk_unidentified": 114,
+        "tts_killed_mid": 56,
+        "tts_mid_barge": 55,
+        "tts_tool_echo_blocked": 26,
+        "mishear_jarvis": 19
+      }
+    },
+    "conveyor": {
+      "ok": true,
+      "passed": 8,
+      "total": 8,
+      "output": "onveyor] PASS question  transcript='Jarvis, você ouviu o que eu falei.'\n[conveyor] PASS jornal    transcript='Hoje no Jornal de Amanhã.'\n[conveyor] PASS futebol   transcript='O Flamengo ganhou de 3 a 0 no último jogo.'\n[conveyor] PASS vida      transcript='Jarvis, qual o significado da vida?'\n[conveyor] resultado: 8/8 (100%) em 46s\n[conveyor] report: reports/duplex-conveyor/2026-11-14T145025.json\n"
+    },
+    "gate1": {
+      "ok": true,
+      "parsed": {
+        "total": [
+          44,
+          52
+        ],
+        "classes": {
+          "RESPOND": [
+            16,
+            16
+          ],
+          "WAIT": [
+            12,
+            13
+          ],
+          "SILENCE": [
+            10,
+            16
+          ],
+          "BARGE": [
+            6,
+            7
+          ]
+        }
+      },
+      "output": "\nBARGE    BARGE   ok| calma calma\nBARGE    BARGE   ok| nao isso ta errado\nBARGE    BARGE   ok| deixa eu te falar uma coisa\nBARGE    BARGE   ok| para com isso\n\nRESPOND  acc 16/16  (pred {'RESPOND': 16})\nWAIT     acc 12/13  (pred {'WAIT': 12, 'BARGE': 1})\nSILENCE  acc 10/16  (pred {'WAIT': 4, 'SILENCE': 10, 'RESPOND': 2})\nBARGE    acc 6/7  (pred {'BARGE': 6, 'WAIT': 1})\nTOTAL 44/52  mean_lat=145 ms\n"
+    },
+    "gate2": {
+      "ok": true,
+      "parsed": {
+        "total": [
+          0,
+          24
+        ],
+        "classes": {
+          "WAIT": [
+            0,
+            4
+          ],
+          "SILENCE": [
+            0,
+            18
+          ],
+          "BARGE": [
+            0,
+            2
+          ]
+        }
+      },
+      "output": "AIT    MISS| escuta só o que aconteceu comigo\nNONE     WAIT    MISS| deixa eu te contar uma coisa importante\nNONE     WAIT    MISS| fala aí uma coisa pra mim\nNONE     BARGE   MISS| para para para chega já\nNONE     BARGE   MISS| chega de conversa vamos ao fato\n\nWAIT     acc 0/4  (pred {'NONE': 4})\nSILENCE  acc 0/18  (pred {'NONE': 18})\nBARGE    acc 0/2  (pred {'NONE': 2})\nTOTAL 0/24  mean_lat=1 ms\n"
+    },
+    "agent": {
+      "ok": true,
+      "metrics": {
+        "tool_ok": "5/6",
+        "direct_ok": "8/13",
+        "no_invent": "11/11",
+        "short_ok": "19/19",
+        "no_roleplay": "19/19",
+        "no_fake_action": "2/2"
+      },
+      "output": "             words=0   direct_ok\n[   human] tool=-                  words=18  \n[  flight] tool=web_search         words=0   \n[   order] tool=web_search         words=0   \n[  silent] tool=jarvis             words=0   direct_ok\n\n=== RESUMO baseline (12s, temp=0.4) ===\n  tool_ok        5/6\n  direct_ok      8/13\n  no_invent      11/11\n  short_ok       19/19\n  no_roleplay    19/19\n  no_fake_action 2/2\n"
+    }
+  },
+  "regressions": [
+    "gate2 0/24 < 15"
+  ],
+  "duration_s": 74
+}

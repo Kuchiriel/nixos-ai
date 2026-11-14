@@ -405,3 +405,38 @@ Conclusão honesta: o gargalo prático percebido na sessão do dono NÃO é nenh
 componente isolado; é o stream llama + respostas longas + a própria fila de
 palavra na auditiva do dono. Terminal da avaliação: tudo medido, nada mexido
 sem evidência. Diário das medições: reports/duplex-conveyor/2026-11-14T*.json.
+
+## 2026-11-14 14:20 duplex-sweep (7d): asr_empty_seg=960, spk_unidentified=140, tts_killed_mid=52, tts_mid_barge=51, tts_tool_echo_blocked=26 — reports/duplex-sweep/2026-11-14T142034.json
+
+## 2026-11-14 14:21 duplex-sweep (7d): asr_empty_seg=916, spk_unidentified=114, tts_killed_mid=56, tts_mid_barge=55, tts_tool_echo_blocked=26, mishear_jarvis=19 — reports/duplex-sweep/2026-11-14T142143.json
+
+## 2026-11-14 14:49 duplex-sweep (7d): asr_empty_seg=916, spk_unidentified=114, tts_killed_mid=56, tts_mid_barge=55, tts_tool_echo_blocked=26, mishear_jarvis=19 — reports/duplex-sweep/2026-11-14T144938.json
+
+## 2026-11-14 esteira automatizada ASR->texto: 8/8 (100%) — report reports/duplex-conveyor/2026-11-14T145025.json
+
+## 2026-11-14T144932 — duplex-cycle completo: conveyor=8/8 reg=gate2 0/24 < 15 — reports/duplex-cycle/2026-11-14T144932/SUMMARY.md
+
+## 2026-11-14 14:51 duplex-sweep (7d): asr_empty_seg=916, spk_unidentified=114, tts_killed_mid=56, tts_mid_barge=55, tts_tool_echo_blocked=26, mishear_jarvis=19 — reports/duplex-sweep/2026-11-14T145144.json
+
+## 2026-11-14 esteira automatizada ASR->texto: 8/8 (100%) — report reports/duplex-conveyor/2026-11-14T145229.json
+
+## 2026-11-14T145138 — duplex-cycle completo: conveyor=8/8 reg=nenhum — reports/duplex-cycle/2026-11-14T145138/SUMMARY.md
+
+## 2026-11-14 14:50 — Esteira padronizada: scripts/duplex-cycle.py
+
+Esteira de qualidade completa (um comando): sweep -> conveyor -> gate1/2 -> agent.
+1a execucao verde: conveyor 8/8, gate heldout1 44/52 (v8), heldout2 22/24,
+agent tool_ok 5/6 + direct_ok 8/13.
+
+Bug do gate2 desconectado (classify_turn 0/24) corrigido: o env var
+JARVIS_BENCH_BASE nao era passado para os subprocessos; heldout2 cai em
+http://127.0.0.1:8093 em silencio -> 100%% NONE. Agora JARVIS_BENCH_BASE
+default 8092 empacotado no spawn.
+
+Outro achado duro de merito: Laya-microturn A/B honesto vs LoRA v8
+(mesma metodologia, mesmos heldouts):
+  - heldout1: 18/52 (SILENCE 0/16, BARGE 0/7), 804 ms CPU
+  - heldout2: 1/24 (SILENCE 0/18, BARGE 0/2)
+LoRA v8 (atual em producao): 44/52 + 22/24, mean 140-146 ms.
+Modelo binario do convertido deletado; microturn duplex em
+~/models/_arquivo/laya-duplex-microturn-2026-11-14/ + MOVED com rollback commands.
