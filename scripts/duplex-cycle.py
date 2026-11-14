@@ -49,10 +49,13 @@ def step_sweep(days: int) -> dict:
 
 
 def step_conveyor() -> dict:
+    env = dict(os.environ,
+               LD_LIBRARY_PATH=os.popen(
+                   f"{sys.executable} {REPO}/scripts/asrd_env.py --print").read().strip())
     rc, out = _run([
         "/home/nixos/projects/karaok/.venv/bin/python3",
         str(REPO / "scripts" / "duplex-conveyor.py"),
-    ], timeout=300)
+    ], timeout=300, env=env)
     m = re.search(r"resultado: (\d+)/(\d+)", out)
     passed, total = (int(m.group(1)), int(m.group(2))) if m else (0, 0)
     print(f"[conveyor] {passed}/{total}")
