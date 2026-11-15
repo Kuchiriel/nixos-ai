@@ -100,6 +100,25 @@ const TEXT_MAX = 2000;
 const BUSY_MS = Number(process.env.AGENT_HUB_BUSY_MS || 90000);
 // corpo maximo do POST /api/wake (o texto do dono cabe em folgado)
 const BODY_MAX = 64 * 1024;
+
+// (15/11) RATE LIMIT do spawn: o hub cria agentes que consomem modelo e
+// VRAM (o router tem maxResident=1). Sem teto, um celular pode encher a
+// casa de sessoes. A2A v1.0: entrada externa e nao confiavel e precisa
+// de politica e rate limit.
+const SPAWN_RATE = { windowMs: 10 * 60 * 1000, max: 6, maxConcurrent: 3 };
+const _spawnLog = [];   // {ts, origin}
+
+function spawnAllowed(origin) {
+  const now = Date.now();
+  while (_spawnLog.length && now - _spawnLog[0].ts > SPAWN_RATE.windowMs) {
+    _spawnLog.shift();
+  }
+  if (_spawnLog.length >= SPAWN_RATE.max) {
+    return { ok: false, error: 'rate limit: ${SPAWN_RATE.max} spawns em ${SPAWN_RATE.windowMs / 60000} min (tente depois)' };
+  }
+  _spawnLog.push({ ts: now, origin });
+  return { ok: true };
+}
 async function wake(name, text) {
   // (15/11, crouton-alpha) SEM DUPLICAR: o hub NAO injeta prompt por conta
   // propria. Usa o caminho CANONICO da casa (jarvis.core.comms.deliver ->
@@ -452,6 +471,30 @@ async function pyMod(mod, args = [], timeoutMs = 60000) {
 async function handler(req, res) {
   const url = new URL(req.url, 'http://127.0.0.1');
   const send = (code, body, type='text/html; charset=utf-8') => { res.writeHead(code, { 'Content-Type': type }); res.end(body); };
+  if (req.method === 'GET' && url.pathname === '/.well-known/agent-card.json') {
+    // (15/11) AGENT CARD (padrao A2A): o manifesto publico do hub. O
+    // cliente le o card antes de delegar (paper 2609.00006: executor local
+    // e agente A2A remoto pela mesma interface).
+    return send(200, JSON.stringify({
+      name: 'agent-hub JARVIS',
+      description: 'Hub de agentes da casa: cria agentes, mostra o bus e acorda sessoes.',
+      url: 'http://' + (process.env.HUB_PUBLIC_URL || '127.0.0.1:' + PORT),
+      version: '1.0.0',
+      protocolVersion: 'a2a/1.0',
+      capabilities: { streaming: false, pushNotifications: false,
+        stateTransitionHistory: true,
+        skills: [
+          { id: 'agents.list', name: 'listar agentes' },
+          { id: 'agents.spawn', name: 'criar agente' },
+          { id: 'bus.read', name: 'ler o bus' },
+          { id: 'agent.wake', name: 'acordar agente' },
+        ] },
+      securitySchemes: { hubToken: { type: 'apiKey', in: 'header',
+        name: 'x-agent-hub-token' } },
+      defaultInputModes: ['text'],
+      defaultOutputModes: ['text'],
+    }), 'application/json');
+  }
   if (req.method === 'GET' && url.pathname === '/') return send(200, HTML);
   if (req.method === 'GET' && url.pathname === '/api/agents') { const j = await agentsJSON().catch(e => ({ servers: { opencode: false }, agents: [], error: String(e) })); return send(200, JSON.stringify(j), 'application/json'); }
   if (req.method === 'GET' && url.pathname === '/api/transcript') {
@@ -535,11 +578,42 @@ async function handler(req, res) {
     }
     let body = {};
     try { body = JSON.parse(raw || '{}'); } catch { return send(400, JSON.stringify({ error: 'json invalido' }), 'application/json'); }
-    const args = ['--task', String(body.task || '')];
+    const task = String(body.task || '');
+    if (!task.trim()) return send(400, JSON.stringify({ error: 'task obrigatoria' }), 'application/json');
+    // (15/11) O PEDIDO E INPUT EXTERNO: passa pelo guard da frota antes
+    // de virar tarefa de agente. O guard decide: intrusao bloqueia,
+    // moralizacao vira aviso no prompt do agente novo.
+    let guard = { clean: true, hits: [], padroes: [], categoria: 'limpo' };
+    try {
+      const { spawnSync } = await import('node:child_process');
+      const g = spawnSync('python3', ['/home/nixos/projects/nixos-ai/scripts/agent_guard.py',
+        '--scan', task, '--json'], { encoding: 'utf8', timeout: 20000 });
+      if (g.status === 0 || g.stdout) {
+        const v = JSON.parse(g.stdout || '{}');
+        if (v && v.hits && v.hits.length) {
+          return send(451, JSON.stringify({
+            error: 'guard: pedido bloqueado (termo de intrusao)',
+            termos: v.hits.map((x) => x.termo),
+          }), 'application/json');
+        }
+        guard = v || guard;
+      }
+    } catch (e) {
+      /* fail-open: o guard no spawn e o agente-spawn.py tambem bloqueia */
+    }
+    const rate = spawnAllowed(String(req.socket.remoteAddress || '?'));
+    if (!rate.ok) return send(429, JSON.stringify({ error: rate.error }), 'application/json');
+    const args = ['--task', task];
     if (body.name) args.push('--name', String(body.name));
-    if (body.model) args.push('--model', String(body.model));
-    if (body.lane) args.push('--lane', String(body.lane));
-    if (body.profile) args.push('--profile', String(body.profile));
+    if (body.requester) args.push('--requester', String(body.requester));
+    // (15/11) o solicitante NAO escolhe persona/modelo/lane: o papel vem do
+    // catalogo e o modelo do model_for_task (o override fica para uso local
+    // com JARVIS_SPAWN_ALLOW_OVERRIDE=1).
+    if (process.env.JARVIS_SPAWN_ALLOW_OVERRIDE === '1') {
+      if (body.model) args.push('--model', String(body.model));
+      if (body.lane) args.push('--lane', String(body.lane));
+      if (body.profile) args.push('--profile', String(body.profile));
+    }
     if (body.dry_run) args.push('--dry-run');
     if (body.dry_run) {
       const j = await pyJSON("agent-spawn.py", args, 120000).catch(e => ({ ok: false, error: String(e) }));

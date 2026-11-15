@@ -647,6 +647,74 @@ JARVIS_TOOLS = [
         },
     },
     {
+        "name": "hub_agents",
+        "description": "List the agents of the house (the hub roster: codename, lane, "
+                       "state, session). For a remote lane (phone) this is the discovery "
+                       "surface — the hub also publishes an A2A Agent Card at "
+                       "/.well-known/agent-card.json.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "hub_spawn",
+        "description": "Create a NEW agent in the house with the right model, persona "
+                       "and lane (the hub picks the model by tier/cooldown; the caller "
+                       "does NOT choose persona/model). The task is external input: it "
+                       "goes through the intrusion guard, and a marked task arrives with "
+                       "a warning. Returns the new session id.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "what the new agent must do"},
+                "name": {"type": "string", "description": "name of the new agent"},
+                "requester": {"type": "string", "description": "who is asking (your codename)"},
+                "dry_run": {"type": "boolean"},
+            },
+            "required": ["task"],
+        },
+    },
+    {
+        "name": "hub_spawns",
+        "description": "State of the recent spawns (the hub spawns asynchronously: a "
+                       "spawn with a big model takes minutes).",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "hub_bus",
+        "description": "The coordination bus as the hub sees it: every agent's claim, "
+                       "scope, state and the messages (the single source for the hub; "
+                       "refusals and focus-drift messages are filtered by the guard).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"limit": {"type": "integer"}},
+        },
+    },
+    {
+        "name": "hub_state",
+        "description": "Consolidated state of the house (services, GPU/VRAM, models, "
+                       "agents, sessions) as the hub reports it.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "hub_models",
+        "description": "The model catalog the hub can spawn with (tier, cooldown, "
+                       "measured refusal).",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "hub_wake",
+        "description": "Wake an agent of the house (delivers a prompt to its session "
+                       "through the guarded delivery path and posts it on the bus).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "codename of the agent"},
+                "text": {"type": "string", "description": "what to deliver"},
+                "note": {"type": "boolean"},
+            },
+            "required": ["name", "text"],
+        },
+    },
+    {
         "name": "coord_roster",
         "description": "List the local agent roster: codename, name, lane, state and the "
                        "one-line context each agent is working on. Read this to know who "
@@ -738,6 +806,8 @@ _CORE_TOOL_NAMES = {
     "rag_search", "rag_index",                              # conhecimento
     "vault_list", "vault_write", "vault_search_obsidian",   # vault
     "coord_post", "coord_read", "coord_check", "coord_guard", "coord_roster",
+    "hub_agents", "hub_spawn", "hub_spawns", "hub_bus", "hub_state",
+    "hub_models", "hub_wake",
     "coord_whoami", "coord_set_context", "coord_msg", "coord_pending",
 }
 
@@ -761,6 +831,43 @@ _META_TOOLS = [
 ]
 
 _META_TOOL_NAMES = {"tools_search", "tools_call"}
+
+
+def _hub_token() -> str:
+    """O token do hub (server-side): o cliente MCP nunca o ve."""
+    tok = (os.environ.get("AGENT_HUB_TOKEN") or "").strip()
+    if tok:
+        return tok
+    try:
+        p = Path.home() / ".config/opencode/agent-hub.token"
+        return p.read_text(encoding="utf-8").strip()
+    except Exception:
+        return ""
+
+
+def _hub_call(method: str, path: str, body: dict | None = None,
+              timeout: float = 30.0) -> str:
+    """Chama o agent-hub (loopback) com o token. Devolve o JSON cru."""
+    import urllib.error  # noqa: PLC0415
+    import urllib.request  # noqa: PLC0415
+    base = os.environ.get("AGENT_HUB_URL", "http://127.0.0.1:8091").rstrip("/")
+    tok = _hub_token()
+    if not tok:
+        return json.dumps({"error": "hub: token ausente (AGENT_HUB_TOKEN ou "
+                                     "~/.config/opencode/agent-hub.token)"})
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(
+        base + path, data=data, method=method,
+        headers={"Content-Type": "application/json",
+                 "x-agent-hub-token": tok})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.read().decode(errors="replace")
+    except urllib.error.HTTPError as e:
+        return json.dumps({"error": f"HTTP {e.code}",
+                           "body": e.read()[:300].decode(errors="replace")})
+    except Exception as e:
+        return json.dumps({"error": f"{type(e).__name__}: {e}"})
 
 
 def _listed_tools() -> list[dict[str, Any]]:
@@ -1643,6 +1750,41 @@ def call_tool(name: str, args: dict[str, Any]) -> str:
                 return coord_check(agent=args.get("agent") or None, files=files)
             except Exception as e:
                 return f"ERROR: coord_check failed: {e}"
+
+        if name in ("jarvis_hub_agents", "hub_agents"):
+            return _hub_call("GET", "/api/agents")
+
+        if name in ("jarvis_hub_spawns", "hub_spawns"):
+            return _hub_call("GET", "/api/spawns")
+
+        if name in ("jarvis_hub_state", "hub_state"):
+            return _hub_call("GET", "/api/state")
+
+        if name in ("jarvis_hub_models", "hub_models"):
+            return _hub_call("GET", "/api/models")
+
+        if name in ("jarvis_hub_bus", "hub_bus"):
+            try:
+                lim = int(args.get("limit") or 40)
+            except Exception:
+                lim = 40
+            return _hub_call("GET", f"/api/bus?limit={lim}")
+
+        if name in ("jarvis_hub_spawn", "hub_spawn"):
+            body = {"task": str(args.get("task") or ""),
+                    "requester": str(args.get("requester") or "")}
+            if args.get("name"):
+                body["name"] = str(args["name"])
+            if args.get("dry_run"):
+                body["dry_run"] = True
+            return _hub_call("POST", "/api/spawn", body, timeout=60.0)
+
+        if name in ("jarvis_hub_wake", "hub_wake"):
+            body = {"name": str(args.get("name") or ""),
+                    "text": str(args.get("text") or "")}
+            if args.get("note"):
+                body["note"] = True
+            return _hub_call("POST", "/api/wake", body, timeout=60.0)
 
         if name in ("jarvis_coord_guard", "coord_guard"):
             try:
