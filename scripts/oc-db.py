@@ -21,6 +21,7 @@ API:
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import sys
 import time
@@ -71,6 +72,77 @@ def tabelas_ativas(con, janela_ms: int, sessao: str | None) -> tuple[str, list[t
     # nenhuma tabela com atividade na janela: devolve a preferencia (modern)
     pref = "session_message" if "session_message" in tabs else ("part" if "part" in tabs else "")
     return pref, []
+
+
+def partes_com_erro(db: str, desde_ms: int) -> list[tuple[str, str, str, dict]]:
+    """Partes de FERRAMENTA que falharam, desde um instante (ms).
+
+    (15/11, crouton-alpha) O agent-pains.sh lia a tabela `part` (schema
+    1.x) — no 2.2.6 ela esta congelada, entao os erros de hoje nunca
+    chegavam ao PAINS.md (a dor do agente nao era registrada).
+
+    ONDE O 2.2.6 GUARDA AS PARTES (medido): nao existe `session_part`
+    (0 linhas); o conteudo vem EMBUTIDO no `data` da `session_message`
+    (campo `content`: lista de blocos {type, text|tool, state}). O
+    schema 1.x (`part`/`message`) continua existindo, congelado.
+    """
+    out: list[tuple[str, str, str, dict]] = []
+    try:
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=3)
+    except Exception:
+        return out
+    try:
+        tabs = _tables(con)
+        # 1) 2.2.6: partes dentro do data de session_message
+        if "session_message" in tabs:
+            q = ("SELECT session_id, data FROM session_message "
+                 "WHERE time_created > ? ORDER BY time_created DESC")
+            for sid, data in con.execute(q, (desde_ms,)):
+                try:
+                    msg = json.loads(data)
+                except Exception:
+                    continue
+                if not isinstance(msg, dict):
+                    continue
+                for blk in (msg.get("content") or []):
+                    if not isinstance(blk, dict):
+                        continue
+                    if blk.get("type") != "tool":
+                        continue
+                    st = blk.get("state") or {}
+                    if st.get("status") != "error":
+                        continue
+                    err = str(st.get("error") or "").strip()
+                    if not err or "rejected permission" in err:
+                        continue
+                    out.append((str(sid), str(blk.get("name") or blk.get("tool") or "?"), err,
+                                st.get("input") or {}))
+        # 2) 1.x legado (fallback)
+        if not out and "part" in tabs:
+            q = "SELECT session_id, data FROM part WHERE time_created > ? ORDER BY time_created DESC"
+            for sid, data in con.execute(q, (desde_ms,)):
+                try:
+                    j = json.loads(data)
+                except Exception:
+                    continue
+                if not isinstance(j, dict) or j.get("type") != "tool":
+                    continue
+                st = j.get("state") or {}
+                if st.get("status") != "error":
+                    continue
+                msg = str(st.get("error") or "").strip()
+                if not msg or "rejected permission" in msg:
+                    continue
+                out.append((str(sid), str(j.get("tool") or "?"), msg,
+                            st.get("input") or {}))
+    except Exception:
+        pass
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+    return out
 
 
 def main() -> int:

@@ -118,30 +118,35 @@ def norm(sig):
     return re.sub(r'\s+', ' ', sig).strip()[:240]
 
 # 1) sqlite (store vivo) + 2) sqlite legado + 3) storage em json
-for db in (os.path.join(store, 'opencode.db'), os.path.join(store, 'opencode-stable.db')):
-    if not os.path.exists(db):
-        continue
-    try:
-        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
-        for sid, data in con.execute(
-                "select session_id,data from part where time_created>? order by time_created desc",
-                (cutoff_ms,)):
-            try: j = json.loads(data)
-            except Exception: continue
-            if j.get('type') != 'tool':
-                continue
-            st = j.get('state') or {}
-            if st.get('status') != 'error':
-                continue
-            msg = str(st.get('error') or '').strip()
-            if not msg:
-                continue
-            if 'rejected permission' in msg:
-                continue
-            rows.append((sid, j.get('tool', '?'), msg, st.get('input') or {}))
-        con.close()
-    except Exception:
-        pass
+# (15/11, crouton-alpha) DELEGADO ao oc-db.py: a tabela `part` e o
+# schema 1.x e esta CONGELADA no 2.2.6 (as partes novas estao dentro do
+# `data` de session_message) — entao as dores de hoje nunca chegavam ao
+# PAINS.md. O oc-db.py le o schema que esta vivo.
+try:
+    # (15/11) este bloco roda via heredoc: __file__ e '-' (stdin). O repo
+    # sai do caminho do store (argv[1]).
+    _home = os.path.expanduser('~')
+    _ocdb_path = ''
+    for _cand in (os.path.join(_home, 'projects', 'nixos-ai', 'scripts', 'oc-db.py'),
+                  os.path.join(_home, '.local', 'share', 'nixos-ai', 'scripts', 'oc-db.py'),
+                  os.path.join(_home, '.local', 'share', 'scripts', 'oc-db.py')):
+        if os.path.exists(_cand):
+            _ocdb_path = _cand
+            break
+    if not _ocdb_path:
+        _ocdb_path = os.path.join(_repo, 'nixos-ai', 'scripts', 'oc-db.py')
+    import importlib.util as _ilu
+    _spec = _ilu.spec_from_file_location('oc_db_pains', _ocdb_path)
+    _ocdb = _ilu.module_from_spec(_spec)
+    _spec.loader.exec_module(_ocdb)
+    for db in (os.path.join(store, 'opencode.db'), os.path.join(store, 'opencode-stable.db')):
+        if not os.path.exists(db):
+            continue
+        for sid, tool, msg, inp in _ocdb.partes_com_erro(db, cutoff_ms):
+            rows.append((sid, tool, msg, inp))
+except Exception:
+    pass
+
 
 for f in glob.glob(os.path.join(store, 'storage', 'part', '*', '*.json')):
     try:
