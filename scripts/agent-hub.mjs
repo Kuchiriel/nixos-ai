@@ -157,6 +157,12 @@ pre { background:#0d1117; border:1px solid var(--line); border-radius:6px; paddi
     <button id="stRefresh" style="margin-left:auto">atualizar</button></div>
   <div id="stBox" class="muted" style="margin-top:6px"></div>
 </div>
+<div class="section-title">dungeon A/B (bonsai vs qwen 4b mtp) - dentro do sistema novo</div>
+<div class="card spawnbox">
+  <div class="row"><button id="abGo">rodar A/B (2 modelos)</button>
+    <span id="abSum" class="muted" style="margin-left:10px">sem veredito ainda</span></div>
+  <div id="abOut" class="muted" style="margin-top:8px"></div>
+</div>
 <div class="section-title">criar agente</div>
 <div class="card spawnbox">
   <div class="turn"><input id="spTask" placeholder="tarefa do agente novo (a persona e o modelo sao escolhidos)"></div>
@@ -272,6 +278,31 @@ async function refreshState() {
     box.innerHTML = '<div>fila: ' + esc(fila || '-') + '</div><div>kanban: ' + esc(kan || '-') + '</div>';
   } catch (e) { sum.textContent = 'estado indisponivel: ' + e; }
 }
+async function refreshAB() {
+  const sum = document.getElementById('abSum'), out = document.getElementById('abOut');
+  if (!sum) return;
+  try {
+    const d = await (await fetch('/api/dungeon-ab')).json();
+    const linhas = [];
+    for (const [modelo, tasks] of Object.entries(d.modelos || {})) {
+      for (const t of (tasks || [])) {
+        linhas.push(modelo + ' -> ' + t.status + (t.attempts ? ' (tentativas ' + t.attempts + ')' : ''));
+        if (t.validacao) linhas.push('    ' + String(t.validacao).slice(0, 160));
+        if (t.erro) linhas.push('    erro: ' + String(t.erro).slice(0, 160));
+      }
+    }
+    sum.textContent = linhas.length ? ('ultimo: ' + linhas.slice(0, 2).join(' | ')) : 'sem veredito ainda';
+    out.textContent = linhas.join('\n') || ('checker: ' + (d.checker || '?'));
+  } catch (e) { sum.textContent = 'erro: ' + e; }
+}
+async function runAB() {
+  const sum = document.getElementById('abSum');
+  if (sum) sum.textContent = 'rodando (o harness vai executar a task na fila)...';
+  for (const m of ['bonsai', 'mtp']) {
+    await fetch('/api/dungeon-ab?model=' + m, { method: 'POST' });
+  }
+  setTimeout(refreshAB, 3000);
+}
 async function refreshBus() {
   const el = document.getElementById('bus');
   if (!el) return;
@@ -299,6 +330,9 @@ document.addEventListener('DOMContentLoaded', function () {
   if (b) b.addEventListener('click', refreshState);
 });
 document.addEventListener('DOMContentLoaded', function () {
+  const ab = document.getElementById('abGo');
+  if (ab) ab.addEventListener('click', runAB);
+  refreshAB();
   const go = document.getElementById('spGo');
   if (go) go.addEventListener('click', doSpawn);
   loadModels();
@@ -407,6 +441,14 @@ async function pyJSON(script, args = [], timeoutMs = 60000) {
   try { return JSON.parse(r.stdout || "{}"); } catch { return { raw: (r.stdout || "").slice(0, 300) }; }
 }
 
+async function pyMod(mod, args = [], timeoutMs = 60000) {
+  const PY = process.env.PY_BIN || '/etc/profiles/per-user/nixos/bin/python3';
+  const ROOT = '/home/nixos/projects/nixos-ai';
+  const env = { ...process.env, PYTHONPATH: ROOT + '/modules/ai/jarvis/src' };
+  const r = spawnSync(PY, ['-m', mod, ...args], { encoding: 'utf8', timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024, cwd: ROOT, env });
+  if (r.error) throw new Error(String(r.error.message || r.error));
+  try { return JSON.parse(r.stdout || '{}'); } catch { return { raw: (r.stdout || '').slice(0, 400) }; }
+}
 async function handler(req, res) {
   const url = new URL(req.url, 'http://127.0.0.1');
   const send = (code, body, type='text/html; charset=utf-8') => { res.writeHead(code, { 'Content-Type': type }); res.end(body); };
@@ -436,6 +478,31 @@ async function handler(req, res) {
       }
       return send(200, JSON.stringify({ session: s, status, lines }), 'application/json');
     } catch (e) { return send(502, JSON.stringify({ error: String(e) }), 'application/json'); }
+  }
+  if (req.method === 'GET' && url.pathname === '/api/dungeon-ab') {
+    // (15/11) O A/B do dungeon roda PELO PAINEL e DENTRO do sistema novo:
+    // nightwatch.dungeon usa a FILA do sistema (TaskQueue) + o Harness do
+    // proprio nightwatch, com o CHECKER FIXADO (pytest test_astar.py 4/4)
+    // e o SANDBOX (worktree por lane). Nada de script solto.
+    try {
+      const j = await pyMod('nightwatch.dungeon', ['report'], 90000);
+      return send(200, JSON.stringify(j), 'application/json');
+    } catch (e) {
+      return send(200, JSON.stringify({ erro: String(e) }), 'application/json');
+    }
+  }
+  if (req.method === 'POST' && url.pathname === '/api/dungeon-ab') {
+    if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required (x-agent-hub-token)' }), 'application/json');
+    const m = url.searchParams.get('model') || 'mtp';
+    const PY = process.env.PY_BIN || '/etc/profiles/per-user/nixos/bin/python3';
+    const ROOT = '/home/nixos/projects/nixos-ai';
+    const env = { ...process.env, PYTHONPATH: ROOT + '/modules/ai/jarvis/src' };
+    const { spawn } = await import('node:child_process');
+    // assincrono: um A/B com modelo local leva minutos; a UI nao pode esperar.
+    const child = spawn(PY, ['-m', 'nightwatch.dungeon', 'run', '--model', String(m)],
+      { detached: true, stdio: 'ignore', cwd: ROOT, env });
+    child.unref();
+    return send(200, JSON.stringify({ ok: true, status: 'running', model: String(m), pid: child.pid }), 'application/json');
   }
   if (req.method === 'GET' && url.pathname === '/api/state') {
     // (15/11) TUDO LIGADO num estado so: agentes (roster), claims/board
