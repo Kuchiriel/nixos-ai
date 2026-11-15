@@ -416,7 +416,7 @@
       log.level = "info";
     };
   };
-  networking.firewall.allowedTCPPorts = [22 8080 8081 4000 5353 8099 47984 47989 47990 48010 9090]; # 8099 = karaok cast (letra+som p/ TV); 47984-48010 = Sunshine/Moonlight
+  networking.firewall.allowedTCPPorts = [22 8080 8081 4000 5353 8099 47984 47989 47990 48010 9090 5173 8090 8091]; # 8099 = karaok cast (letra+som p/ TV); 47984-48010 = Sunshine/Moonlight
   networking.firewall.allowedUDPPorts = [47998 47999 48000 48002 48010]; # Sunshine/Moonlight stream
 
   # (26/10, dono pediu) PROTON VPN — checkReversePath = false é REQUERIDO
@@ -522,7 +522,7 @@
   # com `opencode attach http://127.0.0.1:4599` (assim os dois veem a MESMA
   # sessão, com busy-state coordenado).
   networking.firewall.interfaces.tailscale0 = {
-    allowedTCPPorts = [4599];
+    allowedTCPPorts = [4599 5173 8090 8091];
   };
 
   # opencode serve com nome curto (2026-10-02). O MagicDNS do Tailscale só

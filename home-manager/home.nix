@@ -198,6 +198,8 @@ in {
     ./modules/xref-watch.nix
     ./modules/sandbox-verificacao.nix
     ./modules/agents-watcher.nix
+    # agent-hub: mission control dos agentes (roster + transcript + wake) — 14/11
+    ./modules/agent-hub.nix
     # keepawake da tela: sempre ligado (o watcher é AFK-only)
     ./modules/agents-keepawake.nix
     # jobs noturnos (bench 04:00 / probe do default 05:00) — declarativos
