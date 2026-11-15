@@ -8,7 +8,7 @@
 //   POST /api/wake                  -> {"name":"...","text":"..."} injeta user-turn na sessão
 // Nada de credencial exposta: o token fica só no lado do servidor (loopback).
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
@@ -101,21 +101,15 @@ const BUSY_MS = Number(process.env.AGENT_HUB_BUSY_MS || 90000);
 // corpo maximo do POST /api/wake (o texto do dono cabe em folgado)
 const BODY_MAX = 64 * 1024;
 async function wake(name, text) {
-  const r = roster().find(a => a.session && (
-    (a.name||'').toLowerCase() === name.toLowerCase() ||
-    (a.codename||'').toLowerCase() === name.toLowerCase() ||
-    ((a.aliases||[]).some(x => String(x).toLowerCase() === name.toLowerCase()))));
-  if (!r) return { status: 404, body: { error: 'alvo nao esta no roster local' } };
-  if (!text?.trim()) return { status: 400, body: { error: 'texto vazio' } };
-  const payload = { text, delivery: 'queue' };
-  const res = await fetch(OC + `/api/session/${r.session}/prompt`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: AUTH() },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(15000),
-  });
-  const body = await res.text().catch(() => '');
-  try { return { status: res.status, body: JSON.parse(body) }; } catch { return { status: res.status, body }; }
+  // (15/11, crouton-alpha) SEM DUPLICAR: o hub NAO injeta prompt por conta
+  // propria. Usa o caminho CANONICO da casa (jarvis.core.comms.deliver ->
+  // coord_roster.send_message -> bus + wake pela API), que e o mesmo do
+  // /to do Telegram e o mesmo do plugin agent-wake. Antes o hub fazia POST
+  // direto em /api/session/<id>/prompt (3o caminho de injecao) — o que
+  // duplicava guard, cooldown, dedupe e registro no bus.
+  const j = await pyJSON("deliver.py", [String(name || ""), String(text || "")], 120000)
+    .catch(e => ({ ok: false, error: String(e) }));
+  return { status: j && j.ok ? 200 : 500, body: j };
 }
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -141,6 +135,9 @@ main { padding:18px; }
 button { background:#21262f; color:#c9d1d9; border:1px solid var(--line); border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; } button:hover { border-color:var(--idx); color:#fff; }
 pre { background:#0d1117; border:1px solid var(--line); border-radius:6px; padding:8px; max-height:260px; overflow:auto; font-size:11px; }
 .section-title { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.1em; margin:18px 0 8px; }
+.spawnbox { margin-bottom:14px; }
+.spawnbox .turn { display:flex; gap:8px; align-items:center; margin-top:6px; }
+.spawnbox select, .spawnbox input { background:#0d1117; border:1px solid var(--line); color:#c9d1d9; border-radius:6px; padding:6px 8px; font:inherit; }
 .busbox { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px; max-height:340px; overflow:auto; font-size:12px; }
 .busline { padding:4px 0; border-bottom:1px dashed #21262f; }
 .busline:last-child { border-bottom:0; }
@@ -154,6 +151,15 @@ pre { background:#0d1117; border:1px solid var(--line); border-radius:6px; paddi
 <main>
 <div class="section-title">agentes</div>
 <div id="grid" class="grid"></div>
+<div class="section-title">criar agente</div>
+<div class="card spawnbox">
+  <div class="turn"><input id="spTask" placeholder="tarefa do agente novo (a persona e o modelo sao escolhidos)"></div>
+  <div class="turn"><select id="spModel"><option value="">modelo: auto (dificuldade + cooldown)</option></select>
+    <select id="spProfile"><option value="">perfil: auto</option><option value="redteam">redteam (INTP, baixa recusa)</option></select>
+    <input id="spName" placeholder="nome (opcional)" style="max-width:160px">
+    <button id="spGo">criar</button></div>
+  <div id="spOut" class="muted" style="margin-top:8px"></div>
+</div>
 <div class="section-title">conversa da frota (bus)</div>
 <div id="bus" class="busbox">carregando…</div>
 <div id="drawer" class="section-title" style="display:none">transcript de <span id="drawerName"></span> — <a id="drawerToggle" href="#">fechar</a></div>
@@ -202,6 +208,50 @@ async function openTranscript(session, btn) {
   } catch (e) { t.textContent = 'erro ao ler: ' + e; }
 }
 $('#drawerToggle').addEventListener('click', e => { e.preventDefault(); $('#transcript').style.display = 'none'; $('#drawer').style.display = 'none'; });
+async function loadModels() {
+  const sel = document.getElementById('spModel');
+  if (!sel) return;
+  try {
+    const d = await (await fetch('/api/models')).json();
+    const groups = [];
+    const rt = d.redteam_candidates || [];
+    if (rt.length) {
+      groups.push('redteam (baixa recusa)');
+      for (const m of rt) groups.push('  ' + m.id + '  ctx=' + (m.context || '?') + ' · ' + (m.tier || ''));
+    }
+    const seen = new Set();
+    for (const p of (d.providers || [])) {
+      for (const m of p.models || []) {
+        if (seen.has(m.id)) continue;
+        seen.add(m.id);
+        groups.push('  ' + m.id + '  ctx=' + (m.context || '?') + ' · ' + (m.tier || ''));
+      }
+    }
+    sel.innerHTML = '<option value="">modelo: auto (dificuldade + cooldown)</option>'
+      + groups.map(g => g.startsWith('  ') ? '<option value="' + g.trim().split(' ')[0] + '">' + g + '</option>' : '<optgroup label="' + g + '"></optgroup>').join('');
+  } catch (e) { /* sem catalogo: segue com auto */ }
+}
+async function doSpawn() {
+  const out = document.getElementById('spOut');
+  const task = document.getElementById('spTask').value.trim();
+  if (!task) { out.textContent = 'descreva a tarefa'; return; }
+  out.textContent = 'criando… (pode levar ~1-2 min)';
+  try {
+    const r = await fetch('/api/spawn', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-agent-hub-token': TOKEN_FIELD.value },
+      body: JSON.stringify({
+        task: task,
+        model: document.getElementById('spModel').value || undefined,
+        profile: document.getElementById('spProfile').value || undefined,
+        name: document.getElementById('spName').value || undefined,
+      }),
+    });
+    const d = await r.json();
+    out.textContent = (d.ok ? 'criado: ' + (d.session || '') + ' · ' + (d.model || '') + ' · ' + ((d.persona || {}).mbti || '') : 'falhou: ' + (d.error || JSON.stringify(d).slice(0, 200)));
+    if (d.ok) document.getElementById('spTask').value = '';
+    refresh();
+  } catch (e) { out.textContent = 'erro: ' + e; }
+}
 async function refreshBus() {
   const el = document.getElementById('bus');
   if (!el) return;
@@ -223,6 +273,11 @@ async function refreshBus() {
 }
 setInterval(refresh, 5000); refresh();
 setInterval(refreshBus, 10000); refreshBus();
+document.addEventListener('DOMContentLoaded', function () {
+  const go = document.getElementById('spGo');
+  if (go) go.addEventListener('click', doSpawn);
+  loadModels();
+});
 </script></body></html>`;
 
 // ── BUS: a conversa da frota (issue #12 do repo Kuchiriel/mt5) ────────────
@@ -315,6 +370,17 @@ async function busMessages(limit = 40) {
   }
 }
 
+// ── CATALOGO DE MODELOS + RATE LIMIT + SPAWN (15/11, crouton-alpha) ────────
+// Tudo via python da casa (o node deste unit nao executa binarios do nix
+// store — medido), lido por HTTP nos endpoints 127.0.0.1.
+async function pyJSON(script, args = [], timeoutMs = 60000) {
+  const PY = process.env.PY_BIN || "/etc/profiles/per-user/nixos/bin/python3";
+  const S = "/home/nixos/projects/nixos-ai/scripts/";
+  const r = spawnSync(PY, [S + script, ...args], { encoding: "utf8", timeout: timeoutMs, maxBuffer: 16 * 1024 * 1024 });
+  if (r.error) throw new Error(String(r.error.message || r.error));
+  try { return JSON.parse(r.stdout || "{}"); } catch { return { raw: (r.stdout || "").slice(0, 300) }; }
+}
+
 async function handler(req, res) {
   const url = new URL(req.url, 'http://127.0.0.1');
   const send = (code, body, type='text/html; charset=utf-8') => { res.writeHead(code, { 'Content-Type': type }); res.end(body); };
@@ -344,6 +410,55 @@ async function handler(req, res) {
       }
       return send(200, JSON.stringify({ session: s, status, lines }), 'application/json');
     } catch (e) { return send(502, JSON.stringify({ error: String(e) }), 'application/json'); }
+  }
+  if (req.method === 'GET' && url.pathname === '/api/models') {
+    // Catalogo REAL de modelos (ctx/output medidos no endpoint, tier,
+    // capabilities, good_for) + medidor de rate-limit do nv-gate + cooldowns.
+    const j = await pyJSON("model-catalog.py", [], 90000).catch(e => ({ error: String(e) }));
+    return send(200, JSON.stringify(j), 'application/json');
+  }
+  if (req.method === 'POST' && url.pathname === '/api/spawn') {
+    // Cria um agente NOVO: modelo escolhido (catalogo/cooldown), persona
+    // MBTI e system prompt inicial — a experiencia do Grok Bot.
+    if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required (x-agent-hub-token)' }), 'application/json');
+    let raw = ''; for await (const chunk of req) {
+      raw += chunk;
+      if (raw.length > BODY_MAX) return send(413, JSON.stringify({ error: 'body grande demais' }), 'application/json');
+    }
+    let body = {};
+    try { body = JSON.parse(raw || '{}'); } catch { return send(400, JSON.stringify({ error: 'json invalido' }), 'application/json'); }
+    const args = ['--task', String(body.task || '')];
+    if (body.name) args.push('--name', String(body.name));
+    if (body.model) args.push('--model', String(body.model));
+    if (body.lane) args.push('--lane', String(body.lane));
+    if (body.profile) args.push('--profile', String(body.profile));
+    if (body.dry_run) args.push('--dry-run');
+    if (body.dry_run) {
+      const j = await pyJSON("agent-spawn.py", args, 120000).catch(e => ({ ok: false, error: String(e) }));
+      return send(200, JSON.stringify(j), 'application/json');
+    }
+    // (15/11) ASSINCRONO: um spawn com Nemotron leva minutos; a UI nao pode
+    // ficar esperando. O python grava o estado em
+    // ~/.local/state/jarvis/spawns/<ses>.json e a UI le por /api/spawns.
+    const PY = process.env.PY_BIN || "/etc/profiles/per-user/nixos/bin/python3";
+    const { spawn } = await import('node:child_process');
+    const child = spawn(PY, ['/home/nixos/projects/nixos-ai/scripts/agent-spawn.py', ...args], {
+      detached: true, stdio: 'ignore', cwd: '/home/nixos/projects/nixos-ai',
+    });
+    child.unref();
+    return send(200, JSON.stringify({ ok: true, status: 'starting', pid: child.pid }), 'application/json');
+  }
+  if (req.method === 'GET' && url.pathname === '/api/spawns') {
+    // Estado dos spawns recentes (o spawn e lento: o hub responde na hora).
+    const out = [];
+    try {
+      const dir = HOME + '/.local/state/jarvis/spawns';
+      const files = readdirSync(dir).filter(f => f.endsWith('.json')).sort();
+      for (const f of files.slice(-12)) {
+        try { out.push(JSON.parse(readFileSync(dir + '/' + f, 'utf8'))); } catch { /* ignora */ }
+      }
+    } catch { /* sem spawns ainda */ }
+    return send(200, JSON.stringify({ spawns: out }), 'application/json');
   }
   if (req.method === 'GET' && url.pathname === '/api/bus') {
     // (15/11) a conversa da frota. Publica: o bus e append-only e as

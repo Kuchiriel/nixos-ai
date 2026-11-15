@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "_nota": "(15/11, crouton-alpha) Perfil ENXUTO para os modelos locais pequenos (Qwen 4B MTP: ctx 12.288). Medido: o payload CHEIO do opencode (MCP jarvis + AGENTS.md do projeto) da 56k tokens e estoura o 4B; aqui ele responde. Combine com OPENCODE_DISABLE_PROJECT_CONFIG=1 e um cwd sem AGENTS.md. Para as APIs (ctx 1.048.576) o perfil normal e melhor (tools + RAG).",
+  "mcp": { "jarvis": { "enabled": false } },
+  "instructions": [],
+  "tools": {
+    "bash": false, "edit": false, "write": false, "webfetch": false, "websearch": false,
+    "task": false, "todowrite": false, "todoread": false, "read": false, "grep": false,
+    "glob": false, "list": false, "patch": false, "multiedit": false, "lsp": false,
+    "download": false, "invalid": false
+  },
+  "permission": { "edit": "deny", "bash": "deny" }
+}
