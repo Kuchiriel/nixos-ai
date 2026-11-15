@@ -602,3 +602,11 @@ CLI PUT continuou 403 nesta máquina). Depois:
 
 Para ser monitorado: `kaggle kernels status kuchiriel/duplex-gate-lora-v9`.
 Próximos passos: convert -> :8093 bench -> decide promotion.
+
+## 2026-11-14 22:57 — v9 em produção, ganho em ambos heldouts
+
+- heldout1 GPU: v9 47/52 (v8 44/52), BARGE 7/7, WAIT 13/13
+- heldout2 GPU: v9 23/24 (v8 22/24), WAIT 4/4
+- Rebuild OK; :8092 recomeçou 22:54; serviço duplex_state restarted 22:56
+- Adapter v9 em /var/lib/ai/models/loras/microturn-4b/microturn-4b-lora-v9.gguf
+- Commit 46a68f52
