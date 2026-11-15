@@ -65,7 +65,50 @@ together -> openai -> anthropic -> google -> local.
 - Sem `shared_prefs` => o app nunca gerou o token do widget, entao nenhum
   atalho existe ainda.
 
-## Commits
+
+## 6. O achado grande: a casa lia o schema ERRADO do DB do opencode
+
+| medido | valor |
+|---|---|
+| `max(part.time_updated)` (schema 1.x) | **09/11 06:12** (congelado) |
+| `max(session_message.time_updated)` (schema 2.2.6) | **15/11 04:48** (vivo) |
+
+O opencode 2.2.6 grava a atividade em `session_message`/`session_part`/
+`session_v2`; `message`/`part`/`session` sao o schema legado do 1.x.
+Cinco scripts da casa liam a tabela errada e concluiam "o agente esta
+morto":
+
+- o `prune` **apagou os 4 agentes VIVOS** do roster (restaurei do backup);
+- o watcher via `agente_vivo_db` via as sessoes vivas como ociosas -> nunca
+  acordava ninguem (o "agent watcher que ate agora nao fez nada");
+- a lane coord tambin tinha medido "the opencode.db path is dead".
+
+**Correcao**: `scripts/oc-db.py` = fonte unica; escolhe a tabela viva
+sozinha (2.x primeiro, 1.x como fallback) e expoe `<db> <janela_s>
+[session]`, `--sessions`, `--last`. `agent-db-alive.py` e `agent-roster.py`
+delegam; a liveness soma a API do opencode (autoritativa, headless).
+
+**Prova**: `agent-db-alive` dizia "Cervo ocioso" (rc=1, ERRADO) e passou a
+dizer "viva" (rc=0); `live_sessions()` foi de 0 para 50; roster mostra 4
+live e o prune remove 0.
+
+## 7. /agentes — o pulso da frota no bolso (Telegram)
+
+`/agentes` mostra, por agente: vivo/ocioso, ha quantos minutos se mexeu,
+a lane e o **modelo em uso**. Sai da API do opencode + roster local.
+Novo `comms.agents_pulse()`.
+
+Prova: `fuzzy('/agentes')` -> `('agentes','')` e o handler imprime o
+pulso real (Cervo, Falcao, Onca, Lince com modelo e ha-quanto-tempo).
+
+## Commits (completo)
+
+`2e689bbb` hub+portas · `f4990443` wake via prompt · `aef16f96` 3 bugs do
+comms · `cac645f5` agent-model · `86a5cc12` rotacao no guard ·
+`a2de8960` roster+night-watch · `69c4721b` 404 libera claim ·
+`dab05bd1` DB 2.2.6 · `66a4afd9` /agentes
+
+## Commits (antigos)
 
 `2e689bbb` hub+portas · `f4990443` wake via prompt · `aef16f96` 3 bugs do
 comms · `cac645f5` agent-model · `86a5cc12` rotacao no guard
