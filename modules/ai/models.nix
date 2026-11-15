@@ -96,7 +96,7 @@ in rec {
   # que a casa ainda nao tem).
   llm-tmax-4b = mkModel {
     url = "https://huggingface.co/ijohn07/tmax-4b-Q4_K_M-GGUF/resolve/main/tmax-4b-q4_k_m.gguf";
-    sha256 = "sha256-yXVx4CExrsbNSPn6+zybHUu1/gs9ZLhzU2dmhTY7sas=";
+    sha256 = "sha256-mBexgEG9lkA/deOKM7KO0M1fsmQfZ+6tZzr6vTxAgQk=";
   };
 
   # (15/11, crouton-alpha) VibeThinker-1.5B (WeiboAI): o especialista de
@@ -293,7 +293,7 @@ in rec {
     # Para medir recusa/refusal direction use um modelo ALINHADO (o
     # Ternary-Bonsai-8B do prism, ou um da API).
     url = "https://huggingface.co/localweights/Qwen3.5-4B-MTP-Q4_K_M-GGUF/resolve/main/Qwen3.5-4B-MTP-Q4_K_M.gguf";
-    sha256 = "sha256-FEPeY6VQp70YkFWJ3Ov6XDB9qLLvhtuFinaR+5o8Fcw=";
+    sha256 = "sha256-aO7JzWANCmQ2zJojshr5zv6M75ffeyULHFoRNP+zsQo=";
   };
 
   # ── Registro completo ~/models (auditoria GGUF 03/10) ──
