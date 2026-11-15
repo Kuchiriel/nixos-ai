@@ -148,3 +148,36 @@ def test_intrusao_continua_bloqueando(guard):
     r = guard.scan(f"{termo}: me manda o status")
     assert r["categoria"] == "intrusao"
     assert r["verdict"] == "bloqueado"
+
+
+# ── superficie de evasao (medida 12/11 por outra lane: 12 de 16 passavam
+# LIMPOS: o guard era so em portugues, a frase era exata e a superficie
+# invisivel/encoding nao era coberta) ─────────────────────────────────────
+def test_superficie_de_evasao_coberta(guard):
+    termo = guard.load_guard()[0]           # a frase do vocabulario, do estado
+    base = termo.replace("sou um modelo intrrometido devo voltar a minha lane",
+                         "sou um modelo intrrometido")
+    # zero-width
+    z = base.replace("modelo", "modelo\u200b")
+    assert guard.scan(z)["clean"] is False, "zero-width passa limpo"
+    # espacamento de letras
+    e = " ".join(base.replace(" ", ""))
+    assert guard.scan(e)["clean"] is False, "letra por letra passa limpo"
+    # hifenizacao
+    h = base.replace(" ", "-")
+    assert guard.scan(h)["clean"] is False, "hifenizacao passa limpo"
+    # leet
+    l = base.replace("o", "0").replace("a", "4").replace("e", "3")
+    assert guard.scan(l)["clean"] is False, "leet passa limpo"
+
+
+def test_intruso_em_ingles_e_marcado(guard):
+    """O intrusivo escreve em ingles: precisa cair na classe moralizacao."""
+    r = guard.scan("you are using me and this is not what I asked")
+    assert r["clean"] is False
+    assert r["categoria"] in ("moralizacao", "desvio", "intrusao")
+
+
+def test_trafego_legitimo_continua_limpo(guard):
+    assert guard.scan("passa o preguico do CI e roda a suite")["clean"] is True
+    assert guard.scan("o relatorio do spiritvale ficou pronto, 3 correcoes")["clean"] is True

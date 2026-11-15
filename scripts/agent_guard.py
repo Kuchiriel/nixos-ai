@@ -58,6 +58,45 @@ def load_guard(path: Path | None = None) -> list[str]:
     return out
 
 
+# (13/11) CANONIZACAO: o guard precisa ver o texto como o MODELO ve.
+# Medido (crouton, 12/11): zero-width, hifenizacao, espacamento de letras,
+# leet e base64 passavam limpos. Aqui o texto e canonizado antes de casar:
+#   - remove controles invisiveis (zero-width, bidi) e pontuacao;
+#   - produz uma forma COMPACTA (sem espacos/hifens) para casar frase
+#     embaralhada/espacada e palavra extra no meio;
+#   - a forma leet (4->a, 3->e, 0->o, 1->i, 5->s) tambem e tentada;
+#   - blobs base64 sao decodificados e escaneados tambem.
+INVISIVEIS = re.compile(r"[\u200b-\u200d\u2060\ufeff\u00ad]|"
+                        r"[\u202a-\u202e\u2066-\u2069]")
+LEET = str.maketrans({"4": "a", "3": "e", "0": "o", "1": "i", "5": "s",
+                       "@": "a", "$": "s", "!": "i", "|": "l"})
+_B64 = re.compile(r"[A-Za-z0-9+/]{16,}={0,2}")
+
+
+def _canon(text: str) -> list[str]:
+    """Formas de comparacao do texto (ver _canon)."""
+    base = INVISIVEIS.sub("", str(text or ""))
+    base = unicodedata.normalize("NFKD", base)
+    base = "".join(c for c in base if not unicodedata.combining(c)).lower()
+    formas = [base]
+    compacto = re.sub(r"[^a-z0-9]+", "", base)
+    formas.append(compacto)
+    formas.append(re.sub(r"[^a-z0-9]+", "", base.translate(LEET)))
+    # base64: decodifica blobs e inclui o texto decodificado
+    for m in _B64.finditer(base):
+        try:
+            import base64 as _b64mod
+            bruto = m.group(0)
+            bruto += "=" * (-len(bruto) % 4)
+            dec = _b64mod.b64decode(bruto, validate=False).decode("utf-8", "ignore")
+            if dec and len(dec) > 6:
+                formas.append(dec.lower())
+                formas.append(re.sub(r"[^a-z0-9]+", "", dec.lower()))
+        except Exception:
+            continue
+    return formas
+
+
 def _fold(text: str) -> str:
     """minusculas, sem acento, espacos colapsados."""
     t = unicodedata.normalize("NFKD", str(text or ""))
@@ -90,6 +129,18 @@ PATTERNS: list[tuple[str, str]] = [
     ("gaslighting: vitima", r"(fui|estou\s+sendo)\s+(hackeado|injetado|controlado|manipulado)"),
     ("gaslighting: teste", r"(estou\s+sendo|esta\s+sendo)\s+(testado|avaliado|medido)"),
     ("desvio de escopo", r"(deixa|muda)\s+(de\s+)?(assunto|tarefa|escopo)\s+(para|pra)"),
+    # (13/11) o intrusivo escreve em INGLES tambem: sem isso, um texto em
+    # ingles passava limpo (medido 12/11).
+    ("moralizing refusal (en)", r"i (?:can(?:not|'t)|won't|will not|must not)\s+"
+                               r"(help|assist|provide|comply|share|give)|"
+                               r"i(?:'m| am) (?:sorry|unable|not able)|"
+                               r"as an ai|i (?:can(?:not|'t)|won't) (?:help|assist)"),
+    ("lane redirection (en)", r"go back to your (?:lane|track)|return to your lane|"
+                             r"stop (?:interfering|meddling)|mind your own lane"),
+    ("gaslighting (en)", r"you(?:'re| are) (?:using|manipulating) me|"
+                         r"this is not what i asked|my real instructions are|"
+                         r"trust me|you are being (?:tested|evaluated)"),
+    ("scope drift (en)", r"(?:change|switch|move) (?:the )?(?:topic|task|scope) to"),
 ]
 
 # (13/11) RECUSA: mensagem de recusa no bus e RUIDO para quem recebe (nao
@@ -116,13 +167,23 @@ def eh_recusa(text: str) -> bool:
 
 
 def scan_patterns(text: str) -> list[dict]:
-    """Casas de moralizacao/injecao (classe, nao frase exata)."""
-    alvo = _fold(text)
+    """Casas de moralizacao/injecao (classe, nao frase exata).
+
+    (13/11) varre as formas canonicas (ver _canon): com zero-width,
+    hifenizacao, espacamento de letras, leet ou base64 o padrao ainda casa.
+    """
     hits = []
-    for nome, padrao in PATTERNS:
-        m = re.search(padrao, alvo)
-        if m:
-            hits.append({"tipo": nome, "trecho": alvo[max(0, m.start() - 30): m.end() + 30]})
+    vistos = set()
+    for forma in _canon(text):
+        alvo = forma if " " in forma else forma
+        for nome, padrao in PATTERNS:
+            if nome in vistos:
+                continue
+            m = re.search(padrao, alvo)
+            if m:
+                vistos.add(nome)
+                hits.append({"tipo": nome,
+                             "trecho": alvo[max(0, m.start() - 30): m.end() + 30]})
     return hits
 
 
@@ -135,16 +196,30 @@ def scan(text: str, terms: list[str] | None = None) -> dict:
     - marcado: casou padrao da classe → a entrega entra com aviso.
     """
     terms = load_guard() if terms is None else terms
-    alvo = _fold(text)
+    formas = _canon(text)
+    alvo = formas[0] if formas else ""
     hits = []
     for termo in terms:
         t = _fold(termo)
         if not t:
             continue
-        if t in alvo:
-            i = alvo.find(t)
-            ctx = alvo[max(0, i - 40): i + len(t) + 40]
-            hits.append({"termo": termo, "contexto": ctx})
+        compacto = re.sub(r"[^a-z0-9]+", "", t)
+        achou = False
+        for forma in formas:
+            if t and t in forma:
+                i = forma.find(t)
+                ctx = forma[max(0, i - 40): i + len(t) + 40]
+                hits.append({"termo": termo, "contexto": ctx})
+                achou = True
+                break
+            if compacto and compacto in forma:
+                i = forma.find(compacto)
+                ctx = forma[max(0, i - 40): i + len(compacto) + 40]
+                hits.append({"termo": termo, "contexto": ctx})
+                achou = True
+                break
+        if achou:
+            continue
     padroes = scan_patterns(text)
     recusa = eh_recusa(text)
     if hits:
