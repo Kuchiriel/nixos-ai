@@ -50,6 +50,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -93,9 +94,29 @@ def parse_feed(xml: str) -> list[dict]:
     return out
 
 
-def youtube_channel(cid: str) -> list[dict]:
-    xml = fetch(f"https://www.youtube.com/feeds/videos.xml?channel_id={urllib.parse.quote(cid)}")
-    return parse_feed(xml)
+def youtube_channel(cid: str, tries: int = 3) -> list[dict]:
+    """Feed de uploads do canal.
+
+    (14/11) O endpoint /feeds/videos.xml do YouTube tem 404 INTERMITENTE
+    conhecido (a community rastrea: janela recorrente de 404 desde dez/2025
+    e IPs de datacenter recebem 404/500 mesmo com o canal ativo). O formato
+    da URL nao mudou. Aqui a leitura e com RETRY e backoff; se ainda assim
+    falhar, a fonte e uma Instances (Piped/Invidious) ou a API de dados.
+    """
+    url = f"https://www.youtube.com/feeds/videos.xml?channel_id={urllib.parse.quote(cid)}"
+    last = ""
+    for attempt in range(tries):
+        try:
+            xml = fetch(url)
+        except Exception as exc:  # noqa: BLE001
+            last = str(exc)
+            xml = ""
+        if "<entry>" in xml or "<feed" in xml:
+            return parse_feed(xml)
+        last = f"resposta sem itens ({len(xml)} chars)"
+        if attempt + 1 < tries:
+            time.sleep(2 + attempt * 3)
+    raise RuntimeError(f"feed do YouTube indisponivel: {last}")
 
 
 def hn_search(query: str) -> list[dict]:

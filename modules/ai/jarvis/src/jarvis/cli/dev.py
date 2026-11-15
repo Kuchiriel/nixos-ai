@@ -1561,6 +1561,46 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
         return offline_search(args.get("query", ""),
                               max_results=args.get("max_results", 5)), None
 
+    # ── Transcrição de vídeo (14/11) ──
+    if name == "video_transcript":
+        # o script é a fonte única (mesmo caminho do CLI e do MCP)
+        try:
+            from jarvis.core.paths import find_repo_root
+            script = find_repo_root() / "scripts" / "fetch-video-transcript.py"
+        except Exception:
+            from pathlib import Path as _P
+            script = _P(__file__).resolve().parents[6] / "scripts" / "fetch-video-transcript.py"
+        url = (args.get("url") or "").strip()
+        if not url:
+            return "ERROR: url vazia", None
+        cmd = [sys.executable, str(script), url,
+               "--langs", str(args.get("langs") or "pt,en")]
+        if args.get("digest"):
+            cmd.append("--digest")
+        try:
+            r = _sp.run(cmd, capture_output=True, text=True, timeout=900)
+            out = (r.stdout or "") + (r.stderr or "")
+            return out.strip()[-3000:] or f"exit={r.returncode}", None
+        except Exception as e:
+            return f"ERROR: {e}", None
+
+    # ── Monitor de novidades (14/11) ──
+    if name == "watch_updates":
+        # dry-run por padrão: publicar no bus é decisão, não efeito colateral
+        try:
+            from jarvis.core.paths import find_repo_root
+            script = find_repo_root() / "scripts" / "watch-updates.py"
+        except Exception:
+            from pathlib import Path as _P
+            script = _P(__file__).resolve().parents[6] / "scripts" / "watch-updates.py"
+        cmd = [sys.executable, str(script)]
+        cmd.append("--post-bus" if args.get("post_bus") else "--dry-run")
+        try:
+            r = _sp.run(cmd, capture_output=True, text=True, timeout=300)
+            return ((r.stdout or "") + (r.stderr or "")).strip()[-3000:] or f"exit={r.returncode}", None
+        except Exception as e:
+            return f"ERROR: {e}", None
+
     # ── Web Search (Tavily) ──
     if name == "web_search":
         try:
@@ -2082,6 +2122,58 @@ def _get_tools(persona=None, phase: str | None = None) -> list[dict[str, Any]]:
                     "type": "object",
                     "properties": {
                         "path": {"type": "string", "description": "Directory to index (default: current)"},
+                    },
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "video_transcript",
+                "description": (
+                    "Download the transcript of a YouTube video (the path "
+                    "that survives the 429) and save it under "
+                    "~/Books/videos/<id>/ with the transcript, meta.json and a "
+                    "digest by timestamp. Use it to read a video before "
+                    "answering about it, instead of guessing its content."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "YouTube URL or video id",
+                        },
+                        "langs": {
+                            "type": "string",
+                            "description": "comma separated, default pt,en",
+                        },
+                        "digest": {
+                            "type": "boolean",
+                            "description": "also write the digest by timestamp",
+                        },
+                    },
+                    "required": ["url"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "watch_updates",
+                "description": (
+                    "Check the sources the house cares about (YouTube "
+                    "channels, RSS, Hacker News, GitHub releases), filtered by "
+                    "keyword, and report what is new. Dry run by default: "
+                    "publishing on the bus is a decision, not a side effect."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "post_bus": {
+                            "type": "boolean",
+                            "description": "publish the new items on the bus",
+                        },
                     },
                 },
             },
