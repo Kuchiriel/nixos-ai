@@ -159,6 +159,41 @@ def peer_note(text: str, peer: str) -> None:
         pass
 
 
+
+AGENT_MODEL = HOME / "projects/nixos-ai/scripts/agent-model.py"
+
+
+def rotate_model(session: str, provider: str, model: str) -> str:
+    """Troca o modelo da sessao quando o provider caiu (429).
+
+    (15/11, crouton-alpha) O guard JA classificava 429 e escrevia "troque
+    de provider" no aviso — mas nao trocava. Agora ele troca: usa o
+    agent-model.py, que roda UM turno na sessao com o proximo modelo
+    disponivel (cooldown-aware) e marca o provider caido em cooldown.
+    Medido: 'opencode run -s <sess> -m <model>' e o caminho que troca de
+    verdade (o PATCH /api/session nao troca o modelo do TUI em execucao).
+    """
+    if not session or not AGENT_MODEL.is_file():
+        return ""
+    try:
+        p = subprocess.run(
+            ["python3", str(AGENT_MODEL), "--run", session,
+             "[provider-guard] Troca automatica de modelo: o provider "
+             f"{provider}/{model} caiu em rate-limit. Retome a tarefa em "
+             " andamento no novo modelo; NAO repita o que ja foi feito.",
+             "--max-tries", "2"],
+            capture_output=True, text=True, timeout=420)
+        out = (p.stdout or "").strip()
+        try:
+            d = json.loads(out)
+            if d.get("ok"):
+                return f"modelo trocado para {d.get('model')}"
+            return "troca falhou: " + str(d.get("error") or d.get("tried"))[:160]
+        except Exception:
+            return (out or p.stderr or "")[:160]
+    except Exception as exc:  # noqa: BLE001
+        return f"troca falhou: {exc}"
+
 def cmd_scan(args: argparse.Namespace) -> int:
     log_path = Path(os.environ.get("AGENTS_OC_LOG", str(LOG_DEFAULT)))
     state_path = Path(os.environ.get("AGENTS_GUARD_STATE", str(STATE_DEFAULT)))
@@ -187,9 +222,17 @@ def cmd_scan(args: argparse.Namespace) -> int:
             continue
         if not args.no_notify:
             ping(f"opencode: {e['class']} ({e['provider']})", line[:220])
+        # (15/11) ROTACAO AUTOMATICA: so para 429 (rate-limit). O
+        # provider cai em cooldown e a sessao segue em outro modelo.
+        rot = ""
+        if e["class"] == "RATE_LIMIT" and not args.no_rotate and e.get("session"):
+            rot = rotate_model(e["session"], e.get("provider", ""), e.get("model", ""))
+            if rot:
+                print(f"provider-guard: rotacao: {rot}")
         if peer:
+            extra = f" | rotacao: {rot}" if rot else ""
             peer_note(f"PROVIDER {e['class']} em {e['provider']}/{e['model']} "
-                      f"(sessao {e['session']}, {when}): {e['hint']}", peer)
+                      f"(sessao {e['session']}, {when}): {e['hint']}{extra}", peer)
         cooldown[key] = max(e["epoch"], now)
     if not args.dry_run:
         save_state(state_path, seen, cooldown)
@@ -210,6 +253,8 @@ def main() -> int:
     scan.add_argument("--since-min", type=int, default=15)
     scan.add_argument("--max", type=int, default=5)
     scan.add_argument("--dry-run", action="store_true")
+    scan.add_argument("--no-rotate", action="store_true",
+                      help="nao troca o modelo automaticamente no 429")
     scan.add_argument("--no-notify", action="store_true")
     scan.add_argument("--no-peer", action="store_true")
     sub.add_parser("classes", help="lista as classes de erro")
