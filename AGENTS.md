@@ -139,6 +139,48 @@ nix flake check
   fallback — never submit what the human is typing.
 - Evidence: `scripts/agent-msg.sh` : `~/projects/AGENTS-MSG.log`.
 
+## Agent handoffs (15/11, measured — video "Is this how Local AI reaches Frontier Capabilities?", Codacus)
+
+- **O ESPECIALISTA PRECISA VER O PEDIDO ORIGINAL.** Medido no video: com um
+  planejador + especialista, o time passou MENOS de 3 de 8 checks, enquanto o
+  especialista SOZINHO passou 6 de 8 — "my experts only saw what the planner
+  wrote; they never saw my original request". Aqui: `send_message` anexa
+  `[PEDIDO ORIGINAL (contexto do remetente)]` (a `task`/`context` do roster de
+  quem manda) ao texto injetado. **Quem wake um par, envie o pedido original,
+  nao o resumo dele.**
+- **O PLANEJADOR e o elo fraco, nao o especialista.** Medido: 4B planejador
+  deu 2/4; 35B planejador (mesmo especialista) deu 4/4; e o plano do 4B
+  mandava PARAR O CONTAINER DE PRODUCAO. Para delegar: o model do planejador
+  tem de ser forte — o especialista pode ser pequeno.
+- **JOB LONGO = MODELO GRANDE.** Medido (terminal-bench): 85% (GPT-5.5) vs 27%
+  (T-Max 9B) — "a model can be almost perfect on one step and still fail a
+  long task". Regra: tarefa curta com resposta verificavel -> especialista
+  pequeno (o 4B MTP local, ctx 12.288, so one-shot com perfil slim);
+  tarefa longa/multi-etapa -> modelo grande (nvidia/nemotron 3 ultra, ctx
+  1.048.576). `scripts/model-catalog.py` diz o que existe AGORA.
+- **SANDBOX + CHECKER.** O video: "don't touch production — copy to sandbox,
+  fix there, then hand over a script", com checker de 4 pontos (producao
+  igual? sandbox separado? sandbox funciona? o script corrige a producao?).
+  A casa tem worktree-por-lane + read-back do vault; **falta o checker
+  explicito**: antes de tocar producao, o agente prova em worktree e devolve
+  o comando.
+- **DÁ SEARCH AO TIME**: "facts don't fit in a small model" -> o RAG
+  (jarvis_rag_search) e o corpus offline entram no prompt do especialista.
+
+## Video transcripts (15/11, measured)
+
+- **LEIA A FAIXA ORIGINAL, NAO A TRADUZIDA.** O YouTube marca a track NAO
+  traduzida com o sufixo `-orig`, e o campo `language` do video e o idioma
+  original. Medido no video PZQWdlTi9B0 (`language: en-US`): pedir `pt` entregou
+  a traducao automatica — a leitura mudou o sentido (frases quebradas, numeros
+  for a fora). O script agora pega a original primeiro e para nela.
+- **LEIA O `.md`, NAO O `.json3`.** O `.json3` e XML (nao e JSON) e o `.txt`
+  nao tem horario. O `<id>.<lang>.md` (transcricao com `[mm:ss]`) e o formato
+  que a IA le. O `meta.json` aponta o caminho (`transcript_md`).
+- **Se o YouTube travar (429)**: o script falha rapido e explica (a faixa
+  original falhou; as traducidas custam ~45s cada). Nao re-tente em loop: o
+  rate-limit e por IP. O `meta.json` fica em cache (10 MB, nao rebaixe).
+
 ## Model identity (self-identification — 02/11)
 
 You cannot introspect your own weights (size, quantisation, VRAM, latency) — a

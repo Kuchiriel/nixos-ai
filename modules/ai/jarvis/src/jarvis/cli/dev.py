@@ -1573,8 +1573,16 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
         url = (args.get("url") or "").strip()
         if not url:
             return "ERROR: url vazia", None
-        cmd = [sys.executable, str(script), url,
-               "--langs", str(args.get("langs") or "pt,en")]
+        # (15/11, crouton-alpha) O script decide a faixa: o IDIOMA ORIGINAL do
+        # video primeiro (o `language` dele + o sufixo "-orig" do YouTube).
+        # O default antigo ("pt,en") entregava a TRADUCAO automatica num video
+        # en-US — e a leitura degradada mudava o sentido. "langs" explicito
+        # ainda vale; sem ele, so a original.
+        cmd = [sys.executable, str(script), url]
+        if args.get("langs"):
+            cmd += ["--langs", str(args["langs"])]
+        if args.get("all_langs"):
+            cmd.append("--all-langs")
         if args.get("digest"):
             cmd.append("--digest")
         try:

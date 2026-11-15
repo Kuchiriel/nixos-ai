@@ -78,15 +78,15 @@ def fetch_meta(vid: str, out_dir: Path, timeout: int) -> Path:
     return meta
 
 
-def fetch_caption(url: str, timeout: int, tries: int = 3) -> str:
+def fetch_caption(url: str, timeout: int, tries: int = 2) -> str:
     """Baixa a legenda direto no timedtext, com UA e retry (o 429 é do endpoint do yt-dlp)."""
     last = ""
     for attempt in range(tries):
-        for ua in UAS:
+        for ua in UAS[:1 + attempt]:
             try:
                 r = subprocess.run(
-                    ["curl", "-sS", "--compressed", "-A", ua, "--max-time", str(timeout), url],
-                    capture_output=True, text=True, timeout=timeout + 10)
+                    ["curl", "-sS", "--compressed", "-A", ua, "--max-time", str(min(timeout, 15)), url],
+                    capture_output=True, text=True, timeout=min(timeout, 15) + 10)
             except subprocess.TimeoutExpired:
                 last = "timeout"
                 continue
@@ -112,12 +112,40 @@ def json3_to_text(body: str) -> tuple[str, list[tuple[float, str]]]:
     return " ".join(t for _, t in segs), segs
 
 
+def write_md(out_dir, vid, lang, meta, segs, native):
+    """Escreve <id>.<lang>.md: a transcricao COM timestamps, legivel por IA.
+
+    (15/11, crouton-alpha) O .json3 e XML (nao e JSON) e o .txt nao tem
+    horario, e a IA perde a linha do tempo. Este e o formato que se le.
+    """
+    try:
+        def ts(v):
+            return "%02d:%02d" % (int(v // 60), int(v % 60))
+        head = []
+        head.append("# " + str(meta.get("title") or vid))
+        head.append("")
+        head.append("- video: https://youtu.be/" + vid)
+        head.append("- canal: " + str(meta.get("channel") or meta.get("uploader") or "?"))
+        head.append("- faixa: " + str(lang) + " (original do video: " + str(native or "?") + ")")
+        head.append("- duracao: " + str(meta.get("duration")) + "s")
+        head.append("- formato: transcricao automatica com timestamps")
+        head.append("")
+        body = []
+        for t, txt in segs:
+            body.append("[" + ts(t) + "] " + str(txt))
+        (out_dir / (vid + "." + lang + ".md")).write_text("\n".join(head + body) + "\n")
+    except Exception:
+        pass
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("url")
     ap.add_argument("--out-dir", default=os.path.expanduser("~/Books/videos"))
     ap.add_argument("--langs", default="pt,en")
     ap.add_argument("--timeout", type=int, default=45)
+    ap.add_argument("--all-langs", action="store_true",
+                    help="baixa todas as faixas pedidas (o padrao e so a original do video)")
     ap.add_argument("--digest", action="store_true",
                     help="escreve <id>.DIGEST.md com o roteiro e os horários")
     args = ap.parse_args()
@@ -127,16 +155,28 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     log(f"video: {vid} -> {out_dir}")
 
-    meta_path = fetch_meta(vid, out_dir, args.timeout)
+    # (15/11) CACHE do meta.json (10 MB do YouTube): reusa o que ja esta
+    # em disco (rebaixar a cada chamada gastava ~40s e piorava o 429).
+    meta_path = out_dir / f"{vid}.info.json"
+    if not (meta_path.is_file() and meta_path.stat().st_size > 1000):
+        meta_path = fetch_meta(vid, out_dir, args.timeout)
     meta = json.loads(meta_path.read_text())
     auto = meta.get("automatic_captions") or {}
     manual = meta.get("subtitles") or {}
 
     langs = [l.strip() for l in args.langs.split(",") if l.strip()]
-    # o "-orig" é a track original (sem tradução); tenta antes a pedida
-    ordem: list[str] = []
+    # (15/11, crouton-alpha) O IDIOMA ORIGINAL PRIMEIRO: o YouTube marca a
+    # track NAO traduzida com o sufixo "-orig" e o campo `language` do video
+    # e o idioma original. Medido: pedir "pt,en" num video en-US entrega a
+    # TRADUCAO automatica (degradada: a leitura muda o sentido).
+    native = str(meta.get("language") or "").split("-")[0].lower()
+    ordem = []
+    if native:
+        for cand in (native + "-orig", native):
+            if cand not in ordem:
+                ordem.append(cand)
     for lang in langs:
-        for cand in (lang, f"{lang}-orig"):
+        for cand in (lang + "-orig", lang):
             if cand not in ordem:
                 ordem.append(cand)
 
@@ -156,14 +196,21 @@ def main() -> int:
             if not text:
                 continue
             (out_dir / f"{vid}.{lang}.txt").write_text(text)
-            log(f"  legenda {lang}: {len(text)} chars")
+            write_md(out_dir, vid, lang, meta, segs, native)
+            log(f"  legenda {lang}: {len(text)} chars (+ .md com timestamps)")
             if not best_text:
                 best_text, best_lang = text, lang
                 (out_dir / f"{vid}.txt").write_text(text)
                 (out_dir / f"{vid}.segs.json").write_text(
                     json.dumps([{"t": round(t, 2), "text": s} for t, s in segs],
                                ensure_ascii=False, indent=1))
+            if (not args.all_langs and native
+                    and lang in (native, native + "-orig")):
+                break
+        if (best_text and not args.all_langs and native
+                and best_lang in (native, native + "-orig")):
             break
+
 
     if not best_text:
         log("  NENHUMA legenda obtida (429 do YouTube ou video sem legenda)")
@@ -184,6 +231,8 @@ def main() -> int:
         "chapters": meta.get("chapters") or [],
         "keywords": meta.get("keywords") or [],
     }
+    house_meta["transcript_md"] = f"{vid}.{best_lang}.md"
+    house_meta["native_language"] = native
     (out_dir / "meta.json").write_text(json.dumps(house_meta, ensure_ascii=False, indent=1))
 
     if args.digest:

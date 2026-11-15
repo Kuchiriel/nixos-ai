@@ -253,6 +253,34 @@ def set_context(context: str, name: str | None = None) -> str:
                  "--name", target, "--context", context.strip()], timeout=20)
 
 
+def _origin_context() -> str:
+    """O pedido original: a tarefa/contexto do AGENTE QUE MANDA.
+
+    (15/11) Medido num video sobre times de modelos: os especialistas
+    perdiam o pedido original (recebiam so o resumo do planejador) e o
+    time inteiro ficava fraco. Aqui a origem vem do ROSTER do remetente
+    (campo `task`, depois `context`) — o que a casa ja guarda.
+    """
+    try:
+        me = agent_id()
+    except Exception:
+        me = ""
+    if not me:
+        return ""
+    for entry in roster_agents():
+        if entry.get("name") != me and entry.get("codename") != me:
+            continue
+        task = str(entry.get("task") or "").strip()
+        if task:
+            return task[:700]
+        for key in ("context", "note"):
+            val = str(entry.get(key) or "").strip()
+            if val:
+                return val[:700]
+        break
+    return ""
+
+
 def send_message(target: str, message: str, note: bool = True) -> str:
     """Entrega mensagem a um par (por codinome ou nome).
 
@@ -327,8 +355,20 @@ def send_message(target: str, message: str, note: bool = True) -> str:
     except Exception:
         session = ""
     if session:
+        payload = message.strip()
+        # (15/11, crouton-alpha) O ESPECIALISTA PRECISA VER O PEDIDO ORIGINAL.
+        # Medido num video sobre times de modelos (Kimi 4B planejador +
+        # especialistas): "Meus especialistas sao so [o que o planejador
+        # escreveu]. Eles nunca viram meu pedido original" — e o time ficou
+        # fraco. Aqui acontece igual: o par acorda com o RESUMO do remetente e
+        # perde o pedido original. Entao quem entrega anexa o contexto
+        # original do REMETENTE (a tarefa que ele esta executando).
+        _origem = _origin_context()
+        if _origem and not note:
+            payload = ("[PEDIDO ORIGINAL (contexto do remetente)]: " + _origem
+                       + "\n\n[TAREFA PARA VOCE]: " + payload)
         cmd_api = ["python3", _script("agent-api.py"), "--session", session,
-                   "--text", message.strip()]
+                   "--text", payload]
         cmd_api.append("--note" if note else "--ask")
         try:
             api_note = _run(cmd_api, timeout=90)
