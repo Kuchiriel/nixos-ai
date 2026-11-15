@@ -82,21 +82,37 @@ case "${1:---list}" in
     ;;
 
   --start-mtp)
-    log "subindo o MTP (mesma cmdline medida)..."
-    nohup "$MTP_CMD" -m "$MTP_MODEL" --host 127.0.0.1 --port "$MTP_PORT" \
-      -ngl 99 -t 6 -c 12288 -b 256 -ub 256 -fa off -ctk f16 -ctv f16 \
-      --alias "$MTP_ALIAS" --parallel 1 --jinja --reasoning off \
-      --spec-type draft-mtp --lora "$MTP_LORA" --lora-init-without-apply \
-      >/tmp/llama-mtp.log 2>&1 &
+    # (15/11) DOIS PERFIS do MTP (exclusivos por VRAM):
+    #   --profile lora (default): COM o LoRA microturn -> PHONE CALL (voz).
+    #   --profile code: SEM o LoRA -> CODING/TESTES (harness/nightwatch).
+    PERFIL="${2:-lora}"
+    if [ "$PERFIL" = "code" ]; then
+      PORTA=8096; ALIAS="jarvis-mtp-code"; LOG=/tmp/llama-mtp-code.log
+    else
+      PORTA="$MTP_PORT"; ALIAS="$MTP_ALIAS"; LOG=/tmp/llama-mtp.log
+    fi
+    log "subindo o MTP perfil=$PERFIL (porta $PORTA)..."
+    if [ "$PERFIL" = "code" ]; then
+      nohup "$MTP_CMD" -m "$MTP_MODEL" --host 127.0.0.1 --port "$PORTA" \
+        -ngl 99 -t 6 -c 12288 -b 256 -ub 256 -fa off -ctk f16 -ctv f16 \
+        --alias "$ALIAS" --parallel 1 --jinja --reasoning off \
+        --spec-type draft-mtp >"$LOG" 2>&1 &
+    else
+      nohup "$MTP_CMD" -m "$MTP_MODEL" --host 127.0.0.1 --port "$PORTA" \
+        -ngl 99 -t 6 -c 12288 -b 256 -ub 256 -fa off -ctk f16 -ctv f16 \
+        --alias "$ALIAS" --parallel 1 --jinja --reasoning off \
+        --spec-type draft-mtp --lora "$MTP_LORA" --lora-init-without-apply \
+        >"$LOG" 2>&1 &
+    fi
     log "  pid $!"
     for i in $(seq 1 120); do
-      if endpoint_ok "$MTP_PORT"; then
-        log "  :$MTP_PORT responde (${i}s) | VRAM livre: $(vram) MiB"
+      if endpoint_ok "$PORTA"; then
+        log "  :$PORTA responde (${i}s) | VRAM livre: $(vram) MiB"
         exit 0
       fi
       sleep 1
     done
-    log "  :$MTP_PORT NAO respondeu em 120s"
+    log "  :$PORTA NAO respondeu em 120s"
     exit 1
     ;;
 

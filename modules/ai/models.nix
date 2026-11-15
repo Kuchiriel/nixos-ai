@@ -470,6 +470,102 @@ in rec {
       # id = alias (o server anuncia o alias; home.nix usa svc.alias).
       opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 12288; output = 4096; };
     };
+    # (15/11, dono) PERFIL DE **CODING** do 4B-MTP: SEM o LoRA microturn.
+    # O LoRA microturn e o classificador de VOZ (RESPOND/WAIT/SILENCE) e NAO
+    # serve para coding/testes: medido no A/B do dungeon que, com ele
+    # carregado, o patcher de 4k tokens dava TIMEOUT. Este perfil serve o
+    # harness/nightwatch/dev.py; o COM LoRA (:8092, jarvis-mtp-lora) serve a
+    # phone call. EXCLUSIVOS POR VRAM (6 GB): o watchdog da voz tem de saber
+    # que, com este perfil carregado, o duplex NAO pode subir.
+    uncensored-4b-code = {
+      # (19/10) binary stock (v0.7.0-dev build local): o upstream nixpkgs
+      # 0.5.0 NÃO tem --lora nem /lora-adapters. O LoRA micro-turn
+      # (classificador RESPOND/WAIT/SILENCE/BARGE) exige o stock.
+      # (24/10, incidente 04:03) mínimo de VRAM LIVRE p/ o vram-guard:
+      # modelo 2.7G + KV ~0.75G (20k ×2 MTP) + buffers ~0.6G.
+      # (26/10 09:45, OOM MEDIIDO) 32768 FALHOU na 6GB com whisper
+      # co-residente: KV f16 @32k (~600MB) ×2 (MTP draft context!) +
+      # buffer fa=false (~1GB @32k) + modelo 2.7G = ~4.9G; com
+      # whisper(0.9)+embed(0.2)+desktop = 6.3G > 6.1G → "failed to
+      # allocate buffer for kv cache".
+      # (26/10 10:15, HB decisão dados OC) 20k+MTP: KV 375MB×2=750MB +
+      # buffer 625MB + modelo 2.7G = ~4.1G; com whisper+embed = ~5.2G;
+      # margem ~900MB. MANTÉM o +24% TG do MTP. Para opencode 32k:
+      # remover --spec-type draft-mtp (perde TG) OU slimming MCP tools.
+      # GUARD FUTURO (lição OOM): vramMin DEVE contar MTP×2 no KV.
+      vramMinMiB = 4200;  # 20k real: modelo+KV+buffer ~4.1G
+      port = 8096; binary = "stock";
+      # (26/10) ALIAS — id estável anunciado em /v1/models. Medido: com
+      # --alias o data[].id vira o alias (sem ele = path do gguf). O
+      # registry Python compara o id do modelo com o id ATIVO do server
+      # (ensure_model → active_model) p/ provar identidade: com path
+      # grudado no registry isso quebrava. Alias = contrato limpo.
+      alias = "jarvis-mtp-code";
+      # ARQUIVO MTP (não o base!): NextN real, +24% TG. Rebuild sem isto
+      # voltaria a 8092 sem speculative decoding (regressão silenciosa).
+      modelFile = "/var/lib/ai/models/Qwen3.5-4B-MTP-Q4_K_M.gguf";
+      # KV f16 híbrido (8/32 layers) ≈ 750MB @20k ×2 MTP.
+      # (06/11, 18:40) ctx 16384→12288: o consumo de REPOUSO do 4B com
+      # fa off (o KV mora na CPU) + MTP + LoRA + prompt-cache (328MiB por
+      # entrada) dava 8,4G — batia no MemoryHigh (8G) → reclaim/swap
+      # permanente → cada request levava 1,9-2,4s (o classify que era
+      # 158ms no battery). 12288 corta ~1,2G do KV+cache e deixa folga.
+      threads = 6; ctxSize = 12288; batchSize = 256; ubatch = 256;
+      gpuLayers = 99; moeFlags = "";
+      # (19/10) LoRA+flash-attn incompatíveis (log do server, ver
+      # duplex-35b) → fa off. KV quantizado (q4_0) EXIGE fa → KV f16.
+      fa = false; ctk = "f16"; ctv = "f16";
+      # LoRA init sem aplicar: o cliente liga/desliga via /lora-adapters
+      # SÓ nos requests do classificador (chat com tools fica limpo).
+      # (06/11) --parallel 2 foi TESTADO e REVERTIDO: com 2 slots a voz
+      # ainda esperou 4,5s durante um prompt longo do harness (medido
+      # A/B no :8092) — a fila não é o gargalo, é a GPU saturada pelo
+      # PREFILL do prompt longo (7,2k tokens ≈ 5s). 2 slots só limitaria
+      # o contexto do dev a 8192 (quebraria prompts longos). Fix real do
+      # gargalo = reduzir o prompt do harness (ver _trim_messages e o
+      # budget de agent-context em cli/dev.py) + ctx menor (16384).
+      extraArgs = [ "--parallel" "1" "--jinja" "--reasoning" "off" "--spec-type" "draft-mtp" ];
+      # (06/11) MEMÓRIA (medido): com c=20480 o 4B chegou a 9G RSS +
+      # 6,2G swap → zram (15,5G) lotou → HOST TRAVOU (thrash) e o OOM
+      # killer matou o llama-server (11:22:08). memHigh/memMax eram
+      # DECLARADOS AQUI mas NUNCA chegavam à unit (config morta) →
+      # agora são MemoryHigh/MemoryMax reais (ver llama-uncensored.nix).
+      # 6G/9G/1G: o modelo é pressionado a devolver memória cedo
+      # (MemoryHigh), nunca passa de 9G (MemoryMax) e não vira 6GB de
+      # swap (MemorySwapMax) — morre o serviço, não o host.
+      # (06/11, 15:41) swap max 1G era aperto demais: o modelo joga
+      # 1,2-1,7GB de páginas frias no zram em operação normal e foi
+      # morto no limite (oom-kill da cgroup). 2G prende o desastre
+      # (zram cheio = freeze) sem matar o serviço no uso normal.
+      # (06/11, 16:50) MemoryHigh ABAIXO do consumo real = swap thrash:
+      # o modelo ficava 6,5-9G (o KV do 4B mora na RAM porque fa off),
+      # o cgroup passava o high-watermark todo dia → reclaim → KV no
+      # zram → cada request levava MINUTOS (timeout) → o classificador
+      # devolvia None → o JARVIS FICAVA MUDO. MemoryHigh tem de ser
+      # MAIOR que o consumo de repouso; o swap é só reserva.
+      # (06/11, 21:25) swap max 1G MATAVA o server: o GGUF é mmap e o
+      # kernel joga as páginas frias no zram (1,2-1,7GB em operação
+      # normal) → cgroup OOM-kill (status=9/KILL) 2x em 15min. Com
+      # MemoryHigh=8G o modelo volta pra RAM; o swap é reserva de 4G
+      # (e o MemoryMax=11G é o teto duro).
+      # (06/11, 23:30) TIGHTENING FINAL: o host levou 4 OOM globals
+      # (23:12-23:24) e o 4B-MTP foi morto 19x em loop (start-limit) —
+      # o teto de 11G+4G de swap deixava o LLM pedir 15GB num host de
+      # 31GB que já tem MT5 (4,2GB) + 4 sessões opencode (3,4GB). O
+      # modelo precisa de ~5GB (ctx 12288): high 6G, max 7G, swap 2G.
+      memHigh = "6G"; memMax = "7G"; memSwapMax = "2G"; limitMemlock = false;
+      # (26/10, dono: "tira o bonsai de default e coloca o qwen mtp que tem
+      # o lora pra subir com o lora") → este é o DEFAULT do sistema agora.
+      # wanted=true = sobe no boot COM o LoRA registrado (medido ao vivo:
+      # LoRA ON 4/4 classes corretas; LoRA OFF = base entra em "Thinking
+      # Pro" e NÃO classifica nada — o classificador é o LoRA, não o base).
+      # Consequência VRAM: 4.1G resident → o bonsai do router :8080 não
+      # carrega junto (o default não passa mais pelo router).
+      wanted = true;
+      # opencode provider (gerado em home.nix via mapAttrs):
+      # id = alias (o server anuncia o alias; home.nix usa svc.alias).
+      opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 12288; output = 4096; };
+    };
     deepseek-7b = {
       # (04/11, sweep) 8085 era COMPARTILHADA com duplex-35b (models.nix:312)
       # → as units se conflitavam e o opencode publicava local-deepseek-7b

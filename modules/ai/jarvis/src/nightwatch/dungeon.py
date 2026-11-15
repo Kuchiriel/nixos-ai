@@ -47,6 +47,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -60,7 +61,21 @@ WORKSPACE = Path(os.environ.get("JARVIS_WORKSPACE_ROOT", str(Path.home() / "proj
 # ── os dois modelos do A/B (medidos HOJE na casa) ──
 MODELOS = {
     "bonsai": {"base_url": "http://127.0.0.1:8080/v1", "model": "bonsai"},
-    "mtp": {"base_url": "http://127.0.0.1:8092/v1", "model": "jarvis-mtp-lora"},
+    # (15/11, dono) O MTP tem DOIS perfis (exclusivos por VRAM):
+    #   mtp-code = SEM o LoRA microturn -> CODING/TESTES (o harness).
+    #              MEDIDO: com o LoRA carregado o patcher de 4k tokens dava
+    #              TIMEOUT — o LoRA e o classificador de VOZ (phone call).
+    #   mtp-lora = COM o LoRA -> a phone call (a voz).
+    "mtp": {"base_url": "http://127.0.0.1:8096/v1", "model": "jarvis-mtp-code"},
+    "mtp-lora": {"base_url": "http://127.0.0.1:8092/v1", "model": "jarvis-mtp-lora"},
+    # (15/11) O TERCEIRO BRAÇO — a API. O transcript (Codacus) mediu: "A 4B
+    # planner with one expert handles SHORT jobs with a clear answer. For LONG
+    # jobs, run the biggest single model your card can hold." O A* pathfinding
+    # é job LONGO (5 etapas com deps) -> o local pequeno nao fecha. Entao o A/B
+    # mede os tres: 8B ternario local, 4B MTP local e o forte da API.
+    # Escolhi o deepseek-v4.1-flash: 73,2% em coding agentic real (bito),
+    # MIT, Terminal-Bench 42,3 (o melhor da lista API da casa).
+    "api": {"base_url": "http://127.0.0.1:8095/v1", "model": "deepseek-ai/deepseek-v4.1-flash"},
 }
 
 # ── O PEDIDO ORIGINAL (a regra do video: o especialista ve o pedido inteiro) ──
@@ -90,12 +105,14 @@ def lane_path(modelo: str) -> Path:
 
 
 def ensure_lane(modelo: str) -> Path:
-    """Cria o SANDBOX: um worktree do dungeon (a producao nao e tocada).
+    """Cria o SANDBOX: uma COPIA do dungeon (a producao nao e tocada).
 
-    O video: "don't touch production — copy to a sandbox, fix it there, then
-    hand me a script". Aqui o sandbox e um worktree: o agente edita o lane e a
-    producao fica intacta (o diff/commit do lane e o "script" que o dono
-    revisa).
+    (15/11) MEDIDO: com worktree o harness falha no retry — "Could not create
+    branch for retry 1" — porque o harness cria um branch por task e o
+    worktree ja tem um branch em uso (git nao deixa mexer). E o proprio video
+    diz "copy the app into a sandbox, fix it there, then hand me a script".
+    Entao: COPIA (o sandbox literal do video) — o agente edita a copia, a
+    producao fica intacta, e o diff/commit da copia e o "script" pro dono.
     """
     lane = lane_path(modelo)
     if lane.exists():
@@ -103,11 +120,17 @@ def ensure_lane(modelo: str) -> Path:
     if not DUNGEON_SRC.exists():
         raise SystemExit(f"dungeon nao encontrado: {DUNGEON_SRC}")
     WORKSPACE.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["git", "-C", str(DUNGEON_SRC), "worktree", "add", "-B",
-         f"lane/{lane_name(modelo)}", str(lane)],
-        check=True, timeout=180,
-    )
+    if lane.exists():
+        shutil.rmtree(lane)
+    shutil.copytree(DUNGEON_SRC, lane, symlinks=True)
+    shutil.rmtree(lane / ".git", ignore_errors=True)
+    # o harness cria branch por task: o sandbox precisa ser um repo git
+    subprocess.run(["git", "-C", str(lane), "init", "-q"], check=True, timeout=60)
+    subprocess.run(["git", "-C", str(lane), "add", "-A"], check=True, timeout=120)
+    subprocess.run(["git", "-C", str(lane), "-c", "user.email=lane@local",
+                    "-c", "user.name=lane", "commit", "-q", "-m",
+                    "sandbox: copia do jarvis-dungeon (baseline)"],
+                   check=True, timeout=120)
     return lane
 
 
@@ -153,6 +176,24 @@ def run(modelo: str, max_tasks: int = 1) -> dict:
 
     cfg_model = MODELOS[modelo]
     lane = ensure_lane(modelo)
+    if modelo == "api":
+        # (15/11) MEDIDO: o backend "remote" da casa (jarvis/providers/
+        # llm_factory.py) pede a chave via ENV: JARVIS_LLM_BACKEND=remote +
+        # JARVIS_REMOTE_BASE_URL + JARVIS_REMOTE_API_KEY (a regra da casa: a
+        # chave NUNCA no codigo). Sem isso o harness batia em 401.
+        import os as _os
+        _os.environ["JARVIS_LLM_BACKEND"] = "remote"
+        _os.environ["JARVIS_REMOTE_BASE_URL"] = cfg_model["base_url"]
+        envf = _os.path.expanduser("~/.config/opencode/keys.env")
+        try:
+            for line in open(envf, encoding="utf-8"):
+                line = line.strip()
+                if line.startswith("NVIDIA_API_KEY="):
+                    _os.environ["JARVIS_REMOTE_API_KEY"] = (
+                        line.split("=", 1)[1].strip().strip('"'))
+                    break
+        except Exception:
+            pass
     # o harness le o modelo do ambiente/config
     os.environ["JARVIS_LLM_BASE_URL"] = cfg_model["base_url"]
     os.environ["JARVIS_LLM_MODEL"] = cfg_model["model"]

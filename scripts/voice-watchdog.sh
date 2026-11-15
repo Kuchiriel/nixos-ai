@@ -148,6 +148,21 @@ if reason="$(paused_reason)"; then
   exit 0
 fi
 
+# (15/11, dono) PERFIL DE CODIGO CARREGADO -> a voz NAO pode ficar no ar.
+# O 4B-MTP tem DOIS perfis (exclusivos por VRAM, 6 GB): o COM o LoRA
+# microturn (:8092, jarvis-mtp-lora, PHONE CALL) e o de CODING (:8096,
+# jarvis-mtp-code, SEM LoRA). Com o perfil de CODIGO carregado nao ha VRAM
+# para o duplex — e o dono NAO quer o MTP+LoRA em coding/testes. Entao o
+# watchdog nao re-arma a voz E derruba a que estiver no ar.
+PERFIL_DE_CODIGO=""
+for _pid in $(pgrep -f "llama-server.*jarvis-mtp-code" 2>/dev/null); do
+  PERFIL_DE_CODIGO="$_pid"
+done
+if [ -n "$PERFIL_DE_CODIGO" ]; then
+  echo "voice: PARADA (perfil de CODING do MTP carregado, pid=$PERFIL_DE_CODIGO) — o duplex nao cabe na VRAM (6 GB) e o MTP+LoRA e para phone call, nao para coding"
+  exit 0
+fi
+
 if [ "$RESTART" != "1" ]; then
   report_state
   exit $?
