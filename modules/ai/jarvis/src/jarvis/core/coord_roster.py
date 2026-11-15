@@ -38,16 +38,34 @@ DEFAULT_AGENT = "jarvis"
 
 
 def _repo_root() -> Path:
-    """Raiz do repo nixos-ai (sobe até achar scripts/agent-roster.py)."""
+    """Raiz do repo nixos-ai (sobe até achar scripts/agent-roster.py).
+
+    (14/11, crouton-alpha) BUG CORRIGIDO: o fallback usava
+    jarvis.core.paths.find_repo_root(), que resolve o PROJECT ROOT — e o
+    walk-up dele achou /home/nixos (tem .git) ou o JARVIS_WORKSPACE_ROOT
+    (/home/nixos/projects). Resultado: _script() virava
+    /home/nixos/scripts/agent-roster.py (INEXISTENTE) → roster VAZIO e wake
+    quebrado em TODO serviço jarvis (Telegram, MCP, heal). Medido: o
+    jarvis-telegram via o store nao achava o roster nenhum.
+    Agora: se o path resolvido não tem scripts/agent-roster.py, cai no
+    fallback ~/projects/nixos-ai (que TEM o script) e, em último caso, no
+    repo do proprio source (build local).
+    """
     here = Path(__file__).resolve()
     for parent in here.parents:
         if (parent / "scripts" / "agent-roster.py").exists():
             return parent
+    candidates = []
     try:
         from jarvis.core.paths import find_repo_root
-        return Path(find_repo_root())
+        candidates.append(Path(find_repo_root()))
     except Exception:
-        return here.parents[6]
+        pass
+    candidates.append(Path.home() / "projects" / "nixos-ai")
+    for cand in candidates:
+        if (cand / "scripts" / "agent-roster.py").exists():
+            return cand
+    return here.parents[6]
 
 
 def _script(name: str) -> str:
@@ -255,10 +273,20 @@ def send_message(target: str, message: str, note: bool = True) -> str:
     # Bug corrigido em 05/11 (achado pelo Urubu): validar so contra o roster
     # local rejeitava o caso cross-machine - que e exatamente o que o bus
     # existe para resolver.
+    # (14/11) Match tolerante: o Telegram manda o codinome como o dono
+    # digita ("Falcão" com acento) e o roster guarda "Falcao" (sem acento).
+    # Antes: igualdade exata -> o /to caia no bus e nunca acordava ninguem.
+    def _norm(x: object) -> str:
+        import unicodedata
+        return unicodedata.normalize("NFKD", str(x or "")).encode("ascii", "ignore").decode().lower().strip()
+
     name = target
     codename = target
+    needle = _norm(target)
     for entry in roster_agents():
-        if entry.get("name") == target or entry.get("codename") == target:
+        if (_norm(entry.get("name")) == needle
+                or _norm(entry.get("codename")) == needle
+                or any(_norm(a) == needle for a in (entry.get("aliases") or []))):
             name = str(entry.get("name"))
             codename = str(entry.get("codename") or "") or name
             break
@@ -269,9 +297,21 @@ def send_message(target: str, message: str, note: bool = True) -> str:
         bus_note = bus_send(to=codename, message=message, lane=lane)
     except Exception as exc:
         bus_note = f"(bus indisponível: {exc})"
-    if not any(entry.get("name") == name for entry in roster_agents()):
+    # (14/11) Presença local: casa por NOME **ou CODINOME** (o Telegram manda
+    # o codinome — "Falcão" — e o roster guarda name=spiritvale-pivot,
+    # codename=Falcao; antes, so name casava e o /to caia no bus).
+    local_match = None
+    for entry in roster_agents():
+        if (_norm(entry.get("name")) == _norm(name)
+                or _norm(entry.get("codename")) == _norm(codename)
+                or any(_norm(a) == _norm(target) for a in (entry.get("aliases") or []))):
+            local_match = entry
+            break
+    if local_match is None:
         return (f"{bus_note}\n(destinatário '{target}' não está nesta máquina: "
                 "a mensagem ficou no bus e será lida no próximo poll do watcher)")
+    # nome canonico do registro (para a API e para o agent-msg.sh)
+    name = str(local_match.get("name") or name)
     # (14/11, crouton-alpha) ACORDAR PELO PROMPT, NAO PELO BUS.
     # O bug medido: agent-msg.sh decide "vivo" pela JANELA Hyprland
     # (windows --json) — invisivel para servico headless (Telegram, cron,
