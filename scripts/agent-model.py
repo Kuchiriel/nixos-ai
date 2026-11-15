@@ -133,6 +133,88 @@ def mark_cooldown(model_id: str) -> None:
         pass
 
 
+def vram_free_mib() -> int:
+    """VRAM livre agora (MiB). Medido: 6.141 MiB no total da casa."""
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=8).stdout
+        return int(out.strip().splitlines()[0])
+    except Exception:
+        return -1
+
+
+def endpoint_up(endpoint: str) -> bool:
+    """O servidor local deste endpoint responde de verdade?"""
+    if not endpoint:
+        return False
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{endpoint}/v1/models")
+        with urllib.request.urlopen(req, timeout=6) as r:
+            return r.getcode() == 200
+    except Exception:
+        return False
+
+
+REGISTRY_FILE = Path("/etc/jarvis/model-registry.json")
+
+
+def registry_endpoint(mid: str) -> str:
+    """A porta do endpoint local deste id (fonte: /etc/jarvis/model-registry.json).
+
+    (15/11) O available_models() do team nao traz o `endpoint`; o registry da
+    casa tem ("bonsai": 8080, "jarvis-mtp-lora": 8092, ...).
+    """
+    try:
+        if REGISTRY_FILE.is_file():
+            data = json.loads(REGISTRY_FILE.read_text())
+            for key in (mid, mid.split("/")[-1]):
+                m = (data.get("models") or {}).get(key) or {}
+                ep = m.get("endpoint")
+                if ep:
+                    return str(ep)
+    except Exception:
+        pass
+    return ""
+
+
+def apply_vram_rule(order: list[str]) -> tuple[list[str], list[str]]:
+    """A receita do transcript (15/11) aplicada a escolha de modelo.
+
+    Medido na casa: 6.141 MiB de VRAM; o MTP segura 3.874, os embeddings 446
+    e o whisper 934 -> **102 MiB livres**. Um segundo modelo local NAO cabe.
+
+    * local pedido que NAO esta no ar:
+        - VRAM livre (idle)  -> a API do mesmo tier vai na frente e o swap
+          fica como acao sugerida (llama-swap.sh);
+        - VRAM ocupada       -> a API cobre; o local vai para o fim da fila.
+    * local no ar -> fica como esta (barato, sem latencia).
+    """
+    notas: list[str] = []
+    free = vram_free_mib()
+    head: list[str] = []
+    tail: list[str] = []
+    for mid in order:
+        ep = registry_endpoint(mid)
+        if not ep:
+            head.append(mid)
+            continue
+        if endpoint_up(ep):
+            head.append(mid)
+            continue
+        if free >= 2000:
+            notas.append(f"{mid}: local NAO esta no ar e ha VRAM livre ({free} MiB) "
+                         f"-> a API do mesmo tier vai na frente; "
+                         f"swap sugerido: bash scripts/llama-swap.sh --free "
+                         f"&& bash scripts/llama-swap.sh --wait-model <alias>")
+            tail.append(mid)
+        else:
+            notas.append(f"{mid}: local NAO esta no ar e a VRAM esta ocupada "
+                         f"({free} MiB livres) -> a API cobre este tier")
+            tail.append(mid)
+    return head + tail, notas
+
+
 def choose_models(current: str | None, auto: bool, explicit: str | None) -> list[str]:
     """Ordem de tentativa: o atual, o pedido, e depois o fallback por provider."""
     order: list[str] = []
@@ -163,7 +245,14 @@ def choose_models(current: str | None, auto: bool, explicit: str | None) -> list
         return len(FALLBACK_ORDER)
     head = order[:2] if (explicit or current) else []
     tail = sorted([m for m in order if m not in head], key=rank)
-    return head + tail
+    ordenado = head + tail
+    # (15/11) A REGRA DA VRAM (a receita do transcript): local que nao esta
+    # no ar nao briga pela VRAM — a API do mesmo tier responde.
+    try:
+        ordenado, _notas = apply_vram_rule(ordenado)
+    except Exception:
+        pass
+    return ordenado
 
 
 def run_turn(session: str, text: str, model: str) -> tuple[int, str]:
@@ -193,6 +282,9 @@ def main() -> int:
         for m in models:
             mid = m.get("id") or f"{m.get('provider_id','')}/{m.get('model_id','')}".strip("/")
             out.append({"model": mid, "cooldown": in_cooldown(mid),
+                    "vram_livre_mib": vram_free_mib(),
+                    "local_no_ar": (endpoint_up(registry_endpoint(mid))
+                                    if registry_endpoint(mid) else None),
                         "tier": m.get("tier"), "note": m.get("note")})
         print(json.dumps(out, ensure_ascii=False, indent=1))
         return 0
