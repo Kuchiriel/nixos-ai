@@ -90,7 +90,25 @@ async function getJSON(path, timeoutMs = 15000) {
 }
 async function postPrompt(session, text, delivery, timeoutMs = 20000) {
   // 2.2.6 route (needs /api). delivery enum = { steer, queue }. No noReply here.
-  return getJSON(`/api/session/${encodeURIComponent(session)}/prompt`, timeoutMs);
+  //
+  // (14/11, sweep-2026-11) CORRECAO: isto era um GET. A rota /api/session/:id/prompt
+  // so existe em POST, e o corpo {text, delivery} e o que entrega a mensagem:
+  // o GET devolvia 404 em TODA entrega (medido: agent_wake e agent_note falhavam
+  // com HTTP 404 contra a sessao viva). Agora e POST com o corpo.
+  const url = OC_URL + `/api/session/${encodeURIComponent(session)}/prompt`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ text, delivery }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const body = await res.text().catch(() => "");
+    let json = null; try { json = JSON.parse(body); } catch { /* keep raw */ }
+    return { status: res.status, body, json };
+  } catch (e) {
+    return { status: 0, body: String(e), json: null };
+  }
 }
 
 // roster: codename/name -> { name, lane, session, busy }
