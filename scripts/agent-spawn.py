@@ -408,6 +408,10 @@ def main() -> int:
                 "name": name,
                 "codename": codename,
                 "context": (task or "")[:200],
+                # (15/11) o PEDIDO ORIGINAL precisa ser a TAREFA, nao o
+                # contexto da lane: e assim que o par acorda vendo o pedido
+                # completo (ideia medida no video sobre times de modelos).
+                "task": (task or "")[:400],
                 "lane": lane,
                 "repo": "nixos-ai",
                 "files": [],
