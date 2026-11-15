@@ -9,6 +9,7 @@
 // Nada de credencial exposta: o token fica só no lado do servidor (loopback).
 
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 const HOME = process.env.HOME;
@@ -140,6 +141,12 @@ main { padding:18px; }
 button { background:#21262f; color:#c9d1d9; border:1px solid var(--line); border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; } button:hover { border-color:var(--idx); color:#fff; }
 pre { background:#0d1117; border:1px solid var(--line); border-radius:6px; padding:8px; max-height:260px; overflow:auto; font-size:11px; }
 .section-title { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.1em; margin:18px 0 8px; }
+.busbox { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px; max-height:340px; overflow:auto; font-size:12px; }
+.busline { padding:4px 0; border-bottom:1px dashed #21262f; }
+.busline:last-child { border-bottom:0; }
+.busline .who { color:var(--idx); font-weight:700; }
+.busline .kind { color:var(--warn); }
+.busline .ts { color:#8b949e; margin-right:6px; }
 </style></head><body>
 <header><h1>🤖 AGENT HUB <span class="muted">nitro-v15</span></h1>
 <input id="tok" type="password" placeholder="token do hub" style="max-width:220px">
@@ -147,6 +154,8 @@ pre { background:#0d1117; border:1px solid var(--line); border-radius:6px; paddi
 <main>
 <div class="section-title">agentes</div>
 <div id="grid" class="grid"></div>
+<div class="section-title">conversa da frota (bus)</div>
+<div id="bus" class="busbox">carregando…</div>
 <div id="drawer" class="section-title" style="display:none">transcript de <span id="drawerName"></span> — <a id="drawerToggle" href="#">fechar</a></div>
 <pre id="transcript" style="display:none"></pre>
 </main>
@@ -193,8 +202,65 @@ async function openTranscript(session, btn) {
   } catch (e) { t.textContent = 'erro ao ler: ' + e; }
 }
 $('#drawerToggle').addEventListener('click', e => { e.preventDefault(); $('#transcript').style.display = 'none'; $('#drawer').style.display = 'none'; });
+async function refreshBus() {
+  const el = document.getElementById('bus');
+  if (!el) return;
+  try {
+    const r = await fetch('/api/bus?limit=40');
+    const d = await r.json();
+    if (!d.items || !d.items.length) {
+      el.textContent = d.err ? ('bus indisponível: ' + d.err) : 'sem mensagens coord-json no bus (ainda)';
+      return;
+    }
+    el.innerHTML = d.items.map(function (i) {
+      var arrow = (i.to && i.to !== '-') ? ('\u2192 ' + esc(i.to) + ' ') : '';
+      return '<div class="busline"><span class="ts">' + esc(i.ts) + '</span>'
+        + '<span class="who">' + esc(i.from) + '</span> '
+        + '<span class="kind">[' + esc(i.kind) + ']</span> '
+        + arrow + esc(i.text) + '</div>';
+    }).join('');
+  } catch (e) { el.textContent = 'erro ao ler o bus: ' + e; }
+}
 setInterval(refresh, 5000); refresh();
+setInterval(refreshBus, 10000); refreshBus();
 </script></body></html>`;
+
+// ── BUS: a conversa da frota (issue #12 do repo Kuchiriel/mt5) ────────────
+// (15/11, crouton-alpha) O dono pediu "ver como eles estao conversando".
+// As mensagens entre agentes vao pro bus como comment com bloco ```coord-json.
+// Le com o gh (autenticado no host) e cacheia 90s para nao estourar o
+// rate-limit do GitHub (a UI faz poll a cada 10s).
+let busCache = { at: 0, items: [], err: "" };
+
+function parseCoordJson(body) {
+  const out = [];
+  const blocks = String(body || "").match(/```coord-json\n([\s\S]*?)```/g) || [];
+  for (const b of blocks) {
+    const raw = b.replace(/```coord-json\n?/, "").replace(/```\s*$/, "");
+    try {
+      const j = JSON.parse(raw);
+      if (j && typeof j === "object") out.push(j);
+    } catch { /* bloco nao-json: ignora */ }
+  }
+  return out;
+}
+
+async function busMessages(limit = 40) {
+  const now = Date.now();
+  if (now - busCache.at < 90000) return { items: busCache.items.slice(-limit), cached: true, err: busCache.err };
+  try {
+    const r = spawnSync("gh", ["api", "repos/Kuchiriel/mt5/issues/12/comments?per_page=60", "-q", ".[].body"], {
+      encoding: "utf8", timeout: 60, maxBuffer: 8 * 1024 * 1024,
+    });
+    if (r.status !== 0) throw new Error(String(r.stderr || "gh falhou").slice(0, 200));
+    const items = parseCoordJson(r.stdout || "");
+    busCache = { at: now, items, err: "" };
+    return { items: items.slice(-limit), cached: false, err: "" };
+  } catch (e) {
+    busCache = { at: now, items: busCache.items, err: String(e).slice(0, 200) };
+    return { items: busCache.items.slice(-limit), cached: true, err: busCache.err };
+  }
+}
 
 async function handler(req, res) {
   const url = new URL(req.url, 'http://127.0.0.1');
@@ -225,6 +291,22 @@ async function handler(req, res) {
       }
       return send(200, JSON.stringify({ session: s, status, lines }), 'application/json');
     } catch (e) { return send(502, JSON.stringify({ error: String(e) }), 'application/json'); }
+  }
+  if (req.method === 'GET' && url.pathname === '/api/bus') {
+    // (15/11) a conversa da frota. Publica: o bus e append-only e as
+    // mensagens sao coord-json (kind=msg/status/claim...). Nao leva
+    // token: nao expoe transcript de sessao nem escreve nada.
+    const lim = Math.min(100, parseInt(url.searchParams.get('limit') || '40', 10) || 40);
+    const b = await busMessages(lim);
+    const linhas = b.items.map((j) => {
+      const ts = j.ts ? String(j.ts).replace('T', ' ').replace('Z', '').slice(5, 16) : "??";
+      const from = j.agent || j.from || "?";
+      const to = j.to || "-";
+      const kind = j.kind || "msg";
+      const txt = String(j.message || j.intent || j.note || "").replace(/\s+/g, " ").slice(0, 400);
+      return { ts, from, to, kind, text: txt, lane: j.lane || "" };
+    });
+    return send(200, JSON.stringify({ items: linhas, cached: b.cached, err: b.err }), 'application/json');
   }
   if (req.method === 'POST' && url.pathname === '/api/wake') {
     if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required (x-agent-hub-token)' }), 'application/json');

@@ -29,6 +29,11 @@
       default = "100.121.100.103";
       description = "IP do tailnet onde o MCP escuta (NÃO use 0.0.0.0).";
     };
+    hostV6 = lib.mkOption {
+      type = lib.types.str;
+      default = "fd7a:115c:a1e0::7f01:64bd";
+      description = "Endereco IPv6 do tailnet onde o MCP tambem escuta (15/11: do celular so o IPv6 responde).";
+    };
     port = lib.mkOption {
       type = lib.types.port;
       default = 8765;
@@ -42,6 +47,37 @@
   };
 
   config = lib.mkIf config.services.jarvis.coordMcp.enable {
+    # (15/11, crouton-alpha) Segunda instancia do MESMO MCP, escutando no
+    # IPv6 do tailnet. Motivo medido: do celular (o dono) a rota IPv4 da
+    # tailnet esta morta (assimetria celular->PC) e so o IPv6 responde;
+    # com o MCP so no IPv4, o meta-tool `mcp search|call` do celular caia
+    # no fallback de tunel SSH e o heartbeat notificava "coord-mcp pela
+    # tailnet fora" a cada 30min. Bind no endereco do TAILNET (nao
+    # 0.0.0.0): a protecao continua sendo a tailnet.
+    systemd.user.services.coord-mcp-v6 = {
+      Unit = {
+        Description = "JARVIS — MCP de coordenação entre IAs (streamable-http, tailnet IPv6)";
+        After = [ "network-online.target" ];
+        Wants = [ "network-online.target" ];
+      };
+      Install.WantedBy = [ "default.target" ];
+      Service = {
+        Type = "simple";
+        ExecStart = lib.concatStringsSep " " [
+          "/home/nixos/projects/nixos-ai/modules/ai/jarvis/coord-mcp-launcher.sh"
+          "--host"
+          config.services.jarvis.coordMcp.hostV6
+          "--port"
+          (toString config.services.jarvis.coordMcp.port)
+        ];
+        Environment = "COORD_AGENT=${config.services.jarvis.coordMcp.agent}";
+        Restart = "always";
+        RestartSec = "5s";
+        StandardOutput = "journal";
+        StandardError = "journal";
+      };
+    };
+
     systemd.user.services.coord-mcp = {
       # (05/11) No home-manager as opções de unit usam os NOMES DO SYSTEMD
       # (Unit.Description, Unit.After, Service.ExecStart, Install.WantedBy):

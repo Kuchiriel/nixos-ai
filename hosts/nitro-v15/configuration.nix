@@ -522,7 +522,7 @@
   # com `opencode attach http://127.0.0.1:4599` (assim os dois veem a MESMA
   # sessão, com busy-state coordenado).
   networking.firewall.interfaces.tailscale0 = {
-    allowedTCPPorts = [4599 5173 8090 8091];
+    allowedTCPPorts = [4599 5173 8090 8091 8765];
   };
 
   # opencode serve com nome curto (2026-10-02). O MagicDNS do Tailscale só
