@@ -185,6 +185,53 @@ def redteam_candidates(cat: dict) -> list:
         })
     return out
 
+
+def local_live() -> list:
+    """Modelos LOCAIS que existem AGORA, descobertos sem lista fixa.
+
+    (15/11) O opencode.json declara os providers locais (baseURL
+    127.0.0.1:PORT/v1); cada /v1/models responde com o alias REAL que o
+    opencode valida. Como o router so serve 'bonsai' e o :8092 serve
+    'jarvis-mtp-lora' (medido 15/11 09:4x), a lista de locais e lida do
+    servidor, nao do catalogo.
+    """
+    out = []
+    try:
+        cfg = json.loads((HOME / ".config/opencode/opencode.json").read_text())
+    except Exception:
+        return out
+    for pname, p in ((cfg.get("provider") or {})).items():
+        opts = p.get("options") or {}
+        base = opts.get("baseURL") or ""
+        if "127.0.0.1" not in base and "localhost" not in base:
+            continue
+        port = base.split(":")[2].split("/")[0] if base.count(":") >= 2 else None
+        if not port:
+            continue
+        try:
+            import urllib.request
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/v1/models", timeout=4) as r:
+                data = json.loads(r.read() or b"{}")
+            for m in (data.get("data") or []):
+                mid = m.get("id")
+                if not mid:
+                    continue
+                # (15/11) "local" so se o provider key for local: o
+                # nvidia aponta para 127.0.0.1:8095, que e o GATE (proxy
+                # para a API da nvidia), nao um modelo local.
+                kind = "local" if pname.startswith("local") else "api-via-gate"
+                out.append({
+                    "id": mid,
+                    "provider_key": pname,       # o prefixo que o opencode usa
+                    "full_id": f"{pname}/{mid}",
+                    "port": int(port),
+                    "context": m.get("context_length") or m.get("max_model_len"),
+                    "kind": kind,
+                })
+        except Exception:
+            continue
+    return out
+
 def build() -> dict:
     cat = load_catalog()
     cd = cooldown_map()
@@ -215,6 +262,7 @@ def build() -> dict:
     return {
         "ts": int(time.time()),
         "providers": providers,
+        "local_live": local_live(),
         "redteam_candidates": redteam_candidates(cat),
         "redteam_profile": {
             "mbti": "INTP",

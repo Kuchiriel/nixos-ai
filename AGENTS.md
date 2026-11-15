@@ -94,10 +94,19 @@ nix flake check
   opencode store is the **SQLite `~/.local/share/opencode/opencode.db`** (the
   `storage/` JSON only has old sessions). `agents-watcher.sh` runs the
   `scan-apply` every 10 cycles and suggests a checkpoint after 45min of work.
-- **Frequency calibrated by activity (01/11, owner's request)**: the watcher
-  reads `part` from `opencode.db` (updated on every tool call) — an agent with
-  a new part ≤`AGENTS_DB_ALIVE`s (600) is ALIVE: no wake, no RE-ENTER, no
-  deadlock (CPU idle = false positive of a long command). Read-only, `mode=ro`.
+    - **Frequency calibrated by activity (01/11, owner's request)**: an agent with
+      new activity <=`AGENTS_DB_ALIVE`s (600) is ALIVE: no wake, no RE-ENTER, no
+      deadlock (CPU idle = false positive of a long command). Read-only, `mode=ro`.
+      **CORRIGIDO 15/11 (medido)**: no 2.2.6 a atividade fica em
+      `session_message` (o CONTEUDO vem DENTRO do `data`); `part`/`message` sao o
+      schema 1.x e estao CONGELADOS (medido: max(part.time_updated)=09/11 no host).
+      Ler a tabela errada fez o `prune` APAGAR os 4 agentes VIVOS e o watcher
+      concluir "ninguem esta trabalhando". Fonte unica: `scripts/oc-db.py`
+      (escolhe a tabela viva; `agent-db-alive.py` e `agent-roster.py` delegam).
+      Regra de bolso: **liveness pela API do opencode** (`/api/session`): ela
+      responde 200 para a sessao viva e 404 para a morta, em qualquer contexto
+      (inclusive headless, onde nao ha janela Hyprland).
+
 - **Checkpoint without redundancy (01/11)**: `CHECKPOINT-SUGERIDO` compares the
   current snapshot (commits of all repos at the root) with the snapshot stored
   at the last suggestion — no new commit = era already sealed, no repeat. The
