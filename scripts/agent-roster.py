@@ -249,46 +249,36 @@ def own_window(windows: list[dict] | None = None) -> dict | None:
 
 
 def _db_live_sessions(janela_s: int | None = None) -> list[str]:
-    """Sessões com part nova na janela (default AGENTS_DB_ALIVE=600s).
+    """Sessoes com atividade nova na janela (fonte unica: oc-db.py).
 
-    Cobre a sessão servida por `opencode serve`: ela não tem TUI com
-    `-s ses_...` no argv (a sessão chega pela API), então o scan de /proc
-    não a vê e o roster a marcava `dead` com o claim certo (medido 08/11).
-    Mesmo critério e mesma janela do watcher (agent-db-alive.py).
+    (15/11, crouton-alpha) DELEGADO: a copia local consultava a tabela
+    `part`, que no opencode 2.2.6 e o schema LEGADO do 1.x (congelada em
+    09/11 no host). O 2.2.6 grava atividade em session_message/session_part.
+    Medido antes: o roster via DB dizia que as 4 sessoes VIVAS estavam
+    ociosas. Agora: oc-db.py escolhe a tabela viva sozinha.
     """
     if janela_s is None:
         try:
             janela_s = int(os.environ.get("AGENTS_DB_ALIVE", "600"))
         except ValueError:
             janela_s = 600
-    db = Path(os.environ.get(
-        "AGENTS_DB_PATH",
-        str(Path.home() / ".local/share/opencode/opencode.db")))
-    if not db.exists():
-        return []
     try:
-        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
-        try:
-            rows = con.execute(
-                "SELECT DISTINCT session_id FROM part WHERE time_updated >= ?",
-                (int((time.time() - janela_s) * 1000),),
-            ).fetchall()
-        finally:
-            con.close()
+        import subprocess
+        here = Path(__file__).resolve().parent
+        out = subprocess.run(
+            ["python3", str(here / "oc-db.py"), "--sessions",
+             str(Path.home() / ".local/share/opencode/opencode.db"), str(janela_s)],
+            capture_output=True, text=True, timeout=20)
+        return [ln.strip() for ln in (out.stdout or "").splitlines() if ln.strip()]
     except Exception:
         return []
-    return [str(r[0]) for r in rows if r and r[0]]
-
 
 
 # (15/11, crouton-alpha) LIVENESS PELA API DO OPENCODE — a fonte autoritativa.
-# O problema medido: o roster decidia "vivo" por (a) janela Hyprland e (b) o
-# DB local (part.time_updated). Fora do desktop (SSH/cron/Telegram) a janela
-# nao existe; e o DB do host estava ~5,7 dias atrasado em relacao ao relogio
-# do host (o DB e a API gravam relogios diferentes). Resultado: `prune`
-# removeu os 6 agentes do roster, incluindo os 4 VIVOS.
-# Agora: a API do opencode (mesmo canal que o wake usa) e consultada; a
-# sessao que responde 200 esta viva, a que da 404 esta morta.
+# Sem ela, o roster so via janelas Hyprland + DB legado: fora do desktop
+# (SSH/cron/Telegram) nao ha janela, e o DB (schema 1.x) esta congelado.
+# A API responde 200 para a sessao viva e 404 para a morta — em qualquer
+# contexto, headless.
 OC_API_URL = os.environ.get("AGENTS_OC_URL", "http://100.121.100.103:4599")
 _OC_SESSION_CACHE: dict = {"at": 0.0, "ids": set()}
 
@@ -323,6 +313,7 @@ def api_live_sessions() -> set:
     _OC_SESSION_CACHE["at"] = now
     _OC_SESSION_CACHE["ids"] = ids
     return ids
+
 
 def live_sessions() -> dict[str, int]:
     """session id -> pid dos TUIs opencode VIVOS.

@@ -1,51 +1,36 @@
 #!/usr/bin/env python3
 """agent-db-alive.py — a sessão produziu trabalho novo nos últimos N segundos?
 
-POR QUE EXISTE (06/11/2026): o watcher usava
-`SELECT MAX(time_updated), MAX(time_created) FROM part` — **sem filtrar por
-sessão**. Como qualquer agente que escrevesse uma part (inclusive a própria IA
-acordada) deixava o máximo global recente, **todas** as sessões pareciam
-"vivas" → nunca havia idle → **nunca havia wake** → o watcher "não fazia
-nada" (sintoma do dono).
-
-Agora o filtro é por `session_id`: vivo = **esta** sessão produziu part nova
-dentro da janela (AGENTS_DB_ALIVE, padrão 600 s).
+(15/11, crouton-alpha) DELEGADO ao oc-db.py (fonte unica). O bug medido:
+esta copia consultava a tabela `part`, que no opencode 2.2.6 e o schema
+LEGADO do 1.x — congelada em 09/11 no host (max(part.time_updated) =
+09/11 06:12). O 2.2.6 grava a atividade em `session_message`/`session_part`
+(medido: session_message chega a 15/11 04:48). Efeito: o watcher via
+`agents-watcher.sh:agente_vivo_db` concluia que as sessoes vivas estavam
+ociosas -> wake nunca acontecia (o sintoma "o agent watcher que ate agora
+nao fez nada"), e o prune apagava agentes vivos.
 
 uso: agent-db-alive.py <opencode.db> <janela_s> [session_id]
-saída: 0 = viva (part nova na janela) · 1 = ociosa
+saida: 0 = viva (atividade nova na janela) · 1 = ociosa
 """
-
-import sqlite3
+import os
+import subprocess
 import sys
-import time
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+OC_DB = os.path.join(HERE, "oc-db.py")
 
 
 def main() -> int:
     if len(sys.argv) < 3:
         print("uso: agent-db-alive.py <db> <janela_s> [session_id]", file=sys.stderr)
         return 2
-    db, janela = sys.argv[1], int(sys.argv[2])
-    sessao = sys.argv[3] if len(sys.argv) > 3 else ""
+    cmd = ["python3", OC_DB] + sys.argv[1:]
     try:
-        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
-        if sessao:
-            row = con.execute(
-                "SELECT MAX(time_updated), MAX(time_created) FROM part WHERE session_id = ?",
-                (sessao,),
-            ).fetchone()
-        else:
-            row = con.execute(
-                "SELECT MAX(time_updated), MAX(time_created) FROM part"
-            ).fetchone()
+        rc = subprocess.run(cmd, capture_output=True, timeout=20).returncode
     except Exception:
         return 1
-    if not row:
-        return 1
-    agora = int(time.time() * 1000)
-    for t in row:
-        if t and agora - t <= janela * 1000:
-            return 0
-    return 1
+    return 0 if rc == 0 else 1
 
 
 if __name__ == "__main__":
