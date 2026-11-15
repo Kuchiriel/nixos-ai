@@ -117,16 +117,77 @@ def list_sessions(con: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def count_messages(con: sqlite3.Connection, sid: str) -> int:
+    """Conta as mensagens da sessao (2.2.6: session_message; 1.x: message).
+
+    (15/11, crouton-alpha) `message` e o schema 1.x e esta CONGELADO no
+    2.2.6 — os resumos de sessao saiam vazios. Agora conta a tabela viva.
+    """
+    cur = con.cursor()
+    for tab in ("session_message", "message"):
+        try:
+            cur.execute(f"SELECT count(*) FROM {tab} WHERE session_id=?", (sid,))
+            n = int(cur.fetchone()[0] or 0)
+            if n:
+                return n
+        except Exception:
+            continue
+    return 0
+
+
+def _extract_texts_modern(con: sqlite3.Connection, sid: str, max_msgs: int = 60) -> list[dict[str, str]]:
+    """2.2.6: session_message.data.content = lista de blocos (text/tool).
+
+    (15/11, crouton-alpha) No 2.2.6 o conteudo das mensagens esta
+    EMBUTIDO no `data` de session_message (a tabela session_part tem 0
+    linhas). O RAG/MCP recuperava resumos VAZIOS de conteudo recente.
+    """
     cur = con.cursor()
     try:
-        cur.execute("SELECT count(*) FROM message WHERE session_id=?", (sid,))
-        return int(cur.fetchone()[0] or 0)
+        rows = cur.execute(
+            "SELECT data FROM session_message WHERE session_id=? ORDER BY time_created",
+            (sid,)).fetchall()
     except Exception:
-        return 0
+        return []
+    if not rows:
+        return []
+    if max_msgs and len(rows) > max_msgs:
+        idxs = list(range(len(rows)))
+        head, tail = idxs[:20], idxs[-20:]
+        mid_n = max(0, max_msgs - len(head) - len(tail))
+        step = max(1, (len(idxs) - 40) // mid_n) if mid_n else 1
+        mid = idxs[20:len(idxs) - 20:step][:mid_n] if mid_n else []
+        rows = [rows[i] for i in sorted(set(head + mid + tail))]
+    out: list[dict[str, str]] = []
+    for (data,) in rows:
+        try:
+            md = json.loads(data) if isinstance(data, str) else data
+        except Exception:
+            continue
+        if not isinstance(md, dict):
+            continue
+        role = md.get("role") or md.get("type") or "?"
+        for blk in (md.get("content") or []):
+            if not isinstance(blk, dict):
+                continue
+            btype = blk.get("type")
+            if btype == "text" and (blk.get("text") or "").strip():
+                out.append({"role": role, "text": blk["text"].strip()})
+            elif btype == "tool":
+                name = blk.get("name") or blk.get("tool") or "tool"
+                st = blk.get("state") or {}
+                mark = ""
+                if st.get("status") == "error":
+                    mark = " [erro: " + str(st.get("error"))[:120] + "]"
+                out.append({"role": role, "text": f"[tool:{name}]{mark}"})
+    return out
 
 
 def extract_texts(con: sqlite3.Connection, sid: str, max_msgs: int = 60) -> list[dict[str, str]]:
-    """Return ordered (role, text) from message/part, preferring text parts."""
+    """(role, text) ordenados. 2.2.6: conteudo dentro de session_message;
+    1.x: message + part (legado, congelado no 2.2.6)."""
+    modern = _extract_texts_modern(con, sid, max_msgs)
+    if modern:
+        return modern
     cur = con.cursor()
     try:
         mcols = {r[1] for r in cur.execute("PRAGMA table_info(message)")}
