@@ -59,6 +59,10 @@ ROSTER_PATH = Path(
     os.environ.get("AGENTS_ROSTER", PROJECTS_ROOT / ".agents" / "roster.json"))
 LOCK_PATH = ROSTER_PATH.with_suffix(".lock")
 STALE_AFTER_S = int(os.environ.get("AGENTS_ROSTER_STALE_S", "900"))
+# (15/11) de quanto em quanto o claim de um agente VIVO e' renovado. 15 min:
+# um terco do TTL do bus (6 h), entao a sessao viva nunca chega a parecer
+# velha para um leitor cross-machine, e a sessao morta NAO e' renovada.
+HEARTBEAT_EVERY_S = int(os.environ.get("AGENTS_ROSTER_HEARTBEAT_S", "900"))
 VERSION = 1
 
 
@@ -276,6 +280,50 @@ def _db_live_sessions(janela_s: int | None = None) -> list[str]:
     return [str(r[0]) for r in rows if r and r[0]]
 
 
+
+# (15/11, crouton-alpha) LIVENESS PELA API DO OPENCODE — a fonte autoritativa.
+# O problema medido: o roster decidia "vivo" por (a) janela Hyprland e (b) o
+# DB local (part.time_updated). Fora do desktop (SSH/cron/Telegram) a janela
+# nao existe; e o DB do host estava ~5,7 dias atrasado em relacao ao relogio
+# do host (o DB e a API gravam relogios diferentes). Resultado: `prune`
+# removeu os 6 agentes do roster, incluindo os 4 VIVOS.
+# Agora: a API do opencode (mesmo canal que o wake usa) e consultada; a
+# sessao que responde 200 esta viva, a que da 404 esta morta.
+OC_API_URL = os.environ.get("AGENTS_OC_URL", "http://100.121.100.103:4599")
+_OC_SESSION_CACHE: dict = {"at": 0.0, "ids": set()}
+
+
+def api_live_sessions() -> set:
+    """Sessoes que a API do opencode ve (autoritativo, funciona headless)."""
+    now = time.time()
+    if now - _OC_SESSION_CACHE["at"] < 15:
+        return _OC_SESSION_CACHE["ids"]
+    ids: set = set()
+    try:
+        pw = os.environ.get("OPENCODE_SERVER_PASSWORD", "")
+        if not pw:
+            env = Path.home() / ".config/opencode/server.env"
+            if env.is_file():
+                for line in env.read_text().splitlines():
+                    if line.startswith("OPENCODE_SERVER_PASSWORD="):
+                        pw = line.split("=", 1)[1].strip().strip("\"'")
+                        break
+        import base64
+        import json as _json
+        import urllib.request
+        req = urllib.request.Request(
+            OC_API_URL + "/api/session",
+            headers={"Authorization": "Basic " + base64.b64encode(f"opencode:{pw}".encode()).decode()})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = _json.loads(r.read() or b"[]")
+        items = data if isinstance(data, list) else data.get("data", [])
+        ids = {str(s.get("id")) for s in items if s.get("id")}
+    except Exception:
+        pass
+    _OC_SESSION_CACHE["at"] = now
+    _OC_SESSION_CACHE["ids"] = ids
+    return ids
+
 def live_sessions() -> dict[str, int]:
     """session id -> pid dos TUIs opencode VIVOS.
 
@@ -301,6 +349,10 @@ def live_sessions() -> dict[str, int]:
     # (08/11) sessão de `opencode serve` não aparece no scan acima: o DB diz
     # se ela produziu trabalho na janela. pid 0 = sem TUI (é o esperado).
     for sess in _db_live_sessions():
+        out.setdefault(sess, 0)
+    # (15/11) a API do opencode e a fonte autoritativa: cobre o caso
+    # headless (sem Hyprland) e o DB com relogio defasado.
+    for sess in api_live_sessions():
         out.setdefault(sess, 0)
     return out
 
@@ -654,6 +706,9 @@ def cmd_claim(args) -> int:
             "pid": own["pid"],
             "session": own.get("session", ""),
             "claimed_at": int(time.time()),
+            # (15/11) prova de vida do claim: `claimed_at` e' o inicio,
+            # `heartbeat_at` e' a ultima renovacao (ver cmd_list).
+            "heartbeat_at": int(time.time()),
         }
         agents[:] = [e for e in agents if e["name"] != args.name]
         agents.append(entry)
@@ -714,7 +769,18 @@ def cmd_list(args) -> int:
             e["window"] = wv.get("address")
             e["pid"] = wv.get("pid")
             mudou = True
-        age = now - int(e.get("claimed_at") or now)
+        # (15/11) AUTO-REFRESH DO CLAIM VIVO. Medido: a sessao estava viva e
+        # o `claimed_at` tinha 86.298 s ⇒ qualquer leitor OUTRO (o bus, outra
+        # maquina, o digest noturno) via "stale" e mandava WAKE de recuperacao
+        # para um agente que estava trabalhando. A idade do claim nao e' vida:
+        # a VIDA e' a sessao. Quando a sessao esta viva, o claim se renova.
+        if alive and not getattr(args, "no_refresh", False):
+            last = int(e.get("heartbeat_at") or e.get("claimed_at") or 0)
+            if now - last > HEARTBEAT_EVERY_S:
+                e["heartbeat_at"] = now
+                e["claimed_at"] = now
+                mudou = True
+        age = now - int(e.get("heartbeat_at") or e.get("claimed_at") or now)
         state = "live" if alive else ("stale" if age > STALE_AFTER_S else "dead")
         rows.append({**e, "state": state, "age_s": age,
                      "session": e.get("session") or sessao.get(e.get("window"), ""),
@@ -754,7 +820,7 @@ def cmd_prune(args) -> int:
         for e in data["agents"]:
             if window_alive(e, windows):
                 keep.append(e)
-            elif now - int(e.get("claimed_at") or 0) > STALE_AFTER_S:
+            elif now - int(e.get("heartbeat_at") or e.get("claimed_at") or 0) > STALE_AFTER_S:
                 continue
             else:
                 keep.append(e)
@@ -937,6 +1003,10 @@ def main() -> int:
 
     p = sub.add_parser("list", help="lista o roster + tarefas")
     p.add_argument("--json", action="store_true")
+    # (15/11) o auto-refresh do claim vivo vem por padrao; --no-refresh
+    # desliga (teste, ou quem nao quiser o efeito colateral).
+    p.add_argument("--no-refresh", action="store_true",
+                   help="nao renova o claimed_at dos agentes vivos")
     p.set_defaults(func=cmd_list)
 
     p = sub.add_parser("set-context", help="atualiza a descrição curta do contexto")
