@@ -113,6 +113,18 @@ def main() -> int:
                     headers={"Authorization": auth})
                 urllib.request.urlopen(req, timeout=15).read()
             except Exception as exc:  # noqa: BLE001
+                # 404 = a sessao NAO EXISTE mais (virou registro no DB, o
+                # opencode nao a ve). Acordar nao adianta: em vez de tocar
+                # todo ciclo, o claim e liberado (prune oficial da casa).
+                if "404" in str(exc):
+                    try:
+                        subprocess.run(["python3", ROSTER, "release", "--name",
+                                        str(a.get("name") or "")],
+                                       capture_output=True, text=True, timeout=30)
+                        log(f"[{ciclo}] {nome}: sessao nao existe mais (404) — claim liberado")
+                    except Exception as exc2:  # noqa: BLE001
+                        log(f"[{ciclo}] {nome}: 404 e release falhou: {exc2}")
+                    continue
                 log(f"[{ciclo}] {nome}: sessao nao responde ({exc}) — acordando")
                 r = wake(sess, "[night-watch] Sessao nao responde; retome a tarefa em andamento.")
                 log(f"[{ciclo}] {nome}: wake -> {r[:160]}")
