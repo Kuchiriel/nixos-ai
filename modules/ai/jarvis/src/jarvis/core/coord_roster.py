@@ -272,6 +272,28 @@ def send_message(target: str, message: str, note: bool = True) -> str:
     if not any(entry.get("name") == name for entry in roster_agents()):
         return (f"{bus_note}\n(destinatário '{target}' não está nesta máquina: "
                 "a mensagem ficou no bus e será lida no próximo poll do watcher)")
+    # (14/11, crouton-alpha) ACORDAR PELO PROMPT, NAO PELO BUS.
+    # O bug medido: agent-msg.sh decide "vivo" pela JANELA Hyprland
+    # (windows --json) — invisivel para servico headless (Telegram, cron,
+    # ssh). O /to do Telegram postava no bus e devolvia "sucesso" sem nunca
+    # acordar ninguem: a frota silenciava.
+    # Ordem nova: (1) API do opencode (agent-api.py) — headless, acorda de
+    # verdade; (2) agent-msg.sh (janela viva, com guarda de lane); (3) o bus
+    # fica so como REGISTRO cross-machine, nunca como transporte.
+    api_note = ""
+    session = ""
+    try:
+        session = _session_of(name)
+    except Exception:
+        session = ""
+    if session:
+        cmd_api = ["python3", _script("agent-api.py"), "--session", session,
+                   "--text", message.strip()]
+        cmd_api.append("--note" if note else "--ask")
+        try:
+            api_note = _run(cmd_api, timeout=90)
+        except Exception as exc:
+            api_note = f"(api falhou: {exc})"
     cmd = ["bash", _script("agent-msg.sh"), "--to", name]
     if note:
         cmd.append("--note")
@@ -279,9 +301,28 @@ def send_message(target: str, message: str, note: bool = True) -> str:
     try:
         local = _run(cmd, timeout=60)
     except Exception as exc:
-        return f"{bus_note}\n(wake local falhou: {exc} — a mensagem está no bus)"
+        local = f"(wake por janela falhou: {exc})"
+    # A API e a verdade: se ela entregou, a mensagem JA acordou o par.
+    if api_note and not api_note.startswith("(api falhou"):
+        return f"{bus_note}\n(prompt: {api_note})\n(local: {local})"
     return f"{bus_note}\n(local: {local})"
 
+
+
+def _session_of(name: str) -> str:
+    """Sessao opencode do agente (viva no roster), por nome ou codinome."""
+    for entry in roster_agents():
+        if entry.get("name") == name or entry.get("codename") == name:
+            sess = str(entry.get("session") or "")
+            if sess:
+                return sess
+            pid = entry.get("pid")
+            if pid:
+                try:
+                    return _session_from_cmdline(int(pid))
+                except Exception:
+                    return ""
+    return ""
 
 def codename_of(name: str) -> str:
     """Codinome humano de um agente do roster (vazio se não tiver)."""
