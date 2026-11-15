@@ -1368,8 +1368,18 @@ def _request_json_patch(
             from jarvis.core.context_budget import ctx_derived_max_tokens
             from jarvis.core.config import get_config as _gc
             from jarvis.core.model_registry import ModelRegistry as _MR
-            _e = _MR.load().get(_gc().llm_model)
+            # (15/11) o budget do patcher tem que vir do MODELO DESTE HARNESS
+            # (o A/B roda com outro), nao do model global do config.
+            _reg = _MR.load()
+            _e = None
+            for _mid in (self.config.llm_model, _gc().llm_model):
+                if _mid:
+                    _e = _reg.get(_mid)
+                    if _e:
+                        break
             _ctx = (_e.raw or {}).get("ctx") if _e else None
+            if not _ctx:
+                _ctx = query_server_context_size(self.config.llm_base_url)
             _mt = max(4096, ctx_derived_max_tokens(_ctx))
         except Exception:
             _mt = 4096
@@ -1810,7 +1820,8 @@ class Harness:
         # Auto-detect context size from llama.cpp server if not specified
         budget = self.config.context_budget
         if budget <= 0:
-            server_ctx = query_server_context_size()
+            # (15/11) o ctx e do SERVIDOR QUE ESTE HARNESS VAI CHAMAR
+            server_ctx = query_server_context_size(self.config.llm_base_url)
             if server_ctx > 0:
                 budget = server_ctx
                 self.notify(f"📊 Context: {budget:,} tokens (from server)")

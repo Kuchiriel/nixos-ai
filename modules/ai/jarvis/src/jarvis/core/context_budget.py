@@ -82,7 +82,7 @@ def ctx_derived_max_tokens(ctx: Any) -> int:
     return max(1, ctx // 12)
 
 
-def query_server_context_size() -> int:
+def query_server_context_size(base_url: str | None = None) -> int:
     """Query llama.cpp /props endpoint for actual n_ctx.
 
     Fallback em cascata (dono 16/09 — consciência de contexto):
@@ -97,7 +97,11 @@ def query_server_context_size() -> int:
     try:
         import requests
         from jarvis.core.config import get_config
-        base_url = get_config().llm_base_url
+        # (15/11) MEDIDO: perguntar ao config GLOBAL dava o ctx do modelo
+        # errado — no A/B o harness falava no :8092 (MTP) enquanto chamava o
+        # :8080 (bonsai) e vice-versa; o budget caia no piso de 4096 e o
+        # patcher dava timeout. Agora aceita a base_url de quem vai chamar.
+        base_url = base_url or get_config().llm_base_url
         # /props is at root, not under /v1
         base = base_url.rstrip("/").replace("/v1", "")
         resp = requests.get(f"{base}/props", timeout=3)
