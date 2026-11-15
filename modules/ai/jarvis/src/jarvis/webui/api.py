@@ -31,7 +31,7 @@ import threading
 import time
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -50,6 +50,42 @@ app = FastAPI(
 )
 
 # CORS for SvelteKit dev server
+# (15/11) AUTH DO WEBUI: o serve pode fazer bind em 0.0.0.0 (tailnet) e a
+# API mostra sessoes, transcripts e o estado da casa. O hub ja exige token
+# (fail-closed); o webui passa a exigir o MESMO token quando o request nao
+# vem do loopback. Sem token configurado, o webui so aceita loopback.
+def _webui_token() -> str:
+    tok = (os.environ.get("AGENT_HUB_TOKEN") or "").strip()
+    if tok:
+        return tok
+    try:
+        p = Path.home() / ".config/opencode/agent-hub.token"
+        return p.read_text(encoding="utf-8").strip()
+    except Exception:
+        return ""
+
+
+@app.middleware("http")
+async def _hub_auth_middleware(request: Request, call_next):
+    """Exige o token do hub fora do loopback (o hub ja e fail-closed)."""
+    try:
+        host = (request.client.host if request.client else "") or ""
+        if host not in ("127.0.0.1", "::1", "localhost", ""):
+            tok = _webui_token()
+            if not tok:
+                return JSONResponse(
+                    {"detail": "webui: token ausente e o request nao e local"},
+                    status_code=403)
+            given = request.headers.get("x-agent-hub-token", "")
+            if not given or not secrets.compare_digest(given, tok):
+                return JSONResponse(
+                    {"detail": "webui: token invalido (x-agent-hub-token)"},
+                    status_code=401)
+    except Exception:
+        pass
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
