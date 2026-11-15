@@ -126,8 +126,15 @@ class HarnessConfig:
     # (roda de noite). Padrão: MoE uncensored :8084 sem thinking — o bonsai
     # provou não emitir json-patch legível (3/3 no teste do dia). Override
     # por env continua valendo (JARVIS_LLM_BASE_URL/MODEL/DISABLE_THINKING).
-    llm_base_url: str = "http://127.0.0.1:8084/v1"
-    llm_model: str = "jarvis-strong"
+    # (15/11, crouton-alpha) O default apontava para o MoE 35B em :8084
+    # (jarvis-strong) — MEDIDO MORTO (a unit llama-uncensored-35b nao roda
+    # desde 13/11; o router so serve o bonsai). O harness apontava para um
+    # servidor morto: o nightwatch nao tinha com quem falar. Agora: o Qwen 4B
+    # MTP (directServer :8092, duplex), que esta NO AR e e melhor em PT-BR
+    # que o bonsai (que erra muito). Sobrescreva por env
+    # (JARVIS_LLM_BASE_URL/MODEL) continua valendo.
+    llm_base_url: str = "http://127.0.0.1:8092/v1"
+    llm_model: str = "jarvis-mtp-lora"
     llm_thinking: bool = False
     max_minutes: int = 180
     max_retries: int = 3
