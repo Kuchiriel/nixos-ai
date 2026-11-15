@@ -82,6 +82,30 @@ function headers() {
   return { "Content-Type": "application/json", Authorization: auth() };
 }
 
+/**
+ * (15/11) O WAKE TAMBEM POSTA NO BUS: assim a conversa entre agentes
+ * aparece no hub (o bus publica no EventBus e a rota /activity mostra) e
+ * passa pelo mesmo guard/filtragem do resto do trafego. Best effort: se o
+ * bus falhar, o wake acontece do mesmo jeito.
+ */
+async function postNoBus(name, text, kind) {
+  try {
+    const { spawnSync } = require("node:child_process");
+    const cli = `${process.env.HOME}/projects/nixos-ai/scripts/jarvis-cli.sh`;
+    const payload = JSON.stringify({
+      kind: kind || "msg",
+      agent: process.env.COORD_AGENT || "opencode",
+      to: name,
+      note: String(text || "").slice(0, 800),
+    });
+    spawnSync(cli, ["tool", "coord_post", payload], {
+      encoding: "utf8", timeout: 20000,
+    });
+  } catch {
+    /* fail-open: o bus e informativo, nao e o caminho do wake */
+  }
+}
+
 async function getJSON(path, timeoutMs = 15000) {
   const res = await fetch(OC_URL + path, { headers: headers(), signal: AbortSignal.timeout(timeoutMs) });
   const body = await res.text().catch(() => "");
