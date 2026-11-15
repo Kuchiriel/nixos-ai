@@ -93,6 +93,13 @@ entra no pacote (cleanSource embala so `./jarvis`). O rebuild volta a passar,
 mas 7 testes validos ficam sem cobertura no sandbox; o TODO
 `sweep-2026-11` continua aberto.
 
+Estado real medido HOJE (15/11, `nix build .#jarvis --no-link`):
+`1712 passed, 149 skipped, 92 deselected in 33.05s` — o build do pacote
+**passa**. O item do digest da noite ("rebuild lima em jarvis package no
+installCheckPhase, 7 testes offline* falham") esta **velho**: os deselects
+ja estão no HEAD (2e689bbb). O que sobra e a cobertura perdida, nao o
+build quebrado.
+
 Preparo: copiar o corpus para dentro do pacote (ou usar `substituteInPlace`
 com o corpus como input) e reativar os 7 testes.
 
@@ -131,3 +138,21 @@ Preparo: versionar (ou revisar antes do proximo rebuild) e limpar o indice.
    não haja leitura dos valores das chaves.
 3. Achados 3 e 4 (roster aberto + firewall volatil) — decisao do dono + declarativo.
 4. Achados 5 e 6 (cobertura + arvore suja) — higiene, sem urgencia.
+
+## Cruze com a outra auditoria do mesmo dia
+
+`docs/auditoria/AUDITORIA-CASA-2026-11-15.md` (commit c2cfebe7, 15:12) mediu
+A1 (4B MTP fora), A2 (VRAM 96 MiB), A3 (hub sem token na LAN), A4 (guard
+12/16), A5 (plugin sem entrega), A6 (roster stale) e A7 (tailnet). O que
+esta auditoria acrescenta com evidencia nova:
+
+- **achado 2**: o webui API (8090) responde **sem token** pelo forward
+  tailnet (`/api/keys` devolve os providers com chave, `/api/chat` chama o
+  LLM local) — a outra auditoria viu a porta aberta, nao a resposta.
+- **achado 6**: 5 arquivos nao versionados + `git add -A` do rebuild no
+  indice compartilhado (risco de commit por outra lane).
+- **achado 5**: o item "rebuild quebrado nos 7 testes offline" do digest
+  da noite esta **velho** — build medido verde hoje (1712 passed).
+- **preparo executavel**: `llama-swap.sh --free` + `--start-mtp` ja sobem
+  o :8092 com o LoRA **v9** (o script ja aponta para
+  `microturn-4b-lora-v9.gguf`).
