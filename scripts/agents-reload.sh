@@ -44,10 +44,15 @@ reload_plugins() {
     elif [ ! -e "$live" ]; then
       ln -sfn "$f" "$live"
     fi
-    # (2) tocar o arquivo VIVO -> o watcher do opencode recarrega nas sessoes
-    touch "$f" 2>/dev/null && n=$((n+1))
+    # (2) MEDIDO 15/11: tocar o arquivo NAO recarrega nada (o watcher compara
+    # o DIGEST do caminho watchado, que e o symlink; mtime/content do alvo
+    # nao entra). O que recarrega de verdade: (a) re-apontar o symlink
+    # (mudanca de caminho) ou (b) `opencode reload` (forca tudo). Por isso
+    # este script NAO toca: ele re-aponta e deixa o reload para a etapa
+    # seguinte (que roda opencode reload).
+    n=$((n+1))
   done
-  log "plugins: $n arquivo(s) vivo(s) tocados (watcher recarrega nas sessoes abertas)"
+  log "plugins: $n symlink(s) apontando para o arquivo VIVO do repo"
   log "  (o proximo rebuild do HM pode voltar a apontar pro store; este script refaz)"
 }
 

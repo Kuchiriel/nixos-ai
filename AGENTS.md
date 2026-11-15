@@ -198,6 +198,20 @@ read pt-BR); answer the owner in pt-BR.
   **4B-MTP PARADO** (6 GB, 1 LLM por vez) e o 4B é o cérebro da voz: medir
   recusa tira a voz do ar (o cliente morre com ":8092 fora"). Avisos
  tambem em `modules/ai/models.nix`, junto de cada modelo.
+- **HOT RELOAD (15/11, medido)**: mudar plugin/config NAO exige restart —
+  o opencode tem WATCHER sobre `~/.config/opencode/plugins/` (log: "watcher
+  subscribe" + "loading plugin") e `opencode reload` recarrega a config sem
+  reiniciar o server ("running sessions continue with fresh services at the
+  next step boundary"). O plugin vive como symlink do nix store (read-only:
+  ninguem conseguia tocar) → `scripts/agents-reload.sh` repoint para o
+  arquivo VIVO do repo e toca (recarrega em todas as sessoes abertas);
+  `~/bin/agents-reload` faz o mesmo do celular.
+- **Estado real dos modelos locais (15/11, medido)**: o router serve
+  `bonsai` (:8080); o Qwen 4B-MTP fica no directServer :8092 (duplex);
+  o Qwen MoE 35B (:8084) esta MORTO. O hot-swap `/model jarvis-raw*`
+  (models.nix `extraProfiles`) so vale se o ROUTER servir o preset — hoje
+  nao. Para saber o que existe AGORA: `scripts/model-catalog.py` (descobre
+  pelo opencode.json + /v1/models dos servidores, sem lista fixa).
 - 6GB VRAM: **1 LLM at a time.** For models that don't fit, GPU experts
   **hurt** (fetch comes over PCIe, 6-7 GB/s, vs 41-83 GB/s from
   RAM). Dense models that fit in VRAM run ~3.2× faster.
