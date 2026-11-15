@@ -463,21 +463,9 @@ print(send(to=sys.argv[1], message=sys.argv[2], agent=sys.argv[3], lane=sys.argv
         "$MSG_ID" "${REPLY_TO:--}" "$TEXTO_ESCAPED" >> "$LOG"
     continue
 
-    hyprctl dispatch focuswindow "address:$END"
-    sleep 1
-    ATUAL=$(hyprctl activewindow -j 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin).get('address',''))" 2>/dev/null || true)
-    if [ "$ATUAL" != "$END" ]; then
-        echo "agent-msg: FOCO NAO PEGOU (alvo=$END atual=$ATUAL) — nada digitado" >&2
-        FALHOU=1
-        continue
-    fi
-    wtype "$TEXTO_FINAL"
-    sleep 0.4
-    wtype -k Return
-    echo "enviado p/ $END ($NOME_ALVO) [fallback focus+wtype]"
-    printf '%s | %s | %s | %s(%s) | id=%s | re=%s | %s\n' \
-        "$(date '+%d/%m %H:%M')" "$REMETENTE" "$TIPO" "$NOME_ALVO" "$END" \
-        "$MSG_ID" "${REPLY_TO:--}" "$TEXTO_ESCAPED" >> "$LOG"
+  # (14/11) bloco focus+wtype REMOVIDO: codigo morto — todo alvo ou
+  # tem sessao local (delivery via API) ou cai no BUS. Nunca digita na
+  # caixa do humano (mesma classe do wtype).
 done
 
 [ -n "$MINHA" ] && hyprctl dispatch focuswindow "address:$MINHA" >/dev/null 2>&1 || true

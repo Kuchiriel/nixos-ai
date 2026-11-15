@@ -127,6 +127,16 @@ def build_server():
         from jarvis.mcp_server import call_tool
         return call_tool("jarvis_web_search", {"query": query, "limit": limit})
 
+    # ── corpus offline (N.O.M.A.D / Kiwix) ───────────────────────────────
+    @mcp.tool
+    def jarvis_offline_search(query: str, max_results: int = 5) -> str:
+        """Busca no corpus OFFLINE de sobrevivencia (agua, primeiros socorros,
+        remedios caseiros, abrigo, emergencia). Funciona SEM internet e nunca
+        inventa: sem fonte local devolve NO OFFLINE SOURCE."""
+        from jarvis.mcp_server import call_tool
+        return call_tool("jarvis_offline_search", {"query": query,
+                                                   "max_results": max_results})
+
     return mcp
 
 

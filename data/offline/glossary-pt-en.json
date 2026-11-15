@@ -1,0 +1,2356 @@
+{
+ "version": 1,
+ "note": "Expansao PT->EN para busca offline. Fonte unica; o celular e o PC leem este arquivo.",
+ "generated_at": "2026-11-14",
+ "entries": [
+  {
+   "pt": "intoxicacao alimentar",
+   "en": [
+    [
+     "food poisoning",
+     3
+    ],
+    [
+     "poisoning",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "parada respiratoria",
+   "en": [
+    [
+     "respiratory arrest",
+     3
+    ],
+    [
+     "breathing",
+     3
+    ],
+    [
+     "cpr",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "torcao de tornozelo",
+   "en": [
+    [
+     "sprained ankle",
+     3
+    ],
+    [
+     "sprain",
+     2
+    ],
+    [
+     "ankle",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "primeiros socorros",
+   "en": [
+    [
+     "first aid",
+     3
+    ],
+    [
+     "emergency",
+     1
+    ]
+   ]
+  },
+  {
+   "pt": "queimadura quimica",
+   "en": [
+    [
+     "chemical burn",
+     3
+    ],
+    [
+     "burn",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "remedios caseiros",
+   "en": [
+    [
+     "home remedies",
+     3
+    ],
+    [
+     "remedy",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "remedios naturais",
+   "en": [
+    [
+     "natural remedies",
+     3
+    ],
+    [
+     "herb",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "sangramento nasal",
+   "en": [
+    [
+     "nosebleed",
+     3
+    ],
+    [
+     "nose",
+     2
+    ],
+    [
+     "bleeding",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "mordida de cobra",
+   "en": [
+    [
+     "snake bite",
+     3
+    ],
+    [
+     "snake",
+     3
+    ],
+    [
+     "bite",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "picada de inseto",
+   "en": [
+    [
+     "insect bite",
+     3
+    ],
+    [
+     "insect",
+     2
+    ],
+    [
+     "bite",
+     2
+    ],
+    [
+     "sting",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "picada de abelha",
+   "en": [
+    [
+     "bee sting",
+     3
+    ],
+    [
+     "bee",
+     3
+    ],
+    [
+     "sting",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "queimadura solar",
+   "en": [
+    [
+     "sunburn",
+     3
+    ],
+    [
+     "burn",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "febre em crianca",
+   "en": [
+    [
+     "fever child",
+     3
+    ],
+    [
+     "fever",
+     2
+    ],
+    [
+     "child",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "ferida infectada",
+   "en": [
+    [
+     "infected wound",
+     3
+    ],
+    [
+     "wound",
+     2
+    ],
+    [
+     "infection",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "efeito colateral",
+   "en": [
+    [
+     "side effect",
+     3
+    ],
+    [
+     "side effects",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "dor de garganta",
+   "en": [
+    [
+     "sore throat",
+     3
+    ],
+    [
+     "throat",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "picada de cobra",
+   "en": [
+    [
+     "snake bite",
+     3
+    ],
+    [
+     "snake",
+     3
+    ],
+    [
+     "bite",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "parada cardiaca",
+   "en": [
+    [
+     "cardiac arrest",
+     3
+    ],
+    [
+     "cpr",
+     3
+    ],
+    [
+     "heart",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "ataque cardiaco",
+   "en": [
+    [
+     "heart attack",
+     3
+    ],
+    [
+     "heart",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "intestino preso",
+   "en": [
+    [
+     "constipation",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "dor nas costas",
+   "en": [
+    [
+     "back pain",
+     3
+    ],
+    [
+     "back",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "dor de barriga",
+   "en": [
+    [
+     "stomach pain",
+     3
+    ],
+    [
+     "stomach",
+     2
+    ],
+    [
+     "abdominal",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "purificar agua",
+   "en": [
+    [
+     "purify water",
+     3
+    ],
+    [
+     "water",
+     2
+    ],
+    [
+     "treatment",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "corte profundo",
+   "en": [
+    [
+     "deep cut",
+     3
+    ],
+    [
+     "wound",
+     2
+    ],
+    [
+     "cut",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "golpe de calor",
+   "en": [
+    [
+     "heat stroke",
+     3
+    ],
+    [
+     "heat",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "agua sanitaria",
+   "en": [
+    [
+     "bleach",
+     3
+    ],
+    [
+     "chlorine",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "dor de cabeca",
+   "en": [
+    [
+     "headache",
+     3
+    ],
+    [
+     "head",
+     1
+    ],
+    [
+     "pain",
+     1
+    ]
+   ]
+  },
+  {
+   "pt": "pressao baixa",
+   "en": [
+    [
+     "low blood pressure",
+     3
+    ],
+    [
+     "pressure",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "dor de ouvido",
+   "en": [
+    [
+     "ear pain",
+     3
+    ],
+    [
+     "ear",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "dor de cabeca",
+   "en": [
+    [
+     "headache",
+     3
+    ],
+    [
+     "head",
+     1
+    ],
+    [
+     "pain",
+     1
+    ]
+   ]
+  },
+  {
+   "pt": "envenenamento",
+   "en": [
+    [
+     "poisoning",
+     3
+    ],
+    [
+     "poison",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "osso quebrado",
+   "en": [
+    [
+     "broken bone",
+     3
+    ],
+    [
+     "fracture",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "dor de dente",
+   "en": [
+    [
+     "toothache",
+     3
+    ],
+    [
+     "tooth",
+     2
+    ],
+    [
+     "dental",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "dor no peito",
+   "en": [
+    [
+     "chest pain",
+     3
+    ],
+    [
+     "chest",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "pressao alta",
+   "en": [
+    [
+     "high blood pressure",
+     3
+    ],
+    [
+     "pressure",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "agua potavel",
+   "en": [
+    [
+     "drinking water",
+     3
+    ],
+    [
+     "water",
+     2
+    ],
+    [
+     "safe",
+     1
+    ]
+   ]
+  },
+  {
+   "pt": "filtrar agua",
+   "en": [
+    [
+     "filter water",
+     3
+    ],
+    [
+     "water",
+     2
+    ],
+    [
+     "filter",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "pe de atleta",
+   "en": [
+    [
+     "athlete foot",
+     3
+    ],
+    [
+     "fungal",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "desidratacao",
+   "en": [
+    [
+     "dehydration",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "pressao alta",
+   "en": [
+    [
+     "high blood pressure",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "dessalinizar",
+   "en": [
+    [
+     "desalination",
+     3
+    ],
+    [
+     "desalinate",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "falta de ar",
+   "en": [
+    [
+     "shortness of breath",
+     3
+    ],
+    [
+     "breathing",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "tratar agua",
+   "en": [
+    [
+     "water treatment",
+     3
+    ],
+    [
+     "water",
+     2
+    ],
+    [
+     "purify",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "ferver agua",
+   "en": [
+    [
+     "boil water",
+     3
+    ],
+    [
+     "water",
+     2
+    ],
+    [
+     "boil",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "sangramento",
+   "en": [
+    [
+     "bleeding",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "constipacao",
+   "en": [
+    [
+     "constipation",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "sufocamento",
+   "en": [
+    [
+     "choking",
+     3
+    ],
+    [
+     "suffocation",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "antibiotico",
+   "en": [
+    [
+     "antibiotic",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "paracetamol",
+   "en": [
+    [
+     "paracetamol",
+     3
+    ],
+    [
+     "acetaminophen",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "medicamento",
+   "en": [
+    [
+     "medicine",
+     3
+    ],
+    [
+     "medication",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "febre alta",
+   "en": [
+    [
+     "high fever",
+     3
+    ],
+    [
+     "fever",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "hipotermia",
+   "en": [
+    [
+     "hypothermia",
+     3
+    ],
+    [
+     "cold",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "queimadura",
+   "en": [
+    [
+     "burn",
+     3
+    ],
+    [
+     "burns",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "tratamento",
+   "en": [
+    [
+     "treatment",
+     3
+    ],
+    [
+     "treat",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "envenenado",
+   "en": [
+    [
+     "poisoning",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "inflamacao",
+   "en": [
+    [
+     "inflammation",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "respiracao",
+   "en": [
+    [
+     "breathing",
+     3
+    ],
+    [
+     "respiration",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "emergencia",
+   "en": [
+    [
+     "emergency",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "tempestade",
+   "en": [
+    [
+     "storm",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "colesterol",
+   "en": [
+    [
+     "cholesterol",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "ibuprofeno",
+   "en": [
+    [
+     "ibuprofen",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "comprimido",
+   "en": [
+    [
+     "tablet",
+     3
+    ],
+    [
+     "pill",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "afogamento",
+   "en": [
+    [
+     "drowning",
+     3
+    ],
+    [
+     "rescue",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "destilador",
+   "en": [
+    [
+     "still",
+     3
+    ],
+    [
+     "distillation",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "convulsao",
+   "en": [
+    [
+     "seizure",
+     3
+    ],
+    [
+     "convulsion",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "insolacao",
+   "en": [
+    [
+     "heat stroke",
+     3
+    ],
+    [
+     "heat",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "purificar",
+   "en": [
+    [
+     "purify",
+     3
+    ],
+    [
+     "purification",
+     3
+    ],
+    [
+     "disinfect",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "resfriado",
+   "en": [
+    [
+     "cold",
+     3
+    ],
+    [
+     "flu",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "ferimento",
+   "en": [
+    [
+     "wound",
+     3
+    ],
+    [
+     "injury",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "queimacao",
+   "en": [
+    [
+     "heartburn",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "terremoto",
+   "en": [
+    [
+     "earthquake",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "inundacao",
+   "en": [
+    [
+     "flood",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "pneumonia",
+   "en": [
+    [
+     "pneumonia",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "bacterias",
+   "en": [
+    [
+     "bacteria",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "ansiedade",
+   "en": [
+    [
+     "anxiety",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "depressao",
+   "en": [
+    [
+     "depression",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "enxaqueca",
+   "en": [
+    [
+     "migraine",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "navegacao",
+   "en": [
+    [
+     "navigation",
+     3
+    ],
+    [
+     "compass",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "armadilha",
+   "en": [
+    [
+     "trap",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "lombriga",
+   "en": [
+    [
+     "worm",
+     3
+    ],
+    [
+     "pinworm",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "queimado",
+   "en": [
+    [
+     "burn",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "gengibre",
+   "en": [
+    [
+     "ginger",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "remedios",
+   "en": [
+    [
+     "remedies",
+     3
+    ],
+    [
+     "medicine",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "garganta",
+   "en": [
+    [
+     "throat",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "diarreia",
+   "en": [
+    [
+     "diarrhea",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "infeccao",
+   "en": [
+    [
+     "infection",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "fogueira",
+   "en": [
+    [
+     "fire",
+     3
+    ],
+    [
+     "campfire",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "cozinhar",
+   "en": [
+    [
+     "cooking",
+     3
+    ],
+    [
+     "cook",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "alimento",
+   "en": [
+    [
+     "food",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "desastre",
+   "en": [
+    [
+     "disaster",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "enchente",
+   "en": [
+    [
+     "flood",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "diabetes",
+   "en": [
+    [
+     "diabetes",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "radiacao",
+   "en": [
+    [
+     "radiation",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "parasita",
+   "en": [
+    [
+     "parasite",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "mosquito",
+   "en": [
+    [
+     "mosquito",
+     3
+    ],
+    [
+     "insect",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "dipirona",
+   "en": [
+    [
+     "dipyrone",
+     3
+    ],
+    [
+     "metamizole",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "derrame",
+   "en": [
+    [
+     "stroke",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "desmaio",
+   "en": [
+    [
+     "fainting",
+     3
+    ],
+    [
+     "unconscious",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "malaria",
+   "en": [
+    [
+     "malaria",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "queimar",
+   "en": [
+    [
+     "burn",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "crianca",
+   "en": [
+    [
+     "child",
+     1.5
+    ],
+    [
+     "children",
+     1.5
+    ]
+   ]
+  },
+  {
+   "pt": "potavel",
+   "en": [
+    [
+     "drinking",
+     2
+    ],
+    [
+     "safe",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "filtrar",
+   "en": [
+    [
+     "filter",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "remedio",
+   "en": [
+    [
+     "remedy",
+     3
+    ],
+    [
+     "medicine",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "sangrar",
+   "en": [
+    [
+     "bleeding",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "mordida",
+   "en": [
+    [
+     "bite",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "alergia",
+   "en": [
+    [
+     "allergy",
+     3
+    ],
+    [
+     "allergic",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "coceira",
+   "en": [
+    [
+     "itch",
+     3
+    ],
+    [
+     "itching",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "erupcao",
+   "en": [
+    [
+     "rash",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "fratura",
+   "en": [
+    [
+     "fracture",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "entorse",
+   "en": [
+    [
+     "sprain",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "musculo",
+   "en": [
+    [
+     "muscle",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "caimbra",
+   "en": [
+    [
+     "cramp",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "pressao",
+   "en": [
+    [
+     "pressure",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "coracao",
+   "en": [
+    [
+     "heart",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "engasgo",
+   "en": [
+    [
+     "choking",
+     3
+    ],
+    [
+     "choke",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "refugio",
+   "en": [
+    [
+     "shelter",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "higiene",
+   "en": [
+    [
+     "hygiene",
+     3
+    ],
+    [
+     "clean",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "limpeza",
+   "en": [
+    [
+     "clean",
+     3
+    ],
+    [
+     "cleaning",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "quimico",
+   "en": [
+    [
+     "chemical",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "amarrar",
+   "en": [
+    [
+     "knot",
+     3
+    ],
+    [
+     "rope",
+     2
+    ],
+    [
+     "tie",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "receita",
+   "en": [
+    [
+     "recipe",
+     3
+    ],
+    [
+     "cooking",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "dosagem",
+   "en": [
+    [
+     "dose",
+     3
+    ],
+    [
+     "dosage",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "afogado",
+   "en": [
+    [
+     "drowning",
+     3
+    ],
+    [
+     "rescue",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "gravida",
+   "en": [
+    [
+     "pregnant",
+     3
+    ],
+    [
+     "pregnancy",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "resgate",
+   "en": [
+    [
+     "rescue",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "bussola",
+   "en": [
+    [
+     "compass",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "deserto",
+   "en": [
+    [
+     "desert",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "dengue",
+   "en": [
+    [
+     "dengue",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "micose",
+   "en": [
+    [
+     "fungal",
+     3
+    ],
+    [
+     "athlete foot",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "tratar",
+   "en": [
+    [
+     "treat",
+     3
+    ],
+    [
+     "treatment",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "ferver",
+   "en": [
+    [
+     "boil",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "filtro",
+   "en": [
+    [
+     "filter",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "acucar",
+   "en": [
+    [
+     "sugar",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "planta",
+   "en": [
+    [
+     "plant",
+     2
+    ],
+    [
+     "herb",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "cabeca",
+   "en": [
+    [
+     "head",
+     2
+    ],
+    [
+     "headache",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "ouvido",
+   "en": [
+    [
+     "ear",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "ferida",
+   "en": [
+    [
+     "wound",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "sangue",
+   "en": [
+    [
+     "blood",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "picada",
+   "en": [
+    [
+     "bite",
+     3
+    ],
+    [
+     "sting",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "inseto",
+   "en": [
+    [
+     "insect",
+     3
+    ],
+    [
+     "bug",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "abelha",
+   "en": [
+    [
+     "bee",
+     3
+    ],
+    [
+     "sting",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "aranha",
+   "en": [
+    [
+     "spider",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "veneno",
+   "en": [
+    [
+     "poison",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "vomito",
+   "en": [
+    [
+     "vomiting",
+     3
+    ],
+    [
+     "vomit",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "torcao",
+   "en": [
+    [
+     "sprain",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "abrigo",
+   "en": [
+    [
+     "shelter",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "comida",
+   "en": [
+    [
+     "food",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "vacina",
+   "en": [
+    [
+     "vaccine",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "anemia",
+   "en": [
+    [
+     "anemia",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "cancer",
+   "en": [
+    [
+     "cancer",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "alcool",
+   "en": [
+    [
+     "alcohol",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "choque",
+   "en": [
+    [
+     "shock",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "cinzas",
+   "en": [
+    [
+     "ash",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "carvao",
+   "en": [
+    [
+     "charcoal",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "verme",
+   "en": [
+    [
+     "worm",
+     3
+    ],
+    [
+     "pinworm",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "sarna",
+   "en": [
+    [
+     "scabies",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "febre",
+   "en": [
+    [
+     "fever",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "cloro",
+   "en": [
+    [
+     "chlorine",
+     3
+    ],
+    [
+     "bleach",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "limao",
+   "en": [
+    [
+     "lemon",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "ervas",
+   "en": [
+    [
+     "herb",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "tosse",
+   "en": [
+    [
+     "cough",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "gripe",
+   "en": [
+    [
+     "flu",
+     3
+    ],
+    [
+     "cold",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "nariz",
+   "en": [
+    [
+     "nose",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "dente",
+   "en": [
+    [
+     "tooth",
+     3
+    ],
+    [
+     "dental",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "corte",
+   "en": [
+    [
+     "cut",
+     3
+    ],
+    [
+     "wound",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "cobra",
+   "en": [
+    [
+     "snake",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "enjoo",
+   "en": [
+    [
+     "nausea",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "gases",
+   "en": [
+    [
+     "gas",
+     2
+    ],
+    [
+     "bloating",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "calor",
+   "en": [
+    [
+     "heat",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "sabao",
+   "en": [
+    [
+     "soap",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "urina",
+   "en": [
+    [
+     "urine",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "fezes",
+   "en": [
+    [
+     "stool",
+     3
+    ],
+    [
+     "feces",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "acido",
+   "en": [
+    [
+     "acid",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "virus",
+   "en": [
+    [
+     "virus",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "corda",
+   "en": [
+    [
+     "rope",
+     3
+    ],
+    [
+     "knot",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "parto",
+   "en": [
+    [
+     "childbirth",
+     3
+    ],
+    [
+     "labor",
+     2
+    ],
+    [
+     "delivery",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "idoso",
+   "en": [
+    [
+     "elderly",
+     3
+    ],
+    [
+     "older",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "pesca",
+   "en": [
+    [
+     "fishing",
+     3
+    ],
+    [
+     "fish",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "selva",
+   "en": [
+    [
+     "jungle",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "radio",
+   "en": [
+    [
+     "radio",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "pilha",
+   "en": [
+    [
+     "battery",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "sinal",
+   "en": [
+    [
+     "signal",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "bebe",
+   "en": [
+    [
+     "baby",
+     1.5
+    ],
+    [
+     "infant",
+     1.5
+    ]
+   ]
+  },
+  {
+   "pt": "agua",
+   "en": [
+    [
+     "water",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "alho",
+   "en": [
+    [
+     "garlic",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "olho",
+   "en": [
+    [
+     "eye",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "azia",
+   "en": [
+    [
+     "heartburn",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "osso",
+   "en": [
+    [
+     "bone",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "fogo",
+   "en": [
+    [
+     "fire",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "frio",
+   "en": [
+    [
+     "cold",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "maos",
+   "en": [
+    [
+     "hand",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "asma",
+   "en": [
+    [
+     "asthma",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "iodo",
+   "en": [
+    [
+     "iodine",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "bolo",
+   "en": [
+    [
+     "cake",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "bula",
+   "en": [
+    [
+     "leaflet",
+     3
+    ],
+    [
+     "information",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "raio",
+   "en": [
+    [
+     "lightning",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "mapa",
+   "en": [
+    [
+     "map",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "sal",
+   "en": [
+    [
+     "salt",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "mel",
+   "en": [
+    [
+     "honey",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "dor",
+   "en": [
+    [
+     "pain",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "mao",
+   "en": [
+    [
+     "hand",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "pao",
+   "en": [
+    [
+     "bread",
+     3
+    ]
+   ]
+  },
+  {
+   "pt": "mar",
+   "en": [
+    [
+     "sea",
+     3
+    ],
+    [
+     "ocean",
+     2
+    ]
+   ]
+  },
+  {
+   "pt": "sos",
+   "en": [
+    [
+     "sos",
+     3
+    ],
+    [
+     "signal",
+     2
+    ],
+    [
+     "rescue",
+     2
+    ]
+   ]
+  }
+ ]
+}

@@ -610,3 +610,9 @@ Próximos passos: convert -> :8093 bench -> decide promotion.
 - Rebuild OK; :8092 recomeçou 22:54; serviço duplex_state restarted 22:56
 - Adapter v9 em /var/lib/ai/models/loras/microturn-4b/microturn-4b-lora-v9.gguf
 - Commit 46a68f52
+
+## 2026-11-15 05:00 duplex-sweep (7d): asr_empty_seg=916, spk_unidentified=112, tts_killed_mid=62, tts_mid_barge=60, tts_tool_echo_blocked=26, mishear_jarvis=19 — reports/duplex-sweep/2026-11-15T050018.json
+
+## 2026-11-15 esteira automatizada ASR->texto: 8/8 (100%) — report reports/duplex-conveyor/2026-11-15T050104.json
+
+## 2026-11-15T050013 — duplex-cycle completo: conveyor=8/8 reg=nenhum — reports/duplex-cycle/2026-11-15T050013/SUMMARY.md

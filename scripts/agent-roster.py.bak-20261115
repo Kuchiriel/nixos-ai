@@ -1,0 +1,1013 @@
+#!/usr/bin/env python3
+"""agent-roster.py — ROSTER + TASKS da coordenação multi-agente (02/11).
+
+POR QUE (e o que a literatura diz):
+- A2A (Google→LF/AAIF, v1.0 em 03/2026): o "Agent Card" é a peça de
+  DESCOBERTA (quem existe, o que sabe) e o roteamento pode ser LÓGICA
+  DETERMINÍSTICA, sem LLM no meio. Roster = agent card.
+- Claude Code Agent Teams (2026): teammates COMPARTILHAM uma lista de
+  tarefas, cada um CLAIMa trabalho, e o isolamento de ARQUIVOS evita
+  colisão. Duas janelas no mesmo assunto só é seguro com fronteira
+  explícita de arquivos.
+- Anthropic (multi-agent research, 06/2025): sem OBJETIVO + FRONTEIRAS
+  explícitos na delegação, os agentes DUPLICAM trabalho; e multi-agente
+  custa ~15x os tokens de chat — então broadcast é caro e deve ser raro.
+- CHI'26 (arXiv 2602.17864): agente proativo que interrompe sem filtro
+  QUEBRA o fluxo e aumenta a carga. Wake é para quem é dono do assunto.
+
+O QUE FAZ:
+  claim/release/list/prune  — quem existe, em que lane, com que arquivos
+  task add/close/list       — a lista de tarefas compartilhada (A2A Task)
+  windows/resolve           — resolve nomes -> janela viva (usado pelo
+                              agent-msg.sh e pelo watcher; fonte ÚNICA da
+                              geometria de janelas)
+
+ESTADO: ~/projects/.agents/roster.json (texto plano, diffável, git-friendly).
+        Override: $AGENTS_ROSTER.  Lock: flock no arquivo ao lado.
+
+USO:
+  ./scripts/agent-roster.py claim --name mt5 --lane "mt5/optimizer" \
+      --repo mt5 --files "backtest/**,mql/**" --note "rodando sweep v3.11"
+  ./scripts/agent-roster.py list
+  ./scripts/agent-roster.py task add --title "medir DD do v3.12" --owner mt5
+  ./scripts/agent-roster.py release --name mt5
+  ./scripts/agent-roster.py windows --json
+"""
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+import random
+import socket
+import sqlite3
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+PROJECTS_ROOT = Path(os.environ.get("AGENTS_ROOT", Path.home() / "projects"))
+# bootstrap opcional: permite sugerir MBTI/persona via jarvis.core.team quando rodar no repo
+_SRC = PROJECTS_ROOT / "nixos-ai" / "modules" / "ai" / "jarvis" / "src"
+if _SRC.is_dir():
+    p = str(_SRC)
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+ROSTER_PATH = Path(
+    os.environ.get("AGENTS_ROSTER", PROJECTS_ROOT / ".agents" / "roster.json"))
+LOCK_PATH = ROSTER_PATH.with_suffix(".lock")
+STALE_AFTER_S = int(os.environ.get("AGENTS_ROSTER_STALE_S", "900"))
+# (15/11) de quanto em quanto o claim de um agente VIVO e' renovado. 15 min:
+# um terco do TTL do bus (6 h), entao a sessao viva nunca chega a parecer
+# velha para um leitor cross-machine, e a sessao morta NAO e' renovada.
+HEARTBEAT_EVERY_S = int(os.environ.get("AGENTS_ROSTER_HEARTBEAT_S", "900"))
+VERSION = 1
+
+
+# ── geometria de janelas (fonte única) ─────────────────────────────────
+def _proc_map() -> tuple[dict[int, int], set[int]]:
+    """ppid de cada pid + pids que são opencode."""
+    ppid_de: dict[int, int] = {}
+    agente: set[int] = set()
+    for d in os.scandir("/proc"):
+        if not d.name.isdigit():
+            continue
+        pid = int(d.name)
+        try:
+            stat = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+            ppid_de[pid] = int(stat[1])
+            if b"opencode" in Path(f"/proc/{pid}/cmdline").read_bytes():
+                agente.add(pid)
+        except Exception:
+            continue
+    return ppid_de, agente
+
+
+def _descendants(root: int, ppid_de: dict[int, int]) -> list[int]:
+    pids, frontier = [root], [root]
+    while frontier:
+        nxt = [p for p in ppid_de
+               if ppid_de.get(p) in frontier and p not in pids]
+        pids += nxt
+        frontier = nxt
+    return pids
+
+
+def hypr_clients() -> list[dict]:
+    try:
+        out = subprocess.run(["hyprctl", "clients", "-j"],
+                             capture_output=True, text=True, timeout=5).stdout
+        return json.loads(out or "[]")
+    except Exception:
+        return []
+
+
+def _cpu_ticks(pids: list[int]) -> int:
+    """utime+stime de um conjunto de pids (ticks de clock)."""
+    total = 0
+    for pid in pids:
+        try:
+            parts = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+            total += int(parts[11]) + int(parts[12])
+        except Exception:
+            continue
+    return total
+
+
+DB_PATH = Path(os.environ.get(
+    "AGENTS_DB_PATH", Path.home() / ".local/share/opencode/opencode.db"))
+BUSY_WINDOW_S = int(os.environ.get("AGENTS_BUSY_S", "60"))
+
+
+def _session_do_pid(pid: int) -> str:
+    """Session id do opencode (-s ses_...) de um pid, se houver."""
+    try:
+        argv = Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace")
+    except Exception:
+        return ""
+    parts = [p for p in argv.split("\0") if p]
+    for i, p in enumerate(parts):
+        if p == "-s" and i + 1 < len(parts):
+            return parts[i + 1]
+        if p.startswith("ses_"):
+            return p
+    return ""
+
+
+def session_busy(session: str, janela_s: int = BUSY_WINDOW_S) -> bool:
+    """O agente da session está EM TURNO agora (part nova nos últimos N s)?
+
+    Read-only (mode=ro). Sem DB/session => False (o alvo é considerado ocioso).
+    """
+    if not session or not DB_PATH.exists():
+        return False
+    try:
+        import sqlite3
+        c = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+        r = c.execute("SELECT MAX(time_updated), MAX(time_created) FROM part "
+                      "WHERE session_id=?", (session,)).fetchone()
+        now = int(time.time() * 1000)
+        return bool(r and any(t and now - t <= janela_s * 1000 for t in r))
+    except Exception:
+        return False
+
+
+def agent_windows() -> list[dict]:
+    """Janelas foot com um opencode VIVO dentro (process-tree, sem título)."""
+    ppid_de, agente = _proc_map()
+    out = []
+    for c in hypr_clients():
+        if c.get("class") != "foot":
+            continue
+        pid = c.get("pid", 0)
+        desc = _descendants(pid, ppid_de)
+        vivos = [p for p in desc if p in agente]
+        if not vivos:
+            continue
+        session = ""
+        for p in vivos:
+            session = _session_do_pid(p)
+            if session:
+                break
+        out.append({"address": c.get("address", ""), "pid": pid,
+                    "title": c.get("title") or "", "cpu": _cpu_ticks(desc),
+                    "session": session,
+                    "busy": session_busy(session)})
+    return out
+
+
+def _session_from_env() -> str:
+    """Sessão do chamador: env do bash tool ou o app pai do MCP server.
+
+    Medido 08/11: o bash tool recebe OPENCODE_SESSION_ID; o MCP server não,
+    mas recebe OPENCODE_PID (o processo opencode pai, com `-s ses_...` no
+    argv). Sem isso, claim de dentro do MCP/CLI não achava a janela e caía
+    na primeira janela viva (identidade errada).
+
+    OPENCODE_PID pode estar morto/estale (MCP server de `opencode serve`,
+    processo longevo): nesse caso sobe a árvore de ppid procurando um
+    ancestral com `-s ses_...` antes de desistir.
+    """
+    ses = os.environ.get("OPENCODE_SESSION_ID", "").strip()
+    if ses:
+        return ses
+    pid = os.environ.get("OPENCODE_PID", "").strip()
+    if pid.isdigit():
+        ses = _session_do_pid(int(pid))
+        if ses:
+            return ses
+    ppid_de, _ = _proc_map()
+    p = os.getppid()
+    for _ in range(8):
+        if p <= 1:
+            break
+        ses = _session_do_pid(p)
+        if ses:
+            return ses
+        p = ppid_de.get(p, 0)
+    return ""
+
+
+def _opencode_ancestor() -> int:
+    """PID do ancestral opencode mais próximo (serve/TUI que hospeda o bash)."""
+    ppid_de, agente = _proc_map()
+    p = os.getppid()
+    while p > 1:
+        if p in agente:
+            return p
+        p = ppid_de.get(p, 0)
+    return 0
+
+
+def own_window(windows: list[dict] | None = None) -> dict | None:
+    """A janela do chamador (sobe a árvore de ppid até achar um foot-agente)."""
+    windows = agent_windows() if windows is None else windows
+    # 1) identidade durável: a SESSÃO do chamador (bash ou MCP)
+    ses = _session_from_env()
+    if ses:
+        for w in windows:
+            if (w.get("session") or "") == ses:
+                return w
+        # server-side: o bash é filho do `opencode serve` (sem janela foot);
+        # a sessão continua sendo a identidade -> sintetiza a entrada.
+        return {"address": "", "pid": _opencode_ancestor() or os.getppid(),
+                "title": "", "cpu": 0, "session": ses,
+                "busy": session_busy(ses)}
+    # 2) fallback: walk de ppid (quem roda dentro do TUI sem a env)
+    pids = {w["pid"] for w in windows}
+    ppid_de, _ = _proc_map()
+    p = os.getppid()
+    while p > 1:
+        if p in pids:
+            for w in windows:
+                if w["pid"] == p:
+                    return w
+        p = ppid_de.get(p, 0)
+    return None
+
+
+def _db_live_sessions(janela_s: int | None = None) -> list[str]:
+    """Sessões com part nova na janela (default AGENTS_DB_ALIVE=600s).
+
+    Cobre a sessão servida por `opencode serve`: ela não tem TUI com
+    `-s ses_...` no argv (a sessão chega pela API), então o scan de /proc
+    não a vê e o roster a marcava `dead` com o claim certo (medido 08/11).
+    Mesmo critério e mesma janela do watcher (agent-db-alive.py).
+    """
+    if janela_s is None:
+        try:
+            janela_s = int(os.environ.get("AGENTS_DB_ALIVE", "600"))
+        except ValueError:
+            janela_s = 600
+    db = Path(os.environ.get(
+        "AGENTS_DB_PATH",
+        str(Path.home() / ".local/share/opencode/opencode.db")))
+    if not db.exists():
+        return []
+    try:
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
+        try:
+            rows = con.execute(
+                "SELECT DISTINCT session_id FROM part WHERE time_updated >= ?",
+                (int((time.time() - janela_s) * 1000),),
+            ).fetchall()
+        finally:
+            con.close()
+    except Exception:
+        return []
+    return [str(r[0]) for r in rows if r and r[0]]
+
+
+def live_sessions() -> dict[str, int]:
+    """session id -> pid dos TUIs opencode VIVOS.
+
+    (03/11, dono: "quando eu reabro as janelas vcs acham que fechou")
+    O ENDEREÇO da janela é efêmero: reabrir a janela = novo address → o
+    roster via address dava o agente por morto. A SESSÃO é a identidade
+    DURÁVEL (opencode -s ses_...) → é ela que decide a vida.
+    """
+    out: dict[str, int] = {}
+    for d in os.scandir("/proc"):
+        if not d.name.isdigit():
+            continue
+        pid = int(d.name)
+        try:
+            argv = Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace")
+        except Exception:
+            continue
+        if "bin/opencode" not in argv:
+            continue
+        sess = _session_do_pid(pid)
+        if sess:
+            out.setdefault(sess, pid)
+    # (08/11) sessão de `opencode serve` não aparece no scan acima: o DB diz
+    # se ela produziu trabalho na janela. pid 0 = sem TUI (é o esperado).
+    for sess in _db_live_sessions():
+        out.setdefault(sess, 0)
+    return out
+
+
+def window_alive(entry: dict, windows: list[dict],
+                 sessions: dict[str, int] | None = None) -> bool:
+    """O agente ainda está vivo?
+
+    address casa com uma janela viva (mesma janela) OU a SESSÃO do agente
+    ainda tem um TUI opencode vivo (a janela foi reaberta/mudou de lugar).
+    """
+    if any(w["address"] == entry.get("window") for w in windows):
+        return True
+    sess = entry.get("session") or ""
+    if not sess:
+        return False
+    sessions = live_sessions() if sessions is None else sessions
+    return sess in sessions
+
+
+def window_of_session(entry: dict, windows: list[dict]) -> dict | None:
+    """A janela viva que carrega a sessão do agente (se houver)."""
+    sess = entry.get("session") or ""
+    if not sess:
+        return None
+    return next((w for w in windows
+                 if (w.get("session") or "") == sess), None)
+
+
+# ── roster: leitura/escrita atômica ───────────────────────────────────
+# (05/11) CODINOMES HUMANOS: o dono olhando a tela nao consegue dizer
+# quem e quem a partir de um session id (ses_eb612ed53...). Cada agente
+# ganha um nome curto, unico e legivel, no primeiro claim; o contexto
+# (uma frase sobre o que a IA esta fazendo) e atualizavel a qualquer
+# momento (set-context). Sem acento (o terminal e o shell).
+CODENAMES = [
+    "Cervo", "Tucano", "Lince", "Puma", "Onca", "Jaguar", "Galo", "Raposa",
+    "Urubu", "Mico", "Tatu", "Lobo", "Corvo", "Falcao", "Arara", "Sucuri",
+    "Girafa", "Capivara", "Pinguim", "Camaleao", "Sabia", "Ibis",
+    "Andorinha", "Cegonha", "Ema", "Tartaruga", "Veado", "Quati",
+    "Bicho", "Gralha", "Pavão", "Maritaca",
+]
+
+
+# ── codinome pelo MODELO (dono, 07/11) ─────────────────────────────────
+# "usar o self identification pra dar um codinome mas tbm informar qual
+# modelo e": o agente NAO se annuncia — o harness injeta o bloco IDENTITY
+# (provider/model) e o agente declara no claim. O codinome sai do MODELO
+# de forma DETERMINISTICA (o mesmo modelo -> o mesmo nome), e o modelo
+# viaja junto no roster (e no bus), para o coordenador da noite saber que
+# tier esta atras de cada agente.
+MODEL_CODENAMES = (
+    ("minimax", "Lince"),
+    ("qwen", "Tatu"),
+    ("gemma", "Cabra"),
+    ("deepseek", "Lontra"),
+    ("phi", "Galo"),
+    ("nemotron", "Falcao"),
+    ("gpt-oss", "Corvo"),
+    ("bonsai", "Bambu"),
+    ("bonsai-8b", "Bambu"),
+    ("kilo", "Pika"),
+    ("local", "Musgo"),
+)
+
+
+def codename_for_model(model: str) -> str:
+    """Codinome deterministico a partir do id do modelo (vazio se nao der)."""
+    mid = (model or "").strip().lower()
+    if not mid:
+        return ""
+    for key, name in MODEL_CODENAMES:
+        if key in mid:
+            return name
+    return ""
+
+
+def _pick_codename(agents: list[dict]) -> str:
+    """Codinome livre para um agente novo (aleatório entre os livres)."""
+    used = {e.get("codename") for e in agents if e.get("codename")}
+    pool = [c for c in CODENAMES if c not in used]
+    if not pool:
+        return f"Agente{len(agents) + 1}"
+    return random.choice(pool)
+
+
+def _blank() -> dict:
+    return {"version": VERSION, "agents": [], "tasks": []}
+
+
+def load() -> dict:
+    try:
+        data = json.loads(ROSTER_PATH.read_text())
+    except Exception:
+        return _blank()
+    if not isinstance(data, dict) or data.get("version") != VERSION:
+        return _blank()
+    data.setdefault("agents", [])
+    data.setdefault("tasks", [])
+    return data
+
+
+def save(data: dict) -> None:
+    ROSTER_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = ROSTER_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+    os.replace(tmp, ROSTER_PATH)
+
+
+class _Lock:
+    """flock no arquivo ao lado (serializa claim/release/task)."""
+
+    def __enter__(self):
+        LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+        self._fh = open(LOCK_PATH, "w")
+        fcntl.flock(self._fh, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc):
+        fcntl.flock(self._fh, fcntl.LOCK_UN)
+        self._fh.close()
+        return False
+
+
+def _overlaps(a: list[str], b: list[str]) -> list[str]:
+    """Interseção entre globs de arquivos (mesmo repo OU path absoluto)."""
+    def norm(g: str) -> str:
+        return g.strip().rstrip("/")
+    sa = {norm(x) for x in a if x.strip()}
+    sb = {norm(x) for x in b if x.strip()}
+    hits = set()
+    for x in sa:
+        for y in sb:
+            if x == y or x.startswith(y + "/") or y.startswith(x + "/"):
+                hits.add(x if x in sb else y)
+            elif "**" in x and y.startswith(x.split("**")[0]):
+                hits.add(y)
+            elif "**" in y and x.startswith(y.split("**")[0]):
+                hits.add(x)
+    return sorted(hits)
+
+
+def _files_of(entry: dict) -> list[str]:
+    return list(entry.get("files") or [])
+
+
+def _host_info() -> dict[str, str]:
+    """Origem do agente: onde ele roda (sistema, host, arquitetura).
+
+    Mesmo espírito do host_info do bus de coord: cada agente informa de
+    onde vem e em que sistema roda (linux/windows/termux/macos). Sem isso
+    no roster, ninguém sabe com quem fala.
+    """
+    import platform as _platform
+    system = _platform.system().lower()
+    if os.environ.get("ANDROID_ROOT") or os.environ.get("ANDROID_DATA"):
+        kind = "termux"
+    elif system == "windows":
+        kind = "windows"
+    elif system == "darwin":
+        kind = "macos"
+    else:
+        kind = "linux"
+    return {
+        "kind": kind,
+        "os": system,
+        "arch": _platform.machine(),
+        "hostname": socket.gethostname().split(".")[0],
+    }
+
+
+# ── comandos ───────────────────────────────────────────────────────────
+
+def cmd_set_context(args) -> int:
+    """Atualiza a descricao curta do contexto de um agente.
+
+    (05/11) O dono nao consegue saber "quem e quem" por session id: cada
+    agente tem um codinome e UMA FRASE sobre o que esta fazendo. Quando a
+    IA muda de assunto, ela atualiza essa frase — e todo mundo (e o MCP)
+    ve a mudanca.
+    """
+    with _Lock():
+        data = load()
+        for e in data["agents"]:
+            if e["name"] == args.name:
+                e["context"] = args.context
+                e["context_updated_at"] = int(time.time())
+                save(data)
+                print(f"roster: contexto de '{args.name}' "
+                      f"({e.get('codename') or '-'}) = {args.context}")
+                return 0
+    print(f"agent-roster: '{args.name}' não está no roster", file=sys.stderr)
+    return 1
+
+
+def cmd_whoami(args) -> int:
+    """Quem sou eu: codinome + identidade + contexto (o cartão de visita)."""
+    data = load()
+    for e in data["agents"]:
+        if e["name"] == args.name:
+            if args.json:
+                print(json.dumps(e, ensure_ascii=False, indent=2))
+            else:
+                print(f"{e.get('codename') or '-'} ({e['name']})")
+                print(f"  origem:   {e.get('origin') or '-'}")
+                if e.get("model"):
+                    print(f"  modelo:   {e.get('model')}")
+                if e.get("mbti") or e.get("persona"):
+                    print(f"  persona:  {e.get('mbti') or '-'}"
+                          + (f" ({e.get('persona')})" if e.get("persona") else ""))
+                print(f"  lane:     {e.get('lane') or '-'}")
+                print(f"  repo:     {e.get('repo') or '-'}")
+                print(f"  files:    {', '.join(e.get('files') or []) or '-'}")
+                print(f"  contexto: {e.get('context') or '(vazio)'}")
+                print(f"  sessao:   {e.get('session') or '-'}")
+            return 0
+    print(f"agent-roster: '{args.name}' não está no roster", file=sys.stderr)
+    return 1
+
+
+def cmd_claim(args) -> int:
+    windows = agent_windows()
+    own = own_window(windows)
+    if own is None:
+        print("agent-roster: chamador não vive numa janela-agente "
+              "(foot com opencode vivo) — rode de dentro do terminal do "
+              "agente, ou use --window/--pid para claim manual",
+              file=sys.stderr)
+        return 2
+    with _Lock():
+        data = load()
+        agents = data["agents"]
+        for e in agents:
+            # (07/11) O re-claim do PROPRIO nome tinha que ser possível: sem
+            # --force, nao dava para atualizar codinome/aliases/contexto de um
+            # agente que continua vivo (e o proprio agente esta vivo por
+            # definicao aqui) => o roster ficava congelado com o primeiro
+            # claim. --force assume (mesma semantica da colisao de arquivos).
+            if e["name"] == args.name and window_alive(e, windows) \
+                    and not getattr(args, "force", False):
+                print(f"agent-roster: nome '{args.name}' já está vivo na "
+                      f"janela {e.get('window')} — use --force para "
+                      f"reivindicar (atualiza codinome/aliases/contexto) ou "
+                      f"release antes", file=sys.stderr)
+                return 3
+        for e in agents:
+            if e["name"] == args.name:
+                continue
+            hit = _overlaps(_files_of(e), args.files or [])
+            if hit and not args.force:
+                print(f"agent-roster: COLISÃO de arquivos com '{e['name']}' "
+                      f"({', '.join(hit)}) — duas janelas no mesmo arquivo "
+                      f"duplicam trabalho (Anthropic: fronteiras explícitas). "
+                      f"Use --force se a intenção é assumir.", file=sys.stderr)
+                return 4
+        # (05/11) re-claim mantem o codinome e o contexto (o dono nao
+        # perde o "quem e quem" a cada revindicada); --context atualiza.
+        previous = next((e for e in agents if e["name"] == args.name), None)
+        # (05/11) --codename deixa o agente ESCOLHER o nome (o Windows
+        # ja tinha o seu: 'matheus-perf'); sem o flag, sorteia um livre.
+        chosen = (getattr(args, "codename", "") or "").strip()
+        if chosen:
+            dono = next((e for e in agents
+                         if e.get("codename") == chosen and e["name"] != args.name), None)
+            if dono and not getattr(args, "force", False):
+                print(f"agent-roster: codinome '{chosen}' ja e do agente "
+                      f"'{dono['name']}' — use --force para tomar", file=sys.stderr)
+                return 5
+            codename = chosen
+        else:
+            model_hint = (getattr(args, "model", "") or "").strip() \
+                or (previous or {}).get("model", "") or ""
+            codename = (previous or {}).get("codename") \
+                or codename_for_model(model_hint) \
+                or _pick_codename(agents)
+        context = (getattr(args, "context", "") or (previous or {}).get("context") or "")
+        # (07/11) ALIASES: o mesmo agente aparece com nomes diferentes no
+        # roster (name/codename) e no bus (ex: 'jarvis@nitro-v15' vs 'Cervo').
+        # Medido: 13 nomes no bus para 6 agentes => as mensagens endereçadas
+        # se perdiam. Aqui o agente DECLARA os nomes extras e o coord.py os
+        # resolve (roster -> _aliases).
+        raw_aliases = (getattr(args, "aliases", "") or "").strip()
+        aliases = [a.strip() for a in raw_aliases.split(",") if a.strip()]
+        if not aliases:
+            aliases = list((previous or {}).get("aliases") or [])
+        model = (getattr(args, "model", "") or "").strip() \
+            or (previous or {}).get("model", "") or ""
+        task_hint = (getattr(args, "task", "") or "").strip()
+        suggested = None
+        need_mbti = not (getattr(args, "mbti", "") or "").strip()
+        need_persona = not (getattr(args, "persona", "") or "").strip()
+        if task_hint and (need_mbti or need_persona):
+            # sugestão segura (não muda comportamento de sessão; só preenche claim)
+            try:
+                from jarvis.core.team import persona_for_task, classify
+                mbti_s, persona_s, why_s = persona_for_task(task_hint)
+                kind_s, _ = classify(task_hint)
+                suggested = {"kind": kind_s, "mbti": mbti_s, "persona": persona_s, "why": why_s}
+            except Exception:
+                # fallback local (mesmo espírito de team.TASK_PROFILES)
+                tl = task_hint.lower()
+                profiles = [
+                    ("debug", ("ISTP", "debug")),
+                    ("arquitetura", ("INTJ", "architect")),
+                    ("pesquisa", ("INTP", "researcher")),
+                    ("documentacao", ("INFJ", "technical_writer")),
+                    ("operacao", ("ESTJ", "devops_engineer")),
+                    ("criacao", ("ENTP", "cto")),
+                    ("coord", ("ENTJ", "supervisor")),
+                ]
+                pats = {
+                    "debug": ["bug", "erro", "exception", "traceback", "falha", "quebr", "regress"],
+                    "arquitetura": ["arquitet", "design", "refactor", "schema"],
+                    "pesquisa": ["pesquis", "investig", "benchmark", "paper", "medid", "rag"],
+                    "documentacao": ["doc", "readme", "manual", "tutorial", "explic", "escrev"],
+                    "operacao": ["deploy", "servi", "systemd", "monitor", "backup", "health", "manuten"],
+                    "criacao": ["criar", "idei", "proposta", "novo"],
+                    "coord": ["coorden", "organiz", "prioriz", "equipe", "time", "agente"],
+                }
+                kind_s = "operacao"
+                for k, kws in pats.items():
+                    if any(kw in tl for kw in kws):
+                        kind_s = k
+                        break
+                for k, (m, p) in profiles:
+                    if k == kind_s:
+                        suggested = {"kind": k, "mbti": m, "persona": p, "why": "sugestão local por tipo de tarefa"}
+                        break
+        mbti = (getattr(args, "mbti", "") or "").strip().upper() \
+            or ((suggested or {}).get("mbti", "") if need_mbti else "") \
+            or str((previous or {}).get("mbti") or "")
+        persona = (getattr(args, "persona", "") or "").strip() \
+            or ((suggested or {}).get("persona", "") if need_persona else "") \
+            or str((previous or {}).get("persona") or "")
+        host = _host_info()
+        entry = {
+            "name": args.name,
+            "codename": codename,
+            "aliases": aliases,
+            "model": model,
+            "mbti": mbti,
+            "persona": persona,
+            "host": host,
+            "origin": f"{host.get('hostname', '?')} ({host.get('kind', '?')}/{host.get('arch', '?')})",
+            "context": context,
+            "lane": args.lane or "",
+            "repo": args.repo or "",
+            "files": args.files or [],
+            "note": args.note or "",
+            "window": own["address"],
+            "pid": own["pid"],
+            "session": own.get("session", ""),
+            "claimed_at": int(time.time()),
+            # (15/11) prova de vida do claim: `claimed_at` e' o inicio,
+            # `heartbeat_at` e' a ultima renovacao (ver cmd_list).
+            "heartbeat_at": int(time.time()),
+        }
+        agents[:] = [e for e in agents if e["name"] != args.name]
+        agents.append(entry)
+        save(data)
+    print(f"roster: '{args.name}' na lane '{entry['lane'] or '(sem lane)'}' "
+          f"(repo={entry['repo'] or '-'}, janela={entry['window']})")
+    if entry.get("aliases"):
+        print(f"roster: aliases {', '.join(entry['aliases'])}")
+    if entry.get("model"):
+        print(f"roster: modelo {entry['model']}")
+    if suggested and (need_mbti or need_persona):
+        filled = []
+        if need_mbti and (suggested.get("mbti")):
+            filled.append(f"MBTI={suggested.get('mbti')}")
+        if need_persona and (suggested.get("persona")):
+            filled.append(f"persona={suggested.get('persona')}")
+        if filled:
+            print(f"roster: sugestão pela tarefa ({suggested.get('kind')}): " + ", ".join(filled))
+            print(f"roster: motivo: {suggested.get('why')}")
+    if entry.get("mbti") or entry.get("persona"):
+        print(f"roster: persona {entry.get('mbti') or '-'}"
+              + (f" ({entry.get('persona')})" if entry.get("persona") else ""))
+    if entry.get("origin"):
+        print(f"roster: origem {entry['origin']}")
+    print(f"roster: codinome '{entry['codename']}'"
+          + (f" | contexto: {entry['context']}" if entry["context"] else
+             " | contexto: (vazio — defina com set-context)"))
+    return 0
+
+
+def cmd_release(args) -> int:
+    with _Lock():
+        data = load()
+        before = len(data["agents"])
+        data["agents"] = [e for e in data["agents"] if e["name"] != args.name]
+        if len(data["agents"]) == before:
+            print(f"agent-roster: '{args.name}' não está no roster")
+            return 1
+        save(data)
+    print(f"roster: '{args.name}' liberado")
+    return 0
+
+
+def cmd_list(args) -> int:
+    data = load()
+    windows = agent_windows()
+    sessions = live_sessions()
+    sessao = {w["address"]: w.get("session", "") for w in windows}
+    now = int(time.time())
+    rows = []
+    mudou = False
+    for e in data["agents"]:
+        alive = window_alive(e, windows, sessions)
+        # auto-cura: a sessão bate com uma janela viva → o address mudou
+        # (o dono reabriu a janela) → o registro passa a apontar pra ela
+        wv = window_of_session(e, windows)
+        if wv and wv.get("address") != e.get("window"):
+            e["window"] = wv.get("address")
+            e["pid"] = wv.get("pid")
+            mudou = True
+        # (15/11) AUTO-REFRESH DO CLAIM VIVO. Medido: a sessao estava viva e
+        # o `claimed_at` tinha 86.298 s ⇒ qualquer leitor OUTRO (o bus, outra
+        # maquina, o digest noturno) via "stale" e mandava WAKE de recuperacao
+        # para um agente que estava trabalhando. A idade do claim nao e' vida:
+        # a VIDA e' a sessao. Quando a sessao esta viva, o claim se renova.
+        if alive and not getattr(args, "no_refresh", False):
+            last = int(e.get("heartbeat_at") or e.get("claimed_at") or 0)
+            if now - last > HEARTBEAT_EVERY_S:
+                e["heartbeat_at"] = now
+                e["claimed_at"] = now
+                mudou = True
+        age = now - int(e.get("heartbeat_at") or e.get("claimed_at") or now)
+        state = "live" if alive else ("stale" if age > STALE_AFTER_S else "dead")
+        rows.append({**e, "state": state, "age_s": age,
+                     "session": e.get("session") or sessao.get(e.get("window"), ""),
+                     "busy": next((bool(w.get("busy")) for w in windows
+                                   if w["address"] == e.get("window")), False)})
+    if mudou:
+        with _Lock():
+            save(data)
+    if args.json:
+        print(json.dumps({"agents": rows, "tasks": data["tasks"]},
+                         ensure_ascii=False, indent=2))
+        return 0
+    if not rows:
+        print("roster vazio (nenhum agente fez claim)")
+    for r in sorted(rows, key=lambda x: x["name"]):
+        print(f"{r['state']:5} {r.get('codename') or '-':10} {r['name']:14} "
+              f"lane={r['lane'] or '-':22} repo={r['repo'] or '-':10} "
+              f"age={r['age_s']}s")
+        if r.get("context"):
+            print(f"      contexto: {r['context']}")
+        if r.get("note"):
+            print(f"      nota: {r['note']}")
+    if data["tasks"]:
+        print("\ntarefas:")
+        for t in data["tasks"]:
+            print(f"  {t['id']:6} [{t['status']:8}] owner={t.get('owner') or '-':14} "
+                  f"{t['title']}")
+    return 0
+
+
+def cmd_prune(args) -> int:
+    with _Lock():
+        data = load()
+        windows = agent_windows()
+        now = int(time.time())
+        keep = []
+        for e in data["agents"]:
+            if window_alive(e, windows):
+                keep.append(e)
+            elif now - int(e.get("heartbeat_at") or e.get("claimed_at") or 0) > STALE_AFTER_S:
+                continue
+            else:
+                keep.append(e)
+        removed = len(data["agents"]) - len(keep)
+        data["agents"] = keep
+        save(data)
+    print(f"roster: {removed} entradas mortas removidas")
+    return 0
+
+
+def cmd_task_add(args) -> int:
+    with _Lock():
+        data = load()
+        n = 1 + max([int(t["id"].split("-")[1]) for t in data["tasks"]
+                     if t["id"].startswith("t-") and t["id"].split("-")[1].isdigit()]
+                    or [0])
+        task = {
+            "id": f"t-{n}",
+            "title": args.title,
+            "owner": args.owner or "",
+            "lane": args.lane or "",
+            "files": args.files or [],
+            "status": "working" if args.owner else "pending",
+            "note": args.note or "",
+            "created": int(time.time()),
+        }
+        data["tasks"].append(task)
+        save(data)
+    print(f"task: {task['id']} criada (owner={task['owner'] or '-'}, "
+          f"status={task['status']}) — {task['title']}")
+    return 0
+
+
+def cmd_task_close(args) -> int:
+    with _Lock():
+        data = load()
+        for t in data["tasks"]:
+            if t["id"] == args.id:
+                t["status"] = "done"
+                t["closed"] = int(time.time())
+                save(data)
+                print(f"task: {args.id} fechada")
+                return 0
+    print(f"agent-roster: task {args.id} não existe", file=sys.stderr)
+    return 1
+
+
+def cmd_task_list(args) -> int:
+    data = load()
+    if args.json:
+        print(json.dumps(data["tasks"], ensure_ascii=False, indent=2))
+        return 0
+    for t in data["tasks"]:
+        print(f"{t['id']:6} [{t['status']:8}] owner={t.get('owner') or '-':14} "
+              f"{t['title']}")
+    return 0
+
+
+def cmd_windows(args) -> int:
+    windows = agent_windows()
+    own = own_window(windows)
+    out = {
+        "own": own,
+        "others": [w for w in windows if not own or w["address"] != own["address"]],
+        "all": windows,
+    }
+    if args.json:
+        print(json.dumps(out, ensure_ascii=False))
+    else:
+        print(f"minha janela: {own['address'] if own else '(não detectada)'}")
+        for w in out["others"]:
+            print(f"  {w['address']} pid={w['pid']} title={w['title']!r}")
+    return 0
+
+
+def cmd_resolve(args) -> int:
+    """Resolve um NOME do roster -> janela viva (JSON). Sai 1 se não achar."""
+    data = load()
+    windows = agent_windows()
+    sessions = live_sessions()
+    for e in data["agents"]:
+        if e["name"] != args.name:
+            continue
+        alive = window_alive(e, windows, sessions)
+        wv = window_of_session(e, windows)
+        out = {**e, "live": alive,
+               "window": (wv or e).get("address") if alive else "",
+               "pid": (wv or e).get("pid", e.get("pid")) if alive else 0}
+        print(json.dumps(out, ensure_ascii=False))
+        return 0 if alive else 1
+    print(json.dumps({"error": "nome desconhecido", "name": args.name},
+                     ensure_ascii=False))
+    return 1
+
+
+def cmd_events(args) -> int:
+    """Filtra eventos do watcher pela LANE do dono da janela (stdin → stdout).
+
+    Regras:
+      - evento de commit do repo X → só o agente dono do repo X (ou lane
+        "X/...") ou um generalista (repo vazio);
+      - evento global (fila/hooks) → todo mundo;
+      - sem roster (ou janela sem claim) → legado: passa tudo.
+    """
+    eventos = [linha for linha in sys.stdin.read().splitlines() if linha.strip()]
+    data = load()
+    agentes = data.get("agents", [])
+    if not agentes:
+        print("\n".join(eventos))
+        return 0
+    me = next((a for a in agentes if a.get("window") == args.window), None)
+    if me is None:
+        # (03/11) a janela foi reaberta → address novo: casa pela SESSÃO
+        windows = agent_windows()
+        sess = next((w.get("session", "") for w in windows
+                     if w.get("address") == args.window), "")
+        if sess:
+            me = next((a for a in agentes if a.get("session") == sess), None)
+    if me is None:
+        print("\n".join(eventos))
+        return 0
+    meu_repo = (me.get("repo") or "").strip()
+    meu_lane = (me.get("lane") or "").strip()
+
+    def pertence(linha: str) -> bool:
+        corpo = linha.split(": ", 1)[-1]
+        if not corpo.startswith("commit:"):
+            return True                      # fila/hooks = global
+        partes = corpo.split()
+        # "commit:<repo> <hash>" → repo é o primeiro campo depois do prefixo
+        repo = partes[0].split(":", 1)[1] if partes and ":" in partes[0] else ""
+        if not meu_repo:
+            return True                      # generalista = global
+        if repo.lower() == meu_repo.lower():
+            return True
+        return meu_lane.lower().startswith(repo.lower() + "/")
+
+    print("\n".join(linha for linha in eventos if pertence(linha)))
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="roster+tasks da coordenação")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("claim", help="reivindica uma lane (a janela do chamador)")
+    p.add_argument("--name", required=True)
+    p.add_argument("--lane", default="")
+    p.add_argument("--repo", default="")
+    p.add_argument("--files", default="", help="globs separados por vírgula")
+    p.add_argument("--note", default="")
+    p.add_argument("--context", default="",
+                   help="descrição curta do contexto (1 frase): o que esta IA fazendo")
+    p.add_argument("--aliases", default="",
+                   help="outros nomes pelos quais este agente pode ser "
+                        "enderecado no bus (separados por virgula) - use para "
+                        "o nome que voce publica no bus, ex: --aliases "
+                        "jarvis@nitro-v15,Cervo")
+    p.add_argument("--model", default="",
+                   help="identidade do modelo (provider/id) — a mesma do bloco "
+                        "IDENTITY do harness. Diz a fleet QUAL tier esta "
+                        "atras do agente (o coordenador da noite escolhe o "
+                        "modelo pela tarefa e troca no rate limit)")
+    p.add_argument("--codename", default="",
+                   help="codinome escolhido (sem ele, sorteia um livre)")
+    p.add_argument("--mbti", default="",
+                   help="perfil MBTI da persona (ex.: ISTP), alinhado à tarefa")
+    p.add_argument("--persona", default="",
+                   help="id/nome da persona (ex.: debug, architect)")
+    p.add_argument("--task", default="",
+                   help="tarefa atual: sugere MBTI/persona via team.persona_for_task "
+                        "(só preenche se --mbti/--persona não forem informados)")
+    p.add_argument("--force", action="store_true",
+                   help="assume mesmo com colisão de arquivos")
+    p.set_defaults(func=cmd_claim)
+
+    p = sub.add_parser("release", help="libera a claim")
+    p.add_argument("--name", required=True)
+    p.set_defaults(func=cmd_release)
+
+    p = sub.add_parser("list", help="lista o roster + tarefas")
+    p.add_argument("--json", action="store_true")
+    # (15/11) o auto-refresh do claim vivo vem por padrao; --no-refresh
+    # desliga (teste, ou quem nao quiser o efeito colateral).
+    p.add_argument("--no-refresh", action="store_true",
+                   help="nao renova o claimed_at dos agentes vivos")
+    p.set_defaults(func=cmd_list)
+
+    p = sub.add_parser("set-context", help="atualiza a descrição curta do contexto")
+    p.add_argument("--name", required=True)
+    p.add_argument("--context", required=True)
+    p.set_defaults(func=cmd_set_context)
+
+    p = sub.add_parser("whoami", help="mostra codinome/contexto/lane do agente")
+    p.add_argument("--name", required=True)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_whoami)
+
+    p = sub.add_parser("prune", help="remove entradas mortas")
+    p.set_defaults(func=cmd_prune)
+
+    p = sub.add_parser("task", help="lista de tarefas compartilhada")
+    tsub = p.add_subparsers(dest="tcmd", required=True)
+    q = tsub.add_parser("add")
+    q.add_argument("--title", required=True)
+    q.add_argument("--owner", default="")
+    q.add_argument("--lane", default="")
+    q.add_argument("--files", default="")
+    q.add_argument("--note", default="")
+    q.set_defaults(func=cmd_task_add)
+    q = tsub.add_parser("close")
+    q.add_argument("--id", required=True)
+    q.set_defaults(func=cmd_task_close)
+    q = tsub.add_parser("list")
+    q.add_argument("--json", action="store_true")
+    q.set_defaults(func=cmd_task_list)
+
+    p = sub.add_parser("windows", help="janelas de agente vivas (JSON)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_windows)
+
+    p = sub.add_parser("resolve", help="nome do roster -> janela viva (JSON)")
+    p.add_argument("name")
+    p.set_defaults(func=cmd_resolve)
+
+    p = sub.add_parser("events", help="filtra eventos do watcher pela lane "
+                                      "(stdin: linhas de evento)")
+    p.add_argument("--window", required=True)
+    p.set_defaults(func=cmd_events)
+
+    args = ap.parse_args()
+    if getattr(args, "files", ""):
+        args.files = [f.strip() for f in args.files.split(",") if f.strip()]
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

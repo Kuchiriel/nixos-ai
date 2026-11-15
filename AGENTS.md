@@ -181,6 +181,19 @@ nix flake check
   original falhou; as traducidas custam ~45s cada). Nao re-tente em loop: o
   rate-limit e por IP. O `meta.json` fica em cache (10 MB, nao rebaixe).
 
+## Compactacao (15/11, medido — o resumo pode ser DEGENERADO)
+
+- Medido no celular (mesmo opencode, outra maquina): o modelo de compactacao
+  respondia so com o ESQUELETO do template (`## Objective\n## Requirements\n...`,
+  98-114 chars) -> `status=completed`, mas o contexto caia de 939.526 para
+  91.865 **e o resumo era vazio**. Sintoma: "saiu de 100% pra 1 sem compactar".
+- **REGRA: `status=completed` NAO e compactacao.** Confere o
+  `len(summary)` no `session_message` (type=`compaction`): <300 chars =
+  degenerada = o historico foi jogado fora sem resumo.
+- A casa ja esta com `agents.compaction.model = nvidia/minimaxai/minimax-m3.1-flash`
+  (variant none) — esse modelo grava resumo CHEIO (medido: 11.197 chars).
+  `experimental.background_compaction` foi ligado em 15/11 (faltava).
+
 ## Model identity (self-identification — 02/11)
 
 You cannot introspect your own weights (size, quantisation, VRAM, latency) — a

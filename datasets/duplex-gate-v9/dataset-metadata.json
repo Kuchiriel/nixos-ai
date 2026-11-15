@@ -1,9 +1,6 @@
 {
-  "title": "Duplex Gate v9 (PT-BR)",
+  "title": "Duplex Gate v9 PT-BR",
   "id": "kuchiriel/duplex-gate-v9",
-  "licenses": [
-    {
-      "name": "CC0-1.0"
-    }
-  ]
+  "subtitle": "Microturn LoRA training corpus for the JARVIS duplex gate, rebalanced BARGE and WAIT classes, targeted at PT-BR conversations.",
+  "licenses": [{"name": "CC0-1.0"}]
 }

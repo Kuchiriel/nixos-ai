@@ -35,8 +35,13 @@
       # sensiveis (transcript/wake) — o padrao do script e loopback, mas o
       # dono precisa abrir o hub do celular (IPv6 da tailnet). Sem token
       # no servidor, as rotas sensiveis recusam (fail-closed).
-      Environment = "PORT=8091";
-      Environment = "BIND=::";
+      Environment = [
+        "PORT=8091"
+        # (15/11) BIND=:: de proposito: o TOKEN continua obrigatorio nas rotas
+        # sensiveis (transcript/wake) — o padrao do script e loopback, mas o
+        # dono precisa abrir o hub do celular (IPv6 da tailnet).
+        "BIND=::"
+      ];
     };
     Install = {
       WantedBy = [ "default.target" ];

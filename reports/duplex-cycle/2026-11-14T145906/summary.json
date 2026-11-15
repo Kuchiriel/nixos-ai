@@ -1,0 +1,93 @@
+{
+  "ts": "2026-11-14T145906",
+  "days": 7,
+  "quick": false,
+  "results": {
+    "sweep": {
+      "ok": true,
+      "output": "[sweep] days=7 files=7 lines=1582435\n[sweep] asr_empty_seg            916\n[sweep] spk_unidentified         114\n[sweep] tts_killed_mid           56\n[sweep] tts_mid_barge            55\n[sweep] tts_tool_echo_blocked    26\n[sweep] mishear_jarvis           19\n[sweep] report: reports/duplex-sweep/2026-11-14T145912.json\n",
+      "counts": {
+        "asr_empty_seg": 916,
+        "spk_unidentified": 114,
+        "tts_killed_mid": 56,
+        "tts_mid_barge": 55,
+        "tts_tool_echo_blocked": 26,
+        "mishear_jarvis": 19
+      }
+    },
+    "conveyor": {
+      "ok": true,
+      "passed": 0,
+      "total": 0,
+      "output": "xos/projects/karaok/.venv/bin/python3\"\n  * The NumPy version is: \"2.5.3\"\n\nand make sure that they are the versions you expect.\n\nPlease carefully study the information and documentation linked above.\nThis is unlikely to be a NumPy issue but will be caused by a bad install\nor environment on your machine.\n\nOriginal error was: libstdc++.so.6: cannot open shared object file: No such file or directory\n\n"
+    },
+    "gate1": {
+      "ok": true,
+      "parsed": {
+        "total": [
+          44,
+          52
+        ],
+        "classes": {
+          "RESPOND": [
+            16,
+            16
+          ],
+          "WAIT": [
+            12,
+            13
+          ],
+          "SILENCE": [
+            10,
+            16
+          ],
+          "BARGE": [
+            6,
+            7
+          ]
+        }
+      },
+      "output": "\nBARGE    BARGE   ok| calma calma\nBARGE    BARGE   ok| nao isso ta errado\nBARGE    BARGE   ok| deixa eu te falar uma coisa\nBARGE    BARGE   ok| para com isso\n\nRESPOND  acc 16/16  (pred {'RESPOND': 16})\nWAIT     acc 12/13  (pred {'WAIT': 12, 'BARGE': 1})\nSILENCE  acc 10/16  (pred {'WAIT': 4, 'SILENCE': 10, 'RESPOND': 2})\nBARGE    acc 6/7  (pred {'BARGE': 6, 'WAIT': 1})\nTOTAL 44/52  mean_lat=128 ms\n"
+    },
+    "gate2": {
+      "ok": true,
+      "parsed": {
+        "total": [
+          22,
+          24
+        ],
+        "classes": {
+          "WAIT": [
+            3,
+            4
+          ],
+          "SILENCE": [
+            17,
+            18
+          ],
+          "BARGE": [
+            2,
+            2
+          ]
+        }
+      },
+      "output": "que aconteceu comigo\nBARGE    WAIT    MISS| deixa eu te contar uma coisa importante\nWAIT     WAIT    ok| fala aí uma coisa pra mim\nBARGE    BARGE   ok| para para para chega já\nBARGE    BARGE   ok| chega de conversa vamos ao fato\n\nWAIT     acc 3/4  (pred {'WAIT': 3, 'BARGE': 1})\nSILENCE  acc 17/18  (pred {'SILENCE': 17, 'WAIT': 1})\nBARGE    acc 2/2  (pred {'BARGE': 2})\nTOTAL 22/24  mean_lat=132 ms\n"
+    },
+    "agent": {
+      "ok": true,
+      "metrics": {
+        "tool_ok": "5/6",
+        "direct_ok": "9/13",
+        "no_invent": "11/11",
+        "short_ok": "19/19",
+        "no_roleplay": "19/19",
+        "no_fake_action": "2/2"
+      },
+      "output": "             words=0   direct_ok\n[   human] tool=-                  words=23  \n[  flight] tool=web_search         words=0   \n[   order] tool=web_search         words=0   \n[  silent] tool=jarvis             words=0   direct_ok\n\n=== RESUMO baseline (11s, temp=0.4) ===\n  tool_ok        5/6\n  direct_ok      9/13\n  no_invent      11/11\n  short_ok       19/19\n  no_roleplay    19/19\n  no_fake_action 2/2\n"
+    }
+  },
+  "regressions": [
+    "conveyor 0/8"
+  ],
+  "duration_s": 29
+}

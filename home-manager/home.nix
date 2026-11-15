@@ -464,8 +464,12 @@ in {
   # dele. Declarativo porque antes era install manual (o rebuild apagava o
   # fix). O plugin tem o GUARD DE INTRUSAO antes do POST: um texto
   # injetivo nao entra na sessao do par.
-  home.file.".config/opencode/plugins/agent-wake.js".source =
-    ./files/opencode/plugins/agent-wake.js;
+  home.file.".config/opencode/plugins/agent-wake.js" = {
+    source = ./files/opencode/plugins/agent-wake.js;
+    # (14/11) force: o arquivo existia como regular (install manual) —
+    # sem force o HM aborta a ativacao inteira.
+    force = true;
+  };
 
   # cli.json (TUI do v2): o red-team roda no processo do TUI via comando
   # local (nenhuma msg, nenhum turno de modelo). O substituto nativo do hack
