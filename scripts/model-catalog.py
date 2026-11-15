@@ -121,50 +121,66 @@ def opencode_models() -> list:
 
 
 
-REDTEAM_LOCAL = "local-uncensored-4b/jarvis-mtp-lora"   # Qwen 4B MTP (duplex :8092) — medido carregando
-REDTEAM_API = [
-    # (15/11, dono: "redteam um modelo de api tambem, n apenas local")
-    # Candidatos de API do catalogo: a familia Nemotron (openrouter/nvidia) e o
-    # gpt-oss-120b do groq. free, ctx 1.048.576 (Nemotron) / 131.072 (gpt-oss).
-    "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
-    "nvidia/nvidia/nemotron-3-ultra-550b-a55b",
-    "nvidia/minimaxai/minimax-m3.1-flash",
-    "groq/openai/gpt-oss-120b",
-    "openrouter/nvidia/nemotron-3.5-lightning:free",
-]
+# (15/11, dono) "redteam um modelo de api tambem, n apenas local".
+# SEM LISTA FIXA: o catalogo (free-providers.json) e o registry (models.nix)
+# sao a fonte da verdade. O local vem do registry (o alias que o opencode
+# carrega) e a API vem do catalogo, escolhida por TIER (reasoning = mais
+# inteligente) — o que o dono pediu: "o modelo ideal pra tarefa".
+LOCAL_CANDIDATE_HINTS = ("local-uncensored-4b/jarvis-mtp-lora",)  # medido carregando
+
+
+def local_candidates() -> list:
+    """Modelos LOCAIS que o opencode carrega (registry + alias do server)."""
+    out = []
+    try:
+        from jarvis.core.model_registry import registry_or_none
+        reg = registry_or_none()
+        if reg is not None:
+            for mid in reg.ids():
+                full = mid if "/" in mid else f"local/{mid}"
+                out.append(full)
+    except Exception:
+        pass
+    for hint in LOCAL_CANDIDATE_HINTS:
+        if hint not in out:
+            out.append(hint)
+    return out
+
+
+def api_candidates(cat: dict, tiers: tuple = ("reasoning", "general", "fast")) -> list:
+    """Modelos de API do catalogo, ordenados por tier (reasoning primeiro)."""
+    rows = []
+    for pname, pv in (cat.get("providers") or {}).items():
+        for m in (pv.get("models") or []):
+            tier = m.get("tier") or ""
+            if tier not in tiers:
+                continue
+            rows.append((tiers.index(tier), pname, m))
+    rows.sort(key=lambda r: (r[0], r[1]))
+    return [f"{p}/{m.get('id')}" for _t, p, m in rows]
 
 
 def redteam_candidates(cat: dict) -> list:
-    """Os candidatos do perfil redteam, com os dados REAIS de cada um."""
-    by_id = {}
-    for pv in (cat.get("providers") or {}).values():
-        for m in (pv.get("models") or []):
-            by_id[f"{pv.get('_provider') or ''}"] = None
-    out = []
-    # local (o Qwen 4B MTP do duplex)
-    out.append({
-        "id": REDTEAM_LOCAL,
-        "kind": "local",
-        "name": "Qwen 4B Uncensored MTP (local, duplex :8092)",
-        "context": 12288, "output": 4096, "tier": "local-uncensored",
-        "good_for": "Sem recusa, local, latencia baixa. Roda o plugin jailbreak do redteam sem depender de cota externa.",
-        "status": "verified-loadable",
-    })
-    # API: pega do catalogo (ctx/output/tier/good_for reais)
+    """Candidatos do perfil redteam: local medido + API por tier. Sem lista fixa."""
     idx = {}
     for pname, pv in (cat.get("providers") or {}).items():
         for m in (pv.get("models") or []):
             idx[f"{pname}/{m.get('id')}"] = (pname, m)
-    for full in REDTEAM_API:
+    out = []
+    for full in local_candidates():
+        out.append({
+            "id": full, "kind": "local", "name": full,
+            "context": None, "output": None, "tier": "local",
+            "good_for": "Local, sem recusa, latencia baixa (perfil slim: sem MCP/tools).",
+            "status": "verified-loadable" if full in LOCAL_CANDIDATE_HINTS else "listed",
+        })
+    for full in api_candidates(cat)[:8]:
         pname, m = idx.get(full, (None, None))
         out.append({
-            "id": full,
-            "kind": "api",
+            "id": full, "kind": "api",
             "name": (m or {}).get("name") or full,
-            "context": (m or {}).get("context"),
-            "output": (m or {}).get("output"),
-            "tier": (m or {}).get("tier"),
-            "good_for": (m or {}).get("good_for") or "",
+            "context": (m or {}).get("context"), "output": (m or {}).get("output"),
+            "tier": (m or {}).get("tier"), "good_for": (m or {}).get("good_for") or "",
             "status": (m or {}).get("status") or "listed",
         })
     return out

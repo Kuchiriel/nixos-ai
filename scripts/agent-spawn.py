@@ -190,6 +190,32 @@ def pick_model(text: str, forced: str = "") -> tuple[str, str]:
     return mid, why
 
 
+
+def _rank_models(cands: list) -> list:
+    """Ordena candidatos por FORCA REAL (o catalogo da casa: ctx + tier).
+
+    (15/11, dono) "o modelo ideal pra tarefa": o mais forte primeiro.
+    Criterio: contexto maior e tier reasoning > general > fast; local
+    (sem recusa) por ultimo, porque so serve one-shot.
+    """
+    ctx = {}
+    tier = {}
+    try:
+        cat = json.loads((REPO / "modules/ai/free-providers.json").read_text())
+        for pname, pv in (cat.get("providers") or {}).items():
+            for m in (pv.get("models") or []):
+                ctx[f"{pname}/{m.get('id')}"] = m.get("context") or 0
+                tier[f"{pname}/{m.get('id')}"] = m.get("tier") or ""
+    except Exception:
+        pass
+    ti = {"reasoning": 0, "general": 1, "fast": 2}
+
+    def key(mid: str):
+        local = mid.startswith("local-")
+        return (1 if local else 0, ti.get(tier.get(mid, ""), 3), -(ctx.get(mid) or 0))
+
+    return sorted(cands, key=key)
+
 def redteam_candidates() -> list:
     """Candidatos do perfil redteam, na ordem de preferencia.
 
@@ -200,11 +226,30 @@ def redteam_candidates() -> list:
     ordem e: API primeiro (Nemotron 550B ctx 1.048.576 free, minimax M3.1,
     gpt-oss-120b) e o local 4B MTP como opcao BAR (one-shot, sem sessao).
     """
-    api = ["nvidia/nvidia/nemotron-3-ultra-550b-a55b",
-           "nvidia/minimaxai/minimax-m3.1-flash",
-           "groq/openai/gpt-oss-120b",
-           "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"]
-    return api + ["local-uncensored-4b/jarvis-mtp-lora"]
+    api = []
+    try:
+        from jarvis.core.model_registry import registry_or_none
+    except Exception:
+        registry_or_none = None
+    try:
+        from jarvis.core.team import available_models
+        cd = {}
+        try:
+            cd = json.loads((HOME / ".local/state/jarvis/provider-cooldown.json").read_text())
+        except Exception:
+            cd = {}
+        now = time.time()
+        for m in available_models(include_local=False):
+            mid = m.get("id") or ""
+            if not mid or "/" not in mid:
+                continue
+            ts = float(cd.get(mid) or 0)
+            if ts and (now - ts) < 1800:
+                continue
+            api.append(mid)
+    except Exception:
+        pass
+    return _rank_models(api + ["local-uncensored-4b/jarvis-mtp-lora"])
 
 def main() -> int:
     ap = argparse.ArgumentParser()

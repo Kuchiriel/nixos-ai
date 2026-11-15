@@ -151,6 +151,12 @@ pre { background:#0d1117; border:1px solid var(--line); border-radius:6px; paddi
 <main>
 <div class="section-title">agentes</div>
 <div id="grid" class="grid"></div>
+<div class="section-title">estado da casa</div>
+<div class="card spawnbox">
+  <div class="row"><span class="muted" id="stSum">carregando…</span>
+    <button id="stRefresh" style="margin-left:auto">atualizar</button></div>
+  <div id="stBox" class="muted" style="margin-top:6px"></div>
+</div>
 <div class="section-title">criar agente</div>
 <div class="card spawnbox">
   <div class="turn"><input id="spTask" placeholder="tarefa do agente novo (a persona e o modelo sao escolhidos)"></div>
@@ -252,6 +258,20 @@ async function doSpawn() {
     refresh();
   } catch (e) { out.textContent = 'erro: ' + e; }
 }
+async function refreshState() {
+  const sum = document.getElementById('stSum'), box = document.getElementById('stBox');
+  if (!sum) return;
+  try {
+    const d = await (await fetch('/api/state')).json();
+    const ag = d.agentes || [], sp = d.spawns || [], sv = d.servicos || {};
+    const up = Object.values(sv).filter(v => v === 'active').length;
+    sum.textContent = ag.length + ' agentes · ' + (d.board?.claims || []).length + ' claims · '
+      + sp.length + ' spawns · ' + up + '/' + Object.keys(sv).length + ' servicos ativos';
+    const kan = (d.kanban && (d.kanban.lista || '')).split('\n').slice(0, 4).join(' | ').slice(0, 220);
+    const fila = (d.fila || []).slice(0, 2).join(' / ').slice(0, 200);
+    box.innerHTML = '<div>fila: ' + esc(fila || '-') + '</div><div>kanban: ' + esc(kan || '-') + '</div>';
+  } catch (e) { sum.textContent = 'estado indisponivel: ' + e; }
+}
 async function refreshBus() {
   const el = document.getElementById('bus');
   if (!el) return;
@@ -273,6 +293,11 @@ async function refreshBus() {
 }
 setInterval(refresh, 5000); refresh();
 setInterval(refreshBus, 10000); refreshBus();
+setInterval(refreshState, 60000); refreshState();
+document.addEventListener('DOMContentLoaded', function () {
+  const b = document.getElementById('stRefresh');
+  if (b) b.addEventListener('click', refreshState);
+});
 document.addEventListener('DOMContentLoaded', function () {
   const go = document.getElementById('spGo');
   if (go) go.addEventListener('click', doSpawn);
@@ -286,6 +311,7 @@ document.addEventListener('DOMContentLoaded', function () {
 // Le com o gh (autenticado no host) e cacheia 90s para nao estourar o
 // rate-limit do GitHub (a UI faz poll a cada 10s).
 let busCache = { at: 0, items: [], err: "" };
+let stateCache = { at: 0, value: null };
 
 function parseCoordJson(body) {
   const out = [];
@@ -410,6 +436,21 @@ async function handler(req, res) {
       }
       return send(200, JSON.stringify({ session: s, status, lines }), 'application/json');
     } catch (e) { return send(502, JSON.stringify({ error: String(e) }), 'application/json'); }
+  }
+  if (req.method === 'GET' && url.pathname === '/api/state') {
+    // (15/11) TUDO LIGADO num estado so: agentes (roster), claims/board
+    // (bus), fila da casa, kanban (nightwatch workitems), spawns, servicos e
+    // catalogo de modelos + rate-limit. Agrega o que a casa JA tem — nao
+    // duplica nada.
+    // (15/11) cache de 30s: o state agrega o workitem da casa (que le a
+    // fila) — sem cache, cada poll da UIpressionava o Nix e o DB.
+    const now = Date.now();
+    if (stateCache.value && now - stateCache.at < 120000) {
+      return send(200, JSON.stringify(stateCache.value), 'application/json');
+    }
+    const j = await pyJSON("hub-state.py", [], 180000).catch(e => ({ error: String(e) }));
+    stateCache = { at: now, value: j };
+    return send(200, JSON.stringify(j), 'application/json');
   }
   if (req.method === 'GET' && url.pathname === '/api/models') {
     // Catalogo REAL de modelos (ctx/output medidos no endpoint, tier,
