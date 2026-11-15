@@ -458,6 +458,13 @@ in {
   home.file.".config/opencode/plugins/check-redteam.mjs".source =
     ./files/opencode/plugins/check-redteam.mjs;
 
+  # agent-wake (14/11): acorda o agente par injetando um turno na sessao
+  # dele. Declarativo porque antes era install manual (o rebuild apagava o
+  # fix). O plugin tem o GUARD DE INTRUSAO antes do POST: um texto
+  # injetivo nao entra na sessao do par.
+  home.file.".config/opencode/plugins/agent-wake.js".source =
+    ./files/opencode/plugins/agent-wake.js;
+
   # cli.json (TUI do v2): o red-team roda no processo do TUI via comando
   # local (nenhuma msg, nenhum turno de modelo). O substituto nativo do hack
   # keymap.intercept do v1. O pacote vive em tui-plugins/redteam-tui/

@@ -494,6 +494,18 @@ def open_prs() -> list[dict[str, Any]]:
         return []
 
 
+
+def _publish_bus_event(topic: str, data: dict[str, Any]) -> None:
+    """Publica o evento do bus no EventBus (o hub consome o SSE e passa a
+    mostrar os agentes falando — 14/11: NADA do bus publicava evento, por
+    isso o hub mostrava as tasks mas nunca a conversa entre agentes).
+    Fail-open: um problema no event bus nao pode derrubar o bus."""
+    try:
+        from jarvis.core.eventbus import get_bus
+        get_bus().publish(topic, data)
+    except Exception:
+        pass
+
 def post(
     kind: str = "claim",
     agent: str | None = None,
@@ -538,6 +550,12 @@ def post(
     )
     gh("api", f"repos/{repo()}/issues/{number}/comments", "-f", f"body={body}")
     invalidate_cache()
+    _publish_bus_event("coord.post", {
+        "kind": kind, "agent": payload.get("agent", ""),
+        "lane": payload.get("lane", ""), "to": payload.get("to", ""),
+        "note": payload.get("note", ""), "intent": payload.get("intent", ""),
+        "issue": number, "ts": payload.get("ts", ""), "repo": repo(),
+    })
     return (f"coord: {kind} de {payload['agent']} publicado no issue #{number} "
             f"({repo()}, label {label()})"
             + (f" → {payload['to']}" if payload["to"] else ""))
@@ -568,6 +586,10 @@ def read() -> str:
     if number is None:
         return (f"coord: ainda não existe issue de coordenação "
                 f"(repo {repo()}, label {label()}) — crie com coord_post")
+    _publish_bus_event("coord.read", {
+        "issue": number, "repo": repo(), "agentes": len(state),
+        "updated_at": bus_updated_at(),
+    })
     lines = [f"coord: bus = {repo()} issue #{number} (label {label()})"]
     lines.append(f"bus_updated_at: {bus_updated_at()}")
     if not state:
