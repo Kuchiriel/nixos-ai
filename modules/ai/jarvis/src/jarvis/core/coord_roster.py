@@ -367,6 +367,23 @@ def send_message(target: str, message: str, note: bool = True) -> str:
         if _origem and not note:
             payload = ("[PEDIDO ORIGINAL (contexto do remetente)]: " + _origem
                        + "\n\n[TAREFA PARA VOCE]: " + payload)
+            # (15/11) PORT DO LEGADO: o playbook do papel do alvo vai junto.
+            # O legado (team/roles/*.md) tinha as regras de conducao; o
+            # video de 15/11 mediu que o time falha quando o especialista
+            # acorda sem o pedido original e sem as regras do papel.
+            try:
+                from jarvis.core.playbook import playbook_for_agent
+                _alvo = next((a for a in roster_agents()
+                              if str(a.get("codename") or "").lower() == str(target).lower()
+                              or str(a.get("name") or "").lower() == str(target).lower()
+                              or str(target).lower() in [str(x).lower() for x in (a.get("aliases") or [])]),
+                             None)
+                _play = playbook_for_agent(_alvo) if _alvo else ""
+                if _play:
+                    payload = ("[PLAYBOOK DO PAPEL (regras de conducao)]\n"
+                               + _play + "\n\n" + payload)
+            except Exception:
+                pass
         cmd_api = ["python3", _script("agent-api.py"), "--session", session,
                    "--text", payload]
         cmd_api.append("--note" if note else "--ask")

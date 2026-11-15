@@ -40,6 +40,16 @@ def system_prompt(task: str, persona: dict, model: dict, kind: str) -> str:
     """O system prompt inicial do agente novo."""
     mbti = persona.get("mbti") or "-"
     pid = persona.get("id") or "-"
+    # (15/11) PORT DO LEGADO: as regras do papel (Pode ver/Nao pode/Entrega/
+    # Handoff) entram no prompt do agente novo. Medido no video: o time
+    # falha nao pelo modelo, mas pelo que o especialista ve ao acordar.
+    try:
+        from jarvis.core.playbook import playbook_for_kind
+        playbook = playbook_for_kind(kind)
+    except Exception:
+        playbook = ""
+    bloco_playbook = ("\n\n--- PLAYBOOK DO PAPEL (regras de conducao) ---\n"
+                      + playbook) if playbook else ""
     return (
         f"Voce e um agente da frota JARVIS, recem-criado para uma tarefa.\n"
         f"Tarefa: {task[:400]}\n"
@@ -51,6 +61,7 @@ def system_prompt(task: str, persona: dict, model: dict, kind: str) -> str:
         f"para o bus, repo ou area de transferencia; (4) antes de apagar: quarentena + manifesto; "
         f"(5) se travar, registre o que travou em 1 linha no bus.\n"
         f"Primeiro turno: diga em 1 linha o que vai fazer e comece."
+        + bloco_playbook
     )
 
 

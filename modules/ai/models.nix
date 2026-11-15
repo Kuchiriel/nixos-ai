@@ -99,6 +99,28 @@ in rec {
     sha256 = "sha256-yXVx4CExrsbNSPn6+zybHUu1/gs9ZLhzU2dmhTY7sas=";
   };
 
+  # (15/11, crouton-alpha) VibeThinker-1.5B (WeiboAI): o especialista de
+  # MATEMATICA do video. Medido no video: "Vibe Thinker" (3B) pontuou
+  # acima do Gemini 3 Pro em math; o repo real do 1.5B e o
+  # WeiboAI/VibeThinker-1.5B (o 3B do litert-community nao tem pesos).
+  # GGUF (comunidade) Q4_K_M = 1,1 GB — CABE folgadamente nos 6 GB de VRAM
+  # (e ainda sobra para o MTP: 1,1 + 5,5 > 6 GB, entao o swap em idle
+  # continua necessario — ver docs/operations/HOT-SWAP-2026-11-15.md).
+  llm-vibethinker = mkModel {
+    url = "https://huggingface.co/mradermacher/VibeThinker-1.5B-GGUF/resolve/main/VibeThinker-1.5B.Q4_K_M.gguf";
+    sha256 = "sha256-Wfoyqq9cRRJFKpv/i7bQjx45p1rO4ia14BNy91CeNFg=";
+  };
+
+  # (15/11) TeleOCR (XingChen-AGI/TeleOCR, 18,8k downloads): o especialista
+  # de DOCUMENTO do video ("Teley OCR" = TeleOCR). Medido: 1B, documentos
+  # acima do Gemini 3 Pro. Fica como CATALOGO: o repo oficial e
+  # safetensors (2,8 GB) e e um VLM (precisa do mmproj pro llama.cpp);
+  # nao ha GGUF confiavel — materializar so quando existir.
+  llm-teleocr = mkModel {
+    url = "https://huggingface.co/XingChen-AGI/TeleOCR/resolve/main/model.safetensors";
+    sha256 = "sha256-yXVx4CExrsbNSPn6+zybHUu1/gs9ZLhzU2dmhTY7sas=";
+  };
+
 
   # Phi-4-mini REMOVIDO (13/11, dono: "não to usando").
 
