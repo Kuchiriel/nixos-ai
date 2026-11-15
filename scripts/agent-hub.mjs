@@ -245,15 +245,68 @@ function parseCoordJson(body) {
   return out;
 }
 
+// token do GitHub (o mesmo do `gh` da casa) — lido do hosts.yml
+function ghToken() {
+  try {
+    const y = readFileSync(HOME + '/.config/gh/hosts.yml', 'utf8');
+    const m = y.match(/oauth_token:\s*(\S+)/);
+    if (m) return m[1];
+  } catch { /* sem token: a API publica ainda da o basico */ }
+  return '';
+}
+
+async function busViaApi(limit) {
+  const headers = { 'User-Agent': 'agent-hub', 'Accept': 'application/vnd.github+json' };
+  const tok = ghToken();
+  if (tok) headers.Authorization = 'Bearer ' + tok;
+  // (15/11) o issue tem MILHARES de comentarios: per_page=1 na ultima
+  // pagina traz os MAIS RECENTES (per_page=60 na primeira traz os de
+  // 06/11 — medido). Pega as 2 ultimas paginas (60 cada) para ter o
+  // presente e o passado recente.
+  // (15/11) O issue tem 2033 comentarios: o GitHub ordena por criacao, entao
+  // o PRESENTE esta no FIM. Descobre a ultima pagina com per_page=1 (o header
+  // link traz rel=last) e le as 2 ultimas paginas com per_page=60 — a conta
+  // de pagina muda com o per_page, entao recalcula: lastPage(per_page=1) e o
+  // TOTAL de itens; com per_page=60 a ultima pagina e ceil(total/60).
+  const base = 'https://api.github.com/repos/Kuchiriel/mt5/issues/12/comments';
+  const head = await fetch(base + '?per_page=1', { headers, signal: AbortSignal.timeout(25000) });
+  if (!head.ok) throw new Error('api.github.com ' + head.status);
+  const link = head.headers.get('link') || '';
+  const totalItems = Number(link.match(/[?&]page=(\d+)[^>]*>; rel="last"/)?.[1] || 1);
+  const perPage = 60;
+  const lastPage = Math.max(1, Math.ceil(totalItems / perPage));
+  const pages = [Math.max(1, lastPage - 1), lastPage];
+  const lists = await Promise.all(pages.map(async (pg) => {
+    const r = await fetch(base + '?per_page=' + perPage + '&page=' + pg, { headers, signal: AbortSignal.timeout(30000) });
+    if (!r.ok) throw new Error('api.github.com ' + r.status);
+    return r.json();
+  }));
+  const list = lists.flat();
+  const out = [];
+  for (const c of list) {
+    for (const j of parseCoordJson(c.body || '')) {
+      out.push({
+        ts: String(j.ts || '').slice(0, 19).replace('T', ' '),
+        from: j.agent || j.from || '?',
+        to: j.to || '-',
+        kind: j.kind || 'msg',
+        lane: j.lane || '',
+        text: String(j.message || j.intent || j.note || '').replace(/\s+/g, ' ').slice(0, 400),
+      });
+    }
+  }
+  return out.slice(-limit);
+}
+
 async function busMessages(limit = 40) {
   const now = Date.now();
   if (now - busCache.at < 90000) return { items: busCache.items.slice(-limit), cached: true, err: busCache.err };
   try {
-    const r = spawnSync("gh", ["api", "repos/Kuchiriel/mt5/issues/12/comments?per_page=60", "-q", ".[].body"], {
-      encoding: "utf8", timeout: 60, maxBuffer: 8 * 1024 * 1024,
-    });
-    if (r.status !== 0) throw new Error(String(r.stderr || "gh falhou").slice(0, 200));
-    const items = parseCoordJson(r.stdout || "");
+    // (15/11) Sem execucao externa: o node deste unit nao consegue rodar o
+    // `gh` nem o `python3` (SIGTERM imediato ao exec — medido, ate o
+    // .gh-wrapped). A leitura do bus e por HTTPS direto na API do GitHub,
+    // com o token que o proprio `gh` da casa usa (~/.config/gh/hosts.yml).
+    const items = await busViaApi(limit);
     busCache = { at: now, items, err: "" };
     return { items: items.slice(-limit), cached: false, err: "" };
   } catch (e) {
@@ -298,15 +351,7 @@ async function handler(req, res) {
     // token: nao expoe transcript de sessao nem escreve nada.
     const lim = Math.min(100, parseInt(url.searchParams.get('limit') || '40', 10) || 40);
     const b = await busMessages(lim);
-    const linhas = b.items.map((j) => {
-      const ts = j.ts ? String(j.ts).replace('T', ' ').replace('Z', '').slice(5, 16) : "??";
-      const from = j.agent || j.from || "?";
-      const to = j.to || "-";
-      const kind = j.kind || "msg";
-      const txt = String(j.message || j.intent || j.note || "").replace(/\s+/g, " ").slice(0, 400);
-      return { ts, from, to, kind, text: txt, lane: j.lane || "" };
-    });
-    return send(200, JSON.stringify({ items: linhas, cached: b.cached, err: b.err }), 'application/json');
+    return send(200, JSON.stringify({ items: b.items, cached: b.cached, err: b.err }), 'application/json');
   }
   if (req.method === 'POST' && url.pathname === '/api/wake') {
     if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required (x-agent-hub-token)' }), 'application/json');
