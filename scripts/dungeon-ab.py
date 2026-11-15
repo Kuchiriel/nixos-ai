@@ -127,7 +127,12 @@ def main() -> int:
         item["sandbox"] = str(sb)
         item["plano"] = plano_com_modelo(cfg["base_url"], cfg["model"], TASK)
         item["teste_final"] = roda_teste(sb)
-        item["veredito"] = "PASS" if item["teste_final"]["pass"] else "FAIL"
+        # (15/11) O VEREDITO REAL (PASS/FAIL do AGENTE) exige que o harness
+        # EXECUTE a task no sandbox. Este script prova so o PLUMBING
+        # (servidor vivo, harness instancia, checker roda) - marcar PASS/FAIL
+        # aqui seria MENTIR (o agente nem editou nada).
+        item["veredito"] = "PENDENTE-EXECUCAO"
+        item["nota"] = "plumbing OK; o agente ainda nao executou a task"
         rel["resultados"].append(item)
         print(f"[{tag}] veredito: {item['veredito']}", flush=True)
 
