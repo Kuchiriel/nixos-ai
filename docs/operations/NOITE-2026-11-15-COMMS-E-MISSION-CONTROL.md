@@ -101,6 +101,21 @@ Novo `comms.agents_pulse()`.
 Prova: `fuzzy('/agentes')` -> `('agentes','')` e o handler imprime o
 pulso real (Cervo, Falcao, Onca, Lince com modelo e ha-quanto-tempo).
 
+
+## 8. As dores e o RAG voltar a enxergar o presente
+
+O `oc-db.py` (fonte unica) foi religado a **dois** consumidores que
+tavam cegos:
+
+| script | antes | agora |
+|---|---|---|
+| `agent-pains.sh` | 0 dores ( lia `part`, congelada) | **11 dores em 24h** (schema 2.2.6) |
+| `index_opencode_sessions.py` | resumos de sessao **vazios** no RAG | 20 sessoes reindexadas; busca por "wake via prompt" traz **"Consolidate agents-wake-up scripts"** como 1o hit |
+
+Onde o 2.2.6 guarda o conteudo (medido): **`session_message.data.content`**
+(lista de blocos `{type,text|name,state}`). A tabela `session_part` tem
+**0 linhas** — quem procurar as partes la nunca vai achar nada.
+
 ## Commits (completo)
 
 `2e689bbb` hub+portas · `f4990443` wake via prompt · `aef16f96` 3 bugs do
