@@ -198,6 +198,17 @@ read pt-BR); answer the owner in pt-BR.
   **4B-MTP PARADO** (6 GB, 1 LLM por vez) e o 4B é o cérebro da voz: medir
   recusa tira a voz do ar (o cliente morre com ":8092 fora"). Avisos
  tambem em `modules/ai/models.nix`, junto de cada modelo.
+    - **HOT RELOAD (15/11, medido)**: mudar plugin/config NAO exige restart.
+      O caminho DETERMINISTICO e `opencode reload` (ou `/reload` no TUI): recarrega
+      config + plugins sem reiniciar o server ("running sessions continue with
+      fresh services at the next step boundary") - medido no log: "loading plugin"
+      para os 4 plugins.
+      A ARMADILHA do WATCHER: ele compara o DIGEST do CAMINHO watchado (o symlink
+      em ~/.config/opencode/plugins/) - entao **editar o CONTEUDO do arquivo-alvo
+      NAO recarrega** (medido: log mudo); o que dispara e RE-APONTAR o symlink
+      (muda o caminho) ou o `opencode reload`. O plugin vive como symlink do nix
+      store (read-only) -> `scripts/agents-reload.sh` re-aponta para o arquivo VIVO
+      do repo e roda o reload (do celular: `~/bin/agents-reload`).
 - 6GB VRAM: **1 LLM at a time.** For models that don't fit, GPU experts
   **hurt** (fetch comes over PCIe, 6-7 GB/s, vs 41-83 GB/s from
   RAM). Dense models that fit in VRAM run ~3.2× faster.
