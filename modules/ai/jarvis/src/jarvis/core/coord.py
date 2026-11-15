@@ -550,11 +550,17 @@ def post(
     )
     gh("api", f"repos/{repo()}/issues/{number}/comments", "-f", f"body={body}")
     invalidate_cache()
+    _nota = str(payload.get("note") or payload.get("intent") or "")
     _publish_bus_event("coord.post", {
         "kind": kind, "agent": payload.get("agent", ""),
         "lane": payload.get("lane", ""), "to": payload.get("to", ""),
-        "note": payload.get("note", ""), "intent": payload.get("intent", ""),
+        "note": _nota, "intent": payload.get("intent", ""),
         "issue": number, "ts": payload.get("ts", ""), "repo": repo(),
+        # o hub mostra data_summary na linha do evento: o texto da
+        # mensagem entra aqui para a conversa aparecer de verdade
+        "data_summary": (f"{kind} · {payload.get('agent', '')}"
+                         + (f" → {payload['to']}" if payload.get("to") else "")
+                         + (f": {_nota[:200]}" if _nota else "")),
     })
     return (f"coord: {kind} de {payload['agent']} publicado no issue #{number} "
             f"({repo()}, label {label()})"
