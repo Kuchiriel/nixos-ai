@@ -10,6 +10,7 @@
 
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
 const HOME = process.env.HOME;
 const OC = 'http://100.121.100.103:4599';
 const ENV = HOME + '/.config/opencode/server.env';
@@ -25,6 +26,33 @@ function password() {
   return pw;
 }
 const AUTH = () => 'Basic ' + Buffer.from('opencode:' + password()).toString('base64');
+
+// (14/11) TOKEN PROPRIO DO HUB. O hub le transcripts e injeta user-turn em
+// sessoes da frota: sem token, quem alcanca a porta da LAN/tailnet le
+// qualquer transcript e escreve em qualquer agente. O token vem do env
+// AGENT_HUB_TOKEN ou do arquivo ~/.config/opencode/agent-hub.token (0600).
+// FAIL-CLOSED: sem token configurado, as rotas sensiveis recusam.
+const TOKEN_FILE = HOME + '/.config/opencode/agent-hub.token';
+let tok;
+function hubToken() {
+  if (tok !== undefined) return tok;
+  let t = (process.env.AGENT_HUB_TOKEN || '').trim();
+  if (!t) { try { t = readFileSync(TOKEN_FILE, 'utf8').trim(); } catch { t = ''; } }
+  tok = t;
+  return tok;
+}
+function sameSecret(a, b) {
+  const x = Buffer.from(String(a || '')), y = Buffer.from(String(b || ''));
+  if (x.length !== y.length || x.length === 0) return false;
+  return timingSafeEqual(x, y);
+}
+function authorized(req) {
+  const t = hubToken();
+  if (!t) return false;
+  const h = String(req.headers['x-agent-hub-token'] || '');
+  const b = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  return sameSecret(h, t) || sameSecret(b, t);
+}
 
 let sessionCache = { at: 0, map: new Map() };
 async function sessions() {
@@ -51,8 +79,13 @@ async function agentsJSON() {
   try { map = await sessions(); oc_ok = true; } catch (e) { oc_ok = false; }
   const rows = roster().map(a => {
     const s = a.session ? map.get(a.session) : null;
-    const busy = s ? Number(s.busy || 0) : null;
+    // (14/11) A API /api/session NAO devolve 'busy' (medido: as chaves reais
+    // sao agent, cost, id, location, model, outcome, projectID, time, title,
+    // tokens). Ler 'busy' dava 0 para todo mundo e todo agente aparecia
+    // 'idle' mesmo trabalhando. A fonte real e' time.updated (ultimo
+    // movimento da sessao) comparado com agora.
     const upd = s ? (s.time?.updated ?? null) : null;
+    const busy = upd ? (Date.now() - upd < BUSY_MS) : null;
     const status = s ? (busy ? 'busy' : 'idle') : 'ghost';
     return { name: a.name, codename: a.codename || '?', lane: a.lane || '-',
              session: a.session || null, busy, updated: upd, status };
@@ -61,6 +94,11 @@ async function agentsJSON() {
   return { servers: { opencode: oc_ok }, agents: rows };
 }
 const TEXT_MAX = 2000;
+// janela de 'atividade recente' que conta como busy (o dono pedalava com
+// 600s no watcher; aqui e' menor porque o hub so mostra estado)
+const BUSY_MS = Number(process.env.AGENT_HUB_BUSY_MS || 90000);
+// corpo maximo do POST /api/wake (o texto do dono cabe em folgado)
+const BODY_MAX = 64 * 1024;
 async function wake(name, text) {
   const r = roster().find(a => a.session && (
     (a.name||'').toLowerCase() === name.toLowerCase() ||
@@ -103,7 +141,9 @@ button { background:#21262f; color:#c9d1d9; border:1px solid var(--line); border
 pre { background:#0d1117; border:1px solid var(--line); border-radius:6px; padding:8px; max-height:260px; overflow:auto; font-size:11px; }
 .section-title { color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:.1em; margin:18px 0 8px; }
 </style></head><body>
-<header><h1>🤖 AGENT HUB <span class="muted">nitro-v15</span></h1><span id="hud">conectando…</span></header>
+<header><h1>🤖 AGENT HUB <span class="muted">nitro-v15</span></h1>
+<input id="tok" type="password" placeholder="token do hub" style="max-width:220px">
+<button id="tokSave">salvar</button><span id="hud">conectando…</span></header>
 <main>
 <div class="section-title">agentes</div>
 <div id="grid" class="grid"></div>
@@ -115,9 +155,12 @@ const $ = (s, el=document) => el.querySelector(s);
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const now = () => new Date().toLocaleTimeString('pt-BR');
+const TOKEN = () => localStorage.getItem('hubToken') || '';
 async function fetchAgents() {
-  try { return await (await fetch('/api/agents')).json(); } catch (e) { return { servers: { opencode: false }, agents: [] }; }
+  try { return await (await fetch('/api/agents', { headers: { 'x-agent-hub-token': TOKEN() } })).json(); } catch (e) { return { servers: { opencode: false }, agents: [] }; }
 }
+$('#tok').value = TOKEN();
+$('#tokSave').addEventListener('click', () => { localStorage.setItem('hubToken', $('#tok').value.trim()); refresh(); });
 async function refresh() {
   const d = await fetchAgents();
   $('#hud').textContent = 'opencode=' + (d.servers.opencode ? 'OK' : 'OFFLINE') + ' · ' + now();
@@ -133,7 +176,7 @@ async function refresh() {
     send.addEventListener('click', async () => {
       const t = say.value.trim(); if (!t) return;
       send.disabled = true; say.disabled = true;
-      const r = await fetch('/api/wake', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ name: $('.name', card).textContent, text: t }) });
+      const r = await fetch('/api/wake', { method: 'POST', headers: {'Content-Type': 'application/json','x-agent-hub-token':TOKEN()}, body: JSON.stringify({ name: $('.name', card).textContent, text: t }) });
       say.value = r.ok ? '(enviado)' : '(falhou)';
       setTimeout(() => { say.value = ''; send.disabled = false; say.disabled = false; }, 1200);
     });
@@ -144,7 +187,7 @@ async function openTranscript(session, btn) {
   t.style.display = 'block'; d.style.display = 'block'; n.textContent = session.slice(0, 18);
   t.textContent = 'carregando…';
   try {
-    const r = await fetch('/api/transcript?session=' + encodeURIComponent(session));
+    const r = await fetch('/api/transcript?session=' + encodeURIComponent(session), { headers: { 'x-agent-hub-token': TOKEN() } });
     const d2 = await r.json();
     t.textContent = d2.lines.join('\\n\\n');
   } catch (e) { t.textContent = 'erro ao ler: ' + e; }
@@ -159,6 +202,7 @@ async function handler(req, res) {
   if (req.method === 'GET' && url.pathname === '/') return send(200, HTML);
   if (req.method === 'GET' && url.pathname === '/api/agents') { const j = await agentsJSON().catch(e => ({ servers: { opencode: false }, agents: [], error: String(e) })); return send(200, JSON.stringify(j), 'application/json'); }
   if (req.method === 'GET' && url.pathname === '/api/transcript') {
+    if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required (x-agent-hub-token)' }), 'application/json');
     const s = url.searchParams.get('session');
     if (!s) return send(400, JSON.stringify({ error: 'session required' }), 'application/json');
     try {
@@ -183,7 +227,11 @@ async function handler(req, res) {
     } catch (e) { return send(502, JSON.stringify({ error: String(e) }), 'application/json'); }
   }
   if (req.method === 'POST' && url.pathname === '/api/wake') {
-    let raw = ''; for await (const chunk of req) raw += chunk;
+    if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required (x-agent-hub-token)' }), 'application/json');
+    let raw = ''; for await (const chunk of req) {
+      raw += chunk;
+      if (raw.length > BODY_MAX) return send(413, JSON.stringify({ error: 'body grande demais' }), 'application/json');
+    }
     try {
       const { name, text } = JSON.parse(raw || '{}');
       const out = await wake(name, text);
@@ -193,5 +241,9 @@ async function handler(req, res) {
   send(404, '{"error":"not found"}', 'application/json');
 }
 const PORT = Number(process.env.PORT || 8091);
-const BIND = process.env.BIND || '::';  // dual-stack: IPv6 + IPv4 fallback
+// (14/11) O padrao era '::' (TODAS as interfaces) enquanto o comentario do
+// topo dizia 127.0.0.1 — e o iptables abre 8091 para a LAN inteira. O
+// padrao agora e' loopback; para usar na tailnet de novo, e' preciso
+// BIND=:: de proposito (e o token continua obrigatorio).
+const BIND = process.env.BIND || '127.0.0.1';
 createServer((req, res) => handler(req, res).catch(e => { console.error('[hub]', e); res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: String(e) })); })).listen(PORT, BIND, () => console.log('[agent-hub] listening on ' + BIND + ':' + PORT));
