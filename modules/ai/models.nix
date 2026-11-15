@@ -85,6 +85,21 @@ in rec {
     sha256 = "sha256-BKQ6IujSAD3tpazCYvaOwQBfp2xzWpliqMdwQqdKfRk=";
   };
 
+  # (15/11, crouton-alpha) TMax-4B (AI2, arXiv 2606.23321): o
+  # ESPECIALISTA DE TERMINAL que cabe na nossa VRAM. Medido no video
+  # "Is this how Local AI reaches Frontier Capabilities?" (Codacus):
+  # o T-Max 4B faz 27% do terminal-bench (o GPT-5.5 faz 85%) e bate o
+  # Qwen 9B em uso de terminal — um especialista pequeno que faz o
+  # trabalho de terminal; o PLANEJADOR e que tem de ser forte.
+  # GGUF da comunidade (o repo oficial e safetensors); Q4_K_M = 2,7 GB
+  # (a casa tem 6 GB de VRAM: cabe, mas exige parar o MTP — o hot-swap
+  # que a casa ainda nao tem).
+  llm-tmax-4b = mkModel {
+    url = "https://huggingface.co/ijohn07/tmax-4b-Q4_K_M-GGUF/resolve/main/tmax-4b-q4_k_m.gguf";
+    sha256 = "sha256-yXVx4CExrsbNSPn6+zybHUu1/gs9ZLhzU2dmhTY7sas=";
+  };
+
+
   # Phi-4-mini REMOVIDO (13/11, dono: "não to usando").
 
   # xLAM-2-8B REMOVIDO (13/11, dono: "não to usando mesmo"). O registry
