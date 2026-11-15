@@ -390,7 +390,7 @@ in rec {
       # gargalo = reduzir o prompt do harness (ver _trim_messages e o
       # budget de agent-context em cli/dev.py) + ctx menor (16384).
       extraArgs = [ "--parallel" "1" "--jinja" "--reasoning" "off" "--spec-type" "draft-mtp"
-                    "--lora" "/var/lib/ai/models/loras/microturn-4b/microturn-4b-lora-v8.gguf"
+                    "--lora" "/var/lib/ai/models/loras/microturn-4b/microturn-4b-lora-v9.gguf"
                     "--lora-init-without-apply" ];
       # (06/11) MEMÓRIA (medido): com c=20480 o 4B chegou a 9G RSS +
       # 6,2G swap → zram (15,5G) lotou → HOST TRAVOU (thrash) e o OOM
@@ -1055,7 +1055,7 @@ in rec {
         "--jinja"
         "--reasoning" "off"
         "--spec-type" "draft-mtp"
-        "--lora" "/var/lib/ai/models/loras/microturn-4b/microturn-4b-lora-v8.gguf"
+        "--lora" "/var/lib/ai/models/loras/microturn-4b/microturn-4b-lora-v9.gguf"
         "--lora-init-without-apply"
         "--alias" "jarvis-mtp-lora"
       ];
