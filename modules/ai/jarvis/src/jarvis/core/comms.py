@@ -235,6 +235,67 @@ def deliver(agent: str, text: str, *, request: bool = False) -> tuple[bool, str]
 
 
 # ── o quadro (kanban) — o BUS é a fonte da verdade ───────────────────────
+
+def agents_pulse() -> str:
+    """O pulso da frota: quem esta vivo, em que lane, com que modelo e
+    ha quanto tempo se mexeram. Sai pela API do opencode (autoritativa).
+
+    (15/11, crouton-alpha) Para o dono no celular: "saber oq ta
+    acontecendo com cada agente". O roster local manda (name/codename/
+    lane) e a API do opencode diz o que importa (vivo/ocioso, modelo,
+    ultimo movimento).
+    """
+    try:
+        from jarvis.core.coord_roster import roster_agents, _session_of
+    except Exception as exc:  # noqa: BLE001
+        return f"roster indisponível: {exc}"
+    try:
+        import base64
+        import json
+        import os
+        import time
+        import urllib.request
+        from pathlib import Path
+
+        base = os.environ.get("AGENTS_OC_URL", "http://100.121.100.103:4599")
+        pw = os.environ.get("OPENCODE_SERVER_PASSWORD", "")
+        if not pw:
+            env = Path.home() / ".config/opencode/server.env"
+            if env.is_file():
+                for line in env.read_text().splitlines():
+                    if line.startswith("OPENCODE_SERVER_PASSWORD="):
+                        pw = line.split("=", 1)[1].strip().strip("\"'")
+                        break
+        auth = "Basic " + base64.b64encode(f"opencode:{pw}".encode()).decode()
+        req = urllib.request.Request(base + "/api/session", headers={"Authorization": auth})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = json.loads(r.read() or b"[]")
+        items = data if isinstance(data, list) else data.get("data", [])
+        by_id = {str(x.get("id")): x for x in items if x.get("id")}
+        now = time.time()
+        linhas = []
+        for a in roster_agents():
+            sess = _session_of(str(a.get("name") or ""))
+            if not sess:
+                continue
+            info = by_id.get(sess)
+            if not info:
+                linhas.append(f"• {a.get('codename') or a.get('name')} — SEM SESSÃO (morta)")
+                continue
+            upd = (info.get("time") or {}).get("updated") or 0
+            mins = int((now - upd / 1000) / 60) if upd else -1
+            model = (info.get("model") or {}).get("id") or "?"
+            busy = info.get("busy")
+            estado = "ocupado" if busy else "ocioso"
+            linhas.append(
+                f"• {a.get('codename') or a.get('name')} — {estado}, há {mins} min"
+                f" · {a.get('lane') or '-'} · {model}")
+        if not linhas:
+            return "nenhum agente com sessão no roster local"
+        return "🤖 PULSO DA FROTA\n" + "\n".join(linhas)
+    except Exception as exc:  # noqa: BLE001
+        return f"pulso indisponível: {exc}"
+
 def board() -> dict[str, Any]:
     """O quadro único: claims ativas no bus + agentes vivos + colisões."""
     try:

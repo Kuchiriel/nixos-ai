@@ -134,7 +134,7 @@ class TelegramChannel:
         "force_local", "force_remote", "sshkey", "opencode",
         "start", "help",
         # --- comunicação unificada (07/11): o Telegram é terminal do BUS ---
-        "board", "quadro", "pending", "pendencias", "to", "note", "mood",
+        "board", "quadro", "agentes", "agents", "pending", "pendencias", "to", "note", "mood",
         "assign", "plano",
         # --- kanban/fila de execução (nightwatch.task_queue / coord_workitem) ---
         "work", "fila", "kanban",
@@ -345,6 +345,8 @@ class TelegramChannel:
         if cmd == "vault":
             return (self._vault or (lambda a: f"vault unavailable: {a}"))(arg)
         # --- comunicação unificada com os agentes (bus) ---
+        if cmd in ("agentes", "agents"):
+            return self._handle_agents()
         if cmd in ("board", "quadro"):
             return self._handle_board()
         if cmd in ("pending", "pendencias"):
@@ -652,6 +654,23 @@ class TelegramChannel:
             return board_text()
         except Exception as exc:  # noqa: BLE001
             return f"quadro indisponível: {exc}"
+
+
+    def _handle_agents(self) -> str:
+        """Os agentes vivos, com lane, modelo e ultima atividade — no bolso.
+
+        (15/11, crouton-alpha) O dono pediu: "usar o celular pra comandar
+        la, abrir e fechar sessao, saber oq ta acontecendo com cada
+        agente, ver como eles tao conversando". O /board mostra claims e
+        pendencias; este mostra o PULSO de cada agente: vivo/ocioso,
+        lane, modelo em uso e ha quanto tempo se mexeram. Sai pela API do
+        opencode (fonte autoritativa, funciona headless).
+        """
+        try:
+            from jarvis.core.comms import agents_pulse
+            return agents_pulse()
+        except Exception as exc:  # noqa: BLE001
+            return f"pulso indisponível: {exc}"
 
     def _handle_pending(self, arg: str) -> str:
         try:
