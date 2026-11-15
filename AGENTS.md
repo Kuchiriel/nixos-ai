@@ -1653,3 +1653,32 @@ relatório Solar, sudo kill nightwatch se quiser, cupom-100% final.
   antes de medir pixel.
 - `drag` solta o botão no `finally`: arrasto interrompido não deixa o mouse
   do dono travado pressionado.
+## Video "Is this how Local AI reaches Frontier Capabilities?" — a CAUDA (15/11, lida depois)
+
+> (15/11) Medido: eu tinha lido so 0-13.000 dos 17.777 chars. A cauda
+> (12.500-17.777) tem as conclusoes mais fortes.
+
+- **O PLANEJADOR precisa de habilidade GERAL primeiro**: *"a model needs a
+  certain level of general ability first. After that, specializing starts to
+  make sense"*. Medido la: 35B planner + T-Max passou **2 de 4** checks; o
+  melhor setup 4B passou **<1**.
+- **Weight editing (MIT "Sparks of Weight Space Programming" + Bonsio)**:
+  funciona para UM bug claro (loop -> matematica 8%->48%; comandos ocultos
+  26%->2,5%), mas para um **habito espalhado no job longo** o teste real
+  deu **0 passes vs 1** do nao-patcheado -> *"o planejador tem que melhorar,
+  nao da para consertar"*. Also: fine-tuning apaga o patch; RL em 12 GB
+  conserta o loop do Qwen em <4h.
+- **Epoch AI**: modelos que cabem numa GPU de gaming estao ~**1 ano** atras da
+  fronteira e o gap **nao esta encolhendo**. Um modelo <10B chega la entre
+  **fim de 2027 e 2029**.
+- **35B MoE usa ~3B ativos por token** (expert em RAM): roda na mesma placa
+  de um 4B com 8 GB de VRAM + 32 GB de RAM.
+- **As regras finais do autor**: *"You can already run part of this today on
+  8 gigs. A 4B planner with one expert handles **short jobs with a clear
+  answer**. For **long jobs**, run the biggest single model your card can
+  hold. And **give your team search** because facts don't fit in a small
+  model."*
+- **Aplicado na casa**: o harness sobe o perfil de **coding** do MTP (sem o
+  LoRA microturn, que e de VOZ); a VRAM (6 GB) decide quem e o residente
+  (hot-swap); a API cobre o tier quando a VRAM esta ocupada; e o
+  especialista recebe RAG + corpus (search).
