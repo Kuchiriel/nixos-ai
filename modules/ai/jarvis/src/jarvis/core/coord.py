@@ -499,12 +499,60 @@ def _publish_bus_event(topic: str, data: dict[str, Any]) -> None:
     """Publica o evento do bus no EventBus (o hub consome o SSE e passa a
     mostrar os agentes falando — 14/11: NADA do bus publicava evento, por
     isso o hub mostrava as tasks mas nunca a conversa entre agentes).
-    Fail-open: um problema no event bus nao pode derrubar o bus."""
+    Fail-open: um problema no event bus nao pode derrubar o bus.
+
+    (16/11) E TAMBEM ENTREGA AO WEBUI, porque o EventBus e' IN-PROCESS:
+    medido, um evento publicado aqui (pid do coord-mcp) NAO chega no SSE
+    do webui (pid do webui) — sao processos diferentes. O SSE so enxerga o
+    `get_bus()` do proprio processo. Como o coord-mcp roda em processo
+    separado do webui, o caminho que falta e' o POST /api/events do webui
+    (a rota e' da lane do webui; aqui so se entrega o evento).
+
+    FAIL-OPEN e idempotente: se a rota nao existir ainda (404) ou o webui
+    estiver fora, o bus continua funcionando. O bus nunca pode depender do
+    hub estar de pe.
+    """
     try:
         from jarvis.core.eventbus import get_bus
         get_bus().publish(topic, data)
     except Exception:
         pass
+    try:
+        _deliver_event_to_webui(topic, data)
+    except Exception:
+        pass
+
+
+# (16/11) O WEBUI QUE ASSISTE O SSE. Loopback por default (o webui so exige
+# token fora do loopback, commit 5adc1a54) e um timeout curto: este POST e'
+# no caminho de escrita do bus, entao nao pode segurar o post.
+WEBUI_EVENTS_URL = os.environ.get(
+    "COORD_WEBUI_EVENTS_URL", "http://127.0.0.1:8090/api/events")
+
+
+def _deliver_event_to_webui(topic: str, data: dict[str, Any]) -> None:
+    """Entrega o evento ao webui (POST /api/events). Silencioso por design.
+
+    Devolve o status HTTP (ou "" se nao deu) — para o self-test e para
+    diagnostico; quem chama ignora.
+    """
+    import urllib.error
+    import urllib.request
+
+    body = json.dumps({"topic": topic, "data": data, "source": "coord"},
+                      ensure_ascii=False).encode()
+    req = urllib.request.Request(
+        WEBUI_EVENTS_URL, data=body, method="POST",
+        headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
+            return resp.status
+    except urllib.error.HTTPError as e:
+        # 404 = a rota ainda nao existe (lane do webui): esperado, nao e'
+        # erro nosso, e o bus segue funcionando.
+        return e.code
+    except Exception:
+        return ""
 
 def post(
     kind: str = "claim",
