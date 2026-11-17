@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Casa — índice único</title>
+<style>
+  :root { color-scheme: dark; --bg:#0b0f14; --card:#121821; --line:#243040; --fg:#e6edf3; --mut:#8b98a5; --ok:#3fb950; --warn:#d29922; --plan:#8b5cf6; --accent:#58a6ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding:20px 18px 10px; max-width:1100px; margin:0 auto; }
+  h1 { margin:0 0 4px; font-size:26px; letter-spacing:-.02em; }
+  .sub { color:var(--mut); margin:0 0 12px; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  .bar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; padding:0 18px 14px; max-width:1100px; margin:0 auto; }
+  input { flex:1 1 260px; background:var(--card); color:var(--fg); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font:inherit; }
+  .meta { color:var(--mut); font-size:13px; }
+  main { max-width:1100px; margin:0 auto; padding:0 18px 60px; display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px; }
+  article { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 15px; display:flex; flex-direction:column; gap:8px; }
+  .top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .id { font:600 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color:var(--accent); }
+  .badge { font-size:11px; text-transform:uppercase; letter-spacing:.06em; border-radius:999px; padding:3px 8px; border:1px solid var(--line); color:var(--mut); }
+  .badge.active { color:var(--ok); border-color:#1f6f33; }
+  .badge.planned { color:var(--plan); border-color:#4c2f8a; }
+  h2 { margin:0; font-size:17px; line-height:1.25; }
+  p { margin:0; }
+  .summary { color:var(--fg); }
+  .hosts { color:var(--mut); font-size:12px; }
+  dl { margin:4px 0 0; display:grid; grid-template-columns:48px 1fr; gap:4px 8px; font-size:13px; }
+  dt { color:var(--mut); }
+  dd { margin:0; overflow-wrap:anywhere; }
+  code { font:12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background:#0a0e13; border:1px solid var(--line); border-radius:6px; padding:1px 5px; overflow-wrap:anywhere; }
+  details { margin-top:2px; }
+  summary { cursor:pointer; color:var(--mut); font-size:13px; }
+  .measured { border-top:1px dashed var(--line); padding-top:8px; font-size:13px; color:var(--mut); }
+  .measured b { color:var(--fg); font-weight:600; }
+  .health { font-size:12.5px; color:var(--mut); }
+  .err { grid-column:1/-1; border:1px solid #7d2b2b; background:#1b1012; color:#ffb4b4; border-radius:12px; padding:14px; }
+  .empty { grid-column:1/-1; color:var(--mut); padding:20px 0; }
+  footer { text-align:center; color:var(--mut); font-size:12px; padding:0 18px 30px; }
+  @media (max-width:520px){ h1{font-size:22px} main{padding:0 10px 40px} header,.bar{padding-left:10px;padding-right:10px} }
+</style>
+</head>
+<body>
+<header>
+  <h1>Casa</h1>
+  <p class="sub">Índice único da casa · fonte: <code>ai-mesh/index/house.json</code> · <a href="./">← mission control</a></p>
+</header>
+<div class="bar">
+  <input id="q" type="search" placeholder="filtrar por id, título, tag, host…" autocomplete="off">
+  <span class="meta" id="meta">carregando…</span>
+</div>
+<main id="list"></main>
+<footer>gerado de <code>index/house.json</code> · atualize com <code>house docs</code> · sem segredo aqui</footer>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let DOC = null;
+
+function code(v){ return `<code>${esc(v)}</code>`; }
+
+function card(e){
+  const ent = e.entry || {}, code_ = e.code || {}, lm = e.last_measured;
+  const docs = (e.docs || []).map(d => `<div>${code(d)}</div>`).join('') || '<div>—</div>';
+  const hosts = (e.hosts || []).join(' · ') || '—';
+  const measured = lm
+    ? `<b>${esc(lm.ts || '')}</b> — ${esc(lm.summary || '')}${lm.source ? `<br>fonte: ${code(lm.source)}` : ''}`
+    : '— (sem medição registrada)';
+  return `<article id="${esc(e.id)}">
+    <div class="top"><span class="id">${esc(e.id)}</span><span class="badge ${esc(e.status)}">${esc(e.status)}</span></div>
+    <h2>${esc(e.title)}</h2>
+    <p class="summary">${esc(e.summary)}</p>
+    <p class="hosts">hosts: ${esc(hosts)} · tags: ${esc((e.tags||[]).join(', ') || '—')}</p>
+    <dl>
+      <dt>CLI</dt><dd>${code(ent.cli || '—')}</dd>
+      <dt>Web</dt><dd>${code(ent.web || '—')}</dd>
+      <dt>MCP</dt><dd>${code(ent.mcp || '—')}</dd>
+    </dl>
+    <details><summary>docs e código</summary>
+      <dl>
+        <dt>docs</dt><dd>${docs}</dd>
+        <dt>canôn.</dt><dd>${code(code_.canonical || '—')}</dd>
+        <dt>espelho</dt><dd>${code(code_.mirror || '—')}</dd>
+      </dl>
+    </details>
+    <p class="measured">${measured}</p>
+    <p class="health">saúde: ${code(e.health || '—')}</p>
+  </article>`;
+}
+
+function render(){
+  if (!DOC) return;
+  const q = $('#q').value.trim().toLowerCase();
+  const items = (DOC.entries || []).filter(e => {
+    if (!q) return true;
+    return [e.id, e.title, e.summary, (e.tags||[]).join(' '), (e.hosts||[]).join(' ')]
+      .join(' ').toLowerCase().includes(q);
+  });
+  $('#meta').textContent = `${items.length} de ${(DOC.entries||[]).length} domínios · atualizado ${DOC.updated || '?'}`;
+  $('#list').innerHTML = items.length ? items.map(card).join('') : '<div class="empty">nada para o filtro.</div>';
+}
+
+fetch('api/house', {cache:'no-store'})
+  .then(r => r.json().then(j => ({ok:r.ok, j})))
+  .then(({ok,j}) => {
+    if (!ok || j.error) throw new Error(j.error || 'erro');
+    DOC = j;
+    render();
+  })
+  .catch(err => {
+    $('#meta').textContent = 'índice indisponível';
+    $('#list').innerHTML = `<div class="err"><b>não consegui ler o índice</b><br>${esc(err.message)}<br><br>no host: <code>~/projects/ai-mesh/index/house.json</code> · sincronize com <code>mesh-repo</code> ou <code>git pull</code>.</div>`;
+  });
+
+$('#q').addEventListener('input', render);
+</script>
+</body>
+</html>

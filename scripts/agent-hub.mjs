@@ -834,6 +834,26 @@ async function handler(req, res) {
     req.on('close', () => { clearInterval(ka); evClients.delete(res); });
     return;
   }
+  // (17/11) CASA: indice unico (ai-mesh/index/house.json). A MESMA fonte
+  // alimenta o CLI `house`, a pagina /house e a tool coord_house do MCP.
+  // Leitura read-only: o indice nao tem segredo; o token do hub nao e exposto.
+  if (req.method === "GET" && url.pathname === "/api/house") {
+    const p = process.env.HOUSE_INDEX || join(HOME, "projects/ai-mesh/index/house.json");
+    try {
+      const raw = readFileSync(p, "utf8");
+      JSON.parse(raw);
+      return send(200, raw, "application/json");
+    } catch (e) {
+      return send(503, JSON.stringify({ error: "house index indisponivel", detail: String(e), path: p }), "application/json");
+    }
+  }
+  if (req.method === "GET" && url.pathname === "/house") {
+    try {
+      return send(200, readFileSync(join(__DIR, "house.html"), "utf8"), "text/html; charset=utf-8");
+    } catch (e) {
+      return send(500, "house.html ausente em " + join(__DIR, "house.html") + ": " + String(e));
+    }
+  }
   // (16/11) ESTADO AO VIVO DO A/B: loop vivo, ciclo, modelo em curso,
   // estatistica por modelo (taxa de aprovacao, tempo medio) e os patches.
   if (req.method === 'GET' && url.pathname === '/api/ab/live') {
