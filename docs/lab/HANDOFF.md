@@ -38,15 +38,22 @@
 | braço | L1 (método) | L2 (desvio) | L3 (pathfinding) |
 |---|---|---|---|
 | baseline (sem agente) | 0/5 | 1/5 | 4/5 |
-| bonsai 8B Q2 | **4/4** (98–119 s, 661–665 B) | **0/1** (patch cosmético, revisor certo) | medindo |
-| mtp 4B | **4/4** (84–92 s, 495 B) | **0/1** (2 de 5 passam, patch 819 B) | medindo |
-| api (nemotron ultra) | **1/1** (216 s, 495 B) | medindo | medindo |
+| bonsai 8B Q2 | **5/5** (85–119 s, 661–665 B) | **0/1** (patch cosmético, revisor certo) | **0/1** (2/5, 3003 B — pior que baseline) |
+| mtp 4B | **4/4** (82–92 s, 495 B) | **0/1** (2/5, 819 B) | **0/1** (1/5, 1650 B — bug de unpack) |
+| api (nemotron ultra) | **1/1** (216 s, 495 B) | **0/1** (guloso oscila, 1471 B) | **1/1** (5/5, 3461 B, 241 s, A*) |
 
-Leitura: os locais **sabem** fazer L1 (4/4 cada, patch mínimo). O L2 é o
-penhasco: bonsai não implementou desvio nenhum (o stash mostra que só trocou
-`dx = 0; dy = 0` por `dx, dy = 0, 0`); mtp mexeu 819 B e chegou a 2/5. A
-pergunta agora é se o `api` passa L2 — se passar, o teto local é medido; se
-não, o problema é o harness.
+Leitura (1 amostra por braço em L2/L3; o loop segue para 3):
+
+1. **L1 é o piso**: os três passam, patch mínimo. Não discrimina mais nada.
+2. **L3 prova o instrumento**: o `api` implementou A* com `heapq` e fechou
+   5/5. O harness, o checker e o patch funcionam. O teto dos locais é real:
+   mtp fez BFS com `path` misturando int e tupla (quebra no unpack); bonsai
+   mexeu 3 KB e **regrediu** para 2/5 (baseline é 4/5).
+3. **L2 não é degrau monotônico — é armadilha de guloso.** O `api` falhou L2
+   porque ordenou as 4 direções por distância e oscilou entre (1,1) e (2,1);
+   passou L3 porque usou A*. Quem sabe BFS/A* passa L3 e pode falhar L2; quem
+   tenta "regra local" ingênua oscila. Decidir se L2 fica como teste de
+   estratégia (documentado) ou ganha um hint explícito de estado/memória.
 
 ## 4. Como verificar que o instrumento é honesto (60 s)
 
