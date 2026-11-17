@@ -165,8 +165,15 @@ CONF
         bash "$SWAP" "$modelo" || { registra_erro "$modelo" "$nivel" "swap"; return 1; }
     fi
 
-    local QF="/home/nixos/.local/state/jarvis/nightwatch/task_queue-dungeon-$modelo.json"
-    echo "[]" > "$QF"
+    # (17/11) ESTADO LIMPO POR CICLO. O harness tem QUATRO arquivos por
+    # projeto e o "Recovering" vinha do checkpoint de 15/11: ele ressuscitava
+    # a task antiga ("Implement A pathfinding...") com o checker NOVO do L1 —
+    # medicao com rotulo errado. Fila vazia nao bastava.
+    local ST="/home/nixos/.local/state/jarvis/nightwatch"
+    echo "[]" > "$ST/task_queue-dungeon-$modelo.json"
+    rm -f "$ST/checkpoint-dungeon-$modelo.json" \
+          "$ST/loop_detector-dungeon-$modelo.json" \
+          "$ST/mission_state-dungeon-$modelo.json"
 
     cd "$REPO" || return 1
     export PYTHONPATH="$REPO/modules/ai/jarvis/src"
@@ -181,6 +188,10 @@ CONF
         --model "$modelo" --level "$nivel" > "$LOG_DIR/run-$modelo.log" 2>&1
     rc=$?
     end=$(date +%s); dur=$((end - start))
+    # historico de execucao: sem isso, a falha detalhada de um ciclo era
+    # apagada pelo ciclo seguinte (so sobrava o ultimo).
+    cp -f "$LOG_DIR/run-$modelo.log" "$LOG_DIR/run-$modelo-$(date +%H%M%S).log" 2>/dev/null || true
+    ls -t "$LOG_DIR"/run-"$modelo"-*.log 2>/dev/null | tail -n +21 | xargs -r rm -f
     log "  lock holders apos a corrida: $(lock_holders)"
 
     local checker_result
