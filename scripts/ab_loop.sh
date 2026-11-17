@@ -110,7 +110,7 @@ checker_do_nivel() {
 }
 
 registra_erro() {  # modelo nivel erro
-    printf '{"modelo":"%s","nivel":"%s","erro":"%s","ck":"v3","ts":%s}\n' \
+    printf '{"modelo":"%s","nivel":"%s","erro":"%s","ck":"v3","motivo":"infra","ts":%s}\n' \
         "$1" "$2" "$3" "$(date +%s)" >> "$RES"
     log "  ERRO registrado: $1/$2 -> $3"
 }
@@ -224,14 +224,21 @@ CONF
 
     # rc do run: 124 = timeout do nosso wrapper (nao e veredito do modelo)
     if [ "$rc" = "124" ]; then
-        printf '{"modelo":"%s","nivel":"%s","rc":124,"dur":%s,"erro":"timeout","patch_bytes":%s,"ck":"v3","ts":%s}\n' \
+        printf '{"modelo":"%s","nivel":"%s","rc":124,"dur":%s,"erro":"timeout","patch_bytes":%s,"ck":"v3","motivo":"infra","ts":%s}\n' \
             "$modelo" "$nivel" "$dur" "$pbytes" "$(date +%s)" >> "$RES"
         return 1
     fi
 
-    printf '{"modelo":"%s","nivel":"%s","rc":%s,"dur":%s,"checker":"%s","patch_bytes":%s,"ck":"v3","ts":%s}\n' \
+    # (17/11) MOTIVO: separa "o modelo errou" de "o revisor abortou" e de
+    # "infra falhou". Sem isto, um patch rejeitado pelo revisor aparecia como
+    # reprovacao no checker e o A/B media o baseline, nao o modelo.
+    local motivo="checker"
+    if [ "$pbytes" = "0" ] && grep -q "Review failed" "$LOG_DIR/run-$modelo.log" 2>/dev/null; then
+        motivo="review"
+    fi
+    printf '{"modelo":"%s","nivel":"%s","rc":%s,"dur":%s,"checker":"%s","patch_bytes":%s,"ck":"v3","motivo":"%s","ts":%s}\n' \
         "$modelo" "$nivel" "$rc" "$dur" \
-        "$(echo "$checker_result" | tr -d '"' | cut -c1-120)" "$pbytes" "$(date +%s)" \
+        "$(echo "$checker_result" | tr -d '"' | cut -c1-120)" "$pbytes" "$motivo" "$(date +%s)" \
         >> "$RES"
 }
 
