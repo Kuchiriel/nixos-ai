@@ -59,6 +59,13 @@ Do celular: `lab status` (wrapper em `~/bin/lab`, mesma CLI).
   exporta **`JARVIS_STATE_DIR` próprio por braço** (`.../nightwatch/ab-<braço>`)
   e limpa só ali. Não volte a apontar o harness para o diretório de estado
   compartilhado.
+- **Patch rejeitado pelo revisor não se perde: vai para o `git stash` da lane.**
+  Quando o resultado vem `patch=0B` + `Review failed`, o diff do modelo está
+  em `git -C ~/projects/dungeon-<braço> stash list` (`nightwatch-autosave-uncommitted`).
+  Para saber se o revisor errou, copie a lane para `/tmp`, aplique o stash e
+  rode o checker fixo: o veredito é do checker, não do revisor. (17/11: o
+  stash do bonsai L2 só trocava `dx = 0; dy = 0` por `dx, dy = 0, 0` — o
+  revisor estava certo e a falha era do modelo.)
 - **`pgrep -f` casa com o próprio shell.** Use `pgrep -f 'scripts/ab_loop\.sh'`
   dentro de um arquivo, nunca na linha do SSH.
 - **Crases na mensagem do `git commit -m`** são executadas pelo zsh remoto:

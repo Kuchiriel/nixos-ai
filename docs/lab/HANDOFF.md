@@ -38,12 +38,15 @@
 | braço | L1 (método) | L2 (desvio) | L3 (pathfinding) |
 |---|---|---|---|
 | baseline (sem agente) | 0/5 | 1/5 | 4/5 |
-| bonsai 8B Q2 | 5/5 (98 s, 661 B) | medindo | medindo |
-| mtp 4B | 5/5 (91 s, 495 B) | medindo | medindo |
-| api (nemotron ultra) | medindo | medindo | medindo |
+| bonsai 8B Q2 | **4/4** (98–119 s, 661–665 B) | **0/1** (patch cosmético, revisor certo) | medindo |
+| mtp 4B | **4/4** (84–92 s, 495 B) | **0/1** (2 de 5 passam, patch 819 B) | medindo |
+| api (nemotron ultra) | **1/1** (216 s, 495 B) | medindo | medindo |
 
-Leitura: os locais **sabem** fazer L1. O que não sabiam era passar por um
-teste impossível. L2/L3 é a pergunta em aberto.
+Leitura: os locais **sabem** fazer L1 (4/4 cada, patch mínimo). O L2 é o
+penhasco: bonsai não implementou desvio nenhum (o stash mostra que só trocou
+`dx = 0; dy = 0` por `dx, dy = 0, 0`); mtp mexeu 819 B e chegou a 2/5. A
+pergunta agora é se o `api` passa L2 — se passar, o teto local é medido; se
+não, o problema é o harness.
 
 ## 4. Como verificar que o instrumento é honesto (60 s)
 
@@ -124,3 +127,22 @@ Estado em 17/11: **paridade OK nos 13**. Ficam de propósito só no Linux:
 | relato do dia (com provas) | `docs/agentes/ab-lab-17-11.md` |
 | dados brutos | `~/logs/ab_loop/results.jsonl` |
 | código | `scripts/*`, `modules/ai/jarvis/src/nightwatch/{dungeon,harness}.py` |
+
+## 10. Auditar patch rejeitado (o revisor pode errar)
+
+Quando o resultado é `patch=0B` + `Review failed`, o diff do modelo **não se
+perdeu**: ele está no `git stash` da lane.
+
+```bash
+cd ~/projects/dungeon-<braço>
+git stash list                 # nightwatch-autosave-uncommitted
+git stash show -p stash@{0}    # o patch rejeitado
+# teste objetivo contra o checker fixo, sem tocar na lane:
+cp -a . /tmp/audit-<braço> && cd /tmp/audit-<braço>
+git stash apply stash@{0} --index 2>/dev/null || git stash show -p stash@{0} | git apply
+python3 -m pytest -q checker.py
+```
+
+Regra: **o veredito é do checker fixo**, o revisor é só um porteiro. Se o
+checker aprovar um patch que o revisor rejeitou, a medição vale e o porteiro
+está errado (17/11: no bonsai L2 o revisor estava certo).
