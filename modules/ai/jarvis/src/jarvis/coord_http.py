@@ -284,6 +284,27 @@ def build_server():
             return f"coord_notify falhou: {exc}"
 
     @mcp.tool
+    def coord_key(action: str = "status", provider: str = "nvidia", dry_run: bool = False) -> str:
+        '''Rotação de credencial da frota: list|status|next|verify.
+        NUNCA devolve o valor da chave — só id/label/active e o resultado HTTP.
+        '''
+        import subprocess as _sp
+        if action not in ("list", "status", "next", "verify"):
+            return "action invalida: use list|status|next|verify"
+        import re as _re
+        if not _re.fullmatch(r"[a-zA-Z0-9_-]{1,40}", provider):
+            return "provider invalido"
+        args = ["python3", "/home/nixos/projects/nixos-ai/scripts/key-rotate.py",
+                action, "--provider", provider]
+        if dry_run:
+            args.append("--dry-run")
+        try:
+            r = _sp.run(args, capture_output=True, text=True, timeout=60)
+            return (r.stdout or "")[:600] or (r.stderr or "sem saida")[:300]
+        except Exception as exc:
+            return "coord_key falhou: " + str(exc)[:200]
+
+    @mcp.tool
     def coord_house(action: str = "list", id: str = "", query: str = "") -> str:
         '''Indice unico da casa (ai-mesh/index/house.json) — descubra onde mora
         cada coisa sem carregar o repo. action=list|describe|search|status.

@@ -834,6 +834,25 @@ async function handler(req, res) {
     req.on('close', () => { clearInterval(ka); evClients.delete(res); });
     return;
   }
+  // (17/11) ROTACAO DE CREDENCIAL — a frota troca de key/modelo sem expor valor.
+  // O script key-rotate.py nunca imprime a chave (so id/label/active).
+  if (req.method === "POST" && url.pathname === "/api/key/rotate") {
+    if (!authorized(req)) return send(401, JSON.stringify({ error: "token required" }), "application/json");
+    let body = {};
+    try { const raw = await readBody(req); body = JSON.parse(raw || "{}"); } catch { body = {}; }
+    const provider = /^[a-z0-9_-]{1,40}$/i.test(String(body.provider || "")) ? String(body.provider) : "nvidia";
+    const action = ["list","status","next","verify"].includes(body.action) ? body.action : "next";
+    const args = ["/home/nixos/projects/nixos-ai/scripts/key-rotate.py", action, "--provider", provider];
+    if (body.dry_run) args.push("--dry-run");
+    try {
+      const r = spawnSync("python3", args, { encoding: "utf8", timeout: 60000 });
+      return send(r.status === 0 ? 200 : 500, JSON.stringify({
+        ok: r.status === 0, provider, action,
+        out: String(r.stdout || "").slice(0, 500),
+        err: String(r.stderr || "").slice(0, 200),
+      }), "application/json");
+    } catch (e) { return send(500, JSON.stringify({ ok: false, error: String(e) }), "application/json"); }
+  }
   // (17/11) CASA: indice unico (ai-mesh/index/house.json). A MESMA fonte
   // alimenta o CLI `house`, a pagina /house e a tool coord_house do MCP.
   // Leitura read-only: o indice nao tem segredo; o token do hub nao e exposto.
