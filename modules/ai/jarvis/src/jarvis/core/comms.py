@@ -226,10 +226,12 @@ def deliver(agent: str, text: str, *, request: bool = False) -> tuple[bool, str]
             f"agente '{a['name']}' sem sessão (API não serve) — "
             "use o bus (coord_msg) ou abra a sessão"
         )
-    body = {"parts": [{"type": "text", "text": text}]}
-    path = "/prompt_async" if request else "/message"
-    if not request:
-        body["noReply"] = True
+    # (17/11) API V2: /prompt_async e /message com parts NAO existem no
+    # OpenAPI publicado. A rota documentada e /prompt com {"text":...} e
+    # delivery steer|queue. "steer" agenda a execucao do agente-loop; "queue"
+    # so admite no inbox (foi o bug que deixou a delegacao da frota presa).
+    body = {"text": text, "delivery": "steer" if request else "queue"}
+    path = "/prompt"
     ok, detail = _post(f"/session/{sess}{path}", body)
     return ok, f"{a['name']} ({sess}) — {detail}"
 
