@@ -98,7 +98,7 @@ out = {
     "legado_v2": len(rows) - len(v3),
     "modelos": sorted(modelos.values(), key=lambda x: x["modelo"]),
     "matriz": matriz,
-    "ultimas": [{**{k: r.get(k) for k in ("modelo", "nivel", "dur", "patch_bytes", "erro", "checker", "ts")},
+    "ultimas": [{**{k: r.get(k) for k in ("modelo", "nivel", "dur", "patch_bytes", "erro", "checker", "motivo", "ts")},
                  "veredito": veredito(r)} for r in v3[-8:]][::-1],
 }
 print(json.dumps(out, ensure_ascii=False, indent=1))
@@ -140,8 +140,15 @@ else:
         dur = r.get("dur") or 0
         pb = r.get("patch_bytes") or 0
         ck = str(r.get("checker") or r.get("erro") or "")[:44]
+        # (17/11, coord-naming) o MOTIVO: por que o ciclo nao passou.
+        # Sem ele, "FAIL" e "ERRO" sao a mesma coisa no olho: nao se sabe
+        # se o modelo errou (checker), se o revisor abortou (review) ou se
+        # a maquina/API falhou (infra). Sem a separacao, o A/B mede a
+        # maquina em vez do modelo.
+        mot = str(r.get("motivo") or "-")
         print("    " + ic + " " + str(r["modelo"]).ljust(8) + " " + str(r.get("nivel") or "L3").ljust(3)
-              + " " + str(dur).rjust(4) + "s patch=" + str(pb).rjust(5) + "B  " + ck)
+              + " " + str(dur).rjust(4) + "s patch=" + str(pb).rjust(5) + "B  "
+              + "motivo=" + mot.ljust(13) + ck)
 '
 }
 

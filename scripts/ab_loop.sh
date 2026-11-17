@@ -20,6 +20,7 @@ BASELINE_COMMIT="343256793dc06a1a011adf360b611b1e652d7f79"
 TEST_COMMIT="e47e976"
 REPO="/home/nixos/projects/nixos-ai"
 SWAP="/home/nixos/projects/nixos-ai/scripts/llm-swap.sh"
+MOTIVO_LIB="$REPO/scripts/ab_loop_motivo.sh"
 MODELS="${AB_MODELS:-bonsai mtp api}"
 NIVEIS="${AB_LEVELS:-L1 L2 L3}"
 SLEEP_ENTRE="${AB_SLEEP:-45}"
@@ -27,6 +28,13 @@ RES="$LOG_DIR/results.jsonl"
 
 mkdir -p "$LOG_DIR"
 log() { echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LOG_DIR/ab_loop.log"; }
+
+if [ ! -r "$MOTIVO_LIB" ]; then
+    echo "AB_LOOP: classificador ausente: $MOTIVO_LIB" >&2
+    exit 1
+fi
+# shellcheck source=scripts/ab_loop_motivo.sh
+. "$MOTIVO_LIB"
 
 CTL="/home/nixos/.local/state/jarvis/nightwatch/ab_loop.control"
 controle() { [ -f "$CTL" ] && cat "$CTL" 2>/dev/null || echo "run"; }
@@ -107,6 +115,52 @@ checker_do_nivel() {
         L2) echo "dungeon-checker-l2.py" ;;
         *)  echo "dungeon-checker.py" ;;
     esac
+}
+
+# (17/11, coord-naming) review_wrong: o patch rejeitado esta no git stash da
+# lane? Entao, num COPIA em /tmp (a lane original NAO e' tocada), o checker
+# do nivel APROVA esse patch? Se sim, o review reprovou um patch BOM — o
+# motivo e' review_wrong, e nao 'review'.
+#
+# Por que importa: 'review' e' caso conhecido (o revisor abortou); o
+# review_wrong e' o caso DEFEITO (o revisor reprovou algo que o checker
+# aceita). Sao coisas opostas na decisao: a primeira sobe o modelo na
+# escada, a segunda sobe a CASA.
+review_wrong_pelo_stash() {   # $1 = modelo
+    local modelo="$1"
+    local lane="$LANE_BASE/dungeon-$modelo"
+    [ -d "$lane/.git" ] || return 1
+
+    local stash_ref
+    stash_ref=$(git -C "$lane" stash list 2>/dev/null | head -1 | cut -d: -f1)
+    [ -z "$stash_ref" ] && return 1
+
+    local copy
+    copy=$(mktemp -d "/tmp/opencode/review-wrong-$modelo-XXXXXX") || return 1
+    cp -a "$lane/." "$copy/" 2>/dev/null || { rm -rf "$copy"; return 1; }
+
+    # aplica o stash NA COPIA (a lane original fica intacta)
+    if ! git -C "$copy" stash apply "$stash_ref" >/dev/null 2>&1; then
+        # o stash pode pertencer a outro repo: aplica o DIFF direto
+        if ! git -C "$lane" stash show -p "$stash_ref" 2>/dev/null \
+             | git -C "$copy" apply --whitespace=nowarn - >/dev/null 2>&1; then
+            rm -rf "$copy"; return 1
+        fi
+    fi
+
+    # o checker do nivel, rodando NA COPIA
+    local out
+    out=$(timeout 180 nix develop "$REPO" -c bash -c \
+        "cd '$copy' && python3 -m pytest -q '$copy/checker.py'" 2>&1 \
+        | grep -E "passed|failed|error" | tail -1)
+    rm -rf "$copy"
+
+    # o checker APROVA (nenhum 'N failed') => o review reprovou um patch bom
+    if [ -n "$out" ] && ! echo "$out" | grep -qE "[1-9][0-9]* failed"; then
+        log "  review_wrong: o checker APROVA o stash da lane ($out)"
+        return 0
+    fi
+    return 1
 }
 
 registra_erro() {  # modelo nivel erro
@@ -233,8 +287,27 @@ CONF
     # "infra falhou". Sem isto, um patch rejeitado pelo revisor aparecia como
     # reprovacao no checker e o A/B media o baseline, nao o modelo.
     local motivo="checker"
-    if [ "$pbytes" = "0" ] && grep -q "Review failed" "$LOG_DIR/run-$modelo.log" 2>/dev/null; then
-        motivo="review"
+    local runlog="$LOG_DIR/run-$modelo.log"
+    if [ "$pbytes" = "0" ] && grep -q "Review failed" "$runlog" 2>/dev/null; then
+        # (17/11, coord-naming) O CASO review_wrong: o patch rejeitado esta
+        # no git stash da lane? Entao, num COPIA em /tmp (a lane original nao
+        # e' tocada), o checker APROVA esse patch? Se sim, o review reprovou
+        # algo BOM — o motivo e' review_wrong, nao review. E' o caso mais
+        # caro: o modelo estava certo e a casa disse que nao.
+        if review_wrong_pelo_stash "$modelo"; then
+            motivo="review_wrong"
+        else
+            motivo="review"
+        fi
+    elif [ "$rc" != "0" ]; then
+        # (17/11) rc != 0 (o run morreu por outro motivo que nao timeout) e'
+        # INFRA: nao e' veredito do modelo. Antes caia em 'checker' e
+        # inflava a falha do modelo.
+        motivo="infra"
+    elif grep -qiE "(^|[^0-9])429|rate.?limit|too many requests" "$runlog" 2>/dev/null; then
+        # (17/11) o provedor respondeu 429/rate limit: infra. O braco 'api'
+        # do lab e' o que leva 429.
+        motivo="infra"
     fi
     printf '{"modelo":"%s","nivel":"%s","rc":%s,"dur":%s,"checker":"%s","patch_bytes":%s,"ck":"v3","motivo":"%s","ts":%s}\n' \
         "$modelo" "$nivel" "$rc" "$dur" \
