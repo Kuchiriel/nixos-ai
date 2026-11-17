@@ -61,7 +61,7 @@ class TaskStatus(str, Enum):
 VALID_TRANSITIONS: dict[str, set[str]] = {
     TaskStatus.DISCOVERED.value: {TaskStatus.READY.value, TaskStatus.IN_PROGRESS.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
     TaskStatus.READY.value: {TaskStatus.IN_PROGRESS.value, TaskStatus.FAILED.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
-    TaskStatus.IN_PROGRESS.value: {TaskStatus.VALIDATING.value, TaskStatus.READY.value, TaskStatus.FAILED.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
+    TaskStatus.IN_PROGRESS.value: {TaskStatus.VALIDATING.value, TaskStatus.READY.value, TaskStatus.COMPLETED.value, TaskStatus.FAILED.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
     TaskStatus.VALIDATING.value: {TaskStatus.REVIEW.value, TaskStatus.READY.value, TaskStatus.IN_PROGRESS.value, TaskStatus.COMPLETED.value, TaskStatus.FAILED.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
     TaskStatus.REVIEW.value: {TaskStatus.COMPLETED.value, TaskStatus.READY.value, TaskStatus.IN_PROGRESS.value, TaskStatus.FAILED.value, TaskStatus.BLOCKED.value, TaskStatus.ABANDONED.value},
     # Terminal states
