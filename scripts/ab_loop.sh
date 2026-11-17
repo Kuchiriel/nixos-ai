@@ -244,12 +244,26 @@ CONF
     # (17/11) MOTIVO: separa "o modelo errou" de "o revisor abortou" e de
     # "infra falhou". Sem isto, um patch rejeitado pelo revisor aparecia como
     # reprovacao no checker e o A/B media o baseline, nao o modelo.
-    local motivo runlog="$LOG_DIR/run-$modelo.log"
-    motivo=$(classifica_motivo "$rc" "$pbytes" "$runlog" "$lane")
+    local motivo runlog="$LOG_DIR/run-$modelo.log" review_meta review_sha review_checker
+    review_meta="$(ab_review_meta_path "$LOG_DIR" "$modelo-$nivel-$stamp")"
+    review_sha=""; review_checker=""
+    # G1: se o revisor abortou com patch vazio, captura AGORA o diff
+    # rejeitado e o veredito do checker numa copia. O stash vivo some no
+    # proximo ciclo (a lane e recriada), e sem isto a atribuicao de culpa
+    # fica no escuro.
+    if [ "$pbytes" = "0" ] && ab_log_tem_review_failed "$runlog"; then
+        if ab_captura_rejeicao "$lane" "$LOG_DIR" "$modelo-$nivel-$stamp"; then
+            review_sha=$(grep -E '^diff_sha256=' "$review_meta" 2>/dev/null | head -1 | cut -d= -f2-)
+            review_checker=$(grep -E '^checker=' "$review_meta" 2>/dev/null | head -1 | cut -d= -f2-)
+            log "  Capturado patch rejeitado: sha=$review_sha checker=$review_checker"
+        fi
+    fi
+    motivo=$(classifica_motivo "$rc" "$pbytes" "$runlog" "$lane" "$review_meta")
     log "  Motivo: $motivo"
-    printf '{"modelo":"%s","nivel":"%s","rc":%s,"dur":%s,"checker":"%s","patch_bytes":%s,"ck":"v3","motivo":"%s","ts":%s}\n' \
+    printf '{"modelo":"%s","nivel":"%s","rc":%s,"dur":%s,"checker":"%s","patch_bytes":%s,"ck":"v3","motivo":"%s","review_diff_sha256":"%s","review_checker":"%s","ts":%s}\n' \
         "$modelo" "$nivel" "$rc" "$dur" \
-        "$(echo "$checker_result" | tr -d '"' | cut -c1-120)" "$pbytes" "$motivo" "$(date +%s)" \
+        "$(echo "$checker_result" | tr -d '"' | cut -c1-120)" "$pbytes" "$motivo" \
+        "$review_sha" "$review_checker" "$(date +%s)" \
         >> "$RES"
 }
 

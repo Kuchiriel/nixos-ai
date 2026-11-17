@@ -51,4 +51,57 @@ assert_motivo review_wrong "$(classifica_motivo 0 0 "$TMP/review.log" "$lane")" 
 ab_run_checker() { return 1; }
 assert_motivo review "$(classifica_motivo 0 0 "$TMP/review.log" "$lane")" 'review rejeitado certo'
 
+# G1 (17/11): com o artefato capturado no momento da rejeicao, o motivo
+# nao depende mais do stash vivo (que o lab destroi no ciclo seguinte).
+# Mesmo sem stash na lane, o meta decide.
+meta_dir="$TMP/meta"
+mkdir -p "$meta_dir"
+meta="$meta_dir/review-api-L3-120000.meta"
+
+printf 'diff_sha256=deadbeef\n' > "$meta"
+printf 'diff_file=%s/patch-review-api-L3-120000.diff\n' "$meta_dir" >> "$meta"
+printf 'checker=accepted\n' >> "$meta"
+printf 'checker_output=5 passed\n' >> "$meta"
+printf 'ts=0\n' >> "$meta"
+
+assert_motivo review_wrong "$(classifica_motivo 0 0 "$TMP/review.log" "$TMP/missing-lane" "$meta")" \
+    'G1: meta accepted decide sem stash vivo'
+
+printf 'checker=rejected\n' > "$meta"
+assert_motivo review "$(classifica_motivo 0 0 "$TMP/review.log" "$TMP/missing-lane" "$meta")" \
+    'G1: meta rejected decide sem stash vivo'
+
+printf 'checker=unknown\n' > "$meta"
+assert_motivo review "$(classifica_motivo 0 0 "$TMP/review.log" "$TMP/missing-lane" "$meta")" \
+    'G1: meta desconhecido cai no caminho antigo'
+
+# G1: a captura grava diff + veredito e nao toca na lane
+cap_dir="$TMP/cap"
+mkdir -p "$cap_dir"
+cap_lane="$TMP/cap-lane"
+mkdir -p "$cap_lane"
+git -C "$cap_lane" init -q -b main
+git -C "$cap_lane" config user.email lab@local
+git -C "$cap_lane" config user.name lab
+printf 'original\n' > "$cap_lane/change.txt"
+git -C "$cap_lane" add change.txt
+git -C "$cap_lane" commit -q -m baseline
+printf 'rejected patch\n' > "$cap_lane/change.txt"
+git -C "$cap_lane" stash push -q -m nightwatch-autosave-uncommitted
+
+ab_run_checker() {
+    [ -f "$1/change.txt" ] && grep -Fq 'rejected patch' "$1/change.txt"
+}
+if ab_captura_rejeicao "$cap_lane" "$cap_dir" "api-L3-120000"; then
+    meta_c="$cap_dir/review-api-L3-120000.meta"
+    [ -s "$cap_dir/patch-review-api-L3-120000.diff" ] || { echo 'FAIL G1: diff nao gravado' >&2; exit 1; }
+    grep -q '^checker=accepted' "$meta_c" || { echo 'FAIL G1: veredito do checker ausente' >&2; exit 1; }
+    assert_motivo review_wrong "$(classifica_motivo 0 0 "$TMP/review.log" "$TMP/missing-lane" "$meta_c")" \
+        'G1: captura decide o motivo sem o stash vivo'
+    printf 'ok G1: captura grava diff e veredito\n'
+else
+    echo 'FAIL G1: captura nao rodou' >&2
+    exit 1
+fi
+
 printf 'todos os testes passaram\n'
