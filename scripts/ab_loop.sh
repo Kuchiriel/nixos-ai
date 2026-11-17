@@ -165,15 +165,18 @@ CONF
         bash "$SWAP" "$modelo" || { registra_erro "$modelo" "$nivel" "swap"; return 1; }
     fi
 
-    # (17/11) ESTADO LIMPO POR CICLO. O harness tem QUATRO arquivos por
-    # projeto e o "Recovering" vinha do checkpoint de 15/11: ele ressuscitava
-    # a task antiga ("Implement A pathfinding...") com o checker NOVO do L1 —
-    # medicao com rotulo errado. Fila vazia nao bastava.
+    # (17/11) ESTADO DO HARNESS ISOLADO POR BRACO. Limpar os arquivos por
+    # projeto NAO bastava: checkpoint.py tem fallback LEGADO para o
+    # checkpoint.json global e ressuscitava um "fail-test" de 04/set
+    # (projeto test-repo) reescrito como dungeon-<braco> — o run comecava em
+    # "Recovering: This will fail" antes de qualquer task do A/B, com o
+    # checker novo. Com JARVIS_STATE_DIR proprio por braco nao existe arquivo
+    # legado para herdar, e cada ciclo comeca em estado comprovadamente limpo.
     local ST="/home/nixos/.local/state/jarvis/nightwatch"
-    echo "[]" > "$ST/task_queue-dungeon-$modelo.json"
-    rm -f "$ST/checkpoint-dungeon-$modelo.json" \
-          "$ST/loop_detector-dungeon-$modelo.json" \
-          "$ST/mission_state-dungeon-$modelo.json"
+    export JARVIS_STATE_DIR="$ST/ab-$modelo"
+    mkdir -p "$JARVIS_STATE_DIR"
+    find "$JARVIS_STATE_DIR" -maxdepth 1 -type f -name '*.json' -delete
+    log "  estado do harness: $JARVIS_STATE_DIR (limpo)"
 
     cd "$REPO" || return 1
     export PYTHONPATH="$REPO/modules/ai/jarvis/src"

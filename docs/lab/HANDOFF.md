@@ -27,6 +27,11 @@
 7. `api`: deepseek morreu (EOL); agora `nvidia/nemotron-3-ultra-550b-a55b`.
 8. Hub: só `ck=v3` conta; `N failed>0` reprova; erro de infra é categoria
    própria.
+9. `checkpoint.py` tinha fallback legado para o `checkpoint.json` global
+   (`fail-test` de 04/set, projeto `test-repo`) → todo run começava em
+   `Recovering: This will fail`. Agora o `ab_loop.sh` exporta
+   **`JARVIS_STATE_DIR` por braço** (`~/.local/state/jarvis/nightwatch/ab-<braço>`),
+   limpo a cada ciclo. Nenhum estado compartilhado contamina a medição.
 
 ## 3. Números honestos (o que já se sabe)
 
@@ -93,7 +98,24 @@ ls -t ~/logs/ab_loop/patch-*.diff | head -1 | xargs cat
 - A escada só tem tarefa de código (dungeon). Generalizar para "checker por
   comportamento" em outros projetos é trabalho futuro.
 
-## 8. Onde a verdade mora
+## 8. Paridade celular ↔ Linux
+
+O laboratório roda **todo** no Linux. O celular (`~/work/hub`) é espelho de
+leitura + os wrappers `lab` e `lab-sync`. A paridade é medida por hash, não
+lembrada:
+
+```bash
+lab-sync check    # 13 arquivos canônicos: local vs host (hash)
+lab-sync pull     # baixa os canônicos para ~/work/hub
+lab-sync local    # o que existe SÓ no celular (candidato a subir)
+lab-sync host     # canônicos que faltam no espelho
+```
+
+Estado em 17/11: **paridade OK nos 13**. Ficam de propósito só no Linux:
+`scripts/yt-insights.py`, `yt-channels.json`, `yt-push-phone.sh` (precisam de
+`yt-dlp` + RAG do host) e `scripts/dungeon-lab*.sh` (histórico).
+
+## 9. Onde a verdade mora
 
 | assunto | arquivo |
 |---|---|

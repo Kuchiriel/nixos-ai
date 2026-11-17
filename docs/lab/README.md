@@ -52,6 +52,13 @@ Do celular: `lab status` (wrapper em `~/bin/lab`, mesma CLI).
 
 ## Armadilhas já pagas (não repetir)
 
+- **`checkpoint.py` tem fallback LEGADO.** Mesmo limpando
+  `checkpoint-dungeon-<braço>.json`, ele lê o `checkpoint.json` global (um
+  `fail-test` de 04/set) e reescreve como `dungeon-<braço>`: o run começa em
+  `Recovering: This will fail` antes de qualquer task. Por isso o `ab_loop.sh`
+  exporta **`JARVIS_STATE_DIR` próprio por braço** (`.../nightwatch/ab-<braço>`)
+  e limpa só ali. Não volte a apontar o harness para o diretório de estado
+  compartilhado.
 - **`pgrep -f` casa com o próprio shell.** Use `pgrep -f 'scripts/ab_loop\.sh'`
   dentro de um arquivo, nunca na linha do SSH.
 - **Crases na mensagem do `git commit -m`** são executadas pelo zsh remoto:
