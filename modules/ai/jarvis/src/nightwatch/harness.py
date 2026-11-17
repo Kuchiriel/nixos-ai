@@ -43,7 +43,10 @@ import subprocess
 import sys
 import time
 import traceback
+import logging
 from dataclasses import dataclass, field
+
+log = logging.getLogger(__name__)
 from pathlib import Path
 from typing import Any, Callable
 
@@ -2515,11 +2518,38 @@ class Harness:
                             })
                             return False
 
+                    # (16/11) Pós-patch: rodar o checker (pytest) nos
+                    # arquivos modificados. Se falhar, trata como
+                    # falha de validação para disparar retry.
+                    try:
+                        from nightwatch.validator import run_targeted_tests
+                        _treport = run_targeted_tests(applied_files)
+                        if not _treport.passed:
+                            _tfails = []
+                            for _step in (_treport.steps or []):
+                                for _line in ((_step.output or "").splitlines()):
+                                    if _line.startswith("FAILED "):
+                                        _tfails.append(_line.split()[1])
+                            _baseline = _pre_patch_test_baseline(applied_files)
+                            _new_tfails = set(_tfails) - _baseline
+                            if _new_tfails:
+                                _sorted = sorted(_new_tfails)[:5]
+                                _msg = "Checker failed [new: " + ", ".join(_sorted) + "]"
+                                previous_errors.append(_msg)
+                                if attempt < max_attempts - 1:
+                                    self.notify("⚠️ Checker failed (attempt " + str(attempt + 1) + "), retrying")
+                                    continue
+                                safety.abort_task_branch(branch)
+                                self._fail_task(task, "Checker failed: " + ", ".join(_sorted))
+                                return False
+                    except Exception:
+                        pass
                     # (30/09, C5) Validação passou. Se chegamos aqui numa
                     # tentativa > 1, o retry CONVERGIU: o modelo recebeu o
                     # traceback e corrigiu. Contabiliza pra métrica de
                     # convergência (que antes eu media lendo log à mão).
-                    self._retry_succeeded_here(attempt)
+                    if attempt > 0:
+                        self._task_retried = True
 
                     # ── Step 4: Independent review ──
                     # Skip LLM review for low-risk tasks that pass validation.

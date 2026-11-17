@@ -68,6 +68,7 @@ MODELOS = {
     #   mtp-lora = COM o LoRA -> a phone call (a voz).
     "mtp": {"base_url": "http://127.0.0.1:8096/v1", "model": "jarvis-mtp-code"},
     "mtp-lora": {"base_url": "http://127.0.0.1:8092/v1", "model": "jarvis-mtp-lora"},
+    "vibethinker": {"base_url": "http://127.0.0.1:8098/v1", "model": "vibethinker"},
     # (15/11) O TERCEIRO BRAÇO — a API. O transcript (Codacus) mediu: "A 4B
     # planner with one expert handles SHORT jobs with a clear answer. For LONG
     # jobs, run the biggest single model your card can hold." O A* pathfinding

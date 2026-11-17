@@ -116,7 +116,7 @@
         # "No module named 'requests'" e o harness culpava o modelo.
         # Montado pelo Nix — Python só obedece (JARVIS_TEST_PYTHON).
         jarvis-test-env = final.python3.withPackages (ps:
-          [ ps.pytest ps.pytest-timeout ps.hypothesis ]
+          [ ps.pytest ps.pytest-timeout ps.hypothesis ps.pygame ]
           ++ (prev.callPackage ./modules/ai/package.nix {mcpNixos = final.mcp-nixos-fast; inherit aiModels;}).pythonDeps);
 
         # ── NVIDIA no linux-zen 7.2.x (10/10) ───────────────
@@ -309,6 +309,7 @@
         inputsFrom = [pkgs.jarvis];
         packages = with pkgs; [
           python313Packages.pytest
+          python313Packages.pygame
           python313Packages.hypothesis
           python313Packages.pymupdf  
           python313Packages.ebooklib  

@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mission Control — nitro-v15</title>
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#0b0f16; --bg2:#0f141d; --card:#151b26; --card2:#1b2230; --line:#26303f;
+  --fg:#d7e0ec; --dim:#8794a7; --acc:#5ee6a8; --warn:#f2c66b; --bad:#ff7b72;
+  --idx:#6aa9ff; --mag:#c792ea; --cyan:#56d4dd; --ok:#7ee787;
+  --dock:56px; --tabs:52px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  margin:0;font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,ui-monospace,Menlo,monospace;
+  background:var(--bg);color:var(--fg);
+  padding-bottom:calc(var(--dock) + var(--tabs) + env(safe-area-inset-bottom));
+}
+a{color:var(--idx)}
+button,input,textarea,select{font:inherit;color:inherit}
+button{background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:7px 11px;cursor:pointer;transition:.12s}
+button:hover{border-color:var(--idx);background:#212b3c}
+button:active{transform:translateY(1px)}
+button.primary{background:#1f3a5f;border-color:#2f5c96}
+button.danger{background:#3a1f22;border-color:#6b3236}
+button.ghost{background:transparent}
+button:disabled{opacity:.45;cursor:not-allowed}
+input,textarea,select{background:#0c1119;border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%}
+textarea{resize:vertical;min-height:44px}
+select{width:auto}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.dim{color:var(--dim)}
+.tiny{font-size:11px}
+.small{font-size:12px}
+.hidden{display:none!important}
+
+/* ── header ───────────────────────────────────────────── */
+header{
+  position:sticky;top:0;z-index:40;display:flex;gap:8px;align-items:center;
+  padding:9px 12px;background:rgba(11,15,22,.94);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+}
+header h1{font-size:14px;margin:0;letter-spacing:.06em;white-space:nowrap}
+.pills{display:flex;gap:5px;overflow-x:auto;flex:1;scrollbar-width:none}
+.pills::-webkit-scrollbar{display:none}
+.pill{
+  display:inline-flex;align-items:center;gap:5px;white-space:nowrap;
+  background:var(--card);border:1px solid var(--line);border-radius:99px;
+  padding:3px 9px;font-size:11px;color:var(--dim)
+}
+.pill b{color:var(--fg);font-weight:600}
+.pill.ok{border-color:#2b6b45}.pill.ok b{color:var(--ok)}
+.pill.warn{border-color:#6b5a2b}.pill.warn b{color:var(--warn)}
+.pill.bad{border-color:#6b3236}.pill.bad b{color:var(--bad)}
+.pulse-dot{width:7px;height:7px;border-radius:50%;background:var(--dim)}
+.pulse-dot.live{background:var(--acc);animation:bl 1.6s infinite}
+@keyframes bl{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* ── tabs ─────────────────────────────────────────────── */
+nav.tabs{
+  position:fixed;left:0;right:0;bottom:calc(var(--dock) + env(safe-area-inset-bottom));
+  z-index:45;display:flex;background:rgba(11,15,22,.96);backdrop-filter:blur(10px);
+  border-top:1px solid var(--line);
+}
+nav.tabs button{
+  flex:1;background:none;border:none;border-radius:0;padding:6px 2px 5px;
+  display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--dim);font-size:10px
+}
+nav.tabs button .ic{font-size:16px;line-height:1}
+nav.tabs button.on{color:var(--acc)}
+nav.tabs button .badge{
+  position:absolute;transform:translate(14px,-4px);background:var(--bad);color:#fff;
+  border-radius:99px;font-size:9px;padding:0 4px;min-width:14px;text-align:center
+}
+
+/* ── dock (o volante) ─────────────────────────────────── */
+.dock{
+  position:fixed;left:0;right:0;bottom:0;z-index:50;display:flex;gap:6px;align-items:center;
+  padding:7px 10px calc(7px + env(safe-area-inset-bottom));
+  background:linear-gradient(180deg,rgba(11,15,22,.92),#080c12);
+  border-top:1px solid var(--line);
+}
+.dock select{max-width:96px;flex:0 0 auto;font-size:12px}
+.dock input{flex:1;font-size:13px}
+.dock .go{flex:0 0 auto;padding:8px 13px;background:#1f3a5f;border-color:#2f5c96}
+
+/* ── layout ───────────────────────────────────────────── */
+main{padding:12px;max-width:1400px;margin:0 auto}
+.sec{margin-bottom:16px}
+.sec>h2{
+  font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--dim);
+  margin:0 0 8px;display:flex;align-items:center;gap:8px
+}
+.sec>h2 .grow{flex:1}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:11px}
+.grid{display:grid;gap:9px;grid-template-columns:repeat(auto-fill,minmax(270px,1fr))}
+.grid.two{grid-template-columns:repeat(auto-fill,minmax(340px,1fr))}
+
+/* ── agent card ───────────────────────────────────────── */
+.ag{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:7px}
+.ag .top{display:flex;align-items:center;gap:7px}
+.ag .nm{font-weight:700}
+.ag .meta{display:flex;gap:5px;flex-wrap:wrap}
+.tag{font-size:10px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--dim);background:#101722}
+.tag.pers{border-color:#5a3d7a;color:var(--mag)}
+.tag.model{border-color:#2f5c96;color:var(--idx)}
+.tag.busy{border-color:#2b6b45;color:var(--ok)}
+.tag.idle{border-color:#6b5a2b;color:var(--warn)}
+.tag.ghost{border-color:#6b3236;color:var(--bad)}
+.ag .acts{display:flex;gap:5px;flex-wrap:wrap;margin-top:auto}
+.ag .acts button{font-size:11px;padding:4px 8px}
+
+/* ── pulse / eventos ──────────────────────────────────── */
+.tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.chips{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.chips::-webkit-scrollbar{display:none}
+.chip{
+  white-space:nowrap;font-size:11px;padding:3px 9px;border-radius:99px;
+  background:var(--card);border:1px solid var(--line);color:var(--dim)
+}
+.chip.on{background:#1f3a5f;border-color:#2f5c96;color:#fff}
+.feed{max-height:56vh;overflow:auto;font-size:12px}
+.ev{display:grid;grid-template-columns:54px 78px 1fr;gap:7px;padding:5px 2px;border-bottom:1px dashed #1c2431;align-items:start}
+.ev .t{color:var(--dim);font-size:10px;padding-top:1px}
+.ev .k{font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase}
+.ev .m{white-space:pre-wrap;word-break:break-word}
+.ev.k-birth .k{color:var(--acc)} .ev.k-persona .k{color:var(--mag)}
+.ev.k-say .k{color:var(--idx)} .ev.k-tool .k{color:var(--cyan)}
+.ev.k-swap .k{color:var(--warn)} .ev.k-reload .k{color:var(--warn)}
+.ev.k-fail .k{color:var(--bad)} .ev.k-ok .k{color:var(--ok)}
+.ev.k-fail{background:rgba(255,123,114,.05)}
+.ev.k-ok{background:rgba(126,231,135,.04)}
+
+/* ── A/B ──────────────────────────────────────────────── */
+.abrow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px dashed #1c2431}
+.bar{height:7px;background:#0c1119;border:1px solid var(--line);border-radius:99px;overflow:hidden;margin-top:5px}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,#2f8f5f,#5ee6a8)}
+.abstats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center;margin:2px 0 6px}
+.abstats div{background:#101722;border:1px solid var(--line);border-radius:8px;padding:6px 2px}
+.abstats b{display:block;font-size:16px;line-height:1.2}
+.abstats span{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+.chipsrow{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+
+/* ── diff ─────────────────────────────────────────────── */
+pre.diff{
+  background:#0c1119;border:1px solid var(--line);border-radius:8px;padding:9px;
+  max-height:60vh;overflow:auto;font-size:11px;white-space:pre;margin:0
+}
+.add{color:#7ee787}.del{color:#ff7b72}.ctx{color:#8794a7}.hdr{color:var(--idx)}
+
+/* ── modal ────────────────────────────────────────────── */
+.modal{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:12px}
+.modal .box{background:var(--bg2);border:1px solid var(--line);border-radius:12px;width:min(900px,100%);max-height:88vh;display:flex;flex-direction:column}
+.modal .box header{border-radius:12px 12px 0 0}
+.modal .body{padding:12px;overflow:auto}
+
+/* ── misc ─────────────────────────────────────────────── */
+.busbox{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px;max-height:52vh;overflow:auto;font-size:12px}
+.busline{padding:4px 0;border-bottom:1px dashed #1c2431}
+.busline .who{color:var(--idx);font-weight:700}
+.busline .kind{color:var(--warn)}
+.toast{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--dock) + var(--tabs) + 14px);
+  z-index:70;background:#1b2230;border:1px solid var(--line);border-radius:99px;
+  padding:8px 16px;font-size:12px;box-shadow:0 6px 24px rgba(0,0,0,.5);opacity:0;
+  transition:opacity .2s;pointer-events:none
+}
+.toast.on{opacity:1}
+.kbd{font-size:10px;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--dim)}
+@media(min-width:900px){
+  :root{--dock:0px}
+  main{padding:16px 20px 40px}
+  nav.tabs{bottom:0;left:auto;right:0;top:0;height:auto;width:auto;border-left:1px solid var(--line);border-top:none;flex-direction:column;padding:8px 6px}
+  nav.tabs button{flex:0 0 auto;min-width:74px;padding:8px 4px}
+  .dock{position:static;background:none;border:none;padding:0;margin-bottom:14px}
+  .dock input{max-width:520px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🛰️ MISSION CONTROL</h1>
+  <div class="pills" id="pills"></div>
+  <button class="ghost" id="btnTok" title="token">🔑</button>
+</header>
+
+<main>
+  <!-- ══ AGENTES ══ -->
+  <section class="sec" id="tab-agentes">
+    <h2>agentes <span class="grow"></span>
+      <span class="tiny dim" id="agCount"></span>
+      <button class="ghost tiny" id="btnReload">↻ recarregar</button>
+    </h2>
+    <div class="grid" id="grid"></div>
+
+    <h2 style="margin-top:18px">criar agente</h2>
+    <div class="card">
+      <div class="grid" style="grid-template-columns:1fr">
+        <input id="spTask" placeholder="tarefa do agente novo (a persona e o modelo são escolhidos)">
+        <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
+          <select id="spModel"><option value="">modelo: auto</option></select>
+          <select id="spProfile"><option value="">perfil: auto</option><option value="redteam">redteam (INTP)</option></select>
+          <input id="spName" placeholder="nome (opcional)" style="max-width:150px;flex:1">
+          <button class="primary" id="spGo">criar</button>
+        </div>
+      </div>
+      <div class="tiny dim" id="spOut" style="margin-top:7px"></div>
+    </div>
+  </section>
+
+  <!-- ══ PULSO ══ -->
+  <section class="sec hidden" id="tab-pulso">
+    <h2>pulso <span class="grow"></span>
+      <span class="tiny dim" id="pulseStat"></span>
+    </h2>
+    <div class="tools">
+      <input id="evSearch" placeholder="filtrar por texto…" style="max-width:220px">
+      <div class="chips" id="evChips"></div>
+      <button class="ghost tiny" id="evPause" style="margin-left:auto">⏸</button>
+    </div>
+    <div class="feed" id="feed"></div>
+  </section>
+
+  <!-- ══ A/B ══ -->
+  <section class="sec hidden" id="tab-ab">
+    <h2>dungeon A/B <span class="grow"></span>
+      <span class="tiny dim" id="abState">—</span>
+    </h2>
+    <div class="card">
+      <div class="abstats" id="abStats"></div>
+      <div id="abModels"></div>
+      <div class="chipsrow">
+        <button class="primary" id="abRun">▶ rodar agora</button>
+        <button id="abPause">⏸ pausar</button>
+        <button id="abResume">▶ retomar</button>
+        <button class="danger" id="abStop">⏹ parar loop</button>
+        <button class="ghost" id="abPatches">📄 patches</button>
+      </div>
+      <div class="tiny dim" id="abLog" style="margin-top:8px;max-height:150px;overflow:auto"></div>
+    </div>
+  </section>
+
+  <!-- ══ BUS ══ -->
+  <section class="sec hidden" id="tab-bus">
+    <h2>conversa da frota <span class="grow"></span><button class="ghost tiny" id="busRefresh">↻</button></h2>
+    <div class="busbox" id="bus">carregando…</div>
+  </section>
+
+  <!-- ══ CASA ══ -->
+  <section class="sec hidden" id="tab-casa">
+    <h2>estado da casa <span class="grow"></span><button class="ghost tiny" id="stRefresh">↻</button></h2>
+    <div class="card"><div class="tiny dim" id="stSum">carregando…</div><pre id="stBox" style="max-height:60vh"></pre></div>
+  </section>
+</main>
+
+<!-- dock: o volante -->
+<div class="dock">
+  <select id="cmdTarget"><option value="">alvo: todos</option></select>
+  <input id="cmdText" placeholder="comandar a frota… (Enter envia, Shift+Enter quebra)">
+  <button class="go" id="cmdGo">↵</button>
+</div>
+
+<nav class="tabs" id="tabs"></nav>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const $ = (s, el=document) => el.querySelector(s);
+const $$ = (s, el=document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const hhmm = t => { if(!t) return '—'; const d=new Date(t); return isNaN(d)?'—':d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); };
+const ago = t => { if(!t) return '—'; const s=(Date.now()-t)/1000; if(s<60)return Math.round(s)+'s'; if(s<3600)return Math.round(s/60)+'m'; if(s<86400)return Math.round(s/3600)+'h'; return Math.round(s/86400)+'d'; };
+const TOKEN = () => localStorage.getItem('hubToken') || '';
+const api = (p, o={}) => fetch(p, { ...o, headers: { 'x-agent-hub-token': TOKEN(), ...(o.headers||{}) } });
+const toast = (m) => { const t=$('#toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('on'),2600); };
+
+/* ── tabs ───────────────────────────────────────────── */
+const TABS = [
+  {id:'agentes', ic:'🤖', label:'agentes'},
+  {id:'pulso',   ic:'📡', label:'pulso'},
+  {id:'ab',      ic:'⚖️', label:'A/B'},
+  {id:'bus',     ic:'💬', label:'bus'},
+  {id:'casa',    ic:'🏠', label:'casa'},
+];
+let tab = localStorage.getItem('mcTab') || 'agentes';
+function renderTabs(){
+  $('#tabs').innerHTML = TABS.map(t=>`<button data-tab="${t.id}" class="${t.id===tab?'on':''}"><span class="ic">${t.ic}</span><span>${t.label}</span>${t.id==='pulso'&&evUnread?'<span class="badge">'+evUnread+'</span>':''}</button>`).join('');
+  $$('#tabs button').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+}
+function setTab(id){ tab=id; localStorage.setItem('mcTab',id); renderTabs();
+  TABS.forEach(t=>$('#tab-'+t.id).classList.toggle('hidden', t.id!==id));
+  if(id==='pulso'){ evUnread=0; renderTabs(); }
+  if(id==='bus') loadBus();
+  if(id==='casa') loadState();
+  if(id==='ab') loadAB();
+}
+
+/* ── header pills ───────────────────────────────────── */
+async function loadPills(){
+  const p=[];
+  try{
+    const d = await (await api('/api/agents')).json();
+    const vivos = (d.agents||[]).filter(a=>a.status!=='ghost').length;
+    const busy = (d.agents||[]).filter(a=>a.status==='busy').length;
+    p.push(`<span class="pill ${d.servers?.opencode?'ok':'bad'}"><span class="pulse-dot ${d.servers?.opencode?'live':''}"></span>opencode <b>${d.servers?.opencode?'OK':'OFF'}</b></span>`);
+    p.push(`<span class="pill"><b>${vivos}</b> agentes · <b>${busy}</b> ativos</span>`);
+  }catch(e){ p.push(`<span class="pill bad">hub <b>erro</b></span>`); }
+  try{
+    const ab = await (await api('/api/ab/live')).json();
+    const st = ab.loop?.alive ? 'ok' : 'warn';
+    p.push(`<span class="pill ${st}">A/B <b>${ab.loop?.alive?'rodando':'parado'}</b>${ab.loop?.cycle?' · ciclo '+ab.loop.cycle:''}</span>`);
+  }catch(e){}
+  $('#pills').innerHTML = p.join('');
+}
+
+/* ── agentes ────────────────────────────────────────── */
+async function loadAgents(){
+  let d;
+  try{ d = await (await api('/api/agents')).json(); }catch(e){ return; }
+  const g = $('#grid');
+  if(!(d.agents||[]).length){ g.innerHTML='<div class="card tiny dim">nenhum agente no roster</div>'; return; }
+  $('#agCount').textContent = (d.agents||[]).length + ' no roster';
+  g.innerHTML = d.agents.map(a=>{
+    const tags=[];
+    tags.push(`<span class="tag ${a.status}">${a.status}</span>`);
+    if(a.model) tags.push(`<span class="tag model">${esc(a.model)}</span>`);
+    if(a.persona) tags.push(`<span class="tag pers">${esc(a.persona)}</span>`);
+    if(a.lane && a.lane!=='-') tags.push(`<span class="tag">${esc(a.lane)}</span>`);
+    return `<div class="ag" data-sess="${esc(a.session||'')}" data-name="${esc(a.codename||a.name)}">
+      <div class="top">
+        <span class="pulse-dot ${a.status==='busy'?'live':''}" style="background:${a.status==='busy'?'var(--acc)':a.status==='idle'?'var(--warn)':'var(--bad)'}"></span>
+        <span class="nm">${esc(a.codename||a.name)}</span>
+        <span class="tiny dim" style="margin-left:auto">${ago(a.updated)}</span>
+      </div>
+      <div class="meta">${tags.join('')}</div>
+      <div class="tiny dim">${esc(a.name||'')}</div>
+      <div class="acts">
+        <button data-act="wake">⏰ acordar</button>
+        <button data-act="tr">📜 transcript</button>
+        <button data-act="reload">↻ reload</button>
+        <button data-act="swap">⇄ modelo</button>
+      </div>
+    </div>`;
+  }).join('');
+  $$('#grid .ag').forEach(card=>{
+    const name = card.dataset.name, sess = card.dataset.sess;
+    $$('button', card).forEach(b=>{
+      b.onclick = async (ev)=>{
+        ev.stopPropagation();
+        const act = b.dataset.act;
+        if(act==='tr'){ openTranscript(sess, name); return; }
+        if(act==='wake'){ $('#cmdTarget').value=name; $('#cmdText').focus(); toast('alvo = '+name); return; }
+        if(act==='reload'){ doCmd('reload', name); return; }
+        if(act==='swap'){ doCmd('swap', name); return; }
+      };
+    });
+  });
+}
+
+/* ── transcript ─────────────────────────────────────── */
+async function openTranscript(sess, name){
+  if(!sess){ toast('sem sessão'); return; }
+  const m = document.createElement('div');
+  m.className='modal';
+  m.innerHTML = `<div class="box"><header><h1 style="font-size:13px">📜 ${esc(name)}</h1><span class="grow"></span><button class="ghost" data-x>✕</button></header><div class="body"><pre class="diff" id="trBody">carregando…</pre></div></div>`;
+  document.body.appendChild(m);
+  m.querySelector('[data-x]').onclick = ()=>m.remove();
+  m.onclick = e => { if(e.target===m) m.remove(); };
+  try{
+    const d = await (await api('/api/transcript?session='+encodeURIComponent(sess))).json();
+    $('#trBody').textContent = (d.lines||[]).join('\n') || '(sem mensagens)';
+  }catch(e){ $('#trBody').textContent = 'erro: '+e; }
+}
+
+/* ── pulso (SSE) ────────────────────────────────────── */
+const EV_KINDS = ['all','say','tool','birth','persona','swap','reload','fail','ok','ab'];
+let evFilter = 'all', evSearch = '', evPaused = false, evUnread = 0;
+const EVS = [];
+function renderChips(){
+  $('#evChips').innerHTML = EV_KINDS.map(k=>`<button class="chip ${k===evFilter?'on':''}" data-k="${k}">${k}</button>`).join('');
+  $$('#evChips .chip').forEach(c=>c.onclick=()=>{evFilter=c.dataset.k; renderChips(); renderFeed();});
+}
+function renderFeed(){
+  const f = $('#feed');
+  const list = EVS.filter(e=>(evFilter==='all'||e.kind===evFilter) &&
+      (!evSearch || (e.text||'').toLowerCase().includes(evSearch)));
+  $('#pulseStat').textContent = `${list.length} eventos` + (evPaused?' (pausado)':'');
+  if(!list.length){ f.innerHTML='<div class="tiny dim" style="padding:10px">sem eventos ainda</div>'; return; }
+  f.innerHTML = list.slice(0,300).map(e=>
+    `<div class="ev k-${esc(e.kind)}"><span class="t">${hhmm(e.ts)}</span><span class="k">${esc(e.kind)}</span><span class="m">${esc(e.text||'')}</span></div>`
+  ).join('');
+}
+function connectStream(){
+  try{
+    const es = new EventSource('/api/events/stream?token='+encodeURIComponent(TOKEN()));
+    es.onmessage = (m)=>{
+      let d; try{ d=JSON.parse(m.data); }catch(e){ return; }
+      if(d.kind==='hello'){ return; }
+      EVS.unshift(d);
+      if(EVS.length>500) EVS.pop();
+      if(!evPaused) renderFeed();
+      else if(tab!=='pulso'){ evUnread++; renderTabs(); }
+    };
+    es.onerror = ()=>{ /* EventSource reconecta sozinho */ };
+  }catch(e){ console.error(e); }
+}
+
+/* ── A/B ────────────────────────────────────────────── */
+async function loadAB(){
+  let d;
+  try{ d = await (await api('/api/ab/live')).json(); }catch(e){ $('#abState').textContent='erro'; return; }
+  const L = d.loop || {};
+  $('#abState').textContent = L.alive
+    ? `rodando · ciclo ${L.cycle||'-'} · modelo ${L.current||'-'}`
+    : 'loop parado';
+  const s = d.stats || {};
+  $('#abStats').innerHTML = `
+    <div><b>${s.ciclos||0}</b><span>ciclos</span></div>
+    <div><b>${s.pass||0}</b><span>aprovados</span></div>
+    <div><b>${s.fail||0}</b><span>reprovados</span></div>
+    <div><b>${s.dur_med||'-'}</b><span>dur média</span></div>`;
+  $('#abModels').innerHTML = (d.models||[]).map(m=>{
+    const pct = m.ciclos ? Math.round(100*m.pass/m.ciclos) : 0;
+    return `<div class="abrow">
+      <div>
+        <div style="display:flex;gap:7px;align-items:center">
+          <b>${esc(m.modelo)}</b>
+          <span class="tag">${m.ciclos||0} ciclos</span>
+          <span class="tag ${m.pass?'busy':'idle'}">${m.pass||0} ✓ / ${m.fail||0} ✗</span>
+          ${m.ultimo?`<span class="tiny dim">último: ${esc(m.ultimo.checker||'')}</span>`:''}
+        </div>
+        <div class="bar"><i style="width:${pct}%"></i></div>
+        <div class="tiny dim">${m.dur_med?Math.round(m.dur_med)+'s médio':''} ${m.patch_bytes?('· patch '+m.patch_bytes+'B'):''}</div>
+      </div>
+      <button class="ghost tiny" data-m="${esc(m.modelo)}">▶ só este</button>
+    </div>`;
+  }).join('') || '<div class="tiny dim">sem dados ainda</div>';
+  $$('#abModels button').forEach(b=>b.onclick=()=>abControl('run', b.dataset.m));
+  const lg = (d.log||[]).slice(-30).reverse().map(l=>`<div>${esc(l)}</div>`).join('');
+  $('#abLog').innerHTML = lg || '<span class="dim">sem log</span>';
+}
+
+/* ── comandos ───────────────────────────────────────── */
+async function doCmd(action, name){
+  const text = $('#cmdText').value.trim();
+  const target = $('#cmdTarget').value || name || '';
+  const r = await api('/api/agent/command', { method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ action, name: target, text }) });
+  const j = await r.json().catch(()=>({error:'resposta inválida'}));
+  if(r.ok) { toast(j.message || 'ok'); if(action==='wake') $('#cmdText').value=''; }
+  else toast(j.error || 'erro');
+}
+async function abControl(action, model){
+  const r = await api('/api/ab/control', { method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ action, model }) });
+  const j = await r.json().catch(()=>({error:'resposta inválida'}));
+  toast(r.ok ? (j.message||'ok') : (j.error||'erro'));
+  setTimeout(loadAB, 400);
+}
+
+/* ── bus / casa ─────────────────────────────────────── */
+async function loadBus(){
+  const d = await (await api('/api/bus?limit=40')).json();
+  $('#bus').innerHTML = (d.items||[]).map(b=>
+    `<div class="busline"><span class="ts tiny dim">${hhmm(b.ts)}</span><span class="who">${esc(b.from||b.who||'?')}</span> <span class="kind">[${esc(b.kind||'')}]</span> ${esc(b.text||b.body||'')}</div>`
+  ).join('') || '<div class="tiny dim">bus vazio</div>';
+}
+async function loadState(){
+  const d = await (await api('/api/state')).json();
+  $('#stSum').textContent = d.error ? ('erro: '+d.error) : 'estado da casa';
+  $('#stBox').textContent = JSON.stringify(d, null, 1).slice(0, 60000);
+}
+
+/* ── eventos de UI ──────────────────────────────────── */
+$('#cmdGo').onclick = ()=>doCmd('wake');
+$('#cmdText').addEventListener('keydown', e=>{
+  if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); doCmd('wake'); }
+});
+$('#btnTok').onclick = ()=>{
+  const v = prompt('token do hub:', TOKEN());
+  if(v!==null){ localStorage.setItem('hubToken', v.trim()); toast('token salvo'); refreshAll(); }
+};
+$('#btnReload').onclick = ()=>{ refreshAll(); toast('recarregado'); };
+$('#evPause').onclick = ()=>{ evPaused=!evPaused; $('#evPause').textContent = evPaused?'▶':'⏸'; renderFeed(); };
+$('#evSearch').addEventListener('input', e=>{ evSearch = e.target.value.toLowerCase(); renderFeed(); });
+$('#spGo').onclick = async ()=>{
+  const task = $('#spTask').value.trim();
+  if(!task){ toast('tarefa vazia'); return; }
+  const body = { task };
+  if($('#spName').value.trim()) body.name=$('#spName').value.trim();
+  if($('#spModel').value) body.model=$('#spModel').value;
+  if($('#spProfile').value) body.profile=$('#spProfile').value;
+  const r = await api('/api/spawn', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const j = await r.json().catch(()=>({error:'resposta inválida'}));
+  $('#spOut').textContent = r.ok ? ('✓ '+(j.status||'iniciado')) : ('✗ '+(j.error||'erro'));
+  if(r.ok) $('#spTask').value='';
+};
+$('#abRun').onclick = ()=>abControl('run');
+$('#abPause').onclick = ()=>abControl('pause');
+$('#abResume').onclick = ()=>abControl('resume');
+$('#abStop').onclick = ()=>abControl('stop');
+$('#abPatches').onclick = async ()=>{
+  const d = await (await api('/api/ab/live')).json();
+  const p = (d.patches||[])[0];
+  if(!p){ toast('sem patches'); return; }
+  const m = document.createElement('div');
+  m.className='modal';
+  m.innerHTML = `<div class="box"><header><h1 style="font-size:13px">📄 ${esc(p.modelo)} · ${esc(p.file)}</h1><span class="grow"></span><button class="ghost" data-x>✕</button></header><div class="body"><pre class="diff" id="dfBody">carregando…</pre></div></div>`;
+  document.body.appendChild(m);
+  m.querySelector('[data-x]').onclick=()=>m.remove();
+  m.onclick=e=>{ if(e.target===m) m.remove(); };
+  const t = await (await api('/api/ab/patch?file='+encodeURIComponent(p.file))).text();
+  $('#dfBody').innerHTML = diffHtml(t);
+};
+function diffHtml(t){
+  return String(t||'').split('\n').map(l=>{
+    let c='ctx';
+    if(l.startsWith('+++')||l.startsWith('---')||l.startsWith('@@')) c='hdr';
+    else if(l.startsWith('+')) c='add';
+    else if(l.startsWith('-')) c='del';
+    return `<span class="${c}">${esc(l)}</span>`;
+  }).join('\n');
+}
+$('#busRefresh').onclick = loadBus;
+$('#stRefresh').onclick = loadState;
+
+/* atalhos */
+document.addEventListener('keydown', e=>{
+  if(e.target.matches('input,textarea')) return;
+  if(e.key==='/'){ e.preventDefault(); setTab('pulso'); $('#evSearch').focus(); return; }
+  if(e.key==='c'){ e.preventDefault(); $('#cmdText').focus(); return; }
+  const n = parseInt(e.key,10);
+  if(n>=1 && n<=TABS.length) setTab(TABS[n-1].id);
+});
+
+/* ── boot ───────────────────────────────────────────── */
+async function refreshAll(){
+  await loadPills();
+  await loadAgents();
+  if(tab==='ab') await loadAB();
+  if(tab==='bus') await loadBus();
+  if(tab==='casa') await loadState();
+}
+(async function boot(){
+  renderTabs(); renderChips(); setTab(tab);
+  await refreshAll();
+  connectStream();
+  setInterval(loadPills, 6000);
+  setInterval(()=>{ if(tab==='agentes') loadAgents(); if(tab==='ab') loadAB(); }, 7000);
+  setInterval(loadBus, 15000);
+})();
+</script>
+</body>
+</html>

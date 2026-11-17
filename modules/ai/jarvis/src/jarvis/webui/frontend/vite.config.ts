@@ -3,6 +3,13 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+	// (15/11, crouton-alpha) O Tailscale Serve entrega o Host magico
+	// (nitro-v15.tailbcc368.ts.net) e o vite preview responde 403
+	// ("Blocked request") sem esta permissao — com ela o webui abre
+	// pelo hostname do tailnet, sem decorar IP/porta.
+	preview: {
+		allowedHosts: ['nitro-v15.tailbcc368.ts.net', 'nitro-v15'],
+	},
 	plugins: [
 		sveltekit({
 			compilerOptions: {

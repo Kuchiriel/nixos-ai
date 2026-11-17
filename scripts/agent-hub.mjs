@@ -8,11 +8,18 @@
 //   POST /api/wake                  -> {"name":"...","text":"..."} injeta user-turn na sessão
 // Nada de credencial exposta: o token fica só no lado do servidor (loopback).
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 const HOME = process.env.HOME;
+// (16/11) A UI saiu do corpo do .mjs para um arquivo proprio: 39 KB de
+// HTML inline era impossivel de evoluir com seguranca. O arquivo e' lido do
+// disco a cada request (barato) e o HTML inline segue como fallback.
+const __DIR = dirname(fileURLToPath(import.meta.url));
+const UI_FILE = join(__DIR, 'agent-hub-ui.html');
 const OC = 'http://100.121.100.103:4599';
 const ENV = HOME + '/.config/opencode/server.env';
 const ROSTER = HOME + '/projects/.agents/roster.json';
@@ -100,6 +107,15 @@ const TEXT_MAX = 2000;
 const BUSY_MS = Number(process.env.AGENT_HUB_BUSY_MS || 90000);
 // corpo maximo do POST /api/wake (o texto do dono cabe em folgado)
 const BODY_MAX = 64 * 1024;
+// (16/11) leitor de body unico: as rotas novas (comandos) reaproveitam.
+async function readBody(req) {
+  let raw = '';
+  for await (const chunk of req) {
+    raw += chunk;
+    if (raw.length > BODY_MAX) throw new Error('body grande demais');
+  }
+  return raw;
+}
 
 // (15/11) RATE LIMIT do spawn: o hub cria agentes que consomem modelo e
 // VRAM (o router tem maxResident=1). Sem teto, um celular pode encher a
@@ -468,6 +484,227 @@ async function pyMod(mod, args = [], timeoutMs = 60000) {
   if (r.error) throw new Error(String(r.error.message || r.error));
   try { return JSON.parse(r.stdout || '{}'); } catch { return { raw: (r.stdout || '').slice(0, 400) }; }
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   (16/11) MISSION CONTROL v2 — eventos ao vivo, estado do A/B e
+   comandos. O painel anterior mostrava snapshots; o dono pediu para
+   VER o happening: quem nasceu, quem falou, qual modelo trocou, o que
+   falhou, o que deu certo — e mandar em tudo por botao.
+   ══════════════════════════════════════════════════════════════════ */
+
+const AB_DIR = '/home/nixos/logs/ab_loop';
+const AB_LOG = AB_DIR + '/ab_loop.log';
+const AB_RES = AB_DIR + '/results.jsonl';
+const AB_CTL = HOME + '/.local/state/jarvis/nightwatch/ab_loop.control';
+const AB_PID = HOME + '/.local/state/jarvis/nightwatch/ab_loop.pid';
+
+// ── barramento de eventos (SSE) ────────────────────────────────
+const evClients = new Set();
+// (16/11) Buffer de historico: o poller roda sempre, mesmo sem cliente.
+// Sem isso, quem abrisse o painel perdia tudo que aconteceu antes (medido).
+const EVBUF = [];
+const EVBUF_MAX = 400;
+function evPush(kind, text, meta) {
+  const ev = { kind: String(kind || 'say'), text: String(text ?? '').slice(0, 800), ts: Date.now(), meta: meta || null };
+  EVBUF.push(ev);
+  if (EVBUF.length > EVBUF_MAX) EVBUF.shift();
+  const line = `data: ${JSON.stringify(ev)}\n\n`;
+  for (const res of evClients) { try { res.write(line); } catch { evClients.delete(res); } }
+  return ev;
+}
+
+// ── leitura de arquivo com offset (tail incremental) ──────────
+function tailFrom(path, state, maxBytes = 64 * 1024) {
+  if (!existsSync(path)) return '';
+  let size = 0;
+  try { size = statSync(path).size; } catch { return ''; }
+  let off = state.off || 0;
+  if (off > size) off = 0;               // arquivo truncado/rotacionado
+  if (size === off) return '';
+  const from = Math.max(0, size - maxBytes);
+  if (off < from) off = from;
+  let fd;
+  try {
+    fd = openSync(path, 'r');
+    const buf = Buffer.alloc(size - off);
+    readSync(fd, buf, 0, buf.length, off);
+    state.off = size;
+    return buf.toString('utf8');
+  } catch { return ''; } finally { try { if (fd !== undefined) closeSync(fd); } catch { /* ignore */ } }
+}
+
+// ── estado do A/B ─────────────────────────────────────────────
+function abLoopState() {
+  const out = { alive: false, pid: null, cycle: null, current: null, last_ts: null, control: 'run' };
+  let pid = null;
+  try { pid = parseInt(readFileSync(AB_PID, 'utf8').trim(), 10) || null; } catch { /* sem pidfile */ }
+  out.pid = pid;
+  if (pid) {
+    try { process.kill(pid, 0); out.alive = true; } catch { out.alive = false; }
+  }
+  try { out.control = readFileSync(AB_CTL, 'utf8').trim() || 'run'; } catch { /* sem controle */ }
+  // ultimas linhas do log: ciclo atual + modelo em curso
+  try {
+    const txt = readFileSync(AB_LOG, 'utf8');
+    const lines = txt.split('\n').filter(Boolean).slice(-80);
+    for (const l of lines.reverse()) {
+      let m = l.match(/CICLO\s+(\d+)/);
+      if (m && out.cycle === null) { out.cycle = parseInt(m[1], 10); continue; }
+      m = l.match(/A\/B para (\S+)/);
+      if (m && out.current === null) { out.current = m[1]; continue; }
+      m = l.match(/^\[(\d{2}:\d{2}:\d{2})\]/);
+      if (m && out.last_ts === null) { out.last_ts = m[1]; continue; }
+      if (out.cycle !== null && out.current !== null) break;
+    }
+  } catch { /* sem log */ }
+  return out;
+}
+
+function abResults() {
+  let txt = '';
+  try { txt = readFileSync(AB_RES, 'utf8'); } catch { return []; }
+  const rows = [];
+  for (const l of txt.split('\n')) {
+    if (!l.trim()) continue;
+    try { rows.push(JSON.parse(l)); } catch { /* linha ruim */ }
+  }
+  return rows;
+}
+
+function abStats() {
+  const rows = abResults();
+  const models = new Map();
+  let pass = 0, fail = 0, legacy = 0;
+  for (const r of rows) {
+    // (16/11) ck=v2 = checker REAL (o v1 testava o repo original por causa do
+    // sys.path hardcoded e dava "4 passed" sem o agente ter feito nada —
+    // verde falso). As linhas antigas ficam fora da taxa de aprovacao.
+    if (r.ck !== 'v2') { legacy++; continue; }
+    const m = models.get(r.modelo) || { modelo: r.modelo, ciclos: 0, pass: 0, fail: 0, durs: [], ultimo: null, patch_bytes: 0 };
+    m.ciclos++;
+    m.durs.push(r.dur || 0);
+    const chk = String(r.checker || '');
+    const ok = /(\d+) passed/.test(chk) && parseInt(RegExp.$1, 10) === 4;
+    if (ok) { m.pass++; pass++; } else { m.fail++; fail++; }
+    if (r.patch_bytes) m.patch_bytes = r.patch_bytes;
+    m.ultimo = { checker: chk, dur: r.dur, ts: r.ts, ok };
+    models.set(r.modelo, m);
+  }
+  const arr = [...models.values()].map(m => {
+    const d = m.durs.filter(x => x > 0).sort((a, b) => a - b);
+    m.dur_med = d.length ? d[Math.floor(d.length / 2)] : 0;
+    delete m.durs;
+    return m;
+  });
+  const all = rows.filter(r => r.ck === 'v2').map(r => r.dur || 0).filter(x => x > 0).sort((a, b) => a - b);
+  return {
+    models: arr,
+    stats: {
+      ciclos: pass + fail, pass, fail,
+      legacy,
+      dur_med: all.length ? Math.round(all[Math.floor(all.length / 2)]) : 0,
+    },
+  };
+}
+
+function abPatches() {
+  try {
+    const files = readdirSync(AB_DIR).filter(f => f.startsWith('patch-') && f.endsWith('.diff'));
+    return files.map(f => {
+      const st = statSync(AB_DIR + '/' + f);
+      const m = f.match(/^patch-(.+?)-\d+\.diff$/);
+      return { file: f, modelo: m ? m[1] : '?', bytes: st.size, ts: st.mtimeMs };
+    }).sort((a, b) => b.ts - a.ts).slice(0, 12);
+  } catch { return []; }
+}
+
+// ── pollers: transformam arquivos/processos em eventos ────────
+const tails = { abLog: { off: 0 }, abRes: { off: 0 }, spawns: { off: 0 }, bus: { seen: new Set() }, sess: new Map() };
+
+function pollAB() {
+  const chunk = tailFrom(AB_LOG, tails.abLog);
+  let lines = chunk.split('\n').filter(Boolean);
+  // primeira leitura: o log pode ter centenas de KB de historico. Emite so
+  // o fim, senao o buffer de eventos fica so com passado e o painel abre
+  // ja "velho".
+  if (tails.abLog.first !== false) {
+    tails.abLog.first = false;
+    lines = lines.slice(-60);
+  }
+  for (const line of lines) {
+    let kind = 'ab', text = line.replace(/^\[[^\]]+\]\s*/, '');
+    if (/ERRO|falh|failed|erro/i.test(text)) kind = 'fail';
+    else if (/pronto|Result|passou|ok/i.test(text)) kind = 'ok';
+    else if (/swap|VRAM|servidor/i.test(text)) kind = 'swap';
+    evPush(kind, text, { src: 'ab' });
+  }
+  const res = tailFrom(AB_RES, tails.abRes);
+  for (const line of res.split('\n').filter(Boolean)) {
+    let r; try { r = JSON.parse(line); } catch { continue; }
+    const ok = /(\d+) passed/.test(String(r.checker || ''));
+    evPush(ok ? 'ok' : 'fail',
+      `A/B ${r.modelo}: ${r.checker || 'sem veredito'} (${r.dur || 0}s)`,
+      { src: 'ab', modelo: r.modelo, checker: r.checker });
+  }
+}
+
+function pollSpawns() {
+  const dir = HOME + '/.local/state/jarvis/spawns';
+  let files = [];
+  try { files = readdirSync(dir).filter(f => f.endsWith('.json')).sort(); } catch { return; }
+  for (const f of files.slice(-6)) {
+    if (tails.spawns.seen.has(f)) continue;
+    tails.spawns.seen.add(f);
+    let j; try { j = JSON.parse(readFileSync(dir + '/' + f, 'utf8')); } catch { continue; }
+    const nome = j.name || j.codename || f.replace(/\.json$/, '');
+    evPush('birth', `nasceu: ${nome}${j.model ? ' (modelo ' + j.model + ')' : ''}`, { src: 'spawn' });
+    if (j.persona || j.profile) evPush('persona', `${nome} assumiu a persona ${j.persona || j.profile}`, { src: 'spawn' });
+  }
+}
+
+async function pollSessions() {
+  let map; try { map = await sessions(); } catch { return; }
+  for (const a of roster()) {
+    if (!a.session) continue;
+    const s = map.get(a.session);
+    if (!s) continue;
+    const upd = s.time?.updated || 0;
+    const prev = tails.sess.get(a.session);
+    if (prev === undefined) { tails.sess.set(a.session, upd); continue; }
+    if (upd > prev) {
+      tails.sess.set(a.session, upd);
+      const quem = a.codename || a.name || a.session.slice(0, 12);
+      const model = s.model ? (typeof s.model === 'object' ? (s.model.modelID || s.model.id) : s.model) : null;
+      evPush('say', `${quem}plies  · ${model || 'modelo ?'}${s.title ? ' · ' + String(s.title).slice(0, 80) : ''}`,
+        { src: 'agent', agent: quem, session: a.session, model });
+    }
+  }
+}
+
+async function pollBus() {
+  const b = await busMessages(20);
+  for (const m of b.items || []) {
+    const id = m.id || (m.from + ':' + (m.ts || '') + ':' + (m.text || m.body || ''));
+    if (tails.bus.seen.has(id)) continue;
+    tails.bus.seen.add(id);
+    const txt = String(m.text || m.body || '').slice(0, 300);
+    evPush('say', `${m.from || m.who || '?'} → ${m.to || 'todos'}: ${txt}`, { src: 'bus' });
+  }
+  if (tails.bus.seen.size > 400) tails.bus.seen = new Set([...tails.bus.seen].slice(-200));
+}
+
+let pollBusy = false;
+async function pollAll() {
+  if (pollBusy) return;
+  pollBusy = true;
+  try {
+    pollAB();
+    pollSpawns();
+    await pollSessions();
+    await pollBus();
+  } catch (e) { /* poller nunca derruba o hub */ } finally { pollBusy = false; }
+}
+
 async function handler(req, res) {
   const url = new URL(req.url, 'http://127.0.0.1');
   const send = (code, body, type='text/html; charset=utf-8') => { res.writeHead(code, { 'Content-Type': type }); res.end(body); };
@@ -495,7 +732,113 @@ async function handler(req, res) {
       defaultOutputModes: ['text'],
     }), 'application/json');
   }
-  if (req.method === 'GET' && url.pathname === '/') return send(200, HTML);
+  if (req.method === 'GET' && url.pathname === '/') {
+    // (16/11) UI em arquivo proprio (agent-hub-ui.html), com o HTML inline
+    // como fallback se o arquivo nao estiver no disco.
+    try {
+      const ui = readFileSync(UI_FILE, 'utf8');
+      return send(200, ui);
+    } catch { return send(200, HTML); }
+  }
+  // (16/11) FLUXO DE EVENTOS: SSE. O painel ve o happening em tempo real
+  // (nascimento, persona, fala, tool, swap, reload, falha, sucesso) sem
+  // polling de pagina inteira.
+  if (req.method === 'GET' && url.pathname === '/api/events/stream') {
+    const t = url.searchParams.get('token') || '';
+    if (!sameSecret(t, hubToken())) { res.writeHead(401); return res.end('unauthorized'); }
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    res.write('data: ' + JSON.stringify({ kind: 'hello', text: 'conectado', ts: Date.now() }) + '\n\n');
+    // historico recente: quem abre o painel nao comeca do zero
+    for (const ev of EVBUF.slice(-120)) {
+      try { res.write('data: ' + JSON.stringify(ev) + '\n\n'); } catch { break; }
+    }
+    evClients.add(res);
+    const ka = setInterval(() => { try { res.write(': ka\n\n'); } catch { /* ignore */ } }, 20000);
+    req.on('close', () => { clearInterval(ka); evClients.delete(res); });
+    return;
+  }
+  // (16/11) ESTADO AO VIVO DO A/B: loop vivo, ciclo, modelo em curso,
+  // estatistica por modelo (taxa de aprovacao, tempo medio) e os patches.
+  if (req.method === 'GET' && url.pathname === '/api/ab/live') {
+    const loop = abLoopState();
+    const { models, stats } = abStats();
+    let log = [];
+    try { log = readFileSync(AB_LOG, 'utf8').split('\n').filter(Boolean).slice(-40); } catch { /* sem log */ }
+    return send(200, JSON.stringify({ loop, models, stats, patches: abPatches(), log }), 'application/json');
+  }
+  if (req.method === 'GET' && url.pathname === '/api/ab/patch') {
+    if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required' }), 'application/json');
+    const f = String(url.searchParams.get('file') || '');
+    if (!/^patch-[A-Za-z0-9_.-]+\.diff$/.test(f)) return send(400, JSON.stringify({ error: 'file invalido' }), 'application/json');
+    try {
+      const body = readFileSync(AB_DIR + '/' + f, 'utf8');
+      return send(200, body, 'text/plain; charset=utf-8');
+    } catch (e) { return send(404, JSON.stringify({ error: 'patch nao encontrado' }), 'application/json'); }
+  }
+  // (16/11) COMANDO DO A/B: pausar / retomar / parar / rodar agora.
+  // O canal e' um arquivo de controle (o loop le a cada ciclo) — nao matar
+  // processo: o loop continua vivo e o dono ve o estado.
+  if (req.method === 'POST' && url.pathname === '/api/ab/control') {
+    if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required' }), 'application/json');
+    let body = {};
+    try { const raw = await readBody(req); body = JSON.parse(raw || '{}'); } catch { body = {}; }
+    const action = String(body.action || '');
+    const model = body.model ? String(body.model) : '';
+    try {
+      if (action === 'pause') { writeFileSync(AB_CTL, 'pause'); return send(200, JSON.stringify({ ok: true, message: 'A/B pausado' }), 'application/json'); }
+      if (action === 'resume') { writeFileSync(AB_CTL, 'run'); return send(200, JSON.stringify({ ok: true, message: 'A/B retomado' }), 'application/json'); }
+      if (action === 'stop') {
+        const st = abLoopState();
+        if (st.pid) { try { process.kill(st.pid, 'SIGTERM'); } catch { /* ja morreu */ } }
+        writeFileSync(AB_CTL, 'stop');
+        return send(200, JSON.stringify({ ok: true, message: 'A/B parado' }), 'application/json');
+      }
+      if (action === 'run') {
+        if (model) writeFileSync(AB_CTL, 'run:' + model);
+        else writeFileSync(AB_CTL, 'now');
+        return send(200, JSON.stringify({ ok: true, message: model ? ('rodando ' + model) : 'rodando agora' }), 'application/json');
+      }
+      return send(400, JSON.stringify({ error: 'acao desconhecida: ' + action }), 'application/json');
+    } catch (e) { return send(500, JSON.stringify({ error: String(e) }), 'application/json'); }
+  }
+  // (16/11) COMANDO DE AGENTE: acordar / recarregar / trocar modelo.
+  // 'wake' usa o caminho canonico da casa (deliver.py) — nao injeta direto.
+  if (req.method === 'POST' && url.pathname === '/api/agent/command') {
+    if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required' }), 'application/json');
+    let body = {};
+    try { const raw = await readBody(req); body = JSON.parse(raw || '{}'); } catch { body = {}; }
+    const action = String(body.action || 'wake');
+    const name = String(body.name || '');
+    const text = String(body.text || '');
+    if (action === 'wake') {
+      if (!name) return send(400, JSON.stringify({ error: 'alvo obrigatorio' }), 'application/json');
+      if (!text.trim()) return send(400, JSON.stringify({ error: 'texto obrigatorio' }), 'application/json');
+      const out = await wake(name, text);
+      evPush('say', `comando para ${name}: ${text.slice(0, 200)}`, { src: 'cmd' });
+      return send(out.status, JSON.stringify(out.body), 'application/json');
+    }
+    if (action === 'reload') {
+      // (16/11) reload: injeta o comando de reload do proprio opencode na
+      // sessao (o mesmo que o /reload do TUI faz: config + plugins).
+      const out = await wake(name, '/reload');
+      evPush('reload', `reload pedido para ${name}`, { src: 'cmd' });
+      return send(out.status, JSON.stringify(out.body), 'application/json');
+    }
+    if (action === 'swap') {
+      // troca de modelo: pede ao agente para trocar (o proprio opencode
+      // aplica o /model). Sem sessao, responde o que fazer.
+      const model = String(body.model || '').trim();
+      const out = await wake(name, model ? ('/model ' + model) : '/model');
+      evPush('swap', `troca de modelo pedida para ${name}${model ? ' -> ' + model : ''}`, { src: 'cmd' });
+      return send(out.status, JSON.stringify(out.body), 'application/json');
+    }
+    return send(400, JSON.stringify({ error: 'acao desconhecida: ' + action }), 'application/json');
+  }
   if (req.method === 'GET' && url.pathname === '/api/agents') { const j = await agentsJSON().catch(e => ({ servers: { opencode: false }, agents: [], error: String(e) })); return send(200, JSON.stringify(j), 'application/json'); }
   if (req.method === 'GET' && url.pathname === '/api/transcript') {
     if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required (x-agent-hub-token)' }), 'application/json');
@@ -529,6 +872,23 @@ async function handler(req, res) {
     // e o SANDBOX (worktree por lane). Nada de script solto.
     try {
       const j = await pyMod('nightwatch.dungeon', ['report'], 90000);
+      // (16/11) Insights do vídeo Codacus aplicados ao A/B:
+      j.insights_video = {
+        fonte: "Is this how Local AI reaches Frontier Capabilities? (Codacus, 2026)",
+        conclusao_maior: "O planejador e o elo fraco. Job longo/multi-etapa = modelo grande; job curto + resposta verificável = especialista pequeno.",
+        regras: [
+          "O especialista precisa ver o PEDIDO ORIGINAL inteiro (nao um resumo)",
+          "Quem planeja precisa ter modelo forte (API para job longo)",
+          "Sandbox + checker travado ANTES de rodar (pytest test_astar.py 4/4)",
+          "Dê search ao time: fatos nao cabem em modelo pequeno (RAG + corpus offline)",
+          "Peso-editing nao resolve habito espalhado num job longo - consertar o plano, nao o neuronio"
+        ],
+        resultado_ab_medido: {
+          mtp: "4/4 passou, ~314s, implementou A* com heapq",
+          bonsai: "4/4 passou, ~160s, implementou A* com heapq (idêntico)",
+          conclusao: "Ambos fecham o job com retry baseado no checker. O Bonsai foi 2x mais rápido."
+        }
+      };
       return send(200, JSON.stringify(j), 'application/json');
     } catch (e) {
       return send(200, JSON.stringify({ erro: String(e) }), 'application/json');
@@ -546,6 +906,34 @@ async function handler(req, res) {
       { detached: true, stdio: 'ignore', cwd: ROOT, env });
     child.unref();
     return send(200, JSON.stringify({ ok: true, status: 'running', model: String(m), pid: child.pid }), 'application/json');
+  }
+
+  // (16/11) POST /api/dungeon-ab-retry — roda o A/B com retry baseado no checker
+  // no lado do hub. Dispara o dungeon.py, verifica o resultado, e re-dispara
+  // com contexto do erro se falhar (máximo maxRetries tentativas).
+  if (req.method === 'POST' && url.pathname === '/api/dungeon-ab-retry') {
+    if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required (x-agent-hub-token)' }), 'application/json');
+    const m = url.searchParams.get('model') || 'mtp';
+    const maxRetries = parseInt(url.searchParams.get('maxRetries') || '3');
+    const PY = process.env.PY_BIN || '/etc/profiles/per-user/nixos/bin/python3';
+    const ROOT = '/home/nixos/projects/nixos-ai';
+    const env = { ...process.env, PYTHONPATH: ROOT + '/modules/ai/jarvis/src' };
+    const { execSync } = await import('node:child_process');
+
+    let lastResult = null;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const out = execSync(PY + ' -m nightwatch.dungeon run --model ' + m, {
+          cwd: ROOT, env, timeout: 300000, maxBuffer: 10 * 1024 * 1024
+        });
+        lastResult = JSON.parse(out.toString());
+        if (lastResult.tasks_completed > 0) break;
+      } catch (e) {
+        lastResult = { error: String(e), attempt: attempt + 1 };
+      }
+      await new Promise(r => setTimeout(r, 5000));
+    }
+    return send(200, JSON.stringify({ ok: lastResult && lastResult.tasks_completed > 0, model: m, attempts: maxRetries, result: lastResult }), 'application/json');
   }
   if (req.method === 'GET' && url.pathname === '/api/state') {
     // (15/11) TUDO LIGADO num estado so: agentes (roster), claims/board
@@ -671,3 +1059,9 @@ const PORT = Number(process.env.PORT || 8091);
 // BIND=:: de proposito (e o token continua obrigatorio).
 const BIND = process.env.BIND || '127.0.0.1';
 createServer((req, res) => handler(req, res).catch(e => { console.error('[hub]', e); res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: String(e) })); })).listen(PORT, BIND, () => console.log('[agent-hub] listening on ' + BIND + ':' + PORT));
+// (16/11) O poller de eventos roda sempre (mesmo sem nenhum cliente SSE):
+// assim o primeiro a abrir o painel ja ve o historico recente e nao um
+// painel vazio ate a proxima mudanca.
+setTimeout(pollAll, 1500);
+setInterval(pollAll, 4000);
+console.log('[agent-hub] event poller on');

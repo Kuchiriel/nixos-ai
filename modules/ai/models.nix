@@ -1243,7 +1243,9 @@ in rec {
     # router); `bootModel` = o preset cujo GRUPO sobe no boot (o router fica
     # pronto p/ uso manual do tier speed/EN). Sem esta separação, trocar o
     # default derrubava o router do boot (o grupo do default não existe).
-    bootModel = { host = "bonsai"; vm = "jarvis-fast"; };
+    # (15/11) DECISAO DO DONO: o router serve o 4B MTP (host e vm, uma instancia) e o bonsai fica on-demand.
+    # Medido: MTP 4474 + whisper 934 + embeddings 446 = 5.85 GB cabe; o par antigo (bonsai+fast) daria 8.4 GB.
+    bootModel = { host = "jarvis-mtp-lora"; vm = "jarvis-mtp-lora"; };
     # Portas dos servidores llama que NÃO são tiers de modelo (embeddings /
     # rerank) — Python e timers leem daqui em vez de hardcode 8081/8082.
     servicePorts = { embeddings = 8081; rerank = 8082; };
@@ -1278,7 +1280,7 @@ in rec {
         endpoint = 8092;
         # (03/11) unit systemd que serve este model id (fonte p/ scripts/timers)
         unit = "llama-uncensored-4b";
-        serve = { host = false; vm = false; };
+        serve = { host = true; vm = true; };
         # Qwen3.5 instruct-geral (vendor; mesmo do jarvis-fast).
         sampling = { temperature = 0.7; top_p = 0.8; top_k = 20; min_p = 0.0;
                      presence_penalty = 1.5; repetition_penalty = 1.0; };
@@ -1304,7 +1306,7 @@ in rec {
         endpoint = 8080;
         # (03/11) unit systemd que serve este model id (fonte p/ scripts/timers)
         unit = "llama-cpp-server";
-        serve = { host = true; vm = true; };
+        serve = { host = false; vm = false; };
         # Prism recomenda 0.5 p/ Bonsai (não é regra global — ver Qwen abaixo).
         sampling = { temperature = 0.5; top_p = 0.9; top_k = 20; min_p = 0.0;
                      presence_penalty = 0.0; repetition_penalty = 1.0; };
@@ -1327,7 +1329,7 @@ in rec {
         endpoint = 8083;
         # (03/11) unit systemd que serve este model id (fonte p/ scripts/timers)
         unit = "llama-cpp-upstream";
-        serve = { host = true; vm = true; };
+        serve = { host = false; vm = false; };
         # Qwen3 non-thinking/instruct-geral (vendor).
         sampling = { temperature = 0.7; top_p = 0.8; top_k = 20; min_p = 0.0;
                      presence_penalty = 1.5; repetition_penalty = 1.0; };
