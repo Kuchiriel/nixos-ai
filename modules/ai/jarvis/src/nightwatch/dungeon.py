@@ -50,6 +50,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from nightwatch.task_queue import Task, TaskQueue
@@ -68,7 +69,8 @@ MODELOS = {
     #   mtp-lora = COM o LoRA -> a phone call (a voz).
     "mtp": {"base_url": "http://127.0.0.1:8096/v1", "model": "jarvis-mtp-code"},
     "mtp-lora": {"base_url": "http://127.0.0.1:8092/v1", "model": "jarvis-mtp-lora"},
-    "vibethinker": {"base_url": "http://127.0.0.1:8098/v1", "model": "vibethinker"},
+    "vibethinker": {"base_url": "http://127.0.0.1:8096/v1", "model": "vibethinker"},
+    "tmax": {"base_url": "http://127.0.0.1:8096/v1", "model": "tmax"},
     # (15/11) O TERCEIRO BRAÇO — a API. O transcript (Codacus) mediu: "A 4B
     # planner with one expert handles SHORT jobs with a clear answer. For LONG
     # jobs, run the biggest single model your card can hold." O A* pathfinding
@@ -76,24 +78,85 @@ MODELOS = {
     # mede os tres: 8B ternario local, 4B MTP local e o forte da API.
     # Escolhi o deepseek-v4.1-flash: 73,2% em coding agentic real (bito),
     # MIT, Terminal-Bench 42,3 (o melhor da lista API da casa).
-    "api": {"base_url": "http://127.0.0.1:8095/v1", "model": "deepseek-ai/deepseek-v4.1-flash"},
+    # (17/11) O deepseek-v4.1-flash foi EOL em 16/11 ("reached its end of
+    # life", HTTP 410 medido no nv-gate). O substituto medido: nemotron-3
+    # ultra 550b — respondeu em 1,4s com content preenchido (o lightning 30b
+    # devolveu content VAZIO e so reasoning, que quebra o parser do harness).
+    "api": {"base_url": "http://127.0.0.1:8095/v1", "model": "nvidia/nemotron-3-ultra-550b-a55b"},
 }
 
 # ── O PEDIDO ORIGINAL (a regra do video: o especialista ve o pedido inteiro) ──
 TASK_TEXT = (
-    "Implement A* pathfinding for enemies in src/dungeon/entities.py. "
-    "The Enemy class must use heapq to compute a path to the player, "
-    "recalculate the path when the target moves, and fall back to simple "
-    "movement when no path is found. "
-    "The unit tests in test_astar.py must pass (4/4). "
-    "Read the existing code before editing it; do not assume files exist."
+    "Make the enemy in src/dungeon/entities.py find its way to the player "
+    "even when a wall blocks the direct line: the enemy must walk AROUND an "
+    "internal wall and reach the player, and must never step into a wall. "
+    "Any implementation is fine (A*, BFS, a rule table) — the checker "
+    "measures the BEHAVIOUR, not the API, so do not guess a specific method "
+    "name. Read the existing code before editing it; do not assume files "
+    "exist."
 )
 
 # ── O CHECKER FIXADO (escrito antes e trancado) ──
-CHECKER = "pytest -x -q test_astar.py  ->  4 passed (o veredito objetivo do A/B)"
+# (16/11) CORRIGIDO: era "pytest test_astar.py", que ASSUME a API
+# (enemy._a_star(...)). Com esse checker o A/B media "o modelo adivinhou o
+# nome do metodo?" e nao "o modelo implementou o comportamento?" — o MTP
+# chegou a implementar o comportamento e perdia so por nome. Agora usa o
+# checker AGNOSTICO da casa (scripts/dungeon-checker.py, 444): mede que o
+# inimigo chega no jogador contornando a parede interna.
+CHECKER = "pytest -x -q checker.py  ->  4 passed (o veredito objetivo do A/B)"
 
 # ── o que a task tem de tocar (o alvo do patch) ──
 TARGET_FILES = ["src/dungeon/entities.py"]
+
+# ── A ESCADA (17/11, medido) ─────────────────────────────────────────────
+# Por que existe: com a tarefa L3 (contornar parede = pathfinding de
+# verdade) os DOIS modelos locais falhavam 100% e o A/B nao media nada —
+# falha na tarefa mais dificil nao distingue 8B de 4B. A escada da um
+# degrau trivial (L1), um degrau local (L2) e o teto (L3), e o score passa
+# a ser uma CURVA ("onde a capacidade acaba"), nao um binario.
+#
+# Cada nivel tem seu CHECKER proprio, escrivinhado antes e trancado (444).
+# O baseline falha L1 (nao tem o metodo), falha L2 (trava no obstaculo) e
+# falha L3 (parede inteira). Nenhum nivel e "de graca".
+LEVELS = {
+    "L1": {
+        "texto": (
+            "Add a method `distance_to(self, other)` to the `Enemy` class in "
+            "src/dungeon/entities.py. It must return the Manhattan distance "
+            "between the enemy and the other entity: "
+            "abs(self.x - other.x) + abs(self.y - other.y). "
+            "Do NOT change anything else in the file: no new behaviour, no "
+            "renames, no pathfinding. Read the file first; do not assume."
+        ),
+        "checker": "dungeon-checker-l1.py",
+        "aceite": "pytest -x -q checker.py  ->  5 passed (metodo puro)",
+    },
+    "L2": {
+        "texto": (
+            "In src/dungeon/entities.py, make `Enemy.update()` walk toward the "
+            "player and NEVER step into a wall. When the direct step is "
+            "blocked by a short obstacle, it must try another free direction "
+            "instead of standing still, so it gets around a 3-cell wall and "
+            "reaches the player. A local rule is enough (no A* needed). Read "
+            "the existing code before editing; do not assume files exist."
+        ),
+        "checker": "dungeon-checker-l2.py",
+        "aceite": "pytest -x -q checker.py  ->  4 passed (desvio local)",
+    },
+    "L3": {
+        "texto": TASK_TEXT,
+        "checker": "dungeon-checker.py",
+        "aceite": CHECKER,
+    },
+}
+
+NIVEL_PADRAO = os.environ.get("AB_LEVEL", "L3")
+if NIVEL_PADRAO not in LEVELS:
+    NIVEL_PADRAO = "L3"
+
+
+def nivel_info(nivel: str | None = None) -> dict:
+    return LEVELS.get(nivel or NIVEL_PADRAO, LEVELS["L3"])
 
 
 def lane_name(modelo: str) -> str:
@@ -105,7 +168,7 @@ def lane_path(modelo: str) -> Path:
     return WORKSPACE / lane_name(modelo)
 
 
-def ensure_lane(modelo: str) -> Path:
+def ensure_lane(modelo: str, nivel: str | None = None) -> Path:
     """Cria o SANDBOX: uma COPIA do dungeon (a producao nao e tocada).
 
     (15/11) MEDIDO: com worktree o harness falha no retry — "Could not create
@@ -132,29 +195,59 @@ def ensure_lane(modelo: str) -> Path:
                     "-c", "user.name=lane", "commit", "-q", "-m",
                     "sandbox: copia do jarvis-dungeon (baseline)"],
                    check=True, timeout=120)
+    # (16/11) O CHECKER AGNOSTICO vai para a lane, TRANCADO (444), junto com
+    # o baseline. O agente nao pode ver nem mexer no veredito — e o checker
+    # mede o comportamento (o inimigo contorna a parede), nao um nome de
+    # metodo especifico.
+    checker_src = None
+    if not (lane / "checker.py").exists():
+        alvo = nivel_info(nivel)["checker"]
+        for parent in Path(__file__).resolve().parents:
+            cand = parent / "scripts" / alvo
+            if cand.exists():
+                checker_src = cand
+                break
+    if checker_src is not None:
+        dest = lane / "checker.py"
+        shutil.copy2(checker_src, dest)
+        dest.chmod(0o444)
+        subprocess.run(["git", "-C", str(lane), "add", "-A"], check=True, timeout=60)
+        subprocess.run(["git", "-C", str(lane), "-c", "user.email=lane@local",
+                        "-c", "user.name=lane", "commit", "-q", "-m",
+                        "checker: o veredito objetivo (trancado)"],
+                       check=True, timeout=60)
     return lane
 
 
-def enqueue(modelo: str) -> dict:
+def enqueue(modelo: str, nivel: str | None = None) -> dict:
     """Enfileira a task do dungeon NA FILA DO SISTEMA (TaskQueue)."""
     if modelo not in MODELOS:
         raise SystemExit(f"modelo desconhecido: {modelo}")
-    lane = ensure_lane(modelo)
+    nivel = nivel or NIVEL_PADRAO
+    if nivel not in LEVELS:
+        raise SystemExit(f"nivel desconhecido: {nivel}")
+    info = nivel_info(nivel)
+    lane = ensure_lane(modelo, nivel)
     queue = TaskQueue(project=lane_name(modelo))
+    # (17/11) ID UNICO POR CORRIDA. Antes era sempre "dungeon-ab-<modelo>":
+    # o harness encontrava a task ANTIGA (failed, com attempts acumulados) e
+    # entrava em "Recovering" — o A/B media a mesma task fracassada para
+    # sempre, e o retry nunca partia de um estado limpo (medido no log).
     task = Task(
-        id=f"dungeon-ab-{modelo}",
+        id=f"dungeon-ab-{modelo}-{nivel}-{int(time.time())}",
         project=lane_name(modelo),
-        description=TASK_TEXT,        # o PEDIDO ORIGINAL, inteiro
+        description=info["texto"],    # o PEDIDO ORIGINAL, inteiro
         priority=1,                   # a primeira da fila
         risk="medium",
         target_files=list(TARGET_FILES),
-        acceptance_criteria=CHECKER,  # o CHECKER FIXADO
+        acceptance_criteria=info["aceite"],  # o CHECKER FIXADO
         repository=str(lane),         # o sandbox (a producao fica intacta)
         language="python",
     )
     ok = queue.add_task(task)
     return {
         "modelo": modelo,
+        "nivel": nivel,
         "lane": str(lane),
         "task_id": task.id,
         "add_task": ok,
@@ -163,7 +256,7 @@ def enqueue(modelo: str) -> dict:
     }
 
 
-def run(modelo: str, max_tasks: int = 1) -> dict:
+def run(modelo: str, max_tasks: int = 1, nivel: str | None = None) -> dict:
     """Roda o HARNESS DO SISTEMA (o proprio nightwatch) contra o lane.
 
     Nao ha agente novo aqui: e o nightwatch de sempre, com a task da fila e o
@@ -175,8 +268,9 @@ def run(modelo: str, max_tasks: int = 1) -> dict:
 
     from nightwatch.harness import Harness, HarnessConfig
 
+    nivel = nivel or NIVEL_PADRAO
     cfg_model = MODELOS[modelo]
-    lane = ensure_lane(modelo)
+    lane = ensure_lane(modelo, nivel)
     if modelo == "api":
         # (15/11) MEDIDO: o backend "remote" da casa (jarvis/providers/
         # llm_factory.py) pede a chave via ENV: JARVIS_LLM_BACKEND=remote +
@@ -220,6 +314,7 @@ def run(modelo: str, max_tasks: int = 1) -> dict:
     resultado = harness.run()
     return {
         "modelo": modelo,
+        "nivel": nivel,
         "lane": str(lane),
         "resultado": str(resultado)[:600],
     }
@@ -244,6 +339,8 @@ def report() -> dict:
             })
         saida["modelos"][modelo] = linhas
     saida["checker"] = CHECKER
+    saida["niveis"] = sorted(LEVELS)
+    saida["nivel_padrao"] = NIVEL_PADRAO
     saida["pedido_original"] = TASK_TEXT
     return saida
 
@@ -278,15 +375,17 @@ def main() -> int:
     for nome in ("enqueue", "run"):
         p = sub.add_parser(nome)
         p.add_argument("--model", required=True, choices=sorted(MODELOS))
+        p.add_argument("--level", default=NIVEL_PADRAO, choices=sorted(LEVELS),
+                       help="degrau da escada (default: $AB_LEVEL ou L3)")
     sub.add_parser("report")
     args = ap.parse_args()
 
     if args.cmd == "report":
         out = report()
     elif args.cmd == "enqueue":
-        out = enqueue(args.model)
+        out = enqueue(args.model, args.level)
     else:
-        out = run(args.model)
+        out = run(args.model, nivel=args.level)
     print(json.dumps(out, ensure_ascii=False, indent=1))
     return 0
 

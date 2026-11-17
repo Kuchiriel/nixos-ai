@@ -138,7 +138,16 @@ main{padding:12px;max-width:1400px;margin:0 auto}
 .abrow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px dashed #1c2431}
 .bar{height:7px;background:#0c1119;border:1px solid var(--line);border-radius:99px;overflow:hidden;margin-top:5px}
 .bar>i{display:block;height:100%;background:linear-gradient(90deg,#2f8f5f,#5ee6a8)}
-.abstats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center;margin:2px 0 6px}
+.abstats{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;text-align:center;margin:2px 0 6px}
+.abgpu{margin:6px 0 2px}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;background:var(--dim)}
+.dot.ok{background:#5ee6a8;box-shadow:0 0 6px #5ee6a8}
+.dot.bad{background:#e06666}
+.matrix{width:100%;border-collapse:collapse;font-size:12px}
+.matrix th{color:var(--dim);font-weight:500;font-size:10px;text-transform:uppercase;letter-spacing:.06em;padding:3px 4px;text-align:center;border-bottom:1px solid var(--line)}
+.matrix td{padding:5px 4px;text-align:center;border-bottom:1px dashed #1c2431}
+.matrix td.mnome{text-align:left;font-weight:600}
+.okc{color:#5ee6a8}.failc{color:#e06666}.warnc{color:#e6c85e}
 .abstats div{background:#101722;border:1px solid var(--line);border-radius:8px;padding:6px 2px}
 .abstats b{display:block;font-size:16px;line-height:1.2}
 .abstats span{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
@@ -227,11 +236,13 @@ pre.diff{
 
   <!-- ══ A/B ══ -->
   <section class="sec hidden" id="tab-ab">
-    <h2>dungeon A/B <span class="grow"></span>
+    <h2>laboratório A/B <span class="grow"></span>
       <span class="tiny dim" id="abState">—</span>
     </h2>
     <div class="card">
       <div class="abstats" id="abStats"></div>
+      <div id="abGpu" class="abgpu"></div>
+      <div id="abMatrix" style="margin:10px 0"></div>
       <div id="abModels"></div>
       <div class="chipsrow">
         <button class="primary" id="abRun">▶ rodar agora</button>
@@ -240,6 +251,14 @@ pre.diff{
         <button class="danger" id="abStop">⏹ parar loop</button>
         <button class="ghost" id="abPatches">📄 patches</button>
       </div>
+      <div class="chipsrow" style="margin-top:6px">
+        <span class="tiny dim" style="align-self:center">forçar próximo ciclo:</span>
+        <button class="ghost tiny" data-lvl="L1">L1 método</button>
+        <button class="ghost tiny" data-lvl="L2">L2 desvio</button>
+        <button class="ghost tiny" data-lvl="L3">L3 pathfinding</button>
+      </div>
+      <div class="tiny dim" style="margin-top:10px">últimas medições</div>
+      <div id="abRecentes" class="tiny"></div>
       <div class="tiny dim" id="abLog" style="margin-top:8px;max-height:150px;overflow:auto"></div>
     </div>
   </section>
@@ -327,9 +346,11 @@ async function loadAgents(){
   g.innerHTML = d.agents.map(a=>{
     const tags=[];
     tags.push(`<span class="tag ${a.status}">${a.status}</span>`);
-    if(a.model) tags.push(`<span class="tag model">${esc(a.model)}</span>`);
-    if(a.persona) tags.push(`<span class="tag pers">${esc(a.persona)}</span>`);
-    if(a.lane && a.lane!=='-') tags.push(`<span class="tag">${esc(a.lane)}</span>`);
+    if(a.model) tags.push(`<span class="tag model" title="modelo em uso">${esc(a.model)}</span>`);
+    if(a.persona) tags.push(`<span class="tag pers" title="persona MBTI">${esc(a.persona)}</span>`);
+    if(a.lane && a.lane!=='-') tags.push(`<span class="tag" title="lane">${esc(a.lane)}</span>`);
+    if(a.host) tags.push(`<span class="tag">${esc(a.host)}</span>`);
+    const note = a.note || a.context || '';
     return `<div class="ag" data-sess="${esc(a.session||'')}" data-name="${esc(a.codename||a.name)}">
       <div class="top">
         <span class="pulse-dot ${a.status==='busy'?'live':''}" style="background:${a.status==='busy'?'var(--acc)':a.status==='idle'?'var(--warn)':'var(--bad)'}"></span>
@@ -337,7 +358,7 @@ async function loadAgents(){
         <span class="tiny dim" style="margin-left:auto">${ago(a.updated)}</span>
       </div>
       <div class="meta">${tags.join('')}</div>
-      <div class="tiny dim">${esc(a.name||'')}</div>
+      <div class="tiny dim">${esc(a.name||'')}${note?`<br><span title="${esc(note)}">${esc(note.slice(0,90))}</span>`:''}</div>
       <div class="acts">
         <button data-act="wake">⏰ acordar</button>
         <button data-act="tr">📜 transcript</button>
@@ -410,36 +431,96 @@ function connectStream(){
 }
 
 /* ── A/B ────────────────────────────────────────────── */
+const NIVEL_NOME = { L1: 'método', L2: 'desvio', L3: 'pathfinding' };
+
+function celulaNivel(c) {
+  if (!c || !c.ciclos) return '<td class="dim">·</td>';
+  const cls = c.pass > 0 && c.fail === 0 ? 'okc' : c.pass > 0 ? 'warnc' : 'failc';
+  const er = c.erro ? `<sup title="erros de infra">${c.erro}!</sup>` : '';
+  return `<td class="${cls}" title="${c.pass} ✓ / ${c.fail} ✗ / ${c.erro} erro">${c.pass}/${c.ciclos}${er}</td>`;
+}
+
 async function loadAB(){
   let d;
   try{ d = await (await api('/api/ab/live')).json(); }catch(e){ $('#abState').textContent='erro'; return; }
   const L = d.loop || {};
-  $('#abState').textContent = L.alive
-    ? `rodando · ciclo ${L.cycle||'-'} · modelo ${L.current||'-'}`
-    : 'loop parado';
+  $('#abState').innerHTML = L.alive
+    ? `<span class="dot ok"></span> ciclo ${L.cycle||'-'}${L.nivel?` · <b>${esc(L.nivel)}</b>`:''} · ${esc(L.current||'…')} · ${esc(L.control||'run')}`
+    : `<span class="dot bad"></span> loop parado (${esc(L.control||'?')})`;
   const s = d.stats || {};
   $('#abStats').innerHTML = `
-    <div><b>${s.ciclos||0}</b><span>ciclos</span></div>
-    <div><b>${s.pass||0}</b><span>aprovados</span></div>
-    <div><b>${s.fail||0}</b><span>reprovados</span></div>
-    <div><b>${s.dur_med||'-'}</b><span>dur média</span></div>`;
-  $('#abModels').innerHTML = (d.models||[]).map(m=>{
+    <div><b>${s.ciclos||0}</b><span>medições</span></div>
+    <div><b class="okc">${s.pass||0}</b><span>aprovadas</span></div>
+    <div><b class="failc">${s.fail||0}</b><span>reprovadas</span></div>
+    <div><b class="warnc">${s.erro||0}</b><span>erros infra</span></div>
+    <div><b>${s.dur_med||'-'}</b><span>dur mediana (s)</span></div>`;
+
+  // GPU: por que um ciclo falhou tem de estar na cara, nao no log
+  const g = d.gpu || {};
+  if (g.total) {
+    const pct = Math.round(100 * (g.usado||0) / g.total);
+    const cls = (g.livre||0) < 2600 ? 'failc' : 'okc';
+    $('#abGpu').innerHTML = `
+      <div class="row" style="justify-content:space-between">
+        <span class="tiny dim">VRAM ${g.usado}/${g.total} MiB (${g.livre} livres)</span>
+        <span class="tag ${g.residente?'busy':'idle'}">${esc(g.swap||'?')}</span>
+      </div>
+      <div class="bar" title="${pct}%"><i class="${cls}" style="width:${pct}%"></i></div>`;
+  } else { $('#abGpu').innerHTML = '<span class="tiny dim">sem GPU visível</span>'; }
+
+  // MATRIZ modelo x degrau — a curva de capacidade, nao um binario
+  const niveis = d.niveis || ['L1','L2','L3'];
+  const models = d.models || [];
+  if (models.length) {
+    $('#abMatrix').innerHTML = `<table class="matrix">
+      <tr><th>modelo</th>${niveis.map(n=>`<th title="${NIVEL_NOME[n]||''}">${n}</th>`).join('')}<th>total</th></tr>
+      ${models.map(m=>`<tr>
+        <td class="mnome">${esc(m.modelo)}<span class="tiny dim"> ${m.dur_med||0}s</span></td>
+        ${niveis.map(n=>celulaNivel((d.matriz||{})[m.modelo]?.[n])).join('')}
+        <td><b>${m.pass||0}</b>/${m.ciclos||0}</td>
+      </tr>`).join('')}
+    </table>
+    <div class="tiny dim">cada célula: aprovadas/medições · “!” = erro de infra (swap/timeout), não conta como falha do modelo</div>`;
+  } else {
+    $('#abMatrix').innerHTML = '<div class="tiny dim">sem medições ainda</div>';
+  }
+
+  $('#abModels').innerHTML = models.map(m=>{
     const pct = m.ciclos ? Math.round(100*m.pass/m.ciclos) : 0;
     return `<div class="abrow">
       <div>
         <div style="display:flex;gap:7px;align-items:center">
           <b>${esc(m.modelo)}</b>
-          <span class="tag">${m.ciclos||0} ciclos</span>
+          <span class="tag">${m.ciclos||0} medições</span>
           <span class="tag ${m.pass?'busy':'idle'}">${m.pass||0} ✓ / ${m.fail||0} ✗</span>
-          ${m.ultimo?`<span class="tiny dim">último: ${esc(m.ultimo.checker||'')}</span>`:''}
+          ${m.erro?`<span class="tag">${m.erro} erro</span>`:''}
+          ${m.ultimo?`<span class="tiny dim">último: ${esc(m.ultimo.nivel||'')} ${esc((m.ultimo.checker||'').slice(0,42))}</span>`:''}
         </div>
         <div class="bar"><i style="width:${pct}%"></i></div>
-        <div class="tiny dim">${m.dur_med?Math.round(m.dur_med)+'s médio':''} ${m.patch_bytes?('· patch '+m.patch_bytes+'B'):''}</div>
+        <div class="tiny dim">${m.dur_med?Math.round(m.dur_med)+'s mediana':''} ${m.patch_bytes?('· último patch '+m.patch_bytes+'B'):''}</div>
       </div>
       <button class="ghost tiny" data-m="${esc(m.modelo)}">▶ só este</button>
     </div>`;
   }).join('') || '<div class="tiny dim">sem dados ainda</div>';
   $$('#abModels button').forEach(b=>b.onclick=()=>abControl('run', b.dataset.m));
+  $$('#abMatrix').length; // noop
+
+  // últimas medições, uma linha cada — o "filme" do laboratório
+  const rec = (d.resultados||[]).map(r=>{
+    const ic = r.veredito==='pass'?'✓':r.veredito==='fail'?'✗':'!';
+    const cls = r.veredito==='pass'?'okc':r.veredito==='fail'?'failc':'warnc';
+    const h = r.ts?new Date(r.ts*1000).toLocaleTimeString('pt-BR'):'';
+    return `<div class="row" style="gap:6px;padding:1px 0">
+      <span class="${cls}" style="width:10px">${ic}</span>
+      <span class="tiny dim" style="width:52px">${h}</span>
+      <b class="tiny">${esc(r.modelo)}</b>
+      <span class="tag tiny">${esc(r.nivel||'L3')}</span>
+      <span class="tiny dim">${esc(String(r.checker||'').slice(0,60))}</span>
+      <span class="tiny dim" style="margin-left:auto">${r.dur||0}s · ${r.patch_bytes||0}B</span>
+    </div>`;
+  }).join('');
+  $('#abRecentes').innerHTML = rec || '<span class="dim">nada ainda</span>';
+
   const lg = (d.log||[]).slice(-30).reverse().map(l=>`<div>${esc(l)}</div>`).join('');
   $('#abLog').innerHTML = lg || '<span class="dim">sem log</span>';
 }
@@ -455,10 +536,10 @@ async function doCmd(action, name){
   if(r.ok) { toast(j.message || 'ok'); if(action==='wake') $('#cmdText').value=''; }
   else toast(j.error || 'erro');
 }
-async function abControl(action, model){
+async function abControl(action, model, level){
   const r = await api('/api/ab/control', { method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ action, model }) });
+    body: JSON.stringify({ action, model, level }) });
   const j = await r.json().catch(()=>({error:'resposta inválida'}));
   toast(r.ok ? (j.message||'ok') : (j.error||'erro'));
   setTimeout(loadAB, 400);
@@ -505,6 +586,7 @@ $('#abRun').onclick = ()=>abControl('run');
 $('#abPause').onclick = ()=>abControl('pause');
 $('#abResume').onclick = ()=>abControl('resume');
 $('#abStop').onclick = ()=>abControl('stop');
+$$('#tab-ab [data-lvl]').forEach(b=>b.onclick=()=>abControl('level', null, b.dataset.lvl));
 $('#abPatches').onclick = async ()=>{
   const d = await (await api('/api/ab/live')).json();
   const p = (d.patches||[])[0];
