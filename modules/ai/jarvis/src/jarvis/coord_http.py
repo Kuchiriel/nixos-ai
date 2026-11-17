@@ -284,6 +284,55 @@ def build_server():
             return f"coord_notify falhou: {exc}"
 
     @mcp.tool
+    def coord_house(action: str = "list", id: str = "", query: str = "") -> str:
+        '''Indice unico da casa (ai-mesh/index/house.json) — descubra onde mora
+        cada coisa sem carregar o repo. action=list|describe|search|status.
+
+        list: id/status/titulo/entrypoints de todos (compacto).
+        describe id=lab: entry completa (docs, codigo canonico, saude, medida).
+        search query=gpu: filtra por id/titulo/summary/tags/hosts.
+        status: so status e last_measured.
+        '''
+        import json as _json
+        from pathlib import Path as _Path
+        p = _Path(os.environ.get("HOUSE_INDEX") or str(_Path.home() / "projects/ai-mesh/index/house.json"))
+        try:
+            doc = _json.loads(p.read_text(encoding="utf-8"))
+        except Exception as exc:
+            return _json.dumps({"error": "house index indisponivel", "path": str(p), "detail": str(exc)}, ensure_ascii=False)
+        items = doc.get("entries") or []
+
+        def brief(e):
+            ent = e.get("entry") or {}
+            return {"id": e.get("id"), "status": e.get("status"),
+                    "title": e.get("title"), "cli": ent.get("cli"),
+                    "web": ent.get("web"), "mcp": ent.get("mcp")}
+
+        if action == "list":
+            return _json.dumps({"updated": doc.get("updated"), "root": doc.get("root"),
+                                "count": len(items), "entries": [brief(e) for e in items]}, ensure_ascii=False)
+        if action == "describe":
+            for e in items:
+                if e.get("id") == id:
+                    return _json.dumps(e, ensure_ascii=False)
+            return _json.dumps({"error": "id nao existe: " + str(id),
+                                "ids": [e.get("id") for e in items]}, ensure_ascii=False)
+        if action == "search":
+            q = (query or "").lower()
+            hits = []
+            for e in items:
+                hay = " ".join([str(e.get("id")), str(e.get("title")),
+                                str(e.get("summary")), " ".join(e.get("tags") or []),
+                                " ".join(e.get("hosts") or [])]).lower()
+                if q in hay:
+                    hits.append(brief(e))
+            return _json.dumps({"query": query, "count": len(hits), "entries": hits}, ensure_ascii=False)
+        if action == "status":
+            return _json.dumps([{"id": e.get("id"), "status": e.get("status"),
+                                 "last_measured": e.get("last_measured")} for e in items], ensure_ascii=False)
+        return _json.dumps({"error": "action invalida: use list|describe|search|status"}, ensure_ascii=False)
+
+    @mcp.tool
     def coord_health() -> str:
         """Saude do HOST Linux: inferencia, qdrant, embeddings, RAM, disco.
 
