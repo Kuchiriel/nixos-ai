@@ -3,7 +3,7 @@
 ## Estado inicial → final
 | item | inicial | final |
 |---|---|---|
-| HEAD | `57c91765` | `b4039d87` |
+| HEAD | `57c91765` | `105214e4` |
 | Backlog | 4 abertos (#08/#17/#18 + decisões) | **0 aberto / 22 total** |
 | Entregáveis docs/audit | 0 | 9 (+ RAG-EVAL, HANDOFF-FORMAT) |
 | RAG recall@8 | 0.36 (juiz 15 perguntas) | **0.93** (MRR 0.762 com rerank) |
@@ -11,7 +11,9 @@
 | A/B por nível | inválido (Task.project sem sufixo) | válido, #18 medido |
 | Compactação degenerada | 27/259 resumos ruins | guard no host (avisa) |
 | Plugins gerados vs live | drift suspeito | sha256 idêntico |
-| Workspace | 42 uncommitted | 48 uncommitted (principalmente .bak e trabalho paralelo) |
+| Workspace | 42 uncommitted | 19 uncommitted (todo de outras lanes; 0 staged) |
+| Switch NixOS | não executado | **rc=0**, HM ativo, units servidas do `/nix/store` |
+| Cliente de voz | arquivo solto, dois donos | symlink Nix, systemd dono único, watchdog delega |
 
 ## Testes (Fase 8, 19/11)
 - `test_handoff + test_rehydrate + test_rag_identifier`: **24 passed**.
@@ -31,12 +33,16 @@
 8. rag-prune (35,8% do índice obsoleto) e consolidação sem perda de memória.
 9. 2 scripts Laya sem consumidor arquivados com `git mv`.
 10. 10 coleções Qdrant órfãs exportadas com payloads (nada apagado).
+11. Switch NixOS: `nix-env --set` exige root; HM parava em `opencode.json.backup`
+    e em `ExecStartPre` multilinha (`7b9dd96a`).
+12. `voice-watchdog.sh` não cria mais órfão: start/stop via `systemctl --user`
+    (`105214e4`), self-test 6/6.
 
 ## Dívida restante (honesta)
 - Gate H3 "cada chunk 5/5": medido 4/5 — 3ª amostra pendente se quiser 5/5.
 - Host tem ~45 uncommitted (`.bak` de patches + trabalho de agentes paralelos):
   nunca usar `git add -A`; inspecionar cada arquivo.
-- Worktree `/tmp/ack-patch-wt` prunable; `.worktrees/coord-mcp` ativo.
+- Worktree `/tmp/ack-patch-wt` removido; `.worktrees/coord-mcp` ativo (dono Onca).
 - Tailnet IPv6 oscila; usar SSH IPv4 `nixos@100.121.100.103` quando cair.
 - Memória episódica ainda error-only (sem registro de decisões bem-sucedidas).
 - `docs/audit/RAG-EVAL.md` é superseded pelo juiz de 15 perguntas (ambos mantidos

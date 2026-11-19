@@ -226,7 +226,7 @@ _160 tools._
 - `voice-trigger-fixtures.py` (nixos-ai/scripts) — """voice-trigger-fixtures.py — gera os parquets do trigger bench (durable).
 - `voice-up.sh` (nixos-ai/scripts) — voice-up.sh — ERGUE A LANE DE VOZ em 1 comando (sequência sancionada
   use: `USO: voice-up.sh [--router-off]`
-- `voice-watchdog.sh` (nixos-ai/scripts) — voice-watchdog.sh — verifica se a pilha de voz esta de pe e levanta se nao.
+- `voice-watchdog.sh` (nixos-ai/scripts) — verifica a pilha de voz; `--restart`/`--pause` delegam a `duplex-voice.service` (systemd e' o dono unico; sem orfaos).
 - `voice_gate.py` (nixos-ai/scripts) — """Gate de voz: a lógica anti-alucinação do duplex-asrd, extraída verbatim.
 - `voice_text_rules.py` (nixos-ai/scripts) — """voice_text_rules.py — regras de higiene de texto do asrd, num lugar só.
 - `vram-split-sweep.py` (nixos-ai/scripts) — """Sweep de split GPU/CPU: onde o MoE (e o denso) perdem velocidade.

@@ -13,7 +13,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 ## Datas e HEADs
 - Início da missão: 2026-11-19.
 - HEAD inicial da auditoria: `57c9176517ca2f27d8e3285deb43f009cb0a21b3` (`main`).
-- HEAD atual: `029b8043` (recon 19/11).
+- HEAD atual: `105214e4` (recon 19/11, janela 2 — pós-switch e fix de voz).
 - Primeiro commit do projeto: `ae8789fac5cbb8b2527f5091c9b2877507f8337e` (2024-11-23, fork de `nixos-config-reborn`).
 
 ## Fases
@@ -124,8 +124,9 @@ esse arquivo e não reeditar por cima.** O registro desta sessão vive no
   Não é falha do chunker: o harness estoura o teto por comando.
 - **rag-prune --apply** em `code_index` (98.732 pts) e `books` (203):
   **exige autorização do dono** (dados de produção, §10.1/§10.2).
-- `knowledge_schema.py` sem consumidor e divergente do payload real
-  (P2-1 do KNOWLEDGE-SYSTEM-AUDIT): decidir executável vs documento.
+- `knowledge_schema.py` **tem consumidor desde `8834e98c`**: `rag.py` usa
+  `build_payload` para o payload canônico; `test_architecture_invariants`
+  guarda `EMBED_DIM`. Pendência real: só manter o contrato único (P2, não P1).
 - Migrar resultados A/B antigos (inválidos por `Task.project`) — marcar como suspeitos.
 - Fase 6/9 do plano ainda não concluídas.
 
@@ -202,11 +203,18 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
   Unit ainda solta (não Nix-managed) — dívida registrada.
 
 ## Próxima tarefa exata
-1. Fase 4 (delta): auditar `_rehydrate_state`/`_handle_rehydrate` quanto a ordem, dedupe e orcamento de tokens; ja existe teste de loop-breaker, falta medir tamanho real do bloco com a fila de hoje.
-2. Fase 5: fechar o inventario de units/timers fora do Nix (medir agora, nao repetir numero de memoria) e conferir `home-manager/home.nix` contra `opencode.json` vivo, sem editar o vivo.
-3. Fase 6: triagem de `.bak` rastreados (`harness.py.bak-*`) com o dono de cada lane antes de remover; conferir indice `scripts/TOOLS-INDEX.md` contra os scripts reais.
-4. Depende do dono: reindexar `code_index` (backfill do payload canonico), remote do vault, `remember_fact(kind=decision)`, `rag-prune --apply`.
-5. Rotina: testes focados no diff; suite completa (~4,5 min, `-p no:randomly`) com janela livre. Rebuild do host so com autorizacao.
+1. Fase 9: reconciliar `AUDIT-FINAL.md` com o HEAD real (`105214e4`) e com o
+   switch executado — a tabela ainda diz `b4039d87` e que a unit estava solta.
+2. Exclusividade dos dois perfis do 4B-MTP (:8092 voice / :8096 code): hoje
+   quem decide e o `llama-vram-guard` por corrida; definir dono determinístico
+   com a lane do lab (Falcao) antes de mudar `wanted`/timers.
+3. P2: `knowledge_schema.py` sem consumidor e divergente do payload real —
+   decidir se e executável ou documento; NAO tocar coleções de produção.
+4. Fase 6 (delta): procurar outros `setsid nohup` que relancem cliente duplex
+   (o `voice-watchdog.sh` foi corrigido em `105214e4`); conferir
+   `scripts/TOOLS-INDEX.md` contra os scripts reais.
+5. Rotina: testes focados no diff; suite completa (~4,5 min, `-p no:randomly`)
+   com janela livre. Rebuilds do host autorizados pelo dono nesta missão.
 
 ## Arquivos que o próximo agente precisa ler
 - `AGENTS.md` (raiz: cabecalho e regras pinadas; detalhes sob demanda).
@@ -216,7 +224,7 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
 
 ## Riscos de retomada
 - Arvore suja com ~20 itens nao commitados (mix de docs/audit de outra lane, memory.js, scripts/agent-roster.py, .bak e diretorios nao rastreados como docs/agentes e memory/). **Nao usar `git add -A`**; inspecionar cada arquivo e respeitar o dono de cada mudanca.
-- Worktrees: `.worktrees/coord-mcp` (branch `fix/coord-pending-json`) ativo; `/tmp/ack-patch-wt` consta como prunable no registro (conferir antes de remover).
+- Worktrees: `.worktrees/coord-mcp` (branch `fix/coord-pending-json`) ativo, dono Onca — NAO tocar; `/tmp/ack-patch-wt` ja foi removido com `git worktree prune -v`.
 - `docs/audit/CHRONOLOGICAL-REVIEW-2026-11-19.md` e citado em versoes anteriores do checkpoint mas nao existe no working tree atual; usar `PROJECT-HISTORY.md` como base canonica ate reconciliar.
 - Mullvad: guard e bypass corrigidos no vivo e no repo, mas o timer declarativo novo (`mullvad-tailscale-bypass-check`) e a unit ajustada do host so entram no proximo rebuild; o timer de usuario `vpn-guard` aponta para o script do repo.
 - Outros agentes ativos: Falcao em `#18`, Cervo em `#10`, Lince em TAB — verificar claim antes de editar.
@@ -294,3 +302,23 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
   com `MANIFEST.json` (sha256); `git worktree prune -v` removeu
   `worktrees/ack-patch-wt`; work de outros agentes intacto (25 itens);
   `nixos-rebuild build` rc=0 em 116 s e 96 s com staged=0 antes/depois.
+
+## Reconciliação 19/11 — janela 2 (supera a seção "Organização" acima)
+As linhas da seção **Organização** que dizem "Switch NÃO executado" e
+"Unit ainda solta (não Nix-managed)" estavam obsoletas no momento da retomada.
+Estado MEDIDO agora:
+- `nixos-rebuild switch --flake .#nitro-v15` **rc=0** (via `sudo -n env`,
+  porque `nix-env --set` exige root em `/nix/var/nix/profiles`).
+- `home-manager-nixos.service` active; `duplex-voice.service` e
+  `vpn-guard.service` são symlinks do `/nix/store`.
+- `:8092` `/health` ok, LoRA v9 scale 1.0; `llama-uncensored-4b-code.service`
+  (:8096) inactive. Exclusividade ainda por VRAM guard (ver Próxima tarefa 2).
+- `f83644e6` corrigiu o bug que impedia a ativação: `ExecStartPre` multilinha
+  na unit gerada (`expected entry key name but got '/' at line 6`).
+- `105214e4` (P1): `scripts/voice-watchdog.sh` parou de criar órfão com
+  `setsid nohup` e passou a delegar start/stop a `systemctl --user`. Antes,
+  `--pause` matava o pid e o `Restart=always` da unit reanimava o cliente.
+  Prova: `--self-test` 6/6 com `systemctl`/`pgrep`/`setsid` falsos; nenhum
+  serviço real foi reiniciado no teste; `duplex-voice.service` segue active.
+- Novo bloqueio descoberto: `jarvis_rehydrate` NÃO está disponível como tool
+  nesta sessão (`mcp search rehydrate` vazio); o checkpoint substitui a tool.
