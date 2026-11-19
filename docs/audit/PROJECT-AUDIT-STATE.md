@@ -13,7 +13,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 ## Datas e HEADs
 - Início da missão: 2026-11-19.
 - HEAD inicial da auditoria: `57c9176517ca2f27d8e3285deb43f009cb0a21b3` (`main`).
-- HEAD atual: `d070aa83`.
+- HEAD atual: `d633ae14`.
 - Primeiro commit do projeto: `ae8789fac5cbb8b2527f5091c9b2877507f8337e` (2024-11-23, fork de `nixos-config-reborn`).
 
 ## Fases
@@ -155,6 +155,15 @@ mortos por PID; unit declarada iniciada via `sudo -n systemctl start`
 `/lora-adapters` = `microturn-4b-lora-v9.gguf` (3 MB) scale 1.0.
 LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
 (linha 147) — registrar no debt; lab e produção disputam a mesma unit :8092.
+
+## Testes e runtime (19/11, retomada com rebuilds autorizados)
+- Full suite: **2096 passed, 8 failed, 27 skipped**. 8 falhas são testes
+  antigos com arquivos limpos (test_p5_state_machine, test_reranker,
+  test_voice etc.) — dívida prévia, não regressão desta missão.
+- `test_offline_search.py` corrigido (6/6): teste monkeypatchava o caminho
+  errado desde c514a1ba; agora força o fallback real.
+- Runtime :8092: shadow removido, unit declarada ativa com adapter v9
+  (detalhe na seção shadow acima). Lab pausado (`control=pause`).
 
 ## Próxima tarefa exata
 1. **#22 bloqueio do A/B**: investigar por que o harness dá TimeoutExpired em

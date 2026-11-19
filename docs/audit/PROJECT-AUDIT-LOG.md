@@ -254,3 +254,12 @@
   `release`); o erro "MODEL unbound" era sintoma do case cair no fim, não bug
   de runtime. Nenhuma mudança de código necessária.
 - Lab pausado (control=pause); produção saudável.
+
+## 2026-11-19 — retomada final (11ª entrada, rebuilds autorizados)
+- HEAD inicial `a99f229f`; HEAD final `d633ae14`.
+- P1 runtime resolvido: shadow :8092 → unit declarada com v9 adapter.
+- My own leaked GPU servers (mtp :8096, bonsai :8080) killed by exact PID.
+- Bug de teste antigo corrigido: offline_search 6/6.
+- Full suite: 2096 passed, 8 failed (prévios), 27 skipped. RAG 0.93, host OK.
+- Rebuilds não foram necessários; reinício de unit foi via systemctl --user/system.
+- Próximo: 8 testes antigos; limpeza de worktree/uncommitted com manifesto.
