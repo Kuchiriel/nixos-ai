@@ -7,7 +7,8 @@ passar).
 
 O METODO (o mesmo do v9, para o numero ser comparavel):
   - o mesmo runner (bench_heldout3.py) e o mesmo heldout3;
-  - o mesmo servidor (o MTP 4B :8092), trocando SO o LoRA (v9 -> v10);
+  - o mesmo comando de servidor do llama-swap --start-mtp, trocando SO o LoRA
+    (v9 -> v10);
   - 3 amostras, como o doc do Codacus usou (o v9 deu 3 amostras identicas).
 
 O QUE ESTE SCRIPT FAZ:
@@ -15,6 +16,23 @@ O QUE ESTE SCRIPT FAZ:
      LoRA trocado) e mede o heldout3;
   2) devolve o v9 e mede de novo (o baseline da mesma maquina, na mesma hora);
   3) grava os dois JSON e imprime o delta.
+
+(19/11, auditoria-runtime) CORRECOES DE PRODUCAO — este script sequestrava a
+porta de PRODUCAO:
+  - PORT era 8092, a porta do default do sistema (o `llama-uncensored-4b`
+    declarativo). O script subia um server NAO supervisionado por cima do
+    default e, se era interrompido, deixava o server vivo: medido em
+    19/11 05:30, o processo ficou de pe ate as 13h com o adapter v1 (81 MB)
+    em vez do v9 (2,9 MB) do registry — o `duplex` classificava com o
+    adapter errado e a VRAM ficava presa, impedindo a unit de subir.
+  - `stop_mtp()` matava por PATTERN (`pgrep -f 'llama-server -m <mtp>'`),
+    ou seja, matava o default de PRODUCAO tambem.
+  - `LORA_V10` apontava para `microturn-4b-lora.gguf`, que e' o adapter v1
+    (o legado de 81 MB), nao o v10: o "v10" medido seria o v1 com nome novo.
+AGORA: porta de medicao dedicada (8094), o v10 aponta para o arquivo real
+(conversao do Kaggle) e falha alto se ele nao existir, o default de producao
+nao e' tocado (nada de matar por pattern) e o server do script e' derrubado
+sempre, inclusive em Ctrl-C.
 """
 import json
 import os
@@ -28,10 +46,54 @@ REPO = pathlib.Path("/home/nixos/projects/nixos-ai")
 MODELS = pathlib.Path("/var/lib/ai/models")
 MTP = MODELS / "Qwen3.5-4B-MTP-Q4_K_M.gguf"
 LORA_V9 = MODELS / "loras" / "microturn-4b" / "microturn-4b-lora-v9.gguf"
-LORA_V10 = MODELS / "loras" / "microturn-4b" / "microturn-4b-lora.gguf"
+# (19/11, auditoria-runtime) O v10 e' o adapter convertido do Kaggle (PEFT ->
+# GGUF), que vive em /tmp ate ser promovido ao diretorio de producao. O
+# arquivo em MODELS/.../microturn-4b-lora.gguf (81 MB) e' o v1 LEGADO: usar
+# ele como "v10" media o v1 com nome novo.
+LORA_V10 = pathlib.Path("/tmp/opencode/v10-lora-gguf/microturn-4b-lora-v10.gguf")
+LORA_V1_LEGADO = MODELS / "loras" / "microturn-4b" / "microturn-4b-lora.gguf"
 BIN = pathlib.Path("/home/nixos/projects/llama.cpp/build-stock/bin/llama-server")
-PORT = 8092
+# (19/11) Porta de MEDICAO. 8092 e' o default do sistema (producao): usar
+# ela sequestrava o default (medido: server orfao ate as 13h com o adapter
+# errado). 8096 e' do laboratorio A/B e 8094 a porta livre de medicao.
+PORT = 8094
+PORTA_PRODUCAO = 8092
 ENV_SH = REPO / "modules/ai/jarvis/jarvis-env.sh"
+
+# o processo que ESTE script subiu (unico que ele pode derrubar)
+_server_pid = None
+
+
+def _stop_server():
+    """Derruba SO o server que este script subiu (nunca por pattern)."""
+    global _server_pid
+    if not _server_pid:
+        return
+    try:
+        os.killpg(os.getpgid(_server_pid), signal.SIGTERM)
+    except Exception:
+        try:
+            os.kill(_server_pid, signal.SIGTERM)
+        except Exception:
+            pass
+    print(f"  MTP de medicao derrubado (pid {_server_pid})")
+    _server_pid = None
+    time.sleep(3)
+
+
+def _on_signal(signum, frame):
+    _stop_server()
+    raise SystemExit(128 + signum)
+
+
+def _vram_livre_mib():
+    try:
+        r = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=10)
+        return int(r.stdout.strip().splitlines()[0])
+    except Exception:
+        return None
 
 
 def http_json(url, timeout=10):
@@ -43,22 +105,30 @@ def http_json(url, timeout=10):
         return None
 
 
-def stop_mtp():
-    r = subprocess.run(["pgrep", "-f", f"llama-server -m {MTP}"],
-                       capture_output=True, text=True)
-    pids = [p for p in r.stdout.split() if p.strip()]
-    for pid in pids:
-        try:
-            os.kill(int(pid), signal.SIGTERM)
-        except Exception:
-            pass
-    if pids:
-        print(f"MTP derrubado (pids {pids})")
-    time.sleep(4)
-    return pids
+def porta_ocupada(port):
+    import socket
+    with socket.socket() as s:
+        s.settimeout(1)
+        return s.connect_ex(("127.0.0.1", port)) == 0
 
 
 def start_mtp(lora, tag):
+    global _server_pid
+    if porta_ocupada(PORT):
+        print(f"  ERRO: a porta de medicao {PORT} ja esta ocupada por outro "
+              f"processo — medir agora seria medir o server de outra pessoa. "
+              f"Use outra porta ou derrube o dono do processo.")
+        return False
+    if porta_ocupada(PORTA_PRODUCAO):
+        print(f"  AVISO: o default de producao esta de pe na {PORTA_PRODUCAO}; "
+              f"esta medicao NAO o toca (o script nunca mata producao), mas a "
+              f"VRAM pode nao caber dois MTP ao mesmo tempo.")
+    livre = _vram_livre_mib()
+    if livre is not None and livre < 4300:
+        print(f"  ERRO: VRAM livre {livre} MiB (< 4300): o MTP de medicao nao "
+              f"cabe sem derrubar o default. Espere a janela de VRAM "
+              f"(regra da casa: 1 LLM por vez) e rode de novo.")
+        return False
     env = dict(os.environ)
     nix_ld = "/run/current-system/sw/share/nix-ld/lib"
     if pathlib.Path(nix_ld).is_dir():
@@ -70,15 +140,17 @@ def start_mtp(lora, tag):
            "--reasoning", "off", "--spec-type", "draft-mtp",
            "--lora", str(lora), "--lora-init-without-apply"]
     log = pathlib.Path(f"/tmp/opencode/mtp-{tag}.log")
-    print(f"subindo o MTP com {tag}: {lora.name}")
-    subprocess.Popen(cmd, stdout=log.open("w"), stderr=subprocess.STDOUT,
-                     env=env, start_new_session=True)
+    print(f"subindo o MTP de MEDICAO com {tag}: {lora.name} (porta {PORT})")
+    proc = subprocess.Popen(cmd, stdout=log.open("w"), stderr=subprocess.STDOUT,
+                            env=env, start_new_session=True)
+    _server_pid = proc.pid
     for _ in range(120):
         if http_json(f"http://127.0.0.1:{PORT}/v1/models", timeout=5):
             print(f"  :{PORT} responde ({tag})")
             return True
         time.sleep(2)
     print(f"  ERRO: o MTP nao respondeu ({tag}); log: {log}")
+    _stop_server()
     return False
 
 
@@ -120,21 +192,36 @@ def medir(tag, amostras=3):
 
 
 def main():
+    # (19/11) Ctrl-C e SIGTERM derrubam o server de medicao: um orfao na
+    # porta de medicao ainda sequestra VRAM e vira default sombra.
+    signal.signal(signal.SIGINT, _on_signal)
+    signal.signal(signal.SIGTERM, _on_signal)
+    import atexit
+    atexit.register(_stop_server)
+
     v10_existe = LORA_V10.is_file()
     v9_existe = LORA_V9.is_file()
-    print(f"v9: {v9_existe} | v10: {v10_existe}")
+    print(f"v9: {v9_existe} ({LORA_V9}) | v10: {v10_existe} ({LORA_V10})")
+    if not v10_existe and LORA_V1_LEGADO.is_file():
+        print(f"  AVISO: o v10 (convertido do Kaggle) NAO esta em {LORA_V10}. "
+              f"O arquivo {LORA_V1_LEGADO.name} (81 MB) e' o v1 LEGADO e nao "
+              f"serve como v10: medir com ele seria medir o v1 com nome novo. "
+              f"Converta o v10 antes de rodar.")
 
     resultado = {}
-    # --- o v10 ---
-    if v10_existe:
-        stop_mtp()
-        if start_mtp(LORA_V10, "v10"):
-            resultado["v10"] = medir("v10")
-    # --- o v9 (baseline, mesma maquina, mesma hora) ---
-    if v9_existe:
-        stop_mtp()
-        if start_mtp(LORA_V9, "v9"):
-            resultado["v9"] = medir("v9")
+    try:
+        # --- o v10 ---
+        if v10_existe:
+            if start_mtp(LORA_V10, "v10"):
+                resultado["v10"] = medir("v10")
+                _stop_server()
+        # --- o v9 (baseline, mesma maquina, mesma hora) ---
+        if v9_existe:
+            if start_mtp(LORA_V9, "v9"):
+                resultado["v9"] = medir("v9")
+                _stop_server()
+    finally:
+        _stop_server()
 
     pathlib.Path("/tmp/opencode/v9-v10-heldout3.json").write_text(
         json.dumps(resultado, ensure_ascii=False, indent=1))
