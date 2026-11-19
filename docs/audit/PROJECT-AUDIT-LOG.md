@@ -55,3 +55,21 @@
   `sessions`.
 - Próximo passo: Fase 6 (código morto com entrypoints dinâmicos) começando
   por `core/consolidate.py` e `.bak-*` em `scripts/`.
+
+## 2026-11-19 12:02 — mesma sessão, correção P1-C e colisão de arquivo
+- HEAD final: `7de768b5`.
+- Correção `11686c78`: chunk que estoura o ctx do embedder. O fallback
+  embedava metade do texto e gravava o chunk inteiro no payload (vetor não
+  representava o conteúdo devolvido); se a metade também falhasse, o chunk
+  era descartado em silêncio. Agora ambos encurtam juntos, o descarte entra
+  em `skipped` (`chunk_dropped N/M`) e `index_directory` imprime o resumo.
+- **Colisão de arquivo (registro honesto)**: `KNOWLEDGE-SYSTEM-AUDIT.md` já
+  existia (commit `37216195`, autor `nixos`). Meu `write_file` sobrescreveu
+  sem checar, e a outra lane recommitou por cima (`81fcb511`), apagando a
+  minha versão. Resolução: seções dela preservadas + seção 6 com o que esta
+  sessão mediu/corrigiu (`7de768b5`); 4 setas e 1 caractere CJK do texto
+  original corrigidos por `check-text-chars.py`. Lição: `read_files` antes
+  de `write_file` em `docs/audit/`, onde outra lane também escreve.
+- Testes: `test_rag.py` 27 passed com `test_rag_prune.py`.
+- Próximo passo: reproduzir o achado de ranking (1/5 acertos no top-8) com o
+  script da outra lane e medir se o prune de versões antigas muda o top-k.

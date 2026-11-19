@@ -13,7 +13,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 ## Datas e HEADs
 - Início da missão: 2026-11-19.
 - HEAD inicial da auditoria: `57c9176517ca2f27d8e3285deb43f009cb0a21b3` (`main`).
-- HEAD atual: `5b2cd8c95b4bf936d32f91b4604ec5ef96560020` (checkpoint 2026-11-19 11:51).
+- HEAD atual: `7de768b5` (checkpoint 2026-11-19 12:02).
 - Primeiro commit do projeto: `ae8789fac5cbb8b2527f5091c9b2877507f8337e` (2024-11-23, fork de `nixos-config-reborn`).
 
 ## Fases
@@ -59,6 +59,10 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
    texto (chave `timestamp` inexistente) → marca `superseded`, keeper por
    `ts` — `70f65895`. Vale no próximo 03:00 (timer roda do source).
 9. Revisão cronológica com a seção Era 0 repetida 15x (395→102 linhas) — `5b2cd8c9`.
+10. Chunk que estoura o ctx do embedder: vetor de metade com payload do
+    chunk inteiro, e descarte silencioso — `11686c78`.
+11. Auditoria de conhecimento preservada em duas versões concorrentes:
+    merge sem perder a seção da outra lane — `7de768b5`.
 
 ## Decisões arquiteturais
 - **ADR-003** (personas): manter BLOCKED — exige convergência `dev.py`→`agent_loop.py`;
@@ -97,8 +101,8 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
    KNOWLEDGE-SYSTEM-AUDIT) e pelos `.bak-*` na raiz de `scripts/`.
 2. Fase 4: auditar `rehydrate` de ponta a ponta (ordem, dedup, limite de
    tokens) contra o que o MCP devolve hoje.
-3. P1-3 do KNOWLEDGE-SYSTEM-AUDIT: registrar chunk pulado em `skipped` e
-   devolver contagem ok/quarentena/pulado no `index_directory`.
+3. Reproduzir o achado de ranking (1/5 acertos no top-8) e medir se o
+   prune muda o top-k antes de mexer em boosts/reranker.
 
 ## Arquivos que o próximo agente precisa ler
 - `AGENTS.md` (raiz, 1.684 linhas — ler o cabeçalho e as regras pinadas; o resto sob demanda).
