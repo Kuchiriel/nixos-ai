@@ -35,6 +35,10 @@
     # (05/11) MCP de coordenação entre IAs por HTTP na tailnet.
     ./services/coord-mcp.nix
     ./services/jarvis-knowledge-mcp.nix
+    # (19/11, auditoria-runtime) O cliente de voz duplex era uma unit SOLTA
+    # em ~/.config/systemd/user (fora do Nix): nenhum rebuild a recriava e
+    # nenhuma maquina montada do zero teria voz. Ver o modulo.
+    ./services/duplex-voice.nix
     ./wofi
     ./zathura.nix
     ./zsh.nix
