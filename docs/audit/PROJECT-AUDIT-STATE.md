@@ -13,7 +13,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 ## Datas e HEADs
 - Início da missão: 2026-11-19.
 - HEAD inicial da auditoria: `57c9176517ca2f27d8e3285deb43f009cb0a21b3` (`main`).
-- HEAD atual: `7a54d0c8` (reconciliado 19/11).
+- HEAD atual: `684a12ef` (checkpoint 19/11 recon).
 - Primeiro commit do projeto: `ae8789fac5cbb8b2527f5091c9b2877507f8337e` (2024-11-23, fork de `nixos-config-reborn`).
 
 ## Fases
@@ -111,6 +111,14 @@ esse arquivo e não reeditar por cima.** O registro desta sessão vive no
 `PROJECT-AUDIT-STATE.md`, `PROJECT-AUDIT-LOG.md`, `PROJECT-HISTORY.md`,
 `ARCHITECTURE-MAP.md`, `KNOWLEDGE-SYSTEM-AUDIT.md`, `OPENCODE-CONTINUITY-AUDIT.md`,
 `NIXOS-AUDIT.md`, `TECHNICAL-DEBT.md`, `IMPROVEMENT-ROADMAP.md`.
+
+## A/B #18 — estado real (reconciliação 19/11)
+Runner confiável = **canonical A/B** (`chunk_ab_canonical.py`), usa o loop de
+produção e grava `ck=v3` em `results.jsonl`. Verificado: 12 linhas frescas em
+1h; bonsai L2 = 4 failed/1 passed de forma consistente; mtp-lora dá `swap`
+quando :8096 sobe junto (guard do lab). Rodando em background (PID 2261149).
+Meus runners diretos (`dungeon.run()`) davam TimeoutExpired 1200s —
+**abandonados**, não são evidência.
 
 ## Próxima tarefa exata
 1. **#22 bloqueio do A/B**: investigar por que o harness dá TimeoutExpired em

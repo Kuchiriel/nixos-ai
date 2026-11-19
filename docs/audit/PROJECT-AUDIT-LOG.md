@@ -174,3 +174,20 @@
 - A/B #18 bloqueada (`#22`): 2 timeouts 1200s, 2/12 válidas insuficientes.
 - Próximo: gate do rerank (350 chars/doc), depois retomar A/B com :8096 up.
 - Riscos: 47 uncommitted, worktrees, agente auditoria-runtime, tailnet.
+
+## 2026-11-19 — reconciliação de sessões paralelas (7ª entrada)
+- HEAD inicial `7a54d0c8`; HEAD final `684a12ef` (`main`).
+- DESCOBERTA CRÍTICA: outra sessão da MESMA missão commitou b907a442 (RAG
+  cross-encoder, recall@8 0.36→0.93 em 15 perguntas) + 3c0c4f20 (rag-prune),
+  70f65895 (consolidação), 5b2cd8c9, 11686c78, 7de768b5, 4fc3e769
+  (HANDOFF-FORMAT). Meus commits de1cbf66..7a54d0c8 vieram DEPOIS e
+  sobrescreveram o checkpoint da outra lane — reconciliação feita agora,
+  sem descartar nenhum código (ambos os fixes coexistem em HEAD).
+- Juiz canônico RAG = scripts/rag-eval.py (15 perguntas), verificado:
+  off recall@8 0.93/MRR 0.667; on 0.93/0.762. Meu RAG-EVAL de 5 perguntas
+  está marcado superseded (684a12ef).
+- A/B #18: runners diretos mortos por timeout; canonical A/B (usa ab_loop.sh)
+  produziu 12 linhas ck=v3 em 1h, bonsai L2 = 4 failed/1 passed consistente.
+- Config: plugin gerado == live (sha256 idêntico), 9 providers, 1 MCP, 7 agents.
+- Próximo: 3 ciclos por braço → `chunk-ab-canonical.json` → fechar #18.
+- Riscos: 45 uncommitted, worktrees, IPv6 flapping (usar SSH IPv4).
