@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# voice-watchdog.sh — verifica se a pilha de voz esta de pe e levanta se nao.
+# voice-watchdog.sh — verifica a pilha de voz e delega start/stop a duplex-voice.service (systemd e' o dono unico; sem orfaos).
 #
 # POR QUE (13/11, coord-naming): o cliente de voz era AVULSO e o jarvis-heal
 # so vigia units => qualquer crash deixava a voz muda sem ninguem levantar.

@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_160 tools._
+_174 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -32,6 +32,7 @@ _160 tools._
 - `agent-provider-guard.py` (nixos-ai/scripts) — """agent-provider-guard.py — detecta falhas do PROVIDER de LLM e avisa (ping).
 - `agent-roster.py` (nixos-ai/scripts) — """agent-roster.py — ROSTER + TASKS da coordenação multi-agente (02/11).
 - `agent-spawn.py` (nixos-ai/scripts) — """agent-spawn.py — cria um agente NOVO (sessao opencode) com o modelo certo,
+- `agent_config.py` (nixos-ai/scripts) — agent_config.py — configuração centralizada da frota JARVIS.
 - `agent_guard.py` (nixos-ai/scripts) — """agent-guard.py — trava a entrada de intrusao na frota (medido 12/11).
   use: `python3 agent-guard.py --terms              # lista o vocabulario guardado`
 - `agents-keepawake.sh` (nixos-ai/scripts) — agents-keepawake.sh — inibe o idle (tela) enquanto houver agente vivo.
@@ -42,6 +43,7 @@ _160 tools._
 - `asrd_env.py` (nixos-ai/scripts) — """asrd_env.py — environment for the duplex ASRD subprocess.
 - `bench-35b-codacus.py` (nixos-ai/scripts) — """Mede o gate de voz (heldout3) em varios bracos e salva o JSON do resultado.
 - `bench-llm.sh` (nixos-ai/scripts) — bench-llm.sh — benchmark padrão da casa (consolida os one-offs de 24/09).
+- `bench-v9-v10-heldout3.py` (nixos-ai/scripts) — """Mede o gate v10 (Kaggle) no heldout3, com o MESMO metodo do v9.
 - `bus-tail.py` (nixos-ai/scripts) — """bus-tail.py — as ultimas mensagens coord-json do bus, em JSON.
   use: `uso: bus-tail.py [limite]`
 - `bus-to-nightwatch.py` (nixos-ai/scripts) — bus-to-nightwatch.py — esteira mínima: lê o bus, cria tarefas no nightwatch
@@ -56,7 +58,12 @@ _160 tools._
   use: `python3 scripts/check-text-chars.py <arquivo>`
 - `check-voice-gate-parity.py` (nixos-ai/scripts) — """Prova de paridade: o gate do duplex-asrd e o de voice_gate.py são o mesmo.
   use: `python3 scripts/check-voice-gate-parity.py`
+- `checker-chunk-a.py` (nixos-ai/scripts) — """Checker do CHUNK A (SERA/H3): o inimigo SE MOVE em direção ao player.
+- `checker-chunk-b.py` (nixos-ai/scripts) — """Checker do CHUNK B (SERA/H3): o inimigo NUNCA entra na parede. 5 testes."""
+- `checker-chunk-c.py` (nixos-ai/scripts) — """Checker do CHUNK C (SERA/H3): o inimigo CONTORNA o obstaculo curto.
 - `consolidate_sessions_memory.py` (nixos-ai/scripts) — Consolidate opencode session summaries into durable JARVIS episodic memory.
+- `consulta-antes-de-agir.py` (nixos-ai/scripts) — consulta-antes-de-agir.py — CLI auxiliar para forçar a consulta prévia.
+  use: `python3 scripts/consulta-antes-de-agir.py topico="editar arquivo X"`
 - `context-guard.py` (nixos-ai/scripts) — """context-guard — troca modelo/key ANTES do limite (contexto ou cota).
   use: `Uso: context-guard.py [--dry-run|--apply] [--threshold 0.80]`
 - `corpus_inventory.py` (nixos-ai/scripts) — """Inventário do corpus de conhecimento (§3/§22 da missão knowledge-substrate).
@@ -80,7 +87,7 @@ _160 tools._
 - `duplex-cycle.py` (nixos-ai/scripts) — """duplex-cycle.py — esteira completa de qualidade do duplex.
   use: `./scripts/duplex-cycle.py             # full pass`
 - `duplex-eval.py` (nixos-ai/scripts) — """duplex-eval.py — harness de eval do modo voz full-duplex (P5, noite 20/10, HB).
-- `duplex-restart.sh` (nixos-ai/scripts) — duplex-restart.sh — reinicia o cliente de voz duplex (mata TODOS os
+- `duplex-restart.sh` (nixos-ai/scripts) — duplex-restart.sh — reinicia o cliente de voz duplex.
   use: `USO: duplex-restart.sh [--port N] [--gate intent|jarvis|on|off] [--force]`
 - `duplex-sweep.py` (nixos-ai/scripts) — """duplex-sweep.py — encontra falhas reais nos logs do duplex e destila VSS.
   use: `./scripts/duplex-sweep.py               # varre 7 dias`
@@ -97,9 +104,12 @@ _160 tools._
   use: `Uso: python3 fetch-resume.py URL DESTINO [--tries 50]`
 - `fetch-video-transcript.py` (nixos-ai/scripts) — """fetch-video-transcript.py — baixa a transcrição de um vídeo do YouTube, sem travar.
   use: `python3 scripts/fetch-video-transcript.py https://youtu.be/pnZh5PAF3VE`
+- `fleet-dispatch.py` (nixos-ai/scripts) — fleet-dispatch — fecha o loop da frota no host.
 - `fleet-milestone.py` (nixos-ai/scripts) — """fleet-milestone — notifica o dono no celular SÓ em marcos da frota.
   use: `Uso: fleet-milestone [--dry-run] [--limit 40]`
 - `fleet-watchdog.sh` (nixos-ai/scripts) — fleet-watchdog — promove itens de inbox presos em queue para steer.
+- `fleet_model_route.py` (nixos-ai/scripts) — """fleet-model-route v2 — model assignment from AUTHORITATIVE sources.
+  use: `Usage: --dry-run (default) | --apply | --agent NAME | --test`
 - `gen-lora-data.py` (nixos-ai/scripts) — """gen-lora-data.py — gera dados de treino pro LoRA de timing no 4B-MTP.
   use: `python3 gen-lora-data.py --log /tmp/opencode/duplex-voice.log --out /tmp/opencode/lora-train.jsonl`
 - `gguf-ctx.py` (nixos-ai/scripts) — """Le o contexto REAL (treinado) dos modelos GGUF.
@@ -142,6 +152,12 @@ _160 tools._
   use: `python3 scripts/measure-repeat-rule-cost.py`
 - `measure-voice-rule-cost.py` (nixos-ai/scripts) — """measure-voice-rule-cost.py — custo em FALA REAL de uma regra candidata de gate.
 - `measure-voice-signals.py` (nixos-ai/scripts) — """measure-voice-signals.py — separa alucinação de fala real por sinais que o gate NÃO usa.
+- `medir-acuracia-por-token.py` (nixos-ai/scripts) — """Mede ACURACIA POR TOKEN no laboratorio A/B (1M ctx vs especialista).
+  use: `usage.prompt_tokens da resposta da LLM), mas nao chega na linha.`
+- `medir-gate-adapter.py` (nixos-ai/scripts) — """Mede o gate no heldout3 com um LoRA, com TIMEOUT e n_predict HONESTOS,
+- `medir-gate-api.py` (nixos-ai/scripts) — """Mede o gate no heldout3 com o BRAÇO DE 1M DE CONTEXTO (api), na mesma
+- `medir-gate-token.py` (nixos-ai/scripts) — """Sobe o MTP com um LoRA especifico e mede o gate no heldout3, com
+- `medir-token-por-braco.py` (nixos-ai/scripts) — """Mede o TOKEN REAL por braco, com o servidor do proprio braco no ar, e
 - `memory-arena-lite.py` (nixos-ai/scripts) — """MemoryArena-lite: o H1 no formato de USO ATIVO (25/09).
   use: `uso ativo. Então o INCONCLUSIVE do H1 não era "memória não importa": era`
 - `migrate-tools-en.py` (nixos-ai/scripts) — """migrate-tools-en.py — tool descriptions PT→EN (29/09, harness em inglês).
@@ -176,6 +192,8 @@ _160 tools._
   use: `0/3), enquanto o MoE acerta o diagnóstico mas perde o último passo.`
 - `prova_checkers.py` (nixos-ai/scripts) — """Prova que os checkers da escada PASSAM para uma solucao correta.
 - `provider_matrix.py` (nixos-ai/scripts) — """provider_matrix.py — audit de TODOS os LLM providers do dono (keys de
+- `rag-eval.py` (nixos-ai/scripts) — """rag-eval.py — recall@k e MRR do RAG híbrido contra perguntas de resposta conhecida.
+  use: `python3 scripts/rag-eval.py --top-k 8 --rerank both`
 - `reindex_code.py` (nixos-ai/scripts) — """Reindexa o code_index (coleção canônica) a partir do código vivo.
 - `restart-ab.sh` (nixos-ai/scripts) — restart-ab.sh — reinicia o loop A/B com seguranca.
   use: `bash "$REPO/scripts/llm-swap.sh" release >/dev/null 2>&1`
@@ -226,7 +244,7 @@ _160 tools._
 - `voice-trigger-fixtures.py` (nixos-ai/scripts) — """voice-trigger-fixtures.py — gera os parquets do trigger bench (durable).
 - `voice-up.sh` (nixos-ai/scripts) — voice-up.sh — ERGUE A LANE DE VOZ em 1 comando (sequência sancionada
   use: `USO: voice-up.sh [--router-off]`
-- `voice-watchdog.sh` (nixos-ai/scripts) — verifica a pilha de voz; `--restart`/`--pause` delegam a `duplex-voice.service` (systemd e' o dono unico; sem orfaos).
+- `voice-watchdog.sh` (nixos-ai/scripts) — voice-watchdog.sh — verifica a pilha de voz e delega start/stop a duplex-voice.service (systemd e' o dono unico; sem orfaos).
 - `voice_gate.py` (nixos-ai/scripts) — """Gate de voz: a lógica anti-alucinação do duplex-asrd, extraída verbatim.
 - `voice_text_rules.py` (nixos-ai/scripts) — """voice_text_rules.py — regras de higiene de texto do asrd, num lugar só.
 - `vram-split-sweep.py` (nixos-ai/scripts) — """Sweep de split GPU/CPU: onde o MoE (e o denso) perdem velocidade.
