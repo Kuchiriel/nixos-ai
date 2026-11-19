@@ -173,7 +173,16 @@ def main() -> int:
         task += (" Use `gh issue comment 100 --repo Kuchiriel/mt5 --body \"<finding>\"` "
                  "to publish. Never write secrets, never restart services, never "
                  "modify production data.")
-        result = spawn(pid, model, task, peer)
+        try:
+            result = spawn(pid, model, task, peer)
+        except subprocess.TimeoutExpired:
+            # (19/11) Um provider lento (ovhcloud 70B) nao pode matar a
+            # varredura inteira: registra o tempo esgotado e segue.
+            result = {"name": f"endpoint-{pid}", "provider": pid,
+                      "error": "spawn timeout 240s", "ok": False}
+        except Exception as exc:  # noqa: BLE001
+            result = {"name": f"endpoint-{pid}", "provider": pid,
+                      "error": f"spawn failed: {type(exc).__name__}: {exc}"[:300], "ok": False}
         result["ok"] = bool(result.get("session"))
         manifest.setdefault("spawns", []).append(result)
         print(f"  {pid}: {model} -> {result.get('session') or result.get('error')}")
