@@ -46,6 +46,10 @@ const STATE_SEEN = new Set();
 const VIS_STATE_DIR = process.env.HOME ? process.env.HOME + "/.local/state/jarvis" : "/home/nixos/.local/state/jarvis";
 const VIS_QUEUE_FILE = VIS_STATE_DIR + "/vis-queue.txt";
 const VIS_BUDGET_FILE = VIS_STATE_DIR + "/vis-wake-budget.json";
+// (19/11, medido) O plugin e global: sem alvo, a fila era consumida pela
+// PRIMEIRA sessao ociosa — inclusive a de um agente. A sessao do dono fica
+// declarada aqui (vis-enqueue session <id>); com alvo definido, so ela recebe.
+const VIS_SESSION_FILE = VIS_STATE_DIR + "/vis-session";
 const VIS_MAX_PER_HOUR = parseInt(process.env.VIS_MAX_PER_HOUR || "12", 10);
 const VIS_MIN_GAP_MIN = parseInt(process.env.VIS_MIN_GAP_MIN || "3", 10);
 
@@ -72,8 +76,7 @@ function visBudgetOk() {
   return true;
 }
 
-function visReadQueue() {
-  let lines = [];
+function visReadQueue() {  let lines = [];
   try {
     if (!existsSync(VIS_QUEUE_FILE)) return [];
     lines = readFileSync(VIS_QUEUE_FILE, "utf8").split("\n").filter(Boolean);
@@ -336,6 +339,11 @@ export default {
       try {
         const sid = event?.sessionID || "";
         if (!sid) return;
+        // so a sessao declarada como alvo (a do dono) recebe; sem alvo, qualquer uma
+        try {
+          const alvo = readFileSync(VIS_SESSION_FILE, "utf8").trim();
+          if (alvo && alvo !== sid) return;
+        } catch { /* sem arquivo: comportamento antigo */ }
         if (!visBudgetOk()) return;
         const pend = visAllPending();
         if (pend.length === 0) return;

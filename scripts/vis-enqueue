@@ -54,7 +54,7 @@ try: print(json.load(open('$BUDGET')).get('last',0))
 except Exception: print(0)
 " 2>/dev/null)
   fi
-  echo "vis-enqueue: fila=$pend | injecoes nesta hora=$usados/$MAX_PER_HOUR | ultimo ha $(( (now-ultima)/60 ))min"
+  echo "vis-enqueue: fila=$pend | injecoes nesta hora=$usados/$MAX_PER_HOUR | ultimo ha $(( (now-ultima)/60 ))min | alvo=$(cat "$STATE/vis-session" 2>/dev/null || echo 'qualquer')"
   [ "$pend" -gt 0 ] && sed 's/^/  - /' "$QUEUE" | head -5
   return 0
 }
@@ -87,6 +87,14 @@ case "${1:-status}" in
   next) cmd_next ;;
   status) cmd_status ;;
   budget) cmd_budget ;;
+  session)
+    if [ -n "${2:-}" ]; then
+      echo "$2" > "$STATE/vis-session"
+      echo "vis-enqueue: sessao alvo = $2 (so ela recebe as injecoes)"
+    else
+      printf 'vis-enqueue: alvo = %s\n' "$(cat "$STATE/vis-session" 2>/dev/null || echo '(nenhum: qualquer sessao ociosa recebe)')"
+    fi
+    ;;
   limit) echo "max por hora: ${2:-$MAX_PER_HOUR}" ;;
   *) cmd_status ;;
 esac
