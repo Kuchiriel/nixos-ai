@@ -57,3 +57,12 @@ Checkpoint associa HEAD, fase, arquivos, testes, pendências e riscos.
 - Worktrees: `.worktrees/coord-mcp` ativo; `/tmp/ack-patch-wt` prunable.
 - Agentes ativos (Falcao/Cervo/Lince): verificar claim antes de editar.
 - Tailnet oscila quando duas VPNs ligam no Android.
+
+## 7. Transcript do agent hub — schema V2 (19/11, medido)
+`/api/transcript` (`scripts/agent-hub.mjs`) esperava `m.payload.text` e
+`m.content`. A API V2 devolve o texto do usuário em **`m.text`** e falhas em
+**`m.error.message`** (num mensagem `type=idle`); por isso o log das sessões
+novas saía vazio e ninguém via os 413/429 dos providers. Corrigido: ler os
+dois formatos, ordenar por `time.created` ASC (a API devolve newest-first),
+dedupar por conteúdo e mostrar `ERROR:` explícito. Prova: sessão do groq
+com USER + ASST ERROR + ERROR; `ordered=asc`, 30→27 linhas.

@@ -208,6 +208,19 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
   duplex-voice.service ativo com 1 cliente = MainPID 2820856, sem órfãos.
   Unit ainda solta (não Nix-managed) — dívida registrada.
 
+## Hub da frota / endpoints LLM (19/11, noite — pedido do dono)
+- `/api/transcript` corrigido: ordem cronológica, dedupe, schema V2 (`m.text`)
+  e erros de provider visíveis; hub recarregado e provado (`ordered=asc`).
+- `scripts/fleet-endpoint-sweep.py`: um agente por provider, modelo forçado,
+  tarefa read-only, manifesto diário em
+  `~/.local/state/jarvis/fleet-endpoint-sweep/<data>.json`.
+- Limites medidos dos free tiers: groq 413 TPM com o prompt do spawn;
+  vários providers 429; catálogo marca modelo EOL como `active` (corrigido
+  no seletor). Não concluir que "o endpoint está quebrado" sem ler o erro no
+  transcript — agora ele aparece no log.
+- Log consolidado: `~/.local/state/jarvis/conversation-log/<data>.md`
+  (sha256 ao lado), gerado pelo `--consolidate-only`.
+
 ## Próxima tarefa exata
 1. **FEITO nesta janela (Fase 8)**: suíte completa
    `nix develop --command python3 -m pytest -q modules/ai/jarvis/tests

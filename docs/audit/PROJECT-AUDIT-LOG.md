@@ -527,3 +527,47 @@
   duplica `llama-swap.sh` na :8096 com `nohup`+kill por PID — não foi tocado.
 - Próximo: decidir com o dono da lane o destino de `hot-swap-model.sh`;
   revalidar `--start-mtp code` só com permissão; Fase 9 final.
+
+### 2026-11-19 (noite) — retomada 17 (crouton-alpha/termux, dono dormindo)
+- HEAD de entrada `71759f45`; HEAD de código `0c50b5dc` (commits de docs
+  posteriores podem estar 1 à frente — `git rev-parse HEAD` é a verdade).
+- Pedido do dono: fazer a frota usar TODOS os endpoints de LLM e, se os
+  agentes conversarem, arrumar o log de conversas no agent hub.
+- Hub auditado: `agent-hub.mjs` roda em `agent-hub.service` (user), porta
+  8091; `/api/agents` lista 50 sessões (todas ociosas); `/api/models` traz
+  9 providers (groq, nvidia, cloudflare, gemini, openrouter, ovhcloud,
+  kilocode, llm7, cohere) e 494 modelos no catálogo do opencode.
+- P1 CORRIGIDO no `/api/transcript` (3 iterações, cada uma medida):
+  1. a API devolve mensagens NEWEST-FIRST → ordenado por epoch ASC,
+     dedupado por conteúdo e limitado a 30 (antes 10) — prova:
+     `ordered=asc`, 30→27 linhas, 16:01→16:22.
+  2. schema V2 guarda texto do usuário em `m.text`, não em
+     `m.payload.text` → os logs dos agentes novos saíam VAZIOS. Corrigido.
+  3. mensagens `idle` com `m.error` agora aparecem como `ERROR:` no log —
+     antes uma falha de provider era invisível (observabilidade).
+  Hub recarregado (`systemctl --user restart agent-hub.service`), rc=0.
+  Prova final no session do groq: USER completo + ASST ERROR + ERROR.
+- `scripts/fleet-endpoint-sweep.py` (promovido de /tmp para o repo, com
+  `--help`, timeout de rede, manifesto diário e idempotência): um agente por
+  provider com `--model` forçado via `JARVIS_SPAWN_ALLOW_OVERRIDE=1`, tarefa
+  read-only e pedido de resposta no bus ao próximo endpoint.
+- Medições do sweep (até o fechamento desta janela): groq falhou com
+  HTTP 413 TPM (8000 permitidos vs 54.976 pedidos — system prompt do spawn
+  é grande demais para o free tier); nvidia escolheu modelo EOL
+  (`diffusiongemma`, morto 12/11 mas marcado `active`) → 0 trabalho;
+  cloudflare rodou 9 turnos com tools e depois deu "Service temporarily
+  overloaded"; gemini e openrouter caíram com 429 de quota. A seleção foi
+  corrigida no repo (mapa de IDs medidos + filtro anti-EOL/diffusion) para
+  a próxima corrida.
+- Conversa garantida com agentes saudáveis: `wake-direct` para
+  `auditoria-runtime` e `Onca`, tarefa curta e somente leitura. HTTP 200 com
+  `steer_patch=erro`, mas inbox vazio (nada preso em queue) e
+  `busy=True` + `time.updated` recente nos dois — prova de execução real,
+  não falso positivo de HTTP 200.
+- Finalizador destacado (`finalize_sweep.py`) espera o sweep terminar, roda
+  `--consolidate-only`, conta tags no bus e publica o resumo em
+  `~/.local/state/jarvis/fleet-endpoint-sweep/final-summary.json`.
+- Arquivos: `scripts/agent-hub.mjs`, `scripts/fleet-endpoint-sweep.py`,
+  `scripts/TOOLS-INDEX.md` (regerado pelo gerador canônico, `--check` limpo).
+- Próximo: ler `final-summary.json`, conferir as tags no bus e o log
+  consolidado; repetir só os endpoints que falharam, com os IDs curados.
