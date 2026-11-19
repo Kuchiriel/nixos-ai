@@ -676,9 +676,23 @@ def classify_turn(base, utt):
         j = http(base + "/completion", {
             "prompt": prompt, "n_predict": 6, "temperature": 0,
             "stop": ["<|im_end|>"], "cache_prompt": True}, timeout=8)
-        out = str(j.get("content", "")).strip().upper()
+        raw = str(j.get("content", "")).strip()
+        # (18/11, sweep-2026-11) MEDIDO: o MTP responde o rotulo CORRETO mas
+        #(prefixado pelo bloco de raciocinio: '<think>\n\n</think>\n\nRESPOND').
+        # O codigo antigo comparava so' o INICIO, entao devolvia None (e o
+        # caller caia na regra antiga) — 39/39 predicoes NONE, latencia 176 ms.
+        # Agora o rotulo e' procurado em qualquer posicao, ignorando o bloco
+        # de raciocinio e o texto antes dele. A resposta continua sendo do
+        # mesmo modelo e do mesmo LoRA: muda so a extracao.
+        out = re.sub(r"<think>.*?</think>", " ", raw, flags=re.DOTALL)
+        out = out.strip().upper()
         for lab in CLASS_LABELS:
             if out.startswith(lab):
+                return lab
+        # o rotulo pode estar depois de um prefixo residual
+        for lab in CLASS_LABELS:
+            m = re.search(r"\b" + lab + r"\b", out)
+            if m:
                 return lab
         return None
     except Exception:
