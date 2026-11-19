@@ -73,3 +73,23 @@
 - Testes: `test_rag.py` 27 passed com `test_rag_prune.py`.
 - Próximo passo: reproduzir o achado de ranking (1/5 acertos no top-8) com o
   script da outra lane e medir se o prune de versões antigas muda o top-k.
+
+## 2026-11-19 — sessão contínua (mesmo `ses_e52816aa7ffe4zi1iV7cJ8mvtc`, 2ª entrada)
+- HEAD inicial: `57c91765`; HEAD final: `a50b1965` (`main`).
+- Fase: 0 (checkpoint criado), 1 (arqueologia), 2 (mapa), 3 (conhecimento), 7 (correções).
+- Trabalho:
+  - Criados `PROJECT-AUDIT-STATE.md` e `PROJECT-AUDIT-LOG.md` (`756fd6f3`).
+  - `ARCHITECTURE-MAP.md` com entrypoints/pacotes/serviços/fluxo medidos (`7b5dc985`,
+    correção `d68b159a`: rehydrate é hidden-tool, funciona via `tools_call`).
+  - `KNOWLEDGE-SYSTEM-AUDIT.md` com contratos reais de Memory/RAG/Qdrant/Vault
+    (`81fcb511`→`a50b1965`). RAG: 1/5 known-answer hits; depois isolado — boosts
+    funcionam, defeito é recall da fusão híbrida.
+- Correções: RAG finding corrigido duas vezes (ranking→boost→recall) após testes isolados.
+- Testes: `jarvis_rehydrate` via `tools_call` (`isError: False`); `test_boost.py`
+  (CYCLE-9 sobe a 100005); `rag_retrieval_test.py` (1/5); `check_rag_indexed.py`
+  (4/4 indexados); A/B 2 amostras reais (2/5, 2/5).
+- Pendências: A/B morreu por TimeoutExpired em 700s (amostra 3) — gravei no estado;
+  lab loop restaurado (`restart-ab.sh`, PID 1912914).
+- Próximo passo: reescrever runner de A/B com try/except e timeout maior; retomar 2/12.
+- Riscos: 42 uncommitted; `.worktrees/coord-mcp` ativo; Falcao claimou #18 —
+  verificar claim antes de editar lane dele.
