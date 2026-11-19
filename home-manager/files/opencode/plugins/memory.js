@@ -68,8 +68,10 @@ function visBudgetOk() {
   let d = { count: 0, hour: Math.floor(now / 3600000), last: 0 };
   try { d = JSON.parse(readFileSync(VIS_BUDGET_FILE, "utf8")); } catch {}
   if (d.hour !== Math.floor(now / 3600000)) d = { count: 0, hour: Math.floor(now / 3600000), last: d.last || 0 };
+  let last = Number(d.last) || 0;
+  if (last > 0 && last < 1e12) last *= 1000;   // legado em segundos -> ms
   if (d.count >= VIS_MAX_PER_HOUR) return false;
-  if (now - (d.last || 0) < VIS_MIN_GAP_MIN * 60 * 1000) return false;
+  if (now - last < VIS_MIN_GAP_MIN * 60 * 1000) return false;
   d.count = (d.count || 0) + 1;
   d.last = now;
   try { mkdirSync(VIS_STATE_DIR, { recursive: true }); writeFileSync(VIS_BUDGET_FILE, JSON.stringify(d)); } catch {}
@@ -344,9 +346,12 @@ export default {
           const alvo = readFileSync(VIS_SESSION_FILE, "utf8").trim();
           if (alvo && alvo !== sid) return;
         } catch { /* sem arquivo: comportamento antigo */ }
-        if (!visBudgetOk()) return;
+        // (19/11, medido) A VERIFICACAO vem ANTES do gasto: um evento ocioso
+        // sem nada pendente consumia 1 das 12 injecoes/h e ainda bloqueava a
+        // proxima mensagem real pelo gap de 3 min (fila parada com item dentro).
         const pend = visAllPending();
         if (pend.length === 0) return;
+        if (!visBudgetOk()) return;
         const task = visPopQueue();
         if (!task) return;
         const goalText = [

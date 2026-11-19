@@ -22,7 +22,14 @@ mkdir -p "$STATE"
 [ -f "$QUEUE" ] || : > "$QUEUE"
 MAX_PER_HOUR="${VIS_MAX_PER_HOUR:-12}"
 MIN_GAP_MIN="${VIS_MIN_GAP_MIN:-3}"
+# (19/11, medido) UNIDADE UNICA = milissegundos. O plugin memory.js escreve
+# `last` com Date.now() (ms) e o script lia/escrevia com date +%s (s): o status
+# imprimia "ultimo ha -29888226094min" e o gap comparava segundos contra
+# gap*60*1000, ou seja exigia 180000 s (~50 h) entre injecoes. Agora tudo em
+# ms, e um valor legado (<1e12) e normalizado multiplicando por 1000.
 now=$(date +%s)
+now_ms=$(date +%s%3N)
+[ -n "$now_ms" ] && [ "${#now_ms}" -ge 10 ] || now_ms=$(( now * 1000 ))
 cmd_enqueue() {
   local t="$*"
   [ -z "$t" ] && { echo "vis-enqueue: tarefa vazia" >&2; exit 2; }
@@ -39,27 +46,33 @@ cmd_next() {
 cmd_status() {
   local pend=0
   if [ -s "$QUEUE" ]; then pend=$(grep -c . "$QUEUE" 2>/dev/null | head -1); pend=${pend:-0}; else pend=0; fi
-  local usados=0 ultima=0
+  local ultima_min=0 usados=0 ultima=0
   if [ -f "$BUDGET" ]; then
     usados=$(python3 -c "
 import json,sys
 try:
     d=json.load(open('$BUDGET'))
-    print(d.get('count',0) if int(d.get('hour',0))==int($now//3600) else 0)
+    print(d.get('count',0) if int(d.get('hour',0))==int($now_ms//3600000) else 0)
 except Exception: print(0)
 " 2>/dev/null)
-    ultima=$(python3 -c "
-import json
-try: print(json.load(open('$BUDGET')).get('last',0))
-except Exception: print(0)
+    ultima_min=$(python3 -c "
+import json,sys
+try:
+    last=int(json.load(open('$BUDGET')).get('last',0) or 0)
+except Exception:
+    sys.exit(0)
+if 0 < last < 10**12: last *= 1000   # legado em segundos
+print(max(0, int(($now_ms-last)//60000)))
 " 2>/dev/null)
   fi
-  echo "vis-enqueue: fila=$pend | injecoes nesta hora=$usados/$MAX_PER_HOUR | ultimo ha $(( (now-ultima)/60 ))min | alvo=$(cat "$STATE/vis-session" 2>/dev/null || echo 'qualquer')"
+  [ -n "$usados" ] || usados=0
+  [ -n "$ultima_min" ] || ultima_min=0
+  echo "vis-enqueue: fila=$pend | injecoes nesta hora=$usados/$MAX_PER_HOUR | ultimo ha ${ultima_min}min | alvo=$(cat "$STATE/vis-session" 2>/dev/null || echo 'qualquer')"
   [ "$pend" -gt 0 ] && sed 's/^/  - /' "$QUEUE" | head -5
   return 0
 }
 cmd_budget() {
-  python3 - "$BUDGET" "$now" "$MAX_PER_HOUR" "$MIN_GAP_MIN" <<'PY'
+  python3 - "$BUDGET" "$now_ms" "$MAX_PER_HOUR" "$MIN_GAP_MIN" <<'PY'
 import json, os, sys
 path, now, mx, gap = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])
 d = {"count": 0, "hour": now // 3600000, "last": 0}
@@ -69,10 +82,13 @@ except Exception:
     pass
 if d.get("hour") != now // 3600000:
     d = {"count": 0, "hour": now // 3600000, "last": d.get("last", 0)}
+last = int(d.get("last", 0) or 0)
+if 0 < last < 10**12:   # legado em segundos -> ms
+    last *= 1000
 if d.get("count", 0) >= mx:
     print("BLOQUEADO")
     sys.exit(1)
-if now - int(d.get("last", 0)) < gap * 60 * 1000:
+if now - last < gap * 60 * 1000:
     print("BLOQUEADO")
     sys.exit(1)
 d["count"] = d.get("count", 0) + 1

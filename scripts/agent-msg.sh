@@ -57,6 +57,26 @@ ROSTER="$HERE/agent-roster.py"
 LOG="$HOME/projects/AGENTS-MSG.log"
 mkdir -p "$(dirname "$LOG")" /tmp/opencode
 
+# ── COMUNICACAO VISIVEL (19/11, pedido do dono) ───────────────────────
+# Toda mensagem entre agentes tambem entra na fila vis-enqueue: o plugin
+# memory.js injeta via ctx.session.synthetic() na sessao declarada em
+# ~/.local/state/jarvis/vis-session quando ela fica ociosa. Assim o dono ve a
+# conversa da frota NA JANELA DELE, sem abrir o hub nem o bus. O orcamento
+# (VIS_MAX_PER_HOUR, default 12/h com gap de 3 min) ja limita o volume:
+# isto e' uma amostra legivel, o arquivo inteiro continua no LOG e no bus.
+# Sem script novo: reusa o vis-enqueue que ja existe.
+vis_visible() {
+    local rem="$1" tipo="$2" alvo="$3" texto="$4" sessao_alvo="$5"
+    command -v "$HOME/bin/vis-enqueue" >/dev/null 2>&1 || return 0
+    local alvo_vis=""
+    alvo_vis=$(cat "$HOME/.local/state/jarvis/vis-session" 2>/dev/null)
+    # se a mensagem ja foi entregue na sessao do dono, nao duplica (a copia ja'
+    # visivel la; enfileirar so' geraria um /goal repetindo o texto).
+    if [ -n "$alvo_vis" ] && [ "$alvo_vis" = "$sessao_alvo" ]; then return 0; fi
+    "$HOME/bin/vis-enqueue" enqueue "[AGENT] $rem : $alvo ($tipo) : $texto" \
+        >/dev/null 2>&1 || true
+}
+
 # ── config do servidor opencode (API) ─────────────────────────────────
 # Lê da configuração centralizada (scripts/agent-config.json) com fallback
 # para a variável de ambiente AGENTS_OC_URL.
@@ -452,6 +472,7 @@ print(json.dumps({"parts": [{"type": "text", "text": sys.argv[1]}]}))' "$TEXTO_F
         printf '%s | %s | %s | %s(%s) | id=%s | re=%s | %s\n' \
             "$(date '+%d/%m %H:%M')" "$REMETENTE" "$TIPO" "$NOME_ALVO" "$END" \
             "$MSG_ID" "${REPLY_TO:--}" "$TEXTO_ESCAPED" >> "$LOG"
+        vis_visible "$REMETENTE" "$TIPO" "$NOME_ALVO" "$TEXTO_ESCAPED" "$SESSAO"
         continue
     fi
 
@@ -471,6 +492,7 @@ print(send(to=sys.argv[1], message=sys.argv[2], agent=sys.argv[3], lane=sys.argv
     printf '%s | %s | %s | %s(%s) | id=%s | re=%s | %s\n' \
         "$(date '+%d/%m %H:%M')" "$REMETENTE" "bus" "$DESTINO_BUS" "$END" \
         "$MSG_ID" "${REPLY_TO:--}" "$TEXTO_ESCAPED" >> "$LOG"
+    vis_visible "$REMETENTE" "bus" "$DESTINO_BUS" "$TEXTO_ESCAPED" ""
     continue
 
   # (14/11) bloco focus+wtype REMOVIDO: codigo morto — todo alvo ou
