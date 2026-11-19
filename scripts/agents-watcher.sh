@@ -162,7 +162,15 @@ ROSTER_PY="${AGENTS_ROSTER_PY:-$SCRIPT_DIR/agent-roster.py}"
 # catch-all da SPA e devolvia HTML 200 -> "wake API falhou" sem erro
 # visivel: a frota nao acordava). Paths reais (openapi.json):
 # POST /api/session/{id}/prompt  {"text": ...,"delivery": "queue"|"steer"}
-OC_URL="${AGENTS_OC_URL:-http://100.121.100.103:4599}"
+OC_URL="${AGENTS_OC_URL:-$(python3 -c "
+import json, sys
+try:
+    cfg = json.loads(open('/home/nixos/projects/nixos-ai/scripts/agent-config.json').read())
+    print(cfg.get('ambiente', {}).get('AGENTS_OC_URL', 'http://127.0.0.1:4599'))
+except Exception:
+    print('http://127.0.0.1:4599', file=sys.stderr)
+    sys.exit(1)
+" 2>/dev/null || echo "http://127.0.0.1:4599")}"
 OC_ENVFILE="${AGENTS_OC_ENVFILE:-$HOME/.config/opencode/server.env}"
 OC_USER="${OPENCODE_SERVER_USERNAME:-opencode}"
 OC_PASS="${OPENCODE_SERVER_PASSWORD:-}"
