@@ -53,6 +53,34 @@ O desvio é **zero nos três adapters locais** (3 rodadas idênticas): a diferen
 de 9 itens entre o v9 e o v10 é real, não ruído. O braço de API tem desvio
 1,2 (é a API, com 429 e variabilidade de cota).
 
+### 2.1 A mesma métrica na escala que o dono pediu (1.000 / 5.000 / 10.000 tokens)
+
+A tabela acima está em "por 1M de token" porque é a unidade do vídeo. O dono
+pediu a escala de 1.000 / 5.000 / 10.000 tokens. A conversão é **exata** (os
+mesmos números medidos, reescalonados): aprovações por token = acertos da
+rodada / tokens da rodada; a coluna de 1.000 tokens é a unidade de 1M
+dividida por 1.000.
+
+| braço | 1.000 tokens | 5.000 tokens | 10.000 tokens | por 1M token |
+|---|---|---|---|---|
+| **especialista (4B MTP + LoRA v9)** | **6,3** aprovações | **31,5** | **63,0** | 6.301 |
+| especialista (4B MTP + LoRA v10, Kaggle) | 4,3 | 21,7 | 43,3 | 4.330 |
+| contexto grande (1M ctx, sem LoRA de voz) | 2,1 | 10,4 | 20,8 | 2.080 |
+| produção (o adapter que está no ar) | 2,6 | 13,0 | 26,1 | 2.609 |
+
+Leitura: com 10.000 tokens, o especialista v9 entrega **63 tarefas aprovadas**
+onde o modelo de contexto grande entrega **21**, e onde o adapter que está
+no ar hoje (o v1, com 2,6 por 1.000) entrega **26**. O mesmo token compra
+3x mais trabalho resolvido no v9, e a razão é constante com o orçamento
+porque as duas taxas são lineares no token.
+
+**O que a escala revela e a coluna por 1M esconde:** o custo por tarefa
+aprovada é o que importa, e ele é **1,8x menor no especialista** (4.602
+tokens para 39 itens contra 8.332). Um orçamento de 10.000 tokens pagaria
+**2,2 rodadas** do especialista (85 itens, cerca de 63 aprovações) contra
+**1,2** do modelo de contexto grande. E o braço "produção" mostra que o
+adapter que está no ar hoje custa **2,4x mais** por acerto que o v9.
+
 ## 3. O v10 não aprendeu a classificar — e o culpado é o treino, não o conjunto
 
 O v10 (Kaggle, COMPLETE) deu 20/39 contra os 29/39 do v9, com desvio zero nos

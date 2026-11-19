@@ -43,6 +43,28 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 - **Forense 09/08**: 6/8 achados confirmados corrigidos; F2/F4 re-verificados.
 
 ## Problemas corrigidos (com commits)
+10. **Frota muda no host** (19/11, lane runtime-production): a entrega por API
+    da frota morria com `Connection refused` (o serve escuta só no IP do
+    tailnet, `opencode-serve.nix`, e o config declarava `127.0.0.1:4599`) e
+    `--to` não alcançava 5 dos 6 agentes (janela do Hyprland vazia, TUI
+    dentro de `foot`). `agent-api.py` cai para o listener real da porta;
+    `--to` identifica por `@sess:<id>` quando não há janela — `995eb3a3`.
+11. **Orçamento da comunicação visível** (19/11): o `vis-enqueue` lia o
+    `last` em segundos e o plugin escrevia em milissegundos (o status
+    imprimia `ultimo ha -29888226094min`; o gap exigia ~50 h), e o hook
+    gastava orçamento antes de olhar a fila. ms em todo o caminho, fila
+    checada primeiro — `4085440a`.
+12. **Medição que sequestrava a produção** (19/11): `bench-v9-v10-heldout3.py`
+    subia o MTP na porta 8092 (a do default), matava o default por pattern e
+    deixava órfão com o adapter v1; `night-qwen.sh` só provava que algo
+    respondia na porta. Porta de medição 8094, adapter v10 real, cleanup
+    garantido, gate de shadow no bench — `76625d44`.
+13. **Dois donos do cliente de voz** (19/11): `duplex-restart.sh` matava o
+    cliente do systemd e relançava um órfão (a unit parava 15 s depois de
+    subir, medido no journal). O systemd passou a ser o dono único; a unit
+    da voz, que vivia só como arquivo solto em `~/.config/systemd/user`,
+    foi para o Nix (`home-manager/modules/services/duplex-voice.nix`) —
+    `d3047102`.
 1. `AGENTS.md` injetado por inteiro (1.684 linhas) no handoff → 400 + ponteiro,
    `test_handoff.py` 4/4 — `d02c4371`.
 2. `fleet_model_route` v1 com MAP próprio (4ª política) → v2 lê
@@ -177,6 +199,15 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
 4. RAG gate SATISFEITO (0.93 ≥ 0.80) — próximo opcional: aumentar trecho
    do documento no reranker (350 → 600 chars) para os 3 misses conceituais.
    Ver `docs/audit/RAG-EVAL.md` §7.
+5. **16 units/timers de USUÁRIO fora do Nix** (medido 19/11 pela lane
+   nixos-ai/runtime-production): das 52 units em `~/.config/systemd/user`,
+   16 não têm menção em nenhum `.nix` do repo — chisel-client,
+   chisel-tunnel, context-guard (service+timer), dono-gate-ivan,
+   fleet-milestone (service+timer), fleet-watchdog (service+timer),
+   night-watch, pipewire-pulse, pipewire-session-manager, vpn-guard
+   (service+timer), wurm-macro, wurm-standalone. A unit da voz JÁ foi
+   trazida para o Nix (`d3047102`); as outras 15 continuam como finding.
+   Ver `docs/audit/PROJECT-AUDIT-LOG.md` §lane runtime-production.
 
 ## Arquivos que o próximo agente precisa ler
 - `AGENTS.md` (raiz, 1.684 linhas — ler o cabeçalho e as regras pinadas; o resto sob demanda).

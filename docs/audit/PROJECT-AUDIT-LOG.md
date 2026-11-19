@@ -272,3 +272,88 @@
 - Full suite: 2104 passed, 0 failed, 27 skipped, 1 warning.
 - Runtime :8092 saudável (unit declarada + v9 adapter).
 - Próximo: worktree prunable / uncommitted com manifesto; 3ª amostra chunks.
+
+## 2026-11-19 — lane nixos-ai/runtime-production (auditoria-runtime, codinome Lince)
+- HEAD inicial `d68b159a`; HEAD final `d3047102`.
+- Escopo declarado no roster: `scripts/bench-v9-v10-heldout3.py`,
+  `benchmarks/model-tiers/night-qwen.sh`, `modules/ai/models.nix`,
+  `scripts/duplex-restart.sh`, `scripts/duplex-voice-run.sh`,
+  `home-manager/modules/services/duplex-voice.nix`.
+- Sem sobreposição com a lane de documentação (docs/audit/*): só acrescento
+  entradas append-only aqui e no STATE, como combinado no bus.
+- P1-A CORRIGIDO (`76625d44`): `bench-v9-v10-heldout3.py` subia o MTP na
+  porta DE PRODUCAO (8092), matava o default por PATTERN e deixava o server
+  vivo se fosse interrompido (foi a origem do shadow de 05:30 com o adapter
+  v1). Agora: porta de medicao 8094, v10 apontando para o arquivo real do
+  Kaggle, nada de kill por pattern, VRAM checada antes, limpeza garantida por
+  atexit + SIGINT/SIGTERM.
+- P1-B CORRIGIDO (`76625d44`): `night-qwen.sh` provava so que ALGO
+  respondia na porta do default (um shadow passava) e esperava 300 s no
+  escuro. Agora ha gate de shadow (PID da porta vs MainPID da unit
+  DECLARADA) e o ALERTA carrega status + journal + VRAM + quem ocupa a porta.
+- P1-C CORRIGIDO (`d3047102`): `duplex-restart.sh` matava o cliente
+  supervisionado e relancava um orfao (setsid nohup) — medido no journal
+  (unit started 07:57:12, "Stopping ... duplex-voice.service" 15 s depois).
+  Agora o systemd e' o dono unico (restart da unit) e porta/gate custom usa
+  transient unit (`systemd-run --collect`), nunca orfao.
+- P2-D CORRIGIDO (`d3047102`): `duplex-voice.service` vivia como arquivo
+  solto em `~/.config/systemd/user` (618 B, sem .nix que a declarasse).
+  Agora e' `home-manager/modules/services/duplex-voice.nix`, com caminhos
+  absolutos do store (a unit solta dependia do PATH do shell).
+- Varredura: das 52 units/timers de usuario do host, 16 nao tem mencao em
+  NENHUM .nix do repo (chisel-client, chisel-tunnel, context-guard x2,
+  dono-gate-ivan, fleet-milestone x2, fleet-watchdog x2, night-watch,
+  pipewire-pulse, pipewire-session-manager, vpn-guard x2, wurm-macro,
+  wurm-standalone). PENDENCIA para a lane de Nix.
+- Runtime verificado depois das correcoes: default :8092 com o adapter v9 do
+  registry; voz de pe (MODO DUPLEX, asrd pronto, gate RESPOND com LoRA);
+  VRAM 5319/6141 MiB.
+- Testes: `bash -n` e `sh -n` nos scripts, `nix-instantiate --parse` nos
+  .nix, ExecStartPre renderizado pelo nix EXECUTADO (rc=0 contra :8097 viva,
+  rc=1 contra porta morta), check-text-chars OK.
+- Proximo: (1) a lista das 16 units fora do Nix vira nó do grafo de
+  melhorias; (2) `llm-swap.sh --free` ainda falha com "MODEL: variavel nao
+  associada" (linha 147) — debt herdado; (3) o bench noturno precisa da
+  janela de VRAM (router parado) e hoje falha as 04:00 quando o default nao
+  sobe — medir de novo com o gate novo.
+
+## 2026-11-19 — lane nixos-ai/runtime-production (auditoria-runtime, Lince)
+- HEAD inicial `d68b159a`; HEAD final `d3047102` (4 commits: `4085440a`, `995eb3a3`, `76625d44`, `d3047102`).
+- Escopo declarado no roster: `scripts/bench-v9-v10-heldout3.py`, `benchmarks/model-tiers/night-qwen.sh`,
+  `modules/ai/models.nix`, `scripts/duplex-restart.sh`, `scripts/duplex-voice-run.sh`,
+  `docs/audit/PROJECT-AUDIT-STATE.md`. Não toquei na revisão cronológica nem nos docs das outras lanes.
+- P1-A medido: `bench-v9-v10-heldout3.py` subia o MTP na PORTA DE PRODUCAO (8092), matava o default por
+  PATTERN (`pgrep -f 'llama-server -m <mtp>'`) e deixava o server vivo se fosse interrompido. Medido: orfao
+  das 05:30 as 13h com o adapter v1 (81 MB) em vez do v9 (2,9 MB) do registry, segurando a VRAM.
+  O script ainda chamava o v1 LEGADO de "v10" (o v10 real e' /tmp/opencode/v10-lora-gguf/microturn-4b-lora-v10.gguf).
+  FIX `76625d44`: porta de medicao 8094, v10 real, sem kill por pattern, VRAM/porta checadas, cleanup por
+  atexit+SIGINT/SIGTERM.
+- P1-B medido: `night-qwen.sh` provava so que ALGO respondia na porta do default (um shadow passava) e o
+  ALERTA era uma linha sem causa apos 300 s. FIX `76625d44`: gate que compara o PID que escuta com o MainPID
+  da unit DECLARADA (shadow = unit caida OU PID diferente) aborta a medicao; ALERTA agora traz status+journal+
+  VRAM+porta. Gate testado contra o estado real: unit MainPID=0, pid 709272 no adapter v1 -> shadow detectado.
+- P1-C medido: `duplex-restart.sh` matava o cliente do systemd por PATTERN e relancava um cliente ORFAO
+  (setsid nohup). Journal: duplex-voice.service started 07:57:12 e 15 s depois o proprio systemd registrou
+  "Stopping ... duplex-voice.service". FIX `d3047102`: porta/gate padrao -> `systemctl --user restart
+  duplex-voice.service` (systemd como dono unico); custom -> transient unit supervisionada (systemd-run --collect).
+- P2-A medido: `duplex-voice.service` vivia como arquivo COMUM em ~/.config/systemd/user (618 B, symlink de
+  store nenhum): nenhum .nix a declarava, nenhum rebuild a recriava, maquina montada do zero ficaria SEM VOZ.
+  FIX `d3047102`: home-manager/modules/services/duplex-voice.nix (caminhos absolutos do store; a unit solta
+  usava /bin/sh+timeout+seq+sleep do PATH) + import em home-manager/modules/default.nix.
+- Varredura: das 52 units/timers de usuario do host, 16 nao tem mencao em NENHUM .nix (chisel-client,
+  chisel-tunnel, context-guard x2, dono-gate-ivan, fleet-milestone x2, fleet-watchdog x2, night-watch,
+  pipewire-pulse, pipewire-session-manager, vpn-guard x2, wurm-macro, wurm-standalone). PENDENCIA para a
+  Fase 5: cada uma ou vira modulo declarativo ou ganha decisao documentada de "fora do Nix".
+- RUNTIME restaurado: `systemctl --user start duplex-voice.service` -> active (running) 16:40:44, MODO DUPLEX
+  no journal, asrd pronto, gate RESPOND com lora=RESPOND, NRestarts=0. O default :8092 responde com o v9
+  (`--lora .../microturn-4b-lora-v9.gguf`) pela unit DECLARADA (MainPID 2520576). Nenhum llama-server foi
+  reiniciado por mim: a unit ja estava de pe quando cheguei.
+- Frota (commits `4085440a` e `995eb3a3`, em paralelo a esta lane): orcamento do vis-enqueue normalizado
+  para ms (o gap comparava segundos contra ms e exigia ~50 h), hook passa a checar a fila ANTES de gastar o
+  orcamento, agent-msg enfileira a comunicacao visivel, agent-api.py cai para o listener real quando o base
+  declarado recusa (127.0.0.1:4599 vs 100.121.100.103:4599) e `--to` alcança quem nao tem janela do Hyprland
+  (5 dos 6 agentes do roster).
+- Proximo: (1) 16 units fora do Nix — priorizar context-guard, fleet-watchdog e vpn-guard; (2) fechar o item
+  #10 do backlog (tabela por token) com a coluna 1000/5000/10000 tokens, que a doc da lane mediu por 1M e o
+  dono pediu por escala; (3) revisar `llm-swap.sh --free` (case sem `MODEL` associado), ja apontado na secao
+  de shadow do STATE.
