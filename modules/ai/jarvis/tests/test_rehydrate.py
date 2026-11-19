@@ -206,3 +206,17 @@ def test_rehydrate_cooldown_env_is_honored(M, monkeypatch):
     a = M._handle_rehydrate({"task": "x"})
     b = M._handle_rehydrate({"task": "x"})
     assert "GUARDS" in a and "GUARDS" in b
+
+
+def test_rehydrate_includes_audit_checkpoint(tmp_path, monkeypatch) -> None:
+    """Optional mission checkpoint from JARVIS_AUDIT_STATE (19/11)."""
+    from jarvis.mcp_server import _rehydrate_audit
+
+    f = tmp_path / "PROJECT-AUDIT-STATE.md"
+    f.write_text("# PROJECT-AUDIT-STATE\n## Próxima tarefa\nfazer X\n", encoding="utf-8")
+    monkeypatch.setenv("JARVIS_AUDIT_STATE", str(f))
+    out = _rehydrate_audit()
+    assert "PROJECT-AUDIT-STATE" in out
+    assert "fazer X" in out
+    monkeypatch.setenv("JARVIS_AUDIT_STATE", str(tmp_path / "missing.md"))
+    assert _rehydrate_audit() == ""  # missing file -> empty block

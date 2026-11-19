@@ -2183,6 +2183,26 @@ def _rehydrate_roster() -> str:
     return "\n".join(lines)
 
 
+def _rehydrate_audit(max_lines: int = 14) -> str:
+    """Mission checkpoint (optional) — the persistent audit state.
+
+    Path is configurable via JARVIS_AUDIT_STATE so no project path is hardcoded.
+    Returns '' when absent: zero behavior change for non-audit sessions.
+    """
+    import os
+    path = os.environ.get(
+        "JARVIS_AUDIT_STATE",
+        str(Path.home() / "projects/nixos-ai/docs/audit/PROJECT-AUDIT-STATE.md"))
+    f = Path(path)
+    if not f.is_file():
+        return ""
+    try:
+        lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+        return "\n".join(lines[:max_lines])
+    except Exception:
+        return ""
+
+
 def _rehydrate_state(max_lines: int = 12) -> str:
     """Compact, deterministic session state for harness injection.
 
@@ -2197,6 +2217,11 @@ def _rehydrate_state(max_lines: int = 12) -> str:
         "## HANDOFF (latest)",
         _rehydrate_handoff(6),
     ]
+    # (19/11) continuous-audit checkpoint — optional, env-configurable
+    audit = _rehydrate_audit()
+    if audit:
+        blocks.append("## AUDIT CHECKPOINT (mission state)\n" + audit)
+
     try:
         from jarvis.core.memory import KIND_ERROR, KIND_LESSON, EpisodicMemory
 
