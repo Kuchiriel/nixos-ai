@@ -168,8 +168,14 @@ def lane_name(modelo: str) -> str:
     return f"dungeon-{modelo}"
 
 
-def lane_path(modelo: str) -> Path:
-    return WORKSPACE / lane_name(modelo)
+def lane_path(modelo: str, nivel: str | None = None) -> Path:
+    # (19/11) lane POR NIVEL: antes a lane (e a fila) eram as mesmas para
+    # L1/L2/L3, entao o harness executava a task que sobrou na fila — a de
+    # outro nivel. Medido: alternancia exata 5 passed/5 failed no L1.
+    base = lane_name(modelo)
+    if nivel:
+        return WORKSPACE / f"{base}-{nivel.lower()}"
+    return WORKSPACE / base
 
 
 def ensure_lane(modelo: str, nivel: str | None = None) -> Path:
@@ -182,7 +188,7 @@ def ensure_lane(modelo: str, nivel: str | None = None) -> Path:
     Entao: COPIA (o sandbox literal do video) — o agente edita a copia, a
     producao fica intacta, e o diff/commit da copia e o "script" pro dono.
     """
-    lane = lane_path(modelo)
+    lane = lane_path(modelo, nivel)
     if lane.exists():
         return lane
     if not DUNGEON_SRC.exists():
@@ -232,7 +238,7 @@ def enqueue(modelo: str, nivel: str | None = None) -> dict:
         raise SystemExit(f"nivel desconhecido: {nivel}")
     info = nivel_info(nivel)
     lane = ensure_lane(modelo, nivel)
-    queue = TaskQueue(project=lane_name(modelo))
+    queue = TaskQueue(project=lane_name(modelo) + (f"-{nivel.lower()}" if nivel else ""))
     # (17/11) ID UNICO POR CORRIDA. Antes era sempre "dungeon-ab-<modelo>":
     # o harness encontrava a task ANTIGA (failed, com attempts acumulados) e
     # entrava em "Recovering" — o A/B media a mesma task fracassada para
@@ -299,13 +305,18 @@ def run(modelo: str, max_tasks: int = 1, nivel: str | None = None) -> dict:
     os.environ["JARVIS_DISABLE_THINKING"] = "1"
 
     pedido = {
-        "project": lane_name(modelo),
+        "project": lane_name(modelo) + (f"-{nivel.lower()}" if nivel else ""),
         "max_tasks": max_tasks,
         "max_retries": 2,
         "llm_base_url": cfg_model["base_url"],
         "llm_model": cfg_model["model"],
         "telegram_notifications": False,
         "use_llm_discovery": False,
+        # (19/11) MEDIDO: o scripted discovery continuava ligado e criava tasks
+        # proprias (5 tasks) que TOMAVAM a precedencia da nossa -> o lab rodava
+        # L3 quando mandamos L1 ("Found 5 tasks"). O lab mede UMA task do nivel;
+        # descoberta livre mede outra coisa. Desliga as duas fontes.
+        "use_scripted_discovery": False,
         "auto_approve": True,
         "projects": [lane_name(modelo)],
         "strict_projects": True,
