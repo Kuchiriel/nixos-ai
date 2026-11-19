@@ -152,6 +152,37 @@ LEVELS = {
         "checker": "dungeon-checker.py",
         "aceite": CHECKER,
     },
+    # (19/11) SERA/H3 — chunking com verifier por subtarefa (item #18).
+    # Checkers validados: pre-A* falha, A* passa 5/5 em benchmarks/lab/.
+    "L2A": {
+        "texto": (
+            "In src/dungeon/entities.py, make `Enemy.update()` actually MOVE "
+            "toward the player (the Manhattan distance must decrease each tick) "
+            "and never stand still while a free step exists. Read the file "
+            "first. Do not add pathfinding: this chunk is only about moving."
+        ),
+        "checker": "checker-chunk-a.py",
+        "aceite": "pytest -x -q checker.py  ->  5 passed (chunk A: move)",
+    },
+    "L2B": {
+        "texto": (
+            "In src/dungeon/entities.py, make `Enemy.update()` NEVER step into "
+            "a wall. While walking toward the player, verify the candidate "
+            "cell is free before moving. Read the file first; do not assume."
+        ),
+        "checker": "checker-chunk-b.py",
+        "aceite": "pytest -x -q checker.py  ->  5 passed (chunk B: nao parede)",
+    },
+    "L2C": {
+        "texto": (
+            "In src/dungeon/entities.py, make `Enemy.update()` get around a "
+            "short 3-cell wall: when the direct step is blocked, try a free "
+            "lateral direction so it reaches the player. A local rule is "
+            "enough (no A*). Read the file first; do not assume."
+        ),
+        "checker": "checker-chunk-c.py",
+        "aceite": "pytest -x -q checker.py  ->  5 passed (chunk C: contorna)",
+    },
 }
 
 NIVEL_PADRAO = os.environ.get("AB_LEVEL", "L3")
@@ -197,6 +228,15 @@ def ensure_lane(modelo: str, nivel: str | None = None) -> Path:
     if lane.exists():
         shutil.rmtree(lane)
     shutil.copytree(DUNGEON_SRC, lane, symlinks=True)
+    # (19/11) SERA: o repo jarvis-dungeon tem A* desde e47e976. Sem isto o
+    # agente herda a solucao e o A/B mede nada. AB_PRE_ASTAR=1 restaura o
+    # movimento direto do commit 3432567 (baseline que os checkers esperam).
+    if os.environ.get("AB_PRE_ASTAR") == "1":
+        base = subprocess.run(
+            ["git", "-C", str(DUNGEON_SRC), "show", "3432567:src/dungeon/entities.py"],
+            capture_output=True, text=True, timeout=30)
+        if base.returncode == 0 and base.stdout.strip():
+            (lane / "src/dungeon/entities.py").write_text(base.stdout, encoding="utf-8")
     shutil.rmtree(lane / ".git", ignore_errors=True)
     # o harness cria branch por task: o sandbox precisa ser um repo git
     subprocess.run(["git", "-C", str(lane), "init", "-q"], check=True, timeout=60)
@@ -245,7 +285,7 @@ def enqueue(modelo: str, nivel: str | None = None) -> dict:
     # sempre, e o retry nunca partia de um estado limpo (medido no log).
     task = Task(
         id=f"dungeon-ab-{modelo}-{nivel}-{int(time.time())}",
-        project=lane_name(modelo),
+        project=lane_name(modelo) + (f"-{nivel.lower()}" if nivel else ""),
         description=info["texto"],    # o PEDIDO ORIGINAL, inteiro
         priority=1,                   # a primeira da fila
         risk="medium",
@@ -318,7 +358,7 @@ def run(modelo: str, max_tasks: int = 1, nivel: str | None = None) -> dict:
         # descoberta livre mede outra coisa. Desliga as duas fontes.
         "use_scripted_discovery": False,
         "auto_approve": True,
-        "projects": [lane_name(modelo)],
+        "projects": [lane_name(modelo) + (f"-{nivel.lower()}" if nivel else "")],
         "strict_projects": True,
     }
     # so passa os campos que existem nesta versao do HarnessConfig
@@ -339,8 +379,9 @@ def report() -> dict:
     """Le o veredito das DUAS filas (o que o sistema registrou)."""
     saida = {"modelos": {}}
     for modelo in MODELOS:
-        queue = TaskQueue(project=lane_name(modelo))
-        tasks = queue.get_tasks_by_project(lane_name(modelo))
+        projeto = lane_name(modelo) + (f"-{nivel.lower()}" if nivel else "")
+        queue = TaskQueue(project=projeto)
+        tasks = queue.get_tasks_by_project(projeto)
         linhas = []
         for t in tasks:
             evidence = t.evidence[-4:] if isinstance(t.evidence, list) else []
