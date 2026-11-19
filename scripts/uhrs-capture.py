@@ -254,18 +254,45 @@ def read_item_text(timeout=45.0, window_title=None, prefer_clipboard=True):
     return text, "ocr", path, ""
 
 
+def item_id_de(context):
+    """Id ESTAVEL de um item, derivado do CONTEXDO (sha256, 12 chars).
+
+    (20/11, coord-naming) O id era `cap-<timestamp em ms>`, e a MESMA
+    pergunta capturada duas vezes virava DOIS ids. E o id repetido e' o que
+    mede a REPETIBILIDADE do dono, que e' o teto real da delegacao
+    (arXiv 2510.07978: o limiar e' a repetibilidade do humano, nao 100%).
+    Sem id estavel, o bench nunca via esse numero.
+
+    A normalizacao (espaco unico, minusculo) faz o mesmo item capturado com
+    quebras de linha diferentes dar o mesmo id.
+    """
+    import hashlib
+    norm = " ".join(str(context or "").lower().split())
+    return "cap-" + hashlib.sha256(norm.encode("utf-8")).hexdigest()[:12]
+
+
 def write_label(context, answer, source="uhrs-capture", item_id=None,
                 path=None):
     """Grava a label no schema: contexto = o que o dono viu, answer = o que
-    ele respondeu. NUNCA o gabarito."""
+    ele respondeu. NUNCA o gabarito.
+
+    O contrato e' o MESMO do uhrs-practice.py (que grava as labels faladas):
+    id · context · answer · key · source · via · ts — assim o registro
+    unico (data/judgments/labels.jsonl) tem um formato so, e o bench le os
+    dois caminhos sem saber de onde veio cada linha.
+    """
     target = Path(path) if path else LABELS
     target.parent.mkdir(parents=True, exist_ok=True)
     row = {
-        "id": item_id or f"cap-{int(time.time() * 1000)}",
+        "id": item_id or item_id_de(context),
         "context": context,
         "answer": answer,
+        # (20/11) mesmo contrato do outro caminho: 'key' e' o gabarito, so
+        # para diagnostico — na captura nao existe gabarito (o dono viu o
+        # item real), entao e' nulo.
+        "key": None,
         "source": source,
-        "via": "captura-de-tela",
+        "via": "tela",
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
     with target.open("a", encoding="utf-8") as fh:
@@ -298,6 +325,25 @@ def self_test():
     assert saved["context"] == ctx, saved
     assert "gabarito" not in saved, saved
     assert saved["source"] == "uhrs-capture", saved
+    # (20/11) o mesmo CONTRATO do uhrs-practice.py: key + via
+    assert "key" in saved and saved["key"] is None, saved
+    assert saved["via"] == "tela", saved
+
+    # (20/11) o ID e' ESTAVEL: o mesmo contexto (mesmo item) da o mesmo id, e
+    #    a normalizacao faz o mesmo item capturado com quebras diferentes dar
+    #    o mesmo id. E' o que permite medir a repetibilidade do dono.
+    id1 = item_id_de(ctx)
+    id2 = item_id_de(ctx)
+    id3 = item_id_de(ctx.replace("\n", "  "))     # mesmo texto, outra quebra
+    id4 = item_id_de(ctx + " outro item")
+    assert id1 == id2 == id3, (id1, id2, id3)
+    assert id1 != id4, (id1, id4)
+    assert id1.startswith("cap-") and len(id1) == 16, id1
+    # e a gravacao usa o id estavel quando nenhum e' passado
+    write_label(ctx, "2", path=labels)
+    ids = [json.loads(l)["id"]
+           for l in labels.read_text(encoding="utf-8").splitlines() if l.strip()]
+    assert ids[1] == id1, ids
 
     # 3) OCR de uma imagem sintetica com texto known
     ocr_ok = False
@@ -319,7 +365,8 @@ def self_test():
 
     shutil.rmtree(tmp, ignore_errors=True)
     print("SELF-TEST ok: mapa de respostas, label com a resposta do DONO (sem "
-          "gabarito) e contexto intacto"
+          "gabarito), contexto intacto, contrato igual ao do uhrs-practice.py "
+          "(key/via) e id ESTAVEL (mesmo contexto => mesmo id)"
           + ("" if ocr_ok else " (OCR nao verificado aqui)"))
     return 0
 
