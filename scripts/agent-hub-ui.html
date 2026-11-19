@@ -190,6 +190,7 @@ pre.diff{
 </style>
 </head>
 <body>
+<div id="uiError" style="display:none;background:#5a1d1d;color:#ffd7d7;padding:8px 12px;font:12px monospace;position:sticky;top:0;z-index:99"></div>
 
 <header>
   <h1>🛰️ MISSION CONTROL</h1>
@@ -293,6 +294,16 @@ const $ = (s, el=document) => el.querySelector(s);
 try { const a=$('#casaIndex'); if(a) a.href=location.pathname.replace(/\/$/,'')+'/house'; } catch(e){}
 const $$ = (s, el=document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const showErr = (where, e) => {
+  try {
+    const el = document.getElementById('uiError');
+    if (!el) return;
+    el.style.display = 'block';
+    el.textContent = (el.textContent ? el.textContent + ' | ' : '') + where + ': ' + String(e && e.message || e).slice(0, 160);
+  } catch {}
+};
+window.addEventListener('error', ev => showErr('window.error', ev.error || ev.message));
+window.addEventListener('unhandledrejection', ev => showErr('promise', ev.reason));
 const hhmm = t => { if(!t) return '—'; const d=new Date(t); return isNaN(d)?'—':d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); };
 const ago = t => { if(!t) return '—'; const s=(Date.now()-t)/1000; if(s<60)return Math.round(s)+'s'; if(s<3600)return Math.round(s/60)+'m'; if(s<86400)return Math.round(s/3600)+'h'; return Math.round(s/86400)+'d'; };
 const TOKEN = () => localStorage.getItem('hubToken') || '';
@@ -341,21 +352,23 @@ async function loadPills(){
 /* ── agentes ────────────────────────────────────────── */
 async function loadAgents(){
   let d;
-  try{ d = await (await api('/api/agents')).json(); }catch(e){ return; }
+  try{ d = await (await api('/api/agents')).json(); }catch(e){ showErr('loadAgents', e); return; }
   const g = $('#grid');
   if(!(d.agents||[]).length){ g.innerHTML='<div class="card tiny dim">nenhum agente no roster</div>'; return; }
   const noRoster = (d.agents||[]).filter(a=>!a.unclaimed).length;
   $('#agCount').textContent = noRoster + ' no roster · ' + (d.agents||[]).length + ' sessões';
-  g.innerHTML = d.agents.map(a=>{
+  // (19/11) agentes do roster primeiro; sessões sem dono em bloco separado
+  const ordered = [...d.agents].sort((x,y)=> (x.unclaimed?1:0)-(y.unclaimed?1:0));
+  g.innerHTML = ordered.map(a=>{
     const tags=[];
     tags.push(`<span class="tag ${a.status}">${a.status}</span>`);
-    if(a.model) tags.push(`<span class="tag model" title="modelo em uso">${esc(a.model)}</span>`);
+    if(a.model) tags.push(`<span class="tag model" title="${esc(a.model)}">${esc(String(a.model).split('/').pop())}</span>`);
     if(a.persona) tags.push(`<span class="tag pers" title="persona MBTI">${esc(a.persona)}</span>`);
     if(a.unclaimed) tags.push(`<span class="tag idle" title="sessão viva no servidor, sem claim no roster">sem dono</span>`);
     if(a.lane && a.lane!=='-') tags.push(`<span class="tag" title="lane">${esc(a.lane)}</span>`);
     if(a.host) {
       const h = typeof a.host === 'object' ? (a.host.hostname || JSON.stringify(a.host)) : a.host;
-      tags.push(`<span class="tag" title="${esc(String(a.host))}">${esc(String(h))}</span>`);
+      tags.push(`<span class="tag" title="host: ${esc(String(h))}">${esc(String(h))}</span>`);
     }
     const note = a.note || a.context || '';
     return `<div class="ag" data-sess="${esc(a.session||'')}" data-name="${esc(a.codename||a.name)}">
@@ -371,6 +384,7 @@ async function loadAgents(){
         <button data-act="tr">📜 transcript</button>
         <button data-act="reload">↻ reload</button>
         <button data-act="swap">⇄ modelo</button>
+        <button data-act="close" title="fechar sessão (histórico fica no DB)">✕ fechar</button>
       </div>
     </div>`;
   }).join('');
@@ -384,6 +398,19 @@ async function loadAgents(){
         if(act==='wake'){ $('#cmdTarget').value=name; $('#cmdText').focus(); toast('alvo = '+name); return; }
         if(act==='reload'){ doCmd('reload', name); return; }
         if(act==='swap'){ doCmd('swap', name); return; }
+        if(act==='close'){
+          if(!sess){ toast('sem sessão'); return; }
+          if(!confirm('Fechar a sessão de ' + name + '? (o histórico fica no DB)')) return;
+          try{
+            const r = await api('/api/session/close', {method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({session:sess})});
+            const j = await r.json();
+            toast(j.ok ? 'sessão fechada' : ('falha: '+(j.error||r.status)));
+            if(j.ok) loadAgents();
+          }catch(e){ toast('falha: '+e); }
+          return;
+        }
       };
     });
   });
@@ -652,6 +679,17 @@ async function refreshAll(){
   renderTabs(); renderChips(); setTab(tab);
   await refreshAll();
   await loadProfiles();
+  // (19/11) diagnostico visivel: o painel mostra o que conseguiu carregar.
+  try {
+    const nAg = document.querySelectorAll('.ag').length;
+    const d = await (await api('/api/agents')).json();
+    const el = document.getElementById('uiError');
+    if (el && nAg === 0) {
+      el.style.display = 'block';
+      el.textContent = 'diagnóstico: /api/agents=' + (d.agents ? d.agents.length : 'sem agents')
+        + ' · DOM .ag=' + nAg + ' · ver console do navegador';
+    }
+  } catch (e) { showErr('diagnóstico', e); }
   connectStream();
   setInterval(loadPills, 6000);
   setInterval(()=>{ if(tab==='agentes') loadAgents(); if(tab==='ab') loadAB(); }, 7000);
