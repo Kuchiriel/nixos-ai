@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+# vpn-guard: uma VPN por vez, sem deixar a VPN parada para sempre.
+# Medido 18/11: Mullvad + Tailscale juntos degradaram a tailnet; o guard parou
+# o mullvad-daemon e nada o religou. No dia seguinte o dono viu "nao foi
+# possivel contatar o servico Mullvad" (stop manual nao volta com Restart=always).
+# Medido 19/11: `tailscale netcheck` diz UDP=false mesmo com a tailnet sadia
+# (Self.Online=true, Health=[], peer em 60 ms), entao o sinal de saude aqui e o
+# estado do tailscaled, nao o netcheck. O mecanismo de coexistencia e a tabela
+# nft mullvad_tailscale, que pode sumir sem a unit perceber: o fix reaplica o
+# bypass ANTES de desligar a VPN, e registra o que desligou para o restore.
+#
+# Uso:
+#   vpn-guard check     # diagnostico, nao muda nada
+#   vpn-guard fix       # repara o bypass; se ainda degradada, desliga a outra VPN e registra
+#   vpn-guard restore   # religa o que o guard desligou (so com a tailnet sadia)
+#   vpn-guard install   # instala o timer do usuario apontando para ESTE arquivo
+set -uo pipefail
+STATE="${VPN_GUARD_STATE:-$HOME/.local/state/vpn-guard}"
+mkdir -p "$STATE"
+LOG="$STATE/vpn-guard.log"
+STOPPED="$STATE/stopped"
+say() { printf '%s %s\n' "$(date '+%H:%M:%S')" "$*" | tee -a "$LOG"; }
+
+# Saida: "ok" com exit 0, ou o motivo da degradacao com exit 1.
+health() {
+  timeout 25 tailscale status --json 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print("tailscaled sem resposta"); sys.exit(1)
+health = d.get("Health") or []
+ok = d.get("BackendState") == "Running" and d.get("Self", {}).get("Online") and not health
+print("ok" if ok else "degradada: " + ("; ".join(health) or d.get("BackendState", "?")))
+sys.exit(0 if ok else 1)
+'
+}
+
+other_vpn_units() {
+  for u in mullvad-daemon wg-quick-mullvad protonvpn-cli nordvpn-daemon; do
+    systemctl is-active "$u" >/dev/null 2>&1 && echo "$u"
+  done
+}
+
+record_stopped() {
+  local u="$1" tmp="$STOPPED.tmp"
+  : > "$tmp"
+  [ -f "$STOPPED" ] && awk -v u="$u" '$1 != u' "$STOPPED" >> "$tmp"
+  printf '%s %s\n' "$u" "$(date +%s)" >> "$tmp"
+  mv "$tmp" "$STOPPED"
+}
+
+# Reaplica a tabela nft que marca o trafego CGNAT do Tailscale.
+bypass_repair() {
+  systemctl is-enabled --quiet mullvad-tailscale-bypass 2>/dev/null || return 1
+  say "reaplicando bypass mullvad_tailscale"
+  sudo -n systemctl restart mullvad-tailscale-bypass 2>/dev/null || return 1
+  sleep 6
+}
+
+case "${1:-check}" in
+  check)
+    if msg=$(health); then
+      say "tailnet OK ($msg)"
+      if [ -s "$STOPPED" ]; then
+        say "parado pelo guard: $(awk '{printf "%s ", $1}' "$STOPPED")(use: vpn-guard restore)"
+        exit 3
+      fi
+      exit 0
+    fi
+    say "tailnet $msg"
+    echo "VPNs ativas: $(other_vpn_units | tr '\n' ' ')"
+    exit 1
+    ;;
+  fix)
+    if msg=$(health); then
+      say "tailnet OK ($msg), nada a fazer"
+      [ -s "$STOPPED" ] && say "pendente de restore: $(awk '{printf "%s ", $1}' "$STOPPED")"
+      exit 0
+    fi
+    say "tailnet $msg"
+    units=$(other_vpn_units)
+    if [ -n "$units" ] && bypass_repair; then
+      if msg=$(health); then
+        say "RECOVERY: bypass reaplicado, tailnet OK com $units ativa"
+        exit 0
+      fi
+      say "bypass reaplicado mas tailnet ainda $msg"
+    fi
+    if [ -z "$units" ]; then
+      say "tailnet degradada sem outra VPN ativa, a causa e outra"
+      exit 1
+    fi
+    for u in $units; do
+      say "desligando $u (1 VPN por vez)"
+      if sudo -n systemctl stop "$u"; then
+        say "$u parado e registrado (vpn-guard restore)"
+        record_stopped "$u"
+      else
+        say "falha ao parar $u"
+      fi
+    done
+    sleep 6
+    if msg=$(health); then
+      say "RECOVERY: tailnet OK apos desligar a outra VPN"
+      exit 0
+    fi
+    say "ainda $msg, investigar firewall/DERP (ver AGENTS.md)"
+    exit 1
+    ;;
+  restore)
+    if ! msg=$(health); then
+      say "tailnet $msg, nao religo a VPN agora"
+      exit 1
+    fi
+    if [ ! -s "$STOPPED" ]; then
+      say "nada para religar"
+      exit 0
+    fi
+    tmp="$STOPPED.tmp"
+    : > "$tmp"
+    while read -r u _ts; do
+      [ -z "${u:-}" ] && continue
+      if systemctl is-active --quiet "$u"; then
+        say "$u ja estava ativo"
+        continue
+      fi
+      if sudo -n systemctl start "$u"; then
+        say "$u religado"
+      else
+        say "falha ao religar $u"
+        printf '%s %s\n' "$u" "$(date +%s)" >> "$tmp"
+      fi
+    done < "$STOPPED"
+    mv "$tmp" "$STOPPED"
+    ;;
+  install)
+    script=$(readlink -f "$0")
+    mkdir -p "$HOME/.config/systemd/user"
+    cat > "$HOME/.config/systemd/user/vpn-guard.service" <<EOF
+[Unit]
+Description=Guarda 1 VPN por vez (Mullvad x Tailscale)
+[Service]
+Type=oneshot
+ExecStart=$script fix
+EOF
+    cat > "$HOME/.config/systemd/user/vpn-guard.timer" <<EOF
+[Unit]
+Description=Checa a tailnet a cada 15 min
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=15min
+Persistent=true
+[Install]
+WantedBy=timers.target
+EOF
+    systemctl --user daemon-reload && systemctl --user enable --now vpn-guard.timer
+    say "timer vpn-guard instalado apontando para $script"
+    ;;
+  *) echo "uso: vpn-guard check|fix|restore|install"; exit 2 ;;
+esac

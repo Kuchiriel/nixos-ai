@@ -455,9 +455,15 @@
     description = "Marks Tailscale CGNAT traffic so the Mullvad tunnel does not swallow it";
     wantedBy = ["multi-user.target"];
     after = ["firewall.service" "mullvad-daemon.service"];
+    # (19/11) restart do mullvad-daemon reaplica a tabela. Medido: a tabela
+    # sumiu do ruleset com a unit ainda "active (exited)" e o bypass parou de
+    # valer, derrubando a tailnet com o tunel de pe.
+    partOf = ["mullvad-daemon.service"];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      # Idempotente: o restart da unit nao pode falhar por "table exists".
+      ExecStartPre = "-${pkgs.nftables}/bin/nft delete table inet mullvad_tailscale";
       ExecStart = "${pkgs.nftables}/bin/nft -f ${pkgs.writeText "mullvad-tailscale.nft" ''
         table inet mullvad_tailscale {
           chain output {
@@ -468,6 +474,29 @@
         }
       ''}";
       ExecStop = "${pkgs.nftables}/bin/nft delete table inet mullvad_tailscale";
+    };
+  };
+
+  # (19/11) A unit acima fica verde mesmo quando a tabela some do ruleset. Este
+  # timer confere a tabela e reaplica o bypass, para a tailnet nao degradar em
+  # silencio com a VPN conectada.
+  systemd.services.mullvad-tailscale-bypass-check = {
+    description = "Reaplica o bypass do Tailscale se a tabela nft sumir";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.writeShellScript "mullvad-bypass-check" ''
+        if ! ${pkgs.nftables}/bin/nft list table inet mullvad_tailscale >/dev/null 2>&1; then
+          ${config.systemd.package}/bin/systemctl restart mullvad-tailscale-bypass.service
+        fi
+      ''}";
+    };
+  };
+  systemd.timers.mullvad-tailscale-bypass-check = {
+    wantedBy = ["timers.target"];
+    timerConfig = {
+      OnBootSec = "2min";
+      OnUnitActiveSec = "5min";
+      Unit = "mullvad-tailscale-bypass-check.service";
     };
   };
 
