@@ -13,7 +13,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 ## Datas e HEADs
 - Início da missão: 2026-11-19.
 - HEAD inicial da auditoria: `57c9176517ca2f27d8e3285deb43f009cb0a21b3` (`main`).
-- HEAD atual: `473d0270` (revert rag rerank skip; gate RAG SATISFEITO).
+- HEAD atual: `0b749111`.
 - Primeiro commit do projeto: `ae8789fac5cbb8b2527f5091c9b2877507f8337e` (2024-11-23, fork de `nixos-config-reborn`).
 
 ## Fases
@@ -116,6 +116,14 @@ esse arquivo e não reeditar por cima.** O registro desta sessão vive no
 `PROJECT-AUDIT-STATE.md`, `PROJECT-AUDIT-LOG.md`, `PROJECT-HISTORY.md`,
 `ARCHITECTURE-MAP.md`, `KNOWLEDGE-SYSTEM-AUDIT.md`, `OPENCODE-CONTINUITY-AUDIT.md`,
 `NIXOS-AUDIT.md`, `TECHNICAL-DEBT.md`, `IMPROVEMENT-ROADMAP.md`.
+
+## A/B #18 — arm inválido descoberto e corrigido (19/11 14:25)
+`mtp-lora` **não é braço válido**: `llm-swap.sh` só suporta `bonsai|mtp`;
+por isso todas as linhas mtp-lora eram `motivo=infra, erro=swap`. O canonical
+runner agora usa **mtp + bonsai** e já provou: `mtp @ L2 rc=0, checker`,
+sem swap. Primeiro sinal real: bonsai single L2 = 1/5, chunks L2A/B/C = 4/5
+cada (1 amostra por nível) — chunking parece melhorar, mas faltam 3 amostras.
+Runner PID 2384517, 3 ciclos por braço.
 
 ## A/B #18 — estado real (reconciliação 19/11)
 Runner confiável = **canonical A/B** (`chunk_ab_canonical.py`), usa o loop de

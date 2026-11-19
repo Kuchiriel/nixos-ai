@@ -216,3 +216,11 @@
 - RAG-EVAL.md §7 (commit `684a12ef`) declara o gate SATISFEITO (0.93 ≥ 0.80) pelo juiz canônico de 15 perguntas (`scripts/rag-eval.py`). O dense-ID fix (`de1cbf66`) e o boost fix (`b907a442`) coexistem.
 - Próximo: #22 (A/B timeout), Fase 6 (.bak-*), recall fusão ("chars per chunk").
 - Riscos: 47+ uncommitted, worktree coord-mcp, agente auditoria-runtime ativo.
+
+## 2026-11-19 — A/B arm fix (8ª entrada)
+- HEAD `0b749111`.
+- Descoberto: `mtp-lora` não é braço suportado por llm-swap.sh → todas as
+  linhas eram `infra/swap`; runner corrigido para `mtp bonsai`.
+- Verificado: mtp @ L2 rc=0 com veredito de checker; bonsai segue.
+- Sinal preliminar: bonsai single L2 1/5 vs chunks 4/5 (1 amostra/nível).
+- Próximo: 3 amostras por braço → convergência final → fechar #18.
