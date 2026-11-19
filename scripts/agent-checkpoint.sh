@@ -230,7 +230,11 @@ if [ "$DRY" -eq 0 ]; then
     printf '## Rehydration\n\n1. este HANDOFF · 2. topo da fila · 3. memórias · 4. RAG\n'
   } > "$HANDOFF"
   if [ "$COMMIT" -eq 1 ] && git -C "$VAULT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    git -C "$VAULT_DIR" add -- "$(basename "$HANDOFF")" 2>/dev/null
+    # (19/11) `add -A` DENTRO do repo do vault, nao no monorepo: o commit
+    # anterior so pegava a nota deste handoff e 276 notas de outras vias
+    # (vault_write sem commit, corpora, HANDOFFs manuais) ficaram untracked
+    # por um mes num vault sem remote. O vault e um repo de um proposito so.
+    git -C "$VAULT_DIR" add -A 2>/dev/null
     if git -C "$VAULT_DIR" commit -q -m "handoff: $ERA ($DATA)" 2>/dev/null; then VAULT_STATUS="nota + commit"
     else VAULT_STATUS="nota escrita (commit falhou)"; fi
   else

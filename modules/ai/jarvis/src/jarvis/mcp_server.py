@@ -2389,10 +2389,9 @@ def _handle_vault_write(args: dict[str, Any]) -> str:
         if not safe_name or safe_name in (".", "..") or "\\" in name or "/" in name:
             return "ERROR: invalid note name (subdirs/traversal not allowed)"
         mv = MemoryVault()
-        from jarvis.core import vault_cipher
-
-        note_path = vault_cipher.note_path(mv.vault_dir, f"{safe_name}.md")
-        vault_cipher.write_text(note_path, content)
+        # (19/11) write_note commita: antes gravava sem commit e 276 notas
+        # ficaram untracked por um mes num repo sem remote.
+        note_path = mv.write_note(safe_name, content)
         return f"Note saved: {note_path}"
     except Exception as e:
         return f"ERROR: vault_write failed: {e}"

@@ -109,6 +109,28 @@ def test_summarize_commits_git_when_requested(tmp_path, monkeypatch) -> None:
     assert any(c[0] == "commit" for c in calls)
 
 
+def test_write_note_writes_and_commits(tmp_path, monkeypatch) -> None:
+    """`vault_write` grava E commita: nota so no worktree nao e duravel."""
+    calls = []
+    vault, _ = _vault(tmp_path, [])
+    monkeypatch.setattr(vault, "_git", lambda *a: (calls.append(a), True)[1])
+    note = vault.write_note("handoff-x", "# nota")
+    assert note.read_text(encoding="utf-8") == "# nota"
+    assert ("add", "--", "handoff-x.md") in calls
+    assert any(c[0] == "commit" for c in calls)
+
+
+def test_write_note_rejects_traversal_and_skips_commit_on_demand(tmp_path, monkeypatch) -> None:
+    calls = []
+    vault, _ = _vault(tmp_path, [])
+    monkeypatch.setattr(vault, "_git", lambda *a: (calls.append(a), True)[1])
+    with pytest.raises(ValueError):
+        vault.write_note("../escape", "x")
+    vault.write_note("sem-commit", "x", commit=False)
+    # `init` pode aparecer (vault novo); add/commit nao.
+    assert not [c for c in calls if c[0] in ("add", "commit")]
+
+
 def test_list_notes_empty_and_after_summary(tmp_path) -> None:
     vault, _ = _vault(tmp_path, [])
     assert vault.list_notes() == []

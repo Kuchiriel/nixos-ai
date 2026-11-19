@@ -1512,11 +1512,12 @@ def _execute_tool_call(name: str, args: dict[str, Any], approve: bool = False) -
 
     if name == "vault_write":
         try:
+            # (19/11) antes escrevia direto no path: sem validacao de nome,
+            # sem vault_cipher (nota em TEXTO PURO num vault cifrado) e sem
+            # commit (nota nao duravel). write_note cobre as tres.
             from jarvis.core.vault import MemoryVault
-            mv = MemoryVault()
-            note_path = mv.vault_dir / f"{args.get('name', '')}.md"
-            note_path.parent.mkdir(parents=True, exist_ok=True)
-            note_path.write_text(args.get("content", ""))
+            note_path = MemoryVault().write_note(
+                args.get("name", ""), args.get("content", ""))
             return f"Note saved: {note_path}", None
         except Exception as e:
             return f"ERROR: {e}", None

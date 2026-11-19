@@ -124,6 +124,34 @@ class MemoryVault:
         return vault_cipher.read_text(vault_cipher.note_path(
             self.vault_dir, safe))
 
+    # --- escrita ---
+
+    def write_note(self, name: str, content: str, *, commit: bool = True) -> Path:
+        """Grava uma nota e commita por default.
+
+        Nota escrita e nao commitada nao e duravel: o repo do vault nao tem
+        remote (medido 19/11) e 276 notas ficaram untracked por um mes porque
+        `vault_write` gravava e nao commitava — so o `summarize()` commitava.
+        O add e por caminho, nunca `-A` (o vault divide maquina com outras
+        lanes; a limpeza fica no checkpoint).
+        """
+        from pathlib import PurePath
+
+        from jarvis.core import vault_cipher
+
+        safe = PurePath(name).name
+        if not safe or safe in (".", "..") or "/" in name or "\\" in name:
+            raise ValueError("invalid note name")
+        if not safe.endswith(".md"):
+            safe = f"{safe}.md"
+        self._ensure_vault()
+        note = vault_cipher.note_path(self.vault_dir, safe)
+        vault_cipher.write_text(note, content)
+        if commit:
+            self._git("add", "--", note.name)
+            self._git("commit", "-q", "-m", f"vault: {safe[:-3]}")
+        return note
+
     # --- síntese ---
 
     def _collect_events(self, since_days: int, limit: int = 1000) -> list[dict[str, Any]]:
