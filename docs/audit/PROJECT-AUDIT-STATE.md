@@ -20,11 +20,11 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 | Fase | Estado | Entrega |
 |---|---|---|
 | 0 — Estado inicial / checkpoint | **CONCLUÍDA** | este arquivo + `PROJECT-AUDIT-LOG.md` |
-| 1 — Arqueologia (git/DB/docs) | **EM ANDAMENTO** | `../NIXOS-AI-ORIGEM-CRONOLOGICA.md` (ai-mesh) + `CHRONOLOGICAL-REVIEW-2026-11-19.md` |
+| 1 — Arqueologia (git/DB/docs) | **CONCLUÍDA** | `PROJECT-HISTORY.md` + `CHRONOLOGICAL-REVIEW-2026-11-19.md` |
 | 2 — Inventário arquitetural | **CONCLUÍDA (v1)** | `ARCHITECTURE-MAP.md` (medido 19/11 11:41) |
 | 3 — Auditoria do conhecimento | **CONCLUÍDA (v1)** | `KNOWLEDGE-SYSTEM-AUDIT.md` com contratos + medições |
-| 4 — OpenCode/contexto | PARCIAL | 259 compactações, 27 degeneradas (medido) |
-| 5 — NixOS/config | PARCIAL | zram 100%→50% confirmado; boot duplicado resolvido |
+| 4 — OpenCode/contexto | **CONCLUÍDA** | `OPENCODE-CONTINUITY-AUDIT.md` (`c9397991`) |
+| 5 — NixOS/config | **CONCLUÍDA** | `NIXOS-AUDIT.md` (`a828c568`) |
 | 6 — Código/org | PARCIAL | AGENTS.md 1684→400 linhas no handoff |
 | 7 — Implementação contínua | **EM ANDAMENTO** | commits abaixo |
 | 8 — Validação/regressão | PARCIAL | test_handoff 4/4; jobs 16/0 |
@@ -94,6 +94,11 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 - Tailnet oscila (2 VPNs no lado Android); Host acessível por IPv6 quando up.
 - Dados de produção do Qdrant e opencode.db: **somente leitura**.
 - Serviços ativos/VM/Hyper-V: nãoAlterar sem autorização.
+
+## Entregáveis permanentes (9/9 presentes em `docs/audit/`)
+`PROJECT-AUDIT-STATE.md`, `PROJECT-AUDIT-LOG.md`, `PROJECT-HISTORY.md`,
+`ARCHITECTURE-MAP.md`, `KNOWLEDGE-SYSTEM-AUDIT.md`, `OPENCODE-CONTINUITY-AUDIT.md`,
+`NIXOS-AUDIT.md`, `TECHNICAL-DEBT.md`, `IMPROVEMENT-ROADMAP.md`.
 
 ## Próxima tarefa exata
 1. Fase 6: varredura de código morto real (sem referência textual, com

@@ -93,3 +93,15 @@
 - Próximo passo: reescrever runner de A/B com try/except e timeout maior; retomar 2/12.
 - Riscos: 42 uncommitted; `.worktrees/coord-mcp` ativo; Falcao claimou #18 —
   verificar claim antes de editar lane dele.
+
+## 2026-11-19 — checkpoint final (mesma sessão, 3ª entrada)
+- HEAD inicial `57c91765`; HEAD final `42c840b3` (`main`).
+- Fases 0,1,2,4,5 concluídas; 3 e 7 parciais; 6 e 9 restantes.
+- Criados os 9 entregáveis permanentes em `docs/audit/` (último `42c840b3`).
+- A/B chunking: runner resiliente (`/tmp/chunk_ab_resilient.py`) com 2/12 amostras
+  válidas; 10 `rc1` inválidas movidas para `.json.invalid-bak`; loop parado
+  corretamente; sample 3 em execução (~9 min, patcher 298s + LLM ativo).
+- Testes nesta entrada: `jarvis_rehydrate` via tools_call OK; `test_boost.py`;
+  `rag_retrieval_test.py` 1/5; `check_rag_indexed.py` 4/4; DB schema/tool capture.
+- Próximo: aguardar 12/12 válidas e fechar #18; investigar RAG recall da fusão.
+- Riscos: 42 uncommitted, worktrees, agentes ativos, tailnet instável.
