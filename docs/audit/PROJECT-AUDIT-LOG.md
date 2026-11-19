@@ -211,3 +211,8 @@
   recall da fusão ("chars por chunk"), rag-prune --apply (autorização),
   knowledge_schema.py (decidir).
 - Riscos: 47+ uncommitted, worktree coord-mcp, agente auditoria-runtime ativo.
+- HEAD inicial `473d0270` (revert rag rerank skip).
+- Descoberto que a hipótese "desligar rerank quando há ID forte" já havia sido tentada e rejeitada (commit `e406b610`): os 3 misses não têm ID forte. Meu commit `e487c443` foi revertido em `473d0270`.
+- RAG-EVAL.md §7 (commit `684a12ef`) declara o gate SATISFEITO (0.93 ≥ 0.80) pelo juiz canônico de 15 perguntas (`scripts/rag-eval.py`). O dense-ID fix (`de1cbf66`) e o boost fix (`b907a442`) coexistem.
+- Próximo: #22 (A/B timeout), Fase 6 (.bak-*), recall fusão ("chars per chunk").
+- Riscos: 47+ uncommitted, worktree coord-mcp, agente auditoria-runtime ativo.
