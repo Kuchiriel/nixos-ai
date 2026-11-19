@@ -1,0 +1,50 @@
+{
+  "_comment": "Configuração centralizada da frota JARVIS. Todos os scripts devem ler destaqui. Nunca hardcode portas/URLs nos scripts — importe agent_config.py ou leia este JSON.",
+  "versao": 1,
+  "atualizado_em": "2026-11-19",
+
+  "host": {
+    "localhost": "127.0.0.1",
+    "tailscale_ipv4": "100.121.100.103",
+    "tailscale_ipv6": "fd7a:115c:a1e0::7f01:64bd",
+    "lan_ipv4": "192.168.15.10"
+  },
+
+  "servicos": {
+    "opencode_serve": { "porta": 4599, "host": "127.0.0.1", "descricao": "API do OpenCode (entrega de mensagens aos agentes)" },
+    "agent_hub": { "porta": 8091, "host": "127.0.0.1", "descricao": "Mission Control (agentes, spawn, wake, bus, A/B)" },
+    "jarvis_webui": { "porta": 8090, "host": "127.0.0.1", "descricao": "WebUI oficial (FastAPI + SvelteKit)" },
+    "coord_mcp": { "porta": 8765, "host": "127.0.0.1", "descricao": "Coordenação via bus (MCP streamable-http)" },
+    "llama_router": { "porta": 8080, "host": "127.0.0.1", "descricao": "LLM router (bonsai/prism)" },
+    "embeddings": { "porta": 8081, "host": "127.0.0.1", "descricao": "Embeddings (nomic)" },
+    "rerank": { "porta": 8082, "host": "127.0.0.1", "descricao": "Reranker (bge)" },
+    "qdrant": { "porta": 6333, "host": "127.0.0.1", "descricao": "Vector DB" },
+    "voz_duplex": { "porta": 8092, "host": "127.0.0.1", "descricao": "Cérebro da voz (Qwen 4B-MTP + LoRA microturn v9)" },
+    "svelte_dev": { "porta": 5173, "host": "127.0.0.1", "descricao": "SvelteKit dev (webUI frontend)" }
+  },
+
+  "caminhos": {
+    "repo_nixos_ai": "/home/nixos/projects/nixos-ai",
+    "repo_termux": "/home/nixos/projects/termux-assistant",
+    "repo_ai_mesh": "/home/nixos/projects/ai-mesh",
+    "roster_json": "/home/nixos/projects/.agents/roster.json",
+    "state_dir": "/home/nixos/.local/state/jarvis",
+    "logs_dir": "/home/nixos/logs",
+    "agent_hub_token": "/home/nixos/.config/opencode/agent-hub.token",
+    "opencode_server_env": "/home/nixos/.config/opencode/server.env",
+    "opencode_db": "/home/nixos/.local/share/opencode/opencode.db"
+  },
+
+  "bus": {
+    "repo": "Kuchiriel/mt5",
+    "issue": 12,
+    "label": "coord"
+  },
+
+  "ambiente": {
+    "AGENTS_OC_URL": "http://127.0.0.1:4599",
+    "AGENT_HUB_URL": "http://127.0.0.1:8091",
+    "COORD_MCP_URL": "http://127.0.0.1:8765/mcp",
+    "JARVIS_REPO": "/home/nixos/projects/nixos-ai"
+  }
+}
