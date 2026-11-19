@@ -13,7 +13,9 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 ## Datas e HEADs
 - Início da missão: 2026-11-19.
 - HEAD inicial da auditoria: `57c9176517ca2f27d8e3285deb43f009cb0a21b3` (`main`).
-- HEAD atual: `dfbda2c0` (recon 19/11, janela 2 — exclusividade 4B + checkpoint).
+- HEAD de código (último commit com mudança de código): `7fe7e4fc`
+  (exclusividade 4B). Commits de checkpoint podem estar 1 à frente;
+  fonte de verdade na retomada: `git rev-parse HEAD`.
 - Primeiro commit do projeto: `ae8789fac5cbb8b2527f5091c9b2877507f8337e` (2024-11-23, fork de `nixos-config-reborn`).
 
 ## Fases
