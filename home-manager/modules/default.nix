@@ -39,6 +39,10 @@
     # em ~/.config/systemd/user (fora do Nix): nenhum rebuild a recriava e
     # nenhuma maquina montada do zero teria voz. Ver o modulo.
     ./services/duplex-voice.nix
+    # (19/11) o guard de VPN estava SOLTO em ~/.config (instalado à mão no
+    # conserto do Mullvad): sem módulo, um rebuild o apagava e uma máquina
+    # nova não tinha o bypass da tailnet.
+    ./services/vpn-guard.nix
     ./wofi
     ./zathura.nix
     ./zsh.nix

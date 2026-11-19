@@ -50,6 +50,20 @@ let
   '';
 in
 {
+  # (19/11) MIGRAÇÃO: a unit nasceu SOLTA em ~/.config/systemd/user. O
+  # home-manager aborta o rebuild com "file in the way" quando o symlink
+  # encontra um arquivo comum — mover para o estado preserva a evidência e
+  # deixa o rebuild passar (mesma técnica do night-comms/team-suite).
+  home.activation."a-migrate-legacy-duplex-voice" = lib.mkIf true
+    (lib.hm.dag.entryBefore [ "checkFilesChanged" ] ''
+      legacy_dir="$HOME/.local/state/jarvis/legacy-duplex-voice-2026-11-19"
+      mkdir -p "$legacy_dir"
+      p="$HOME/.config/systemd/user/duplex-voice.service"
+      if [ -e "$p" ] && [ ! -L "$p" ]; then
+        mv "$p" "$legacy_dir/duplex-voice.service"
+      fi
+    '');
+
   systemd.user.services.duplex-voice = {
     Unit = {
       # (19/11) o texto dizia "gate kernel v8"; o registry (models.nix) aponta
