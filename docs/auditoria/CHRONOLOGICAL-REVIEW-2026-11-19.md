@@ -288,3 +288,24 @@ Leitura inicial:
 - `home-manager/home.nix` usava `stateVersion = "23.11"` e usuário `amper`.
 
 Status: `LIDO` para commit inicial. Pendente: validar se padrões perigosos desse commit sobrevivem no código atual.
+
+## Era 0 — Origem NixOS (2024-11-23)
+
+Commit inicial lido: `ae8789fac5cbb8b2527f5091c9b2877507f8337e` (`here we go again`, 2024-11-23).
+
+Arquivos introduzidos:
+- `flake.nix`, `flake.lock`
+- `nixos/configuration.nix`, `nixos/hardware-configuration.nix`
+- `nixos/modules/{bluetooth,boot,env,zram}.nix`
+- `nixos/packages.nix`
+- `home-manager/home.nix`, `tmux.nix`, `zsh.nix`, `waybar.nix`
+
+Leitura inicial:
+- Sistema nasceu como configuração NixOS + home-manager para um host pessoal (`amper`, Tashkent), com Hyprland, PipeWire, NH, Waybar, Zsh/Tmux.
+- `flake.nix` apontava `nixosConfigurations.nixos` e `homeConfigurations.amper`.
+- `nixos/configuration.nix` duplicava configuração de boot já presente em `nixos/modules/boot.nix` (observação histórica; não alterar sem validar host atual).
+- `zramSwap.memoryPercent = 100` no commit inicial é agressivo para zram; versão atual usa 50%, indicando evolução posterior.
+- `nh.flake = "/home/amper/flake"` era específico do host inicial.
+- `home-manager/home.nix` usava `stateVersion = "23.11"` e usuário `amper`.
+
+Status: `LIDO` para commit inicial. Pendente: validar se padrões perigosos desse commit sobrevivem no código atual.
