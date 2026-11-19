@@ -112,6 +112,9 @@ esse arquivo e não reeditar por cima.** O registro desta sessão vive no
 - Dados de produção do Qdrant e opencode.db: **somente leitura**.
 - Serviços ativos/VM/Hyper-V: nãoAlterar sem autorização.
 
+## Auditoria final
+`AUDIT-FINAL.md` — comparação inicial/final, testes e dívida restante.
+
 ## Entregáveis permanentes (9/9 presentes em `docs/audit/`)
 `PROJECT-AUDIT-STATE.md`, `PROJECT-AUDIT-LOG.md`, `PROJECT-HISTORY.md`,
 `ARCHITECTURE-MAP.md`, `KNOWLEDGE-SYSTEM-AUDIT.md`, `OPENCODE-CONTINUITY-AUDIT.md`,
