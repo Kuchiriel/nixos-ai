@@ -208,11 +208,13 @@ class EpisodicMemory:
         tenant: str | None = None,
         speaker: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Busca híbrida por eventos semânticamente relevantes.
+        """Busca híbrida por eventos semanticamente relevantes.
 
-        Inclui deduplicação por texto (memórias com texto igual ou >95% similar
-        são consolidadas, mantendo a mais recente) e limite de contexto para
-        não saturar o prompt de SLMs.
+        Deduplica apenas texto IDENTICO apos normalizacao (minusculas, strip,
+        primeiros 500 chars) — mantem o hit de maior score. Quase-duplicatas
+        NAO sao fundidas aqui: quem faz isso e `consolidate_memories`, que
+        marca `superseded` por cosseno e nunca apaga. Limite de contexto
+        para nao saturar o prompt de SLMs.
 
         tenant (isolamento 22/09, evidência: isolada 3/3 vs 0/3): quando
         dado, só retornam hits do mesmo tenant; hits sem tenant seguem
@@ -255,7 +257,8 @@ class EpisodicMemory:
                 if _ps is not None and _ps != speaker:
                     continue
             text = payload.get("text", "")
-            # dedup: texto idêntico ou muito similar → mantém o mais recente
+            # dedup exato (normalizado): o hit repetido no top-k some; o que
+            # "parece igual mas nao e" fica para a consolidacao noturna.
             text_key = text.strip().lower()[:500]  # chave de dedup — 500 chars evita falsos positivos
             if text_key in seen_texts:
                 continue
@@ -385,12 +388,34 @@ class EpisodicMemory:
         if not self.is_available():
             return {"error": "Qdrant indisponível"}
         self.ensure()
-        scroll = self._store._request(
-            "POST", f"/collections/{self.collection}/points/scroll",
-            json={"limit": 1000, "with_payload": True, "with_vector": True})
-        if not scroll or scroll.get("status") != "ok":
-            return {"error": "falha ao buscar memórias"}
-        points = scroll.get("result", {}).get("points", [])
+        # Paginado (19/11): antes lia UM page de 1000 pontos e ignorava
+        # `max_points` — com 3.105 memórias, dois tercos nunca eram vistos e
+        # o timer noturno consolidava sempre o mesmo prefixo por id.
+        points: list[dict[str, Any]] = []
+        offset: Any = None
+        page_size = max(1, min(500, int(max_points)))
+        while len(points) < max_points:
+            body: dict[str, Any] = {
+                "limit": min(page_size, max_points - len(points)),
+                "with_payload": True,
+                "with_vector": True,
+            }
+            if offset is not None:
+                body["offset"] = offset
+            try:
+                scroll = self._store._request(
+                    "POST", f"/collections/{self.collection}/points/scroll",
+                    json=body)
+            except Exception:  # noqa: BLE001
+                return {"error": "falha ao buscar memórias"}
+            if not scroll or scroll.get("status") != "ok":
+                return {"error": "falha ao buscar memórias"}
+            result = scroll.get("result", {}) or {}
+            page = result.get("points", []) or []
+            points.extend(page)
+            offset = result.get("next_page_offset")
+            if not offset or not page:
+                break
         if len(points) < 2:
             return {"status": "pontos_insuficientes", "processed": 0}
         import numpy as np
@@ -422,9 +447,10 @@ class EpisodicMemory:
                 for idx in cluster:
                     visited[idx] = True
         if not clusters:
-            return {"status": "sem_clusters", "processed": 0}
+            return {"status": "sem_clusters", "processed": 0,
+                    "scanned": len(points)}
         stats = {"clusters": len(clusters), "superseded": 0, "kept": 0,
-                 "consolidated": 0}
+                 "consolidated": 0, "scanned": len(points)}
         now = time.time()
         for cluster in clusters:
             cp = [pts[i] for i in cluster]

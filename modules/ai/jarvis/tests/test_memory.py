@@ -330,3 +330,49 @@ def test_consolidate_dry_run_writes_nothing(monkeypatch) -> None:
     out = mem.consolidate_memories(dry_run=True)
     assert out["superseded"] == 1
     assert store.payloads == {}
+
+
+class _PagedConsolidateStore(_ConsolidateStore):
+    """Scroll paginado: devolve no máximo `cap` pontos e next_page_offset."""
+
+    def __init__(self, points, cap=2):
+        super().__init__(points)
+        self.cap = cap
+        self.requests = []
+
+    def _request(self, method, path, json=None):
+        if "scroll" not in path:
+            raise AssertionError("unexpected " + path)
+        body = dict(json or {})
+        self.requests.append(body)
+        start = int(body.get("offset") or 0)
+        limit = min(int(body.get("limit", self.cap)), self.cap)
+        page = self.points[start:start + limit]
+        result = {"points": page}
+        nxt = start + len(page)
+        if nxt < len(self.points):
+            result["next_page_offset"] = nxt
+        return {"status": "ok", "result": result}
+
+
+def test_consolidate_scrolls_every_page(monkeypatch) -> None:
+    """Antes lia só o primeiro page de 1000 e ignorava max_points: com 3.105
+    memórias, dois terços nunca eram consolidados. Agora pagina."""
+    mem = EpisodicMemory(Config())
+    pts = [_cpoint(i, float(i), text=f"fato distintos {i}") for i in range(1, 7)]
+    store = _PagedConsolidateStore(pts, cap=2)
+    monkeypatch.setattr(mem, "_store", store)
+    out = mem.consolidate_memories(dry_run=True, max_points=6)
+    assert out["scanned"] == 6
+    assert len(store.requests) == 3
+    assert [r.get("offset") for r in store.requests] == [None, 2, 4]
+
+
+def test_consolidate_respects_max_points(monkeypatch) -> None:
+    mem = EpisodicMemory(Config())
+    pts = [_cpoint(i, float(i), text=f"fato distintos {i}") for i in range(1, 7)]
+    store = _PagedConsolidateStore(pts, cap=2)
+    monkeypatch.setattr(mem, "_store", store)
+    out = mem.consolidate_memories(dry_run=True, max_points=3)
+    assert out["scanned"] == 3
+    assert len(store.requests) == 2
