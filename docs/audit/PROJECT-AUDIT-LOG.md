@@ -505,3 +505,25 @@
   `docs/audit/PROJECT-AUDIT-STATE.md`.
 - Próximo: revalidar `--start-mtp code` apenas com janela/permissão (derruba
   a voz); Fase 9 final; P2 `knowledge_schema` contrato único.
+
+### 2026-11-19 — retomada 16 (crouton-alpha/termux)
+- HEAD de entrada `f18be80c`; HEAD de código `9f8d1537` (docs de checkpoint
+  podem estar 1 commit à frente — `git rev-parse HEAD` é a fonte de verdade).
+- Protocolo: AGENTS/STATE/LOG lidos; coord consultado (Onca live, Falcao/Cervo
+  stale); `jarvis_rehydrate` indisponível, checkpoint usado; 20 itens
+  uncommitted de outras lanes preservados; 0 staged em todo o processo.
+- Fase 8: suíte completa com `nix develop --command python3 -m pytest -q
+  modules/ai/jarvis/tests -p no:randomly` → **2109 passed / 0 failed /
+  27 skipped**, 240.28 s, rc=0. 1 DeprecationWarning em `test_eval_judge`.
+- Fase 6: `TOOLS-INDEX.md` estava STALE; localizei o gerador canônico em
+  `canary-official/dataset/tools/tools_index.py` (não existe no caminho que o
+  próprio índice cita). Corrigi a PRIMEIRA linha de `voice-watchdog.sh`
+  (é o que o gerador lê) e regenerei: 160→174 tools, `--check` limpo,
+  commit `9f8d1537`. Não houve edição manual do índice.
+- Fase 3 (delta): `knowledge_schema.build_payload` medido — 19 campos de
+  proveniência, `rag.py:841` passa todos; pendência P2 encerrada sem
+  alteração de produção.
+- Risco registrado: `scripts/hot-swap-model.sh` (untracked, outro agente)
+  duplica `llama-swap.sh` na :8096 com `nohup`+kill por PID — não foi tocado.
+- Próximo: decidir com o dono da lane o destino de `hot-swap-model.sh`;
+  revalidar `--start-mtp code` só com permissão; Fase 9 final.

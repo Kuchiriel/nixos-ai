@@ -209,20 +209,21 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
   Unit ainda solta (não Nix-managed) — dívida registrada.
 
 ## Próxima tarefa exata
-1. Fase 9: reconciliar `AUDIT-FINAL.md` com o HEAD real (`105214e4`) e com o
-   switch executado — a tabela ainda diz `b4039d87` e que a unit estava solta.
-2. **FEITO em `7fe7e4fc`**: perfil code `wanted=false` (era copy-paste do
-   perfil voz, `dc6a0e231`) e `llama-swap.sh` usa units do systemd em vez de
-   `nohup llama-server`. Lab estava PAUSADO; build+switch rc=0; voice active,
-   code inactive, `Conflicts=` presente. **Não** rodar `--start-mtp code`
-   sem permissão (derrubaria a voz).
-3. P2: `knowledge_schema.py` sem consumidor e divergente do payload real —
-   decidir se e executável ou documento; NAO tocar coleções de produção.
-4. Fase 6 (delta): procurar outros `setsid nohup` que relancem cliente duplex
-   (o `voice-watchdog.sh` foi corrigido em `105214e4`); conferir
-   `scripts/TOOLS-INDEX.md` contra os scripts reais.
-5. Rotina: testes focados no diff; suite completa (~4,5 min, `-p no:randomly`)
-   com janela livre. Rebuilds do host autorizados pelo dono nesta missão.
+1. **FEITO nesta janela (Fase 8)**: suíte completa
+   `nix develop --command python3 -m pytest -q modules/ai/jarvis/tests
+   -p no:randomly` → **2109 passed / 0 failed / 27 skipped**, 240 s, rc=0
+   (1 DeprecationWarning em `test_eval_judge`, não regressão).
+2. Fase 9: fechar `AUDIT-FINAL.md` com o resultado da suíte e o HEAD vivo.
+   A reconciliação anterior (`24622e1c`/`c5e3c147`) já foi feita.
+3. **FEITO (verificação)**: `knowledge_schema.build_payload` produz 19 campos
+   de proveniência e `rag.py:841` passa todos (medido 19/11). Sem divergência.
+   Não tocar coleções de produção sem autorização.
+4. **FEITO**: exclusividade 4B (`7fe7e4fc`) e busca por outros `setsid nohup`
+   (só o whisper-server em `duplex-voice-run.sh`, legítimo). `TOOLS-INDEX`
+   regenerado pelo gerador canônico em `9f8d1537` (`--check` limpo).
+   **Não** rodar `--start-mtp code` sem permissão (derruba a voz via
+   `Conflicts=` — comportamento correto).
+5. Rotina: testes focados no diff; rebuilds autorizados pelo dono nesta missão.
 
 ## Arquivos que o próximo agente precisa ler
 - `AGENTS.md` (raiz: cabecalho e regras pinadas; detalhes sob demanda).
@@ -231,6 +232,10 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
 - `../NIXOS-AI-ORIGEM-CRONOLOGICA.md` (ai-mesh), se disponivel no host.
 
 ## Riscos de retomada
+- `scripts/hot-swap-model.sh` está **untracked (outro agente)** e duplica
+  `llama-swap.sh` na porta 8096 com `nohup` + `kill` por PID — reintroduz
+  exatamente o órfão que `7fe7e4fc` removeu. Não editar/apagar; preciso
+  decidir com o dono da lane se vira wrapper do `llama-swap.sh`.
 - Arvore suja com ~20 itens nao commitados (mix de docs/audit de outra lane, memory.js, scripts/agent-roster.py, .bak e diretorios nao rastreados como docs/agentes e memory/). **Nao usar `git add -A`**; inspecionar cada arquivo e respeitar o dono de cada mudanca.
 - Worktrees: `.worktrees/coord-mcp` (branch `fix/coord-pending-json`) ativo, dono Onca — NAO tocar; `/tmp/ack-patch-wt` ja foi removido com `git worktree prune -v`.
 - `docs/audit/CHRONOLOGICAL-REVIEW-2026-11-19.md` e citado em versoes anteriores do checkpoint mas nao existe no working tree atual; usar `PROJECT-HISTORY.md` como base canonica ate reconciliar.
