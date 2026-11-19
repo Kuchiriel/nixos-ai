@@ -13,7 +13,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 ## Datas e HEADs
 - Início da missão: 2026-11-19.
 - HEAD inicial da auditoria: `57c9176517ca2f27d8e3285deb43f009cb0a21b3` (`main`).
-- HEAD atual: `3213fe7c`.
+- HEAD atual: `029b8043` (recon 19/11).
 - Primeiro commit do projeto: `ae8789fac5cbb8b2527f5091c9b2877507f8337e` (2024-11-23, fork de `nixos-config-reborn`).
 
 ## Fases
@@ -186,6 +186,20 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
   errado desde c514a1ba; agora força o fallback real.
 - Runtime :8092: shadow removido, unit declarada ativa com adapter v9
   (detalhe na seção shadow acima). Lab pausado (`control=pause`).
+
+## Organização (19/11, retomada 13ª)
+- 23 `.bak` meus arquivados FORA do repo em
+  `~/.local/state/jarvis/patch-backups-2026-11-19/` com MANIFEST.json
+  (sha256 por arquivo, nada apagado em disco sem backup).
+- Worktree prunable `/tmp/ack-patch-wt` removido do registro do Git
+  (`git worktree prune -v`); estava ausente do disco.
+- 19 itens uncommitted restantes = outro agente, NUNCA commitados por mim.
+- Rebuild: `nixos-rebuild build --flake .#nitro-v15` PASSOU (116s, rc=0,
+  git index 0→0). Switch NÃO executado: agents ativos commits concorrentes
+  (HEAD 3213fe7c→029b8043 nesta janela) — derrubar config em alvo móvel é
+  risco maior que o benefício. Intenção operacional de d3047102 JÁ satisfeita:
+  duplex-voice.service ativo com 1 cliente = MainPID 2820856, sem órfãos.
+  Unit ainda solta (não Nix-managed) — dívida registrada.
 
 ## Próxima tarefa exata
 1. **#22 bloqueio do A/B**: investigar por que o harness dá TimeoutExpired em

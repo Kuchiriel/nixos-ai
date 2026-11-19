@@ -357,3 +357,12 @@
   #10 do backlog (tabela por token) com a coluna 1000/5000/10000 tokens, que a doc da lane mediu por 1M e o
   dono pediu por escala; (3) revisar `llm-swap.sh --free` (case sem `MODEL` associado), ja apontado na secao
   de shadow do STATE.
+
+## 2026-11-19 — retomada 13ª entrada (organização + rebuild)
+- HEAD inicial `926123bd`; HEAD final `029b8043` (outros agents comitaram voice).
+- 23 .bak meus -> ~/.local/state/jarvis/patch-backups-2026-11-19/ (MANIFEST).
+- git worktree prune removeu /tmp/ack-patch-wt (ausente do disco).
+- 19 uncommitted = outro agente; index limpo; nada staged/commitado por mim.
+- nixos-rebuild build --flake .#nitro-v15: rc=0 em 116s, index 0->0.
+- Switch deferido: alvo móvel (HEAD mudou 3x) + intenção de d3047102 já OK.
+- Próximo: switch quando frota estabilizar; 3ª amostra chunks (opcional).
