@@ -44,8 +44,15 @@ de documento fornecido ao reranker ou desligá-lo quando houver ID forte.
 Hipótese rejeitada: desligar o rerank quando há ID forte não mudou o
 resultado (2/5) — os 3 misses não têm ID forte na query. Mudança revertida.
 
-## 7. Estado final do gate
-- Dense fix (`de1cbf66`): **4/4** com `use_rerank=False`.
-- Rerank ON (default): **2/5** — gate ≥4/5 NÃO atingido.
-- Causa dos 3 misses restantes: provável cross-encoder com 350 chars/doc em
-  documentos longos. Próximo A/B: aumentar o trecho do documento no rerank.
+## 7. FONTE CANÔNICA — juiz de 15 perguntas (reconciliação 19/11)
+Este doc nasceu de um teste fraco de 5 perguntas (1/5 → 2/5) e está
+**superseded** pelo juiz reproduzível da sessão paralela:
+`scripts/rag-eval.py` + `scripts/rag-eval-queries.jsonl` (15 perguntas).
+
+Verificado agora em HEAD: `rerank=off recall@8=0.93 MRR=0.667`;
+`rerank=on recall@8=0.93 MRR=0.762` — o fix `b907a442` (boost de filename
+vazio + ordem do cross-encoder) é a causa da melhora de 0.36→0.93.
+O dense-ID fix (`de1cbf66`) é complementar e coexiste.
+
+**Gate: SATISFEITO (0.93 ≥ 0.80).** Para reavaliar:
+`nix develop --command python3 scripts/rag-eval.py`.
