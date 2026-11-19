@@ -1083,6 +1083,20 @@ async function handler(req, res) {
     const j = await pyJSON("model-catalog.py", [], 90000).catch(e => ({ error: String(e) }));
     return send(200, JSON.stringify(j), 'application/json');
   }
+  if (req.method === 'GET' && url.pathname === '/api/profiles') {
+    // Perfis disponíveis para spawn, lidos do roster (mbti/persona) + redteam.
+    // Nao e hardcoded: reflete o que a casa realmente tem.
+    const perfis = new Set(['redteam']);
+    try {
+      const raw = readFileSync(ROSTER, 'utf8');
+      const d = JSON.parse(raw);
+      for (const a of (d.agents || [])) {
+        if (a.mbti) perfis.add(String(a.mbti));
+        if (a.persona) perfis.add(String(a.persona));
+      }
+    } catch { /* roster ainda vazio: fica so com redteam */ }
+    return send(200, JSON.stringify({ perfis: [...perfis].sort() }), 'application/json');
+  }
   if (req.method === 'POST' && url.pathname === '/api/spawn') {
     // Cria um agente NOVO: modelo escolhido (catalogo/cooldown), persona
     // MBTI e system prompt inicial — a experiencia do Grok Bot.

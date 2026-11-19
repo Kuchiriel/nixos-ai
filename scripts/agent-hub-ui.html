@@ -212,7 +212,7 @@ pre.diff{
         <input id="spTask" placeholder="tarefa do agente novo (a persona e o modelo são escolhidos)">
         <div class="row" style="display:flex;gap:8px;flex-wrap:wrap">
           <select id="spModel"><option value="">modelo: auto</option></select>
-          <select id="spProfile"><option value="">perfil: auto</option><option value="redteam">redteam (INTP)</option></select>
+          <select id="spProfile"><option value="">perfil: auto</option></select>
           <input id="spName" placeholder="nome (opcional)" style="max-width:150px;flex:1">
           <button class="primary" id="spGo">criar</button>
         </div>
@@ -351,7 +351,10 @@ async function loadAgents(){
     if(a.model) tags.push(`<span class="tag model" title="modelo em uso">${esc(a.model)}</span>`);
     if(a.persona) tags.push(`<span class="tag pers" title="persona MBTI">${esc(a.persona)}</span>`);
     if(a.lane && a.lane!=='-') tags.push(`<span class="tag" title="lane">${esc(a.lane)}</span>`);
-    if(a.host) tags.push(`<span class="tag">${esc(a.host)}</span>`);
+    if(a.host) {
+      const h = typeof a.host === 'object' ? (a.host.hostname || JSON.stringify(a.host)) : a.host;
+      tags.push(`<span class="tag" title="${esc(String(a.host))}">${esc(String(h))}</span>`);
+    }
     const note = a.note || a.context || '';
     return `<div class="ag" data-sess="${esc(a.session||'')}" data-name="${esc(a.codename||a.name)}">
       <div class="top">
@@ -382,6 +385,18 @@ async function loadAgents(){
       };
     });
   });
+}
+
+/* ── perfis (roster) ────────────────────────────────── */
+async function loadProfiles(){
+  const sel = document.getElementById('spProfile');
+  if(!sel) return;
+  try{
+    const d = await (await api('/api/profiles')).json();
+    const perfis = d.perfis || [];
+    const opts = perfis.map(p => '<option value="'+esc(p)+'">'+esc(p)+'</option>').join('');
+    sel.innerHTML = '<option value="">perfil: auto</option>' + opts;
+  }catch(e){ /* sem perfis: segue com auto */ }
 }
 
 /* ── transcript ─────────────────────────────────────── */
@@ -634,6 +649,7 @@ async function refreshAll(){
 (async function boot(){
   renderTabs(); renderChips(); setTab(tab);
   await refreshAll();
+  await loadProfiles();
   connectStream();
   setInterval(loadPills, 6000);
   setInterval(()=>{ if(tab==='agentes') loadAgents(); if(tab==='ab') loadAB(); }, 7000);
