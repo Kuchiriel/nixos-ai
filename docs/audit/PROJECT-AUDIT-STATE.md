@@ -13,7 +13,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 ## Datas e HEADs
 - Início da missão: 2026-11-19.
 - HEAD inicial da auditoria: `57c9176517ca2f27d8e3285deb43f009cb0a21b3` (`main`).
-- HEAD atual: `684a12ef` (checkpoint 19/11 recon).
+- HEAD atual: `cf5b9611` (retomada 6, rehydrate audit checkpoint fix).
 - Primeiro commit do projeto: `ae8789fac5cbb8b2527f5091c9b2877507f8337e` (2024-11-23, fork de `nixos-config-reborn`).
 
 ## Fases
@@ -68,6 +68,11 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
     perguntas: recall@8 0.36 → 0.93, MRR 0.357 → 0.762 — `b907a442`.
 13. `docs/HANDOFF-FORMAT.md` não existia apesar do ponteiro no `AGENTS.md`
     da raiz: criado com formato, nome e regra de supersessão.
+14. `_handle_rehydrate` (MCP tool) não incluía o checkpoint de auditoria,
+    embora `_rehydrate_state` (plugin) o incluísse desde `18d9433e`. Agente
+    chamando `jarvis_rehydrate` começava sem o estado da missão. Corrigido:
+    `_rehydrate_audit()` chamado em `_handle_rehydrate` também — `cf5b9611`.
+    Teste: `test_rehydrate.py` 17 passed (2 de regressão).
 
 ## Conflito de lanes (2026-11-19 12:30)
 `docs/audit/KNOWLEDGE-SYSTEM-AUDIT.md` tem outra sessão ativa escrevendo:
@@ -121,14 +126,15 @@ Meus runners diretos (`dungeon.run()`) davam TimeoutExpired 1200s —
 **abandonados**, não são evidência.
 
 ## Próxima tarefa exata
-1. **#22 bloqueio do A/B**: investigar por que o harness dá TimeoutExpired em
+1. RAG rerank: aumentar trecho de documento (350 chars) fornecido ao
+   cross-encoder ou desligá-lo quando houver ID forte — gate ≥4/5 no
+   `rag_rerank_test.py` (atual 2/5). Ver `docs/audit/RAG-EVAL.md` §6.
+2. **#22 bloqueio do A/B**: investigar por que o harness dá TimeoutExpired em
    1200 s (mtp-lora/s3 e bonsai/s1) — llm-call/retry preso. Só retomar 12/12
    com veredito válido; 2/5 atuais NÃO são conclusão (#18 segue aberto).
-2. Fase 6 restante: revisar `.bak-*` em `scripts/` (47 uncommitted, cuidado
+3. Fase 6 restante: revisar `.bak-*` em `scripts/` (47 uncommitted, cuidado
    com agentes ativos) — nenhum outro módulo é morto (8 candidatos verificados).
-2. Fase 4: auditar `rehydrate` de ponta a ponta (ordem, dedup, limite de
-   tokens) contra o que o MCP devolve hoje.
-3. Recall da fusão para a pergunta "chars por chunk" (falha com e sem
+4. Recall da fusão para a pergunta "chars por chunk" (falha com e sem
    rerank): ela não entra nos candidatos crus — investigar dense/sparse e o
    cap de `top_k*4` (outra lane já claimou esse ponto: conferir antes).
 

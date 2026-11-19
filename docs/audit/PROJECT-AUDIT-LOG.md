@@ -191,3 +191,23 @@
 - Config: plugin gerado == live (sha256 idêntico), 9 providers, 1 MCP, 7 agents.
 - Próximo: 3 ciclos por braço → `chunk-ab-canonical.json` → fechar #18.
 - Riscos: 45 uncommitted, worktrees, IPv6 flapping (usar SSH IPv4).
+
+## 2026-11-19 — retomada 6ª entrada (missão contínua)
+- HEAD inicial `7bad360b`; HEAD final (pendente commit) `main`.
+- Fase 4 (rehydrate end-to-end): achado — `_handle_rehydrate` (MCP tool) NÃO
+  incluía o checkpoint de auditoria, embora `_rehydrate_state` (plugin) o
+  incluísse desde `18d9433e`. Um agente chamando `jarvis_rehydrate` começava
+  sem o estado da missão. Corrigido: `_rehydrate_audit()` agora é chamado em
+  `_handle_rehydrate` também (bloco "AUDIT CHECKPOINT"), mesmo contrato
+  (env `JARVIS_AUDIT_STATE`, 14 linhas, vazio se arquivo ausente).
+- Testes: `test_rehydrate.py` 17 passed (15 originais + 2 de regressão para
+  presença/ausência do checkpoint no `_handle_rehydrate`).
+- Commits recentes não logados (2932b46e, 7bad360b): RAG-EVAL doc criado
+  com metodologia known-answer (5 perguntas, top_k=10); rerank ON medido
+  2/5 (gate 4/5 não atingido); causa: cross-encoder com 350 chars/doc
+  desordena documentos longos. Próximo: aumentar trecho ou desligar rerank
+  quando houver ID forte.
+- Pendências restantes: #18 (A/B timeout #22), Fase 6 (.bak-* em scripts/),
+  recall da fusão ("chars por chunk"), rag-prune --apply (autorização),
+  knowledge_schema.py (decidir).
+- Riscos: 47+ uncommitted, worktree coord-mcp, agente auditoria-runtime ativo.
