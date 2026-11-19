@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # voice-watchdog.sh — verifica se a pilha de voz esta de pe e levanta se nao.
 #
-# POR QUE (13/11, coord-naming): o cliente de voz e' AVULSO (nao e' unit), e
-# o jarvis-heal so vigia units => qualquer crash da voz a deixa muda sem ninguem
-# levantar (medido: caiu varias vezes num dia, sempre por rebuild do host).
+# POR QUE (13/11, coord-naming): o cliente de voz era AVULSO e o jarvis-heal
+# so vigia units => qualquer crash deixava a voz muda sem ninguem levantar.
+# (19/11) DONO UNICO: a unit `duplex-voice.service` (systemd de usuario,
+# declarada em home-manager/modules/services/duplex-voice.nix) e a dona do
+# cliente. Este watchdog NAO relanca mais com `setsid nohup` (isso criava
+# orfaos que o systemd nao via): ele delega start/stop a unit.
+# Consequencia: `--pause` usa `systemctl --user stop` (stop explicito NAO
+# dispara o Restart=always da unit); matar pid so, nao bastava.
 #
 # PAUSA (13/11, pedido do dono): o watchdog RESPEITA a pausa. Sem isso, dar
 # "systemctl stop" (ou querer a voz quieta) nao adiantava: o proximo ciclo
@@ -35,6 +40,7 @@ REPO="$(cd "$HERE/.." && pwd)"
 STATE_DIR="${JARVIS_STATE_DIR:-$HOME/.local/state/jarvis}"
 VOICE_PAUSE="$STATE_DIR/VOICE_PAUSED"
 HOUSE_PAUSE="$STATE_DIR/PAUSED"
+VOICE_UNIT="duplex-voice.service"   # dono unico do cliente desde 19/11
 
 RESTART=0
 PAUSE=0
@@ -69,6 +75,9 @@ paused_reason() {
 }
 
 kill_stack() {
+  # Stop explicito primeiro: com Restart=always, matar somente o pid faz
+  # a unit reanimar o cliente 5 s depois (medido 19/11).
+  systemctl --user stop "$VOICE_UNIT" >/dev/null 2>&1 || true
   for pid in $(_asrd_pids) $(_client_pids); do
     kill "$pid" 2>/dev/null || true
   done
@@ -79,10 +88,16 @@ kill_stack() {
 }
 
 start_stack() {
-  cd "$REPO" || exit 1
-  setsid nohup ./scripts/duplex-voice-run.sh --gate intent \
-    >> /tmp/opencode/voice-watchdog.log 2>&1 &
-  sleep 20
+  # Nada de setsid nohup: o systemd e' o dono unico (d3047102).
+  if ! systemctl --user start "$VOICE_UNIT" >/dev/null 2>&1; then
+    echo "voice: falha ao start $VOICE_UNIT (systemctl --user)" >&2
+    return 1
+  fi
+  for _i in $(seq 1 20); do
+    [ "$(systemctl --user is-active "$VOICE_UNIT" 2>/dev/null)" = "active" ] && return 0
+    sleep 1
+  done
+  return 1
 }
 
 report_state() {
@@ -137,8 +152,47 @@ if [ "$SELF_TEST" = "1" ]; then
     *PAUSADO*) echo "ok: pauseiro da casa tambem pausa a voz" ;;
     *) echo "FALHOU: pauseiro da casa disse: $out"; fail=1 ;;
   esac
+  # 4) dono unico: --restart delega ao systemd, nunca ao setsid nohup
+  rm -f "$TMP/state/VOICE_PAUSED" "$TMP/state/PAUSED"
+  FAKEBIN="$TMP/bin"; mkdir -p "$FAKEBIN"
+  cat > "$FAKEBIN/systemctl" <<'EOS'
+#!/usr/bin/env bash
+printf 'systemctl %s\n' "$*" >> "$FAKECTL_LOG"
+if [ "${1:-}" = "--user" ] && [ "${2:-}" = "is-active" ]; then echo active; fi
+exit 0
+EOS
+  cat > "$FAKEBIN/pgrep" <<'EOS'
+#!/usr/bin/env bash
+exit 1
+EOS
+  cat > "$FAKEBIN/setsid" <<'EOS'
+#!/usr/bin/env bash
+printf 'setsid %s\n' "$*" >> "$FAKECTL_LOG"
+exit 0
+EOS
+  chmod +x "$FAKEBIN/systemctl" "$FAKEBIN/pgrep" "$FAKEBIN/setsid"
+  export FAKECTL_LOG="$TMP/ctl.log"; : > "$FAKECTL_LOG"
+  PATH="$FAKEBIN:$PATH" JARVIS_STATE_DIR="$TMP/state" "$0" --restart >/dev/null 2>&1 || true
+  if grep -q 'start duplex-voice.service' "$FAKECTL_LOG"; then
+    echo "ok: --restart delega ao systemd"
+  else
+    echo "FALHOU: --restart nao chamou systemctl start"; fail=1
+  fi
+  if grep -q 'setsid' "$FAKECTL_LOG"; then
+    echo "FALHOU: --restart ainda cria orfao via setsid"; fail=1
+  else
+    echo "ok: --restart nao cria orfao"
+  fi
+  # 5) --pause para a unit (stop explicito vence Restart=always)
+  : > "$FAKECTL_LOG"
+  PATH="$FAKEBIN:$PATH" JARVIS_STATE_DIR="$TMP/state" "$0" --pause --reason=teste >/dev/null 2>&1 || true
+  if grep -q 'stop duplex-voice.service' "$FAKECTL_LOG"; then
+    echo "ok: --pause usa systemctl stop"
+  else
+    echo "FALHOU: --pause nao parou a unit"; fail=1
+  fi
   rm -rf "$TMP"
-  [ "$fail" = "0" ] && echo "SELF-TEST ok: pausa da voz e da casa respeitadas" || exit 1
+  [ "$fail" = "0" ] && echo "SELF-TEST ok: pausa, dono unico e delegate systemd" || exit 1
   exit 0
 fi
 
