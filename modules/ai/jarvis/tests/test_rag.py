@@ -251,6 +251,33 @@ def test_index_file_shrinks_chunk_and_keeps_payload_consistent(tmp_path) -> None
     assert points[0]["payload"]["content"] == payload["content"]
 
 
+def test_index_file_writes_canonical_payload_fields(tmp_path) -> None:
+    """O indexador preenche os campos que knowledge_schema INDEXA.
+
+    Medido 19/11: `code_index` tinha payload indexes para source_type,
+    authority, status, canonical_path e source_modified_at, mas todo ponto
+    gravado por `rag.py` vinha sem esses campos (so path/domain/arxiv_id),
+    entao um filtro por eles nao casava com nada.
+    """
+    idx, path = _indexer(tmp_path, limit=4000)
+    payload = idx.index_file(path, force=True)
+
+    assert payload is not None
+    assert payload["canonical_path"] == path
+    assert payload["source_type"] == "code"
+    assert payload["knowledge_domain"] == "code_knowledge"
+    assert payload["authority"] == "source"
+    assert payload["status"] == "current"
+    assert payload["filename"] == "big.py"
+    assert payload["extractor"] == "py"
+    assert payload["sanitizer_version"]
+    assert payload["source_modified_at"] > 0
+    # identidade preservada: o prune por source_sha256 depende dela
+    assert len(payload["source_sha256"]) == 64
+    assert payload["source_id"] == payload["document_id"]
+    assert payload["content_hash"]
+
+
 def test_index_file_records_dropped_chunk_reason(tmp_path) -> None:
     idx, path = _indexer(tmp_path, limit=10)  # nada cabe, nem a metade
     assert idx.index_file(path, force=True) is None

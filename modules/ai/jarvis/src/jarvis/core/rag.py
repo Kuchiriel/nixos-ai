@@ -780,14 +780,11 @@ class HybridIndexer:
                 return None  # quarentena in-memory: sem indexar
 
         # proveniência canônica do ponto (§13; audit P1-6)
-        from datetime import datetime, timezone as _tz
         from jarvis.core.doc_sanitize import SANITIZER_VERSION
         try:
             _sanitizer_version  # code-direct-read já definiu
         except NameError:
             _sanitizer_version = SANITIZER_VERSION
-        _ingested_at = datetime.now(_tz.utc).isoformat()
-
         # Chunking alinhado com o contexto do modelo de embedding.
         # nomic-embed-text-v2-moe tem ctx 2048; 1500 chars ≈ 700 tokens.
         # Com metadata, total fica ~800-900 tokens (safe for ubatch 1024).
@@ -810,10 +807,38 @@ class HybridIndexer:
         # sha do fonte UMA vez por arquivo (medido 19/11: ficava dentro do
         # loop de chunks e relia o arquivo inteiro a cada chunk).
         import hashlib as _hl
+        source_mtime: float | None = None
         if os.path.exists(path):
             source_sha = _hl.sha256(Path(path).read_bytes()).hexdigest()
+            try:
+                source_mtime = os.path.getmtime(path)
+            except OSError:
+                source_mtime = None
         else:
             source_sha = _hl.sha256(content.encode()).hexdigest()
+        # (19/11) Payload canonico: `knowledge_schema` declara e INDEXA
+        # source_type/authority/status/canonical_path/source_modified_at, mas
+        # este indexador gravava so path/domain/arxiv_id — os indexes ficavam
+        # vazios e qualquer filtro por esses campos nao casava com nada.
+        # Aditivo: `path` e as chaves antigas continuam iguais.
+        _is_books = target_collection == "books"
+        _canonical = {
+            "canonical_path": path,
+            "source_type": "book" if _is_books else "code",
+            "source_id": f"doc:{source_sha[:16]}",
+            "knowledge_domain": "durable_knowledge" if _is_books else "code_knowledge",
+            "title": os.path.basename(path),
+            # build_payload sobrescreve estes tres com o default vazio quando
+            # nao vem por kwarg; passar aqui preserva identidade e sanitizer.
+            "filename": os.path.basename(path),
+            "source_sha256": source_sha,
+            "sanitizer_version": _sanitizer_version if _sanitizer_version else "1.0.0",
+            "source_modified_at": source_mtime,
+            "extractor": ext.lstrip(".") or "text",
+            "authority": "source",
+            "status": "current",
+        }
+        from jarvis.core.knowledge_schema import build_payload as _build_payload
         try:
             dense_list = self._llm.embed_batch(rich_list)
             if len(dense_list) != len(rich_list):
@@ -858,24 +883,25 @@ class HybridIndexer:
                     "dense": dense,
                     "bm25": sparse_vector(terms),
                 },
-                "payload": {
-                    "path": path,
-                    "document_id": f"doc:{source_sha[:16]}",
-                    "chunk_id": f"{source_sha[:16]}:{i}",
-                    "chunk_index": i,
-                    "filename": os.path.basename(path),
-                    "ext": ext,
-                    "facts": facts if i == 0 else [],
-                    "content": chunk,
-                    "source_sha256": source_sha,
-                    "content_hash": _hl.sha256(chunk.encode()).hexdigest(),
-                    "sanitizer_version": _sanitizer_version if _sanitizer_version else "1.0.0",
-                    "ingested_at": _ingested_at,
-                    "embedding_model": self._cfg.embed_model,
-                    "arxiv_id": _extract_arxiv_id(path, content),
-                    "year": _extract_year(content),
-                    "domain": _extract_domain(path, content),
-                },
+                "payload": _build_payload(
+                    {
+                        "path": path,
+                        "document_id": f"doc:{source_sha[:16]}",
+                        "chunk_id": f"{source_sha[:16]}:{i}",
+                        "chunk_index": i,
+                        "filename": os.path.basename(path),
+                        "ext": ext,
+                        "facts": facts if i == 0 else [],
+                        "content": chunk,
+                        "source_sha256": source_sha,
+                        "sanitizer_version": _sanitizer_version if _sanitizer_version else "1.0.0",
+                        "embedding_model": self._cfg.embed_model,
+                        "arxiv_id": _extract_arxiv_id(path, content),
+                        "year": _extract_year(content),
+                        "domain": _extract_domain(path, content),
+                    },
+                    **_canonical,
+                ),
             }
             # Route by content: ~/Books → books collection; resto → code_index
             self._store.upsert(target_collection, [point])
