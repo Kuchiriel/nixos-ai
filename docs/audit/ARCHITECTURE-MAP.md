@@ -47,9 +47,11 @@ REPL (jarvis dev) ──> cli/dev.py ──> core/agent.py ──> providers/LLM
 NIGHTWATCH ──> task_queue (por projeto/nível) ──> harness ──> checker fixo (444)
 opencode.db (1,9 GB) ──> session/message/session_message (V2: conteúdo em data)
 ```
-**Fio desligado medido**: `jarvis_rehydrate` existe no plugin e no código, mas
-**não aparece na lista de 18 tools do MCP** (`mcp search rehydrate` → nada).
-O agente que retoma usa `ta-state` no celular, não o tool canônico.
+**Correção (medida)**: `rehydrate` está em `_META_TOOLS`/hidden catalog
+(`mcp_server.py:805`) de propósito — economia de contexto (RCR-Router). Chamável
+como `jarvis_rehydrate` via `tools_call` (verificado: `isError: False`, devolve
+GUARDS + estado). `mcp search rehydrate` no meta-tool do celular não o vê porque
+o catalogo do celular é outro (coord/knowledge); no MCP jarvis do host ele existe.
 
 ## 5. Persistência e fontes de verdade
 | dado | canônico | medido |
