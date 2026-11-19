@@ -27,6 +27,7 @@ import base64
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import re
 import urllib.error
@@ -70,6 +71,53 @@ def _post(url: str, payload: dict, timeout: int = 25):
                                  method="POST", headers=_headers())
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.status, r.read()[:300].decode(errors="replace")
+
+
+# (19/11, medido) A FONTE DA VERDADE DO ENDERECO EO O PROPRIO SOCKET.
+# `home-manager/modules/services/opencode-serve.nix` sobe o serve com
+# `--hostname 100.121.100.103 --port 4599` (escuta SO no IP do tailnet), mas o
+# agent-config.json declara http://127.0.0.1:4599. Resultado medido: TODA
+# entrega por API da frota morria com `URLError: [Errno 111] Connection
+# refused` enquanto o bus (outro caminho) funcionava — a frota parecia viva e
+# as mensagens nao chegavam. Aqui o base declarado e tentado primeiro e, se o
+# TCP recusar, usa-se o listener REAL da mesma porta lido em `ss -ltnH`.
+def _candidate_bases(base: str) -> list[str]:
+    cands = [base]
+    m = re.match(r"^([a-zA-Z][\w+.-]*://)([^:/]+)(:\d+)?$", base.strip())
+    if not m:
+        return cands
+    scheme, port = m.group(1), m.group(3) or ""
+    try:
+        txt = subprocess.run(["ss", "-ltnH"], capture_output=True,
+                             text=True, timeout=5).stdout
+    except Exception:
+        return cands
+    for line in txt.splitlines():
+        cols = line.split()
+        if len(cols) < 4 or not cols[3].endswith(port):
+            continue
+        local = cols[3]
+        if local.startswith(("127.", "::1", "[::1]")):
+            continue
+        ip = local[:-len(port)].strip("[]") if port else local.rsplit(":", 1)[0]
+        if not ip:
+            continue
+        cand = f"{scheme}{ip}{port}"
+        if cand not in cands:
+            cands.append(cand)
+    return cands
+
+
+def _routes(base: str, session: str, text: str, note: bool):
+    novo = {"text": text, "delivery": "queue"}
+    return (
+        (f"{base}/api/session/{session}/prompt", novo),
+        # 2.x sem o prefixo (alguns builds) e 1.x com {parts, noReply}
+        (f"{base}/session/{session}/prompt", novo),
+        (f"{base}/session/{session}/message",
+         {"parts": [{"type": "text", "text": text}], "noReply": bool(note)}),
+        (f"{base}/session/{session}/prompt_async", {"text": text}),
+    )
 
 
 # (09/11, sweep-2026-11) DEDUPE NA ENTREGA: o loop medido na casa vinha
@@ -194,46 +242,55 @@ def deliver(base: str, session: str, text: str, *, note: bool = False,
     # {steer, queue}: NAO existe "nota sem rodar" no 2.x (o 1.x tinha
     # noReply=true). Uma "nota" no 2.x = queue (a mensagem fica na inbox
     # e o agente a ve no proximo turno) — entrego assim, com o aviso.
-    novo = {"text": text, "delivery": "queue"}
     # dedupe: nao enfileira o que ja foi entregue (o turno do agente e o preco)
     _dpath = _dedupe_path(base, session)
     _dkey = _dedupe_key(text)
     if _already_delivered(_dpath, _dkey):
         return 208, ("dedupe: texto ja entregue a esta sessao, nao reenfileirado")
-    for url, payload in (
-        (f"{base}/api/session/{session}/prompt", novo),
-        # 2.x sem o prefixo (alguns builds) e 1.x com {parts, noReply}
-        (f"{base}/session/{session}/prompt", novo),
-        (f"{base}/session/{session}/message",
-         {"parts": [{"type": "text", "text": text}], "noReply": bool(note)}),
-        (f"{base}/session/{session}/prompt_async", {"text": text}),
-    ):
-        try:
-            st, out = _post(url, payload, timeout=timeout)
-            _mark_delivered(_dpath, _dkey)
-            return st, out
-        except urllib.error.HTTPError as e:
-            body = (e.read() or b"")[:200].decode(errors="replace")
-            if e.code in (404, 405, 501):
-                continue  # rota nao existe nesta versao → tenta a proxima
-            raise RuntimeError(f"HTTP {e.code} {body}") from e
-        except Exception as e:  # noqa: BLE001
-            raise RuntimeError(f"{type(e).__name__}: {e}") from e
-    raise RuntimeError("nenhuma rota de entrega respondeu (404/405 em todas)")
+    bases = _candidate_bases(base)
+    last_err = "rotas ausentes"
+    for b in bases:
+        for url, payload in _routes(b, session, text, note):
+            try:
+                st, out = _post(url, payload, timeout=timeout)
+                _mark_delivered(_dpath, _dkey)
+                return st, out
+            except urllib.error.HTTPError as e:
+                body = (e.read() or b"")[:200].decode(errors="replace")
+                if e.code in (404, 405, 501):
+                    continue  # rota nao existe nesta versao → tenta a proxima
+                raise RuntimeError(f"HTTP {e.code} {body}") from e
+            except Exception as e:  # noqa: BLE001
+                # transporte falhou neste endereco (ex.: TCP recusado no
+                # 127.0.0.1 enquanto o serve escuta no IP do tailnet): tenta
+                # o proximo candidato antes de desistir.
+                last_err = f"{type(e).__name__}: {e}"
+                break
+        else:
+            continue  # todas as rotas deste base responderam 404/405/501
+    raise RuntimeError(
+        f"nenhuma rota de entrega respondeu (bases tentados: "
+        f"{', '.join(bases)}; ultimo erro: {last_err})")
 
 
 def abort(base: str, session: str, timeout: int = 15) -> tuple[int, str]:
-    for url in (f"{base}/session/{session}/abort", f"{base}/api/session/{session}/abort"):
-        try:
-            st, out = _post(url, {}, timeout=timeout)
-            return st, out
-        except urllib.error.HTTPError as e:
-            if e.code in (404, 405, 501):
-                continue
-            raise RuntimeError(f"HTTP {e.code}") from e
-        except Exception as e:  # noqa: BLE001
-            raise RuntimeError(str(e)) from e
-    raise RuntimeError("rota de abort nao encontrada")
+    last_err = "-"
+    for b in _candidate_bases(base):
+        for url in (f"{b}/session/{session}/abort",
+                    f"{b}/api/session/{session}/abort"):
+            try:
+                st, out = _post(url, {}, timeout=timeout)
+                return st, out
+            except urllib.error.HTTPError as e:
+                if e.code in (404, 405, 501):
+                    continue
+                raise RuntimeError(f"HTTP {e.code}") from e
+            except Exception as e:  # noqa: BLE001
+                last_err = str(e)
+                break
+        else:
+            continue
+    raise RuntimeError(f"rota de abort nao encontrada ({last_err})")
 
 
 def live_db_path() -> str:

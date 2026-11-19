@@ -367,7 +367,15 @@ while IFS= read -r addr; do [ -n "$addr" ] && ALVOS+=("$addr"); done < <(
     python3 -c "
 import json
 d=json.load(open('$ALVOS_JSON'))
-print('\n'.join(t['address'] for t in d['targets']))"
+for t in d['targets']:
+    a = t.get('address') or ''
+    s = t.get('session') or ''
+    # (19/11, medido) 5 dos 6 agentes do roster rodam o TUI dentro de um foot
+    # e a janela do Hyprland tem address VAZIO: so' o address filtrava, entao
+    # '--to <nome>' devolvia 'nenhum alvo' e a mensagem nao saia. Quem tem
+    # sessao do opencode e' alcancavel pela API, entao o marcador @sess:<id>
+    # carrega a identidade sem depender da janela.
+    print(a if a else ('@sess:' + s))"
 )
 
 # ── list (dry-run) + avisos ───────────────────────────────────────────
@@ -439,14 +447,18 @@ FALHOU=0
 
 for END in "${ALVOS[@]}"; do
     INFO=$(python3 -c "
-import json
+import json, sys
 d=json.load(open('$ALVOS_JSON'))
+end=sys.argv[1]
 for t in d['targets']:
-    if t['address']=='$END':
+    ok = (t.get('address') or '') == end
+    if not ok and end.startswith('@sess:'):
+        ok = ('@sess:' + str(t.get('session') or '')) == end
+    if ok:
         print(t.get('name') or '(janela)', '|', t.get('session') or '', '|',
               '1' if t.get('busy') else '0')
         break
-")
+" "$END")
     NOME_ALVO=$(echo "$INFO" | cut -d'|' -f1 | tr -d ' ')
     SESSAO=$(echo "$INFO" | cut -d'|' -f2 | tr -d ' ')
     OCUPADO=$(echo "$INFO" | cut -d'|' -f3 | tr -d ' ')
