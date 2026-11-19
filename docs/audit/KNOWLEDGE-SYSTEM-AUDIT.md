@@ -54,12 +54,15 @@ re-injeção, mas **não substitui** o resumo gravado pelo core.
 
 ### P1 — RAG: ranking ruim, índice correto (medido 19/11)
 Teste de 5 perguntas com resposta conhecida (`rag_retrieval_test.py`): apenas
-**1/5** retornou o documento esperado no top-8. Os outros 4 estavam
-**indexados** (`code_index/points/scroll` confirmou), então não é cobertura.
-Isolamento posterior (`test_boost.py`): `apply_legacy_boosts` funciona — dado
-o hit de CYCLE-9, ele sobe para 100005 e fica em 1º. Logo o defeito é de
-**recall da busca híbrida**: o hit correto não entra em `raw` antes do boost.
-Correção exigida: investigar dense/sparse e o top-k da fusão (não os boosts).
+**1/5** retornou o documento esperado no top-8. Documentos indexados
+(`check_rag_indexed.py` 4/4) e boosts funcionais (`test_boost.py`: CYCLE-9 →
+100005, 1º). Isolamento final por frase (`rag_phrasing_probe.py`):
+"CYCLE-9" sozinho ranqueia `CYCLE-9-REPORT.md` em **1º**; "CYCLE-9 Harbor"
+e "CYCLE-9-REPORT.md" o removem do top-10. Portanto o defeito é
+**diluição do embedding denso por tokens adicionais na query**, não recall
+da fusão nem boosts. Correção: normalizar/ponderar termos fortes (filename
+sovereignty já existe no rerank) antes de gerar o dense vector, ou usar
+busca por termos exatos quando a query contém um identificador de documento.
 
 ## 4. O que NÃO é problema (verificado)
 - `stable_id`: SHA-256 63 bits, não CRC32 (CRC32 foi substituído no P0-1).
