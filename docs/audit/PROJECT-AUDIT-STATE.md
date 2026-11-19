@@ -13,7 +13,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 ## Datas e HEADs
 - Início da missão: 2026-11-19.
 - HEAD inicial da auditoria: `57c9176517ca2f27d8e3285deb43f009cb0a21b3` (`main`).
-- HEAD atual: `cf5b9611` (retomada 6, rehydrate audit checkpoint fix).
+- HEAD atual: `473d0270` (revert rag rerank skip; gate RAG SATISFEITO).
 - Primeiro commit do projeto: `ae8789fac5cbb8b2527f5091c9b2877507f8337e` (2024-11-23, fork de `nixos-config-reborn`).
 
 ## Fases
@@ -126,17 +126,17 @@ Meus runners diretos (`dungeon.run()`) davam TimeoutExpired 1200s —
 **abandonados**, não são evidência.
 
 ## Próxima tarefa exata
-1. RAG rerank: aumentar trecho de documento (350 chars) fornecido ao
-   cross-encoder ou desligá-lo quando houver ID forte — gate ≥4/5 no
-   `rag_rerank_test.py` (atual 2/5). Ver `docs/audit/RAG-EVAL.md` §6.
-2. **#22 bloqueio do A/B**: investigar por que o harness dá TimeoutExpired em
+1. **#22 bloqueio do A/B**: investigar por que o harness dá TimeoutExpired em
    1200 s (mtp-lora/s3 e bonsai/s1) — llm-call/retry preso. Só retomar 12/12
    com veredito válido; 2/5 atuais NÃO são conclusão (#18 segue aberto).
-3. Fase 6 restante: revisar `.bak-*` em `scripts/` (47 uncommitted, cuidado
+2. Fase 6 restante: revisar `.bak-*` em `scripts/` (47 uncommitted, cuidado
    com agentes ativos) — nenhum outro módulo é morto (8 candidatos verificados).
-4. Recall da fusão para a pergunta "chars por chunk" (falha com e sem
+3. Recall da fusão para a pergunta "chars per chunk" (falha com e sem
    rerank): ela não entra nos candidatos crus — investigar dense/sparse e o
    cap de `top_k*4` (outra lane já claimou esse ponto: conferir antes).
+4. RAG gate SATISFEITO (0.93 ≥ 0.80) — próximo opcional: aumentar trecho
+   do documento no reranker (350 → 600 chars) para os 3 misses conceituais.
+   Ver `docs/audit/RAG-EVAL.md` §7.
 
 ## Arquivos que o próximo agente precisa ler
 - `AGENTS.md` (raiz, 1.684 linhas — ler o cabeçalho e as regras pinadas; o resto sob demanda).
