@@ -20,7 +20,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 | Fase | Estado | Entrega |
 |---|---|---|
 | 0 — Estado inicial / checkpoint | **CONCLUÍDA** | este arquivo + `PROJECT-AUDIT-LOG.md` |
-| 1 — Arqueologia (git/DB/docs) | **CONCLUÍDA** | `PROJECT-HISTORY.md` + `CHRONOLOGICAL-REVIEW-2026-11-19.md` |
+| 1 — Arqueologia (git/DB/docs) | **CONCLUÍDA** | `PROJECT-HISTORY.md` (canônico; o antigo `CHRONOLOGICAL-REVIEW-2026-11-19.md` não existe no working tree) |
 | 2 — Inventário arquitetural | **CONCLUÍDA (v1)** | `ARCHITECTURE-MAP.md` (medido 19/11 11:41) |
 | 3 — Auditoria do conhecimento | **CONCLUÍDA (v1)** | `KNOWLEDGE-SYSTEM-AUDIT.md` (outra lane) + ranking medido e corrigido em `b907a442` |
 | 4 — OpenCode/contexto | **CONCLUÍDA** | `OPENCODE-CONTINUITY-AUDIT.md` (`c9397991`) |
@@ -202,11 +202,11 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
   Unit ainda solta (não Nix-managed) — dívida registrada.
 
 ## Próxima tarefa exata
-1. Aprofundar Fase 1/3 (delta): auditar contratos reais e consumidores de `modules/ai/jarvis/src/jarvis/core/memory.py`, `rag.py`, `vector_store.py`, `knowledge_schema.py`, `vault.py`, `retriever.py`, `reranker.py`, `chunker.py` e scripts de OpenCode/agente (`scripts/agent-pains.py`, `scripts/opencode-sessions.py`, `scripts/agent-checkpoint.sh`, plugins), registrando proveniencia, idempotencia e divergencias com evidencia em `KNOWLEDGE-SYSTEM-AUDIT.md` e `OPENCODE-CONTINUITY-AUDIT.md`.
-2. Inspecionar `~/.local/share/opencode/opencode.db` em modo somente leitura (`sqlite3 'file:...?mode=ro'`) para confirmar o schema real (tabelas, colunas, contagens) e alinhar a auditoria de continuidade. Nada de escrita, migracao ou DDL.
-3. Reconciliar entregaveis: `CHRONOLOGICAL-REVIEW-2026-11-19.md` nao existe no working tree (o STATE antigo o citava); usar `PROJECT-HISTORY.md` como base canonica e criar um indice curto se necessario. Revisar `ARCHITECTURE-MAP.md`, `NIXOS-AUDIT.md`, `TECHNICAL-DEBT.md` e `IMPROVEMENT-ROADMAP.md` contra o HEAD `029b8043`.
-4. Itens abertos que continuam validos: #22/#18 A/B (timeout do harness, evidencias parciais), recall da fusao para "chars per chunk" (candidato nao entra no top_k cru), 16 units de usuario fora do Nix, `.bak`/organizacao da Fase 6 respeitando trabalho de outras lanes.
-5. Antes de commitar correcoes de codigo: testes focados no diff; suite completa (~6 min, `-p no:randomly`) so com janela livre de GPU/CPU e sem conflito com agentes ativos. Rebuild do host continua condicionado a autorizacao e a alvo estavel.
+1. Fase 4 (delta): auditar `_rehydrate_state`/`_handle_rehydrate` quanto a ordem, dedupe e orcamento de tokens; ja existe teste de loop-breaker, falta medir tamanho real do bloco com a fila de hoje.
+2. Fase 5: fechar o inventario de units/timers fora do Nix (medir agora, nao repetir numero de memoria) e conferir `home-manager/home.nix` contra `opencode.json` vivo, sem editar o vivo.
+3. Fase 6: triagem de `.bak` rastreados (`harness.py.bak-*`) com o dono de cada lane antes de remover; conferir indice `scripts/TOOLS-INDEX.md` contra os scripts reais.
+4. Depende do dono: reindexar `code_index` (backfill do payload canonico), remote do vault, `remember_fact(kind=decision)`, `rag-prune --apply`.
+5. Rotina: testes focados no diff; suite completa (~4,5 min, `-p no:randomly`) com janela livre. Rebuild do host so com autorizacao.
 
 ## Arquivos que o próximo agente precisa ler
 - `AGENTS.md` (raiz: cabecalho e regras pinadas; detalhes sob demanda).

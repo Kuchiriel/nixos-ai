@@ -2188,8 +2188,12 @@ def _rehydrate_audit(max_lines: int = 14) -> str:
 
     Path is configurable via JARVIS_AUDIT_STATE so no project path is hardcoded.
     Returns '' when absent: zero behavior change for non-audit sessions.
+
+    (19/11) Entrega o que muda decisao: o HEAD VIVO do repo do checkpoint e as
+    secoes "Proxima tarefa" e "Bloqueios". Antes mandava as 14 primeiras
+    linhas (objetivo + cabecalho) e o "HEAD atual" do texto, que envelhece a
+    cada commit — o socorro chegava com estado de dois dias atras.
     """
-    import os
     path = os.environ.get(
         "JARVIS_AUDIT_STATE",
         str(Path.home() / "projects/nixos-ai/docs/audit/PROJECT-AUDIT-STATE.md"))
@@ -2198,9 +2202,39 @@ def _rehydrate_audit(max_lines: int = 14) -> str:
         return ""
     try:
         lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
-        return "\n".join(lines[:max_lines])
     except Exception:
         return ""
+    out: list[str] = []
+    title = next((ln for ln in lines if ln.startswith("# ")), "")
+    if title:
+        out.append(title)
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(f.parent), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        head = ""
+    if head:
+        out.append(f"- HEAD live: `{head}`")
+
+    def section(needle: str) -> list[str]:
+        start = next((i for i, ln in enumerate(lines)
+                      if ln.startswith("## ") and needle.lower() in ln.lower()), None)
+        if start is None:
+            return []
+        block = [lines[start]]
+        for ln in lines[start + 1:]:
+            if ln.startswith("## "):
+                break
+            block.append(ln)
+        while block and not block[-1].strip():
+            block.pop()
+        return block
+
+    out.extend(section("xima tarefa"))
+    out.extend(section("Bloqueios"))
+    return "\n".join(out[:max_lines])
 
 
 def _rehydrate_state(max_lines: int = 12) -> str:
