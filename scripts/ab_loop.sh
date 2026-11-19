@@ -122,8 +122,8 @@ checker_do_nivel() {
 # um patch BOM e o motivo e' review_wrong. A lane original nunca e' tocada.
 
 # (19/11) persona da ultima execucao da lane (log de observabilidade do harness)
-persona_da_lane() {  # lane texto_da_task -> "id|in_prompt"
-  local lane="$1" tasktxt="$2" logf
+persona_da_lane() {  # lane -> "id|in_prompt" (entrada mais recente ate o instante)
+  local lane="$1" ate="$2" logf
   for logf in "$HOME/.local/state/jarvis/orchestrator/task-execution.jsonl"; do
     [ -f "$logf" ] || continue
     python3 - "$logf" "$lane" <<'PYEOF' 2>/dev/null && return 0
@@ -136,10 +136,10 @@ try:
         except Exception: continue
         # casa pela lane: o task_id traz o nome da lane (dungeon-ab-bonsai-L1-...)
         tid = str(d.get("task_id",""))
-        proj = str(d.get("project",""))
-        # casa por: lane no task_id, OU o texto da task no project da entrada
-        if (lane in tid) or (lane in str(d.get("lane",""))) \
-           or (tasktxt and tasktxt[:40] and tasktxt[:40] in proj):
+        # (19/11) casamento TEMPORAL: a entrada de persona mais recente antes
+        # do resultado do ciclo e' a do ciclo. O task_id traz a persona
+        # ('patch-<persona>'), o project a descricao da task.
+        if tid.startswith("patch-"):
             last=d
 except Exception: pass
 if last:
@@ -290,18 +290,7 @@ CONF
     motivo=$(classifica_motivo "$rc" "$pbytes" "$runlog" "$lane" "$review_meta")
     log "  Motivo: $motivo"
     local persona_info persona_id persona_in_prompt
-    local texto_task=""
-    texto_task="$(python3 -c "
-import json,os
-p=os.path.expanduser('~/.local/state/jarvis/nightwatch/task_queue-dungeon-${modelo}-${nivel,,}.json')
-try:
-    d=json.load(open(p))
-    for t in d:
-        if t.get('status') in ('IN_PROGRESS','READY','DISCOVERED'):
-            print(t.get('description','')); break
-except Exception: pass
-" 2>/dev/null)"
-    persona_info="$(persona_da_lane "$lane" "$texto_task")"
+    persona_info="$(persona_da_lane "$lane" "$(date +%s)")"
     persona_id="${persona_info%%|*}"; persona_in_prompt="${persona_info##*|}"
     printf '{"modelo":"%s","nivel":"%s","rc":%s,"dur":%s,"checker":"%s","patch_bytes":%s,"ck":"v3","motivo":"%s","persona":"%s","persona_in_prompt":%s,"review_diff_sha256":"%s","review_checker":"%s","ts":%s}\n' \
         "$modelo" "$nivel" "$rc" "$dur" \
