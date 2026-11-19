@@ -60,9 +60,10 @@ Teste de 5 perguntas com resposta conhecida (`rag_retrieval_test.py`): apenas
 "CYCLE-9" sozinho ranqueia `CYCLE-9-REPORT.md` em **1º**; "CYCLE-9 Harbor"
 e "CYCLE-9-REPORT.md" o removem do top-10. Portanto o defeito é
 **diluição do embedding denso por tokens adicionais na query**, não recall
-da fusão nem boosts. Correção: normalizar/ponderar termos fortes (filename
-sovereignty já existe no rerank) antes de gerar o dense vector, ou usar
-busca por termos exatos quando a query contém um identificador de documento.
+da fusão nem boosts. **CORRIGIDO** em `de1cbf66`: `strong_query_identifier()` detecta IDs fortes e
+usa apenas o ID como dense query (sparse/boosts intactos). Verificado com
+`HybridSearch` direto: 4/4 frases no top-4 (antes 1/4 no top-10);
+`test_rag_identifier.py` 3/3.
 
 ## 4. O que NÃO é problema (verificado)
 - `stable_id`: SHA-256 63 bits, não CRC32 (CRC32 foi substituído no P0-1).
