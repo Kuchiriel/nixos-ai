@@ -1588,19 +1588,32 @@ FILES:
     # melhora a aprovacao no L2 com o mesmo modelo?
     _persona_block = ""
     _persona_id = "unknown"
-    try:
-        from jarvis.core.persona import PersonaRegistry
-        _reg = PersonaRegistry()
+    # (19/11) item #17: AB_PERSONA=0 desliga a persona, para medir com/sem.
+    if os.environ.get("AB_PERSONA", "1") == "0":
         try:
-            _p = _reg.select_for_task(task_description, "")
-        except TypeError:
-            _p = _reg.select_for_task(task_description)
-        _persona_id = str(getattr(_p, "id", "") or "unknown")
-        _add = (getattr(_p, "system_prompt_additions", "") or "").strip()
-        if _add:
-            _persona_block = f"[PERSONA: {getattr(_p, 'name', _persona_id)}]\n{_add}\n\n"
-    except Exception:
-        _persona_block = ""
+            from jarvis.core.persona import PersonaRegistry
+            _reg = PersonaRegistry()
+            try:
+                _p = _reg.select_for_task(task_description, "")
+            except TypeError:
+                _p = _reg.select_for_task(task_description)
+            _persona_id = str(getattr(_p, "id", "") or "unknown")
+        except Exception:
+            pass
+    else:
+        try:
+            from jarvis.core.persona import PersonaRegistry
+            _reg = PersonaRegistry()
+            try:
+                _p = _reg.select_for_task(task_description, "")
+            except TypeError:
+                _p = _reg.select_for_task(task_description)
+            _persona_id = str(getattr(_p, "id", "") or "unknown")
+            _add = (getattr(_p, "system_prompt_additions", "") or "").strip()
+            if _add:
+                _persona_block = f"[PERSONA: {getattr(_p, 'name', _persona_id)}]\n{_add}\n\n"
+        except Exception:
+            _persona_block = ""
     if _persona_block:
         prompt = _persona_block + prompt
 
