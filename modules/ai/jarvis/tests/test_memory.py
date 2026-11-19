@@ -277,3 +277,56 @@ def test_source_in_hits(monkeypatch) -> None:
     mem.remember_fact("fato da sessao", source="session_consolidation")
     hits = mem.recall("facts")
     assert hits[0]["source"] == "session_consolidation"
+
+
+class _ConsolidateStore:
+    """Store mínimo: scroll com vetores + set_payload; delete explode."""
+
+    def __init__(self, points):
+        self.points = points
+        self.payloads = {}
+
+    def is_available(self):
+        return True
+
+    def ensure_collection(self, name, dim=768):
+        pass
+
+    def _request(self, method, path, json=None):
+        if "scroll" in path:
+            return {"status": "ok", "result": {"points": self.points}}
+        raise AssertionError("unexpected " + path)
+
+    def set_payload(self, name, ids, payload):
+        self.payloads.setdefault(tuple(ids), []).append(payload)
+
+    def delete_points(self, name, ids):
+        raise AssertionError("consolidate nao pode apagar (contrato: marcar)")
+
+
+def _cpoint(pid, ts, text="mesma coisa"):
+    return {"id": pid, "payload": {"text": text, "ts": ts},
+            "vector": {"dense": [0.5, 0.5, 0.5, 0.5]}}
+
+
+def test_consolidate_marks_superseded_never_deletes(monkeypatch) -> None:
+    """Timer 03:00 roda --apply: marcar (reversivel), nunca apagar."""
+    mem = EpisodicMemory(Config())
+    store = _ConsolidateStore([_cpoint(1, 100.0), _cpoint(2, 300.0), _cpoint(3, 200.0)])
+    monkeypatch.setattr(mem, "_store", store)
+    out = mem.consolidate_memories(similarity_threshold=0.95, dry_run=False)
+    assert out["status"] == "ok"
+    assert out["superseded"] == 2
+    marks = [p for pls in store.payloads.values() for p in pls]
+    assert all(p["superseded"] is True for p in marks)
+    # keeper = mais recente (ts 300), nao o texto maior
+    assert marks[0]["superseded_by"] == 2
+
+
+def test_consolidate_dry_run_writes_nothing(monkeypatch) -> None:
+    mem = EpisodicMemory(Config())
+    store = _ConsolidateStore([_cpoint(1, 100.0), _cpoint(2, 200.0)])
+    monkeypatch.setattr(mem, "_store", store)
+    out = mem.consolidate_memories(dry_run=True)
+    assert out["superseded"] == 1
+    assert store.payloads == {}

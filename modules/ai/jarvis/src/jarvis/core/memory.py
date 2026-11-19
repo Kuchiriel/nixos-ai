@@ -370,7 +370,18 @@ class EpisodicMemory:
                               min_cluster_size: int = 2,
                               max_points: int = 1000,
                               dry_run: bool = True) -> dict:
-        """Consolida memórias similares em fatos atômicos (cosseno >= threshold)."""
+        """Consolida memórias similares marcando as antigas como superseded.
+
+        NUNCA apaga (audit 19/11): o timer `jarvis-consolidate` roda
+        `--apply` todo dia 03:00 e a versão anterior fazia
+        `delete_points` no cluster — contrariando o contrato documentado
+        ("marca superseded_by, nunca deleta", HANDOFF 25/09) e fazendo do
+        keeper uma escolha por TAMANHO DE TEXTO: o sort usava
+        `payload["timestamp"]`, chave que o payload não tem (é `ts`), então
+        todo cluster caía em (0, len(text)). Agora o keeper é o evento mais
+        RECENTE (ts) e os demais recebem `superseded` (o recall já filtra),
+        restando reversível: limpar a flag devolve a memória.
+        """
         if not self.is_available():
             return {"error": "Qdrant indisponível"}
         self.ensure()
@@ -412,15 +423,23 @@ class EpisodicMemory:
                     visited[idx] = True
         if not clusters:
             return {"status": "sem_clusters", "processed": 0}
-        stats = {"clusters": len(clusters), "removed": 0, "kept": 0, "consolidated": 0}
+        stats = {"clusters": len(clusters), "superseded": 0, "kept": 0,
+                 "consolidated": 0}
+        now = time.time()
         for cluster in clusters:
             cp = [pts[i] for i in cluster]
-            cp.sort(key=lambda p: (p["pl"].get("timestamp", 0), len(p["text"])), reverse=True)
+            # keeper = evento mais recente; empate desempata por texto maior
+            cp.sort(key=lambda p: (float(p["pl"].get("ts") or 0),
+                                   len(p["text"])), reverse=True)
             keeper = cp[0]
-            if not dry_run:
-                ids = [p["id"] for p in cp[1:]]
-                self._store.delete_points(self.collection, ids)
-            stats["removed"] += len(cluster) - 1
+            losers = [p["id"] for p in cp[1:]]
+            if not dry_run and losers:
+                self._store.set_payload(
+                    self.collection, losers,
+                    {"superseded": True, "superseded_by": keeper["id"],
+                     "superseded_ts": now},
+                )
+            stats["superseded"] += len(losers)
             stats["kept"] += 1
             stats["consolidated"] += 1
         return {"status": "ok", **stats}
