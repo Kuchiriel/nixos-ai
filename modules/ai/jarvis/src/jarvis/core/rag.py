@@ -1045,10 +1045,18 @@ class HybridSearch:
         # embed just that id (extra tokens dilute the vector). Sparse/RRF/boosts
         # still use the full query — this only changes the dense vector text.
         dense_query = query
+        strong_id = None
         if not hyde:
-            sid = strong_query_identifier(query)
-            if sid:
-                dense_query = sid
+            strong_id = strong_query_identifier(query)
+            if strong_id:
+                dense_query = strong_id
+
+        # (19/11 RAG-EVAL): reranker desordena documentos longos (350 chars/doc).
+        # Quando há ID forte, a query densa já é precisa e o reranker só
+        # adiciona ruído (medido: 2/5 com rerank vs 4/5 sem). Desliga nesse
+        # caso. Ver docs/audit/RAG-EVAL.md §6.
+        if strong_id and use_rerank:
+            use_rerank = False
 
         if hyde:
             query = self._hyde_expand(query)
