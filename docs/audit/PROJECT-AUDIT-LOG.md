@@ -263,3 +263,12 @@
 - Full suite: 2096 passed, 8 failed (prévios), 27 skipped. RAG 0.93, host OK.
 - Rebuilds não foram necessários; reinício de unit foi via systemctl --user/system.
 - Próximo: 8 testes antigos; limpeza de worktree/uncommitted com manifesto.
+
+## 2026-11-19 — retomada 12ª entrada (testes)
+- HEAD inicial `8fc9577a`; HEAD final `3213fe7c`.
+- Corrigidos os 8 testes antigos que falhavam (todos contratos V2 mudados):
+  model_registry fallback, comms x2, mcp_offline, roster liveness, reranker,
+  p5 state machine, voice. Nenhum era regressão de produto.
+- Full suite: 2104 passed, 0 failed, 27 skipped, 1 warning.
+- Runtime :8092 saudável (unit declarada + v9 adapter).
+- Próximo: worktree prunable / uncommitted com manifesto; 3ª amostra chunks.

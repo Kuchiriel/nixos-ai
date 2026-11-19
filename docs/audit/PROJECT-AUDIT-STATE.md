@@ -13,7 +13,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 ## Datas e HEADs
 - Início da missão: 2026-11-19.
 - HEAD inicial da auditoria: `57c9176517ca2f27d8e3285deb43f009cb0a21b3` (`main`).
-- HEAD atual: `d633ae14`.
+- HEAD atual: `3213fe7c`.
 - Primeiro commit do projeto: `ae8789fac5cbb8b2527f5091c9b2877507f8337e` (2024-11-23, fork de `nixos-config-reborn`).
 
 ## Fases
@@ -27,7 +27,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 | 5 — NixOS/config | **CONCLUÍDA** | `NIXOS-AUDIT.md` (`a828c568`) |
 | 6 — Código/org | **EM ANDAMENTO** | AGENTS 1684→400; 2 scripts Laya arquivados com `git mv` (`a072e908`) |
 | 7 — Implementação contínua | **CONCLUÍDA (22/22 backlog)** | commits abaixo |
-| 8 — Validação/regressão | PARCIAL | test_handoff 4/4; jobs 16/0 |
+| 8 — Validação/regressão | **CONCLUÍDA** | 2104 passed / 0 failed / 27 skipped |
 | 9 — Auditoria final | PENDENTE | — |
 
 ## Subsistemas já investigados (com evidência)
