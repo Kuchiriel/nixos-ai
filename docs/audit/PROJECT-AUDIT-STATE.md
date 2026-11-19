@@ -202,37 +202,23 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
   Unit ainda solta (não Nix-managed) — dívida registrada.
 
 ## Próxima tarefa exata
-1. **#22 bloqueio do A/B**: investigar por que o harness dá TimeoutExpired em
-   1200 s (mtp-lora/s3 e bonsai/s1) — llm-call/retry preso. Só retomar 12/12
-   com veredito válido; 2/5 atuais NÃO são conclusão (#18 segue aberto).
-2. Fase 6 restante: revisar `.bak-*` em `scripts/` (47 uncommitted, cuidado
-   com agentes ativos) — nenhum outro módulo é morto (8 candidatos verificados).
-3. Recall da fusão para a pergunta "chars per chunk" (falha com e sem
-   rerank): ela não entra nos candidatos crus — investigar dense/sparse e o
-   cap de `top_k*4` (outra lane já claimou esse ponto: conferir antes).
-4. RAG gate SATISFEITO (0.93 ≥ 0.80) — próximo opcional: aumentar trecho
-   do documento no reranker (350 → 600 chars) para os 3 misses conceituais.
-   Ver `docs/audit/RAG-EVAL.md` §7.
-5. **16 units/timers de USUÁRIO fora do Nix** (medido 19/11 pela lane
-   nixos-ai/runtime-production): das 52 units em `~/.config/systemd/user`,
-   16 não têm menção em nenhum `.nix` do repo — chisel-client,
-   chisel-tunnel, context-guard (service+timer), dono-gate-ivan,
-   fleet-milestone (service+timer), fleet-watchdog (service+timer),
-   night-watch, pipewire-pulse, pipewire-session-manager, vpn-guard
-   (service+timer), wurm-macro, wurm-standalone. A unit da voz JÁ foi
-   trazida para o Nix (`d3047102`); as outras 15 continuam como finding.
-   Ver `docs/audit/PROJECT-AUDIT-LOG.md` §lane runtime-production.
+1. Aprofundar Fase 1/3 (delta): auditar contratos reais e consumidores de `modules/ai/jarvis/src/jarvis/core/memory.py`, `rag.py`, `vector_store.py`, `knowledge_schema.py`, `vault.py`, `retriever.py`, `reranker.py`, `chunker.py` e scripts de OpenCode/agente (`scripts/agent-pains.py`, `scripts/opencode-sessions.py`, `scripts/agent-checkpoint.sh`, plugins), registrando proveniencia, idempotencia e divergencias com evidencia em `KNOWLEDGE-SYSTEM-AUDIT.md` e `OPENCODE-CONTINUITY-AUDIT.md`.
+2. Inspecionar `~/.local/share/opencode/opencode.db` em modo somente leitura (`sqlite3 'file:...?mode=ro'`) para confirmar o schema real (tabelas, colunas, contagens) e alinhar a auditoria de continuidade. Nada de escrita, migracao ou DDL.
+3. Reconciliar entregaveis: `CHRONOLOGICAL-REVIEW-2026-11-19.md` nao existe no working tree (o STATE antigo o citava); usar `PROJECT-HISTORY.md` como base canonica e criar um indice curto se necessario. Revisar `ARCHITECTURE-MAP.md`, `NIXOS-AUDIT.md`, `TECHNICAL-DEBT.md` e `IMPROVEMENT-ROADMAP.md` contra o HEAD `029b8043`.
+4. Itens abertos que continuam validos: #22/#18 A/B (timeout do harness, evidencias parciais), recall da fusao para "chars per chunk" (candidato nao entra no top_k cru), 16 units de usuario fora do Nix, `.bak`/organizacao da Fase 6 respeitando trabalho de outras lanes.
+5. Antes de commitar correcoes de codigo: testes focados no diff; suite completa (~6 min, `-p no:randomly`) so com janela livre de GPU/CPU e sem conflito com agentes ativos. Rebuild do host continua condicionado a autorizacao e a alvo estavel.
 
 ## Arquivos que o próximo agente precisa ler
-- `AGENTS.md` (raiz, 1.684 linhas — ler o cabeçalho e as regras pinadas; o resto sob demanda).
-- `docs/audit/INDEX.md`, `docs/audit/CHRONOLOGICAL-REVIEW-2026-11-19.md`.
-- `../NIXOS-AI-ORIGEM-CRONOLOGICA.md` (ai-mesh, síntese verificada).
-- `PROJECT-AUDIT-LOG.md` (este diretório).
+- `AGENTS.md` (raiz: cabecalho e regras pinadas; detalhes sob demanda).
+- `docs/audit/PROJECT-AUDIT-STATE.md` e `docs/audit/PROJECT-AUDIT-LOG.md` (ultimas entradas).
+- `docs/audit/INDEX.md`, `docs/audit/PROJECT-HISTORY.md`, `docs/audit/ARCHITECTURE-MAP.md`, `docs/audit/KNOWLEDGE-SYSTEM-AUDIT.md`, `docs/audit/OPENCODE-CONTINUITY-AUDIT.md`, `docs/audit/NIXOS-AUDIT.md`, `docs/audit/TECHNICAL-DEBT.md`, `docs/audit/IMPROVEMENT-ROADMAP.md`.
+- `../NIXOS-AI-ORIGEM-CRONOLOGICA.md` (ai-mesh), se disponivel no host.
 
 ## Riscos de retomada
-- 42 alterações não commitadas no host (principalmente `.bak` de patches + trabalho de outros agentes).
-  **Não usar `git add -A`**; inspecionar cada arquivo.
-- Worktrees: `.worktrees/coord-mcp` (branch `fix/coord-pending-json`) e `/tmp/ack-patch-wt` (prunable).
+- Arvore suja com ~20 itens nao commitados (mix de docs/audit de outra lane, memory.js, scripts/agent-roster.py, .bak e diretorios nao rastreados como docs/agentes e memory/). **Nao usar `git add -A`**; inspecionar cada arquivo e respeitar o dono de cada mudanca.
+- Worktrees: `.worktrees/coord-mcp` (branch `fix/coord-pending-json`) ativo; `/tmp/ack-patch-wt` consta como prunable no registro (conferir antes de remover).
+- `docs/audit/CHRONOLOGICAL-REVIEW-2026-11-19.md` e citado em versoes anteriores do checkpoint mas nao existe no working tree atual; usar `PROJECT-HISTORY.md` como base canonica ate reconciliar.
+- Mullvad: guard e bypass corrigidos no vivo e no repo, mas o timer declarativo novo (`mullvad-tailscale-bypass-check`) e a unit ajustada do host so entram no proximo rebuild; o timer de usuario `vpn-guard` aponta para o script do repo.
 - Outros agentes ativos: Falcao em `#18`, Cervo em `#10`, Lince em TAB — verificar claim antes de editar.
 
 ## Histórico incremental de progresso
@@ -251,3 +237,10 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
 - 2026-11-19 11:51: Fase 3 concluída (auditoria do conhecimento com medições);
   Fase 2 fechada v1; 3 commits novos (`3c0c4f20`, `70f65895`, `5b2cd8c9`);
   A/B #18 registrada como morta por timeout.
+- 2026-11-19 (retomada 14, Glyph/Buffy): Mullvad diagnosticado e restaurado
+  (stop manual em 18/11 18:57:45; bypass nft ausente reaplicado; guard
+  reescrito em `f64be138`). Correcao de performance/fiabilidade commitada em
+  `029b8043` (`workspace.py` com varredura podada e capada, `harness.py` com
+  snapshot de projetos, bulldozer opt-in por `JARVIS_TEST_SLM=1`);
+  `test_longrun_e2e.py` 13 passed em 48.38s. Suite completa NAO reexecutada
+  nesta janela (job pesado, agentes ativos).
