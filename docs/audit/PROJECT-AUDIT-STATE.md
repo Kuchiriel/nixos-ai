@@ -29,7 +29,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 | 5 — NixOS/config | **CONCLUÍDA** | `NIXOS-AUDIT.md` (`a828c568`) |
 | 6 — Código/org | **EM ANDAMENTO** | AGENTS 1684→400; 2 scripts Laya arquivados com `git mv` (`a072e908`) |
 | 7 — Implementação contínua | **CONCLUÍDA (22/22 backlog)** | commits abaixo |
-| 8 — Validação/regressão | **CONCLUÍDA** | 2104 passed / 0 failed / 27 skipped |
+| 8 — Validação/regressão | **CONCLUÍDA** | 2109 passed / 0 failed / 27 skipped (240 s, 19/11) |
 | 9 — Auditoria final | PENDENTE | — |
 
 ## Subsistemas já investigados (com evidência)
