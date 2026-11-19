@@ -1018,14 +1018,22 @@ async function handler(req, res) {
         const ts = epoch ? new Date(epoch).toLocaleTimeString('pt-BR') : '';
         const t = (m.type || '?').toUpperCase();
         let line = '';
-        if (t === 'USER') {
-          line = `[${ts}] USER: ${(m.payload?.text || '').slice(0, 400)}`;
+        // (19/11) V2: o texto do usuario vem em `m.text`, nao em
+        // `m.payload.text` (por isso o log dos agentes novos saia vazio).
+        if (t === 'USER' || t === 'IDLE') {
+          const txt = m.payload?.text || m.text || '';
+          if (m.error) {
+            line = `[${ts}] ERROR: ${String(m.error.message || m.error.type || '').slice(0, 500)}`;
+          } else if (txt) {
+            line = `[${ts}] USER: ${txt.slice(0, 400)}`;
+          }
         } else if (t === 'ASSISTANT') {
           const parts = (m.content || []).map(c => {
             if (c.type === 'text') return c.text;
             if (c.type === 'tool') return '⚙ tool: ' + c.name + ' ' + JSON.stringify(c.state?.input || {}).slice(0, 180);
             return '[' + c.type + ']';
           }).filter(Boolean);
+          if (m.error) parts.push('ERROR: ' + String(m.error.message || m.error.type || '').slice(0, 400));
           line = `[${ts}] ASST:\n${parts.join('\n').slice(0, 900)}`;
         }
         if (line) rows.push({ epoch, line });

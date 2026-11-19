@@ -59,14 +59,37 @@ def api(path: str) -> dict:
         return {}
 
 
+# (19/11, medido) IDs que responderam de verdade nesta casa. O catalogo
+# marca modelos EOL como "active" (diffusiongemma morreu 12/11) e o
+# alphabetical-first escolheu um deles -> 0 trabalho do endpoint nvidia.
+GOOD_MODEL = {
+    "groq": "groq/openai/gpt-oss-20b",
+    "nvidia": "nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+    "cloudflare": "cloudflare/@cf/google/gemma-4-26b-a4b-it",
+    "gemini": "gemini/gemini-2.5-flash",
+    "openrouter": "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "ovhcloud": "ovhcloud/gpt-oss-20b",
+    "kilocode": "kilocode/nvidia/nemotron-3-ultra-550b-a55b:free",
+    "llm7": "llm7/nemotron-3-nano:30b",
+    "cohere": "cohere/command-r7b-12-2024",
+}
+
+
 def pick_model(provider: dict) -> str:
+    pid = provider.get("id", "")
     models = [m for m in provider.get("models", [])
               if m.get("status") == "active" and not m.get("in_cooldown")]
-    if not models:
-        models = provider.get("models", [])
-    models.sort(key=lambda m: (0 if m.get("tier") in ("fast", "general") else 1,
+    ids = {m.get("id") for m in models}
+    preferred = GOOD_MODEL.get(pid, "")
+    if preferred in ids:
+        return preferred
+    # nunca escolher modelo EOL/diffusion: catalogo diz "active" mas o
+    # provider recusa (medido 19/11 no nvidia diffusiongemma).
+    usable = [m for m in models
+              if not any(w in m.get("id", "").lower() for w in ("diffusion", "eol", "legacy"))]
+    usable.sort(key=lambda m: (0 if m.get("tier") in ("fast", "general") else 1,
                                m.get("id", "")))
-    return models[0].get("id", "") if models else ""
+    return usable[0].get("id", "") if usable else ""
 
 
 def load_manifest() -> dict:
