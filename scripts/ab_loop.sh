@@ -134,7 +134,9 @@ try:
     for line in open(logf,encoding="utf-8"):
         try: d=json.loads(line)
         except Exception: continue
-        if lane in str(d.get("project","")) or lane in str(d.get("lane","")):
+        # casa pela lane: o task_id traz o nome da lane (dungeon-ab-bonsai-L1-...)
+        tid = str(d.get("task_id",""))
+        if lane in tid or lane in str(d.get("lane","")) or lane in str(d.get("project","")):
             last=d
 except Exception: pass
 if last:
