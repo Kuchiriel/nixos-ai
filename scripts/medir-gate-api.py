@@ -3,16 +3,16 @@ metrica de token dos adapters locais.
 
 POR QUE (19/11, sweep-2026-11, item #10): a hipotese do video do VIDEU e'
 "modelos 1M ctx vs especialistas" e a metrica e' ACURACIA POR TOKEN. ate
-aqui eu medi os dois adapters LOCAIS (v9 e v10 do 4B). Falta a outra ponta:
-o modelo de 1M de contexto, que no laboratorio e' o braco `api` (o
-nemotron-3-ultra-550b-a55b, via o nv-gate na :8095).
+aqui eu medi os tres adapters LOCAIS (v9, v10 e o de 81 MB que esta em
+producao). Falta a outra ponta: o modelo de 1M de contexto, que no laboratorio
+e' o braco `api` (o nemotron-3-ultra-550b-a55b, via o nv-gate na :8095).
 
 O QUE ESTE SCRIPT FAZ:
 1) descobre o endpoint do braco `api` na MESMA configuracao que o lab usa
-   (modules/ai/jarvis/src/nightwatch/dungeon.py, MODELOS["api"]);
-2) roda o heldout3 com o prompt EXATO do classificador, N rodadas, medindo o
-   token de entrada e saida que a API devolve (o /v1/chat/completions do
-   nv-gate traz usage);
+   (nightwatch.dungeon.MODELOS["api"]);
+2) roda o heldout3 com o prompt EXATO do classificador oficial (o CLASS_SYS
+   completo, que descreve cada rotulo — a versao encurtada muda o resultado),
+   N rodadas, medindo o token de entrada e saida que a API devolve;
 3) reporta acuracia, token e ACURACIA POR TOKEN, na MESMA formula dos
    adapters locais, para a tabela ser comparavel.
 
@@ -32,10 +32,13 @@ REPO = Path("/home/nixos/projects/nixos-ai")
 sys.path.insert(0, str(REPO / "modules/ai/jarvis/src"))
 sys.path.insert(0, str(REPO / "benchmarks/voice"))
 
-CLASS_SYS = (
-    "Você é o JARVIS, assistente de voz. Classifique o turno do usuário em "
-    "una palabra: RESPOND, WAIT, SILENCE ou BARGE."
-)
+# (19/11, sweep-2026-11) MEDIDO: o CLASS_SYS oficial DESCREVE cada rotulo
+# (o LoRA foi treinado com ele). Uma versao encurtada muda o resultado.
+CLASS_SYS = ("Você é o JARVIS, assistente de voz. Classifique o turno do "
+             "usuário em uma palavra: RESPOND (fala completa que pede "
+             "resposta), WAIT (frase incompleta, mais vem), SILENCE "
+             "(backchannel/ruído ou fala completa NÃO dirigida ao assistente, "
+             "como TV/narração/música), ou BARGE (o dono interrompeu sua fala).")
 LABELS = ("RESPOND", "WAIT", "SILENCE", "BARGE")
 
 
@@ -56,15 +59,14 @@ def main():
     timeout = int(sys.argv[2]) if len(sys.argv) > 2 else 180
     rodadas = int(sys.argv[3]) if len(sys.argv) > 3 else 3
     braco = sys.argv[4] if len(sys.argv) > 4 else "api"
+    espera_429 = float(sys.argv[5]) if len(sys.argv) > 5 else 20.0
 
-    # a MESMA configuracao do lab
     from nightwatch.dungeon import MODELOS
     cfg = MODELOS[braco]
     base = cfg["base_url"].rstrip("/")
     modelo = cfg["model"]
     print(f"1) braco '{braco}': {modelo} em {base}")
 
-    # a chave: o braco remote usa o env (medido no proprio lab)
     envf = Path.home() / ".config/opencode/keys.env"
     if envf.is_file():
         for ln in envf.read_text().splitlines():
@@ -72,9 +74,8 @@ def main():
                 os.environ["NVIDIA_API_KEY"] = ln.split("=", 1)[1].strip().strip('"')
                 break
     headers = {"Content-Type": "application/json"}
-    key = os.environ.get("NVIDIA_API_KEY")
-    if key:
-        headers["Authorization"] = f"Bearer {key}"
+    if os.environ.get("NVIDIA_API_KEY"):
+        headers["Authorization"] = f"Bearer {os.environ['NVIDIA_API_KEY']}"
 
     try:
         from heldout3 import HELDOUT3
@@ -99,30 +100,41 @@ def main():
                     {"role": "system", "content": CLASS_SYS},
                     {"role": "user", "content": utter}],
                 "max_tokens": n_predict, "temperature": 0}
+            import urllib.error
             import urllib.request
             req = urllib.request.Request(
                 base + "/chat/completions", data=json.dumps(payload).encode(),
                 headers=headers)
             t = time.time()
-            try:
-                with urllib.request.urlopen(req, timeout=timeout) as r:
-                    j = json.loads(r.read().decode())
-            except Exception as e:
-                print(f"   ERRO {type(e).__name__}: {e}")
+            j = None
+            for tentativa in range(4):
+                try:
+                    with urllib.request.urlopen(req, timeout=timeout) as r:
+                        j = json.loads(r.read().decode())
+                    break
+                except urllib.error.HTTPError as e:
+                    if e.code == 429:
+                        # (19/11) MEDIDO: o nv-gate e' 8 RPM + burst 2; o 429
+                        # aqui e' a FILA da cota, nao um erro do modelo. Entao
+                        # espera e tenta de novo, e o veredito nao se perde.
+                        espera = espera_429 * (tentativa + 1)
+                        print(f"   429 (cota): esperando {espera:.0f}s", flush=True)
+                        time.sleep(espera)
+                        continue
+                    print(f"   ERRO HTTP {e.code}")
+                    break
+                except Exception as e:
+                    print(f"   ERRO {type(e).__name__}: {e}")
+                    break
+            if j is None:
                 break
             lat.append(time.time() - t)
             u = j.get("usage") or {}
             txt = ""
             for ch in (j.get("choices") or []):
-                msg = ch.get("message") or {}
-                txt = msg.get("content") or ch.get("text") or ""
+                txt = (ch.get("message") or {}).get("content") or ch.get("text") or ""
                 if txt:
                     break
-            # (19/11) MEDIDO: o modelo de 1M ctx gasta os tokens em REASONING
-            # (usage.completion_tokens_details.reasoning_tokens = 24 de 24).
-            # Com n_predict=24 o rotulo NAO SAI (a string volta vazia ou
-            # cortada em 'RE'), e o veredito media o CORTE, nao o modelo.
-            # Entao o token e' lido do usage (real) e o texto e' o que veio.
             if u.get("prompt_tokens"):
                 pt.append(u["prompt_tokens"])
             if u.get("completion_tokens"):

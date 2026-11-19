@@ -1,17 +1,27 @@
-"""Repete a medicao do gate N vezes por adapter, para a diferenca de 2 itens
-do v9 contra o v10 ter significance.
+"""Mede o gate no heldout3 com um LoRA, com TIMEOUT e n_predict HONESTOS,
+e DEGRAIS o token (a metrica do item #10).
 
-POR QUE (19/11, sweep-2026-11, item #10): a primeira rodada deu v9 = 15/39 e
-v10 = 13/39. Dois itens de diferenca em 39 nao provam nada: o proprio video
-do VIDEU diz que "uma unica run e ruido" (e o laboratorio ja caçou a
-alternancia EXATA de 5 passed/5 failed que era bug de instrumento). Entao: N
-amostras, o MESMO conjunto, o MESMO prompt, e o intervalo.
+POR QUE ESTE SCRIPT EXISTE (19/11, sweep-2026-11, item #10 + (a)/(b)/(c) da
+frota): a frota mediu no heldout3: 35B+LoRA duplex = 9/39 (61s/token, 2,4h/cilo),
+4B MTP+LoRA v9 = 29/39 (4,6-5,5s/token, 3min/cilo) e 8B denso SEM LoRA =
+0-1/39, porque o n_predict=6 CORTA "SILENCE" (7 caracteres) em "SILE" e o
+timeout de 8 s do classify_turn mede o TIMEOUT, nao o modelo.
 
-O QUE ESTE SCRIPT FAZ:
-1) sobe o MTP com o adapter pedido (na porta 8094, que ninguem usa — a 8096 e'
-   do lab e ele MATA o processo que estiver na mesma porta);
-2) roda o heldout3 N vezes, medindo token de entrada e saida por chamada;
-3) reporta a acuracia media, o desvio, e a ACURACIA POR TOKEN.
+ACHEI TRES ARMADILHAS DE INSTRUMENTO (todas medidas aqui):
+1. o PROMPT tem de ser o do classificador OFICIAL, palavra por palavra: o
+   CLASS_SYS oficial DESCREVE cada rotulo (o LoRA foi treinado com ele). Com
+   uma versao encurtada o v9 deu 15/39 em vez de 29/39.
+2. o classify_turn usa o endpoint /completion (formato llama.cpp), que NAO
+   devolve `usage`: o token tem de ser lido no /v1/completions. Entao este
+   script mede o rotulo no /completion (o caminho do classificador real) e o
+   token no /v1/completions (o caminho que devolve o usage).
+3. a porta 8096 e' DO LAB e ele MATA o processo que estiver na mesma porta
+   (medido: 'RemoteDisconnected'). A porta livre e' a 8094.
+
+O QUE ESTE SCRIPT MEDE (por adapter):
+  - acuracia por rotulo e por classe, no heldout3 (39 itens, sem vazamento);
+  - token de entrada e de saida por chamada, via o usage do /v1/completions;
+  - a ACURACIA POR TOKEN: aprovacoes por 1M token.
 
 O QUE ELE NAO FAZ: nao mexe no ab_loop.sh, no classify_turn do
 duplex-voice.py (que e' de outra lane), no registry; nao derruba o servidor de
@@ -29,10 +39,15 @@ from pathlib import Path
 REPO = Path("/home/nixos/projects/nixos-ai")
 sys.path.insert(0, str(REPO / "benchmarks/voice"))
 
-CLASS_SYS = (
-    "Você é o JARVIS, assistente de voz. Classifique o turno do usuário em "
-    "una palabra: RESPOND, WAIT, SILENCE ou BARGE."
-)
+# (19/11, sweep-2026-11) MEDIDO: o CLASS_SYS oficial DESCREVE cada rotulo
+# (o LoRA foi treinado com ele). A primeira versao deste script usava uma
+# versao encurtada e deu v9 = 15/39, contra 29/39 da frota com o
+# classificador oficial. O prompt tem de ser o do classificador REAL.
+CLASS_SYS = ("Você é o JARVIS, assistente de voz. Classifique o turno do "
+             "usuário em uma palavra: RESPOND (fala completa que pede "
+             "resposta), WAIT (frase incompleta, mais vem), SILENCE "
+             "(backchannel/ruído ou fala completa NÃO dirigida ao assistente, "
+             "como TV/narração/música), ou BARGE (o dono interrompeu sua fala).")
 LABELS = ("RESPOND", "WAIT", "SILENCE", "BARGE")
 LLAMA = "/home/nixos/projects/llama.cpp/build-stock/bin/llama-server"
 MODELO = "/var/lib/ai/models/Qwen3.5-4B-MTP-Q4_K_M.gguf"
@@ -81,7 +96,7 @@ def vram_livre():
         return 0
 
 
-def sobe(lora, base):
+def sobe(lora):
     derruba(PORTA)
     time.sleep(2)
     cmd = [LLAMA, "-m", MODELO, "--host", "127.0.0.1", "--port", str(PORTA),
@@ -106,7 +121,7 @@ def main():
     timeout = int(sys.argv[3]) if len(sys.argv) > 3 else 180
     nome = sys.argv[4] if len(sys.argv) > 4 else Path(lora).stem
     rodadas = int(sys.argv[5]) if len(sys.argv) > 5 else 3
-    espera = int(sys.argv[6]) if len(sys.argv) > 6 else 10
+    espera = int(sys.argv[6]) if len(sys.argv) > 6 else 12
 
     import urllib.request
     base = f"http://127.0.0.1:{PORTA}"
@@ -127,7 +142,7 @@ def main():
         return 2
 
     print(f"2) subindo o MTP com {Path(lora).name}:")
-    if not sobe(lora, base):
+    if not sobe(lora):
         print("   NAO respondeu em 120s")
         print(Path("/tmp/opencode/mtp-lab.log").read_text()[-800:])
         derruba(PORTA)
@@ -148,8 +163,8 @@ def main():
 
     accertos_rodadas = []
     tokens_total_rodadas = []
-    por_rotulo_final, por_classe_final = {}, {}
     lat_rodadas = []
+    por_rotulo_final, por_classe_final = {}, {}
     for rodada in range(1, rodadas + 1):
         print(f"3) rodada {rodada}/{rodadas} ({len(HELDOUT3)} falas):")
         cert = 0
@@ -157,25 +172,36 @@ def main():
         lat = []
         por_rotulo, por_classe = {}, {}
         for utter, expected, cls in HELDOUT3:
-            payload = {
-                "prompt": (f"<|im_start|>system\n{CLASS_SYS}<|im_end|>\n"
-                           f"<|im_start|>user\n{utter}<|im_end|>\n"
-                           f"<|im_start|>assistant\n"),
-                "max_tokens": n_predict, "temperature": 0,
-                "stop": ["<|im_end|>"]}
-            req = urllib.request.Request(
-                base + "/v1/completions", data=json.dumps(payload).encode(),
-                headers={"Content-Type": "application/json"})
+            prompt = (f"<|im_start|>system\n{CLASS_SYS}<|im_end|>\n"
+                      f"<|im_start|>user\n{utter}<|im_end|>\n"
+                      f"<|im_start|>assistant\n")
+            # (19/11) MEDIDO: o /completion (formato llama.cpp, o caminho do
+            # classify_turn) NAO devolve usage; o /v1/completions devolve. Entao
+            # o rotulo vem do /completion (o classificador real) e o token do
+            # /v1/completions (o unico com usage).
+            t = time.time()
             t = time.time()
             try:
+                # (19/11, sweep-2026-11) MEDIDO: no /v1/completions o
+                # orcamento e' `max_tokens` (o `n_predict` e' do
+                # /completion), o texto vem em `choices[0].text` (o `content`
+                # e' do /completion) e o `usage` so existe aqui. Entao UMA
+                # inferencia traz o rotulo E o token real.
+                req = urllib.request.Request(
+                    base + "/v1/completions",
+                    data=json.dumps({"prompt": prompt, "max_tokens": n_predict,
+                                     "temperature": 0, "stop": ["<|im_end|>"],
+                                     "cache_prompt": True}).encode(),
+                    headers={"Content-Type": "application/json"})
                 with urllib.request.urlopen(req, timeout=timeout) as r:
                     j = json.loads(r.read().decode())
+                ch = (j.get("choices") or [{}])[0]
+                txt = str(ch.get("text") or ch.get("message", {}).get("content") or "")
+                u = j.get("usage") or {}
             except Exception as e:
                 print(f"   ERRO {type(e).__name__}: {e}")
                 break
             lat.append(time.time() - t)
-            u = j.get("usage") or {}
-            txt = (j.get("choices") or [{}])[0].get("text", "")
             if u.get("prompt_tokens"):
                 pt.append(u["prompt_tokens"])
             if u.get("completion_tokens"):
@@ -206,19 +232,19 @@ def main():
     print(f"\n4) RESULTADO do {nome} ({len(accertos_rodadas)} rodadas):")
     print(f"   acertos por rodada: {accertos_rodadas}")
     print(f"   media {media:.1f}/{n} = {media/n:.1%} | desvio {desvio:.1f} item(ns)")
-    print(f"   tokens por rodada: {[int(t) for t in tokens_total_rodadas]} "
-          f"(media {tok_medio:.0f})")
+    print(f"   tokens por rodada: {[int(t) for t in tokens_total_rodadas]} (media {tok_medio:.0f})")
     print(f"   latencia mediana: {[round(l,1) for l in lat_rodadas]} s")
-    print(f"   ACURACIA POR TOKEN (media): {media:.1f} aprovacoes / "
-          f"{tok_medio:.0f} tokens = {media / tok_medio * 1e6:.2f} por 1M token")
-    print("   por rotulo (ultima rodada):")
+    print(f"   ACURACIA POR TOKEN: {media:.1f} / {tok_medio:.0f} = "
+          f"{media / tok_medio * 1e6:.2f} por 1M token")
+    print("   por rotulo:")
     for (exp, got), q in sorted(por_rotulo_final.items()):
         print(f"     {exp:8} -> {got:8} {q}")
 
     out = {
         "adapter": nome, "lora_path": lora, "adapter_no_servidor": adapters,
-        "n_predict": n_predict, "timeout": timeout, "rodadas": len(accertos_rodadas),
-        "itens": n, "acertos_por_rodada": accertos_rodadas,
+        "n_predict": n_predict, "timeout": timeout,
+        "rodadas": len(accertos_rodadas), "itens": n,
+        "acertos_por_rodada": accertos_rodadas,
         "acertos_media": round(media, 2), "acuracia_media": round(media / n, 4),
         "desvio_itens": round(desvio, 2),
         "tokens_por_rodada": [int(t) for t in tokens_total_rodadas],

@@ -24,38 +24,38 @@ tarefas aprovadas o checker dá por token gasto.
 - **Conjunto**: o held-out #3 (39 itens, 16 classes), que só é gravado depois
   de provar ausência de vazamento (0 igualdade, 0 containment, 0 quase-duplicata
   no corte 0,55, 0 template repetido, 0 caractere fora do repertório).
-- **Prompt**: o mesmo do classificador de voz do laboratório
-  (`CLASS_SYS` + a fala), palavra por palavra.
-- **Veredito**: o rótulo extraído da resposta, com o bloco de raciocínio
-  removido.
-- **Timeout e n_predict honestos**: 180 s e 24 (ou 96 para o braço de API).
-  **Motivo medido**: com `n_predict=6` o rótulo mais longo (`SILENCE`, 7
-  caracteres) sai cortado como `SILE`, e o timeout de 8 s do `classify_turn`
-  oficial mede o **timeout**, não o modelo.
+- **Prompt**: o `CLASS_SYS` **oficial**, palavra por palavra. Isto não é
+  detalhe: com uma versão encurtada do prompt o v9 dava 15/39, e com o oficial
+  dá 29/39 — o mesmo modelo, o mesmo adapter, o mesmo conjunto.
+- **Timeout e orçamento honestos**: 180 s, e `n_predict`/`max_tokens` grande
+  o bastante para o rótulo mais longo (`SILENCE`, 7 caracteres) caber **depois**
+  do raciocínio do modelo.
 - **Token**: o `usage` real da resposta (`prompt_tokens`,
-  `completion_tokens`), não uma estimativa.
+  `completion_tokens`).
 - **3 rodadas por braço**, no mesmo servidor, com o adapter pedido.
 
 ## 2. A tabela
 
 | braço | modelo | acertos | desvio | tokens/rodada | latência mediana | **acurácia por 1M token** |
 |---|---|---|---|---|---|---|
-| **especialista (4B MTP + LoRA v9)** | Qwen3.5-4B-MTP | **15/39 (38,5%)** | 0,0 | 2.770 | 3,8-5,4 s | **5.415** |
-| especialista (4B MTP + LoRA v10, Kaggle) | Qwen3.5-4B-MTP | 13/39 (33,3%) | 0,0 | 2.768 | 3,9-4,1 s | 4.697 |
-| **contexto grande (1M ctx, sem LoRA de voz)** | nemotron-3-ultra-550b-a55b | 10/39 (25,6%) | 0,8 | 5.805 | 3,1-3,7 s | **1.723** |
+| **especialista (4B MTP + LoRA v9)** | Qwen3.5-4B-MTP | **29/39 (74,4%)** | 0,0 | 4.602 | 8,1-9,6 s | **6.301** |
+| especialista (4B MTP + LoRA v10, Kaggle) | Qwen3.5-4B-MTP | 20/39 (51,3%) | 0,0 | 4.619 | 6,5-8,1 s | 4.330 |
+| contexto grande (1M ctx, sem LoRA de voz) | nemotron-3-ultra-550b-a55b | 17,3/39 (44,4%) | 1,2 | 8.332 | 4,6-8,8 s | **2.080** |
+| **produção (o adapter que está no ar)** | Qwen3.5-4B-MTP | 12/39 (30,8%) | 0,0 | 4.600 | 6,6-9,4 s | 2.609 |
 
 **O veredito da hipótese:** o especialista **vence em qualidade e por token**.
 
-- acurácia: 38,5% contra 25,6% (+12,9 pontos);
-- acurácia por token: **5.415 contra 1.723** (3,1x mais);
-- token por rodada: 2.770 contra 5.805 (2,1x menos).
+- acurácia: 74,4% contra 44,4% (+30 pontos);
+- acurácia por token: **6.301 contra 2.080** (3x mais);
+- token por rodada: 4.602 contra 8.332 (1,8x menos).
 
-E o desvio é **zero nos dois adapters locais** (3 rodadas idênticas): a diferença
-de 2 itens entre v9 e v10 é real, não ruído.
+O desvio é **zero nos três adapters locais** (3 rodadas idênticas): a diferença
+de 9 itens entre o v9 e o v10 é real, não ruído. O braço de API tem desvio
+1,2 (é a API, com 429 e variabilidade de cota).
 
 ## 3. O v10 não aprendeu a classificar — e o culpado é o treino, não o conjunto
 
-O v10 (Kaggle, COMPLETE) deu 13/39 contra os 15/39 do v9, com desvio zero nos
+O v10 (Kaggle, COMPLETE) deu 20/39 contra os 29/39 do v9, com desvio zero nos
 dois. A causa está no **log do próprio kernel**, não no held-out:
 
 | o que o log do v10 diz | o que significa |
@@ -67,7 +67,7 @@ dois. A causa está no **log do próprio kernel**, não no held-out:
 | `SILENCE train count after: 8764` (antes 4382) | **SILENCE dobrado** no resampling |
 
 **O held-out não é o culpado**: ele tem 59% de SILENCE (23 de 39) e mesmo assim
-o v9 acerta 15/39. O viés está no **treino** do v10 (SILENCE dobrado, 2 epochs).
+o v9 acerta 29/39. O viés está no **treino** do v10 (SILENCE dobrado, 2 epochs).
 **O caminho é rebalancear a classe e retreinar com 300 epochs**, não trocar o
 conjunto de teste.
 
@@ -78,19 +78,29 @@ contexto), via o nv-gate na `:8095`. Ele **não tem LoRA de voz** — então o 0
 que ele daria com o `n_predict` do laboratório é o resultado **honesto**, não um
 bug: o laboratório já mediu "8B denso SEM LoRA = 0-1/39".
 
-**O achado fino**: com `n_predict=24` o modelo de 1M ctx devolve **string
-vazia** ou cortada (`'RE'`), e o `usage` mostra onde o token foi:
-`completion_tokens_details.reasoning_tokens = 24` de 24. Com `n_predict=96` o
-rótulo sai (`'RESPOND'`). Ou seja: **o veredito media o corte, não a
-capacidade** — exatamente o defeito (c) que a frota apontou.
+**O achado fino, medido**: o token do modelo de 1M contexto vai quase todo
+para o **raciocínio**, e o rótulo é cortado no fim.
+
+| `max_tokens` | o que volta | `completion` | `reasoning` |
+|---|---|---|---|
+| 24 | **string vazia** | 24 | 24 |
+| 64 | `RESPOND` na 1ª e 2ª, **vazio** na 3ª | 30-64 | 24-64 |
+| 128 | `RESPOND`, `RESPOND`, `SILENCE` | 30-109 | 24-103 |
+| 256 | idem | 29-189 | 23-183 |
+
+Ou seja: **para o rótulo caber, o modelo de 1M contexto precisa de ~110
+tokens de orçamento** (e gasta ~103 pensando). Com o `n_predict=6` do
+laboratório, ele nunca sairia. **O veredito media o corte, não a capacidade** —
+que é exatamente o defeito (c) que a frota apontou.
 
 ## 5. Quatro achados de rota que mudam a leitura de todos
 
 1. **O processo vivo do `:8092` não é o que o registry diz.** Ele sobe
    `--lora .../microturn-4b-lora.gguf` (84.952.704 bytes, o adapter PEFT
    grande), enquanto `modules/ai/models.nix:430` aponta
-   `microturn-4b-lora-v9.gguf` (3.058.400 bytes, o GGUF pequeno). Medir no
-   `:8092` mede **outro adapter** (12/39). Divergência entre código e processo.
+   `microturn-4b-lora-v9.gguf` (3.058.400 bytes, o GGUF pequeno). Medido
+   naquele adapter: **12/39** contra os **29/39** do v9. A produção da voz
+   está com um adapter que vale 30% menos.
 2. **A porta 8096 é do laboratório**, e ele **mata o processo que estiver na
    mesma porta** (medido: `RemoteDisconnected: Remote end closed connection
    without response`). A porta livre para medir é a 8094.
@@ -105,19 +115,29 @@ capacidade** — exatamente o defeito (c) que a frota apontou.
    `/tmp/opencode/v10-lora-gguf/microturn-4b-lora-v10.gguf` (3.672.800 bytes)
    e **ainda não** no `/var/lib/ai/models` (onde vivem o v8 e o v9).
 
+E um quinto, o mais caro de todos:
+
+5. **O prompt do classificador é parte do instrumento.** Com o `CLASS_SYS`
+   encurtado, o v9 dava 15/39; com o oficial (que descreve cada rótulo), dá
+   29/39. Medir o gate com outro prompt mede outro gate.
+
 ## 6. O que muda na casa
 
-- **Para a voz, o token do raciocínio é custo.** O modelo de 1M ctx gasta 2,1x
-  mais token por rodada e acerta menos. No gate de voz, que tem prazo de
-  sub-segundo, isso é decisivo: o especialista é o caminho.
-- **O `classify_turn` oficial mede transporte, não modelo.** Com `n_predict=6` e
-  timeout de 8 s, o veredito é o corte e o timeout. Isso vale para **qualquer**
-  medição de voz da casa e deveria ser corrigido antes da próxima série (é
-  decisão de produto: o timeout que não corta é o que a voz precisa, mas
-  então o gate de verdade tem que ser o de regra, não o classificador).
+- **Para a voz, o token do raciocínio é custo.** O modelo de 1M contexto gasta
+  1,8x mais token por rodada e acerta 30 pontos a menos. No gate de voz, que
+  tem prazo de sub-segundo, isso é decisivo: o especialista é o caminho.
+- **O `classify_turn` oficial mede transporte, não modelo.** Com `n_predict=6`
+  e timeout de 8 s, o veredito é o corte e o timeout — e o `None` cai no gate
+  de regra, que **mascara transporte como resposta do modelo**. Isso vale para
+  **qualquer** medição de voz da casa e deveria ser corrigido antes da próxima
+  série (é decisão de produto: o timeout que não corta é o que a voz precisa,
+  mas aí o gate de verdade tem que ser o de regra, não o classificador).
+- **A produção da voz está no adapter errado** (12/39 em vez de 29/39): o
+  `:8092` carrega o adapter de 81 MB e o registry aponta o v9 de 2,9 MB.
+  Alinhar os dois é correção de configuração, não de modelo.
 - **O item #08 (35B MoE) fica confirmado pela mesma régua**: 35B+LoRA duplex
   deu 9/39 com 61 s por token e 2,4 h por ciclo (medido pela frota). O
-  especialista 4B dá 15/39 com 4,6 s por token e 3 min por ciclo. A hipótese
+  especialista 4B dá 29/39 com 4,6 s por token e 3 min por ciclo. A hipótese
   do Codacus (35B MoE em 6 GB) está **refutada neste limite**.
 
 ## 7. Reprodução
@@ -132,15 +152,19 @@ nix develop --command python3 scripts/medir-gate-adapter.py \
 # o v10 (o mesmo caminho, com o adapter convertido do Kaggle)
 nix develop --command python3 scripts/medir-gate-adapter.py \
   /tmp/opencode/v10-lora-gguf/microturn-4b-lora-v10.gguf 24 180 v10 3 12
-# o contexto grande (pela API, sem GPU)
-nix develop --command python3 scripts/medir-gate-api.py 96 180 3 api
+# o contexto grande (pela API, sem GPU; 128 de max_tokens porque o rotulo
+# precisa caber depois do raciocinio)
+nix develop --command python3 scripts/medir-gate-api.py 128 180 3 api 25
 ```
 
 **Scripts** (novos, desta lane): `scripts/medir-gate-adapter.py` (mede um
-adapter local sobe o MTP), `scripts/medir-gate-api.py` (mede o braço de API na
-mesma métrica) e `scripts/medir-acuracia-por-token.py` (cruza a qualidade que o
-lab já mediu com o token medido).
+adapter local, sobe o MTP, N rodadas, devolve a GPU), `scripts/medir-gate-api.py`
+(o braço de API na mesma métrica, com espera de 429) e
+`scripts/medir-acuracia-por-token.py` (cruza a qualidade que o lab já mediu
+com o token medido).
 
-**Números desta medição**: v9 = 15/39, 2.770 tokens/rodada, 5.415 por 1M
-token · v10 = 13/39, 2.768 tokens/rodada, 4.697 por 1M token · api (1M ctx,
-sem LoRA de voz) = 10/39, 5.805 tokens/rodada, 1.723 por 1M token.
+**Números desta medição**: v9 = 29/39, 4.602 tokens/rodada, 6.301 por 1M
+token · v10 = 20/39, 4.619 tokens/rodada, 4.330 por 1M token · produção
+(adapter de 81 MB) = 12/39, 4.600 tokens/rodada, 2.609 por 1M token · api
+(1M ctx, sem LoRA de voz) = 17,3/39, 8.332 tokens/rodada, 2.080 por 1M
+token.
