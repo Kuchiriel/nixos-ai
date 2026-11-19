@@ -5,7 +5,7 @@ O QUE ESTES TESTES PROVAM (e por que existem):
     agentes — "jarvis@nitro-v15", "Cervo", "Arara", "sweep-2026-11" são o
     mesmo agente; sem o join o quadro mostra "sem claim" para todo mundo);
   - a entrega vai pelo caminho canônico (bus + wake) e o fallback direto
-    na API monta o payload certo (NOTA = noReply=true, PEDIDO = prompt_async);
+    na API V2 monta o payload certo (NOTA = delivery=queue, PEDIDO = delivery=steer);
   - a persona ativa persiste e volta (o /mood do Telegram depende disso).
 """
 from __future__ import annotations
@@ -65,8 +65,8 @@ def test_board_text_lista_agentes_sem_claim(monkeypatch):
 
 
 # ── entrega ──────────────────────────────────────────────────────────────
-def test_deliver_fallback_nota_usa_noreply(monkeypatch):
-    """Sem o roster (canônico indisponível), a NOTA vai como noReply."""
+def test_deliver_fallback_nota_usa_queue(monkeypatch):
+    """Sem o roster, a NOTA entra na fila V2 (delivery=queue)."""
     monkeypatch.setattr(
         "jarvis.core.coord_roster.send_message",
         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("sem roster")),
@@ -86,12 +86,12 @@ def test_deliver_fallback_nota_usa_noreply(monkeypatch):
     monkeypatch.setattr(comms, "_post", fake_post)
     ok, detail = comms.deliver("X", "oi")
     assert ok, detail
-    assert seen["path"] == "/session/ses_abc/message"
-    assert seen["body"]["noReply"] is True
-    assert seen["body"]["parts"][0]["text"] == "oi"
+    assert seen["path"] == "/session/ses_abc/prompt"
+    assert seen["body"]["delivery"] == "queue"
+    assert seen["body"]["text"] == "oi"
 
 
-def test_deliver_fallback_pedido_usa_prompt_async(monkeypatch):
+def test_deliver_fallback_pedido_usa_steer(monkeypatch):
     monkeypatch.setattr(
         "jarvis.core.coord_roster.send_message",
         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("sem roster")),
@@ -111,8 +111,8 @@ def test_deliver_fallback_pedido_usa_prompt_async(monkeypatch):
     monkeypatch.setattr(comms, "_post", fake_post)
     ok, _ = comms.deliver("X", "roda", request=True)
     assert ok
-    assert seen["path"] == "/session/ses_abc/prompt_async"
-    assert "noReply" not in seen["body"]
+    assert seen["path"] == "/session/ses_abc/prompt"
+    assert seen["body"]["delivery"] == "steer"
 
 
 def test_deliver_usa_caminho_canonico(monkeypatch):

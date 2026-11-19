@@ -39,15 +39,12 @@ _FALLBACK = {
     "units": {},
     # (03/11) Espelho de models.nix `routing.directServers` (porta + unit).
     "directServers": {
-        "uncensored-35b": {"endpoint": 8084, "unit": "llama-uncensored-35b"},
-        "duplex-35b": {"endpoint": 8085, "unit": "llama-duplex-35b"},
-        "uncensored-4b": {"endpoint": 8092, "unit": "llama-uncensored-4b"},
-        # (05/11) 8094: 8085 era compartilhada com duplex-35b (models.nix) —
-        # as units se conflitavam. Espelha o registry gerado pelo Nix.
         "deepseek-7b": {"endpoint": 8094, "unit": "llama-deepseek-7b"},
+        "duplex-35b": {"endpoint": 8085, "unit": "llama-duplex-35b"},
         "gemma-4b": {"endpoint": 8087, "unit": "llama-gemma-4b"},
-        "qwen30b-moe": {"endpoint": 8091, "unit": "llama-qwen30b-moe"},
-        "uncensored-35b-q4kp": {"endpoint": 8093, "unit": "llama-uncensored-35b-q4kp"},
+        "uncensored-35b": {"endpoint": 8084, "unit": "llama-uncensored-35b"},
+        "uncensored-4b": {"endpoint": 8092, "unit": "llama-uncensored-4b"},
+        "uncensored-4b-code": {"endpoint": 8096, "unit": "llama-uncensored-4b-code"},
     },
     "models": {
         "jarvis-mtp-lora": {

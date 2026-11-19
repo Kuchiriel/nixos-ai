@@ -90,10 +90,12 @@ def test_rrf_fusion_resolves_rerank_disagreement(monkeypatch):
     hs = HybridSearch(Config())
     ranked = hs._rerank_candidates("roteamento da cascata", boosted)
     paths = [h["payload"]["path"] for h in ranked]
-    # o relevante (router.py) volta ao topo pelo consenso dos rankings
-    assert paths[0] == "router.py"
-    assert paths[1] == "benchmark.py"
-    # score reflete a fusão (ordem final), não o score cru do rerank
+    # (19/11, b907a442) o CROSS-ENCODER manda na ordem final: o fake rerank
+    # deu maior score a benchmark.py (1.44) — ela deve virar #1, não voltar
+    # ao consenso antigo (que anulava o reranker). A score final e'
+    # decrescente na ordem do slice reordenado.
+    assert paths[0] == "benchmark.py"
+    assert paths[1] == "router.py"
     assert ranked[0]["score"] > ranked[1]["score"]
 
 

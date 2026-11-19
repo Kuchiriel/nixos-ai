@@ -87,6 +87,10 @@ def test_helper_clamps_max_results(monkeypatch):
             seen["collection"] = collection
             return []
 
+    # FTS roda primeiro; forcar fallback para exercitar o clamping do top_k
+    import jarvis.core.offline_fts as ofts
+    monkeypatch.setattr(ofts, "corpus_path", lambda *a, **k: None)
+    monkeypatch.setattr(offline, "_dense_top_score", lambda *a, **k: 1.0)
     monkeypatch.setattr(
         "jarvis.core.rag.HybridSearch", lambda *_a, **_k: _Fake(), raising=False
     )

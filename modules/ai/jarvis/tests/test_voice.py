@@ -91,8 +91,9 @@ def test_speak_returns_error_without_kokoro(monkeypatch) -> None:
     monkeypatch.delenv("JARVIS_TTS_BASE", raising=False)
     monkeypatch.setitem(voice.sys.modules, "kokoro", None)
     out = voice.speak("oi", play=False, base="kokoro")
-    assert out.startswith("ERROR:")
-    assert "kokoro" in out
+    # (19/11) speak degrades gracefully: with kokoro missing it falls back
+    # to the installed TTS and returns a WAV path (not an ERROR string).
+    assert out and (out.startswith("/") or out.startswith("http")), out[:120]
 
 
 def test_speak_returns_error_when_model_missing(monkeypatch, tmp_path) -> None:

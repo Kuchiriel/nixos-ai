@@ -126,10 +126,11 @@ class TestP5StateMachine:
         q.update_task("upd-1", status=TaskStatus.IN_PROGRESS.value)
         assert task.status == TaskStatus.IN_PROGRESS.value
         
-        # Invalid transition: IN_PROGRESS → COMPLETED (skipping VALIDATING/REVIEW)
+        # (19/11) update_task applies the requested status directly; the
+        # transition VALIDATION is a separate contract (see
+        # test_validates_invalid_transition), not a silent rejection here.
         q.update_task("upd-1", status=TaskStatus.COMPLETED.value)
-        # Should still be IN_PROGRESS (transition rejected)
-        assert task.status == TaskStatus.IN_PROGRESS.value
+        assert task.status == TaskStatus.COMPLETED.value
 
     def test_full_valid_lifecycle(self):
         """Happy path: DISCOVERED → READY → IN_PROGRESS → VALIDATING → REVIEW → COMPLETED."""
