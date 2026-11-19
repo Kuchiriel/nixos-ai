@@ -25,7 +25,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 | 3 — Auditoria do conhecimento | **CONCLUÍDA (v1)** | `KNOWLEDGE-SYSTEM-AUDIT.md` (outra lane) + ranking medido e corrigido em `b907a442` |
 | 4 — OpenCode/contexto | **CONCLUÍDA** | `OPENCODE-CONTINUITY-AUDIT.md` (`c9397991`) |
 | 5 — NixOS/config | **CONCLUÍDA** | `NIXOS-AUDIT.md` (`a828c568`) |
-| 6 — Código/org | PARCIAL | AGENTS.md 1684→400 linhas no handoff |
+| 6 — Código/org | **EM ANDAMENTO** | AGENTS 1684→400; 2 scripts Laya arquivados com `git mv` (`a072e908`) |
 | 7 — Implementação contínua | **EM ANDAMENTO** | commits abaixo |
 | 8 — Validação/regressão | PARCIAL | test_handoff 4/4; jobs 16/0 |
 | 9 — Auditoria final | PENDENTE | — |
@@ -113,9 +113,10 @@ esse arquivo e não reeditar por cima.** O registro desta sessão vive no
 `NIXOS-AUDIT.md`, `TECHNICAL-DEBT.md`, `IMPROVEMENT-ROADMAP.md`.
 
 ## Próxima tarefa exata
-1. Fase 6: varredura de código morto real (sem referência textual, com
-   entrypoints dinâmicos): começar por `core/consolidate.py` (P2-2 do
-   KNOWLEDGE-SYSTEM-AUDIT) e pelos `.bak-*` na raiz de `scripts/`.
+1. Fase 6: continuar varredura de código morto — os 8 candidatos restantes
+   (`coord_http`, `spaces`, `jarvis_http`, `kb_regression`, `run_l9`,
+   `interfaces`) TÊM consumidores reais (launchers/docs/testes) — não tocar.
+   Revisar apenas `.bak-*` em `scripts/` (42 uncommitted, cuidado com outros agentes).
 2. Fase 4: auditar `rehydrate` de ponta a ponta (ordem, dedup, limite de
    tokens) contra o que o MCP devolve hoje.
 3. Recall da fusão para a pergunta "chars por chunk" (falha com e sem
@@ -136,6 +137,11 @@ esse arquivo e não reeditar por cima.** O registro desta sessão vive no
 
 ## Histórico incremental de progresso
 - 2026-11-19: checkpoint criado; fases 0 concluída, 1/7 em andamento; 6 correções com commit.
+- 2026-11-19: rehydrate passou a incluir `PROJECT-AUDIT-STATE.md` via
+  `JARVIS_AUDIT_STATE` (`18d9433e`, teste `test_rehydrate` 15/15).
+  Dead code: `core/consolidate.py` TEM consumidor (`memory.py`) — hipótese
+  rejeitada. 8 candidatos verificados, 6 com consumidores reais, 2 Laya
+  arquivados com `git mv` (`a072e908`).
 - 2026-11-19 11:51: Fase 3 concluída (auditoria do conhecimento com medições);
   Fase 2 fechada v1; 3 commits novos (`3c0c4f20`, `70f65895`, `5b2cd8c9`);
   A/B #18 registrada como morta por timeout.

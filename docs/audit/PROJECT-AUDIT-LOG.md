@@ -138,3 +138,17 @@
 - Testes: `test_rag.py` + `test_rag_prune.py` + `test_memory.py` = 47 passed.
 - Próximo passo (sem colidir): Fase 6, código morto real com entrypoints
   dinâmicos (`core/consolidate.py`, `.bak-*` em `scripts/`).
+
+## 2026-11-19 — retomada (4ª entrada, sessão contínua)
+- HEAD inicial `9545c1d7`; HEAD final `a072e908` (`main`).
+- Protocolo de retomada executado: AGENTS.md → STATE → LOG → rehydrate →
+  roster → git/worktrees. Descoberto agente novo `auditoria-runtime` (Lince) ativo.
+- Fase 4 (continuidade): `rehydrate` NÃO incluía o checkpoint da missão —
+  corrigido com bloco opcional via `JARVIS_AUDIT_STATE` (`18d9433e`);
+  `HAS_AUDIT True`, teste 15/15.
+- Fase 6 (código morto): `consolidate.py` tem consumidor real (`memory.py`) —
+  hipótese do checkpoint rejeitada. 8 candidatos: 6 com consumidores, 2
+  scripts Laya sem imports/artefatos arquivados via `git mv` (`a072e908`).
+- A/B #18: runner ainda vivo em sample 3 (~13 min), 2/12 válidas.
+- Próximo: aguardar A/B, revisar `.bak-*` sem sobrescrever outros agentes.
+- Riscos: 47 uncommitted, worktrees, agente auditoria-runtime ativo.
