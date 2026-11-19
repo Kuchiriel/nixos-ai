@@ -1,0 +1,488 @@
+{
+ "arm": "none",
+ "base": "http://127.0.0.1:8092",
+ "lora": true,
+ "samples": 3,
+ "itens": 39,
+ "subida_s": 0.0,
+ "dur_ciclo_s": 717.4,
+ "ts": "2026-11-19T03:04:32-0300",
+ "amostras": [
+  {
+   "total": 39,
+   "acertos": 29,
+   "acuracia": 0.7436,
+   "erros": 0,
+   "erros_detalhe": [],
+   "lat_media_ms": 5466.1,
+   "lat_mediana_ms": 5021.1,
+   "lat_p95_ms": 7180.5,
+   "lat_min_ms": 4439.1,
+   "lat_max_ms": 8503.0,
+   "por_rotulo": {
+    "SILENCE": {
+     "n": 23,
+     "acertos": 19,
+     "pred": {
+      "SILENCE": 19,
+      "RESPOND": 4
+     }
+    },
+    "WAIT": {
+     "n": 3,
+     "acertos": 2,
+     "pred": {
+      "WAIT": 2,
+      "RESPOND": 1
+     }
+    },
+    "BARGE": {
+     "n": 3,
+     "acertos": 0,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "RESPOND": {
+     "n": 10,
+     "acertos": 8,
+     "pred": {
+      "RESPOND": 8,
+      "SILENCE": 2
+     }
+    }
+   },
+   "por_classe": {
+    "abertura": {
+     "n": 3,
+     "pred": {
+      "WAIT": 2,
+      "RESPOND": 1
+     }
+    },
+    "anafilaxia": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "broadcast": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 3
+     }
+    },
+    "comando": {
+     "n": 1,
+     "pred": {
+      "RESPOND": 1
+     }
+    },
+    "epistaxe": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "febre em crianca": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "inseto": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "insolacao exaustao": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "interrupcao": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "lista": {
+     "n": 2,
+     "pred": {
+      "RESPOND": 1,
+      "SILENCE": 1
+     }
+    },
+    "meningite": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "mordida de animal": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "narracao": {
+     "n": 2,
+     "pred": {
+      "SILENCE": 2
+     }
+    },
+    "pedido": {
+     "n": 1,
+     "pred": {
+      "RESPOND": 1
+     }
+    },
+    "pergunta": {
+     "n": 1,
+     "pred": {
+      "RESPOND": 1
+     }
+    },
+    "terceira": {
+     "n": 2,
+     "pred": {
+      "RESPOND": 1,
+      "SILENCE": 1
+     }
+    }
+   },
+   "dur_amostra_s": 213.2
+  },
+  {
+   "total": 39,
+   "acertos": 29,
+   "acuracia": 0.7436,
+   "erros": 0,
+   "erros_detalhe": [],
+   "lat_media_ms": 5056.5,
+   "lat_mediana_ms": 5016.5,
+   "lat_p95_ms": 5757.4,
+   "lat_min_ms": 4468.4,
+   "lat_max_ms": 6293.2,
+   "por_rotulo": {
+    "SILENCE": {
+     "n": 23,
+     "acertos": 19,
+     "pred": {
+      "SILENCE": 19,
+      "RESPOND": 4
+     }
+    },
+    "WAIT": {
+     "n": 3,
+     "acertos": 2,
+     "pred": {
+      "WAIT": 2,
+      "RESPOND": 1
+     }
+    },
+    "BARGE": {
+     "n": 3,
+     "acertos": 0,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "RESPOND": {
+     "n": 10,
+     "acertos": 8,
+     "pred": {
+      "RESPOND": 8,
+      "SILENCE": 2
+     }
+    }
+   },
+   "por_classe": {
+    "abertura": {
+     "n": 3,
+     "pred": {
+      "WAIT": 2,
+      "RESPOND": 1
+     }
+    },
+    "anafilaxia": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "broadcast": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 3
+     }
+    },
+    "comando": {
+     "n": 1,
+     "pred": {
+      "RESPOND": 1
+     }
+    },
+    "epistaxe": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "febre em crianca": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "inseto": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "insolacao exaustao": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "interrupcao": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "lista": {
+     "n": 2,
+     "pred": {
+      "RESPOND": 1,
+      "SILENCE": 1
+     }
+    },
+    "meningite": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "mordida de animal": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "narracao": {
+     "n": 2,
+     "pred": {
+      "SILENCE": 2
+     }
+    },
+    "pedido": {
+     "n": 1,
+     "pred": {
+      "RESPOND": 1
+     }
+    },
+    "pergunta": {
+     "n": 1,
+     "pred": {
+      "RESPOND": 1
+     }
+    },
+    "terceira": {
+     "n": 2,
+     "pred": {
+      "RESPOND": 1,
+      "SILENCE": 1
+     }
+    }
+   },
+   "dur_amostra_s": 197.2
+  },
+  {
+   "total": 39,
+   "acertos": 29,
+   "acuracia": 0.7436,
+   "erros": 0,
+   "erros_detalhe": [],
+   "lat_media_ms": 4606.2,
+   "lat_mediana_ms": 4628.6,
+   "lat_p95_ms": 5210.6,
+   "lat_min_ms": 3949.6,
+   "lat_max_ms": 5503.2,
+   "por_rotulo": {
+    "SILENCE": {
+     "n": 23,
+     "acertos": 19,
+     "pred": {
+      "SILENCE": 19,
+      "RESPOND": 4
+     }
+    },
+    "WAIT": {
+     "n": 3,
+     "acertos": 2,
+     "pred": {
+      "WAIT": 2,
+      "RESPOND": 1
+     }
+    },
+    "BARGE": {
+     "n": 3,
+     "acertos": 0,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "RESPOND": {
+     "n": 10,
+     "acertos": 8,
+     "pred": {
+      "RESPOND": 8,
+      "SILENCE": 2
+     }
+    }
+   },
+   "por_classe": {
+    "abertura": {
+     "n": 3,
+     "pred": {
+      "WAIT": 2,
+      "RESPOND": 1
+     }
+    },
+    "anafilaxia": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "broadcast": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 3
+     }
+    },
+    "comando": {
+     "n": 1,
+     "pred": {
+      "RESPOND": 1
+     }
+    },
+    "epistaxe": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "febre em crianca": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "inseto": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "insolacao exaustao": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "interrupcao": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "lista": {
+     "n": 2,
+     "pred": {
+      "RESPOND": 1,
+      "SILENCE": 1
+     }
+    },
+    "meningite": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "mordida de animal": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 2,
+      "RESPOND": 1
+     }
+    },
+    "narracao": {
+     "n": 2,
+     "pred": {
+      "SILENCE": 2
+     }
+    },
+    "pedido": {
+     "n": 1,
+     "pred": {
+      "RESPOND": 1
+     }
+    },
+    "pergunta": {
+     "n": 1,
+     "pred": {
+      "RESPOND": 1
+     }
+    },
+    "terceira": {
+     "n": 2,
+     "pred": {
+      "RESPOND": 1,
+      "SILENCE": 1
+     }
+    }
+   },
+   "dur_amostra_s": 179.6
+  }
+ ],
+ "acuracia_media": 0.7436,
+ "acertos_medio": 29.0,
+ "lat_media_ms_media": 5042.9,
+ "oficial": {
+  "rc": 0,
+  "stdout": "ed\": {\n    \"SILENCE\": 2,\n    \"RESPOND\": 1\n   }\n  },\n  \"narracao\": {\n   \"n\": 2,\n   \"pred\": {\n    \"SILENCE\": 2\n   }\n  },\n  \"pedido\": {\n   \"n\": 1,\n   \"pred\": {\n    \"RESPOND\": 1\n   }\n  },\n  \"pergunta\": {\n   \"n\": 1,\n   \"pred\": {\n    \"RESPOND\": 1\n   }\n  },\n  \"terceira\": {\n   \"n\": 2,\n   \"pred\": {\n    \"RESPOND\": 1,\n    \"SILENCE\": 1\n   }\n  }\n },\n \"base\": \"http://127.0.0.1:8092\",\n \"modo\": \"classificador\"\n}\n",
+  "stderr": ""
+ }
+}

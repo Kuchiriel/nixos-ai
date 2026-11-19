@@ -1,0 +1,551 @@
+{
+ "arm": "none",
+ "base": "http://127.0.0.1:8085",
+ "lora": true,
+ "samples": 3,
+ "itens": 39,
+ "subida_s": 0.0,
+ "dur_ciclo_s": 2380.1,
+ "ts": "2026-11-19T03:26:03-0300",
+ "amostras": [
+  {
+   "total": 39,
+   "acertos": 9,
+   "acuracia": 0.2308,
+   "erros": 9,
+   "erros_detalhe": [
+    {
+     "fala": "basta rodeio vamos direto ponto interessa verdade sem rodeio",
+     "erro": "sem_rotulo",
+     "raw": "Basta rodeio"
+    },
+    {
+     "fala": "crianca dois anos letargica quarenta graus nao responde esti",
+     "erro": "RemoteDisconnected: Remote end closed connection without response",
+     "raw": ""
+    },
+    {
+     "fala": "cachorro mordeu mao direita o que faco agora mesmo urgente-K",
+     "erro": "URLError: <urlopen error [Errno 111] Connection refused>",
+     "raw": ""
+    },
+    {
+     "fala": "picado aranha marrom violinista ajuda por favor urgente agor",
+     "erro": "URLError: <urlopen error [Errno 111] Connection refused>",
+     "raw": ""
+    },
+    {
+     "fala": "comi algo desencadeou choque anafilatico orienta por favor i",
+     "erro": "URLError: <urlopen error [Errno 111] Connection refused>",
+     "raw": ""
+    }
+   ],
+   "lat_media_ms": 61011.5,
+   "lat_mediana_ms": 68152.8,
+   "lat_p95_ms": 101454.8,
+   "lat_min_ms": 0.1,
+   "lat_max_ms": 118507.0,
+   "por_rotulo": {
+    "SILENCE": {
+     "n": 23,
+     "acertos": 7,
+     "pred": {
+      "WAIT": 3,
+      "RESPOND": 9,
+      "SILENCE": 7,
+      "BARGE": 3,
+      "NONE": 1
+     }
+    },
+    "WAIT": {
+     "n": 3,
+     "acertos": 1,
+     "pred": {
+      "WAIT": 1,
+      "RESPOND": 1,
+      "SILENCE": 1
+     }
+    },
+    "BARGE": {
+     "n": 3,
+     "acertos": 0,
+     "pred": {
+      "RESPOND": 1,
+      "SILENCE": 1,
+      "NONE": 1
+     }
+    },
+    "RESPOND": {
+     "n": 10,
+     "acertos": 1,
+     "pred": {
+      "SILENCE": 1,
+      "RESPOND": 1,
+      "BARGE": 1,
+      "NONE": 7
+     }
+    }
+   },
+   "por_classe": {
+    "abertura": {
+     "n": 3,
+     "pred": {
+      "WAIT": 1,
+      "RESPOND": 1,
+      "SILENCE": 1
+     }
+    },
+    "anafilaxia": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 1,
+      "RESPOND": 1,
+      "NONE": 1
+     }
+    },
+    "broadcast": {
+     "n": 3,
+     "pred": {
+      "WAIT": 1,
+      "RESPOND": 2
+     }
+    },
+    "comando": {
+     "n": 1,
+     "pred": {
+      "RESPOND": 1
+     }
+    },
+    "epistaxe": {
+     "n": 3,
+     "pred": {
+      "BARGE": 1,
+      "SILENCE": 1,
+      "NONE": 1
+     }
+    },
+    "febre em crianca": {
+     "n": 3,
+     "pred": {
+      "RESPOND": 1,
+      "NONE": 2
+     }
+    },
+    "inseto": {
+     "n": 3,
+     "pred": {
+      "BARGE": 1,
+      "SILENCE": 1,
+      "NONE": 1
+     }
+    },
+    "insolacao exaustao": {
+     "n": 3,
+     "pred": {
+      "RESPOND": 1,
+      "WAIT": 1,
+      "NONE": 1
+     }
+    },
+    "interrupcao": {
+     "n": 3,
+     "pred": {
+      "RESPOND": 1,
+      "SILENCE": 1,
+      "NONE": 1
+     }
+    },
+    "lista": {
+     "n": 2,
+     "pred": {
+      "SILENCE": 2
+     }
+    },
+    "meningite": {
+     "n": 3,
+     "pred": {
+      "SILENCE": 1,
+      "RESPOND": 1,
+      "NONE": 1
+     }
+    },
+    "mordida de animal": {
+     "n": 3,
+     "pred": {
+      "BARGE": 1,
+      "SILENCE": 1,
+      "NONE": 1
+     }
+    },
+    "narracao": {
+     "n": 2,
+     "pred": {
+      "RESPOND": 2
+     }
+    },
+    "pedido": {
+     "n": 1,
+     "pred": {
+      "BARGE": 1
+     }
+    },
+    "pergunta": {
+     "n": 1,
+     "pred": {
+      "SILENCE": 1
+     }
+    },
+    "terceira": {
+     "n": 2,
+     "pred": {
+      "WAIT": 1,
+      "RESPOND": 1
+     }
+    }
+   },
+   "dur_amostra_s": 2379.5
+  },
+  {
+   "total": 39,
+   "acertos": 0,
+   "acuracia": 0.0,
+   "erros": 39,
+   "erros_detalhe": [
+    {
+     "fala": "Xyloph-7B quadrant-Z3 alpha-beta-gamma delta-epsilon-zeta",
+     "erro": "URLError: <urlopen error [Errno 111] Connection refused>",
+     "raw": ""
+    },
+    {
+     "fala": "tempestade Quadrant-Z3 alagou-via principal derrubou-tres ar",
+     "erro": "URLError: <urlopen error [Errno 111] Connection refused>",
+     "raw": ""
+    },
+    {
+     "fala": "caminhao Zenthian-7 tombou-curva fechada serra interditou-du",
+     "erro": "URLError: <urlopen error [Errno 111] Connection refused>",
+     "raw": ""
+    },
+    {
+     "fala": "tecnico trocou-capacitor placa-mae servidor apos diagnostico",
+     "erro": "URLError: <urlopen error [Errno 111] Connection refused>",
+     "raw": ""
+    },
+    {
+     "fala": "lampadas corredor piscaram-tres vezes sequencia antes apagar",
+     "erro": "URLError: <urlopen error [Errno 111] Connection refused>",
+     "raw": ""
+    }
+   ],
+   "lat_media_ms": 0.1,
+   "lat_mediana_ms": 0.1,
+   "lat_p95_ms": 0.1,
+   "lat_min_ms": 0.0,
+   "lat_max_ms": 0.1,
+   "por_rotulo": {
+    "SILENCE": {
+     "n": 23,
+     "acertos": 0,
+     "pred": {
+      "NONE": 23
+     }
+    },
+    "WAIT": {
+     "n": 3,
+     "acertos": 0,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "BARGE": {
+     "n": 3,
+     "acertos": 0,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "RESPOND": {
+     "n": 10,
+     "acertos": 0,
+     "pred": {
+      "NONE": 10
+     }
+    }
+   },
+   "por_classe": {
+    "abertura": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "anafilaxia": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "broadcast": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "comando": {
+     "n": 1,
+     "pred": {
+      "NONE": 1
+     }
+    },
+    "epistaxe": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "febre em crianca": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "inseto": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "insolacao exaustao": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "interrupcao": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "lista": {
+     "n": 2,
+     "pred": {
+      "NONE": 2
+     }
+    },
+    "meningite": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "mordida de animal": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "narracao": {
+     "n": 2,
+     "pred": {
+      "NONE": 2
+     }
+    },
+    "pedido": {
+     "n": 1,
+     "pred": {
+      "NONE": 1
+     }
+    },
+    "pergunta": {
+     "n": 1,
+     "pred": {
+      "NONE": 1
+     }
+    },
+    "terceira": {
+     "n": 2,
+     "pred": {
+      "NONE": 2
+     }
+    }
+   },
+   "dur_amostra_s": 0.0
+  },
+  {
+   "total": 39,
+   "acertos": 0,
+   "acuracia": 0.0,
+   "erros": 39,
+   "erros_detalhe": [
+    {
+     "fala": "Xyloph-7B quadrant-Z3 alpha-beta-gamma delta-epsilon-zeta",
+     "erro": "URLError: <urlopen error [Errno 111] Connection refused>",
+     "raw": ""
+    },
+    {
+     "fala": "tempestade Quadrant-Z3 alagou-via principal derrubou-tres ar",
+     "erro": "URLError: <urlopen error [Errno 111] Connection refused>",
+     "raw": ""
+    },
+    {
+     "fala": "caminhao Zenthian-7 tombou-curva fechada serra interditou-du",
+     "erro": "URLError: <urlopen error [Errno 111] Connection refused>",
+     "raw": ""
+    },
+    {
+     "fala": "tecnico trocou-capacitor placa-mae servidor apos diagnostico",
+     "erro": "URLError: <urlopen error [Errno 111] Connection refused>",
+     "raw": ""
+    },
+    {
+     "fala": "lampadas corredor piscaram-tres vezes sequencia antes apagar",
+     "erro": "URLError: <urlopen error [Errno 111] Connection refused>",
+     "raw": ""
+    }
+   ],
+   "lat_media_ms": 0.1,
+   "lat_mediana_ms": 0.1,
+   "lat_p95_ms": 0.1,
+   "lat_min_ms": 0.0,
+   "lat_max_ms": 0.1,
+   "por_rotulo": {
+    "SILENCE": {
+     "n": 23,
+     "acertos": 0,
+     "pred": {
+      "NONE": 23
+     }
+    },
+    "WAIT": {
+     "n": 3,
+     "acertos": 0,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "BARGE": {
+     "n": 3,
+     "acertos": 0,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "RESPOND": {
+     "n": 10,
+     "acertos": 0,
+     "pred": {
+      "NONE": 10
+     }
+    }
+   },
+   "por_classe": {
+    "abertura": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "anafilaxia": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "broadcast": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "comando": {
+     "n": 1,
+     "pred": {
+      "NONE": 1
+     }
+    },
+    "epistaxe": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "febre em crianca": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "inseto": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "insolacao exaustao": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "interrupcao": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "lista": {
+     "n": 2,
+     "pred": {
+      "NONE": 2
+     }
+    },
+    "meningite": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "mordida de animal": {
+     "n": 3,
+     "pred": {
+      "NONE": 3
+     }
+    },
+    "narracao": {
+     "n": 2,
+     "pred": {
+      "NONE": 2
+     }
+    },
+    "pedido": {
+     "n": 1,
+     "pred": {
+      "NONE": 1
+     }
+    },
+    "pergunta": {
+     "n": 1,
+     "pred": {
+      "NONE": 1
+     }
+    },
+    "terceira": {
+     "n": 2,
+     "pred": {
+      "NONE": 2
+     }
+    }
+   },
+   "dur_amostra_s": 0.0
+  }
+ ],
+ "acuracia_media": 0.0769,
+ "acertos_medio": 3.0,
+ "lat_media_ms_media": 20337.2,
+ "oficial": {
+  "rc": 0,
+  "stdout": "  }\n  },\n  \"mordida de animal\": {\n   \"n\": 3,\n   \"pred\": {\n    \"NONE\": 3\n   }\n  },\n  \"narracao\": {\n   \"n\": 2,\n   \"pred\": {\n    \"NONE\": 2\n   }\n  },\n  \"pedido\": {\n   \"n\": 1,\n   \"pred\": {\n    \"NONE\": 1\n   }\n  },\n  \"pergunta\": {\n   \"n\": 1,\n   \"pred\": {\n    \"NONE\": 1\n   }\n  },\n  \"terceira\": {\n   \"n\": 2,\n   \"pred\": {\n    \"NONE\": 2\n   }\n  }\n },\n \"base\": \"http://127.0.0.1:8085\",\n \"modo\": \"classificador\"\n}\n",
+  "stderr": ""
+ }
+}

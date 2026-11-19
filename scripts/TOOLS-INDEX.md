@@ -2,10 +2,15 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_124 tools._
+_160 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
+- `ab_loop.sh` (nixos-ai/scripts) — ab_loop.sh — Loop A/B continuo do dungeon: escada L1/L2/L3 x modelos locais.
+- `ab_loop.test.sh` (nixos-ai/scripts) — ab_loop.test.sh - Testa a classificacao de motivo do laboratorio A/B.
+  use: `Uso: bash scripts/ab_loop.test.sh`
+- `ab_loop_motivo.sh` (nixos-ai/scripts) — ab_loop_motivo.sh - Classifica o motivo de cada resultado do laboratorio A/B.
+  use: `Uso: source este arquivo e chame classifica_motivo <rc> <patch_bytes> <run.log> <lane>.`
 - `agent-api.py` (nixos-ai/scripts) — """Entrega mensagens numa sessao do opencode — QUALQUER versao da API.
   use: ``/session/:id/message`, `/session/:id/prompt_async`) ou o 2.2.6 (rota nova:`
 - `agent-brief.py` (nixos-ai/scripts) — """agent-brief.py — o contexto COMPARTILHADO da frota (1 comando).
@@ -20,18 +25,27 @@ _124 tools._
 - `agent-db-alive.py` (nixos-ai/scripts) — """agent-db-alive.py — a sessão produziu trabalho novo nos últimos N segundos?
   use: `uso: agent-db-alive.py <opencode.db> <janela_s> [session_id]`
 - `agent-keepalive.sh` (nixos-ai/scripts) — =====================================================================
+- `agent-model.py` (nixos-ai/scripts) — """agent-model — troca o modelo de um agente em runtime e cai no proximo
 - `agent-msg.sh` (nixos-ai/scripts) — agent-msg.sh — O CANAL BOT-A-BOT, agora com ROTEAMENTO e ENTREGA por API.
 - `agent-pains.sh` (nixos-ai/scripts) — agent-pains.sh — registro automático de "dores" de CLI e lições aprendidas (genérico do monorepo).
   use: `./agent-pains.sh add --kind cli|lesson|tool|env --project <path> \`
 - `agent-provider-guard.py` (nixos-ai/scripts) — """agent-provider-guard.py — detecta falhas do PROVIDER de LLM e avisa (ping).
 - `agent-roster.py` (nixos-ai/scripts) — """agent-roster.py — ROSTER + TASKS da coordenação multi-agente (02/11).
+- `agent-spawn.py` (nixos-ai/scripts) — """agent-spawn.py — cria um agente NOVO (sessao opencode) com o modelo certo,
 - `agent_guard.py` (nixos-ai/scripts) — """agent-guard.py — trava a entrada de intrusao na frota (medido 12/11).
   use: `python3 agent-guard.py --terms              # lista o vocabulario guardado`
 - `agents-keepawake.sh` (nixos-ai/scripts) — agents-keepawake.sh — inibe o idle (tela) enquanto houver agente vivo.
   use: `USO: systemd user service (nixos-ai home-manager, agents-keepawake.service)`
+- `agents-reload.sh` (nixos-ai/scripts) — agents-reload.sh — empurra mudanças para os agentes LOCAIS, sem reiniciar nada.
+  use: ``/model jarvis-raw*` no TUI, com o llama-server servindo os presets).`
 - `agents-watcher.sh` (nixos-ai/scripts) — agents-watcher.sh — O WATCHER ÚNICO dos agentes (17/10, dono: "consolide
 - `asrd_env.py` (nixos-ai/scripts) — """asrd_env.py — environment for the duplex ASRD subprocess.
+- `bench-35b-codacus.py` (nixos-ai/scripts) — """Mede o gate de voz (heldout3) em varios bracos e salva o JSON do resultado.
 - `bench-llm.sh` (nixos-ai/scripts) — bench-llm.sh — benchmark padrão da casa (consolida os one-offs de 24/09).
+- `bus-tail.py` (nixos-ai/scripts) — """bus-tail.py — as ultimas mensagens coord-json do bus, em JSON.
+  use: `uso: bus-tail.py [limite]`
+- `bus-to-nightwatch.py` (nixos-ai/scripts) — bus-to-nightwatch.py — esteira mínima: lê o bus, cria tarefas no nightwatch
+  use: `Uso: bus-to-nightwatch.py [--once] [--interval 60]`
 - `check-ctx-drift.py` (nixos-ai/scripts) — """Confere o contexto do registry contra o contexto REAL dos GGUFs.
 - `check-plugin-contract.py` (nixos-ai/scripts) — """check-plugin-contract.py — o plugin VIVO é o mesmo código que o FONTE?
 - `check-queue-handoff.py` (nixos-ai/scripts) — """check-queue-handoff.py — os ponteiros da fila para o vault existem?
@@ -43,6 +57,8 @@ _124 tools._
 - `check-voice-gate-parity.py` (nixos-ai/scripts) — """Prova de paridade: o gate do duplex-asrd e o de voice_gate.py são o mesmo.
   use: `python3 scripts/check-voice-gate-parity.py`
 - `consolidate_sessions_memory.py` (nixos-ai/scripts) — Consolidate opencode session summaries into durable JARVIS episodic memory.
+- `context-guard.py` (nixos-ai/scripts) — """context-guard — troca modelo/key ANTES do limite (contexto ou cota).
+  use: `Uso: context-guard.py [--dry-run|--apply] [--threshold 0.80]`
 - `corpus_inventory.py` (nixos-ai/scripts) — """Inventário do corpus de conhecimento (§3/§22 da missão knowledge-substrate).
   use: `~/Books            corpus de conhecimento (binários + notas; inclui versions/)`
 - `ctx-usage.sh` (nixos-ai/scripts) — ctx-usage.sh — Agrega uso real do LLM local a partir do journal.
@@ -50,6 +66,14 @@ _124 tools._
 - `dat_probe.py` (nixos-ai/scripts) — """dat_probe.py — sonda do APPEARANCES .dat do CLIENT (protobuf moderno).
   use: `Uso (via nix develop do nixos-ai — PYTHONPATH e stripado no shell):`
 - `decomp.py` (nixos-ai/scripts) — """decomp.py — o gargalo é decomposição ou execução?
+- `deliver.py` (nixos-ai/scripts) — """deliver.py — entrega canonica (usada pelo hub para nao duplicar caminho).
+  use: `uso: deliver.py <agente> <texto> [--note]`
+- `dungeon-checker-jogo.py` (nixos-ai/scripts) — """CHECKER do lab "jogo do zero" — escrito ANTES e TRAVADO (444).
+- `dungeon-checker-l1.py` (nixos-ai/scripts) — """CHECKER L1 do lab do dungeon — escrito ANTES do agente e TRAVADO (444).
+- `dungeon-checker-l2.py` (nixos-ai/scripts) — """CHECKER L2 do lab do dungeon — escrito ANTES do agente e TRAVADO (444).
+- `dungeon-checker.py` (nixos-ai/scripts) — """CHECKER do lab do dungeon — escrito ANTES do agente e TRAVADO (444).
+- `dungeon-lab-zero.sh` (nixos-ai/scripts) — dungeon-lab.sh — o teste DO ZERO: criar o JOGO INTEIRO do nada.
+- `dungeon-lab.sh` (nixos-ai/scripts) — dungeon-lab.sh — o teste DO ZERO do dungeon (15/11, criado do nada).
 - `duplex-asrd.py` (nixos-ai/scripts) — """duplex-asrd.py — ASR v4: silero VAD (limites) + whisper.cpp GPU (texto).
 - `duplex-conveyor.py` (nixos-ai/scripts) — """duplex-conveyor.py — esteira automatizada para o caminho de voz do duplex.
   use: `./scripts/duplex-conveyor.py            # corpus completo`
@@ -73,6 +97,9 @@ _124 tools._
   use: `Uso: python3 fetch-resume.py URL DESTINO [--tries 50]`
 - `fetch-video-transcript.py` (nixos-ai/scripts) — """fetch-video-transcript.py — baixa a transcrição de um vídeo do YouTube, sem travar.
   use: `python3 scripts/fetch-video-transcript.py https://youtu.be/pnZh5PAF3VE`
+- `fleet-milestone.py` (nixos-ai/scripts) — """fleet-milestone — notifica o dono no celular SÓ em marcos da frota.
+  use: `Uso: fleet-milestone [--dry-run] [--limit 40]`
+- `fleet-watchdog.sh` (nixos-ai/scripts) — fleet-watchdog — promove itens de inbox presos em queue para steer.
 - `gen-lora-data.py` (nixos-ai/scripts) — """gen-lora-data.py — gera dados de treino pro LoRA de timing no 4B-MTP.
   use: `python3 gen-lora-data.py --log /tmp/opencode/duplex-voice.log --out /tmp/opencode/lora-train.jsonl`
 - `gguf-ctx.py` (nixos-ai/scripts) — """Le o contexto REAL (treinado) dos modelos GGUF.
@@ -85,6 +112,10 @@ _124 tools._
 - `harness-suite.py` (nixos-ai/scripts) — """harness-suite.py — desafios progressivos p/ jarvis dev (E2E real).
   use: `python3 scripts/harness-suite.py [--tier easy|medium|hard] [--out FILE]`
 - `host-health.sh` (nixos-ai/scripts) — host-health.sh — veredito de SAÚDE DE RAM/SWAP do host (leitura only).
+- `hot-swap-model.sh` (nixos-ai/scripts) — hot-swap-model.sh — troca o modelo na porta 8096 sem desligar o hub
+  use: `Uso: hot-swap-model.sh <mtp|bonsai>`
+- `house-offline.sh` (nixos-ai/scripts) — house-offline.sh — o house offline, num entrypoint unico.
+- `hub-state.py` (nixos-ai/scripts) — """hub-state.py — o estado CONSOLIDADO da casa, num JSON so.
 - `index_opencode_sessions.py` (nixos-ai/scripts) — Indexa sessões do opencode.db no Qdrant (coleção dedicada `sessions`).
 - `ingest_books.py` (nixos-ai/scripts) — """Ingestão do corpus de livros/papers/digests na coleção books (§10–§11).
 - `jarvis-cli.sh` (nixos-ai/scripts) — jarvis-cli.sh — CLI wrapper for all JARVIS MCP tools
@@ -97,6 +128,10 @@ _124 tools._
 - `kaggle-kernel-watch.sh` (nixos-ai/scripts) — kaggle-kernel-watch — acompanha um kernel Kaggle até COMPLETE/ERROR e puxa o output.
   use: `USAGE: kaggle-kernel-watch.sh --slug <owner/kernel> [--out <dir>] [--interval <s>]`
 - `kaggle-scicom-antihalluc-kernel.py` (nixos-ai/scripts) — """RECONSTRUIDO do transcript (09/11, coord-naming) — kernel Kaggle do dataset
+- `key-rotate.py` (nixos-ai/scripts) — """key-rotate — troca a credencial ATIVA de um provider no OpenCode (sem expor valor).
+- `lab.sh` (nixos-ai/scripts) — lab.sh — PONTO DE ENTRADA UNICO do laboratorio A/B (dungeon x modelos).
+- `llama-swap.sh` (nixos-ai/scripts) — llama-swap.sh — troca o modelo LOCAL RESIDENTE em idle (hot-swap da casa).
+- `llm-swap.sh` (nixos-ai/scripts) — llm-swap.sh — sobe o modelo do braco A/B na porta que o nightwatch espera.
 - `loop-close.py` (nixos-ai/scripts) — """loop-close.py — semente do laço que se fecha (F-supervisor, 26/09).
   use: `python3 scripts/loop-close.py --tier easy --rounds 1 [--apply-lessons]`
 - `loop-runner.sh` (nixos-ai/scripts) — loop-runner.sh — executor do LOOP-v2 (o agente raciocina; isto executa).
@@ -112,6 +147,7 @@ _124 tools._
 - `migrate-tools-en.py` (nixos-ai/scripts) — """migrate-tools-en.py — tool descriptions PT→EN (29/09, harness em inglês).
 - `mission-kit.py` (nixos-ai/scripts) — """mission-kit.py — bateria que discrimina CAPACIDADE, não transferência.
 - `mlock-benchmark.sh` (nixos-ai/scripts) — mlock-benchmark.sh — Compare EHS-25 baseline vs EHS-25 + --mlock
+- `model-catalog.py` (nixos-ai/scripts) — """model-catalog.py — o catalogo REAL de modelos + medidor de rate-limit.
 - `moe-profiler.py` (nixos-ai/scripts) — MoE Expert Activation Profiler for llama.cpp
   use: `Run inference and capture expert activations`
 - `monitor-nightwatch.sh` (nixos-ai/scripts) — Nightwatch Monitor — checks for errors and reports status
@@ -121,9 +157,11 @@ _124 tools._
 - `night-anchor.sh` (nixos-ai/scripts) — ═══ night-anchor.sh ═══
   use: `./scripts/night-anchor.sh start    # Start anchor (background heartbeat)`
 - `night-comms.py` (nixos-ai/scripts) — """night-comms.py — a PASSADA DE MADRUGADA da comunicação entre agentes.
+- `night-watch.py` (nixos-ai/scripts) — """night-watch — vigilancia noturna da frota (15/11, crouton-alpha).
 - `nix-validate.sh` (nixos-ai/scripts) — nix-validate.sh — Multi-layer validation for Nix/NixOS configurations.
   use: `./scripts/nix-validate.sh              # Full validation`
 - `nv-gate.py` (nixos-ai/scripts) — """nv-gate — transparent rate-limit gate for the NVIDIA free tier (integrate.api.nvidia.com).
+- `oc-db.py` (nixos-ai/scripts) — """oc-db.py — leitura do DB do opencode 2.2.6 (fonte unica da casa).
 - `opencode-resume.sh` (nixos-ai/scripts) — opencode-resume.sh — reabre uma sessão do opencode que foi fechada
   use: `./scripts/opencode-resume.sh --list                 # lista as recentes`
 - `opencode-session.sh` (nixos-ai/scripts) — opencode-session.sh — roda o TUI do opencode e GUARDA a janela ao fechar.
@@ -136,8 +174,11 @@ _124 tools._
   use: `Uso: ./scripts/overnight-loop.sh [--max-tasks 3] [--max-minutes 150]`
 - `pipeline.py` (nixos-ai/scripts) — """pipeline.py — estrategista (MoE) diagnostica, executor (bonsai) executa.
   use: `0/3), enquanto o MoE acerta o diagnóstico mas perde o último passo.`
+- `prova_checkers.py` (nixos-ai/scripts) — """Prova que os checkers da escada PASSAM para uma solucao correta.
 - `provider_matrix.py` (nixos-ai/scripts) — """provider_matrix.py — audit de TODOS os LLM providers do dono (keys de
 - `reindex_code.py` (nixos-ai/scripts) — """Reindexa o code_index (coleção canônica) a partir do código vivo.
+- `restart-ab.sh` (nixos-ai/scripts) — restart-ab.sh — reinicia o loop A/B com seguranca.
+  use: `bash "$REPO/scripts/llm-swap.sh" release >/dev/null 2>&1`
 - `restore-sessions.sh` (nixos-ai/scripts) — restore-sessions.sh — relança as sessões opencode capturadas no snapshot, no layout original
   use: `./scripts/restore-sessions.sh [--dry-run] [--file <snapshot.tsv>]`
 - `roo-nightwatch-setup.sh` (nixos-ai/scripts) — ══════════════════════════════════════════════════════════════
@@ -154,6 +195,7 @@ _124 tools._
   use: `Usage: ./scripts/setup-hackmd.sh`
 - `silero_vad_iterator.py` (nixos-ai/scripts) — This is copied from silero-vad's vad_utils.py:
 - `smart_turn_probe.py` (nixos-ai/scripts) — import numpy as np
+- `spawn-visible.sh` (nixos-ai/scripts) — spawn-visible — cria um agente em ABERTO no TUI do Linux (não headless).
 - `spk-enroll.py` (nixos-ai/scripts) — """spk-enroll.py — matricula a voz do dono para o gate de audio da voz.
 - `spk-separability.py` (nixos-ai/scripts) — """spk-separability.py — mede se o gate de audio (matricula do dono) SEPARA vozes.
 - `sync-vault.sh` (nixos-ai/scripts) — Sync important docs to Obsidian vault (not everything)
@@ -162,6 +204,7 @@ _124 tools._
 - `thermal-curve.sh` (nixos-ai/scripts) — thermal-curve.sh — Measure thermal degradation over 5 minutes of continuous inference
 - `tui-e2e.sh` (nixos-ai/scripts) — tui-e2e.sh — prova que um comando/slash do TUI roda LOCAL (zero turno de
   use: `./scripts/tui-e2e.sh --command "/jailbreak status"`
+- `uhrs-capture.py` (nixos-ai/scripts) — """uhrs-capture.py — o item da tela vira label do dono (sem digitar nada).
 - `uhrs-practice.py` (nixos-ai/scripts) — """uhrs-practice.py — treino do rubric de relevancia (e as primeiras labels do dono).
 - `ux-autonomy.py` (nixos-ai/scripts) — """P0 autonomy suite — 20 tarefas user-fiéis no Agent REAL (P0.4 + metas P0).
   use: `Uso: python3 ux-autonomy.py --model bonsai|qwen --out DIR [--only F1,D2]`
@@ -187,9 +230,14 @@ _124 tools._
 - `voice_gate.py` (nixos-ai/scripts) — """Gate de voz: a lógica anti-alucinação do duplex-asrd, extraída verbatim.
 - `voice_text_rules.py` (nixos-ai/scripts) — """voice_text_rules.py — regras de higiene de texto do asrd, num lugar só.
 - `vram-split-sweep.py` (nixos-ai/scripts) — """Sweep de split GPU/CPU: onde o MoE (e o denso) perdem velocidade.
+- `wake-fix-inbox.py` (nixos-ai/scripts) — """wake-fix-inbox — promove itens pendentes do inbox para delivery=steer.
+  use: `Uso: wake-fix-inbox [--agent CODINOME] [--dry-run]`
 - `wakeword-eval.py` (nixos-ai/scripts) — """wakeword-eval.py — mede o wakeword da casa sobre o corpus de voz.
 - `watch-updates.py` (nixos-ai/scripts) — """watch-updates.py — avisa a casa quando algo novo aparece nas fontes que importam.
 - `websearch.py` (nixos-ai/scripts) — """websearch.py — busca tavily p/ o duplex. Uso:
   use: `python3 websearch.py "query"  → RESPOSTA sintetizada + snippets"""`
 - `whisper_streaming.py` (nixos-ai/scripts) — import numpy as np
 - `xref_audit.py` (nixos-ai/scripts) — """xref_audit.py — N<->N audit: docs <-> code references.
+- `yt-insights.py` (nixos-ai/scripts) — """yt-insights.py — coleta transcrições de vídeos do YouTube para o RAG offline do celular.
+- `yt-push-phone.sh` (nixos-ai/scripts) — yt-push-phone.sh — empurra as transcrições curadas dos vídeos do YouTube para o
+  use: `./yt-push-phone.sh --dry-run`
