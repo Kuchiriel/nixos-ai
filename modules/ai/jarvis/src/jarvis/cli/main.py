@@ -217,6 +217,41 @@ def _cmd_index(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_rag_prune(args: argparse.Namespace) -> int:
+    """Reconcilia o índice com o disco (versões antigas / arquivos removidos).
+
+    Default é dry-run: imprime o que seria removido e não apaga nada.
+    `--apply` grava manifesto em `$JARVIS_STATE_DIR/rag-prune/` antes de
+    apagar (dados de produção nunca são removidos sem registro reversível).
+    """
+    import dataclasses
+
+    from jarvis.core.rag_prune import apply as prune_apply, scan as prune_scan
+    from jarvis.providers.vector_store import QdrantStore
+
+    cfg = get_config()
+    if args.collection == "books":
+        cfg = dataclasses.replace(cfg, qdrant_collection_code=cfg.qdrant_collection_books)
+    store = QdrantStore(cfg)
+    report = prune_scan(store, cfg.qdrant_collection_code)
+    out = {
+        "collection": report["collection"],
+        "total_points": report["total_points"],
+        "unique_paths": report["unique_paths"],
+        "by_reason": report["by_reason"],
+        "removable": report["removable"],
+        "top_paths": report["paths"][:10],
+        "apply": bool(args.apply),
+    }
+    if args.apply:
+        res = prune_apply(store, report,
+                         manifest_dir=cfg.state_dir / "rag-prune")
+        out.update({"deleted": res["deleted"], "manifest": res["manifest"]})
+        # o índice local de mtime não guarda paths removidos: nada a limpar aqui
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
 def _cmd_migrate(args: argparse.Namespace) -> int:
     from jarvis.core.legacy_index import load_legacy_index, migrate
 
@@ -1215,6 +1250,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_index = sub.add_parser("index", help="indexa um diretório de código no Qdrant")
     p_index.add_argument("directory")
     p_index.set_defaults(func=_cmd_index)
+
+    p_prune = sub.add_parser(
+        "rag-prune",
+        help="reconcilia o índice com o disco (versões antigas/arquivos removidos)")
+    p_prune.add_argument("--collection", choices=["code", "books"], default="code")
+    p_prune.add_argument("--apply", action="store_true",
+                         help="apaga de verdade (grava manifesto antes); default é dry-run")
+    p_prune.set_defaults(func=_cmd_rag_prune)
 
     p_migrate = sub.add_parser("migrate", help="migra o índice .ai-index legado para o Qdrant")
     p_migrate.add_argument("legacy_dir", help="diretório do índice legado (ex: ~/.ai-index)")

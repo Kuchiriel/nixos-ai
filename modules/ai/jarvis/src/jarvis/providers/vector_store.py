@@ -200,6 +200,68 @@ class QdrantStore:
             json={"points": ids},
         )
 
+    def set_payload(self, name: str, ids: list[int],
+                    payload: dict[str, Any]) -> None:
+        """Atualiza campos do payload sem tocar no vetor (idempotente)."""
+        if not ids:
+            return
+        for i in range(0, len(ids), 256):
+            self._request(
+                "POST",
+                f"/collections/{name}/points/payload",
+                json={"payload": payload, "points": ids[i:i + 256]},
+            )
+
+    def delete_by_filter(self, name: str, must: list[dict[str, Any]],
+                         must_not: list[dict[str, Any]] | None = None) -> None:
+        """Apaga por filtro de payload (match exato, sem substring)."""
+        body: dict[str, Any] = {"must": must}
+        if must_not:
+            body["must_not"] = must_not
+        self._request(
+            "POST",
+            f"/collections/{name}/points/delete",
+            json={"filter": body},
+        )
+
+    def scroll_all(
+        self,
+        name: str,
+        *,
+        payload_keys: list[str] | None = None,
+        page: int = 512,
+        max_pages: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Pagina a coleção inteira (id + payload), sem vetores.
+
+        `payload_keys` limita o payload trafegado (auditoria/prune não
+        precisam de `content`): 275k pontos com o payload completo custam
+        centenas de MB; só path+sha custa poucos MB.
+
+        O scroll do Qdrant vem em ordem de id, não de tempo: quem precisa
+        de ordem temporal ordena localmente (ver `EpisodicMemory.recent`).
+        """
+        out: list[dict[str, Any]] = []
+        offset: Any = None
+        pages = 0
+        while True:
+            body: dict[str, Any] = {"limit": page, "with_payload": True,
+                                    "with_vector": False}
+            if payload_keys:
+                body["with_payload"] = payload_keys
+            if offset is not None:
+                body["offset"] = offset
+            res = self._request(
+                "POST", f"/collections/{name}/points/scroll", json=body,
+            ).get("result", {}) or {}
+            pts = res.get("points", []) or []
+            out.extend(pts)
+            pages += 1
+            offset = res.get("next_page_offset")
+            if not offset or not pts or (max_pages and pages >= max_pages):
+                break
+        return self._decrypt_results(name, out)
+
     def search(
         self,
         name: str,

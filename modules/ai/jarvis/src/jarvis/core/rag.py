@@ -629,6 +629,16 @@ _ALLOW_DIRS: tuple[str, ...] = (
 )
 
 
+def _prune_on_index() -> bool:
+    """Opt-in: apaga versoes antigas do MESMO path durante a indexacao.
+
+    Default OFF: indexar nunca apaga nada sem `JARVIS_RAG_PRUNE_ON_INDEX=1`.
+    A reconciliacao em lote (dry-run + manifesto) fica em `core/rag_prune.py`.
+    """
+    return os.environ.get("JARVIS_RAG_PRUNE_ON_INDEX", "").strip().lower() in (
+        "1", "true", "yes", "on")
+
+
 def iter_indexable_files(root: str | Path, exclude_dirs: Iterable[str] | None = None) -> Iterable[str]:
     """Varre um diretório/arquivo com as mesmas regras do V4.0.5 (excludes, tamanho).
     Respeita também um .ragignore na raiz (sintaxe gitignore; ver _load_ragignore).
@@ -777,6 +787,17 @@ class HybridIndexer:
         # com metades (semântica antiga intacta).
         rich_list = [build_rich_content(path, facts if i == 0 else [], chunk, max_chars=chunk_size)
                      for i, chunk in enumerate(chunks)]
+        # Route by content: ~/Books → books collection; resto → code_index
+        target_collection = ("books" if path.startswith(
+            str(Path.home() / "Books")) else
+            self._cfg.qdrant_collection_code)
+        # sha do fonte UMA vez por arquivo (medido 19/11: ficava dentro do
+        # loop de chunks e relia o arquivo inteiro a cada chunk).
+        import hashlib as _hl
+        if os.path.exists(path):
+            source_sha = _hl.sha256(Path(path).read_bytes()).hexdigest()
+        else:
+            source_sha = _hl.sha256(content.encode()).hexdigest()
         try:
             dense_list = self._llm.embed_batch(rich_list)
             if len(dense_list) != len(rich_list):
@@ -807,8 +828,6 @@ class HybridIndexer:
             # Point id = sha256 63-bit de (source_sha256, chunk_index) —
             # estável a rename/move (audit P0-1): reindex sobrescreve em vez
             # de duplicar, e a colisão 32-bit de crc32 não se aplica.
-            import hashlib as _hl
-            source_sha = _hl.sha256(open(path, 'rb').read()).hexdigest() if os.path.exists(path) else _hl.sha256(content.encode()).hexdigest()
             point = {
                 "id": stable_id("doc", source_sha, str(i)),
                 "vector": {
@@ -835,11 +854,24 @@ class HybridIndexer:
                 },
             }
             # Route by content: ~/Books → books collection; resto → code_index
-            target_collection = ("books" if path.startswith(
-                str(Path.home() / "Books")) else
-                self._cfg.qdrant_collection_code)
             self._store.upsert(target_collection, [point])
             last_payload = point["payload"]
+
+        if last_payload is not None and _prune_on_index():
+            # Opt-in (JARVIS_RAG_PRUNE_ON_INDEX=1): aposenta as versoes
+            # anteriores DESTE path no mesmo passo da indexacao. Sem isso o
+            # id muda a cada edicao e o indice acumula versoes antigas
+            # recuperaveis (medido 19/11: rag.py 7 versoes, 231 pontos,
+            # 39 chunks atuais). Filtro exato por path + sha diferente;
+            # default OFF para nao apagar nada sem pedido explicito.
+            try:
+                self._store.delete_by_filter(
+                    target_collection,
+                    must=[{"key": "path", "match": {"value": path}}],
+                    must_not=[{"key": "source_sha256", "match": {"value": source_sha}}],
+                )
+            except Exception:  # noqa: BLE001 — prune nunca derruba a indexacao
+                pass
             
         if last_payload is not None:
             self._mark_indexed(path)
