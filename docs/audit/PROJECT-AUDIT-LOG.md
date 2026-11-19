@@ -242,3 +242,15 @@
   bonsai/mtp vazados dos meus A/B — mortos por PID exato (nunca pkill -f).
 - Bug registrado: llm-swap.sh --free falha com MODEL unbound (linha 147).
 - Lab pausado (control=pause); produção saudável.
+
+## 2026-11-19 — retomada 10ª entrada (rebuilds autorizados)
+- HEAD `d070aa83`.
+- Protocolo executado; rehydrate com checkpoint OK; roster tem Lince/auditoria-runtime ativo.
+- P1 de runtime resolvido: shadow :8092 (PID 709272, adapter v1 84MB) substituído
+  pela unit declarada llama-uncensored-4b.service (MainPID 2520576), v9 3MB scale 1.0.
+- Causa do timeout da unit: VRAM guard (precisa 4200 livre) bloqueado por
+  bonsai/mtp vazados dos meus A/B — mortos por PID exato (nunca pkill -f).
+- Correção de erro meu: `llm-swap.sh --free` não é opção válida (o correto é
+  `release`); o erro "MODEL unbound" era sintoma do case cair no fim, não bug
+  de runtime. Nenhuma mudança de código necessária.
+- Lab pausado (control=pause); produção saudável.
