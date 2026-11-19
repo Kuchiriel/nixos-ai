@@ -48,3 +48,18 @@ def test_handoff_prompt_only_skips_agents(tmp_path, monkeypatch) -> None:
     out = _run_handoff(tmp_path, monkeypatch, prompt_only=True)
     assert "AGENTS.md" not in out
     assert "TAREFA: (descreva aqui" in out
+
+
+def test_handoff_caps_embedded_protocol(tmp_path, monkeypatch) -> None:
+    """AGENTS.md injection stops before the embedded BUFFY protocol (19/11)."""
+    big = "# AGENTS.md\npin-rule-1\n" + ("x\n" * 500) + \
+          "## BUFFY.md — nixos-ai Execution Protocol\n" + ("y\n" * 500)
+    (tmp_path / "AGENTS.md").write_text(big, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    cap2 = _Capture()
+    monkeypatch.setattr("builtins.print", cap2)
+    assert _cmd_handoff(argparse.Namespace(task="x", prompt_only=False)) == 0
+    out = "\n".join(cap2.lines)
+    assert "pin-rule-1" in out
+    assert "protocolo completo" in out
+    assert "y\ny" not in out  # embedded protocol NOT injected

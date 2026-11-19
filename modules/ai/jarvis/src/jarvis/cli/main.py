@@ -612,7 +612,16 @@ def _cmd_handoff(args: argparse.Namespace) -> int:
     if not args.prompt_only:
         agents = root / "AGENTS.md"
         if agents.exists():
-            parts.append(f"<!-- AGENTS.md (premissas do repo) -->\n{agents.read_text(encoding='utf-8')}")
+            # (19/11) injeta SO as regras operacionais pinadas, nao o protocolo
+            # embutido de 1255 linhas (o arquivo completo continua no disco e
+            # e' legavel via jarvis_read_file quando a tarefa pedir).
+            full = agents.read_text(encoding="utf-8")
+            marker = "## BUFFY.md — nixos-ai Execution Protocol"
+            head = full.split(marker, 1)[0].rstrip() if marker in full else full
+            if len(head) != len(full):
+                head += ("\n\n[AGENTS.md: protocolo completo com " + str(len(full.splitlines()))
+                         + " linhas em " + str(agents) + " — ler sob demanda]")
+            parts.append(f"<!-- AGENTS.md (premissas do repo) -->\n{head}")
 
         try:
             log = subprocess.run(
