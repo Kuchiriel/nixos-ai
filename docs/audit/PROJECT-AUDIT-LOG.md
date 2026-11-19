@@ -164,3 +164,13 @@
   registrado bloqueio #22 e lab restaurado (`restart-ab.sh`).
 - Próximo: investigar timeout do harness antes de retomar A/B.
 - Riscos: 47 uncommitted, worktree coord-mcp, agente auditoria-runtime ativo.
+
+## 2026-11-19 — checkpoint final (6ª entrada)
+- HEAD inicial `9545c1d7`; HEAD final `e406b610` (`main`).
+- Rehydrate inclui checkpoint (`18d9433e`, 15/15); RAG dense fix
+  (`de1cbf66`, 4/4 sem rerank, teste 3/3); RAG-EVAL (`e406b610`)
+  com rerank ON 2/5 (gate não atingido) e hipótese rejeitada/revertida.
+- Dead code: 8 candidatos verificados, 6 vivos, 2 Laya arquivados (`a072e908`).
+- A/B #18 bloqueada (`#22`): 2 timeouts 1200s, 2/12 válidas insuficientes.
+- Próximo: gate do rerank (350 chars/doc), depois retomar A/B com :8096 up.
+- Riscos: 47 uncommitted, worktrees, agente auditoria-runtime, tailnet.

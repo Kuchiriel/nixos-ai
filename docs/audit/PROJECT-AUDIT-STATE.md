@@ -138,6 +138,9 @@ esse arquivo e não reeditar por cima.** O registro desta sessão vive no
 
 ## Histórico incremental de progresso
 - 2026-11-19: checkpoint criado; fases 0 concluída, 1/7 em andamento; 6 correções com commit.
+- 2026-11-19: RAG-EVAL criado (`2932b46e`→`e406b610`) — 4/4 sem rerank,
+  2/5 com rerank (gate 4/5 não atingido); hipótese "skip rerank com ID"
+  rejeitada e revertida com evidência.
 - 2026-11-19: RAG P1 CORRIGIDO (`de1cbf66`) — dense query por ID forte;
   4/4 frases no top-4 (antes 1/4 no top-10); teste 3/3. Doc `f664ed0e`.
   A/B #18 BLOQUEADA (`#22`): 2 timeouts de 1200s, lab restaurado.
