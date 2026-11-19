@@ -41,13 +41,11 @@ let
   repo = "/home/nixos/projects/nixos-ai";
   # (19/11) Mesma espera da unit solta: 60 x 2 s = 120 s pelo ASR e pelo
   # default. Sem isso o cliente nasce surdo e só descobre minutos depois.
-  waitPort = port: ''
-    for i in $(seq 1 60); do
-      ${pkgs.coreutils}/bin/timeout 1 ${pkgs.bash}/bin/bash -c "exec 3<>/dev/tcp/127.0.0.1/${toString port}" && exit 0
-      ${pkgs.coreutils}/bin/sleep 2
-    done
-    exit 1
-  '';
+  # (19/11 P0) systemd NAO aceita valor multilinha em ExecStartPre: as linhas
+  # seguintes sao lidas como novas diretivas e o parser fecha com
+  # "expected entry key name but got '/'". Uma linha com ';' preserva a
+  # semantica da unit solta (legacy) e os caminhos absolutos do store.
+  waitPort = port: "for i in $(seq 1 60); do ${pkgs.coreutils}/bin/timeout 1 ${pkgs.bash}/bin/bash -c \"exec 3<>/dev/tcp/127.0.0.1/${toString port}\" && exit 0; ${pkgs.coreutils}/bin/sleep 2; done; exit 1";
 in
 {
   # (19/11) MIGRAÇÃO: a unit nasceu SOLTA em ~/.config/systemd/user. O
