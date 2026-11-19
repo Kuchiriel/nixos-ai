@@ -22,8 +22,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.request
+from pathlib import Path
+
+# ── configuração centralizada ───────────────────────────────────────
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from agent_config import cfg as _agent_cfg  # noqa: E402
+
+_CONFIG_URL = _agent_cfg().env("COORD_MCP_URL")
+
 
 def _default_url() -> str:
     """URL do MCP de coordenação local.
@@ -32,7 +41,11 @@ def _default_url() -> str:
     para não expor na LAN). Logo, o loopback (127.0.0.1) NÃO responde: o
     watcher tem que falar com a tailnet — que é a mesma máquina, sem
     depender de rede externa. Detecta a IP do tailnet e cai para o loopback.
+    Se a variável COORD_MCP_URL estiver setada, usa ela (sobrescreve a detecção).
     """
+    env_url = os.environ.get("COORD_MCP_URL")
+    if env_url:
+        return env_url
     import socket
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -43,7 +56,7 @@ def _default_url() -> str:
             return f"http://{ip}:8765/mcp"
     except OSError:
         pass
-    return "http://127.0.0.1:8765/mcp"
+    return _CONFIG_URL or "http://127.0.0.1:8765/mcp"
 
 
 DEFAULT_URL = _default_url()

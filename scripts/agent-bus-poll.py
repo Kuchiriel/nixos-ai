@@ -24,10 +24,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.request
+from pathlib import Path
 
-DEFAULT_URL = "http://100.121.100.103:8765/mcp"
+# ── configuração centralizada ───────────────────────────────────────
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from agent_config import cfg as _agent_cfg  # noqa: E402
+
+DEFAULT_URL = os.environ.get("COORD_MCP_URL", _agent_cfg().env("COORD_MCP_URL"))
 
 
 def _post(url: str, payload: dict, session: str | None = None) -> tuple[dict, str | None]:
