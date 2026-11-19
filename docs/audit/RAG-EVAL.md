@@ -34,6 +34,11 @@ Commit `de1cbf66`.
 3/5 para 0/5 no k=8 — o cross-encoder com 350 chars/doc desordena mais do
 que ajuda. Mantido em 5. **Não alterar sem novo A/B**.
 
-## 6. Próximo
-Medir com `use_rerank=True` depois do fix do dense (o teste atual usou
-`False` para isolar). Gate: ≥4/5 known-answer hits no top-8.
+## 6. Rerank ON (medido depois do fix)
+`rag_rerank_test.py` com `use_rerank=True`, 5 perguntas: **2/5** hits
+(CYCLE-9 e ADR-004 no rank 1; ADR-003/ARCHITECTURE-FINDINGS/RUNTIME-FORENSICS
+fora do top-8). Antes do fix eram 1/5 — melhora, mas **abaixo do gate ≥4/5**.
+Causa provável: o cross-encoder com 350 chars/doc desordena documentos
+longos (já observado em `rag.py:1111` para k=8). Próximo: aumentar o trecho
+de documento fornecido ao reranker ou desligá-lo quando houver ID forte.
+NÃO alterar o rerank sem novo A/B.
