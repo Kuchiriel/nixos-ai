@@ -462,3 +462,46 @@
 - Evidência final: `home-manager-nixos.service` active; unit de usuário é
   symlink do store; `duplex-voice.service`, `vpn-guard.timer`, :8092 active;
   `/health` `{"status":"ok"}`; LoRA v9 scale 1.0; staged=0.
+
+## 2026-11-19 — retomada 15 (janela 2, crouton-alpha/termux)
+- HEAD inicial: `f83644e6`; HEAD final: `105214e4`. Agente: crouton-alpha,
+  lane `nixos-ai/audit-continuation` (claim publicado no bus #100).
+- Protocolo de retomada: AGENTS.md lido; STATE e LOG lidos; `coord_roster`,
+  `coord_read`, `coord_health` consultados; `jarvis_rehydrate` indisponível
+  (`mcp search rehydrate` vazio) — checkpoint usado como substituto.
+- Git: 19 itens não commitados de outros agentes, 0 staged; worktree
+  `.worktrees/coord-mcp` (Onca) preservado; nenhum `git add -A`.
+- Fase: 9 (auditoria final / reconciliação) + Fase 7 (correção P1).
+- Correção P1 (`105214e4`): `voice-watchdog.sh` delegava start ao cliente
+  órfão (`setsid nohup ... duplex-voice-run.sh`), conflitando com o dono
+  único systemd definido em `d3047102`; `--pause` matava pid e o
+  `Restart=always` reanimava a voz. Agora `start_stack` usa
+  `systemctl --user start` com espera por `is-active`, `kill_stack` usa
+  `systemctl --user stop` antes de matar pids.
+- Teste: `bash -n` OK; `--self-test` rc=0, 6/6 (3 casos de pausa + 2 novos
+  de delegate/systemd + 1 de não-órfão). Estado real inalterado: unit active,
+  sem `VOICE_PAUSED`, 1 cliente (o do systemd).
+- Obs: 23 itens `.backup` já arquivados com MANIFEST na janela anterior;
+  nada de produção (Qdrant/opencode.db) foi escrito.
+- Próximo passo: reconciliar `AUDIT-FINAL.md` com o HEAD real e definir a
+  exclusividade determinística dos perfis 4B com a lane do lab.
+
+### 2026-11-19 — retomada 15 (continuação, crouton-alpha)
+- HEAD `24622e1c` → `7fe7e4fc`. Fase 7 (correção P1) + Fase 5 (config).
+- Causa medida: `uncensored-4b-code` tinha `wanted = true` copiado do perfil
+  voz (`git blame` → `dc6a0e231` 02/11) com comentário dizendo "com LoRA",
+  mas o perfil code não tem LoRA e é :8096. Ambos os perfis subiam no boot
+  e o `llama-vram-guard 4200` matava a :8092 (reproduzido no switch anterior).
+- Correções: `models.nix` code `wanted=false` (unit ainda gerada via
+  `materialize`); `llama-swap.sh --free/--start-mtp` usam `systemctl` em vez
+  de `nohup llama-server`, com `--self-test` (systemctl/curl/nohup falsos).
+- Evidência: `bash -n` OK; self-test rc=0 (2/2); `nixos-rebuild build` rc=0;
+  `switch` como root rc=0; `voice=active`, `code=inactive`,
+  `Conflicts=llama-uncensored-4b-code.service`; HM active; duplex active;
+  `:8092/health` ok; 0 staged. Lab confirmado PAUSADO antes da mudança.
+- Hipótese rejeitada: LoRA `scale 0.0` em idle NÃO é regressão —
+  `duplex-voice.py:723/765` aplica 1.0 só na classificação e limpa depois.
+- Arquivos: `modules/ai/models.nix`, `scripts/llama-swap.sh`,
+  `docs/audit/PROJECT-AUDIT-STATE.md`.
+- Próximo: revalidar `--start-mtp code` apenas com janela/permissão (derruba
+  a voz); Fase 9 final; P2 `knowledge_schema` contrato único.

@@ -13,7 +13,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 ## Datas e HEADs
 - Início da missão: 2026-11-19.
 - HEAD inicial da auditoria: `57c9176517ca2f27d8e3285deb43f009cb0a21b3` (`main`).
-- HEAD atual: `105214e4` (recon 19/11, janela 2 — pós-switch e fix de voz).
+- HEAD atual: `dfbda2c0` (recon 19/11, janela 2 — exclusividade 4B + checkpoint).
 - Primeiro commit do projeto: `ae8789fac5cbb8b2527f5091c9b2877507f8337e` (2024-11-23, fork de `nixos-config-reborn`).
 
 ## Fases
@@ -209,9 +209,11 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
 ## Próxima tarefa exata
 1. Fase 9: reconciliar `AUDIT-FINAL.md` com o HEAD real (`105214e4`) e com o
    switch executado — a tabela ainda diz `b4039d87` e que a unit estava solta.
-2. Exclusividade dos dois perfis do 4B-MTP (:8092 voice / :8096 code): hoje
-   quem decide e o `llama-vram-guard` por corrida; definir dono determinístico
-   com a lane do lab (Falcao) antes de mudar `wanted`/timers.
+2. **FEITO em `7fe7e4fc`**: perfil code `wanted=false` (era copy-paste do
+   perfil voz, `dc6a0e231`) e `llama-swap.sh` usa units do systemd em vez de
+   `nohup llama-server`. Lab estava PAUSADO; build+switch rc=0; voice active,
+   code inactive, `Conflicts=` presente. **Não** rodar `--start-mtp code`
+   sem permissão (derrubaria a voz).
 3. P2: `knowledge_schema.py` sem consumidor e divergente do payload real —
    decidir se e executável ou documento; NAO tocar coleções de produção.
 4. Fase 6 (delta): procurar outros `setsid nohup` que relancem cliente duplex

@@ -3,7 +3,7 @@
 ## Estado inicial → final
 | item | inicial | final |
 |---|---|---|
-| HEAD | `57c91765` | `105214e4` |
+| HEAD | `57c91765` | `7fe7e4fc` |
 | Backlog | 4 abertos (#08/#17/#18 + decisões) | **0 aberto / 22 total** |
 | Entregáveis docs/audit | 0 | 9 (+ RAG-EVAL, HANDOFF-FORMAT) |
 | RAG recall@8 | 0.36 (juiz 15 perguntas) | **0.93** (MRR 0.762 com rerank) |
@@ -37,6 +37,8 @@
     e em `ExecStartPre` multilinha (`7b9dd96a`).
 12. `voice-watchdog.sh` não cria mais órfão: start/stop via `systemctl --user`
     (`105214e4`), self-test 6/6.
+13. Exclusividade 4B determinística (`7fe7e4fc`): code `wanted=false` +
+    `llama-swap.sh` via systemd; build+switch rc=0, voice active.
 
 ## Dívida restante (honesta)
 - Gate H3 "cada chunk 5/5": medido 4/5 — 3ª amostra pendente se quiser 5/5.
