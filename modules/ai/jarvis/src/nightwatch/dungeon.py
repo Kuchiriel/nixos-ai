@@ -83,6 +83,10 @@ MODELOS = {
     # ultra 550b — respondeu em 1,4s com content preenchido (o lightning 30b
     # devolveu content VAZIO e so reasoning, que quebra o parser do harness).
     "api": {"base_url": "http://127.0.0.1:8095/v1", "model": "nvidia/nemotron-3-ultra-550b-a55b"},
+    # (18/11) Quarto braço: 35B MoE via NVIDIA NIM (Nemotron 3.5 Lightning 30B).
+    # Mesmo endpoint da API (:8095), modelo MoE com expert offload.
+    # Teste da hipótese #15: 35B MoE expert-cache vs 8B denso.
+    "api-moe": {"base_url": "http://127.0.0.1:8095/v1", "model": "nvidia/nemotron-3.5-lightning-30b-a3b"},
 }
 
 # ── O PEDIDO ORIGINAL (a regra do video: o especialista ve o pedido inteiro) ──

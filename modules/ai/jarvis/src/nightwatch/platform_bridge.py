@@ -55,7 +55,13 @@ def select_persona_for_task(task_description: str) -> dict:
     try:
         from jarvis.core.persona import PersonaRegistry
         reg = PersonaRegistry()
-        persona = reg.select_for_task(task_description)
+        # (19/11) a assinatura real e' select_for_task(task_type, project_type="");
+        # a chamada com 1 argumento levantava TypeError, coberto pelo except, e
+        # TODA task caia em "backend_engineer" sem_selection real.
+        try:
+            persona = reg.select_for_task(task_description)
+        except TypeError:
+            persona = reg.select_for_task(task_description, "")
         return persona.to_dict()
     except Exception:
         return {"id": "backend_engineer", "name": "Backend Engineer"}

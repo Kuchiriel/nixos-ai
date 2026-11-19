@@ -1582,6 +1582,22 @@ FILES:
                        for p in json_patches for h in p.hunks):
         return True, json_patches, []
 
+    # (19/11) PERSONA NO PROMPT: a persona era escolhida e nunca usada. Com a
+    # persona no prompt, o modelo pequeno recebe o papel (backend/QA/etc) com as
+    # regras daquela persona. Vira a hipotese #09 do backlog: persona por chunk
+    # melhora a aprovacao no L2 com o mesmo modelo?
+    _persona_block = ""
+    try:
+        from jarvis.core.persona import PersonaRegistry
+        _p = PersonaRegistry().select_for_task(task_description, "")
+        _add = (getattr(_p, "system_prompt_additions", "") or "").strip()
+        if _add:
+            _persona_block = f"[PERSONA: {getattr(_p, 'name', '')}]\n{_add}\n\n"
+    except Exception:
+        _persona_block = ""
+    if _persona_block:
+        prompt = _persona_block + prompt
+
     response = call_llm_fn(prompt, 4096)
 
     if "ERROR" in response:
@@ -2707,6 +2723,7 @@ class Harness:
                     log_task_execution(
                         task_id=task.id,
                         persona=getattr(task, 'persona', 'unknown'),
+                        persona_in_prompt=bool(_persona_block),
                         model_tier=getattr(task, 'model_tier', 'medium'),
                         project=task.project,
                         status="completed",
