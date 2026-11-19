@@ -24,3 +24,34 @@
 - Pendências: #18 A/B em background (2/12 amostras); fases 2/3/6/9.
 - Próximo passo: verificar A/B e fechar #18; criar `KNOWLEDGE-SYSTEM-AUDIT.md`.
 - Riscos: 42 uncommitted, worktrees órfãos, tailnet instável, dados de produção só leitura.
+
+## 2026-11-19 11:51 — sessão `ses_e52816aa7ffe4zi1iV7cJ8mvtc` (continuação)
+- HEAD inicial: `5b2cd8c9` antes dos commits abaixo; `main`.
+- HEAD final: `5b2cd8c9` (`5b2cd8c95b4bf936d32f91b4604ec5ef96560020`).
+- Fase: 3 (auditoria do conhecimento) concluída + 7 (correções) + fechamento da 2.
+- Trabalho:
+  - Medição somente leitura do Qdrant: `code_index` 275.724 pts (176.992
+    current, 32.519 stale, 66.213 missing), `books` 11.379 (3.064 sem
+    identidade por desenho), `memories` 3.034, `vault` 102, `sessions` 775.
+  - `KNOWLEDGE-SYSTEM-AUDIT.md` escrito com contratos `arquivo:linha` e as
+    pendências que exigem autorização.
+- Problemas corrigidos:
+  - `3c0c4f20` RAG acumulava versões antigas (35,8% removível): `rag_prune.py`
+    + CLI `jarvis rag-prune` (dry-run default, manifesto antes do delete),
+    helpers `set_payload`/`delete_by_filter`/`scroll_all`, sha do fonte
+    calculado uma vez por arquivo, prune opt-in na indexação.
+  - `70f65895` consolidação noturna apagava memória e escolhia keeper por
+    tamanho de texto (`payload["timestamp"]` inexistente; a chave é `ts`):
+    agora marca `superseded`/`superseded_by` e keeper é o mais recente.
+  - `5b2cd8c9` revisão cronológica com a seção Era 0 repetida 15x.
+- Arquivos: `core/rag_prune.py`, `core/rag.py`, `core/memory.py`,
+  `providers/vector_store.py`, `cli/main.py`, `tests/test_rag_prune.py`,
+  `tests/test_memory.py`, `docs/auditoria/CHRONOLOGICAL-REVIEW-2026-11-19.md`,
+  `docs/audit/{KNOWLEDGE-SYSTEM-AUDIT,PROJECT-AUDIT-STATE,PROJECT-AUDIT-LOG}.md`.
+- Testes: `pytest test_rag test_memory test_rag_prune test_rag_manifest
+  test_consolidate` = 62 passed (nix develop).
+- Pendências: `rag-prune --apply` (autorização), destino de
+  `knowledge_schema.py`, chunk pulado sem registro em `skipped`, prune de
+  `sessions`.
+- Próximo passo: Fase 6 (código morto com entrypoints dinâmicos) começando
+  por `core/consolidate.py` e `.bak-*` em `scripts/`.

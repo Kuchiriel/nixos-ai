@@ -13,7 +13,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 ## Datas e HEADs
 - Início da missão: 2026-11-19.
 - HEAD inicial da auditoria: `57c9176517ca2f27d8e3285deb43f009cb0a21b3` (`main`).
-- HEAD atual: `57c9176517ca2f27d8e3285deb43f009cb0a21b3` (atualizado a cada checkpoint).
+- HEAD atual: `5b2cd8c95b4bf936d32f91b4604ec5ef96560020` (checkpoint 2026-11-19 11:51).
 - Primeiro commit do projeto: `ae8789fac5cbb8b2527f5091c9b2877507f8337e` (2024-11-23, fork de `nixos-config-reborn`).
 
 ## Fases
@@ -21,8 +21,8 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 |---|---|---|
 | 0 — Estado inicial / checkpoint | **CONCLUÍDA** | este arquivo + `PROJECT-AUDIT-LOG.md` |
 | 1 — Arqueologia (git/DB/docs) | **EM ANDAMENTO** | `../NIXOS-AI-ORIGEM-CRONOLOGICA.md` (ai-mesh) + `CHRONOLOGICAL-REVIEW-2026-11-19.md` |
-| 2 — Inventário arquitetural | PENDENTE | `ARCHITECTURE-MAP.md` |
-| 3 — Auditoria do conhecimento | PARCIAL | ver `KNOWLEDGE-SYSTEM-AUDIT.md` (a criar) |
+| 2 — Inventário arquitetural | **CONCLUÍDA (v1)** | `ARCHITECTURE-MAP.md` (medido 19/11 11:41) |
+| 3 — Auditoria do conhecimento | **CONCLUÍDA (v1)** | `KNOWLEDGE-SYSTEM-AUDIT.md` com contratos + medições |
 | 4 — OpenCode/contexto | PARCIAL | 259 compactações, 27 degeneradas (medido) |
 | 5 — NixOS/config | PARCIAL | zram 100%→50% confirmado; boot duplicado resolvido |
 | 6 — Código/org | PARCIAL | AGENTS.md 1684→400 linhas no handoff |
@@ -53,6 +53,12 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
    **toda A/B recente por nível era inválida** — `9f5678e8`.
 5. Guard de compactação degenerada portado para o host — `57c91765`.
 6. Chunking L2: níveis L2A/B/C + baseline pré-A* + checkers validados — `9f5678e8`.
+7. RAG acumulava versões antigas (35,8% do `code_index` removível) →
+   `rag_prune.py` + `jarvis rag-prune` (dry-run + manifesto) — `3c0c4f20`.
+8. Consolidação noturna apagava memória e escolhia keeper por tamanho de
+   texto (chave `timestamp` inexistente) → marca `superseded`, keeper por
+   `ts` — `70f65895`. Vale no próximo 03:00 (timer roda do source).
+9. Revisão cronológica com a seção Era 0 repetida 15x (395→102 linhas) — `5b2cd8c9`.
 
 ## Decisões arquiteturais
 - **ADR-003** (personas): manter BLOCKED — exige convergência `dev.py`→`agent_loop.py`;
@@ -69,10 +75,16 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 - "10 notas duplicadas no vault por caixa" → 570 únicos em 570 arquivos (hash).
 
 ## Pendências
-- **#18** (único backlog aberto): A/B de chunking — 12 amostras (3 × mtp-lora/bonsai × single/chunks),
-  em background no host (`/tmp/opencode/chunk-ab-v2.log`), 2/12 feitas (single/mtp-lora 2/5, 2/5).
+- **#18** (único backlog aberto): A/B de chunking. O run em background
+  **morreu por timeout** (`subprocess.TimeoutExpired` após 700 s no
+  `nix develop ... dungeon.run`), 2/12 amostras; o log para em traceback.
+  Não é falha do chunker: o harness estoura o teto por comando.
+- **rag-prune --apply** em `code_index` (98.732 pts) e `books` (203):
+  **exige autorização do dono** (dados de produção, §10.1/§10.2).
+- `knowledge_schema.py` sem consumidor e divergente do payload real
+  (P2-1 do KNOWLEDGE-SYSTEM-AUDIT): decidir executável vs documento.
 - Migrar resultados A/B antigos (inválidos por `Task.project`) — marcar como suspeitos.
-- Fase 2/3/6/9 do plano ainda não concluídas.
+- Fase 6/9 do plano ainda não concluídas.
 
 ## Bloqueios
 - Tailnet oscila (2 VPNs no lado Android); Host acessível por IPv6 quando up.
@@ -80,10 +92,13 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 - Serviços ativos/VM/Hyper-V: nãoAlterar sem autorização.
 
 ## Próxima tarefa exata
-1. Verificar se a A/B de chunking terminou (`tail /tmp/opencode/chunk-ab-v2.log`);
-   fechar #18 com convergência medida (single 1 checker vs chunks 3 checkers).
-2. Criar `KNOWLEDGE-SYSTEM-AUDIT.md` com contratos reais de Memory/RAG/Vault/Qdrant.
-3. Continuar Fase 2 (mapa arquitetural) começando por `docs/audit/01-current-nixos.md`.
+1. Fase 6: varredura de código morto real (sem referência textual, com
+   entrypoints dinâmicos): começar por `core/consolidate.py` (P2-2 do
+   KNOWLEDGE-SYSTEM-AUDIT) e pelos `.bak-*` na raiz de `scripts/`.
+2. Fase 4: auditar `rehydrate` de ponta a ponta (ordem, dedup, limite de
+   tokens) contra o que o MCP devolve hoje.
+3. P1-3 do KNOWLEDGE-SYSTEM-AUDIT: registrar chunk pulado em `skipped` e
+   devolver contagem ok/quarentena/pulado no `index_directory`.
 
 ## Arquivos que o próximo agente precisa ler
 - `AGENTS.md` (raiz, 1.684 linhas — ler o cabeçalho e as regras pinadas; o resto sob demanda).
@@ -99,3 +114,6 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 
 ## Histórico incremental de progresso
 - 2026-11-19: checkpoint criado; fases 0 concluída, 1/7 em andamento; 6 correções com commit.
+- 2026-11-19 11:51: Fase 3 concluída (auditoria do conhecimento com medições);
+  Fase 2 fechada v1; 3 commits novos (`3c0c4f20`, `70f65895`, `5b2cd8c9`);
+  A/B #18 registrada como morta por timeout.
