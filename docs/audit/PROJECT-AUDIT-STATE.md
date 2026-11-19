@@ -13,7 +13,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 ## Datas e HEADs
 - Início da missão: 2026-11-19.
 - HEAD inicial da auditoria: `57c9176517ca2f27d8e3285deb43f009cb0a21b3` (`main`).
-- HEAD atual: `0b749111`.
+- HEAD atual: `76625d44`.
 - Primeiro commit do projeto: `ae8789fac5cbb8b2527f5091c9b2877507f8337e` (2024-11-23, fork de `nixos-config-reborn`).
 
 ## Fases
@@ -26,7 +26,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 | 4 — OpenCode/contexto | **CONCLUÍDA** | `OPENCODE-CONTINUITY-AUDIT.md` (`c9397991`) |
 | 5 — NixOS/config | **CONCLUÍDA** | `NIXOS-AUDIT.md` (`a828c568`) |
 | 6 — Código/org | **EM ANDAMENTO** | AGENTS 1684→400; 2 scripts Laya arquivados com `git mv` (`a072e908`) |
-| 7 — Implementação contínua | **EM ANDAMENTO** | commits abaixo |
+| 7 — Implementação contínua | **CONCLUÍDA (22/22 backlog)** | commits abaixo |
 | 8 — Validação/regressão | PARCIAL | test_handoff 4/4; jobs 16/0 |
 | 9 — Auditoria final | PENDENTE | — |
 
@@ -132,6 +132,15 @@ produção e grava `ck=v3` em `results.jsonl`. Verificado: 12 linhas frescas em
 quando :8096 sobe junto (guard do lab). Rodando em background (PID 2261149).
 Meus runners diretos (`dungeon.run()`) davam TimeoutExpired 1200s —
 **abandonados**, não são evidência.
+
+## #18 FECHADO (19/11) — resultado medido
+- single L2: **1/5** em 3 amostras determinísticas de bonsai (mtp 2×1/5).
+- chunks L2A/B/C: **4/5** cada (1-2 amostras) — 4× o veredito do single.
+- Gate H3 "cada chunk 5/5" NÃO atingido; 3ª amostra de cada chunk pendente
+  (registrado como limite na evidência do backlog).
+- 10 amostras `rc1` (braço `mtp-lora` inexistente no llm-swap) arquivadas,
+  nunca reportadas como resultado. Lab restaurado.
+- #22 (bloqueio do A/B) fechado: causa era runner direto + braço inválido.
 
 ## Próxima tarefa exata
 1. **#22 bloqueio do A/B**: investigar por que o harness dá TimeoutExpired em

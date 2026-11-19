@@ -224,3 +224,11 @@
 - Verificado: mtp @ L2 rc=0 com veredito de checker; bonsai segue.
 - Sinal preliminar: bonsai single L2 1/5 vs chunks 4/5 (1 amostra/nível).
 - Próximo: 3 amostras por braço → convergência final → fechar #18.
+
+## 2026-11-19 — fechamento do backlog (9ª entrada)
+- HEAD `76625d44`.
+- #18 FECHADO com evidência: single 1/5 (3 amostras), chunks 4/5 (1-2 amostras),
+  gate 5/5 não atingido mas melhora 4× medida. #22 fechado (causa: runner direto
+  + braço mtp-lora inválido no llm-swap). Backlog 0 aberto / 22 total.
+- Rebuilds autorizados pelo dono não foram necessários até aqui.
+- Próximo: Fase 8/9 (validação e auditoria final).
