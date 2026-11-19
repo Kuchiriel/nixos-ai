@@ -404,3 +404,24 @@
   (gate de RAG fechado deixa de aparecer como 1/5).
 - Pendencia que exige autorizacao: reindexar `code_index` para os 275.724
   pontos antigos ganharem o payload canonico (escrita em producao).
+
+## 2026-11-19 — retomada 14, lote 4 (vault, memoria, unit solta, rehydrate)
+- HEAD inicial: `888124e0`; HEAD final: `54845ffa`.
+- `ac26129b` memoria: `consolidate_memories` pagina a colecao ate
+  `max_points` (antes um page de 1000 e o parametro ignorado; 3.105 pontos
+  -> dois tercos nunca vistos) e o docstring do `recall` para de prometer
+  dedup >95% que so a consolidacao faz.
+- `f6013355` vault: `MemoryVault.write_note` (validacao + `vault_cipher` +
+  commit por caminho); MCP e `cli/dev.py` delegam; `agent-checkpoint.sh`
+  varre o repo do vault. Achado: 276 notas untracked desde 13/10 num repo
+  SEM remote. Commitadas como estavam no proprio vault (`36d5f49`).
+- `a388c7a0` rehydrate: bloco de auditoria com HEAD vivo (git) + secoes
+  "Proxima tarefa"/"Bloqueios" em vez das 14 primeiras linhas do STATE.
+- `54845ffa` Home Manager: `vpn-guard` declarativo + migration; migration
+  que faltava em `duplex-voice`. Metodo: `readlink -f`, porque
+  `FragmentPath` aponta o symlink (44 falsos positivos se lido cru).
+- Evidencia: suite completa 2.105 passed / 27 skipped / 0 failed (269s);
+  `test_memory` 20, `test_vault*` 27, `test_rehydrate` 17, `test_consolidate`
+  14; `nix eval` lista o timer e as activations no host `nitro-v15`.
+- Pendente (dono): remote do vault, backfill de `code_index`, 12 familias de
+  units soltas, rebuild do host.

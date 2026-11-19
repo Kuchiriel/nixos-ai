@@ -259,3 +259,12 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
   untracked desde 13/10 num repo SEM remote; commitadas como estavam
   (`36d5f49` no vault). Suite completa: 2.105 passed / 27 skipped / 0 failed
   em 269s.
+- 2026-11-19 (retomada 14, lote 4): `54845ffa` declarou `vpn-guard`
+  (`home-manager/modules/services/vpn-guard.nix`) e adicionou a migration que
+  faltava em `duplex-voice` (sem ela o switch aborta com "file in the way").
+  Medicao com `readlink -f` (o `FragmentPath` devolve o symlink e engana):
+  17 units de usuario servidas por arquivo comum; 12 familias seguem soltas
+  (chisel-*, context-guard, dono-gate, fleet-*, llama-wackmall, night-watch,
+  wurm-*). Validado por `nix eval` do flake: timer e as duas activations
+  aparecem. `a388c7a0` fez o bloco de auditoria do rehydrate entregar HEAD
+  vivo + "proxima tarefa" + "bloqueios" (antes eram 14 linhas de cabecalho).
