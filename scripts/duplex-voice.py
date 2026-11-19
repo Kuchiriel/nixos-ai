@@ -35,6 +35,7 @@ import queue
 import re
 import difflib
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -250,10 +251,32 @@ def ts():
 
 # ---------------------------------------------------------------- HTTP
 def http(url, payload=None, timeout=180):
+    """Chamada HTTP com ORCAMENTO REAL (connect + leitura).
+
+    (19/11, coord-naming) MEDIDO: o `urlopen(timeout=T)` so limita o
+    CONNECT. Quando o servidor aceita e depois segura a resposta, a LEITURA
+    ficava sem prazo (medido: 6,0 s contra um orcamento de 1 s). Para o
+    classificador isso quebrava o orcamento: o 'TIMEOUT' chegava tarde e a
+    voz (que e' sub-segundo) esperava 6 s. Agora o socket tambem tem prazo.
+    """
     data = json.dumps(payload).encode() if payload is not None else None
     req = urllib.request.Request(url, data=data,
                                   headers={"Content-Type": "application/json"})
-    return json.load(urllib.request.urlopen(req, timeout=timeout))
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        # (19/11) o prazo da LEITURA: o do urlopen cobre o connect, e o
+        # corpo pode demorar (medido: um servidor que segura a resposta
+        # passava do orcamento). Pego o socket pelo caminho estavel
+        # (http.client) e aplico o timeout nele.
+        try:
+            import http.client
+            if isinstance(resp, http.client.HTTPResponse):
+                resp.fp.raw._sock.settimeout(timeout)
+        except Exception:
+            pass
+        try:
+            return json.loads(resp.read().decode())
+        except socket.timeout as exc:
+            raise TimeoutError(f"leitura excedeu {timeout}s") from exc
 
 # (09:15, dono assistindo TV: "ele continua agradecendo sem nada
 # acontecer") ADDRESS GATE no caminho do classificador: com GATE_MODE
@@ -666,16 +689,46 @@ def classify_intent(base, utt):
     except Exception:
         return None
 
+# (19/11, coord-naming) O ORCAMENTO DO CLASSIFICADOR E' DADO, NAO CHUTADO.
+# MEDIDO no #08: o timeout de 8 s estourava com o v10 (13-34 s por item), o
+# classify_turn devolvia None, e o caller caia no fallback — que responde
+# RESPOND. O veredito "12/39, RESPOND 10/10" do v10 era o FALLBACK, nao o
+# classificador: um veredito de transporte, invalido como veredito de modelo.
+#
+# Tres casos, agora distinguiveis:
+#   "RESPOND"/"WAIT"/"SILENCE"/"BARGE" = o modelo respondeu
+#   None                                  = o modelo respondeu e o rotulo nao
+#                                          foi reconhecido (ou erro)
+#   "TIMEOUT"                             = o modelo nao cabe no orcamento
+#                                          (dado sobre o MODELO, nao sobre a
+#                                          voz: a voz nao espera 13 s)
+CLASSIFY_TIMEOUT_S = float(os.environ.get("JARVIS_CLASSIFY_TIMEOUT_S", "8"))
+# o rotulo mais longo e' SILENCE (7 caracteres): o n_predict=6 cortava em
+# 'SILE' (medido no 8B denso, que emitia thinking em vez do rotulo)
+CLASS_N_PREDICT = int(os.environ.get("JARVIS_CLASS_N_PREDICT", "8"))
+
+
 def classify_turn(base, utt):
-    """Label do turno via LoRA; None = falha (caller cai no gate antigo)."""
+    """Label do turno via LoRA.
+
+    Devolve o rotulo, None (respondeu mas nao reconheceu) ou "TIMEOUT"
+    (nao coube no orcamento). Antes, o timeout era indistinguivel de
+    "rotulo desconhecido" e o caller caia no fallback, mascarando transporte
+    como resposta do modelo.
+    """
     try:
-        http(base + "/lora-adapters", [{"id": 0, "scale": 1.0}], timeout=3)
+        # (19/11) a ABERTURA do LoRA tambem e' parte do orcamento do
+        # classificador (antes: timeout=3 fixo, que somava 3 s ao tempo total
+        # mesmo com o orcamento de 1 s)
+        http(base + "/lora-adapters", [{"id": 0, "scale": 1.0}],
+             timeout=min(3, CLASSIFY_TIMEOUT_S))
         prompt = (f"<|im_start|>system\n{CLASS_SYS}<|im_end|>\n"
                   f"<|im_start|>user\n{utt}<|im_end|>\n"
                   f"<|im_start|>assistant\n")
         j = http(base + "/completion", {
-            "prompt": prompt, "n_predict": 6, "temperature": 0,
-            "stop": ["<|im_end|>"], "cache_prompt": True}, timeout=8)
+            "prompt": prompt, "n_predict": CLASS_N_PREDICT, "temperature": 0,
+            "stop": ["<|im_end|>"], "cache_prompt": True},
+            timeout=CLASSIFY_TIMEOUT_S)
         raw = str(j.get("content", "")).strip()
         # (18/11, sweep-2026-11) MEDIDO: o MTP responde o rotulo CORRETO mas
         #(prefixado pelo bloco de raciocinio: '<think>\n\n</think>\n\nRESPOND').
@@ -695,13 +748,24 @@ def classify_turn(base, utt):
             if m:
                 return lab
         return None
-    except Exception:
+    except Exception as exc:
+        # (19/11) o TIMEOUT e' um resultado, nao uma falha silenciosa: um
+        # classificador lento e' um dado sobre o modelo. Devolver None aqui
+        # fazia o caller cair no fallback, que 'responde' — e o numero do
+        # bench passava a medir o fallback, nao o classificador.
+        if type(exc).__name__ in ("TimeoutError", "ReadTimeout",
+                                  "Timeout", "socket.timeout"):
+            return "TIMEOUT"
         return None
     finally:
+        # (19/11) o cleanup do LoRA respeita o mesmo orcamento do classify:
+        # com timeout=3 fixo, um servidor lento somava 3 s ao tempo total do
+        # classificador (medido: 1,0 s de orcamento + 4 s de cleanup = 5,0 s).
         try:
-            http(base + "/lora-adapters", [], timeout=3)
+            http(base + "/lora-adapters", [], timeout=min(3, CLASSIFY_TIMEOUT_S))
         except Exception:
             pass
+
 
 def tick_once(base, history, heard, force_speak=False, tts=None, spk=None):
     # (10:15, regressão HB: classify 621→1190ms) O micro-turn por tick era
@@ -3583,7 +3647,24 @@ def main():
                         log(f"[{ts()}] classify({heard[:38]!r}) = {lab} "
                             f"spk={SPK_STATE.get('last_spk')} "
                             f"voices={SPK_STATE.get('voices')}")
-                        if lab is None:
+                        if lab == "TIMEOUT":
+                            # (19/11, coord-naming) O CLASSIFICADOR NAO CABE
+                            # NO ORCAMENTO. Isto e' um dado sobre o MODELO
+                            # (ele e' lento demais para o orcamento), nao
+                            # sobre a voz. O fallback neural ainda decide o
+                            # que fazer AGORA (a voz nao espera 13 s), mas
+                            # o log passa a dizer que a decisao NAO veio do
+                            # classificador — sem isso o bench mede o
+                            # fallback e chama de 'o modelo errou'.
+                            _int = (_intent_of(_intent_th, _intent_box)
+                                    if _intent_th is not None else None)
+                            _ok = _gate_accepts(_addr, _int)
+                            log(f"[{ts()}] classificador TIMEOUT "
+                                f"(orcamento={CLASSIFY_TIMEOUT_S}s) — decisao "
+                                f"do fallback neural (intent={_int}) "
+                                f"gate={_ok}; o classificador NAO respondeu")
+                            lab = "RESPOND" if _ok else "SILENCE"
+                        elif lab is None:
                             # (06/11) FALHA DO CLASSIFICADOR ≠ SILÊNCIO.
                             # O docstring promete "caller cai no gate
                             # antigo" mas o lab=None não caía em NENHUM
