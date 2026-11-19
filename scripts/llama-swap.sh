@@ -16,8 +16,14 @@
 #   :8081      = embeddings (nomic, 446 MiB)
 #   :8097      = whisper-server (STT, 934 MiB)
 #
+# (19/11) DONO UNICO: os perfis do 4B-MTP sao units do systemd
+# (`llama-uncensored-4b.service` :8092 / `llama-uncensored-4b-code.service`
+# :8096, geradas de models.nix). `--free` e `--start-mtp` usam systemctl —
+# `nohup llama-server` criava orfaos sem restart e competia com a unit.
+#
 # USO:
 #   llama-swap.sh --list                 # quem roda, com VRAM e modelo
+#   llama-swap.sh --self-test            # prova que nao cria orfaos
 #   llama-swap.sh --free [--also-stt]    # larga a VRAM (mata o MTP)
 #   llama-swap.sh --start-mtp            # religa o MTP identico
 #   llama-swap.sh --wait-model bonsai    # espera o router carregar o modelo
@@ -66,12 +72,19 @@ case "${1:---list}" in
         log "  parando whisper-server (pid $pid)"; kill "$pid" 2>/dev/null
       done
     fi
+    # Stop pelas units: matar so o pid nao basta (Restart/Conflicts do
+    # systemd) e deixa o dono do processo inconsistente.
+    for u in llama-uncensored-4b.service llama-uncensored-4b-code.service; do
+      if [ "$(systemctl is-active "$u" 2>/dev/null)" = "active" ]; then
+        systemctl stop "$u" >/dev/null 2>&1
+        log "  parando $u — o small model da frota cai ate o --start-mtp"
+      fi
+    done
+    # Orfaos historicos (llama-server sem unit) ainda podem existir.
     pid=$(mtp_pid)
     if [ -n "$pid" ]; then
-      log "  parando o MTP (pid $pid) — o small model da frota cai ate o --start-mtp"
+      log "  parando MTP orfao (pid $pid)"
       kill "$pid" 2>/dev/null
-    else
-      log "  MTP nao estava rodando"
     fi
     for i in $(seq 1 40); do
       free=$(vram)
@@ -83,28 +96,21 @@ case "${1:---list}" in
 
   --start-mtp)
     # (15/11) DOIS PERFIS do MTP (exclusivos por VRAM):
-    #   --profile lora (default): COM o LoRA microturn -> PHONE CALL (voz).
-    #   --profile code: SEM o LoRA -> CODING/TESTES (harness/nightwatch).
+    #   lora (default): COM o LoRA microturn -> PHONE CALL (voz, :8092).
+    #   code: SEM o LoRA -> CODING/TESTES (harness/nightwatch, :8096).
+    # (19/11) systemd e' o dono: start da unit, nunca nohup orfao.
     PERFIL="${2:-lora}"
     if [ "$PERFIL" = "code" ]; then
-      PORTA=8096; ALIAS="jarvis-mtp-code"; LOG=/tmp/llama-mtp-code.log
+      PORTA=8096; UNIT="llama-uncensored-4b-code.service"
     else
-      PORTA="$MTP_PORT"; ALIAS="$MTP_ALIAS"; LOG=/tmp/llama-mtp.log
+      PORTA="$MTP_PORT"; UNIT="llama-uncensored-4b.service"
     fi
-    log "subindo o MTP perfil=$PERFIL (porta $PORTA)..."
-    if [ "$PERFIL" = "code" ]; then
-      nohup "$MTP_CMD" -m "$MTP_MODEL" --host 127.0.0.1 --port "$PORTA" \
-        -ngl 99 -t 6 -c 12288 -b 256 -ub 256 -fa off -ctk f16 -ctv f16 \
-        --alias "$ALIAS" --parallel 1 --jinja --reasoning off \
-        --spec-type draft-mtp >"$LOG" 2>&1 &
-    else
-      nohup "$MTP_CMD" -m "$MTP_MODEL" --host 127.0.0.1 --port "$PORTA" \
-        -ngl 99 -t 6 -c 12288 -b 256 -ub 256 -fa off -ctk f16 -ctv f16 \
-        --alias "$ALIAS" --parallel 1 --jinja --reasoning off \
-        --spec-type draft-mtp --lora "$MTP_LORA" --lora-init-without-apply \
-        >"$LOG" 2>&1 &
+    log "subindo o MTP perfil=$PERFIL (porta $PORTA) via $UNIT..."
+    if ! systemctl start "$UNIT" >/dev/null 2>&1; then
+      log "  falha no start de $UNIT (systemctl)"
+      exit 1
     fi
-    log "  pid $!"
+    log "  $UNIT: $(systemctl is-active "$UNIT" 2>/dev/null)"
     for i in $(seq 1 120); do
       if endpoint_ok "$PORTA"; then
         log "  :$PORTA responde (${i}s) | VRAM livre: $(vram) MiB"
@@ -114,6 +120,42 @@ case "${1:---list}" in
     done
     log "  :$PORTA NAO respondeu em 120s"
     exit 1
+    ;;
+
+  --self-test)
+    # Prova, com systemctl/curl/nohup FALSOS, que --start-mtp nao cria orfao.
+    fail=0
+    TMP="$(mktemp -d)"; FAKEBIN="$TMP/bin"; mkdir -p "$FAKEBIN"
+    cat > "$FAKEBIN/systemctl" <<'EOS'
+#!/usr/bin/env bash
+printf 'systemctl %s\n' "$*" >> "$FAKECTL_LOG"
+if [ "${1:-}" = "is-active" ]; then echo inactive; fi
+exit 0
+EOS
+    cat > "$FAKEBIN/curl" <<'EOS'
+#!/usr/bin/env bash
+printf '{"data":[{"id":"fake"}]}'
+EOS
+    cat > "$FAKEBIN/nohup" <<'EOS'
+#!/usr/bin/env bash
+printf 'nohup %s\n' "$*" >> "$FAKECTL_LOG"
+exit 0
+EOS
+    chmod +x "$FAKEBIN/systemctl" "$FAKEBIN/curl" "$FAKEBIN/nohup"
+    export FAKECTL_LOG="$TMP/ctl.log"; : > "$FAKECTL_LOG"
+    PATH="$FAKEBIN:$PATH" "$0" --start-mtp code >/dev/null 2>&1 || true
+    if grep -q 'start llama-uncensored-4b-code.service' "$FAKECTL_LOG"; then
+      echo "ok: --start-mtp code usa a unit"
+    else
+      echo "FALHOU: --start-mtp code nao chamou systemctl start"; fail=1
+    fi
+    if grep -q 'nohup' "$FAKECTL_LOG"; then
+      echo "FALHOU: --start-mtp ainda cria orfao"; fail=1
+    else
+      echo "ok: --start-mtp nao cria orfao"
+    fi
+    rm -rf "$TMP"
+    [ "$fail" = "0" ] && echo "SELF-TEST ok: dono unico systemd" || exit 1
     ;;
 
   --wait-model)

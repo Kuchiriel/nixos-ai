@@ -554,14 +554,15 @@ in rec {
       # 31GB que já tem MT5 (4,2GB) + 4 sessões opencode (3,4GB). O
       # modelo precisa de ~5GB (ctx 12288): high 6G, max 7G, swap 2G.
       memHigh = "6G"; memMax = "7G"; memSwapMax = "2G"; limitMemlock = false;
-      # (26/10, dono: "tira o bonsai de default e coloca o qwen mtp que tem
-      # o lora pra subir com o lora") → este é o DEFAULT do sistema agora.
-      # wanted=true = sobe no boot COM o LoRA registrado (medido ao vivo:
-      # LoRA ON 4/4 classes corretas; LoRA OFF = base entra em "Thinking
-      # Pro" e NÃO classifica nada — o classificador é o LoRA, não o base).
-      # Consequência VRAM: 4.1G resident → o bonsai do router :8080 não
-      # carrega junto (o default não passa mais pelo router).
-      wanted = true;
+      # (19/11) PERFIL DE CODIGO: NAO e o default e NAO tem LoRA. O default
+      # do sistema e o perfil VOZ (:8092, com LoRA microturn — ver acima).
+      # wanted=true aqui era copy-paste do perfil voz (dc6a0e231, 02/11):
+      # os DOIS perfis 4B subiam no boot e disputavam 6 GB de VRAM — medido
+      # 19/11, o llama-vram-guard matou a :8092 no switch.
+      # wanted=false: unit continua gerada (materialize default true) e e
+      # levantada sob demanda por `llama-swap.sh --start-mtp code`.
+      # O `Conflicts=` do gerador mantem a exclusividade com a voz.
+      wanted = false;
       # opencode provider (gerado em home.nix via mapAttrs):
       # id = alias (o server anuncia o alias; home.nix usa svc.alias).
       opencode = { key = "local-uncensored-4b"; name = "Qwen 4B Uncensored MTP Local"; context = 12288; output = 4096; };

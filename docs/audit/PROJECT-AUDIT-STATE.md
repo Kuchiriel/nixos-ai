@@ -111,6 +111,10 @@ esse arquivo e não reeditar por cima.** O registro desta sessão vive no
 - **Qdrant**: coleções órfãs exportadas, não apagadas; cleanup exige autorização.
 
 ## Hipóteses rejeitadas (evidência)
+- "LoRA do :8092 caiu para scale 0.0 depois do switch" → **comportamento
+  correto**: `scripts/duplex-voice.py:723` aplica scale 1.0 só durante a
+  classificação e `:765` envia `[]` (off) no cleanup, para o chat com tools
+  ficar limpo (medido 19/11: 0.0 estável em idle com cliente active).
 - "BUFFY.md é duplicata de 90 KB" → é **symlink** (`ls -l`).
 - "22 definições de `find_repo_root`" → 1 definição, 21 imports (`grep def`).
 - "16 scripts com LD_LIBRARY_PATH duplicado" → guards legítimos (`bench-llm.sh`).
