@@ -152,3 +152,15 @@
 - A/B #18: runner ainda vivo em sample 3 (~13 min), 2/12 válidas.
 - Próximo: aguardar A/B, revisar `.bak-*` sem sobrescrever outros agentes.
 - Riscos: 47 uncommitted, worktrees, agente auditoria-runtime ativo.
+
+## 2026-11-19 — retomada 5ª entrada (missão contínua)
+- HEAD inicial `9545c1d7`; HEAD final `f664ed0e` (`main`).
+- Rehydrate agora inclui o checkpoint (`18d9433e`); teste 15/15.
+- Fase 6: consolidate.py TEM consumidor (memory.py) — hipótese rejeitada;
+  8 candidatos, 6 com consumidores, 2 Laya arquivados (`a072e908`).
+- RAG P1 corrigido: `de1cbf66` strong_query_identifier, 4/4 top-4,
+  `test_rag_identifier.py` 3/3; doc `f664ed0e`.
+- A/B #18: 2 timeouts de 1200s consecutivos; 2/12 válidas insuficientes;
+  registrado bloqueio #22 e lab restaurado (`restart-ab.sh`).
+- Próximo: investigar timeout do harness antes de retomar A/B.
+- Riscos: 47 uncommitted, worktree coord-mcp, agente auditoria-runtime ativo.

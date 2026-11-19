@@ -113,10 +113,11 @@ esse arquivo e não reeditar por cima.** O registro desta sessão vive no
 `NIXOS-AUDIT.md`, `TECHNICAL-DEBT.md`, `IMPROVEMENT-ROADMAP.md`.
 
 ## Próxima tarefa exata
-1. Fase 6: continuar varredura de código morto — os 8 candidatos restantes
-   (`coord_http`, `spaces`, `jarvis_http`, `kb_regression`, `run_l9`,
-   `interfaces`) TÊM consumidores reais (launchers/docs/testes) — não tocar.
-   Revisar apenas `.bak-*` em `scripts/` (42 uncommitted, cuidado com outros agentes).
+1. **#22 bloqueio do A/B**: investigar por que o harness dá TimeoutExpired em
+   1200 s (mtp-lora/s3 e bonsai/s1) — llm-call/retry preso. Só retomar 12/12
+   com veredito válido; 2/5 atuais NÃO são conclusão (#18 segue aberto).
+2. Fase 6 restante: revisar `.bak-*` em `scripts/` (47 uncommitted, cuidado
+   com agentes ativos) — nenhum outro módulo é morto (8 candidatos verificados).
 2. Fase 4: auditar `rehydrate` de ponta a ponta (ordem, dedup, limite de
    tokens) contra o que o MCP devolve hoje.
 3. Recall da fusão para a pergunta "chars por chunk" (falha com e sem
@@ -137,6 +138,9 @@ esse arquivo e não reeditar por cima.** O registro desta sessão vive no
 
 ## Histórico incremental de progresso
 - 2026-11-19: checkpoint criado; fases 0 concluída, 1/7 em andamento; 6 correções com commit.
+- 2026-11-19: RAG P1 CORRIGIDO (`de1cbf66`) — dense query por ID forte;
+  4/4 frases no top-4 (antes 1/4 no top-10); teste 3/3. Doc `f664ed0e`.
+  A/B #18 BLOQUEADA (`#22`): 2 timeouts de 1200s, lab restaurado.
 - 2026-11-19: rehydrate passou a incluir `PROJECT-AUDIT-STATE.md` via
   `JARVIS_AUDIT_STATE` (`18d9433e`, teste `test_rehydrate` 15/15).
   Dead code: `core/consolidate.py` TEM consumidor (`memory.py`) — hipótese
