@@ -21,7 +21,7 @@ TEST_COMMIT="e47e976"
 REPO="/home/nixos/projects/nixos-ai"
 SWAP="/home/nixos/projects/nixos-ai/scripts/llm-swap.sh"
 MOTIVO_LIB="$REPO/scripts/ab_loop_motivo.sh"
-MODELS="${AB_MODELS:-bonsai mtp api}"
+MODELS="${AB_MODELS:-bonsai mtp api api-moe}"
 NIVEIS="${AB_LEVELS:-L1 L2 L3}"
 SLEEP_ENTRE="${AB_SLEEP:-45}"
 RES="$LOG_DIR/results.jsonl"
@@ -121,6 +121,30 @@ checker_do_nivel() {
 # COPIA em /tmp, o checker fixo APROVA esse patch? Se sim, o review reprovou
 # um patch BOM e o motivo e' review_wrong. A lane original nunca e' tocada.
 
+# (19/11) persona da ultima execucao da lane (log de observabilidade do harness)
+persona_da_lane() {  # lane -> "id|in_prompt"
+  local lane="$1" logf
+  for logf in "$HOME/.local/state/jarvis/orchestrator/task-execution.jsonl"; do
+    [ -f "$logf" ] || continue
+    python3 - "$logf" "$lane" <<'PYEOF' 2>/dev/null && return 0
+import json,sys
+logf,lane=sys.argv[1],sys.argv[2]
+last=None
+try:
+    for line in open(logf,encoding="utf-8"):
+        try: d=json.loads(line)
+        except Exception: continue
+        if lane in str(d.get("project","")) or lane in str(d.get("lane","")):
+            last=d
+except Exception: pass
+if last:
+    p=last.get("persona") or ""
+    print(f"{p}|{1 if last.get('persona_in_prompt') else 0}")
+PYEOF
+  done
+  echo "|0"
+}
+
 registra_erro() {  # modelo nivel erro
     printf '{"modelo":"%s","nivel":"%s","erro":"%s","ck":"v3","motivo":"infra","ts":%s}\n' \
         "$1" "$2" "$3" "$(date +%s)" >> "$RES"
@@ -172,8 +196,8 @@ CONF
     git init -q && git add -A && \
         git -c user.email=lab@local -c user.name=lab commit -q -m "baseline+checker"
 
-    # o braco "api" nao usa a GPU: nao ha swap nem VRAM a disputar
-    if [ "$modelo" != "api" ] && [ -x "$SWAP" ]; then
+    # os bracos "api" e "api-moe" nao usam GPU: nao ha swap nem VRAM a disputar
+    if [ "$modelo" != "api" ] && [ "$modelo" != "api-moe" ] && [ -x "$SWAP" ]; then
         bash "$SWAP" "$modelo" || { registra_erro "$modelo" "$nivel" "swap"; return 1; }
     fi
 
@@ -260,10 +284,13 @@ CONF
     fi
     motivo=$(classifica_motivo "$rc" "$pbytes" "$runlog" "$lane" "$review_meta")
     log "  Motivo: $motivo"
-    printf '{"modelo":"%s","nivel":"%s","rc":%s,"dur":%s,"checker":"%s","patch_bytes":%s,"ck":"v3","motivo":"%s","review_diff_sha256":"%s","review_checker":"%s","ts":%s}\n' \
+    local persona_info persona_id persona_in_prompt
+    persona_info="$(persona_da_lane "$lane")"
+    persona_id="${persona_info%%|*}"; persona_in_prompt="${persona_info##*|}"
+    printf '{"modelo":"%s","nivel":"%s","rc":%s,"dur":%s,"checker":"%s","patch_bytes":%s,"ck":"v3","motivo":"%s","persona":"%s","persona_in_prompt":%s,"review_diff_sha256":"%s","review_checker":"%s","ts":%s}\n' \
         "$modelo" "$nivel" "$rc" "$dur" \
-        "$(echo "$checker_result" | tr -d '"' | cut -c1-120)" "$pbytes" "$motivo" \
-        "$review_sha" "$review_checker" "$(date +%s)" \
+        "$(echo "$checker_result" | tr -d '"' | cut -c1-120)" "$pbytes" "$motivo" "$persona_id" \
+        "${persona_in_prompt:-0}" "$review_sha" "$review_checker" "$(date +%s)" \
         >> "$RES"
 }
 
