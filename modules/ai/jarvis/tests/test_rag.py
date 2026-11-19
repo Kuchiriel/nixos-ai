@@ -255,3 +255,51 @@ def test_index_file_records_dropped_chunk_reason(tmp_path) -> None:
     idx, path = _indexer(tmp_path, limit=10)  # nada cabe, nem a metade
     assert idx.index_file(path, force=True) is None
     assert idx.skipped == [(path, "chunk_dropped 2/2")]
+
+
+def test_legacy_boost_ignores_hit_without_path() -> None:
+    """Hit sem path nao pode ganhar soberania de filename (regressao 19/11).
+
+    `filename` vazio e substring de qualquer query, entao o boost de 100000
+    ia para todo payload sem `path` (books) e dominava o top-k.
+    """
+    hits = [
+        {"score": 1.0, "payload": {"book": "x", "content": "book chunk"}},
+        {"score": 1.0, "payload": {"path": "/repo/vault_cipher.py"}},
+    ]
+    out = apply_legacy_boosts("how does the vault cipher work", hits)
+    assert out[0]["payload"]["path"].endswith("vault_cipher.py")
+    assert out[0]["score"] < 100000
+
+
+def test_rerank_orders_by_cross_encoder_and_clears_the_tail(monkeypatch) -> None:
+    """O cross-encoder manda e o slice fica acima da cauda (regressao 19/11).
+
+    A fusao antiga era quase simetrica e devolvia score ~1/61 ao slice,
+    enquanto a cauda mantinha o score do boost: o diversify_by_source entao
+    subia a cauda na frente e o rerank piorava o recall (0.93 -> 0.36).
+    """
+    import types
+
+    import jarvis.providers.reranker as rr
+    from jarvis.core import rag as ragmod
+
+    class FakeReranker:
+        def __init__(self, *a, **kw) -> None:
+            pass
+
+        def rerank(self, query, docs):
+            return [0.1, 5.0, 0.2, 9.0, 0.3]
+
+    monkeypatch.setattr(rr, "Reranker", FakeReranker)
+    dummy = types.SimpleNamespace(_cfg=types.SimpleNamespace(rerank_base_url="http://x"))
+    cands = [{"score": 1000.0 - i, "payload": {"path": f"/p{i}.py", "content": "x"}}
+             for i in range(8)]
+
+    out = ragmod.HybridSearch._rerank_candidates(dummy, "q", cands)
+
+    order = [h["payload"]["path"] for h in out[:5]]
+    assert order == ["/p3.py", "/p1.py", "/p4.py", "/p2.py", "/p0.py"]
+    tail = out[5:]
+    assert [h["payload"]["path"] for h in tail] == ["/p5.py", "/p6.py", "/p7.py"]
+    assert min(h["score"] for h in out[:5]) > max(h["score"] for h in tail)

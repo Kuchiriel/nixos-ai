@@ -1,0 +1,17 @@
+# Perguntas de resposta conhecida para scripts/rag-eval.py.
+# `expect` = sufixo de path que TEM de aparecer no payload do hit.
+# Regra: só entra pergunta cuja resposta está de fato no arquivo citado.
+{"query": "what was the CYCLE-9 verdict from Harbor", "expect": "docs/audit/CYCLE-9-REPORT.md"}
+{"query": "how many characters per chunk does the code indexer use", "expect": "core/rag.py"}
+{"query": "at what hour does the memory consolidation timer run", "expect": "modules/services/jarvis-consolidate-timer.nix"}
+{"query": "how does the vault encrypt notes at rest", "expect": "core/vault_cipher.py"}
+{"query": "which port serves the cross-encoder reranker model", "expect": "modules/ai/models.nix"}
+{"query": "duplex voice loop barge-in interruption handling", "expect": "scripts/duplex-voice.py"}
+{"query": "how does an agent claim a lane in the roster", "expect": "scripts/agent-roster.py"}
+{"query": "how are tool errors captured into the pains store", "expect": "scripts/agent-pains.sh"}
+{"query": "rebuild host script for the nixos machine", "expect": "rebuild-host.sh"}
+{"query": "night comms delivers pending bus notes without spending tokens", "expect": "home-manager/modules/night-comms.nix"}
+{"query": "free providers api rate limit gate configuration", "expect": "modules/ai/free-providers.json"}
+{"query": "qdrant store stable id and hybrid search implementation", "expect": "vector_store.py"}
+{"query": "how is the episodic memory id computed from the text", "expect": "core/memory.py"}
+{"query": "which characters are forbidden in written text by the checker", "expect": "scripts/check-text-chars.py"}

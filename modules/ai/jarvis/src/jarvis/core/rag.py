@@ -584,7 +584,11 @@ def apply_legacy_boosts(
         score = float(hit.get("score", 0.0))
         stem = filename.split(".")[0]
 
-        if filename in query_l or (len(stem) >= 8 and stem in query_l):
+        # `filename` vazio (hit sem path, ex.: payload de `books`) e substring
+        # de QUALQUER query: `"" in query_l` e True, e o hit levava +100000
+        # de soberania, dominando o top-k (medido 19/11: dois pontos de book
+        # no top-2 de uma pergunta de codigo, score 100000.18).
+        if filename and (filename in query_l or (len(stem) >= 8 and stem in query_l)):
             score += _FILENAME_SOVEREIGNTY
         for word in query_words:
             if word in filename:
@@ -1081,6 +1085,9 @@ class HybridSearch:
 
         boosted = apply_legacy_boosts(query, raw)
         if use_rerank and boosted:
+            # Slice fixo em 5 (medido 19/11: subir para 8 piorou o acerto de
+            # 3/5 para 0/5 no k=8 — o cross-encoder com 350 chars/doc
+            # desordena mais do que ajuda; ver RAG-EVAL no docs/audit).
             ranked = self._rerank_candidates(query, boosted)
         else:
             ranked = boosted
@@ -1146,18 +1153,26 @@ Answer:"""
             # Se cortou, só reordena o slice; resto mantém ordem boost
             if len(scores) != len(rerank_slice):
                 return candidates
-            # Reconstroi lista completa: slice reordenado + tail intocado
             n_slice = len(rerank_slice)
-            order = sorted(range(n_slice), key=lambda i: -scores[i])
-            rrank = {idx: pos + 1 for pos, idx in enumerate(order)}
-            fused: list[tuple[float, int]] = []
-            for i in range(n_slice):
-                s = 1.0 / (_RERANK_K + i + 1) + 1.0 / (_RERANK_K + rrank[i])
-                fused.append((s + _RERANK_TIEBREAK / (i + 1), i))
-            fused.sort(key=lambda x: -x[0])
-            ranked_slice = [dict(rerank_slice[i]) for _, i in fused]
-            for (s, _), hit in zip(fused, ranked_slice):
-                hit["score"] = float(s)
-            return ranked_slice + candidates[n_slice:]
+            # O cross-encoder manda: ordem = score dele (empate: ordem boost).
+            # A fusão anterior (1/(K+i+1) + 1/(K+rrank)) era quase simétrica —
+            # rerank 1º no fim do slice empatava com rerank último no começo e
+            # o desempate devolvia a ordem do boost, anulando o reranker.
+            order = sorted(range(n_slice), key=lambda i: (-scores[i], i))
+            tail = candidates[n_slice:]
+            # Score dos re-rankeados fica ACIMA da cauda e decrescente: o
+            # diversify_by_source reordena por score, então score pequeno
+            # (~1/61) fazia a cauda (boost 2..100000) subir na frente — medido
+            # 19/11: recall@8 0.93 sem rerank contra 0.36 com rerank.
+            base = max(
+                max((float(h.get("score", 0.0)) for h in rerank_slice), default=0.0),
+                max((float(h.get("score", 0.0)) for h in tail), default=0.0),
+            )
+            ranked_slice = []
+            for pos, i in enumerate(order):
+                hit = dict(rerank_slice[i])
+                hit["score"] = base + 1.0 - pos * 1e-3
+                ranked_slice.append(hit)
+            return ranked_slice + tail
         except Exception:  # noqa: BLE001 + Fallback silencioso para qualquer erro de comunicação ou parsing
             return candidates
