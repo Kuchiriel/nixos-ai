@@ -244,3 +244,11 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
   snapshot de projetos, bulldozer opt-in por `JARVIS_TEST_SLM=1`);
   `test_longrun_e2e.py` 13 passed em 48.38s. Suite completa NAO reexecutada
   nesta janela (job pesado, agentes ativos).
+- 2026-11-19 (retomada 14, lote 2): `8834e98c` alinhou o payload do RAG ao
+  contrato do `knowledge_schema` (campos indexados que nunca eram gravados) com
+  teste de regressao; 50 testes de RAG/schema/invariantes + 55 de
+  memory/prune/book/legacy passaram. DB do OpenCode re-medido em `mode=ro`
+  (33 tabelas, `session_part` 0, `session_message` 115.435). TECHNICAL-DEBT
+  corrigido: `knowledge_schema` TEM consumidores; a divergencia estava no
+  indexador. Backfill dos 275.724 pontos antigos de `code_index` fica pendente
+  (escrita em producao exige autorizacao).

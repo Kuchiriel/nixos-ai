@@ -21,7 +21,13 @@ dívida; P3 estética. Impacto real, não quantidade de arquivos.
 ## P2 — médio
 - `cli/dev.py` 4.204 linhas; ADR-003 BLOCKED até convergência `agent_loop.py`.
 - 10 coleções Qdrant `test_*_memories` órfãs (payloads exportados, não apagados).
-- 42 alterações não commitadas no host (`.bak` + trabalho de outros agentes).
+- ~20 alterações não commitadas no host (docs de outra lane, `.bak`, `memory/`,
+  `docs/agentes/`) — cada uma tem dono; nada commitado sem pathspec.
+- **Backfill do payload canônico**: `8834e98c` faz o indexador preencher
+  `source_type`/`authority`/`status`/`canonical_path`/`source_modified_at`, mas
+  só em pontos novos ou reindexados. Os 275.724 pontos atuais de `code_index`
+  continuam sem esses campos; filtros por eles só valem depois de reindexar
+  (escrita em produção, exige autorização).
 - sync host↔phone: drift 176 (`sync-status`, report-only).
 - Memória episódica error-only (sem decisões bem-sucedidas) — `KNOWLEDGE-SYSTEM-AUDIT.md`.
 - Relatórios CYCLE-4..9 com itens abertos (Harbor BLOCKED por framework ausente).
@@ -30,6 +36,14 @@ dívida; P3 estética. Impacto real, não quantidade de arquivos.
 - Worktree `/tmp/ack-patch-wt` prunable.
 - Nomes com variação de caixa no Vault (não duplicatas; 570 hashes únicos).
 - `session_part` V2 com 0 linhas (partes em `session_message.data.content`).
+
+## Corrigidas / reclassificadas (medido 19/11)
+- "`knowledge_schema.py` sem consumidor e divergente" — **metade falsa**: tem
+  consumidores (`scripts/reindex_code.py`, `scripts/index_opencode_sessions.py`,
+  `test_knowledge_schema.py`, `test_architecture_invariants.py`). A divergência
+  era real e estava no outro lado: o indexador do RAG gravava payload sem os
+  campos indexados. Corrigido em `8834e98c` (payload via `build_payload` +
+  teste de contrato); backfill dos pontos antigos segue pendente.
 
 ## Rejeitadas com evidência
 - CRC32 em IDs → é SHA-256 63 bits desde P0-1.

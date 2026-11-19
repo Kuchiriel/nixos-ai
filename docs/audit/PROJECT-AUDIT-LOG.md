@@ -377,3 +377,30 @@
 - Alteracoes locais nao minhas permanecem na arvore (docs/audit de outra lane, memory.js, scripts/agent-roster.py, backups .bak, docs/agentes, memory/, etc.): nao staged/nao commitadas.
 - Pendencias imediatas: atualizar STATE com HEAD real e risco de uncommitted; Fase 1/2/3 aprofundar delta desde ultimo checkpoint (historia git completa, contratos memory/rag/vault/qdrant/opencode.db/vault/git, continuidade OpenCode/Nix); avaliar `CHRONOLOGICAL-REVIEW-2026-11-19.md` ausente; triagem de divida aberta em TECHNICAL-DEBT/IMPROVEMENT-ROADMAP; validar suite completa apenas se houver janela (job pesado, ~6 min) antes de novo commit de codigo.
 - Proximo passo exato: reconciliar `docs/audit/PROJECT-AUDIT-STATE.md` com HEAD `029b8043`, confirmar inventario de entregaveis canonicos, e continuar Fase 1/3 lendo `memory.py`, `rag.py`, `vector_store.py`, `knowledge_schema.py`, `vault.py` e consumidores de `opencode.db` (somente leitura) para registrar contratos reais e gaps priorizados.
+
+## 2026-11-19 — retomada 14, lote 2 (contrato do payload RAG + DB re-medido)
+- HEAD inicial do lote: `029b8043`; HEAD final: `8834e98c`.
+- Medicao: `code_index` (275.724 pts) tinha payload indexes para
+  `source_type`, `authority`, `status`, `source_modified_at`, `repo`,
+  `source_id`, mas o indexador (`rag.py`) gravava apenas
+  `path/document_id/chunk_id/filename/ext/content/source_sha256/...`.
+  Consequencia: filtro por campo canonico nao casava com nada.
+- Correcao `8834e98c`: payload construido via `knowledge_schema.build_payload`
+  (aditivo; `path` e chaves antigas preservadas), com `source_type`,
+  `knowledge_domain`, `canonical_path`, `source_id`, `title`, `extractor`,
+  `authority`, `status`, `source_modified_at`; identidade mantida
+  (`source_sha256`, `filename`, `sanitizer_version`). Teste novo em
+  `test_rag.py` trava o contrato.
+- Evidencia de teste: `test_rag.py` + `test_rag_diversify.py` +
+  `test_knowledge_schema.py` + `test_architecture_invariants.py` = 50 passed;
+  `test_rag_crypto/deadline/identifier/manifest/prune`, `test_book_rag`,
+  `test_legacy_index`, `test_memory` = 55 passed.
+- DB do OpenCode re-lido em `mode=ro`: 33 tabelas; `session` 723,
+  `session_v2` 1.183, `message` 93.465, `part` 346.044, `session_message`
+  115.435, `session_part` 0, `event` 151.018, `todo` 132, `project` 26.
+  Confirma a doc (nada escrito no DB).
+- Docs atualizados: `TECHNICAL-DEBT.md` (reclassificacao medida, backfill
+  pendente), `OPENCODE-CONTINUITY-AUDIT.md` (re-medicao), `IMPROVEMENT-ROADMAP.md`
+  (gate de RAG fechado deixa de aparecer como 1/5).
+- Pendencia que exige autorizacao: reindexar `code_index` para os 275.724
+  pontos antigos ganharem o payload canonico (escrita em producao).

@@ -2,6 +2,9 @@
 
 > Medido em 2026-11-19 com conexão SQLite `mode=ro` em
 > `~/.local/share/opencode/opencode.db` (1,9 GB). Nenhuma escrita no DB.
+> Re-medido 19/11 (retomada 14): 33 tabelas no total; contagens abaixo são
+> um retrato, crescem enquanto o host trabalha (`session_v2` 1.183,
+> `session_message` 115.435 na segunda leitura).
 
 ## 1. Schema real (V2)
 | tabela | linhas | papel |

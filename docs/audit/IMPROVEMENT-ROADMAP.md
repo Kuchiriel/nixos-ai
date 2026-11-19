@@ -10,8 +10,10 @@
 ## Pendentes (próximas, em ordem de impacto)
 1. **#18 A/B de chunking** — runner resiliente em execução; fechar com convergência
    medida (single 1 checker vs chunks 3 checkers) quando 12/12 válidas.
-2. **RAG recall** — investigar `search_hybrid` top-k/fusão antes dos boosts.
-   Gate: 4/5 known-answer hits no top-8 (hoje 1/5).
+2. **RAG recall** — gate fechado em `b907a442` (recall@8 0.93, MRR 0.762 com
+   15 perguntas, ver `RAG-EVAL.md`). Resta opcional: recall da pergunta
+   "chars per chunk" (o candidato não entra no top-k cru) e backfill do
+   payload canônico nos pontos antigos (`8834e98c`), que exige reindexar.
 3. **Compactação** — substituir resumo degenerado no core (hook só avisa).
 4. **ADR-003** — aguardar convergência `dev.py→agent_loop.py`; não micro-patch.
 5. **Sync host↔phone** — escolher canônico por ferramenta (4 divergentes);
