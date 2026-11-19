@@ -20,6 +20,17 @@ from pathlib import Path
 
 import pytest
 
+# Cada teste aqui sobe um `jarvis dev` real contra o SLM e pode esperar ate o
+# timeout do subprocesso (60 s) — 6 testes assim tornam a suite padrao
+# imprevisivel (medido 19/11: a suite inteira travar por mais de 5 min no
+# test_level5_read_then_edit). Estes testes sao explicitamente integracao:
+# rodam quando quem chama pede, com JARVIS_TEST_SLM=1.
+SLM_ENABLED = os.environ.get("JARVIS_TEST_SLM") == "1"
+pytestmark = pytest.mark.skipif(
+    not SLM_ENABLED,
+    reason="bulldozer tests need a live SLM; set JARVIS_TEST_SLM=1 to run",
+)
+
 
 def _run_dev_task(task: str, project_root: str, timeout: int = 60) -> dict:
     """Executa uma tarefa via jarvis dev <task> e retorna o resultado."""

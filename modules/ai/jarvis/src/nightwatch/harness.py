@@ -2091,7 +2091,11 @@ class Harness:
         Uses platform bridge for workspace-aware discovery when available.
         """
         tasks = []
-        projects = [project] if project else self.config.projects
+        # Snapshot: platform discovery appends to config.projects below, and
+        # com a lista por referencia o loop re-descobria as fontes scripted
+        # uma vez por projeto descoberto (126 projetos = 126 varreduras, medido
+        # 19/11). A rodada atual usa a lista que existia quando comecou.
+        projects = [project] if project else list(self.config.projects)
         stats: dict[str, Any] = {
             "projects": list(projects),
             "scripted_total": 0,

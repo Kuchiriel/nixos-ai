@@ -11,6 +11,7 @@ workspace discovery approach.
 
 import json
 import os
+import re
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Optional
@@ -96,17 +97,24 @@ SKIP_DIRS = {
 }
 
 
-def _count_languages(project_path: Path, max_depth: int = 6,
-                     max_files: int = 20000) -> dict[str, int]:
+def _scan_project(project_path: Path, max_depth: int = 6,
+                  max_files: int = 20000, count_lines: bool = False,
+                  max_line_files: int = 2000) -> tuple[dict[str, int], int, int]:
     """Count files per language with a single pruned walk.
 
     Prunes SKIP_DIRS + hidden dirs in-place (never descends), caps depth
     and total files — discovery needs shape, not exactitude.
+
+    Returns (counts, file_count, total_lines). Line counting is opt-in
+    and capped by max_line_files: reading every file of a data-heavy
+    workspace is what made discovery take minutes (medido 19/11).
     """
     from collections import Counter
     counts: Counter[str] = Counter()
     base = str(project_path)
     seen = 0
+    lines = 0
+    line_files = 0
     for root, dirnames, filenames in os.walk(base, followlinks=False):
         depth = root[len(base):].count(os.sep)
         dirnames[:] = sorted(
@@ -119,12 +127,56 @@ def _count_languages(project_path: Path, max_depth: int = 6,
         for fn in filenames:
             seen += 1
             if seen > max_files:
-                return dict(counts)
+                return dict(counts), seen - 1, lines
             ext = os.path.splitext(fn)[1]
             lang = LANG_MAP.get(ext)
-            if lang:
-                counts[lang] += 1
-    return dict(counts)
+            if not lang:
+                continue
+            counts[lang] += 1
+            if count_lines and line_files < max_line_files:
+                line_files += 1
+                try:
+                    with open(os.path.join(root, fn), errors="ignore") as fh:
+                        lines += fh.read().count("\n")
+                except OSError:
+                    pass
+    return dict(counts), seen, lines
+
+
+def _count_languages(project_path: Path, max_depth: int = 6,
+                     max_files: int = 20000) -> dict[str, int]:
+    """Count files per language (single pruned walk, see _scan_project)."""
+    counts, _files, _lines = _scan_project(
+        project_path, max_depth=max_depth, max_files=max_files,
+    )
+    return counts
+
+
+def _iter_files(project_path: Path, suffix: str, max_depth: int = 6,
+                max_files: int = 3000):
+    """Yield files with `suffix` using the same pruned, capped walk.
+
+    Dependency graph inference precisa de imports, nao do repo inteiro:
+    rglob sem poda lia cada .py de cada projeto (medido 19/11).
+    """
+    base = str(project_path)
+    seen = 0
+    for root, dirnames, filenames in os.walk(base, followlinks=False):
+        depth = root[len(base):].count(os.sep)
+        dirnames[:] = sorted(
+            d for d in dirnames
+            if d not in SKIP_DIRS and not d.startswith(".")
+        )
+        if depth >= max_depth:
+            dirnames[:] = []
+            continue
+        for fn in filenames:
+            if not fn.endswith(suffix):
+                continue
+            seen += 1
+            if seen > max_files:
+                return
+            yield Path(root) / fn
 
 
 class WorkspaceDiscovery:
@@ -145,8 +197,11 @@ class WorkspaceDiscovery:
             if not entry.is_dir() or entry.name.startswith(".") or entry.name in SKIP_DIRS:
                 continue
             if (entry / ".git").exists() or self._looks_like_project(entry):
-                manifest = self._auto_detect_manifest(entry)
-                info = self._analyze_project(entry, manifest)
+                # One walk per project: manifest and analysis share the scan
+                # (antes eram duas varreduras completas, medido 19/11).
+                scan = _scan_project(entry, count_lines=True)
+                manifest = self._auto_detect_manifest(entry, languages=scan[0])
+                info = self._analyze_project(entry, manifest, scan=scan)
                 self._projects[manifest.id] = info
 
         self._build_dependency_graph()
@@ -161,7 +216,8 @@ class WorkspaceDiscovery:
         ]
         return any((path / ind).exists() for ind in indicators)
 
-    def _auto_detect_manifest(self, project_path: Path) -> ProjectManifest:
+    def _auto_detect_manifest(self, project_path: Path,
+                              languages: dict[str, int] | None = None) -> ProjectManifest:
         """Auto-detect project manifest from structure."""
         project_id = project_path.name
         rel_path = str(project_path.relative_to(self.workspace_root))
@@ -177,7 +233,8 @@ class WorkspaceDiscovery:
 
         # Detect language breakdown — single bounded walk (rglob per
         # extension walks .git/nixpkgs/build dirs repeatedly = hang).
-        languages = _count_languages(project_path)
+        if languages is None:
+            languages = _count_languages(project_path)
 
         # Detect test command
         test_cmd = ""
@@ -217,22 +274,17 @@ class WorkspaceDiscovery:
             tags=list(languages.keys()),
         )
 
-    def _analyze_project(self, project_path: Path, manifest: ProjectManifest) -> ProjectInfo:
-        """Analyze a project for additional information."""
-        file_count = 0
-        total_lines = 0
-        lang_counts = {}
+    def _analyze_project(self, project_path: Path, manifest: ProjectManifest,
+                         scan: tuple[dict[str, int], int, int] | None = None) -> ProjectInfo:
+        """Analyze a project for additional information.
 
-        for ext, lang in LANG_MAP.items():
-            for f in project_path.rglob(f"*{ext}"):
-                rel = str(f.relative_to(project_path))
-                if not any(skip in rel for skip in SKIP_DIRS):
-                    file_count += 1
-                    lang_counts[lang] = lang_counts.get(lang, 0) + 1
-                    try:
-                        total_lines += len(f.read_text(errors="ignore").splitlines())
-                    except Exception:
-                        pass
+        One pruned walk for the whole project (antes: 20 rglob, um por
+        extensao do LANG_MAP, sem poda nem teto — medido 19/11: discovery
+        de ~/projects passava de 30 s e pendurava a suite).
+        """
+        lang_counts, file_count, total_lines = scan or _scan_project(
+            project_path, count_lines=True,
+        )
 
         # Check git
         has_git = (project_path / ".git").exists()
@@ -261,25 +313,34 @@ class WorkspaceDiscovery:
         )
 
     def _build_dependency_graph(self):
-        """Build a dependency graph from manifests and imports."""
+        """Build a dependency graph from manifests and imports.
+
+        Le so as linhas de import (antes: substring do id de cada projeto
+        contra o conteudo inteiro, O(arquivos x projetos) — 7 s medidos em
+        126 projetos, 19/11).
+        """
         self._dependency_graph = {pid: [] for pid in self._projects}
+        module_to_id = {}
+        for other_id in self._projects:
+            module_to_id[other_id.replace("-", "_").replace(" ", "_")] = other_id
+            module_to_id.setdefault(other_id, other_id)
+
+        import_re = re.compile(r"^\s*(?:from|import)\s+([A-Za-z_][\w.]*)", re.M)
 
         for pid, info in self._projects.items():
             # Check if this project imports from others
             project_path = self.workspace_root / info.manifest.path
-            for py_file in project_path.rglob("*.py"):
+            for py_file in _iter_files(project_path, ".py"):
                 try:
+                    if py_file.stat().st_size > 512 * 1024:
+                        continue
                     content = py_file.read_text(errors="ignore")
-                    for other_id, other_info in self._projects.items():
-                        if other_id == pid:
-                            continue
-                        # Check if any file from other project is imported
-                        other_name = other_id.replace("-", "_").replace(" ", "_")
-                        if other_name in content:
-                            if other_id not in self._dependency_graph[pid]:
-                                self._dependency_graph[pid].append(other_id)
-                except Exception:
-                    pass
+                except OSError:
+                    continue
+                for mod in import_re.findall(content):
+                    dep_id = module_to_id.get(mod.split(".")[0])
+                    if dep_id and dep_id != pid and dep_id not in self._dependency_graph[pid]:
+                        self._dependency_graph[pid].append(dep_id)
 
     def get_affected_projects(self, changed_files: list[str]) -> list[str]:
         """Determine which projects are affected by file changes."""
