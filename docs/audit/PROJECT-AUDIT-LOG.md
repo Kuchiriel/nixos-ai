@@ -425,3 +425,8 @@
   14; `nix eval` lista o timer e as activations no host `nitro-v15`.
 - Pendente (dono): remote do vault, backfill de `code_index`, 12 familias de
   units soltas, rebuild do host.
+- Precisao do registro: a suite completa (2.105) rodou depois de `8834e98c` e
+  ANTES de `ac26129b`/`f6013355`/`a388c7a0`; depois delas, os modulos afetados
+  foram re-testados (`test_memory` 20, `test_vault`+cipher+mcp 27,
+  `test_rehydrate` 17, `test_consolidate` 14, e 150 no conjunto com
+  `test_devtools`/runtime/offline). Nenhuma falha.
