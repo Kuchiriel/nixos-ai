@@ -33,7 +33,11 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-DEFAULT_URL = os.environ.get("AGENTS_OC_URL", "http://100.121.100.103:4599")
+# ── configuração centralizada ───────────────────────────────────────
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from agent_config import cfg as _agent_cfg  # noqa: E402
+
+DEFAULT_URL = os.environ.get("AGENTS_OC_URL", _agent_cfg().env("AGENTS_OC_URL"))
 ENVFILE = os.environ.get(
     "AGENTS_OC_ENVFILE", str(Path.home() / ".config/opencode/server.env"))
 

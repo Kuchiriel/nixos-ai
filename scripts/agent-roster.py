@@ -36,8 +36,9 @@ USO:
 from __future__ import annotations
 
 import argparse
+import base64
 import fcntl
-import json
+import json as _json
 import os
 import random
 import socket
@@ -45,6 +46,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import urllib.request
 from pathlib import Path
 
 PROJECTS_ROOT = Path(os.environ.get("AGENTS_ROOT", Path.home() / "projects"))
@@ -54,6 +56,10 @@ if _SRC.is_dir():
     p = str(_SRC)
     if p not in sys.path:
         sys.path.insert(0, p)
+
+# ── configuração centralizada (portas, URLs, caminhos) ───────────────
+sys.path.insert(0, str(PROJECTS_ROOT / "nixos-ai" / "scripts"))
+from agent_config import cfg as _agent_cfg  # noqa: E402
 
 ROSTER_PATH = Path(
     os.environ.get("AGENTS_ROSTER", PROJECTS_ROOT / ".agents" / "roster.json"))
@@ -279,7 +285,7 @@ def _db_live_sessions(janela_s: int | None = None) -> list[str]:
 # (SSH/cron/Telegram) nao ha janela, e o DB (schema 1.x) esta congelado.
 # A API responde 200 para a sessao viva e 404 para a morta — em qualquer
 # contexto, headless.
-OC_API_URL = os.environ.get("AGENTS_OC_URL", "http://100.121.100.103:4599")
+OC_API_URL = os.environ.get("AGENTS_OC_URL", _agent_cfg().env("AGENTS_OC_URL"))
 _OC_SESSION_CACHE: dict = {"at": 0.0, "ids": set()}
 
 
