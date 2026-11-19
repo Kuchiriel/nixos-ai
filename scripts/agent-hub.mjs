@@ -256,7 +256,7 @@ async function refresh() {
       <div class="row"><span class="dot \${a.status}"></span><span class="name">\${esc(a.codename)}</span> <span class="muted">\${esc(a.name)}</span></div>
       <div class="muted">lane=\${esc(a.lane)} · \${a.status}\${a.busy ? ' · há ' + Math.round((Date.now()-a.busy/1)/1000) + 's ativo' : ''}</div>
       <div class="muted" style="margin-top:4px">sessão \${esc((a.session||'ghost').slice(0,18))}…</div>
-      <div class="turn"><button onclick="openTranscript('\${esc(a.session)}', this)">transcript</button></div>
+      <div class="turn"><button onclick="openTranscript('\${esc(a.session)}', this)">transcript</button> <button class="closeSession" data-session="\${esc(a.session || '')}" data-name="\${esc(a.codename || a.name || '')}" title="fechar sessao">fechar</button></div>
       <div class="turn"><input placeholder="dizer algo para \${esc(a.codename)}…" class="say"><button class="send">↵</button></div>
     </div>\`).join('');
   $$('.card').forEach((card, i) => {
@@ -281,6 +281,21 @@ async function openTranscript(session, btn) {
   } catch (e) { t.textContent = 'erro ao ler: ' + e; }
 }
 $('#drawerToggle').addEventListener('click', e => { e.preventDefault(); $('#transcript').style.display = 'none'; $('#drawer').style.display = 'none'; });
+// (19/11) fechar sessao com confirmacao; so atua na sessao do card.
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('.closeSession');
+  if (!b) return;
+  const sid = b.dataset.session;
+  if (!sid || !confirm('Fechar a sessao de ' + (b.dataset.name || sid.slice(0, 8)) + '? (o historico fica no DB)')) return;
+  try {
+    const r = await fetch('/api/session/close', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-agent-hub-token': TOKEN() },
+      body: JSON.stringify({ session: sid }) });
+    const d = await r.json();
+    b.textContent = d.ok ? 'fechada' : 'erro';
+    if (!d.ok) alert(d.error || ('HTTP ' + r.status));
+  } catch (err) { b.textContent = 'erro'; }
+});
 async function loadModels() {
   const sel = document.getElementById('spModel');
   if (!sel) return;
@@ -1209,6 +1224,36 @@ async function handler(req, res) {
       const out = await wake(name, text);
       return send(out.status, JSON.stringify(out.body), 'application/json');
     } catch (e) { return send(400, JSON.stringify({ error: String(e) }), 'application/json'); }
+  }
+  // (19/11) FECHAR SESSAO — pedido original 15/11 ('abrir e fechar sessao').
+  // API medida: DELETE /api/session/{id} existe no OpenCode V2 (openapi.json).
+  if (req.method === 'POST' && url.pathname === '/api/session/close') {
+    if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required' }), 'application/json');
+    let raw = ''; for await (const chunk of req) {
+      raw += chunk;
+      if (raw.length > BODY_MAX) return send(413, '{"error":"body grande demais"}', 'application/json');
+    }
+    try {
+      const { name, session } = JSON.parse(raw || '{}');
+      let sid = session || '';
+      if (!sid && name) {
+        const a = roster().find(x => x.name === name || x.codename === name);
+        sid = a?.session || '';
+      }
+      if (!sid) return send(400, '{"ok":false,"error":"sem sessao para fechar"}', 'application/json');
+      const r = await fetch(OC + '/api/session/' + encodeURIComponent(sid), {
+        method: 'DELETE', headers: { Authorization: AUTH() },
+        signal: AbortSignal.timeout(10000) });
+      const body = await r.text();
+      // remove a sessao do roster para o painel nao mostrar um agente fantasma
+      // preserva TODAS as chaves do roster (version/tasks) — so troca agents
+      try {
+        const cur = JSON.parse(readFileSync(ROSTER, "utf8"));
+        cur.agents = (cur.agents || []).map(x => x.session === sid ? { ...x, session: null } : x);
+        writeFileSync(ROSTER, JSON.stringify(cur, null, 2));
+      } catch {}
+      return send(r.status, JSON.stringify({ ok: r.ok, status: r.status, session: sid, body: body.slice(0, 200) }), 'application/json');
+    } catch (e) { return send(400, JSON.stringify({ ok: false, error: String(e) }), 'application/json'); }
   }
   send(404, '{"error":"not found"}', 'application/json');
 }
