@@ -547,6 +547,18 @@ _ACRONYM_RE = re.compile(r"\b[A-Z](?:\.[A-Z]){1,4}\.?\b")
 _EXT_RE = re.compile(r"\.([a-zA-Z][a-zA-Z0-9]{0,3})\b")
 
 
+# (19/11) Strong document identifiers survive extra query tokens better when
+# the dense vector is built from the identifier alone (measured: "CYCLE-9" ranks
+# the right doc #1; "CYCLE-9 Harbor" drops it from top-10).
+_STRONG_ID_RE = re.compile(r"\b(?:[A-Z][A-Z0-9]*-\d+|\d{4}\.\d{4,5})\b")
+
+
+def strong_query_identifier(query: str) -> str | None:
+    """Return the first strong document identifier in a query, or None."""
+    m = _STRONG_ID_RE.search(query or "")
+    return m.group(0) if m else None
+
+
 def _target_extension(query: str) -> str | None:
     """Extensão de arquivo citada na query (".py", ".md"), se houver.
 
@@ -1029,13 +1041,22 @@ class HybridSearch:
             hyde: Whether to use HyDE (Hypothetical Document Embeddings) for ambiguous queries
             collection: Which Qdrant collection to search (default: code_index, use "books" for papers)
         """
+        # (19/11) dense-query normalization: if the query has a strong doc id,
+        # embed just that id (extra tokens dilute the vector). Sparse/RRF/boosts
+        # still use the full query — this only changes the dense vector text.
+        dense_query = query
+        if not hyde:
+            sid = strong_query_identifier(query)
+            if sid:
+                dense_query = sid
+
         if hyde:
             query = self._hyde_expand(query)
 
         if dense_override is not None:
             dense = dense_override
         else:
-            dense = self._llm.embed(query)
+            dense = self._llm.embed(dense_query)
             if not dense:
                 return []
 
