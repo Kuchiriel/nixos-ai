@@ -13,7 +13,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 ## Datas e HEADs
 - Início da missão: 2026-11-19.
 - HEAD inicial da auditoria: `57c9176517ca2f27d8e3285deb43f009cb0a21b3` (`main`).
-- HEAD atual: `76625d44`.
+- HEAD atual: `a99f229f`.
 - Primeiro commit do projeto: `ae8789fac5cbb8b2527f5091c9b2877507f8337e` (2024-11-23, fork de `nixos-config-reborn`).
 
 ## Fases
@@ -144,6 +144,17 @@ Meus runners diretos (`dungeon.run()`) davam TimeoutExpired 1200s —
 - 10 amostras `rc1` (braço `mtp-lora` inexistente no llm-swap) arquivadas,
   nunca reportadas como resultado. Lab restaurado.
 - #22 (bloqueio do A/B) fechado: causa era runner direto + braço inválido.
+
+## shadow :8092 RESOLVIDO (19/11 15:10)
+ANTES: PID 709272 (fora de unit) em :8092 com adapter ERRADO
+(`microturn-4b-lora.gguf` 84 MB) e unit `llama-uncensored-4b.service` inativa
+→ bench noturno falhava e VRAM presa.
+DEPOIS: shadow morto por PID exato; leaked bonsai/mtp dos meus A/B também
+mortos por PID; unit declarada iniciada via `sudo -n systemctl start`
+(system scope, não --user). Verificado: MainPID=2520576, :8092 escutando,
+`/lora-adapters` = `microturn-4b-lora-v9.gguf` (3 MB) scale 1.0.
+LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
+(linha 147) — registrar no debt; lab e produção disputam a mesma unit :8092.
 
 ## Próxima tarefa exata
 1. **#22 bloqueio do A/B**: investigar por que o harness dá TimeoutExpired em
