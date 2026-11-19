@@ -806,22 +806,30 @@ class HybridIndexer:
         except Exception:
             dense_list = [None] * len(rich_list)
             batched = False
+        dropped = 0
         for i, chunk in enumerate(chunks):
             rich = rich_list[i]
-            if batched:
-                dense = dense_list[i]
-            else:
+            dense = dense_list[i] if batched else None
+            if not dense:
                 try:
                     dense = self._llm.embed(rich)
                 except Exception:
-                    # If embedding fails (e.g., input too large), try with smaller chunk
-                    smaller = chunk[:len(chunk) // 2]
-                    rich_fallback = build_rich_content(path, facts if i == 0 else [], smaller, max_chars=len(smaller))
+                    # Chunk maior que o ctx do embedder: indexa METADE do
+                    # texto, e o payload passa a guardar essa metade. Antes
+                    # o vetor vinha da metade mas o payload do chunk inteiro:
+                    # o ponto recuperava por um vetor que nao representava o
+                    # conteudo recuperado (medido 19/11, audit P1-3).
+                    chunk = chunk[:len(chunk) // 2]
+                    rich = build_rich_content(path, facts if i == 0 else [], chunk, max_chars=len(chunk))
                     try:
-                        dense = self._llm.embed(rich_fallback)
+                        dense = self._llm.embed(rich)
                     except Exception:
-                        continue  # Skip this chunk entirely
+                        dense = None
             if not dense:
+                # Sem vetor o ponto nao pode ser gravado: registra o motivo
+                # em `skipped` para o chamador nao achar que o arquivo
+                # entrou inteiro (antes o `continue` era silencioso).
+                dropped += 1
                 continue
 
             terms = sparse_terms(rich)
@@ -856,6 +864,9 @@ class HybridIndexer:
             # Route by content: ~/Books → books collection; resto → code_index
             self._store.upsert(target_collection, [point])
             last_payload = point["payload"]
+
+        if dropped:
+            self.skipped.append((path, f"chunk_dropped {dropped}/{len(chunks)}"))
 
         if last_payload is not None and _prune_on_index():
             # Opt-in (JARVIS_RAG_PRUNE_ON_INDEX=1): aposenta as versoes
@@ -923,6 +934,19 @@ class HybridIndexer:
         except IndexDeadline as e:
             print(f"index: PARCIAL — {e} apos {time.monotonic() - t0:.0f}s; "
                   f"{len(processed_files)} arquivos entraram (re-rodar completa)",
+                  file=sys.stderr, flush=True)
+        # "unchanged" e o caso normal de reindexacao incremental; o resto
+        # (quarentena, chunk pulado, ilegivel) e o que explica um arquivo
+        # que nao entrou. Sem isso o resumo so dizia quantos entraram.
+        reasons: dict[str, int] = {}
+        for _path, reason in self.skipped:
+            if reason == "unchanged":
+                continue
+            key = reason.split()[0] if reason else "unknown"
+            reasons[key] = reasons.get(key, 0) + 1
+        if reasons:
+            detail = ", ".join(f"{k}={v}" for k, v in sorted(reasons.items(), key=lambda kv: -kv[1]))
+            print(f"index: {len(processed_files)} entraram; nao entraram: {detail}",
                   file=sys.stderr, flush=True)
         return len(processed_files)
 

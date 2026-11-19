@@ -193,3 +193,65 @@ def test_hybrid_hit_dataclass() -> None:
     hit = HybridHit(path="/a.py", score=0.5, payload={"symbols": ["main"]})
     assert hit.path == "/a.py"
     assert hit.payload["symbols"] == ["main"]
+
+
+# ---------------------------------------------------------------------------
+# index_file: chunk que nao cabe no ctx do embedder (audit P1-3)
+# ---------------------------------------------------------------------------
+
+class _FakeStore:
+    def __init__(self) -> None:
+        self.upserts: list[tuple[str, list[dict]]] = []
+
+    def upsert(self, name, points):
+        self.upserts.append((name, points))
+
+    def delete_by_filter(self, *a, **kw):
+        raise AssertionError("prune nao deve rodar por default")
+
+
+class _FakeLLM:
+    """embed() falha acima de `limit` chars; embed_batch sempre falha."""
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self.seen: list[str] = []
+
+    def embed_batch(self, texts):
+        raise RuntimeError("batch off no teste")
+
+    def embed(self, text):
+        if len(text) > self.limit:
+            raise RuntimeError("input too large")
+        self.seen.append(text)
+        return [0.1, 0.2, 0.3, 0.4]
+
+
+def _indexer(tmp_path, limit: int):
+    from jarvis.core.rag import HybridIndexer
+
+    idx = HybridIndexer()
+    idx._store = _FakeStore()
+    idx._llm = _FakeLLM(limit)
+    path = tmp_path / "big.py"
+    path.write_text("x = 1\n" * 400, encoding="utf-8")  # 2400 chars, 2 chunks
+    return idx, str(path)
+
+
+def test_index_file_shrinks_chunk_and_keeps_payload_consistent(tmp_path) -> None:
+    # rich = chunk (1200) + header de proveniencia; metade (600) cabe em 800
+    idx, path = _indexer(tmp_path, limit=800)
+    payload = idx.index_file(path, force=True)
+
+    assert payload is not None  # entrou (metade do chunk cabe)
+    _name, points = idx._store.upserts[-1]
+    sent = idx._llm.seen[-1]
+    # o vetor foi calculado sobre o MESMO texto que o payload guarda
+    assert payload["content"] in sent
+    assert 500 <= len(payload["content"]) <= 800
+    assert points[0]["payload"]["content"] == payload["content"]
+
+
+def test_index_file_records_dropped_chunk_reason(tmp_path) -> None:
+    idx, path = _indexer(tmp_path, limit=10)  # nada cabe, nem a metade
+    assert idx.index_file(path, force=True) is None
+    assert idx.skipped == [(path, "chunk_dropped 2/2")]
