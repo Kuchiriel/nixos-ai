@@ -1587,16 +1587,32 @@ FILES:
     # regras daquela persona. Vira a hipotese #09 do backlog: persona por chunk
     # melhora a aprovacao no L2 com o mesmo modelo?
     _persona_block = ""
+    _persona_id = "unknown"
     try:
         from jarvis.core.persona import PersonaRegistry
-        _p = PersonaRegistry().select_for_task(task_description, "")
+        _reg = PersonaRegistry()
+        try:
+            _p = _reg.select_for_task(task_description, "")
+        except TypeError:
+            _p = _reg.select_for_task(task_description)
+        _persona_id = str(getattr(_p, "id", "") or "unknown")
         _add = (getattr(_p, "system_prompt_additions", "") or "").strip()
         if _add:
-            _persona_block = f"[PERSONA: {getattr(_p, 'name', '')}]\n{_add}\n\n"
+            _persona_block = f"[PERSONA: {getattr(_p, 'name', _persona_id)}]\n{_add}\n\n"
     except Exception:
         _persona_block = ""
     if _persona_block:
         prompt = _persona_block + prompt
+
+    # registra a persona usada (o lab le isto para virar numero no resultado)
+    try:
+        from nightwatch.platform_bridge import log_task_execution
+        log_task_execution(task_id=f"patch-{_persona_id}", persona=_persona_id,
+                           model_tier="medium", project=task_description[:40],
+                           status="persona_selected", duration_seconds=0,
+                           persona_in_prompt=bool(_persona_block))
+    except Exception:
+        pass
 
     response = call_llm_fn(prompt, 4096)
 

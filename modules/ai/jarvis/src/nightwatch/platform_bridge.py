@@ -123,6 +123,7 @@ def log_task_execution(
     tokens_used: int = 0,
     error: str = "",
     state_dir: str = None,
+    persona_in_prompt: bool = False,
 ):
     """Log task execution for observability.
 
@@ -138,6 +139,7 @@ def log_task_execution(
     entry = {
         "task_id": task_id,
         "persona": persona,
+        "persona_in_prompt": bool(persona_in_prompt),
         "model_tier": model_tier,
         "project": project,
         "status": status,
