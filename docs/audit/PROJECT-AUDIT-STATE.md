@@ -13,7 +13,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 ## Datas e HEADs
 - Início da missão: 2026-11-19.
 - HEAD inicial da auditoria: `57c9176517ca2f27d8e3285deb43f009cb0a21b3` (`main`).
-- HEAD atual: `7de768b5` (checkpoint 2026-11-19 12:02).
+- HEAD atual: `b907a442` (checkpoint 2026-11-19 12:30).
 - Primeiro commit do projeto: `ae8789fac5cbb8b2527f5091c9b2877507f8337e` (2024-11-23, fork de `nixos-config-reborn`).
 
 ## Fases
@@ -22,7 +22,7 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
 | 0 — Estado inicial / checkpoint | **CONCLUÍDA** | este arquivo + `PROJECT-AUDIT-LOG.md` |
 | 1 — Arqueologia (git/DB/docs) | **CONCLUÍDA** | `PROJECT-HISTORY.md` + `CHRONOLOGICAL-REVIEW-2026-11-19.md` |
 | 2 — Inventário arquitetural | **CONCLUÍDA (v1)** | `ARCHITECTURE-MAP.md` (medido 19/11 11:41) |
-| 3 — Auditoria do conhecimento | **CONCLUÍDA (v1)** | `KNOWLEDGE-SYSTEM-AUDIT.md` com contratos + medições |
+| 3 — Auditoria do conhecimento | **CONCLUÍDA (v1)** | `KNOWLEDGE-SYSTEM-AUDIT.md` (outra lane) + ranking medido e corrigido em `b907a442` |
 | 4 — OpenCode/contexto | **CONCLUÍDA** | `OPENCODE-CONTINUITY-AUDIT.md` (`c9397991`) |
 | 5 — NixOS/config | **CONCLUÍDA** | `NIXOS-AUDIT.md` (`a828c568`) |
 | 6 — Código/org | PARCIAL | AGENTS.md 1684→400 linhas no handoff |
@@ -63,6 +63,18 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
     chunk inteiro, e descarte silencioso — `11686c78`.
 11. Auditoria de conhecimento preservada em duas versões concorrentes:
     merge sem perder a seção da outra lane — `7de768b5`.
+12. Ranking do RAG: boost de filename vazio (+100000 para hit sem path) e
+    fusão do rerank quase simétrica anulavam o cross-encoder. Medido com 15
+    perguntas: recall@8 0.36 → 0.93, MRR 0.357 → 0.762 — `b907a442`.
+13. `docs/HANDOFF-FORMAT.md` não existia apesar do ponteiro no `AGENTS.md`
+    da raiz: criado com formato, nome e regra de supersessão.
+
+## Conflito de lanes (2026-11-19 12:30)
+`docs/audit/KNOWLEDGE-SYSTEM-AUDIT.md` tem outra sessão ativa escrevendo:
+ela reescreveu o arquivo e reverteu a correção de setas e a seção com as
+medições desta sessão. **Regra para o próximo agente: ler antes de editar
+esse arquivo e não reeditar por cima.** O registro desta sessão vive no
+`PROJECT-AUDIT-LOG.md` (append-only) e nas mensagens de commit.
 
 ## Decisões arquiteturais
 - **ADR-003** (personas): manter BLOCKED — exige convergência `dev.py`→`agent_loop.py`;
@@ -106,8 +118,9 @@ Não é um relatório único — o trabalho continua enquanto houver dívida.
    KNOWLEDGE-SYSTEM-AUDIT) e pelos `.bak-*` na raiz de `scripts/`.
 2. Fase 4: auditar `rehydrate` de ponta a ponta (ordem, dedup, limite de
    tokens) contra o que o MCP devolve hoje.
-3. Reproduzir o achado de ranking (1/5 acertos no top-8) e medir se o
-   prune muda o top-k antes de mexer em boosts/reranker.
+3. Recall da fusão para a pergunta "chars por chunk" (falha com e sem
+   rerank): ela não entra nos candidatos crus — investigar dense/sparse e o
+   cap de `top_k*4` (outra lane já claimou esse ponto: conferir antes).
 
 ## Arquivos que o próximo agente precisa ler
 - `AGENTS.md` (raiz, 1.684 linhas — ler o cabeçalho e as regras pinadas; o resto sob demanda).

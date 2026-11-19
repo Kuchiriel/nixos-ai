@@ -12,9 +12,9 @@
   - Leitura integral das fontes: 2.931 commits (`git log --reverse`), 723 sessões do
     `opencode.db` (1,9 GB, `mode=ro`), 22 coleções Qdrant, 570 notas do Vault,
     357 linhas de memória episódica, forense 09/08 e cycle reports 4-9.
-  - Síntese: `docs/NIXOS-AI-ORIGEM-CRONOLOGICA.md` (ai-mesh, commits `6e0c0d3`→`2e08594`).
+  - Síntese: `docs/NIXOS-AI-ORIGEM-CRONOLOGICA.md` (ai-mesh, commits `6e0c0d3` ate `2e08594`).
 - Problemas corrigidos (com commits no host):
-  - `d02c4371` AGENTS.md 1684→400 linhas no handoff (teste 4/4).
+  - `d02c4371` AGENTS.md 1684 para 400 linhas no handoff (teste 4/4).
   - `e119db50` model route v2 sem MAP próprio (registry × health).
   - `acdf09d5` hub: close-session no UI real (51 botões provados por `--dump-dom`).
   - `9f5678e8` Task.project sufixado — A/B recente por nível era inválida.
@@ -82,9 +82,9 @@
   - `ARCHITECTURE-MAP.md` com entrypoints/pacotes/serviços/fluxo medidos (`7b5dc985`,
     correção `d68b159a`: rehydrate é hidden-tool, funciona via `tools_call`).
   - `KNOWLEDGE-SYSTEM-AUDIT.md` com contratos reais de Memory/RAG/Qdrant/Vault
-    (`81fcb511`→`a50b1965`). RAG: 1/5 known-answer hits; depois isolado — boosts
+    (de `81fcb511` a `a50b1965`). RAG: 1/5 known-answer hits; depois isolado — boosts
     funcionam, defeito é recall da fusão híbrida.
-- Correções: RAG finding corrigido duas vezes (ranking→boost→recall) após testes isolados.
+- Correções: RAG finding corrigido duas vezes (ranking, depois boost, depois recall) após testes isolados.
 - Testes: `jarvis_rehydrate` via `tools_call` (`isError: False`); `test_boost.py`
   (CYCLE-9 sobe a 100005); `rag_retrieval_test.py` (1/5); `check_rag_indexed.py`
   (4/4 indexados); A/B 2 amostras reais (2/5, 2/5).
@@ -105,3 +105,36 @@
   `rag_retrieval_test.py` 1/5; `check_rag_indexed.py` 4/4; DB schema/tool capture.
 - Próximo: aguardar 12/12 válidas e fechar #18; investigar RAG recall da fusão.
 - Riscos: 42 uncommitted, worktrees, agentes ativos, tailnet instável.
+
+## 2026-11-19 12:30 — sessão `ses_e52816aa7ffe4zi1iV7cJ8mvtc` (3ª entrada)
+- HEAD final: `b907a442` antes desta entrada.
+- Trabalho: ranking do RAG medido com fixture próprio (15 perguntas de
+  resposta conhecida) porque o número de 5 perguntas não se reproduzia.
+- Correção `b907a442` (P1-D): o reranker respondia certo (probe :8082:
+  relevante 1.57, irrelevante -10.77) mas o pipeline o anulava.
+  - `apply_legacy_boosts`: `_FILENAME_SOVEREIGNTY` (+100000) disparava com
+    `filename in query_l`, e filename vazio (hit sem `path`, caso de
+    `books`) é substring de toda query: dois pontos de livro no top-2 com
+    score 100000.18.
+  - fusão `1/(K+i+1) + 1/(K+rrank)` com K=60 é quase simétrica: topo do
+    rerank no fim do slice empatava com o último no começo, e o desempate
+    devolvia a ordem do boost; o slice ainda recebia score ~1/61 enquanto a
+    cauda mantinha boost (2 a 100000), e `diversify_by_source` ordena por
+    score: cauda na frente.
+  - agora a ordem é a do cross-encoder (empate: boost) e o score do slice
+    fica acima da cauda, decrescente.
+- Medição (`scripts/rag-eval.py`, top-8, índice de produção, só leitura):
+  rerank off recall 0.93 / MRR 0.685; rerank on antes 0.36 / 0.357; depois
+  0.93 / 0.762. A pergunta que falha nos dois modos (chars por chunk,
+  `core/rag.py`) é recall de fusão, não rerank: fica para a lane que já
+  investiga isso.
+- `docs/HANDOFF-FORMAT.md` criado: o `AGENTS.md` da raiz aponta para ele e
+  o arquivo não existia em nenhum lugar do monorepo.
+- Conflito de lane (registro): `KNOWLEDGE-SYSTEM-AUDIT.md` é escrito por
+  outra sessão ativa, que reescreveu o arquivo duas vezes (inclusive
+  revertendo a correção de setas e a seção 6 com as medições desta sessão).
+  Decisão: não reeditar o arquivo dela; o registro fica aqui (append-only) e
+  na mensagem de `b907a442`. Headers do arquivo dela ainda têm setas.
+- Testes: `test_rag.py` + `test_rag_prune.py` + `test_memory.py` = 47 passed.
+- Próximo passo (sem colidir): Fase 6, código morto real com entrypoints
+  dinâmicos (`core/consolidate.py`, `.bak-*` em `scripts/`).
