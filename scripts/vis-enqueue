@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# vis-enqueue — enfileira comunicacao visivel para injetar na sessao ociosa do dono.
+#
+# COMO FUNCIONA (igual ao auto-wake do Termux):
+#   1. Qualquer agente/encomenda enfileira:  vis-enqueue "<tarefa>"
+#   2. Quando a sessao do dono fica ociosa, o plugin memory.js injeta
+#      via ctx.session.synthetic() na sessao — o dono VE na janela do OpenCode.
+#   3. Fila vazia = nada e injetado (sem loop infinito).
+#
+# Comandos:
+#   vis-enqueue "<tarefa>"     # enfileira (fila FIFO)
+#   vis-enqueue next           # imprime e remove a proxima
+#   vis-enqueue status         # fila + orcamento de wakes
+#   vis-enqueue budget         # interno: 0 = pode injetar, 1 = sem orcamento
+#   vis-enqueue limit N        # ajusta maximo de injecoes/hora (default 12)
+set -uo pipefail
+export PATH="$HOME/.nix-profile/bin:/run/current-system/sw/bin:$PATH"
+STATE="$HOME/.local/state/jarvis"
+QUEUE="$STATE/vis-queue.txt"
+BUDGET="$STATE/vis-wake-budget.json"
+mkdir -p "$STATE"
+[ -f "$QUEUE" ] || : > "$QUEUE"
+MAX_PER_HOUR="${VIS_MAX_PER_HOUR:-12}"
+MIN_GAP_MIN="${VIS_MIN_GAP_MIN:-3}"
+now=$(date +%s)
+cmd_enqueue() {
+  local t="$*"
+  [ -z "$t" ] && { echo "vis-enqueue: tarefa vazia" >&2; exit 2; }
+  grep -Fxq "$t" "$QUEUE" 2>/dev/null || echo "$t" >> "$QUEUE"
+  echo "vis-enqueue: enfileirado ($(wc -l < "$QUEUE") na fila) :: $t"
+}
+cmd_next() {
+  [ -s "$QUEUE" ] || exit 1
+  local t
+  t=$(head -1 "$QUEUE")
+  tail -n +2 "$QUEUE" > "$QUEUE.tmp" 2>/dev/null && mv "$QUEUE.tmp" "$QUEUE"
+  printf '%s\n' "$t"
+}
+cmd_status() {
+  local pend=0
+  if [ -s "$QUEUE" ]; then pend=$(grep -c . "$QUEUE" 2>/dev/null | head -1); pend=${pend:-0}; else pend=0; fi
+  local usados=0 ultima=0
+  if [ -f "$BUDGET" ]; then
+    usados=$(python3 -c "
+import json,sys
+try:
+    d=json.load(open('$BUDGET'))
+    print(d.get('count',0) if int(d.get('hour',0))==int($now//3600) else 0)
+except Exception: print(0)
+" 2>/dev/null)
+    ultima=$(python3 -c "
+import json
+try: print(json.load(open('$BUDGET')).get('last',0))
+except Exception: print(0)
+" 2>/dev/null)
+  fi
+  echo "vis-enqueue: fila=$pend | injecoes nesta hora=$usados/$MAX_PER_HOUR | ultimo ha $(( (now-ultima)/60 ))min"
+  [ "$pend" -gt 0 ] && sed 's/^/  - /' "$QUEUE" | head -5
+  return 0
+}
+cmd_budget() {
+  python3 - "$BUDGET" "$now" "$MAX_PER_HOUR" "$MIN_GAP_MIN" <<'PY'
+import json, os, sys
+path, now, mx, gap = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])
+d = {"count": 0, "hour": now // 3600000, "last": 0}
+try:
+    d = json.load(open(path))
+except Exception:
+    pass
+if d.get("hour") != now // 3600000:
+    d = {"count": 0, "hour": now // 3600000, "last": d.get("last", 0)}
+if d.get("count", 0) >= mx:
+    print("BLOQUEADO")
+    sys.exit(1)
+if now - int(d.get("last", 0)) < gap * 60 * 1000:
+    print("BLOQUEADO")
+    sys.exit(1)
+d["count"] = d.get("count", 0) + 1
+d["last"] = now
+json.dump(d, open(path, "w"))
+print("OK")
+sys.exit(0)
+PY
+}
+case "${1:-status}" in
+  enqueue) shift; cmd_enqueue "$*" ;;
+  next) cmd_next ;;
+  status) cmd_status ;;
+  budget) cmd_budget ;;
+  limit) echo "max por hora: ${2:-$MAX_PER_HOUR}" ;;
+  *) cmd_status ;;
+esac

@@ -32,12 +32,83 @@
 // OPENCODE_NO_IDENTITY_INJECT=1 / OPENCODE_NO_PERSONA_INJECT=1 likewise.
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 
 const JARVIS_CLI = process.env.JARVIS_CLI || "/home/nixos/projects/nixos-ai/scripts/jarvis-cli.sh";
 const JARVIS_REPO = process.env.JARVIS_REPO || "/home/nixos/projects/nixos-ai";
 const STATE_MAX_CHARS = 4200;
 const STATE_SEEN = new Set();
+
+// ── Visibilidade de comunicacoes entre agentes (igual ao Termux @teste-visivel) ──
+// Quando a sessao do dono fica ociosa, injetamos comunicacoes pendentes
+// direto na sessao via ctx.session.synthetic(). Nada de bus, nada de MCP coord_msg.
+// Tudo visivel na janela do OpenCode do dono.
+const VIS_STATE_DIR = process.env.HOME ? process.env.HOME + "/.local/state/jarvis" : "/home/nixos/.local/state/jarvis";
+const VIS_QUEUE_FILE = VIS_STATE_DIR + "/vis-queue.txt";
+const VIS_BUDGET_FILE = VIS_STATE_DIR + "/vis-wake-budget.json";
+const VIS_MAX_PER_HOUR = parseInt(process.env.VIS_MAX_PER_HOUR || "12", 10);
+const VIS_MIN_GAP_MIN = parseInt(process.env.VIS_MIN_GAP_MIN || "3", 10);
+
+function visRun(cmd, timeoutMs = 12000) {
+  try {
+    return execFileSync("bash", cmd, {
+      encoding: "utf8",
+      timeout: timeoutMs,
+      maxBuffer: 1024 * 1024,
+    });
+  } catch { return ""; }
+}
+
+function visBudgetOk() {
+  const now = Date.now();
+  let d = { count: 0, hour: Math.floor(now / 3600000), last: 0 };
+  try { d = JSON.parse(readFileSync(VIS_BUDGET_FILE, "utf8")); } catch {}
+  if (d.hour !== Math.floor(now / 3600000)) d = { count: 0, hour: Math.floor(now / 3600000), last: d.last || 0 };
+  if (d.count >= VIS_MAX_PER_HOUR) return false;
+  if (now - (d.last || 0) < VIS_MIN_GAP_MIN * 60 * 1000) return false;
+  d.count = (d.count || 0) + 1;
+  d.last = now;
+  try { mkdirSync(VIS_STATE_DIR, { recursive: true }); writeFileSync(VIS_BUDGET_FILE, JSON.stringify(d)); } catch {}
+  return true;
+}
+
+function visReadQueue() {
+  let lines = [];
+  try {
+    if (!existsSync(VIS_QUEUE_FILE)) return [];
+    lines = readFileSync(VIS_QUEUE_FILE, "utf8").split("\n").filter(Boolean);
+  } catch { return []; }
+  return lines;
+}
+
+function visPopQueue() {
+  const lines = visReadQueue();
+  if (lines.length === 0) return null;
+  const task = lines[0];
+  try {
+    mkdirSync(VIS_STATE_DIR, { recursive: true });
+    writeFileSync(VIS_QUEUE_FILE, lines.slice(1).join("\n") + (lines.length > 1 ? "\n" : ""));
+  } catch {}
+  return task;
+}
+
+function visPendingFromFrota() {
+  // Lê tarefas DISCOVERED/READY da fila da frota (task_queue-frota.json)
+  const qf = VIS_STATE_DIR + "/task_queue-frota.json";
+  try {
+    const d = JSON.parse(readFileSync(qf, "utf8"));
+    const arr = Array.isArray(d) ? d : (d.tasks || []);
+    const pend = arr.filter(t => t.status === "DISCOVERED" || t.status === "READY");
+    return pend.map(t => `[FROTA] ${t.id} — ${t.description || "(sem descricao)"}`);
+  } catch { return []; }
+}
+
+function visAllPending() {
+  // Fila de comunicacoes visiveis + tarefas da frota pendentes
+  const queue = visReadQueue();
+  const frota = visPendingFromFrota();
+  return [...queue, ...frota];
+}
 
 // (07/11) REGRA DA FROTA (medida no celular pela lane crouton-alpha): o hook
 // de contexto NAO pode spawnar CLI nem fazer rede. Cada chamada da CLI
@@ -255,6 +326,34 @@ export default {
           });
         }
       }
+    });
+
+    // ── VISIBILIDADE: injetar comunicacoes pendentes na sessao ociosa ──
+    // Igual ao Termux @teste-visivel: quando a sessao fica ociosa, injetamos
+    // comunicacoes pendentes direto na sessao via ctx.session.synthetic().
+    // Nada de bus, nada de MCP coord_msg — tudo visivel na janela do dono.
+    await ctx.session.hook("experimental.idle", async (event) => {
+      try {
+        const sid = event?.sessionID || "";
+        if (!sid) return;
+        if (!visBudgetOk()) return;
+        const pend = visAllPending();
+        if (pend.length === 0) return;
+        const task = visPopQueue();
+        if (!task) return;
+        const goalText = [
+          "/goal " + task,
+          "",
+          "COMUNICACAO VISIVEL (auto-inject) — o dono esta assistindo. Siga sem perguntar nada.",
+          "",
+          "Regras: meca antes de agir; nada de 'deve funcionar'; nao apague nada (use phone-fs propose",
+          "para mover); nao reinicie o opencode; segredos fora do bus/repo; se precisar de acao do dono,",
+          "registre no bus e siga com o resto.",
+          "Ao terminar: escreva 1 linha de status e ENFILEIRE a proxima tarefa com",
+          "vis-enqueue (ou pare se nao houver mais nada util).",
+        ].join("\n");
+        await ctx.session.synthetic({ sessionID: sid, text: goalText });
+      } catch { /* erro de plugin nunca derruba a sessao */ }
     });
   },
   // opencode 1: the object the loader (>=1.18.29) calls. Kept byte-for-byte
