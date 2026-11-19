@@ -1007,23 +1007,41 @@ async function handler(req, res) {
     if (!s) return send(400, JSON.stringify({ error: 'session required' }), 'application/json');
     try {
       const { status, json } = await oc(`/api/session/${encodeURIComponent(s)}/message`);
-      const msgs = (json?.data || []).slice(-10);
-      const lines = [];
+      const all = json?.data || [];
+      // (19/11) A API devolve as mensagens NEWEST-FIRST: o log chegava de
+      // cabeca para baixo e repetia turnos. Ordena por epoch (asc), dedupa
+      // por conteudo normalizado e devolve um log de conversa legivel.
+      const msgs = all.slice(-30);
+      const rows = [];
       for (const m of msgs) {
-        const ts = m.time?.created ? new Date(m.time.created > 1e12 ? m.time.created : m.time.created * 1000).toLocaleTimeString('pt-BR') : '';
+        const epoch = m.time?.created ? (m.time.created > 1e12 ? m.time.created : m.time.created * 1000) : 0;
+        const ts = epoch ? new Date(epoch).toLocaleTimeString('pt-BR') : '';
         const t = (m.type || '?').toUpperCase();
+        let line = '';
         if (t === 'USER') {
-          lines.push(`[${ts}] USER: ${(m.payload?.text || '').slice(0, 400)}`);
+          line = `[${ts}] USER: ${(m.payload?.text || '').slice(0, 400)}`;
         } else if (t === 'ASSISTANT') {
           const parts = (m.content || []).map(c => {
             if (c.type === 'text') return c.text;
             if (c.type === 'tool') return '⚙ tool: ' + c.name + ' ' + JSON.stringify(c.state?.input || {}).slice(0, 180);
             return '[' + c.type + ']';
           }).filter(Boolean);
-          lines.push(`[${ts}] ASST:\n${parts.join('\n').slice(0, 900)}`);
+          line = `[${ts}] ASST:\n${parts.join('\n').slice(0, 900)}`;
         }
+        if (line) rows.push({ epoch, line });
       }
-      return send(200, JSON.stringify({ session: s, status, lines }), 'application/json');
+      rows.sort((a, b) => a.epoch - b.epoch);
+      const seen = new Set();
+      const lines = [];
+      for (const r of rows) {
+        // remove so o horario antes de comparar: mesmo texto em outro minuto
+        // e repeticao real (o agente repetiu o turno) e deve sumir do log.
+        const key = r.line.replace(/^\[[^\]]+\]\s*/, '').trim().slice(0, 600);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        lines.push(r.line);
+      }
+      return send(200, JSON.stringify({ session: s, status, lines, ordered: 'asc', total: all.length }), 'application/json');
     } catch (e) { return send(502, JSON.stringify({ error: String(e) }), 'application/json'); }
   }
   if (req.method === 'GET' && url.pathname === '/api/dungeon-ab') {
