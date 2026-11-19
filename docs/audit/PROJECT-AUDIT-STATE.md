@@ -252,3 +252,10 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
   corrigido: `knowledge_schema` TEM consumidores; a divergencia estava no
   indexador. Backfill dos 275.724 pontos antigos de `code_index` fica pendente
   (escrita em producao exige autorizacao).
+- 2026-11-19 (retomada 14, lote 3): `ac26129b` (consolidacao pagina a
+  colecao, `max_points` respeitado, docstring do recall verdadeiro) e
+  `f6013355` (vault: `write_note` valida/cifra/commita, MCP e dev.py delegam,
+  checkpoint varre o repo do vault). Achado P1 medido: 276 notas do vault
+  untracked desde 13/10 num repo SEM remote; commitadas como estavam
+  (`36d5f49` no vault). Suite completa: 2.105 passed / 27 skipped / 0 failed
+  em 269s.

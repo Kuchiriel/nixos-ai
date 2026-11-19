@@ -65,6 +65,40 @@ usa apenas o ID como dense query (sparse/boosts intactos). Verificado com
 `HybridSearch` direto: 4/4 frases no top-4 (antes 1/4 no top-10);
 `test_rag_identifier.py` 3/3.
 
+### P1 — Vault: a camada "durável" não estava durável (medido 19/11)
+O repo do vault (`~/.local/state/jarvis/vault`) **não tem remote** e tinha
+**276 notas untracked + 1 modificada** desde 2026-10-13, contra 570 notas
+no disco. Causa medida, em três escritores independentes:
+1. `_handle_vault_write` (MCP, o caminho que os agentes usam) gravava e
+   retornava "Note saved" **sem commitar** — só `summarize()` fazia
+   `git add -A` + commit.
+2. `cli/dev.py` `vault_write` era pior: escrevia direto em
+   `vault_dir/"<name>.md"` **sem `vault_cipher`** (nota em texto puro num
+   vault cifrado), **sem validar nome** (traversal) e **sem commit**.
+3. `scripts/agent-checkpoint.sh` commitava só `basename` do handoff que ele
+   mesmo escrevia, então nota de qualquer outra via ficava de fora para
+   sempre.
+**Corrigido em `f6013355`**: `MemoryVault.write_note()` centraliza
+validação, cifra e commit por caminho; MCP e dev.py delegam; o checkpoint
+faz `add -A` **dentro do repo do vault** (separado do monorepo). As 276
+notas foram commitadas como estavam (`36d5f49` no vault), auditoria de
+segredo antes (nenhum padrão de chave/PEM nas 276).
+
+### P2 — Duas consolidações com fronteiras diferentes (documentado)
+`core/consolidate.py` é **detector read-only** (merge/supersede/heat, sem
+mutar); `EpisodicMemory.consolidate_memories` é o **aplicador** que marca
+`superseded`/`superseded_by` (nunca apaga) e é o que o timer 03:00 roda com
+`--apply`. Não são duplicatas: um diagnostica, o outro aplica. Ficam como
+estão; o que faltava era o aplicador enxergar a coleção inteira.
+
+### P1 — Consolidação noturna via um terço da memória (corrigido 19/11)
+`consolidate_memories` fazia **um** scroll de `limit=1000` e ignorava o
+parâmetro `max_points`: com 3.105 pontos em `memories`, dois terços nunca
+eram vistos e o timer revisitava sempre o mesmo prefixo por id. Corrigido em
+`ac26129b` (scroll paginado até `max_points`, `scanned` no resultado). O
+docstring do `recall` prometia dedup ">95% similar" que o código não fazia
+(dedup exato normalizado); agora diz a verdade e aponta a consolidação.
+
 ## 4. O que NÃO é problema (verificado)
 - `stable_id`: SHA-256 63 bits, não CRC32 (CRC32 foi substituído no P0-1).
 - `_stable_id` da memória ignora timestamp de propósito ⇒ upsert idempotente.
@@ -72,8 +106,15 @@ usa apenas o ID como dense query (sparse/boosts intactos). Verificado com
 - Vault cifra com Fernet opcional; `pessoal_*` coleções são produção, intocáveis.
 
 ## 5. Próximos passos (Fase 3)
-1. Teste de recuperação RAG com perguntas de resposta conhecida nos doc reais
-   (ex.: "qual o veredito do CYCLE-9?" → `docs/audit/CYCLE-9-REPORT.md`).
-2. Verificar se `rag.py` reindexa quando o git muda (incremental) — procurar
-   `content_hash` no caminho de indexação.
-3. Decidir (com dono) se decisões validadas viram `remember_fact(kind=decision)`.
+1. ~~Teste de recuperação RAG com perguntas de resposta conhecida~~ fechado:
+   `RAG-EVAL.md` (15 perguntas, recall@8 0,93, MRR 0,762; `b907a442`).
+2. ~~Reindexação incremental~~ verificado: `index_file` compara
+   `source_sha256`/`content_hash` e `rag-prune` remove o que sumiu.
+3. ~~Payload canônico no índice~~ corrigido (`8834e98c`): o indexador agora
+   preenche os campos que os payload indexes declaram. **Backfill** dos
+   275.724 pontos antigos continua pendente (reindexar = escrita em
+   produção; exige autorização).
+4. Decidir (com dono) se decisões validadas viram `remember_fact(kind=decision)`
+   (hoje a memória é só de falhas: 352 `failure`/`fix`, 0 decisão).
+5. Vault: decidir destino do remote (hoje local-only ⇒ um disco perdido
+   apaga tudo; o commit resolve rollback, não backup).
