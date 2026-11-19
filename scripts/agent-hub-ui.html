@@ -344,12 +344,14 @@ async function loadAgents(){
   try{ d = await (await api('/api/agents')).json(); }catch(e){ return; }
   const g = $('#grid');
   if(!(d.agents||[]).length){ g.innerHTML='<div class="card tiny dim">nenhum agente no roster</div>'; return; }
-  $('#agCount').textContent = (d.agents||[]).length + ' no roster';
+  const noRoster = (d.agents||[]).filter(a=>!a.unclaimed).length;
+  $('#agCount').textContent = noRoster + ' no roster · ' + (d.agents||[]).length + ' sessões';
   g.innerHTML = d.agents.map(a=>{
     const tags=[];
     tags.push(`<span class="tag ${a.status}">${a.status}</span>`);
     if(a.model) tags.push(`<span class="tag model" title="modelo em uso">${esc(a.model)}</span>`);
     if(a.persona) tags.push(`<span class="tag pers" title="persona MBTI">${esc(a.persona)}</span>`);
+    if(a.unclaimed) tags.push(`<span class="tag idle" title="sessão viva no servidor, sem claim no roster">sem dono</span>`);
     if(a.lane && a.lane!=='-') tags.push(`<span class="tag" title="lane">${esc(a.lane)}</span>`);
     if(a.host) {
       const h = typeof a.host === 'object' ? (a.host.hostname || JSON.stringify(a.host)) : a.host;

@@ -105,7 +105,26 @@ async function agentsJSON() {
              note: a.note || null, context: a.context || null, host: a.host || null,
              aliases: a.aliases || null };
   });
-  rows.sort((x, y) => (y.busy ? 1 : 0) - (x.busy ? 1 : 0) || String(x.codename).localeCompare(String(y.codename)));
+  // (19/11, medido) A API /api/session devolve TODAS as sessoes (50), mas o
+  // hub so mostrava as que estao no roster (6): agentsJSON mapeava roster().
+  // Quem abre 50 sessoes nao via 44 delas no painel. Agora as sessoes sem
+  // dono no roster entram como linha propria (unclaimed), com o titulo como
+  // nome, para o painel refletir o servidor.
+  const cobertas = new Set(roster().map((a) => a.session).filter(Boolean));
+  for (const [sid, s] of map) {
+    if (cobertas.has(sid)) continue;
+    const upd = s.time?.updated ?? null;
+    const busy = upd ? (Date.now() - upd < BUSY_MS) : null;
+    const m = s.model ? (typeof s.model === 'object' ? (s.model.modelID || s.model.id) : s.model) : null;
+    rows.push({
+      name: s.title || sid, codename: null, lane: '-', session: sid,
+      busy, updated: upd, status: busy ? 'busy' : 'idle',
+      persona: null, model: m, note: 'sessao sem dono no roster',
+      context: null, host: s.location?.directory || null, aliases: null,
+      unclaimed: true,
+    });
+  }
+  rows.sort((x, y) => (y.busy ? 1 : 0) - (x.busy ? 1 : 0) || String(x.codename || x.name).localeCompare(String(y.codename || y.name)));
   return { servers: { opencode: oc_ok }, agents: rows };
 }
 const TEXT_MAX = 2000;
