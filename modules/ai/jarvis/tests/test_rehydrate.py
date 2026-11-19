@@ -220,3 +220,24 @@ def test_rehydrate_includes_audit_checkpoint(tmp_path, monkeypatch) -> None:
     assert "fazer X" in out
     monkeypatch.setenv("JARVIS_AUDIT_STATE", str(tmp_path / "missing.md"))
     assert _rehydrate_audit() == ""  # missing file -> empty block
+
+
+def test_handle_rehydrate_surfaces_audit_checkpoint(M, tmp_path, monkeypatch):
+    """MCP rescue must include the audit checkpoint when the file exists (19/11 gap fix)."""
+    f = tmp_path / "PROJECT-AUDIT-STATE.md"
+    f.write_text("# PROJECT-AUDIT-STATE\n## Próxima tarefa\nfazer Y\n", encoding="utf-8")
+    monkeypatch.setenv("JARVIS_AUDIT_STATE", str(f))
+    M._REHYDRATE_CALLS.clear()
+    M._REHYDRATE_SEEN.clear()
+    out = M._handle_rehydrate({"task": "auditoria", "include": "handoff"})
+    assert "## AUDIT CHECKPOINT" in out
+    assert "fazer Y" in out
+
+
+def test_handle_rehydrate_no_audit_when_file_missing(M, tmp_path, monkeypatch):
+    """Missing audit file -> no audit block (zero behavior change)."""
+    monkeypatch.setenv("JARVIS_AUDIT_STATE", str(tmp_path / "nope.md"))
+    M._REHYDRATE_CALLS.clear()
+    M._REHYDRATE_SEEN.clear()
+    out = M._handle_rehydrate({"task": "auditoria", "include": "handoff"})
+    assert "## AUDIT CHECKPOINT" not in out

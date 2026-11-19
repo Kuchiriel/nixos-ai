@@ -2296,6 +2296,14 @@ def _handle_rehydrate(args: dict[str, Any]) -> str:
         blocks.append("## QUEUE (top — the real current state)\n" + _rehydrate_queue())
     if not wanted or "handoff" in wanted:
         blocks.append("## HANDOFF (most recent — atomic)\n" + _rehydrate_handoff())
+    # (19/11) continuous-audit checkpoint — optional, env-configurable.
+    # Same contract as _rehydrate_state: the MCP rescue must surface the
+    # mission checkpoint too, otherwise an agent calling jarvis_rehydrate
+    # starts 2 days behind the real state (measured gap: commit 18d9433e
+    # only fixed the plugin path, not this one).
+    audit = _rehydrate_audit()
+    if audit and (not wanted or "audit" in wanted or "handoff" in wanted):
+        blocks.append("## AUDIT CHECKPOINT (mission state)\n" + audit)
     if not wanted or "memories" in wanted:
         blocks.append(f"## MEMORIES (request: {task})\n" + _rehydrate_memories(task, limit))
     if not wanted or "lessons" in wanted:
