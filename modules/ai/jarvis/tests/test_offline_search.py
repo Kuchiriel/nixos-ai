@@ -78,8 +78,18 @@ class _FakeSearch:
 
 
 def test_offline_search_handler_names_the_source_file(monkeypatch) -> None:
+    # (19/11) offline_search lives in jarvis.core.offline since c514a1ba;
+    # patching rag.HybridSearch made the test hit the REAL corpus and assert
+    # a fake path — a false failure that masked the real contract.
+    # (19/11) offline_search tries the local FTS corpus FIRST; to test the
+    # HybridSearch fallback contract we must force FTS to return no hits.
+    # The function imports HybridSearch from jarvis.core.rag INSIDE its body.
+    import jarvis.core.offline as offline
+    import jarvis.core.offline_fts as ofts
     import jarvis.core.rag as rag
 
+    monkeypatch.setattr(ofts, "corpus_path", lambda *a, **k: None)
+    monkeypatch.setattr(offline, "_dense_top_score", lambda *a, **k: 1.0)
     fake = _FakeSearch([_FakeHit("data/offline/kiwix-water-x.md", "boil the water")])
     monkeypatch.setattr(rag, "HybridSearch", lambda config=None: fake)
 
