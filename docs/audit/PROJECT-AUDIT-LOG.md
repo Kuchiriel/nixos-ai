@@ -430,3 +430,35 @@
   foram re-testados (`test_memory` 20, `test_vault`+cipher+mcp 27,
   `test_rehydrate` 17, `test_consolidate` 14, e 150 no conjunto com
   `test_devtools`/runtime/offline). Nenhuma falha.
+
+## 2026-11-19 — retomada 14, lote 5 (switch root, HM backup, unit malformada)
+- HEAD inicial da janela: `136fc5ee`; HEAD final: `7b9dd96a` (1 arquivo,
+  +5/-7). Nenhum `git add -A`; staged=0 antes e depois de cada rebuild.
+- Triage dos 8 testes falhos: contratos obsoletos, sem regressão de produto.
+  Suíte: 2.104 passed / 0 failed / 27 skipped. Contratos V2/API atualizados
+  em 7 testes (`/prompt` com `delivery=steer|queue`, mocks de `offline_search`,
+  roster liveness API-first, reranker, p5 state machine).
+- Drift corrigido em `model_registry.py`: `_FALLBACK` tinha `qwen30b-moe` e
+  `uncensored-35b-q4kp` mortos e faltava `uncensored-4b-code` (risco de unit
+  errada no heal). Fonte de verdade: `/etc/jarvis/model-registry.json`.
+- `nixos-rebuild switch` como usuário falha no `nix-env --set` com
+  `Permission denied` em `/nix/var/nix/profiles/.0_system` (dir root:root 755).
+  `sudo -n nix-env ... --set` direto: rc=0. Switch com `sudo -n env` + NIX_PATH:
+  rc=0 somente depois dos dois bloqueios abaixo.
+- HM: `backupFileExtension = "backup"` encontrou `opencode.json.backup` e
+  abortou (`would be clobbered by backing up`). Quarentena com manifesto
+  (23 itens) antes de qualquer remoção — regra P0/AGENTS.
+- HM (causa real, depois do backup): `duplex-voice.service` gerada com
+  `ExecStartPre` multilinha → systemd `expected entry key name but got '/'
+  at line 6, column 2`. A unit solta legada usava `;` em uma linha.
+  `7b9dd96a` corrigiu `waitPort`; prova: `nix eval
+  .#nixosConfigurations.nitro-v15.config.home-manager.users.nixos.systemd.user.services.duplex-voice.Service.ExecStartPre`
+  devolve duas strings sem newline, e o switch real termina rc=0.
+- Exclusividade de VRAM: `llama-uncensored-4b-code.service` (:8096, commit
+  `919c74d9`) e `llama-uncensored-4b.service` (:8092) são ambas enabled; o
+  `llama-vram-guard 4200` matou a :8092 no switch. Recuperado com stop da
+  code + start da voice. Pendente: tornar a exclusividade determinística no
+  boot/rebuild (hoje é corrida de guard).
+- Evidência final: `home-manager-nixos.service` active; unit de usuário é
+  symlink do store; `duplex-voice.service`, `vpn-guard.timer`, :8092 active;
+  `/health` `{"status":"ok"}`; LoRA v9 scale 1.0; staged=0.

@@ -268,3 +268,29 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
   wurm-*). Validado por `nix eval` do flake: timer e as duas activations
   aparecem. `a388c7a0` fez o bloco de auditoria do rehydrate entregar HEAD
   vivo + "proxima tarefa" + "bloqueios" (antes eram 14 linhas de cabecalho).
+- 2026-11-19 (retomada 14, lote 5 — switch P0): HEAD final `7b9dd96a`.
+  Causa raiz do `error: creating symlink "/nix/var/nix/profiles/.0_system":
+  Permission denied` medida: `nixos-rebuild switch` herdado como uid 1000
+  (`nixos`) chama `nix-env --set`; `/nix/var/nix/profiles` é root:root 755
+  (`sudo touch` prova que root escreve). Correção: rodar o switch com
+  `sudo -n env ... NIX_PATH=... timeout 700 nixos-rebuild switch --flake .#nitro-v15`
+  (snapshot/restore de `.git/index`). Segundo bloqueio: HM abortou por
+  `opencode.json.backup` já existir (`backupFileExtension = "backup"`) —
+  23 arquivos `*.backup` arquivados com MANIFEST em
+  `~/.local/state/jarvis/patch-backups-2026-11-19/hm-backup-collisions/`.
+  Terceiro bloqueio (real): a unit gerada `duplex-voice.service` tinha
+  `ExecStartPre` multilinha e o systemd fechava com `expected entry key name
+  but got '/' at line 6, column 2`. `7b9dd96a` reescreveu `waitPort` para
+  comando de uma linha com `;`; `nix eval` confirmou zero newlines.
+  Estado final MEDIDO: switch rc=0; `home-manager-nixos.service` active;
+  `~/.config/systemd/user/duplex-voice.service` é symlink para
+  `/nix/store/cz5v0fv...-duplex-voice.service` e está active; `vpn-guard.timer`
+  active; `llama-uncensored-4b.service` (:8092) active com LoRA v9 scale 1.0 e
+  `/health` ok; `llama-uncensored-4b-code.service` (:8096) inactive;
+  staged=0. Efeito colateral corrigido no caminho: os dois perfis do 4B-MTP
+  competem por VRAM e o `llama-vram-guard` (4200) matou o :8092; restabelecido
+  com stop do perfil code + start do perfil voice.
+- 2026-11-19 (retomada 14, lote 5): 23 `.bak` próprios arquivados fora do repo
+  com `MANIFEST.json` (sha256); `git worktree prune -v` removeu
+  `worktrees/ack-patch-wt`; work de outros agentes intacto (25 itens);
+  `nixos-rebuild build` rc=0 em 116 s e 96 s com staged=0 antes/depois.
