@@ -41,4 +41,11 @@ fora do top-8). Antes do fix eram 1/5 — melhora, mas **abaixo do gate ≥4/5**
 Causa provável: o cross-encoder com 350 chars/doc desordena documentos
 longos (já observado em `rag.py:1111` para k=8). Próximo: aumentar o trecho
 de documento fornecido ao reranker ou desligá-lo quando houver ID forte.
-NÃO alterar o rerank sem novo A/B.
+Hipótese rejeitada: desligar o rerank quando há ID forte não mudou o
+resultado (2/5) — os 3 misses não têm ID forte na query. Mudança revertida.
+
+## 7. Estado final do gate
+- Dense fix (`de1cbf66`): **4/4** com `use_rerank=False`.
+- Rerank ON (default): **2/5** — gate ≥4/5 NÃO atingido.
+- Causa dos 3 misses restantes: provável cross-encoder com 350 chars/doc em
+  documentos longos. Próximo A/B: aumentar o trecho do documento no rerank.
