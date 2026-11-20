@@ -921,3 +921,14 @@
   leitores citados existem (`jobs-audit`, plugin memory-termux, install.sh,
   TURNO-AUTONOMO-17-11.md) e o backup `entropy-seen.json.bak` tem original vivo.
 - Nenhum órfão real; nada movido ou apagado nesta revisão.
+
+### 2026-11-20 — auto-wake: snapshot de precisão por wake
+- `auto-improve` agora tem `--snapshot`: extrai as métricas do `--audit` e
+  grava 1 linha JSONL em `~/.local/state/auto-improve-precision.jsonl`
+  (wakes desde o fix, novos enqueues, executados, precisão, decisão, reason).
+  Idempotente por `last_wake_epoch` — 2ª chamada no mesmo wake não duplica.
+- Hook `experimental.idle` chama o snapshot logo após admitir o prompt
+  sintético; sintaxe validada com `node --check` no host, sem restart.
+- Prova local: 1 linha gravada, 2ª chamada reportou "já registrado";
+  medição atual: 5/10 wakes, 0 enqueues novos, `KEEP_MAX_REMOTE_1`.
+- ai-mesh `4bb2462` pushed; nenhum dado apagado, nenhum limite alterado.
