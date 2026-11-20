@@ -890,3 +890,12 @@
   agora reporta 0 órfãos e 12 mantidos. ai-mesh `843f543` pushed.
 - Tarefa falsa removida da fila com backup; fila=2. Nenhum dado apagado,
   nenhum restart do opencode, nenhuma escrita em produção.
+
+### 2026-11-20 — auto-wake: precisão pós-correção
+- Medido com `auto-improve --audit`: desde o commit da validação central
+  (`29f3d13`, 08:45:50-03) houve **2 wakes** (alvo 10), **0 enqueues novos**
+  do gerador e precisão `null` na janela pós-correção. Decisão registrada:
+  `KEEP_MAX_REMOTE_1` — ampliar sem 10 wakes e precisão >=0,8 seria chute.
+- O próprio `--audit` agora informa `since_fix.wakes`, `new_enqueues`,
+  `precision`, `decision` e `reason`, para que a próxima sessão apenas leia
+  a evidência. Canônico ai-mesh `af08fce`; nenhum limite foi alterado.
