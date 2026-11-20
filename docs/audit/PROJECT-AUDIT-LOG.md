@@ -1033,3 +1033,13 @@
 - Resultado: 5/5 enqueues novos registrados com source/texto, snapshot 11 gravado.
   `--audit`: 15 wakes, 5 enqueues, 0 executados, precisao 0.0 ->
   **KEEP_MAX_REMOTE_1** (gate 0.8 nao atingido). ai-mesh `1c7889d`.
+
+### 2026-11-20 — auto-wake: painel final do ciclo de auto-melhoria
+- Consolidado `docs/audit/AUTO-IMPROVEMENT-DASHBOARD-2026-11-20.md`: 16 wakes,
+  5 enqueues reais, 0 executados, precisão 0,0 -> KEEP_MAX_REMOTE_1; 11 snapshots;
+  hook sem stall por ~77 min; 9/14 sequências idle completas e 5 bloqueios
+  explicados pelo gap de 180 s; lab api 5/5, bonsai em curso, mtp pendente;
+  suíte 2117 passed.
+- Próximo limite útil: proveniência `git_commit` no RAG e reexecução do
+  `sync-vault.sh` para 5 AGENTS.md stale — não ampliar MAX_REMOTE antes das
+  5 tarefas reais serem executadas com precisão >=0,8.
