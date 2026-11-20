@@ -1102,3 +1102,13 @@
   4 failed/1 passed e patch vazio — os 3 braços falharam a tarefa, não infra.
 - `docs/audit/L2-MATRIX-2026-11-20.md` registra a matriz e o critério corrigido;
   laboratório pausado e GPU devolvida. L1/L3 seguem pendentes.
+
+### 2026-11-20 — auto-wake: streams de memória declarados
+- `manifests/termux.json` agora tem `memory_streams` com 3 canônicos medidos:
+  termux (409 linhas, sha `379e3f1c…`), nitro-v15 (11, `e107d868…`, host Linux)
+  e nixos-ai (1, `022a4a13…`, host Linux com esquema `timestamp/errors`).
+- Espelhos divergentes registrados sem sobrescrever: Linux termux 407 (-2),
+  celular nitro-v15 7 (-4), celular nixos-ai 1 com `schema_mismatch`.
+- `memory_canonical`/`memory_mirrors` legados atualizados para o stream termux;
+  `manifest-check --parity`: memory ok, sha declarado == sha real, 0 conflitos.
+- ai-mesh `7f14c39`; nada apagado ou restaurado.
