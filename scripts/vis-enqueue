@@ -46,7 +46,7 @@ cmd_next() {
 cmd_status() {
   local pend=0
   if [ -s "$QUEUE" ]; then pend=$(grep -c . "$QUEUE" 2>/dev/null | head -1); pend=${pend:-0}; else pend=0; fi
-  local ultima_min=0 usados=0 ultima=0
+  local ultima_min=0 usados=0
   if [ -f "$BUDGET" ]; then
     usados=$(python3 -c "
 import json,sys
@@ -112,5 +112,7 @@ case "${1:-status}" in
     fi
     ;;
   limit) echo "max por hora: ${2:-$MAX_PER_HOUR}" ;;
-  *) cmd_status ;;
+  # A forma documentada e `vis-enqueue "<tarefa>"`. Antes esta rota caia em
+  # `*) cmd_status`: imprimia o status e descartava a tarefa silenciosamente.
+  *) cmd_enqueue "$*" ;;
 esac
