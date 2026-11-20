@@ -868,3 +868,14 @@
 - Novo `auto-improve --audit` reporta enqueues, execuções, fila, limites e
   precisão sem escrever; `--dry-run` e `--once` continuam idempotentes.
 - Canônico ai-mesh commitado/pushed `29f3d13`; `house docs --check` OK (15).
+
+### 2026-11-20 — auto-wake: resumo dos 113 A/B suspeitos
+- Resumo lido do índice + `results.jsonl` (somente leitura): api 10 (L1 4/L2 4/L3 2),
+  bonsai 53 (4/45/4), mtp 50 (4/44/2). L2 domina: 93/113.
+- Checker: 12 registros com 100% passed, 97 com alguma falha, 5 `infra`
+  (4 sem `rc`). Mesmo os 12 "passed" são inválidos: `Task.project` fazia o
+  harness ler 0 tarefas.
+- Plano proposto sem reexecutar: P1 L2 primeiro (3 células × 5 amostras = 15),
+  P2 L1/L3 (6 × 5 = 30), estabilizar swap/VRAM antes de medir e exigir
+  `discovery_stats.returned>0`, checker de referência 5/5 e 5 amostras/célula.
+- Relatório `docs/audit/AB-SUSPECT-SUMMARY-2026-11-20.md`; TECHNICAL-DEBT linkado.
