@@ -1179,3 +1179,20 @@
   gate (L1/L3, 30 medições). Summaries em `~/logs/ab_loop/l2-*-summary.json`
   conferem: api 4 checker+1 review, bonsai 5 review, mtp 4 checker+1 review.
 - Nenhuma reescrita necessária; nenhuma medição reexecutada.
+
+### 2026-11-20 — auto-wake: paridade de scripts e consolidacao de runtime
+- Sessao: retomada autonoma (dono ausente). HEAD inicial `cb76c0b8`, HEAD final
+  `cb76c0b8`. Agente: Crouton Alpha (Termux). Fase 7/8 (implementacao + validacao).
+- Problema: `manifest-check --parity` reportava 66 divergencias de hash sem
+  separar adaptacao de host de drift real; Uma copia stale de `entropy-watch`
+  no runtime usava schema morto apos canonicalizacao (`f8d7855`).
+- Corrigido: `semantic_hash` + `is_shim` no `manifest-check`; shim permanente em
+  `~/bin/entropy-watch`; 8 scripts promovidos ao canonico com `TA_LINUX_*`.
+- Arquivos: `ai-mesh/shared/scripts/{9 arquivos}`, `ai-mesh/bin/{manifest-check,entropy-watch}`,
+  `docs/ARMADILHAS.md`, `memory/episodic/termux.jsonl`.
+- Testes: py_compile dos 9 scripts; `bash -n` dos scripts shell; fixture de
+  divergencia artificial detectada; help de `lab`/`entropy-watch` nos 2 hosts;
+  `house docs --check` 18/18; `repo-integrity-check` OK.
+- Commits: ai-mesh `ded5b4c`, `08b56b1` (ambos pushed). Nixos-ai: este LOG/STATE.
+- Proximo passo: seguir a fila auto-wake; proximo item concreto e auditar
+  segredos na config declarada e sincronizar espelhos de memoria divergentes.

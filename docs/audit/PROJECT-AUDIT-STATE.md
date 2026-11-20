@@ -288,9 +288,14 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
    regenerado pelo gerador canônico em `9f8d1537` (`--check` limpo).
    **Não** rodar `--start-mtp code` sem permissão (derruba a voz via
    `Conflicts=` — comportamento correto).
-5. **EM CURSO**: auditoria de sync AGENTS/vault/memory/RAG/plugins e contratos
-   Termux/Linux/Windows (2 agentes de apoio rodando). Corrigir gaps medidos,
-   validar com testes/rebuild autorizado e atualizar este checkpoint.
+5. **FEITO nesta janela (20/11)**: paridade `~/bin` x `shared/scripts`
+   consolidada — 66 divergencias brutas classificadas em 54 adaptacoes, 12
+   semanticas e, apos correcao, **0 reais**. `entropy-watch` stale (schema
+   antigo `down`/`dead`) virado shim; 8 scripts promovidos ao canonico com
+   overrides `TA_LINUX_*`; ai-mesh `ded5b4c`/`08b56b1`. Ver secao abaixo.
+6. **EM CURSO**: auditoria de sync AGENTS/vault/memory/RAG/plugins e contratos
+   Termux/Linux/Windows. Corrigir gaps medidos, validar com testes/rebuild
+   autorizado e atualizar este checkpoint.
 
 ## Arquivos que o próximo agente precisa ler
 - `AGENTS.md` (raiz: cabecalho e regras pinadas; detalhes sob demanda).
@@ -402,3 +407,22 @@ Estado MEDIDO agora:
   serviço real foi reiniciado no teste; `duplex-voice.service` segue active.
 - Novo bloqueio descoberto: `jarvis_rehydrate` NÃO está disponível como tool
   nesta sessão (`mcp search rehydrate` vazio); o checkpoint substitui a tool.
+
+## Paridade de scripts consolidada (20/11 — retomada automated)
+- `manifest-check --parity` comparava hash bruto e reportava 66 divergencias;
+ 85% eram adaptacao de host, mas entre as 12 "semanticas" havia um bug real:
+ `~/bin/entropy-watch` (06:44) usava `down`/`dead` enquanto o canonico
+ (`f8d7855`, 11:47) ja usava `servicos[].vivo`/`fora_do_ar`.
+- Correcao na origem: shim intencional em `~/bin/entropy-watch` (mesmo padrao
+ de `auto-improve`); `semantic_hash` colapsa wrappers de variavel com valor
+ default (inclusive aninhados) e `os.environ.get` ao literal antes de normalizar
+ IP/usuario/marca; `is_shim` separa adaptacao de logica.
+- Consolidacao: 8 scripts (`api-contract`, `fleet-doctor`, `lab`, `mcp`,
+ `oc-doctor`, `owner-brief`, `session-clients`, `wake-direct`) promovidos ao
+ canonico com os overrides de host — o canonico agora e portatil nos dois hosts.
+- Evidencia: 0 divergencias reais (65 esperadas documentadas), teste com fixture
+ detecta divergencia logica artificial, `lab --help`/`entropy-watch --help` OK
+ no celular e no Linux, `house docs --check` OK (18), ambos os clones ai-mesh
+ sincronizados. HEAD nixos-ai nesta janela: `cb76c0b8`.
+- Risco resolvido: nao usar `git add -A`; commits com `--only` e pre-commit
+ `repo-integrity-check` OK (sem conflict markers, JSONL valido).
