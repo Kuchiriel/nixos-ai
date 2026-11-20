@@ -641,3 +641,22 @@
 - Commits: `10aaa0d4` (mock/fixtures/redteam), `ad836d49` (checker sem viés).
 - Próximo: executar o desafio com a frota real em sandbox e medir gates por
   agente; não rodar nada contra produção.
+
+### 2026-11-20 — retomada 20 (frota, automação do desafio)
+- Correção P0: o guard bloqueou os 4 spawns porque o texto da task embutia
+  a string "ignore previous instructions" do fixture. O task agora só passa
+  o **caminho** do fixture; o agente lê e trata o conteúdo como dado não
+  confiável. Prova: `agent_guard.py --scan` limpo para as 4 personas.
+- Runner promovido de one-shot para **feature da frota**:
+  `scripts/fleet-challenge.py` com `run|status|score|report`, estado durável
+  em `~/.local/state/jarvis/fleet-challenge/`,TOOLS-INDEX regenerado pelo
+  gerador canônico e endpoint read-only `GET /api/fleet-challenge` no hub.
+- Hub recarregado (`agent-hub.service active`); endpoint responde
+  `not-started` antes da corrida. One-shot antigo removido (git rename).
+- Corrida automática launchada em background:
+  `python3 scripts/fleet-challenge.py run --timeout-min 30 --poll-sec 30`.
+  4 providers测量 como funcionais (cloudflare, gemini, kilocode, ovhcloud),
+  personas distribuídas sem escolha humana, prompt cego.
+- Validação prévia: 17 testes do pack passam; checker CLI `passed: true`.
+- Estimativa: spawn sequencial 8–16 min + coleta até 30 min; teto prático
+  ~45 min. Monitoramento pelo próprio comando `status` e pelo hub.
