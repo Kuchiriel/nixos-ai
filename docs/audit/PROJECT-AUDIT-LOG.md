@@ -798,3 +798,18 @@
 - `phone-fs` passou a enxergar `~/ai-mesh` (allowlist) para movimentos
   reversiveis; backup dentro do repo movido para quarentena com manifesto.
 - Nao commitado: `memory/episodic/termux.jsonl` (modificado por outra lane).
+
+### 2026-11-20 — auto-wake: paridade de scripts / house docs
+- 70 divergências de hash classificadas por evidência (sha, mtime, diff,
+  shebang, marcadores TA_*/identidade). Nenhuma exige dono.
+- Classes finais: 59 shebang_only, 5 env_adaptation, 4 runtime_adaptation,
+  2 identity_adaptation. Zero implementation_drift.
+- Convergidas com backup e shebang do destino: manifest-check (canonico ->
+  runtime), phone-fs, state-audit, jobs-audit (runtime -> canonico). Smoke
+  `--help` OK nos quatro, nos dois lados.
+- `manifest-check --parity`: memoria canonica ok (sha 5f8bdf34…, 407 linhas),
+  64 divergencias restantes todas esperadas e classificadas.
+- ai-mesh commit `e35610b` pushed; doc `docs/script-parity-2026-11-20.md`.
+- Linux: `house docs --check` estava desatualizado (3 arquivos); regenerei com
+  o canonico e agora OK (13 arquivos). Nao commitei la: o clone esta em rebase
+  de outra lane (`HEAD (no branch, rebasing main)`); seguir apos o rebase.
