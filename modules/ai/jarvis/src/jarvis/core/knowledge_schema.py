@@ -166,10 +166,51 @@ def _create_payload_index(store: Any, name: str, field: str, schema_type: str) -
         pass  # index já existe → idempotente
 
 
+def git_provenance() -> dict[str, str]:
+    """HEAD/branch do repo, para provar de qual commit veio cada ponto.
+
+    Read-only, com timeout e fallback explícito: proveniência "unknown" é
+    melhor que chutar. Env override permite testes sem depender do .git.
+    """
+    import os
+    import subprocess
+    from functools import lru_cache
+
+    @lru_cache(maxsize=1)
+    def _get() -> tuple[str, str]:
+        commit = os.environ.get("JARVIS_GIT_COMMIT", "")
+        branch = os.environ.get("JARVIS_GIT_BRANCH", "")
+        if commit and branch:
+            return commit, branch
+        root = next((p for p in __import__("pathlib").Path(__file__).resolve().parents
+                     if (p / ".git").exists()), None)
+        if root is None:
+            return (commit or "unknown", branch or "unknown")
+        for key, args in (("commit", ["rev-parse", "HEAD"]),
+                          ("branch", ["rev-parse", "--abbrev-ref", "HEAD"])):
+            if locals()[key]:
+                continue
+            try:
+                out = subprocess.run(["git", "-C", str(root), *args],
+                                     capture_output=True, text=True, timeout=5)
+                if out.returncode == 0:
+                    if key == "commit":
+                        commit = out.stdout.strip()
+                    else:
+                        branch = out.stdout.strip()
+            except Exception:
+                pass
+        return (commit or "unknown", branch or "unknown")
+
+    c, b = _get()
+    return {"commit": c, "branch": b}
+
+
 def build_payload(base: dict[str, Any], *, knowledge_domain: str = "",
                   source_type: str = "", source_id: str = "",
                   canonical_path: str = "", filename: str = "",
                   title: str = "", repo: str = "", git_commit: str = "",
+                  branch: str = "",
                   source_sha256: str = "", source_modified_at: float | None = None,
                   sanitizer_version: str = "", extractor: str = "",
                   ocr_used: bool = False, authority: str = DEFAULT_AUTHORITY,
@@ -186,6 +227,7 @@ def build_payload(base: dict[str, Any], *, knowledge_domain: str = "",
         "title": title,
         "repo": repo,
         "git_commit": git_commit,
+        "branch": branch,
         "source_sha256": source_sha256,
         "content_hash": _content_hash(str(base.get("content", ""))),
         "source_modified_at": source_modified_at,

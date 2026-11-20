@@ -1053,3 +1053,13 @@
   Resumo recuperado de forma somente leitura em l2-bonsai-summary.json.
 - Loop parado por PID exato, controle `pause`, GPU liberada; mtp relancado
   com o script estavel (sem edicoes durante a execucao).
+
+### 2026-11-20 — auto-wake: proveniência Git no RAG
+- `git_provenance()` em knowledge_schema (read-only, timeout, env override,
+  fallback unknown); `build_payload` passou a gravar `branch` além de
+  `git_commit`; `rag.py` preenche ambos no payload canônico;
+  `reindex_code.py` grava commit/branch/schema_version no manifesto.
+- Sem payload indexes novos (evita migração da coleção de produção).
+- Validação: py_compile OK, 20 testes focados passed, proveniência medida
+  `eb122765…/main`, `rag-prune --dry-run` removable=99294 e apply=false.
+- Detalhe em `docs/audit/RAG-PROVENANCE-2026-11-20.md`.

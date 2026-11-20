@@ -96,11 +96,14 @@ def main() -> int:
         if i % 25 == 0 or i == len(files):
             print(f"{i}/{len(files)} | {indexed} idx | {skipped} skip | {errors} err | {time.time()-t0:.0f}s")
 
+    prov = knowledge_schema.git_provenance()
     out = REPO / "logs" / "code_index-reindex.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(
         {"total": len(files), "indexed": indexed, "skipped": skipped,
-         "errors": errors, "files": manifest}, ensure_ascii=False, indent=1))
+         "errors": errors, "git_commit": prov["commit"], "branch": prov["branch"],
+         "schema_version": knowledge_schema.SCHEMA_VERSION,
+         "files": manifest}, ensure_ascii=False, indent=1))
     print(f"feito: {indexed} indexados, {skipped} skip, {errors} erros → {out.name}")
     return 1 if errors else 0
 

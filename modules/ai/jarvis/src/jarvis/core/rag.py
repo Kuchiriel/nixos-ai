@@ -822,7 +822,11 @@ class HybridIndexer:
         # vazios e qualquer filtro por esses campos nao casava com nada.
         # Aditivo: `path` e as chaves antigas continuam iguais.
         _is_books = target_collection == "books"
+        from jarvis.core.knowledge_schema import git_provenance as _git_provenance
+        _prov = _git_provenance()
         _canonical = {
+            "git_commit": _prov["commit"],
+            "branch": _prov["branch"],
             "canonical_path": path,
             "source_type": "book" if _is_books else "code",
             "source_id": f"doc:{source_sha[:16]}",

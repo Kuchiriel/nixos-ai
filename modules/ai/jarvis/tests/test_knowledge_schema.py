@@ -114,6 +114,16 @@ def test_build_payload_canonical_fields():
     assert p["ocr_used"] is False
 
 
+def test_build_payload_git_provenance():
+    from jarvis.core.knowledge_schema import build_payload, git_provenance
+    p = build_payload({"content": "x"}, git_commit="abc123", branch="main")
+    assert p["git_commit"] == "abc123"
+    assert p["branch"] == "main"
+    prov = git_provenance()
+    assert set(prov) == {"commit", "branch"}
+    assert all(isinstance(v, str) and v for v in prov.values())
+
+
 def test_build_payload_content_hash_deterministic():
     from jarvis.core.knowledge_schema import build_payload
     a = build_payload({"content": "mesmo texto"}, )
