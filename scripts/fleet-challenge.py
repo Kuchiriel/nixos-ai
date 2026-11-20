@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 import time
+from pathlib import Path
 from datetime import datetime
 from pathlib import Path
 
@@ -99,18 +100,40 @@ def task_for(persona: str) -> str:
 
 
 def spawn(persona: str, model: str | None = None) -> dict:
+    """Fire-and-track: agent-spawn.py writes its state file at session creation.
+
+    Waiting for the whole first turn can exceed 7 min (measured 20/11) and
+    killed the runner with TimeoutExpired. The state file is the real signal
+    that the fleet accepted the task; the agent keeps working after it.
+    """
+    import os
     model = model or MODELS[persona]
-    rc, out = sh([
+    env = dict(os.environ, JARVIS_SPAWN_ALLOW_OVERRIDE="1")
+    proc = subprocess.Popen([
         "python3", "scripts/agent-spawn.py", "--task", task_for(persona),
         "--name", f"challenge-{persona}", "--model", model,
         "--requester", "crouton-alpha",
-    ])
-    try:
-        d = json.loads(out)
-    except Exception:
-        return {"persona": persona, "error": out[:300], "rc": rc}
-    return {"persona": persona, "model_used": model, "session": d.get("session"),
-            "model": d.get("model"), "error": d.get("error", "")}
+    ], cwd=str(REPO), env=env, stdout=subprocess.DEVNULL,
+       stderr=subprocess.DEVNULL, start_new_session=True)
+    marker = f"challenge-{persona}"
+    state_dir = Path.home() / ".local/state/jarvis/spawns"
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        for path in sorted(state_dir.glob("*.json"),
+                           key=lambda p: p.stat().st_mtime, reverse=True):
+            try:
+                d = json.loads(path.read_text())
+            except Exception:
+                continue
+            if marker in str(d.get("task", "")):
+                return {"persona": persona, "model_used": model,
+                        "session": d.get("session"), "model": d.get("model"),
+                        "pid": proc.pid, "error": d.get("error", "")}
+        if proc.poll() is not None:
+            break
+        time.sleep(2)
+    return {"persona": persona, "model_used": model,
+            "error": f"no spawn state within 120s (pid={proc.pid})"}
 
 
 def load_state() -> dict:
