@@ -296,6 +296,27 @@ def redteam_candidates() -> list:
         pass
     return _rank_models(api + ["local-uncensored-4b/jarvis-mtp-lora"])
 
+def write_spawn_state(session: str, data: dict) -> None:
+    """Synchronous checkpoint of a spawn BEFORE the long model call.
+
+    (20/11) Padrão de durable execution: checkpoint síncrido no início da
+    operação, não só no fim. Sem isso, um runner que observa o arquivo de
+    estado só vê a sessão depois do primeiro turno ( minutos ) e acaba
+    duplicando spawns. Ver SagaLLM (arXiv:2503.11951, state checkpoints) e
+    LangGraph durability mode `sync` (persiste antes de seguir).
+    Escrita atômica para um leitor nunca ver JSON pela metade.
+    """
+    try:
+        sd = HOME / ".local/state/jarvis/spawns"
+        sd.mkdir(parents=True, exist_ok=True)
+        target = sd / f"{session}.json"
+        tmp = target.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1))
+        tmp.replace(target)
+    except Exception:
+        pass
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--task", required=True)
@@ -396,6 +417,7 @@ def main() -> int:
     out = {
         "ok": True,
         "session": sess,
+        "name": args.name or "",
         "model": model_id,
         "model_why": (plan.get("model") or {}).get("why"),
         "persona": persona,
@@ -412,6 +434,13 @@ def main() -> int:
     if args.dry_run:
         print(json.dumps(out, ensure_ascii=False, indent=1))
         return 0
+
+    # EARLY CHECKPOINT: a sessão existe antes do `opencode run`; publicar o
+    # estado agora permite que o runner/fila reivindique o agente sem esperar
+    # o turno inteiro (durabilidade síncrona, ver write_spawn_state).
+    out["status"] = "starting"
+    out["started_at"] = int(time.time())
+    write_spawn_state(sess, out)
 
     # (15/11) MODELO LOCAL = PERFIL ENXUTO. Medido: o payload cheio do
     # opencode da 56.147 tokens e o Qwen 4B MTP tem ctx 12.288 -> estoura.
@@ -510,14 +539,10 @@ def main() -> int:
     except Exception as exc:  # noqa: BLE001
         out["roster"] = f"registro falhou: {exc}"
 
-    # (15/11) o spawn e LENTO (Nemotron com payload completo leva minutos):
-    # grava o estado num arquivo para a UI do hub poder acompanhar.
-    try:
-        sd = HOME / ".local/state/jarvis/spawns"
-        sd.mkdir(parents=True, exist_ok=True)
-        (sd / f"{sess}.json").write_text(json.dumps(out, ensure_ascii=False, indent=1))
-    except Exception:
-        pass
+    # (20/11) fecha o checkpoint com o resultado final (o inicial já existe).
+    out["status"] = "done" if out.get("rc") == 0 else "failed"
+    out["finished_at"] = int(time.time())
+    write_spawn_state(sess, out)
     print(json.dumps(out, ensure_ascii=False))
     return 0
 

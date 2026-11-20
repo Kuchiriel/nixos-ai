@@ -125,7 +125,7 @@ def spawn(persona: str, model: str | None = None) -> dict:
                 d = json.loads(path.read_text())
             except Exception:
                 continue
-            if marker in str(d.get("task", "")):
+            if d.get("name") == marker or marker in str(d.get("task", "")):
                 return {"persona": persona, "model_used": model,
                         "session": d.get("session"), "model": d.get("model"),
                         "pid": proc.pid, "error": d.get("error", "")}
