@@ -980,3 +980,11 @@
 - Loop iniciado sem `lab restart` (evitou `rm` de lock/pid), controle final
   `pause`, sem processos de dungeon, GPU devolvida. Resultado em
   `docs/audit/L2-API-RESULT-2026-11-20.md`.
+
+### 2026-11-20 — auto-wake: decisão de MAX_REMOTE com 10 wakes
+- Snapshot atingiu 10/10 wakes desde o fix, mas com 0/5 enqueues novos e
+  precisão `null`. Decisão: **KEEP_MAX_REMOTE_1** — não ampliar sem evidência.
+- Corrigida idempotência do snapshot (epoch em segundos) e reforçado o gate
+  para exigir 5 enqueues novos além dos 10 wakes; `target_enqueues` exposto.
+- Tendência registrada em `docs/audit/AUTO-IMPROVE-PRECISION-TREND-2026-11-20.md`;
+  ai-mesh `58146bd` e `2801ccb`.
