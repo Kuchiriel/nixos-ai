@@ -1137,3 +1137,12 @@
   `02c07af` e sem divergência. `house docs --check` OK (15 arquivos) nos dois
   repos, 14 páginas de domínio.
 - Nada apagado; nenhum segredo no commit (só lições e memória episódica).
+
+### 2026-11-20 — auto-wake: precisão calibrada com 5/5 gaps
+- `--audit`: 5 enqueues novos, **5 executados, precisão 1,0** (gate 0,8),
+  decisão `KEEP_MAX_REMOTE_2`; cap persistido com reason atualizado
+  (5/5, precisão 1,0). Snapshot 20 gravado.
+- Precisão global do arquivo é 0,75 por causa de 2 tarefas legadas
+  não executadas (vagas/stale), já eliminadas pelo validador — não afeta o
+  gate pós-correção.
+- Nenhuma ampliação além do cap 2: o contrato só prevê 1→2 com >=0,8.
