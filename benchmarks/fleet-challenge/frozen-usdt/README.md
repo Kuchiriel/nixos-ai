@@ -75,14 +75,27 @@ Gates are **conjunctive**: a security failure cannot be offset by utility.
 - `tests/test_challenge.py` — proves the mock and checker: reference solution
   passes, each failure mode is rejected.
 
-## Run
+## Fleet command (canonical, automatic)
+
+```bash
+python3 scripts/fleet-challenge.py run --timeout-min 30 --poll-sec 30
+python3 scripts/fleet-challenge.py status
+python3 scripts/fleet-challenge.py report
+python3 scripts/fleet-challenge.py score <submission.json>
+```
+
+The runner chooses four idle-capable providers automatically, distributes the
+four personas without human choice, falls back to another model on quota/error,
+waits for the submission files, scores them with the validated checker and
+publishes a result to the bus. State is durable at
+`~/.local/state/jarvis/fleet-challenge/run.json` and readable read-only from
+the hub at `GET /api/fleet-challenge` (token required). Nothing here touches
+production data, keys, real RPC or services.
+
+## Validation of the checker itself
 
 ```bash
 python3 -m pytest -q benchmarks/fleet-challenge/frozen-usdt/tests -p no:randomly
 python3 benchmarks/fleet-challenge/frozen-usdt/checker.py \
   benchmarks/fleet-challenge/frozen-usdt/fixtures/reference_submission.json
 ```
-
-A submission is a JSON file with the shape documented in `checker.py`.
-This pack never executes an agent by itself: it scores artifacts produced by
-the fleet in a separate, isolated run.
