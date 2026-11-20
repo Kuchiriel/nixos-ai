@@ -221,6 +221,14 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
 - Log consolidado: `~/.local/state/jarvis/conversation-log/<data>.md`
   (sha256 ao lado), gerado pelo `--consolidate-only`.
 
+## Bus em tempo real + dataset de conversas (20/11 — retomada 21)
+- Hub lê os 3 caminhos reais do bus (`bus-gh#100`, `coord-mcp`, `hub-wake`),
+  com cache de 10 s e etiqueta de origem em cada mensagem.
+- Registro automático a cada 5 min em
+  `~/.local/state/jarvis/bus-journal/` (append-only, dedup por hash) — é o
+  dataset a usar em auditorias e melhorias. Manifesto exposto em `/api/bus`.
+- Nunca escrever esse dataset em coleções de produção sem autorização.
+
 ## Desafio FROZEN-USDT-FLEET (20/11 — retomada 19)
 - Pacote: `benchmarks/fleet-challenge/frozen-usdt/` (mock USDT-like, fixtures,
   4 personas, checker cego, 17 testes). Prompt **sem conclusão implantada**;

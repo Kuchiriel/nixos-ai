@@ -660,3 +660,31 @@
 - Validação prévia: 17 testes do pack passam; checker CLI `passed: true`.
 - Estimativa: spawn sequencial 8–16 min + coleta até 30 min; teto prático
   ~45 min. Monitoramento pelo próprio comando `status` e pelo hub.
+
+### 2026-11-20 — retomada 21 (agent hub bus real-time + dataset)
+- Pedido do dono: botão Bus stale; mostrar conversa real em tempo real, de
+  todos os caminhos, dizendo a origem; **e registrar automaticamente** — o
+  registro é o dataset de melhorias.
+- Causa raiz medida: `agent-hub.mjs::busViaApi` lia
+  `repos/Kuchiriel/mt5/issues/12/comments`, mas o bus da frota é issue **100**;
+  `busMessages` usava cache de 90 s (a UI já fazia polling de 15 s).
+- Correção: `scripts/bus-paths.py` agrega 3 caminhos com campo `path`:
+  `bus-gh#100` (comments coord-json + texto), `coord-mcp` (coord_read via
+  handshake MCP na LAN), `hub-wake` (wakes diretos registrados pelo hub).
+  Quota por caminho evita que o coord-mcp, que repete o mesmo timestamp,
+  domine o feed. Hub passou a usar o agregador com cache de 10 s e fallback
+  para a API do GitHub no issue 100; UI mostra a origem em cada linha e o
+  total do registro automático.
+- Dataset automático: timer `bus-journal.timer` (home-manager, 5 min,
+  `Persistent=true`) executando `bus-paths.py 100 --record`. Saída append-only
+  em `~/.local/state/jarvis/bus-journal/YYYY-MM-DD.jsonl` + `manifest.json`;
+  id = sha256(path|ts|from|kind|text) → repetir não duplica. Medido: 40 itens
+  na 1ª captura, 0 novos na 2ª; após o timer, 76 itens
+  (`bus-gh#100`:50, `coord-mcp`:26). Nenhum dado de produção tocado.
+- Build+switch rc=0; timer ativo e serviço já executou com status=0; hub
+  recarregado e `/api/bus` devolve o manifesto do dataset.
+- Desafio FROZEN-USDT: runner crashou com `TimeoutExpired` porque esperava o
+  primeiro turno inteiro do spawn. Corrigido para modo assíncrono: detecta o
+  arquivo de estado do spawn (até 120 s) e deixa o agente continuar.
+  Relançado em background; resultado ainda pendente.
+- Commits: `d628dad1` (bus multipath + dataset), `44f7ad9b` (spawn assíncrono).
