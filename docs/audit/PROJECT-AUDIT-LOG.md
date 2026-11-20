@@ -988,3 +988,10 @@
   para exigir 5 enqueues novos além dos 10 wakes; `target_enqueues` exposto.
 - Tendência registrada em `docs/audit/AUTO-IMPROVE-PRECISION-TREND-2026-11-20.md`;
   ai-mesh `58146bd` e `2801ccb`.
+
+### 2026-11-20 — auto-wake: 3 ciclos do entropy-watch após o fix
+- 3 execuções de `entropy-watch --dry-run`: **0 achados, 0 novos** em todas.
+- Fila antes=4, depois=4; nenhuma tarefa `sshd` na fila (grep=0).
+- `manifest-check --json`: `fora_do_ar=0`; sshd, webhook, openai-bridge e tor
+  todos `vivo=True`. Nenhum serviço no ar gerou tarefa stale.
+- Nada foi movido, restaurado ou apagado.
