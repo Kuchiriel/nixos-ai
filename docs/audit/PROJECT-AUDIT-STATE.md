@@ -261,6 +261,14 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
   `shared/scripts`; declarar qual `termux.jsonl` é canônico; rag-prune --apply
   (produção, só com autorização explícita); Windows segue sem SSH/RDP/MCP.
 
+## Pendências abertas (20/11 — honestas)
+- Classificar as 64 divergências de hash `~/bin` vs `shared/scripts` antes de
+  qualquer consolidação (parte pode ser adaptação legítima do Termux).
+- `rag-prune --apply` ainda exige autorização explícita de escrita em produção.
+- Windows: dois peers descobertos e contratados, mas sem SSH/RDP/MCP — paridade
+  depende de decisão do dono.
+- Comitar sempre com `git commit --only` em árvore compartilhada.
+
 ## Próxima tarefa exata
 1. **FEITO nesta janela (Fase 8)**: suíte completa
    `nix develop --command python3 -m pytest -q modules/ai/jarvis/tests

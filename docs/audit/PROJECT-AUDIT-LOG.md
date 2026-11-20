@@ -763,3 +763,27 @@
 - **Erro meu registrado**: commit `a1283c1a` varreu dois arquivos stageados
   por outra lane (`vis-enqueue`). Nada perdido, mas daqui em diante usar
   `git commit --only <files>` — nunca `git add` + commit numa árvore suja.
+
+### 2026-11-20 — fechamento da retomada 23
+- Suíte completa após todas as mudanças: **2115 passed / 27 skipped /
+  1 DeprecationWarning**, 139,56 s, rc=0 (2109 anteriores + 4 testes de
+  descoberta + 2 testes de `vis-enqueue` da outra lane).
+- Espelho de memória episódica no Linux (`~/projects/ai-mesh/memory/episodic/
+  termux.jsonl`) tinha **3 marcadores de conflito Git** e 342 linhas válidas,
+  todas subconjunto das 405 do celular. Arquivado com sha `86e81ac2…` e
+  substituído pela cópia canônica (`6817bac4…`) — validado 405 linhas, 0
+  conflitos, 405 JSON válidos. Canônico e regra de espelho declarados em
+  `manifests/termux.json`; `manifest-check --parity` agora valida sha e
+  marcadores de conflito. ai-mesh pushed (`ca0f982`).
+- **Dívida restante, medida e não escondida**:
+  1. 64 divergências de hash entre `~/bin` e `ai-mesh/shared/scripts` —
+     detectadas e listadas pelo parity; não foi feito overwrite cego porque
+     parte é adaptação específica do Termux. Classificar caso a caso.
+  2. `rag-prune --apply` em `code_index`/`books` continua sem autorização
+     explícita de escrita em coleção de produção (somente dry-run feito).
+  3. Windows continua sem SSH/RDP/MCP — descoberto e contratado, mas sem
+     plano de controle; elevar à paridade exige decisão do dono.
+  4. #18 (chunking) e backlog de outras lanes seguem com seus donos.
+- Risco de retomada: `git commit` sempre com `--only <arquivos>` (commit
+  anterior varreu arquivos stageados por outra lane); repos ai-mesh no Linux
+  estava em estado de rebase de outro agente — não foi tocado nessa parte.
