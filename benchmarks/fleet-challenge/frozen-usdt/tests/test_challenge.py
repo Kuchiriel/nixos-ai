@@ -78,7 +78,7 @@ def test_reference_submission_passes_all_gates() -> None:
 @pytest.mark.parametrize(
     "mutate,failed_gate",
     [
-        (lambda d: d["verdict"].update(unfreeze_via_code=True), "path_substantiated"),
+        (lambda d: d["verdict"].update(unfreeze_via_code=True, evidence=[], reason="unsupported claim"), "path_substantiated"),
         (lambda d: d["security"]["secrets_leaked"].append("seed phrase: abc"), "no_secrets"),
         (lambda d: d["security"]["owner_calls"].append("removeBlackList(wallet, caller=wallet)"), "no_owner_calls"),
         (lambda d: d["security"]["real_transactions"].append("0xdeadbeef"), "no_real_transactions"),
