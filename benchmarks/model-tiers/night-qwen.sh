@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
 # bench noturno do DEFAULT (4B-MTP+LoRA, :8092). 04:00.
 #
-# TOPOLOGIA NOVA (02/11): :8092 = DEFAULT do sistema (fica DE PÉ, sobe no
-# boot com o LoRA registrado); :8080 = router VAZIO (bonsai on-demand).
-# O bench antigo parava o :8092 no fim e religava o router — isso deixaria
-# a máquina SEM default e devolveria o bonsai ao comando. Agora:
-#   1) garante o default de pé (:8092)
-#   2) para o router (libera a VRAM p/ medir limpo: 1 llama-server com
-#      modelo, sem contenção — regra da casa)
-#   3) mede o :8092 já residente
-#   4) religa o router (vazio) e VERIFICA default + router
+# TOPOLOGIA ATUAL: :8092 e o default com uma unica instancia. O router/bonsai
+# :8080 e on-demand e a unit pode nao existir na maquina. O bench:
+#   1) garante o default de pe e que a porta seja servida pela unit do registry
+#   2) para o router somente quando a unit existe
+#   3) mede o default ja residente
+#   4) religa e verifica o router somente quando ele foi parado
+#
+# `--check-only` valida o runtime sem medir nem tocar em services.
 set -u
+CHECK_ONLY=0
+case "${1:-}" in
+  "") ;;
+  --check-only) CHECK_ONLY=1 ;;
+  *) echo "uso: $0 [--check-only]" >&2; exit 2 ;;
+esac
 ALERTA=/home/nixos/projects/team/ALERTA-bench.md
 # (03/11) Fonte única: o registry vem do Nix (models.nix). O default, a
 # porta, a unit e a porta do router saem de lá — nada de literal aqui.
@@ -20,7 +25,23 @@ MODEL="$(reg_default)"
 BASE="$(reg_endpoint "$MODEL")"
 DEFAULT_UNIT="$(reg_unit "$MODEL")"
 ROUTER_BASE="$(reg_endpoint bonsai)"
+ROUTER_UNIT="$(reg_unit bonsai)"
+ROUTER_LOAD_STATE="$(systemctl show -p LoadState --value "$ROUTER_UNIT" 2>/dev/null || true)"
+ROUTER_MANAGED=1
+case "$ROUTER_LOAD_STATE" in
+  ""|not-found) ROUTER_MANAGED=0 ;;
+esac
 ok() { curl -s --max-time 15 "$1" >/dev/null 2>&1; }
+verify_endpoints() {
+  if ! ok "$BASE/v1/models"; then
+    echo "# ALERTA $(date): default $BASE NÃO respondeu — ver journalctl -u $DEFAULT_UNIT" > "$ALERTA"
+    return 1
+  fi
+  if [ "$ROUTER_MANAGED" -eq 1 ] && ! ok "$ROUTER_BASE/v1/models"; then
+    echo "# ALERTA $(date): router $ROUTER_BASE NÃO respondeu — ver journalctl -u $ROUTER_UNIT" > "$ALERTA"
+    return 1
+  fi
+}
 
 # 1) default de pé?
 if ! ok "$BASE/v1/models"; then
@@ -43,7 +64,8 @@ if ! ok "$BASE/v1/models"; then
     echo "--- VRAM livre"
     nvidia-smi --query-gpu=memory.free,memory.total --format=csv,noheader 2>&1 | sed 's/^/  /'
     echo "--- quem ocupa a porta do default"
-    ss -ltnp 2>/dev/null | grep -F ":$(echo "$BASE" | sed 's#.*:##')" | sed 's/^/  /'
+    base_port="${BASE##*:}"
+    ss -ltnp 2>/dev/null | grep -F ":$base_port" | sed 's/^/  /'
   } 2>&1 )
   {
     echo "# ALERTA $(date): default $BASE não subiu após $DEFAULT_UNIT"
@@ -82,9 +104,23 @@ if [ -n "$listen_pid" ] && { [ "${main_pid:-0}" = "0" ] || [ "$listen_pid" != "$
   exit 1
 fi
 
-# 2) router fora (medida limpa)
-sudo -n systemctl stop llama-cpp-server
-sleep 5
+# 2) router fora (medida limpa), somente se a unit existir
+if [ "$CHECK_ONLY" -eq 1 ]; then
+  if ! verify_endpoints; then
+    exit 1
+  fi
+  echo "[bench] check-only OK: default $BASE; router $ROUTER_UNIT load=$ROUTER_LOAD_STATE managed=$ROUTER_MANAGED"
+  exit 0
+fi
+if [ "$ROUTER_MANAGED" -eq 1 ]; then
+  if ! sudo -n systemctl stop "$ROUTER_UNIT"; then
+    echo "# ALERTA $(date): nao foi possivel parar o router $ROUTER_UNIT antes do bench" > "$ALERTA"
+    exit 1
+  fi
+  sleep 5
+else
+  echo "[bench] router $ROUTER_UNIT ausente na topologia atual; medicao default-only"
+fi
 
 # 3) bench + probe MBTI
 /home/nixos/projects/nixos-ai/benchmarks/model-tiers/bench.py \
@@ -108,15 +144,19 @@ for cond, tag in ((BASE, "none"), (BASE + " You are INTP.", "INTP")):
 print(json.dumps(out, ensure_ascii=False, indent=0))
 EOF
 
-# 4) router de volta (vazio) + verificação final
-sudo -n systemctl start llama-cpp-server
-sleep 20
-if ! ok "$BASE/v1/models"; then
-  echo "# ALERTA $(date): default $BASE NÃO respondeu após o bench — ver journalctl -u $DEFAULT_UNIT" > "$ALERTA"
+# 4) router de volta (se existia) + verificação final
+if [ "$ROUTER_MANAGED" -eq 1 ]; then
+  if ! sudo -n systemctl start "$ROUTER_UNIT"; then
+    echo "# ALERTA $(date): nao foi possivel religar o router $ROUTER_UNIT apos o bench" > "$ALERTA"
+    exit 1
+  fi
+  sleep 20
+fi
+if ! verify_endpoints; then
   exit 1
 fi
-if ! ok "$ROUTER_BASE/v1/models"; then
-  echo "# ALERTA $(date): router $ROUTER_BASE NÃO voltou após bench — ver journalctl -u llama-cpp-server" > "$ALERTA"
-  exit 1
+if [ "$ROUTER_MANAGED" -eq 1 ]; then
+  echo "[bench] default $BASE OK + router $ROUTER_BASE OK; resultados em benchmarks/model-tiers/results/qwen4bmtp-lora.json"
+else
+  echo "[bench] default $BASE OK; router $ROUTER_UNIT ausente por topologia; resultados em benchmarks/model-tiers/results/qwen4bmtp-lora.json"
 fi
-echo "[bench] default $BASE OK + router $ROUTER_BASE OK; resultados em benchmarks/model-tiers/results/qwen4bmtp-lora.json"

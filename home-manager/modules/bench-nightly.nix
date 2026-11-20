@@ -6,13 +6,15 @@
 # gerados pelo home-manager: o agendamento vive junto do resto.
 #
 # bench-qwen (04:00): mede o DEFAULT (4B-MTP+LoRA, :8092). O script nunca
-# mais para o default — para o router :8080 (medida limpa) e o religa.
+# para o default. Ele para o router :8080 somente quando a unit existe e o
+# religa somente nesse caso; na topologia de uma instancia, a unit ausente e
+# um estado valido e o bench termina sem exigir um :8080 inexistente.
 # swap-probe (05:00): virou probe do DEFAULT (o hot-swap que ele media não
 # existe mais na topologia nova) com fail-safe: se o default não
 # responde, reinicia o service em vez de deixar a máquina sem LLM.
 #
-# Os scripts usam `sudo -n systemctl` (stop/start do router) — o usuário
-# tem NOPASSWD pra systemctl; o timer roda como user service.
+# Quando existe, o script usa `sudo -n systemctl` (stop/start do router) — o
+# usuário tem NOPASSWD pra systemctl; o timer roda como user service.
 {
   systemd.user.services = {
     bench-qwen = {
