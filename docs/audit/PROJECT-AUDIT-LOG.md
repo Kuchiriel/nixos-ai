@@ -1172,3 +1172,10 @@
 - `code_index` 275.724 pontos antes e depois — nada de produção escrito.
 - Decisão: **não** criar indexes de `git_commit`/`branch` em produção com
   esta evidência; detalhe em `docs/audit/RAG-INDEX-AB-2026-11-20.md`.
+
+### 2026-11-20 — auto-wake: matriz L2 verificada (sem duplicação)
+- Tarefa já estava concluída: `docs/audit/L2-MATRIX-2026-11-20.md` tem api,
+  bonsai e mtp com 5/5 amostras cada, `ck=v3`, veredito por braço e próximo
+  gate (L1/L3, 30 medições). Summaries em `~/logs/ab_loop/l2-*-summary.json`
+  conferem: api 4 checker+1 review, bonsai 5 review, mtp 4 checker+1 review.
+- Nenhuma reescrita necessária; nenhuma medição reexecutada.
