@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# lab-l2-arm — executa N amostras L2 de UM braço (bonsai|mtp|api).
+# Nao apaga nada: controle e escrito, lock stale e ignorado pelo ab_loop,
+# PID e morto por numero exato. Gates revalidados antes de cada braço.
+# Uso: lab-l2-arm bonsai [N=5] [timeout_s=900]
+set -uo pipefail
+ARM="${1:-}"; N="${2:-5}"; TMO="${3:-900}"
+case "$ARM" in
+  --help|-h)
+    sed -n '2,7p' "$0"; exit 0 ;;
+esac
+case "$ARM" in bonsai|mtp|api) ;; *) echo "uso: lab-l2-arm bonsai|mtp|api [N] [timeout]" >&2; exit 2 ;; esac
+REPO=/home/nixos/projects/nixos-ai
+STATE=/home/nixos/.local/state/jarvis/nightwatch
+CTL=$STATE/ab_loop.control
+PIDF=$STATE/ab_loop.pid
+RES=/home/nixos/logs/ab_loop/results.jsonl
+LOG=/home/nixos/logs/ab_loop/l2-$ARM-run.log
+SUM=/home/nixos/logs/ab_loop/l2-$ARM-summary.json
+cd "$REPO" || exit 1
+
+gates=$(scripts/lab-l2-plan 2>&1)
+echo "$gates" >> "$LOG"
+if ! echo "$gates" | grep -q 'processos de dungeon               nenhum'; then
+  echo "ABORT: dungeon ativo antes de $ARM" >> "$LOG"; exit 3
+fi
+if ! echo "$gates" | grep -q 'checkers de referência            OK 5/5'; then
+  echo "ABORT: checkers nao OK antes de $ARM" >> "$LOG"; exit 4
+fi
+
+START=$(date +%s); BEFORE=$(wc -l < "$RES")
+printf 'run' > "$CTL"
+AB_LEVELS=L2 AB_MODELS="$ARM" AB_SLEEP=5 nohup setsid bash scripts/ab_loop.sh \
+  > "/home/nixos/logs/ab_loop/l2-$ARM-launch.log" 2>&1 < /dev/null &
+LOOP=$!
+sleep 3
+printf 'arm=%s loop=%s antes=%s\n' "$ARM" "$LOOP" "$BEFORE" >> "$LOG"
+rows=0
+for i in $(seq 1 "$N"); do
+  deadline=$(( $(date +%s) + TMO )); hit=""
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    now=$(wc -l < "$RES")
+    if [ "$now" -gt "$((BEFORE + i - 1))" ]; then
+      hit=$(sed -n "$((BEFORE + i))p" "$RES"); break
+    fi
+    sleep 5
+  done
+  if [ -z "$hit" ]; then echo "amostra $i TIMEOUT ${TMO}s" >> "$LOG"; break; fi
+  printf 'amostra %s: %s\n' "$i" "${hit:0:180}" >> "$LOG"; rows=$((rows+1))
+done
+printf 'pause' > "$CTL"
+if [ -s "$PIDF" ]; then
+  P=$(cat "$PIDF")
+  case "$P" in ''|*[!0-9]*) : ;; *) kill "$P" 2>/dev/null || true ;; esac
+fi
+bash "$REPO/scripts/llm-swap.sh" release >/dev/null 2>&1 || true
+python3 - "$SUM" "$BEFORE" "$rows" "$START" "$ARM" <<'PY'
+import json,sys,time
+from pathlib import Path
+out,before,n,start,arm=sys.argv[1],int(sys.argv[2]),int(sys.argv[3]),int(sys.argv[4]),sys.argv[5]
+lines=Path('/home/nixos/logs/ab_loop/results.jsonl').read_text(errors='ignore').splitlines()
+rows=[]
+for i in range(n):
+    try: rows.append(json.loads(lines[before+i]))
+    except Exception: pass
+Path(out).write_text(json.dumps({
+ 'arm':arm,'started':start,'finished':time.time(),'before':before,'after':len(lines),
+ 'samples':len(rows),'modelos':sorted({r.get('modelo') for r in rows}),
+ 'niveis':sorted({r.get('nivel') for r in rows}),'cks':sorted({r.get('ck') for r in rows}),
+ 'rcs':[r.get('rc') for r in rows],'motivos':[r.get('motivo') for r in rows],
+ 'checkers':[str(r.get('checker'))[:60] for r in rows],
+},indent=2,ensure_ascii=False))
+print('summary',out,'samples',len(rows))
+PY
