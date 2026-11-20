@@ -1196,3 +1196,18 @@
 - Commits: ai-mesh `ded5b4c`, `08b56b1` (ambos pushed). Nixos-ai: este LOG/STATE.
 - Proximo passo: seguir a fila auto-wake; proximo item concreto e auditar
   segredos na config declarada e sincronizar espelhos de memoria divergentes.
+
+### 2026-11-20 — auto-wake: cards A2A publicados no /hub
+- Sessao: retomada autonoma, HEAD final `02c63c1a`. Fase 7/8.
+- `scripts/agent-hub.mjs`: rotas read-only `/api/cards` (resumo) e
+  `/api/cards?name=<file>.json` (card individual), com validacao de nome,
+  traversal barrado (400) e bloqueio de marcadores de credencial no payload.
+- `scripts/agent-hub-ui.html`: aba `cards` com badge `host_kind`/`status`,
+  servicos, contagens e link para o JSON canonico.
+- Reiniciado somente `agent-hub.service` (UI, separado do opencode, que nao
+  foi reiniciado); root 8091 = 200, servico active.
+- Evidencia: 4 cards servidos; `/hub/` via IPv6 do tailnet 200 com a aba;
+  varredura de segredo nos 2 payloads ao vivo = 0 ocorrencias; `node --check`
+  limpo antes e depois; detalhe em `ai-mesh/docs/capability-cards-2026-11-20.md`.
+- Proximo passo: seguir a fila auto-wake (auditoria de segredos na config
+  declarada e sincronizacao dos espelhos de memoria).
