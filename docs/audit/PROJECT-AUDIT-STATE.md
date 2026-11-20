@@ -426,3 +426,9 @@ Estado MEDIDO agora:
  sincronizados. HEAD nixos-ai nesta janela: `cb76c0b8`.
 - Risco resolvido: nao usar `git add -A`; commits com `--only` e pre-commit
  `repo-integrity-check` OK (sem conflict markers, JSONL valido).
+
+## Auditoria de segredos (20/11 — retomada)
+- Confirmado: 0 tokens reais em HEAD/historico/Store/`/etc`. Placeholders
+  literais em 5 pontos viraram risco P2 em `TECHNICAL-DEBT.md`.
+- Nao rotacionar, nao reescrever historico, nao alterar config sem rebuild
+  autorizado. Relatorio: `docs/audit/SECRETS-AUDIT-2026-11-20.md`.

@@ -1211,3 +1211,16 @@
   limpo antes e depois; detalhe em `ai-mesh/docs/capability-cards-2026-11-20.md`.
 - Proximo passo: seguir a fila auto-wake (auditoria de segredos na config
   declarada e sincronizacao dos espelhos de memoria).
+
+### 2026-11-20 — auto-wake: auditoria de segredos na config declarada
+- Somente leitura. 243 arquivos Nix do HEAD, 3,48 MB de patch no historico,
+  32 generations do home-manager (329 alvos unicos apos resolver symlinks) e
+  9 arquivos do /etc da geracao atual.
+- Resultado: **0 tokens reais**. 5 literais no HEAD sao placeholders (4 em
+  `litellm-cascade.nix`, 1 em `home.nix:876` com base localhost); 5 ocorrencias
+  no Store sao o mesmo placeholder; 1 sinal `sk-` em fontconfig e falso
+  positivo confirmado (`sk-home-manager-path` em caminho do store).
+- Risco P2 registrado em `TECHNICAL-DEBT.md`: placeholders literais viram
+  texto imutavel no Git e no Store; migrar para agenix/sops/env exige rebuild
+  autorizado. Nada alterado na config; nenhuma chave rotacionada.
+- Detalhe (sem valores): `docs/audit/SECRETS-AUDIT-2026-11-20.md`.
