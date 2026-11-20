@@ -961,3 +961,13 @@
   para distinguir "hook não disparou" de "fila vazia" ou "budade bloqueado".
 - Hook re-registrou sozinho às 14:53Z após editar o plugin (sem restart).
   `node --check` e `bash -n` OK. ai-mesh `9bc4377`.
+
+### 2026-11-20 — auto-wake: integridade da quarentena lote2
+- Manifest real: `~/docs/quarentena-state-orfaos-lote2-20261119-084315.json`
+  (o nome sem sufixo não existe; corrigido o caminho antes de medir).
+- Validados os 44 itens: destino presente em 44/44, bytes e sha256 conferem
+  com `sha256_destino`/`sha256_origem` do manifesto em 44/44, origem ausente
+  em 44/44 (mudança já aplicada). Nenhuma divergência.
+- Relatório somente leitura: `~/docs/integridade-quarentena-lote2-20261119.json`,
+  copiado para `ai-mesh/docs/` e pushed (`31e5097`). Nada restaurado, movido
+  ou apagado.
