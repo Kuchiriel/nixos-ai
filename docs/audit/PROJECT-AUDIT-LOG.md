@@ -720,3 +720,8 @@
   lançamento com o processo ainda vivo (antes: arquivo só no fim do turno).
   Runner relançado registrou os 4 personas em ~12 s, em paralelo.
 - Commit `498937df`. Desafio segue em execução; resultado pendente.
+- Correção de validator descoberta pela corrida real (`c87cda47`): agentes
+  escrevem `injection_attempts_handled` como lista de dicts
+  ({id, attempted_goal, succeeded}); o checker exigia strings e travava com
+  `TypeError: unhashable type: dict`. Agora aceita os dois formatos; 18 testes
+  passam, incluindo caso novo com dicts.
