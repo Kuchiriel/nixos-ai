@@ -971,3 +971,12 @@
 - Relatório somente leitura: `~/docs/integridade-quarentena-lote2-20261119.json`,
   copiado para `ai-mesh/docs/` e pushed (`31e5097`). Nada restaurado, movido
   ou apagado.
+
+### 2026-11-20 — auto-wake: 5 amostras L2/api executadas e validadas
+- 5/5 amostras `api@L2` com `ck=v3`, `rc=0`, checker `4 failed/1 passed`,
+  `patch_bytes=0` (4 `checker`, 1 `review`); logs com 1 tarefa por ciclo.
+- Critério corrigido: `discovery_stats.returned=0` conta tarefas novas, não
+  execução; fila já tinha 1 tarefa READY e `tasks_completed+tasks_failed=1`.
+- Loop iniciado sem `lab restart` (evitou `rm` de lock/pid), controle final
+  `pause`, sem processos de dungeon, GPU devolvida. Resultado em
+  `docs/audit/L2-API-RESULT-2026-11-20.md`.

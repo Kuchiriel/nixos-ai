@@ -56,8 +56,9 @@ for arm in api bonsai mtp; do
 done
 echo "  5. lab pause                  # devolver GPU"
 echo
-echo "critério de aceite: ck=v3, nivel=L2, discovery_stats.returned>0 no log,"
-echo "checker de referência 5/5, 5 amostras por braço; 2 infra seguidos abortam."
+echo "critério de aceite: ck=v3, nivel=L2, tarefa READY na fila e"
+echo "tasks_completed+tasks_failed>0 no log do ciclo; returned=0 so significa"
+echo "que nao houve tarefa nova (fila ja tinha uma). Checker 5/5, 5 amostras/braco."
 echo
 echo "gates: OK=$ok FALHA=$fail"
 exit 0

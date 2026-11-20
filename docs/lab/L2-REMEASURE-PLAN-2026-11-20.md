@@ -47,8 +47,11 @@ lab pause                       # devolver GPU
 ## Critérios de aceite e abort
 
 - Cada nova linha deve ter `ck=v3`, `nivel=L2`, `modelo` igual ao braço
-  armado, `discovery_stats.returned>0` no log do ciclo e checker de
-  referência 5/5.
+  armado e checker de referência 5/5. A prova de que o ciclo trabalhou é
+  `tasks_completed + tasks_failed > 0` no `HarnessResult` do log, com uma
+  tarefa `READY` na fila. **`discovery_stats.returned=0` é esperado quando a
+  tarefa já estava na fila** — ele conta tarefas *novas* descobertas no
+  ciclo, não trabalho executado (medido 20/11 com 5 amostras api/L2).
 - Duas linhas consecutivas com `motivo=infra` abortam a bateria: é problema
   de swap/VRAM, não do modelo.
 - Se a voz do dono ocupar o residente (`llm-swap.sh idle` falhar), o loop
