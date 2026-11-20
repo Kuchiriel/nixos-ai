@@ -932,3 +932,15 @@
 - Prova local: 1 linha gravada, 2ª chamada reportou "já registrado";
   medição atual: 5/10 wakes, 0 enqueues novos, `KEEP_MAX_REMOTE_1`.
 - ai-mesh `4bb2462` pushed; nenhum dado apagado, nenhum limite alterado.
+
+### 2026-11-20 — auto-wake: tarefa sshd stale e sensores
+- Tarefa `manifest-check: sshd fora do ar` veio de `entropy-watch`, não de
+  estado atual: medição direta mostrou sshd UP (8022, processo 23223) e
+  `manifest-check --json` com `fora_do_ar=0`. Nenhum serviço foi reiniciado.
+- Causa raiz do sensor: ele procurava chaves `down`/`dead`, mas o schema real
+  é `fora_do_ar` + `servicos[].vivo`. Corrigido e canonicalizado em
+  `ai-mesh/shared/scripts/entropy-watch` (shim em ~/work/hub); dry-run agora
+  reporta 0 achados.
+- O dry-run expôs outro falso positivo: `auto-improve-precision.jsonl` como
+  órfão. `state-audit` passou a reconhecer sidecars `.jsonl` ativos: 0 órfãos,
+  13 mantidos. ai-mesh `f8d7855`; nenhum dado apagado.
