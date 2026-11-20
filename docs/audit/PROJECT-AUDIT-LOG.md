@@ -856,3 +856,15 @@
 - Validação: original sha `a8bbaf32…` inalterado; 113 marcados na cópia,
   0 linhas inválidas, 0 registros fora da janela com campo `validity`.
 - `docs/audit/TECHNICAL-DEBT.md` linha 2 atualizada com contagem e índice.
+
+### 2026-11-20 — auto-wake: eficácia do refill medida
+- Estado legado migrado com backup (`auto-improve-last.pre-migrate.json`) e
+  correlacionado com mensagens `type=synthetic` do OpenCode DB (mode=ro):
+  **3 enqueues, 1 executado, precisão 0,333**. Os 2 não executados eram
+  "Fase 6/9..." (vago) e "64 divergências" (stale, já resolvido).
+- Correção com evidência: validação central antes de enfileirar (verbo de
+  ação + filtros de stale/dono/lane) rejeita exatamente os 2 falsos positivos
+  e aceita a tarefa real; `MAX_REMOTE=1`, `MAX_QUEUE=3`, cooldown 6 h mantido.
+- Novo `auto-improve --audit` reporta enqueues, execuções, fila, limites e
+  precisão sem escrever; `--dry-run` e `--once` continuam idempotentes.
+- Canônico ai-mesh commitado/pushed `29f3d13`; `house docs --check` OK (15).
