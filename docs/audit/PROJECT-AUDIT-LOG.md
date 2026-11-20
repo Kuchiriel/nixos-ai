@@ -1010,3 +1010,14 @@
   **2117 passed / 27 skipped / 1 warning**, 111,81 s, rc=0.
 - `AUDIT-FINAL.md` atualizado; nenhuma falha nova após os fixes de swarm,
   lab, auto-wake e contratos.
+
+### 2026-11-20 — auto-wake: quarentenas antigas validadas
+- `20261107-112830`: 16/16 itens com destino presente, tamanho conferindo,
+  origem ausente; sha256 calculado para cada arquivo (manifestos antigos não
+  tinham hash declarado). 0 divergências.
+- `androrat-20261114-1958`: origem ausente, 4042/4042 arquivos presentes;
+  `du -sh` 620M confere com o manifesto, `du -sb` 95.920.590 bytes é o tamanho
+  aparente somado — distinção registrada, não é divergência. Tree sha256
+  `264a0f94…`.
+- Relatório `ai-mesh/docs/integridade-quarentena-anteriores-20261120.json`,
+  pushed `111e515`. Nada restaurado, movido ou apagado.
