@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_176 tools._
+_178 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -44,6 +44,7 @@ _176 tools._
 - `bench-35b-codacus.py` (nixos-ai/scripts) — """Mede o gate de voz (heldout3) em varios bracos e salva o JSON do resultado.
 - `bench-llm.sh` (nixos-ai/scripts) — bench-llm.sh — benchmark padrão da casa (consolida os one-offs de 24/09).
 - `bench-v9-v10-heldout3.py` (nixos-ai/scripts) — """Mede o gate v10 (Kaggle) no heldout3, com o MESMO metodo do v9.
+- `bus-paths.py` (nixos-ai/scripts) — """Aggregate the fleet's real bus paths into one JSON feed for the hub.
 - `bus-tail.py` (nixos-ai/scripts) — """bus-tail.py — as ultimas mensagens coord-json do bus, em JSON.
   use: `uso: bus-tail.py [limite]`
 - `bus-to-nightwatch.py` (nixos-ai/scripts) — bus-to-nightwatch.py — esteira mínima: lê o bus, cria tarefas no nightwatch
@@ -106,6 +107,8 @@ _176 tools._
   use: `python3 scripts/fetch-video-transcript.py https://youtu.be/pnZh5PAF3VE`
 - `fleet-challenge.py` (nixos-ai/scripts) — """Fleet capability: blind USDT-like challenge runner, scorer and status.
   use: `~/.local/state/jarvis/fleet-challenge/. Agents receive ONLY the blinded`
+- `fleet-discover.py` (nixos-ai/scripts) — """Fleet discovery — dynamic, evidence-based host and agent inventory.
+  use: `A/B of discovery channels: coverage and latency per method in each run.`
 - `fleet-dispatch.py` (nixos-ai/scripts) — fleet-dispatch — fecha o loop da frota no host.
 - `fleet-endpoint-sweep.py` (nixos-ai/scripts) — """fleet-endpoint-sweep.py — use every configured LLM endpoint overnight.
 - `fleet-milestone.py` (nixos-ai/scripts) — """fleet-milestone — notifica o dono no celular SÓ em marcos da frota.

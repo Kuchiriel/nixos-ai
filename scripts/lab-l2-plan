@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# lab-l2-plan — prepara/valida o plano de 15 medições L2 ck=v3 (SEM executar).
+# Uso: lab-l2-plan [--help] [--json]
+set -uo pipefail
+REPO="/home/nixos/projects/nixos-ai"
+CTL="/home/nixos/.local/state/jarvis/nightwatch/ab_loop.control"
+RES="/home/nixos/logs/ab_loop/results.jsonl"
+SWAP="$REPO/scripts/llm-swap.sh"
+LAB="$REPO/scripts/lab.sh"
+
+case "${1:-}" in
+  --help|-h)
+    sed -n '2,18p' "$0"; exit 0 ;;
+esac
+
+ok=0; fail=0
+row() { printf '%-34s %s\n' "$1" "$2"; }
+gate() {
+  local label="$1"; shift
+  if "$@" >/dev/null 2>&1; then row "$label" OK; ok=$((ok+1));
+  else row "$label" FALHA; fail=$((fail+1)); fi
+}
+
+echo "── preparação L2 (somente leitura; nenhuma medição é disparada) ──"
+control=$(cat "$CTL" 2>/dev/null || echo ausente)
+row "controle do loop" "$control"
+[ "$control" = pause ] && ok=$((ok+1)) || fail=$((fail+1))
+
+if timeout 900 python3 "$REPO/scripts/prova_checkers.py" 2>&1 | grep -q '5 passed'; then
+  row "checkers de referência" "OK 5/5 (L1,L2,L3)"; ok=$((ok+1))
+else
+  row "checkers de referência" FALHA; fail=$((fail+1))
+fi
+
+if pgrep -f 'nightwatch[.]dungeon' >/dev/null 2>&1; then
+  row "processos de dungeon" ATIVOS; fail=$((fail+1))
+else
+  row "processos de dungeon" nenhum; ok=$((ok+1))
+fi
+
+gate "residente sem cliente (swap idle)" bash "$SWAP" idle
+[ -s "$RES" ] && { row "results.jsonl" presente; ok=$((ok+1)); } || { row "results.jsonl" AUSENTE; fail=$((fail+1)); }
+
+suspect=$(ls -1 /home/nixos/logs/ab_loop/marked/results-suspect-index-*.json 2>/dev/null | tail -1)
+[ -n "$suspect" ] && row "índice de suspeitos" "$(basename "$suspect")" || row "índice de suspeitos" AUSENTE
+
+echo
+echo "── sequência prevista (15 execuções: 3 braços × 5 amostras) ──"
+echo "  1. lab doctor                 # reconfimar 5/5 antes de armar"
+echo "  2. lab level L2"
+echo "  3. lab restart                # somente com janela GPU livre"
+for arm in api bonsai mtp; do
+  for i in 1 2 3 4 5; do
+    echo "  4. lab arm $arm               # amostra $i/5 — esperar 1 novo resultado ck=v3/L2"
+  done
+done
+echo "  5. lab pause                  # devolver GPU"
+echo
+echo "critério de aceite: ck=v3, nivel=L2, discovery_stats.returned>0 no log,"
+echo "checker de referência 5/5, 5 amostras por braço; 2 infra seguidos abortam."
+echo
+echo "gates: OK=$ok FALHA=$fail"
+exit 0
