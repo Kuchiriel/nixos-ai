@@ -1021,3 +1021,15 @@
   `264a0f94…`.
 - Relatório `ai-mesh/docs/integridade-quarentena-anteriores-20261120.json`,
   pushed `111e515`. Nada restaurado, movido ou apagado.
+
+### 2026-11-20 — auto-wake: calibracao com 5 gaps reais
+- Como o gerador nao tinha gaps locais e 0 enqueues desde o fix, liguei uma
+  fonte versionada `ai-mesh/docs/auto-improve-gaps.jsonl` com 5 tarefas reais
+  medidas pela auditoria de sync (vault AGENTS, memory streams, capability
+  cards, plugin provenance, clone Linux atras). Nao sao tarefas sinteticas.
+- Corrigidos 2 falsos positivos do propio pipeline: verbo `declarar` ausente
+  no validador e teto da fila (6) impedindo os 2 ultimos gaps; MAX_QUEUE=9,
+  budget 12/h continua limitando a taxa.
+- Resultado: 5/5 enqueues novos registrados com source/texto, snapshot 11 gravado.
+  `--audit`: 15 wakes, 5 enqueues, 0 executados, precisao 0.0 ->
+  **KEEP_MAX_REMOTE_1** (gate 0.8 nao atingido). ai-mesh `1c7889d`.
