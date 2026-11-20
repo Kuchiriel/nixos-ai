@@ -1096,3 +1096,9 @@
 - Verificado: ambos os symlinks live agora apontam para `/nix/store/...-hm_*`;
   sha do backup preservado; `node --check` OK; hub `/api/state` 200;
   processos `opencode serve` vivos (nenhum restart explícito); staged=0.
+
+### 2026-11-20 — auto-wake: matriz L2 fechada
+- 15/15 amostras novas (`api`, `bonsai`, `mtp`), todas `ck=v3/L2`, checker
+  4 failed/1 passed e patch vazio — os 3 braços falharam a tarefa, não infra.
+- `docs/audit/L2-MATRIX-2026-11-20.md` registra a matriz e o critério corrigido;
+  laboratório pausado e GPU devolvida. L1/L3 seguem pendentes.
