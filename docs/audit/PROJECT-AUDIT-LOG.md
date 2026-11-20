@@ -995,3 +995,12 @@
 - `manifest-check --json`: `fora_do_ar=0`; sshd, webhook, openai-bridge e tor
   todos `vivo=True`. Nenhum serviço no ar gerou tarefa stale.
 - Nada foi movido, restaurado ou apagado.
+
+### 2026-11-20 — auto-wake: trace do idle validado
+- `auto-wake-idle.jsonl` tem 32 eventos; o wake desta tarefa mostra a sequência
+  completa `idle(15:53:00) -> peek(found) -> budget(allowed) -> wake(task)`.
+- Todos os 5 wakes registrados têm `idle` anterior e os 4 bloqueios de budget
+  ocorreram 43–172 s depois de um wake, dentro do gap mínimo de 180 s —
+  não são falha do hook nem perda de idle.
+- Grupo final `idle->peek->budget(false)` às 15:53:44 é o retorno ao idle após
+  o wake, com budget bloqueado pelo gap; comportamento esperado.
