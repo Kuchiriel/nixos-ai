@@ -1043,3 +1043,13 @@
 - Próximo limite útil: proveniência `git_commit` no RAG e reexecução do
   `sync-vault.sh` para 5 AGENTS.md stale — não ampliar MAX_REMOTE antes das
   5 tarefas reais serem executadas com precisão >=0,8.
+
+### 2026-11-20 — lab L2: falha do runner por edicao em voo (corrigida)
+- O driver bonsai->mtp morreu com `unexpected EOF` porque o script
+  `scripts/lab-l2-arm` foi reescrito (para adicionar --help) enquanto o bash
+  ja o executava; a leitura incremental pegou offsets corrompidos.
+- As 5 amostras bonsai em si foram validas e estao em results.jsonl
+  (1125-1129, todas bonsai/L2/ck=v3, checker 4 failed/1 passed, motivo review).
+  Resumo recuperado de forma somente leitura em l2-bonsai-summary.json.
+- Loop parado por PID exato, controle `pause`, GPU liberada; mtp relancado
+  com o script estavel (sem edicoes durante a execucao).
