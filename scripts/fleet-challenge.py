@@ -24,10 +24,16 @@ STATE = Path.home() / ".local/state/jarvis/fleet-challenge"
 SUB = STATE / "submissions"
 RUN = STATE / "run.json"
 MODELS = {
-    "auditor": "cloudflare/@cf/google/gemma-4-26b-a4b-it",
+    "auditor": "nvidia/minimaxai/minimax-m3.1-flash",
     "dev": "gemini/gemini-2.5-flash",
     "redteam": "kilocode/nvidia/nemotron-3-ultra-550b-a55b:free",
     "operator": "ovhcloud/gpt-oss-20b",
+}
+FALLBACKS = {
+    "auditor": ["deepseek-v4.1-flash-free", "nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"],
+    "dev": ["nvidia/minimaxai/minimax-m3.1-flash", "deepseek-v4.1-flash-free"],
+    "redteam": ["nvidia/minimaxai/minimax-m3.1-flash", "gemini/gemini-2.5-flash"],
+    "operator": ["nvidia/minimaxai/minimax-m3.1-flash", "deepseek-v4.1-flash-free"],
 }
 PERSONAS = tuple(MODELS)
 BUS_REPO, BUS_ISSUE = "Kuchiriel/mt5", "100"
@@ -92,17 +98,18 @@ def task_for(persona: str) -> str:
     )
 
 
-def spawn(persona: str) -> dict:
+def spawn(persona: str, model: str | None = None) -> dict:
+    model = model or MODELS[persona]
     rc, out = sh([
         "python3", "scripts/agent-spawn.py", "--task", task_for(persona),
-        "--name", f"challenge-{persona}", "--model", MODELS[persona],
+        "--name", f"challenge-{persona}", "--model", model,
         "--requester", "crouton-alpha",
     ])
     try:
         d = json.loads(out)
     except Exception:
         return {"persona": persona, "error": out[:300], "rc": rc}
-    return {"persona": persona, "session": d.get("session"),
+    return {"persona": persona, "model_used": model, "session": d.get("session"),
             "model": d.get("model"), "error": d.get("error", "")}
 
 
@@ -115,14 +122,18 @@ def save_state(d: dict) -> None:
     RUN.write_text(json.dumps(d, indent=2, ensure_ascii=False))
 
 
-def score_all() -> dict:
+def score_all(state: dict | None = None) -> dict:
     mod = checker()
+    infra = (state or {}).get("model_swaps", [])
     out = {}
     for p in PERSONAS:
         f = SUB / f"{p}.json"
         if f.exists():
             try:
-                out[p] = mod.evaluate(json.loads(f.read_text()))
+                data = json.loads(f.read_text())
+                if infra and not ((data.get("model_swap") or {}).get("switches")):
+                    data.setdefault("model_swap", {})["switches"] = infra
+                out[p] = mod.evaluate(data)
             except Exception as exc:
                 out[p] = {"passed": False, "error": f"{type(exc).__name__}: {exc}"}
         else:
@@ -142,19 +153,29 @@ def cmd_run(args) -> int:
              "version": "1.0"}
     save_state(state)
     if not args.skip_spawn:
+        state.setdefault("model_swaps", [])
         for p in PERSONAS:
-            r = spawn(p)
+            candidates = [MODELS[p]] + FALLBACKS[p]
+            r = {"persona": p, "error": "no candidate"}
+            for i, model in enumerate(candidates):
+                r = spawn(p, model)
+                if r.get("session") and not r.get("error"):
+                    if i:
+                        state["model_swaps"].append({
+                            "from": candidates[0], "to": model,
+                            "reason": "primary provider quota/error; automatic fallback"})
+                    break
             state["spawns"].append(r)
             save_state(state)
             print(f"spawn {p}: {r.get('session') or r.get('error')}", flush=True)
     deadline = time.time() + args.timeout_min * 60
     while time.time() < deadline:
-        state["scores"] = score_all()
+        state["scores"] = score_all(state)
         save_state(state)
         if all((SUB / f"{p}.json").exists() for p in PERSONAS):
             break
         time.sleep(args.poll_sec)
-    state["scores"] = score_all()
+    state["scores"] = score_all(state)
     state["finished"] = datetime.now().isoformat()
     state["all_passed"] = all(v.get("passed") for v in state["scores"].values())
     lines = [f"{p}: {'PASS' if v.get('passed') else 'FAIL'}" for p, v in state["scores"].items()]
