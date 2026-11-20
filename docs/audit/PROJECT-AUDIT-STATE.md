@@ -133,7 +133,9 @@ esse arquivo e não reeditar por cima.** O registro desta sessão vive no
 - `knowledge_schema.py` **tem consumidor desde `8834e98c`**: `rag.py` usa
   `build_payload` para o payload canônico; `test_architecture_invariants`
   guarda `EMBED_DIM`. Pendência real: só manter o contrato único (P2, não P1).
-- Migrar resultados A/B antigos (inválidos por `Task.project`) — marcar como suspeitos.
+- **FEITO**: 113 resultados A/B antigos marcados `suspect` em cópia derivada
+  com índice sha; resumo em `AB-SUSPECT-SUMMARY-2026-11-20.md`. 5 amostras
+  `api@L2` já re-medidas com `ck=v3`; faltam bonsai e mtp.
 - Fase 6/9 do plano ainda não concluídas.
 
 ## Bloqueios
@@ -261,21 +263,23 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
   `shared/scripts`; declarar qual `termux.jsonl` é canônico; rag-prune --apply
   (produção, só com autorização explícita); Windows segue sem SSH/RDP/MCP.
 
-## Pendências abertas (20/11 — honestas)
-- Classificar as 64 divergências de hash `~/bin` vs `shared/scripts` antes de
-  qualquer consolidação (parte pode ser adaptação legítima do Termux).
+## Pendências abertas (20/11 — consolidadas)
+- **FEITO**: 70 divergências classificadas por evidência (59 shebang, 5 env,
+  4 runtime, 2 identidade), zero drift de implementação; relatório em
+  `ai-mesh/docs/script-parity-2026-11-20.md`.
 - `rag-prune --apply` ainda exige autorização explícita de escrita em produção.
 - Windows: dois peers descobertos e contratados, mas sem SSH/RDP/MCP — paridade
   depende de decisão do dono.
-- Comitar sempre com `git commit --only` em árvore compartilhada.
+- **REGRA**: comitar sempre com `git commit --only` em árvore compartilhada
+  (um commit varreu arquivos staged de outra lane; registrado em ARMADILHAS).
 
 ## Próxima tarefa exata
 1. **FEITO nesta janela (Fase 8)**: suíte completa
    `nix develop --command python3 -m pytest -q modules/ai/jarvis/tests
    -p no:randomly` → **2109 passed / 0 failed / 27 skipped**, 240 s, rc=0
    (1 DeprecationWarning em `test_eval_judge`, não regressão).
-2. Fase 9: fechar `AUDIT-FINAL.md` com o resultado da suíte e o HEAD vivo.
-   A reconciliação anterior (`24622e1c`/`c5e3c147`) já foi feita.
+2. **FEITO**: `AUDIT-FINAL.md` reconciliado com HEAD vivo e suíte 2115 passed.
+   Próxima reconciliação só se HEAD mudar por outra lane.
 3. **FEITO (verificação)**: `knowledge_schema.build_payload` produz 19 campos
    de proveniência e `rag.py:841` passa todos (medido 19/11). Sem divergência.
    Não tocar coleções de produção sem autorização.
@@ -284,7 +288,9 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
    regenerado pelo gerador canônico em `9f8d1537` (`--check` limpo).
    **Não** rodar `--start-mtp code` sem permissão (derruba a voz via
    `Conflicts=` — comportamento correto).
-5. Rotina: testes focados no diff; rebuilds autorizados pelo dono nesta missão.
+5. **EM CURSO**: auditoria de sync AGENTS/vault/memory/RAG/plugins e contratos
+   Termux/Linux/Windows (2 agentes de apoio rodando). Corrigir gaps medidos,
+   validar com testes/rebuild autorizado e atualizar este checkpoint.
 
 ## Arquivos que o próximo agente precisa ler
 - `AGENTS.md` (raiz: cabecalho e regras pinadas; detalhes sob demanda).
