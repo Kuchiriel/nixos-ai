@@ -879,3 +879,14 @@
   P2 L1/L3 (6 × 5 = 30), estabilizar swap/VRAM antes de medir e exigir
   `discovery_stats.returned>0`, checker de referência 5/5 e 5 amostras/célula.
 - Relatório `docs/audit/AB-SUSPECT-SUMMARY-2026-11-20.md`; TECHNICAL-DEBT linkado.
+
+### 2026-11-20 — auto self-improvement contínuo (saída do dono)
+- Verificado que o loop está ativo sem restart: hook `auto-wake` registrado
+  (`memory-termux-auto-wake-hook.txt` 11:29Z) e wake real 11:46Z; auto-improve
+  com `--audit`, fila e limites atuando (queue_cap=3, remote_cap=1).
+- A própria fila gerou um falso positivo do `state-audit`:
+  `auto-improve-last.json` aparecia como órfão. Corrigido na origem (sidecars
+  `.json` passaram a ser reconhecidos), runtime e canônico; `state-audit`
+  agora reporta 0 órfãos e 12 mantidos. ai-mesh `843f543` pushed.
+- Tarefa falsa removida da fila com backup; fila=2. Nenhum dado apagado,
+  nenhum restart do opencode, nenhuma escrita em produção.
