@@ -251,6 +251,16 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
   já é usado por 14 sessões reais (não precisa de spawn). groq segue como
   pendência externa justificada (upgrade de conta/outra rota).
 
+## Descoberta dinâmica e contratos (20/11 — retomada 23)
+- Hosts/agentes vêm de `fleet-discover` (Tailscale/mDNS/ARP/ICMP/TCP/HTTPS/
+  SNMP/bus), nunca de lista fixa. Dois Windows descobertos via `coord-json`.
+- `AGENTS.md` do Linux segue canônico (1684 linhas); vault e celular são
+  ponteiros com sha256. `sync-vault.sh` não copia mais contratos.
+- `manifest-check --parity` detecta divergência de hash e declaração stale.
+- Pendências vivas: racionalizar as 64 divergências de hash `~/bin` vs
+  `shared/scripts`; declarar qual `termux.jsonl` é canônico; rag-prune --apply
+  (produção, só com autorização explícita); Windows segue sem SSH/RDP/MCP.
+
 ## Próxima tarefa exata
 1. **FEITO nesta janela (Fase 8)**: suíte completa
    `nix develop --command python3 -m pytest -q modules/ai/jarvis/tests

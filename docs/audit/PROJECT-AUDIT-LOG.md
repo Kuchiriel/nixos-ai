@@ -725,3 +725,41 @@
   ({id, attempted_goal, succeeded}); o checker exigia strings e travava com
   `TypeError: unhashable type: dict`. Agora aceita os dois formatos; 18 testes
   passam, incluindo caso novo com dicts.
+
+### 2026-11-20 — retomada 23 (descoberta dinâmica e contratos de frota)
+- HEAD de entrada `44f10d50`. Estado: 22 itens alheios, 0 staged, worktree
+  Onca preservado. `jarvis_rehydrate` indisponível; checkpoint usado.
+- **P0 corrigido**: `~/vaults/projects/nixos-ai/AGENTS.md` era cópia de 12/11
+  com regra obsoleta de liveness pela tabela `part` (já fez o `prune` apagar
+  4 agentes vivos). Cópia arquivada com sha256 em `patch-backups-2026-11-19`;
+  substituída por ponteiro com sha do canônico. `scripts/sync-vault.sh`
+  agora gera ponteiros em vez de copiar contratos (fix permanente).
+  Canônico intacto: `~/projects/nixos-ai/AGENTS.md`, 1684 linhas,
+  sha256 `f1aaa1c092f207a…`.
+- Celular: `~/AGENTS.md` virou ponteiro para `~/.config/opencode/AGENTS.md`
+  (o que o runtime carrega); versão antiga arquivada.
+- **Descoberta dinâmica** `scripts/fleet-discover.py`: Tailscale, mDNS, ARP,
+  ICMP, TCP, HTTPS, SNMP UDP/161, hub `/api/agents`, coord-mcp e blocos
+  `coord-json` do bus (via `gh issue view ... | @json`). Zero hostname/IP
+  hardcoded no código; evidência viva prevalece sobre hint estático.
+  Descobriu **dois peers Windows** pelo bus — `DESKTOP-LHTGATC`
+  (100.123.236.2) e `LAPTOP-IQ0QD1R4` (100.94.78.97), ambos `kind=windows`,
+  `os=win32`, porta 445 aberta, agentes `matheus-perf`/`Tatu` — e gerou
+  `ai-mesh/manifests/mesh/discovered/*.json` com IP/portas/agentes medidos.
+  Manifesto estático `windows.json` removido (arquivado) e `house.json`
+  aponta para a descoberta.
+- Timer `fleet-discovery.timer` (10 min, `Persistent=true`) com estado em
+  `~/.local/state/jarvis/fleet-discovery/` e `--report` de A/B por método.
+  Build+switch **rc=0**; timer ativo; 4 testes de descoberta passam.
+- `manifest-check --parity`: detectou **64 divergências de hash** entre
+  `~/bin` e `ai-mesh/shared/scripts`, 1 plugin e 1 skill não declarados.
+  Manifesto sincronizado com o disco (177 scripts, plugin `memory-termux`,
+  21 skills); ai-mesh commitado e pushed.
+- Referências que guiaram o desenho: A2A Agent Card (manifesto de capacidades),
+  MCP Tools spec (descoberta de ferramentas), MAST arXiv:2503.13657 (taxonomia
+  de falhas multi-agente), Mem0 arXiv:2504.19413 e Zep arXiv:2501.13956
+  (consolidação/proveniência), LangGraph durability, AgentDojo/SWE-bench
+  (A/B com verificador determinístico).
+- **Erro meu registrado**: commit `a1283c1a` varreu dois arquivos stageados
+  por outra lane (`vis-enqueue`). Nada perdido, mas daqui em diante usar
+  `git commit --only <files>` — nunca `git add` + commit numa árvore suja.
