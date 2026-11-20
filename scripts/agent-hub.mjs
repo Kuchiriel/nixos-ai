@@ -1122,6 +1122,18 @@ async function handler(req, res) {
     }
     return send(200, JSON.stringify({ ok: lastResult && lastResult.tasks_completed > 0, model: m, attempts: maxRetries, result: lastResult }), 'application/json');
   }
+  // (20/11) DESAFIO DA FROTA: estado duravel do runner canonico
+  // `scripts/fleet-challenge.py`. Read-only; sem spawn e sem segredos.
+  if (req.method === 'GET' && url.pathname === '/api/fleet-challenge') {
+    if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required' }), 'application/json');
+    const f = HOME + '/.local/state/jarvis/fleet-challenge/run.json';
+    try {
+      const j = JSON.parse(readFileSync(f, 'utf8'));
+      return send(200, JSON.stringify(j), 'application/json');
+    } catch (e) {
+      return send(200, JSON.stringify({ status: 'not-started', error: String(e) }), 'application/json');
+    }
+  }
   if (req.method === 'GET' && url.pathname === '/api/state') {
     // (15/11) TUDO LIGADO num estado so: agentes (roster), claims/board
     // (bus), fila da casa, kanban (nightwatch workitems), spawns, servicos e

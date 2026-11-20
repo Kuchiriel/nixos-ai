@@ -2,7 +2,7 @@
 
 > Regenerate with `python3 dataset/tools/tools_index.py` (canary). AGENTS.md reuse rule: search this index + grep tools/ for the verb BEFORE writing any script.
 
-_175 tools._
+_176 tools._
 
 - `ab-prompt.py` (nixos-ai/scripts) — """ab-prompt.sh — A/B de prompt com métrica HONESTA (bytes, não RC).
   use: `./scripts/ab-prompt.sh <modelo> <tier|task> [--runs N]`
@@ -104,6 +104,8 @@ _175 tools._
   use: `Uso: python3 fetch-resume.py URL DESTINO [--tries 50]`
 - `fetch-video-transcript.py` (nixos-ai/scripts) — """fetch-video-transcript.py — baixa a transcrição de um vídeo do YouTube, sem travar.
   use: `python3 scripts/fetch-video-transcript.py https://youtu.be/pnZh5PAF3VE`
+- `fleet-challenge.py` (nixos-ai/scripts) — """Fleet capability: blind USDT-like challenge runner, scorer and status.
+  use: `~/.local/state/jarvis/fleet-challenge/. Agents receive ONLY the blinded`
 - `fleet-dispatch.py` (nixos-ai/scripts) — fleet-dispatch — fecha o loop da frota no host.
 - `fleet-endpoint-sweep.py` (nixos-ai/scripts) — """fleet-endpoint-sweep.py — use every configured LLM endpoint overnight.
 - `fleet-milestone.py` (nixos-ai/scripts) — """fleet-milestone — notifica o dono no celular SÓ em marcos da frota.
