@@ -1063,3 +1063,16 @@
 - Validação: py_compile OK, 20 testes focados passed, proveniência medida
   `eb122765…/main`, `rag-prune --dry-run` removable=99294 e apply=false.
 - Detalhe em `docs/audit/RAG-PROVENANCE-2026-11-20.md`.
+
+### 2026-11-20 — auto-wake: vault AGENTS stale regenerados
+- 5 stale medidos (ai-mesh, cactus-needle, mt5, red-teaming, spiritvale-audit)
+  arquivados com sha256 em
+  `~/.local/state/jarvis/patch-backups-2026-11-19/vault-agents-pre-sync/`
+  (MANIFEST.json) antes de qualquer reescrita.
+- `scripts/sync-vault.sh` rodou; primeira execução revelou bug próprio:
+  heredoc `<<EOF` executou crases do texto (`part`), gerando "comando não
+  encontrado" e ponteiros truncados; corrigido (sem crases no texto) e
+  reexecutado. Caminho do canonical também normalizado (sem `//`).
+- Validação: 6/6 ponteiros (5 + nixos-ai) com caminho canonico correto, sha256
+  conf erindo com a fonte e texto íntegro; 3 órfãos preservados.
+- Nada apagado; 206 arquivos .md no vault após o sync.
