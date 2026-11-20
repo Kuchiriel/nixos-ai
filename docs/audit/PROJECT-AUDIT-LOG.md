@@ -1004,3 +1004,9 @@
   não são falha do hook nem perda de idle.
 - Grupo final `idle->peek->budget(false)` às 15:53:44 é o retorno ao idle após
   o wake, com budget bloqueado pelo gap; comportamento esperado.
+
+### 2026-11-20 — validação final da suíte (retomada)
+- `nix develop --command pytest -q modules/ai/jarvis/tests -p no:randomly`:
+  **2117 passed / 27 skipped / 1 warning**, 111,81 s, rc=0.
+- `AUDIT-FINAL.md` atualizado; nenhuma falha nova após os fixes de swarm,
+  lab, auto-wake e contratos.

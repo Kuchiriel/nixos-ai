@@ -18,7 +18,9 @@
 | Endpoints LLM | catálogo com 9 providers, frota ociosa | sweep por provider (7 spawns, conversas reais no bus) |
 
 ## Testes (Fase 8, 19/11)
-- **Suíte completa (19/11, janela 2): 2109 passed / 0 failed / 27 skipped**
+- **Suíte completa (20/11, HEAD `3be6f141`): 2117 passed / 27 skipped /
+  0 failed**, 111,81 s, rc=0 (1 DeprecationWarning conhecido).
+- Suíte anterior (19/11, janela 2): 2109 passed / 0 failed / 27 skipped.
   em 240 s, `nix develop --command pytest -q modules/ai/jarvis/tests -p no:randomly`.
 - `test_handoff + test_rehydrate + test_rag_identifier`: **24 passed**.
 - `scripts/rag-eval.py` (15 perguntas): recall@8 off=0.93/on=0.93, MRR 0.667/0.762.
