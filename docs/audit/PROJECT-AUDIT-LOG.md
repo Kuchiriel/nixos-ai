@@ -912,3 +912,12 @@
   timeout 900s, aceite `ck=v3`/`nivel=L2`/`discovery_stats.returned>0`,
   abort após 2 `infra` seguidos, `lab pause` no fim.
 - Commit `43f9ac83`; TOOLS-INDEX regenerado pelo gerador canônico.
+
+### 2026-11-20 — auto-wake: revisão dos 12 arquivos mantidos
+- `state-audit --json`: 81 arquivos, 0 órfãos, 12 mantidos.
+- Confirmados 12/12: 2 declarados `gerado-ativo` (auto-improve-last.json,
+  ta-state.cache.meta) e 10 no manifesto `quarentena-state-orfaos-lote2-20261119-084315.json`
+  (motivo presente para cada um). Diretório de quarentena existe com 44 itens;
+  leitores citados existem (`jobs-audit`, plugin memory-termux, install.sh,
+  TURNO-AUTONOMO-17-11.md) e o backup `entropy-seen.json.bak` tem original vivo.
+- Nenhum órfão real; nada movido ou apagado nesta revisão.
