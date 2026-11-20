@@ -1224,3 +1224,16 @@
   texto imutavel no Git e no Store; migrar para agenix/sops/env exige rebuild
   autorizado. Nada alterado na config; nenhuma chave rotacionada.
 - Detalhe (sem valores): `docs/audit/SECRETS-AUDIT-2026-11-20.md`.
+
+### 2026-11-20 — auto-wake: espelhos de memória reconciliados
+- Medido antes de qualquer escrita: `termux` 411/411 linhas e sha `099a88f994f5`
+  idêntico nos dois hosts; `nitro-v15` 11/11 e sha `e107d8685812` idêntico.
+  A divergência declarada (-2/-4) já tinha convergido nos fast-forward do sync
+  do ai-mesh — nenhuma linha precisou ser acrescentada ou apagada.
+- `nixos-ai` preservado como `schema_mismatch`: 1 linha em cada host, mas
+  `timestamp/agent/lane/errors` no Linux vs `ts/kind/text` no celular.
+- `manifests/termux.json` atualizado com os sha/linhas medidos e status `synced`;
+  registro em `ai-mesh/docs/memory-replication-2026-11-20.json` guarda os valores
+  declarados antes e o método (append-only, sem remoção).
+- Validação: `manifest-check --parity` → `sha_declared == sha_actual`,
+  0 conflitos, 0 divergências; verificado também no clone Linux. ai-mesh `2f22866`.
