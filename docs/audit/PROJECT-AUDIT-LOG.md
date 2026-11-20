@@ -694,3 +694,29 @@
   duplicando personas. Processos parados por PID exato; nenhum agente órfão
   restante. Correção futura: gravar estado inicial no `agent-spawn.py` (ou
   usar `/api/spawn` do hub com override de modelo) antes de relançar.
+
+### 2026-11-20 — retomada 22 (correção do spawn using papers)
+- Pedido: corrigir o timing do estado do spawn e usar literatura para guiar.
+- Referências consultadas (diretriz: checkpoint síncrono ANTES da operação
+  longa, com estado identificável e recuperação):
+  - SagaLLM — context management, validation and transaction guarantees for
+    multi-agent LLM planning, arXiv:2503.11951 (spatio-temporal state
+    identification/checkpointing, operation state com status/timestamps,
+    durabilidade de estados confirmados).
+    https://arxiv.org/html/2503.11951v3
+  - LangGraph checkpointers / durability modes (`exit`, `async`, `sync`):
+    `sync` persiste cada checkpoint antes de seguir; `thread id` identifica a
+    execução retomável. https://docs.langchain.com/oss/python/langgraph/checkpointers
+  - Martin Fowler, “Long-horizon agents and durable execution”:
+    https://martinfowler.com/articles/durable-execution-agents.html
+- Implementação em `scripts/agent-spawn.py`: `write_spawn_state()` grava,
+  de forma **atômica** (tmp + replace), um checkpoint com `status=starting`
+  e `started_at` **antes** de `opencode run`; o estado final substitui o
+  arquivo com `done|failed`, `rc`, `output` e `finished_at`. Campo `name`
+  adicionado para identificação estável do spawn.
+- `scripts/fleet-challenge.py` passou a casar pelo campo `name` (não por um
+  fragmento do prompt, que ficava fora dos primeiros 300 chars).
+- Evidência: sonda com minimax mostrou `status=starting` **1,0 s** após o
+  lançamento com o processo ainda vivo (antes: arquivo só no fim do turno).
+  Runner relançado registrou os 4 personas em ~12 s, em paralelo.
+- Commit `498937df`. Desafio segue em execução; resultado pendente.
