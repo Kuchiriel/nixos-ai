@@ -70,7 +70,7 @@ GOOD_MODEL = {
     "openrouter": "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
     "ovhcloud": "ovhcloud/gpt-oss-20b",
     "kilocode": "kilocode/nvidia/nemotron-3-ultra-550b-a55b:free",
-    "llm7": "llm7/nemotron-3-nano:30b",
+    "llm7": "llm7/gpt-oss:20b",
     "cohere": "cohere/command-r7b-12-2024",
 }
 
@@ -149,15 +149,26 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Use every configured LLM endpoint overnight; consolidate the hub conversation log.")
     ap.add_argument("--consolidate-only", action="store_true",
                     help="only rebuild the daily conversation log from existing spawns")
+    ap.add_argument("--only", default="",
+                    help="comma-separated provider ids to spawn (retry selective)")
+    ap.add_argument("--force", action="store_true",
+                    help="respawn providers already present in today's manifest")
+    ap.add_argument("--short-task", action="store_true",
+                    help="minimal task text for low-TPM tiers")
     args = ap.parse_args()
     manifest = load_manifest()
     if args.consolidate_only:
         log = consolidate_log(manifest)
         print("log:", log, "bytes=", log.stat().st_size)
         return 0
-    done = {e.get("provider") for e in manifest.get("spawns", []) if e.get("ok", True)}
+    done = set()
+    if not args.force:
+        done = {e.get("provider") for e in manifest.get("spawns", []) if e.get("ok", True)}
     models = api("/api/models")
     providers = models.get("providers", [])
+    if args.only:
+        wanted = {x.strip() for x in args.only.split(",") if x.strip()}
+        providers = [p for p in providers if p.get("id") in wanted]
     print(f"providers={len(providers)} already_today={sorted(done)}")
     ids = [p.get("id") for p in providers if p.get("id")]
     for i, provider in enumerate(providers):
@@ -170,6 +181,11 @@ def main() -> int:
             continue
         peer = f"endpoint-{ids[(i + 1) % len(ids)]}" if ids else " coordinator"
         task = TASKS.get(pid, f"Read-only audit of {pid} configuration; post 3 findings to bus issue 100 with tag [endpoint-{pid}].")
+        if args.short_task:
+            task = (f"Reply in one sentence what the agent hub /api/transcript does now. "
+                    f"Post it to bus issue 100 with tag [endpoint-{pid}] using "
+                    "`gh issue comment 100 --repo Kuchiriel/mt5 --body \"<finding>\"`. "
+                    "No tools, no file changes.")
         task += (" Use `gh issue comment 100 --repo Kuchiriel/mt5 --body \"<finding>\"` "
                  "to publish. Never write secrets, never restart services, never "
                  "modify production data.")
