@@ -435,6 +435,19 @@ in {
   # o agente lembrar (2602.11988: disciplina sozinha não é sistema).
   home.file.".config/opencode/plugins/memory.js".source = ./files/opencode/plugins/memory.js;
 
+  # (20/11) backup PRE-COMPACTION do memory.js vivia SO no ~/.config, sem
+  # par no repo: versionado para nao perder a evidencia do rollback.
+  home.file.".config/opencode/plugins/memory.js.bak-19-11-compaction".source =
+    ./files/opencode/plugins/memory.js.bak-19-11-compaction;
+
+  # (20/11) consulta-obrigatoria.js nao era declarado: o symlink live apontava
+  # direto para a fonte do repo, entao uma edicao local virava "plugin ativo"
+  # sem rebuild. Declarado com force porque o symlink manual ja existe.
+  home.file.".config/opencode/plugins/consulta-obrigatoria.js" = {
+    source = ./files/opencode/plugins/consulta-obrigatoria.js;
+    force = true;
+  };
+
   # Red-team plugin — modo de auditoria + tools nativas `redteam_matrix`,
   # `redteam_payload` e `redteam_probe` (06/11). O opencode.json e
   # read-only (symlink do store), entao as tools NAO podem ser registradas
