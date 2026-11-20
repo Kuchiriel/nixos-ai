@@ -601,3 +601,18 @@
 - Próximo: ler `retry-summary.json`; se nvidia仍 falhar, registrar como
   pendência externa; único risco em aberto segue sendo
   `scripts/hot-swap-model.sh` (untracked, outro agente, duplica órfãos).
+
+### 2026-11-20 — fechamento da retomada 18
+- `retry-summary.json`: 3 sessões de repetição (groq, ovhcloud, llm7);
+  log consolidado `conversations-2026-11-20.md` (3.200 B) com sha256.
+- Classificação final por transcript: **ovhcloud funcionou** (6 linhas, 0
+  erros, tag `[endpoint-ovhcloud]` no bus); groq 413 TPM (55.571 pedidos,
+  mesma conta free); llm7 "free token allowance reached, retry in 3600s";
+  nvidia timeout 240s no spawn, mas o provider **já é usado por 14 sessões
+  reais da frota** (`/api/agents`) — não há pendência de endpoint nvidia;
+  cohere ficou sem modelo ativo no catálogo no momento da repetição.
+- Total com trabalho real: cloudflare, gemini, openrouter, kilocode (noite)
+  + ovhcloud (repetição) = **5 providers por spawn**, mais nvidia já em uso
+  pela frota. Pendências externas justificadas: groq (upgrade de conta),
+  llm7/cohere (cota/catálogo), sem ação local segura.
+- Suíte revalidada no delta: 2109 passed / 0 failed / 27 skipped (110 s).

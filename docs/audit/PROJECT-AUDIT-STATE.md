@@ -230,8 +230,10 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
   upgrade da conta/outra rota.
 - `nvidia` com ID curado também estourou o timeout de 240 s no spawn;
   investigar caminho alternativo (wake em sessão existente) antes de insistir.
-- Repetição dos demais falhos roda destacada; resultado em
-  `~/.local/state/jarvis/fleet-endpoint-sweep/retry-summary.json`.
+- **FEITO**: `retry-summary.json` gravado; ovhcloud funcionou (tag no bus);
+  llm7 atingiu cota horária; cohere sem modelo ativo no momento; nvidia
+  já é usado por 14 sessões reais (não precisa de spawn). groq segue como
+  pendência externa justificada (upgrade de conta/outra rota).
 
 ## Próxima tarefa exata
 1. **FEITO nesta janela (Fase 8)**: suíte completa
