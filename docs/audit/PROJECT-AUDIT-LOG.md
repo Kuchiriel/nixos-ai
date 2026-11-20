@@ -1165,3 +1165,10 @@
 - `house docs` regenerou HOME.md + páginas; `house docs --check` OK (18) no
   celular e no Linux; ambos os clones em `55aacb2`, sem divergência.
 - Nada apagado; segredos fora do índice.
+
+### 2026-11-20 — auto-wake: A/B de payload index RAG
+- `scripts/rag-index-ab.py --n 500` em `jarvis_test_gitprovenance`: recall@8
+  1,0 antes e depois; latência média 2,13 -> 2,16 ms (sem ganho).
+- `code_index` 275.724 pontos antes e depois — nada de produção escrito.
+- Decisão: **não** criar indexes de `git_commit`/`branch` em produção com
+  esta evidência; detalhe em `docs/audit/RAG-INDEX-AB-2026-11-20.md`.
