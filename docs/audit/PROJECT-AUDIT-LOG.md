@@ -831,3 +831,16 @@
   a fila esvazia, antes de desistir; sintaxe validada por `node --check` no
   host. Nenhum reinicio do opencode.
 - ai-mesh phone pushed `21b3ad9`; parity memoria ok, docs --check OK.
+
+### 2026-11-20 — auto-wake: fonte remota no auto-improve
+- `auto-improve` agora lê `PROJECT-AUDIT-STATE.md` do Linux por SSH
+  (`timeout 12`, `ConnectTimeout=6`, `BatchMode=yes`, read-only) e transforma
+  pendências acionáveis em tarefas da fila.
+- Filtros medidos: descarta FEITO, rag-prune/produção, decisões do dono,
+  lanes de outros agentes, itens informativos e vagos; exige verbo de ação
+  e dedupe por hash com cooldown de 6 h (mesmo mecanismo do auto-wake).
+- Validação: `--dry-run` com fontes simuladas gerou 2 candidatos; dry-run real
+  extraiu pendências remotas; `--once` enfileirou 1 e repetições não duplicaram.
+  Fila final=1 (tarefa remota de resultados A/B antigos).
+- Canônico commitado/pushado em ai-mesh `acbbe53`; shim `~/bin/auto-improve`
+  intacto. Nenhum restart do opencode, nenhuma escrita em produção.
