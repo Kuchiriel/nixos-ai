@@ -688,3 +688,9 @@
   arquivo de estado do spawn (até 120 s) e deixa o agente continuar.
   Relançado em background; resultado ainda pendente.
 - Commits: `d628dad1` (bus multipath + dataset), `44f7ad9b` (spawn assíncrono).
+- ATUALIZAÇÃO (retomada 21): a corrida do desafio foi **pausada** — o arquivo
+  de estado do `agent-spawn.py` só é gravado no fim do primeiro turno, então o
+  modo assíncrono ainda não consegue reivindicar a sessão cedo e acabaria
+  duplicando personas. Processos parados por PID exato; nenhum agente órfão
+  restante. Correção futura: gravar estado inicial no `agent-spawn.py` (ou
+  usar `/api/spawn` do hub com override de modelo) antes de relançar.
