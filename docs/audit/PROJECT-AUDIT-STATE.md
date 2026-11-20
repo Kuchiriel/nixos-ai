@@ -221,6 +221,18 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
 - Log consolidado: `~/.local/state/jarvis/conversation-log/<data>.md`
   (sha256 ao lado), gerado pelo `--consolidate-only`.
 
+## Resultado dos endpoints LLM (20/11 — retomada 18)
+- 7 providers spawnados na noite; 4 produziram trabalho real e conversa no
+  bus (cloudflare, gemini, openrouter, kilocode). Log consolidado auditado:
+  cronológico, dedupado, sem USER vazio, com 11 linhas `ERROR`.
+- `groq` é **pendência justificada por limite externo**: 413 TPM mesmo com
+  prompt mínimo (11.843 pedidos vs 8.000 permitidos). Não repetir sem
+  upgrade da conta/outra rota.
+- `nvidia` com ID curado também estourou o timeout de 240 s no spawn;
+  investigar caminho alternativo (wake em sessão existente) antes de insistir.
+- Repetição dos demais falhos roda destacada; resultado em
+  `~/.local/state/jarvis/fleet-endpoint-sweep/retry-summary.json`.
+
 ## Próxima tarefa exata
 1. **FEITO nesta janela (Fase 8)**: suíte completa
    `nix develop --command python3 -m pytest -q modules/ai/jarvis/tests

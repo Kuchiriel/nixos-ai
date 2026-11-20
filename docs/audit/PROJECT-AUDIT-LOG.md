@@ -571,3 +571,33 @@
   `scripts/TOOLS-INDEX.md` (regerado pelo gerador canônico, `--check` limpo).
 - Próximo: ler `final-summary.json`, conferir as tags no bus e o log
   consolidado; repetir só os endpoints que falharam, com os IDs curados.
+
+### 2026-11-20 — retomada 18 (crouton-alpha/termux)
+- Protocolo: AGENTS/STATE/LOG lidos; `jarvis_rehydrate` indisponível; coord
+  consultado (Onca live, Lince/auditoria-runtime live); Git: HEAD `fcda2e3e`
+  de outra lane (renda, `scripts/uhrs-capture.py`, sem conflito com a
+  auditoria), 21 itens alheios, 0 staged; worktree Onca preservado.
+- Resultados da noite lidos: `final-summary.json` com 7 spawns e log
+  consolidado de 16.457 B; tags reais no bus (`conv-frota`,
+  `endpoint-gemini`, `endpoint-kilocode`, `endpoint-llm7`, `endpoint-nvidia`).
+  Qualidade do log auditada: 7 seções, cronológico, 0 linhas USER vazias,
+  11 linhas ERROR visíveis.
+- Classificação dos endpoints: funcionaram cloudflare (21 turnos/19 tools,
+  depois esgotou cota diária), gemini (4 turnos, postou no bus), openrouter
+  (14 turnos/11 tools), kilocode (19 turnos/16 tools, postou no bus).
+  Falharam: groq (413 TPM), nvidia (modelo EOL), llm7 (modelo indisponível),
+  ovhcloud (timeout), cohere (não spawned).
+- Repetição seletiva (`--only --force --short-task`) com IDs curados: groq
+  **mediado e refutado de vez** — até `opencode run` com prompt mínimo em
+  /tmp pede 11.843 tokens contra TPM 8.000 da conta (413); marcado como
+  skip justificado no script. nvidia com modelo curado também estourou
+  240 s. O restante segue em job destacado com finalizador próprio.
+- Fase 8 revalidada após o delta: suíte completa **2109 passed / 0 failed /
+  27 skipped**, 110 s, rc=0 (1 DeprecationWarning conhecido).
+- Fase 9 fechada no `AUDIT-FINAL.md` com HEAD de código `53010052` e novas
+  linhas para hub/endpoints.
+- Commits desta janela: `92eb796f` (Fase 9), `4f7c8efa` (retry flags),
+  `b0bd576e` (skip groq com evidência).
+- Próximo: ler `retry-summary.json`; se nvidia仍 falhar, registrar como
+  pendência externa; único risco em aberto segue sendo
+  `scripts/hot-swap-model.sh` (untracked, outro agente, duplica órfãos).
