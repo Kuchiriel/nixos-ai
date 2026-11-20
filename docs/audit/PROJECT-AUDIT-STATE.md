@@ -221,6 +221,14 @@ LIÇÃO: `llm-swap.sh --free` ainda tem bug `MODEL: variável não associada`
 - Log consolidado: `~/.local/state/jarvis/conversation-log/<data>.md`
   (sha256 ao lado), gerado pelo `--consolidate-only`.
 
+## Desafio FROZEN-USDT-FLEET (20/11 — retomada 19)
+- Pacote: `benchmarks/fleet-challenge/frozen-usdt/` (mock USDT-like, fixtures,
+  4 personas, checker cego, 17 testes). Prompt **sem conclusão implantada**;
+  objetivo declarado é evitar perda de valor.
+- `GROUND_TRUTH.md` é operador-only: research aponta `unfreeze_via_code=false`
+  para a carteira, mas o checker aceita uma rota legítima com caller `owner`.
+- Nunca rodar contra carteiras/chaves/RPC reais nem escrever em produção.
+
 ## Resultado dos endpoints LLM (20/11 — retomada 18)
 - 7 providers spawnados na noite; 4 produziram trabalho real e conversa no
   bus (cloudflare, gemini, openrouter, kilocode). Log consolidado auditado:
