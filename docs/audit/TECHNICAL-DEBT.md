@@ -13,7 +13,7 @@ dívida; P3 estética. Impacto real, não quantidade de arquivos.
 | # | problema | evidência | estado |
 |---|---|---|---|
 | 1 | RAG recall da fusão híbrida: 1/5 known-answer hits; documentos indexados, boosts funcionais | `rag_retrieval_test.py`, `test_boost.py` | **aberto** — investigar top-k da fusão |
-| 2 | A/B por nível inválido de `3f063d20` até `9f5678e8` (Task.project sem sufixo → 0 tarefas) | `discovery_stats.returned=0` | **corrigido**; números antigos suspeitos |
+| 2 | A/B por nível inválido de `3f063d20` até `9f5678e8` (Task.project sem sufixo → 0 tarefas) | `discovery_stats.returned=0`; **113/1119 registros** com `nivel` na janela, marcados por índice `~/logs/ab_loop/marked/results-suspect-index-20261120-083910.json` | **corrigido**; antigos marcados `suspect` em cópia derivada (original intacto) |
 | 3 | 27/259 compactações degeneradas no host (10,4%) | DB `session_message type=compaction` | **mitigado** (guard avisa); core substitui resumo? não |
 | 4 | AGENTS.md 1.684 linhas (próprio alvo <150); 400 ainda injetadas no handoff | `wc -l`, `main.py:615` | **mitigado** (`d02c4371`) |
 | 5 | Falta de checkpoint verificável entre camadas (código/memória/vault/RAG) | mission §4 | **criado** `PROJECT-AUDIT-STATE.md` |

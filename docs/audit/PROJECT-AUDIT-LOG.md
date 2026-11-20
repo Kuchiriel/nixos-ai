@@ -844,3 +844,15 @@
   Fila final=1 (tarefa remota de resultados A/B antigos).
 - Canônico commitado/pushado em ai-mesh `acbbe53`; shim `~/bin/auto-improve`
   intacto. Nenhum restart do opencode, nenhuma escrita em produção.
+
+### 2026-11-20 — auto-wake: marcar A/B inválidos por Task.project
+- Janela medida pelos commits: `3f063d20` (03:23:42-03) até `9f5678e8`
+  (10:58:11-03), 19/11. `results.jsonl` tem 1119 linhas, 583 com `nivel`;
+  **113** per-level_records caem na janela (bonsai 53, mtp 50, api 10).
+- Nada foi apagado ou reescrito no original: backup verbatim e cópia derivada
+  com `validity=suspect` + `suspect_reason` em
+  `~/logs/ab_loop/marked/`, com índice JSON (sha de cada linha, modelo,
+  nível, ts, rc, ck) e manifesto do backup.
+- Validação: original sha `a8bbaf32…` inalterado; 113 marcados na cópia,
+  0 linhas inválidas, 0 registros fora da janela com campo `validity`.
+- `docs/audit/TECHNICAL-DEBT.md` linha 2 atualizada com contagem e índice.
