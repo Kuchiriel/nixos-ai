@@ -1112,3 +1112,15 @@
 - `memory_canonical`/`memory_mirrors` legados atualizados para o stream termux;
   `manifest-check --parity`: memory ok, sha declarado == sha real, 0 conflitos.
 - ai-mesh `7f14c39`; nada apagado ou restaurado.
+
+### 2026-11-20 — dono ausente: auto self-improvement expandido
+- Verificado: auto-wake fila=8, hook registrado, 22 wakes desde o fix,
+  5 enqueues reais, 4 executados, precisão 0,8; sensores ativos.
+- Expansão implementada em `auto-improve`:
+  * `card_drift()` compara cards A2A com a descoberta viva e gera tarefa de
+    reconciliação quando portas divergem (teste com fixture: 1 drift detectado);
+  * `MAX_REMOTE` agora tem histerese persistida em
+    `~/.local/state/auto-improve-remote-cap.json`: cap 2 enquanto precisão
+    >=0,8; se cair, `--audit` passa a decidir `REVERT_MAX_REMOTE_TO_1`.
+- Decisão executada com evidência: cap 2 (`precision 0.8`, 4/5 executados),
+  `KEEP_MAX_REMOTE_2`; snapshot 12 gravado. ai-mesh `95cdec3`.
