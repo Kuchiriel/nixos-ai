@@ -3,7 +3,7 @@
 ## Estado inicial → final
 | item | inicial | final |
 |---|---|---|
-| HEAD | `57c91765` | `7fe7e4fc` |
+| HEAD de código da auditoria | `57c91765` | `53010052` (fcda2e3e é delta de outra lane; `git rev-parse HEAD` é a verdade) |
 | Backlog | 4 abertos (#08/#17/#18 + decisões) | **0 aberto / 22 total** |
 | Entregáveis docs/audit | 0 | 9 (+ RAG-EVAL, HANDOFF-FORMAT) |
 | RAG recall@8 | 0.36 (juiz 15 perguntas) | **0.93** (MRR 0.762 com rerank) |
@@ -11,9 +11,11 @@
 | A/B por nível | inválido (Task.project sem sufixo) | válido, #18 medido |
 | Compactação degenerada | 27/259 resumos ruins | guard no host (avisa) |
 | Plugins gerados vs live | drift suspeito | sha256 idêntico |
-| Workspace | 42 uncommitted | 19 uncommitted (todo de outras lanes; 0 staged) |
+| Workspace | 42 uncommitted | 21 uncommitted (todo de outras lanes; 0 staged) |
 | Switch NixOS | não executado | **rc=0**, HM ativo, units servidas do `/nix/store` |
 | Cliente de voz | arquivo solto, dois donos | symlink Nix, systemd dono único, watchdog delega |
+| Log de conversas do hub | newest-first, vazio em sessões V2 | ordem ASC, dedupe, `m.text` e `ERROR` visíveis |
+| Endpoints LLM | catálogo com 9 providers, frota ociosa | sweep por provider (7 spawns, conversas reais no bus) |
 
 ## Testes (Fase 8, 19/11)
 - **Suíte completa (19/11, janela 2): 2109 passed / 0 failed / 27 skipped**
@@ -41,6 +43,9 @@
     (`105214e4`), self-test 6/6.
 13. Exclusividade 4B determinística (`7fe7e4fc`): code `wanted=false` +
     `llama-swap.sh` via systemd; build+switch rc=0, voice active.
+14. `TOOLS-INDEX` regenerado pelo gerador canônico (160→174, `--check` limpo).
+15. Hub `/api/transcript` corrigido (ordem/dedupe/schema V2/erros) e recarregado.
+16. `fleet-endpoint-sweep.py` acionou endpoints LLM e consolidou o log diário.
 
 ## Dívida restante (honesta)
 - Gate H3 "cada chunk 5/5": medido 4/5 — 3ª amostra pendente se quiser 5/5.
