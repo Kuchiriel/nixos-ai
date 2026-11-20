@@ -1076,3 +1076,12 @@
 - Validação: 6/6 ponteiros (5 + nixos-ai) com caminho canonico correto, sha256
   conf erindo com a fonte e texto íntegro; 3 órfãos preservados.
 - Nada apagado; 206 arquivos .md no vault após o sync.
+
+### 2026-11-20 — auto-wake: capability cards e monitor idle
+- `capability-cards` gera 4 cards A2A-style a partir de evidência viva
+  (manifests canônicos, discovered, termux.json, fleet-discovery/latest.json):
+  linux (4 serviços reconciliados), termux (3, 21 skills, 177 scripts) e os
+  dois peers Windows (smb:445, status limited). `--check`: 4 cards, 0 problemas;
+  nenhum segredo/pubkey nos cards. ai-mesh `600f5d2`/`b638280`.
+- Observador dos 3 wakes seguintes concluiu: 13 wakes no trace, 3 sequências
+  `idle->peek->budget->wake`, **0 exceções** (rag, vault e este goal).
