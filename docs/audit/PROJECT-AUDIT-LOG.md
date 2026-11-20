@@ -1085,3 +1085,14 @@
   nenhum segredo/pubkey nos cards. ai-mesh `600f5d2`/`b638280`.
 - Observador dos 3 wakes seguintes concluiu: 13 wakes no trace, 3 sequências
   `idle->peek->budget->wake`, **0 exceções** (rag, vault e este goal).
+
+### 2026-11-20 — auto-wake: proveniência dos plugins corrigida
+- `consulta-obrigatoria.js` não era declarado no `home.nix`: symlink live
+  apontava direto para a fonte do repo (edição local virava plugin ativo sem
+  rebuild). Declarado com `force=true`; backup live sem par (`memory.js.bak-19-11-compaction`,
+  sha `5baa9ff3…`, varredura sem segredos) copiado para o repo e declarado.
+- Commit `dfabaa12`; `nixos-rebuild build` e `switch` rc=0 com snapshot/restore
+  do índice Git (autorização do dono para rebuilds nesta missão).
+- Verificado: ambos os symlinks live agora apontam para `/nix/store/...-hm_*`;
+  sha do backup preservado; `node --check` OK; hub `/api/state` 200;
+  processos `opencode serve` vivos (nenhum restart explícito); staged=0.
