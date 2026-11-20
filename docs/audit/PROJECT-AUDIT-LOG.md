@@ -1124,3 +1124,16 @@
     >=0,8; se cair, `--audit` passa a decidir `REVERT_MAX_REMOTE_TO_1`.
 - Decisão executada com evidência: cap 2 (`precision 0.8`, 4/5 executados),
   `KEEP_MAX_REMOTE_2`; snapshot 12 gravado. ai-mesh `95cdec3`.
+
+### 2026-11-20 — auto-wake: clone Linux ai-mesh sincronizado
+- Antes: clone Linux em `823d6e8`, origin/main em `95cdec3` (24 commits),
+  com 2 arquivos locais modificados e 1 script untracked.
+- Backup com sha/manifest em
+  `~/.local/state/jarvis/patch-backups-2026-11-19/ai-mesh-linux-presync/`
+  antes de qualquer operação; `git stash push -u`, `git pull --ff-only`,
+  `git stash pop`. Conflito em `docs/ARMADILHAS.md` resolvido por união
+  determinística dos estágios; memória local preservada.
+- Commit `02c07af` pushed; phone puxou em fast-forward; ambos os clones em
+  `02c07af` e sem divergência. `house docs --check` OK (15 arquivos) nos dois
+  repos, 14 páginas de domínio.
+- Nada apagado; nenhum segredo no commit (só lições e memória episódica).
