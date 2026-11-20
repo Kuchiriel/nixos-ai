@@ -63,6 +63,9 @@ def api(path: str) -> dict:
 # marca modelos EOL como "active" (diffusiongemma morreu 12/11) e o
 # alphabetical-first escolheu um deles -> 0 trabalho do endpoint nvidia.
 GOOD_MODEL = {
+    # (20/11, MEDIDO) groq e' inutilizavel nesta conta: ate `opencode run` com
+    # prompt minimo em /tmp pede 11.843 tokens contra TPM 8.000 do tier free
+    # (413). Nao e bug do sweep — exige upgrade da conta ou outra rota.
     "groq": "groq/openai/gpt-oss-20b",
     "nvidia": "nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
     "cloudflare": "cloudflare/@cf/google/gemma-4-26b-a4b-it",
@@ -173,6 +176,9 @@ def main() -> int:
     ids = [p.get("id") for p in providers if p.get("id")]
     for i, provider in enumerate(providers):
         pid = provider.get("id", "")
+        if pid == "groq":
+            print("  skip groq: TPM 8000 < 11843 pedidos ate com prompt minimo (20/11)")
+            continue
         if not pid or pid in done:
             continue
         model = pick_model(provider)
