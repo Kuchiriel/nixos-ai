@@ -594,8 +594,10 @@ async function abControl(action, model, level){
 /* ── bus / casa ─────────────────────────────────────── */
 async function loadBus(){
   const d = await (await api('/api/bus?limit=40')).json();
-  $('#bus').innerHTML = (d.items||[]).map(b=>
-    `<div class="busline"><span class="ts tiny dim">${hhmm(b.ts)}</span><span class="who">${esc(b.from||b.who||'?')}</span> <span class="kind">[${esc(b.kind||'')}]</span> ${esc(b.text||b.body||'')}</div>`
+  const j = d.journal;
+  const head = j ? `<div class="tiny dim">registro automático: ${j.total} mensagens · ${Object.keys(j.by_path||{}).join(' · ')} · ${esc(j.day||'')}</div>` : '<div class="tiny dim">registro automático: aguardando primeira captura</div>';
+  $('#bus').innerHTML = head + (d.items||[]).map(b=>
+    `<div class="busline"><span class="ts tiny dim">${hhmm(b.ts)}</span><span class="who">${esc(b.from||b.who||'?')}</span> <span class="path">[${esc(b.path||'?')}]</span> <span class="kind">[${esc(b.kind||'')}]</span> ${esc(b.text||b.body||'')}</div>`
   ).join('') || '<div class="tiny dim">bus vazio</div>';
 }
 async function loadState(){

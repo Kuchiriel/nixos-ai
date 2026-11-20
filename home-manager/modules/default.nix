@@ -34,6 +34,8 @@
     ./services/wireplumber-default-source.nix
     # (05/11) MCP de coordenação entre IAs por HTTP na tailnet.
     ./services/coord-mcp.nix
+    # (20/11) dataset append-only das conversas da frota (3 caminhos do bus).
+    ./services/bus-journal.nix
     ./services/jarvis-knowledge-mcp.nix
     # (19/11, auditoria-runtime) O cliente de voz duplex era uma unit SOLTA
     # em ~/.config/systemd/user (fora do Nix): nenhum rebuild a recriava e

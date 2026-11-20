@@ -459,7 +459,7 @@ async function busViaApi(limit) {
   // link traz rel=last) e le as 2 ultimas paginas com per_page=60 — a conta
   // de pagina muda com o per_page, entao recalcula: lastPage(per_page=1) e o
   // TOTAL de itens; com per_page=60 a ultima pagina e ceil(total/60).
-  const base = 'https://api.github.com/repos/Kuchiriel/mt5/issues/12/comments';
+  const base = 'https://api.github.com/repos/Kuchiriel/mt5/issues/100/comments';
   const head = await fetch(base + '?per_page=1', { headers, signal: AbortSignal.timeout(25000) });
   if (!head.ok) throw new Error('api.github.com ' + head.status);
   const link = head.headers.get('link') || '';
@@ -491,18 +491,23 @@ async function busViaApi(limit) {
 
 async function busMessages(limit = 40) {
   const now = Date.now();
-  if (now - busCache.at < 90000) return { items: busCache.items.slice(-limit), cached: true, err: busCache.err };
+  // (20/11) 10s, nao 90s: o botao Bus tem de refletir a conversa da frota
+  // em tempo real. Cada item traz `path` dizendo de onde veio.
+  if (now - busCache.at < 10000) return { items: busCache.items.slice(-limit), cached: true, err: busCache.err };
   try {
-    // (15/11) Sem execucao externa: o node deste unit nao consegue rodar o
-    // `gh` nem o `python3` (SIGTERM imediato ao exec — medido, ate o
-    // .gh-wrapped). A leitura do bus e por HTTPS direto na API do GitHub,
-    // com o token que o proprio `gh` da casa usa (~/.config/gh/hosts.yml).
-    const items = await busViaApi(limit);
-    busCache = { at: now, items, err: "" };
-    return { items: items.slice(-limit), cached: false, err: "" };
+    const j = await pyJSON('bus-paths.py', [String(limit)], 60000);
+    const items = Array.isArray(j.items) ? j.items : [];
+    busCache = { at: now, items, err: (j.errs || []).join(' | ') };
+    return { items: items.slice(-limit), cached: false, err: busCache.err };
   } catch (e) {
-    busCache = { at: now, items: busCache.items, err: String(e).slice(0, 200) };
-    return { items: busCache.items.slice(-limit), cached: true, err: busCache.err };
+    try {
+      const items = await busViaApi(limit);
+      busCache = { at: now, items, err: 'fallback gh#100: ' + String(e).slice(0, 120) };
+      return { items: items.slice(-limit), cached: false, err: busCache.err };
+    } catch (e2) {
+      busCache = { at: now, items: busCache.items, err: String(e2).slice(0, 200) };
+      return { items: busCache.items.slice(-limit), cached: true, err: busCache.err };
+    }
   }
 }
 
@@ -1249,7 +1254,9 @@ async function handler(req, res) {
     // token: nao expoe transcript de sessao nem escreve nada.
     const lim = Math.min(100, parseInt(url.searchParams.get('limit') || '40', 10) || 40);
     const b = await busMessages(lim);
-    return send(200, JSON.stringify({ items: b.items, cached: b.cached, err: b.err }), 'application/json');
+    let journal = null;
+    try { journal = JSON.parse(readFileSync(HOME + '/.local/state/jarvis/bus-journal/manifest.json', 'utf8')); } catch { /* sem captura ainda */ }
+    return send(200, JSON.stringify({ items: b.items, cached: b.cached, err: b.err, journal }), 'application/json');
   }
   if (req.method === 'POST' && url.pathname === '/api/wake') {
     if (!authorized(req)) return send(401, JSON.stringify({ error: 'token required (x-agent-hub-token)' }), 'application/json');
@@ -1260,6 +1267,14 @@ async function handler(req, res) {
     try {
       const { name, text } = JSON.parse(raw || '{}');
       const out = await wake(name, text);
+      // (20/11) caminho `hub-wake`: entrega direta na sessao tambem e
+      // conversa da frota e deve aparecer no Bus com origem etiquetada.
+      try {
+        const line = JSON.stringify({ ts: new Date().toISOString(), name,
+          to: (out.body && out.body.name) || name,
+          text: String(text || '').replace(/\s+/g, ' ').slice(0, 500) }) + '\n';
+        writeFileSync(HOME + '/.local/state/jarvis/hub-messages.jsonl', line, { flag: 'a' });
+      } catch { /* log e best-effort; a entrega ja aconteceu */ }
       return send(out.status, JSON.stringify(out.body), 'application/json');
     } catch (e) { return send(400, JSON.stringify({ error: String(e) }), 'application/json'); }
   }
