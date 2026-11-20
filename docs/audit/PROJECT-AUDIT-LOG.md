@@ -1157,3 +1157,11 @@
   limite real de taxa).
 - Teste real: `--dry-run` listou o gap `investigar top-k da fusão` e `--once`
   o enfileirou; ai-mesh `70ff6cf`.
+
+### 2026-11-20 — auto-wake: house indexou auditorias recentes
+- `index/house.json` passou de 14 para 17 entradas com 3 domínios novos:
+  `audit-auto-improve`, `audit-lab` e `audit-quarantine`, cada um com
+  entrypoint, health e `last_measured` conforme a regra da casa.
+- `house docs` regenerou HOME.md + páginas; `house docs --check` OK (18) no
+  celular e no Linux; ambos os clones em `55aacb2`, sem divergência.
+- Nada apagado; segredos fora do índice.
