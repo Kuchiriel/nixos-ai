@@ -944,3 +944,20 @@
 - O dry-run expôs outro falso positivo: `auto-improve-precision.jsonl` como
   órfão. `state-audit` passou a reconhecer sidecars `.jsonl` ativos: 0 órfãos,
   13 mantidos. ai-mesh `f8d7855`; nenhum dado apagado.
+
+### 2026-11-20 — auto-wake: diagnóstico do idle parado ~2h
+- Evidência: hook registrado (marcador 14:40Z), opencode vivo, budget
+  resetado (0/12), fila com tarefas, mas nenhum wake entre 12:18Z e ~14:27Z.
+- Documentação oficial (Context7 /anomalyco/opencode, README do plugin):
+  `experimental.idle` dispara só quando a Sessão termina o trabalho do modelo
+  **sem input pendente**, logo antes de ficar ociosa; não roda após
+  interrupção/falha/trabalho apenas de controle; input admitido continua na
+  mesma execução, então o plugin precisa limitar o próprio loop.
+- Causa provável corrigida: o hook chamava `auto-wake budget` **antes** de
+  saber se havia tarefa, queimando o orçamento em idle com fila vazia. Agora
+  `auto-wake peek` (somente leitura) vem primeiro; se não há tarefa, chama
+  `auto-improve --once`, faz peek de novo e só então gasta budget.
+- Instrumentação: `auto-wake-idle.jsonl` registra idle/peek/refill/budget/wake
+  para distinguir "hook não disparou" de "fila vazia" ou "budade bloqueado".
+- Hook re-registrou sozinho às 14:53Z após editar o plugin (sem restart).
+  `node --check` e `bash -n` OK. ai-mesh `9bc4377`.
