@@ -899,3 +899,16 @@
 - O próprio `--audit` agora informa `since_fix.wakes`, `new_enqueues`,
   `precision`, `decision` e `reason`, para que a próxima sessão apenas leia
   a evidência. Canônico ai-mesh `af08fce`; nenhum limite foi alterado.
+
+### 2026-11-20 — auto-wake: plano L2 preparado (sem executar)
+- `scripts/lab-l2-plan` (somente leitura) validou 5 gates: controle pause,
+  checkers de referência 5/5 em L1/L2/L3, nenhum processo de dungeon,
+  `llm-swap idle` rc=0 e `results.jsonl`/índice de suspeitos presentes.
+  Resultado: OK=5 FALHA=0. Nenhuma medição foi disparada.
+- GPU: 847/6141 MiB livres, residente 4B em :8092 sem cliente. Não é janela
+  livre para `lab restart`; o plano só roda quando o swap liberar a GPU.
+- Runbook `docs/lab/L2-REMEASURE-PLAN-2026-11-20.md`: 3 braços × 5 amostras
+  (api/bonsai/mtp) em L2, `lab level L2`, `lab arm <braço>` por amostra,
+  timeout 900s, aceite `ck=v3`/`nivel=L2`/`discovery_stats.returned>0`,
+  abort após 2 `infra` seguidos, `lab pause` no fim.
+- Commit `43f9ac83`; TOOLS-INDEX regenerado pelo gerador canônico.
