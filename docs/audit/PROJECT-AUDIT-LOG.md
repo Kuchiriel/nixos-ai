@@ -1146,3 +1146,14 @@
   não executadas (vagas/stale), já eliminadas pelo validador — não afeta o
   gate pós-correção.
 - Nenhuma ampliação além do cap 2: o contrato só prevê 1→2 com >=0,8.
+
+### 2026-11-20 — dono ausente: auto-improve ganha fonte de dívida
+- Verificado: hook registrado, fila 10->11, precisão pós-fix 1,0 (5/5), cap 2;
+  o intervalo desde o último wake se deve a turnos contínuos do operador,
+  não a falha do idle (trace mostra idle->peek->budget com bloqueio por gap).
+- `auto-improve` agora lê `TECHNICAL-DEBT.md`/`IMPROVEMENT-ROADMAP.md` do
+  repositório canônico por SSH com timeout, gera tarefas só de ités `aberto`
+  com verbo de ação e dedupe/cooldown; `MAX_QUEUE` 9->12 (budget 12/h é o
+  limite real de taxa).
+- Teste real: `--dry-run` listou o gap `investigar top-k da fusão` e `--once`
+  o enfileirou; ai-mesh `70ff6cf`.
