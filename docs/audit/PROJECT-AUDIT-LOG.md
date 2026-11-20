@@ -813,3 +813,21 @@
 - Linux: `house docs --check` estava desatualizado (3 arquivos); regenerei com
   o canonico e agora OK (13 arquivos). Nao commitei la: o clone esta em rebase
   de outra lane (`HEAD (no branch, rebasing main)`); seguir apos o rebase.
+
+### 2026-11-20 — auto-wake: rebase Linux + auto self-improvement
+- Clone Linux ai-mesh estava em rebase abandonado (1/5, sem conflitos). Com
+  backup (tag + patch), continuo o rebase, resolvi conflitos por uniao
+  (HOME.md/index/house.json com id-union; JSONL validado), mergei origin/main
+  e regenerei house docs: **14 dominios, windows-contract.md presente,
+  docs --check OK (15)**. Commits locais pushed (`823d6e8`).
+- Detectei e corrigi perda causada por uniao crua: ARMADILHAS.md 203->30 e
+  nitro-v15.jsonl 5->2; restaurei por uniao com tag (commit `114b9a7`).
+- Expandi o auto-wake: novo `auto-improve` (canonico em ai-mesh/shared/scripts,
+  shim em ~/bin) reabastece a fila apenas com gaps MEDIDOS (docs --check,
+  parity de memoria, implementation_drift, entradas sem health/medicao),
+  dedupe por hash com cooldown de 6h. Teste com fontes simuladas provou 2
+  candidatos; sem gaps reais, nada entra.
+- Plugin `memory-termux.js` (backup arquivado) agora chama auto-improve quando
+  a fila esvazia, antes de desistir; sintaxe validada por `node --check` no
+  host. Nenhum reinicio do opencode.
+- ai-mesh phone pushed `21b3ad9`; parity memoria ok, docs --check OK.
