@@ -787,3 +787,14 @@
 - Risco de retomada: `git commit` sempre com `--only <arquivos>` (commit
   anterior varreu arquivos stageados por outra lane); repos ai-mesh no Linux
   estava em estado de rebase de outro agente — não foi tocado nessa parte.
+
+### 2026-11-20 — house docs (auto-wake)
+- `house docs --check` apontava `~/docs/house/windows-contract.md`: wrapper
+  `~/bin/house` era copia divergente com ROOT=home, nao repo ai-mesh.
+- Usei o canonico `ai-mesh/scripts/house docs`: 8 arquivos gerados/OK.
+  Commit `fa37470` (docs gerados) e `ffe8696` (licoes ARMADILHAS) pushed.
+- Wrapper substituido por shim que delega ao canonico; `house docs --check`
+  agora OK (14 arquivos). Backup do wrapper antigo arquivado.
+- `phone-fs` passou a enxergar `~/ai-mesh` (allowlist) para movimentos
+  reversiveis; backup dentro do repo movido para quarentena com manifesto.
+- Nao commitado: `memory/episodic/termux.jsonl` (modificado por outra lane).
