@@ -270,6 +270,13 @@ pre.diff{
     <div class="busbox" id="bus">carregando…</div>
   </section>
 
+  <!-- ══ CAPABILITY CARDS ══ -->
+  <section class="sec hidden" id="tab-cards">
+    <h2>capability cards (A2A) <span class="grow"></span><button class="ghost tiny" id="cardsRefresh">↻</button></h2>
+    <p class="tiny dim"><span id="cardsSum">carregando…</span> — clique no card para abrir o JSON canonico.</p>
+    <div id="cardsGrid" class="grid">carregando…</div>
+  </section>
+
   <!-- ══ CASA ══ -->
   <section class="sec hidden" id="tab-casa">
     <h2>estado da casa <span class="grow"></span><button class="ghost tiny" id="stRefresh">↻</button></h2>
@@ -316,6 +323,7 @@ const TABS = [
   {id:'pulso',   ic:'📡', label:'pulso'},
   {id:'ab',      ic:'⚖️', label:'A/B'},
   {id:'bus',     ic:'💬', label:'bus'},
+  {id:'cards',   ic:'🪪', label:'cards'},
   {id:'casa',    ic:'🏠', label:'casa'},
 ];
 let tab = localStorage.getItem('mcTab') || 'agentes';
@@ -327,6 +335,7 @@ function setTab(id){ tab=id; localStorage.setItem('mcTab',id); renderTabs();
   TABS.forEach(t=>$('#tab-'+t.id).classList.toggle('hidden', t.id!==id));
   if(id==='pulso'){ evUnread=0; renderTabs(); }
   if(id==='bus') loadBus();
+  if(id==='cards') loadCards();
   if(id==='casa') loadState();
   if(id==='ab') loadAB();
 }
@@ -606,6 +615,23 @@ async function loadState(){
   $('#stBox').textContent = JSON.stringify(d, null, 1).slice(0, 60000);
 }
 
+async function loadCards(){
+  try{
+    const d = await (await api('/api/cards')).json();
+    if(d.error){ $('#cardsSum').textContent = 'erro: '+d.error; return; }
+    $('#cardsSum').textContent = d.count + ' cards · ' + (d.source||'');
+    $('#cardsGrid').innerHTML = (d.cards||[]).map(c=>`
+      <div class="card">
+        <div class="row"><strong>${esc(c.name)}</strong><span class="grow"></span>
+          <span class="badge">${esc(c.host_kind)}</span><span class="badge">${esc(c.status)}</span></div>
+        <div class="tiny dim" style="margin:6px 0">${esc(c.description)}</div>
+        <div class="tiny">servicos: ${esc((c.services||[]).join(' · ') || '—')}</div>
+        <div class="tiny">skills ${esc(c.skills)} · scripts ${esc(c.scripts)} · ${esc(c.version)}</div>
+        <div style="margin-top:8px"><a href="${esc(c.url)}" target="_blank" rel="noopener">abrir card JSON ↗</a></div>
+      </div>`).join('') || '<div class="tiny dim">nenhum card</div>';
+  }catch(e){ $('#cardsSum').textContent = 'erro: '+e; }
+}
+
 /* ── eventos de UI ──────────────────────────────────── */
 $('#cmdGo').onclick = ()=>doCmd('wake');
 $('#cmdText').addEventListener('keydown', e=>{
@@ -659,6 +685,7 @@ function diffHtml(t){
 }
 $('#busRefresh').onclick = loadBus;
 $('#stRefresh').onclick = loadState;
+$('#cardsRefresh').onclick = loadCards;
 
 /* atalhos */
 document.addEventListener('keydown', e=>{

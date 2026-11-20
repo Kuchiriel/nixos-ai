@@ -892,6 +892,43 @@ async function handler(req, res) {
       }), "application/json");
     } catch (e) { return send(500, JSON.stringify({ ok: false, error: String(e) }), "application/json"); }
   }
+  // (20/11) CAPABILITY CARDS A2A — contratos por host, gerados de evidencia
+  // viva em ai-mesh/manifests/mesh/cards. Read-only; bloqueia marcadores de
+  // credencial antes de responder (cards nao devem conter segredo algum).
+  const CARDS_DIR = process.env.CARDS_DIR || join(HOME, "projects/ai-mesh/manifests/mesh/cards");
+  const CARD_SECRET = /"(?:pubkey|private_key|api_key|authorization|password|secret|access_token|refresh_token)"\s*:|Bearer\s+[A-Za-z0-9._-]{12,}|sk-[A-Za-z0-9]{12,}|gh[pousr]_[A-Za-z0-9]{20,}|"token"\s*:\s*"[^"]{8,}"/i;
+  function cardFile(name) {
+    if (!/^[A-Za-z0-9._-]+\.json$/.test(name || '')) return null;
+    const p = join(CARDS_DIR, name);
+    return p.startsWith(CARDS_DIR) ? p : null;
+  }
+  if (req.method === 'GET' && url.pathname === '/api/cards') {
+    const wanted = url.searchParams.get('name');
+    try {
+      if (wanted) {
+        const p = cardFile(wanted);
+        if (!p) return send(400, '{"error":"nome invalido"}', 'application/json');
+        const raw = readFileSync(p, 'utf8');
+        if (CARD_SECRET.test(raw)) return send(503, '{"error":"card contem marcador de credencial"}', 'application/json');
+        return send(200, raw, 'application/json');
+      }
+      const files = readdirSync(CARDS_DIR).filter(f => f.endsWith('.json')).sort();
+      const cards = files.map(f => {
+        const j = JSON.parse(readFileSync(join(CARDS_DIR, f), 'utf8'));
+        return { file: f, name: j.name || f.replace(/\.json$/, ''),
+          host_kind: j.host_kind || 'unknown', status: j.status || 'unknown',
+          version: j.version || '', description: j.description || '',
+          services: (j.services || []).map(x => String(x.name || '?') + ':' + String(x.port || '?')),
+          skills: (j.skills || []).length, scripts: (j.scripts || []).length,
+          url: '/api/cards?name=' + encodeURIComponent(f) };
+      });
+      const body = JSON.stringify({ cards, count: cards.length, source: CARDS_DIR });
+      if (CARD_SECRET.test(body)) return send(503, '{"error":"payload contem marcador de credencial"}', 'application/json');
+      return send(200, body, 'application/json');
+    } catch (e) {
+      return send(503, JSON.stringify({ error: 'cards indisponiveis', detail: String(e) }), 'application/json');
+    }
+  }
   // (17/11) CASA: indice unico (ai-mesh/index/house.json). A MESMA fonte
   // alimenta o CLI `house`, a pagina /house e a tool coord_house do MCP.
   // Leitura read-only: o indice nao tem segredo; o token do hub nao e exposto.
