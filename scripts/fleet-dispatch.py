@@ -24,10 +24,12 @@ import json
 import os
 import subprocess
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
 REPO = Path(os.environ.get("JARVIS_REPO", "/home/nixos/projects/nixos-ai"))
+TRACE = Path.home() / ".local/state/job-fleet-dispatch.trace"
 SRC = REPO / "modules" / "ai" / "jarvis" / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
@@ -105,7 +107,7 @@ def claim(item_id: str, agente: str, projeto: str = "frota") -> str:
         return f"ERRO: claim falhou ({exc})"
 
 
-def publicar_bus(item_id: str, descricao: str, agente: str) -> None:
+def publicar_bus(item_id: str, descricao: str, agente: str, projeto: str) -> None:
     """Publica no bus (issue #12) que o item foi pego."""
     cli = str(REPO / "scripts" / "jarvis-cli.sh")
     texto = (
@@ -114,7 +116,8 @@ def publicar_bus(item_id: str, descricao: str, agente: str) -> None:
         f"Ao terminar: coord_workitem action=done item_id={item_id} project={projeto} "
         f"e rode: {REPO}/scripts/fleet-dispatch"
     )
-    payload = json.dumps({"kind": "status", "agent": "fleet-dispatch", "lane": "frota", "note": texto})
+    payload = json.dumps({"kind": "status", "agent": "fleet-dispatch", "lane": "frota",
+                          "project": projeto, "note": texto})
     try:
         subprocess.run(
             ["bash", cli, "tool", "coord_post", payload],
@@ -126,6 +129,11 @@ def publicar_bus(item_id: str, descricao: str, agente: str) -> None:
 
 def main() -> int:
     projeto = "frota"
+    try:
+        TRACE.parent.mkdir(parents=True, exist_ok=True)
+        TRACE.write_text(f"{time.time():.0f} fleet-dispatch pid={os.getpid()} projeto={projeto}\n")
+    except Exception:
+        pass  # rastro nao pode travar o dispatch
     dry_run = "--dry-run" in sys.argv
     for a in sys.argv[1:]:
         if a.startswith("--projeto="):
@@ -158,7 +166,8 @@ def main() -> int:
     tarefa = (
         f"ID:{iid} FILA DA FROTA — {desc}. "
         f"ACEITE: artefato commitado no repo canônico + 1 linha no bus (issue #12). "
-        f"Ao terminar, marque o item done "
+        f"Bus: dispatch ja publicado pelo dispatcher (kind=status). "
+        f"Ao terminar, publique UMA linha kind=done no bus e marque o item done "
         f"(coord_workitem action=done item_id={iid} project={projeto}) "
         f"e rode: {REPO}/scripts/fleet-dispatch — para acordar o próximo agente. "
         f"Não responda só 'feito': entregue."
@@ -170,7 +179,7 @@ def main() -> int:
     cl = claim(iid, cod, projeto)
     print(f"claim: {cl}")
 
-    publicar_bus(iid, desc, cod)
+    publicar_bus(iid, desc, cod, projeto)
     say(f"item={iid} agente={cod} :: {desc[:50]} :: wake={out[:40]} claim={cl}")
     return 0
 
