@@ -1547,3 +1547,11 @@
   AgentRuntime via F8 com linter estrutural 3->2->1 loops (31/31 testes hoje).
 - ADR-003 marcada superseded por ADR-005, texto preservado; nenhuma linha de
   dev.py alterada. Detalhe em docs/audit/DEV-AGENT-LOOP-AUDIT-2026-11-21.md.
+
+### 2026-11-21 — backfill canônico validado em coleção isolada
+- code_index amostrado: 0/5000 pontos com source_type/source_id/repo/status/
+  authority/source_modified_at/canonical_path.
+- jarvis_test_canonical_backfill 2000 pontos: cobertura 0->2000 nos campos
+  keyword; source_modified_at 1539/2000 (461 arquivos ausentes, sem inventar).
+- recall@8 com filtros source_type e repo: 0,0 -> 1,0; range datetime RFC3339
+  validado. Nada escrito em produção.
