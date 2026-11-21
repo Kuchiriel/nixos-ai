@@ -969,12 +969,16 @@ async function handler(req, res) {
         const r = JSON.parse(readFileSync(fonts.resolution, 'utf8'));
         resolution = { kind: 'resolution', arquivadas: Number(r.arquivadas || 0),
           pendentes: Number(r.pendentes_de_fechamento || 0),
+          evidence_ok: r.evidence_ok === true, gate_ok: r.gate_ok === true,
+          error: String(r.error || ''),
           ts: r.ts || '', fonte: r.source || '' };
       } catch (e) { resolution = { kind: 'resolution', indisponivel: true }; }
       const result = { items: openItems.concat(gaps, next, resolution ? [resolution] : []),
         counts: { debt: openItems.length, gaps: gaps.length, next: next.length,
                   resolution_arquivadas: resolution?.arquivadas ?? null,
-                  resolution_pendentes: resolution?.pendentes ?? null },
+                  resolution_pendentes: resolution?.pendentes ?? null,
+                  resolution_evidence_ok: resolution?.evidence_ok ?? null,
+                  resolution_gate_ok: resolution?.gate_ok ?? null },
         resolution,
         sources: ['docs/audit/TECHNICAL-DEBT.md', 'docs/audit/PROJECT-AUDIT-STATE.md',
                   'ai-mesh/docs/auto-improve-gaps.jsonl',
