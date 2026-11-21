@@ -944,11 +944,14 @@ def _rag_deps():
 def index_book(book_name: str, books_dir: str | Path | None = None,
                *, force: bool = False,
                chunk_chars: int = 1200,
-               max_chunks: int | None = None) -> dict[str, Any]:
+               max_chunks: int | None = None,
+               source_path: str | Path | None = None) -> dict[str, Any]:
     """Indexa um livro em chunks com metadados (livro, capítulo).
 
     Idempotente por chunk-id (re-index sobrescreve). Retorna contagem.
     max_chunks limita p/ validação rápida (None = livro inteiro).
+    source_path resolve o arquivo exato quando PDF e digest .md têm o mesmo
+    stem; nesse caso _find_book não pode escolher o PDF por coincidência.
     """
     Config, LLMClient, QdrantStore, sparse_terms, sparse_vector, dense_key = _rag_deps()
     from jarvis.providers.vector_store import stable_id
@@ -956,8 +959,11 @@ def index_book(book_name: str, books_dir: str | Path | None = None,
     import hashlib as _hl
     from datetime import datetime, timezone as _tz
     cfg = Config()
-    path = _find_book(book_name, books_dir)
-    if path is None:
+    if source_path is None:
+        path = _find_book(book_name, books_dir)
+    else:
+        path = Path(source_path)
+    if path is None or not path.is_file():
         return {"ok": False, "error": f"livro não encontrado: {book_name}"}
     # identidade estável: sha do ARQUIVO FONTE (idempotente a rename, audit P0-1)
     source_sha = _hl.sha256(Path(path).read_bytes()).hexdigest()
@@ -1097,7 +1103,7 @@ def sweep_books(limit: int = 3) -> dict[str, Any]:
     # Idempotência por CONTEÚDO (sha), não só por nome: quarentena/falha com
     # o mesmo sha nunca é retentada (observado: 2 PDFs scanned reprocessados
     # a cada sweep); conteúdo novo/alterado (sha novo) tenta de novo.
-    fresh: list[tuple[str, str, str, str]] = []
+    fresh: list[tuple[str, str, str, str, Path]] = []
     for name, root, cat, f in candidates:
         if (name, cat) in done:
             continue
@@ -1107,11 +1113,11 @@ def sweep_books(limit: int = 3) -> dict[str, Any]:
             continue
         if sha in attempted_sha:
             continue
-        fresh.append((name, root, cat, sha))
+        fresh.append((name, root, cat, sha, f))
     ingested: list[str] = []
-    for name, root, cat, sha in fresh[:limit]:
+    for name, root, cat, sha, f in fresh[:limit]:
         try:
-            r = index_book(name, root)
+            r = index_book(name, root, source_path=f)
         except Exception as e:
             r = {"ok": False, "error": str(e)[:200]}
         rec = {"name": name, "cat": cat, "source_sha": sha, **r}
