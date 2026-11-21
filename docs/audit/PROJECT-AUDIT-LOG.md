@@ -1348,3 +1348,18 @@
   registrado em `TECHNICAL-DEBT.md`; gate `--min-recall` e demais mudanças
   desde então são Python/docs e não afetam superfície de segredos declarada.
 - Sem rotação, sem reescrita, sem escrita em produção.
+
+### 2026-11-21 — dono ausente: fechamento durável do ciclo auto-improve
+- Gap medido: precisao 1,0 (6/6 executados no SQLite) mas nenhuma das enqueues
+  do gerador aparecia em `auto-queue.resolved.jsonl` — o agente executava e
+  respondia, porem nunca chamava `auto-wake complete`.
+- Expansao: `auto-improve --reconcile` / `--reconcile-dry-run` cruzam tarefas
+  enqueued com mensagens synthetic e gravam a conclusao no arquivo append-only
+  do auto-wake; `--audit` expoe `resolution.arquivadas/pendentes_de_fechamento`.
+- Execucao real: dry-run 7 pendentes sem escrever; reconcile 10->17 registros;
+  segunda execucao `archived_now=0`; audit 17/0; snapshot 32.
+- Dois bugs de portabilidade corrigidos na origem: `datetime/timezone` ausentes
+  no modulo e teste com caminho fixo do celular (agora derivado de `__file__`).
+  Teste 1/1 no celular e no Linux; rebase no Linux preservou 2 commits de outro
+  agente (conflito em ARMADILHAS resolvido por uniao).
+- ai-mesh `7f5ef00`/`1978ecb`; nenhum servico reiniciado, nada apagado.
