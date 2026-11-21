@@ -26,3 +26,10 @@
 - `nixos-rebuild switch`, `rebuild-host.sh`, restart de llama-server, boot/VM/Hyper-V.
 - Reescrita de histórico Git, rotação de credenciais.
 - Exclusão de notas do Vault ou dados persistentes.
+
+## LittleBit-2 / ITQ (21/11 — pesquisado, não adotado)
+- Primtivo Joint-ITQ reduz λ em dados sintéticos (0,368→0,301) mas quase nada
+  em embeddings reais (0,372→0,362); no Qdrant binário, com `rescore` padrão,
+  recall@8 1,0 nos dois lados. Sem `rescore`: 0,87→0,90 em 100 queries.
+- Decisão: não adotar em RAG; só reavaliar se houver QAT local ou se `rescore`
+  precisar ser desligado. Detalhe: `docs/audit/LITTLEBIT2-RESEARCH-2026-11-21.md`.

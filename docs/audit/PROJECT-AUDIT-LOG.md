@@ -1395,3 +1395,13 @@
   eram refs de ambiente. `/etc/litellm.env` passou de 644 para 600.
 - `build` e `switch` rc=0; novo home-manager-files com 144 alvos e 0 literais;
   hub 200, opencode vivo, staged=0. Doc `SECRETS-LITERALS-2026-11-21.md`.
+
+### 2026-11-21 — pesquisa: LittleBit-2 (Samsung) no nosso stack
+- Fonte primária lida (Samsung Research + repo oficial). O ganho vem da
+  inicialização Joint-ITQ antes do QAT, não de arquitetura de inferência.
+- Testes: sintético γ=0,4 λ 0,368→0,301; embeddings reais λ 0,372→0,362;
+  Qdrant binário isolado 900 pontos/100 queries, recall sem rescore 0,87→0,90
+  e com rescore 1,0→1,0. `code_index` inalterado (275.724).
+- Decisão registrada: não adotar em RAG agora; reavaliar com QAT local ou se
+  rescore precisar ser desligado. Scripts `littlebit2-itq-probe.py` e
+  `itq-binary-rag-ab.py`; doc `LITTLEBIT2-RESEARCH-2026-11-21.md`.
