@@ -20,7 +20,7 @@ in {
     services.litellm = {
       port = 4000;
       host = "127.0.0.1";
-      environmentFile = "/etc/litellm.env";
+      environmentFile = "/etc/litellm-sops.env";
 
       settings = {
         model_list = [

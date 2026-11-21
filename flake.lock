@@ -331,7 +331,28 @@
         "nixpkgs-unstable": "nixpkgs-unstable",
         "nixpkgs-wine10": "nixpkgs-wine10",
         "opencode-flake": "opencode-flake",
+        "sops-nix": "sops-nix",
         "stylix": "stylix"
+      }
+    },
+    "sops-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1794866654,
+        "narHash": "sha256-Y28AMB8lyKjASdJ0BVsR2AqR1cUsVuo8RVVpzHoECho=",
+        "owner": "Mic92",
+        "repo": "sops-nix",
+        "rev": "7c637afdccdf9bcf35c4a2d67b58a77c1fd843a4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Mic92",
+        "repo": "sops-nix",
+        "type": "github"
       }
     },
     "stylix": {

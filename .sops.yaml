@@ -1,0 +1,4 @@
+# Recipient PUBLICO da chave age do nitro-v15 (chave privada fica em
+# /var/lib/sops-nix/key.txt, root 600, NUNCA neste repo).
+creation_rules:
+  - age: age16tgwjr5mzvx8qrkm03gzk9fa4skrplgr3p3kk5ya46a0pnyj4gqqfksuuf

@@ -1464,3 +1464,10 @@
   pior com 300 passos — protocolo exige 5 épocas. Custo init 8,5× maior.
 - Pico 10031 MiB, nenhum modelo de producao alterado.
 - Doc: `docs/audit/LITTLEBIT2-KAGGLE-QAT-2026-11-21.md`.
+
+### 2026-11-21 — sops-nix adotado (autorização d0010=Sim)
+- Flake com input/módulo sops-nix escopo nitro-v15; chave age root 600 fora do
+  repo; segredo litellm-env.yaml criptografado e provisionado em
+  /etc/litellm-sops.env (600 root) para o serviço litellm.
+- build+switch rc=0; 35 exports descriptografáveis; 0 valores no /nix/store;
+  hub 200 e opencode vivo. Doc `docs/audit/SOPS-NIX-ADOPTION-2026-11-21.md`.

@@ -40,6 +40,13 @@
       url = "github:nix-community/disko/latest";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # (21/11) segredos declarativos: chave age fora do Store, arquivo
+    # criptografado versionado em secrets/. Autorizado por d0010=Sim.
+    sops-nix = {
+      url = "github:Mic92/sops-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
@@ -48,6 +55,7 @@
     nixpkgs-master,
     nixpkgs-wine10,
     home-manager,
+    sops-nix,
     stylix,
     disko,
     ...
@@ -215,6 +223,12 @@
 
           # Disko — partições declarativas (só afeta hosts que importam disko.nix)
           disko.nixosModules.disko
+
+          # sops-nix so no host que tem a chave age (nitro-v15); o lab nao
+          # recebe segredos e nao precisa da chave.
+          (if hostname == "nitro-v15" then {
+            imports = [ sops-nix.nixosModules.sops ./modules/secrets.nix ];
+          } else {})
 
           ./hosts/${hostname}/configuration.nix
           stylix.nixosModules.stylix
