@@ -99,7 +99,7 @@ in {
         # litellm.env is needed for the API cascade (STUCK -> Groq); the bot
         # already runs as the same user, so the file's own permissions are
         # the boundary.
-        # (03/11) NÃO ler /etc/litellm.env direto: o systemd recusa linhas com
+        # (03/11) NÃO ler /etc/litellm-sops.env direto: o systemd recusa linhas com
         # `export` e LOGA A LINHA INTEIRA no journal (segredo em cleartext).
         # O espelho /run/jarvis/litellm.env (KEY=valor, 0600 root) é gerado
         # pelo unit jarvis-keys-env.service. Prefixo `-`: sem espelho o bot

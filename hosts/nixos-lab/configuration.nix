@@ -169,7 +169,7 @@
   # nixpkgs em :4000 (127.0.0.1), roteia local → nuvem grátis (Groq→Gemini→
   # OpenRouter) com fallbacks em cadeia. A config cascade vem de
   # modules/services/litellm-cascade.nix. Testável já no lab; chaves em
-  # /etc/litellm.env (fora do repo). Sem o arquivo, serve só a rota local.
+  # /etc/litellm-sops.env (fora do repo). Sem o arquivo, serve só a rota local.
   services.litellm.enable = true;
   # Freebuff CLI — o agente de coding gratuito (freebuff.com) declarativo,
   # para o host final ter o mesmo fluxo de trabalho deste lab.

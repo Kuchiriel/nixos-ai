@@ -16,7 +16,7 @@ def main():
     key = os.environ.get("TAVILY_API_KEY", "")
     if not key:
         try:
-            for line in open("/etc/litellm.env"):
+            for line in open("/etc/litellm-sops.env"):
                 if line.startswith(("TAVILY", "TAVILY_API_KEY")):
                     key = line.split("=", 1)[1].strip().strip('"').strip("'")
                     break

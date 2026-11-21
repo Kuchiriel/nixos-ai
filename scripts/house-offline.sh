@@ -129,7 +129,7 @@ PY
     fi
 
     # a chave do Tavily (a busca online; a sua ausencia NAO impede o offline)
-    if [ -n "${TAVILY_API_KEY:-}" ] || grep -qs '^TAVILY_API_KEY=' /etc/litellm.env 2>/dev/null; then
+    if [ -n "${TAVILY_API_KEY:-}" ] || grep -qs '^TAVILY_API_KEY=' /etc/litellm-sops.env 2>/dev/null; then
         pass "chave Tavily presente (a busca online existe; o offline e' o plano B)"
     else
         warn "chave Tavily AUSENTE: a busca online cai no offline (que e' o ramo de sobrevivencia)"

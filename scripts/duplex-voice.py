@@ -432,9 +432,9 @@ _CLOUD_EXTRA = {
 
 
 def _load_api_keys() -> None:
-    """Carrega as chaves de /etc/litellm.env no env (se faltarem)."""
+    """Carrega as chaves de /etc/litellm-sops.env no env (se faltarem)."""
     try:
-        with open("/etc/litellm.env", errors="ignore") as f:
+        with open("/etc/litellm-sops.env", errors="ignore") as f:
             for line in f:
                 line = line.strip()
                 if line.startswith("export "):

@@ -2,7 +2,7 @@
 
 Camadas (ordem):
   1. environment (populado por ~/.config/ai-agents/keys-wrapper.sh ←
-     /etc/litellm.env, ou EnvironmentFile=-/etc/*.env nos services);
+     /etc/litellm-sops.env, ou EnvironmentFile=-/etc/*.env nos services);
   2. arquivos legados legíveis (best-effort, nunca exceção).
 
 NUNCA hardcodear path /etc/* nos consumers — usar get()/require().
@@ -20,13 +20,13 @@ from typing import Any
 _SOURCES: dict[str, dict[str, Any]] = {
     "tavily": {
         "env": ["TAVILY_API_KEY"],
-        # (07/11) /etc/litellm.env e a fonte de verdade das keys (o
+        # (07/11) /etc/litellm-sops.env e a fonte de verdade das keys (o
         # jarvis-env.sh e o launcher do MCP carregam ela). Sem esta
         # entrada, `jarvis dev` (que nao passa pelo wrapper) falhava
         # com "web search indisponivel (sem TAVILY_API_KEY)" — e o
         # wrapper em ~/.config/ai-agents/keys-wrapper.sh estava um
         # SYMLINK QUEBRADO (store path novo, link velho).
-        "files": ["/etc/jarvis-secrets/tavily.env", "/etc/litellm.env"],
+        "files": ["/etc/jarvis-secrets/tavily.env", "/etc/litellm-sops.env"],
     },
     "hackmd": {
         "env": ["HMD_API_ACCESS_TOKEN"],
@@ -41,18 +41,18 @@ _SOURCES: dict[str, dict[str, Any]] = {
         "env": ["JARVIS_TELEGRAM_CHAT_ID", "TELEGRAM_CHAT_ID"],
         "files": ["/etc/jarvis-telegram.env"],
     },
-    "groq": {"env": ["GROQ_API_KEY"], "files": ["/etc/litellm.env"]},
-    "gemini": {"env": ["GEMINI_API_KEY", "GOOGLE_API_KEY"], "files": ["/etc/litellm.env"]},
-    "openrouter": {"env": ["OPENROUTER_API_KEY"], "files": ["/etc/litellm.env"]},
+    "groq": {"env": ["GROQ_API_KEY"], "files": ["/etc/litellm-sops.env"]},
+    "gemini": {"env": ["GEMINI_API_KEY", "GOOGLE_API_KEY"], "files": ["/etc/litellm-sops.env"]},
+    "openrouter": {"env": ["OPENROUTER_API_KEY"], "files": ["/etc/litellm-sops.env"]},
     # NVIDIA_NIM_API_KEY tb: o build.nvidia.com emite nvapi-... e o console
     # antigo emitia NVIDIA_API_KEY. Aceitamos os dois nomes.
     "nvidia": {"env": ["NVIDIA_API_KEY", "NVIDIA_NIM_API_KEY"],
-               "files": ["/etc/litellm.env"]},
+               "files": ["/etc/litellm-sops.env"]},
     # (15/10) vision cloudflare: token + account id do Workers AI.
     "cloudflare_token": {"env": ["CLOUDFLARE_API_TOKEN"],
-                         "files": ["/etc/litellm.env"]},
+                         "files": ["/etc/litellm-sops.env"]},
     "cloudflare_account": {"env": ["CLOUDFLARE_ACCOUNT_ID"],
-                           "files": ["/etc/litellm.env"]},
+                           "files": ["/etc/litellm-sops.env"]},
 }
 
 
@@ -78,7 +78,7 @@ def _from_files(spec: dict[str, Any]) -> str:
             # ordem do registry, com as linhas por dentro. Antes era o
             # contrário (linha por fora, alias por dentro) e devolvia o
             # PRIMEIRO alias encontrado no arquivo: como `GOOGLE_API_KEY` vem
-            # antes de `GEMINI_API_KEY` no /etc/litellm.env, o getter "gemini"
+            # antes de `GEMINI_API_KEY` no /etc/litellm-sops.env, o getter "gemini"
             # devolvia a chave velha do Google e a visão levava 401 com a
             # chave boa sitting right there no arquivo.
             wanted = list(spec.get("env", []))
@@ -106,7 +106,7 @@ def get(name: str) -> str:
 
     PRECEDÊNCIA: ARQUIVO antes do environment (2026-10-02). Diagnosticado
     na prática: o processo JARVIS carrega uma `GEMINI_API_KEY` exportada há
-    semanas; quando a chave foi renovada em `/etc/litellm.env`, o `os.environ`
+    semanas; quando a chave foi renovada em `/etc/litellm-sops.env`, o `os.environ`
     continuou servindo a velha e a visão recebeu 401 mesmo com o arquivo
     correto. Como quem renova chave edita o arquivo gerenciado por root, o
     arquivo tem de ganhar. O `environment` fica como fallback (útil p/ CI e

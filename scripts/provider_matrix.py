@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """provider_matrix.py — audit de TODOS os LLM providers do dono (keys de
-/etc/litellm.env) contra os endpoints reais; classifica OK / RATE_LIMIT /
+/etc/litellm-sops.env) contra os endpoints reais; classifica OK / RATE_LIMIT /
 DEAD / PAID / AUTH / ERROR. Fonte do catalogo enabled_providers do home.nix.
   use:  python3 provider_matrix.py           (34 testes, ~3min; JSON em
        /tmp/opencode/provider_matrix.json; gemini thinking precisa
@@ -13,7 +13,7 @@ Classifica: OK / RATE_LIMIT / DEAD / PAID / ERROR. Salva JSON p/ gerar nix."""
 import json, os, re, sys, time, urllib.request, urllib.error
 
 ENV = {}
-for line in open('/etc/litellm.env'):
+for line in open('/etc/litellm-sops.env'):
     m = re.match(r'\s*export\s+([A-Za-z_][A-Za-z0-9_]*)="?(.*?)"?\s*$', line)
     if m and not line.strip().startswith('#'):
         ENV[m.group(1)] = m.group(2)

@@ -1499,3 +1499,11 @@
   dedicada quando ausente; teste isolado recriou/reusou com 0 candidatos.
 - `git worktree prune -v` removeu 7 metadados sem dono; 32 diretórios seguem
   intactos na quarentena. ai-mesh `90d5fd6`/`3047993`; P0 em ARMADILHAS.
+
+### 2026-11-21 — antigo litellm.env em quarentena
+- Descoberto que 17 arquivos ativos ainda liam /etc/litellm.env apos a adocao
+  do sops-nix; migrados 49 caminhos para /etc/litellm-sops.env.
+- build+switch rc=0; arquivo antigo movido (nao apagado) para
+  /var/backups/quarentena-litellm-20261121/ com manifesto e sha conferido.
+- Pos-movimento: 35 exports no segredo e no keys.env, hub 200, opencode-serve
+  active, 0 referencias antigas na geracao.

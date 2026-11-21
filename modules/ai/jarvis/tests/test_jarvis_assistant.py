@@ -52,7 +52,7 @@ class TestCapabilityMatrix:
 
 class TestWebSearch:
     # (08/11) keys.get() lê env E arquivos (/etc/jarvis-secrets/tavily.env,
-    # /etc/litellm.env). Desde 07/11 o host tem a chave real nesses
+    # /etc/litellm-sops.env). Desde 07/11 o host tem a chave real nesses
     # arquivos: os testes que só mexiam no env (a) quebravam e (b) VAZAVAM
     # a chave real no assert (que o scanner de pains guarda no opencode.db).
     # Por isso o fixture tira as DUAS fontes — o teste é sobre a fonte, não

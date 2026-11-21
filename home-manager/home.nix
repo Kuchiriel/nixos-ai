@@ -228,10 +228,10 @@ in {
   stylix.targets.hyprland.enable = false;
 
   # ⚠️ SEGREDOS: NUNCA coloque API keys aqui (vazam para o repo/git history).
-  # O padrão do projeto é /etc/litellm.env (chmod 600, criado manualmente no
+  # O padrão do projeto é /etc/litellm-sops.env (chmod 600, criado manualmente no
   # host, fora do git) — o serviço services.litellm lê de lá. Para o aider
   # enxergar a chave na sessão interativa:
-  #    sudo cp /etc/litellm.env ~/.config/litellm.env && chmod 600 ~/.config/litellm.env
+  #    sudo cp /etc/litellm-sops.env ~/.config/litellm.env && chmod 600 ~/.config/litellm.env
   #    echo '[ -f ~/.config/litellm.env ] && set -a && . ~/.config/litellm.env && set +a' >> ~/.bashrc
 
   # ── stt-ptt: Push-to-Talk STT com Whisper ──────────────────
@@ -279,7 +279,7 @@ in {
     fi
     # Reconcilia auth.json do opencode com o env (fonte da verdade).
     # Mata a classe "colei a chave e continua dando token error": chave
-    # apodrecida no state é sobrescrita pela chave boa do /etc/litellm.env.
+    # apodrecida no state é sobrescrita pela chave boa do /etc/litellm-sops.env.
     if [ -x ~/.config/ai-agents/opencode-auth-sync.sh ]; then
       ~/.config/ai-agents/opencode-auth-sync.sh >/dev/null 2>&1 || true
     fi
@@ -294,7 +294,7 @@ in {
   home.file.".config/ai-agents/opencode-auth-sync.sh".source = builtins.toFile "opencode-auth-sync.sh" ''
     #!/usr/bin/env bash
     # Reconcilia ~/.local/share/opencode/auth.json com as chaves do env.
-    # Env é a fonte da verdade (/etc/litellm.env via keys-wrapper.sh).
+    # Env é a fonte da verdade (/etc/litellm-sops.env via keys-wrapper.sh).
     # Só toca providers com chave válida no env; nunca exibe valores.
     set -u
     AUTH="$HOME/.local/share/opencode/auth.json"
@@ -357,7 +357,7 @@ in {
       bindkey '^W' backward-kill-word
       # Ctrl+U = deletar até início da linha
       bindkey '^U' backward-kill-line
-      # Chaves das APIs (fonte da verdade: /etc/litellm.env)
+      # Chaves das APIs (fonte da verdade: /etc/litellm-sops.env)
       if [ -f "$HOME/.config/ai-agents/keys-wrapper.sh" ]; then
         set -a
         source "$HOME/.config/ai-agents/keys-wrapper.sh"
@@ -394,16 +394,16 @@ in {
   # JARVIS — API Keys abstraction (keys-wrapper.sh + keys.env)
   # ══════════════════════════════════════════════════════════════
   home.file.".config/ai-agents/keys.env".source = builtins.toFile "jarvis-keys.env" ''
-    source /etc/litellm.env 2>/dev/null || true
+    source /etc/litellm-sops.env 2>/dev/null || true
   '';
 
   home.file.".config/ai-agents/keys-wrapper.sh".source = builtins.toFile "jarvis-keys-wrapper.sh" ''
     #!/usr/bin/env bash
-    # Fonte única de verdade: /etc/litellm.env
+    # Fonte única de verdade: /etc/litellm-sops.env
     # Normaliza aliases entre chaves.
 
     set -a
-    source "/etc/litellm.env" 2>/dev/null || true
+    source "/etc/litellm-sops.env" 2>/dev/null || true
     set +a
 
     if [ -z "$TOGETHER_API_KEY" ] && [ -n "$TOGETHERAI_API_KEY" ]; then
@@ -905,7 +905,7 @@ in {
     *.pem
     *.key
     *.token
-    /etc/litellm.env
+    /etc/litellm-sops.env
     /etc/jarvis-telegram.env
 
     # Modelos de IA, Pesos e Assets Pesados

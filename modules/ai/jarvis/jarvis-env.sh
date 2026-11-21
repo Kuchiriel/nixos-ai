@@ -2,7 +2,7 @@
 # jarvis-env.sh — env COMPARTILHADO entre o MCP do JARVIS e a CLI (jarvis-cli.sh).
 #
 # POR QUE EXISTE (2026-10-30): o MCP roda com PYTHONPATH = src + site-packages
-# do store + site-packages local e com as keys de /etc/litellm.env. A CLI
+# do store + site-packages local e com as keys de /etc/litellm-sops.env. A CLI
 # (scripts/jarvis-cli.sh) rodava so com o src no PYTHONPATH e sem as keys:
 #   - `import requests` falhava (ModuleNotFoundError) em rag-index/remember;
 #   - o provider de LLM abria o circuit breaker (4 falhas) e o rag-index
@@ -26,12 +26,12 @@ if [ ! -d "$JARVIS_PROJECT_ROOT/modules/ai/jarvis/src" ]; then
 fi
 JARVIS_SRC="${JARVIS_SRC:-$JARVIS_PROJECT_ROOT/modules/ai/jarvis/src}"
 
-# 1) keys: fonte de verdade = /etc/litellm.env (o MCP precisa; a CLI tambem).
+# 1) keys: fonte de verdade = /etc/litellm-sops.env (o MCP precisa; a CLI tambem).
 #    Source ANTES do PYTHONPATH p/ garantir precedencia sobre o environ da sessao.
-if [ -r /etc/litellm.env ]; then
+if [ -r /etc/litellm-sops.env ]; then
   set -a
   # shellcheck disable=SC1091
-  . /etc/litellm.env
+  . /etc/litellm-sops.env
   set +a
 fi
 

@@ -536,7 +536,7 @@ def _vision_gemini(image_path: str, question: str,
     import json
     import urllib.request
 
-    # A chave vive em /etc/litellm.env; keys.get() le a env E cai pro arquivo.
+    # A chave vive em /etc/litellm-sops.env; keys.get() le a env E cai pro arquivo.
     # Antes era so os.environ, entao a chave nunca chegava ao processo e este
     # nivel nao era nunca tentado (o observe caia direto no OCR).
     try:
@@ -591,7 +591,7 @@ def _vision_openrouter(image_path: str, question: str,
                        timeout: float = 90.0) -> dict[str, Any]:
     """Nível 2c: OpenRouter com modelo de visão `:free` (sem cartão).
 
-    DIAGNÓSTICO 2026-10-02: no /etc/litellm.env a chave em GEMINI_API_KEY NÃO
+    DIAGNÓSTICO 2026-10-02: no /etc/litellm-sops.env a chave em GEMINI_API_KEY NÃO
     é do Google (não começa com "AIza" → 401) e a de GROQ_API_KEY devolve 403
     até em /models (expirada/revogada). A que FUNCIONA é OPENROUTER_API_KEY, e
     ela tem visão gratuita: `google/gemma-4-26b-a4b-it:free` e
@@ -994,7 +994,7 @@ def _ocr_text(image_path: str, lang: str = "por+eng",
 
 
 # Provedores que responderam 401/403 ficam fora das próximas tentativas.
-# DIAGNÓSTICO 2026-10-02: as chaves de vision do /etc/litellm.env estão
+# DIAGNÓSTICO 2026-10-02: as chaves de vision do /etc/litellm-sops.env estão
 # expiradas/revogadas (Gemini 401, Groq 403, OpenRouter 401). Sem isto, cada
 # observe gastava 3 round-trips em rede morrendo antes de chegar no OCR — e o
 # MCP estourava o timeout. Agora a falha é lembrada e o OCR responde na hora.

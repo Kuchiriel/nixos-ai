@@ -514,10 +514,10 @@ def chat(req: ChatRequest) -> dict[str, Any]:
 def remote_status() -> dict[str, Any]:
     """Cascade remota: quais provedores têm key configurada (nomes, NUNCA valores).
 
-    Keys vivem em /etc/litellm.env (chmod 600, fora do repo).
+    Keys vivem em /etc/litellm-sops.env (chmod 600, fora do repo).
     """
     from pathlib import Path
-    env_file = Path("/etc/litellm.env")
+    env_file = Path("/etc/litellm-sops.env")
     present: dict[str, bool] = {"groq": False, "gemini": False, "openrouter": False}
     exists = env_file.exists()
     if exists:
@@ -559,7 +559,7 @@ def _key_line_name(line: str) -> str:
 def keys_status() -> dict[str, Any]:
     """List which API-key providers have keys configured (names only, never values)."""
     from pathlib import Path
-    env_file = Path("/etc/litellm.env")
+    env_file = Path("/etc/litellm-sops.env")
     present: dict[str, bool] = {k: False for k in PROVIDER_KEY_MAP}
     if env_file.exists():
         try:
@@ -580,9 +580,9 @@ def keys_status() -> dict[str, Any]:
 
 @app.post("/api/keys")
 def set_key(req: KeysUpdateRequest) -> dict[str, Any]:
-    """Set or update an API key for a provider. Writes to /etc/litellm.env."""
+    """Set or update an API key for a provider. Writes to /etc/litellm-sops.env."""
     import os
-    env_file = Path("/etc/litellm.env")
+    env_file = Path("/etc/litellm-sops.env")
     key_names = PROVIDER_KEY_MAP.get(req.provider)
     if not key_names:
         raise HTTPException(400, f"Unknown provider: {req.provider}")
@@ -612,7 +612,7 @@ def set_key(req: KeysUpdateRequest) -> dict[str, Any]:
 
 @app.delete("/api/keys/{provider}")
 def remove_key(provider: str) -> dict[str, Any]:
-    """Remove an API key for a provider from /etc/litellm.env."""
+    """Remove an API key for a provider from /etc/litellm-sops.env."""
     import os
     key_names = PROVIDER_KEY_MAP.get(provider)
     if not key_names:
@@ -621,7 +621,7 @@ def remove_key(provider: str) -> dict[str, Any]:
         key_names = [key_names]
 
     try:
-        env_file = Path("/etc/litellm.env")
+        env_file = Path("/etc/litellm-sops.env")
         if env_file.exists():
             content = env_file.read_text(encoding="utf-8")
             lines = content.splitlines()

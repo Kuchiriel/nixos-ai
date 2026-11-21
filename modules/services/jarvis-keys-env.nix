@@ -1,19 +1,19 @@
 # ═══════════════════════════════════════════════════════════════════════
-# JARVIS-KEYS-ENV — espelho do /etc/litellm.env em formato systemd
+# JARVIS-KEYS-ENV — espelho do /etc/litellm-sops.env em formato systemd
 # ═══════════════════════════════════════════════════════════════════════
 #
 # PROBLEMA (03/11): o systemd EnvironmentFile NÃO aceita `export KEY=...`.
 # A linha é recusada e o systemd LOGA A LINHA INTEIRA no journal:
 #
 #   jarvis-telegram.service: Ignoring invalid environment assignment
-#   'export NVIDIA_API_KEY=nvapi-...': /etc/litellm.env
+#   'export NVIDIA_API_KEY=nvapi-...': /etc/litellm-sops.env
 #
 # Duas consequências: (1) a variável NÃO entra no ambiente do serviço (o bot
 # sobe sem chave cloud) e (2) o SEGREDO vai parar no journal, legível por
 # qualquer usuário no grupo systemd-journal. Medido: 206 linhas hoje, com
 # valores de sk-or-v1-*, sk-* e nvapi-*.
 #
-# FIX: /etc/litellm.env continua como está (o shell precisa de `export` — os
+# FIX: /etc/litellm-sops.env continua como está (o shell precisa de `export` — os
 # scripts fazem `set -a; . file`), e um unit oneshot gera o espelho em
 # /run/jarvis/litellm.env no formato KEY=valor (systemd-compatible), 0600
 # root:root. Os units que precisam das chaves passam a ler o espelho.
@@ -44,10 +44,10 @@ let
 in
 {
   options.services.jarvis-keys-env = {
-    enable = lib.mkEnableOption "espelho systemd do /etc/litellm.env (sem `export`)";
+    enable = lib.mkEnableOption "espelho systemd do /etc/litellm-sops.env (sem `export`)";
     source = lib.mkOption {
       type = lib.types.str;
-      default = "/etc/litellm.env";
+      default = "/etc/litellm-sops.env";
       description = "Arquivo-fonte com as chaves (formato shell, aceita `export`).";
     };
     target = lib.mkOption {
@@ -63,7 +63,7 @@ in
     ];
 
     systemd.services."jarvis-keys-env" = {
-      description = "Espelha /etc/litellm.env em formato systemd (KEY=valor, sem `export`)";
+      description = "Espelha /etc/litellm-sops.env em formato systemd (KEY=valor, sem `export`)";
       wantedBy = [ "multi-user.target" ];
       before = [ "jarvis-telegram.service" "jarvis-vault.service" ];
       serviceConfig = {
@@ -75,7 +75,7 @@ in
 
     # Re-gera o espelho se a fonte mudar (rotação de chave sem reboot).
     systemd.paths."jarvis-keys-env-path" = {
-      description = "Re-gera /run/jarvis/litellm.env quando /etc/litellm.env muda";
+      description = "Re-gera /run/jarvis/litellm.env quando /etc/litellm-sops.env muda";
       wantedBy = [ "multi-user.target" ];
       pathConfig = {
         PathChanged = cfg.source;

@@ -24,11 +24,11 @@
 # passar a gravar o prefixo, este script apenas repassa o que já está lá.
 set -euo pipefail
 
-# (28/10, fix432) Fonte de verdade das keys = /etc/litellm.env (legível).
+# (28/10, fix432) Fonte de verdade das keys = /etc/litellm-sops.env (legível).
 # A sessão desktop pode ter TAVILY_API_KEY antiga no environ; sem este
 # source, o MCP herda a key podre e recebe HTTP 432 mesmo com o arquivo
 # atualizado. Source ANTES do PYTHONPATH p/ garantir precedência.
-# Env COMPARTILHADO com a CLI (jarvis-env.sh): keys de /etc/litellm.env,
+# Env COMPARTILHADO com a CLI (jarvis-env.sh): keys de /etc/litellm-sops.env,
 # PYTHONPATH (src + site-packages do store + local) e o python do perfil.
 # A logica vivia aqui e foi extraida p/ o script ser a UNICA fonte (2026-10-30):
 # a CLI rodava em env diferente (sem requests, sem keys) e o rag-index pendurava.

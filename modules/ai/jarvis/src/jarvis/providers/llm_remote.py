@@ -2,7 +2,7 @@
 
 Mesmo formato do LlamaCppBackend (chat/completions), mas com Bearer auth
 e sem timings/thinking do llama.cpp. Chaves via env (abstração
-/etc/litellm.env → home.nix). Uso: fallback da cascata quando o modelo
+/etc/litellm-sops.env → home.nix). Uso: fallback da cascata quando o modelo
 local trava (STUCK) ou cai — camadas em model_policy.CASCADE_MAP.
 """
 from __future__ import annotations

@@ -43,7 +43,7 @@
       # keys.env (2º item): o systemd user manager nunca lê .zshrc, então o
       # serve nascia sem NENHUMA chave ({env:} vazio → 401 em todo modelo
       # cloud pelo celular; medido 11/10: environ do PID sem API_KEY).
-      # Gerado da /etc/litellm.env pela activation abaixo (formato KEY=valor,
+      # Gerado da /etc/litellm-sops.env pela activation abaixo (formato KEY=valor,
       # chmod 600). Prefixo `-`: opcional — se a activation ainda não rodou,
       # o serve sobe (só com local), em vez de falhar o boot.
       EnvironmentFile = [
@@ -111,15 +111,15 @@
     fi
   '';
 
-  # keys.env p/ o serve (11/10): espelha /etc/litellm.env em formato KEY=valor
+  # keys.env p/ o serve (11/10): espelha /etc/litellm-sops.env em formato KEY=valor
   # (sem `export` — systemd recusa e loga em claro). Roda TODA activation, então
-  # rotação de chave no /etc/litellm.env propaga no próximo switch/login.
+  # rotação de chave no /etc/litellm-sops.env propaga no próximo switch/login.
   # Se a fonte estiver ilegível (foi assim 11/10: chmod 600 pelo agente do
   # driver → shell sem chave → 401 em tudo), AVISA no stderr mas não quebra a
   # activation; o serve sobe sem chaves cloud (só local) até o próximo switch.
   home.activation."opencode-keys-env" = lib.mkIf true ''
     keysFile="$HOME/.config/opencode/keys.env"
-    src="/etc/litellm.env"
+    src="/etc/litellm-sops.env"
     if [ -r "$src" ]; then
       mkdir -p "$(dirname "$keysFile")"
       umask 077

@@ -255,7 +255,7 @@
   services.jarvis-watchdog.enable = true;
   services.jarvis-heal.enable = true;
   services.jarvis-telegram.enable = true;
-  # Espelho systemd do /etc/litellm.env (03/11): o systemd recusa `export KEY=`
+  # Espelho systemd do /etc/litellm-sops.env (03/11): o systemd recusa `export KEY=`
   # e LOGA o valor da chave no journal (206 linhas/dia com sk-* e nvapi-*).
   services.jarvis-keys-env.enable = true;
   services.jarvis-gaming.enable = true;
@@ -269,7 +269,7 @@
   programs.jarvis-scripts.enable = false;
 
   # environment.etc."litellm.env" removed — litellm service disabled (services.litellm.enable = false)
-  # API keys live in /etc/litellm.env managed manually with chmod 644
+  # API keys live in /etc/litellm-sops.env managed manually with chmod 644
 
   environment.etc."nanorc".text = ''
     set tabsize 2

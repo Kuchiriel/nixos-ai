@@ -11,7 +11,7 @@ Classifica OK / RATE_LIMIT / DEAD / PAID / AUTH / ERROR + mede latência."""
 import base64, io, json, os, re, sys, time, urllib.request, urllib.error
 
 ENV = {}
-for line in open('/etc/litellm.env'):
+for line in open('/etc/litellm-sops.env'):
     m = re.match(r'\s*export\s+([A-Za-z_][A-Za-z0-9_]*)="?(.*?)"?\s*$', line)
     if m and not line.strip().startswith('#'):
         ENV[m.group(1)] = m.group(2)

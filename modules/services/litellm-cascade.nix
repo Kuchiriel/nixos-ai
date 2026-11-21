@@ -11,7 +11,7 @@
 #   2. Se falhar → nuvem grátis: Groq → Gemini → OpenRouter
 #   3. JARVIS usa UM endpoint (http://127.0.0.1:4000/v1)
 #
-# API keys: /etc/litellm.env (chmod 600, fora do repo)
+# API keys: /etc/litellm-sops.env (chmod 600, fora do repo)
 # ═══════════════════════════════════════════════════════════════════════
 with lib; let
   cfg = config.services.litellm;
@@ -29,7 +29,7 @@ in {
             litellm_params = {
               model = "openai/qwen3";
               api_base = "http://127.0.0.1:8080/v1";
-              # Referencia de ambiente: o valor fica em /etc/litellm.env
+              # Referencia de ambiente: o valor fica em /etc/litellm-sops.env
               # (chmod 600, fora do repo e do Nix Store).
               api_key = "os.environ/OPENAI_API_KEY";
             };
