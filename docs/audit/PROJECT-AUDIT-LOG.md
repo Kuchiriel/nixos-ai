@@ -1296,3 +1296,18 @@
 - `--once` nao enfileirou: fila 16 > teto interno 12 do gerador. Os gaps ficam
   registrados na fonte versionada e entram assim que a fila descer — nenhum
   limite foi alterado para forcar enqueue. ai-mesh `0726de9`.
+
+### 2026-11-20 — auto-wake: estado do auto-improve NAO e orfao
+- Pergunta: quarentenar `~/.local/state/auto-improve-remote-cap.json`?
+  **Resposta medida: NAO.** O arquivo e lido por `effective_remote_cap()` em
+  `auto-improve` (linhas 38/190/198);一样 `auto-improve-sources.json` e
+  `entropy-seen.json` estao vivos.
+- Causa do falso positivo: `state-audit` varria apenas `~/bin`, `~/hooks` e
+  `~/.config/opencode`; os scripts la sao shims e as constantes de caminho
+  ficam em `ai-mesh/shared/scripts`, fora do escopo.
+- Corrigido na origem: `FONTES` inclui `shared/scripts`, copias do proprio
+  auditor sao excluidas por basename (evita auto-citacao) e os sidecars foram
+  declarados em `GENERATED_SIDECARS`.
+- Validacao: `state-audit --json` passou de **3 orfaos para 0**, com 15 arquivos
+  MANTIDOS (4 sidecars do auto-improve). Nada quarentenado, nada apagado,
+  nenhum servico reiniciado. ai-mesh `43568dd`; lição em ARMADILHAS.
