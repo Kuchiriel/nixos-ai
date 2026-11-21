@@ -1443,3 +1443,16 @@
   whisper ativos. Smoke test anterior já usava 5,25 GB com config reduzida.
 - Protocolo completo do paper não cabe nesta GPU: bloqueio registrado, sem
   nova tentativa e sem reiniciar serviços. Tarefa devolvida com motivo.
+
+### 2026-11-21 — LittleBit-2: medicao final de compressao e latencia
+- Compressao no Qwen3-0.6B (196 lineares, baseline FP32 1761,6 MB):
+  1,0 bpp 54,6 MB (32,25x), 0,55 bpp 29,8 MB (59,04x), 0,1 bpp 5,2 MB
+  (340,12x). `--use_itq` nao muda compressao.
+- Latencia real: CPU 1059->1535 ms (1 bpp) e 995 ms (0,1 bpp); GPU 28,88 ->
+  52,52 ms (1 bpp) e 39,19 ms (0,1 bpp). Sem kernel MatMul-free o ganho de
+  velocidade do paper NAO se materializa (repo so tem QAT/eval).
+- Tentativa de QAT em GPU com servicos pausados falhou por VRAM (5,24-5,69 GB
+  num limite de ~5,7 GB), mesmo com SGD; servicos devolvidos e hub 200.
+- Decisao: compressao e real e de alto impacto, mas adocao exige GPU >=16 GB
+  para QAT completo e kernel bitwise; nada alterado em producao.
+  Doc `docs/audit/LITTLEBIT2-COMPRESSION-FINAL-2026-11-21.md`.
