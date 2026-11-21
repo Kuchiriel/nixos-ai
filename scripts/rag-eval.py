@@ -17,6 +17,8 @@ CONTRATO:
     retrieval; sem pergunta de resposta conhecida, mudança de boost/rerank
     vira opinião. Este script é o juiz reproduzível.
   - Sai != 0 se o fixture estiver vazio ou se algum modo tiver recall 0.
+  - `--min-recall F` transforma o harness em gate de regressao: sai 2 se
+    qualquer modo ficar abaixo de F (ex.: 0.9 para nao regressar ao 1/5 historico).
 
 EXEMPLO:
   python3 scripts/rag-eval.py --top-k 8 --rerank both
@@ -70,6 +72,8 @@ def main() -> int:
     ap.add_argument("--fixture", type=Path, default=DEFAULT_FIXTURE)
     ap.add_argument("--top-k", type=int, default=8)
     ap.add_argument("--rerank", choices=["on", "off", "both"], default="both")
+    ap.add_argument("--min-recall", type=float, default=None,
+                    help="gate de regressao: falha (2) se recall < F em qualquer modo")
     args = ap.parse_args()
 
     rows = load_fixture(args.fixture)
@@ -87,7 +91,15 @@ def main() -> int:
     for use_rerank, res in results.items():
         print(f"rerank={'on ' if use_rerank else 'off'}  recall@{args.top_k}="
               f"{res['recall']:.2f}  MRR={res['mrr']:.3f}  ranks={res['ranks']}")
-    return 0 if all(r["recall"] > 0 for r in results.values()) else 1
+    if not all(r["recall"] > 0 for r in results.values()):
+        return 1
+    if args.min_recall is not None:
+        below = {("on" if k else "off"): r["recall"]
+                 for k, r in results.items() if r["recall"] < args.min_recall}
+        if below:
+            print("GATE FAIL recall abaixo de %.2f: %s" % (args.min_recall, below), file=sys.stderr)
+            return 2
+    return 0
 
 
 if __name__ == "__main__":

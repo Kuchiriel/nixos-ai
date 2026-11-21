@@ -1328,3 +1328,14 @@
   entre estado vivo e manifests descobertos (o Linux nao via os peers Windows
   descobertos pelo celular). `unittest` 3/3 nos dois hosts; `house docs --check`
   OK (18). ai-mesh `87656fb`/`d406a37`.
+
+### 2026-11-21 — auto-wake: dívida de top-k da fusão investigada
+- Reprodução: recall@8 = 0,93 (13/14) nos dois modos; o "1/5" era de antes de
+  `b907a442` (blame `2d52584d`, 19/11).
+- A/B read-only: profundidade da fusão (4/6/8/10×) e peso RRF (1–5) ×
+  `sparse_limit` (50/150/300) — nenhuma melhora; config atual tem o maior MRR.
+  O doc faltante está no rank 33 com k=64, logo é relevância, não top-k.
+- Melhoria: `--min-recall F` em `scripts/rag-eval.py` como gate de regressão;
+  validado F=0,9 -> rc=0 e F=0,95 -> rc=2. Nenhuma coleção de produção escrita.
+- Dívida reclassificada em `TECHNICAL-DEBT.md`; detalhe em
+  `docs/audit/RAG-FUSION-TOPK-2026-11-21.md`.

@@ -12,7 +12,6 @@ dívida; P3 estética. Impacto real, não quantidade de arquivos.
 ## P1 — alto
 | # | problema | evidência | estado |
 |---|---|---|---|
-| 1 | RAG recall da fusão híbrida: 1/5 known-answer hits; documentos indexados, boosts funcionais | `rag_retrieval_test.py`, `test_boost.py` | **aberto** — investigar top-k da fusão |
 | 2 | A/B por nível inválido de `3f063d20` até `9f5678e8` (Task.project sem sufixo → 0 tarefas) | `discovery_stats.returned=0`; **113/1119 registros** com `nivel` na janela, marcados por índice `~/logs/ab_loop/marked/results-suspect-index-20261120-083910.json`; detalhe em `AB-SUSPECT-SUMMARY-2026-11-20.md` | **corrigido**; antigos marcados `suspect` em cópia derivada (original intacto) |
 | 3 | 27/259 compactações degeneradas no host (10,4%) | DB `session_message type=compaction` | **mitigado** (guard avisa); core substitui resumo? não |
 | 4 | AGENTS.md 1.684 linhas (próprio alvo <150); 400 ainda injetadas no handoff | `wc -l`, `main.py:615` | **mitigado** (`d02c4371`) |
@@ -59,6 +58,11 @@ dívida; P3 estética. Impacto real, não quantidade de arquivos.
   teste de contrato); backfill dos pontos antigos segue pendente.
 
 ## Rejeitadas com evidência
+- "RAG recall da fusão híbrida 1/5" — **stale, reclassificada em 21/11**:
+  com `b907a442` o `rag-eval.py` mede 13/14 (0,93) nos dois modos. A/B de
+  profundidade (4–10×) e de `dense_weight`/`sparse_limit` não melhora o único
+  erro; ver `docs/audit/RAG-FUSION-TOPK-2026-11-21.md`. Gate permanente:
+  `rag-eval.py --min-recall 0.9` (rc=2 abaixo do alvo).
 - CRC32 em IDs → é SHA-256 63 bits desde P0-1.
 - BUFFY.md duplicata → symlink.
 - 22 `find_repo_root` → 1 definição, 21 imports.
