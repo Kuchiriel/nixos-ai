@@ -270,6 +270,14 @@ pre.diff{
     <div class="busbox" id="bus">carregando…</div>
   </section>
 
+  <!-- ══ PENDENCIAS ══ -->
+  <section class="sec hidden" id="tab-pend">
+    <h2>pendências da auditoria <span class="grow"></span><button class="ghost tiny" id="pendRefresh">↻</button></h2>
+    <p class="tiny dim"><a id="pendState" href="#">abrir PROJECT-AUDIT-STATE.md (fonte canônica)</a></p>
+    <div id="pendSum" class="tiny dim">carregando…</div>
+    <div id="pendList" class="grid">carregando…</div>
+  </section>
+
   <!-- ══ CAPABILITY CARDS ══ -->
   <section class="sec hidden" id="tab-cards">
     <h2>capability cards (A2A) <span class="grow"></span><button class="ghost tiny" id="cardsRefresh">↻</button></h2>
@@ -324,6 +332,7 @@ const TABS = [
   {id:'ab',      ic:'⚖️', label:'A/B'},
   {id:'bus',     ic:'💬', label:'bus'},
   {id:'cards',   ic:'🪪', label:'cards'},
+  {id:'pend',    ic:'📌', label:'pendências'},
   {id:'casa',    ic:'🏠', label:'casa'},
 ];
 let tab = localStorage.getItem('mcTab') || 'agentes';
@@ -336,6 +345,7 @@ function setTab(id){ tab=id; localStorage.setItem('mcTab',id); renderTabs();
   if(id==='pulso'){ evUnread=0; renderTabs(); }
   if(id==='bus') loadBus();
   if(id==='cards') loadCards();
+  if(id==='pend') loadPending();
   if(id==='casa') loadState();
   if(id==='ab') loadAB();
 }
@@ -615,6 +625,18 @@ async function loadState(){
   $('#stBox').textContent = JSON.stringify(d, null, 1).slice(0, 60000);
 }
 
+async function loadPending(){
+  try{
+    const d = await (await api('/api/pending')).json();
+    if(d.error){ $('#pendSum').textContent='erro: '+d.error; return; }
+    $('#pendSum').textContent = JSON.stringify(d.counts);
+    $('#pendList').innerHTML = (d.items||[]).map(i=>`
+      <div class="card"><span class="badge">${esc(i.kind)}${i.level?' '+esc(i.level):''}</span>
+        <div class="tiny" style="margin-top:6px">${esc(i.task || i.text || '')}</div>
+        ${i.id?'<div class="tiny dim">'+esc(i.id)+' · '+esc(i.source||'')+'</div>':''}
+      </div>`).join('') || '<div class="tiny dim">nenhuma pendência</div>';
+  }catch(e){ $('#pendSum').textContent='erro: '+e; }
+}
 async function loadCards(){
   try{
     const d = await (await api('/api/cards')).json();
@@ -686,6 +708,8 @@ function diffHtml(t){
 $('#busRefresh').onclick = loadBus;
 $('#stRefresh').onclick = loadState;
 $('#cardsRefresh').onclick = loadCards;
+$('#pendRefresh').onclick = loadPending;
+$('#pendState').href = '/api/pending/state';
 
 /* atalhos */
 document.addEventListener('keydown', e=>{

@@ -929,6 +929,58 @@ async function handler(req, res) {
       return send(503, JSON.stringify({ error: 'cards indisponiveis', detail: String(e) }), 'application/json');
     }
   }
+  // (21/11) PENDENCIAS DA AUDITORIA — fonte versionada, sem segredo, somente
+  // leitura. Mesmo padrao de /api/cards: validacao de PATH, JSON e bloqueio
+  // de marcadores de credencial antes de responder.
+  function pendingFiles() {
+    return {
+      debt: join(HOME, 'projects/nixos-ai/docs/audit/TECHNICAL-DEBT.md'),
+      state: join(HOME, 'projects/nixos-ai/docs/audit/PROJECT-AUDIT-STATE.md'),
+      gaps: join(HOME, "projects/ai-mesh/docs/auto-improve-gaps.jsonl"),
+      backlog: join(HOME, 'projects/nixos-ai/docs/backlog.jsonl'),
+    };
+  }
+  if (req.method === 'GET' && url.pathname === '/api/pending') {
+    try {
+      const fonts = pendingFiles();
+      const debtRaw = readFileSync(fonts.debt, 'utf8');
+      const gapsRaw = readFileSync(fonts.gaps, 'utf8');
+      const stateRaw = readFileSync(fonts.state, 'utf8');
+      const openItems = [];
+      let section = '';
+      for (const line of debtRaw.split(/\r?\n/)) {
+        const h = line.match(/^##\s+(P[0-3])\b/);
+        if (h) { section = h[1]; continue; }
+        if (/^- /.test(line) && section && !/FEITO|rejeitada|corrigida/i.test(line))
+          openItems.push({ kind: 'debt', level: section, text: line.replace(/^- /, '').slice(0, 240) });
+      }
+      const gaps = gapsRaw.split(/\r?\n/).filter(l => l.trim() && !l.trim().startsWith('#'))
+        .map(l => { try { const d = JSON.parse(l); return {
+            kind: 'gap', id: d.id, source: d.source, priority: d.priority,
+            task: String(d.task || '').slice(0, 240) }; } catch (e) { return null; } })
+        .filter(Boolean);
+      const next = stateRaw.split(/\r?\n/).filter(l => /^\d+\. /.test(l)).slice(0, 5)
+        .map(l => ({ kind: 'next', text: l.replace(/^\d+\. /, '').slice(0, 240) }));
+      const result = { items: openItems.concat(gaps, next),
+        counts: { debt: openItems.length, gaps: gaps.length, next: next.length },
+        sources: ['docs/audit/TECHNICAL-DEBT.md', 'docs/audit/PROJECT-AUDIT-STATE.md',
+                  'ai-mesh/docs/auto-improve-gaps.jsonl'],
+        state_url: '/api/pending?name=PROJECT-AUDIT-STATE.md',
+        documentation: 'docs/audit/PROJECT-AUDIT-STATE.md' };
+      const body = JSON.stringify(result);
+      if (CARD_SECRET.test(body)) return send(503, '{"error":"payload contem marcador de credencial"}', 'application/json');
+      return send(200, body, 'application/json');
+    } catch (e) {
+      return send(503, JSON.stringify({ error: 'pendencias indisponiveis', detail: String(e) }), 'application/json');
+    }
+  }
+  if (req.method === 'GET' && url.pathname === '/api/pending/state') {
+    try {
+      const raw = readFileSync(join(HOME, 'projects/nixos-ai/docs/audit/PROJECT-AUDIT-STATE.md'), 'utf8');
+      if (CARD_SECRET.test(raw)) return send(503, '{"error":"estado contem marcador de credencial"}', 'application/json');
+      return send(200, raw, 'text/markdown; charset=utf-8');
+    } catch (e) { return send(503, String(e), 'text/plain; charset=utf-8'); }
+  }
   // (17/11) CASA: indice unico (ai-mesh/index/house.json). A MESMA fonte
   // alimenta o CLI `house`, a pagina /house e a tool coord_house do MCP.
   // Leitura read-only: o indice nao tem segredo; o token do hub nao e exposto.

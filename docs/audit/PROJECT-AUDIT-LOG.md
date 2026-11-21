@@ -1375,3 +1375,14 @@
 - `code_index` 275.724 pontos antes e depois: **nenhuma escrita em produção**.
   Recomendação registrada (índices em `branch`/`git_commit`), sem aplicar.
 - Doc: `docs/audit/RAG-INDEX-AB-REAL-2026-11-21.md`.
+
+### 2026-11-21 — auto-wake: painel de pendências no /hub
+- Rotas read-only `/api/pending` e `/api/pending/state`, reaproveitando o
+  contrato de `/api/cards` (bloqueio de marcadores de credencial).
+- Fontes: TECHNICAL-DEBT.md (24), auto-improve-gaps.jsonl (11) e próximos
+  passos do PROJECT-AUDIT-STATE.md (5) — total 40 itens, sem duplicar fonte.
+- UI: aba 📌 pendências com badge e link para o estado canônico.
+- Dois bugs encontridos e corrigidos na origem: constante `REPO` inexistente
+  no `.mjs` (troca por `join(HOME, 'projects/nixos-ai/...')`) e rota de estado
+  com 503. `node --check` limpo; só agent-hub.service reiniciado.
+- Prova do celular via IPv6: rotas 200, 40 itens, 0 segredos nos payloads.
