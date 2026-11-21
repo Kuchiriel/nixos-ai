@@ -1,0 +1,22 @@
+{
+  "model": "Qwen/Qwen3-0.6B",
+  "device": "cpu",
+  "use_itq": true,
+  "steps": 30,
+  "residual": false,
+  "seq": 256,
+  "eff_bit": 1.0,
+  "patch_seconds": 477.8,
+  "train_seconds": 437.0,
+  "ppl_before": 44664760.371,
+  "ppl_after": 247783.342,
+  "eval_windows": [
+    6,
+    6
+  ],
+  "initial_loss": 15.4215,
+  "final_loss": 12.6851,
+  "peak_vram_mib": null,
+  "trainable_params": 581336256,
+  "production_writes": false
+}

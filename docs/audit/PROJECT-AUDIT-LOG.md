@@ -1415,3 +1415,15 @@
   35,8 → 34,8 ms/query. MRR cai 0,821 → 0,804.
 - Nada aplicado em produção; `code_index` 275.724 inalterado. Decisão e
   scripts em `docs/audit/RAG-RELEVANCE-BOOST-2026-11-21.md`.
+
+### 2026-11-21 — LittleBit-2 no uso original (compressão de LLM)
+- Repo oficial clonado e venv CUDA instalado; GPU de 6 GB não comporta o QAT
+  mesmo com takeover+whisper pausado, então A/B rodou em CPU (30 passos).
+- Compressão medida no Qwen3-0.6B (`eff_bit=1.0`, 196 lineares):
+  880,8 MB → 54,6 MB = **16,13×** (propriedade da arquitetura, não do ITQ).
+- A/B: ITQ reduziu loss inicial 17,30 → 15,42 (como o paper prevê), mas com
+  30 passos terminou pior (PPL 247.783 vs 16.394) — protocolo insuficiente,
+  não refuta o paper. Inicialização ITQ custou 478 s vs 15 s na CPU.
+- Decisão: não adotar `--use_itq` sem reproduzir 5 épocas + destilação em GPU.
+- Serviços devolvidos (residente, whisper, hub 200, opencode vivo, staged=0).
+  Detalhe: `docs/audit/LITTLEBIT2-QAT-COMPRESSION-2026-11-21.md`.
