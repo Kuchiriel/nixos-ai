@@ -1386,3 +1386,12 @@
   no `.mjs` (troca por `join(HOME, 'projects/nixos-ai/...')`) e rota de estado
   com 503. `node --check` limpo; só agent-hub.service reiniciado.
 - Prova do celular via IPv6: rotas 200, 40 itens, 0 segredos nos payloads.
+
+### 2026-11-21 — auto-wake: literais de api_key removidos do Store
+- Diagnosticado que não há agenix/sops no repo (nem input, nem chave, nem
+  referência) — corrigida a afirmação falsa do relatório anterior.
+- Sem introduzir subsistema novo: `sk-dummy` removido do `.aider.conf.yml` e
+  `local-not-needed` trocado por `os.environ/OPENAI_API_KEY`; as outras 3 já
+  eram refs de ambiente. `/etc/litellm.env` passou de 644 para 600.
+- `build` e `switch` rc=0; novo home-manager-files com 144 alvos e 0 literais;
+  hub 200, opencode vivo, staged=0. Doc `SECRETS-LITERALS-2026-11-21.md`.

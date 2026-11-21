@@ -31,13 +31,6 @@ dívida; P3 estética. Impacto real, não quantidade de arquivos.
 - Memória episódica error-only (sem decisões bem-sucedidas) — `KNOWLEDGE-SYSTEM-AUDIT.md`.
 - Relatórios CYCLE-4..9 com itens abertos (Harbor BLOCKED por framework ausente).
 
-- **Placeholders de `api_key` em texto literal**: `home.nix:876` e 4 chaves em
-  `modules/services/litellm-cascade.nix` (ver `SECRETS-AUDIT-2026-11-20.md`).
-  Não são segredos hoje, mas o padrão grava qualquer chave futura no Git e no
-  Nix Store (world-readable/immutável). Migrar para agenix/sops ou env — exige
-  rebuild autorizado. Nenhum token real encontrado no HEAD, no histórico ou nos
-  32 generations do Store.
-
 - **28 worktrees `ai-mesh-sync-*` no celular (~2,4 GB)**: 27 são checkouts
   antigos com tree divergente do `main`; nenhum tem arquivo ausente no canônico
   nem linha de memória não preservada. Não apagar sem decisão do dono — inventário

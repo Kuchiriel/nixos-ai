@@ -871,9 +871,10 @@ in {
   # ══════════════════════════════════════════════════════════════
 
   # 1. Configuração principal do Aider
+  # (21/11) sem valor literal: o aider le OPENAI_API_KEY do ambiente.
+  # Nenhuma credencial e gravada no arquivo gerado no /nix/store.
   home.file.".aider.conf.yml".text = ''
     openai-api-base: "http://localhost:8080/v1"
-    openai-api-key: "sk-dummy"
     model: "openai/qwen3-35b-a3b"
 
     architect: true

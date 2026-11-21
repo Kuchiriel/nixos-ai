@@ -46,9 +46,10 @@ Placeholders de `api_key` são gravados como texto literal na configuração e,
 portanto, também no Nix Store (world-readable, imutável). Hoje não são
 segredos, mas o padrão facilita que uma chave real seja colada no mesmo ponto
 e vire permanente no histórico Git e no Store. Recomendação: migrar esses
-cinco pontos para referência de segredo (agenix/sops já usados em
-`nv-gate.nix`, `rclone-sync.nix`) ou env no runtime, **com rebuild autorizado
-pelo dono**. Não alterado nesta sessão (escopo era auditoria; §10.5).
+cinco pontos para env no runtime, **com rebuild autorizado pelo dono**.
+Correção (21/11): a alegação de que agenix/sops já eram usados em
+`nv-gate.nix`/`rclone-sync.nix` era falsa — não há agenix/sops no flake; a
+migração segura por env foi feita em `SECRETS-LITERALS-2026-11-21.md`. Não alterado nesta sessão (escopo era auditoria; §10.5).
 
 ## Critério de sucesso
 

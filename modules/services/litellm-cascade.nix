@@ -29,7 +29,9 @@ in {
             litellm_params = {
               model = "openai/qwen3";
               api_base = "http://127.0.0.1:8080/v1";
-              api_key = "local-not-needed";
+              # Referencia de ambiente: o valor fica em /etc/litellm.env
+              # (chmod 600, fora do repo e do Nix Store).
+              api_key = "os.environ/OPENAI_API_KEY";
             };
           }
           {
