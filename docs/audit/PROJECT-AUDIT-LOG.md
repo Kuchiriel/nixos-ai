@@ -1471,3 +1471,13 @@
   /etc/litellm-sops.env (600 root) para o serviço litellm.
 - build+switch rc=0; 35 exports descriptografáveis; 0 valores no /nix/store;
   hub 200 e opencode vivo. Doc `docs/audit/SOPS-NIX-ADOPTION-2026-11-21.md`.
+
+### 2026-11-21 — ta-state: cleanup atômico e regressão
+- `trap 'rm -f "$tmp"' EXIT` remove somente o temporario criado pelo proprio
+  processo apos mktemp; `mv` continua atomico para o cache ativo.
+- Bug adicional exposto pelo teste: quando render/mv falhava o script retornava
+  0 (silencioso). Corrigido para `exit 1` com mensagem no stderr.
+- Teste isolado `tests/test_ta_state_tmp_cleanup.py` (HOME temporaria, stub mv)
+  verifica: falha nao deixa temp e nao altera cache/meta; sucesso substitui
+  cache e mantem meta consistente. 2/2 OK; state-audit 0 orfaos.
+  ai-mesh `9f6413c`.
