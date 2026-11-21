@@ -1481,3 +1481,12 @@
   verifica: falha nao deixa temp e nao altera cache/meta; sucesso substitui
   cache e mantem meta consistente. 2/2 OK; state-audit 0 orfaos.
   ai-mesh `9f6413c`.
+
+### 2026-11-21 — proveniência do code_index migrada (d0011=Sim)
+- Snapshot Qdrant antes da escrita (checksum faf2802e...); teste em coleção
+  isolada 1000 pontos: recall 0->1, latência 1,66->0,91 ms.
+- 275.724 pontos receberam branch=main e git_commit=cbdbaca48aa6...; indexes
+  keyword criados com wait=true; cobertura 200/200; consulta filtrada 30/30
+  com recall@8 1,0 e 10,2 ms.
+- Proveniência e' a da migracao, nao o commit original de cada chunk.
+  Doc `docs/audit/CODE-INDEX-PROVENANCE-MIGRATION-2026-11-21.md`.
