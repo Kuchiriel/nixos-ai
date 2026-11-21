@@ -1490,3 +1490,12 @@
   com recall@8 1,0 e 10,2 ms.
 - Proveniência e' a da migracao, nao o commit original de cada chunk.
   Doc `docs/audit/CODE-INDEX-PROVENANCE-MIGRATION-2026-11-21.md`.
+
+### 2026-11-21 — retomada contínua: produtor de worktrees
+- Protocolo de retomada executado (STATE/LOG/HEAD/worktrees); HEAD inicial
+  `f6764878`, final `f6764878`.
+- Gap atacado: criação recorrente de worktrees `ai-mesh-sync-*` (~2/30 min).
+  Produtor `mesh-repo sync_worktree_for` corrigido para recriar a base
+  dedicada quando ausente; teste isolado recriou/reusou com 0 candidatos.
+- `git worktree prune -v` removeu 7 metadados sem dono; 32 diretórios seguem
+  intactos na quarentena. ai-mesh `90d5fd6`/`3047993`; P0 em ARMADILHAS.

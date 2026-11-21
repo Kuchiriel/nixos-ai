@@ -443,3 +443,18 @@ Estado MEDIDO agora:
   `fleet-parity` mede capacidades por host sem IPs/segredos (3/3 testes nos 2 hosts).
 - Nao ativar SSH/MCP em peer Windows sem decao do dono do peer.
 - Proximo: usar `fleet-parity --json` como fonte de gaps do auto-improve.
+
+## Retomada 21/11 (missão contínua)
+- HEAD no início desta janela: `f6764878`; HEAD final: `f6764878` (mudanças
+  desde o checkpoint anterior: proveniência do `code_index`, sops-nix,
+  cleanup do `ta-state`, migração de proveniência e correção do produtor de
+  worktrees — todas documentadas em arquivos especializados).
+- Worktrees de outras lanes preservados: `coord-mcp`, `rag-full-pool-boost-ab`,
+  `rag-payload-index-decision`. Árvore com ~23 itens de outros agentes; não
+  usar `git add -A`.
+- Próxima tarefa exata: auditar divergência entre `main.py` oficial e
+  `minimal_qat.py` local (fila auto-wake), com preflight verificável para
+  hardware maior — sem treino longo nesta janela.
+- Riscos: quota Kaggle (kernel longo 2000 passos em execução); d0008/d0009
+  fecharam sozinhas por condições inválidas, d0010=Sim e d0011=Sim já
+  executadas; nenhuma decisão pendente no momento.
