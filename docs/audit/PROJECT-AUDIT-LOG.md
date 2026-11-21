@@ -1237,3 +1237,21 @@
   declarados antes e o método (append-only, sem remoção).
 - Validação: `manifest-check --parity` → `sha_declared == sha_actual`,
   0 conflitos, 0 divergências; verificado também no clone Linux. ai-mesh `2f22866`.
+
+### 2026-11-20 — dono ausente: auto-improve ganha observabilidade de fontes
+- Verificado: 30 wakes, precisao 0,833 (>= gate 0,8), cap 2, 4 fontes ativas;
+  `entropy-watch` JA converte achados em fila com dedupe (19 assinaturas),
+  entao nao foi duplicado.
+- Expansao: `auto-improve --health` sonda 6 dependencias (house index, parity,
+  gaps, cards, discovery, debt SSH), persiste falhas consecutivas em
+  `~/.local/state/auto-improve-sources.json` e gera tarefa de reparo apos 2
+  falhas; `--audit` agora inclui `source_health`.
+- Dois bugs reais expostos e corrigidos na origem: (1) `DISCOVERY` indefinida
+  fazia `card_drift()` retornar [] silenciosamente — apos corrigir, gerou o
+  candidato `reconciliar capability card termux ...`; (2) parity de memoria com
+  sha do arquivo inteiro gerava falso positivo a cada append do hook — agora
+  compara o snapshot prefixado das N linhas declaradas (411 declaradas, 414
+  reais, sha identico).
+- Validacao: 6/6 sondas OK, fixture com 2 falhas gerou 1 tarefa,
+  `house docs --check` OK (18), `py_compile` limpo, `repo-integrity-check` OK.
+- ai-mesh `1e96bd0`; ningum servico foi reiniciado, nenhuma producao alterada.
