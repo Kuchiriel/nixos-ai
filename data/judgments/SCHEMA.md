@@ -16,6 +16,7 @@ item de qualificação** (o trabalho que ele já tem que fazer), sem custo extra
 | `id` | sim | identificador do item (único) |
 | `context` | sim | **a pergunta como o dono a viu**, mais o documento avaliado — **sem a resposta do dono** |
 | `answer` | sim | a resposta **curta** do dono: `Sim`, `Não`, ou um rótulo curto (`irrelevante`, `spam`, ...) |
+| `why_dono` | não | **a razão do dono, em uma frase**: por que ele respondeu isso (é o que torna a divergência com o gabarito diagnosticável) |
 | `source` | não | de onde veio (`uhrs-qualification`, `clickworker-micro`, `mindrift-eval`, ...) |
 | `ts` | não | quando o dono respondeu |
 
@@ -55,6 +56,25 @@ que um arquivo antigo não volte a inflar o número.
   repetibilidade do dono), as duas respostas ficam no **mesmo** arquivo. Se
   elas caíssem em treino e teste, o bench mediria o modelo vendo o mesmo
   item no treino.
+
+## Por que o dono discordou (`why_dono`)
+
+O `why_dono` é **opcional**, mas é o campo que dá sentido à divergência:
+
+- **Concordância baixa não é evidência de dado ruim** (arXiv 2603.06865): é
+  ambiguidade de instrução. O mesmo número ("concordância 50 % na classe
+  2") tem duas causas opostas — o rubric está mal escrito, ou a casa está
+  medindo o rótulo errado — e **só o texto dos dois lados diz qual**.
+- **Treinar só no gabarito ensinaria o modelo a agradar o rubric**
+  (arXiv 2607.28802). O que o dono precisa é um modelo que responda **como
+  ele** — e isso se ensina com o julgamento dele, não com a resposta da
+  casa.
+- Na prática: quando o dono discorda do gabarito, o `uhrs-practice.py`
+  pergunta **"por quê? (uma frase)"** (no teclado) ou aceita
+  **"porque: ..."** na voz. Uma frase basta (o dono é PCD).
+- No `judgment-bench.py`, as divergências saem **lado a lado**: o porque da
+  casa e o porque do dono, e quando falta o do dono o bench diz que o item
+  **ainda precisa de diagnóstico**.
 
 ## Limites (o que este dataset não resolve)
 

@@ -65,6 +65,22 @@ SYSTEM = (
 )
 
 
+def _load_items():
+    """Os itens de pratica (o 'why' do gabarito vive la)."""
+    p = REPO / "data" / "judgments" / "uhrs-practice-items.jsonl"
+    out = []
+    if not p.is_file():
+        return out
+    for line in p.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+    return out
+
+
 def load(path):
     rows = []
     for line in Path(path).read_text(encoding="utf-8").splitlines():
@@ -426,6 +442,32 @@ def main():
         print("divergências (id, dono, modelo):")
         for m in misses[:20]:
             print("  ", m)
+        # (21/11) o DIAGNOSTICO da divergencia: o porque da casa e o porque
+        # do dono, lado a lado. Concordancia baixa nao e' evidencia de dado
+        # ruim (arXiv 2603.06865) — e' ambiguidade de instrucao, e o texto
+        # dos dois lados e' o que diz qual. O 'why_dono' e' opcional: sem
+        # ele, a divergencia fica so com o numero.
+        _ids = {str(m[0]) for m in misses}
+        _det = []
+        for r in rows:
+            if str(r.get("id")) in _ids:
+                _det.append(r)
+        if _det:
+            print("\npor que divergiu (casa | dono):")
+            for r in _det[:10]:
+                _why_casa = ""
+                try:
+                    _it = _load_items()
+                    _why_casa = next((it.get("why", "") for it in _it
+                                      if str(it.get("id")) == str(r.get("id"))), "")
+                except Exception:
+                    _why_casa = ""
+                print(f"  {r.get('id')}: {_why_casa[:130]}")
+                if r.get("why_dono"):
+                    print(f"     (dono) {str(r['why_dono'])[:130]}")
+                else:
+                    print("     (dono) sem por que — o item ainda precisa de "
+                          "diagnostico")
     print(f"modo recomendado: {mode_for(rate)}")
     if measured_on_train:
         print("ATENCAO: esta medicao foi feita SEM held-out (o proprio arquivo "

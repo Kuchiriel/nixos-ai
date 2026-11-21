@@ -257,7 +257,7 @@ class DuplexVoice:
         return last
 
 
-def record_label(item, answer, via, path=None):
+def record_label(item, answer, via, path=None, why_dono=None):
     """Grava a label do DONO: a resposta DELE, nao o gabarito.
 
     (14/11) Dois bugs pegos ao ler o codigo (nao por teste, que nao cobre
@@ -282,6 +282,11 @@ def record_label(item, answer, via, path=None):
         "context": f"Query: {item['query']}\nPage: {item['snippet']}",
         "answer": answer,
         "key": item.get("answer"),
+        # (21/11) o PORQUE DO DONO, em uma frase. Sem ele, a divergencia com
+        # o gabarito nao e' diagnosticavel (arXiv 2603.06865: concordancia
+        # baixa e' ambiguidade de instrucao, nao dado ruim) — e treinar so no
+        # gabarito ensinaria o modelo a agradar o rubric (2607.28802).
+        "why_dono": (why_dono or None),
         "source": "uhrs-practice",
         "via": via,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -378,6 +383,7 @@ def main():
 
     right = 0
     for it in items:
+        why_dono = ""
         print("-" * 72)
         print(f"QUERY: {it['query']}")
         print(f"PAGE : {it['snippet']}")
@@ -406,8 +412,32 @@ def main():
                 break
             if not ans:
                 print("  (sem transcricao no log)")
+            elif parse_answer(ans) != it.get("answer"):
+                # (21/11) o dono falou o veredito e divergiu do gabarito: o
+                # porque dele (se quizer) vem na transcricao seguinte, com o
+                # prefixo 'porque:'.
+                print("  (voce divergiu do gabarito — fale 'porque: ...' "
+                      "para explicar, ou 'proxima' para seguir)")
+                while True:
+                    time.sleep(1.5)
+                    txt = voice.poll()
+                    if not txt:
+                        continue
+                    low = norm(txt)
+                    if "proxima" in low or "pular" in low or "next" in low:
+                        break
+                    if low.startswith("porque") or "porque:" in low:
+                        why_dono = txt.split(":", 1)[1].strip() if ":" in txt \
+                            else txt.replace("porque", "").strip()
+                        break
         else:
             ans = input().strip()
+            # (21/11) o porque do dono, opcional e em UMA frase (ele e' PCD).
+            # So faz sentido se a resposta divergir do gabarito — a'i o
+            # porque explica a fronteira.
+            why_dono = ""
+            if parse_answer(ans) != item.get("answer"):
+                why_dono = input("  por que? (uma frase, opcional): ").strip()
         got = parse_answer(ans)
         if got is None:
             print("  nao entendi a resposta; conta como erro.")
@@ -416,8 +446,12 @@ def main():
             right += ok
             print(f"  gabarito: {it['answer']} ({LEVEL_NAMES[it['answer']]}) | "
                   f"sua: {got} -> {'ok' if ok else 'erro'}")
-            print(f"  porque: {it['why']}")
-        record_label(it, got or "unparsed", "voice" if args.from_duplex else "teclado")
+            print(f"  porque (da casa): {it['why']}")
+            if why_dono:
+                print(f"  porque (seu): {why_dono}")
+        record_label(it, got or "unparsed",
+                    "voice" if args.from_duplex else "teclado",
+                    why_dono=why_dono or None)
         if args.from_duplex:
             # ele le a explicacao antes do proximo item aparecer
             time.sleep(4)
