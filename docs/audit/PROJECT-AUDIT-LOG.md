@@ -1555,3 +1555,9 @@
   keyword; source_modified_at 1539/2000 (461 arquivos ausentes, sem inventar).
 - recall@8 com filtros source_type e repo: 0,0 -> 1,0; range datetime RFC3339
   validado. Nada escrito em produção.
+
+### 2026-11-21 — fleet-dispatch canonico aplicado pos A/B
+- Host Python corrigido: chmod 755 (causa real do "Permissao negada"), trace
+  do jobs-audit, `publicar_bus(projeto)` sem NameError e politica status/done.
+- Celular virou shim para o host com trace local; Bash antigo arquivado com
+  sha 94637d72 e manifesto. A/B rerodado 3/3, shim --dry-run OK, job 116 vivo.
