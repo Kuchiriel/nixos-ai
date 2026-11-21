@@ -55,3 +55,19 @@ de decoding. Isso vira uma tarefa separada, não uma conclusão deste teste.
 Serviços devolvidos ao estado original: residente `llama-uncensored-4b`
 active, `duplex-voice` active, `whisper-server` active, hub 200, opencode vivo,
 `git staged=0`. Nenhum dado de produção escrito.
+
+## Reavaliação da condição (mais tarde em 21/11)
+
+Medido de novo antes de qualquer tentativa: RTX 4050 com 6141 MiB, 5272 MiB
+em uso por três processos (446 + 930 + 3874 MiB), **582 MiB livres**; residente
+`llama-uncensored-4b` e `duplex-voice` active, `whisper-server` active.
+
+Mesmo com `llm-swap takeover` e whisper pausado, o smoke test já tinha
+consumido 5,25 GB com `residual=False`, seq 256 e Adam8bit. O protocolo do
+paper (`residual=True`, teacher em paralelo, 5 épocas) exige mais VRAM do que
+os 6 GB do host conseguem oferecer. Portanto a condição "QAT local virou
+realidade" **não está satisfeita** para a reprodução completa.
+
+Bloqueio registrado, sem nova tentativa: seria preciso GPU dedicada (≥16 GB)
+ou reduzir o protocolo a um regime que não comprova o paper — o que já foi
+feito e documentado acima. Nenhum serviço foi reiniciado nesta reavaliação.

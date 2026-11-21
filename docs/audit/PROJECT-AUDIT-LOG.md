@@ -1437,3 +1437,9 @@
   devolvia `indisponivel`; após correção, 23 arquivadas / 0 pendentes.
 - Prova: `/hub/api/pending` 200 via IPv6, 42 itens, 0 segredos; `node --check`
   limpo; só agent-hub.service reiniciado. ai-mesh `b9483c3`.
+
+### 2026-11-21 — LittleBit-2: condição de QAT completo reavaliada
+- GPU 6141 MiB com 582 livres; 3 processos (446/930/3874 MiB), residente e
+  whisper ativos. Smoke test anterior já usava 5,25 GB com config reduzida.
+- Protocolo completo do paper não cabe nesta GPU: bloqueio registrado, sem
+  nova tentativa e sem reiniciar serviços. Tarefa devolvida com motivo.
