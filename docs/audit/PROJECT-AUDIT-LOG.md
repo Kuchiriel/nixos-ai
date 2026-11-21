@@ -1513,3 +1513,11 @@
   (`f49d66a`, `f7eb040`) dentro de `docs/sessions/*.md`.
 - Commit atual `b4905899` nao contem marcadores; nada reescrito, nenhum
   unblock usado. Aguardando decisao do dono (unblock vs reescrita).
+
+### 2026-11-21 — proveniência real por arquivo no code_index
+- Mapa git por repo: 105.441/275.724 pontos (38,2%) com commit real por
+  arquivo; restante marcado `unknown` (sem false provenance).
+- Snapshot antes (checksum 3e9bc84b...); teste isolado 2000 pontos recall 1,0;
+  produção 275.724 atualizados em 1259 grupos; 0 pontos com commit da migracao.
+- Recall@8 1,0, latencia 1,71ms; `?wait=true` necessario no payload update.
+  Doc `docs/audit/CODE-INDEX-REAL-PROVENANCE-2026-11-21.md`.
