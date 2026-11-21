@@ -57,6 +57,11 @@ dívida; P3 estética. Impacto real, não quantidade de arquivos.
   campos indexados. Corrigido em `8834e98c` (payload via `build_payload` +
   teste de contrato); backfill dos pontos antigos segue pendente.
 
+- **Índice keyword em `branch`/`git_commit`: recomendado, não aplicado** —
+  A/B realista (12k pontos, filtro 1/4) mostrou 13,79 → 3,37 ms sem perda de
+  recall; ver `docs/audit/RAG-INDEX-AB-REAL-2026-11-21.md`. Requer autorização
+  para escrever em `code_index` (produção).
+
 ## Rejeitadas com evidência
 - "RAG recall da fusão híbrida 1/5" — **stale, reclassificada em 21/11**:
   com `b907a442` o `rag-eval.py` mede 13/14 (0,93) nos dois modos. A/B de

@@ -1363,3 +1363,15 @@
   Teste 1/1 no celular e no Linux; rebase no Linux preservou 2 commits de outro
   agente (conflito em ARMADILHAS resolvido por uniao).
 - ai-mesh `7f5ef00`/`1978ecb`; nenhum servico reiniciado, nada apagado.
+
+### 2026-11-21 — auto-wake: A/B realista de payload index
+- `scripts/rag-index-ab-real.py`: 12.000 pontos em `jarvis_test_index_ab_real`,
+  filtro `branch` com seletividade 1/4 (~3.000 matches), 40 consultas.
+- Resultado: recall@8 1,0 antes e depois; latência média 13,79 → 3,37 ms
+  (~4,1×), p95 15,04 → 4,00 ms. A/B anterior de 500 pontos não mostrara ganho
+  — o índice só compensa com baixa seletividade.
+- Bug corrigido: `sparse()` com índices duplicados gerava Qdrant HTTP 422;
+  dedupe/ordenação aplicados no harness.
+- `code_index` 275.724 pontos antes e depois: **nenhuma escrita em produção**.
+  Recomendação registrada (índices em `branch`/`git_commit`), sem aplicar.
+- Doc: `docs/audit/RAG-INDEX-AB-REAL-2026-11-21.md`.
