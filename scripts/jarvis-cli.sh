@@ -225,6 +225,10 @@ print(_handle_rag_search({
 PY
         ;;
     rag-index)
+        if [[ "${2:-}" == "--help" || "${2:-}" == "-h" || "${2:-}" == "help" ]]; then
+            echo "Usage: jarvis-cli.sh rag-index <directory>"
+            exit 0
+        fi
         DIR="${2:?Usage: jarvis-cli.sh rag-index <directory>}"
         "$PY" - "$DIR" <<'PY'
 import sys

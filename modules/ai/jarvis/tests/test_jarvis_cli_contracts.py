@@ -59,6 +59,15 @@ def _json_stdout(cp: subprocess.CompletedProcess[str]):
     return json.loads(out)
 
 
+def test_rag_index_help_does_not_start_indexing():
+    cp = _run("rag-index", "--help")
+
+    assert cp.returncode == 0
+    assert "Usage: jarvis-cli.sh rag-index <directory>" in cp.stdout
+    assert "Indexed 0 files" not in cp.stdout
+    assert "books sweep started" not in cp.stdout
+
+
 def test_tools_search_json_shape_embedding_or_fallback():
     data = _json_stdout(_run("tools-search", "session resume", "--json"))
     assert data.get("query") == "session resume"
