@@ -1339,3 +1339,12 @@
   validado F=0,9 -> rc=0 e F=0,95 -> rc=2. Nenhuma coleção de produção escrita.
 - Dívida reclassificada em `TECHNICAL-DEBT.md`; detalhe em
   `docs/audit/RAG-FUSION-TOPK-2026-11-21.md`.
+
+### 2026-11-21 — auto-wake: auditoria de segredos reverificada por delta
+- Tarefa repetida na fila; protocolo manda não refazer auditoria concluída sem
+  motivo técnico. Medido: 0 arquivos `.nix` alterados entre `5480d1f3` e
+  `c80279e8`, nenhum `.nix` sujo na árvore, 32 gerações home-manager no Store.
+- Veredito mantido: 0 tokens reais; risco P2 dos 5 placeholders literais segue
+  registrado em `TECHNICAL-DEBT.md`; gate `--min-recall` e demais mudanças
+  desde então são Python/docs e não afetam superfície de segredos declarada.
+- Sem rotação, sem reescrita, sem escrita em produção.

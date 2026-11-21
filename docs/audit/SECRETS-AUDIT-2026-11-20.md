@@ -54,3 +54,12 @@ pelo dono**. Não alterado nesta sessão (escopo era auditoria; §10.5).
 
 Nenhum valor de credencial real encontrado → **não há rotação nem reescrita de
 histórico a fazer**. Risco de padrão registrado em `TECHNICAL-DEBT.md` (P2).
+
+## Reverificação por delta (21/11)
+
+A auditoria completa não foi repetida: não houve mudança que a justificasse.
+Medido em `c80279e8`: `git diff --name-only 5480d1f3..HEAD -- "*.nix"` →
+**0 arquivos**; árvore de trabalho sem `.nix` modificado; número de gerações
+home-manager no `/nix/store` segue **32**. Logo o veredito anterior permanece:
+0 tokens reais, risco P2 dos placeholders literais inalterado. Nenhuma chave
+foi rotacionada e nenhum histórico reescrito.
