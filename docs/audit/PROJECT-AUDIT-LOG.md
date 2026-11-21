@@ -1526,3 +1526,10 @@
 - 11 bypasses criados pela API oficial, sem expor valores e sem reescrever
   histórico; push rc=0 com LOCAL=REMOTE=f0ef2576 e divergencia 0.
 - Risco residual: chaves antigas seguem no historico; rotacao pendente.
+
+### 2026-11-21 — LittleBit-2: veredito final do A/B longo
+- Kernel Kaggle 2000 passos COMPLETE: baseline PPL 367,16 vs ITQ 571,27;
+  losses finais 50,24 vs 56,75; init 42 s vs 334 s.
+- ITQ melhora o ponto de partida mas nao vence em PPL ate 2000 passos.
+  Veredito: nao adotar; protocolo completo (5 epocas + KD intermediario) exige
+  GPU >=16 GB. Nada em producao alterado.

@@ -38,3 +38,30 @@ e 2000 passos, mas permaneceu `KernelWorkerStatus.QUEUED` por 46 verificações
 disponível no momento, a reprodução completa (5 épocas) fica pendente —
 tarefa devolvida à fila com o bloqueio registrado. Nada em produção foi
 alterado.
+
+## Resultado de 2000 passos (kernel `littlebit2-qat-long-2000`, COMPLETE)
+
+Mesma configuração do A/B de 300 passos (Qwen3-0.6B, T4 x2, `residual=True`,
+professor, 12 janelas WikiText-2):
+
+| passos | baseline PPL | ITQ PPL | baseline loss final | ITQ loss final |
+|---:|---:|---:|---:|---:|
+| 300 | 1803,64 | 2424,87 | 74,09 | 69,11 |
+| **2000** | **367,16** | **571,27** | **50,24** | **56,75** |
+
+Ambos melhoram ~5× de 300 para 2000 passos, mas o ITQ continua **~1,55× pior**
+em PPL, apesar de começar com loss menor (210 vs 280) e inicialização 8× mais
+cara (334 s vs 42 s).
+
+### Veredito final
+
+**Não adotar `--use_itq` no nosso stack com esta evidência.** Hipóteses para a
+divergência com o paper (que usa Llama-2/3 7–13B): nossa destilação é só MSE de
+logits (sem `l2l_loss_scale` sobre estados intermediários), 2000 passos ainda
+são ~4% das 5 épocas do protocolo oficial, e o modelo é 10–20× menor. Para
+reavaliar: reproduzir `main.py` completo em GPU ≥16 GB com 5 épocas, HiddenState
+KD e o mesmo scheduler — e só então medir PPL/tokens/s.
+
+Nenhum modelo de produção foi alterado. Compressão medida separadamente:
+340× a 0,1 bpp; latência com PyTorch genérico é pior que o Linear original
+(o repo não inclui o kernel bitwise).

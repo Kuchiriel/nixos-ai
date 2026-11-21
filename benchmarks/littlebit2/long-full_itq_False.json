@@ -1,0 +1,25 @@
+{
+  "model": "Qwen/Qwen3-0.6B",
+  "device": "cuda",
+  "use_itq": false,
+  "steps": 2000,
+  "residual": true,
+  "optimizer": "adam",
+  "teacher": true,
+  "kd_scale": 10.0,
+  "seq": 256,
+  "eff_bit": 1.0,
+  "patch_seconds": 41.6,
+  "train_seconds": 2024.3,
+  "ppl_before": 67581344.14,
+  "ppl_after": 367.157,
+  "eval_windows": [
+    12,
+    12
+  ],
+  "initial_loss": 280.5719,
+  "final_loss": 50.2396,
+  "peak_vram_mib": 10033,
+  "trainable_params": 568195968,
+  "production_writes": false
+}
