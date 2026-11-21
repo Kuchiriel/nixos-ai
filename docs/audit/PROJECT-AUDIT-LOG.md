@@ -1282,3 +1282,17 @@
   `ai-mesh/docs/ai-mesh-sync-worktrees-2026-11-20.json` é a consolidação legível.
   Nada apagado nem movido. Risco de disco ~2,4 GB registrado em `TECHNICAL-DEBT.md`
   para decisão do dono (`phone-fs propose` + manifesto se autorizado).
+
+### 2026-11-20 — auto-wake: segundo lote de 5 gaps medidos
+- Estado medido antes: 33 wakes, precisao 0,833, cap 2, 5 gaps do lote 1 todos
+  executados, fila 16, 28 snapshots.
+- Lote 2 em `ai-mesh/docs/auto-improve-gaps.jsonl` (sha `8905ba020d29`):
+  card_drift termux (servicos vivos), convergencia `cli/dev.py` x `agent_loop.py`
+  (ADR-003), validacao isolada do backfill de payload RAG, classificacao das
+  176 divergencias de sync e migracao dos 5 placeholders de api_key.
+  Cada entrada tem `id`/`source`/`evidence`; todas passaram em `validate_task`.
+- Validacao: `--dry-run` listou 11 candidatos incluindo os 5 novos; cap seguiu 2
+  e `--audit` decidiu `KEEP_MAX_REMOTE_2` (histerese intacta); snapshot 29 gravado.
+- `--once` nao enfileirou: fila 16 > teto interno 12 do gerador. Os gaps ficam
+  registrados na fonte versionada e entram assim que a fila descer — nenhum
+  limite foi alterado para forcar enqueue. ai-mesh `0726de9`.
