@@ -1533,3 +1533,9 @@
 - ITQ melhora o ponto de partida mas nao vence em PPL ate 2000 passos.
   Veredito: nao adotar; protocolo completo (5 epocas + KD intermediario) exige
   GPU >=16 GB. Nada em producao alterado.
+
+### 2026-11-21 — preflight LittleBit-2 sem falso negativo de ambiente
+- `probe_python` deriva LD_LIBRARY_PATH do gcc lib mais recente no Nix store
+  (sem hash fixo) e preserva o LD_LIBRARY_PATH atual.
+- Probe real: torch 2.6.0+cu124, transformers 4.51.3, cuda true, ok true;
+  testes do preflight 5/5.

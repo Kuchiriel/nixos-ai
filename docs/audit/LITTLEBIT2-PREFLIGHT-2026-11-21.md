@@ -80,3 +80,15 @@ probe de ambiente import-only; também prova que o relatório sempre declara
 `training_started=false`.
 
 Nenhum treino longo, serviço ou modelo de produção foi alterado.
+
+## Correção do probe de ambiente (após revisão)
+
+O probe retornava `ImportError: libstdc++.so.6: cannot open shared object
+file` para o venv Nix — falso negativo: o torch 2.6.0+cu124 estava instalado.
+`scripts/littlebit2-preflight.py` agora deriva `LD_LIBRARY_PATH` do ambiente:
+seleciona o diretório `lib` do gcc mais recente em `/nix/store`, inclui
+`/run/opengl-driver/lib` e o `nix-ld`, sem fixar hash de store.
+
+Medido após a correção: `torch=2.6.0+cu124`, `transformers=4.51.3`,
+`cuda_available=true`, `environment.ok=true`; testes `test_littlebit2_preflight.py`
+5/5.

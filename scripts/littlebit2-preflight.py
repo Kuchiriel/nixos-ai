@@ -32,11 +32,37 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _run(cmd: list[str], *, cwd: Path | None = None, timeout: int = 30) -> dict[str, Any]:
+def _venv_lib_path() -> str:
+    """Derive the library path needed by a Nix-built Python venv.
+
+    The torch wheel is linked against libstdc++.so.6 in the Nix store; the
+    plain environment of the Checker does not include it, which produced a
+    false-negative "torch unavailable". No store hash is hardcoded: pick the
+    newest gcc lib directory visible on this host.
+    """
+    parts: list[str] = []
+    libs = sorted(
+        Path('/nix/store').glob('*-gcc-*-lib/lib/libstdc++.so.6'),
+        key=lambda q: q.stat().st_mtime,
+    ) if Path('/nix/store').exists() else []
+    if libs:
+        parts.append(str(libs[-1].parent))
+    for extra in ('/run/opengl-driver/lib', '/run/current-system/sw/share/nix-ld/lib'):
+        if Path(extra).exists():
+            parts.append(extra)
+    current = os.environ.get('LD_LIBRARY_PATH', '')
+    if current:
+        parts.append(current)
+    return os.pathsep.join(dict.fromkeys(parts))
+
+
+def _run(cmd: list[str], *, cwd: Path | None = None, timeout: int = 30,
+         env: dict[str, str] | None = None) -> dict[str, Any]:
     try:
         proc = subprocess.run(
             cmd,
             cwd=str(cwd) if cwd else None,
+            env=env,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -240,7 +266,9 @@ def probe_python(python: Path) -> dict[str, Any]:
         "'cuda_available':bool(torch.cuda.is_available()),"
         "'transformers':transformers.__version__}))"
     )
-    result = _run([str(python), "-c", probe], timeout=45)
+    env = dict(os.environ)
+    env['LD_LIBRARY_PATH'] = _venv_lib_path()
+    result = _run([str(python), "-c", probe], timeout=45, env=env)
     payload: dict[str, Any] = {}
     if result["ok"]:
         try:
