@@ -29,3 +29,12 @@ Ainda **sem adoção**: o A/B completo reproduziu o mecanismo de convergência,
 mas não o resultado de PPL. Antes de qualquer mudança é preciso o protocolo
 completo (5 épocas) ou, no mínimo, um regime intermediário (~2000 passos)
 para ver se o cruzamento ocorre. Nenhum modelo de produção foi alterado.
+
+## Tentativa de 2000 passos (bloqueio)
+
+Kernel `kuchiriel/littlebit2-qat-long-2000` foi enviado com o mesmo protocolo
+e 2000 passos, mas permaneceu `KernelWorkerStatus.QUEUED` por 46 verificações
+(~92 minutos) após o kernel de 300 passos ter terminado. Sem GPU adicional
+disponível no momento, a reprodução completa (5 épocas) fica pendente —
+tarefa devolvida à fila com o bloqueio registrado. Nada em produção foi
+alterado.
